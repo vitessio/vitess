@@ -32,7 +32,7 @@ import (
 const (
 	// BaseShowTables is the base query used in further methods.
 	BaseShowTables = "SELECT t.table_name, t.table_type, unix_timestamp(t.create_time), t.table_comment, i.file_size, i.allocated_size " +
-		"FROM information_schema.tables t, information_schema.innodb_sys_tablespaces i " +
+		"FROM information_schema.tables t, information_schema.innodb_tablespaces i " +
 		"WHERE t.table_schema = database() and i.name = concat(t.table_schema,'/',t.table_name)"
 
 	// BaseShowPrimary is the base query for fetching primary key info.

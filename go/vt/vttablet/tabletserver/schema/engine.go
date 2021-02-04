@@ -321,19 +321,25 @@ func (se *Engine) reload(ctx context.Context) error {
 		tableName := row[0].ToString()
 		curTables[tableName] = true
 		createTime, _ := evalengine.ToInt64(row[2])
+		fileSize, _ := evalengine.ToUint64(row[4])
+		allocatedSize, _ := evalengine.ToUint64(row[5])
+
 		// TODO(sougou); find a better way detect changed tables. This method
 		// seems unreliable. The endtoend test flags all tables as changed.
-		if _, ok := se.tables[tableName]; ok && createTime < se.lastChange {
+		if t, ok := se.tables[tableName]; ok && createTime < se.lastChange {
+			t.FileSize = fileSize
+			t.AllocatedSize = allocatedSize
 			continue
 		}
+
 		log.V(2).Infof("Reading schema for table: %s", tableName)
 		table, err := LoadTable(conn, tableName, row[3].ToString())
 		if err != nil {
 			rec.RecordError(err)
 			continue
 		}
-		table.FileSize, _ = evalengine.ToUint64(row[4])
-		table.AllocatedSize, _ = evalengine.ToUint64(row[5])
+		table.FileSize = fileSize
+		table.AllocatedSize = allocatedSize
 		changedTables[tableName] = table
 		if _, ok := se.tables[tableName]; ok {
 			altered = append(altered, tableName)
