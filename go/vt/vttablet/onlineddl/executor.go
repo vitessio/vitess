@@ -15,7 +15,7 @@ limitations under the License.
 */
 
 /*
-Functionality of this Executor is tested in go/test/endtoend/onlineddl/onlineddl_test.go
+Functionality of this Executor is tested in go/test/endtoend/onlineddl_ghost/... and go/test/endtoend/onlineddl_vrepl/...
 */
 
 package onlineddl
