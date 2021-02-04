@@ -59,7 +59,7 @@ const (
   vrepl_id int,
   table_name varbinary(128),
   lastpk varbinary(2000),
-	primary key (vrepl_id, table_name))`
+  primary key (vrepl_id, table_name))`
 )
 
 var withDDL *withddl.WithDDL
