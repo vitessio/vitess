@@ -317,8 +317,8 @@ func TestExecutorAutocommit(t *testing.T) {
 	if logStats.CommitTime != 0 {
 		t.Errorf("logstats: expected zero CommitTime")
 	}
-	if logStats.RowsAffected == 0 {
-		t.Errorf("logstats: expected non-zero RowsAffected")
+	if logStats.RowsReturned == 0 {
+		t.Errorf("logstats: expected non-zero RowsReturned")
 	}
 
 	// autocommit = 1
@@ -333,7 +333,7 @@ func TestExecutorAutocommit(t *testing.T) {
 
 	_, err = executor.Execute(ctx, "TestExecute", session, "update main1 set id=1", nil)
 	require.NoError(t, err)
-	wantSession = &vtgatepb.Session{Autocommit: true, TargetString: "@master", FoundRows: 1, RowCount: 1}
+	wantSession = &vtgatepb.Session{Autocommit: true, TargetString: "@master", FoundRows: 0, RowCount: 1}
 	utils.MustMatch(t, wantSession, session.Session, "session does not match for autocommit=1")
 
 	logStats = testQueryLog(t, logChan, "TestExecute", "UPDATE", "update main1 set id=1", 1)
@@ -349,7 +349,7 @@ func TestExecutorAutocommit(t *testing.T) {
 
 	_, err = executor.Execute(ctx, "TestExecute", session, "update main1 set id=1", nil)
 	require.NoError(t, err)
-	wantSession = &vtgatepb.Session{InTransaction: true, Autocommit: true, TargetString: "@master", FoundRows: 1, RowCount: 1}
+	wantSession = &vtgatepb.Session{InTransaction: true, Autocommit: true, TargetString: "@master", FoundRows: 0, RowCount: 1}
 	testSession = *session.Session
 	testSession.ShardSessions = nil
 	utils.MustMatch(t, wantSession, &testSession, "session does not match for autocommit=1")
@@ -442,14 +442,14 @@ func TestExecutorShow(t *testing.T) {
 	for _, query := range []string{"show vitess_keyspaces", "show keyspaces"} {
 		qr, err := executor.Execute(ctx, "TestExecute", session, query, nil)
 		require.NoError(t, err)
-		require.EqualValues(t, 5, qr.RowsAffected, fmt.Sprintf("unexpected results running query: %s", query))
+		require.EqualValues(t, 5, len(qr.Rows), fmt.Sprintf("unexpected results running query: %s", query))
 	}
 
 	for _, query := range []string{"show databases", "show DATABASES", "show schemas", "show SCHEMAS"} {
 		qr, err := executor.Execute(ctx, "TestExecute", session, query, nil)
 		require.NoError(t, err)
 		// Showing default tables (5+4[default])
-		require.EqualValues(t, 9, qr.RowsAffected, fmt.Sprintf("unexpected results running query: %s", query))
+		require.EqualValues(t, 9, len(qr.Rows), fmt.Sprintf("unexpected results running query: %s", query))
 	}
 
 	_, err := executor.Execute(ctx, "TestExecute", session, "show variables", nil)
@@ -592,7 +592,6 @@ func TestExecutorShow(t *testing.T) {
 					"utf8mb4_general_ci"),
 					sqltypes.NewInt32(4)),
 			},
-			RowsAffected: 2,
 		}
 
 		utils.MustMatch(t, wantqr, qr, query)
@@ -621,7 +620,6 @@ func TestExecutorShow(t *testing.T) {
 					"UTF-8 Unicode",
 					"utf8_general_ci"), sqltypes.NewInt32(3)),
 			},
-			RowsAffected: 1,
 		}
 
 		utils.MustMatch(t, wantqr, qr, query)
@@ -639,9 +637,7 @@ func TestExecutorShow(t *testing.T) {
 					"utf8mb4_general_ci"),
 					sqltypes.NewInt32(4)),
 			},
-			RowsAffected: 1,
 		}
-
 		utils.MustMatch(t, wantqr, qr, query)
 	}
 
@@ -659,7 +655,6 @@ func TestExecutorShow(t *testing.T) {
 				"YES",
 				"YES"),
 		},
-		RowsAffected: 1,
 	}
 	utils.MustMatch(t, wantqr, qr, query)
 
@@ -676,7 +671,6 @@ func TestExecutorShow(t *testing.T) {
 				"NULL",
 				"GPL"),
 		},
-		RowsAffected: 1,
 	}
 	utils.MustMatch(t, wantqr, qr, query)
 
@@ -684,9 +678,8 @@ func TestExecutorShow(t *testing.T) {
 		qr, err = executor.Execute(ctx, "TestExecute", session, "show session status", nil)
 		require.NoError(t, err)
 		wantqr = &sqltypes.Result{
-			Fields:       buildVarCharFields("Variable_name", "Value"),
-			Rows:         make([][]sqltypes.Value, 0, 2),
-			RowsAffected: 0,
+			Fields: buildVarCharFields("Variable_name", "Value"),
+			Rows:   make([][]sqltypes.Value, 0, 2),
 		}
 
 		utils.MustMatch(t, wantqr, qr, query)
@@ -708,7 +701,6 @@ func TestExecutorShow(t *testing.T) {
 			buildVarCharRow("TestExecutor/-20"),
 			buildVarCharRow("TestXBadVSchema/e0-"),
 		},
-		RowsAffected: 33,
 	}
 	utils.MustMatch(t, wantqr, qr, query)
 
@@ -723,7 +715,6 @@ func TestExecutorShow(t *testing.T) {
 			buildVarCharRow("FakeCell", "TestExecutor", "-20", "MASTER", "SERVING", "aa-0000000000", "-20", "1970-01-01T00:00:01Z"),
 			buildVarCharRow("FakeCell", "TestUnsharded", "0", "MASTER", "SERVING", "aa-0000000000", "0", "1970-01-01T00:00:01Z"),
 		},
-		RowsAffected: 9,
 	}
 	utils.MustMatch(t, wantqr, qr, query)
 
@@ -731,9 +722,8 @@ func TestExecutorShow(t *testing.T) {
 	qr, err = executor.Execute(ctx, "TestExecute", session, query, nil)
 	require.NoError(t, err)
 	wantqr = &sqltypes.Result{
-		Fields:       buildVarCharFields("Cell", "Keyspace", "Shard", "TabletType", "State", "Alias", "Hostname", "MasterTermStartTime"),
-		Rows:         [][]sqltypes.Value{},
-		RowsAffected: 0,
+		Fields: buildVarCharFields("Cell", "Keyspace", "Shard", "TabletType", "State", "Alias", "Hostname", "MasterTermStartTime"),
+		Rows:   [][]sqltypes.Value{},
 	}
 	utils.MustMatch(t, wantqr, qr, fmt.Sprintf("%q should be empty", query))
 
@@ -745,7 +735,6 @@ func TestExecutorShow(t *testing.T) {
 		Rows: [][]sqltypes.Value{
 			buildVarCharRow("FakeCell", "TestExecutor", "-20", "MASTER", "SERVING", "aa-0000000000", "-20", "1970-01-01T00:00:01Z"),
 		},
-		RowsAffected: 1,
 	}
 	utils.MustMatch(t, wantqr, qr, query)
 
@@ -767,7 +756,6 @@ func TestExecutorShow(t *testing.T) {
 			buildVarCharRow("TestExecutor", "name_user_map", "lookup_hash", "from=name; table=name_user_map; to=user_id", "user"),
 			buildVarCharRow("TestExecutor", "t1_lkp_vdx", "consistent_lookup_unique", "from=unq_col; table=t1_lkp_idx; to=keyspace_id", "t1"),
 		},
-		RowsAffected: 11,
 	}
 	utils.MustMatch(t, wantqr, qr, query)
 
@@ -780,7 +768,6 @@ func TestExecutorShow(t *testing.T) {
 			buildVarCharRow("Id", "hash_index", "hash", "", ""),
 			buildVarCharRow("name", "name_user_map", "lookup_hash", "from=name; table=name_user_map; to=user_id", "user"),
 		},
-		RowsAffected: 2,
 	}
 	utils.MustMatch(t, wantqr, qr, query)
 
@@ -804,7 +791,6 @@ func TestExecutorShow(t *testing.T) {
 			buildVarCharRow("Id", "hash_index", "hash", "", ""),
 			buildVarCharRow("name", "name_user_map", "lookup_hash", "from=name; table=name_user_map; to=user_id", "user"),
 		},
-		RowsAffected: 2,
 	}
 	utils.MustMatch(t, wantqr, qr, query)
 
@@ -818,7 +804,6 @@ func TestExecutorShow(t *testing.T) {
 			buildVarCharRow("id", "hash_index", "hash", "", ""),
 			buildVarCharRow("name, lastname", "name_lastname_keyspace_id_map", "lookup", "from=name,lastname; table=name_lastname_keyspace_id_map; to=keyspace_id", "user2"),
 		},
-		RowsAffected: 2,
 	}
 	utils.MustMatch(t, wantqr, qr, query)
 
@@ -836,8 +821,7 @@ func TestExecutorShow(t *testing.T) {
 			{Name: "Code", Type: sqltypes.Uint16},
 			{Name: "Message", Type: sqltypes.VarChar},
 		},
-		Rows:         [][]sqltypes.Value{},
-		RowsAffected: 0,
+		Rows: [][]sqltypes.Value{},
 	}
 	utils.MustMatch(t, wantqr, qr, query)
 
@@ -851,8 +835,7 @@ func TestExecutorShow(t *testing.T) {
 			{Name: "Code", Type: sqltypes.Uint16},
 			{Name: "Message", Type: sqltypes.VarChar},
 		},
-		Rows:         [][]sqltypes.Value{},
-		RowsAffected: 0,
+		Rows: [][]sqltypes.Value{},
 	}
 	utils.MustMatch(t, wantqr, qr, query)
 
@@ -874,7 +857,6 @@ func TestExecutorShow(t *testing.T) {
 			{sqltypes.NewVarChar("Warning"), sqltypes.NewUint32(mysql.ERBadTable), sqltypes.NewVarChar("bad table")},
 			{sqltypes.NewVarChar("Warning"), sqltypes.NewUint32(mysql.EROutOfResources), sqltypes.NewVarChar("ks/-40: query timed out")},
 		},
-		RowsAffected: 0,
 	}
 	utils.MustMatch(t, wantqr, qr, query)
 
@@ -891,7 +873,6 @@ func TestExecutorShow(t *testing.T) {
 			buildVarCharRow("TestSharded/-20"),
 			buildVarCharRow("TestXBadVSchema/e0-"),
 		},
-		RowsAffected: 25,
 	}
 	utils.MustMatch(t, wantqr, qr, fmt.Sprintf("%s, with a bad keyspace", query))
 
@@ -912,7 +893,6 @@ func TestExecutorShow(t *testing.T) {
 			buildVarCharRow("user_msgs"),
 			buildVarCharRow("user_seq"),
 		},
-		RowsAffected: 9,
 	}
 	utils.MustMatch(t, wantqr, qr, query)
 

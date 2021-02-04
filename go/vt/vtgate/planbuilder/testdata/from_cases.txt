@@ -2766,3 +2766,22 @@ Gen4 plan same as above
     "SysTableTableSchema": "VARBINARY(\"a\")"
   }
 }
+
+# system schema in where clause of information_schema query
+"SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE table_schema = 'performance_schema' AND table_name = 'foo'"
+{
+  "QueryType": "SELECT",
+  "Original": "SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE table_schema = 'performance_schema' AND table_name = 'foo'",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectDBA",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select COUNT(*) from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
+    "Query": "select COUNT(*) from INFORMATION_SCHEMA.`TABLES` where table_schema = :__vtschemaname and table_name = :__vttablename",
+    "SysTableTableName": "VARBINARY(\"foo\")",
+    "SysTableTableSchema": "VARBINARY(\"performance_schema\")"
+  }
+}

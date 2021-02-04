@@ -161,7 +161,8 @@ type (
 		ExecCount    uint64        // Count of times this plan was executed
 		ExecTime     time.Duration // Total execution time
 		ShardQueries uint64        // Total number of shard queries
-		Rows         uint64        // Total number of rows
+		RowsReturned uint64        // Total number of rows
+		RowsAffected uint64        // Total number of rows
 		Errors       uint64        // Total number of errors
 	}
 
@@ -200,23 +201,25 @@ type (
 )
 
 // AddStats updates the plan execution statistics
-func (p *Plan) AddStats(execCount uint64, execTime time.Duration, shardQueries, rows, errors uint64) {
+func (p *Plan) AddStats(execCount uint64, execTime time.Duration, shardQueries, rowsAffected, rowsReturned, errors uint64) {
 	p.mu.Lock()
 	p.ExecCount += execCount
 	p.ExecTime += execTime
 	p.ShardQueries += shardQueries
-	p.Rows += rows
+	p.RowsAffected += rowsAffected
+	p.RowsReturned += rowsReturned
 	p.Errors += errors
 	p.mu.Unlock()
 }
 
 // Stats returns a copy of the plan execution statistics
-func (p *Plan) Stats() (execCount uint64, execTime time.Duration, shardQueries, rows, errors uint64) {
+func (p *Plan) Stats() (execCount uint64, execTime time.Duration, shardQueries, rowsAffected, rowsReturned, errors uint64) {
 	p.mu.Lock()
 	execCount = p.ExecCount
 	execTime = p.ExecTime
 	shardQueries = p.ShardQueries
-	rows = p.Rows
+	rowsAffected = p.RowsAffected
+	rowsReturned = p.RowsReturned
 	errors = p.Errors
 	p.mu.Unlock()
 	return
@@ -256,7 +259,8 @@ func (p *Plan) MarshalJSON() ([]byte, error) {
 		ExecCount    uint64                `json:",omitempty"`
 		ExecTime     time.Duration         `json:",omitempty"`
 		ShardQueries uint64                `json:",omitempty"`
-		Rows         uint64                `json:",omitempty"`
+		RowsAffected uint64                `json:",omitempty"`
+		RowsReturned uint64                `json:",omitempty"`
 		Errors       uint64                `json:",omitempty"`
 	}{
 		QueryType:    p.Type.String(),
@@ -265,7 +269,8 @@ func (p *Plan) MarshalJSON() ([]byte, error) {
 		ExecCount:    p.ExecCount,
 		ExecTime:     p.ExecTime,
 		ShardQueries: p.ShardQueries,
-		Rows:         p.Rows,
+		RowsAffected: p.RowsAffected,
+		RowsReturned: p.RowsReturned,
 		Errors:       p.Errors,
 	}
 	return json.Marshal(marshalPlan)

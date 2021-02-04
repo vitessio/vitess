@@ -127,6 +127,7 @@ type VTGate struct {
 	// are global vars that depend on this member var.
 	timings      *stats.MultiTimings
 	rowsReturned *stats.CountersWithMultiLabels
+	rowsAffected *stats.CountersWithMultiLabels
 
 	// the throttled loggers for all errors, one per API entry
 	logExecute       *logutil.ThrottledLogger
@@ -194,6 +195,10 @@ func Init(ctx context.Context, serv srvtopo.Server, cell string, tabletTypesToWa
 		rowsReturned: stats.NewCountersWithMultiLabels(
 			"VtgateApiRowsReturned",
 			"Rows returned through the VTgate API",
+			[]string{"Operation", "Keyspace", "DbType"}),
+		rowsAffected: stats.NewCountersWithMultiLabels(
+			"VtgateApiRowsAffected",
+			"Rows affected by a write (DML) operation through the VTgate API",
 			[]string{"Operation", "Keyspace", "DbType"}),
 
 		logExecute:       logutil.NewThrottledLogger("Execute", 5*time.Second),
@@ -270,6 +275,7 @@ func (vtg *VTGate) Execute(ctx context.Context, session *vtgatepb.Session, sql s
 	qr, err = vtg.executor.Execute(ctx, "Execute", NewSafeSession(session), sql, bindVariables)
 	if err == nil {
 		vtg.rowsReturned.Add(statsKey, int64(len(qr.Rows)))
+		vtg.rowsAffected.Add(statsKey, int64(qr.RowsAffected))
 		return session, qr, nil
 	}
 
@@ -305,6 +311,7 @@ func (vtg *VTGate) ExecuteBatch(ctx context.Context, session *vtgatepb.Session, 
 		session, qrl[i].QueryResult, qrl[i].QueryError = vtg.Execute(ctx, session, sql, bv)
 		if qr := qrl[i].QueryResult; qr != nil {
 			vtg.rowsReturned.Add(statsKey, int64(len(qr.Rows)))
+			vtg.rowsAffected.Add(statsKey, int64(qr.RowsAffected))
 		}
 	}
 	return session, qrl, nil
@@ -336,6 +343,7 @@ func (vtg *VTGate) StreamExecute(ctx context.Context, session *vtgatepb.Session,
 			},
 			func(reply *sqltypes.Result) error {
 				vtg.rowsReturned.Add(statsKey, int64(len(reply.Rows)))
+				vtg.rowsAffected.Add(statsKey, int64(reply.RowsAffected))
 				return callback(reply)
 			})
 	}
@@ -376,7 +384,6 @@ func (vtg *VTGate) Prepare(ctx context.Context, session *vtgatepb.Session, sql s
 
 	fld, err = vtg.executor.Prepare(ctx, "Prepare", NewSafeSession(session), sql, bindVariables)
 	if err == nil {
-		vtg.rowsReturned.Add(statsKey, int64(len(fld)))
 		return session, fld, nil
 	}
 
@@ -514,6 +521,10 @@ func LegacyInit(ctx context.Context, hc discovery.LegacyHealthCheck, serv srvtop
 		rowsReturned: stats.NewCountersWithMultiLabels(
 			"VtgateApiRowsReturned",
 			"Rows returned through the VTgate API",
+			[]string{"Operation", "Keyspace", "DbType"}),
+		rowsAffected: stats.NewCountersWithMultiLabels(
+			"VtgateApiRowsAffected",
+			"Rows affected by a write (DML) operation through the VTgate API",
 			[]string{"Operation", "Keyspace", "DbType"}),
 
 		logExecute:       logutil.NewThrottledLogger("Execute", 5*time.Second),
