@@ -471,7 +471,7 @@ func (e *Executor) terminateVReplMigration(ctx context.Context, uuid string) err
 func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) error {
 	// sanity checks:
 	if s == nil {
-		return vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "No vreplicatoin stream migration %s", s.workflow)
+		return vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "No vreplication stream migration %s", s.workflow)
 	}
 	if s.bls.Filter == nil {
 		return vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "No binlog source filter for migration %s", s.workflow)
@@ -541,6 +541,8 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 		return err
 	}
 
+	ctx, cancel := context.WithTimeout(ctx, 2*cutOverThreshold)
+	defer cancel()
 	// Wait for target to reach the up-to-date pos
 	if err := tmClient.VReplicationWaitForPos(ctx, tablet.Tablet, int(s.id), s.pos); err != nil {
 		return err
