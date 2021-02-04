@@ -1035,27 +1035,26 @@ func TestExecutorOther(t *testing.T) {
 
 	for _, stmt := range stmts {
 		for _, tc := range tcs {
-			sbc1.ExecCount.Set(0)
-			sbc2.ExecCount.Set(0)
-			sbclookup.ExecCount.Set(0)
+			t.Run(fmt.Sprintf("%s-%s", stmt, tc.targetStr), func(t *testing.T) {
+				sbc1.ExecCount.Set(0)
+				sbc2.ExecCount.Set(0)
+				sbclookup.ExecCount.Set(0)
 
-			_, err := executor.Execute(ctx, "TestExecute", NewSafeSession(&vtgatepb.Session{TargetString: tc.targetStr}), stmt, nil)
-			if tc.hasNoKeyspaceErr {
-				assert.Error(t, err, errNoKeyspace)
-			} else if tc.hasDestinationShardErr {
-				assert.Errorf(t, err, "Destination can only be a single shard for statement: %s, got: DestinationExactKeyRange(-)", stmt)
-			} else {
-				assert.NoError(t, err)
-			}
+				_, err := executor.Execute(ctx, "TestExecute", NewSafeSession(&vtgatepb.Session{TargetString: tc.targetStr}), stmt, nil)
+				if tc.hasNoKeyspaceErr {
+					assert.Error(t, err, errNoKeyspace)
+				} else if tc.hasDestinationShardErr {
+					assert.Errorf(t, err, "Destination can only be a single shard for statement: %s", stmt)
+				} else {
+					assert.NoError(t, err)
+				}
 
-			diff := cmp.Diff(tc.wantCnts, cnts{
-				Sbc1Cnt:      sbc1.ExecCount.Get(),
-				Sbc2Cnt:      sbc2.ExecCount.Get(),
-				SbcLookupCnt: sbclookup.ExecCount.Get(),
+				utils.MustMatch(t, tc.wantCnts, cnts{
+					Sbc1Cnt:      sbc1.ExecCount.Get(),
+					Sbc2Cnt:      sbc2.ExecCount.Get(),
+					SbcLookupCnt: sbclookup.ExecCount.Get(),
+				})
 			})
-			if diff != "" {
-				t.Errorf("stmt: %s\ntc: %+v\n-want,+got:\n%s", stmt, tc, diff)
-			}
 		}
 	}
 }
