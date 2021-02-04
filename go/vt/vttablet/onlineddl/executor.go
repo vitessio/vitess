@@ -1155,6 +1155,8 @@ func (e *Executor) cancelMigration(ctx context.Context, uuid string, terminateRu
 	}
 
 	switch onlineDDL.Status {
+	case schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed:
+		return emptyResult, nil
 	case schema.OnlineDDLStatusQueued, schema.OnlineDDLStatusReady:
 		if err := e.updateMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusCancelled); err != nil {
 			return nil, err
