@@ -31,7 +31,9 @@ import (
 
 const (
 	// BaseShowTables is the base query used in further methods.
-	BaseShowTables = "SELECT table_name, table_type, unix_timestamp(create_time), table_comment FROM information_schema.tables WHERE table_schema = database()"
+	BaseShowTables = "SELECT t.table_name, t.table_type, unix_timestamp(t.create_time), t.table_comment, i.file_size, i.allocated_size " +
+		"FROM information_schema.tables t, information_schema.innodb_sys_tablespaces i " +
+		"WHERE t.table_schema = database() and i.name = concat(t.table_schema,'/',t.table_name)"
 
 	// BaseShowPrimary is the base query for fetching primary key info.
 	BaseShowPrimary = "SELECT table_name, column_name FROM information_schema.key_column_usage WHERE table_schema=database() AND constraint_name='PRIMARY' ORDER BY table_name, ordinal_position"
