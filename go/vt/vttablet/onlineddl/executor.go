@@ -134,11 +134,13 @@ type Executor struct {
 	shard    string
 	dbName   string
 
-	initMutex          sync.Mutex
-	migrationMutex     sync.Mutex
-	migrationRunning   int64
-	lastMigrationUUID  string
-	tickReentranceFlag int64
+	initMutex             sync.Mutex
+	migrationMutex        sync.Mutex
+	vreplMigrationRunning int64
+	ghostMigrationRunning int64
+	ptoscMigrationRunning int64
+	lastMigrationUUID     string
+	tickReentranceFlag    int64
 
 	ticks             *timer.Timer
 	isOpen            bool
@@ -267,6 +269,20 @@ func (e *Executor) Close() {
 // triggerNextCheckInterval the next tick sooner than normal
 func (e *Executor) triggerNextCheckInterval() {
 	e.ticks.TriggerAfter(migrationNextCheckInterval)
+}
+
+// isAnyMigrationRunning sees if there's any migration running right now
+func (e *Executor) isAnyMigrationRunning() bool {
+	if atomic.LoadInt64(&e.vreplMigrationRunning) > 0 {
+		return true
+	}
+	if atomic.LoadInt64(&e.ghostMigrationRunning) > 0 {
+		return true
+	}
+	if atomic.LoadInt64(&e.ptoscMigrationRunning) > 0 {
+		return true
+	}
+	return false
 }
 
 func (e *Executor) ghostPanicFlagFileName(uuid string) string {
@@ -418,7 +434,7 @@ func (e *Executor) executeDirectly(ctx context.Context, onlineDDL *schema.Online
 }
 
 // terminateVReplMigration stops vreplication, then removes the _vt.vreplication entry for the given migration
-func (e *Executor) terminateVReplMigration(ctx context.Context, onlineDDL *schema.OnlineDDL) error {
+func (e *Executor) terminateVReplMigration(ctx context.Context, uuid string) error {
 	tmClient := tmclient.NewTabletManagerClient()
 	tablet, err := e.ts.GetTablet(ctx, e.tabletAlias)
 	if err != nil {
@@ -427,7 +443,7 @@ func (e *Executor) terminateVReplMigration(ctx context.Context, onlineDDL *schem
 	{
 		query, err := sqlparser.ParseAndBind(sqlStopVReplStream,
 			sqltypes.StringBindVariable(e.dbName),
-			sqltypes.StringBindVariable(onlineDDL.UUID),
+			sqltypes.StringBindVariable(uuid),
 		)
 		if err != nil {
 			return err
@@ -438,7 +454,7 @@ func (e *Executor) terminateVReplMigration(ctx context.Context, onlineDDL *schem
 	{
 		query, err := sqlparser.ParseAndBind(sqlDeleteVReplStream,
 			sqltypes.StringBindVariable(e.dbName),
-			sqltypes.StringBindVariable(onlineDDL.UUID),
+			sqltypes.StringBindVariable(uuid),
 		)
 		if err != nil {
 			return err
@@ -550,8 +566,6 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 
 	// Tables are now swapped! Migration is successful
 	_ = e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusComplete, false, progressPctFull)
-	atomic.StoreInt64(&e.migrationRunning, 0)
-
 	return nil
 }
 
@@ -560,7 +574,10 @@ func (e *Executor) ExecuteWithVReplication(ctx context.Context, onlineDDL *schem
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
 
-	if atomic.LoadInt64(&e.migrationRunning) > 0 {
+	// make sure there's no vreplication workflow running under same name
+	_ = e.terminateVReplMigration(ctx, onlineDDL.UUID)
+
+	if e.isAnyMigrationRunning() {
 		return ErrExecutorMigrationAlreadyRunning
 	}
 
@@ -574,7 +591,7 @@ func (e *Executor) ExecuteWithVReplication(ctx context.Context, onlineDDL *schem
 	}
 	defer conn.Close()
 
-	atomic.StoreInt64(&e.migrationRunning, 1)
+	atomic.StoreInt64(&e.vreplMigrationRunning, 1)
 	e.lastMigrationUUID = onlineDDL.UUID
 	if err := e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusRunning, false, progressPctStarted); err != nil {
 		return err
@@ -638,7 +655,7 @@ func (e *Executor) ExecuteWithGhost(ctx context.Context, onlineDDL *schema.Onlin
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
 
-	if atomic.LoadInt64(&e.migrationRunning) > 0 {
+	if e.isAnyMigrationRunning() {
 		return ErrExecutorMigrationAlreadyRunning
 	}
 
@@ -784,11 +801,11 @@ curl -s 'http://localhost:%d/schema-migration/report-status?uuid=%s&status=%s&dr
 		return err
 	}
 
-	atomic.StoreInt64(&e.migrationRunning, 1)
+	atomic.StoreInt64(&e.ghostMigrationRunning, 1)
 	e.lastMigrationUUID = onlineDDL.UUID
 
 	go func() error {
-		defer atomic.StoreInt64(&e.migrationRunning, 0)
+		defer atomic.StoreInt64(&e.ghostMigrationRunning, 0)
 		defer e.dropOnlineDDLUser(ctx)
 		defer e.gcArtifacts(ctx)
 
@@ -826,7 +843,7 @@ func (e *Executor) ExecuteWithPTOSC(ctx context.Context, onlineDDL *schema.Onlin
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
 
-	if atomic.LoadInt64(&e.migrationRunning) > 0 {
+	if e.isAnyMigrationRunning() {
 		return ErrExecutorMigrationAlreadyRunning
 	}
 
@@ -1007,11 +1024,11 @@ export MYSQL_PWD
 		return err
 	}
 
-	atomic.StoreInt64(&e.migrationRunning, 1)
+	atomic.StoreInt64(&e.ptoscMigrationRunning, 1)
 	e.lastMigrationUUID = onlineDDL.UUID
 
 	go func() error {
-		defer atomic.StoreInt64(&e.migrationRunning, 0)
+		defer atomic.StoreInt64(&e.ptoscMigrationRunning, 0)
 		defer e.dropOnlineDDLUser(ctx)
 		defer e.gcArtifacts(ctx)
 
@@ -1081,21 +1098,14 @@ func (e *Executor) readMigration(ctx context.Context, uuid string) (onlineDDL *s
 
 // terminateMigration attempts to interrupt and hard-stop a running migration
 func (e *Executor) terminateMigration(ctx context.Context, onlineDDL *schema.OnlineDDL, lastMigrationUUID string) (foundRunning bool, err error) {
-	if atomic.LoadInt64(&e.migrationRunning) > 0 {
-		// double check: is the running migration the very same one we wish to cancel?
-		if onlineDDL.UUID == lastMigrationUUID {
-			// assuming all goes well in next steps, we can already report that there has indeed been a migration
-			foundRunning = true
-		}
-	}
 	switch onlineDDL.Strategy {
 	case schema.DDLStrategyOnline:
-		if err := e.terminateVReplMigration(ctx, onlineDDL); err != nil {
+		// migration could have started by a different tablet. We need to actively verify if it is running
+		foundRunning, _, _ = e.isVReplMigrationRunning(ctx, onlineDDL.UUID)
+		if err := e.terminateVReplMigration(ctx, onlineDDL.UUID); err != nil {
 			return foundRunning, fmt.Errorf("Error cancelling migration, vreplication exec error: %+v", err)
 		}
 		_ = e.updateMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusFailed)
-		atomic.StoreInt64(&e.migrationRunning, 0)
-
 	case schema.DDLStrategyPTOSC:
 		// see if pt-osc is running (could have been executed by this vttablet or one that crashed in the past)
 		if running, pid, _ := e.isPTOSCMigrationRunning(ctx, onlineDDL.UUID); running {
@@ -1116,6 +1126,13 @@ func (e *Executor) terminateMigration(ctx context.Context, onlineDDL *schema.Onl
 			}
 		}
 	case schema.DDLStrategyGhost:
+		if atomic.LoadInt64(&e.ghostMigrationRunning) > 0 {
+			// double check: is the running migration the very same one we wish to cancel?
+			if onlineDDL.UUID == lastMigrationUUID {
+				// assuming all goes well in next steps, we can already report that there has indeed been a migration
+				foundRunning = true
+			}
+		}
 		// gh-ost migrations are easy to kill: just touch their specific panic flag files. We trust
 		// gh-ost to terminate. No need to KILL it. And there's no trigger cleanup.
 		if err := e.createGhostPanicFlagFile(onlineDDL.UUID); err != nil {
@@ -1205,7 +1222,7 @@ func (e *Executor) scheduleNextMigration(ctx context.Context) error {
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
 
-	if atomic.LoadInt64(&e.migrationRunning) > 0 {
+	if e.isAnyMigrationRunning() {
 		return ErrExecutorMigrationAlreadyRunning
 	}
 
@@ -1319,7 +1336,7 @@ func (e *Executor) runNextMigration(ctx context.Context) error {
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
 
-	if atomic.LoadInt64(&e.migrationRunning) > 0 {
+	if e.isAnyMigrationRunning() {
 		return ErrExecutorMigrationAlreadyRunning
 	}
 
@@ -1526,16 +1543,18 @@ func (e *Executor) isVReplMigrationRunning(ctx context.Context, uuid string) (is
 	return false, s, nil
 }
 
-// reviewRunningMigrations iterates migrations in 'running' state (there really should just be one that is
-// actually running).
-func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning int, runningNotByThisProcess []string, err error) {
+// reviewRunningMigrations iterates migrations in 'running' state. Normally there's only one running, which was
+// spawned by this tablet; but vreplication migrations could also resume from failure.
+func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning int, cancellable []string, err error) {
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
 
 	r, err := e.execQuery(ctx, sqlSelectRunningMigrations)
 	if err != nil {
-		return countRunnning, runningNotByThisProcess, err
+		return countRunnning, cancellable, err
 	}
+	// we identify running vreplication migrations in this function
+	atomic.StoreInt64(&e.vreplMigrationRunning, 0)
 	for _, row := range r.Named().Rows {
 		uuid := row["migration_uuid"].ToString()
 		strategy := schema.DDLStrategy(row["strategy"].ToString())
@@ -1545,17 +1564,21 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 				// We check the _vt.vreplication table
 				running, s, err := e.isVReplMigrationRunning(ctx, uuid)
 				if err != nil {
-					return countRunnning, runningNotByThisProcess, err
+					return countRunnning, cancellable, err
 				}
 				if running {
+					// This VRepl migration may have started from outside this tablet, so
+					// vreplMigrationRunning could be zero. Whatever the case is, we're under
+					// migrationMutex lock and it's now safe to ensure vreplMigrationRunning is 1
+					atomic.StoreInt64(&e.vreplMigrationRunning, 1)
 					_ = e.updateMigrationTimestamp(ctx, "liveness_timestamp", uuid)
 					isReady, err := e.isVReplMigrationReadyToCutOver(ctx, s)
 					if err != nil {
-						return countRunnning, runningNotByThisProcess, err
+						return countRunnning, cancellable, err
 					}
 					if isReady {
 						if err := e.cutOverVReplMigration(ctx, s); err != nil {
-							return countRunnning, runningNotByThisProcess, err
+							return countRunnning, cancellable, err
 						}
 					}
 				}
@@ -1566,10 +1589,17 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 				// if the process is alive, we update the `liveness_timestamp` for this migration.
 				running, _, err := e.isPTOSCMigrationRunning(ctx, uuid)
 				if err != nil {
-					return countRunnning, runningNotByThisProcess, err
+					return countRunnning, cancellable, err
 				}
 				if running {
 					_ = e.updateMigrationTimestamp(ctx, "liveness_timestamp", uuid)
+				}
+				if uuid != e.lastMigrationUUID {
+					// This executor can only spawn one migration at a time. And that
+					// migration is identified by e.lastMigrationUUID.
+					// If we find a _running_ migration that does not have this UUID, it _must_
+					// mean the migration was started by a former vttablet (ie vttablet crashed and restarted)
+					cancellable = append(cancellable, uuid)
 				}
 			}
 		}
@@ -1580,10 +1610,10 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 			// migration is identified by e.lastMigrationUUID.
 			// If we find a _running_ migration that does not have this UUID, it _must_
 			// mean the migration was started by a former vttablet (ie vttablet crashed and restarted)
-			runningNotByThisProcess = append(runningNotByThisProcess, uuid)
+			cancellable = append(cancellable, uuid)
 		}
 	}
-	return countRunnning, runningNotByThisProcess, err
+	return countRunnning, cancellable, err
 }
 
 // reviewStaleMigrations marks as 'failed' migrations whose status is 'running' but which have
@@ -1728,9 +1758,9 @@ func (e *Executor) onMigrationCheckTick() {
 	if err := e.runNextMigration(ctx); err != nil {
 		log.Error(err)
 	}
-	if _, runningNotByThisProcess, err := e.reviewRunningMigrations(ctx); err != nil {
+	if _, cancellable, err := e.reviewRunningMigrations(ctx); err != nil {
 		log.Error(err)
-	} else if err := e.cancelMigrations(ctx, runningNotByThisProcess); err != nil {
+	} else if err := e.cancelMigrations(ctx, cancellable); err != nil {
 		log.Error(err)
 	}
 	if err := e.reviewStaleMigrations(ctx); err != nil {
