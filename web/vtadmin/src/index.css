@@ -162,7 +162,9 @@ table {
 }
 
 table th {
-  padding: 8px;
+  font-size: var(--fontSizeSmall);
+  padding: 8px 12px;
+  text-align: left;
 }
 
 table tbody td {
