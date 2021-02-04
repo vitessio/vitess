@@ -45,14 +45,13 @@ type (
 
 	// SelectStatement any SELECT statement.
 	SelectStatement interface {
+		Statement
 		iSelectStatement()
-		iStatement()
 		iInsertRows()
 		AddOrder(*Order)
 		SetLimit(*Limit)
 		SetLock(lock Lock)
 		MakeDistinct()
-		SQLNode
 	}
 
 	// DDLStatement represents any DDL Statement
@@ -537,16 +536,16 @@ type (
 	// UnlockTables represents the unlock statement
 	UnlockTables struct{}
 
-	// ExplainType is an enum for Explain.Type
+	// ExplainType is an enum for ExplainStmt.Type
 	ExplainType int8
 
-	// Explain represents an EXPLAIN statement
+	// ExplainStmt represents an Explain statement
 	ExplainStmt struct {
 		Type      ExplainType
 		Statement Statement
 	}
 
-	// ExplainTab represents the explain table statement
+	// ExplainTab represents the Explain table
 	ExplainTab struct {
 		Table TableName
 		Wild  string
@@ -583,7 +582,6 @@ func (*Rollback) iStatement()          {}
 func (*SRollback) iStatement()         {}
 func (*Savepoint) iStatement()         {}
 func (*Release) iStatement()           {}
-func (*Explain) iStatement()           {}
 func (*OtherRead) iStatement()         {}
 func (*OtherAdmin) iStatement()        {}
 func (*Select) iSelectStatement()      {}
@@ -604,7 +602,8 @@ func (*DropView) iStatement()          {}
 func (*TruncateTable) iStatement()     {}
 func (*RenameTable) iStatement()       {}
 func (*CallProc) iStatement()          {}
-func (*Desc) iStatement()              {}
+func (*ExplainStmt) iStatement()       {}
+func (*ExplainTab) iStatement()        {}
 
 func (*CreateView) iDDLStatement()    {}
 func (*AlterView) iDDLStatement()     {}
@@ -634,6 +633,9 @@ func (*RenameTableName) iAlterOption()         {}
 func (*RenameIndex) iAlterOption()             {}
 func (*Validation) iAlterOption()              {}
 func (TableOptions) iAlterOption()             {}
+
+func (*ExplainStmt) iExplain() {}
+func (*ExplainTab) iExplain()  {}
 
 // IsFullyParsed implements the DDLStatement interface
 func (*TruncateTable) IsFullyParsed() bool {
@@ -2499,7 +2501,7 @@ func (node *Release) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
-func (node *Explain) Format(buf *TrackedBuffer) {
+func (node *ExplainStmt) Format(buf *TrackedBuffer) {
 	format := ""
 	switch node.Type {
 	case EmptyType: // do nothing
@@ -2512,7 +2514,7 @@ func (node *Explain) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
-func (node *Desc) Format(buf *TrackedBuffer) {
+func (node *ExplainTab) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "explain %v", node.Table)
 	if node.Wild != "" {
 		buf.astPrintf(node, " %s", node.Wild)

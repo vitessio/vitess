@@ -342,10 +342,6 @@ func replaceDerivedTableSelect(newNode, parent SQLNode) {
 	parent.(*DerivedTable).Select = newNode.(SelectStatement)
 }
 
-func replaceDescTable(newNode, parent SQLNode) {
-	parent.(*Desc).Table = newNode.(TableName)
-}
-
 func replaceDropColumnName(newNode, parent SQLNode) {
 	parent.(*DropColumn).Name = newNode.(*ColName)
 }
@@ -362,8 +358,12 @@ func replaceExistsExprSubquery(newNode, parent SQLNode) {
 	parent.(*ExistsExpr).Subquery = newNode.(*Subquery)
 }
 
-func replaceExplainStatement(newNode, parent SQLNode) {
-	parent.(*Explain).Statement = newNode.(Statement)
+func replaceExplainStmtStatement(newNode, parent SQLNode) {
+	parent.(*ExplainStmt).Statement = newNode.(Statement)
+}
+
+func replaceExplainTabTable(newNode, parent SQLNode) {
+	parent.(*ExplainTab).Table = newNode.(TableName)
 }
 
 type replaceExprsItems int
@@ -1267,9 +1267,6 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 	case *DerivedTable:
 		a.apply(node, n.Select, replaceDerivedTableSelect)
 
-	case *Desc:
-		a.apply(node, n.Table, replaceDescTable)
-
 	case *DropColumn:
 		a.apply(node, n.Name, replaceDropColumnName)
 
@@ -1286,8 +1283,11 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 	case *ExistsExpr:
 		a.apply(node, n.Subquery, replaceExistsExprSubquery)
 
-	case *Explain:
-		a.apply(node, n.Statement, replaceExplainStatement)
+	case *ExplainStmt:
+		a.apply(node, n.Statement, replaceExplainStmtStatement)
+
+	case *ExplainTab:
+		a.apply(node, n.Table, replaceExplainTabTable)
 
 	case Exprs:
 		replacer := replaceExprsItems(0)
