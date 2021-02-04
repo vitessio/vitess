@@ -19,20 +19,28 @@ package command
 import (
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/spf13/cobra"
 
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
-	"vitess.io/vitess/go/vt/logutil"
-	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
 var (
+	// ChangeTabletType makes a ChangeTabletType gRPC call to a vtctld.
+	ChangeTabletType = &cobra.Command{
+		Use:  "ChangeTabletType [--dry-run] TABLET_ALIAS TABLET_TYPE",
+		Args: cobra.ExactArgs(2),
+		RunE: commandChangeTabletType,
+	}
+	// DeleteTablets makes a DeleteTablets gRPC call to a vtctld.
+	DeleteTablets = &cobra.Command{
+		Use:  "DeleteTablets TABLET_ALIAS [ TABLET_ALIAS ... ]",
+		Args: cobra.MinimumNArgs(1),
+		RunE: commandDeleteTablets,
+	}
 	// GetTablet makes a GetTablet gRPC call to a vtctld.
 	GetTablet = &cobra.Command{
 		Use:  "GetTablet alias",
@@ -46,6 +54,67 @@ var (
 		RunE: commandGetTablets,
 	}
 )
+
+var changeTabletTypeOptions = struct {
+	DryRun bool
+}{}
+
+func commandChangeTabletType(cmd *cobra.Command, args []string) error {
+	aliasStr := cmd.Flags().Arg(0)
+	typeStr := cmd.Flags().Arg(1)
+
+	alias, err := topoproto.ParseTabletAlias(aliasStr)
+	if err != nil {
+		return err
+	}
+
+	newType, err := topoproto.ParseTabletType(typeStr)
+	if err != nil {
+		return err
+	}
+
+	resp, err := client.ChangeTabletType(commandCtx, &vtctldatapb.ChangeTabletTypeRequest{
+		TabletAlias: alias,
+		DbType:      newType,
+		DryRun:      changeTabletTypeOptions.DryRun,
+	})
+	if err != nil {
+		return err
+	}
+
+	if resp.WasDryRun {
+		fmt.Println("--- DRY RUN ---")
+	}
+
+	fmt.Printf("- %v\n", cli.MarshalTabletAWK(resp.BeforeTablet))
+	fmt.Printf("+ %v\n", cli.MarshalTabletAWK(resp.AfterTablet))
+
+	return nil
+}
+
+var deleteTabletsOptions = struct {
+	AllowPrimary bool
+}{}
+
+func commandDeleteTablets(cmd *cobra.Command, args []string) error {
+	aliases, err := cli.TabletAliasesFromPosArgs(cmd.Flags().Args())
+	if err != nil {
+		return err
+	}
+
+	_, err = client.DeleteTablets(commandCtx, &vtctldatapb.DeleteTabletsRequest{
+		TabletAliases: aliases,
+		AllowPrimary:  deleteTabletsOptions.AllowPrimary,
+	})
+
+	if err != nil {
+		return fmt.Errorf("%w: while deleting %d tablets; please inspect the topo", err, len(aliases))
+	}
+
+	fmt.Printf("Successfully deleted %d tablets\n", len(aliases))
+
+	return nil
+}
 
 func commandGetTablet(cmd *cobra.Command, args []string) error {
 	aliasStr := cmd.Flags().Arg(0)
@@ -101,33 +170,8 @@ func commandGetTablets(cmd *cobra.Command, args []string) error {
 
 	switch format {
 	case "awk":
-		lineFn := func(t *topodatapb.Tablet) string {
-			ti := topo.TabletInfo{
-				Tablet: t,
-			}
-
-			keyspace := t.Keyspace
-			if keyspace == "" {
-				keyspace = "<null>"
-			}
-
-			shard := t.Shard
-			if shard == "" {
-				shard = "<null>"
-			}
-
-			mtst := "<null>"
-			// special case for old primary that hasn't been updated in the topo
-			// yet.
-			if t.MasterTermStartTime != nil && t.MasterTermStartTime.Seconds > 0 {
-				mtst = logutil.ProtoToTime(t.MasterTermStartTime).Format(time.RFC3339)
-			}
-
-			return fmt.Sprintf("%v %v %v %v %v %v %v %v", topoproto.TabletAliasString(t.Alias), keyspace, shard, topoproto.TabletTypeLString(t.Type), ti.Addr(), ti.MysqlAddr(), cli.MarshalMapAWK(t.Tags), mtst)
-		}
-
 		for _, t := range resp.Tablets {
-			fmt.Println(lineFn(t))
+			fmt.Println(cli.MarshalTabletAWK(t))
 		}
 	case "json":
 		data, err := cli.MarshalJSON(resp.Tablets)
@@ -142,6 +186,12 @@ func commandGetTablets(cmd *cobra.Command, args []string) error {
 }
 
 func init() {
+	ChangeTabletType.Flags().BoolVarP(&changeTabletTypeOptions.DryRun, "dry-run", "d", false, "Shows the proposed change without actually executing it")
+	Root.AddCommand(ChangeTabletType)
+
+	DeleteTablets.Flags().BoolVarP(&deleteTabletsOptions.AllowPrimary, "allow-primary", "p", false, "Allow the primary tablet of a shard to be deleted. Use with caution.")
+	Root.AddCommand(DeleteTablets)
+
 	Root.AddCommand(GetTablet)
 
 	GetTablets.Flags().StringSliceVarP(&getTabletsOptions.Cells, "cell", "c", nil, "list of cells to filter tablets by")

@@ -31,6 +31,30 @@ service Vtctl {
 
 // Service Vtctld exposes gRPC endpoints for each vt command.
 service Vtctld {
+  // ChangeTabletType changes the db type for the specified tablet, if possible.
+  // This is used primarily to arrange replicas, and it will not convert a
+  // primary. For that, use InitShardPrimary.
+  //
+  // NOTE: This command automatically updates the serving graph.
+  rpc ChangeTabletType(vtctldata.ChangeTabletTypeRequest) returns (vtctldata.ChangeTabletTypeResponse) {};
+  // CreateKeyspace creates the specified keyspace in the topology. For a
+  // SNAPSHOT keyspace, the request must specify the name of a base keyspace,
+  // as well as a snapshot time.
+  rpc CreateKeyspace(vtctldata.CreateKeyspaceRequest) returns (vtctldata.CreateKeyspaceResponse) {};
+  // CreateShard creates the specified shard in the topology.
+  rpc CreateShard(vtctldata.CreateShardRequest) returns (vtctldata.CreateShardResponse) {};
+  // DeleteKeyspace deletes the specified keyspace from the topology. In
+  // recursive mode, it also recursively deletes all shards in the keyspace.
+  // Otherwise, the keyspace must be empty (have no shards), or DeleteKeyspace
+  // returns an error.
+  rpc DeleteKeyspace(vtctldata.DeleteKeyspaceRequest) returns (vtctldata.DeleteKeyspaceResponse) {};
+  // DeleteShards deletes the specified shards from the topology. In recursive
+  // mode, it also deletes all tablets belonging to the shard. Otherwise, the
+  // shard must be empty (have no tablets) or DeleteShards returns an error for
+  // that shard.
+  rpc DeleteShards(vtctldata.DeleteShardsRequest) returns (vtctldata.DeleteShardsResponse) {};
+  // DeleteTablets deletes one or more tablets from the topology.
+  rpc DeleteTablets(vtctldata.DeleteTabletsRequest) returns (vtctldata.DeleteTabletsResponse) {};
   // FindAllShardsInKeyspace returns a map of shard names to shard references
   // for a given keyspace.
   rpc FindAllShardsInKeyspace(vtctldata.FindAllShardsInKeyspaceRequest) returns (vtctldata.FindAllShardsInKeyspaceResponse) {};
@@ -51,6 +75,8 @@ service Vtctld {
   // GetSchema returns the schema for a tablet, or just the schema for the
   // specified tables in that tablet.
   rpc GetSchema(vtctldata.GetSchemaRequest) returns (vtctldata.GetSchemaResponse) {};
+  // GetShard returns information about a shard in the topology.
+  rpc GetShard(vtctldata.GetShardRequest) returns (vtctldata.GetShardResponse) {};
   // GetSrvVSchema returns a the SrvVSchema for a cell.
   rpc GetSrvVSchema(vtctldata.GetSrvVSchemaRequest) returns (vtctldata.GetSrvVSchemaResponse) {};
   // GetTablet returns information about a tablet.
@@ -66,4 +92,11 @@ service Vtctld {
   // PlannedReparentShard or EmergencyReparentShard should be used in those
   // cases instead.
   rpc InitShardPrimary(vtctldata.InitShardPrimaryRequest) returns (vtctldata.InitShardPrimaryResponse) {};
+  // RemoveKeyspaceCell removes the specified cell from the Cells list for all
+  // shards in the specified keyspace, as well as from the SrvKeyspace for that
+  // keyspace in that cell.
+  rpc RemoveKeyspaceCell(vtctldata.RemoveKeyspaceCellRequest) returns (vtctldata.RemoveKeyspaceCellResponse) {};
+  // RemoveShardCell removes the specified cell from the specified shard's Cells
+  // list.
+  rpc RemoveShardCell(vtctldata.RemoveShardCellRequest) returns (vtctldata.RemoveShardCellResponse) {};
 }
