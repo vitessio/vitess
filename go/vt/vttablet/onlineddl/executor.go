@@ -628,6 +628,11 @@ func (e *Executor) ExecuteWithVReplication(ctx context.Context, onlineDDL *schem
 		if err != nil {
 			return err
 		}
+		// reload schema
+		if err := tmClient.ReloadSchema(ctx, tablet.Tablet, ""); err != nil {
+			return err
+		}
+
 		// create vreplication entry
 		insertVReplicationQuery, err := v.generateInsertStatement(ctx)
 		if err != nil {
