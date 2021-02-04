@@ -190,10 +190,12 @@ func TestMoveTablesStopFlags(t *testing.T) {
 		defer env.close()
 		env.tmc.expectVRQuery(100, mzCheckJournal, &sqltypes.Result{})
 		env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
+		// insert expects flag stop_after_copy to be true
 		insert := `/insert into _vt.vreplication\(workflow, source, pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, db_name\) values .*stop_after_copy:true.*`
 
 		env.tmc.expectVRQuery(200, insert, &sqltypes.Result{})
 		env.tmc.expectVRQuery(200, mzSelectIDQuery, &sqltypes.Result{})
+		// -start_stopped is tested by NOT expecting the update query which sets state to RUNNING
 		err = env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "t1", "",
 			"", false, "", true, true)
 		require.NoError(t, err)

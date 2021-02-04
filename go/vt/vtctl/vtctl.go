@@ -1969,6 +1969,9 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 	reverseReplication := subFlags.Bool("reverse_replication", true, "Also reverse the replication")
 	keepData := subFlags.Bool("keep_data", false, "Do not drop tables or shards (if true, only vreplication artifacts are cleaned up)")
 
+	startStopped := subFlags.Bool("start_stopped", false, "Do not start streams: streams start off in the Stopped state")
+	stopAfterCopy := subFlags.Bool("stop_after_copy", false, "Streams will be stopped once the copy phase is completed")
+
 	// MoveTables-only params
 	sourceKeyspace := subFlags.String("source", "", "Source keyspace")
 	tables := subFlags.String("tables", "", "A table spec or a list of tables")
@@ -1980,9 +1983,6 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 	sourceShards := subFlags.String("source_shards", "", "Source shards")
 	targetShards := subFlags.String("target_shards", "", "Target shards")
 	skipSchemaCopy := subFlags.Bool("skip_schema_copy", false, "Skip copying of schema to target shards")
-
-	startStopped := subFlags.Bool("start_stopped", false, "Do not start streams: streams start off in the Stopped state")
-	stopAfterCopy := subFlags.Bool("stop_after_copy", false, "Streams will be stopped once the copy phase is completed")
 
 	_ = subFlags.Bool("v2", true, "")
 
