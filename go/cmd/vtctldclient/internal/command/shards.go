@@ -65,6 +65,8 @@ func commandCreateShard(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	cli.FinishedParsing(cmd)
+
 	resp, err := client.CreateShard(commandCtx, &vtctldatapb.CreateShardRequest{
 		Keyspace:      keyspace,
 		ShardName:     shard,
@@ -96,6 +98,8 @@ func commandDeleteShards(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	cli.FinishedParsing(cmd)
+
 	_, err = client.DeleteShards(commandCtx, &vtctldatapb.DeleteShardsRequest{
 		Shards:        shards,
 		EvenIfServing: deleteShardsOptions.EvenIfServing,
@@ -116,6 +120,8 @@ func commandGetShard(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
+
+	cli.FinishedParsing(cmd)
 
 	resp, err := client.GetShard(commandCtx, &vtctldatapb.GetShardRequest{
 		Keyspace:  keyspace,
@@ -145,6 +151,8 @@ func commandRemoveShardCell(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
+
+	cli.FinishedParsing(cmd)
 
 	cell := cmd.Flags().Arg(1)
 

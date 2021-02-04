@@ -73,6 +73,8 @@ func commandChangeTabletType(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	cli.FinishedParsing(cmd)
+
 	resp, err := client.ChangeTabletType(commandCtx, &vtctldatapb.ChangeTabletTypeRequest{
 		TabletAlias: alias,
 		DbType:      newType,
@@ -102,6 +104,8 @@ func commandDeleteTablets(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	cli.FinishedParsing(cmd)
+
 	_, err = client.DeleteTablets(commandCtx, &vtctldatapb.DeleteTabletsRequest{
 		TabletAliases: aliases,
 		AllowPrimary:  deleteTabletsOptions.AllowPrimary,
@@ -122,6 +126,8 @@ func commandGetTablet(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
+
+	cli.FinishedParsing(cmd)
 
 	resp, err := client.GetTablet(commandCtx, &vtctldatapb.GetTabletRequest{TabletAlias: alias})
 	if err != nil {
@@ -158,6 +164,8 @@ func commandGetTablets(cmd *cobra.Command, args []string) error {
 	if getTabletsOptions.Keyspace == "" && getTabletsOptions.Shard != "" {
 		return fmt.Errorf("--shard (= %s) cannot be passed without also passing --keyspace", getTabletsOptions.Shard)
 	}
+
+	cli.FinishedParsing(cmd)
 
 	resp, err := client.GetTablets(commandCtx, &vtctldatapb.GetTabletsRequest{
 		Cells:    getTabletsOptions.Cells,
