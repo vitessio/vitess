@@ -1869,6 +1869,7 @@
 2021-02-04T02:10:17Z,region_example,https://github.com/vitessio/vitess/actions/runs/535780855
 2021-02-04T02:10:17Z,unit_race,https://github.com/vitessio/vitess/actions/runs/535780863
 2021-02-04T02:10:18Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/535780883
+2021-02-04T02:10:18Z,docker_test_1,https://github.com/vitessio/vitess/actions/runs/535780882
 2021-02-04T02:16:25Z,Cluster (11),https://github.com/vitessio/vitess/actions/runs/535792864
 2021-02-04T02:16:25Z,Cluster (12),https://github.com/vitessio/vitess/actions/runs/535792871
 2021-02-04T02:16:25Z,Cluster (13),https://github.com/vitessio/vitess/actions/runs/535792857
@@ -1895,6 +1896,9 @@
 2021-02-04T02:16:25Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/535792848
 2021-02-04T02:16:25Z,check_formatting,https://github.com/vitessio/vitess/actions/runs/535792862
 2021-02-04T02:16:25Z,cluster_initial_sharding_multi,https://github.com/vitessio/vitess/actions/runs/535792854
+2021-02-04T02:16:25Z,docker_test_1,https://github.com/vitessio/vitess/actions/runs/535792865
+2021-02-04T02:16:25Z,docker_test_2,https://github.com/vitessio/vitess/actions/runs/535792858
+2021-02-04T02:16:25Z,docker_test_3,https://github.com/vitessio/vitess/actions/runs/535792863
 2021-02-04T02:16:25Z,e2e_race,https://github.com/vitessio/vitess/actions/runs/535792866
 2021-02-04T02:16:25Z,endtoend,https://github.com/vitessio/vitess/actions/runs/535792845
 2021-02-04T02:16:25Z,golangci-lint,https://github.com/vitessio/vitess/actions/runs/535792879
@@ -1903,4 +1907,7 @@
 2021-02-04T02:16:25Z,region_example,https://github.com/vitessio/vitess/actions/runs/535792843
 2021-02-04T02:16:25Z,unit_race,https://github.com/vitessio/vitess/actions/runs/535792867
 2021-02-04T02:24:44Z,golangci-lint,https://github.com/vitessio/vitess/actions/runs/535809093
+2021-02-04T02:24:45Z,Cluster (13),https://github.com/vitessio/vitess/actions/runs/535809100
+2021-02-04T02:24:45Z,Cluster (15),https://github.com/vitessio/vitess/actions/runs/535809117
 2021-02-04T02:24:45Z,check_formatting,https://github.com/vitessio/vitess/actions/runs/535809118
+2021-02-04T02:24:45Z,cluster_initial_sharding_multi,https://github.com/vitessio/vitess/actions/runs/535809098
