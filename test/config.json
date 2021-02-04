@@ -268,7 +268,7 @@
 		},
 		"onlineddl_ghost": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl_ghost"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "onlineddl_ghost",
@@ -277,7 +277,7 @@
 		},
 		"onlineddl_vrepl": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl_vrepl"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "onlineddl_vrepl",
