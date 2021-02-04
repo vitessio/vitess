@@ -217,6 +217,7 @@ func TestReshardStopFlags(t *testing.T) {
 
 	env.expectValidation()
 	env.expectNoRefStream()
+	// inserts into the two shards expects flag stop_after_copy to be true
 
 	env.tmc.expectVRQuery(
 		200,
@@ -232,6 +233,7 @@ func TestReshardStopFlags(t *testing.T) {
 			eol,
 		&sqltypes.Result{},
 	)
+	// -start_stopped is tested by NOT expecting the update query which sets state to RUNNING
 
 	err := env.wr.Reshard(context.Background(), env.keyspace, env.workflow, env.sources, env.targets, true, "", "", true, true)
 	assert.NoError(t, err)
