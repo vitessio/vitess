@@ -122,7 +122,7 @@ type GCStatus struct {
 // NewTableGC creates a table collector
 func NewTableGC(env tabletenv.Env, ts *topo.Server, tabletTypeFunc func() topodatapb.TabletType, lagThrottler *throttle.Throttler) *TableGC {
 	collector := &TableGC{
-		throttlerClient: throttle.NewBackgroundClient(lagThrottler, throttlerAppName, throttle.ThrottleCheckSelf),
+		throttlerClient: throttle.NewBackgroundClient(lagThrottler, throttlerAppName, throttle.ThrottleCheckPrimaryWrite),
 		isPrimary:       0,
 		isOpen:          0,
 
