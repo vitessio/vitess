@@ -49,6 +49,7 @@ type LogStats struct {
 	EndTime       time.Time
 	ShardQueries  uint32
 	RowsAffected  uint64
+	RowsReturned  uint64
 	PlanTime      time.Duration
 	ExecuteTime   time.Duration
 	CommitTime    time.Duration

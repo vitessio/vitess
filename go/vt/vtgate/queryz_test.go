@@ -48,7 +48,7 @@ func TestQueryzHandler(t *testing.T) {
 		t.Fatalf("couldn't get plan from cache")
 	}
 	plan1 := result.(*engine.Plan)
-	plan1.ExecTime = time.Duration(1 * time.Millisecond)
+	plan1.ExecTime = 1 * time.Millisecond
 
 	// scatter
 	sql = "select id from user"
@@ -59,7 +59,7 @@ func TestQueryzHandler(t *testing.T) {
 		t.Fatalf("couldn't get plan from cache")
 	}
 	plan2 := result.(*engine.Plan)
-	plan2.ExecTime = time.Duration(1 * time.Second)
+	plan2.ExecTime = 1 * time.Second
 
 	sql = "insert into user (id, name) values (:id, :name)"
 	_, err = executorExec(executor, sql, map[string]*querypb.BindVariable{
@@ -88,8 +88,8 @@ func TestQueryzHandler(t *testing.T) {
 
 	require.NoError(t, err)
 
-	plan3.ExecTime = time.Duration(100 * time.Millisecond)
-	plan4.ExecTime = time.Duration(200 * time.Millisecond)
+	plan3.ExecTime = 100 * time.Millisecond
+	plan4.ExecTime = 200 * time.Millisecond
 
 	queryzHandler(executor, resp, req)
 	body, _ := ioutil.ReadAll(resp.Body)
@@ -99,10 +99,12 @@ func TestQueryzHandler(t *testing.T) {
 		`<td>1</td>`,
 		`<td>0.001000</td>`,
 		`<td>1</td>`,
+		`<td>0</td>`,
 		`<td>1</td>`,
 		`<td>0</td>`,
 		`<td>0.001000</td>`,
 		`<td>1.000000</td>`,
+		`<td>0.000000</td>`,
 		`<td>1.000000</td>`,
 		`<td>0.000000</td>`,
 		`</tr>`,
@@ -114,10 +116,12 @@ func TestQueryzHandler(t *testing.T) {
 		`<td>1</td>`,
 		`<td>1.000000</td>`,
 		`<td>8</td>`,
+		`<td>0</td>`,
 		`<td>8</td>`,
 		`<td>0</td>`,
 		`<td>1.000000</td>`,
 		`<td>8.000000</td>`,
+		`<td>0.000000</td>`,
 		`<td>8.000000</td>`,
 		`<td>0.000000</td>`,
 		`</tr>`,
@@ -131,9 +135,11 @@ func TestQueryzHandler(t *testing.T) {
 		`<td>2</td>`,
 		`<td>2</td>`,
 		`<td>0</td>`,
+		`<td>0</td>`,
 		`<td>0.050000</td>`,
 		`<td>1.000000</td>`,
 		`<td>1.000000</td>`,
+		`<td>0.000000</td>`,
 		`<td>0.000000</td>`,
 		`</tr>`,
 	}
@@ -146,9 +152,11 @@ func TestQueryzHandler(t *testing.T) {
 		`<td>2</td>`,
 		`<td>2</td>`,
 		`<td>0</td>`,
+		`<td>0</td>`,
 		`<td>0.100000</td>`,
 		`<td>1.000000</td>`,
 		`<td>1.000000</td>`,
+		`<td>0.000000</td>`,
 		`<td>0.000000</td>`,
 		`</tr>`,
 	}

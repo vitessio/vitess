@@ -86,7 +86,6 @@ func (ms *MemorySort) Execute(vcursor VCursor, bindVars map[string]*querypb.Bind
 	result.Rows = sh.rows
 	if len(result.Rows) > count {
 		result.Rows = result.Rows[:count]
-		result.RowsAffected = uint64(count)
 	}
 	return result.Truncate(ms.TruncateColumnCount), nil
 }
@@ -151,6 +150,7 @@ func (ms *MemorySort) Inputs() []Primitive {
 	return []Primitive{ms.Input}
 }
 
+// NeedsTransaction implements the Primitive interface
 func (ms *MemorySort) NeedsTransaction() bool {
 	return ms.Input.NeedsTransaction()
 }

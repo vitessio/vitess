@@ -59,12 +59,13 @@ type TabletPlan struct {
 	Rules      *rules.Rules
 	Authorized []*tableacl.ACLResult
 
-	mu         sync.Mutex
-	QueryCount int64
-	Time       time.Duration
-	MysqlTime  time.Duration
-	RowCount   int64
-	ErrorCount int64
+	mu           sync.Mutex
+	QueryCount   int64
+	Time         time.Duration
+	MysqlTime    time.Duration
+	RowsAffected int64
+	RowsReturned int64
+	ErrorCount   int64
 }
 
 // Size allows TabletPlan to be in cache.LRUCache.
@@ -73,23 +74,25 @@ func (*TabletPlan) Size() int {
 }
 
 // AddStats updates the stats for the current TabletPlan.
-func (ep *TabletPlan) AddStats(queryCount int64, duration, mysqlTime time.Duration, rowCount, errorCount int64) {
+func (ep *TabletPlan) AddStats(queryCount int64, duration, mysqlTime time.Duration, rowsAffected, rowsReturned, errorCount int64) {
 	ep.mu.Lock()
 	ep.QueryCount += queryCount
 	ep.Time += duration
 	ep.MysqlTime += mysqlTime
-	ep.RowCount += rowCount
+	ep.RowsAffected += rowsAffected
+	ep.RowsReturned += rowsReturned
 	ep.ErrorCount += errorCount
 	ep.mu.Unlock()
 }
 
 // Stats returns the current stats of TabletPlan.
-func (ep *TabletPlan) Stats() (queryCount int64, duration, mysqlTime time.Duration, rowCount, errorCount int64) {
+func (ep *TabletPlan) Stats() (queryCount int64, duration, mysqlTime time.Duration, rowsAffected, rowsReturned, errorCount int64) {
 	ep.mu.Lock()
 	queryCount = ep.QueryCount
 	duration = ep.Time
 	mysqlTime = ep.MysqlTime
-	rowCount = ep.RowCount
+	rowsAffected = ep.RowsAffected
+	rowsReturned = ep.RowsReturned
 	errorCount = ep.ErrorCount
 	ep.mu.Unlock()
 	return
@@ -431,14 +434,15 @@ func (qe *QueryEngine) AddStats(planName, tableName string, queryCount int64, du
 }
 
 type perQueryStats struct {
-	Query      string
-	Table      string
-	Plan       planbuilder.PlanType
-	QueryCount int64
-	Time       time.Duration
-	MysqlTime  time.Duration
-	RowCount   int64
-	ErrorCount int64
+	Query        string
+	Table        string
+	Plan         planbuilder.PlanType
+	QueryCount   int64
+	Time         time.Duration
+	MysqlTime    time.Duration
+	RowsAffected int64
+	RowsReturned int64
+	ErrorCount   int64
 }
 
 func (qe *QueryEngine) handleHTTPQueryPlans(response http.ResponseWriter, request *http.Request) {
@@ -476,7 +480,7 @@ func (qe *QueryEngine) handleHTTPQueryStats(response http.ResponseWriter, reques
 			pqstats.Query = unicoded(sqlparser.TruncateForUI(v))
 			pqstats.Table = plan.TableName().String()
 			pqstats.Plan = plan.PlanID
-			pqstats.QueryCount, pqstats.Time, pqstats.MysqlTime, pqstats.RowCount, pqstats.ErrorCount = plan.Stats()
+			pqstats.QueryCount, pqstats.Time, pqstats.MysqlTime, pqstats.RowsAffected, pqstats.RowsReturned, pqstats.ErrorCount = plan.Stats()
 
 			qstats = append(qstats, pqstats)
 		}
