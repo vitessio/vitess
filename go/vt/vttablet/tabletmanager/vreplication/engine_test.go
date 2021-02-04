@@ -154,9 +154,6 @@ func TestEngineExec(t *testing.T) {
 	vre.Open(context.Background())
 	defer vre.Close()
 
-	for _, ddl := range withDDL.DDLs() {
-		dbClient.ExpectRequest(ddl, &sqltypes.Result{}, nil)
-	}
 	dbClient.ExpectRequest("use _vt", &sqltypes.Result{}, nil)
 	dbClient.ExpectRequest("insert into _vt.vreplication values(null)", &sqltypes.Result{InsertID: 1}, nil)
 	dbClient.ExpectRequest("select * from _vt.vreplication where id = 1", sqltypes.MakeTestResult(
@@ -495,9 +492,14 @@ func TestCreateDBAndTable(t *testing.T) {
 
 	expectDDLs := func() {
 		t.Helper()
-		for _, ddl := range withDDL.DDLs() {
-			dbClient.ExpectRequest(ddl, &sqltypes.Result{}, nil)
-		}
+		dbClient.ExpectRequest("CREATE DATABASE IF NOT EXISTS _vt", &sqltypes.Result{}, nil)
+		dbClient.ExpectRequest("DROP TABLE IF EXISTS _vt.blp_checkpoint", &sqltypes.Result{}, nil)
+		dbClient.ExpectRequestRE("CREATE TABLE IF NOT EXISTS _vt.vreplication.*", &sqltypes.Result{}, nil)
+		dbClient.ExpectRequestRE("ALTER TABLE _vt.vreplication ADD COLUMN db_name.*", &sqltypes.Result{}, nil)
+		dbClient.ExpectRequestRE("ALTER TABLE _vt.vreplication MODIFY source.*", &sqltypes.Result{}, nil)
+		dbClient.ExpectRequestRE("ALTER TABLE _vt.vreplication ADD KEY.*", &sqltypes.Result{}, nil)
+		dbClient.ExpectRequestRE("create table if not exists _vt.resharding_journal.*", &sqltypes.Result{}, nil)
+		dbClient.ExpectRequestRE("create table if not exists _vt.copy_state.*", &sqltypes.Result{}, nil)
 	}
 	expectDDLs()
 	dbClient.ExpectRequest("use _vt", &sqltypes.Result{}, nil)

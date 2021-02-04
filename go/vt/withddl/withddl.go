@@ -22,7 +22,6 @@ package withddl
 import (
 	"context"
 	"fmt"
-	"sync"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
@@ -37,8 +36,6 @@ import (
 // to the desired state and retry.
 type WithDDL struct {
 	ddls []string
-
-	applyOnce sync.Once
 }
 
 // New creates a new WithDDL.
@@ -46,29 +43,6 @@ func New(ddls []string) *WithDDL {
 	return &WithDDL{
 		ddls: ddls,
 	}
-}
-
-// DDLs returns the ddl statements used by this WithDDL
-func (wd *WithDDL) DDLs() []string {
-	return wd.ddls
-}
-
-// applyDDLs applies DDLs and ignores any schema error
-func (wd *WithDDL) applyDDLs(ctx context.Context, exec func(query string) (*sqltypes.Result, error)) error {
-	log.Infof("Updating schema")
-	for _, applyQuery := range wd.ddls {
-		_, err := exec(applyQuery)
-		if err == nil {
-			continue
-		}
-		if mysql.IsSchemaApplyError(err) {
-			continue
-		}
-		log.Warningf("DDL apply %v failed: %v", applyQuery, err)
-		// Return the original error.
-		return err
-	}
-	return nil
 }
 
 // Exec executes the query using the supplied function.
@@ -83,14 +57,6 @@ func (wd *WithDDL) Exec(ctx context.Context, query string, f interface{}) (*sqlt
 	if err != nil {
 		return nil, err
 	}
-
-	// On the first time this ever gets called, just go ahead and brute force the schema.
-	// this ensures even "soft" changes, like adding an index, are applied.
-	wd.applyOnce.Do(func() {
-		wd.applyDDLs(ctx, exec)
-	})
-
-	// Attempt to run queries:
 	qr, err := exec(query)
 	if err == nil {
 		return qr, nil
@@ -99,12 +65,19 @@ func (wd *WithDDL) Exec(ctx context.Context, query string, f interface{}) (*sqlt
 		return nil, err
 	}
 
-	// Got here? Means we hit a schema error
 	log.Infof("Updating schema for %v and retrying: %v", sqlparser.TruncateForUI(err.Error()), err)
-	if err := wd.applyDDLs(ctx, exec); err != nil {
+	for _, applyQuery := range wd.ddls {
+		_, merr := exec(applyQuery)
+		if merr == nil {
+			continue
+		}
+		if mysql.IsSchemaApplyError(merr) {
+			continue
+		}
+		log.Warningf("DDL apply %v failed: %v", applyQuery, merr)
+		// Return the original error.
 		return nil, err
 	}
-	// Try the query again
 	return exec(query)
 }
 
