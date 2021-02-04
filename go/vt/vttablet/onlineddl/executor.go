@@ -541,14 +541,19 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 		return err
 	}
 
-	ctx, cancel := context.WithTimeout(ctx, 2*cutOverThreshold)
-	defer cancel()
-	// Wait for target to reach the up-to-date pos
-	if err := tmClient.VReplicationWaitForPos(ctx, tablet.Tablet, int(s.id), s.pos); err != nil {
+	waitForPos := func() error {
+		ctx, cancel := context.WithTimeout(ctx, 2*cutOverThreshold)
+		defer cancel()
+		// Wait for target to reach the up-to-date pos
+		if err := tmClient.VReplicationWaitForPos(ctx, tablet.Tablet, int(s.id), s.pos); err != nil {
+			return err
+		}
+		// Target is now in sync with source!
+		return nil
+	}
+	if err := waitForPos(); err != nil {
 		return err
 	}
-	// Target is now in sync with source!
-
 	// Stop vreplication
 	if _, err := tmClient.VReplicationExec(ctx, tablet.Tablet, binlogplayer.StopVReplication(uint32(s.id), "stopped for online DDL cutover")); err != nil {
 		return err
