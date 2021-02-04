@@ -1959,3 +1959,6 @@
 2021-02-04T08:18:09Z,region_example,https://github.com/vitessio/vitess/actions/runs/536490992
 2021-02-04T08:18:09Z,unit_race,https://github.com/vitessio/vitess/actions/runs/536490995
 2021-02-04T12:03:42Z,Cluster (onlineddl_ghost),https://github.com/vitessio/vitess/actions/runs/537038624
+2021-02-04T12:05:13Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/537042732
+2021-02-04T12:16:28Z,Cluster (onlineddl_vrepl),https://github.com/vitessio/vitess/actions/runs/537069881
+2021-02-04T12:16:28Z,unit_race,https://github.com/vitessio/vitess/actions/runs/537069848
