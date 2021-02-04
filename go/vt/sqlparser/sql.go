@@ -8303,13 +8303,13 @@ yydefault:
 		yyDollar = yyS[yypt-3 : yypt+1]
 //line sql.y:2740
 		{
-			yyVAL.statement = &Desc{Table: yyDollar[2].tableName, Wild: yyDollar[3].str}
+			yyVAL.statement = &ExplainTab{Table: yyDollar[2].tableName, Wild: yyDollar[3].str}
 		}
 	case 515:
 		yyDollar = yyS[yypt-3 : yypt+1]
 //line sql.y:2744
 		{
-			yyVAL.statement = &Explain{Type: yyDollar[2].explainType, Statement: yyDollar[3].statement}
+			yyVAL.statement = &ExplainStmt{Type: yyDollar[2].explainType, Statement: yyDollar[3].statement}
 		}
 	case 516:
 		yyDollar = yyS[yypt-2 : yypt+1]

@@ -2738,11 +2738,11 @@ wild_opt:
 explain_statement:
   explain_synonyms table_name wild_opt
   {
-    $$ = &Desc{Table: $2, Wild: $3}
+    $$ = &ExplainTab{Table: $2, Wild: $3}
   }
 | explain_synonyms explain_format_opt explainable_statement
   {
-    $$ = &Explain{Type: $2, Statement: $3}
+    $$ = &ExplainStmt{Type: $2, Statement: $3}
   }
 
 other_statement:
