@@ -26,7 +26,7 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
-// StringMapValue augements flagutil.StringMapValue so it can be used as a
+// StringMapValue augments flagutil.StringMapValue so it can be used as a
 // pflag.Value.
 type StringMapValue struct {
 	flagutil.StringMapValue
