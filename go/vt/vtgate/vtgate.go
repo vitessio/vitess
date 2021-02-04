@@ -179,11 +179,7 @@ func Init(ctx context.Context, serv srvtopo.Server, cell string, tabletTypesToWa
 	srvResolver := srvtopo.NewResolver(serv, gw, cell)
 	resolver := NewResolver(srvResolver, serv, cell, sc)
 	vsm := newVStreamManager(srvResolver, serv, cell)
-
-	var cacheSize cache.Capacity = cache.SizeInEntries(*queryPlanCacheSize)
-	if *lfuQueryPlanCacheSizeBytes != 0 {
-		cacheSize = cache.SizeInBytes(*lfuQueryPlanCacheSizeBytes)
-	}
+	cacheSize := cache.GuessCapacity(*queryPlanCacheSize, *lfuQueryPlanCacheSizeBytes)
 
 	rpcVTGate = &VTGate{
 		executor: NewExecutor(ctx, serv, cell, resolver, *normalizeQueries, *streamBufferSize, cacheSize),
@@ -503,11 +499,7 @@ func LegacyInit(ctx context.Context, hc discovery.LegacyHealthCheck, serv srvtop
 	srvResolver := srvtopo.NewResolver(serv, gw, cell)
 	resolver := NewResolver(srvResolver, serv, cell, sc)
 	vsm := newVStreamManager(srvResolver, serv, cell)
-
-	var cacheSize cache.Capacity = cache.SizeInEntries(*queryPlanCacheSize)
-	if *lfuQueryPlanCacheSizeBytes != 0 {
-		cacheSize = cache.SizeInBytes(*lfuQueryPlanCacheSizeBytes)
-	}
+	cacheSize := cache.GuessCapacity(*queryPlanCacheSize, *lfuQueryPlanCacheSizeBytes)
 
 	rpcVTGate = &VTGate{
 		executor: NewExecutor(ctx, serv, cell, resolver, *normalizeQueries, *streamBufferSize, cacheSize),
