@@ -82,6 +82,26 @@ func TestStreamSQLSharded(t *testing.T) {
 	}
 }
 
+func TestStreamError(t *testing.T) {
+	executor, _, _, _ := createLegacyExecutorEnv()
+	logChan := QueryLogger.Subscribe("TestStreamError")
+	defer QueryLogger.Unsubscribe(logChan)
+
+	queries := []string{
+		"start transaction",
+		"begin",
+		"rollback",
+		"commit",
+	}
+	for _, query := range queries {
+		t.Run(query, func(t *testing.T) {
+			_, err := executorStreamMessages(executor, query)
+			require.Error(t, err)
+			require.Contains(t, err.Error(), "unsupported statement type for OLAP")
+		})
+	}
+}
+
 func executorStreamMessages(executor *Executor, sql string) (qr *sqltypes.Result, err error) {
 	results := make(chan *sqltypes.Result, 100)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
