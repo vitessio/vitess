@@ -1832,3 +1832,6 @@
 2021-02-03T22:59:59Z,Cluster (21),https://github.com/vitessio/vitess/actions/runs/535384340
 2021-02-03T22:59:59Z,Cluster (22),https://github.com/vitessio/vitess/actions/runs/535384365
 2021-02-03T22:59:59Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/535384348
+2021-02-04T01:00:47Z,Cluster (13),https://github.com/vitessio/vitess/actions/runs/535640981
+2021-02-04T01:00:47Z,Cluster (21),https://github.com/vitessio/vitess/actions/runs/535640998
+2021-02-04T01:00:47Z,cluster_initial_sharding_multi,https://github.com/vitessio/vitess/actions/runs/535641003
