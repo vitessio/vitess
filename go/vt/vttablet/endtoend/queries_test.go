@@ -19,6 +19,10 @@ package endtoend
 import (
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/test/utils"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vttablet/endtoend/framework"
 
@@ -29,7 +33,7 @@ var frameworkErrors = `fail failed:
 Result mismatch:
 '[[1 1] [1 2]]' does not match
 '[[2 1] [1 2]]'
-RowsAffected mismatch: 2, want 1
+RowsReturned mismatch: 2, want 1
 Rewritten mismatch:
 '["select eid, id from vitess_a where 1 != 1 union select eid, id from vitess_b where 1 != 1" "select /* fail */ eid, id from vitess_a union select eid, id from vitess_b limit 10001"]' does not match
 '["select eid id from vitess_a where 1 != 1 union select eid, id from vitess_b where 1 != 1" "select /* fail */ eid, id from vitess_a union select eid, id from vitess_b"]'
@@ -45,7 +49,7 @@ func TestTheFramework(t *testing.T) {
 			{"2", "1"},
 			{"1", "2"},
 		},
-		RowsAffected: 1,
+		RowsReturned: 1,
 		Rewritten: []string{
 			"select eid id from vitess_a where 1 != 1 union select eid, id from vitess_b where 1 != 1",
 			"select /* fail */ eid, id from vitess_a union select eid, id from vitess_b",
@@ -54,9 +58,8 @@ func TestTheFramework(t *testing.T) {
 		Table: "bb",
 	}
 	err := expectFail.Test("", client)
-	if err == nil || err.Error() != frameworkErrors {
-		t.Errorf("Framework result: \n%q\nexpecting\n%q", err.Error(), frameworkErrors)
-	}
+	require.Error(t, err)
+	utils.MustMatch(t, frameworkErrors, err.Error())
 }
 
 // Most of these tests are not really needed because the queries are mostly pass-through.
@@ -76,7 +79,7 @@ func TestQueries(t *testing.T) {
 				"select eid, id from vitess_a where 1 != 1 union select eid, id from vitess_b where 1 != 1",
 				"select /* union */ eid, id from vitess_a union select eid, id from vitess_b limit 10001",
 			},
-			RowsAffected: 2,
+			RowsReturned: 2,
 		},
 		&framework.TestCase{
 			Name:  "double union",
@@ -89,7 +92,7 @@ func TestQueries(t *testing.T) {
 				"select eid, id from vitess_a where 1 != 1 union select eid, id from vitess_b where 1 != 1 union select eid, id from vitess_d where 1 != 1",
 				"select /* double union */ eid, id from vitess_a union select eid, id from vitess_b union select eid, id from vitess_d limit 10001",
 			},
-			RowsAffected: 2,
+			RowsReturned: 2,
 		},
 		&framework.TestCase{
 			Name:  "distinct",
@@ -113,7 +116,7 @@ func TestQueries(t *testing.T) {
 				"select eid, sum(id) from vitess_a where 1 != 1 group by eid",
 				"select /* group by */ eid, sum(id) from vitess_a group by eid limit 10001",
 			},
-			RowsAffected: 1,
+			RowsReturned: 1,
 		},
 		&framework.TestCase{
 			Name:  "having",
@@ -125,7 +128,7 @@ func TestQueries(t *testing.T) {
 				"select sum(id) from vitess_a where 1 != 1",
 				"select /* having */ sum(id) from vitess_a having sum(id) = 3 limit 10001",
 			},
-			RowsAffected: 1,
+			RowsReturned: 1,
 		},
 		&framework.TestCase{
 			Name:  "limit",
@@ -140,7 +143,7 @@ func TestQueries(t *testing.T) {
 				"select eid, id from vitess_a where 1 != 1",
 				"select /* limit */ eid, id from vitess_a limit 1",
 			},
-			RowsAffected: 1,
+			RowsReturned: 1,
 		},
 		&framework.TestCase{
 			Name:  "multi-table",
@@ -155,7 +158,7 @@ func TestQueries(t *testing.T) {
 				"select a.eid, a.id, b.eid, b.id from vitess_a as a, vitess_b as b where 1 != 1",
 				"select /* multi-table */ a.eid, a.id, b.eid, b.id from vitess_a as a, vitess_b as b order by a.eid asc, a.id asc, b.eid asc, b.id asc limit 10001",
 			},
-			RowsAffected: 4,
+			RowsReturned: 4,
 		},
 		&framework.TestCase{
 			Name:  "join",
@@ -168,7 +171,7 @@ func TestQueries(t *testing.T) {
 				"select a.eid, a.id, b.eid, b.id from vitess_a as a join vitess_b as b on a.eid = b.eid and a.id = b.id where 1 != 1",
 				"select /* join */ a.eid, a.id, b.eid, b.id from vitess_a as a join vitess_b as b on a.eid = b.eid and a.id = b.id limit 10001",
 			},
-			RowsAffected: 2,
+			RowsReturned: 2,
 		},
 		&framework.TestCase{
 			Name:  "straight_join",
@@ -181,7 +184,7 @@ func TestQueries(t *testing.T) {
 				"select a.eid, a.id, b.eid, b.id from vitess_a as a straight_join vitess_b as b on a.eid = b.eid and a.id = b.id where 1 != 1",
 				"select /* straight_join */ a.eid, a.id, b.eid, b.id from vitess_a as a straight_join vitess_b as b on a.eid = b.eid and a.id = b.id limit 10001",
 			},
-			RowsAffected: 2,
+			RowsReturned: 2,
 		},
 		&framework.TestCase{
 			Name:  "cross join",
@@ -194,7 +197,7 @@ func TestQueries(t *testing.T) {
 				"select a.eid, a.id, b.eid, b.id from vitess_a as a join vitess_b as b on a.eid = b.eid and a.id = b.id where 1 != 1",
 				"select /* cross join */ a.eid, a.id, b.eid, b.id from vitess_a as a join vitess_b as b on a.eid = b.eid and a.id = b.id limit 10001",
 			},
-			RowsAffected: 2,
+			RowsReturned: 2,
 		},
 		&framework.TestCase{
 			Name:  "natural join",
@@ -207,7 +210,7 @@ func TestQueries(t *testing.T) {
 				"select a.eid, a.id, b.eid, b.id from vitess_a as a natural join vitess_b as b where 1 != 1",
 				"select /* natural join */ a.eid, a.id, b.eid, b.id from vitess_a as a natural join vitess_b as b limit 10001",
 			},
-			RowsAffected: 2,
+			RowsReturned: 2,
 		},
 		&framework.TestCase{
 			Name:  "left join",
@@ -220,7 +223,7 @@ func TestQueries(t *testing.T) {
 				"select a.eid, a.id, b.eid, b.id from vitess_a as a left join vitess_b as b on a.eid = b.eid and a.id = b.id where 1 != 1",
 				"select /* left join */ a.eid, a.id, b.eid, b.id from vitess_a as a left join vitess_b as b on a.eid = b.eid and a.id = b.id limit 10001",
 			},
-			RowsAffected: 2,
+			RowsReturned: 2,
 		},
 		&framework.TestCase{
 			Name:  "right join",
@@ -233,7 +236,7 @@ func TestQueries(t *testing.T) {
 				"select a.eid, a.id, b.eid, b.id from vitess_a as a right join vitess_b as b on a.eid = b.eid and a.id = b.id where 1 != 1",
 				"select /* right join */ a.eid, a.id, b.eid, b.id from vitess_a as a right join vitess_b as b on a.eid = b.eid and a.id = b.id limit 10001",
 			},
-			RowsAffected: 2,
+			RowsReturned: 2,
 		},
 		&framework.TestCase{
 			Name:  "complex select list",
@@ -246,7 +249,7 @@ func TestQueries(t *testing.T) {
 				"select eid + 1, id from vitess_a where 1 != 1",
 				"select /* complex select list */ eid + 1, id from vitess_a limit 10001",
 			},
-			RowsAffected: 2,
+			RowsReturned: 2,
 		},
 		&framework.TestCase{
 			Name:  "*",
@@ -259,7 +262,7 @@ func TestQueries(t *testing.T) {
 				"select * from vitess_a where 1 != 1",
 				"select /* * */ * from vitess_a limit 10001",
 			},
-			RowsAffected: 2,
+			RowsReturned: 2,
 		},
 		&framework.TestCase{
 			Name:  "table alias",
@@ -272,7 +275,7 @@ func TestQueries(t *testing.T) {
 				"select a.eid from vitess_a as a where 1 != 1",
 				"select /* table alias */ a.eid from vitess_a as a where a.eid = 1 limit 10001",
 			},
-			RowsAffected: 2,
+			RowsReturned: 2,
 		},
 		&framework.TestCase{
 			Name:  "parenthesised col",
@@ -284,7 +287,7 @@ func TestQueries(t *testing.T) {
 				"select eid from vitess_a where 1 != 1",
 				"select /* parenthesised col */ eid from vitess_a where eid = 1 and id = 1 limit 10001",
 			},
-			RowsAffected: 1,
+			RowsReturned: 1,
 		},
 		&framework.MultiCase{
 			Name: "for update",
@@ -299,7 +302,7 @@ func TestQueries(t *testing.T) {
 						"select eid from vitess_a where 1 != 1",
 						"select /* for update */ eid from vitess_a where eid = 1 and id = 1 limit 10001 for update",
 					},
-					RowsAffected: 1,
+					RowsReturned: 1,
 				},
 				framework.TestQuery("commit"),
 			},
@@ -317,7 +320,7 @@ func TestQueries(t *testing.T) {
 						"select eid from vitess_a where 1 != 1",
 						"select /* for update */ eid from vitess_a where eid = 1 and id = 1 limit 10001 lock in share mode",
 					},
-					RowsAffected: 1,
+					RowsReturned: 1,
 				},
 				framework.TestQuery("commit"),
 			},
@@ -332,7 +335,7 @@ func TestQueries(t *testing.T) {
 				"select id from vitess_a where 1 != 1",
 				"select /* complex where */ id from vitess_a where id + 1 = 2 limit 10001",
 			},
-			RowsAffected: 1,
+			RowsReturned: 1,
 		},
 		&framework.TestCase{
 			Name:  "complex where (non-value operand)",
@@ -344,7 +347,7 @@ func TestQueries(t *testing.T) {
 				"select eid, id from vitess_a where 1 != 1",
 				"select /* complex where (non-value operand) */ eid, id from vitess_a where eid = id limit 10001",
 			},
-			RowsAffected: 1,
+			RowsReturned: 1,
 		},
 		&framework.TestCase{
 			Name:  "(condition)",
@@ -357,7 +360,7 @@ func TestQueries(t *testing.T) {
 				"select * from vitess_a where 1 != 1",
 				"select /* (condition) */ * from vitess_a where eid = 1 limit 10001",
 			},
-			RowsAffected: 2,
+			RowsReturned: 2,
 		},
 		&framework.TestCase{
 			Name:  "inequality",
@@ -369,7 +372,7 @@ func TestQueries(t *testing.T) {
 				"select * from vitess_a where 1 != 1",
 				"select /* inequality */ * from vitess_a where id > 1 limit 10001",
 			},
-			RowsAffected: 1,
+			RowsReturned: 1,
 		},
 		&framework.TestCase{
 			Name:  "in",
@@ -382,7 +385,7 @@ func TestQueries(t *testing.T) {
 				"select * from vitess_a where 1 != 1",
 				"select /* in */ * from vitess_a where id in (1, 2) limit 10001",
 			},
-			RowsAffected: 2,
+			RowsReturned: 2,
 		},
 		&framework.TestCase{
 			Name:  "between",
@@ -395,7 +398,7 @@ func TestQueries(t *testing.T) {
 				"select * from vitess_a where 1 != 1",
 				"select /* between */ * from vitess_a where id between 1 and 2 limit 10001",
 			},
-			RowsAffected: 2,
+			RowsReturned: 2,
 		},
 		&framework.TestCase{
 			Name:  "order",
@@ -408,7 +411,7 @@ func TestQueries(t *testing.T) {
 				"select * from vitess_a where 1 != 1",
 				"select /* order */ * from vitess_a order by id desc limit 10001",
 			},
-			RowsAffected: 2,
+			RowsReturned: 2,
 		},
 		&framework.TestCase{
 			Name:  "select in select list",
@@ -420,7 +423,7 @@ func TestQueries(t *testing.T) {
 				"select (select eid from vitess_a where 1 != 1), eid from vitess_a where 1 != 1",
 				"select (select eid from vitess_a where id = 1), eid from vitess_a where id = 2 limit 10001",
 			},
-			RowsAffected: 1,
+			RowsReturned: 1,
 		},
 		&framework.TestCase{
 			Name:  "select in from clause",
@@ -432,7 +435,7 @@ func TestQueries(t *testing.T) {
 				"select eid from (select eid from vitess_a where 1 != 1) as a where 1 != 1",
 				"select eid from (select eid from vitess_a where id = 2) as a limit 10001",
 			},
-			RowsAffected: 1,
+			RowsReturned: 1,
 		},
 		&framework.MultiCase{
 			Name: "select in transaction",

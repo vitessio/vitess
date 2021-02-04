@@ -294,11 +294,7 @@ func checkForPoolingUnsafeConstructs(expr sqlparser.SQLNode) error {
 	return sqlparser.Walk(func(in sqlparser.SQLNode) (kontinue bool, err error) {
 		switch node := in.(type) {
 		case *sqlparser.Set:
-			for _, setExpr := range node.Exprs {
-				if setExpr.Name.AtCount() > 0 {
-					return false, genError(node)
-				}
-			}
+			return false, genError(node)
 		case *sqlparser.FuncExpr:
 			if sqlparser.IsLockingFunc(node) {
 				return false, genError(node)

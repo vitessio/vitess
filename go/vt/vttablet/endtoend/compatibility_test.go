@@ -77,7 +77,6 @@ func TestCharaterSet(t *testing.T) {
 				Flags:        128,
 			},
 		},
-		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			{
 				sqltypes.TestValue(sqltypes.Int32, "1"),
@@ -232,7 +231,6 @@ func TestInts(t *testing.T) {
 				Flags:        32864,
 			},
 		},
-		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			{
 				sqltypes.TestValue(sqltypes.Int8, "-128"),
@@ -268,7 +266,6 @@ func TestInts(t *testing.T) {
 				Flags:        32928,
 			},
 		},
-		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			{
 				sqltypes.TestValue(sqltypes.Uint64, "18446744073709551615"),
@@ -358,7 +355,6 @@ func TestFractionals(t *testing.T) {
 				Flags:        32768,
 			},
 		},
-		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			{
 				sqltypes.TestValue(sqltypes.Int32, "1"),
@@ -501,7 +497,6 @@ func TestStrings(t *testing.T) {
 				Flags:        2048,
 			},
 		},
-		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			{
 				sqltypes.TestValue(sqltypes.VarBinary, "a"),
@@ -605,7 +600,6 @@ func TestMiscTypes(t *testing.T) {
 				Flags:        144,
 			},
 		},
-		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			{
 				sqltypes.TestValue(sqltypes.Int32, "1"),
@@ -635,7 +629,6 @@ func TestNull(t *testing.T) {
 				Flags:   32896,
 			},
 		},
-		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			{
 				{},
@@ -689,7 +682,6 @@ func TestJSONType(t *testing.T) {
 				Flags:        144,
 			},
 		},
-		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			{
 				sqltypes.TestValue(sqltypes.Int32, "1"),

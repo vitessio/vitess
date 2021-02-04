@@ -150,9 +150,8 @@ func (e *Executor) startVStream(ctx context.Context, keyspace string, shard stri
 	}
 	send := func(evs []*binlogdata.VEvent) error {
 		result := &sqltypes.Result{
-			Fields:       nil,
-			RowsAffected: 0,
-			Rows:         [][]sqltypes.Value{},
+			Fields: nil,
+			Rows:   [][]sqltypes.Value{},
 		}
 		for _, ev := range evs {
 			if totalRows+numRows >= limit {
@@ -188,7 +187,6 @@ func (e *Executor) startVStream(ctx context.Context, keyspace string, shard stri
 						break
 					}
 				}
-				result.RowsAffected = uint64(numRows)
 			default:
 			}
 		}

@@ -83,11 +83,11 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 
 		if reply == nil {
 			qre.tsv.qe.AddStats(planName, tableName, 1, duration, mysqlTime, 0, 1)
-			qre.plan.AddStats(1, duration, mysqlTime, 0, 1)
+			qre.plan.AddStats(1, duration, mysqlTime, 0, 0, 1)
 			return
 		}
 		qre.tsv.qe.AddStats(planName, tableName, 1, duration, mysqlTime, int64(reply.RowsAffected), 0)
-		qre.plan.AddStats(1, duration, mysqlTime, int64(reply.RowsAffected), 0)
+		qre.plan.AddStats(1, duration, mysqlTime, int64(reply.RowsAffected), int64(len(reply.Rows)), 0)
 		qre.logStats.RowsAffected = int(reply.RowsAffected)
 		qre.logStats.Rows = reply.Rows
 		qre.tsv.Stats().ResultHistogram.Add(int64(len(reply.Rows)))
@@ -137,7 +137,7 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 		return qr, nil
 	case p.PlanSelectLock:
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%s disallowed outside transaction", qre.plan.PlanID.String())
-	case p.PlanSet, p.PlanOtherRead, p.PlanOtherAdmin, p.PlanFlush:
+	case p.PlanOtherRead, p.PlanOtherAdmin, p.PlanFlush:
 		return qre.execOther()
 	case p.PlanSavepoint, p.PlanRelease, p.PlanSRollback:
 		return qre.execOther()
@@ -197,14 +197,14 @@ func (qre *QueryExecutor) execAsTransaction(f func(conn *StatefulConnection) (*s
 
 func (qre *QueryExecutor) txConnExec(conn *StatefulConnection) (*sqltypes.Result, error) {
 	switch qre.plan.PlanID {
-	case p.PlanInsert, p.PlanUpdate, p.PlanDelete:
+	case p.PlanInsert, p.PlanUpdate, p.PlanDelete, p.PlanSet:
 		return qre.txFetch(conn, true)
 	case p.PlanInsertMessage:
 		qre.bindVars["#time_now"] = sqltypes.Int64BindVariable(time.Now().UnixNano())
 		return qre.txFetch(conn, true)
 	case p.PlanUpdateLimit, p.PlanDeleteLimit:
 		return qre.execDMLLimit(conn)
-	case p.PlanSet, p.PlanOtherRead, p.PlanOtherAdmin, p.PlanFlush:
+	case p.PlanOtherRead, p.PlanOtherAdmin, p.PlanFlush:
 		return qre.execStatefulConn(conn, qre.query, true)
 	case p.PlanSavepoint, p.PlanRelease, p.PlanSRollback:
 		return qre.execStatefulConn(conn, qre.query, true)
@@ -506,7 +506,6 @@ func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewInt64(ret),
 		}},
-		RowsAffected: 1,
 	}, nil
 }
 

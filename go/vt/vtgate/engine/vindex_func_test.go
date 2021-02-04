@@ -137,7 +137,7 @@ func TestVindexFuncMap(t *testing.T) {
 			sqltypes.MakeTrusted(sqltypes.VarBinary, []byte{0x60}),
 			sqltypes.NULL,
 		}},
-		RowsAffected: 1,
+		RowsAffected: 0,
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("Execute(Map, uvindex(none)):\n%v, want\n%v", got, want)
@@ -191,7 +191,7 @@ func TestVindexFuncMap(t *testing.T) {
 			sqltypes.MakeTrusted(sqltypes.VarBinary, []byte{0x60}),
 			sqltypes.NULL,
 		}},
-		RowsAffected: 1,
+		RowsAffected: 0,
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("Execute(Map, uvindex(none)):\n%v, want\n%v", got, want)
