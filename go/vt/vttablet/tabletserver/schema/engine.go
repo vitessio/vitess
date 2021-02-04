@@ -327,11 +327,13 @@ func (se *Engine) reload(ctx context.Context) error {
 			continue
 		}
 		log.V(2).Infof("Reading schema for table: %s", tableName)
-		table, err := LoadTable(conn, tableName, row[1].ToString(), row[3].ToString())
+		table, err := LoadTable(conn, tableName, row[3].ToString())
 		if err != nil {
 			rec.RecordError(err)
 			continue
 		}
+		table.FileSize, _ = evalengine.ToUint64(row[4])
+		table.AllocatedSize, _ = evalengine.ToUint64(row[5])
 		changedTables[tableName] = table
 		if _, ok := se.tables[tableName]; ok {
 			altered = append(altered, tableName)
