@@ -1,9 +1,9 @@
-name: Cluster (26)
+name: Cluster (onlineddl_ghost)
 on: [push, pull_request]
 jobs:
 
   build:
-    name: Run endtoend tests on Cluster (26)
+    name: Run endtoend tests on Cluster (onlineddl_ghost)
     runs-on: ubuntu-latest
 
     steps:
@@ -35,4 +35,4 @@ jobs:
       timeout-minutes: 30
       run: |
         source build.env
-        eatmydata -- go run test.go -docker=false -print-log -follow -shard 26
+        eatmydata -- go run test.go -docker=false -print-log -follow -shard onlineddl_ghost

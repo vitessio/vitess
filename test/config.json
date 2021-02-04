@@ -266,12 +266,21 @@
 				"site_test"
 			]
 		},
-		"onlineddl": {
+		"onlineddl_ghost": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "26",
+			"Shard": "onlineddl_ghost",
+			"RetryMax": 0,
+			"Tags": []
+		},
+		"onlineddl_vrepl": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "onlineddl_vrepl",
 			"RetryMax": 0,
 			"Tags": []
 		},
