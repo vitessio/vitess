@@ -120,6 +120,10 @@ func TestMain(m *testing.M) {
 			"-schema_change_check_interval", "1"}
 
 		clusterInstance.VtTabletExtraArgs = []string{
+			"-enable-lag-throttler",
+			"-throttle_threshold", "1s",
+			"-heartbeat_enable",
+			"-heartbeat_interval", "250ms",
 			"-migration_check_interval", "5s",
 		}
 		clusterInstance.VtGateExtraArgs = []string{
@@ -206,7 +210,6 @@ func TestSchemaChange(t *testing.T) {
 		checkRetryMigration(t, uuid, false)
 	})
 	t.Run("throttled migration", func(t *testing.T) {
-		// TODO(shlomi): throttle app, unthrottle
 		for i := range clusterInstance.Keyspaces[0].Shards {
 			throttleApp(clusterInstance.Keyspaces[0].Shards[i].Vttablets[0], throttlerAppName)
 			defer unthrottleApp(clusterInstance.Keyspaces[0].Shards[i].Vttablets[0], throttlerAppName)
@@ -230,6 +233,10 @@ func TestSchemaChange(t *testing.T) {
 		checkCancelAllMigrations(t, 0)
 	})
 	t.Run("cancel all migrations: some migrations to cancel", func(t *testing.T) {
+		for i := range clusterInstance.Keyspaces[0].Shards {
+			throttleApp(clusterInstance.Keyspaces[0].Shards[i].Vttablets[0], throttlerAppName)
+			defer unthrottleApp(clusterInstance.Keyspaces[0].Shards[i].Vttablets[0], throttlerAppName)
+		}
 		// spawn n migrations; cancel them via cancel-all
 		var wg sync.WaitGroup
 		count := 4
@@ -237,7 +244,7 @@ func TestSchemaChange(t *testing.T) {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				_ = testOnlineDDLStatement(t, alterTableThrottlingStatement, "online --max-load=Threads_running=1", "vtgate", "vrepl_col")
+				_ = testOnlineDDLStatement(t, alterTableThrottlingStatement, "online", "vtgate", "vrepl_col")
 			}()
 		}
 		wg.Wait()
@@ -312,6 +319,7 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 
 	strategy, _, err := schema.ParseDDLStrategy(ddlStrategy)
 	assert.NoError(t, err)
+
 	if !strategy.IsDirect() {
 		time.Sleep(time.Second * 20)
 	}
