@@ -75,6 +75,10 @@ func init() {
 	withDDL = withddl.New(allddls)
 }
 
+func WithDDLs() []string {
+	return withDDL.DDLs()
+}
+
 // this are the default tablet_types that will be used by the tablet picker to find sources for a vreplication stream
 // it can be overridden by passing a different list to the MoveTables or Reshard commands
 var tabletTypesStr = flag.String("vreplication_tablet_type", "MASTER,REPLICA", "comma separated list of tablet types used as a source")
