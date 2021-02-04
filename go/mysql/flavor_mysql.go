@@ -29,6 +29,15 @@ import (
 
 // mysqlFlavor implements the Flavor interface for Mysql.
 type mysqlFlavor struct{}
+type mysqlFlavor57 struct {
+	mysqlFlavor
+}
+type mysqlFlavor80 struct {
+	mysqlFlavor
+}
+
+var _ flavor = (*mysqlFlavor57)(nil)
+var _ flavor = (*mysqlFlavor80)(nil)
 
 // masterGTIDSet is part of the Flavor interface.
 func (mysqlFlavor) masterGTIDSet(c *Conn) (GTIDSet, error) {
@@ -230,4 +239,18 @@ func (mysqlFlavor) enableBinlogPlaybackCommand() string {
 // disableBinlogPlaybackCommand is part of the Flavor interface.
 func (mysqlFlavor) disableBinlogPlaybackCommand() string {
 	return ""
+}
+
+// baseShowTablesWithSizes is part of the Flavor interface.
+func (mysqlFlavor57) baseShowTablesWithSizes() string {
+	return `SELECT t.table_name, t.table_type, unix_timestamp(t.create_time), t.table_comment, i.file_size, i.allocated_size 
+		FROM information_schema.tables t, information_schema.innodb_sys_tablespaces i 
+		WHERE t.table_schema = database() and i.name = concat(t.table_schema,'/',t.table_name)`
+}
+
+// baseShowTablesWithSizes is part of the Flavor interface.
+func (mysqlFlavor80) baseShowTablesWithSizes() string {
+	return `SELECT t.table_name, t.table_type, unix_timestamp(t.create_time), t.table_comment, i.file_size, i.allocated_size 
+		FROM information_schema.tables t, information_schema.innodb_tablespaces i 
+		WHERE t.table_schema = database() and i.name = concat(t.table_schema,'/',t.table_name)`
 }

@@ -305,7 +305,7 @@ func (se *Engine) reload(ctx context.Context) error {
 	if se.SkipMetaCheck {
 		return nil
 	}
-	tableData, err := conn.Exec(ctx, mysql.BaseShowTables, maxTableCount, false)
+	tableData, err := conn.Exec(ctx, conn.BaseShowTables(), maxTableCount, false)
 	if err != nil {
 		return err
 	}
@@ -326,9 +326,10 @@ func (se *Engine) reload(ctx context.Context) error {
 
 		// TODO(sougou); find a better way detect changed tables. This method
 		// seems unreliable. The endtoend test flags all tables as changed.
-		if t, ok := se.tables[tableName]; ok && createTime < se.lastChange {
-			t.FileSize = fileSize
-			t.AllocatedSize = allocatedSize
+		tbl, isInTablesMap := se.tables[tableName]
+		if isInTablesMap && createTime < se.lastChange {
+			tbl.FileSize = fileSize
+			tbl.AllocatedSize = allocatedSize
 			continue
 		}
 
@@ -341,7 +342,7 @@ func (se *Engine) reload(ctx context.Context) error {
 		table.FileSize = fileSize
 		table.AllocatedSize = allocatedSize
 		changedTables[tableName] = table
-		if _, ok := se.tables[tableName]; ok {
+		if isInTablesMap {
 			altered = append(altered, tableName)
 		} else {
 			created = append(created, tableName)
@@ -354,11 +355,10 @@ func (se *Engine) reload(ctx context.Context) error {
 	// Compute and handle dropped tables.
 	var dropped []string
 	for tableName := range se.tables {
-		if curTables[tableName] {
-			continue
+		if !curTables[tableName] {
+			dropped = append(dropped, tableName)
+			delete(se.tables, tableName)
 		}
-		dropped = append(dropped, tableName)
-		delete(se.tables, tableName)
 	}
 
 	// Populate PKColumns for changed tables.
@@ -520,10 +520,10 @@ func (se *Engine) handleDebugSchema(response http.ResponseWriter, request *http.
 		acl.SendError(response, err)
 		return
 	}
-	se.handleHTTPSchema(response, request)
+	se.handleHTTPSchema(response)
 }
 
-func (se *Engine) handleHTTPSchema(response http.ResponseWriter, request *http.Request) {
+func (se *Engine) handleHTTPSchema(response http.ResponseWriter) {
 	// Ensure schema engine is Open. If vttablet came up in a non_serving role,
 	// the schema engine may not have been initialized.
 	err := se.Open()

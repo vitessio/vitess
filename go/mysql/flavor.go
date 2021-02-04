@@ -44,6 +44,8 @@ const (
 	mariaDBReplicationHackPrefix = "5.5.5-"
 	// mariaDBVersionString is present in
 	mariaDBVersionString = "MariaDB"
+	// mysql57VersionPrefix is the prefix for 5.7 mysql version, such as 5.7.31-log
+	mysql80VersionPrefix = "8.0."
 )
 
 // flavor is the abstract interface for a flavor.
@@ -111,6 +113,8 @@ type flavor interface {
 	// timestamp cannot be set by regular clients.
 	enableBinlogPlaybackCommand() string
 	disableBinlogPlaybackCommand() string
+
+	baseShowTablesWithSizes() string
 }
 
 // flavors maps flavor names to their implementation.
@@ -131,23 +135,21 @@ var flavors = make(map[string]func() flavor)
 // as well (not matching what c.ServerVersion is, but matching after we remove
 // the prefix).
 func (c *Conn) fillFlavor(params *ConnParams) {
-	if flavorFunc := flavors[params.Flavor]; flavorFunc != nil {
-		c.flavor = flavorFunc()
-		return
-	}
+	flavorFunc := flavors[params.Flavor]
 
-	if strings.HasPrefix(c.ServerVersion, mariaDBReplicationHackPrefix) {
+	switch {
+	case flavorFunc != nil:
+		c.flavor = flavorFunc()
+	case strings.HasPrefix(c.ServerVersion, mariaDBReplicationHackPrefix):
 		c.ServerVersion = c.ServerVersion[len(mariaDBReplicationHackPrefix):]
 		c.flavor = mariadbFlavor{}
-		return
-	}
-
-	if strings.Contains(c.ServerVersion, mariaDBVersionString) {
+	case strings.Contains(c.ServerVersion, mariaDBVersionString):
 		c.flavor = mariadbFlavor{}
-		return
+	case strings.HasPrefix(c.ServerVersion, mysql80VersionPrefix):
+		c.flavor = mysqlFlavor80{}
+	default:
+		c.flavor = mysqlFlavor57{}
 	}
-
-	c.flavor = mysqlFlavor{}
 }
 
 //
@@ -389,4 +391,9 @@ func (c *Conn) EnableBinlogPlaybackCommand() string {
 // binlog playback.
 func (c *Conn) DisableBinlogPlaybackCommand() string {
 	return c.flavor.disableBinlogPlaybackCommand()
+}
+
+// BaseShowTables returns a query that shows tables and their sizes
+func (c *Conn) BaseShowTables() string {
+	return c.flavor.baseShowTablesWithSizes()
 }

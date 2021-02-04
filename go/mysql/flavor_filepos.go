@@ -271,3 +271,8 @@ func (*filePosFlavor) enableBinlogPlaybackCommand() string {
 func (*filePosFlavor) disableBinlogPlaybackCommand() string {
 	return ""
 }
+
+// baseShowTablesWithSizes is part of the Flavor interface.
+func (*filePosFlavor) baseShowTablesWithSizes() string {
+	return ""
+}

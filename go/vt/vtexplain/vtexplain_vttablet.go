@@ -382,7 +382,7 @@ func initTabletEnvironment(ddls []sqlparser.DDLStatement, opts *Options) error {
 		}
 		showTableRows = append(showTableRows, mysql.BaseShowTablesRow(table, false, options))
 	}
-	schemaQueries[mysql.BaseShowTables] = &sqltypes.Result{
+	schemaQueries["mysql.BaseShowTables"] = &sqltypes.Result{
 		Fields: mysql.BaseShowTablesFields,
 		Rows:   showTableRows,
 	}
