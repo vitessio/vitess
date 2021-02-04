@@ -121,6 +121,8 @@ func commandCreateKeyspace(cmd *cobra.Command, args []string) error {
 		snapshotTime = logutil.TimeToProto(t)
 	}
 
+	cli.FinishedParsing(cmd)
+
 	req := &vtctldatapb.CreateKeyspaceRequest{
 		Name:               name,
 		Force:              createKeyspaceOptions.Force,
@@ -164,12 +166,14 @@ var deleteKeyspaceOptions = struct {
 }{}
 
 func commandDeleteKeyspace(cmd *cobra.Command, args []string) error {
-	ks := cmd.Flags().Arg(0)
+	cli.FinishedParsing(cmd)
 
+	ks := cmd.Flags().Arg(0)
 	_, err := client.DeleteKeyspace(commandCtx, &vtctldatapb.DeleteKeyspaceRequest{
 		Keyspace:  ks,
 		Recursive: deleteKeyspaceOptions.Recursive,
 	})
+
 	if err != nil {
 		return fmt.Errorf("DeleteKeyspace(%v) error: %w; please check the topo", ks, err)
 	}
@@ -180,6 +184,8 @@ func commandDeleteKeyspace(cmd *cobra.Command, args []string) error {
 }
 
 func commandFindAllShardsInKeyspace(cmd *cobra.Command, args []string) error {
+	cli.FinishedParsing(cmd)
+
 	ks := cmd.Flags().Arg(0)
 	resp, err := client.FindAllShardsInKeyspace(commandCtx, &vtctldatapb.FindAllShardsInKeyspaceRequest{
 		Keyspace: ks,
@@ -199,6 +205,8 @@ func commandFindAllShardsInKeyspace(cmd *cobra.Command, args []string) error {
 }
 
 func commandGetKeyspace(cmd *cobra.Command, args []string) error {
+	cli.FinishedParsing(cmd)
+
 	ks := cmd.Flags().Arg(0)
 	resp, err := client.GetKeyspace(commandCtx, &vtctldatapb.GetKeyspaceRequest{
 		Keyspace: ks,
@@ -214,6 +222,8 @@ func commandGetKeyspace(cmd *cobra.Command, args []string) error {
 }
 
 func commandGetKeyspaces(cmd *cobra.Command, args []string) error {
+	cli.FinishedParsing(cmd)
+
 	resp, err := client.GetKeyspaces(commandCtx, &vtctldatapb.GetKeyspacesRequest{})
 	if err != nil {
 		return err
@@ -235,6 +245,8 @@ var removeKeyspaceCellOptions = struct {
 }{}
 
 func commandRemoveKeyspaceCell(cmd *cobra.Command, args []string) error {
+	cli.FinishedParsing(cmd)
+
 	keyspace := cmd.Flags().Arg(0)
 	cell := cmd.Flags().Arg(1)
 
