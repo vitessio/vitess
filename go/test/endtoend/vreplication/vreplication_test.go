@@ -64,11 +64,11 @@ func throttleResponse(tablet *cluster.VttabletProcess, path string) (resp *http.
 	return resp, respBody, err
 }
 
-func throttleStreamer(tablet *cluster.VttabletProcess, app string) (*http.Response, string, error) {
+func throttleApp(tablet *cluster.VttabletProcess, app string) (*http.Response, string, error) {
 	return throttleResponse(tablet, fmt.Sprintf("throttler/throttle-app?app=%s&duration=1h", app))
 }
 
-func unthrottleStreamer(tablet *cluster.VttabletProcess, app string) (*http.Response, string, error) {
+func unthrottleApp(tablet *cluster.VttabletProcess, app string) (*http.Response, string, error) {
 	return throttleResponse(tablet, fmt.Sprintf("throttler/unthrottle-app?app=%s", app))
 }
 
@@ -604,7 +604,7 @@ func materializeProduct(t *testing.T) {
 		t.Run("throttle-app-product", func(t *testing.T) {
 			// Now, throttle the streamer on source tablets, insert some rows
 			for _, tab := range productTablets {
-				_, body, err := throttleStreamer(tab, sourceThrottlerAppName)
+				_, body, err := throttleApp(tab, sourceThrottlerAppName)
 				assert.NoError(t, err)
 				assert.Contains(t, body, sourceThrottlerAppName)
 			}
@@ -633,7 +633,7 @@ func materializeProduct(t *testing.T) {
 		t.Run("unthrottle-app-product", func(t *testing.T) {
 			// unthrottle on source tablets, and expect the rows to show up
 			for _, tab := range productTablets {
-				_, body, err := unthrottleStreamer(tab, sourceThrottlerAppName)
+				_, body, err := unthrottleApp(tab, sourceThrottlerAppName)
 				assert.NoError(t, err)
 				assert.Contains(t, body, sourceThrottlerAppName)
 			}
@@ -654,7 +654,7 @@ func materializeProduct(t *testing.T) {
 		t.Run("throttle-app-customer", func(t *testing.T) {
 			// Now, throttle the streamer on source tablets, insert some rows
 			for _, tab := range customerTablets {
-				_, body, err := throttleStreamer(tab, targetThrottlerAppName)
+				_, body, err := throttleApp(tab, targetThrottlerAppName)
 				assert.NoError(t, err)
 				assert.Contains(t, body, targetThrottlerAppName)
 			}
@@ -683,7 +683,7 @@ func materializeProduct(t *testing.T) {
 		t.Run("unthrottle-app-customer", func(t *testing.T) {
 			// unthrottle on source tablets, and expect the rows to show up
 			for _, tab := range customerTablets {
-				_, body, err := unthrottleStreamer(tab, targetThrottlerAppName)
+				_, body, err := unthrottleApp(tab, targetThrottlerAppName)
 				assert.NoError(t, err)
 				assert.Contains(t, body, targetThrottlerAppName)
 			}
