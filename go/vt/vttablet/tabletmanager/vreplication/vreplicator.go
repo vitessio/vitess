@@ -327,7 +327,7 @@ func (vr *vreplicator) getSettingFKCheck() error {
 	if err != nil {
 		return err
 	}
-	if qr.RowsAffected != 1 || len(qr.Fields) != 1 {
+	if len(qr.Rows) != 1 || len(qr.Fields) != 1 {
 		return fmt.Errorf("unable to select @@foreign_key_checks")
 	}
 	vr.originalFKCheckSetting, err = evalengine.ToInt64(qr.Rows[0][0])

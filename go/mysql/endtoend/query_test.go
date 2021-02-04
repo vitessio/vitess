@@ -100,7 +100,6 @@ func TestQueries(t *testing.T) {
 				sqltypes.MakeTrusted(querypb.Type_VARCHAR, []byte("nice name")),
 			},
 		},
-		RowsAffected: 1,
 	}
 	if !result.Equal(expectedResult) {
 		// MySQL 5.7 is adding the NO_DEFAULT_VALUE_FLAG to Flags.

@@ -136,9 +136,6 @@ func wrapStreamExecute(prim Primitive, vcursor VCursor, bindVars map[string]*que
 		}
 		return nil
 	})
-	if result != nil {
-		result.RowsAffected = uint64(len(result.Rows))
-	}
 	return result, err
 }
 
