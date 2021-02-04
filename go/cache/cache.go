@@ -29,6 +29,31 @@ package cache
 // a LRU cache).
 const DefaultCacheSize = SizeInEntries(5000)
 
+// GuessCapacity returns a Capacity value for a cache instance based on the defaults in Vitess
+// and the options passed by the user
+func GuessCapacity(inEntries, inBytes int64) Capacity {
+	switch {
+	// If the default cache has a byte capacity, only override it if the user has explicitly
+	// passed a capacity in entries
+	case DefaultCacheSize.Bytes() != 0:
+		if inEntries != 0 {
+			return SizeInEntries(inEntries)
+		}
+		return SizeInBytes(inBytes)
+
+	// If the default cache has capacity in entries, only override it if the user has explicitly
+	// passed a capacity in bytes
+	case DefaultCacheSize.Entries() != 0:
+		if inBytes != 0 {
+			return SizeInBytes(inBytes)
+		}
+		return SizeInEntries(inEntries)
+
+	default:
+		panic("DefaultCacheSize is not initialized")
+	}
+}
+
 // const DefaultCacheSize = SizeInBytes(64 * 1024 * 1024)
 
 // Cache is a generic interface type for a data structure that keeps recently used

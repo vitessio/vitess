@@ -165,11 +165,7 @@ type QueryEngine struct {
 // You must call this only once.
 func NewQueryEngine(env tabletenv.Env, se *schema.Engine) *QueryEngine {
 	config := env.Config()
-
-	var cacheSize cache.Capacity = cache.SizeInEntries(config.QueryCacheSize)
-	if config.LFUQueryCacheSizeBytes != 0 {
-		cacheSize = cache.SizeInBytes(config.LFUQueryCacheSizeBytes)
-	}
+	cacheSize := cache.GuessCapacity(int64(config.QueryCacheSize), config.LFUQueryCacheSizeBytes)
 
 	qe := &QueryEngine{
 		env:              env,
