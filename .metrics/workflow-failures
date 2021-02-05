@@ -2043,5 +2043,7 @@
 2021-02-05T10:04:25Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/540038457
 2021-02-05T10:04:25Z,endtoend,https://github.com/vitessio/vitess/actions/runs/540038443
 2021-02-05T10:04:25Z,unit_race,https://github.com/vitessio/vitess/actions/runs/540038430
+2021-02-05T11:14:50Z,Cluster (21),https://github.com/vitessio/vitess/actions/runs/540205977
+2021-02-05T11:21:45Z,Cluster (21),https://github.com/vitessio/vitess/actions/runs/540221911
 2021-02-05T11:22:13Z,endtoend,https://github.com/vitessio/vitess/actions/runs/540222999
 2021-02-05T11:22:13Z,golangci-lint,https://github.com/vitessio/vitess/actions/runs/540222996
