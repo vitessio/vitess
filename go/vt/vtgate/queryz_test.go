@@ -43,6 +43,7 @@ func TestQueryzHandler(t *testing.T) {
 	sql := "select id from user where id = 1"
 	_, err := executorExec(executor, sql, nil)
 	require.NoError(t, err)
+	executor.plans.Wait()
 	result, ok := executor.plans.Get("@master:" + sql)
 	if !ok {
 		t.Fatalf("couldn't get plan from cache")
@@ -54,6 +55,7 @@ func TestQueryzHandler(t *testing.T) {
 	sql = "select id from user"
 	_, err = executorExec(executor, sql, nil)
 	require.NoError(t, err)
+	executor.plans.Wait()
 	result, ok = executor.plans.Get("@master:" + sql)
 	if !ok {
 		t.Fatalf("couldn't get plan from cache")
@@ -67,6 +69,7 @@ func TestQueryzHandler(t *testing.T) {
 		"name": sqltypes.BytesBindVariable([]byte("myname")),
 	})
 	require.NoError(t, err)
+	executor.plans.Wait()
 	result, ok = executor.plans.Get("@master:" + sql)
 	if !ok {
 		t.Fatalf("couldn't get plan from cache")
