@@ -241,16 +241,22 @@ func (mysqlFlavor) disableBinlogPlaybackCommand() string {
 	return ""
 }
 
-// baseShowTablesWithSizes is part of the Flavor interface.
-func (mysqlFlavor57) baseShowTablesWithSizes() string {
-	return `SELECT t.table_name, t.table_type, unix_timestamp(t.create_time), t.table_comment, i.file_size, i.allocated_size 
+// TablesWithSize57 is a query to select table along with size for mysql 5.7
+const TablesWithSize57 = `SELECT t.table_name, t.table_type, unix_timestamp(t.create_time), t.table_comment, i.file_size, i.allocated_size 
 		FROM information_schema.tables t, information_schema.innodb_sys_tablespaces i 
 		WHERE t.table_schema = database() and i.name = concat(t.table_schema,'/',t.table_name)`
+
+// TablesWithSize80 is a query to select table along with size for mysql 8.0
+const TablesWithSize80 = `SELECT t.table_name, t.table_type, unix_timestamp(t.create_time), t.table_comment, i.file_size, i.allocated_size 
+		FROM information_schema.tables t, information_schema.innodb_tablespaces i 
+		WHERE t.table_schema = database() and i.name = concat(t.table_schema,'/',t.table_name)`
+
+// baseShowTablesWithSizes is part of the Flavor interface.
+func (mysqlFlavor57) baseShowTablesWithSizes() string {
+	return TablesWithSize57
 }
 
 // baseShowTablesWithSizes is part of the Flavor interface.
 func (mysqlFlavor80) baseShowTablesWithSizes() string {
-	return `SELECT t.table_name, t.table_type, unix_timestamp(t.create_time), t.table_comment, i.file_size, i.allocated_size 
-		FROM information_schema.tables t, information_schema.innodb_tablespaces i 
-		WHERE t.table_schema = database() and i.name = concat(t.table_schema,'/',t.table_name)`
+	return TablesWithSize80
 }
