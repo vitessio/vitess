@@ -1588,6 +1588,43 @@ var (
 		}, {
 			input: "delete from t partition (p0) where a = 1",
 		}, {
+			input: "select name, dense_rank(a) over () from t",
+		}, {
+			input: "select name, dense_rank(a) over (partition by b) from t",
+		}, {
+			input: "select name, dense_rank(a) over (partition by b order by c asc) from t",
+		}, {
+			input: "select name, cume_dist(a) over (partition by b order by c asc) from t",
+		}, {
+			input: "select name, first_value(a) over (partition by b order by c asc) from t",
+		}, {
+			input: "select name, lag(a) over (partition by b order by c asc) from t",
+		}, {
+			input: "select name, last_value(a) over (partition by b order by c asc) from t",
+		}, {
+			input: "select name, lead(a) over (partition by b order by c asc) from t",
+		}, {
+			input: "select name, nth_value(a) over (partition by b order by c asc) from t",
+		}, {
+			input: "select name, ntile(a) over (partition by b order by c asc) from t",
+		}, {
+			input: "select name, percent_rank(a) over (partition by b order by c asc) from t",
+		}, {
+			input: "select name, rank(a) over (partition by b order by c asc) from t",
+		}, {
+			input: "select name, row_number(a) over (partition by b order by c asc) from t",
+		}, {
+			input: "select name, dense_rank(a) over (order by b) from t",
+			output: "select name, dense_rank(a) over ( order by b asc) from t",
+		}, {
+			input: "select name, dense_rank(a) over (partition by b order by c) from t",
+			output: "select name, dense_rank(a) over (partition by b order by c asc) from t",
+		}, {
+			input: "select name, dense_rank(a) over (partition by b order by c), lag(d) over (order by e desc) from t",
+			output: "select name, dense_rank(a) over (partition by b order by c asc), lag(d) over ( order by e desc) from t",
+		}, {
+			input: "select name, dense_rank(a) over window_name from t",
+		}, {
 			input: "stream * from t",
 		}, {
 			input: "stream /* comment */ * from t",

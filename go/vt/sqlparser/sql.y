@@ -2458,7 +2458,7 @@ select_expression:
   }
 | expression over_opt as_ci_opt
   {
-    $$ = &AliasedExpr{Expr: $1, Over: $2 As: $3}
+    $$ = &AliasedExpr{Expr: $1, Over: $2, As: $3}
   }
 | table_id '.' '*'
   {
@@ -2469,9 +2469,14 @@ select_expression:
     $$ = &StarExpr{TableName: TableName{Qualifier: $1, Name: $3}}
   }
 
+// TODO: handle ROWS UNBOUNDED PRECEDING et al
 over_opt:
   {
     $$ = nil
+  }
+| OVER sql_id
+  {
+    $$ = &Over{WindowName: $2}
   }
 | OVER openb order_by_opt closeb
   {
@@ -3860,7 +3865,6 @@ reserved_keyword:
 | CONVERT
 | CREATE
 | CROSS
-| CUME_DIST
 | CURRENT_DATE
 | CURRENT_TIME
 | CURRENT_TIMESTAMP
@@ -3870,7 +3874,6 @@ reserved_keyword:
 | DATABASES
 | DEFAULT
 | DELETE
-| DENSE_RANK
 | DESC
 | DESCRIBE
 | DISTINCT
@@ -3884,7 +3887,6 @@ reserved_keyword:
 | EXPLAIN
 | FALSE
 | FIRST
-| FIRST_VALUE
 | FOR
 | FORCE
 | FROM
@@ -3904,10 +3906,7 @@ reserved_keyword:
 | JOIN
 | JSON_TABLE
 | KEY
-| LAG
-| LAST_VALUE
 | LATERAL
-| LEAD
 | LEFT
 | LIKE
 | LIMIT
@@ -3921,8 +3920,6 @@ reserved_keyword:
 | NATURAL
 | NEXT // next should be doable as non-reserved, but is not due to the special `select next num_val` query that vitess supports
 | NOT
-| NTH_VALUE
-| NTILE
 | NULL
 | OF
 | OFF
@@ -3931,14 +3928,11 @@ reserved_keyword:
 | ORDER
 | OUTER
 | OVER
-| PERCENT_RANK
-| RANK
 | RECURSIVE
 | REGEXP
 | RENAME
 | REPLACE
 | RIGHT
-| ROW_NUMBER
 | SCHEMA
 | SELECT
 | SEPARATOR
@@ -4003,12 +3997,14 @@ non_reserved_keyword:
 | CONSTRAINT_CATALOG
 | CONSTRAINT_NAME
 | CONSTRAINT_SCHEMA
+| CUME_DIST
 | CURSOR_NAME
 | DATE
 | DATETIME
 | DECIMAL
 | DEFINITION
 | DESCRIPTION
+| DENSE_RANK
 | DOUBLE
 | DUPLICATE
 | ENFORCED
@@ -4017,6 +4013,7 @@ non_reserved_keyword:
 | EXCLUDE
 | EXPANSION
 | FIELDS
+| FIRST_VALUE
 | FLOAT_TYPE
 | FLUSH
 | FOLLOWING
@@ -4037,8 +4034,11 @@ non_reserved_keyword:
 | JSON
 | KEYS
 | KEY_BLOCK_SIZE
+| LAG
 | LANGUAGE
 | LAST_INSERT_ID
+| LAST_VALUE
+| LEAD
 | LESS
 | LEVEL
 | LINESTRING
@@ -4060,10 +4060,12 @@ non_reserved_keyword:
 | MYSQL_ERRNO
 | NAMES
 | NCHAR
+| NTH_VALUE
 | NESTED
 | NETWORK_NAMESPACE
 | NO
 | NOWAIT
+| NTILE
 | NULLS
 | NUMERIC
 | OFFSET
@@ -4077,6 +4079,7 @@ non_reserved_keyword:
 | OTHERS
 | PARTITION
 | PATH
+| PERCENT_RANK
 | PERSIST
 | PERSIST_ONLY
 | PLUGINS
@@ -4089,6 +4092,7 @@ non_reserved_keyword:
 | PROCESS
 | QUERY
 | RANDOM
+| RANK
 | READ
 | REAL
 | REFERENCE
@@ -4105,6 +4109,7 @@ non_reserved_keyword:
 | REUSE
 | ROLE
 | ROLLBACK
+| ROW_NUMBER
 | SCHEMA_NAME
 | SECONDARY
 | SECONDARY_ENGINE

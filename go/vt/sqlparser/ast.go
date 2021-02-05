@@ -2304,6 +2304,9 @@ type AliasedExpr struct {
 // Format formats the node.
 func (node *AliasedExpr) Format(buf *TrackedBuffer) {
 	buf.Myprintf("%v", node.Expr)
+	if node.Over != nil {
+		buf.Myprintf(" %v", node.Over)
+	}
 	if !node.As.IsEmpty() {
 		buf.Myprintf(" as %v", node.As)
 	}
@@ -2320,10 +2323,31 @@ func (node *AliasedExpr) walkSubtree(visit Visit) error {
 	)
 }
 
+// Over defines an OVER expression in a select
 type Over struct {
 	PartitionBy Exprs
 	OrderBy OrderBy
-	WindowName string
+	WindowName ColIdent
+}
+
+// Format formats the node.
+func (node Over) Format(buf *TrackedBuffer) {
+	if !node.WindowName.IsEmpty() {
+		buf.Myprintf("over %v", node.WindowName)
+	} else {
+		buf.Myprintf("over (")
+		if len(node.PartitionBy) > 0 {
+			buf.Myprintf("partition by %v", node.PartitionBy)
+		}
+		if len(node.OrderBy) > 0 {
+			buf.Myprintf("%v", node.OrderBy)
+		}
+		buf.Myprintf(")")
+	}
+}
+
+func (node Over) walkSubtree(visit Visit) error {
+	return Walk(visit, node.PartitionBy, node.OrderBy, node.WindowName)
 }
 
 // Nextval defines the NEXT VALUE expression.
