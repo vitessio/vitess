@@ -630,9 +630,7 @@ func BenchmarkSelectVsDML(b *testing.B) {
 	var selectCases []testCase
 
 	for tc := range iterateExecFile("dml_cases.txt") {
-		if tc.output2ndPlanner != "" {
-			dmlCases = append(dmlCases, tc)
-		}
+		dmlCases = append(dmlCases, tc)
 	}
 
 	for tc := range iterateExecFile("select_cases.txt") {

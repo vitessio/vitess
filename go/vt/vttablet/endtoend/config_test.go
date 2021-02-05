@@ -177,7 +177,7 @@ func TestConsolidatorReplicasOnly(t *testing.T) {
 }
 
 func TestQueryPlanCache(t *testing.T) {
-	if cache.DefaultCacheSize.Bytes() != 0 {
+	if cache.DefaultConfig.LFU {
 		const cacheItemSize = 40
 		const cachedPlanSize = 2275 + cacheItemSize
 		const cachePlanSize2 = 2254 + cacheItemSize

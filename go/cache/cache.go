@@ -42,10 +42,9 @@ type cachedObject interface {
 	CachedSize(alloc bool) int64
 }
 
-// NewDefaultCacheImpl returns the default cache implementation for Vitess. If the given capacity
-// is given in bytes, the implementation will be LFU-based and keep track of the total memory usage
-// for the cache. If the implementation is given in entries, the legacy LRU implementation will be used,
-// keeping track
+// NewDefaultCacheImpl returns the default cache implementation for Vitess. The options in the
+// Config struct control the memory and entry limits for the cache, and the underlying cache
+// implementation.
 func NewDefaultCacheImpl(cfg *Config) Cache {
 	switch {
 	case cfg == nil || (cfg.MaxEntries == 0 && cfg.MaxMemoryUsage == 0):
