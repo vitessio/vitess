@@ -2066,3 +2066,11 @@
 2021-02-05T16:56:01Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/541031464
 2021-02-05T16:56:01Z,endtoend,https://github.com/vitessio/vitess/actions/runs/541031448
 2021-02-05T16:56:01Z,golangci-lint,https://github.com/vitessio/vitess/actions/runs/541031444
+2021-02-05T18:00:09Z,Unit Test (mariadb101),https://github.com/vitessio/vitess/actions/runs/541187132
+2021-02-05T18:00:09Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/541187126
+2021-02-05T18:00:09Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/541187115
+2021-02-05T18:00:09Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/541187125
+2021-02-05T18:00:10Z,endtoend,https://github.com/vitessio/vitess/actions/runs/541187187
+2021-02-05T18:07:17Z,Unit Test (mariadb101),https://github.com/vitessio/vitess/actions/runs/541204803
+2021-02-05T18:07:17Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/541204790
+2021-02-05T18:19:06Z,golangci-lint,https://github.com/vitessio/vitess/actions/runs/541233312
