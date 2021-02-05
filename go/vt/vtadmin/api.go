@@ -221,13 +221,28 @@ func (api *API) GetKeyspaces(ctx context.Context, req *vtadminpb.GetKeyspacesReq
 				return
 			}
 
-			m.Lock()
+			kss := make([]*vtadminpb.Keyspace, 0, len(resp.Keyspaces))
+
 			for _, ks := range resp.Keyspaces {
-				keyspaces = append(keyspaces, &vtadminpb.Keyspace{
+				// We _could_ do each of these calls in a goroutine... but... so much overhead.
+				sr, err := c.Vtctld.FindAllShardsInKeyspace(ctx, &vtctldatapb.FindAllShardsInKeyspaceRequest{
+					Keyspace: ks.Name,
+				})
+
+				if err != nil {
+					er.RecordError(err)
+					return
+				}
+
+				kss = append(kss, &vtadminpb.Keyspace{
 					Cluster:  c.ToProto(),
 					Keyspace: ks,
+					Shards:   sr.Shards,
 				})
 			}
+
+			m.Lock()
+			keyspaces = append(keyspaces, kss...)
 			m.Unlock()
 		}(c)
 	}
