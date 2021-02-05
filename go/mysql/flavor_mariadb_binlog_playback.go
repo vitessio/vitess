@@ -31,6 +31,11 @@ func (mariadbFlavor) disableBinlogPlaybackCommand() string {
 }
 
 // baseShowTablesWithSizes is part of the Flavor interface.
-func (mariadbFlavor) baseShowTablesWithSizes() string {
+func (mariadbFlavor101) baseShowTablesWithSizes() string {
+	return TablesWithSize56
+}
+
+// baseShowTablesWithSizes is part of the Flavor interface.
+func (mariadbFlavor102) baseShowTablesWithSizes() string {
 	return TablesWithSize57
 }

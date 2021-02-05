@@ -144,9 +144,13 @@ func (c *Conn) fillFlavor(params *ConnParams) {
 		c.flavor = flavorFunc()
 	case strings.HasPrefix(c.ServerVersion, mariaDBReplicationHackPrefix):
 		c.ServerVersion = c.ServerVersion[len(mariaDBReplicationHackPrefix):]
-		c.flavor = mariadbFlavor{}
+		c.flavor = mariadbFlavor101{}
 	case strings.Contains(c.ServerVersion, mariaDBVersionString):
-		c.flavor = mariadbFlavor{}
+		mariadbVersion, err := strconv.ParseFloat(c.ServerVersion[:4], 64)
+		if err != nil || mariadbVersion < 10.2 {
+			c.flavor = mariadbFlavor101{}
+		}
+		c.flavor = mariadbFlavor102{}
 	case strings.HasPrefix(c.ServerVersion, mysql57VersionPrefix):
 		c.flavor = mysqlFlavor57{}
 	case strings.HasPrefix(c.ServerVersion, mysql80VersionPrefix):
@@ -165,8 +169,11 @@ func (c *Conn) fillFlavor(params *ConnParams) {
 // is identified as MariaDB. Most applications should not care, but
 // this is useful in tests.
 func (c *Conn) IsMariaDB() bool {
-	_, ok := c.flavor.(mariadbFlavor)
-	return ok
+	switch c.flavor.(type) {
+	case mariadbFlavor101, mariadbFlavor102:
+		return true
+	}
+	return false
 }
 
 // MasterPosition returns the current master replication position.
