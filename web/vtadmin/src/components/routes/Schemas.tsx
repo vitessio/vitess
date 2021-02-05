@@ -16,8 +16,10 @@
 import { orderBy } from 'lodash-es';
 import * as React from 'react';
 import { useTableDefinitions } from '../../hooks/api';
+import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 
 export const Schemas = () => {
+    useDocumentTitle('Schemas');
     const { data = [] } = useTableDefinitions();
 
     const rows = React.useMemo(() => {
