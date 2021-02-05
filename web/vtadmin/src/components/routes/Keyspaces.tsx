@@ -16,8 +16,10 @@
 import { orderBy } from 'lodash-es';
 import * as React from 'react';
 import { useKeyspaces } from '../../hooks/api';
+import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 
 export const Keyspaces = () => {
+    useDocumentTitle('Keyspaces');
     const { data } = useKeyspaces();
 
     const rows = React.useMemo(() => {
