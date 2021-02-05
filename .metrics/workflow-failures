@@ -2080,3 +2080,8 @@
 2021-02-05T18:19:06Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/541233310
 2021-02-05T18:19:06Z,endtoend,https://github.com/vitessio/vitess/actions/runs/541233332
 2021-02-05T18:19:06Z,golangci-lint,https://github.com/vitessio/vitess/actions/runs/541233312
+2021-02-05T18:45:01Z,Unit Test (mariadb101),https://github.com/vitessio/vitess/actions/runs/541294033
+2021-02-05T18:45:01Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/541294021
+2021-02-05T18:45:01Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/541294024
+2021-02-05T18:45:01Z,endtoend,https://github.com/vitessio/vitess/actions/runs/541294045
+2021-02-05T18:45:02Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/541294077
