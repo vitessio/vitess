@@ -2297,6 +2297,7 @@ func (node *StarExpr) walkSubtree(visit Visit) error {
 // AliasedExpr defines an aliased SELECT expression.
 type AliasedExpr struct {
 	Expr Expr
+	Over *Over
 	As   ColIdent
 }
 
@@ -2317,6 +2318,12 @@ func (node *AliasedExpr) walkSubtree(visit Visit) error {
 		node.Expr,
 		node.As,
 	)
+}
+
+type Over struct {
+	PartitionBy Exprs
+	OrderBy OrderBy
+	WindowName string
 }
 
 // Nextval defines the NEXT VALUE expression.

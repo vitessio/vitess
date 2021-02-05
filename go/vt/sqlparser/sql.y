@@ -122,6 +122,7 @@ func skipToEnd(yylex interface{}) {
   vindexParams  []VindexParam
   showFilter    *ShowFilter
   optLike       *OptLike
+  over          *Over
   caseStatementCases []CaseStatementCase
   caseStatementCase CaseStatementCase
   ifStatementConditions []IfStatementCondition
@@ -291,6 +292,7 @@ func skipToEnd(yylex interface{}) {
 %type <columnOrder> column_order_opt
 %type <triggerOrder> trigger_order_opt
 %type <order> order
+%type <over> over_opt
 %type <int> lexer_position
 %type <str> asc_desc_opt
 %type <limit> limit_opt
@@ -2454,9 +2456,9 @@ select_expression:
   {
     $$ = &StarExpr{}
   }
-| expression as_ci_opt
+| expression over_opt as_ci_opt
   {
-    $$ = &AliasedExpr{Expr: $1, As: $2}
+    $$ = &AliasedExpr{Expr: $1, Over: $2 As: $3}
   }
 | table_id '.' '*'
   {
@@ -2465,6 +2467,19 @@ select_expression:
 | table_id '.' reserved_table_id '.' '*'
   {
     $$ = &StarExpr{TableName: TableName{Qualifier: $1, Name: $3}}
+  }
+
+over_opt:
+  {
+    $$ = nil
+  }
+| OVER openb order_by_opt closeb
+  {
+    $$ = &Over{OrderBy: $3}
+  }
+| OVER openb PARTITION BY expression_list order_by_opt closeb
+  {
+    $$ = &Over{PartitionBy: $5, OrderBy: $6}
   }
 
 as_ci_opt:
