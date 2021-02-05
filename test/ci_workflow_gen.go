@@ -31,17 +31,16 @@ const (
 	unitTestTemplate  = "templates/unit_test.tpl"
 	unitTestDatabases = "percona56, mysql57, mysql80, mariadb101, mariadb102, mariadb103"
 
-	clusterTestTemplate        = "templates/cluster_endtoend_test.tpl"
-	clusterList                = "11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 26, 27, vreplication_basic"
-	clustersRequiringMakeTools = "18,24"
-
+	clusterTestTemplate         = "templates/cluster_endtoend_test.tpl"
+	clusterList                 = "11,12,13,14,15,16,17,18,19,20,21,22,23,24,26,27,vreplication_basic,vreplication_multicell,vreplication_cellalias,vreplication_v2"
 	// TODO: currently some percona tools including xtrabackup are installed on all clusters, we can possibly optimize
 	// this by only installing them in the required clusters
 	clustersRequiringXtraBackup = clusterList
+	clustersRequiringMakeTools  = "18,24"
 )
 
 type unitTest struct {
-	Name, Database string
+	Name, Platform string
 }
 
 type clusterTest struct {
@@ -113,7 +112,7 @@ func generateUnitTestWorkflows() {
 	for _, platform := range platforms {
 		test := &unitTest{
 			Name:     fmt.Sprintf("Unit Test (%s)", platform),
-			Database: platform,
+			Platform: platform,
 		}
 		path := fmt.Sprintf("%s/unit_test_%s.yml", workflowConfigDir, platform)
 		generateWorkflowFile(unitTestTemplate, path, test)
@@ -139,6 +138,7 @@ func generateWorkflowFile(templateFile, path string, test interface{}) {
 		log.Println("Error creating file: ", err)
 		return
 	}
+	f.WriteString("# DO NOT MODIFY: THIS FILE IS GENERATED USING test/ci_workflow_gen.go\n\n")
 	f.WriteString(mergeBlankLines(buf))
 	fmt.Printf("Generated %s\n", path)
 

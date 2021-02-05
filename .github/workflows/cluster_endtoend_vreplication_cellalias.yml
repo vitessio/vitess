@@ -1,11 +1,11 @@
 # DO NOT MODIFY: THIS FILE IS GENERATED USING test/ci_workflow_gen.go
 
-name: Cluster (17)
+name: Cluster (vreplication_cellalias)
 on: [push, pull_request]
 jobs:
 
   build:
-    name: Run endtoend tests on Cluster (17)
+    name: Run endtoend tests on Cluster (vreplication_cellalias)
     runs-on: ubuntu-latest
 
     steps:
@@ -37,4 +37,4 @@ jobs:
       timeout-minutes: 30
       run: |
         source build.env
-        eatmydata -- go run test.go -docker=false -print-log -follow -shard 17
+        eatmydata -- go run test.go -docker=false -print-log -follow -shard vreplication_cellalias
