@@ -131,6 +131,7 @@ oltpReadPool:
   idleTimeoutSeconds: 1800
   maxWaiters: 5000
   size: 16
+queryCacheMemory: 33554432
 queryCacheSize: 5000
 replicationTracker:
   heartbeatIntervalSeconds: 0.25
@@ -191,8 +192,9 @@ func TestFlags(t *testing.T) {
 			MaxConcurrency:     5,
 		},
 		StreamBufferSize:            32768,
-		QueryCacheSize:              int(cache.DefaultCacheSize.Entries()),
-		LFUQueryCacheSizeBytes:      cache.DefaultCacheSize.Bytes(),
+		QueryCacheSize:              int(cache.DefaultConfig.MaxEntries),
+		QueryCacheMemory:            cache.DefaultConfig.MaxMemoryUsage,
+		QueryCacheLFU:               cache.DefaultConfig.LFU,
 		SchemaReloadIntervalSeconds: 1800,
 		TrackSchemaVersions:         false,
 		MessagePostponeParallelism:  4,

@@ -45,9 +45,6 @@ const (
 	// This is used for sending different IN clause values
 	// to different shards.
 	ListVarName = "__vals"
-	// AveragePlanSize is the average size in bytes that a cached plan takes
-	// when cached in memory
-	AveragePlanSize = 2500
 )
 
 type (

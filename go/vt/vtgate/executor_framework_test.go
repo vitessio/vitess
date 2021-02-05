@@ -398,7 +398,7 @@ func createLegacyExecutorEnv() (executor *Executor, sbc1, sbc2, sbclookup *sandb
 	bad.VSchema = badVSchema
 
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
-	executor = NewExecutor(context.Background(), serv, cell, resolver, false, testBufferSize, cache.DefaultCacheSize)
+	executor = NewExecutor(context.Background(), serv, cell, resolver, false, testBufferSize, cache.DefaultConfig)
 
 	key.AnyShardPicker = DestinationAnyShardPickerFirstShard{}
 	return executor, sbc1, sbc2, sbclookup
@@ -433,7 +433,7 @@ func createExecutorEnv() (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn
 	bad.VSchema = badVSchema
 
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
-	executor = NewExecutor(context.Background(), serv, cell, resolver, false, testBufferSize, cache.DefaultCacheSize)
+	executor = NewExecutor(context.Background(), serv, cell, resolver, false, testBufferSize, cache.DefaultConfig)
 
 	key.AnyShardPicker = DestinationAnyShardPickerFirstShard{}
 	return executor, sbc1, sbc2, sbclookup
@@ -453,7 +453,7 @@ func createCustomExecutor(vschema string) (executor *Executor, sbc1, sbc2, sbclo
 	sbclookup = hc.AddTestTablet(cell, "0", 1, KsTestUnsharded, "0", topodatapb.TabletType_MASTER, true, 1, nil)
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
 
-	executor = NewExecutor(context.Background(), serv, cell, resolver, false, testBufferSize, cache.DefaultCacheSize)
+	executor = NewExecutor(context.Background(), serv, cell, resolver, false, testBufferSize, cache.DefaultConfig)
 	return executor, sbc1, sbc2, sbclookup
 }
 
