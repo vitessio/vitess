@@ -24,6 +24,7 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
@@ -76,6 +77,9 @@ type Engine struct {
 
 	// dbCreationFailed is for preventing log spam.
 	dbCreationFailed bool
+
+	tableFileSizeGauge      *stats.GaugesWithSingleLabel
+	tableAllocatedSizeGauge *stats.GaugesWithSingleLabel
 }
 
 // NewEngine creates a new Engine.
@@ -93,6 +97,8 @@ func NewEngine(env tabletenv.Env) *Engine {
 		reloadTime: reloadTime,
 	}
 	_ = env.Exporter().NewGaugeDurationFunc("SchemaReloadTime", "vttablet keeps table schemas in its own memory and periodically refreshes it from MySQL. This config controls the reload time.", se.ticks.Interval)
+	se.tableFileSizeGauge = env.Exporter().NewGaugesWithSingleLabel("TableFileSize", "tracks table file size", "Table")
+	se.tableAllocatedSizeGauge = env.Exporter().NewGaugesWithSingleLabel("TableAllocatedSize", "tracks table allocated size", "Table")
 
 	env.Exporter().HandleFunc("/debug/schema", se.handleDebugSchema)
 	env.Exporter().HandleFunc("/schemaz", func(w http.ResponseWriter, r *http.Request) {
@@ -323,6 +329,10 @@ func (se *Engine) reload(ctx context.Context) error {
 		createTime, _ := evalengine.ToInt64(row[2])
 		fileSize, _ := evalengine.ToUint64(row[4])
 		allocatedSize, _ := evalengine.ToUint64(row[5])
+
+		// publish the size metrics
+		se.tableFileSizeGauge.Set(tableName, int64(fileSize))
+		se.tableAllocatedSizeGauge.Set(tableName, int64(allocatedSize))
 
 		// TODO(sougou); find a better way detect changed tables. This method
 		// seems unreliable. The endtoend test flags all tables as changed.
