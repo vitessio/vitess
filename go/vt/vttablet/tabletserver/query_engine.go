@@ -290,7 +290,7 @@ func (qe *QueryEngine) GetPlan(ctx context.Context, logStats *tabletenv.LogStats
 	defer span.Finish()
 
 	if plan := qe.getQuery(sql); plan != nil {
-		logStats.Cached = true
+		logStats.CachedPlan = true
 		return plan, nil
 	}
 
