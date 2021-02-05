@@ -32,5 +32,5 @@ func (mariadbFlavor) disableBinlogPlaybackCommand() string {
 
 // baseShowTablesWithSizes is part of the Flavor interface.
 func (mariadbFlavor) baseShowTablesWithSizes() string {
-	return ""
+	return TablesWithSize57
 }
