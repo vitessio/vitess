@@ -16,8 +16,10 @@
 import { orderBy } from 'lodash-es';
 import * as React from 'react';
 import { useGates } from '../../hooks/api';
+import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 
 export const Gates = () => {
+    useDocumentTitle('Gates');
     const { data } = useGates();
 
     const rows = React.useMemo(() => {
