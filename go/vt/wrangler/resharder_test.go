@@ -190,6 +190,58 @@ func TestResharderManyToMany(t *testing.T) {
 
 // TestResharderOneRefTable tests the case where there's one ref table, but no stream for it.
 // This means that the table is being updated manually.
+func TestResharderOneRefTable(t *testing.T) {
+	env := newTestResharderEnv([]string{"0"}, []string{"-80", "80-"})
+	defer env.close()
+
+	schm := &tabletmanagerdatapb.SchemaDefinition{
+		TableDefinitions: []*tabletmanagerdatapb.TableDefinition{{
+			Name:              "t1",
+			Columns:           []string{"c1", "c2"},
+			PrimaryKeyColumns: []string{"c1"},
+			Fields:            sqltypes.MakeTestFields("c1|c2", "int64|int64"),
+		}},
+	}
+	env.tmc.schema = schm
+
+	vs := &vschemapb.Keyspace{
+		Tables: map[string]*vschemapb.Table{
+			"t1": {
+				Type: vindexes.TypeReference,
+			},
+		},
+	}
+	if err := env.wr.ts.SaveVSchema(context.Background(), env.keyspace, vs); err != nil {
+		t.Fatal(err)
+	}
+
+	env.expectValidation()
+	env.expectNoRefStream()
+
+	env.tmc.expectVRQuery(
+		200,
+		insertPrefix+
+			`\('resharderTest', 'keyspace:\\"ks\\" shard:\\"0\\" filter:<rules:<match:\\"t1\\" filter:\\"exclude\\" > rules:<match:\\"/.*\\" filter:\\"-80\\" > > ', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_ks'\)`+
+			eol,
+		&sqltypes.Result{},
+	)
+	env.tmc.expectVRQuery(
+		210,
+		insertPrefix+
+			`\('resharderTest', 'keyspace:\\"ks\\" shard:\\"0\\" filter:<rules:<match:\\"t1\\" filter:\\"exclude\\" > rules:<match:\\"/.*\\" filter:\\"80-\\" > > ', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_ks'\)`+
+			eol,
+		&sqltypes.Result{},
+	)
+
+	env.tmc.expectVRQuery(200, "update _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
+	env.tmc.expectVRQuery(210, "update _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
+
+	err := env.wr.Reshard(context.Background(), env.keyspace, env.workflow, env.sources, env.targets, true, "", "", false, false)
+	assert.NoError(t, err)
+	env.tmc.verifyQueries(t)
+}
+
+// TestReshardStopFlags tests the flags -stop_started and -stop_after_copy
 func TestReshardStopFlags(t *testing.T) {
 	env := newTestResharderEnv([]string{"0"}, []string{"-80", "80-"})
 	defer env.close()
