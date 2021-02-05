@@ -1052,6 +1052,9 @@ var (
 		input:  "alter table a drop id",
 		output: "alter table a drop column id",
 	}, {
+		input:  "ALTER TABLE `product115s` CHANGE `part_number` `part_number` varchar(255) DEFAULT '0' NOT NULL",
+		output: "alter table product115s change column part_number part_number varchar(255) default '0' not null",
+	}, {
 		input: "alter database character set geostd8",
 	}, {
 		input: "alter database d character set geostd8",
