@@ -114,14 +114,14 @@ const pathScatterStats = "/debug/scatter_stats"
 const pathVSchema = "/debug/vschema"
 
 // NewExecutor creates a new Executor.
-func NewExecutor(ctx context.Context, serv srvtopo.Server, cell string, resolver *Resolver, normalize bool, streamSize int, cacheSize cache.Capacity) *Executor {
+func NewExecutor(ctx context.Context, serv srvtopo.Server, cell string, resolver *Resolver, normalize bool, streamSize int, cacheCfg *cache.Config) *Executor {
 	e := &Executor{
 		serv:        serv,
 		cell:        cell,
 		resolver:    resolver,
 		scatterConn: resolver.scatterConn,
 		txConn:      resolver.scatterConn.txConn,
-		plans:       cache.NewDefaultCacheImpl(cacheSize, engine.AveragePlanSize),
+		plans:       cache.NewDefaultCacheImpl(cacheCfg),
 		normalize:   normalize,
 		streamSize:  streamSize,
 	}

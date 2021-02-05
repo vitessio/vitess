@@ -16,46 +16,6 @@ limitations under the License.
 
 package cache
 
-// DefaultCacheSize is the default size for a Vitess cache instance.
-// If this value is specified in BYTES, Vitess will use a LFU-based cache that keeps track of the total
-// memory usage of all cached entries accurately. If this value is specified in ENTRIES, Vitess will
-// use the legacy LRU cache implementation which only tracks the amount of entries being stored.
-// Changing this value affects:
-// - the default values for CLI arguments in VTGate
-// - the default values for the config files in VTTablet
-// - the default values for the test caches used in integration and end-to-end tests
-// Regardless of the default value used here, the user can always override Vitess' configuration to
-// force a specific cache type (e.g. when passing a value in ENTRIES to vtgate, the service will use
-// a LRU cache).
-const DefaultCacheSize = SizeInEntries(5000)
-
-// GuessCapacity returns a Capacity value for a cache instance based on the defaults in Vitess
-// and the options passed by the user
-func GuessCapacity(inEntries, inBytes int64) Capacity {
-	switch {
-	// If the default cache has a byte capacity, only override it if the user has explicitly
-	// passed a capacity in entries
-	case DefaultCacheSize.Bytes() != 0:
-		if inEntries != 0 {
-			return SizeInEntries(inEntries)
-		}
-		return SizeInBytes(inBytes)
-
-	// If the default cache has capacity in entries, only override it if the user has explicitly
-	// passed a capacity in bytes
-	case DefaultCacheSize.Entries() != 0:
-		if inBytes != 0 {
-			return SizeInBytes(inBytes)
-		}
-		return SizeInEntries(inEntries)
-
-	default:
-		panic("DefaultCacheSize is not initialized")
-	}
-}
-
-// const DefaultCacheSize = SizeInBytes(64 * 1024 * 1024)
-
 // Cache is a generic interface type for a data structure that keeps recently used
 // objects in memory and evicts them when it becomes full.
 type Cache interface {
@@ -65,6 +25,10 @@ type Cache interface {
 
 	Delete(key string)
 	Clear()
+
+	// Wait waits for all pending operations on the cache to settle. Since cache writes
+	// are asynchronous, a write may not be immediately accessible unless the user
+	// manually calls Wait.
 	Wait()
 
 	Len() int
@@ -82,51 +46,36 @@ type cachedObject interface {
 // is given in bytes, the implementation will be LFU-based and keep track of the total memory usage
 // for the cache. If the implementation is given in entries, the legacy LRU implementation will be used,
 // keeping track
-func NewDefaultCacheImpl(capacity Capacity, averageItemSize int64) Cache {
+func NewDefaultCacheImpl(cfg *Config) Cache {
 	switch {
-	case capacity == nil || (capacity.Entries() == 0 && capacity.Bytes() == 0):
+	case cfg == nil || (cfg.MaxEntries == 0 && cfg.MaxMemoryUsage == 0):
 		return &nullCache{}
 
-	case capacity.Bytes() != 0:
-		return NewRistrettoCache(capacity.Bytes(), averageItemSize, func(val interface{}) int64 {
+	case cfg.LFU:
+		return NewRistrettoCache(cfg.MaxEntries, cfg.MaxMemoryUsage, func(val interface{}) int64 {
 			return val.(cachedObject).CachedSize(true)
 		})
 
 	default:
-		return NewLRUCache(capacity.Entries(), func(_ interface{}) int64 {
+		return NewLRUCache(cfg.MaxEntries, func(_ interface{}) int64 {
 			return 1
 		})
 	}
 }
 
-// Capacity is the interface implemented by numeric types that define a cache's capacity
-type Capacity interface {
-	Bytes() int64
-	Entries() int64
+// Config is the configuration options for a cache instance
+type Config struct {
+	// MaxEntries is the estimated amount of entries that the cache will hold at capacity
+	MaxEntries int64
+	// MaxMemoryUsage is the maximum amount of memory the cache can handle
+	MaxMemoryUsage int64
+	// LFU toggles whether to use a new cache implementation with a TinyLFU admission policy
+	LFU bool
 }
 
-// SizeInBytes is a Capacity that measures the total size of the cache in Bytes
-type SizeInBytes int64
-
-// Bytes returns the size of the cache in Bytes
-func (s SizeInBytes) Bytes() int64 {
-	return int64(s)
-}
-
-// Entries returns 0 because this Capacity measures the cache size in Bytes
-func (s SizeInBytes) Entries() int64 {
-	return 0
-}
-
-// SizeInEntries is a Capacity that measures the total size of the cache in Entries
-type SizeInEntries int64
-
-// Bytes returns 0 because this Capacity measures the cache size in Entries
-func (s SizeInEntries) Bytes() int64 {
-	return 0
-}
-
-// Entries returns the size of the cache in Entries
-func (s SizeInEntries) Entries() int64 {
-	return int64(s)
+// DefaultConfig is the default configuration for a cache instance in Vitess
+var DefaultConfig = &Config{
+	MaxEntries:     5000,
+	MaxMemoryUsage: 32 * 1024 * 1024,
+	LFU:            false,
 }
