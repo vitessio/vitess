@@ -2,7 +2,6 @@ package statsd
 
 import (
 	"expvar"
-	"fmt"
 	"net"
 	"sort"
 	"strings"
@@ -27,12 +26,7 @@ func getBackend(t *testing.T) (StatsBackend, *net.UDPConn) {
 	sb.sampleRate = 1
 	sb.statsdClient = client
 	stats.RegisterTimerHook(func(stats, name string, value int64, timings *stats.Timings) {
-		labels := strings.Split(timings.Label(), ".")
-		names := strings.Split(name, ".")
-		var tags []string
-		for i, label := range labels {
-			tags = append(tags, fmt.Sprintf("%s:%s", label, names[i]))
-		}
+		tags := makeLabels(strings.Split(timings.Label(), "."), name)
 		client.TimeInMilliseconds(stats, float64(value), tags, sb.sampleRate)
 	})
 	stats.RegisterHistogramHook(func(name string, val int64) {
