@@ -16,8 +16,10 @@
 import { orderBy } from 'lodash-es';
 import * as React from 'react';
 import { useClusters } from '../../hooks/api';
+import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 
 export const Clusters = () => {
+    useDocumentTitle('Clusters');
     const { data } = useClusters();
 
     const rows = React.useMemo(() => {
