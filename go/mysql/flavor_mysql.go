@@ -247,7 +247,7 @@ func (mysqlFlavor) disableBinlogPlaybackCommand() string {
 
 // TablesWithSize56 is a query to select table along with size for mysql 5.6
 const TablesWithSize56 = `SELECT table_name, table_type, unix_timestamp(create_time), table_comment, SUM( data_length + index_length), SUM( data_length + index_length) 
-		FROM information_schema.tables WHERE table_schema = database()`
+		FROM information_schema.tables WHERE table_schema = database() group by table_name`
 
 // TablesWithSize57 is a query to select table along with size for mysql 5.7
 const TablesWithSize57 = `SELECT t.table_name, t.table_type, unix_timestamp(t.create_time), t.table_comment, i.file_size, i.allocated_size 

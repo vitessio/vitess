@@ -32,16 +32,13 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/mysql"
-
-	"context"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/cache"
-	"vitess.io/vitess/go/streamlog"
-
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/tableacl"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
