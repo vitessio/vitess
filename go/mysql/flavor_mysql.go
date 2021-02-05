@@ -29,6 +29,9 @@ import (
 
 // mysqlFlavor implements the Flavor interface for Mysql.
 type mysqlFlavor struct{}
+type mysqlFlavor56 struct {
+	mysqlFlavor
+}
 type mysqlFlavor57 struct {
 	mysqlFlavor
 }
@@ -36,6 +39,7 @@ type mysqlFlavor80 struct {
 	mysqlFlavor
 }
 
+var _ flavor = (*mysqlFlavor56)(nil)
 var _ flavor = (*mysqlFlavor57)(nil)
 var _ flavor = (*mysqlFlavor80)(nil)
 
@@ -241,6 +245,10 @@ func (mysqlFlavor) disableBinlogPlaybackCommand() string {
 	return ""
 }
 
+// TablesWithSize56 is a query to select table along with size for mysql 5.6
+const TablesWithSize56 = `SELECT table_name, table_type, unix_timestamp(create_time), table_comment, SUM( data_length + index_length), SUM( data_length + index_length) 
+		FROM information_schema.tables WHERE table_schema = database()`
+
 // TablesWithSize57 is a query to select table along with size for mysql 5.7
 const TablesWithSize57 = `SELECT t.table_name, t.table_type, unix_timestamp(t.create_time), t.table_comment, i.file_size, i.allocated_size 
 		FROM information_schema.tables t, information_schema.innodb_sys_tablespaces i 
@@ -250,6 +258,11 @@ const TablesWithSize57 = `SELECT t.table_name, t.table_type, unix_timestamp(t.cr
 const TablesWithSize80 = `SELECT t.table_name, t.table_type, unix_timestamp(t.create_time), t.table_comment, i.file_size, i.allocated_size 
 		FROM information_schema.tables t, information_schema.innodb_tablespaces i 
 		WHERE t.table_schema = database() and i.name = concat(t.table_schema,'/',t.table_name)`
+
+// baseShowTablesWithSizes is part of the Flavor interface.
+func (mysqlFlavor56) baseShowTablesWithSizes() string {
+	return TablesWithSize56
+}
 
 // baseShowTablesWithSizes is part of the Flavor interface.
 func (mysqlFlavor57) baseShowTablesWithSizes() string {

@@ -45,6 +45,8 @@ const (
 	// mariaDBVersionString is present in
 	mariaDBVersionString = "MariaDB"
 	// mysql57VersionPrefix is the prefix for 5.7 mysql version, such as 5.7.31-log
+	mysql57VersionPrefix = "5.7."
+	// mysql80VersionPrefix is the prefix for 8.0 mysql version, such as 8.0.19
 	mysql80VersionPrefix = "8.0."
 )
 
@@ -145,10 +147,12 @@ func (c *Conn) fillFlavor(params *ConnParams) {
 		c.flavor = mariadbFlavor{}
 	case strings.Contains(c.ServerVersion, mariaDBVersionString):
 		c.flavor = mariadbFlavor{}
+	case strings.HasPrefix(c.ServerVersion, mysql57VersionPrefix):
+		c.flavor = mysqlFlavor57{}
 	case strings.HasPrefix(c.ServerVersion, mysql80VersionPrefix):
 		c.flavor = mysqlFlavor80{}
 	default:
-		c.flavor = mysqlFlavor57{}
+		c.flavor = mysqlFlavor56{}
 	}
 }
 
