@@ -1,3 +1,5 @@
+# DO NOT MODIFY: THIS FILE IS GENERATED USING test/ci_workflow_gen.go
+
 name: Cluster (vreplication_basic)
 on: [push, pull_request]
 jobs:
