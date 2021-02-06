@@ -1,4 +1,4 @@
-# DO NOT MODIFY: THIS FILE IS GENERATED USING test/ci_workflow_gen.go
+# DO NOT MODIFY: THIS FILE IS GENERATED USING "make generate_ci_workflows"
 
 name: Cluster (14)
 on: [push, pull_request]

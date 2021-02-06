@@ -138,7 +138,7 @@ func generateWorkflowFile(templateFile, path string, test interface{}) {
 		log.Println("Error creating file: ", err)
 		return
 	}
-	f.WriteString("# DO NOT MODIFY: THIS FILE IS GENERATED USING test/ci_workflow_gen.go\n\n")
+	f.WriteString("# DO NOT MODIFY: THIS FILE IS GENERATED USING \"make generate_ci_workflows\"\n\n")
 	f.WriteString(mergeBlankLines(buf))
 	fmt.Printf("Generated %s\n", path)
 
