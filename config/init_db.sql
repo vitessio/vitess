@@ -15,40 +15,38 @@
 # Changes during the init db should not make it to the binlog.
 # They could potentially create errant transactions on replicas.
 SET sql_log_bin = 0;
-# Remove anonymous users.
-#DELETE FROM mysql.user WHERE User = '';
 
-# Disable remote root access (only allow UNIX socket).
-#DELETE FROM mysql.user WHERE User = 'root' AND Host != 'localhost';
-# Remove anonymous users and non-localhost root users.
+DROP PROCEDURE IF EXISTS mysql.secure_install;
 
-# use standard DROP USER on anon users and the local root TCP based user
-# The default standard install uses @@hostname as the hostname, but only
-# MariaDB(10.2.3+) supports the EXECUTE IMMEDIATE.
-
-DROP USER /*M!100103 IF EXISTS */ ''@localhost;
-/*M!100203 EXECUTE IMMEDIATE CONCAT('DROP USER IF EXISTS ""@', @@hostname) */;
-
-DROP USER /*M!100103 IF EXISTS */ 'root'@'127.0.0.1';
-DROP USER /*M!100103 IF EXISTS */ 'root'@'::1';
-/*M!100203 EXECUTE IMMEDIATE CONCAT('DROP USER IF EXISTS root@', @@hostname) */;
-
-# MariaDB-10.3 can be a bit more thorough with this FOR synax.
 DELIMITER $$
-/*M!100301 CREATE OR REPLACE PROCEDURE mysql.secure_users()
-FOR insecuser IN ( SELECT user,host FROM mysql.user WHERE user='' OR (user='root' AND host!='localhost') )
-DO
-	EXECUTE IMMEDIATE CONCAT('DROP USER `', insecuser.user, '`@`', insecuser.host, '`');
-END FOR */
-$$
-DELIMITER ;
-/*M!100301 call mysql.secure_users() */;
-/*M!100301 DROP PROCEDURE mysql.secure_users */;
+CREATE PROCEDURE mysql.secure_install()
+BEGIN
+	DECLARE done INT DEFAULT FALSE;
+	DECLARE u CHAR(80);
+	DECLARE h CHAR(60);
+	DECLARE deluser CURSOR FOR SELECT user,host FROM mysql.user WHERE user='' OR (user='root' AND host!='localhost');
+	DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = TRUE;
 
-# MySQL-5.7 (not MariaDB) can use direct table manipulation. MariaDB-10.4 has mysql.user as a VIEW
-# so the previous cases of MariaDB will work.
-/*!50701 DELETE FROM mysql.user WHERE User= '' OR (User = 'root' AND Host != 'localhost') */;
-/*!50701 FLUSH PRIVILEGES */;
+	OPEN deluser;
+
+	del_loop: LOOP
+	FETCH deluser INTO u,h;
+	IF done THEN
+          LEAVE del_loop;
+        END IF;
+	SELECT CONCAT("DROP USER ",QUOTE(u), "@", QUOTE(h)) into @sqldropuser;
+	PREPARE dodeluser FROM @sqldropuser;
+	EXECUTE dodeluser;
+        DEALLOCATE PREPARE dodeluser;
+	END LOOP;
+
+	CLOSE deluser;
+END$$
+
+DELIMITER ;
+CALL mysql.secure_install();
+DROP PROCEDURE mysql.secure_install;
+
 
 # Remove test database.
 DROP DATABASE IF EXISTS test;
