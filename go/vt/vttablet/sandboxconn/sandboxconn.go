@@ -511,7 +511,7 @@ func (sbc *SandboxConn) getNextResult(stmt sqlparser.Statement) *sqltypes.Result
 	case *sqlparser.Select,
 		*sqlparser.Union,
 		*sqlparser.Show,
-		*sqlparser.Explain,
+		sqlparser.Explain,
 		*sqlparser.OtherRead:
 		return SingleRowResult
 	case *sqlparser.Set,
