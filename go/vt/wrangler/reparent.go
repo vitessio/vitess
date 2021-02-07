@@ -48,7 +48,7 @@ import (
 
 const (
 	plannedReparentShardOperation       = "PlannedReparentShard"
-	emergencyReparentShardOperation     = "EmergencyReparentShard"
+	emergencyReparentShardOperation     = "EmergencyReparentShard"     //nolint
 	tabletExternallyReparentedOperation = "TabletExternallyReparented" //nolint
 )
 
@@ -541,180 +541,18 @@ func (wr *Wrangler) plannedReparentShardLocked(ctx context.Context, ev *events.R
 // EmergencyReparentShard will make the provided tablet the master for
 // the shard, when the old master is completely unreachable.
 func (wr *Wrangler) EmergencyReparentShard(ctx context.Context, keyspace, shard string, masterElectTabletAlias *topodatapb.TabletAlias, waitReplicasTimeout time.Duration, ignoredTablets sets.String) (err error) {
-	// lock the shard
-	actionMsg := emergencyReparentShardOperation
-	if masterElectTabletAlias != nil {
-		actionMsg += fmt.Sprintf("(%v)", topoproto.TabletAliasString(masterElectTabletAlias))
-	}
-	ctx, unlock, lockErr := wr.ts.LockShard(ctx, keyspace, shard, actionMsg)
-	if lockErr != nil {
-		return lockErr
-	}
-	defer unlock(&err)
+	_, err = reparentutil.NewEmergencyReparenter(wr.ts, wr.tmc, wr.logger).ReparentShard(
+		ctx,
+		keyspace,
+		shard,
+		reparentutil.EmergencyReparentOptions{
+			NewPrimaryAlias:     masterElectTabletAlias,
+			WaitReplicasTimeout: waitReplicasTimeout,
+			IgnoreReplicas:      ignoredTablets,
+		},
+	)
 
-	// Create reusable Reparent event with available info
-	ev := &events.Reparent{}
-
-	// do the work
-	err = wr.emergencyReparentShardLocked(ctx, ev, keyspace, shard, masterElectTabletAlias, waitReplicasTimeout, ignoredTablets)
-	if err != nil {
-		event.DispatchUpdate(ev, "failed EmergencyReparentShard: "+err.Error())
-	} else {
-		event.DispatchUpdate(ev, "finished EmergencyReparentShard")
-	}
 	return err
-}
-
-func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events.Reparent, keyspace, shard string, masterElectTabletAlias *topodatapb.TabletAlias, waitReplicasTimeout time.Duration, ignoredTablets sets.String) error {
-	shardInfo, err := wr.ts.GetShard(ctx, keyspace, shard)
-	if err != nil {
-		return err
-	}
-	ev.ShardInfo = *shardInfo
-
-	event.DispatchUpdate(ev, "reading all tablets")
-	tabletMap, err := wr.ts.GetTabletMapForShard(ctx, keyspace, shard)
-	if err != nil {
-		return vterrors.Wrapf(err, "failed to get tablet map for shard %v in keyspace %v: %v", shard, keyspace, err)
-	}
-
-	statusMap, masterStatusMap, err := reparentutil.StopReplicationAndBuildStatusMaps(ctx, wr.tmc, ev, tabletMap, waitReplicasTimeout, ignoredTablets, wr.logger)
-	if err != nil {
-		return vterrors.Wrapf(err, "failed to stop replication and build status maps: %v", err)
-	}
-
-	// Check we still have the topology lock.
-	if err := topo.CheckShardLocked(ctx, keyspace, shard); err != nil {
-		return vterrors.Wrapf(err, "lost topology lock, aborting: %v", err)
-	}
-
-	validCandidates, err := reparentutil.FindValidEmergencyReparentCandidates(statusMap, masterStatusMap)
-	if err != nil {
-		return err
-	}
-	if len(validCandidates) == 0 {
-		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no valid candidates for emergency reparent")
-	}
-
-	errChan := make(chan error)
-	rec := &concurrency.AllErrorRecorder{}
-	groupCtx, groupCancel := context.WithTimeout(ctx, waitReplicasTimeout)
-	defer groupCancel()
-	for candidate := range validCandidates {
-		go func(alias string) {
-			var err error
-			defer func() { errChan <- err }()
-			err = reparentutil.WaitForRelayLogsToApply(groupCtx, wr.tmc, tabletMap[alias], statusMap[alias])
-		}(candidate)
-	}
-
-	resultCounter := 0
-	for waitErr := range errChan {
-		resultCounter++
-		if waitErr != nil {
-			rec.RecordError(waitErr)
-			groupCancel()
-		}
-		if resultCounter == len(validCandidates) {
-			break
-		}
-	}
-	if len(rec.Errors) != 0 {
-		return vterrors.Wrapf(rec.Error(), "could not apply all relay logs within the provided wait_replicas_timeout: %v", rec.Error())
-	}
-
-	var winningPosition mysql.Position
-	var newMasterTabletAliasStr string
-	for alias, position := range validCandidates {
-		if winningPosition.IsZero() {
-			winningPosition = position
-			newMasterTabletAliasStr = alias
-			continue
-		}
-		if position.AtLeast(winningPosition) {
-			winningPosition = position
-			newMasterTabletAliasStr = alias
-		}
-	}
-
-	if masterElectTabletAlias != nil {
-		newMasterTabletAliasStr = topoproto.TabletAliasString(masterElectTabletAlias)
-		masterPos, ok := validCandidates[newMasterTabletAliasStr]
-		if !ok {
-			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "master elect %v has errant GTIDs", newMasterTabletAliasStr)
-		}
-		if !masterPos.AtLeast(winningPosition) {
-			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "master elect: %v at position %v, is not fully caught up. Winning position: %v", newMasterTabletAliasStr, masterPos, winningPosition)
-		}
-	}
-
-	// Check we still have the topology lock.
-	if err := topo.CheckShardLocked(ctx, keyspace, shard); err != nil {
-		return vterrors.Wrapf(err, "lost topology lock, aborting: %v", err)
-	}
-
-	// Promote the masterElect
-	wr.logger.Infof("promote tablet %v to master", newMasterTabletAliasStr)
-	event.DispatchUpdate(ev, "promoting replica")
-	rp, err := wr.tmc.PromoteReplica(ctx, tabletMap[newMasterTabletAliasStr].Tablet)
-	if err != nil {
-		return vterrors.Wrapf(err, "master-elect tablet %v failed to be upgraded to master: %v", newMasterTabletAliasStr, err)
-	}
-
-	// Check we still have the topology lock.
-	if err := topo.CheckShardLocked(ctx, keyspace, shard); err != nil {
-		return vterrors.Wrapf(err, "lost topology lock, aborting: %v", err)
-	}
-
-	// Create a cancelable context for the following RPCs.
-	// If error conditions happen, we can cancel all outgoing RPCs.
-	replCtx, replCancel := context.WithTimeout(ctx, waitReplicasTimeout)
-	defer replCancel()
-
-	// Reset replication on all replicas to point to the new master, and
-	// insert test row in the new master.
-	// Go through all the tablets:
-	// - new master: populate the reparent journal
-	// - everybody else: reparent to new master, wait for row
-	event.DispatchUpdate(ev, "reparenting all tablets")
-	now := time.Now().UnixNano()
-	errChan = make(chan error)
-
-	handleMaster := func(alias string, tabletInfo *topo.TabletInfo) error {
-		wr.logger.Infof("populating reparent journal on new master %v", alias)
-		return wr.tmc.PopulateReparentJournal(replCtx, tabletInfo.Tablet, now, emergencyReparentShardOperation, tabletMap[newMasterTabletAliasStr].Alias, rp)
-	}
-	handleReplica := func(alias string, tabletInfo *topo.TabletInfo) {
-		var err error
-		defer func() { errChan <- err }()
-
-		wr.logger.Infof("setting new master on replica %v", alias)
-		forceStart := false
-		if status, ok := statusMap[alias]; ok {
-			forceStart = reparentutil.ReplicaWasRunning(status)
-		}
-		err = wr.tmc.SetMaster(replCtx, tabletInfo.Tablet, tabletMap[newMasterTabletAliasStr].Alias, now, "", forceStart)
-		if err != nil {
-			err = vterrors.Wrapf(err, "tablet %v SetMaster failed: %v", alias, err)
-		}
-	}
-
-	for alias, tabletInfo := range tabletMap {
-		if alias == newMasterTabletAliasStr {
-			continue
-		} else if !ignoredTablets.Has(alias) {
-			go handleReplica(alias, tabletInfo)
-		}
-	}
-
-	masterErr := handleMaster(newMasterTabletAliasStr, tabletMap[newMasterTabletAliasStr])
-	if masterErr != nil {
-		wr.logger.Warningf("master failed to PopulateReparentJournal")
-		replCancel()
-		return vterrors.Wrapf(masterErr, "failed to PopulateReparentJournal on master: %v", masterErr)
-	}
-
-	return nil
 }
 
 // TabletExternallyReparented changes the type of new master for this shard to MASTER
