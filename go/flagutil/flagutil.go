@@ -21,6 +21,7 @@ package flagutil
 import (
 	"errors"
 	"flag"
+	"fmt"
 	"sort"
 	"strings"
 )
@@ -123,4 +124,59 @@ func (value StringMapValue) String() string {
 	// Generate the string deterministically.
 	sort.Strings(parts)
 	return strings.Join(parts, ",")
+}
+
+// DualFormatStringListVar creates a flag which supports both dashes and underscores
+func DualFormatStringListVar(p *[]string, name string, value []string, usage string) {
+	dashes := strings.Replace(name, "_", "-", -1)
+	underscores := strings.Replace(name, "-", "_", -1)
+
+	StringListVar(p, underscores, value, usage)
+	if dashes != underscores {
+		StringListVar(p, dashes, *p, fmt.Sprintf("Synonym to -%s", underscores))
+	}
+}
+
+// DualFormatStringVar creates a flag which supports both dashes and underscores
+func DualFormatStringVar(p *string, name string, value string, usage string) {
+	dashes := strings.Replace(name, "_", "-", -1)
+	underscores := strings.Replace(name, "-", "_", -1)
+
+	flag.StringVar(p, underscores, value, usage)
+	if dashes != underscores {
+		flag.StringVar(p, dashes, *p, fmt.Sprintf("Synonym to -%s", underscores))
+	}
+}
+
+// DualFormatInt64Var creates a flag which supports both dashes and underscores
+func DualFormatInt64Var(p *int64, name string, value int64, usage string) {
+	dashes := strings.Replace(name, "_", "-", -1)
+	underscores := strings.Replace(name, "-", "_", -1)
+
+	flag.Int64Var(p, underscores, value, usage)
+	if dashes != underscores {
+		flag.Int64Var(p, dashes, *p, fmt.Sprintf("Synonym to -%s", underscores))
+	}
+}
+
+// DualFormatIntVar creates a flag which supports both dashes and underscores
+func DualFormatIntVar(p *int, name string, value int, usage string) {
+	dashes := strings.Replace(name, "_", "-", -1)
+	underscores := strings.Replace(name, "-", "_", -1)
+
+	flag.IntVar(p, underscores, value, usage)
+	if dashes != underscores {
+		flag.IntVar(p, dashes, *p, fmt.Sprintf("Synonym to -%s", underscores))
+	}
+}
+
+// DualFormatBoolVar creates a flag which supports both dashes and underscores
+func DualFormatBoolVar(p *bool, name string, value bool, usage string) {
+	dashes := strings.Replace(name, "_", "-", -1)
+	underscores := strings.Replace(name, "-", "_", -1)
+
+	flag.BoolVar(p, underscores, value, usage)
+	if dashes != underscores {
+		flag.BoolVar(p, dashes, *p, fmt.Sprintf("Synonym to -%s", underscores))
+	}
 }
