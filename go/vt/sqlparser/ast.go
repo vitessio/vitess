@@ -45,14 +45,13 @@ type (
 
 	// SelectStatement any SELECT statement.
 	SelectStatement interface {
+		Statement
 		iSelectStatement()
-		iStatement()
 		iInsertRows()
 		AddOrder(*Order)
 		SetLimit(*Limit)
 		SetLock(lock Lock)
 		MakeDistinct()
-		SQLNode
 	}
 
 	// DDLStatement represents any DDL Statement
@@ -84,6 +83,12 @@ type (
 	AlterOption interface {
 		iAlterOption()
 		SQLNode
+	}
+
+	// Explain is an interface that represents the Explain statements
+	Explain interface {
+		Statement
+		iExplain()
 	}
 
 	// AddConstraintDefinition represents a ADD CONSTRAINT alter option
@@ -505,31 +510,11 @@ type (
 		Name ColIdent
 	}
 
-	// Explain represents an EXPLAIN statement
-	Explain struct {
-		Type      ExplainType
-		Statement Statement
-	}
-
-	// ExplainType is an enum for Explain.Type
-	ExplainType int8
-
 	// CallProc represents a CALL statement
 	CallProc struct {
 		Name   TableName
 		Params Exprs
 	}
-
-	// OtherRead represents a DESCRIBE, or EXPLAIN statement.
-	// It should be used only as an indicator. It does not contain
-	// the full AST for the statement.
-	OtherRead struct{}
-
-	// OtherAdmin represents a misc statement that relies on ADMIN privileges,
-	// such as REPAIR, OPTIMIZE, or TRUNCATE statement.
-	// It should be used only as an indicator. It does not contain
-	// the full AST for the statement.
-	OtherAdmin struct{}
 
 	// LockType is an enum for Lock Types
 	LockType int8
@@ -550,6 +535,32 @@ type (
 
 	// UnlockTables represents the unlock statement
 	UnlockTables struct{}
+
+	// ExplainType is an enum for ExplainStmt.Type
+	ExplainType int8
+
+	// ExplainStmt represents an Explain statement
+	ExplainStmt struct {
+		Type      ExplainType
+		Statement Statement
+	}
+
+	// ExplainTab represents the Explain table
+	ExplainTab struct {
+		Table TableName
+		Wild  string
+	}
+
+	// OtherRead represents a DESCRIBE, or EXPLAIN statement.
+	// It should be used only as an indicator. It does not contain
+	// the full AST for the statement.
+	OtherRead struct{}
+
+	// OtherAdmin represents a misc statement that relies on ADMIN privileges,
+	// such as REPAIR, OPTIMIZE, or TRUNCATE statement.
+	// It should be used only as an indicator. It does not contain
+	// the full AST for the statement.
+	OtherAdmin struct{}
 )
 
 func (*Union) iStatement()             {}
@@ -571,7 +582,6 @@ func (*Rollback) iStatement()          {}
 func (*SRollback) iStatement()         {}
 func (*Savepoint) iStatement()         {}
 func (*Release) iStatement()           {}
-func (*Explain) iStatement()           {}
 func (*OtherRead) iStatement()         {}
 func (*OtherAdmin) iStatement()        {}
 func (*Select) iSelectStatement()      {}
@@ -592,6 +602,8 @@ func (*DropView) iStatement()          {}
 func (*TruncateTable) iStatement()     {}
 func (*RenameTable) iStatement()       {}
 func (*CallProc) iStatement()          {}
+func (*ExplainStmt) iStatement()       {}
+func (*ExplainTab) iStatement()        {}
 
 func (*CreateView) iDDLStatement()    {}
 func (*AlterView) iDDLStatement()     {}
@@ -621,6 +633,9 @@ func (*RenameTableName) iAlterOption()         {}
 func (*RenameIndex) iAlterOption()             {}
 func (*Validation) iAlterOption()              {}
 func (TableOptions) iAlterOption()             {}
+
+func (*ExplainStmt) iExplain() {}
+func (*ExplainTab) iExplain()  {}
 
 // IsFullyParsed implements the DDLStatement interface
 func (*TruncateTable) IsFullyParsed() bool {
@@ -2486,7 +2501,7 @@ func (node *Release) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
-func (node *Explain) Format(buf *TrackedBuffer) {
+func (node *ExplainStmt) Format(buf *TrackedBuffer) {
 	format := ""
 	switch node.Type {
 	case EmptyType: // do nothing
@@ -2496,6 +2511,14 @@ func (node *Explain) Format(buf *TrackedBuffer) {
 		format = "format = " + node.Type.ToString() + " "
 	}
 	buf.astPrintf(node, "explain %s%v", format, node.Statement)
+}
+
+// Format formats the node.
+func (node *ExplainTab) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "explain %v", node.Table)
+	if node.Wild != "" {
+		buf.astPrintf(node, " %s", node.Wild)
+	}
 }
 
 // Format formats the node.

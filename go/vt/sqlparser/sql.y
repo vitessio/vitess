@@ -2728,21 +2728,21 @@ wild_opt:
   }
 | sql_id
   {
-    $$ = "" 
+    $$ = $1.val
   }
 | STRING
   {
-    $$ = "" 
+    $$ = "'" + string($1) + "'"
   }
-  
+
 explain_statement:
   explain_synonyms table_name wild_opt
   {
-    $$ = &OtherRead{}
+    $$ = &ExplainTab{Table: $2, Wild: $3}
   }
 | explain_synonyms explain_format_opt explainable_statement
   {
-    $$ = &Explain{Type: $2, Statement: $3}
+    $$ = &ExplainStmt{Type: $2, Statement: $3}
   }
 
 other_statement:

@@ -50,7 +50,7 @@
 {
   "PlanID": "SelectStream",
   "TableName": "",
-  "FullQuery": "otherread"
+  "FullQuery": "explain foo"
 }
 
 # dml
