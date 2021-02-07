@@ -146,6 +146,7 @@ func skipToEnd(yylex interface{}) {
   tableOption      *TableOption
   tableOptions     TableOptions
   renameTablePairs []*RenameTablePair
+  columnTypeOptions *ColumnTypeOptions
 }
 
 %token LEX_ERROR
@@ -328,6 +329,7 @@ func skipToEnd(yylex interface{}) {
 %type <orderDirection> asc_desc_opt
 %type <limit> limit_opt
 %type <selectInto> into_option
+%type <columnTypeOptions> column_type_options
 %type <str> header_opt export_options manifest_opt overwrite_opt format_opt optionally_opt
 %type <str> fields_opt lines_opt terminated_by_opt starting_by_opt enclosed_by_opt escaped_by_opt
 %type <lock> lock_opt
@@ -347,7 +349,7 @@ func skipToEnd(yylex interface{}) {
 %type <ignore> ignore_opt
 %type <str> full_opt from_database_opt tables_or_processlist columns_or_fields extended_opt storage_opt
 %type <showFilter> like_or_where_opt like_opt
-%type <boolean> exists_opt not_exists_opt null_opt enforced_opt
+%type <boolean> exists_opt not_exists_opt enforced_opt
 %type <empty> to_opt
 %type <bytes> reserved_keyword non_reserved_keyword
 %type <colIdent> sql_id reserved_sql_id col_alias as_ci_opt
@@ -360,12 +362,10 @@ func skipToEnd(yylex interface{}) {
 %type <convertType> convert_type
 %type <columnType> column_type
 %type <columnType> int_type decimal_type numeric_type time_type char_type spatial_type
-%type <literal> length_opt column_comment_opt
-%type <optVal> column_default_opt on_update_opt
+%type <literal> length_opt
 %type <str> charset_opt collate_opt
 %type <LengthScaleOption> float_length_opt decimal_length_opt
-%type <boolean> auto_increment_opt unsigned_opt zero_fill_opt without_valid_opt
-%type <colKeyOpt> column_key_opt
+%type <boolean> unsigned_opt zero_fill_opt without_valid_opt
 %type <strs> enum_values
 %type <columnDefinition> column_definition
 %type <columnDefinitions> column_definition_list
@@ -998,16 +998,67 @@ table_column_list:
   }
 
 column_definition:
-  sql_id column_type null_opt column_default_opt on_update_opt auto_increment_opt column_key_opt column_comment_opt
+  sql_id column_type column_type_options
   {
-    $2.NotNull = $3
-    $2.Default = $4
-    $2.OnUpdate = $5
-    $2.Autoincrement = $6
-    $2.KeyOpt = $7
-    $2.Comment = $8
+    $2.Options = $3
     $$ = &ColumnDefinition{Name: $1, Type: $2}
   }
+
+column_type_options:
+  {
+    $$ = &ColumnTypeOptions{NotNull: false, Default: nil, OnUpdate: nil, Autoincrement: false, KeyOpt: colKeyNone, Comment: nil}
+  }
+| column_type_options NULL
+  {
+    $1.NotNull = false
+    $$ = $1
+  }
+| column_type_options NOT NULL
+  {
+    $1.NotNull = true
+    $$ = $1
+  }
+| column_type_options DEFAULT value_expression
+  {
+    $1.Default = $3
+    $$ = $1
+  }
+| column_type_options ON UPDATE function_call_nonkeyword
+  {
+    $1.OnUpdate = $4
+    $$ = $1
+  }
+| column_type_options AUTO_INCREMENT
+  {
+    $1.Autoincrement = true
+    $$ = $1
+  }
+| column_type_options COMMENT_KEYWORD STRING
+  {
+    $1.Comment = NewStrLiteral($3)
+    $$ = $1
+  }
+| column_type_options PRIMARY KEY
+  {
+    $1.KeyOpt = colKeyPrimary
+    $$ = $1
+  }
+| column_type_options KEY
+  {
+    $1.KeyOpt = colKey
+    $$ = $1
+  }
+| column_type_options UNIQUE KEY
+  {
+    $1.KeyOpt = colKeyUniqueKey
+    $$ = $1
+  }
+| column_type_options UNIQUE
+  {
+    $1.KeyOpt = colKeyUnique
+    $$ = $1
+  }
+
 column_type:
   numeric_type unsigned_opt zero_fill_opt
   {
@@ -1287,47 +1338,6 @@ zero_fill_opt:
     $$ = true
   }
 
-// Null opt returns false to mean NULL (i.e. the default) and true for NOT NULL
-null_opt:
-  {
-    $$ = false
-  }
-| NULL
-  {
-    $$ = false
-  }
-| NOT NULL
-  {
-    $$ = true
-  }
-
-column_default_opt:
-  {
-    $$ = nil
-  }
-| DEFAULT value_expression
-  {
-    $$ = $2
-  }
-
-on_update_opt:
-  {
-    $$ = nil
-  }
-| ON UPDATE function_call_nonkeyword
-{
-  $$ = $3
-}
-
-auto_increment_opt:
-  {
-    $$ = false
-  }
-| AUTO_INCREMENT
-  {
-    $$ = true
-  }
-
 charset_opt:
   {
     $$ = ""
@@ -1354,35 +1364,6 @@ collate_opt:
     $$ = string($2)
   }
 
-column_key_opt:
-  {
-    $$ = colKeyNone
-  }
-| PRIMARY KEY
-  {
-    $$ = colKeyPrimary
-  }
-| KEY
-  {
-    $$ = colKey
-  }
-| UNIQUE KEY
-  {
-    $$ = colKeyUniqueKey
-  }
-| UNIQUE
-  {
-    $$ = colKeyUnique
-  }
-
-column_comment_opt:
-  {
-    $$ = nil
-  }
-| COMMENT_KEYWORD STRING
-  {
-    $$ = NewStrLiteral($2)
-  }
 
 index_definition:
   index_info '(' index_column_list ')' index_option_list_opt

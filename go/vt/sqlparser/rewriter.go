@@ -212,20 +212,8 @@ func replaceColumnDefinitionName(newNode, parent SQLNode) {
 	parent.(*ColumnDefinition).Name = newNode.(ColIdent)
 }
 
-func replaceColumnTypeComment(newNode, parent SQLNode) {
-	parent.(*ColumnType).Comment = newNode.(*Literal)
-}
-
-func replaceColumnTypeDefault(newNode, parent SQLNode) {
-	parent.(*ColumnType).Default = newNode.(Expr)
-}
-
 func replaceColumnTypeLength(newNode, parent SQLNode) {
 	parent.(*ColumnType).Length = newNode.(*Literal)
-}
-
-func replaceColumnTypeOnUpdate(newNode, parent SQLNode) {
-	parent.(*ColumnType).OnUpdate = newNode.(Expr)
 }
 
 func replaceColumnTypeScale(newNode, parent SQLNode) {
@@ -1196,10 +1184,7 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 		a.apply(node, n.Name, replaceColumnDefinitionName)
 
 	case *ColumnType:
-		a.apply(node, n.Comment, replaceColumnTypeComment)
-		a.apply(node, n.Default, replaceColumnTypeDefault)
 		a.apply(node, n.Length, replaceColumnTypeLength)
-		a.apply(node, n.OnUpdate, replaceColumnTypeOnUpdate)
 		a.apply(node, n.Scale, replaceColumnTypeScale)
 
 	case Columns:

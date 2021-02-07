@@ -1241,11 +1241,7 @@ type ColumnType struct {
 	Type string
 
 	// Generic field options.
-	NotNull       bool
-	Autoincrement bool
-	Default       Expr
-	OnUpdate      Expr
-	Comment       *Literal
+	Options *ColumnTypeOptions
 
 	// Numeric field options
 	Length   *Literal
@@ -1259,6 +1255,15 @@ type ColumnType struct {
 
 	// Enum values
 	EnumValues []string
+}
+
+// ColumnTypeOptions are generic field options for a column type
+type ColumnTypeOptions struct {
+	NotNull       bool
+	Autoincrement bool
+	Default       Expr
+	OnUpdate      Expr
+	Comment       *Literal
 
 	// Key specification
 	KeyOpt ColumnKeyOption
@@ -2220,37 +2225,37 @@ func (ct *ColumnType) Format(buf *TrackedBuffer) {
 	if ct.Collate != "" {
 		opts = append(opts, keywordStrings[COLLATE], ct.Collate)
 	}
-	if ct.NotNull {
+	if ct.Options.NotNull {
 		opts = append(opts, keywordStrings[NOT], keywordStrings[NULL])
 	}
-	if ct.Default != nil {
-		opts = append(opts, keywordStrings[DEFAULT], String(ct.Default))
+	if ct.Options.Default != nil {
+		opts = append(opts, keywordStrings[DEFAULT], String(ct.Options.Default))
 	}
-	if ct.OnUpdate != nil {
-		opts = append(opts, keywordStrings[ON], keywordStrings[UPDATE], String(ct.OnUpdate))
+	if ct.Options.OnUpdate != nil {
+		opts = append(opts, keywordStrings[ON], keywordStrings[UPDATE], String(ct.Options.OnUpdate))
 	}
-	if ct.Autoincrement {
+	if ct.Options.Autoincrement {
 		opts = append(opts, keywordStrings[AUTO_INCREMENT])
 	}
-	if ct.Comment != nil {
-		opts = append(opts, keywordStrings[COMMENT_KEYWORD], String(ct.Comment))
+	if ct.Options.Comment != nil {
+		opts = append(opts, keywordStrings[COMMENT_KEYWORD], String(ct.Options.Comment))
 	}
-	if ct.KeyOpt == colKeyPrimary {
+	if ct.Options.KeyOpt == colKeyPrimary {
 		opts = append(opts, keywordStrings[PRIMARY], keywordStrings[KEY])
 	}
-	if ct.KeyOpt == colKeyUnique {
+	if ct.Options.KeyOpt == colKeyUnique {
 		opts = append(opts, keywordStrings[UNIQUE])
 	}
-	if ct.KeyOpt == colKeyUniqueKey {
+	if ct.Options.KeyOpt == colKeyUniqueKey {
 		opts = append(opts, keywordStrings[UNIQUE], keywordStrings[KEY])
 	}
-	if ct.KeyOpt == colKeySpatialKey {
+	if ct.Options.KeyOpt == colKeySpatialKey {
 		opts = append(opts, keywordStrings[SPATIAL], keywordStrings[KEY])
 	}
-	if ct.KeyOpt == colKeyFulltextKey {
+	if ct.Options.KeyOpt == colKeyFulltextKey {
 		opts = append(opts, keywordStrings[FULLTEXT], keywordStrings[KEY])
 	}
-	if ct.KeyOpt == colKey {
+	if ct.Options.KeyOpt == colKey {
 		opts = append(opts, keywordStrings[KEY])
 	}
 
