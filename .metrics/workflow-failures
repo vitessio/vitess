@@ -2123,4 +2123,5 @@
 2021-02-07T20:27:53Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/546051672
 2021-02-07T20:27:53Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/546051670
 2021-02-07T20:27:53Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/546051655
+2021-02-07T20:27:53Z,docker_test_3,https://github.com/vitessio/vitess/actions/runs/546051649
 2021-02-07T20:27:53Z,unit_race,https://github.com/vitessio/vitess/actions/runs/546051647
