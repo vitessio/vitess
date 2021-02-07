@@ -1,11 +1,11 @@
 # DO NOT MODIFY: THIS FILE IS GENERATED USING "make generate_ci_workflows"
 
-name: Cluster (27)
+name: Cluster (vreplication_v2)
 on: [push, pull_request]
 jobs:
 
   build:
-    name: Run endtoend tests on Cluster (27)
+    name: Run endtoend tests on Cluster (vreplication_v2)
     runs-on: ubuntu-latest
 
     steps:
@@ -37,4 +37,4 @@ jobs:
       timeout-minutes: 30
       run: |
         source build.env
-        eatmydata -- go run test.go -docker=false -print-log -follow -shard 27
+        eatmydata -- go run test.go -docker=false -print-log -follow -shard vreplication_v2
