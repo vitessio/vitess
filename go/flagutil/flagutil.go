@@ -126,8 +126,8 @@ func (value StringMapValue) String() string {
 	return strings.Join(parts, ",")
 }
 
-// DualCaseStringListVar cretes a flag which supports both dashes and underscores
-func DualCaseStringListVar(p *[]string, name string, value []string, usage string) {
+// DualFormatStringListVar creates a flag which supports both dashes and underscores
+func DualFormatStringListVar(p *[]string, name string, value []string, usage string) {
 	dashes := strings.Replace(name, "_", "-", -1)
 	underscores := strings.Replace(name, "-", "_", -1)
 
@@ -137,8 +137,8 @@ func DualCaseStringListVar(p *[]string, name string, value []string, usage strin
 	}
 }
 
-// DualCaseStringVar cretes a flag which supports both dashes and underscores
-func DualCaseStringVar(p *string, name string, value string, usage string) {
+// DualFormatStringVar creates a flag which supports both dashes and underscores
+func DualFormatStringVar(p *string, name string, value string, usage string) {
 	dashes := strings.Replace(name, "_", "-", -1)
 	underscores := strings.Replace(name, "-", "_", -1)
 
@@ -148,8 +148,8 @@ func DualCaseStringVar(p *string, name string, value string, usage string) {
 	}
 }
 
-// DualCaseInt64Var cretes a flag which supports both dashes and underscores
-func DualCaseInt64Var(p *int64, name string, value int64, usage string) {
+// DualFormatInt64Var creates a flag which supports both dashes and underscores
+func DualFormatInt64Var(p *int64, name string, value int64, usage string) {
 	dashes := strings.Replace(name, "_", "-", -1)
 	underscores := strings.Replace(name, "-", "_", -1)
 
@@ -159,8 +159,8 @@ func DualCaseInt64Var(p *int64, name string, value int64, usage string) {
 	}
 }
 
-// DualCaseIntVar cretes a flag which supports both dashes and underscores
-func DualCaseIntVar(p *int, name string, value int, usage string) {
+// DualFormatIntVar creates a flag which supports both dashes and underscores
+func DualFormatIntVar(p *int, name string, value int, usage string) {
 	dashes := strings.Replace(name, "_", "-", -1)
 	underscores := strings.Replace(name, "-", "_", -1)
 
@@ -170,8 +170,8 @@ func DualCaseIntVar(p *int, name string, value int, usage string) {
 	}
 }
 
-// DualCaseBoolVar cretes a flag which supports both dashes and underscores
-func DualCaseBoolVar(p *bool, name string, value bool, usage string) {
+// DualFormatBoolVar creates a flag which supports both dashes and underscores
+func DualFormatBoolVar(p *bool, name string, value bool, usage string) {
 	dashes := strings.Replace(name, "_", "-", -1)
 	underscores := strings.Replace(name, "-", "_", -1)
 
