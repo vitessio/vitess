@@ -23,6 +23,6 @@ jobs:
            exit 0
           fi
           echo 'We wish to maintain a tidy state for go mod. Please run `go mod tidy` on your branch, commit and push again.'
-          echo 'Output for `go mod tidy`:'
+          echo 'Running `go mod tidy` on this CI test yields with the following changes:'
           echo "$output"
           exit 1
