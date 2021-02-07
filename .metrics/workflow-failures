@@ -2102,3 +2102,7 @@
 2021-02-07T03:21:15Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/544461552
 2021-02-07T05:53:57Z,check_make_parser,https://github.com/vitessio/vitess/actions/runs/544686786
 2021-02-07T07:18:47Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/544812736
+2021-02-07T12:26:55Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/545278812
+2021-02-07T12:26:55Z,gomod-tidy,https://github.com/vitessio/vitess/actions/runs/545278803
+2021-02-07T12:28:37Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/545281911
+2021-02-07T12:30:27Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/545284758
