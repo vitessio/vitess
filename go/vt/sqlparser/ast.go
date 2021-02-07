@@ -87,8 +87,8 @@ type (
 
 	// Explain is an interface that represents the Explain statements
 	Explain interface {
-		iExplain()
 		Statement
+		iExplain()
 	}
 
 	// AddConstraintDefinition represents a ADD CONSTRAINT alter option
