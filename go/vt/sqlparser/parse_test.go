@@ -1052,6 +1052,9 @@ var (
 		input:  "alter table a drop id",
 		output: "alter table a drop column id",
 	}, {
+		input:  "ALTER TABLE distributors ADD CONSTRAINT zipchk CHECK (char_length(zipcode) = 5)",
+		output: "alter table distributors add constraint zipchk check (char_length(zipcode) = 5)",
+	}, {
 		input: "alter database character set geostd8",
 	}, {
 		input: "alter database d character set geostd8",
