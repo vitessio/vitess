@@ -1053,7 +1053,7 @@ var (
 		output: "alter table a drop column id",
 	}, {
 		input:  "ALTER TABLE `product115s` CHANGE `part_number` `part_number` varchar(255) DEFAULT '0' NOT NULL",
-		output: "alter table product115s change column part_number part_number varchar(255) default '0' not null",
+		output: "alter table product115s change column part_number part_number varchar(255) not null default '0'",
 	}, {
 		input: "alter database character set geostd8",
 	}, {
@@ -1121,6 +1121,12 @@ var (
 	}, {
 		input:  "create table a (b1 bool NOT NULL PRIMARY KEY, b2 boolean not null, KEY b2_idx(b))",
 		output: "create table a (\n\tb1 bool not null primary key,\n\tb2 boolean not null,\n\tKEY b2_idx (b)\n)",
+	}, {
+		input:  "CREATE TABLE pkai (id INT PRIMARY KEY AUTO_INCREMENT);",
+		output: "create table pkai (\n\tid INT auto_increment primary key\n)",
+	}, {
+		input:  "CREATE TABLE aipk (id INT AUTO_INCREMENT PRIMARY KEY)",
+		output: "create table aipk (\n\tid INT auto_increment primary key\n)",
 	}, {
 		input: "alter vschema create vindex hash_vdx using hash",
 	}, {
