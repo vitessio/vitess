@@ -825,6 +825,8 @@ curl -s 'http://localhost:%d/schema-migration/report-status?uuid=%s&status=%s&dr
 		if err := runGhost(false); err != nil {
 			// perhaps gh-ost was interrupted midway and didn't have the chance to send a "failes" status
 			_ = e.updateMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusFailed)
+			_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, err.Error())
+
 			log.Errorf("Error executing gh-ost dry run: %+v", err)
 			return err
 		}
@@ -835,6 +837,7 @@ curl -s 'http://localhost:%d/schema-migration/report-status?uuid=%s&status=%s&dr
 		if err := runGhost(true); err != nil {
 			// perhaps gh-ost was interrupted midway and didn't have the chance to send a "failes" status
 			_ = e.updateMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusFailed)
+			_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, err.Error())
 			failedMigrations.Add(1)
 			log.Errorf("Error running gh-ost: %+v", err)
 			return err
@@ -1048,6 +1051,7 @@ export MYSQL_PWD
 		if err := runPTOSC(false); err != nil {
 			// perhaps pt-osc was interrupted midway and didn't have the chance to send a "failes" status
 			_ = e.updateMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusFailed)
+			_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, err.Error())
 			_ = e.updateMigrationTimestamp(ctx, "completed_timestamp", onlineDDL.UUID)
 			log.Errorf("Error executing pt-online-schema-change dry run: %+v", err)
 			return err
@@ -1059,6 +1063,7 @@ export MYSQL_PWD
 		if err := runPTOSC(true); err != nil {
 			// perhaps pt-osc was interrupted midway and didn't have the chance to send a "failes" status
 			_ = e.updateMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusFailed)
+			_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, err.Error())
 			_ = e.updateMigrationTimestamp(ctx, "completed_timestamp", onlineDDL.UUID)
 			_ = e.dropPTOSCMigrationTriggers(ctx, onlineDDL)
 			failedMigrations.Add(1)
@@ -1155,7 +1160,7 @@ func (e *Executor) terminateMigration(ctx context.Context, onlineDDL *schema.Onl
 }
 
 // cancelMigration attempts to abort a scheduled or a running migration
-func (e *Executor) cancelMigration(ctx context.Context, uuid string, terminateRunningMigration bool) (result *sqltypes.Result, err error) {
+func (e *Executor) cancelMigration(ctx context.Context, uuid string, terminateRunningMigration bool, message string) (result *sqltypes.Result, err error) {
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
 
@@ -1178,6 +1183,8 @@ func (e *Executor) cancelMigration(ctx context.Context, uuid string, terminateRu
 
 	if terminateRunningMigration {
 		migrationFound, err := e.terminateMigration(ctx, onlineDDL, e.lastMigrationUUID)
+		defer e.updateMigrationMessage(ctx, onlineDDL.UUID, message)
+
 		if migrationFound {
 			rowsAffected = 1
 		}
@@ -1194,10 +1201,10 @@ func (e *Executor) cancelMigration(ctx context.Context, uuid string, terminateRu
 }
 
 // cancelMigrations attempts to abort a list of migrations
-func (e *Executor) cancelMigrations(ctx context.Context, uuids []string) (err error) {
+func (e *Executor) cancelMigrations(ctx context.Context, uuids []string, message string) (err error) {
 	for _, uuid := range uuids {
 		log.Infof("cancelMigrations: cancelling %s", uuid)
-		if _, err := e.cancelMigration(ctx, uuid, true); err != nil {
+		if _, err := e.cancelMigration(ctx, uuid, true, message); err != nil {
 			return err
 		}
 	}
@@ -1206,7 +1213,7 @@ func (e *Executor) cancelMigrations(ctx context.Context, uuids []string) (err er
 
 // cancelPendingMigrations cancels all pending migrations (that are expected to run or are running)
 // for this keyspace
-func (e *Executor) cancelPendingMigrations(ctx context.Context) (result *sqltypes.Result, err error) {
+func (e *Executor) cancelPendingMigrations(ctx context.Context, message string) (result *sqltypes.Result, err error) {
 	r, err := e.execQuery(ctx, sqlSelectPendingMigrations)
 	if err != nil {
 		return result, err
@@ -1220,7 +1227,7 @@ func (e *Executor) cancelPendingMigrations(ctx context.Context) (result *sqltype
 	result = &sqltypes.Result{}
 	for _, uuid := range uuids {
 		log.Infof("cancelPendingMigrations: cancelling %s", uuid)
-		res, err := e.cancelMigration(ctx, uuid, true)
+		res, err := e.cancelMigration(ctx, uuid, true, message)
 		if err != nil {
 			return result, err
 		}
@@ -1266,6 +1273,9 @@ func (e *Executor) scheduleNextMigration(ctx context.Context) error {
 func (e *Executor) executeMigration(ctx context.Context, onlineDDL *schema.OnlineDDL) error {
 	failMigration := func(err error) error {
 		_ = e.updateMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusFailed)
+		if err != nil {
+			_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, err.Error())
+		}
 		e.triggerNextCheckInterval()
 		return err
 	}
@@ -1671,6 +1681,7 @@ func (e *Executor) reviewStaleMigrations(ctx context.Context) error {
 		if err := e.updateMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusFailed); err != nil {
 			return err
 		}
+		_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, "stale migration")
 	}
 
 	return nil
@@ -1774,7 +1785,7 @@ func (e *Executor) onMigrationCheckTick() {
 	}
 	if _, cancellable, err := e.reviewRunningMigrations(ctx); err != nil {
 		log.Error(err)
-	} else if err := e.cancelMigrations(ctx, cancellable); err != nil {
+	} else if err := e.cancelMigrations(ctx, cancellable, "auto cancel"); err != nil {
 		log.Error(err)
 	}
 	if err := e.reviewStaleMigrations(ctx); err != nil {
@@ -1881,6 +1892,18 @@ func (e *Executor) updateMigrationStatus(ctx context.Context, uuid string, statu
 		return err
 	}
 	_, err = e.execQuery(ctx, bound)
+	return err
+}
+
+func (e *Executor) updateMigrationMessage(ctx context.Context, uuid string, message string) error {
+	query, err := sqlparser.ParseAndBind(sqlUpdateMessage,
+		sqltypes.StringBindVariable(message),
+		sqltypes.StringBindVariable(uuid),
+	)
+	if err != nil {
+		return err
+	}
+	_, err = e.execQuery(ctx, query)
 	return err
 }
 
@@ -2044,13 +2067,13 @@ func (e *Executor) VExec(ctx context.Context, vx *vexec.TabletVExec) (qr *queryp
 			if !schema.IsOnlineDDLUUID(uuid) {
 				return nil, fmt.Errorf("Not an Online DDL UUID: %s", uuid)
 			}
-			return response(e.cancelMigration(ctx, uuid, true))
+			return response(e.cancelMigration(ctx, uuid, true, "cancel by user"))
 		case cancelAllMigrationHint:
 			uuid, _ := vx.ColumnStringVal(vx.WhereCols, "migration_uuid")
 			if uuid != "" {
 				return nil, fmt.Errorf("Unexpetced UUID: %s", uuid)
 			}
-			return response(e.cancelPendingMigrations(ctx))
+			return response(e.cancelPendingMigrations(ctx, "cancel-all by user"))
 		default:
 			return nil, fmt.Errorf("Unexpected value for migration_status: %v. Supported values are: %s, %s",
 				statusVal, retryMigrationHint, cancelMigrationHint)
