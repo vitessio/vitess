@@ -53,6 +53,7 @@ const (
 	alterSchemaMigrationsTableProgress           = "ALTER TABLE _vt.schema_migrations add column progress float NOT NULL DEFAULT 0"
 	alterSchemaMigrationsTableContext            = "ALTER TABLE _vt.schema_migrations add column migration_context varchar(1024) NOT NULL DEFAULT ''"
 	alterSchemaMigrationsTableDDLAction          = "ALTER TABLE _vt.schema_migrations add column ddl_action varchar(16) NOT NULL DEFAULT ''"
+	alterSchemaMigrationsTableMessage            = "ALTER TABLE _vt.schema_migrations add column message TEXT NOT NULL"
 
 	sqlScheduleSingleMigration = `UPDATE _vt.schema_migrations
 		SET
@@ -96,6 +97,11 @@ const (
 	`
 	sqlUpdateTabletFailure = `UPDATE _vt.schema_migrations
 			SET tablet_failure=1
+		WHERE
+			migration_uuid=%a
+	`
+	sqlUpdateMessage = `UPDATE _vt.schema_migrations
+			SET message=%a
 		WHERE
 			migration_uuid=%a
 	`
@@ -271,4 +277,5 @@ var applyDDL = []string{
 	alterSchemaMigrationsTableProgress,
 	alterSchemaMigrationsTableContext,
 	alterSchemaMigrationsTableDDLAction,
+	alterSchemaMigrationsTableMessage,
 }
