@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
+	"sync/atomic"
 	"time"
 
 	"vitess.io/vitess/go/vt/logz"
@@ -74,16 +75,16 @@ func (e *Executor) gatherScatterStats() (statsResults, error) {
 			}
 			plans = append(plans, plan)
 			routes = append(routes, route)
-			scatterExecTime += plan.ExecTime
-			scatterCount += plan.ExecCount
+			scatterExecTime += time.Duration(atomic.LoadUint64(&plan.ExecTime))
+			scatterCount += atomic.LoadUint64(&plan.ExecCount)
 		}
 		if readOnly {
-			readOnlyTime += plan.ExecTime
-			readOnlyCount += plan.ExecCount
+			readOnlyTime += time.Duration(atomic.LoadUint64(&plan.ExecTime))
+			readOnlyCount += atomic.LoadUint64(&plan.ExecCount)
 		}
 
-		totalExecTime += plan.ExecTime
-		totalCount += plan.ExecCount
+		totalExecTime += time.Duration(atomic.LoadUint64(&plan.ExecTime))
+		totalCount += atomic.LoadUint64(&plan.ExecCount)
 		return true
 	})
 	if err != nil {
@@ -94,19 +95,22 @@ func (e *Executor) gatherScatterStats() (statsResults, error) {
 	resultItems := make([]*statsResultItem, len(plans))
 	for i, plan := range plans {
 		route := routes[i]
+		execCount := atomic.LoadUint64(&plan.ExecCount)
+		execTime := time.Duration(atomic.LoadUint64(&plan.ExecTime))
+
 		var avgTimePerQuery int64
-		if plan.ExecCount != 0 {
-			avgTimePerQuery = plan.ExecTime.Nanoseconds() / int64(plan.ExecCount)
+		if execCount != 0 {
+			avgTimePerQuery = execTime.Nanoseconds() / int64(execCount)
 		}
 		resultItems[i] = &statsResultItem{
 			Query:                  plan.Original,
 			AvgTimePerQuery:        time.Duration(avgTimePerQuery),
-			PercentTimeOfReads:     100 * float64(plan.ExecTime) / float64(readOnlyTime),
-			PercentTimeOfScatters:  100 * float64(plan.ExecTime) / float64(scatterExecTime),
-			PercentCountOfReads:    100 * float64(plan.ExecCount) / float64(readOnlyCount),
-			PercentCountOfScatters: 100 * float64(plan.ExecCount) / float64(scatterCount),
+			PercentTimeOfReads:     100 * float64(execTime) / float64(readOnlyTime),
+			PercentTimeOfScatters:  100 * float64(execTime) / float64(scatterExecTime),
+			PercentCountOfReads:    100 * float64(execCount) / float64(readOnlyCount),
+			PercentCountOfScatters: 100 * float64(execCount) / float64(scatterCount),
 			From:                   route.Keyspace.Name + "." + route.TableName,
-			Count:                  plan.ExecCount,
+			Count:                  execCount,
 		}
 	}
 	result := statsResults{

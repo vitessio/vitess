@@ -76,12 +76,12 @@ type queryzRow struct {
 	Query        string
 	Table        string
 	Plan         planbuilder.PlanType
-	Count        int64
+	Count        uint64
 	tm           time.Duration
 	mysqlTime    time.Duration
-	RowsAffected int64
-	RowsReturned int64
-	Errors       int64
+	RowsAffected uint64
+	RowsReturned uint64
+	Errors       uint64
 	Color        string
 }
 
@@ -164,7 +164,7 @@ func queryzHandler(qe *QueryEngine, w http.ResponseWriter, r *http.Request) {
 		Value.Count, Value.tm, Value.mysqlTime, Value.RowsAffected, Value.RowsReturned, Value.Errors = plan.Stats()
 		var timepq time.Duration
 		if Value.Count != 0 {
-			timepq = time.Duration(int64(Value.tm) / Value.Count)
+			timepq = Value.tm / time.Duration(Value.Count)
 		}
 		if timepq < 10*time.Millisecond {
 			Value.Color = "low"
