@@ -2145,3 +2145,5 @@
 2021-02-08T15:57:46Z,.github/workflows/check_runs_analysis.yaml,https://github.com/vitessio/vitess/actions/runs/548497954
 2021-02-08T18:35:58Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/548916174
 2021-02-08T18:38:48Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/548924949
+2021-02-08T19:00:24Z,cluster_endtoend,https://github.com/vitessio/vitess/actions/runs/548980109
+2021-02-08T19:00:24Z,unit_race,https://github.com/vitessio/vitess/actions/runs/548980116
