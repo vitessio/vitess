@@ -65,6 +65,11 @@ const (
 			requested_timestamp ASC
 		LIMIT 1
 	`
+	sqlUpdateMySQLTable = `UPDATE _vt.schema_migrations
+			SET mysql_table=%a
+		WHERE
+			migration_uuid=%a
+	`
 	sqlUpdateMigrationStatus = `UPDATE _vt.schema_migrations
 			SET migration_status=%a
 		WHERE
@@ -159,6 +164,10 @@ const (
 		WHERE
 			migration_status IN ('complete', 'failed')
 			AND cleanup_timestamp IS NULL
+			AND completed_timestamp <= CASE strategy
+				WHEN 'online' THEN NOW() - INTERVAL %a SECOND
+			  ELSE NOW()
+			END
 	`
 	sqlSelectMigration = `SELECT
 			id,

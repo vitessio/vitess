@@ -104,6 +104,7 @@ var emptyResult = &sqltypes.Result{
 var ghostOverridePath = flag.String("gh-ost-path", "", "override default gh-ost binary full path")
 var ptOSCOverridePath = flag.String("pt-osc-path", "", "override default pt-online-schema-change binary full path")
 var migrationCheckInterval = flag.Duration("migration_check_interval", 1*time.Minute, "Interval between migration checks")
+var retainVReplicationTables = flag.Duration("retain_online_ddl_tables", 4*time.Hour, "How long to wait after a 'ALTER TABLE' with ddl_strategy=online migration completes before cleaning up the artifact table")
 var migrationNextCheckInterval = 5 * time.Second
 
 const (
@@ -470,16 +471,10 @@ func (e *Executor) terminateVReplMigration(ctx context.Context, uuid string) err
 // cutOverVReplMigration stops vreplication, then removes the _vt.vreplication entry for the given migration
 func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) error {
 	// sanity checks:
-	if s == nil {
-		return vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "No vreplication stream migration %s", s.workflow)
+	vreplTable, err := getVreplTable(ctx, s)
+	if err != nil {
+		return err
 	}
-	if s.bls.Filter == nil {
-		return vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "No binlog source filter for migration %s", s.workflow)
-	}
-	if len(s.bls.Filter.Rules) != 1 {
-		return vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "Cannot detect filter rules for migration/vreplication %+v", s.workflow)
-	}
-	vreplTable := s.bls.Filter.Rules[0].Match
 
 	// get topology client & entities:
 	tmClient := tmclient.NewTabletManagerClient()
@@ -576,6 +571,73 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 	return nil
 }
 
+func (e *Executor) initVreplicationOriginalMigration(ctx context.Context, onlineDDL *schema.OnlineDDL, conn *dbconnpool.DBConnection) (v *VRepl, err error) {
+	vreplTableName := fmt.Sprintf("_%s_%s_vrepl", onlineDDL.UUID, ReadableTimestamp())
+	{
+		// Apply CREATE TABLE for materialized table
+		parsed := sqlparser.BuildParsedQuery(sqlCreateTableLike, vreplTableName, onlineDDL.Table)
+		if _, err := conn.ExecuteFetch(parsed.Query, 0, false); err != nil {
+			return v, err
+		}
+	}
+	alterOptions := e.parseAlterOptions(ctx, onlineDDL)
+	{
+		// Apply ALTER TABLE to materialized table
+		parsed := sqlparser.BuildParsedQuery(sqlAlterTableOptions, vreplTableName, alterOptions)
+		if _, err := conn.ExecuteFetch(parsed.Query, 0, false); err != nil {
+			return v, err
+		}
+	}
+	v = NewVRepl(onlineDDL.UUID, e.keyspace, e.shard, e.dbName, onlineDDL.Table, vreplTableName, alterOptions)
+	return v, nil
+}
+
+func (e *Executor) initVreplicationRevertMigration(ctx context.Context, onlineDDL *schema.OnlineDDL, revertUUID string) (v *VRepl, err error) {
+	// Validation: migration to revert exists and is in complete state
+	revertMigration, err := e.readMigration(ctx, revertUUID)
+	if err != nil {
+		return nil, err
+	}
+	action, actionStr, err := revertMigration.GetActionStr()
+	if err != nil {
+		return nil, err
+	}
+	switch action {
+	case sqlparser.AlterDDLAction, sqlparser.RevertDDLAction:
+	default:
+		return nil, fmt.Errorf("Can only revert a ALTER/REVERT migration. Migration %s is %s", revertMigration.UUID, actionStr)
+	}
+	if revertMigration.Strategy != schema.DDLStrategyOnline {
+		return nil, fmt.Errorf("Can only revert a %s strategy migration. Migration %s has %s strategy", schema.DDLStrategyOnline, revertMigration.UUID, revertMigration.Strategy)
+	}
+	if revertMigration.Status != schema.OnlineDDLStatusComplete {
+		return nil, fmt.Errorf("Can only revert a migration in a '%s' state. Migration %s is in '%s' state", schema.OnlineDDLStatusComplete, revertMigration.UUID, revertMigration.Status)
+	}
+	// Validation: reverted migration is the last migration to run on this table:
+	// TODO(shlomi): implement ^
+
+	// Validation: vreplication still exists for reverted migration
+	revertStream, err := e.readVReplStream(ctx, revertMigration.UUID, false)
+	if err != nil {
+		// cannot read the vreplication stream which we want to revert
+		return nil, fmt.Errorf("can not revert vreplication migration %s because vreplication stream %s was not found", revertMigration.UUID, revertMigration.UUID)
+	}
+
+	onlineDDL.Table = revertMigration.Table
+	if err := e.updateMySQLTable(ctx, onlineDDL.UUID, onlineDDL.Table); err != nil {
+		return nil, err
+	}
+
+	vreplTableName, err := getVreplTable(ctx, revertStream)
+	if err != nil {
+		return nil, err
+	}
+
+	v = NewVRepl(onlineDDL.UUID, e.keyspace, e.shard, e.dbName, onlineDDL.Table, vreplTableName, "")
+	v.pos = revertStream.pos
+	return v, nil
+}
+
 // ExecuteWithVReplication sets up the grounds for a vreplication schema migration
 func (e *Executor) ExecuteWithVReplication(ctx context.Context, onlineDDL *schema.OnlineDDL) error {
 	e.migrationMutex.Lock()
@@ -603,30 +665,25 @@ func (e *Executor) ExecuteWithVReplication(ctx context.Context, onlineDDL *schem
 	if err := e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusRunning, false, progressPctStarted); err != nil {
 		return err
 	}
-	vreplTableName := fmt.Sprintf("_%s_%s_vrepl", onlineDDL.UUID, ReadableTimestamp())
 
-	if err := e.updateArtifacts(ctx, onlineDDL.UUID, vreplTableName); err != nil {
+	var v *VRepl
+	if revertUUID, _ := onlineDDL.GetRevertUUID(); revertUUID == "" {
+		// Original ALTER TABLE request for vreplication
+		v, err = e.initVreplicationOriginalMigration(ctx, onlineDDL, conn)
+	} else {
+		// this is a revert request
+		v, err = e.initVreplicationRevertMigration(ctx, onlineDDL, revertUUID)
+	}
+	if err != nil {
+		return err
+	}
+	if err := v.analyze(ctx, conn); err != nil {
+		return err
+	}
+	if err := e.updateArtifacts(ctx, onlineDDL.UUID, v.targetTable); err != nil {
 		return err
 	}
 
-	{
-		parsed := sqlparser.BuildParsedQuery(sqlCreateTableLike, vreplTableName, onlineDDL.Table)
-		if _, err := conn.ExecuteFetch(parsed.Query, 0, false); err != nil {
-			return err
-		}
-	}
-	alterOptions := e.parseAlterOptions(ctx, onlineDDL)
-	{
-		parsed := sqlparser.BuildParsedQuery(sqlAlterTableOptions, vreplTableName, alterOptions)
-		// Apply ALTER TABLE to materialized table
-		if _, err := conn.ExecuteFetch(parsed.Query, 0, false); err != nil {
-			return err
-		}
-	}
-	v := NewVRepl(onlineDDL.UUID, e.keyspace, e.shard, e.dbName, onlineDDL.Table, vreplTableName)
-	if err := v.analyze(ctx, conn, alterOptions); err != nil {
-		return err
-	}
 	{
 		// We need to talk to tabletmanager's VREngine. But we're on TabletServer. While we live in the same
 		// process as VREngine, it is actually simpler to get hold of it via gRPC, just like wrangler does.
@@ -1352,6 +1409,12 @@ func (e *Executor) executeMigration(ctx context.Context, onlineDDL *schema.Onlin
 				return failMigration(fmt.Errorf("Unsupported strategy: %+v", onlineDDL.Strategy))
 			}
 		}
+	case sqlparser.RevertDDLAction:
+		go func() {
+			if err := e.ExecuteWithVReplication(ctx, onlineDDL); err != nil {
+				failMigration(err)
+			}
+		}()
 	}
 	return nil
 }
@@ -1722,7 +1785,13 @@ func (e *Executor) gcArtifacts(ctx context.Context) error {
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
 
-	r, err := e.execQuery(ctx, sqlSelectUncollectedArtifacts)
+	query, err := sqlparser.ParseAndBind(sqlSelectUncollectedArtifacts,
+		sqltypes.Int64BindVariable(int64((*retainVReplicationTables).Seconds())),
+	)
+	if err != nil {
+		return err
+	}
+	r, err := e.execQuery(ctx, query)
 	if err != nil {
 		return err
 	}
@@ -1898,6 +1967,18 @@ func (e *Executor) updateMigrationStatus(ctx context.Context, uuid string, statu
 func (e *Executor) updateMigrationMessage(ctx context.Context, uuid string, message string) error {
 	query, err := sqlparser.ParseAndBind(sqlUpdateMessage,
 		sqltypes.StringBindVariable(message),
+		sqltypes.StringBindVariable(uuid),
+	)
+	if err != nil {
+		return err
+	}
+	_, err = e.execQuery(ctx, query)
+	return err
+}
+
+func (e *Executor) updateMySQLTable(ctx context.Context, uuid string, tableName string) error {
+	query, err := sqlparser.ParseAndBind(sqlUpdateMySQLTable,
+		sqltypes.StringBindVariable(tableName),
 		sqltypes.StringBindVariable(uuid),
 	)
 	if err != nil {
