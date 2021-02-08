@@ -34,6 +34,7 @@ type Timings struct {
 	mu         sync.RWMutex
 	histograms map[string]*Histogram
 
+	name          string
 	help          string
 	label         string
 	labelCombined bool
@@ -46,6 +47,7 @@ type Timings struct {
 func NewTimings(name, help, label string, categories ...string) *Timings {
 	t := &Timings{
 		histograms:    make(map[string]*Histogram),
+		name:          name,
 		help:          help,
 		label:         label,
 		labelCombined: IsDimensionCombined(label),
@@ -86,6 +88,9 @@ func (t *Timings) Add(name string, elapsed time.Duration) {
 			t.histograms[name] = hist
 		}
 		t.mu.Unlock()
+	}
+	if defaultStatsdHook.timerHook != nil && t.name != "" {
+		defaultStatsdHook.timerHook(t.name, name, elapsed.Milliseconds(), t)
 	}
 
 	elapsedNs := int64(elapsed)
@@ -198,16 +203,19 @@ type MultiTimings struct {
 
 // NewMultiTimings creates a new MultiTimings object.
 func NewMultiTimings(name string, help string, labels []string) *MultiTimings {
+	combinedLabels := make([]bool, len(labels))
+	for i, label := range labels {
+		combinedLabels[i] = IsDimensionCombined(label)
+	}
 	t := &MultiTimings{
 		Timings: Timings{
 			histograms: make(map[string]*Histogram),
+			name:       name,
 			help:       help,
+			label:      safeJoinLabels(labels, combinedLabels),
 		},
 		labels:         labels,
-		combinedLabels: make([]bool, len(labels)),
-	}
-	for i, label := range labels {
-		t.combinedLabels[i] = IsDimensionCombined(label)
+		combinedLabels: combinedLabels,
 	}
 	if name != "" {
 		publish(name, t)
