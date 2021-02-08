@@ -2136,3 +2136,5 @@
 2021-02-08T08:24:35Z,docker_test_3,https://github.com/vitessio/vitess/actions/runs/547352923
 2021-02-08T10:52:34Z,endtoend,https://github.com/vitessio/vitess/actions/runs/547725816
 2021-02-08T10:52:34Z,golangci-lint,https://github.com/vitessio/vitess/actions/runs/547725806
+2021-02-08T11:07:27Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/547758987
+2021-02-08T11:07:27Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/547758982
