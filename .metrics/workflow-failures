@@ -2138,3 +2138,6 @@
 2021-02-08T10:52:34Z,golangci-lint,https://github.com/vitessio/vitess/actions/runs/547725806
 2021-02-08T11:07:27Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/547758987
 2021-02-08T11:07:27Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/547758982
+2021-02-08T11:55:19Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/547870501
+2021-02-08T11:55:19Z,endtoend,https://github.com/vitessio/vitess/actions/runs/547870496
+2021-02-08T11:55:19Z,golangci-lint,https://github.com/vitessio/vitess/actions/runs/547870497
