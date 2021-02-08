@@ -34,7 +34,9 @@ import (
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/dbconnpool"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/onlineddl/vrepl"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 )
@@ -54,12 +56,14 @@ type VReplStream struct {
 
 // VRepl is an online DDL helper for VReplication based migrations (ddl_strategy="online")
 type VRepl struct {
-	workflow    string
-	keyspace    string
-	shard       string
-	dbName      string
-	sourceTable string
-	targetTable string
+	workflow     string
+	keyspace     string
+	shard        string
+	dbName       string
+	sourceTable  string
+	targetTable  string
+	pos          string
+	alterOptions string
 
 	sharedPKColumns *vrepl.ColumnList
 
@@ -74,15 +78,16 @@ type VRepl struct {
 }
 
 // NewVRepl creates a VReplication handler for Online DDL
-func NewVRepl(workflow, keyspace, shard, dbName, sourceTable, targetTable string) *VRepl {
+func NewVRepl(workflow, keyspace, shard, dbName, sourceTable, targetTable, alterOptions string) *VRepl {
 	return &VRepl{
-		workflow:    workflow,
-		keyspace:    keyspace,
-		shard:       shard,
-		dbName:      dbName,
-		sourceTable: sourceTable,
-		targetTable: targetTable,
-		parser:      vrepl.NewAlterTableParser(),
+		workflow:     workflow,
+		keyspace:     keyspace,
+		shard:        shard,
+		dbName:       dbName,
+		sourceTable:  sourceTable,
+		targetTable:  targetTable,
+		alterOptions: alterOptions,
+		parser:       vrepl.NewAlterTableParser(),
 	}
 }
 
@@ -237,12 +242,12 @@ func (v *VRepl) getSharedUniqueKeys(sourceUniqueKeys, targetUniqueKeys [](*vrepl
 	return uniqueKeys, nil
 }
 
-func (v *VRepl) analyzeAlter(ctx context.Context, alterOptions string) error {
-	if err := v.parser.ParseAlterStatement(alterOptions); err != nil {
+func (v *VRepl) analyzeAlter(ctx context.Context) error {
+	if err := v.parser.ParseAlterStatement(v.alterOptions); err != nil {
 		return err
 	}
 	if v.parser.IsRenameTable() {
-		return fmt.Errorf("Renaming the table is not aupported in ALTER TABLE: %s", alterOptions)
+		return fmt.Errorf("Renaming the table is not aupported in ALTER TABLE: %s", v.alterOptions)
 	}
 	return nil
 }
@@ -309,8 +314,8 @@ func (v *VRepl) analyzeBinlogSource(ctx context.Context) {
 	v.bls = bls
 }
 
-func (v *VRepl) analyze(ctx context.Context, conn *dbconnpool.DBConnection, alterOptions string) error {
-	if err := v.analyzeAlter(ctx, alterOptions); err != nil {
+func (v *VRepl) analyze(ctx context.Context, conn *dbconnpool.DBConnection) error {
+	if err := v.analyzeAlter(ctx); err != nil {
 		return err
 	}
 	if err := v.analyzeTables(ctx, conn); err != nil {
@@ -326,7 +331,7 @@ func (v *VRepl) analyze(ctx context.Context, conn *dbconnpool.DBConnection, alte
 // generateInsertStatement generates the INSERT INTO _vt.replication stataement that creates the vreplication workflow
 func (v *VRepl) generateInsertStatement(ctx context.Context) (string, error) {
 	ig := vreplication.NewInsertGenerator(binlogplayer.BlpStopped, v.dbName)
-	ig.AddRow(v.workflow, v.bls, "", "", "MASTER")
+	ig.AddRow(v.workflow, v.bls, v.pos, "", "MASTER")
 
 	return ig.String(), nil
 }
@@ -337,6 +342,21 @@ func (v *VRepl) generateStartStatement(ctx context.Context) (string, error) {
 		sqltypes.StringBindVariable(v.dbName),
 		sqltypes.StringBindVariable(v.workflow),
 	)
+}
+
+func getVreplTable(ctx context.Context, s *VReplStream) (string, error) {
+	// sanity checks:
+	if s == nil {
+		return "", vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "No vreplication stream migration %s", s.workflow)
+	}
+	if s.bls.Filter == nil {
+		return "", vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "No binlog source filter for migration %s", s.workflow)
+	}
+	if len(s.bls.Filter.Rules) != 1 {
+		return "", vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "Cannot detect filter rules for migration/vreplication %+v", s.workflow)
+	}
+	vreplTable := s.bls.Filter.Rules[0].Match
+	return vreplTable, nil
 }
 
 // escapeName will escape a db/table/column/... name by wrapping with backticks.

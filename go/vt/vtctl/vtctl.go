@@ -2894,6 +2894,34 @@ func commandOnlineDDL(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag
 			}
 			query = `update _vt.schema_migrations set migration_status='cancel-all'`
 		}
+	case "revert":
+		{
+			if arg == "" {
+				return fmt.Errorf("UUID required")
+			}
+			uuid = arg
+			contextUUID, err := schema.CreateUUID()
+			if err != nil {
+				return err
+			}
+			requestContext := fmt.Sprintf("vtctl:%s", contextUUID)
+
+			onlineDDL, err := schema.NewOnlineDDL(keyspace, "", fmt.Sprintf("revert %s", uuid), schema.DDLStrategyOnline, "", requestContext)
+			if err != nil {
+				return err
+			}
+			conn, err := wr.TopoServer().ConnForCell(ctx, topo.GlobalCell)
+			if err != nil {
+				return err
+			}
+			err = onlineDDL.WriteTopo(ctx, conn, schema.MigrationRequestsPath())
+			if err != nil {
+				return err
+			}
+			wr.Logger().Infof("UUID=%+v", onlineDDL.UUID)
+			wr.Logger().Printf("%s\n", onlineDDL.UUID)
+			return nil
+		}
 	default:
 		return fmt.Errorf("Unknown OnlineDDL command: %s", command)
 	}

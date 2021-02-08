@@ -34,10 +34,12 @@ var (
 	strategyParserRegexp              = regexp.MustCompile(`^([\S]+)\s+(.*)$`)
 	onlineDDLGeneratedTableNameRegexp = regexp.MustCompile(`^_[0-f]{8}_[0-f]{4}_[0-f]{4}_[0-f]{4}_[0-f]{12}_([0-9]{14})_(gho|ghc|del|new|vrepl)$`)
 	ptOSCGeneratedTableNameRegexp     = regexp.MustCompile(`^_.*_old$`)
+	revertStatementRegexp             = regexp.MustCompile(`(?i)^revert\s+(.*)$`)
 )
 
 const (
 	SchemaMigrationsTableName = "schema_migrations"
+	RevertActionStr           = "revert"
 )
 
 // MigrationBasePath is the root for all schema migration entries
@@ -208,25 +210,41 @@ func (onlineDDL *OnlineDDL) ToJSON() ([]byte, error) {
 
 // GetAction extracts the DDL action type from the online DDL statement
 func (onlineDDL *OnlineDDL) GetAction() (action sqlparser.DDLAction, err error) {
+	if revertStatementRegexp.MatchString(onlineDDL.SQL) {
+		return sqlparser.RevertDDLAction, nil
+	}
+
 	_, action, err = ParseOnlineDDLStatement(onlineDDL.SQL)
 	return action, err
 }
 
 // GetActionStr returns a string representation of the DDL action
-func (onlineDDL *OnlineDDL) GetActionStr() (actionStr string, err error) {
-	action, err := onlineDDL.GetAction()
+func (onlineDDL *OnlineDDL) GetActionStr() (action sqlparser.DDLAction, actionStr string, err error) {
+	action, err = onlineDDL.GetAction()
 	if err != nil {
-		return actionStr, err
+		return action, actionStr, err
 	}
 	switch action {
+	case sqlparser.RevertDDLAction:
+		return action, RevertActionStr, nil
 	case sqlparser.CreateDDLAction:
-		return sqlparser.CreateStr, nil
+		return action, sqlparser.CreateStr, nil
 	case sqlparser.AlterDDLAction:
-		return sqlparser.AlterStr, nil
+		return action, sqlparser.AlterStr, nil
 	case sqlparser.DropDDLAction:
-		return sqlparser.DropStr, nil
+		return action, sqlparser.DropStr, nil
 	}
-	return "", fmt.Errorf("Unsupported online DDL action. SQL=%s", onlineDDL.SQL)
+	return action, "", fmt.Errorf("Unsupported online DDL action. SQL=%s", onlineDDL.SQL)
+}
+
+// GetRevertUUID works when this migration is a revert for another migration. It returns the UUID
+// fo the reverted migration.
+// The functio nreturns error when this is not a revert migration.
+func (onlineDDL *OnlineDDL) GetRevertUUID() (uuid string, err error) {
+	if submatch := revertStatementRegexp.FindStringSubmatch(onlineDDL.SQL); len(submatch) > 0 {
+		return submatch[1], nil
+	}
+	return "", fmt.Errorf("Not a Revert DDL: '%s'", onlineDDL.SQL)
 }
 
 // ToString returns a simple string representation of this instance
