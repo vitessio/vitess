@@ -23,10 +23,12 @@ func (cached *TabletPlan) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(112)
+		size += int64(128)
 	}
 	// field Plan *vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder.Plan
 	size += cached.Plan.CachedSize(true)
+	// field Original string
+	size += int64(len(cached.Original))
 	// field Fields []*vitess.io/vitess/go/vt/proto/query.Field
 	{
 		size += int64(cap(cached.Fields)) * int64(8)
