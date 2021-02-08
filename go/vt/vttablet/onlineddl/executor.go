@@ -104,7 +104,7 @@ var emptyResult = &sqltypes.Result{
 var ghostOverridePath = flag.String("gh-ost-path", "", "override default gh-ost binary full path")
 var ptOSCOverridePath = flag.String("pt-osc-path", "", "override default pt-online-schema-change binary full path")
 var migrationCheckInterval = flag.Duration("migration_check_interval", 1*time.Minute, "Interval between migration checks")
-var retainVReplicationTables = flag.Duration("retain_online_ddl_tables", 4*time.Hour, "How long to wait after a 'ALTER TABLE' with ddl_strategy=online migration completes before cleaning up the artifact table")
+var retainOnlineDDLTables = flag.Duration("retain_online_ddl_tables", 24*time.Hour, "How long should vttablet keep an old migrated table before purging it")
 var migrationNextCheckInterval = 5 * time.Second
 
 const (
@@ -1786,7 +1786,7 @@ func (e *Executor) gcArtifacts(ctx context.Context) error {
 	defer e.migrationMutex.Unlock()
 
 	query, err := sqlparser.ParseAndBind(sqlSelectUncollectedArtifacts,
-		sqltypes.Int64BindVariable(int64((*retainVReplicationTables).Seconds())),
+		sqltypes.Int64BindVariable(int64((*retainOnlineDDLTables).Seconds())),
 	)
 	if err != nil {
 		return err
