@@ -164,10 +164,7 @@ const (
 		WHERE
 			migration_status IN ('complete', 'failed')
 			AND cleanup_timestamp IS NULL
-			AND completed_timestamp <= CASE strategy
-				WHEN 'online' THEN NOW() - INTERVAL %a SECOND
-			  ELSE NOW()
-			END
+			AND completed_timestamp <= NOW() - INTERVAL %a SECOND
 	`
 	sqlSelectMigration = `SELECT
 			id,
