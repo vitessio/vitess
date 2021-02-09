@@ -374,6 +374,11 @@ func (dbc *DBConn) ID() int64 {
 	return dbc.conn.ID()
 }
 
+// BaseShowTables returns a query that shows tables and their sizes
+func (dbc *DBConn) BaseShowTables() string {
+	return dbc.conn.BaseShowTables()
+}
+
 func (dbc *DBConn) reconnect(ctx context.Context) error {
 	dbc.conn.Close()
 	// Reuse MySQLTimings from dbc.conn.

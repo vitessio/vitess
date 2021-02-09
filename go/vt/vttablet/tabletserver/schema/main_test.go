@@ -34,10 +34,9 @@ func getTestSchemaEngine(t *testing.T) (*Engine, *fakesqldb.DB, func()) {
 		"int64"),
 		"1427325876",
 	))
-	db.AddQuery(mysql.BaseShowTables, &sqltypes.Result{})
-
+	db.AddQueryPattern(baseShowTablesPattern, &sqltypes.Result{})
 	db.AddQuery(mysql.BaseShowPrimary, &sqltypes.Result{})
-	se := newEngine(10, 10*time.Second, 10*time.Second, true, db)
+	se := newEngine(10, 10*time.Second, 10*time.Second, db)
 	require.NoError(t, se.Open())
 	cancel := func() {
 		defer db.Close()

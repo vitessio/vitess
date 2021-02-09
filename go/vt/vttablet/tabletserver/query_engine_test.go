@@ -35,10 +35,10 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/cache"
-	"vitess.io/vitess/go/streamlog"
-
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/tableacl"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
@@ -120,6 +120,15 @@ func TestGetMessageStreamPlan(t *testing.T) {
 	for query, result := range schematest.Queries() {
 		db.AddQuery(query, result)
 	}
+	db.AddQueryPattern(baseShowTablesPattern, &sqltypes.Result{
+		Fields: mysql.BaseShowTablesFields,
+		Rows: [][]sqltypes.Value{
+			mysql.BaseShowTablesRow("test_table_01", false, ""),
+			mysql.BaseShowTablesRow("test_table_02", false, ""),
+			mysql.BaseShowTablesRow("test_table_03", false, ""),
+			mysql.BaseShowTablesRow("seq", false, "vitess_sequence"),
+			mysql.BaseShowTablesRow("msg", false, "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30"),
+		}})
 	qe := newTestQueryEngine(10*time.Second, true, newDBConfigs(db))
 	qe.se.Open()
 	qe.Open()
