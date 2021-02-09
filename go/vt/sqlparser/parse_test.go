@@ -1388,8 +1388,7 @@ var (
 		input:  "show master status",
 		output: "show master",
 	}, {
-		input:  "show open tables",
-		output: "show open",
+		input: "show open tables",
 	}, {
 		input:  "show plugins",
 		output: "show plugins",

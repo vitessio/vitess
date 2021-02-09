@@ -1228,6 +1228,7 @@ type (
 	// ShowBasic is of ShowInternal type, holds Simple SHOW queries with a filter.
 	ShowBasic struct {
 		Command ShowCommandType
+		DbName  string
 		Filter  *ShowFilter
 	}
 )
@@ -3158,7 +3159,11 @@ func (node *ShowTableStatus) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *ShowBasic) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "show%s%v", node.Command.ToString(), node.Filter)
+	buf.astPrintf(node, "show%s", node.Command.ToString())
+	if node.DbName != "" {
+		buf.astPrintf(node, " from %s", node.DbName)
+	}
+	buf.astPrintf(node, "%v", node.Filter)
 }
 
 // Format formats the node.
