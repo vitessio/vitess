@@ -1231,6 +1231,8 @@ func (ty ShowCommandType) ToString() string {
 		return DatabaseStr
 	case Function:
 		return FunctionStr
+	case OpenTable:
+		return OpenTableStr
 	case Privilege:
 		return PrivilegeStr
 	case Procedure:
@@ -1239,6 +1241,14 @@ func (ty ShowCommandType) ToString() string {
 		return StatusGlobalStr
 	case StatusSession:
 		return StatusSessionStr
+	case Table:
+		return TableStr
+	case TableFull:
+		return TableFullStr
+	case TableStatus:
+		return TableStatusStr
+	case Trigger:
+		return TriggerStr
 	case VariableGlobal:
 		return VariableGlobalStr
 	case VariableSession:

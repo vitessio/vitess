@@ -221,7 +221,7 @@ func skipToEnd(yylex interface{}) {
 
 // SHOW tokens
 %token <bytes> COLLATION DATABASES SCHEMAS TABLES VITESS_METADATA VSCHEMA FULL PROCESSLIST COLUMNS FIELDS ENGINES PLUGINS EXTENDED
-%token <bytes> KEYSPACES VITESS_KEYSPACES VITESS_SHARDS VITESS_TABLETS CODE PRIVILEGES FUNCTION
+%token <bytes> KEYSPACES VITESS_KEYSPACES VITESS_SHARDS VITESS_TABLETS CODE PRIVILEGES FUNCTION OPEN TRIGGERS
 
 // SET tokens
 %token <bytes> NAMES CHARSET GLOBAL SESSION ISOLATION LEVEL READ WRITE ONLY REPEATABLE COMMITTED UNCOMMITTED SERIALIZABLE
@@ -347,7 +347,7 @@ func skipToEnd(yylex interface{}) {
 %type <bytes> for_from
 %type <str> default_opt
 %type <ignore> ignore_opt
-%type <str> full_opt from_database_opt tables_or_processlist columns_or_fields extended_opt storage_opt
+%type <str> full_opt from_database_opt columns_or_fields extended_opt storage_opt
 %type <showFilter> like_or_where_opt like_opt
 %type <boolean> exists_opt not_exists_opt enforced_opt temp_opt
 %type <empty> to_opt
@@ -2340,6 +2340,10 @@ show_statement:
   {
     $$ = &Show{&ShowBasic{Command: Function, Filter: $4}}
   }
+| SHOW OPEN TABLES from_database_opt like_or_where_opt
+  {
+    $$ = &Show{&ShowBasic{Command: OpenTable, DbName:$4, Filter: $5}}
+  }
 | SHOW PRIVILEGES
   {
     $$ = &Show{&ShowBasic{Command: Privilege}}
@@ -2366,7 +2370,19 @@ show_statement:
   }
 | SHOW TABLE STATUS from_database_opt like_or_where_opt
   {
-    $$ = &Show{&ShowTableStatus{DatabaseName:$4, Filter:$5}}
+    $$ = &Show{&ShowBasic{Command: TableStatus, DbName:$4, Filter: $5}}
+  }
+| SHOW TABLES from_database_opt like_or_where_opt
+  {
+    $$ = &Show{&ShowBasic{Command: Table, DbName:$3, Filter: $4}}
+  }
+| SHOW FULL TABLES from_database_opt like_or_where_opt
+  {
+    $$ = &Show{&ShowBasic{Command: TableFull, DbName:$4, Filter: $5}}
+  }
+| SHOW TRIGGERS from_database_opt like_or_where_opt
+  {
+    $$ = &Show{&ShowBasic{Command: Trigger, DbName:$3, Filter: $4}}
   }
 | SHOW full_opt columns_or_fields from_or_in table_name from_database_opt like_or_where_opt
   {
@@ -2430,15 +2446,9 @@ show_statement:
   {
     $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3), Table: $4, Scope: ImplicitScope}}
   }
-| SHOW full_opt tables_or_processlist from_database_opt like_or_where_opt
+| SHOW full_opt PROCESSLIST from_database_opt like_or_where_opt
   {
-    // this is ugly, but I couldn't find a better way for now
-    if $3 == "processlist" {
-      $$ = &Show{&ShowLegacy{Type: $3, Scope: ImplicitScope}}
-    } else {
-    showTablesOpt := &ShowTablesOpt{Full:$2, DbName:$4, Filter:$5}
-      $$ = &Show{&ShowLegacy{Type: $3, ShowTablesOpt: showTablesOpt, Scope: ImplicitScope}}
-    }
+      $$ = &Show{&ShowLegacy{Type: string($3), Scope: ImplicitScope}}
   }
 | SHOW VITESS_METADATA VARIABLES like_opt
   {
@@ -2487,16 +2497,6 @@ show_statement:
 | SHOW STORAGE ddl_skip_to_end
   {
     $$ = &Show{&ShowLegacy{Type: string($2), Scope: ImplicitScope}}
-  }
-
-tables_or_processlist:
-  TABLES
-  {
-    $$ = string($1)
-  }
-| PROCESSLIST
-  {
-    $$ = string($1)
   }
 
 vitess_topo:
@@ -4969,6 +4969,7 @@ non_reserved_keyword:
 | OFFSET
 | OJ
 | OLD
+| OPEN
 | OPTION
 | OPTIONAL
 | OPTIONALLY
@@ -5057,6 +5058,7 @@ non_reserved_keyword:
 | TRANSACTION
 | TREE
 | TRIGGER
+| TRIGGERS
 | TRUNCATE
 | UNBOUNDED
 | UNCOMMITTED

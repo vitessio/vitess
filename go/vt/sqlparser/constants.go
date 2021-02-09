@@ -16,6 +16,7 @@ limitations under the License.
 
 package sqlparser
 
+// String constants to be used in ast.
 const (
 	// Select.Distinct
 	DistinctStr         = "distinct "
@@ -213,10 +214,15 @@ const (
 	CollationStr       = " collation"
 	DatabaseStr        = " databases"
 	FunctionStr        = " function status"
+	OpenTableStr       = " open tables"
 	PrivilegeStr       = " privileges"
 	ProcedureStr       = " procedure status"
 	StatusGlobalStr    = " global status"
 	StatusSessionStr   = " status"
+	TableStr           = " tables"
+	TableFullStr       = " full tables"
+	TableStatusStr     = " table status"
+	TriggerStr         = " triggers"
 	VariableGlobalStr  = " global variables"
 	VariableSessionStr = " variables"
 	KeyspaceStr        = " keyspaces"
@@ -453,10 +459,15 @@ const (
 	Collation
 	Database
 	Function
+	OpenTable
 	Privilege
 	Procedure
 	StatusGlobal
 	StatusSession
+	Table
+	TableFull
+	TableStatus
+	Trigger
 	VariableGlobal
 	VariableSession
 	Keyspace
