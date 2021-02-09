@@ -61,6 +61,10 @@ func commandInitShardPrimary(cmd *cobra.Command, args []string) error {
 		Force:                   initShardPrimaryOptions.Force,
 	})
 
+	if err != nil {
+		return err
+	}
+
 	for _, event := range resp.Events {
 		log.Infof("%v", event)
 	}

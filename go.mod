@@ -103,7 +103,7 @@ require (
 	golang.org/x/sync v0.0.0-20201020160332-67f06af15bc9
 	golang.org/x/text v0.3.3
 	golang.org/x/time v0.0.0-20190308202827-9d24e82272b4
-	golang.org/x/tools v0.0.0-20201202200335-bef1c476418a
+	golang.org/x/tools v0.1.0
 	google.golang.org/api v0.13.0
 	google.golang.org/grpc v1.24.0
 	gopkg.in/DataDog/dd-trace-go.v1 v1.17.0

@@ -134,7 +134,7 @@ func (mariadbFlavor) setReplicationPositionCommands(pos Position) []string {
 
 // setReplicationPositionCommands is part of the Flavor interface.
 func (mariadbFlavor) changeMasterArg() string {
-	return "MASTER_USE_GTID = current_pos"
+	return "MASTER_USE_GTID = slave_pos"
 }
 
 // status is part of the Flavor interface.
