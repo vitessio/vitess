@@ -233,7 +233,7 @@ func getCurrentState(t *testing.T) string {
 func TestBasicV2Workflows(t *testing.T) {
 	vc = setupCluster(t)
 	defer vtgateConn.Close()
-	//defer vc.TearDown()
+	defer vc.TearDown()
 
 	testMoveTablesV2Workflow(t)
 	testReshardV2Workflow(t)
@@ -242,9 +242,9 @@ func TestBasicV2Workflows(t *testing.T) {
 
 func testReshardV2Workflow(t *testing.T) {
 	currentWorkflowType = wrangler.ReshardWorkflow
-
-	createAdditionalCustomerShards(t, "-40,40-80,80-c0,c0-")
-	createReshardWorkflow(t, "-80,80-", "-40,40-80,80-c0,c0-")
+	targetShards := "-40,40-a0,a0-"
+	createAdditionalCustomerShards(t, targetShards)
+	createReshardWorkflow(t, "-80,80-", targetShards)
 	if !strings.Contains(lastOutput, "Workflow started successfully") {
 		t.Fail()
 	}
@@ -558,8 +558,8 @@ func createAdditionalCustomerShards(t *testing.T, shards string) {
 		}
 	}
 	custKs := vc.Cells[defaultCell.Name].Keyspaces[ksName]
-	targetTab2 = custKs.Shards["80-c0"].Tablets["zone1-600"].Vttablet
-	targetTab1 = custKs.Shards["40-80"].Tablets["zone1-500"].Vttablet
+	targetTab2 = custKs.Shards["a0-"].Tablets["zone1-600"].Vttablet
+	targetTab1 = custKs.Shards["40-a0"].Tablets["zone1-500"].Vttablet
 	targetReplicaTab1 = custKs.Shards["-40"].Tablets["zone1-401"].Vttablet
 
 	sourceReplicaTab = custKs.Shards["-80"].Tablets["zone1-201"].Vttablet
