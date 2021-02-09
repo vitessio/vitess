@@ -2313,3 +2313,11 @@
 2021-02-09T16:48:11Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/551980422
 2021-02-09T16:48:11Z,gomod-tidy,https://github.com/vitessio/vitess/actions/runs/551980452
 2021-02-09T17:18:13Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/552062835
+2021-02-09T20:05:36Z,Cluster (17),https://github.com/vitessio/vitess/actions/runs/552469734
+2021-02-09T20:05:36Z,Unit Test (mariadb101),https://github.com/vitessio/vitess/actions/runs/552469733
+2021-02-09T20:05:36Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/552469713
+2021-02-09T20:05:36Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/552469739
+2021-02-09T20:05:36Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/552469735
+2021-02-09T20:05:36Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/552469728
+2021-02-09T20:05:36Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/552469780
+2021-02-09T20:05:36Z,unit_race,https://github.com/vitessio/vitess/actions/runs/552469727
