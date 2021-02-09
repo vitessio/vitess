@@ -1004,6 +1004,10 @@ column_definition:
     $$ = &ColumnDefinition{Name: $1, Type: $2}
   }
 
+// There is a shift reduce conflict that arises here becase UNIQUE and KEY are column_type_option and so is UNIQUE KEY.
+// So in the state "column_type_options UNIQUE. KEY" there is a shift-reduce conflict.
+// This has been added to emulate what MySQL does. The previous architecture was such that the order of the column options
+// was specific (as stated in the MySQL guide) and did not accept arbitrary order options. For example NOT NULL DEFAULT 1 and not DEFAULT 1 NOT NULL
 column_type_options:
   {
     $$ = &ColumnTypeOptions{NotNull: false, Default: nil, OnUpdate: nil, Autoincrement: false, KeyOpt: colKeyNone, Comment: nil}
