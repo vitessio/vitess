@@ -258,8 +258,8 @@ const TablesWithSize57 = `
 	WHERE t.table_schema = database() and i.name = concat(t.table_schema,'/',t.table_name)
 UNION ALL
 	SELECT table_name, table_type, unix_timestamp(create_time), table_comment, SUM( data_length + index_length), SUM( data_length + index_length)
-	FROM information_schema.tables 
-	WHERE table_schema = database() AND NOT EXISTS(SELECT * FROM information_schema.tables t, information_schema.innodb_sys_tablespaces i WHERE t.table_schema = database() and i.name = concat(t.table_schema,'/',t.table_name)) 
+	FROM information_schema.tables t
+	WHERE table_schema = database() AND NOT EXISTS(SELECT * FROM information_schema.innodb_sys_tablespaces i WHERE i.name = concat(t.table_schema,'/',t.table_name)) 
 	group by table_name
 `
 
