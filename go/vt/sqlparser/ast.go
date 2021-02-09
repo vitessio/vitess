@@ -2384,9 +2384,7 @@ func (f *ForeignKeyDefinition) Format(buf *TrackedBuffer) {
 // Format formats the node.
 func (c *CheckConstraintDefinition) Format(buf *TrackedBuffer) {
 	buf.astPrintf(c, "check (%v)", c.Expr)
-	if c.Enforced {
-		buf.astPrintf(c, " enforced")
-	} else {
+	if !c.Enforced {
 		buf.astPrintf(c, " not enforced")
 	}
 }
