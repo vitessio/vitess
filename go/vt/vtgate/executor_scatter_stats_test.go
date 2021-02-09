@@ -68,6 +68,8 @@ func TestScatterStatsHttpWriting(t *testing.T) {
 	_, err = executor.Execute(context.Background(), "TestExecutorResultsExceeded", session, query4, nil)
 	require.NoError(t, err)
 
+	executor.plans.Wait()
+
 	recorder := httptest.NewRecorder()
 	executor.WriteScatterStats(recorder)
 

@@ -8251,25 +8251,25 @@ yydefault:
 		yyDollar = yyS[yypt-1 : yypt+1]
 //line sql.y:2715
 		{
-			yyVAL.str = ""
+			yyVAL.str = yyDollar[1].colIdent.val
 		}
 	case 508:
 		yyDollar = yyS[yypt-1 : yypt+1]
 //line sql.y:2719
 		{
-			yyVAL.str = ""
+			yyVAL.str = "'" + string(yyDollar[1].bytes) + "'"
 		}
 	case 509:
 		yyDollar = yyS[yypt-3 : yypt+1]
 //line sql.y:2725
 		{
-			yyVAL.statement = &OtherRead{}
+			yyVAL.statement = &ExplainTab{Table: yyDollar[2].tableName, Wild: yyDollar[3].str}
 		}
 	case 510:
 		yyDollar = yyS[yypt-3 : yypt+1]
 //line sql.y:2729
 		{
-			yyVAL.statement = &Explain{Type: yyDollar[2].explainType, Statement: yyDollar[3].statement}
+			yyVAL.statement = &ExplainStmt{Type: yyDollar[2].explainType, Statement: yyDollar[3].statement}
 		}
 	case 511:
 		yyDollar = yyS[yypt-2 : yypt+1]

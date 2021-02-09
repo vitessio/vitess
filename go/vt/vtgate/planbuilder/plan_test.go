@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"math/rand"
 	"os"
 	"runtime/debug"
 	"strings"
@@ -616,6 +617,43 @@ func BenchmarkPlanner(b *testing.B) {
 			benchmarkPlanner(b, Gen4Left2Right, testCases, vschema)
 		})
 	}
+}
+
+func BenchmarkSelectVsDML(b *testing.B) {
+	vschema := &vschemaWrapper{
+		v:             loadSchema(b, "schema_test.json"),
+		sysVarEnabled: true,
+		version:       V3,
+	}
+
+	var dmlCases []testCase
+	var selectCases []testCase
+
+	for tc := range iterateExecFile("dml_cases.txt") {
+		dmlCases = append(dmlCases, tc)
+	}
+
+	for tc := range iterateExecFile("select_cases.txt") {
+		if tc.output2ndPlanner != "" {
+			selectCases = append(selectCases, tc)
+		}
+	}
+
+	rand.Shuffle(len(dmlCases), func(i, j int) {
+		dmlCases[i], dmlCases[j] = dmlCases[j], dmlCases[i]
+	})
+
+	rand.Shuffle(len(selectCases), func(i, j int) {
+		selectCases[i], selectCases[j] = selectCases[j], selectCases[i]
+	})
+
+	b.Run("DML (random sample, N=32)", func(b *testing.B) {
+		benchmarkPlanner(b, V3, dmlCases[:32], vschema)
+	})
+
+	b.Run("Select (random sample, N=32)", func(b *testing.B) {
+		benchmarkPlanner(b, V3, selectCases[:32], vschema)
+	})
 }
 
 func benchmarkPlanner(b *testing.B, version PlannerVersion, testCases []testCase, vschema *vschemaWrapper) {

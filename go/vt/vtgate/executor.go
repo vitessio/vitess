@@ -101,7 +101,7 @@ type Executor struct {
 	vschema      *vindexes.VSchema
 	normalize    bool
 	streamSize   int
-	plans        *cache.LRUCache
+	plans        cache.Cache
 	vschemaStats *VSchemaStats
 
 	vm *VSchemaManager
@@ -114,14 +114,14 @@ const pathScatterStats = "/debug/scatter_stats"
 const pathVSchema = "/debug/vschema"
 
 // NewExecutor creates a new Executor.
-func NewExecutor(ctx context.Context, serv srvtopo.Server, cell string, resolver *Resolver, normalize bool, streamSize int, queryPlanCacheSize int64) *Executor {
+func NewExecutor(ctx context.Context, serv srvtopo.Server, cell string, resolver *Resolver, normalize bool, streamSize int, cacheCfg *cache.Config) *Executor {
 	e := &Executor{
 		serv:        serv,
 		cell:        cell,
 		resolver:    resolver,
 		scatterConn: resolver.scatterConn,
 		txConn:      resolver.scatterConn.txConn,
-		plans:       cache.NewLRUCache(queryPlanCacheSize),
+		plans:       cache.NewDefaultCacheImpl(cacheCfg),
 		normalize:   normalize,
 		streamSize:  streamSize,
 	}
@@ -131,13 +131,12 @@ func NewExecutor(ctx context.Context, serv srvtopo.Server, cell string, resolver
 	e.vm.watchSrvVSchema(ctx, cell)
 
 	executorOnce.Do(func() {
-		stats.NewGaugeFunc("QueryPlanCacheLength", "Query plan cache length", e.plans.Length)
-		stats.NewGaugeFunc("QueryPlanCacheSize", "Query plan cache size", e.plans.Size)
-		stats.NewGaugeFunc("QueryPlanCacheCapacity", "Query plan cache capacity", e.plans.Capacity)
+		stats.NewGaugeFunc("QueryPlanCacheLength", "Query plan cache length", func() int64 {
+			return int64(e.plans.Len())
+		})
+		stats.NewGaugeFunc("QueryPlanCacheSize", "Query plan cache size", e.plans.UsedCapacity)
+		stats.NewGaugeFunc("QueryPlanCacheCapacity", "Query plan cache capacity", e.plans.MaxCapacity)
 		stats.NewCounterFunc("QueryPlanCacheEvictions", "Query plan cache evictions", e.plans.Evictions)
-		stats.Publish("QueryPlanCacheOldest", stats.StringFunc(func() string {
-			return fmt.Sprintf("%v", e.plans.Oldest())
-		}))
 		http.Handle(pathQueryPlans, e)
 		http.Handle(pathScatterStats, e)
 		http.Handle(pathVSchema, e)
@@ -1286,11 +1285,6 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 	ignoreMaxMemoryRows := sqlparser.IgnoreMaxMaxMemoryRowsDirective(stmt)
 	vcursor.SetIgnoreMaxMemoryRows(ignoreMaxMemoryRows)
 
-	planKey := vcursor.planPrefixKey() + ":" + sql
-	if plan, ok := e.plans.Get(planKey); ok {
-		return plan.(*engine.Plan), nil
-	}
-
 	// Normalize if possible and retry.
 	if (e.normalize && sqlparser.CanNormalize(stmt)) || sqlparser.IsSetStatement(stmt) {
 		parameterize := e.normalize // the public flag is called normalize
@@ -1308,10 +1302,11 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 		logStats.BindVariables = bindVars
 	}
 
-	planKey = vcursor.planPrefixKey() + ":" + query
+	planKey := vcursor.planPrefixKey() + ":" + query
 	if plan, ok := e.plans.Get(planKey); ok {
 		return plan.(*engine.Plan), nil
 	}
+
 	plan, err := planbuilder.BuildFromStmt(query, statement, vcursor, bindVarNeeds)
 	if err != nil {
 		return nil, err
@@ -1330,6 +1325,23 @@ func skipQueryPlanCache(safeSession *SafeSession) bool {
 	return safeSession.Options.SkipQueryPlanCache
 }
 
+type cacheItem struct {
+	Key   string
+	Value *engine.Plan
+}
+
+func (e *Executor) debugCacheEntries() (items []cacheItem) {
+	e.plans.ForEach(func(value interface{}) bool {
+		plan := value.(*engine.Plan)
+		items = append(items, cacheItem{
+			Key:   plan.Original,
+			Value: plan,
+		})
+		return true
+	})
+	return
+}
+
 // ServeHTTP shows the current plans in the query cache.
 func (e *Executor) ServeHTTP(response http.ResponseWriter, request *http.Request) {
 	if err := acl.CheckAccessHTTP(request, acl.DEBUGGING); err != nil {
@@ -1339,7 +1351,7 @@ func (e *Executor) ServeHTTP(response http.ResponseWriter, request *http.Request
 
 	switch request.URL.Path {
 	case pathQueryPlans:
-		returnAsJSON(response, e.plans.Items())
+		returnAsJSON(response, e.debugCacheEntries())
 	case pathVSchema:
 		returnAsJSON(response, e.VSchema())
 	case pathScatterStats:
@@ -1362,7 +1374,7 @@ func returnAsJSON(response http.ResponseWriter, stuff interface{}) {
 }
 
 // Plans returns the LRU plan cache
-func (e *Executor) Plans() *cache.LRUCache {
+func (e *Executor) Plans() cache.Cache {
 	return e.plans
 }
 

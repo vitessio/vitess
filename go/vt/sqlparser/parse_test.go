@@ -1021,7 +1021,7 @@ var (
 		output: "alter table a add constraint b unique key c (id)",
 	}, {
 		input:  "alter table a add constraint check (id)",
-		output: "alter table a add check (id) enforced",
+		output: "alter table a add check (id)",
 	}, {
 		input:  "alter table a add id int",
 		output: "alter table a add column id int",
@@ -1054,6 +1054,9 @@ var (
 	}, {
 		input:  "ALTER TABLE `product115s` CHANGE `part_number` `part_number` varchar(255) DEFAULT '0' NOT NULL",
 		output: "alter table product115s change column part_number part_number varchar(255) not null default '0'",
+	}, {
+		input:  "ALTER TABLE distributors ADD CONSTRAINT zipchk CHECK (char_length(zipcode) = 5)",
+		output: "alter table distributors add constraint zipchk check (char_length(zipcode) = 5)",
 	}, {
 		input: "alter database character set geostd8",
 	}, {
@@ -1543,13 +1546,13 @@ var (
 		output: "explain select * from t",
 	}, {
 		input:  "desc foobar",
-		output: "otherread",
+		output: "explain foobar",
 	}, {
-		input:  "explain t1",
-		output: "otherread",
+		input: "explain t1",
 	}, {
-		input:  "explain t1 col",
-		output: "otherread",
+		input: "explain t1 col",
+	}, {
+		input: "explain t1 '%col%'",
 	}, {
 		input: "explain select * from t",
 	}, {
@@ -1807,12 +1810,12 @@ var (
 			"\tc1 int,\n" +
 			"\tc2 int,\n" +
 			"\tc3 int,\n" +
-			"\tcheck (c1 != c2) enforced,\n" +
-			"\tcheck (c1 > 10) enforced,\n" +
-			"\tconstraint c2_positive check (c2 > 0) enforced,\n" +
-			"\tcheck (c3 < 100) enforced,\n" +
-			"\tconstraint c1_nonzero check (c1 != 0) enforced,\n" +
-			"\tcheck (c1 > c3) enforced\n)",
+			"\tcheck (c1 != c2),\n" +
+			"\tcheck (c1 > 10),\n" +
+			"\tconstraint c2_positive check (c2 > 0),\n" +
+			"\tcheck (c3 < 100),\n" +
+			"\tconstraint c1_nonzero check (c1 != 0),\n" +
+			"\tcheck (c1 > c3)\n)",
 	}, {
 		input:  "SHOW INDEXES FROM `AO_E8B6CC_ISSUE_MAPPING` FROM `jiradb`",
 		output: "show indexes from AO_E8B6CC_ISSUE_MAPPING from jiradb",
