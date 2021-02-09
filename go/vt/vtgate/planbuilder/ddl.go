@@ -26,64 +26,25 @@ const (
 // This is why we return a compound primitive (DDL) which contains fully populated primitives (Send & OnlineDDL),
 // and which chooses which of the two to invoke at runtime.
 func buildGeneralDDLPlan(sql string, ddlStatement sqlparser.DDLStatement, vschema ContextVSchema) (engine.Primitive, error) {
-	if ddlStatement.IsTemporary() {
-		return buildTempTablePlan(sql, ddlStatement, vschema)
-	}
 	normalDDLPlan, onlineDDLPlan, err := buildDDLPlans(sql, ddlStatement, vschema)
 	if err != nil {
 		return nil, err
 	}
 
+	if ddlStatement.IsTemporary() {
+		if normalDDLPlan.Keyspace.Sharded {
+			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Temporary table not supported in sharded keyspace: %s", normalDDLPlan.Keyspace.Name)
+		}
+		onlineDDLPlan = nil // emptying this so it does not accidentally gets used somewhere
+	}
+
 	return &engine.DDL{
-		Keyspace:  normalDDLPlan.Keyspace,
-		SQL:       normalDDLPlan.Query,
-		DDL:       ddlStatement,
-		NormalDDL: normalDDLPlan,
-		OnlineDDL: onlineDDLPlan,
-	}, nil
-}
-
-func buildTempTablePlan(sql string, stmt sqlparser.DDLStatement, vschema ContextVSchema) (engine.Primitive, error) {
-	var destination key.Destination
-	var keyspace *vindexes.Keyspace
-	var err error
-
-	switch stmt.(type) {
-	case *sqlparser.CreateTable:
-		destination, keyspace, _, err = vschema.TargetDestination(stmt.GetTable().Qualifier.String())
-		// Remove the keyspace name as the database name might be different.
-		stmt.SetTable("", stmt.GetTable().Name.String())
-		if err != nil {
-			return nil, err
-		}
-	case *sqlparser.DropTable:
-		destination, keyspace, err = buildDropViewOrTable(vschema, stmt)
-		if err != nil {
-			return nil, err
-		}
-	default:
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: Temporary table not planned for %s", sql)
-	}
-
-	if keyspace.Sharded {
-		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Temporary table not supported in sharded keyspace: %s", keyspace.Name)
-	}
-
-	if destination == nil {
-		destination = key.DestinationAllShards{}
-	}
-
-	query := sql
-	// If the query is fully parsed, generate the query from the ast. Otherwise, use the original query
-	if stmt.IsFullyParsed() {
-		query = sqlparser.String(stmt)
-	}
-
-	return &engine.Send{
-		Keyspace:          keyspace,
-		TargetDestination: destination,
-		Query:             query,
-		ReservedConn:      true,
+		Keyspace:        normalDDLPlan.Keyspace,
+		SQL:             normalDDLPlan.Query,
+		DDL:             ddlStatement,
+		NormalDDL:       normalDDLPlan,
+		OnlineDDL:       onlineDDLPlan,
+		CreateTempTable: ddlStatement.IsTemporary(),
 	}, nil
 }
 

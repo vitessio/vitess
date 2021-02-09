@@ -679,14 +679,19 @@ func (vc *vcursorImpl) SetReadAfterWriteGTID(vtgtid string) {
 	vc.safeSession.SetReadAfterWriteGTID(vtgtid)
 }
 
-//SetReadAfterWriteTimeout implements the SessionActions interface
+// SetReadAfterWriteTimeout implements the SessionActions interface
 func (vc *vcursorImpl) SetReadAfterWriteTimeout(timeout float64) {
 	vc.safeSession.SetReadAfterWriteTimeout(timeout)
 }
 
-//SetSessionTrackGTIDs implements the SessionActions interface
+// SetSessionTrackGTIDs implements the SessionActions interface
 func (vc *vcursorImpl) SetSessionTrackGTIDs(enable bool) {
 	vc.safeSession.SetSessionTrackGtids(enable)
+}
+
+// HasCreatedTempTable implements the SessionActions interface
+func (vc *vcursorImpl) HasCreatedTempTable() {
+	vc.safeSession.GetOrCreateOptions().HasCreatedTempTables = true
 }
 
 // ParseDestinationTarget parses destination target string and sets default keyspace if possible.

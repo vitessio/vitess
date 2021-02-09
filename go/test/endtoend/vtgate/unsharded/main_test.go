@@ -335,7 +335,7 @@ func TestTempTable(t *testing.T) {
 
 	_ = exec(t, conn1, `create temporary table temp_t(id bigint primary key)`)
 	_ = exec(t, conn1, `insert into temp_t(id) values (1),(2),(3)`)
-	//	assertMatches(t, conn1, `select id from temp_t order by id`, `[[INT64(1)] [INT64(2)] [INT64(3)]]`)
+	assertMatches(t, conn1, `select id from temp_t order by id`, `[[INT64(1)] [INT64(2)] [INT64(3)]]`)
 	assertMatches(t, conn1, `select count(table_id) from information_schema.innodb_temp_table_info`, `[[INT64(1)]]`)
 
 	conn2, err := mysql.Connect(ctx, &vtParams)
