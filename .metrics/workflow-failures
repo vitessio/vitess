@@ -2268,3 +2268,4 @@
 2021-02-09T11:19:48Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/551135656
 2021-02-09T11:19:48Z,unit_race,https://github.com/vitessio/vitess/actions/runs/551135643
 2021-02-09T11:25:39Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/551150036
+2021-02-09T11:25:39Z,cluster_initial_sharding_multi,https://github.com/vitessio/vitess/actions/runs/551150034
