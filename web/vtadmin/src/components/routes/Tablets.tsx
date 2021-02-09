@@ -18,8 +18,10 @@ import * as React from 'react';
 import { useTablets } from '../../hooks/api';
 import { vtadmin as pb, topodata } from '../../proto/vtadmin';
 import { orderBy } from 'lodash-es';
+import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 
 export const Tablets = () => {
+    useDocumentTitle('Tablets');
     const { data = [] } = useTablets();
 
     const rows = React.useMemo(() => {

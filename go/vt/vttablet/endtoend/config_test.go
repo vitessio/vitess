@@ -26,6 +26,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/cache"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -176,11 +177,24 @@ func TestConsolidatorReplicasOnly(t *testing.T) {
 }
 
 func TestQueryPlanCache(t *testing.T) {
+	if cache.DefaultConfig.LFU {
+		const cacheItemSize = 40
+		const cachedPlanSize = 2275 + cacheItemSize
+		const cachePlanSize2 = 2254 + cacheItemSize
+		testQueryPlanCache(t, cachedPlanSize, cachePlanSize2)
+	} else {
+		testQueryPlanCache(t, 1, 1)
+	}
+}
+
+func testQueryPlanCache(t *testing.T, cachedPlanSize, cachePlanSize2 int) {
+	t.Helper()
+
 	//sleep to avoid race between SchemaChanged event clearing out the plans cache which breaks this test
 	time.Sleep(1 * time.Second)
 
 	defer framework.Server.SetQueryPlanCacheCap(framework.Server.QueryPlanCacheCap())
-	framework.Server.SetQueryPlanCacheCap(1)
+	framework.Server.SetQueryPlanCacheCap(cachedPlanSize)
 
 	bindVars := map[string]*querypb.BindVariable{
 		"ival1": sqltypes.Int64BindVariable(1),
@@ -189,20 +203,26 @@ func TestQueryPlanCache(t *testing.T) {
 	client := framework.NewClient()
 	_, _ = client.Execute("select * from vitess_test where intval=:ival1", bindVars)
 	_, _ = client.Execute("select * from vitess_test where intval=:ival2", bindVars)
+	time.Sleep(100 * time.Millisecond)
+
 	vend := framework.DebugVars()
 	verifyIntValue(t, vend, "QueryCacheLength", 1)
-	verifyIntValue(t, vend, "QueryCacheSize", 1)
-	verifyIntValue(t, vend, "QueryCacheCapacity", 1)
+	verifyIntValue(t, vend, "QueryCacheSize", cachedPlanSize)
+	verifyIntValue(t, vend, "QueryCacheCapacity", cachedPlanSize)
 
-	framework.Server.SetQueryPlanCacheCap(10)
+	framework.Server.SetQueryPlanCacheCap(64 * 1024)
 	_, _ = client.Execute("select * from vitess_test where intval=:ival1", bindVars)
+	time.Sleep(100 * time.Millisecond)
+
 	vend = framework.DebugVars()
 	verifyIntValue(t, vend, "QueryCacheLength", 2)
-	verifyIntValue(t, vend, "QueryCacheSize", 2)
+	verifyIntValue(t, vend, "QueryCacheSize", cachedPlanSize*2)
 	_, _ = client.Execute("select * from vitess_test where intval=1", bindVars)
+	time.Sleep(100 * time.Millisecond)
+
 	vend = framework.DebugVars()
 	verifyIntValue(t, vend, "QueryCacheLength", 3)
-	verifyIntValue(t, vend, "QueryCacheSize", 3)
+	verifyIntValue(t, vend, "QueryCacheSize", cachedPlanSize*2+cachePlanSize2)
 }
 
 func TestMaxResultSize(t *testing.T) {

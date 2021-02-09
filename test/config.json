@@ -594,8 +594,8 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "MultiCell"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "22",
-			"RetryMax": 3,
+			"Shard": "vreplication_multicell",
+			"RetryMax": 0,
 			"Tags": []
 		},
 		"vreplication_cellalias": {
@@ -603,8 +603,8 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "CellAlias"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "23",
-			"RetryMax": 3,
+			"Shard": "vreplication_cellalias",
+			"RetryMax": 0,
 			"Tags": []
 		},
 		"vreplication_basic": {
@@ -613,7 +613,7 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_basic",
-			"RetryMax": 3,
+			"RetryMax": 0,
 			"Tags": []
 		},
 		"orchestrator": {
@@ -639,8 +639,8 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestBasicV2Workflows"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "21",
-			"RetryMax": 3,
+			"Shard": "vreplication_v2",
+			"RetryMax": 0,
 			"Tags": []
 		}
 	}

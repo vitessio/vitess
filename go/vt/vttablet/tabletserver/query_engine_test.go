@@ -17,16 +17,24 @@ limitations under the License.
 package tabletserver
 
 import (
+	"context"
 	"expvar"
+	"fmt"
+	"math/rand"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path"
 	"reflect"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
-	"context"
+	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/cache"
 	"vitess.io/vitess/go/streamlog"
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
@@ -92,7 +100,7 @@ func TestGetPlanPanicDuetoEmptyQuery(t *testing.T) {
 	for query, result := range schematest.Queries() {
 		db.AddQuery(query, result)
 	}
-	qe := newTestQueryEngine(10, 10*time.Second, true, newDBConfigs(db))
+	qe := newTestQueryEngine(10*time.Second, true, newDBConfigs(db))
 	qe.se.Open()
 	qe.Open()
 	defer qe.Close()
@@ -112,7 +120,7 @@ func TestGetMessageStreamPlan(t *testing.T) {
 	for query, result := range schematest.Queries() {
 		db.AddQuery(query, result)
 	}
-	qe := newTestQueryEngine(10, 10*time.Second, true, newDBConfigs(db))
+	qe := newTestQueryEngine(10*time.Second, true, newDBConfigs(db))
 	qe.se.Open()
 	qe.Open()
 	defer qe.Close()
@@ -137,6 +145,17 @@ func TestGetMessageStreamPlan(t *testing.T) {
 	}
 }
 
+func assertPlanCacheSize(t *testing.T, qe *QueryEngine, expected int) {
+	var size int
+	qe.plans.ForEach(func(_ interface{}) bool {
+		size++
+		return true
+	})
+	if size != expected {
+		t.Fatalf("expected query plan cache to contain %d entries, found %d", expected, size)
+	}
+}
+
 func TestQueryPlanCache(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
@@ -149,14 +168,18 @@ func TestQueryPlanCache(t *testing.T) {
 	db.AddQuery("select * from test_table_01 where 1 != 1", &sqltypes.Result{})
 	db.AddQuery("select * from test_table_02 where 1 != 1", &sqltypes.Result{})
 
-	qe := newTestQueryEngine(10, 10*time.Second, true, newDBConfigs(db))
+	qe := newTestQueryEngine(10*time.Second, true, newDBConfigs(db))
 	qe.se.Open()
 	qe.Open()
 	defer qe.Close()
 
 	ctx := context.Background()
 	logStats := tabletenv.NewLogStats(ctx, "GetPlanStats")
-	qe.SetQueryPlanCacheCap(1)
+	if cache.DefaultConfig.LFU {
+		qe.SetQueryPlanCacheCap(1024)
+	} else {
+		qe.SetQueryPlanCacheCap(1)
+	}
 	firstPlan, err := qe.GetPlan(ctx, logStats, firstQuery, false, false /* inReservedConn */)
 	if err != nil {
 		t.Fatal(err)
@@ -174,9 +197,7 @@ func TestQueryPlanCache(t *testing.T) {
 	expvar.Do(func(kv expvar.KeyValue) {
 		_ = kv.Value.String()
 	})
-	if qe.plans.Size() == 0 {
-		t.Fatalf("query plan cache should not be 0")
-	}
+	assertPlanCacheSize(t, qe, 1)
 	qe.ClearQueryPlanCache()
 }
 
@@ -191,14 +212,14 @@ func TestNoQueryPlanCache(t *testing.T) {
 	db.AddQuery("select * from test_table_01 where 1 != 1", &sqltypes.Result{})
 	db.AddQuery("select * from test_table_02 where 1 != 1", &sqltypes.Result{})
 
-	qe := newTestQueryEngine(10, 10*time.Second, true, newDBConfigs(db))
+	qe := newTestQueryEngine(10*time.Second, true, newDBConfigs(db))
 	qe.se.Open()
 	qe.Open()
 	defer qe.Close()
 
 	ctx := context.Background()
 	logStats := tabletenv.NewLogStats(ctx, "GetPlanStats")
-	qe.SetQueryPlanCacheCap(1)
+	qe.SetQueryPlanCacheCap(1024)
 	firstPlan, err := qe.GetPlan(ctx, logStats, firstQuery, true, false /* inReservedConn */)
 	if err != nil {
 		t.Fatal(err)
@@ -206,9 +227,7 @@ func TestNoQueryPlanCache(t *testing.T) {
 	if firstPlan == nil {
 		t.Fatalf("plan should not be nil")
 	}
-	if qe.plans.Size() != 0 {
-		t.Fatalf("query plan cache should be 0")
-	}
+	assertPlanCacheSize(t, qe, 0)
 	qe.ClearQueryPlanCache()
 }
 
@@ -223,14 +242,14 @@ func TestNoQueryPlanCacheDirective(t *testing.T) {
 	db.AddQuery("select /*vt+ SKIP_QUERY_PLAN_CACHE=1 */ * from test_table_01 where 1 != 1", &sqltypes.Result{})
 	db.AddQuery("select /*vt+ SKIP_QUERY_PLAN_CACHE=1 */ * from test_table_02 where 1 != 1", &sqltypes.Result{})
 
-	qe := newTestQueryEngine(10, 10*time.Second, true, newDBConfigs(db))
+	qe := newTestQueryEngine(10*time.Second, true, newDBConfigs(db))
 	qe.se.Open()
 	qe.Open()
 	defer qe.Close()
 
 	ctx := context.Background()
 	logStats := tabletenv.NewLogStats(ctx, "GetPlanStats")
-	qe.SetQueryPlanCacheCap(1)
+	qe.SetQueryPlanCacheCap(1024)
 	firstPlan, err := qe.GetPlan(ctx, logStats, firstQuery, false, false /* inReservedConn */)
 	if err != nil {
 		t.Fatal(err)
@@ -238,9 +257,7 @@ func TestNoQueryPlanCacheDirective(t *testing.T) {
 	if firstPlan == nil {
 		t.Fatalf("plan should not be nil")
 	}
-	if qe.plans.Size() != 0 {
-		t.Fatalf("query plan cache should be 0")
-	}
+	assertPlanCacheSize(t, qe, 0)
 	qe.ClearQueryPlanCache()
 }
 
@@ -252,7 +269,7 @@ func TestStatsURL(t *testing.T) {
 	}
 	query := "select * from test_table_01"
 	db.AddQuery("select * from test_table_01 where 1 != 1", &sqltypes.Result{})
-	qe := newTestQueryEngine(10, 1*time.Second, true, newDBConfigs(db))
+	qe := newTestQueryEngine(1*time.Second, true, newDBConfigs(db))
 	qe.se.Open()
 	qe.Open()
 	defer qe.Close()
@@ -274,10 +291,9 @@ func TestStatsURL(t *testing.T) {
 	qe.handleHTTPQueryRules(response, request)
 }
 
-func newTestQueryEngine(queryCacheSize int, idleTimeout time.Duration, strict bool, dbcfgs *dbconfigs.DBConfigs) *QueryEngine {
+func newTestQueryEngine(idleTimeout time.Duration, strict bool, dbcfgs *dbconfigs.DBConfigs) *QueryEngine {
 	config := tabletenv.NewDefaultConfig()
 	config.DB = dbcfgs
-	config.QueryCacheSize = queryCacheSize
 	config.OltpReadPool.IdleTimeoutSeconds.Set(idleTimeout)
 	config.OlapReadPool.IdleTimeoutSeconds.Set(idleTimeout)
 	config.TxPool.IdleTimeoutSeconds.Set(idleTimeout)
@@ -292,7 +308,7 @@ func runConsolidatedQuery(t *testing.T, sql string) *QueryEngine {
 	db := fakesqldb.New(t)
 	defer db.Close()
 
-	qe := newTestQueryEngine(10, 1*time.Second, true, newDBConfigs(db))
+	qe := newTestQueryEngine(1*time.Second, true, newDBConfigs(db))
 	qe.se.Open()
 	qe.Open()
 	defer qe.Close()
@@ -345,4 +361,138 @@ func TestConsolidationsUIRedaction(t *testing.T) {
 	if !strings.Contains(redactedResponse.Body.String(), redactedSQL) {
 		t.Fatalf("Response missing redacted consolidated query: %v %v", redactedSQL, redactedResponse.Body.String())
 	}
+}
+
+func TestPlanCachePollution(t *testing.T) {
+	plotPath := os.Getenv("CACHE_PLOT_PATH")
+	if plotPath == "" {
+		t.Skipf("CACHE_PLOT_PATH not set")
+	}
+
+	const NormalQueries = 500000
+	const PollutingQueries = NormalQueries / 2
+
+	db := fakesqldb.New(t)
+	defer db.Close()
+
+	for query, result := range schematest.Queries() {
+		db.AddQuery(query, result)
+	}
+
+	db.AddQueryPattern(".*", &sqltypes.Result{})
+
+	dbcfgs := newDBConfigs(db)
+	config := tabletenv.NewDefaultConfig()
+	config.DB = dbcfgs
+	// config.LFUQueryCacheSizeBytes = 3 * 1024 * 1024
+
+	env := tabletenv.NewEnv(config, "TabletServerTest")
+	se := schema.NewEngine(env)
+	qe := NewQueryEngine(env, se)
+
+	se.InitDBConfig(dbcfgs.DbaWithDB())
+	se.Open()
+
+	qe.Open()
+	defer qe.Close()
+
+	type Stats struct {
+		queries  uint64
+		cached   uint64
+		interval time.Duration
+	}
+
+	var stats1, stats2 Stats
+	var wg sync.WaitGroup
+
+	go func() {
+		cacheMode := "lru"
+		if config.QueryCacheLFU {
+			cacheMode = "lfu"
+		}
+
+		out, err := os.Create(path.Join(plotPath,
+			fmt.Sprintf("cache_plot_%d_%d_%s.dat",
+				config.QueryCacheSize, config.QueryCacheMemory, cacheMode,
+			)),
+		)
+		require.NoError(t, err)
+		defer out.Close()
+
+		var last1 uint64
+		var last2 uint64
+
+		for range time.Tick(100 * time.Millisecond) {
+			var avg1, avg2 time.Duration
+
+			if stats1.queries-last1 > 0 {
+				avg1 = stats1.interval / time.Duration(stats1.queries-last1)
+			}
+			if stats2.queries-last2 > 0 {
+				avg2 = stats2.interval / time.Duration(stats2.queries-last2)
+			}
+
+			stats1.interval = 0
+			last1 = stats1.queries
+			stats2.interval = 0
+			last2 = stats2.queries
+
+			cacheUsed, cacheCap := qe.plans.UsedCapacity(), qe.plans.MaxCapacity()
+
+			t.Logf("%d queries (%f hit rate), cache %d / %d (%f usage), %v %v",
+				stats1.queries+stats2.queries,
+				float64(stats1.cached)/float64(stats1.queries),
+				cacheUsed, cacheCap,
+				float64(cacheUsed)/float64(cacheCap), avg1, avg2)
+
+			if out != nil {
+				fmt.Fprintf(out, "%d %f %f %f %f %d %d\n",
+					stats1.queries+stats2.queries,
+					float64(stats1.queries)/float64(NormalQueries),
+					float64(stats2.queries)/float64(PollutingQueries),
+					float64(stats1.cached)/float64(stats1.queries),
+					float64(cacheUsed)/float64(cacheCap),
+					avg1.Microseconds(),
+					avg2.Microseconds(),
+				)
+			}
+		}
+	}()
+
+	runner := func(totalQueries uint64, stats *Stats, sample func() string) {
+		for i := uint64(0); i < totalQueries; i++ {
+			ctx := context.Background()
+			logStats := tabletenv.NewLogStats(ctx, "GetPlanStats")
+			query := sample()
+
+			start := time.Now()
+			_, err := qe.GetPlan(ctx, logStats, query, false, false /* inReservedConn */)
+			require.NoErrorf(t, err, "bad query: %s", query)
+			stats.interval += time.Since(start)
+
+			atomic.AddUint64(&stats.queries, 1)
+			if logStats.CachedPlan {
+				atomic.AddUint64(&stats.cached, 1)
+			}
+		}
+	}
+
+	wg.Add(2)
+
+	go func() {
+		defer wg.Done()
+		runner(NormalQueries, &stats1, func() string {
+			return fmt.Sprintf("SELECT (a, b, c) FROM test_table_%d", rand.Intn(5000))
+		})
+	}()
+
+	go func() {
+		defer wg.Done()
+		time.Sleep(500 * time.Millisecond)
+		runner(PollutingQueries, &stats2, func() string {
+			return fmt.Sprintf("INSERT INTO test_table_00 VALUES (1, 2, 3, %d)", rand.Int())
+		})
+	}()
+
+	wg.Wait()
 }

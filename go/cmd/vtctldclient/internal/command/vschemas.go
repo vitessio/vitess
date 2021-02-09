@@ -42,6 +42,8 @@ var (
 )
 
 func commandGetSrvVSchema(cmd *cobra.Command, args []string) error {
+	cli.FinishedParsing(cmd)
+
 	cell := cmd.Flags().Arg(0)
 
 	resp, err := client.GetSrvVSchema(commandCtx, &vtctldatapb.GetSrvVSchemaRequest{
@@ -62,6 +64,8 @@ func commandGetSrvVSchema(cmd *cobra.Command, args []string) error {
 }
 
 func commandGetVSchema(cmd *cobra.Command, args []string) error {
+	cli.FinishedParsing(cmd)
+
 	keyspace := cmd.Flags().Arg(0)
 
 	resp, err := client.GetVSchema(commandCtx, &vtctldatapb.GetVSchemaRequest{
