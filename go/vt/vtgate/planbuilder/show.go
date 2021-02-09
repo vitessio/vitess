@@ -43,8 +43,6 @@ func buildShowPlan(stmt *sqlparser.Show, vschema ContextVSchema) (engine.Primiti
 		return buildShowBasicPlan(show, vschema)
 	case *sqlparser.ShowColumns:
 		return buildShowColumnsPlan(show, vschema)
-	case *sqlparser.ShowTableStatus:
-		return buildShowTableStatusPlan(show, vschema)
 	default:
 		return nil, ErrPlanNotSupported
 	}
@@ -53,43 +51,14 @@ func buildShowPlan(stmt *sqlparser.Show, vschema ContextVSchema) (engine.Primiti
 func buildShowBasicPlan(show *sqlparser.ShowBasic, vschema ContextVSchema) (engine.Primitive, error) {
 	switch show.Command {
 	case sqlparser.Charset:
-		return showCharset(show)
+		return buildCharsetPlan(show)
 	case sqlparser.Collation, sqlparser.Function, sqlparser.Privilege, sqlparser.Procedure,
 		sqlparser.VariableGlobal, sqlparser.VariableSession:
-		return showSendAnywhere(show, vschema)
+		return buildSendAnywherePlan(show, vschema)
 	case sqlparser.Database, sqlparser.Keyspace:
-		ks, err := vschema.AllKeyspace()
-		if err != nil {
-			return nil, err
-		}
-
-		var filter *regexp.Regexp
-
-		if show.Filter != nil {
-			filter = sqlparser.LikeToRegexp(show.Filter.Like)
-		}
-
-		if filter == nil {
-			filter = regexp.MustCompile(".*")
-		}
-
-		//rows := make([][]sqltypes.Value, 0, len(ks)+4)
-		var rows [][]sqltypes.Value
-
-		if show.Command == sqlparser.Database {
-			//Hard code default databases
-			rows = append(rows, buildVarCharRow("information_schema"))
-			rows = append(rows, buildVarCharRow("mysql"))
-			rows = append(rows, buildVarCharRow("sys"))
-			rows = append(rows, buildVarCharRow("performance_schema"))
-		}
-
-		for _, v := range ks {
-			if filter.MatchString(v.Name) {
-				rows = append(rows, buildVarCharRow(v.Name))
-			}
-		}
-		return engine.NewRowsPrimitive(rows, buildVarCharFields("Database")), nil
+		return buildDBPlan(show, vschema)
+	case sqlparser.OpenTable, sqlparser.TableStatus, sqlparser.Table, sqlparser.TableFull, sqlparser.Trigger:
+		return buildPlanWithDB(show, vschema)
 	case sqlparser.StatusGlobal, sqlparser.StatusSession:
 		return engine.NewRowsPrimitive(make([][]sqltypes.Value, 0, 2), buildVarCharFields("Variable_name", "Value")), nil
 	}
@@ -97,21 +66,7 @@ func buildShowBasicPlan(show *sqlparser.ShowBasic, vschema ContextVSchema) (engi
 
 }
 
-func showSendAnywhere(show *sqlparser.ShowBasic, vschema ContextVSchema) (engine.Primitive, error) {
-	ks, err := vschema.FirstSortedKeyspace()
-	if err != nil {
-		return nil, err
-	}
-	return &engine.Send{
-		Keyspace:          ks,
-		TargetDestination: key.DestinationAnyShard{},
-		Query:             sqlparser.String(show),
-		IsDML:             false,
-		SingleShardOnly:   true,
-	}, nil
-}
-
-func showCharset(show *sqlparser.ShowBasic) (engine.Primitive, error) {
+func buildCharsetPlan(show *sqlparser.ShowBasic) (engine.Primitive, error) {
 	fields := buildVarCharFields("Charset", "Description", "Default collation")
 	maxLenField := &querypb.Field{Name: "Maxlen", Type: sqltypes.Int32}
 	fields = append(fields, maxLenField)
@@ -123,6 +78,20 @@ func showCharset(show *sqlparser.ShowBasic) (engine.Primitive, error) {
 	}
 
 	return engine.NewRowsPrimitive(rows, fields), nil
+}
+
+func buildSendAnywherePlan(show *sqlparser.ShowBasic, vschema ContextVSchema) (engine.Primitive, error) {
+	ks, err := vschema.FirstSortedKeyspace()
+	if err != nil {
+		return nil, err
+	}
+	return &engine.Send{
+		Keyspace:          ks,
+		TargetDestination: key.DestinationAnyShard{},
+		Query:             sqlparser.String(show),
+		IsDML:             false,
+		SingleShardOnly:   true,
+	}, nil
 }
 
 func buildShowColumnsPlan(show *sqlparser.ShowColumns, vschema ContextVSchema) (engine.Primitive, error) {
@@ -155,8 +124,43 @@ func buildShowColumnsPlan(show *sqlparser.ShowColumns, vschema ContextVSchema) (
 
 }
 
-func buildShowTableStatusPlan(show *sqlparser.ShowTableStatus, vschema ContextVSchema) (engine.Primitive, error) {
-	destination, keyspace, _, err := vschema.TargetDestination(show.DatabaseName)
+func buildDBPlan(show *sqlparser.ShowBasic, vschema ContextVSchema) (engine.Primitive, error) {
+	ks, err := vschema.AllKeyspace()
+	if err != nil {
+		return nil, err
+	}
+
+	var filter *regexp.Regexp
+
+	if show.Filter != nil {
+		filter = sqlparser.LikeToRegexp(show.Filter.Like)
+	}
+
+	if filter == nil {
+		filter = regexp.MustCompile(".*")
+	}
+
+	//rows := make([][]sqltypes.Value, 0, len(ks)+4)
+	var rows [][]sqltypes.Value
+
+	if show.Command == sqlparser.Database {
+		//Hard code default databases
+		rows = append(rows, buildVarCharRow("information_schema"))
+		rows = append(rows, buildVarCharRow("mysql"))
+		rows = append(rows, buildVarCharRow("sys"))
+		rows = append(rows, buildVarCharRow("performance_schema"))
+	}
+
+	for _, v := range ks {
+		if filter.MatchString(v.Name) {
+			rows = append(rows, buildVarCharRow(v.Name))
+		}
+	}
+	return engine.NewRowsPrimitive(rows, buildVarCharFields("Database")), nil
+}
+
+func buildPlanWithDB(show *sqlparser.ShowBasic, vschema ContextVSchema) (engine.Primitive, error) {
+	destination, keyspace, _, err := vschema.TargetDestination(show.DbName)
 	if err != nil {
 		return nil, err
 	}
@@ -165,7 +169,7 @@ func buildShowTableStatusPlan(show *sqlparser.ShowTableStatus, vschema ContextVS
 	}
 
 	// Remove Database Name from the query.
-	show.DatabaseName = ""
+	show.DbName = ""
 
 	query := sqlparser.String(show)
 	return &engine.Send{

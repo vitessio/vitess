@@ -460,7 +460,7 @@ func TestExecutorShow(t *testing.T) {
 	require.NoError(t, err)
 
 	_, err = executor.Execute(ctx, "TestExecute", session, "show tables", nil)
-	assert.EqualError(t, err, errNoKeyspace.Error(), "'show tables' should fail without a keyspace")
+	assert.EqualError(t, err, "keyspace not specified", "'show tables' should fail without a keyspace")
 	assert.Empty(t, sbclookup.Queries, "sbclookup unexpectedly has queries already")
 
 	showResults := &sqltypes.Result{
