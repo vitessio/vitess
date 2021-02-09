@@ -63,7 +63,7 @@ type refStream struct {
 
 // Reshard initiates a resharding workflow.
 func (wr *Wrangler) Reshard(ctx context.Context, keyspace, workflow string, sources, targets []string,
-	skipSchemaCopy bool, cell, tabletTypes string, startStopped, stopAfterCopy bool) error {
+	skipSchemaCopy bool, cell, tabletTypes string, autoRun, stopAfterCopy bool) error {
 	if err := wr.validateNewWorkflow(ctx, keyspace, workflow); err != nil {
 		return err
 	}
@@ -81,12 +81,12 @@ func (wr *Wrangler) Reshard(ctx context.Context, keyspace, workflow string, sour
 		return vterrors.Wrap(err, "createStreams")
 	}
 
-	if !startStopped {
+	if autoRun {
 		if err := rs.startStreams(ctx); err != nil {
 			return vterrors.Wrap(err, "startStreams")
 		}
 	} else {
-		wr.Logger().Infof("Streams will not be started since -start_stopped is specified")
+		wr.Logger().Infof("Streams will not be started since -auto_start is set to false")
 	}
 	return nil
 }

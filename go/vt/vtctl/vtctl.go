@@ -1884,7 +1884,7 @@ func commandReshard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.F
 	tabletTypes := subFlags.String("tablet_types", "", "Source tablet types to replicate from.")
 	skipSchemaCopy := subFlags.Bool("skip_schema_copy", false, "Skip copying of schema to targets")
 
-	startStopped := subFlags.Bool("start_stopped", false, "Do not start streams: streams start off in the Stopped state")
+	autoStart := subFlags.Bool("auto_start", true, "If false, streams will start in the Stopped state and will need to be explicitly started")
 	stopAfterCopy := subFlags.Bool("stop_after_copy", false, "Streams will be stopped once the copy phase is completed")
 
 	if err := subFlags.Parse(args); err != nil {
@@ -1900,7 +1900,7 @@ func commandReshard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.F
 	source := strings.Split(subFlags.Arg(1), ",")
 	target := strings.Split(subFlags.Arg(2), ",")
 	return wr.Reshard(ctx, keyspace, workflow, source, target, *skipSchemaCopy, *cells,
-		*tabletTypes, *startStopped, *stopAfterCopy)
+		*tabletTypes, *autoStart, *stopAfterCopy)
 }
 
 func commandMoveTables(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -1916,7 +1916,7 @@ func commandMoveTables(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 	allTables := subFlags.Bool("all", false, "Move all tables from the source keyspace")
 	excludes := subFlags.String("exclude", "", "Tables to exclude (comma-separated) if -all is specified")
 
-	startStopped := subFlags.Bool("start_stopped", false, "Do not start streams: streams start off in the Stopped state")
+	autoStart := subFlags.Bool("auto_start", true, "If false, streams will start in the Stopped state and will need to be explicitly started")
 	stopAfterCopy := subFlags.Bool("stop_after_copy", false, "Streams will be stopped once the copy phase is completed")
 
 	if err := subFlags.Parse(args); err != nil {
@@ -1942,7 +1942,7 @@ func commandMoveTables(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 	target := subFlags.Arg(1)
 	tableSpecs := subFlags.Arg(2)
 	return wr.MoveTables(ctx, *workflow, source, target, tableSpecs, *cells, *tabletTypes, *allTables,
-		*excludes, *startStopped, *stopAfterCopy)
+		*excludes, *autoStart, *stopAfterCopy)
 }
 
 // VReplicationWorkflowAction defines subcommands passed to vtctl for movetables or reshard
@@ -1969,7 +1969,7 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 	reverseReplication := subFlags.Bool("reverse_replication", true, "Also reverse the replication")
 	keepData := subFlags.Bool("keep_data", false, "Do not drop tables or shards (if true, only vreplication artifacts are cleaned up)")
 
-	startStopped := subFlags.Bool("start_stopped", false, "Do not start streams: streams start off in the Stopped state")
+	autoStart := subFlags.Bool("auto_start", true, "If false, streams will start in the Stopped state and will need to be explicitly started")
 	stopAfterCopy := subFlags.Bool("stop_after_copy", false, "Streams will be stopped once the copy phase is completed")
 
 	// MoveTables-only params
@@ -2009,7 +2009,7 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 		TargetKeyspace: target,
 		Workflow:       workflow,
 		DryRun:         *dryRun,
-		StartStopped:   *startStopped,
+		AutoStart:      *autoStart,
 		StopAfterCopy:  *stopAfterCopy,
 	}
 
@@ -2170,7 +2170,7 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 		if err != nil {
 			return err
 		}
-		if *startStopped {
+		if !*autoStart {
 			wr.Logger().Printf("Workflow has been created in Stopped state\n")
 			break
 		}
