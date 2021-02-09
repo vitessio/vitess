@@ -314,7 +314,7 @@ func (qe *QueryEngine) GetPlan(ctx context.Context, logStats *tabletenv.LogStats
 	plan.Rules = qe.queryRuleSources.FilterByPlan(sql, plan.PlanID, plan.TableName().String())
 	plan.buildAuthorized()
 	if plan.PlanID.IsSelect() {
-		if qe.enableQueryPlanFieldCaching && plan.FieldQuery != nil {
+		if !skipQueryPlanCache && qe.enableQueryPlanFieldCaching && plan.FieldQuery != nil {
 			conn, err := qe.conns.Get(ctx)
 			if err != nil {
 				return nil, err
