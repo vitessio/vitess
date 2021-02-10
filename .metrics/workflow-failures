@@ -2329,3 +2329,5 @@
 2021-02-10T15:21:40Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/555029976
 2021-02-10T16:37:55Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/555239757
 2021-02-10T16:37:55Z,endtoend,https://github.com/vitessio/vitess/actions/runs/555239794
+2021-02-10T19:03:32Z,check_formatting,https://github.com/vitessio/vitess/actions/runs/555626627
+2021-02-10T19:03:32Z,golangci-lint,https://github.com/vitessio/vitess/actions/runs/555626606
