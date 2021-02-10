@@ -54,6 +54,7 @@ const (
 	alterSchemaMigrationsTableContext            = "ALTER TABLE _vt.schema_migrations add column migration_context varchar(1024) NOT NULL DEFAULT ''"
 	alterSchemaMigrationsTableDDLAction          = "ALTER TABLE _vt.schema_migrations add column ddl_action varchar(16) NOT NULL DEFAULT ''"
 	alterSchemaMigrationsTableMessage            = "ALTER TABLE _vt.schema_migrations add column message TEXT NOT NULL"
+	alterSchemaMigrationsTableTableCompleteIndex = "ALTER TABLE _vt.schema_migrations add KEY table_complete_idx (migration_status, keyspace(64), mysql_table(64), completed_timestamp)"
 
 	sqlScheduleSingleMigration = `UPDATE _vt.schema_migrations
 		SET
@@ -137,6 +138,18 @@ const (
 		FROM _vt.schema_migrations
 		WHERE
 			migration_status='running'
+	`
+	sqlSelectCompleteMigrationsOnTable = `SELECT
+			migration_uuid,
+			strategy
+		FROM _vt.schema_migrations
+		WHERE
+			migration_status='complete'
+			AND keyspace=%a
+			AND mysql_table=%a
+		ORDER BY
+			completed_timestamp DESC
+		LIMIT 1
 	`
 	sqlSelectCountReadyMigrations = `SELECT
 			count(*) as count_ready
@@ -284,4 +297,5 @@ var applyDDL = []string{
 	alterSchemaMigrationsTableContext,
 	alterSchemaMigrationsTableDDLAction,
 	alterSchemaMigrationsTableMessage,
+	alterSchemaMigrationsTableTableCompleteIndex,
 }
