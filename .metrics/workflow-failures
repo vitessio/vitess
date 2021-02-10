@@ -2333,3 +2333,12 @@
 2021-02-10T19:03:32Z,Cluster (22),https://github.com/vitessio/vitess/actions/runs/555626600
 2021-02-10T19:03:32Z,check_formatting,https://github.com/vitessio/vitess/actions/runs/555626627
 2021-02-10T19:03:32Z,golangci-lint,https://github.com/vitessio/vitess/actions/runs/555626606
+2021-02-10T22:38:22Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/556124028
+2021-02-10T22:38:22Z,Unit Test (mariadb101),https://github.com/vitessio/vitess/actions/runs/556123995
+2021-02-10T22:38:22Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/556124027
+2021-02-10T22:38:22Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/556124019
+2021-02-10T22:38:22Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/556124001
+2021-02-10T22:38:22Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/556123989
+2021-02-10T22:38:22Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/556124004
+2021-02-10T22:38:22Z,gomod-tidy,https://github.com/vitessio/vitess/actions/runs/556124003
+2021-02-10T22:38:22Z,unit_race,https://github.com/vitessio/vitess/actions/runs/556124020
