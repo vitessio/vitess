@@ -17,6 +17,7 @@
     "@types/react-dom": "^16.9.10",
     "@types/react-router-dom": "^5.1.7",
     "classnames": "^2.2.6",
+    "lodash-es": "^4.17.20",
     "node-sass": "^4.14.1",
     "react": "^17.0.1",
     "react-dom": "^17.0.1",
@@ -59,6 +60,7 @@
     ]
   },
   "devDependencies": {
+    "@types/lodash-es": "^4.17.4",
     "msw": "^0.24.4",
     "prettier": "^2.2.1",
     "protobufjs": "^6.10.2",

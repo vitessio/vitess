@@ -178,24 +178,24 @@
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "1",
-    "TableName": "unsharded, unsharded_a, unsharded_auto, unsharded_b_user, user_extra, user_metadata_music, music_extra",
+    "TableName": "music, music_extra_user, user_extra, user_metadata_unsharded, unsharded_a, unsharded_auto, unsharded_b",
     "Inputs": [
       {
         "OperatorType": "Route",
-        "Variant": "SelectUnsharded",
+        "Variant": "SelectScatter",
         "Keyspace": {
-          "Name": "main",
-          "Sharded": false
+          "Name": "user",
+          "Sharded": true
         },
-        "FieldQuery": "select 1 from unsharded, unsharded_a, unsharded_b, unsharded_auto where 1 != 1",
-        "Query": "select 1 from unsharded, unsharded_a, unsharded_b, unsharded_auto where unsharded.x = unsharded_a.y",
-        "Table": "unsharded, unsharded_a, unsharded_auto, unsharded_b"
+        "FieldQuery": "select 1 from music, music_extra where 1 != 1",
+        "Query": "select 1 from music, music_extra where music.id = music_extra.music_id",
+        "Table": "music, music_extra"
       },
       {
         "OperatorType": "Join",
         "Variant": "Join",
         "JoinColumnIndexes": "-1",
-        "TableName": "user, user_extra, user_metadata_music, music_extra",
+        "TableName": "user, user_extra, user_metadata_unsharded, unsharded_a, unsharded_auto, unsharded_b",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -210,14 +210,14 @@
           },
           {
             "OperatorType": "Route",
-            "Variant": "SelectScatter",
+            "Variant": "SelectUnsharded",
             "Keyspace": {
-              "Name": "user",
-              "Sharded": true
+              "Name": "main",
+              "Sharded": false
             },
-            "FieldQuery": "select 1 from music, music_extra where 1 != 1",
-            "Query": "select 1 from music, music_extra where music.id = music_extra.music_id",
-            "Table": "music, music_extra"
+            "FieldQuery": "select 1 from unsharded, unsharded_a, unsharded_b, unsharded_auto where 1 != 1",
+            "Query": "select 1 from unsharded, unsharded_a, unsharded_b, unsharded_auto where unsharded.x = unsharded_a.y",
+            "Table": "unsharded, unsharded_a, unsharded_auto, unsharded_b"
           }
         ]
       }

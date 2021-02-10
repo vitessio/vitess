@@ -301,9 +301,10 @@ message ExecuteOptions {
   enum PlannerVersion {
     DEFAULT_PLANNER = 0;
     V3 = 1;
-    V4 = 2;
-    V4Greedy = 3;
-    V4Left2Right = 4;
+    Gen4 = 2;
+    Gen4Greedy = 3;
+    Gen4Left2Right = 4;
+    Gen4WithFallback = 5;
   }
   
   // PlannerVersion specifies which planner to use. 

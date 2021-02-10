@@ -352,6 +352,9 @@ func TestExplainPassthrough(t *testing.T) {
 	got := fmt.Sprintf("%v", result.Rows)
 	require.Contains(t, got, "SIMPLE") // there is a lot more coming from mysql,
 	// but we are trying to make the test less fragile
+
+	result = exec(t, conn, "explain ks.t1")
+	require.EqualValues(t, 2, len(result.Rows))
 }
 
 func TestXXHash(t *testing.T) {
@@ -404,8 +407,15 @@ func TestSwitchBetweenOlapAndOltp(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
+	assertMatches(t, conn, "select @@workload", `[[VARBINARY("OLTP")]]`)
+
 	exec(t, conn, "set workload='olap'")
+
+	assertMatches(t, conn, "select @@workload", `[[VARBINARY("OLAP")]]`)
+
 	exec(t, conn, "set workload='oltp'")
+
+	assertMatches(t, conn, "select @@workload", `[[VARBINARY("OLTP")]]`)
 }
 
 func TestFoundRowsOnDualQueries(t *testing.T) {

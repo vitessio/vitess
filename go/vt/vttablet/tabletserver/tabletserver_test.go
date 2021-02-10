@@ -2458,6 +2458,14 @@ func setupFakeDB(t *testing.T) *fakesqldb.DB {
 	for query, result := range getSupportedQueries() {
 		db.AddQuery(query, result)
 	}
+	db.AddQueryPattern(baseShowTablesPattern, &sqltypes.Result{
+		Fields: mysql.BaseShowTablesFields,
+		Rows: [][]sqltypes.Value{
+			mysql.BaseShowTablesRow("test_table", false, ""),
+			mysql.BaseShowTablesRow("msg", false, "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30"),
+		},
+	})
+
 	return db
 }
 
@@ -2518,13 +2526,6 @@ func getSupportedQueries() map[string]*sqltypes.Result {
 			}},
 			Rows: [][]sqltypes.Value{
 				{sqltypes.NewVarBinary("0")},
-			},
-		},
-		mysql.BaseShowTables: {
-			Fields: mysql.BaseShowTablesFields,
-			Rows: [][]sqltypes.Value{
-				mysql.BaseShowTablesRow("test_table", false, ""),
-				mysql.BaseShowTablesRow("msg", false, "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30"),
 			},
 		},
 		mysql.BaseShowPrimary: {

@@ -177,6 +177,10 @@ func TestRewrites(in *testing.T) {
 		// SELECT * behaves different depending the join type used, so if that has been used, we won't rewrite
 		in:       "SELECT * FROM A JOIN B USING (id1,id2,id3)",
 		expected: "SELECT * FROM A JOIN B USING (id1,id2,id3)",
+	}, {
+		in:       "CALL proc(@foo)",
+		expected: "CALL proc(:__vtudvfoo)",
+		udv:      1,
 	}}
 
 	for _, tc := range tests {

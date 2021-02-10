@@ -22,6 +22,9 @@ import (
 	"fmt"
 	"os"
 	"testing"
+	"time"
+
+	"vitess.io/vitess/go/vt/log"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/assert"
@@ -92,6 +95,55 @@ CREATE TABLE allDefaults (
     }
 }
 `
+
+	createProcSQL = `use vt_customer;
+CREATE PROCEDURE sp_insert()
+BEGIN
+	insert into allDefaults () values ();
+END;
+
+CREATE PROCEDURE sp_delete()
+BEGIN
+	delete from allDefaults;
+END;
+
+CREATE PROCEDURE sp_multi_dml()
+BEGIN
+	insert into allDefaults () values ();
+	delete from allDefaults;
+END;
+
+CREATE PROCEDURE sp_variable()
+BEGIN
+	insert into allDefaults () values ();
+	SELECT min(id) INTO @myvar FROM allDefaults;
+	DELETE FROM allDefaults WHERE id = @myvar;
+END;
+
+CREATE PROCEDURE sp_select()
+BEGIN
+	SELECT * FROM allDefaults;
+END;
+
+CREATE PROCEDURE sp_all()
+BEGIN
+	insert into allDefaults () values ();
+    select * from allDefaults;
+	delete from allDefaults;
+    set autocommit = 0;
+END;
+
+CREATE PROCEDURE in_parameter(IN val int)
+BEGIN
+	insert into allDefaults(id) values(val);
+END;
+
+CREATE PROCEDURE out_parameter(OUT val int)
+BEGIN
+	insert into allDefaults(id) values (128);
+	select 128 into val from dual;
+END;
+`
 )
 
 func TestMain(m *testing.M) {
@@ -114,11 +166,19 @@ func TestMain(m *testing.M) {
 			VSchema:   VSchema,
 		}
 		if err := clusterInstance.StartUnshardedKeyspace(*Keyspace, 0, false); err != nil {
+			log.Fatal(err.Error())
 			return 1
 		}
 
 		// Start vtgate
 		if err := clusterInstance.StartVtgate(); err != nil {
+			log.Fatal(err.Error())
+			return 1
+		}
+
+		masterProcess := clusterInstance.Keyspaces[0].Shards[0].MasterTablet().VttabletProcess
+		if _, err := masterProcess.QueryTablet(createProcSQL, KeyspaceName, false); err != nil {
+			log.Fatal(err.Error())
 			return 1
 		}
 
@@ -213,6 +273,53 @@ func TestDDLUnsharded(t *testing.T) {
 	exec(t, conn, `drop view v1`)
 	exec(t, conn, `drop table tempt1`)
 	assertMatches(t, conn, "show tables", `[[VARCHAR("allDefaults")] [VARCHAR("t1")]]`)
+}
+
+func TestCallProcedure(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	vtParams := mysql.ConnParams{
+		Host:   "localhost",
+		Port:   clusterInstance.VtgateMySQLPort,
+		Flags:  mysql.CapabilityClientMultiResults,
+		DbName: "@master",
+	}
+	time.Sleep(5 * time.Second)
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+	qr := exec(t, conn, `CALL sp_insert()`)
+	require.EqualValues(t, 1, qr.RowsAffected)
+
+	_, err = conn.ExecuteFetch(`CALL sp_select()`, 1000, true)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Multi-Resultset not supported in stored procedure")
+
+	_, err = conn.ExecuteFetch(`CALL sp_all()`, 1000, true)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Multi-Resultset not supported in stored procedure")
+
+	qr = exec(t, conn, `CALL sp_delete()`)
+	require.GreaterOrEqual(t, 1, int(qr.RowsAffected))
+
+	qr = exec(t, conn, `CALL sp_multi_dml()`)
+	require.EqualValues(t, 1, qr.RowsAffected)
+
+	qr = exec(t, conn, `CALL sp_variable()`)
+	require.EqualValues(t, 1, qr.RowsAffected)
+
+	qr = exec(t, conn, `CALL in_parameter(42)`)
+	require.EqualValues(t, 1, qr.RowsAffected)
+
+	_ = exec(t, conn, `SET @foo = 123`)
+	qr = exec(t, conn, `CALL in_parameter(@foo)`)
+	require.EqualValues(t, 1, qr.RowsAffected)
+	qr = exec(t, conn, "select * from allDefaults where id = 123")
+	assert.NotEmpty(t, qr.Rows)
+
+	_, err = conn.ExecuteFetch(`CALL out_parameter(@foo)`, 100, true)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "OUT and INOUT parameters are not supported")
 }
 
 func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {

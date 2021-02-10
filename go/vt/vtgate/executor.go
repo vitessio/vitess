@@ -101,7 +101,7 @@ type Executor struct {
 	vschema      *vindexes.VSchema
 	normalize    bool
 	streamSize   int
-	plans        *cache.LRUCache
+	plans        cache.Cache
 	vschemaStats *VSchemaStats
 
 	vm *VSchemaManager
@@ -114,14 +114,14 @@ const pathScatterStats = "/debug/scatter_stats"
 const pathVSchema = "/debug/vschema"
 
 // NewExecutor creates a new Executor.
-func NewExecutor(ctx context.Context, serv srvtopo.Server, cell string, resolver *Resolver, normalize bool, streamSize int, queryPlanCacheSize int64) *Executor {
+func NewExecutor(ctx context.Context, serv srvtopo.Server, cell string, resolver *Resolver, normalize bool, streamSize int, cacheCfg *cache.Config) *Executor {
 	e := &Executor{
 		serv:        serv,
 		cell:        cell,
 		resolver:    resolver,
 		scatterConn: resolver.scatterConn,
 		txConn:      resolver.scatterConn.txConn,
-		plans:       cache.NewLRUCache(queryPlanCacheSize),
+		plans:       cache.NewDefaultCacheImpl(cacheCfg),
 		normalize:   normalize,
 		streamSize:  streamSize,
 	}
@@ -131,13 +131,12 @@ func NewExecutor(ctx context.Context, serv srvtopo.Server, cell string, resolver
 	e.vm.watchSrvVSchema(ctx, cell)
 
 	executorOnce.Do(func() {
-		stats.NewGaugeFunc("QueryPlanCacheLength", "Query plan cache length", e.plans.Length)
-		stats.NewGaugeFunc("QueryPlanCacheSize", "Query plan cache size", e.plans.Size)
-		stats.NewGaugeFunc("QueryPlanCacheCapacity", "Query plan cache capacity", e.plans.Capacity)
+		stats.NewGaugeFunc("QueryPlanCacheLength", "Query plan cache length", func() int64 {
+			return int64(e.plans.Len())
+		})
+		stats.NewGaugeFunc("QueryPlanCacheSize", "Query plan cache size", e.plans.UsedCapacity)
+		stats.NewGaugeFunc("QueryPlanCacheCapacity", "Query plan cache capacity", e.plans.MaxCapacity)
 		stats.NewCounterFunc("QueryPlanCacheEvictions", "Query plan cache evictions", e.plans.Evictions)
-		stats.Publish("QueryPlanCacheOldest", stats.StringFunc(func() string {
-			return fmt.Sprintf("%v", e.plans.Oldest())
-		}))
 		http.Handle(pathQueryPlans, e)
 		http.Handle(pathScatterStats, e)
 		http.Handle(pathVSchema, e)
@@ -171,7 +170,7 @@ func saveSessionStats(safeSession *SafeSession, stmtType sqlparser.StatementType
 		return
 	}
 	if !safeSession.foundRowsHandled {
-		safeSession.FoundRows = result.RowsAffected
+		safeSession.FoundRows = uint64(len(result.Rows))
 	}
 	if result.InsertID > 0 {
 		safeSession.LastInsertId = result.InsertID
@@ -373,7 +372,7 @@ func (e *Executor) handleBegin(ctx context.Context, safeSession *SafeSession, lo
 func (e *Executor) handleCommit(ctx context.Context, safeSession *SafeSession, logStats *LogStats) (*sqltypes.Result, error) {
 	execStart := time.Now()
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
-	logStats.ShardQueries = uint32(len(safeSession.ShardSessions))
+	logStats.ShardQueries = uint64(len(safeSession.ShardSessions))
 	e.updateQueryCounts("Commit", "", "", int64(logStats.ShardQueries))
 
 	err := e.txConn.Commit(ctx, safeSession)
@@ -389,7 +388,7 @@ func (e *Executor) Commit(ctx context.Context, safeSession *SafeSession) error {
 func (e *Executor) handleRollback(ctx context.Context, safeSession *SafeSession, logStats *LogStats) (*sqltypes.Result, error) {
 	execStart := time.Now()
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
-	logStats.ShardQueries = uint32(len(safeSession.ShardSessions))
+	logStats.ShardQueries = uint64(len(safeSession.ShardSessions))
 	e.updateQueryCounts("Rollback", "", "", int64(logStats.ShardQueries))
 	err := e.txConn.Rollback(ctx, safeSession)
 	logStats.CommitTime = time.Since(execStart)
@@ -399,7 +398,7 @@ func (e *Executor) handleRollback(ctx context.Context, safeSession *SafeSession,
 func (e *Executor) handleSavepoint(ctx context.Context, safeSession *SafeSession, sql string, planType string, logStats *LogStats, nonTxResponse func(query string) (*sqltypes.Result, error), ignoreMaxMemoryRows bool) (*sqltypes.Result, error) {
 	execStart := time.Now()
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
-	logStats.ShardQueries = uint32(len(safeSession.ShardSessions))
+	logStats.ShardQueries = uint64(len(safeSession.ShardSessions))
 	e.updateQueryCounts(planType, "", "", int64(logStats.ShardQueries))
 	defer func() {
 		logStats.ExecuteTime = time.Since(execStart)
@@ -557,7 +556,7 @@ func (e *Executor) handleSetVitessMetadata(ctx context.Context, name, value stri
 		return nil, err
 	}
 
-	return &sqltypes.Result{RowsAffected: 1}, nil
+	return &sqltypes.Result{}, nil
 }
 
 func (e *Executor) handleShowVitessMetadata(ctx context.Context, opt *sqlparser.ShowTablesOpt) (*sqltypes.Result, error) {
@@ -586,9 +585,8 @@ func (e *Executor) handleShowVitessMetadata(ctx context.Context, opt *sqlparser.
 	}
 
 	return &sqltypes.Result{
-		Fields:       buildVarCharFields("Key", "Value"),
-		Rows:         rows,
-		RowsAffected: uint64(len(rows)),
+		Fields: buildVarCharFields("Key", "Value"),
+		Rows:   rows,
 	}, nil
 }
 
@@ -626,9 +624,8 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 			"YES")
 		rows = append(rows, row)
 		return &sqltypes.Result{
-			Fields:       buildVarCharFields("Engine", "Support", "Comment", "Transactions", "XA", "Savepoints"),
-			Rows:         rows,
-			RowsAffected: 1,
+			Fields: buildVarCharFields("Engine", "Support", "Comment", "Transactions", "XA", "Savepoints"),
+			Rows:   rows,
 		}, nil
 	// for PLUGINS, return InnoDb + mysql_native_password
 	case sqlparser.KeywordString(sqlparser.PLUGINS):
@@ -641,9 +638,8 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 			"GPL")
 		rows = append(rows, row)
 		return &sqltypes.Result{
-			Fields:       buildVarCharFields("Name", "Status", "Type", "Library", "License"),
-			Rows:         rows,
-			RowsAffected: 1,
+			Fields: buildVarCharFields("Name", "Status", "Type", "Library", "License"),
+			Rows:   rows,
 		}, nil
 	case "create table":
 		if !show.Table.Qualifier.IsEmpty() {
@@ -769,9 +765,8 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 		}
 
 		return &sqltypes.Result{
-			Fields:       buildVarCharFields("Shards"),
-			Rows:         rows,
-			RowsAffected: uint64(len(rows)),
+			Fields: buildVarCharFields("Shards"),
+			Rows:   rows,
 		}, nil
 	case sqlparser.KeywordString(sqlparser.VITESS_TABLETS):
 		return e.showTablets(show)
@@ -779,9 +774,8 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 		var rows [][]sqltypes.Value
 		rows = append(rows, buildVarCharRow(safeSession.TargetString))
 		return &sqltypes.Result{
-			Fields:       buildVarCharFields("Target"),
-			Rows:         rows,
-			RowsAffected: uint64(len(rows)),
+			Fields: buildVarCharFields("Target"),
+			Rows:   rows,
 		}, nil
 	case "vschema tables":
 		if destKeyspace == "" {
@@ -804,9 +798,8 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 		}
 
 		return &sqltypes.Result{
-			Fields:       buildVarCharFields("Tables"),
-			Rows:         rows,
-			RowsAffected: uint64(len(rows)),
+			Fields: buildVarCharFields("Tables"),
+			Rows:   rows,
 		}, nil
 	case "vschema vindexes":
 		vschema := e.vm.GetCurrentSrvVschema()
@@ -856,9 +849,8 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 			}
 
 			return &sqltypes.Result{
-				Fields:       buildVarCharFields("Columns", "Name", "Type", "Params", "Owner"),
-				Rows:         rows,
-				RowsAffected: uint64(len(rows)),
+				Fields: buildVarCharFields("Columns", "Name", "Type", "Params", "Owner"),
+				Rows:   rows,
 			}, nil
 		}
 
@@ -889,9 +881,8 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 			}
 		}
 		return &sqltypes.Result{
-			Fields:       buildVarCharFields("Keyspace", "Name", "Type", "Params", "Owner"),
-			Rows:         rows,
-			RowsAffected: uint64(len(rows)),
+			Fields: buildVarCharFields("Keyspace", "Name", "Type", "Params", "Owner"),
+			Rows:   rows,
 		}, nil
 	case sqlparser.KeywordString(sqlparser.WARNINGS):
 		fields := []*querypb.Field{
@@ -1034,9 +1025,8 @@ func (e *Executor) showTablets(show *sqlparser.ShowLegacy) (*sqltypes.Result, er
 		}
 	}
 	return &sqltypes.Result{
-		Fields:       buildVarCharFields("Cell", "Keyspace", "Shard", "TabletType", "State", "Alias", "Hostname", "MasterTermStartTime"),
-		Rows:         rows,
-		RowsAffected: uint64(len(rows)),
+		Fields: buildVarCharFields("Cell", "Keyspace", "Shard", "TabletType", "State", "Alias", "Hostname", "MasterTermStartTime"),
+		Rows:   rows,
 	}, nil
 }
 
@@ -1104,10 +1094,6 @@ func (e *Executor) StreamExecute(ctx context.Context, method string, safeSession
 		// These may or may not all work, but getPlan() should either return a plan with instructions
 		// or an error, so it's safe to try.
 		break
-	case sqlparser.StmtBegin, sqlparser.StmtCommit, sqlparser.StmtRollback:
-		// These statements don't populate plan.Instructions. We want to make sure we don't try to
-		// dereference nil Instructions which would panic.
-		fallthrough
 	case sqlparser.StmtVStream:
 		log.Infof("handleVStream called with target %v", target)
 		return e.handleVStream(ctx, sql, target, callback, vcursor, logStats)
@@ -1299,11 +1285,6 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 	ignoreMaxMemoryRows := sqlparser.IgnoreMaxMaxMemoryRowsDirective(stmt)
 	vcursor.SetIgnoreMaxMemoryRows(ignoreMaxMemoryRows)
 
-	planKey := vcursor.planPrefixKey() + ":" + sql
-	if plan, ok := e.plans.Get(planKey); ok {
-		return plan.(*engine.Plan), nil
-	}
-
 	// Normalize if possible and retry.
 	if (e.normalize && sqlparser.CanNormalize(stmt)) || sqlparser.IsSetStatement(stmt) {
 		parameterize := e.normalize // the public flag is called normalize
@@ -1321,10 +1302,11 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 		logStats.BindVariables = bindVars
 	}
 
-	planKey = vcursor.planPrefixKey() + ":" + query
+	planKey := vcursor.planPrefixKey() + ":" + query
 	if plan, ok := e.plans.Get(planKey); ok {
 		return plan.(*engine.Plan), nil
 	}
+
 	plan, err := planbuilder.BuildFromStmt(query, statement, vcursor, bindVarNeeds)
 	if err != nil {
 		return nil, err
@@ -1343,6 +1325,23 @@ func skipQueryPlanCache(safeSession *SafeSession) bool {
 	return safeSession.Options.SkipQueryPlanCache
 }
 
+type cacheItem struct {
+	Key   string
+	Value *engine.Plan
+}
+
+func (e *Executor) debugCacheEntries() (items []cacheItem) {
+	e.plans.ForEach(func(value interface{}) bool {
+		plan := value.(*engine.Plan)
+		items = append(items, cacheItem{
+			Key:   plan.Original,
+			Value: plan,
+		})
+		return true
+	})
+	return
+}
+
 // ServeHTTP shows the current plans in the query cache.
 func (e *Executor) ServeHTTP(response http.ResponseWriter, request *http.Request) {
 	if err := acl.CheckAccessHTTP(request, acl.DEBUGGING); err != nil {
@@ -1352,7 +1351,7 @@ func (e *Executor) ServeHTTP(response http.ResponseWriter, request *http.Request
 
 	switch request.URL.Path {
 	case pathQueryPlans:
-		returnAsJSON(response, e.plans.Items())
+		returnAsJSON(response, e.debugCacheEntries())
 	case pathVSchema:
 		returnAsJSON(response, e.VSchema())
 	case pathScatterStats:
@@ -1375,7 +1374,7 @@ func returnAsJSON(response http.ResponseWriter, stuff interface{}) {
 }
 
 // Plans returns the LRU plan cache
-func (e *Executor) Plans() *cache.LRUCache {
+func (e *Executor) Plans() cache.Cache {
 	return e.plans
 }
 
@@ -1623,7 +1622,7 @@ func (e *Executor) handlePrepare(ctx context.Context, safeSession *SafeSession, 
 	}
 	logStats.RowsAffected = qr.RowsAffected
 
-	plan.AddStats(1, time.Since(logStats.StartTime), uint64(logStats.ShardQueries), logStats.RowsAffected, errCount)
+	plan.AddStats(1, time.Since(logStats.StartTime), logStats.ShardQueries, qr.RowsAffected, uint64(len(qr.Rows)), errCount)
 
 	return qr.Fields, err
 }

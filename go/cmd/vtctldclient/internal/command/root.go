@@ -64,6 +64,14 @@ var (
 			return err
 		},
 		TraverseChildren: true,
+		// By default, cobra will print any error returned by a child command to
+		// stderr, and then return that error back up the call chain. Since we
+		// use vitess's log package to log any error we get back from
+		// Root.Execute() (in ../../main.go) this actually results in duplicate
+		// stderr lines. So, somewhat counterintuitively, we actually "silence"
+		// all errors in cobra (just from being output, they still get
+		// propagated).
+		SilenceErrors: true,
 	}
 )
 

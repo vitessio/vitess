@@ -102,7 +102,7 @@
 
 # create db main
 "create database main"
-"cannot create database 'main'; database exists"
+"Can't create database 'main'; database exists (errno 1007) (sqlstate HY000)"
 
 # create db if not exists main
 "create database if not exists main"
@@ -116,7 +116,7 @@
 
 # alter db foo
 "alter database foo collate utf8"
-"cannot alter database 'foo'; database does not exists"
+"Can't alter database 'foo'; database doesn't exists"
 
 # alter db main
 "alter database main collate utf8"
@@ -124,7 +124,7 @@
 
 # drop db foo
 "drop database foo"
-"cannot drop database 'foo'; database does not exists"
+"Can't drop database 'foo'; database doesn't exists (errno 1008) (sqlstate HY000)"
 
 # drop db main
 "drop database main"

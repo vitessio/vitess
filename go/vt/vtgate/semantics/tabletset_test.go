@@ -29,15 +29,25 @@ const (
 	F3
 )
 
-func TestTableSet(t *testing.T) {
+func TestTableSet_IsOverlapping(t *testing.T) {
 	assert.True(t, (F1 | F2).IsOverlapping(F1|F2))
 	assert.True(t, F1.IsOverlapping(F1|F2))
 	assert.True(t, (F1 | F2).IsOverlapping(F1))
 	assert.False(t, F3.IsOverlapping(F1|F2))
 	assert.False(t, (F1 | F2).IsOverlapping(F3))
+}
 
+func TestTableSet_IsSolvedBy(t *testing.T) {
 	assert.True(t, F1.IsSolvedBy(F1|F2))
 	assert.False(t, (F1 | F2).IsSolvedBy(F1))
 	assert.False(t, F3.IsSolvedBy(F1|F2))
 	assert.False(t, (F1 | F2).IsSolvedBy(F3))
+}
+
+func TestTableSet_Constituents(t *testing.T) {
+	assert.Equal(t, []TableSet{F1, F2, F3}, (F1 | F2 | F3).Constituents())
+	assert.Equal(t, []TableSet{F1, F2}, (F1 | F2).Constituents())
+	assert.Equal(t, []TableSet{F1, F3}, (F1 | F3).Constituents())
+	assert.Equal(t, []TableSet{F2, F3}, (F2 | F3).Constituents())
+	assert.Empty(t, TableSet(0).Constituents())
 }
