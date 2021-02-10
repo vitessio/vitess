@@ -1530,6 +1530,8 @@ var (
 		}, {
 			input: "select MAX(k collate latin1_german2_ci) from t1",
 		}, {
+			input: "select MaX(k collate latin1_german2_ci) from t1",
+		}, {
 			input: "select distinct k collate latin1_german2_ci from t1",
 		}, {
 			input: "select * from t1 where 'Müller' collate latin1_german2_ci = k",
