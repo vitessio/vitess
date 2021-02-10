@@ -2327,3 +2327,5 @@
 2021-02-10T07:37:29Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/553895427
 2021-02-10T07:46:55Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/553915851
 2021-02-10T15:21:40Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/555029976
+2021-02-10T16:37:55Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/555239757
+2021-02-10T16:37:55Z,endtoend,https://github.com/vitessio/vitess/actions/runs/555239794
