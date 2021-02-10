@@ -64,7 +64,7 @@ const (
 
 // MoveTables initiates moving table(s) over to another keyspace
 func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, targetKeyspace, tableSpecs,
-	cell, tabletTypes string, allTables bool, excludeTables string, autoRun, stopAfterCopy bool) error {
+	cell, tabletTypes string, allTables bool, excludeTables string, autoStart, stopAfterCopy bool) error {
 	//FIXME validate tableSpecs, allTables, excludeTables
 	var tables []string
 	var err error
@@ -223,7 +223,7 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 			workflow, targetKeyspace)
 		return fmt.Errorf(msg)
 	}
-	if autoRun {
+	if autoStart {
 		return mz.startStreams(ctx)
 	}
 	wr.Logger().Infof("Streams will not be started since -auto_start is set to false")
