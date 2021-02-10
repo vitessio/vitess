@@ -2303,9 +2303,6 @@ type AliasedExpr struct {
 // Format formats the node.
 func (node *AliasedExpr) Format(buf *TrackedBuffer) {
 	buf.Myprintf("%v", node.Expr)
-	if node.Over != nil {
-		buf.Myprintf(" %v", node.Over)
-	}
 	if !node.As.IsEmpty() {
 		buf.Myprintf(" as %v", node.As)
 	}
@@ -2330,7 +2327,7 @@ type Over struct {
 }
 
 // Format formats the node.
-func (node Over) Format(buf *TrackedBuffer) {
+func (node *Over) Format(buf *TrackedBuffer) {
 	if !node.WindowName.IsEmpty() {
 		buf.Myprintf("over %v", node.WindowName)
 	} else {
@@ -2345,7 +2342,10 @@ func (node Over) Format(buf *TrackedBuffer) {
 	}
 }
 
-func (node Over) walkSubtree(visit Visit) error {
+func (node *Over) walkSubtree(visit Visit) error {
+	if node == nil {
+		return nil
+	}
 	return Walk(visit, node.PartitionBy, node.OrderBy, node.WindowName)
 }
 
@@ -3613,6 +3613,10 @@ func (node *FuncExpr) Format(buf *TrackedBuffer) {
 	// if they match a reserved word. So, print the
 	// name as is.
 	buf.Myprintf("%s(%s%v)", node.Name.String(), distinct, node.Exprs)
+
+	if node.Over != nil {
+		buf.Myprintf(" %v", node.Over)
+	}
 }
 
 func (node *FuncExpr) walkSubtree(visit Visit) error {
@@ -3624,6 +3628,7 @@ func (node *FuncExpr) walkSubtree(visit Visit) error {
 		node.Qualifier,
 		node.Name,
 		node.Exprs,
+		node.Over,
 	)
 }
 

@@ -1590,6 +1590,60 @@ var (
 		}, {
 			input: "select name, dense_rank(a) over () from t",
 		}, {
+			input: "select name, avg(a) over (partition by b) from t",
+		}, {
+			input: "select name, bit_and(a) over (partition by b) from t",
+		}, {
+			input: "select name, bit_or(a) over (partition by b) from t",
+		}, {
+			input: "select name, bit_xor(a) over (partition by b) from t",
+		}, {
+			input: "select name, count(a) over (partition by b) from t",
+		}, {
+			input: "select name, json_arrayagg(a) over (partition by b) from t",
+		}, {
+			input: "select name, json_objectagg(a) over (partition by b) from t",
+		}, {
+			input: "select name, max(a) over (partition by b) from t",
+		}, {
+			input: "select name, min(a) over (partition by b) from t",
+		}, {
+			input: "select name, stddev_pop(a) over (partition by b) from t",
+		}, {
+			input: "select name, stddev(a) over (partition by b) from t",
+		}, {
+			input: "select name, std(a) over (partition by b) from t",
+		}, {
+			input: "select name, stddev_samp(a) over (partition by b) from t",
+		}, {
+			input: "select name, sum(a) over (partition by b) from t",
+		}, {
+			input: "select name, var_pop(a) over (partition by b) from t",
+		}, {
+			input: "select name, variance(a) over (partition by b) from t",
+		}, {
+			input: "select name, cume_dist(a) over (partition by b) from t",
+		}, {
+			input: "select name, dense_rank(a) over (partition by b) from t",
+		}, {
+			input: "select name, first_value(a) over (partition by b) from t",
+		}, {
+			input: "select name, lag(a) over (partition by b) from t",
+		}, {
+			input: "select name, last_value(a) over (partition by b) from t",
+		}, {
+			input: "select name, lead(a) over (partition by b) from t",
+		}, {
+			input: "select name, nth_value(a) over (partition by b) from t",
+		}, {
+			input: "select name, ntile(a) over (partition by b) from t",
+		}, {
+			input: "select name, percent_rank(a) over (partition by b) from t",
+		}, {
+			input: "select name, rank(a) over (partition by b) from t",
+		}, {
+			input: "select name, row_number(a) over (partition by b) from t",
+		}, {
 			input: "select name, dense_rank(a) over (partition by b) from t",
 		}, {
 			input: "select name, dense_rank(a) over (partition by b order by c asc) from t",

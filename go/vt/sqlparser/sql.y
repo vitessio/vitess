@@ -276,7 +276,8 @@ func skipToEnd(yylex interface{}) {
 %type <str> compare
 %type <ins> insert_data
 %type <expr> value value_expression num_val as_of_opt
-%type <expr> function_call_keyword function_call_nonkeyword function_call_generic function_call_conflict func_datetime_precision function_call_window
+%type <expr> function_call_keyword function_call_nonkeyword function_call_generic function_call_conflict
+%type <expr> func_datetime_precision function_call_window function_call_aggregate
 %type <str> is_suffix
 %type <colTuple> col_tuple
 %type <exprs> expression_list
@@ -294,7 +295,7 @@ func skipToEnd(yylex interface{}) {
 %type <columnOrder> column_order_opt
 %type <triggerOrder> trigger_order_opt
 %type <order> order
-%type <over> over
+%type <over> over over_opt
 %type <int> lexer_position
 %type <str> asc_desc_opt
 %type <limit> limit_opt
@@ -2486,6 +2487,15 @@ over:
     $$ = &Over{PartitionBy: $5, OrderBy: $6}
   }
 
+over_opt:
+  {
+    $$ = nil
+  }
+| over
+  {
+    $$ = $1
+  }
+
 as_ci_opt:
   {
     $$ = ColIdent{}
@@ -3099,6 +3109,7 @@ value_expression:
     // will be non-trivial because of grammar conflicts.
     $$ = &IntervalExpr{Expr: $2, Unit: $3.String()}
   }
+| function_call_aggregate
 | function_call_generic
 | function_call_keyword
 | function_call_nonkeyword
@@ -3120,120 +3131,126 @@ function_call_generic:
   }
 
 /*
+   Special aggregate function calls that can't be treated like a normal function call, because they have an optional
+   OVER clause (not legal any other function)
+ */
+function_call_aggregate:
+ MAX openb select_expression_list closeb over_opt
+  {
+    $$ = &FuncExpr{Name: NewColIdent("max"), Exprs: $3, Over: $5}
+  }
+| AVG  openb select_expression_list closeb over_opt
+  {
+    $$ = &FuncExpr{Name: NewColIdent("avg"), Exprs: $3, Over: $5}
+  }
+| BIT_AND openb select_expression_list closeb over_opt
+  {
+    $$ = &FuncExpr{Name: NewColIdent("bit_and"), Exprs: $3, Over: $5}
+  }
+| BIT_OR openb select_expression_list closeb over_opt
+  {
+    $$ = &FuncExpr{Name: NewColIdent("bit_or"), Exprs: $3, Over: $5}
+  }
+| BIT_XOR openb select_expression_list closeb over_opt
+  {
+    $$ = &FuncExpr{Name: NewColIdent("bit_xor"), Exprs: $3, Over: $5}
+  }
+| COUNT openb select_expression_list closeb over_opt
+  {
+    $$ = &FuncExpr{Name: NewColIdent("count"), Exprs: $3, Over: $5}
+  }
+| JSON_ARRAYAGG openb select_expression_list closeb over_opt
+  {
+    $$ = &FuncExpr{Name: NewColIdent("json_arrayagg"), Exprs: $3, Over: $5}
+  }
+| JSON_OBJECTAGG openb select_expression_list closeb over_opt
+  {
+    $$ = &FuncExpr{Name: NewColIdent("json_objectagg"), Exprs: $3, Over: $5}
+  }
+| MIN openb select_expression_list closeb over_opt
+  {
+    $$ = &FuncExpr{Name: NewColIdent("min"), Exprs: $3, Over: $5}
+  }
+| STDDEV_POP openb select_expression_list closeb over_opt
+  {
+    $$ = &FuncExpr{Name: NewColIdent("stddev_pop"), Exprs: $3, Over: $5}
+  }
+| STDDEV openb select_expression_list closeb over_opt
+  {
+    $$ = &FuncExpr{Name: NewColIdent("stddev"), Exprs: $3, Over: $5}
+  }
+| STD openb select_expression_list closeb over_opt
+  {
+    $$ = &FuncExpr{Name: NewColIdent("std"), Exprs: $3, Over: $5}
+  }
+| STDDEV_SAMP openb select_expression_list closeb over_opt
+  {
+    $$ = &FuncExpr{Name: NewColIdent("stddev_samp"), Exprs: $3, Over: $5}
+  }
+| SUM openb select_expression_list closeb over_opt
+  {
+    $$ = &FuncExpr{Name: NewColIdent("sum"), Exprs: $3, Over: $5}
+  }
+| VAR_POP openb select_expression_list closeb over_opt
+  {
+    $$ = &FuncExpr{Name: NewColIdent("var_pop"), Exprs: $3, Over: $5}
+  }
+| VARIANCE openb select_expression_list closeb over_opt
+  {
+    $$ = &FuncExpr{Name: NewColIdent("variance"), Exprs: $3, Over: $5}
+  }
+| VAR_SAMP openb select_expression_list closeb over_opt
+  {
+    $$ = &FuncExpr{Name: NewColIdent("varsamp"), Exprs: $3, Over: $5}
+  }
+
+/*
   Function calls with an OVER expression, only valid for certain aggregate and window functions
 */
 function_call_window:
-  AVG openb expression over closeb
+  CUME_DIST openb select_expression closeb over
   {
-    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $4}
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: SelectExprs{$3}, Over: $5}
   }
-| BIT_AND openb expression over closeb
+| DENSE_RANK openb select_expression closeb over
   {
-    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $4}
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: SelectExprs{$3}, Over: $5}
   }
-| BIT_OR openb expression over closeb
+| FIRST_VALUE openb select_expression closeb over
   {
-    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $4}
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: SelectExprs{$3}, Over: $5}
   }
-| BIT_XOR openb expression over closeb
+| LAG openb select_expression closeb over
   {
-    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $4}
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: SelectExprs{$3}, Over: $5}
   }
-| COUNT openb expression over closeb
+| LAST_VALUE openb select_expression closeb over
   {
-    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $4}
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: SelectExprs{$3}, Over: $5}
   }
-| JSON_ARRAYAGG openb expression over closeb
+| LEAD openb select_expression closeb over
   {
-    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $4}
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: SelectExprs{$3}, Over: $5}
   }
-| JSON_OBJECTAGG openb expression over closeb
+| NTH_VALUE openb select_expression closeb over
   {
-    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $4}
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: SelectExprs{$3}, Over: $5}
   }
-| MAX openb expression over closeb
+| NTILE openb select_expression closeb over
   {
-    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $4}
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: SelectExprs{$3}, Over: $5}
   }
-| MIN openb expression over closeb
+| PERCENT_RANK openb select_expression closeb over
   {
-    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $4}
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: SelectExprs{$3}, Over: $5}
   }
-| STDDEV_POP openb expression over closeb
+| RANK openb select_expression closeb over
   {
-    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $4}
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: SelectExprs{$3}, Over: $5}
   }
-| STDDEV openb expression over closeb
+| ROW_NUMBER openb select_expression closeb over
   {
-    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $4}
-  }
-| STD openb expression over closeb
-  {
-    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $4}
-  }
-| STDDEV_SAMP openb expression over closeb
-  {
-    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $4}
-  }
-| SUM openb expression over closeb
-  {
-    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $4}
-  }
-| VAR_POP openb expression over closeb
-  {
-    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $4}
-  }
-| VARIANCE openb expression over closeb
-  {
-    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $4}
-  }
-| VAR_SAMP openb expression over closeb
-  {
-    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $4}
-  }
-| CUME_DIST openb expression over closeb
-  {
-    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $4}
-  }
-| DENSE_RANK openb expression over closeb
-  {
-    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $4}
-  }
-| FIRST_VALUE openb expression over closeb
-  {
-    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $4}
-  }
-| LAG openb expression over closeb
-  {
-    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $4}
-  }
-| LAST_VALUE openb expression over closeb
-  {
-    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $4}
-  }
-| LEAD openb expression over closeb
-  {
-    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $4}
-  }
-| NTH_VALUE openb expression over closeb
-  {
-    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $4}
-  }
-| NTILE openb expression over closeb
-  {
-    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $4}
-  }
-| PERCENT_RANK openb expression over closeb
-  {
-    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $4}
-  }
-| RANK openb expression over closeb
-  {
-    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $4}
-  }
-| ROW_NUMBER openb expression over closeb
-  {
-    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $4}
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: SelectExprs{$3}, Over: $5}
   }
 
 /*
@@ -3968,6 +3985,23 @@ reserved_table_id:
 */
 reserved_keyword:
   ADD
+| AVG
+| BIT_AND
+| BIT_OR
+| BIT_XOR
+| COUNT
+| JSON_ARRAYAGG
+| JSON_OBJECTAGG
+| MAX
+| MIN
+| STDDEV_POP
+| STDDEV
+| STD
+| STDDEV_SAMP
+| SUM
+| VAR_POP
+| VARIANCE
+| VAR_SAMP
 | AFTER
 | ARRAY 
 | AND
@@ -4177,6 +4211,7 @@ non_reserved_keyword:
 | NOWAIT
 | NULLS
 | NUMERIC
+
 | OFFSET
 | OJ
 | OLD
