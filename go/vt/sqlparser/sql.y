@@ -3208,49 +3208,49 @@ function_call_aggregate_with_window:
   Function calls with an OVER expression, only valid for certain aggregate and window functions
 */
 function_call_window:
-  CUME_DIST openb select_expression closeb over
+  CUME_DIST openb closeb over
   {
-    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: SelectExprs{$3}, Over: $5}
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Over: $4}
   }
-| DENSE_RANK openb select_expression closeb over
+| DENSE_RANK openb closeb over
   {
-    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: SelectExprs{$3}, Over: $5}
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Over: $4}
   }
 | FIRST_VALUE openb select_expression closeb over
   {
     $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: SelectExprs{$3}, Over: $5}
   }
-| LAG openb select_expression closeb over
+| LAG openb select_expression_list closeb over
   {
-    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: SelectExprs{$3}, Over: $5}
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $5}
   }
 | LAST_VALUE openb select_expression closeb over
   {
     $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: SelectExprs{$3}, Over: $5}
   }
-| LEAD openb select_expression closeb over
+| LEAD openb select_expression_list closeb over
   {
-    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: SelectExprs{$3}, Over: $5}
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $5}
   }
-| NTH_VALUE openb select_expression closeb over
+| NTH_VALUE openb select_expression_list closeb over
   {
-    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: SelectExprs{$3}, Over: $5}
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $5}
   }
-| NTILE openb select_expression closeb over
+| NTILE openb closeb over
   {
-    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: SelectExprs{$3}, Over: $5}
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Over: $4}
   }
-| PERCENT_RANK openb select_expression closeb over
+| PERCENT_RANK openb closeb over
   {
-    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: SelectExprs{$3}, Over: $5}
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Over: $4}
   }
-| RANK openb select_expression closeb over
+| RANK openb closeb over
   {
-    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: SelectExprs{$3}, Over: $5}
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Over: $4}
   }
-| ROW_NUMBER openb select_expression closeb over
+| ROW_NUMBER openb closeb over
   {
-    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: SelectExprs{$3}, Over: $5}
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Over: $4}
   }
 
 /*
