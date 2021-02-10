@@ -465,10 +465,25 @@ func (wr *Wrangler) SwitchReads(ctx context.Context, targetKeyspace, workflow st
 		}
 		return sw.logs(), nil
 	}
-	wr.Logger().Infof("switchShardReads: %+v, %+v, %+v", cells, servedTypes, direction)
+	wr.Logger().Infof("About to switchShardReads: %+v, %+v, %+v", cells, servedTypes, direction)
+	if err := wr.ts.ValidateSrvKeyspace(ctx, targetKeyspace, strings.Join(cells, ",")); err != nil {
+		err2 := vterrors.Wrapf(err, "Before switching shard reads, found SrvKeyspace for %s is corrupt in cell %s",
+			targetKeyspace, strings.Join(cells, ","))
+		log.Errorf("%w", err2)
+		return nil, err2
+	}
+
 	if err := ts.switchShardReads(ctx, cells, servedTypes, direction); err != nil {
 		ts.wr.Logger().Errorf("switchShardReads failed: %v", err)
 		return nil, err
+	}
+
+	wr.Logger().Infof("switchShardReads Completed: %+v, %+v, %+v", cells, servedTypes, direction)
+	if err := wr.ts.ValidateSrvKeyspace(ctx, targetKeyspace, strings.Join(cells, ",")); err != nil {
+		err2 := vterrors.Wrapf(err, "After switching shard reads, found SrvKeyspace for %s is corrupt in cell %s",
+			targetKeyspace, strings.Join(cells, ","))
+		log.Errorf("%w", err2)
+		return nil, err2
 	}
 	return sw.logs(), nil
 }
