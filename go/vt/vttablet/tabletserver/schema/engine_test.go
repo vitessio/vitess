@@ -18,13 +18,14 @@ package schema
 
 import (
 	"expvar"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"sort"
 	"strings"
 	"testing"
 	"time"
+
+	"vitess.io/vitess/go/test/utils"
 
 	"context"
 
@@ -42,12 +43,36 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
+const baseShowTablesPattern = `SELECT t\.table_name.*`
+
+var mustMatch = utils.MustMatchFn(
+	[]interface{}{ // types with unexported fields
+		sqlparser.TableIdent{},
+	},
+	[]string{".Mutex"}, // ignored fields
+)
+
 func TestOpenAndReload(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	for query, result := range schematest.Queries() {
 		db.AddQuery(query, result)
 	}
+	db.AddQueryPattern(baseShowTablesPattern,
+		&sqltypes.Result{
+			Fields:       mysql.BaseShowTablesFields,
+			RowsAffected: 0,
+			InsertID:     0,
+			Rows: [][]sqltypes.Value{
+				mysql.BaseShowTablesRow("test_table_01", false, ""),
+				mysql.BaseShowTablesRow("test_table_02", false, ""),
+				mysql.BaseShowTablesRow("test_table_03", false, ""),
+				mysql.BaseShowTablesRow("seq", false, "vitess_sequence"),
+				mysql.BaseShowTablesRow("msg", false, "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30"),
+			},
+			SessionStateChanges: "",
+			StatusFlags:         0,
+		})
 
 	// pre-advance to above the default 1427325875.
 	db.AddQuery("select unix_timestamp()", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
@@ -55,12 +80,12 @@ func TestOpenAndReload(t *testing.T) {
 		"int64"),
 		"1427325876",
 	))
-	se := newEngine(10, 10*time.Second, 10*time.Second, true, db)
+	se := newEngine(10, 10*time.Second, 10*time.Second, db)
 	se.Open()
 	defer se.Close()
 
 	want := initialSchema()
-	assert.Equal(t, want, se.GetSchema())
+	mustMatch(t, want, se.GetSchema())
 
 	// Advance time some more.
 	db.AddQuery("select unix_timestamp()", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
@@ -71,17 +96,19 @@ func TestOpenAndReload(t *testing.T) {
 	// Modify test_table_03
 	// Add test_table_04
 	// Drop msg
-	db.AddQuery(mysql.BaseShowTables, &sqltypes.Result{
+	db.ClearQueryPattern()
+	db.AddQueryPattern(baseShowTablesPattern, &sqltypes.Result{
 		Fields: mysql.BaseShowTablesFields,
 		Rows: [][]sqltypes.Value{
 			mysql.BaseShowTablesRow("test_table_01", false, ""),
 			mysql.BaseShowTablesRow("test_table_02", false, ""),
 			{
-				sqltypes.MakeTrusted(sqltypes.VarChar, []byte("test_table_03")),
-				sqltypes.MakeTrusted(sqltypes.VarChar, []byte("BASE TABLE")),
-				// Match the timestamp.
-				sqltypes.MakeTrusted(sqltypes.Int64, []byte("1427325877")),
-				sqltypes.MakeTrusted(sqltypes.VarChar, []byte("")),
+				sqltypes.MakeTrusted(sqltypes.VarChar, []byte("test_table_03")), // table_name
+				sqltypes.MakeTrusted(sqltypes.VarChar, []byte("BASE TABLE")),    // table_type
+				sqltypes.MakeTrusted(sqltypes.Int64, []byte("1427325877")),      // unix_timestamp(t.create_time) // Match the timestamp.
+				sqltypes.MakeTrusted(sqltypes.VarChar, []byte("")),              // table_comment
+				sqltypes.MakeTrusted(sqltypes.Int64, []byte("128")),             // file_size
+				sqltypes.MakeTrusted(sqltypes.Int64, []byte("256")),             // allocated_size
 			},
 			// test_table_04 will in spite of older timestamp because it doesn't exist yet.
 			mysql.BaseShowTablesRow("test_table_04", false, ""),
@@ -149,7 +176,9 @@ func TestOpenAndReload(t *testing.T) {
 			Name: "val",
 			Type: sqltypes.Int32,
 		}},
-		PKColumns: []int{0, 1},
+		PKColumns:     []int{0, 1},
+		FileSize:      128,
+		AllocatedSize: 256,
 	}
 	want["test_table_04"] = &Table{
 		Name: sqlparser.NewTableIdent("test_table_04"),
@@ -157,7 +186,9 @@ func TestOpenAndReload(t *testing.T) {
 			Name: "pk",
 			Type: sqltypes.Int32,
 		}},
-		PKColumns: []int{0},
+		PKColumns:     []int{0},
+		FileSize:      100,
+		AllocatedSize: 150,
 	}
 	delete(want, "msg")
 	assert.Equal(t, want, se.GetSchema())
@@ -177,8 +208,8 @@ func TestOpenAndReload(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, want, se.GetSchema())
 
-	// delete table test_table_03
-	db.AddQuery(mysql.BaseShowTables, &sqltypes.Result{
+	db.ClearQueryPattern()
+	db.AddQueryPattern(baseShowTablesPattern, &sqltypes.Result{
 		Fields: mysql.BaseShowTablesFields,
 		Rows: [][]sqltypes.Value{
 			mysql.BaseShowTablesRow("test_table_01", false, ""),
@@ -220,7 +251,7 @@ func TestOpenFailedDueToMissMySQLTime(t *testing.T) {
 			{sqltypes.NewVarBinary("1427325875")},
 		},
 	})
-	se := newEngine(10, 1*time.Second, 1*time.Second, false, db)
+	se := newEngine(10, 1*time.Second, 1*time.Second, db)
 	err := se.Open()
 	want := "could not get MySQL time"
 	if err == nil || !strings.Contains(err.Error(), want) {
@@ -240,7 +271,7 @@ func TestOpenFailedDueToIncorrectMysqlRowNum(t *testing.T) {
 			{sqltypes.NULL},
 		},
 	})
-	se := newEngine(10, 1*time.Second, 1*time.Second, false, db)
+	se := newEngine(10, 1*time.Second, 1*time.Second, db)
 	err := se.Open()
 	want := "unexpected result for MySQL time"
 	if err == nil || !strings.Contains(err.Error(), want) {
@@ -260,7 +291,7 @@ func TestOpenFailedDueToInvalidTimeFormat(t *testing.T) {
 			{sqltypes.NewVarBinary("invalid_time")},
 		},
 	})
-	se := newEngine(10, 1*time.Second, 1*time.Second, false, db)
+	se := newEngine(10, 1*time.Second, 1*time.Second, db)
 	err := se.Open()
 	want := "could not parse time"
 	if err == nil || !strings.Contains(err.Error(), want) {
@@ -274,10 +305,11 @@ func TestOpenFailedDueToExecErr(t *testing.T) {
 	for query, result := range schematest.Queries() {
 		db.AddQuery(query, result)
 	}
-	db.AddRejectedQuery(mysql.BaseShowTables, fmt.Errorf("injected error"))
-	se := newEngine(10, 1*time.Second, 1*time.Second, false, db)
-	err := se.Open()
+
 	want := "injected error"
+	db.RejectQueryPattern(baseShowTablesPattern, want)
+	se := newEngine(10, 1*time.Second, 1*time.Second, db)
+	err := se.Open()
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("se.Open: %v, want %s", err, want)
 	}
@@ -289,7 +321,7 @@ func TestOpenFailedDueToTableErr(t *testing.T) {
 	for query, result := range schematest.Queries() {
 		db.AddQuery(query, result)
 	}
-	db.AddQuery(mysql.BaseShowTables, &sqltypes.Result{
+	db.AddQueryPattern(baseShowTablesPattern, &sqltypes.Result{
 		Fields: mysql.BaseShowTablesFields,
 		Rows: [][]sqltypes.Value{
 			mysql.BaseShowTablesRow("test_table", false, ""),
@@ -306,7 +338,7 @@ func TestOpenFailedDueToTableErr(t *testing.T) {
 			{sqltypes.NewVarBinary("")},
 		},
 	})
-	se := newEngine(10, 1*time.Second, 1*time.Second, false, db)
+	se := newEngine(10, 1*time.Second, 1*time.Second, db)
 	err := se.Open()
 	want := "Row count exceeded"
 	if err == nil || !strings.Contains(err.Error(), want) {
@@ -320,7 +352,7 @@ func TestExportVars(t *testing.T) {
 	for query, result := range schematest.Queries() {
 		db.AddQuery(query, result)
 	}
-	se := newEngine(10, 1*time.Second, 1*time.Second, true, db)
+	se := newEngine(10, 1*time.Second, 1*time.Second, db)
 	se.Open()
 	defer se.Close()
 	expvar.Do(func(kv expvar.KeyValue) {
@@ -334,7 +366,7 @@ func TestStatsURL(t *testing.T) {
 	for query, result := range schematest.Queries() {
 		db.AddQuery(query, result)
 	}
-	se := newEngine(10, 1*time.Second, 1*time.Second, true, db)
+	se := newEngine(10, 1*time.Second, 1*time.Second, db)
 	se.Open()
 	defer se.Close()
 
@@ -343,7 +375,7 @@ func TestStatsURL(t *testing.T) {
 	se.handleDebugSchema(response, request)
 }
 
-func newEngine(queryCacheSize int, reloadTime time.Duration, idleTimeout time.Duration, strict bool, db *fakesqldb.DB) *Engine {
+func newEngine(queryCacheSize int, reloadTime time.Duration, idleTimeout time.Duration, db *fakesqldb.DB) *Engine {
 	config := tabletenv.NewDefaultConfig()
 	config.QueryCacheSize = queryCacheSize
 	config.SchemaReloadIntervalSeconds.Set(reloadTime)
@@ -372,7 +404,9 @@ func initialSchema() map[string]*Table {
 				Name: "pk",
 				Type: sqltypes.Int32,
 			}},
-			PKColumns: []int{0},
+			PKColumns:     []int{0},
+			FileSize:      0x64,
+			AllocatedSize: 0x96,
 		},
 		"test_table_02": {
 			Name: sqlparser.NewTableIdent("test_table_02"),
@@ -380,7 +414,9 @@ func initialSchema() map[string]*Table {
 				Name: "pk",
 				Type: sqltypes.Int32,
 			}},
-			PKColumns: []int{0},
+			PKColumns:     []int{0},
+			FileSize:      0x64,
+			AllocatedSize: 0x96,
 		},
 		"test_table_03": {
 			Name: sqlparser.NewTableIdent("test_table_03"),
@@ -388,7 +424,9 @@ func initialSchema() map[string]*Table {
 				Name: "pk",
 				Type: sqltypes.Int32,
 			}},
-			PKColumns: []int{0},
+			PKColumns:     []int{0},
+			FileSize:      0x64,
+			AllocatedSize: 0x96,
 		},
 		"seq": {
 			Name: sqlparser.NewTableIdent("seq"),
@@ -406,8 +444,10 @@ func initialSchema() map[string]*Table {
 				Name: "increment",
 				Type: sqltypes.Int64,
 			}},
-			PKColumns:    []int{0},
-			SequenceInfo: &SequenceInfo{},
+			PKColumns:     []int{0},
+			FileSize:      0x64,
+			AllocatedSize: 0x96,
+			SequenceInfo:  &SequenceInfo{},
 		},
 		"msg": {
 			Name: sqlparser.NewTableIdent("msg"),
@@ -431,7 +471,9 @@ func initialSchema() map[string]*Table {
 				Name: "message",
 				Type: sqltypes.Int64,
 			}},
-			PKColumns: []int{0},
+			PKColumns:     []int{0},
+			FileSize:      0x64,
+			AllocatedSize: 0x96,
 			MessageInfo: &MessageInfo{
 				Fields: []*querypb.Field{{
 					Name: "id",
