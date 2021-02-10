@@ -2297,7 +2297,6 @@ func (node *StarExpr) walkSubtree(visit Visit) error {
 // AliasedExpr defines an aliased SELECT expression.
 type AliasedExpr struct {
 	Expr Expr
-	Over *Over
 	As   ColIdent
 }
 
@@ -3598,6 +3597,7 @@ type FuncExpr struct {
 	Name      ColIdent
 	Distinct  bool
 	Exprs     SelectExprs
+	Over      *Over
 }
 
 // Format formats the node.

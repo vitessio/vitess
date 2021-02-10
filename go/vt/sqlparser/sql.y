@@ -220,8 +220,10 @@ func skipToEnd(yylex interface{}) {
 %token <bytes> TIMESTAMPADD TIMESTAMPDIFF
 
 // Window functions
-%token <bytes> NTH_VALUE NTILE OVER PERCENT_RANK RANK ROW_NUMBER WINDOW CUME_DIST DENSE_RANK FIRST_VALUE
-%token <bytes> GROUPING GROUPS LAG LAST_VALUE LEAD
+%token <bytes> OVER WINDOW GROUPING GROUPS
+%token <bytes> AVG BIT_AND BIT_OR BIT_XOR COUNT JSON_ARRAYAGG JSON_OBJECTAGG MAX MIN STDDEV_POP STDDEV STD STDDEV_SAMP
+%token <bytes> SUM VAR_POP VARIANCE VAR_SAMP CUME_DIST DENSE_RANK FIRST_VALUE LAG LAST_VALUE LEAD NTH_VALUE NTILE
+%token <bytes> ROW_NUMBER PERCENT_RANK RANK
 
 // Match
 %token <bytes> MATCH AGAINST BOOLEAN LANGUAGE WITH QUERY EXPANSION
@@ -274,7 +276,7 @@ func skipToEnd(yylex interface{}) {
 %type <str> compare
 %type <ins> insert_data
 %type <expr> value value_expression num_val as_of_opt
-%type <expr> function_call_keyword function_call_nonkeyword function_call_generic function_call_conflict func_datetime_precision
+%type <expr> function_call_keyword function_call_nonkeyword function_call_generic function_call_conflict func_datetime_precision function_call_window
 %type <str> is_suffix
 %type <colTuple> col_tuple
 %type <exprs> expression_list
@@ -292,7 +294,7 @@ func skipToEnd(yylex interface{}) {
 %type <columnOrder> column_order_opt
 %type <triggerOrder> trigger_order_opt
 %type <order> order
-%type <over> over_opt
+%type <over> over
 %type <int> lexer_position
 %type <str> asc_desc_opt
 %type <limit> limit_opt
@@ -2456,9 +2458,9 @@ select_expression:
   {
     $$ = &StarExpr{}
   }
-| expression over_opt as_ci_opt
+| expression as_ci_opt
   {
-    $$ = &AliasedExpr{Expr: $1, Over: $2, As: $3}
+    $$ = &AliasedExpr{Expr: $1, As: $2}
   }
 | table_id '.' '*'
   {
@@ -2470,11 +2472,8 @@ select_expression:
   }
 
 // TODO: handle ROWS UNBOUNDED PRECEDING et al
-over_opt:
-  {
-    $$ = nil
-  }
-| OVER sql_id
+over:
+  OVER sql_id
   {
     $$ = &Over{WindowName: $2}
   }
@@ -3104,6 +3103,7 @@ value_expression:
 | function_call_keyword
 | function_call_nonkeyword
 | function_call_conflict
+| function_call_window
 
 /*
   Regular function calls without special token or syntax, guaranteed to not
@@ -3117,6 +3117,123 @@ function_call_generic:
 | table_id '.' reserved_sql_id openb select_expression_list_opt closeb
   {
     $$ = &FuncExpr{Qualifier: $1, Name: $3, Exprs: $5}
+  }
+
+/*
+  Function calls with an OVER expression, only valid for certain aggregate and window functions
+*/
+function_call_window:
+  AVG openb expression over closeb
+  {
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $4}
+  }
+| BIT_AND openb expression over closeb
+  {
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $4}
+  }
+| BIT_OR openb expression over closeb
+  {
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $4}
+  }
+| BIT_XOR openb expression over closeb
+  {
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $4}
+  }
+| COUNT openb expression over closeb
+  {
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $4}
+  }
+| JSON_ARRAYAGG openb expression over closeb
+  {
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $4}
+  }
+| JSON_OBJECTAGG openb expression over closeb
+  {
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $4}
+  }
+| MAX openb expression over closeb
+  {
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $4}
+  }
+| MIN openb expression over closeb
+  {
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $4}
+  }
+| STDDEV_POP openb expression over closeb
+  {
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $4}
+  }
+| STDDEV openb expression over closeb
+  {
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $4}
+  }
+| STD openb expression over closeb
+  {
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $4}
+  }
+| STDDEV_SAMP openb expression over closeb
+  {
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $4}
+  }
+| SUM openb expression over closeb
+  {
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $4}
+  }
+| VAR_POP openb expression over closeb
+  {
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $4}
+  }
+| VARIANCE openb expression over closeb
+  {
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $4}
+  }
+| VAR_SAMP openb expression over closeb
+  {
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $4}
+  }
+| CUME_DIST openb expression over closeb
+  {
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $4}
+  }
+| DENSE_RANK openb expression over closeb
+  {
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $4}
+  }
+| FIRST_VALUE openb expression over closeb
+  {
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $4}
+  }
+| LAG openb expression over closeb
+  {
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $4}
+  }
+| LAST_VALUE openb expression over closeb
+  {
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $4}
+  }
+| LEAD openb expression over closeb
+  {
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $4}
+  }
+| NTH_VALUE openb expression over closeb
+  {
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $4}
+  }
+| NTILE openb expression over closeb
+  {
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $4}
+  }
+| PERCENT_RANK openb expression over closeb
+  {
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $4}
+  }
+| RANK openb expression over closeb
+  {
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $4}
+  }
+| ROW_NUMBER openb expression over closeb
+  {
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $4}
   }
 
 /*
@@ -3997,14 +4114,12 @@ non_reserved_keyword:
 | CONSTRAINT_CATALOG
 | CONSTRAINT_NAME
 | CONSTRAINT_SCHEMA
-| CUME_DIST
 | CURSOR_NAME
 | DATE
 | DATETIME
 | DECIMAL
 | DEFINITION
 | DESCRIPTION
-| DENSE_RANK
 | DOUBLE
 | DUPLICATE
 | ENFORCED
@@ -4013,7 +4128,6 @@ non_reserved_keyword:
 | EXCLUDE
 | EXPANSION
 | FIELDS
-| FIRST_VALUE
 | FLOAT_TYPE
 | FLUSH
 | FOLLOWING
@@ -4034,11 +4148,8 @@ non_reserved_keyword:
 | JSON
 | KEYS
 | KEY_BLOCK_SIZE
-| LAG
 | LANGUAGE
 | LAST_INSERT_ID
-| LAST_VALUE
-| LEAD
 | LESS
 | LEVEL
 | LINESTRING
@@ -4060,12 +4171,10 @@ non_reserved_keyword:
 | MYSQL_ERRNO
 | NAMES
 | NCHAR
-| NTH_VALUE
 | NESTED
 | NETWORK_NAMESPACE
 | NO
 | NOWAIT
-| NTILE
 | NULLS
 | NUMERIC
 | OFFSET
@@ -4079,7 +4188,6 @@ non_reserved_keyword:
 | OTHERS
 | PARTITION
 | PATH
-| PERCENT_RANK
 | PERSIST
 | PERSIST_ONLY
 | PLUGINS
@@ -4092,7 +4200,6 @@ non_reserved_keyword:
 | PROCESS
 | QUERY
 | RANDOM
-| RANK
 | READ
 | REAL
 | REFERENCE
@@ -4109,7 +4216,6 @@ non_reserved_keyword:
 | REUSE
 | ROLE
 | ROLLBACK
-| ROW_NUMBER
 | SCHEMA_NAME
 | SECONDARY
 | SECONDARY_ENGINE
