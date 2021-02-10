@@ -50,8 +50,8 @@ const appendEntry = -1
 type DB struct {
 	// Fields set at construction time.
 
-	// t is our testing.T instance
-	t *testing.T
+	// t is our testing.TB instance
+	t testing.TB
 
 	// listener is our mysql.Listener.
 	listener *mysql.Listener
@@ -151,7 +151,7 @@ type ExpectedExecuteFetch struct {
 }
 
 // New creates a server, and starts listening.
-func New(t *testing.T) *DB {
+func New(t testing.TB) *DB {
 	// Pick a path for our socket.
 	socketDir, err := ioutil.TempDir("", "fakesqldb")
 	if err != nil {
