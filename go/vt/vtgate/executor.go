@@ -1322,7 +1322,7 @@ func skipQueryPlanCache(safeSession *SafeSession) bool {
 	if safeSession == nil || safeSession.Options == nil {
 		return false
 	}
-	return safeSession.Options.SkipQueryPlanCache
+	return safeSession.Options.SkipQueryPlanCache || safeSession.Options.HasCreatedTempTables
 }
 
 type cacheItem struct {

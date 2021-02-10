@@ -323,3 +323,35 @@
     "Query": "rename table a to b"
   }
 }
+
+# CREATE temp TABLE
+"create temporary table a(id int)"
+{
+  "QueryType": "DDL",
+  "Original": "create temporary table a(id int)",
+  "Instructions": {
+    "OperatorType": "DDL",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "create temporary table a (\n\tid int\n)",
+    "TempTable": true
+  }
+}
+
+# DROP temp TABLE
+"drop temporary table a"
+{
+  "QueryType": "DDL",
+  "Original": "drop temporary table a",
+  "Instructions": {
+    "OperatorType": "DDL",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "drop temporary table a",
+    "TempTable": true
+  }
+}
