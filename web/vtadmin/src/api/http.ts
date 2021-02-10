@@ -58,8 +58,12 @@ class HttpResponseNotOkError extends Error {
 // Note that this only validates the HttpResponse envelope; it does not
 // do any type checking or validation on the result.
 export const vtfetch = async (endpoint: string): Promise<HttpResponse> => {
-    const url = `${process.env.REACT_APP_VTADMIN_API_ADDRESS}${endpoint}`;
-    const response = await fetch(url);
+    const { REACT_APP_VTADMIN_API_ADDRESS } = process.env;
+
+    const url = `${REACT_APP_VTADMIN_API_ADDRESS}${endpoint}`;
+    const opts = vtfetchOpts();
+
+    const response = await global.fetch(url, opts);
 
     const json = await response.json();
     if (!('ok' in json)) throw new MalformedHttpResponseError('invalid http envelope', json);
@@ -67,21 +71,94 @@ export const vtfetch = async (endpoint: string): Promise<HttpResponse> => {
     return json as HttpResponse;
 };
 
-export const fetchTablets = async () => {
-    const endpoint = '/api/tablets';
-    const res = await vtfetch(endpoint);
+export const vtfetchOpts = (): RequestInit => {
+    const credentials = process.env.REACT_APP_FETCH_CREDENTIALS;
+    if (credentials && credentials !== 'omit' && credentials !== 'same-origin' && credentials !== 'include') {
+        throw Error(
+            `Invalid fetch credentials property: ${credentials}. Must be undefined or one of omit, same-origin, include`
+        );
+    }
+    return { credentials };
+};
+
+// vtfetchEntities is a helper function for querying vtadmin-api endpoints
+// that return a list of protobuf entities.
+export const vtfetchEntities = async <T>(opts: {
+    endpoint: string;
+    // Extract the list of entities from the response. We can't (strictly)
+    // guarantee type safety for API responses, hence the `any` return type.
+    extract: (res: HttpOkResponse) => any;
+    // Transform an individual entity in the array to its (proto)typed form.
+    // This will almost always be a `.verify` followed by a `.create`,
+    // but because of how protobufjs structures its generated types,
+    // writing this in a generic way is... unpleasant, and difficult to read.
+    transform: (e: object) => T;
+}): Promise<T[]> => {
+    const res = await vtfetch(opts.endpoint);
 
     // Throw "not ok" responses so that react-query correctly interprets them as errors.
     // See https://react-query.tanstack.com/guides/query-functions#handling-and-throwing-errors
-    if (!res.ok) throw new HttpResponseNotOkError(endpoint, res);
+    if (!res.ok) throw new HttpResponseNotOkError(opts.endpoint, res);
 
-    const tablets = res.result?.tablets;
-    if (!Array.isArray(tablets)) throw Error(`expected tablets to be an array, got ${tablets}`);
+    const entities = opts.extract(res);
+    if (!Array.isArray(entities)) {
+        throw Error(`expected entities to be an array, got ${entities}`);
+    }
 
-    return tablets.map((t: any) => {
-        const err = pb.Tablet.verify(t);
-        if (err) throw Error(err);
-
-        return pb.Tablet.create(t);
-    });
+    return entities.map(opts.transform);
 };
+
+export const fetchClusters = async () =>
+    vtfetchEntities({
+        endpoint: '/api/clusters',
+        extract: (res) => res.result.clusters,
+        transform: (e) => {
+            const err = pb.Cluster.verify(e);
+            if (err) throw Error(err);
+            return pb.Cluster.create(e);
+        },
+    });
+
+export const fetchGates = async () =>
+    vtfetchEntities({
+        endpoint: '/api/gates',
+        extract: (res) => res.result.gates,
+        transform: (e) => {
+            const err = pb.VTGate.verify(e);
+            if (err) throw Error(err);
+            return pb.VTGate.create(e);
+        },
+    });
+
+export const fetchKeyspaces = async () =>
+    vtfetchEntities({
+        endpoint: '/api/keyspaces',
+        extract: (res) => res.result.keyspaces,
+        transform: (e) => {
+            const err = pb.Keyspace.verify(e);
+            if (err) throw Error(err);
+            return pb.Keyspace.create(e);
+        },
+    });
+
+export const fetchSchemas = async () =>
+    vtfetchEntities({
+        endpoint: '/api/schemas',
+        extract: (res) => res.result.schemas,
+        transform: (e) => {
+            const err = pb.Schema.verify(e);
+            if (err) throw Error(err);
+            return pb.Schema.create(e);
+        },
+    });
+
+export const fetchTablets = async () =>
+    vtfetchEntities({
+        endpoint: '/api/tablets',
+        extract: (res) => res.result.tablets,
+        transform: (e) => {
+            const err = pb.Tablet.verify(e);
+            if (err) throw Error(err);
+            return pb.Tablet.create(e);
+        },
+    });

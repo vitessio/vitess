@@ -613,7 +613,6 @@ func TestOrderedAggregateMergeFail(t *testing.T) {
 				sqltypes.MakeTrusted(querypb.Type_DECIMAL, []byte("1")),
 			},
 		},
-		RowsAffected: 1,
 	}
 
 	res, err := oa.Execute(nil, nil, false)

@@ -1,0 +1,28 @@
+name: gomod-tidy
+on: [push, pull_request]
+jobs:
+  build:
+    name: Check go mod tidy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Go 1.15
+        uses: actions/setup-go@v1
+        with:
+          go-version: 1.15
+        id: go
+
+      - name: Check out code into the Go module directory
+        uses: actions/checkout@v2
+
+      - name: Run go mod tidy
+        run: |
+          set -e
+          go mod tidy
+          output=$(git status -s)
+          if [ -z "${output}" ]; then
+           exit 0
+          fi
+          echo 'We wish to maintain a tidy state for go mod. Please run `go mod tidy` on your branch, commit and push again.'
+          echo 'Running `go mod tidy` on this CI test yields with the following changes:'
+          echo "$output"
+          exit 1

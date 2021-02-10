@@ -24,6 +24,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+
 	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -36,9 +38,7 @@ func TestStreamUnion(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	if qr.RowsAffected != 1 {
-		t.Errorf("RowsAffected: %d, want 1", qr.RowsAffected)
-	}
+	assert.Equal(t, 1, len(qr.Rows))
 }
 
 func TestStreamBigData(t *testing.T) {

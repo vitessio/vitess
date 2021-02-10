@@ -173,9 +173,8 @@ func (rm *ResultMerger) Next() (*sqltypes.Result, error) {
 	}
 
 	result := &sqltypes.Result{
-		Fields:       rm.fields,
-		RowsAffected: uint64(len(rm.output)),
-		Rows:         rm.output,
+		Fields: rm.fields,
+		Rows:   rm.output,
 	}
 	rm.reset()
 

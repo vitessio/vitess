@@ -71,9 +71,13 @@ func TestInformationSchemaQuery(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	assertSingleRowIsReturned(t, conn, "table_schema = 'ks'")
-	assertSingleRowIsReturned(t, conn, "table_schema = 'vt_ks'")
+	assertSingleRowIsReturned(t, conn, "table_schema = 'ks'", "vt_ks")
+	assertSingleRowIsReturned(t, conn, "table_schema = 'vt_ks'", "vt_ks")
 	assertResultIsEmpty(t, conn, "table_schema = 'NONE'")
+	assertSingleRowIsReturned(t, conn, "table_schema = 'performance_schema'", "performance_schema")
+	assertResultIsEmpty(t, conn, "table_schema = 'PERFORMANCE_SCHEMA'")
+	assertSingleRowIsReturned(t, conn, "table_schema = 'performance_schema' and table_name = 'users'", "performance_schema")
+	assertResultIsEmpty(t, conn, "table_schema = 'performance_schema' and table_name = 'foo'")
 }
 
 func assertResultIsEmpty(t *testing.T, conn *mysql.Conn, pre string) {
@@ -84,12 +88,12 @@ func assertResultIsEmpty(t *testing.T, conn *mysql.Conn, pre string) {
 	})
 }
 
-func assertSingleRowIsReturned(t *testing.T, conn *mysql.Conn, predicate string) {
+func assertSingleRowIsReturned(t *testing.T, conn *mysql.Conn, predicate string, expectedKs string) {
 	t.Run(predicate, func(t *testing.T) {
 		qr, err := conn.ExecuteFetch("SELECT distinct table_schema FROM information_schema.tables WHERE "+predicate, 1000, true)
 		require.NoError(t, err)
 		assert.Equal(t, 1, len(qr.Rows), "did not get enough rows back")
-		assert.Equal(t, "vt_ks", qr.Rows[0][0].ToString())
+		assert.Equal(t, expectedKs, qr.Rows[0][0].ToString())
 	})
 }
 

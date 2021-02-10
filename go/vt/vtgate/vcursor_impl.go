@@ -358,12 +358,14 @@ func (vc *vcursorImpl) Planner() planbuilder.PlannerVersion {
 	switch strings.ToLower(*plannerVersion) {
 	case "v3":
 		return planbuilder.V3
-	case "v4":
-		return planbuilder.V4
-	case "v4greedy", "greedy":
-		return planbuilder.V4GreedyOnly
+	case "gen4":
+		return planbuilder.Gen4
+	case "gen4greedy", "greedy":
+		return planbuilder.Gen4GreedyOnly
 	case "left2right":
-		return planbuilder.V4Left2Right
+		return planbuilder.Gen4Left2Right
+	case "gen4fallback":
+		return planbuilder.Gen4WithFallback
 	}
 
 	log.Warn("unknown planner version configured. using the default")
@@ -400,7 +402,7 @@ func (vc *vcursorImpl) Execute(method string, query string, bindVars map[string]
 
 // ExecuteMultiShard is part of the engine.VCursor interface.
 func (vc *vcursorImpl) ExecuteMultiShard(rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, rollbackOnError, autocommit bool) (*sqltypes.Result, []error) {
-	atomic.AddUint32(&vc.logStats.ShardQueries, uint32(len(queries)))
+	atomic.AddUint64(&vc.logStats.ShardQueries, uint64(len(queries)))
 	qr, errs := vc.executor.ExecuteMultiShard(vc.ctx, rss, commentedShardQueries(queries, vc.marginComments), vc.safeSession, autocommit, vc.ignoreMaxMemoryRows)
 
 	if errs == nil && rollbackOnError {
@@ -455,13 +457,13 @@ func (vc *vcursorImpl) ExecuteStandalone(query string, bindVars map[string]*quer
 
 // StreamExeculteMulti is the streaming version of ExecuteMultiShard.
 func (vc *vcursorImpl) StreamExecuteMulti(query string, rss []*srvtopo.ResolvedShard, bindVars []map[string]*querypb.BindVariable, callback func(reply *sqltypes.Result) error) error {
-	atomic.AddUint32(&vc.logStats.ShardQueries, uint32(len(rss)))
+	atomic.AddUint64(&vc.logStats.ShardQueries, uint64(len(rss)))
 	return vc.executor.StreamExecuteMulti(vc.ctx, vc.marginComments.Leading+query+vc.marginComments.Trailing, rss, bindVars, vc.safeSession.Options, callback)
 }
 
 // ExecuteKeyspaceID is part of the engine.VCursor interface.
 func (vc *vcursorImpl) ExecuteKeyspaceID(keyspace string, ksid []byte, query string, bindVars map[string]*querypb.BindVariable, rollbackOnError, autocommit bool) (*sqltypes.Result, error) {
-	atomic.AddUint32(&vc.logStats.ShardQueries, 1)
+	atomic.AddUint64(&vc.logStats.ShardQueries, 1)
 	rss, _, err := vc.ResolveDestinations(keyspace, nil, []key.Destination{key.DestinationKeyspaceID(ksid)})
 	if err != nil {
 		return nil, err
