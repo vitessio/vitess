@@ -150,6 +150,14 @@ func replaceBinaryExprRight(newNode, parent SQLNode) {
 	parent.(*BinaryExpr).Right = newNode.(Expr)
 }
 
+func replaceCallProcName(newNode, parent SQLNode) {
+	parent.(*CallProc).Name = newNode.(TableName)
+}
+
+func replaceCallProcParams(newNode, parent SQLNode) {
+	parent.(*CallProc).Params = newNode.(Exprs)
+}
+
 func replaceCaseExprElse(newNode, parent SQLNode) {
 	parent.(*CaseExpr).Else = newNode.(Expr)
 }
@@ -204,20 +212,8 @@ func replaceColumnDefinitionName(newNode, parent SQLNode) {
 	parent.(*ColumnDefinition).Name = newNode.(ColIdent)
 }
 
-func replaceColumnTypeComment(newNode, parent SQLNode) {
-	parent.(*ColumnType).Comment = newNode.(*Literal)
-}
-
-func replaceColumnTypeDefault(newNode, parent SQLNode) {
-	parent.(*ColumnType).Default = newNode.(Expr)
-}
-
 func replaceColumnTypeLength(newNode, parent SQLNode) {
 	parent.(*ColumnType).Length = newNode.(*Literal)
-}
-
-func replaceColumnTypeOnUpdate(newNode, parent SQLNode) {
-	parent.(*ColumnType).OnUpdate = newNode.(Expr)
 }
 
 func replaceColumnTypeScale(newNode, parent SQLNode) {
@@ -350,8 +346,12 @@ func replaceExistsExprSubquery(newNode, parent SQLNode) {
 	parent.(*ExistsExpr).Subquery = newNode.(*Subquery)
 }
 
-func replaceExplainStatement(newNode, parent SQLNode) {
-	parent.(*Explain).Statement = newNode.(Statement)
+func replaceExplainStmtStatement(newNode, parent SQLNode) {
+	parent.(*ExplainStmt).Statement = newNode.(Statement)
+}
+
+func replaceExplainTabTable(newNode, parent SQLNode) {
+	parent.(*ExplainTab).Table = newNode.(TableName)
 }
 
 type replaceExprsItems int
@@ -1152,6 +1152,10 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 
 	case BoolVal:
 
+	case *CallProc:
+		a.apply(node, n.Name, replaceCallProcName)
+		a.apply(node, n.Params, replaceCallProcParams)
+
 	case *CaseExpr:
 		a.apply(node, n.Else, replaceCaseExprElse)
 		a.apply(node, n.Expr, replaceCaseExprExpr)
@@ -1184,10 +1188,7 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 		a.apply(node, n.Name, replaceColumnDefinitionName)
 
 	case *ColumnType:
-		a.apply(node, n.Comment, replaceColumnTypeComment)
-		a.apply(node, n.Default, replaceColumnTypeDefault)
 		a.apply(node, n.Length, replaceColumnTypeLength)
-		a.apply(node, n.OnUpdate, replaceColumnTypeOnUpdate)
 		a.apply(node, n.Scale, replaceColumnTypeScale)
 
 	case Columns:
@@ -1267,8 +1268,11 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 	case *ExistsExpr:
 		a.apply(node, n.Subquery, replaceExistsExprSubquery)
 
-	case *Explain:
-		a.apply(node, n.Statement, replaceExplainStatement)
+	case *ExplainStmt:
+		a.apply(node, n.Statement, replaceExplainStmtStatement)
+
+	case *ExplainTab:
+		a.apply(node, n.Table, replaceExplainTabTable)
 
 	case Exprs:
 		replacer := replaceExprsItems(0)

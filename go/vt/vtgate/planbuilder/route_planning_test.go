@@ -99,8 +99,28 @@ func TestMergeJoins(t *testing.T) {
 	}}
 	for i, tc := range tests {
 		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
-			result := tryMerge(tc.l, tc.r, tc.predicates, &semantics.SemTable{})
+			result := tryMerge(tc.l, tc.r, tc.predicates, semantics.NewSemTable())
 			assert.Equal(t, tc.expected, result)
 		})
 	}
+}
+
+func TestClone(t *testing.T) {
+	original := &routePlan{
+		routeOpCode: engine.SelectEqualUnique,
+		vindexPreds: []*vindexPlusPredicates{{
+			covered: false,
+		}},
+	}
+
+	clone := original.clone()
+
+	clonedRP := clone.(*routePlan)
+	clonedRP.routeOpCode = engine.SelectDBA
+	assert.Equal(t, clonedRP.routeOpCode, engine.SelectDBA)
+	assert.Equal(t, original.routeOpCode, engine.SelectEqualUnique)
+
+	clonedRP.vindexPreds[0].covered = true
+	assert.True(t, clonedRP.vindexPreds[0].covered)
+	assert.False(t, original.vindexPreds[0].covered)
 }

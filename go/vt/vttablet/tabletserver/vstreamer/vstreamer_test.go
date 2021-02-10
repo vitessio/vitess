@@ -1923,7 +1923,7 @@ func TestFilteredMultipleWhere(t *testing.T) {
 }
 
 func runCases(t *testing.T, filter *binlogdatapb.Filter, testcases []testcase, position string, tablePK []*binlogdatapb.TableLastPK) {
-	t.Helper()
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	wg, ch := startStream(ctx, t, filter, position, tablePK)
@@ -1956,7 +1956,6 @@ func runCases(t *testing.T, filter *binlogdatapb.Filter, testcases []testcase, p
 }
 
 func expectLog(ctx context.Context, t *testing.T, input interface{}, ch <-chan []*binlogdatapb.VEvent, output [][]string) {
-	t.Helper()
 	timer := time.NewTimer(1 * time.Minute)
 	defer timer.Stop()
 	for _, wantset := range output {

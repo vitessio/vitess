@@ -128,7 +128,6 @@ func (vf *VindexFunc) mapVindex(vcursor VCursor, bindVars map[string]*querypb.Bi
 	case key.DestinationKeyRange:
 		if d.KeyRange != nil {
 			result.Rows = append(result.Rows, vf.buildRow(vkey, nil, d.KeyRange))
-			result.RowsAffected = 1
 		}
 	case key.DestinationKeyspaceID:
 		if len(d) > 0 {
@@ -144,19 +143,16 @@ func (vf *VindexFunc) mapVindex(vcursor VCursor, bindVars map[string]*querypb.Bi
 				result.Rows = [][]sqltypes.Value{
 					vf.buildRow(vkey, d, kr[0]),
 				}
-				result.RowsAffected = 1
 			} else {
 				result.Rows = [][]sqltypes.Value{
 					vf.buildRow(vkey, d, nil),
 				}
-				result.RowsAffected = 1
 			}
 		}
 	case key.DestinationKeyspaceIDs:
 		for _, ksid := range d {
 			result.Rows = append(result.Rows, vf.buildRow(vkey, ksid, nil))
 		}
-		result.RowsAffected = uint64(len(d))
 	case key.DestinationNone:
 		// Nothing to do.
 	default:

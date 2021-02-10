@@ -160,6 +160,7 @@ var (
 		{Name: "explicit_defaults_for_timestamp"},
 		{Name: "foreign_key_checks", IsBoolean: true},
 		{Name: "group_concat_max_len"},
+		{Name: "information_schema_stats_expiry"},
 		{Name: "max_heap_table_size"},
 		{Name: "max_seeks_for_key"},
 		{Name: "max_tmp_tables"},

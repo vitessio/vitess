@@ -12,6 +12,7 @@ import (
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
+	tabletmanagerdata "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodata "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldata "vitess.io/vitess/go/vt/proto/vtctldata"
 )
@@ -52,7 +53,7 @@ func (x Tablet_ServingState) String() string {
 }
 
 func (Tablet_ServingState) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_609739e22a0a50b3, []int{2, 0}
+	return fileDescriptor_609739e22a0a50b3, []int{3, 0}
 }
 
 // Cluster represents information about a Vitess cluster.
@@ -152,6 +153,61 @@ func (m *Keyspace) GetKeyspace() *vtctldata.Keyspace {
 	return nil
 }
 
+type Schema struct {
+	Cluster              *Cluster                             `protobuf:"bytes,1,opt,name=cluster,proto3" json:"cluster,omitempty"`
+	Keyspace             string                               `protobuf:"bytes,2,opt,name=keyspace,proto3" json:"keyspace,omitempty"`
+	TableDefinitions     []*tabletmanagerdata.TableDefinition `protobuf:"bytes,3,rep,name=table_definitions,json=tableDefinitions,proto3" json:"table_definitions,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}                             `json:"-"`
+	XXX_unrecognized     []byte                               `json:"-"`
+	XXX_sizecache        int32                                `json:"-"`
+}
+
+func (m *Schema) Reset()         { *m = Schema{} }
+func (m *Schema) String() string { return proto.CompactTextString(m) }
+func (*Schema) ProtoMessage()    {}
+func (*Schema) Descriptor() ([]byte, []int) {
+	return fileDescriptor_609739e22a0a50b3, []int{2}
+}
+
+func (m *Schema) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_Schema.Unmarshal(m, b)
+}
+func (m *Schema) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_Schema.Marshal(b, m, deterministic)
+}
+func (m *Schema) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_Schema.Merge(m, src)
+}
+func (m *Schema) XXX_Size() int {
+	return xxx_messageInfo_Schema.Size(m)
+}
+func (m *Schema) XXX_DiscardUnknown() {
+	xxx_messageInfo_Schema.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_Schema proto.InternalMessageInfo
+
+func (m *Schema) GetCluster() *Cluster {
+	if m != nil {
+		return m.Cluster
+	}
+	return nil
+}
+
+func (m *Schema) GetKeyspace() string {
+	if m != nil {
+		return m.Keyspace
+	}
+	return ""
+}
+
+func (m *Schema) GetTableDefinitions() []*tabletmanagerdata.TableDefinition {
+	if m != nil {
+		return m.TableDefinitions
+	}
+	return nil
+}
+
 // Tablet groups the topo information of a tablet together with the Vitess
 // cluster it belongs to.
 type Tablet struct {
@@ -167,7 +223,7 @@ func (m *Tablet) Reset()         { *m = Tablet{} }
 func (m *Tablet) String() string { return proto.CompactTextString(m) }
 func (*Tablet) ProtoMessage()    {}
 func (*Tablet) Descriptor() ([]byte, []int) {
-	return fileDescriptor_609739e22a0a50b3, []int{2}
+	return fileDescriptor_609739e22a0a50b3, []int{3}
 }
 
 func (m *Tablet) XXX_Unmarshal(b []byte) error {
@@ -222,7 +278,7 @@ func (m *Vtctld) Reset()         { *m = Vtctld{} }
 func (m *Vtctld) String() string { return proto.CompactTextString(m) }
 func (*Vtctld) ProtoMessage()    {}
 func (*Vtctld) Descriptor() ([]byte, []int) {
-	return fileDescriptor_609739e22a0a50b3, []int{3}
+	return fileDescriptor_609739e22a0a50b3, []int{4}
 }
 
 func (m *Vtctld) XXX_Unmarshal(b []byte) error {
@@ -280,7 +336,7 @@ func (m *VTGate) Reset()         { *m = VTGate{} }
 func (m *VTGate) String() string { return proto.CompactTextString(m) }
 func (*VTGate) ProtoMessage()    {}
 func (*VTGate) Descriptor() ([]byte, []int) {
-	return fileDescriptor_609739e22a0a50b3, []int{4}
+	return fileDescriptor_609739e22a0a50b3, []int{5}
 }
 
 func (m *VTGate) XXX_Unmarshal(b []byte) error {
@@ -336,6 +392,77 @@ func (m *VTGate) GetKeyspaces() []string {
 	return nil
 }
 
+// Request/Response types
+type GetClustersRequest struct {
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *GetClustersRequest) Reset()         { *m = GetClustersRequest{} }
+func (m *GetClustersRequest) String() string { return proto.CompactTextString(m) }
+func (*GetClustersRequest) ProtoMessage()    {}
+func (*GetClustersRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_609739e22a0a50b3, []int{6}
+}
+
+func (m *GetClustersRequest) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_GetClustersRequest.Unmarshal(m, b)
+}
+func (m *GetClustersRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_GetClustersRequest.Marshal(b, m, deterministic)
+}
+func (m *GetClustersRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_GetClustersRequest.Merge(m, src)
+}
+func (m *GetClustersRequest) XXX_Size() int {
+	return xxx_messageInfo_GetClustersRequest.Size(m)
+}
+func (m *GetClustersRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_GetClustersRequest.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_GetClustersRequest proto.InternalMessageInfo
+
+type GetClustersResponse struct {
+	Clusters             []*Cluster `protobuf:"bytes,1,rep,name=clusters,proto3" json:"clusters,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}   `json:"-"`
+	XXX_unrecognized     []byte     `json:"-"`
+	XXX_sizecache        int32      `json:"-"`
+}
+
+func (m *GetClustersResponse) Reset()         { *m = GetClustersResponse{} }
+func (m *GetClustersResponse) String() string { return proto.CompactTextString(m) }
+func (*GetClustersResponse) ProtoMessage()    {}
+func (*GetClustersResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_609739e22a0a50b3, []int{7}
+}
+
+func (m *GetClustersResponse) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_GetClustersResponse.Unmarshal(m, b)
+}
+func (m *GetClustersResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_GetClustersResponse.Marshal(b, m, deterministic)
+}
+func (m *GetClustersResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_GetClustersResponse.Merge(m, src)
+}
+func (m *GetClustersResponse) XXX_Size() int {
+	return xxx_messageInfo_GetClustersResponse.Size(m)
+}
+func (m *GetClustersResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_GetClustersResponse.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_GetClustersResponse proto.InternalMessageInfo
+
+func (m *GetClustersResponse) GetClusters() []*Cluster {
+	if m != nil {
+		return m.Clusters
+	}
+	return nil
+}
+
 type GetGatesRequest struct {
 	ClusterIds           []string `protobuf:"bytes,1,rep,name=cluster_ids,json=clusterIds,proto3" json:"cluster_ids,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
@@ -347,7 +474,7 @@ func (m *GetGatesRequest) Reset()         { *m = GetGatesRequest{} }
 func (m *GetGatesRequest) String() string { return proto.CompactTextString(m) }
 func (*GetGatesRequest) ProtoMessage()    {}
 func (*GetGatesRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_609739e22a0a50b3, []int{5}
+	return fileDescriptor_609739e22a0a50b3, []int{8}
 }
 
 func (m *GetGatesRequest) XXX_Unmarshal(b []byte) error {
@@ -386,7 +513,7 @@ func (m *GetGatesResponse) Reset()         { *m = GetGatesResponse{} }
 func (m *GetGatesResponse) String() string { return proto.CompactTextString(m) }
 func (*GetGatesResponse) ProtoMessage()    {}
 func (*GetGatesResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_609739e22a0a50b3, []int{6}
+	return fileDescriptor_609739e22a0a50b3, []int{9}
 }
 
 func (m *GetGatesResponse) XXX_Unmarshal(b []byte) error {
@@ -425,7 +552,7 @@ func (m *GetKeyspacesRequest) Reset()         { *m = GetKeyspacesRequest{} }
 func (m *GetKeyspacesRequest) String() string { return proto.CompactTextString(m) }
 func (*GetKeyspacesRequest) ProtoMessage()    {}
 func (*GetKeyspacesRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_609739e22a0a50b3, []int{7}
+	return fileDescriptor_609739e22a0a50b3, []int{10}
 }
 
 func (m *GetKeyspacesRequest) XXX_Unmarshal(b []byte) error {
@@ -464,7 +591,7 @@ func (m *GetKeyspacesResponse) Reset()         { *m = GetKeyspacesResponse{} }
 func (m *GetKeyspacesResponse) String() string { return proto.CompactTextString(m) }
 func (*GetKeyspacesResponse) ProtoMessage()    {}
 func (*GetKeyspacesResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_609739e22a0a50b3, []int{8}
+	return fileDescriptor_609739e22a0a50b3, []int{11}
 }
 
 func (m *GetKeyspacesResponse) XXX_Unmarshal(b []byte) error {
@@ -492,6 +619,84 @@ func (m *GetKeyspacesResponse) GetKeyspaces() []*Keyspace {
 	return nil
 }
 
+type GetSchemasRequest struct {
+	ClusterIds           []string `protobuf:"bytes,1,rep,name=cluster_ids,json=clusterIds,proto3" json:"cluster_ids,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *GetSchemasRequest) Reset()         { *m = GetSchemasRequest{} }
+func (m *GetSchemasRequest) String() string { return proto.CompactTextString(m) }
+func (*GetSchemasRequest) ProtoMessage()    {}
+func (*GetSchemasRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_609739e22a0a50b3, []int{12}
+}
+
+func (m *GetSchemasRequest) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_GetSchemasRequest.Unmarshal(m, b)
+}
+func (m *GetSchemasRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_GetSchemasRequest.Marshal(b, m, deterministic)
+}
+func (m *GetSchemasRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_GetSchemasRequest.Merge(m, src)
+}
+func (m *GetSchemasRequest) XXX_Size() int {
+	return xxx_messageInfo_GetSchemasRequest.Size(m)
+}
+func (m *GetSchemasRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_GetSchemasRequest.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_GetSchemasRequest proto.InternalMessageInfo
+
+func (m *GetSchemasRequest) GetClusterIds() []string {
+	if m != nil {
+		return m.ClusterIds
+	}
+	return nil
+}
+
+type GetSchemasResponse struct {
+	Schemas              []*Schema `protobuf:"bytes,1,rep,name=schemas,proto3" json:"schemas,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}  `json:"-"`
+	XXX_unrecognized     []byte    `json:"-"`
+	XXX_sizecache        int32     `json:"-"`
+}
+
+func (m *GetSchemasResponse) Reset()         { *m = GetSchemasResponse{} }
+func (m *GetSchemasResponse) String() string { return proto.CompactTextString(m) }
+func (*GetSchemasResponse) ProtoMessage()    {}
+func (*GetSchemasResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_609739e22a0a50b3, []int{13}
+}
+
+func (m *GetSchemasResponse) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_GetSchemasResponse.Unmarshal(m, b)
+}
+func (m *GetSchemasResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_GetSchemasResponse.Marshal(b, m, deterministic)
+}
+func (m *GetSchemasResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_GetSchemasResponse.Merge(m, src)
+}
+func (m *GetSchemasResponse) XXX_Size() int {
+	return xxx_messageInfo_GetSchemasResponse.Size(m)
+}
+func (m *GetSchemasResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_GetSchemasResponse.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_GetSchemasResponse proto.InternalMessageInfo
+
+func (m *GetSchemasResponse) GetSchemas() []*Schema {
+	if m != nil {
+		return m.Schemas
+	}
+	return nil
+}
+
 type GetTabletRequest struct {
 	Hostname string `protobuf:"bytes,1,opt,name=hostname,proto3" json:"hostname,omitempty"`
 	// ClusterIDs is an optional parameter to narrow the scope of the search, if
@@ -507,7 +712,7 @@ func (m *GetTabletRequest) Reset()         { *m = GetTabletRequest{} }
 func (m *GetTabletRequest) String() string { return proto.CompactTextString(m) }
 func (*GetTabletRequest) ProtoMessage()    {}
 func (*GetTabletRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_609739e22a0a50b3, []int{9}
+	return fileDescriptor_609739e22a0a50b3, []int{14}
 }
 
 func (m *GetTabletRequest) XXX_Unmarshal(b []byte) error {
@@ -553,7 +758,7 @@ func (m *GetTabletsRequest) Reset()         { *m = GetTabletsRequest{} }
 func (m *GetTabletsRequest) String() string { return proto.CompactTextString(m) }
 func (*GetTabletsRequest) ProtoMessage()    {}
 func (*GetTabletsRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_609739e22a0a50b3, []int{10}
+	return fileDescriptor_609739e22a0a50b3, []int{15}
 }
 
 func (m *GetTabletsRequest) XXX_Unmarshal(b []byte) error {
@@ -592,7 +797,7 @@ func (m *GetTabletsResponse) Reset()         { *m = GetTabletsResponse{} }
 func (m *GetTabletsResponse) String() string { return proto.CompactTextString(m) }
 func (*GetTabletsResponse) ProtoMessage()    {}
 func (*GetTabletsResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_609739e22a0a50b3, []int{11}
+	return fileDescriptor_609739e22a0a50b3, []int{16}
 }
 
 func (m *GetTabletsResponse) XXX_Unmarshal(b []byte) error {
@@ -624,13 +829,18 @@ func init() {
 	proto.RegisterEnum("vtadmin.Tablet_ServingState", Tablet_ServingState_name, Tablet_ServingState_value)
 	proto.RegisterType((*Cluster)(nil), "vtadmin.Cluster")
 	proto.RegisterType((*Keyspace)(nil), "vtadmin.Keyspace")
+	proto.RegisterType((*Schema)(nil), "vtadmin.Schema")
 	proto.RegisterType((*Tablet)(nil), "vtadmin.Tablet")
 	proto.RegisterType((*Vtctld)(nil), "vtadmin.Vtctld")
 	proto.RegisterType((*VTGate)(nil), "vtadmin.VTGate")
+	proto.RegisterType((*GetClustersRequest)(nil), "vtadmin.GetClustersRequest")
+	proto.RegisterType((*GetClustersResponse)(nil), "vtadmin.GetClustersResponse")
 	proto.RegisterType((*GetGatesRequest)(nil), "vtadmin.GetGatesRequest")
 	proto.RegisterType((*GetGatesResponse)(nil), "vtadmin.GetGatesResponse")
 	proto.RegisterType((*GetKeyspacesRequest)(nil), "vtadmin.GetKeyspacesRequest")
 	proto.RegisterType((*GetKeyspacesResponse)(nil), "vtadmin.GetKeyspacesResponse")
+	proto.RegisterType((*GetSchemasRequest)(nil), "vtadmin.GetSchemasRequest")
+	proto.RegisterType((*GetSchemasResponse)(nil), "vtadmin.GetSchemasResponse")
 	proto.RegisterType((*GetTabletRequest)(nil), "vtadmin.GetTabletRequest")
 	proto.RegisterType((*GetTabletsRequest)(nil), "vtadmin.GetTabletsRequest")
 	proto.RegisterType((*GetTabletsResponse)(nil), "vtadmin.GetTabletsResponse")
@@ -639,43 +849,52 @@ func init() {
 func init() { proto.RegisterFile("vtadmin.proto", fileDescriptor_609739e22a0a50b3) }
 
 var fileDescriptor_609739e22a0a50b3 = []byte{
-	// 568 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x94, 0x54, 0x51, 0x8f, 0xd2, 0x40,
-	0x10, 0xa6, 0x3d, 0xa0, 0x30, 0x3d, 0x81, 0x9b, 0xf3, 0xa1, 0x56, 0x8c, 0xa4, 0x51, 0x83, 0x26,
-	0xb6, 0x49, 0x35, 0x26, 0x3c, 0x99, 0xd3, 0x98, 0xe6, 0x72, 0x11, 0x4c, 0x41, 0x4c, 0x7c, 0xb9,
-	0xf4, 0xe8, 0x06, 0x1b, 0x7b, 0x14, 0xd9, 0x3d, 0x12, 0xff, 0x88, 0xaf, 0xfe, 0x22, 0xff, 0x93,
-	0xe9, 0xee, 0x76, 0x29, 0x70, 0xde, 0x9d, 0x6f, 0xbb, 0x33, 0xf3, 0xcd, 0xf7, 0x7d, 0x33, 0x9b,
-	0x85, 0x7b, 0x6b, 0x16, 0xc5, 0x97, 0xc9, 0xc2, 0x5d, 0xae, 0x32, 0x96, 0xa1, 0x21, 0xaf, 0x76,
-	0x8b, 0x65, 0xcb, 0x2c, 0x8e, 0x58, 0x24, 0x12, 0x76, 0x7b, 0xcd, 0x66, 0x2c, 0xdd, 0x04, 0x9c,
-	0x97, 0x60, 0xbc, 0x4f, 0xaf, 0x28, 0x23, 0x2b, 0x6c, 0x81, 0x9e, 0xc4, 0x96, 0xd6, 0xd3, 0xfa,
-	0xcd, 0x50, 0x4f, 0x62, 0x44, 0xa8, 0x2e, 0xa2, 0x4b, 0x62, 0xe9, 0x3c, 0xc2, 0xcf, 0xce, 0x1c,
-	0x1a, 0x67, 0xe4, 0x27, 0x5d, 0x46, 0x33, 0x82, 0x2f, 0xc0, 0x98, 0x09, 0x28, 0x07, 0x99, 0x7e,
-	0xc7, 0x2d, 0x54, 0xc8, 0x96, 0x61, 0x51, 0x80, 0x1e, 0x34, 0xbe, 0x4b, 0x1c, 0xef, 0x67, 0xfa,
-	0xc7, 0xee, 0x46, 0x4a, 0xd1, 0x32, 0x54, 0x45, 0xce, 0x1f, 0x0d, 0xea, 0x93, 0xe8, 0x22, 0x25,
-	0xec, 0xbf, 0x78, 0xfa, 0x50, 0x67, 0x1c, 0x25, 0x59, 0x3a, 0xae, 0x1a, 0x80, 0xe8, 0x16, 0xca,
-	0x3c, 0xfa, 0x50, 0xa3, 0x2c, 0x62, 0xc4, 0x3a, 0xe8, 0x69, 0xfd, 0x96, 0xdf, 0x55, 0x3d, 0x45,
-	0x9d, 0x3b, 0x26, 0xab, 0x75, 0xb2, 0x98, 0x8f, 0xf3, 0x9a, 0x50, 0x94, 0x3a, 0x03, 0x38, 0x2c,
-	0x87, 0xd1, 0x04, 0xe3, 0xf3, 0xf0, 0x6c, 0x38, 0xfa, 0x32, 0xec, 0x54, 0xf2, 0xcb, 0xf8, 0x43,
-	0x38, 0x3d, 0x1d, 0x06, 0x1d, 0x0d, 0xdb, 0x60, 0x0e, 0x47, 0x93, 0xf3, 0x22, 0xa0, 0x3b, 0x9f,
-	0xa0, 0x3e, 0xe5, 0x7e, 0xd1, 0x86, 0xc6, 0xb7, 0x8c, 0x32, 0x3e, 0x5a, 0x31, 0x6c, 0x75, 0x2f,
-	0x5b, 0xd5, 0x6f, 0xb1, 0xea, 0xfc, 0xd2, 0xa0, 0x3e, 0x9d, 0x04, 0xb9, 0x8e, 0x9b, 0x5a, 0x22,
-	0x54, 0x97, 0x59, 0x96, 0x16, 0x5b, 0xcc, 0xcf, 0x79, 0x6c, 0x46, 0xd2, 0x94, 0x5b, 0x6f, 0x86,
-	0xfc, 0x5c, 0xa6, 0xae, 0xde, 0x36, 0xe5, 0x2e, 0x34, 0x8b, 0x45, 0x51, 0xab, 0xd6, 0x3b, 0xe8,
-	0x37, 0xc3, 0x4d, 0xc0, 0xf1, 0xa1, 0x1d, 0x10, 0x96, 0x0b, 0xa3, 0x21, 0xf9, 0x71, 0x45, 0x28,
-	0xc3, 0xc7, 0x60, 0x4a, 0xec, 0x79, 0x12, 0x53, 0x4b, 0xe3, 0x10, 0x90, 0xa1, 0xd3, 0x98, 0x3a,
-	0x03, 0xe8, 0x6c, 0x30, 0x74, 0x99, 0x2d, 0x28, 0xc1, 0xa7, 0x50, 0x9b, 0xe7, 0x01, 0x5e, 0x6e,
-	0xfa, 0x6d, 0xa5, 0x47, 0xb8, 0x0e, 0x45, 0xd6, 0x79, 0x03, 0xc7, 0x01, 0x61, 0xc5, 0x13, 0xba,
-	0x3b, 0x65, 0x00, 0xf7, 0xb7, 0x71, 0x92, 0xd6, 0x2b, 0x9b, 0x13, 0xd4, 0x47, 0x8a, 0x5a, 0xbd,
-	0xd4, 0x92, 0xdf, 0x11, 0xd7, 0x2e, 0x9f, 0x97, 0x64, 0xbf, 0x69, 0x23, 0x3b, 0xca, 0xf4, 0x3d,
-	0x65, 0xaf, 0xe1, 0x48, 0x35, 0xbc, 0xbb, 0x9f, 0xb7, 0x80, 0x65, 0x94, 0x74, 0xf3, 0x1c, 0x0c,
-	0xf1, 0xe0, 0xf7, 0xc7, 0x28, 0x15, 0x17, 0x79, 0xff, 0xb7, 0x0e, 0xc6, 0x74, 0x72, 0x92, 0xe7,
-	0xf0, 0x04, 0x1a, 0xc5, 0x3e, 0xd0, 0x52, 0x88, 0x9d, 0xb5, 0xda, 0x0f, 0xae, 0xc9, 0x08, 0x5e,
-	0xa7, 0x82, 0x1f, 0xe1, 0xb0, 0x3c, 0x5f, 0xec, 0x96, 0x8b, 0x77, 0xd7, 0x65, 0x3f, 0xfa, 0x47,
-	0x56, 0xb5, 0x1b, 0x40, 0x53, 0xd9, 0xc3, 0x2d, 0xe2, 0xad, 0xc9, 0xdb, 0xbb, 0xfe, 0x9c, 0x0a,
-	0x06, 0x00, 0x9b, 0xc9, 0xa0, 0xbd, 0x8f, 0x55, 0x2a, 0x1e, 0x5e, 0x9b, 0x2b, 0x34, 0xbc, 0x7b,
-	0xf6, 0xf5, 0xc9, 0x3a, 0x61, 0x84, 0x52, 0x37, 0xc9, 0x3c, 0x71, 0xf2, 0xe6, 0x99, 0xb7, 0x66,
-	0x1e, 0xff, 0x4c, 0x3d, 0x09, 0xbe, 0xa8, 0xf3, 0xeb, 0xab, 0xbf, 0x01, 0x00, 0x00, 0xff, 0xff,
-	0x9a, 0xe6, 0x88, 0x48, 0x96, 0x05, 0x00, 0x00,
+	// 709 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x94, 0x55, 0x5d, 0x6e, 0xd3, 0x4c,
+	0x14, 0xad, 0x93, 0x36, 0x89, 0xaf, 0xfb, 0x35, 0xe9, 0xb4, 0xd2, 0x67, 0xdc, 0x22, 0xa2, 0x11,
+	0xa0, 0x80, 0xc0, 0x96, 0x0c, 0x42, 0xea, 0x13, 0x2a, 0x05, 0x59, 0xa5, 0x22, 0x41, 0x4e, 0x08,
+	0x12, 0x2f, 0x95, 0x1b, 0x0f, 0xa9, 0x45, 0x62, 0x87, 0xcc, 0x34, 0x12, 0x1b, 0xe1, 0x9d, 0x3d,
+	0xb0, 0x0d, 0xf6, 0x84, 0x3c, 0x33, 0x1e, 0xdb, 0x49, 0x69, 0x9b, 0x37, 0xcf, 0xfd, 0x39, 0xe7,
+	0xfe, 0x9c, 0x2b, 0xc3, 0x7f, 0x0b, 0x16, 0x84, 0xd3, 0x28, 0xb6, 0x67, 0xf3, 0x84, 0x25, 0xa8,
+	0x2e, 0x9f, 0xd6, 0xff, 0x2c, 0xb8, 0x98, 0x10, 0x36, 0x0d, 0xe2, 0x60, 0x4c, 0xe6, 0x61, 0xc0,
+	0x02, 0x11, 0x61, 0xed, 0xb0, 0x64, 0x96, 0x14, 0xde, 0xcd, 0x05, 0x1b, 0xb1, 0x49, 0x6e, 0xc0,
+	0xcf, 0xa1, 0x7e, 0x32, 0xb9, 0xa2, 0x8c, 0xcc, 0xd1, 0x0e, 0x54, 0xa2, 0xd0, 0xd4, 0xda, 0x5a,
+	0x47, 0xf7, 0x2b, 0x51, 0x88, 0x10, 0x6c, 0xc6, 0xc1, 0x94, 0x98, 0x15, 0x6e, 0xe1, 0xdf, 0x78,
+	0x0c, 0x8d, 0x33, 0xf2, 0x83, 0xce, 0x82, 0x11, 0x41, 0x4f, 0xa1, 0x3e, 0x12, 0xa9, 0x3c, 0xc9,
+	0x70, 0x5b, 0x76, 0x56, 0x9e, 0x84, 0xf4, 0xb3, 0x00, 0xe4, 0x40, 0xe3, 0x9b, 0xcc, 0xe3, 0x78,
+	0x86, 0xbb, 0x67, 0xe7, 0xa5, 0x64, 0x90, 0xbe, 0x0a, 0xc2, 0xbf, 0x34, 0xa8, 0xf5, 0x47, 0x97,
+	0x64, 0x1a, 0xac, 0xc5, 0x63, 0x2d, 0xf1, 0xe8, 0x39, 0x24, 0xea, 0xc1, 0x2e, 0x1f, 0xd3, 0x79,
+	0x48, 0xbe, 0x46, 0x71, 0xc4, 0xa2, 0x24, 0xa6, 0x66, 0xb5, 0x5d, 0xed, 0x18, 0x2e, 0xb6, 0x57,
+	0x07, 0x38, 0x48, 0x2d, 0x6f, 0x55, 0xa8, 0xdf, 0x62, 0x65, 0x03, 0xc5, 0x7f, 0x34, 0xa8, 0xf1,
+	0x28, 0xb6, 0x56, 0x8d, 0x1d, 0xa8, 0x09, 0x36, 0x39, 0x89, 0x96, 0xad, 0x96, 0x24, 0xd0, 0x7c,
+	0xe9, 0x47, 0x2e, 0x6c, 0x51, 0x16, 0x30, 0x62, 0x56, 0xdb, 0x5a, 0x67, 0xc7, 0x3d, 0x54, 0x98,
+	0x22, 0xce, 0xee, 0x93, 0xf9, 0x22, 0x8a, 0xc7, 0xfd, 0x34, 0xc6, 0x17, 0xa1, 0xf8, 0x08, 0xb6,
+	0x8b, 0x66, 0x64, 0x40, 0xfd, 0x53, 0xf7, 0xac, 0xdb, 0xfb, 0xdc, 0x6d, 0x6d, 0xa4, 0x8f, 0xfe,
+	0x3b, 0x7f, 0x78, 0xda, 0xf5, 0x5a, 0x1a, 0x6a, 0x82, 0xd1, 0xed, 0x0d, 0xce, 0x33, 0x43, 0x05,
+	0x7f, 0x84, 0xda, 0x90, 0xef, 0x24, 0x1d, 0xe3, 0x65, 0x42, 0x19, 0x5f, 0xbf, 0x10, 0x84, 0x7a,
+	0x17, 0x5b, 0xad, 0xdc, 0xd2, 0x2a, 0xfe, 0xa9, 0x41, 0x6d, 0x38, 0xf0, 0xd2, 0x3a, 0x6e, 0x82,
+	0x44, 0xb0, 0x39, 0x4b, 0x92, 0x49, 0xa6, 0xb4, 0xf4, 0x3b, 0xb5, 0x8d, 0xc8, 0x64, 0xc2, 0x5b,
+	0xd7, 0x7d, 0xfe, 0x5d, 0xa4, 0xde, 0xbc, 0x6d, 0xca, 0x87, 0xa0, 0x67, 0x9b, 0xa7, 0xe6, 0x56,
+	0xbb, 0xda, 0xd1, 0xfd, 0xdc, 0x80, 0xf7, 0x01, 0x79, 0x84, 0xc9, 0x24, 0xea, 0x93, 0xef, 0x57,
+	0x84, 0x32, 0x7c, 0x02, 0x7b, 0x25, 0x2b, 0x9d, 0x25, 0x31, 0x25, 0xe8, 0x19, 0x34, 0x24, 0x2a,
+	0x35, 0x35, 0xae, 0x97, 0x55, 0x5e, 0x15, 0x81, 0x5d, 0x68, 0x7a, 0x84, 0xa5, 0x3d, 0x67, 0xb8,
+	0xe8, 0x01, 0x18, 0xd2, 0x7d, 0x1e, 0x85, 0x02, 0x43, 0xf7, 0x41, 0x9a, 0x4e, 0x43, 0x8a, 0x8f,
+	0xa0, 0x95, 0xe7, 0x48, 0xd6, 0x47, 0xb0, 0x35, 0x4e, 0x0d, 0x92, 0xb2, 0xa9, 0x28, 0xc5, 0x40,
+	0x7d, 0xe1, 0xc5, 0xaf, 0x78, 0xcd, 0xd9, 0x05, 0xdd, 0x9d, 0xd2, 0x83, 0xfd, 0x72, 0x9e, 0xa4,
+	0x75, 0x8a, 0x73, 0x13, 0xd4, 0xbb, 0x8a, 0x5a, 0x1d, 0x6a, 0x61, 0x94, 0x2f, 0x61, 0xd7, 0x23,
+	0x4c, 0xdc, 0xea, 0xdd, 0xe9, 0x5f, 0xf3, 0x05, 0xa8, 0x2c, 0x49, 0xfe, 0x04, 0xea, 0x54, 0x98,
+	0x56, 0xba, 0x16, 0xa1, 0x7e, 0xe6, 0xc7, 0x3d, 0x3e, 0x32, 0x79, 0x30, 0x92, 0xf5, 0x26, 0x8d,
+	0x2d, 0x55, 0x54, 0x59, 0xa9, 0x48, 0xf4, 0x21, 0x00, 0xd7, 0xed, 0x43, 0x65, 0xe5, 0x7d, 0x88,
+	0x13, 0x5e, 0xed, 0x43, 0x56, 0x9c, 0xf9, 0xdd, 0xdf, 0x55, 0xa8, 0x0f, 0x07, 0xc7, 0xa9, 0x0f,
+	0xbd, 0x07, 0xa3, 0xa0, 0x3f, 0x74, 0xa0, 0x92, 0x56, 0xb5, 0x6a, 0x1d, 0x5e, 0xef, 0x14, 0x05,
+	0xe0, 0x0d, 0x74, 0x0c, 0x8d, 0x4c, 0x52, 0xc8, 0x2c, 0xc6, 0x16, 0x95, 0x69, 0xdd, 0xbb, 0xc6,
+	0xa3, 0x20, 0x3e, 0xc0, 0x76, 0x51, 0x22, 0xa8, 0x44, 0xb9, 0xac, 0x38, 0xeb, 0xfe, 0x3f, 0xbc,
+	0x0a, 0xce, 0x03, 0xc8, 0x57, 0x8e, 0xac, 0x62, 0x78, 0x59, 0x3d, 0xd6, 0xc1, 0xb5, 0x3e, 0x05,
+	0x74, 0x04, 0xba, 0x9a, 0x39, 0x2a, 0x75, 0x50, 0x92, 0x83, 0xb5, 0x3c, 0x74, 0x55, 0x83, 0x5c,
+	0x57, 0xb9, 0x86, 0xf2, 0xe6, 0xcb, 0x35, 0x2c, 0xed, 0x17, 0x6f, 0xbc, 0x79, 0xfc, 0xe5, 0xe1,
+	0x22, 0x62, 0x84, 0x52, 0x3b, 0x4a, 0x1c, 0xf1, 0xe5, 0x8c, 0x13, 0x67, 0xc1, 0x1c, 0xfe, 0x5f,
+	0x75, 0x64, 0xf2, 0x45, 0x8d, 0x3f, 0x5f, 0xfc, 0x0d, 0x00, 0x00, 0xff, 0xff, 0x4c, 0x35, 0x35,
+	0x72, 0xba, 0x07, 0x00, 0x00,
 }
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -690,10 +909,14 @@ const _ = grpc.SupportPackageIsVersion4
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://godoc.org/google.golang.org/grpc#ClientConn.NewStream.
 type VTAdminClient interface {
+	// GetClusters returns all configured clusters.
+	GetClusters(ctx context.Context, in *GetClustersRequest, opts ...grpc.CallOption) (*GetClustersResponse, error)
 	// GetGates returns all gates across all the specified clusters.
 	GetGates(ctx context.Context, in *GetGatesRequest, opts ...grpc.CallOption) (*GetGatesResponse, error)
 	// GetKeyspaces returns all keyspaces across the specified clusters.
 	GetKeyspaces(ctx context.Context, in *GetKeyspacesRequest, opts ...grpc.CallOption) (*GetKeyspacesResponse, error)
+	// GetSchemas returns all schemas across the specified clusters.
+	GetSchemas(ctx context.Context, in *GetSchemasRequest, opts ...grpc.CallOption) (*GetSchemasResponse, error)
 	// GetTablet looks up a tablet by hostname across all clusters and returns
 	// the result.
 	GetTablet(ctx context.Context, in *GetTabletRequest, opts ...grpc.CallOption) (*Tablet, error)
@@ -709,6 +932,15 @@ func NewVTAdminClient(cc *grpc.ClientConn) VTAdminClient {
 	return &vTAdminClient{cc}
 }
 
+func (c *vTAdminClient) GetClusters(ctx context.Context, in *GetClustersRequest, opts ...grpc.CallOption) (*GetClustersResponse, error) {
+	out := new(GetClustersResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/GetClusters", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vTAdminClient) GetGates(ctx context.Context, in *GetGatesRequest, opts ...grpc.CallOption) (*GetGatesResponse, error) {
 	out := new(GetGatesResponse)
 	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/GetGates", in, out, opts...)
@@ -721,6 +953,15 @@ func (c *vTAdminClient) GetGates(ctx context.Context, in *GetGatesRequest, opts 
 func (c *vTAdminClient) GetKeyspaces(ctx context.Context, in *GetKeyspacesRequest, opts ...grpc.CallOption) (*GetKeyspacesResponse, error) {
 	out := new(GetKeyspacesResponse)
 	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/GetKeyspaces", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vTAdminClient) GetSchemas(ctx context.Context, in *GetSchemasRequest, opts ...grpc.CallOption) (*GetSchemasResponse, error) {
+	out := new(GetSchemasResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/GetSchemas", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -747,10 +988,14 @@ func (c *vTAdminClient) GetTablets(ctx context.Context, in *GetTabletsRequest, o
 
 // VTAdminServer is the server API for VTAdmin service.
 type VTAdminServer interface {
+	// GetClusters returns all configured clusters.
+	GetClusters(context.Context, *GetClustersRequest) (*GetClustersResponse, error)
 	// GetGates returns all gates across all the specified clusters.
 	GetGates(context.Context, *GetGatesRequest) (*GetGatesResponse, error)
 	// GetKeyspaces returns all keyspaces across the specified clusters.
 	GetKeyspaces(context.Context, *GetKeyspacesRequest) (*GetKeyspacesResponse, error)
+	// GetSchemas returns all schemas across the specified clusters.
+	GetSchemas(context.Context, *GetSchemasRequest) (*GetSchemasResponse, error)
 	// GetTablet looks up a tablet by hostname across all clusters and returns
 	// the result.
 	GetTablet(context.Context, *GetTabletRequest) (*Tablet, error)
@@ -762,11 +1007,17 @@ type VTAdminServer interface {
 type UnimplementedVTAdminServer struct {
 }
 
+func (*UnimplementedVTAdminServer) GetClusters(ctx context.Context, req *GetClustersRequest) (*GetClustersResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetClusters not implemented")
+}
 func (*UnimplementedVTAdminServer) GetGates(ctx context.Context, req *GetGatesRequest) (*GetGatesResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetGates not implemented")
 }
 func (*UnimplementedVTAdminServer) GetKeyspaces(ctx context.Context, req *GetKeyspacesRequest) (*GetKeyspacesResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetKeyspaces not implemented")
+}
+func (*UnimplementedVTAdminServer) GetSchemas(ctx context.Context, req *GetSchemasRequest) (*GetSchemasResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetSchemas not implemented")
 }
 func (*UnimplementedVTAdminServer) GetTablet(ctx context.Context, req *GetTabletRequest) (*Tablet, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetTablet not implemented")
@@ -777,6 +1028,24 @@ func (*UnimplementedVTAdminServer) GetTablets(ctx context.Context, req *GetTable
 
 func RegisterVTAdminServer(s *grpc.Server, srv VTAdminServer) {
 	s.RegisterService(&_VTAdmin_serviceDesc, srv)
+}
+
+func _VTAdmin_GetClusters_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetClustersRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).GetClusters(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/GetClusters",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).GetClusters(ctx, req.(*GetClustersRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 func _VTAdmin_GetGates_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -811,6 +1080,24 @@ func _VTAdmin_GetKeyspaces_Handler(srv interface{}, ctx context.Context, dec fun
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(VTAdminServer).GetKeyspaces(ctx, req.(*GetKeyspacesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _VTAdmin_GetSchemas_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetSchemasRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).GetSchemas(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/GetSchemas",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).GetSchemas(ctx, req.(*GetSchemasRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -856,12 +1143,20 @@ var _VTAdmin_serviceDesc = grpc.ServiceDesc{
 	HandlerType: (*VTAdminServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
+			MethodName: "GetClusters",
+			Handler:    _VTAdmin_GetClusters_Handler,
+		},
+		{
 			MethodName: "GetGates",
 			Handler:    _VTAdmin_GetGates_Handler,
 		},
 		{
 			MethodName: "GetKeyspaces",
 			Handler:    _VTAdmin_GetKeyspaces_Handler,
+		},
+		{
+			MethodName: "GetSchemas",
+			Handler:    _VTAdmin_GetSchemas_Handler,
 		},
 		{
 			MethodName: "GetTablet",

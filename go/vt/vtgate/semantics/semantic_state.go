@@ -42,6 +42,11 @@ type (
 	}
 )
 
+// NewSemTable creates a new empty SemTable
+func NewSemTable() *SemTable {
+	return &SemTable{exprDependencies: map[sqlparser.Expr]TableSet{}}
+}
+
 // TableSetFor returns the bitmask for this particular tableshoe
 func (st *SemTable) TableSetFor(t table) TableSet {
 	for idx, t2 := range st.Tables {
@@ -54,7 +59,10 @@ func (st *SemTable) TableSetFor(t table) TableSet {
 
 // Dependencies return the table dependencies of the expression.
 func (st *SemTable) Dependencies(expr sqlparser.Expr) TableSet {
-	var deps TableSet
+	deps, found := st.exprDependencies[expr]
+	if found {
+		return deps
+	}
 
 	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		colName, ok := node.(*sqlparser.ColName)
@@ -64,6 +72,8 @@ func (st *SemTable) Dependencies(expr sqlparser.Expr) TableSet {
 		}
 		return true, nil
 	}, expr)
+
+	st.exprDependencies[expr] = deps
 
 	return deps
 }
@@ -112,11 +122,13 @@ func (ts TableSet) NumberOfTables() int {
 // Constituents returns an slice with all the
 // individual tables in their own TableSet identifier
 func (ts TableSet) Constituents() (result []TableSet) {
-	for i := 0; i < 64; i++ {
-		i2 := TableSet(1 << i)
-		if ts&i2 == i2 {
-			result = append(result, i2)
-		}
+	mask := ts
+
+	for mask > 0 {
+		maskLeft := mask & (mask - 1)
+		constituent := mask ^ maskLeft
+		mask = maskLeft
+		result = append(result, constituent)
 	}
 	return
 }
