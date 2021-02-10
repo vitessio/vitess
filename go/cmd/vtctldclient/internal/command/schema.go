@@ -54,6 +54,8 @@ func commandGetSchema(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	cli.FinishedParsing(cmd)
+
 	resp, err := client.GetSchema(commandCtx, &vtctldatapb.GetSchemaRequest{
 		TabletAlias:    alias,
 		Tables:         getSchemaOptions.Tables,

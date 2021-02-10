@@ -652,6 +652,9 @@ func (t testRun) ComQuery(c *Conn, query string, callback func(*sqltypes.Result)
 	if strings.Contains(query, "panic") {
 		panic("test panic attack!")
 	}
+	if strings.Contains(query, "twice") {
+		callback(selectRowsResult)
+	}
 	callback(selectRowsResult)
 	return nil
 }
