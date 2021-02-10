@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"net/http"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"context"
@@ -60,37 +61,32 @@ type TabletPlan struct {
 	Rules      *rules.Rules
 	Authorized []*tableacl.ACLResult
 
-	mu           sync.Mutex
-	QueryCount   int64
-	Time         time.Duration
-	MysqlTime    time.Duration
-	RowsAffected int64
-	RowsReturned int64
-	ErrorCount   int64
+	QueryCount   uint64
+	Time         uint64
+	MysqlTime    uint64
+	RowsAffected uint64
+	RowsReturned uint64
+	ErrorCount   uint64
 }
 
 // AddStats updates the stats for the current TabletPlan.
-func (ep *TabletPlan) AddStats(queryCount int64, duration, mysqlTime time.Duration, rowsAffected, rowsReturned, errorCount int64) {
-	ep.mu.Lock()
-	ep.QueryCount += queryCount
-	ep.Time += duration
-	ep.MysqlTime += mysqlTime
-	ep.RowsAffected += rowsAffected
-	ep.RowsReturned += rowsReturned
-	ep.ErrorCount += errorCount
-	ep.mu.Unlock()
+func (ep *TabletPlan) AddStats(queryCount uint64, duration, mysqlTime time.Duration, rowsAffected, rowsReturned, errorCount uint64) {
+	atomic.AddUint64(&ep.QueryCount, queryCount)
+	atomic.AddUint64(&ep.Time, uint64(duration))
+	atomic.AddUint64(&ep.MysqlTime, uint64(mysqlTime))
+	atomic.AddUint64(&ep.RowsAffected, rowsAffected)
+	atomic.AddUint64(&ep.RowsReturned, rowsReturned)
+	atomic.AddUint64(&ep.ErrorCount, errorCount)
 }
 
 // Stats returns the current stats of TabletPlan.
-func (ep *TabletPlan) Stats() (queryCount int64, duration, mysqlTime time.Duration, rowsAffected, rowsReturned, errorCount int64) {
-	ep.mu.Lock()
-	queryCount = ep.QueryCount
-	duration = ep.Time
-	mysqlTime = ep.MysqlTime
-	rowsAffected = ep.RowsAffected
-	rowsReturned = ep.RowsReturned
-	errorCount = ep.ErrorCount
-	ep.mu.Unlock()
+func (ep *TabletPlan) Stats() (queryCount uint64, duration, mysqlTime time.Duration, rowsAffected, rowsReturned, errorCount uint64) {
+	queryCount = atomic.LoadUint64(&ep.QueryCount)
+	duration = time.Duration(atomic.LoadUint64(&ep.Time))
+	mysqlTime = time.Duration(atomic.LoadUint64(&ep.MysqlTime))
+	rowsAffected = atomic.LoadUint64(&ep.RowsAffected)
+	rowsReturned = atomic.LoadUint64(&ep.RowsReturned)
+	errorCount = atomic.LoadUint64(&ep.ErrorCount)
 	return
 }
 
@@ -431,12 +427,12 @@ type perQueryStats struct {
 	Query        string
 	Table        string
 	Plan         planbuilder.PlanType
-	QueryCount   int64
+	QueryCount   uint64
 	Time         time.Duration
 	MysqlTime    time.Duration
-	RowsAffected int64
-	RowsReturned int64
-	ErrorCount   int64
+	RowsAffected uint64
+	RowsReturned uint64
+	ErrorCount   uint64
 }
 
 func (qe *QueryEngine) handleHTTPQueryPlans(response http.ResponseWriter, request *http.Request) {

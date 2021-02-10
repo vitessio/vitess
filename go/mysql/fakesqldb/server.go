@@ -136,6 +136,7 @@ type ExpectedResult struct {
 type exprResult struct {
 	expr   *regexp.Regexp
 	result *sqltypes.Result
+	err    string
 }
 
 // ExpectedExecuteFetch defines for an expected query the to be faked output.
@@ -391,6 +392,9 @@ func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.R
 			if ok {
 				userCallback(query)
 			}
+			if pat.err != "" {
+				return fmt.Errorf(pat.err)
+			}
 			return callback(pat.result)
 		}
 	}
@@ -504,7 +508,20 @@ func (db *DB) AddQueryPattern(queryPattern string, expectedResult *sqltypes.Resu
 	result := *expectedResult
 	db.mu.Lock()
 	defer db.mu.Unlock()
-	db.patternData = append(db.patternData, exprResult{expr, &result})
+	db.patternData = append(db.patternData, exprResult{expr: expr, result: &result})
+}
+
+// RejectQueryPattern allows a query pattern to be rejected with an error
+func (db *DB) RejectQueryPattern(queryPattern, error string) {
+	expr := regexp.MustCompile("(?is)^" + queryPattern + "$")
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	db.patternData = append(db.patternData, exprResult{expr: expr, err: error})
+}
+
+// ClearQueryPattern removes all query patterns set up
+func (db *DB) ClearQueryPattern() {
+	db.patternData = nil
 }
 
 // AddQueryPatternWithCallback is similar to AddQueryPattern: in addition it calls the provided callback function
