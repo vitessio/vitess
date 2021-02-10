@@ -1650,17 +1650,46 @@ func TestEmergencyReparenter_waitForAllRelayLogsToApply(t *testing.T) {
 
 type emergencyReparenterTestTMClient struct {
 	tmclient.TabletManagerClient
+	// keyed by tablet alias.
+	DemoteMasterDelays map[string]time.Duration
+	// keyed by tablet alias.
+	DemoteMasterResults map[string]struct {
+		Status *replicationdatapb.MasterStatus
+		Error  error
+	}
+	// keyed by tablet alias.
+	MasterPositionDelays map[string]time.Duration
+	// keyed by tablet alias.
+	MasterPositionResults map[string]struct {
+		Position string
+		Error    error
+	}
+	// keyed by tablet alias.
+	PopulateReparentJournalDelays map[string]time.Duration
 	// keyed by tablet alias
 	PopulateReparentJournalResults map[string]error
+	// keyed by tablet alias.
+	PromoteReplicaDelays map[string]time.Duration
+	// keyed by tablet alias. injects a sleep to the end of the function
+	// regardless of parent context timeout or error result.
+	PromoteReplicaPostDelays map[string]time.Duration
 	// keyed by tablet alias.
 	PromoteReplicaResults map[string]struct {
 		Result string
 		Error  error
 	}
+	ReplicationStatusResults map[string]struct {
+		Position *replicationdatapb.Status
+		Error    error
+	}
 	// keyed by tablet alias.
 	SetMasterDelays map[string]time.Duration
 	// keyed by tablet alias.
 	SetMasterResults map[string]error
+	// keyed by tablet alias.
+	SetReadWriteDelays map[string]time.Duration
+	// keyed by tablet alias.
+	SetReadWriteResults map[string]error
 	// keyed by tablet alias.
 	StopReplicationAndGetStatusDelays map[string]time.Duration
 	// keyed by tablet alias.
@@ -1671,9 +1700,74 @@ type emergencyReparenterTestTMClient struct {
 	}
 	// keyed by tablet alias.
 	WaitForPositionDelays map[string]time.Duration
+	// keyed by tablet alias. injects a sleep to the end of the function
+	// regardless of parent context timeout or error result.
+	WaitForPositionPostDelays map[string]time.Duration
 	// WaitForPosition(tablet *topodatapb.Tablet, position string) error, so we
 	// key by tablet alias and then by position.
 	WaitForPositionResults map[string]map[string]error
+	// keyed by tablet alias.
+	UndoDemoteMasterDelays map[string]time.Duration
+	// keyed by tablet alias
+	UndoDemoteMasterResults map[string]error
+}
+
+func (fake *emergencyReparenterTestTMClient) DemoteMaster(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.MasterStatus, error) {
+	if fake.DemoteMasterResults == nil {
+		return nil, assert.AnError
+	}
+
+	if tablet.Alias == nil {
+		return nil, assert.AnError
+	}
+
+	key := topoproto.TabletAliasString(tablet.Alias)
+
+	if fake.DemoteMasterDelays != nil {
+		if delay, ok := fake.DemoteMasterDelays[key]; ok {
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(delay):
+				// proceed to results
+			}
+		}
+	}
+
+	if result, ok := fake.DemoteMasterResults[key]; ok {
+		return result.Status, result.Error
+	}
+
+	return nil, assert.AnError
+}
+
+func (fake *emergencyReparenterTestTMClient) MasterPosition(ctx context.Context, tablet *topodatapb.Tablet) (string, error) {
+	if fake.MasterPositionResults == nil {
+		return "", assert.AnError
+	}
+
+	if tablet.Alias == nil {
+		return "", assert.AnError
+	}
+
+	key := topoproto.TabletAliasString(tablet.Alias)
+
+	if fake.MasterPositionDelays != nil {
+		if delay, ok := fake.MasterPositionDelays[key]; ok {
+			select {
+			case <-ctx.Done():
+				return "", ctx.Err()
+			case <-time.After(delay):
+				// proceed to results
+			}
+		}
+	}
+
+	if result, ok := fake.MasterPositionResults[key]; ok {
+		return result.Position, result.Error
+	}
+
+	return "", assert.AnError
 }
 
 func (fake *emergencyReparenterTestTMClient) PopulateReparentJournal(ctx context.Context, tablet *topodatapb.Tablet, timeCreatedNS int64, actionName string, primaryAlias *topodatapb.TabletAlias, pos string) error {
@@ -1682,6 +1776,17 @@ func (fake *emergencyReparenterTestTMClient) PopulateReparentJournal(ctx context
 	}
 
 	key := topoproto.TabletAliasString(tablet.Alias)
+
+	if fake.PopulateReparentJournalDelays != nil {
+		if delay, ok := fake.PopulateReparentJournalDelays[key]; ok {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(delay):
+				// proceed to results
+			}
+		}
+	}
 	if result, ok := fake.PopulateReparentJournalResults[key]; ok {
 		return result
 	}
@@ -1695,11 +1800,47 @@ func (fake *emergencyReparenterTestTMClient) PromoteReplica(ctx context.Context,
 	}
 
 	key := topoproto.TabletAliasString(tablet.Alias)
+
+	defer func() {
+		if fake.PromoteReplicaPostDelays == nil {
+			return
+		}
+
+		if delay, ok := fake.PromoteReplicaPostDelays[key]; ok {
+			time.Sleep(delay)
+		}
+	}()
+
+	if fake.PromoteReplicaDelays != nil {
+		if delay, ok := fake.PromoteReplicaDelays[key]; ok {
+			select {
+			case <-ctx.Done():
+				return "", ctx.Err()
+			case <-time.After(delay):
+				// proceed to results
+			}
+		}
+	}
+
 	if result, ok := fake.PromoteReplicaResults[key]; ok {
 		return result.Result, result.Error
 	}
 
 	return "", assert.AnError
+}
+
+func (fake *emergencyReparenterTestTMClient) ReplicationStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.Status, error) {
+	if fake.ReplicationStatusResults == nil {
+		return nil, assert.AnError
+	}
+
+	key := topoproto.TabletAliasString(tablet.Alias)
+
+	if result, ok := fake.ReplicationStatusResults[key]; ok {
+		return result.Position, result.Error
+	}
+
+	return nil, assert.AnError
 }
 
 func (fake *emergencyReparenterTestTMClient) SetMaster(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool) error {
@@ -1722,6 +1863,35 @@ func (fake *emergencyReparenterTestTMClient) SetMaster(ctx context.Context, tabl
 
 	if result, ok := fake.SetMasterResults[key]; ok {
 		return result
+	}
+
+	return assert.AnError
+}
+
+func (fake *emergencyReparenterTestTMClient) SetReadWrite(ctx context.Context, tablet *topodatapb.Tablet) error {
+	if fake.SetReadWriteResults == nil {
+		return assert.AnError
+	}
+
+	if tablet.Alias == nil {
+		return assert.AnError
+	}
+
+	key := topoproto.TabletAliasString(tablet.Alias)
+
+	if fake.SetReadWriteDelays != nil {
+		if delay, ok := fake.SetReadWriteDelays[key]; ok {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(delay):
+				// proceed to results
+			}
+		}
+	}
+
+	if err, ok := fake.SetReadWriteResults[key]; ok {
+		return err
 	}
 
 	return assert.AnError
@@ -1759,6 +1929,16 @@ func (fake *emergencyReparenterTestTMClient) StopReplicationAndGetStatus(ctx con
 func (fake *emergencyReparenterTestTMClient) WaitForPosition(ctx context.Context, tablet *topodatapb.Tablet, position string) error {
 	tabletKey := topoproto.TabletAliasString(tablet.Alias)
 
+	defer func() {
+		if fake.WaitForPositionPostDelays == nil {
+			return
+		}
+
+		if delay, ok := fake.WaitForPositionPostDelays[tabletKey]; ok {
+			time.Sleep(delay)
+		}
+	}()
+
 	if fake.WaitForPositionDelays != nil {
 		if delay, ok := fake.WaitForPositionDelays[tabletKey]; ok {
 			select {
@@ -1785,4 +1965,33 @@ func (fake *emergencyReparenterTestTMClient) WaitForPosition(ctx context.Context
 	}
 
 	return result
+}
+
+func (fake *emergencyReparenterTestTMClient) UndoDemoteMaster(ctx context.Context, tablet *topodatapb.Tablet) error {
+	if fake.UndoDemoteMasterResults == nil {
+		return assert.AnError
+	}
+
+	if tablet.Alias == nil {
+		return assert.AnError
+	}
+
+	key := topoproto.TabletAliasString(tablet.Alias)
+
+	if fake.UndoDemoteMasterDelays != nil {
+		if delay, ok := fake.UndoDemoteMasterDelays[key]; ok {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(delay):
+				// proceed to results
+			}
+		}
+	}
+
+	if result, ok := fake.UndoDemoteMasterResults[key]; ok {
+		return result
+	}
+
+	return assert.AnError
 }

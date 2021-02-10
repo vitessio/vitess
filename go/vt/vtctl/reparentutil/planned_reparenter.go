@@ -329,7 +329,6 @@ func (pr *PlannedReparenter) performPotentialPromotion(
 	shard string,
 	primaryElect topodatapb.Tablet,
 	tabletMap map[string]*topo.TabletInfo,
-	opts PlannedReparentOptions,
 ) (string, error) {
 	primaryElectAliasStr := topoproto.TabletAliasString(primaryElect.Alias)
 
@@ -518,7 +517,7 @@ func (pr *PlannedReparenter) reparentShardLocked(
 	case currentPrimary == nil:
 		// Case (1): no clear current primary. Try to find a safe promotion
 		// candidate, and promote to it.
-		reparentJournalPos, err = pr.performPotentialPromotion(ctx, keyspace, shard, ev.NewMaster, tabletMap, opts)
+		reparentJournalPos, err = pr.performPotentialPromotion(ctx, keyspace, shard, ev.NewMaster, tabletMap)
 	case topoproto.TabletAliasEqual(currentPrimary.Alias, opts.NewPrimaryAlias):
 		// Case (2): desired new primary is the current primary. Attempt to fix
 		// up replicas to recover from a previous partial promotion.
@@ -579,6 +578,8 @@ func (pr *PlannedReparenter) reparentTablets(
 		if alias == primaryElectAliasStr {
 			continue
 		}
+
+		replicasWg.Add(1)
 
 		go func(alias string, tablet *topodatapb.Tablet) {
 			defer replicasWg.Done()
