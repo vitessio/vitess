@@ -3985,42 +3985,28 @@ reserved_table_id:
 */
 reserved_keyword:
   ADD
-| AVG
-| BIT_AND
-| BIT_OR
-| BIT_XOR
-| COUNT
-| JSON_ARRAYAGG
-| JSON_OBJECTAGG
-| MAX
-| MIN
-| STDDEV_POP
-| STDDEV
-| STD
-| STDDEV_SAMP
-| SUM
-| VAR_POP
-| VARIANCE
-| VAR_SAMP
 | AFTER
-| ARRAY 
 | AND
+| ARRAY
 | AS
 | ASC
 | AUTO_INCREMENT
+| AVG
 | BETWEEN
 | BINARY
+| BIT_AND
+| BIT_OR
+| BIT_XOR
 | BY
 | CASE
 | COLLATE
 | CONVERT
+| COUNT
 | CREATE
 | CROSS
 | CURRENT_DATE
 | CURRENT_TIME
 | CURRENT_TIMESTAMP
-| SUBSTR
-| SUBSTRING
 | DATABASE
 | DATABASES
 | DEFAULT
@@ -4055,6 +4041,8 @@ reserved_keyword:
 | INTO
 | IS
 | JOIN
+| JSON_ARRAYAGG
+| JSON_OBJECTAGG
 | JSON_TABLE
 | KEY
 | LATERAL
@@ -4064,9 +4052,11 @@ reserved_keyword:
 | LOCALTIME
 | LOCALTIMESTAMP
 | LOCK
-| MEMBER
 | MATCH
+| MAX
 | MAXVALUE
+| MEMBER
+| MIN
 | MOD
 | NATURAL
 | NEXT // next should be doable as non-reserved, but is not due to the special `select next num_val` query that vitess supports
@@ -4089,7 +4079,14 @@ reserved_keyword:
 | SEPARATOR
 | SET
 | SHOW
+| STD
+| STDDEV
+| STDDEV_POP
+| STDDEV_SAMP
 | STRAIGHT_JOIN
+| SUBSTR
+| SUBSTRING
+| SUM
 | SYSTEM
 | TABLE
 | THEN
@@ -4107,6 +4104,9 @@ reserved_keyword:
 | UTC_TIME
 | UTC_TIMESTAMP
 | VALUES
+| VARIANCE
+| VAR_POP
+| VAR_SAMP
 | WHEN
 | WHERE
 | WINDOW
@@ -4211,7 +4211,6 @@ non_reserved_keyword:
 | NOWAIT
 | NULLS
 | NUMERIC
-
 | OFFSET
 | OJ
 | OLD
