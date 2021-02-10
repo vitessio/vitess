@@ -2342,3 +2342,10 @@
 2021-02-10T22:38:22Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/556124004
 2021-02-10T22:38:22Z,gomod-tidy,https://github.com/vitessio/vitess/actions/runs/556124003
 2021-02-10T22:38:22Z,unit_race,https://github.com/vitessio/vitess/actions/runs/556124020
+2021-02-10T22:43:36Z,Unit Test (mariadb101),https://github.com/vitessio/vitess/actions/runs/556135565
+2021-02-10T22:43:36Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/556135612
+2021-02-10T22:43:36Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/556135609
+2021-02-10T22:43:36Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/556135582
+2021-02-10T22:43:36Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/556135608
+2021-02-10T22:43:36Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/556135570
+2021-02-10T22:43:36Z,unit_race,https://github.com/vitessio/vitess/actions/runs/556135584
