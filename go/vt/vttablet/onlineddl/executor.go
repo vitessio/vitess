@@ -611,9 +611,44 @@ func (e *Executor) initVreplicationRevertMigration(ctx context.Context, onlineDD
 	if revertMigration.Status != schema.OnlineDDLStatusComplete {
 		return nil, fmt.Errorf("Can only revert a migration in a '%s' state. Migration %s is in '%s' state", schema.OnlineDDLStatusComplete, revertMigration.UUID, revertMigration.Status)
 	}
-	// Validation: reverted migration is the last migration to run on this table:
-	// TODO(shlomi): implement ^
+	{
+		// Validation: see if there's a pending migration on this table:
+		r, err := e.execQuery(ctx, sqlSelectPendingMigrations)
+		if err != nil {
+			return nil, err
+		}
+		// we identify running vreplication migrations in this function
+		for _, row := range r.Named().Rows {
+			pendingUUID := row["migration_uuid"].ToString()
+			keyspace := row["keyspace"].ToString()
+			table := row["mysql_table"].ToString()
+			status := schema.OnlineDDLStatus(row["migration_status"].ToString())
 
+			if keyspace == e.keyspace && table == revertMigration.Table {
+				return nil, fmt.Errorf("can not revert vreplication migration %s on table %s because migration %s is in %s status. May only revert if all migrations on this table are completed or failed", revertMigration.UUID, revertMigration.Table, pendingUUID, status)
+			}
+		}
+		{
+			// Validation: see that we're reverting the last successful migration on this table:
+			query, err := sqlparser.ParseAndBind(sqlSelectCompleteMigrationsOnTable,
+				sqltypes.StringBindVariable(e.keyspace),
+				sqltypes.StringBindVariable(revertMigration.Table),
+			)
+			if err != nil {
+				return nil, err
+			}
+			r, err := e.execQuery(ctx, query)
+			if err != nil {
+				return nil, err
+			}
+			for _, row := range r.Named().Rows {
+				completeUUID := row["migration_uuid"].ToString()
+				if completeUUID != revertMigration.UUID {
+					return nil, fmt.Errorf("can not revert vreplication migration %s on table %s because it is not the last migration to complete on that table. The last migration to complete was %s", revertMigration.UUID, revertMigration.Table, completeUUID)
+				}
+			}
+		}
+	}
 	// Validation: vreplication still exists for reverted migration
 	revertStream, err := e.readVReplStream(ctx, revertMigration.UUID, false)
 	if err != nil {
