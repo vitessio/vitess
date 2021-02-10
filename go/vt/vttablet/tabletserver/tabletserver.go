@@ -1810,5 +1810,5 @@ func skipQueryPlanCache(options *querypb.ExecuteOptions) bool {
 	if options == nil {
 		return false
 	}
-	return options.SkipQueryPlanCache
+	return options.SkipQueryPlanCache || options.HasCreatedTempTables
 }

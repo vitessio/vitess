@@ -58,6 +58,7 @@ type (
 	DDLStatement interface {
 		iDDLStatement()
 		IsFullyParsed() bool
+		IsTemporary() bool
 		GetTable() TableName
 		GetAction() DDLAction
 		GetOptLike() *OptLike
@@ -421,6 +422,7 @@ type (
 
 	// DropTable represents a DROP TABLE statement.
 	DropTable struct {
+		Temp       bool
 		FromTables TableNames
 		// The following fields are set if a DDL was fully analyzed.
 		IfExists bool
@@ -434,6 +436,7 @@ type (
 
 	// CreateTable represents a CREATE TABLE statement.
 	CreateTable struct {
+		Temp        bool
 		Table       TableName
 		IfNotExists bool
 		TableSpec   *TableSpec
@@ -675,6 +678,46 @@ func (node *DropTable) IsFullyParsed() bool {
 // IsFullyParsed implements the DDLStatement interface
 func (node *AlterView) IsFullyParsed() bool {
 	return true
+}
+
+// IsTemporary implements the DDLStatement interface
+func (*TruncateTable) IsTemporary() bool {
+	return false
+}
+
+// IsTemporary implements the DDLStatement interface
+func (*RenameTable) IsTemporary() bool {
+	return false
+}
+
+// IsTemporary implements the DDLStatement interface
+func (node *CreateTable) IsTemporary() bool {
+	return node.Temp
+}
+
+// IsTemporary implements the DDLStatement interface
+func (node *AlterTable) IsTemporary() bool {
+	return false
+}
+
+// IsTemporary implements the DDLStatement interface
+func (node *CreateView) IsTemporary() bool {
+	return false
+}
+
+// IsTemporary implements the DDLStatement interface
+func (node *DropView) IsTemporary() bool {
+	return false
+}
+
+// IsTemporary implements the DDLStatement interface
+func (node *DropTable) IsTemporary() bool {
+	return node.Temp
+}
+
+// IsTemporary implements the DDLStatement interface
+func (node *AlterView) IsTemporary() bool {
+	return false
 }
 
 // GetTable implements the DDLStatement interface
@@ -3170,11 +3213,17 @@ func (node *AlterDatabase) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *CreateTable) Format(buf *TrackedBuffer) {
-	if node.IfNotExists {
-		buf.astPrintf(node, "create table if not exists %v", node.Table)
-	} else {
-		buf.astPrintf(node, "create table %v", node.Table)
+	buf.WriteString("create ")
+	if node.Temp {
+		buf.WriteString("temporary ")
 	}
+	buf.WriteString("table ")
+
+	if node.IfNotExists {
+		buf.WriteString("if not exists ")
+	}
+	buf.astPrintf(node, "%v", node.Table)
+
 	if node.OptLike != nil {
 		buf.astPrintf(node, " %v", node.OptLike)
 	}
@@ -3239,11 +3288,15 @@ func (node *AlterView) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *DropTable) Format(buf *TrackedBuffer) {
+	temp := ""
+	if node.Temp {
+		temp = " temporary"
+	}
 	exists := ""
 	if node.IfExists {
 		exists = " if exists"
 	}
-	buf.astPrintf(node, "drop table%s %v", exists, node.FromTables)
+	buf.astPrintf(node, "drop%s table%s %v", temp, exists, node.FromTables)
 }
 
 // Format formats the node.
