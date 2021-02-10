@@ -372,6 +372,33 @@ func TestConsolidationsUIRedaction(t *testing.T) {
 	}
 }
 
+func BenchmarkPlanCacheThroughput(b *testing.B) {
+	db := fakesqldb.New(b)
+	defer db.Close()
+
+	for query, result := range schematest.Queries() {
+		db.AddQuery(query, result)
+	}
+
+	db.AddQueryPattern(".*", &sqltypes.Result{})
+
+	qe := newTestQueryEngine(10*time.Second, true, newDBConfigs(db))
+	qe.se.Open()
+	qe.Open()
+	defer qe.Close()
+
+	ctx := context.Background()
+	logStats := tabletenv.NewLogStats(ctx, "GetPlanStats")
+
+	for i := 0; i < b.N; i++ {
+		query := fmt.Sprintf("SELECT (a, b, c) FROM test_table_%d", rand.Intn(500))
+		_, err := qe.GetPlan(ctx, logStats, query, false, false /* inReservedConn */)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
 func benchmarkPlanCache(b *testing.B, db *fakesqldb.DB, lfu bool, par int) {
 	b.Helper()
 
@@ -402,7 +429,7 @@ func benchmarkPlanCache(b *testing.B, db *fakesqldb.DB, lfu bool, par int) {
 	})
 }
 
-func BenchmarkPlanCache(b *testing.B) {
+func BenchmarkPlanCacheContention(b *testing.B) {
 	db := fakesqldb.New(b)
 	defer db.Close()
 
