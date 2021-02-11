@@ -17,6 +17,8 @@ import { orderBy } from 'lodash-es';
 import * as React from 'react';
 import { useClusters } from '../../hooks/api';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
+import { DataTable } from '../dataTable/DataTable';
+import { vtadmin as pb } from '../../proto/vtadmin';
 
 export const Clusters = () => {
     useDocumentTitle('Clusters');
@@ -26,25 +28,18 @@ export const Clusters = () => {
         return orderBy(data, ['name']);
     }, [data]);
 
+    const renderRows = (rows: pb.Cluster[]) =>
+        rows.map((cluster, idx) => (
+            <tr key={idx}>
+                <td>{cluster.name}</td>
+                <td>{cluster.id}</td>
+            </tr>
+        ));
+
     return (
         <div>
             <h1>Clusters</h1>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Name</th>
-                        <th>Id</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {rows.map((cluster, idx) => (
-                        <tr key={idx}>
-                            <td>{cluster.name}</td>
-                            <td>{cluster.id}</td>
-                        </tr>
-                    ))}
-                </tbody>
-            </table>
+            <DataTable columns={['Name', 'Id']} data={rows} renderRows={renderRows} />
         </div>
     );
 };

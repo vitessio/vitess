@@ -15,8 +15,9 @@
  */
 import { orderBy } from 'lodash-es';
 import * as React from 'react';
-import { useTableDefinitions } from '../../hooks/api';
+import { TableDefinition, useTableDefinitions } from '../../hooks/api';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
+import { DataTable } from '../dataTable/DataTable';
 
 export const Schemas = () => {
     useDocumentTitle('Schemas');
@@ -26,27 +27,19 @@ export const Schemas = () => {
         return orderBy(data, ['cluster.name', 'keyspace', 'tableDefinition.name']);
     }, [data]);
 
+    const renderRows = (rows: TableDefinition[]) =>
+        rows.map((row, idx) => (
+            <tr key={idx}>
+                <td>{row.cluster?.name}</td>
+                <td>{row.keyspace}</td>
+                <td>{row.tableDefinition?.name}</td>
+            </tr>
+        ));
+
     return (
         <div>
             <h1>Schemas</h1>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Cluster</th>
-                        <th>Keyspace</th>
-                        <th>Table</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {rows.map((row, idx) => (
-                        <tr key={idx}>
-                            <td>{row.cluster?.name}</td>
-                            <td>{row.keyspace}</td>
-                            <td>{row.tableDefinition?.name}</td>
-                        </tr>
-                    ))}
-                </tbody>
-            </table>
+            <DataTable columns={['Cluster', 'Keyspace', 'Table']} data={rows} renderRows={renderRows} />
         </div>
     );
 };
