@@ -68,6 +68,9 @@
   --inputHeightMedium: 3.6rem;
   --inputHeightLarge: 4.8rem;
 
+  /* Tables */
+  --tableCellPadding: 1.6rem;
+
   /* Layout variables, set to light theme by default */
   --backgroundPrimary: #fff;
   --backgroundPrimaryHighlight: rgba(61, 90, 254, 0.1);
@@ -158,16 +161,22 @@ code {
 /* Tables */
 table {
   border-collapse: collapse;
+  margin-bottom: var(--tableCellPadding);
   width: 100%;
 }
 
 table th {
   font-size: var(--fontSizeSmall);
-  padding: 8px 12px;
+  padding: 8px var(--tableCellPadding);
   text-align: left;
 }
 
 table tbody td {
   border: solid 1px var(--tableBorderColor);
-  padding: 12px;
+  padding: var(--tableCellPadding);
+}
+
+/* Utilities */
+.text-color-secondary {
+  color: var(--textColorSecondary);
 }
