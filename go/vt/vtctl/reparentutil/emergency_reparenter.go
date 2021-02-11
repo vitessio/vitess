@@ -19,6 +19,7 @@ package reparentutil
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -150,14 +151,8 @@ func (erp *EmergencyReparenter) promoteNewPrimary(
 
 	event.DispatchUpdate(ev, "reparenting all tablets")
 
-	// (@ajm188) - A question while migrating: Is this by design? By my read,
-	// there's nothing consuming that error channel, meaning any replica that
-	// fails to SetMaster will actually block trying to send to the errCh. In
-	// addition, the only way an operator will ever notice these errors will be
-	// in the logs on the tablet, and not from any error propagation in
-	// vtctl/wrangler, so a shard will continue to attempt to serve (probably?)
-	// after a partially-failed ERS.
 	now := time.Now().UnixNano()
+	replWg := sync.WaitGroup{}
 	errCh := make(chan error)
 
 	handlePrimary := func(alias string, ti *topo.TabletInfo) error {
@@ -166,6 +161,7 @@ func (erp *EmergencyReparenter) promoteNewPrimary(
 	}
 
 	handleReplica := func(alias string, ti *topo.TabletInfo) {
+		defer replWg.Done()
 		erp.logger.Infof("setting new master on replica %v", alias)
 
 		var err error
@@ -182,11 +178,53 @@ func (erp *EmergencyReparenter) promoteNewPrimary(
 		}
 	}
 
+	// Create a context and cancel function to watch for the first successful
+	// SetMaster call on a replica. We use a background context so that this
+	// context is only ever Done when its cancel is called by the background
+	// goroutine we're about to spin up.
+	//
+	// Similarly, create a context and cancel for the error poller goroutine to
+	// signal when it's finished processing every replica goroutine. In the case
+	// where at least one replica succeeds, replSuccessCtx will be canceled
+	// first, while allReplicasDoneCtx is guaranteed to be canceled within
+	// opts.WaitReplicasTimeout plus some jitter.
+	replSuccessCtx, replSuccessCancel := context.WithCancel(context.Background())
+	allReplicasDoneCtx, allReplicasDoneCancel := context.WithCancel(context.Background())
+	rec := concurrency.AllErrorRecorder{}
+
+	// Spin up a goroutine to log and record every error from the replicas, to
+	// ensure we don't leave a goroutine blocked on channel send. If we get a
+	// non-nil error, call the replSuccessCtx's cancel function to signal back
+	// that we got at least one successful SetMaster.
+	//
+	// A separate background goroutine will wait until all replica goroutines
+	// finish and close the errCh, so this goroutine does not block on channel
+	// receive forever.
+	go func() {
+		for err := range errCh {
+			switch err {
+			case nil:
+				replSuccessCancel()
+			default:
+				erp.logger.Errorf("SetMaster failure: %v", err)
+				rec.RecordError(err)
+			}
+		}
+
+		allReplicasDoneCancel()
+	}()
+
+	go func() {
+		replWg.Wait()
+		close(errCh)
+	}()
+
 	for alias, ti := range tabletMap {
 		switch {
 		case alias == newPrimaryTabletAlias:
 			continue
 		case !opts.IgnoreReplicas.Has(alias):
+			replWg.Add(1)
 			go handleReplica(alias, ti)
 		}
 	}
@@ -199,7 +237,20 @@ func (erp *EmergencyReparenter) promoteNewPrimary(
 		return vterrors.Wrapf(primaryErr, "failed to PopulateReparentJournal on master: %v", primaryErr)
 	}
 
-	return nil
+	select {
+	case <-replSuccessCtx.Done():
+		// At least one replica was able to SetMaster successfully
+		return nil
+	case <-allReplicasDoneCtx.Done():
+		// The error poller goroutine finished processing every replica, and was
+		// unable to find a single one that succeed. Every one either failed, in
+		// which case the recorder will have some errors, or timed out.
+		if rec.HasErrors() {
+			return rec.Error()
+		}
+
+		return vterrors.Wrapf(replCtx.Err(), "timed out waiting for at least one replica to successfully SetMaster")
+	}
 }
 
 func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *events.Reparent, keyspace string, shard string, opts EmergencyReparentOptions) error {
