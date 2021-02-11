@@ -413,6 +413,12 @@ func (qe *QueryEngine) QueryPlanCacheCap() int {
 	return int(qe.plans.MaxCapacity())
 }
 
+// QueryPlanCacheLen returns the length (size in entries0 of the query cache
+func (qe *QueryEngine) QueryPlanCacheLen() int {
+	qe.plans.Wait()
+	return qe.plans.Len()
+}
+
 // AddStats adds the given stats for the planName.tableName
 func (qe *QueryEngine) AddStats(planName, tableName string, queryCount int64, duration, mysqlTime time.Duration, rowCount, errorCount int64) {
 	// table names can contain "." characters, replace them!
