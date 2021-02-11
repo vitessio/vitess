@@ -51,6 +51,7 @@ type resharder struct {
 	refStreams    map[string]*refStream
 	cell          string //single cell or cellsAlias or comma-separated list of cells/cellsAliases
 	tabletTypes   string
+	stopAfterCopy bool
 }
 
 type refStream struct {
@@ -61,7 +62,8 @@ type refStream struct {
 }
 
 // Reshard initiates a resharding workflow.
-func (wr *Wrangler) Reshard(ctx context.Context, keyspace, workflow string, sources, targets []string, skipSchemaCopy bool, cell, tabletTypes string) error {
+func (wr *Wrangler) Reshard(ctx context.Context, keyspace, workflow string, sources, targets []string,
+	skipSchemaCopy bool, cell, tabletTypes string, autoStart, stopAfterCopy bool) error {
 	if err := wr.validateNewWorkflow(ctx, keyspace, workflow); err != nil {
 		return err
 	}
@@ -69,6 +71,7 @@ func (wr *Wrangler) Reshard(ctx context.Context, keyspace, workflow string, sour
 	if err != nil {
 		return vterrors.Wrap(err, "buildResharder")
 	}
+	rs.stopAfterCopy = stopAfterCopy
 	if !skipSchemaCopy {
 		if err := rs.copySchema(ctx); err != nil {
 			return vterrors.Wrap(err, "copySchema")
@@ -77,10 +80,14 @@ func (wr *Wrangler) Reshard(ctx context.Context, keyspace, workflow string, sour
 	if err := rs.createStreams(ctx); err != nil {
 		return vterrors.Wrap(err, "createStreams")
 	}
-	if err := rs.startStreams(ctx); err != nil {
-		return vterrors.Wrap(err, "startStream")
-	}
 
+	if autoStart {
+		if err := rs.startStreams(ctx); err != nil {
+			return vterrors.Wrap(err, "startStreams")
+		}
+	} else {
+		wr.Logger().Infof("Streams will not be started since -auto_start is set to false")
+	}
 	return nil
 }
 
@@ -301,9 +308,10 @@ func (rs *resharder) createStreams(ctx context.Context) error {
 				}),
 			}
 			bls := &binlogdatapb.BinlogSource{
-				Keyspace: rs.keyspace,
-				Shard:    source.ShardName(),
-				Filter:   filter,
+				Keyspace:      rs.keyspace,
+				Shard:         source.ShardName(),
+				Filter:        filter,
+				StopAfterCopy: rs.stopAfterCopy,
 			}
 			ig.AddRow(rs.workflow, bls, "", rs.cell, rs.tabletTypes)
 		}
