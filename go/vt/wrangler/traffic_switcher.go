@@ -466,13 +466,6 @@ func (wr *Wrangler) SwitchReads(ctx context.Context, targetKeyspace, workflow st
 		return sw.logs(), nil
 	}
 	wr.Logger().Infof("About to switchShardReads: %+v, %+v, %+v", cells, servedTypes, direction)
-	if err := wr.ts.ValidateSrvKeyspace(ctx, targetKeyspace, strings.Join(cells, ",")); err != nil {
-		err2 := vterrors.Wrapf(err, "Before switching shard reads, found SrvKeyspace for %s is corrupt in cell %s",
-			targetKeyspace, strings.Join(cells, ","))
-		log.Errorf("%w", err2)
-		return nil, err2
-	}
-
 	if err := ts.switchShardReads(ctx, cells, servedTypes, direction); err != nil {
 		ts.wr.Logger().Errorf("switchShardReads failed: %v", err)
 		return nil, err
@@ -1035,6 +1028,12 @@ func (ts *trafficSwitcher) switchShardReads(ctx context.Context, cells []string,
 	} else {
 		fromShards, toShards = ts.targetShards(), ts.sourceShards()
 	}
+	if err := ts.wr.ts.ValidateSrvKeyspace(ctx, ts.targetKeyspace, strings.Join(cells, ",")); err != nil {
+		err2 := vterrors.Wrapf(err, "Before switching shard reads, found SrvKeyspace for %s is corrupt in cell %s",
+			ts.targetKeyspace, strings.Join(cells, ","))
+		log.Errorf("%w", err2)
+		return err2
+	}
 	for _, servedType := range servedTypes {
 		if err := ts.wr.updateShardRecords(ctx, ts.sourceKeyspace, fromShards, cells, servedType, true /* isFrom */, false /* clearSourceShards */); err != nil {
 			return err
@@ -1046,6 +1045,12 @@ func (ts *trafficSwitcher) switchShardReads(ctx context.Context, cells []string,
 		if err != nil {
 			return err
 		}
+	}
+	if err := ts.wr.ts.ValidateSrvKeyspace(ctx, ts.targetKeyspace, strings.Join(cells, ",")); err != nil {
+		err2 := vterrors.Wrapf(err, "After switching shard reads, found SrvKeyspace for %s is corrupt in cell %s",
+			ts.targetKeyspace, strings.Join(cells, ","))
+		log.Errorf("%w", err2)
+		return err2
 	}
 	return nil
 }
@@ -1389,6 +1394,11 @@ func (ts *trafficSwitcher) changeWriteRoute(ctx context.Context) error {
 }
 
 func (ts *trafficSwitcher) changeShardRouting(ctx context.Context) error {
+	if err := ts.wr.ts.ValidateSrvKeyspace(ctx, ts.targetKeyspace, ""); err != nil {
+		err2 := vterrors.Wrapf(err, "Before changing shard routes, found SrvKeyspace for %s is corrupt", ts.targetKeyspace)
+		log.Errorf("%w", err2)
+		return err2
+	}
 	err := ts.forAllSources(func(source *tsSource) error {
 		_, err := ts.wr.ts.UpdateShardFields(ctx, ts.sourceKeyspace, source.si.ShardName(), func(si *topo.ShardInfo) error {
 			si.IsMasterServing = false
@@ -1409,7 +1419,16 @@ func (ts *trafficSwitcher) changeShardRouting(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	return ts.wr.ts.MigrateServedType(ctx, ts.targetKeyspace, ts.targetShards(), ts.sourceShards(), topodatapb.TabletType_MASTER, nil)
+	err = ts.wr.ts.MigrateServedType(ctx, ts.targetKeyspace, ts.targetShards(), ts.sourceShards(), topodatapb.TabletType_MASTER, nil)
+	if err != nil {
+		return err
+	}
+	if err := ts.wr.ts.ValidateSrvKeyspace(ctx, ts.targetKeyspace, ""); err != nil {
+		err2 := vterrors.Wrapf(err, "After changing shard routes, found SrvKeyspace for %s is corrupt", ts.targetKeyspace)
+		log.Errorf("%w", err2)
+		return err2
+	}
+	return nil
 }
 
 func (ts *trafficSwitcher) startReverseVReplication(ctx context.Context) error {
