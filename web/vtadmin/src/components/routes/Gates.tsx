@@ -17,6 +17,8 @@ import { orderBy } from 'lodash-es';
 import * as React from 'react';
 import { useGates } from '../../hooks/api';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
+import { vtadmin as pb } from '../../proto/vtadmin';
+import { DataTable } from '../dataTable/DataTable';
 
 export const Gates = () => {
     useDocumentTitle('Gates');
@@ -26,25 +28,18 @@ export const Gates = () => {
         return orderBy(data, ['cluster.name', 'hostname']);
     }, [data]);
 
+    const renderRows = (gates: pb.VTGate[]) =>
+        gates.map((gate, idx) => (
+            <tr key={idx}>
+                <td>{gate.cluster?.name}</td>
+                <td>{gate.hostname}</td>
+            </tr>
+        ));
+
     return (
         <div>
             <h1>Gates</h1>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Cluster</th>
-                        <th>Hostname</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {rows.map((gate, idx) => (
-                        <tr key={idx}>
-                            <td>{gate.cluster?.name}</td>
-                            <td>{gate.hostname}</td>
-                        </tr>
-                    ))}
-                </tbody>
-            </table>
+            <DataTable columns={['Cluster', 'Hostname']} data={rows} renderRows={renderRows} />
         </div>
     );
 };

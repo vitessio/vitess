@@ -19,6 +19,7 @@ import { useTablets } from '../../hooks/api';
 import { vtadmin as pb, topodata } from '../../proto/vtadmin';
 import { orderBy } from 'lodash-es';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
+import { DataTable } from '../dataTable/DataTable';
 
 export const Tablets = () => {
     useDocumentTitle('Tablets');
@@ -28,36 +29,28 @@ export const Tablets = () => {
         return orderBy(data, ['cluster.name', 'tablet.keyspace', 'tablet.shard', 'tablet.type']);
     }, [data]);
 
+    const renderRows = React.useCallback((rows: pb.Tablet[]) => {
+        return rows.map((t, tdx) => (
+            <tr key={tdx}>
+                <td>{t.cluster?.name}</td>
+                <td>{t.tablet?.keyspace}</td>
+                <td>{t.tablet?.shard}</td>
+                <td>{formatAlias(t)}</td>
+                <td>{t.tablet?.hostname}</td>
+                <td>{formatType(t)}</td>
+                <td>{formatState(t)}</td>
+            </tr>
+        ));
+    }, []);
+
     return (
         <div>
             <h1>Tablets</h1>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Cluster</th>
-                        <th>Keyspace</th>
-                        <th>Shard</th>
-                        <th>Alias</th>
-                        <th>Hostname</th>
-
-                        <th>Type</th>
-                        <th>State</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {rows.map((t, tdx) => (
-                        <tr key={tdx}>
-                            <td>{t.cluster?.name}</td>
-                            <td>{t.tablet?.keyspace}</td>
-                            <td>{t.tablet?.shard}</td>
-                            <td>{formatAlias(t)}</td>
-                            <td>{t.tablet?.hostname}</td>
-                            <td>{formatType(t)}</td>
-                            <td>{formatState(t)}</td>
-                        </tr>
-                    ))}
-                </tbody>
-            </table>
+            <DataTable
+                columns={['Cluster', 'Keyspace', 'Shard', 'Alias', 'Hostname', 'Type', 'State']}
+                data={rows}
+                renderRows={renderRows}
+            />
         </div>
     );
 };
