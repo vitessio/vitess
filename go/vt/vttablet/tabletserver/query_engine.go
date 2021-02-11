@@ -413,7 +413,7 @@ func (qe *QueryEngine) QueryPlanCacheCap() int {
 	return int(qe.plans.MaxCapacity())
 }
 
-// QueryPlanCacheLen returns the length (size in entries0 of the query cache
+// QueryPlanCacheLen returns the length (size in entries) of the query cache
 func (qe *QueryEngine) QueryPlanCacheLen() int {
 	qe.plans.Wait()
 	return qe.plans.Len()
