@@ -18,6 +18,7 @@ package endtoend
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -1783,6 +1784,10 @@ func TestQueries(t *testing.T) {
 			},
 		},
 	}
+
+	// Wait for the vtgate caches to flush
+	time.Sleep(1 * time.Second)
+
 	for _, tcase := range testCases {
 		if err := tcase.Test("", client); err != nil {
 			t.Error(err)
