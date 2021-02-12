@@ -760,6 +760,13 @@ func TestReplicaWasRunning(t *testing.T) {
 			},
 			expected: false,
 		},
+		{
+			name: "status.Before is nil means we were not running",
+			in: &replicationdatapb.StopReplicationStatus{
+				Before: nil,
+			},
+			expected: false,
+		},
 	}
 
 	for _, tt := range tests {

@@ -142,6 +142,10 @@ func FindValidEmergencyReparentCandidates(
 // ReplicaWasRunning returns true if a StopReplicationStatus indicates that the
 // replica had running replication threads before being stopped.
 func ReplicaWasRunning(stopStatus *replicationdatapb.StopReplicationStatus) bool {
+	if stopStatus.Before == nil {
+		return false
+	}
+
 	return stopStatus.Before.IoThreadRunning || stopStatus.Before.SqlThreadRunning
 }
 

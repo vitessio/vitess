@@ -142,6 +142,10 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 						Error:  nil,
 					},
 				},
+				SetMasterResults: map[string]error{
+					"zone1-0000000100": nil,
+					"zone1-0000000101": nil,
+				},
 				StopReplicationAndGetStatusResults: map[string]struct {
 					Status     *replicationdatapb.Status
 					StopStatus *replicationdatapb.StopReplicationStatus
@@ -239,6 +243,10 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 						Result: "ok",
 						Error:  nil,
 					},
+				},
+				SetMasterResults: map[string]error{
+					"zone1-0000000100": nil,
+					"zone1-0000000102": nil,
 				},
 				StopReplicationAndGetStatusResults: map[string]struct {
 					Status     *replicationdatapb.Status
