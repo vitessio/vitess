@@ -509,58 +509,50 @@ func TestExecutorShow(t *testing.T) {
 	_, err = executor.Execute(ctx, "TestExecute", session, fmt.Sprintf("show keys from %v.unknown", KsTestUnsharded), nil)
 	require.NoError(t, err)
 	lastQuery = sbclookup.Queries[len(sbclookup.Queries)-1].Sql
-	wantQuery = "show keys from unknown"
+	wantQuery = "show indexes from unknown"
 	assert.Equal(t, wantQuery, lastQuery, "Got: %v. Want: %v", lastQuery, wantQuery)
 
 	_, err = executor.Execute(ctx, "TestExecute", session, fmt.Sprintf("show keys from unknown from %v", KsTestUnsharded), nil)
 	require.NoError(t, err)
 	lastQuery = sbclookup.Queries[len(sbclookup.Queries)-1].Sql
-	wantQuery = "show keys from unknown"
 	assert.Equal(t, wantQuery, lastQuery, "Got: %v. Want: %v", lastQuery, wantQuery)
 
 	// SHOW INDEX with two different syntax
 	_, err = executor.Execute(ctx, "TestExecute", session, fmt.Sprintf("show index from %v.unknown", KsTestUnsharded), nil)
 	require.NoError(t, err)
 	lastQuery = sbclookup.Queries[len(sbclookup.Queries)-1].Sql
-	wantQuery = "show index from unknown"
 	assert.Equal(t, wantQuery, lastQuery, "Got: %v. Want: %v", lastQuery, wantQuery)
 
 	_, err = executor.Execute(ctx, "TestExecute", session, fmt.Sprintf("show index from unknown from %v", KsTestUnsharded), nil)
 	require.NoError(t, err)
 	lastQuery = sbclookup.Queries[len(sbclookup.Queries)-1].Sql
-	wantQuery = "show index from unknown"
 	assert.Equal(t, wantQuery, lastQuery, "Got: %v. Want: %v", lastQuery, wantQuery)
 
 	// SHOW INDEXES with two different syntax
 	_, err = executor.Execute(ctx, "TestExecute", session, fmt.Sprintf("show indexes from %v.unknown", KsTestUnsharded), nil)
 	require.NoError(t, err)
 	lastQuery = sbclookup.Queries[len(sbclookup.Queries)-1].Sql
-	wantQuery = "show indexes from unknown"
 	assert.Equal(t, wantQuery, lastQuery, "Got: %v. Want: %v", lastQuery, wantQuery)
 
 	_, err = executor.Execute(ctx, "TestExecute", session, fmt.Sprintf("show indexes from unknown from %v", KsTestUnsharded), nil)
 	require.NoError(t, err)
 	lastQuery = sbclookup.Queries[len(sbclookup.Queries)-1].Sql
-	wantQuery = "show indexes from unknown"
 	assert.Equal(t, wantQuery, lastQuery, "Got: %v. Want: %v", lastQuery, wantQuery)
 
 	// SHOW EXTENDED {INDEX | INDEXES | KEYS}
 	_, err = executor.Execute(ctx, "TestExecute", session, fmt.Sprintf("show extended index from unknown from %v", KsTestUnsharded), nil)
 	require.NoError(t, err)
 	lastQuery = sbclookup.Queries[len(sbclookup.Queries)-1].Sql
-	wantQuery = "show extended index from unknown"
 	assert.Equal(t, wantQuery, lastQuery, "Got: %v. Want: %v", lastQuery, wantQuery)
 
 	_, err = executor.Execute(ctx, "TestExecute", session, fmt.Sprintf("show extended indexes from unknown from %v", KsTestUnsharded), nil)
 	require.NoError(t, err)
 	lastQuery = sbclookup.Queries[len(sbclookup.Queries)-1].Sql
-	wantQuery = "show extended indexes from unknown"
 	assert.Equal(t, wantQuery, lastQuery, "Got: %v. Want: %v", lastQuery, wantQuery)
 
 	_, err = executor.Execute(ctx, "TestExecute", session, fmt.Sprintf("show extended keys from unknown from %v", KsTestUnsharded), nil)
 	require.NoError(t, err)
 	lastQuery = sbclookup.Queries[len(sbclookup.Queries)-1].Sql
-	wantQuery = "show extended keys from unknown"
 	assert.Equal(t, wantQuery, lastQuery, "Got: %v. Want: %v", lastQuery, wantQuery)
 
 	// Set desitation keyspace in session
