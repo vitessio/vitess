@@ -2320,6 +2320,10 @@ show_statement:
   {
     $$ = &Show{&ShowBasic{Command: Collation, Filter: $3}}
   }
+| SHOW full_opt columns_or_fields from_or_in table_name from_database_opt like_or_where_opt
+  {
+    $$ = &Show{&ShowBasic{Full: $2, Command: Column, Tbl: $5, DbName: $6, Filter: $7}}
+  }
 | SHOW DATABASES like_or_where_opt
   {
     $$ = &Show{&ShowBasic{Command: Database, Filter: $3}}
@@ -2339,6 +2343,10 @@ show_statement:
 | SHOW FUNCTION STATUS like_or_where_opt
   {
     $$ = &Show{&ShowBasic{Command: Function, Filter: $4}}
+  }
+| SHOW extended_opt index_symbols from_or_in table_name from_database_opt like_or_where_opt
+  {
+    $$ = &Show{&ShowBasic{Command: Index, Tbl: $5, DbName: $6, Filter: $7}}
   }
 | SHOW OPEN TABLES from_database_opt like_or_where_opt
   {
@@ -2379,10 +2387,6 @@ show_statement:
 | SHOW TRIGGERS from_database_opt like_or_where_opt
   {
     $$ = &Show{&ShowBasic{Command: Trigger, DbName:$3, Filter: $4}}
-  }
-| SHOW full_opt columns_or_fields from_or_in table_name from_database_opt like_or_where_opt
-  {
-    $$ = &Show{&ShowColumns{Full: $2, Table: $5, DbName: $6, Filter: $7}}
   }
 |  SHOW BINARY id_or_var ddl_skip_to_end /* SHOW BINARY ... */
   {
@@ -2428,11 +2432,6 @@ show_statement:
 | SHOW FUNCTION CODE table_name
   {
     $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3), Table: $4, Scope: ImplicitScope}}
-  }
-| SHOW extended_opt index_symbols from_or_in table_name from_database_opt like_or_where_opt
-  {
-    showTablesOpt := &ShowTablesOpt{DbName:$6, Filter:$7}
-    $$ = &Show{&ShowLegacy{Extended: string($2), Type: string($3), ShowTablesOpt: showTablesOpt, OnTable: $5, Scope: ImplicitScope}}
   }
 | SHOW PLUGINS
   {
