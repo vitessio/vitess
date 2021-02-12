@@ -131,7 +131,7 @@ func analyzeShow(show *sqlparser.Show, dbName string) (plan *Plan, err error) {
 	switch showInternal := show.Internal.(type) {
 	case *sqlparser.ShowBasic:
 		switch showInternal.Command {
-		case sqlparser.Table, sqlparser.TableFull:
+		case sqlparser.Table:
 			// rewrite WHERE clause if it exists
 			// `where Tables_in_Keyspace` => `where Tables_in_DbName`
 			if showInternal.Filter != nil {

@@ -220,7 +220,6 @@ const (
 	StatusGlobalStr    = " global status"
 	StatusSessionStr   = " status"
 	TableStr           = " tables"
-	TableFullStr       = " full tables"
 	TableStatusStr     = " table status"
 	TriggerStr         = " triggers"
 	VariableGlobalStr  = " global variables"
@@ -465,7 +464,6 @@ const (
 	StatusGlobal
 	StatusSession
 	Table
-	TableFull
 	TableStatus
 	Trigger
 	VariableGlobal

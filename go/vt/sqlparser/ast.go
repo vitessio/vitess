@@ -1210,7 +1210,7 @@ type (
 
 	// ShowColumns is of ShowInternal type, holds the show columns statement.
 	ShowColumns struct {
-		Full   string
+		Full   bool
 		Table  TableName
 		DbName string
 		Filter *ShowFilter
@@ -1228,6 +1228,7 @@ type (
 	// ShowBasic is of ShowInternal type, holds Simple SHOW queries with a filter.
 	ShowBasic struct {
 		Command ShowCommandType
+		Full    bool
 		DbName  string
 		Filter  *ShowFilter
 	}
@@ -2445,7 +2446,10 @@ func (node *Show) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *ShowColumns) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "show %s", node.Full)
+	buf.WriteString("show ")
+	if node.Full {
+		buf.WriteString("full ")
+	}
 	buf.astPrintf(node, "columns from %v", node.Table)
 
 	buf.printIf(node.DbName != "", " from "+node.DbName)
@@ -3159,7 +3163,11 @@ func (node *ShowTableStatus) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *ShowBasic) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "show%s", node.Command.ToString())
+	buf.WriteString("show")
+	if node.Full {
+		buf.WriteString(" full")
+	}
+	buf.astPrintf(node, "%s", node.Command.ToString())
 	if node.DbName != "" {
 		buf.astPrintf(node, " from %s", node.DbName)
 	}

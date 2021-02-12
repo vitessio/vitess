@@ -1243,8 +1243,6 @@ func (ty ShowCommandType) ToString() string {
 		return StatusSessionStr
 	case Table:
 		return TableStr
-	case TableFull:
-		return TableFullStr
 	case TableStatus:
 		return TableStatusStr
 	case Trigger:

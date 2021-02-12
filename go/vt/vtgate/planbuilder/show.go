@@ -57,7 +57,7 @@ func buildShowBasicPlan(show *sqlparser.ShowBasic, vschema ContextVSchema) (engi
 		return buildSendAnywherePlan(show, vschema)
 	case sqlparser.Database, sqlparser.Keyspace:
 		return buildDBPlan(show, vschema)
-	case sqlparser.OpenTable, sqlparser.TableStatus, sqlparser.Table, sqlparser.TableFull, sqlparser.Trigger:
+	case sqlparser.OpenTable, sqlparser.TableStatus, sqlparser.Table, sqlparser.Trigger:
 		return buildPlanWithDB(show, vschema)
 	case sqlparser.StatusGlobal, sqlparser.StatusSession:
 		return engine.NewRowsPrimitive(make([][]sqltypes.Value, 0, 2), buildVarCharFields("Variable_name", "Value")), nil
