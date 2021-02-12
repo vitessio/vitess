@@ -206,7 +206,7 @@ func testQueryPlanCache(t *testing.T, cachedPlanSize, cachePlanSize2 int) {
 	assert.Equal(t, 1, framework.Server.QueryPlanCacheLen())
 
 	vend := framework.DebugVars()
-	// verifyIntValue(t, vend, "QueryCacheLength", 1)
+	verifyIntValue(t, vend, "QueryCacheLength", 1)
 	verifyIntValue(t, vend, "QueryCacheSize", cachedPlanSize)
 	verifyIntValue(t, vend, "QueryCacheCapacity", cachedPlanSize)
 
