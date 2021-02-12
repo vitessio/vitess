@@ -1732,9 +1732,14 @@ func (tsv *TabletServer) SetQueryPlanCacheCap(val int) {
 	tsv.qe.SetQueryPlanCacheCap(val)
 }
 
-// QueryPlanCacheCap returns the pool size.
+// QueryPlanCacheCap returns the plan cache capacity
 func (tsv *TabletServer) QueryPlanCacheCap() int {
-	return int(tsv.qe.QueryPlanCacheCap())
+	return tsv.qe.QueryPlanCacheCap()
+}
+
+// QueryPlanCacheLen returns the plan cache length
+func (tsv *TabletServer) QueryPlanCacheLen() int {
+	return tsv.qe.QueryPlanCacheLen()
 }
 
 // SetMaxResultSize changes the max result size to the specified value.

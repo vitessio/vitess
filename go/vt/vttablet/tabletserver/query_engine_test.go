@@ -372,6 +372,84 @@ func TestConsolidationsUIRedaction(t *testing.T) {
 	}
 }
 
+func BenchmarkPlanCacheThroughput(b *testing.B) {
+	db := fakesqldb.New(b)
+	defer db.Close()
+
+	for query, result := range schematest.Queries() {
+		db.AddQuery(query, result)
+	}
+
+	db.AddQueryPattern(".*", &sqltypes.Result{})
+
+	qe := newTestQueryEngine(10*time.Second, true, newDBConfigs(db))
+	qe.se.Open()
+	qe.Open()
+	defer qe.Close()
+
+	ctx := context.Background()
+	logStats := tabletenv.NewLogStats(ctx, "GetPlanStats")
+
+	for i := 0; i < b.N; i++ {
+		query := fmt.Sprintf("SELECT (a, b, c) FROM test_table_%d", rand.Intn(500))
+		_, err := qe.GetPlan(ctx, logStats, query, false, false /* inReservedConn */)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func benchmarkPlanCache(b *testing.B, db *fakesqldb.DB, lfu bool, par int) {
+	b.Helper()
+
+	dbcfgs := newDBConfigs(db)
+	config := tabletenv.NewDefaultConfig()
+	config.DB = dbcfgs
+	config.QueryCacheLFU = lfu
+
+	env := tabletenv.NewEnv(config, "TabletServerTest")
+	se := schema.NewEngine(env)
+	qe := NewQueryEngine(env, se)
+
+	se.InitDBConfig(dbcfgs.DbaWithDB())
+	require.NoError(b, se.Open())
+	require.NoError(b, qe.Open())
+	defer qe.Close()
+
+	b.SetParallelism(par)
+	b.RunParallel(func(pb *testing.PB) {
+		ctx := context.Background()
+		logStats := tabletenv.NewLogStats(ctx, "GetPlanStats")
+
+		for pb.Next() {
+			query := fmt.Sprintf("SELECT (a, b, c) FROM test_table_%d", rand.Intn(500))
+			_, err := qe.GetPlan(ctx, logStats, query, false, false /* inReservedConn */)
+			require.NoErrorf(b, err, "bad query: %s", query)
+		}
+	})
+}
+
+func BenchmarkPlanCacheContention(b *testing.B) {
+	db := fakesqldb.New(b)
+	defer db.Close()
+
+	for query, result := range schematest.Queries() {
+		db.AddQuery(query, result)
+	}
+
+	db.AddQueryPattern(".*", &sqltypes.Result{})
+
+	for par := 1; par <= 8; par *= 2 {
+		b.Run(fmt.Sprintf("ContentionLRU-%d", par), func(b *testing.B) {
+			benchmarkPlanCache(b, db, false, par)
+		})
+
+		b.Run(fmt.Sprintf("ContentionLFU-%d", par), func(b *testing.B) {
+			benchmarkPlanCache(b, db, true, par)
+		})
+	}
+}
+
 func TestPlanCachePollution(t *testing.T) {
 	plotPath := os.Getenv("CACHE_PLOT_PATH")
 	if plotPath == "" {
