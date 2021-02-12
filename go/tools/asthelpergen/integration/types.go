@@ -17,6 +17,8 @@ limitations under the License.
 //nolint
 package integration
 
+import "reflect"
+
 type (
 	AST interface {
 		i()
@@ -52,3 +54,27 @@ func (*LiteralInt) i() {}
 
 //func (String) i()       {}
 //func (ArrayDef) i()     {}
+
+type application struct {
+	pre, post ApplyFunc
+	cursor    Cursor
+}
+
+type ApplyFunc func(*Cursor) bool
+
+type Cursor struct {
+	parent   AST
+	replacer replacerFunc
+	node     AST
+}
+
+type replacerFunc func(newNode, parent AST)
+
+func isNilValue(i interface{}) bool {
+	valueOf := reflect.ValueOf(i)
+	kind := valueOf.Kind()
+	isNullable := kind == reflect.Ptr || kind == reflect.Array || kind == reflect.Slice
+	return isNullable && valueOf.IsNil()
+}
+
+var abort = new(int) // singleton, to signal termination of Apply
