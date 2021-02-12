@@ -347,9 +347,9 @@ func skipToEnd(yylex interface{}) {
 %type <bytes> for_from
 %type <str> default_opt
 %type <ignore> ignore_opt
-%type <str> full_opt from_database_opt columns_or_fields extended_opt storage_opt
+%type <str> from_database_opt columns_or_fields extended_opt storage_opt
 %type <showFilter> like_or_where_opt like_opt
-%type <boolean> exists_opt not_exists_opt enforced_opt temp_opt
+%type <boolean> exists_opt not_exists_opt enforced_opt temp_opt full_opt
 %type <empty> to_opt
 %type <bytes> reserved_keyword non_reserved_keyword
 %type <colIdent> sql_id reserved_sql_id col_alias as_ci_opt
@@ -2372,13 +2372,9 @@ show_statement:
   {
     $$ = &Show{&ShowBasic{Command: TableStatus, DbName:$4, Filter: $5}}
   }
-| SHOW TABLES from_database_opt like_or_where_opt
+| SHOW full_opt TABLES from_database_opt like_or_where_opt
   {
-    $$ = &Show{&ShowBasic{Command: Table, DbName:$3, Filter: $4}}
-  }
-| SHOW FULL TABLES from_database_opt like_or_where_opt
-  {
-    $$ = &Show{&ShowBasic{Command: TableFull, DbName:$4, Filter: $5}}
+    $$ = &Show{&ShowBasic{Command: Table, Full: $2, DbName:$4, Filter: $5}}
   }
 | SHOW TRIGGERS from_database_opt like_or_where_opt
   {
@@ -2522,11 +2518,11 @@ extended_opt:
 full_opt:
   /* empty */
   {
-    $$ = ""
+    $$ = false
   }
 | FULL
   {
-    $$ = "full "
+    $$ = true
   }
 
 columns_or_fields:
