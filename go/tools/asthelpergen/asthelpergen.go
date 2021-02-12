@@ -48,11 +48,11 @@ type astHelperGen struct {
 	DebugTypes bool
 	mod        *packages.Module
 	sizes      types.Sizes
-	iface      *types.Named
+	namedIface *types.Named
+	iface      *types.Interface
 }
 
 type rewriterFile struct {
-	pkg            string
 	cases          []jen.Code
 	replaceMethods []jen.Code
 }
@@ -62,7 +62,8 @@ func newGenerator(mod *packages.Module, sizes types.Sizes, named *types.Named) *
 		DebugTypes: true,
 		mod:        mod,
 		sizes:      sizes,
-		iface:      named,
+		namedIface: named,
+		iface:      named.Underlying().(*types.Interface),
 	}
 }
 
@@ -77,7 +78,7 @@ func findImplementations(scope *types.Scope, iff *types.Interface, impl func(typ
 }
 
 func (gen *astHelperGen) doIt() (map[string]*jen.File, error) {
-	pkg := gen.iface.Obj().Pkg()
+	pkg := gen.namedIface.Obj().Pkg()
 	rewriter := &rewriterFile{}
 
 	iface, ok := gen.iface.Underlying().(*types.Interface)
@@ -223,7 +224,9 @@ func GenerateASTHelpers(packagePatterns []string, rootIface string) (map[string]
 		return nil, fmt.Errorf("no type called '%s' found in '%s'", typename, pkgname)
 	}
 
-	generator := newGenerator(loaded[0].Module, loaded[0].TypesSizes, tt.Type().(*types.Named))
+	nt := tt.Type().(*types.Named)
+
+	generator := newGenerator(loaded[0].Module, loaded[0].TypesSizes, nt)
 	it, err := generator.doIt()
 	if err != nil {
 		return nil, err
