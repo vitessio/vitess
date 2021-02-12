@@ -24,8 +24,9 @@ import (
 
 func TestVisit(t *testing.T) {
 	one := &LiteralInt{1}
+	minusOne := &UnaryMinus{Val: one}
 	two := &LiteralInt{1}
-	plus := &Plus{Left: one, Right: two}
+	plus := &Plus{Left: minusOne, Right: two}
 
 	var preOrder, postOrder []AST
 
@@ -44,7 +45,7 @@ func TestVisit(t *testing.T) {
 	// visit
 	a.apply(nil, plus, nil)
 
-	assert.Equal(t, []AST{plus, one, two}, preOrder, "pre-order wrong")
-	assert.Equal(t, []AST{one, two, plus}, postOrder, "post-order wrong")
+	assert.Equal(t, []AST{plus, minusOne, one, two}, preOrder, "pre-order wrong")
+	assert.Equal(t, []AST{one, minusOne, two, plus}, postOrder, "post-order wrong")
 
 }
