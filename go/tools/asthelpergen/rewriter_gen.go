@@ -24,10 +24,16 @@ import (
 )
 
 func (gen *astHelperGen) rewriterStructCase(name string, stroct *types.Struct) (jen.Code, error) {
-	fmt.Println(stroct)
-	return jen.Case(
-		jen.Op("*").Id(name),
-	), nil
+	var stmts []jen.Code
+	for i := 0; i < stroct.NumFields(); i++ {
+		field := stroct.Field(i)
+		if types.Implements(field.Type(), gen.iface) {
+			//		a.apply(node, n.As, replaceAliasedExprAs)
+			stmts = append(stmts, jen.Id("a").Dot("apply").Call(jen.Id("node"), jen.Id("n").Dot(field.Name()), jen.Nil()))
+		}
+	}
+	stroct.NumFields()
+	return jen.Case(jen.Op("*").Id(name)).Block(stmts...), nil
 }
 
 func (gen *astHelperGen) rewriterReplaceMethods(name string, stroct *types.Struct) ([]jen.Code, error) {
@@ -53,7 +59,7 @@ func (gen *astHelperGen) rewriterApplyFunc(file *rewriterFile) *jen.Statement {
 		jen.Id("a").Op("*").Id("application"),
 	).Id("apply").Params(
 		jen.Id("parent"),
-		jen.Id("node").Id(gen.iface.Obj().Name()),
+		jen.Id("node").Id(gen.namedIface.Obj().Name()),
 		jen.Id("replacer").Id("replacerFunc"),
 	).Block(
 		jen.If(
@@ -81,6 +87,8 @@ func (gen *astHelperGen) rewriterApplyFunc(file *rewriterFile) *jen.Statement {
 				Op("!").Id("a").Dot("post").Call(jen.Op("&").Id("a").Dot("cursor"))).Block(
 			jen.Id("panic").Call(jen.Id("abort")),
 		),
+		// 	a.cursor = saved
+		jen.Id("a").Dot("cursor").Op("=").Id("saved"),
 	)
 	return apply
 }

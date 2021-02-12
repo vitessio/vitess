@@ -18,16 +18,33 @@ package integration
 
 import (
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestVisit(t *testing.T) {
-	//pre :=
-	//a := &application{
-	//	pre: func(cursor *Cursor) bool {
-	//		cursor.node
-	//	},
-	//	post:   post,
-	//	cursor: Cursor{},
-	//}
-	//a.apply()
+	one := &LiteralInt{1}
+	two := &LiteralInt{1}
+	plus := &Plus{Left: one, Right: two}
+
+	var preOrder, postOrder []AST
+
+	a := &application{
+		pre: func(cursor *Cursor) bool {
+			preOrder = append(preOrder, cursor.node)
+			return true
+		},
+		post: func(cursor *Cursor) bool {
+			postOrder = append(postOrder, cursor.node)
+			return true
+		},
+		cursor: Cursor{},
+	}
+
+	// visit
+	a.apply(nil, plus, nil)
+
+	assert.Equal(t, []AST{plus, one, two}, preOrder, "pre-order wrong")
+	assert.Equal(t, []AST{one, two, plus}, postOrder, "post-order wrong")
+
 }
