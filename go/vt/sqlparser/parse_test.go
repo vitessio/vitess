@@ -732,10 +732,10 @@ var (
 	}, {
 		input: "insert /* bool expression on duplicate */ into a values (1, 2) on duplicate key update b = func(a), c = a > d",
 	}, {
-		input: "insert into user(username, `status`) values ('Chuck', default(`status`))",
+		input: "insert into `user`(username, `status`) values ('Chuck', default(`status`))",
 	}, {
 		input:  "insert into user(format, tree, vitess) values ('Chuck', 42, 'Barry')",
-		output: "insert into user(`format`, `tree`, `vitess`) values ('Chuck', 42, 'Barry')",
+		output: "insert into `user`(`format`, `tree`, `vitess`) values ('Chuck', 42, 'Barry')",
 	}, {
 		input:  "insert into customer () values ()",
 		output: "insert into customer values ()",
@@ -1182,7 +1182,7 @@ var (
 		output: "alter vschema on a add vindex hash (id) using hash",
 	}, {
 		input:  "alter vschema on user add vindex name_lookup_vdx (name) using lookup_hash with owner=user, table=name_user_idx, from=name, to=user_id",
-		output: "alter vschema on user add vindex name_lookup_vdx (`name`) using lookup_hash with owner=user, table=name_user_idx, from=name, to=user_id",
+		output: "alter vschema on `user` add vindex name_lookup_vdx (`name`) using lookup_hash with owner=user, table=name_user_idx, from=name, to=user_id",
 	}, {
 		input:  "alter vschema on user2 add vindex name_lastname_lookup_vdx (name,lastname) using lookup with owner=`user`, table=`name_lastname_keyspace_id_map`, from=`name,lastname`, to=`keyspace_id`",
 		output: "alter vschema on user2 add vindex name_lastname_lookup_vdx (`name`, lastname) using lookup with owner=user, table=name_lastname_keyspace_id_map, from=name,lastname, to=keyspace_id",
@@ -1325,28 +1325,22 @@ var (
 		input:  "show collation where `Charset` = 'utf8' and `Collation` = 'utf8_bin'",
 		output: "show collation where `Charset` = 'utf8' and `Collation` = 'utf8_bin'",
 	}, {
-		input:  "show create database d",
-		output: "show create database",
+		input: "show create database d",
 	}, {
-		input:  "show create event e",
-		output: "show create event",
+		input: "show create event e",
 	}, {
 		input: "show create function f",
 	}, {
-		input:  "show create procedure p",
-		output: "show create procedure",
+		input: "show create procedure p",
 	}, {
-		input:  "show create table t",
-		output: "show create table t",
+		input: "show create table t",
 	}, {
-		input:  "show create trigger t",
-		output: "show create trigger",
+		input: "show create trigger t",
 	}, {
 		input:  "show create user u",
 		output: "show create user",
 	}, {
-		input:  "show create view v",
-		output: "show create view",
+		input: "show create view v",
 	}, {
 		input:  "show databases",
 		output: "show databases",

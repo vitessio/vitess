@@ -221,7 +221,7 @@ func skipToEnd(yylex interface{}) {
 
 // SHOW tokens
 %token <bytes> COLLATION DATABASES SCHEMAS TABLES VITESS_METADATA VSCHEMA FULL PROCESSLIST COLUMNS FIELDS ENGINES PLUGINS EXTENDED
-%token <bytes> KEYSPACES VITESS_KEYSPACES VITESS_SHARDS VITESS_TABLETS CODE PRIVILEGES FUNCTION OPEN TRIGGERS
+%token <bytes> KEYSPACES VITESS_KEYSPACES VITESS_SHARDS VITESS_TABLETS CODE PRIVILEGES FUNCTION OPEN TRIGGERS EVENT USER
 
 // SET tokens
 %token <bytes> NAMES CHARSET GLOBAL SESSION ISOLATION LEVEL READ WRITE ONLY REPEATABLE COMMITTED UNCOMMITTED SERIALIZABLE
@@ -2388,40 +2388,43 @@ show_statement:
   {
     $$ = &Show{&ShowBasic{Command: Trigger, DbName:$3, Filter: $4}}
   }
+| SHOW CREATE DATABASE table_name
+  {
+    $$ = &Show{&ShowCreate{Command: CreateDb, Op: $4}}
+  }
+| SHOW CREATE EVENT table_name
+  {
+    $$ = &Show{&ShowCreate{Command: CreateE, Op: $4}}
+  }
+| SHOW CREATE FUNCTION table_name
+  {
+    $$ = &Show{&ShowCreate{Command: CreateF, Op: $4}}
+  }
+| SHOW CREATE PROCEDURE table_name
+  {
+    $$ = &Show{&ShowCreate{Command: CreateProc, Op: $4}}
+  }
+| SHOW CREATE TABLE table_name
+  {
+    $$ = &Show{&ShowCreate{Command: CreateTbl, Op: $4}}
+  }
+| SHOW CREATE TRIGGER table_name
+  {
+    $$ = &Show{&ShowCreate{Command: CreateTr, Op: $4}}
+  }
+| SHOW CREATE VIEW table_name
+  {
+    $$ = &Show{&ShowCreate{Command: CreateV, Op: $4}}
+  }
+| SHOW CREATE USER ddl_skip_to_end
+  {
+    $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3), Scope: ImplicitScope}}
+   }
 |  SHOW BINARY id_or_var ddl_skip_to_end /* SHOW BINARY ... */
   {
     $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3.String()), Scope: ImplicitScope}}
   }
 |  SHOW BINARY LOGS ddl_skip_to_end /* SHOW BINARY LOGS */
-  {
-    $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3), Scope: ImplicitScope}}
-  }
-| SHOW CREATE DATABASE ddl_skip_to_end
-  {
-    $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3), Scope: ImplicitScope}}
-  }
-| SHOW CREATE FUNCTION table_name
-  {
-    $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3), Table: $4, Scope: ImplicitScope}}
-  }
-/* Rule to handle SHOW CREATE EVENT, SHOW CREATE FUNCTION, etc. */
-| SHOW CREATE id_or_var ddl_skip_to_end
-  {
-    $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3.String()), Scope: ImplicitScope}}
-  }
-| SHOW CREATE PROCEDURE ddl_skip_to_end
-  {
-    $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3), Scope: ImplicitScope}}
-  }
-| SHOW CREATE TABLE table_name
-  {
-    $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3), Table: $4, Scope: ImplicitScope}}
-  }
-| SHOW CREATE TRIGGER ddl_skip_to_end
-  {
-    $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3), Scope: ImplicitScope}}
-  }
-| SHOW CREATE VIEW ddl_skip_to_end
   {
     $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3), Scope: ImplicitScope}}
   }
@@ -4883,6 +4886,7 @@ non_reserved_keyword:
 | ENUM
 | ERROR
 | ESCAPED
+| EVENT
 | EXCHANGE
 | EXCLUDE
 | EXCLUSIVE
@@ -5061,6 +5065,7 @@ non_reserved_keyword:
 | UNSIGNED
 | UNUSED
 | UPGRADE
+| USER
 | USER_RESOURCES
 | VALIDATION
 | VARBINARY
