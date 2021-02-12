@@ -129,12 +129,13 @@ func analyzeInsert(ins *sqlparser.Insert, tables map[string]*schema.Table) (plan
 
 func analyzeShow(show *sqlparser.Show, dbName string) (plan *Plan, err error) {
 	switch showInternal := show.Internal.(type) {
-	case *sqlparser.ShowLegacy:
-		if showInternal.Type == sqlparser.KeywordString(sqlparser.TABLES) {
+	case *sqlparser.ShowBasic:
+		switch showInternal.Command {
+		case sqlparser.Table, sqlparser.TableFull:
 			// rewrite WHERE clause if it exists
 			// `where Tables_in_Keyspace` => `where Tables_in_DbName`
-			if showInternal.ShowTablesOpt != nil && showInternal.ShowTablesOpt.Filter != nil {
-				filter := showInternal.ShowTablesOpt.Filter.Filter
+			if showInternal.Filter != nil {
+				filter := showInternal.Filter.Filter
 				if filter != nil {
 					sqlparser.Rewrite(filter, func(cursor *sqlparser.Cursor) bool {
 						switch n := cursor.Node().(type) {
