@@ -1607,7 +1607,7 @@ var (
 			output: "create database test_db",
 		}, {
 			input:  "create database if not exists test_db",
-			output: "create database test_db",
+			output: "create database if not exists test_db",
 		}, {
 			input: "drop database test_db",
 		}, {
@@ -1615,7 +1615,7 @@ var (
 			output: "drop database test_db",
 		}, {
 			input:  "drop database if exists test_db",
-			output: "drop database test_db",
+			output: "drop database if exists test_db",
 		}, {
 			input: "drop trigger trigger1",
 		}, {
