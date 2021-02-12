@@ -745,6 +745,10 @@ func replaceShowBasicFilter(newNode, parent SQLNode) {
 	parent.(*ShowBasic).Filter = newNode.(*ShowFilter)
 }
 
+func replaceShowBasicTbl(newNode, parent SQLNode) {
+	parent.(*ShowBasic).Tbl = newNode.(TableName)
+}
+
 func replaceShowColumnsFilter(newNode, parent SQLNode) {
 	parent.(*ShowColumns).Filter = newNode.(*ShowFilter)
 }
@@ -1523,6 +1527,7 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 
 	case *ShowBasic:
 		a.apply(node, n.Filter, replaceShowBasicFilter)
+		a.apply(node, n.Tbl, replaceShowBasicTbl)
 
 	case *ShowColumns:
 		a.apply(node, n.Filter, replaceShowColumnsFilter)

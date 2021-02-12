@@ -212,10 +212,21 @@ const (
 	// ShowCommand Types
 	CharsetStr         = " charset"
 	CollationStr       = " collation"
+	ColumnStr          = " columns"
+	CreateDbStr        = " create database"
+	CreateEStr         = " create event"
+	CreateFStr         = " create function"
+	CreateProcStr      = " create procedure"
+	CreateTblStr       = " create table"
+	CreateTrStr        = " create trigger"
+	CreateVStr         = " create view"
 	DatabaseStr        = " databases"
+	FunctionCStr       = " function code"
 	FunctionStr        = " function status"
+	IndexStr           = " indexes"
 	OpenTableStr       = " open tables"
 	PrivilegeStr       = " privileges"
+	ProcedureCStr      = " procedure code"
 	ProcedureStr       = " procedure status"
 	StatusGlobalStr    = " global status"
 	StatusSessionStr   = " status"
@@ -456,10 +467,21 @@ const (
 	UnknownCommandType ShowCommandType = iota
 	Charset
 	Collation
+	Column
+	CreateDb
+	CreateE
+	CreateF
+	CreateProc
+	CreateTbl
+	CreateTr
+	CreateV
 	Database
+	FunctionC
 	Function
+	Index
 	OpenTable
 	Privilege
+	ProcedureC
 	Procedure
 	StatusGlobal
 	StatusSession

@@ -1227,14 +1227,36 @@ func (ty ShowCommandType) ToString() string {
 		return CharsetStr
 	case Collation:
 		return CollationStr
+	case Column:
+		return ColumnStr
+	case CreateDb:
+		return CreateDbStr
+	case CreateE:
+		return CreateEStr
+	case CreateF:
+		return CreateFStr
+	case CreateProc:
+		return CreateProcStr
+	case CreateTbl:
+		return CreateTblStr
+	case CreateTr:
+		return CreateTrStr
+	case CreateV:
+		return CreateVStr
 	case Database:
 		return DatabaseStr
+	case FunctionC:
+		return FunctionCStr
 	case Function:
 		return FunctionStr
+	case Index:
+		return IndexStr
 	case OpenTable:
 		return OpenTableStr
 	case Privilege:
 		return PrivilegeStr
+	case ProcedureC:
+		return ProcedureCStr
 	case Procedure:
 		return ProcedureStr
 	case StatusGlobal:
@@ -1254,7 +1276,8 @@ func (ty ShowCommandType) ToString() string {
 	case Keyspace:
 		return KeyspaceStr
 	default:
-		return "Unknown ShowCommandType"
+		return "" +
+			"Unknown ShowCommandType"
 	}
 }
 

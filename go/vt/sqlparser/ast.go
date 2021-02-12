@@ -1229,6 +1229,7 @@ type (
 	ShowBasic struct {
 		Command ShowCommandType
 		Full    bool
+		Tbl     TableName
 		DbName  string
 		Filter  *ShowFilter
 	}
@@ -3168,6 +3169,9 @@ func (node *ShowBasic) Format(buf *TrackedBuffer) {
 		buf.WriteString(" full")
 	}
 	buf.astPrintf(node, "%s", node.Command.ToString())
+	if !node.Tbl.IsEmpty() {
+		buf.astPrintf(node, " from %v", node.Tbl)
+	}
 	if node.DbName != "" {
 		buf.astPrintf(node, " from %s", node.DbName)
 	}
