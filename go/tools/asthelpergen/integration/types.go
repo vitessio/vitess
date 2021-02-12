@@ -32,17 +32,13 @@ type (
 	//	Values []AST
 	//}
 	//
-	//UnaryMinus struct {
-	//	Val *LiteralInt
-	//}
+	UnaryMinus struct {
+		Val *LiteralInt
+	}
 	//
 	LiteralInt struct {
 		Val int
 	}
-
-	//String struct {
-	//	Val string
-	//}
 
 	//ArrayDef []AST
 )
@@ -50,10 +46,9 @@ type (
 func (*Plus) i() {}
 
 //func (*Array) i()       {}
-//func (*UnaryMinus) i()  {}
+func (*UnaryMinus) i() {}
 func (*LiteralInt) i() {}
 
-//func (String) i()       {}
 //func (ArrayDef) i()     {}
 
 type application struct {
