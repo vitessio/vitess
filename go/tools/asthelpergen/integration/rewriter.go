@@ -29,6 +29,9 @@ func (a *application) apply(parent, node AST, replacer replacerFunc) {
 		a.cursor = saved
 		return
 	}
+	switch n := node.(type) {
+	case *LiteralInt:
+	}
 	if a.post != nil && !a.post(&a.cursor) {
 		panic(abort)
 	}
