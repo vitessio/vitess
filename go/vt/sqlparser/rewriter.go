@@ -749,12 +749,8 @@ func replaceShowBasicTbl(newNode, parent SQLNode) {
 	parent.(*ShowBasic).Tbl = newNode.(TableName)
 }
 
-func replaceShowColumnsFilter(newNode, parent SQLNode) {
-	parent.(*ShowColumns).Filter = newNode.(*ShowFilter)
-}
-
-func replaceShowColumnsTable(newNode, parent SQLNode) {
-	parent.(*ShowColumns).Table = newNode.(TableName)
+func replaceShowCreateOp(newNode, parent SQLNode) {
+	parent.(*ShowCreate).Op = newNode.(TableName)
 }
 
 func replaceShowFilterFilter(newNode, parent SQLNode) {
@@ -771,10 +767,6 @@ func replaceShowLegacyShowCollationFilterOpt(newNode, parent SQLNode) {
 
 func replaceShowLegacyTable(newNode, parent SQLNode) {
 	parent.(*ShowLegacy).Table = newNode.(TableName)
-}
-
-func replaceShowTableStatusFilter(newNode, parent SQLNode) {
-	parent.(*ShowTableStatus).Filter = newNode.(*ShowFilter)
 }
 
 func replaceStarExprTableName(newNode, parent SQLNode) {
@@ -1529,9 +1521,8 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 		a.apply(node, n.Filter, replaceShowBasicFilter)
 		a.apply(node, n.Tbl, replaceShowBasicTbl)
 
-	case *ShowColumns:
-		a.apply(node, n.Filter, replaceShowColumnsFilter)
-		a.apply(node, n.Table, replaceShowColumnsTable)
+	case *ShowCreate:
+		a.apply(node, n.Op, replaceShowCreateOp)
 
 	case *ShowFilter:
 		a.apply(node, n.Filter, replaceShowFilterFilter)
@@ -1540,9 +1531,6 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 		a.apply(node, n.OnTable, replaceShowLegacyOnTable)
 		a.apply(node, n.ShowCollationFilterOpt, replaceShowLegacyShowCollationFilterOpt)
 		a.apply(node, n.Table, replaceShowLegacyTable)
-
-	case *ShowTableStatus:
-		a.apply(node, n.Filter, replaceShowTableStatusFilter)
 
 	case *StarExpr:
 		a.apply(node, n.TableName, replaceStarExprTableName)
