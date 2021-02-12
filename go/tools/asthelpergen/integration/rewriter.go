@@ -31,6 +31,7 @@ func (a *application) apply(parent, node AST, replacer replacerFunc) {
 	}
 	switch n := node.(type) {
 	case *LiteralInt:
+	case *Plus:
 	}
 	if a.post != nil && !a.post(&a.cursor) {
 		panic(abort)
