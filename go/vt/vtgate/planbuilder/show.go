@@ -41,8 +41,6 @@ func buildShowPlan(stmt *sqlparser.Show, vschema ContextVSchema) (engine.Primiti
 	switch show := stmt.Internal.(type) {
 	case *sqlparser.ShowBasic:
 		return buildShowBasicPlan(show, vschema)
-	case *sqlparser.ShowColumns:
-		return buildShowColumnsPlan(show, vschema)
 	default:
 		return nil, ErrPlanNotSupported
 	}
@@ -55,6 +53,8 @@ func buildShowBasicPlan(show *sqlparser.ShowBasic, vschema ContextVSchema) (engi
 	case sqlparser.Collation, sqlparser.Function, sqlparser.Privilege, sqlparser.Procedure,
 		sqlparser.VariableGlobal, sqlparser.VariableSession:
 		return buildSendAnywherePlan(show, vschema)
+	case sqlparser.Column, sqlparser.Index:
+		return buildShowTblPlan(show, vschema)
 	case sqlparser.Database, sqlparser.Keyspace:
 		return buildDBPlan(show, vschema)
 	case sqlparser.OpenTable, sqlparser.TableStatus, sqlparser.Table, sqlparser.Trigger:
@@ -94,16 +94,16 @@ func buildSendAnywherePlan(show *sqlparser.ShowBasic, vschema ContextVSchema) (e
 	}, nil
 }
 
-func buildShowColumnsPlan(show *sqlparser.ShowColumns, vschema ContextVSchema) (engine.Primitive, error) {
+func buildShowTblPlan(show *sqlparser.ShowBasic, vschema ContextVSchema) (engine.Primitive, error) {
 	if show.DbName != "" {
-		show.Table.Qualifier = sqlparser.NewTableIdent(show.DbName)
+		show.Tbl.Qualifier = sqlparser.NewTableIdent(show.DbName)
 	}
-	table, _, _, _, destination, err := vschema.FindTableOrVindex(show.Table)
+	table, _, _, _, destination, err := vschema.FindTableOrVindex(show.Tbl)
 	if err != nil {
 		return nil, err
 	}
 	if table == nil {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "table does not exists: %s", show.Table.Name.String())
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "table does not exists: %s", show.Tbl.Name.String())
 	}
 	if destination == nil {
 		destination = key.DestinationAnyShard{}
@@ -111,8 +111,8 @@ func buildShowColumnsPlan(show *sqlparser.ShowColumns, vschema ContextVSchema) (
 
 	// Remove Database Name from the query.
 	show.DbName = ""
-	show.Table.Qualifier = sqlparser.NewTableIdent("")
-	show.Table.Name = table.Name
+	show.Tbl.Qualifier = sqlparser.NewTableIdent("")
+	show.Tbl.Name = table.Name
 
 	return &engine.Send{
 		Keyspace:          table.Keyspace,
@@ -121,7 +121,6 @@ func buildShowColumnsPlan(show *sqlparser.ShowColumns, vschema ContextVSchema) (
 		IsDML:             false,
 		SingleShardOnly:   true,
 	}, nil
-
 }
 
 func buildDBPlan(show *sqlparser.ShowBasic, vschema ContextVSchema) (engine.Primitive, error) {
