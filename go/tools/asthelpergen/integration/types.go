@@ -24,10 +24,10 @@ type (
 		i()
 	}
 
-	//Plus struct {
-	//	Left, Right AST
-	//}
-	//
+	Plus struct {
+		Left, Right AST
+	}
+
 	//Array struct {
 	//	Values []AST
 	//}
@@ -47,7 +47,8 @@ type (
 	//ArrayDef []AST
 )
 
-//func (*Plus) i()        {}
+func (*Plus) i() {}
+
 //func (*Array) i()       {}
 //func (*UnaryMinus) i()  {}
 func (*LiteralInt) i() {}
