@@ -1346,9 +1346,6 @@ func TestEmergencyReparenter_promoteNewPrimary(t *testing.T) {
 				},
 			},
 			statusMap: map[string]*replicationdatapb.StopReplicationStatus{},
-			opts: EmergencyReparentOptions{
-				WaitReplicasTimeout: time.Millisecond * 10,
-			},
 			shouldErr: false,
 		},
 	}

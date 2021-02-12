@@ -151,9 +151,22 @@ func (erp *EmergencyReparenter) promoteNewPrimary(
 
 	event.DispatchUpdate(ev, "reparenting all tablets")
 
+	// Create a context and cancel function to watch for the first successful
+	// SetMaster call on a replica. We use a background context so that this
+	// context is only ever Done when its cancel is called by the background
+	// goroutine we're about to spin up.
+	//
+	// Similarly, create a context and cancel for the replica waiter goroutine
+	// to signal when all replica goroutines have finished. In the case where at
+	// least one replica succeeds, replSuccessCtx will be canceled first, while
+	// allReplicasDoneCtx is guaranteed to be canceled within
+	// opts.WaitReplicasTimeout plus some jitter.
+	replSuccessCtx, replSuccessCancel := context.WithCancel(context.Background())
+	allReplicasDoneCtx, allReplicasDoneCancel := context.WithCancel(context.Background())
+
 	now := time.Now().UnixNano()
 	replWg := sync.WaitGroup{}
-	errCh := make(chan error)
+	rec := concurrency.AllErrorRecorder{}
 
 	handlePrimary := func(alias string, ti *topo.TabletInfo) error {
 		erp.logger.Infof("populating reparent journal on new master %v", alias)
@@ -164,60 +177,24 @@ func (erp *EmergencyReparenter) promoteNewPrimary(
 		defer replWg.Done()
 		erp.logger.Infof("setting new master on replica %v", alias)
 
-		var err error
-		defer func() { errCh <- err }()
-
 		forceStart := false
 		if status, ok := statusMap[alias]; ok {
 			forceStart = ReplicaWasRunning(status)
 		}
 
-		err = erp.tmc.SetMaster(replCtx, ti.Tablet, newPrimaryTabletInfo.Alias, now, "", forceStart)
+		err := erp.tmc.SetMaster(replCtx, ti.Tablet, newPrimaryTabletInfo.Alias, now, "", forceStart)
 		if err != nil {
 			err = vterrors.Wrapf(err, "tablet %v SetMaster failed: %v", alias, err)
+			rec.RecordError(err)
+
+			return
 		}
+
+		// Signal that at least one goroutine succeeded to SetMaster.
+		replSuccessCancel()
 	}
 
-	// Create a context and cancel function to watch for the first successful
-	// SetMaster call on a replica. We use a background context so that this
-	// context is only ever Done when its cancel is called by the background
-	// goroutine we're about to spin up.
-	//
-	// Similarly, create a context and cancel for the error poller goroutine to
-	// signal when it's finished processing every replica goroutine. In the case
-	// where at least one replica succeeds, replSuccessCtx will be canceled
-	// first, while allReplicasDoneCtx is guaranteed to be canceled within
-	// opts.WaitReplicasTimeout plus some jitter.
-	replSuccessCtx, replSuccessCancel := context.WithCancel(context.Background())
-	allReplicasDoneCtx, allReplicasDoneCancel := context.WithCancel(context.Background())
-	rec := concurrency.AllErrorRecorder{}
-
-	// Spin up a goroutine to log and record every error from the replicas, to
-	// ensure we don't leave a goroutine blocked on channel send. If we get a
-	// non-nil error, call the replSuccessCtx's cancel function to signal back
-	// that we got at least one successful SetMaster.
-	//
-	// A separate background goroutine will wait until all replica goroutines
-	// finish and close the errCh, so this goroutine does not block on channel
-	// receive forever.
-	go func() {
-		for err := range errCh {
-			switch err {
-			case nil:
-				replSuccessCancel()
-			default:
-				erp.logger.Errorf("SetMaster failure: %v", err)
-				rec.RecordError(err)
-			}
-		}
-
-		allReplicasDoneCancel()
-	}()
-
-	go func() {
-		replWg.Wait()
-		close(errCh)
-	}()
+	numReplicas := 0
 
 	for alias, ti := range tabletMap {
 		switch {
@@ -225,9 +202,19 @@ func (erp *EmergencyReparenter) promoteNewPrimary(
 			continue
 		case !opts.IgnoreReplicas.Has(alias):
 			replWg.Add(1)
+			numReplicas++
 			go handleReplica(alias, ti)
 		}
 	}
+
+	// Spin up a background goroutine to wait until all replica goroutines
+	// finished. If one replica is slow, but another finishes quickly, the main
+	// thread of execution in this function while this goroutine will run until
+	// the parent context times out, without slowing down the flow of ERS.
+	go func() {
+		replWg.Wait()
+		allReplicasDoneCancel()
+	}()
 
 	primaryErr := handlePrimary(newPrimaryTabletAlias, newPrimaryTabletInfo)
 	if primaryErr != nil {
@@ -242,14 +229,18 @@ func (erp *EmergencyReparenter) promoteNewPrimary(
 		// At least one replica was able to SetMaster successfully
 		return nil
 	case <-allReplicasDoneCtx.Done():
-		// The error poller goroutine finished processing every replica, and was
-		// unable to find a single one that succeed. Every one either failed, in
-		// which case the recorder will have some errors, or timed out.
-		if rec.HasErrors() {
-			return rec.Error()
+		if len(rec.Errors) >= numReplicas {
+			// There are certain timing issues between replSuccessCtx.Done
+			// firing and allReplicasDoneCtx.Done firing, so we check again if
+			// truly all replicas failed (where `numReplicas` goroutines
+			// recorded an error) or one or more actually managed to succeed.
+			//
+			// Technically, rec.Errors should never be greater than numReplicas,
+			// but it's better to err on the side of caution here.
+			return vterrors.Wrapf(rec.Error(), "%d replica(s) failed: %v", len(rec.Errors), rec.Error())
 		}
 
-		return vterrors.Wrapf(replCtx.Err(), "timed out waiting for at least one replica to successfully SetMaster")
+		return nil
 	}
 }
 
