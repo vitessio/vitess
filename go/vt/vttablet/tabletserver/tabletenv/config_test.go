@@ -131,6 +131,7 @@ oltpReadPool:
   idleTimeoutSeconds: 1800
   maxWaiters: 5000
   size: 16
+queryCacheLFU: true
 queryCacheMemory: 33554432
 queryCacheSize: 5000
 replicationTracker:

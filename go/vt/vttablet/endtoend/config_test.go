@@ -27,6 +27,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/cache"
+	"vitess.io/vitess/go/cache/ristretto"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -178,9 +179,8 @@ func TestConsolidatorReplicasOnly(t *testing.T) {
 
 func TestQueryPlanCache(t *testing.T) {
 	if cache.DefaultConfig.LFU {
-		const cacheItemSize = 40
-		const cachedPlanSize = 2275 + cacheItemSize
-		const cachePlanSize2 = 2254 + cacheItemSize
+		const cachedPlanSize = 2352 + int(ristretto.CacheItemSize)
+		const cachePlanSize2 = 2326 + int(ristretto.CacheItemSize)
 		testQueryPlanCache(t, cachedPlanSize, cachePlanSize2)
 	} else {
 		testQueryPlanCache(t, 1, 1)
@@ -203,7 +203,7 @@ func testQueryPlanCache(t *testing.T, cachedPlanSize, cachePlanSize2 int) {
 	client := framework.NewClient()
 	_, _ = client.Execute("select * from vitess_test where intval=:ival1", bindVars)
 	_, _ = client.Execute("select * from vitess_test where intval=:ival2", bindVars)
-	time.Sleep(100 * time.Millisecond)
+	assert.Equal(t, 1, framework.Server.QueryPlanCacheLen())
 
 	vend := framework.DebugVars()
 	verifyIntValue(t, vend, "QueryCacheLength", 1)
@@ -212,13 +212,14 @@ func testQueryPlanCache(t *testing.T, cachedPlanSize, cachePlanSize2 int) {
 
 	framework.Server.SetQueryPlanCacheCap(64 * 1024)
 	_, _ = client.Execute("select * from vitess_test where intval=:ival1", bindVars)
-	time.Sleep(100 * time.Millisecond)
+	require.Equal(t, 2, framework.Server.QueryPlanCacheLen())
 
 	vend = framework.DebugVars()
 	verifyIntValue(t, vend, "QueryCacheLength", 2)
 	verifyIntValue(t, vend, "QueryCacheSize", cachedPlanSize*2)
+
 	_, _ = client.Execute("select * from vitess_test where intval=1", bindVars)
-	time.Sleep(100 * time.Millisecond)
+	require.Equal(t, 3, framework.Server.QueryPlanCacheLen())
 
 	vend = framework.DebugVars()
 	verifyIntValue(t, vend, "QueryCacheLength", 3)
