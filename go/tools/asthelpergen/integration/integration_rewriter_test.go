@@ -17,7 +17,10 @@ limitations under the License.
 package integration
 
 import (
+	"reflect"
 	"testing"
+
+	"vitess.io/vitess/go/test/utils"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -25,7 +28,7 @@ import (
 func TestVisit(t *testing.T) {
 	one := &LiteralInt{1}
 	minusOne := &UnaryMinus{Val: one}
-	two := &LiteralInt{1}
+	two := &LiteralInt{2}
 	plus := &Plus{Left: minusOne, Right: two}
 
 	var preOrder, postOrder []AST
@@ -42,10 +45,48 @@ func TestVisit(t *testing.T) {
 		cursor: Cursor{},
 	}
 
-	// visit
 	a.apply(nil, plus, nil)
 
 	assert.Equal(t, []AST{plus, minusOne, one, two}, preOrder, "pre-order wrong")
 	assert.Equal(t, []AST{one, minusOne, two, plus}, postOrder, "post-order wrong")
+}
 
+func TestDeepEqualsWorksForAST(t *testing.T) {
+	one := &LiteralInt{1}
+	two := &LiteralInt{2}
+	plus := &Plus{Left: one, Right: two}
+	oneB := &LiteralInt{1}
+	twoB := &LiteralInt{2}
+	plusB := &Plus{Left: oneB, Right: twoB}
+
+	if !reflect.DeepEqual(plus, plusB) {
+		t.Fatalf("oh noes")
+	}
+}
+
+func TestReplace(t *testing.T) {
+	one := &LiteralInt{1}
+	two := &LiteralInt{2}
+	plus := &Plus{Left: one, Right: two}
+	four := &LiteralInt{4}
+	expected := &Plus{Left: two, Right: four}
+
+	parent := &struct{ AST }{plus}
+
+	a := &application{
+		pre: func(cursor *Cursor) bool {
+			switch n := cursor.node.(type) {
+			case *LiteralInt:
+				newNode := &LiteralInt{Val: n.Val * 2}
+				cursor.replacer(newNode, cursor.parent)
+			}
+			return true
+		},
+		post:   nil,
+		cursor: Cursor{},
+	}
+
+	a.apply(parent, plus, nil)
+
+	utils.MustMatch(t, expected, parent.AST)
 }
