@@ -52,11 +52,6 @@ type astHelperGen struct {
 	iface      *types.Interface
 }
 
-type rewriterFile struct {
-	cases          []jen.Code
-	replaceMethods []jen.Code
-}
-
 func newGenerator(mod *packages.Module, sizes types.Sizes, named *types.Named) *astHelperGen {
 	return &astHelperGen{
 		DebugTypes: true,
@@ -67,59 +62,53 @@ func newGenerator(mod *packages.Module, sizes types.Sizes, named *types.Named) *
 	}
 }
 
-func findImplementations(scope *types.Scope, iff *types.Interface, impl func(types.Type)) {
+func findImplementations(scope *types.Scope, iff *types.Interface, impl func(types.Type) error) error {
 	for _, name := range scope.Names() {
 		obj := scope.Lookup(name)
 		baseType := obj.Type()
 		if types.Implements(baseType, iff) || types.Implements(types.NewPointer(baseType), iff) {
-			impl(baseType)
+			err := impl(baseType)
+			if err != nil {
+				return err
+			}
 		}
 	}
+	return nil
 }
 
 func (gen *astHelperGen) doIt() (map[string]*jen.File, error) {
 	pkg := gen.namedIface.Obj().Pkg()
-	rewriter := &rewriterFile{}
+
+	rewriter := newRewriterGen(func(t types.Type) bool {
+		return types.Implements(t, gen.iface)
+	}, gen.namedIface.Obj().Name())
 
 	iface, ok := gen.iface.Underlying().(*types.Interface)
 	if !ok {
 		return nil, fmt.Errorf("expected interface, but got %T", gen.iface)
 	}
 
-	var outerErr error
-
-	findImplementations(pkg.Scope(), iface, func(t types.Type) {
+	err := findImplementations(pkg.Scope(), iface, func(t types.Type) error {
 		nt := t.(*types.Named)
 
 		switch n := t.Underlying().(type) {
 		case *types.Struct:
-			switchCase, err := gen.rewriterStructCase(nt.Obj().Name(), n)
-			if err != nil {
-				outerErr = err
-				return
-			}
-			rewriter.cases = append(rewriter.cases, switchCase)
-
-			replaceMethods, err := gen.rewriterReplaceMethods(t.String(), n)
-			if err != nil {
-				outerErr = err
-				return
-			}
-			rewriter.replaceMethods = append(rewriter.cases, replaceMethods...)
+			return rewriter.visitStruct(nt, n)
 		case *types.Interface:
 
 		default:
 			fmt.Printf("unknown %T\n", t)
 		}
+		return nil
 	})
 
-	if outerErr != nil {
-		return nil, outerErr
+	if err != nil {
+		return nil, err
 	}
 
 	result := map[string]*jen.File{}
 	fullPath := path.Join(gen.mod.Dir, strings.TrimPrefix(pkg.Path(), gen.mod.Path), "rewriter.go")
-	result[fullPath] = gen.rewriterFile(pkg.Name(), rewriter)
+	result[fullPath] = rewriter.createFile(pkg.Name())
 
 	return result, nil
 }
