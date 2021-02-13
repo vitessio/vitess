@@ -1603,6 +1603,7 @@ var (
 			input: "select name, dense_rank() over () from t",
 		}, {
 			input: "select name, avg(a) over (partition by b) as avg from t",
+			output: "select name, avg(a) over (partition by b) as `avg` from t",
 		}, {
 			input: "select name, bit_and(a) over (partition by b) from t",
 		}, {
@@ -1612,7 +1613,8 @@ var (
 		}, {
 			input: "select name, count(distinct a) over (partition by b) from t",
 		}, {
-			input: "select name, count(a) over (partition by b) from t",
+			input: "select name, count(a) over (partition by b) as count from t",
+			output: "select name, count(a) over (partition by b) as `count` from t",
 		}, {
 			input: "select name, json_arrayagg(a) over (partition by b) from t",
 		}, {
@@ -1632,7 +1634,8 @@ var (
 		}, {
 			input: "select name, sum(a) over (partition by b) from t",
 		}, {
-			input: "select name, sum(distinct a) over (partition by b) from t",
+			input: "select name, sum(distinct a) over (partition by b) as SUM from t",
+			output: "select name, sum(distinct a) over (partition by b) as `SUM` from t",
 		}, {
 			input: "select name, var_pop(a) over (partition by b) from t",
 		}, {
