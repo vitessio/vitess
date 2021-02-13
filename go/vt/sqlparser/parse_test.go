@@ -1702,6 +1702,20 @@ var (
 		}, {
 			input: "select name, dense_rank() over window_name from t",
 		}, {
+			input: `SELECT pk,
+					(SELECT max(pk) FROM one_pk WHERE pk < opk.pk) AS max,
+					(SELECT min(pk) FROM one_pk WHERE pk > opk.pk) AS min
+					FROM one_pk opk
+					WHERE (SELECT min(pk) FROM one_pk WHERE pk > opk.pk) IS NOT NULL
+					ORDER BY max`,
+			output: "select pk, (select max(pk) from one_pk where pk < opk.pk) as `max`," +
+				" (select min(pk) from one_pk where pk > opk.pk) as `min` " +
+				"from one_pk as opk " +
+				"where (select min(pk) from one_pk where pk > opk.pk) " +
+				"is not null order by `max` asc",
+		}, {
+			input: "select i, s as max from mytable group by max",
+		}, {
 			input: "stream * from t",
 		}, {
 			input: "stream /* comment */ * from t",

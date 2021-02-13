@@ -2555,7 +2555,7 @@ table_factor:
   {
     $$ = $1
   }
-| subquery as_opt table_id
+| subquery as_opt table_alias
   {
     $$ = &AliasedTableExpr{Expr:$1, As: $3}
   }
@@ -2693,6 +2693,10 @@ as_opt:
 
 table_alias:
   table_id
+| column_name_safe_reserved_keyword
+  {
+    $$ = NewTableIdent(string($1))
+  }
 | STRING
   {
     $$ = NewTableIdent(string($1))
@@ -3688,6 +3692,10 @@ order:
   expression asc_desc_opt
   {
     $$ = &Order{Expr: $1, Direction: $2}
+  }
+| column_name_safe_reserved_keyword asc_desc_opt
+  {
+    $$ = &Order{Expr: &ColName{Name: NewColIdent(string($1))}, Direction: $2}
   }
 
 asc_desc_opt:
