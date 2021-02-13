@@ -261,7 +261,7 @@ func skipToEnd(yylex interface{}) {
 %type <expr> like_escape_opt
 %type <selectExprs> select_expression_list select_expression_list_opt
 %type <selectExpr> select_expression
-%type <expr> expression naked_like
+%type <expr> expression naked_like group_by
 %type <tableExprs> from_opt table_references
 %type <tableExpr> table_reference table_factor join_table
 %type <joinCondition> join_condition join_condition_opt on_expression_opt
@@ -280,7 +280,7 @@ func skipToEnd(yylex interface{}) {
 %type <expr> func_datetime_precision function_call_window function_call_aggregate_with_window
 %type <str> is_suffix
 %type <colTuple> col_tuple
-%type <exprs> expression_list
+%type <exprs> expression_list group_by_list
 %type <values> tuple_list
 %type <valTuple> row_tuple tuple_or_empty
 %type <expr> tuple_expression
@@ -290,7 +290,7 @@ func skipToEnd(yylex interface{}) {
 %type <when> when_expression
 %type <expr> expression_opt else_expression_opt
 %type <exprs> group_by_opt
-%type <expr> having_opt
+%type <expr> having_opt having
 %type <orderBy> order_by_opt order_list
 %type <columnOrder> column_order_opt
 %type <triggerOrder> trigger_order_opt
@@ -3655,18 +3655,48 @@ group_by_opt:
   {
     $$ = nil
   }
-| GROUP BY expression_list
+| GROUP BY group_by_list
   {
     $$ = $3
+  }
+
+group_by_list:
+  group_by
+  {
+    $$ = Exprs{$1}
+  }
+| group_by_list ',' group_by
+  {
+    $$ = append($1, $3)
+  }
+
+group_by:
+  expression
+  {
+    $$ = $1
+  }
+| column_name_safe_reserved_keyword
+  {
+    $$ = &ColName{Name: NewColIdent(string($1))}
   }
 
 having_opt:
   {
     $$ = nil
   }
-| HAVING expression
+| HAVING having
   {
     $$ = $2
+  }
+
+having:
+  expression
+  {
+    $$ = $1
+  }
+| column_name_safe_reserved_keyword
+  {
+    $$ = &ColName{Name: NewColIdent(string($1))}
   }
 
 order_by_opt:
