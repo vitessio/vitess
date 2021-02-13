@@ -66,8 +66,15 @@ func findImplementations(scope *types.Scope, iff *types.Interface, impl func(typ
 	for _, name := range scope.Names() {
 		obj := scope.Lookup(name)
 		baseType := obj.Type()
-		if types.Implements(baseType, iff) || types.Implements(types.NewPointer(baseType), iff) {
+		if types.Implements(baseType, iff) {
 			err := impl(baseType)
+			if err != nil {
+				return err
+			}
+		}
+		pointerT := types.NewPointer(baseType)
+		if types.Implements(pointerT, iff) {
+			err := impl(pointerT)
 			if err != nil {
 				return err
 			}
@@ -89,11 +96,25 @@ func (gen *astHelperGen) doIt() (map[string]*jen.File, error) {
 	}
 
 	err := findImplementations(pkg.Scope(), iface, func(t types.Type) error {
-		nt := t.(*types.Named)
+		var nt *types.Named
+
+		switch node := t.(type) {
+		case *types.Named:
+			nt = node
+		case *types.Pointer:
+			named, ok := node.Elem().(*types.Named)
+			if !ok {
+				return fmt.Errorf("oh noes")
+			}
+			nt = named
+		}
 
 		switch n := t.Underlying().(type) {
 		case *types.Struct:
-			return rewriter.visitStruct(nt, n)
+			return rewriter.visitStruct(t, nt, n)
+		case *types.Pointer:
+			a := n.Elem().Underlying().(*types.Struct)
+			return rewriter.visitStruct(t, nt, a)
 		case *types.Interface:
 
 		default:

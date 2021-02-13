@@ -17,6 +17,15 @@ limitations under the License.
 
 package integration
 
+func replacePlusLeft(newNode, parent AST) {
+	parent.(*Plus).Left = newNode.(AST)
+}
+func replacePlusRight(newNode, parent AST) {
+	parent.(*Plus).Right = newNode.(AST)
+}
+func replaceUnaryMinusVal(newNode, parent AST) {
+	parent.(*UnaryMinus).Val = newNode.(*LiteralInt)
+}
 func (a *application) apply(parent, node AST, replacer replacerFunc) {
 	if node == nil || isNilValue(node) {
 		return
@@ -32,10 +41,10 @@ func (a *application) apply(parent, node AST, replacer replacerFunc) {
 	switch n := node.(type) {
 	case *LiteralInt:
 	case *Plus:
-		a.apply(node, n.Left, nil)
-		a.apply(node, n.Right, nil)
+		a.apply(node, n.Left, replacePlusLeft)
+		a.apply(node, n.Right, replacePlusRight)
 	case *UnaryMinus:
-		a.apply(node, n.Val, nil)
+		a.apply(node, n.Val, replaceUnaryMinusVal)
 	}
 	if a.post != nil && !a.post(&a.cursor) {
 		panic(abort)
