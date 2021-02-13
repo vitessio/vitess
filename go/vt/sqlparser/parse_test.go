@@ -1534,6 +1534,12 @@ var (
 		}, {
 			input: "select MAX(distinct k) from t1",
 		}, {
+			input: "select MAX(distinct k) as min from t1",
+			output: "select MAX(distinct k) as `min` from t1",
+		}, {
+			input: "select MIn(distinct k) as Max from t1",
+			output: "select MIn(distinct k) as `Max` from t1",
+		}, {
 			input: "select avg(distinct k) from t1",
 		}, {
 			input: "select distinct k collate latin1_german2_ci from t1",
@@ -1596,7 +1602,7 @@ var (
 		}, {
 			input: "select name, dense_rank() over () from t",
 		}, {
-			input: "select name, avg(a) over (partition by b) from t",
+			input: "select name, avg(a) over (partition by b) as avg from t",
 		}, {
 			input: "select name, bit_and(a) over (partition by b) from t",
 		}, {

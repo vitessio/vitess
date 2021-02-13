@@ -316,7 +316,7 @@ func skipToEnd(yylex interface{}) {
 %type <empty> non_add_drop_or_rename_operation
 %type <empty> to_opt to_or_as as_opt column_opt describe definer_opt
 %type <empty> skip_to_end ddl_skip_to_end
-%type <bytes> reserved_keyword non_reserved_keyword
+%type <bytes> reserved_keyword non_reserved_keyword column_name_safe_reserved_keyword
 %type <colIdent> sql_id reserved_sql_id col_alias as_ci_opt using_opt
 %type <expr> charset_value
 %type <tableIdent> table_id reserved_table_id table_alias
@@ -2510,7 +2510,18 @@ as_ci_opt:
   }
 
 col_alias:
-  sql_id
+  ID
+    {
+      $$ = NewColIdent(string($1))
+    }
+| non_reserved_keyword
+    {
+      $$ = NewColIdent(string($1))
+    }
+| column_name_safe_reserved_keyword
+    {
+      $$ = NewColIdent(string($1))
+    }
 | STRING
   {
     $$ = NewColIdent(string($1))
@@ -4303,6 +4314,37 @@ non_reserved_keyword:
 | WRITE
 | YEAR
 | ZEROFILL
+
+// Reserved keywords that cause grammar conflicts in some places, but are safe to use as column name / alias identifiers.
+column_name_safe_reserved_keyword:
+  AVG
+| BIT_AND
+| BIT_OR
+| BIT_XOR
+| COUNT
+| CUME_DIST
+| DENSE_RANK
+| FIRST_VALUE
+| JSON_ARRAYAGG
+| JSON_OBJECTAGG
+| LAG
+| LAST_VALUE
+| LEAD openb
+| MAX
+| MIN
+| NTH_VALUE
+| NTILE
+| PERCENT_RANK
+| RANK
+| ROW_NUMBER
+| STD
+| STDDEV
+| STDDEV_POP
+| STDDEV_SAMP
+| SUM
+| VARIANCE
+| VAR_POP
+| VAR_SAMP
 
 openb:
   '('

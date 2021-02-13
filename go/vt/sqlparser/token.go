@@ -84,6 +84,7 @@ func NewTokenizer(r io.Reader) *Tokenizer {
 // NOTE: If you add new keywords, add them also to the reserved_keywords or
 // non_reserved_keywords grammar in sql.y -- this will allow the keyword to be used
 // in identifiers. See the docs for each grammar to determine which one to put it into.
+// Everything in this list will be escaped when used as identifier in printing.
 var keywords = map[string]int{
 	"_binary":             UNDERSCORE_BINARY,
 	"_utf8mb4":            UNDERSCORE_UTF8MB4,
