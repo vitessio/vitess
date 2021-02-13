@@ -208,9 +208,14 @@ func (erp *EmergencyReparenter) promoteNewPrimary(
 	}
 
 	// Spin up a background goroutine to wait until all replica goroutines
-	// finished. If one replica is slow, but another finishes quickly, the main
-	// thread of execution in this function while this goroutine will run until
-	// the parent context times out, without slowing down the flow of ERS.
+	// finished. Polling this way allows us to have promoteNewPrimary return
+	// success as soon as (a) the primary successfully populates its reparent
+	// journal and (b) at least one replica successfully begins replicating.
+	//
+	// If we were to follow the more common pattern of blocking on replWg.Wait()
+	// in the main body of promoteNewPrimary, we would be bound to the
+	// time of slowest replica, instead of the time of the fastest successful
+	// replica, and we want ERS to be fast.
 	go func() {
 		replWg.Wait()
 		allReplicasDoneCancel()
