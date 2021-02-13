@@ -21,15 +21,19 @@ import (
 	"testing"
 	"time"
 
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+
 	"github.com/stretchr/testify/assert"
 
 	"vitess.io/vitess/go/vt/mysqlctl/fakemysqldaemon"
 )
 
 func TestPoller(t *testing.T) {
+	target := querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA}
 	poller := &poller{}
 	mysqld := fakemysqldaemon.NewFakeMysqlDaemon(nil)
-	poller.InitDBConfig(mysqld)
+	poller.InitDBConfig(mysqld, target)
 
 	mysqld.ReplicationStatusError = errors.New("err")
 	_, err := poller.Status()
