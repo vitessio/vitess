@@ -65,11 +65,11 @@ import (
 
 var (
 	// ErrExecutorNotWritableTablet  is generated when executor is asked to run gh-ost on a read-only server
-	ErrExecutorNotWritableTablet = errors.New("Cannot run migration on non-writable tablet")
+	ErrExecutorNotWritableTablet = errors.New("cannot run migration on non-writable tablet")
 	// ErrExecutorMigrationAlreadyRunning is generated when an attempt is made to run an operation that conflicts with a running migration
-	ErrExecutorMigrationAlreadyRunning = errors.New("Cannot run migration since a migration is already running")
+	ErrExecutorMigrationAlreadyRunning = errors.New("cannot run migration since a migration is already running")
 	// ErrMigrationNotFound is returned by readMigration when given UUI cannot be found
-	ErrMigrationNotFound = errors.New("Migration not found")
+	ErrMigrationNotFound = errors.New("migration not found")
 )
 
 var vexecUpdateTemplates = []string{
