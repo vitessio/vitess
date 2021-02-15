@@ -55,7 +55,7 @@ func (w *WriteMetrics) Clear() {
 }
 
 func (w *WriteMetrics) String() string {
-	return fmt.Sprintf("WriteMetrics: inserts=%d, updates=%d, deletes=%d", w.inserts, w.updates, w.deletes)
+	return fmt.Sprintf("WriteMetrics: inserts=%d, updates=%d, deletes=%d, inserts-deletes=%d, updates-deletes=%d", w.inserts, w.updates, w.deletes, w.inserts-w.deletes, w.updates-w.deletes)
 }
 
 var (
@@ -86,14 +86,14 @@ var (
 		INSERT IGNORE INTO stress_test (id, rand_val) VALUES (%d, left(md5(rand()), 8))
 	`
 	updateRowStatement = `
-		UPDATE stress_test SET updates=updates+1 ORDER BY RAND() LIMIT 1
+		UPDATE stress_test SET updates=updates+1 WHERE id=%d
 	`
 	deleteRowStatement = `
-		DELETE FROM stress_test WHERE updates=1 ORDER BY RAND() LIMIT 1
+		DELETE FROM stress_test WHERE id=%d AND updates=1
 	`
 	// We use CAST(SUM(updates) AS SIGNED) because SUM() returns a DECIMAL datatype, and we want to read a SIGNED INTEGER type
 	selectCountRowsStatement = `
-		SELECT COUNT(*) AS num_rows, CAST(SUM(updates) AS SIGNED) AS num_updates FROM stress_test
+		SELECT COUNT(*) AS num_rows, CAST(SUM(updates) AS SIGNED) AS sum_updates FROM stress_test
 	`
 	truncateStatement = `
 		TRUNCATE TABLE stress_test
@@ -210,7 +210,7 @@ func TestSchemaChange(t *testing.T) {
 			initTable(t)
 			done := make(chan bool)
 			go runMultipleConnections(ctx, t, done)
-			hint := "hint-alter-with-workload"
+			hint := fmt.Sprintf("hint-alter-with-workload-%d", i)
 			uuid := testOnlineDDLStatement(t, fmt.Sprintf(alterHintStatement, hint), "online", "vtgate", hint)
 			checkRecentMigrations(t, uuid, schema.OnlineDDLStatusComplete)
 			done <- true
@@ -324,6 +324,7 @@ func generateInsert(t *testing.T, conn *mysql.Conn) error {
 	if err != nil {
 		return err
 	}
+	assert.Less(t, qr.RowsAffected, uint64(2))
 	if qr.RowsAffected > 0 {
 		writeMetrics.mu.Lock()
 		defer writeMetrics.mu.Unlock()
@@ -333,10 +334,13 @@ func generateInsert(t *testing.T, conn *mysql.Conn) error {
 }
 
 func generateUpdate(t *testing.T, conn *mysql.Conn) error {
-	qr, err := conn.ExecuteFetch(updateRowStatement, 1000, true)
+	id := rand.Int31n(int32(maxTableRows))
+	query := fmt.Sprintf(updateRowStatement, id)
+	qr, err := conn.ExecuteFetch(query, 1000, true)
 	if err != nil {
 		return err
 	}
+	assert.Less(t, qr.RowsAffected, uint64(2))
 	if qr.RowsAffected > 0 {
 		writeMetrics.mu.Lock()
 		defer writeMetrics.mu.Unlock()
@@ -346,15 +350,17 @@ func generateUpdate(t *testing.T, conn *mysql.Conn) error {
 }
 
 func generateDelete(t *testing.T, conn *mysql.Conn) error {
-	qr, err := conn.ExecuteFetch(deleteRowStatement, 1000, true)
+	id := rand.Int31n(int32(maxTableRows))
+	query := fmt.Sprintf(deleteRowStatement, id)
+	qr, err := conn.ExecuteFetch(query, 1000, true)
 	if err != nil {
 		return err
 	}
+	assert.Less(t, qr.RowsAffected, uint64(2))
 	if qr.RowsAffected > 0 {
 		writeMetrics.mu.Lock()
 		defer writeMetrics.mu.Unlock()
 		writeMetrics.deletes++
-		writeMetrics.updates-- // because we delete `where updates=1`
 	}
 	return nil
 }
@@ -386,12 +392,10 @@ func runSingleConnection(ctx context.Context, t *testing.T, done chan bool) {
 		if err != nil {
 			if strings.Contains(err.Error(), "disallowed due to rule: enforce blacklisted tables") {
 				err = nil
-			} else if strings.Contains(err.Error(), "Deadlock found when trying to get lock") {
-				err = nil
 			}
 		}
 		assert.Nil(t, err)
-		time.Sleep(50 * time.Millisecond)
+		time.Sleep(20 * time.Millisecond)
 	}
 }
 
@@ -434,12 +438,13 @@ func initTable(t *testing.T) {
 	for i := 0; i < maxTableRows/4; i++ {
 		generateDelete(t, conn)
 	}
-	log.Infof("writeMetrics: %v", writeMetrics.String())
 }
 
 func testSelectTableMetrics(t *testing.T) {
 	writeMetrics.mu.Lock()
 	defer writeMetrics.mu.Unlock()
+
+	log.Infof("writeMetrics: %v", writeMetrics.String())
 
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
@@ -453,15 +458,15 @@ func testSelectTableMetrics(t *testing.T) {
 	require.NotNil(t, row)
 	log.Infof("testSelectTableMetrics, row: %v", row)
 	numRows := row.AsInt64("num_rows", 0)
-	numUpdates := row.AsInt64("num_updates", 0)
+	sumUpdates := row.AsInt64("sum_updates", 0)
 
 	assert.NotZero(t, numRows)
-	assert.NotZero(t, numUpdates)
+	assert.NotZero(t, sumUpdates)
 	assert.NotZero(t, writeMetrics.inserts)
 	assert.NotZero(t, writeMetrics.deletes)
 	assert.NotZero(t, writeMetrics.updates)
 	assert.Equal(t, numRows, writeMetrics.inserts-writeMetrics.deletes)
-	assert.Equal(t, numUpdates, writeMetrics.updates)
+	assert.Equal(t, sumUpdates, writeMetrics.updates-writeMetrics.deletes) // because we DELETE WHERE updates=1
 }
 
 func vtgateExec(t *testing.T, ddlStrategy string, query string, expectError string) *sqltypes.Result {
