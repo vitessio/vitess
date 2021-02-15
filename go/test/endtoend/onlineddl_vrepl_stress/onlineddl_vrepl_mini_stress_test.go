@@ -20,8 +20,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"io/ioutil"
-	"net/http"
+	"math/rand"
 	"os"
 	"path"
 	"regexp"
@@ -32,8 +31,8 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/schema"
-	throttlebase "vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
 
@@ -41,73 +40,75 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+type WriteMetrics struct {
+	mu                        sync.Mutex
+	inserts, updates, deletes int64
+}
+
+func (w *WriteMetrics) Clear() {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	w.inserts = 0
+	w.updates = 0
+	w.deletes = 0
+}
+
+func (w *WriteMetrics) String() string {
+	return fmt.Sprintf("WriteMetrics: inserts=%d, updates=%d, deletes=%d", w.inserts, w.updates, w.deletes)
+}
+
 var (
-	clusterInstance  *cluster.LocalProcessCluster
-	vtParams         mysql.ConnParams
-	httpClient       = throttlebase.SetupHTTPClient(time.Second)
-	throttlerAppName = "vreplication"
+	clusterInstance *cluster.LocalProcessCluster
+	vtParams        mysql.ConnParams
 
 	hostname              = "localhost"
 	keyspaceName          = "ks"
 	cell                  = "zone1"
 	schemaChangeDirectory = ""
-	totalTableCount       = 4
-	createTable           = `
-		CREATE TABLE %s (
-			id bigint(20) NOT NULL,
-			test_val bigint unsigned NOT NULL DEFAULT 0,
-			msg varchar(64),
-			PRIMARY KEY (id)
-		) ENGINE=InnoDB;`
-	// To verify non online-DDL behavior
-	alterTableNormalStatement = `
-		ALTER TABLE %s
-			ADD COLUMN non_online int UNSIGNED NOT NULL DEFAULT 0`
-	// A trivial statement which must succeed and does not change the schema
-	alterTableTrivialStatement = `
-		ALTER TABLE %s
-			ENGINE=InnoDB`
-	// The following statement is valid
-	alterTableSuccessfulStatement = `
-		ALTER TABLE %s
-			MODIFY id bigint UNSIGNED NOT NULL,
-			ADD COLUMN vrepl_col int NOT NULL DEFAULT 0,
-			ADD INDEX idx_msg(msg)`
-	// The following statement will fail because vreplication requires shared PRIMARY KEY columns
-	alterTableFailedStatement = `
-		ALTER TABLE %s
-			DROP PRIMARY KEY,
-			DROP COLUMN vrepl_col`
-	// We will run this query while throttling vreplication
-	alterTableThrottlingStatement = `
-		ALTER TABLE %s
-			DROP COLUMN vrepl_col`
-	onlineDDLCreateTableStatement = `
-		CREATE TABLE %s (
-			id bigint NOT NULL,
-			test_val bigint unsigned NOT NULL DEFAULT 0,
-			online_ddl_create_col INT NOT NULL,
-			PRIMARY KEY (id)
-		) ENGINE=InnoDB;`
-	onlineDDLDropTableStatement = `
-		DROP TABLE %s`
-	onlineDDLDropTableIfExistsStatement = `
-		DROP TABLE IF EXISTS %s`
+	tableName             = `stress_test`
+	createStatement       = `
+		CREATE TABLE stress_test (
+			id bigint(20) not null,
+			rand_val varchar(32) null default '',
+			hint_col varchar(64) not null default '',
+			created_timestamp timestamp not null default current_timestamp,
+			updates int unsigned not null default 0,
+			PRIMARY KEY (id),
+			key created_idx(created_timestamp),
+			key updates_idx(updates)
+		) ENGINE=InnoDB
+	`
+	alterHintStatement = `
+		ALTER TABLE stress_test modify hint_col varchar(64) not null default '%s'
+	`
 	insertRowStatement = `
-		INSERT INTO %s (id, test_val) VALUES (%d, 1)
+		INSERT IGNORE INTO stress_test (id, rand_val) VALUES (%d, left(md5(rand()), 8))
 	`
+	updateRowStatement = `
+		UPDATE stress_test SET updates=updates+1 ORDER BY RAND() LIMIT 1
+	`
+	deleteRowStatement = `
+		DELETE FROM stress_test WHERE updates=1 ORDER BY RAND() LIMIT 1
+	`
+	// We use CAST(SUM(updates) AS SIGNED) because SUM() returns a DECIMAL datatype, and we want to read a SIGNED INTEGER type
 	selectCountRowsStatement = `
-		SELECT COUNT(*) AS c FROM %s
+		SELECT COUNT(*) AS num_rows, CAST(SUM(updates) AS SIGNED) AS num_updates FROM stress_test
 	`
-	countInserts int64
-	insertMutex  sync.Mutex
+	truncateStatement = `
+		TRUNCATE TABLE stress_test
+	`
+	writeMetrics WriteMetrics
+)
+
+const (
+	maxTableRows    = 4096
+	maxConcurrency  = 5
+	countIterations = 5
 )
 
 func fullWordUUIDRegexp(uuid, searchWord string) *regexp.Regexp {
 	return regexp.MustCompile(uuid + `.*?\b` + searchWord + `\b`)
-}
-func fullWordRegexp(searchWord string) *regexp.Regexp {
-	return regexp.MustCompile(`.*?\b` + searchWord + `\b`)
 }
 
 func TestMain(m *testing.M) {
@@ -181,186 +182,63 @@ func TestMain(m *testing.M) {
 
 }
 
-func throttleResponse(tablet *cluster.Vttablet, path string) (resp *http.Response, respBody string, err error) {
-	apiURL := fmt.Sprintf("http://%s:%d/%s", tablet.VttabletProcess.TabletHostname, tablet.HTTPPort, path)
-	resp, err = httpClient.Get(apiURL)
-	if err != nil {
-		return resp, respBody, err
-	}
-	b, err := ioutil.ReadAll(resp.Body)
-	respBody = string(b)
-	return resp, respBody, err
-}
-
-func throttleApp(tablet *cluster.Vttablet, app string) (*http.Response, string, error) {
-	return throttleResponse(tablet, fmt.Sprintf("throttler/throttle-app?app=%s&duration=1h", app))
-}
-
-func unthrottleApp(tablet *cluster.Vttablet, app string) (*http.Response, string, error) {
-	return throttleResponse(tablet, fmt.Sprintf("throttler/unthrottle-app?app=%s", app))
-}
-
 func TestSchemaChange(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	assert.Equal(t, 2, len(clusterInstance.Keyspaces[0].Shards))
-	testWithInitialSchema(t)
-	t.Run("create non_online", func(t *testing.T) {
-		_ = testOnlineDDLStatement(t, alterTableNormalStatement, string(schema.DDLStrategyDirect), "vtctl", "non_online")
-		insertRows(t, 2)
-		testRows(t)
-	})
-	t.Run("successful online alter, vtgate", func(t *testing.T) {
-		insertRows(t, 2)
-		uuid := testOnlineDDLStatement(t, alterTableSuccessfulStatement, "online", "vtgate", "vrepl_col")
-		checkRecentMigrations(t, uuid, schema.OnlineDDLStatusComplete)
-		testRows(t)
-		checkCancelMigration(t, uuid, false)
-		checkRetryMigration(t, uuid, false)
-	})
-	t.Run("successful online alter, vtctl", func(t *testing.T) {
-		insertRows(t, 2)
-		uuid := testOnlineDDLStatement(t, alterTableTrivialStatement, "online", "vtctl", "vrepl_col")
-		checkRecentMigrations(t, uuid, schema.OnlineDDLStatusComplete)
-		testRows(t)
-		checkCancelMigration(t, uuid, false)
-		checkRetryMigration(t, uuid, false)
-	})
-	t.Run("throttled migration", func(t *testing.T) {
-		insertRows(t, 2)
-		for i := range clusterInstance.Keyspaces[0].Shards {
-			throttleApp(clusterInstance.Keyspaces[0].Shards[i].Vttablets[0], throttlerAppName)
-			defer unthrottleApp(clusterInstance.Keyspaces[0].Shards[i].Vttablets[0], throttlerAppName)
-		}
-		uuid := testOnlineDDLStatement(t, alterTableThrottlingStatement, "online", "vtgate", "vrepl_col")
-		checkRecentMigrations(t, uuid, schema.OnlineDDLStatusRunning)
-		testRows(t)
-		checkCancelMigration(t, uuid, true)
-		time.Sleep(2 * time.Second)
-		checkRecentMigrations(t, uuid, schema.OnlineDDLStatusFailed)
-	})
-	t.Run("failed migration", func(t *testing.T) {
-		insertRows(t, 2)
-		uuid := testOnlineDDLStatement(t, alterTableFailedStatement, "online", "vtgate", "vrepl_col")
-		checkRecentMigrations(t, uuid, schema.OnlineDDLStatusFailed)
-		testRows(t)
-		checkCancelMigration(t, uuid, false)
-		checkRetryMigration(t, uuid, true)
-		// migration will fail again
-	})
-	t.Run("cancel all migrations: nothing to cancel", func(t *testing.T) {
-		// no migrations pending at this time
-		time.Sleep(10 * time.Second)
-		checkCancelAllMigrations(t, 0)
-	})
-	t.Run("cancel all migrations: some migrations to cancel", func(t *testing.T) {
-		for i := range clusterInstance.Keyspaces[0].Shards {
-			throttleApp(clusterInstance.Keyspaces[0].Shards[i].Vttablets[0], throttlerAppName)
-			defer unthrottleApp(clusterInstance.Keyspaces[0].Shards[i].Vttablets[0], throttlerAppName)
-		}
-		// spawn n migrations; cancel them via cancel-all
-		var wg sync.WaitGroup
-		count := 4
-		for i := 0; i < count; i++ {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				_ = testOnlineDDLStatement(t, alterTableThrottlingStatement, "online", "vtgate", "vrepl_col")
-			}()
-		}
-		wg.Wait()
-		checkCancelAllMigrations(t, count)
-	})
-	t.Run("Online DROP, vtctl", func(t *testing.T) {
-		uuid := testOnlineDDLStatement(t, onlineDDLDropTableStatement, "online", "vtctl", "")
-		checkRecentMigrations(t, uuid, schema.OnlineDDLStatusComplete)
-		checkCancelMigration(t, uuid, false)
-		checkRetryMigration(t, uuid, false)
-	})
-	t.Run("Online CREATE, vtctl", func(t *testing.T) {
-		uuid := testOnlineDDLStatement(t, onlineDDLCreateTableStatement, "online", "vtctl", "online_ddl_create_col")
-		checkRecentMigrations(t, uuid, schema.OnlineDDLStatusComplete)
-		checkCancelMigration(t, uuid, false)
-		checkRetryMigration(t, uuid, false)
-	})
-	t.Run("Online DROP TABLE IF EXISTS, vtgate", func(t *testing.T) {
-		uuid := testOnlineDDLStatement(t, onlineDDLDropTableIfExistsStatement, "online", "vtgate", "")
-		checkRecentMigrations(t, uuid, schema.OnlineDDLStatusComplete)
-		checkCancelMigration(t, uuid, false)
-		checkRetryMigration(t, uuid, false)
-		// this table existed
-		checkTables(t, schema.OnlineDDLToGCUUID(uuid), 1)
-	})
-	t.Run("Online DROP TABLE IF EXISTS for nonexistent table, vtgate", func(t *testing.T) {
-		uuid := testOnlineDDLStatement(t, onlineDDLDropTableIfExistsStatement, "online", "vtgate", "")
-		checkRecentMigrations(t, uuid, schema.OnlineDDLStatusComplete)
-		checkCancelMigration(t, uuid, false)
-		checkRetryMigration(t, uuid, false)
-		// this table did not exist
-		checkTables(t, schema.OnlineDDLToGCUUID(uuid), 0)
-	})
-	t.Run("Online DROP TABLE for nonexistent table, expect error, vtgate", func(t *testing.T) {
-		uuid := testOnlineDDLStatement(t, onlineDDLDropTableStatement, "online", "vtgate", "")
-		checkRecentMigrations(t, uuid, schema.OnlineDDLStatusFailed)
-		checkCancelMigration(t, uuid, false)
-		checkRetryMigration(t, uuid, true)
-	})
-}
 
-func insertRow(t *testing.T) {
-	insertMutex.Lock()
-	defer insertMutex.Unlock()
+	ctx := context.Background()
 
-	tableName := fmt.Sprintf("vt_onlineddl_test_%02d", 3)
-	sqlQuery := fmt.Sprintf(insertRowStatement, tableName, countInserts)
-	r := vtgateExecQuery(t, sqlQuery, "")
-	require.NotNil(t, r)
-	countInserts++
-}
+	t.Run("create schema", func(t *testing.T) {
+		assert.Equal(t, 2, len(clusterInstance.Keyspaces[0].Shards))
+		testWithInitialSchema(t)
+	})
 
-func insertRows(t *testing.T, count int) {
-	for i := 0; i < count; i++ {
-		insertRow(t)
+	t.Run("workload without ALTER TABLE", func(t *testing.T) {
+		initTable(t)
+		testSelectTableMetrics(t)
+	})
+	t.Run("ALTER TABLE without workload", func(t *testing.T) {
+		initTable(t)
+		hint := "hint-alter-without-workload"
+		uuid := testOnlineDDLStatement(t, fmt.Sprintf(alterHintStatement, hint), "online", "vtgate", hint)
+		checkRecentMigrations(t, uuid, schema.OnlineDDLStatusComplete)
+		testSelectTableMetrics(t)
+	})
+
+	for i := 0; i < countIterations; i++ {
+		testName := fmt.Sprintf("ALTER TABLE with workload %d/%d", (i + 1), countIterations)
+		t.Run(testName, func(t *testing.T) {
+			initTable(t)
+			done := make(chan bool)
+			go runMultipleConnections(ctx, t, done)
+			hint := "hint-alter-with-workload"
+			uuid := testOnlineDDLStatement(t, fmt.Sprintf(alterHintStatement, hint), "online", "vtgate", hint)
+			checkRecentMigrations(t, uuid, schema.OnlineDDLStatusComplete)
+			done <- true
+			time.Sleep(2 * time.Second)
+			testSelectTableMetrics(t)
+		})
 	}
-}
-
-func testRows(t *testing.T) {
-	insertMutex.Lock()
-	defer insertMutex.Unlock()
-
-	tableName := fmt.Sprintf("vt_onlineddl_test_%02d", 3)
-	sqlQuery := fmt.Sprintf(selectCountRowsStatement, tableName)
-	r := vtgateExecQuery(t, sqlQuery, "")
-	require.NotNil(t, r)
-	row := r.Named().Row()
-	require.NotNil(t, row)
-	require.Equal(t, countInserts, row.AsInt64("c", 0))
 }
 
 func testWithInitialSchema(t *testing.T) {
-	// Create 4 tables
-	var sqlQuery = "" //nolint
-	for i := 0; i < totalTableCount; i++ {
-		sqlQuery = fmt.Sprintf(createTable, fmt.Sprintf("vt_onlineddl_test_%02d", i))
-		err := clusterInstance.VtctlclientProcess.ApplySchema(keyspaceName, sqlQuery)
-		require.Nil(t, err)
-	}
+	// Create the stress table
+	err := clusterInstance.VtctlclientProcess.ApplySchema(keyspaceName, createStatement)
+	require.Nil(t, err)
 
-	// Check if 4 tables are created
-	checkTables(t, "", totalTableCount)
+	// Check if table is created
+	checkTable(t, tableName)
 }
 
 // testOnlineDDLStatement runs an online DDL, ALTER statement
-func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy string, executeStrategy string, expectColumn string) (uuid string) {
-	tableName := fmt.Sprintf("vt_onlineddl_test_%02d", 3)
-	sqlQuery := fmt.Sprintf(alterStatement, tableName)
+func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy string, executeStrategy string, expectHint string) (uuid string) {
 	if executeStrategy == "vtgate" {
-		row := vtgateExec(t, ddlStrategy, sqlQuery, "").Named().Row()
+		row := vtgateExec(t, ddlStrategy, alterStatement, "").Named().Row()
 		if row != nil {
 			uuid = row.AsString("uuid", "")
 		}
 	} else {
 		var err error
-		uuid, err = clusterInstance.VtctlclientProcess.ApplySchemaWithOutput(keyspaceName, sqlQuery, ddlStrategy)
+		uuid, err = clusterInstance.VtctlclientProcess.ApplySchemaWithOutput(keyspaceName, alterStatement, ddlStrategy)
 		assert.NoError(t, err)
 	}
 	uuid = strings.TrimSpace(uuid)
@@ -374,16 +252,16 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 		time.Sleep(time.Second * 20)
 	}
 
-	if expectColumn != "" {
-		checkMigratedTable(t, tableName, expectColumn)
+	if expectHint != "" {
+		checkMigratedTable(t, tableName, expectHint)
 	}
 	return uuid
 }
 
-// checkTables checks the number of tables in the first two shards.
-func checkTables(t *testing.T, showTableName string, expectCount int) {
+// checkTable checks the number of tables in the first two shards.
+func checkTable(t *testing.T, showTableName string) {
 	for i := range clusterInstance.Keyspaces[0].Shards {
-		checkTablesCount(t, clusterInstance.Keyspaces[0].Shards[i].Vttablets[0], showTableName, expectCount)
+		checkTablesCount(t, clusterInstance.Keyspaces[0].Shards[i].Vttablets[0], showTableName, 1)
 	}
 }
 
@@ -396,12 +274,12 @@ func checkTablesCount(t *testing.T, tablet *cluster.Vttablet, showTableName stri
 }
 
 // checkRecentMigrations checks 'OnlineDDL <keyspace> show recent' output. Example to such output:
-// +------------------+-------+--------------+----------------------+--------------------------------------+----------+---------------------+---------------------+------------------+
-// |      Tablet      | shard | mysql_schema |     mysql_table      |            migration_uuid            | strategy |  started_timestamp  | completed_timestamp | migration_status |
-// +------------------+-------+--------------+----------------------+--------------------------------------+----------+---------------------+---------------------+------------------+
-// | zone1-0000003880 |     0 | vt_ks        | vt_onlineddl_test_03 | a0638f6b_ec7b_11ea_9bf8_000d3a9b8a9a | online   | 2020-09-01 17:50:40 | 2020-09-01 17:50:41 | complete         |
-// | zone1-0000003884 |     1 | vt_ks        | vt_onlineddl_test_03 | a0638f6b_ec7b_11ea_9bf8_000d3a9b8a9a | online   | 2020-09-01 17:50:40 | 2020-09-01 17:50:41 | complete         |
-// +------------------+-------+--------------+----------------------+--------------------------------------+----------+---------------------+---------------------+------------------+
+// +------------------+-------+--------------+-------------+--------------------------------------+----------+---------------------+---------------------+------------------+
+// |      Tablet      | shard | mysql_schema | mysql_table |            migration_uuid            | strategy |  started_timestamp  | completed_timestamp | migration_status |
+// +------------------+-------+--------------+-------------+--------------------------------------+----------+---------------------+---------------------+------------------+
+// | zone1-0000003880 |     0 | vt_ks        | stress_test | a0638f6b_ec7b_11ea_9bf8_000d3a9b8a9a | online   | 2020-09-01 17:50:40 | 2020-09-01 17:50:41 | complete         |
+// | zone1-0000003884 |     1 | vt_ks        | stress_test | a0638f6b_ec7b_11ea_9bf8_000d3a9b8a9a | online   | 2020-09-01 17:50:40 | 2020-09-01 17:50:41 | complete         |
+// +------------------+-------+--------------+-------------+--------------------------------------+----------+---------------------+---------------------+------------------+
 
 func checkRecentMigrations(t *testing.T, uuid string, expectStatus schema.OnlineDDLStatus) {
 	result, err := clusterInstance.VtctlclientProcess.OnlineDDLShowRecent(keyspaceName)
@@ -413,59 +291,18 @@ func checkRecentMigrations(t *testing.T, uuid string, expectStatus schema.Online
 	expectStatusRegexp := fullWordUUIDRegexp(uuid, string(expectStatus))
 	m := expectStatusRegexp.FindAllString(result, -1)
 	assert.Equal(t, len(clusterInstance.Keyspaces[0].Shards), len(m))
-}
 
-// checkCancelMigration attempts to cancel a migration, and expects rejection
-func checkCancelMigration(t *testing.T, uuid string, expectCancelPossible bool) {
-	result, err := clusterInstance.VtctlclientProcess.OnlineDDLCancelMigration(keyspaceName, uuid)
-	fmt.Println("# 'vtctlclient OnlineDDL cancel <uuid>' output (for debug purposes):")
-	fmt.Println(result)
+	result, err = clusterInstance.VtctlclientProcess.VExec(keyspaceName, uuid, `select migration_status, message from _vt.schema_migrations`)
 	assert.NoError(t, err)
-
-	var r *regexp.Regexp
-	if expectCancelPossible {
-		r = fullWordRegexp("1")
-	} else {
-		r = fullWordRegexp("0")
-	}
-	m := r.FindAllString(result, -1)
-	assert.Equal(t, len(clusterInstance.Keyspaces[0].Shards), len(m))
-}
-
-// checkCancelAllMigrations all pending migrations
-func checkCancelAllMigrations(t *testing.T, expectCount int) {
-	result, err := clusterInstance.VtctlclientProcess.OnlineDDLCancelAllMigrations(keyspaceName)
-	fmt.Println("# 'vtctlclient OnlineDDL cancel-all' output (for debug purposes):")
+	fmt.Println("# 'vtctlclient VExec' output (for debug purposes):")
 	fmt.Println(result)
-	assert.NoError(t, err)
-
-	r := fullWordRegexp(fmt.Sprintf("%d", expectCount))
-	m := r.FindAllString(result, -1)
-	assert.Equal(t, len(clusterInstance.Keyspaces[0].Shards), len(m))
-}
-
-// checkRetryMigration attempts to retry a migration, and expects rejection
-func checkRetryMigration(t *testing.T, uuid string, expectRetryPossible bool) {
-	result, err := clusterInstance.VtctlclientProcess.OnlineDDLRetryMigration(keyspaceName, uuid)
-	fmt.Println("# 'vtctlclient OnlineDDL retry <uuid>' output (for debug purposes):")
-	fmt.Println(result)
-	assert.NoError(t, err)
-
-	var r *regexp.Regexp
-	if expectRetryPossible {
-		r = fullWordRegexp("1")
-	} else {
-		r = fullWordRegexp("0")
-	}
-	m := r.FindAllString(result, -1)
-	assert.Equal(t, len(clusterInstance.Keyspaces[0].Shards), len(m))
 }
 
 // checkMigratedTables checks the CREATE STATEMENT of a table after migration
-func checkMigratedTable(t *testing.T, tableName, expectColumn string) {
+func checkMigratedTable(t *testing.T, tableName, expectHint string) {
 	for i := range clusterInstance.Keyspaces[0].Shards {
 		createStatement := getCreateTableStatement(t, clusterInstance.Keyspaces[0].Shards[i].Vttablets[0], tableName)
-		assert.Contains(t, createStatement, expectColumn)
+		assert.Contains(t, createStatement, expectHint)
 	}
 }
 
@@ -480,22 +317,151 @@ func getCreateTableStatement(t *testing.T, tablet *cluster.Vttablet, tableName s
 	return statement
 }
 
-func vtgateExecQuery(t *testing.T, query string, expectError string) *sqltypes.Result {
-	t.Helper()
+func generateInsert(t *testing.T, conn *mysql.Conn) error {
+	id := rand.Int31n(int32(maxTableRows))
+	query := fmt.Sprintf(insertRowStatement, id)
+	qr, err := conn.ExecuteFetch(query, 1000, true)
+	if err != nil {
+		return err
+	}
+	if qr.RowsAffected > 0 {
+		writeMetrics.mu.Lock()
+		defer writeMetrics.mu.Unlock()
+		writeMetrics.inserts++
+	}
+	return nil
+}
+
+func generateUpdate(t *testing.T, conn *mysql.Conn) error {
+	qr, err := conn.ExecuteFetch(updateRowStatement, 1000, true)
+	if err != nil {
+		return err
+	}
+	if qr.RowsAffected > 0 {
+		writeMetrics.mu.Lock()
+		defer writeMetrics.mu.Unlock()
+		writeMetrics.updates++
+	}
+	return nil
+}
+
+func generateDelete(t *testing.T, conn *mysql.Conn) error {
+	qr, err := conn.ExecuteFetch(deleteRowStatement, 1000, true)
+	if err != nil {
+		return err
+	}
+	if qr.RowsAffected > 0 {
+		writeMetrics.mu.Lock()
+		defer writeMetrics.mu.Unlock()
+		writeMetrics.deletes++
+		writeMetrics.updates-- // because we delete `where updates=1`
+	}
+	return nil
+}
+
+func runSingleConnection(ctx context.Context, t *testing.T, done chan bool) {
+	log.Infof("Running single connection")
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.Nil(t, err)
+	defer conn.Close()
+
+	_, err = conn.ExecuteFetch("set autocommit=1", 1000, true)
+	require.Nil(t, err)
+
+	for {
+		select {
+		case <-done:
+			log.Infof("Terminating single connection")
+			return
+		default:
+		}
+		switch rand.Int31n(3) {
+		case 0:
+			err = generateInsert(t, conn)
+		case 1:
+			err = generateUpdate(t, conn)
+		case 2:
+			err = generateDelete(t, conn)
+		}
+		if err != nil {
+			if strings.Contains(err.Error(), "disallowed due to rule: enforce blacklisted tables") {
+				err = nil
+			} else if strings.Contains(err.Error(), "Deadlock found when trying to get lock") {
+				err = nil
+			}
+		}
+		assert.Nil(t, err)
+		time.Sleep(50 * time.Millisecond)
+	}
+}
+
+func runMultipleConnections(ctx context.Context, t *testing.T, done chan bool) {
+	log.Infof("Running multiple connections")
+	var chans []chan bool
+	for i := 0; i < maxConcurrency; i++ {
+		d := make(chan bool)
+		chans = append(chans, d)
+		go runSingleConnection(ctx, t, d)
+	}
+	<-done
+	log.Infof("Running multiple connections: done")
+	for _, d := range chans {
+		log.Infof("Cancelling single connection")
+		d <- true
+	}
+	log.Infof("All connections cancelled")
+}
+
+func initTable(t *testing.T) {
+	log.Infof("initTable begin")
+	defer log.Infof("initTable complete")
 
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
 	defer conn.Close()
 
-	qr, err := conn.ExecuteFetch(query, 1000, true)
-	if expectError == "" {
-		require.NoError(t, err)
-	} else {
-		require.Error(t, err, "error should not be nil")
-		assert.Contains(t, err.Error(), expectError, "Unexpected error")
+	writeMetrics.Clear()
+	_, err = conn.ExecuteFetch(truncateStatement, 1000, true)
+	require.Nil(t, err)
+
+	for i := 0; i < maxTableRows/2; i++ {
+		generateInsert(t, conn)
 	}
-	return qr
+	for i := 0; i < maxTableRows/4; i++ {
+		generateUpdate(t, conn)
+	}
+	for i := 0; i < maxTableRows/4; i++ {
+		generateDelete(t, conn)
+	}
+	log.Infof("writeMetrics: %v", writeMetrics.String())
+}
+
+func testSelectTableMetrics(t *testing.T) {
+	writeMetrics.mu.Lock()
+	defer writeMetrics.mu.Unlock()
+
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.Nil(t, err)
+	defer conn.Close()
+
+	rs, err := conn.ExecuteFetch(selectCountRowsStatement, 1000, true)
+	require.Nil(t, err)
+
+	row := rs.Named().Row()
+	require.NotNil(t, row)
+	log.Infof("testSelectTableMetrics, row: %v", row)
+	numRows := row.AsInt64("num_rows", 0)
+	numUpdates := row.AsInt64("num_updates", 0)
+
+	assert.NotZero(t, numRows)
+	assert.NotZero(t, numUpdates)
+	assert.NotZero(t, writeMetrics.inserts)
+	assert.NotZero(t, writeMetrics.deletes)
+	assert.NotZero(t, writeMetrics.updates)
+	assert.Equal(t, numRows, writeMetrics.inserts-writeMetrics.deletes)
+	assert.Equal(t, numUpdates, writeMetrics.updates)
 }
 
 func vtgateExec(t *testing.T, ddlStrategy string, query string, expectError string) *sqltypes.Result {
