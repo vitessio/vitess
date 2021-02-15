@@ -653,11 +653,19 @@ create_statement:
   }
 | CREATE DATABASE not_exists_opt ID ddl_skip_to_end
   {
-    $$ = &DBDDL{Action: CreateStr, DBName: string($4)}
+    var ne bool
+    if $3 != 0 {
+      ne = true
+    }
+   $$ = &DBDDL{Action: CreateStr, DBName: string($4), IfNotExists: ne}
   }
 | CREATE SCHEMA not_exists_opt ID ddl_skip_to_end
   {
-    $$ = &DBDDL{Action: CreateStr, DBName: string($4)}
+    var ne bool
+    if $3 != 0 {
+      ne = true
+    }
+    $$ = &DBDDL{Action: CreateStr, DBName: string($4), IfNotExists: ne}
   }
 | CREATE definer_opt TRIGGER ID trigger_time trigger_event ON table_name FOR EACH ROW trigger_order_opt lexer_position trigger_body lexer_position
   {
@@ -1987,11 +1995,19 @@ drop_statement:
   }
 | DROP DATABASE exists_opt ID
   {
-    $$ = &DBDDL{Action: DropStr, DBName: string($4)}
+    var exists bool
+    if $3 != 0 {
+      exists = true
+    }
+    $$ = &DBDDL{Action: DropStr, DBName: string($4), IfExists: exists}
   }
 | DROP SCHEMA exists_opt ID
   {
-    $$ = &DBDDL{Action: DropStr, DBName: string($4)}
+    var exists bool
+    if $3 != 0 {
+      exists = true
+    }
+    $$ = &DBDDL{Action: DropStr, DBName: string($4), IfExists: exists}
   }
 | DROP TRIGGER exists_opt ID
   {
