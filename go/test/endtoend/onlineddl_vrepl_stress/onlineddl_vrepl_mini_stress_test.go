@@ -41,8 +41,11 @@ import (
 )
 
 type WriteMetrics struct {
-	mu                        sync.Mutex
-	inserts, updates, deletes int64
+	mu                                             sync.Mutex
+	inserts, updates, deletes                      int64
+	insertsAttempts, insertsFailures, insertsNoops int64
+	updatesAttempts, updatesFailures, updatesNoops int64
+	deletesAttempts, deletesFailures, deletesNoops int64
 }
 
 func (w *WriteMetrics) Clear() {
@@ -52,10 +55,31 @@ func (w *WriteMetrics) Clear() {
 	w.inserts = 0
 	w.updates = 0
 	w.deletes = 0
+
+	w.insertsAttempts = 0
+	w.insertsFailures = 0
+	w.insertsNoops = 0
+
+	w.updatesAttempts = 0
+	w.updatesFailures = 0
+	w.updatesNoops = 0
+
+	w.deletesAttempts = 0
+	w.deletesFailures = 0
+	w.deletesNoops = 0
 }
 
 func (w *WriteMetrics) String() string {
-	return fmt.Sprintf("WriteMetrics: inserts=%d, updates=%d, deletes=%d, inserts-deletes=%d, updates-deletes=%d", w.inserts, w.updates, w.deletes, w.inserts-w.deletes, w.updates-w.deletes)
+	return fmt.Sprintf(`WriteMetrics: inserts=%d, updates=%d, deletes=%d, inserts-deletes=%d, updates-deletes=%d,
+insertsAttempts=%d, insertsFailures=%d, insertsNoops=%d, inserts=%d,
+updatesAttempts=%d, updatesFailures=%d, updatesNoops=%d, updates=%d,
+deletesAttempts=%d, deletesFailures=%d, deletesNoops=%d, deletes=%d,
+`,
+		w.inserts, w.updates, w.deletes, w.inserts-w.deletes, w.updates-w.deletes,
+		w.insertsAttempts, w.insertsFailures, w.insertsNoops, w.inserts,
+		w.updatesAttempts, w.updatesFailures, w.updatesNoops, w.updates,
+		w.deletesAttempts, w.deletesFailures, w.deletesNoops, w.deletes,
+	)
 }
 
 var (
@@ -321,48 +345,72 @@ func generateInsert(t *testing.T, conn *mysql.Conn) error {
 	id := rand.Int31n(int32(maxTableRows))
 	query := fmt.Sprintf(insertRowStatement, id)
 	qr, err := conn.ExecuteFetch(query, 1000, true)
-	if err != nil {
-		return err
-	}
-	assert.Less(t, qr.RowsAffected, uint64(2))
-	if qr.RowsAffected > 0 {
+
+	go func() {
 		writeMetrics.mu.Lock()
 		defer writeMetrics.mu.Unlock()
+
+		writeMetrics.insertsAttempts++
+		if err != nil {
+			writeMetrics.insertsFailures++
+			return
+		}
+		assert.Less(t, qr.RowsAffected, uint64(2))
+		if qr.RowsAffected == 0 {
+			writeMetrics.insertsNoops++
+			return
+		}
 		writeMetrics.inserts++
-	}
-	return nil
+	}()
+	return err
 }
 
 func generateUpdate(t *testing.T, conn *mysql.Conn) error {
 	id := rand.Int31n(int32(maxTableRows))
 	query := fmt.Sprintf(updateRowStatement, id)
 	qr, err := conn.ExecuteFetch(query, 1000, true)
-	if err != nil {
-		return err
-	}
-	assert.Less(t, qr.RowsAffected, uint64(2))
-	if qr.RowsAffected > 0 {
+
+	go func() {
 		writeMetrics.mu.Lock()
 		defer writeMetrics.mu.Unlock()
+
+		writeMetrics.updatesAttempts++
+		if err != nil {
+			writeMetrics.updatesFailures++
+			return
+		}
+		assert.Less(t, qr.RowsAffected, uint64(2))
+		if qr.RowsAffected == 0 {
+			writeMetrics.updatesNoops++
+			return
+		}
 		writeMetrics.updates++
-	}
-	return nil
+	}()
+	return err
 }
 
 func generateDelete(t *testing.T, conn *mysql.Conn) error {
 	id := rand.Int31n(int32(maxTableRows))
 	query := fmt.Sprintf(deleteRowStatement, id)
 	qr, err := conn.ExecuteFetch(query, 1000, true)
-	if err != nil {
-		return err
-	}
-	assert.Less(t, qr.RowsAffected, uint64(2))
-	if qr.RowsAffected > 0 {
+
+	go func() {
 		writeMetrics.mu.Lock()
 		defer writeMetrics.mu.Unlock()
+
+		writeMetrics.deletesAttempts++
+		if err != nil {
+			writeMetrics.deletesFailures++
+			return
+		}
+		assert.Less(t, qr.RowsAffected, uint64(2))
+		if qr.RowsAffected == 0 {
+			writeMetrics.deletesNoops++
+			return
+		}
 		writeMetrics.deletes++
-	}
-	return nil
+	}()
+	return err
 }
 
 func runSingleConnection(ctx context.Context, t *testing.T, done chan bool) {
@@ -444,7 +492,7 @@ func testSelectTableMetrics(t *testing.T) {
 	writeMetrics.mu.Lock()
 	defer writeMetrics.mu.Unlock()
 
-	log.Infof("writeMetrics: %v", writeMetrics.String())
+	log.Infof("%s", writeMetrics.String())
 
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
@@ -465,8 +513,8 @@ func testSelectTableMetrics(t *testing.T) {
 	assert.NotZero(t, writeMetrics.inserts)
 	assert.NotZero(t, writeMetrics.deletes)
 	assert.NotZero(t, writeMetrics.updates)
-	assert.Equal(t, numRows, writeMetrics.inserts-writeMetrics.deletes)
-	assert.Equal(t, sumUpdates, writeMetrics.updates-writeMetrics.deletes) // because we DELETE WHERE updates=1
+	assert.Equal(t, writeMetrics.inserts-writeMetrics.deletes, numRows)
+	assert.Equal(t, writeMetrics.updates-writeMetrics.deletes, sumUpdates) // because we DELETE WHERE updates=1
 }
 
 func vtgateExec(t *testing.T, ddlStrategy string, query string, expectError string) *sqltypes.Result {
