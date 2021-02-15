@@ -1515,10 +1515,10 @@ func (e *Executor) isVReplMigrationReadyToCutOver(ctx context.Context, s *VReplS
 		if durationDiff(time.Now(), timeUpdated) > cutOverThreshold {
 			return false, err
 		}
-		transactionTimestamp := time.Unix(s.transactionTimestamp, 0)
-		if durationDiff(transactionTimestamp, timeUpdated) > cutOverThreshold {
-			return false, err
-		}
+		// previously, we also tested for transactionTimestamp. However, as pointed out in
+		// https://github.com/vitessio/vitess/pull/7419#discussion_r576316376, if the table is idle and
+		// receives no traffic, transactionTimestamp natually goes stale, and this should not prevent
+		// cut-over from taking place.
 	}
 	{
 		// copy_state must have no entries for this vreplication id: if entries are
