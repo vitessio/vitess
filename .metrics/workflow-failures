@@ -2394,3 +2394,4 @@
 2021-02-15T13:10:19Z,Cluster (14),https://github.com/vitessio/vitess/actions/runs/568616177
 2021-02-15T13:10:19Z,Cluster (onlineddl_vrepl_stress),https://github.com/vitessio/vitess/actions/runs/568616163
 2021-02-15T13:10:19Z,endtoend,https://github.com/vitessio/vitess/actions/runs/568616202
+2021-02-15T15:08:54Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/568909430
