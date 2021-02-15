@@ -340,12 +340,14 @@ func getCreateTableStatement(t *testing.T, tablet *cluster.Vttablet, tableName s
 	return statement
 }
 
-func generateInsert(t *testing.T, conn *mysql.Conn) error {
+func generateInsert(t *testing.T, conn *mysql.Conn, wg *sync.WaitGroup) error {
+	wg.Add(1)
 	id := rand.Int31n(int32(maxTableRows))
 	query := fmt.Sprintf(insertRowStatement, id)
 	qr, err := conn.ExecuteFetch(query, 1000, true)
 
 	go func() {
+		defer wg.Done()
 		writeMetrics.mu.Lock()
 		defer writeMetrics.mu.Unlock()
 
@@ -364,12 +366,14 @@ func generateInsert(t *testing.T, conn *mysql.Conn) error {
 	return err
 }
 
-func generateUpdate(t *testing.T, conn *mysql.Conn) error {
+func generateUpdate(t *testing.T, conn *mysql.Conn, wg *sync.WaitGroup) error {
+	wg.Add(1)
 	id := rand.Int31n(int32(maxTableRows))
 	query := fmt.Sprintf(updateRowStatement, id)
 	qr, err := conn.ExecuteFetch(query, 1000, true)
 
 	go func() {
+		defer wg.Done()
 		writeMetrics.mu.Lock()
 		defer writeMetrics.mu.Unlock()
 
@@ -388,12 +392,14 @@ func generateUpdate(t *testing.T, conn *mysql.Conn) error {
 	return err
 }
 
-func generateDelete(t *testing.T, conn *mysql.Conn) error {
+func generateDelete(t *testing.T, conn *mysql.Conn, wg *sync.WaitGroup) error {
+	wg.Add(1)
 	id := rand.Int31n(int32(maxTableRows))
 	query := fmt.Sprintf(deleteRowStatement, id)
 	qr, err := conn.ExecuteFetch(query, 1000, true)
 
 	go func() {
+		defer wg.Done()
 		writeMetrics.mu.Lock()
 		defer writeMetrics.mu.Unlock()
 
@@ -412,7 +418,7 @@ func generateDelete(t *testing.T, conn *mysql.Conn) error {
 	return err
 }
 
-func runSingleConnection(ctx context.Context, t *testing.T, done chan bool) {
+func runSingleConnection(ctx context.Context, t *testing.T, done chan bool, wg *sync.WaitGroup) {
 	log.Infof("Running single connection")
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
@@ -432,11 +438,11 @@ func runSingleConnection(ctx context.Context, t *testing.T, done chan bool) {
 		}
 		switch rand.Int31n(3) {
 		case 0:
-			err = generateInsert(t, conn)
+			err = generateInsert(t, conn, wg)
 		case 1:
-			err = generateUpdate(t, conn)
+			err = generateUpdate(t, conn, wg)
 		case 2:
-			err = generateDelete(t, conn)
+			err = generateDelete(t, conn, wg)
 		}
 		if err != nil {
 			if strings.Contains(err.Error(), "disallowed due to rule: enforce blacklisted tables") {
@@ -451,10 +457,11 @@ func runSingleConnection(ctx context.Context, t *testing.T, done chan bool) {
 func runMultipleConnections(ctx context.Context, t *testing.T, done chan bool) {
 	log.Infof("Running multiple connections")
 	var chans []chan bool
+	var wg sync.WaitGroup
 	for i := 0; i < maxConcurrency; i++ {
 		d := make(chan bool)
 		chans = append(chans, d)
-		go runSingleConnection(ctx, t, d)
+		go runSingleConnection(ctx, t, d, &wg)
 	}
 	<-done
 	log.Infof("Running multiple connections: done")
@@ -462,6 +469,7 @@ func runMultipleConnections(ctx context.Context, t *testing.T, done chan bool) {
 		log.Infof("Cancelling single connection")
 		d <- true
 	}
+	wg.Wait()
 	log.Infof("All connections cancelled")
 }
 
@@ -478,21 +486,20 @@ func initTable(t *testing.T) {
 	_, err = conn.ExecuteFetch(truncateStatement, 1000, true)
 	require.Nil(t, err)
 
+	var wg sync.WaitGroup
 	for i := 0; i < maxTableRows/2; i++ {
-		generateInsert(t, conn)
+		generateInsert(t, conn, &wg)
 	}
 	for i := 0; i < maxTableRows/4; i++ {
-		generateUpdate(t, conn)
+		generateUpdate(t, conn, &wg)
 	}
 	for i := 0; i < maxTableRows/4; i++ {
-		generateDelete(t, conn)
+		generateDelete(t, conn, &wg)
 	}
+	wg.Wait()
 }
 
 func testSelectTableMetrics(t *testing.T) {
-	// More than reasonable safety margin to sllow goroutines to complete.
-	time.Sleep(2 * time.Second)
-
 	writeMetrics.mu.Lock()
 	defer writeMetrics.mu.Unlock()
 
