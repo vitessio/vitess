@@ -413,7 +413,7 @@ func TestExecutorShowColumns(t *testing.T) {
 			require.NoError(t, err)
 
 			wantQueries := []*querypb.BoundQuery{{
-				Sql:           "show columns from user",
+				Sql:           "show columns from `user`",
 				BindVariables: map[string]*querypb.BindVariable{},
 			}}
 
@@ -1992,7 +1992,7 @@ func TestExecutorExplain(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Equal(t,
-		`[[VARCHAR("Route") VARCHAR("SelectScatter") VARCHAR("TestExecutor") VARCHAR("") VARCHAR("UNKNOWN") VARCHAR("select * from user")]]`,
+		`[[VARCHAR("Route") VARCHAR("SelectScatter") VARCHAR("TestExecutor") VARCHAR("") VARCHAR("UNKNOWN") VARCHAR("select * from `+"`user`"+`")]]`,
 		fmt.Sprintf("%v", result.Rows))
 
 	result, err = executorExec(executor, "explain format = vitess select 42", bindVars)
@@ -2115,7 +2115,7 @@ func TestExecutorSavepointInTx(t *testing.T) {
 		Sql:           "release savepoint a",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}, {
-		Sql:           "select id from user where id = 1",
+		Sql:           "select id from `user` where id = 1",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}, {
 		Sql:           "savepoint b",
@@ -2147,7 +2147,7 @@ func TestExecutorSavepointInTx(t *testing.T) {
 		Sql:           "release savepoint b",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}, {
-		Sql:           "select id from user where id = 3",
+		Sql:           "select id from `user` where id = 3",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	utils.MustMatch(t, sbc1WantQueries, sbc1.Queries, "")
@@ -2186,12 +2186,12 @@ func TestExecutorSavepointWithoutTx(t *testing.T) {
 	_, err = exec(executor, session, "select id from user where id = 3")
 	require.NoError(t, err)
 	sbc1WantQueries := []*querypb.BoundQuery{{
-		Sql:           "select id from user where id = 1",
+		Sql:           "select id from `user` where id = 1",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 
 	sbc2WantQueries := []*querypb.BoundQuery{{
-		Sql:           "select id from user where id = 3",
+		Sql:           "select id from `user` where id = 3",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	utils.MustMatch(t, sbc1WantQueries, sbc1.Queries, "")
