@@ -2178,6 +2178,17 @@ func TestSelectBindvarswithPrepare(t *testing.T) {
 	}
 }
 
+func TestSelectDatabasePrepare(t *testing.T) {
+	executor, _, _, _ := createExecutorEnv()
+	executor.normalize = true
+	logChan := QueryLogger.Subscribe("Test")
+	defer QueryLogger.Unsubscribe(logChan)
+
+	sql := "select database()"
+	_, err := executorPrepare(executor, sql, map[string]*querypb.BindVariable{})
+	require.NoError(t, err)
+}
+
 func TestSelectWithUnionAll(t *testing.T) {
 	executor, sbc1, sbc2, _ := createLegacyExecutorEnv()
 	executor.normalize = true
