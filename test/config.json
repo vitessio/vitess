@@ -290,7 +290,7 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "onlineddl_vrepl_stress",
-			"RetryMax": 0,
+			"RetryMax": 1,
 			"Tags": []
 		},
 		"pitr": {
