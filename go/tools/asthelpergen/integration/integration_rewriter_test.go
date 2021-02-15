@@ -28,9 +28,16 @@ import (
 func TestVisit(t *testing.T) {
 	one := &LiteralInt{1}
 	minusOne := &UnaryMinus{Val: one}
-	two := &LiteralInt{2}
-	plus := &Plus{Left: minusOne, Right: two}
+	foo := LiteralString{"foo"}
+	plus := &Plus{Left: minusOne, Right: foo}
 
+	preOrder, postOrder := testVisitOrder(plus)
+
+	assert.Equal(t, []AST{plus, minusOne, one, foo}, preOrder, "pre-order wrong")
+	assert.Equal(t, []AST{one, minusOne, foo, plus}, postOrder, "post-order wrong")
+}
+
+func testVisitOrder(plus AST) ([]AST, []AST) {
 	var preOrder, postOrder []AST
 
 	a := &application{
@@ -46,9 +53,7 @@ func TestVisit(t *testing.T) {
 	}
 
 	a.apply(nil, plus, nil)
-
-	assert.Equal(t, []AST{plus, minusOne, one, two}, preOrder, "pre-order wrong")
-	assert.Equal(t, []AST{one, minusOne, two, plus}, postOrder, "post-order wrong")
+	return preOrder, postOrder
 }
 
 func TestDeepEqualsWorksForAST(t *testing.T) {

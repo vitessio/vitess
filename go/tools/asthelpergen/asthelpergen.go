@@ -96,25 +96,14 @@ func (gen *astHelperGen) doIt() (map[string]*jen.File, error) {
 	}
 
 	err := findImplementations(pkg.Scope(), iface, func(t types.Type) error {
-		var nt *types.Named
-
-		switch node := t.(type) {
-		case *types.Named:
-			nt = node
-		case *types.Pointer:
-			named, ok := node.Elem().(*types.Named)
-			if !ok {
-				return fmt.Errorf("oh noes")
-			}
-			nt = named
-		}
-
 		switch n := t.Underlying().(type) {
 		case *types.Struct:
-			return rewriter.visitStruct(t, nt, n)
+			named := t.(*types.Named)
+			return rewriter.visitStruct(t, types.TypeString(t, noQualifier), named.Obj().Name(), n)
 		case *types.Pointer:
-			a := n.Elem().Underlying().(*types.Struct)
-			return rewriter.visitStruct(t, nt, a)
+			strct := n.Elem().Underlying().(*types.Struct)
+			named := t.(*types.Pointer).Elem().(*types.Named)
+			return rewriter.visitStruct(t, types.TypeString(t, noQualifier), named.Obj().Name(), strct)
 		case *types.Interface:
 
 		default:

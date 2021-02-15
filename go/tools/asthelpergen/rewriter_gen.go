@@ -37,18 +37,18 @@ var noQualifier = func(p *types.Package) string {
 	return ""
 }
 
-func (r *rewriterGen) visitStruct(t types.Type, named *types.Named, stroct *types.Struct) error {
+func (r *rewriterGen) visitStruct(t types.Type, typeString, replaceMethodPrefix string, stroct *types.Struct) error {
 	var caseStmts []jen.Code
 	for i := 0; i < stroct.NumFields(); i++ {
 		field := stroct.Field(i)
 		if r.interestingType(field.Type()) {
-			replacerName, method := r.createReplaceMethod(named.Obj().Name(), types.TypeString(t, noQualifier), field)
+			replacerName, method := r.createReplaceMethod(replaceMethodPrefix, types.TypeString(t, noQualifier), field)
 			r.replaceMethods = append(r.replaceMethods, method)
 
 			caseStmts = append(caseStmts, caseStmtFor(field, replacerName))
 		}
 	}
-	r.cases = append(r.cases, jen.Case(jen.Op("*").Id(named.Obj().Name())).Block(caseStmts...))
+	r.cases = append(r.cases, jen.Case(jen.Id(typeString)).Block(caseStmts...))
 	return nil
 }
 
