@@ -41,11 +41,10 @@ import (
 )
 
 type WriteMetrics struct {
-	mu                                             sync.Mutex
-	inserts, updates, deletes                      int64
-	insertsAttempts, insertsFailures, insertsNoops int64
-	updatesAttempts, updatesFailures, updatesNoops int64
-	deletesAttempts, deletesFailures, deletesNoops int64
+	mu                                                      sync.Mutex
+	insertsAttempts, insertsFailures, insertsNoops, inserts int64
+	updatesAttempts, updatesFailures, updatesNoops, updates int64
+	deletesAttempts, deletesFailures, deletesNoops, deletes int64
 }
 
 func (w *WriteMetrics) Clear() {
@@ -70,12 +69,12 @@ func (w *WriteMetrics) Clear() {
 }
 
 func (w *WriteMetrics) String() string {
-	return fmt.Sprintf(`WriteMetrics: inserts=%d, updates=%d, deletes=%d, inserts-deletes=%d, updates-deletes=%d,
+	return fmt.Sprintf(`WriteMetrics: inserts-deletes=%d, updates-deletes=%d,
 insertsAttempts=%d, insertsFailures=%d, insertsNoops=%d, inserts=%d,
 updatesAttempts=%d, updatesFailures=%d, updatesNoops=%d, updates=%d,
 deletesAttempts=%d, deletesFailures=%d, deletesNoops=%d, deletes=%d,
 `,
-		w.inserts, w.updates, w.deletes, w.inserts-w.deletes, w.updates-w.deletes,
+		w.inserts-w.deletes, w.updates-w.deletes,
 		w.insertsAttempts, w.insertsFailures, w.insertsNoops, w.inserts,
 		w.updatesAttempts, w.updatesFailures, w.updatesNoops, w.updates,
 		w.deletesAttempts, w.deletesFailures, w.deletesNoops, w.deletes,
@@ -209,17 +208,17 @@ func TestMain(m *testing.M) {
 func TestSchemaChange(t *testing.T) {
 	defer cluster.PanicHandler(t)
 
-	ctx := context.Background()
-
 	t.Run("create schema", func(t *testing.T) {
 		assert.Equal(t, 2, len(clusterInstance.Keyspaces[0].Shards))
 		testWithInitialSchema(t)
 	})
-
-	t.Run("workload without ALTER TABLE", func(t *testing.T) {
-		initTable(t)
-		testSelectTableMetrics(t)
-	})
+	for i := 0; i < countIterations; i++ {
+		testName := fmt.Sprintf("workload without ALTER TABLE %d/%d", (i + 1), countIterations)
+		t.Run(testName, func(t *testing.T) {
+			initTable(t)
+			testSelectTableMetrics(t)
+		})
+	}
 	t.Run("ALTER TABLE without workload", func(t *testing.T) {
 		initTable(t)
 		hint := "hint-alter-without-workload"
@@ -228,6 +227,7 @@ func TestSchemaChange(t *testing.T) {
 		testSelectTableMetrics(t)
 	})
 
+	ctx := context.Background()
 	for i := 0; i < countIterations; i++ {
 		testName := fmt.Sprintf("ALTER TABLE with workload %d/%d", (i + 1), countIterations)
 		t.Run(testName, func(t *testing.T) {
@@ -238,7 +238,6 @@ func TestSchemaChange(t *testing.T) {
 			uuid := testOnlineDDLStatement(t, fmt.Sprintf(alterHintStatement, hint), "online", "vtgate", hint)
 			checkRecentMigrations(t, uuid, schema.OnlineDDLStatusComplete)
 			done <- true
-			time.Sleep(2 * time.Second)
 			testSelectTableMetrics(t)
 		})
 	}
@@ -421,6 +420,8 @@ func runSingleConnection(ctx context.Context, t *testing.T, done chan bool) {
 
 	_, err = conn.ExecuteFetch("set autocommit=1", 1000, true)
 	require.Nil(t, err)
+	_, err = conn.ExecuteFetch("set transaction isolation level read committed", 1000, true)
+	require.Nil(t, err)
 
 	for {
 		select {
@@ -443,7 +444,7 @@ func runSingleConnection(ctx context.Context, t *testing.T, done chan bool) {
 			}
 		}
 		assert.Nil(t, err)
-		time.Sleep(20 * time.Millisecond)
+		time.Sleep(10 * time.Millisecond)
 	}
 }
 
@@ -489,6 +490,9 @@ func initTable(t *testing.T) {
 }
 
 func testSelectTableMetrics(t *testing.T) {
+	// More than reasonable safety margin to sllow goroutines to complete.
+	time.Sleep(2 * time.Second)
+
 	writeMetrics.mu.Lock()
 	defer writeMetrics.mu.Unlock()
 
