@@ -40,6 +40,8 @@ func (a *application) apply(parent, node AST, replacer replacerFunc) {
 	}
 	switch n := node.(type) {
 	case *LiteralInt:
+	case LiteralString:
+	case *LiteralString:
 	case *Plus:
 		a.apply(node, n.Left, replacePlusLeft)
 		a.apply(node, n.Right, replacePlusRight)
