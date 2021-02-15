@@ -32,7 +32,10 @@ func ParseTable(input string) (keyspace, table string, err error) {
 	case ID:
 		table = string(value)
 	default:
-		return "", "", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid table name: %s", input)
+		table = KeywordString(token)
+		if table == "" {
+			return "", "", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid table name: %s", input)
+		}
 	}
 
 	// Seen first ID, want '.' or 0
@@ -52,7 +55,10 @@ func ParseTable(input string) (keyspace, table string, err error) {
 	case ID:
 		table = string(value)
 	default:
-		return "", "", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid table name: %s", input)
+		table = KeywordString(token)
+		if table == "" {
+			return "", "", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid table name: %s", input)
+		}
 	}
 
 	// Seen second ID, want 0
