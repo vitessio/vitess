@@ -103,7 +103,7 @@ func NewMultiSplitDiffWorker(wr *wrangler.Wrangler, cell, keyspace, shard string
 	}
 }
 
-// NewMultiSplitDiffWorker returns a new MultiSplitDiffWorker object.
+// NewVerticalMultiSplitDiffWorker returns a new MultiSplitDiffWorker object.
 func NewVerticalMultiSplitDiffWorker(wr *wrangler.Wrangler, cell, destinationKeyspace string, destinationShard string, excludeTables []string, minHealthyTablets, parallelDiffsCount int, waitForFixedTimeRatherThanGtidSet bool, useConsistentSnapshot bool, tabletType topodatapb.TabletType) Worker {
 	return &MultiSplitDiffWorker{
 		StatusWorker:                      NewStatusWorker(),
@@ -385,6 +385,11 @@ func (msdw *MultiSplitDiffWorker) findTargets(ctx context.Context) error {
 	msdw.SetState(WorkerStateFindTargets)
 	var err error
 
+	cells, err := msdw.wr.TopoServer().GetCellInfoNames(ctx)
+	if err != nil {
+		return vterrors.Wrap(err, "failed to fetch cell list")
+	}
+
 	var finderFunc func(keyspace string, shard string) (*topodatapb.TabletAlias, error)
 	if msdw.tabletType == topodatapb.TabletType_RDONLY {
 		finderFunc = func(keyspace string, shard string) (*topodatapb.TabletAlias, error) {
@@ -392,7 +397,37 @@ func (msdw *MultiSplitDiffWorker) findTargets(ctx context.Context) error {
 		}
 	} else {
 		finderFunc = func(keyspace string, shard string) (*topodatapb.TabletAlias, error) {
-			return FindHealthyTablet(ctx, msdw.wr, nil /*tsc*/, msdw.cell, keyspace, shard, 1, msdw.tabletType)
+			// Prefer to find a tablet in the same cell as the worker.
+			found, err := msdw.shardHasCell(ctx, keyspace, shard, msdw.cell)
+			if err != nil {
+				return nil, err
+			}
+
+			var alias *topodatapb.TabletAlias
+			if found {
+				msdw.wr.Logger().Infof("Looking for %v/%v on %v", keyspace, shard, msdw.cell)
+				return FindHealthyTablet(ctx, msdw.wr, nil /*tsc*/, msdw.cell, keyspace, shard, 1, msdw.tabletType)
+			}
+
+			// Search the other cells.
+			for _, cell := range cells {
+				if cell == msdw.cell {
+					continue
+				}
+				found, err = msdw.shardHasCell(ctx, keyspace, shard, cell)
+				if found {
+					msdw.wr.Logger().Infof("Now looking for %v/%v on %v", keyspace, shard, cell)
+					alias, err = FindHealthyTablet(ctx, msdw.wr, nil /*tsc*/, cell, keyspace, shard, 1, msdw.tabletType)
+					if err != nil {
+						break
+					}
+				}
+			}
+
+			if !found {
+				return nil, vterrors.Errorf(vtrpc.Code_NOT_FOUND, "Unable to find tablets for %v/%v", keyspace, shard)
+			}
+			return alias, err
 		}
 	}
 
@@ -413,6 +448,15 @@ func (msdw *MultiSplitDiffWorker) findTargets(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+func (msdw *MultiSplitDiffWorker) shardHasCell(ctx context.Context, keyspace, shard, cell string) (bool, error) {
+	tablets, err := msdw.wr.TopoServer().FindAllTabletAliasesInShardByCell(ctx, keyspace, shard, []string{cell})
+	if err != nil {
+		return false, vterrors.Wrapf(err, "error loading tablet aliases for %v/%v", keyspace, shard)
+	}
+
+	return len(tablets) > 0, nil
 }
 
 // ask the master of the destination shard to pause filtered replication,

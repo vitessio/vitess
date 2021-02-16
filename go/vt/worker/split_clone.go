@@ -99,6 +99,7 @@ type SplitCloneWorker struct {
 	// It must be closed at the end of the command.
 	healthCheck discovery.LegacyHealthCheck
 	tsc         *discovery.LegacyTabletStatsCache
+	celltscs    map[string]*discovery.LegacyTabletStatsCache
 
 	// populated during WorkerStateFindTargets, read-only after that
 	sourceTablets []*topodatapb.Tablet
@@ -563,13 +564,25 @@ func (scw *SplitCloneWorker) init(ctx context.Context) error {
 	// We set sendDownEvents=true because it's required by LegacyTabletStatsCache.
 	scw.healthCheck.SetListener(scw, true /* sendDownEvents */)
 
+	cells, err := scw.wr.TopoServer().GetCellInfoNames(ctx)
+	if err != nil {
+		return vterrors.Wrap(err, "failed to fetch cell list")
+	}
+
+	scw.celltscs = make(map[string]*discovery.LegacyTabletStatsCache)
+	for _, cell := range cells {
+		scw.celltscs[cell] = discovery.NewTabletStatsCacheDoNotSetListener(scw.wr.TopoServer(), cell)
+	}
+
 	// Start watchers to get tablets added automatically to healthCheck.
 	allShards := append(scw.sourceShards, scw.destinationShards...)
 	for _, si := range allShards {
-		watcher := discovery.NewLegacyShardReplicationWatcher(ctx, scw.wr.TopoServer(), scw.healthCheck,
-			scw.cell, si.Keyspace(), si.ShardName(),
-			*healthCheckTopologyRefresh, discovery.DefaultTopoReadConcurrency)
-		scw.shardWatchers = append(scw.shardWatchers, watcher)
+		for _, cell := range cells {
+			watcher := discovery.NewLegacyShardReplicationWatcher(ctx, scw.wr.TopoServer(), scw.healthCheck,
+				cell, si.Keyspace(), si.ShardName(),
+				*healthCheckTopologyRefresh, discovery.DefaultTopoReadConcurrency)
+			scw.shardWatchers = append(scw.shardWatchers, watcher)
+		}
 	}
 
 	return nil
@@ -843,12 +856,21 @@ func (scw *SplitCloneWorker) findDestinationMasters(ctx context.Context) error {
 	// Make sure we find a master for each destination shard and log it.
 	scw.wr.Logger().Infof("Finding a MASTER tablet for each destination shard...")
 	for _, si := range scw.destinationShards {
-		waitCtx, waitCancel := context.WithTimeout(ctx, *waitForHealthyTabletsTimeout)
-		err := scw.tsc.WaitForTablets(waitCtx, si.Keyspace(), si.ShardName(), topodatapb.TabletType_PRIMARY)
-		waitCancel()
-		if err != nil {
-			return vterrors.Wrapf(err, "cannot find MASTER tablet for destination shard for %v/%v (in cell: %v)", si.Keyspace(), si.ShardName(), scw.cell)
+		var err error
+		for cell, tsc := range scw.celltscs {
+			scw.wr.Logger().Infof("Testing cell %v for %v/%v", cell, si.Keyspace(), si.ShardName())
+			waitCtx, waitCancel := context.WithTimeout(ctx, *waitForHealthyTabletsTimeout)
+			err = tsc.WaitForTablets(waitCtx, si.Keyspace(), si.ShardName(), topodatapb.TabletType_PRIMARY)
+			waitCancel()
+			if err == nil {
+				break
+			}
 		}
+
+		if err != nil {
+			return vterrors.Wrapf(err, "cannot find MASTER tablet for destination shard for %v/%v", si.Keyspace(), si.ShardName())
+		}
+
 		masters := scw.tsc.GetHealthyTabletStats(si.Keyspace(), si.ShardName(), topodatapb.TabletType_PRIMARY)
 		if len(masters) == 0 {
 			return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cannot find MASTER tablet for destination shard for %v/%v (in cell: %v) in LegacyHealthCheck: empty LegacyTabletStats list", si.Keyspace(), si.ShardName(), scw.cell)
@@ -1262,6 +1284,14 @@ func (scw *SplitCloneWorker) setUpVReplication(ctx context.Context) error {
 		cancel()
 	}
 
+	var cells string
+	for cell := range scw.celltscs {
+		if len(cells) != 0 {
+			cells += ","
+		}
+		cells += cell
+	}
+
 	for _, si := range scw.destinationShards {
 		keyspaceAndShard := topoproto.KeyspaceShardString(si.Keyspace(), si.ShardName())
 		dbName := scw.destinationDbNames[keyspaceAndShard]
@@ -1290,7 +1320,7 @@ func (scw *SplitCloneWorker) setUpVReplication(ctx context.Context) error {
 					bls.Tables = scw.tables
 				}
 				// TODO(mberlin): Fill in scw.maxReplicationLag once the adapative throttler is enabled by default.
-				qr, err := exc.vreplicationExec(cancelableCtx, binlogplayer.CreateVReplication("SplitClone", bls, sourcePositions[shardIndex], scw.maxTPS, throttler.ReplicationLagModuleDisabled, time.Now().Unix(), dbName))
+				qr, err := exc.vreplicationExec(cancelableCtx, binlogplayer.CreateVReplicationWithCell("SplitClone", cells, bls, sourcePositions[shardIndex], scw.maxTPS, throttler.ReplicationLagModuleDisabled, time.Now().Unix(), dbName))
 				if err != nil {
 					handleError(vterrors.Wrap(err, "vreplication queries failed"))
 					cancel()
@@ -1360,6 +1390,10 @@ func (scw *SplitCloneWorker) createKeyResolver(td *tabletmanagerdatapb.TableDefi
 // It is part of the discovery.LegacyHealthCheckStatsListener interface.
 func (scw *SplitCloneWorker) StatsUpdate(ts *discovery.LegacyTabletStats) {
 	scw.tsc.StatsUpdate(ts)
+
+	for _, tsc := range scw.celltscs {
+		tsc.StatsUpdate(ts)
+	}
 
 	// Ignore unless REPLICA or RDONLY.
 	if ts.Target.TabletType != topodatapb.TabletType_REPLICA && ts.Target.TabletType != topodatapb.TabletType_RDONLY {

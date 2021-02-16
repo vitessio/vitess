@@ -650,6 +650,15 @@ func CreateVReplicationState(workflow string, source *binlogdatapb.BinlogSource,
 		encodeString(workflow), encodeString(source.String()), encodeString(position), throttler.MaxRateModuleDisabled, throttler.ReplicationLagModuleDisabled, time.Now().Unix(), state, encodeString(dbName))
 }
 
+// CreateVReplicationWithCell returns a statement to populate the first value into
+// the _vt.vreplication table with cells specified.
+func CreateVReplicationWithCell(workflow, cell string, source *binlogdatapb.BinlogSource, position string, maxTPS, maxReplicationLag, timeUpdated int64, dbName string) string {
+	return fmt.Sprintf("insert into _vt.vreplication "+
+		"(workflow, source, cell, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state, db_name) "+
+		"values (%v, %v, %v, %v, %v, %v, %v, 0, '%v', %v)",
+		encodeString(workflow), encodeString(source.String()), encodeString(cell), encodeString(position), maxTPS, maxReplicationLag, timeUpdated, BlpRunning, encodeString(dbName))
+}
+
 // GenerateUpdatePos returns a statement to update a value in the
 // _vt.vreplication table.
 func GenerateUpdatePos(uid uint32, pos mysql.Position, timeUpdated int64, txTimestamp int64, rowsCopied int64, compress bool) string {
