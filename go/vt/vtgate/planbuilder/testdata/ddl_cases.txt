@@ -73,7 +73,7 @@
       "Name": "user",
       "Sharded": true
     },
-    "Query": "alter table user add column id int"
+    "Query": "alter table `user` add column id int"
   }
 }
 
@@ -155,7 +155,7 @@
       "Name": "user",
       "Sharded": true
     },
-    "Query": "alter table user add index a (id)"
+    "Query": "alter table `user` add index a (id)"
   }
 }
 
@@ -260,7 +260,7 @@
       "Name": "user",
       "Sharded": true
     },
-    "Query": "alter view user_extra as select * from user"
+    "Query": "alter view user_extra as select * from `user`"
   }
 }
 
