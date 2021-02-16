@@ -43,39 +43,40 @@ func TestSetUDV(t *testing.T) {
 		query        string
 		expectedRows string
 		rowsAffected int
+		rowsReturned int
 	}
 
 	queries := []queriesWithExpectations{{
 		query:        "select @foo",
-		expectedRows: "[[NULL]]", rowsAffected: 1,
+		expectedRows: "[[NULL]]", rowsReturned: 1,
 	}, {
 		query: "set @foo = 'abc', @bar = 42, @baz = 30.5, @tablet = concat('foo','bar')",
 	}, {
 		query: "/*!40101 SET @OLD_SQL_MODE=@@SQL_MODE */",
 	}, { // This is handled at vtgate.
 		query:        "select @foo, @bar, @baz, @tablet",
-		expectedRows: `[[VARBINARY("abc") INT64(42) FLOAT64(30.5) VARBINARY("foobar")]]`, rowsAffected: 1,
+		expectedRows: `[[VARBINARY("abc") INT64(42) FLOAT64(30.5) VARBINARY("foobar")]]`, rowsReturned: 1,
 	}, { // Cannot really check a specific value for sql_mode as it will differ based on database selected to run these tests.
 		query:        "select @OLD_SQL_MODE = @@SQL_MODE",
-		expectedRows: `[[INT64(1)]]`, rowsAffected: 1,
+		expectedRows: `[[INT64(1)]]`, rowsReturned: 1,
 	}, { // This one is sent to tablet.
 		query:        "select @foo, @bar, @baz, @tablet, @OLD_SQL_MODE = @@SQL_MODE",
-		expectedRows: `[[VARCHAR("abc") INT64(42) DECIMAL(30.5) VARCHAR("foobar") INT64(1)]]`, rowsAffected: 1,
+		expectedRows: `[[VARCHAR("abc") INT64(42) DECIMAL(30.5) VARCHAR("foobar") INT64(1)]]`, rowsReturned: 1,
 	}, {
 		query:        "insert into test(id, val1, val2, val3) values(1, @foo, null, null), (2, null, @bar, null), (3, null, null, @baz)",
 		expectedRows: ``, rowsAffected: 3,
 	}, {
 		query:        "select id, val1, val2, val3 from test order by id",
-		expectedRows: `[[INT64(1) VARCHAR("abc") NULL NULL] [INT64(2) NULL INT32(42) NULL] [INT64(3) NULL NULL FLOAT32(30.5)]]`, rowsAffected: 3,
+		expectedRows: `[[INT64(1) VARCHAR("abc") NULL NULL] [INT64(2) NULL INT32(42) NULL] [INT64(3) NULL NULL FLOAT32(30.5)]]`, rowsReturned: 3,
 	}, {
 		query:        "select id, val1 from test where val1=@foo",
-		expectedRows: `[[INT64(1) VARCHAR("abc")]]`, rowsAffected: 1,
+		expectedRows: `[[INT64(1) VARCHAR("abc")]]`, rowsReturned: 1,
 	}, {
 		query:        "select id, val2 from test where val2=@bar",
-		expectedRows: `[[INT64(2) INT32(42)]]`, rowsAffected: 1,
+		expectedRows: `[[INT64(2) INT32(42)]]`, rowsReturned: 1,
 	}, {
 		query:        "select id, val3 from test where val3=@baz",
-		expectedRows: `[[INT64(3) FLOAT32(30.5)]]`, rowsAffected: 1,
+		expectedRows: `[[INT64(3) FLOAT32(30.5)]]`, rowsReturned: 1,
 	}, {
 		query:        "delete from test where val2 = @bar",
 		expectedRows: ``, rowsAffected: 1,
@@ -87,19 +88,19 @@ func TestSetUDV(t *testing.T) {
 		expectedRows: ``, rowsAffected: 1,
 	}, {
 		query:        "select id, val1, val2 from test where val1=@foo",
-		expectedRows: `[[INT64(1) VARCHAR("abc") INT32(42)]]`, rowsAffected: 1,
+		expectedRows: `[[INT64(1) VARCHAR("abc") INT32(42)]]`, rowsReturned: 1,
 	}, {
 		query:        "insert into test(id, val1, val2, val3) values (42, @tablet, null, null)",
 		expectedRows: ``, rowsAffected: 1,
 	}, {
 		query:        "select id, val1 from test where val1 = @tablet",
-		expectedRows: `[[INT64(42) VARCHAR("foobar")]]`, rowsAffected: 1,
+		expectedRows: `[[INT64(42) VARCHAR("foobar")]]`, rowsReturned: 1,
 	}, {
 		query:        "set @foo = now(), @bar = now(), @dd = date('2020-10-20'), @tt = time('10:15')",
 		expectedRows: `[]`,
 	}, {
 		query:        "select @foo = @bar, @dd, @tt",
-		expectedRows: `[[INT64(1) VARCHAR("2020-10-20") VARCHAR("10:15:00")]]`, rowsAffected: 1,
+		expectedRows: `[[INT64(1) VARCHAR("2020-10-20") VARCHAR("10:15:00")]]`, rowsReturned: 1,
 	}}
 
 	conn, err := mysql.Connect(ctx, &vtParams)
@@ -112,7 +113,8 @@ func TestSetUDV(t *testing.T) {
 		t.Run(fmt.Sprintf("%d-%s", i, q.query), func(t *testing.T) {
 			qr, err := exec(t, conn, q.query)
 			require.NoError(t, err)
-			assert.Equal(t, uint64(q.rowsAffected), qr.RowsAffected, "rows affected wrong for query: %s", q.query)
+			assert.EqualValues(t, q.rowsAffected, qr.RowsAffected, "rows affected wrong for query: %s", q.query)
+			assert.EqualValues(t, q.rowsReturned, len(qr.Rows), "rows returned wrong for query: %s", q.query)
 			if q.expectedRows != "" {
 				result := fmt.Sprintf("%v", qr.Rows)
 				if diff := cmp.Diff(q.expectedRows, result); diff != "" {

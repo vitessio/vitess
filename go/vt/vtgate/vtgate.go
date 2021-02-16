@@ -29,6 +29,7 @@ import (
 	"context"
 
 	"vitess.io/vitess/go/acl"
+	"vitess.io/vitess/go/cache"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/tb"
@@ -52,15 +53,17 @@ import (
 )
 
 var (
-	transactionMode    = flag.String("transaction_mode", "MULTI", "SINGLE: disallow multi-db transactions, MULTI: allow multi-db transactions with best effort commit, TWOPC: allow multi-db transactions with 2pc commit")
-	normalizeQueries   = flag.Bool("normalize_queries", true, "Rewrite queries with bind vars. Turn this off if the app itself sends normalized queries with bind vars.")
-	terseErrors        = flag.Bool("vtgate-config-terse-errors", false, "prevent bind vars from escaping in returned errors")
-	streamBufferSize   = flag.Int("stream_buffer_size", 32*1024, "the number of bytes sent from vtgate for each stream call. It's recommended to keep this value in sync with vttablet's query-server-config-stream-buffer-size.")
-	queryPlanCacheSize = flag.Int64("gate_query_cache_size", 10000, "gate server query cache size, maximum number of queries to be cached. vtgate analyzes every incoming query and generate a query plan, these plans are being cached in a lru cache. This config controls the capacity of the lru cache.")
-	_                  = flag.Bool("disable_local_gateway", false, "deprecated: if specified, this process will not route any queries to local tablets in the local cell")
-	maxMemoryRows      = flag.Int("max_memory_rows", 300000, "Maximum number of rows that will be held in memory for intermediate results as well as the final result.")
-	warnMemoryRows     = flag.Int("warn_memory_rows", 30000, "Warning threshold for in-memory results. A row count higher than this amount will cause the VtGateWarnings.ResultsExceeded counter to be incremented.")
-	defaultDDLStrategy = flag.String("ddl_strategy", string(schema.DDLStrategyDirect), "Set default strategy for DDL statements. Override with @@ddl_strategy session variable")
+	transactionMode      = flag.String("transaction_mode", "MULTI", "SINGLE: disallow multi-db transactions, MULTI: allow multi-db transactions with best effort commit, TWOPC: allow multi-db transactions with 2pc commit")
+	normalizeQueries     = flag.Bool("normalize_queries", true, "Rewrite queries with bind vars. Turn this off if the app itself sends normalized queries with bind vars.")
+	terseErrors          = flag.Bool("vtgate-config-terse-errors", false, "prevent bind vars from escaping in returned errors")
+	streamBufferSize     = flag.Int("stream_buffer_size", 32*1024, "the number of bytes sent from vtgate for each stream call. It's recommended to keep this value in sync with vttablet's query-server-config-stream-buffer-size.")
+	queryPlanCacheSize   = flag.Int64("gate_query_cache_size", cache.DefaultConfig.MaxEntries, "gate server query cache size, maximum number of queries to be cached. vtgate analyzes every incoming query and generate a query plan, these plans are being cached in a cache. This config controls the expected amount of unique entries in the cache.")
+	queryPlanCacheMemory = flag.Int64("gate_query_cache_memory", cache.DefaultConfig.MaxMemoryUsage, "gate server query cache size in bytes, maximum amount of memory to be cached. vtgate analyzes every incoming query and generate a query plan, these plans are being cached in a lru cache. This config controls the capacity of the lru cache.")
+	queryPlanCacheLFU    = flag.Bool("gate_query_cache_lfu", cache.DefaultConfig.LFU, "gate server cache algorithm. when set to true, a new cache algorithm based on a TinyLFU admission policy will be used to improve cache behavior and prevent pollution from sparse queries")
+	_                    = flag.Bool("disable_local_gateway", false, "deprecated: if specified, this process will not route any queries to local tablets in the local cell")
+	maxMemoryRows        = flag.Int("max_memory_rows", 300000, "Maximum number of rows that will be held in memory for intermediate results as well as the final result.")
+	warnMemoryRows       = flag.Int("warn_memory_rows", 30000, "Warning threshold for in-memory results. A row count higher than this amount will cause the VtGateWarnings.ResultsExceeded counter to be incremented.")
+	defaultDDLStrategy   = flag.String("ddl_strategy", string(schema.DDLStrategyDirect), "Set default strategy for DDL statements. Override with @@ddl_strategy session variable")
 
 	// TODO(deepthi): change these two vars to unexported and move to healthcheck.go when LegacyHealthcheck is removed
 
@@ -125,6 +128,7 @@ type VTGate struct {
 	// are global vars that depend on this member var.
 	timings      *stats.MultiTimings
 	rowsReturned *stats.CountersWithMultiLabels
+	rowsAffected *stats.CountersWithMultiLabels
 
 	// the throttled loggers for all errors, one per API entry
 	logExecute       *logutil.ThrottledLogger
@@ -177,9 +181,14 @@ func Init(ctx context.Context, serv srvtopo.Server, cell string, tabletTypesToWa
 	srvResolver := srvtopo.NewResolver(serv, gw, cell)
 	resolver := NewResolver(srvResolver, serv, cell, sc)
 	vsm := newVStreamManager(srvResolver, serv, cell)
+	cacheCfg := &cache.Config{
+		MaxEntries:     *queryPlanCacheSize,
+		MaxMemoryUsage: *queryPlanCacheMemory,
+		LFU:            *queryPlanCacheLFU,
+	}
 
 	rpcVTGate = &VTGate{
-		executor: NewExecutor(ctx, serv, cell, resolver, *normalizeQueries, *streamBufferSize, *queryPlanCacheSize),
+		executor: NewExecutor(ctx, serv, cell, resolver, *normalizeQueries, *streamBufferSize, cacheCfg),
 		resolver: resolver,
 		vsm:      vsm,
 		txConn:   tc,
@@ -191,6 +200,10 @@ func Init(ctx context.Context, serv srvtopo.Server, cell string, tabletTypesToWa
 		rowsReturned: stats.NewCountersWithMultiLabels(
 			"VtgateApiRowsReturned",
 			"Rows returned through the VTgate API",
+			[]string{"Operation", "Keyspace", "DbType"}),
+		rowsAffected: stats.NewCountersWithMultiLabels(
+			"VtgateApiRowsAffected",
+			"Rows affected by a write (DML) operation through the VTgate API",
 			[]string{"Operation", "Keyspace", "DbType"}),
 
 		logExecute:       logutil.NewThrottledLogger("Execute", 5*time.Second),
@@ -267,6 +280,7 @@ func (vtg *VTGate) Execute(ctx context.Context, session *vtgatepb.Session, sql s
 	qr, err = vtg.executor.Execute(ctx, "Execute", NewSafeSession(session), sql, bindVariables)
 	if err == nil {
 		vtg.rowsReturned.Add(statsKey, int64(len(qr.Rows)))
+		vtg.rowsAffected.Add(statsKey, int64(qr.RowsAffected))
 		return session, qr, nil
 	}
 
@@ -302,6 +316,7 @@ func (vtg *VTGate) ExecuteBatch(ctx context.Context, session *vtgatepb.Session, 
 		session, qrl[i].QueryResult, qrl[i].QueryError = vtg.Execute(ctx, session, sql, bv)
 		if qr := qrl[i].QueryResult; qr != nil {
 			vtg.rowsReturned.Add(statsKey, int64(len(qr.Rows)))
+			vtg.rowsAffected.Add(statsKey, int64(qr.RowsAffected))
 		}
 	}
 	return session, qrl, nil
@@ -333,6 +348,7 @@ func (vtg *VTGate) StreamExecute(ctx context.Context, session *vtgatepb.Session,
 			},
 			func(reply *sqltypes.Result) error {
 				vtg.rowsReturned.Add(statsKey, int64(len(reply.Rows)))
+				vtg.rowsAffected.Add(statsKey, int64(reply.RowsAffected))
 				return callback(reply)
 			})
 	}
@@ -373,7 +389,6 @@ func (vtg *VTGate) Prepare(ctx context.Context, session *vtgatepb.Session, sql s
 
 	fld, err = vtg.executor.Prepare(ctx, "Prepare", NewSafeSession(session), sql, bindVariables)
 	if err == nil {
-		vtg.rowsReturned.Add(statsKey, int64(len(fld)))
 		return session, fld, nil
 	}
 
@@ -496,9 +511,14 @@ func LegacyInit(ctx context.Context, hc discovery.LegacyHealthCheck, serv srvtop
 	srvResolver := srvtopo.NewResolver(serv, gw, cell)
 	resolver := NewResolver(srvResolver, serv, cell, sc)
 	vsm := newVStreamManager(srvResolver, serv, cell)
+	cacheCfg := &cache.Config{
+		MaxEntries:     *queryPlanCacheSize,
+		MaxMemoryUsage: *queryPlanCacheMemory,
+		LFU:            *queryPlanCacheLFU,
+	}
 
 	rpcVTGate = &VTGate{
-		executor: NewExecutor(ctx, serv, cell, resolver, *normalizeQueries, *streamBufferSize, *queryPlanCacheSize),
+		executor: NewExecutor(ctx, serv, cell, resolver, *normalizeQueries, *streamBufferSize, cacheCfg),
 		resolver: resolver,
 		vsm:      vsm,
 		txConn:   tc,
@@ -510,6 +530,10 @@ func LegacyInit(ctx context.Context, hc discovery.LegacyHealthCheck, serv srvtop
 		rowsReturned: stats.NewCountersWithMultiLabels(
 			"VtgateApiRowsReturned",
 			"Rows returned through the VTgate API",
+			[]string{"Operation", "Keyspace", "DbType"}),
+		rowsAffected: stats.NewCountersWithMultiLabels(
+			"VtgateApiRowsAffected",
+			"Rows affected by a write (DML) operation through the VTgate API",
 			[]string{"Operation", "Keyspace", "DbType"}),
 
 		logExecute:       logutil.NewThrottledLogger("Execute", 5*time.Second),

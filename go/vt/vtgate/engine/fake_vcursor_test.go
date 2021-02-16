@@ -89,6 +89,10 @@ func (t noopVCursor) SetSessionTrackGTIDs(b bool) {
 	panic("implement me")
 }
 
+func (t noopVCursor) HasCreatedTempTable() {
+	panic("implement me")
+}
+
 func (t noopVCursor) LookupRowLockShardSession() vtgatepb.CommitOrder {
 	panic("implement me")
 }

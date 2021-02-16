@@ -1,4 +1,8 @@
+.DS_Store
 *.yaml
 dashboards_out
-vendor
+prometheus_alerts.yaml
+prometheus_rules.yaml
 jsonnetfile.lock.json
+vendor
+.vscode/

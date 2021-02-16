@@ -21,6 +21,7 @@ import (
 	"strings"
 	"testing"
 
+	"vitess.io/vitess/go/cache"
 	"vitess.io/vitess/go/test/utils"
 
 	"github.com/stretchr/testify/assert"
@@ -293,7 +294,6 @@ func TestSelectLastInsertId(t *testing.T) {
 	sql := "select last_insert_id()"
 	result, err := executorExec(executor, sql, map[string]*querypb.BindVariable{})
 	wantResult := &sqltypes.Result{
-		RowsAffected: 1,
 		Fields: []*querypb.Field{
 			{Name: "last_insert_id()", Type: sqltypes.Uint64},
 		},
@@ -335,7 +335,6 @@ func TestSelectSystemVariables(t *testing.T) {
 			{Name: "@@session_track_gtids", Type: sqltypes.VarBinary},
 			{Name: "@@ddl_strategy", Type: sqltypes.VarBinary},
 		},
-		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{{
 			// the following are the uninitialised session values
 			sqltypes.NewInt64(0),
@@ -378,7 +377,6 @@ func TestSelectInitializedVitessAwareVariable(t *testing.T) {
 			{Name: "@@autocommit", Type: sqltypes.Int64},
 			{Name: "@@enable_system_settings", Type: sqltypes.Int64},
 		},
-		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewInt64(1),
 			sqltypes.NewInt64(1),
@@ -398,7 +396,6 @@ func TestSelectUserDefindVariable(t *testing.T) {
 	result, err := executorExec(executor, sql, map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
 	wantResult := &sqltypes.Result{
-		RowsAffected: 1,
 		Fields: []*querypb.Field{
 			{Name: "@foo", Type: sqltypes.Null},
 		},
@@ -412,7 +409,6 @@ func TestSelectUserDefindVariable(t *testing.T) {
 	result, err = executorExec(executor, sql, map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
 	wantResult = &sqltypes.Result{
-		RowsAffected: 1,
 		Fields: []*querypb.Field{
 			{Name: "@foo", Type: sqltypes.VarBinary},
 		},
@@ -436,7 +432,6 @@ func TestFoundRows(t *testing.T) {
 	sql := "select found_rows()"
 	result, err := executorExec(executor, sql, map[string]*querypb.BindVariable{})
 	wantResult := &sqltypes.Result{
-		RowsAffected: 1,
 		Fields: []*querypb.Field{
 			{Name: "found_rows()", Type: sqltypes.Uint64},
 		},
@@ -464,9 +459,9 @@ func TestRowCount(t *testing.T) {
 }
 
 func testRowCount(t *testing.T, executor *Executor, wantRowCount int64) {
+	t.Helper()
 	result, err := executorExec(executor, "select row_count()", map[string]*querypb.BindVariable{})
 	wantResult := &sqltypes.Result{
-		RowsAffected: 1,
 		Fields: []*querypb.Field{
 			{Name: "row_count()", Type: sqltypes.Int64},
 		},
@@ -512,8 +507,7 @@ func TestLastInsertIDInVirtualTable(t *testing.T) {
 			{Name: "id", Type: sqltypes.Int32},
 			{Name: "col", Type: sqltypes.Int32},
 		},
-		RowsAffected: 1,
-		InsertID:     0,
+		InsertID: 0,
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewInt32(1),
 			sqltypes.NewInt32(3),
@@ -541,7 +535,6 @@ func TestLastInsertIDInSubQueryExpression(t *testing.T) {
 	rs, err := executorExec(executor, "select (select last_insert_id()) as x", nil)
 	require.NoError(t, err)
 	wantResult := &sqltypes.Result{
-		RowsAffected: 1,
 		Fields: []*querypb.Field{
 			{Name: "x", Type: sqltypes.Uint64},
 		},
@@ -570,7 +563,6 @@ func TestSelectDatabase(t *testing.T) {
 		sql,
 		map[string]*querypb.BindVariable{})
 	wantResult := &sqltypes.Result{
-		RowsAffected: 1,
 		Fields: []*querypb.Field{
 			{Name: "database()", Type: sqltypes.VarBinary},
 		},
@@ -1034,7 +1026,7 @@ func TestSelectScatter(t *testing.T) {
 		sbc := hc.AddTestTablet(cell, shard, 1, "TestExecutor", shard, topodatapb.TabletType_MASTER, true, 1, nil)
 		conns = append(conns, sbc)
 	}
-	executor := NewExecutor(context.Background(), serv, cell, resolver, false, testBufferSize, testCacheSize)
+	executor := NewExecutor(context.Background(), serv, cell, resolver, false, testBufferSize, cache.DefaultConfig)
 	logChan := QueryLogger.Subscribe("Test")
 	defer QueryLogger.Unsubscribe(logChan)
 
@@ -1066,7 +1058,7 @@ func TestSelectScatterPartial(t *testing.T) {
 		conns = append(conns, sbc)
 	}
 
-	executor := NewExecutor(context.Background(), serv, cell, resolver, false, testBufferSize, testCacheSize)
+	executor := NewExecutor(context.Background(), serv, cell, resolver, false, testBufferSize, cache.DefaultConfig)
 	logChan := QueryLogger.Subscribe("Test")
 	defer QueryLogger.Unsubscribe(logChan)
 
@@ -1123,7 +1115,7 @@ func TestStreamSelectScatter(t *testing.T) {
 	for _, shard := range shards {
 		_ = hc.AddTestTablet(cell, shard, 1, "TestExecutor", shard, topodatapb.TabletType_MASTER, true, 1, nil)
 	}
-	executor := NewExecutor(context.Background(), serv, cell, resolver, false, testBufferSize, testCacheSize)
+	executor := NewExecutor(context.Background(), serv, cell, resolver, false, testBufferSize, cache.DefaultConfig)
 
 	sql := "select id from user"
 	result, err := executorStream(executor, sql)
@@ -1165,8 +1157,7 @@ func TestSelectScatterOrderBy(t *testing.T) {
 				{Name: "col1", Type: sqltypes.Int32},
 				{Name: "col2", Type: sqltypes.Int32},
 			},
-			RowsAffected: 1,
-			InsertID:     0,
+			InsertID: 0,
 			Rows: [][]sqltypes.Value{{
 				sqltypes.NewInt32(1),
 				// i%4 ensures that there are duplicates across shards.
@@ -1177,7 +1168,7 @@ func TestSelectScatterOrderBy(t *testing.T) {
 		}})
 		conns = append(conns, sbc)
 	}
-	executor := NewExecutor(context.Background(), serv, cell, resolver, false, testBufferSize, testCacheSize)
+	executor := NewExecutor(context.Background(), serv, cell, resolver, false, testBufferSize, cache.DefaultConfig)
 
 	query := "select col1, col2 from user order by col2 desc"
 	gotResult, err := executorExec(executor, query, nil)
@@ -1196,8 +1187,7 @@ func TestSelectScatterOrderBy(t *testing.T) {
 			{Name: "col1", Type: sqltypes.Int32},
 			{Name: "col2", Type: sqltypes.Int32},
 		},
-		RowsAffected: 8,
-		InsertID:     0,
+		InsertID: 0,
 	}
 	for i := 0; i < 4; i++ {
 		// There should be a duplicate for each row returned.
@@ -1231,8 +1221,7 @@ func TestSelectScatterOrderByVarChar(t *testing.T) {
 				{Name: "col1", Type: sqltypes.Int32},
 				{Name: "textcol", Type: sqltypes.VarChar},
 			},
-			RowsAffected: 1,
-			InsertID:     0,
+			InsertID: 0,
 			Rows: [][]sqltypes.Value{{
 				sqltypes.NewInt32(1),
 				// i%4 ensures that there are duplicates across shards.
@@ -1244,7 +1233,7 @@ func TestSelectScatterOrderByVarChar(t *testing.T) {
 		}})
 		conns = append(conns, sbc)
 	}
-	executor := NewExecutor(context.Background(), serv, cell, resolver, false, testBufferSize, testCacheSize)
+	executor := NewExecutor(context.Background(), serv, cell, resolver, false, testBufferSize, cache.DefaultConfig)
 
 	query := "select col1, textcol from user order by textcol desc"
 	gotResult, err := executorExec(executor, query, nil)
@@ -1263,8 +1252,7 @@ func TestSelectScatterOrderByVarChar(t *testing.T) {
 			{Name: "col1", Type: sqltypes.Int32},
 			{Name: "textcol", Type: sqltypes.VarChar},
 		},
-		RowsAffected: 8,
-		InsertID:     0,
+		InsertID: 0,
 	}
 	for i := 0; i < 4; i++ {
 		// There should be a duplicate for each row returned.
@@ -1297,8 +1285,7 @@ func TestStreamSelectScatterOrderBy(t *testing.T) {
 				{Name: "id", Type: sqltypes.Int32},
 				{Name: "col", Type: sqltypes.Int32},
 			},
-			RowsAffected: 1,
-			InsertID:     0,
+			InsertID: 0,
 			Rows: [][]sqltypes.Value{{
 				sqltypes.NewInt32(1),
 				sqltypes.NewInt32(int32(i % 4)),
@@ -1306,7 +1293,7 @@ func TestStreamSelectScatterOrderBy(t *testing.T) {
 		}})
 		conns = append(conns, sbc)
 	}
-	executor := NewExecutor(context.Background(), serv, cell, resolver, false, testBufferSize, testCacheSize)
+	executor := NewExecutor(context.Background(), serv, cell, resolver, false, testBufferSize, cache.DefaultConfig)
 
 	query := "select id, col from user order by col desc"
 	gotResult, err := executorStream(executor, query)
@@ -1354,8 +1341,7 @@ func TestStreamSelectScatterOrderByVarChar(t *testing.T) {
 				{Name: "id", Type: sqltypes.Int32},
 				{Name: "textcol", Type: sqltypes.VarChar},
 			},
-			RowsAffected: 1,
-			InsertID:     0,
+			InsertID: 0,
 			Rows: [][]sqltypes.Value{{
 				sqltypes.NewInt32(1),
 				sqltypes.NewVarChar(fmt.Sprintf("%d", i%4)),
@@ -1364,7 +1350,7 @@ func TestStreamSelectScatterOrderByVarChar(t *testing.T) {
 		}})
 		conns = append(conns, sbc)
 	}
-	executor := NewExecutor(context.Background(), serv, cell, resolver, false, testBufferSize, testCacheSize)
+	executor := NewExecutor(context.Background(), serv, cell, resolver, false, testBufferSize, cache.DefaultConfig)
 
 	query := "select id, textcol from user order by textcol desc"
 	gotResult, err := executorStream(executor, query)
@@ -1413,8 +1399,7 @@ func TestSelectScatterAggregate(t *testing.T) {
 				{Name: "col", Type: sqltypes.Int32},
 				{Name: "sum(foo)", Type: sqltypes.Int32},
 			},
-			RowsAffected: 1,
-			InsertID:     0,
+			InsertID: 0,
 			Rows: [][]sqltypes.Value{{
 				sqltypes.NewInt32(int32(i % 4)),
 				sqltypes.NewInt32(int32(i)),
@@ -1422,7 +1407,7 @@ func TestSelectScatterAggregate(t *testing.T) {
 		}})
 		conns = append(conns, sbc)
 	}
-	executor := NewExecutor(context.Background(), serv, cell, resolver, false, testBufferSize, testCacheSize)
+	executor := NewExecutor(context.Background(), serv, cell, resolver, false, testBufferSize, cache.DefaultConfig)
 
 	query := "select col, sum(foo) from user group by col"
 	gotResult, err := executorExec(executor, query, nil)
@@ -1441,8 +1426,7 @@ func TestSelectScatterAggregate(t *testing.T) {
 			{Name: "col", Type: sqltypes.Int32},
 			{Name: "sum(foo)", Type: sqltypes.Int32},
 		},
-		RowsAffected: 4,
-		InsertID:     0,
+		InsertID: 0,
 	}
 	for i := 0; i < 4; i++ {
 		row := []sqltypes.Value{
@@ -1472,8 +1456,7 @@ func TestStreamSelectScatterAggregate(t *testing.T) {
 				{Name: "col", Type: sqltypes.Int32},
 				{Name: "sum(foo)", Type: sqltypes.Int32},
 			},
-			RowsAffected: 1,
-			InsertID:     0,
+			InsertID: 0,
 			Rows: [][]sqltypes.Value{{
 				sqltypes.NewInt32(int32(i % 4)),
 				sqltypes.NewInt32(int32(i)),
@@ -1481,7 +1464,7 @@ func TestStreamSelectScatterAggregate(t *testing.T) {
 		}})
 		conns = append(conns, sbc)
 	}
-	executor := NewExecutor(context.Background(), serv, cell, resolver, false, testBufferSize, testCacheSize)
+	executor := NewExecutor(context.Background(), serv, cell, resolver, false, testBufferSize, cache.DefaultConfig)
 
 	query := "select col, sum(foo) from user group by col"
 	gotResult, err := executorStream(executor, query)
@@ -1531,8 +1514,7 @@ func TestSelectScatterLimit(t *testing.T) {
 				{Name: "col1", Type: sqltypes.Int32},
 				{Name: "col2", Type: sqltypes.Int32},
 			},
-			RowsAffected: 1,
-			InsertID:     0,
+			InsertID: 0,
 			Rows: [][]sqltypes.Value{{
 				sqltypes.NewInt32(1),
 				sqltypes.NewInt32(int32(i % 4)),
@@ -1540,7 +1522,7 @@ func TestSelectScatterLimit(t *testing.T) {
 		}})
 		conns = append(conns, sbc)
 	}
-	executor := NewExecutor(context.Background(), serv, cell, resolver, false, testBufferSize, testCacheSize)
+	executor := NewExecutor(context.Background(), serv, cell, resolver, false, testBufferSize, cache.DefaultConfig)
 
 	query := "select col1, col2 from user order by col2 desc limit 3"
 	gotResult, err := executorExec(executor, query, nil)
@@ -1559,8 +1541,7 @@ func TestSelectScatterLimit(t *testing.T) {
 			{Name: "col1", Type: sqltypes.Int32},
 			{Name: "col2", Type: sqltypes.Int32},
 		},
-		RowsAffected: 3,
-		InsertID:     0,
+		InsertID: 0,
 	}
 	wantResult.Rows = append(wantResult.Rows,
 		[]sqltypes.Value{
@@ -1599,8 +1580,7 @@ func TestStreamSelectScatterLimit(t *testing.T) {
 				{Name: "col1", Type: sqltypes.Int32},
 				{Name: "col2", Type: sqltypes.Int32},
 			},
-			RowsAffected: 1,
-			InsertID:     0,
+			InsertID: 0,
 			Rows: [][]sqltypes.Value{{
 				sqltypes.NewInt32(1),
 				sqltypes.NewInt32(int32(i % 4)),
@@ -1608,7 +1588,7 @@ func TestStreamSelectScatterLimit(t *testing.T) {
 		}})
 		conns = append(conns, sbc)
 	}
-	executor := NewExecutor(context.Background(), serv, cell, resolver, false, testBufferSize, testCacheSize)
+	executor := NewExecutor(context.Background(), serv, cell, resolver, false, testBufferSize, cache.DefaultConfig)
 
 	query := "select col1, col2 from user order by col2 desc limit 3"
 	gotResult, err := executorStream(executor, query)
@@ -1676,7 +1656,6 @@ func TestSimpleJoin(t *testing.T) {
 				sandboxconn.SingleRowResult.Rows[0][0],
 			},
 		},
-		RowsAffected: 1,
 	}
 	if !result.Equal(wantResult) {
 		t.Errorf("result: %+v, want %+v", result, wantResult)
@@ -1755,8 +1734,7 @@ func TestVarJoin(t *testing.T) {
 			{Name: "id", Type: sqltypes.Int32},
 			{Name: "col", Type: sqltypes.Int32},
 		},
-		RowsAffected: 1,
-		InsertID:     0,
+		InsertID: 0,
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewInt32(1),
 			sqltypes.NewInt32(3),
@@ -1791,8 +1769,7 @@ func TestVarJoinStream(t *testing.T) {
 			{Name: "id", Type: sqltypes.Int32},
 			{Name: "col", Type: sqltypes.Int32},
 		},
-		RowsAffected: 1,
-		InsertID:     0,
+		InsertID: 0,
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewInt32(1),
 			sqltypes.NewInt32(3),
@@ -1826,8 +1803,7 @@ func TestLeftJoin(t *testing.T) {
 			{Name: "id", Type: sqltypes.Int32},
 			{Name: "col", Type: sqltypes.Int32},
 		},
-		RowsAffected: 1,
-		InsertID:     0,
+		InsertID: 0,
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewInt32(1),
 			sqltypes.NewInt32(3),
@@ -1854,14 +1830,11 @@ func TestLeftJoin(t *testing.T) {
 				{},
 			},
 		},
-		RowsAffected: 1,
 	}
 	if !result.Equal(wantResult) {
 		t.Errorf("result: %+v, want %+v", result, wantResult)
 	}
-
 	testQueryLog(t, logChan, "TestExecute", "SELECT", sql, 2)
-
 }
 
 func TestLeftJoinStream(t *testing.T) {
@@ -1871,8 +1844,7 @@ func TestLeftJoinStream(t *testing.T) {
 			{Name: "id", Type: sqltypes.Int32},
 			{Name: "col", Type: sqltypes.Int32},
 		},
-		RowsAffected: 1,
-		InsertID:     0,
+		InsertID: 0,
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewInt32(1),
 			sqltypes.NewInt32(3),
@@ -2072,8 +2044,7 @@ func TestCrossShardSubquery(t *testing.T) {
 			{Name: "id", Type: sqltypes.Int32},
 			{Name: "col", Type: sqltypes.Int32},
 		},
-		RowsAffected: 1,
-		InsertID:     0,
+		InsertID: 0,
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewInt32(1),
 			sqltypes.NewInt32(3),
@@ -2098,7 +2069,6 @@ func TestCrossShardSubquery(t *testing.T) {
 		Fields: []*querypb.Field{
 			{Name: "id", Type: sqltypes.Int32},
 		},
-		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewInt32(1),
 		}},
@@ -2115,8 +2085,7 @@ func TestCrossShardSubqueryStream(t *testing.T) {
 			{Name: "id", Type: sqltypes.Int32},
 			{Name: "col", Type: sqltypes.Int32},
 		},
-		RowsAffected: 1,
-		InsertID:     0,
+		InsertID: 0,
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewInt32(1),
 			sqltypes.NewInt32(3),
@@ -2209,6 +2178,17 @@ func TestSelectBindvarswithPrepare(t *testing.T) {
 	}
 }
 
+func TestSelectDatabasePrepare(t *testing.T) {
+	executor, _, _, _ := createExecutorEnv()
+	executor.normalize = true
+	logChan := QueryLogger.Subscribe("Test")
+	defer QueryLogger.Unsubscribe(logChan)
+
+	sql := "select database()"
+	_, err := executorPrepare(executor, sql, map[string]*querypb.BindVariable{})
+	require.NoError(t, err)
+}
+
 func TestSelectWithUnionAll(t *testing.T) {
 	executor, sbc1, sbc2, _ := createLegacyExecutorEnv()
 	executor.normalize = true
@@ -2291,7 +2271,6 @@ func TestSelectLock(t *testing.T) {
 			TabletAlias:   sbc1.Tablet().Alias,
 		}},
 		LockSession: &vtgatepb.Session_ShardSession{
-
 			Target:      &querypb.Target{Keyspace: "TestExecutor", Shard: "-20", TabletType: topodatapb.TabletType_MASTER},
 			TabletAlias: sbc1.Tablet().Alias,
 			ReservedId:  1,

@@ -245,7 +245,6 @@ func (client *QueryClient) StreamExecuteWithOptions(query string, bindvars map[s
 				result.Fields = res.Fields
 			}
 			result.Rows = append(result.Rows, res.Rows...)
-			result.RowsAffected += uint64(len(res.Rows))
 			return nil
 		},
 	)

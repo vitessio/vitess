@@ -86,7 +86,6 @@ func TestBatchRead(t *testing.T) {
 			Charset:      63,
 			Flags:        128,
 		}},
-		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			{
 				sqltypes.NewInt64(1),
@@ -119,7 +118,6 @@ func TestBatchRead(t *testing.T) {
 			Charset:      63,
 			Flags:        49155,
 		}},
-		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			{
 				sqltypes.NewInt64(1),

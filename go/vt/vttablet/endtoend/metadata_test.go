@@ -66,37 +66,31 @@ func TestMetadataSpecificExecOptions(t *testing.T) {
 	}
 
 	want := &sqltypes.Result{
-		Fields: []*querypb.Field{
-			{
-				Name:         "eid",
-				Type:         sqltypes.Int64,
-				Table:        "vitess_b",
-				OrgTable:     "vitess_b",
-				Database:     "vttest",
-				OrgName:      "eid",
-				ColumnLength: 20,
-				Charset:      63,
-				Flags:        49155,
-			},
-			{
-				Name:         "id",
-				Type:         sqltypes.Int32,
-				Table:        "vitess_b",
-				OrgTable:     "vitess_b",
-				Database:     "vttest",
-				OrgName:      "id",
-				ColumnLength: 11,
-				Charset:      63,
-				Flags:        49155,
-			},
-		},
-		RowsAffected: 1,
-		Rows: [][]sqltypes.Value{
-			{
-				sqltypes.NewInt64(-9223372036854775808),
-				sqltypes.NewInt32(-2147483648),
-			},
-		},
+		Fields: []*querypb.Field{{
+			Name:         "eid",
+			Type:         sqltypes.Int64,
+			Table:        "vitess_b",
+			OrgTable:     "vitess_b",
+			Database:     "vttest",
+			OrgName:      "eid",
+			ColumnLength: 20,
+			Charset:      63,
+			Flags:        49155,
+		}, {
+			Name:         "id",
+			Type:         sqltypes.Int32,
+			Table:        "vitess_b",
+			OrgTable:     "vitess_b",
+			Database:     "vttest",
+			OrgName:      "id",
+			ColumnLength: 11,
+			Charset:      63,
+			Flags:        49155,
+		}},
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NewInt64(-9223372036854775808),
+			sqltypes.NewInt32(-2147483648),
+		}},
 		StatusFlags: sqltypes.ServerStatusAutocommit,
 	}
 	mustMatch(t, want, qr)
@@ -118,23 +112,17 @@ func TestMetadataDefaultExecOptions(t *testing.T) {
 	}
 
 	want := &sqltypes.Result{
-		Fields: []*querypb.Field{
-			{
-				Name: "eid",
-				Type: sqltypes.Int64,
-			},
-			{
-				Name: "id",
-				Type: sqltypes.Int32,
-			},
-		},
-		RowsAffected: 1,
-		Rows: [][]sqltypes.Value{
-			{
-				sqltypes.NewInt64(-9223372036854775808),
-				sqltypes.NewInt32(-2147483648),
-			},
-		},
+		Fields: []*querypb.Field{{
+			Name: "eid",
+			Type: sqltypes.Int64,
+		}, {
+			Name: "id",
+			Type: sqltypes.Int32,
+		}},
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NewInt64(-9223372036854775808),
+			sqltypes.NewInt32(-2147483648),
+		}},
 		StatusFlags: sqltypes.ServerStatusAutocommit,
 	}
 	mustMatch(t, want, qr)
@@ -156,23 +144,17 @@ func TestMetadataNoExecOptions(t *testing.T) {
 	}
 
 	want := &sqltypes.Result{
-		Fields: []*querypb.Field{
-			{
-				Name: "eid",
-				Type: sqltypes.Int64,
-			},
-			{
-				Name: "id",
-				Type: sqltypes.Int32,
-			},
-		},
-		RowsAffected: 1,
-		Rows: [][]sqltypes.Value{
-			{
-				sqltypes.NewInt64(-9223372036854775808),
-				sqltypes.NewInt32(-2147483648),
-			},
-		},
+		Fields: []*querypb.Field{{
+			Name: "eid",
+			Type: sqltypes.Int64,
+		}, {
+			Name: "id",
+			Type: sqltypes.Int32,
+		}},
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NewInt64(-9223372036854775808),
+			sqltypes.NewInt32(-2147483648),
+		}},
 		StatusFlags: sqltypes.ServerStatusAutocommit,
 	}
 	mustMatch(t, want, qr)

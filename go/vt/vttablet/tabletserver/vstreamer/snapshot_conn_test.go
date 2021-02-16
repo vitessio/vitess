@@ -53,8 +53,7 @@ func TestStartSnapshot(t *testing.T) {
 		Rows: [][]sqltypes.Value{
 			{sqltypes.NewInt32(1), sqltypes.NewVarBinary("aaa")},
 		},
-		RowsAffected: 1,
-		StatusFlags:  sqltypes.ServerStatusNoIndexUsed | sqltypes.ServerStatusAutocommit | sqltypes.ServerStatusInTrans,
+		StatusFlags: sqltypes.ServerStatusNoIndexUsed | sqltypes.ServerStatusAutocommit | sqltypes.ServerStatusInTrans,
 	}
 	qr, err := conn.ExecuteFetch("select * from t1", 10, false)
 	require.NoError(t, err)

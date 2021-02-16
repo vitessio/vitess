@@ -61,16 +61,6 @@ func Queries() map[string]*sqltypes.Result {
 				{sqltypes.NewVarBinary("0")},
 			},
 		},
-		mysql.BaseShowTables: {
-			Fields: mysql.BaseShowTablesFields,
-			Rows: [][]sqltypes.Value{
-				mysql.BaseShowTablesRow("test_table_01", false, ""),
-				mysql.BaseShowTablesRow("test_table_02", false, ""),
-				mysql.BaseShowTablesRow("test_table_03", false, ""),
-				mysql.BaseShowTablesRow("seq", false, "vitess_sequence"),
-				mysql.BaseShowTablesRow("msg", false, "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30"),
-			},
-		},
 		mysql.BaseShowPrimary: {
 			Fields: mysql.ShowPrimaryFields,
 			Rows: [][]sqltypes.Value{

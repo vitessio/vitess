@@ -16,27 +16,51 @@
 import * as React from 'react';
 
 import { useTablets } from '../../hooks/api';
-import { TabletList } from '../TabletList';
+import { vtadmin as pb, topodata } from '../../proto/vtadmin';
+import { orderBy } from 'lodash-es';
+import { useDocumentTitle } from '../../hooks/useDocumentTitle';
+import { DataTable } from '../dataTable/DataTable';
 
 export const Tablets = () => {
-    const { data, error, isError, isSuccess } = useTablets();
+    useDocumentTitle('Tablets');
+    const { data = [] } = useTablets();
 
-    // Placeholder UI :D
-    let content = <div>Loading...</div>;
-    if (isError) {
-        content = (
-            <div>
-                {error?.name}: {error?.message}
-            </div>
-        );
-    } else if (isSuccess) {
-        content = <TabletList tablets={data || []} />;
-    }
+    const rows = React.useMemo(() => {
+        return orderBy(data, ['cluster.name', 'tablet.keyspace', 'tablet.shard', 'tablet.type']);
+    }, [data]);
+
+    const renderRows = React.useCallback((rows: pb.Tablet[]) => {
+        return rows.map((t, tdx) => (
+            <tr key={tdx}>
+                <td>{t.cluster?.name}</td>
+                <td>{t.tablet?.keyspace}</td>
+                <td>{t.tablet?.shard}</td>
+                <td>{formatAlias(t)}</td>
+                <td>{t.tablet?.hostname}</td>
+                <td>{formatType(t)}</td>
+                <td>{formatState(t)}</td>
+            </tr>
+        ));
+    }, []);
 
     return (
         <div>
             <h1>Tablets</h1>
-            {content}
+            <DataTable
+                columns={['Cluster', 'Keyspace', 'Shard', 'Alias', 'Hostname', 'Type', 'State']}
+                data={rows}
+                renderRows={renderRows}
+            />
         </div>
     );
 };
+
+const SERVING_STATES = Object.keys(pb.Tablet.ServingState);
+const TABLET_TYPES = Object.keys(topodata.TabletType);
+
+const formatAlias = (t: pb.Tablet) =>
+    t.tablet?.alias?.cell && t.tablet?.alias?.uid && `${t.tablet.alias.cell}-${t.tablet.alias.uid}`;
+
+const formatType = (t: pb.Tablet) => t.tablet?.type && TABLET_TYPES[t.tablet?.type];
+
+const formatState = (t: pb.Tablet) => t.state && SERVING_STATES[t.state];

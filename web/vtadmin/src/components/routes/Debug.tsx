@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import { Theme, useTheme } from '../../hooks/useTheme';
 import { Button } from '../Button';
 import { Icon, Icons } from '../Icon';
@@ -6,6 +7,7 @@ import { TextInput } from '../TextInput';
 import style from './Debug.module.scss';
 
 export const Debug = () => {
+    useDocumentTitle('Debug');
     const [theme, setTheme] = useTheme();
 
     return (

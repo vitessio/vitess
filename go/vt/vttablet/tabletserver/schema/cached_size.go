@@ -50,7 +50,7 @@ func (cached *Table) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(88)
+		size += int64(104)
 	}
 	// field Name vitess.io/vitess/go/vt/sqlparser.TableIdent
 	size += cached.Name.CachedSize(false)
