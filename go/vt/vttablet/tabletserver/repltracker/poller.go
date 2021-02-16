@@ -20,8 +20,6 @@ import (
 	"sync"
 	"time"
 
-	querypb "vitess.io/vitess/go/vt/proto/query"
-
 	"vitess.io/vitess/go/stats"
 
 	"vitess.io/vitess/go/vt/mysqlctl"
@@ -29,10 +27,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
-var replicationLagGauges = stats.NewGaugesWithMultiLabels(
-	"replicationLag",
-	"replication lag",
-	[]string{"Keyspace", "Shard"})
+var replicationLagGauges = stats.NewGauge("replicationLagSec", "replication lag in seconds")
 
 type poller struct {
 	mysqld mysqlctl.MysqlDaemon
@@ -40,15 +35,10 @@ type poller struct {
 	mu           sync.Mutex
 	lag          time.Duration
 	timeRecorded time.Time
-
-	keyspace string
-	shard    string
 }
 
-func (p *poller) InitDBConfig(mysqld mysqlctl.MysqlDaemon, target querypb.Target) {
+func (p *poller) InitDBConfig(mysqld mysqlctl.MysqlDaemon) {
 	p.mysqld = mysqld
-	p.keyspace = target.Keyspace
-	p.shard = target.Shard
 }
 
 func (p *poller) Status() (time.Duration, error) {
@@ -69,6 +59,6 @@ func (p *poller) Status() (time.Duration, error) {
 
 	p.lag = time.Duration(status.SecondsBehindMaster) * time.Second
 	p.timeRecorded = time.Now()
-	replicationLagGauges.Set([]string{p.keyspace, p.shard}, p.lag.Milliseconds())
+	replicationLagGauges.Set(int64(p.lag.Seconds()))
 	return p.lag, nil
 }
