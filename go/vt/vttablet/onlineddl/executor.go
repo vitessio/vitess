@@ -1511,7 +1511,7 @@ func (e *Executor) isVReplMigrationReadyToCutOver(ctx context.Context, s *VReplS
 	{
 		// when ready to cut-over, pos must have some value
 		if s.pos == "" {
-			return false, err
+			return false, nil
 		}
 	}
 	{
@@ -1527,12 +1527,19 @@ func (e *Executor) isVReplMigrationReadyToCutOver(ctx context.Context, s *VReplS
 		}
 		timeUpdated := time.Unix(s.timeUpdated, 0)
 		if durationDiff(time.Now(), timeUpdated) > cutOverThreshold {
-			return false, err
+			return false, nil
 		}
-		// previously, we also tested for transactionTimestamp. However, as pointed out in
-		// https://github.com/vitessio/vitess/pull/7419#discussion_r576316376, if the table is idle and
-		// receives no traffic, transactionTimestamp natually goes stale, and this should not prevent
-		// cut-over from taking place.
+		// Let's look at transaction timestamp. This gets written by any ongoing
+		// writes on the server (whether on this table or any other table)
+		transactionTimestamp := time.Unix(s.transactionTimestamp, 0)
+		if durationDiff(transactionTimestamp, timeUpdated) > cutOverThreshold {
+			// There's two ways the diff can be high:
+			// 1. High workload: vreplication is unable to apply events in a timely manner. This is
+			//    a normal situation and is why we're testing transaction_timestamp
+			// 2. Lack of writes on the server. Possibly the server is stale. In which case, cut-over
+			//    should be good to go. But we need (TODO) some mechanism to inform us that this is indeed the case.
+			return false, nil
+		}
 	}
 	{
 		// copy_state must have no entries for this vreplication id: if entries are
@@ -1554,7 +1561,7 @@ func (e *Executor) isVReplMigrationReadyToCutOver(ctx context.Context, s *VReplS
 		count := csRow.AsInt64("cnt", 0)
 		if count > 0 {
 			// Still copying
-			return false, err
+			return false, nil
 		}
 	}
 	return true, nil
