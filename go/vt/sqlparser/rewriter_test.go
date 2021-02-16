@@ -23,11 +23,12 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestReplaceJoinCondition(t *testing.T) {
+func XTestReplaceJoinCondition(t *testing.T) {
 	stmt, _ := Parse("select * from a join b on a.id=b.id")
 	Rewrite(stmt, func(cursor *Cursor) bool {
 		fmt.Printf("%T\n", cursor.Node())
 		switch cursor.Node().(type) {
+		case *JoinTableExpr:
 		case *ComparisonExpr:
 			fmt.Println("oh yeah")
 			cursor.Replace(&NullVal{})

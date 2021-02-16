@@ -23,8 +23,7 @@ import "reflect"
 These types are used to test the rewriter generator against these types.
 To recreate them, just run:
 
-go run go/tools/asthelpergen/asthelpergen.go \
-	-in ./go/tools/asthelpergen/integration -iface vitess.io/vitess/go/tools/asthelpergen/integration.AST
+go run go/tools/asthelpergen -in ./go/tools/asthelpergen/integration -iface vitess.io/vitess/go/tools/asthelpergen/integration.AST
 */
 type (
 	AST interface {
@@ -61,11 +60,11 @@ type (
 
 func (*Plus) i() {}
 
-func (*Array) i()        {}
-func (*UnaryMinus) i()   {}
-func (*LiteralInt) i()   {}
-func (LiteralString) i() {}
-func (StructHolder) i()  {}
+func (*Array) i()         {}
+func (*UnaryMinus) i()    {}
+func (*LiteralInt) i()    {}
+func (*LiteralString) i() {}
+func (*StructHolder) i()  {}
 
 //func (ArrayDef) i()     {}
 

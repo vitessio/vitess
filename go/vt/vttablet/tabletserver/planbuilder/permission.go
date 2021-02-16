@@ -39,7 +39,7 @@ func BuildPermissions(stmt sqlparser.Statement) []Permission {
 	case *sqlparser.Union, *sqlparser.Select:
 		permissions = buildSubqueryPermissions(node, tableacl.READER, permissions)
 	case *sqlparser.Insert:
-		permissions = buildTableNamePermissions(node.Table, tableacl.WRITER, permissions)
+		permissions = buildTableNamePermissions(&node.Table, tableacl.WRITER, permissions)
 		permissions = buildSubqueryPermissions(node, tableacl.READER, permissions)
 	case *sqlparser.Update:
 		permissions = buildTableExprsPermissions(node.TableExprs, tableacl.WRITER, permissions)
@@ -49,11 +49,11 @@ func BuildPermissions(stmt sqlparser.Statement) []Permission {
 		permissions = buildSubqueryPermissions(node, tableacl.READER, permissions)
 	case sqlparser.DDLStatement:
 		for _, t := range node.AffectedTables() {
-			permissions = buildTableNamePermissions(t, tableacl.ADMIN, permissions)
+			permissions = buildTableNamePermissions(&t, tableacl.ADMIN, permissions)
 		}
 	case *sqlparser.Flush:
 		for _, t := range node.TableNames {
-			permissions = buildTableNamePermissions(t, tableacl.ADMIN, permissions)
+			permissions = buildTableNamePermissions(&t, tableacl.ADMIN, permissions)
 		}
 	case *sqlparser.OtherAdmin, *sqlparser.CallProc, *sqlparser.Begin, *sqlparser.Commit, *sqlparser.Rollback,
 		*sqlparser.Load, *sqlparser.Savepoint, *sqlparser.Release, *sqlparser.SRollback, *sqlparser.Set, *sqlparser.Show,
@@ -92,7 +92,7 @@ func buildTableExprPermissions(node sqlparser.TableExpr, role tableacl.Role, per
 		// because the buildSubQueryPermissions walker will catch them and extract
 		// the corresponding table names.
 		switch node := node.Expr.(type) {
-		case sqlparser.TableName:
+		case *sqlparser.TableName:
 			permissions = buildTableNamePermissions(node, role, permissions)
 		case *sqlparser.DerivedTable:
 			permissions = buildSubqueryPermissions(node.Select, role, permissions)
@@ -106,7 +106,7 @@ func buildTableExprPermissions(node sqlparser.TableExpr, role tableacl.Role, per
 	return permissions
 }
 
-func buildTableNamePermissions(node sqlparser.TableName, role tableacl.Role, permissions []Permission) []Permission {
+func buildTableNamePermissions(node *sqlparser.TableName, role tableacl.Role, permissions []Permission) []Permission {
 	permissions = append(permissions, Permission{
 		TableName: node.Name.String(),
 		Role:      role,

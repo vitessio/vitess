@@ -349,14 +349,14 @@ func (node *AliasedTableExpr) RemoveHints() *AliasedTableExpr {
 }
 
 //TableName returns a TableName pointing to this table expr
-func (node *AliasedTableExpr) TableName() (TableName, error) {
+func (node *AliasedTableExpr) TableName() (*TableName, error) {
 	if !node.As.IsEmpty() {
-		return TableName{Name: node.As}, nil
+		return &TableName{Name: node.As}, nil
 	}
 
-	tableName, ok := node.Expr.(TableName)
+	tableName, ok := node.Expr.(*TableName)
 	if !ok {
-		return TableName{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: the AST has changed. This should not be possible")
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: the AST has changed. This should not be possible")
 	}
 
 	return tableName, nil
@@ -535,7 +535,7 @@ func NewColName(str string) *ColName {
 }
 
 // NewColNameWithQualifier makes a new ColName pointing to a specific table
-func NewColNameWithQualifier(identifier string, table TableName) *ColName {
+func NewColNameWithQualifier(identifier string, table *TableName) *ColName {
 	return &ColName{
 		Name: NewColIdent(identifier),
 		Qualifier: TableName{

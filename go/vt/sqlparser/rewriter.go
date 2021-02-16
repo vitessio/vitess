@@ -521,8 +521,7 @@ func replaceModifyColumnNewColDefinition(newNode, parent SQLNode) {
 }
 
 func replaceNextvalExpr(newNode, parent SQLNode) {
-	tmp := parent.(Nextval)
-	tmp.Expr = newNode.(Expr)
+	parent.(*Nextval).Expr = newNode.(Expr)
 }
 
 func replaceNotExprExpr(newNode, parent SQLNode) {
@@ -814,13 +813,11 @@ func (r *replaceTableExprsItems) inc() {
 }
 
 func replaceTableNameName(newNode, parent SQLNode) {
-	tmp := parent.(TableName)
-	tmp.Name = newNode.(TableIdent)
+	parent.(*TableName).Name = newNode.(TableIdent)
 }
 
 func replaceTableNameQualifier(newNode, parent SQLNode) {
-	tmp := parent.(TableName)
-	tmp.Qualifier = newNode.(TableIdent)
+	parent.(*TableName).Qualifier = newNode.(TableIdent)
 }
 
 type replaceTableNamesItems int
@@ -1000,8 +997,7 @@ func replaceValuesFuncExprName(newNode, parent SQLNode) {
 }
 
 func replaceVindexParamKey(newNode, parent SQLNode) {
-	tmp := parent.(VindexParam)
-	tmp.Key = newNode.(ColIdent)
+	parent.(*VindexParam).Key = newNode.(ColIdent)
 }
 
 func replaceVindexSpecName(newNode, parent SQLNode) {
@@ -1011,7 +1007,7 @@ func replaceVindexSpecName(newNode, parent SQLNode) {
 type replaceVindexSpecParams int
 
 func (r *replaceVindexSpecParams) replace(newNode, container SQLNode) {
-	container.(*VindexSpec).Params[int(*r)] = newNode.(VindexParam)
+	container.(*VindexSpec).Params[int(*r)] = newNode.(*VindexParam)
 }
 
 func (r *replaceVindexSpecParams) inc() {
@@ -1370,6 +1366,9 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 		a.apply(node, n.First, replaceModifyColumnFirst)
 		a.apply(node, n.NewColDefinition, replaceModifyColumnNewColDefinition)
 
+	case *Nextval:
+		a.apply(node, n.Expr, replaceNextvalExpr)
+
 	case Nextval:
 		a.apply(node, n.Expr, replaceNextvalExpr)
 
@@ -1563,6 +1562,10 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 		a.apply(node, n.Name, replaceTableNameName)
 		a.apply(node, n.Qualifier, replaceTableNameQualifier)
 
+	case *TableName:
+		a.apply(node, n.Name, replaceTableNameName)
+		a.apply(node, n.Qualifier, replaceTableNameQualifier)
+
 	case TableNames:
 		replacer := replaceTableNamesItems(0)
 		replacerRef := &replacer
@@ -1673,7 +1676,7 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 	case *ValuesFuncExpr:
 		a.apply(node, n.Name, replaceValuesFuncExprName)
 
-	case VindexParam:
+	case *VindexParam:
 		a.apply(node, n.Key, replaceVindexParamKey)
 
 	case *VindexSpec:

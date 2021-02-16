@@ -308,25 +308,25 @@ func SplitAndExpression(filters []Expr, node Expr) []Expr {
 
 // TableFromStatement returns the qualified table name for the query.
 // This works only for select statements.
-func TableFromStatement(sql string) (TableName, error) {
+func TableFromStatement(sql string) (*TableName, error) {
 	stmt, err := Parse(sql)
 	if err != nil {
-		return TableName{}, err
+		return nil, err
 	}
 	sel, ok := stmt.(*Select)
 	if !ok {
-		return TableName{}, fmt.Errorf("unrecognized statement: %s", sql)
+		return nil, fmt.Errorf("unrecognized statement: %s", sql)
 	}
 	if len(sel.From) != 1 {
-		return TableName{}, fmt.Errorf("table expression is complex")
+		return nil, fmt.Errorf("table expression is complex")
 	}
 	aliased, ok := sel.From[0].(*AliasedTableExpr)
 	if !ok {
-		return TableName{}, fmt.Errorf("table expression is complex")
+		return nil, fmt.Errorf("table expression is complex")
 	}
-	tableName, ok := aliased.Expr.(TableName)
+	tableName, ok := aliased.Expr.(*TableName)
 	if !ok {
-		return TableName{}, fmt.Errorf("table expression is complex")
+		return nil, fmt.Errorf("table expression is complex")
 	}
 	return tableName, nil
 }
@@ -334,7 +334,7 @@ func TableFromStatement(sql string) (TableName, error) {
 // GetTableName returns the table name from the SimpleTableExpr
 // only if it's a simple expression. Otherwise, it returns "".
 func GetTableName(node SimpleTableExpr) TableIdent {
-	if n, ok := node.(TableName); ok && n.Qualifier.IsEmpty() {
+	if n, ok := node.(*TableName); ok && n.Qualifier.IsEmpty() {
 		return n.Name
 	}
 	// sub-select or '.' expression

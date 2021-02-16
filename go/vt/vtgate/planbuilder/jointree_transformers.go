@@ -65,7 +65,7 @@ func transformRoutePlan(n *routePlan) (*route, error) {
 	sort.Sort(n._tables)
 	for _, t := range n._tables {
 		alias := sqlparser.AliasedTableExpr{
-			Expr: sqlparser.TableName{
+			Expr: &sqlparser.TableName{
 				Name: t.vtable.Name,
 			},
 			Partitions: nil,

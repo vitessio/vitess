@@ -120,8 +120,8 @@ func newQueryGraph() *queryGraph {
 func (qg *queryGraph) collectTable(t sqlparser.TableExpr, semTable *semantics.SemTable) error {
 	switch table := t.(type) {
 	case *sqlparser.AliasedTableExpr:
-		tableName := table.Expr.(sqlparser.TableName)
-		qt := &queryTable{alias: table, table: tableName, tableID: semTable.TableSetFor(table)}
+		tableName := table.Expr.(*sqlparser.TableName)
+		qt := &queryTable{alias: table, table: *tableName, tableID: semTable.TableSetFor(table)}
 		qg.tables = append(qg.tables, qt)
 	case *sqlparser.JoinTableExpr:
 		if err := qg.collectTable(table.LeftExpr, semTable); err != nil {

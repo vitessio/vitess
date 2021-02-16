@@ -116,8 +116,8 @@ func skipToEnd(yylex interface{}) {
   partDef       *PartitionDefinition
   partSpec      *PartitionSpec
   partSpecs     []*PartitionSpec
-  vindexParam   VindexParam
-  vindexParams  []VindexParam
+  vindexParam   *VindexParam
+  vindexParams  []*VindexParam
   showFilter    *ShowFilter
   optLike       *OptLike
   isolationLevel IsolationLevel
@@ -211,7 +211,7 @@ func skipToEnd(yylex interface{}) {
 %token <bytes> BIT TINYINT SMALLINT MEDIUMINT INT INTEGER BIGINT INTNUM
 %token <bytes> REAL DOUBLE FLOAT_TYPE DECIMAL NUMERIC
 %token <bytes> TIME TIMESTAMP DATETIME YEAR
-%token <bytes> CHAR VARCHAR BOOL CHARACTER VARBINARY NCHAR 
+%token <bytes> CHAR VARCHAR BOOL CHARACTER VARBINARY NCHAR
 %token <bytes> TEXT TINYTEXT MEDIUMTEXT LONGTEXT
 %token <bytes> BLOB TINYBLOB MEDIUMBLOB LONGBLOB JSON ENUM
 %token <bytes> GEOMETRY POINT LINESTRING POLYGON GEOMETRYCOLLECTION MULTIPOINT MULTILINESTRING MULTIPOLYGON
@@ -507,7 +507,8 @@ select_statement:
   }
 | SELECT comment_opt cache_opt NEXT num_val for_from table_name
   {
-    $$ = NewSelect(Comments($2), SelectExprs{Nextval{Expr: $5}}, []string{$3}/*options*/, TableExprs{&AliasedTableExpr{Expr: $7}}, nil/*where*/, nil/*groupBy*/, nil/*having*/) 
+  	tableName := $7
+    $$ = NewSelect(Comments($2), SelectExprs{&Nextval{Expr: $5}}, []string{$3}/*options*/, TableExprs{&AliasedTableExpr{Expr: &tableName}}, nil/*where*/, nil/*groupBy*/, nil/*having*/)
   }
 
 // simple_select is an unparenthesized select used for subquery.
@@ -615,7 +616,8 @@ update_statement:
 delete_statement:
   DELETE comment_opt ignore_opt FROM table_name opt_partition_clause where_expression_opt order_by_opt limit_opt
   {
-    $$ = &Delete{Comments: Comments($2), Ignore: $3, TableExprs:  TableExprs{&AliasedTableExpr{Expr:$5}}, Partitions: $6, Where: NewWhere(WhereClause, $7), OrderBy: $8, Limit: $9}
+  	tableName := $5
+    $$ = &Delete{Comments: Comments($2), Ignore: $3, TableExprs:  TableExprs{&AliasedTableExpr{Expr: &tableName}}, Partitions: $6, Where: NewWhere(WhereClause, $7), OrderBy: $8, Limit: $9}
   }
 | DELETE comment_opt ignore_opt FROM table_name_list USING table_references where_expression_opt
   {
@@ -801,7 +803,7 @@ vindex_type:
 
 vindex_params_opt:
   {
-    var v []VindexParam
+    var v []*VindexParam
     $$ = v
   }
 | WITH vindex_param_list
@@ -812,7 +814,7 @@ vindex_params_opt:
 vindex_param_list:
   vindex_param
   {
-    $$ = make([]VindexParam, 0, 4)
+    $$ = make([]*VindexParam, 0, 4)
     $$ = append($$, $1)
   }
 | vindex_param_list ',' vindex_param
@@ -823,7 +825,7 @@ vindex_param_list:
 vindex_param:
   reserved_sql_id '=' table_opt_value
   {
-    $$ = VindexParam{Key: $1, Val: $3}
+    $$ = &VindexParam{Key: $1, Val: $3}
   }
 
 create_table_prefix:
@@ -2682,11 +2684,11 @@ explain_synonyms:
   }
 | DESCRIBE
   {
-    $$ = $1  
+    $$ = $1
   }
 | DESC
   {
-    $$ = $1  
+    $$ = $1
   }
 
 explainable_statement:
@@ -2694,15 +2696,15 @@ explainable_statement:
   {
     $$ = $1
   }
-| update_statement  
+| update_statement
   {
     $$ = $1
   }
-| insert_statement  
+| insert_statement
   {
     $$ = $1
   }
-| delete_statement  
+| delete_statement
   {
     $$ = $1
   }
@@ -2970,15 +2972,15 @@ select_options:
   {
     $$ = []string{$1}
   }
-| select_option select_option // TODO: figure out a way to do this recursively instead. 
+| select_option select_option // TODO: figure out a way to do this recursively instead.
   {                           // TODO: This is a hack since I couldn't get it to work in a nicer way. I got 'conflicts: 8 shift/reduce'
     $$ = []string{$1, $2}
   }
-| select_option select_option select_option 
+| select_option select_option select_option
   {
     $$ = []string{$1, $2, $3}
   }
-| select_option select_option select_option select_option 
+| select_option select_option select_option select_option
   {
     $$ = []string{$1, $2, $3, $4}
   }
@@ -3059,7 +3061,7 @@ col_alias:
 
 from_opt:
   {
-    $$ = TableExprs{&AliasedTableExpr{Expr:TableName{Name: NewTableIdent("dual")}}}
+    $$ = TableExprs{&AliasedTableExpr{Expr:&TableName{Name: NewTableIdent("dual")}}}
   }
 | FROM table_references
   {
@@ -3103,11 +3105,13 @@ derived_table:
 aliased_table_name:
 table_name as_opt_id index_hint_list
   {
-    $$ = &AliasedTableExpr{Expr:$1, As: $2, Hints: $3}
+  	tableName := $1
+    $$ = &AliasedTableExpr{Expr:&tableName, As: $2, Hints: $3}
   }
 | table_name PARTITION openb partition_list closeb as_opt_id index_hint_list
   {
-    $$ = &AliasedTableExpr{Expr:$1, Partitions: $4, As: $6, Hints: $7}
+  	tableName := $1
+    $$ = &AliasedTableExpr{Expr: &tableName, Partitions: $4, As: $6, Hints: $7}
   }
 
 column_list_opt:
@@ -3666,7 +3670,7 @@ function_call_generic:
 | sql_id openb DISTINCTROW select_expression_list closeb
   {
     $$ = &FuncExpr{Name: $1, Distinct: true, Exprs: $4}
-  }  
+  }
 | table_id '.' reserved_sql_id openb select_expression_list_opt closeb
   {
     $$ = &FuncExpr{Qualifier: $1, Name: $3, Exprs: $5}
@@ -4618,7 +4622,7 @@ call_statement:
     $$ = &CallProc{Name: $2, Params: $4}
   }
 
-expression_list_opt:  
+expression_list_opt:
   {
     $$ = nil
   }
@@ -4682,7 +4686,7 @@ reserved_table_id:
 */
 reserved_keyword:
   ADD
-| ARRAY 
+| ARRAY
 | AND
 | AS
 | ASC

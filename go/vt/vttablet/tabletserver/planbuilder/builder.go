@@ -46,7 +46,7 @@ func analyzeSelect(sel *sqlparser.Select, tables map[string]*schema.Table) (plan
 	}
 
 	// Check if it's a NEXT VALUE statement.
-	if nextVal, ok := sel.SelectExprs[0].(sqlparser.Nextval); ok {
+	if nextVal, ok := sel.SelectExprs[0].(*sqlparser.Nextval); ok {
 		if plan.Table == nil || plan.Table.Type != schema.Sequence {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%s is not a sequence", sqlparser.String(sel.From))
 		}
@@ -122,7 +122,7 @@ func analyzeInsert(ins *sqlparser.Insert, tables map[string]*schema.Table) (plan
 		FullQuery: GenerateFullQuery(ins),
 	}
 
-	tableName := sqlparser.GetTableName(ins.Table)
+	tableName := sqlparser.GetTableName(&ins.Table)
 	plan.Table = tables[tableName.String()]
 	return plan, nil
 }

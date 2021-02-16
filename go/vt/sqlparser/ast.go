@@ -1349,7 +1349,7 @@ type IndexInfo struct {
 type VindexSpec struct {
 	Name   ColIdent
 	Type   ColIdent
-	Params []VindexParam
+	Params []*VindexParam
 }
 
 // AutoIncSpec defines and autoincrement value for a ADD AUTO_INCREMENT statement
@@ -1431,7 +1431,7 @@ type (
 
 func (*StarExpr) iSelectExpr()    {}
 func (*AliasedExpr) iSelectExpr() {}
-func (Nextval) iSelectExpr()      {}
+func (*Nextval) iSelectExpr()     {}
 
 // Columns represents an insert column list.
 type Columns []ColIdent
@@ -1507,7 +1507,7 @@ type (
 	}
 )
 
-func (TableName) iSimpleTableExpr()     {}
+func (*TableName) iSimpleTableExpr()    {}
 func (*DerivedTable) iSimpleTableExpr() {}
 
 // TableNames is a list of TableName.
@@ -2390,7 +2390,7 @@ func (node *VindexSpec) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
-func (node VindexParam) Format(buf *TrackedBuffer) {
+func (node *VindexParam) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "%s=%s", node.Key.String(), node.Val)
 }
 

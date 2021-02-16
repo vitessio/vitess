@@ -33,13 +33,13 @@ import (
 func buildInsertPlan(stmt sqlparser.Statement, vschema ContextVSchema) (engine.Primitive, error) {
 	ins := stmt.(*sqlparser.Insert)
 	pb := newPrimitiveBuilder(vschema, newJointab(sqlparser.GetBindvars(ins)))
-	exprs := sqlparser.TableExprs{&sqlparser.AliasedTableExpr{Expr: ins.Table}}
+	exprs := sqlparser.TableExprs{&sqlparser.AliasedTableExpr{Expr: &ins.Table}}
 	rb, err := pb.processDMLTable(exprs, nil)
 	if err != nil {
 		return nil, err
 	}
 	// The table might have been routed to a different one.
-	ins.Table = exprs[0].(*sqlparser.AliasedTableExpr).Expr.(sqlparser.TableName)
+	ins.Table = *exprs[0].(*sqlparser.AliasedTableExpr).Expr.(*sqlparser.TableName)
 	if rb.eroute.TargetDestination != nil {
 		return nil, errors.New("unsupported: INSERT with a target destination")
 	}

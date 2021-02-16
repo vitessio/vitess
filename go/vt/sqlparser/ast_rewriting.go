@@ -72,7 +72,7 @@ func shouldRewriteDatabaseFunc(in Statement) bool {
 	if !ok {
 		return false
 	}
-	tableName, ok := aliasedTable.Expr.(TableName)
+	tableName, ok := aliasedTable.Expr.(*TableName)
 	if !ok {
 		return false
 	}
@@ -165,7 +165,7 @@ func (er *expressionRewriter) rewrite(cursor *Cursor) bool {
 		if !SystemSchema(er.keyspace) {
 			break
 		}
-		aliasTableName, ok := node.Expr.(TableName)
+		aliasTableName, ok := node.Expr.(*TableName)
 		if !ok {
 			return true
 		}
@@ -294,7 +294,7 @@ func (er *expressionRewriter) unnestSubQueries(cursor *Cursor, subquery *Subquer
 	if !ok {
 		return
 	}
-	table, ok := aliasedTable.Expr.(TableName)
+	table, ok := aliasedTable.Expr.(*TableName)
 	if !ok || table.Name.String() != "dual" {
 		return
 	}

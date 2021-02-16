@@ -17,7 +17,6 @@ limitations under the License.
 package integration
 
 import (
-	"fmt"
 	"reflect"
 	"testing"
 
@@ -29,7 +28,7 @@ import (
 func TestVisit(t *testing.T) {
 	one := &LiteralInt{1}
 	minusOne := &UnaryMinus{Val: one}
-	foo := LiteralString{"foo"}
+	foo := &LiteralString{"foo"}
 	plus := &Plus{Left: minusOne, Right: foo}
 
 	preOrder, postOrder := testVisitOrder(plus)
@@ -45,7 +44,7 @@ func TestVisitWSlice(t *testing.T) {
 		Values: []AST{int1, int2},
 		Stuff:  []int{1, 2, 3},
 	}
-	foo := LiteralString{"foo"}
+	foo := &LiteralString{"foo"}
 	plus := &Plus{Left: slice, Right: foo}
 
 	preOrder, postOrder := testVisitOrder(plus)
@@ -118,7 +117,7 @@ func TestReplaceInSlice(t *testing.T) {
 	two := &LiteralInt{2}
 	three := &LiteralInt{3}
 	array := &Array{Values: []AST{one, two, three}}
-	string2 := LiteralString{"two"}
+	string2 := &LiteralString{"two"}
 
 	parent := &struct{ AST }{array}
 
@@ -146,19 +145,19 @@ func TestReplaceInSlice(t *testing.T) {
 
 func TestReplaceValue(t *testing.T) {
 	plus := &Plus{
-		Left:  StructHolder{&LiteralInt{1}},
-		Right: &LiteralInt{2}}
+		Left:  &StructHolder{&LiteralInt{1}},
+		Right: &LiteralInt{2},
+	}
 	parent := &struct{ AST }{plus}
 	a := &application{
-		pre: func(cursor *Cursor) bool {
+		pre: func(cursor *Cursor) (AST, bool) {
 			switch n := cursor.node.(type) {
 			case *LiteralInt:
 				if n.Val == 1 {
-					fmt.Println("!")
-					cursor.replacer(&LiteralInt{3}, cursor.parent)
+					return &LiteralInt{3}, true
 				}
+				return nil, false
 			}
-			return true
 		},
 		post:   nil,
 		cursor: Cursor{},
@@ -167,8 +166,9 @@ func TestReplaceValue(t *testing.T) {
 	a.apply(parent, plus, nil)
 
 	expected := &Plus{
-		Left:  StructHolder{&LiteralInt{3}},
-		Right: &LiteralInt{2}}
+		Left:  &StructHolder{&LiteralInt{3}},
+		Right: &LiteralInt{2},
+	}
 
 	utils.MustMatch(t, expected, parent.AST)
 }

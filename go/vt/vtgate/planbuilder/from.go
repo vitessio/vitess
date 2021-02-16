@@ -97,8 +97,8 @@ func (pb *primitiveBuilder) processTableExpr(tableExpr sqlparser.TableExpr, wher
 // vindex columns.
 func (pb *primitiveBuilder) processAliasedTable(tableExpr *sqlparser.AliasedTableExpr) error {
 	switch expr := tableExpr.Expr.(type) {
-	case sqlparser.TableName:
-		return pb.buildTablePrimitive(tableExpr, expr)
+	case *sqlparser.TableName:
+		return pb.buildTablePrimitive(tableExpr, *expr)
 	case *sqlparser.DerivedTable:
 		spb := newPrimitiveBuilder(pb.vschema, pb.jt)
 		switch stmt := expr.Select.(type) {
@@ -220,7 +220,7 @@ func (pb *primitiveBuilder) buildTablePrimitive(tableExpr *sqlparser.AliasedTabl
 		if tableName.Name != vschemaTable.Name {
 			// Table name does not match. Change and alias it to old name.
 			sub.newExpr = &sqlparser.AliasedTableExpr{
-				Expr: sqlparser.TableName{Name: vschemaTable.Name},
+				Expr: &sqlparser.TableName{Name: vschemaTable.Name},
 				As:   tableName.Name,
 			}
 		}
@@ -229,7 +229,7 @@ func (pb *primitiveBuilder) buildTablePrimitive(tableExpr *sqlparser.AliasedTabl
 		if tableName.Name != vschemaTable.Name {
 			// Table name does not match. Change it and reuse existing alias.
 			sub.newExpr = &sqlparser.AliasedTableExpr{
-				Expr: sqlparser.TableName{Name: vschemaTable.Name},
+				Expr: &sqlparser.TableName{Name: vschemaTable.Name},
 				As:   tableExpr.As,
 			}
 		}

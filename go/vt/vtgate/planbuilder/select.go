@@ -415,8 +415,7 @@ func isOnlyDual(sel *sqlparser.Select) bool {
 	if !ok {
 		return false
 	}
-	tableName, ok := table.Expr.(sqlparser.TableName)
-
+	tableName, ok := table.Expr.(*sqlparser.TableName)
 	return ok && tableName.Name.String() == "dual" && tableName.Qualifier.IsEmpty()
 }
 
@@ -531,7 +530,7 @@ func (pb *primitiveBuilder) pushSelectRoutes(selectExprs sqlparser.SelectExprs) 
 				}
 			}
 			resultColumns = append(resultColumns, rb.PushAnonymous(node))
-		case sqlparser.Nextval:
+		case *sqlparser.Nextval:
 			rb, ok := pb.plan.(*route)
 			if !ok {
 				// This code is unreachable because the parser doesn't allow joins for next val statements.

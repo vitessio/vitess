@@ -160,7 +160,7 @@ func (a *analyzer) bindTable(alias *sqlparser.AliasedTableExpr, expr sqlparser.S
 		a.popScope()
 		scope := a.currentScope()
 		return scope.addTable(alias.As.String(), alias)
-	case sqlparser.TableName:
+	case *sqlparser.TableName:
 		scope := a.currentScope()
 		a.Tables = append(a.Tables, alias)
 		if alias.As.IsEmpty() {
