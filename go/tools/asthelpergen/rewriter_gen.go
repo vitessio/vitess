@@ -17,6 +17,7 @@ limitations under the License.
 package main
 
 import (
+	"fmt"
 	"go/types"
 
 	"github.com/dave/jennifer/jen"
@@ -47,6 +48,12 @@ func (r *rewriterGen) visitStruct(t types.Type, typeString, replaceMethodPrefix 
 
 			caseStmts = append(caseStmts, caseStmtFor(field, replacerName))
 		}
+		sliceT, ok := field.Type().(*types.Slice)
+		if ok && r.interestingType(sliceT.Elem()) {
+			replacerName, methods := r.createReplaceCodeForSliceField(replaceMethodPrefix, types.TypeString(t, noQualifier), field)
+			r.replaceMethods = append(r.replaceMethods, methods...)
+			fmt.Println("apa", replacerName)
+		}
 	}
 	r.cases = append(r.cases, jen.Case(jen.Id(typeString)).Block(caseStmts...))
 	return nil
@@ -75,6 +82,38 @@ func (r *rewriterGen) createReplaceMethod(structName, structType string, field *
 	).Block(
 		jen.Id("parent").Assert(jen.Id(structType)).Dot(field.Name()).Op("=").Id("newNode").Assert(jen.Id(types.TypeString(field.Type(), noQualifier))),
 	)
+}
+
+func (r *rewriterGen) createReplaceCodeForSliceField(structName, structType string, field *types.Var) (string, []jen.Code) {
+	name := "replace" + structName + field.Name()
+
+	//adds: type replaceContainerFieldName int
+	counterType := jen.Type().Id(name).Int()
+
+	// adds:
+	//func (r *replaceContainerFieldName) replace(newNode, container SQLNode) {
+	//	container.(*Container).Elements[int(*r)] = newNode.(*FieldType)
+	//}
+	elemType := field.Type().(*types.Slice).Elem()
+	replaceMethod := jen.Func().Params(jen.Id("r").Op("*").Id(name)).Id("replace").Params(
+		jen.Id("newNode"),
+		jen.Id("parent").Id(r.ifaceName),
+	).Block(
+		jen.Id("parent").Assert(jen.Id(structType)).Dot(field.Name()).Index(jen.Int().Call(jen.Op("*").Id("r"))).
+			Op("=").Id("newNode").Assert(jen.Id(types.TypeString(elemType, noQualifier))),
+	)
+
+	//func (r *replaceContainerFieldName) inc() {
+	//	*r++
+	//}
+	inc := jen.Func().Params(jen.Id("r").Op("*").Id(name)).Id("inc").Params().Block(
+		jen.Op("*").Id("r").Op("++"),
+	)
+	return name, []jen.Code{
+		counterType,
+		replaceMethod,
+		inc,
+	}
 }
 
 func (r *rewriterGen) createFile(pkgName string) *jen.File {

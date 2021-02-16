@@ -35,10 +35,11 @@ type (
 		Left, Right AST
 	}
 
-	//Array struct {
-	//	Values []AST
-	//}
-	//
+	Array struct {
+		Values []AST
+		Stuff  []int
+	}
+
 	UnaryMinus struct {
 		Val *LiteralInt
 	}
@@ -56,7 +57,7 @@ type (
 
 func (*Plus) i() {}
 
-//func (*Array) i()       {}
+func (*Array) i()        {}
 func (*UnaryMinus) i()   {}
 func (*LiteralInt) i()   {}
 func (LiteralString) i() {}
