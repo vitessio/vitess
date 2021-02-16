@@ -1612,6 +1612,12 @@ func (e *Executor) handlePrepare(ctx context.Context, safeSession *SafeSession, 
 		return nil, err
 	}
 
+	err = e.addNeededBindVars(plan.BindVarNeeds, bindVars, safeSession)
+	if err != nil {
+		logStats.Error = err
+		return nil, err
+	}
+
 	qr, err := plan.Instructions.GetFields(vcursor, bindVars)
 	logStats.ExecuteTime = time.Since(execStart)
 	var errCount uint64
