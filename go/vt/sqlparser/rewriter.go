@@ -527,8 +527,7 @@ func replaceModifyColumnNewColDefinition(newNode, parent SQLNode) {
 }
 
 func replaceNextvalExpr(newNode, parent SQLNode) {
-	tmp := parent.(Nextval)
-	tmp.Expr = newNode.(Expr)
+	parent.(*Nextval).Expr = newNode.(Expr)
 }
 
 func replaceNotExprExpr(newNode, parent SQLNode) {
@@ -1377,7 +1376,7 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 		a.apply(node, n.First, replaceModifyColumnFirst)
 		a.apply(node, n.NewColDefinition, replaceModifyColumnNewColDefinition)
 
-	case Nextval:
+	case *Nextval:
 		a.apply(node, n.Expr, replaceNextvalExpr)
 
 	case *NotExpr:
