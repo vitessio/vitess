@@ -76,7 +76,7 @@ func NewReplTracker(env tabletenv.Env, alias topodatapb.TabletAlias) *ReplTracke
 func (rt *ReplTracker) InitDBConfig(target querypb.Target, mysqld mysqlctl.MysqlDaemon) {
 	rt.hw.InitDBConfig(target)
 	rt.hr.InitDBConfig(target)
-	rt.poller.InitDBConfig(mysqld, target)
+	rt.poller.InitDBConfig(mysqld)
 }
 
 // MakeMaster must be called if the tablet type becomes MASTER.
