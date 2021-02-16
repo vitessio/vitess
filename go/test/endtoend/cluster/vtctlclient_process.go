@@ -122,6 +122,15 @@ func (vtctlclient *VtctlClientProcess) OnlineDDLRetryMigration(Keyspace, uuid st
 	)
 }
 
+// VExec runs a VExec query
+func (vtctlclient *VtctlClientProcess) VExec(Keyspace, workflow, query string) (result string, err error) {
+	return vtctlclient.ExecuteCommandWithOutput(
+		"VExec",
+		fmt.Sprintf("%s.%s", Keyspace, workflow),
+		query,
+	)
+}
+
 // ExecuteCommand executes any vtctlclient command
 func (vtctlclient *VtctlClientProcess) ExecuteCommand(args ...string) (err error) {
 	output, err := vtctlclient.ExecuteCommandWithOutput(args...)
