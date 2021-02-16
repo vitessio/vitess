@@ -173,7 +173,7 @@ func TestMain(m *testing.M) {
 			Name: keyspaceName,
 		}
 
-		if err := clusterInstance.StartUnshardedKeyspace(*keyspace, 2, true); err != nil {
+		if err := clusterInstance.StartUnshardedKeyspace(*keyspace, 0, false); err != nil {
 			return 1, err
 		}
 		if err := clusterInstance.StartKeyspace(*keyspace, []string{"1"}, 1, false); err != nil {
