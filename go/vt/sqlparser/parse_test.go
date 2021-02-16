@@ -1265,10 +1265,13 @@ var (
 			output: "show events",
 		}, {
 			input:  "show function code func",
-			output: "show function",
+			output: "show function code",
 		}, {
-			input:  "show function status",
-			output: "show function",
+			input: "show function status",
+		}, {
+			input: "show function status where Name = 'hi'",
+		}, {
+			input: "show function status like 'hi'",
 		}, {
 			input:  "show grants for 'root@localhost'",
 			output: "show grants",
@@ -1322,10 +1325,13 @@ var (
 			output: "show privileges",
 		}, {
 			input:  "show procedure code p",
-			output: "show procedure",
+			output: "show procedure code",
 		}, {
-			input:  "show procedure status",
-			output: "show procedure",
+			input: "show procedure status",
+		}, {
+			input: "show procedure status where Name = 'hi'",
+		}, {
+			input: "show procedure status like 'hi'",
 		}, {
 			input:  "show processlist",
 			output: "show processlist",
@@ -1679,11 +1685,69 @@ var (
 		}, {
 			input:  "delete a.*, b.* from tbl_a a, tbl_b b where a.id = b.id and b.name = 'test'",
 			output: "delete a, b from tbl_a as a, tbl_b as b where a.id = b.id and b.name = 'test'",
+		}, {
+			input: "call f1",
+		}, {
+			input:  "call f1()",
+			output: "call f1",
+		}, {
+			input:  "call f1 ()",
+			output: "call f1",
+		}, {
+			input: "call f1(x)",
+		}, {
+			input: "call f1(@x, @y)",
+		}, {
+			input: "call f1(now(), rand())",
+		}, {
+			input: "drop procedure p1",
+		}, {
+			input: "drop procedure if exists p1",
+		}, {
+			input:  "create procedure p1() select rand()",
+			output: "create procedure p1 () select rand() from dual",
+		}, {
+			input:  "create procedure p1() language sql deterministic sql security invoker select 1+1",
+			output: "create procedure p1 () language sql deterministic sql security invoker select 1 + 1 from dual",
+		},{
+			input:  "create definer = me procedure p1(v1 int) select now()",
+			output: "create definer = me procedure p1 (in v1 int) select now() from dual",
+		}, {
+			input:  "create definer = me procedure p1(v1 int) comment 'some_comment' not deterministic select now()",
+			output: "create definer = me procedure p1 (in v1 int) comment 'some_comment' not deterministic select now() from dual",
+		},
+	}
+	// Any tests that contain multiple statements within the body (such as BEGIN/END blocks) should go here.
+	// validSQL is used by TestParseNextValid, which expects a semicolon to mean the end of a full statement.
+	// Multi-statement bodies do not follow this expectation, hence they are excluded from TestParseNextValid.
+	validMultiStatementSql = []parseTest{
+		{
+			input:  "create procedure p1 (in v1 int, inout v2 char(2), out v3 datetime) begin select rand() * 10; end",
+			output: "create procedure p1 (in v1 int, inout v2 char(2), out v3 datetime) begin\nselect rand() * 10 from dual;\nend",
+		}, {
+			input:  "create procedure p1(v1 datetime)\nif rand() < 1 then select rand();\nend if",
+			output: "create procedure p1 (in v1 datetime) if rand() < 1 then select rand() from dual;\nend if",
+		}, {
+			input:  `create procedure p1(n double, m double)
+begin
+	set @s = '';
+	if n = m then set @s = 'equals';
+	else
+		if n > m then set @s = 'greater';
+		else set @s = 'less';
+		end if;
+		set @s = concat('is ', @s, ' than');
+	end if;
+	set @s = concat(n, ' ', @s, ' ', m, '.');
+	select @s;
+end`,
+			output: "create procedure p1 (in n double, in m double) begin\nset @s = '';\nif n = m then set @s = 'equals';\nelse if n > m then set @s = 'greater';\nelse set @s = 'less';\nend if; set @s = concat('is ', @s, ' than');\nend if;\nset @s = concat(n, ' ', @s, ' ', m, '.');\nselect @s from dual;\nend",
 		},
 	}
 )
 
 func TestValid(t *testing.T) {
+	validSQL = append(validSQL, validMultiStatementSql...)
 	for _, tcase := range validSQL {
 		t.Run(tcase.input, func(t *testing.T) {
 			if tcase.output == "" {
@@ -1858,6 +1922,7 @@ func TestCreateViewSelectPosition(t *testing.T) {
 
 // Ensure there is no corruption from using a pooled yyParserImpl in Parse.
 func TestValidParallel(t *testing.T) {
+	validSQL = append(validSQL, validMultiStatementSql...)
 	parallelism := 100
 	numIters := 1000
 

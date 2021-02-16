@@ -305,6 +305,7 @@ func (*BeginEndBlock) iStatement() {}
 func (*CaseStatement) iStatement() {}
 func (*IfStatement) iStatement()   {}
 func (*Signal) iStatement()        {}
+func (*Call) iStatement()          {}
 
 // ParenSelect can actually not be a top level statement,
 // but we have to allow it because it's a requirement
@@ -689,6 +690,38 @@ func (s *Signal) walkSubtree(visit Visit) error {
 	return nil
 }
 
+// Call represents the CALL statement
+type Call struct {
+	FuncName string
+	Params   []Expr
+}
+
+func (c *Call) Format(buf *TrackedBuffer) {
+	buf.Myprintf("call %s", c.FuncName)
+	if len(c.Params) > 0 {
+		buf.Myprintf("(")
+		for i, param := range c.Params {
+			if i > 0 {
+				buf.Myprintf(", ")
+			}
+			buf.Myprintf("%v", param)
+		}
+		buf.Myprintf(")")
+	}
+}
+
+func (c *Call) walkSubtree(visit Visit) error {
+	if c == nil {
+		return nil
+	}
+	for _, expr := range c.Params {
+		if err := Walk(visit, expr); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // Stream represents a SELECT statement.
 type Stream struct {
 	Comments   Comments
@@ -921,6 +954,52 @@ type TriggerOrder struct {
 	OtherTriggerName  string
 }
 
+type ProcedureSpec struct {
+	Name            string
+	Definer         string
+	Params          []ProcedureParam
+	Characteristics []Characteristic
+	Body            Statement
+}
+
+type ProcedureParamDirection string
+const (
+	ProcedureParamDirection_In ProcedureParamDirection = "in"
+	ProcedureParamDirection_Inout ProcedureParamDirection = "inout"
+	ProcedureParamDirection_Out ProcedureParamDirection = "out"
+)
+
+type ProcedureParam struct {
+	Direction ProcedureParamDirection
+	Name      string
+	Type      ColumnType
+}
+
+type CharacteristicValue string
+const (
+	CharacteristicValue_Comment CharacteristicValue = "comment"
+	CharacteristicValue_LanguageSql CharacteristicValue = "language sql"
+	CharacteristicValue_Deterministic CharacteristicValue = "deterministic"
+	CharacteristicValue_NotDeterministic CharacteristicValue = "not deterministic"
+	CharacteristicValue_ContainsSql CharacteristicValue = "contains sql"
+	CharacteristicValue_NoSql CharacteristicValue = "no sql"
+	CharacteristicValue_ReadsSqlData CharacteristicValue = "reads sql data"
+	CharacteristicValue_ModifiesSqlData CharacteristicValue = "modifies sql data"
+	CharacteristicValue_SqlSecurityDefiner CharacteristicValue = "sql security definer"
+	CharacteristicValue_SqlSecurityInvoker CharacteristicValue = "sql security invoker"
+)
+
+type Characteristic struct {
+	Type    CharacteristicValue
+	Comment string
+}
+func (c Characteristic) String() string {
+	if c.Type == CharacteristicValue_Comment {
+		return fmt.Sprintf("comment '%s'", c.Comment)
+	}
+	return string(c.Type)
+}
+
 // DDL represents a CREATE, ALTER, DROP, RENAME, TRUNCATE or ANALYZE statement.
 type DDL struct {
 	Action string
@@ -985,6 +1064,9 @@ type DDL struct {
 
 	// TriggerSpec is set for CREATE / ALTER / DROP trigger operations
 	TriggerSpec *TriggerSpec
+
+	// ProcedureSpec is set for CREATE PROCEDURE operations
+	ProcedureSpec *ProcedureSpec
 }
 
 // ColumnOrder is used in some DDL statements to specify or change the order of a column in a schema.
@@ -1049,6 +1131,26 @@ func (node *DDL) Format(buf *TrackedBuffer) {
 			}
 			buf.Myprintf("%s trigger %s %s %s on %v for each row %s%v",
 				node.Action, trigger.Name, trigger.Time, trigger.Event, node.Table, triggerOrder, trigger.Body)
+		} else if node.ProcedureSpec != nil {
+			proc := node.ProcedureSpec
+			sb := strings.Builder{}
+			sb.WriteString("create ")
+			if proc.Definer != "" {
+				sb.WriteString(fmt.Sprintf("definer = %s ", proc.Definer))
+			}
+			sb.WriteString(fmt.Sprintf("procedure %s (", proc.Name))
+			for i, param := range proc.Params {
+				if i > 0 {
+					sb.WriteString(", ")
+				}
+				sb.WriteString(string(param.Direction)+" ")
+				sb.WriteString(fmt.Sprintf("%s %s", param.Name, param.Type.String()))
+			}
+			sb.WriteString(")")
+			for _, characteristic := range proc.Characteristics {
+				sb.WriteString(" "+characteristic.String())
+			}
+			buf.Myprintf("%s %v", sb.String(), proc.Body)
 		} else {
 			notExists := ""
 			if node.IfNotExists {
@@ -1075,6 +1177,12 @@ func (node *DDL) Format(buf *TrackedBuffer) {
 				exists = " if exists"
 			}
 			buf.Myprintf(fmt.Sprintf("%s trigger%s %v", node.Action, exists, node.TriggerSpec.Name))
+		} else if node.ProcedureSpec != nil {
+			exists := ""
+			if node.IfExists {
+				exists = " if exists"
+			}
+			buf.Myprintf(fmt.Sprintf("%s procedure%s %v", node.Action, exists, node.ProcedureSpec.Name))
 		} else {
 			buf.Myprintf("%s table%s %v", node.Action, exists, node.FromTables)
 		}
@@ -1506,6 +1614,13 @@ func (ct *ColumnType) Format(buf *TrackedBuffer) {
 	if len(opts) != 0 {
 		buf.Myprintf(" %s", strings.Join(opts, " "))
 	}
+}
+
+// String returns a canonical string representation of the type and all relevant options
+func (ct *ColumnType) String() string {
+	buf := NewTrackedBuffer(nil)
+	ct.Format(buf)
+	return buf.String()
 }
 
 // DescribeType returns the abbreviated type information as required for
@@ -2045,6 +2160,7 @@ type Show struct {
 	Scope                  string
 	ShowCollationFilterOpt *Expr
 	ShowIndexFilterOpt     Expr
+	ProcFuncFilter         *ShowFilter
 }
 
 // Format formats the node.
@@ -2076,6 +2192,20 @@ func (node *Show) Format(buf *TrackedBuffer) {
 	}
 	if node.Type == CreateTriggerStr {
 		buf.Myprintf("show create trigger %v", node.Table)
+		return
+	}
+	if node.Type == "procedure status" {
+		buf.Myprintf("show procedure status")
+		if node.ProcFuncFilter != nil {
+			buf.Myprintf("%v", node.ProcFuncFilter)
+		}
+		return
+	}
+	if node.Type == "function status" {
+		buf.Myprintf("show function status")
+		if node.ProcFuncFilter != nil {
+			buf.Myprintf("%v", node.ProcFuncFilter)
+		}
 		return
 	}
 	if node.Database != "" {
@@ -2115,7 +2245,16 @@ func (node *Show) HasTable() bool {
 }
 
 func (node *Show) walkSubtree(visit Visit) error {
-	return nil
+	if node == nil {
+		return nil
+	}
+	return Walk(
+		visit,
+		node.OnTable,
+		node.Table,
+		node.ShowIndexFilterOpt,
+		node.ProcFuncFilter,
+	)
 }
 
 // ShowTablesOpt is show tables option
@@ -3184,6 +3323,13 @@ func (node *SQLVal) Format(buf *TrackedBuffer) {
 	default:
 		panic("unexpected")
 	}
+}
+
+// String returns the node as a string, similar to Format.
+func (node *SQLVal) String() string {
+	buf := NewTrackedBuffer(nil)
+	node.Format(buf)
+	return buf.String()
 }
 
 func (node *SQLVal) walkSubtree(visit Visit) error {

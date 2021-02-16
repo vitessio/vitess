@@ -128,11 +128,15 @@ func skipToEnd(yylex interface{}) {
   ifStatementCondition IfStatementCondition
   signalInfo SignalInfo
   signalInfos []SignalInfo
+  procedureParam ProcedureParam
+  procedureParams []ProcedureParam
+  characteristic Characteristic
+  characteristics []Characteristic
 }
 
 %token LEX_ERROR
 %left <bytes> UNION
-%token <bytes> SELECT STREAM INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT OFFSET FOR
+%token <bytes> SELECT STREAM INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT OFFSET FOR CALL
 %token <bytes> ALL DISTINCT AS EXISTS ASC DESC INTO DUPLICATE DEFAULT SET LOCK UNLOCK KEYS
 %right <bytes> UNIQUE KEY
 %token <bytes> SYSTEM_TIME
@@ -177,11 +181,12 @@ func skipToEnd(yylex interface{}) {
 %token <bytes> ACTION CASCADE CONSTRAINT FOREIGN NO REFERENCES RESTRICT
 %token <bytes> FIRST AFTER
 %token <bytes> SHOW DESCRIBE EXPLAIN DATE ESCAPE REPAIR OPTIMIZE TRUNCATE FORMAT
-%token <bytes> MAXVALUE PARTITION REORGANIZE LESS THAN PROCEDURE TRIGGER TRIGGERS
+%token <bytes> MAXVALUE PARTITION REORGANIZE LESS THAN PROCEDURE TRIGGER TRIGGERS FUNCTION
 %token <bytes> VINDEX VINDEXES
-%token <bytes> STATUS VARIABLES WARNINGS
+%token <bytes> STATUS VARIABLES WARNINGS CODE
 %token <bytes> SEQUENCE
-%token <bytes> EACH ROW BEFORE FOLLOWS PRECEDES DEFINER
+%token <bytes> EACH ROW BEFORE FOLLOWS PRECEDES DEFINER INVOKER
+%token <bytes> INOUT OUT DETERMINISTIC CONTAINS READS MODIFIES SQL DATA SECURITY
 
 // SIGNAL Tokens
 %token <bytes> CLASS_ORIGIN SUBCLASS_ORIGIN MESSAGE_TEXT MYSQL_ERRNO CONSTRAINT_CATALOG CONSTRAINT_SCHEMA
@@ -233,9 +238,10 @@ func skipToEnd(yylex interface{}) {
 %type <statement> command
 %type <selStmt> select_statement base_select union_lhs union_rhs
 %type <statement> stream_statement insert_statement update_statement delete_statement set_statement trigger_body
-%type <statement> create_statement rename_statement drop_statement truncate_statement flush_statement
-%type <statement> begin_end_block statement_list_statement case_statement if_statement signal_statement
-%type <statements> statement_list
+%type <statement> create_statement rename_statement drop_statement truncate_statement flush_statement call_statement
+%type <statement> trigger_begin_end_block statement_list_statement case_statement if_statement signal_statement
+%type <statement> proc_allowed_statement proc_begin_end_block
+%type <statements> statement_list proc_allowed_statement_list
 %type <caseStatementCases> case_statement_case_list
 %type <caseStatementCase> case_statement_case
 %type <ifStatementConditions> elseif_list
@@ -248,7 +254,7 @@ func skipToEnd(yylex interface{}) {
 %type <ddl> create_table_prefix rename_list
 %type <statement> analyze_statement show_statement use_statement other_statement
 %type <statement> describe_statement explain_statement explainable_statement
-%type <statement> begin_statement commit_statement rollback_statement
+%type <statement> begin_statement commit_statement rollback_statement start_transaction_statement
 %type <bytes2> comment_opt comment_list
 %type <str> union_op insert_or_replace
 %type <str> distinct_opt straight_join_opt cache_opt match_option separator_opt format_opt
@@ -306,7 +312,8 @@ func skipToEnd(yylex interface{}) {
 %type <byt> exists_opt not_exists_opt
 %type <str> key_type key_type_opt
 %type <empty> non_add_drop_or_rename_operation
-%type <empty> to_opt to_or_as as_opt column_opt describe definer_opt
+%type <empty> to_opt to_or_as as_opt column_opt describe
+%type <str> definer_opt
 %type <empty> skip_to_end ddl_skip_to_end
 %type <bytes> reserved_keyword non_reserved_keyword
 %type <colIdent> sql_id reserved_sql_id col_alias as_ci_opt using_opt
@@ -350,6 +357,11 @@ func skipToEnd(yylex interface{}) {
 %type <bytes> ignored_alter_object_type
 %type <ReferenceAction> fk_reference_action fk_on_delete fk_on_update
 %type <str> constraint_symbol_opt
+%type <exprs> call_param_list_opt
+%type <procedureParams> proc_param_list_opt proc_param_list
+%type <procedureParam> proc_param
+%type <characteristics> characteristic_list_opt characteristic_list
+%type <characteristic> characteristic
 
 %start any_command
 
@@ -391,6 +403,7 @@ command:
 | other_statement
 | flush_statement
 | signal_statement
+| call_statement
 | /*empty*/
 {
   setParseTree(yylex, nil)
@@ -671,14 +684,159 @@ create_statement:
   {
     $$ = &DDL{Action: CreateStr, Table: $8, TriggerSpec: &TriggerSpec{Name: string($4), Time: $5, Event: $6, Order: $12, Body: $14}, SubStatementPositionStart: $13, SubStatementPositionEnd: $15 - 1}
   }
+| CREATE definer_opt PROCEDURE ID '(' proc_param_list_opt ')' characteristic_list_opt lexer_position proc_allowed_statement lexer_position
+  {
+    $$ = &DDL{Action: CreateStr, ProcedureSpec: &ProcedureSpec{Name: string($4), Definer: $2, Params: $6, Characteristics: $8, Body: $10}, SubStatementPositionStart: $9, SubStatementPositionEnd: $11 - 1}
+  }
+
+proc_param_list_opt:
+  {
+    $$ = nil
+  }
+| proc_param_list
+  {
+    $$ = $1
+  }
+
+proc_param_list:
+  proc_param
+  {
+    $$ = []ProcedureParam{$1}
+  }
+| proc_param_list ',' proc_param
+  {
+    $$ = append($$, $3)
+  }
+
+proc_param:
+  ID column_type
+  {
+    $$ = ProcedureParam{Direction: ProcedureParamDirection_In, Name: string($1), Type: $2}
+  }
+| IN ID column_type
+  {
+    $$ = ProcedureParam{Direction: ProcedureParamDirection_In, Name: string($2), Type: $3}
+  }
+| INOUT ID column_type
+  {
+    $$ = ProcedureParam{Direction: ProcedureParamDirection_Inout, Name: string($2), Type: $3}
+  }
+| OUT ID column_type
+  {
+    $$ = ProcedureParam{Direction: ProcedureParamDirection_Out, Name: string($2), Type: $3}
+  }
+
+characteristic_list_opt:
+  {
+    $$ = nil
+  }
+| characteristic_list
+  {
+    $$ = $1
+  }
+
+characteristic_list:
+  characteristic
+  {
+    $$ = []Characteristic{$1}
+  }
+| characteristic_list characteristic
+  {
+    $$ = append($$, $2)
+  }
+
+characteristic:
+  COMMENT_KEYWORD STRING
+  {
+    $$ = Characteristic{Type: CharacteristicValue_Comment, Comment: string($2)}
+  }
+| LANGUAGE SQL
+  {
+    $$ = Characteristic{Type: CharacteristicValue_LanguageSql}
+  }
+| NOT DETERMINISTIC
+  {
+    $$ = Characteristic{Type: CharacteristicValue_NotDeterministic}
+  }
+| DETERMINISTIC
+  {
+    $$ = Characteristic{Type: CharacteristicValue_Deterministic}
+  }
+| CONTAINS SQL
+  {
+    $$ = Characteristic{Type: CharacteristicValue_ContainsSql}
+  }
+| NO SQL
+  {
+    $$ = Characteristic{Type: CharacteristicValue_NoSql}
+  }
+| READS SQL DATA
+  {
+    $$ = Characteristic{Type: CharacteristicValue_ReadsSqlData}
+  }
+| MODIFIES SQL DATA
+  {
+    $$ = Characteristic{Type: CharacteristicValue_ModifiesSqlData}
+  }
+| SQL SECURITY DEFINER
+  {
+    $$ = Characteristic{Type: CharacteristicValue_SqlSecurityDefiner}
+  }
+| SQL SECURITY INVOKER
+  {
+    $$ = Characteristic{Type: CharacteristicValue_SqlSecurityInvoker}
+  }
+
+proc_allowed_statement:
+  select_statement
+  {
+    $$ = $1
+  }
+| insert_statement
+| update_statement
+| delete_statement
+| set_statement
+| create_statement
+| alter_statement
+| rename_statement
+| drop_statement
+| case_statement
+| if_statement
+| truncate_statement
+| analyze_statement
+| show_statement
+| start_transaction_statement
+| commit_statement
+| rollback_statement
+| explain_statement
+| describe_statement
+| signal_statement
+| call_statement
+| proc_begin_end_block
+
+proc_begin_end_block:
+  BEGIN proc_allowed_statement_list ';' END
+  {
+    $$ = &BeginEndBlock{Statements: $2}
+  }
+
+proc_allowed_statement_list:
+  proc_allowed_statement
+  {
+    $$ = Statements{$1}
+  }
+| proc_allowed_statement_list ';' proc_allowed_statement
+  {
+    $$ = append($$, $3)
+  }
 
 definer_opt:
   {
-    $$ = struct{}{}
+    $$ = ""
   }
 | DEFINER '=' ID
   {
-    $$ = struct{}{}
+    $$ = string($3)
   }
 
 trigger_time:
@@ -719,7 +877,7 @@ trigger_order_opt:
   }
 
 trigger_body:
-  begin_end_block
+  trigger_begin_end_block
   {
     $$ = $1
   }
@@ -728,7 +886,7 @@ trigger_body:
 | update_statement
 | delete_statement
 
-begin_end_block:
+trigger_begin_end_block:
   BEGIN statement_list ';' END
   {
     $$ = &BeginEndBlock{Statements: $2}
@@ -853,6 +1011,25 @@ signal_information_name:
 | COLUMN_NAME
 | CURSOR_NAME
 
+call_statement:
+  CALL ID call_param_list_opt
+  {
+    $$ = &Call{FuncName: string($2), Params: $3}
+  }
+
+call_param_list_opt:
+  {
+    $$ = nil
+  }
+| '(' ')'
+  {
+    $$ = nil
+  }
+| '(' expression_list ')'
+  {
+    $$ = $2
+  }
+
 statement_list:
   statement_list_statement
   {
@@ -875,7 +1052,7 @@ statement_list_statement:
 | case_statement
 | if_statement
 | signal_statement
-| begin_end_block
+| trigger_begin_end_block
 
 vindex_type_opt:
   {
@@ -2017,6 +2194,14 @@ drop_statement:
     }
     $$ = &DDL{Action: DropStr, TriggerSpec: &TriggerSpec{Name: string($4)}, IfExists: exists}
   }
+| DROP PROCEDURE exists_opt ID
+  {
+    var exists bool
+    if $3 != 0 {
+      exists = true
+    }
+    $$ = &DDL{Action: DropStr, ProcedureSpec: &ProcedureSpec{Name: string($4)}, IfExists: exists}
+  }
 
 truncate_statement:
   TRUNCATE TABLE table_name
@@ -2055,12 +2240,16 @@ show_statement:
   {
     $$ = &Show{Type: string($2) + " " + string($3), IfNotExists: $4 == 1, Database: string($5)}
   }
-/* Rule to handle SHOW CREATE EVENT, SHOW CREATE FUNCTION, etc. */
+/* Rule to handle SHOW CREATE EVENT, etc. */
 | SHOW CREATE ID ddl_skip_to_end
   {
     $$ = &Show{Type: string($2) + " " + string($3)}
   }
 | SHOW CREATE PROCEDURE ddl_skip_to_end
+  {
+    $$ = &Show{Type: string($2) + " " + string($3)}
+  }
+| SHOW CREATE FUNCTION ddl_skip_to_end
   {
     $$ = &Show{Type: string($2) + " " + string($3)}
   }
@@ -2096,9 +2285,21 @@ show_statement:
   {
     $$ = &Show{Type: string($2)}
   }
-| SHOW PROCEDURE ddl_skip_to_end
+| SHOW PROCEDURE CODE ddl_skip_to_end
   {
-    $$ = &Show{Type: string($2)}
+    $$ = &Show{Type: string($2) + " " + string($3)}
+  }
+| SHOW PROCEDURE STATUS like_or_where_opt
+  {
+    $$ = &Show{Type: string($2) + " " + string($3), ProcFuncFilter: $4}
+  }
+| SHOW FUNCTION CODE ddl_skip_to_end
+  {
+    $$ = &Show{Type: string($2) + " " + string($3)}
+  }
+| SHOW FUNCTION STATUS like_or_where_opt
+  {
+    $$ = &Show{Type: string($2) + " " + string($3), ProcFuncFilter: $4}
   }
 | SHOW show_session_or_global STATUS ddl_skip_to_end
   {
@@ -2288,7 +2489,13 @@ begin_statement:
   {
     $$ = &Begin{}
   }
-| START TRANSACTION
+| start_transaction_statement
+  {
+    $$ = $1
+  }
+
+start_transaction_statement:
+  START TRANSACTION
   {
     $$ = &Begin{}
   }
@@ -3853,6 +4060,7 @@ reserved_keyword:
 | BETWEEN
 | BINARY
 | BY
+| CALL
 | CASE
 | COLLATE
 | CONVERT
@@ -3871,6 +4079,7 @@ reserved_keyword:
 | DENSE_RANK
 | DESC
 | DESCRIBE
+| DETERMINISTIC
 | DISTINCT
 | DIV
 | DROP
@@ -3893,6 +4102,7 @@ reserved_keyword:
 | IF
 | IGNORE
 | IN
+| INOUT
 | INDEX
 | INNER
 | INSERT
@@ -3916,6 +4126,7 @@ reserved_keyword:
 | MATCH
 | MAXVALUE
 | MOD
+| MODIFIES
 | NATURAL
 | NEXT // next should be doable as non-reserved, but is not due to the special `select next num_val` query that vitess supports
 | NOT
@@ -3927,6 +4138,7 @@ reserved_keyword:
 | ON
 | OR
 | ORDER
+| OUT
 | OUTER
 | OVER
 | PERCENT_RANK
@@ -3942,6 +4154,7 @@ reserved_keyword:
 | SEPARATOR
 | SET
 | SHOW
+| SQL
 | STRAIGHT_JOIN
 | SYSTEM
 | TABLE
@@ -3991,6 +4204,7 @@ non_reserved_keyword:
 | CHECK
 | CLASS_ORIGIN
 | CLONE
+| CODE
 | COLLATION
 | COLUMNS
 | COLUMN_NAME
@@ -4001,7 +4215,9 @@ non_reserved_keyword:
 | CONSTRAINT_CATALOG
 | CONSTRAINT_NAME
 | CONSTRAINT_SCHEMA
+| CONTAINS
 | CURSOR_NAME
+| DATA
 | DATE
 | DATETIME
 | DECIMAL
@@ -4020,6 +4236,7 @@ non_reserved_keyword:
 | FOLLOWING
 | FOREIGN
 | FULLTEXT
+| FUNCTION
 | GEOMCOLLECTION
 | GEOMETRY
 | GEOMETRYCOLLECTION
@@ -4031,6 +4248,7 @@ non_reserved_keyword:
 | INT
 | INTEGER
 | INVISIBLE
+| INVOKER
 | ISOLATION
 | JSON
 | KEYS
@@ -4088,6 +4306,7 @@ non_reserved_keyword:
 | QUERY
 | RANDOM
 | READ
+| READS
 | REAL
 | REFERENCE
 | REFERENCES
@@ -4108,6 +4327,7 @@ non_reserved_keyword:
 | SECONDARY_ENGINE
 | SECONDARY_LOAD
 | SECONDARY_UNLOAD
+| SECURITY
 | SEQUENCE
 | SERIALIZABLE
 | SESSION
