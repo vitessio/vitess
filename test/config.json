@@ -284,6 +284,15 @@
 			"RetryMax": 0,
 			"Tags": []
 		},
+		"onlineddl_vrepl_stress": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl_vrepl_stress"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "onlineddl_vrepl_stress",
+			"RetryMax": 1,
+			"Tags": []
+		},
 		"pitr": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/recovery/pitr"],
