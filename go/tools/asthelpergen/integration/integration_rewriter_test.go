@@ -17,6 +17,7 @@ limitations under the License.
 package integration
 
 import (
+	"fmt"
 	"reflect"
 	"testing"
 
@@ -111,6 +112,7 @@ func TestReplace(t *testing.T) {
 
 	utils.MustMatch(t, expected, parent.AST)
 }
+
 func TestReplaceInSlice(t *testing.T) {
 	one := &LiteralInt{1}
 	two := &LiteralInt{2}
@@ -138,6 +140,35 @@ func TestReplaceInSlice(t *testing.T) {
 	a.apply(parent, array, nil)
 
 	expected := &Array{Values: []AST{one, string2, three}}
+
+	utils.MustMatch(t, expected, parent.AST)
+}
+
+func TestReplaceValue(t *testing.T) {
+	plus := &Plus{
+		Left:  StructHolder{&LiteralInt{1}},
+		Right: &LiteralInt{2}}
+	parent := &struct{ AST }{plus}
+	a := &application{
+		pre: func(cursor *Cursor) bool {
+			switch n := cursor.node.(type) {
+			case *LiteralInt:
+				if n.Val == 1 {
+					fmt.Println("!")
+					cursor.replacer(&LiteralInt{3}, cursor.parent)
+				}
+			}
+			return true
+		},
+		post:   nil,
+		cursor: Cursor{},
+	}
+
+	a.apply(parent, plus, nil)
+
+	expected := &Plus{
+		Left:  StructHolder{&LiteralInt{3}},
+		Right: &LiteralInt{2}}
 
 	utils.MustMatch(t, expected, parent.AST)
 }

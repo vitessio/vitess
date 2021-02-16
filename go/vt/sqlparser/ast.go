@@ -2692,7 +2692,10 @@ func (node *ParenTableExpr) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
-func (node JoinCondition) Format(buf *TrackedBuffer) {
+func (node *JoinCondition) Format(buf *TrackedBuffer) {
+	if node == nil {
+		return
+	}
 	if node.On != nil {
 		buf.astPrintf(node, " on %v", node.On)
 	}
@@ -2703,7 +2706,7 @@ func (node JoinCondition) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *JoinTableExpr) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "%v %s %v%v", node.LeftExpr, node.Join.ToString(), node.RightExpr, node.Condition)
+	buf.astPrintf(node, "%v %s %v%v", node.LeftExpr, node.Join.ToString(), node.RightExpr, &node.Condition)
 }
 
 // Format formats the node.

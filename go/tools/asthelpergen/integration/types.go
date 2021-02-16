@@ -52,6 +52,10 @@ type (
 		Val string
 	}
 
+	StructHolder struct {
+		Val AST
+	}
+
 	//ArrayDef []AST
 )
 
@@ -61,6 +65,7 @@ func (*Array) i()        {}
 func (*UnaryMinus) i()   {}
 func (*LiteralInt) i()   {}
 func (LiteralString) i() {}
+func (StructHolder) i()  {}
 
 //func (ArrayDef) i()     {}
 

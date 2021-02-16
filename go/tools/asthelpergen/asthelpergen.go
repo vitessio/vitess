@@ -97,9 +97,9 @@ func (gen *astHelperGen) doIt() (map[string]*jen.File, error) {
 
 	err := findImplementations(pkg.Scope(), iface, func(t types.Type) error {
 		switch n := t.Underlying().(type) {
-		case *types.Struct:
-			named := t.(*types.Named)
-			return rewriter.visitStruct(t, types.TypeString(t, noQualifier), named.Obj().Name(), n)
+		//case *types.Struct:
+		//	named := t.(*types.Named)
+		//	return rewriter.visitStruct(t, types.TypeString(t, noQualifier), named.Obj().Name(), n)
 		case *types.Pointer:
 			strct := n.Elem().Underlying().(*types.Struct)
 			named := t.(*types.Pointer).Elem().(*types.Named)

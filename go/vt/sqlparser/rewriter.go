@@ -477,17 +477,11 @@ func replaceIsExprExpr(newNode, parent SQLNode) {
 }
 
 func replaceJoinConditionOn(newNode, parent SQLNode) {
-	tmp := parent.(JoinCondition)
-	tmp.On = newNode.(Expr)
+	parent.(*JoinCondition).On = newNode.(Expr)
 }
 
 func replaceJoinConditionUsing(newNode, parent SQLNode) {
-	tmp := parent.(JoinCondition)
-	tmp.Using = newNode.(Columns)
-}
-
-func replaceJoinTableExprCondition(newNode, parent SQLNode) {
-	parent.(*JoinTableExpr).Condition = newNode.(JoinCondition)
+	parent.(*JoinCondition).Using = newNode.(Columns)
 }
 
 func replaceJoinTableExprLeftExpr(newNode, parent SQLNode) {
@@ -1343,12 +1337,11 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 
 	case IsolationLevel:
 
-	case JoinCondition:
+	case *JoinCondition:
 		a.apply(node, n.On, replaceJoinConditionOn)
 		a.apply(node, n.Using, replaceJoinConditionUsing)
 
 	case *JoinTableExpr:
-		a.apply(node, n.Condition, replaceJoinTableExprCondition)
 		a.apply(node, n.LeftExpr, replaceJoinTableExprLeftExpr)
 		a.apply(node, n.RightExpr, replaceJoinTableExprRightExpr)
 
