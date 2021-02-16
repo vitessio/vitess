@@ -20,6 +20,8 @@ import (
 	"regexp"
 	"strings"
 
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
@@ -41,6 +43,8 @@ func buildShowPlan(stmt *sqlparser.Show, vschema ContextVSchema) (engine.Primiti
 	switch show := stmt.Internal.(type) {
 	case *sqlparser.ShowBasic:
 		return buildShowBasicPlan(show, vschema)
+	case *sqlparser.ShowCreate:
+		return buildShowCreatePlan(show, vschema)
 	default:
 		return nil, ErrPlanNotSupported
 	}
@@ -292,4 +296,107 @@ func checkLikeOpt(likeOpt string, colNames []string) (string, error) {
 	}
 
 	return "", nil
+}
+
+func buildShowCreatePlan(show *sqlparser.ShowCreate, vschema ContextVSchema) (engine.Primitive, error) {
+	switch show.Command {
+	case sqlparser.CreateDb:
+		return buildCreateDbPlan(show, vschema)
+	case sqlparser.CreateE, sqlparser.CreateF, sqlparser.CreateProc, sqlparser.CreateTr, sqlparser.CreateV:
+		return buildCreatePlan(show, vschema)
+	case sqlparser.CreateTbl:
+		return buildCreateTblPlan(show, vschema)
+	}
+	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: unknown show query type %s", show.Command.ToString())
+}
+
+func buildCreateDbPlan(show *sqlparser.ShowCreate, vschema ContextVSchema) (engine.Primitive, error) {
+	dest := key.Destination(key.DestinationAnyShard{})
+	var ks *vindexes.Keyspace
+	var err error
+	dbName := show.Op.Name.String()
+	if sqlparser.SystemSchema(dbName) {
+		ks, err = vschema.AnyKeyspace()
+	} else {
+		dest, ks, _, err = vschema.TargetDestination(dbName)
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	return &engine.Send{
+		Keyspace:          ks,
+		TargetDestination: dest,
+		Query:             sqlparser.String(show),
+		IsDML:             false,
+		SingleShardOnly:   true,
+	}, nil
+}
+
+func buildCreateTblPlan(show *sqlparser.ShowCreate, vschema ContextVSchema) (engine.Primitive, error) {
+	dest := key.Destination(key.DestinationAnyShard{})
+	var ks *vindexes.Keyspace
+	var err error
+
+	if !show.Op.Qualifier.IsEmpty() && sqlparser.SystemSchema(show.Op.Qualifier.String()) {
+		ks, err = vschema.AnyKeyspace()
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		tbl, _, _, _, destKs, err := vschema.FindTableOrVindex(show.Op)
+		if err != nil {
+			return nil, err
+		}
+		if tbl == nil {
+			return nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "table now found: %v", show.Op)
+		}
+		ks = tbl.Keyspace
+		if destKs != nil {
+			dest = destKs
+		}
+		show.Op.Qualifier = sqlparser.NewTableIdent("")
+		show.Op.Name = tbl.Name
+	}
+
+	return &engine.Send{
+		Keyspace:          ks,
+		TargetDestination: dest,
+		Query:             sqlparser.String(show),
+		IsDML:             false,
+		SingleShardOnly:   true,
+	}, nil
+
+}
+
+func buildCreatePlan(show *sqlparser.ShowCreate, vschema ContextVSchema) (engine.Primitive, error) {
+	dest := key.Destination(key.DestinationAnyShard{})
+	var ks *vindexes.Keyspace
+	var err error
+	if show.Op.Qualifier.IsEmpty() {
+		ks, err = vschema.DefaultKeyspace()
+		if err != nil {
+			return nil, err
+		}
+	}
+	if ks == nil {
+		dbName := show.Op.Qualifier.String()
+		if sqlparser.SystemSchema(dbName) {
+			ks, err = vschema.AnyKeyspace()
+		} else {
+			dest, ks, _, err = vschema.TargetDestination(dbName)
+			show.Op.Qualifier = sqlparser.NewTableIdent("")
+		}
+		if err != nil {
+			return nil, err
+		}
+	}
+	return &engine.Send{
+		Keyspace:          ks,
+		TargetDestination: dest,
+		Query:             sqlparser.String(show),
+		IsDML:             false,
+		SingleShardOnly:   true,
+	}, nil
+
 }
