@@ -11,7 +11,7 @@
     },
     "TargetDestination": "AnyShard()",
     "IsDML": false,
-    "Query": "explain select * from user",
+    "Query": "explain select * from `user`",
     "SingleShardOnly": true
   }
 }

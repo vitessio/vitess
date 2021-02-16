@@ -243,3 +243,20 @@
     "OperatorType": "Rows"
   }
 }
+
+# show create database
+"show create database user"
+{
+  "QueryType": "SHOW",
+  "Original": "show create database user",
+  "Instructions": {
+    "OperatorType": "Send",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "IsDML": false,
+    "Query": "show create database `user`",
+    "SingleShardOnly": true
+  }
+}
