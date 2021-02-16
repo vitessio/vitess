@@ -37,6 +37,22 @@ func TestVisit(t *testing.T) {
 	assert.Equal(t, []AST{one, minusOne, foo, plus}, postOrder, "post-order wrong")
 }
 
+func TestVisitWSlice(t *testing.T) {
+	int1 := &LiteralInt{1}
+	int2 := &LiteralInt{2}
+	slice := &Array{
+		Values: []AST{int1, int2},
+		Stuff:  []int{1, 2, 3},
+	}
+	foo := LiteralString{"foo"}
+	plus := &Plus{Left: slice, Right: foo}
+
+	preOrder, postOrder := testVisitOrder(plus)
+
+	assert.Equal(t, []AST{plus, slice, int1, int2, foo}, preOrder, "pre-order wrong")
+	assert.Equal(t, []AST{int1, int2, slice, foo, plus}, postOrder, "post-order wrong")
+}
+
 func testVisitOrder(plus AST) ([]AST, []AST) {
 	var preOrder, postOrder []AST
 
@@ -92,6 +108,36 @@ func TestReplace(t *testing.T) {
 	}
 
 	a.apply(parent, plus, nil)
+
+	utils.MustMatch(t, expected, parent.AST)
+}
+func TestReplaceInSlice(t *testing.T) {
+	one := &LiteralInt{1}
+	two := &LiteralInt{2}
+	three := &LiteralInt{3}
+	array := &Array{Values: []AST{one, two, three}}
+	string2 := LiteralString{"two"}
+
+	parent := &struct{ AST }{array}
+
+	a := &application{
+		pre: func(cursor *Cursor) bool {
+			switch n := cursor.node.(type) {
+			case *LiteralInt:
+				if n.Val == 2 {
+					newNode := string2
+					cursor.replacer(newNode, cursor.parent)
+				}
+			}
+			return true
+		},
+		post:   nil,
+		cursor: Cursor{},
+	}
+
+	a.apply(parent, array, nil)
+
+	expected := &Array{Values: []AST{one, string2, three}}
 
 	utils.MustMatch(t, expected, parent.AST)
 }

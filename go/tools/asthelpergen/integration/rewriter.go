@@ -48,6 +48,12 @@ func (a *application) apply(parent, node AST, replacer replacerFunc) {
 	}
 	switch n := node.(type) {
 	case *Array:
+		replacerValues := replaceArrayValues(0)
+		replacerValuesB := &replacerValues
+		for _, item := range n.Values {
+			a.apply(node, item, replacerValuesB.replace)
+			replacerValuesB.inc()
+		}
 	case *LiteralInt:
 	case LiteralString:
 	case *LiteralString:

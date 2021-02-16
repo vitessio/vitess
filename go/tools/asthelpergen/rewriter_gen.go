@@ -49,9 +49,10 @@ func (r *rewriterGen) visitStruct(t types.Type, typeString, replaceMethodPrefix 
 			caseStmts = append(caseStmts, caseStmtFor(field, replacerName))
 		}
 		sliceT, ok := field.Type().(*types.Slice)
-		if ok && r.interestingType(sliceT.Elem()) {
+		if ok && r.interestingType(sliceT.Elem()) { // we have a field containing a slice of interesting elements
 			replacerName, methods := r.createReplaceCodeForSliceField(replaceMethodPrefix, types.TypeString(t, noQualifier), field)
 			r.replaceMethods = append(r.replaceMethods, methods...)
+			caseStmts = append(caseStmts, caseStmtForSliceField(field, replacerName)...)
 			fmt.Println("apa", replacerName)
 		}
 	}
@@ -61,6 +62,31 @@ func (r *rewriterGen) visitStruct(t types.Type, typeString, replaceMethodPrefix 
 
 func caseStmtFor(field *types.Var, name string) *jen.Statement {
 	return jen.Id("a").Dot("apply").Call(jen.Id("node"), jen.Id("n").Dot(field.Name()), jen.Id(name))
+}
+func caseStmtForSliceField(field *types.Var, name string) []jen.Code {
+	//replacerColumns := replaceAddColumnsColumns(0)
+	replacerName := "replacer" + field.Name()
+	s1 := jen.Id(replacerName).Op(":=").Id(name).Call(jen.Lit(0))
+
+	//replacerColumnsB := &replacerColumns
+	bName := replacerName + "B"
+	s2 := jen.Id(bName).Op(":=").Op("&").Id(replacerName)
+
+	//for _, item := range n.Columns {
+	//	a.apply(node, item, replacerColumnsB.replace)
+	//	replacerColumnsB.inc()
+	//}
+	s3 := jen.For(jen.List(jen.Op("_"), jen.Id("item"))).Op(":=").Range().Id("n").Dot(field.Name()).Block(
+		jen.Id("a").Dot("apply").Call(jen.Id("node"), jen.Id("item"), jen.Id(bName).Dot("replace")),
+		jen.Id(bName).Dot("inc").Call(),
+	)
+
+	return []jen.Code{
+		s1,
+		s2,
+		s3,
+	}
+	//return jen.Id("a").Dot("apply").Call(jen.Id("node"), jen.Id("n").Dot(field.Name()), jen.Id(name))
 }
 
 func (r *rewriterGen) structCase(name string, stroct *types.Struct) (jen.Code, error) {
