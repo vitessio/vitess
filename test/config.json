@@ -571,19 +571,19 @@
 		},
 		"topo_zk2": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/topotest/zk2", "-topo-flavor", "zk2"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/topotest/zk2", "--topo-flavor=zk2"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "17",
+			"Shard": "25",
 			"RetryMax": 0,
 			"Tags": []
 		},
 		"topo_consul": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/topotest/consul", "-topo-flavor", "consul"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/topotest/consul", "--topo-flavor=consul"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "17",
+			"Shard": "18",
 			"RetryMax": 0,
 			"Tags": []
 		},
