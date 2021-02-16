@@ -26,6 +26,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -106,7 +107,7 @@ var (
 		ALTER TABLE stress_test modify hint_col varchar(64) not null default '%s'
 	`
 	insertRowStatement = `
-		INSERT INTO stress_test (id, rand_val) VALUES (%d, left(md5(rand()), 8))
+		INSERT IGNORE INTO stress_test (id, rand_val) VALUES (%d, left(md5(rand()), 8))
 	`
 	updateRowStatement = `
 		UPDATE stress_test SET updates=updates+1 WHERE id=%d
@@ -173,6 +174,7 @@ func TestMain(m *testing.M) {
 			Name: keyspaceName,
 		}
 
+		// No need for replicas in this stress test
 		if err := clusterInstance.StartUnshardedKeyspace(*keyspace, 0, false); err != nil {
 			return 1, err
 		}
@@ -213,6 +215,8 @@ func TestSchemaChange(t *testing.T) {
 		testWithInitialSchema(t)
 	})
 	for i := 0; i < countIterations; i++ {
+		// This first tests the general functionality of initializing the table with data,
+		// no concurrency involved. Just counting.
 		testName := fmt.Sprintf("init table %d/%d", (i + 1), countIterations)
 		t.Run(testName, func(t *testing.T) {
 			initTable(t)
@@ -220,24 +224,28 @@ func TestSchemaChange(t *testing.T) {
 		})
 	}
 	for i := 0; i < countIterations; i++ {
+		// This tests running a workload on the table, then comparing expected metrics with
+		// actual table metrics. All this without any ALTER TABLE: this is to validate
+		// that our testing/metrics logic is sound in the first place.
 		testName := fmt.Sprintf("workload without ALTER TABLE %d/%d", (i + 1), countIterations)
 		t.Run(testName, func(t *testing.T) {
-			ctx := context.Background()
+			ctx, cancel := context.WithCancel(context.Background())
 			initTable(t)
-			done := make(chan bool)
 			var wg sync.WaitGroup
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				runMultipleConnections(ctx, t, done)
+				runMultipleConnections(ctx, t)
 			}()
 			time.Sleep(5 * time.Second)
-			done <- true
+			cancel() // will cause runMultipleConnections() to terminate
 			wg.Wait()
 			testSelectTableMetrics(t)
 		})
 	}
 	t.Run("ALTER TABLE without workload", func(t *testing.T) {
+		// A single ALTER TABLE. Generally this is covered in endtoend/onlineddl_vrepl,
+		// but we wish to verify the ALTER statement used in these tests is sound
 		initTable(t)
 		hint := "hint-alter-without-workload"
 		uuid := testOnlineDDLStatement(t, fmt.Sprintf(alterHintStatement, hint), "online", "vtgate", hint)
@@ -246,21 +254,26 @@ func TestSchemaChange(t *testing.T) {
 	})
 
 	for i := 0; i < countIterations; i++ {
+		// Finally, this is the real test:
+		// We populate a table, and begin a concurrent workload (this is the "mini stress")
+		// We then ALTER TABLE via vreplication.
+		// Once convinced ALTER TABLE is complete, we stop the workload.
+		// We then compare expected metrics with table metrics. If they agree, then
+		// the vreplication/ALTER TABLE did not corrupt our data and we are happy.
 		testName := fmt.Sprintf("ALTER TABLE with workload %d/%d", (i + 1), countIterations)
 		t.Run(testName, func(t *testing.T) {
-			ctx := context.Background()
+			ctx, cancel := context.WithCancel(context.Background())
 			initTable(t)
-			done := make(chan bool)
 			var wg sync.WaitGroup
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				runMultipleConnections(ctx, t, done)
+				runMultipleConnections(ctx, t)
 			}()
 			hint := fmt.Sprintf("hint-alter-with-workload-%d", i)
 			uuid := testOnlineDDLStatement(t, fmt.Sprintf(alterHintStatement, hint), "online", "vtgate", hint)
 			checkRecentMigrations(t, uuid, schema.OnlineDDLStatusComplete)
-			done <- true
+			cancel() // will cause runMultipleConnections() to terminate
 			wg.Wait()
 			testSelectTableMetrics(t)
 		})
@@ -364,14 +377,12 @@ func getCreateTableStatement(t *testing.T, tablet *cluster.Vttablet, tableName s
 	return statement
 }
 
-func generateInsert(t *testing.T, conn *mysql.Conn, wg *sync.WaitGroup) error {
-	wg.Add(1)
+func generateInsert(t *testing.T, conn *mysql.Conn) error {
 	id := rand.Int31n(int32(maxTableRows))
 	query := fmt.Sprintf(insertRowStatement, id)
 	qr, err := conn.ExecuteFetch(query, 1000, true)
 
-	go func() {
-		defer wg.Done()
+	func() {
 		writeMetrics.mu.Lock()
 		defer writeMetrics.mu.Unlock()
 
@@ -390,14 +401,12 @@ func generateInsert(t *testing.T, conn *mysql.Conn, wg *sync.WaitGroup) error {
 	return err
 }
 
-func generateUpdate(t *testing.T, conn *mysql.Conn, wg *sync.WaitGroup) error {
-	wg.Add(1)
+func generateUpdate(t *testing.T, conn *mysql.Conn) error {
 	id := rand.Int31n(int32(maxTableRows))
 	query := fmt.Sprintf(updateRowStatement, id)
 	qr, err := conn.ExecuteFetch(query, 1000, true)
 
-	go func() {
-		defer wg.Done()
+	func() {
 		writeMetrics.mu.Lock()
 		defer writeMetrics.mu.Unlock()
 
@@ -416,14 +425,12 @@ func generateUpdate(t *testing.T, conn *mysql.Conn, wg *sync.WaitGroup) error {
 	return err
 }
 
-func generateDelete(t *testing.T, conn *mysql.Conn, wg *sync.WaitGroup) error {
-	wg.Add(1)
+func generateDelete(t *testing.T, conn *mysql.Conn) error {
 	id := rand.Int31n(int32(maxTableRows))
 	query := fmt.Sprintf(deleteRowStatement, id)
 	qr, err := conn.ExecuteFetch(query, 1000, true)
 
-	go func() {
-		defer wg.Done()
+	func() {
 		writeMetrics.mu.Lock()
 		defer writeMetrics.mu.Unlock()
 
@@ -442,7 +449,7 @@ func generateDelete(t *testing.T, conn *mysql.Conn, wg *sync.WaitGroup) error {
 	return err
 }
 
-func runSingleConnection(ctx context.Context, t *testing.T, done chan bool, wg *sync.WaitGroup) {
+func runSingleConnection(ctx context.Context, t *testing.T, done *int64) {
 	log.Infof("Running single connection")
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
@@ -454,24 +461,20 @@ func runSingleConnection(ctx context.Context, t *testing.T, done chan bool, wg *
 	require.Nil(t, err)
 
 	for {
-		select {
-		case <-done:
+		if atomic.LoadInt64(done) == 1 {
 			log.Infof("Terminating single connection")
 			return
-		default:
 		}
 		switch rand.Int31n(3) {
 		case 0:
-			err = generateInsert(t, conn, wg)
+			err = generateInsert(t, conn)
 		case 1:
-			err = generateUpdate(t, conn, wg)
+			err = generateUpdate(t, conn)
 		case 2:
-			err = generateDelete(t, conn, wg)
+			err = generateDelete(t, conn)
 		}
 		if err != nil {
 			if strings.Contains(err.Error(), "disallowed due to rule: enforce blacklisted tables") {
-				err = nil
-			} else if strings.Contains(err.Error(), "AlreadyExists") {
 				err = nil
 			}
 		}
@@ -480,21 +483,20 @@ func runSingleConnection(ctx context.Context, t *testing.T, done chan bool, wg *
 	}
 }
 
-func runMultipleConnections(ctx context.Context, t *testing.T, done chan bool) {
+func runMultipleConnections(ctx context.Context, t *testing.T) {
 	log.Infof("Running multiple connections")
-	var chans []chan bool
+	var done int64
 	var wg sync.WaitGroup
 	for i := 0; i < maxConcurrency; i++ {
-		d := make(chan bool)
-		chans = append(chans, d)
-		go runSingleConnection(ctx, t, d, &wg)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			runSingleConnection(ctx, t, &done)
+		}()
 	}
-	<-done
+	<-ctx.Done()
+	atomic.StoreInt64(&done, 1)
 	log.Infof("Running multiple connections: done")
-	for _, d := range chans {
-		log.Infof("Cancelling single connection")
-		d <- true
-	}
 	wg.Wait()
 	log.Infof("All connections cancelled")
 }
@@ -512,17 +514,15 @@ func initTable(t *testing.T) {
 	_, err = conn.ExecuteFetch(truncateStatement, 1000, true)
 	require.Nil(t, err)
 
-	var wg sync.WaitGroup
 	for i := 0; i < maxTableRows/2; i++ {
-		generateInsert(t, conn, &wg)
+		generateInsert(t, conn)
 	}
 	for i := 0; i < maxTableRows/4; i++ {
-		generateUpdate(t, conn, &wg)
+		generateUpdate(t, conn)
 	}
 	for i := 0; i < maxTableRows/4; i++ {
-		generateDelete(t, conn, &wg)
+		generateDelete(t, conn)
 	}
-	wg.Wait()
 }
 
 func testSelectTableMetrics(t *testing.T) {
