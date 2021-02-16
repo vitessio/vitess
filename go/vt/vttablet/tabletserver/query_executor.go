@@ -121,7 +121,7 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 	}
 
 	switch qre.plan.PlanID {
-	case p.PlanSelect, p.PlanSelectImpossible, p.PlanShowTables:
+	case p.PlanSelect, p.PlanSelectImpossible, p.PlanShow:
 		maxrows := qre.getSelectLimit()
 		qre.bindVars["#maxLimit"] = sqltypes.Int64BindVariable(maxrows + 1)
 		if qre.bindVars[sqltypes.BvReplaceSchemaName] != nil {
@@ -208,7 +208,7 @@ func (qre *QueryExecutor) txConnExec(conn *StatefulConnection) (*sqltypes.Result
 		return qre.execStatefulConn(conn, qre.query, true)
 	case p.PlanSavepoint, p.PlanRelease, p.PlanSRollback:
 		return qre.execStatefulConn(conn, qre.query, true)
-	case p.PlanSelect, p.PlanSelectLock, p.PlanSelectImpossible, p.PlanShowTables:
+	case p.PlanSelect, p.PlanSelectLock, p.PlanSelectImpossible, p.PlanShow:
 		maxrows := qre.getSelectLimit()
 		qre.bindVars["#maxLimit"] = sqltypes.Int64BindVariable(maxrows + 1)
 		if qre.bindVars[sqltypes.BvReplaceSchemaName] != nil {
