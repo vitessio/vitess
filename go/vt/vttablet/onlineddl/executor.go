@@ -569,9 +569,23 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 		}
 	}
 
+	go func() {
+		// Tables are swapped! Let's take the opportunity to ReloadSchema now
+		// We do this in a goroutine because it might take time on a schema with thousands of tables, and we don't want to delay
+		// the cut-over.
+		// this means ReloadSchema is not in sync with the actual schema change. Users will still need to run tracker if they want to sync.
+		// In the future, we will want to reload the single table, instead of reloading the schema.
+		if err := tmClient.ReloadSchema(ctx, tablet.Tablet, ""); err != nil {
+			vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "Error on ReloadSchema while cutting over vreplication migration UUID: %+v", onlineDDL.UUID)
+		}
+	}()
+
 	// Tables are now swapped! Migration is successful
 	_ = e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusComplete, false, progressPctFull)
 	return nil
+
+	// deferred function will re-enable writes now
+	// deferred function will unlock keyspace
 }
 
 // ExecuteWithVReplication sets up the grounds for a vreplication schema migration
