@@ -242,18 +242,23 @@ func (erp *EmergencyReparenter) promoteNewPrimary(
 		// At least one replica was able to SetMaster successfully
 		return nil
 	case <-allReplicasDoneCtx.Done():
-		if len(rec.Errors) >= numReplicas {
-			// There are certain timing issues between replSuccessCtx.Done
-			// firing and allReplicasDoneCtx.Done firing, so we check again if
-			// truly all replicas failed (where `numReplicas` goroutines
-			// recorded an error) or one or more actually managed to succeed.
-			//
-			// Technically, rec.Errors should never be greater than numReplicas,
-			// but it's better to err on the side of caution here.
-			return vterrors.Wrapf(rec.Error(), "%d replica(s) failed: %v", len(rec.Errors), rec.Error())
-		}
+		// There are certain timing issues between replSuccessCtx.Done firing
+		// and allReplicasDoneCtx.Done firing, so we check again if truly all
+		// replicas failed (where `numReplicas` goroutines recorded an error) or
+		// one or more actually managed to succeed.
+		errCount := len(rec.Errors)
 
-		return nil
+		switch {
+		case errCount > numReplicas:
+			// Technically, rec.Errors should never be greater than numReplicas,
+			// but it's better to err on the side of caution here, but also
+			// we're going to be explicit that this is doubly unexpected.
+			return vterrors.Wrapf(rec.Error(), "received more errors (= %d) than replicas (= %d), which should be impossible: %v", errCount, numReplicas, rec.Error())
+		case errCount == numReplicas:
+			return vterrors.Wrapf(rec.Error(), "%d replica(s) failed: %v", numReplicas, rec.Error())
+		default:
+			return nil
+		}
 	}
 }
 
