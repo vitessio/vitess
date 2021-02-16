@@ -592,7 +592,7 @@ func (pr *PlannedReparenter) reparentTablets(
 			// that it needs to start replication after transitioning from
 			// MASTER => REPLICA.
 			forceStartReplication := false
-			if err := pr.tmc.SetMaster(replCtx, tablet, ev.NewMaster.Alias, reparentJournalTimestamp, reparentJournalPosition, forceStartReplication); err != nil {
+			if err := pr.tmc.SetMaster(replCtx, tablet, ev.NewMaster.Alias, reparentJournalTimestamp, "", forceStartReplication); err != nil {
 				rec.RecordError(vterrors.Wrapf(err, "tablet %v failed SetMaster(%v): %v", alias, primaryElectAliasStr, err))
 			}
 		}(alias, tabletInfo.Tablet)
