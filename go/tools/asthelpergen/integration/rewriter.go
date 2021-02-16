@@ -17,6 +17,14 @@ limitations under the License.
 
 package integration
 
+type replaceArrayValues int
+
+func (r *replaceArrayValues) replace(newNode, parent AST) {
+	parent.(*Array).Values[int(*r)] = newNode.(AST)
+}
+func (r *replaceArrayValues) inc() {
+	*r++
+}
 func replacePlusLeft(newNode, parent AST) {
 	parent.(*Plus).Left = newNode.(AST)
 }
@@ -39,6 +47,7 @@ func (a *application) apply(parent, node AST, replacer replacerFunc) {
 		return
 	}
 	switch n := node.(type) {
+	case *Array:
 	case *LiteralInt:
 	case LiteralString:
 	case *LiteralString:
