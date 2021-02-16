@@ -179,7 +179,15 @@ func (erp *EmergencyReparenter) promoteNewPrimary(
 
 		forceStart := false
 		if status, ok := statusMap[alias]; ok {
-			forceStart = ReplicaWasRunning(status)
+			fs, err := ReplicaWasRunning(status)
+			if err != nil {
+				err = vterrors.Wrapf(err, "tablet %v could not determine StopReplicationStatus: %v", alias, err)
+				rec.RecordError(err)
+
+				return
+			}
+
+			forceStart = fs
 		}
 
 		err := erp.tmc.SetMaster(replCtx, ti.Tablet, newPrimaryTabletInfo.Alias, now, "", forceStart)
