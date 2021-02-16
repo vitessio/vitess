@@ -202,7 +202,7 @@ func Build(statement sqlparser.Statement, tables map[string]*schema.Table, isRes
 		plan = &Plan{PlanID: PlanDDL, FullQuery: fullQuery}
 	case *sqlparser.Show:
 		plan, err = analyzeShow(stmt, dbName)
-	case *sqlparser.OtherRead, *sqlparser.Explain:
+	case *sqlparser.OtherRead, sqlparser.Explain:
 		plan, err = &Plan{PlanID: PlanOtherRead}, nil
 	case *sqlparser.OtherAdmin:
 		plan, err = &Plan{PlanID: PlanOtherAdmin}, nil
@@ -254,7 +254,7 @@ func BuildStreaming(sql string, tables map[string]*schema.Table, isReservedConn 
 			return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "select with lock not allowed for streaming")
 		}
 		plan.Table = lookupTable(stmt.From, tables)
-	case *sqlparser.OtherRead, *sqlparser.Show, *sqlparser.Union, *sqlparser.CallProc:
+	case *sqlparser.OtherRead, *sqlparser.Show, *sqlparser.Union, *sqlparser.CallProc, sqlparser.Explain:
 		// pass
 	default:
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "'%v' not allowed for streaming", sqlparser.String(stmt))

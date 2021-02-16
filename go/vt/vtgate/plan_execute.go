@@ -179,7 +179,7 @@ func (e *Executor) executePlan(ctx context.Context, plan *engine.Plan, vcursor *
 		logStats.Table = plan.Instructions.GetTableName()
 		logStats.TabletType = vcursor.TabletType().String()
 		errCount := e.logExecutionEnd(logStats, execStart, plan, err, qr)
-		plan.AddStats(1, time.Since(logStats.StartTime), uint64(logStats.ShardQueries), logStats.RowsAffected, errCount)
+		plan.AddStats(1, time.Since(logStats.StartTime), uint64(logStats.ShardQueries), logStats.RowsAffected, logStats.RowsReturned, errCount)
 
 		// Check if there was partial DML execution. If so, rollback the transaction.
 		if err != nil && safeSession.InTransaction() && vcursor.rollbackOnPartialExec {
@@ -201,6 +201,7 @@ func (e *Executor) logExecutionEnd(logStats *LogStats, execStart time.Time, plan
 		errCount = 1
 	} else {
 		logStats.RowsAffected = qr.RowsAffected
+		logStats.RowsReturned = uint64(len(qr.Rows))
 	}
 	return errCount
 }

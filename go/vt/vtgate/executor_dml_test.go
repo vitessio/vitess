@@ -1012,11 +1012,11 @@ func TestInsertGeneratorSharded(t *testing.T) {
 		},
 	}}
 	utils.MustMatch(t, wantQueries, sbclookup.Queries, "sbclookup.Queries")
-	wantResult := *sandboxconn.SingleRowResult
-	wantResult.InsertID = 1
-	if !result.Equal(&wantResult) {
-		t.Errorf("result: %+v, want %+v", result, &wantResult)
+	wantResult := &sqltypes.Result{
+		InsertID:     1,
+		RowsAffected: 1,
 	}
+	utils.MustMatch(t, wantResult, result)
 }
 
 func TestInsertAutoincSharded(t *testing.T) {
@@ -1064,11 +1064,11 @@ func TestInsertGeneratorUnsharded(t *testing.T) {
 	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
 		t.Errorf("sbclookup.Queries: \n%#v, want \n%#v\n", sbclookup.Queries, wantQueries)
 	}
-	wantResult := *sandboxconn.SingleRowResult
-	wantResult.InsertID = 1
-	if !result.Equal(&wantResult) {
-		t.Errorf("result: %+v, want %+v", result, &wantResult)
+	wantResult := &sqltypes.Result{
+		InsertID:     1,
+		RowsAffected: 1,
 	}
+	utils.MustMatch(t, wantResult, result)
 }
 
 func TestInsertAutoincUnsharded(t *testing.T) {
@@ -1161,11 +1161,11 @@ func TestInsertLookupOwnedGenerator(t *testing.T) {
 	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
 		t.Errorf("sbclookup.Queries:\n%+v, want\n%+v\n", sbclookup.Queries, wantQueries)
 	}
-	wantResult := *sandboxconn.SingleRowResult
-	wantResult.InsertID = 4
-	if !result.Equal(&wantResult) {
-		t.Errorf("result:\n%+v, want\n%+v", result, &wantResult)
+	wantResult := &sqltypes.Result{
+		InsertID:     4,
+		RowsAffected: 1,
 	}
+	utils.MustMatch(t, wantResult, result)
 }
 
 func TestInsertLookupUnowned(t *testing.T) {
@@ -1430,11 +1430,11 @@ func TestMultiInsertGenerator(t *testing.T) {
 		},
 	}}
 	utils.MustMatch(t, wantQueries, sbclookup.Queries, "sbclookup.Queries")
-	wantResult := *sandboxconn.SingleRowResult
-	wantResult.InsertID = 1
-	if !result.Equal(&wantResult) {
-		t.Errorf("result: %+v, want %+v", result, &wantResult)
+	wantResult := &sqltypes.Result{
+		InsertID:     1,
+		RowsAffected: 1,
 	}
+	utils.MustMatch(t, wantResult, result)
 }
 
 func TestMultiInsertGeneratorSparse(t *testing.T) {
@@ -1482,11 +1482,11 @@ func TestMultiInsertGeneratorSparse(t *testing.T) {
 		},
 	}}
 	utils.MustMatch(t, wantQueries, sbclookup.Queries, "sbclookup.Queries")
-	wantResult := *sandboxconn.SingleRowResult
-	wantResult.InsertID = 1
-	if !result.Equal(&wantResult) {
-		t.Errorf("result: %+v, want %+v", result, &wantResult)
+	wantResult := &sqltypes.Result{
+		InsertID:     1,
+		RowsAffected: 1,
 	}
+	utils.MustMatch(t, wantResult, result)
 }
 
 func TestInsertBadAutoInc(t *testing.T) {

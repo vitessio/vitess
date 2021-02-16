@@ -22,6 +22,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"vitess.io/vitess/go/cmd/vtctldclient/cli"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
@@ -33,6 +34,8 @@ var GetBackups = &cobra.Command{
 }
 
 func commandGetBackups(cmd *cobra.Command, args []string) error {
+	cli.FinishedParsing(cmd)
+
 	keyspace := cmd.Flags().Arg(0)
 	shard := cmd.Flags().Arg(1)
 

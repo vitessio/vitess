@@ -517,7 +517,6 @@ func TestQueryExecutorPlanNextval(t *testing.T) {
 			sqltypes.NewInt64(1),
 			sqltypes.NewInt64(3),
 		}},
-		RowsAffected: 1,
 	})
 	updateQuery := "update seq set next_id = 4 where id = 0"
 	db.AddQuery(updateQuery, &sqltypes.Result{})
@@ -538,7 +537,6 @@ func TestQueryExecutorPlanNextval(t *testing.T) {
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewInt64(1),
 		}},
-		RowsAffected: 1,
 	}
 	assert.Equal(t, want, got)
 
@@ -558,7 +556,6 @@ func TestQueryExecutorPlanNextval(t *testing.T) {
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewInt64(2),
 		}},
-		RowsAffected: 1,
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("qre.Execute() =\n%#v, want:\n%#v", got, want)
@@ -575,7 +572,6 @@ func TestQueryExecutorPlanNextval(t *testing.T) {
 			sqltypes.NewInt64(4),
 			sqltypes.NewInt64(3),
 		}},
-		RowsAffected: 1,
 	})
 	updateQuery = "update seq set next_id = 7 where id = 0"
 	db.AddQuery(updateQuery, &sqltypes.Result{})
@@ -592,7 +588,6 @@ func TestQueryExecutorPlanNextval(t *testing.T) {
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewInt64(3),
 		}},
-		RowsAffected: 1,
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("qre.Execute() =\n%#v, want:\n%#v", got, want)
@@ -609,7 +604,6 @@ func TestQueryExecutorPlanNextval(t *testing.T) {
 			sqltypes.NewInt64(7),
 			sqltypes.NewInt64(3),
 		}},
-		RowsAffected: 2,
 	})
 	updateQuery = "update seq set next_id = 13 where id = 0"
 	db.AddQuery(updateQuery, &sqltypes.Result{})
@@ -626,7 +620,6 @@ func TestQueryExecutorPlanNextval(t *testing.T) {
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewInt64(5),
 		}},
-		RowsAffected: 1,
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("qre.Execute() =\n%#v, want:\n%#v", got, want)
@@ -1164,14 +1157,24 @@ func newTestQueryExecutor(ctx context.Context, tsv *TabletServer, sql string, tx
 
 func setUpQueryExecutorTest(t *testing.T) *fakesqldb.DB {
 	db := fakesqldb.New(t)
-	initQueryExecutorTestDB(db, true)
+	initQueryExecutorTestDB(db)
 	return db
 }
 
-func initQueryExecutorTestDB(db *fakesqldb.DB, testTableHasMultipleUniqueKeys bool) {
-	for query, result := range getQueryExecutorSupportedQueries(testTableHasMultipleUniqueKeys) {
+const baseShowTablesPattern = `SELECT t\.table_name.*`
+
+func initQueryExecutorTestDB(db *fakesqldb.DB) {
+	for query, result := range getQueryExecutorSupportedQueries() {
 		db.AddQuery(query, result)
 	}
+	db.AddQueryPattern(baseShowTablesPattern, &sqltypes.Result{
+		Fields: mysql.BaseShowTablesFields,
+		Rows: [][]sqltypes.Value{
+			mysql.BaseShowTablesRow("test_table", false, ""),
+			mysql.BaseShowTablesRow("seq", false, "vitess_sequence"),
+			mysql.BaseShowTablesRow("msg", false, "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30"),
+		},
+	})
 }
 
 func getTestTableFields() []*querypb.Field {
@@ -1182,7 +1185,7 @@ func getTestTableFields() []*querypb.Field {
 	}
 }
 
-func getQueryExecutorSupportedQueries(testTableHasMultipleUniqueKeys bool) map[string]*sqltypes.Result {
+func getQueryExecutorSupportedQueries() map[string]*sqltypes.Result {
 	return map[string]*sqltypes.Result{
 		// queries for twopc
 		fmt.Sprintf(sqlCreateSidecarDB, "_vt"):          {},
@@ -1202,7 +1205,6 @@ func getQueryExecutorSupportedQueries(testTableHasMultipleUniqueKeys bool) map[s
 			Rows: [][]sqltypes.Value{
 				{sqltypes.NewInt32(1427325875)},
 			},
-			RowsAffected: 1,
 		},
 		"select @@global.sql_mode": {
 			Fields: []*querypb.Field{{
@@ -1211,7 +1213,6 @@ func getQueryExecutorSupportedQueries(testTableHasMultipleUniqueKeys bool) map[s
 			Rows: [][]sqltypes.Value{
 				{sqltypes.NewVarBinary("STRICT_TRANS_TABLES")},
 			},
-			RowsAffected: 1,
 		},
 		"select @@autocommit": {
 			Fields: []*querypb.Field{{
@@ -1220,7 +1221,6 @@ func getQueryExecutorSupportedQueries(testTableHasMultipleUniqueKeys bool) map[s
 			Rows: [][]sqltypes.Value{
 				{sqltypes.NewVarBinary("1")},
 			},
-			RowsAffected: 1,
 		},
 		"select @@sql_auto_is_null": {
 			Fields: []*querypb.Field{{
@@ -1229,7 +1229,6 @@ func getQueryExecutorSupportedQueries(testTableHasMultipleUniqueKeys bool) map[s
 			Rows: [][]sqltypes.Value{
 				{sqltypes.NewVarBinary("0")},
 			},
-			RowsAffected: 1,
 		},
 		"select @@version_comment from dual where 1 != 1": {
 			Fields: []*querypb.Field{{
@@ -1243,30 +1242,18 @@ func getQueryExecutorSupportedQueries(testTableHasMultipleUniqueKeys bool) map[s
 			Rows: [][]sqltypes.Value{
 				{sqltypes.NewVarBinary("fakedb server")},
 			},
-			RowsAffected: 1,
 		},
 		"(select 0 as x from dual where 1 != 1) union (select 1 as y from dual where 1 != 1)": {
 			Fields: []*querypb.Field{{
 				Type: sqltypes.Uint64,
 			}},
-			Rows:         [][]sqltypes.Value{},
-			RowsAffected: 0,
+			Rows: [][]sqltypes.Value{},
 		},
 		"(select 0 as x from dual where 1 != 1) union (select 1 as y from dual where 1 != 1) limit 10001": {
 			Fields: []*querypb.Field{{
 				Type: sqltypes.Uint64,
 			}},
-			Rows:         [][]sqltypes.Value{},
-			RowsAffected: 0,
-		},
-		mysql.BaseShowTables: {
-			Fields: mysql.BaseShowTablesFields,
-			Rows: [][]sqltypes.Value{
-				mysql.BaseShowTablesRow("test_table", false, ""),
-				mysql.BaseShowTablesRow("seq", false, "vitess_sequence"),
-				mysql.BaseShowTablesRow("msg", false, "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30"),
-			},
-			RowsAffected: 3,
+			Rows: [][]sqltypes.Value{},
 		},
 		mysql.BaseShowPrimary: {
 			Fields: mysql.ShowPrimaryFields,
@@ -1275,7 +1262,6 @@ func getQueryExecutorSupportedQueries(testTableHasMultipleUniqueKeys bool) map[s
 				mysql.ShowPrimaryRow("seq", "id"),
 				mysql.ShowPrimaryRow("msg", "id"),
 			},
-			RowsAffected: 3,
 		},
 		"select * from test_table where 1 != 1": {
 			Fields: []*querypb.Field{{

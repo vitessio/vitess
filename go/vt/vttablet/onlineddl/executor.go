@@ -93,9 +93,7 @@ var vexecInsertTemplates = []string{
 	)`,
 }
 
-var emptyResult = &sqltypes.Result{
-	RowsAffected: 0,
-}
+var emptyResult = &sqltypes.Result{}
 
 var ghostOverridePath = flag.String("gh-ost-path", "", "override default gh-ost binary full path")
 var ptOSCOverridePath = flag.String("pt-osc-path", "", "override default pt-online-schema-change binary full path")

@@ -1,0 +1,250 @@
+// Re-cyclable components for singlestat resources
+local config = import '../../../config.libsonnet';
+local grafana = import '../../../vendor/grafonnet/grafana.libsonnet';
+
+local singlestat = grafana.singlestat;
+local prometheus = grafana.prometheus;
+
+{
+  //TODO move to resource to use vtgate_config/vtgate_helper
+  vtgateSuccessRate::
+    singlestat.new(
+      'Query success - vtgate',
+      datasource='%(dataSource)s' % config._config,
+      colorBackground=true,
+      decimals=4,
+      format='percent',
+      colors=[
+        '#d44a3a',
+        'rgba(237, 129, 40, 0.89)',
+        '#299c46',
+      ],
+      valueFontSize='70%',
+      valueName='current',
+      thresholds='0.99,0.999',
+    )
+    .addTarget(
+      prometheus.target(
+        |||
+          100 
+          -
+          sum(
+            irate(
+              vtgate_api_error_counts{
+                %(customCommonSelector)s,
+                %(vtgateSelector)s
+              }[$interval]
+            ) OR vector(0)
+          )
+          /
+          sum(
+            irate(
+              vtgate_api_count{
+                %(customCommonSelector)s,
+                %(vtgateSelector)s
+              }[$interval]
+            )
+          )
+        ||| % config._config,
+        instant=true,
+        intervalFactor=1
+      )
+    ),
+
+  //TODO move to resource to use vtgate_config/vtgate_helper
+  vtgateUp::
+    singlestat.new(
+      'vtgate',
+      datasource='%(dataSource)s' % config._config,
+      valueFontSize='50%',
+      valueName='current',
+    )
+    .addTarget(
+      prometheus.target(
+        |||
+          sum(
+            up{
+              %(customCommonSelector)s,
+              %(vtgateSelector)s
+            }
+          )
+        ||| % config._config,
+        instant=true,
+        intervalFactor=1
+      )
+    ),
+
+  //TODO move to resource to use vttablet_config/vttablet_helper
+  vttabletQuerySuccess::
+    singlestat.new(
+      'Query success - vttablet',
+      datasource='%(dataSource)s' % config._config,
+      colorBackground=true,
+      decimals=4,
+      format='percent',
+      colors=[
+        '#d44a3a',
+        'rgba(237, 129, 40, 0.89)',
+        '#299c46',
+      ],
+      valueFontSize='70%',
+      valueName='current',
+      thresholds='0.99,0.999',
+    )
+    .addTarget(
+      prometheus.target(
+        |||
+          100 
+          -
+          (
+            sum by(region)(
+              vitess_mixin:vttablet_error_byregion:irate1m{%(customCommonSelector)s}
+            )
+            /
+            sum by(region)(
+              vitess_mixin:vttablet_query_counts_byregion:irate1m{%(customCommonSelector)s}
+            )
+          )
+        ||| % config._config,
+        instant=true,
+        intervalFactor=1
+      )
+    ),
+
+  //TODO move to resource to use vttablet_config/vttablet_helper
+  vttabletUp::
+    singlestat.new(
+      'vttablet',
+      datasource='%(dataSource)s' % config._config,
+      valueFontSize='50%',
+      valueName='current',
+    )
+    .addTarget(
+      prometheus.target(
+        |||
+          sum(
+            up{
+              %(customCommonSelector)s,
+              %(vttabletSelector)s
+            }
+          )
+        ||| % config._config,
+        instant=true,
+        intervalFactor=1
+      )
+    ),
+
+
+  //TODO move to resource to use vttablet_config/vttablet_helper
+  keyspaceCount::
+    singlestat.new(
+      'keyspace',
+      datasource='%(dataSource)s' % config._config,
+      valueFontSize='50%',
+      valueName='current',
+    )
+    .addTarget(
+      prometheus.target(
+        |||
+          count(
+            count by (keyspace)(
+              vttablet_tablet_state{
+                %(customCommonSelector)s,
+                %(vttabletSelector)s
+              }
+            )
+          )
+        ||| % config._config,
+        instant=true,
+        intervalFactor=1
+      )
+    ),
+
+  //TODO move to resource to use vttablet_config/vttablet_helper
+  shardCount::
+    singlestat.new(
+      'shard',
+      datasource='%(dataSource)s' % config._config,
+      valueFontSize='50%',
+      valueName='current',
+    )
+    .addTarget(
+      prometheus.target(
+        |||
+          count(
+            count by(shard)(
+              vttablet_tablet_state{
+                %(customCommonSelector)s,
+                %(vttabletSelector)s
+              }
+            )
+          )
+        ||| % config._config,
+        instant=true,
+        intervalFactor=1
+      )
+    ),
+
+  vtworkerUp::
+    singlestat.new(
+      'vtworker',
+      datasource='%(dataSource)s' % config._config,
+      valueFontSize='50%',
+      valueName='current',
+    )
+    .addTarget(
+      prometheus.target(
+        |||
+          sum(
+            up{
+              %(customCommonSelector)s,
+              %(vtworkerSelector)s
+            }
+          )
+        ||| % config._config,
+        instant=true,
+        intervalFactor=1
+      )
+    ),
+
+  mysqlQPS::
+    singlestat.new(
+      'QPS - MySQL',
+      datasource='%(dataSource)s' % config._config,
+      format='short',
+      valueFontSize='70%',
+      valueName='current',
+      sparklineFull=true,
+      sparklineShow=true,
+    )
+    .addTarget(
+      prometheus.target(
+        |||
+          sum (
+            vitess_mixin:mysql_global_status_queries_byregion:irate1m{%(customCommonSelector)s}
+          )
+        ||| % config._config,
+        intervalFactor=1
+      )
+    ),
+
+  vtctldUp::
+    singlestat.new(
+      'vtctld',
+      datasource='%(dataSource)s' % config._config,
+      valueFontSize='50%',
+      valueName='current',
+    )
+    .addTarget(
+      prometheus.target(
+        |||
+          sum(
+            up{
+              %(customCommonSelector)s,
+              %(vtctldSelector)s})
+        ||| % config._config,
+        instant=true,
+        intervalFactor=1
+      )
+    ),
+}

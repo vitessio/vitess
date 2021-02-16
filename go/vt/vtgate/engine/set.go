@@ -249,7 +249,7 @@ func (svci *SysVarCheckAndIgnore) Execute(vcursor VCursor, env evalengine.Expres
 	if err != nil {
 		return err
 	}
-	if result.RowsAffected == 0 {
+	if len(result.Rows) == 0 {
 		log.Infof("Ignored inapplicable SET %v = %v", svci.Name, svci.Expr)
 	}
 	return nil
