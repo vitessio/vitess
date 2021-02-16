@@ -106,7 +106,7 @@ var (
 		ALTER TABLE stress_test modify hint_col varchar(64) not null default '%s'
 	`
 	insertRowStatement = `
-		INSERT IGNORE INTO stress_test (id, rand_val) VALUES (%d, left(md5(rand()), 8))
+		INSERT INTO stress_test (id, rand_val) VALUES (%d, left(md5(rand()), 8))
 	`
 	updateRowStatement = `
 		UPDATE stress_test SET updates=updates+1 WHERE id=%d
@@ -213,9 +213,27 @@ func TestSchemaChange(t *testing.T) {
 		testWithInitialSchema(t)
 	})
 	for i := 0; i < countIterations; i++ {
-		testName := fmt.Sprintf("workload without ALTER TABLE %d/%d", (i + 1), countIterations)
+		testName := fmt.Sprintf("init table %d/%d", (i + 1), countIterations)
 		t.Run(testName, func(t *testing.T) {
 			initTable(t)
+			testSelectTableMetrics(t)
+		})
+	}
+	for i := 0; i < countIterations; i++ {
+		testName := fmt.Sprintf("workload without ALTER TABLE %d/%d", (i + 1), countIterations)
+		t.Run(testName, func(t *testing.T) {
+			ctx := context.Background()
+			initTable(t)
+			done := make(chan bool)
+			var wg sync.WaitGroup
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				runMultipleConnections(ctx, t, done)
+			}()
+			time.Sleep(5 * time.Second)
+			done <- true
+			wg.Wait()
 			testSelectTableMetrics(t)
 		})
 	}
@@ -227,17 +245,23 @@ func TestSchemaChange(t *testing.T) {
 		testSelectTableMetrics(t)
 	})
 
-	ctx := context.Background()
 	for i := 0; i < countIterations; i++ {
 		testName := fmt.Sprintf("ALTER TABLE with workload %d/%d", (i + 1), countIterations)
 		t.Run(testName, func(t *testing.T) {
+			ctx := context.Background()
 			initTable(t)
 			done := make(chan bool)
-			go runMultipleConnections(ctx, t, done)
+			var wg sync.WaitGroup
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				runMultipleConnections(ctx, t, done)
+			}()
 			hint := fmt.Sprintf("hint-alter-with-workload-%d", i)
 			uuid := testOnlineDDLStatement(t, fmt.Sprintf(alterHintStatement, hint), "online", "vtgate", hint)
 			checkRecentMigrations(t, uuid, schema.OnlineDDLStatusComplete)
 			done <- true
+			wg.Wait()
 			testSelectTableMetrics(t)
 		})
 	}
@@ -446,6 +470,8 @@ func runSingleConnection(ctx context.Context, t *testing.T, done chan bool, wg *
 		}
 		if err != nil {
 			if strings.Contains(err.Error(), "disallowed due to rule: enforce blacklisted tables") {
+				err = nil
+			} else if strings.Contains(err.Error(), "AlreadyExists") {
 				err = nil
 			}
 		}
