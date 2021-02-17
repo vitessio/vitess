@@ -2615,7 +2615,7 @@ func (node *AliasedExpr) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
-func (node Nextval) Format(buf *TrackedBuffer) {
+func (node *Nextval) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "next %v values", node.Expr)
 }
 
@@ -2676,7 +2676,7 @@ func (node TableNames) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
-func (node TableName) Format(buf *TrackedBuffer) {
+func (node *TableName) Format(buf *TrackedBuffer) {
 	if node.IsEmpty() {
 		return
 	}

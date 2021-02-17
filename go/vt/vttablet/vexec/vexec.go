@@ -192,7 +192,7 @@ func (e *TabletVExec) analyzeStatement() error {
 		e.TableName = sqlparser.String(stmt.TableExprs)
 		e.WhereCols = e.analyzeWhereEqualsColumns(stmt.Where)
 	case *sqlparser.Insert:
-		e.TableName = sqlparser.String(stmt.Table)
+		e.TableName = sqlparser.String(&stmt.Table)
 		e.InsertCols = e.analyzeInsertColumns(stmt)
 	case *sqlparser.Select:
 		e.TableName = sqlparser.String(stmt.From)

@@ -167,7 +167,7 @@ func (qt *queryTable) testString() string {
 		where = " where " + strings.Join(preds, " and ")
 	}
 
-	return fmt.Sprintf("\t%d:%s%s%s", qt.tableID, sqlparser.String(qt.table), alias, where)
+	return fmt.Sprintf("\t%d:%s%s%s", qt.tableID, sqlparser.String(&qt.table), alias, where)
 }
 
 func (qg *queryGraph) testString() string {

@@ -70,7 +70,7 @@ func (nz *normalizer) WalkStatement(cursor *Cursor) bool {
 		nz.convertLiteral(node, cursor)
 	case *ComparisonExpr:
 		nz.convertComparison(node)
-	case *ColName, TableName:
+	case *ColName, *TableName:
 		// Common node types that never contain Literal or ListArgs but create a lot of object
 		// allocations.
 		return false
@@ -87,7 +87,7 @@ func (nz *normalizer) WalkSelect(cursor *Cursor) bool {
 		nz.convertLiteralDedup(node, cursor)
 	case *ComparisonExpr:
 		nz.convertComparison(node)
-	case *ColName, TableName:
+	case *ColName, *TableName:
 		// Common node types that never contain Literals or ListArgs but create a lot of object
 		// allocations.
 		return false
@@ -226,7 +226,7 @@ func GetBindvars(stmt Statement) map[string]struct{} {
 	bindvars := make(map[string]struct{})
 	_ = Walk(func(node SQLNode) (kontinue bool, err error) {
 		switch node := node.(type) {
-		case *ColName, TableName:
+		case *ColName, *TableName:
 			// Common node types that never contain expressions but create a lot of object
 			// allocations.
 			return false, nil

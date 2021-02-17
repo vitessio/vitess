@@ -73,7 +73,7 @@ func buildControllerPlan(query string) (*controllerPlan, error) {
 }
 
 func buildInsertPlan(ins *sqlparser.Insert) (*controllerPlan, error) {
-	switch sqlparser.String(ins.Table) {
+	switch sqlparser.String(&ins.Table) {
 	case reshardingJournalTableName:
 		return &controllerPlan{
 			opcode: reshardingJournalQuery,
@@ -81,7 +81,7 @@ func buildInsertPlan(ins *sqlparser.Insert) (*controllerPlan, error) {
 	case vreplicationTableName:
 		// no-op
 	default:
-		return nil, fmt.Errorf("invalid table name: %v", sqlparser.String(ins.Table))
+		return nil, fmt.Errorf("invalid table name: %v", sqlparser.String(&ins.Table))
 	}
 	if ins.Action != sqlparser.InsertAct {
 		return nil, fmt.Errorf("unsupported construct: %v", sqlparser.String(ins))

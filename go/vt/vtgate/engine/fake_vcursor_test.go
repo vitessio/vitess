@@ -504,7 +504,7 @@ func (f *loggingVCursor) SetPlannerVersion(querypb.ExecuteOptions_PlannerVersion
 }
 
 func (f *loggingVCursor) FindRoutedTable(tbl sqlparser.TableName) (*vindexes.Table, error) {
-	f.log = append(f.log, fmt.Sprintf("FindTable(%s)", sqlparser.String(tbl)))
+	f.log = append(f.log, fmt.Sprintf("FindTable(%s)", sqlparser.String(&tbl)))
 	return f.tableRoutes.tbl, nil
 }
 

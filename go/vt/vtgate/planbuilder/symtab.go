@@ -169,7 +169,7 @@ func (st *symtab) AddTable(t *table) error {
 		st.singleRoute = nil
 	}
 	if _, ok := st.tables[t.alias]; ok {
-		return fmt.Errorf("duplicate symbol: %s", sqlparser.String(t.alias))
+		return fmt.Errorf("duplicate symbol: %s", sqlparser.String(&t.alias))
 	}
 	st.tables[t.alias] = t
 	st.tableNames = append(st.tableNames, t.alias)
@@ -216,7 +216,7 @@ func (st *symtab) FindTable(tname sqlparser.TableName) (*table, error) {
 	}
 	t, ok := st.tables[tname]
 	if !ok {
-		return nil, fmt.Errorf("table %v not found", sqlparser.String(tname))
+		return nil, fmt.Errorf("table %v not found", sqlparser.String(&tname))
 	}
 	return t, nil
 }
@@ -488,7 +488,7 @@ func (t *table) mergeColumn(alias sqlparser.ColIdent, c *column) (*column, error
 		return col, nil
 	}
 	if t.isAuthoritative {
-		return nil, fmt.Errorf("column %v not found in %v", sqlparser.String(alias), sqlparser.String(t.alias))
+		return nil, fmt.Errorf("column %v not found in %v", sqlparser.String(alias), sqlparser.String(&t.alias))
 	}
 	c.colNumber = len(t.columnNames)
 	t.columns[lowered] = c

@@ -166,8 +166,8 @@ func buildAlterView(vschema ContextVSchema, ddl *sqlparser.AlterView) (key.Desti
 	}
 	sqlparser.Rewrite(ddl.Select, func(cursor *sqlparser.Cursor) bool {
 		switch tableName := cursor.Node().(type) {
-		case sqlparser.TableName:
-			cursor.Replace(sqlparser.TableName{
+		case *sqlparser.TableName:
+			cursor.Replace(&sqlparser.TableName{
 				Name: tableName.Name,
 			})
 		}
@@ -202,8 +202,8 @@ func buildCreateView(vschema ContextVSchema, ddl *sqlparser.CreateView) (key.Des
 	}
 	sqlparser.Rewrite(ddl.Select, func(cursor *sqlparser.Cursor) bool {
 		switch tableName := cursor.Node().(type) {
-		case sqlparser.TableName:
-			cursor.Replace(sqlparser.TableName{
+		case *sqlparser.TableName:
+			cursor.Replace(&sqlparser.TableName{
 				Name: tableName.Name,
 			})
 		}

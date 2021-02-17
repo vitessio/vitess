@@ -175,7 +175,7 @@ func extractTableName(stmt sqlparser.Statement) (string, error) {
 	case *sqlparser.Delete:
 		return sqlparser.String(stmt.TableExprs), nil
 	case *sqlparser.Insert:
-		return sqlparser.String(stmt.Table), nil
+		return sqlparser.String(&stmt.Table), nil
 	case *sqlparser.Select:
 		return sqlparser.String(stmt.From), nil
 	}

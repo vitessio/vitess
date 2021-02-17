@@ -194,7 +194,7 @@ func generateQuery(statement sqlparser.Statement) string {
 // dmlFormatter strips out keyspace name from dmls.
 func dmlFormatter(buf *sqlparser.TrackedBuffer, node sqlparser.SQLNode) {
 	switch node := node.(type) {
-	case sqlparser.TableName:
+	case *sqlparser.TableName:
 		node.Name.Format(buf)
 		return
 	}

@@ -150,15 +150,6 @@ func TestReplaceValue(t *testing.T) {
 	}
 	parent := &struct{ AST }{plus}
 	a := &application{
-		pre: func(cursor *Cursor) (AST, bool) {
-			switch n := cursor.node.(type) {
-			case *LiteralInt:
-				if n.Val == 1 {
-					return &LiteralInt{3}, true
-				}
-				return nil, false
-			}
-		},
 		post:   nil,
 		cursor: Cursor{},
 	}

@@ -18,6 +18,7 @@ package sqlparser
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 )
 
@@ -115,7 +116,16 @@ func (buf *TrackedBuffer) astPrintf(currentNode SQLNode, format string, values .
 			expr := getExpressionForParensEval(checkParens, value)
 
 			if expr == nil {
-				buf.formatter(value.(SQLNode))
+				node, ok := value.(SQLNode)
+				if !ok {
+					valuePtr := reflect.New(reflect.TypeOf(value))
+					valuePtr.Elem().Set(reflect.ValueOf(value))
+					node, ok = valuePtr.Interface().(SQLNode)
+				}
+				if !ok {
+					panic(fmt.Sprintf("unexpected TrackedBuffer type %T", value))
+				}
+				buf.formatter(node)
 			} else {
 				needParens := needParens(currentExpr, expr, left)
 				buf.printIf(needParens, "(")

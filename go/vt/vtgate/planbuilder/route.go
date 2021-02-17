@@ -208,7 +208,7 @@ func (rb *route) Wireup(plan logicalPlan, jt *jointab) error {
 				buf.Myprintf("%a", ":"+joinVar)
 				return
 			}
-		case sqlparser.TableName:
+		case *sqlparser.TableName:
 			if !sqlparser.SystemSchema(node.Qualifier.String()) {
 				node.Name.Format(buf)
 				return
@@ -290,7 +290,7 @@ func (rb *route) generateFieldQuery(sel sqlparser.SelectStatement, jt *jointab) 
 				buf.Myprintf("%a", ":"+joinVar)
 				return
 			}
-		case sqlparser.TableName:
+		case *sqlparser.TableName:
 			if !sqlparser.SystemSchema(node.Qualifier.String()) {
 				node.Name.Format(buf)
 				return
