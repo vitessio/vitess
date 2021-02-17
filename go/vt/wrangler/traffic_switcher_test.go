@@ -768,7 +768,7 @@ func TestShardMigrateMainflow(t *testing.T) {
 	verifyQueries(t, tme.allDBClients)
 }
 
-func TestTableMigrateOneToManyX(t *testing.T) {
+func TestTableMigrateOneToMany(t *testing.T) {
 	ctx := context.Background()
 	tme := newTestTableMigraterCustom(ctx, t, []string{"0"}, []string{"-80", "80-"}, "select * %s")
 	defer tme.stopTablets(t)
