@@ -1320,6 +1320,12 @@ float_length_opt:
   {
     $$ = LengthScaleOption{}
   }
+| '(' INTEGRAL ')'
+    {
+      $$ = LengthScaleOption{
+          Length: NewIntVal($2),
+      }
+    }
 | '(' INTEGRAL ',' INTEGRAL ')'
   {
     $$ = LengthScaleOption{
@@ -3340,6 +3346,18 @@ convert_type:
     $$ = &ConvertType{Type: string($1), Length: $2}
   }
 | DECIMAL decimal_length_opt
+  {
+    $$ = &ConvertType{Type: string($1)}
+    $$.Length = $2.Length
+    $$.Scale = $2.Scale
+  }
+| FLOAT_TYPE float_length_opt
+  {
+    $$ = &ConvertType{Type: string($1)}
+    $$.Length = $2.Length
+    $$.Scale = $2.Scale
+  }
+| DOUBLE float_length_opt
   {
     $$ = &ConvertType{Type: string($1)}
     $$.Length = $2.Length
