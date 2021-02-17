@@ -21,7 +21,6 @@ local configuration_templates = import './configuration_templates.libsonnet';
               avg (
                 rate(
                   node_cpu_seconds_total{
-                    %(customCommonSelector)s,
                     %(vtgateNodeSelector)s,
                     mode="idle"
                   }[1m]
@@ -45,13 +44,12 @@ local configuration_templates = import './configuration_templates.libsonnet';
               avg by (instance)(
                 rate(
                   node_cpu_seconds_total{
-                    %(customCommonSelector)s,
                     instance=~"$host",
                     mode="idle"
                   }[1m]
                 )
               )
-            ||| % config._config,
+            |||,
           legendFormat: '{{instance}}',
         },
       ],
@@ -68,7 +66,6 @@ local configuration_templates = import './configuration_templates.libsonnet';
               avg by (instance)(
                 rate(
                   node_cpu_seconds_total{
-                    %(customCommonSelector)s,
                     keyspace="$keyspace",
                     shard=~"$shard",
                     instance=~"$host",
@@ -76,7 +73,7 @@ local configuration_templates = import './configuration_templates.libsonnet';
                   }[5m]
                 )
               )
-            ||| % config._config,
+            |||,
           legendFormat: '{{instance}}',
         },
       ],
@@ -92,14 +89,12 @@ local configuration_templates = import './configuration_templates.libsonnet';
               1 -
               sum (
                 node_memory_MemAvailable{
-                  %(customCommonSelector)s,
                   %(vtgateNodeSelector)s
                 }
               )
               /
               sum (
                 node_memory_MemTotal{
-                  %(customCommonSelector)s,
                   %(vtgateNodeSelector)s
                 }
               )
@@ -119,14 +114,12 @@ local configuration_templates = import './configuration_templates.libsonnet';
               1 -
               sum by (instance)(
                 node_memory_MemAvailable{
-                  %(customCommonSelector)s,
                   instance=~"$host"
                 }
               )
               /
               sum by (instance)(
                 node_memory_MemTotal{
-                  %(customCommonSelector)s,
                   instance=~"$host"
                 }
               )
@@ -145,7 +138,6 @@ local configuration_templates = import './configuration_templates.libsonnet';
               1 -
               sum by (instance)(
                 node_memory_MemAvailable{
-                  %(customCommonSelector)s,
                   keyspace="$keyspace",
                   shard=~"$shard",
                   instance=~"$host"
@@ -154,13 +146,12 @@ local configuration_templates = import './configuration_templates.libsonnet';
               /
               sum by (instance)(
                 node_memory_MemTotal{
-                  %(customCommonSelector)s,
                   keyspace="$keyspace",
                   shard=~"$shard",
                   instance=~"$host"
                 }
               )
-            ||| % config._config,
+            |||,
           legendFormat: '{{instance}}',
         },
       ],
@@ -175,7 +166,6 @@ local configuration_templates = import './configuration_templates.libsonnet';
               sum (
                 irate(
                   node_netstat_Tcp_RetransSegs{
-                    %(customCommonSelector)s,
                     %(vtgateNodeSelector)s
                   }[1m]
                 )
@@ -184,7 +174,6 @@ local configuration_templates = import './configuration_templates.libsonnet';
               sum (
                 irate(
                   node_netstat_Tcp_OutSegs{
-                    %(customCommonSelector)s,
                     %(vtgateNodeSelector)s
                   }[1m]
                 )
@@ -204,7 +193,6 @@ local configuration_templates = import './configuration_templates.libsonnet';
               sum by (instance) (
                 irate(
                   node_netstat_Tcp_RetransSegs{
-                    %(customCommonSelector)s,
                     instance=~"$host"
                   }[1m]
                 )
@@ -213,12 +201,11 @@ local configuration_templates = import './configuration_templates.libsonnet';
               sum by (instance) (
                 irate(
                   node_netstat_Tcp_OutSegs{
-                    %(customCommonSelector)s,
                     instance=~"$host"
                   }[1m]
                 )
               )
-            ||| % config._config,
+            |||,
           legendFormat: '{{instance}}',
         },
       ],
@@ -241,7 +228,6 @@ local configuration_templates = import './configuration_templates.libsonnet';
               sum (
                 rate(
                   node_network_receive_bytes{
-                    %(customCommonSelector)s,
                     %(vtgateNodeSelector)s
                   }[5m]
                 )
@@ -256,7 +242,6 @@ local configuration_templates = import './configuration_templates.libsonnet';
               sum (
                 rate(
                   node_network_transmit_bytes{
-                    %(customCommonSelector)s,
                     %(vtgateNodeSelector)s
                   }[5m]
                 )
@@ -286,7 +271,6 @@ local configuration_templates = import './configuration_templates.libsonnet';
               sum by (instance)(
                 rate(
                   node_network_receive_bytes{
-                    %(customCommonSelector)s,
                     instance=~"$host"
                   }[5m]
                 )
@@ -300,7 +284,6 @@ local configuration_templates = import './configuration_templates.libsonnet';
               sum by (instance)(
                 rate(
                   node_network_transmit_bytes{
-                    %(customCommonSelector)s,
                     instance=~"$host"
                   }[5m]
                 )
@@ -329,7 +312,6 @@ local configuration_templates = import './configuration_templates.libsonnet';
               sum by (instance)(
                 rate(
                   node_network_receive_bytes{
-                    %(customCommonSelector)s,
                     keyspace="$keyspace",
                     shard=~"$shard",
                     instance=~"$host"
@@ -337,7 +319,7 @@ local configuration_templates = import './configuration_templates.libsonnet';
                 )
               )
               * 8
-            ||| % config._config,
+            |||,
           legendFormat: 'ingress - {{instance}}',
         },
         {
@@ -346,7 +328,6 @@ local configuration_templates = import './configuration_templates.libsonnet';
               sum by (instance)(
                 rate(
                   node_network_transmit_bytes{
-                    %(customCommonSelector)s,
                     keyspace="$keyspace",
                     shard=~"$shard",
                     instance=~"$host"
@@ -354,7 +335,7 @@ local configuration_templates = import './configuration_templates.libsonnet';
                 )
               )
               * 8
-            ||| % config._config,
+            |||,
           legendFormat: 'egress - {{instance}}',
         },
       ],
@@ -370,7 +351,6 @@ local configuration_templates = import './configuration_templates.libsonnet';
               sum by (instance)(
                 rate(
                   node_network_receive_bytes{
-                    %(customCommonSelector)s,
                     keyspace="$keyspace",
                     shard=~"$shard",
                     instance=~"$host"
@@ -378,7 +358,7 @@ local configuration_templates = import './configuration_templates.libsonnet';
                 )
               )
               * 8
-            ||| % config._config,
+            |||,
           legendFormat: 'ingress - {{instance}}',
         },
       ],
@@ -394,7 +374,6 @@ local configuration_templates = import './configuration_templates.libsonnet';
               sum by (instance)(
                 rate(
                   node_network_transmit_bytes{
-                    %(customCommonSelector)s,
                     keyspace="$keyspace",
                     shard=~"$shard",
                     instance=~"$host"
@@ -402,7 +381,7 @@ local configuration_templates = import './configuration_templates.libsonnet';
                 )
               )
               * 8
-            ||| % config._config,
+            |||,
           legendFormat: 'egress - {{instance}}',
         },
       ],
@@ -418,13 +397,12 @@ local configuration_templates = import './configuration_templates.libsonnet';
               avg by (keyspace)(
                 rate(
                   node_cpu_seconds_total{
-                    %(customCommonSelector)s,
                     keyspace="$keyspace",
                     mode="idle"
                   }[5m]
                 )
               )
-            ||| % config._config,
+            |||,
           legendFormat: '{{keyspace}}',
         },
       ],
@@ -439,16 +417,14 @@ local configuration_templates = import './configuration_templates.libsonnet';
               1 -
               avg by (keyspace)(
                 node_memory_MemAvailable{
-                  %(customCommonSelector)s,
                   keyspace="$keyspace"
                 }
                 /
                 node_memory_MemTotal{
-                  %(customCommonSelector)s,
                   keyspace="$keyspace"
                 }
               )
-            ||| % config._config,
+            |||,
           legendFormat: '{{keyspace}}',
         },
       ],
@@ -473,12 +449,11 @@ local configuration_templates = import './configuration_templates.libsonnet';
               sum  by (keyspace)(
                 rate(
                   node_network_receive_bytes{
-                    %(customCommonSelector)s,
                     keyspace="$keyspace"
                   }[5m]
                 )
               ) * 8
-            ||| % config._config,
+            |||,
           legendFormat: 'ingress {{keyspace}}',
         },
         {
@@ -487,12 +462,11 @@ local configuration_templates = import './configuration_templates.libsonnet';
               sum by (keyspace)(
                 rate(
                   node_network_transmit_bytes{
-                    %(customCommonSelector)s,
                     keyspace="$keyspace"
                   }[5m]
                 )
               ) * 8
-            ||| % config._config,
+            |||,
           legendFormat: 'egress {{keyspace}}',
         },
       ],
@@ -506,18 +480,16 @@ local configuration_templates = import './configuration_templates.libsonnet';
             |||
               avg by(keyspace)(
                 node_filesystem_avail{
-                    %(customCommonSelector)s,
                     keyspace="$keyspace",
                     mountpoint="/mnt"
                 }
                 /
                 node_filesystem_size{
-                  %(customCommonSelector)s,
                   keyspace="$keyspace",
                   mountpoint="/mnt"
                 }
               )
-            ||| % config._config,
+            |||,
           legendFormat: '{{keyspace}}',
           intervalFactor: 1,
         },
@@ -532,7 +504,6 @@ local configuration_templates = import './configuration_templates.libsonnet';
             |||
               avg by(instance)(
                 node_filesystem_avail{
-                  %(customCommonSelector)s,
                   keyspace="$keyspace",
                   shard=~"$shard",
                   instance=~"$host",
@@ -540,14 +511,13 @@ local configuration_templates = import './configuration_templates.libsonnet';
                 }
                 /
                 node_filesystem_size{
-                  %(customCommonSelector)s,
                   keyspace="$keyspace",
                   shard=~"$shard",
                   instance=~"$host",
                   mountpoint="/mnt"
                 }
               )
-            ||| % config._config,
+            |||,
           legendFormat: '{{instance}}',
           intervalFactor: 1,
         },

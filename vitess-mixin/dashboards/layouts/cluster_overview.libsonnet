@@ -14,7 +14,6 @@ local config = import '../../config.libsonnet';
       helpers.dashboard.getDashboard(config._config.grafanaDashboardMetadata.clusterOverview)
       .addTemplates([
         templates.interval,
-        templates.region,
       ])
       .addLink(helpers.default.getDashboardLink(config._config.dashborardLinks))
       .addPanels([

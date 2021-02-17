@@ -8,8 +8,6 @@
     vtworkerSelector: 'job="vitess-vtworker"',
     vtgateNodeSelector: 'job="node-exporter-vitess-vtgate"',
     mysqlSelector: 'job="mysql"',
-    customCommonSelector: 'region="$region"',
-    defaultRegion: 'us-east-1',
     defaultTimeFrom: 'now-30m',
 
     // Datasource to use

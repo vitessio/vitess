@@ -24,7 +24,6 @@ local configuration_templates = import './configuration_templates.libsonnet';
             count by (keyspace, shard) (
               idelta (
                 mysql_global_status_uptime{
-                  %(customCommonSelector)s,
                   %(mysqlSelector)s
                 }[5m]
               ) < 0
@@ -51,7 +50,6 @@ local configuration_templates = import './configuration_templates.libsonnet';
             sum by (keyspace, shard)(
               rate(
                 mysql_global_status_slow_queries{
-                  %(customCommonSelector)s,
                   %(mysqlSelector)s
                 }[$interval]
               )
@@ -71,13 +69,12 @@ local configuration_templates = import './configuration_templates.libsonnet';
         {
           expr: |||
             sum by(keyspace)(
-              vitess_mixin:mysql_global_status_slow_queries_byregion_keyspace_shard:irate1m{
-                %(customCommonSelector)s,
+              vitess_mixin:mysql_global_status_slow_queries_by_keyspace_shard:irate1m{
                 keyspace="$keyspace"
               }
             )
-          ||| % config._config,
-          legendFormat: '{{region}}/{{keyspace}}',
+          |||,
+          legendFormat: '{{keyspace}}',
           intervalFactor: 1,
         },
       ],
@@ -93,14 +90,13 @@ local configuration_templates = import './configuration_templates.libsonnet';
             sum by(instance)(
               rate(
                 mysql_global_status_slow_queries{
-                  %(customCommonSelector)s,
                   keyspace="$keyspace",
                   shard=~"$shard",
                   instance=~"$host"
                 }[5m]
               )
             )
-          ||| % config._config,
+          |||,
           legendFormat: '{{instance}}',
           intervalFactor: 1,
         },
@@ -116,7 +112,6 @@ local configuration_templates = import './configuration_templates.libsonnet';
           expr: |||
             sum by (keyspace)(
               mysql_slave_status_seconds_behind_master{
-                %(customCommonSelector)s,
                 keyspace="$keyspace"
               }
             ) > 1
@@ -136,7 +131,6 @@ local configuration_templates = import './configuration_templates.libsonnet';
             sum by (keyspace)(
               rate(
                 mysql_global_status_innodb_row_ops_total{
-                  %(customCommonSelector)s,
                   keyspace="$keyspace",
                   operation="read"
                 }[5m]
@@ -159,7 +153,6 @@ local configuration_templates = import './configuration_templates.libsonnet';
             sum by (keyspace)(
               rate(
                 mysql_global_status_rpl_semi_sync_master_tx_avg_wait_time{
-                  %(customCommonSelector)s,
                   keyspace="$keyspace"
                 }[1m]
               )
@@ -181,7 +174,6 @@ local configuration_templates = import './configuration_templates.libsonnet';
             sum by (keyspace)(
               rate(
                 mysql_global_status_rpl_semi_sync_master_tx_avg_wait_time{
-                  %(customCommonSelector)s,
                   keyspace="$keyspace",
                   shard=~"$shard",
                   instance=~"$host"
@@ -202,7 +194,6 @@ local configuration_templates = import './configuration_templates.libsonnet';
           expr: |||
             sum by (keyspace, version)(
               mysql_version_info{
-                %(customCommonSelector)s,
                 keyspace="$keyspace"
               }
             ) 

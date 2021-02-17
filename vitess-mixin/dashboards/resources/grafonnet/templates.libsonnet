@@ -4,16 +4,6 @@ local grafana = import '../../../vendor/grafonnet/grafana.libsonnet';
 
 local template = grafana.template;
 {
-  region:: template.new(
-    'region',
-    '%(dataSource)s' % config._config,
-    'label_values(vtctld_build_number{%(vtctldSelector)s}, region)' % config._config,
-    label='Region',
-    refresh='time',
-    includeAll=false,
-    sort=1,
-  ),
-
   interval:: template.interval(
     name='interval',
     label='Interval',
@@ -26,7 +16,7 @@ local template = grafana.template;
     template.new(
       'keyspace',
       '%(dataSource)s' % config._config,
-      'query_result(sum by(keyspace)(vttablet_build_number{%(customCommonSelector)s, %(vttabletSelector)s}))' % config._config,
+      'query_result(sum by(keyspace)(vttablet_build_number{%(vttabletSelector)s}))',
       regex='.*keyspace="(.*)".*',
       label='Keyspace',
       refresh='load',
@@ -38,7 +28,7 @@ local template = grafana.template;
     template.new(
       'table',
       '%(dataSource)s' % config._config,
-      'query_result(sum by(table)(vitess_mixin:vtgate_queries_processed_by_table:irate1m{%(customCommonSelector)s,keyspace="$keyspace"}))' % config._config,
+      'query_result(sum by(table)(vitess_mixin:vtgate_queries_processed_by_table:irate1m{keyspace="$keyspace"}))',
       regex='.*table="(.*)".*',
       label='Table',
       refresh='time',
@@ -51,7 +41,7 @@ local template = grafana.template;
     template.new(
       'host',
       '%(dataSource)s' % config._config,
-      'label_values(vtgate_build_number{%(customCommonSelector)s}, instance)' % config._config,
+      'label_values(vtgate_build_number{ instance)',
       regex='',
       label='Host(s)',
       refresh='time',
@@ -64,7 +54,7 @@ local template = grafana.template;
     template.new(
       'host',
       '%(dataSource)s' % config._config,
-      'label_values(vttablet_build_number{%(customCommonSelector)s, keyspace="$keyspace", shard=~"$shard"}, instance)' % config._config,
+      'label_values(vttablet_build_number{keyspace="$keyspace", shard=~"$shard"}, instance)',
       regex='',
       label='Host(s)',
       refresh='time',
@@ -74,38 +64,11 @@ local template = grafana.template;
       sort=1
     ),
 
-  hostByCurrentOSRelease::
-    template.new(
-      'host%(currentOSLabel)s' % config._config,
-      '%(nodeDataSource)s' % config._config,
-      'label_values(node_uname_info{instance=~".*tablet.*",release=~"%(currentOSRelease)s.*"}, instance)' % config._config,
-      regex='',
-      label='Host(s) %(currentOSLabel)s' % config._config,
-      refresh='load',
-      multi=true,
-      includeAll=false,
-      allValues='.*',
-      sort=1
-    ),
-  hostByNextOSRelease::
-    template.new(
-      'host%(nextOSLabel)s' % config._config,
-      '%(nodeDataSource)s' % config._config,
-      'label_values(node_uname_info{instance=~".*tablet.*",release=~"%(nextOSRelease)s.*"}, instance)' % config._config,
-      regex='',
-      refresh='load',
-      label='Host(s) %(nextOSLabel)s' % config._config,
-      multi=true,
-      includeAll=false,
-      allValues='.*',
-      sort=1
-    ),
-
   shard::
     template.new(
       'shard',
       '%(dataSource)s' % config._config,
-      'label_values(vttablet_build_number{%(customCommonSelector)s, keyspace="$keyspace"}, shard)' % config._config,
+      'label_values(vttablet_build_number{keyspace="$keyspace"}, shard)',
       regex='',
       label='Shard',
       refresh='time',
@@ -118,7 +81,7 @@ local template = grafana.template;
     template.new(
       'shard',
       '%(dataSource)s' % config._config,
-      'label_values(vttablet_build_number{%(customCommonSelector)s, keyspace="$keyspace"}, shard)' % config._config,
+      'label_values(vttablet_build_number{keyspace="$keyspace"}, shard)',
       regex='',
       label='Shard',
       refresh='time',

@@ -62,12 +62,11 @@ local prometheus = grafana.prometheus;
     .addTarget(prometheus.target(
       |||
         sum by (instance) (
-          vitess_mixin:process_start_time_seconds_byregion_instance_job:sum5m{
-            %(customCommonSelector)s,
+          vitess_mixin:process_start_time_seconds_by_instance_job:sum5m{
             %(vtctldSelector)s
           }
         ) > 0
-      ||| % config._config,
+      |||,
       legendFormat='{{instance}}'
     )),
 }

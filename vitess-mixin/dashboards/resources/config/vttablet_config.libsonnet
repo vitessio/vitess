@@ -44,7 +44,6 @@ local vitess_ct = configuration_templates.prometheus_vitess;
             |||
               count(
                 vttablet_tablet_server_state{
-                  %(customCommonSelector)s,
                   %(vttabletSelector)s,
                   name="SERVING"
                 }
@@ -64,15 +63,14 @@ local vitess_ct = configuration_templates.prometheus_vitess;
           expr:
             |||
               sum by (table)(
-                vitess_mixin:vttablet_query_counts_byregion_keyspace_table:irate1m{
-                  %(customCommonSelector)s,
+                vitess_mixin:vttablet_query_counts_by_keyspace_table:irate1m{
                   keyspace="$keyspace",
                   table=~"$table"
                 }
               )
               or
               vector(0)
-            ||| % config._config,
+            |||,
           legendFormat: '{{table}}',
         },
       ],
@@ -86,15 +84,14 @@ local vitess_ct = configuration_templates.prometheus_vitess;
           expr:
             |||
               sum by (plan)(
-                vitess_mixin:vttablet_query_counts_byregion_keyspace_table_plan:irate1m{
-                  %(customCommonSelector)s,
+                vitess_mixin:vttablet_query_counts_by_keyspace_table_plan:irate1m{
                   keyspace="$keyspace",
                   table=~"$table"
                 }
               )
               or
               vector(0)
-            ||| % config._config,
+            |||,
           legendFormat: '{{plan}}',
         },
       ],
@@ -111,14 +108,13 @@ local vitess_ct = configuration_templates.prometheus_vitess;
               sum by (plan_type)(
                 rate(
                   vttablet_queries_count{
-                    %(customCommonSelector)s,
                     keyspace="$keyspace",
                     shard=~"$shard",
                     instance=~"$host"
                   } [5m]
                 )
               )
-            ||| % config._config,
+            |||,
           legendFormat: '{{plan_type}}',
         },
       ],
@@ -134,12 +130,11 @@ local vitess_ct = configuration_templates.prometheus_vitess;
           expr:
             |||
               sum by (keyspace)(
-                vitess_mixin:vttablet_query_counts_byregion_keyspace:irate1m{
-                  %(customCommonSelector)s,
+                vitess_mixin:vttablet_query_counts_by_keyspace:irate1m{
                   keyspace="$keyspace"
                 }
               )
-            ||| % config._config,
+            |||,
           legendFormat: '{{keyspace}}',
         },
       ],
@@ -159,14 +154,13 @@ local vitess_ct = configuration_templates.prometheus_vitess;
               sum  by (instance)(
                 rate(
                   vttablet_query_counts{
-                    %(customCommonSelector)s,
                     keyspace="$keyspace",
                     shard=~"$shard",
                     instance=~"$host"
                   }[5m]
                 )
               )
-            ||| % config._config,
+            |||,
           legendFormat: '{{instance}}',
         },
       ],
@@ -183,14 +177,13 @@ local vitess_ct = configuration_templates.prometheus_vitess;
               sum  by (shard)(
                 rate(
                   vttablet_query_counts{
-                    %(customCommonSelector)s,
                     keyspace="$keyspace",
                     shard=~"$shard",
                     instance=~"$host"
                   }[5m]
                 )
               )
-            ||| % config._config,
+            |||,
           legendFormat: '{{shard}}',
           intervalFactor: 1,
         },
@@ -208,14 +201,13 @@ local vitess_ct = configuration_templates.prometheus_vitess;
               sum  by (table)(
                 rate(
                   vttablet_query_counts{
-                    %(customCommonSelector)s,
                     keyspace="$keyspace",
                     shard=~"$shard",
                     instance=~"$host"
                   }[5m]
                 )
               )
-            ||| % config._config,
+            |||,
           legendFormat: '{{table}}',
           intervalFactor: 1,
         },
@@ -238,20 +230,18 @@ local vitess_ct = configuration_templates.prometheus_vitess;
                 100
                 *
                 sum(
-                  vitess_mixin:vttablet_errors_byregion_keyspace:irate1m{
-                    %(customCommonSelector)s,
+                  vitess_mixin:vttablet_errors_by_keyspace:irate1m{
                     keyspace="$keyspace"
                   }
                 )
                 /
                 sum(
-                  vitess_mixin:vttablet_query_counts_byregion_keyspace:irate1m{
-                    %(customCommonSelector)s,
+                  vitess_mixin:vttablet_query_counts_by_keyspace:irate1m{
                     keyspace="$keyspace"
                   }
                 )
               )
-            ||| % config._config,
+            |||,
           legendFormat: 'Success rate',
         },
       ],
@@ -269,27 +259,24 @@ local vitess_ct = configuration_templates.prometheus_vitess;
           expr:
             |||
               sum by (keyspace)(
-                vitess_mixin:vttablet_query_error_counts_byregion_keyspace_table:irate1m{
-                  %(customCommonSelector)s,
+                vitess_mixin:vttablet_query_error_counts_by_keyspace_table:irate1m{
                   keyspace="$keyspace"
                 })
               /
               (
                 sum by (keyspace)(
-                  vitess_mixin:vttablet_query_error_counts_byregion_keyspace_table:irate1m{
-                    %(customCommonSelector)s,
+                  vitess_mixin:vttablet_query_error_counts_by_keyspace_table:irate1m{
                     keyspace="$keyspace"
                   }
                 )
                 +
                 sum by (keyspace)(
-                  vitess_mixin:vttablet_query_counts_byregion_keyspace:irate1m{
-                    %(customCommonSelector)s,
+                  vitess_mixin:vttablet_query_counts_by_keyspace:irate1m{
                     keyspace="$keyspace"
                   }
                 )
               )
-            ||| % config._config,
+            |||,
           legendFormat: '{{keyspace}}',
         },
       ],
@@ -310,7 +297,6 @@ local vitess_ct = configuration_templates.prometheus_vitess;
               sum by (instance)(
                 rate(
                   vttablet_query_error_counts{
-                    %(customCommonSelector)s,
                     keyspace="$keyspace",
                     shard=~"$shard",
                     instance=~"$host"
@@ -322,7 +308,6 @@ local vitess_ct = configuration_templates.prometheus_vitess;
                 sum by (instance)(
                   rate(
                     vttablet_query_error_counts{
-                      %(customCommonSelector)s,
                       keyspace="$keyspace",
                       shard=~"$shard",
                       instance=~"$host"
@@ -333,7 +318,6 @@ local vitess_ct = configuration_templates.prometheus_vitess;
                 sum by (instance)(
                   rate(
                     vttablet_query_counts{
-                      %(customCommonSelector)s,
                       keyspace="$keyspace",
                       shard=~"$shard",
                       instance=~"$host"
@@ -341,7 +325,7 @@ local vitess_ct = configuration_templates.prometheus_vitess;
                   )
                 )
               )
-            ||| % config._config,
+            |||,
           legendFormat: '{{instance}}',
         },
       ],
@@ -361,7 +345,6 @@ local vitess_ct = configuration_templates.prometheus_vitess;
               sum by (plan)(
                 rate(
                   vttablet_query_error_counts{
-                    %(customCommonSelector)s,
                     keyspace="$keyspace",
                     shard=~"$shard",
                     instance=~"$host"
@@ -373,7 +356,6 @@ local vitess_ct = configuration_templates.prometheus_vitess;
                 sum by (plan)(
                   rate(
                     vttablet_query_error_counts{
-                      %(customCommonSelector)s,
                       keyspace="$keyspace",
                       shard=~"$shard",
                       instance=~"$host"
@@ -384,7 +366,6 @@ local vitess_ct = configuration_templates.prometheus_vitess;
                 sum by (plan)(
                   rate(
                     vttablet_query_counts{
-                      %(customCommonSelector)s,
                       keyspace="$keyspace",
                       shard=~"$shard",
                       instance=~"$host"
@@ -392,7 +373,7 @@ local vitess_ct = configuration_templates.prometheus_vitess;
                   )
                 )
               )
-            ||| % config._config,
+            |||,
           legendFormat: '{{plan}}',
         },
       ],
@@ -413,7 +394,6 @@ local vitess_ct = configuration_templates.prometheus_vitess;
               sum by (shard)(
                 rate(
                   vttablet_query_error_counts{
-                    %(customCommonSelector)s,
                     keyspace="$keyspace",
                     shard=~"$shard",
                     instance=~"$host"
@@ -425,7 +405,6 @@ local vitess_ct = configuration_templates.prometheus_vitess;
                 sum by (shard)(
                   rate(
                     vttablet_query_error_counts{
-                      %(customCommonSelector)s,
                       keyspace="$keyspace",
                       shard=~"$shard",
                       instance=~"$host"
@@ -436,7 +415,6 @@ local vitess_ct = configuration_templates.prometheus_vitess;
                 sum by (shard)(
                   rate(
                     vttablet_query_counts{
-                      %(customCommonSelector)s,
                       keyspace="$keyspace",
                       shard=~"$shard",
                       instance=~"$host"
@@ -444,7 +422,7 @@ local vitess_ct = configuration_templates.prometheus_vitess;
                   )
                 )
               )
-            ||| % config._config,
+            |||,
           legendFormat: '{{shard}}',
         },
       ],
@@ -465,7 +443,6 @@ local vitess_ct = configuration_templates.prometheus_vitess;
               sum by (table)(
                 rate(
                   vttablet_query_error_counts{
-                    %(customCommonSelector)s,
                     keyspace="$keyspace",
                     shard=~"$shard",
                     instance=~"$host"
@@ -477,7 +454,6 @@ local vitess_ct = configuration_templates.prometheus_vitess;
                 sum by (table)(
                   rate(
                     vttablet_query_error_counts{
-                      %(customCommonSelector)s,
                       keyspace="$keyspace",
                       shard=~"$shard",
                       instance=~"$host"
@@ -488,7 +464,6 @@ local vitess_ct = configuration_templates.prometheus_vitess;
                 sum by (table)(
                   rate(
                     vttablet_query_counts{
-                      %(customCommonSelector)s,
                       keyspace="$keyspace",
                       shard=~"$shard",
                       instance=~"$host"
@@ -496,7 +471,7 @@ local vitess_ct = configuration_templates.prometheus_vitess;
                   )
                 )
               )
-            ||| % config._config,
+            |||,
           legendFormat: '{{table}}',
         },
       ],
@@ -510,13 +485,12 @@ local vitess_ct = configuration_templates.prometheus_vitess;
           expr:
             |||
               sum  by (table)(
-                vitess_mixin:vttablet_query_error_counts_byregion_keyspace_table:irate1m{
-                  %(customCommonSelector)s,
+                vitess_mixin:vttablet_query_error_counts_by_keyspace_table:irate1m{
                   keyspace="$keyspace",
                   table=~"$table"
                 }
               )
-            ||| % config._config,
+            |||,
           legendFormat: '{{table}}',
         },
       ],
@@ -530,13 +504,12 @@ local vitess_ct = configuration_templates.prometheus_vitess;
           expr:
             |||
               sum  by (plan,table)(
-                vitess_mixin:vttablet_query_error_counts_byregion_keyspace_table_plan:irate1m{
-                  %(customCommonSelector)s,
+                vitess_mixin:vttablet_query_error_counts_by_keyspace_table_plan:irate1m{
                   keyspace="$keyspace",
                   table=~"$table"
                 }
               )
-            ||| % config._config,
+            |||,
           legendFormat: '{{plan}} / {{table}}',
         },
       ],
@@ -550,13 +523,12 @@ local vitess_ct = configuration_templates.prometheus_vitess;
           expr:
             |||
               sum by (shard,table)(
-                vitess_mixin:vttablet_query_error_counts_byregion_keyspace_table_shard:irate1m{
-                  %(customCommonSelector)s,
+                vitess_mixin:vttablet_query_error_counts_by_keyspace_table_shard:irate1m{
                   keyspace="$keyspace",
                   table=~"$table"
                 }
               )
-            ||| % config._config,
+            |||,
           legendFormat: '{{shard}} / {{table}}',
         },
       ],
@@ -570,13 +542,12 @@ local vitess_ct = configuration_templates.prometheus_vitess;
           expr:
             |||
               sum by (table)(
-                vitess_mixin:vttablet_query_row_counts_byregion_keyspace_table:rate1m{
-                  %(customCommonSelector)s,
+                vitess_mixin:vttablet_query_row_counts_by_keyspace_table:rate1m{
                   keyspace="$keyspace",
                   table=~"$table"
                 }
               )
-            ||| % config._config,
+            |||,
           legendFormat: '{{table}}',
         },
       ],
@@ -589,13 +560,12 @@ local vitess_ct = configuration_templates.prometheus_vitess;
           expr:
             |||
               sum by (plan)(
-                vitess_mixin:vttablet_query_row_counts_byregion_keyspace_table_plan:rate1m{
-                  %(customCommonSelector)s,
+                vitess_mixin:vttablet_query_row_counts_by_keyspace_table_plan:rate1m{
                   keyspace="$keyspace",
                   table=~"$table"
                 }
               )
-            ||| % config._config,
+            |||,
           legendFormat: '{{plan}}',
         },
       ],
@@ -608,13 +578,12 @@ local vitess_ct = configuration_templates.prometheus_vitess;
           expr:
             |||
               sum by (shard)(
-                vitess_mixin:vttablet_query_row_counts_byregion_keyspace_table_shard:rate1m{
-                  %(customCommonSelector)s,
+                vitess_mixin:vttablet_query_row_counts_by_keyspace_table_shard:rate1m{
                   keyspace="$keyspace",
                   table=~"$table"
                 }
               )
-            ||| % config._config,
+            |||,
           legendFormat: '{{shard}}',
         },
       ],
@@ -628,14 +597,13 @@ local vitess_ct = configuration_templates.prometheus_vitess;
             |||
               sum by (table) (
                 rate(vttablet_query_row_counts{
-                    %(customCommonSelector)s,
                     keyspace=~"$keyspace",
                     shard=~"$shard",
                     instance=~"$host"
                   }[1m]
                 )
               )
-            ||| % config._config,
+            |||,
           legendFormat: '{{table}}',
         },
       ],
@@ -649,14 +617,13 @@ local vitess_ct = configuration_templates.prometheus_vitess;
             |||
               sum by (plan) (
                 rate(vttablet_query_row_counts{
-                    %(customCommonSelector)s,
                     keyspace=~"$keyspace",
                     shard=~"$shard",
                     instance=~"$host"
                   }[1m]
                 )
               )
-            ||| % config._config,
+            |||,
           legendFormat: '{{plan}}',
         },
       ],
@@ -670,37 +637,34 @@ local vitess_ct = configuration_templates.prometheus_vitess;
           expr:
             |||
               sum(
-                vitess_mixin:vttablet_queries_sum_byregion_keyspace:rate1m{
-                  %(customCommonSelector)s,
-                  keyspace="$keyspace"}
-                )
-              /
-              sum (
-                vitess_mixin:vttablet_queries_count_byregion_keyspace:rate1m{
-                  %(customCommonSelector)s,
+                vitess_mixin:vttablet_queries_sum_by_keyspace:rate1m{
                   keyspace="$keyspace"
                 }
               )
-            ||| % config._config,
+              /
+              sum (
+                vitess_mixin:vttablet_queries_count_by_keyspace:rate1m{
+                  keyspace="$keyspace"
+                }
+              )
+            |||,
           legendFormat: 'Total',
         },
         {
           expr:
             |||
               sum by (shard)(
-                vitess_mixin:vttablet_queries_sum_byregion_keyspace_shard:rate1m{
-                  %(customCommonSelector)s,
+                vitess_mixin:vttablet_queries_sum_by_keyspace_shard:rate1m{
                   keyspace="$keyspace"
                 }
               )
               /
               sum by(shard)(
-                vitess_mixin:vttablet_queries_count_byregion_keyspace_shard:rate1m{
-                  %(customCommonSelector)s,
+                vitess_mixin:vttablet_queries_count_by_keyspace_shard:rate1m{
                   keyspace="$keyspace"
                 }
               )
-            ||| % config._config,
+            |||,
           legendFormat: '{{shard}}',
         },
       ],
@@ -716,13 +680,12 @@ local vitess_ct = configuration_templates.prometheus_vitess;
               histogram_quantile(
                 0.50,
                 sum by (le)(
-                  vitess_mixin:vttablet_queries_bucket_byregion_keyspace:rate1m{
-                    %(customCommonSelector)s,
+                  vitess_mixin:vttablet_queries_bucket_by_keyspace:rate1m{
                     keyspace="$keyspace"
                   }
                 )
               )
-            ||| % config._config,
+            |||,
           legendFormat: 'Total',
         },
         {
@@ -731,13 +694,12 @@ local vitess_ct = configuration_templates.prometheus_vitess;
               histogram_quantile(
                 0.50,
                 sum by (shard, le)(
-                  vitess_mixin:vttablet_queries_bucket_byregion_keyspace_shard:rate1m{
-                    region="$region",
+                  vitess_mixin:vttablet_queries_bucket_by_keyspace_shard:rate1m{
                     keyspace="$keyspace"
                   }
                 )
               )
-            ||| % config._config,
+            |||,
           legendFormat: '{{shard}}',
         },
       ],
@@ -753,13 +715,12 @@ local vitess_ct = configuration_templates.prometheus_vitess;
               histogram_quantile(
                 0.95,
                 sum by (le)(
-                  vitess_mixin:vttablet_queries_bucket_byregion_keyspace:rate1m{
-                    %(customCommonSelector)s,
+                  vitess_mixin:vttablet_queries_bucket_by_keyspace:rate1m{
                     keyspace="$keyspace"
                   }
                 )
               )
-            ||| % config._config,
+            |||,
           legendFormat: 'Total',
         },
         {
@@ -768,13 +729,12 @@ local vitess_ct = configuration_templates.prometheus_vitess;
               histogram_quantile(
                 0.95,
                 sum by (shard, le)(
-                  vitess_mixin:vttablet_queries_bucket_byregion_keyspace_shard:rate1m{
-                    region="$region",
+                  vitess_mixin:vttablet_queries_bucket_by_keyspace_shard:rate1m{
                     keyspace="$keyspace"
                   }
                 )
               )
-            ||| % config._config,
+            |||,
           legendFormat: '{{shard}}',
         },
       ],
@@ -791,13 +751,12 @@ local vitess_ct = configuration_templates.prometheus_vitess;
               histogram_quantile(
                 0.999,
                 sum by (le)(
-                  vitess_mixin:vttablet_queries_bucket_byregion_keyspace:rate1m{
-                    %(customCommonSelector)s,
+                  vitess_mixin:vttablet_queries_bucket_by_keyspace:rate1m{
                     keyspace="$keyspace"
                   }
                 )
               )
-            ||| % config._config,
+            |||,
           legendFormat: 'Total',
         },
         {
@@ -806,13 +765,12 @@ local vitess_ct = configuration_templates.prometheus_vitess;
               histogram_quantile(
                 0.999,
                 sum by (shard, le)(
-                  vitess_mixin:vttablet_queries_bucket_byregion_keyspace_shard:rate1m{
-                    %(customCommonSelector)s,
+                  vitess_mixin:vttablet_queries_bucket_by_keyspace_shard:rate1m{
                     keyspace="$keyspace"
                   }
                 )
               )
-            ||| % config._config,
+            |||,
           legendFormat: '{{shard}}',
         },
       ],
@@ -830,13 +788,12 @@ local vitess_ct = configuration_templates.prometheus_vitess;
             |||
               histogram_quantile(
                 0.99,sum by(keyspace,le)(
-                  vitess_mixin:vttablet_queries_bucket_byregion_keyspace:rate1m{
-                    %(customCommonSelector)s,
+                  vitess_mixin:vttablet_queries_bucket_by_keyspace:rate1m{
                     keyspace="$keyspace"
                   }
                 )
               )
-            ||| % config._config,
+            |||,
           legendFormat: '{{keyspace}}',
         },
       ],
@@ -857,7 +814,6 @@ local vitess_ct = configuration_templates.prometheus_vitess;
               sum by(instance)(
                 rate(
                   vttablet_queries_sum{
-                    %(customCommonSelector)s,
                     keyspace="$keyspace",
                     shard=~"$shard",
                     instance=~"$host"
@@ -868,14 +824,13 @@ local vitess_ct = configuration_templates.prometheus_vitess;
               sum by(instance)(
                 rate(
                   vttablet_queries_count{
-                    %(customCommonSelector)s,
                     keyspace="$keyspace",
                     shard=~"$shard",
                     instance=~"$host"
                   }[5m]
                 )
               )
-            ||| % config._config,
+            |||,
           legendFormat: '{{instance}}',
         },
       ],
@@ -896,7 +851,6 @@ local vitess_ct = configuration_templates.prometheus_vitess;
                 0.50,sum by(instance,le)(
                   rate(
                     vttablet_queries_bucket{
-                      %(customCommonSelector)s,
                       keyspace="$keyspace",
                       shard=~"$shard",
                       instance=~"$host"
@@ -904,7 +858,7 @@ local vitess_ct = configuration_templates.prometheus_vitess;
                   )
                 )
               )
-            ||| % config._config,
+            |||,
           legendFormat: '{{instance}}',
         },
       ],
@@ -925,7 +879,6 @@ local vitess_ct = configuration_templates.prometheus_vitess;
                 0.95,sum by(instance,le)(
                   rate(
                     vttablet_queries_bucket{
-                      %(customCommonSelector)s,
                       keyspace="$keyspace",
                       shard=~"$shard",
                       instance=~"$host"
@@ -933,7 +886,7 @@ local vitess_ct = configuration_templates.prometheus_vitess;
                   )
                 )
               )
-            ||| % config._config,
+            |||,
           legendFormat: '{{instance}}',
         },
       ],
@@ -954,7 +907,6 @@ local vitess_ct = configuration_templates.prometheus_vitess;
                 0.99,sum by(instance,le)(
                   rate(
                     vttablet_queries_bucket{
-                      %(customCommonSelector)s,
                       keyspace="$keyspace",
                       shard=~"$shard",
                       instance=~"$host"
@@ -962,7 +914,7 @@ local vitess_ct = configuration_templates.prometheus_vitess;
                   )
                 )
               )
-            ||| % config._config,
+            |||,
           legendFormat: '{{instance}}',
         },
       ],
@@ -983,7 +935,6 @@ local vitess_ct = configuration_templates.prometheus_vitess;
                 0.99,sum by(plan_type,le)(
                   rate(
                     vttablet_queries_bucket{
-                      %(customCommonSelector)s,
                       keyspace="$keyspace",
                       shard=~"$shard",
                       instance=~"$host"
@@ -991,7 +942,7 @@ local vitess_ct = configuration_templates.prometheus_vitess;
                   )
                 )
               )
-            ||| % config._config,
+            |||,
           legendFormat: '{{plan_type}}',
         },
       ],
@@ -1012,7 +963,6 @@ local vitess_ct = configuration_templates.prometheus_vitess;
                 0.99,sum by(shard,le)(
                   rate(
                     vttablet_queries_bucket{
-                      %(customCommonSelector)s,
                       keyspace="$keyspace",
                       shard=~"$shard",
                       instance=~"$host"
@@ -1020,7 +970,7 @@ local vitess_ct = configuration_templates.prometheus_vitess;
                   )
                 )
               )
-            ||| % config._config,
+            |||,
           legendFormat: '{{shard}}',
         },
       ],
@@ -1034,37 +984,33 @@ local vitess_ct = configuration_templates.prometheus_vitess;
           expr:
             |||
               sum(
-                vitess_mixin:vttablet_transactions_sum_byregion_keyspace:rate1m{
-                  %(customCommonSelector)s,
+                vitess_mixin:vttablet_transactions_sum_by_keyspace:rate1m{
                   keyspace="$keyspace"
                 }
               )
               /
               sum (
-                vitess_mixin:vttablet_transactions_count_byregion_keyspace:rate1m{
-                  %(customCommonSelector)s,
+                vitess_mixin:vttablet_transactions_count_by_keyspace:rate1m{
                   keyspace="$keyspace"
                 }
               )
-            ||| % config._config,
+            |||,
           legendFormat: 'Total',
         },
         {
           expr:
             |||
               sum by (shard)(
-                vitess_mixin:vttablet_transactions_sum_byregion_keyspace_shard:rate1m{
-                  %(customCommonSelector)s,
+                vitess_mixin:vttablet_transactions_sum_by_keyspace_shard:rate1m{
                   keyspace="$keyspace"
                 }
               )
               /
               sum by (shard)(
-                vitess_mixin:vttablet_transactions_count_byregion_keyspace_shard:rate1m{
-                  %(customCommonSelector)s,
+                vitess_mixin:vttablet_transactions_count_by_keyspace_shard:rate1m{
                   keyspace="$keyspace"}
                 )
-            ||| % config._config,
+            |||,
           legendFormat: '{{shard}}',
         },
       ],
@@ -1080,13 +1026,12 @@ local vitess_ct = configuration_templates.prometheus_vitess;
               histogram_quantile(
                 0.50,
                 sum by (le)(
-                  vitess_mixin:vttablet_transactions_bucket_byregion_keyspace:rate1m{
-                    %(customCommonSelector)s,
+                  vitess_mixin:vttablet_transactions_bucket_by_keyspace:rate1m{
                     keyspace="$keyspace"
                   }
                 )
               )
-            ||| % config._config,
+            |||,
           legendFormat: 'Total',
         },
         {
@@ -1095,13 +1040,12 @@ local vitess_ct = configuration_templates.prometheus_vitess;
               histogram_quantile(
                 0.50,
                 sum by (le,shard)(
-                  vitess_mixin:vttablet_transactions_bucket_byregion_keyspace_shard:rate1m{
-                    %(customCommonSelector)s,
+                  vitess_mixin:vttablet_transactions_bucket_by_keyspace_shard:rate1m{
                     keyspace="$keyspace"
                   }
                 )
               )
-            ||| % config._config,
+            |||,
           legendFormat: '{{shard}}',
         },
       ],
@@ -1117,13 +1061,12 @@ local vitess_ct = configuration_templates.prometheus_vitess;
               histogram_quantile(
                 0.95,
                 sum by (le)(
-                  vitess_mixin:vttablet_transactions_bucket_byregion_keyspace:rate1m{
-                    %(customCommonSelector)s,
+                  vitess_mixin:vttablet_transactions_bucket_by_keyspace:rate1m{
                     keyspace="$keyspace"
                   }
                 )
               )
-            ||| % config._config,
+            |||,
           legendFormat: 'Total',
         },
         {
@@ -1132,13 +1075,12 @@ local vitess_ct = configuration_templates.prometheus_vitess;
               histogram_quantile(
                 0.95,
                 sum by (le,shard)(
-                  vitess_mixin:vttablet_transactions_bucket_byregion_keyspace_shard:rate1m{
-                    %(customCommonSelector)s,
+                  vitess_mixin:vttablet_transactions_bucket_by_keyspace_shard:rate1m{
                     keyspace="$keyspace"
                   }
                 )
               )
-            ||| % config._config,
+            |||,
           legendFormat: '{{shard}}',
         },
       ],
@@ -1154,13 +1096,12 @@ local vitess_ct = configuration_templates.prometheus_vitess;
               histogram_quantile(
                 0.999,
                 sum by (le)(
-                  vitess_mixin:vttablet_transactions_bucket_byregion_keyspace:rate1m{
-                    %(customCommonSelector)s,
+                  vitess_mixin:vttablet_transactions_bucket_by_keyspace:rate1m{
                     keyspace="$keyspace"
                   }
                 )
               )
-            ||| % config._config,
+            |||,
           legendFormat: 'Total',
         },
         {
@@ -1169,13 +1110,12 @@ local vitess_ct = configuration_templates.prometheus_vitess;
               histogram_quantile(
                 0.999,
                 sum by (le,shard)(
-                  vitess_mixin:vttablet_transactions_bucket_byregion_keyspace_shard:rate1m{
-                    %(customCommonSelector)s,
+                  vitess_mixin:vttablet_transactions_bucket_by_keyspace_shard:rate1m{
                     keyspace="$keyspace"
                   }
                 )
               )
-            ||| % config._config,
+            |||,
           legendFormat: '{{shard}}',
         },
       ],
@@ -1196,7 +1136,6 @@ local vitess_ct = configuration_templates.prometheus_vitess;
               sum by(instance)(
                 rate(
                   vttablet_transactions_sum{
-                    %(customCommonSelector)s,
                     keyspace="$keyspace",
                     shard=~"$shard",
                     instance=~"$host"
@@ -1207,14 +1146,13 @@ local vitess_ct = configuration_templates.prometheus_vitess;
               sum by(instance)(
                 rate(
                   vttablet_transactions_count{
-                    %(customCommonSelector)s,
                     keyspace="$keyspace",
                     shard=~"$shard",
                     instance=~"$host"
                   }[5m]
                 )
               )
-            ||| % config._config,
+            |||,
           legendFormat: '{{instance}}',
         },
       ],
@@ -1235,7 +1173,6 @@ local vitess_ct = configuration_templates.prometheus_vitess;
                 0.50,sum by(instance,le)(
                   rate(
                     vttablet_transactions_bucket{
-                      %(customCommonSelector)s,
                       keyspace="$keyspace",
                       shard=~"$shard",
                       instance=~"$host"
@@ -1243,7 +1180,7 @@ local vitess_ct = configuration_templates.prometheus_vitess;
                   )
                 )
               )
-            ||| % config._config,
+            |||,
           legendFormat: '{{instance}}',
         },
       ],
@@ -1264,7 +1201,6 @@ local vitess_ct = configuration_templates.prometheus_vitess;
                 0.95,sum by(instance,le)(
                   rate(
                     vttablet_transactions_bucket{
-                      %(customCommonSelector)s,
                       keyspace="$keyspace",
                       shard=~"$shard",
                       instance=~"$host"
@@ -1272,7 +1208,7 @@ local vitess_ct = configuration_templates.prometheus_vitess;
                   )
                 )
               )
-            ||| % config._config,
+            |||,
           legendFormat: '{{instance}}',
         },
       ],
@@ -1289,11 +1225,9 @@ local vitess_ct = configuration_templates.prometheus_vitess;
           expr:
             |||
               sum by (keyspace,shard)(
-                vitess_mixin:vttablet_kills_byregion_keyspace_shard:irate1m{
-                  %(customCommonSelector)s
-                }
+                vitess_mixin:vttablet_kills_by_keyspace_shard:irate1m
               ) > 0
-            ||| % config._config,
+            |||,
           legendFormat: '{{keyspace}}/{{shard}}',
         },
       ],
@@ -1319,8 +1253,7 @@ local vitess_ct = configuration_templates.prometheus_vitess;
           expr:
             |||
               sum by (keyspace,shard) (
-                vitess_mixin:process_start_time_seconds_byregion_keyspace_shard_job:sum5m{
-                  %(customCommonSelector)s,
+                vitess_mixin:process_start_time_seconds_by_keyspace_shard_job:sum5m{
                   %(vttabletSelector)s
                 }
               ) > 0
@@ -1341,13 +1274,12 @@ local vitess_ct = configuration_templates.prometheus_vitess;
             |||
               sum by (instance)(
                 vttablet_conn_pool_available{
-                  %(customCommonSelector)s,
-                  keyspace='$keyspace',
+                 keyspace='$keyspace',
                   shard=~'$shard',
                   instance=~'$host'
                 }
               )
-            ||| % config._config,
+            |||,
           legendFormat: '{{instance}}',
         },
       ],
@@ -1364,13 +1296,12 @@ local vitess_ct = configuration_templates.prometheus_vitess;
             |||
               sum by(instance) (
                 vttablet_conn_pool_active{
-                  %(customCommonSelector)s,
                   keyspace='$keyspace',
                   shard=~'$shard',
                   instance=~'$host'
                 }
               )
-            ||| % config._config,
+            |||,
           legendFormat: '{{instance}}',
         },
       ],
@@ -1388,14 +1319,13 @@ local vitess_ct = configuration_templates.prometheus_vitess;
               sum by (instance)(
                 rate(
                   vttablet_conn_pool_idle_closed{
-                    %(customCommonSelector)s,
                     keyspace="$keyspace",
                     shard=~"$shard",
                     instance=~"$host"
                   }[5m]
                 )
               )
-            ||| % config._config,
+            |||,
           legendFormat: '{{instance}}',
         },
       ],
@@ -1413,14 +1343,13 @@ local vitess_ct = configuration_templates.prometheus_vitess;
               sum by (instance)(
                 rate(
                   vttablet_conn_pool_wait_count{
-                    %(customCommonSelector)s,
                     keyspace='$keyspace',
                     shard=~'$shard',
                     instance=~'$host'
                   }[5m]
                 )
               )
-            ||| % config._config,
+            |||,
           legendFormat: '{{instance}}',
         },
       ],
@@ -1438,7 +1367,6 @@ local vitess_ct = configuration_templates.prometheus_vitess;
               sum by (instance) (
                 rate(
                   vttablet_conn_pool_wait_time{
-                    %(customCommonSelector)s,
                     keyspace="$keyspace",
                     shard=~"$shard",
                     instance=~"$host"
@@ -1449,14 +1377,13 @@ local vitess_ct = configuration_templates.prometheus_vitess;
               sum by (instance) (
                 rate(
                   vttablet_conn_pool_wait_count{
-                    %(customCommonSelector)s,
                     keyspace="$keyspace",
                     shard=~"$shard",
                     instance=~"$host"
                   }[5m]
                 )
               )
-            ||| % config._config,
+            |||,
           legendFormat: '{{instance}}',
         },
       ],
@@ -1473,13 +1400,12 @@ local vitess_ct = configuration_templates.prometheus_vitess;
           expr: |||
             sum by (instance)(
               vitess_mixin:vttablet_kills:irate1m{
-                %(customCommonSelector)s,
                 keyspace=~"$keyspace",
                 shard=~"$shard",
                 instance=~"$host"
               } > 0
             )
-          ||| % config._config,
+          |||,
           legendFormat: '{{instance}}',
         },
       ],
@@ -1495,11 +1421,10 @@ local vitess_ct = configuration_templates.prometheus_vitess;
               vitess_mixin:vttablet_errors:irate1m{
                 keyspace=~"$keyspace",
                 shard=~"$shard",
-                instance=~"$host",
-                region=~"$region"
+                instance=~"$host"
               } > 0
             )
-          ||| % config._config,
+          |||,
           legendFormat: 'ErrorCode: {{error_code}}',
         },
       ],
@@ -1516,13 +1441,12 @@ local vitess_ct = configuration_templates.prometheus_vitess;
             |||
               sum by (instance)(
                 vttablet_transaction_pool_available{
-                  %(customCommonSelector)s,
                   keyspace='$keyspace',
                   shard=~'$shard',
                   instance=~'$host'
                 }
               )
-            ||| % config._config,
+            |||,
           legendFormat: '{{instance}}',
         },
       ],
@@ -1539,13 +1463,12 @@ local vitess_ct = configuration_templates.prometheus_vitess;
             |||
               sum by(instance) (
                 vttablet_transaction_pool_active{
-                  %(customCommonSelector)s,
                   keyspace='$keyspace',
                   shard=~'$shard',
                   instance=~'$host'
                 }
               )
-            ||| % config._config,
+            |||,
           legendFormat: '{{instance}}',
         },
       ],
@@ -1563,14 +1486,13 @@ local vitess_ct = configuration_templates.prometheus_vitess;
               sum by (instance)(
                 rate(
                   vttablet_transaction_pool_idle_closed{
-                    %(customCommonSelector)s,
                     keyspace="$keyspace",
                     shard=~"$shard",
                     instance=~"$host"
                   }[5m]
                 )
               )
-            ||| % config._config,
+            |||,
           legendFormat: '{{instance}}',
         },
       ],
@@ -1588,14 +1510,13 @@ local vitess_ct = configuration_templates.prometheus_vitess;
               sum by (instance)(
                 rate(
                   vttablet_transaction_pool_wait_count{
-                    %(customCommonSelector)s,
                     keyspace='$keyspace',
                     shard=~'$shard',
                     instance=~'$host'
                   }[5m]
                 )
               )
-            ||| % config._config,
+            |||,
           legendFormat: '{{instance}}',
         },
       ],
@@ -1613,7 +1534,6 @@ local vitess_ct = configuration_templates.prometheus_vitess;
               sum by (instance) (
                 rate(
                   vttablet_transaction_pool_wait_time{
-                    %(customCommonSelector)s,
                     keyspace="$keyspace",
                     shard=~"$shard",
                     instance=~"$host"
@@ -1624,14 +1544,13 @@ local vitess_ct = configuration_templates.prometheus_vitess;
               sum by (instance) (
                 rate(
                   vttablet_transaction_pool_wait_count{
-                    %(customCommonSelector)s,
                     keyspace="$keyspace",
                     shard=~"$shard",
                     instance=~"$host"
                   }[5m]
                 )
               )
-            ||| % config._config,
+            |||,
           legendFormat: '{{instance}}',
         },
       ],
@@ -1647,14 +1566,13 @@ local vitess_ct = configuration_templates.prometheus_vitess;
               sum by(instance)(
                 rate(
                   go_gc_duration_seconds_count{
-                    %(customCommonSelector)s,
                     keyspace=~"$keyspace", 
                     shard=~"$shard", 
                     instance=~"$host"
                   }[1m]
                 )
               )
-            ||| % config._config,
+            |||,
           legendFormat: '{{instance}}',
           intervalFactor: 1,
         },
@@ -1672,14 +1590,13 @@ local vitess_ct = configuration_templates.prometheus_vitess;
               sum by(instance)(
                 rate(
                   go_gc_duration_seconds_count{
-                    %(customCommonSelector)s,
                     keyspace=~"$keyspace", 
                     shard=~"$shard", 
                     instance=~"$host"
                   }[1m]
                 )
               )
-            ||| % config._config,
+            |||,
           legendFormat: '{{instance}}',
           intervalFactor: 1,
         },
@@ -1695,14 +1612,13 @@ local vitess_ct = configuration_templates.prometheus_vitess;
               sum by(quantile)(
                 rate(
                   go_gc_duration_seconds{
-                    %(customCommonSelector)s,
                     keyspace=~"$keyspace", 
                     shard=~"$shard", 
                     instance=~"$host"
                   }[1m]
                 )
               )
-            ||| % config._config,
+            |||,
           legendFormat: 'p{{quantile}}',
           intervalFactor: 1,
         },
@@ -1719,7 +1635,6 @@ local vitess_ct = configuration_templates.prometheus_vitess;
               sum by (instance) (
                 rate(
                   vttablet_mysql_sum{
-                    %(customCommonSelector)s,
                     keyspace=~"$keyspace",
                     shard=~"$shard",
                     instance=~"$host"
@@ -1730,14 +1645,13 @@ local vitess_ct = configuration_templates.prometheus_vitess;
               sum by (instance) (
                 rate(
                   vttablet_mysql_count{
-                    %(customCommonSelector)s,
                     keyspace=~"$keyspace",
                     shard=~"$shard",
                     instance=~"$host"
                   }[1m]
                 )
               )
-            ||| % config._config,
+            |||,
           legendFormat: '{{instance}}',
         },
       ],
@@ -1754,7 +1668,6 @@ local vitess_ct = configuration_templates.prometheus_vitess;
               sum by (le, instance) (
                 rate(
                   vttablet_mysql_bucket{
-                    %(customCommonSelector)s,
                     operation="Exec",
                     keyspace=~"$keyspace",
                     shard=~"$shard",
@@ -1763,7 +1676,7 @@ local vitess_ct = configuration_templates.prometheus_vitess;
                 )
               )
             ) 
-          ||| % config._config,
+          |||,
           legendFormat: '{{instance}}',
         },
       ],
@@ -1780,7 +1693,6 @@ local vitess_ct = configuration_templates.prometheus_vitess;
               sum by (le, instance) (
                 rate(
                   vttablet_mysql_bucket{
-                    %(customCommonSelector)s,
                     operation="Exec",
                     keyspace=~"$keyspace",
                     shard=~"$shard",
@@ -1789,7 +1701,7 @@ local vitess_ct = configuration_templates.prometheus_vitess;
                 )
               )
             ) 
-          ||| % config._config,
+          |||,
           legendFormat: '{{instance}}',
         },
       ],
@@ -1811,12 +1723,11 @@ local vitess_ct = configuration_templates.prometheus_vitess;
               sum by (instance) (
                 rate(
                   vttablet_waits_count{
-                    %(customCommonSelector)s,
                     keyspace=~"$keyspace",
                     shard=~"$shard",
                     type="Consolidations",
                     instance=~"$host"}[1m]))
-            ||| % config._config,
+            |||,
           legendFormat: '{{instance}}',
         },
       ],
@@ -1838,7 +1749,6 @@ local vitess_ct = configuration_templates.prometheus_vitess;
               sum by (instance) (
                 rate(
                   vttablet_waits_sum{
-                    %(customCommonSelector)s,
                     keyspace=~"$keyspace",
                     shard=~"$shard",
                     type="Consolidations",
@@ -1850,7 +1760,6 @@ local vitess_ct = configuration_templates.prometheus_vitess;
               sum by (instance) (
                 rate(
                   vttablet_waits_count{
-                    %(customCommonSelector)s,
                     keyspace=~"$keyspace",
                     shard=~"$shard",
                     type="Consolidations",
@@ -1858,7 +1767,7 @@ local vitess_ct = configuration_templates.prometheus_vitess;
                   }[1m]
                 )
               )
-            ||| % config._config,
+            |||,
           legendFormat: '{{instance}}',
         },
       ],
@@ -1882,7 +1791,6 @@ local vitess_ct = configuration_templates.prometheus_vitess;
                 sum by (le, instance)(
                   rate(
                     vttablet_waits_bucket{
-                      %(customCommonSelector)s,
                       keyspace=~"$keyspace",
                       shard=~"$shard",
                       type="Consolidations",
@@ -1891,7 +1799,7 @@ local vitess_ct = configuration_templates.prometheus_vitess;
                   )
                 )
               ) 
-            ||| % config._config,
+            |||,
           legendFormat: '{{instance}}',
         },
       ],
@@ -1907,7 +1815,6 @@ local vitess_ct = configuration_templates.prometheus_vitess;
               sum by (instance)(
                 rate(
                   vtgate_vttablet_call_sum{
-                    %(customCommonSelector)s,
                     keyspace=~"$keyspace",
                     shard_name=~"$shard"
                   }[1m]
@@ -1917,13 +1824,12 @@ local vitess_ct = configuration_templates.prometheus_vitess;
               sum by (instance)(
                 rate(
                   vtgate_vttablet_call_count{
-                    %(customCommonSelector)s,
                     keyspace=~"$keyspace",
                     shard_name=~"$shard"
                   }[1m]
                 )
               )
-            ||| % config._config,
+            |||,
           legendFormat: '{{instance}}',
         },
       ],
@@ -1938,7 +1844,6 @@ local vitess_ct = configuration_templates.prometheus_vitess;
             sum by (shard_name, db_type)(
               rate(
                 vtgate_vttablet_call_sum{
-                  %(customCommonSelector)s,
                   keyspace=~"$keyspace",
                   shard_name=~"$shard"
                 }[1m]
@@ -1947,13 +1852,12 @@ local vitess_ct = configuration_templates.prometheus_vitess;
             sum by (shard_name, db_type)(
               rate(
                 vtgate_vttablet_call_count{
-                  %(customCommonSelector)s,
                   keyspace=~"$keyspace",
                   shard_name=~"$shard"
                 }[1m]
               )
             )
-          ||| % config._config,
+          |||,
           legendFormat: '{{shard_name}}-{{db_type}}',
         },
       ],
@@ -1979,12 +1883,10 @@ local vitess_ct = configuration_templates.prometheus_vitess;
       target:
         {
           expr: |||
-            sum by (region)(
-              vitess_mixin:vttablet_query_counts_byregion:irate1m{
-                %(customCommonSelector)s
-              }
+            sum (
+              vitess_mixin:vttablet_query_counts:irate1m
             )
-          ||| % config._config,
+          |||,
           intervalFactor: 1,
         },
     },

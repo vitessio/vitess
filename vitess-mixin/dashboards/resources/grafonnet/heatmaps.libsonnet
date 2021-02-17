@@ -21,12 +21,11 @@ local prometheus = grafana.prometheus;
       prometheus.target(
         |||
           sum  by (le)(
-            vitess_mixin:vttablet_queries_bucket_byregion_keyspace:rate1m{
-              %(customCommonSelector)s,
+            vitess_mixin:vttablet_queries_bucket_by_keyspace:rate1m{
               keyspace="$keyspace"
             }
           )
-        ||| % config._config,
+        |||,
         format='heatmap',
         legendFormat='{{le}}'
       )
@@ -48,12 +47,11 @@ local prometheus = grafana.prometheus;
       prometheus.target(
         |||
           sum by (le)(
-            vitess_mixin:vttablet_transactions_bucket_byregion_keyspace:rate1m{
-              %(customCommonSelector)s,
+            vitess_mixin:vttablet_transactions_bucket_by_keyspace:rate1m{
               keyspace="$keyspace"
             }
           )
-        ||| % config._config,
+        |||,
         format='heatmap',
         legendFormat='{{le}}'
       )
@@ -78,14 +76,13 @@ local prometheus = grafana.prometheus;
           sum by (le) (
             rate(
               vttablet_queries_bucket{
-              %(customCommonSelector)s,
                 keyspace=~"$keyspace",
                 shard=~"$shard",
                 instance=~"$host"
                 }[1m]
               )
             )
-        ||| % config._config,
+        |||,
         format='heatmap',
         legendFormat='{{le}}'
       )

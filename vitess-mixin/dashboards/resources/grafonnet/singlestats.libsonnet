@@ -31,7 +31,6 @@ local prometheus = grafana.prometheus;
           sum(
             irate(
               vtgate_api_error_counts{
-                %(customCommonSelector)s,
                 %(vtgateSelector)s
               }[$interval]
             ) OR vector(0)
@@ -40,7 +39,6 @@ local prometheus = grafana.prometheus;
           sum(
             irate(
               vtgate_api_count{
-                %(customCommonSelector)s,
                 %(vtgateSelector)s
               }[$interval]
             )
@@ -64,7 +62,6 @@ local prometheus = grafana.prometheus;
         |||
           sum(
             up{
-              %(customCommonSelector)s,
               %(vtgateSelector)s
             }
           )
@@ -97,12 +94,12 @@ local prometheus = grafana.prometheus;
           100 
           -
           (
-            sum by(region)(
-              vitess_mixin:vttablet_error_byregion:irate1m{%(customCommonSelector)s}
+            sum (
+              vitess_mixin:vttablet_errors:irate1m
             )
             /
-            sum by(region)(
-              vitess_mixin:vttablet_query_counts_byregion:irate1m{%(customCommonSelector)s}
+            sum (
+              vitess_mixin:vttablet_query_counts:irate1m
             )
           )
         ||| % config._config,
@@ -124,7 +121,6 @@ local prometheus = grafana.prometheus;
         |||
           sum(
             up{
-              %(customCommonSelector)s,
               %(vttabletSelector)s
             }
           )
@@ -149,7 +145,6 @@ local prometheus = grafana.prometheus;
           count(
             count by (keyspace)(
               vttablet_tablet_state{
-                %(customCommonSelector)s,
                 %(vttabletSelector)s
               }
             )
@@ -174,7 +169,6 @@ local prometheus = grafana.prometheus;
           count(
             count by(shard)(
               vttablet_tablet_state{
-                %(customCommonSelector)s,
                 %(vttabletSelector)s
               }
             )
@@ -197,7 +191,6 @@ local prometheus = grafana.prometheus;
         |||
           sum(
             up{
-              %(customCommonSelector)s,
               %(vtworkerSelector)s
             }
           )
@@ -221,9 +214,9 @@ local prometheus = grafana.prometheus;
       prometheus.target(
         |||
           sum (
-            vitess_mixin:mysql_global_status_queries_byregion:irate1m{%(customCommonSelector)s}
+            vitess_mixin:mysql_global_status_queries:irate1m
           )
-        ||| % config._config,
+        |||,
         intervalFactor=1
       )
     ),
@@ -240,7 +233,6 @@ local prometheus = grafana.prometheus;
         |||
           sum(
             up{
-              %(customCommonSelector)s,
               %(vtctldSelector)s})
         ||| % config._config,
         instant=true,
