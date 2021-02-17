@@ -676,6 +676,9 @@ func (wr *Wrangler) DropTargets(ctx context.Context, targetKeyspace, workflow st
 	if err := wr.dropArtifacts(ctx, sw); err != nil {
 		return nil, err
 	}
+	if err := ts.wr.ts.RebuildSrvVSchema(ctx, nil); err != nil {
+		return nil, err
+	}
 	return sw.logs(), nil
 }
 
@@ -750,6 +753,10 @@ func (wr *Wrangler) DropSources(ctx context.Context, targetKeyspace, workflow st
 	if err := wr.dropArtifacts(ctx, sw); err != nil {
 		return nil, err
 	}
+	if err := ts.wr.ts.RebuildSrvVSchema(ctx, nil); err != nil {
+		return nil, err
+	}
+
 	return sw.logs(), nil
 }
 
@@ -1102,7 +1109,7 @@ func (ts *trafficSwitcher) changeTableSourceWrites(ctx context.Context, access a
 		}); err != nil {
 			return err
 		}
-		return ts.wr.tmc.RefreshState(ctx, source.master.Tablet)
+		return ts.wr.RefreshTabletsByShard(ctx, source.si, nil, nil)
 	})
 }
 
@@ -1337,7 +1344,7 @@ func (ts *trafficSwitcher) allowTableTargetWrites(ctx context.Context) error {
 		}); err != nil {
 			return err
 		}
-		return ts.wr.tmc.RefreshState(ctx, target.master.Tablet)
+		return ts.wr.RefreshTabletsByShard(ctx, target.si, nil, nil)
 	})
 }
 
@@ -1481,7 +1488,7 @@ func (ts *trafficSwitcher) dropSourceBlacklistedTables(ctx context.Context) erro
 		}); err != nil {
 			return err
 		}
-		return ts.wr.tmc.RefreshState(ctx, source.master.Tablet)
+		return ts.wr.RefreshTabletsByShard(ctx, source.si, nil, nil)
 	})
 }
 
