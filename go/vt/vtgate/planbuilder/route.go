@@ -440,15 +440,28 @@ func (rb *route) JoinCanMerge(pb *primitiveBuilder, rrb *route, ajoin *sqlparser
 		if where == nil {
 			return true
 		}
-		hasRuntimeRoutingPredicates := false
+		var tableWithRoutingPredicates sqlparser.TableNames
 		_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 			col, ok := node.(*sqlparser.ColName)
 			if ok {
-				hasRuntimeRoutingPredicates = hasRuntimeRoutingPredicates || isTableNameCol(col) || isDbNameCol(col)
+				hasRuntimeRoutingPredicates := isTableNameCol(col) || isDbNameCol(col)
+				if hasRuntimeRoutingPredicates {
+					for _, table := range tableWithRoutingPredicates {
+						if table.String() == col.Qualifier.String() {
+							return true, nil
+						}
+					}
+					tableWithRoutingPredicates = append(tableWithRoutingPredicates, col.Qualifier)
+				}
 			}
-			return !hasRuntimeRoutingPredicates, nil
+			return true, nil
 		}, where)
-		return !hasRuntimeRoutingPredicates
+		// Routes can be merged if only tables from information schema are accessed and only 1 table is used in the predicates that are used for routing
+		// TODO :- Even if more table are present in the routing, we can merge if they agree
+		if rb.ContainsOnlyInformationSchema() && rrb.ContainsOnlyInformationSchema() && len(tableWithRoutingPredicates) <= 1 {
+			return true
+		}
+		return len(tableWithRoutingPredicates) == 0
 	}
 	if ajoin == nil {
 		return false
@@ -819,4 +832,9 @@ func queryTimeout(d sqlparser.CommentDirectives) int {
 		return intVal
 	}
 	return 0
+}
+
+// ContainsOnlyInformationSchema returns if the route only contains information_schema tables
+func (rb *route) ContainsOnlyInformationSchema() bool {
+	return rb.Select.ContainsOnlyInformationSchema()
 }
