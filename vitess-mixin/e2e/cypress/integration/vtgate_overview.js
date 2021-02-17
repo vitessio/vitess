@@ -13,9 +13,6 @@ describe('vitess-mixin: Vtgate Overview Dashboard Test', function() {
     cy.visit('/d/vitess-vtgate-overview/vtgate - overview (auto-generated)')
   })
   //SUB-MENU CONTROLS
-  it('contains the Region Template', function() {
-    cy.get('.submenu-controls').contains('Region');
-  })
   it('contains vitess-mixin Dashboard links dropdown', function() {
     cy.get('.submenu-controls').get('.gf-form').contains('vitess-mixin');
   })

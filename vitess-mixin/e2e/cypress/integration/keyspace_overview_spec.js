@@ -14,9 +14,6 @@ describe('vitess-mixin: Keyspace Overview Dashboard Test', function () {
   it('contains the Interval Template', function () {
     cy.get('.submenu-controls').contains('Interval');
   })
-  it('contains the Region Template', function () {
-    cy.get('.submenu-controls').contains('Region');
-  })
   it('contains the Keyspace Template', function () {
     cy.get('.submenu-controls').contains('Keyspace');
   })
