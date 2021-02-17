@@ -676,6 +676,9 @@ func (wr *Wrangler) DropTargets(ctx context.Context, targetKeyspace, workflow st
 	if err := wr.dropArtifacts(ctx, sw); err != nil {
 		return nil, err
 	}
+	if err := ts.wr.ts.RebuildSrvVSchema(ctx, nil); err != nil {
+		return nil, err
+	}
 	return sw.logs(), nil
 }
 
@@ -750,6 +753,10 @@ func (wr *Wrangler) DropSources(ctx context.Context, targetKeyspace, workflow st
 	if err := wr.dropArtifacts(ctx, sw); err != nil {
 		return nil, err
 	}
+	if err := ts.wr.ts.RebuildSrvVSchema(ctx, nil); err != nil {
+		return nil, err
+	}
+
 	return sw.logs(), nil
 }
 
