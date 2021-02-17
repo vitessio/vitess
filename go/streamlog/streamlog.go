@@ -42,7 +42,7 @@ var (
 	QueryLogFormat = flag.String("querylog-format", "text", "format for query logs (\"text\" or \"json\")")
 
 	// QueryLogFilterTag contains an optional string that must be present in the query for it to be logged
-	QueryLogFilterTag = flag.String("querylog-filter-tag", "", "string that must be present in the query for it to be logged")
+	QueryLogFilterTag = flag.String("querylog-filter-tag", "", "string that must be present in the query for it to be logged; if using a value as the tag, you need to disable query normalization")
 
 	sendCount      = stats.NewCountersWithSingleLabel("StreamlogSend", "stream log send count", "logger_names")
 	deliveredCount = stats.NewCountersWithMultiLabels(
