@@ -13,9 +13,6 @@ describe('vitess-mixin: Vtgate Host View Dashboard Test', function() {
     cy.visit('/d/vitess-vtgate-host-view/vtgate - host view (auto-generated)')
   })
   //SUB-MENU CONTROLS
-  it('contains the Region Template', function() {
-    cy.get('.submenu-controls').contains('Region');
-  })
   it('contains the Host(s) Template', function() {
     cy.get('.submenu-controls').contains('Host(s)');
   })

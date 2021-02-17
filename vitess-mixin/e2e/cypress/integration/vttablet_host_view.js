@@ -13,9 +13,6 @@ describe('vitess-mixin: Vttablet Host View Dashboard Test', function () {
     cy.visit('/d/vitess-vttablet-host-view/vttablet - host view (auto-generated)')
   })
   //SUB-MENU CONTROLS
-  it('contains the Region Template', function () {
-    cy.get('.submenu-controls').contains('Region');
-  })
   it('contains the Keyspace Template', function () {
     cy.get('.submenu-controls').contains('Keyspace');
   })
