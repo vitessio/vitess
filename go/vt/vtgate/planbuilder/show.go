@@ -163,16 +163,24 @@ func buildDBPlan(show *sqlparser.ShowBasic, vschema ContextVSchema) (engine.Prim
 }
 
 func buildPlanWithDB(show *sqlparser.ShowBasic, vschema ContextVSchema) (engine.Primitive, error) {
-	destination, keyspace, _, err := vschema.TargetDestination(show.DbName)
+	dbName := show.DbName
+	if sqlparser.SystemSchema(dbName) {
+		ks, err := vschema.AnyKeyspace()
+		if err != nil {
+			return nil, err
+		}
+		dbName = ks.Name
+	} else {
+		// Remove Database Name from the query.
+		show.DbName = ""
+	}
+	destination, keyspace, _, err := vschema.TargetDestination(dbName)
 	if err != nil {
 		return nil, err
 	}
 	if destination == nil {
 		destination = key.DestinationAnyShard{}
 	}
-
-	// Remove Database Name from the query.
-	show.DbName = ""
 
 	query := sqlparser.String(show)
 	return &engine.Send{
@@ -311,17 +319,22 @@ func buildShowCreatePlan(show *sqlparser.ShowCreate, vschema ContextVSchema) (en
 }
 
 func buildCreateDbPlan(show *sqlparser.ShowCreate, vschema ContextVSchema) (engine.Primitive, error) {
-	dest := key.Destination(key.DestinationAnyShard{})
-	var ks *vindexes.Keyspace
-	var err error
 	dbName := show.Op.Name.String()
 	if sqlparser.SystemSchema(dbName) {
-		ks, err = vschema.AnyKeyspace()
-	} else {
-		dest, ks, _, err = vschema.TargetDestination(dbName)
+		ks, err := vschema.AnyKeyspace()
+		if err != nil {
+			return nil, err
+		}
+		dbName = ks.Name
 	}
+
+	dest, ks, _, err := vschema.TargetDestination(dbName)
 	if err != nil {
 		return nil, err
+	}
+
+	if dest == nil {
+		dest = key.DestinationAnyShard{}
 	}
 
 	return &engine.Send{
@@ -370,27 +383,29 @@ func buildCreateTblPlan(show *sqlparser.ShowCreate, vschema ContextVSchema) (eng
 }
 
 func buildCreatePlan(show *sqlparser.ShowCreate, vschema ContextVSchema) (engine.Primitive, error) {
-	dest := key.Destination(key.DestinationAnyShard{})
-	var ks *vindexes.Keyspace
-	var err error
-	if show.Op.Qualifier.IsEmpty() {
-		ks, err = vschema.DefaultKeyspace()
+	dbName := ""
+	if !show.Op.Qualifier.IsEmpty() {
+		dbName = show.Op.Qualifier.String()
+	}
+
+	if sqlparser.SystemSchema(dbName) {
+		ks, err := vschema.AnyKeyspace()
 		if err != nil {
 			return nil, err
 		}
+		dbName = ks.Name
+	} else {
+		show.Op.Qualifier = sqlparser.NewTableIdent("")
 	}
-	if ks == nil {
-		dbName := show.Op.Qualifier.String()
-		if sqlparser.SystemSchema(dbName) {
-			ks, err = vschema.AnyKeyspace()
-		} else {
-			dest, ks, _, err = vschema.TargetDestination(dbName)
-			show.Op.Qualifier = sqlparser.NewTableIdent("")
-		}
-		if err != nil {
-			return nil, err
-		}
+
+	dest, ks, _, err := vschema.TargetDestination(dbName)
+	if err != nil {
+		return nil, err
 	}
+	if dest == nil {
+		dest = key.DestinationAnyShard{}
+	}
+
 	return &engine.Send{
 		Keyspace:          ks,
 		TargetDestination: dest,
