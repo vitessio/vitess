@@ -19,10 +19,10 @@ package command
 import (
 	"time"
 
-	"github.com/golang/protobuf/ptypes"
 	"github.com/spf13/cobra"
 
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
+	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 
@@ -60,7 +60,7 @@ func commandInitShardPrimary(cmd *cobra.Command, args []string) error {
 		Keyspace:                keyspace,
 		Shard:                   shard,
 		PrimaryElectTabletAlias: tabletAlias,
-		WaitReplicasTimeout:     ptypes.DurationProto(initShardPrimaryOptions.WaitReplicasTimeout),
+		WaitReplicasTimeout:     protoutil.DurationToProto(initShardPrimaryOptions.WaitReplicasTimeout),
 		Force:                   initShardPrimaryOptions.Force,
 	})
 
