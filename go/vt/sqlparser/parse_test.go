@@ -2354,7 +2354,6 @@ func TestCreateTable(t *testing.T) {
 			"	col_double double,\n" +
 			"	col_double2 double(3,4) not null default 1.23,\n" +
 			"	col_double3 double precision not null default 1.23,\n" +
-			"	col_double4 double(3) not null default 1.23,\n" +
 			"	col_float float,\n" +
 			"	col_float2 float(3,4) not null default 1.23,\n" +
 			"	col_float3 float(3) not null default 1.23,\n" +

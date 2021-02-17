@@ -3357,12 +3357,6 @@ convert_type:
     $$.Length = $2.Length
     $$.Scale = $2.Scale
   }
-| DOUBLE float_length_opt
-  {
-    $$ = &ConvertType{Type: string($1)}
-    $$.Length = $2.Length
-    $$.Scale = $2.Scale
-  }
 | JSON
   {
     $$ = &ConvertType{Type: string($1)}
