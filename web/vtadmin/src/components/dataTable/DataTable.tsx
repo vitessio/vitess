@@ -13,12 +13,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import qs from 'query-string';
 import * as React from 'react';
 import { useLocation } from 'react-router-dom';
 
 import { useURLPagination } from '../../hooks/useURLPagination';
 import { useURLQuery } from '../../hooks/useURLQuery';
+import { stringify } from '../../util/queryString';
 import { PaginationNav } from './PaginationNav';
 
 interface Props<T> {
@@ -48,7 +48,7 @@ export const DataTable = <T extends object>({ columns, data, pageSize = DEFAULT_
 
     const formatPageLink = (p: number) => ({
         pathname,
-        search: qs.stringify({ ...urlQuery, page: p === 1 ? undefined : p }),
+        search: stringify({ ...urlQuery.query, page: p === 1 ? undefined : p }),
     });
 
     return (
