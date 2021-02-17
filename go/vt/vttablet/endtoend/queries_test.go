@@ -19,6 +19,8 @@ package endtoend
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/test/utils"
@@ -1784,8 +1786,16 @@ func TestQueries(t *testing.T) {
 		},
 	}
 	for _, tcase := range testCases {
-		if err := tcase.Test("", client); err != nil {
-			t.Error(err)
+		tName := ""
+		if t, ok := tcase.(*framework.TestCase); ok {
+			tName = t.Name
 		}
+		if t, ok := tcase.(*framework.MultiCase); ok {
+			tName = t.Name
+		}
+		t.Run(tName, func(t *testing.T) {
+			assert.NoError(t,
+				tcase.Test(tName, client))
+		})
 	}
 }
