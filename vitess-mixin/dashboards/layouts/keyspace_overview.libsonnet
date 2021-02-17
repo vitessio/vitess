@@ -15,7 +15,6 @@ local config = import '../../config.libsonnet';
       .addTemplates(
         [
           templates.interval,
-          templates.region,
           templates.keyspace,
           templates.table,
         ]

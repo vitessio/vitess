@@ -28,7 +28,7 @@ local text = grafana.text;
       content=|||
         #### Cluster overview
 
-        This is a general overview of our Vitess clusters where only drilldown by region is allowed. %(drill_down_note)s
+        This is a general overview of our Vitess clusters. %(drill_down_note)s
 
         %(footnote)s
       ||| % notes
@@ -42,7 +42,7 @@ local text = grafana.text;
       content=|||
         #### Keyspace overview
 
-        This is a general overview of our keyspaces where only drilldown by region, keyspace and table is allowed. %(drill_down_note)s
+        This is a general overview of our keyspaces where only drilldown by keyspace and table is allowed. %(drill_down_note)s
 
         %(footnote)s
       ||| % notes
@@ -56,7 +56,7 @@ local text = grafana.text;
       content=|||
         #### vtgate overview
 
-        This is a general overview of our vtgate tier where only drilldown by region is allowed. %(drill_down_note)s
+        This is a general overview of our vtgate tier. %(drill_down_note)s
 
         %(footnote)s
       ||| % notes

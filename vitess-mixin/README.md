@@ -13,13 +13,13 @@ A set of Grafana dashboards, Prometheus rules and alerts for Vitess, packaged to
         export PATH="$GOPATH/bin:/usr/local/go/bin:$PATH"
         ```
 
-1. Install the go tools: `make tools`. `jb`, `jsonnet`, `jsonnetfmt`, and `promtool` should now be in `$GOPATH/bin`.
-
 1. Install the dependencies by running: `jb install`
+
+1. Install the go tools: `make tools`. `jb`, `jsonnet`, `jsonnetfmt`, and `promtool` should now be in `$GOPATH/bin`.
 
 ## ℹ️ How-to
 
-Customize `config.libsonnet` based on your setup. Example: specify the `dataSource` name (default to `Prometheus_Vitess`) and add any custom selectors in `customCommonSelector`. You can then generate:
+Customize `config.libsonnet` based on your setup. Example: specify the `dataSource` name (default to `Prometheus_Vitess`). You can then generate:
 
 - Prometheus alerts: `$ make prometheus_alerts.yaml`
 (Note: This files is empty because the current version of the mixin uses Grafana Alerts)

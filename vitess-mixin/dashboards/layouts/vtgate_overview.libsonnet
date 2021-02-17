@@ -14,9 +14,6 @@ local config = import '../../config.libsonnet';
     'vtgate_overview.json':
 
       helpers.dashboard.getDashboard(config._config.grafanaDashboardMetadata.vtgateOverview)
-      .addTemplates([
-        templates.region,
-      ])
       .addLink(helpers.default.getDashboardLink(config._config.dashborardLinks))
       .addPanels([
         texts.vtgateOverview { gridPos: { h: 3, w: 24, x: 0, y: 0 } },

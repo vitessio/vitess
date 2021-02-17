@@ -14,7 +14,6 @@ local rows_helper = helpers.default;
       helpers.dashboard.getDashboard(config._config.grafanaDashboardMetadata.vttabletHostView)
       .addTemplates(
         [
-          templates.region,
           templates.keyspace,
           templates.shard_multi,
           templates.hostByKeyspaceShard,

@@ -57,6 +57,7 @@ test: #: Compare your .json generated dashboards local version with the origin/m
 tools: tools.go
 	@# -mod='' tells go to ignore the vendor/ directory
 	@cat $^ | grep _ | awk -F'"' '{print $$2}' | xargs -I% go install -mod='' %
+	@jb install 
 	@jb update https://github.com/grafana/grafonnet-lib/grafonnet > /dev/null 2>&1
 
 

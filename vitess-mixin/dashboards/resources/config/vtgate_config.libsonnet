@@ -45,9 +45,9 @@ local datalinks = import '../datalinks.libsonnet';
         {
           expr: |||
             sum (
-              vitess_mixin:vtgate_api_count_byregion:irate1m{%(customCommonSelector)s}
+              vitess_mixin:vtgate_api_count:irate1m
             )
-          ||| % config._config,
+          |||,
           legendFormat: 'Requests',
         },
       ],
@@ -64,9 +64,7 @@ local datalinks = import '../datalinks.libsonnet';
         {
           expr: |||
             sum by(keyspace)(
-              vitess_mixin:vtgate_queries_processed_by_region_and_keyspace:irate1m{
-                %(customCommonSelector)s
-              }
+              vitess_mixin:vtgate_queries_processed_by_keyspace:irate1m
             )
           ||| % config._config,
           legendFormat: '{{keyspace}}',
@@ -87,11 +85,9 @@ local datalinks = import '../datalinks.libsonnet';
         {
           expr: |||
             sum by (db_type)(
-              vitess_mixin:vtgate_api_count_byregion_db_type:irate1m{
-                %(customCommonSelector)s
-              }
+              vitess_mixin:vtgate_api_count_by_db_type:irate1m
             )
-          ||| % config._config,
+          |||,
           legendFormat: '{{db_type}}',
         },
       ],
@@ -112,12 +108,11 @@ local datalinks = import '../datalinks.libsonnet';
             sum by (instance, db_type)(
               rate(
                 vtgate_api_count{
-                  %(customCommonSelector)s,
                   instance=~"$host",
                 }[1m]
               )
             )
-          ||| % config._config,
+          |||,
           legendFormat: '{{instance}} - {{db_type}}',
           intervalFactor: 1,
         },
@@ -141,12 +136,11 @@ local datalinks = import '../datalinks.libsonnet';
               sum by (instance)(
                 rate(
                   vtgate_api_count{
-                    %(customCommonSelector)s,
                     instance=~'$host'
                   }[1m]
                 )
               )
-            ||| % config._config,
+            |||,
           legendFormat: '{{instance}}',
           intervalFactor: 1,
         },
@@ -164,11 +158,11 @@ local datalinks = import '../datalinks.libsonnet';
         {
           expr: |||
             sum (
-              vitess_mixin:vtgate_api_error_counts_byregion:irate1m{%(customCommonSelector)s})
+              vitess_mixin:vtgate_api_error_counts:irate1m)
             /
             sum (
-              vitess_mixin:vtgate_api_count_byregion:irate1m{%(customCommonSelector)s})
-          ||| % config._config,
+              vitess_mixin:vtgate_api_count:irate1m)
+          |||,
           legendFormat: 'Error rate',
         },
       ],
@@ -186,11 +180,11 @@ local datalinks = import '../datalinks.libsonnet';
         {
           expr: |||
             sum by(keyspace)(
-              vitess_mixin:vtgate_api_error_counts_byregion_keyspace:irate1m{%(customCommonSelector)s})
+              vitess_mixin:vtgate_api_error_counts_by_keyspace:irate1m)
             /
             sum by(keyspace)(
-              vitess_mixin:vtgate_api_count_byregion_keyspace:irate1m{%(customCommonSelector)s})
-          ||| % config._config,
+              vitess_mixin:vtgate_api_count_by_keyspace:irate1m)
+          |||,
           legendFormat: '{{keyspace}}',
         },
       ],
@@ -210,15 +204,11 @@ local datalinks = import '../datalinks.libsonnet';
         {
           expr: |||
             sum by (db_type)(
-              vitess_mixin:vtgate_api_error_counts_byregion_db_type:irate1m{
-                %(customCommonSelector)s,
-              }
+              vitess_mixin:vtgate_api_error_counts_by_db_type:irate1m
             )
             /
             sum by (db_type)(
-              vitess_mixin:vtgate_api_count_byregion_db_type:irate1m{
-                %(customCommonSelector)s,
-              }
+              vitess_mixin:vtgate_api_count_by_db_type:irate1m
             )
           ||| % config._config,
           legendFormat: '{{db_type}}',
@@ -242,19 +232,17 @@ local datalinks = import '../datalinks.libsonnet';
           expr:
             |||
               sum by(instance)(
-                rate(vtgate_api_error_counts{
-                  %(customCommonSelector)s
-                }[1m]) > 0
+                rate(
+                  vtgate_api_error_counts[1m]
+                  ) > 0
               )
               /
               sum by(instance)(
                 rate(
-                  vtgate_api_count{
-                    %(customCommonSelector)s
-                  }[1m]
+                  vtgate_api_count[1m]
                 )
               )
-            ||| % config._config,
+            |||,
           legendFormat: '{{instance}}',
           intervalFactor: 1,
         },
@@ -272,7 +260,6 @@ local datalinks = import '../datalinks.libsonnet';
             |||
               sum by(instance, db_type)(
                 rate(vtgate_api_error_counts{
-                    %(customCommonSelector)s,
                     instance=~"$host"
                   }[1m]
                 ) > 0
@@ -281,12 +268,11 @@ local datalinks = import '../datalinks.libsonnet';
               sum by(instance, db_type)(
                 rate(
                   vtgate_api_count{
-                    %(customCommonSelector)s,
                     instance=~"$host"
                   }[1m]
                 )
               )
-            ||| % config._config,
+            |||,
           legendFormat: '{{instance}} - {{db_type}}',
           intervalFactor: 1,
         },
@@ -306,10 +292,10 @@ local datalinks = import '../datalinks.libsonnet';
             histogram_quantile(
               0.99,
               sum by(le)(
-                vitess_mixin:vtgate_api_bucket_byregion:irate1m{%(customCommonSelector)s}
+                vitess_mixin:vtgate_api_bucket:irate1m
               )
             )
-          ||| % config._config,
+          |||,
           legendFormat: 'Duration',
         },
       ],
@@ -329,7 +315,7 @@ local datalinks = import '../datalinks.libsonnet';
             histogram_quantile(
               0.99,
               sum by(keyspace,le)(
-                vitess_mixin:vtgate_api_bucket_byregion_keyspace:irate1m{%(customCommonSelector)s}
+                vitess_mixin:vtgate_api_bucket_by_keyspace:irate1m
               )
             )
           ||| % config._config,
@@ -369,13 +355,12 @@ local datalinks = import '../datalinks.libsonnet';
               sum by(instance,le)(
                 rate(
                   vtgate_api_bucket{
-                    %(customCommonSelector)s,
                     instance=~"$host"
                   }[1m]
                 )
               )
             )
-          ||| % config._config,
+          |||,
           legendFormat: '{{instance}}',
           intervalFactor: 1,
         },
@@ -394,13 +379,12 @@ local datalinks = import '../datalinks.libsonnet';
               sum by(instance,db_type,le)(
                 rate(
                   vtgate_api_bucket{
-                    %(customCommonSelector)s,
                     instance=~"$host"
                   }[1m]
                 )
               )
             )
-          ||| % config._config,
+          |||,
           legendFormat: '{{instance}} - {{db_type}}',
           intervalFactor: 1,
         },
@@ -416,12 +400,10 @@ local datalinks = import '../datalinks.libsonnet';
             histogram_quantile(
               0.50,
               sum by(le)(
-                vitess_mixin:vtgate_api_bucket_byregion:irate1m{
-                  %(customCommonSelector)s
-                }
+                vitess_mixin:vtgate_api_bucket:irate1m
               )
             )
-          ||| % config._config,
+          |||,
           legendFormat: 'Duration p50',
         },
       ],
@@ -439,13 +421,12 @@ local datalinks = import '../datalinks.libsonnet';
               sum by(instance, le)(
                 rate(
                   vtgate_api_bucket{
-                    %(customCommonSelector)s,
                     instance=~"$host"
                   }[1m]
                 )
               )
             )
-          ||| % config._config,
+          |||,
           legendFormat: '{{instance}}',
         },
       ],
@@ -460,12 +441,10 @@ local datalinks = import '../datalinks.libsonnet';
             histogram_quantile(
               0.95,
               sum by(le)(
-                vitess_mixin:vtgate_api_bucket_byregion:irate1m{
-                  %(customCommonSelector)s
-                }
+                vitess_mixin:vtgate_api_bucket:irate1m
               )
             )
-          ||| % config._config,
+          |||,
           legendFormat: 'Duration p95',
         },
       ],
@@ -482,13 +461,12 @@ local datalinks = import '../datalinks.libsonnet';
               sum by(instance, le)(
                 rate(
                   vtgate_api_bucket{
-                    %(customCommonSelector)s,
                     instance=~"$host"
                   }[1m]
                 )
               )
             )
-          ||| % config._config,
+          |||,
           legendFormat: '{{instance}}',
         },
       ],
@@ -504,20 +482,16 @@ local datalinks = import '../datalinks.libsonnet';
           expr: |||
             sum (
               rate(
-                vtgate_api_sum{
-                  %(customCommonSelector)s
-                }[5m]
+                vtgate_api_sum[5m]
               )
             )
             /
             sum (
               rate(
-                vtgate_api_count{
-                  %(customCommonSelector)s
-                  }[5m]
+                vtgate_api_count[5m]
                 )
               )
-          ||| % config._config,
+          |||,
           legendFormat: 'Avg Latency',
         },
       ],
@@ -533,7 +507,6 @@ local datalinks = import '../datalinks.libsonnet';
             sum by (instance)(
               rate(
                 vtgate_api_sum{
-                  %(customCommonSelector)s,
                   instance=~"$host"
                 }[5m]
               )
@@ -542,12 +515,11 @@ local datalinks = import '../datalinks.libsonnet';
             sum by (instance)(
               rate(
                 vtgate_api_count{
-                  %(customCommonSelector)s,
                   instance=~"$host"
                   }[5m]
                 )
               )
-          ||| % config._config,
+          |||,
           legendFormat: '{{instance}}',
         },
       ],
@@ -562,12 +534,10 @@ local datalinks = import '../datalinks.libsonnet';
             histogram_quantile(
               0.99,
               sum by (db_type, le)(
-                vitess_mixin:vtgate_api_bucket_byregion_db_type:irate1m{
-                  %(customCommonSelector)s
-                }
+                vitess_mixin:vtgate_api_bucket_by_db_type:irate1m
               )
             )
-          ||| % config._config,
+          |||,
           legendFormat: '{{db_type}}',
         },
       ],
@@ -584,8 +554,7 @@ local datalinks = import '../datalinks.libsonnet';
         {
           expr: |||
             sum by (table)(
-              vitess_mixin:vtgate_queries_processed_byregion_keyspace_table:irate1m{
-                %(customCommonSelector)s,
+              vitess_mixin:vtgate_queries_processed_by_keyspace_table:irate1m{
                 keyspace="$keyspace",
                 table=~"$table"
               }
@@ -605,15 +574,14 @@ local datalinks = import '../datalinks.libsonnet';
         {
           expr: |||
             sum by (plan)(
-              vitess_mixin:vtgate_queries_processed_byregion_keyspace_table_plan:irate1m{
-                %(customCommonSelector)s,
+              vitess_mixin:vtgate_queries_processed_by_keyspace_table_plan:irate1m{
                 keyspace="$keyspace",
                 table=~"$table"
               }
             )
             OR
             vector(0)
-          ||| % config._config,
+          |||,
           legendFormat: '{{plan}}',
         },
       ],
@@ -633,20 +601,18 @@ local datalinks = import '../datalinks.libsonnet';
             (
               100 *
               sum by (keyspace)(
-                vitess_mixin:vtgate_api_error_counts_byregion_keyspace:irate1m{
-                  %(customCommonSelector)s,
+                vitess_mixin:vtgate_api_error_counts_by_keyspace:irate1m{
                   keyspace="$keyspace"
                 }
               )
               /
               sum by (keyspace)(
-                vitess_mixin:vtgate_api_count_byregion_keyspace:irate1m{
-                  %(customCommonSelector)s,
+                vitess_mixin:vtgate_api_count_by_keyspace:irate1m{
                   keyspace="$keyspace"
                 }
               )
             )
-          ||| % config._config,
+          |||,
           legendFormat: 'Success rate',
         },
       ],
@@ -659,11 +625,9 @@ local datalinks = import '../datalinks.libsonnet';
         {
           expr: |||
             sum by (code)(
-              vitess_mixin:vtgate_api_error_counts_byregion_code:irate1m{
-                %(customCommonSelector)s
-              }
+              vitess_mixin:vtgate_api_error_counts_by_code:irate1m
             )
-          ||| % config._config,
+          |||,
           legendFormat: '{{code}}',
         },
       ],
@@ -680,12 +644,11 @@ local datalinks = import '../datalinks.libsonnet';
             sum by (instance,code)(
               rate(
                 vtgate_api_error_counts{
-                  %(customCommonSelector)s,
                   instance=~"$host"
                 }[1m]
               )
             )
-          ||| % config._config,
+          |||,
           legendFormat: '{{instance}} - {{code}}',
         },
       ],
@@ -699,11 +662,9 @@ local datalinks = import '../datalinks.libsonnet';
         {
           expr: |||
             sum by (operation)(
-              vitess_mixin:vtgate_api_error_counts_byregion_operation:irate1m{
-                %(customCommonSelector)s
-              }
+              vitess_mixin:vtgate_api_error_counts_by_operation:irate1m
             )
-          ||| % config._config,
+          |||,
           legendFormat: '{{operation}}',
         },
       ],
@@ -717,11 +678,9 @@ local datalinks = import '../datalinks.libsonnet';
         {
           expr: |||
             sum by (db_type)(
-              vitess_mixin:vtgate_api_error_counts_byregion_db_type:irate1m{
-                %(customCommonSelector)s
-              }
+              vitess_mixin:vtgate_api_error_counts_by_db_type:irate1m
             )
-          ||| % config._config,
+          |||,
           legendFormat: '{{db_type}}',
         },
       ],
@@ -738,12 +697,11 @@ local datalinks = import '../datalinks.libsonnet';
             sum by (instance,keyspace)(
               rate(
                 vtgate_api_error_counts{
-                  %(customCommonSelector)s,
                   instance=~"$host"
                 }[1m]
               )
             )
-          ||| % config._config,
+          |||,
           legendFormat: '{{keyspace}}',
           intervalFactor: 1,
         },
@@ -771,8 +729,7 @@ local datalinks = import '../datalinks.libsonnet';
         {
           expr: |||
             sum (
-              vitess_mixin:process_start_time_seconds_byregion_job:sum5m{
-                %(customCommonSelector)s,
+              vitess_mixin:process_start_time_seconds_by_job:sum5m{
                 %(vtgateSelector)s
               }
             ) > 0
@@ -793,7 +750,6 @@ local datalinks = import '../datalinks.libsonnet';
               sum by(instance)(
                 irate(
                   go_gc_duration_seconds_count{
-                    %(customCommonSelector)s,
                     %(vtgateSelector)s
                   }[1m]
                 )
@@ -815,7 +771,6 @@ local datalinks = import '../datalinks.libsonnet';
               sum by(instance)(
                 irate(
                   go_gc_duration_seconds_count{
-                    %(customCommonSelector)s,
                     %(vtgateSelector)s
                   }[1m]
                 )
@@ -836,7 +791,6 @@ local datalinks = import '../datalinks.libsonnet';
               sum by(quantile)(
                 irate(
                   go_gc_duration_seconds{
-                    %(customCommonSelector)s,
                     %(vtgateSelector)s
                   }[1m]
                 )
@@ -871,11 +825,9 @@ local datalinks = import '../datalinks.libsonnet';
         {
           expr: |||
             sum (
-              vitess_mixin:vtgate_api_count_byregion:irate1m{
-                %(customCommonSelector)s
-              }
+              vitess_mixin:vtgate_api_count:irate1m
             )
-          ||| % config._config,
+          |||,
           intervalFactor: 1,
         },
     },
@@ -895,12 +847,10 @@ local datalinks = import '../datalinks.libsonnet';
             1000 * histogram_quantile(
               0.99,
               sum by(le)(
-                vitess_mixin:vtgate_api_bucket_byregion:irate1m{
-                  %(customCommonSelector)s
-                }
+                vitess_mixin:vtgate_api_bucket:irate1m
               )
             )
-          ||| % config._config,
+          |||,
           instant: true,
           intervalFactor: 1,
         },

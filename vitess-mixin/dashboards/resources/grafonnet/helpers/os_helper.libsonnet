@@ -4,7 +4,6 @@
 
 local grafonnet_helper = import './grafonnet_helper.libsonnet';
 
-
 {
   /**
    * Builds grapPanel using grafonnet and the configuration from `os_config.libsonnet`
