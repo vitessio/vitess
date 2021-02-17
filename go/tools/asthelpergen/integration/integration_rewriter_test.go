@@ -56,19 +56,16 @@ func TestVisitWSlice(t *testing.T) {
 func testVisitOrder(plus AST) ([]AST, []AST) {
 	var preOrder, postOrder []AST
 
-	a := &application{
-		pre: func(cursor *Cursor) bool {
-			preOrder = append(preOrder, cursor.node)
+	Rewrite(plus,
+		func(cursor *Cursor) bool {
+			preOrder = append(preOrder, cursor.Node())
 			return true
 		},
-		post: func(cursor *Cursor) bool {
-			postOrder = append(postOrder, cursor.node)
+		func(cursor *Cursor) bool {
+			postOrder = append(postOrder, cursor.Node())
 			return true
-		},
-		cursor: Cursor{},
-	}
+		})
 
-	a.apply(nil, plus, nil)
 	return preOrder, postOrder
 }
 
@@ -92,80 +89,56 @@ func TestReplace(t *testing.T) {
 	four := &LiteralInt{4}
 	expected := &Plus{Left: two, Right: four}
 
-	parent := &struct{ AST }{plus}
+	result := Rewrite(plus, func(cursor *Cursor) bool {
+		switch n := cursor.Node().(type) {
+		case *LiteralInt:
+			newNode := &LiteralInt{Val: n.Val * 2}
+			cursor.Replace(newNode)
+		}
+		return true
+	}, nil)
 
-	a := &application{
-		pre: func(cursor *Cursor) bool {
-			switch n := cursor.node.(type) {
-			case *LiteralInt:
-				newNode := &LiteralInt{Val: n.Val * 2}
-				cursor.replacer(newNode, cursor.parent)
-			}
-			return true
-		},
-		post:   nil,
-		cursor: Cursor{},
-	}
-
-	a.apply(parent, plus, nil)
-
-	utils.MustMatch(t, expected, parent.AST)
+	utils.MustMatch(t, expected, result)
 }
 func TestReplaceInSlice(t *testing.T) {
 	one := &LiteralInt{1}
 	two := &LiteralInt{2}
 	three := &LiteralInt{3}
 	array := &Array{Values: []AST{one, two, three}}
-	string2 := LiteralString{"two"}
+	string2 := &LiteralString{"two"}
 
-	parent := &struct{ AST }{array}
-
-	a := &application{
-		pre: func(cursor *Cursor) bool {
-			switch n := cursor.node.(type) {
-			case *LiteralInt:
-				if n.Val == 2 {
-					newNode := string2
-					cursor.replacer(newNode, cursor.parent)
-				}
+	result := Rewrite(array, func(cursor *Cursor) bool {
+		switch n := cursor.Node().(type) {
+		case *LiteralInt:
+			if n.Val == 2 {
+				cursor.Replace(string2)
 			}
-			return true
-		},
-		post:   nil,
-		cursor: Cursor{},
-	}
-
-	a.apply(parent, array, nil)
+		}
+		return true
+	}, nil)
 
 	expected := &Array{Values: []AST{one, string2, three}}
-
-	utils.MustMatch(t, expected, parent.AST)
+	utils.MustMatch(t, expected, result)
 }
 
 func TestReplaceStructHolder(t *testing.T) {
 	one := &LiteralInt{1}
 	root := StructHolder{one}
 
-	parent := &struct{ AST }{root}
-
 	defer func() {
 		if r := recover(); r != nil {
+			// we expect the rewriter to panic
 			assert.Equal(t, "StructHolder Val", r)
 		}
 	}()
 
-	a := &application{
-		pre: func(cursor *Cursor) bool {
-			switch cursor.node.(type) {
-			case *LiteralInt:
-				cursor.replacer(nil, nil)
-			}
-			return true
-		},
-		post:   nil,
-		cursor: Cursor{},
-	}
-
-	a.apply(parent, root, nil)
+	Rewrite(root, func(cursor *Cursor) bool {
+		switch cursor.Node().(type) {
+		case *LiteralInt:
+			// here we are trying to change the value of one of the fields of the value, and that is not allowed
+			cursor.Replace(nil)
+		}
+		return true
+	}, nil)
 	t.Fatal("Should have panicked")
 }

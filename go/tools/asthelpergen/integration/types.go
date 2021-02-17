@@ -23,8 +23,7 @@ import "reflect"
 These types are used to test the rewriter generator against these types.
 To recreate them, just run:
 
-go run go/tools/asthelpergen/asthelpergen.go \
-	-in ./go/tools/asthelpergen/integration -iface vitess.io/vitess/go/tools/asthelpergen/integration.AST
+go run go/tools/asthelpergen -in ./go/tools/asthelpergen/integration -iface vitess.io/vitess/go/tools/asthelpergen/integration.AST
 */
 type (
 	AST interface {
@@ -69,6 +68,8 @@ func (StructHolder) i()  {}
 
 //func (ArrayDef) i()     {}
 
+// the methods below are what the generated code expected to be there in the package
+
 type application struct {
 	pre, post ApplyFunc
 	cursor    Cursor
@@ -82,6 +83,19 @@ type Cursor struct {
 	node     AST
 }
 
+// Node returns the current Node.
+func (c *Cursor) Node() AST { return c.node }
+
+// Parent returns the parent of the current Node.
+func (c *Cursor) Parent() AST { return c.parent }
+
+// Replace replaces the current node in the parent field with this new object. The use needs to make sure to not
+// replace the object with something of the wrong type, or the visitor will panic.
+func (c *Cursor) Replace(newNode AST) {
+	c.replacer(newNode, c.parent)
+	c.node = newNode
+}
+
 type replacerFunc func(newNode, parent AST)
 
 func isNilValue(i interface{}) bool {
@@ -92,6 +106,19 @@ func isNilValue(i interface{}) bool {
 }
 
 var abort = new(int) // singleton, to signal termination of Apply
+
+func Rewrite(node AST, pre, post ApplyFunc) (result AST) {
+	parent := &struct{ AST }{node}
+
+	a := &application{
+		pre:    pre,
+		post:   post,
+		cursor: Cursor{},
+	}
+
+	a.apply(parent.AST, node, nil)
+	return parent.AST
+}
 
 func replacePanic(msg string) func(newNode, parent AST) {
 	return func(newNode, parent AST) {
