@@ -1235,6 +1235,7 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 	case *JoinTableExpr:
 		a.apply(node, n.LeftExpr, replaceJoinTableExprLeftExpr)
 		a.apply(node, n.RightExpr, replaceJoinTableExprRightExpr)
+		a.apply(node, &n.Condition, replaceJoinConditionOn)
 
 	case *KeyState:
 

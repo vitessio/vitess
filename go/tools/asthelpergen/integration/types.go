@@ -81,6 +81,19 @@ type Cursor struct {
 	node     AST
 }
 
+// Node returns the current Node.
+func (c *Cursor) Node() AST { return c.node }
+
+// Parent returns the parent of the current Node.
+func (c *Cursor) Parent() AST { return c.parent }
+
+// Replace replaces the current node in the parent field with this new object. The use needs to make sure to not
+// replace the object with something of the wrong type, or the visitor will panic.
+func (c *Cursor) Replace(newNode AST) {
+	c.replacer(newNode, c.parent)
+	c.node = newNode
+}
+
 type replacerFunc func(newNode, parent AST)
 
 func isNilValue(i interface{}) bool {
@@ -91,3 +104,27 @@ func isNilValue(i interface{}) bool {
 }
 
 var abort = new(int) // singleton, to signal termination of Apply
+
+func Rewrite(node AST, pre, post ApplyFunc) (result AST) {
+	parent := &struct{ AST }{node}
+	defer func() {
+		if r := recover(); r != nil && r != abort {
+			panic(r)
+		}
+		result = parent.AST
+	}()
+
+	a := &application{
+		pre:    pre,
+		post:   post,
+		cursor: Cursor{},
+	}
+
+	// this is the root-replacer, used when the user replaces the root of the ast
+	replacer := func(newNode AST, _ AST) {
+		parent.AST = newNode
+	}
+
+	a.apply(parent.AST, node, replacer)
+	return parent.AST
+}
