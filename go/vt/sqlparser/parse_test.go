@@ -2235,9 +2235,8 @@ func TestCaseSensitivity(t *testing.T) {
 		input:  "select A(ALL B, C) from b",
 		output: "select A(B, C) from b",
 	}, {
-		// IF is an exception. It's always lower-cased.
 		input:  "select IF(B, C) from b",
-		output: "select if(B, C) from b",
+		output: "select IF(B, C) from b",
 	}, {
 		input: "select * from b use index (A)",
 	}, {
@@ -2492,12 +2491,12 @@ func TestSubStr(t *testing.T) {
 		input: "select substr(a, 1, 6) from t",
 	}, {
 		input:  "select substring(a, 1) from t",
-		output: "select substr(a, 1) from t",
+		output: "select substring(a, 1) from t",
 	}, {
 		input:  "select substring(a, 1, 6) from t",
-		output: "select substr(a, 1, 6) from t",
+		output: "select substring(a, 1, 6) from t",
 	}, {
-		input:  "select substr(a from 1 for 6) from t",
+		input:  "select substring(a from 1 for 6) from t",
 		output: "select substr(a, 1, 6) from t",
 	}, {
 		input:  "select substring(a from 1 for 6) from t",
@@ -2507,15 +2506,15 @@ func TestSubStr(t *testing.T) {
 		output: `select substr('foo', 1, 2) from t`,
 	}, {
 		input:  `select substring("foo", 1, 2) from t`,
-		output: `select substr('foo', 1, 2) from t`,
+		output: `select substring('foo', 1, 2) from t`,
 	}, {
 		input:  `select substr(substr("foo" from 1 for 2), 1, 2) from t`,
 		output: `select substr(substr('foo', 1, 2), 1, 2) from t`,
 	}, {
 		input:  `select substr(substring("foo", 1, 2), 3, 4) from t`,
-		output: `select substr(substr('foo', 1, 2), 3, 4) from t`,
+		output: `select substr(substring('foo', 1, 2), 3, 4) from t`,
 	}, {
-		input:  `select substring(substr("foo", 1), 2) from t`,
+		input:  `select substr(substr("foo", 1), 2) from t`,
 		output: `select substr(substr('foo', 1), 2) from t`,
 	}}
 

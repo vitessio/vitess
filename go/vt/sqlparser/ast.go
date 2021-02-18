@@ -2442,6 +2442,8 @@ func (node *StarExpr) walkSubtree(visit Visit) error {
 type AliasedExpr struct {
 	Expr Expr
 	As   ColIdent
+	StartParsePos int
+	EndParsePos int
 }
 
 // Format formats the node.

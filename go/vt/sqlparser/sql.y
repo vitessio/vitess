@@ -133,6 +133,7 @@ func skipToEnd(yylex interface{}) {
   procedureParams []ProcedureParam
   characteristic Characteristic
   characteristics []Characteristic
+  optParens Parens
 }
 
 %token LEX_ERROR
@@ -3494,19 +3495,20 @@ function_call_window:
 /*
   Function calls using reserved keywords, with dedicated grammar rules
   as a result
+  TODO: some of these change the case or even the name of the function expression. Should be preserved.
 */
 function_call_keyword:
   LEFT openb select_expression_list closeb
   {
-    $$ = &FuncExpr{Name: NewColIdent("left"), Exprs: $3}
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3}
   }
 | RIGHT openb select_expression_list closeb
   {
-    $$ = &FuncExpr{Name: NewColIdent("right"), Exprs: $3}
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3}
   }
 | SCHEMA openb closeb
   {
-    $$ = &FuncExpr{Name: NewColIdent("schema")}
+    $$ = &FuncExpr{Name: NewColIdent(string($1))}
   }
 | CONVERT openb expression ',' convert_type closeb
   {
@@ -3542,7 +3544,7 @@ function_call_keyword:
   }
 | FIRST openb select_expression_list closeb
   {
-    $$ = &FuncExpr{Name: NewColIdent("first"), Exprs: $3}
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3}
   }
 | GROUP_CONCAT openb distinct_opt select_expression_list order_by_opt separator_opt closeb
   {
@@ -3562,75 +3564,75 @@ function_call_keyword:
   Dedicated grammar rules are needed because of the special syntax
 */
 function_call_nonkeyword:
-  CURRENT_TIMESTAMP func_datetime_opt
+  CURRENT_TIMESTAMP func_parens_opt
   {
-    $$ = &FuncExpr{Name:NewColIdent("current_timestamp")}
+    $$ = &FuncExpr{Name:NewColIdent(string($1))}
   }
-| UTC_TIMESTAMP func_datetime_opt
+| UTC_TIMESTAMP func_parens_opt
   {
-    $$ = &FuncExpr{Name:NewColIdent("utc_timestamp")}
+    $$ = &FuncExpr{Name:NewColIdent(string($1))}
   }
-| UTC_TIME func_datetime_opt
+| UTC_TIME func_parens_opt
   {
-    $$ = &FuncExpr{Name:NewColIdent("utc_time")}
+    $$ = &FuncExpr{Name:NewColIdent(string($1))}
   }
 /* doesn't support fsp */
-| UTC_DATE func_datetime_opt
+| UTC_DATE func_parens_opt
   {
-    $$ = &FuncExpr{Name:NewColIdent("utc_date")}
+    $$ = &FuncExpr{Name:NewColIdent(string($1))}
   }
   // now
-| LOCALTIME func_datetime_opt
+| LOCALTIME func_parens_opt
   {
-    $$ = &FuncExpr{Name:NewColIdent("localtime")}
+    $$ = &FuncExpr{Name:NewColIdent(string($1))}
   }
   // now
-| LOCALTIMESTAMP func_datetime_opt
+| LOCALTIMESTAMP func_parens_opt
   {
-    $$ = &FuncExpr{Name:NewColIdent("localtimestamp")}
+    $$ = &FuncExpr{Name:NewColIdent(string($1))}
   }
   // curdate
 /* doesn't support fsp */
-| CURRENT_DATE func_datetime_opt
+| CURRENT_DATE func_parens_opt
   {
-    $$ = &FuncExpr{Name:NewColIdent("current_date")}
+    $$ = &FuncExpr{Name:NewColIdent(string($1))}
   }
   // curtime
-| CURRENT_TIME func_datetime_opt
+| CURRENT_TIME func_parens_opt
   {
-    $$ = &FuncExpr{Name:NewColIdent("current_time")}
+    $$ = &FuncExpr{Name:NewColIdent(string($1))}
   }
-| CURRENT_USER func_datetime_opt
+| CURRENT_USER func_parens_opt
   {
-    $$ = &FuncExpr{Name:NewColIdent("current_user")}
+    $$ = &FuncExpr{Name:NewColIdent(string($1))}
   }
 // these functions can also be called with an optional argument
 | CURRENT_TIMESTAMP func_datetime_precision
   {
-    $$ = &CurTimeFuncExpr{Name:NewColIdent("current_timestamp"), Fsp:$2}
+    $$ = &CurTimeFuncExpr{Name:NewColIdent(string($1)), Fsp:$2}
   }
 | UTC_TIMESTAMP func_datetime_precision
   {
-    $$ = &CurTimeFuncExpr{Name:NewColIdent("utc_timestamp"), Fsp:$2}
+    $$ = &CurTimeFuncExpr{Name:NewColIdent(string($1)), Fsp:$2}
   }
 | UTC_TIME func_datetime_precision
   {
-    $$ = &CurTimeFuncExpr{Name:NewColIdent("utc_time"), Fsp:$2}
+    $$ = &CurTimeFuncExpr{Name:NewColIdent(string($1)), Fsp:$2}
   }
   // now
 | LOCALTIME func_datetime_precision
   {
-    $$ = &CurTimeFuncExpr{Name:NewColIdent("localtime"), Fsp:$2}
+    $$ = &CurTimeFuncExpr{Name:NewColIdent(string($1)), Fsp:$2}
   }
   // now
 | LOCALTIMESTAMP func_datetime_precision
   {
-    $$ = &CurTimeFuncExpr{Name:NewColIdent("localtimestamp"), Fsp:$2}
+    $$ = &CurTimeFuncExpr{Name:NewColIdent(string($1)), Fsp:$2}
   }
   // curtime
 | CURRENT_TIME func_datetime_precision
   {
-    $$ = &CurTimeFuncExpr{Name:NewColIdent("current_time"), Fsp:$2}
+    $$ = &CurTimeFuncExpr{Name:NewColIdent(string($1)), Fsp:$2}
   }
 | TIMESTAMPADD openb sql_id ',' value_expression ',' value_expression closeb
   {
@@ -3641,7 +3643,8 @@ function_call_nonkeyword:
     $$ = &TimestampFuncExpr{Name:string("timestampdiff"), Unit:$3.String(), Expr1:$5, Expr2:$7}
   }
 
-func_datetime_opt:
+// Optional parens for certain keyword functions that don't require them.
+func_parens_opt:
   /* empty */
 | openb closeb
 
@@ -3658,27 +3661,27 @@ func_datetime_precision:
 function_call_conflict:
   IF openb select_expression_list closeb
   {
-    $$ = &FuncExpr{Name: NewColIdent("if"), Exprs: $3}
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3}
   }
 | DATABASE openb select_expression_list_opt closeb
   {
-    $$ = &FuncExpr{Name: NewColIdent("database"), Exprs: $3}
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3}
   }
 | MOD openb select_expression_list closeb
   {
-    $$ = &FuncExpr{Name: NewColIdent("mod"), Exprs: $3}
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3}
   }
 | REPLACE openb select_expression_list closeb
   {
-    $$ = &FuncExpr{Name: NewColIdent("replace"), Exprs: $3}
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3}
   }
 | SUBSTR openb select_expression_list closeb
   {
-    $$ = &FuncExpr{Name: NewColIdent("substr"), Exprs: $3}
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3}
   }
 | SUBSTRING openb select_expression_list closeb
   {
-    $$ = &FuncExpr{Name: NewColIdent("substr"), Exprs: $3}
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3}
   }
 
 match_option:
