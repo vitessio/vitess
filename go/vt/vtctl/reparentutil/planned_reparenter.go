@@ -125,7 +125,7 @@ func (pr *PlannedReparenter) getLockAction(opts PlannedReparentOptions) string {
 	)
 }
 
-// prelightChecks checks some invariants that pr.reparentShardLocked() depends
+// preflightChecks checks some invariants that pr.reparentShardLocked() depends
 // on. It returns a boolean to indicate if the reparent is a no-op (which
 // happens iff the caller specified an AvoidPrimaryAlias and it's not the shard
 // primary), as well as an error.
