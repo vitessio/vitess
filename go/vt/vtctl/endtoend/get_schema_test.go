@@ -138,7 +138,7 @@ func TestGetSchema(t *testing.T) {
 		},
 	}
 
-	tmc := testutil.TabletManagerClient
+	tmc := testutil.TestTabletManagerClient
 	tmc.Schemas[topoproto.TabletAliasString(tablet.Alias)] = sd
 
 	*tmclient.TabletManagerProtocol = testutil.TabletManagerClientProtocol

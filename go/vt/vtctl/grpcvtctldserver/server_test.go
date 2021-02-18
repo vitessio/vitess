@@ -207,7 +207,7 @@ func TestChangeTabletType(t *testing.T) {
 			ctx := context.Background()
 			ts := memorytopo.NewServer(tt.cells...)
 			vtctld := NewVtctldServer(ts)
-			testutil.TabletManagerClient.Topo = ts
+			testutil.TestTabletManagerClient.Topo = ts
 
 			testutil.AddTablets(ctx, t, ts, nil, tt.tablets...)
 
@@ -247,7 +247,7 @@ func TestChangeTabletType(t *testing.T) {
 		ctx := context.Background()
 		ts := memorytopo.NewServer("zone1")
 		vtctld := NewVtctldServer(ts)
-		testutil.TabletManagerClient.Topo = nil
+		testutil.TestTabletManagerClient.Topo = nil
 
 		testutil.AddTablet(ctx, t, ts, &topodatapb.Tablet{
 			Alias: &topodatapb.TabletAlias{
@@ -2205,7 +2205,7 @@ func TestGetSchema(t *testing.T) {
 
 	// we need to run this on each test case or they will pollute each other
 	setupSchema := func() {
-		testutil.TabletManagerClient.Schemas[topoproto.TabletAliasString(validAlias)] = &tabletmanagerdatapb.SchemaDefinition{
+		testutil.TestTabletManagerClient.Schemas[topoproto.TabletAliasString(validAlias)] = &tabletmanagerdatapb.SchemaDefinition{
 			DatabaseSchema: "CREATE DATABASE vt_testkeyspace",
 			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
 				{
