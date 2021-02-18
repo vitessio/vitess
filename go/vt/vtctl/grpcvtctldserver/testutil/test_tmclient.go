@@ -37,26 +37,6 @@ import (
 	"vitess.io/vitess/go/vt/proto/vttime"
 )
 
-// tabletManagerClient implements the tmclient.TabletManagerClient for
-// testing. It allows users to mock various tmclient methods.
-type tabletManagerClient struct {
-	tmclient.TabletManagerClient
-	Topo    *topo.Server
-	Schemas map[string]*tabletmanagerdatapb.SchemaDefinition
-}
-
-// GetSchema is part of the tmclient.TabletManagerClient interface.
-func (c *tabletManagerClient) GetSchema(ctx context.Context, tablet *topodatapb.Tablet, tablets []string, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error) {
-	key := topoproto.TabletAliasString(tablet.Alias)
-
-	schema, ok := c.Schemas[key]
-	if !ok {
-		return nil, fmt.Errorf("no schemas for %s", key)
-	}
-
-	return schema, nil
-}
-
 var (
 	tmclientLock        sync.Mutex
 	tmclientFactoryLock sync.Mutex
@@ -137,17 +117,6 @@ func NewVtctldServerWithTabletManagerClient(t *testing.T, ts *topo.Server, tmc t
 	return newVtctldServerFn(ts)
 }
 
-// TabletManagerClientProtocol is the protocol this package registers its client
-// test implementation under. Users should set *tmclient.TabletManagerProtocol
-// to this value before use.
-const TabletManagerClientProtocol = "grpcvtctldserver.testutil"
-
-// TestTabletManagerClient is the singleton test client instance. It is public
-// and singleton to allow tests to mutate and verify its state.
-var TestTabletManagerClient = &tabletManagerClient{
-	Schemas: map[string]*tabletmanagerdatapb.SchemaDefinition{},
-}
-
 // TabletManagerClient implements the tmclient.TabletManagerClient interface
 // with mock delays and response values, for use in unit tests.
 type TabletManagerClient struct {
@@ -161,6 +130,13 @@ type TabletManagerClient struct {
 	// keyed by tablet alias.
 	DemoteMasterResults map[string]struct {
 		Status *replicationdatapb.MasterStatus
+		Error  error
+	}
+	// keyed by tablet alias.
+	GetSchemaDelays map[string]time.Duration
+	// keyed by tablet alias.
+	GetSchemaResults map[string]struct {
+		Schema *tabletmanagerdatapb.SchemaDefinition
 		Error  error
 	}
 	// keyed by tablet alias.
@@ -256,6 +232,36 @@ func (fake *TabletManagerClient) DemoteMaster(ctx context.Context, tablet *topod
 	}
 
 	return nil, assert.AnError
+}
+
+// GetSchema is part of the tmclient.TabletManagerClient interface.
+func (fake *TabletManagerClient) GetSchema(ctx context.Context, tablet *topodatapb.Tablet, tablets []string, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error) {
+	if fake.GetSchemaResults == nil {
+		return nil, assert.AnError
+	}
+
+	if tablet.Alias == nil {
+		return nil, assert.AnError
+	}
+
+	key := topoproto.TabletAliasString(tablet.Alias)
+
+	if fake.GetSchemaDelays != nil {
+		if delay, ok := fake.GetSchemaDelays[key]; ok {
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(delay):
+				// proceed to results
+			}
+		}
+	}
+
+	if result, ok := fake.GetSchemaResults[key]; ok {
+		return result.Schema, result.Error
+	}
+
+	return nil, fmt.Errorf("%w: no schemas for %s", assert.AnError, key)
 }
 
 // MasterPosition is part of the tmclient.TabletManagerClient interface.
@@ -522,10 +528,4 @@ func (fake *TabletManagerClient) UndoDemoteMaster(ctx context.Context, tablet *t
 	}
 
 	return assert.AnError
-}
-
-func init() {
-	tmclient.RegisterTabletManagerClientFactory(TabletManagerClientProtocol, func() tmclient.TabletManagerClient {
-		return TestTabletManagerClient
-	})
 }

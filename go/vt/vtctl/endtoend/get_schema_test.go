@@ -138,14 +138,26 @@ func TestGetSchema(t *testing.T) {
 		},
 	}
 
-	tmc := testutil.TestTabletManagerClient
-	tmc.Schemas[topoproto.TabletAliasString(tablet.Alias)] = sd
+	tmc := testutil.TabletManagerClient{
+		GetSchemaResults: map[string]struct {
+			Schema *tabletmanagerdatapb.SchemaDefinition
+			Error  error
+		}{
+			topoproto.TabletAliasString(tablet.Alias): {
+				Schema: sd,
+				Error:  nil,
+			},
+		},
+	}
 
-	*tmclient.TabletManagerProtocol = testutil.TabletManagerClientProtocol
+	tmclient.RegisterTabletManagerClientFactory(t.Name(), func() tmclient.TabletManagerClient {
+		return &tmc
+	})
+	*tmclient.TabletManagerProtocol = t.Name()
 
 	logger := logutil.NewMemoryLogger()
 
-	err := vtctl.RunCommand(ctx, wrangler.New(logger, topo, tmc), []string{
+	err := vtctl.RunCommand(ctx, wrangler.New(logger, topo, &tmc), []string{
 		"GetSchema",
 		topoproto.TabletAliasString(tablet.Alias),
 	})
@@ -185,7 +197,7 @@ func TestGetSchema(t *testing.T) {
 		},
 	}
 
-	err = vtctl.RunCommand(ctx, wrangler.New(logger, topo, tmc), []string{
+	err = vtctl.RunCommand(ctx, wrangler.New(logger, topo, &tmc), []string{
 		"GetSchema",
 		"-table_sizes_only",
 		topoproto.TabletAliasString(tablet.Alias),
