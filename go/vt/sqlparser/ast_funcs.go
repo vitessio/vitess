@@ -771,52 +771,6 @@ func (node *Select) MakeDistinct() {
 	node.Distinct = true
 }
 
-// ContainsOnlyInformationSchema returns if the select statement only contains information_schema tables
-func (node *Select) ContainsOnlyInformationSchema() bool {
-	for _, expr := range node.From {
-		if !expr.ContainsOnlyInformationSchema() {
-			return false
-		}
-	}
-	return true
-}
-
-// ContainsOnlyInformationSchema returns if the expression only contains information_schema tables
-func (expr *ParenTableExpr) ContainsOnlyInformationSchema() bool {
-	for _, tableExpr := range expr.Exprs {
-		if !tableExpr.ContainsOnlyInformationSchema() {
-			return false
-		}
-	}
-	return true
-}
-
-// ContainsOnlyInformationSchema returns if the expression only contains information_schema tables
-func (expr *JoinTableExpr) ContainsOnlyInformationSchema() bool {
-	if !expr.LeftExpr.ContainsOnlyInformationSchema() {
-		return false
-	}
-	if !expr.RightExpr.ContainsOnlyInformationSchema() {
-		return false
-	}
-	return true
-}
-
-// ContainsOnlyInformationSchema returns if the expression only contains information_schema tables
-func (node *AliasedTableExpr) ContainsOnlyInformationSchema() bool {
-	return node.Expr.ContainsOnlyInformationSchema()
-}
-
-// ContainsOnlyInformationSchema returns if the table is from information_schema
-func (node *DerivedTable) ContainsOnlyInformationSchema() bool {
-	return node.Select.ContainsOnlyInformationSchema()
-}
-
-// ContainsOnlyInformationSchema returns if the table is from information_schema
-func (node TableName) ContainsOnlyInformationSchema() bool {
-	return strings.ToLower(node.Qualifier.String()) == "information_schema"
-}
-
 // AddWhere adds the boolean expression to the
 // WHERE clause as an AND condition.
 func (node *Select) AddWhere(expr Expr) {
@@ -869,11 +823,6 @@ func (node *ParenSelect) MakeDistinct() {
 	node.Select.MakeDistinct()
 }
 
-// ContainsOnlyInformationSchema returns if the select statement only contains information_schema tables
-func (node *ParenSelect) ContainsOnlyInformationSchema() bool {
-	return node.Select.ContainsOnlyInformationSchema()
-}
-
 // AddWhere adds the boolean expression to the
 // WHERE clause as an AND condition.
 func (node *Update) AddWhere(expr Expr) {
@@ -908,19 +857,6 @@ func (node *Union) SetLock(lock Lock) {
 // MakeDistinct implements the SelectStatement interface
 func (node *Union) MakeDistinct() {
 	node.UnionSelects[len(node.UnionSelects)-1].Distinct = true
-}
-
-// ContainsOnlyInformationSchema returns if the union statement only contains information_schema tables
-func (node *Union) ContainsOnlyInformationSchema() bool {
-	if !node.FirstStatement.ContainsOnlyInformationSchema() {
-		return false
-	}
-	for _, unionSelect := range node.UnionSelects {
-		if !unionSelect.Statement.ContainsOnlyInformationSchema() {
-			return false
-		}
-	}
-	return true
 }
 
 //Unionize returns a UNION, either creating one or adding SELECT to an existing one

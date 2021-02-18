@@ -52,7 +52,6 @@ type (
 		SetLimit(*Limit)
 		SetLock(lock Lock)
 		MakeDistinct()
-		ContainsOnlyInformationSchema() bool
 	}
 
 	// DDLStatement represents any DDL Statement
@@ -1447,7 +1446,6 @@ type (
 	// TableExpr represents a table expression.
 	TableExpr interface {
 		iTableExpr()
-		ContainsOnlyInformationSchema() bool
 		SQLNode
 	}
 
@@ -1486,7 +1484,6 @@ type (
 	// SimpleTableExpr represents a simple table expression.
 	SimpleTableExpr interface {
 		iSimpleTableExpr()
-		ContainsOnlyInformationSchema() bool
 		SQLNode
 	}
 

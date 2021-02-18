@@ -836,5 +836,5 @@ func queryTimeout(d sqlparser.CommentDirectives) int {
 
 // ContainsOnlyInformationSchema returns if the route only contains information_schema tables
 func (rb *route) ContainsOnlyInformationSchema() bool {
-	return rb.Select.ContainsOnlyInformationSchema()
+	return rb.eroute.Opcode == engine.SelectDBA
 }

@@ -553,7 +553,7 @@ func (cached *CreateTable) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(57)
+		size += int64(65)
 	}
 	// field Table vitess.io/vitess/go/vt/sqlparser.TableName
 	size += cached.Table.CachedSize(false)
@@ -666,7 +666,7 @@ func (cached *DropTable) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(25)
+		size += int64(33)
 	}
 	// field FromTables vitess.io/vitess/go/vt/sqlparser.TableNames
 	{
