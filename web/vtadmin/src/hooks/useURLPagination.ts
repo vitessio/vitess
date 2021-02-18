@@ -15,7 +15,6 @@
  */
 import { useEffect } from 'react';
 
-import qs from 'query-string';
 import { useHistory, useLocation } from 'react-router-dom';
 import { useURLQuery } from './useURLQuery';
 
@@ -39,25 +38,24 @@ const FIRST_PAGE = 1;
 export const useURLPagination = ({ totalPages }: PaginationOpts): PaginationParams => {
     const history = useHistory();
     const location = useLocation();
-    const query = useURLQuery();
+    const { query, replaceQuery } = useURLQuery();
 
     // A slight nuance here -- if `page` is not in the URL at all, then we can assume
     // it's the first page. This makes for slightly nicer URLs for the first/default page:
     // "/foo" instead of "/foo?page=1". No redirect required.
-    //
-    // However, if the value in the URL *is* defined but is negative, non-numeric,
-    // too big, or otherwise Weird, then we *do* want to redirect to the first page.
     const page = !('page' in query) || query.page === null ? FIRST_PAGE : query.page;
 
     useEffect(() => {
-        const isPageTooBig = totalPages > 0 && page > totalPages;
-        const isPageTooSmall = page < FIRST_PAGE;
+        // If the value in the URL *is* defined but is negative, non-numeric,
+        // too big, or otherwise Weird, then we *do* want to redirect to the first page.
+        const isPageTooBig = typeof page === 'number' && totalPages > 0 && page > totalPages;
+        const isPageTooSmall = typeof page === 'number' && page < FIRST_PAGE;
 
         if (isPageTooBig || isPageTooSmall || typeof page !== 'number') {
-            const nextQuery = qs.stringify({ ...query, page: FIRST_PAGE });
-            history.replace({ pathname: location.pathname, search: `?${nextQuery}` });
+            // Replace history so the invalid value is not persisted in browser history
+            replaceQuery({ page: FIRST_PAGE });
         }
-    }, [page, totalPages, history, location.pathname, query]);
+    }, [page, totalPages, history, location.pathname, query, replaceQuery]);
 
     return {
         page,
