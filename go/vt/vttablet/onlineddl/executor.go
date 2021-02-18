@@ -1395,7 +1395,8 @@ func (e *Executor) executeMigration(ctx context.Context, onlineDDL *schema.Onlin
 				return failMigration(err)
 			}
 
-			onlineDDL.SQL, _, err = schema.GenerateRenameStatementWithUUID(onlineDDL.Table, schema.HoldTableGCState, onlineDDL.GetGCUUID(), time.Now().UTC().Add(gcHoldHours*time.Hour))
+			var toTableName string
+			onlineDDL.SQL, toTableName, err = schema.GenerateRenameStatementWithUUID(onlineDDL.Table, schema.HoldTableGCState, onlineDDL.GetGCUUID(), time.Now().UTC().Add(gcHoldHours*time.Hour))
 			if err != nil {
 				return failMigration(err)
 			}
@@ -1409,6 +1410,10 @@ func (e *Executor) executeMigration(ctx context.Context, onlineDDL *schema.Onlin
 			if err != nil {
 				return failMigration(err)
 			}
+			if err := e.updateArtifacts(ctx, onlineDDL.UUID, toTableName); err != nil {
+				return err
+			}
+
 			return nil
 		}()
 	case sqlparser.CreateDDLAction:
