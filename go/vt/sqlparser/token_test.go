@@ -247,75 +247,37 @@ func TestVersion(t *testing.T) {
 
 func TestConvertMySQLVersion(t *testing.T) {
 	testcases := []struct {
-		version          string
-		convertedVersion []int
-		error            string
+		version        string
+		commentVersion string
+		error          string
 	}{{
-		version:          "5.7.9",
-		convertedVersion: []int{5, 7, 9},
+		version:        "5.7.9",
+		commentVersion: "50709",
 	}, {
-		version:          "0008.08.9",
-		convertedVersion: []int{8, 8, 9},
+		version:        "0008.08.9",
+		commentVersion: "80809",
 	}, {
-		version:          "501.7.9, Vitess - 10.0.1",
-		convertedVersion: []int{501, 7, 9},
+		version:        "5.7.9, Vitess - 10.0.1",
+		commentVersion: "50709",
 	}, {
-		version:          "8.1 Vitess - 10.0.1",
-		convertedVersion: []int{8, 1, 0},
+		version:        "8.1 Vitess - 10.0.1",
+		commentVersion: "80100",
 	}, {
 		version: "Vitess - 10.0.1",
 		error:   "MySQL version not correctly setup - Vitess - 10.0.1.",
 	}, {
-		version:          "5.7.9.22",
-		convertedVersion: []int{5, 7, 9},
+		version:        "5.7.9.22",
+		commentVersion: "50709",
 	}}
 
 	for _, tcase := range testcases {
 		t.Run(tcase.version, func(t *testing.T) {
-			output, err := convertMySQLVersion(tcase.version)
+			output, err := convertMySQLVersionToCommentVersion(tcase.version)
 			if tcase.error != "" {
 				require.EqualError(t, err, tcase.error)
 			} else {
 				require.NoError(t, err)
-				require.Equal(t, tcase.convertedVersion, output)
-			}
-		})
-	}
-}
-
-func TestConvertCommentVersion(t *testing.T) {
-	testcases := []struct {
-		version          string
-		convertedVersion []int
-		error            string
-	}{{
-		version:          "50709",
-		convertedVersion: []int{5, 7, 9},
-	}, {
-		version:          "50110",
-		convertedVersion: []int{5, 1, 10},
-	}, {
-		version:          "32312",
-		convertedVersion: []int{3, 23, 12},
-	}, {
-		version:          "40100",
-		convertedVersion: []int{4, 1, 0},
-	}, {
-		version:          "80016",
-		convertedVersion: []int{8, 0, 16},
-	}, {
-		version:          "",
-		convertedVersion: []int{0, 0, 0},
-	}}
-
-	for _, tcase := range testcases {
-		t.Run(tcase.version, func(t *testing.T) {
-			output, err := convertCommentVersion(tcase.version)
-			if tcase.error != "" {
-				require.EqualError(t, err, tcase.error)
-			} else {
-				require.NoError(t, err)
-				require.Equal(t, tcase.convertedVersion, output)
+				require.Equal(t, tcase.commentVersion, output)
 			}
 		})
 	}

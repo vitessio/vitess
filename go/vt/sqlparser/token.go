@@ -1031,39 +1031,23 @@ func (tkn *Tokenizer) scanMySQLSpecificComment() (int, []byte) {
 		}
 		tkn.consumeNext(buffer)
 	}
-	version, sql := ExtractMysqlComment(buffer.String())
-	commentVersion, err := convertCommentVersion(version)
+
+	commentVersion, sql := ExtractMysqlComment(buffer.String())
+
+	mysqlVersion, err := convertMySQLVersionToCommentVersion(MySQLVersion)
 	if err != nil {
 		tkn.Error(err.Error())
 		return tkn.Scan()
 	}
-
-	isCommentVersionHigher := false
-
-	if len(commentVersion) == 3 {
-		mysqlVersion, err := convertMySQLVersion(MySQLVersion)
-		if err != nil {
-			tkn.Error(err.Error())
-			return tkn.Scan()
-		}
-		for i := 0; i < 3; i++ {
-			if mysqlVersion[i] > commentVersion[i] {
-				break
-			} else if mysqlVersion[i] < commentVersion[i] {
-				isCommentVersionHigher = true
-				break
-			}
-		}
-	}
-
-	// Only add the special comment to the tokenizer if the version of MySQL is higher or equal to the comment version
-	if !isCommentVersionHigher {
+	if mysqlVersion >= commentVersion {
+		// Only add the special comment to the tokenizer if the version of MySQL is higher or equal to the comment version
 		tkn.specialComment = NewStringTokenizer(sql)
 	}
+
 	return tkn.Scan()
 }
 
-func convertMySQLVersion(version string) ([]int, error) {
+func convertMySQLVersionToCommentVersion(version string) (string, error) {
 	var res = make([]int, 3)
 	idx := 0
 	val := ""
@@ -1073,7 +1057,7 @@ func convertMySQLVersion(version string) ([]int, error) {
 		} else if c == '.' {
 			v, err := strconv.Atoi(val)
 			if err != nil {
-				return nil, err
+				return "", err
 			}
 			val = ""
 			res[idx] = v
@@ -1088,39 +1072,16 @@ func convertMySQLVersion(version string) ([]int, error) {
 	if val != "" {
 		v, err := strconv.Atoi(val)
 		if err != nil {
-			return nil, err
+			return "", err
 		}
 		res[idx] = v
 		idx++
 	}
 	if idx == 0 {
-		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "MySQL version not correctly setup - %s.", version)
+		return "", vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "MySQL version not correctly setup - %s.", version)
 	}
-	return res, nil
-}
 
-func convertCommentVersion(version string) ([]int, error) {
-	var res = make([]int, 3)
-	if len(version) != 5 {
-		res[0] = 0
-		res[1] = 0
-		res[2] = 0
-	} else {
-		var err error
-		res[0], err = strconv.Atoi(string(version[0]))
-		if err != nil {
-			return nil, err
-		}
-		res[1], err = strconv.Atoi(string(version[1:3]))
-		if err != nil {
-			return nil, err
-		}
-		res[2], err = strconv.Atoi(string(version[3:]))
-		if err != nil {
-			return nil, err
-		}
-	}
-	return res, nil
+	return fmt.Sprintf("%01d%02d%02d", res[0], res[1], res[2]), nil
 }
 
 func (tkn *Tokenizer) consumeNext(buffer *bytes2.Buffer) {
