@@ -4367,7 +4367,7 @@ column_name_safe_reserved_keyword:
 | JSON_OBJECTAGG
 | LAG
 | LAST_VALUE
-| LEAD openb
+| LEAD
 | MAX
 | MIN
 | NTH_VALUE
