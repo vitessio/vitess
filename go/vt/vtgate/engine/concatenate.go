@@ -134,7 +134,7 @@ func (c *Concatenate) execSources(vcursor VCursor, bindVars map[string]*querypb.
 	}
 
 	if err := g.Wait(); err != nil {
-		return nil, vterrors.Wrap(err, "Concatenate.Execute")
+		return nil, err
 	}
 	return results, nil
 }
