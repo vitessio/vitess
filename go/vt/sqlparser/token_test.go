@@ -218,23 +218,23 @@ func TestVersion(t *testing.T) {
 	}{{
 		version: "5.7.9",
 		in:      "/*!80102 SELECT*/ FROM IN EXISTS",
-		id:      []int{FROM, IN, EXISTS, eofChar},
+		id:      []int{FROM, IN, EXISTS, 0},
 	}, {
 		version: "8.1.1",
 		in:      "/*!80102 SELECT*/ FROM IN EXISTS",
-		id:      []int{FROM, IN, EXISTS, eofChar},
+		id:      []int{FROM, IN, EXISTS, 0},
 	}, {
 		version: "8.2.1",
 		in:      "/*!80102 SELECT*/ FROM IN EXISTS",
-		id:      []int{SELECT, FROM, IN, EXISTS, eofChar},
+		id:      []int{SELECT, FROM, IN, EXISTS, 0},
 	}, {
 		version: "8.1.2",
 		in:      "/*!80102 SELECT*/ FROM IN EXISTS",
-		id:      []int{SELECT, FROM, IN, EXISTS, eofChar},
+		id:      []int{SELECT, FROM, IN, EXISTS, 0},
 	}}
 
 	for _, tcase := range testcases {
-		t.Run(tcase.in, func(t *testing.T) {
+		t.Run(tcase.version+"_"+tcase.in, func(t *testing.T) {
 			MySQLVersion = tcase.version
 			tok := NewStringTokenizer(tcase.in)
 			for _, expectedID := range tcase.id {
