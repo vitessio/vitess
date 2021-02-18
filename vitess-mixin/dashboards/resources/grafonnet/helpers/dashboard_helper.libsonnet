@@ -1,4 +1,4 @@
-/** This is a helper library to load grafonet dashboards using the mixin metadata stored in `config.libshonnet` */
+/** This is a helper library to load grafonnet dashboards using the mixin metadata stored in `config.libshonnet` */
 
 local grafonnet_helper = import 'grafonnet_helper.libsonnet';
 

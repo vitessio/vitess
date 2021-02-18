@@ -6,7 +6,7 @@ local grafonnet_helper = import './grafonnet_helper.libsonnet';
 
 {
   /**
-   * Builds grapPanel using grafonet and the configuration from `vtgate_config.libsonnet`
+   * Builds grapPanel using grafonnet and the configuration from `vtgate_config.libsonnet`
    *
    * @name vtgate_helper.getPanel
    *
@@ -18,7 +18,7 @@ local grafonnet_helper = import './grafonnet_helper.libsonnet';
   getPanel(config):: grafonnet_helper.getPanel(config),
 
   /**
-   * Builds a singlestat using grafonet and the configuration from `vtgate_config.libsonnet`
+   * Builds a singlestat using grafonnet and the configuration from `vtgate_config.libsonnet`
    *
    * @name vtgate_helper.getSingleStat
    *
