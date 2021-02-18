@@ -57,15 +57,6 @@ func (c *tabletManagerClient) GetSchema(ctx context.Context, tablet *topodatapb.
 	return schema, nil
 }
 
-// SetMaster is part of the tmclient.TabletManagerClient interface.
-func (c *tabletManagerClient) SetMaster(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool) error {
-	if c.Topo == nil {
-		return assert.AnError
-	}
-
-	return nil
-}
-
 var (
 	tmclientLock        sync.Mutex
 	tmclientFactoryLock sync.Mutex
