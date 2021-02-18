@@ -1264,9 +1264,6 @@ var (
 			input:  "show events",
 			output: "show events",
 		}, {
-			input:  "show function code func",
-			output: "show function code",
-		}, {
 			input: "show function status",
 		}, {
 			input: "show function status where Name = 'hi'",
@@ -1323,9 +1320,6 @@ var (
 		}, {
 			input:  "show privileges",
 			output: "show privileges",
-		}, {
-			input:  "show procedure code p",
-			output: "show procedure code",
 		}, {
 			input: "show procedure status",
 		}, {

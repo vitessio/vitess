@@ -184,7 +184,7 @@ func skipToEnd(yylex interface{}) {
 %token <bytes> SHOW DESCRIBE EXPLAIN DATE ESCAPE REPAIR OPTIMIZE TRUNCATE FORMAT
 %token <bytes> MAXVALUE PARTITION REORGANIZE LESS THAN PROCEDURE TRIGGER TRIGGERS FUNCTION
 %token <bytes> VINDEX VINDEXES
-%token <bytes> STATUS VARIABLES WARNINGS CODE
+%token <bytes> STATUS VARIABLES WARNINGS
 %token <bytes> SEQUENCE
 %token <bytes> EACH ROW BEFORE FOLLOWS PRECEDES DEFINER INVOKER
 %token <bytes> INOUT OUT DETERMINISTIC CONTAINS READS MODIFIES SQL DATA SECURITY
@@ -2293,17 +2293,9 @@ show_statement:
   {
     $$ = &Show{Type: string($2)}
   }
-| SHOW PROCEDURE CODE ddl_skip_to_end
-  {
-    $$ = &Show{Type: string($2) + " " + string($3)}
-  }
 | SHOW PROCEDURE STATUS like_or_where_opt
   {
     $$ = &Show{Type: string($2) + " " + string($3), ProcFuncFilter: $4}
-  }
-| SHOW FUNCTION CODE ddl_skip_to_end
-  {
-    $$ = &Show{Type: string($2) + " " + string($3)}
   }
 | SHOW FUNCTION STATUS like_or_where_opt
   {
@@ -4346,6 +4338,7 @@ reserved_keyword:
 | OUT
 | OUTER
 | OVER
+| READS
 | RECURSIVE
 | REGEXP
 | RENAME
@@ -4416,7 +4409,6 @@ non_reserved_keyword:
 | CHECK
 | CLASS_ORIGIN
 | CLONE
-| CODE
 | COLLATION
 | COLUMNS
 | COLUMN_NAME
@@ -4518,7 +4510,6 @@ non_reserved_keyword:
 | QUERY
 | RANDOM
 | READ
-| READS
 | REAL
 | REFERENCE
 | REFERENCES
