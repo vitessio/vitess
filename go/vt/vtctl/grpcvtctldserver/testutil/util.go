@@ -20,6 +20,7 @@ package testutil
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 
@@ -87,6 +88,10 @@ type AddTabletOptions struct {
 	// update the shard record to make that tablet the primary, and fail the
 	// test if the shard record has a serving primary already.
 	AlsoSetShardMaster bool
+	// ForceSetShardMaster, when combined with AlsoSetShardMaster, will ignore
+	// any existing primary in the shard, making the current tablet the serving
+	// primary (given it is type MASTER), and log that it has done so.
+	ForceSetShardMaster bool
 	// SkipShardCreation, when set, makes AddTablet never attempt to create a
 	// shard record in the topo under any circumstances.
 	SkipShardCreation bool
@@ -136,7 +141,13 @@ func AddTablet(ctx context.Context, t *testing.T, ts *topo.Server, tablet *topod
 			if tablet.Type == topodatapb.TabletType_MASTER && opts.AlsoSetShardMaster {
 				_, err := ts.UpdateShardFields(ctx, tablet.Keyspace, tablet.Shard, func(si *topo.ShardInfo) error {
 					if si.IsMasterServing && si.MasterAlias != nil {
-						return fmt.Errorf("shard %v/%v already has a serving master (%v)", tablet.Keyspace, tablet.Shard, topoproto.TabletAliasString(si.MasterAlias))
+						msg := fmt.Sprintf("shard %v/%v already has a serving master (%v)", tablet.Keyspace, tablet.Shard, topoproto.TabletAliasString(si.MasterAlias))
+
+						if !opts.ForceSetShardMaster {
+							return errors.New(msg)
+						}
+
+						t.Logf("%s; replacing with %v because ForceSetShardMaster = true", msg, topoproto.TabletAliasString(tablet.Alias))
 					}
 
 					si.MasterAlias = tablet.Alias
