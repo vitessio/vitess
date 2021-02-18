@@ -2529,3 +2529,5 @@
 2021-02-18T13:59:34Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/578323111
 2021-02-18T13:59:34Z,unit_race,https://github.com/vitessio/vitess/actions/runs/578323102
 2021-02-18T14:26:32Z,endtoend,https://github.com/vitessio/vitess/actions/runs/578399875
+2021-02-18T14:42:41Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/578447604
+2021-02-18T14:42:41Z,unit_race,https://github.com/vitessio/vitess/actions/runs/578447555
