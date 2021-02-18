@@ -2511,17 +2511,17 @@ as_ci_opt:
 
 col_alias:
   ID
-    {
-      $$ = NewColIdent(string($1))
-    }
+  {
+    $$ = NewColIdent(string($1))
+  }
 | non_reserved_keyword
-    {
-      $$ = NewColIdent(string($1))
-    }
+  {
+    $$ = NewColIdent(string($1))
+  }
 | column_name_safe_reserved_keyword
-    {
-      $$ = NewColIdent(string($1))
-    }
+  {
+    $$ = NewColIdent(string($1))
+  }
 | STRING
   {
     $$ = NewColIdent(string($1))
@@ -4354,6 +4354,7 @@ non_reserved_keyword:
 | ZEROFILL
 
 // Reserved keywords that cause grammar conflicts in some places, but are safe to use as column name / alias identifiers.
+// These keywords should also go in reserved_keyword.
 column_name_safe_reserved_keyword:
   AVG
 | BIT_AND
