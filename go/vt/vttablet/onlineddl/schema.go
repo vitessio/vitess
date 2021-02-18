@@ -245,8 +245,7 @@ const (
 			_vt.copy_state
 		WHERE vrepl_id=%a
 		`
-	sqlSwapTables    = "RENAME TABLE `%a` TO `%a`, `%a` TO `%a`, `%a` TO `%a`"
-	sqlDummyDropView = "DROP VIEW IF EXISTS `_vt:onlineddl:executor:inject:binlog:entry`"
+	sqlSwapTables = "RENAME TABLE `%a` TO `%a`, `%a` TO `%a`, `%a` TO `%a`"
 )
 
 const (

@@ -140,8 +140,6 @@ type Executor struct {
 	lastMigrationUUID     string
 	tickReentranceFlag    int64
 
-	requestForDummyInjection int64
-
 	ticks             *timer.Timer
 	isOpen            bool
 	schemaInitialized bool
@@ -387,24 +385,6 @@ func (e *Executor) tableExists(ctx context.Context, tableName string) (bool, err
 	}
 	row := rs.Named().Row()
 	return (row != nil), nil
-}
-
-// injectDummyStatements issues several no-op statements on the backend MySQL server. This is done to
-// ensure binary logs are being written, to solve a possible scenario for vreplication-based migrations
-// where the server is otherwise completely stale. Vreplication does not write heartbeats like gh-ost does,
-// and if the server is stale (and assuming lag-throttler is not enabled) then binary logs may be completely silent,
-// which makes it impossible to know when to cut-over.
-func (e *Executor) injectDummyStatements(ctx context.Context) (err error) {
-	conn, err := dbconnpool.NewDBConnection(ctx, e.env.Config().DB.DbaWithDB())
-	if err != nil {
-		return err
-	}
-	defer conn.Close()
-
-	if _, err := conn.ExecuteFetch(sqlDummyDropView, 0, false); err != nil {
-		return err
-	}
-	return nil
 }
 
 func (e *Executor) parseAlterOptions(ctx context.Context, onlineDDL *schema.OnlineDDL) string {
@@ -1553,18 +1533,7 @@ func (e *Executor) isVReplMigrationReadyToCutOver(ctx context.Context, s *VReplS
 		// Let's look at transaction timestamp. This gets written by any ongoing
 		// writes on the server (whether on this table or any other table)
 		transactionTimestamp := time.Unix(s.transactionTimestamp, 0)
-		if diff := durationDiff(timeNow, transactionTimestamp); diff > cutOverThreshold {
-			// There's two ways the diff can be high:
-			// 1. High workload: vreplication is unable to apply events in a timely manner. This is
-			//    a normal situation and is why we're testing transaction_timestamp
-			// 2. Lack of writes on the server. Possibly the server is stale. In which case, cut-over
-			//    should be good to go. But we need (TODO) some mechanism to inform us that this is indeed the case.
-
-			// To handle (2), we request an injection of a dummy transaction, heuristically in good time for the next check.
-			// To not overdo it, and avoid spamming the server with dummy statements, we only request injection if lag is very high.
-			if diff > *migrationCheckInterval {
-				atomic.StoreInt64(&e.requestForDummyInjection, 1)
-			}
+		if durationDiff(timeNow, transactionTimestamp) > cutOverThreshold {
 			return false, nil
 		}
 	}
@@ -1821,17 +1790,6 @@ func (e *Executor) onMigrationCheckTick() {
 		return
 	}
 
-	if atomic.LoadInt64(&e.requestForDummyInjection) > 0 {
-		// This is a special scenario. VReplication-based online-DDL notices transaction timestamp is old. Either it
-		// is very busy, or the server is compeltely stale. In th elatter case, it requests dummy injection of
-		// statements. We comply here.
-		// We inject a few well-timed statements, scheduled to be fresh by *next iteration*, to be intercepted by e.reviewRunningMigrations(ctx), following
-		atomic.StoreInt64(&e.requestForDummyInjection, 0)
-		intervals := []time.Duration{*migrationCheckInterval - 2*time.Second, *migrationCheckInterval - time.Second, *migrationCheckInterval}
-		for _, d := range intervals {
-			time.AfterFunc(d, func() { e.injectDummyStatements(ctx) })
-		}
-	}
 	if err := e.retryTabletFailureMigrations(ctx); err != nil {
 		log.Error(err)
 	}
