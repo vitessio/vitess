@@ -114,6 +114,7 @@ func StartServer(connParams, connAppDebugParams mysql.ConnParams, dbName string)
 	config.HotRowProtection.Mode = tabletenv.Enable
 	config.TrackSchemaVersions = true
 	config.GracePeriods.ShutdownSeconds = 2
+	config.QueryCacheLFU = false
 	gotBytes, _ := yaml2.Marshal(config)
 	log.Infof("Config:\n%s", gotBytes)
 	return StartCustomServer(connParams, connAppDebugParams, dbName, config)
