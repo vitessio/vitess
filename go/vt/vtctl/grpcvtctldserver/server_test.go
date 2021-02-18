@@ -32,7 +32,6 @@ import (
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver/testutil"
-	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	mysqlctlpb "vitess.io/vitess/go/vt/proto/mysqlctl"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -45,7 +44,6 @@ import (
 )
 
 func init() {
-	*tmclient.TabletManagerProtocol = testutil.TabletManagerClientProtocol
 	*backupstorage.BackupStorageImplementation = testutil.BackupStorageImplementation
 }
 
@@ -2197,7 +2195,15 @@ func TestGetTablet(t *testing.T) {
 func TestGetSchema(t *testing.T) {
 	ctx := context.Background()
 	ts := memorytopo.NewServer("zone1")
-	vtctld := NewVtctldServer(ts)
+	tmc := testutil.TabletManagerClient{
+		GetSchemaResults: map[string]struct {
+			Schema *tabletmanagerdatapb.SchemaDefinition
+			Error  error
+		}{},
+	}
+	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, &tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+		return NewVtctldServer(ts)
+	})
 
 	validAlias := &topodatapb.TabletAlias{
 		Cell: "zone1",
@@ -2216,27 +2222,33 @@ func TestGetSchema(t *testing.T) {
 
 	// we need to run this on each test case or they will pollute each other
 	setupSchema := func() {
-		testutil.TestTabletManagerClient.Schemas[topoproto.TabletAliasString(validAlias)] = &tabletmanagerdatapb.SchemaDefinition{
-			DatabaseSchema: "CREATE DATABASE vt_testkeyspace",
-			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
-				{
-					Name: "t1",
-					Schema: `CREATE TABLE t1 (
+		tmc.GetSchemaResults[topoproto.TabletAliasString(validAlias)] = struct {
+			Schema *tabletmanagerdatapb.SchemaDefinition
+			Error  error
+		}{
+			Schema: &tabletmanagerdatapb.SchemaDefinition{
+				DatabaseSchema: "CREATE DATABASE vt_testkeyspace",
+				TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+					{
+						Name: "t1",
+						Schema: `CREATE TABLE t1 (
 	id int(11) not null,
 	PRIMARY KEY (id)
 );`,
-					Type:       "BASE",
-					Columns:    []string{"id"},
-					DataLength: 100,
-					RowCount:   50,
-					Fields: []*querypb.Field{
-						{
-							Name: "id",
-							Type: querypb.Type_INT32,
+						Type:       "BASE",
+						Columns:    []string{"id"},
+						DataLength: 100,
+						RowCount:   50,
+						Fields: []*querypb.Field{
+							{
+								Name: "id",
+								Type: querypb.Type_INT32,
+							},
 						},
 					},
 				},
 			},
+			Error: nil,
 		}
 	}
 
