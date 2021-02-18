@@ -45,16 +45,6 @@ type tabletManagerClient struct {
 	Schemas map[string]*tabletmanagerdatapb.SchemaDefinition
 }
 
-// ChangeType is part of the tmclient.TabletManagerClient interface.
-func (c *tabletManagerClient) ChangeType(ctx context.Context, tablet *topodatapb.Tablet, newType topodatapb.TabletType) error {
-	if c.Topo == nil {
-		return assert.AnError
-	}
-
-	_, err := topotools.ChangeType(ctx, c.Topo, tablet.Alias, newType, &vttime.Time{})
-	return err
-}
-
 // GetSchema is part of the tmclient.TabletManagerClient interface.
 func (c *tabletManagerClient) GetSchema(ctx context.Context, tablet *topodatapb.Tablet, tablets []string, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error) {
 	key := topoproto.TabletAliasString(tablet.Alias)
@@ -171,6 +161,10 @@ var TestTabletManagerClient = &tabletManagerClient{
 // with mock delays and response values, for use in unit tests.
 type TabletManagerClient struct {
 	tmclient.TabletManagerClient
+	// TopoServer is used for certain TabletManagerClient rpcs that update topo
+	// information, e.g. ChangeType. To force an error result for those rpcs in
+	// a test, set tmc.TopoServer = nil.
+	TopoServer *topo.Server
 	// keyed by tablet alias.
 	DemoteMasterDelays map[string]time.Duration
 	// keyed by tablet alias.
@@ -231,6 +225,16 @@ type TabletManagerClient struct {
 	UndoDemoteMasterDelays map[string]time.Duration
 	// keyed by tablet alias
 	UndoDemoteMasterResults map[string]error
+}
+
+// ChangeType is part of the tmclient.TabletManagerClient interface.
+func (fake *TabletManagerClient) ChangeType(ctx context.Context, tablet *topodatapb.Tablet, newType topodatapb.TabletType) error {
+	if fake.TopoServer == nil {
+		return assert.AnError
+	}
+
+	_, err := topotools.ChangeType(ctx, fake.TopoServer, tablet.Alias, newType, &vttime.Time{})
+	return err
 }
 
 // DemoteMaster is part of the tmclient.TabletManagerClient interface.
