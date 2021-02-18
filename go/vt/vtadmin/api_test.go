@@ -702,7 +702,7 @@ func TestGetSchemas(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		testutil.TabletManagerClient.Schemas = map[string]*tabletmanagerdata.SchemaDefinition{}
+		testutil.TestTabletManagerClient.Schemas = map[string]*tabletmanagerdata.SchemaDefinition{}
 
 		topos := []*topo.Server{
 			memorytopo.NewServer("c0_cell1"),
@@ -734,7 +734,7 @@ func TestGetSchemas(t *testing.T) {
 						// exist in the map. Otherwise, TabletManagerClient will return an error when
 						// looking up the schema with tablet alias that doesn't exist.)
 						alias := topoproto.TabletAliasString(tablet.Tablet.Alias)
-						testutil.TabletManagerClient.Schemas[alias] = tt.tabletSchemas[alias]
+						testutil.TestTabletManagerClient.Schemas[alias] = tt.tabletSchemas[alias]
 					}
 
 					clusters[cdx] = buildCluster(cdx, clusterClients[cdx], cts, nil)

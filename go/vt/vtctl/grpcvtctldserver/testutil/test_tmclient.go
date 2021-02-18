@@ -159,14 +159,14 @@ func NewVtctldServerWithTabletManagerClient(t *testing.T, ts *topo.Server, tmc t
 // to this value before use.
 const TabletManagerClientProtocol = "grpcvtctldserver.testutil"
 
-// TabletManagerClient is the singleton test client instance. It is public and
-// singleton to allow tests to mutate and verify its state.
-var TabletManagerClient = &tabletManagerClient{
+// TestTabletManagerClient is the singleton test client instance. It is public
+// and singleton to allow tests to mutate and verify its state.
+var TestTabletManagerClient = &tabletManagerClient{
 	Schemas: map[string]*tabletmanagerdatapb.SchemaDefinition{},
 }
 
 func init() {
 	tmclient.RegisterTabletManagerClientFactory(TabletManagerClientProtocol, func() tmclient.TabletManagerClient {
-		return TabletManagerClient
+		return TestTabletManagerClient
 	})
 }
