@@ -1725,10 +1725,12 @@ var (
 		}, {
 			input: "select i, s as max from mytable MAx",
 			output: "select i, s as `max` from mytable as `MAx`",
-		}, {
-			// TODO: for this to work we need a keyword-safe version of expression in sql.y
-			// input: `select i, s as max from mytable group by max having max = "hello"`,
-		}, {
+		},
+		// {
+		// 	// TODO: for this to work we need a keyword-safe version of expression in sql.y
+		// 	// input: `select i, s as max from mytable group by max having max = "hello"`,
+		// },
+		{
 			input: "stream * from t",
 		}, {
 			input: "stream /* comment */ * from t",
