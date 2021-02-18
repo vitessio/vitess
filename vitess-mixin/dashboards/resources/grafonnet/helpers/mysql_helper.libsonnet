@@ -5,7 +5,7 @@
 local grafonnet_helper = import './grafonnet_helper.libsonnet';
 
 /**
- * Builds grapPanel using grafonet and the configuration from `mysql_config.libsonnet`
+ * Builds grapPanel using grafonnet and the configuration from `mysql_config.libsonnet`
  *
  * @name mysql_helper.getPanel
  *

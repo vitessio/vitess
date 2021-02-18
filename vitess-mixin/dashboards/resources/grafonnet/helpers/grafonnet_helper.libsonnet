@@ -152,7 +152,7 @@ local getTargets(config) =
       //When the datasource is not prometheus(elastic, graphite) config file
       //include calls to graphite.target() and elasticsearch.target().
       //see webapp_config.lisonnet
-      //TODO Update this method to decouple grafonet code from the configuration files.
+      //TODO Update this method to decouple grafonnet code from the configuration files.
       //Legacy configuration files include prometheus.target() calls.
       //TODO update legacy config files to use {'expr':'Prom query' ...} format,
       config.targets
@@ -260,8 +260,8 @@ local getRow(c) =
 // \__ \ | | | | (_| | |  __/\__ \ || (_| | |_
 // |___/_|_| |_|\__, |_|\___||___/\__\__,_|\__|
 //              |___/
-//The default value should include all the parameters that are overriden by the objects that extend the default.
-//Default values match grafonet defaults > https://github.com/grafana/grafonnet-lib/blob/master/grafonnet/singlestat.libsonnet
+//The default value should include all the parameters that are overridden by the objects that extend the default.
+//Default values match grafonnet defaults > https://github.com/grafana/grafonnet-lib/blob/master/grafonnet/singlestat.libsonnet
 
 local default_singlestat = {
   colors: [
