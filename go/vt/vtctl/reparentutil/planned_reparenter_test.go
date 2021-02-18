@@ -404,8 +404,6 @@ func TestPlannedReparenter_preflightChecks(t *testing.T) {
 		},
 		{
 			name: "invariants hold with primary selection",
-			// (TODO:@ajm188) - Rename this type and unify it with the 4 other
-			// mock implementations I've written by this point.
 			tmc: &testutil.TabletManagerClient{
 				ReplicationStatusResults: map[string]struct {
 					Position *replicationdatapb.Status
