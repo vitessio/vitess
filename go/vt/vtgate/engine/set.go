@@ -238,7 +238,7 @@ func (svci *SysVarCheckAndIgnore) VariableName() string {
 func (svci *SysVarCheckAndIgnore) Execute(vcursor VCursor, env evalengine.ExpressionEnv) error {
 	rss, _, err := vcursor.ResolveDestinations(svci.Keyspace.Name, nil, []key.Destination{svci.TargetDestination})
 	if err != nil {
-		return vterrors.Wrap(err, "SysVarCheckAndIgnore")
+		return err
 	}
 
 	if len(rss) != 1 {
@@ -280,7 +280,7 @@ func (svs *SysVarReservedConn) Execute(vcursor VCursor, env evalengine.Expressio
 	if svs.TargetDestination != nil {
 		rss, _, err := vcursor.ResolveDestinations(svs.Keyspace.Name, nil, []key.Destination{svs.TargetDestination})
 		if err != nil {
-			return vterrors.Wrap(err, "SysVarSet")
+			return err
 		}
 		vcursor.Session().NeedsReservedConn()
 		return svs.execSetStatement(vcursor, rss, env)
@@ -325,7 +325,7 @@ func (svs *SysVarReservedConn) checkAndUpdateSysVar(vcursor VCursor, res evaleng
 	sysVarExprValidationQuery := fmt.Sprintf("select %s from dual where @@%s != %s", svs.Expr, svs.Name, svs.Expr)
 	rss, _, err := vcursor.ResolveDestinations(svs.Keyspace.Name, nil, []key.Destination{key.DestinationKeyspaceID{0}})
 	if err != nil {
-		return false, vterrors.Wrap(err, "SysVarSet")
+		return false, err
 	}
 	qr, err := execShard(vcursor, sysVarExprValidationQuery, res.BindVars, rss[0], false /* rollbackOnError */, false /* canAutocommit */)
 	if err != nil {
