@@ -87,7 +87,7 @@ func TestPlannedReparenter_ReparentShard(t *testing.T) {
 		{
 			name: "success",
 			ts:   memorytopo.NewServer("zone1"),
-			tmc: &emergencyReparenterTestTMClient{
+			tmc: &testutil.TabletManagerClient{
 				MasterPositionResults: map[string]struct {
 					Position string
 					Error    error
@@ -406,7 +406,7 @@ func TestPlannedReparenter_preflightChecks(t *testing.T) {
 			name: "invariants hold with primary selection",
 			// (TODO:@ajm188) - Rename this type and unify it with the 4 other
 			// mock implementations I've written by this point.
-			tmc: &emergencyReparenterTestTMClient{
+			tmc: &testutil.TabletManagerClient{
 				ReplicationStatusResults: map[string]struct {
 					Position *replicationdatapb.Status
 					Error    error
@@ -680,7 +680,7 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 		{
 			name: "successful promotion",
 			ts:   memorytopo.NewServer("zone1"),
-			tmc: &emergencyReparenterTestTMClient{
+			tmc: &testutil.TabletManagerClient{
 				DemoteMasterResults: map[string]struct {
 					Status *replicationdatapb.MasterStatus
 					Error  error
@@ -747,7 +747,7 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 		{
 			name: "cannot get snapshot of current primary",
 			ts:   memorytopo.NewServer("zone1"),
-			tmc: &emergencyReparenterTestTMClient{
+			tmc: &testutil.TabletManagerClient{
 				MasterPositionResults: map[string]struct {
 					Position string
 					Error    error
@@ -781,7 +781,7 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 		{
 			name: "primary-elect fails to catch up to current primary snapshot position",
 			ts:   memorytopo.NewServer("zone1"),
-			tmc: &emergencyReparenterTestTMClient{
+			tmc: &testutil.TabletManagerClient{
 				MasterPositionResults: map[string]struct {
 					Position string
 					Error    error
@@ -818,7 +818,7 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 		{
 			name: "primary-elect times out catching up to current primary snapshot position",
 			ts:   memorytopo.NewServer("zone1"),
-			tmc: &emergencyReparenterTestTMClient{
+			tmc: &testutil.TabletManagerClient{
 				MasterPositionResults: map[string]struct {
 					Position string
 					Error    error
@@ -860,7 +860,7 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 		{
 			name: "lost topology lock",
 			ts:   memorytopo.NewServer("zone1"),
-			tmc: &emergencyReparenterTestTMClient{
+			tmc: &testutil.TabletManagerClient{
 				MasterPositionResults: map[string]struct {
 					Position string
 					Error    error
@@ -898,7 +898,7 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 		{
 			name: "failed to demote current primary",
 			ts:   memorytopo.NewServer("zone1"),
-			tmc: &emergencyReparenterTestTMClient{
+			tmc: &testutil.TabletManagerClient{
 				DemoteMasterResults: map[string]struct {
 					Status *replicationdatapb.MasterStatus
 					Error  error
@@ -943,7 +943,7 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 		{
 			name: "primary-elect fails to catch up to current primary demotion position",
 			ts:   memorytopo.NewServer("zone1"),
-			tmc: &emergencyReparenterTestTMClient{
+			tmc: &testutil.TabletManagerClient{
 				DemoteMasterResults: map[string]struct {
 					Status *replicationdatapb.MasterStatus
 					Error  error
@@ -1000,7 +1000,7 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 		{
 			name: "primary-elect times out catching up to current primary demotion position",
 			ts:   memorytopo.NewServer("zone1"),
-			tmc: &emergencyReparenterTestTMClient{
+			tmc: &testutil.TabletManagerClient{
 				DemoteMasterResults: map[string]struct {
 					Status *replicationdatapb.MasterStatus
 					Error  error
@@ -1062,7 +1062,7 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 		{
 			name: "demotion succeeds but parent context times out",
 			ts:   memorytopo.NewServer("zone1"),
-			tmc: &emergencyReparenterTestTMClient{
+			tmc: &testutil.TabletManagerClient{
 				DemoteMasterResults: map[string]struct {
 					Status *replicationdatapb.MasterStatus
 					Error  error
@@ -1133,7 +1133,7 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 		{
 			name: "rollback fails",
 			ts:   memorytopo.NewServer("zone1"),
-			tmc: &emergencyReparenterTestTMClient{
+			tmc: &testutil.TabletManagerClient{
 				DemoteMasterResults: map[string]struct {
 					Status *replicationdatapb.MasterStatus
 					Error  error
@@ -1196,7 +1196,7 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 		{
 			name: "rollback succeeds",
 			ts:   memorytopo.NewServer("zone1"),
-			tmc: &emergencyReparenterTestTMClient{
+			tmc: &testutil.TabletManagerClient{
 				DemoteMasterResults: map[string]struct {
 					Status *replicationdatapb.MasterStatus
 					Error  error
@@ -1259,7 +1259,7 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 		{
 			name: "primary-elect fails to promote",
 			ts:   memorytopo.NewServer("zone1"),
-			tmc: &emergencyReparenterTestTMClient{
+			tmc: &testutil.TabletManagerClient{
 				DemoteMasterResults: map[string]struct {
 					Status *replicationdatapb.MasterStatus
 					Error  error
@@ -1324,7 +1324,7 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 		{
 			name: "promotion succeeds but parent context times out",
 			ts:   memorytopo.NewServer("zone1"),
-			tmc: &emergencyReparenterTestTMClient{
+			tmc: &testutil.TabletManagerClient{
 				DemoteMasterResults: map[string]struct {
 					Status *replicationdatapb.MasterStatus
 					Error  error
@@ -1469,7 +1469,7 @@ func TestPlannedReparenter_performPartialPromotionRecovery(t *testing.T) {
 	}{
 		{
 			name: "successful recovery",
-			tmc: &emergencyReparenterTestTMClient{
+			tmc: &testutil.TabletManagerClient{
 				MasterPositionResults: map[string]struct {
 					Position string
 					Error    error
@@ -1494,7 +1494,7 @@ func TestPlannedReparenter_performPartialPromotionRecovery(t *testing.T) {
 		},
 		{
 			name: "failed to SetReadWrite",
-			tmc: &emergencyReparenterTestTMClient{
+			tmc: &testutil.TabletManagerClient{
 				SetReadWriteResults: map[string]error{
 					"zone1-0000000100": assert.AnError,
 				},
@@ -1509,7 +1509,7 @@ func TestPlannedReparenter_performPartialPromotionRecovery(t *testing.T) {
 		},
 		{
 			name: "SetReadWrite timed out",
-			tmc: &emergencyReparenterTestTMClient{
+			tmc: &testutil.TabletManagerClient{
 				SetReadWriteDelays: map[string]time.Duration{
 					"zone1-0000000100": time.Millisecond * 50,
 				},
@@ -1528,7 +1528,7 @@ func TestPlannedReparenter_performPartialPromotionRecovery(t *testing.T) {
 		},
 		{
 			name: "failed to get MasterPosition from refreshed primary",
-			tmc: &emergencyReparenterTestTMClient{
+			tmc: &testutil.TabletManagerClient{
 				MasterPositionResults: map[string]struct {
 					Position string
 					Error    error
@@ -1552,7 +1552,7 @@ func TestPlannedReparenter_performPartialPromotionRecovery(t *testing.T) {
 		},
 		{
 			name: "MasterPosition timed out",
-			tmc: &emergencyReparenterTestTMClient{
+			tmc: &testutil.TabletManagerClient{
 				MasterPositionDelays: map[string]time.Duration{
 					"zone1-0000000100": time.Millisecond * 50,
 				},
@@ -1633,7 +1633,7 @@ func TestPlannedReparenter_performPotentialPromotion(t *testing.T) {
 		{
 			name: "success",
 			ts:   memorytopo.NewServer("zone1"),
-			tmc: &emergencyReparenterTestTMClient{
+			tmc: &testutil.TabletManagerClient{
 				DemoteMasterResults: map[string]struct {
 					Status *replicationdatapb.MasterStatus
 					Error  error
@@ -1708,7 +1708,7 @@ func TestPlannedReparenter_performPotentialPromotion(t *testing.T) {
 		{
 			name: "failed to DemoteMaster on a tablet",
 			ts:   memorytopo.NewServer("zone1"),
-			tmc: &emergencyReparenterTestTMClient{
+			tmc: &testutil.TabletManagerClient{
 				DemoteMasterResults: map[string]struct {
 					Status *replicationdatapb.MasterStatus
 					Error  error
@@ -1743,7 +1743,7 @@ func TestPlannedReparenter_performPotentialPromotion(t *testing.T) {
 		{
 			name: "timed out during DemoteMaster on a tablet",
 			ts:   memorytopo.NewServer("zone1"),
-			tmc: &emergencyReparenterTestTMClient{
+			tmc: &testutil.TabletManagerClient{
 				DemoteMasterDelays: map[string]time.Duration{
 					"zone1-0000000100": time.Millisecond * 50,
 				},
@@ -1784,7 +1784,7 @@ func TestPlannedReparenter_performPotentialPromotion(t *testing.T) {
 		{
 			name: "failed to DecodePosition on a tablet's demote position",
 			ts:   memorytopo.NewServer("zone1"),
-			tmc: &emergencyReparenterTestTMClient{
+			tmc: &testutil.TabletManagerClient{
 				DemoteMasterResults: map[string]struct {
 					Status *replicationdatapb.MasterStatus
 					Error  error
@@ -1821,7 +1821,7 @@ func TestPlannedReparenter_performPotentialPromotion(t *testing.T) {
 		{
 			name:       "primary-elect not in tablet map",
 			ts:         memorytopo.NewServer("zone1"),
-			tmc:        &emergencyReparenterTestTMClient{},
+			tmc:        &testutil.TabletManagerClient{},
 			unlockTopo: false,
 			keyspace:   "testkeyspace",
 			shard:      "-",
@@ -1837,7 +1837,7 @@ func TestPlannedReparenter_performPotentialPromotion(t *testing.T) {
 		{
 			name: "primary-elect not most at most advanced position",
 			ts:   memorytopo.NewServer("zone1"),
-			tmc: &emergencyReparenterTestTMClient{
+			tmc: &testutil.TabletManagerClient{
 				DemoteMasterResults: map[string]struct {
 					Status *replicationdatapb.MasterStatus
 					Error  error
@@ -1902,7 +1902,7 @@ func TestPlannedReparenter_performPotentialPromotion(t *testing.T) {
 		{
 			name: "lost topology lock",
 			ts:   memorytopo.NewServer("zone1"),
-			tmc: &emergencyReparenterTestTMClient{
+			tmc: &testutil.TabletManagerClient{
 				DemoteMasterResults: map[string]struct {
 					Status *replicationdatapb.MasterStatus
 					Error  error
@@ -1967,7 +1967,7 @@ func TestPlannedReparenter_performPotentialPromotion(t *testing.T) {
 		{
 			name: "failed to promote primary-elect",
 			ts:   memorytopo.NewServer("zone1"),
-			tmc: &emergencyReparenterTestTMClient{
+			tmc: &testutil.TabletManagerClient{
 				DemoteMasterResults: map[string]struct {
 					Status *replicationdatapb.MasterStatus
 					Error  error
@@ -2041,7 +2041,7 @@ func TestPlannedReparenter_performPotentialPromotion(t *testing.T) {
 		{
 			name: "timed out while promoting primary-elect",
 			ts:   memorytopo.NewServer("zone1"),
-			tmc: &emergencyReparenterTestTMClient{
+			tmc: &testutil.TabletManagerClient{
 				DemoteMasterResults: map[string]struct {
 					Status *replicationdatapb.MasterStatus
 					Error  error
@@ -2188,7 +2188,7 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 		{
 			name: "success: current primary cannot be determined", // "Case (1)"
 			ts:   memorytopo.NewServer("zone1"),
-			tmc: &emergencyReparenterTestTMClient{
+			tmc: &testutil.TabletManagerClient{
 				DemoteMasterResults: map[string]struct {
 					Status *replicationdatapb.MasterStatus
 					Error  error
@@ -2268,7 +2268,7 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 		{
 			name: "success: current primary is desired primary", // "Case (2)"
 			ts:   memorytopo.NewServer("zone1"),
-			tmc: &emergencyReparenterTestTMClient{
+			tmc: &testutil.TabletManagerClient{
 				MasterPositionResults: map[string]struct {
 					Position string
 					Error    error
@@ -2343,7 +2343,7 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 		{
 			name: "success: graceful promotion", // "Case (3)"
 			ts:   memorytopo.NewServer("zone1"),
-			tmc: &emergencyReparenterTestTMClient{
+			tmc: &testutil.TabletManagerClient{
 				DemoteMasterResults: map[string]struct {
 					Status *replicationdatapb.MasterStatus
 					Error  error
@@ -2534,7 +2534,7 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 		{
 			name: "promotion step fails",
 			ts:   memorytopo.NewServer("zone1"),
-			tmc: &emergencyReparenterTestTMClient{
+			tmc: &testutil.TabletManagerClient{
 				SetReadWriteResults: map[string]error{
 					"zone1-0000000100": assert.AnError,
 				},
@@ -2594,7 +2594,7 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 		{
 			name: "lost topology lock",
 			ts:   memorytopo.NewServer("zone1"),
-			tmc: &emergencyReparenterTestTMClient{
+			tmc: &testutil.TabletManagerClient{
 				MasterPositionResults: map[string]struct {
 					Position string
 					Error    error
@@ -2665,7 +2665,7 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 		{
 			name: "failed to reparent tablets",
 			ts:   memorytopo.NewServer("zone1"),
-			tmc: &emergencyReparenterTestTMClient{
+			tmc: &testutil.TabletManagerClient{
 				MasterPositionResults: map[string]struct {
 					Position string
 					Error    error
@@ -2801,7 +2801,7 @@ func TestPlannedReparenter_reparentTablets(t *testing.T) {
 	}{
 		{
 			name: "success",
-			tmc: &emergencyReparenterTestTMClient{
+			tmc: &testutil.TabletManagerClient{
 				PopulateReparentJournalResults: map[string]error{
 					"zone1-0000000100": nil,
 				},
@@ -2862,7 +2862,7 @@ func TestPlannedReparenter_reparentTablets(t *testing.T) {
 		},
 		{
 			name: "SetMaster failed on replica",
-			tmc: &emergencyReparenterTestTMClient{
+			tmc: &testutil.TabletManagerClient{
 				PopulateReparentJournalResults: map[string]error{
 					"zone1-0000000100": nil,
 				},
@@ -2923,7 +2923,7 @@ func TestPlannedReparenter_reparentTablets(t *testing.T) {
 		},
 		{
 			name: "SetMaster timed out on replica",
-			tmc: &emergencyReparenterTestTMClient{
+			tmc: &testutil.TabletManagerClient{
 				PopulateReparentJournalResults: map[string]error{
 					"zone1-0000000100": nil,
 				},
@@ -2990,7 +2990,7 @@ func TestPlannedReparenter_reparentTablets(t *testing.T) {
 		},
 		{
 			name: "PopulateReparentJournal failed out on new primary",
-			tmc: &emergencyReparenterTestTMClient{
+			tmc: &testutil.TabletManagerClient{
 				PopulateReparentJournalResults: map[string]error{
 					"zone1-0000000100": assert.AnError,
 				},
@@ -3051,7 +3051,7 @@ func TestPlannedReparenter_reparentTablets(t *testing.T) {
 		},
 		{
 			name: "PopulateReparentJournal timed out on new primary",
-			tmc: &emergencyReparenterTestTMClient{
+			tmc: &testutil.TabletManagerClient{
 				PopulateReparentJournalDelays: map[string]time.Duration{
 					"zone1-0000000100": time.Millisecond * 50,
 				},
