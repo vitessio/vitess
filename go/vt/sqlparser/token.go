@@ -20,7 +20,11 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
+
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/bytes2"
 	"vitess.io/vitess/go/sqltypes"
@@ -1027,9 +1031,96 @@ func (tkn *Tokenizer) scanMySQLSpecificComment() (int, []byte) {
 		}
 		tkn.consumeNext(buffer)
 	}
-	_, sql := ExtractMysqlComment(buffer.String())
-	tkn.specialComment = NewStringTokenizer(sql)
+	version, sql := ExtractMysqlComment(buffer.String())
+	commentVersion, err := convertCommentVersion(version)
+	if err != nil {
+		tkn.Error(err.Error())
+		return tkn.Scan()
+	}
+
+	isCommentVersionHigher := false
+
+	if len(commentVersion) == 3 {
+		mysqlVersion, err := convertMySQLVersion(MySQLVersion)
+		if err != nil {
+			tkn.Error(err.Error())
+			return tkn.Scan()
+		}
+		for i := 0; i < 3; i++ {
+			if mysqlVersion[i] > commentVersion[i] {
+				break
+			} else if mysqlVersion[i] < commentVersion[i] {
+				isCommentVersionHigher = true
+				break
+			}
+		}
+	}
+
+	// Only add the special comment to the tokenizer if the version of MySQL is higher or equal to the comment version
+	if !isCommentVersionHigher {
+		tkn.specialComment = NewStringTokenizer(sql)
+	}
 	return tkn.Scan()
+}
+
+func convertMySQLVersion(version string) ([]int, error) {
+	var res = make([]int, 3)
+	idx := 0
+	val := ""
+	for _, c := range version {
+		if c <= '9' && c >= '0' {
+			val += string(c)
+		} else if c == '.' {
+			v, err := strconv.Atoi(val)
+			if err != nil {
+				return nil, err
+			}
+			val = ""
+			res[idx] = v
+			idx++
+			if idx == 3 {
+				break
+			}
+		} else {
+			break
+		}
+	}
+	if val != "" {
+		v, err := strconv.Atoi(val)
+		if err != nil {
+			return nil, err
+		}
+		res[idx] = v
+		idx++
+	}
+	if idx == 0 {
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "MySQL version not correctly setup - %s.", version)
+	}
+	return res, nil
+}
+
+func convertCommentVersion(version string) ([]int, error) {
+	var res = make([]int, 3)
+	if len(version) != 5 {
+		res[0] = 0
+		res[1] = 0
+		res[2] = 0
+	} else {
+		var err error
+		res[0], err = strconv.Atoi(string(version[0]))
+		if err != nil {
+			return nil, err
+		}
+		res[1], err = strconv.Atoi(string(version[1:3]))
+		if err != nil {
+			return nil, err
+		}
+		res[2], err = strconv.Atoi(string(version[3:]))
+		if err != nil {
+			return nil, err
+		}
+	}
+	return res, nil
 }
 
 func (tkn *Tokenizer) consumeNext(buffer *bytes2.Buffer) {

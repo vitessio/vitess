@@ -19,6 +19,8 @@ package sqlparser
 import (
 	"fmt"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestLiteralID(t *testing.T) {
@@ -146,10 +148,12 @@ func TestString(t *testing.T) {
 	}}
 
 	for _, tcase := range testcases {
-		id, got := NewStringTokenizer(tcase.in).Scan()
-		if tcase.id != id || string(got) != tcase.want {
-			t.Errorf("Scan(%q) = (%s, %q), want (%s, %q)", tcase.in, tokenName(id), got, tokenName(tcase.id), tcase.want)
-		}
+		t.Run(tcase.in, func(t *testing.T) {
+			id, got := NewStringTokenizer(tcase.in).Scan()
+			if tcase.id != id || string(got) != tcase.want {
+				t.Errorf("Scan(%q) = (%s, %q), want (%s, %q)", tcase.in, tokenName(id), got, tokenName(tcase.id), tcase.want)
+			}
+		})
 	}
 }
 
@@ -203,5 +207,139 @@ func TestSplitStatement(t *testing.T) {
 		if tcase.rem != rem {
 			t.Errorf("EndOfStatementPosition(%s) got remainder \"%s\" want \"%s\"", tcase.in, rem, tcase.rem)
 		}
+	}
+}
+
+func TestVersion(t *testing.T) {
+	testcases := []struct {
+		version string
+		in      string
+		id      []int
+	}{{
+		version: "5.7.9",
+		in:      "/*!80102 SELECT*/ FROM IN EXISTS",
+		id:      []int{FROM, IN, EXISTS, eofChar},
+	}, {
+		version: "8.1.1",
+		in:      "/*!80102 SELECT*/ FROM IN EXISTS",
+		id:      []int{FROM, IN, EXISTS, eofChar},
+	}, {
+		version: "8.2.1",
+		in:      "/*!80102 SELECT*/ FROM IN EXISTS",
+		id:      []int{SELECT, FROM, IN, EXISTS, eofChar},
+	}, {
+		version: "8.1.2",
+		in:      "/*!80102 SELECT*/ FROM IN EXISTS",
+		id:      []int{SELECT, FROM, IN, EXISTS, eofChar},
+	}}
+
+	for _, tcase := range testcases {
+		t.Run(tcase.in, func(t *testing.T) {
+			MySQLVersion = tcase.version
+			tok := NewStringTokenizer(tcase.in)
+			for _, expectedID := range tcase.id {
+				id, _ := tok.Scan()
+				require.Equal(t, expectedID, id)
+			}
+		})
+	}
+}
+
+func TestConvertMySQLVersion(t *testing.T) {
+	testcases := []struct {
+		version          string
+		convertedVersion []int
+		error            string
+	}{{
+		version:          "5.7.9",
+		convertedVersion: []int{5, 7, 9},
+	}, {
+		version:          "0008.08.9",
+		convertedVersion: []int{8, 8, 9},
+	}, {
+		version:          "501.7.9, Vitess - 10.0.1",
+		convertedVersion: []int{501, 7, 9},
+	}, {
+		version:          "8.1 Vitess - 10.0.1",
+		convertedVersion: []int{8, 1, 0},
+	}, {
+		version: "Vitess - 10.0.1",
+		error:   "MySQL version not correctly setup - Vitess - 10.0.1.",
+	}, {
+		version:          "5.7.9.22",
+		convertedVersion: []int{5, 7, 9},
+	}}
+
+	for _, tcase := range testcases {
+		t.Run(tcase.version, func(t *testing.T) {
+			output, err := convertMySQLVersion(tcase.version)
+			if tcase.error != "" {
+				require.EqualError(t, err, tcase.error)
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, tcase.convertedVersion, output)
+			}
+		})
+	}
+}
+
+func TestConvertCommentVersion(t *testing.T) {
+	testcases := []struct {
+		version          string
+		convertedVersion []int
+		error            string
+	}{{
+		version:          "50709",
+		convertedVersion: []int{5, 7, 9},
+	}, {
+		version:          "50110",
+		convertedVersion: []int{5, 1, 10},
+	}, {
+		version:          "32312",
+		convertedVersion: []int{3, 23, 12},
+	}, {
+		version:          "40100",
+		convertedVersion: []int{4, 1, 0},
+	}, {
+		version:          "80016",
+		convertedVersion: []int{8, 0, 16},
+	}, {
+		version:          "",
+		convertedVersion: []int{0, 0, 0},
+	}}
+
+	for _, tcase := range testcases {
+		t.Run(tcase.version, func(t *testing.T) {
+			output, err := convertCommentVersion(tcase.version)
+			if tcase.error != "" {
+				require.EqualError(t, err, tcase.error)
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, tcase.convertedVersion, output)
+			}
+		})
+	}
+}
+
+func TestExtractMySQLComment(t *testing.T) {
+	testcases := []struct {
+		comment string
+		version string
+	}{{
+		comment: "/*!50108 SELECT * FROM */",
+		version: "50108",
+	}, {
+		comment: "/*!5018 SELECT * FROM */",
+		version: "",
+	}, {
+		comment: "/*!SELECT * FROM */",
+		version: "",
+	}}
+
+	for _, tcase := range testcases {
+		t.Run(tcase.version, func(t *testing.T) {
+			output, _ := ExtractMysqlComment(tcase.comment)
+			require.Equal(t, tcase.version, output)
+		})
 	}
 }
