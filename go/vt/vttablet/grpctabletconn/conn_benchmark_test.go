@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"math/rand"
 	"net"
+	"sort"
 	"testing"
 
-	"github.com/golang/protobuf/jsonpb"
 	"google.golang.org/grpc"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -138,8 +138,9 @@ func (b *BenchmarkService) Close(ctx context.Context) error {
 const longSQL = `create table vitess_ints(tiny tinyint default 0, tinyu tinyint unsigned default null, small smallint default null, smallu smallint unsigned default null, medium mediumint default null, mediumu mediumint unsigned default null, normal int default null, normalu int unsigned default null, big bigint default null, bigu bigint unsigned default null, y year default null, primary key(tiny));`
 
 type generator struct {
-	n int
-	r *rand.Rand
+	n  int
+	r  *rand.Rand
+	tt []querypb.Type
 }
 
 func (gen *generator) randomString(min, max int) string {
@@ -207,25 +208,58 @@ func (gen *generator) generateBoundQuery() (bq []*querypb.BoundQuery) {
 	return
 }
 
-func TestRandomGeneration(t *testing.T) {
-	gen := &generator{
-		n: 50,
-		r: rand.New(rand.NewSource(420)),
+func (gen *generator) generateType() querypb.Type {
+	if len(gen.tt) == 0 {
+		for _, tt := range querypb.Type_value {
+			gen.tt = append(gen.tt, querypb.Type(tt))
+		}
+		sort.Slice(gen.tt, func(i, j int) bool {
+			return gen.tt[i] < gen.tt[j]
+		})
+	}
+	return gen.tt[gen.r.Intn(len(gen.tt))]
+}
+
+func (gen *generator) generateRows() (fields []*querypb.Field, rows [][]sqltypes.Value) {
+	fieldCount := 1 + gen.r.Intn(16)
+
+	for i := 0; i < fieldCount; i++ {
+		fields = append(fields, &querypb.Field{
+			Name: fmt.Sprintf("field%d", i),
+			Type: gen.generateType(),
+		})
 	}
 
-	bq := gen.generateBoundQuery()
+	for gen.n > 0 {
+		var row []sqltypes.Value
+		for _, f := range fields {
+			row = append(row, sqltypes.TestValue(f.Type, gen.randomString(8, 32)))
+			gen.n--
+		}
+		rows = append(rows, row)
+	}
+	return
+}
 
-	m := jsonpb.Marshaler{}
-	m.Indent = "  "
-	s, _ := m.MarshalToString(&querypb.ExecuteBatchRequest{Queries: bq})
-	t.Log(s)
+func (gen *generator) generateQueryResultList() (qrl []sqltypes.Result) {
+	for gen.n > 0 {
+		fields, rows := gen.generateRows()
+		r := sqltypes.Result{
+			Fields:       fields,
+			RowsAffected: gen.r.Uint64(),
+			InsertID:     gen.r.Uint64(),
+			Rows:         rows,
+		}
+		gen.n--
+		qrl = append(qrl, r)
+	}
+	return
 }
 
 func BenchmarkGRPCTabletConn(b *testing.B) {
 	// fake service
 	service := &BenchmarkService{
-		t:           b,
-		batchResult: tabletconntest.ExecuteBatchQueryResultList,
+		t: b,
 	}
 
 	// listen on a random port
@@ -252,31 +286,48 @@ func BenchmarkGRPCTabletConn(b *testing.B) {
 		},
 	}
 
-	for _, querySize := range []int{5, 10, 50, 100, 500, 1000, 5000, 25000} {
-		b.Run(fmt.Sprintf("Proto-%d", querySize), func(b *testing.B) {
-			conn, err := tabletconn.GetDialer()(tablet, false)
-			if err != nil {
-				b.Fatalf("dial failed: %v", err)
-			}
-			defer conn.Close(context.Background())
+	var querySizes = []int{8, 64, 512, 4096, 32768}
+	var requests = make(map[int][]*querypb.BoundQuery)
+	var responses = make(map[int][]sqltypes.Result)
 
-			gen := &generator{
-				n: querySize,
-				r: rand.New(rand.NewSource(int64(420 ^ querySize))),
-			}
-			query := gen.generateBoundQuery()
+	for _, size := range querySizes {
+		gen := &generator{
+			n: size,
+			r: rand.New(rand.NewSource(int64(0x33333 ^ size))),
+		}
+		requests[size] = gen.generateBoundQuery()
 
-			b.SetParallelism(4)
-			b.RunParallel(func(pb *testing.PB) {
-				for pb.Next() {
-					ctx := context.Background()
-					ctx = callerid.NewContext(ctx, tabletconntest.TestCallerID, tabletconntest.TestVTGateCallerID)
-					_, err := conn.ExecuteBatch(ctx, tabletconntest.TestTarget, query, tabletconntest.TestAsTransaction, tabletconntest.ExecuteBatchTransactionID, tabletconntest.TestExecuteOptions)
-					if err != nil {
-						b.Fatalf("ExecuteBatch failed: %v", err)
-					}
+		gen = &generator{
+			n: size,
+			r: rand.New(rand.NewSource(int64(0x44444 ^ size))),
+		}
+		responses[size] = gen.generateQueryResultList()
+	}
+
+	for _, reqSize := range querySizes {
+		for _, respSize := range querySizes {
+			b.Run(fmt.Sprintf("Req%d-Resp%d", reqSize, respSize), func(b *testing.B) {
+				conn, err := tabletconn.GetDialer()(tablet, false)
+				if err != nil {
+					b.Fatalf("dial failed: %v", err)
 				}
+				defer conn.Close(context.Background())
+
+				requestQuery := requests[reqSize]
+				service.batchResult = responses[respSize]
+
+				b.SetParallelism(4)
+				b.RunParallel(func(pb *testing.PB) {
+					for pb.Next() {
+						ctx := context.Background()
+						ctx = callerid.NewContext(ctx, tabletconntest.TestCallerID, tabletconntest.TestVTGateCallerID)
+						_, err := conn.ExecuteBatch(ctx, tabletconntest.TestTarget, requestQuery, tabletconntest.TestAsTransaction, tabletconntest.ExecuteBatchTransactionID, tabletconntest.TestExecuteOptions)
+						if err != nil {
+							b.Fatalf("ExecuteBatch failed: %v", err)
+						}
+					}
+				})
 			})
-		})
+		}
 	}
 }
