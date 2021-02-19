@@ -399,16 +399,14 @@ func (se *Engine) updateInnoDBRowsRead(ctx context.Context, conn *connpool.DBCon
 		return err
 	}
 
-	if !(len(readRowsData.Rows) == 1 && len(readRowsData.Rows[0]) == 2) {
-		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "got bad output from query, expected one row, two columns")
-	}
+	if len(readRowsData.Rows) == 1 && len(readRowsData.Rows[0]) == 2 {
+		value, err := evalengine.ToInt64(readRowsData.Rows[0][1])
+		if err != nil {
+			return err
+		}
 
-	value, err := evalengine.ToInt64(readRowsData.Rows[0][1])
-	if err != nil {
-		return err
+		se.innoDbReadRowsGauge.Set("read_rows", value)
 	}
-
-	se.innoDbReadRowsGauge.Set("read_rows", value)
 	return nil
 }
 
