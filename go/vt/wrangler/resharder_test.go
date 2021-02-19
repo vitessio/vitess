@@ -243,7 +243,7 @@ func TestResharderOneRefTable(t *testing.T) {
 
 // TestReshardStopFlags tests the flags -stop_started and -stop_after_copy
 func TestReshardStopFlags(t *testing.T) {
-	env := newTestResharderEnv([]string{"0"}, []string{"-80", "80-"})
+	env := newTestResharderEnv(t, []string{"0"}, []string{"-80", "80-"})
 	defer env.close()
 
 	schm := &tabletmanagerdatapb.SchemaDefinition{
