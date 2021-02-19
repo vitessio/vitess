@@ -37,6 +37,7 @@ import (
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
+	"vitess.io/vitess/go/vt/proto/vttime"
 )
 
 func TestNewEmergencyReparenter(t *testing.T) {
@@ -336,6 +337,268 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 					Uid:  101,
 				},
 			},
+			shouldErr: false,
+		},
+		{
+			name: "requested primary-elect is already shard primary",
+			ts:   memorytopo.NewServer("zone1"),
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "testkeyspace",
+					Name:     "-",
+					Shard: &topodatapb.Shard{
+						IsMasterServing: true,
+						MasterAlias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+						MasterTermStartTime: &vttime.Time{
+							Seconds: 100,
+						},
+					},
+				},
+			},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  101,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+					Type:     topodatapb.TabletType_MASTER,
+					MasterTermStartTime: &vttime.Time{
+						Seconds: 100,
+					},
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  102,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+			},
+			keyspace: "testkeyspace",
+			shard:    "-",
+			opts: EmergencyReparentOptions{
+				NewPrimaryAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  101,
+				},
+			},
+			shouldErr: true,
+		},
+		{
+			name: "shard primary is not in tablet map and ignored",
+			ts:   memorytopo.NewServer("zone1"),
+			tmc: &emergencyReparenterTestTMClient{
+				PopulateReparentJournalResults: map[string]error{
+					"zone1-0000000102": nil,
+				},
+				PromoteReplicaResults: map[string]struct {
+					Result string
+					Error  error
+				}{
+					"zone1-0000000102": {
+						Result: "ok",
+						Error:  nil,
+					},
+				},
+				SetMasterResults: map[string]error{
+					"zone1-0000000100": nil,
+					"zone1-0000000101": nil,
+				},
+				StopReplicationAndGetStatusResults: map[string]struct {
+					Status     *replicationdatapb.Status
+					StopStatus *replicationdatapb.StopReplicationStatus
+					Error      error
+				}{
+					"zone1-0000000100": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{},
+							After: &replicationdatapb.Status{
+								MasterUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
+								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
+							},
+						},
+					},
+					"zone1-0000000101": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{},
+							After: &replicationdatapb.Status{
+								MasterUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
+								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
+							},
+						},
+					},
+					"zone1-0000000102": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{},
+							After: &replicationdatapb.Status{
+								MasterUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
+								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-26",
+							},
+						},
+					},
+				},
+				WaitForPositionResults: map[string]map[string]error{
+					"zone1-0000000100": {
+						"MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21": nil,
+					},
+					"zone1-0000000101": {
+						"MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21": nil,
+					},
+					"zone1-0000000102": {
+						"MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-26": nil,
+					},
+				},
+			},
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "testkeyspace",
+					Name:     "-",
+					Shard: &topodatapb.Shard{
+						IsMasterServing: true,
+						MasterAlias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  404,
+						},
+						MasterTermStartTime: &vttime.Time{
+							Seconds: 100,
+						},
+					},
+				},
+			},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  101,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  102,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+			},
+			keyspace:  "testkeyspace",
+			shard:     "-",
+			opts:      EmergencyReparentOptions{},
+			shouldErr: false,
+		},
+		{
+			// Here, all our (2) tablets are tied, but the current primary is
+			// ignored, and we promote zone1-101.
+			name: "shard primary is deleted from tablet map",
+			ts:   memorytopo.NewServer("zone1"),
+			tmc: &emergencyReparenterTestTMClient{
+				PopulateReparentJournalResults: map[string]error{
+					"zone1-0000000101": nil,
+				},
+				PromoteReplicaResults: map[string]struct {
+					Result string
+					Error  error
+				}{
+					"zone1-0000000101": {
+						Result: "ok",
+						Error:  nil,
+					},
+				},
+				SetMasterResults: map[string]error{
+					"zone1-0000000100": nil,
+				},
+				StopReplicationAndGetStatusResults: map[string]struct {
+					Status     *replicationdatapb.Status
+					StopStatus *replicationdatapb.StopReplicationStatus
+					Error      error
+				}{
+					"zone1-0000000100": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{},
+							After: &replicationdatapb.Status{
+								MasterUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
+								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
+							},
+						},
+					},
+					"zone1-0000000101": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{},
+							After: &replicationdatapb.Status{
+								MasterUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
+								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
+							},
+						},
+					},
+				},
+				WaitForPositionResults: map[string]map[string]error{
+					"zone1-0000000100": {
+						"MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21": nil,
+					},
+					"zone1-0000000101": {
+						"MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21": nil,
+					},
+				},
+			},
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "testkeyspace",
+					Name:     "-",
+					Shard: &topodatapb.Shard{
+						IsMasterServing: true,
+						MasterAlias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+					},
+				},
+			},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+					Type:     topodatapb.TabletType_MASTER,
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  101,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+			},
+			keyspace:  "testkeyspace",
+			shard:     "-",
+			opts:      EmergencyReparentOptions{},
 			shouldErr: false,
 		},
 		{
