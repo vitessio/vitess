@@ -58,6 +58,7 @@ message Cluster {
 message Keyspace {
     Cluster cluster = 1;
     vtctldata.Keyspace keyspace = 2;
+    map<string, vtctldata.Shard> shards = 3;
 }
 
 message Schema {
