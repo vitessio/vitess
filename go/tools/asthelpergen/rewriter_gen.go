@@ -38,15 +38,19 @@ var noQualifier = func(p *types.Package) string {
 	return ""
 }
 
-func (r *rewriterGen) visitStruct(t types.Type, typeString, replaceMethodPrefix string, stroct *types.Struct) error {
+func (r *rewriterGen) visitStruct(t types.Type, typeString, replaceMethodPrefix string, stroct *types.Struct, pointer bool) error {
 	var caseStmts []jen.Code
 	for i := 0; i < stroct.NumFields(); i++ {
 		field := stroct.Field(i)
 		if r.interestingType(field.Type()) {
-			replacerName, method := r.createReplaceMethod(replaceMethodPrefix, types.TypeString(t, noQualifier), field)
-			r.replaceMethods = append(r.replaceMethods, method)
+			if pointer {
+				replacerName, method := r.createReplaceMethod(replaceMethodPrefix, types.TypeString(t, noQualifier), field)
+				r.replaceMethods = append(r.replaceMethods, method)
 
-			caseStmts = append(caseStmts, caseStmtFor(field, replacerName))
+				caseStmts = append(caseStmts, caseStmtFor(field, replacerName))
+			} else {
+				caseStmts = append(caseStmts, casePanicStmtFor(field, types.TypeString(t, noQualifier)+" "+field.Name()))
+			}
 		}
 		sliceT, ok := field.Type().(*types.Slice)
 		if ok && r.interestingType(sliceT.Elem()) { // we have a field containing a slice of interesting elements
@@ -63,6 +67,11 @@ func (r *rewriterGen) visitStruct(t types.Type, typeString, replaceMethodPrefix 
 func caseStmtFor(field *types.Var, name string) *jen.Statement {
 	return jen.Id("a").Dot("apply").Call(jen.Id("node"), jen.Id("n").Dot(field.Name()), jen.Id(name))
 }
+
+func casePanicStmtFor(field *types.Var, name string) *jen.Statement {
+	return jen.Id("a").Dot("apply").Call(jen.Id("node"), jen.Id("n").Dot(field.Name()), jen.Id("replacePanic").Call(jen.Lit(name)))
+}
+
 func caseStmtForSliceField(field *types.Var, name string) []jen.Code {
 	//replacerColumns := replaceAddColumnsColumns(0)
 	replacerName := "replacer" + field.Name()
