@@ -23,6 +23,8 @@ import (
 	"strconv"
 	"time"
 
+	"vitess.io/vitess/go/vt/sqlparser"
+
 	"vitess.io/vitess/go/stats"
 )
 
@@ -104,6 +106,7 @@ func init() {
 		goArch:             runtime.GOARCH,
 		version:            versionName,
 	}
+	sqlparser.MySQLVersion = AppVersion.MySQLVersion()
 	stats.NewString("BuildHost").Set(AppVersion.buildHost)
 	stats.NewString("BuildUser").Set(AppVersion.buildUser)
 	stats.NewGauge("BuildTimestamp", "build timestamp").Set(AppVersion.buildTime)
