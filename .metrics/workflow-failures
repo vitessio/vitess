@@ -2636,4 +2636,6 @@
 2021-02-19T15:40:07Z,endtoend,https://github.com/vitessio/vitess/actions/runs/581887816
 2021-02-19T15:40:07Z,golangci-lint,https://github.com/vitessio/vitess/actions/runs/581887808
 2021-02-19T15:40:07Z,gomod-tidy,https://github.com/vitessio/vitess/actions/runs/581887803
+2021-02-19T15:42:57Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/581895530
 2021-02-19T15:42:57Z,endtoend,https://github.com/vitessio/vitess/actions/runs/581895503
+2021-02-19T15:42:57Z,golangci-lint,https://github.com/vitessio/vitess/actions/runs/581895527
