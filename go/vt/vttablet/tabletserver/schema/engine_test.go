@@ -18,6 +18,7 @@ package schema
 
 import (
 	"expvar"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"sort"
@@ -80,6 +81,8 @@ func TestOpenAndReload(t *testing.T) {
 		"int64"),
 		"1427325876",
 	))
+	firstReadRowsValue := 12
+	AddFakeInnoDBReadRowsResult(db, firstReadRowsValue)
 	se := newEngine(10, 10*time.Second, 10*time.Second, db)
 	se.Open()
 	defer se.Close()
@@ -93,6 +96,8 @@ func TestOpenAndReload(t *testing.T) {
 		"int64"),
 		"1427325877",
 	))
+	assert.Contains(t, se.innoDbReadRowsGauge.Counts(), "read_rows")
+	assert.EqualValues(t, firstReadRowsValue, se.innoDbReadRowsGauge.Counts()["read_rows"])
 	// Modify test_table_03
 	// Add test_table_04
 	// Drop msg
@@ -144,6 +149,8 @@ func TestOpenAndReload(t *testing.T) {
 			mysql.ShowPrimaryRow("seq", "id"),
 		},
 	})
+	secondReadRowsValue := 123
+	AddFakeInnoDBReadRowsResult(db, secondReadRowsValue)
 
 	firstTime := true
 	notifier := func(full map[string]*Table, created, altered, dropped []string) {
@@ -163,6 +170,9 @@ func TestOpenAndReload(t *testing.T) {
 	se.RegisterNotifier("test", notifier)
 	err := se.Reload(context.Background())
 	require.NoError(t, err)
+
+	assert.Contains(t, se.innoDbReadRowsGauge.Counts(), "read_rows")
+	assert.EqualValues(t, secondReadRowsValue, se.innoDbReadRowsGauge.Counts()["read_rows"])
 
 	want["test_table_03"] = &Table{
 		Name: sqlparser.NewTableIdent("test_table_03"),
@@ -338,6 +348,7 @@ func TestOpenFailedDueToTableErr(t *testing.T) {
 			{sqltypes.NewVarBinary("")},
 		},
 	})
+	AddFakeInnoDBReadRowsResult(db, 0)
 	se := newEngine(10, 1*time.Second, 1*time.Second, db)
 	err := se.Open()
 	want := "Row count exceeded"
@@ -491,4 +502,12 @@ func initialSchema() map[string]*Table {
 			},
 		},
 	}
+}
+
+func AddFakeInnoDBReadRowsResult(db *fakesqldb.DB, value int) *fakesqldb.ExpectedResult {
+	return db.AddQuery("show status like 'Innodb_rows_read'", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+		"Variable_name|Value",
+		"varchar|int64"),
+		fmt.Sprintf("Innodb_rows_read|%d", value),
+	))
 }
