@@ -10986,6 +10986,9 @@ export namespace query {
 
         /** ExecuteOptions planner_version */
         planner_version?: (query.ExecuteOptions.PlannerVersion|null);
+
+        /** ExecuteOptions has_created_temp_tables */
+        has_created_temp_tables?: (boolean|null);
     }
 
     /** Represents an ExecuteOptions. */
@@ -11017,6 +11020,9 @@ export namespace query {
 
         /** ExecuteOptions planner_version. */
         public planner_version: query.ExecuteOptions.PlannerVersion;
+
+        /** ExecuteOptions has_created_temp_tables. */
+        public has_created_temp_tables: boolean;
 
         /**
          * Creates a new ExecuteOptions instance using the specified properties.
