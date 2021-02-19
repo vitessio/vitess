@@ -17,11 +17,12 @@ limitations under the License.
 package wrangler
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"time"
 
-	"context"
+	"vitess.io/vitess/go/vt/log"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
@@ -67,6 +68,12 @@ func (wr *Wrangler) Reshard(ctx context.Context, keyspace, workflow string, sour
 	if err := wr.validateNewWorkflow(ctx, keyspace, workflow); err != nil {
 		return err
 	}
+	if err := wr.ts.ValidateSrvKeyspace(ctx, keyspace, cell); err != nil {
+		err2 := vterrors.Wrapf(err, "SrvKeyspace for keyspace %s is corrupt in cell %s", keyspace, cell)
+		log.Errorf("%w", err2)
+		return err2
+	}
+
 	rs, err := wr.buildResharder(ctx, keyspace, workflow, sources, targets, cell, tabletTypes)
 	if err != nil {
 		return vterrors.Wrap(err, "buildResharder")
