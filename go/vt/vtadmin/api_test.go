@@ -42,6 +42,7 @@ import (
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver/testutil"
 	"vitess.io/vitess/go/vt/vtctl/vtctldclient"
+	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
@@ -1257,4 +1258,18 @@ func buildCluster(i int, vtctldClient vtctldclient.VtctldClient, tablets []*vtad
 	cluster.Vtctld = vtctld
 
 	return cluster
+}
+
+func init() {
+	// For tests that don't actually care about mocking the tmclient (i.e. they
+	// call grpcvtctldserver.NewVtctldServer to initialize the unit under test),
+	// this needs to be set.
+	//
+	// Tests that do care about the tmclient should use
+	// testutil.NewVtctldServerWithTabletManagerClient to initialize their
+	// VtctldServer.
+	*tmclient.TabletManagerProtocol = "vtadmin.test"
+	tmclient.RegisterTabletManagerClientFactory("vtadmin.test", func() tmclient.TabletManagerClient {
+		return nil
+	})
 }

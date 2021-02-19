@@ -32,6 +32,7 @@ import (
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver/testutil"
+	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	mysqlctlpb "vitess.io/vitess/go/vt/proto/mysqlctl"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -45,6 +46,18 @@ import (
 
 func init() {
 	*backupstorage.BackupStorageImplementation = testutil.BackupStorageImplementation
+
+	// For tests that don't actually care about mocking the tmclient (i.e. they
+	// call NewVtctldServer to initialize the unit under test), this needs to be
+	// set.
+	//
+	// Tests that do care about the tmclient should use
+	// testutil.NewVtctldServerWithTabletManagerClient to initialize their
+	// VtctldServer.
+	*tmclient.TabletManagerProtocol = "grpcvtctldserver.test"
+	tmclient.RegisterTabletManagerClientFactory("grpcvtctldserver.test", func() tmclient.TabletManagerClient {
+		return nil
+	})
 }
 
 func TestChangeTabletType(t *testing.T) {
