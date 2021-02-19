@@ -32,10 +32,11 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/mysql"
+
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/cache"
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/streamlog"
@@ -114,12 +115,7 @@ func TestGetPlanPanicDuetoEmptyQuery(t *testing.T) {
 	}
 }
 
-func TestGetMessageStreamPlan(t *testing.T) {
-	db := fakesqldb.New(t)
-	defer db.Close()
-	for query, result := range schematest.Queries() {
-		db.AddQuery(query, result)
-	}
+func addSchemaEngineQueries(db *fakesqldb.DB) {
 	db.AddQueryPattern(baseShowTablesPattern, &sqltypes.Result{
 		Fields: mysql.BaseShowTablesFields,
 		Rows: [][]sqltypes.Value{
@@ -129,6 +125,22 @@ func TestGetMessageStreamPlan(t *testing.T) {
 			mysql.BaseShowTablesRow("seq", false, "vitess_sequence"),
 			mysql.BaseShowTablesRow("msg", false, "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30"),
 		}})
+	db.AddQuery("show status like 'Innodb_rows_read'", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+		"Variable_name|Value",
+		"varchar|int64"),
+		"Innodb_rows_read|0",
+	))
+}
+
+func TestGetMessageStreamPlan(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	for query, result := range schematest.Queries() {
+		db.AddQuery(query, result)
+	}
+
+	addSchemaEngineQueries(db)
+
 	qe := newTestQueryEngine(10*time.Second, true, newDBConfigs(db))
 	qe.se.Open()
 	qe.Open()

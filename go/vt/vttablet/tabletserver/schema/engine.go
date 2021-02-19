@@ -80,6 +80,7 @@ type Engine struct {
 
 	tableFileSizeGauge      *stats.GaugesWithSingleLabel
 	tableAllocatedSizeGauge *stats.GaugesWithSingleLabel
+	innoDbReadRowsGauge     *stats.GaugesWithSingleLabel
 }
 
 // NewEngine creates a new Engine.
@@ -99,6 +100,7 @@ func NewEngine(env tabletenv.Env) *Engine {
 	_ = env.Exporter().NewGaugeDurationFunc("SchemaReloadTime", "vttablet keeps table schemas in its own memory and periodically refreshes it from MySQL. This config controls the reload time.", se.ticks.Interval)
 	se.tableFileSizeGauge = env.Exporter().NewGaugesWithSingleLabel("TableFileSize", "tracks table file size", "Table")
 	se.tableAllocatedSizeGauge = env.Exporter().NewGaugesWithSingleLabel("TableAllocatedSize", "tracks table allocated size", "Table")
+	se.innoDbReadRowsGauge = env.Exporter().NewGaugesWithSingleLabel("InnodbRowsRead", "number of rows read by mysql", "Database")
 
 	env.Exporter().HandleFunc("/debug/schema", se.handleDebugSchema)
 	env.Exporter().HandleFunc("/schemaz", func(w http.ResponseWriter, r *http.Request) {
@@ -290,9 +292,7 @@ func (se *Engine) ReloadAt(ctx context.Context, pos mysql.Position) error {
 
 // reload reloads the schema. It can also be used to initialize it.
 func (se *Engine) reload(ctx context.Context) error {
-	//start := time.Now()
 	defer func() {
-		//log.Infof("Time taken to load the schema: %v", time.Since(start))
 		se.env.LogError()
 	}()
 
@@ -312,6 +312,11 @@ func (se *Engine) reload(ctx context.Context) error {
 		return nil
 	}
 	tableData, err := conn.Exec(ctx, conn.BaseShowTables(), maxTableCount, false)
+	if err != nil {
+		return err
+	}
+
+	err = se.updateInnoDBRowsRead(ctx, conn)
 	if err != nil {
 		return err
 	}
@@ -385,6 +390,25 @@ func (se *Engine) reload(ctx context.Context) error {
 		log.Infof("schema engine created %v, altered %v, dropped %v", created, altered, dropped)
 	}
 	se.broadcast(created, altered, dropped)
+	return nil
+}
+
+func (se *Engine) updateInnoDBRowsRead(ctx context.Context, conn *connpool.DBConn) error {
+	readRowsData, err := conn.Exec(ctx, "show status like 'Innodb_rows_read'", 10, false)
+	if err != nil {
+		return err
+	}
+
+	if !(len(readRowsData.Rows) == 1 && len(readRowsData.Rows[0]) == 2) {
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "got bad output from query, expected one row, two columns")
+	}
+
+	value, err := evalengine.ToInt64(readRowsData.Rows[0][1])
+	if err != nil {
+		return err
+	}
+
+	se.innoDbReadRowsGauge.Set("read_rows", value)
 	return nil
 }
 
