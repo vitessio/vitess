@@ -31,6 +31,9 @@ func replacePlusLeft(newNode, parent AST) {
 func replacePlusRight(newNode, parent AST) {
 	parent.(*Plus).Right = newNode.(AST)
 }
+func replaceStructHolderVal(newNode, parent AST) {
+	parent.(*StructHolder).Val = newNode.(AST)
+}
 func replaceUnaryMinusVal(newNode, parent AST) {
 	parent.(*UnaryMinus).Val = newNode.(*LiteralInt)
 }
@@ -60,6 +63,10 @@ func (a *application) apply(parent, node AST, replacer replacerFunc) {
 	case *Plus:
 		a.apply(node, n.Left, replacePlusLeft)
 		a.apply(node, n.Right, replacePlusRight)
+	case StructHolder:
+		a.apply(node, n.Val, replacePanic("StructHolder Val"))
+	case *StructHolder:
+		a.apply(node, n.Val, replaceStructHolderVal)
 	case *UnaryMinus:
 		a.apply(node, n.Val, replaceUnaryMinusVal)
 	}

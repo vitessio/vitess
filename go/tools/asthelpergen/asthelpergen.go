@@ -99,13 +99,13 @@ func (gen *astHelperGen) doIt() (map[string]*jen.File, error) {
 		switch n := t.Underlying().(type) {
 		case *types.Struct:
 			named := t.(*types.Named)
-			return rewriter.visitStruct(t, types.TypeString(t, noQualifier), named.Obj().Name(), n)
+			return rewriter.visitStruct(t, types.TypeString(t, noQualifier), named.Obj().Name(), n, false)
 		case *types.Pointer:
 			strct := n.Elem().Underlying().(*types.Struct)
 			named := t.(*types.Pointer).Elem().(*types.Named)
-			return rewriter.visitStruct(t, types.TypeString(t, noQualifier), named.Obj().Name(), strct)
+			return rewriter.visitStruct(t, types.TypeString(t, noQualifier), named.Obj().Name(), strct, true)
 		case *types.Interface:
-
+			// do nothing
 		default:
 			fmt.Printf("unknown %T\n", t)
 		}

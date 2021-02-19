@@ -141,3 +141,31 @@ func TestReplaceInSlice(t *testing.T) {
 
 	utils.MustMatch(t, expected, parent.AST)
 }
+
+func TestReplaceStructHolder(t *testing.T) {
+	one := &LiteralInt{1}
+	root := StructHolder{one}
+
+	parent := &struct{ AST }{root}
+
+	defer func() {
+		if r := recover(); r != nil {
+			assert.Equal(t, "StructHolder Val", r)
+		}
+	}()
+
+	a := &application{
+		pre: func(cursor *Cursor) bool {
+			switch cursor.node.(type) {
+			case *LiteralInt:
+				cursor.replacer(nil, nil)
+			}
+			return true
+		},
+		post:   nil,
+		cursor: Cursor{},
+	}
+
+	a.apply(parent, root, nil)
+	t.Fatal("Should have panicked")
+}
