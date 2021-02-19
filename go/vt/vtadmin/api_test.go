@@ -192,42 +192,128 @@ func TestGetGates(t *testing.T) {
 }
 
 func TestGetKeyspaces(t *testing.T) {
-	ts1 := memorytopo.NewServer("c1_cell1")
-	ts2 := memorytopo.NewServer("c2_cell1")
-
-	testutil.AddKeyspace(context.Background(), t, ts1, &vtctldatapb.Keyspace{
-		Name:     "testkeyspace",
-		Keyspace: &topodatapb.Keyspace{},
-	})
-	testutil.AddKeyspace(context.Background(), t, ts1, &vtctldatapb.Keyspace{
-		Name: "snapshot",
-		Keyspace: &topodatapb.Keyspace{
-			KeyspaceType: topodatapb.KeyspaceType_SNAPSHOT,
-			BaseKeyspace: "testkeyspace",
-			SnapshotTime: &vttime.Time{Seconds: 10, Nanoseconds: 1},
-		},
-	})
-
-	testutil.AddKeyspace(context.Background(), t, ts2, &vtctldatapb.Keyspace{
-		Name:     "customer",
-		Keyspace: &topodatapb.Keyspace{},
-	})
-
-	testutil.WithTestServer(t, grpcvtctldserver.NewVtctldServer(ts1), func(t *testing.T, cluster1Client vtctldclient.VtctldClient) {
-		testutil.WithTestServer(t, grpcvtctldserver.NewVtctldServer(ts2), func(t *testing.T, cluster2Client vtctldclient.VtctldClient) {
-			c1 := buildCluster(1, cluster1Client, nil, nil)
-			c2 := buildCluster(2, cluster2Client, nil, nil)
-
-			api := NewAPI([]*cluster.Cluster{c1, c2}, grpcserver.Options{}, http.Options{})
-			resp, err := api.GetKeyspaces(context.Background(), &vtadminpb.GetKeyspacesRequest{})
-			require.NoError(t, err)
-
-			expected := &vtadminpb.GetKeyspacesResponse{
+	tests := []struct {
+		name             string
+		clusterKeyspaces [][]*vtctldatapb.Keyspace
+		clusterShards    [][]*vtctldatapb.Shard
+		req              *vtadminpb.GetKeyspacesRequest
+		expected         *vtadminpb.GetKeyspacesResponse
+	}{
+		{
+			name: "multiple clusters, multiple shards",
+			clusterKeyspaces: [][]*vtctldatapb.Keyspace{
+				//cluster0
+				{
+					{
+						Name:     "c0-ks0",
+						Keyspace: &topodatapb.Keyspace{},
+					},
+				},
+				//cluster1
+				{
+					{
+						Name:     "c1-ks0",
+						Keyspace: &topodatapb.Keyspace{},
+					},
+				},
+			},
+			clusterShards: [][]*vtctldatapb.Shard{
+				//cluster0
+				{
+					{
+						Keyspace: "c0-ks0",
+						Name:     "-80",
+					},
+					{
+						Keyspace: "c0-ks0",
+						Name:     "80-",
+					},
+				},
+				//cluster1
+				{
+					{
+						Keyspace: "c1-ks0",
+						Name:     "-",
+					},
+				},
+			},
+			req: &vtadminpb.GetKeyspacesRequest{},
+			expected: &vtadminpb.GetKeyspacesResponse{
 				Keyspaces: []*vtadminpb.Keyspace{
+					{
+						Cluster: &vtadminpb.Cluster{
+							Id:   "c0",
+							Name: "cluster0",
+						},
+						Keyspace: &vtctldatapb.Keyspace{
+							Name:     "c0-ks0",
+							Keyspace: &topodatapb.Keyspace{},
+						},
+						Shards: map[string]*vtctldatapb.Shard{
+							"-80": {
+								Keyspace: "c0-ks0",
+								Name:     "-80",
+								Shard: &topodatapb.Shard{
+									IsMasterServing: true,
+								},
+							},
+							"80-": {
+								Keyspace: "c0-ks0",
+								Name:     "80-",
+								Shard: &topodatapb.Shard{
+									IsMasterServing: true,
+								},
+							},
+						},
+					},
 					{
 						Cluster: &vtadminpb.Cluster{
 							Id:   "c1",
 							Name: "cluster1",
+						},
+						Keyspace: &vtctldatapb.Keyspace{
+							Name:     "c1-ks0",
+							Keyspace: &topodatapb.Keyspace{},
+						},
+						Shards: map[string]*vtctldatapb.Shard{
+							"-": {
+								Keyspace: "c1-ks0",
+								Name:     "-",
+								Shard: &topodatapb.Shard{
+									IsMasterServing: true,
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "with snapshot",
+			clusterKeyspaces: [][]*vtctldatapb.Keyspace{
+				// cluster0
+				{
+					{
+						Name:     "testkeyspace",
+						Keyspace: &topodatapb.Keyspace{},
+					},
+					{
+						Name: "snapshot",
+						Keyspace: &topodatapb.Keyspace{
+							KeyspaceType: topodatapb.KeyspaceType_SNAPSHOT,
+							BaseKeyspace: "testkeyspace",
+							SnapshotTime: &vttime.Time{Seconds: 10, Nanoseconds: 1},
+						},
+					},
+				},
+			},
+			req: &vtadminpb.GetKeyspacesRequest{},
+			expected: &vtadminpb.GetKeyspacesResponse{
+				Keyspaces: []*vtadminpb.Keyspace{
+					{
+						Cluster: &vtadminpb.Cluster{
+							Id:   "c0",
+							Name: "cluster0",
 						},
 						Keyspace: &vtctldatapb.Keyspace{
 							Name:     "testkeyspace",
@@ -236,8 +322,8 @@ func TestGetKeyspaces(t *testing.T) {
 					},
 					{
 						Cluster: &vtadminpb.Cluster{
-							Id:   "c1",
-							Name: "cluster1",
+							Id:   "c0",
+							Name: "cluster0",
 						},
 						Keyspace: &vtctldatapb.Keyspace{
 							Name: "snapshot",
@@ -248,32 +334,82 @@ func TestGetKeyspaces(t *testing.T) {
 							},
 						},
 					},
+				},
+			},
+		},
+		{
+			name: "filtered by cluster ID",
+			clusterKeyspaces: [][]*vtctldatapb.Keyspace{
+				//cluster0
+				{
+					{
+						Name:     "c0-ks0",
+						Keyspace: &topodatapb.Keyspace{},
+					},
+				},
+				//cluster1
+				{
+					{
+						Name:     "c1-ks0",
+						Keyspace: &topodatapb.Keyspace{},
+					},
+				},
+			},
+			req: &vtadminpb.GetKeyspacesRequest{
+				ClusterIds: []string{"c1"},
+			},
+			expected: &vtadminpb.GetKeyspacesResponse{
+				Keyspaces: []*vtadminpb.Keyspace{
 					{
 						Cluster: &vtadminpb.Cluster{
-							Id:   "c2",
-							Name: "cluster2",
+							Id:   "c1",
+							Name: "cluster1",
 						},
 						Keyspace: &vtctldatapb.Keyspace{
-							Name:     "customer",
+							Name:     "c1-ks0",
 							Keyspace: &topodatapb.Keyspace{},
 						},
 					},
 				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		topos := []*topo.Server{
+			memorytopo.NewServer("c0_cell1"),
+			memorytopo.NewServer("c1_cell1"),
+		}
+
+		for cdx, cks := range tt.clusterKeyspaces {
+			for _, ks := range cks {
+				testutil.AddKeyspace(context.Background(), t, topos[cdx], ks)
 			}
-			assert.ElementsMatch(t, expected.Keyspaces, resp.Keyspaces)
+		}
 
-			resp, err = api.GetKeyspaces(
-				context.Background(),
-				&vtadminpb.GetKeyspacesRequest{
-					ClusterIds: []string{"c1"},
-				},
-			)
-			require.NoError(t, err)
+		for cdx, css := range tt.clusterShards {
+			testutil.AddShards(context.Background(), t, topos[cdx], css...)
+		}
 
-			expected.Keyspaces = expected.Keyspaces[:2] // just c1
-			assert.ElementsMatch(t, expected.Keyspaces, resp.Keyspaces)
+		// Setting up WithTestServer in a generic, recursive way is... unpleasant,
+		// so all tests are set-up and run in the context of these two clusters.
+		testutil.WithTestServer(t, grpcvtctldserver.NewVtctldServer(topos[0]), func(t *testing.T, cluster0Client vtctldclient.VtctldClient) {
+			testutil.WithTestServer(t, grpcvtctldserver.NewVtctldServer(topos[1]), func(t *testing.T, cluster1Client vtctldclient.VtctldClient) {
+				clusterClients := []vtctldclient.VtctldClient{cluster0Client, cluster1Client}
+
+				clusters := []*cluster.Cluster{
+					buildCluster(0, clusterClients[0], nil, nil),
+					buildCluster(1, clusterClients[1], nil, nil),
+				}
+
+				api := NewAPI(clusters, grpcserver.Options{}, http.Options{})
+				resp, err := api.GetKeyspaces(context.Background(), tt.req)
+				require.NoError(t, err)
+
+				vtadmintestutil.AssertKeyspaceSlicesEqual(t, tt.expected.Keyspaces, resp.Keyspaces)
+			})
 		})
-	})
+	}
 }
 
 func TestGetSchemas(t *testing.T) {
