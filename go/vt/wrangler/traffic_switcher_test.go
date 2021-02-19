@@ -915,10 +915,28 @@ func TestTableMigrateOneToMany(t *testing.T) {
 	}
 	dropSources()
 
+	checkRouting(t, tme.wr, map[string][]string{
+		"t1":             {"ks2.t1"},
+		"ks1.t1":         {"ks2.t1"},
+		"t2":             {"ks2.t2"},
+		"ks1.t2":         {"ks2.t2"},
+		"t1@replica":     {"ks2.t1"},
+		"ks2.t1@replica": {"ks2.t1"},
+		"ks1.t1@replica": {"ks2.t1"},
+		"t2@replica":     {"ks2.t2"},
+		"ks2.t2@replica": {"ks2.t2"},
+		"ks1.t2@replica": {"ks2.t2"},
+		"t1@rdonly":      {"ks2.t1"},
+		"ks2.t1@rdonly":  {"ks2.t1"},
+		"ks1.t1@rdonly":  {"ks2.t1"},
+		"t2@rdonly":      {"ks2.t2"},
+		"ks2.t2@rdonly":  {"ks2.t2"},
+		"ks1.t2@rdonly":  {"ks2.t2"},
+	})
 	_, err = tme.wr.DropSources(ctx, tme.targetKeyspace, "test", RenameTable, false, false, false)
 	require.NoError(t, err)
 	checkBlacklist(t, tme.ts, fmt.Sprintf("%s:%s", "ks1", "0"), nil)
-
+	checkRouting(t, tme.wr, map[string][]string{})
 	verifyQueries(t, tme.allDBClients)
 }
 
