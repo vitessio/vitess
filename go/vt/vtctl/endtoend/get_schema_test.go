@@ -214,12 +214,3 @@ func TestGetSchema(t *testing.T) {
 
 	assert.Equal(t, sd, actual)
 }
-
-func init() {
-	// enforce we will use the right protocol (gRPC) (note the
-	// client is unused, but it is initialized, so it needs to exist)
-	*tmclient.TabletManagerProtocol = "grpc"
-	tmclient.RegisterTabletManagerClientFactory("grpc", func() tmclient.TabletManagerClient {
-		return nil
-	})
-}
