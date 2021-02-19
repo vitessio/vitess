@@ -24420,6 +24420,7 @@ $root.query = (function() {
          * @property {query.ExecuteOptions.TransactionIsolation|null} [transaction_isolation] ExecuteOptions transaction_isolation
          * @property {boolean|null} [skip_query_plan_cache] ExecuteOptions skip_query_plan_cache
          * @property {query.ExecuteOptions.PlannerVersion|null} [planner_version] ExecuteOptions planner_version
+         * @property {boolean|null} [has_created_temp_tables] ExecuteOptions has_created_temp_tables
          */
 
         /**
@@ -24494,6 +24495,14 @@ $root.query = (function() {
         ExecuteOptions.prototype.planner_version = 0;
 
         /**
+         * ExecuteOptions has_created_temp_tables.
+         * @member {boolean} has_created_temp_tables
+         * @memberof query.ExecuteOptions
+         * @instance
+         */
+        ExecuteOptions.prototype.has_created_temp_tables = false;
+
+        /**
          * Creates a new ExecuteOptions instance using the specified properties.
          * @function create
          * @memberof query.ExecuteOptions
@@ -24531,6 +24540,8 @@ $root.query = (function() {
                 writer.uint32(/* id 10, wireType 0 =*/80).bool(message.skip_query_plan_cache);
             if (message.planner_version != null && Object.hasOwnProperty.call(message, "planner_version"))
                 writer.uint32(/* id 11, wireType 0 =*/88).int32(message.planner_version);
+            if (message.has_created_temp_tables != null && Object.hasOwnProperty.call(message, "has_created_temp_tables"))
+                writer.uint32(/* id 12, wireType 0 =*/96).bool(message.has_created_temp_tables);
             return writer;
         };
 
@@ -24585,6 +24596,9 @@ $root.query = (function() {
                     break;
                 case 11:
                     message.planner_version = reader.int32();
+                    break;
+                case 12:
+                    message.has_created_temp_tables = reader.bool();
                     break;
                 default:
                     reader.skipType(tag & 7);
@@ -24674,6 +24688,9 @@ $root.query = (function() {
                 case 5:
                     break;
                 }
+            if (message.has_created_temp_tables != null && message.hasOwnProperty("has_created_temp_tables"))
+                if (typeof message.has_created_temp_tables !== "boolean")
+                    return "has_created_temp_tables: boolean expected";
             return null;
         };
 
@@ -24790,6 +24807,8 @@ $root.query = (function() {
                 message.planner_version = 5;
                 break;
             }
+            if (object.has_created_temp_tables != null)
+                message.has_created_temp_tables = Boolean(object.has_created_temp_tables);
             return message;
         };
 
@@ -24818,6 +24837,7 @@ $root.query = (function() {
                 object.transaction_isolation = options.enums === String ? "DEFAULT" : 0;
                 object.skip_query_plan_cache = false;
                 object.planner_version = options.enums === String ? "DEFAULT_PLANNER" : 0;
+                object.has_created_temp_tables = false;
             }
             if (message.included_fields != null && message.hasOwnProperty("included_fields"))
                 object.included_fields = options.enums === String ? $root.query.ExecuteOptions.IncludedFields[message.included_fields] : message.included_fields;
@@ -24836,6 +24856,8 @@ $root.query = (function() {
                 object.skip_query_plan_cache = message.skip_query_plan_cache;
             if (message.planner_version != null && message.hasOwnProperty("planner_version"))
                 object.planner_version = options.enums === String ? $root.query.ExecuteOptions.PlannerVersion[message.planner_version] : message.planner_version;
+            if (message.has_created_temp_tables != null && message.hasOwnProperty("has_created_temp_tables"))
+                object.has_created_temp_tables = message.has_created_temp_tables;
             return object;
         };
 
