@@ -668,13 +668,6 @@ func (node TableIdent) String() string {
 	return node.v
 }
 
-// String returns the unescaped table name with qualifier. It must
-// not be used for SQL generation. Use sqlparser.String
-// instead.
-func (node TableName) String() string {
-	return strings.ToLower(node.Qualifier.String() + "." + node.Name.String())
-}
-
 // CompliantName returns a compliant id name
 // that can be used for a bind var.
 func (node TableIdent) CompliantName() string {
