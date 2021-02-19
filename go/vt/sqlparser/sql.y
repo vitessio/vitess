@@ -122,18 +122,23 @@ func skipToEnd(yylex interface{}) {
   vindexParams  []VindexParam
   showFilter    *ShowFilter
   optLike       *OptLike
+  over          *Over
   caseStatementCases []CaseStatementCase
   caseStatementCase CaseStatementCase
   ifStatementConditions []IfStatementCondition
   ifStatementCondition IfStatementCondition
   signalInfo SignalInfo
   signalInfos []SignalInfo
+  procedureParam ProcedureParam
+  procedureParams []ProcedureParam
+  characteristic Characteristic
+  characteristics []Characteristic
 }
 
 %token LEX_ERROR
 %left <bytes> UNION
-%token <bytes> SELECT STREAM INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT OFFSET FOR
-%token <bytes> ALL DISTINCT AS EXISTS ASC DESC INTO DUPLICATE DEFAULT SET LOCK UNLOCK KEYS
+%token <bytes> SELECT STREAM INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT OFFSET FOR CALL
+%token <bytes> ALL DISTINCT AS EXISTS ASC DESC INTO DUPLICATE DEFAULT SET LOCK UNLOCK KEYS OF
 %right <bytes> UNIQUE KEY
 %token <bytes> SYSTEM_TIME
 %token <bytes> VALUES LAST_INSERT_ID
@@ -177,11 +182,12 @@ func skipToEnd(yylex interface{}) {
 %token <bytes> ACTION CASCADE CONSTRAINT FOREIGN NO REFERENCES RESTRICT
 %token <bytes> FIRST AFTER
 %token <bytes> SHOW DESCRIBE EXPLAIN DATE ESCAPE REPAIR OPTIMIZE TRUNCATE FORMAT
-%token <bytes> MAXVALUE PARTITION REORGANIZE LESS THAN PROCEDURE TRIGGER TRIGGERS
+%token <bytes> MAXVALUE PARTITION REORGANIZE LESS THAN PROCEDURE TRIGGER TRIGGERS FUNCTION
 %token <bytes> VINDEX VINDEXES
 %token <bytes> STATUS VARIABLES WARNINGS
 %token <bytes> SEQUENCE
-%token <bytes> EACH ROW BEFORE FOLLOWS PRECEDES DEFINER
+%token <bytes> EACH ROW BEFORE FOLLOWS PRECEDES DEFINER INVOKER
+%token <bytes> INOUT OUT DETERMINISTIC CONTAINS READS MODIFIES SQL DATA SECURITY
 
 // SIGNAL Tokens
 %token <bytes> CLASS_ORIGIN SUBCLASS_ORIGIN MESSAGE_TEXT MYSQL_ERRNO CONSTRAINT_CATALOG CONSTRAINT_SCHEMA
@@ -218,24 +224,30 @@ func skipToEnd(yylex interface{}) {
 %token <bytes> GROUP_CONCAT SEPARATOR
 %token <bytes> TIMESTAMPADD TIMESTAMPDIFF
 
+// Window functions
+%token <bytes> OVER WINDOW GROUPING GROUPS
+%token <bytes> AVG BIT_AND BIT_OR BIT_XOR COUNT JSON_ARRAYAGG JSON_OBJECTAGG MAX MIN STDDEV_POP STDDEV STD STDDEV_SAMP
+%token <bytes> SUM VAR_POP VARIANCE VAR_SAMP CUME_DIST DENSE_RANK FIRST_VALUE LAG LAST_VALUE LEAD NTH_VALUE NTILE
+%token <bytes> ROW_NUMBER PERCENT_RANK RANK
+
 // Match
 %token <bytes> MATCH AGAINST BOOLEAN LANGUAGE WITH QUERY EXPANSION
 
 // MySQL reserved words that are unused by this grammar will map to this token.
-%token <bytes> UNUSED ARRAY CUME_DIST DESCRIPTION DENSE_RANK EMPTY EXCEPT FIRST_VALUE GROUPING GROUPS JSON_TABLE LAG LAST_VALUE LATERAL LEAD MEMBER
-%token <bytes> NTH_VALUE NTILE OF OVER PERCENT_RANK RANK RECURSIVE ROW_NUMBER SYSTEM WINDOW
+%token <bytes> UNUSED ARRAY DESCRIPTION EMPTY EXCEPT JSON_TABLE LATERAL MEMBER RECURSIVE
 %token <bytes> ACTIVE ADMIN BUCKETS CLONE COMPONENT DEFINITION ENFORCED EXCLUDE FOLLOWING GEOMCOLLECTION GET_MASTER_PUBLIC_KEY HISTOGRAM HISTORY
 %token <bytes> INACTIVE INVISIBLE LOCKED MASTER_COMPRESSION_ALGORITHMS MASTER_PUBLIC_KEY_PATH MASTER_TLS_CIPHERSUITES MASTER_ZSTD_COMPRESSION_LEVEL
 %token <bytes> NESTED NETWORK_NAMESPACE NOWAIT NULLS OJ OLD OPTIONAL ORDINALITY ORGANIZATION OTHERS PATH PERSIST PERSIST_ONLY PRECEDING PRIVILEGE_CHECKS_USER PROCESS
 %token <bytes> RANDOM REFERENCE REQUIRE_ROW_FORMAT RESOURCE RESPECT RESTART RETAIN REUSE ROLE SECONDARY SECONDARY_ENGINE SECONDARY_LOAD SECONDARY_UNLOAD SKIP SRID
-%token <bytes> THREAD_PRIORITY TIES UNBOUNDED VCPU VISIBLE
+%token <bytes> THREAD_PRIORITY TIES UNBOUNDED VCPU VISIBLE SYSTEM
 
 %type <statement> command
 %type <selStmt> select_statement base_select union_lhs union_rhs
 %type <statement> stream_statement insert_statement update_statement delete_statement set_statement trigger_body
-%type <statement> create_statement rename_statement drop_statement truncate_statement flush_statement
-%type <statement> begin_end_block statement_list_statement case_statement if_statement signal_statement
-%type <statements> statement_list
+%type <statement> create_statement rename_statement drop_statement truncate_statement flush_statement call_statement
+%type <statement> trigger_begin_end_block statement_list_statement case_statement if_statement signal_statement
+%type <statement> proc_allowed_statement proc_begin_end_block
+%type <statements> statement_list proc_allowed_statement_list
 %type <caseStatementCases> case_statement_case_list
 %type <caseStatementCase> case_statement_case
 %type <ifStatementConditions> elseif_list
@@ -248,14 +260,14 @@ func skipToEnd(yylex interface{}) {
 %type <ddl> create_table_prefix rename_list
 %type <statement> analyze_statement show_statement use_statement other_statement
 %type <statement> describe_statement explain_statement explainable_statement
-%type <statement> begin_statement commit_statement rollback_statement
+%type <statement> begin_statement commit_statement rollback_statement start_transaction_statement
 %type <bytes2> comment_opt comment_list
 %type <str> union_op insert_or_replace
 %type <str> distinct_opt straight_join_opt cache_opt match_option separator_opt format_opt
 %type <expr> like_escape_opt
 %type <selectExprs> select_expression_list select_expression_list_opt
 %type <selectExpr> select_expression
-%type <expr> expression naked_like
+%type <expr> expression naked_like group_by
 %type <tableExprs> from_opt table_references
 %type <tableExpr> table_reference table_factor join_table
 %type <joinCondition> join_condition join_condition_opt on_expression_opt
@@ -270,10 +282,11 @@ func skipToEnd(yylex interface{}) {
 %type <str> compare
 %type <ins> insert_data
 %type <expr> value value_expression num_val as_of_opt
-%type <expr> function_call_keyword function_call_nonkeyword function_call_generic function_call_conflict func_datetime_precision
+%type <expr> function_call_keyword function_call_nonkeyword function_call_generic function_call_conflict
+%type <expr> func_datetime_precision function_call_window function_call_aggregate_with_window
 %type <str> is_suffix
 %type <colTuple> col_tuple
-%type <exprs> expression_list
+%type <exprs> expression_list group_by_list
 %type <values> tuple_list
 %type <valTuple> row_tuple tuple_or_empty
 %type <expr> tuple_expression
@@ -283,11 +296,12 @@ func skipToEnd(yylex interface{}) {
 %type <when> when_expression
 %type <expr> expression_opt else_expression_opt
 %type <exprs> group_by_opt
-%type <expr> having_opt
+%type <expr> having_opt having
 %type <orderBy> order_by_opt order_list
 %type <columnOrder> column_order_opt
 %type <triggerOrder> trigger_order_opt
 %type <order> order
+%type <over> over over_opt
 %type <int> lexer_position
 %type <str> asc_desc_opt
 %type <limit> limit_opt
@@ -306,9 +320,10 @@ func skipToEnd(yylex interface{}) {
 %type <byt> exists_opt not_exists_opt
 %type <str> key_type key_type_opt
 %type <empty> non_add_drop_or_rename_operation
-%type <empty> to_opt to_or_as as_opt column_opt describe definer_opt
+%type <empty> to_opt to_or_as as_opt column_opt describe
+%type <str> definer_opt
 %type <empty> skip_to_end ddl_skip_to_end
-%type <bytes> reserved_keyword non_reserved_keyword
+%type <bytes> reserved_keyword non_reserved_keyword column_name_safe_reserved_keyword
 %type <colIdent> sql_id reserved_sql_id col_alias as_ci_opt using_opt
 %type <expr> charset_value
 %type <tableIdent> table_id reserved_table_id table_alias
@@ -350,6 +365,11 @@ func skipToEnd(yylex interface{}) {
 %type <bytes> ignored_alter_object_type
 %type <ReferenceAction> fk_reference_action fk_on_delete fk_on_update
 %type <str> constraint_symbol_opt
+%type <exprs> call_param_list_opt
+%type <procedureParams> proc_param_list_opt proc_param_list
+%type <procedureParam> proc_param
+%type <characteristics> characteristic_list_opt characteristic_list
+%type <characteristic> characteristic
 
 %start any_command
 
@@ -391,6 +411,7 @@ command:
 | other_statement
 | flush_statement
 | signal_statement
+| call_statement
 | /*empty*/
 {
   setParseTree(yylex, nil)
@@ -653,24 +674,177 @@ create_statement:
   }
 | CREATE DATABASE not_exists_opt ID ddl_skip_to_end
   {
-    $$ = &DBDDL{Action: CreateStr, DBName: string($4)}
+    var ne bool
+    if $3 != 0 {
+      ne = true
+    }
+   $$ = &DBDDL{Action: CreateStr, DBName: string($4), IfNotExists: ne}
   }
 | CREATE SCHEMA not_exists_opt ID ddl_skip_to_end
   {
-    $$ = &DBDDL{Action: CreateStr, DBName: string($4)}
+    var ne bool
+    if $3 != 0 {
+      ne = true
+    }
+    $$ = &DBDDL{Action: CreateStr, DBName: string($4), IfNotExists: ne}
   }
 | CREATE definer_opt TRIGGER ID trigger_time trigger_event ON table_name FOR EACH ROW trigger_order_opt lexer_position trigger_body lexer_position
   {
     $$ = &DDL{Action: CreateStr, Table: $8, TriggerSpec: &TriggerSpec{Name: string($4), Time: $5, Event: $6, Order: $12, Body: $14}, SubStatementPositionStart: $13, SubStatementPositionEnd: $15 - 1}
   }
+| CREATE definer_opt PROCEDURE ID '(' proc_param_list_opt ')' characteristic_list_opt lexer_position proc_allowed_statement lexer_position
+  {
+    $$ = &DDL{Action: CreateStr, ProcedureSpec: &ProcedureSpec{Name: string($4), Definer: $2, Params: $6, Characteristics: $8, Body: $10}, SubStatementPositionStart: $9, SubStatementPositionEnd: $11 - 1}
+  }
+
+proc_param_list_opt:
+  {
+    $$ = nil
+  }
+| proc_param_list
+  {
+    $$ = $1
+  }
+
+proc_param_list:
+  proc_param
+  {
+    $$ = []ProcedureParam{$1}
+  }
+| proc_param_list ',' proc_param
+  {
+    $$ = append($$, $3)
+  }
+
+proc_param:
+  ID column_type
+  {
+    $$ = ProcedureParam{Direction: ProcedureParamDirection_In, Name: string($1), Type: $2}
+  }
+| IN ID column_type
+  {
+    $$ = ProcedureParam{Direction: ProcedureParamDirection_In, Name: string($2), Type: $3}
+  }
+| INOUT ID column_type
+  {
+    $$ = ProcedureParam{Direction: ProcedureParamDirection_Inout, Name: string($2), Type: $3}
+  }
+| OUT ID column_type
+  {
+    $$ = ProcedureParam{Direction: ProcedureParamDirection_Out, Name: string($2), Type: $3}
+  }
+
+characteristic_list_opt:
+  {
+    $$ = nil
+  }
+| characteristic_list
+  {
+    $$ = $1
+  }
+
+characteristic_list:
+  characteristic
+  {
+    $$ = []Characteristic{$1}
+  }
+| characteristic_list characteristic
+  {
+    $$ = append($$, $2)
+  }
+
+characteristic:
+  COMMENT_KEYWORD STRING
+  {
+    $$ = Characteristic{Type: CharacteristicValue_Comment, Comment: string($2)}
+  }
+| LANGUAGE SQL
+  {
+    $$ = Characteristic{Type: CharacteristicValue_LanguageSql}
+  }
+| NOT DETERMINISTIC
+  {
+    $$ = Characteristic{Type: CharacteristicValue_NotDeterministic}
+  }
+| DETERMINISTIC
+  {
+    $$ = Characteristic{Type: CharacteristicValue_Deterministic}
+  }
+| CONTAINS SQL
+  {
+    $$ = Characteristic{Type: CharacteristicValue_ContainsSql}
+  }
+| NO SQL
+  {
+    $$ = Characteristic{Type: CharacteristicValue_NoSql}
+  }
+| READS SQL DATA
+  {
+    $$ = Characteristic{Type: CharacteristicValue_ReadsSqlData}
+  }
+| MODIFIES SQL DATA
+  {
+    $$ = Characteristic{Type: CharacteristicValue_ModifiesSqlData}
+  }
+| SQL SECURITY DEFINER
+  {
+    $$ = Characteristic{Type: CharacteristicValue_SqlSecurityDefiner}
+  }
+| SQL SECURITY INVOKER
+  {
+    $$ = Characteristic{Type: CharacteristicValue_SqlSecurityInvoker}
+  }
+
+proc_allowed_statement:
+  select_statement
+  {
+    $$ = $1
+  }
+| insert_statement
+| update_statement
+| delete_statement
+| set_statement
+| create_statement
+| alter_statement
+| rename_statement
+| drop_statement
+| case_statement
+| if_statement
+| truncate_statement
+| analyze_statement
+| show_statement
+| start_transaction_statement
+| commit_statement
+| rollback_statement
+| explain_statement
+| describe_statement
+| signal_statement
+| call_statement
+| proc_begin_end_block
+
+proc_begin_end_block:
+  BEGIN proc_allowed_statement_list ';' END
+  {
+    $$ = &BeginEndBlock{Statements: $2}
+  }
+
+proc_allowed_statement_list:
+  proc_allowed_statement
+  {
+    $$ = Statements{$1}
+  }
+| proc_allowed_statement_list ';' proc_allowed_statement
+  {
+    $$ = append($$, $3)
+  }
 
 definer_opt:
   {
-    $$ = struct{}{}
+    $$ = ""
   }
 | DEFINER '=' ID
   {
-    $$ = struct{}{}
+    $$ = string($3)
   }
 
 trigger_time:
@@ -711,7 +885,7 @@ trigger_order_opt:
   }
 
 trigger_body:
-  begin_end_block
+  trigger_begin_end_block
   {
     $$ = $1
   }
@@ -720,7 +894,7 @@ trigger_body:
 | update_statement
 | delete_statement
 
-begin_end_block:
+trigger_begin_end_block:
   BEGIN statement_list ';' END
   {
     $$ = &BeginEndBlock{Statements: $2}
@@ -845,6 +1019,25 @@ signal_information_name:
 | COLUMN_NAME
 | CURSOR_NAME
 
+call_statement:
+  CALL ID call_param_list_opt
+  {
+    $$ = &Call{FuncName: string($2), Params: $3}
+  }
+
+call_param_list_opt:
+  {
+    $$ = nil
+  }
+| '(' ')'
+  {
+    $$ = nil
+  }
+| '(' expression_list ')'
+  {
+    $$ = $2
+  }
+
 statement_list:
   statement_list_statement
   {
@@ -867,7 +1060,7 @@ statement_list_statement:
 | case_statement
 | if_statement
 | signal_statement
-| begin_end_block
+| trigger_begin_end_block
 
 vindex_type_opt:
   {
@@ -1987,11 +2180,19 @@ drop_statement:
   }
 | DROP DATABASE exists_opt ID
   {
-    $$ = &DBDDL{Action: DropStr, DBName: string($4)}
+    var exists bool
+    if $3 != 0 {
+      exists = true
+    }
+    $$ = &DBDDL{Action: DropStr, DBName: string($4), IfExists: exists}
   }
 | DROP SCHEMA exists_opt ID
   {
-    $$ = &DBDDL{Action: DropStr, DBName: string($4)}
+    var exists bool
+    if $3 != 0 {
+      exists = true
+    }
+    $$ = &DBDDL{Action: DropStr, DBName: string($4), IfExists: exists}
   }
 | DROP TRIGGER exists_opt ID
   {
@@ -2000,6 +2201,14 @@ drop_statement:
       exists = true
     }
     $$ = &DDL{Action: DropStr, TriggerSpec: &TriggerSpec{Name: string($4)}, IfExists: exists}
+  }
+| DROP PROCEDURE exists_opt ID
+  {
+    var exists bool
+    if $3 != 0 {
+      exists = true
+    }
+    $$ = &DDL{Action: DropStr, ProcedureSpec: &ProcedureSpec{Name: string($4)}, IfExists: exists}
   }
 
 truncate_statement:
@@ -2039,12 +2248,16 @@ show_statement:
   {
     $$ = &Show{Type: string($2) + " " + string($3), IfNotExists: $4 == 1, Database: string($5)}
   }
-/* Rule to handle SHOW CREATE EVENT, SHOW CREATE FUNCTION, etc. */
+/* Rule to handle SHOW CREATE EVENT, etc. */
 | SHOW CREATE ID ddl_skip_to_end
   {
     $$ = &Show{Type: string($2) + " " + string($3)}
   }
 | SHOW CREATE PROCEDURE ddl_skip_to_end
+  {
+    $$ = &Show{Type: string($2) + " " + string($3)}
+  }
+| SHOW CREATE FUNCTION ddl_skip_to_end
   {
     $$ = &Show{Type: string($2) + " " + string($3)}
   }
@@ -2080,9 +2293,13 @@ show_statement:
   {
     $$ = &Show{Type: string($2)}
   }
-| SHOW PROCEDURE ddl_skip_to_end
+| SHOW PROCEDURE STATUS like_or_where_opt
   {
-    $$ = &Show{Type: string($2)}
+    $$ = &Show{Type: string($2) + " " + string($3), ProcFuncFilter: $4}
+  }
+| SHOW FUNCTION STATUS like_or_where_opt
+  {
+    $$ = &Show{Type: string($2) + " " + string($3), ProcFuncFilter: $4}
   }
 | SHOW show_session_or_global STATUS ddl_skip_to_end
   {
@@ -2272,7 +2489,13 @@ begin_statement:
   {
     $$ = &Begin{}
   }
-| START TRANSACTION
+| start_transaction_statement
+  {
+    $$ = $1
+  }
+
+start_transaction_statement:
+  START TRANSACTION
   {
     $$ = &Begin{}
   }
@@ -2464,6 +2687,30 @@ select_expression:
     $$ = &StarExpr{TableName: TableName{Qualifier: $1, Name: $3}}
   }
 
+// TODO: handle ROWS UNBOUNDED PRECEDING et al
+over:
+  OVER sql_id
+  {
+    $$ = &Over{WindowName: $2}
+  }
+| OVER openb order_by_opt closeb
+  {
+    $$ = &Over{OrderBy: $3}
+  }
+| OVER openb PARTITION BY expression_list order_by_opt closeb
+  {
+    $$ = &Over{PartitionBy: $5, OrderBy: $6}
+  }
+
+over_opt:
+  {
+    $$ = nil
+  }
+| over
+  {
+    $$ = $1
+  }
+
 as_ci_opt:
   {
     $$ = ColIdent{}
@@ -2478,7 +2725,18 @@ as_ci_opt:
   }
 
 col_alias:
-  sql_id
+  ID
+  {
+    $$ = NewColIdent(string($1))
+  }
+| non_reserved_keyword
+  {
+    $$ = NewColIdent(string($1))
+  }
+| column_name_safe_reserved_keyword
+  {
+    $$ = NewColIdent(string($1))
+  }
 | STRING
   {
     $$ = NewColIdent(string($1))
@@ -2512,7 +2770,7 @@ table_factor:
   {
     $$ = $1
   }
-| subquery as_opt table_id
+| subquery as_opt table_alias
   {
     $$ = &AliasedTableExpr{Expr:$1, As: $3}
   }
@@ -2650,6 +2908,10 @@ as_opt:
 
 table_alias:
   table_id
+| column_name_safe_reserved_keyword
+  {
+    $$ = NewTableIdent(string($1))
+  }
 | STRING
   {
     $$ = NewTableIdent(string($1))
@@ -3081,6 +3343,8 @@ value_expression:
 | function_call_keyword
 | function_call_nonkeyword
 | function_call_conflict
+| function_call_window
+| function_call_aggregate_with_window
 
 /*
   Regular function calls without special token or syntax, guaranteed to not
@@ -3094,6 +3358,129 @@ function_call_generic:
 | table_id '.' reserved_sql_id openb select_expression_list_opt closeb
   {
     $$ = &FuncExpr{Qualifier: $1, Name: $3, Exprs: $5}
+  }
+
+/*
+   Special aggregate function calls that can't be treated like a normal function call, because they have an optional
+   OVER clause (not legal on any other non-window, non-aggregate function)
+ */
+function_call_aggregate_with_window:
+ MAX openb distinct_opt select_expression_list closeb over_opt
+  {
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $4, Distinct: $3 == DistinctStr, Over: $6}
+  }
+| AVG openb distinct_opt select_expression_list closeb over_opt
+  {
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $4, Distinct: $3 == DistinctStr, Over: $6}
+  }
+| BIT_AND openb select_expression_list closeb over_opt
+  {
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $5}
+  }
+| BIT_OR openb select_expression_list closeb over_opt
+  {
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $5}
+  }
+| BIT_XOR openb select_expression_list closeb over_opt
+  {
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $5}
+  }
+| COUNT openb distinct_opt select_expression_list closeb over_opt
+  {
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $4, Distinct: $3 == DistinctStr, Over: $6}
+  }
+| JSON_ARRAYAGG openb select_expression_list closeb over_opt
+  {
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $5}
+  }
+| JSON_OBJECTAGG openb select_expression_list closeb over_opt
+  {
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $5}
+  }
+| MIN openb distinct_opt select_expression_list closeb over_opt
+  {
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $4, Distinct: $3 == DistinctStr, Over: $6}
+  }
+| STDDEV_POP openb select_expression_list closeb over_opt
+  {
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $5}
+  }
+| STDDEV openb select_expression_list closeb over_opt
+  {
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $5}
+  }
+| STD openb select_expression_list closeb over_opt
+  {
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $5}
+  }
+| STDDEV_SAMP openb select_expression_list closeb over_opt
+  {
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $5}
+  }
+| SUM openb distinct_opt select_expression_list closeb over_opt
+  {
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $4, Distinct: $3 == DistinctStr, Over: $6}
+  }
+| VAR_POP openb select_expression_list closeb over_opt
+  {
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $5}
+  }
+| VARIANCE openb select_expression_list closeb over_opt
+  {
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $5}
+  }
+| VAR_SAMP openb select_expression_list closeb over_opt
+  {
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $5}
+  }
+
+/*
+  Function calls with an OVER expression, only valid for certain aggregate and window functions
+*/
+function_call_window:
+  CUME_DIST openb closeb over
+  {
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Over: $4}
+  }
+| DENSE_RANK openb closeb over
+  {
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Over: $4}
+  }
+| FIRST_VALUE openb select_expression closeb over
+  {
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: SelectExprs{$3}, Over: $5}
+  }
+| LAG openb select_expression_list closeb over
+  {
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $5}
+  }
+| LAST_VALUE openb select_expression closeb over
+  {
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: SelectExprs{$3}, Over: $5}
+  }
+| LEAD openb select_expression_list closeb over
+  {
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $5}
+  }
+| NTH_VALUE openb select_expression_list closeb over
+  {
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $5}
+  }
+| NTILE openb closeb over
+  {
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Over: $4}
+  }
+| PERCENT_RANK openb closeb over
+  {
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Over: $4}
+  }
+| RANK openb closeb over
+  {
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Over: $4}
+  }
+| ROW_NUMBER openb closeb over
+  {
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Over: $4}
   }
 
 /*
@@ -3483,18 +3870,48 @@ group_by_opt:
   {
     $$ = nil
   }
-| GROUP BY expression_list
+| GROUP BY group_by_list
   {
     $$ = $3
+  }
+
+group_by_list:
+  group_by
+  {
+    $$ = Exprs{$1}
+  }
+| group_by_list ',' group_by
+  {
+    $$ = append($1, $3)
+  }
+
+group_by:
+  expression
+  {
+    $$ = $1
+  }
+| column_name_safe_reserved_keyword
+  {
+    $$ = &ColName{Name: NewColIdent(string($1))}
   }
 
 having_opt:
   {
     $$ = nil
   }
-| HAVING expression
+| HAVING having
   {
     $$ = $2
+  }
+
+having:
+  expression
+  {
+    $$ = $1
+  }
+| column_name_safe_reserved_keyword
+  {
+    $$ = &ColName{Name: NewColIdent(string($1))}
   }
 
 order_by_opt:
@@ -3520,6 +3937,10 @@ order:
   expression asc_desc_opt
   {
     $$ = &Order{Expr: $1, Direction: $2}
+  }
+| column_name_safe_reserved_keyword asc_desc_opt
+  {
+    $$ = &Order{Expr: &ColName{Name: NewColIdent(string($1))}, Direction: $2}
   }
 
 asc_desc_opt:
@@ -3829,32 +4250,35 @@ reserved_table_id:
 reserved_keyword:
   ADD
 | AFTER
-| ARRAY 
 | AND
+| ARRAY
 | AS
 | ASC
 | AUTO_INCREMENT
+| AVG
 | BETWEEN
 | BINARY
+| BIT_AND
+| BIT_OR
+| BIT_XOR
 | BY
+| CALL
 | CASE
 | COLLATE
 | CONVERT
+| COUNT
 | CREATE
 | CROSS
-| CUME_DIST
 | CURRENT_DATE
 | CURRENT_TIME
 | CURRENT_TIMESTAMP
-| SUBSTR
-| SUBSTRING
 | DATABASE
 | DATABASES
 | DEFAULT
 | DELETE
-| DENSE_RANK
 | DESC
 | DESCRIBE
+| DETERMINISTIC
 | DISTINCT
 | DIV
 | DROP
@@ -3866,7 +4290,6 @@ reserved_keyword:
 | EXPLAIN
 | FALSE
 | FIRST
-| FIRST_VALUE
 | FOR
 | FORCE
 | FROM
@@ -3877,6 +4300,7 @@ reserved_keyword:
 | IF
 | IGNORE
 | IN
+| INOUT
 | INDEX
 | INNER
 | INSERT
@@ -3884,49 +4308,56 @@ reserved_keyword:
 | INTO
 | IS
 | JOIN
+| JSON_ARRAYAGG
+| JSON_OBJECTAGG
 | JSON_TABLE
 | KEY
-| LAG
-| LAST_VALUE
 | LATERAL
-| LEAD
 | LEFT
 | LIKE
 | LIMIT
 | LOCALTIME
 | LOCALTIMESTAMP
 | LOCK
-| MEMBER
 | MATCH
+| MAX
 | MAXVALUE
+| MEMBER
+| MIN
 | MOD
+| MODIFIES
 | NATURAL
 | NEXT // next should be doable as non-reserved, but is not due to the special `select next num_val` query that vitess supports
 | NOT
-| NTH_VALUE
-| NTILE
 | NULL
 | OF
 | OFF
 | ON
 | OR
 | ORDER
+| OUT
 | OUTER
 | OVER
-| PERCENT_RANK
-| RANK
+| READS
 | RECURSIVE
 | REGEXP
 | RENAME
 | REPLACE
 | RIGHT
-| ROW_NUMBER
 | SCHEMA
 | SELECT
 | SEPARATOR
 | SET
 | SHOW
+| STD
+| STDDEV
+| STDDEV_POP
+| STDDEV_SAMP
+| SQL
 | STRAIGHT_JOIN
+| SUBSTR
+| SUBSTRING
+| SUM
 | SYSTEM
 | TABLE
 | THEN
@@ -3944,6 +4375,9 @@ reserved_keyword:
 | UTC_TIME
 | UTC_TIMESTAMP
 | VALUES
+| VARIANCE
+| VAR_POP
+| VAR_SAMP
 | WHEN
 | WHERE
 | WINDOW
@@ -3985,7 +4419,9 @@ non_reserved_keyword:
 | CONSTRAINT_CATALOG
 | CONSTRAINT_NAME
 | CONSTRAINT_SCHEMA
+| CONTAINS
 | CURSOR_NAME
+| DATA
 | DATE
 | DATETIME
 | DECIMAL
@@ -4004,6 +4440,7 @@ non_reserved_keyword:
 | FOLLOWING
 | FOREIGN
 | FULLTEXT
+| FUNCTION
 | GEOMCOLLECTION
 | GEOMETRY
 | GEOMETRYCOLLECTION
@@ -4015,6 +4452,7 @@ non_reserved_keyword:
 | INT
 | INTEGER
 | INVISIBLE
+| INVOKER
 | ISOLATION
 | JSON
 | KEYS
@@ -4092,6 +4530,7 @@ non_reserved_keyword:
 | SECONDARY_ENGINE
 | SECONDARY_LOAD
 | SECONDARY_UNLOAD
+| SECURITY
 | SEQUENCE
 | SERIALIZABLE
 | SESSION
@@ -4140,6 +4579,38 @@ non_reserved_keyword:
 | WRITE
 | YEAR
 | ZEROFILL
+
+// Reserved keywords that cause grammar conflicts in some places, but are safe to use as column name / alias identifiers.
+// These keywords should also go in reserved_keyword.
+column_name_safe_reserved_keyword:
+  AVG
+| BIT_AND
+| BIT_OR
+| BIT_XOR
+| COUNT
+| CUME_DIST
+| DENSE_RANK
+| FIRST_VALUE
+| JSON_ARRAYAGG
+| JSON_OBJECTAGG
+| LAG
+| LAST_VALUE
+| LEAD
+| MAX
+| MIN
+| NTH_VALUE
+| NTILE
+| PERCENT_RANK
+| RANK
+| ROW_NUMBER
+| STD
+| STDDEV
+| STDDEV_POP
+| STDDEV_SAMP
+| SUM
+| VARIANCE
+| VAR_POP
+| VAR_SAMP
 
 openb:
   '('

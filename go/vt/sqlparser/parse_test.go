@@ -1264,11 +1264,11 @@ var (
 			input:  "show events",
 			output: "show events",
 		}, {
-			input:  "show function code func",
-			output: "show function",
+			input: "show function status",
 		}, {
-			input:  "show function status",
-			output: "show function",
+			input: "show function status where Name = 'hi'",
+		}, {
+			input: "show function status like 'hi'",
 		}, {
 			input:  "show grants for 'root@localhost'",
 			output: "show grants",
@@ -1321,11 +1321,11 @@ var (
 			input:  "show privileges",
 			output: "show privileges",
 		}, {
-			input:  "show procedure code p",
-			output: "show procedure",
+			input: "show procedure status",
 		}, {
-			input:  "show procedure status",
-			output: "show procedure",
+			input: "show procedure status where Name = 'hi'",
+		}, {
+			input: "show procedure status like 'hi'",
 		}, {
 			input:  "show processlist",
 			output: "show processlist",
@@ -1530,6 +1530,18 @@ var (
 		}, {
 			input: "select MAX(k collate latin1_german2_ci) from t1",
 		}, {
+			input: "select MaX(k collate latin1_german2_ci) from t1",
+		}, {
+			input: "select MAX(distinct k) from t1",
+		}, {
+			input: "select MAX(distinct k) as min from t1",
+			output: "select MAX(distinct k) as `min` from t1",
+		}, {
+			input: "select MIn(distinct k) as Max from t1",
+			output: "select MIn(distinct k) as `Max` from t1",
+		}, {
+			input: "select avg(distinct k) from t1",
+		}, {
 			input: "select distinct k collate latin1_german2_ci from t1",
 		}, {
 			input: "select * from t1 where 'Müller' collate latin1_german2_ci = k",
@@ -1588,6 +1600,131 @@ var (
 		}, {
 			input: "delete from t partition (p0) where a = 1",
 		}, {
+			input: "select name, dense_rank() over () from t",
+		}, {
+			input: "select name, avg(a) over (partition by b) as avg from t",
+			output: "select name, avg(a) over (partition by b) as `avg` from t",
+		}, {
+			input: "select name, bit_and(a) over (partition by b) from t",
+		}, {
+			input: "select name, bit_or(a) over (partition by b) from t",
+		}, {
+			input: "select name, bit_xor(a) over (partition by b) from t",
+		}, {
+			input: "select name, count(distinct a) over (partition by b) from t",
+		}, {
+			input: "select name, count(a) over (partition by b) as count from t",
+			output: "select name, count(a) over (partition by b) as `count` from t",
+		}, {
+			input: "select name, json_arrayagg(a) over (partition by b) from t",
+		}, {
+			input: "select name, json_objectagg(a) over (partition by b) from t",
+		}, {
+			input: "select name, max(a) over (partition by b) from t",
+		}, {
+			input: "select name, min(a) over (partition by b) from t",
+		}, {
+			input: "select name, stddev_pop(a) over (partition by b) from t",
+		}, {
+			input: "select name, stddev(a) over (partition by b) from t",
+		}, {
+			input: "select name, std(a) over (partition by b) from t",
+		}, {
+			input: "select name, stddev_samp(a) over (partition by b) from t",
+		}, {
+			input: "select name, sum(a) over (partition by b) from t",
+		}, {
+			input: "select name, sum(distinct a) over (partition by b) as SUM from t",
+			output: "select name, sum(distinct a) over (partition by b) as `SUM` from t",
+		}, {
+			input: "select name, var_pop(a) over (partition by b) from t",
+		}, {
+			input: "select name, variance(a) over (partition by b) from t",
+		}, {
+			input: "select name, cume_dist() over (partition by b) from t",
+		}, {
+			input: "select name, cume_dist() over (partition by b) - 1 in (1, 2) as included from t",
+		}, {
+			input: "select name, cume_dist() over (partition by b) = dense_rank() over () as included from t",
+		}, {
+			input: "select name, dense_rank() over (partition by b) from t",
+		}, {
+			input: "select name, first_value(a) over (partition by b) from t",
+		}, {
+			input: "select name, lag(a) over (partition by b) from t",
+		}, {
+			input: "select name, last_value(a) over (partition by b) from t",
+		}, {
+			input: "select name, lead(a) over (partition by b) from t",
+		}, {
+			input: "select name, nth_value(a) over (partition by b) from t",
+		}, {
+			input: "select name, ntile() over (partition by b) from t",
+		}, {
+			input: "select name, percent_rank() over (partition by b) from t",
+		}, {
+			input: "select name, rank() over (partition by b) from t",
+		}, {
+			input: "select name, row_number() over (partition by b) from t",
+		}, {
+			input: "select name, dense_rank() over (partition by b) from t",
+		}, {
+			input: "select name, dense_rank() over (partition by b order by c asc) from t",
+		}, {
+			input: "select name, cume_dist() over (partition by b order by c asc) from t",
+		}, {
+			input: "select name, first_value(a) over (partition by b order by c asc) from t",
+		}, {
+			input: "select name, lag(a) over (partition by b order by c asc) from t",
+		}, {
+			input: "select name, last_value(a) over (partition by b order by c asc) from t",
+		}, {
+			input: "select name, lead(a) over (partition by b order by c asc) from t",
+		}, {
+			input: "select name, nth_value(a) over (partition by b order by c asc) from t",
+		}, {
+			input: "select name, ntile() over (partition by b order by c asc) from t",
+		}, {
+			input: "select name, percent_rank() over (partition by b order by c asc) from t",
+		}, {
+			input: "select name, rank() over (partition by b order by c asc) from t",
+		}, {
+			input: "select name, row_number() over (partition by b order by c asc) from t",
+		}, {
+			input: "select name, dense_rank() over (order by b) from t",
+			output: "select name, dense_rank() over ( order by b asc) from t",
+		}, {
+			input: "select name, dense_rank() over (partition by b order by c) from t",
+			output: "select name, dense_rank() over (partition by b order by c asc) from t",
+		}, {
+			input: "select name, dense_rank() over (partition by b order by c), lag(d) over (order by e desc) from t",
+			output: "select name, dense_rank() over (partition by b order by c asc), lag(d) over ( order by e desc) from t",
+		}, {
+			input: "select name, dense_rank() over window_name from t",
+		}, {
+			input: `SELECT pk,
+					(SELECT max(pk) FROM one_pk WHERE pk < opk.pk) AS max,
+					(SELECT min(pk) FROM one_pk WHERE pk > opk.pk) AS min
+					FROM one_pk opk
+					WHERE (SELECT min(pk) FROM one_pk WHERE pk > opk.pk) IS NOT NULL
+					ORDER BY max`,
+			output: "select pk, (select max(pk) from one_pk where pk < opk.pk) as `max`," +
+				" (select min(pk) from one_pk where pk > opk.pk) as `min` " +
+				"from one_pk as opk " +
+				"where (select min(pk) from one_pk where pk > opk.pk) " +
+				"is not null order by `max` asc",
+		}, {
+			input: "select i, s as max from mytable group by max",
+			output: "select i, s as `max` from mytable group by `max`",
+		}, {
+			input: "select i, s as max from mytable MAx",
+			output: "select i, s as `max` from mytable as `MAx`",
+		},
+		// {
+		// 	// TODO: for this to work we need a keyword-safe version of expression in sql.y
+		// 	// input: `select i, s as max from mytable group by max having max = "hello"`,
+		// },
+		{
 			input: "stream * from t",
 		}, {
 			input: "stream /* comment */ * from t",
@@ -1607,7 +1744,7 @@ var (
 			output: "create database test_db",
 		}, {
 			input:  "create database if not exists test_db",
-			output: "create database test_db",
+			output: "create database if not exists test_db",
 		}, {
 			input: "drop database test_db",
 		}, {
@@ -1615,7 +1752,7 @@ var (
 			output: "drop database test_db",
 		}, {
 			input:  "drop database if exists test_db",
-			output: "drop database test_db",
+			output: "drop database if exists test_db",
 		}, {
 			input: "drop trigger trigger1",
 		}, {
@@ -1679,11 +1816,69 @@ var (
 		}, {
 			input:  "delete a.*, b.* from tbl_a a, tbl_b b where a.id = b.id and b.name = 'test'",
 			output: "delete a, b from tbl_a as a, tbl_b as b where a.id = b.id and b.name = 'test'",
+		}, {
+			input: "call f1",
+		}, {
+			input:  "call f1()",
+			output: "call f1",
+		}, {
+			input:  "call f1 ()",
+			output: "call f1",
+		}, {
+			input: "call f1(x)",
+		}, {
+			input: "call f1(@x, @y)",
+		}, {
+			input: "call f1(now(), rand())",
+		}, {
+			input: "drop procedure p1",
+		}, {
+			input: "drop procedure if exists p1",
+		}, {
+			input:  "create procedure p1() select rand()",
+			output: "create procedure p1 () select rand() from dual",
+		}, {
+			input:  "create procedure p1() language sql deterministic sql security invoker select 1+1",
+			output: "create procedure p1 () language sql deterministic sql security invoker select 1 + 1 from dual",
+		},{
+			input:  "create definer = me procedure p1(v1 int) select now()",
+			output: "create definer = me procedure p1 (in v1 int) select now() from dual",
+		}, {
+			input:  "create definer = me procedure p1(v1 int) comment 'some_comment' not deterministic select now()",
+			output: "create definer = me procedure p1 (in v1 int) comment 'some_comment' not deterministic select now() from dual",
+		},
+	}
+	// Any tests that contain multiple statements within the body (such as BEGIN/END blocks) should go here.
+	// validSQL is used by TestParseNextValid, which expects a semicolon to mean the end of a full statement.
+	// Multi-statement bodies do not follow this expectation, hence they are excluded from TestParseNextValid.
+	validMultiStatementSql = []parseTest{
+		{
+			input:  "create procedure p1 (in v1 int, inout v2 char(2), out v3 datetime) begin select rand() * 10; end",
+			output: "create procedure p1 (in v1 int, inout v2 char(2), out v3 datetime) begin\nselect rand() * 10 from dual;\nend",
+		}, {
+			input:  "create procedure p1(v1 datetime)\nif rand() < 1 then select rand();\nend if",
+			output: "create procedure p1 (in v1 datetime) if rand() < 1 then select rand() from dual;\nend if",
+		}, {
+			input:  `create procedure p1(n double, m double)
+begin
+	set @s = '';
+	if n = m then set @s = 'equals';
+	else
+		if n > m then set @s = 'greater';
+		else set @s = 'less';
+		end if;
+		set @s = concat('is ', @s, ' than');
+	end if;
+	set @s = concat(n, ' ', @s, ' ', m, '.');
+	select @s;
+end`,
+			output: "create procedure p1 (in n double, in m double) begin\nset @s = '';\nif n = m then set @s = 'equals';\nelse if n > m then set @s = 'greater';\nelse set @s = 'less';\nend if; set @s = concat('is ', @s, ' than');\nend if;\nset @s = concat(n, ' ', @s, ' ', m, '.');\nselect @s from dual;\nend",
 		},
 	}
 )
 
 func TestValid(t *testing.T) {
+	validSQL = append(validSQL, validMultiStatementSql...)
 	for _, tcase := range validSQL {
 		t.Run(tcase.input, func(t *testing.T) {
 			if tcase.output == "" {
@@ -1858,6 +2053,7 @@ func TestCreateViewSelectPosition(t *testing.T) {
 
 // Ensure there is no corruption from using a pooled yyParserImpl in Parse.
 func TestValidParallel(t *testing.T) {
+	validSQL = append(validSQL, validMultiStatementSql...)
 	parallelism := 100
 	numIters := 1000
 
@@ -2941,6 +3137,33 @@ var (
 	}, {
 		input:  "select * from t where id = ((select a from t1 union select b from t2) order by a limit 1)",
 		output: "syntax error at position 76 near 'order'",
+	}, {
+		input:  "select a, cume_dist() from t1",
+		output: "syntax error at position 27 near 'from'",
+	}, {
+		input:  "select a, STD(distinct b) over () from t1",
+		output: "syntax error at position 23 near 'distinct'",
+	}, {
+		input:  "select a, foo() over () from t1",
+		output: "syntax error at position 21 near 'over'",
+	}, {
+		input: "select name, cume_dist(a) over (partition by b) from t",
+		output: "syntax error at position 25 near 'a'",
+	}, {
+		input: "select name, dense_rank(a) over (partition by b) from t",
+		output: "syntax error at position 26 near 'a'",
+	}, {
+		input: "select name, ntile(a) over (partition by b) from t",
+		output: "syntax error at position 21 near 'a'",
+	}, {
+		input: "select name, percent_rank(a) over (partition by b) from t",
+		output: "syntax error at position 28 near 'a'",
+	}, {
+		input: "select name, rank(a) over (partition by b) from t",
+		output: "syntax error at position 20 near 'a'",
+	}, {
+		input: "select name, row_number(a) over (partition by b) from t",
+		output: "syntax error at position 26 near 'a'",
 	}, {
 		input:  "select /* straight_join using */ 1 from t1 straight_join t2 using (a)",
 		output: "syntax error at position 66 near 'using'",
