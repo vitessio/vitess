@@ -30,6 +30,7 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/topotools/events"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
@@ -275,6 +276,47 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	tabletMap, err := erp.ts.GetTabletMapForShard(ctx, keyspace, shard)
 	if err != nil {
 		return vterrors.Wrapf(err, "failed to get tablet map for %v/%v: %v", keyspace, shard, err)
+	}
+
+	if opts.NewPrimaryAlias != nil {
+		primaryElectAliasStr := topoproto.TabletAliasString(opts.NewPrimaryAlias)
+		primaryElectTabletInfo, ok := tabletMap[primaryElectAliasStr]
+		if !ok {
+			return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "primary-elect tablet %v is not in the shard", primaryElectAliasStr)
+		}
+
+		ev.NewMaster = *primaryElectTabletInfo.Tablet
+
+		if topoproto.TabletAliasEqual(shardInfo.MasterAlias, opts.NewPrimaryAlias) {
+			return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "primary-elect tablet %v is already the shard primary", primaryElectAliasStr)
+		}
+	}
+
+	if shardInfo.HasMaster() {
+		deleteOldPrimary := true
+		shardPrimaryAliasStr := topoproto.TabletAliasString(shardInfo.MasterAlias)
+		shardPrimaryTabletInfo, ok := tabletMap[shardPrimaryAliasStr]
+		if ok {
+			delete(tabletMap, shardPrimaryAliasStr)
+		} else {
+			shardPrimaryTabletInfo, err = erp.ts.GetTablet(ctx, shardInfo.MasterAlias)
+			if err != nil {
+				erp.logger.Warningf("cannot read old primary tablet %v, won't touch it: %v", shardPrimaryAliasStr, err)
+				deleteOldPrimary = false
+			}
+		}
+
+		if deleteOldPrimary {
+			ev.OldMaster = *shardPrimaryTabletInfo.Tablet
+			erp.logger.Infof("deleting old primary", shardPrimaryAliasStr)
+
+			ctx, cancel := context.WithTimeout(ctx, opts.WaitReplicasTimeout)
+			defer cancel()
+
+			if err := topotools.DeleteTablet(ctx, erp.ts, shardPrimaryTabletInfo.Tablet); err != nil {
+				erp.logger.Warningf("failed to delete old primary tablet %v: %v", shardPrimaryAliasStr, err)
+			}
+		}
 	}
 
 	statusMap, primaryStatusMap, err := StopReplicationAndBuildStatusMaps(ctx, erp.tmc, ev, tabletMap, opts.WaitReplicasTimeout, opts.IgnoreReplicas, erp.logger)
