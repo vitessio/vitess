@@ -3427,31 +3427,56 @@ func commandWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.
 }
 
 func commandMount(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	clusterType := subFlags.String("type", "", "Specify cluster type: mysql or vitess")
-	unmountCluster := subFlags.Bool("unmount", false, "If set, unmount cluster provided")
+	clusterType := subFlags.String("type", "vitess", "Specify cluster type: mysql or vitess")
+	unmount := subFlags.Bool("unmount", false, "Unmount cluster")
+	display := subFlags.Bool("display", false, "Display contents of cluster")
+	list := subFlags.Bool("list", false, "List all clusters")
+
+	//FIXME: add validations for parameters and combinations
 
 	// vitess cluster params
 	topoType := subFlags.String("topo_type", "", "Type of cluster's topology server")
 	topoServer := subFlags.String("topo_server", "", "Server url of cluster's topology server")
 	topoRoot := subFlags.String("topo_root", "", "Root node of cluster's topology")
-	//FIXME: check params
 
 	if err := subFlags.Parse(args); err != nil {
 		return err
+	}
+	if *list {
+		clusters, err := wr.TopoServer().GetVitessClusters(ctx)
+		if err != nil {
+			return err
+		}
+		wr.Logger().Printf("%s\n", strings.Join(clusters, ","))
+		return nil
 	}
 	if subFlags.NArg() != 1 {
 		return fmt.Errorf("cluster name needs to be provided")
 	}
 
 	clusterName := subFlags.Arg(0)
-
-	if *unmountCluster {
-		return wr.UnmountVitessCluster(ctx, clusterName)
-	}
-
 	switch *clusterType {
 	case "vitess":
-		return wr.MountVitessCluster(ctx, clusterName, *topoType, *topoServer, *topoRoot)
+		switch {
+		case *unmount:
+			return wr.UnmountVitessCluster(ctx, clusterName)
+		case *display:
+			vci, err := wr.TopoServer().GetVitessCluster(ctx, clusterName)
+			if err != nil {
+				return err
+			}
+			if vci == nil {
+				return fmt.Errorf("there is no vitess cluster named %s", clusterName)
+			}
+			data, err := json.Marshal(vci)
+			if err != nil {
+				return err
+			}
+			wr.Logger().Printf("%s\n", string(data))
+			return nil
+		default:
+			return wr.MountVitessCluster(ctx, clusterName, *topoType, *topoServer, *topoRoot)
+		}
 	case "mysql":
 		return fmt.Errorf("mysql cluster type not yet supported")
 	default:
