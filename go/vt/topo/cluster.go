@@ -37,8 +37,14 @@ type VitessClusterInfo struct {
 	*topodatapb.VitessCluster
 }
 
-func getVitessClusterPath(clusterName string) string {
-	return path.Join(ExternalClustersFile, ExternalClusterVitess, clusterName)
+// GetVitessClusterDir returns node path containing external vitess clusters
+func GetVitessClusterDir() string {
+	return path.Join(ExternalClustersFile, ExternalClusterVitess)
+}
+
+// GetVitessClusterPath returns node path containing external clusters
+func GetVitessClusterPath(clusterName string) string {
+	return path.Join(GetVitessClusterDir(), clusterName)
 }
 
 // CreateVitessCluster creates a topo record for the passed vitess cluster
@@ -48,7 +54,7 @@ func (ts *Server) CreateVitessCluster(ctx context.Context, clusterName string, v
 		return err
 	}
 
-	if _, err := ts.globalCell.Create(ctx, getVitessClusterPath(clusterName), data); err != nil {
+	if _, err := ts.globalCell.Create(ctx, GetVitessClusterPath(clusterName), data); err != nil {
 		return err
 	}
 
@@ -62,7 +68,7 @@ func (ts *Server) CreateVitessCluster(ctx context.Context, clusterName string, v
 
 // GetVitessCluster returns a topo record for the named vitess cluster
 func (ts *Server) GetVitessCluster(ctx context.Context, clusterName string) (*VitessClusterInfo, error) {
-	data, version, err := ts.globalCell.Get(ctx, getVitessClusterPath(clusterName))
+	data, version, err := ts.globalCell.Get(ctx, GetVitessClusterPath(clusterName))
 	switch {
 	case IsErrType(err, NoNode):
 		return nil, nil
@@ -89,7 +95,7 @@ func (ts *Server) UpdateVitessCluster(ctx context.Context, vc *VitessClusterInfo
 	if err != nil {
 		return err
 	}
-	version, err := ts.globalCell.Update(ctx, getVitessClusterPath(vc.ClusterName), data, vc.version)
+	version, err := ts.globalCell.Update(ctx, GetVitessClusterPath(vc.ClusterName), data, vc.version)
 	if err != nil {
 		return err
 	}
@@ -105,7 +111,7 @@ func (ts *Server) UpdateVitessCluster(ctx context.Context, vc *VitessClusterInfo
 
 // DeleteVitessCluster deletes the topo record for the named vitess cluster
 func (ts *Server) DeleteVitessCluster(ctx context.Context, clusterName string) error {
-	if err := ts.globalCell.Delete(ctx, getVitessClusterPath(clusterName), nil); err != nil {
+	if err := ts.globalCell.Delete(ctx, GetVitessClusterPath(clusterName), nil); err != nil {
 		return err
 	}
 
@@ -115,4 +121,17 @@ func (ts *Server) DeleteVitessCluster(ctx context.Context, clusterName string) e
 		Status:        "deleted",
 	})
 	return nil
+}
+
+// GetVitessClusters returns the list of external vitess clusters in the topology.
+func (ts *Server) GetVitessClusters(ctx context.Context) ([]string, error) {
+	children, err := ts.globalCell.ListDir(ctx, GetVitessClusterDir(), false /*full*/)
+	switch {
+	case err == nil:
+		return DirEntriesToStringArray(children), nil
+	case IsErrType(err, NoNode):
+		return nil, nil
+	default:
+		return nil, err
+	}
 }

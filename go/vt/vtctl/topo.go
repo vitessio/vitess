@@ -23,6 +23,8 @@ import (
 	"io/ioutil"
 	"path"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"github.com/golang/protobuf/jsonpb"
 
 	"context"
@@ -60,7 +62,8 @@ func init() {
 // the right object, then echoes it as a string.
 func DecodeContent(filename string, data []byte, json bool) (string, error) {
 	name := path.Base(filename)
-
+	dir := path.Dir(filename)
+	fmt.Printf("name %s, dir %s, filename %s\n%s\n", name, dir, filename, string(data))
 	var p proto.Message
 	switch name {
 	case topo.CellInfoFile:
@@ -81,13 +84,21 @@ func DecodeContent(filename string, data []byte, json bool) (string, error) {
 		p = new(topodatapb.SrvKeyspace)
 	case topo.RoutingRulesFile:
 		p = new(vschemapb.RoutingRules)
-	case topo.ExternalClustersFile:
-		p = new(topodatapb.ExternalClusters)
 	default:
-		if json {
-			return "", fmt.Errorf("unknown topo protobuf type for %v", name)
+		log.Infof("Default: %s, dir %s, vc %s", filename, dir, topo.GetVitessClusterDir())
+		switch dir {
+		case "/" + topo.GetVitessClusterDir():
+			log.Infof("in Decode for Vitess Cluster for %s\n", name)
+			p = new(topodatapb.VitessCluster)
+		default:
 		}
-		return string(data), nil
+		if p == nil {
+			fmt.Printf("in default for %s\n", name)
+			if json {
+				return "", fmt.Errorf("unknown topo protobuf type for %v", name)
+			}
+			return string(data), nil
+		}
 	}
 
 	if err := proto.Unmarshal(data, p); err != nil {
