@@ -17,6 +17,7 @@ limitations under the License.
 package mysql
 
 import (
+	"context"
 	"crypto/tls"
 	"io"
 	"net"
@@ -173,6 +174,13 @@ type Listener struct {
 
 	// RequireSecureTransport configures the server to reject connections from insecure clients
 	RequireSecureTransport bool
+
+	// PreHandleFunc is called for each incoming connection, immediately after
+	// accepting a new connection. By default it's no-op. Useful for custom
+	// connection inspection or TLS termination. The returned connection is
+	// handled further by the MySQL handler. An non-nil error will stop
+	// processing the connection by the MySQL handler.
+	PreHandleFunc func(context.Context, net.Conn, uint32) (net.Conn, error)
 }
 
 // NewFromListener creares a new mysql listener from an existing net.Listener
@@ -248,6 +256,8 @@ func (l *Listener) Addr() net.Addr {
 
 // Accept runs an accept loop until the listener is closed.
 func (l *Listener) Accept() {
+	ctx := context.Background()
+
 	for {
 		conn, err := l.listener.Accept()
 		if err != nil {
@@ -264,7 +274,17 @@ func (l *Listener) Accept() {
 		connCount.Add(1)
 		connAccept.Add(1)
 
-		go l.handle(conn, connectionID, acceptTime)
+		go func() {
+			if l.PreHandleFunc != nil {
+				conn, err = l.PreHandleFunc(ctx, conn, connectionID)
+				if err != nil {
+					log.Errorf("mysql_server pre hook: %s", err)
+					return
+				}
+			}
+
+			l.handle(conn, connectionID, acceptTime)
+		}()
 	}
 }
 
