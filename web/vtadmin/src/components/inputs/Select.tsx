@@ -22,6 +22,7 @@ import style from './Select.module.scss';
 import { Icon, Icons } from '../Icon';
 
 interface Props<T> {
+    disabled?: boolean;
     items: T[];
     itemToString?: (item: T | null) => string;
     label: string;
@@ -38,6 +39,7 @@ interface Props<T> {
  * and allows for fine-grained rendering control. :)
  */
 export const Select = <T,>({
+    disabled,
     itemToString,
     items,
     label,
@@ -101,7 +103,7 @@ export const Select = <T,>({
     return (
         <div className={containerClass}>
             <Label {...getLabelProps()} label={label} />
-            <button type="button" {...getToggleButtonProps()} className={style.toggle}>
+            <button type="button" {...getToggleButtonProps()} className={style.toggle} disabled={disabled}>
                 {selectedItem ? _renderItem(selectedItem) : placeholder}
                 <Icon className={style.chevron} icon={isOpen ? Icons.chevronUp : Icons.chevronDown} />
             </button>
