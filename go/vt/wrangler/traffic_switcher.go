@@ -26,6 +26,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/json2"
+
 	"vitess.io/vitess/go/vt/topotools"
 
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -1758,4 +1760,44 @@ func reverseName(workflow string) string {
 		return workflow[:len(workflow)-len(reverse)]
 	}
 	return workflow + reverse
+}
+
+func (ts *trafficSwitcher) addParticipatingTablesToKeyspace(ctx context.Context, keyspace, tableSpecs string) error {
+	var err error
+	var vschema *vschemapb.Keyspace
+	vschema, err = ts.wr.ts.GetVSchema(ctx, keyspace)
+	if err != nil {
+		return err
+	}
+	if vschema == nil {
+		return fmt.Errorf("no vschema found for keyspace %s", keyspace)
+	}
+	if strings.HasPrefix(tableSpecs, "{") {
+		if vschema.Tables == nil {
+			vschema.Tables = make(map[string]*vschemapb.Table)
+		}
+		wrap := fmt.Sprintf(`{"tables": %s}`, tableSpecs)
+		ks := &vschemapb.Keyspace{}
+		if err := json2.Unmarshal([]byte(wrap), ks); err != nil {
+			return err
+		}
+		if err != nil {
+			return err
+		}
+		for table, vtab := range ks.Tables {
+			vschema.Tables[table] = vtab
+		}
+	} else {
+		if !vschema.Sharded {
+			if vschema.Tables == nil {
+				vschema.Tables = make(map[string]*vschemapb.Table)
+			}
+			for _, table := range ts.tables {
+				vschema.Tables[table] = &vschemapb.Table{}
+			}
+		} else {
+			return fmt.Errorf("no sharded vschema was provided, so you will need to update the vschema of the target manually for the moved tables")
+		}
+	}
+	return ts.wr.ts.SaveVSchema(ctx, keyspace, vschema)
 }

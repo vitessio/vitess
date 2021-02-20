@@ -22,6 +22,7 @@ type VReplicationWorkflowType int
 const (
 	MoveTablesWorkflow = VReplicationWorkflowType(iota)
 	ReshardWorkflow
+	MigrateWorkflow
 )
 
 // Workflow state display strings
@@ -54,6 +55,7 @@ func (vrw *VReplicationWorkflow) String() string {
 
 // VReplicationWorkflowParams stores args and options passed to a VReplicationWorkflow command
 type VReplicationWorkflowParams struct {
+	WorkflowType                      VReplicationWorkflowType
 	Workflow, TargetKeyspace          string
 	Cells, TabletTypes, ExcludeTables string
 	EnableReverseReplication, DryRun  bool
@@ -69,6 +71,9 @@ type VReplicationWorkflowParams struct {
 	SourceShards, TargetShards []string
 	SkipSchemaCopy             bool
 	AutoStart, StopAfterCopy   bool
+
+	// Migrate specific
+	ExternalCluster string
 }
 
 // NewVReplicationWorkflow sets up a MoveTables or Reshard workflow based on options provided, deduces the state of the
@@ -225,7 +230,7 @@ func (vrw *VReplicationWorkflow) GetStreamCount() (int64, int64, []*WorkflowErro
 	return totalStreams, runningStreams, workflowErrors, nil
 }
 
-// SwitchTraffic switches traffic forward for tablet_types passed
+// SwitchTraffic switches traffic in the direction passed for specified tablet_types
 func (vrw *VReplicationWorkflow) SwitchTraffic(direction TrafficSwitchDirection) (*[]string, error) {
 	var dryRunResults []string
 	var rdDryRunResults, wrDryRunResults *[]string
@@ -362,7 +367,8 @@ func (vrw *VReplicationWorkflow) parseTabletTypes() (hasReplica, hasRdonly, hasM
 func (vrw *VReplicationWorkflow) initMoveTables() error {
 	log.Infof("In VReplicationWorkflow.initMoveTables() for %+v", vrw)
 	return vrw.wr.MoveTables(vrw.ctx, vrw.params.Workflow, vrw.params.SourceKeyspace, vrw.params.TargetKeyspace,
-		vrw.params.Tables, vrw.params.Cells, vrw.params.TabletTypes, vrw.params.AllTables, vrw.params.ExcludeTables, vrw.params.AutoStart, vrw.params.StopAfterCopy)
+		vrw.params.Tables, vrw.params.Cells, vrw.params.TabletTypes, vrw.params.AllTables, vrw.params.ExcludeTables,
+		vrw.params.AutoStart, vrw.params.StopAfterCopy, vrw.params.ExternalCluster)
 }
 
 func (vrw *VReplicationWorkflow) initReshard() error {

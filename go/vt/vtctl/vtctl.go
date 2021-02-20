@@ -308,6 +308,9 @@ var commands = []commandGroup{
 			{"MoveTables", commandMoveTables,
 				"[-cells=<cells>] [-tablet_types=<source_tablet_types>] -workflow=<workflow> <source_keyspace> <target_keyspace> <table_specs>",
 				`Move table(s) to another keyspace, table_specs is a list of tables or the tables section of the vschema for the target keyspace. Example: '{"t1":{"column_vindexes": [{"column": "id1", "name": "hash"}]}, "t2":{"column_vindexes": [{"column": "id2", "name": "hash"}]}}'.  In the case of an unsharded target keyspace the vschema for each table may be empty. Example: '{"t1":{}, "t2":{}}'.`},
+			{"Migrate", commandMigrate,
+				"[-cells=<cells>] [-tablet_types=<source_tablet_types>] -workflow=<workflow> <source_keyspace> <target_keyspace> <table_specs>",
+				`Move table(s) to another keyspace, table_specs is a list of tables or the tables section of the vschema for the target keyspace. Example: '{"t1":{"column_vindexes": [{"column": "id1", "name": "hash"}]}, "t2":{"column_vindexes": [{"column": "id2", "name": "hash"}]}}'.  In the case of an unsharded target keyspace the vschema for each table may be empty. Example: '{"t1":{}, "t2":{}}'.`},
 			{"DropSources", commandDropSources,
 				"[-dry_run] [-rename_tables] <keyspace.workflow>",
 				"After a MoveTables or Resharding workflow cleanup unused artifacts like source tables, source shards and blacklists"},
@@ -1945,7 +1948,7 @@ func commandMoveTables(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 	target := subFlags.Arg(1)
 	tableSpecs := subFlags.Arg(2)
 	return wr.MoveTables(ctx, *workflow, source, target, tableSpecs, *cells, *tabletTypes, *allTables,
-		*excludes, *autoStart, *stopAfterCopy)
+		*excludes, *autoStart, *stopAfterCopy, "")
 }
 
 // VReplicationWorkflowAction defines subcommands passed to vtctl for movetables or reshard
@@ -1962,6 +1965,12 @@ const (
 	vReplicationWorkflowActionGetState       = "getstate"
 )
 
+func commandMigrate(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	return commandVRWorkflow(ctx, wr, subFlags, args, wrangler.MigrateWorkflow)
+}
+
+// commandVRWorkflow is the common entry point for MoveTables/Reshard/Migrate workflows
+// FIXME: this needs a refactor. Also validations for params need to be done per workflow type
 func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string,
 	workflowType wrangler.VReplicationWorkflowType) error {
 
@@ -1975,14 +1984,16 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 	autoStart := subFlags.Bool("auto_start", true, "If false, streams will start in the Stopped state and will need to be explicitly started")
 	stopAfterCopy := subFlags.Bool("stop_after_copy", false, "Streams will be stopped once the copy phase is completed")
 
-	// MoveTables-only params
-	sourceKeyspace := subFlags.String("source", "", "Source keyspace")
+	// MoveTables and Migrate params
 	tables := subFlags.String("tables", "", "A table spec or a list of tables")
 	allTables := subFlags.Bool("all", false, "Move all tables from the source keyspace")
 	excludes := subFlags.String("exclude", "", "Tables to exclude (comma-separated) if -all is specified")
+	sourceKeyspace := subFlags.String("source", "", "Source keyspace")
+
+	// MoveTables-only params
 	renameTables := subFlags.Bool("rename_tables", false, "Rename tables instead of dropping them")
 
-	// Reshard-only params
+	// Reshard params
 	sourceShards := subFlags.String("source_shards", "", "Source shards")
 	targetShards := subFlags.String("target_shards", "", "Target shards")
 	skipSchemaCopy := subFlags.Bool("skip_schema_copy", false, "Skip copying of schema to target shards")
@@ -2057,14 +2068,40 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 	//TODO: check if invalid parameters were passed in that do not apply to this action
 	originalAction := action
 	action = strings.ToLower(action) // allow users to input action in a case-insensitive manner
+	if workflowType == wrangler.MigrateWorkflow {
+		switch action {
+		case vReplicationWorkflowActionCreate, vReplicationWorkflowActionCancel, vReplicationWorkflowActionComplete:
+		default:
+			return fmt.Errorf("invalid action for Migrate: %s", action)
+		}
+	}
+
 	switch action {
 	case vReplicationWorkflowActionCreate:
 		switch workflowType {
-		case wrangler.MoveTablesWorkflow:
+		case wrangler.MoveTablesWorkflow, wrangler.MigrateWorkflow:
+			var sourceTopo *topo.Server
+			var externalClusterName string
+
+			sourceTopo = wr.TopoServer()
 			if *sourceKeyspace == "" {
 				return fmt.Errorf("source keyspace is not specified")
 			}
-			_, err := wr.TopoServer().GetKeyspace(ctx, *sourceKeyspace)
+			if workflowType == wrangler.MigrateWorkflow {
+				splits := strings.Split(*sourceKeyspace, ".")
+				if len(splits) != 2 {
+					return fmt.Errorf("invalid format for external source cluster: %s", *sourceKeyspace)
+				}
+				externalClusterName = splits[0]
+				*sourceKeyspace = splits[1]
+
+				sourceTopo, err = sourceTopo.OpenExternalVitessClusterServer(ctx, externalClusterName)
+				if err != nil {
+					return err
+				}
+			}
+
+			_, err := sourceTopo.GetKeyspace(ctx, *sourceKeyspace)
 			if err != nil {
 				wr.Logger().Errorf("keyspace %s not found", *sourceKeyspace)
 				return err
@@ -2077,7 +2114,7 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 			vrwp.AllTables = *allTables
 			vrwp.ExcludeTables = *excludes
 			vrwp.Timeout = *timeout
-			workflowType = wrangler.MoveTablesWorkflow
+			vrwp.ExternalCluster = externalClusterName
 		case wrangler.ReshardWorkflow:
 			if *sourceShards == "" || *targetShards == "" {
 				return fmt.Errorf("source and target shards are not specified")
@@ -2086,8 +2123,6 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 			vrwp.TargetShards = strings.Split(*targetShards, ",")
 			vrwp.SkipSchemaCopy = *skipSchemaCopy
 			vrwp.SourceKeyspace = target
-			workflowType = wrangler.ReshardWorkflow
-			log.Infof("params are %s, %s, %+v", *sourceShards, *targetShards, vrwp)
 		default:
 			return fmt.Errorf("unknown workflow type passed: %v", workflowType)
 		}
@@ -2108,12 +2143,13 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 		case wrangler.MoveTablesWorkflow:
 			vrwp.RenameTables = *renameTables
 		case wrangler.ReshardWorkflow:
+		case wrangler.MigrateWorkflow:
 		default:
 			return fmt.Errorf("unknown workflow type passed: %v", workflowType)
 		}
 		vrwp.KeepData = *keepData
 	}
-
+	vrwp.WorkflowType = workflowType
 	wf, err := wr.NewVReplicationWorkflow(ctx, workflowType, vrwp)
 	if err != nil {
 		log.Warningf("NewVReplicationWorkflow returned error %+v", wf)
