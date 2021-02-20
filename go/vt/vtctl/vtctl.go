@@ -355,6 +355,9 @@ var commands = []commandGroup{
 				"Blocks until no new queries were observed on all tablets with the given tablet type in the specified keyspace. " +
 					" This can be used as sanity check to ensure that the tablets were drained after running vtctl MigrateServedTypes " +
 					" and vtgate is no longer using them. If -timeout is set, it fails when the timeout is reached."},
+			{"Mount", commandMount,
+				"-t [mysql|vitess] [-d] [cluster_specific_params] <cluster_name>",
+				"Mount and unmount an external cluster in the file system"},
 		},
 	},
 	{
@@ -3421,6 +3424,39 @@ func commandWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.
 
 	printQueryResult(loggerWriter{wr.Logger()}, qr)
 	return nil
+}
+
+func commandMount(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	clusterType := subFlags.String("type", "", "Specify cluster type: mysql or vitess")
+	unmountCluster := subFlags.Bool("unmount", false, "If set, unmount cluster provided")
+
+	// vitess cluster params
+	topoType := subFlags.String("topo_type", "", "Type of cluster's topology server")
+	topoServer := subFlags.String("topo_server", "", "Server url of cluster's topology server")
+	topoRoot := subFlags.String("topo_root", "", "Root node of cluster's topology")
+	//FIXME: check params
+
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if subFlags.NArg() != 1 {
+		return fmt.Errorf("cluster name needs to be provided")
+	}
+
+	clusterName := subFlags.Arg(0)
+
+	if *unmountCluster {
+		return wr.UnmountVitessCluster(ctx, clusterName)
+	}
+
+	switch *clusterType {
+	case "vitess":
+		return wr.MountVitessCluster(ctx, clusterName, *topoType, *topoServer, *topoRoot)
+	case "mysql":
+		return fmt.Errorf("mysql cluster type not yet supported")
+	default:
+		return fmt.Errorf("cluster type can be only one of vitess or mysql")
+	}
 }
 
 func commandGenerateShardRanges(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
