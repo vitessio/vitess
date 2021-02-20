@@ -2657,3 +2657,5 @@
 2021-02-19T21:53:51Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/582767077
 2021-02-19T21:53:51Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/582767078
 2021-02-19T21:53:51Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/582767047
+2021-02-20T15:02:33Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/584433377
+2021-02-20T15:02:33Z,endtoend,https://github.com/vitessio/vitess/actions/runs/584433362
