@@ -76,6 +76,7 @@ const (
 	SrvVSchemaFile       = "SrvVSchema"
 	SrvKeyspaceFile      = "SrvKeyspace"
 	RoutingRulesFile     = "RoutingRules"
+	ExternalClustersFile = "ExternalClusters"
 )
 
 // Path for all object types.
@@ -86,6 +87,9 @@ const (
 	ShardsPath       = "shards"
 	TabletsPath      = "tablets"
 	MetadataPath     = "metadata"
+
+	ExternalClusterMySQL  = "mysql"
+	ExternalClusterVitess = "vitess"
 )
 
 // Factory is a factory interface to create Conn objects.
