@@ -48,6 +48,13 @@
   outline: none;
 }
 
+.toggle:disabled {
+  background: var(--backgroundSecondary);
+  border-color: var(--backgroundSecondaryHighlight);
+  color: var(--textColorSecondary);
+  cursor: not-allowed;
+}
+
 .large .toggle {
   font-size: var(--fontSizeLarge);
   height: var(--inputHeightLarge);

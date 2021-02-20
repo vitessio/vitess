@@ -70,6 +70,16 @@ export const Debug = () => {
                             placeholder="Choose a fruit name"
                             selectedItem={formData.selectFruitNameDefault || null}
                         />
+                        <Select
+                            disabled
+                            itemToString={(fruit) => fruit?.name || ''}
+                            items={FRUITS}
+                            label="Fruits"
+                            onChange={(fruit) => setFormData({ ...formData, selectFruitDefault: fruit })}
+                            placeholder="Choose a fruit"
+                            renderItem={(fruit) => `${fruit.emoji} ${fruit.name}`}
+                            selectedItem={formData.selectFruitDefault || null}
+                        />
                     </div>
                     <div className={style.dropdownRow}>
                         <Select
@@ -89,6 +99,17 @@ export const Debug = () => {
                             placeholder="Choose a fruit name"
                             size="large"
                             selectedItem={formData.selectFruitNameLarge || null}
+                        />
+                        <Select
+                            disabled
+                            itemToString={(fruit) => fruit?.name || ''}
+                            items={FRUITS}
+                            label="Fruits"
+                            onChange={(fruit) => setFormData({ ...formData, selectFruitLarge: fruit })}
+                            placeholder="Choose a fruit"
+                            renderItem={(fruit) => `${fruit.emoji} ${fruit.name}`}
+                            selectedItem={formData.selectFruitLarge || null}
+                            size="large"
                         />
                     </div>
                 </div>
