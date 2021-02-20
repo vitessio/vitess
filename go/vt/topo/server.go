@@ -333,3 +333,20 @@ func (ts *Server) clearCellAliasesCache() {
 	defer cellsAliases.mu.Unlock()
 	cellsAliases.cellsToAliases = make(map[string]string)
 }
+
+// OpenExternalVitessClusterServer returns the topo server of the external cluster
+func (ts *Server) OpenExternalVitessClusterServer(ctx context.Context, clusterName string) (*Server, error) {
+	vc, err := ts.GetVitessCluster(ctx, clusterName)
+	if err != nil {
+		return nil, err
+	}
+	var externalTopo *Server
+	externalTopo, err = OpenServer(vc.TopoConfig.TopoType, vc.TopoConfig.Server, vc.TopoConfig.Root)
+	if err != nil {
+		return nil, err
+	}
+	if externalTopo == nil {
+		return nil, fmt.Errorf("unable to open external topo for config %s", clusterName)
+	}
+	return externalTopo, nil
+}
