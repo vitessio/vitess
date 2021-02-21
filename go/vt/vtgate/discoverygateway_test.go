@@ -171,7 +171,6 @@ func TestDiscoveryGatewayWaitForTablets(t *testing.T) {
 			},
 		},
 	}
-
 	dg := NewDiscoveryGateway(context.Background(), hc, srvTopo, "local", 2)
 
 	// replica should only use local ones

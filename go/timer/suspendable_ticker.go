@@ -61,6 +61,15 @@ func (s *SuspendableTicker) Stop() {
 	s.ticker.Stop()
 }
 
+// TickNow generates a tick at this point in time. It may block
+// if nothing consumes the tick.
+func (s *SuspendableTicker) TickNow() {
+	if atomic.LoadInt64(&s.suspended) == 0 {
+		// not suspended
+		s.C <- time.Now()
+	}
+}
+
 func (s *SuspendableTicker) loop() {
 	for t := range s.ticker.C {
 		if atomic.LoadInt64(&s.suspended) == 0 {

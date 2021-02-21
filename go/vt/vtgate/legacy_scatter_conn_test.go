@@ -269,8 +269,8 @@ func testScatterConnGeneric(t *testing.T, name string, f func(sc *ScatterConn, s
 	if execCount := sbc1.ExecCount.Get(); execCount != 1 {
 		t.Errorf("want 1, got %v", execCount)
 	}
-	if qr.RowsAffected != 2 {
-		t.Errorf("want 2, got %v", qr.RowsAffected)
+	if qr.RowsAffected != 0 {
+		t.Errorf("want 0, got %v", qr.RowsAffected)
 	}
 	if len(qr.Rows) != 2 {
 		t.Errorf("want 2, got %v", len(qr.Rows))

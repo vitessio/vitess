@@ -28,7 +28,7 @@ import (
 )
 
 // LoadTable creates a Table from the schema info in the database.
-func LoadTable(conn *connpool.DBConn, tableName string, tableType string, comment string) (*Table, error) {
+func LoadTable(conn *connpool.DBConn, tableName string, comment string) (*Table, error) {
 	ta := NewTable(tableName)
 	sqlTableName := sqlparser.String(ta.Name)
 	if err := fetchColumns(ta, conn, sqlTableName); err != nil {

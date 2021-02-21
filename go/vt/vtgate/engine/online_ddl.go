@@ -96,8 +96,7 @@ func (v *OnlineDDL) Execute(vcursor VCursor, bindVars map[string]*query.BindVari
 				Type: sqltypes.VarChar,
 			},
 		},
-		Rows:         rows,
-		RowsAffected: uint64(len(rows)),
+		Rows: rows,
 	}
 	return result, err
 }

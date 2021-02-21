@@ -319,3 +319,57 @@ func TestSetSystemVarInTxWithConnError(t *testing.T) {
 	// subsequent queries on 80- will pass
 	assertMatches(t, conn, "select id, @@sql_safe_updates from test where id = 4", "[[INT64(4) INT64(1)]]")
 }
+
+func TestEnableSystemSettings(t *testing.T) {
+	vtParams := mysql.ConnParams{
+		Host: "localhost",
+		Port: clusterInstance.VtgateMySQLPort,
+	}
+	conn, err := mysql.Connect(context.Background(), &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	// test set @@enable_system_settings to false and true
+	checkedExec(t, conn, "set enable_system_settings = false")
+	assertMatches(t, conn, `select @@enable_system_settings`, `[[INT64(0)]]`)
+	checkedExec(t, conn, "set enable_system_settings = true")
+	assertMatches(t, conn, `select @@enable_system_settings`, `[[INT64(1)]]`)
+
+	// prepare the @@sql_mode variable
+	checkedExec(t, conn, "set sql_mode = 'NO_ZERO_DATE'")
+	assertMatches(t, conn, "select 	@@sql_mode", `[[VARCHAR("NO_ZERO_DATE")]]`)
+
+	// check disabling @@enable_system_settings
+	checkedExec(t, conn, "set enable_system_settings = false")
+	checkedExec(t, conn, "set sql_mode = ''")                                   // attempting to set @@sql_mode to an empty string
+	assertMatches(t, conn, "select 	@@sql_mode", `[[VARCHAR("NO_ZERO_DATE")]]`) // @@sql_mode did not change
+
+	// check enabling @@enable_system_settings
+	checkedExec(t, conn, "set enable_system_settings = true")
+	checkedExec(t, conn, "set sql_mode = ''")                       // changing @@sql_mode to empty string
+	assertMatches(t, conn, "select 	@@sql_mode", `[[VARCHAR("")]]`) // @@sql_mode did change
+}
+
+// Tests type consitency through multiple queries
+func TestSystemVariableType(t *testing.T) {
+	vtParams := mysql.ConnParams{
+		Host: "localhost",
+		Port: clusterInstance.VtgateMySQLPort,
+	}
+	conn, err := mysql.Connect(context.Background(), &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	checkedExec(t, conn, "delete from test")
+	checkedExec(t, conn, "insert into test (id, val1, val2, val3) values (1, null, 0, 0)")
+
+	// regardless of the "from", the select @@autocommit should return the same type
+	query1 := "select @@autocommit"
+	query2 := "select @@autocommit from test"
+
+	checkedExec(t, conn, "set autocommit = false")
+	assertResponseMatch(t, conn, query1, query2)
+
+	checkedExec(t, conn, "set autocommit = true")
+	assertResponseMatch(t, conn, query1, query2)
+}

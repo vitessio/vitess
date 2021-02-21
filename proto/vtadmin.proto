@@ -21,6 +21,7 @@ option go_package = "vitess.io/vitess/go/vt/proto/vtadmin";
 
 package vtadmin;
 
+import "tabletmanagerdata.proto";
 import "topodata.proto";
 import "vtctldata.proto";
 
@@ -29,10 +30,14 @@ import "vtctldata.proto";
 // VTAdmin is the Vitess Admin API service. It provides RPCs that operate on
 // across a range of Vitess clusters.
 service VTAdmin {
+    // GetClusters returns all configured clusters.
+    rpc GetClusters(GetClustersRequest) returns (GetClustersResponse) {};
     // GetGates returns all gates across all the specified clusters.
     rpc GetGates(GetGatesRequest) returns (GetGatesResponse) {};
     // GetKeyspaces returns all keyspaces across the specified clusters.
     rpc GetKeyspaces(GetKeyspacesRequest) returns (GetKeyspacesResponse) {};
+    // GetSchemas returns all schemas across the specified clusters.
+    rpc GetSchemas(GetSchemasRequest) returns (GetSchemasResponse) {};
     // GetTablet looks up a tablet by hostname across all clusters and returns
     // the result.
     rpc GetTablet(GetTabletRequest) returns (Tablet) {};
@@ -53,6 +58,14 @@ message Cluster {
 message Keyspace {
     Cluster cluster = 1;
     vtctldata.Keyspace keyspace = 2;
+    map<string, vtctldata.Shard> shards = 3;
+}
+
+message Schema {
+    Cluster cluster = 1;
+    string keyspace = 2;
+
+    repeated tabletmanagerdata.TableDefinition table_definitions = 3;
 }
 
 // Tablet groups the topo information of a tablet together with the Vitess
@@ -93,6 +106,11 @@ message VTGate {
 }
 
 /* Request/Response types */
+message GetClustersRequest {}
+
+message GetClustersResponse {
+    repeated Cluster clusters = 1;
+}
 
 message GetGatesRequest {
     repeated string cluster_ids = 1;
@@ -108,6 +126,14 @@ message GetKeyspacesRequest {
 
 message GetKeyspacesResponse {
     repeated Keyspace keyspaces = 1;
+}
+
+message GetSchemasRequest {
+    repeated string cluster_ids = 1;
+}
+
+message GetSchemasResponse {
+    repeated Schema schemas = 1;
 }
 
 message GetTabletRequest {

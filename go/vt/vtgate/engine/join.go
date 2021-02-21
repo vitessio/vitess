@@ -84,9 +84,6 @@ func (jn *Join) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariab
 		}
 		if jn.Opcode == LeftJoin && len(rresult.Rows) == 0 {
 			result.Rows = append(result.Rows, joinRows(lrow, nil, jn.Cols))
-			result.RowsAffected++
-		} else {
-			result.RowsAffected += uint64(len(rresult.Rows))
 		}
 		if vcursor.ExceedsMaxMemoryRows(len(result.Rows)) {
 			return nil, fmt.Errorf("in-memory row count exceeded allowed limit of %d", vcursor.MaxMemoryRows())
@@ -244,6 +241,7 @@ func (jn *Join) GetTableName() string {
 	return jn.Left.GetTableName() + "_" + jn.Right.GetTableName()
 }
 
+// NeedsTransaction implements the Primitive interface
 func (jn *Join) NeedsTransaction() bool {
 	return jn.Right.NeedsTransaction() || jn.Left.NeedsTransaction()
 }

@@ -75,11 +75,16 @@ func TestMain(m *testing.M) {
 			fmt.Fprintf(os.Stderr, "could not launch mysql: %v\n", err)
 			return 1
 		}
+		err := cluster.Execute(procSQL, "vttest")
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "%v", err)
+			return 1
+		}
 		defer cluster.TearDown()
 
 		connParams = cluster.MySQLConnParams()
 		connAppDebugParams = cluster.MySQLAppDebugConnParams()
-		err := framework.StartServer(connParams, connAppDebugParams, cluster.DbName())
+		err = framework.StartServer(connParams, connAppDebugParams, cluster.DbName())
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "%v", err)
 			return 1
@@ -91,7 +96,6 @@ func TestMain(m *testing.M) {
 			fmt.Fprintf(os.Stderr, "%v", err)
 			return 1
 		}
-
 		return m.Run()
 	}()
 	os.Exit(exitCode)

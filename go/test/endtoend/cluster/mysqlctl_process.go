@@ -161,9 +161,9 @@ func (mysqlctl *MysqlctlProcess) CleanupFiles(tabletUID int) {
 	os.RemoveAll(path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/innodb", tabletUID)))
 }
 
-// MysqlCtlProcessInstance returns a Mysqlctl handle for mysqlctl process
+// MysqlCtlProcessInstanceOptionalInit returns a Mysqlctl handle for mysqlctl process
 // configured with the given Config.
-func MysqlCtlProcessInstance(tabletUID int, mySQLPort int, tmpDirectory string) *MysqlctlProcess {
+func MysqlCtlProcessInstanceOptionalInit(tabletUID int, mySQLPort int, tmpDirectory string, initMySQL bool) *MysqlctlProcess {
 	mysqlctl := &MysqlctlProcess{
 		Name:         "mysqlctl",
 		Binary:       "mysqlctl",
@@ -172,9 +172,15 @@ func MysqlCtlProcessInstance(tabletUID int, mySQLPort int, tmpDirectory string) 
 	}
 	mysqlctl.MySQLPort = mySQLPort
 	mysqlctl.TabletUID = tabletUID
-	mysqlctl.InitMysql = true
+	mysqlctl.InitMysql = initMySQL
 	mysqlctl.SecureTransport = false
 	return mysqlctl
+}
+
+// MysqlCtlProcessInstance returns a Mysqlctl handle for mysqlctl process
+// configured with the given Config.
+func MysqlCtlProcessInstance(tabletUID int, mySQLPort int, tmpDirectory string) *MysqlctlProcess {
+	return MysqlCtlProcessInstanceOptionalInit(tabletUID, mySQLPort, tmpDirectory, true)
 }
 
 // StartMySQL starts mysqlctl process

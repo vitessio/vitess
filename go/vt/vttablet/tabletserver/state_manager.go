@@ -458,7 +458,6 @@ func (sm *stateManager) serveNonMaster(wantTabletType topodatapb.TabletType) err
 
 	sm.ddle.Close()
 	sm.tableGC.Close()
-	sm.throttler.Close()
 	sm.messager.Close()
 	sm.tracker.Close()
 	sm.se.MakeNonMaster()
@@ -470,6 +469,7 @@ func (sm *stateManager) serveNonMaster(wantTabletType topodatapb.TabletType) err
 	sm.te.AcceptReadOnly()
 	sm.rt.MakeNonMaster()
 	sm.watcher.Open()
+	sm.throttler.Open()
 	sm.setState(wantTabletType, StateServing)
 	return nil
 }

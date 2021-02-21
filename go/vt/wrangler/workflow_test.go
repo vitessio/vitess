@@ -50,12 +50,16 @@ func getMoveTablesWorkflow(t *testing.T, cells, tabletTypes string) *VReplicatio
 	return mtwf
 }
 
+func testComplete(t *testing.T, vrwf *VReplicationWorkflow) error {
+	_, err := vrwf.Complete()
+	return err
+}
 func TestReshardingWorkflowErrorsAndMisc(t *testing.T) {
 	mtwf := getMoveTablesWorkflow(t, "cell1,cell2", "replica,rdonly")
 	require.False(t, mtwf.Exists())
 	mtwf.ws = &workflowState{}
 	require.True(t, mtwf.Exists())
-	require.Errorf(t, mtwf.Complete(), ErrWorkflowNotFullySwitched)
+	require.Errorf(t, testComplete(t, mtwf), ErrWorkflowNotFullySwitched)
 	mtwf.ws.WritesSwitched = true
 	require.Errorf(t, mtwf.Cancel(), ErrWorkflowPartiallySwitched)
 
@@ -100,8 +104,9 @@ func TestCopyProgress(t *testing.T) {
 
 	expectCopyProgressQueries(t, tme)
 
-	cp, err2 := wf.GetCopyProgress()
-	require.NoError(t, err2)
+	var cp *CopyProgress
+	cp, err = wf.GetCopyProgress()
+	require.NoError(t, err)
 	log.Infof("CopyProgress is %+v,%+v", (*cp)["t1"], (*cp)["t2"])
 
 	require.Equal(t, int64(800), (*cp)["t1"].SourceRowCount)
@@ -113,6 +118,11 @@ func TestCopyProgress(t *testing.T) {
 	require.Equal(t, int64(400), (*cp)["t2"].TargetRowCount)
 	require.Equal(t, int64(4000), (*cp)["t2"].SourceTableSize)
 	require.Equal(t, int64(1000), (*cp)["t2"].TargetTableSize)
+
+	var isCopyInProgress bool
+	isCopyInProgress, err = wf.IsCopyInProgress()
+	require.NoError(t, err)
+	require.True(t, isCopyInProgress)
 }
 
 func expectCopyProgressQueries(t *testing.T, tme *testMigraterEnv) {
@@ -143,6 +153,14 @@ func expectCopyProgressQueries(t *testing.T, tme *testMigraterEnv) {
 		"t2|1000|2000")
 	db.AddQuery(query, result)
 
+	for _, id := range []int{1, 2} {
+		query = fmt.Sprintf("select 1 from _vt.copy_state cs, _vt.vreplication vr where vr.id = cs.vrepl_id and vr.id = %d", id)
+		result = sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+			"dummy",
+			"int64"),
+			"1")
+		db.AddQuery(query, result)
+	}
 }
 
 func TestMoveTablesV2(t *testing.T) {
@@ -165,12 +183,12 @@ func TestMoveTablesV2(t *testing.T) {
 	tme.expectNoPreviousJournals()
 	expectMoveTablesQueries(t, tme)
 	tme.expectNoPreviousJournals()
-	require.NoError(t, wf.SwitchTraffic(DirectionForward))
+	require.NoError(t, testSwitchForward(t, wf))
 	require.Equal(t, WorkflowStateAllSwitched, wf.CurrentState())
 
 	tme.expectNoPreviousJournals()
 	tme.expectNoPreviousReverseJournals()
-	require.NoError(t, wf.ReverseTraffic())
+	require.NoError(t, testReverse(t, wf))
 	require.Equal(t, WorkflowStateNotSwitched, wf.CurrentState())
 }
 
@@ -211,7 +229,7 @@ func TestMoveTablesV2Complete(t *testing.T) {
 	tme.expectNoPreviousJournals()
 	expectMoveTablesQueries(t, tme)
 	tme.expectNoPreviousJournals()
-	require.NoError(t, wf.SwitchTraffic(DirectionForward))
+	require.NoError(t, testSwitchForward(t, wf))
 	require.Equal(t, WorkflowStateAllSwitched, wf.CurrentState())
 
 	//16 rules, 8 per table t1,t2 eg: t1,t1@replica,t1@rdonly,ks1.t1,ks1.t1@replica,ks1.t1@rdonly,ks2.t1@replica,ks2.t1@rdonly
@@ -220,13 +238,23 @@ func TestMoveTablesV2Complete(t *testing.T) {
 	require.True(t, checkIfTableExistInVSchema(ctx, t, wf.wr.ts, "ks1", "t2"))
 	require.True(t, checkIfTableExistInVSchema(ctx, t, wf.wr.ts, "ks2", "t1"))
 	require.True(t, checkIfTableExistInVSchema(ctx, t, wf.wr.ts, "ks2", "t2"))
-	require.NoError(t, wf.Complete())
+	require.NoError(t, testComplete(t, wf))
 	require.False(t, checkIfTableExistInVSchema(ctx, t, wf.wr.ts, "ks1", "t1"))
 	require.False(t, checkIfTableExistInVSchema(ctx, t, wf.wr.ts, "ks1", "t2"))
 	require.True(t, checkIfTableExistInVSchema(ctx, t, wf.wr.ts, "ks2", "t1"))
 	require.True(t, checkIfTableExistInVSchema(ctx, t, wf.wr.ts, "ks2", "t2"))
 
 	validateRoutingRuleCount(ctx, t, wf.wr.ts, 0)
+}
+
+func testSwitchForward(t *testing.T, wf *VReplicationWorkflow) error {
+	_, err := wf.SwitchTraffic(DirectionForward)
+	return err
+}
+
+func testReverse(t *testing.T, wf *VReplicationWorkflow) error {
+	_, err := wf.ReverseTraffic()
+	return err
 }
 
 func TestMoveTablesV2Partial(t *testing.T) {
@@ -250,40 +278,39 @@ func TestMoveTablesV2Partial(t *testing.T) {
 	expectMoveTablesQueries(t, tme)
 
 	tme.expectNoPreviousJournals()
-	wf.params.TabletTypes = "replica"
-	wf.params.Cells = "cell1"
-	require.NoError(t, wf.SwitchTraffic(DirectionForward))
-	require.Equal(t, "Reads partially switched. Replica switched in cells: cell1. Rdonly not switched. Writes Not Switched", wf.CurrentState())
-
-	tme.expectNoPreviousJournals()
-	wf.params.TabletTypes = "replica"
-	wf.params.Cells = "cell2"
-	require.NoError(t, wf.SwitchTraffic(DirectionForward))
-	require.Equal(t, "Reads partially switched. All Replica Reads Switched. Rdonly not switched. Writes Not Switched", wf.CurrentState())
-
-	tme.expectNoPreviousJournals()
-	wf.params.TabletTypes = "rdonly"
-	wf.params.Cells = "cell1,cell2"
-	require.NoError(t, wf.SwitchTraffic(DirectionForward))
-	require.Equal(t, WorkflowStateReadsSwitched, wf.CurrentState())
-
-	tme.expectNoPreviousJournals()
-	wf.params.TabletTypes = "replica,rdonly"
-	require.NoError(t, wf.SwitchTraffic(DirectionBackward))
-	require.Equal(t, WorkflowStateNotSwitched, wf.CurrentState())
-
-	tme.expectNoPreviousJournals()
 	wf.params.TabletTypes = "rdonly"
 	wf.params.Cells = "cell1"
-	require.NoError(t, wf.SwitchTraffic(DirectionForward))
+	require.NoError(t, testSwitchForward(t, wf))
 	require.Equal(t, "Reads partially switched. Replica not switched. Rdonly switched in cells: cell1. Writes Not Switched", wf.CurrentState())
 
 	tme.expectNoPreviousJournals()
 	wf.params.TabletTypes = "rdonly"
 	wf.params.Cells = "cell2"
-	require.NoError(t, wf.SwitchTraffic(DirectionForward))
+	require.NoError(t, testSwitchForward(t, wf))
 	require.Equal(t, "Reads partially switched. Replica not switched. All Rdonly Reads Switched. Writes Not Switched", wf.CurrentState())
 
+	tme.expectNoPreviousJournals()
+	wf.params.TabletTypes = "replica"
+	wf.params.Cells = "cell1,cell2"
+	require.NoError(t, testSwitchForward(t, wf))
+	require.Equal(t, WorkflowStateReadsSwitched, wf.CurrentState())
+
+	tme.expectNoPreviousJournals()
+	wf.params.TabletTypes = "replica,rdonly"
+	require.NoError(t, testReverse(t, wf))
+	require.Equal(t, WorkflowStateNotSwitched, wf.CurrentState())
+
+	tme.expectNoPreviousJournals()
+	wf.params.TabletTypes = "replica"
+	wf.params.Cells = "cell1"
+	require.NoError(t, testSwitchForward(t, wf))
+	require.Equal(t, "Reads partially switched. Replica switched in cells: cell1. Rdonly switched in cells: cell1. Writes Not Switched", wf.CurrentState())
+
+	tme.expectNoPreviousJournals()
+	wf.params.TabletTypes = "replica"
+	wf.params.Cells = "cell2"
+	require.NoError(t, testSwitchForward(t, wf))
+	require.Equal(t, "All Reads Switched. Writes Not Switched", wf.CurrentState())
 }
 
 func TestMoveTablesV2Cancel(t *testing.T) {
@@ -345,9 +372,9 @@ func TestReshardV2(t *testing.T) {
 	tme.expectNoPreviousJournals()
 	expectReshardQueries(t, tme)
 	tme.expectNoPreviousJournals()
-	require.NoError(t, wf.SwitchTraffic(DirectionForward))
+	require.NoError(t, testSwitchForward(t, wf))
 	require.Equal(t, WorkflowStateAllSwitched, wf.CurrentState())
-	require.NoError(t, wf.Complete())
+	require.NoError(t, testComplete(t, wf))
 	si, err := wf.wr.ts.GetShard(ctx, "ks", "-40")
 	require.Contains(t, err.Error(), "node doesn't exist")
 	require.Nil(t, si)
@@ -401,7 +428,6 @@ func expectReshardQueries(t *testing.T, tme *testShardMigraterEnv) {
 		dbclient.addInvariant("select * from _vt.vreplication where id = 1", runningResult(1))
 		dbclient.addInvariant("select * from _vt.vreplication where id = 2", runningResult(2))
 		dbclient.addInvariant("insert into _vt.resharding_journal", noResult)
-
 	}
 
 	targetQueries := []string{
@@ -428,8 +454,10 @@ func expectReshardQueries(t *testing.T, tme *testShardMigraterEnv) {
 		dbclient.addInvariant("update _vt.vreplication set message = 'FROZEN'", noResult)
 		dbclient.addInvariant("delete from _vt.vreplication where id in (1)", noResult)
 		dbclient.addInvariant("delete from _vt.copy_state where vrepl_id in (1)", noResult)
-
 	}
+	tme.tmeDB.AddQuery("select 1 from _vt.copy_state cs, _vt.vreplication vr where vr.id = cs.vrepl_id and vr.id = 1", noResult)
+	tme.tmeDB.AddQuery("select 1 from _vt.copy_state cs, _vt.vreplication vr where vr.id = cs.vrepl_id and vr.id = 2", noResult)
+
 }
 
 func expectMoveTablesQueries(t *testing.T, tme *testMigraterEnv) {
@@ -460,7 +488,6 @@ func expectMoveTablesQueries(t *testing.T, tme *testMigraterEnv) {
 				"int64|varchar|varchar|varchar|varchar"),
 				""),
 		)
-		//select pos, state, message from _vt.vreplication where id=1
 	}
 
 	for _, dbclient := range tme.dbSourceClients {
@@ -503,4 +530,7 @@ func expectMoveTablesQueries(t *testing.T, tme *testMigraterEnv) {
 	tme.tmeDB.AddQuery("drop table vt_ks2.t1", noResult)
 	tme.tmeDB.AddQuery("drop table vt_ks2.t2", noResult)
 	tme.tmeDB.AddQuery("update _vt.vreplication set message='Picked source tablet: cell:\"cell1\" uid:10 ' where id=1", noResult)
+	tme.tmeDB.AddQuery("select 1 from _vt.copy_state cs, _vt.vreplication vr where vr.id = cs.vrepl_id and vr.id = 1", noResult)
+	tme.tmeDB.AddQuery("select 1 from _vt.copy_state cs, _vt.vreplication vr where vr.id = cs.vrepl_id and vr.id = 2", noResult)
+
 }

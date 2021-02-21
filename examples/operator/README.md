@@ -14,7 +14,7 @@ vtctlclient ApplyVSchema -vschema="$(cat vschema_commerce_initial.json)" commerc
 
 # Insert and verify data
 mysql < ../common/insert_commerce_data.sql
-mysql --table < select_commerce_data.sql
+mysql --table < ../common/select_commerce_data.sql
 
 # Bring up customer keyspace
 kubectl apply -f 201_customer_tablets.yaml

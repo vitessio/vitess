@@ -41,6 +41,9 @@ type (
 
 		// noDeps contains the predicates that can be evaluated anywhere.
 		noDeps sqlparser.Expr
+
+		// subqueries contains the subqueries that depend on this query graph
+		subqueries map[*sqlparser.Subquery][]*queryGraph
 	}
 
 	// queryTable is a single FROM table, including all predicates particular to this table
@@ -79,9 +82,38 @@ func createQGFromSelect(sel *sqlparser.Select, semTable *semantics.SemTable) (*q
 	return qg, nil
 }
 
+func createQGFromSelectStatement(selStmt sqlparser.SelectStatement, semTable *semantics.SemTable) ([]*queryGraph, error) {
+	switch stmt := selStmt.(type) {
+	case *sqlparser.Select:
+		qg, err := createQGFromSelect(stmt, semTable)
+		if err != nil {
+			return nil, err
+		}
+		return []*queryGraph{qg}, err
+	case *sqlparser.Union:
+		qg, err := createQGFromSelectStatement(stmt.FirstStatement, semTable)
+		if err != nil {
+			return nil, err
+		}
+		for _, sel := range stmt.UnionSelects {
+			qgr, err := createQGFromSelectStatement(sel.Statement, semTable)
+			if err != nil {
+				return nil, err
+			}
+			qg = append(qg, qgr...)
+		}
+		return qg, nil
+	case *sqlparser.ParenSelect:
+		return createQGFromSelectStatement(stmt.Select, semTable)
+	}
+
+	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: not reachable %T", selStmt)
+}
+
 func newQueryGraph() *queryGraph {
 	return &queryGraph{
 		crossTable: map[semantics.TableSet][]sqlparser.Expr{},
+		subqueries: map[*sqlparser.Subquery][]*queryGraph{},
 	}
 }
 
@@ -156,7 +188,20 @@ func (qg *queryGraph) collectPredicate(predicate sqlparser.Expr, semTable *seman
 		}
 		qg.crossTable[deps] = allPredicates
 	}
-	return nil
+	err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+		switch subQuery := node.(type) {
+		case *sqlparser.Subquery:
+
+			qgr, err := createQGFromSelectStatement(subQuery.Select, semTable)
+			if err != nil {
+				return false, err
+			}
+			qg.subqueries[subQuery] = qgr
+		}
+		return true, nil
+	}, predicate)
+
+	return err
 }
 
 func (qg *queryGraph) addToSingleTable(table semantics.TableSet, predicate sqlparser.Expr) bool {

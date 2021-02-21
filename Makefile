@@ -74,7 +74,7 @@ endif
 install: build
 	# binaries
 	mkdir -p "$${PREFIX}/bin"
-	cp "$${VTROOT}/bin/"{mysqlctld,vtorc,vtctld,vtctlclient,vtctldclient,vtgate,vttablet,vtworker,vtbackup} "$${PREFIX}/bin/"
+	cp "$${VTROOT}/bin/"{mysqlctl,mysqlctld,vtorc,vtctld,vtctlclient,vtctldclient,vtgate,vttablet,vtworker,vtbackup} "$${PREFIX}/bin/"
 
 # Install local install the binaries needed to run vitess locally
 # Usage: make install-local PREFIX=/path/to/install/root
@@ -104,6 +104,12 @@ parser:
 
 visitor:
 	go generate go/vt/sqlparser/rewriter.go
+
+sizegen:
+	go run go/tools/sizegen/sizegen.go \
+		-in ./go/vt/... \
+	  	-gen vitess.io/vitess/go/vt/vtgate/engine.Plan \
+	  	-gen vitess.io/vitess/go/vt/vttablet/tabletserver.TabletPlan
 
 # To pass extra flags, run test.go manually.
 # For example: go run test.go -docker=false -- --extra-flag
@@ -306,7 +312,7 @@ web_bootstrap:
 	./tools/web_bootstrap.sh
 
 # Do a production build of the vtctld UI.
-# This target needs to be manually run every time any file within web/vtctld2/app 
+# This target needs to be manually run every time any file within web/vtctld2/app
 # is modified to regenerate rice-box.go
 web_build: web_bootstrap
 	./tools/web_build.sh
@@ -317,7 +323,7 @@ web_build: web_bootstrap
 web_start: web_bootstrap
 	cd web/vtctld2 && npm run start
 
-vtadmin_web_install: 
+vtadmin_web_install:
 	cd web/vtadmin && npm install
 
 # Generate JavaScript/TypeScript bindings for vtadmin-web from the Vitess .proto files.

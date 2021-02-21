@@ -1,0 +1,117 @@
+/**
+ * Copyright 2021 The Vitess Authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+$navRailHoverTransition: background-color 0.1s ease-in-out;
+
+.container {
+  background: var(--backgroundSecondary);
+  border-right: solid 1px var(--backgroundSecondaryHighlight);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  height: 100vh;
+  overflow-y: auto;
+}
+
+.logoContainer {
+  display: block;
+  padding: 24px;
+  text-align: center;
+}
+
+.footerContainer {
+  margin: auto 0 24px 0;
+}
+
+.navLinks {
+  margin: 24px 0 32px 0;
+}
+
+.navList {
+  list-style-type: none;
+  margin: 0;
+  padding: 0;
+
+  &::after {
+    content: '';
+    background-color: var(--colorScaffoldingHighlight);
+    display: block;
+    height: 1px;
+    margin: 20px 24px;
+    max-width: 100%;
+  }
+}
+
+.navList:last-child::after,
+.footerContainer .navList::after {
+  content: none;
+}
+
+a.navLink {
+  border-left: solid 4px transparent;
+  color: var(--textColorPrimary);
+  display: flex;
+  flex-wrap: nowrap;
+  font-size: 1.6rem;
+  font-weight: 500;
+  outline: none;
+  padding: 13px 24px;
+  text-decoration: none;
+  transition: $navRailHoverTransition;
+
+  &.navLinkActive {
+    border-color: var(--colorPrimary);
+    color: var(--colorPrimary);
+  }
+
+  &:focus,
+  &:hover {
+    background: var(--backgroundSecondaryHighlight);
+    color: var(--colorPrimary);
+  }
+}
+
+.badge {
+  background-color: var(--backgroundSecondaryHighlight);
+  border-radius: 20px;
+  color: var(--textColorSecondary);
+  display: inline-block;
+  font-size: 1.4rem;
+  line-height: 1.9rem;
+  margin-left: auto;
+  padding: 2px 8px;
+  transition: $navRailHoverTransition;
+}
+
+a.navLinkActive .badge,
+a.navLink:focus .badge,
+a.navLink:hover .badge {
+  background-color: var(--backgroundPrimaryHighlight);
+  color: var(--colorPrimary);
+}
+
+.icon {
+  fill: var(--colorScaffoldingForeground);
+  height: 2rem;
+  margin-right: 1.2rem;
+  transition: $navRailHoverTransition;
+}
+
+a.navLinkActive .icon,
+a.navLink:focus .icon,
+a.navLink:hover .icon {
+  fill: var(--colorPrimary);
+}

@@ -92,11 +92,11 @@ func (p vreplicationPlanner) dryRun(ctx context.Context) error {
 		p.vx.plannedQuery, p.vx.keyspace, p.vx.workflow)
 	tableString := &strings.Builder{}
 	table := tablewriter.NewWriter(tableString)
-	table.SetHeader([]string{"Tablet", "ID", "BinLogSource", "State", "DBName", "Current GTID", "MaxReplicationLag"})
+	table.SetHeader([]string{"Tablet", "ID", "BinLogSource", "State", "DBName", "Current GTID"})
 	for _, master := range p.vx.masters {
 		key := fmt.Sprintf("%s/%s", master.Shard, master.AliasString())
 		for _, stream := range rsr.ShardStatuses[key].MasterReplicationStatuses {
-			table.Append([]string{key, fmt.Sprintf("%d", stream.ID), stream.Bls.String(), stream.State, stream.DBName, stream.Pos, fmt.Sprintf("%d", stream.MaxReplicationLag)})
+			table.Append([]string{key, fmt.Sprintf("%d", stream.ID), stream.Bls.String(), stream.State, stream.DBName, stream.Pos})
 		}
 	}
 	table.SetAutoMergeCellsByColumnIndex([]int{0})
