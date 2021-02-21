@@ -214,13 +214,13 @@ func TestQueryExecutorPlans(t *testing.T) {
 	}, {
 		input: "create index a on user(id)",
 		dbResponses: []dbResponse{{
-			query:  "alter table user add index a (id)",
+			query:  "alter table `user` add index a (id)",
 			result: emptyResult,
 		}},
 		resultWant: emptyResult,
 		planWant:   "DDL",
-		logWant:    "alter table user add index a (id)",
-		inTxWant:   "alter table user add index a (id)",
+		logWant:    "alter table `user` add index a (id)",
+		inTxWant:   "alter table `user` add index a (id)",
 	}, {
 		input: "create index a on user(id1 + id2)",
 		dbResponses: []dbResponse{{
@@ -251,6 +251,33 @@ func TestQueryExecutorPlans(t *testing.T) {
 		planWant:   "Release",
 		logWant:    "RELEASE savepoint a",
 		inTxWant:   "RELEASE savepoint a",
+	}, {
+		input: "show create database db_name",
+		dbResponses: []dbResponse{{
+			query:  "show create database ks",
+			result: emptyResult,
+		}},
+		resultWant: emptyResult,
+		planWant:   "Show",
+		logWant:    "show create database ks",
+	}, {
+		input: "show create database mysql",
+		dbResponses: []dbResponse{{
+			query:  "show create database mysql",
+			result: emptyResult,
+		}},
+		resultWant: emptyResult,
+		planWant:   "Show",
+		logWant:    "show create database mysql",
+	}, {
+		input: "show create table mysql.user",
+		dbResponses: []dbResponse{{
+			query:  "show create table mysql.`user`",
+			result: emptyResult,
+		}},
+		resultWant: emptyResult,
+		planWant:   "Show",
+		logWant:    "show create table mysql.`user`",
 	}}
 	for _, tcase := range testcases {
 		t.Run(tcase.input, func(t *testing.T) {
@@ -261,6 +288,7 @@ func TestQueryExecutorPlans(t *testing.T) {
 			}
 			ctx := context.Background()
 			tsv := newTestTabletServer(ctx, noFlags, db)
+			tsv.config.DB.DBName = "ks"
 			defer tsv.StopService()
 
 			tsv.SetPassthroughDMLs(tcase.passThrough)

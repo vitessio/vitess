@@ -259,7 +259,7 @@ func (pb *primitiveBuilder) buildTablePrimitive(tableExpr *sqlparser.AliasedTabl
 		eroute.Vindex, _ = vindex.(vindexes.SingleColumn)
 		eroute.Values = []sqltypes.PlanValue{{Value: sqltypes.MakeTrusted(sqltypes.VarBinary, vschemaTable.Pinned)}}
 	}
-	eroute.TableName = vschemaTable.Name.String()
+	eroute.TableName = sqlparser.String(vschemaTable.Name)
 	rb.eroute = eroute
 
 	return nil

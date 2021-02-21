@@ -10,12 +10,26 @@
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from user where 1 != 1",
-    "Query": "select id from user",
-    "Table": "user"
+    "FieldQuery": "select id from `user` where 1 != 1",
+    "Query": "select id from `user`",
+    "Table": "`user`"
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select id from user",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select id from `user` where 1 != 1",
+    "Query": "select id from `user`",
+    "Table": "`user`"
+  }
+}
 
 # Query that always return empty
 "select id from user where someColumn = null"
@@ -29,9 +43,9 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from user where 1 != 1",
-    "Query": "select id from user where someColumn = null",
-    "Table": "user"
+    "FieldQuery": "select id from `user` where 1 != 1",
+    "Query": "select id from `user` where someColumn = null",
+    "Table": "`user`"
   }
 }
 {
@@ -44,9 +58,9 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from user where 1 != 1",
-    "Query": "select id from user where someColumn = null",
-    "Table": "user"
+    "FieldQuery": "select id from `user` where 1 != 1",
+    "Query": "select id from `user` where someColumn = null",
+    "Table": "`user`"
   }
 }
 
@@ -62,16 +76,34 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from user where 1 != 1",
-    "Query": "select id from user where user.id = 5",
-    "Table": "user",
+    "FieldQuery": "select id from `user` where 1 != 1",
+    "Query": "select id from `user` where `user`.id = 5",
+    "Table": "`user`",
     "Values": [
       5
     ],
     "Vindex": "user_index"
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select id from user where user.id = 5",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select id from `user` where 1 != 1",
+    "Query": "select id from `user` where `user`.id = 5",
+    "Table": "`user`",
+    "Values": [
+      5
+    ],
+    "Vindex": "user_index"
+  }
+}
 
 # Single table unique vindex route, but complex expr
 "select id from user where user.id = 5+5"
@@ -85,12 +117,26 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from user where 1 != 1",
-    "Query": "select id from user where user.id = 5 + 5",
-    "Table": "user"
+    "FieldQuery": "select id from `user` where 1 != 1",
+    "Query": "select id from `user` where `user`.id = 5 + 5",
+    "Table": "`user`"
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select id from user where user.id = 5+5",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select id from `user` where 1 != 1",
+    "Query": "select id from `user` where `user`.id = 5 + 5",
+    "Table": "`user`"
+  }
+}
 
 # Single table multiple unique vindex match
 "select id from music where id = 5 and user_id = 4"
@@ -127,16 +173,34 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from user where 1 != 1",
-    "Query": "select id from user where costly = 'aa' and `name` = 'bb'",
-    "Table": "user",
+    "FieldQuery": "select id from `user` where 1 != 1",
+    "Query": "select id from `user` where costly = 'aa' and `name` = 'bb'",
+    "Table": "`user`",
     "Values": [
       "bb"
     ],
     "Vindex": "name_user_map"
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select id from user where costly = 'aa' and name = 'bb'",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectEqual",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select id from `user` where 1 != 1",
+    "Query": "select id from `user` where costly = 'aa' and `name` = 'bb'",
+    "Table": "`user`",
+    "Values": [
+      "bb"
+    ],
+    "Vindex": "name_user_map"
+  }
+}
 
 # Single table multiple non-unique vindex match for IN clause
 "select id from user where costly in ('aa', 'bb') and name in ('aa', 'bb')"
@@ -150,9 +214,9 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from user where 1 != 1",
-    "Query": "select id from user where costly in ('aa', 'bb') and `name` in ::__vals",
-    "Table": "user",
+    "FieldQuery": "select id from `user` where 1 != 1",
+    "Query": "select id from `user` where costly in ('aa', 'bb') and `name` in ::__vals",
+    "Table": "`user`",
     "Values": [
       [
         "aa",
@@ -175,9 +239,9 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from user where 1 != 1",
-    "Query": "select id from user where (`name`, col) in (('aa', 'bb'), ('cc', 'dd'))",
-    "Table": "user",
+    "FieldQuery": "select id from `user` where 1 != 1",
+    "Query": "select id from `user` where (`name`, col) in (('aa', 'bb'), ('cc', 'dd'))",
+    "Table": "`user`",
     "Values": [
       [
         "aa",
@@ -200,9 +264,9 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from user where 1 != 1",
-    "Query": "select id from user where (col, `name`) in (('aa', 'bb'), ('cc', 'dd'))",
-    "Table": "user",
+    "FieldQuery": "select id from `user` where 1 != 1",
+    "Query": "select id from `user` where (col, `name`) in (('aa', 'bb'), ('cc', 'dd'))",
+    "Table": "`user`",
     "Values": [
       [
         "bb",
@@ -225,9 +289,9 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from user where 1 != 1",
-    "Query": "select id from user where (costly, `name`) in (('aa', 'bb'), ('cc', 'dd'))",
-    "Table": "user",
+    "FieldQuery": "select id from `user` where 1 != 1",
+    "Query": "select id from `user` where (costly, `name`) in (('aa', 'bb'), ('cc', 'dd'))",
+    "Table": "`user`",
     "Values": [
       [
         "bb",
@@ -250,9 +314,9 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from user where 1 != 1",
-    "Query": "select id from user where (`name`, costly) in (('aa', 'bb'), ('cc', 'dd'))",
-    "Table": "user",
+    "FieldQuery": "select id from `user` where 1 != 1",
+    "Query": "select id from `user` where (`name`, costly) in (('aa', 'bb'), ('cc', 'dd'))",
+    "Table": "`user`",
     "Values": [
       [
         "aa",
@@ -275,9 +339,9 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from user where 1 != 1",
-    "Query": "select id from user where (col, costly) in (('aa', 'bb')) and (col, `name`) in (('cc', 'dd'))",
-    "Table": "user",
+    "FieldQuery": "select id from `user` where 1 != 1",
+    "Query": "select id from `user` where (col, costly) in (('aa', 'bb')) and (col, `name`) in (('cc', 'dd'))",
+    "Table": "`user`",
     "Values": [
       [
         "dd"
@@ -299,16 +363,34 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from user where 1 != 1",
-    "Query": "select id from user where (col, `name`) in (('aa', 'bb')) and id = 5",
-    "Table": "user",
+    "FieldQuery": "select id from `user` where 1 != 1",
+    "Query": "select id from `user` where (col, `name`) in (('aa', 'bb')) and id = 5",
+    "Table": "`user`",
     "Values": [
       5
     ],
     "Vindex": "user_index"
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select id from user where (col, name) in (('aa', 'bb')) and id = 5",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select id from `user` where 1 != 1",
+    "Query": "select id from `user` where (col, `name`) in (('aa', 'bb')) and id = 5",
+    "Table": "`user`",
+    "Values": [
+      5
+    ],
+    "Vindex": "user_index"
+  }
+}
 
 # Composite IN: multiple vindex matches
 "select id from user where (costly, name) in (('aa', 'bb'), ('cc', 'dd'))"
@@ -322,9 +404,9 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from user where 1 != 1",
-    "Query": "select id from user where (costly, `name`) in (('aa', 'bb'), ('cc', 'dd'))",
-    "Table": "user",
+    "FieldQuery": "select id from `user` where 1 != 1",
+    "Query": "select id from `user` where (costly, `name`) in (('aa', 'bb'), ('cc', 'dd'))",
+    "Table": "`user`",
     "Values": [
       [
         "bb",
@@ -347,9 +429,9 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from user where 1 != 1",
-    "Query": "select id from user where ((col1, `name`), col2) in ((('aa', 'bb'), 'cc'), (('dd', 'ee'), 'ff'))",
-    "Table": "user",
+    "FieldQuery": "select id from `user` where 1 != 1",
+    "Query": "select id from `user` where ((col1, `name`), col2) in ((('aa', 'bb'), 'cc'), (('dd', 'ee'), 'ff'))",
+    "Table": "`user`",
     "Values": [
       [
         "bb",
@@ -372,9 +454,9 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from user where 1 != 1",
-    "Query": "select id from user where (`name`, (col1, col2)) in (('aa', ('bb', 'cc')), ('dd', ('ee', 'ff')))",
-    "Table": "user",
+    "FieldQuery": "select id from `user` where 1 != 1",
+    "Query": "select id from `user` where (`name`, (col1, col2)) in (('aa', ('bb', 'cc')), ('dd', ('ee', 'ff')))",
+    "Table": "`user`",
     "Values": [
       [
         "aa",
@@ -397,12 +479,26 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from user where 1 != 1",
-    "Query": "select id from user where ((col1, `name`), col2) in (('aa', 'bb', 'cc'), (('dd', 'ee'), 'ff'))",
-    "Table": "user"
+    "FieldQuery": "select id from `user` where 1 != 1",
+    "Query": "select id from `user` where ((col1, `name`), col2) in (('aa', 'bb', 'cc'), (('dd', 'ee'), 'ff'))",
+    "Table": "`user`"
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select id from user where ((col1, name), col2) in (('aa', 'bb', 'cc'), (('dd', 'ee'), 'ff'))",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select id from `user` where 1 != 1",
+    "Query": "select id from `user` where ((col1, `name`), col2) in (('aa', 'bb', 'cc'), (('dd', 'ee'), 'ff'))",
+    "Table": "`user`"
+  }
+}
 
 # Composite IN: RHS not tuple
 "select id from user where (col1, name) in (select * from music where music.user_id=user.id)"
@@ -416,9 +512,9 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from user where 1 != 1",
-    "Query": "select id from user where (col1, `name`) in (select * from music where music.user_id = user.id)",
-    "Table": "user"
+    "FieldQuery": "select id from `user` where 1 != 1",
+    "Query": "select id from `user` where (col1, `name`) in (select * from music where music.user_id = `user`.id)",
+    "Table": "`user`"
   }
 }
 
@@ -434,12 +530,26 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from user where 1 != 1",
-    "Query": "select id from user where (col1, `name`) in (('aa', 1 + 1))",
-    "Table": "user"
+    "FieldQuery": "select id from `user` where 1 != 1",
+    "Query": "select id from `user` where (col1, `name`) in (('aa', 1 + 1))",
+    "Table": "`user`"
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select id from user where (col1, name) in (('aa', 1+1))",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select id from `user` where 1 != 1",
+    "Query": "select id from `user` where (col1, `name`) in (('aa', 1 + 1))",
+    "Table": "`user`"
+  }
+}
 
 # IN clause: LHS is neither column nor composite tuple
 "select Id from user where 1 in ('aa', 'bb')"
@@ -453,9 +563,9 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select Id from user where 1 != 1",
-    "Query": "select Id from user where 1 in ('aa', 'bb')",
-    "Table": "user"
+    "FieldQuery": "select Id from `user` where 1 != 1",
+    "Query": "select Id from `user` where 1 in ('aa', 'bb')",
+    "Table": "`user`"
   }
 }
 
@@ -471,12 +581,26 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from user where 1 != 1",
-    "Query": "select id from user where `name` in (col, 'bb')",
-    "Table": "user"
+    "FieldQuery": "select id from `user` where 1 != 1",
+    "Query": "select id from `user` where `name` in (col, 'bb')",
+    "Table": "`user`"
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select id from user where name in (col, 'bb')",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select id from `user` where 1 != 1",
+    "Query": "select id from `user` where `name` in (col, 'bb')",
+    "Table": "`user`"
+  }
+}
 
 # Single table equality route with val arg
 "select id from user where name = :a"
@@ -490,16 +614,34 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from user where 1 != 1",
-    "Query": "select id from user where `name` = :a",
-    "Table": "user",
+    "FieldQuery": "select id from `user` where 1 != 1",
+    "Query": "select id from `user` where `name` = :a",
+    "Table": "`user`",
     "Values": [
       ":a"
     ],
     "Vindex": "name_user_map"
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select id from user where name = :a",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectEqual",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select id from `user` where 1 != 1",
+    "Query": "select id from `user` where `name` = :a",
+    "Table": "`user`",
+    "Values": [
+      ":a"
+    ],
+    "Vindex": "name_user_map"
+  }
+}
 
 # Single table equality route with unsigned value
 "select id from user where name = 18446744073709551615"
@@ -513,16 +655,34 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from user where 1 != 1",
-    "Query": "select id from user where `name` = 18446744073709551615",
-    "Table": "user",
+    "FieldQuery": "select id from `user` where 1 != 1",
+    "Query": "select id from `user` where `name` = 18446744073709551615",
+    "Table": "`user`",
     "Values": [
       18446744073709551615
     ],
     "Vindex": "name_user_map"
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select id from user where name = 18446744073709551615",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectEqual",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select id from `user` where 1 != 1",
+    "Query": "select id from `user` where `name` = 18446744073709551615",
+    "Table": "`user`",
+    "Values": [
+      18446744073709551615
+    ],
+    "Vindex": "name_user_map"
+  }
+}
 
 # Single table in clause list arg
 "select id from user where name in ::list"
@@ -536,9 +696,9 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from user where 1 != 1",
-    "Query": "select id from user where `name` in ::__vals",
-    "Table": "user",
+    "FieldQuery": "select id from `user` where 1 != 1",
+    "Query": "select id from `user` where `name` in ::__vals",
+    "Table": "`user`",
     "Values": [
       "::list"
     ],
@@ -558,9 +718,9 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select user_extra.id from user join user_extra on user.id = user_extra.user_id where 1 != 1",
-    "Query": "select user_extra.id from user join user_extra on user.id = user_extra.user_id where user.id = 5",
-    "Table": "user",
+    "FieldQuery": "select user_extra.id from `user` join user_extra on `user`.id = user_extra.user_id where 1 != 1",
+    "Query": "select user_extra.id from `user` join user_extra on `user`.id = user_extra.user_id where `user`.id = 5",
+    "Table": "`user`",
     "Values": [
       5
     ],
@@ -580,9 +740,9 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select user_extra.id from user join user_extra on user.id = user_extra.user_id where 1 != 1",
-    "Query": "select user_extra.id from user join user_extra on user.id = user_extra.user_id where user_extra.user_id = 5",
-    "Table": "user",
+    "FieldQuery": "select user_extra.id from `user` join user_extra on `user`.id = user_extra.user_id where 1 != 1",
+    "Query": "select user_extra.id from `user` join user_extra on `user`.id = user_extra.user_id where user_extra.user_id = 5",
+    "Table": "`user`",
     "Values": [
       5
     ],
@@ -602,9 +762,9 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select user_extra.id from user left join user_extra on user.id = user_extra.user_id where 1 != 1",
-    "Query": "select user_extra.id from user left join user_extra on user.id = user_extra.user_id where user.id = 5",
-    "Table": "user",
+    "FieldQuery": "select user_extra.id from `user` left join user_extra on `user`.id = user_extra.user_id where 1 != 1",
+    "Query": "select user_extra.id from `user` left join user_extra on `user`.id = user_extra.user_id where `user`.id = 5",
+    "Table": "`user`",
     "Values": [
       5
     ],
@@ -624,9 +784,9 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select user_extra.id from user left join user_extra on user.id = user_extra.user_id where 1 != 1",
-    "Query": "select user_extra.id from user left join user_extra on user.id = user_extra.user_id where user_extra.user_id = 5",
-    "Table": "user",
+    "FieldQuery": "select user_extra.id from `user` left join user_extra on `user`.id = user_extra.user_id where 1 != 1",
+    "Query": "select user_extra.id from `user` left join user_extra on `user`.id = user_extra.user_id where user_extra.user_id = 5",
+    "Table": "`user`",
     "Values": [
       5
     ],
@@ -643,7 +803,7 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "1",
-    "TableName": "user_user_extra",
+    "TableName": "`user`_user_extra",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -652,9 +812,9 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select user.col from user where 1 != 1",
-        "Query": "select user.col from user where user.id = 5",
-        "Table": "user",
+        "FieldQuery": "select `user`.col from `user` where 1 != 1",
+        "Query": "select `user`.col from `user` where `user`.id = 5",
+        "Table": "`user`",
         "Values": [
           5
         ],
@@ -674,7 +834,44 @@ Gen4 plan same as above
     ]
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select user_extra.id from user join user_extra on user.col = user_extra.col where user.id = 5",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "1",
+    "TableName": "`user`_user_extra",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectEqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select `user`.col from `user` where 1 != 1",
+        "Query": "select `user`.col from `user` where `user`.id = 5",
+        "Table": "`user`",
+        "Values": [
+          5
+        ],
+        "Vindex": "user_index"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select user_extra.id from user_extra where 1 != 1",
+        "Query": "select user_extra.id from user_extra where user_extra.col = :user_col",
+        "Table": "user_extra"
+      }
+    ]
+  }
+}
 
 # Multi-route unique vindex route on both routes
 "select user_extra.id from user join user_extra on user.col = user_extra.col where user.id = 5 and user_extra.user_id = 5"
@@ -685,7 +882,7 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "1",
-    "TableName": "user_user_extra",
+    "TableName": "`user`_user_extra",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -694,9 +891,9 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select user.col from user where 1 != 1",
-        "Query": "select user.col from user where user.id = 5",
-        "Table": "user",
+        "FieldQuery": "select `user`.col from `user` where 1 != 1",
+        "Query": "select `user`.col from `user` where `user`.id = 5",
+        "Table": "`user`",
         "Values": [
           5
         ],
@@ -730,7 +927,7 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "1",
-    "TableName": "user_user_extra",
+    "TableName": "`user`_user_extra",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -739,9 +936,9 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select user.col from user where 1 != 1",
-        "Query": "select user.col from user",
-        "Table": "user"
+        "FieldQuery": "select `user`.col from `user` where 1 != 1",
+        "Query": "select `user`.col from `user`",
+        "Table": "`user`"
       },
       {
         "OperatorType": "Route",
@@ -771,7 +968,7 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "1",
-    "TableName": "user_user_extra",
+    "TableName": "`user`_user_extra",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -780,9 +977,9 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select user.col from user where 1 != 1",
-        "Query": "select user.col from user where 1 = 1",
-        "Table": "user"
+        "FieldQuery": "select `user`.col from `user` where 1 != 1",
+        "Query": "select `user`.col from `user` where 1 = 1",
+        "Table": "`user`"
       },
       {
         "OperatorType": "Route",
@@ -811,9 +1008,9 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from user where 1 != 1",
-    "Query": "select id from user where user.col = 5 and user.id in ::__vals",
-    "Table": "user",
+    "FieldQuery": "select id from `user` where 1 != 1",
+    "Query": "select id from `user` where `user`.col = 5 and `user`.id in ::__vals",
+    "Table": "`user`",
     "Values": [
       [
         1,
@@ -836,9 +1033,9 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from user where 1 != 1",
-    "Query": "select id from user where user.col = case user.col when 'foo' then true else false end and user.id in ::__vals",
-    "Table": "user",
+    "FieldQuery": "select id from `user` where 1 != 1",
+    "Query": "select id from `user` where `user`.col = case `user`.col when 'foo' then true else false end and `user`.id in ::__vals",
+    "Table": "`user`",
     "Values": [
       [
         1,
@@ -861,16 +1058,34 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id or col as val from user where 1 != 1",
-    "Query": "select id or col as val from user where user.col = 5 and user.id in (1, 2) and user.`name` = 'aa'",
-    "Table": "user",
+    "FieldQuery": "select id or col as val from `user` where 1 != 1",
+    "Query": "select id or col as val from `user` where `user`.col = 5 and `user`.id in (1, 2) and `user`.`name` = 'aa'",
+    "Table": "`user`",
     "Values": [
       "aa"
     ],
     "Vindex": "name_user_map"
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select (id or col) as val from user where user.col = 5 and user.id in (1, 2) and user.name = 'aa'",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectEqual",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select id or col as val from `user` where 1 != 1",
+    "Query": "select id or col as val from `user` where `user`.col = 5 and `user`.id in (1, 2) and `user`.`name` = 'aa'",
+    "Table": "`user`",
+    "Values": [
+      "aa"
+    ],
+    "Vindex": "name_user_map"
+  }
+}
 
 # Route with multiple route constraints, SelectEqual is the best constraint.
 "select id from user where user.col = false and user.id in (1, 2) and user.name = 'aa'"
@@ -884,16 +1099,34 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from user where 1 != 1",
-    "Query": "select id from user where user.col = false and user.id in (1, 2) and user.`name` = 'aa'",
-    "Table": "user",
+    "FieldQuery": "select id from `user` where 1 != 1",
+    "Query": "select id from `user` where `user`.col = false and `user`.id in (1, 2) and `user`.`name` = 'aa'",
+    "Table": "`user`",
     "Values": [
       "aa"
     ],
     "Vindex": "name_user_map"
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select id from user where user.col = false and user.id in (1, 2) and user.name = 'aa'",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectEqual",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select id from `user` where 1 != 1",
+    "Query": "select id from `user` where `user`.col = false and `user`.id in (1, 2) and `user`.`name` = 'aa'",
+    "Table": "`user`",
+    "Values": [
+      "aa"
+    ],
+    "Vindex": "name_user_map"
+  }
+}
 
 # Route with multiple route constraints, SelectEqualUnique is the best constraint.
 "select id from user where user.col = 5 and user.id in (1, 2) and user.name = 'aa' and user.id = 1"
@@ -907,16 +1140,34 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from user where 1 != 1",
-    "Query": "select id from user where user.col = 5 and user.id in (1, 2) and user.`name` = 'aa' and user.id = 1",
-    "Table": "user",
+    "FieldQuery": "select id from `user` where 1 != 1",
+    "Query": "select id from `user` where `user`.col = 5 and `user`.id in (1, 2) and `user`.`name` = 'aa' and `user`.id = 1",
+    "Table": "`user`",
     "Values": [
       1
     ],
     "Vindex": "user_index"
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select id from user where user.col = 5 and user.id in (1, 2) and user.name = 'aa' and user.id = 1",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select id from `user` where 1 != 1",
+    "Query": "select id from `user` where `user`.col = 5 and `user`.id in (1, 2) and `user`.`name` = 'aa' and `user`.id = 1",
+    "Table": "`user`",
+    "Values": [
+      1
+    ],
+    "Vindex": "user_index"
+  }
+}
 
 # Route with multiple route constraints, SelectEqualUnique is the best constraint, order reversed.
 "select id from user where user.id = 1 and user.name = 'aa' and user.id in (1, 2) and user.col = 5"
@@ -930,16 +1181,34 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from user where 1 != 1",
-    "Query": "select id from user where user.id = 1 and user.`name` = 'aa' and user.id in (1, 2) and user.col = 5",
-    "Table": "user",
+    "FieldQuery": "select id from `user` where 1 != 1",
+    "Query": "select id from `user` where `user`.id = 1 and `user`.`name` = 'aa' and `user`.id in (1, 2) and `user`.col = 5",
+    "Table": "`user`",
     "Values": [
       1
     ],
     "Vindex": "user_index"
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select id from user where user.id = 1 and user.name = 'aa' and user.id in (1, 2) and user.col = 5",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select id from `user` where 1 != 1",
+    "Query": "select id from `user` where `user`.id = 1 and `user`.`name` = 'aa' and `user`.id in (1, 2) and `user`.col = 5",
+    "Table": "`user`",
+    "Values": [
+      1
+    ],
+    "Vindex": "user_index"
+  }
+}
 
 # Route with OR and AND clause, must parenthesize correctly.
 "select id from user where user.id = 1 or user.name = 'aa' and user.id in (1, 2)"
@@ -953,12 +1222,26 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from user where 1 != 1",
-    "Query": "select id from user where user.id = 1 or user.`name` = 'aa' and user.id in (1, 2)",
-    "Table": "user"
+    "FieldQuery": "select id from `user` where 1 != 1",
+    "Query": "select id from `user` where `user`.id = 1 or `user`.`name` = 'aa' and `user`.id in (1, 2)",
+    "Table": "`user`"
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select id from user where user.id = 1 or user.name = 'aa' and user.id in (1, 2)",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select id from `user` where 1 != 1",
+    "Query": "select id from `user` where `user`.id = 1 or `user`.`name` = 'aa' and `user`.id in (1, 2)",
+    "Table": "`user`"
+  }
+}
 
 # Unsharded route
 "select unsharded.id from user join unsharded where unsharded.id = user.id"
@@ -969,7 +1252,7 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "1",
-    "TableName": "user_unsharded",
+    "TableName": "`user`_unsharded",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -978,9 +1261,9 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select user.id from user where 1 != 1",
-        "Query": "select user.id from user",
-        "Table": "user"
+        "FieldQuery": "select `user`.id from `user` where 1 != 1",
+        "Query": "select `user`.id from `user`",
+        "Table": "`user`"
       },
       {
         "OperatorType": "Route",
@@ -1003,7 +1286,7 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-2",
-    "TableName": "unsharded_user",
+    "TableName": "unsharded_`user`",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -1023,9 +1306,9 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select 1 from user where 1 != 1",
-        "Query": "select 1 from user where user.id = :unsharded_id",
-        "Table": "user",
+        "FieldQuery": "select 1 from `user` where 1 != 1",
+        "Query": "select 1 from `user` where `user`.id = :unsharded_id",
+        "Table": "`user`",
         "Values": [
           ":unsharded_id"
         ],
@@ -1047,9 +1330,9 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select col from user as route1 where 1 != 1",
-    "Query": "select col from user as route1 where id = 1",
-    "Table": "user",
+    "FieldQuery": "select col from `user` as route1 where 1 != 1",
+    "Query": "select col from `user` as route1 where id = 1",
+    "Table": "`user`",
     "Values": [
       1
     ],
@@ -1083,7 +1366,7 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "1",
-    "TableName": "user_extra_user",
+    "TableName": "user_extra_`user`",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -1103,9 +1386,9 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select u.m from user as u where 1 != 1",
-        "Query": "select u.m from user as u where u.id in ::__vals and u.id in (select m2 from user where user.id = u.id and user.col = :user_extra_col)",
-        "Table": "user",
+        "FieldQuery": "select u.m from `user` as u where 1 != 1",
+        "Query": "select u.m from `user` as u where u.id in ::__vals and u.id in (select m2 from `user` where `user`.id = u.id and `user`.col = :user_extra_col)",
+        "Table": "`user`",
         "Values": [
           [
             ":user_extra_col",
@@ -1127,7 +1410,7 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "1",
-    "TableName": "user_extra_user",
+    "TableName": "user_extra_`user`",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -1147,9 +1430,9 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select u.m from user as u where 1 != 1",
-        "Query": "select u.m from user as u where u.id = 5 and u.id in (select m2 from user where user.id = 5)",
-        "Table": "user",
+        "FieldQuery": "select u.m from `user` as u where 1 != 1",
+        "Query": "select u.m from `user` as u where u.id = 5 and u.id in (select m2 from `user` where `user`.id = 5)",
+        "Table": "`user`",
         "Values": [
           5
         ],
@@ -1168,7 +1451,7 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "1",
-    "TableName": "user_extra_user",
+    "TableName": "user_extra_`user`",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -1188,9 +1471,9 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select u.m from user as u where 1 != 1",
-        "Query": "select u.m from user as u where u.id in ::__vals and u.id in (select m2 from user where user.id = u.id and user.col = :user_extra_col and user.id in (select m3 from user_extra where user_extra.user_id = user.id))",
-        "Table": "user",
+        "FieldQuery": "select u.m from `user` as u where 1 != 1",
+        "Query": "select u.m from `user` as u where u.id in ::__vals and u.id in (select m2 from `user` where `user`.id = u.id and `user`.col = :user_extra_col and `user`.id in (select m3 from user_extra where user_extra.user_id = `user`.id))",
+        "Table": "`user`",
         "Values": [
           [
             ":user_extra_col",
@@ -1215,9 +1498,9 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from user where 1 != 1",
-    "Query": "select id from user where user.col in (select user_extra.col from user_extra where user_extra.user_id = user.id)",
-    "Table": "user"
+    "FieldQuery": "select id from `user` where 1 != 1",
+    "Query": "select id from `user` where `user`.col in (select user_extra.col from user_extra where user_extra.user_id = `user`.id)",
+    "Table": "`user`"
   }
 }
 
@@ -1233,9 +1516,9 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from user where 1 != 1",
-    "Query": "select id from user where id = 5 and user.col in (select user_extra.col from user_extra where user_extra.user_id = 5)",
-    "Table": "user",
+    "FieldQuery": "select id from `user` where 1 != 1",
+    "Query": "select id from `user` where id = 5 and `user`.col in (select user_extra.col from user_extra where user_extra.user_id = 5)",
+    "Table": "`user`",
     "Values": [
       5
     ],
@@ -1255,9 +1538,9 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from user where 1 != 1",
-    "Query": "select id from user where id = 'aa' and user.col in (select user_extra.col from user_extra where user_extra.user_id = 'aa')",
-    "Table": "user",
+    "FieldQuery": "select id from `user` where 1 != 1",
+    "Query": "select id from `user` where id = 'aa' and `user`.col in (select user_extra.col from user_extra where user_extra.user_id = 'aa')",
+    "Table": "`user`",
     "Values": [
       "aa"
     ],
@@ -1277,9 +1560,9 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from user where 1 != 1",
-    "Query": "select id from user where id = :a and user.col in (select user_extra.col from user_extra where user_extra.user_id = :a)",
-    "Table": "user",
+    "FieldQuery": "select id from `user` where 1 != 1",
+    "Query": "select id from `user` where id = :a and `user`.col in (select user_extra.col from user_extra where user_extra.user_id = :a)",
+    "Table": "`user`",
     "Values": [
       ":a"
     ],
@@ -1303,9 +1586,9 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id2 from user as uu where 1 != 1",
-    "Query": "select id2 from user as uu where id in (select id from user where id = uu.id and user.col in (select user_extra.col from user_extra where user_extra.user_id = uu.id))",
-    "Table": "user"
+    "FieldQuery": "select id2 from `user` as uu where 1 != 1",
+    "Query": "select id2 from `user` as uu where id in (select id from `user` where id = uu.id and `user`.col in (select user_extra.col from user_extra where user_extra.user_id = uu.id))",
+    "Table": "`user`"
   }
 }
 
@@ -1326,9 +1609,9 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select col from user where 1 != 1",
-        "Query": "select col from user",
-        "Table": "user"
+        "FieldQuery": "select col from `user` where 1 != 1",
+        "Query": "select col from `user`",
+        "Table": "`user`"
       },
       {
         "OperatorType": "Route",
@@ -1337,9 +1620,9 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select id from user where 1 != 1",
-        "Query": "select id from user where :__sq_has_values1 = 1 and id in ::__vals",
-        "Table": "user",
+        "FieldQuery": "select id from `user` where 1 != 1",
+        "Query": "select id from `user` where :__sq_has_values1 = 1 and id in ::__vals",
+        "Table": "`user`",
         "Values": [
           "::__sq1"
         ],
@@ -1365,9 +1648,9 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select col from user where 1 != 1",
-        "Query": "select col from user",
-        "Table": "user"
+        "FieldQuery": "select col from `user` where 1 != 1",
+        "Query": "select col from `user`",
+        "Table": "`user`"
       },
       {
         "OperatorType": "Route",
@@ -1376,9 +1659,9 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select id from user where 1 != 1",
-        "Query": "select id from user where :__sq_has_values1 = 0 or id not in ::__sq1",
-        "Table": "user"
+        "FieldQuery": "select id from `user` where 1 != 1",
+        "Query": "select id from `user` where :__sq_has_values1 = 0 or id not in ::__sq1",
+        "Table": "`user`"
       }
     ]
   }
@@ -1400,9 +1683,9 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select col from user where 1 != 1",
-        "Query": "select col from user",
-        "Table": "user"
+        "FieldQuery": "select col from `user` where 1 != 1",
+        "Query": "select col from `user`",
+        "Table": "`user`"
       },
       {
         "OperatorType": "Route",
@@ -1411,9 +1694,9 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select id from user where 1 != 1",
-        "Query": "select id from user where :__sq_has_values1",
-        "Table": "user"
+        "FieldQuery": "select id from `user` where 1 != 1",
+        "Query": "select id from `user` where :__sq_has_values1",
+        "Table": "`user`"
       }
     ]
   }
@@ -1435,9 +1718,9 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select col from user where 1 != 1",
-        "Query": "select col from user",
-        "Table": "user"
+        "FieldQuery": "select col from `user` where 1 != 1",
+        "Query": "select col from `user`",
+        "Table": "`user`"
       },
       {
         "OperatorType": "Route",
@@ -1446,9 +1729,9 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select id from user where 1 != 1",
-        "Query": "select id from user where id = :__sq1",
-        "Table": "user",
+        "FieldQuery": "select id from `user` where 1 != 1",
+        "Query": "select id from `user` where id = :__sq1",
+        "Table": "`user`",
         "Values": [
           ":__sq1"
         ],
@@ -1478,9 +1761,9 @@ Gen4 plan same as above
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select id3 from user where 1 != 1",
-            "Query": "select id3 from user",
-            "Table": "user"
+            "FieldQuery": "select id3 from `user` where 1 != 1",
+            "Query": "select id3 from `user`",
+            "Table": "`user`"
           },
           {
             "OperatorType": "Route",
@@ -1489,9 +1772,9 @@ Gen4 plan same as above
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select id2 from user where 1 != 1",
-            "Query": "select id2 from user where :__sq_has_values1 = 1 and id2 in ::__sq1",
-            "Table": "user"
+            "FieldQuery": "select id2 from `user` where 1 != 1",
+            "Query": "select id2 from `user` where :__sq_has_values1 = 1 and id2 in ::__sq1",
+            "Table": "`user`"
           }
         ]
       },
@@ -1502,9 +1785,9 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select id1 from user where 1 != 1",
-        "Query": "select id1 from user where id = :__sq2",
-        "Table": "user",
+        "FieldQuery": "select id1 from `user` where 1 != 1",
+        "Query": "select id1 from `user` where id = :__sq2",
+        "Table": "`user`",
         "Values": [
           ":__sq2"
         ],
@@ -1526,9 +1809,9 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select col from user where 1 != 1",
-    "Query": "select col from user where id = (select id from user as route1 where route1.id = user.id)",
-    "Table": "user"
+    "FieldQuery": "select col from `user` where 1 != 1",
+    "Query": "select col from `user` where id = (select id from `user` as route1 where route1.id = `user`.id)",
+    "Table": "`user`"
   }
 }
 
@@ -1559,9 +1842,9 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select col from user where 1 != 1",
-        "Query": "select col from user where id = :__sq1",
-        "Table": "user",
+        "FieldQuery": "select col from `user` where 1 != 1",
+        "Query": "select col from `user` where id = :__sq1",
+        "Table": "`user`",
         "Values": [
           ":__sq1"
         ],
@@ -1583,9 +1866,9 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select user_extra.Id from user join user_extra on user.iD = user_extra.User_Id where 1 != 1",
-    "Query": "select user_extra.Id from user join user_extra on user.iD = user_extra.User_Id where user.Id = 5",
-    "Table": "user",
+    "FieldQuery": "select user_extra.Id from `user` join user_extra on `user`.iD = user_extra.User_Id where 1 != 1",
+    "Query": "select user_extra.Id from `user` join user_extra on `user`.iD = user_extra.User_Id where `user`.Id = 5",
+    "Table": "`user`",
     "Values": [
       5
     ],
@@ -1602,9 +1885,9 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select user_extra.Id from user, user_extra where 1 != 1",
-    "Query": "select user_extra.Id from user, user_extra where user.Id = 5 and user.iD = user_extra.User_Id",
-    "Table": "user, user_extra",
+    "FieldQuery": "select user_extra.Id from `user`, user_extra where 1 != 1",
+    "Query": "select user_extra.Id from `user`, user_extra where `user`.Id = 5 and `user`.iD = user_extra.User_Id",
+    "Table": "`user`, user_extra",
     "Values": [
       5
     ],
@@ -1624,9 +1907,9 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id from user where 1 != 1",
-    "Query": "select id from user where database()",
-    "Table": "user"
+    "FieldQuery": "select id from `user` where 1 != 1",
+    "Query": "select id from `user` where database()",
+    "Table": "`user`"
   }
 }
 
@@ -1653,21 +1936,7 @@ Gen4 plan same as above
     "Table": "music"
   }
 }
-{
-  "QueryType": "SELECT",
-  "Original": "select id from music where id = null",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectNone",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "FieldQuery": "select id from music where 1 != 1",
-    "Query": "select id from music where id = null",
-    "Table": "music"
-  }
-}
+Gen4 plan same as above
 
 # SELECT with IS NULL
 "select id from music where id is null"
@@ -1727,21 +1996,7 @@ Gen4 plan same as above
     "Table": "music"
   }
 }
-{
-  "QueryType": "SELECT",
-  "Original": "select id from music where user_id = 4 and id = null",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectNone",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "FieldQuery": "select id from music where 1 != 1",
-    "Query": "select id from music where user_id = 4 and id = null",
-    "Table": "music"
-  }
-}
+Gen4 plan same as above
 
 # Single table with unique vindex match and IN (null)
 "select id from music where user_id = 4 and id IN (null)"
