@@ -188,20 +188,11 @@ const (
 	// ComQuit is COM_QUIT.
 	ComQuit = 0x01
 
-	// AuthMoreDataPacket is sent when
-	AuthMoreDataPacket = 0x01
-
 	// ComInitDB is COM_INIT_DB.
 	ComInitDB = 0x02
 
 	// ComQuery is COM_QUERY.
 	ComQuery = 0x03
-
-	// CachingSha2FastAuth is sent before OKPacket when server authenticates using cache
-	CachingSha2FastAuth = 0x03
-
-	// CachingSha2FullAuth is sent when server requests un-scrambled password to authenticate
-	CachingSha2FullAuth = 0x04
 
 	// ComPing is COM_PING.
 	ComPing = 0x0e
@@ -242,14 +233,26 @@ const (
 	// EOFPacket is the header of the EOF packet.
 	EOFPacket = 0xfe
 
-	// AuthSwitchRequestPacket is used to switch auth method.
-	AuthSwitchRequestPacket = 0xfe
-
 	// ErrPacket is the header of the error packet.
 	ErrPacket = 0xff
 
 	// NullValue is the encoded value of NULL.
 	NullValue = 0xfb
+)
+
+// Auth packet types
+const (
+	// AuthMoreDataPacket is sent when server requires more data to authenticate
+	AuthMoreDataPacket = 0x01
+
+	// CachingSha2FastAuth is sent before OKPacket when server authenticates using cache
+	CachingSha2FastAuth = 0x03
+
+	// CachingSha2FullAuth is sent when server requests un-scrambled password to authenticate
+	CachingSha2FullAuth = 0x04
+
+	// AuthSwitchRequestPacket is used to switch auth method.
+	AuthSwitchRequestPacket = 0xfe
 )
 
 // Error codes for client-side errors.
