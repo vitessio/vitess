@@ -29,7 +29,7 @@
     },
     "TargetDestination": "AnyShard()",
     "IsDML": false,
-    "Query": "show full columns from user",
+    "Query": "show full columns from `user`",
     "SingleShardOnly": true
   }
 }

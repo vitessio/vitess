@@ -64,7 +64,7 @@ const (
 	PlanSavepoint
 	PlanRelease
 	PlanSRollback
-	PlanShowTables
+	PlanShow
 	// PlanLoad is for Load data statements
 	PlanLoad
 	// PlanFlush is for FLUSH statements
@@ -96,7 +96,7 @@ var planName = []string{
 	"Savepoint",
 	"Release",
 	"RollbackSavepoint",
-	"ShowTables",
+	"Show",
 	"Load",
 	"Flush",
 	"LockTables",
