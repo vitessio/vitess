@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"k8s.io/apimachinery/pkg/util/sets"
 
 	"vitess.io/vitess/go/event"
 	"vitess.io/vitess/go/protoutil"
@@ -38,6 +39,7 @@ import (
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/topotools/events"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
@@ -318,7 +320,44 @@ func (s *VtctldServer) DeleteTablets(ctx context.Context, req *vtctldatapb.Delet
 
 // EmergencyReparentShard is part of the vtctldservicepb.VtctldServer interface.
 func (s *VtctldServer) EmergencyReparentShard(ctx context.Context, req *vtctldatapb.EmergencyReparentShardRequest) (*vtctldatapb.EmergencyReparentShardResponse, error) {
-	panic("unimplemented!")
+	waitReplicasTimeout, ok, err := protoutil.DurationFromProto(req.WaitReplicasTimeout)
+	if err != nil {
+		return nil, err
+	} else if !ok {
+		waitReplicasTimeout = time.Second * 30
+	}
+
+	logstream := []*logutilpb.Event{}
+	logger := logutil.NewCallbackLogger(func(e *logutilpb.Event) {
+		logstream = append(logstream, e)
+	})
+
+	ev, err := reparentutil.NewEmergencyReparenter(s.ts, s.tmc, logger).ReparentShard(ctx,
+		req.Keyspace,
+		req.Shard,
+		reparentutil.EmergencyReparentOptions{
+			NewPrimaryAlias:     req.NewPrimary,
+			IgnoreReplicas:      sets.NewString(topoproto.TabletAliasList(req.IgnoreReplicas).ToStringSlice()...),
+			WaitReplicasTimeout: waitReplicasTimeout,
+		},
+	)
+
+	resp := &vtctldatapb.EmergencyReparentShardResponse{
+		Keyspace: req.Keyspace,
+		Shard:    req.Shard,
+		Events:   logstream,
+	}
+
+	if ev != nil {
+		resp.Keyspace = ev.ShardInfo.Keyspace()
+		resp.Shard = ev.ShardInfo.ShardName()
+
+		if !topoproto.TabletAliasIsZero(ev.NewMaster.Alias) {
+			resp.PromotedPrimary = ev.NewMaster.Alias
+		}
+	}
+
+	return resp, err
 }
 
 // FindAllShardsInKeyspace is part of the vtctlservicepb.VtctldServer interface.

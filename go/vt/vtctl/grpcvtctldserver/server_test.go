@@ -23,9 +23,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang/protobuf/ptypes"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	durationpb "github.com/golang/protobuf/ptypes/duration"
+
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	"vitess.io/vitess/go/vt/topo"
@@ -36,6 +40,7 @@ import (
 
 	mysqlctlpb "vitess.io/vitess/go/vt/proto/mysqlctl"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
@@ -1925,6 +1930,203 @@ func TestDeleteTablets(t *testing.T) {
 			assert.NoError(t, err)
 			assert.Equal(t, tt.expected, resp)
 			checkRemainingTablets()
+		})
+	}
+}
+
+func TestEmergencyReparentShard(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		ts      *topo.Server
+		tmc     tmclient.TabletManagerClient
+		tablets []*topodatapb.Tablet
+
+		req                 *vtctldatapb.EmergencyReparentShardRequest
+		expected            *vtctldatapb.EmergencyReparentShardResponse
+		expectEventsToOccur bool
+		shouldErr           bool
+	}{
+		{
+			name: "successful reparent",
+			ts:   memorytopo.NewServer("zone1"),
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type: topodatapb.TabletType_MASTER,
+					MasterTermStartTime: &vttime.Time{
+						Seconds: 100,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  200,
+					},
+					Type:     topodatapb.TabletType_REPLICA,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  101,
+					},
+					Type:     topodatapb.TabletType_RDONLY,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+			},
+			tmc: &testutil.TabletManagerClient{
+				DemoteMasterResults: map[string]struct {
+					Status *replicationdatapb.MasterStatus
+					Error  error
+				}{
+					"zone1-0000000100": {
+						Status: &replicationdatapb.MasterStatus{
+							Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+						},
+					},
+				},
+				PopulateReparentJournalResults: map[string]error{
+					"zone1-0000000200": nil,
+				},
+				PromoteReplicaResults: map[string]struct {
+					Result string
+					Error  error
+				}{
+					"zone1-0000000200": {},
+				},
+				SetMasterResults: map[string]error{
+					"zone1-0000000100": nil,
+					"zone1-0000000101": nil,
+				},
+				StopReplicationAndGetStatusResults: map[string]struct {
+					Status     *replicationdatapb.Status
+					StopStatus *replicationdatapb.StopReplicationStatus
+					Error      error
+				}{
+					"zone1-0000000100": {
+						Error: mysql.ErrNotReplica,
+					},
+					"zone1-0000000101": {
+						Error: assert.AnError,
+					},
+					"zone1-0000000200": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{},
+							After: &replicationdatapb.Status{
+								MasterUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
+								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+								Position:         "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
+							},
+						},
+					},
+				},
+				WaitForPositionResults: map[string]map[string]error{
+					"zone1-0000000100": {
+						"MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5": nil,
+					},
+					"zone1-0000000200": {
+						"MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5": nil,
+					},
+				},
+			},
+			req: &vtctldatapb.EmergencyReparentShardRequest{
+				Keyspace: "testkeyspace",
+				Shard:    "-",
+				NewPrimary: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  200,
+				},
+				WaitReplicasTimeout: ptypes.DurationProto(time.Millisecond * 10),
+			},
+			expected: &vtctldatapb.EmergencyReparentShardResponse{
+				Keyspace: "testkeyspace",
+				Shard:    "-",
+				PromotedPrimary: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  200,
+				},
+			},
+			expectEventsToOccur: true,
+			shouldErr:           false,
+		},
+		{
+			// Note: this is testing the error-handling done in
+			// (*VtctldServer).EmergencyReparentShard, not the logic of an ERS.
+			// That logic is tested in reparentutil, and not here. Therefore,
+			// the simplest way to trigger a failure is to attempt an ERS on a
+			// shard that does not exist.
+			name:    "failed reparent",
+			ts:      memorytopo.NewServer("zone1"),
+			tablets: nil,
+
+			req: &vtctldatapb.EmergencyReparentShardRequest{
+				Keyspace: "testkeyspace",
+				Shard:    "-",
+			},
+			expectEventsToOccur: false,
+			shouldErr:           true,
+		},
+		{
+			name: "invalid WaitReplicasTimeout",
+			req: &vtctldatapb.EmergencyReparentShardRequest{
+				WaitReplicasTimeout: &durationpb.Duration{
+					Seconds: -1,
+					Nanos:   1,
+				},
+			},
+			shouldErr: true,
+		},
+	}
+
+	ctx := context.Background()
+
+	for _, tt := range tests {
+		tt := tt
+
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			testutil.AddTablets(ctx, t, tt.ts, &testutil.AddTabletOptions{
+				AlsoSetShardMaster:  true,
+				ForceSetShardMaster: true,
+				SkipShardCreation:   false,
+			}, tt.tablets...)
+
+			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, tt.ts, tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+				return NewVtctldServer(ts)
+			})
+			resp, err := vtctld.EmergencyReparentShard(ctx, tt.req)
+
+			// We defer this because we want to check in both error and non-
+			// error cases, but after the main set of assertions for those
+			// cases.
+			defer func() {
+				if !tt.expectEventsToOccur {
+					testutil.AssertNoLogutilEventsOccurred(t, resp, "expected no events to occur during ERS")
+
+					return
+				}
+
+				testutil.AssertLogutilEventsOccurred(t, resp, "expected events to occur during ERS")
+			}()
+
+			if tt.shouldErr {
+				assert.Error(t, err)
+
+				return
+			}
+
+			assert.NoError(t, err)
+			testutil.AssertEmergencyReparentShardResponsesEqual(t, *tt.expected, *resp)
 		})
 	}
 }
