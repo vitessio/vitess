@@ -335,6 +335,8 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		return err
 	}
 
+	ev.NewMaster = *tabletMap[winningPrimaryTabletAliasStr].Tablet
+
 	return nil
 }
 
