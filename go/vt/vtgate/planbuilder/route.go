@@ -237,6 +237,16 @@ func (rb *route) prepareTheAST() {
 					},
 				}
 			}
+		case *sqlparser.ComparisonExpr:
+			// 42 = colName -> colName = 42
+			b := node.Operator == sqlparser.EqualOp
+			value := sqlparser.IsValue(node.Left)
+			name := sqlparser.IsColName(node.Right)
+			if b &&
+				value &&
+				name {
+				node.Left, node.Right = node.Right, node.Left
+			}
 		}
 		return true, nil
 	}, rb.Select)
@@ -430,15 +440,23 @@ func (rb *route) JoinCanMerge(pb *primitiveBuilder, rrb *route, ajoin *sqlparser
 		if where == nil {
 			return true
 		}
-		hasRuntimeRoutingPredicates := false
+		tableWithRoutingPredicates := make(map[sqlparser.TableName]struct{})
 		_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 			col, ok := node.(*sqlparser.ColName)
 			if ok {
-				hasRuntimeRoutingPredicates = hasRuntimeRoutingPredicates || isTableNameCol(col) || isDbNameCol(col)
+				hasRuntimeRoutingPredicates := isTableNameCol(col) || isDbNameCol(col)
+				if hasRuntimeRoutingPredicates && pb.st.tables[col.Qualifier] != nil {
+					tableWithRoutingPredicates[col.Qualifier] = struct{}{}
+				}
 			}
-			return !hasRuntimeRoutingPredicates, nil
+			return true, nil
 		}, where)
-		return !hasRuntimeRoutingPredicates
+		// Routes can be merged if only 1 table is used in the predicates that are used for routing
+		// TODO :- Even if more table are present in the routing, we can merge if they agree
+		if len(tableWithRoutingPredicates) <= 1 {
+			return true
+		}
+		return len(tableWithRoutingPredicates) == 0
 	}
 	if ajoin == nil {
 		return false

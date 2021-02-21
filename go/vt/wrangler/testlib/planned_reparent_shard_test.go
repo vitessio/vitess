@@ -290,7 +290,7 @@ func TestPlannedReparentNoMaster(t *testing.T) {
 
 	err := vp.Run([]string{"PlannedReparentShard", "-wait_replicas_timeout", "10s", "-keyspace_shard", replica1.Tablet.Keyspace + "/" + replica1.Tablet.Shard, "-new_master", topoproto.TabletAliasString(replica1.Tablet.Alias)})
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "the shard has no master")
+	assert.Contains(t, err.Error(), "the shard has no current primary")
 }
 
 // TestPlannedReparentShardWaitForPositionFail simulates a failure of the WaitForPosition call
@@ -386,7 +386,7 @@ func TestPlannedReparentShardWaitForPositionFail(t *testing.T) {
 	// run PlannedReparentShard
 	err := vp.Run([]string{"PlannedReparentShard", "-wait_replicas_timeout", "10s", "-keyspace_shard", newMaster.Tablet.Keyspace + "/" + newMaster.Tablet.Shard, "-new_master", topoproto.TabletAliasString(newMaster.Tablet.Alias)})
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "replication on master-elect cell1-0000000001 did not catch up in time")
+	assert.Contains(t, err.Error(), "replication on primary-elect cell1-0000000001 did not catch up in time")
 
 	// now check that DemoteMaster was undone and old master is still master
 	assert.True(t, newMaster.FakeMysqlDaemon.ReadOnly, "newMaster.FakeMysqlDaemon.ReadOnly not set")
@@ -486,7 +486,7 @@ func TestPlannedReparentShardWaitForPositionTimeout(t *testing.T) {
 	// run PlannedReparentShard
 	err := vp.Run([]string{"PlannedReparentShard", "-wait_replicas_timeout", "10s", "-keyspace_shard", newMaster.Tablet.Keyspace + "/" + newMaster.Tablet.Shard, "-new_master", topoproto.TabletAliasString(newMaster.Tablet.Alias)})
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "replication on master-elect cell1-0000000001 did not catch up in time")
+	assert.Contains(t, err.Error(), "replication on primary-elect cell1-0000000001 did not catch up in time")
 
 	// now check that DemoteMaster was undone and old master is still master
 	assert.True(t, newMaster.FakeMysqlDaemon.ReadOnly, "newMaster.FakeMysqlDaemon.ReadOnly not set")

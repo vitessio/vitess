@@ -1151,6 +1151,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4 plan same as above
 
 # sharded join, non-vindex col
 "select user.col from user join user_extra on user.id = user_extra.col"
@@ -1194,8 +1195,8 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-2",
-    "TableName": "user_user_extra",
+    "JoinColumnIndexes": "1",
+    "TableName": "user_extra_user",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -1204,20 +1205,24 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select user.id, user.col from user where 1 != 1",
-        "Query": "select user.id, user.col from user",
-        "Table": "user"
+        "FieldQuery": "select user_extra.col from user_extra where 1 != 1",
+        "Query": "select user_extra.col from user_extra",
+        "Table": "user_extra"
       },
       {
         "OperatorType": "Route",
-        "Variant": "SelectScatter",
+        "Variant": "SelectEqualUnique",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select 1 from user_extra where 1 != 1",
-        "Query": "select 1 from user_extra where user_extra.col = :user_id",
-        "Table": "user_extra"
+        "FieldQuery": "select user.col from user where 1 != 1",
+        "Query": "select user.col from user where user.id = :user_extra_col",
+        "Table": "user",
+        "Values": [
+          ":user_extra_col"
+        ],
+        "Vindex": "user_index"
       }
     ]
   }
@@ -2395,8 +2400,8 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-2",
-    "TableName": "user_user_extra",
+    "JoinColumnIndexes": "1",
+    "TableName": "user_extra_user",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -2405,20 +2410,24 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select user.id, user.id from user where 1 != 1",
-        "Query": "select user.id, user.id from user",
-        "Table": "user"
+        "FieldQuery": "select user_extra.id from user_extra where 1 != 1",
+        "Query": "select user_extra.id from user_extra",
+        "Table": "user_extra"
       },
       {
         "OperatorType": "Route",
-        "Variant": "SelectScatter",
+        "Variant": "SelectEqualUnique",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select 1 from user_extra where 1 != 1",
-        "Query": "select 1 from user_extra where user_extra.id = :user_id",
-        "Table": "user_extra"
+        "FieldQuery": "select user.id from user where 1 != 1",
+        "Query": "select user.id from user where user.id = :user_extra_id",
+        "Table": "user",
+        "Values": [
+          ":user_extra_id"
+        ],
+        "Vindex": "user_index"
       }
     ]
   }
@@ -2755,5 +2764,24 @@ Gen4 plan same as above
     "FieldQuery": "select cc.constraint_name as `name` from information_schema.check_constraints as cc where 1 != 1",
     "Query": "select cc.constraint_name as `name` from information_schema.check_constraints as cc where cc.constraint_schema = :__vtschemaname and cc.table_schema = :__vtschemaname",
     "SysTableTableSchema": "VARBINARY(\"a\")"
+  }
+}
+
+# system schema in where clause of information_schema query
+"SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE table_schema = 'performance_schema' AND table_name = 'foo'"
+{
+  "QueryType": "SELECT",
+  "Original": "SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE table_schema = 'performance_schema' AND table_name = 'foo'",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectDBA",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select COUNT(*) from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
+    "Query": "select COUNT(*) from INFORMATION_SCHEMA.`TABLES` where table_schema = :__vtschemaname and table_name = :__vttablename",
+    "SysTableTableName": "VARBINARY(\"foo\")",
+    "SysTableTableSchema": "VARBINARY(\"performance_schema\")"
   }
 }
