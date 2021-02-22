@@ -87,7 +87,7 @@ func TestBasicVreplicationWorkflow(t *testing.T) {
 	defaultCellName := "zone1"
 	allCells := []string{"zone1"}
 	allCellNames = "zone1"
-	vc = InitCluster(t, allCells)
+	vc = NewVitessCluster(t, "TestBasicVreplicationWorkflow", allCells, mainClusterConfig)
 
 	require.NotNil(t, vc)
 	defaultReplicas = 0 // because of CI resource constraints we can only run this test with master tablets
@@ -101,9 +101,9 @@ func TestBasicVreplicationWorkflow(t *testing.T) {
 	require.NotNil(t, vtgate)
 	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.master", "product", "0"), 1)
 
-	vtgateConn = getConnection(t, globalConfig.vtgateMySQLPort)
+	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	defer vtgateConn.Close()
-	verifyClusterHealth(t)
+	verifyClusterHealth(t, vc)
 	insertInitialData(t)
 	materializeRollup(t)
 
@@ -135,7 +135,7 @@ func TestMultiCellVreplicationWorkflow(t *testing.T) {
 	cells := []string{"zone1", "zone2"}
 	allCellNames = "zone1,zone2"
 
-	vc = InitCluster(t, cells)
+	vc = NewVitessCluster(t, "TestBasicVreplicationWorkflow", cells, mainClusterConfig)
 	require.NotNil(t, vc)
 	defaultCellName := "zone1"
 	defaultCell = vc.Cells[defaultCellName]
@@ -151,9 +151,9 @@ func TestMultiCellVreplicationWorkflow(t *testing.T) {
 	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.master", "product", "0"), 1)
 	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", "product", "0"), 2)
 
-	vtgateConn = getConnection(t, globalConfig.vtgateMySQLPort)
+	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	defer vtgateConn.Close()
-	verifyClusterHealth(t)
+	verifyClusterHealth(t, vc)
 	insertInitialData(t)
 	shardCustomer(t, true, []*Cell{cell1, cell2}, cell2.Name)
 }
@@ -161,7 +161,7 @@ func TestMultiCellVreplicationWorkflow(t *testing.T) {
 func TestCellAliasVreplicationWorkflow(t *testing.T) {
 	cells := []string{"zone1", "zone2"}
 
-	vc = InitCluster(t, cells)
+	vc = NewVitessCluster(t, "TestBasicVreplicationWorkflow", cells, mainClusterConfig)
 	require.NotNil(t, vc)
 	allCellNames = "zone1,zone2"
 	defaultCellName := "zone1"
@@ -182,9 +182,9 @@ func TestCellAliasVreplicationWorkflow(t *testing.T) {
 	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.master", "product", "0"), 1)
 	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", "product", "0"), 2)
 
-	vtgateConn = getConnection(t, globalConfig.vtgateMySQLPort)
+	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	defer vtgateConn.Close()
-	verifyClusterHealth(t)
+	verifyClusterHealth(t, vc)
 	insertInitialData(t)
 	shardCustomer(t, true, []*Cell{cell1, cell2}, "alias")
 }
@@ -776,8 +776,8 @@ func checkTabletHealth(t *testing.T, tablet *Tablet) {
 	}
 }
 
-func iterateTablets(t *testing.T, f func(t *testing.T, tablet *Tablet)) {
-	for _, cell := range vc.Cells {
+func iterateTablets(t *testing.T, cluster *VitessCluster, f func(t *testing.T, tablet *Tablet)) {
+	for _, cell := range cluster.Cells {
 		for _, ks := range cell.Keyspaces {
 			for _, shard := range ks.Shards {
 				for _, tablet := range shard.Tablets {
@@ -788,15 +788,15 @@ func iterateTablets(t *testing.T, f func(t *testing.T, tablet *Tablet)) {
 	}
 }
 
-func iterateCells(t *testing.T, f func(t *testing.T, cell *Cell)) {
-	for _, cell := range vc.Cells {
+func iterateCells(t *testing.T, cluster *VitessCluster, f func(t *testing.T, cell *Cell)) {
+	for _, cell := range cluster.Cells {
 		f(t, cell)
 	}
 }
 
-func verifyClusterHealth(t *testing.T) {
-	iterateCells(t, checkVtgateHealth)
-	iterateTablets(t, checkTabletHealth)
+func verifyClusterHealth(t *testing.T, cluster *VitessCluster) {
+	iterateCells(t, cluster, checkVtgateHealth)
+	iterateTablets(t, cluster, checkTabletHealth)
 }
 
 func catchup(t *testing.T, vttablet *cluster.VttabletProcess, workflow, info string) {

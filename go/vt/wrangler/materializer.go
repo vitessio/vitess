@@ -190,14 +190,14 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 	if err := wr.ts.RebuildSrvVSchema(ctx, nil); err != nil {
 		return err
 	}
-
 	ms := &vtctldatapb.MaterializeSettings{
-		Workflow:       workflow,
-		SourceKeyspace: sourceKeyspace,
-		TargetKeyspace: targetKeyspace,
-		Cell:           cell,
-		TabletTypes:    tabletTypes,
-		StopAfterCopy:  stopAfterCopy,
+		Workflow:        workflow,
+		SourceKeyspace:  sourceKeyspace,
+		TargetKeyspace:  targetKeyspace,
+		Cell:            cell,
+		TabletTypes:     tabletTypes,
+		StopAfterCopy:   stopAfterCopy,
+		ExternalCluster: externalCluster,
 	}
 	for _, table := range tables {
 		buf := sqlparser.NewTrackedBuffer(nil)
@@ -222,17 +222,19 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 		return err
 	}
 
-	exists, tablets, err := wr.checkIfPreviousJournalExists(ctx, mz, migrationID)
-	if err != nil {
-		return err
-	}
-	if exists {
-		wr.Logger().Errorf("Found a previous journal entry for %d", migrationID)
-		msg := fmt.Sprintf("found an entry from a previous run for migration id %d in _vt.resharding_journal of tablets %s,",
-			migrationID, strings.Join(tablets, ","))
-		msg += fmt.Sprintf("please review and delete it before proceeding and restart the workflow using the Workflow %s.%s start",
-			workflow, targetKeyspace)
-		return fmt.Errorf(msg)
+	if externalCluster == "" {
+		exists, tablets, err := wr.checkIfPreviousJournalExists(ctx, mz, migrationID)
+		if err != nil {
+			return err
+		}
+		if exists {
+			wr.Logger().Errorf("Found a previous journal entry for %d", migrationID)
+			msg := fmt.Sprintf("found an entry from a previous run for migration id %d in _vt.resharding_journal of tablets %s,",
+				migrationID, strings.Join(tablets, ","))
+			msg += fmt.Sprintf("please review and delete it before proceeding and restart the workflow using the Workflow %s.%s start",
+				workflow, targetKeyspace)
+			return fmt.Errorf(msg)
+		}
 	}
 	if autoStart {
 		return mz.startStreams(ctx)
