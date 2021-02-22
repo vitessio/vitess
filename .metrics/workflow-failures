@@ -2713,3 +2713,6 @@
 2021-02-22T11:39:04Z,endtoend,https://github.com/vitessio/vitess/actions/runs/589007159
 2021-02-22T11:39:04Z,unit_race,https://github.com/vitessio/vitess/actions/runs/589007125
 2021-02-22T13:46:38Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/589345455
+2021-02-22T15:09:53Z,Unit Test (mariadb101),https://github.com/vitessio/vitess/actions/runs/589559803
+2021-02-22T15:09:54Z,endtoend,https://github.com/vitessio/vitess/actions/runs/589559842
+2021-02-22T15:09:54Z,unit_race,https://github.com/vitessio/vitess/actions/runs/589559852
