@@ -19,6 +19,8 @@ package planbuilder
 import (
 	"testing"
 
+	"vitess.io/vitess/go/vt/sqlparser"
+
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -47,12 +49,22 @@ func TestCreateDB(t *testing.T) {
 	}()
 
 	// setting custom behaviour for CREATE DATABASE
-	databaseCreator = func(name string) error {
-		return nil
-	}
+	databaseCreator = &fakePlugin{}
 
 	plan, err = TestBuilder("create database test", vschema)
 	require.NoError(t, err)
 	_, err = plan.Instructions.Execute(nil, nil, true)
 	require.NoError(t, err)
+}
+
+type fakePlugin struct{}
+
+// CreateDatabase is a fake
+func (*fakePlugin) CreateDatabase(ast *sqlparser.CreateDatabase) error {
+	return nil
+}
+
+// DropDatabase is a fake
+func (*fakePlugin) DropDatabase(ast *sqlparser.DropDatabase) error {
+	return nil
 }
