@@ -327,8 +327,12 @@ func (s *VtctldServer) EmergencyReparentShard(ctx context.Context, req *vtctldat
 		waitReplicasTimeout = time.Second * 30
 	}
 
+	m := sync.Mutex{}
 	logstream := []*logutilpb.Event{}
 	logger := logutil.NewCallbackLogger(func(e *logutilpb.Event) {
+		m.Lock()
+		defer m.Unlock()
+
 		logstream = append(logstream, e)
 	})
 
@@ -690,10 +694,14 @@ func (s *VtctldServer) InitShardPrimary(ctx context.Context, req *vtctldatapb.In
 	}
 	defer unlock(&err)
 
+	m := sync.Mutex{}
 	ev := &events.Reparent{}
 
 	resp := &vtctldatapb.InitShardPrimaryResponse{}
 	err = s.InitShardPrimaryLocked(ctx, ev, req, waitReplicasTimeout, tmclient.NewTabletManagerClient(), logutil.NewCallbackLogger(func(e *logutilpb.Event) {
+		m.Lock()
+		defer m.Unlock()
+
 		resp.Events = append(resp.Events, e)
 	}))
 	if err != nil {
@@ -917,8 +925,12 @@ func (s *VtctldServer) PlannedReparentShard(ctx context.Context, req *vtctldatap
 		waitReplicasTimeout = time.Second * 30
 	}
 
+	m := sync.Mutex{}
 	logstream := []*logutilpb.Event{}
 	logger := logutil.NewCallbackLogger(func(e *logutilpb.Event) {
+		m.Lock()
+		defer m.Unlock()
+
 		logstream = append(logstream, e)
 	})
 
