@@ -387,7 +387,7 @@ func testRestOfWorkflow(t *testing.T) {
 func setupCluster(t *testing.T) *VitessCluster {
 	cells := []string{"zone1", "zone2"}
 
-	vc = InitCluster(t, cells)
+	vc = NewVitessCluster(t, "TestBasicVreplicationWorkflow", cells, mainClusterConfig)
 	require.NotNil(t, vc)
 	defaultCellName := "zone1"
 	allCellNames = defaultCellName
@@ -403,8 +403,8 @@ func setupCluster(t *testing.T) *VitessCluster {
 	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.master", "product", "0"), 1)
 	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", "product", "0"), 2)
 
-	vtgateConn = getConnection(t, globalConfig.vtgateMySQLPort)
-	verifyClusterHealth(t)
+	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+	verifyClusterHealth(t, vc)
 	insertInitialData(t)
 
 	sourceReplicaTab = vc.Cells[defaultCell.Name].Keyspaces["product"].Shards["0"].Tablets["zone1-101"].Vttablet

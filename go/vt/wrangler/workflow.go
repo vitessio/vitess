@@ -171,7 +171,7 @@ func (vrw *VReplicationWorkflow) Create() error {
 		return fmt.Errorf("workflow has already been created, state is %s", vrw.CachedState())
 	}
 	switch vrw.workflowType {
-	case MoveTablesWorkflow:
+	case MoveTablesWorkflow, MigrateWorkflow:
 		err = vrw.initMoveTables()
 	case ReshardWorkflow:
 		err = vrw.initReshard()
