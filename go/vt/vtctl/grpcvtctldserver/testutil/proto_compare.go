@@ -26,14 +26,26 @@ import (
 )
 
 // AssertEmergencyReparentShardResponsesEqual asserts that two
-// vtctldatapb.EmergencyReparentShardResponse objects are equal,
-// ignoring their respective Events field in the comparison.
+// vtctldatapb.EmergencyReparentShardResponse objects are equal, ignoring their
+// respective Events field in the comparison.
 func AssertEmergencyReparentShardResponsesEqual(t *testing.T, expected vtctldatapb.EmergencyReparentShardResponse, actual vtctldatapb.EmergencyReparentShardResponse, msgAndArgs ...interface{}) {
 	t.Helper()
 
 	// We take both the expected and actual values by value, rather than by
 	// reference, so this mutation is safe to do and will not interfere with
 	// other assertions performed in the calling function.
+	expected.Events = nil
+	actual.Events = nil
+
+	assert.Equal(t, expected, actual, msgAndArgs...)
+}
+
+// AssertPlannedReparentShardResponsesEqual asserts that two
+// vtctldatapb.PlannedReparentShardResponse objects are equal, ignoring their
+// respective Events field in the comparison.
+func AssertPlannedReparentShardResponsesEqual(t *testing.T, expected vtctldatapb.PlannedReparentShardResponse, actual vtctldatapb.PlannedReparentShardResponse, msgAndArgs ...interface{}) {
+	t.Helper()
+
 	expected.Events = nil
 	actual.Events = nil
 

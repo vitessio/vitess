@@ -3242,6 +3242,192 @@ func TestGetVSchema(t *testing.T) {
 	})
 }
 
+func TestPlannedReparentShard(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		ts      *topo.Server
+		tmc     tmclient.TabletManagerClient
+		tablets []*topodatapb.Tablet
+
+		req                 *vtctldatapb.PlannedReparentShardRequest
+		expected            *vtctldatapb.PlannedReparentShardResponse
+		expectEventsToOccur bool
+		shouldErr           bool
+	}{
+		{
+			name: "successful reparent",
+			ts:   memorytopo.NewServer("zone1"),
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type: topodatapb.TabletType_MASTER,
+					MasterTermStartTime: &vttime.Time{
+						Seconds: 100,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  200,
+					},
+					Type:     topodatapb.TabletType_REPLICA,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  101,
+					},
+					Type:     topodatapb.TabletType_RDONLY,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+			},
+			tmc: &testutil.TabletManagerClient{
+				DemoteMasterResults: map[string]struct {
+					Status *replicationdatapb.MasterStatus
+					Error  error
+				}{
+					"zone1-0000000100": {
+						Status: &replicationdatapb.MasterStatus{
+							Position: "primary-demotion position",
+						},
+						Error: nil,
+					},
+				},
+				MasterPositionResults: map[string]struct {
+					Position string
+					Error    error
+				}{
+					"zone1-0000000100": {
+						Position: "doesn't matter",
+						Error:    nil,
+					},
+				},
+				PopulateReparentJournalResults: map[string]error{
+					"zone1-0000000200": nil,
+				},
+				PromoteReplicaResults: map[string]struct {
+					Result string
+					Error  error
+				}{
+					"zone1-0000000200": {
+						Result: "promotion position",
+						Error:  nil,
+					},
+				},
+				SetMasterResults: map[string]error{
+					"zone1-0000000200": nil, // waiting for master-position during promotion
+					// reparent SetMaster calls
+					"zone1-0000000100": nil,
+					"zone1-0000000101": nil,
+				},
+				WaitForPositionResults: map[string]map[string]error{
+					"zone1-0000000200": {
+						"primary-demotion position": nil,
+					},
+				},
+			},
+			req: &vtctldatapb.PlannedReparentShardRequest{
+				Keyspace: "testkeyspace",
+				Shard:    "-",
+				NewPrimary: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  200,
+				},
+				WaitReplicasTimeout: ptypes.DurationProto(time.Millisecond * 10),
+			},
+			expected: &vtctldatapb.PlannedReparentShardResponse{
+				Keyspace: "testkeyspace",
+				Shard:    "-",
+				PromotedPrimary: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  200,
+				},
+			},
+			expectEventsToOccur: true,
+			shouldErr:           false,
+		},
+		{
+			// Note: this is testing the error-handling done in
+			// (*VtctldServer).PlannedReparentShard, not the logic of an PRS.
+			// That logic is tested in reparentutil, and not here. Therefore,
+			// the simplest way to trigger a failure is to attempt an PRS on a
+			// shard that does not exist.
+			name:    "failed reparent",
+			ts:      memorytopo.NewServer("zone1"),
+			tablets: nil,
+			req: &vtctldatapb.PlannedReparentShardRequest{
+				Keyspace: "testkeyspace",
+				Shard:    "-",
+			},
+			expectEventsToOccur: false,
+			shouldErr:           true,
+		},
+		{
+			name: "invalid WaitReplicasTimeout",
+			req: &vtctldatapb.PlannedReparentShardRequest{
+				WaitReplicasTimeout: &durationpb.Duration{
+					Seconds: -1,
+					Nanos:   1,
+				},
+			},
+			shouldErr: true,
+		},
+	}
+
+	ctx := context.Background()
+
+	for _, tt := range tests {
+		tt := tt
+
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			testutil.AddTablets(ctx, t, tt.ts, &testutil.AddTabletOptions{
+				AlsoSetShardMaster:  true,
+				ForceSetShardMaster: true,
+				SkipShardCreation:   false,
+			}, tt.tablets...)
+
+			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, tt.ts, tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+				return NewVtctldServer(ts)
+			})
+			resp, err := vtctld.PlannedReparentShard(ctx, tt.req)
+
+			// We defer this because we want to check in both error and non-
+			// error cases, but after the main set of assertions for those
+			// cases.
+			defer func() {
+				if !tt.expectEventsToOccur {
+					testutil.AssertNoLogutilEventsOccurred(t, resp, "expected no events to occur during ERS")
+
+					return
+				}
+
+				testutil.AssertLogutilEventsOccurred(t, resp, "expected events to occur during ERS")
+			}()
+
+			if tt.shouldErr {
+				assert.Error(t, err)
+
+				return
+			}
+
+			assert.NoError(t, err)
+			testutil.AssertPlannedReparentShardResponsesEqual(t, *tt.expected, *resp)
+		})
+	}
+}
+
 func TestRemoveKeyspaceCell(t *testing.T) {
 	t.Parallel()
 
