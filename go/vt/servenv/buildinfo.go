@@ -23,6 +23,8 @@ import (
 	"strconv"
 	"time"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	"vitess.io/vitess/go/stats"
@@ -106,9 +108,12 @@ func init() {
 		goArch:             runtime.GOARCH,
 		version:            versionName,
 	}
-	sqlparser.MySQLVersion, err = sqlparser.ConvertMySQLVersionToCommentVersion(AppVersion.MySQLVersion())
+	var convVersion string
+	convVersion, err = sqlparser.ConvertMySQLVersionToCommentVersion(AppVersion.MySQLVersion())
 	if err != nil {
-		panic(fmt.Sprintf("%s", err))
+		log.Error(err)
+	} else {
+		sqlparser.MySQLVersion = convVersion
 	}
 	stats.NewString("BuildHost").Set(AppVersion.buildHost)
 	stats.NewString("BuildUser").Set(AppVersion.buildUser)
