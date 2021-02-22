@@ -706,6 +706,46 @@ func (wr *Wrangler) dropArtifacts(ctx context.Context, sw iswitcher) error {
 	return nil
 }
 
+// finalizeMigrateWorkflow deletes the streams for the Migrate workflow.
+// We only cleanup the target for external sources
+// FIXME: implement dryRun
+func (wr *Wrangler) finalizeMigrateWorkflow(ctx context.Context, targetKeyspace, workflow, tableSpecs string,
+	cancel, keepData, dryRun bool) (*[]string, error) {
+	ts, err := wr.buildTrafficSwitcher(ctx, targetKeyspace, workflow)
+	if err != nil {
+		wr.Logger().Errorf("buildTrafficSwitcher failed: %v", err)
+		return nil, err
+	}
+	var sw iswitcher
+	if dryRun {
+		sw = &switcherDryRun{ts: ts, drLog: NewLogRecorder()}
+	} else {
+		sw = &switcher{ts: ts, wr: wr}
+	}
+	var tctx context.Context
+	tctx, targetUnlock, lockErr := sw.lockKeyspace(ctx, ts.targetKeyspace, "completeMigrateWorkflow")
+	if lockErr != nil {
+		ts.wr.Logger().Errorf("Target LockKeyspace failed: %v", lockErr)
+		return nil, lockErr
+	}
+	defer targetUnlock(&err)
+	ctx = tctx
+	if err := sw.dropTargetVReplicationStreams(ctx); err != nil {
+		return nil, err
+	}
+	if cancel && !keepData {
+		if err := sw.removeTargetTables(ctx); err != nil {
+			return nil, err
+		}
+	} else {
+		sw.addParticipatingTablesToKeyspace(ctx, targetKeyspace, tableSpecs)
+		if err := ts.wr.ts.RebuildSrvVSchema(ctx, nil); err != nil {
+			return nil, err
+		}
+	}
+	return sw.logs(), nil
+}
+
 // DropSources cleans up source tables, shards and blacklisted tables after a MoveTables/Reshard is completed
 func (wr *Wrangler) DropSources(ctx context.Context, targetKeyspace, workflow string, removalType TableRemovalType, keepData, force, dryRun bool) (*[]string, error) {
 	ts, err := wr.buildTrafficSwitcher(ctx, targetKeyspace, workflow)

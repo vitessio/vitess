@@ -241,6 +241,9 @@ func (vrw *VReplicationWorkflow) SwitchTraffic(direction TrafficSwitchDirection)
 	if !vrw.Exists() {
 		return nil, fmt.Errorf("workflow has not yet been started")
 	}
+	if vrw.workflowType == MigrateWorkflow {
+		return nil, fmt.Errorf("invalid action for Migrate workflow: SwitchTraffic")
+	}
 
 	isCopyInProgress, err = vrw.IsCopyInProgress()
 	if err != nil {
@@ -279,6 +282,9 @@ func (vrw *VReplicationWorkflow) ReverseTraffic() (*[]string, error) {
 	if !vrw.Exists() {
 		return nil, fmt.Errorf("workflow has not yet been started")
 	}
+	if vrw.workflowType == MigrateWorkflow {
+		return nil, fmt.Errorf("invalid action for Migrate workflow: ReverseTraffic")
+	}
 	return vrw.SwitchTraffic(DirectionBackward)
 }
 
@@ -290,7 +296,14 @@ const (
 
 // Complete cleans up a successful workflow
 func (vrw *VReplicationWorkflow) Complete() (*[]string, error) {
+	var dryRunResults *[]string
+	var err error
 	ws := vrw.ws
+
+	if vrw.workflowType == MigrateWorkflow {
+		return vrw.wr.finalizeMigrateWorkflow(vrw.ctx, ws.TargetKeyspace, ws.Workflow, vrw.params.Tables, vrw.params.KeepData, false, vrw.params.DryRun)
+	}
+
 	if !ws.WritesSwitched || len(ws.ReplicaCellsNotSwitched) > 0 || len(ws.RdonlyCellsNotSwitched) > 0 {
 		return nil, fmt.Errorf(ErrWorkflowNotFullySwitched)
 	}
@@ -300,8 +313,6 @@ func (vrw *VReplicationWorkflow) Complete() (*[]string, error) {
 	} else {
 		renameTable = DropTable
 	}
-	var dryRunResults *[]string
-	var err error
 	if dryRunResults, err = vrw.wr.DropSources(vrw.ctx, vrw.ws.TargetKeyspace, vrw.ws.Workflow, renameTable, vrw.params.KeepData,
 		false, vrw.params.DryRun); err != nil {
 		return nil, err
@@ -312,6 +323,11 @@ func (vrw *VReplicationWorkflow) Complete() (*[]string, error) {
 // Cancel deletes all artifacts from a workflow which has not yet been switched
 func (vrw *VReplicationWorkflow) Cancel() error {
 	ws := vrw.ws
+	if vrw.workflowType == MigrateWorkflow {
+		_, err := vrw.wr.finalizeMigrateWorkflow(vrw.ctx, ws.TargetKeyspace, ws.Workflow, "", vrw.params.KeepData, true, vrw.params.DryRun)
+		return err
+	}
+
 	if ws.WritesSwitched || len(ws.ReplicaCellsSwitched) > 0 || len(ws.RdonlyCellsSwitched) > 0 {
 		return fmt.Errorf(ErrWorkflowPartiallySwitched)
 	}
