@@ -201,7 +201,7 @@ func (v *VRepl) getSharedColumns(sourceColumns, targetColumns *vrepl.ColumnList,
 	return vrepl.NewColumnList(sharedColumnNames), vrepl.NewColumnList(mappedSharedColumnNames), sharedColumnsMap
 }
 
-// getSharedPKColumns returns the intersection of PRIMARY KEY columns (taking renaming into consideration) etween source and target tables
+// getSharedPKColumns returns the intersection of PRIMARY KEY columns (taking renaming into consideration) between source and target tables
 func (v *VRepl) getSharedPKColumns(sourcePKColumns, targetPKColumns *vrepl.ColumnList, columnRenameMap map[string]string) (
 	sharedPKColumns *vrepl.ColumnList,
 ) {

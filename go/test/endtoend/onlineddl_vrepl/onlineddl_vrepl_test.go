@@ -204,7 +204,7 @@ func TestSchemaChange(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	assert.Equal(t, 2, len(clusterInstance.Keyspaces[0].Shards))
 	testWithInitialSchema(t)
-	t.Run("create non_online", func(t *testing.T) {
+	t.Run("alter non_online", func(t *testing.T) {
 		_ = testOnlineDDLStatement(t, alterTableNormalStatement, string(schema.DDLStrategyDirect), "vtctl", "non_online")
 		insertRows(t, 2)
 		testRows(t)

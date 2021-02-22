@@ -65,11 +65,11 @@ import (
 
 var (
 	// ErrExecutorNotWritableTablet  is generated when executor is asked to run gh-ost on a read-only server
-	ErrExecutorNotWritableTablet = errors.New("Cannot run migration on non-writable tablet")
+	ErrExecutorNotWritableTablet = errors.New("cannot run migration on non-writable tablet")
 	// ErrExecutorMigrationAlreadyRunning is generated when an attempt is made to run an operation that conflicts with a running migration
-	ErrExecutorMigrationAlreadyRunning = errors.New("Cannot run migration since a migration is already running")
+	ErrExecutorMigrationAlreadyRunning = errors.New("cannot run migration since a migration is already running")
 	// ErrMigrationNotFound is returned by readMigration when given UUI cannot be found
-	ErrMigrationNotFound = errors.New("Migration not found")
+	ErrMigrationNotFound = errors.New("migration not found")
 )
 
 var vexecUpdateTemplates = []string{
@@ -560,9 +560,23 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 		}
 	}
 
+	go func() {
+		// Tables are swapped! Let's take the opportunity to ReloadSchema now
+		// We do this in a goroutine because it might take time on a schema with thousands of tables, and we don't want to delay
+		// the cut-over.
+		// this means ReloadSchema is not in sync with the actual schema change. Users will still need to run tracker if they want to sync.
+		// In the future, we will want to reload the single table, instead of reloading the schema.
+		if err := tmClient.ReloadSchema(ctx, tablet.Tablet, ""); err != nil {
+			vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "Error on ReloadSchema while cutting over vreplication migration UUID: %+v", onlineDDL.UUID)
+		}
+	}()
+
 	// Tables are now swapped! Migration is successful
 	_ = e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusComplete, false, progressPctFull)
 	return nil
+
+	// deferred function will re-enable writes now
+	// deferred function will unlock keyspace
 }
 
 func (e *Executor) initVreplicationOriginalMigration(ctx context.Context, onlineDDL *schema.OnlineDDL, conn *dbconnpool.DBConnection) (v *VRepl, err error) {
@@ -1691,7 +1705,7 @@ func (e *Executor) isVReplMigrationReadyToCutOver(ctx context.Context, s *VReplS
 	{
 		// when ready to cut-over, pos must have some value
 		if s.pos == "" {
-			return false, err
+			return false, nil
 		}
 	}
 	{
@@ -1705,13 +1719,16 @@ func (e *Executor) isVReplMigrationReadyToCutOver(ctx context.Context, s *VReplS
 			}
 			return diff
 		}
+		timeNow := time.Now()
 		timeUpdated := time.Unix(s.timeUpdated, 0)
-		if durationDiff(time.Now(), timeUpdated) > cutOverThreshold {
-			return false, err
+		if durationDiff(timeNow, timeUpdated) > cutOverThreshold {
+			return false, nil
 		}
+		// Let's look at transaction timestamp. This gets written by any ongoing
+		// writes on the server (whether on this table or any other table)
 		transactionTimestamp := time.Unix(s.transactionTimestamp, 0)
-		if durationDiff(transactionTimestamp, timeUpdated) > cutOverThreshold {
-			return false, err
+		if durationDiff(timeNow, transactionTimestamp) > cutOverThreshold {
+			return false, nil
 		}
 	}
 	{
@@ -1734,7 +1751,7 @@ func (e *Executor) isVReplMigrationReadyToCutOver(ctx context.Context, s *VReplS
 		count := csRow.AsInt64("cnt", 0)
 		if count > 0 {
 			// Still copying
-			return false, err
+			return false, nil
 		}
 	}
 	return true, nil
@@ -1974,6 +1991,7 @@ func (e *Executor) onMigrationCheckTick() {
 		log.Error(err)
 		return
 	}
+
 	if err := e.retryTabletFailureMigrations(ctx); err != nil {
 		log.Error(err)
 	}
