@@ -90,6 +90,16 @@ func (r ValueSliceContainer) String() string {
 	return fmt.Sprintf("ValueSliceContainer{%s, %s, %s}", sliceStringAST(r.ASTElements...), "r.NotASTType", sliceStringLeaf(r.ASTImplementationElements...))
 }
 
+type InterfaceSlice []AST
+
+func (r InterfaceSlice) String() string {
+	var elements []string
+	for _, el := range r {
+		elements = append(elements, el.String())
+	}
+	return strings.Join(elements, ", ")
+}
+
 // ast type helpers
 
 func sliceStringAST(els ...AST) string {
