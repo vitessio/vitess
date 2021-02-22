@@ -75,29 +75,15 @@ func casePanicStmtFor(field *types.Var, name string) *jen.Statement {
 }
 
 func caseStmtForSliceField(field *types.Var, name string) []jen.Code {
-	//replacerColumns := replaceAddColumnsColumns(0)
-	replacerName := "replacer" + field.Name()
-	s1 := jen.Id(replacerName).Op(":=").Id(name).Call(jen.Lit(0))
-
-	//replacerColumnsB := &replacerColumns
-	bName := replacerName + "B"
-	s2 := jen.Id(bName).Op(":=").Op("&").Id(replacerName)
-
-	//for _, item := range n.Columns {
-	//	a.apply(node, item, replacerColumnsB.replace)
-	//	replacerColumnsB.inc()
-	//}
-	s3 := jen.For(jen.List(jen.Op("_"), jen.Id("item"))).Op(":=").Range().Id("n").Dot(field.Name()).Block(
-		jen.Id("a").Dot("apply").Call(jen.Id("node"), jen.Id("item"), jen.Id(bName).Dot("replace")),
-		jen.Id(bName).Dot("inc").Call(),
-	)
-
 	return []jen.Code{
-		s1,
-		s2,
-		s3,
+		jen.For(jen.List(jen.Op("x"), jen.Id("el"))).Op(":=").Range().Id("n").Dot(field.Name()).Block(
+			jen.Id("a").Dot("apply").Call(
+				jen.Id("node"),
+				jen.Id("el"),
+				jen.Id(name).Call(jen.Id("x")),
+			),
+		),
 	}
-	//return jen.Id("a").Dot("apply").Call(jen.Id("node"), jen.Id("n").Dot(field.Name()), jen.Id(name))
 }
 
 func (r *rewriterGen) structCase(name string, stroct *types.Struct) (jen.Code, error) {
@@ -123,33 +109,26 @@ func (r *rewriterGen) createReplaceMethod(structName, structType string, field *
 
 func (r *rewriterGen) createReplaceCodeForSliceField(structName, structType string, field *types.Var) (string, []jen.Code) {
 	name := "replace" + structName + field.Name()
-
-	//adds: type replaceContainerFieldName int
-	counterType := jen.Type().Id(name).Int()
-
-	// adds:
-	//func (r *replaceContainerFieldName) replace(newNode, container SQLNode) {
-	//	container.(*Container).Elements[int(*r)] = newNode.(*FieldType)
-	//}
 	elemType := field.Type().(*types.Slice).Elem()
-	replaceMethod := jen.Func().Params(jen.Id("r").Op("*").Id(name)).Id("replace").Params(
-		jen.Id("newNode"),
-		jen.Id("parent").Id(r.ifaceName),
-	).Block(
-		jen.Id("parent").Assert(jen.Id(structType)).Dot(field.Name()).Index(jen.Int().Call(jen.Op("*").Id("r"))).
-			Op("=").Id("newNode").Assert(jen.Id(types.TypeString(elemType, noQualifier))),
+
+	/*
+		func replacerStructField(idx int) func(AST, AST) {
+			return func(newNode, container AST) {
+				container.(*Struct)[idx] = newNode.(AST)
+			}
+		}
+
+	*/
+
+	s := jen.Func().Id(name).Params(jen.Id("idx").Int()).Func().Params(jen.List(jen.Id("AST"), jen.Id("AST"))).Block(
+		jen.Return(jen.Func().Params(jen.List(jen.Id("newNode"), jen.Id("container")).Id("AST"))).Block(
+			jen.Id("container").Assert(jen.Id(structType)).Dot(field.Name()).Index(jen.Id("idx")).Op("=").
+				Id("newNode").Assert(jen.Id(types.TypeString(elemType, noQualifier))),
+		),
 	)
 
-	//func (r *replaceContainerFieldName) inc() {
-	//	*r++
-	//}
-	inc := jen.Func().Params(jen.Id("r").Op("*").Id(name)).Id("inc").Params().Block(
-		jen.Op("*").Id("r").Op("++"),
-	)
 	return name, []jen.Code{
-		counterType,
-		replaceMethod,
-		inc,
+		s,
 	}
 }
 
