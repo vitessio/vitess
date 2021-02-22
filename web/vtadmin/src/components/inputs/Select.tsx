@@ -121,7 +121,11 @@ export const Select = <T,>({
         if (typeof emptyContent === 'string' || !emptyContent) {
             emptyContent = <div className={style.emptyPlaceholder}>{emptyContent || 'No items'}</div>;
         }
-        content = <div className={style.emptyContainer}>{emptyContent}</div>;
+        content = (
+            <div className={style.emptyContainer} {...getMenuProps()}>
+                {emptyContent}
+            </div>
+        );
     }
 
     return (
