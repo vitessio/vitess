@@ -27,12 +27,15 @@ import (
 	"google.golang.org/grpc"
 
 	"vitess.io/vitess/go/vt/grpcclient"
+	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vitessdriver"
 	"vitess.io/vitess/go/vt/vtadmin/cluster"
 	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery/fakediscovery"
 	"vitess.io/vitess/go/vt/vtadmin/grpcserver"
 	"vitess.io/vitess/go/vt/vtadmin/http"
+	vtadmintestutil "vitess.io/vitess/go/vt/vtadmin/testutil"
 	vtadminvtctldclient "vitess.io/vitess/go/vt/vtadmin/vtctldclient"
 	"vitess.io/vitess/go/vt/vtadmin/vtsql"
 	"vitess.io/vitess/go/vt/vtadmin/vtsql/fakevtsql"
@@ -41,14 +44,63 @@ import (
 	"vitess.io/vitess/go/vt/vtctl/vtctldclient"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
+	vtctlservicepb "vitess.io/vitess/go/vt/proto/vtctlservice"
 	"vitess.io/vitess/go/vt/proto/vttime"
 )
 
-func init() {
-	*tmclient.TabletManagerProtocol = testutil.TabletManagerClientProtocol
+func TestGetClusters(t *testing.T) {
+	tests := []struct {
+		name     string
+		clusters []*cluster.Cluster
+		expected []*vtadminpb.Cluster
+	}{
+		{
+			name: "multiple clusters",
+			clusters: []*cluster.Cluster{
+				{
+					ID:        "c1",
+					Name:      "cluster1",
+					Discovery: fakediscovery.New(),
+				},
+				{
+					ID:        "c2",
+					Name:      "cluster2",
+					Discovery: fakediscovery.New(),
+				},
+			},
+			expected: []*vtadminpb.Cluster{
+				{
+					Id:   "c1",
+					Name: "cluster1",
+				},
+				{
+					Id:   "c2",
+					Name: "cluster2",
+				},
+			},
+		},
+		{
+			name:     "no clusters",
+			clusters: []*cluster.Cluster{},
+			expected: []*vtadminpb.Cluster{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			api := NewAPI(tt.clusters, grpcserver.Options{}, http.Options{})
+			ctx := context.Background()
+
+			resp, err := api.GetClusters(ctx, &vtadminpb.GetClustersRequest{})
+			assert.NoError(t, err)
+			assert.ElementsMatch(t, tt.expected, resp.Clusters)
+		})
+	}
 }
 
 func TestGetGates(t *testing.T) {
@@ -69,8 +121,31 @@ func TestGetGates(t *testing.T) {
 			Hostname: "cluster1-gate3",
 		},
 	}
-
 	fakedisco1.AddTaggedGates(nil, cluster1Gates...)
+
+	expectedCluster1Gates := []*vtadminpb.VTGate{
+		{
+			Cluster: &vtadminpb.Cluster{
+				Id:   cluster1.ID,
+				Name: cluster1.Name,
+			},
+			Hostname: "cluster1-gate1",
+		},
+		{
+			Cluster: &vtadminpb.Cluster{
+				Id:   cluster1.ID,
+				Name: cluster1.Name,
+			},
+			Hostname: "cluster1-gate2",
+		},
+		{
+			Cluster: &vtadminpb.Cluster{
+				Id:   cluster1.ID,
+				Name: cluster1.Name,
+			},
+			Hostname: "cluster1-gate3",
+		},
+	}
 
 	fakedisco2 := fakediscovery.New()
 	cluster2 := &cluster.Cluster{
@@ -83,19 +158,28 @@ func TestGetGates(t *testing.T) {
 			Hostname: "cluster2-gate1",
 		},
 	}
-
 	fakedisco2.AddTaggedGates(nil, cluster2Gates...)
+
+	expectedCluster2Gates := []*vtadminpb.VTGate{
+		{
+			Cluster: &vtadminpb.Cluster{
+				Id:   cluster2.ID,
+				Name: cluster2.Name,
+			},
+			Hostname: "cluster2-gate1",
+		},
+	}
 
 	api := NewAPI([]*cluster.Cluster{cluster1, cluster2}, grpcserver.Options{}, http.Options{})
 	ctx := context.Background()
 
 	resp, err := api.GetGates(ctx, &vtadminpb.GetGatesRequest{})
 	assert.NoError(t, err)
-	assert.ElementsMatch(t, append(cluster1Gates, cluster2Gates...), resp.Gates)
+	assert.ElementsMatch(t, append(expectedCluster1Gates, expectedCluster2Gates...), resp.Gates)
 
 	resp, err = api.GetGates(ctx, &vtadminpb.GetGatesRequest{ClusterIds: []string{cluster1.ID}})
 	assert.NoError(t, err)
-	assert.ElementsMatch(t, cluster1Gates, resp.Gates)
+	assert.ElementsMatch(t, expectedCluster1Gates, resp.Gates)
 
 	fakedisco1.SetGatesError(true)
 
@@ -105,42 +189,128 @@ func TestGetGates(t *testing.T) {
 }
 
 func TestGetKeyspaces(t *testing.T) {
-	ts1 := memorytopo.NewServer("c1_cell1")
-	ts2 := memorytopo.NewServer("c2_cell1")
-
-	testutil.AddKeyspace(context.Background(), t, ts1, &vtctldatapb.Keyspace{
-		Name:     "testkeyspace",
-		Keyspace: &topodatapb.Keyspace{},
-	})
-	testutil.AddKeyspace(context.Background(), t, ts1, &vtctldatapb.Keyspace{
-		Name: "snapshot",
-		Keyspace: &topodatapb.Keyspace{
-			KeyspaceType: topodatapb.KeyspaceType_SNAPSHOT,
-			BaseKeyspace: "testkeyspace",
-			SnapshotTime: &vttime.Time{Seconds: 10, Nanoseconds: 1},
-		},
-	})
-
-	testutil.AddKeyspace(context.Background(), t, ts2, &vtctldatapb.Keyspace{
-		Name:     "customer",
-		Keyspace: &topodatapb.Keyspace{},
-	})
-
-	testutil.WithTestServer(t, grpcvtctldserver.NewVtctldServer(ts1), func(t *testing.T, cluster1Client vtctldclient.VtctldClient) {
-		testutil.WithTestServer(t, grpcvtctldserver.NewVtctldServer(ts2), func(t *testing.T, cluster2Client vtctldclient.VtctldClient) {
-			c1 := buildCluster(1, cluster1Client, nil, nil)
-			c2 := buildCluster(2, cluster2Client, nil, nil)
-
-			api := NewAPI([]*cluster.Cluster{c1, c2}, grpcserver.Options{}, http.Options{})
-			resp, err := api.GetKeyspaces(context.Background(), &vtadminpb.GetKeyspacesRequest{})
-			require.NoError(t, err)
-
-			expected := &vtadminpb.GetKeyspacesResponse{
+	tests := []struct {
+		name             string
+		clusterKeyspaces [][]*vtctldatapb.Keyspace
+		clusterShards    [][]*vtctldatapb.Shard
+		req              *vtadminpb.GetKeyspacesRequest
+		expected         *vtadminpb.GetKeyspacesResponse
+	}{
+		{
+			name: "multiple clusters, multiple shards",
+			clusterKeyspaces: [][]*vtctldatapb.Keyspace{
+				//cluster0
+				{
+					{
+						Name:     "c0-ks0",
+						Keyspace: &topodatapb.Keyspace{},
+					},
+				},
+				//cluster1
+				{
+					{
+						Name:     "c1-ks0",
+						Keyspace: &topodatapb.Keyspace{},
+					},
+				},
+			},
+			clusterShards: [][]*vtctldatapb.Shard{
+				//cluster0
+				{
+					{
+						Keyspace: "c0-ks0",
+						Name:     "-80",
+					},
+					{
+						Keyspace: "c0-ks0",
+						Name:     "80-",
+					},
+				},
+				//cluster1
+				{
+					{
+						Keyspace: "c1-ks0",
+						Name:     "-",
+					},
+				},
+			},
+			req: &vtadminpb.GetKeyspacesRequest{},
+			expected: &vtadminpb.GetKeyspacesResponse{
 				Keyspaces: []*vtadminpb.Keyspace{
+					{
+						Cluster: &vtadminpb.Cluster{
+							Id:   "c0",
+							Name: "cluster0",
+						},
+						Keyspace: &vtctldatapb.Keyspace{
+							Name:     "c0-ks0",
+							Keyspace: &topodatapb.Keyspace{},
+						},
+						Shards: map[string]*vtctldatapb.Shard{
+							"-80": {
+								Keyspace: "c0-ks0",
+								Name:     "-80",
+								Shard: &topodatapb.Shard{
+									IsMasterServing: true,
+								},
+							},
+							"80-": {
+								Keyspace: "c0-ks0",
+								Name:     "80-",
+								Shard: &topodatapb.Shard{
+									IsMasterServing: true,
+								},
+							},
+						},
+					},
 					{
 						Cluster: &vtadminpb.Cluster{
 							Id:   "c1",
 							Name: "cluster1",
+						},
+						Keyspace: &vtctldatapb.Keyspace{
+							Name:     "c1-ks0",
+							Keyspace: &topodatapb.Keyspace{},
+						},
+						Shards: map[string]*vtctldatapb.Shard{
+							"-": {
+								Keyspace: "c1-ks0",
+								Name:     "-",
+								Shard: &topodatapb.Shard{
+									IsMasterServing: true,
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "with snapshot",
+			clusterKeyspaces: [][]*vtctldatapb.Keyspace{
+				// cluster0
+				{
+					{
+						Name:     "testkeyspace",
+						Keyspace: &topodatapb.Keyspace{},
+					},
+					{
+						Name: "snapshot",
+						Keyspace: &topodatapb.Keyspace{
+							KeyspaceType: topodatapb.KeyspaceType_SNAPSHOT,
+							BaseKeyspace: "testkeyspace",
+							SnapshotTime: &vttime.Time{Seconds: 10, Nanoseconds: 1},
+						},
+					},
+				},
+			},
+			req: &vtadminpb.GetKeyspacesRequest{},
+			expected: &vtadminpb.GetKeyspacesResponse{
+				Keyspaces: []*vtadminpb.Keyspace{
+					{
+						Cluster: &vtadminpb.Cluster{
+							Id:   "c0",
+							Name: "cluster0",
 						},
 						Keyspace: &vtctldatapb.Keyspace{
 							Name:     "testkeyspace",
@@ -149,8 +319,8 @@ func TestGetKeyspaces(t *testing.T) {
 					},
 					{
 						Cluster: &vtadminpb.Cluster{
-							Id:   "c1",
-							Name: "cluster1",
+							Id:   "c0",
+							Name: "cluster0",
 						},
 						Keyspace: &vtctldatapb.Keyspace{
 							Name: "snapshot",
@@ -161,32 +331,585 @@ func TestGetKeyspaces(t *testing.T) {
 							},
 						},
 					},
+				},
+			},
+		},
+		{
+			name: "filtered by cluster ID",
+			clusterKeyspaces: [][]*vtctldatapb.Keyspace{
+				//cluster0
+				{
+					{
+						Name:     "c0-ks0",
+						Keyspace: &topodatapb.Keyspace{},
+					},
+				},
+				//cluster1
+				{
+					{
+						Name:     "c1-ks0",
+						Keyspace: &topodatapb.Keyspace{},
+					},
+				},
+			},
+			req: &vtadminpb.GetKeyspacesRequest{
+				ClusterIds: []string{"c1"},
+			},
+			expected: &vtadminpb.GetKeyspacesResponse{
+				Keyspaces: []*vtadminpb.Keyspace{
 					{
 						Cluster: &vtadminpb.Cluster{
-							Id:   "c2",
-							Name: "cluster2",
+							Id:   "c1",
+							Name: "cluster1",
 						},
 						Keyspace: &vtctldatapb.Keyspace{
-							Name:     "customer",
+							Name:     "c1-ks0",
 							Keyspace: &topodatapb.Keyspace{},
 						},
 					},
 				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		topos := []*topo.Server{
+			memorytopo.NewServer("c0_cell1"),
+			memorytopo.NewServer("c1_cell1"),
+		}
+
+		for cdx, cks := range tt.clusterKeyspaces {
+			for _, ks := range cks {
+				testutil.AddKeyspace(context.Background(), t, topos[cdx], ks)
 			}
-			assert.ElementsMatch(t, expected.Keyspaces, resp.Keyspaces)
+		}
 
-			resp, err = api.GetKeyspaces(
-				context.Background(),
-				&vtadminpb.GetKeyspacesRequest{
-					ClusterIds: []string{"c1"},
-				},
-			)
-			require.NoError(t, err)
+		for cdx, css := range tt.clusterShards {
+			testutil.AddShards(context.Background(), t, topos[cdx], css...)
+		}
 
-			expected.Keyspaces = expected.Keyspaces[:2] // just c1
-			assert.ElementsMatch(t, expected.Keyspaces, resp.Keyspaces)
+		// Setting up WithTestServer in a generic, recursive way is... unpleasant,
+		// so all tests are set-up and run in the context of these two clusters.
+		testutil.WithTestServer(t, grpcvtctldserver.NewVtctldServer(topos[0]), func(t *testing.T, cluster0Client vtctldclient.VtctldClient) {
+			testutil.WithTestServer(t, grpcvtctldserver.NewVtctldServer(topos[1]), func(t *testing.T, cluster1Client vtctldclient.VtctldClient) {
+				clusterClients := []vtctldclient.VtctldClient{cluster0Client, cluster1Client}
+
+				clusters := []*cluster.Cluster{
+					buildCluster(0, clusterClients[0], nil, nil),
+					buildCluster(1, clusterClients[1], nil, nil),
+				}
+
+				api := NewAPI(clusters, grpcserver.Options{}, http.Options{})
+				resp, err := api.GetKeyspaces(context.Background(), tt.req)
+				require.NoError(t, err)
+
+				vtadmintestutil.AssertKeyspaceSlicesEqual(t, tt.expected.Keyspaces, resp.Keyspaces)
+			})
 		})
-	})
+	}
+}
+
+func TestGetSchemas(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name           string
+		clusterTablets [][]*vtadminpb.Tablet
+		// Indexed by tablet alias
+		tabletSchemas map[string]*tabletmanagerdatapb.SchemaDefinition
+		req           *vtadminpb.GetSchemasRequest
+		expected      *vtadminpb.GetSchemasResponse
+	}{
+		{
+			name: "one schema in one cluster",
+			clusterTablets: [][]*vtadminpb.Tablet{
+				// cluster0
+				{
+					{
+						State: vtadminpb.Tablet_SERVING,
+						Tablet: &topodatapb.Tablet{
+							Alias: &topodatapb.TabletAlias{
+								Cell: "c0_cell1",
+								Uid:  100,
+							},
+							Keyspace: "commerce",
+						},
+					},
+				},
+				// cluster1
+				{
+					{
+						State: vtadminpb.Tablet_SERVING,
+						Tablet: &topodatapb.Tablet{
+							Alias: &topodatapb.TabletAlias{
+								Cell: "c1_cell1",
+								Uid:  100,
+							},
+							Keyspace: "commerce",
+						},
+					},
+				},
+			},
+			tabletSchemas: map[string]*tabletmanagerdatapb.SchemaDefinition{
+				"c0_cell1-0000000100": {
+					DatabaseSchema: "CREATE DATABASE vt_testkeyspace",
+					TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+						{
+							Name:       "t1",
+							Schema:     `CREATE TABLE t1 (id int(11) not null,PRIMARY KEY (id));`,
+							Type:       "BASE",
+							Columns:    []string{"id"},
+							DataLength: 100,
+							RowCount:   50,
+							Fields: []*querypb.Field{
+								{
+									Name: "id",
+									Type: querypb.Type_INT32,
+								},
+							},
+						},
+					},
+				},
+			},
+			req: &vtadminpb.GetSchemasRequest{},
+			expected: &vtadminpb.GetSchemasResponse{
+				Schemas: []*vtadminpb.Schema{
+					{
+						Cluster: &vtadminpb.Cluster{
+							Id:   "c0",
+							Name: "cluster0",
+						},
+						Keyspace: "commerce",
+						TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+							{
+								Name:       "t1",
+								Schema:     `CREATE TABLE t1 (id int(11) not null,PRIMARY KEY (id));`,
+								Type:       "BASE",
+								Columns:    []string{"id"},
+								DataLength: 100,
+								RowCount:   50,
+								Fields: []*querypb.Field{
+									{
+										Name: "id",
+										Type: querypb.Type_INT32,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "one schema in each cluster",
+			clusterTablets: [][]*vtadminpb.Tablet{
+				// cluster0
+				{
+					{
+						State: vtadminpb.Tablet_SERVING,
+						Tablet: &topodatapb.Tablet{
+							Alias: &topodatapb.TabletAlias{
+								Cell: "c0_cell1",
+								Uid:  100,
+							},
+							Keyspace: "commerce",
+						},
+					},
+				},
+				// cluster1
+				{
+					{
+						State: vtadminpb.Tablet_SERVING,
+						Tablet: &topodatapb.Tablet{
+							Alias: &topodatapb.TabletAlias{
+								Cell: "c1_cell1",
+								Uid:  100,
+							},
+							Keyspace: "commerce",
+						},
+					},
+				},
+			},
+			tabletSchemas: map[string]*tabletmanagerdatapb.SchemaDefinition{
+				"c0_cell1-0000000100": {
+					DatabaseSchema: "CREATE DATABASE vt_testkeyspace",
+					TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+						{
+							Name:       "t1",
+							Schema:     `CREATE TABLE t1 (id int(11) not null,PRIMARY KEY (id));`,
+							Type:       "BASE",
+							Columns:    []string{"id"},
+							DataLength: 100,
+							RowCount:   50,
+							Fields: []*querypb.Field{
+								{
+									Name: "id",
+									Type: querypb.Type_INT32,
+								},
+							},
+						},
+					},
+				},
+				"c1_cell1-0000000100": {
+					DatabaseSchema: "CREATE DATABASE vt_testkeyspace",
+					TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+						{
+							Name:       "t2",
+							Schema:     `CREATE TABLE t2 (id int(11) not null,PRIMARY KEY (id));`,
+							Type:       "BASE",
+							Columns:    []string{"id"},
+							DataLength: 100,
+							RowCount:   50,
+							Fields: []*querypb.Field{
+								{
+									Name: "id",
+									Type: querypb.Type_INT32,
+								},
+							},
+						},
+					},
+				},
+			},
+			req: &vtadminpb.GetSchemasRequest{},
+			expected: &vtadminpb.GetSchemasResponse{
+				Schemas: []*vtadminpb.Schema{
+					{
+						Cluster: &vtadminpb.Cluster{
+							Id:   "c0",
+							Name: "cluster0",
+						},
+						Keyspace: "commerce",
+						TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+							{
+								Name:       "t1",
+								Schema:     `CREATE TABLE t1 (id int(11) not null,PRIMARY KEY (id));`,
+								Type:       "BASE",
+								Columns:    []string{"id"},
+								DataLength: 100,
+								RowCount:   50,
+								Fields: []*querypb.Field{
+									{
+										Name: "id",
+										Type: querypb.Type_INT32,
+									},
+								},
+							},
+						},
+					},
+					{
+						Cluster: &vtadminpb.Cluster{
+							Id:   "c1",
+							Name: "cluster1",
+						},
+						Keyspace: "commerce",
+						TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+							{
+								Name:       "t2",
+								Schema:     `CREATE TABLE t2 (id int(11) not null,PRIMARY KEY (id));`,
+								Type:       "BASE",
+								Columns:    []string{"id"},
+								DataLength: 100,
+								RowCount:   50,
+								Fields: []*querypb.Field{
+									{
+										Name: "id",
+										Type: querypb.Type_INT32,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "filtered by cluster ID",
+			clusterTablets: [][]*vtadminpb.Tablet{
+				// cluster0
+				{
+					{
+						State: vtadminpb.Tablet_SERVING,
+						Tablet: &topodatapb.Tablet{
+							Alias: &topodatapb.TabletAlias{
+								Cell: "c0_cell1",
+								Uid:  100,
+							},
+							Keyspace: "commerce",
+						},
+					},
+				},
+				// cluster1
+				{
+					{
+						State: vtadminpb.Tablet_SERVING,
+						Tablet: &topodatapb.Tablet{
+							Alias: &topodatapb.TabletAlias{
+								Cell: "c1_cell1",
+								Uid:  100,
+							},
+							Keyspace: "commerce",
+						},
+					},
+				},
+			},
+			tabletSchemas: map[string]*tabletmanagerdatapb.SchemaDefinition{
+				"c0_cell1-0000000100": {
+					DatabaseSchema: "CREATE DATABASE vt_testkeyspace",
+					TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+						{
+							Name:       "t1",
+							Schema:     `CREATE TABLE t1 (id int(11) not null,PRIMARY KEY (id));`,
+							Type:       "BASE",
+							Columns:    []string{"id"},
+							DataLength: 100,
+							RowCount:   50,
+							Fields: []*querypb.Field{
+								{
+									Name: "id",
+									Type: querypb.Type_INT32,
+								},
+							},
+						},
+					},
+				},
+				"c1_cell1-0000000100": {
+					DatabaseSchema: "CREATE DATABASE vt_testkeyspace",
+					TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+						{
+							Name:       "t2",
+							Schema:     `CREATE TABLE t2 (id int(11) not null,PRIMARY KEY (id));`,
+							Type:       "BASE",
+							Columns:    []string{"id"},
+							DataLength: 100,
+							RowCount:   50,
+							Fields: []*querypb.Field{
+								{
+									Name: "id",
+									Type: querypb.Type_INT32,
+								},
+							},
+						},
+					},
+				},
+			},
+			req: &vtadminpb.GetSchemasRequest{
+				ClusterIds: []string{"c1"},
+			},
+			expected: &vtadminpb.GetSchemasResponse{
+				Schemas: []*vtadminpb.Schema{
+					{
+						Cluster: &vtadminpb.Cluster{
+							Id:   "c1",
+							Name: "cluster1",
+						},
+						Keyspace: "commerce",
+						TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+							{
+								Name:       "t2",
+								Schema:     `CREATE TABLE t2 (id int(11) not null,PRIMARY KEY (id));`,
+								Type:       "BASE",
+								Columns:    []string{"id"},
+								DataLength: 100,
+								RowCount:   50,
+								Fields: []*querypb.Field{
+									{
+										Name: "id",
+										Type: querypb.Type_INT32,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "filtered by cluster ID that doesn't exist",
+			clusterTablets: [][]*vtadminpb.Tablet{
+				// cluster0
+				{
+					{
+						State: vtadminpb.Tablet_SERVING,
+						Tablet: &topodatapb.Tablet{
+							Alias: &topodatapb.TabletAlias{
+								Cell: "c0_cell1",
+								Uid:  100,
+							},
+							Keyspace: "commerce",
+						},
+					},
+				},
+			},
+			tabletSchemas: map[string]*tabletmanagerdatapb.SchemaDefinition{
+				"c0_cell1-0000000100": {
+					DatabaseSchema: "CREATE DATABASE vt_testkeyspace",
+					TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+						{
+							Name:       "t1",
+							Schema:     `CREATE TABLE t1 (id int(11) not null,PRIMARY KEY (id));`,
+							Type:       "BASE",
+							Columns:    []string{"id"},
+							DataLength: 100,
+							RowCount:   50,
+							Fields: []*querypb.Field{
+								{
+									Name: "id",
+									Type: querypb.Type_INT32,
+								},
+							},
+						},
+					},
+				},
+			},
+			req: &vtadminpb.GetSchemasRequest{
+				ClusterIds: []string{"nope"},
+			},
+			expected: &vtadminpb.GetSchemasResponse{
+				Schemas: []*vtadminpb.Schema{},
+			},
+		},
+		{
+			name: "no schemas for any cluster",
+			clusterTablets: [][]*vtadminpb.Tablet{
+				// cluster0
+				{
+					{
+						State: vtadminpb.Tablet_SERVING,
+						Tablet: &topodatapb.Tablet{
+							Alias: &topodatapb.TabletAlias{
+								Cell: "c0_cell1",
+								Uid:  100,
+							},
+							Keyspace: "commerce",
+						},
+					},
+				},
+			},
+			tabletSchemas: map[string]*tabletmanagerdatapb.SchemaDefinition{},
+			req:           &vtadminpb.GetSchemasRequest{},
+			expected: &vtadminpb.GetSchemasResponse{
+				Schemas: []*vtadminpb.Schema{},
+			},
+		},
+		{
+			name: "no serving tablets",
+			clusterTablets: [][]*vtadminpb.Tablet{
+				// cluster0
+				{
+					{
+						State: vtadminpb.Tablet_NOT_SERVING,
+						Tablet: &topodatapb.Tablet{
+							Alias: &topodatapb.TabletAlias{
+								Cell: "c0_cell1",
+								Uid:  100,
+							},
+							Keyspace: "commerce",
+						},
+					},
+				},
+			},
+			tabletSchemas: map[string]*tabletmanagerdatapb.SchemaDefinition{
+				"c0_cell1-0000000100": {
+					DatabaseSchema: "CREATE DATABASE vt_testkeyspace",
+					TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+						{
+							Name:       "t1",
+							Schema:     `CREATE TABLE t1 (id int(11) not null,PRIMARY KEY (id));`,
+							Type:       "BASE",
+							Columns:    []string{"id"},
+							DataLength: 100,
+							RowCount:   50,
+							Fields: []*querypb.Field{
+								{
+									Name: "id",
+									Type: querypb.Type_INT32,
+								},
+							},
+						},
+					},
+				},
+			},
+			req: &vtadminpb.GetSchemasRequest{},
+			expected: &vtadminpb.GetSchemasResponse{
+				Schemas: []*vtadminpb.Schema{},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			topos := []*topo.Server{
+				memorytopo.NewServer("c0_cell1"),
+				memorytopo.NewServer("c1_cell1"),
+			}
+
+			tmc := testutil.TabletManagerClient{
+				GetSchemaResults: map[string]struct {
+					Schema *tabletmanagerdatapb.SchemaDefinition
+					Error  error
+				}{},
+			}
+
+			vtctlds := []vtctlservicepb.VtctldServer{
+				testutil.NewVtctldServerWithTabletManagerClient(t, topos[0], &tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+					return grpcvtctldserver.NewVtctldServer(ts)
+				}),
+				testutil.NewVtctldServerWithTabletManagerClient(t, topos[1], &tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+					return grpcvtctldserver.NewVtctldServer(ts)
+				}),
+			}
+
+			// Setting up WithTestServer in a generic, recursive way is... unpleasant,
+			// so all tests are set-up and run in the context of these two clusters.
+			testutil.WithTestServer(t, vtctlds[0], func(t *testing.T, cluster0Client vtctldclient.VtctldClient) {
+				testutil.WithTestServer(t, vtctlds[1], func(t *testing.T, cluster1Client vtctldclient.VtctldClient) {
+					// Put 'em in a slice so we can look them up by index
+					clusterClients := []vtctldclient.VtctldClient{cluster0Client, cluster1Client}
+
+					// Build the clusters
+					clusters := make([]*cluster.Cluster, len(topos))
+					for cdx, toposerver := range topos {
+						// Handle when a test doesn't define any tablets for a given cluster.
+						var cts []*vtadminpb.Tablet
+						if cdx < len(tt.clusterTablets) {
+							cts = tt.clusterTablets[cdx]
+						}
+
+						for _, tablet := range cts {
+							// AddTablet also adds the keyspace + shard for us.
+							testutil.AddTablet(context.Background(), t, toposerver, tablet.Tablet, nil)
+
+							// Adds each SchemaDefinition to the fake TabletManagerClient, or nil
+							// if there are no schemas for that tablet. (All tablet aliases must
+							// exist in the map. Otherwise, TabletManagerClient will return an error when
+							// looking up the schema with tablet alias that doesn't exist.)
+							alias := topoproto.TabletAliasString(tablet.Tablet.Alias)
+							tmc.GetSchemaResults[alias] = struct {
+								Schema *tabletmanagerdatapb.SchemaDefinition
+								Error  error
+							}{
+								Schema: tt.tabletSchemas[alias],
+								Error:  nil,
+							}
+						}
+
+						clusters[cdx] = buildCluster(cdx, clusterClients[cdx], cts, nil)
+					}
+
+					api := NewAPI(clusters, grpcserver.Options{}, http.Options{})
+
+					resp, err := api.GetSchemas(context.Background(), tt.req)
+					require.NoError(t, err)
+
+					vtadmintestutil.AssertSchemaSlicesEqual(t, tt.expected.Schemas, resp.Schemas, tt.name)
+				})
+			})
+		})
+	}
 }
 
 func TestGetTablets(t *testing.T) {
@@ -671,4 +1394,18 @@ func buildCluster(i int, vtctldClient vtctldclient.VtctldClient, tablets []*vtad
 	cluster.Vtctld = vtctld
 
 	return cluster
+}
+
+func init() {
+	// For tests that don't actually care about mocking the tmclient (i.e. they
+	// call grpcvtctldserver.NewVtctldServer to initialize the unit under test),
+	// this needs to be set.
+	//
+	// Tests that do care about the tmclient should use
+	// testutil.NewVtctldServerWithTabletManagerClient to initialize their
+	// VtctldServer.
+	*tmclient.TabletManagerProtocol = "vtadmin.test"
+	tmclient.RegisterTabletManagerClientFactory("vtadmin.test", func() tmclient.TabletManagerClient {
+		return nil
+	})
 }

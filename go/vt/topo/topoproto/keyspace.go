@@ -23,7 +23,7 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
-// ParseKeyspaceType parses a string into a KeyspaceType
+// ParseKeyspaceType parses a string into a KeyspaceType.
 func ParseKeyspaceType(param string) (topodatapb.KeyspaceType, error) {
 	value, ok := topodatapb.KeyspaceType_value[strings.ToUpper(param)]
 	if !ok {
@@ -31,4 +31,14 @@ func ParseKeyspaceType(param string) (topodatapb.KeyspaceType, error) {
 		return topodatapb.KeyspaceType_NORMAL, fmt.Errorf("unknown keyspace type: %v", value)
 	}
 	return topodatapb.KeyspaceType(value), nil
+}
+
+// KeyspaceTypeString returns the string representation of a KeyspaceType.
+func KeyspaceTypeString(kt topodatapb.KeyspaceType) string {
+	str, ok := topodatapb.KeyspaceType_name[int32(kt)]
+	if !ok {
+		return "UNKNOWN"
+	}
+
+	return str
 }

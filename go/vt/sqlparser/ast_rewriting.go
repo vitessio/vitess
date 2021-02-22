@@ -238,7 +238,8 @@ func (er *expressionRewriter) sysVarRewrite(cursor *Cursor, node *ColName) {
 		sysvars.SessionEnableSystemSettings.Name,
 		sysvars.ReadAfterWriteGTID.Name,
 		sysvars.ReadAfterWriteTimeOut.Name,
-		sysvars.VitessVersion.Name,
+		sysvars.Version.Name,
+		sysvars.VersionComment.Name,
 		sysvars.SessionTrackGTIDs.Name:
 		cursor.Replace(bindVarExpression("__vt" + lowered))
 		er.bindVars.AddSysVar(lowered)

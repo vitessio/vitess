@@ -3,6 +3,7 @@ on: [push, pull_request]
 jobs:
 
   build:
+    if: github.repository == 'vitessio/vitess'
     name: Run endtoend tests on Cluster (upgrade)
     runs-on: ubuntu-latest
 

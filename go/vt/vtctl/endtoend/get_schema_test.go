@@ -138,14 +138,26 @@ func TestGetSchema(t *testing.T) {
 		},
 	}
 
-	tmc := testutil.TabletManagerClient
-	tmc.Schemas[topoproto.TabletAliasString(tablet.Alias)] = sd
+	tmc := testutil.TabletManagerClient{
+		GetSchemaResults: map[string]struct {
+			Schema *tabletmanagerdatapb.SchemaDefinition
+			Error  error
+		}{
+			topoproto.TabletAliasString(tablet.Alias): {
+				Schema: sd,
+				Error:  nil,
+			},
+		},
+	}
 
-	*tmclient.TabletManagerProtocol = testutil.TabletManagerClientProtocol
+	tmclient.RegisterTabletManagerClientFactory(t.Name(), func() tmclient.TabletManagerClient {
+		return &tmc
+	})
+	*tmclient.TabletManagerProtocol = t.Name()
 
 	logger := logutil.NewMemoryLogger()
 
-	err := vtctl.RunCommand(ctx, wrangler.New(logger, topo, tmc), []string{
+	err := vtctl.RunCommand(ctx, wrangler.New(logger, topo, &tmc), []string{
 		"GetSchema",
 		topoproto.TabletAliasString(tablet.Alias),
 	})
@@ -185,7 +197,7 @@ func TestGetSchema(t *testing.T) {
 		},
 	}
 
-	err = vtctl.RunCommand(ctx, wrangler.New(logger, topo, tmc), []string{
+	err = vtctl.RunCommand(ctx, wrangler.New(logger, topo, &tmc), []string{
 		"GetSchema",
 		"-table_sizes_only",
 		topoproto.TabletAliasString(tablet.Alias),
@@ -201,13 +213,4 @@ func TestGetSchema(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, sd, actual)
-}
-
-func init() {
-	// enforce we will use the right protocol (gRPC) (note the
-	// client is unused, but it is initialized, so it needs to exist)
-	*tmclient.TabletManagerProtocol = "grpc"
-	tmclient.RegisterTabletManagerClientFactory("grpc", func() tmclient.TabletManagerClient {
-		return nil
-	})
 }

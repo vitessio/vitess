@@ -22,6 +22,7 @@ require (
 	github.com/coreos/go-systemd v0.0.0-20190719114852-fd7a80b32e1f // indirect
 	github.com/corpix/uarand v0.1.1 // indirect
 	github.com/cyberdelia/go-metrics-graphite v0.0.0-20161219230853-39f87cc3b432
+	github.com/dave/jennifer v1.4.1
 	github.com/evanphx/json-patch v4.5.0+incompatible
 	github.com/go-martini/martini v0.0.0-20170121215854-22fa46961aab
 	github.com/go-sql-driver/mysql v1.5.0
@@ -45,7 +46,6 @@ require (
 	github.com/hashicorp/go-msgpack v0.5.5
 	github.com/hashicorp/go-sockaddr v1.0.2 // indirect
 	github.com/hashicorp/go-uuid v1.0.2 // indirect
-	github.com/hashicorp/golang-lru v0.5.3 // indirect
 	github.com/hashicorp/serf v0.9.2 // indirect
 	github.com/howeyc/gopass v0.0.0-20190910152052-7cb4b85ec19c
 	github.com/icrowley/fake v0.0.0-20180203215853-4178557ae428
@@ -53,16 +53,13 @@ require (
 	github.com/klauspost/compress v1.4.1 // indirect
 	github.com/klauspost/cpuid v1.2.0 // indirect
 	github.com/klauspost/pgzip v1.2.4
-	github.com/konsorten/go-windows-terminal-sequences v1.0.2 // indirect
 	github.com/krishicks/yaml-patch v0.0.10
-	github.com/looplab/fsm v0.2.0
 	github.com/magiconair/properties v1.8.1
 	github.com/martini-contrib/auth v0.0.0-20150219114609-fa62c19b7ae8
 	github.com/martini-contrib/gzip v0.0.0-20151124214156-6c035326b43f
 	github.com/martini-contrib/render v0.0.0-20150707142108-ec18f8345a11
 	github.com/mattn/go-sqlite3 v1.14.0
 	github.com/minio/minio-go v0.0.0-20190131015406-c8a261de75c1
-	github.com/mitchellh/go-ps v1.0.0 // indirect
 	github.com/mitchellh/go-testing-interface v1.14.0 // indirect
 	github.com/mitchellh/mapstructure v1.2.3 // indirect
 	github.com/montanaflynn/stats v0.6.3
@@ -117,6 +114,5 @@ require (
 	k8s.io/apiextensions-apiserver v0.17.3
 	k8s.io/apimachinery v0.17.3
 	k8s.io/client-go v0.17.3
-	k8s.io/utils v0.0.0-20191114184206-e782cd3c129f
 	sigs.k8s.io/yaml v1.1.0
 )

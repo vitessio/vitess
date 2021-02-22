@@ -56,8 +56,9 @@ var (
 	SessionUUID                 = SystemVariable{Name: "session_uuid", IdentifierAsString: true}
 	SessionEnableSystemSettings = SystemVariable{Name: "enable_system_settings", IsBoolean: true, Default: on}
 	// Online DDL
-	DDLStrategy   = SystemVariable{Name: "ddl_strategy", IdentifierAsString: true}
-	VitessVersion = SystemVariable{Name: "vitess_version", IdentifierAsString: true}
+	DDLStrategy    = SystemVariable{Name: "ddl_strategy", IdentifierAsString: true}
+	Version        = SystemVariable{Name: "version"}
+	VersionComment = SystemVariable{Name: "version_comment"}
 
 	// Read After Write settings
 	ReadAfterWriteGTID    = SystemVariable{Name: "read_after_write_gtid"}
@@ -159,6 +160,7 @@ var (
 		{Name: "explicit_defaults_for_timestamp"},
 		{Name: "foreign_key_checks", IsBoolean: true},
 		{Name: "group_concat_max_len"},
+		{Name: "information_schema_stats_expiry"},
 		{Name: "max_heap_table_size"},
 		{Name: "max_seeks_for_key"},
 		{Name: "max_tmp_tables"},

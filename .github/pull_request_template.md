@@ -28,5 +28,5 @@ Components that this PR will affect:
 - [ ]  Query Serving
 - [ ]  VReplication
 - [ ]  Cluster Management
-- [ ]  Build 
+- [ ]  Build/CI
 - [ ]  VTAdmin
