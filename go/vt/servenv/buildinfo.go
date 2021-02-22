@@ -106,7 +106,10 @@ func init() {
 		goArch:             runtime.GOARCH,
 		version:            versionName,
 	}
-	sqlparser.MySQLVersion = AppVersion.MySQLVersion()
+	sqlparser.MySQLVersion, err = sqlparser.ConvertMySQLVersionToCommentVersion(AppVersion.MySQLVersion())
+	if err != nil {
+		panic(fmt.Sprintf("%s", err))
+	}
 	stats.NewString("BuildHost").Set(AppVersion.buildHost)
 	stats.NewString("BuildUser").Set(AppVersion.buildUser)
 	stats.NewGauge("BuildTimestamp", "build timestamp").Set(AppVersion.buildTime)
