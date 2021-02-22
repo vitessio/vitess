@@ -49,5 +49,5 @@
 .dropdownRow {
   display: grid;
   grid-gap: 8px;
-  grid-template-columns: min-content min-content min-content;
+  grid-template-columns: repeat(4, min-content);
 }

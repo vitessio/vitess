@@ -80,6 +80,15 @@ export const Debug = () => {
                             renderItem={(fruit) => `${fruit.emoji} ${fruit.name}`}
                             selectedItem={formData.selectFruitDefault || null}
                         />
+                        <Select
+                            items={[]}
+                            emptyPlaceholder="No fruits :("
+                            label="Empty Fruits"
+                            onChange={(fruit) => setFormData({ ...formData, selectFruitDefault: fruit })}
+                            placeholder="Choose a fruit"
+                            renderItem={(fruit) => `${fruit.emoji} ${fruit.name}`}
+                            selectedItem={formData.selectFruitDefault || null}
+                        />
                     </div>
                     <div className={style.dropdownRow}>
                         <Select
@@ -251,4 +260,4 @@ const FRUITS: { emoji: string; name: string; id: string }[] = [
     { emoji: '🍉', name: 'watermelon', id: 'watermelon' },
 ];
 
-const FRUIT_NAMES = FRUITS.map((f) => f.name);
+const FRUIT_NAMES = FRUITS.map((f) => f.name).slice(0, 5);
