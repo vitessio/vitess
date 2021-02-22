@@ -17,7 +17,11 @@ limitations under the License.
 //nolint
 package integration
 
-import "reflect"
+import (
+	"fmt"
+	"reflect"
+	"strings"
+)
 
 /*
 These types are used to test the rewriter generator against these types.
@@ -25,48 +29,83 @@ To recreate them, just run:
 
 go run go/tools/asthelpergen -in ./go/tools/asthelpergen/integration -iface vitess.io/vitess/go/tools/asthelpergen/integration.AST
 */
-type (
-	AST interface {
-		i()
+// AST is the interface all interface types implement
+type AST interface {
+	String() string
+}
+
+// Empty struct impl of the iface
+type Leaf struct {
+	v int
+}
+
+func (l *Leaf) String() string {
+	if l == nil {
+		return "nil"
 	}
+	return fmt.Sprintf("Leaf(%d)", l.v)
+}
 
-	Plus struct {
-		Left, Right AST
+// Container implements the interface ByRef
+type RefContainer struct {
+	ASTType               AST
+	NotASTType            int
+	ASTImplementationType *Leaf
+}
+
+func (r *RefContainer) String() string {
+	return fmt.Sprintf("RefContainer{%s, %d, %s}", r.ASTType.String(), r.NotASTType, r.ASTImplementationType.String())
+}
+
+// Container implements the interface ByRef
+type RefSliceContainer struct {
+	ASTElements               []AST
+	NotASTElements            []int
+	ASTImplementationElements []*Leaf
+}
+
+func (r *RefSliceContainer) String() string {
+	return fmt.Sprintf("RefSliceContainer{%s, %s, %s}", sliceStringAST(r.ASTElements...), "r.NotASTType", sliceStringLeaf(r.ASTImplementationElements...))
+}
+
+// Container implements the interface ByValue
+type ValueContainer struct {
+	ASTType               AST
+	NotASTType            int
+	ASTImplementationType *Leaf
+}
+
+func (r ValueContainer) String() string {
+	return fmt.Sprintf("ValueContainer{%s, %d, %s}", r.ASTType.String(), r.NotASTType, r.ASTImplementationType.String())
+}
+
+// Container implements the interface ByValue
+type ValueSliceContainer struct {
+	ASTElements               []AST
+	NotASTElements            []int
+	ASTImplementationElements []*Leaf
+}
+
+func (r ValueSliceContainer) String() string {
+	return fmt.Sprintf("ValueSliceContainer{%s, %s, %s}", sliceStringAST(r.ASTElements...), "r.NotASTType", sliceStringLeaf(r.ASTImplementationElements...))
+}
+
+// ast type helpers
+
+func sliceStringAST(els ...AST) string {
+	result := make([]string, len(els))
+	for i, el := range els {
+		result[i] = el.String()
 	}
-
-	Array struct {
-		Values []AST
-		Stuff  []int
+	return strings.Join(result, ", ")
+}
+func sliceStringLeaf(els ...*Leaf) string {
+	result := make([]string, len(els))
+	for i, el := range els {
+		result[i] = el.String()
 	}
-
-	UnaryMinus struct {
-		Val *LiteralInt
-	}
-
-	LiteralInt struct {
-		Val int
-	}
-
-	LiteralString struct {
-		Val string
-	}
-
-	StructHolder struct {
-		Val AST
-	}
-
-	//ArrayDef []AST
-)
-
-func (*Plus) i() {}
-
-func (*Array) i()        {}
-func (*UnaryMinus) i()   {}
-func (*LiteralInt) i()   {}
-func (LiteralString) i() {}
-func (StructHolder) i()  {}
-
-//func (ArrayDef) i()     {}
+	return strings.Join(result, ", ")
+}
 
 // the methods below are what the generated code expected to be there in the package
 
@@ -122,6 +161,6 @@ func Rewrite(node AST, pre, post ApplyFunc) (result AST) {
 
 func replacePanic(msg string) func(newNode, parent AST) {
 	return func(newNode, parent AST) {
-		panic(msg)
+		panic("Tried replacing a field of a value type. This is not supported. " + msg)
 	}
 }

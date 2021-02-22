@@ -17,7 +17,6 @@ limitations under the License.
 package main
 
 import (
-	"fmt"
 	"go/types"
 
 	"github.com/dave/jennifer/jen"
@@ -54,10 +53,13 @@ func (r *rewriterGen) visitStruct(t types.Type, typeString, replaceMethodPrefix 
 		}
 		sliceT, ok := field.Type().(*types.Slice)
 		if ok && r.interestingType(sliceT.Elem()) { // we have a field containing a slice of interesting elements
-			replacerName, methods := r.createReplaceCodeForSliceField(replaceMethodPrefix, types.TypeString(t, noQualifier), field)
+			replaceMethodName := replaceMethodPrefix
+			if !pointer {
+				replaceMethodName += "Val"
+			}
+			replacerName, methods := r.createReplaceCodeForSliceField(replaceMethodName, types.TypeString(t, noQualifier), field)
 			r.replaceMethods = append(r.replaceMethods, methods...)
 			caseStmts = append(caseStmts, caseStmtForSliceField(field, replacerName)...)
-			fmt.Println("apa", replacerName)
 		}
 	}
 	r.cases = append(r.cases, jen.Case(jen.Id(typeString)).Block(caseStmts...))

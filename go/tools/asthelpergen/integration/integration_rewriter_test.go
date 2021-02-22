@@ -17,128 +17,276 @@ limitations under the License.
 package integration
 
 import (
-	"reflect"
+	"fmt"
 	"testing"
-
-	"vitess.io/vitess/go/test/utils"
 
 	"github.com/stretchr/testify/assert"
 )
 
-func TestVisit(t *testing.T) {
-	one := &LiteralInt{1}
-	minusOne := &UnaryMinus{Val: one}
-	foo := LiteralString{"foo"}
-	plus := &Plus{Left: minusOne, Right: foo}
+func TestVisitRefContainer(t *testing.T) {
+	leaf1 := &Leaf{1}
+	leaf2 := &Leaf{2}
+	container := &RefContainer{ASTType: leaf1, ASTImplementationType: leaf2}
+	containerContainer := &RefContainer{ASTType: container}
 
-	preOrder, postOrder := testVisitOrder(plus)
+	tv := &testVisitor{}
 
-	assert.Equal(t, []AST{plus, minusOne, one, foo}, preOrder, "pre-order wrong")
-	assert.Equal(t, []AST{one, minusOne, foo, plus}, postOrder, "post-order wrong")
-}
+	Rewrite(containerContainer, tv.pre, tv.post)
 
-func TestVisitWSlice(t *testing.T) {
-	int1 := &LiteralInt{1}
-	int2 := &LiteralInt{2}
-	slice := &Array{
-		Values: []AST{int1, int2},
-		Stuff:  []int{1, 2, 3},
+	expected := []step{
+		Pre{containerContainer},
+		Pre{container},
+		Pre{leaf1},
+		Post{leaf1},
+		Pre{leaf2},
+		Post{leaf2},
+		Post{container},
+		Post{containerContainer},
 	}
-	foo := LiteralString{"foo"}
-	plus := &Plus{Left: slice, Right: foo}
-
-	preOrder, postOrder := testVisitOrder(plus)
-
-	assert.Equal(t, []AST{plus, slice, int1, int2, foo}, preOrder, "pre-order wrong")
-	assert.Equal(t, []AST{int1, int2, slice, foo, plus}, postOrder, "post-order wrong")
+	tv.assertEquals(t, expected)
 }
 
-func testVisitOrder(plus AST) ([]AST, []AST) {
-	var preOrder, postOrder []AST
+func TestVisitValueContainer(t *testing.T) {
+	leaf1 := &Leaf{1}
+	leaf2 := &Leaf{2}
+	container := ValueContainer{ASTType: leaf1, ASTImplementationType: leaf2}
+	containerContainer := ValueContainer{ASTType: container}
 
-	Rewrite(plus,
-		func(cursor *Cursor) bool {
-			preOrder = append(preOrder, cursor.Node())
-			return true
-		},
-		func(cursor *Cursor) bool {
-			postOrder = append(postOrder, cursor.Node())
-			return true
-		})
+	tv := &testVisitor{}
 
-	return preOrder, postOrder
-}
+	Rewrite(containerContainer, tv.pre, tv.post)
 
-func TestDeepEqualsWorksForAST(t *testing.T) {
-	one := &LiteralInt{1}
-	two := &LiteralInt{2}
-	plus := &Plus{Left: one, Right: two}
-	oneB := &LiteralInt{1}
-	twoB := &LiteralInt{2}
-	plusB := &Plus{Left: oneB, Right: twoB}
-
-	if !reflect.DeepEqual(plus, plusB) {
-		t.Fatalf("oh noes")
+	expected := []step{
+		Pre{containerContainer},
+		Pre{container},
+		Pre{leaf1},
+		Post{leaf1},
+		Pre{leaf2},
+		Post{leaf2},
+		Post{container},
+		Post{containerContainer},
 	}
+	tv.assertEquals(t, expected)
 }
 
-func TestReplace(t *testing.T) {
-	one := &LiteralInt{1}
-	two := &LiteralInt{2}
-	plus := &Plus{Left: one, Right: two}
-	four := &LiteralInt{4}
-	expected := &Plus{Left: two, Right: four}
+func TestVisitRefSliceContainer(t *testing.T) {
+	leaf1 := &Leaf{1}
+	leaf2 := &Leaf{2}
+	leaf3 := &Leaf{3}
+	leaf4 := &Leaf{4}
+	container := &RefSliceContainer{ASTElements: []AST{leaf1, leaf2}, ASTImplementationElements: []*Leaf{leaf3, leaf4}}
+	containerContainer := &RefSliceContainer{ASTElements: []AST{container}}
 
-	result := Rewrite(plus, func(cursor *Cursor) bool {
-		switch n := cursor.Node().(type) {
-		case *LiteralInt:
-			newNode := &LiteralInt{Val: n.Val * 2}
-			cursor.Replace(newNode)
+	tv := &testVisitor{}
+
+	Rewrite(containerContainer, tv.pre, tv.post)
+
+	tv.assertEquals(t, []step{
+		Pre{containerContainer},
+		Pre{container},
+		Pre{leaf1},
+		Post{leaf1},
+		Pre{leaf2},
+		Post{leaf2},
+		Pre{leaf3},
+		Post{leaf3},
+		Pre{leaf4},
+		Post{leaf4},
+		Post{container},
+		Post{containerContainer},
+	})
+}
+
+func TestVisitValueSliceContainer(t *testing.T) {
+	leaf1 := &Leaf{1}
+	leaf2 := &Leaf{2}
+	leaf3 := &Leaf{3}
+	leaf4 := &Leaf{4}
+	container := &ValueSliceContainer{ASTElements: []AST{leaf1, leaf2}, ASTImplementationElements: []*Leaf{leaf3, leaf4}}
+	containerContainer := &ValueSliceContainer{ASTElements: []AST{container}}
+
+	tv := &testVisitor{}
+
+	Rewrite(containerContainer, tv.pre, tv.post)
+
+	tv.assertEquals(t, []step{
+		Pre{containerContainer},
+		Pre{container},
+		Pre{leaf1},
+		Post{leaf1},
+		Pre{leaf2},
+		Post{leaf2},
+		Pre{leaf3},
+		Post{leaf3},
+		Pre{leaf4},
+		Post{leaf4},
+		Post{container},
+		Post{containerContainer},
+	})
+}
+
+func TestVisitRefContainerReplace(t *testing.T) {
+	ast := &RefContainer{
+		ASTType:               &RefContainer{NotASTType: 12},
+		ASTImplementationType: &Leaf{2},
+	}
+
+	// rewrite field of type AST
+	Rewrite(ast, func(cursor *Cursor) bool {
+		leaf, ok := cursor.node.(*RefContainer)
+		if ok && leaf.NotASTType == 12 {
+			cursor.Replace(&Leaf{99})
 		}
 		return true
 	}, nil)
 
-	utils.MustMatch(t, expected, result)
-}
-func TestReplaceInSlice(t *testing.T) {
-	one := &LiteralInt{1}
-	two := &LiteralInt{2}
-	three := &LiteralInt{3}
-	array := &Array{Values: []AST{one, two, three}}
-	string2 := &LiteralString{"two"}
+	assert.Equal(t, &RefContainer{
+		ASTType:               &Leaf{99},
+		ASTImplementationType: &Leaf{2},
+	}, ast)
 
-	result := Rewrite(array, func(cursor *Cursor) bool {
-		switch n := cursor.Node().(type) {
-		case *LiteralInt:
-			if n.Val == 2 {
-				cursor.Replace(string2)
-			}
-		}
-		return true
-	}, nil)
+	Rewrite(ast, rewriteLeaf(2, 55), nil)
 
-	expected := &Array{Values: []AST{one, string2, three}}
-	utils.MustMatch(t, expected, result)
+	assert.Equal(t, &RefContainer{
+		ASTType:               &Leaf{99},
+		ASTImplementationType: &Leaf{55},
+	}, ast)
 }
 
-func TestReplaceStructHolder(t *testing.T) {
-	one := &LiteralInt{1}
-	root := StructHolder{one}
+func TestVisitValueContainerReplace(t *testing.T) {
+	ast := ValueContainer{
+		ASTType:               ValueContainer{NotASTType: 12},
+		ASTImplementationType: &Leaf{2},
+	}
 
 	defer func() {
 		if r := recover(); r != nil {
-			// we expect the rewriter to panic
-			assert.Equal(t, "StructHolder Val", r)
+			assert.Contains(t, r, "ValueContainer ASTType")
 		}
 	}()
 
-	Rewrite(root, func(cursor *Cursor) bool {
-		switch cursor.Node().(type) {
-		case *LiteralInt:
-			// here we are trying to change the value of one of the fields of the value, and that is not allowed
-			cursor.Replace(nil)
+	Rewrite(ast, func(cursor *Cursor) bool {
+		leaf, ok := cursor.node.(ValueContainer)
+		if ok && leaf.NotASTType == 12 {
+			cursor.Replace(&Leaf{99})
 		}
 		return true
 	}, nil)
-	t.Fatal("Should have panicked")
+
+	t.Fatalf("should not get here")
+}
+
+func TestVisitValueContainerReplace2(t *testing.T) {
+	ast := ValueContainer{
+		ASTType:               ValueContainer{NotASTType: 12},
+		ASTImplementationType: &Leaf{2},
+	}
+
+	defer func() {
+		if r := recover(); r != nil {
+			assert.Contains(t, r, "ValueContainer ASTImplementationType")
+		}
+	}()
+
+	Rewrite(ast, rewriteLeaf(2, 10), nil)
+
+	t.Fatalf("should not get here")
+}
+
+func rewriteLeaf(from, to int) func(*Cursor) bool {
+	return func(cursor *Cursor) bool {
+		leaf, ok := cursor.node.(*Leaf)
+		if ok && leaf.v == from {
+			cursor.Replace(&Leaf{to})
+		}
+		return true
+	}
+}
+
+func TestRefSliceContainerReplace(t *testing.T) {
+	ast := &RefSliceContainer{
+		ASTElements:               []AST{&Leaf{1}, &Leaf{2}},
+		ASTImplementationElements: []*Leaf{{3}, {4}},
+	}
+
+	Rewrite(ast, rewriteLeaf(2, 42), nil)
+
+	assert.Equal(t, &RefSliceContainer{
+		ASTElements:               []AST{&Leaf{1}, &Leaf{42}},
+		ASTImplementationElements: []*Leaf{{3}, {4}},
+	}, ast)
+
+	Rewrite(ast, rewriteLeaf(3, 88), nil)
+
+	assert.Equal(t, &RefSliceContainer{
+		ASTElements:               []AST{&Leaf{1}, &Leaf{42}},
+		ASTImplementationElements: []*Leaf{{88}, {4}},
+	}, ast)
+}
+
+type step interface {
+	String() string
+}
+type Pre struct {
+	el AST
+}
+
+func (r Pre) String() string {
+	return fmt.Sprintf("Pre(%s)", r.el.String())
+}
+func (r Post) String() string {
+	return fmt.Sprintf("Pre(%s)", r.el.String())
+}
+
+type Post struct {
+	el AST
+}
+
+type testVisitor struct {
+	walk []step
+}
+
+func (tv *testVisitor) pre(cursor *Cursor) bool {
+	tv.walk = append(tv.walk, Pre{el: cursor.Node()})
+	return true
+}
+func (tv *testVisitor) post(cursor *Cursor) bool {
+	tv.walk = append(tv.walk, Post{el: cursor.Node()})
+	return true
+}
+func (tv *testVisitor) assertEquals(t *testing.T, expected []step) {
+	t.Helper()
+	var lines []string
+	error := false
+	expectedSize := len(expected)
+	for i, step := range tv.walk {
+		if expectedSize <= i {
+			t.Errorf("❌️ - Expected less elements %v", tv.walk[i:])
+			break
+		} else {
+			e := expected[i]
+			if e == step {
+				a := "✔️ - " + e.String()
+				if error {
+					fmt.Println(a)
+				} else {
+					lines = append(lines, a)
+				}
+			} else {
+				if !error {
+					// first error we see.
+					error = true
+					for _, line := range lines {
+						fmt.Println(line)
+					}
+				}
+				t.Errorf("❌️ - Expected: %s Got: %s\n", e.String(), step.String())
+			}
+		}
+	}
+	walkSize := len(tv.walk)
+	if expectedSize > walkSize {
+		t.Errorf("❌️ - Expected more elements %v", expected[walkSize:])
+	}
+
 }
