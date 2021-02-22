@@ -135,8 +135,6 @@ func (b *BenchmarkService) Close(ctx context.Context) error {
 	panic("should not be called")
 }
 
-const longSQL = `create table vitess_ints(tiny tinyint default 0, tinyu tinyint unsigned default null, small smallint default null, smallu smallint unsigned default null, medium mediumint default null, mediumu mediumint unsigned default null, normal int default null, normalu int unsigned default null, big bigint default null, bigu bigint unsigned default null, y year default null, primary key(tiny));`
-
 type generator struct {
 	n  int
 	r  *rand.Rand
