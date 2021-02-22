@@ -107,7 +107,7 @@ func (gen *astHelperGen) doIt() (map[string]*jen.File, error) {
 		case *types.Interface:
 			// do nothing
 		default:
-			fmt.Printf("unknown %T\n", t)
+			log.Printf("unknown %T\n", t)
 		}
 		return nil
 	})
