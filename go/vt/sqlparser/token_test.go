@@ -216,19 +216,19 @@ func TestVersion(t *testing.T) {
 		in      string
 		id      []int
 	}{{
-		version: "5.7.9",
+		version: "50709",
 		in:      "/*!80102 SELECT*/ FROM IN EXISTS",
 		id:      []int{FROM, IN, EXISTS, 0},
 	}, {
-		version: "8.1.1",
+		version: "80101",
 		in:      "/*!80102 SELECT*/ FROM IN EXISTS",
 		id:      []int{FROM, IN, EXISTS, 0},
 	}, {
-		version: "8.2.1",
+		version: "80201",
 		in:      "/*!80102 SELECT*/ FROM IN EXISTS",
 		id:      []int{SELECT, FROM, IN, EXISTS, 0},
 	}, {
-		version: "8.1.2",
+		version: "80102",
 		in:      "/*!80102 SELECT*/ FROM IN EXISTS",
 		id:      []int{SELECT, FROM, IN, EXISTS, 0},
 	}}
