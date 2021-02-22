@@ -2740,4 +2740,5 @@
 2021-02-22T16:52:17Z,endtoend,https://github.com/vitessio/vitess/actions/runs/589853201
 2021-02-22T17:04:43Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/589888493
 2021-02-22T17:04:43Z,endtoend,https://github.com/vitessio/vitess/actions/runs/589888461
+2021-02-22T17:05:47Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/589891523
 2021-02-22T17:05:47Z,endtoend,https://github.com/vitessio/vitess/actions/runs/589891560
