@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"math/rand"
 	"os"
 	"runtime/debug"
 	"strings"
@@ -247,6 +248,7 @@ func TestWithDefaultKeyspaceFromFile(t *testing.T) {
 	testFile(t, "ddl_cases.txt", testOutputTempDir, vschema, false)
 	testFile(t, "flush_cases.txt", testOutputTempDir, vschema, false)
 	testFile(t, "show_cases.txt", testOutputTempDir, vschema, false)
+	testFile(t, "call_cases.txt", testOutputTempDir, vschema, false)
 }
 
 func TestOtherPlanningFromFile(t *testing.T) {
@@ -400,7 +402,7 @@ func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper, c
 		expected := &strings.Builder{}
 		fail := checkAllTests
 		for tcase := range iterateExecFile(filename) {
-			t.Run(tcase.comments, func(t *testing.T) {
+			t.Run(fmt.Sprintf("%d V3: %s", tcase.lineno, tcase.comments), func(t *testing.T) {
 				vschema.version = V3
 				plan, err := TestBuilder(tcase.input, vschema)
 				out := getPlanOrErrorOutput(err, plan)
@@ -421,7 +423,7 @@ func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper, c
 				empty = true
 			}
 
-			vschema.version = V4
+			vschema.version = Gen4
 			out, err := getPlanOutput(tcase, vschema)
 
 			// our expectation for the new planner on this query is one of three
@@ -432,7 +434,7 @@ func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper, c
 			//       with this last expectation, it is an error if the V4 planner
 			//       produces the same plan as the V3 planner does
 			if !empty || checkAllTests {
-				t.Run("V4: "+tcase.comments, func(t *testing.T) {
+				t.Run(fmt.Sprintf("%d V4: %s", tcase.lineno, tcase.comments), func(t *testing.T) {
 					if out != tcase.output2ndPlanner {
 						fail = true
 						t.Errorf("V4 - %s:%d\nDiff:\n%s\n[%s] \n[%s]", filename, tcase.lineno, cmp.Diff(tcase.output2ndPlanner, out), tcase.output, out)
@@ -445,7 +447,7 @@ func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper, c
 					if tcase.output == out {
 						expected.WriteString(samePlanMarker)
 					} else {
-						expected.WriteString(out)
+						expected.WriteString(fmt.Sprintf("%s\n", out))
 					}
 				})
 			} else {
@@ -609,12 +611,49 @@ func BenchmarkPlanner(b *testing.B) {
 			benchmarkPlanner(b, V3, testCases, vschema)
 		})
 		b.Run(filename+"-v4", func(b *testing.B) {
-			benchmarkPlanner(b, V4, testCases, vschema)
+			benchmarkPlanner(b, Gen4, testCases, vschema)
 		})
 		b.Run(filename+"-v4left2right", func(b *testing.B) {
-			benchmarkPlanner(b, V4Left2Right, testCases, vschema)
+			benchmarkPlanner(b, Gen4Left2Right, testCases, vschema)
 		})
 	}
+}
+
+func BenchmarkSelectVsDML(b *testing.B) {
+	vschema := &vschemaWrapper{
+		v:             loadSchema(b, "schema_test.json"),
+		sysVarEnabled: true,
+		version:       V3,
+	}
+
+	var dmlCases []testCase
+	var selectCases []testCase
+
+	for tc := range iterateExecFile("dml_cases.txt") {
+		dmlCases = append(dmlCases, tc)
+	}
+
+	for tc := range iterateExecFile("select_cases.txt") {
+		if tc.output2ndPlanner != "" {
+			selectCases = append(selectCases, tc)
+		}
+	}
+
+	rand.Shuffle(len(dmlCases), func(i, j int) {
+		dmlCases[i], dmlCases[j] = dmlCases[j], dmlCases[i]
+	})
+
+	rand.Shuffle(len(selectCases), func(i, j int) {
+		selectCases[i], selectCases[j] = selectCases[j], selectCases[i]
+	})
+
+	b.Run("DML (random sample, N=32)", func(b *testing.B) {
+		benchmarkPlanner(b, V3, dmlCases[:32], vschema)
+	})
+
+	b.Run("Select (random sample, N=32)", func(b *testing.B) {
+		benchmarkPlanner(b, V3, selectCases[:32], vschema)
+	})
 }
 
 func benchmarkPlanner(b *testing.B, version PlannerVersion, testCases []testCase, vschema *vschemaWrapper) {

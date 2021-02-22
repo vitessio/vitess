@@ -28,6 +28,60 @@ import (
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
+// ChangeTabletType is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) ChangeTabletType(ctx context.Context, in *vtctldatapb.ChangeTabletTypeRequest, opts ...grpc.CallOption) (*vtctldatapb.ChangeTabletTypeResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.ChangeTabletType(ctx, in, opts...)
+}
+
+// CreateKeyspace is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) CreateKeyspace(ctx context.Context, in *vtctldatapb.CreateKeyspaceRequest, opts ...grpc.CallOption) (*vtctldatapb.CreateKeyspaceResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.CreateKeyspace(ctx, in, opts...)
+}
+
+// CreateShard is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) CreateShard(ctx context.Context, in *vtctldatapb.CreateShardRequest, opts ...grpc.CallOption) (*vtctldatapb.CreateShardResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.CreateShard(ctx, in, opts...)
+}
+
+// DeleteKeyspace is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) DeleteKeyspace(ctx context.Context, in *vtctldatapb.DeleteKeyspaceRequest, opts ...grpc.CallOption) (*vtctldatapb.DeleteKeyspaceResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.DeleteKeyspace(ctx, in, opts...)
+}
+
+// DeleteShards is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) DeleteShards(ctx context.Context, in *vtctldatapb.DeleteShardsRequest, opts ...grpc.CallOption) (*vtctldatapb.DeleteShardsResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.DeleteShards(ctx, in, opts...)
+}
+
+// DeleteTablets is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) DeleteTablets(ctx context.Context, in *vtctldatapb.DeleteTabletsRequest, opts ...grpc.CallOption) (*vtctldatapb.DeleteTabletsResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.DeleteTablets(ctx, in, opts...)
+}
+
 // FindAllShardsInKeyspace is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) FindAllShardsInKeyspace(ctx context.Context, in *vtctldatapb.FindAllShardsInKeyspaceRequest, opts ...grpc.CallOption) (*vtctldatapb.FindAllShardsInKeyspaceResponse, error) {
 	if client.c == nil {
@@ -100,6 +154,15 @@ func (client *gRPCVtctldClient) GetSchema(ctx context.Context, in *vtctldatapb.G
 	return client.c.GetSchema(ctx, in, opts...)
 }
 
+// GetShard is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) GetShard(ctx context.Context, in *vtctldatapb.GetShardRequest, opts ...grpc.CallOption) (*vtctldatapb.GetShardResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.GetShard(ctx, in, opts...)
+}
+
 // GetSrvVSchema is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) GetSrvVSchema(ctx context.Context, in *vtctldatapb.GetSrvVSchemaRequest, opts ...grpc.CallOption) (*vtctldatapb.GetSrvVSchemaResponse, error) {
 	if client.c == nil {
@@ -143,4 +206,22 @@ func (client *gRPCVtctldClient) InitShardPrimary(ctx context.Context, in *vtctld
 	}
 
 	return client.c.InitShardPrimary(ctx, in, opts...)
+}
+
+// RemoveKeyspaceCell is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) RemoveKeyspaceCell(ctx context.Context, in *vtctldatapb.RemoveKeyspaceCellRequest, opts ...grpc.CallOption) (*vtctldatapb.RemoveKeyspaceCellResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.RemoveKeyspaceCell(ctx, in, opts...)
+}
+
+// RemoveShardCell is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) RemoveShardCell(ctx context.Context, in *vtctldatapb.RemoveShardCellRequest, opts ...grpc.CallOption) (*vtctldatapb.RemoveShardCellResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.RemoveShardCell(ctx, in, opts...)
 }

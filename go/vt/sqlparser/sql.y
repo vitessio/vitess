@@ -146,12 +146,13 @@ func skipToEnd(yylex interface{}) {
   tableOption      *TableOption
   tableOptions     TableOptions
   renameTablePairs []*RenameTablePair
+  columnTypeOptions *ColumnTypeOptions
 }
 
 %token LEX_ERROR
 %left <bytes> UNION
 %token <bytes> SELECT STREAM VSTREAM INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT OFFSET FOR
-%token <bytes> ALL DISTINCT AS EXISTS ASC DESC INTO DUPLICATE KEY DEFAULT SET LOCK UNLOCK KEYS DO
+%token <bytes> ALL DISTINCT AS EXISTS ASC DESC INTO DUPLICATE KEY DEFAULT SET LOCK UNLOCK KEYS DO CALL
 %token <bytes> DISTINCTROW PARSER
 %token <bytes> OUTFILE S3 DATA LOAD LINES TERMINATED ESCAPED ENCLOSED
 %token <bytes> DUMPFILE CSV HEADER MANIFEST OVERWRITE STARTING OPTIONALLY
@@ -201,7 +202,7 @@ func skipToEnd(yylex interface{}) {
 %token <bytes> MAXVALUE PARTITION REORGANIZE LESS THAN PROCEDURE TRIGGER
 %token <bytes> VINDEX VINDEXES DIRECTORY NAME UPGRADE
 %token <bytes> STATUS VARIABLES WARNINGS CASCADED DEFINER OPTION SQL UNDEFINED
-%token <bytes> SEQUENCE MERGE TEMPTABLE INVOKER SECURITY FIRST AFTER LAST
+%token <bytes> SEQUENCE MERGE TEMPORARY TEMPTABLE INVOKER SECURITY FIRST AFTER LAST
 
 // Transaction Tokens
 %token <bytes> BEGIN START TRANSACTION COMMIT ROLLBACK SAVEPOINT RELEASE WORK
@@ -220,7 +221,7 @@ func skipToEnd(yylex interface{}) {
 
 // SHOW tokens
 %token <bytes> COLLATION DATABASES SCHEMAS TABLES VITESS_METADATA VSCHEMA FULL PROCESSLIST COLUMNS FIELDS ENGINES PLUGINS EXTENDED
-%token <bytes> KEYSPACES VITESS_KEYSPACES VITESS_SHARDS VITESS_TABLETS CODE PRIVILEGES FUNCTION
+%token <bytes> KEYSPACES VITESS_KEYSPACES VITESS_SHARDS VITESS_TABLETS CODE PRIVILEGES FUNCTION OPEN TRIGGERS EVENT USER
 
 // SET tokens
 %token <bytes> NAMES CHARSET GLOBAL SESSION ISOLATION LEVEL READ WRITE ONLY REPEATABLE COMMITTED UNCOMMITTED SERIALIZABLE
@@ -278,7 +279,7 @@ func skipToEnd(yylex interface{}) {
 %type <boolean> default_optional
 %type <statement> analyze_statement show_statement use_statement other_statement
 %type <statement> begin_statement commit_statement rollback_statement savepoint_statement release_statement load_statement
-%type <statement> lock_statement unlock_statement
+%type <statement> lock_statement unlock_statement call_statement
 %type <bytes2> comment_opt comment_list
 %type <str> wild_opt check_option_opt cascade_or_local_opt restrict_or_cascade_opt
 %type <explainType> explain_format_opt
@@ -311,7 +312,7 @@ func skipToEnd(yylex interface{}) {
 %type <expr> function_call_keyword function_call_nonkeyword function_call_generic function_call_conflict func_datetime_precision
 %type <isExprOperator> is_suffix
 %type <colTuple> col_tuple
-%type <exprs> expression_list
+%type <exprs> expression_list expression_list_opt
 %type <values> tuple_list
 %type <valTuple> row_tuple tuple_or_empty
 %type <expr> tuple_expression
@@ -328,6 +329,7 @@ func skipToEnd(yylex interface{}) {
 %type <orderDirection> asc_desc_opt
 %type <limit> limit_opt
 %type <selectInto> into_option
+%type <columnTypeOptions> column_type_options
 %type <str> header_opt export_options manifest_opt overwrite_opt format_opt optionally_opt
 %type <str> fields_opt lines_opt terminated_by_opt starting_by_opt enclosed_by_opt escaped_by_opt
 %type <lock> lock_opt
@@ -345,9 +347,9 @@ func skipToEnd(yylex interface{}) {
 %type <bytes> for_from
 %type <str> default_opt
 %type <ignore> ignore_opt
-%type <str> full_opt from_database_opt tables_or_processlist columns_or_fields extended_opt storage_opt
+%type <str> from_database_opt columns_or_fields extended_opt storage_opt
 %type <showFilter> like_or_where_opt like_opt
-%type <boolean> exists_opt not_exists_opt null_opt enforced_opt
+%type <boolean> exists_opt not_exists_opt enforced_opt temp_opt full_opt
 %type <empty> to_opt
 %type <bytes> reserved_keyword non_reserved_keyword
 %type <colIdent> sql_id reserved_sql_id col_alias as_ci_opt
@@ -360,12 +362,10 @@ func skipToEnd(yylex interface{}) {
 %type <convertType> convert_type
 %type <columnType> column_type
 %type <columnType> int_type decimal_type numeric_type time_type char_type spatial_type
-%type <literal> length_opt column_comment_opt
-%type <optVal> column_default_opt on_update_opt
+%type <literal> length_opt
 %type <str> charset_opt collate_opt
 %type <LengthScaleOption> float_length_opt decimal_length_opt
-%type <boolean> auto_increment_opt unsigned_opt zero_fill_opt without_valid_opt
-%type <colKeyOpt> column_key_opt
+%type <boolean> unsigned_opt zero_fill_opt without_valid_opt
 %type <strs> enum_values
 %type <columnDefinition> column_definition
 %type <columnDefinitions> column_definition_list
@@ -446,6 +446,7 @@ command:
 | load_statement
 | lock_statement
 | unlock_statement
+| call_statement
 | /*empty*/
 {
   setParseTree(yylex, nil)
@@ -826,9 +827,9 @@ vindex_param:
   }
 
 create_table_prefix:
-  CREATE TABLE not_exists_opt table_name
+  CREATE temp_opt TABLE not_exists_opt table_name
   {
-    $$ = &CreateTable{Table: $4, IfNotExists: $3}
+    $$ = &CreateTable{Table: $5, IfNotExists: $4, Temp: $2}
     setDDL(yylex, $$)
   }
 
@@ -997,16 +998,71 @@ table_column_list:
   }
 
 column_definition:
-  sql_id column_type null_opt column_default_opt on_update_opt auto_increment_opt column_key_opt column_comment_opt
+  sql_id column_type column_type_options
   {
-    $2.NotNull = $3
-    $2.Default = $4
-    $2.OnUpdate = $5
-    $2.Autoincrement = $6
-    $2.KeyOpt = $7
-    $2.Comment = $8
+    $2.Options = $3
     $$ = &ColumnDefinition{Name: $1, Type: $2}
   }
+
+// There is a shift reduce conflict that arises here because UNIQUE and KEY are column_type_option and so is UNIQUE KEY.
+// So in the state "column_type_options UNIQUE. KEY" there is a shift-reduce conflict.
+// This has been added to emulate what MySQL does. The previous architecture was such that the order of the column options
+// was specific (as stated in the MySQL guide) and did not accept arbitrary order options. For example NOT NULL DEFAULT 1 and not DEFAULT 1 NOT NULL
+column_type_options:
+  {
+    $$ = &ColumnTypeOptions{NotNull: false, Default: nil, OnUpdate: nil, Autoincrement: false, KeyOpt: colKeyNone, Comment: nil}
+  }
+| column_type_options NULL
+  {
+    $1.NotNull = false
+    $$ = $1
+  }
+| column_type_options NOT NULL
+  {
+    $1.NotNull = true
+    $$ = $1
+  }
+| column_type_options DEFAULT value_expression
+  {
+    $1.Default = $3
+    $$ = $1
+  }
+| column_type_options ON UPDATE function_call_nonkeyword
+  {
+    $1.OnUpdate = $4
+    $$ = $1
+  }
+| column_type_options AUTO_INCREMENT
+  {
+    $1.Autoincrement = true
+    $$ = $1
+  }
+| column_type_options COMMENT_KEYWORD STRING
+  {
+    $1.Comment = NewStrLiteral($3)
+    $$ = $1
+  }
+| column_type_options PRIMARY KEY
+  {
+    $1.KeyOpt = colKeyPrimary
+    $$ = $1
+  }
+| column_type_options KEY
+  {
+    $1.KeyOpt = colKey
+    $$ = $1
+  }
+| column_type_options UNIQUE KEY
+  {
+    $1.KeyOpt = colKeyUniqueKey
+    $$ = $1
+  }
+| column_type_options UNIQUE
+  {
+    $1.KeyOpt = colKeyUnique
+    $$ = $1
+  }
+
 column_type:
   numeric_type unsigned_opt zero_fill_opt
   {
@@ -1286,47 +1342,6 @@ zero_fill_opt:
     $$ = true
   }
 
-// Null opt returns false to mean NULL (i.e. the default) and true for NOT NULL
-null_opt:
-  {
-    $$ = false
-  }
-| NULL
-  {
-    $$ = false
-  }
-| NOT NULL
-  {
-    $$ = true
-  }
-
-column_default_opt:
-  {
-    $$ = nil
-  }
-| DEFAULT value_expression
-  {
-    $$ = $2
-  }
-
-on_update_opt:
-  {
-    $$ = nil
-  }
-| ON UPDATE function_call_nonkeyword
-{
-  $$ = $3
-}
-
-auto_increment_opt:
-  {
-    $$ = false
-  }
-| AUTO_INCREMENT
-  {
-    $$ = true
-  }
-
 charset_opt:
   {
     $$ = ""
@@ -1353,35 +1368,6 @@ collate_opt:
     $$ = string($2)
   }
 
-column_key_opt:
-  {
-    $$ = colKeyNone
-  }
-| PRIMARY KEY
-  {
-    $$ = colKeyPrimary
-  }
-| KEY
-  {
-    $$ = colKey
-  }
-| UNIQUE KEY
-  {
-    $$ = colKeyUniqueKey
-  }
-| UNIQUE
-  {
-    $$ = colKeyUnique
-  }
-
-column_comment_opt:
-  {
-    $$ = nil
-  }
-| COMMENT_KEYWORD STRING
-  {
-    $$ = NewStrLiteral($2)
-  }
 
 index_definition:
   index_info '(' index_column_list ')' index_option_list_opt
@@ -2288,9 +2274,9 @@ rename_list:
   }
 
 drop_statement:
-  DROP TABLE exists_opt table_name_list restrict_or_cascade_opt
+  DROP temp_opt TABLE exists_opt table_name_list restrict_or_cascade_opt
   {
-    $$ = &DropTable{FromTables: $4, IfExists: $3}
+    $$ = &DropTable{FromTables: $5, IfExists: $4, Temp: $2}
   }
 | DROP INDEX id_or_var ON table_name algorithm_lock_opt
   {
@@ -2334,6 +2320,10 @@ show_statement:
   {
     $$ = &Show{&ShowBasic{Command: Collation, Filter: $3}}
   }
+| SHOW full_opt columns_or_fields from_or_in table_name from_database_opt like_or_where_opt
+  {
+    $$ = &Show{&ShowBasic{Full: $2, Command: Column, Tbl: $5, DbName: $6, Filter: $7}}
+  }
 | SHOW DATABASES like_or_where_opt
   {
     $$ = &Show{&ShowBasic{Command: Database, Filter: $3}}
@@ -2353,6 +2343,14 @@ show_statement:
 | SHOW FUNCTION STATUS like_or_where_opt
   {
     $$ = &Show{&ShowBasic{Command: Function, Filter: $4}}
+  }
+| SHOW extended_opt index_symbols from_or_in table_name from_database_opt like_or_where_opt
+  {
+    $$ = &Show{&ShowBasic{Command: Index, Tbl: $5, DbName: $6, Filter: $7}}
+  }
+| SHOW OPEN TABLES from_database_opt like_or_where_opt
+  {
+    $$ = &Show{&ShowBasic{Command: OpenTable, DbName:$4, Filter: $5}}
   }
 | SHOW PRIVILEGES
   {
@@ -2380,46 +2378,53 @@ show_statement:
   }
 | SHOW TABLE STATUS from_database_opt like_or_where_opt
   {
-    $$ = &Show{&ShowTableStatus{DatabaseName:$4, Filter:$5}}
+    $$ = &Show{&ShowBasic{Command: TableStatus, DbName:$4, Filter: $5}}
   }
-| SHOW full_opt columns_or_fields from_or_in table_name from_database_opt like_or_where_opt
+| SHOW full_opt TABLES from_database_opt like_or_where_opt
   {
-    $$ = &Show{&ShowColumns{Full: $2, Table: $5, DbName: $6, Filter: $7}}
+    $$ = &Show{&ShowBasic{Command: Table, Full: $2, DbName:$4, Filter: $5}}
   }
+| SHOW TRIGGERS from_database_opt like_or_where_opt
+  {
+    $$ = &Show{&ShowBasic{Command: Trigger, DbName:$3, Filter: $4}}
+  }
+| SHOW CREATE DATABASE table_name
+  {
+    $$ = &Show{&ShowCreate{Command: CreateDb, Op: $4}}
+  }
+| SHOW CREATE EVENT table_name
+  {
+    $$ = &Show{&ShowCreate{Command: CreateE, Op: $4}}
+  }
+| SHOW CREATE FUNCTION table_name
+  {
+    $$ = &Show{&ShowCreate{Command: CreateF, Op: $4}}
+  }
+| SHOW CREATE PROCEDURE table_name
+  {
+    $$ = &Show{&ShowCreate{Command: CreateProc, Op: $4}}
+  }
+| SHOW CREATE TABLE table_name
+  {
+    $$ = &Show{&ShowCreate{Command: CreateTbl, Op: $4}}
+  }
+| SHOW CREATE TRIGGER table_name
+  {
+    $$ = &Show{&ShowCreate{Command: CreateTr, Op: $4}}
+  }
+| SHOW CREATE VIEW table_name
+  {
+    $$ = &Show{&ShowCreate{Command: CreateV, Op: $4}}
+  }
+| SHOW CREATE USER ddl_skip_to_end
+  {
+    $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3), Scope: ImplicitScope}}
+   }
 |  SHOW BINARY id_or_var ddl_skip_to_end /* SHOW BINARY ... */
   {
     $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3.String()), Scope: ImplicitScope}}
   }
 |  SHOW BINARY LOGS ddl_skip_to_end /* SHOW BINARY LOGS */
-  {
-    $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3), Scope: ImplicitScope}}
-  }
-| SHOW CREATE DATABASE ddl_skip_to_end
-  {
-    $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3), Scope: ImplicitScope}}
-  }
-| SHOW CREATE FUNCTION table_name
-  {
-    $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3), Table: $4, Scope: ImplicitScope}}
-  }
-/* Rule to handle SHOW CREATE EVENT, SHOW CREATE FUNCTION, etc. */
-| SHOW CREATE id_or_var ddl_skip_to_end
-  {
-    $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3.String()), Scope: ImplicitScope}}
-  }
-| SHOW CREATE PROCEDURE ddl_skip_to_end
-  {
-    $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3), Scope: ImplicitScope}}
-  }
-| SHOW CREATE TABLE table_name
-  {
-    $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3), Table: $4, Scope: ImplicitScope}}
-  }
-| SHOW CREATE TRIGGER ddl_skip_to_end
-  {
-    $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3), Scope: ImplicitScope}}
-  }
-| SHOW CREATE VIEW ddl_skip_to_end
   {
     $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3), Scope: ImplicitScope}}
   }
@@ -2431,11 +2436,6 @@ show_statement:
   {
     $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3), Table: $4, Scope: ImplicitScope}}
   }
-| SHOW extended_opt index_symbols from_or_in table_name from_database_opt like_or_where_opt
-  {
-    showTablesOpt := &ShowTablesOpt{DbName:$6, Filter:$7}
-    $$ = &Show{&ShowLegacy{Extended: string($2), Type: string($3), ShowTablesOpt: showTablesOpt, OnTable: $5, Scope: ImplicitScope}}
-  }
 | SHOW PLUGINS
   {
     $$ = &Show{&ShowLegacy{Type: string($2), Scope: ImplicitScope}}
@@ -2444,15 +2444,9 @@ show_statement:
   {
     $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3), Table: $4, Scope: ImplicitScope}}
   }
-| SHOW full_opt tables_or_processlist from_database_opt like_or_where_opt
+| SHOW full_opt PROCESSLIST from_database_opt like_or_where_opt
   {
-    // this is ugly, but I couldn't find a better way for now
-    if $3 == "processlist" {
-      $$ = &Show{&ShowLegacy{Type: $3, Scope: ImplicitScope}}
-    } else {
-    showTablesOpt := &ShowTablesOpt{Full:$2, DbName:$4, Filter:$5}
-      $$ = &Show{&ShowLegacy{Type: $3, ShowTablesOpt: showTablesOpt, Scope: ImplicitScope}}
-    }
+      $$ = &Show{&ShowLegacy{Type: string($3), Scope: ImplicitScope}}
   }
 | SHOW VITESS_METADATA VARIABLES like_opt
   {
@@ -2503,16 +2497,6 @@ show_statement:
     $$ = &Show{&ShowLegacy{Type: string($2), Scope: ImplicitScope}}
   }
 
-tables_or_processlist:
-  TABLES
-  {
-    $$ = string($1)
-  }
-| PROCESSLIST
-  {
-    $$ = string($1)
-  }
-
 vitess_topo:
   VITESS_TABLETS
   {
@@ -2536,11 +2520,11 @@ extended_opt:
 full_opt:
   /* empty */
   {
-    $$ = ""
+    $$ = false
   }
 | FULL
   {
-    $$ = "full "
+    $$ = true
   }
 
 columns_or_fields:
@@ -2727,21 +2711,21 @@ wild_opt:
   }
 | sql_id
   {
-    $$ = "" 
+    $$ = $1.val
   }
 | STRING
   {
-    $$ = "" 
+    $$ = "'" + string($1) + "'"
   }
-  
+
 explain_statement:
   explain_synonyms table_name wild_opt
   {
-    $$ = &OtherRead{}
+    $$ = &ExplainTab{Table: $2, Wild: $3}
   }
 | explain_synonyms explain_format_opt explainable_statement
   {
-    $$ = &Explain{Type: $2, Statement: $3}
+    $$ = &ExplainStmt{Type: $2, Statement: $3}
   }
 
 other_statement:
@@ -4599,6 +4583,11 @@ for_from:
   FOR
 | FROM
 
+temp_opt:
+  { $$ = false }
+| TEMPORARY
+  { $$ = true }
+
 exists_opt:
   { $$ = false }
 | IF EXISTS
@@ -4620,6 +4609,21 @@ to_opt:
   { $$ = struct{}{} }
 | AS
   { $$ = struct{}{} }
+
+call_statement:
+  CALL table_name openb expression_list_opt closeb
+  {
+    $$ = &CallProc{Name: $2, Params: $4}
+  }
+
+expression_list_opt:  
+  {
+    $$ = nil
+  }
+| expression_list
+  {
+    $$ = $1
+  }
 
 using_opt:
   { $$ = nil }
@@ -4684,6 +4688,7 @@ reserved_keyword:
 | BINARY
 | BY
 | CASE
+| CALL
 | CHANGE
 | CHECK
 | COLLATE
@@ -4881,6 +4886,7 @@ non_reserved_keyword:
 | ENUM
 | ERROR
 | ESCAPED
+| EVENT
 | EXCHANGE
 | EXCLUDE
 | EXCLUSIVE
@@ -4962,6 +4968,7 @@ non_reserved_keyword:
 | OFFSET
 | OJ
 | OLD
+| OPEN
 | OPTION
 | OPTIONAL
 | OPTIONALLY
@@ -5035,6 +5042,7 @@ non_reserved_keyword:
 | STORAGE
 | TABLES
 | TABLESPACE
+| TEMPORARY
 | TEMPTABLE
 | TERMINATED
 | TEXT
@@ -5049,6 +5057,7 @@ non_reserved_keyword:
 | TRANSACTION
 | TREE
 | TRIGGER
+| TRIGGERS
 | TRUNCATE
 | UNBOUNDED
 | UNCOMMITTED
@@ -5056,6 +5065,7 @@ non_reserved_keyword:
 | UNSIGNED
 | UNUSED
 | UPGRADE
+| USER
 | USER_RESOURCES
 | VALIDATION
 | VARBINARY

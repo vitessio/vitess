@@ -21,6 +21,10 @@ import { Tablets } from './routes/Tablets';
 import { Debug } from './routes/Debug';
 import { NavRail } from './NavRail';
 import { Error404 } from './routes/Error404';
+import { Clusters } from './routes/Clusters';
+import { Gates } from './routes/Gates';
+import { Keyspaces } from './routes/Keyspaces';
+import { Schemas } from './routes/Schemas';
 
 export const App = () => {
     return (
@@ -32,6 +36,22 @@ export const App = () => {
 
                 <div className={style.mainContainer}>
                     <Switch>
+                        <Route path="/clusters">
+                            <Clusters />
+                        </Route>
+
+                        <Route path="/gates">
+                            <Gates />
+                        </Route>
+
+                        <Route path="/keyspaces">
+                            <Keyspaces />
+                        </Route>
+
+                        <Route path="/schemas">
+                            <Schemas />
+                        </Route>
+
                         <Route path="/tablets">
                             <Tablets />
                         </Route>

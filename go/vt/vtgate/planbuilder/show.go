@@ -20,6 +20,8 @@ import (
 	"regexp"
 	"strings"
 
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
@@ -41,10 +43,8 @@ func buildShowPlan(stmt *sqlparser.Show, vschema ContextVSchema) (engine.Primiti
 	switch show := stmt.Internal.(type) {
 	case *sqlparser.ShowBasic:
 		return buildShowBasicPlan(show, vschema)
-	case *sqlparser.ShowColumns:
-		return buildShowColumnsPlan(show, vschema)
-	case *sqlparser.ShowTableStatus:
-		return buildShowTableStatusPlan(show, vschema)
+	case *sqlparser.ShowCreate:
+		return buildShowCreatePlan(show, vschema)
 	default:
 		return nil, ErrPlanNotSupported
 	}
@@ -53,43 +53,16 @@ func buildShowPlan(stmt *sqlparser.Show, vschema ContextVSchema) (engine.Primiti
 func buildShowBasicPlan(show *sqlparser.ShowBasic, vschema ContextVSchema) (engine.Primitive, error) {
 	switch show.Command {
 	case sqlparser.Charset:
-		return showCharset(show)
+		return buildCharsetPlan(show)
 	case sqlparser.Collation, sqlparser.Function, sqlparser.Privilege, sqlparser.Procedure,
 		sqlparser.VariableGlobal, sqlparser.VariableSession:
-		return showSendAnywhere(show, vschema)
+		return buildSendAnywherePlan(show, vschema)
+	case sqlparser.Column, sqlparser.Index:
+		return buildShowTblPlan(show, vschema)
 	case sqlparser.Database, sqlparser.Keyspace:
-		ks, err := vschema.AllKeyspace()
-		if err != nil {
-			return nil, err
-		}
-
-		var filter *regexp.Regexp
-
-		if show.Filter != nil {
-			filter = sqlparser.LikeToRegexp(show.Filter.Like)
-		}
-
-		if filter == nil {
-			filter = regexp.MustCompile(".*")
-		}
-
-		//rows := make([][]sqltypes.Value, 0, len(ks)+4)
-		var rows [][]sqltypes.Value
-
-		if show.Command == sqlparser.Database {
-			//Hard code default databases
-			rows = append(rows, buildVarCharRow("information_schema"))
-			rows = append(rows, buildVarCharRow("mysql"))
-			rows = append(rows, buildVarCharRow("sys"))
-			rows = append(rows, buildVarCharRow("performance_schema"))
-		}
-
-		for _, v := range ks {
-			if filter.MatchString(v.Name) {
-				rows = append(rows, buildVarCharRow(v.Name))
-			}
-		}
-		return engine.NewRowsPrimitive(rows, buildVarCharFields("Database")), nil
+		return buildDBPlan(show, vschema)
+	case sqlparser.OpenTable, sqlparser.TableStatus, sqlparser.Table, sqlparser.Trigger:
+		return buildPlanWithDB(show, vschema)
 	case sqlparser.StatusGlobal, sqlparser.StatusSession:
 		return engine.NewRowsPrimitive(make([][]sqltypes.Value, 0, 2), buildVarCharFields("Variable_name", "Value")), nil
 	}
@@ -97,21 +70,7 @@ func buildShowBasicPlan(show *sqlparser.ShowBasic, vschema ContextVSchema) (engi
 
 }
 
-func showSendAnywhere(show *sqlparser.ShowBasic, vschema ContextVSchema) (engine.Primitive, error) {
-	ks, err := vschema.FirstSortedKeyspace()
-	if err != nil {
-		return nil, err
-	}
-	return &engine.Send{
-		Keyspace:          ks,
-		TargetDestination: key.DestinationAnyShard{},
-		Query:             sqlparser.String(show),
-		IsDML:             false,
-		SingleShardOnly:   true,
-	}, nil
-}
-
-func showCharset(show *sqlparser.ShowBasic) (engine.Primitive, error) {
+func buildCharsetPlan(show *sqlparser.ShowBasic) (engine.Primitive, error) {
 	fields := buildVarCharFields("Charset", "Description", "Default collation")
 	maxLenField := &querypb.Field{Name: "Maxlen", Type: sqltypes.Int32}
 	fields = append(fields, maxLenField)
@@ -125,16 +84,30 @@ func showCharset(show *sqlparser.ShowBasic) (engine.Primitive, error) {
 	return engine.NewRowsPrimitive(rows, fields), nil
 }
 
-func buildShowColumnsPlan(show *sqlparser.ShowColumns, vschema ContextVSchema) (engine.Primitive, error) {
-	if show.DbName != "" {
-		show.Table.Qualifier = sqlparser.NewTableIdent(show.DbName)
+func buildSendAnywherePlan(show *sqlparser.ShowBasic, vschema ContextVSchema) (engine.Primitive, error) {
+	ks, err := vschema.FirstSortedKeyspace()
+	if err != nil {
+		return nil, err
 	}
-	table, _, _, _, destination, err := vschema.FindTableOrVindex(show.Table)
+	return &engine.Send{
+		Keyspace:          ks,
+		TargetDestination: key.DestinationAnyShard{},
+		Query:             sqlparser.String(show),
+		IsDML:             false,
+		SingleShardOnly:   true,
+	}, nil
+}
+
+func buildShowTblPlan(show *sqlparser.ShowBasic, vschema ContextVSchema) (engine.Primitive, error) {
+	if show.DbName != "" {
+		show.Tbl.Qualifier = sqlparser.NewTableIdent(show.DbName)
+	}
+	table, _, _, _, destination, err := vschema.FindTableOrVindex(show.Tbl)
 	if err != nil {
 		return nil, err
 	}
 	if table == nil {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "table does not exists: %s", show.Table.Name.String())
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "table does not exists: %s", show.Tbl.Name.String())
 	}
 	if destination == nil {
 		destination = key.DestinationAnyShard{}
@@ -142,8 +115,8 @@ func buildShowColumnsPlan(show *sqlparser.ShowColumns, vschema ContextVSchema) (
 
 	// Remove Database Name from the query.
 	show.DbName = ""
-	show.Table.Qualifier = sqlparser.NewTableIdent("")
-	show.Table.Name = table.Name
+	show.Tbl.Qualifier = sqlparser.NewTableIdent("")
+	show.Tbl.Name = table.Name
 
 	return &engine.Send{
 		Keyspace:          table.Keyspace,
@@ -152,11 +125,56 @@ func buildShowColumnsPlan(show *sqlparser.ShowColumns, vschema ContextVSchema) (
 		IsDML:             false,
 		SingleShardOnly:   true,
 	}, nil
-
 }
 
-func buildShowTableStatusPlan(show *sqlparser.ShowTableStatus, vschema ContextVSchema) (engine.Primitive, error) {
-	destination, keyspace, _, err := vschema.TargetDestination(show.DatabaseName)
+func buildDBPlan(show *sqlparser.ShowBasic, vschema ContextVSchema) (engine.Primitive, error) {
+	ks, err := vschema.AllKeyspace()
+	if err != nil {
+		return nil, err
+	}
+
+	var filter *regexp.Regexp
+
+	if show.Filter != nil {
+		filter = sqlparser.LikeToRegexp(show.Filter.Like)
+	}
+
+	if filter == nil {
+		filter = regexp.MustCompile(".*")
+	}
+
+	//rows := make([][]sqltypes.Value, 0, len(ks)+4)
+	var rows [][]sqltypes.Value
+
+	if show.Command == sqlparser.Database {
+		//Hard code default databases
+		rows = append(rows, buildVarCharRow("information_schema"))
+		rows = append(rows, buildVarCharRow("mysql"))
+		rows = append(rows, buildVarCharRow("sys"))
+		rows = append(rows, buildVarCharRow("performance_schema"))
+	}
+
+	for _, v := range ks {
+		if filter.MatchString(v.Name) {
+			rows = append(rows, buildVarCharRow(v.Name))
+		}
+	}
+	return engine.NewRowsPrimitive(rows, buildVarCharFields("Database")), nil
+}
+
+func buildPlanWithDB(show *sqlparser.ShowBasic, vschema ContextVSchema) (engine.Primitive, error) {
+	dbName := show.DbName
+	if sqlparser.SystemSchema(dbName) {
+		ks, err := vschema.AnyKeyspace()
+		if err != nil {
+			return nil, err
+		}
+		dbName = ks.Name
+	} else {
+		// Remove Database Name from the query.
+		show.DbName = ""
+	}
+	destination, keyspace, _, err := vschema.TargetDestination(dbName)
 	if err != nil {
 		return nil, err
 	}
@@ -164,13 +182,11 @@ func buildShowTableStatusPlan(show *sqlparser.ShowTableStatus, vschema ContextVS
 		destination = key.DestinationAnyShard{}
 	}
 
-	// Remove Database Name from the query.
-	show.DatabaseName = ""
-
+	query := sqlparser.String(show)
 	return &engine.Send{
 		Keyspace:          keyspace,
 		TargetDestination: destination,
-		Query:             sqlparser.String(show),
+		Query:             query,
 		IsDML:             false,
 		SingleShardOnly:   true,
 	}, nil
@@ -288,4 +304,114 @@ func checkLikeOpt(likeOpt string, colNames []string) (string, error) {
 	}
 
 	return "", nil
+}
+
+func buildShowCreatePlan(show *sqlparser.ShowCreate, vschema ContextVSchema) (engine.Primitive, error) {
+	switch show.Command {
+	case sqlparser.CreateDb:
+		return buildCreateDbPlan(show, vschema)
+	case sqlparser.CreateE, sqlparser.CreateF, sqlparser.CreateProc, sqlparser.CreateTr, sqlparser.CreateV:
+		return buildCreatePlan(show, vschema)
+	case sqlparser.CreateTbl:
+		return buildCreateTblPlan(show, vschema)
+	}
+	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: unknown show query type %s", show.Command.ToString())
+}
+
+func buildCreateDbPlan(show *sqlparser.ShowCreate, vschema ContextVSchema) (engine.Primitive, error) {
+	dbName := show.Op.Name.String()
+	if sqlparser.SystemSchema(dbName) {
+		ks, err := vschema.AnyKeyspace()
+		if err != nil {
+			return nil, err
+		}
+		dbName = ks.Name
+	}
+
+	dest, ks, _, err := vschema.TargetDestination(dbName)
+	if err != nil {
+		return nil, err
+	}
+
+	if dest == nil {
+		dest = key.DestinationAnyShard{}
+	}
+
+	return &engine.Send{
+		Keyspace:          ks,
+		TargetDestination: dest,
+		Query:             sqlparser.String(show),
+		IsDML:             false,
+		SingleShardOnly:   true,
+	}, nil
+}
+
+func buildCreateTblPlan(show *sqlparser.ShowCreate, vschema ContextVSchema) (engine.Primitive, error) {
+	dest := key.Destination(key.DestinationAnyShard{})
+	var ks *vindexes.Keyspace
+	var err error
+
+	if !show.Op.Qualifier.IsEmpty() && sqlparser.SystemSchema(show.Op.Qualifier.String()) {
+		ks, err = vschema.AnyKeyspace()
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		tbl, _, _, _, destKs, err := vschema.FindTableOrVindex(show.Op)
+		if err != nil {
+			return nil, err
+		}
+		if tbl == nil {
+			return nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "table now found: %v", show.Op)
+		}
+		ks = tbl.Keyspace
+		if destKs != nil {
+			dest = destKs
+		}
+		show.Op.Qualifier = sqlparser.NewTableIdent("")
+		show.Op.Name = tbl.Name
+	}
+
+	return &engine.Send{
+		Keyspace:          ks,
+		TargetDestination: dest,
+		Query:             sqlparser.String(show),
+		IsDML:             false,
+		SingleShardOnly:   true,
+	}, nil
+
+}
+
+func buildCreatePlan(show *sqlparser.ShowCreate, vschema ContextVSchema) (engine.Primitive, error) {
+	dbName := ""
+	if !show.Op.Qualifier.IsEmpty() {
+		dbName = show.Op.Qualifier.String()
+	}
+
+	if sqlparser.SystemSchema(dbName) {
+		ks, err := vschema.AnyKeyspace()
+		if err != nil {
+			return nil, err
+		}
+		dbName = ks.Name
+	} else {
+		show.Op.Qualifier = sqlparser.NewTableIdent("")
+	}
+
+	dest, ks, _, err := vschema.TargetDestination(dbName)
+	if err != nil {
+		return nil, err
+	}
+	if dest == nil {
+		dest = key.DestinationAnyShard{}
+	}
+
+	return &engine.Send{
+		Keyspace:          ks,
+		TargetDestination: dest,
+		Query:             sqlparser.String(show),
+		IsDML:             false,
+		SingleShardOnly:   true,
+	}, nil
+
 }
