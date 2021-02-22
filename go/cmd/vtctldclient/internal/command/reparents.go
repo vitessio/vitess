@@ -47,6 +47,13 @@ var (
 		Args: cobra.ExactArgs(2),
 		RunE: commandInitShardPrimary,
 	}
+	// PlannedReparentShard makes a PlannedReparentShard gRPC call to a vtctld.
+	PlannedReparentShard = &cobra.Command{
+		Use:  "PlannedReparentShard <keyspace/shard>",
+		Args: cobra.ExactArgs(1),
+		Long: "string",
+		RunE: commandPlannedReparentShard,
+	}
 	// ReparentTablet makes a ReparentTablet gRPC call to a vtctld.
 	ReparentTablet = &cobra.Command{
 		Use: "ReparentTablet ALIAS",
@@ -151,6 +158,57 @@ func commandInitShardPrimary(cmd *cobra.Command, args []string) error {
 	return err
 }
 
+var plannedReparentShardOptions = struct {
+	NewPrimaryAliasStr   string
+	AvoidPrimaryAliasStr string
+	WaitReplicasTimeout  time.Duration
+}{}
+
+func commandPlannedReparentShard(cmd *cobra.Command, args []string) error {
+	keyspace, shard, err := topoproto.ParseKeyspaceShard(cmd.Flags().Arg(0))
+	if err != nil {
+		return err
+	}
+
+	var (
+		newPrimaryAlias   *topodatapb.TabletAlias
+		avoidPrimaryAlias *topodatapb.TabletAlias
+	)
+
+	if plannedReparentShardOptions.NewPrimaryAliasStr != "" {
+		newPrimaryAlias, err = topoproto.ParseTabletAlias(plannedReparentShardOptions.NewPrimaryAliasStr)
+		if err != nil {
+			return err
+		}
+	}
+
+	if plannedReparentShardOptions.AvoidPrimaryAliasStr != "" {
+		avoidPrimaryAlias, err = topoproto.ParseTabletAlias(plannedReparentShardOptions.AvoidPrimaryAliasStr)
+		if err != nil {
+			return err
+		}
+	}
+
+	cli.FinishedParsing(cmd)
+
+	resp, err := client.PlannedReparentShard(commandCtx, &vtctldatapb.PlannedReparentShardRequest{
+		Keyspace:            keyspace,
+		Shard:               shard,
+		NewPrimary:          newPrimaryAlias,
+		AvoidPrimary:        avoidPrimaryAlias,
+		WaitReplicasTimeout: ptypes.DurationProto(plannedReparentShardOptions.WaitReplicasTimeout),
+	})
+	if err != nil {
+		return err
+	}
+
+	for _, event := range resp.Events {
+		fmt.Println(logutil.EventString(event))
+	}
+
+	return nil
+}
+
 func commandReparentTablet(cmd *cobra.Command, args []string) error {
 	alias, err := topoproto.ParseTabletAlias(cmd.Flags().Arg(0))
 	if err != nil {
@@ -206,6 +264,11 @@ func init() {
 	InitShardPrimary.Flags().DurationVar(&initShardPrimaryOptions.WaitReplicasTimeout, "wait-replicas-timeout", 30*time.Second, "time to wait for replicas to catch up in reparenting")
 	InitShardPrimary.Flags().BoolVar(&initShardPrimaryOptions.Force, "force", false, "will force the reparent even if the provided tablet is not a master or the shard master")
 	Root.AddCommand(InitShardPrimary)
+
+	PlannedReparentShard.Flags().DurationVar(&plannedReparentShardOptions.WaitReplicasTimeout, "wait-replicas-timeout", *topo.RemoteOperationTimeout, "Time to wait for replicas to catch up on replication both before and after reparenting.")
+	PlannedReparentShard.Flags().StringVar(&plannedReparentShardOptions.NewPrimaryAliasStr, "new-primary", "", "Alias of a tablet that should be the new primary.")
+	PlannedReparentShard.Flags().StringVar(&plannedReparentShardOptions.AvoidPrimaryAliasStr, "avoid-primary", "", "Alias of a tablet that should not be the primary; i.e. \"reparent to any other tablet if this one is the primary\".")
+	Root.AddCommand(PlannedReparentShard)
 
 	Root.AddCommand(ReparentTablet)
 	Root.AddCommand(TabletExternallyReparented)
