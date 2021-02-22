@@ -88,7 +88,7 @@ func buildShowBasicPlan(show *sqlparser.ShowBasic, vschema ContextVSchema) (engi
 }
 
 func showSendAnywhere(show *sqlparser.ShowBasic, vschema ContextVSchema) (engine.Primitive, error) {
-	ks, err := vschema.FirstSortedKeyspace()
+	ks, err := vschema.AnyKeyspace()
 	if err != nil {
 		return nil, err
 	}
