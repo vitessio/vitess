@@ -910,7 +910,44 @@ func (s *VtctldServer) InitShardPrimaryLocked(
 
 // PlannedReparentShard is part of the vtctldservicepb.VtctldServer interface.
 func (s *VtctldServer) PlannedReparentShard(ctx context.Context, req *vtctldatapb.PlannedReparentShardRequest) (*vtctldatapb.PlannedReparentShardResponse, error) {
-	panic("unimplemented!")
+	waitReplicasTimeout, ok, err := protoutil.DurationFromProto(req.WaitReplicasTimeout)
+	if err != nil {
+		return nil, err
+	} else if !ok {
+		waitReplicasTimeout = time.Second * 30
+	}
+
+	logstream := []*logutilpb.Event{}
+	logger := logutil.NewCallbackLogger(func(e *logutilpb.Event) {
+		logstream = append(logstream, e)
+	})
+
+	ev, err := reparentutil.NewPlannedReparenter(s.ts, s.tmc, logger).ReparentShard(ctx,
+		req.Keyspace,
+		req.Shard,
+		reparentutil.PlannedReparentOptions{
+			AvoidPrimaryAlias:   req.AvoidPrimary,
+			NewPrimaryAlias:     req.NewPrimary,
+			WaitReplicasTimeout: waitReplicasTimeout,
+		},
+	)
+
+	resp := &vtctldatapb.PlannedReparentShardResponse{
+		Keyspace: req.Keyspace,
+		Shard:    req.Shard,
+		Events:   logstream,
+	}
+
+	if ev != nil {
+		resp.Keyspace = ev.ShardInfo.Keyspace()
+		resp.Shard = ev.ShardInfo.ShardName()
+
+		if !topoproto.TabletAliasIsZero(ev.NewMaster.Alias) {
+			resp.PromotedPrimary = ev.NewMaster.Alias
+		}
+	}
+
+	return resp, err
 }
 
 // RemoveKeyspaceCell is part of the vtctlservicepb.VtctldServer interface.
