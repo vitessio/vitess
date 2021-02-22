@@ -40,15 +40,29 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
+	vtctlservicepb "vitess.io/vitess/go/vt/proto/vtctlservice"
 	"vitess.io/vitess/go/vt/proto/vttime"
 )
 
 func init() {
-	*tmclient.TabletManagerProtocol = testutil.TabletManagerClientProtocol
 	*backupstorage.BackupStorageImplementation = testutil.BackupStorageImplementation
+
+	// For tests that don't actually care about mocking the tmclient (i.e. they
+	// call NewVtctldServer to initialize the unit under test), this needs to be
+	// set.
+	//
+	// Tests that do care about the tmclient should use
+	// testutil.NewVtctldServerWithTabletManagerClient to initialize their
+	// VtctldServer.
+	*tmclient.TabletManagerProtocol = "grpcvtctldserver.test"
+	tmclient.RegisterTabletManagerClientFactory("grpcvtctldserver.test", func() tmclient.TabletManagerClient {
+		return nil
+	})
 }
 
 func TestChangeTabletType(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name      string
 		cells     []string
@@ -203,11 +217,16 @@ func TestChangeTabletType(t *testing.T) {
 	}
 
 	for _, tt := range tests {
+		tt := tt
+
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			ctx := context.Background()
 			ts := memorytopo.NewServer(tt.cells...)
-			vtctld := NewVtctldServer(ts)
-			testutil.TabletManagerClient.Topo = ts
+			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, &testutil.TabletManagerClient{
+				TopoServer: ts,
+			}, func(ts *topo.Server) vtctlservicepb.VtctldServer { return NewVtctldServer(ts) })
 
 			testutil.AddTablets(ctx, t, ts, nil, tt.tablets...)
 
@@ -244,10 +263,13 @@ func TestChangeTabletType(t *testing.T) {
 	}
 
 	t.Run("tabletmanager failure", func(t *testing.T) {
+		t.Parallel()
+
 		ctx := context.Background()
 		ts := memorytopo.NewServer("zone1")
-		vtctld := NewVtctldServer(ts)
-		testutil.TabletManagerClient.Topo = nil
+		vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, &testutil.TabletManagerClient{
+			TopoServer: nil,
+		}, func(ts *topo.Server) vtctlservicepb.VtctldServer { return NewVtctldServer(ts) })
 
 		testutil.AddTablet(ctx, t, ts, &topodatapb.Tablet{
 			Alias: &topodatapb.TabletAlias{
@@ -2186,7 +2208,15 @@ func TestGetTablet(t *testing.T) {
 func TestGetSchema(t *testing.T) {
 	ctx := context.Background()
 	ts := memorytopo.NewServer("zone1")
-	vtctld := NewVtctldServer(ts)
+	tmc := testutil.TabletManagerClient{
+		GetSchemaResults: map[string]struct {
+			Schema *tabletmanagerdatapb.SchemaDefinition
+			Error  error
+		}{},
+	}
+	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, &tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+		return NewVtctldServer(ts)
+	})
 
 	validAlias := &topodatapb.TabletAlias{
 		Cell: "zone1",
@@ -2205,27 +2235,33 @@ func TestGetSchema(t *testing.T) {
 
 	// we need to run this on each test case or they will pollute each other
 	setupSchema := func() {
-		testutil.TabletManagerClient.Schemas[topoproto.TabletAliasString(validAlias)] = &tabletmanagerdatapb.SchemaDefinition{
-			DatabaseSchema: "CREATE DATABASE vt_testkeyspace",
-			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
-				{
-					Name: "t1",
-					Schema: `CREATE TABLE t1 (
+		tmc.GetSchemaResults[topoproto.TabletAliasString(validAlias)] = struct {
+			Schema *tabletmanagerdatapb.SchemaDefinition
+			Error  error
+		}{
+			Schema: &tabletmanagerdatapb.SchemaDefinition{
+				DatabaseSchema: "CREATE DATABASE vt_testkeyspace",
+				TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+					{
+						Name: "t1",
+						Schema: `CREATE TABLE t1 (
 	id int(11) not null,
 	PRIMARY KEY (id)
 );`,
-					Type:       "BASE",
-					Columns:    []string{"id"},
-					DataLength: 100,
-					RowCount:   50,
-					Fields: []*querypb.Field{
-						{
-							Name: "id",
-							Type: querypb.Type_INT32,
+						Type:       "BASE",
+						Columns:    []string{"id"},
+						DataLength: 100,
+						RowCount:   50,
+						Fields: []*querypb.Field{
+							{
+								Name: "id",
+								Type: querypb.Type_INT32,
+							},
 						},
 					},
 				},
 			},
+			Error: nil,
 		}
 	}
 
