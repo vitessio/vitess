@@ -29,6 +29,7 @@ import (
 
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/concurrency"
+	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtadmin/cluster"
 	"vitess.io/vitess/go/vt/vtadmin/grpcserver"
 	vtadminhttp "vitess.io/vitess/go/vt/vtadmin/http"
@@ -626,7 +627,7 @@ func (api *API) VTExplain(ctx context.Context, req *vtadminpb.VTExplainRequest) 
 	}
 
 	tablet, err := api.findTablet(ctx, c, func(t *vtadminpb.Tablet) bool {
-		return t.Tablet.Keyspace == req.Keyspace && t.Tablet.Type == topodata.TabletType_REPLICA && t.State == vtadminpb.Tablet_SERVING
+		return t.Tablet.Keyspace == req.Keyspace && topo.IsInServingGraph(t.Tablet.Type) && t.Tablet.Type != topodata.TabletType_MASTER && t.State == vtadminpb.Tablet_SERVING
 	})
 
 	if err != nil {
