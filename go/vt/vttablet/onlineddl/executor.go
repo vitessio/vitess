@@ -398,10 +398,10 @@ func (e *Executor) parseAlterOptions(ctx context.Context, onlineDDL *schema.Onli
 }
 
 // executeDirectly runs a DDL query directly on the backend MySQL server
-func (e *Executor) executeDirectly(ctx context.Context, onlineDDL *schema.OnlineDDL, acceptableMySQLErrorCodes ...int) error {
+func (e *Executor) executeDirectly(ctx context.Context, onlineDDL *schema.OnlineDDL, acceptableMySQLErrorCodes ...int) (acceptableErrorCodeFound bool, err error) {
 	conn, err := dbconnpool.NewDBConnection(ctx, e.env.Config().DB.DbaWithDB())
 	if err != nil {
-		return err
+		return false, err
 	}
 	defer conn.Close()
 
@@ -414,6 +414,7 @@ func (e *Executor) executeDirectly(ctx context.Context, onlineDDL *schema.Online
 			for _, acceptableCode := range acceptableMySQLErrorCodes {
 				if merr.Num == acceptableCode {
 					// we don't consider this to be an error.
+					acceptableErrorCodeFound = true
 					err = nil
 					break
 				}
@@ -421,11 +422,11 @@ func (e *Executor) executeDirectly(ctx context.Context, onlineDDL *schema.Online
 		}
 	}
 	if err != nil {
-		return err
+		return false, err
 	}
 	_ = e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusComplete, false, progressPctFull)
 
-	return nil
+	return acceptableErrorCodeFound, nil
 }
 
 // terminateVReplMigration stops vreplication, then removes the _vt.vreplication entry for the given migration
@@ -1404,8 +1405,15 @@ func (e *Executor) executeRevert(ctx context.Context, onlineDDL *schema.OnlineDD
 			if err := e.updateArtifacts(ctx, onlineDDL.UUID, toTableName); err != nil {
 				return err
 			}
-			if err := e.executeDirectly(ctx, onlineDDL); err != nil {
+			acceptableErrCodeFound, err := e.executeDirectly(ctx, onlineDDL, mysql.ERCantFindFile, mysql.ERNoSuchTable)
+			if err != nil {
 				return err
+			}
+			if acceptableErrCodeFound {
+				// Table did not exist after all. There is no artifact
+				if err := e.clearArtifacts(ctx, onlineDDL.UUID); err != nil {
+					return err
+				}
 			}
 		}
 	case sqlparser.DropStr:
@@ -1421,12 +1429,16 @@ func (e *Executor) executeRevert(ctx context.Context, onlineDDL *schema.OnlineDD
 			}
 			artifacts := row["artifacts"].ToString()
 			artifactTables := textutil.SplitDelimitedList(artifacts)
-			if len(artifactTables) != 1 {
-				return fmt.Errorf("cannot run migration %s reverting %s: found %d artifact tables, expected exactly 1", onlineDDL.UUID, revertMigration.UUID, len(artifactTables))
+			if len(artifactTables) > 1 {
+				return fmt.Errorf("cannot run migration %s reverting %s: found %d artifact tables, expected maximum 1", onlineDDL.UUID, revertMigration.UUID, len(artifactTables))
+			}
+			if len(artifactTables) == 0 {
+				// Could happen on `DROP TABLE IF EXISTS` where the table did not exist...
+				_ = e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusComplete, false, progressPctFull)
 			}
 			for _, artifactTable := range artifactTables {
 				onlineDDL.SQL = sqlparser.BuildParsedQuery(sqlRenameTable, artifactTable, revertMigration.Table).Query
-				if err := e.executeDirectly(ctx, onlineDDL); err != nil {
+				if _, err := e.executeDirectly(ctx, onlineDDL); err != nil {
 					return err
 				}
 			}
@@ -1472,7 +1484,7 @@ func (e *Executor) executeMigration(ctx context.Context, onlineDDL *schema.Onlin
 			// already a GC-lifecycle table, then we don't put it through yet another GC lifecycle,
 			// we just drop it.
 			if schema.IsGCTableName(onlineDDL.Table) {
-				if err := e.executeDirectly(ctx, onlineDDL); err != nil {
+				if _, err := e.executeDirectly(ctx, onlineDDL); err != nil {
 					return failMigration(err)
 				}
 				return nil
@@ -1494,14 +1506,19 @@ func (e *Executor) executeMigration(ctx context.Context, onlineDDL *schema.Onlin
 				return err
 			}
 
+			acceptableErrorCodes := []int{}
 			if ddlStmt.GetIfExists() {
-				err = e.executeDirectly(ctx, onlineDDL, mysql.ERCantFindFile, mysql.ERNoSuchTable)
-			} else {
-				err = e.executeDirectly(ctx, onlineDDL)
+				acceptableErrorCodes = append(acceptableErrorCodes, mysql.ERCantFindFile, mysql.ERNoSuchTable)
 			}
-
+			acceptableErrCodeFound, err := e.executeDirectly(ctx, onlineDDL, acceptableErrorCodes...)
 			if err != nil {
 				return failMigration(err)
+			}
+			if acceptableErrCodeFound {
+				// Table did not exist after all. There is no artifact
+				if err := e.clearArtifacts(ctx, onlineDDL.UUID); err != nil {
+					return err
+				}
 			}
 
 			return nil
@@ -1511,7 +1528,7 @@ func (e *Executor) executeMigration(ctx context.Context, onlineDDL *schema.Onlin
 			e.migrationMutex.Lock()
 			defer e.migrationMutex.Unlock()
 
-			if err := e.executeDirectly(ctx, onlineDDL); err != nil {
+			if _, err := e.executeDirectly(ctx, onlineDDL); err != nil {
 				failMigration(err)
 			}
 		}()
@@ -2046,37 +2063,38 @@ func (e *Executor) updateMigrationTimestamp(ctx context.Context, timestampColumn
 
 func (e *Executor) updateMigrationLogPath(ctx context.Context, uuid string, hostname, path string) error {
 	logPath := fmt.Sprintf("%s:%s", hostname, path)
-	parsed := sqlparser.BuildParsedQuery(sqlUpdateMigrationLogPath,
-		":log_path",
-		":migration_uuid",
+	query, err := sqlparser.ParseAndBind(sqlUpdateMigrationLogPath,
+		sqltypes.StringBindVariable(logPath),
+		sqltypes.StringBindVariable(uuid),
 	)
-	bindVars := map[string]*querypb.BindVariable{
-		"log_path":       sqltypes.StringBindVariable(logPath),
-		"migration_uuid": sqltypes.StringBindVariable(uuid),
-	}
-	bound, err := parsed.GenerateQuery(bindVars, nil)
 	if err != nil {
 		return err
 	}
-	_, err = e.execQuery(ctx, bound)
+	_, err = e.execQuery(ctx, query)
 	return err
 }
 
 func (e *Executor) updateArtifacts(ctx context.Context, uuid string, artifacts ...string) error {
 	bindArtifacts := strings.Join(artifacts, ",")
-	parsed := sqlparser.BuildParsedQuery(sqlUpdateArtifacts,
-		":artifacts",
-		":migration_uuid",
+	query, err := sqlparser.ParseAndBind(sqlUpdateArtifacts,
+		sqltypes.StringBindVariable(bindArtifacts),
+		sqltypes.StringBindVariable(uuid),
 	)
-	bindVars := map[string]*querypb.BindVariable{
-		"artifacts":      sqltypes.StringBindVariable(bindArtifacts),
-		"migration_uuid": sqltypes.StringBindVariable(uuid),
-	}
-	bound, err := parsed.GenerateQuery(bindVars, nil)
 	if err != nil {
 		return err
 	}
-	_, err = e.execQuery(ctx, bound)
+	_, err = e.execQuery(ctx, query)
+	return err
+}
+
+func (e *Executor) clearArtifacts(ctx context.Context, uuid string) error {
+	query, err := sqlparser.ParseAndBind(sqlClearArtifacts,
+		sqltypes.StringBindVariable(uuid),
+	)
+	if err != nil {
+		return err
+	}
+	_, err = e.execQuery(ctx, query)
 	return err
 }
 
@@ -2097,19 +2115,14 @@ func (e *Executor) updateTabletFailure(ctx context.Context, uuid string) error {
 }
 
 func (e *Executor) updateMigrationStatus(ctx context.Context, uuid string, status schema.OnlineDDLStatus) error {
-	parsed := sqlparser.BuildParsedQuery(sqlUpdateMigrationStatus,
-		":migration_status",
-		":migration_uuid",
+	query, err := sqlparser.ParseAndBind(sqlUpdateMigrationStatus,
+		sqltypes.StringBindVariable(string(status)),
+		sqltypes.StringBindVariable(uuid),
 	)
-	bindVars := map[string]*querypb.BindVariable{
-		"migration_status": sqltypes.StringBindVariable(string(status)),
-		"migration_uuid":   sqltypes.StringBindVariable(uuid),
-	}
-	bound, err := parsed.GenerateQuery(bindVars, nil)
 	if err != nil {
 		return err
 	}
-	_, err = e.execQuery(ctx, bound)
+	_, err = e.execQuery(ctx, query)
 	return err
 }
 
