@@ -96,8 +96,7 @@ func TestOpenAndReload(t *testing.T) {
 		"int64"),
 		"1427325877",
 	))
-	assert.Contains(t, se.innoDbReadRowsGauge.Counts(), "read_rows")
-	assert.EqualValues(t, firstReadRowsValue, se.innoDbReadRowsGauge.Counts()["read_rows"])
+	assert.EqualValues(t, firstReadRowsValue, se.innoDbReadRowsGauge.Get())
 	// Modify test_table_03
 	// Add test_table_04
 	// Drop msg
@@ -171,8 +170,7 @@ func TestOpenAndReload(t *testing.T) {
 	err := se.Reload(context.Background())
 	require.NoError(t, err)
 
-	assert.Contains(t, se.innoDbReadRowsGauge.Counts(), "read_rows")
-	assert.EqualValues(t, secondReadRowsValue, se.innoDbReadRowsGauge.Counts()["read_rows"])
+	assert.EqualValues(t, secondReadRowsValue, se.innoDbReadRowsGauge.Get())
 
 	want["test_table_03"] = &Table{
 		Name: sqlparser.NewTableIdent("test_table_03"),
