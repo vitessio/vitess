@@ -1,4 +1,4 @@
-name: check_make_parser
+name: check_make_sizegen
 on: [push, pull_request]
 jobs:
 
