@@ -101,6 +101,11 @@ const (
 		WHERE
 			migration_uuid=%a
 	`
+	sqlClearArtifacts = `UPDATE _vt.schema_migrations
+			SET artifacts=''
+		WHERE
+			migration_uuid=%a
+	`
 	sqlUpdateTabletFailure = `UPDATE _vt.schema_migrations
 			SET tablet_failure=1
 		WHERE
