@@ -23,23 +23,15 @@ func replaceRefContainerASTType(newNode, parent AST) {
 func replaceRefContainerASTImplementationType(newNode, parent AST) {
 	parent.(*RefContainer).ASTImplementationType = newNode.(*Leaf)
 }
-
-type replaceRefSliceContainerASTElements int
-
-func (r *replaceRefSliceContainerASTElements) replace(newNode, parent AST) {
-	parent.(*RefSliceContainer).ASTElements[int(*r)] = newNode.(AST)
+func replaceRefSliceContainerASTElements(idx int) func(AST, AST) {
+	return func(newNode, container AST) {
+		container.(*RefSliceContainer).ASTElements[idx] = newNode.(AST)
+	}
 }
-func (r *replaceRefSliceContainerASTElements) inc() {
-	*r++
-}
-
-type replaceRefSliceContainerASTImplementationElements int
-
-func (r *replaceRefSliceContainerASTImplementationElements) replace(newNode, parent AST) {
-	parent.(*RefSliceContainer).ASTImplementationElements[int(*r)] = newNode.(*Leaf)
-}
-func (r *replaceRefSliceContainerASTImplementationElements) inc() {
-	*r++
+func replaceRefSliceContainerASTImplementationElements(idx int) func(AST, AST) {
+	return func(newNode, container AST) {
+		container.(*RefSliceContainer).ASTImplementationElements[idx] = newNode.(*Leaf)
+	}
 }
 func replaceValueContainerASTType(newNode, parent AST) {
 	parent.(*ValueContainer).ASTType = newNode.(AST)
@@ -47,41 +39,25 @@ func replaceValueContainerASTType(newNode, parent AST) {
 func replaceValueContainerASTImplementationType(newNode, parent AST) {
 	parent.(*ValueContainer).ASTImplementationType = newNode.(*Leaf)
 }
-
-type replaceValueSliceContainerValASTElements int
-
-func (r *replaceValueSliceContainerValASTElements) replace(newNode, parent AST) {
-	parent.(ValueSliceContainer).ASTElements[int(*r)] = newNode.(AST)
+func replaceValueSliceContainerValASTElements(idx int) func(AST, AST) {
+	return func(newNode, container AST) {
+		container.(ValueSliceContainer).ASTElements[idx] = newNode.(AST)
+	}
 }
-func (r *replaceValueSliceContainerValASTElements) inc() {
-	*r++
+func replaceValueSliceContainerValASTImplementationElements(idx int) func(AST, AST) {
+	return func(newNode, container AST) {
+		container.(ValueSliceContainer).ASTImplementationElements[idx] = newNode.(*Leaf)
+	}
 }
-
-type replaceValueSliceContainerValASTImplementationElements int
-
-func (r *replaceValueSliceContainerValASTImplementationElements) replace(newNode, parent AST) {
-	parent.(ValueSliceContainer).ASTImplementationElements[int(*r)] = newNode.(*Leaf)
+func replaceValueSliceContainerASTElements(idx int) func(AST, AST) {
+	return func(newNode, container AST) {
+		container.(*ValueSliceContainer).ASTElements[idx] = newNode.(AST)
+	}
 }
-func (r *replaceValueSliceContainerValASTImplementationElements) inc() {
-	*r++
-}
-
-type replaceValueSliceContainerASTElements int
-
-func (r *replaceValueSliceContainerASTElements) replace(newNode, parent AST) {
-	parent.(*ValueSliceContainer).ASTElements[int(*r)] = newNode.(AST)
-}
-func (r *replaceValueSliceContainerASTElements) inc() {
-	*r++
-}
-
-type replaceValueSliceContainerASTImplementationElements int
-
-func (r *replaceValueSliceContainerASTImplementationElements) replace(newNode, parent AST) {
-	parent.(*ValueSliceContainer).ASTImplementationElements[int(*r)] = newNode.(*Leaf)
-}
-func (r *replaceValueSliceContainerASTImplementationElements) inc() {
-	*r++
+func replaceValueSliceContainerASTImplementationElements(idx int) func(AST, AST) {
+	return func(newNode, container AST) {
+		container.(*ValueSliceContainer).ASTImplementationElements[idx] = newNode.(*Leaf)
+	}
 }
 func (a *application) apply(parent, node AST, replacer replacerFunc) {
 	if node == nil || isNilValue(node) {
@@ -101,17 +77,11 @@ func (a *application) apply(parent, node AST, replacer replacerFunc) {
 		a.apply(node, n.ASTType, replaceRefContainerASTType)
 		a.apply(node, n.ASTImplementationType, replaceRefContainerASTImplementationType)
 	case *RefSliceContainer:
-		replacerASTElements := replaceRefSliceContainerASTElements(0)
-		replacerASTElementsB := &replacerASTElements
-		for _, item := range n.ASTElements {
-			a.apply(node, item, replacerASTElementsB.replace)
-			replacerASTElementsB.inc()
+		for x, el := range n.ASTElements {
+			a.apply(node, el, replaceRefSliceContainerASTElements(x))
 		}
-		replacerASTImplementationElements := replaceRefSliceContainerASTImplementationElements(0)
-		replacerASTImplementationElementsB := &replacerASTImplementationElements
-		for _, item := range n.ASTImplementationElements {
-			a.apply(node, item, replacerASTImplementationElementsB.replace)
-			replacerASTImplementationElementsB.inc()
+		for x, el := range n.ASTImplementationElements {
+			a.apply(node, el, replaceRefSliceContainerASTImplementationElements(x))
 		}
 	case ValueContainer:
 		a.apply(node, n.ASTType, replacePanic("ValueContainer ASTType"))
@@ -120,30 +90,18 @@ func (a *application) apply(parent, node AST, replacer replacerFunc) {
 		a.apply(node, n.ASTType, replaceValueContainerASTType)
 		a.apply(node, n.ASTImplementationType, replaceValueContainerASTImplementationType)
 	case ValueSliceContainer:
-		replacerASTElements := replaceValueSliceContainerValASTElements(0)
-		replacerASTElementsB := &replacerASTElements
-		for _, item := range n.ASTElements {
-			a.apply(node, item, replacerASTElementsB.replace)
-			replacerASTElementsB.inc()
+		for x, el := range n.ASTElements {
+			a.apply(node, el, replaceValueSliceContainerValASTElements(x))
 		}
-		replacerASTImplementationElements := replaceValueSliceContainerValASTImplementationElements(0)
-		replacerASTImplementationElementsB := &replacerASTImplementationElements
-		for _, item := range n.ASTImplementationElements {
-			a.apply(node, item, replacerASTImplementationElementsB.replace)
-			replacerASTImplementationElementsB.inc()
+		for x, el := range n.ASTImplementationElements {
+			a.apply(node, el, replaceValueSliceContainerValASTImplementationElements(x))
 		}
 	case *ValueSliceContainer:
-		replacerASTElements := replaceValueSliceContainerASTElements(0)
-		replacerASTElementsB := &replacerASTElements
-		for _, item := range n.ASTElements {
-			a.apply(node, item, replacerASTElementsB.replace)
-			replacerASTElementsB.inc()
+		for x, el := range n.ASTElements {
+			a.apply(node, el, replaceValueSliceContainerASTElements(x))
 		}
-		replacerASTImplementationElements := replaceValueSliceContainerASTImplementationElements(0)
-		replacerASTImplementationElementsB := &replacerASTImplementationElements
-		for _, item := range n.ASTImplementationElements {
-			a.apply(node, item, replacerASTImplementationElementsB.replace)
-			replacerASTImplementationElementsB.inc()
+		for x, el := range n.ASTImplementationElements {
+			a.apply(node, el, replaceValueSliceContainerASTImplementationElements(x))
 		}
 	}
 	if a.post != nil && !a.post(&a.cursor) {
