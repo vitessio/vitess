@@ -1034,12 +1034,7 @@ func (tkn *Tokenizer) scanMySQLSpecificComment() (int, []byte) {
 
 	commentVersion, sql := ExtractMysqlComment(buffer.String())
 
-	mysqlVersion, err := convertMySQLVersionToCommentVersion(MySQLVersion)
-	if err != nil {
-		tkn.Error(err.Error())
-		return tkn.Scan()
-	}
-	if mysqlVersion >= commentVersion {
+	if MySQLVersion >= commentVersion {
 		// Only add the special comment to the tokenizer if the version of MySQL is higher or equal to the comment version
 		tkn.specialComment = NewStringTokenizer(sql)
 	}
@@ -1047,7 +1042,8 @@ func (tkn *Tokenizer) scanMySQLSpecificComment() (int, []byte) {
 	return tkn.Scan()
 }
 
-func convertMySQLVersionToCommentVersion(version string) (string, error) {
+// ConvertMySQLVersionToCommentVersion converts the MySQL version into comment version format.
+func ConvertMySQLVersionToCommentVersion(version string) (string, error) {
 	var res = make([]int, 3)
 	idx := 0
 	val := ""
