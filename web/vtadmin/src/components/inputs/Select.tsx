@@ -28,6 +28,7 @@ interface Props<T> {
     label: string;
     onChange: (selectedItem: T | null | undefined) => void;
     placeholder: string;
+    emptyPlaceholder?: string | (() => JSX.Element | string);
     renderItem?: (item: T) => JSX.Element | string;
     selectedItem: T | null;
     size?: 'large';
@@ -45,6 +46,7 @@ export const Select = <T,>({
     label,
     onChange,
     placeholder,
+    emptyPlaceholder,
     renderItem,
     selectedItem,
     size,
@@ -100,6 +102,28 @@ export const Select = <T,>({
         [renderItem]
     );
 
+    let content = null;
+    if (items.length) {
+        content = (
+            <ul {...getMenuProps()} className={style.menu}>
+                {items.map((item, index) => {
+                    const itemClass = cx({ [style.active]: highlightedIndex === index });
+                    return (
+                        <li key={index} className={itemClass} {...getItemProps({ item, index })}>
+                            {_renderItem(item)}
+                        </li>
+                    );
+                })}
+            </ul>
+        );
+    } else {
+        let emptyContent = typeof emptyPlaceholder === 'function' ? emptyPlaceholder() : emptyPlaceholder;
+        if (typeof emptyContent === 'string' || !emptyContent) {
+            emptyContent = <div className={style.emptyPlaceholder}>{emptyContent || 'No items'}</div>;
+        }
+        content = <div className={style.emptyContainer}>{emptyContent}</div>;
+    }
+
     return (
         <div className={containerClass}>
             <Label {...getLabelProps()} label={label} />
@@ -108,16 +132,7 @@ export const Select = <T,>({
                 <Icon className={style.chevron} icon={isOpen ? Icons.chevronUp : Icons.chevronDown} />
             </button>
             <div className={style.dropdown} hidden={!isOpen}>
-                <ul {...getMenuProps()} className={style.menu}>
-                    {items.map((item, index) => {
-                        const itemClass = cx({ [style.active]: highlightedIndex === index });
-                        return (
-                            <li key={index} className={itemClass} {...getItemProps({ item, index })}>
-                                {_renderItem(item)}
-                            </li>
-                        );
-                    })}
-                </ul>
+                {content}
                 {selectedItem && (
                     <button className={style.clear} onClick={() => selectItem(null as any)} type="button">
                         Clear selection

@@ -75,7 +75,7 @@
   border-radius: 6px;
   box-sizing: border-box;
   margin: 4px 0 0 0;
-  height: 40vh;
+  height: min-content;
   max-height: 420px;
   overflow: auto;
   outline: none;
@@ -139,4 +139,12 @@
 .large .clear {
   font-size: var(--fontSizeLarge);
   padding: 8px 16px;
+}
+
+.emptyContainer {
+  padding: 8px 12px;
+}
+
+.emptyPlaceholder {
+  color: var(--textColorSecondary);
 }
