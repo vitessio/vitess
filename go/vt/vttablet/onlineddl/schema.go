@@ -106,6 +106,11 @@ const (
 		WHERE
 			migration_uuid=%a
 	`
+	sqlUpdateDDLAction = `UPDATE _vt.schema_migrations
+			SET ddl_action=%a
+		WHERE
+			migration_uuid=%a
+	`
 	sqlUpdateMessage = `UPDATE _vt.schema_migrations
 			SET message=%a
 		WHERE
@@ -197,6 +202,8 @@ const (
 			migration_status,
 			log_path,
 			retries,
+			ddl_action,
+			artifacts,
 			tablet
 		FROM _vt.schema_migrations
 		WHERE
@@ -220,6 +227,8 @@ const (
 			migration_status,
 			log_path,
 			retries,
+			ddl_action,
+			artifacts,
 			tablet
 		FROM _vt.schema_migrations
 		WHERE
@@ -264,7 +273,8 @@ const (
 			_vt.copy_state
 		WHERE vrepl_id=%a
 		`
-	sqlSwapTables = "RENAME TABLE `%a` TO `%a`, `%a` TO `%a`, `%a` TO `%a`"
+	sqlSwapTables  = "RENAME TABLE `%a` TO `%a`, `%a` TO `%a`, `%a` TO `%a`"
+	sqlRenameTable = "RENAME TABLE `%a` TO `%a`"
 )
 
 const (
