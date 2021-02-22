@@ -17,40 +17,51 @@ limitations under the License.
 package engine
 
 import (
+	"strings"
+
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
-var _ Primitive = (*CreateDatabase)(nil)
+var _ Primitive = (*DropCreateDatabase)(nil)
 
-// CreateDatabase is just a container around custom database provisioning plugins
-// the default behaviour is to just return an error
-type CreateDatabase struct {
-	Name string
-	DoIt func(dbName string) error
+// DropCreateDatabase is just a container around custom database provisioning plugins
+// The default behaviour is to just return an error
+type DropCreateDatabase struct {
+	name, verb string
+	plugin     func() error
 	noInputs
 	noTxNeeded
 }
 
+// CreateDropCreateDatabase creates the engine primitive
+func CreateDropCreateDatabase(dbName, verb string, plugin func() error) *DropCreateDatabase {
+	return &DropCreateDatabase{
+		name:   dbName,
+		verb:   verb,
+		plugin: plugin,
+	}
+}
+
 // RouteType implements the Primitive interface
-func (c *CreateDatabase) RouteType() string {
-	return "create database"
+func (c *DropCreateDatabase) RouteType() string {
+	return c.verb + " database"
 }
 
 // GetKeyspaceName implements the Primitive interface
-func (c *CreateDatabase) GetKeyspaceName() string {
-	return c.Name
+func (c *DropCreateDatabase) GetKeyspaceName() string {
+	return c.name
 }
 
 // GetTableName implements the Primitive interface
-func (c *CreateDatabase) GetTableName() string {
+func (c *DropCreateDatabase) GetTableName() string {
 	return ""
 }
 
 // Execute implements the Primitive interface
-func (c *CreateDatabase) Execute(VCursor, map[string]*querypb.BindVariable, bool) (*sqltypes.Result, error) {
-	err := c.DoIt(c.Name)
+func (c *DropCreateDatabase) Execute(VCursor, map[string]*querypb.BindVariable, bool) (*sqltypes.Result, error) {
+	err := c.plugin()
 	if err != nil {
 		return nil, err
 	}
@@ -59,7 +70,7 @@ func (c *CreateDatabase) Execute(VCursor, map[string]*querypb.BindVariable, bool
 }
 
 // StreamExecute implements the Primitive interface
-func (c *CreateDatabase) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (c *DropCreateDatabase) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	res, err := c.Execute(vcursor, bindVars, wantfields)
 	if err != nil {
 		return err
@@ -68,14 +79,14 @@ func (c *CreateDatabase) StreamExecute(vcursor VCursor, bindVars map[string]*que
 }
 
 // GetFields implements the Primitive interface
-func (c *CreateDatabase) GetFields(VCursor, map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (c *DropCreateDatabase) GetFields(VCursor, map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	return &sqltypes.Result{}, nil
 }
 
 // description implements the Primitive interface
-func (c *CreateDatabase) description() PrimitiveDescription {
+func (c *DropCreateDatabase) description() PrimitiveDescription {
 	return PrimitiveDescription{
-		OperatorType: "CREATE DATABASE",
-		Keyspace:     &vindexes.Keyspace{Name: c.Name},
+		OperatorType: strings.ToUpper(c.verb + " DATABASE"),
+		Keyspace:     &vindexes.Keyspace{Name: c.name},
 	}
 }

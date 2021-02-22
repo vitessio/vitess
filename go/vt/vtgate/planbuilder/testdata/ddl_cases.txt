@@ -138,11 +138,31 @@
 
 # drop db main
 "drop database main"
-"drop database not allowed"
+{
+  "QueryType": "DDL",
+  "Original": "drop database main",
+  "Instructions": {
+    "OperatorType": "DROP DATABASE",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    }
+  }
+}
 
 # drop db if exists main
 "drop database if exists main"
-"drop database not allowed"
+{
+  "QueryType": "DDL",
+  "Original": "drop database if exists main",
+  "Instructions": {
+    "OperatorType": "DROP DATABASE",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    }
+  }
+}
 
 # drop db if exists foo
 "drop schema if exists foo"

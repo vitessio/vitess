@@ -18,15 +18,27 @@ package planbuilder
 
 import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
-// CreateDatabasePlug is the function signature that you need to implement to add a custom CREATE DATABASE handler
-type CreateDatabasePlug = func(name string) error
+// DropCreateDB is the interface that you need to implement to add a custom CREATE/DROP DATABASE handler
+type DropCreateDB interface {
+	CreateDatabase(ast *sqlparser.CreateDatabase) error
+	DropDatabase(ast *sqlparser.DropDatabase) error
+}
 
-//goland:noinspection GoVarAndConstTypeMayBeOmitted
-var databaseCreator CreateDatabasePlug = defaultCreateDatabase
+type defaultHandler struct{}
 
-func defaultCreateDatabase(_ string) error {
+// CreateDatabase implements the DropCreateDB interface
+func (defaultHandler) CreateDatabase(*sqlparser.CreateDatabase) error {
 	return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "create database not allowed")
 }
+
+// DropDatabase implements the DropCreateDB interface
+func (defaultHandler) DropDatabase(*sqlparser.DropDatabase) error {
+	return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "drop database not allowed")
+}
+
+//goland:noinspection GoVarAndConstTypeMayBeOmitted
+var databaseCreator DropCreateDB = defaultHandler{}

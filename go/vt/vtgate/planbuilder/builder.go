@@ -208,7 +208,7 @@ func buildDBDDLPlan(stmt sqlparser.Statement, vschema ContextVSchema) (engine.Pr
 		if !ksExists {
 			return nil, mysql.NewSQLError(mysql.ERDbDropExists, mysql.SSUnknownSQLState, "Can't drop database '%s'; database doesn't exists", ksName)
 		}
-		return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "drop database not allowed")
+		return engine.CreateDropCreateDatabase(dbDDL.DBName, "drop", func() error { return databaseCreator.DropDatabase(dbDDL) }), nil
 	case *sqlparser.AlterDatabase:
 		if !ksExists {
 			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "Can't alter database '%s'; database doesn't exists", ksName)
@@ -221,10 +221,7 @@ func buildDBDDLPlan(stmt sqlparser.Statement, vschema ContextVSchema) (engine.Pr
 		if !dbDDL.IfNotExists && ksExists {
 			return nil, mysql.NewSQLError(mysql.ERDbCreateExists, mysql.SSUnknownSQLState, "Can't create database '%s'; database exists", ksName)
 		}
-		return &engine.CreateDatabase{
-			Name: dbDDL.DBName,
-			DoIt: databaseCreator,
-		}, nil
+		return engine.CreateDropCreateDatabase(dbDDL.DBName, "create", func() error { return databaseCreator.CreateDatabase(dbDDL) }), nil
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unreachable code path: %s", sqlparser.String(dbDDLstmt))
 }
