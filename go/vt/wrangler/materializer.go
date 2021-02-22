@@ -158,7 +158,7 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 			}
 		}
 	}
-	if externalTopo != nil {
+	if externalTopo == nil {
 		// Save routing rules before vschema. If we save vschema first, and routing rules
 		// fails to save, we may generate duplicate table errors.
 		rules, err := wr.getRoutingRules(ctx)
