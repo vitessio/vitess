@@ -2746,3 +2746,6 @@
 2021-02-22T20:23:46Z,unit_race,https://github.com/vitessio/vitess/actions/runs/590387411
 2021-02-22T21:15:48Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/590512105
 2021-02-22T21:15:48Z,unit_race,https://github.com/vitessio/vitess/actions/runs/590512140
+2021-02-23T00:42:48Z,Unit Test (mariadb101),https://github.com/vitessio/vitess/actions/runs/590972154
+2021-02-23T00:42:48Z,golangci-lint,https://github.com/vitessio/vitess/actions/runs/590972173
+2021-02-23T00:42:48Z,unit_race,https://github.com/vitessio/vitess/actions/runs/590972170
