@@ -10,6 +10,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"math"
 	"math/rand"
 	"net/http"
 	"strings"
@@ -58,9 +59,12 @@ const (
 	selfStoreName  = "self"
 )
 
-var throttleThreshold = flag.Duration("throttle_threshold", 1*time.Second, "Replication lag threshold for throttling")
-var throttleTabletTypes = flag.String("throttle_tablet_types", "replica", "Comma separated VTTablet types to be considered by the throttler. default: 'replica'. example: 'replica,rdonly'. 'replica' aways implicitly included")
-
+var (
+	throttleThreshold       = flag.Duration("throttle_threshold", 1*time.Second, "Replication lag threshold for default lag throttling")
+	throttleTabletTypes     = flag.String("throttle_tablet_types", "replica", "Comma separated VTTablet types to be considered by the throttler. default: 'replica'. example: 'replica,rdonly'. 'replica' aways implicitly included")
+	throttleMetricQuery     = flag.String("throttle_metrics_query", "", "Override default heartbeat/lag metric. Use either `SELECT` (must return single row, single value) or `SHOW GLOBAL ... LIKE ...` queries. Set -throttle_metrics_threshold respectively.")
+	throttleMetricThreshold = flag.Float64("throttle_metrics_threshold", math.MaxFloat64, "Override default throttle threshold, respective to -throttle_metrics_query")
+)
 var (
 	throttlerUser  = "vt_tablet_throttler"
 	throttlerGrant = fmt.Sprintf("'%s'@'%s'", throttlerUser, "%")
@@ -75,10 +79,13 @@ var (
 	replicationLagQuery = `select unix_timestamp(now(6))-max(ts/1000000000) as replication_lag from _vt.heartbeat`
 )
 
+// ThrottleCheckType allows a client to indicate what type of check it wants to issue. See available types below.
 type ThrottleCheckType int
 
 const (
+	// ThrottleCheckPrimaryWrite indicates a check before making a write on a primary server
 	ThrottleCheckPrimaryWrite ThrottleCheckType = iota
+	// ThrottleCheckSelf indicates a check on a specific server health
 	ThrottleCheckSelf
 )
 
@@ -215,19 +222,28 @@ func (throttler *Throttler) initConfig(password string) {
 			},
 		},
 	}
+	metricsQuery := replicationLagQuery
+	if *throttleMetricQuery != "" {
+		metricsQuery = *throttleMetricQuery
+	}
+	metricsThreshold := throttleThreshold.Seconds()
+	if *throttleMetricThreshold != math.MaxFloat64 {
+		metricsThreshold = *throttleMetricThreshold
+	}
+
 	config.Instance.Stores.MySQL.Clusters[selfStoreName] = &config.MySQLClusterConfigurationSettings{
 		User:              "", // running on local tablet server, will use vttablet DBA user
 		Password:          "", // running on local tablet server, will use vttablet DBA user
-		ThrottleThreshold: throttleThreshold.Seconds(),
-		MetricQuery:       replicationLagQuery,
+		ThrottleThreshold: metricsThreshold,
+		MetricQuery:       metricsQuery,
 		IgnoreHostsCount:  0,
 	}
 	if password != "" {
 		config.Instance.Stores.MySQL.Clusters[shardStoreName] = &config.MySQLClusterConfigurationSettings{
 			User:              throttlerUser,
 			Password:          password,
-			ThrottleThreshold: throttleThreshold.Seconds(),
-			MetricQuery:       replicationLagQuery,
+			ThrottleThreshold: metricsThreshold,
+			MetricQuery:       metricsQuery,
 			IgnoreHostsCount:  0,
 		}
 	}
@@ -799,7 +815,7 @@ func (throttler *Throttler) CheckSelf(ctx context.Context, appName string, remot
 	return throttler.checkStore(ctx, appName, selfStoreName, remoteAddr, flags)
 }
 
-// CheckSelf is checks the mysql/self metric, and is available on each tablet
+// CheckByType runs a check by requested check type
 func (throttler *Throttler) CheckByType(ctx context.Context, appName string, remoteAddr string, flags *CheckFlags, checkType ThrottleCheckType) (checkResult *CheckResult) {
 	switch checkType {
 	case ThrottleCheckSelf:
