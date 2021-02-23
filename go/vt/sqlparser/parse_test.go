@@ -1540,10 +1540,10 @@ var (
 		}, {
 			input: "select MAX(distinct k) from t1",
 		}, {
-			input: "select MAX(distinct k) as min from t1",
+			input:  "select MAX(distinct k) as min from t1",
 			output: "select MAX(distinct k) as `min` from t1",
 		}, {
-			input: "select MIn(distinct k) as Max from t1",
+			input:  "select MIn(distinct k) as Max from t1",
 			output: "select MIn(distinct k) as `Max` from t1",
 		}, {
 			input: "select avg(distinct k) from t1",
@@ -1608,7 +1608,7 @@ var (
 		}, {
 			input: "select name, dense_rank() over () from t",
 		}, {
-			input: "select name, avg(a) over (partition by b) as avg from t",
+			input:  "select name, avg(a) over (partition by b) as avg from t",
 			output: "select name, avg(a) over (partition by b) as `avg` from t",
 		}, {
 			input: "select name, bit_and(a) over (partition by b) from t",
@@ -1619,7 +1619,7 @@ var (
 		}, {
 			input: "select name, count(distinct a) over (partition by b) from t",
 		}, {
-			input: "select name, count(a) over (partition by b) as count from t",
+			input:  "select name, count(a) over (partition by b) as count from t",
 			output: "select name, count(a) over (partition by b) as `count` from t",
 		}, {
 			input: "select name, json_arrayagg(a) over (partition by b) from t",
@@ -1640,7 +1640,7 @@ var (
 		}, {
 			input: "select name, sum(a) over (partition by b) from t",
 		}, {
-			input: "select name, sum(distinct a) over (partition by b) as SUM from t",
+			input:  "select name, sum(distinct a) over (partition by b) as SUM from t",
 			output: "select name, sum(distinct a) over (partition by b) as `SUM` from t",
 		}, {
 			input: "select name, var_pop(a) over (partition by b) from t",
@@ -1697,13 +1697,13 @@ var (
 		}, {
 			input: "select name, row_number() over (partition by b order by c asc) from t",
 		}, {
-			input: "select name, dense_rank() over (order by b) from t",
+			input:  "select name, dense_rank() over (order by b) from t",
 			output: "select name, dense_rank() over ( order by b asc) from t",
 		}, {
-			input: "select name, dense_rank() over (partition by b order by c) from t",
+			input:  "select name, dense_rank() over (partition by b order by c) from t",
 			output: "select name, dense_rank() over (partition by b order by c asc) from t",
 		}, {
-			input: "select name, dense_rank() over (partition by b order by c), lag(d) over (order by e desc) from t",
+			input:  "select name, dense_rank() over (partition by b order by c), lag(d) over (order by e desc) from t",
 			output: "select name, dense_rank() over (partition by b order by c asc), lag(d) over ( order by e desc) from t",
 		}, {
 			input: "select name, dense_rank() over window_name from t",
@@ -1720,10 +1720,10 @@ var (
 				"where (select min(pk) from one_pk where pk > opk.pk) " +
 				"is not null order by `max` asc",
 		}, {
-			input: "select i, s as max from mytable group by max",
+			input:  "select i, s as max from mytable group by max",
 			output: "select i, s as `max` from mytable group by `max`",
 		}, {
-			input: "select i, s as max from mytable MAx",
+			input:  "select i, s as max from mytable MAx",
 			output: "select i, s as `max` from mytable as `MAx`",
 		},
 		// {
@@ -1846,7 +1846,7 @@ var (
 		}, {
 			input:  "create procedure p1() language sql deterministic sql security invoker select 1+1",
 			output: "create procedure p1 () language sql deterministic sql security invoker select 1 + 1 from dual",
-		},{
+		}, {
 			input:  "create definer = me procedure p1(v1 int) select now()",
 			output: "create definer = me procedure p1 (in v1 int) select now() from dual",
 		}, {
@@ -1865,7 +1865,7 @@ var (
 			input:  "create procedure p1(v1 datetime)\nif rand() < 1 then select rand();\nend if",
 			output: "create procedure p1 (in v1 datetime) if rand() < 1 then select rand() from dual;\nend if",
 		}, {
-			input:  `create procedure p1(n double, m double)
+			input: `create procedure p1(n double, m double)
 begin
 	set @s = '';
 	if n = m then set @s = 'equals';
@@ -2979,51 +2979,51 @@ func TestCreateTable(t *testing.T) {
 		})
 	}
 
-    nonsupportedKeywords := []string{
-        "sql_cache",
-        "cume_dist",
-        "last_value",
-        "percent_rank",
-        "lag",
-        "first_value",
-        "column",
-        "long",
-        "sql_no_cache",
-        "current_user",
-        "row",
-        "lead",
-        "full",
-        "nvarchar",
-        "_binary",
-        "dec",
-        "all",
-        "processlist",
-        "dense_rank",
-        "analyze",
-        "format",
-        "ntile",
-        "cast",
-        "follows",
-        "group_concat",
-        "nth_value",
-        "_utf8mb4",
-        "row_number",
-        "rank",
-    }
-    nonsupported := map[string]bool{}
-    for _, x := range nonsupportedKeywords {
-        nonsupported[x] = true
-    }
+	nonsupportedKeywords := []string{
+		"sql_cache",
+		"cume_dist",
+		"last_value",
+		"percent_rank",
+		"lag",
+		"first_value",
+		"column",
+		"long",
+		"sql_no_cache",
+		"current_user",
+		"row",
+		"lead",
+		"full",
+		"nvarchar",
+		"_binary",
+		"dec",
+		"all",
+		"processlist",
+		"dense_rank",
+		"analyze",
+		"format",
+		"ntile",
+		"cast",
+		"follows",
+		"group_concat",
+		"nth_value",
+		"_utf8mb4",
+		"row_number",
+		"rank",
+	}
+	nonsupported := map[string]bool{}
+	for _, x := range nonsupportedKeywords {
+		nonsupported[x] = true
+	}
 
 	for key := range keywords {
-        if _, ok := nonsupported[key]; ok {
-            continue
-        }
+		if _, ok := nonsupported[key]; ok {
+			continue
+		}
 		input := fmt.Sprintf("create table t (%s INTEGER)", key)
 		output := fmt.Sprintf("create table t (\n\t`%s` INTEGER\n)", key)
 		t.Run(input, func(t *testing.T) {
 			tree, err := ParseStrictDDL(input)
-				if err != nil {
+			if err != nil {
 				t.Errorf("input: %s, err: %v", input, err)
 				return
 			}
@@ -3204,22 +3204,22 @@ var (
 		input:  "select a, foo() over () from t1",
 		output: "syntax error at position 21 near 'over'",
 	}, {
-		input: "select name, cume_dist(a) over (partition by b) from t",
+		input:  "select name, cume_dist(a) over (partition by b) from t",
 		output: "syntax error at position 25 near 'a'",
 	}, {
-		input: "select name, dense_rank(a) over (partition by b) from t",
+		input:  "select name, dense_rank(a) over (partition by b) from t",
 		output: "syntax error at position 26 near 'a'",
 	}, {
-		input: "select name, ntile(a) over (partition by b) from t",
+		input:  "select name, ntile(a) over (partition by b) from t",
 		output: "syntax error at position 21 near 'a'",
 	}, {
-		input: "select name, percent_rank(a) over (partition by b) from t",
+		input:  "select name, percent_rank(a) over (partition by b) from t",
 		output: "syntax error at position 28 near 'a'",
 	}, {
-		input: "select name, rank(a) over (partition by b) from t",
+		input:  "select name, rank(a) over (partition by b) from t",
 		output: "syntax error at position 20 near 'a'",
 	}, {
-		input: "select name, row_number(a) over (partition by b) from t",
+		input:  "select name, row_number(a) over (partition by b) from t",
 		output: "syntax error at position 26 near 'a'",
 	}, {
 		input:  "select /* straight_join using */ 1 from t1 straight_join t2 using (a)",

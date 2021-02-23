@@ -24,10 +24,10 @@ import (
 	"strings"
 	"time"
 
-	"golang.org/x/net/context"
 	"github.com/dolthub/vitess/go/vt/proto/vtrpc"
 	"github.com/dolthub/vitess/go/vt/vterrors"
 	"github.com/dolthub/vitess/go/vt/vttls"
+	"golang.org/x/net/context"
 )
 
 // connectResult is used by Connect.
