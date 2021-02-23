@@ -119,7 +119,6 @@ func TestConcatenate_NoErrors(t *testing.T) {
 
 func TestConcatenate_WithErrors(t *testing.T) {
 	strFailed := "failed"
-	errString := "Concatenate.Execute: " + strFailed
 
 	fake := r("id|col1|col2", "int64|varchar|varbinary", "1|a1|b1", "2|a2|b2")
 	concatenate := &Concatenate{
@@ -131,7 +130,7 @@ func TestConcatenate_WithErrors(t *testing.T) {
 	}
 	ctx := context.Background()
 	_, err := concatenate.Execute(&noopVCursor{ctx: ctx}, nil, true)
-	require.EqualError(t, err, errString)
+	require.EqualError(t, err, strFailed)
 
 	_, err = wrapStreamExecute(concatenate, &noopVCursor{ctx: ctx}, nil, true)
 	require.EqualError(t, err, strFailed)
@@ -144,7 +143,7 @@ func TestConcatenate_WithErrors(t *testing.T) {
 		},
 	}
 	_, err = concatenate.Execute(&noopVCursor{ctx: ctx}, nil, true)
-	require.EqualError(t, err, errString)
+	require.EqualError(t, err, strFailed)
 	_, err = wrapStreamExecute(concatenate, &noopVCursor{ctx: ctx}, nil, true)
 	require.EqualError(t, err, strFailed)
 }
