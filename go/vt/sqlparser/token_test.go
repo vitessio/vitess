@@ -77,9 +77,8 @@ func TestLiteralID(t *testing.T) {
 	for _, tcase := range testcases {
 		tkn := NewStringTokenizer(tcase.in)
 		id, out := tkn.Scan()
-		if tcase.id != id || string(out) != tcase.out {
-			t.Errorf("Scan(%s): %d, %s, want %d, %s", tcase.in, id, out, tcase.id, tcase.out)
-		}
+		require.Equal(t, tcase.id, id)
+		require.Equal(t, tcase.out, string(out))
 	}
 }
 
@@ -150,9 +149,8 @@ func TestString(t *testing.T) {
 	for _, tcase := range testcases {
 		t.Run(tcase.in, func(t *testing.T) {
 			id, got := NewStringTokenizer(tcase.in).Scan()
-			if tcase.id != id || string(got) != tcase.want {
-				t.Errorf("Scan(%q) = (%s, %q), want (%s, %q)", tcase.in, tokenName(id), got, tokenName(tcase.id), tcase.want)
-			}
+			require.Equal(t, tcase.id, id, "Scan(%q) = (%s), want (%s)", tcase.in, tokenName(id), tokenName(tcase.id))
+			require.Equal(t, tcase.want, string(got))
 		})
 	}
 }
@@ -240,44 +238,6 @@ func TestVersion(t *testing.T) {
 			for _, expectedID := range tcase.id {
 				id, _ := tok.Scan()
 				require.Equal(t, expectedID, id)
-			}
-		})
-	}
-}
-
-func TestConvertMySQLVersion(t *testing.T) {
-	testcases := []struct {
-		version        string
-		commentVersion string
-		error          string
-	}{{
-		version:        "5.7.9",
-		commentVersion: "50709",
-	}, {
-		version:        "0008.08.9",
-		commentVersion: "80809",
-	}, {
-		version:        "5.7.9, Vitess - 10.0.1",
-		commentVersion: "50709",
-	}, {
-		version:        "8.1 Vitess - 10.0.1",
-		commentVersion: "80100",
-	}, {
-		version: "Vitess - 10.0.1",
-		error:   "MySQL version not correctly setup - Vitess - 10.0.1.",
-	}, {
-		version:        "5.7.9.22",
-		commentVersion: "50709",
-	}}
-
-	for _, tcase := range testcases {
-		t.Run(tcase.version, func(t *testing.T) {
-			output, err := ConvertMySQLVersionToCommentVersion(tcase.version)
-			if tcase.error != "" {
-				require.EqualError(t, err, tcase.error)
-			} else {
-				require.NoError(t, err)
-				require.Equal(t, tcase.commentVersion, output)
 			}
 		})
 	}
