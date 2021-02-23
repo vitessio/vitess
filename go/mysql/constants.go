@@ -520,14 +520,8 @@ const (
 	// in client.c. So using that one.
 	SSUnknownSQLState = "HY000"
 
-	//SSSyntaxErrorOrAccessViolation is the state on syntax errors or access violations
-	SSSyntaxErrorOrAccessViolation = "42000"
-
 	// SSUnknownComError is ER_UNKNOWN_COM_ERROR
 	SSUnknownComError = "08S01"
-
-	// SSHandshakeError is ER_HANDSHAKE_ERROR
-	SSHandshakeError = "08S01"
 
 	// SSServerShutdown is ER_SERVER_SHUTDOWN
 	SSServerShutdown = "08S01"
@@ -538,14 +532,8 @@ const (
 	// SSDataOutOfRange is ER_DATA_OUT_OF_RANGE
 	SSDataOutOfRange = "22003"
 
-	// SSBadNullError is ER_BAD_NULL_ERROR
-	SSBadNullError = "23000"
-
-	// SSBadFieldError is ER_BAD_FIELD_ERROR
-	SSBadFieldError = "42S22"
-
-	// SSDupKey is ER_DUP_KEY
-	SSDupKey = "23000"
+	// SSConstraintViolation is constraint violation
+	SSConstraintViolation = "23000"
 
 	// SSCantDoThisDuringAnTransaction is
 	// ER_CANT_DO_THIS_DURING_AN_TRANSACTION
@@ -554,11 +542,17 @@ const (
 	// SSAccessDeniedError is ER_ACCESS_DENIED_ERROR
 	SSAccessDeniedError = "28000"
 
+	// SSNoDB is ER_NO_DB_ERROR
+	SSNoDB = "3D000"
+
 	// SSLockDeadlock is ER_LOCK_DEADLOCK
 	SSLockDeadlock = "40001"
 
-	// SSNoDB is ER_NO_DB_ERROR
-	SSNoDB = "3D000"
+	//SSSyntaxErrorOrAccessViolation is the state on syntax errors or access violations
+	SSSyntaxErrorOrAccessViolation = "42000"
+
+	// SSBadFieldError is ER_BAD_FIELD_ERROR
+	SSBadFieldError = "42S22"
 )
 
 // A few interesting character set values.
