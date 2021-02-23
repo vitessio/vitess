@@ -133,12 +133,16 @@ func skipToEnd(yylex interface{}) {
   procedureParams []ProcedureParam
   characteristic Characteristic
   characteristics []Characteristic
+  Fields *Fields
+  Lines	*Lines
+  EnclosedBy *EnclosedBy
 }
 
 %token LEX_ERROR
 %left <bytes> UNION
 %token <bytes> SELECT STREAM INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT OFFSET FOR CALL
 %token <bytes> ALL DISTINCT AS EXISTS ASC DESC INTO DUPLICATE DEFAULT SET LOCK UNLOCK KEYS OF
+%token <bytes> OUTFILE DATA LOAD LINES TERMINATED ESCAPED ENCLOSED OPTIONALLY STARTING
 %right <bytes> UNIQUE KEY
 %token <bytes> SYSTEM_TIME
 %token <bytes> VALUES LAST_INSERT_ID
@@ -187,7 +191,7 @@ func skipToEnd(yylex interface{}) {
 %token <bytes> STATUS VARIABLES WARNINGS
 %token <bytes> SEQUENCE
 %token <bytes> EACH ROW BEFORE FOLLOWS PRECEDES DEFINER INVOKER
-%token <bytes> INOUT OUT DETERMINISTIC CONTAINS READS MODIFIES SQL DATA SECURITY
+%token <bytes> INOUT OUT DETERMINISTIC CONTAINS READS MODIFIES SQL SECURITY
 
 // SIGNAL Tokens
 %token <bytes> CLASS_ORIGIN SUBCLASS_ORIGIN MESSAGE_TEXT MYSQL_ERRNO CONSTRAINT_CATALOG CONSTRAINT_SCHEMA
@@ -206,7 +210,7 @@ func skipToEnd(yylex interface{}) {
 %token <bytes> GEOMETRY POINT LINESTRING POLYGON GEOMETRYCOLLECTION MULTIPOINT MULTILINESTRING MULTIPOLYGON
 
 // Type Modifiers
-%token <bytes> NULLX AUTO_INCREMENT APPROXNUM SIGNED UNSIGNED ZEROFILL
+%token <bytes> NULLX AUTO_INCREMENT APPROXNUM SIGNED UNSIGNED ZEROFILL LOCAL
 
 // Supported SHOW tokens
 %token <bytes> COLLATION DATABASES SCHEMAS TABLES VITESS_METADATA VSCHEMA FULL PROCESSLIST COLUMNS FIELDS ENGINES PLUGINS
@@ -239,7 +243,7 @@ func skipToEnd(yylex interface{}) {
 %token <bytes> INACTIVE INVISIBLE LOCKED MASTER_COMPRESSION_ALGORITHMS MASTER_PUBLIC_KEY_PATH MASTER_TLS_CIPHERSUITES MASTER_ZSTD_COMPRESSION_LEVEL
 %token <bytes> NESTED NETWORK_NAMESPACE NOWAIT NULLS OJ OLD OPTIONAL ORDINALITY ORGANIZATION OTHERS PATH PERSIST PERSIST_ONLY PRECEDING PRIVILEGE_CHECKS_USER PROCESS
 %token <bytes> RANDOM REFERENCE REQUIRE_ROW_FORMAT RESOURCE RESPECT RESTART RETAIN REUSE ROLE SECONDARY SECONDARY_ENGINE SECONDARY_LOAD SECONDARY_UNLOAD SKIP SRID
-%token <bytes> THREAD_PRIORITY TIES UNBOUNDED VCPU VISIBLE SYSTEM
+%token <bytes> THREAD_PRIORITY TIES UNBOUNDED VCPU VISIBLE SYSTEM INFILE
 
 %type <statement> command
 %type <selStmt> select_statement base_select union_lhs union_rhs
@@ -260,7 +264,7 @@ func skipToEnd(yylex interface{}) {
 %type <ddl> create_table_prefix rename_list
 %type <statement> analyze_statement show_statement use_statement other_statement
 %type <statement> describe_statement explain_statement explainable_statement
-%type <statement> begin_statement commit_statement rollback_statement start_transaction_statement
+%type <statement> begin_statement commit_statement rollback_statement start_transaction_statement load_statement
 %type <bytes2> comment_opt comment_list
 %type <str> union_op insert_or_replace
 %type <str> distinct_opt straight_join_opt cache_opt match_option separator_opt format_opt
@@ -273,7 +277,7 @@ func skipToEnd(yylex interface{}) {
 %type <joinCondition> join_condition join_condition_opt on_expression_opt
 %type <tableNames> table_name_list delete_table_list view_name_list
 %type <str> inner_join outer_join straight_join natural_join
-%type <tableName> table_name into_table_name delete_table_name
+%type <tableName> table_name load_into_table_name into_table_name delete_table_name
 %type <aliasedTableName> aliased_table_name aliased_table_options
 %type <indexHints> index_hint_list
 %type <expr> where_expression_opt
@@ -306,7 +310,7 @@ func skipToEnd(yylex interface{}) {
 %type <str> asc_desc_opt
 %type <limit> limit_opt
 %type <str> lock_opt
-%type <columns> ins_column_list column_list
+%type <columns> ins_column_list column_list column_list_opt
 %type <partitions> opt_partition_clause partition_list
 %type <setExprs> on_dup_opt
 %type <setExprs> set_list transaction_chars
@@ -332,12 +336,12 @@ func skipToEnd(yylex interface{}) {
 %type <convertType> convert_type
 %type <columnType> column_type  column_type_options
 %type <columnType> int_type decimal_type numeric_type time_type char_type spatial_type
-%type <sqlVal> length_opt column_comment
+%type <sqlVal> length_opt column_comment ignore_number_opt
 %type <optVal> column_default on_update
 %type <str> charset_opt collate_opt
 %type <boolVal> unsigned_opt zero_fill_opt
 %type <LengthScaleOption> float_length_opt decimal_length_opt
-%type <boolVal> null_or_not_null auto_increment
+%type <boolVal> null_or_not_null auto_increment local_opt optionally_opt
 %type <colKeyOpt> column_key
 %type <strs> enum_values
 %type <columnDefinition> column_definition
@@ -364,12 +368,15 @@ func skipToEnd(yylex interface{}) {
 %type <colIdent> vindex_type vindex_type_opt
 %type <bytes> ignored_alter_object_type
 %type <ReferenceAction> fk_reference_action fk_on_delete fk_on_update
-%type <str> constraint_symbol_opt
+%type <str> constraint_symbol_opt infile_opt starting_by_opt terminated_by_opt escaped_by_opt
 %type <exprs> call_param_list_opt
 %type <procedureParams> proc_param_list_opt proc_param_list
 %type <procedureParam> proc_param
 %type <characteristics> characteristic_list_opt characteristic_list
 %type <characteristic> characteristic
+%type <Fields> fields_opt
+%type <Lines> lines_opt
+%type <EnclosedBy> enclosed_by_opt
 
 %start any_command
 
@@ -412,10 +419,17 @@ command:
 | flush_statement
 | signal_statement
 | call_statement
+| load_statement
 | /*empty*/
 {
   setParseTree(yylex, nil)
 }
+
+load_statement:
+  LOAD DATA local_opt infile_opt load_into_table_name opt_partition_clause charset_opt fields_opt lines_opt ignore_number_opt column_list_opt
+  {
+    $$ = &Load{Local: $3, Infile: $4, Table: $5, Partition: $6, Charset: $7, Fields: $8, Lines: $9, IgnoreNum: $10, Columns: $11}
+  }
 
 select_statement:
   base_select order_by_opt limit_opt lock_opt
@@ -2838,6 +2852,15 @@ as_of_opt:
     $$ = $3
   }
 
+column_list_opt:
+  {
+    $$ = nil
+  }
+| '(' column_list ')'
+  {
+    $$ = $2
+  }
+
 column_list:
   sql_id
   {
@@ -2967,6 +2990,12 @@ natural_join:
     } else {
       $$ = NaturalRightJoinStr
     }
+  }
+
+load_into_table_name:
+  INTO TABLE table_name
+  {
+    $$ = $3
   }
 
 into_table_name:
@@ -4153,6 +4182,11 @@ ignore_opt:
 | IGNORE
   { $$ = IgnoreStr }
 
+ignore_number_opt:
+  { $$ = nil }
+| IGNORE INTEGRAL LINES
+  { $$ = NewIntVal($2) }
+
 non_add_drop_or_rename_operation:
   ALTER
   { $$ = struct{}{} }
@@ -4236,6 +4270,79 @@ reserved_table_id:
 | reserved_keyword
   {
     $$ = NewTableIdent(string($1))
+  }
+
+infile_opt:
+  { $$ = string("") }
+| INFILE STRING
+  { $$ = string($2)}
+
+local_opt:
+  { $$ = BoolVal(false) }
+| LOCAL
+  { $$ = BoolVal(true) }
+
+enclosed_by_opt:
+  {
+    $$ = nil
+  }
+| optionally_opt ENCLOSED BY STRING
+  {
+    $$ = &EnclosedBy{Optionally: $1, Delim: "'" + string($4) + "'"}
+  }
+
+optionally_opt:
+  {
+    $$ = BoolVal(false)
+  }
+| OPTIONALLY
+  {
+    $$ = BoolVal(true)
+  }
+
+terminated_by_opt:
+  {
+    $$ = ""
+  }
+| TERMINATED BY STRING
+  {
+    $$ =  "'" + string($3) +  "'"
+  }
+
+escaped_by_opt:
+  {
+    $$ = ""
+  }
+| ESCAPED BY STRING
+  {
+    $$ =  "'" + string($3) + "'"
+  }
+
+fields_opt:
+  {
+    $$ = nil
+  }
+| columns_or_fields terminated_by_opt enclosed_by_opt escaped_by_opt
+  {
+    $$ = &Fields{TerminatedBy: $2, EnclosedBy: $3, EscapedBy: $4}
+  }
+
+lines_opt:
+  {
+    $$ = nil
+  }
+| LINES starting_by_opt terminated_by_opt
+  {
+    $$ = &Lines{StartingBy: $2, TerminatedBy: $3}
+  }
+
+starting_by_opt:
+  {
+    $$ = ""
+  }
+| STARTING BY STRING
+  {
+    $$ = "'" + string($3) + "'"
   }
 
 /*
@@ -4461,7 +4568,10 @@ non_reserved_keyword:
 | LAST_INSERT_ID
 | LESS
 | LEVEL
+| LINES
 | LINESTRING
+| LOAD
+| LOCAL
 | LOCKED
 | LONGBLOB
 | LONGTEXT
@@ -4492,6 +4602,7 @@ non_reserved_keyword:
 | ONLY
 | OPTIMIZE
 | OPTIONAL
+| OPTIONALLY
 | ORDINALITY
 | ORGANIZATION
 | OTHERS
@@ -4543,6 +4654,7 @@ non_reserved_keyword:
 | SQLSTATE
 | SRID
 | START
+| STARTING
 | STATUS
 | SUBCLASS_ORIGIN
 | TABLES
