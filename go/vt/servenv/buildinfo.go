@@ -23,6 +23,9 @@ import (
 	"strconv"
 	"time"
 
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"vitess.io/vitess/go/vt/log"
 
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -109,7 +112,7 @@ func init() {
 		version:            versionName,
 	}
 	var convVersion string
-	convVersion, err = sqlparser.ConvertMySQLVersionToCommentVersion(AppVersion.MySQLVersion())
+	convVersion, err = convertMySQLVersionToCommentVersion(AppVersion.MySQLVersion())
 	if err != nil {
 		log.Error(err)
 	} else {
@@ -135,4 +138,42 @@ func init() {
 		fmt.Sprintf("%v", AppVersion.jenkinsBuildNumber),
 	}
 	stats.NewGaugesWithMultiLabels("BuildInformation", "build information exposed via label", buildLabels).Set(buildValues, 1)
+}
+
+// convertMySQLVersionToCommentVersion converts the MySQL version into comment version format.
+func convertMySQLVersionToCommentVersion(version string) (string, error) {
+	var res = make([]int, 3)
+	idx := 0
+	val := ""
+	for _, c := range version {
+		if c <= '9' && c >= '0' {
+			val += string(c)
+		} else if c == '.' {
+			v, err := strconv.Atoi(val)
+			if err != nil {
+				return "", err
+			}
+			val = ""
+			res[idx] = v
+			idx++
+			if idx == 3 {
+				break
+			}
+		} else {
+			break
+		}
+	}
+	if val != "" {
+		v, err := strconv.Atoi(val)
+		if err != nil {
+			return "", err
+		}
+		res[idx] = v
+		idx++
+	}
+	if idx == 0 {
+		return "", vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "MySQL version not correctly setup - %s.", version)
+	}
+
+	return fmt.Sprintf("%01d%02d%02d", res[0], res[1], res[2]), nil
 }
