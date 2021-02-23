@@ -1742,6 +1742,11 @@ func (tsv *TabletServer) QueryPlanCacheLen() int {
 	return tsv.qe.QueryPlanCacheLen()
 }
 
+// QueryPlanCacheWait waits until the query plan cache has processed all recent queries
+func (tsv *TabletServer) QueryPlanCacheWait() {
+	tsv.qe.plans.Wait()
+}
+
 // SetMaxResultSize changes the max result size to the specified value.
 func (tsv *TabletServer) SetMaxResultSize(val int) {
 	tsv.qe.maxResultSize.Set(int64(val))
