@@ -22,6 +22,7 @@ option go_package = "vitess.io/vitess/go/vt/proto/vtctldata";
 
 package vtctldata;
 
+import "binlogdata.proto";
 import "logutil.proto";
 import "mysqlctl.proto";
 import "tabletmanagerdata.proto";
@@ -81,6 +82,46 @@ message Shard {
   string keyspace = 1;
   string name = 2;
   topodata.Shard shard = 3;
+}
+
+// TODO: comment the hell out of this.
+message Workflow {
+  string name = 1;
+  ReplicationLocation source = 2;
+  ReplicationLocation target = 3;
+  int64 max_v_replication_lag = 4;
+  map<string, ShardReplicationStatus> shard_statuses = 5;
+
+  message ReplicationLocation {
+    string keyspace = 1;
+    repeated string shards = 2;
+  }
+
+  message ReplicationStatus {
+    int64 id = 1;
+    string shard = 2;
+    topodata.TabletAlias tablet = 3;
+    binlogdata.BinlogSource binlog_source = 4;
+    string position = 5;
+    string stop_position = 6;
+    string state = 7;
+    string db_name = 8;
+    vttime.Time transaction_timestamp = 9;
+    vttime.Time time_updated = 10;
+    string message = 11;
+    repeated CopyState copy_states = 12;
+
+    message CopyState {
+      string table = 1;
+      string last_pk = 2;
+    }
+  }
+
+  message ShardReplicationStatus {
+    repeated ReplicationStatus primary_replication_statuses = 1;
+    repeated topodata.Shard.TabletControl tablet_controls = 2;
+    bool is_primary_serving = 3;
+  }
 }
 
 /* Request/response types for VtctldServer */
@@ -347,6 +388,15 @@ message GetVSchemaRequest {
 
 message GetVSchemaResponse {
   vschema.Keyspace v_schema = 1;
+}
+
+message GetWorkflowsRequest {
+  string keyspace = 1;
+  bool active_only = 2;
+}
+
+message GetWorkflowsResponse {
+  repeated Workflow workflows = 1;
 }
 
 message InitShardPrimaryRequest {
