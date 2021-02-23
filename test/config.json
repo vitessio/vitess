@@ -293,6 +293,15 @@
 			"RetryMax": 1,
 			"Tags": []
 		},
+		"onlineddl_revert": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl_revert"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "onlineddl_revert",
+			"RetryMax": 1,
+			"Tags": []
+		},
 		"pitr": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/recovery/pitr"],
