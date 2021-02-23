@@ -86,7 +86,7 @@ func TestShowTables(t *testing.T) {
 	qr := exec(t, conn, query)
 
 	assert.Equal(t, qr.Fields[0].Database, "information_schema")
-	require.NotNil(t, qr)
+	assert.Equal(t, qr.Fields[0].Name, "Tables_in_ks")
 }
 
 func TestCastConvert(t *testing.T) {
