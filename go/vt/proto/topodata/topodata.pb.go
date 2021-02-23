@@ -6802,7 +6802,7 @@ func (m *ExternalClusters) Unmarshal(dAtA []byte) error {
 		switch fieldNum {
 		case 1:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field ExternalVitessCluster", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field VitessCluster", wireType)
 			}
 			var msglen int
 			for shift := uint(0); ; shift += 7 {
