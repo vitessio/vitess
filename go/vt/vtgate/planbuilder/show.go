@@ -164,17 +164,18 @@ func buildDBPlan(show *sqlparser.ShowBasic, vschema ContextVSchema) (engine.Prim
 
 func buildPlanWithDB(show *sqlparser.ShowBasic, vschema ContextVSchema) (engine.Primitive, error) {
 	dbName := show.DbName
-	if sqlparser.SystemSchema(dbName) {
+	dbDestination := show.DbName
+	if sqlparser.SystemSchema(dbDestination) {
 		ks, err := vschema.AnyKeyspace()
 		if err != nil {
 			return nil, err
 		}
-		dbName = ks.Name
+		dbDestination = ks.Name
 	} else {
 		// Remove Database Name from the query.
 		show.DbName = ""
 	}
-	destination, keyspace, _, err := vschema.TargetDestination(dbName)
+	destination, keyspace, _, err := vschema.TargetDestination(dbDestination)
 	if err != nil {
 		return nil, err
 	}
@@ -182,14 +183,26 @@ func buildPlanWithDB(show *sqlparser.ShowBasic, vschema ContextVSchema) (engine.
 		destination = key.DestinationAnyShard{}
 	}
 
+	if dbName == "" {
+		dbName = keyspace.Name
+	}
+
 	query := sqlparser.String(show)
-	return &engine.Send{
+	var plan engine.Primitive
+	plan = &engine.Send{
 		Keyspace:          keyspace,
 		TargetDestination: destination,
 		Query:             query,
 		IsDML:             false,
 		SingleShardOnly:   true,
-	}, nil
+	}
+	if show.Command == sqlparser.Table {
+		plan, err = engine.NewRenameField([]string{"Tables_in_" + dbName}, []int{0}, plan)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return plan, nil
 
 }
 
