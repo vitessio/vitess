@@ -66,10 +66,14 @@ func (r *rewriterGen) visitStruct(typeString, replaceMethodPrefix string, stroct
 	return nil
 }
 
-func (r *rewriterGen) visitSlice(t types.Type, typeString, replaceMethodPrefix string, slice *types.Slice) error {
-	name, replaceMethod := r.createReplaceCodeForSlice(replaceMethodPrefix, typeString, types.TypeString(slice.Elem(), noQualifier))
-	r.replaceMethods = append(r.replaceMethods, replaceMethod)
-	r.cases = append(r.cases, jen.Case(jen.Id(typeString)).Block(caseStmtForSlice(name)))
+func (r *rewriterGen) visitSlice(typeString, replaceMethodPrefix string, slice *types.Slice) error {
+	var stmts []jen.Code
+	if r.interestingType(slice.Elem()) {
+		name, replaceMethod := r.createReplaceCodeForSlice(replaceMethodPrefix, typeString, types.TypeString(slice.Elem(), noQualifier))
+		r.replaceMethods = append(r.replaceMethods, replaceMethod)
+		stmts = append(stmts, caseStmtForSlice(name))
+	}
+	r.cases = append(r.cases, jen.Case(jen.Id(typeString)).Block(stmts...))
 	return nil
 }
 
@@ -126,7 +130,6 @@ func (r *rewriterGen) createReplaceMethod(structName, structType string, field *
 
 func (r *rewriterGen) createReplaceCodeForSlice(structName, structType, elemType string) (string, jen.Code) {
 	name := "replace" + structName
-
 	/*
 		func replacer(idx int) func(AST, AST) {
 			return func(newnode, container AST) {
@@ -136,8 +139,8 @@ func (r *rewriterGen) createReplaceCodeForSlice(structName, structType, elemType
 
 	*/
 
-	s := jen.Func().Id(name).Params(jen.Id("idx").Int()).Func().Params(jen.List(jen.Id("AST"), jen.Id("AST"))).Block(
-		jen.Return(jen.Func().Params(jen.List(jen.Id("newNode"), jen.Id("container")).Id("AST"))).Block(
+	s := jen.Func().Id(name).Params(jen.Id("idx").Int()).Func().Params(jen.List(jen.Id(r.ifaceName), jen.Id(r.ifaceName))).Block(
+		jen.Return(jen.Func().Params(jen.List(jen.Id("newNode"), jen.Id("container")).Id(r.ifaceName))).Block(
 			jen.Id("container").Assert(jen.Id(structType)).Index(jen.Id("idx")).Op("=").
 				Id("newNode").Assert(jen.Id(elemType)),
 		),
@@ -159,8 +162,8 @@ func (r *rewriterGen) createReplaceCodeForSliceField(structName, structType stri
 
 	*/
 
-	s := jen.Func().Id(name).Params(jen.Id("idx").Int()).Func().Params(jen.List(jen.Id("AST"), jen.Id("AST"))).Block(
-		jen.Return(jen.Func().Params(jen.List(jen.Id("newNode"), jen.Id("container")).Id("AST"))).Block(
+	s := jen.Func().Id(name).Params(jen.Id("idx").Int()).Func().Params(jen.List(jen.Id(r.ifaceName), jen.Id(r.ifaceName))).Block(
+		jen.Return(jen.Func().Params(jen.List(jen.Id("newNode"), jen.Id("container")).Id(r.ifaceName))).Block(
 			jen.Id("container").Assert(jen.Id(structType)).Dot(field.Name()).Index(jen.Id("idx")).Op("=").
 				Id("newNode").Assert(jen.Id(types.TypeString(elemType, noQualifier))),
 		),
