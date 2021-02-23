@@ -1129,7 +1129,7 @@ func (ts *trafficSwitcher) changeTableSourceWrites(ctx context.Context, access a
 		}); err != nil {
 			return err
 		}
-		return ts.wr.RefreshTabletsByShard(ctx, source.si, nil, nil)
+		return ts.wr.RefreshTabletsByShard(ctx, source.si, nil)
 	})
 }
 
@@ -1364,7 +1364,7 @@ func (ts *trafficSwitcher) allowTableTargetWrites(ctx context.Context) error {
 		}); err != nil {
 			return err
 		}
-		return ts.wr.RefreshTabletsByShard(ctx, target.si, nil, nil)
+		return ts.wr.RefreshTabletsByShard(ctx, target.si, nil)
 	})
 }
 
@@ -1522,7 +1522,7 @@ func (ts *trafficSwitcher) dropSourceBlacklistedTables(ctx context.Context) erro
 		}); err != nil {
 			return err
 		}
-		return ts.wr.RefreshTabletsByShard(ctx, source.si, nil, nil)
+		return ts.wr.RefreshTabletsByShard(ctx, source.si, nil)
 	})
 }
 
