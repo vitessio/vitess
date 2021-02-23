@@ -1208,34 +1208,28 @@ type (
 		ShowCollationFilterOpt Expr
 	}
 
-	// ShowColumns is of ShowInternal type, holds the show columns statement.
-	ShowColumns struct {
-		Full   string
-		Table  TableName
-		DbName string
-		Filter *ShowFilter
-	}
-
-	// ShowTableStatus is of ShowInternal type, holds SHOW TABLE STATUS queries.
-	ShowTableStatus struct {
-		DatabaseName string
-		Filter       *ShowFilter
-	}
-
 	// ShowCommandType represents the show statement type.
 	ShowCommandType int8
 
 	// ShowBasic is of ShowInternal type, holds Simple SHOW queries with a filter.
 	ShowBasic struct {
 		Command ShowCommandType
+		Full    bool
+		Tbl     TableName
+		DbName  string
 		Filter  *ShowFilter
+	}
+
+	// ShowCreate is of ShowInternal type, holds SHOW CREATE queries.
+	ShowCreate struct {
+		Command ShowCommandType
+		Op      TableName
 	}
 )
 
-func (*ShowLegacy) isShowInternal()      {}
-func (*ShowColumns) isShowInternal()     {}
-func (*ShowTableStatus) isShowInternal() {}
-func (*ShowBasic) isShowInternal()       {}
+func (*ShowLegacy) isShowInternal() {}
+func (*ShowBasic) isShowInternal()  {}
+func (*ShowCreate) isShowInternal() {}
 
 // InsertRows represents the rows for an INSERT statement.
 type InsertRows interface {
@@ -2443,17 +2437,6 @@ func (node *Show) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
-func (node *ShowColumns) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "show %s", node.Full)
-	buf.astPrintf(node, "columns from %v", node.Table)
-
-	buf.printIf(node.DbName != "", " from "+node.DbName)
-	if node.Filter != nil {
-		buf.astPrintf(node, "%v", node.Filter)
-	}
-}
-
-// Format formats the node.
 func (node *ShowLegacy) Format(buf *TrackedBuffer) {
 	nodeType := strings.ToLower(node.Type)
 	if (nodeType == "tables" || nodeType == "columns" || nodeType == "fields" || nodeType == "index" || nodeType == "keys" || nodeType == "indexes" ||
@@ -3147,18 +3130,24 @@ func (node *Load) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
-func (node *ShowTableStatus) Format(buf *TrackedBuffer) {
-	buf.WriteString("show table status")
-	if node.DatabaseName != "" {
-		buf.WriteString(" from ")
-		buf.WriteString(node.DatabaseName)
+func (node *ShowBasic) Format(buf *TrackedBuffer) {
+	buf.WriteString("show")
+	if node.Full {
+		buf.WriteString(" full")
+	}
+	buf.astPrintf(node, "%s", node.Command.ToString())
+	if !node.Tbl.IsEmpty() {
+		buf.astPrintf(node, " from %v", node.Tbl)
+	}
+	if node.DbName != "" {
+		buf.astPrintf(node, " from %s", node.DbName)
 	}
 	buf.astPrintf(node, "%v", node.Filter)
 }
 
 // Format formats the node.
-func (node *ShowBasic) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "show%s%v", node.Command.ToString(), node.Filter)
+func (node *ShowCreate) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "show%s %v", node.Command.ToString(), node.Op)
 }
 
 // Format formats the node.

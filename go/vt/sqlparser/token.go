@@ -201,6 +201,7 @@ var keywords = map[string]int{
 	"error":               ERROR,
 	"escape":              ESCAPE,
 	"escaped":             ESCAPED,
+	"event":               EVENT,
 	"exchange":            EXCHANGE,
 	"exclusive":           EXCLUSIVE,
 	"exists":              EXISTS,
@@ -336,6 +337,7 @@ var keywords = map[string]int{
 	"offset":              OFFSET,
 	"on":                  ON,
 	"only":                ONLY,
+	"open":                OPEN,
 	"optimize":            OPTIMIZE,
 	"optimizer_costs":     OPTIMIZER_COSTS,
 	"option":              OPTION,
@@ -452,6 +454,7 @@ var keywords = map[string]int{
 	"tree":                TREE,
 	"traditional":         TRADITIONAL,
 	"trigger":             TRIGGER,
+	"triggers":            TRIGGERS,
 	"true":                TRUE,
 	"truncate":            TRUNCATE,
 	"uncommitted":         UNCOMMITTED,
@@ -465,6 +468,7 @@ var keywords = map[string]int{
 	"upgrade":             UPGRADE,
 	"usage":               UNUSED,
 	"use":                 USE,
+	"user":                USER,
 	"user_resources":      USER_RESOURCES,
 	"using":               USING,
 	"utc_date":            UTC_DATE,
@@ -1027,8 +1031,14 @@ func (tkn *Tokenizer) scanMySQLSpecificComment() (int, []byte) {
 		}
 		tkn.consumeNext(buffer)
 	}
-	_, sql := ExtractMysqlComment(buffer.String())
-	tkn.specialComment = NewStringTokenizer(sql)
+
+	commentVersion, sql := ExtractMysqlComment(buffer.String())
+
+	if MySQLVersion >= commentVersion {
+		// Only add the special comment to the tokenizer if the version of MySQL is higher or equal to the comment version
+		tkn.specialComment = NewStringTokenizer(sql)
+	}
+
 	return tkn.Scan()
 }
 

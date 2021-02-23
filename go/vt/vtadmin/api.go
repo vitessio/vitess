@@ -221,13 +221,42 @@ func (api *API) GetKeyspaces(ctx context.Context, req *vtadminpb.GetKeyspacesReq
 				return
 			}
 
-			m.Lock()
+			kss := make([]*vtadminpb.Keyspace, 0, len(resp.Keyspaces))
+
+			var (
+				kwg sync.WaitGroup
+				km  sync.Mutex
+			)
+
 			for _, ks := range resp.Keyspaces {
-				keyspaces = append(keyspaces, &vtadminpb.Keyspace{
-					Cluster:  c.ToProto(),
-					Keyspace: ks,
-				})
+				kwg.Add(1)
+
+				// Find all shards for each keyspace in the cluster, in parallel
+				go func(c *cluster.Cluster, ks *vtctldatapb.Keyspace) {
+					defer kwg.Done()
+					sr, err := c.Vtctld.FindAllShardsInKeyspace(ctx, &vtctldatapb.FindAllShardsInKeyspaceRequest{
+						Keyspace: ks.Name,
+					})
+
+					if err != nil {
+						er.RecordError(err)
+						return
+					}
+
+					km.Lock()
+					kss = append(kss, &vtadminpb.Keyspace{
+						Cluster:  c.ToProto(),
+						Keyspace: ks,
+						Shards:   sr.Shards,
+					})
+					km.Unlock()
+				}(c, ks)
 			}
+
+			kwg.Wait()
+
+			m.Lock()
+			keyspaces = append(keyspaces, kss...)
 			m.Unlock()
 		}(c)
 	}

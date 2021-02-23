@@ -35,6 +35,9 @@ var parserPool = sync.Pool{}
 // zeroParser is a zero-initialized parser to help reinitialize the parser for pooling.
 var zeroParser = *(yyNewParser().(*yyParserImpl))
 
+// MySQLVersion is the version of MySQL that the parser would emulate
+var MySQLVersion string = "50709"
+
 // yyParsePooled is a wrapper around yyParse that pools the parser objects. There isn't a
 // particularly good reason to use yyParse directly, since it immediately discards its parser.  What
 // would be ideal down the line is to actually pool the stacks themselves rather than the parser

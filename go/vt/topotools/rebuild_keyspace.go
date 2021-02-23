@@ -83,10 +83,11 @@ func RebuildKeyspaceLocked(ctx context.Context, log logutil.Logger, ts *topo.Ser
 		switch {
 		case err == nil:
 			for _, partition := range srvKeyspace.GetPartitions() {
-				if partition.GetShardTabletControls() != nil {
-					return fmt.Errorf("can't rebuild serving keyspace while a migration is on going. TabletControls is set for partition %v", partition)
+				for _, shardTabletControl := range partition.GetShardTabletControls() {
+					if shardTabletControl.QueryServiceDisabled {
+						return fmt.Errorf("can't rebuild serving keyspace while a migration is on going. TabletControls is set for partition %v", partition)
+					}
 				}
-
 			}
 		case topo.IsErrType(err, topo.NoNode):
 			// NOOP

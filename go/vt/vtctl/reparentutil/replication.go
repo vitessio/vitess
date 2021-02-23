@@ -140,9 +140,14 @@ func FindValidEmergencyReparentCandidates(
 }
 
 // ReplicaWasRunning returns true if a StopReplicationStatus indicates that the
-// replica had running replication threads before being stopped.
-func ReplicaWasRunning(stopStatus *replicationdatapb.StopReplicationStatus) bool {
-	return stopStatus.Before.IoThreadRunning || stopStatus.Before.SqlThreadRunning
+// replica had running replication threads before being stopped. It returns an
+// error if the Before state of replication is nil.
+func ReplicaWasRunning(stopStatus *replicationdatapb.StopReplicationStatus) (bool, error) {
+	if stopStatus == nil || stopStatus.Before == nil {
+		return false, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "could not determine Before state of StopReplicationStatus %v", stopStatus)
+	}
+
+	return stopStatus.Before.IoThreadRunning || stopStatus.Before.SqlThreadRunning, nil
 }
 
 // StopReplicationAndBuildStatusMaps stops replication on all replicas, then
