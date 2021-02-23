@@ -340,7 +340,7 @@ func skipToEnd(yylex interface{}) {
 %type <boolVal> null_or_not_null auto_increment
 %type <colKeyOpt> column_key
 %type <strs> enum_values
-%type <columnDefinition> column_definition
+%type <columnDefinition> column_definition column_definition_for_create
 %type <indexDefinition> index_definition
 %type <constraintDefinition> constraint_definition
 %type <str> index_or_key indexes_or_keys index_or_key_opt
@@ -1138,7 +1138,7 @@ table_column_list:
     $$ = &TableSpec{}
     $$.AddColumn($1)
   }
-| table_column_list ',' column_definition
+| table_column_list ',' column_definition_for_create
   {
     $$.AddColumn($3)
   }
@@ -1153,6 +1153,16 @@ table_column_list:
 
 column_definition:
   ID column_type column_type_options
+  {
+    if err := $2.merge($3); err != nil {
+      yylex.Error(err.Error())
+      return 1
+    }
+    $$ = &ColumnDefinition{Name: NewColIdent(string($1)), Type: $2}
+  }
+
+column_definition_for_create:
+  reserved_sql_id column_type column_type_options
   {
     if err := $2.merge($3); err != nil {
       yylex.Error(err.Error())
