@@ -2848,3 +2848,4 @@
 2021-02-23T13:41:45Z,Cluster (17),https://github.com/vitessio/vitess/actions/runs/592719747
 2021-02-23T13:41:45Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/592719762
 2021-02-23T15:18:47Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/592984954
+2021-02-23T17:07:01Z,gomod-tidy,https://github.com/vitessio/vitess/actions/runs/593291338
