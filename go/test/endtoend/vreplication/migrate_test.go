@@ -36,6 +36,12 @@ func insertInitialDataIntoExternalCluster(t *testing.T, conn *mysql.Conn) {
 	})
 }
 
+// TestMigrate runs an e2e test for importing from an external cluster using the Mount and Migrate commands.
+// We have an anti-pattern in Vitess: vt executables look for an environment variable VTDATAROOT for certain cluster parameters
+// like the log directory when they are created. Until this test we just needed a single cluster for e2e tests.
+// However now we need to create an external Vitess cluster. For this we need a different VTDATAROOT and
+// hence the VTDATAROOT env variable gets overwritten.
+// Each time we need to create vt processes in the "other" cluster we need to set the appropriate VTDATAROOT
 func TestMigrate(t *testing.T) {
 	defaultCellName := "zone1"
 	cells := []string{"zone1"}
@@ -75,13 +81,80 @@ func TestMigrate(t *testing.T) {
 	extVtgateConn := getConnection(t, extVc.ClusterConfig.hostname, extVc.ClusterConfig.vtgateMySQLPort)
 	insertInitialDataIntoExternalCluster(t, extVtgateConn)
 
-	if output, err := vc.VtctlClient.ExecuteCommandWithOutput("Mount", "-type=vitess", "-topo_type=etcd2",
-		fmt.Sprintf("-topo_server=localhost:%d", extVc.ClusterConfig.topoPort), "-topo_root=/vitess/global", "ext1"); err != nil {
-		t.Fatalf("Mount command failed with %+v : %s\n", err, output)
-	}
-	if output, err := vc.VtctlClient.ExecuteCommandWithOutput("Migrate", "-all", "-source=ext1.rating", "create", "product.extwf1"); err != nil {
-		t.Fatalf("Migrate command failed with %+v : %s\n", err, output)
-	}
-	//TODO: add tests to validate
-	//Complete/Cancel tests
+	var err error
+	var output, expected string
+
+	t.Run("mount external cluster", func(t *testing.T) {
+		if output, err = vc.VtctlClient.ExecuteCommandWithOutput("Mount", "-type=vitess", "-topo_type=etcd2",
+			fmt.Sprintf("-topo_server=localhost:%d", extVc.ClusterConfig.topoPort), "-topo_root=/vitess/global", "ext1"); err != nil {
+			t.Fatalf("Mount command failed with %+v : %s\n", err, output)
+		}
+		if output, err = vc.VtctlClient.ExecuteCommandWithOutput("Mount", "-type=vitess", "-list"); err != nil {
+			t.Fatalf("Mount command failed with %+v : %s\n", err, output)
+		}
+		expected = "ext1\n"
+		require.Equal(t, expected, output)
+		if output, err = vc.VtctlClient.ExecuteCommandWithOutput("Mount", "-type=vitess", "-show", "ext1"); err != nil {
+			t.Fatalf("Mount command failed with %+v : %s\n", err, output)
+		}
+		expected = `{"ClusterName":"ext1","topo_config":{"topo_type":"etcd2","server":"localhost:12379","root":"/vitess/global"}}` + "\n"
+		require.Equal(t, expected, output)
+	})
+
+	t.Run("migrate from external cluster", func(t *testing.T) {
+		if output, err = vc.VtctlClient.ExecuteCommandWithOutput("Migrate", "-all", "-cells=extcell1",
+			"-source=ext1.rating", "create", "product.e1"); err != nil {
+			t.Fatalf("Migrate command failed with %+v : %s\n", err, output)
+		}
+		expectNumberOfStreams(t, vtgateConn, "migrate", "e1", "product:0", 1)
+		validateCount(t, vtgateConn, "product:0", "rating", 2)
+		validateCount(t, vtgateConn, "product:0", "review", 3)
+		execVtgateQuery(t, vtgateConn, "product", "insert into review(rid, pid, review) values(4, 1, 'review4');")
+		execVtgateQuery(t, vtgateConn, "product", "insert into rating(gid, pid, rating) values(3, 1, 3);")
+		validateCount(t, vtgateConn, "product:0", "rating", 3)
+		validateCount(t, vtgateConn, "product:0", "review", 4)
+
+		if output, err = vc.VtctlClient.ExecuteCommandWithOutput("Migrate", "complete", "product.e1"); err != nil {
+			t.Fatalf("Migrate command failed with %+v : %s\n", err, output)
+		}
+
+		expectNumberOfStreams(t, vtgateConn, "migrate", "e1", "product:0", 0)
+	})
+
+	t.Run("cancel migrate workflow", func(t *testing.T) {
+		execVtgateQuery(t, vtgateConn, "product", "drop table review,rating")
+
+		if output, err = vc.VtctlClient.ExecuteCommandWithOutput("Migrate", "-all", "-auto_start=false", "-cells=extcell1",
+			"-source=ext1.rating", "create", "product.e1"); err != nil {
+			t.Fatalf("Migrate command failed with %+v : %s\n", err, output)
+		}
+		expectNumberOfStreams(t, vtgateConn, "migrate", "e1", "product:0", 1)
+		validateCount(t, vtgateConn, "product:0", "rating", 0)
+		validateCount(t, vtgateConn, "product:0", "review", 0)
+		if output, err = vc.VtctlClient.ExecuteCommandWithOutput("Migrate", "cancel", "product.e1"); err != nil {
+			t.Fatalf("Migrate command failed with %+v : %s\n", err, output)
+		}
+		expectNumberOfStreams(t, vtgateConn, "migrate", "e1", "product:0", 0)
+		var found bool
+		found, err = checkIfTableExists(t, vc, "zone1-100", "review")
+		require.NoError(t, err)
+		require.False(t, found)
+		found, err = checkIfTableExists(t, vc, "zone1-100", "rating")
+		require.NoError(t, err)
+		require.False(t, found)
+	})
+	t.Run("unmount external cluster", func(t *testing.T) {
+		if output, err = vc.VtctlClient.ExecuteCommandWithOutput("Mount", "-type=vitess", "-unmount", "ext1"); err != nil {
+			t.Fatalf("Mount command failed with %+v : %s\n", err, output)
+		}
+
+		if output, err = vc.VtctlClient.ExecuteCommandWithOutput("Mount", "-type=vitess", "-list"); err != nil {
+			t.Fatalf("Mount command failed with %+v : %s\n", err, output)
+		}
+		expected = "\n"
+		require.Equal(t, expected, output)
+
+		output, err = vc.VtctlClient.ExecuteCommandWithOutput("Mount", "-type=vitess", "-show", "ext1")
+		require.Errorf(t, err, "there is no vitess cluster named ext1")
+	})
 }

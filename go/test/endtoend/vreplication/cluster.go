@@ -35,6 +35,7 @@ type ClusterConfig struct {
 	topoPort        int
 	vtctldPort      int
 	vtctldGrpcPort  int
+	vtdataroot      string
 	tmpDir          string
 	vtgatePort      int
 	vtgateGrpcPort  int
@@ -124,9 +125,13 @@ func init() {
 		vtgateGrpcPort:  basePort + 991,
 		vtgateMySQLPort: basePort + 306,
 		tabletTypes:     "",
+		vtdataroot:      mainVtDataRoot,
 	}
 	basePort += 10000
 	extVtDataRoot = mainVtDataRoot + "/ext"
+	if _, err := os.Stat(extVtDataRoot); os.IsNotExist(err) {
+		os.Mkdir(extVtDataRoot, 0700)
+	}
 	externalClusterConfig = &ClusterConfig{
 		hostname:        "localhost",
 		topoPort:        etcdPort + 10000,
@@ -137,6 +142,7 @@ func init() {
 		vtgateGrpcPort:  basePort + 991,
 		vtgateMySQLPort: basePort + 306,
 		tabletTypes:     "",
+		vtdataroot:      extVtDataRoot,
 	}
 }
 
