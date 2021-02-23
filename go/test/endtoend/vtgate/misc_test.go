@@ -85,8 +85,8 @@ func TestShowTables(t *testing.T) {
 	query := "show tables;"
 	qr := exec(t, conn, query)
 
-	assert.Equal(t, qr.Fields[0].Database, "information_schema")
-	assert.Equal(t, qr.Fields[0].Name, "Tables_in_ks")
+	assert.Equal(t, "information_schema", qr.Fields[0].Database)
+	assert.Equal(t, "Tables_in_ks", qr.Fields[0].Name)
 }
 
 func TestCastConvert(t *testing.T) {
