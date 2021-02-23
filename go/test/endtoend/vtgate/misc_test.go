@@ -77,6 +77,18 @@ func TestShowColumns(t *testing.T) {
 	assertMatches(t, conn, "SHOW columns FROM `t5_null_vindex` in `ks`", expected)
 }
 
+func TestShowTables(t *testing.T) {
+	conn, err := mysql.Connect(context.Background(), &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	query := "show tables;"
+	qr := exec(t, conn, query)
+
+	assert.Equal(t, qr.Fields[0].Database, "information_schema")
+	require.NotNil(t, qr)
+}
+
 func TestCastConvert(t *testing.T) {
 	conn, err := mysql.Connect(context.Background(), &vtParams)
 	require.NoError(t, err)
