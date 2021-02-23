@@ -850,8 +850,6 @@ func (wr *Wrangler) buildTrafficSwitcher(ctx context.Context, targetKeyspace, wo
 					sourceTopo = externalTopo
 					ts.externalTopo = externalTopo
 				}
-				log.Infof("source topo is %+v", sourceTopo)
-
 			} else if ts.sourceKeyspace != bls.Keyspace {
 				return nil, fmt.Errorf("source keyspaces are mismatched across streams: %v vs %v", ts.sourceKeyspace, bls.Keyspace)
 			}
