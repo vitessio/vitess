@@ -77,6 +77,7 @@ func (a *application) apply(parent, node AST, replacer replacerFunc) {
 		return
 	}
 	switch n := node.(type) {
+	case Bytes:
 	case InterfaceSlice:
 		for x, el := range n {
 			a.apply(node, el, replaceInterfaceSlice(x))

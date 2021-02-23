@@ -102,17 +102,15 @@ func (gen *astHelperGen) doIt() (map[string]*jen.File, error) {
 			return rewriter.visitStruct(types.TypeString(t, noQualifier), named.Obj().Name(), n, false)
 		case *types.Slice:
 			named := t.(*types.Named)
-			return rewriter.visitSlice(t, types.TypeString(t, noQualifier), named.Obj().Name(), n)
+			return rewriter.visitSlice(types.TypeString(t, noQualifier), named.Obj().Name(), n)
 		case *types.Pointer:
 			strct, isStrct := n.Elem().Underlying().(*types.Struct)
 			if isStrct {
 				named := t.(*types.Pointer).Elem().(*types.Named)
 				return rewriter.visitStruct(types.TypeString(t, noQualifier), named.Obj().Name(), strct, true)
 			}
-		case *types.Interface:
-			// do nothing
 		default:
-			log.Printf("unknown %T\n", t)
+			// do nothing
 		}
 		return nil
 	})

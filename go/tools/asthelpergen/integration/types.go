@@ -99,6 +99,7 @@ func (r ValueSliceContainer) String() string {
 	return fmt.Sprintf("ValueSliceContainer{%s, %s, %s}", sliceStringAST(r.ASTElements...), "r.NotASTType", sliceStringLeaf(r.ASTImplementationElements...))
 }
 
+// We need to support these types - a slice of AST elements can implement the interface
 type InterfaceSlice []AST
 
 func (r InterfaceSlice) String() string {
@@ -107,6 +108,13 @@ func (r InterfaceSlice) String() string {
 		elements = append(elements, el.String())
 	}
 	return strings.Join(elements, ", ")
+}
+
+// We need to support these types - a slice of AST elements can implement the interface
+type Bytes []byte
+
+func (r Bytes) String() string {
+	return string(r)
 }
 
 // ast type helpers
