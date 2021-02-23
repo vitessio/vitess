@@ -306,6 +306,7 @@ func (*CaseStatement) iStatement() {}
 func (*IfStatement) iStatement()   {}
 func (*Signal) iStatement()        {}
 func (*Call) iStatement()          {}
+func (*Load) iStatement()          {}
 
 // ParenSelect can actually not be a top level statement,
 // but we have to allow it because it's a requirement
@@ -511,6 +512,153 @@ func (node *Union) walkSubtree(visit Visit) error {
 		node.Left,
 		node.Right,
 	)
+}
+
+// LoadStatement any LOAD statement.
+type LoadStatement interface {
+	iLoadStatement()
+	iStatement()
+	SQLNode
+}
+
+// Load represents a LOAD statement
+type Load struct {
+	Local BoolVal
+	Infile string
+	Table TableName
+	Partition Partitions
+	Charset string
+	*Fields
+	*Lines
+	IgnoreNum *SQLVal
+	Columns
+}
+
+func (*Load) iLoadStatement()      {}
+
+func (node *Load) Format(buf *TrackedBuffer) {
+	local := ""
+	if node.Local {
+		local = "local "
+	}
+	charset := ""
+	if node.Charset != "" {
+		charset = " character set " + node.Charset
+	}
+
+	ignore := ""
+	if node.IgnoreNum != nil {
+		ignore = fmt.Sprintf(" ignore %v lines", node.IgnoreNum)
+	}
+
+	if node.IgnoreNum == nil && node.Columns != nil {
+		ignore = " "
+	} else if node.IgnoreNum != nil && node.Columns != nil {
+		ignore += " "
+	}
+
+	buf.Myprintf("load data %sinfile '%s' into table %s%v%s%v%v%s%v", local, node.Infile, node.Table.String(),
+		node.Partition, charset, node.Fields, node.Lines, ignore, node.Columns)
+}
+
+func (node *Load) walkSubtree(visit Visit) error {
+	if node == nil {
+		return nil
+	}
+	return Walk(
+		visit,
+		node.Local,
+		node.Table,
+		node.Partition,
+		node.Fields,
+		node.Lines,
+		node.IgnoreNum,
+		node.Columns,
+	)
+}
+
+type Fields struct {
+	TerminatedBy string
+	*EnclosedBy
+	EscapedBy    string
+	SQLNode
+}
+
+func (node *Fields) Format(buf *TrackedBuffer) {
+	if node == nil {
+		return
+	}
+
+	terminated := ""
+	if node.TerminatedBy != "" {
+		terminated = "terminated by " + node.TerminatedBy
+	}
+
+	escaped := ""
+	if node.EscapedBy != "" {
+		escaped = " escaped by " + node.EscapedBy
+	}
+
+	buf.Myprintf(" fields %s%v%s", terminated, node.EnclosedBy, escaped)
+}
+
+func (node *Fields) walkSubtree(visit Visit) error {
+	if node == nil {
+		return nil
+	}
+	return nil
+}
+
+type EnclosedBy struct {
+	Optionally BoolVal
+	Delim string
+	SQLNode
+}
+
+func (node *EnclosedBy) Format(buf *TrackedBuffer) {
+	if node == nil {
+		return
+	}
+
+	enclosed := "enclosed by " + node.Delim
+	if node.Optionally {
+		enclosed = " optionally " + enclosed
+	} else {
+		enclosed = " " + enclosed
+	}
+
+	buf.Myprintf(enclosed)
+}
+
+type Lines struct {
+	StartingBy string
+	TerminatedBy string
+	SQLNode
+}
+
+func (node *Lines) Format(buf *TrackedBuffer) {
+	if node == nil {
+		return
+	}
+
+	starting := ""
+	if node.StartingBy != "" {
+		starting = " starting by " + node.StartingBy
+	}
+
+	terminated := ""
+	if node.TerminatedBy != "" {
+		terminated = " terminated by " + node.TerminatedBy
+	}
+
+	buf.Myprintf(" lines%s%s", starting, terminated)
+}
+
+func (node *Lines) walkSubtree(visit Visit) error {
+	if node == nil {
+		return nil
+	}
+	return nil
 }
 
 // BeginEndBlock represents a BEGIN .. END block with one or more statements nested within
