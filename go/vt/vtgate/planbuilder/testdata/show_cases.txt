@@ -396,15 +396,26 @@
   "QueryType": "SHOW",
   "Original": "show tables",
   "Instructions": {
-    "OperatorType": "Send",
-    "Keyspace": {
-      "Name": "main",
-      "Sharded": false
-    },
-    "TargetDestination": "AnyShard()",
-    "IsDML": false,
-    "Query": "show tables",
-    "SingleShardOnly": true
+    "OperatorType": "RenameFields",
+    "Columns": [
+      "Tables_in_main"
+    ],
+    "Indices": [
+      0
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "AnyShard()",
+        "IsDML": false,
+        "Query": "show tables",
+        "SingleShardOnly": true
+      }
+    ]
   }
 }
 
@@ -414,15 +425,26 @@
   "QueryType": "SHOW",
   "Original": "show tables from user",
   "Instructions": {
-    "OperatorType": "Send",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "TargetDestination": "AnyShard()",
-    "IsDML": false,
-    "Query": "show tables",
-    "SingleShardOnly": true
+    "OperatorType": "RenameFields",
+    "Columns": [
+      "Tables_in_user"
+    ],
+    "Indices": [
+      0
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetDestination": "AnyShard()",
+        "IsDML": false,
+        "Query": "show tables",
+        "SingleShardOnly": true
+      }
+    ]
   }
 }
 
@@ -432,15 +454,25 @@
   "QueryType": "SHOW",
   "Original": "show tables from performance_schema",
   "Instructions": {
-    "OperatorType": "Send",
-    "Keyspace": {
-      "Name": "main",
-      "Sharded": false
-    },
-    "TargetDestination": "AnyShard()",
-    "IsDML": false,
-    "Query": "show tables from performance_schema",
-    "SingleShardOnly": true
+    "OperatorType": "RenameFields",
+    "Columns": [
+      "Tables_in_performance_schema"
+    ],
+    "Indices": [
+      0
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "AnyShard()",
+        "IsDML": false,
+        "Query": "show tables from performance_schema",
+        "SingleShardOnly": true
+      }
+    ]
   }
 }
-
