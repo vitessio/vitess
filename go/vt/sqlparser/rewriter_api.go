@@ -107,3 +107,9 @@ func isNilValue(i interface{}) bool {
 	isNullable := kind == reflect.Ptr || kind == reflect.Array || kind == reflect.Slice
 	return isNullable && valueOf.IsNil()
 }
+
+func replacePanic(msg string) func(newNode, parent SQLNode) {
+	return func(newNode, parent SQLNode) {
+		panic("Tried replacing a field of a value type. This is not supported. " + msg)
+	}
+}

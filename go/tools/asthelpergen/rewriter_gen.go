@@ -119,7 +119,7 @@ func (r *rewriterGen) structCase(name string, stroct *types.Struct) (jen.Code, e
 }
 
 func (r *rewriterGen) createReplaceMethod(structName, structType string, field *types.Var) (string, jen.Code) {
-	name := "replace" + structName + field.Name()
+	name := "replaceStruct" + structName + field.Name()
 	return name, jen.Func().Id(name).Params(
 		jen.Id("newNode"),
 		jen.Id("parent").Id(r.ifaceName),
@@ -129,7 +129,7 @@ func (r *rewriterGen) createReplaceMethod(structName, structType string, field *
 }
 
 func (r *rewriterGen) createReplaceCodeForSlice(structName, structType, elemType string) (string, jen.Code) {
-	name := "replace" + structName
+	name := "replaceSlice" + structName
 	/*
 		func replacer(idx int) func(AST, AST) {
 			return func(newnode, container AST) {
