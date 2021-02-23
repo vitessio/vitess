@@ -1,0 +1,40 @@
+# DO NOT MODIFY: THIS FILE IS GENERATED USING "make generate_ci_workflows"
+
+name: Cluster (tabletmanager_throttler)
+on: [push, pull_request]
+jobs:
+
+  build:
+    name: Run endtoend tests on Cluster (tabletmanager_throttler)
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Set up Go
+      uses: actions/setup-go@v1
+      with:
+        go-version: 1.15
+
+    - name: Check out code
+      uses: actions/checkout@v2
+
+    - name: Get dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y mysql-server mysql-client make unzip g++ etcd curl git wget eatmydata
+        sudo service mysql stop
+        sudo service etcd stop
+        sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
+        sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
+        go mod download
+
+        wget https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb
+        sudo apt-get install -y gnupg2
+        sudo dpkg -i percona-release_latest.$(lsb_release -sc)_all.deb
+        sudo apt-get update
+        sudo apt-get install percona-xtrabackup-24
+
+    - name: Run cluster endtoend test
+      timeout-minutes: 30
+      run: |
+        source build.env
+        eatmydata -- go run test.go -docker=false -print-log -follow -shard tabletmanager_throttler
