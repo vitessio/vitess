@@ -97,6 +97,7 @@ func NewSQLErrorFromError(err error) error {
 		// Map vitess error codes into the mysql equivalent
 		code := vterrors.Code(err)
 		num := ERUnknownError
+		ss := SSUnknownSQLState
 		switch code {
 		case vtrpcpb.Code_CANCELED:
 			num = ERQueryInterrupted
@@ -129,6 +130,7 @@ func NewSQLErrorFromError(err error) error {
 			num = ERUnknownError
 		case vtrpcpb.Code_UNIMPLEMENTED:
 			num = ERNotSupportedYet
+			ss = SSSyntaxErrorOrAccessViolation
 		case vtrpcpb.Code_INTERNAL:
 			num = ERUnknownError
 		case vtrpcpb.Code_UNAVAILABLE:
@@ -140,7 +142,7 @@ func NewSQLErrorFromError(err error) error {
 		// Not found, build a generic SQLError.
 		return &SQLError{
 			Num:     num,
-			State:   SSUnknownSQLState,
+			State:   ss,
 			Message: msg,
 		}
 	}
