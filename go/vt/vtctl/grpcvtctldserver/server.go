@@ -676,6 +676,11 @@ func (s *VtctldServer) GetVSchema(ctx context.Context, req *vtctldatapb.GetVSche
 	}, nil
 }
 
+// GetWorkflows is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflowsRequest) (*vtctldatapb.GetWorkflowsResponse, error) {
+	panic("unimplemented!")
+}
+
 // InitShardPrimary is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) InitShardPrimary(ctx context.Context, req *vtctldatapb.InitShardPrimaryRequest) (*vtctldatapb.InitShardPrimaryResponse, error) {
 	if req.Keyspace == "" {
