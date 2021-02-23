@@ -121,7 +121,6 @@ func skipToEnd(yylex interface{}) {
   vindexParam   VindexParam
   vindexParams  []VindexParam
   showFilter    *ShowFilter
-  optLike       *OptLike
   over          *Over
   caseStatementCases []CaseStatementCase
   caseStatementCase CaseStatementCase
@@ -348,7 +347,6 @@ func skipToEnd(yylex interface{}) {
 %type <str> name_opt
 %type <str> equal_opt
 %type <TableSpec> table_spec table_column_list
-%type <optLike> create_like
 %type <str> table_option_list table_option table_opt_value
 %type <indexInfo> index_info
 %type <indexColumn> index_column
@@ -654,10 +652,9 @@ create_statement:
     }
     $$ = $1
   }
-| create_table_prefix create_like
+| create_table_prefix LIKE table_name
   {
-    // Create table [name] like [name]
-    $1.OptLike = $2
+    $1.OptLike = &OptLike{LikeTable: $3}
     $$ = $1
   }
 | CREATE key_type_opt INDEX sql_id using_opt ON table_name '(' index_column_list ')' index_option_list_opt
@@ -1122,16 +1119,6 @@ table_spec:
     $$.Options = $4
   }
 
-create_like:
-  LIKE table_name
-  {
-    $$ = &OptLike{LikeTable: $2}
-  }
-| '(' LIKE table_name ')'
-  {
-    $$ = &OptLike{LikeTable: $3}
-  }
-
 table_column_list:
   column_definition_for_create
   {
@@ -1162,7 +1149,7 @@ column_definition:
   }
 
 column_definition_for_create:
-  col_alias column_type column_type_options
+  reserved_sql_id column_type column_type_options
   {
     if err := $2.merge($3); err != nil {
       yylex.Error(err.Error())

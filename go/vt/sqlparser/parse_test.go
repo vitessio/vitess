@@ -2987,27 +2987,31 @@ func TestCreateTable(t *testing.T) {
 	},
 	}
 	for _, tcase := range testCases {
-		tree, err := ParseStrictDDL(tcase.input)
-		if err != nil {
-			t.Errorf("input: %s, err: %v", tcase.input, err)
-			continue
-		}
-		if got, want := String(tree.(*DDL)), tcase.output; got != want {
-			t.Errorf("Parse(%s):\n%s, want\n%s", tcase.input, got, want)
-		}
+		t.Run(tcase.input, func(t *testing.T) {
+			tree, err := ParseStrictDDL(tcase.input)
+			if err != nil {
+				t.Errorf("input: %s, err: %v", tcase.input, err)
+				return
+			}
+			if got, want := String(tree.(*DDL)), tcase.output; got != want {
+				t.Errorf("Parse(%s):\n%s, want\n%s", tcase.input, got, want)
+			}
+		})
 	}
 
 	for key := range keywords {
-		input := fmt.Sprintf("create table t (%s %s)", key, key)
-		output := fmt.Sprintf("create table t (\n\t`%s` %s\n)", key, key)
-		tree, err := ParseStrictDDL(input)
-		if err != nil {
-			t.Errorf("input: %s, err: %v", input, err)
-			continue
-		}
-		if got, want := String(tree.(*DDL)), output; got != want {
-			t.Errorf("Parse(%s):\n%s, want\n%s", input, got, want)
-		}
+		input := fmt.Sprintf("create table t (%s bigint)", key)
+		output := fmt.Sprintf("create table t (\n\t`%s` bigint\n)", key)
+		t.Run(input, func(t *testing.T) {
+			tree, err := ParseStrictDDL(input)
+			if err != nil {
+				t.Errorf("input: %s, err: %v", input, err)
+				return
+			}
+			if got, want := String(tree.(*DDL)), output; got != want {
+				t.Errorf("Parse(%s):\n%s, want\n%s", input, got, want)
+			}
+		})
 	}
 }
 
