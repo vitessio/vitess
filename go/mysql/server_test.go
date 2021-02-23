@@ -1151,9 +1151,9 @@ func TestErrorCodes(t *testing.T) {
 		{
 			err: vterrors.Errorf(
 				vtrpcpb.Code_INVALID_ARGUMENT,
-				"(errno %v) (sqlstate %v) invalid argument with errno", ERDupEntry, SSDupKey),
+				"(errno %v) (sqlstate %v) invalid argument with errno", ERDupEntry, SSConstraintViolation),
 			code:     ERDupEntry,
-			sqlState: SSDupKey,
+			sqlState: SSConstraintViolation,
 			text:     "invalid argument with errno",
 		},
 		{
