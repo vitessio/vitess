@@ -556,6 +556,9 @@ const (
 
 	// SSLockDeadlock is ER_LOCK_DEADLOCK
 	SSLockDeadlock = "40001"
+
+	// SSNoDB is ER_NO_DB_ERROR
+	SSNoDB = "3D000"
 )
 
 // A few interesting character set values.
