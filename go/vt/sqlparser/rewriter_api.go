@@ -16,6 +16,8 @@ limitations under the License.
 
 package sqlparser
 
+import "reflect"
+
 // The rewriter was heavily inspired by https://github.com/golang/tools/blob/master/go/ast/astutil/rewrite.go
 
 // Rewrite traverses a syntax tree recursively, starting with root,
@@ -89,4 +91,19 @@ func (c *Cursor) Parent() SQLNode { return c.parent }
 func (c *Cursor) Replace(newNode SQLNode) {
 	c.replacer(newNode, c.parent)
 	c.node = newNode
+}
+
+type replacerFunc func(newNode, parent SQLNode)
+
+// application carries all the shared data so we can pass it around cheaply.
+type application struct {
+	pre, post ApplyFunc
+	cursor    Cursor
+}
+
+func isNilValue(i interface{}) bool {
+	valueOf := reflect.ValueOf(i)
+	kind := valueOf.Kind()
+	isNullable := kind == reflect.Ptr || kind == reflect.Array || kind == reflect.Slice
+	return isNullable && valueOf.IsNil()
 }

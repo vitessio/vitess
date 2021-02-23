@@ -106,17 +106,7 @@ package sqlparser
 
 //go:generate go run ./visitorgen/main -input=ast.go -output=rewriter.go
 
-import (
-	"reflect"
-)
-
-type replacerFunc func(newNode, parent SQLNode)
-
-// application carries all the shared data so we can pass it around cheaply.
-type application struct {
-	pre, post ApplyFunc
-	cursor    Cursor
-}
+import "fmt"
 `
 
 const applyHeader = `
@@ -146,7 +136,7 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 
 const fileFooter = `
 	default:
-		panic("unknown ast type " + reflect.TypeOf(node).String())
+		panic(fmt.Sprintf("unknown ast type %T", node))
 	}
 
 	if a.post != nil && !a.post(&a.cursor) {
@@ -154,11 +144,4 @@ const fileFooter = `
 	}
 
 	a.cursor = saved
-}
-
-func isNilValue(i interface{}) bool {
-	valueOf := reflect.ValueOf(i)
-	kind := valueOf.Kind()
-	isNullable := kind == reflect.Ptr || kind == reflect.Array || kind == reflect.Slice
-	return isNullable && valueOf.IsNil()
 }`
