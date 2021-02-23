@@ -54,7 +54,16 @@ type RefContainer struct {
 }
 
 func (r *RefContainer) String() string {
-	return fmt.Sprintf("RefContainer{%s, %d, %s}", r.ASTType.String(), r.NotASTType, r.ASTImplementationType.String())
+	if r == nil {
+		return "nil"
+	}
+	asttype := ""
+	if r.ASTType == nil {
+		asttype = "nil"
+	} else {
+		asttype = r.ASTType.String()
+	}
+	return fmt.Sprintf("RefContainer{%s, %d, %s}", asttype, r.NotASTType, r.ASTImplementationType.String())
 }
 
 // Container implements the interface ByRef

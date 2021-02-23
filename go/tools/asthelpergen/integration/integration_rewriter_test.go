@@ -18,6 +18,7 @@ package integration
 
 import (
 	"fmt"
+	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -122,6 +123,42 @@ func TestVisitValueSliceContainer(t *testing.T) {
 		Post{leaf4},
 		Post{container},
 		Post{containerContainer},
+	})
+}
+
+func TestVisitInterfaceSlice(t *testing.T) {
+	leaf1 := &Leaf{2}
+	astType := &RefContainer{NotASTType: 12}
+	implementationType := &Leaf{2}
+
+	leaf2 := &Leaf{3}
+	refContainer := &RefContainer{
+		ASTType:               astType,
+		ASTImplementationType: implementationType,
+	}
+	ast := InterfaceSlice{
+		refContainer,
+		leaf1,
+		leaf2,
+	}
+
+	tv := &testVisitor{}
+
+	Rewrite(ast, tv.pre, tv.post)
+
+	tv.assertEquals(t, []step{
+		Pre{ast},
+		Pre{refContainer},
+		Pre{astType},
+		Post{astType},
+		Pre{implementationType},
+		Post{implementationType},
+		Post{refContainer},
+		Pre{leaf1},
+		Post{leaf1},
+		Pre{leaf2},
+		Post{leaf2},
+		Post{ast},
 	})
 }
 
@@ -265,7 +302,7 @@ func (tv *testVisitor) assertEquals(t *testing.T, expected []step) {
 			break
 		} else {
 			e := expected[i]
-			if e == step {
+			if reflect.DeepEqual(e, step) {
 				a := "✔️ - " + e.String()
 				if error {
 					fmt.Println(a)
@@ -293,17 +330,17 @@ func (tv *testVisitor) assertEquals(t *testing.T, expected []step) {
 
 // below follows two different ways of creating the replacement method for slices, and benchmark
 // between them. Diff seems to be very small, so I'll use the most readable form
-type replaceInterfaceSlice int
+type replaceA int
 
-func (r *replaceInterfaceSlice) replace(newNode, container AST) {
+func (r *replaceA) replace(newNode, container AST) {
 	container.(InterfaceSlice)[int(*r)] = newNode.(AST)
 }
 
-func (r *replaceInterfaceSlice) inc() {
+func (r *replaceA) inc() {
 	*r++
 }
 
-func replacer(idx int) func(AST, AST) {
+func replaceB(idx int) func(AST, AST) {
 	return func(newNode, container AST) {
 		container.(InterfaceSlice)[idx] = newNode.(AST)
 	}
@@ -323,7 +360,7 @@ func BenchmarkSliceReplacerA(b *testing.B) {
 	}
 
 	for i := 0; i < b.N; i++ {
-		replacer := replaceInterfaceSlice(0)
+		replacer := replaceA(0)
 		for _, el := range islice {
 			a.apply(islice, el, replacer.replace)
 			replacer.inc()
@@ -346,7 +383,7 @@ func BenchmarkSliceReplacerB(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		for x, el := range islice {
-			a.apply(islice, el, replacer(x))
+			a.apply(islice, el, replaceB(x))
 		}
 	}
 }

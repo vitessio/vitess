@@ -17,6 +17,11 @@ limitations under the License.
 
 package integration
 
+func replaceInterfaceSlice(idx int) func(AST, AST) {
+	return func(newNode, container AST) {
+		container.(InterfaceSlice)[idx] = newNode.(AST)
+	}
+}
 func replaceRefContainerASTType(newNode, parent AST) {
 	parent.(*RefContainer).ASTType = newNode.(AST)
 }
@@ -72,6 +77,10 @@ func (a *application) apply(parent, node AST, replacer replacerFunc) {
 		return
 	}
 	switch n := node.(type) {
+	case InterfaceSlice:
+		for x, el := range n {
+			a.apply(node, el, replaceInterfaceSlice(x))
+		}
 	case *Leaf:
 	case *RefContainer:
 		a.apply(node, n.ASTType, replaceRefContainerASTType)
