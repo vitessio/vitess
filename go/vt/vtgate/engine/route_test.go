@@ -821,7 +821,7 @@ func TestRouteSort(t *testing.T) {
 		},
 	}
 	_, err = sel.Execute(vc, map[string]*querypb.BindVariable{}, false)
-	expectError(t, "sel.Execute", err, "types are not comparable: VARCHAR vs VARCHAR")
+	require.EqualError(t, err, `types are not comparable: VARCHAR vs VARCHAR`)
 }
 
 func TestRouteSortTruncate(t *testing.T) {
@@ -983,11 +983,11 @@ func TestParamsFail(t *testing.T) {
 
 	vc := &loggingVCursor{shardErr: errors.New("shard error")}
 	_, err := sel.Execute(vc, map[string]*querypb.BindVariable{}, false)
-	expectError(t, "sel.Execute err", err, "paramsAnyShard: shard error")
+	require.EqualError(t, err, `shard error`)
 
 	vc.Rewind()
 	_, err = wrapStreamExecute(sel, vc, map[string]*querypb.BindVariable{}, false)
-	expectError(t, "sel.StreamExecute err", err, "paramsAnyShard: shard error")
+	require.EqualError(t, err, `shard error`)
 }
 
 func TestExecFail(t *testing.T) {
@@ -1004,12 +1004,12 @@ func TestExecFail(t *testing.T) {
 
 	vc := &loggingVCursor{shards: []string{"0"}, resultErr: mysql.NewSQLError(mysql.ERQueryInterrupted, "", "query timeout")}
 	_, err := sel.Execute(vc, map[string]*querypb.BindVariable{}, false)
-	expectError(t, "sel.Execute err", err, "query timeout (errno 1317) (sqlstate HY000)")
+	require.EqualError(t, err, `query timeout (errno 1317) (sqlstate HY000)`)
 	vc.ExpectWarnings(t, nil)
 
 	vc.Rewind()
 	_, err = wrapStreamExecute(sel, vc, map[string]*querypb.BindVariable{}, false)
-	expectError(t, "sel.StreamExecute err", err, "query timeout (errno 1317) (sqlstate HY000)")
+	require.EqualError(t, err, `query timeout (errno 1317) (sqlstate HY000)`)
 
 	// Scatter fails if one of N fails without ScatterErrorsAsWarnings
 	sel = NewRoute(
@@ -1030,7 +1030,7 @@ func TestExecFail(t *testing.T) {
 		},
 	}
 	_, err = sel.Execute(vc, map[string]*querypb.BindVariable{}, false)
-	expectError(t, "sel.Execute err", err, "result error -20")
+	require.EqualError(t, err, `result error -20`)
 	vc.ExpectWarnings(t, nil)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
@@ -1038,7 +1038,6 @@ func TestExecFail(t *testing.T) {
 	})
 
 	vc.Rewind()
-
 	// Scatter succeeds if all shards fail with ScatterErrorsAsWarnings
 	sel = NewRoute(
 		SelectScatter,
