@@ -2845,4 +2845,5 @@
 2021-02-23T13:25:01Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/592674849
 2021-02-23T13:25:02Z,Cluster (tabletmanager_throttler_custom_config),https://github.com/vitessio/vitess/actions/runs/592674870
 2021-02-23T13:25:02Z,endtoend,https://github.com/vitessio/vitess/actions/runs/592674852
+2021-02-23T13:41:45Z,Cluster (17),https://github.com/vitessio/vitess/actions/runs/592719747
 2021-02-23T13:41:45Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/592719762
