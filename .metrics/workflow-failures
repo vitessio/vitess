@@ -2865,8 +2865,11 @@
 2021-02-23T20:40:21Z,gomod-tidy,https://github.com/vitessio/vitess/actions/runs/593828301
 2021-02-23T20:57:38Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/593865467
 2021-02-23T20:57:38Z,unit_race,https://github.com/vitessio/vitess/actions/runs/593865493
+2021-02-23T22:38:50Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/594105804
 2021-02-23T22:38:50Z,check_make_sizegen,https://github.com/vitessio/vitess/actions/runs/594105820
 2021-02-23T22:38:50Z,gomod-tidy,https://github.com/vitessio/vitess/actions/runs/594105823
 2021-02-23T22:38:50Z,unit_race,https://github.com/vitessio/vitess/actions/runs/594105803
 2021-02-23T22:42:09Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/594113796
+2021-02-23T22:42:09Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/594113780
 2021-02-23T22:42:09Z,check_make_sizegen,https://github.com/vitessio/vitess/actions/runs/594113797
+2021-02-23T23:03:23Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/594159107
