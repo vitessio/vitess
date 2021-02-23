@@ -1009,8 +1009,12 @@ func hashStreams(targetKeyspace string, targets map[string]*tsTarget) int64 {
 
 func (ts *trafficSwitcher) validate(ctx context.Context) error {
 	if ts.migrationType == binlogdatapb.MigrationType_TABLES {
+		sourceTopo := ts.wr.ts
+		if ts.externalTopo != nil {
+			sourceTopo = ts.externalTopo
+		}
 		// All shards must be present.
-		if err := ts.compareShards(ctx, ts.sourceKeyspace, ts.sourceShards(), ts.externalTopo); err != nil {
+		if err := ts.compareShards(ctx, ts.sourceKeyspace, ts.sourceShards(), sourceTopo); err != nil {
 			return err
 		}
 		if err := ts.compareShards(ctx, ts.targetKeyspace, ts.targetShards(), ts.wr.ts); err != nil {
