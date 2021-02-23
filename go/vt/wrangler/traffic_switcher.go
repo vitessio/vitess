@@ -116,7 +116,8 @@ type trafficSwitcher struct {
 	sourceKSSchema  *vindexes.KeyspaceSchema
 	optCells        string //cells option passed to MoveTables/Reshard
 	optTabletTypes  string //tabletTypes option passed to MoveTables/Reshard
-
+	externalCluster string
+	externalTopo    *topo.Server
 }
 
 // tsTarget contains the metadata for each migration target.
@@ -833,7 +834,6 @@ func (wr *Wrangler) buildTrafficSwitcher(ctx context.Context, targetKeyspace, wo
 		optTabletTypes:  optTabletTypes,
 	}
 	log.Infof("Migration ID for workflow %s: %d", workflow, ts.id)
-	externalCluster := ""
 	sourceTopo := wr.ts
 
 	// Build the sources
@@ -841,13 +841,14 @@ func (wr *Wrangler) buildTrafficSwitcher(ctx context.Context, targetKeyspace, wo
 		for _, bls := range target.sources {
 			if ts.sourceKeyspace == "" {
 				ts.sourceKeyspace = bls.Keyspace
-				externalCluster = bls.ExternalCluster
-				if externalCluster != "" {
-					externalTopo, err := wr.ts.OpenExternalVitessClusterServer(ctx, externalCluster)
+				ts.externalCluster = bls.ExternalCluster
+				if ts.externalCluster != "" {
+					externalTopo, err := wr.ts.OpenExternalVitessClusterServer(ctx, ts.externalCluster)
 					if err != nil {
 						return nil, err
 					}
 					sourceTopo = externalTopo
+					ts.externalTopo = externalTopo
 				}
 				log.Infof("source topo is %+v", sourceTopo)
 
@@ -888,7 +889,7 @@ func (wr *Wrangler) buildTrafficSwitcher(ctx context.Context, targetKeyspace, wo
 			}
 		}
 	}
-	if ts.sourceKeyspace != ts.targetKeyspace || externalCluster != "" {
+	if ts.sourceKeyspace != ts.targetKeyspace || ts.externalCluster != "" {
 		ts.migrationType = binlogdatapb.MigrationType_TABLES
 	} else {
 		// TODO(sougou): for shard migration, validate that source and target combined
@@ -1009,10 +1010,10 @@ func hashStreams(targetKeyspace string, targets map[string]*tsTarget) int64 {
 func (ts *trafficSwitcher) validate(ctx context.Context) error {
 	if ts.migrationType == binlogdatapb.MigrationType_TABLES {
 		// All shards must be present.
-		if err := ts.compareShards(ctx, ts.sourceKeyspace, ts.sourceShards()); err != nil {
+		if err := ts.compareShards(ctx, ts.sourceKeyspace, ts.sourceShards(), ts.externalTopo); err != nil {
 			return err
 		}
-		if err := ts.compareShards(ctx, ts.targetKeyspace, ts.targetShards()); err != nil {
+		if err := ts.compareShards(ctx, ts.targetKeyspace, ts.targetShards(), ts.wr.ts); err != nil {
 			return err
 		}
 		// Wildcard table names not allowed.
@@ -1025,12 +1026,12 @@ func (ts *trafficSwitcher) validate(ctx context.Context) error {
 	return nil
 }
 
-func (ts *trafficSwitcher) compareShards(ctx context.Context, keyspace string, sis []*topo.ShardInfo) error {
+func (ts *trafficSwitcher) compareShards(ctx context.Context, keyspace string, sis []*topo.ShardInfo, topo *topo.Server) error {
 	var shards []string
 	for _, si := range sis {
 		shards = append(shards, si.ShardName())
 	}
-	topoShards, err := ts.wr.ts.GetShardNames(ctx, keyspace)
+	topoShards, err := topo.GetShardNames(ctx, keyspace)
 	if err != nil {
 		return err
 	}
