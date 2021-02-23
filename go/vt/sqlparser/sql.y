@@ -1133,7 +1133,7 @@ create_like:
   }
 
 table_column_list:
-  column_definition
+  column_definition_for_create
   {
     $$ = &TableSpec{}
     $$.AddColumn($1)
@@ -1162,13 +1162,13 @@ column_definition:
   }
 
 column_definition_for_create:
-  reserved_sql_id column_type column_type_options
+  col_alias column_type column_type_options
   {
     if err := $2.merge($3); err != nil {
       yylex.Error(err.Error())
       return 1
     }
-    $$ = &ColumnDefinition{Name: NewColIdent(string($1)), Type: $2}
+    $$ = &ColumnDefinition{Name: $1, Type: $2}
   }
 
 column_type_options:

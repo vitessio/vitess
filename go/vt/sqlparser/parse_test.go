@@ -2535,6 +2535,26 @@ func TestSubStr(t *testing.T) {
 	}
 }
 
+func TestCreateTable2(t *testing.T) {
+	validSQL := []string{
+		// test all the data types and options
+		"create table `t` (datetime datetime)"}
+
+	for _, sql := range validSQL {
+		sql = strings.TrimSpace(sql)
+		tree, err := ParseStrictDDL(sql)
+		if err != nil {
+			t.Errorf("input: %s, err: %v", sql, err)
+			continue
+		}
+		got := String(tree.(*DDL))
+
+		if sql != got {
+			t.Errorf("want:\n%s\ngot:\n%s", sql, got)
+		}
+	}
+}
+
 func TestCreateTable(t *testing.T) {
 	validSQL := []string{
 		// test all the data types and options
@@ -2974,6 +2994,19 @@ func TestCreateTable(t *testing.T) {
 		}
 		if got, want := String(tree.(*DDL)), tcase.output; got != want {
 			t.Errorf("Parse(%s):\n%s, want\n%s", tcase.input, got, want)
+		}
+	}
+
+	for key := range keywords {
+		input := fmt.Sprintf("create table t (%s %s)", key, key)
+		output := fmt.Sprintf("create table t (\n\t`%s` %s\n)", key, key)
+		tree, err := ParseStrictDDL(input)
+		if err != nil {
+			t.Errorf("input: %s, err: %v", input, err)
+			continue
+		}
+		if got, want := String(tree.(*DDL)), output; got != want {
+			t.Errorf("Parse(%s):\n%s, want\n%s", input, got, want)
 		}
 	}
 }
