@@ -3019,8 +3019,8 @@ func TestCreateTable(t *testing.T) {
 		if _, ok := nonsupported[key]; ok {
 			continue
 		}
-		input := fmt.Sprintf("create table t (%s INTEGER)", key)
-		output := fmt.Sprintf("create table t (\n\t`%s` INTEGER\n)", key)
+		input := fmt.Sprintf("create table t (%s bigint)", key)
+		output := fmt.Sprintf("create table t (\n\t`%s` bigint\n)", key)
 		t.Run(input, func(t *testing.T) {
 			tree, err := ParseStrictDDL(input)
 			if err != nil {

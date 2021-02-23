@@ -4606,13 +4606,13 @@ non_reserved_keyword:
 // These keywords should also go in reserved_keyword.
 column_name_safe_reserved_keyword:
   AVG
-| FIRST_VALUE
 | BIT_AND
 | BIT_OR
 | BIT_XOR
 | COUNT
 | CUME_DIST
 | DENSE_RANK
+| FIRST_VALUE
 | JSON_ARRAYAGG
 | JSON_OBJECTAGG
 | LAG
