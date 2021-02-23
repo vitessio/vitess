@@ -2853,10 +2853,12 @@
 2021-02-23T17:16:43Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/593316947
 2021-02-23T17:16:43Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/593316946
 2021-02-23T17:19:53Z,docker_test_3,https://github.com/vitessio/vitess/actions/runs/593325142
+2021-02-23T20:34:17Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/593813401
 2021-02-23T20:34:17Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/593813396
 2021-02-23T20:34:17Z,check_make_sizegen,https://github.com/vitessio/vitess/actions/runs/593813408
 2021-02-23T20:34:17Z,golangci-lint,https://github.com/vitessio/vitess/actions/runs/593813412
 2021-02-23T20:34:17Z,gomod-tidy,https://github.com/vitessio/vitess/actions/runs/593813411
+2021-02-23T20:40:21Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/593828292
 2021-02-23T20:40:21Z,check_make_sizegen,https://github.com/vitessio/vitess/actions/runs/593828260
 2021-02-23T20:40:21Z,golangci-lint,https://github.com/vitessio/vitess/actions/runs/593828267
 2021-02-23T20:40:21Z,gomod-tidy,https://github.com/vitessio/vitess/actions/runs/593828301
