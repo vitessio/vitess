@@ -17,15 +17,15 @@ limitations under the License.
 
 package integration
 
-func replaceInterfaceSlice(idx int) func(AST, AST) {
+func replaceSliceInterfaceSlice(idx int) func(AST, AST) {
 	return func(newNode, container AST) {
 		container.(InterfaceSlice)[idx] = newNode.(AST)
 	}
 }
-func replaceRefContainerASTType(newNode, parent AST) {
+func replaceStructRefContainerASTType(newNode, parent AST) {
 	parent.(*RefContainer).ASTType = newNode.(AST)
 }
-func replaceRefContainerASTImplementationType(newNode, parent AST) {
+func replaceStructRefContainerASTImplementationType(newNode, parent AST) {
 	parent.(*RefContainer).ASTImplementationType = newNode.(*Leaf)
 }
 func replaceRefSliceContainerASTElements(idx int) func(AST, AST) {
@@ -38,10 +38,10 @@ func replaceRefSliceContainerASTImplementationElements(idx int) func(AST, AST) {
 		container.(*RefSliceContainer).ASTImplementationElements[idx] = newNode.(*Leaf)
 	}
 }
-func replaceValueContainerASTType(newNode, parent AST) {
+func replaceStructValueContainerASTType(newNode, parent AST) {
 	parent.(*ValueContainer).ASTType = newNode.(AST)
 }
-func replaceValueContainerASTImplementationType(newNode, parent AST) {
+func replaceStructValueContainerASTImplementationType(newNode, parent AST) {
 	parent.(*ValueContainer).ASTImplementationType = newNode.(*Leaf)
 }
 func replaceValueSliceContainerValASTElements(idx int) func(AST, AST) {
@@ -80,12 +80,12 @@ func (a *application) apply(parent, node AST, replacer replacerFunc) {
 	case Bytes:
 	case InterfaceSlice:
 		for x, el := range n {
-			a.apply(node, el, replaceInterfaceSlice(x))
+			a.apply(node, el, replaceSliceInterfaceSlice(x))
 		}
 	case *Leaf:
 	case *RefContainer:
-		a.apply(node, n.ASTType, replaceRefContainerASTType)
-		a.apply(node, n.ASTImplementationType, replaceRefContainerASTImplementationType)
+		a.apply(node, n.ASTType, replaceStructRefContainerASTType)
+		a.apply(node, n.ASTImplementationType, replaceStructRefContainerASTImplementationType)
 	case *RefSliceContainer:
 		for x, el := range n.ASTElements {
 			a.apply(node, el, replaceRefSliceContainerASTElements(x))
@@ -97,8 +97,8 @@ func (a *application) apply(parent, node AST, replacer replacerFunc) {
 		a.apply(node, n.ASTType, replacePanic("ValueContainer ASTType"))
 		a.apply(node, n.ASTImplementationType, replacePanic("ValueContainer ASTImplementationType"))
 	case *ValueContainer:
-		a.apply(node, n.ASTType, replaceValueContainerASTType)
-		a.apply(node, n.ASTImplementationType, replaceValueContainerASTImplementationType)
+		a.apply(node, n.ASTType, replaceStructValueContainerASTType)
+		a.apply(node, n.ASTImplementationType, replaceStructValueContainerASTImplementationType)
 	case ValueSliceContainer:
 		for x, el := range n.ASTElements {
 			a.apply(node, el, replaceValueSliceContainerValASTElements(x))
