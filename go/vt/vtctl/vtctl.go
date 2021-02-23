@@ -359,7 +359,7 @@ var commands = []commandGroup{
 					" This can be used as sanity check to ensure that the tablets were drained after running vtctl MigrateServedTypes " +
 					" and vtgate is no longer using them. If -timeout is set, it fails when the timeout is reached."},
 			{"Mount", commandMount,
-				"-t [mysql|vitess] [-d] [cluster_specific_params] <cluster_name>",
+				"-t [mysql|vitess] [-unmount] [-list] [-show] [cluster_specific_params] [<cluster_name>]",
 				"Mount and unmount an external cluster in the file system"},
 		},
 	},
@@ -3465,7 +3465,7 @@ func commandWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.
 func commandMount(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	clusterType := subFlags.String("type", "vitess", "Specify cluster type: mysql or vitess")
 	unmount := subFlags.Bool("unmount", false, "Unmount cluster")
-	display := subFlags.Bool("display", false, "Display contents of cluster")
+	show := subFlags.Bool("show", false, "Display contents of cluster")
 	list := subFlags.Bool("list", false, "List all clusters")
 
 	//FIXME: add validations for parameters and combinations
@@ -3496,7 +3496,7 @@ func commandMount(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fla
 		switch {
 		case *unmount:
 			return wr.UnmountVitessCluster(ctx, clusterName)
-		case *display:
+		case *show:
 			vci, err := wr.TopoServer().GetVitessCluster(ctx, clusterName)
 			if err != nil {
 				return err

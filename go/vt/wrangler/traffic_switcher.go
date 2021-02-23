@@ -733,13 +733,15 @@ func (wr *Wrangler) finalizeMigrateWorkflow(ctx context.Context, targetKeyspace,
 	if err := sw.dropTargetVReplicationStreams(ctx); err != nil {
 		return nil, err
 	}
-	if cancel && !keepData {
-		if err := sw.removeTargetTables(ctx); err != nil {
-			return nil, err
-		}
-	} else {
+	if !cancel {
 		sw.addParticipatingTablesToKeyspace(ctx, targetKeyspace, tableSpecs)
 		if err := ts.wr.ts.RebuildSrvVSchema(ctx, nil); err != nil {
+			return nil, err
+		}
+	}
+	log.Infof("cancel is %t, keepData %t", cancel, keepData)
+	if cancel && !keepData {
+		if err := sw.removeTargetTables(ctx); err != nil {
 			return nil, err
 		}
 	}
@@ -831,12 +833,24 @@ func (wr *Wrangler) buildTrafficSwitcher(ctx context.Context, targetKeyspace, wo
 		optTabletTypes:  optTabletTypes,
 	}
 	log.Infof("Migration ID for workflow %s: %d", workflow, ts.id)
+	externalCluster := ""
+	sourceTopo := wr.ts
 
 	// Build the sources
 	for _, target := range targets {
 		for _, bls := range target.sources {
 			if ts.sourceKeyspace == "" {
 				ts.sourceKeyspace = bls.Keyspace
+				externalCluster = bls.ExternalCluster
+				if externalCluster != "" {
+					externalTopo, err := wr.ts.OpenExternalVitessClusterServer(ctx, externalCluster)
+					if err != nil {
+						return nil, err
+					}
+					sourceTopo = externalTopo
+				}
+				log.Infof("source topo is %+v", sourceTopo)
+
 			} else if ts.sourceKeyspace != bls.Keyspace {
 				return nil, fmt.Errorf("source keyspaces are mismatched across streams: %v vs %v", ts.sourceKeyspace, bls.Keyspace)
 			}
@@ -860,11 +874,11 @@ func (wr *Wrangler) buildTrafficSwitcher(ctx context.Context, targetKeyspace, wo
 			if _, ok := ts.sources[bls.Shard]; ok {
 				continue
 			}
-			sourcesi, err := ts.wr.ts.GetShard(ctx, bls.Keyspace, bls.Shard)
+			sourcesi, err := sourceTopo.GetShard(ctx, bls.Keyspace, bls.Shard)
 			if err != nil {
 				return nil, err
 			}
-			sourceMaster, err := ts.wr.ts.GetTablet(ctx, sourcesi.MasterAlias)
+			sourceMaster, err := sourceTopo.GetTablet(ctx, sourcesi.MasterAlias)
 			if err != nil {
 				return nil, err
 			}
@@ -874,7 +888,7 @@ func (wr *Wrangler) buildTrafficSwitcher(ctx context.Context, targetKeyspace, wo
 			}
 		}
 	}
-	if ts.sourceKeyspace != ts.targetKeyspace {
+	if ts.sourceKeyspace != ts.targetKeyspace || externalCluster != "" {
 		ts.migrationType = binlogdatapb.MigrationType_TABLES
 	} else {
 		// TODO(sougou): for shard migration, validate that source and target combined
@@ -888,7 +902,7 @@ func (wr *Wrangler) buildTrafficSwitcher(ctx context.Context, targetKeyspace, wo
 			}
 		}
 	}
-	vs, err := ts.wr.ts.GetVSchema(ctx, ts.sourceKeyspace)
+	vs, err := sourceTopo.GetVSchema(ctx, ts.sourceKeyspace)
 	if err != nil {
 		return nil, err
 	}
@@ -1713,6 +1727,7 @@ func (ts *trafficSwitcher) dropSourceReverseVReplicationStreams(ctx context.Cont
 }
 
 func (ts *trafficSwitcher) removeTargetTables(ctx context.Context) error {
+	log.Infof("removeTargetTables")
 	err := ts.forAllTargets(func(target *tsTarget) error {
 		for _, tableName := range ts.tables {
 			query := fmt.Sprintf("drop table %s.%s", target.master.DbName(), tableName)

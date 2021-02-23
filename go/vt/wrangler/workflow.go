@@ -301,7 +301,8 @@ func (vrw *VReplicationWorkflow) Complete() (*[]string, error) {
 	ws := vrw.ws
 
 	if vrw.workflowType == MigrateWorkflow {
-		return vrw.wr.finalizeMigrateWorkflow(vrw.ctx, ws.TargetKeyspace, ws.Workflow, vrw.params.Tables, vrw.params.KeepData, false, vrw.params.DryRun)
+		return vrw.wr.finalizeMigrateWorkflow(vrw.ctx, ws.TargetKeyspace, ws.Workflow, vrw.params.Tables,
+			false, vrw.params.KeepData, vrw.params.DryRun)
 	}
 
 	if !ws.WritesSwitched || len(ws.ReplicaCellsNotSwitched) > 0 || len(ws.RdonlyCellsNotSwitched) > 0 {
@@ -313,8 +314,8 @@ func (vrw *VReplicationWorkflow) Complete() (*[]string, error) {
 	} else {
 		renameTable = DropTable
 	}
-	if dryRunResults, err = vrw.wr.DropSources(vrw.ctx, vrw.ws.TargetKeyspace, vrw.ws.Workflow, renameTable, vrw.params.KeepData,
-		false, vrw.params.DryRun); err != nil {
+	if dryRunResults, err = vrw.wr.DropSources(vrw.ctx, vrw.ws.TargetKeyspace, vrw.ws.Workflow, renameTable,
+		false, vrw.params.KeepData, vrw.params.DryRun); err != nil {
 		return nil, err
 	}
 	return dryRunResults, nil
@@ -324,7 +325,8 @@ func (vrw *VReplicationWorkflow) Complete() (*[]string, error) {
 func (vrw *VReplicationWorkflow) Cancel() error {
 	ws := vrw.ws
 	if vrw.workflowType == MigrateWorkflow {
-		_, err := vrw.wr.finalizeMigrateWorkflow(vrw.ctx, ws.TargetKeyspace, ws.Workflow, "", vrw.params.KeepData, true, vrw.params.DryRun)
+		_, err := vrw.wr.finalizeMigrateWorkflow(vrw.ctx, ws.TargetKeyspace, ws.Workflow, "",
+			true, vrw.params.KeepData, vrw.params.DryRun)
 		return err
 	}
 
