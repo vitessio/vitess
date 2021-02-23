@@ -37,18 +37,18 @@ var noQualifier = func(p *types.Package) string {
 	return ""
 }
 
-func (r *rewriterGen) visitStruct(t types.Type, typeString, replaceMethodPrefix string, stroct *types.Struct, pointer bool) error {
+func (r *rewriterGen) visitStruct(typeString, replaceMethodPrefix string, stroct *types.Struct, pointer bool) error {
 	var caseStmts []jen.Code
 	for i := 0; i < stroct.NumFields(); i++ {
 		field := stroct.Field(i)
 		if r.interestingType(field.Type()) {
 			if pointer {
-				replacerName, method := r.createReplaceMethod(replaceMethodPrefix, types.TypeString(t, noQualifier), field)
+				replacerName, method := r.createReplaceMethod(replaceMethodPrefix, typeString, field)
 				r.replaceMethods = append(r.replaceMethods, method)
 
 				caseStmts = append(caseStmts, caseStmtFor(field, replacerName))
 			} else {
-				caseStmts = append(caseStmts, casePanicStmtFor(field, types.TypeString(t, noQualifier)+" "+field.Name()))
+				caseStmts = append(caseStmts, casePanicStmtFor(field, typeString+" "+field.Name()))
 			}
 		}
 		sliceT, ok := field.Type().(*types.Slice)
@@ -57,12 +57,19 @@ func (r *rewriterGen) visitStruct(t types.Type, typeString, replaceMethodPrefix 
 			if !pointer {
 				replaceMethodName += "Val"
 			}
-			replacerName, methods := r.createReplaceCodeForSliceField(replaceMethodName, types.TypeString(t, noQualifier), field)
+			replacerName, methods := r.createReplaceCodeForSliceField(replaceMethodName, typeString, field)
 			r.replaceMethods = append(r.replaceMethods, methods...)
 			caseStmts = append(caseStmts, caseStmtForSliceField(field, replacerName)...)
 		}
 	}
 	r.cases = append(r.cases, jen.Case(jen.Id(typeString)).Block(caseStmts...))
+	return nil
+}
+
+func (r *rewriterGen) visitSlice(t types.Type, typeString, replaceMethodPrefix string, slice *types.Slice) error {
+	name, replaceMethod := r.createReplaceCodeForSlice(replaceMethodPrefix, typeString, types.TypeString(slice.Elem(), noQualifier))
+	r.replaceMethods = append(r.replaceMethods, replaceMethod)
+	r.cases = append(r.cases, jen.Case(jen.Id(typeString)).Block(caseStmtForSlice(name)))
 	return nil
 }
 
@@ -72,6 +79,16 @@ func caseStmtFor(field *types.Var, name string) *jen.Statement {
 
 func casePanicStmtFor(field *types.Var, name string) *jen.Statement {
 	return jen.Id("a").Dot("apply").Call(jen.Id("node"), jen.Id("n").Dot(field.Name()), jen.Id("replacePanic").Call(jen.Lit(name)))
+}
+
+func caseStmtForSlice(name string) jen.Code {
+	return jen.For(jen.List(jen.Op("x"), jen.Id("el"))).Op(":=").Range().Id("n").Block(
+		jen.Id("a").Dot("apply").Call(
+			jen.Id("node"),
+			jen.Id("el"),
+			jen.Id(name).Call(jen.Id("x")),
+		),
+	)
 }
 
 func caseStmtForSliceField(field *types.Var, name string) []jen.Code {
@@ -105,6 +122,28 @@ func (r *rewriterGen) createReplaceMethod(structName, structType string, field *
 	).Block(
 		jen.Id("parent").Assert(jen.Id(structType)).Dot(field.Name()).Op("=").Id("newNode").Assert(jen.Id(types.TypeString(field.Type(), noQualifier))),
 	)
+}
+
+func (r *rewriterGen) createReplaceCodeForSlice(structName, structType, elemType string) (string, jen.Code) {
+	name := "replace" + structName
+
+	/*
+		func replacer(idx int) func(AST, AST) {
+			return func(newnode, container AST) {
+				container.(InterfaceSlice)[idx] = newnode.(AST)
+			}
+		}
+
+	*/
+
+	s := jen.Func().Id(name).Params(jen.Id("idx").Int()).Func().Params(jen.List(jen.Id("AST"), jen.Id("AST"))).Block(
+		jen.Return(jen.Func().Params(jen.List(jen.Id("newNode"), jen.Id("container")).Id("AST"))).Block(
+			jen.Id("container").Assert(jen.Id(structType)).Index(jen.Id("idx")).Op("=").
+				Id("newNode").Assert(jen.Id(elemType)),
+		),
+	)
+
+	return name, s
 }
 
 func (r *rewriterGen) createReplaceCodeForSliceField(structName, structType string, field *types.Var) (string, []jen.Code) {
