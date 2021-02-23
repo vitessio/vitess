@@ -6,14 +6,12 @@ import (
 	"os"
 	"testing"
 
-	"github.com/stretchr/testify/require"
-
 	"vitess.io/vitess/go/hack"
 )
 
 var (
 	wordlist1 [][]byte
-	n         = 1 << 16
+	n         = uint64(1 << 16)
 	bf        *Bloom
 )
 
@@ -31,7 +29,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestM_NumberOfWrongs(t *testing.T) {
-	bf = NewBloomFilter(float64(n*10), float64(7))
+	bf = NewBloomFilter(n*10, 7)
 
 	cnt := 0
 	for i := range wordlist1 {
@@ -44,43 +42,14 @@ func TestM_NumberOfWrongs(t *testing.T) {
 
 }
 
-func TestM_JSON(t *testing.T) {
-	const shallBe = int(1 << 16)
-
-	bf = NewBloomFilter(float64(n*10), float64(7))
-
-	cnt := 0
-	for i := range wordlist1 {
-		hash := hack.RuntimeMemhash(wordlist1[i], 0)
-		if !bf.AddIfNotHas(hash) {
-			cnt++
-		}
-	}
-
-	jsonm := bf.JSONMarshal()
-
-	// create new bloomfilter from bloomfilter's JSON representation
-	bf2, err := JSONUnmarshal(jsonm)
-	require.NoError(t, err)
-
-	cnt2 := 0
-	for i := range wordlist1 {
-		hash := hack.RuntimeMemhash(wordlist1[i], 0)
-		if !bf2.AddIfNotHas(hash) {
-			cnt2++
-		}
-	}
-	require.Equal(t, shallBe, cnt2)
-}
-
 func BenchmarkM_New(b *testing.B) {
 	for r := 0; r < b.N; r++ {
-		_ = NewBloomFilter(float64(n*10), float64(7))
+		_ = NewBloomFilter(n*10, 7)
 	}
 }
 
 func BenchmarkM_Clear(b *testing.B) {
-	bf = NewBloomFilter(float64(n*10), float64(7))
+	bf = NewBloomFilter(n*10, 7)
 	for i := range wordlist1 {
 		hash := hack.RuntimeMemhash(wordlist1[i], 0)
 		bf.Add(hash)
@@ -92,7 +61,7 @@ func BenchmarkM_Clear(b *testing.B) {
 }
 
 func BenchmarkM_Add(b *testing.B) {
-	bf = NewBloomFilter(float64(n*10), float64(7))
+	bf = NewBloomFilter(n*10, 7)
 	b.ResetTimer()
 	for r := 0; r < b.N; r++ {
 		for i := range wordlist1 {

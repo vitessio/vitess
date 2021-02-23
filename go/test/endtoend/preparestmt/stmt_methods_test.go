@@ -38,6 +38,22 @@ func TestSelect(t *testing.T) {
 	selectWhere(t, dbo, "")
 }
 
+func TestSelectDatabase(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	dbo := Connect(t)
+	defer dbo.Close()
+	prepare, err := dbo.Prepare("select database()")
+	require.NoError(t, err)
+	rows, err := prepare.Query()
+	require.NoError(t, err)
+	defer rows.Close()
+	var resultBytes sql.RawBytes
+	require.True(t, rows.Next(), "no rows found")
+	err = rows.Scan(&resultBytes)
+	require.NoError(t, err)
+	assert.Equal(t, string(resultBytes), "test_keyspace")
+}
+
 // TestInsertUpdateDelete validates all insert, update and
 // delete method on prepared statements.
 func TestInsertUpdateDelete(t *testing.T) {

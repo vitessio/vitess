@@ -524,14 +524,14 @@ func replaceSetTransactionCharacteristics(idx int) func(SQLNode, SQLNode) {
 func replaceStructShowInternal(newNode, parent SQLNode) {
 	parent.(*Show).Internal = newNode.(ShowInternal)
 }
+func replaceStructShowBasicTbl(newNode, parent SQLNode) {
+	parent.(*ShowBasic).Tbl = newNode.(TableName)
+}
 func replaceStructShowBasicFilter(newNode, parent SQLNode) {
 	parent.(*ShowBasic).Filter = newNode.(*ShowFilter)
 }
-func replaceStructShowColumnsTable(newNode, parent SQLNode) {
-	parent.(*ShowColumns).Table = newNode.(TableName)
-}
-func replaceStructShowColumnsFilter(newNode, parent SQLNode) {
-	parent.(*ShowColumns).Filter = newNode.(*ShowFilter)
+func replaceStructShowCreateOp(newNode, parent SQLNode) {
+	parent.(*ShowCreate).Op = newNode.(TableName)
 }
 func replaceStructShowFilterFilter(newNode, parent SQLNode) {
 	parent.(*ShowFilter).Filter = newNode.(Expr)
@@ -544,9 +544,6 @@ func replaceStructShowLegacyTable(newNode, parent SQLNode) {
 }
 func replaceStructShowLegacyShowCollationFilterOpt(newNode, parent SQLNode) {
 	parent.(*ShowLegacy).ShowCollationFilterOpt = newNode.(Expr)
-}
-func replaceStructShowTableStatusFilter(newNode, parent SQLNode) {
-	parent.(*ShowTableStatus).Filter = newNode.(*ShowFilter)
 }
 func replaceStructStarExprTableName(newNode, parent SQLNode) {
 	parent.(*StarExpr).TableName = newNode.(TableName)
@@ -1040,18 +1037,16 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 	case *Show:
 		a.apply(node, n.Internal, replaceStructShowInternal)
 	case *ShowBasic:
+		a.apply(node, n.Tbl, replaceStructShowBasicTbl)
 		a.apply(node, n.Filter, replaceStructShowBasicFilter)
-	case *ShowColumns:
-		a.apply(node, n.Table, replaceStructShowColumnsTable)
-		a.apply(node, n.Filter, replaceStructShowColumnsFilter)
+	case *ShowCreate:
+		a.apply(node, n.Op, replaceStructShowCreateOp)
 	case *ShowFilter:
 		a.apply(node, n.Filter, replaceStructShowFilterFilter)
 	case *ShowLegacy:
 		a.apply(node, n.OnTable, replaceStructShowLegacyOnTable)
 		a.apply(node, n.Table, replaceStructShowLegacyTable)
 		a.apply(node, n.ShowCollationFilterOpt, replaceStructShowLegacyShowCollationFilterOpt)
-	case *ShowTableStatus:
-		a.apply(node, n.Filter, replaceStructShowTableStatusFilter)
 	case *StarExpr:
 		a.apply(node, n.TableName, replaceStructStarExprTableName)
 	case *Stream:

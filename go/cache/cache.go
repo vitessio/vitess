@@ -76,5 +76,5 @@ type Config struct {
 var DefaultConfig = &Config{
 	MaxEntries:     5000,
 	MaxMemoryUsage: 32 * 1024 * 1024,
-	LFU:            false,
+	LFU:            true,
 }

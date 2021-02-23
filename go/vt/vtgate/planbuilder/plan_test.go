@@ -447,7 +447,7 @@ func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper, c
 					if tcase.output == out {
 						expected.WriteString(samePlanMarker)
 					} else {
-						expected.WriteString(out)
+						expected.WriteString(fmt.Sprintf("%s\n", out))
 					}
 				})
 			} else {

@@ -716,9 +716,10 @@ func TestReplicaWasRunning(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name     string
-		in       *replicationdatapb.StopReplicationStatus
-		expected bool
+		name      string
+		in        *replicationdatapb.StopReplicationStatus
+		expected  bool
+		shouldErr bool
 	}{
 		{
 			name: "io thread running",
@@ -728,7 +729,8 @@ func TestReplicaWasRunning(t *testing.T) {
 					SqlThreadRunning: false,
 				},
 			},
-			expected: true,
+			expected:  true,
+			shouldErr: false,
 		},
 		{
 			name: "sql thread running",
@@ -738,7 +740,8 @@ func TestReplicaWasRunning(t *testing.T) {
 					SqlThreadRunning: true,
 				},
 			},
-			expected: true,
+			expected:  true,
+			shouldErr: false,
 		},
 		{
 			name: "io and sql threads running",
@@ -748,7 +751,8 @@ func TestReplicaWasRunning(t *testing.T) {
 					SqlThreadRunning: true,
 				},
 			},
-			expected: true,
+			expected:  true,
+			shouldErr: false,
 		},
 		{
 			name: "no replication threads running",
@@ -758,7 +762,22 @@ func TestReplicaWasRunning(t *testing.T) {
 					SqlThreadRunning: false,
 				},
 			},
-			expected: false,
+			expected:  false,
+			shouldErr: false,
+		},
+		{
+			name:      "passing nil pointer results in an error",
+			in:        nil,
+			expected:  false,
+			shouldErr: true,
+		},
+		{
+			name: "status.Before is nil results in an error",
+			in: &replicationdatapb.StopReplicationStatus{
+				Before: nil,
+			},
+			expected:  false,
+			shouldErr: true,
 		},
 	}
 
@@ -768,7 +787,14 @@ func TestReplicaWasRunning(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			actual := ReplicaWasRunning(tt.in)
+			actual, err := ReplicaWasRunning(tt.in)
+			if tt.shouldErr {
+				assert.Error(t, err)
+
+				return
+			}
+
+			assert.NoError(t, err)
 			assert.Equal(t, tt.expected, actual)
 		})
 	}

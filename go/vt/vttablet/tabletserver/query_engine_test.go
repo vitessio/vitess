@@ -32,10 +32,11 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/mysql"
+
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/cache"
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/streamlog"
@@ -114,12 +115,7 @@ func TestGetPlanPanicDuetoEmptyQuery(t *testing.T) {
 	}
 }
 
-func TestGetMessageStreamPlan(t *testing.T) {
-	db := fakesqldb.New(t)
-	defer db.Close()
-	for query, result := range schematest.Queries() {
-		db.AddQuery(query, result)
-	}
+func addSchemaEngineQueries(db *fakesqldb.DB) {
 	db.AddQueryPattern(baseShowTablesPattern, &sqltypes.Result{
 		Fields: mysql.BaseShowTablesFields,
 		Rows: [][]sqltypes.Value{
@@ -129,6 +125,22 @@ func TestGetMessageStreamPlan(t *testing.T) {
 			mysql.BaseShowTablesRow("seq", false, "vitess_sequence"),
 			mysql.BaseShowTablesRow("msg", false, "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30"),
 		}})
+	db.AddQuery("show status like 'Innodb_rows_read'", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+		"Variable_name|Value",
+		"varchar|int64"),
+		"Innodb_rows_read|0",
+	))
+}
+
+func TestGetMessageStreamPlan(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	for query, result := range schematest.Queries() {
+		db.AddQuery(query, result)
+	}
+
+	addSchemaEngineQueries(db)
+
 	qe := newTestQueryEngine(10*time.Second, true, newDBConfigs(db))
 	qe.se.Open()
 	qe.Open()
@@ -369,6 +381,84 @@ func TestConsolidationsUIRedaction(t *testing.T) {
 
 	if !strings.Contains(redactedResponse.Body.String(), redactedSQL) {
 		t.Fatalf("Response missing redacted consolidated query: %v %v", redactedSQL, redactedResponse.Body.String())
+	}
+}
+
+func BenchmarkPlanCacheThroughput(b *testing.B) {
+	db := fakesqldb.New(b)
+	defer db.Close()
+
+	for query, result := range schematest.Queries() {
+		db.AddQuery(query, result)
+	}
+
+	db.AddQueryPattern(".*", &sqltypes.Result{})
+
+	qe := newTestQueryEngine(10*time.Second, true, newDBConfigs(db))
+	qe.se.Open()
+	qe.Open()
+	defer qe.Close()
+
+	ctx := context.Background()
+	logStats := tabletenv.NewLogStats(ctx, "GetPlanStats")
+
+	for i := 0; i < b.N; i++ {
+		query := fmt.Sprintf("SELECT (a, b, c) FROM test_table_%d", rand.Intn(500))
+		_, err := qe.GetPlan(ctx, logStats, query, false, false /* inReservedConn */)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func benchmarkPlanCache(b *testing.B, db *fakesqldb.DB, lfu bool, par int) {
+	b.Helper()
+
+	dbcfgs := newDBConfigs(db)
+	config := tabletenv.NewDefaultConfig()
+	config.DB = dbcfgs
+	config.QueryCacheLFU = lfu
+
+	env := tabletenv.NewEnv(config, "TabletServerTest")
+	se := schema.NewEngine(env)
+	qe := NewQueryEngine(env, se)
+
+	se.InitDBConfig(dbcfgs.DbaWithDB())
+	require.NoError(b, se.Open())
+	require.NoError(b, qe.Open())
+	defer qe.Close()
+
+	b.SetParallelism(par)
+	b.RunParallel(func(pb *testing.PB) {
+		ctx := context.Background()
+		logStats := tabletenv.NewLogStats(ctx, "GetPlanStats")
+
+		for pb.Next() {
+			query := fmt.Sprintf("SELECT (a, b, c) FROM test_table_%d", rand.Intn(500))
+			_, err := qe.GetPlan(ctx, logStats, query, false, false /* inReservedConn */)
+			require.NoErrorf(b, err, "bad query: %s", query)
+		}
+	})
+}
+
+func BenchmarkPlanCacheContention(b *testing.B) {
+	db := fakesqldb.New(b)
+	defer db.Close()
+
+	for query, result := range schematest.Queries() {
+		db.AddQuery(query, result)
+	}
+
+	db.AddQueryPattern(".*", &sqltypes.Result{})
+
+	for par := 1; par <= 8; par *= 2 {
+		b.Run(fmt.Sprintf("ContentionLRU-%d", par), func(b *testing.B) {
+			benchmarkPlanCache(b, db, false, par)
+		})
+
+		b.Run(fmt.Sprintf("ContentionLFU-%d", par), func(b *testing.B) {
+			benchmarkPlanCache(b, db, true, par)
+		})
 	}
 }
 
