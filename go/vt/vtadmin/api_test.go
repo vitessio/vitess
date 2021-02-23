@@ -1359,7 +1359,7 @@ func TestVTExplain(t *testing.T) {
 		keyspaces     []*vtctldatapb.Keyspace
 		shards        []*vtctldatapb.Shard
 		srvVSchema    *vschemapb.SrvVSchema
-		tabletSchemas map[string]*tabletmanagerdata.SchemaDefinition
+		tabletSchemas map[string]*tabletmanagerdatapb.SchemaDefinition
 		tablets       []*vtadminpb.Tablet
 		req           *vtadminpb.VTExplainRequest
 		expectedError error
@@ -1391,10 +1391,10 @@ func TestVTExplain(t *testing.T) {
 					Rules: []*vschemapb.RoutingRule{},
 				},
 			},
-			tabletSchemas: map[string]*tabletmanagerdata.SchemaDefinition{
+			tabletSchemas: map[string]*tabletmanagerdatapb.SchemaDefinition{
 				"c0_cell1-0000000100": {
 					DatabaseSchema: "CREATE DATABASE commerce",
-					TableDefinitions: []*tabletmanagerdata.TableDefinition{
+					TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
 						{
 							Name:       "t1",
 							Schema:     `CREATE TABLE customers (id int(11) not null,PRIMARY KEY (id));`,
@@ -1464,10 +1464,10 @@ func TestVTExplain(t *testing.T) {
 					Rules: []*vschemapb.RoutingRule{},
 				},
 			},
-			tabletSchemas: map[string]*tabletmanagerdata.SchemaDefinition{
+			tabletSchemas: map[string]*tabletmanagerdatapb.SchemaDefinition{
 				"c0_cell1-0000000102": {
 					DatabaseSchema: "CREATE DATABASE commerce",
-					TableDefinitions: []*tabletmanagerdata.TableDefinition{
+					TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
 						{
 							Name:       "t1",
 							Schema:     `CREATE TABLE customers (id int(11) not null,PRIMARY KEY (id));`,
@@ -1574,7 +1574,19 @@ func TestVTExplain(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			toposerver := memorytopo.NewServer("c0_cell1")
-			testutil.WithTestServer(t, grpcvtctldserver.NewVtctldServer(toposerver), func(t *testing.T, vtctldClient vtctldclient.VtctldClient) {
+
+			tmc := testutil.TabletManagerClient{
+				GetSchemaResults: map[string]struct {
+					Schema *tabletmanagerdatapb.SchemaDefinition
+					Error  error
+				}{},
+			}
+
+			vtctldserver := testutil.NewVtctldServerWithTabletManagerClient(t, toposerver, &tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+				return grpcvtctldserver.NewVtctldServer(ts)
+			})
+
+			testutil.WithTestServer(t, vtctldserver, func(t *testing.T, vtctldClient vtctldclient.VtctldClient) {
 
 				toposerver.UpdateSrvVSchema(context.Background(), "c0_cell1", tt.srvVSchema)
 				testutil.AddKeyspaces(context.Background(), t, toposerver, tt.keyspaces...)
@@ -1588,7 +1600,13 @@ func TestVTExplain(t *testing.T) {
 					// exist in the map. Otherwise, TabletManagerClient will return an error when
 					// looking up the schema with tablet alias that doesn't exist.)
 					alias := topoproto.TabletAliasString(tablet.Tablet.Alias)
-					testutil.TabletManagerClient.Schemas[alias] = tt.tabletSchemas[alias]
+					tmc.GetSchemaResults[alias] = struct {
+						Schema *tabletmanagerdatapb.SchemaDefinition
+						Error  error
+					}{
+						Schema: tt.tabletSchemas[alias],
+						Error:  nil,
+					}
 				}
 
 				c := buildCluster(0, vtctldClient, tt.tablets, nil)
