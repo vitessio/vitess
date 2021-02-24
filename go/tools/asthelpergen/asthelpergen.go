@@ -44,21 +44,29 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.`
 
+type generator interface {
+	visitStruct(t types.Type, stroct *types.Struct) error
+	visitSlice(t types.Type, slice *types.Slice) error
+	createFile(pkgName string) (string, *jen.File)
+}
+
 type astHelperGen struct {
 	DebugTypes bool
 	mod        *packages.Module
 	sizes      types.Sizes
 	namedIface *types.Named
 	iface      *types.Interface
+	gens       []generator
 }
 
-func newGenerator(mod *packages.Module, sizes types.Sizes, named *types.Named) *astHelperGen {
+func newGenerator(mod *packages.Module, sizes types.Sizes, named *types.Named, generators ...generator) *astHelperGen {
 	return &astHelperGen{
 		DebugTypes: true,
 		mod:        mod,
 		sizes:      sizes,
 		namedIface: named,
 		iface:      named.Underlying().(*types.Interface),
+		gens:       generators,
 	}
 }
 
@@ -83,13 +91,28 @@ func findImplementations(scope *types.Scope, iff *types.Interface, impl func(typ
 	return nil
 }
 
-func (gen *astHelperGen) doIt() (map[string]*jen.File, error) {
+func (gen *astHelperGen) visitStruct(t types.Type, stroct *types.Struct) error {
+	for _, g := range gen.gens {
+		err := g.visitStruct(t, stroct)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (gen *astHelperGen) visitSlice(t types.Type, slice *types.Slice) error {
+	for _, g := range gen.gens {
+		err := g.visitSlice(t, slice)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (gen *astHelperGen) GenerateCode() (map[string]*jen.File, error) {
 	pkg := gen.namedIface.Obj().Pkg()
-
-	rewriter := newRewriterGen(func(t types.Type) bool {
-		return types.Implements(t, gen.iface)
-	}, gen.namedIface.Obj().Name())
-
 	iface, ok := gen.iface.Underlying().(*types.Interface)
 	if !ok {
 		return nil, fmt.Errorf("expected interface, but got %T", gen.iface)
@@ -98,16 +121,13 @@ func (gen *astHelperGen) doIt() (map[string]*jen.File, error) {
 	err := findImplementations(pkg.Scope(), iface, func(t types.Type) error {
 		switch n := t.Underlying().(type) {
 		case *types.Struct:
-			named := t.(*types.Named)
-			return rewriter.visitStruct(types.TypeString(t, noQualifier), named.Obj().Name(), n, false)
+			return gen.visitStruct(t, n)
 		case *types.Slice:
-			named := t.(*types.Named)
-			return rewriter.visitSlice(types.TypeString(t, noQualifier), named.Obj().Name(), n)
+			return gen.visitSlice(t, n)
 		case *types.Pointer:
 			strct, isStrct := n.Elem().Underlying().(*types.Struct)
 			if isStrct {
-				named := t.(*types.Pointer).Elem().(*types.Named)
-				return rewriter.visitStruct(types.TypeString(t, noQualifier), named.Obj().Name(), strct, true)
+				return gen.visitStruct(t, strct)
 			}
 		default:
 			// do nothing
@@ -120,10 +140,39 @@ func (gen *astHelperGen) doIt() (map[string]*jen.File, error) {
 	}
 
 	result := map[string]*jen.File{}
-	fullPath := path.Join(gen.mod.Dir, strings.TrimPrefix(pkg.Path(), gen.mod.Path), "rewriter.go")
-	result[fullPath] = rewriter.createFile(pkg.Name())
+	for _, g := range gen.gens {
+		file, code := g.createFile(pkg.Name())
+		fullPath := path.Join(gen.mod.Dir, strings.TrimPrefix(pkg.Path(), gen.mod.Path), file)
+		result[fullPath] = code
+	}
 
 	return result, nil
+}
+
+// printableTypeName returns a string that can be used as a valid golang identifier
+func printableTypeName(t types.Type, named *types.Named) string {
+	switch t := t.(type) {
+	case *types.Pointer:
+		return "RefOf" + printableTypeName(t.Elem(), named)
+	case *types.Slice:
+		return "SliceOf" + printableTypeName(t.Elem(), named)
+	case *types.Named:
+		return t.Obj().Name()
+	case *types.Struct:
+		if named == nil {
+			return t.String()
+		}
+		return named.Obj().Name()
+	case *types.Basic:
+		return t.Name()
+	case *types.Interface:
+		if named == nil {
+			return t.String()
+		}
+		return "I" + named.Obj().Name()
+	default:
+		panic(fmt.Sprintf("unknown type %T", t))
+	}
 }
 
 type typePaths []string
@@ -228,8 +277,15 @@ func GenerateASTHelpers(packagePatterns []string, rootIface string) (map[string]
 
 	nt := tt.Type().(*types.Named)
 
-	generator := newGenerator(loaded[0].Module, loaded[0].TypesSizes, nt)
-	it, err := generator.doIt()
+	iface := nt.Underlying().(*types.Interface)
+
+	interestingType := func(t types.Type) bool {
+		return types.Implements(t, iface)
+	}
+	rewriter := newRewriterGen(interestingType, nt.Obj().Name())
+
+	generator := newGenerator(loaded[0].Module, loaded[0].TypesSizes, nt, rewriter)
+	it, err := generator.GenerateCode()
 	if err != nil {
 		return nil, err
 	}

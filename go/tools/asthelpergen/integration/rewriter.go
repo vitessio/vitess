@@ -17,49 +17,49 @@ limitations under the License.
 
 package integration
 
-func replaceSliceInterfaceSlice(idx int) func(AST, AST) {
+func replaceInterfaceSlice(idx int) func(AST, AST) {
 	return func(newNode, container AST) {
 		container.(InterfaceSlice)[idx] = newNode.(AST)
 	}
 }
-func replaceStructRefContainerASTType(newNode, parent AST) {
+func replaceRefOfRefContainerASTType(newNode, parent AST) {
 	parent.(*RefContainer).ASTType = newNode.(AST)
 }
-func replaceStructRefContainerASTImplementationType(newNode, parent AST) {
+func replaceRefOfRefContainerASTImplementationType(newNode, parent AST) {
 	parent.(*RefContainer).ASTImplementationType = newNode.(*Leaf)
 }
-func replaceRefSliceContainerASTElements(idx int) func(AST, AST) {
+func replaceRefOfRefSliceContainerASTElements(idx int) func(AST, AST) {
 	return func(newNode, container AST) {
 		container.(*RefSliceContainer).ASTElements[idx] = newNode.(AST)
 	}
 }
-func replaceRefSliceContainerASTImplementationElements(idx int) func(AST, AST) {
+func replaceRefOfRefSliceContainerASTImplementationElements(idx int) func(AST, AST) {
 	return func(newNode, container AST) {
 		container.(*RefSliceContainer).ASTImplementationElements[idx] = newNode.(*Leaf)
 	}
 }
-func replaceStructValueContainerASTType(newNode, parent AST) {
+func replaceRefOfValueContainerASTType(newNode, parent AST) {
 	parent.(*ValueContainer).ASTType = newNode.(AST)
 }
-func replaceStructValueContainerASTImplementationType(newNode, parent AST) {
+func replaceRefOfValueContainerASTImplementationType(newNode, parent AST) {
 	parent.(*ValueContainer).ASTImplementationType = newNode.(*Leaf)
 }
-func replaceValueSliceContainerValASTElements(idx int) func(AST, AST) {
+func replaceValueSliceContainerASTElements(idx int) func(AST, AST) {
 	return func(newNode, container AST) {
 		container.(ValueSliceContainer).ASTElements[idx] = newNode.(AST)
 	}
 }
-func replaceValueSliceContainerValASTImplementationElements(idx int) func(AST, AST) {
+func replaceValueSliceContainerASTImplementationElements(idx int) func(AST, AST) {
 	return func(newNode, container AST) {
 		container.(ValueSliceContainer).ASTImplementationElements[idx] = newNode.(*Leaf)
 	}
 }
-func replaceValueSliceContainerASTElements(idx int) func(AST, AST) {
+func replaceRefOfValueSliceContainerASTElements(idx int) func(AST, AST) {
 	return func(newNode, container AST) {
 		container.(*ValueSliceContainer).ASTElements[idx] = newNode.(AST)
 	}
 }
-func replaceValueSliceContainerASTImplementationElements(idx int) func(AST, AST) {
+func replaceRefOfValueSliceContainerASTImplementationElements(idx int) func(AST, AST) {
 	return func(newNode, container AST) {
 		container.(*ValueSliceContainer).ASTImplementationElements[idx] = newNode.(*Leaf)
 	}
@@ -80,38 +80,38 @@ func (a *application) apply(parent, node AST, replacer replacerFunc) {
 	case Bytes:
 	case InterfaceSlice:
 		for x, el := range n {
-			a.apply(node, el, replaceSliceInterfaceSlice(x))
+			a.apply(node, el, replaceInterfaceSlice(x))
 		}
 	case *Leaf:
 	case *RefContainer:
-		a.apply(node, n.ASTType, replaceStructRefContainerASTType)
-		a.apply(node, n.ASTImplementationType, replaceStructRefContainerASTImplementationType)
+		a.apply(node, n.ASTType, replaceRefOfRefContainerASTType)
+		a.apply(node, n.ASTImplementationType, replaceRefOfRefContainerASTImplementationType)
 	case *RefSliceContainer:
 		for x, el := range n.ASTElements {
-			a.apply(node, el, replaceRefSliceContainerASTElements(x))
+			a.apply(node, el, replaceRefOfRefSliceContainerASTElements(x))
 		}
 		for x, el := range n.ASTImplementationElements {
-			a.apply(node, el, replaceRefSliceContainerASTImplementationElements(x))
+			a.apply(node, el, replaceRefOfRefSliceContainerASTImplementationElements(x))
 		}
 	case ValueContainer:
 		a.apply(node, n.ASTType, replacePanic("ValueContainer ASTType"))
 		a.apply(node, n.ASTImplementationType, replacePanic("ValueContainer ASTImplementationType"))
 	case *ValueContainer:
-		a.apply(node, n.ASTType, replaceStructValueContainerASTType)
-		a.apply(node, n.ASTImplementationType, replaceStructValueContainerASTImplementationType)
+		a.apply(node, n.ASTType, replaceRefOfValueContainerASTType)
+		a.apply(node, n.ASTImplementationType, replaceRefOfValueContainerASTImplementationType)
 	case ValueSliceContainer:
-		for x, el := range n.ASTElements {
-			a.apply(node, el, replaceValueSliceContainerValASTElements(x))
-		}
-		for x, el := range n.ASTImplementationElements {
-			a.apply(node, el, replaceValueSliceContainerValASTImplementationElements(x))
-		}
-	case *ValueSliceContainer:
 		for x, el := range n.ASTElements {
 			a.apply(node, el, replaceValueSliceContainerASTElements(x))
 		}
 		for x, el := range n.ASTImplementationElements {
 			a.apply(node, el, replaceValueSliceContainerASTImplementationElements(x))
+		}
+	case *ValueSliceContainer:
+		for x, el := range n.ASTElements {
+			a.apply(node, el, replaceRefOfValueSliceContainerASTElements(x))
+		}
+		for x, el := range n.ASTImplementationElements {
+			a.apply(node, el, replaceRefOfValueSliceContainerASTImplementationElements(x))
 		}
 	}
 	if a.post != nil && !a.post(&a.cursor) {
