@@ -322,6 +322,9 @@ const (
 	// unknown
 	ERUnknownError = 1105
 
+	// internal
+	ERInternalError = 1815
+
 	// unimplemented
 	ERNotSupportedYet = 1235
 
