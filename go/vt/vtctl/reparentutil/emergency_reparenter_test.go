@@ -339,7 +339,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 		{
 			name: "success with existing primary",
 			ts:   memorytopo.NewServer("zone1"),
-			tmc: &emergencyReparenterTestTMClient{
+			tmc: &testutil.TabletManagerClient{
 				DemoteMasterResults: map[string]struct {
 					Status *replicationdatapb.MasterStatus
 					Error  error
