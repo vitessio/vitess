@@ -7,4 +7,6 @@ type State int
 const (
 	Undefined State = iota
 	DataOutOfRange
+	NoDB
+	WrongNumberOfColumnsInSelect
 )

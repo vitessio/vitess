@@ -767,7 +767,7 @@ func TestExecutorShow(t *testing.T) {
 
 	query = "show vschema vindexes on user"
 	_, err = executor.Execute(ctx, "TestExecute", session, query, nil)
-	wantErr := errNoKeyspace.Error()
+	wantErr := "No database selected: use keyspace<:shard><@type> or keyspace<[range]><@type> (<> are optional) (errno 1046) (sqlstate 3D000)"
 	assert.EqualError(t, err, wantErr, query)
 
 	query = "show vschema vindexes on TestExecutor.garbage"
@@ -893,7 +893,7 @@ func TestExecutorShow(t *testing.T) {
 	query = "show vschema tables"
 	session = NewSafeSession(&vtgatepb.Session{})
 	_, err = executor.Execute(ctx, "TestExecute", session, query, nil)
-	want = errNoKeyspace.Error()
+	want = "No database selected: use keyspace<:shard><@type> or keyspace<[range]><@type> (<> are optional) (errno 1046) (sqlstate 3D000)"
 	assert.EqualError(t, err, want, query)
 
 	query = "show 10"
