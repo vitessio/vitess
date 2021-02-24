@@ -153,6 +153,7 @@ func (e *Executor) Execute(ctx context.Context, method string, safeSession *Safe
 
 	logStats := NewLogStats(ctx, method, sql, bindVars)
 	stmtType, result, err := e.execute(ctx, safeSession, sql, bindVars, logStats)
+	err = convertToMysqlError(err)
 	logStats.Error = err
 	saveSessionStats(safeSession, stmtType, result, err)
 	if result != nil && len(result.Rows) > *warnMemoryRows {
@@ -162,6 +163,18 @@ func (e *Executor) Execute(ctx context.Context, method string, safeSession *Safe
 
 	logStats.Send()
 	return result, err
+}
+
+func convertToMysqlError(err error) error {
+	errState := vterrors.ErrState(err)
+	if errState == vterrors.Undefined {
+		return err
+	}
+	switch errState {
+	case vterrors.DataOutOfRange:
+		err = mysql.NewSQLError(mysql.ERDataOutOfRange, mysql.SSDataOutOfRange, err.Error())
+	}
+	return err
 }
 
 func saveSessionStats(safeSession *SafeSession, stmtType sqlparser.StatementType, result *sqltypes.Result, err error) {
