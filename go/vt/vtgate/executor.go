@@ -641,55 +641,6 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 			Fields: buildVarCharFields("Name", "Status", "Type", "Library", "License"),
 			Rows:   rows,
 		}, nil
-	case "create table":
-		if !show.Table.Qualifier.IsEmpty() {
-			// Explicit keyspace was passed. Use that for targeting but remove from the query itself.
-			destKeyspace = show.Table.Qualifier.String()
-			show.Table.Qualifier = sqlparser.NewTableIdent("")
-		} else {
-			// No keyspace was indicated. Try to find one using the vschema.
-			tbl, err := e.VSchema().FindTable(destKeyspace, show.Table.Name.String())
-			if err != nil {
-				return nil, err
-			}
-			destKeyspace = tbl.Keyspace.Name
-		}
-		sql = sqlparser.String(show)
-	case sqlparser.KeywordString(sqlparser.COLUMNS):
-		if !show.OnTable.Qualifier.IsEmpty() {
-			destKeyspace = show.OnTable.Qualifier.String()
-			show.OnTable.Qualifier = sqlparser.NewTableIdent("")
-		} else if show.ShowTablesOpt != nil {
-			if show.ShowTablesOpt.DbName != "" {
-				destKeyspace = show.ShowTablesOpt.DbName
-				show.ShowTablesOpt.DbName = ""
-			}
-		} else {
-			break
-		}
-		sql = sqlparser.String(show)
-	case sqlparser.KeywordString(sqlparser.INDEX), sqlparser.KeywordString(sqlparser.KEYS), sqlparser.KeywordString(sqlparser.INDEXES):
-		if !show.OnTable.Qualifier.IsEmpty() {
-			destKeyspace = show.OnTable.Qualifier.String()
-			show.OnTable.Qualifier = sqlparser.NewTableIdent("")
-		} else if show.ShowTablesOpt != nil {
-			if show.ShowTablesOpt.DbName != "" {
-				destKeyspace = show.ShowTablesOpt.DbName
-				show.ShowTablesOpt.DbName = ""
-			}
-		} else {
-			break
-		}
-		sql = sqlparser.String(show)
-	case sqlparser.KeywordString(sqlparser.TABLES):
-		if show.ShowTablesOpt != nil && show.ShowTablesOpt.DbName != "" {
-			if destKeyspace == "" {
-				// Change "show tables from <keyspace>" to "show tables" directed to that keyspace.
-				destKeyspace = show.ShowTablesOpt.DbName
-			}
-			show.ShowTablesOpt.DbName = ""
-		}
-		sql = sqlparser.String(show)
 	case sqlparser.KeywordString(sqlparser.VITESS_SHARDS):
 		showVitessShardsFilters := func(show *sqlparser.ShowLegacy) ([]func(string) bool, []func(string, *topodatapb.ShardReference) bool) {
 			keyspaceFilters := []func(string) bool{}
@@ -1322,7 +1273,7 @@ func skipQueryPlanCache(safeSession *SafeSession) bool {
 	if safeSession == nil || safeSession.Options == nil {
 		return false
 	}
-	return safeSession.Options.SkipQueryPlanCache
+	return safeSession.Options.SkipQueryPlanCache || safeSession.Options.HasCreatedTempTables
 }
 
 type cacheItem struct {
@@ -1607,6 +1558,12 @@ func (e *Executor) handlePrepare(ctx context.Context, safeSession *SafeSession, 
 	execStart := time.Now()
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
 
+	if err != nil {
+		logStats.Error = err
+		return nil, err
+	}
+
+	err = e.addNeededBindVars(plan.BindVarNeeds, bindVars, safeSession)
 	if err != nil {
 		logStats.Error = err
 		return nil, err

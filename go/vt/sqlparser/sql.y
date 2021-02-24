@@ -202,7 +202,7 @@ func skipToEnd(yylex interface{}) {
 %token <bytes> MAXVALUE PARTITION REORGANIZE LESS THAN PROCEDURE TRIGGER
 %token <bytes> VINDEX VINDEXES DIRECTORY NAME UPGRADE
 %token <bytes> STATUS VARIABLES WARNINGS CASCADED DEFINER OPTION SQL UNDEFINED
-%token <bytes> SEQUENCE MERGE TEMPTABLE INVOKER SECURITY FIRST AFTER LAST
+%token <bytes> SEQUENCE MERGE TEMPORARY TEMPTABLE INVOKER SECURITY FIRST AFTER LAST
 
 // Transaction Tokens
 %token <bytes> BEGIN START TRANSACTION COMMIT ROLLBACK SAVEPOINT RELEASE WORK
@@ -221,7 +221,7 @@ func skipToEnd(yylex interface{}) {
 
 // SHOW tokens
 %token <bytes> COLLATION DATABASES SCHEMAS TABLES VITESS_METADATA VSCHEMA FULL PROCESSLIST COLUMNS FIELDS ENGINES PLUGINS EXTENDED
-%token <bytes> KEYSPACES VITESS_KEYSPACES VITESS_SHARDS VITESS_TABLETS CODE PRIVILEGES FUNCTION
+%token <bytes> KEYSPACES VITESS_KEYSPACES VITESS_SHARDS VITESS_TABLETS CODE PRIVILEGES FUNCTION OPEN TRIGGERS EVENT USER
 
 // SET tokens
 %token <bytes> NAMES CHARSET GLOBAL SESSION ISOLATION LEVEL READ WRITE ONLY REPEATABLE COMMITTED UNCOMMITTED SERIALIZABLE
@@ -347,9 +347,9 @@ func skipToEnd(yylex interface{}) {
 %type <bytes> for_from
 %type <str> default_opt
 %type <ignore> ignore_opt
-%type <str> full_opt from_database_opt tables_or_processlist columns_or_fields extended_opt storage_opt
+%type <str> from_database_opt columns_or_fields extended_opt storage_opt
 %type <showFilter> like_or_where_opt like_opt
-%type <boolean> exists_opt not_exists_opt enforced_opt
+%type <boolean> exists_opt not_exists_opt enforced_opt temp_opt full_opt
 %type <empty> to_opt
 %type <bytes> reserved_keyword non_reserved_keyword
 %type <colIdent> sql_id reserved_sql_id col_alias as_ci_opt
@@ -827,9 +827,9 @@ vindex_param:
   }
 
 create_table_prefix:
-  CREATE TABLE not_exists_opt table_name
+  CREATE temp_opt TABLE not_exists_opt table_name
   {
-    $$ = &CreateTable{Table: $4, IfNotExists: $3}
+    $$ = &CreateTable{Table: $5, IfNotExists: $4, Temp: $2}
     setDDL(yylex, $$)
   }
 
@@ -2274,9 +2274,9 @@ rename_list:
   }
 
 drop_statement:
-  DROP TABLE exists_opt table_name_list restrict_or_cascade_opt
+  DROP temp_opt TABLE exists_opt table_name_list restrict_or_cascade_opt
   {
-    $$ = &DropTable{FromTables: $4, IfExists: $3}
+    $$ = &DropTable{FromTables: $5, IfExists: $4, Temp: $2}
   }
 | DROP INDEX id_or_var ON table_name algorithm_lock_opt
   {
@@ -2320,6 +2320,10 @@ show_statement:
   {
     $$ = &Show{&ShowBasic{Command: Collation, Filter: $3}}
   }
+| SHOW full_opt columns_or_fields from_or_in table_name from_database_opt like_or_where_opt
+  {
+    $$ = &Show{&ShowBasic{Full: $2, Command: Column, Tbl: $5, DbName: $6, Filter: $7}}
+  }
 | SHOW DATABASES like_or_where_opt
   {
     $$ = &Show{&ShowBasic{Command: Database, Filter: $3}}
@@ -2339,6 +2343,14 @@ show_statement:
 | SHOW FUNCTION STATUS like_or_where_opt
   {
     $$ = &Show{&ShowBasic{Command: Function, Filter: $4}}
+  }
+| SHOW extended_opt index_symbols from_or_in table_name from_database_opt like_or_where_opt
+  {
+    $$ = &Show{&ShowBasic{Command: Index, Tbl: $5, DbName: $6, Filter: $7}}
+  }
+| SHOW OPEN TABLES from_database_opt like_or_where_opt
+  {
+    $$ = &Show{&ShowBasic{Command: OpenTable, DbName:$4, Filter: $5}}
   }
 | SHOW PRIVILEGES
   {
@@ -2366,46 +2378,53 @@ show_statement:
   }
 | SHOW TABLE STATUS from_database_opt like_or_where_opt
   {
-    $$ = &Show{&ShowTableStatus{DatabaseName:$4, Filter:$5}}
+    $$ = &Show{&ShowBasic{Command: TableStatus, DbName:$4, Filter: $5}}
   }
-| SHOW full_opt columns_or_fields from_or_in table_name from_database_opt like_or_where_opt
+| SHOW full_opt TABLES from_database_opt like_or_where_opt
   {
-    $$ = &Show{&ShowColumns{Full: $2, Table: $5, DbName: $6, Filter: $7}}
+    $$ = &Show{&ShowBasic{Command: Table, Full: $2, DbName:$4, Filter: $5}}
   }
+| SHOW TRIGGERS from_database_opt like_or_where_opt
+  {
+    $$ = &Show{&ShowBasic{Command: Trigger, DbName:$3, Filter: $4}}
+  }
+| SHOW CREATE DATABASE table_name
+  {
+    $$ = &Show{&ShowCreate{Command: CreateDb, Op: $4}}
+  }
+| SHOW CREATE EVENT table_name
+  {
+    $$ = &Show{&ShowCreate{Command: CreateE, Op: $4}}
+  }
+| SHOW CREATE FUNCTION table_name
+  {
+    $$ = &Show{&ShowCreate{Command: CreateF, Op: $4}}
+  }
+| SHOW CREATE PROCEDURE table_name
+  {
+    $$ = &Show{&ShowCreate{Command: CreateProc, Op: $4}}
+  }
+| SHOW CREATE TABLE table_name
+  {
+    $$ = &Show{&ShowCreate{Command: CreateTbl, Op: $4}}
+  }
+| SHOW CREATE TRIGGER table_name
+  {
+    $$ = &Show{&ShowCreate{Command: CreateTr, Op: $4}}
+  }
+| SHOW CREATE VIEW table_name
+  {
+    $$ = &Show{&ShowCreate{Command: CreateV, Op: $4}}
+  }
+| SHOW CREATE USER ddl_skip_to_end
+  {
+    $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3), Scope: ImplicitScope}}
+   }
 |  SHOW BINARY id_or_var ddl_skip_to_end /* SHOW BINARY ... */
   {
     $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3.String()), Scope: ImplicitScope}}
   }
 |  SHOW BINARY LOGS ddl_skip_to_end /* SHOW BINARY LOGS */
-  {
-    $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3), Scope: ImplicitScope}}
-  }
-| SHOW CREATE DATABASE ddl_skip_to_end
-  {
-    $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3), Scope: ImplicitScope}}
-  }
-| SHOW CREATE FUNCTION table_name
-  {
-    $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3), Table: $4, Scope: ImplicitScope}}
-  }
-/* Rule to handle SHOW CREATE EVENT, SHOW CREATE FUNCTION, etc. */
-| SHOW CREATE id_or_var ddl_skip_to_end
-  {
-    $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3.String()), Scope: ImplicitScope}}
-  }
-| SHOW CREATE PROCEDURE ddl_skip_to_end
-  {
-    $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3), Scope: ImplicitScope}}
-  }
-| SHOW CREATE TABLE table_name
-  {
-    $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3), Table: $4, Scope: ImplicitScope}}
-  }
-| SHOW CREATE TRIGGER ddl_skip_to_end
-  {
-    $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3), Scope: ImplicitScope}}
-  }
-| SHOW CREATE VIEW ddl_skip_to_end
   {
     $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3), Scope: ImplicitScope}}
   }
@@ -2417,11 +2436,6 @@ show_statement:
   {
     $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3), Table: $4, Scope: ImplicitScope}}
   }
-| SHOW extended_opt index_symbols from_or_in table_name from_database_opt like_or_where_opt
-  {
-    showTablesOpt := &ShowTablesOpt{DbName:$6, Filter:$7}
-    $$ = &Show{&ShowLegacy{Extended: string($2), Type: string($3), ShowTablesOpt: showTablesOpt, OnTable: $5, Scope: ImplicitScope}}
-  }
 | SHOW PLUGINS
   {
     $$ = &Show{&ShowLegacy{Type: string($2), Scope: ImplicitScope}}
@@ -2430,15 +2444,9 @@ show_statement:
   {
     $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3), Table: $4, Scope: ImplicitScope}}
   }
-| SHOW full_opt tables_or_processlist from_database_opt like_or_where_opt
+| SHOW full_opt PROCESSLIST from_database_opt like_or_where_opt
   {
-    // this is ugly, but I couldn't find a better way for now
-    if $3 == "processlist" {
-      $$ = &Show{&ShowLegacy{Type: $3, Scope: ImplicitScope}}
-    } else {
-    showTablesOpt := &ShowTablesOpt{Full:$2, DbName:$4, Filter:$5}
-      $$ = &Show{&ShowLegacy{Type: $3, ShowTablesOpt: showTablesOpt, Scope: ImplicitScope}}
-    }
+      $$ = &Show{&ShowLegacy{Type: string($3), Scope: ImplicitScope}}
   }
 | SHOW VITESS_METADATA VARIABLES like_opt
   {
@@ -2489,16 +2497,6 @@ show_statement:
     $$ = &Show{&ShowLegacy{Type: string($2), Scope: ImplicitScope}}
   }
 
-tables_or_processlist:
-  TABLES
-  {
-    $$ = string($1)
-  }
-| PROCESSLIST
-  {
-    $$ = string($1)
-  }
-
 vitess_topo:
   VITESS_TABLETS
   {
@@ -2522,11 +2520,11 @@ extended_opt:
 full_opt:
   /* empty */
   {
-    $$ = ""
+    $$ = false
   }
 | FULL
   {
-    $$ = "full "
+    $$ = true
   }
 
 columns_or_fields:
@@ -4585,6 +4583,11 @@ for_from:
   FOR
 | FROM
 
+temp_opt:
+  { $$ = false }
+| TEMPORARY
+  { $$ = true }
+
 exists_opt:
   { $$ = false }
 | IF EXISTS
@@ -4883,6 +4886,7 @@ non_reserved_keyword:
 | ENUM
 | ERROR
 | ESCAPED
+| EVENT
 | EXCHANGE
 | EXCLUDE
 | EXCLUSIVE
@@ -4964,6 +4968,7 @@ non_reserved_keyword:
 | OFFSET
 | OJ
 | OLD
+| OPEN
 | OPTION
 | OPTIONAL
 | OPTIONALLY
@@ -5037,6 +5042,7 @@ non_reserved_keyword:
 | STORAGE
 | TABLES
 | TABLESPACE
+| TEMPORARY
 | TEMPTABLE
 | TERMINATED
 | TEXT
@@ -5051,6 +5057,7 @@ non_reserved_keyword:
 | TRANSACTION
 | TREE
 | TRIGGER
+| TRIGGERS
 | TRUNCATE
 | UNBOUNDED
 | UNCOMMITTED
@@ -5058,6 +5065,7 @@ non_reserved_keyword:
 | UNSIGNED
 | UNUSED
 | UPGRADE
+| USER
 | USER_RESOURCES
 | VALIDATION
 | VARBINARY

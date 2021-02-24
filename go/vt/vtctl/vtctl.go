@@ -1883,6 +1883,10 @@ func commandReshard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.F
 	cells := subFlags.String("cells", "", "Cell(s) or CellAlias(es) (comma-separated) to replicate from.")
 	tabletTypes := subFlags.String("tablet_types", "", "Source tablet types to replicate from.")
 	skipSchemaCopy := subFlags.Bool("skip_schema_copy", false, "Skip copying of schema to targets")
+
+	autoStart := subFlags.Bool("auto_start", true, "If false, streams will start in the Stopped state and will need to be explicitly started")
+	stopAfterCopy := subFlags.Bool("stop_after_copy", false, "Streams will be stopped once the copy phase is completed")
+
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -1895,7 +1899,8 @@ func commandReshard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.F
 	}
 	source := strings.Split(subFlags.Arg(1), ",")
 	target := strings.Split(subFlags.Arg(2), ",")
-	return wr.Reshard(ctx, keyspace, workflow, source, target, *skipSchemaCopy, *cells, *tabletTypes)
+	return wr.Reshard(ctx, keyspace, workflow, source, target, *skipSchemaCopy, *cells,
+		*tabletTypes, *autoStart, *stopAfterCopy)
 }
 
 func commandMoveTables(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -1910,6 +1915,9 @@ func commandMoveTables(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 	tabletTypes := subFlags.String("tablet_types", "", "Source tablet types to replicate from (e.g. master, replica, rdonly). Defaults to -vreplication_tablet_type parameter value for the tablet, which has the default value of replica.")
 	allTables := subFlags.Bool("all", false, "Move all tables from the source keyspace")
 	excludes := subFlags.String("exclude", "", "Tables to exclude (comma-separated) if -all is specified")
+
+	autoStart := subFlags.Bool("auto_start", true, "If false, streams will start in the Stopped state and will need to be explicitly started")
+	stopAfterCopy := subFlags.Bool("stop_after_copy", false, "Streams will be stopped once the copy phase is completed")
 
 	if err := subFlags.Parse(args); err != nil {
 		return err
@@ -1933,7 +1941,8 @@ func commandMoveTables(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 	source := subFlags.Arg(0)
 	target := subFlags.Arg(1)
 	tableSpecs := subFlags.Arg(2)
-	return wr.MoveTables(ctx, *workflow, source, target, tableSpecs, *cells, *tabletTypes, *allTables, *excludes)
+	return wr.MoveTables(ctx, *workflow, source, target, tableSpecs, *cells, *tabletTypes, *allTables,
+		*excludes, *autoStart, *stopAfterCopy)
 }
 
 // VReplicationWorkflowAction defines subcommands passed to vtctl for movetables or reshard
@@ -1960,12 +1969,17 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 	reverseReplication := subFlags.Bool("reverse_replication", true, "Also reverse the replication")
 	keepData := subFlags.Bool("keep_data", false, "Do not drop tables or shards (if true, only vreplication artifacts are cleaned up)")
 
+	autoStart := subFlags.Bool("auto_start", true, "If false, streams will start in the Stopped state and will need to be explicitly started")
+	stopAfterCopy := subFlags.Bool("stop_after_copy", false, "Streams will be stopped once the copy phase is completed")
+
+	// MoveTables-only params
 	sourceKeyspace := subFlags.String("source", "", "Source keyspace")
 	tables := subFlags.String("tables", "", "A table spec or a list of tables")
 	allTables := subFlags.Bool("all", false, "Move all tables from the source keyspace")
 	excludes := subFlags.String("exclude", "", "Tables to exclude (comma-separated) if -all is specified")
 	renameTables := subFlags.Bool("rename_tables", false, "Rename tables instead of dropping them")
 
+	// Reshard-only params
 	sourceShards := subFlags.String("source_shards", "", "Source shards")
 	targetShards := subFlags.String("target_shards", "", "Target shards")
 	skipSchemaCopy := subFlags.Bool("skip_schema_copy", false, "Skip copying of schema to target shards")
@@ -1995,6 +2009,8 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 		TargetKeyspace: target,
 		Workflow:       workflow,
 		DryRun:         *dryRun,
+		AutoStart:      *autoStart,
+		StopAfterCopy:  *stopAfterCopy,
 	}
 
 	printDetails := func() error {
@@ -2154,7 +2170,12 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 		if err != nil {
 			return err
 		}
+		if !*autoStart {
+			wr.Logger().Printf("Workflow has been created in Stopped state\n")
+			break
+		}
 		wr.Logger().Printf("Waiting for workflow to start:\n")
+
 		type streamCount struct {
 			total, running int64
 		}

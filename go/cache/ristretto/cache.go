@@ -45,7 +45,8 @@ func defaultStringHash(key string) (uint64, uint64) {
 
 type itemCallback func(*Item)
 
-const itemSize = int64(unsafe.Sizeof(storeItem{}))
+// CacheItemSize is the overhead in bytes for every stored cache item
+const CacheItemSize = int64(unsafe.Sizeof(storeItem{}))
 
 // Cache is a thread-safe implementation of a hashmap with a TinyLFU admission
 // policy and a Sampled LFU eviction policy. You can use the same Cache instance
@@ -336,6 +337,10 @@ loop:
 	for {
 		select {
 		case i := <-c.setBuf:
+			if i.wg != nil {
+				i.wg.Done()
+				continue
+			}
 			if i.flag != itemUpdate {
 				// In itemUpdate, the value is already set in the store.  So, no need to call
 				// onEvict here.
@@ -446,7 +451,7 @@ func (c *Cache) processItems() {
 			}
 			if !c.ignoreInternalCost {
 				// Add the cost of internally storing the object.
-				i.Cost += itemSize
+				i.Cost += CacheItemSize
 			}
 
 			switch i.flag {

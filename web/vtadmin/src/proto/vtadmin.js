@@ -248,6 +248,39 @@ $root.vtadmin = (function() {
          * @variation 2
          */
 
+        /**
+         * Callback as used by {@link vtadmin.VTAdmin#vTExplain}.
+         * @memberof vtadmin.VTAdmin
+         * @typedef VTExplainCallback
+         * @type {function}
+         * @param {Error|null} error Error, if any
+         * @param {vtadmin.VTExplainResponse} [response] VTExplainResponse
+         */
+
+        /**
+         * Calls VTExplain.
+         * @function vTExplain
+         * @memberof vtadmin.VTAdmin
+         * @instance
+         * @param {vtadmin.IVTExplainRequest} request VTExplainRequest message or plain object
+         * @param {vtadmin.VTAdmin.VTExplainCallback} callback Node-style callback called with the error, if any, and VTExplainResponse
+         * @returns {undefined}
+         * @variation 1
+         */
+        Object.defineProperty(VTAdmin.prototype.vTExplain = function vTExplain(request, callback) {
+            return this.rpcCall(vTExplain, $root.vtadmin.VTExplainRequest, $root.vtadmin.VTExplainResponse, request, callback);
+        }, "name", { value: "VTExplain" });
+
+        /**
+         * Calls VTExplain.
+         * @function vTExplain
+         * @memberof vtadmin.VTAdmin
+         * @instance
+         * @param {vtadmin.IVTExplainRequest} request VTExplainRequest message or plain object
+         * @returns {Promise<vtadmin.VTExplainResponse>} Promise
+         * @variation 2
+         */
+
         return VTAdmin;
     })();
 
@@ -469,6 +502,7 @@ $root.vtadmin = (function() {
          * @interface IKeyspace
          * @property {vtadmin.ICluster|null} [cluster] Keyspace cluster
          * @property {vtctldata.IKeyspace|null} [keyspace] Keyspace keyspace
+         * @property {Object.<string,vtctldata.IShard>|null} [shards] Keyspace shards
          */
 
         /**
@@ -480,6 +514,7 @@ $root.vtadmin = (function() {
          * @param {vtadmin.IKeyspace=} [properties] Properties to set
          */
         function Keyspace(properties) {
+            this.shards = {};
             if (properties)
                 for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
                     if (properties[keys[i]] != null)
@@ -501,6 +536,14 @@ $root.vtadmin = (function() {
          * @instance
          */
         Keyspace.prototype.keyspace = null;
+
+        /**
+         * Keyspace shards.
+         * @member {Object.<string,vtctldata.IShard>} shards
+         * @memberof vtadmin.Keyspace
+         * @instance
+         */
+        Keyspace.prototype.shards = $util.emptyObject;
 
         /**
          * Creates a new Keyspace instance using the specified properties.
@@ -530,6 +573,11 @@ $root.vtadmin = (function() {
                 $root.vtadmin.Cluster.encode(message.cluster, writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
             if (message.keyspace != null && Object.hasOwnProperty.call(message, "keyspace"))
                 $root.vtctldata.Keyspace.encode(message.keyspace, writer.uint32(/* id 2, wireType 2 =*/18).fork()).ldelim();
+            if (message.shards != null && Object.hasOwnProperty.call(message, "shards"))
+                for (var keys = Object.keys(message.shards), i = 0; i < keys.length; ++i) {
+                    writer.uint32(/* id 3, wireType 2 =*/26).fork().uint32(/* id 1, wireType 2 =*/10).string(keys[i]);
+                    $root.vtctldata.Shard.encode(message.shards[keys[i]], writer.uint32(/* id 2, wireType 2 =*/18).fork()).ldelim().ldelim();
+                }
             return writer;
         };
 
@@ -560,7 +608,7 @@ $root.vtadmin = (function() {
         Keyspace.decode = function decode(reader, length) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
-            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.Keyspace();
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.Keyspace(), key, value;
             while (reader.pos < end) {
                 var tag = reader.uint32();
                 switch (tag >>> 3) {
@@ -569,6 +617,28 @@ $root.vtadmin = (function() {
                     break;
                 case 2:
                     message.keyspace = $root.vtctldata.Keyspace.decode(reader, reader.uint32());
+                    break;
+                case 3:
+                    if (message.shards === $util.emptyObject)
+                        message.shards = {};
+                    var end2 = reader.uint32() + reader.pos;
+                    key = "";
+                    value = null;
+                    while (reader.pos < end2) {
+                        var tag2 = reader.uint32();
+                        switch (tag2 >>> 3) {
+                        case 1:
+                            key = reader.string();
+                            break;
+                        case 2:
+                            value = $root.vtctldata.Shard.decode(reader, reader.uint32());
+                            break;
+                        default:
+                            reader.skipType(tag2 & 7);
+                            break;
+                        }
+                    }
+                    message.shards[key] = value;
                     break;
                 default:
                     reader.skipType(tag & 7);
@@ -615,6 +685,16 @@ $root.vtadmin = (function() {
                 if (error)
                     return "keyspace." + error;
             }
+            if (message.shards != null && message.hasOwnProperty("shards")) {
+                if (!$util.isObject(message.shards))
+                    return "shards: object expected";
+                var key = Object.keys(message.shards);
+                for (var i = 0; i < key.length; ++i) {
+                    var error = $root.vtctldata.Shard.verify(message.shards[key[i]]);
+                    if (error)
+                        return "shards." + error;
+                }
+            }
             return null;
         };
 
@@ -640,6 +720,16 @@ $root.vtadmin = (function() {
                     throw TypeError(".vtadmin.Keyspace.keyspace: object expected");
                 message.keyspace = $root.vtctldata.Keyspace.fromObject(object.keyspace);
             }
+            if (object.shards) {
+                if (typeof object.shards !== "object")
+                    throw TypeError(".vtadmin.Keyspace.shards: object expected");
+                message.shards = {};
+                for (var keys = Object.keys(object.shards), i = 0; i < keys.length; ++i) {
+                    if (typeof object.shards[keys[i]] !== "object")
+                        throw TypeError(".vtadmin.Keyspace.shards: object expected");
+                    message.shards[keys[i]] = $root.vtctldata.Shard.fromObject(object.shards[keys[i]]);
+                }
+            }
             return message;
         };
 
@@ -656,6 +746,8 @@ $root.vtadmin = (function() {
             if (!options)
                 options = {};
             var object = {};
+            if (options.objects || options.defaults)
+                object.shards = {};
             if (options.defaults) {
                 object.cluster = null;
                 object.keyspace = null;
@@ -664,6 +756,12 @@ $root.vtadmin = (function() {
                 object.cluster = $root.vtadmin.Cluster.toObject(message.cluster, options);
             if (message.keyspace != null && message.hasOwnProperty("keyspace"))
                 object.keyspace = $root.vtctldata.Keyspace.toObject(message.keyspace, options);
+            var keys2;
+            if (message.shards && (keys2 = Object.keys(message.shards)).length) {
+                object.shards = {};
+                for (var j = 0; j < keys2.length; ++j)
+                    object.shards[keys2[j]] = $root.vtctldata.Shard.toObject(message.shards[keys2[j]], options);
+            }
             return object;
         };
 
@@ -3965,6 +4063,425 @@ $root.vtadmin = (function() {
         };
 
         return GetTabletsResponse;
+    })();
+
+    vtadmin.VTExplainRequest = (function() {
+
+        /**
+         * Properties of a VTExplainRequest.
+         * @memberof vtadmin
+         * @interface IVTExplainRequest
+         * @property {string|null} [cluster] VTExplainRequest cluster
+         * @property {string|null} [keyspace] VTExplainRequest keyspace
+         * @property {string|null} [sql] VTExplainRequest sql
+         */
+
+        /**
+         * Constructs a new VTExplainRequest.
+         * @memberof vtadmin
+         * @classdesc Represents a VTExplainRequest.
+         * @implements IVTExplainRequest
+         * @constructor
+         * @param {vtadmin.IVTExplainRequest=} [properties] Properties to set
+         */
+        function VTExplainRequest(properties) {
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * VTExplainRequest cluster.
+         * @member {string} cluster
+         * @memberof vtadmin.VTExplainRequest
+         * @instance
+         */
+        VTExplainRequest.prototype.cluster = "";
+
+        /**
+         * VTExplainRequest keyspace.
+         * @member {string} keyspace
+         * @memberof vtadmin.VTExplainRequest
+         * @instance
+         */
+        VTExplainRequest.prototype.keyspace = "";
+
+        /**
+         * VTExplainRequest sql.
+         * @member {string} sql
+         * @memberof vtadmin.VTExplainRequest
+         * @instance
+         */
+        VTExplainRequest.prototype.sql = "";
+
+        /**
+         * Creates a new VTExplainRequest instance using the specified properties.
+         * @function create
+         * @memberof vtadmin.VTExplainRequest
+         * @static
+         * @param {vtadmin.IVTExplainRequest=} [properties] Properties to set
+         * @returns {vtadmin.VTExplainRequest} VTExplainRequest instance
+         */
+        VTExplainRequest.create = function create(properties) {
+            return new VTExplainRequest(properties);
+        };
+
+        /**
+         * Encodes the specified VTExplainRequest message. Does not implicitly {@link vtadmin.VTExplainRequest.verify|verify} messages.
+         * @function encode
+         * @memberof vtadmin.VTExplainRequest
+         * @static
+         * @param {vtadmin.IVTExplainRequest} message VTExplainRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        VTExplainRequest.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.cluster != null && Object.hasOwnProperty.call(message, "cluster"))
+                writer.uint32(/* id 1, wireType 2 =*/10).string(message.cluster);
+            if (message.keyspace != null && Object.hasOwnProperty.call(message, "keyspace"))
+                writer.uint32(/* id 2, wireType 2 =*/18).string(message.keyspace);
+            if (message.sql != null && Object.hasOwnProperty.call(message, "sql"))
+                writer.uint32(/* id 3, wireType 2 =*/26).string(message.sql);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified VTExplainRequest message, length delimited. Does not implicitly {@link vtadmin.VTExplainRequest.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtadmin.VTExplainRequest
+         * @static
+         * @param {vtadmin.IVTExplainRequest} message VTExplainRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        VTExplainRequest.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a VTExplainRequest message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtadmin.VTExplainRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtadmin.VTExplainRequest} VTExplainRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        VTExplainRequest.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.VTExplainRequest();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.cluster = reader.string();
+                    break;
+                case 2:
+                    message.keyspace = reader.string();
+                    break;
+                case 3:
+                    message.sql = reader.string();
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a VTExplainRequest message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtadmin.VTExplainRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtadmin.VTExplainRequest} VTExplainRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        VTExplainRequest.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a VTExplainRequest message.
+         * @function verify
+         * @memberof vtadmin.VTExplainRequest
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        VTExplainRequest.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.cluster != null && message.hasOwnProperty("cluster"))
+                if (!$util.isString(message.cluster))
+                    return "cluster: string expected";
+            if (message.keyspace != null && message.hasOwnProperty("keyspace"))
+                if (!$util.isString(message.keyspace))
+                    return "keyspace: string expected";
+            if (message.sql != null && message.hasOwnProperty("sql"))
+                if (!$util.isString(message.sql))
+                    return "sql: string expected";
+            return null;
+        };
+
+        /**
+         * Creates a VTExplainRequest message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtadmin.VTExplainRequest
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtadmin.VTExplainRequest} VTExplainRequest
+         */
+        VTExplainRequest.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtadmin.VTExplainRequest)
+                return object;
+            var message = new $root.vtadmin.VTExplainRequest();
+            if (object.cluster != null)
+                message.cluster = String(object.cluster);
+            if (object.keyspace != null)
+                message.keyspace = String(object.keyspace);
+            if (object.sql != null)
+                message.sql = String(object.sql);
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a VTExplainRequest message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtadmin.VTExplainRequest
+         * @static
+         * @param {vtadmin.VTExplainRequest} message VTExplainRequest
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        VTExplainRequest.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.defaults) {
+                object.cluster = "";
+                object.keyspace = "";
+                object.sql = "";
+            }
+            if (message.cluster != null && message.hasOwnProperty("cluster"))
+                object.cluster = message.cluster;
+            if (message.keyspace != null && message.hasOwnProperty("keyspace"))
+                object.keyspace = message.keyspace;
+            if (message.sql != null && message.hasOwnProperty("sql"))
+                object.sql = message.sql;
+            return object;
+        };
+
+        /**
+         * Converts this VTExplainRequest to JSON.
+         * @function toJSON
+         * @memberof vtadmin.VTExplainRequest
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        VTExplainRequest.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return VTExplainRequest;
+    })();
+
+    vtadmin.VTExplainResponse = (function() {
+
+        /**
+         * Properties of a VTExplainResponse.
+         * @memberof vtadmin
+         * @interface IVTExplainResponse
+         * @property {string|null} [response] VTExplainResponse response
+         */
+
+        /**
+         * Constructs a new VTExplainResponse.
+         * @memberof vtadmin
+         * @classdesc Represents a VTExplainResponse.
+         * @implements IVTExplainResponse
+         * @constructor
+         * @param {vtadmin.IVTExplainResponse=} [properties] Properties to set
+         */
+        function VTExplainResponse(properties) {
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * VTExplainResponse response.
+         * @member {string} response
+         * @memberof vtadmin.VTExplainResponse
+         * @instance
+         */
+        VTExplainResponse.prototype.response = "";
+
+        /**
+         * Creates a new VTExplainResponse instance using the specified properties.
+         * @function create
+         * @memberof vtadmin.VTExplainResponse
+         * @static
+         * @param {vtadmin.IVTExplainResponse=} [properties] Properties to set
+         * @returns {vtadmin.VTExplainResponse} VTExplainResponse instance
+         */
+        VTExplainResponse.create = function create(properties) {
+            return new VTExplainResponse(properties);
+        };
+
+        /**
+         * Encodes the specified VTExplainResponse message. Does not implicitly {@link vtadmin.VTExplainResponse.verify|verify} messages.
+         * @function encode
+         * @memberof vtadmin.VTExplainResponse
+         * @static
+         * @param {vtadmin.IVTExplainResponse} message VTExplainResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        VTExplainResponse.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.response != null && Object.hasOwnProperty.call(message, "response"))
+                writer.uint32(/* id 1, wireType 2 =*/10).string(message.response);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified VTExplainResponse message, length delimited. Does not implicitly {@link vtadmin.VTExplainResponse.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtadmin.VTExplainResponse
+         * @static
+         * @param {vtadmin.IVTExplainResponse} message VTExplainResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        VTExplainResponse.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a VTExplainResponse message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtadmin.VTExplainResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtadmin.VTExplainResponse} VTExplainResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        VTExplainResponse.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.VTExplainResponse();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.response = reader.string();
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a VTExplainResponse message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtadmin.VTExplainResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtadmin.VTExplainResponse} VTExplainResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        VTExplainResponse.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a VTExplainResponse message.
+         * @function verify
+         * @memberof vtadmin.VTExplainResponse
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        VTExplainResponse.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.response != null && message.hasOwnProperty("response"))
+                if (!$util.isString(message.response))
+                    return "response: string expected";
+            return null;
+        };
+
+        /**
+         * Creates a VTExplainResponse message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtadmin.VTExplainResponse
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtadmin.VTExplainResponse} VTExplainResponse
+         */
+        VTExplainResponse.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtadmin.VTExplainResponse)
+                return object;
+            var message = new $root.vtadmin.VTExplainResponse();
+            if (object.response != null)
+                message.response = String(object.response);
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a VTExplainResponse message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtadmin.VTExplainResponse
+         * @static
+         * @param {vtadmin.VTExplainResponse} message VTExplainResponse
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        VTExplainResponse.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.defaults)
+                object.response = "";
+            if (message.response != null && message.hasOwnProperty("response"))
+                object.response = message.response;
+            return object;
+        };
+
+        /**
+         * Converts this VTExplainResponse to JSON.
+         * @function toJSON
+         * @memberof vtadmin.VTExplainResponse
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        VTExplainResponse.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return VTExplainResponse;
     })();
 
     return vtadmin;
@@ -24355,6 +24872,7 @@ $root.query = (function() {
          * @property {query.ExecuteOptions.TransactionIsolation|null} [transaction_isolation] ExecuteOptions transaction_isolation
          * @property {boolean|null} [skip_query_plan_cache] ExecuteOptions skip_query_plan_cache
          * @property {query.ExecuteOptions.PlannerVersion|null} [planner_version] ExecuteOptions planner_version
+         * @property {boolean|null} [has_created_temp_tables] ExecuteOptions has_created_temp_tables
          */
 
         /**
@@ -24429,6 +24947,14 @@ $root.query = (function() {
         ExecuteOptions.prototype.planner_version = 0;
 
         /**
+         * ExecuteOptions has_created_temp_tables.
+         * @member {boolean} has_created_temp_tables
+         * @memberof query.ExecuteOptions
+         * @instance
+         */
+        ExecuteOptions.prototype.has_created_temp_tables = false;
+
+        /**
          * Creates a new ExecuteOptions instance using the specified properties.
          * @function create
          * @memberof query.ExecuteOptions
@@ -24466,6 +24992,8 @@ $root.query = (function() {
                 writer.uint32(/* id 10, wireType 0 =*/80).bool(message.skip_query_plan_cache);
             if (message.planner_version != null && Object.hasOwnProperty.call(message, "planner_version"))
                 writer.uint32(/* id 11, wireType 0 =*/88).int32(message.planner_version);
+            if (message.has_created_temp_tables != null && Object.hasOwnProperty.call(message, "has_created_temp_tables"))
+                writer.uint32(/* id 12, wireType 0 =*/96).bool(message.has_created_temp_tables);
             return writer;
         };
 
@@ -24520,6 +25048,9 @@ $root.query = (function() {
                     break;
                 case 11:
                     message.planner_version = reader.int32();
+                    break;
+                case 12:
+                    message.has_created_temp_tables = reader.bool();
                     break;
                 default:
                     reader.skipType(tag & 7);
@@ -24609,6 +25140,9 @@ $root.query = (function() {
                 case 5:
                     break;
                 }
+            if (message.has_created_temp_tables != null && message.hasOwnProperty("has_created_temp_tables"))
+                if (typeof message.has_created_temp_tables !== "boolean")
+                    return "has_created_temp_tables: boolean expected";
             return null;
         };
 
@@ -24725,6 +25259,8 @@ $root.query = (function() {
                 message.planner_version = 5;
                 break;
             }
+            if (object.has_created_temp_tables != null)
+                message.has_created_temp_tables = Boolean(object.has_created_temp_tables);
             return message;
         };
 
@@ -24753,6 +25289,7 @@ $root.query = (function() {
                 object.transaction_isolation = options.enums === String ? "DEFAULT" : 0;
                 object.skip_query_plan_cache = false;
                 object.planner_version = options.enums === String ? "DEFAULT_PLANNER" : 0;
+                object.has_created_temp_tables = false;
             }
             if (message.included_fields != null && message.hasOwnProperty("included_fields"))
                 object.included_fields = options.enums === String ? $root.query.ExecuteOptions.IncludedFields[message.included_fields] : message.included_fields;
@@ -24771,6 +25308,8 @@ $root.query = (function() {
                 object.skip_query_plan_cache = message.skip_query_plan_cache;
             if (message.planner_version != null && message.hasOwnProperty("planner_version"))
                 object.planner_version = options.enums === String ? $root.query.ExecuteOptions.PlannerVersion[message.planner_version] : message.planner_version;
+            if (message.has_created_temp_tables != null && message.hasOwnProperty("has_created_temp_tables"))
+                object.has_created_temp_tables = message.has_created_temp_tables;
             return object;
         };
 
@@ -47125,6 +47664,2823 @@ $root.vtctldata = (function() {
         return ExecuteVtctlCommandResponse;
     })();
 
+    vtctldata.ChangeTabletTypeRequest = (function() {
+
+        /**
+         * Properties of a ChangeTabletTypeRequest.
+         * @memberof vtctldata
+         * @interface IChangeTabletTypeRequest
+         * @property {topodata.ITabletAlias|null} [tablet_alias] ChangeTabletTypeRequest tablet_alias
+         * @property {topodata.TabletType|null} [db_type] ChangeTabletTypeRequest db_type
+         * @property {boolean|null} [dry_run] ChangeTabletTypeRequest dry_run
+         */
+
+        /**
+         * Constructs a new ChangeTabletTypeRequest.
+         * @memberof vtctldata
+         * @classdesc Represents a ChangeTabletTypeRequest.
+         * @implements IChangeTabletTypeRequest
+         * @constructor
+         * @param {vtctldata.IChangeTabletTypeRequest=} [properties] Properties to set
+         */
+        function ChangeTabletTypeRequest(properties) {
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * ChangeTabletTypeRequest tablet_alias.
+         * @member {topodata.ITabletAlias|null|undefined} tablet_alias
+         * @memberof vtctldata.ChangeTabletTypeRequest
+         * @instance
+         */
+        ChangeTabletTypeRequest.prototype.tablet_alias = null;
+
+        /**
+         * ChangeTabletTypeRequest db_type.
+         * @member {topodata.TabletType} db_type
+         * @memberof vtctldata.ChangeTabletTypeRequest
+         * @instance
+         */
+        ChangeTabletTypeRequest.prototype.db_type = 0;
+
+        /**
+         * ChangeTabletTypeRequest dry_run.
+         * @member {boolean} dry_run
+         * @memberof vtctldata.ChangeTabletTypeRequest
+         * @instance
+         */
+        ChangeTabletTypeRequest.prototype.dry_run = false;
+
+        /**
+         * Creates a new ChangeTabletTypeRequest instance using the specified properties.
+         * @function create
+         * @memberof vtctldata.ChangeTabletTypeRequest
+         * @static
+         * @param {vtctldata.IChangeTabletTypeRequest=} [properties] Properties to set
+         * @returns {vtctldata.ChangeTabletTypeRequest} ChangeTabletTypeRequest instance
+         */
+        ChangeTabletTypeRequest.create = function create(properties) {
+            return new ChangeTabletTypeRequest(properties);
+        };
+
+        /**
+         * Encodes the specified ChangeTabletTypeRequest message. Does not implicitly {@link vtctldata.ChangeTabletTypeRequest.verify|verify} messages.
+         * @function encode
+         * @memberof vtctldata.ChangeTabletTypeRequest
+         * @static
+         * @param {vtctldata.IChangeTabletTypeRequest} message ChangeTabletTypeRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        ChangeTabletTypeRequest.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.tablet_alias != null && Object.hasOwnProperty.call(message, "tablet_alias"))
+                $root.topodata.TabletAlias.encode(message.tablet_alias, writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
+            if (message.db_type != null && Object.hasOwnProperty.call(message, "db_type"))
+                writer.uint32(/* id 2, wireType 0 =*/16).int32(message.db_type);
+            if (message.dry_run != null && Object.hasOwnProperty.call(message, "dry_run"))
+                writer.uint32(/* id 3, wireType 0 =*/24).bool(message.dry_run);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified ChangeTabletTypeRequest message, length delimited. Does not implicitly {@link vtctldata.ChangeTabletTypeRequest.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtctldata.ChangeTabletTypeRequest
+         * @static
+         * @param {vtctldata.IChangeTabletTypeRequest} message ChangeTabletTypeRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        ChangeTabletTypeRequest.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a ChangeTabletTypeRequest message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtctldata.ChangeTabletTypeRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtctldata.ChangeTabletTypeRequest} ChangeTabletTypeRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        ChangeTabletTypeRequest.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.ChangeTabletTypeRequest();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.uint32());
+                    break;
+                case 2:
+                    message.db_type = reader.int32();
+                    break;
+                case 3:
+                    message.dry_run = reader.bool();
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a ChangeTabletTypeRequest message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtctldata.ChangeTabletTypeRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtctldata.ChangeTabletTypeRequest} ChangeTabletTypeRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        ChangeTabletTypeRequest.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a ChangeTabletTypeRequest message.
+         * @function verify
+         * @memberof vtctldata.ChangeTabletTypeRequest
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        ChangeTabletTypeRequest.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.tablet_alias != null && message.hasOwnProperty("tablet_alias")) {
+                var error = $root.topodata.TabletAlias.verify(message.tablet_alias);
+                if (error)
+                    return "tablet_alias." + error;
+            }
+            if (message.db_type != null && message.hasOwnProperty("db_type"))
+                switch (message.db_type) {
+                default:
+                    return "db_type: enum value expected";
+                case 0:
+                case 1:
+                case 2:
+                case 3:
+                case 3:
+                case 4:
+                case 5:
+                case 6:
+                case 7:
+                case 8:
+                    break;
+                }
+            if (message.dry_run != null && message.hasOwnProperty("dry_run"))
+                if (typeof message.dry_run !== "boolean")
+                    return "dry_run: boolean expected";
+            return null;
+        };
+
+        /**
+         * Creates a ChangeTabletTypeRequest message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtctldata.ChangeTabletTypeRequest
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtctldata.ChangeTabletTypeRequest} ChangeTabletTypeRequest
+         */
+        ChangeTabletTypeRequest.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtctldata.ChangeTabletTypeRequest)
+                return object;
+            var message = new $root.vtctldata.ChangeTabletTypeRequest();
+            if (object.tablet_alias != null) {
+                if (typeof object.tablet_alias !== "object")
+                    throw TypeError(".vtctldata.ChangeTabletTypeRequest.tablet_alias: object expected");
+                message.tablet_alias = $root.topodata.TabletAlias.fromObject(object.tablet_alias);
+            }
+            switch (object.db_type) {
+            case "UNKNOWN":
+            case 0:
+                message.db_type = 0;
+                break;
+            case "MASTER":
+            case 1:
+                message.db_type = 1;
+                break;
+            case "REPLICA":
+            case 2:
+                message.db_type = 2;
+                break;
+            case "RDONLY":
+            case 3:
+                message.db_type = 3;
+                break;
+            case "BATCH":
+            case 3:
+                message.db_type = 3;
+                break;
+            case "SPARE":
+            case 4:
+                message.db_type = 4;
+                break;
+            case "EXPERIMENTAL":
+            case 5:
+                message.db_type = 5;
+                break;
+            case "BACKUP":
+            case 6:
+                message.db_type = 6;
+                break;
+            case "RESTORE":
+            case 7:
+                message.db_type = 7;
+                break;
+            case "DRAINED":
+            case 8:
+                message.db_type = 8;
+                break;
+            }
+            if (object.dry_run != null)
+                message.dry_run = Boolean(object.dry_run);
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a ChangeTabletTypeRequest message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtctldata.ChangeTabletTypeRequest
+         * @static
+         * @param {vtctldata.ChangeTabletTypeRequest} message ChangeTabletTypeRequest
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        ChangeTabletTypeRequest.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.defaults) {
+                object.tablet_alias = null;
+                object.db_type = options.enums === String ? "UNKNOWN" : 0;
+                object.dry_run = false;
+            }
+            if (message.tablet_alias != null && message.hasOwnProperty("tablet_alias"))
+                object.tablet_alias = $root.topodata.TabletAlias.toObject(message.tablet_alias, options);
+            if (message.db_type != null && message.hasOwnProperty("db_type"))
+                object.db_type = options.enums === String ? $root.topodata.TabletType[message.db_type] : message.db_type;
+            if (message.dry_run != null && message.hasOwnProperty("dry_run"))
+                object.dry_run = message.dry_run;
+            return object;
+        };
+
+        /**
+         * Converts this ChangeTabletTypeRequest to JSON.
+         * @function toJSON
+         * @memberof vtctldata.ChangeTabletTypeRequest
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        ChangeTabletTypeRequest.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return ChangeTabletTypeRequest;
+    })();
+
+    vtctldata.ChangeTabletTypeResponse = (function() {
+
+        /**
+         * Properties of a ChangeTabletTypeResponse.
+         * @memberof vtctldata
+         * @interface IChangeTabletTypeResponse
+         * @property {topodata.ITablet|null} [before_tablet] ChangeTabletTypeResponse before_tablet
+         * @property {topodata.ITablet|null} [after_tablet] ChangeTabletTypeResponse after_tablet
+         * @property {boolean|null} [was_dry_run] ChangeTabletTypeResponse was_dry_run
+         */
+
+        /**
+         * Constructs a new ChangeTabletTypeResponse.
+         * @memberof vtctldata
+         * @classdesc Represents a ChangeTabletTypeResponse.
+         * @implements IChangeTabletTypeResponse
+         * @constructor
+         * @param {vtctldata.IChangeTabletTypeResponse=} [properties] Properties to set
+         */
+        function ChangeTabletTypeResponse(properties) {
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * ChangeTabletTypeResponse before_tablet.
+         * @member {topodata.ITablet|null|undefined} before_tablet
+         * @memberof vtctldata.ChangeTabletTypeResponse
+         * @instance
+         */
+        ChangeTabletTypeResponse.prototype.before_tablet = null;
+
+        /**
+         * ChangeTabletTypeResponse after_tablet.
+         * @member {topodata.ITablet|null|undefined} after_tablet
+         * @memberof vtctldata.ChangeTabletTypeResponse
+         * @instance
+         */
+        ChangeTabletTypeResponse.prototype.after_tablet = null;
+
+        /**
+         * ChangeTabletTypeResponse was_dry_run.
+         * @member {boolean} was_dry_run
+         * @memberof vtctldata.ChangeTabletTypeResponse
+         * @instance
+         */
+        ChangeTabletTypeResponse.prototype.was_dry_run = false;
+
+        /**
+         * Creates a new ChangeTabletTypeResponse instance using the specified properties.
+         * @function create
+         * @memberof vtctldata.ChangeTabletTypeResponse
+         * @static
+         * @param {vtctldata.IChangeTabletTypeResponse=} [properties] Properties to set
+         * @returns {vtctldata.ChangeTabletTypeResponse} ChangeTabletTypeResponse instance
+         */
+        ChangeTabletTypeResponse.create = function create(properties) {
+            return new ChangeTabletTypeResponse(properties);
+        };
+
+        /**
+         * Encodes the specified ChangeTabletTypeResponse message. Does not implicitly {@link vtctldata.ChangeTabletTypeResponse.verify|verify} messages.
+         * @function encode
+         * @memberof vtctldata.ChangeTabletTypeResponse
+         * @static
+         * @param {vtctldata.IChangeTabletTypeResponse} message ChangeTabletTypeResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        ChangeTabletTypeResponse.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.before_tablet != null && Object.hasOwnProperty.call(message, "before_tablet"))
+                $root.topodata.Tablet.encode(message.before_tablet, writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
+            if (message.after_tablet != null && Object.hasOwnProperty.call(message, "after_tablet"))
+                $root.topodata.Tablet.encode(message.after_tablet, writer.uint32(/* id 2, wireType 2 =*/18).fork()).ldelim();
+            if (message.was_dry_run != null && Object.hasOwnProperty.call(message, "was_dry_run"))
+                writer.uint32(/* id 3, wireType 0 =*/24).bool(message.was_dry_run);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified ChangeTabletTypeResponse message, length delimited. Does not implicitly {@link vtctldata.ChangeTabletTypeResponse.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtctldata.ChangeTabletTypeResponse
+         * @static
+         * @param {vtctldata.IChangeTabletTypeResponse} message ChangeTabletTypeResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        ChangeTabletTypeResponse.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a ChangeTabletTypeResponse message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtctldata.ChangeTabletTypeResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtctldata.ChangeTabletTypeResponse} ChangeTabletTypeResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        ChangeTabletTypeResponse.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.ChangeTabletTypeResponse();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.before_tablet = $root.topodata.Tablet.decode(reader, reader.uint32());
+                    break;
+                case 2:
+                    message.after_tablet = $root.topodata.Tablet.decode(reader, reader.uint32());
+                    break;
+                case 3:
+                    message.was_dry_run = reader.bool();
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a ChangeTabletTypeResponse message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtctldata.ChangeTabletTypeResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtctldata.ChangeTabletTypeResponse} ChangeTabletTypeResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        ChangeTabletTypeResponse.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a ChangeTabletTypeResponse message.
+         * @function verify
+         * @memberof vtctldata.ChangeTabletTypeResponse
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        ChangeTabletTypeResponse.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.before_tablet != null && message.hasOwnProperty("before_tablet")) {
+                var error = $root.topodata.Tablet.verify(message.before_tablet);
+                if (error)
+                    return "before_tablet." + error;
+            }
+            if (message.after_tablet != null && message.hasOwnProperty("after_tablet")) {
+                var error = $root.topodata.Tablet.verify(message.after_tablet);
+                if (error)
+                    return "after_tablet." + error;
+            }
+            if (message.was_dry_run != null && message.hasOwnProperty("was_dry_run"))
+                if (typeof message.was_dry_run !== "boolean")
+                    return "was_dry_run: boolean expected";
+            return null;
+        };
+
+        /**
+         * Creates a ChangeTabletTypeResponse message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtctldata.ChangeTabletTypeResponse
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtctldata.ChangeTabletTypeResponse} ChangeTabletTypeResponse
+         */
+        ChangeTabletTypeResponse.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtctldata.ChangeTabletTypeResponse)
+                return object;
+            var message = new $root.vtctldata.ChangeTabletTypeResponse();
+            if (object.before_tablet != null) {
+                if (typeof object.before_tablet !== "object")
+                    throw TypeError(".vtctldata.ChangeTabletTypeResponse.before_tablet: object expected");
+                message.before_tablet = $root.topodata.Tablet.fromObject(object.before_tablet);
+            }
+            if (object.after_tablet != null) {
+                if (typeof object.after_tablet !== "object")
+                    throw TypeError(".vtctldata.ChangeTabletTypeResponse.after_tablet: object expected");
+                message.after_tablet = $root.topodata.Tablet.fromObject(object.after_tablet);
+            }
+            if (object.was_dry_run != null)
+                message.was_dry_run = Boolean(object.was_dry_run);
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a ChangeTabletTypeResponse message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtctldata.ChangeTabletTypeResponse
+         * @static
+         * @param {vtctldata.ChangeTabletTypeResponse} message ChangeTabletTypeResponse
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        ChangeTabletTypeResponse.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.defaults) {
+                object.before_tablet = null;
+                object.after_tablet = null;
+                object.was_dry_run = false;
+            }
+            if (message.before_tablet != null && message.hasOwnProperty("before_tablet"))
+                object.before_tablet = $root.topodata.Tablet.toObject(message.before_tablet, options);
+            if (message.after_tablet != null && message.hasOwnProperty("after_tablet"))
+                object.after_tablet = $root.topodata.Tablet.toObject(message.after_tablet, options);
+            if (message.was_dry_run != null && message.hasOwnProperty("was_dry_run"))
+                object.was_dry_run = message.was_dry_run;
+            return object;
+        };
+
+        /**
+         * Converts this ChangeTabletTypeResponse to JSON.
+         * @function toJSON
+         * @memberof vtctldata.ChangeTabletTypeResponse
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        ChangeTabletTypeResponse.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return ChangeTabletTypeResponse;
+    })();
+
+    vtctldata.CreateKeyspaceRequest = (function() {
+
+        /**
+         * Properties of a CreateKeyspaceRequest.
+         * @memberof vtctldata
+         * @interface ICreateKeyspaceRequest
+         * @property {string|null} [name] CreateKeyspaceRequest name
+         * @property {boolean|null} [force] CreateKeyspaceRequest force
+         * @property {boolean|null} [allow_empty_v_schema] CreateKeyspaceRequest allow_empty_v_schema
+         * @property {string|null} [sharding_column_name] CreateKeyspaceRequest sharding_column_name
+         * @property {topodata.KeyspaceIdType|null} [sharding_column_type] CreateKeyspaceRequest sharding_column_type
+         * @property {Array.<topodata.Keyspace.IServedFrom>|null} [served_froms] CreateKeyspaceRequest served_froms
+         * @property {topodata.KeyspaceType|null} [type] CreateKeyspaceRequest type
+         * @property {string|null} [base_keyspace] CreateKeyspaceRequest base_keyspace
+         * @property {vttime.ITime|null} [snapshot_time] CreateKeyspaceRequest snapshot_time
+         */
+
+        /**
+         * Constructs a new CreateKeyspaceRequest.
+         * @memberof vtctldata
+         * @classdesc Represents a CreateKeyspaceRequest.
+         * @implements ICreateKeyspaceRequest
+         * @constructor
+         * @param {vtctldata.ICreateKeyspaceRequest=} [properties] Properties to set
+         */
+        function CreateKeyspaceRequest(properties) {
+            this.served_froms = [];
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * CreateKeyspaceRequest name.
+         * @member {string} name
+         * @memberof vtctldata.CreateKeyspaceRequest
+         * @instance
+         */
+        CreateKeyspaceRequest.prototype.name = "";
+
+        /**
+         * CreateKeyspaceRequest force.
+         * @member {boolean} force
+         * @memberof vtctldata.CreateKeyspaceRequest
+         * @instance
+         */
+        CreateKeyspaceRequest.prototype.force = false;
+
+        /**
+         * CreateKeyspaceRequest allow_empty_v_schema.
+         * @member {boolean} allow_empty_v_schema
+         * @memberof vtctldata.CreateKeyspaceRequest
+         * @instance
+         */
+        CreateKeyspaceRequest.prototype.allow_empty_v_schema = false;
+
+        /**
+         * CreateKeyspaceRequest sharding_column_name.
+         * @member {string} sharding_column_name
+         * @memberof vtctldata.CreateKeyspaceRequest
+         * @instance
+         */
+        CreateKeyspaceRequest.prototype.sharding_column_name = "";
+
+        /**
+         * CreateKeyspaceRequest sharding_column_type.
+         * @member {topodata.KeyspaceIdType} sharding_column_type
+         * @memberof vtctldata.CreateKeyspaceRequest
+         * @instance
+         */
+        CreateKeyspaceRequest.prototype.sharding_column_type = 0;
+
+        /**
+         * CreateKeyspaceRequest served_froms.
+         * @member {Array.<topodata.Keyspace.IServedFrom>} served_froms
+         * @memberof vtctldata.CreateKeyspaceRequest
+         * @instance
+         */
+        CreateKeyspaceRequest.prototype.served_froms = $util.emptyArray;
+
+        /**
+         * CreateKeyspaceRequest type.
+         * @member {topodata.KeyspaceType} type
+         * @memberof vtctldata.CreateKeyspaceRequest
+         * @instance
+         */
+        CreateKeyspaceRequest.prototype.type = 0;
+
+        /**
+         * CreateKeyspaceRequest base_keyspace.
+         * @member {string} base_keyspace
+         * @memberof vtctldata.CreateKeyspaceRequest
+         * @instance
+         */
+        CreateKeyspaceRequest.prototype.base_keyspace = "";
+
+        /**
+         * CreateKeyspaceRequest snapshot_time.
+         * @member {vttime.ITime|null|undefined} snapshot_time
+         * @memberof vtctldata.CreateKeyspaceRequest
+         * @instance
+         */
+        CreateKeyspaceRequest.prototype.snapshot_time = null;
+
+        /**
+         * Creates a new CreateKeyspaceRequest instance using the specified properties.
+         * @function create
+         * @memberof vtctldata.CreateKeyspaceRequest
+         * @static
+         * @param {vtctldata.ICreateKeyspaceRequest=} [properties] Properties to set
+         * @returns {vtctldata.CreateKeyspaceRequest} CreateKeyspaceRequest instance
+         */
+        CreateKeyspaceRequest.create = function create(properties) {
+            return new CreateKeyspaceRequest(properties);
+        };
+
+        /**
+         * Encodes the specified CreateKeyspaceRequest message. Does not implicitly {@link vtctldata.CreateKeyspaceRequest.verify|verify} messages.
+         * @function encode
+         * @memberof vtctldata.CreateKeyspaceRequest
+         * @static
+         * @param {vtctldata.ICreateKeyspaceRequest} message CreateKeyspaceRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        CreateKeyspaceRequest.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.name != null && Object.hasOwnProperty.call(message, "name"))
+                writer.uint32(/* id 1, wireType 2 =*/10).string(message.name);
+            if (message.force != null && Object.hasOwnProperty.call(message, "force"))
+                writer.uint32(/* id 2, wireType 0 =*/16).bool(message.force);
+            if (message.allow_empty_v_schema != null && Object.hasOwnProperty.call(message, "allow_empty_v_schema"))
+                writer.uint32(/* id 3, wireType 0 =*/24).bool(message.allow_empty_v_schema);
+            if (message.sharding_column_name != null && Object.hasOwnProperty.call(message, "sharding_column_name"))
+                writer.uint32(/* id 4, wireType 2 =*/34).string(message.sharding_column_name);
+            if (message.sharding_column_type != null && Object.hasOwnProperty.call(message, "sharding_column_type"))
+                writer.uint32(/* id 5, wireType 0 =*/40).int32(message.sharding_column_type);
+            if (message.served_froms != null && message.served_froms.length)
+                for (var i = 0; i < message.served_froms.length; ++i)
+                    $root.topodata.Keyspace.ServedFrom.encode(message.served_froms[i], writer.uint32(/* id 6, wireType 2 =*/50).fork()).ldelim();
+            if (message.type != null && Object.hasOwnProperty.call(message, "type"))
+                writer.uint32(/* id 7, wireType 0 =*/56).int32(message.type);
+            if (message.base_keyspace != null && Object.hasOwnProperty.call(message, "base_keyspace"))
+                writer.uint32(/* id 8, wireType 2 =*/66).string(message.base_keyspace);
+            if (message.snapshot_time != null && Object.hasOwnProperty.call(message, "snapshot_time"))
+                $root.vttime.Time.encode(message.snapshot_time, writer.uint32(/* id 9, wireType 2 =*/74).fork()).ldelim();
+            return writer;
+        };
+
+        /**
+         * Encodes the specified CreateKeyspaceRequest message, length delimited. Does not implicitly {@link vtctldata.CreateKeyspaceRequest.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtctldata.CreateKeyspaceRequest
+         * @static
+         * @param {vtctldata.ICreateKeyspaceRequest} message CreateKeyspaceRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        CreateKeyspaceRequest.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a CreateKeyspaceRequest message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtctldata.CreateKeyspaceRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtctldata.CreateKeyspaceRequest} CreateKeyspaceRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        CreateKeyspaceRequest.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.CreateKeyspaceRequest();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.name = reader.string();
+                    break;
+                case 2:
+                    message.force = reader.bool();
+                    break;
+                case 3:
+                    message.allow_empty_v_schema = reader.bool();
+                    break;
+                case 4:
+                    message.sharding_column_name = reader.string();
+                    break;
+                case 5:
+                    message.sharding_column_type = reader.int32();
+                    break;
+                case 6:
+                    if (!(message.served_froms && message.served_froms.length))
+                        message.served_froms = [];
+                    message.served_froms.push($root.topodata.Keyspace.ServedFrom.decode(reader, reader.uint32()));
+                    break;
+                case 7:
+                    message.type = reader.int32();
+                    break;
+                case 8:
+                    message.base_keyspace = reader.string();
+                    break;
+                case 9:
+                    message.snapshot_time = $root.vttime.Time.decode(reader, reader.uint32());
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a CreateKeyspaceRequest message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtctldata.CreateKeyspaceRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtctldata.CreateKeyspaceRequest} CreateKeyspaceRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        CreateKeyspaceRequest.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a CreateKeyspaceRequest message.
+         * @function verify
+         * @memberof vtctldata.CreateKeyspaceRequest
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        CreateKeyspaceRequest.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.name != null && message.hasOwnProperty("name"))
+                if (!$util.isString(message.name))
+                    return "name: string expected";
+            if (message.force != null && message.hasOwnProperty("force"))
+                if (typeof message.force !== "boolean")
+                    return "force: boolean expected";
+            if (message.allow_empty_v_schema != null && message.hasOwnProperty("allow_empty_v_schema"))
+                if (typeof message.allow_empty_v_schema !== "boolean")
+                    return "allow_empty_v_schema: boolean expected";
+            if (message.sharding_column_name != null && message.hasOwnProperty("sharding_column_name"))
+                if (!$util.isString(message.sharding_column_name))
+                    return "sharding_column_name: string expected";
+            if (message.sharding_column_type != null && message.hasOwnProperty("sharding_column_type"))
+                switch (message.sharding_column_type) {
+                default:
+                    return "sharding_column_type: enum value expected";
+                case 0:
+                case 1:
+                case 2:
+                    break;
+                }
+            if (message.served_froms != null && message.hasOwnProperty("served_froms")) {
+                if (!Array.isArray(message.served_froms))
+                    return "served_froms: array expected";
+                for (var i = 0; i < message.served_froms.length; ++i) {
+                    var error = $root.topodata.Keyspace.ServedFrom.verify(message.served_froms[i]);
+                    if (error)
+                        return "served_froms." + error;
+                }
+            }
+            if (message.type != null && message.hasOwnProperty("type"))
+                switch (message.type) {
+                default:
+                    return "type: enum value expected";
+                case 0:
+                case 1:
+                    break;
+                }
+            if (message.base_keyspace != null && message.hasOwnProperty("base_keyspace"))
+                if (!$util.isString(message.base_keyspace))
+                    return "base_keyspace: string expected";
+            if (message.snapshot_time != null && message.hasOwnProperty("snapshot_time")) {
+                var error = $root.vttime.Time.verify(message.snapshot_time);
+                if (error)
+                    return "snapshot_time." + error;
+            }
+            return null;
+        };
+
+        /**
+         * Creates a CreateKeyspaceRequest message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtctldata.CreateKeyspaceRequest
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtctldata.CreateKeyspaceRequest} CreateKeyspaceRequest
+         */
+        CreateKeyspaceRequest.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtctldata.CreateKeyspaceRequest)
+                return object;
+            var message = new $root.vtctldata.CreateKeyspaceRequest();
+            if (object.name != null)
+                message.name = String(object.name);
+            if (object.force != null)
+                message.force = Boolean(object.force);
+            if (object.allow_empty_v_schema != null)
+                message.allow_empty_v_schema = Boolean(object.allow_empty_v_schema);
+            if (object.sharding_column_name != null)
+                message.sharding_column_name = String(object.sharding_column_name);
+            switch (object.sharding_column_type) {
+            case "UNSET":
+            case 0:
+                message.sharding_column_type = 0;
+                break;
+            case "UINT64":
+            case 1:
+                message.sharding_column_type = 1;
+                break;
+            case "BYTES":
+            case 2:
+                message.sharding_column_type = 2;
+                break;
+            }
+            if (object.served_froms) {
+                if (!Array.isArray(object.served_froms))
+                    throw TypeError(".vtctldata.CreateKeyspaceRequest.served_froms: array expected");
+                message.served_froms = [];
+                for (var i = 0; i < object.served_froms.length; ++i) {
+                    if (typeof object.served_froms[i] !== "object")
+                        throw TypeError(".vtctldata.CreateKeyspaceRequest.served_froms: object expected");
+                    message.served_froms[i] = $root.topodata.Keyspace.ServedFrom.fromObject(object.served_froms[i]);
+                }
+            }
+            switch (object.type) {
+            case "NORMAL":
+            case 0:
+                message.type = 0;
+                break;
+            case "SNAPSHOT":
+            case 1:
+                message.type = 1;
+                break;
+            }
+            if (object.base_keyspace != null)
+                message.base_keyspace = String(object.base_keyspace);
+            if (object.snapshot_time != null) {
+                if (typeof object.snapshot_time !== "object")
+                    throw TypeError(".vtctldata.CreateKeyspaceRequest.snapshot_time: object expected");
+                message.snapshot_time = $root.vttime.Time.fromObject(object.snapshot_time);
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a CreateKeyspaceRequest message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtctldata.CreateKeyspaceRequest
+         * @static
+         * @param {vtctldata.CreateKeyspaceRequest} message CreateKeyspaceRequest
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        CreateKeyspaceRequest.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.arrays || options.defaults)
+                object.served_froms = [];
+            if (options.defaults) {
+                object.name = "";
+                object.force = false;
+                object.allow_empty_v_schema = false;
+                object.sharding_column_name = "";
+                object.sharding_column_type = options.enums === String ? "UNSET" : 0;
+                object.type = options.enums === String ? "NORMAL" : 0;
+                object.base_keyspace = "";
+                object.snapshot_time = null;
+            }
+            if (message.name != null && message.hasOwnProperty("name"))
+                object.name = message.name;
+            if (message.force != null && message.hasOwnProperty("force"))
+                object.force = message.force;
+            if (message.allow_empty_v_schema != null && message.hasOwnProperty("allow_empty_v_schema"))
+                object.allow_empty_v_schema = message.allow_empty_v_schema;
+            if (message.sharding_column_name != null && message.hasOwnProperty("sharding_column_name"))
+                object.sharding_column_name = message.sharding_column_name;
+            if (message.sharding_column_type != null && message.hasOwnProperty("sharding_column_type"))
+                object.sharding_column_type = options.enums === String ? $root.topodata.KeyspaceIdType[message.sharding_column_type] : message.sharding_column_type;
+            if (message.served_froms && message.served_froms.length) {
+                object.served_froms = [];
+                for (var j = 0; j < message.served_froms.length; ++j)
+                    object.served_froms[j] = $root.topodata.Keyspace.ServedFrom.toObject(message.served_froms[j], options);
+            }
+            if (message.type != null && message.hasOwnProperty("type"))
+                object.type = options.enums === String ? $root.topodata.KeyspaceType[message.type] : message.type;
+            if (message.base_keyspace != null && message.hasOwnProperty("base_keyspace"))
+                object.base_keyspace = message.base_keyspace;
+            if (message.snapshot_time != null && message.hasOwnProperty("snapshot_time"))
+                object.snapshot_time = $root.vttime.Time.toObject(message.snapshot_time, options);
+            return object;
+        };
+
+        /**
+         * Converts this CreateKeyspaceRequest to JSON.
+         * @function toJSON
+         * @memberof vtctldata.CreateKeyspaceRequest
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        CreateKeyspaceRequest.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return CreateKeyspaceRequest;
+    })();
+
+    vtctldata.CreateKeyspaceResponse = (function() {
+
+        /**
+         * Properties of a CreateKeyspaceResponse.
+         * @memberof vtctldata
+         * @interface ICreateKeyspaceResponse
+         * @property {vtctldata.IKeyspace|null} [keyspace] CreateKeyspaceResponse keyspace
+         */
+
+        /**
+         * Constructs a new CreateKeyspaceResponse.
+         * @memberof vtctldata
+         * @classdesc Represents a CreateKeyspaceResponse.
+         * @implements ICreateKeyspaceResponse
+         * @constructor
+         * @param {vtctldata.ICreateKeyspaceResponse=} [properties] Properties to set
+         */
+        function CreateKeyspaceResponse(properties) {
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * CreateKeyspaceResponse keyspace.
+         * @member {vtctldata.IKeyspace|null|undefined} keyspace
+         * @memberof vtctldata.CreateKeyspaceResponse
+         * @instance
+         */
+        CreateKeyspaceResponse.prototype.keyspace = null;
+
+        /**
+         * Creates a new CreateKeyspaceResponse instance using the specified properties.
+         * @function create
+         * @memberof vtctldata.CreateKeyspaceResponse
+         * @static
+         * @param {vtctldata.ICreateKeyspaceResponse=} [properties] Properties to set
+         * @returns {vtctldata.CreateKeyspaceResponse} CreateKeyspaceResponse instance
+         */
+        CreateKeyspaceResponse.create = function create(properties) {
+            return new CreateKeyspaceResponse(properties);
+        };
+
+        /**
+         * Encodes the specified CreateKeyspaceResponse message. Does not implicitly {@link vtctldata.CreateKeyspaceResponse.verify|verify} messages.
+         * @function encode
+         * @memberof vtctldata.CreateKeyspaceResponse
+         * @static
+         * @param {vtctldata.ICreateKeyspaceResponse} message CreateKeyspaceResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        CreateKeyspaceResponse.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.keyspace != null && Object.hasOwnProperty.call(message, "keyspace"))
+                $root.vtctldata.Keyspace.encode(message.keyspace, writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
+            return writer;
+        };
+
+        /**
+         * Encodes the specified CreateKeyspaceResponse message, length delimited. Does not implicitly {@link vtctldata.CreateKeyspaceResponse.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtctldata.CreateKeyspaceResponse
+         * @static
+         * @param {vtctldata.ICreateKeyspaceResponse} message CreateKeyspaceResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        CreateKeyspaceResponse.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a CreateKeyspaceResponse message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtctldata.CreateKeyspaceResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtctldata.CreateKeyspaceResponse} CreateKeyspaceResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        CreateKeyspaceResponse.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.CreateKeyspaceResponse();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.keyspace = $root.vtctldata.Keyspace.decode(reader, reader.uint32());
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a CreateKeyspaceResponse message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtctldata.CreateKeyspaceResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtctldata.CreateKeyspaceResponse} CreateKeyspaceResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        CreateKeyspaceResponse.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a CreateKeyspaceResponse message.
+         * @function verify
+         * @memberof vtctldata.CreateKeyspaceResponse
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        CreateKeyspaceResponse.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.keyspace != null && message.hasOwnProperty("keyspace")) {
+                var error = $root.vtctldata.Keyspace.verify(message.keyspace);
+                if (error)
+                    return "keyspace." + error;
+            }
+            return null;
+        };
+
+        /**
+         * Creates a CreateKeyspaceResponse message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtctldata.CreateKeyspaceResponse
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtctldata.CreateKeyspaceResponse} CreateKeyspaceResponse
+         */
+        CreateKeyspaceResponse.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtctldata.CreateKeyspaceResponse)
+                return object;
+            var message = new $root.vtctldata.CreateKeyspaceResponse();
+            if (object.keyspace != null) {
+                if (typeof object.keyspace !== "object")
+                    throw TypeError(".vtctldata.CreateKeyspaceResponse.keyspace: object expected");
+                message.keyspace = $root.vtctldata.Keyspace.fromObject(object.keyspace);
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a CreateKeyspaceResponse message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtctldata.CreateKeyspaceResponse
+         * @static
+         * @param {vtctldata.CreateKeyspaceResponse} message CreateKeyspaceResponse
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        CreateKeyspaceResponse.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.defaults)
+                object.keyspace = null;
+            if (message.keyspace != null && message.hasOwnProperty("keyspace"))
+                object.keyspace = $root.vtctldata.Keyspace.toObject(message.keyspace, options);
+            return object;
+        };
+
+        /**
+         * Converts this CreateKeyspaceResponse to JSON.
+         * @function toJSON
+         * @memberof vtctldata.CreateKeyspaceResponse
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        CreateKeyspaceResponse.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return CreateKeyspaceResponse;
+    })();
+
+    vtctldata.CreateShardRequest = (function() {
+
+        /**
+         * Properties of a CreateShardRequest.
+         * @memberof vtctldata
+         * @interface ICreateShardRequest
+         * @property {string|null} [keyspace] CreateShardRequest keyspace
+         * @property {string|null} [shard_name] CreateShardRequest shard_name
+         * @property {boolean|null} [force] CreateShardRequest force
+         * @property {boolean|null} [include_parent] CreateShardRequest include_parent
+         */
+
+        /**
+         * Constructs a new CreateShardRequest.
+         * @memberof vtctldata
+         * @classdesc Represents a CreateShardRequest.
+         * @implements ICreateShardRequest
+         * @constructor
+         * @param {vtctldata.ICreateShardRequest=} [properties] Properties to set
+         */
+        function CreateShardRequest(properties) {
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * CreateShardRequest keyspace.
+         * @member {string} keyspace
+         * @memberof vtctldata.CreateShardRequest
+         * @instance
+         */
+        CreateShardRequest.prototype.keyspace = "";
+
+        /**
+         * CreateShardRequest shard_name.
+         * @member {string} shard_name
+         * @memberof vtctldata.CreateShardRequest
+         * @instance
+         */
+        CreateShardRequest.prototype.shard_name = "";
+
+        /**
+         * CreateShardRequest force.
+         * @member {boolean} force
+         * @memberof vtctldata.CreateShardRequest
+         * @instance
+         */
+        CreateShardRequest.prototype.force = false;
+
+        /**
+         * CreateShardRequest include_parent.
+         * @member {boolean} include_parent
+         * @memberof vtctldata.CreateShardRequest
+         * @instance
+         */
+        CreateShardRequest.prototype.include_parent = false;
+
+        /**
+         * Creates a new CreateShardRequest instance using the specified properties.
+         * @function create
+         * @memberof vtctldata.CreateShardRequest
+         * @static
+         * @param {vtctldata.ICreateShardRequest=} [properties] Properties to set
+         * @returns {vtctldata.CreateShardRequest} CreateShardRequest instance
+         */
+        CreateShardRequest.create = function create(properties) {
+            return new CreateShardRequest(properties);
+        };
+
+        /**
+         * Encodes the specified CreateShardRequest message. Does not implicitly {@link vtctldata.CreateShardRequest.verify|verify} messages.
+         * @function encode
+         * @memberof vtctldata.CreateShardRequest
+         * @static
+         * @param {vtctldata.ICreateShardRequest} message CreateShardRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        CreateShardRequest.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.keyspace != null && Object.hasOwnProperty.call(message, "keyspace"))
+                writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
+            if (message.shard_name != null && Object.hasOwnProperty.call(message, "shard_name"))
+                writer.uint32(/* id 2, wireType 2 =*/18).string(message.shard_name);
+            if (message.force != null && Object.hasOwnProperty.call(message, "force"))
+                writer.uint32(/* id 3, wireType 0 =*/24).bool(message.force);
+            if (message.include_parent != null && Object.hasOwnProperty.call(message, "include_parent"))
+                writer.uint32(/* id 4, wireType 0 =*/32).bool(message.include_parent);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified CreateShardRequest message, length delimited. Does not implicitly {@link vtctldata.CreateShardRequest.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtctldata.CreateShardRequest
+         * @static
+         * @param {vtctldata.ICreateShardRequest} message CreateShardRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        CreateShardRequest.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a CreateShardRequest message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtctldata.CreateShardRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtctldata.CreateShardRequest} CreateShardRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        CreateShardRequest.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.CreateShardRequest();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.keyspace = reader.string();
+                    break;
+                case 2:
+                    message.shard_name = reader.string();
+                    break;
+                case 3:
+                    message.force = reader.bool();
+                    break;
+                case 4:
+                    message.include_parent = reader.bool();
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a CreateShardRequest message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtctldata.CreateShardRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtctldata.CreateShardRequest} CreateShardRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        CreateShardRequest.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a CreateShardRequest message.
+         * @function verify
+         * @memberof vtctldata.CreateShardRequest
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        CreateShardRequest.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.keyspace != null && message.hasOwnProperty("keyspace"))
+                if (!$util.isString(message.keyspace))
+                    return "keyspace: string expected";
+            if (message.shard_name != null && message.hasOwnProperty("shard_name"))
+                if (!$util.isString(message.shard_name))
+                    return "shard_name: string expected";
+            if (message.force != null && message.hasOwnProperty("force"))
+                if (typeof message.force !== "boolean")
+                    return "force: boolean expected";
+            if (message.include_parent != null && message.hasOwnProperty("include_parent"))
+                if (typeof message.include_parent !== "boolean")
+                    return "include_parent: boolean expected";
+            return null;
+        };
+
+        /**
+         * Creates a CreateShardRequest message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtctldata.CreateShardRequest
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtctldata.CreateShardRequest} CreateShardRequest
+         */
+        CreateShardRequest.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtctldata.CreateShardRequest)
+                return object;
+            var message = new $root.vtctldata.CreateShardRequest();
+            if (object.keyspace != null)
+                message.keyspace = String(object.keyspace);
+            if (object.shard_name != null)
+                message.shard_name = String(object.shard_name);
+            if (object.force != null)
+                message.force = Boolean(object.force);
+            if (object.include_parent != null)
+                message.include_parent = Boolean(object.include_parent);
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a CreateShardRequest message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtctldata.CreateShardRequest
+         * @static
+         * @param {vtctldata.CreateShardRequest} message CreateShardRequest
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        CreateShardRequest.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.defaults) {
+                object.keyspace = "";
+                object.shard_name = "";
+                object.force = false;
+                object.include_parent = false;
+            }
+            if (message.keyspace != null && message.hasOwnProperty("keyspace"))
+                object.keyspace = message.keyspace;
+            if (message.shard_name != null && message.hasOwnProperty("shard_name"))
+                object.shard_name = message.shard_name;
+            if (message.force != null && message.hasOwnProperty("force"))
+                object.force = message.force;
+            if (message.include_parent != null && message.hasOwnProperty("include_parent"))
+                object.include_parent = message.include_parent;
+            return object;
+        };
+
+        /**
+         * Converts this CreateShardRequest to JSON.
+         * @function toJSON
+         * @memberof vtctldata.CreateShardRequest
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        CreateShardRequest.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return CreateShardRequest;
+    })();
+
+    vtctldata.CreateShardResponse = (function() {
+
+        /**
+         * Properties of a CreateShardResponse.
+         * @memberof vtctldata
+         * @interface ICreateShardResponse
+         * @property {vtctldata.IKeyspace|null} [keyspace] CreateShardResponse keyspace
+         * @property {vtctldata.IShard|null} [shard] CreateShardResponse shard
+         * @property {boolean|null} [shard_already_exists] CreateShardResponse shard_already_exists
+         */
+
+        /**
+         * Constructs a new CreateShardResponse.
+         * @memberof vtctldata
+         * @classdesc Represents a CreateShardResponse.
+         * @implements ICreateShardResponse
+         * @constructor
+         * @param {vtctldata.ICreateShardResponse=} [properties] Properties to set
+         */
+        function CreateShardResponse(properties) {
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * CreateShardResponse keyspace.
+         * @member {vtctldata.IKeyspace|null|undefined} keyspace
+         * @memberof vtctldata.CreateShardResponse
+         * @instance
+         */
+        CreateShardResponse.prototype.keyspace = null;
+
+        /**
+         * CreateShardResponse shard.
+         * @member {vtctldata.IShard|null|undefined} shard
+         * @memberof vtctldata.CreateShardResponse
+         * @instance
+         */
+        CreateShardResponse.prototype.shard = null;
+
+        /**
+         * CreateShardResponse shard_already_exists.
+         * @member {boolean} shard_already_exists
+         * @memberof vtctldata.CreateShardResponse
+         * @instance
+         */
+        CreateShardResponse.prototype.shard_already_exists = false;
+
+        /**
+         * Creates a new CreateShardResponse instance using the specified properties.
+         * @function create
+         * @memberof vtctldata.CreateShardResponse
+         * @static
+         * @param {vtctldata.ICreateShardResponse=} [properties] Properties to set
+         * @returns {vtctldata.CreateShardResponse} CreateShardResponse instance
+         */
+        CreateShardResponse.create = function create(properties) {
+            return new CreateShardResponse(properties);
+        };
+
+        /**
+         * Encodes the specified CreateShardResponse message. Does not implicitly {@link vtctldata.CreateShardResponse.verify|verify} messages.
+         * @function encode
+         * @memberof vtctldata.CreateShardResponse
+         * @static
+         * @param {vtctldata.ICreateShardResponse} message CreateShardResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        CreateShardResponse.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.keyspace != null && Object.hasOwnProperty.call(message, "keyspace"))
+                $root.vtctldata.Keyspace.encode(message.keyspace, writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
+            if (message.shard != null && Object.hasOwnProperty.call(message, "shard"))
+                $root.vtctldata.Shard.encode(message.shard, writer.uint32(/* id 2, wireType 2 =*/18).fork()).ldelim();
+            if (message.shard_already_exists != null && Object.hasOwnProperty.call(message, "shard_already_exists"))
+                writer.uint32(/* id 3, wireType 0 =*/24).bool(message.shard_already_exists);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified CreateShardResponse message, length delimited. Does not implicitly {@link vtctldata.CreateShardResponse.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtctldata.CreateShardResponse
+         * @static
+         * @param {vtctldata.ICreateShardResponse} message CreateShardResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        CreateShardResponse.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a CreateShardResponse message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtctldata.CreateShardResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtctldata.CreateShardResponse} CreateShardResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        CreateShardResponse.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.CreateShardResponse();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.keyspace = $root.vtctldata.Keyspace.decode(reader, reader.uint32());
+                    break;
+                case 2:
+                    message.shard = $root.vtctldata.Shard.decode(reader, reader.uint32());
+                    break;
+                case 3:
+                    message.shard_already_exists = reader.bool();
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a CreateShardResponse message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtctldata.CreateShardResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtctldata.CreateShardResponse} CreateShardResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        CreateShardResponse.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a CreateShardResponse message.
+         * @function verify
+         * @memberof vtctldata.CreateShardResponse
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        CreateShardResponse.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.keyspace != null && message.hasOwnProperty("keyspace")) {
+                var error = $root.vtctldata.Keyspace.verify(message.keyspace);
+                if (error)
+                    return "keyspace." + error;
+            }
+            if (message.shard != null && message.hasOwnProperty("shard")) {
+                var error = $root.vtctldata.Shard.verify(message.shard);
+                if (error)
+                    return "shard." + error;
+            }
+            if (message.shard_already_exists != null && message.hasOwnProperty("shard_already_exists"))
+                if (typeof message.shard_already_exists !== "boolean")
+                    return "shard_already_exists: boolean expected";
+            return null;
+        };
+
+        /**
+         * Creates a CreateShardResponse message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtctldata.CreateShardResponse
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtctldata.CreateShardResponse} CreateShardResponse
+         */
+        CreateShardResponse.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtctldata.CreateShardResponse)
+                return object;
+            var message = new $root.vtctldata.CreateShardResponse();
+            if (object.keyspace != null) {
+                if (typeof object.keyspace !== "object")
+                    throw TypeError(".vtctldata.CreateShardResponse.keyspace: object expected");
+                message.keyspace = $root.vtctldata.Keyspace.fromObject(object.keyspace);
+            }
+            if (object.shard != null) {
+                if (typeof object.shard !== "object")
+                    throw TypeError(".vtctldata.CreateShardResponse.shard: object expected");
+                message.shard = $root.vtctldata.Shard.fromObject(object.shard);
+            }
+            if (object.shard_already_exists != null)
+                message.shard_already_exists = Boolean(object.shard_already_exists);
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a CreateShardResponse message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtctldata.CreateShardResponse
+         * @static
+         * @param {vtctldata.CreateShardResponse} message CreateShardResponse
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        CreateShardResponse.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.defaults) {
+                object.keyspace = null;
+                object.shard = null;
+                object.shard_already_exists = false;
+            }
+            if (message.keyspace != null && message.hasOwnProperty("keyspace"))
+                object.keyspace = $root.vtctldata.Keyspace.toObject(message.keyspace, options);
+            if (message.shard != null && message.hasOwnProperty("shard"))
+                object.shard = $root.vtctldata.Shard.toObject(message.shard, options);
+            if (message.shard_already_exists != null && message.hasOwnProperty("shard_already_exists"))
+                object.shard_already_exists = message.shard_already_exists;
+            return object;
+        };
+
+        /**
+         * Converts this CreateShardResponse to JSON.
+         * @function toJSON
+         * @memberof vtctldata.CreateShardResponse
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        CreateShardResponse.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return CreateShardResponse;
+    })();
+
+    vtctldata.DeleteKeyspaceRequest = (function() {
+
+        /**
+         * Properties of a DeleteKeyspaceRequest.
+         * @memberof vtctldata
+         * @interface IDeleteKeyspaceRequest
+         * @property {string|null} [keyspace] DeleteKeyspaceRequest keyspace
+         * @property {boolean|null} [recursive] DeleteKeyspaceRequest recursive
+         */
+
+        /**
+         * Constructs a new DeleteKeyspaceRequest.
+         * @memberof vtctldata
+         * @classdesc Represents a DeleteKeyspaceRequest.
+         * @implements IDeleteKeyspaceRequest
+         * @constructor
+         * @param {vtctldata.IDeleteKeyspaceRequest=} [properties] Properties to set
+         */
+        function DeleteKeyspaceRequest(properties) {
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * DeleteKeyspaceRequest keyspace.
+         * @member {string} keyspace
+         * @memberof vtctldata.DeleteKeyspaceRequest
+         * @instance
+         */
+        DeleteKeyspaceRequest.prototype.keyspace = "";
+
+        /**
+         * DeleteKeyspaceRequest recursive.
+         * @member {boolean} recursive
+         * @memberof vtctldata.DeleteKeyspaceRequest
+         * @instance
+         */
+        DeleteKeyspaceRequest.prototype.recursive = false;
+
+        /**
+         * Creates a new DeleteKeyspaceRequest instance using the specified properties.
+         * @function create
+         * @memberof vtctldata.DeleteKeyspaceRequest
+         * @static
+         * @param {vtctldata.IDeleteKeyspaceRequest=} [properties] Properties to set
+         * @returns {vtctldata.DeleteKeyspaceRequest} DeleteKeyspaceRequest instance
+         */
+        DeleteKeyspaceRequest.create = function create(properties) {
+            return new DeleteKeyspaceRequest(properties);
+        };
+
+        /**
+         * Encodes the specified DeleteKeyspaceRequest message. Does not implicitly {@link vtctldata.DeleteKeyspaceRequest.verify|verify} messages.
+         * @function encode
+         * @memberof vtctldata.DeleteKeyspaceRequest
+         * @static
+         * @param {vtctldata.IDeleteKeyspaceRequest} message DeleteKeyspaceRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        DeleteKeyspaceRequest.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.keyspace != null && Object.hasOwnProperty.call(message, "keyspace"))
+                writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
+            if (message.recursive != null && Object.hasOwnProperty.call(message, "recursive"))
+                writer.uint32(/* id 2, wireType 0 =*/16).bool(message.recursive);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified DeleteKeyspaceRequest message, length delimited. Does not implicitly {@link vtctldata.DeleteKeyspaceRequest.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtctldata.DeleteKeyspaceRequest
+         * @static
+         * @param {vtctldata.IDeleteKeyspaceRequest} message DeleteKeyspaceRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        DeleteKeyspaceRequest.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a DeleteKeyspaceRequest message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtctldata.DeleteKeyspaceRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtctldata.DeleteKeyspaceRequest} DeleteKeyspaceRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        DeleteKeyspaceRequest.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.DeleteKeyspaceRequest();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.keyspace = reader.string();
+                    break;
+                case 2:
+                    message.recursive = reader.bool();
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a DeleteKeyspaceRequest message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtctldata.DeleteKeyspaceRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtctldata.DeleteKeyspaceRequest} DeleteKeyspaceRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        DeleteKeyspaceRequest.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a DeleteKeyspaceRequest message.
+         * @function verify
+         * @memberof vtctldata.DeleteKeyspaceRequest
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        DeleteKeyspaceRequest.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.keyspace != null && message.hasOwnProperty("keyspace"))
+                if (!$util.isString(message.keyspace))
+                    return "keyspace: string expected";
+            if (message.recursive != null && message.hasOwnProperty("recursive"))
+                if (typeof message.recursive !== "boolean")
+                    return "recursive: boolean expected";
+            return null;
+        };
+
+        /**
+         * Creates a DeleteKeyspaceRequest message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtctldata.DeleteKeyspaceRequest
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtctldata.DeleteKeyspaceRequest} DeleteKeyspaceRequest
+         */
+        DeleteKeyspaceRequest.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtctldata.DeleteKeyspaceRequest)
+                return object;
+            var message = new $root.vtctldata.DeleteKeyspaceRequest();
+            if (object.keyspace != null)
+                message.keyspace = String(object.keyspace);
+            if (object.recursive != null)
+                message.recursive = Boolean(object.recursive);
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a DeleteKeyspaceRequest message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtctldata.DeleteKeyspaceRequest
+         * @static
+         * @param {vtctldata.DeleteKeyspaceRequest} message DeleteKeyspaceRequest
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        DeleteKeyspaceRequest.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.defaults) {
+                object.keyspace = "";
+                object.recursive = false;
+            }
+            if (message.keyspace != null && message.hasOwnProperty("keyspace"))
+                object.keyspace = message.keyspace;
+            if (message.recursive != null && message.hasOwnProperty("recursive"))
+                object.recursive = message.recursive;
+            return object;
+        };
+
+        /**
+         * Converts this DeleteKeyspaceRequest to JSON.
+         * @function toJSON
+         * @memberof vtctldata.DeleteKeyspaceRequest
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        DeleteKeyspaceRequest.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return DeleteKeyspaceRequest;
+    })();
+
+    vtctldata.DeleteKeyspaceResponse = (function() {
+
+        /**
+         * Properties of a DeleteKeyspaceResponse.
+         * @memberof vtctldata
+         * @interface IDeleteKeyspaceResponse
+         */
+
+        /**
+         * Constructs a new DeleteKeyspaceResponse.
+         * @memberof vtctldata
+         * @classdesc Represents a DeleteKeyspaceResponse.
+         * @implements IDeleteKeyspaceResponse
+         * @constructor
+         * @param {vtctldata.IDeleteKeyspaceResponse=} [properties] Properties to set
+         */
+        function DeleteKeyspaceResponse(properties) {
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * Creates a new DeleteKeyspaceResponse instance using the specified properties.
+         * @function create
+         * @memberof vtctldata.DeleteKeyspaceResponse
+         * @static
+         * @param {vtctldata.IDeleteKeyspaceResponse=} [properties] Properties to set
+         * @returns {vtctldata.DeleteKeyspaceResponse} DeleteKeyspaceResponse instance
+         */
+        DeleteKeyspaceResponse.create = function create(properties) {
+            return new DeleteKeyspaceResponse(properties);
+        };
+
+        /**
+         * Encodes the specified DeleteKeyspaceResponse message. Does not implicitly {@link vtctldata.DeleteKeyspaceResponse.verify|verify} messages.
+         * @function encode
+         * @memberof vtctldata.DeleteKeyspaceResponse
+         * @static
+         * @param {vtctldata.IDeleteKeyspaceResponse} message DeleteKeyspaceResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        DeleteKeyspaceResponse.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            return writer;
+        };
+
+        /**
+         * Encodes the specified DeleteKeyspaceResponse message, length delimited. Does not implicitly {@link vtctldata.DeleteKeyspaceResponse.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtctldata.DeleteKeyspaceResponse
+         * @static
+         * @param {vtctldata.IDeleteKeyspaceResponse} message DeleteKeyspaceResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        DeleteKeyspaceResponse.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a DeleteKeyspaceResponse message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtctldata.DeleteKeyspaceResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtctldata.DeleteKeyspaceResponse} DeleteKeyspaceResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        DeleteKeyspaceResponse.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.DeleteKeyspaceResponse();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a DeleteKeyspaceResponse message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtctldata.DeleteKeyspaceResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtctldata.DeleteKeyspaceResponse} DeleteKeyspaceResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        DeleteKeyspaceResponse.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a DeleteKeyspaceResponse message.
+         * @function verify
+         * @memberof vtctldata.DeleteKeyspaceResponse
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        DeleteKeyspaceResponse.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            return null;
+        };
+
+        /**
+         * Creates a DeleteKeyspaceResponse message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtctldata.DeleteKeyspaceResponse
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtctldata.DeleteKeyspaceResponse} DeleteKeyspaceResponse
+         */
+        DeleteKeyspaceResponse.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtctldata.DeleteKeyspaceResponse)
+                return object;
+            return new $root.vtctldata.DeleteKeyspaceResponse();
+        };
+
+        /**
+         * Creates a plain object from a DeleteKeyspaceResponse message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtctldata.DeleteKeyspaceResponse
+         * @static
+         * @param {vtctldata.DeleteKeyspaceResponse} message DeleteKeyspaceResponse
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        DeleteKeyspaceResponse.toObject = function toObject() {
+            return {};
+        };
+
+        /**
+         * Converts this DeleteKeyspaceResponse to JSON.
+         * @function toJSON
+         * @memberof vtctldata.DeleteKeyspaceResponse
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        DeleteKeyspaceResponse.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return DeleteKeyspaceResponse;
+    })();
+
+    vtctldata.DeleteShardsRequest = (function() {
+
+        /**
+         * Properties of a DeleteShardsRequest.
+         * @memberof vtctldata
+         * @interface IDeleteShardsRequest
+         * @property {Array.<vtctldata.IShard>|null} [shards] DeleteShardsRequest shards
+         * @property {boolean|null} [recursive] DeleteShardsRequest recursive
+         * @property {boolean|null} [even_if_serving] DeleteShardsRequest even_if_serving
+         */
+
+        /**
+         * Constructs a new DeleteShardsRequest.
+         * @memberof vtctldata
+         * @classdesc Represents a DeleteShardsRequest.
+         * @implements IDeleteShardsRequest
+         * @constructor
+         * @param {vtctldata.IDeleteShardsRequest=} [properties] Properties to set
+         */
+        function DeleteShardsRequest(properties) {
+            this.shards = [];
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * DeleteShardsRequest shards.
+         * @member {Array.<vtctldata.IShard>} shards
+         * @memberof vtctldata.DeleteShardsRequest
+         * @instance
+         */
+        DeleteShardsRequest.prototype.shards = $util.emptyArray;
+
+        /**
+         * DeleteShardsRequest recursive.
+         * @member {boolean} recursive
+         * @memberof vtctldata.DeleteShardsRequest
+         * @instance
+         */
+        DeleteShardsRequest.prototype.recursive = false;
+
+        /**
+         * DeleteShardsRequest even_if_serving.
+         * @member {boolean} even_if_serving
+         * @memberof vtctldata.DeleteShardsRequest
+         * @instance
+         */
+        DeleteShardsRequest.prototype.even_if_serving = false;
+
+        /**
+         * Creates a new DeleteShardsRequest instance using the specified properties.
+         * @function create
+         * @memberof vtctldata.DeleteShardsRequest
+         * @static
+         * @param {vtctldata.IDeleteShardsRequest=} [properties] Properties to set
+         * @returns {vtctldata.DeleteShardsRequest} DeleteShardsRequest instance
+         */
+        DeleteShardsRequest.create = function create(properties) {
+            return new DeleteShardsRequest(properties);
+        };
+
+        /**
+         * Encodes the specified DeleteShardsRequest message. Does not implicitly {@link vtctldata.DeleteShardsRequest.verify|verify} messages.
+         * @function encode
+         * @memberof vtctldata.DeleteShardsRequest
+         * @static
+         * @param {vtctldata.IDeleteShardsRequest} message DeleteShardsRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        DeleteShardsRequest.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.shards != null && message.shards.length)
+                for (var i = 0; i < message.shards.length; ++i)
+                    $root.vtctldata.Shard.encode(message.shards[i], writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
+            if (message.recursive != null && Object.hasOwnProperty.call(message, "recursive"))
+                writer.uint32(/* id 2, wireType 0 =*/16).bool(message.recursive);
+            if (message.even_if_serving != null && Object.hasOwnProperty.call(message, "even_if_serving"))
+                writer.uint32(/* id 4, wireType 0 =*/32).bool(message.even_if_serving);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified DeleteShardsRequest message, length delimited. Does not implicitly {@link vtctldata.DeleteShardsRequest.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtctldata.DeleteShardsRequest
+         * @static
+         * @param {vtctldata.IDeleteShardsRequest} message DeleteShardsRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        DeleteShardsRequest.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a DeleteShardsRequest message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtctldata.DeleteShardsRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtctldata.DeleteShardsRequest} DeleteShardsRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        DeleteShardsRequest.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.DeleteShardsRequest();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    if (!(message.shards && message.shards.length))
+                        message.shards = [];
+                    message.shards.push($root.vtctldata.Shard.decode(reader, reader.uint32()));
+                    break;
+                case 2:
+                    message.recursive = reader.bool();
+                    break;
+                case 4:
+                    message.even_if_serving = reader.bool();
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a DeleteShardsRequest message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtctldata.DeleteShardsRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtctldata.DeleteShardsRequest} DeleteShardsRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        DeleteShardsRequest.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a DeleteShardsRequest message.
+         * @function verify
+         * @memberof vtctldata.DeleteShardsRequest
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        DeleteShardsRequest.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.shards != null && message.hasOwnProperty("shards")) {
+                if (!Array.isArray(message.shards))
+                    return "shards: array expected";
+                for (var i = 0; i < message.shards.length; ++i) {
+                    var error = $root.vtctldata.Shard.verify(message.shards[i]);
+                    if (error)
+                        return "shards." + error;
+                }
+            }
+            if (message.recursive != null && message.hasOwnProperty("recursive"))
+                if (typeof message.recursive !== "boolean")
+                    return "recursive: boolean expected";
+            if (message.even_if_serving != null && message.hasOwnProperty("even_if_serving"))
+                if (typeof message.even_if_serving !== "boolean")
+                    return "even_if_serving: boolean expected";
+            return null;
+        };
+
+        /**
+         * Creates a DeleteShardsRequest message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtctldata.DeleteShardsRequest
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtctldata.DeleteShardsRequest} DeleteShardsRequest
+         */
+        DeleteShardsRequest.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtctldata.DeleteShardsRequest)
+                return object;
+            var message = new $root.vtctldata.DeleteShardsRequest();
+            if (object.shards) {
+                if (!Array.isArray(object.shards))
+                    throw TypeError(".vtctldata.DeleteShardsRequest.shards: array expected");
+                message.shards = [];
+                for (var i = 0; i < object.shards.length; ++i) {
+                    if (typeof object.shards[i] !== "object")
+                        throw TypeError(".vtctldata.DeleteShardsRequest.shards: object expected");
+                    message.shards[i] = $root.vtctldata.Shard.fromObject(object.shards[i]);
+                }
+            }
+            if (object.recursive != null)
+                message.recursive = Boolean(object.recursive);
+            if (object.even_if_serving != null)
+                message.even_if_serving = Boolean(object.even_if_serving);
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a DeleteShardsRequest message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtctldata.DeleteShardsRequest
+         * @static
+         * @param {vtctldata.DeleteShardsRequest} message DeleteShardsRequest
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        DeleteShardsRequest.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.arrays || options.defaults)
+                object.shards = [];
+            if (options.defaults) {
+                object.recursive = false;
+                object.even_if_serving = false;
+            }
+            if (message.shards && message.shards.length) {
+                object.shards = [];
+                for (var j = 0; j < message.shards.length; ++j)
+                    object.shards[j] = $root.vtctldata.Shard.toObject(message.shards[j], options);
+            }
+            if (message.recursive != null && message.hasOwnProperty("recursive"))
+                object.recursive = message.recursive;
+            if (message.even_if_serving != null && message.hasOwnProperty("even_if_serving"))
+                object.even_if_serving = message.even_if_serving;
+            return object;
+        };
+
+        /**
+         * Converts this DeleteShardsRequest to JSON.
+         * @function toJSON
+         * @memberof vtctldata.DeleteShardsRequest
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        DeleteShardsRequest.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return DeleteShardsRequest;
+    })();
+
+    vtctldata.DeleteShardsResponse = (function() {
+
+        /**
+         * Properties of a DeleteShardsResponse.
+         * @memberof vtctldata
+         * @interface IDeleteShardsResponse
+         */
+
+        /**
+         * Constructs a new DeleteShardsResponse.
+         * @memberof vtctldata
+         * @classdesc Represents a DeleteShardsResponse.
+         * @implements IDeleteShardsResponse
+         * @constructor
+         * @param {vtctldata.IDeleteShardsResponse=} [properties] Properties to set
+         */
+        function DeleteShardsResponse(properties) {
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * Creates a new DeleteShardsResponse instance using the specified properties.
+         * @function create
+         * @memberof vtctldata.DeleteShardsResponse
+         * @static
+         * @param {vtctldata.IDeleteShardsResponse=} [properties] Properties to set
+         * @returns {vtctldata.DeleteShardsResponse} DeleteShardsResponse instance
+         */
+        DeleteShardsResponse.create = function create(properties) {
+            return new DeleteShardsResponse(properties);
+        };
+
+        /**
+         * Encodes the specified DeleteShardsResponse message. Does not implicitly {@link vtctldata.DeleteShardsResponse.verify|verify} messages.
+         * @function encode
+         * @memberof vtctldata.DeleteShardsResponse
+         * @static
+         * @param {vtctldata.IDeleteShardsResponse} message DeleteShardsResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        DeleteShardsResponse.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            return writer;
+        };
+
+        /**
+         * Encodes the specified DeleteShardsResponse message, length delimited. Does not implicitly {@link vtctldata.DeleteShardsResponse.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtctldata.DeleteShardsResponse
+         * @static
+         * @param {vtctldata.IDeleteShardsResponse} message DeleteShardsResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        DeleteShardsResponse.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a DeleteShardsResponse message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtctldata.DeleteShardsResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtctldata.DeleteShardsResponse} DeleteShardsResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        DeleteShardsResponse.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.DeleteShardsResponse();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a DeleteShardsResponse message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtctldata.DeleteShardsResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtctldata.DeleteShardsResponse} DeleteShardsResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        DeleteShardsResponse.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a DeleteShardsResponse message.
+         * @function verify
+         * @memberof vtctldata.DeleteShardsResponse
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        DeleteShardsResponse.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            return null;
+        };
+
+        /**
+         * Creates a DeleteShardsResponse message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtctldata.DeleteShardsResponse
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtctldata.DeleteShardsResponse} DeleteShardsResponse
+         */
+        DeleteShardsResponse.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtctldata.DeleteShardsResponse)
+                return object;
+            return new $root.vtctldata.DeleteShardsResponse();
+        };
+
+        /**
+         * Creates a plain object from a DeleteShardsResponse message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtctldata.DeleteShardsResponse
+         * @static
+         * @param {vtctldata.DeleteShardsResponse} message DeleteShardsResponse
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        DeleteShardsResponse.toObject = function toObject() {
+            return {};
+        };
+
+        /**
+         * Converts this DeleteShardsResponse to JSON.
+         * @function toJSON
+         * @memberof vtctldata.DeleteShardsResponse
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        DeleteShardsResponse.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return DeleteShardsResponse;
+    })();
+
+    vtctldata.DeleteTabletsRequest = (function() {
+
+        /**
+         * Properties of a DeleteTabletsRequest.
+         * @memberof vtctldata
+         * @interface IDeleteTabletsRequest
+         * @property {Array.<topodata.ITabletAlias>|null} [tablet_aliases] DeleteTabletsRequest tablet_aliases
+         * @property {boolean|null} [allow_primary] DeleteTabletsRequest allow_primary
+         */
+
+        /**
+         * Constructs a new DeleteTabletsRequest.
+         * @memberof vtctldata
+         * @classdesc Represents a DeleteTabletsRequest.
+         * @implements IDeleteTabletsRequest
+         * @constructor
+         * @param {vtctldata.IDeleteTabletsRequest=} [properties] Properties to set
+         */
+        function DeleteTabletsRequest(properties) {
+            this.tablet_aliases = [];
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * DeleteTabletsRequest tablet_aliases.
+         * @member {Array.<topodata.ITabletAlias>} tablet_aliases
+         * @memberof vtctldata.DeleteTabletsRequest
+         * @instance
+         */
+        DeleteTabletsRequest.prototype.tablet_aliases = $util.emptyArray;
+
+        /**
+         * DeleteTabletsRequest allow_primary.
+         * @member {boolean} allow_primary
+         * @memberof vtctldata.DeleteTabletsRequest
+         * @instance
+         */
+        DeleteTabletsRequest.prototype.allow_primary = false;
+
+        /**
+         * Creates a new DeleteTabletsRequest instance using the specified properties.
+         * @function create
+         * @memberof vtctldata.DeleteTabletsRequest
+         * @static
+         * @param {vtctldata.IDeleteTabletsRequest=} [properties] Properties to set
+         * @returns {vtctldata.DeleteTabletsRequest} DeleteTabletsRequest instance
+         */
+        DeleteTabletsRequest.create = function create(properties) {
+            return new DeleteTabletsRequest(properties);
+        };
+
+        /**
+         * Encodes the specified DeleteTabletsRequest message. Does not implicitly {@link vtctldata.DeleteTabletsRequest.verify|verify} messages.
+         * @function encode
+         * @memberof vtctldata.DeleteTabletsRequest
+         * @static
+         * @param {vtctldata.IDeleteTabletsRequest} message DeleteTabletsRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        DeleteTabletsRequest.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.tablet_aliases != null && message.tablet_aliases.length)
+                for (var i = 0; i < message.tablet_aliases.length; ++i)
+                    $root.topodata.TabletAlias.encode(message.tablet_aliases[i], writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
+            if (message.allow_primary != null && Object.hasOwnProperty.call(message, "allow_primary"))
+                writer.uint32(/* id 2, wireType 0 =*/16).bool(message.allow_primary);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified DeleteTabletsRequest message, length delimited. Does not implicitly {@link vtctldata.DeleteTabletsRequest.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtctldata.DeleteTabletsRequest
+         * @static
+         * @param {vtctldata.IDeleteTabletsRequest} message DeleteTabletsRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        DeleteTabletsRequest.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a DeleteTabletsRequest message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtctldata.DeleteTabletsRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtctldata.DeleteTabletsRequest} DeleteTabletsRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        DeleteTabletsRequest.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.DeleteTabletsRequest();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    if (!(message.tablet_aliases && message.tablet_aliases.length))
+                        message.tablet_aliases = [];
+                    message.tablet_aliases.push($root.topodata.TabletAlias.decode(reader, reader.uint32()));
+                    break;
+                case 2:
+                    message.allow_primary = reader.bool();
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a DeleteTabletsRequest message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtctldata.DeleteTabletsRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtctldata.DeleteTabletsRequest} DeleteTabletsRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        DeleteTabletsRequest.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a DeleteTabletsRequest message.
+         * @function verify
+         * @memberof vtctldata.DeleteTabletsRequest
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        DeleteTabletsRequest.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.tablet_aliases != null && message.hasOwnProperty("tablet_aliases")) {
+                if (!Array.isArray(message.tablet_aliases))
+                    return "tablet_aliases: array expected";
+                for (var i = 0; i < message.tablet_aliases.length; ++i) {
+                    var error = $root.topodata.TabletAlias.verify(message.tablet_aliases[i]);
+                    if (error)
+                        return "tablet_aliases." + error;
+                }
+            }
+            if (message.allow_primary != null && message.hasOwnProperty("allow_primary"))
+                if (typeof message.allow_primary !== "boolean")
+                    return "allow_primary: boolean expected";
+            return null;
+        };
+
+        /**
+         * Creates a DeleteTabletsRequest message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtctldata.DeleteTabletsRequest
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtctldata.DeleteTabletsRequest} DeleteTabletsRequest
+         */
+        DeleteTabletsRequest.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtctldata.DeleteTabletsRequest)
+                return object;
+            var message = new $root.vtctldata.DeleteTabletsRequest();
+            if (object.tablet_aliases) {
+                if (!Array.isArray(object.tablet_aliases))
+                    throw TypeError(".vtctldata.DeleteTabletsRequest.tablet_aliases: array expected");
+                message.tablet_aliases = [];
+                for (var i = 0; i < object.tablet_aliases.length; ++i) {
+                    if (typeof object.tablet_aliases[i] !== "object")
+                        throw TypeError(".vtctldata.DeleteTabletsRequest.tablet_aliases: object expected");
+                    message.tablet_aliases[i] = $root.topodata.TabletAlias.fromObject(object.tablet_aliases[i]);
+                }
+            }
+            if (object.allow_primary != null)
+                message.allow_primary = Boolean(object.allow_primary);
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a DeleteTabletsRequest message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtctldata.DeleteTabletsRequest
+         * @static
+         * @param {vtctldata.DeleteTabletsRequest} message DeleteTabletsRequest
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        DeleteTabletsRequest.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.arrays || options.defaults)
+                object.tablet_aliases = [];
+            if (options.defaults)
+                object.allow_primary = false;
+            if (message.tablet_aliases && message.tablet_aliases.length) {
+                object.tablet_aliases = [];
+                for (var j = 0; j < message.tablet_aliases.length; ++j)
+                    object.tablet_aliases[j] = $root.topodata.TabletAlias.toObject(message.tablet_aliases[j], options);
+            }
+            if (message.allow_primary != null && message.hasOwnProperty("allow_primary"))
+                object.allow_primary = message.allow_primary;
+            return object;
+        };
+
+        /**
+         * Converts this DeleteTabletsRequest to JSON.
+         * @function toJSON
+         * @memberof vtctldata.DeleteTabletsRequest
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        DeleteTabletsRequest.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return DeleteTabletsRequest;
+    })();
+
+    vtctldata.DeleteTabletsResponse = (function() {
+
+        /**
+         * Properties of a DeleteTabletsResponse.
+         * @memberof vtctldata
+         * @interface IDeleteTabletsResponse
+         */
+
+        /**
+         * Constructs a new DeleteTabletsResponse.
+         * @memberof vtctldata
+         * @classdesc Represents a DeleteTabletsResponse.
+         * @implements IDeleteTabletsResponse
+         * @constructor
+         * @param {vtctldata.IDeleteTabletsResponse=} [properties] Properties to set
+         */
+        function DeleteTabletsResponse(properties) {
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * Creates a new DeleteTabletsResponse instance using the specified properties.
+         * @function create
+         * @memberof vtctldata.DeleteTabletsResponse
+         * @static
+         * @param {vtctldata.IDeleteTabletsResponse=} [properties] Properties to set
+         * @returns {vtctldata.DeleteTabletsResponse} DeleteTabletsResponse instance
+         */
+        DeleteTabletsResponse.create = function create(properties) {
+            return new DeleteTabletsResponse(properties);
+        };
+
+        /**
+         * Encodes the specified DeleteTabletsResponse message. Does not implicitly {@link vtctldata.DeleteTabletsResponse.verify|verify} messages.
+         * @function encode
+         * @memberof vtctldata.DeleteTabletsResponse
+         * @static
+         * @param {vtctldata.IDeleteTabletsResponse} message DeleteTabletsResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        DeleteTabletsResponse.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            return writer;
+        };
+
+        /**
+         * Encodes the specified DeleteTabletsResponse message, length delimited. Does not implicitly {@link vtctldata.DeleteTabletsResponse.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtctldata.DeleteTabletsResponse
+         * @static
+         * @param {vtctldata.IDeleteTabletsResponse} message DeleteTabletsResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        DeleteTabletsResponse.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a DeleteTabletsResponse message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtctldata.DeleteTabletsResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtctldata.DeleteTabletsResponse} DeleteTabletsResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        DeleteTabletsResponse.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.DeleteTabletsResponse();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a DeleteTabletsResponse message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtctldata.DeleteTabletsResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtctldata.DeleteTabletsResponse} DeleteTabletsResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        DeleteTabletsResponse.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a DeleteTabletsResponse message.
+         * @function verify
+         * @memberof vtctldata.DeleteTabletsResponse
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        DeleteTabletsResponse.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            return null;
+        };
+
+        /**
+         * Creates a DeleteTabletsResponse message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtctldata.DeleteTabletsResponse
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtctldata.DeleteTabletsResponse} DeleteTabletsResponse
+         */
+        DeleteTabletsResponse.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtctldata.DeleteTabletsResponse)
+                return object;
+            return new $root.vtctldata.DeleteTabletsResponse();
+        };
+
+        /**
+         * Creates a plain object from a DeleteTabletsResponse message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtctldata.DeleteTabletsResponse
+         * @static
+         * @param {vtctldata.DeleteTabletsResponse} message DeleteTabletsResponse
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        DeleteTabletsResponse.toObject = function toObject() {
+            return {};
+        };
+
+        /**
+         * Converts this DeleteTabletsResponse to JSON.
+         * @function toJSON
+         * @memberof vtctldata.DeleteTabletsResponse
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        DeleteTabletsResponse.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return DeleteTabletsResponse;
+    })();
+
     vtctldata.GetBackupsRequest = (function() {
 
         /**
@@ -49950,6 +53306,408 @@ $root.vtctldata = (function() {
         return GetSchemaResponse;
     })();
 
+    vtctldata.GetShardRequest = (function() {
+
+        /**
+         * Properties of a GetShardRequest.
+         * @memberof vtctldata
+         * @interface IGetShardRequest
+         * @property {string|null} [keyspace] GetShardRequest keyspace
+         * @property {string|null} [shard_name] GetShardRequest shard_name
+         */
+
+        /**
+         * Constructs a new GetShardRequest.
+         * @memberof vtctldata
+         * @classdesc Represents a GetShardRequest.
+         * @implements IGetShardRequest
+         * @constructor
+         * @param {vtctldata.IGetShardRequest=} [properties] Properties to set
+         */
+        function GetShardRequest(properties) {
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * GetShardRequest keyspace.
+         * @member {string} keyspace
+         * @memberof vtctldata.GetShardRequest
+         * @instance
+         */
+        GetShardRequest.prototype.keyspace = "";
+
+        /**
+         * GetShardRequest shard_name.
+         * @member {string} shard_name
+         * @memberof vtctldata.GetShardRequest
+         * @instance
+         */
+        GetShardRequest.prototype.shard_name = "";
+
+        /**
+         * Creates a new GetShardRequest instance using the specified properties.
+         * @function create
+         * @memberof vtctldata.GetShardRequest
+         * @static
+         * @param {vtctldata.IGetShardRequest=} [properties] Properties to set
+         * @returns {vtctldata.GetShardRequest} GetShardRequest instance
+         */
+        GetShardRequest.create = function create(properties) {
+            return new GetShardRequest(properties);
+        };
+
+        /**
+         * Encodes the specified GetShardRequest message. Does not implicitly {@link vtctldata.GetShardRequest.verify|verify} messages.
+         * @function encode
+         * @memberof vtctldata.GetShardRequest
+         * @static
+         * @param {vtctldata.IGetShardRequest} message GetShardRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        GetShardRequest.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.keyspace != null && Object.hasOwnProperty.call(message, "keyspace"))
+                writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
+            if (message.shard_name != null && Object.hasOwnProperty.call(message, "shard_name"))
+                writer.uint32(/* id 2, wireType 2 =*/18).string(message.shard_name);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified GetShardRequest message, length delimited. Does not implicitly {@link vtctldata.GetShardRequest.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtctldata.GetShardRequest
+         * @static
+         * @param {vtctldata.IGetShardRequest} message GetShardRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        GetShardRequest.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a GetShardRequest message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtctldata.GetShardRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtctldata.GetShardRequest} GetShardRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        GetShardRequest.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.GetShardRequest();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.keyspace = reader.string();
+                    break;
+                case 2:
+                    message.shard_name = reader.string();
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a GetShardRequest message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtctldata.GetShardRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtctldata.GetShardRequest} GetShardRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        GetShardRequest.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a GetShardRequest message.
+         * @function verify
+         * @memberof vtctldata.GetShardRequest
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        GetShardRequest.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.keyspace != null && message.hasOwnProperty("keyspace"))
+                if (!$util.isString(message.keyspace))
+                    return "keyspace: string expected";
+            if (message.shard_name != null && message.hasOwnProperty("shard_name"))
+                if (!$util.isString(message.shard_name))
+                    return "shard_name: string expected";
+            return null;
+        };
+
+        /**
+         * Creates a GetShardRequest message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtctldata.GetShardRequest
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtctldata.GetShardRequest} GetShardRequest
+         */
+        GetShardRequest.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtctldata.GetShardRequest)
+                return object;
+            var message = new $root.vtctldata.GetShardRequest();
+            if (object.keyspace != null)
+                message.keyspace = String(object.keyspace);
+            if (object.shard_name != null)
+                message.shard_name = String(object.shard_name);
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a GetShardRequest message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtctldata.GetShardRequest
+         * @static
+         * @param {vtctldata.GetShardRequest} message GetShardRequest
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        GetShardRequest.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.defaults) {
+                object.keyspace = "";
+                object.shard_name = "";
+            }
+            if (message.keyspace != null && message.hasOwnProperty("keyspace"))
+                object.keyspace = message.keyspace;
+            if (message.shard_name != null && message.hasOwnProperty("shard_name"))
+                object.shard_name = message.shard_name;
+            return object;
+        };
+
+        /**
+         * Converts this GetShardRequest to JSON.
+         * @function toJSON
+         * @memberof vtctldata.GetShardRequest
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        GetShardRequest.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return GetShardRequest;
+    })();
+
+    vtctldata.GetShardResponse = (function() {
+
+        /**
+         * Properties of a GetShardResponse.
+         * @memberof vtctldata
+         * @interface IGetShardResponse
+         * @property {vtctldata.IShard|null} [shard] GetShardResponse shard
+         */
+
+        /**
+         * Constructs a new GetShardResponse.
+         * @memberof vtctldata
+         * @classdesc Represents a GetShardResponse.
+         * @implements IGetShardResponse
+         * @constructor
+         * @param {vtctldata.IGetShardResponse=} [properties] Properties to set
+         */
+        function GetShardResponse(properties) {
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * GetShardResponse shard.
+         * @member {vtctldata.IShard|null|undefined} shard
+         * @memberof vtctldata.GetShardResponse
+         * @instance
+         */
+        GetShardResponse.prototype.shard = null;
+
+        /**
+         * Creates a new GetShardResponse instance using the specified properties.
+         * @function create
+         * @memberof vtctldata.GetShardResponse
+         * @static
+         * @param {vtctldata.IGetShardResponse=} [properties] Properties to set
+         * @returns {vtctldata.GetShardResponse} GetShardResponse instance
+         */
+        GetShardResponse.create = function create(properties) {
+            return new GetShardResponse(properties);
+        };
+
+        /**
+         * Encodes the specified GetShardResponse message. Does not implicitly {@link vtctldata.GetShardResponse.verify|verify} messages.
+         * @function encode
+         * @memberof vtctldata.GetShardResponse
+         * @static
+         * @param {vtctldata.IGetShardResponse} message GetShardResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        GetShardResponse.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.shard != null && Object.hasOwnProperty.call(message, "shard"))
+                $root.vtctldata.Shard.encode(message.shard, writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
+            return writer;
+        };
+
+        /**
+         * Encodes the specified GetShardResponse message, length delimited. Does not implicitly {@link vtctldata.GetShardResponse.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtctldata.GetShardResponse
+         * @static
+         * @param {vtctldata.IGetShardResponse} message GetShardResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        GetShardResponse.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a GetShardResponse message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtctldata.GetShardResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtctldata.GetShardResponse} GetShardResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        GetShardResponse.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.GetShardResponse();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.shard = $root.vtctldata.Shard.decode(reader, reader.uint32());
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a GetShardResponse message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtctldata.GetShardResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtctldata.GetShardResponse} GetShardResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        GetShardResponse.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a GetShardResponse message.
+         * @function verify
+         * @memberof vtctldata.GetShardResponse
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        GetShardResponse.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.shard != null && message.hasOwnProperty("shard")) {
+                var error = $root.vtctldata.Shard.verify(message.shard);
+                if (error)
+                    return "shard." + error;
+            }
+            return null;
+        };
+
+        /**
+         * Creates a GetShardResponse message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtctldata.GetShardResponse
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtctldata.GetShardResponse} GetShardResponse
+         */
+        GetShardResponse.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtctldata.GetShardResponse)
+                return object;
+            var message = new $root.vtctldata.GetShardResponse();
+            if (object.shard != null) {
+                if (typeof object.shard !== "object")
+                    throw TypeError(".vtctldata.GetShardResponse.shard: object expected");
+                message.shard = $root.vtctldata.Shard.fromObject(object.shard);
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a GetShardResponse message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtctldata.GetShardResponse
+         * @static
+         * @param {vtctldata.GetShardResponse} message GetShardResponse
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        GetShardResponse.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.defaults)
+                object.shard = null;
+            if (message.shard != null && message.hasOwnProperty("shard"))
+                object.shard = $root.vtctldata.Shard.toObject(message.shard, options);
+            return object;
+        };
+
+        /**
+         * Converts this GetShardResponse to JSON.
+         * @function toJSON
+         * @memberof vtctldata.GetShardResponse
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        GetShardResponse.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return GetShardResponse;
+    })();
+
     vtctldata.GetSrvVSchemaRequest = (function() {
 
         /**
@@ -52041,6 +55799,856 @@ $root.vtctldata = (function() {
         };
 
         return InitShardPrimaryResponse;
+    })();
+
+    vtctldata.RemoveKeyspaceCellRequest = (function() {
+
+        /**
+         * Properties of a RemoveKeyspaceCellRequest.
+         * @memberof vtctldata
+         * @interface IRemoveKeyspaceCellRequest
+         * @property {string|null} [keyspace] RemoveKeyspaceCellRequest keyspace
+         * @property {string|null} [cell] RemoveKeyspaceCellRequest cell
+         * @property {boolean|null} [force] RemoveKeyspaceCellRequest force
+         * @property {boolean|null} [recursive] RemoveKeyspaceCellRequest recursive
+         */
+
+        /**
+         * Constructs a new RemoveKeyspaceCellRequest.
+         * @memberof vtctldata
+         * @classdesc Represents a RemoveKeyspaceCellRequest.
+         * @implements IRemoveKeyspaceCellRequest
+         * @constructor
+         * @param {vtctldata.IRemoveKeyspaceCellRequest=} [properties] Properties to set
+         */
+        function RemoveKeyspaceCellRequest(properties) {
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * RemoveKeyspaceCellRequest keyspace.
+         * @member {string} keyspace
+         * @memberof vtctldata.RemoveKeyspaceCellRequest
+         * @instance
+         */
+        RemoveKeyspaceCellRequest.prototype.keyspace = "";
+
+        /**
+         * RemoveKeyspaceCellRequest cell.
+         * @member {string} cell
+         * @memberof vtctldata.RemoveKeyspaceCellRequest
+         * @instance
+         */
+        RemoveKeyspaceCellRequest.prototype.cell = "";
+
+        /**
+         * RemoveKeyspaceCellRequest force.
+         * @member {boolean} force
+         * @memberof vtctldata.RemoveKeyspaceCellRequest
+         * @instance
+         */
+        RemoveKeyspaceCellRequest.prototype.force = false;
+
+        /**
+         * RemoveKeyspaceCellRequest recursive.
+         * @member {boolean} recursive
+         * @memberof vtctldata.RemoveKeyspaceCellRequest
+         * @instance
+         */
+        RemoveKeyspaceCellRequest.prototype.recursive = false;
+
+        /**
+         * Creates a new RemoveKeyspaceCellRequest instance using the specified properties.
+         * @function create
+         * @memberof vtctldata.RemoveKeyspaceCellRequest
+         * @static
+         * @param {vtctldata.IRemoveKeyspaceCellRequest=} [properties] Properties to set
+         * @returns {vtctldata.RemoveKeyspaceCellRequest} RemoveKeyspaceCellRequest instance
+         */
+        RemoveKeyspaceCellRequest.create = function create(properties) {
+            return new RemoveKeyspaceCellRequest(properties);
+        };
+
+        /**
+         * Encodes the specified RemoveKeyspaceCellRequest message. Does not implicitly {@link vtctldata.RemoveKeyspaceCellRequest.verify|verify} messages.
+         * @function encode
+         * @memberof vtctldata.RemoveKeyspaceCellRequest
+         * @static
+         * @param {vtctldata.IRemoveKeyspaceCellRequest} message RemoveKeyspaceCellRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        RemoveKeyspaceCellRequest.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.keyspace != null && Object.hasOwnProperty.call(message, "keyspace"))
+                writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
+            if (message.cell != null && Object.hasOwnProperty.call(message, "cell"))
+                writer.uint32(/* id 2, wireType 2 =*/18).string(message.cell);
+            if (message.force != null && Object.hasOwnProperty.call(message, "force"))
+                writer.uint32(/* id 3, wireType 0 =*/24).bool(message.force);
+            if (message.recursive != null && Object.hasOwnProperty.call(message, "recursive"))
+                writer.uint32(/* id 4, wireType 0 =*/32).bool(message.recursive);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified RemoveKeyspaceCellRequest message, length delimited. Does not implicitly {@link vtctldata.RemoveKeyspaceCellRequest.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtctldata.RemoveKeyspaceCellRequest
+         * @static
+         * @param {vtctldata.IRemoveKeyspaceCellRequest} message RemoveKeyspaceCellRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        RemoveKeyspaceCellRequest.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a RemoveKeyspaceCellRequest message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtctldata.RemoveKeyspaceCellRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtctldata.RemoveKeyspaceCellRequest} RemoveKeyspaceCellRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        RemoveKeyspaceCellRequest.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.RemoveKeyspaceCellRequest();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.keyspace = reader.string();
+                    break;
+                case 2:
+                    message.cell = reader.string();
+                    break;
+                case 3:
+                    message.force = reader.bool();
+                    break;
+                case 4:
+                    message.recursive = reader.bool();
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a RemoveKeyspaceCellRequest message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtctldata.RemoveKeyspaceCellRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtctldata.RemoveKeyspaceCellRequest} RemoveKeyspaceCellRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        RemoveKeyspaceCellRequest.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a RemoveKeyspaceCellRequest message.
+         * @function verify
+         * @memberof vtctldata.RemoveKeyspaceCellRequest
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        RemoveKeyspaceCellRequest.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.keyspace != null && message.hasOwnProperty("keyspace"))
+                if (!$util.isString(message.keyspace))
+                    return "keyspace: string expected";
+            if (message.cell != null && message.hasOwnProperty("cell"))
+                if (!$util.isString(message.cell))
+                    return "cell: string expected";
+            if (message.force != null && message.hasOwnProperty("force"))
+                if (typeof message.force !== "boolean")
+                    return "force: boolean expected";
+            if (message.recursive != null && message.hasOwnProperty("recursive"))
+                if (typeof message.recursive !== "boolean")
+                    return "recursive: boolean expected";
+            return null;
+        };
+
+        /**
+         * Creates a RemoveKeyspaceCellRequest message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtctldata.RemoveKeyspaceCellRequest
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtctldata.RemoveKeyspaceCellRequest} RemoveKeyspaceCellRequest
+         */
+        RemoveKeyspaceCellRequest.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtctldata.RemoveKeyspaceCellRequest)
+                return object;
+            var message = new $root.vtctldata.RemoveKeyspaceCellRequest();
+            if (object.keyspace != null)
+                message.keyspace = String(object.keyspace);
+            if (object.cell != null)
+                message.cell = String(object.cell);
+            if (object.force != null)
+                message.force = Boolean(object.force);
+            if (object.recursive != null)
+                message.recursive = Boolean(object.recursive);
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a RemoveKeyspaceCellRequest message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtctldata.RemoveKeyspaceCellRequest
+         * @static
+         * @param {vtctldata.RemoveKeyspaceCellRequest} message RemoveKeyspaceCellRequest
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        RemoveKeyspaceCellRequest.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.defaults) {
+                object.keyspace = "";
+                object.cell = "";
+                object.force = false;
+                object.recursive = false;
+            }
+            if (message.keyspace != null && message.hasOwnProperty("keyspace"))
+                object.keyspace = message.keyspace;
+            if (message.cell != null && message.hasOwnProperty("cell"))
+                object.cell = message.cell;
+            if (message.force != null && message.hasOwnProperty("force"))
+                object.force = message.force;
+            if (message.recursive != null && message.hasOwnProperty("recursive"))
+                object.recursive = message.recursive;
+            return object;
+        };
+
+        /**
+         * Converts this RemoveKeyspaceCellRequest to JSON.
+         * @function toJSON
+         * @memberof vtctldata.RemoveKeyspaceCellRequest
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        RemoveKeyspaceCellRequest.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return RemoveKeyspaceCellRequest;
+    })();
+
+    vtctldata.RemoveKeyspaceCellResponse = (function() {
+
+        /**
+         * Properties of a RemoveKeyspaceCellResponse.
+         * @memberof vtctldata
+         * @interface IRemoveKeyspaceCellResponse
+         */
+
+        /**
+         * Constructs a new RemoveKeyspaceCellResponse.
+         * @memberof vtctldata
+         * @classdesc Represents a RemoveKeyspaceCellResponse.
+         * @implements IRemoveKeyspaceCellResponse
+         * @constructor
+         * @param {vtctldata.IRemoveKeyspaceCellResponse=} [properties] Properties to set
+         */
+        function RemoveKeyspaceCellResponse(properties) {
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * Creates a new RemoveKeyspaceCellResponse instance using the specified properties.
+         * @function create
+         * @memberof vtctldata.RemoveKeyspaceCellResponse
+         * @static
+         * @param {vtctldata.IRemoveKeyspaceCellResponse=} [properties] Properties to set
+         * @returns {vtctldata.RemoveKeyspaceCellResponse} RemoveKeyspaceCellResponse instance
+         */
+        RemoveKeyspaceCellResponse.create = function create(properties) {
+            return new RemoveKeyspaceCellResponse(properties);
+        };
+
+        /**
+         * Encodes the specified RemoveKeyspaceCellResponse message. Does not implicitly {@link vtctldata.RemoveKeyspaceCellResponse.verify|verify} messages.
+         * @function encode
+         * @memberof vtctldata.RemoveKeyspaceCellResponse
+         * @static
+         * @param {vtctldata.IRemoveKeyspaceCellResponse} message RemoveKeyspaceCellResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        RemoveKeyspaceCellResponse.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            return writer;
+        };
+
+        /**
+         * Encodes the specified RemoveKeyspaceCellResponse message, length delimited. Does not implicitly {@link vtctldata.RemoveKeyspaceCellResponse.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtctldata.RemoveKeyspaceCellResponse
+         * @static
+         * @param {vtctldata.IRemoveKeyspaceCellResponse} message RemoveKeyspaceCellResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        RemoveKeyspaceCellResponse.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a RemoveKeyspaceCellResponse message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtctldata.RemoveKeyspaceCellResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtctldata.RemoveKeyspaceCellResponse} RemoveKeyspaceCellResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        RemoveKeyspaceCellResponse.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.RemoveKeyspaceCellResponse();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a RemoveKeyspaceCellResponse message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtctldata.RemoveKeyspaceCellResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtctldata.RemoveKeyspaceCellResponse} RemoveKeyspaceCellResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        RemoveKeyspaceCellResponse.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a RemoveKeyspaceCellResponse message.
+         * @function verify
+         * @memberof vtctldata.RemoveKeyspaceCellResponse
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        RemoveKeyspaceCellResponse.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            return null;
+        };
+
+        /**
+         * Creates a RemoveKeyspaceCellResponse message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtctldata.RemoveKeyspaceCellResponse
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtctldata.RemoveKeyspaceCellResponse} RemoveKeyspaceCellResponse
+         */
+        RemoveKeyspaceCellResponse.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtctldata.RemoveKeyspaceCellResponse)
+                return object;
+            return new $root.vtctldata.RemoveKeyspaceCellResponse();
+        };
+
+        /**
+         * Creates a plain object from a RemoveKeyspaceCellResponse message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtctldata.RemoveKeyspaceCellResponse
+         * @static
+         * @param {vtctldata.RemoveKeyspaceCellResponse} message RemoveKeyspaceCellResponse
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        RemoveKeyspaceCellResponse.toObject = function toObject() {
+            return {};
+        };
+
+        /**
+         * Converts this RemoveKeyspaceCellResponse to JSON.
+         * @function toJSON
+         * @memberof vtctldata.RemoveKeyspaceCellResponse
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        RemoveKeyspaceCellResponse.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return RemoveKeyspaceCellResponse;
+    })();
+
+    vtctldata.RemoveShardCellRequest = (function() {
+
+        /**
+         * Properties of a RemoveShardCellRequest.
+         * @memberof vtctldata
+         * @interface IRemoveShardCellRequest
+         * @property {string|null} [keyspace] RemoveShardCellRequest keyspace
+         * @property {string|null} [shard_name] RemoveShardCellRequest shard_name
+         * @property {string|null} [cell] RemoveShardCellRequest cell
+         * @property {boolean|null} [force] RemoveShardCellRequest force
+         * @property {boolean|null} [recursive] RemoveShardCellRequest recursive
+         */
+
+        /**
+         * Constructs a new RemoveShardCellRequest.
+         * @memberof vtctldata
+         * @classdesc Represents a RemoveShardCellRequest.
+         * @implements IRemoveShardCellRequest
+         * @constructor
+         * @param {vtctldata.IRemoveShardCellRequest=} [properties] Properties to set
+         */
+        function RemoveShardCellRequest(properties) {
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * RemoveShardCellRequest keyspace.
+         * @member {string} keyspace
+         * @memberof vtctldata.RemoveShardCellRequest
+         * @instance
+         */
+        RemoveShardCellRequest.prototype.keyspace = "";
+
+        /**
+         * RemoveShardCellRequest shard_name.
+         * @member {string} shard_name
+         * @memberof vtctldata.RemoveShardCellRequest
+         * @instance
+         */
+        RemoveShardCellRequest.prototype.shard_name = "";
+
+        /**
+         * RemoveShardCellRequest cell.
+         * @member {string} cell
+         * @memberof vtctldata.RemoveShardCellRequest
+         * @instance
+         */
+        RemoveShardCellRequest.prototype.cell = "";
+
+        /**
+         * RemoveShardCellRequest force.
+         * @member {boolean} force
+         * @memberof vtctldata.RemoveShardCellRequest
+         * @instance
+         */
+        RemoveShardCellRequest.prototype.force = false;
+
+        /**
+         * RemoveShardCellRequest recursive.
+         * @member {boolean} recursive
+         * @memberof vtctldata.RemoveShardCellRequest
+         * @instance
+         */
+        RemoveShardCellRequest.prototype.recursive = false;
+
+        /**
+         * Creates a new RemoveShardCellRequest instance using the specified properties.
+         * @function create
+         * @memberof vtctldata.RemoveShardCellRequest
+         * @static
+         * @param {vtctldata.IRemoveShardCellRequest=} [properties] Properties to set
+         * @returns {vtctldata.RemoveShardCellRequest} RemoveShardCellRequest instance
+         */
+        RemoveShardCellRequest.create = function create(properties) {
+            return new RemoveShardCellRequest(properties);
+        };
+
+        /**
+         * Encodes the specified RemoveShardCellRequest message. Does not implicitly {@link vtctldata.RemoveShardCellRequest.verify|verify} messages.
+         * @function encode
+         * @memberof vtctldata.RemoveShardCellRequest
+         * @static
+         * @param {vtctldata.IRemoveShardCellRequest} message RemoveShardCellRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        RemoveShardCellRequest.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.keyspace != null && Object.hasOwnProperty.call(message, "keyspace"))
+                writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
+            if (message.shard_name != null && Object.hasOwnProperty.call(message, "shard_name"))
+                writer.uint32(/* id 2, wireType 2 =*/18).string(message.shard_name);
+            if (message.cell != null && Object.hasOwnProperty.call(message, "cell"))
+                writer.uint32(/* id 3, wireType 2 =*/26).string(message.cell);
+            if (message.force != null && Object.hasOwnProperty.call(message, "force"))
+                writer.uint32(/* id 4, wireType 0 =*/32).bool(message.force);
+            if (message.recursive != null && Object.hasOwnProperty.call(message, "recursive"))
+                writer.uint32(/* id 5, wireType 0 =*/40).bool(message.recursive);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified RemoveShardCellRequest message, length delimited. Does not implicitly {@link vtctldata.RemoveShardCellRequest.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtctldata.RemoveShardCellRequest
+         * @static
+         * @param {vtctldata.IRemoveShardCellRequest} message RemoveShardCellRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        RemoveShardCellRequest.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a RemoveShardCellRequest message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtctldata.RemoveShardCellRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtctldata.RemoveShardCellRequest} RemoveShardCellRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        RemoveShardCellRequest.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.RemoveShardCellRequest();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.keyspace = reader.string();
+                    break;
+                case 2:
+                    message.shard_name = reader.string();
+                    break;
+                case 3:
+                    message.cell = reader.string();
+                    break;
+                case 4:
+                    message.force = reader.bool();
+                    break;
+                case 5:
+                    message.recursive = reader.bool();
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a RemoveShardCellRequest message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtctldata.RemoveShardCellRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtctldata.RemoveShardCellRequest} RemoveShardCellRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        RemoveShardCellRequest.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a RemoveShardCellRequest message.
+         * @function verify
+         * @memberof vtctldata.RemoveShardCellRequest
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        RemoveShardCellRequest.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.keyspace != null && message.hasOwnProperty("keyspace"))
+                if (!$util.isString(message.keyspace))
+                    return "keyspace: string expected";
+            if (message.shard_name != null && message.hasOwnProperty("shard_name"))
+                if (!$util.isString(message.shard_name))
+                    return "shard_name: string expected";
+            if (message.cell != null && message.hasOwnProperty("cell"))
+                if (!$util.isString(message.cell))
+                    return "cell: string expected";
+            if (message.force != null && message.hasOwnProperty("force"))
+                if (typeof message.force !== "boolean")
+                    return "force: boolean expected";
+            if (message.recursive != null && message.hasOwnProperty("recursive"))
+                if (typeof message.recursive !== "boolean")
+                    return "recursive: boolean expected";
+            return null;
+        };
+
+        /**
+         * Creates a RemoveShardCellRequest message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtctldata.RemoveShardCellRequest
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtctldata.RemoveShardCellRequest} RemoveShardCellRequest
+         */
+        RemoveShardCellRequest.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtctldata.RemoveShardCellRequest)
+                return object;
+            var message = new $root.vtctldata.RemoveShardCellRequest();
+            if (object.keyspace != null)
+                message.keyspace = String(object.keyspace);
+            if (object.shard_name != null)
+                message.shard_name = String(object.shard_name);
+            if (object.cell != null)
+                message.cell = String(object.cell);
+            if (object.force != null)
+                message.force = Boolean(object.force);
+            if (object.recursive != null)
+                message.recursive = Boolean(object.recursive);
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a RemoveShardCellRequest message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtctldata.RemoveShardCellRequest
+         * @static
+         * @param {vtctldata.RemoveShardCellRequest} message RemoveShardCellRequest
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        RemoveShardCellRequest.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.defaults) {
+                object.keyspace = "";
+                object.shard_name = "";
+                object.cell = "";
+                object.force = false;
+                object.recursive = false;
+            }
+            if (message.keyspace != null && message.hasOwnProperty("keyspace"))
+                object.keyspace = message.keyspace;
+            if (message.shard_name != null && message.hasOwnProperty("shard_name"))
+                object.shard_name = message.shard_name;
+            if (message.cell != null && message.hasOwnProperty("cell"))
+                object.cell = message.cell;
+            if (message.force != null && message.hasOwnProperty("force"))
+                object.force = message.force;
+            if (message.recursive != null && message.hasOwnProperty("recursive"))
+                object.recursive = message.recursive;
+            return object;
+        };
+
+        /**
+         * Converts this RemoveShardCellRequest to JSON.
+         * @function toJSON
+         * @memberof vtctldata.RemoveShardCellRequest
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        RemoveShardCellRequest.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return RemoveShardCellRequest;
+    })();
+
+    vtctldata.RemoveShardCellResponse = (function() {
+
+        /**
+         * Properties of a RemoveShardCellResponse.
+         * @memberof vtctldata
+         * @interface IRemoveShardCellResponse
+         */
+
+        /**
+         * Constructs a new RemoveShardCellResponse.
+         * @memberof vtctldata
+         * @classdesc Represents a RemoveShardCellResponse.
+         * @implements IRemoveShardCellResponse
+         * @constructor
+         * @param {vtctldata.IRemoveShardCellResponse=} [properties] Properties to set
+         */
+        function RemoveShardCellResponse(properties) {
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * Creates a new RemoveShardCellResponse instance using the specified properties.
+         * @function create
+         * @memberof vtctldata.RemoveShardCellResponse
+         * @static
+         * @param {vtctldata.IRemoveShardCellResponse=} [properties] Properties to set
+         * @returns {vtctldata.RemoveShardCellResponse} RemoveShardCellResponse instance
+         */
+        RemoveShardCellResponse.create = function create(properties) {
+            return new RemoveShardCellResponse(properties);
+        };
+
+        /**
+         * Encodes the specified RemoveShardCellResponse message. Does not implicitly {@link vtctldata.RemoveShardCellResponse.verify|verify} messages.
+         * @function encode
+         * @memberof vtctldata.RemoveShardCellResponse
+         * @static
+         * @param {vtctldata.IRemoveShardCellResponse} message RemoveShardCellResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        RemoveShardCellResponse.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            return writer;
+        };
+
+        /**
+         * Encodes the specified RemoveShardCellResponse message, length delimited. Does not implicitly {@link vtctldata.RemoveShardCellResponse.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtctldata.RemoveShardCellResponse
+         * @static
+         * @param {vtctldata.IRemoveShardCellResponse} message RemoveShardCellResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        RemoveShardCellResponse.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a RemoveShardCellResponse message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtctldata.RemoveShardCellResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtctldata.RemoveShardCellResponse} RemoveShardCellResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        RemoveShardCellResponse.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.RemoveShardCellResponse();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a RemoveShardCellResponse message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtctldata.RemoveShardCellResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtctldata.RemoveShardCellResponse} RemoveShardCellResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        RemoveShardCellResponse.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a RemoveShardCellResponse message.
+         * @function verify
+         * @memberof vtctldata.RemoveShardCellResponse
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        RemoveShardCellResponse.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            return null;
+        };
+
+        /**
+         * Creates a RemoveShardCellResponse message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtctldata.RemoveShardCellResponse
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtctldata.RemoveShardCellResponse} RemoveShardCellResponse
+         */
+        RemoveShardCellResponse.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtctldata.RemoveShardCellResponse)
+                return object;
+            return new $root.vtctldata.RemoveShardCellResponse();
+        };
+
+        /**
+         * Creates a plain object from a RemoveShardCellResponse message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtctldata.RemoveShardCellResponse
+         * @static
+         * @param {vtctldata.RemoveShardCellResponse} message RemoveShardCellResponse
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        RemoveShardCellResponse.toObject = function toObject() {
+            return {};
+        };
+
+        /**
+         * Converts this RemoveShardCellResponse to JSON.
+         * @function toJSON
+         * @memberof vtctldata.RemoveShardCellResponse
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        RemoveShardCellResponse.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return RemoveShardCellResponse;
     })();
 
     vtctldata.Keyspace = (function() {

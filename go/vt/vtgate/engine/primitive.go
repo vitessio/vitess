@@ -141,6 +141,9 @@ type (
 		SetReadAfterWriteGTID(string)
 		SetReadAfterWriteTimeout(float64)
 		SetSessionTrackGTIDs(bool)
+
+		// HasCreatedTempTable will mark the session as having created temp tables
+		HasCreatedTempTable()
 	}
 
 	// Plan represents the execution strategy for a given query.
