@@ -23,13 +23,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/protobuf/ptypes"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	durationpb "github.com/golang/protobuf/ptypes/duration"
-
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	"vitess.io/vitess/go/vt/topo"
@@ -2070,7 +2068,7 @@ func TestEmergencyReparentShard(t *testing.T) {
 					Cell: "zone1",
 					Uid:  200,
 				},
-				WaitReplicasTimeout: ptypes.DurationProto(time.Millisecond * 10),
+				WaitReplicasTimeout: protoutil.DurationToProto(time.Millisecond * 10),
 			},
 			expected: &vtctldatapb.EmergencyReparentShardResponse{
 				Keyspace: "testkeyspace",
@@ -2103,7 +2101,7 @@ func TestEmergencyReparentShard(t *testing.T) {
 		{
 			name: "invalid WaitReplicasTimeout",
 			req: &vtctldatapb.EmergencyReparentShardRequest{
-				WaitReplicasTimeout: &durationpb.Duration{
+				WaitReplicasTimeout: &vttime.Duration{
 					Seconds: -1,
 					Nanos:   1,
 				},
@@ -3346,7 +3344,7 @@ func TestPlannedReparentShard(t *testing.T) {
 					Cell: "zone1",
 					Uid:  200,
 				},
-				WaitReplicasTimeout: ptypes.DurationProto(time.Millisecond * 10),
+				WaitReplicasTimeout: protoutil.DurationToProto(time.Millisecond * 10),
 			},
 			expected: &vtctldatapb.PlannedReparentShardResponse{
 				Keyspace: "testkeyspace",
@@ -3378,7 +3376,7 @@ func TestPlannedReparentShard(t *testing.T) {
 		{
 			name: "invalid WaitReplicasTimeout",
 			req: &vtctldatapb.PlannedReparentShardRequest{
-				WaitReplicasTimeout: &durationpb.Duration{
+				WaitReplicasTimeout: &vttime.Duration{
 					Seconds: -1,
 					Nanos:   1,
 				},
