@@ -1,17 +1,17 @@
 {
 	"Tests": {
-        "java": {
-          "File": "",
-          "Args": [],
-          "Command": [
-            "make",
-            "java_test"
-          ],
-          "Manual": false,
-          "Shard": "10",
-          "RetryMax": 0,
-          "Tags": []
-        },
+		"java": {
+			"File": "",
+			"Args": [],
+			"Command": [
+				"make",
+				"java_test"
+			],
+			"Manual": false,
+			"Shard": "10",
+			"RetryMax": 0,
+			"Tags": []
+		},
 		"client_test": {
 			"File": "",
 			"Args": [],
