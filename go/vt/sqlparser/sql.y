@@ -82,6 +82,7 @@ func skipToEnd(yylex interface{}) {
   expr          Expr
   exprs         Exprs
   boolVal       BoolVal
+  boolean       bool
   sqlVal        *SQLVal
   colTuple      ColTuple
   values        Values
@@ -151,7 +152,7 @@ func skipToEnd(yylex interface{}) {
 %left <bytes> JOIN STRAIGHT_JOIN LEFT RIGHT INNER OUTER CROSS NATURAL USE FORCE
 %left <bytes> ON USING
 %token <empty> '(' ',' ')'
-%token <bytes> ID HEX STRING INTEGRAL FLOAT HEXNUM VALUE_ARG LIST_ARG COMMENT COMMENT_KEYWORD BIT_LITERAL
+%token <bytes> ID AT_ID AT_AT_ID HEX STRING INTEGRAL FLOAT HEXNUM VALUE_ARG LIST_ARG COMMENT COMMENT_KEYWORD BIT_LITERAL
 %token <bytes> NULL TRUE FALSE OFF
 
 // Precedence dictated by mysql. But the vitess grammar is simplified.
@@ -283,6 +284,7 @@ func skipToEnd(yylex interface{}) {
 %type <expr> where_expression_opt
 %type <expr> condition
 %type <boolVal> boolean_value
+%type <boolean> enforced_opt
 %type <str> compare
 %type <ins> insert_data
 %type <expr> value value_expression num_val as_of_opt
@@ -346,7 +348,7 @@ func skipToEnd(yylex interface{}) {
 %type <strs> enum_values
 %type <columnDefinition> column_definition
 %type <indexDefinition> index_definition
-%type <constraintDefinition> constraint_definition
+%type <constraintDefinition> constraint_definition check_constraint_definition
 %type <str> index_or_key indexes_or_keys index_or_key_opt
 %type <str> from_or_in show_database_opt
 %type <str> name_opt
@@ -359,13 +361,13 @@ func skipToEnd(yylex interface{}) {
 %type <indexColumns> index_column_list
 %type <indexOption> index_option
 %type <indexOptions> index_option_list index_option_list_opt
-%type <constraintInfo> constraint_info
+%type <constraintInfo> constraint_info check_constraint_info
 %type <partDefs> partition_definitions
 %type <partDef> partition_definition
 %type <partSpec> partition_operation
 %type <vindexParam> vindex_param
 %type <vindexParams> vindex_param_list vindex_params_opt
-%type <colIdent> vindex_type vindex_type_opt
+%type <colIdent> id_or_var id_or_var_opt vindex_type vindex_type_opt
 %type <bytes> ignored_alter_object_type
 %type <ReferenceAction> fk_reference_action fk_on_delete fk_on_update
 %type <str> constraint_symbol_opt infile_opt starting_by_opt terminated_by_opt escaped_by_opt
@@ -424,6 +426,29 @@ command:
 {
   setParseTree(yylex, nil)
 }
+
+id_or_var:
+  ID
+  {
+    $$ = NewColIdentWithAt(string($1), NoAt)
+  }
+| AT_ID
+  {
+    $$ = NewColIdentWithAt(string($1), SingleAt)
+  }
+| AT_AT_ID
+  {
+    $$ = NewColIdentWithAt(string($1), DoubleAt)
+  }
+
+id_or_var_opt:
+  {
+    $$ = NewColIdentWithAt("", NoAt)
+  }
+| id_or_var
+  {
+    $$ = $1
+  }
 
 load_statement:
   LOAD DATA local_opt infile_opt load_into_table_name opt_partition_clause charset_opt fields_opt lines_opt ignore_number_opt column_list_opt
@@ -1152,15 +1177,29 @@ table_column_list:
     $$ = &TableSpec{}
     $$.AddColumn($1)
   }
+| check_constraint_definition
+  {
+    $$ = &TableSpec{}
+    $$.AddConstraint($1)
+  }
 | table_column_list ',' column_definition
   {
     $$.AddColumn($3)
+  }
+| table_column_list ',' column_definition check_constraint_definition
+  {
+    $$.AddColumn($3)
+    $$.AddConstraint($4)
   }
 | table_column_list ',' index_definition
   {
     $$.AddIndex($3)
   }
 | table_column_list ',' constraint_definition
+  {
+    $$.AddConstraint($3)
+  }
+| table_column_list ',' check_constraint_definition
   {
     $$.AddConstraint($3)
   }
@@ -1795,6 +1834,16 @@ constraint_definition:
   }
 
 
+check_constraint_definition:
+  CONSTRAINT id_or_var_opt check_constraint_info
+  {
+    $$ = &ConstraintDefinition{Name: string($2.String()), Details: $3}
+  }
+|  check_constraint_info
+  {
+    $$ = &ConstraintDefinition{Details: $1}
+  }
+
 constraint_info:
   FOREIGN KEY '(' column_list ')' REFERENCES table_name '(' column_list ')'
   {
@@ -1815,6 +1864,12 @@ constraint_info:
 | FOREIGN KEY '(' column_list ')' REFERENCES table_name '(' column_list ')' fk_on_update fk_on_delete
   {
     $$ = &ForeignKeyDefinition{Source: $4, ReferencedTable: $7, ReferencedColumns: $9, OnDelete: $12, OnUpdate: $11}
+  }
+
+check_constraint_info:
+  CHECK '(' expression ')' enforced_opt
+  {
+    $$ = &CheckConstraintDefinition{Expr: $3, Enforced: $5}
   }
 
 from_or_in:
@@ -1872,6 +1927,19 @@ fk_reference_action:
 | SET NULL
   {
     $$ = SetNull
+  }
+
+enforced_opt:
+  {
+    $$ = true
+  }
+| ENFORCED
+  {
+    $$ = true
+  }
+| NOT ENFORCED
+  {
+    $$ = false
   }
 
 table_option_list:

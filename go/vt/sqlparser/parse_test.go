@@ -2712,6 +2712,15 @@ func TestCreateTable(t *testing.T) {
 			"	constraint second_ibfk_1 foreign key (k, j) references simple (a, b) on update cascade\n" +
 			")",
 
+		// check constraint
+		"create table t (\n" +
+			"	id int auto_increment,\n" +
+			"	username varchar,\n" +
+			"	a int,\n" +
+			"	b int,\n" +
+			"	check (b in (0, 1))\n" +
+			")",
+
 		// table options
 		"create table t (\n" +
 			"	id int auto_increment\n" +

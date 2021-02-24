@@ -2230,11 +2230,11 @@ func (a ReferenceAction) Format(buf *TrackedBuffer) {
 
 // ForeignKeyDefinition describes a foreign key
 type ForeignKeyDefinition struct {
-	Source            Columns
-	ReferencedTable   TableName
-	ReferencedColumns Columns
-	OnDelete          ReferenceAction
-	OnUpdate          ReferenceAction
+    Source            Columns
+    ReferencedTable   TableName
+    ReferencedColumns Columns
+    OnDelete          ReferenceAction
+    OnUpdate          ReferenceAction
 }
 
 var _ ConstraintInfo = &ForeignKeyDefinition{}
@@ -2261,6 +2261,27 @@ func (f *ForeignKeyDefinition) walkSubtree(visit Visit) error {
 	}
 	return Walk(visit, f.ReferencedColumns)
 }
+
+type CheckConstraintDefinition struct {
+    Expr     Expr
+    Enforced bool
+}
+
+var _ ConstraintInfo = &CheckConstraintDefinition{}
+
+// Format formats the node.
+func (c *CheckConstraintDefinition) Format(buf *TrackedBuffer) {
+	buf.Myprintf("check (%v)", c.Expr)
+	if !c.Enforced {
+		buf.Myprintf(" not enforced")
+	}
+}
+
+func (f *CheckConstraintDefinition) walkSubtree(visit Visit) error {
+	return nil
+}
+
+func (f *CheckConstraintDefinition) constraintInfo() {}
 
 // Format strings for explain statements
 const (
@@ -4507,6 +4528,18 @@ func (node OnDup) walkSubtree(visit Visit) error {
 	return Walk(visit, SetExprs(node))
 }
 
+const (
+	// NoAt represents no @
+	NoAt AtCount = iota
+	// SingleAt represents @
+	SingleAt
+	// DoubleAt represnts @@
+	DoubleAt
+)
+
+// AtCount represents the '@' count in ColIdent
+type AtCount int
+
 // ColIdent is a case insensitive SQL identifier. It will be escaped with
 // backquotes if necessary.
 type ColIdent struct {
@@ -4515,12 +4548,21 @@ type ColIdent struct {
 	// last field in the struct.
 	_            [0]struct{ _ []byte }
 	val, lowered string
+    at AtCount
 }
 
 // NewColIdent makes a new ColIdent.
 func NewColIdent(str string) ColIdent {
 	return ColIdent{
 		val: str,
+	}
+}
+
+// NewColIdentWithAt makes a new ColIdent.
+func NewColIdentWithAt(str string, at AtCount) ColIdent {
+	return ColIdent{
+		val: str,
+		at:  at,
 	}
 }
 
