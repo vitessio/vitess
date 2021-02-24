@@ -58,6 +58,7 @@ type (
 	DDLStatement interface {
 		iDDLStatement()
 		IsFullyParsed() bool
+		IsTemporary() bool
 		GetTable() TableName
 		GetAction() DDLAction
 		GetOptLike() *OptLike
@@ -421,6 +422,7 @@ type (
 
 	// DropTable represents a DROP TABLE statement.
 	DropTable struct {
+		Temp       bool
 		FromTables TableNames
 		// The following fields are set if a DDL was fully analyzed.
 		IfExists bool
@@ -434,6 +436,7 @@ type (
 
 	// CreateTable represents a CREATE TABLE statement.
 	CreateTable struct {
+		Temp        bool
 		Table       TableName
 		IfNotExists bool
 		TableSpec   *TableSpec
@@ -675,6 +678,46 @@ func (node *DropTable) IsFullyParsed() bool {
 // IsFullyParsed implements the DDLStatement interface
 func (node *AlterView) IsFullyParsed() bool {
 	return true
+}
+
+// IsTemporary implements the DDLStatement interface
+func (*TruncateTable) IsTemporary() bool {
+	return false
+}
+
+// IsTemporary implements the DDLStatement interface
+func (*RenameTable) IsTemporary() bool {
+	return false
+}
+
+// IsTemporary implements the DDLStatement interface
+func (node *CreateTable) IsTemporary() bool {
+	return node.Temp
+}
+
+// IsTemporary implements the DDLStatement interface
+func (node *AlterTable) IsTemporary() bool {
+	return false
+}
+
+// IsTemporary implements the DDLStatement interface
+func (node *CreateView) IsTemporary() bool {
+	return false
+}
+
+// IsTemporary implements the DDLStatement interface
+func (node *DropView) IsTemporary() bool {
+	return false
+}
+
+// IsTemporary implements the DDLStatement interface
+func (node *DropTable) IsTemporary() bool {
+	return node.Temp
+}
+
+// IsTemporary implements the DDLStatement interface
+func (node *AlterView) IsTemporary() bool {
+	return false
 }
 
 // GetTable implements the DDLStatement interface
@@ -1165,34 +1208,28 @@ type (
 		ShowCollationFilterOpt Expr
 	}
 
-	// ShowColumns is of ShowInternal type, holds the show columns statement.
-	ShowColumns struct {
-		Full   string
-		Table  TableName
-		DbName string
-		Filter *ShowFilter
-	}
-
-	// ShowTableStatus is of ShowInternal type, holds SHOW TABLE STATUS queries.
-	ShowTableStatus struct {
-		DatabaseName string
-		Filter       *ShowFilter
-	}
-
 	// ShowCommandType represents the show statement type.
 	ShowCommandType int8
 
 	// ShowBasic is of ShowInternal type, holds Simple SHOW queries with a filter.
 	ShowBasic struct {
 		Command ShowCommandType
+		Full    bool
+		Tbl     TableName
+		DbName  string
 		Filter  *ShowFilter
+	}
+
+	// ShowCreate is of ShowInternal type, holds SHOW CREATE queries.
+	ShowCreate struct {
+		Command ShowCommandType
+		Op      TableName
 	}
 )
 
-func (*ShowLegacy) isShowInternal()      {}
-func (*ShowColumns) isShowInternal()     {}
-func (*ShowTableStatus) isShowInternal() {}
-func (*ShowBasic) isShowInternal()       {}
+func (*ShowLegacy) isShowInternal() {}
+func (*ShowBasic) isShowInternal()  {}
+func (*ShowCreate) isShowInternal() {}
 
 // InsertRows represents the rows for an INSERT statement.
 type InsertRows interface {
@@ -2400,17 +2437,6 @@ func (node *Show) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
-func (node *ShowColumns) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "show %s", node.Full)
-	buf.astPrintf(node, "columns from %v", node.Table)
-
-	buf.printIf(node.DbName != "", " from "+node.DbName)
-	if node.Filter != nil {
-		buf.astPrintf(node, "%v", node.Filter)
-	}
-}
-
-// Format formats the node.
 func (node *ShowLegacy) Format(buf *TrackedBuffer) {
 	nodeType := strings.ToLower(node.Type)
 	if (nodeType == "tables" || nodeType == "columns" || nodeType == "fields" || nodeType == "index" || nodeType == "keys" || nodeType == "indexes" ||
@@ -3104,18 +3130,24 @@ func (node *Load) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
-func (node *ShowTableStatus) Format(buf *TrackedBuffer) {
-	buf.WriteString("show table status")
-	if node.DatabaseName != "" {
-		buf.WriteString(" from ")
-		buf.WriteString(node.DatabaseName)
+func (node *ShowBasic) Format(buf *TrackedBuffer) {
+	buf.WriteString("show")
+	if node.Full {
+		buf.WriteString(" full")
+	}
+	buf.astPrintf(node, "%s", node.Command.ToString())
+	if !node.Tbl.IsEmpty() {
+		buf.astPrintf(node, " from %v", node.Tbl)
+	}
+	if node.DbName != "" {
+		buf.astPrintf(node, " from %s", node.DbName)
 	}
 	buf.astPrintf(node, "%v", node.Filter)
 }
 
 // Format formats the node.
-func (node *ShowBasic) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "show%s%v", node.Command.ToString(), node.Filter)
+func (node *ShowCreate) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "show%s %v", node.Command.ToString(), node.Op)
 }
 
 // Format formats the node.
@@ -3170,11 +3202,17 @@ func (node *AlterDatabase) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *CreateTable) Format(buf *TrackedBuffer) {
-	if node.IfNotExists {
-		buf.astPrintf(node, "create table if not exists %v", node.Table)
-	} else {
-		buf.astPrintf(node, "create table %v", node.Table)
+	buf.WriteString("create ")
+	if node.Temp {
+		buf.WriteString("temporary ")
 	}
+	buf.WriteString("table ")
+
+	if node.IfNotExists {
+		buf.WriteString("if not exists ")
+	}
+	buf.astPrintf(node, "%v", node.Table)
+
 	if node.OptLike != nil {
 		buf.astPrintf(node, " %v", node.OptLike)
 	}
@@ -3239,11 +3277,15 @@ func (node *AlterView) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *DropTable) Format(buf *TrackedBuffer) {
+	temp := ""
+	if node.Temp {
+		temp = " temporary"
+	}
 	exists := ""
 	if node.IfExists {
 		exists = " if exists"
 	}
-	buf.astPrintf(node, "drop table%s %v", exists, node.FromTables)
+	buf.astPrintf(node, "drop%s table%s %v", temp, exists, node.FromTables)
 }
 
 // Format formats the node.

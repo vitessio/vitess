@@ -310,7 +310,7 @@ func (qe *QueryEngine) GetPlan(ctx context.Context, logStats *tabletenv.LogStats
 	plan.Rules = qe.queryRuleSources.FilterByPlan(sql, plan.PlanID, plan.TableName().String())
 	plan.buildAuthorized()
 	if plan.PlanID.IsSelect() {
-		if qe.enableQueryPlanFieldCaching && plan.FieldQuery != nil {
+		if !skipQueryPlanCache && qe.enableQueryPlanFieldCaching && plan.FieldQuery != nil {
 			conn, err := qe.conns.Get(ctx)
 			if err != nil {
 				return nil, err
@@ -411,6 +411,12 @@ func (qe *QueryEngine) SetQueryPlanCacheCap(size int) {
 // QueryPlanCacheCap returns the capacity of the query cache.
 func (qe *QueryEngine) QueryPlanCacheCap() int {
 	return int(qe.plans.MaxCapacity())
+}
+
+// QueryPlanCacheLen returns the length (size in entries) of the query cache
+func (qe *QueryEngine) QueryPlanCacheLen() int {
+	qe.plans.Wait()
+	return qe.plans.Len()
 }
 
 // AddStats adds the given stats for the planName.tableName

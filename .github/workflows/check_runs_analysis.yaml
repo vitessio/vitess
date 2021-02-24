@@ -4,6 +4,7 @@ on:
 
 jobs:
   analyze:
+    if: github.repository == 'vitessio/vitess'
     name: analyze_check_runs
     runs-on: ubuntu-latest
     steps:

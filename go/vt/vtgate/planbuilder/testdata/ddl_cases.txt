@@ -73,7 +73,7 @@
       "Name": "user",
       "Sharded": true
     },
-    "Query": "alter table user add column id int"
+    "Query": "alter table `user` add column id int"
   }
 }
 
@@ -155,7 +155,7 @@
       "Name": "user",
       "Sharded": true
     },
-    "Query": "alter table user add index a (id)"
+    "Query": "alter table `user` add index a (id)"
   }
 }
 
@@ -260,7 +260,7 @@
       "Name": "user",
       "Sharded": true
     },
-    "Query": "alter view user_extra as select * from user"
+    "Query": "alter view user_extra as select * from `user`"
   }
 }
 
@@ -321,5 +321,37 @@
       "Sharded": false
     },
     "Query": "rename table a to b"
+  }
+}
+
+# CREATE temp TABLE
+"create temporary table a(id int)"
+{
+  "QueryType": "DDL",
+  "Original": "create temporary table a(id int)",
+  "Instructions": {
+    "OperatorType": "DDL",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "create temporary table a (\n\tid int\n)",
+    "TempTable": true
+  }
+}
+
+# DROP temp TABLE
+"drop temporary table a"
+{
+  "QueryType": "DDL",
+  "Original": "drop temporary table a",
+  "Instructions": {
+    "OperatorType": "DDL",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "drop temporary table a",
+    "TempTable": true
   }
 }

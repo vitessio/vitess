@@ -239,6 +239,26 @@ func TestEmptyStatement(t *testing.T) {
 	assertMatches(t, conn, `select c1,c2,c3 from t1`, `[[INT64(300) INT64(100) INT64(300)] [INT64(301) INT64(101) INT64(301)]]`)
 }
 
+func TestTopoDownServingQuery(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	vtParams := mysql.ConnParams{
+		Host: "localhost",
+		Port: clusterInstance.VtgateMySQLPort,
+	}
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.Nil(t, err)
+	defer conn.Close()
+
+	defer exec(t, conn, `delete from t1`)
+
+	execMulti(t, conn, `insert into t1(c1, c2, c3, c4) values (300,100,300,'abc'); ;; insert into t1(c1, c2, c3, c4) values (301,101,301,'abcd');;`)
+	assertMatches(t, conn, `select c1,c2,c3 from t1`, `[[INT64(300) INT64(100) INT64(300)] [INT64(301) INT64(101) INT64(301)]]`)
+	clusterInstance.TopoProcess.TearDown(clusterInstance.Cell, clusterInstance.OriginalVTDATAROOT, clusterInstance.CurrentVTDATAROOT, true, *clusterInstance.TopoFlavorString())
+	time.Sleep(3 * time.Second)
+	assertMatches(t, conn, `select c1,c2,c3 from t1`, `[[INT64(300) INT64(100) INT64(300)] [INT64(301) INT64(101) INT64(301)]]`)
+}
+
 func TestInsertAllDefaults(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()
@@ -320,6 +340,30 @@ func TestCallProcedure(t *testing.T) {
 	_, err = conn.ExecuteFetch(`CALL out_parameter(@foo)`, 100, true)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "OUT and INOUT parameters are not supported")
+}
+
+func TestTempTable(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	vtParams := mysql.ConnParams{
+		Host: "localhost",
+		Port: clusterInstance.VtgateMySQLPort,
+	}
+	conn1, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn1.Close()
+
+	_ = exec(t, conn1, `create temporary table temp_t(id bigint primary key)`)
+	_ = exec(t, conn1, `insert into temp_t(id) values (1),(2),(3)`)
+	assertMatches(t, conn1, `select id from temp_t order by id`, `[[INT64(1)] [INT64(2)] [INT64(3)]]`)
+	assertMatches(t, conn1, `select count(table_id) from information_schema.innodb_temp_table_info`, `[[INT64(1)]]`)
+
+	conn2, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn2.Close()
+
+	assertMatches(t, conn2, `select count(table_id) from information_schema.innodb_temp_table_info`, `[[INT64(1)]]`)
+	execAssertError(t, conn2, `show create table temp_t`, `Table 'vt_customer.temp_t' doesn't exist (errno 1146) (sqlstate 42S02)`)
 }
 
 func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {

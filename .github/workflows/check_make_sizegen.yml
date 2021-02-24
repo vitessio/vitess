@@ -1,0 +1,35 @@
+name: check_make_sizegen
+on: [push, pull_request]
+jobs:
+
+  build:
+    name: Check Make Sizegen
+    runs-on: ubuntu-latest
+    steps:
+
+      - name: Set up Go
+        uses: actions/setup-go@v1
+        with:
+          go-version: 1.15
+
+      - name: Check out code
+        uses: actions/checkout@v2
+
+      - name: Get dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y mysql-server mysql-client make unzip g++ etcd curl git wget
+          sudo service mysql stop
+          sudo service etcd stop
+          sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
+          sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
+          go mod download
+
+      - name: Run make minimaltools
+        run: |
+          make minimaltools
+
+      - name: check_make_sizegen
+        run: |
+          tools/check_make_sizegen.sh
+

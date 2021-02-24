@@ -36,6 +36,9 @@ const (
 	// MysqlClearPassword transmits the password in the clear.
 	MysqlClearPassword = "mysql_clear_password"
 
+	// CachingSha2Password uses a salt and transmits a SHA256 hash on the wire.
+	CachingSha2Password = "caching_sha2_password"
+
 	// MysqlDialog uses the dialog plugin on the client side.
 	// It transmits data in the clear.
 	MysqlDialog = "dialog"
@@ -230,14 +233,26 @@ const (
 	// EOFPacket is the header of the EOF packet.
 	EOFPacket = 0xfe
 
-	// AuthSwitchRequestPacket is used to switch auth method.
-	AuthSwitchRequestPacket = 0xfe
-
 	// ErrPacket is the header of the error packet.
 	ErrPacket = 0xff
 
 	// NullValue is the encoded value of NULL.
 	NullValue = 0xfb
+)
+
+// Auth packet types
+const (
+	// AuthMoreDataPacket is sent when server requires more data to authenticate
+	AuthMoreDataPacket = 0x01
+
+	// CachingSha2FastAuth is sent before OKPacket when server authenticates using cache
+	CachingSha2FastAuth = 0x03
+
+	// CachingSha2FullAuth is sent when server requests un-scrambled password to authenticate
+	CachingSha2FullAuth = 0x04
+
+	// AuthSwitchRequestPacket is used to switch auth method.
+	AuthSwitchRequestPacket = 0xfe
 )
 
 // Error codes for client-side errors.

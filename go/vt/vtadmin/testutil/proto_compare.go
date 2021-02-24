@@ -24,6 +24,27 @@ import (
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 )
 
+// AssertKeyspaceSlicesEqual is a convenience function to assert that two
+// []*vtadminpb.Keyspaces slices are equal, after clearing out any reserved
+// proto XXX_ fields.
+func AssertKeyspaceSlicesEqual(t *testing.T, expected []*vtadminpb.Keyspace, actual []*vtadminpb.Keyspace, msgAndArgs ...interface{}) {
+	t.Helper()
+
+	for _, ks := range [][]*vtadminpb.Keyspace{expected, actual} {
+		for _, k := range ks {
+			if k.Shards != nil {
+				for _, ss := range k.Shards {
+					ss.XXX_sizecache = 0
+					ss.XXX_unrecognized = nil
+					ss.Shard.KeyRange = nil
+				}
+			}
+		}
+	}
+
+	assert.ElementsMatch(t, expected, actual, msgAndArgs...)
+}
+
 // AssertSchemaSlicesEqual is a convenience function to assert that two
 // []*vtadminpb.Schema slices are equal, after clearing out any reserved
 // proto XXX_ fields.
