@@ -30,8 +30,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/dolthub/vitess/go/vt/vttls"
+	"github.com/stretchr/testify/assert"
 )
 
 // TestClientServer generates:

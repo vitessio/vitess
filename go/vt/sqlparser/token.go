@@ -274,7 +274,7 @@ var keywords = map[string]int{
 	"lines":               LINES,
 	"linestring":          LINESTRING,
 	"load":                LOAD,
-	"local":			   LOCAL,
+	"local":               LOCAL,
 	"localtime":           LOCALTIME,
 	"localtimestamp":      LOCALTIMESTAMP,
 	"lock":                LOCK,

@@ -251,16 +251,16 @@ func TestDDL(t *testing.T) {
 	}, {
 		query: "alter table a auto_increment 19",
 		output: &DDL{
-			Action: AlterStr,
-			Table: TableName{Name: NewTableIdent("a")},
+			Action:      AlterStr,
+			Table:       TableName{Name: NewTableIdent("a")},
 			AutoIncSpec: &AutoIncSpec{Value: newIntVal("19")},
 		},
 		affected: []string{"a"},
 	}, {
 		query: "alter table a auto_increment 19.9",
 		output: &DDL{
-			Action: AlterStr,
-			Table: TableName{Name: NewTableIdent("a")},
+			Action:      AlterStr,
+			Table:       TableName{Name: NewTableIdent("a")},
 			AutoIncSpec: &AutoIncSpec{Value: newFloatVal("19.9")},
 		},
 		affected: []string{"a"},
@@ -709,10 +709,10 @@ func TestColIdentMarshal(t *testing.T) {
 }
 
 func TestColIdentSize(t *testing.T) {
-	size := unsafe.Sizeof(NewColIdent(""))
-	want := 2 * unsafe.Sizeof("")
+	size := unsafe.Sizeof(NewColIdent(""))g
+	want := 2 * unsafe.Sizeof("") + unsafe.Sizeof(AtCount(0))
 	if size != want {
-		t.Errorf("Size of ColIdent: %d, want 32", want)
+		t.Errorf("Size of ColIdent: %d, want %d", want, size)
 	}
 }
 

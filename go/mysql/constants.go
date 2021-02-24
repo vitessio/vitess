@@ -339,10 +339,10 @@ const (
 	ErNoReferencedRow2              = 1452
 
 	// already exists
-	ERTableExists = 1050
-	ERDupEntry    = 1062
-	ERFileExists  = 1086
-	ERUDFExists   = 1125
+	ERTableExists    = 1050
+	ERDupEntry       = 1062
+	ERFileExists     = 1086
+	ERUDFExists      = 1125
 	ERDbCreateExists = 1007
 
 	// aborted

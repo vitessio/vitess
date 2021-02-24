@@ -523,18 +523,18 @@ type LoadStatement interface {
 
 // Load represents a LOAD statement
 type Load struct {
-	Local BoolVal
-	Infile string
-	Table TableName
+	Local     BoolVal
+	Infile    string
+	Table     TableName
 	Partition Partitions
-	Charset string
+	Charset   string
 	*Fields
 	*Lines
 	IgnoreNum *SQLVal
 	Columns
 }
 
-func (*Load) iLoadStatement()      {}
+func (*Load) iLoadStatement() {}
 
 func (node *Load) Format(buf *TrackedBuffer) {
 	local := ""
@@ -580,7 +580,7 @@ func (node *Load) walkSubtree(visit Visit) error {
 type Fields struct {
 	TerminatedBy string
 	*EnclosedBy
-	EscapedBy    string
+	EscapedBy string
 	SQLNode
 }
 
@@ -611,7 +611,7 @@ func (node *Fields) walkSubtree(visit Visit) error {
 
 type EnclosedBy struct {
 	Optionally BoolVal
-	Delim string
+	Delim      string
 	SQLNode
 }
 
@@ -631,7 +631,7 @@ func (node *EnclosedBy) Format(buf *TrackedBuffer) {
 }
 
 type Lines struct {
-	StartingBy string
+	StartingBy   string
 	TerminatedBy string
 	SQLNode
 }
@@ -1058,12 +1058,12 @@ func (node *Set) walkSubtree(visit Visit) error {
 
 // DBDDL represents a CREATE, DROP database statement.
 type DBDDL struct {
-	Action   string
-	DBName   string
+	Action      string
+	DBName      string
 	IfNotExists bool
-	IfExists bool
-	Collate  string
-	Charset  string
+	IfExists    bool
+	Collate     string
+	Charset     string
 }
 
 // Format formats the node.
@@ -1111,10 +1111,11 @@ type ProcedureSpec struct {
 }
 
 type ProcedureParamDirection string
+
 const (
-	ProcedureParamDirection_In ProcedureParamDirection = "in"
+	ProcedureParamDirection_In    ProcedureParamDirection = "in"
 	ProcedureParamDirection_Inout ProcedureParamDirection = "inout"
-	ProcedureParamDirection_Out ProcedureParamDirection = "out"
+	ProcedureParamDirection_Out   ProcedureParamDirection = "out"
 )
 
 type ProcedureParam struct {
@@ -1124,15 +1125,16 @@ type ProcedureParam struct {
 }
 
 type CharacteristicValue string
+
 const (
-	CharacteristicValue_Comment CharacteristicValue = "comment"
-	CharacteristicValue_LanguageSql CharacteristicValue = "language sql"
-	CharacteristicValue_Deterministic CharacteristicValue = "deterministic"
-	CharacteristicValue_NotDeterministic CharacteristicValue = "not deterministic"
-	CharacteristicValue_ContainsSql CharacteristicValue = "contains sql"
-	CharacteristicValue_NoSql CharacteristicValue = "no sql"
-	CharacteristicValue_ReadsSqlData CharacteristicValue = "reads sql data"
-	CharacteristicValue_ModifiesSqlData CharacteristicValue = "modifies sql data"
+	CharacteristicValue_Comment            CharacteristicValue = "comment"
+	CharacteristicValue_LanguageSql        CharacteristicValue = "language sql"
+	CharacteristicValue_Deterministic      CharacteristicValue = "deterministic"
+	CharacteristicValue_NotDeterministic   CharacteristicValue = "not deterministic"
+	CharacteristicValue_ContainsSql        CharacteristicValue = "contains sql"
+	CharacteristicValue_NoSql              CharacteristicValue = "no sql"
+	CharacteristicValue_ReadsSqlData       CharacteristicValue = "reads sql data"
+	CharacteristicValue_ModifiesSqlData    CharacteristicValue = "modifies sql data"
 	CharacteristicValue_SqlSecurityDefiner CharacteristicValue = "sql security definer"
 	CharacteristicValue_SqlSecurityInvoker CharacteristicValue = "sql security invoker"
 )
@@ -1141,6 +1143,7 @@ type Characteristic struct {
 	Type    CharacteristicValue
 	Comment string
 }
+
 func (c Characteristic) String() string {
 	if c.Type == CharacteristicValue_Comment {
 		return fmt.Sprintf("comment '%s'", c.Comment)
@@ -1291,12 +1294,12 @@ func (node *DDL) Format(buf *TrackedBuffer) {
 				if i > 0 {
 					sb.WriteString(", ")
 				}
-				sb.WriteString(string(param.Direction)+" ")
+				sb.WriteString(string(param.Direction) + " ")
 				sb.WriteString(fmt.Sprintf("%s %s", param.Name, param.Type.String()))
 			}
 			sb.WriteString(")")
 			for _, characteristic := range proc.Characteristics {
-				sb.WriteString(" "+characteristic.String())
+				sb.WriteString(" " + characteristic.String())
 			}
 			buf.Myprintf("%s %v", sb.String(), proc.Body)
 		} else {
@@ -2230,11 +2233,11 @@ func (a ReferenceAction) Format(buf *TrackedBuffer) {
 
 // ForeignKeyDefinition describes a foreign key
 type ForeignKeyDefinition struct {
-    Source            Columns
-    ReferencedTable   TableName
-    ReferencedColumns Columns
-    OnDelete          ReferenceAction
-    OnUpdate          ReferenceAction
+	Source            Columns
+	ReferencedTable   TableName
+	ReferencedColumns Columns
+	OnDelete          ReferenceAction
+	OnUpdate          ReferenceAction
 }
 
 var _ ConstraintInfo = &ForeignKeyDefinition{}
@@ -2263,8 +2266,8 @@ func (f *ForeignKeyDefinition) walkSubtree(visit Visit) error {
 }
 
 type CheckConstraintDefinition struct {
-    Expr     Expr
-    Enforced bool
+	Expr     Expr
+	Enforced bool
 }
 
 var _ ConstraintInfo = &CheckConstraintDefinition{}
@@ -2635,8 +2638,8 @@ func (node *AliasedExpr) walkSubtree(visit Visit) error {
 // Over defines an OVER expression in a select
 type Over struct {
 	PartitionBy Exprs
-	OrderBy OrderBy
-	WindowName ColIdent
+	OrderBy     OrderBy
+	WindowName  ColIdent
 }
 
 // Format formats the node.
@@ -4548,7 +4551,7 @@ type ColIdent struct {
 	// last field in the struct.
 	_            [0]struct{ _ []byte }
 	val, lowered string
-    at AtCount
+	at           AtCount
 }
 
 // NewColIdent makes a new ColIdent.

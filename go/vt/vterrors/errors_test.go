@@ -24,8 +24,8 @@ import (
 	"strings"
 	"testing"
 
-	"golang.org/x/net/context"
 	vtrpcpb "github.com/dolthub/vitess/go/vt/proto/vtrpc"
+	"golang.org/x/net/context"
 )
 
 func TestWrapNil(t *testing.T) {
