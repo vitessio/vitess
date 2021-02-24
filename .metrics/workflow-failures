@@ -3032,3 +3032,6 @@
 2021-02-24T14:12:40Z,region_example,https://github.com/vitessio/vitess/actions/runs/596286915
 2021-02-24T14:12:40Z,unit_race,https://github.com/vitessio/vitess/actions/runs/596286917
 2021-02-24T14:23:48Z,Unit Test (mariadb101),https://github.com/vitessio/vitess/actions/runs/596319035
+2021-02-24T17:10:03Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/596778265
+2021-02-24T17:10:03Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/596778260
+2021-02-24T17:10:03Z,unit_race,https://github.com/vitessio/vitess/actions/runs/596778262
