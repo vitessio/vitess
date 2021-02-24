@@ -112,7 +112,7 @@ func commandEmergencyReparentShard(cmd *cobra.Command, args []string) error {
 		Shard:               shard,
 		NewPrimary:          newPrimaryAlias,
 		IgnoreReplicas:      ignoreReplicaAliases,
-		WaitReplicasTimeout: ptypes.DurationProto(emergencyReparentShardOptions.WaitReplicasTimeout),
+		WaitReplicasTimeout: protoutil.DurationToProto(emergencyReparentShardOptions.WaitReplicasTimeout),
 	})
 	if err != nil {
 		return err
@@ -196,7 +196,7 @@ func commandPlannedReparentShard(cmd *cobra.Command, args []string) error {
 		Shard:               shard,
 		NewPrimary:          newPrimaryAlias,
 		AvoidPrimary:        avoidPrimaryAlias,
-		WaitReplicasTimeout: ptypes.DurationProto(plannedReparentShardOptions.WaitReplicasTimeout),
+		WaitReplicasTimeout: protoutil.DurationToProto(plannedReparentShardOptions.WaitReplicasTimeout),
 	})
 	if err != nil {
 		return err
