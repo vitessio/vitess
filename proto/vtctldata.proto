@@ -22,8 +22,6 @@ option go_package = "vitess.io/vitess/go/vt/proto/vtctldata";
 
 package vtctldata;
 
-import "google/protobuf/duration.proto";
-
 import "logutil.proto";
 import "mysqlctl.proto";
 import "tabletmanagerdata.proto";
@@ -186,7 +184,7 @@ message GetKeyspacesRequest {
 }
 
 message GetKeyspacesResponse {
-  repeated Keyspace keyspaces = 1; 
+  repeated Keyspace keyspaces = 1;
 }
 
 message GetKeyspaceRequest {
@@ -273,7 +271,7 @@ message InitShardPrimaryRequest {
   string shard = 2;
   topodata.TabletAlias primary_elect_tablet_alias = 3;
   bool force = 4;
-  google.protobuf.Duration wait_replicas_timeout = 5;
+  vttime.Duration wait_replicas_timeout = 5;
 }
 
 message InitShardPrimaryResponse {
