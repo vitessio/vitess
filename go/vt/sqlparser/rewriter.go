@@ -17,711 +17,711 @@ limitations under the License.
 
 package sqlparser
 
-func replaceAddColumnsColumns(idx int) func(SQLNode, SQLNode) {
+func replaceRefOfAddColumnsColumns(idx int) func(SQLNode, SQLNode) {
 	return func(newNode, container SQLNode) {
 		container.(*AddColumns).Columns[idx] = newNode.(*ColumnDefinition)
 	}
 }
-func replaceStructAddColumnsFirst(newNode, parent SQLNode) {
+func replaceRefOfAddColumnsFirst(newNode, parent SQLNode) {
 	parent.(*AddColumns).First = newNode.(*ColName)
 }
-func replaceStructAddColumnsAfter(newNode, parent SQLNode) {
+func replaceRefOfAddColumnsAfter(newNode, parent SQLNode) {
 	parent.(*AddColumns).After = newNode.(*ColName)
 }
-func replaceStructAddConstraintDefinitionConstraintDefinition(newNode, parent SQLNode) {
+func replaceRefOfAddConstraintDefinitionConstraintDefinition(newNode, parent SQLNode) {
 	parent.(*AddConstraintDefinition).ConstraintDefinition = newNode.(*ConstraintDefinition)
 }
-func replaceStructAddIndexDefinitionIndexDefinition(newNode, parent SQLNode) {
+func replaceRefOfAddIndexDefinitionIndexDefinition(newNode, parent SQLNode) {
 	parent.(*AddIndexDefinition).IndexDefinition = newNode.(*IndexDefinition)
 }
-func replaceStructAliasedExprExpr(newNode, parent SQLNode) {
+func replaceRefOfAliasedExprExpr(newNode, parent SQLNode) {
 	parent.(*AliasedExpr).Expr = newNode.(Expr)
 }
-func replaceStructAliasedExprAs(newNode, parent SQLNode) {
+func replaceRefOfAliasedExprAs(newNode, parent SQLNode) {
 	parent.(*AliasedExpr).As = newNode.(ColIdent)
 }
-func replaceStructAliasedTableExprExpr(newNode, parent SQLNode) {
+func replaceRefOfAliasedTableExprExpr(newNode, parent SQLNode) {
 	parent.(*AliasedTableExpr).Expr = newNode.(SimpleTableExpr)
 }
-func replaceStructAliasedTableExprPartitions(newNode, parent SQLNode) {
+func replaceRefOfAliasedTableExprPartitions(newNode, parent SQLNode) {
 	parent.(*AliasedTableExpr).Partitions = newNode.(Partitions)
 }
-func replaceStructAliasedTableExprAs(newNode, parent SQLNode) {
+func replaceRefOfAliasedTableExprAs(newNode, parent SQLNode) {
 	parent.(*AliasedTableExpr).As = newNode.(TableIdent)
 }
-func replaceStructAliasedTableExprHints(newNode, parent SQLNode) {
+func replaceRefOfAliasedTableExprHints(newNode, parent SQLNode) {
 	parent.(*AliasedTableExpr).Hints = newNode.(*IndexHints)
 }
-func replaceStructAlterColumnColumn(newNode, parent SQLNode) {
+func replaceRefOfAlterColumnColumn(newNode, parent SQLNode) {
 	parent.(*AlterColumn).Column = newNode.(*ColName)
 }
-func replaceStructAlterColumnDefaultVal(newNode, parent SQLNode) {
+func replaceRefOfAlterColumnDefaultVal(newNode, parent SQLNode) {
 	parent.(*AlterColumn).DefaultVal = newNode.(Expr)
 }
-func replaceStructAlterTableTable(newNode, parent SQLNode) {
+func replaceRefOfAlterTableTable(newNode, parent SQLNode) {
 	parent.(*AlterTable).Table = newNode.(TableName)
 }
-func replaceAlterTableAlterOptions(idx int) func(SQLNode, SQLNode) {
+func replaceRefOfAlterTableAlterOptions(idx int) func(SQLNode, SQLNode) {
 	return func(newNode, container SQLNode) {
 		container.(*AlterTable).AlterOptions[idx] = newNode.(AlterOption)
 	}
 }
-func replaceStructAlterTablePartitionSpec(newNode, parent SQLNode) {
+func replaceRefOfAlterTablePartitionSpec(newNode, parent SQLNode) {
 	parent.(*AlterTable).PartitionSpec = newNode.(*PartitionSpec)
 }
-func replaceStructAlterViewViewName(newNode, parent SQLNode) {
+func replaceRefOfAlterViewViewName(newNode, parent SQLNode) {
 	parent.(*AlterView).ViewName = newNode.(TableName)
 }
-func replaceStructAlterViewColumns(newNode, parent SQLNode) {
+func replaceRefOfAlterViewColumns(newNode, parent SQLNode) {
 	parent.(*AlterView).Columns = newNode.(Columns)
 }
-func replaceStructAlterViewSelect(newNode, parent SQLNode) {
+func replaceRefOfAlterViewSelect(newNode, parent SQLNode) {
 	parent.(*AlterView).Select = newNode.(SelectStatement)
 }
-func replaceStructAlterVschemaTable(newNode, parent SQLNode) {
+func replaceRefOfAlterVschemaTable(newNode, parent SQLNode) {
 	parent.(*AlterVschema).Table = newNode.(TableName)
 }
-func replaceStructAlterVschemaVindexSpec(newNode, parent SQLNode) {
+func replaceRefOfAlterVschemaVindexSpec(newNode, parent SQLNode) {
 	parent.(*AlterVschema).VindexSpec = newNode.(*VindexSpec)
 }
-func replaceAlterVschemaVindexCols(idx int) func(SQLNode, SQLNode) {
+func replaceRefOfAlterVschemaVindexCols(idx int) func(SQLNode, SQLNode) {
 	return func(newNode, container SQLNode) {
 		container.(*AlterVschema).VindexCols[idx] = newNode.(ColIdent)
 	}
 }
-func replaceStructAlterVschemaAutoIncSpec(newNode, parent SQLNode) {
+func replaceRefOfAlterVschemaAutoIncSpec(newNode, parent SQLNode) {
 	parent.(*AlterVschema).AutoIncSpec = newNode.(*AutoIncSpec)
 }
-func replaceStructAndExprLeft(newNode, parent SQLNode) {
+func replaceRefOfAndExprLeft(newNode, parent SQLNode) {
 	parent.(*AndExpr).Left = newNode.(Expr)
 }
-func replaceStructAndExprRight(newNode, parent SQLNode) {
+func replaceRefOfAndExprRight(newNode, parent SQLNode) {
 	parent.(*AndExpr).Right = newNode.(Expr)
 }
-func replaceStructAutoIncSpecColumn(newNode, parent SQLNode) {
+func replaceRefOfAutoIncSpecColumn(newNode, parent SQLNode) {
 	parent.(*AutoIncSpec).Column = newNode.(ColIdent)
 }
-func replaceStructAutoIncSpecSequence(newNode, parent SQLNode) {
+func replaceRefOfAutoIncSpecSequence(newNode, parent SQLNode) {
 	parent.(*AutoIncSpec).Sequence = newNode.(TableName)
 }
-func replaceStructBinaryExprLeft(newNode, parent SQLNode) {
+func replaceRefOfBinaryExprLeft(newNode, parent SQLNode) {
 	parent.(*BinaryExpr).Left = newNode.(Expr)
 }
-func replaceStructBinaryExprRight(newNode, parent SQLNode) {
+func replaceRefOfBinaryExprRight(newNode, parent SQLNode) {
 	parent.(*BinaryExpr).Right = newNode.(Expr)
 }
-func replaceStructCallProcName(newNode, parent SQLNode) {
+func replaceRefOfCallProcName(newNode, parent SQLNode) {
 	parent.(*CallProc).Name = newNode.(TableName)
 }
-func replaceStructCallProcParams(newNode, parent SQLNode) {
+func replaceRefOfCallProcParams(newNode, parent SQLNode) {
 	parent.(*CallProc).Params = newNode.(Exprs)
 }
-func replaceStructCaseExprExpr(newNode, parent SQLNode) {
+func replaceRefOfCaseExprExpr(newNode, parent SQLNode) {
 	parent.(*CaseExpr).Expr = newNode.(Expr)
 }
-func replaceCaseExprWhens(idx int) func(SQLNode, SQLNode) {
+func replaceRefOfCaseExprWhens(idx int) func(SQLNode, SQLNode) {
 	return func(newNode, container SQLNode) {
 		container.(*CaseExpr).Whens[idx] = newNode.(*When)
 	}
 }
-func replaceStructCaseExprElse(newNode, parent SQLNode) {
+func replaceRefOfCaseExprElse(newNode, parent SQLNode) {
 	parent.(*CaseExpr).Else = newNode.(Expr)
 }
-func replaceStructChangeColumnOldColumn(newNode, parent SQLNode) {
+func replaceRefOfChangeColumnOldColumn(newNode, parent SQLNode) {
 	parent.(*ChangeColumn).OldColumn = newNode.(*ColName)
 }
-func replaceStructChangeColumnNewColDefinition(newNode, parent SQLNode) {
+func replaceRefOfChangeColumnNewColDefinition(newNode, parent SQLNode) {
 	parent.(*ChangeColumn).NewColDefinition = newNode.(*ColumnDefinition)
 }
-func replaceStructChangeColumnFirst(newNode, parent SQLNode) {
+func replaceRefOfChangeColumnFirst(newNode, parent SQLNode) {
 	parent.(*ChangeColumn).First = newNode.(*ColName)
 }
-func replaceStructChangeColumnAfter(newNode, parent SQLNode) {
+func replaceRefOfChangeColumnAfter(newNode, parent SQLNode) {
 	parent.(*ChangeColumn).After = newNode.(*ColName)
 }
-func replaceStructCheckConstraintDefinitionExpr(newNode, parent SQLNode) {
+func replaceRefOfCheckConstraintDefinitionExpr(newNode, parent SQLNode) {
 	parent.(*CheckConstraintDefinition).Expr = newNode.(Expr)
 }
-func replaceStructColNameName(newNode, parent SQLNode) {
+func replaceRefOfColNameName(newNode, parent SQLNode) {
 	parent.(*ColName).Name = newNode.(ColIdent)
 }
-func replaceStructColNameQualifier(newNode, parent SQLNode) {
+func replaceRefOfColNameQualifier(newNode, parent SQLNode) {
 	parent.(*ColName).Qualifier = newNode.(TableName)
 }
-func replaceStructCollateExprExpr(newNode, parent SQLNode) {
+func replaceRefOfCollateExprExpr(newNode, parent SQLNode) {
 	parent.(*CollateExpr).Expr = newNode.(Expr)
 }
-func replaceStructColumnDefinitionName(newNode, parent SQLNode) {
+func replaceRefOfColumnDefinitionName(newNode, parent SQLNode) {
 	parent.(*ColumnDefinition).Name = newNode.(ColIdent)
 }
-func replaceStructColumnTypeLength(newNode, parent SQLNode) {
+func replaceRefOfColumnTypeLength(newNode, parent SQLNode) {
 	parent.(*ColumnType).Length = newNode.(*Literal)
 }
-func replaceStructColumnTypeScale(newNode, parent SQLNode) {
+func replaceRefOfColumnTypeScale(newNode, parent SQLNode) {
 	parent.(*ColumnType).Scale = newNode.(*Literal)
 }
-func replaceSliceColumns(idx int) func(SQLNode, SQLNode) {
+func replaceColumns(idx int) func(SQLNode, SQLNode) {
 	return func(newNode, container SQLNode) {
 		container.(Columns)[idx] = newNode.(ColIdent)
 	}
 }
-func replaceStructComparisonExprLeft(newNode, parent SQLNode) {
+func replaceRefOfComparisonExprLeft(newNode, parent SQLNode) {
 	parent.(*ComparisonExpr).Left = newNode.(Expr)
 }
-func replaceStructComparisonExprRight(newNode, parent SQLNode) {
+func replaceRefOfComparisonExprRight(newNode, parent SQLNode) {
 	parent.(*ComparisonExpr).Right = newNode.(Expr)
 }
-func replaceStructComparisonExprEscape(newNode, parent SQLNode) {
+func replaceRefOfComparisonExprEscape(newNode, parent SQLNode) {
 	parent.(*ComparisonExpr).Escape = newNode.(Expr)
 }
-func replaceStructConstraintDefinitionDetails(newNode, parent SQLNode) {
+func replaceRefOfConstraintDefinitionDetails(newNode, parent SQLNode) {
 	parent.(*ConstraintDefinition).Details = newNode.(ConstraintInfo)
 }
-func replaceStructConvertExprExpr(newNode, parent SQLNode) {
+func replaceRefOfConvertExprExpr(newNode, parent SQLNode) {
 	parent.(*ConvertExpr).Expr = newNode.(Expr)
 }
-func replaceStructConvertExprType(newNode, parent SQLNode) {
+func replaceRefOfConvertExprType(newNode, parent SQLNode) {
 	parent.(*ConvertExpr).Type = newNode.(*ConvertType)
 }
-func replaceStructConvertTypeLength(newNode, parent SQLNode) {
+func replaceRefOfConvertTypeLength(newNode, parent SQLNode) {
 	parent.(*ConvertType).Length = newNode.(*Literal)
 }
-func replaceStructConvertTypeScale(newNode, parent SQLNode) {
+func replaceRefOfConvertTypeScale(newNode, parent SQLNode) {
 	parent.(*ConvertType).Scale = newNode.(*Literal)
 }
-func replaceStructConvertUsingExprExpr(newNode, parent SQLNode) {
+func replaceRefOfConvertUsingExprExpr(newNode, parent SQLNode) {
 	parent.(*ConvertUsingExpr).Expr = newNode.(Expr)
 }
-func replaceStructCreateTableTable(newNode, parent SQLNode) {
+func replaceRefOfCreateTableTable(newNode, parent SQLNode) {
 	parent.(*CreateTable).Table = newNode.(TableName)
 }
-func replaceStructCreateTableTableSpec(newNode, parent SQLNode) {
+func replaceRefOfCreateTableTableSpec(newNode, parent SQLNode) {
 	parent.(*CreateTable).TableSpec = newNode.(*TableSpec)
 }
-func replaceStructCreateTableOptLike(newNode, parent SQLNode) {
+func replaceRefOfCreateTableOptLike(newNode, parent SQLNode) {
 	parent.(*CreateTable).OptLike = newNode.(*OptLike)
 }
-func replaceStructCreateViewViewName(newNode, parent SQLNode) {
+func replaceRefOfCreateViewViewName(newNode, parent SQLNode) {
 	parent.(*CreateView).ViewName = newNode.(TableName)
 }
-func replaceStructCreateViewColumns(newNode, parent SQLNode) {
+func replaceRefOfCreateViewColumns(newNode, parent SQLNode) {
 	parent.(*CreateView).Columns = newNode.(Columns)
 }
-func replaceStructCreateViewSelect(newNode, parent SQLNode) {
+func replaceRefOfCreateViewSelect(newNode, parent SQLNode) {
 	parent.(*CreateView).Select = newNode.(SelectStatement)
 }
-func replaceStructCurTimeFuncExprName(newNode, parent SQLNode) {
+func replaceRefOfCurTimeFuncExprName(newNode, parent SQLNode) {
 	parent.(*CurTimeFuncExpr).Name = newNode.(ColIdent)
 }
-func replaceStructCurTimeFuncExprFsp(newNode, parent SQLNode) {
+func replaceRefOfCurTimeFuncExprFsp(newNode, parent SQLNode) {
 	parent.(*CurTimeFuncExpr).Fsp = newNode.(Expr)
 }
-func replaceStructDeleteComments(newNode, parent SQLNode) {
+func replaceRefOfDeleteComments(newNode, parent SQLNode) {
 	parent.(*Delete).Comments = newNode.(Comments)
 }
-func replaceStructDeleteTargets(newNode, parent SQLNode) {
+func replaceRefOfDeleteTargets(newNode, parent SQLNode) {
 	parent.(*Delete).Targets = newNode.(TableNames)
 }
-func replaceStructDeleteTableExprs(newNode, parent SQLNode) {
+func replaceRefOfDeleteTableExprs(newNode, parent SQLNode) {
 	parent.(*Delete).TableExprs = newNode.(TableExprs)
 }
-func replaceStructDeletePartitions(newNode, parent SQLNode) {
+func replaceRefOfDeletePartitions(newNode, parent SQLNode) {
 	parent.(*Delete).Partitions = newNode.(Partitions)
 }
-func replaceStructDeleteWhere(newNode, parent SQLNode) {
+func replaceRefOfDeleteWhere(newNode, parent SQLNode) {
 	parent.(*Delete).Where = newNode.(*Where)
 }
-func replaceStructDeleteOrderBy(newNode, parent SQLNode) {
+func replaceRefOfDeleteOrderBy(newNode, parent SQLNode) {
 	parent.(*Delete).OrderBy = newNode.(OrderBy)
 }
-func replaceStructDeleteLimit(newNode, parent SQLNode) {
+func replaceRefOfDeleteLimit(newNode, parent SQLNode) {
 	parent.(*Delete).Limit = newNode.(*Limit)
 }
-func replaceStructDerivedTableSelect(newNode, parent SQLNode) {
+func replaceRefOfDerivedTableSelect(newNode, parent SQLNode) {
 	parent.(*DerivedTable).Select = newNode.(SelectStatement)
 }
-func replaceStructDropColumnName(newNode, parent SQLNode) {
+func replaceRefOfDropColumnName(newNode, parent SQLNode) {
 	parent.(*DropColumn).Name = newNode.(*ColName)
 }
-func replaceStructDropTableFromTables(newNode, parent SQLNode) {
+func replaceRefOfDropTableFromTables(newNode, parent SQLNode) {
 	parent.(*DropTable).FromTables = newNode.(TableNames)
 }
-func replaceStructDropViewFromTables(newNode, parent SQLNode) {
+func replaceRefOfDropViewFromTables(newNode, parent SQLNode) {
 	parent.(*DropView).FromTables = newNode.(TableNames)
 }
-func replaceStructExistsExprSubquery(newNode, parent SQLNode) {
+func replaceRefOfExistsExprSubquery(newNode, parent SQLNode) {
 	parent.(*ExistsExpr).Subquery = newNode.(*Subquery)
 }
-func replaceStructExplainStmtStatement(newNode, parent SQLNode) {
+func replaceRefOfExplainStmtStatement(newNode, parent SQLNode) {
 	parent.(*ExplainStmt).Statement = newNode.(Statement)
 }
-func replaceStructExplainTabTable(newNode, parent SQLNode) {
+func replaceRefOfExplainTabTable(newNode, parent SQLNode) {
 	parent.(*ExplainTab).Table = newNode.(TableName)
 }
-func replaceSliceExprs(idx int) func(SQLNode, SQLNode) {
+func replaceExprs(idx int) func(SQLNode, SQLNode) {
 	return func(newNode, container SQLNode) {
 		container.(Exprs)[idx] = newNode.(Expr)
 	}
 }
-func replaceStructFlushTableNames(newNode, parent SQLNode) {
+func replaceRefOfFlushTableNames(newNode, parent SQLNode) {
 	parent.(*Flush).TableNames = newNode.(TableNames)
 }
-func replaceStructForeignKeyDefinitionSource(newNode, parent SQLNode) {
+func replaceRefOfForeignKeyDefinitionSource(newNode, parent SQLNode) {
 	parent.(*ForeignKeyDefinition).Source = newNode.(Columns)
 }
-func replaceStructForeignKeyDefinitionReferencedTable(newNode, parent SQLNode) {
+func replaceRefOfForeignKeyDefinitionReferencedTable(newNode, parent SQLNode) {
 	parent.(*ForeignKeyDefinition).ReferencedTable = newNode.(TableName)
 }
-func replaceStructForeignKeyDefinitionReferencedColumns(newNode, parent SQLNode) {
+func replaceRefOfForeignKeyDefinitionReferencedColumns(newNode, parent SQLNode) {
 	parent.(*ForeignKeyDefinition).ReferencedColumns = newNode.(Columns)
 }
-func replaceStructForeignKeyDefinitionOnDelete(newNode, parent SQLNode) {
+func replaceRefOfForeignKeyDefinitionOnDelete(newNode, parent SQLNode) {
 	parent.(*ForeignKeyDefinition).OnDelete = newNode.(ReferenceAction)
 }
-func replaceStructForeignKeyDefinitionOnUpdate(newNode, parent SQLNode) {
+func replaceRefOfForeignKeyDefinitionOnUpdate(newNode, parent SQLNode) {
 	parent.(*ForeignKeyDefinition).OnUpdate = newNode.(ReferenceAction)
 }
-func replaceStructFuncExprQualifier(newNode, parent SQLNode) {
+func replaceRefOfFuncExprQualifier(newNode, parent SQLNode) {
 	parent.(*FuncExpr).Qualifier = newNode.(TableIdent)
 }
-func replaceStructFuncExprName(newNode, parent SQLNode) {
+func replaceRefOfFuncExprName(newNode, parent SQLNode) {
 	parent.(*FuncExpr).Name = newNode.(ColIdent)
 }
-func replaceStructFuncExprExprs(newNode, parent SQLNode) {
+func replaceRefOfFuncExprExprs(newNode, parent SQLNode) {
 	parent.(*FuncExpr).Exprs = newNode.(SelectExprs)
 }
-func replaceSliceGroupBy(idx int) func(SQLNode, SQLNode) {
+func replaceGroupBy(idx int) func(SQLNode, SQLNode) {
 	return func(newNode, container SQLNode) {
 		container.(GroupBy)[idx] = newNode.(Expr)
 	}
 }
-func replaceStructGroupConcatExprExprs(newNode, parent SQLNode) {
+func replaceRefOfGroupConcatExprExprs(newNode, parent SQLNode) {
 	parent.(*GroupConcatExpr).Exprs = newNode.(SelectExprs)
 }
-func replaceStructGroupConcatExprOrderBy(newNode, parent SQLNode) {
+func replaceRefOfGroupConcatExprOrderBy(newNode, parent SQLNode) {
 	parent.(*GroupConcatExpr).OrderBy = newNode.(OrderBy)
 }
-func replaceStructGroupConcatExprLimit(newNode, parent SQLNode) {
+func replaceRefOfGroupConcatExprLimit(newNode, parent SQLNode) {
 	parent.(*GroupConcatExpr).Limit = newNode.(*Limit)
 }
-func replaceStructIndexDefinitionInfo(newNode, parent SQLNode) {
+func replaceRefOfIndexDefinitionInfo(newNode, parent SQLNode) {
 	parent.(*IndexDefinition).Info = newNode.(*IndexInfo)
 }
-func replaceIndexHintsIndexes(idx int) func(SQLNode, SQLNode) {
+func replaceRefOfIndexHintsIndexes(idx int) func(SQLNode, SQLNode) {
 	return func(newNode, container SQLNode) {
 		container.(*IndexHints).Indexes[idx] = newNode.(ColIdent)
 	}
 }
-func replaceStructIndexInfoName(newNode, parent SQLNode) {
+func replaceRefOfIndexInfoName(newNode, parent SQLNode) {
 	parent.(*IndexInfo).Name = newNode.(ColIdent)
 }
-func replaceStructIndexInfoConstraintName(newNode, parent SQLNode) {
+func replaceRefOfIndexInfoConstraintName(newNode, parent SQLNode) {
 	parent.(*IndexInfo).ConstraintName = newNode.(ColIdent)
 }
-func replaceStructInsertComments(newNode, parent SQLNode) {
+func replaceRefOfInsertComments(newNode, parent SQLNode) {
 	parent.(*Insert).Comments = newNode.(Comments)
 }
-func replaceStructInsertTable(newNode, parent SQLNode) {
+func replaceRefOfInsertTable(newNode, parent SQLNode) {
 	parent.(*Insert).Table = newNode.(TableName)
 }
-func replaceStructInsertPartitions(newNode, parent SQLNode) {
+func replaceRefOfInsertPartitions(newNode, parent SQLNode) {
 	parent.(*Insert).Partitions = newNode.(Partitions)
 }
-func replaceStructInsertColumns(newNode, parent SQLNode) {
+func replaceRefOfInsertColumns(newNode, parent SQLNode) {
 	parent.(*Insert).Columns = newNode.(Columns)
 }
-func replaceStructInsertRows(newNode, parent SQLNode) {
+func replaceRefOfInsertRows(newNode, parent SQLNode) {
 	parent.(*Insert).Rows = newNode.(InsertRows)
 }
-func replaceStructInsertOnDup(newNode, parent SQLNode) {
+func replaceRefOfInsertOnDup(newNode, parent SQLNode) {
 	parent.(*Insert).OnDup = newNode.(OnDup)
 }
-func replaceStructIntervalExprExpr(newNode, parent SQLNode) {
+func replaceRefOfIntervalExprExpr(newNode, parent SQLNode) {
 	parent.(*IntervalExpr).Expr = newNode.(Expr)
 }
-func replaceStructIsExprExpr(newNode, parent SQLNode) {
+func replaceRefOfIsExprExpr(newNode, parent SQLNode) {
 	parent.(*IsExpr).Expr = newNode.(Expr)
 }
-func replaceStructJoinConditionOn(newNode, parent SQLNode) {
+func replaceRefOfJoinConditionOn(newNode, parent SQLNode) {
 	parent.(*JoinCondition).On = newNode.(Expr)
 }
-func replaceStructJoinConditionUsing(newNode, parent SQLNode) {
+func replaceRefOfJoinConditionUsing(newNode, parent SQLNode) {
 	parent.(*JoinCondition).Using = newNode.(Columns)
 }
-func replaceStructJoinTableExprLeftExpr(newNode, parent SQLNode) {
+func replaceRefOfJoinTableExprLeftExpr(newNode, parent SQLNode) {
 	parent.(*JoinTableExpr).LeftExpr = newNode.(TableExpr)
 }
-func replaceStructJoinTableExprRightExpr(newNode, parent SQLNode) {
+func replaceRefOfJoinTableExprRightExpr(newNode, parent SQLNode) {
 	parent.(*JoinTableExpr).RightExpr = newNode.(TableExpr)
 }
-func replaceStructJoinTableExprCondition(newNode, parent SQLNode) {
+func replaceRefOfJoinTableExprCondition(newNode, parent SQLNode) {
 	parent.(*JoinTableExpr).Condition = newNode.(JoinCondition)
 }
-func replaceStructLimitOffset(newNode, parent SQLNode) {
+func replaceRefOfLimitOffset(newNode, parent SQLNode) {
 	parent.(*Limit).Offset = newNode.(Expr)
 }
-func replaceStructLimitRowcount(newNode, parent SQLNode) {
+func replaceRefOfLimitRowcount(newNode, parent SQLNode) {
 	parent.(*Limit).Rowcount = newNode.(Expr)
 }
-func replaceStructMatchExprColumns(newNode, parent SQLNode) {
+func replaceRefOfMatchExprColumns(newNode, parent SQLNode) {
 	parent.(*MatchExpr).Columns = newNode.(SelectExprs)
 }
-func replaceStructMatchExprExpr(newNode, parent SQLNode) {
+func replaceRefOfMatchExprExpr(newNode, parent SQLNode) {
 	parent.(*MatchExpr).Expr = newNode.(Expr)
 }
-func replaceStructModifyColumnNewColDefinition(newNode, parent SQLNode) {
+func replaceRefOfModifyColumnNewColDefinition(newNode, parent SQLNode) {
 	parent.(*ModifyColumn).NewColDefinition = newNode.(*ColumnDefinition)
 }
-func replaceStructModifyColumnFirst(newNode, parent SQLNode) {
+func replaceRefOfModifyColumnFirst(newNode, parent SQLNode) {
 	parent.(*ModifyColumn).First = newNode.(*ColName)
 }
-func replaceStructModifyColumnAfter(newNode, parent SQLNode) {
+func replaceRefOfModifyColumnAfter(newNode, parent SQLNode) {
 	parent.(*ModifyColumn).After = newNode.(*ColName)
 }
-func replaceStructNextvalExpr(newNode, parent SQLNode) {
+func replaceRefOfNextvalExpr(newNode, parent SQLNode) {
 	parent.(*Nextval).Expr = newNode.(Expr)
 }
-func replaceStructNotExprExpr(newNode, parent SQLNode) {
+func replaceRefOfNotExprExpr(newNode, parent SQLNode) {
 	parent.(*NotExpr).Expr = newNode.(Expr)
 }
-func replaceSliceOnDup(idx int) func(SQLNode, SQLNode) {
+func replaceOnDup(idx int) func(SQLNode, SQLNode) {
 	return func(newNode, container SQLNode) {
 		container.(OnDup)[idx] = newNode.(*UpdateExpr)
 	}
 }
-func replaceStructOptLikeLikeTable(newNode, parent SQLNode) {
+func replaceRefOfOptLikeLikeTable(newNode, parent SQLNode) {
 	parent.(*OptLike).LikeTable = newNode.(TableName)
 }
-func replaceStructOrExprLeft(newNode, parent SQLNode) {
+func replaceRefOfOrExprLeft(newNode, parent SQLNode) {
 	parent.(*OrExpr).Left = newNode.(Expr)
 }
-func replaceStructOrExprRight(newNode, parent SQLNode) {
+func replaceRefOfOrExprRight(newNode, parent SQLNode) {
 	parent.(*OrExpr).Right = newNode.(Expr)
 }
-func replaceStructOrderExpr(newNode, parent SQLNode) {
+func replaceRefOfOrderExpr(newNode, parent SQLNode) {
 	parent.(*Order).Expr = newNode.(Expr)
 }
-func replaceSliceOrderBy(idx int) func(SQLNode, SQLNode) {
+func replaceOrderBy(idx int) func(SQLNode, SQLNode) {
 	return func(newNode, container SQLNode) {
 		container.(OrderBy)[idx] = newNode.(*Order)
 	}
 }
-func replaceStructOrderByOptionCols(newNode, parent SQLNode) {
+func replaceRefOfOrderByOptionCols(newNode, parent SQLNode) {
 	parent.(*OrderByOption).Cols = newNode.(Columns)
 }
-func replaceStructParenSelectSelect(newNode, parent SQLNode) {
+func replaceRefOfParenSelectSelect(newNode, parent SQLNode) {
 	parent.(*ParenSelect).Select = newNode.(SelectStatement)
 }
-func replaceStructParenTableExprExprs(newNode, parent SQLNode) {
+func replaceRefOfParenTableExprExprs(newNode, parent SQLNode) {
 	parent.(*ParenTableExpr).Exprs = newNode.(TableExprs)
 }
-func replaceStructPartitionDefinitionName(newNode, parent SQLNode) {
+func replaceRefOfPartitionDefinitionName(newNode, parent SQLNode) {
 	parent.(*PartitionDefinition).Name = newNode.(ColIdent)
 }
-func replaceStructPartitionDefinitionLimit(newNode, parent SQLNode) {
+func replaceRefOfPartitionDefinitionLimit(newNode, parent SQLNode) {
 	parent.(*PartitionDefinition).Limit = newNode.(Expr)
 }
-func replaceStructPartitionSpecNames(newNode, parent SQLNode) {
+func replaceRefOfPartitionSpecNames(newNode, parent SQLNode) {
 	parent.(*PartitionSpec).Names = newNode.(Partitions)
 }
-func replaceStructPartitionSpecNumber(newNode, parent SQLNode) {
+func replaceRefOfPartitionSpecNumber(newNode, parent SQLNode) {
 	parent.(*PartitionSpec).Number = newNode.(*Literal)
 }
-func replaceStructPartitionSpecTableName(newNode, parent SQLNode) {
+func replaceRefOfPartitionSpecTableName(newNode, parent SQLNode) {
 	parent.(*PartitionSpec).TableName = newNode.(TableName)
 }
-func replacePartitionSpecDefinitions(idx int) func(SQLNode, SQLNode) {
+func replaceRefOfPartitionSpecDefinitions(idx int) func(SQLNode, SQLNode) {
 	return func(newNode, container SQLNode) {
 		container.(*PartitionSpec).Definitions[idx] = newNode.(*PartitionDefinition)
 	}
 }
-func replaceSlicePartitions(idx int) func(SQLNode, SQLNode) {
+func replacePartitions(idx int) func(SQLNode, SQLNode) {
 	return func(newNode, container SQLNode) {
 		container.(Partitions)[idx] = newNode.(ColIdent)
 	}
 }
-func replaceStructRangeCondLeft(newNode, parent SQLNode) {
+func replaceRefOfRangeCondLeft(newNode, parent SQLNode) {
 	parent.(*RangeCond).Left = newNode.(Expr)
 }
-func replaceStructRangeCondFrom(newNode, parent SQLNode) {
+func replaceRefOfRangeCondFrom(newNode, parent SQLNode) {
 	parent.(*RangeCond).From = newNode.(Expr)
 }
-func replaceStructRangeCondTo(newNode, parent SQLNode) {
+func replaceRefOfRangeCondTo(newNode, parent SQLNode) {
 	parent.(*RangeCond).To = newNode.(Expr)
 }
-func replaceStructReleaseName(newNode, parent SQLNode) {
+func replaceRefOfReleaseName(newNode, parent SQLNode) {
 	parent.(*Release).Name = newNode.(ColIdent)
 }
-func replaceStructRenameTableNameTable(newNode, parent SQLNode) {
+func replaceRefOfRenameTableNameTable(newNode, parent SQLNode) {
 	parent.(*RenameTableName).Table = newNode.(TableName)
 }
-func replaceStructSRollbackName(newNode, parent SQLNode) {
+func replaceRefOfSRollbackName(newNode, parent SQLNode) {
 	parent.(*SRollback).Name = newNode.(ColIdent)
 }
-func replaceStructSavepointName(newNode, parent SQLNode) {
+func replaceRefOfSavepointName(newNode, parent SQLNode) {
 	parent.(*Savepoint).Name = newNode.(ColIdent)
 }
-func replaceStructSelectComments(newNode, parent SQLNode) {
+func replaceRefOfSelectComments(newNode, parent SQLNode) {
 	parent.(*Select).Comments = newNode.(Comments)
 }
-func replaceStructSelectSelectExprs(newNode, parent SQLNode) {
+func replaceRefOfSelectSelectExprs(newNode, parent SQLNode) {
 	parent.(*Select).SelectExprs = newNode.(SelectExprs)
 }
-func replaceStructSelectFrom(newNode, parent SQLNode) {
+func replaceRefOfSelectFrom(newNode, parent SQLNode) {
 	parent.(*Select).From = newNode.(TableExprs)
 }
-func replaceStructSelectWhere(newNode, parent SQLNode) {
+func replaceRefOfSelectWhere(newNode, parent SQLNode) {
 	parent.(*Select).Where = newNode.(*Where)
 }
-func replaceStructSelectGroupBy(newNode, parent SQLNode) {
+func replaceRefOfSelectGroupBy(newNode, parent SQLNode) {
 	parent.(*Select).GroupBy = newNode.(GroupBy)
 }
-func replaceStructSelectHaving(newNode, parent SQLNode) {
+func replaceRefOfSelectHaving(newNode, parent SQLNode) {
 	parent.(*Select).Having = newNode.(*Where)
 }
-func replaceStructSelectOrderBy(newNode, parent SQLNode) {
+func replaceRefOfSelectOrderBy(newNode, parent SQLNode) {
 	parent.(*Select).OrderBy = newNode.(OrderBy)
 }
-func replaceStructSelectLimit(newNode, parent SQLNode) {
+func replaceRefOfSelectLimit(newNode, parent SQLNode) {
 	parent.(*Select).Limit = newNode.(*Limit)
 }
-func replaceStructSelectInto(newNode, parent SQLNode) {
+func replaceRefOfSelectInto(newNode, parent SQLNode) {
 	parent.(*Select).Into = newNode.(*SelectInto)
 }
-func replaceSliceSelectExprs(idx int) func(SQLNode, SQLNode) {
+func replaceSelectExprs(idx int) func(SQLNode, SQLNode) {
 	return func(newNode, container SQLNode) {
 		container.(SelectExprs)[idx] = newNode.(SelectExpr)
 	}
 }
-func replaceStructSetComments(newNode, parent SQLNode) {
+func replaceRefOfSetComments(newNode, parent SQLNode) {
 	parent.(*Set).Comments = newNode.(Comments)
 }
-func replaceStructSetExprs(newNode, parent SQLNode) {
+func replaceRefOfSetExprs(newNode, parent SQLNode) {
 	parent.(*Set).Exprs = newNode.(SetExprs)
 }
-func replaceStructSetExprName(newNode, parent SQLNode) {
+func replaceRefOfSetExprName(newNode, parent SQLNode) {
 	parent.(*SetExpr).Name = newNode.(ColIdent)
 }
-func replaceStructSetExprExpr(newNode, parent SQLNode) {
+func replaceRefOfSetExprExpr(newNode, parent SQLNode) {
 	parent.(*SetExpr).Expr = newNode.(Expr)
 }
-func replaceSliceSetExprs(idx int) func(SQLNode, SQLNode) {
+func replaceSetExprs(idx int) func(SQLNode, SQLNode) {
 	return func(newNode, container SQLNode) {
 		container.(SetExprs)[idx] = newNode.(*SetExpr)
 	}
 }
-func replaceStructSetTransactionSQLNode(newNode, parent SQLNode) {
+func replaceRefOfSetTransactionSQLNode(newNode, parent SQLNode) {
 	parent.(*SetTransaction).SQLNode = newNode.(SQLNode)
 }
-func replaceStructSetTransactionComments(newNode, parent SQLNode) {
+func replaceRefOfSetTransactionComments(newNode, parent SQLNode) {
 	parent.(*SetTransaction).Comments = newNode.(Comments)
 }
-func replaceSetTransactionCharacteristics(idx int) func(SQLNode, SQLNode) {
+func replaceRefOfSetTransactionCharacteristics(idx int) func(SQLNode, SQLNode) {
 	return func(newNode, container SQLNode) {
 		container.(*SetTransaction).Characteristics[idx] = newNode.(Characteristic)
 	}
 }
-func replaceStructShowInternal(newNode, parent SQLNode) {
+func replaceRefOfShowInternal(newNode, parent SQLNode) {
 	parent.(*Show).Internal = newNode.(ShowInternal)
 }
-func replaceStructShowBasicTbl(newNode, parent SQLNode) {
+func replaceRefOfShowBasicTbl(newNode, parent SQLNode) {
 	parent.(*ShowBasic).Tbl = newNode.(TableName)
 }
-func replaceStructShowBasicFilter(newNode, parent SQLNode) {
+func replaceRefOfShowBasicFilter(newNode, parent SQLNode) {
 	parent.(*ShowBasic).Filter = newNode.(*ShowFilter)
 }
-func replaceStructShowCreateOp(newNode, parent SQLNode) {
+func replaceRefOfShowCreateOp(newNode, parent SQLNode) {
 	parent.(*ShowCreate).Op = newNode.(TableName)
 }
-func replaceStructShowFilterFilter(newNode, parent SQLNode) {
+func replaceRefOfShowFilterFilter(newNode, parent SQLNode) {
 	parent.(*ShowFilter).Filter = newNode.(Expr)
 }
-func replaceStructShowLegacyOnTable(newNode, parent SQLNode) {
+func replaceRefOfShowLegacyOnTable(newNode, parent SQLNode) {
 	parent.(*ShowLegacy).OnTable = newNode.(TableName)
 }
-func replaceStructShowLegacyTable(newNode, parent SQLNode) {
+func replaceRefOfShowLegacyTable(newNode, parent SQLNode) {
 	parent.(*ShowLegacy).Table = newNode.(TableName)
 }
-func replaceStructShowLegacyShowCollationFilterOpt(newNode, parent SQLNode) {
+func replaceRefOfShowLegacyShowCollationFilterOpt(newNode, parent SQLNode) {
 	parent.(*ShowLegacy).ShowCollationFilterOpt = newNode.(Expr)
 }
-func replaceStructStarExprTableName(newNode, parent SQLNode) {
+func replaceRefOfStarExprTableName(newNode, parent SQLNode) {
 	parent.(*StarExpr).TableName = newNode.(TableName)
 }
-func replaceStructStreamComments(newNode, parent SQLNode) {
+func replaceRefOfStreamComments(newNode, parent SQLNode) {
 	parent.(*Stream).Comments = newNode.(Comments)
 }
-func replaceStructStreamSelectExpr(newNode, parent SQLNode) {
+func replaceRefOfStreamSelectExpr(newNode, parent SQLNode) {
 	parent.(*Stream).SelectExpr = newNode.(SelectExpr)
 }
-func replaceStructStreamTable(newNode, parent SQLNode) {
+func replaceRefOfStreamTable(newNode, parent SQLNode) {
 	parent.(*Stream).Table = newNode.(TableName)
 }
-func replaceStructSubquerySelect(newNode, parent SQLNode) {
+func replaceRefOfSubquerySelect(newNode, parent SQLNode) {
 	parent.(*Subquery).Select = newNode.(SelectStatement)
 }
-func replaceStructSubstrExprName(newNode, parent SQLNode) {
+func replaceRefOfSubstrExprName(newNode, parent SQLNode) {
 	parent.(*SubstrExpr).Name = newNode.(*ColName)
 }
-func replaceStructSubstrExprStrVal(newNode, parent SQLNode) {
+func replaceRefOfSubstrExprStrVal(newNode, parent SQLNode) {
 	parent.(*SubstrExpr).StrVal = newNode.(*Literal)
 }
-func replaceStructSubstrExprFrom(newNode, parent SQLNode) {
+func replaceRefOfSubstrExprFrom(newNode, parent SQLNode) {
 	parent.(*SubstrExpr).From = newNode.(Expr)
 }
-func replaceStructSubstrExprTo(newNode, parent SQLNode) {
+func replaceRefOfSubstrExprTo(newNode, parent SQLNode) {
 	parent.(*SubstrExpr).To = newNode.(Expr)
 }
-func replaceSliceTableExprs(idx int) func(SQLNode, SQLNode) {
+func replaceTableExprs(idx int) func(SQLNode, SQLNode) {
 	return func(newNode, container SQLNode) {
 		container.(TableExprs)[idx] = newNode.(TableExpr)
 	}
 }
-func replaceStructTableNameName(newNode, parent SQLNode) {
+func replaceRefOfTableNameName(newNode, parent SQLNode) {
 	parent.(*TableName).Name = newNode.(TableIdent)
 }
-func replaceStructTableNameQualifier(newNode, parent SQLNode) {
+func replaceRefOfTableNameQualifier(newNode, parent SQLNode) {
 	parent.(*TableName).Qualifier = newNode.(TableIdent)
 }
-func replaceSliceTableNames(idx int) func(SQLNode, SQLNode) {
+func replaceTableNames(idx int) func(SQLNode, SQLNode) {
 	return func(newNode, container SQLNode) {
 		container.(TableNames)[idx] = newNode.(TableName)
 	}
 }
-func replaceTableSpecColumns(idx int) func(SQLNode, SQLNode) {
+func replaceRefOfTableSpecColumns(idx int) func(SQLNode, SQLNode) {
 	return func(newNode, container SQLNode) {
 		container.(*TableSpec).Columns[idx] = newNode.(*ColumnDefinition)
 	}
 }
-func replaceTableSpecIndexes(idx int) func(SQLNode, SQLNode) {
+func replaceRefOfTableSpecIndexes(idx int) func(SQLNode, SQLNode) {
 	return func(newNode, container SQLNode) {
 		container.(*TableSpec).Indexes[idx] = newNode.(*IndexDefinition)
 	}
 }
-func replaceTableSpecConstraints(idx int) func(SQLNode, SQLNode) {
+func replaceRefOfTableSpecConstraints(idx int) func(SQLNode, SQLNode) {
 	return func(newNode, container SQLNode) {
 		container.(*TableSpec).Constraints[idx] = newNode.(*ConstraintDefinition)
 	}
 }
-func replaceStructTableSpecOptions(newNode, parent SQLNode) {
+func replaceRefOfTableSpecOptions(newNode, parent SQLNode) {
 	parent.(*TableSpec).Options = newNode.(TableOptions)
 }
-func replaceStructTimestampFuncExprExpr1(newNode, parent SQLNode) {
+func replaceRefOfTimestampFuncExprExpr1(newNode, parent SQLNode) {
 	parent.(*TimestampFuncExpr).Expr1 = newNode.(Expr)
 }
-func replaceStructTimestampFuncExprExpr2(newNode, parent SQLNode) {
+func replaceRefOfTimestampFuncExprExpr2(newNode, parent SQLNode) {
 	parent.(*TimestampFuncExpr).Expr2 = newNode.(Expr)
 }
-func replaceStructTruncateTableTable(newNode, parent SQLNode) {
+func replaceRefOfTruncateTableTable(newNode, parent SQLNode) {
 	parent.(*TruncateTable).Table = newNode.(TableName)
 }
-func replaceStructUnaryExprExpr(newNode, parent SQLNode) {
+func replaceRefOfUnaryExprExpr(newNode, parent SQLNode) {
 	parent.(*UnaryExpr).Expr = newNode.(Expr)
 }
-func replaceStructUnionFirstStatement(newNode, parent SQLNode) {
+func replaceRefOfUnionFirstStatement(newNode, parent SQLNode) {
 	parent.(*Union).FirstStatement = newNode.(SelectStatement)
 }
-func replaceUnionUnionSelects(idx int) func(SQLNode, SQLNode) {
+func replaceRefOfUnionUnionSelects(idx int) func(SQLNode, SQLNode) {
 	return func(newNode, container SQLNode) {
 		container.(*Union).UnionSelects[idx] = newNode.(*UnionSelect)
 	}
 }
-func replaceStructUnionOrderBy(newNode, parent SQLNode) {
+func replaceRefOfUnionOrderBy(newNode, parent SQLNode) {
 	parent.(*Union).OrderBy = newNode.(OrderBy)
 }
-func replaceStructUnionLimit(newNode, parent SQLNode) {
+func replaceRefOfUnionLimit(newNode, parent SQLNode) {
 	parent.(*Union).Limit = newNode.(*Limit)
 }
-func replaceStructUnionSelectStatement(newNode, parent SQLNode) {
+func replaceRefOfUnionSelectStatement(newNode, parent SQLNode) {
 	parent.(*UnionSelect).Statement = newNode.(SelectStatement)
 }
-func replaceStructUpdateComments(newNode, parent SQLNode) {
+func replaceRefOfUpdateComments(newNode, parent SQLNode) {
 	parent.(*Update).Comments = newNode.(Comments)
 }
-func replaceStructUpdateTableExprs(newNode, parent SQLNode) {
+func replaceRefOfUpdateTableExprs(newNode, parent SQLNode) {
 	parent.(*Update).TableExprs = newNode.(TableExprs)
 }
-func replaceStructUpdateExprs(newNode, parent SQLNode) {
+func replaceRefOfUpdateExprs(newNode, parent SQLNode) {
 	parent.(*Update).Exprs = newNode.(UpdateExprs)
 }
-func replaceStructUpdateWhere(newNode, parent SQLNode) {
+func replaceRefOfUpdateWhere(newNode, parent SQLNode) {
 	parent.(*Update).Where = newNode.(*Where)
 }
-func replaceStructUpdateOrderBy(newNode, parent SQLNode) {
+func replaceRefOfUpdateOrderBy(newNode, parent SQLNode) {
 	parent.(*Update).OrderBy = newNode.(OrderBy)
 }
-func replaceStructUpdateLimit(newNode, parent SQLNode) {
+func replaceRefOfUpdateLimit(newNode, parent SQLNode) {
 	parent.(*Update).Limit = newNode.(*Limit)
 }
-func replaceStructUpdateExprName(newNode, parent SQLNode) {
+func replaceRefOfUpdateExprName(newNode, parent SQLNode) {
 	parent.(*UpdateExpr).Name = newNode.(*ColName)
 }
-func replaceStructUpdateExprExpr(newNode, parent SQLNode) {
+func replaceRefOfUpdateExprExpr(newNode, parent SQLNode) {
 	parent.(*UpdateExpr).Expr = newNode.(Expr)
 }
-func replaceSliceUpdateExprs(idx int) func(SQLNode, SQLNode) {
+func replaceUpdateExprs(idx int) func(SQLNode, SQLNode) {
 	return func(newNode, container SQLNode) {
 		container.(UpdateExprs)[idx] = newNode.(*UpdateExpr)
 	}
 }
-func replaceStructUseDBName(newNode, parent SQLNode) {
+func replaceRefOfUseDBName(newNode, parent SQLNode) {
 	parent.(*Use).DBName = newNode.(TableIdent)
 }
-func replaceStructVStreamComments(newNode, parent SQLNode) {
+func replaceRefOfVStreamComments(newNode, parent SQLNode) {
 	parent.(*VStream).Comments = newNode.(Comments)
 }
-func replaceStructVStreamSelectExpr(newNode, parent SQLNode) {
+func replaceRefOfVStreamSelectExpr(newNode, parent SQLNode) {
 	parent.(*VStream).SelectExpr = newNode.(SelectExpr)
 }
-func replaceStructVStreamTable(newNode, parent SQLNode) {
+func replaceRefOfVStreamTable(newNode, parent SQLNode) {
 	parent.(*VStream).Table = newNode.(TableName)
 }
-func replaceStructVStreamWhere(newNode, parent SQLNode) {
+func replaceRefOfVStreamWhere(newNode, parent SQLNode) {
 	parent.(*VStream).Where = newNode.(*Where)
 }
-func replaceStructVStreamLimit(newNode, parent SQLNode) {
+func replaceRefOfVStreamLimit(newNode, parent SQLNode) {
 	parent.(*VStream).Limit = newNode.(*Limit)
 }
-func replaceSliceValTuple(idx int) func(SQLNode, SQLNode) {
+func replaceValTuple(idx int) func(SQLNode, SQLNode) {
 	return func(newNode, container SQLNode) {
 		container.(ValTuple)[idx] = newNode.(Expr)
 	}
 }
-func replaceSliceValues(idx int) func(SQLNode, SQLNode) {
+func replaceValues(idx int) func(SQLNode, SQLNode) {
 	return func(newNode, container SQLNode) {
 		container.(Values)[idx] = newNode.(ValTuple)
 	}
 }
-func replaceStructValuesFuncExprName(newNode, parent SQLNode) {
+func replaceRefOfValuesFuncExprName(newNode, parent SQLNode) {
 	parent.(*ValuesFuncExpr).Name = newNode.(*ColName)
 }
-func replaceStructVindexParamKey(newNode, parent SQLNode) {
+func replaceRefOfVindexParamKey(newNode, parent SQLNode) {
 	parent.(*VindexParam).Key = newNode.(ColIdent)
 }
-func replaceStructVindexSpecName(newNode, parent SQLNode) {
+func replaceRefOfVindexSpecName(newNode, parent SQLNode) {
 	parent.(*VindexSpec).Name = newNode.(ColIdent)
 }
-func replaceStructVindexSpecType(newNode, parent SQLNode) {
+func replaceRefOfVindexSpecType(newNode, parent SQLNode) {
 	parent.(*VindexSpec).Type = newNode.(ColIdent)
 }
-func replaceVindexSpecParams(idx int) func(SQLNode, SQLNode) {
+func replaceRefOfVindexSpecParams(idx int) func(SQLNode, SQLNode) {
 	return func(newNode, container SQLNode) {
 		container.(*VindexSpec).Params[idx] = newNode.(VindexParam)
 	}
 }
-func replaceStructWhenCond(newNode, parent SQLNode) {
+func replaceRefOfWhenCond(newNode, parent SQLNode) {
 	parent.(*When).Cond = newNode.(Expr)
 }
-func replaceStructWhenVal(newNode, parent SQLNode) {
+func replaceRefOfWhenVal(newNode, parent SQLNode) {
 	parent.(*When).Val = newNode.(Expr)
 }
-func replaceStructWhereExpr(newNode, parent SQLNode) {
+func replaceRefOfWhereExpr(newNode, parent SQLNode) {
 	parent.(*Where).Expr = newNode.(Expr)
 }
-func replaceStructXorExprLeft(newNode, parent SQLNode) {
+func replaceRefOfXorExprLeft(newNode, parent SQLNode) {
 	parent.(*XorExpr).Left = newNode.(Expr)
 }
-func replaceStructXorExprRight(newNode, parent SQLNode) {
+func replaceRefOfXorExprRight(newNode, parent SQLNode) {
 	parent.(*XorExpr).Right = newNode.(Expr)
 }
 func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
@@ -739,330 +739,330 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 	switch n := node.(type) {
 	case *AddColumns:
 		for x, el := range n.Columns {
-			a.apply(node, el, replaceAddColumnsColumns(x))
+			a.apply(node, el, replaceRefOfAddColumnsColumns(x))
 		}
-		a.apply(node, n.First, replaceStructAddColumnsFirst)
-		a.apply(node, n.After, replaceStructAddColumnsAfter)
+		a.apply(node, n.First, replaceRefOfAddColumnsFirst)
+		a.apply(node, n.After, replaceRefOfAddColumnsAfter)
 	case *AddConstraintDefinition:
-		a.apply(node, n.ConstraintDefinition, replaceStructAddConstraintDefinitionConstraintDefinition)
+		a.apply(node, n.ConstraintDefinition, replaceRefOfAddConstraintDefinitionConstraintDefinition)
 	case *AddIndexDefinition:
-		a.apply(node, n.IndexDefinition, replaceStructAddIndexDefinitionIndexDefinition)
+		a.apply(node, n.IndexDefinition, replaceRefOfAddIndexDefinitionIndexDefinition)
 	case *AliasedExpr:
-		a.apply(node, n.Expr, replaceStructAliasedExprExpr)
-		a.apply(node, n.As, replaceStructAliasedExprAs)
+		a.apply(node, n.Expr, replaceRefOfAliasedExprExpr)
+		a.apply(node, n.As, replaceRefOfAliasedExprAs)
 	case *AliasedTableExpr:
-		a.apply(node, n.Expr, replaceStructAliasedTableExprExpr)
-		a.apply(node, n.Partitions, replaceStructAliasedTableExprPartitions)
-		a.apply(node, n.As, replaceStructAliasedTableExprAs)
-		a.apply(node, n.Hints, replaceStructAliasedTableExprHints)
+		a.apply(node, n.Expr, replaceRefOfAliasedTableExprExpr)
+		a.apply(node, n.Partitions, replaceRefOfAliasedTableExprPartitions)
+		a.apply(node, n.As, replaceRefOfAliasedTableExprAs)
+		a.apply(node, n.Hints, replaceRefOfAliasedTableExprHints)
 	case *AlterCharset:
 	case *AlterColumn:
-		a.apply(node, n.Column, replaceStructAlterColumnColumn)
-		a.apply(node, n.DefaultVal, replaceStructAlterColumnDefaultVal)
+		a.apply(node, n.Column, replaceRefOfAlterColumnColumn)
+		a.apply(node, n.DefaultVal, replaceRefOfAlterColumnDefaultVal)
 	case *AlterDatabase:
 	case *AlterTable:
-		a.apply(node, n.Table, replaceStructAlterTableTable)
+		a.apply(node, n.Table, replaceRefOfAlterTableTable)
 		for x, el := range n.AlterOptions {
-			a.apply(node, el, replaceAlterTableAlterOptions(x))
+			a.apply(node, el, replaceRefOfAlterTableAlterOptions(x))
 		}
-		a.apply(node, n.PartitionSpec, replaceStructAlterTablePartitionSpec)
+		a.apply(node, n.PartitionSpec, replaceRefOfAlterTablePartitionSpec)
 	case *AlterView:
-		a.apply(node, n.ViewName, replaceStructAlterViewViewName)
-		a.apply(node, n.Columns, replaceStructAlterViewColumns)
-		a.apply(node, n.Select, replaceStructAlterViewSelect)
+		a.apply(node, n.ViewName, replaceRefOfAlterViewViewName)
+		a.apply(node, n.Columns, replaceRefOfAlterViewColumns)
+		a.apply(node, n.Select, replaceRefOfAlterViewSelect)
 	case *AlterVschema:
-		a.apply(node, n.Table, replaceStructAlterVschemaTable)
-		a.apply(node, n.VindexSpec, replaceStructAlterVschemaVindexSpec)
+		a.apply(node, n.Table, replaceRefOfAlterVschemaTable)
+		a.apply(node, n.VindexSpec, replaceRefOfAlterVschemaVindexSpec)
 		for x, el := range n.VindexCols {
-			a.apply(node, el, replaceAlterVschemaVindexCols(x))
+			a.apply(node, el, replaceRefOfAlterVschemaVindexCols(x))
 		}
-		a.apply(node, n.AutoIncSpec, replaceStructAlterVschemaAutoIncSpec)
+		a.apply(node, n.AutoIncSpec, replaceRefOfAlterVschemaAutoIncSpec)
 	case *AndExpr:
-		a.apply(node, n.Left, replaceStructAndExprLeft)
-		a.apply(node, n.Right, replaceStructAndExprRight)
+		a.apply(node, n.Left, replaceRefOfAndExprLeft)
+		a.apply(node, n.Right, replaceRefOfAndExprRight)
 	case Argument:
 	case *AutoIncSpec:
-		a.apply(node, n.Column, replaceStructAutoIncSpecColumn)
-		a.apply(node, n.Sequence, replaceStructAutoIncSpecSequence)
+		a.apply(node, n.Column, replaceRefOfAutoIncSpecColumn)
+		a.apply(node, n.Sequence, replaceRefOfAutoIncSpecSequence)
 	case *Begin:
 	case *BinaryExpr:
-		a.apply(node, n.Left, replaceStructBinaryExprLeft)
-		a.apply(node, n.Right, replaceStructBinaryExprRight)
+		a.apply(node, n.Left, replaceRefOfBinaryExprLeft)
+		a.apply(node, n.Right, replaceRefOfBinaryExprRight)
 	case *CallProc:
-		a.apply(node, n.Name, replaceStructCallProcName)
-		a.apply(node, n.Params, replaceStructCallProcParams)
+		a.apply(node, n.Name, replaceRefOfCallProcName)
+		a.apply(node, n.Params, replaceRefOfCallProcParams)
 	case *CaseExpr:
-		a.apply(node, n.Expr, replaceStructCaseExprExpr)
+		a.apply(node, n.Expr, replaceRefOfCaseExprExpr)
 		for x, el := range n.Whens {
-			a.apply(node, el, replaceCaseExprWhens(x))
+			a.apply(node, el, replaceRefOfCaseExprWhens(x))
 		}
-		a.apply(node, n.Else, replaceStructCaseExprElse)
+		a.apply(node, n.Else, replaceRefOfCaseExprElse)
 	case *ChangeColumn:
-		a.apply(node, n.OldColumn, replaceStructChangeColumnOldColumn)
-		a.apply(node, n.NewColDefinition, replaceStructChangeColumnNewColDefinition)
-		a.apply(node, n.First, replaceStructChangeColumnFirst)
-		a.apply(node, n.After, replaceStructChangeColumnAfter)
+		a.apply(node, n.OldColumn, replaceRefOfChangeColumnOldColumn)
+		a.apply(node, n.NewColDefinition, replaceRefOfChangeColumnNewColDefinition)
+		a.apply(node, n.First, replaceRefOfChangeColumnFirst)
+		a.apply(node, n.After, replaceRefOfChangeColumnAfter)
 	case *CheckConstraintDefinition:
-		a.apply(node, n.Expr, replaceStructCheckConstraintDefinitionExpr)
+		a.apply(node, n.Expr, replaceRefOfCheckConstraintDefinitionExpr)
 	case ColIdent:
 	case *ColIdent:
 	case *ColName:
-		a.apply(node, n.Name, replaceStructColNameName)
-		a.apply(node, n.Qualifier, replaceStructColNameQualifier)
+		a.apply(node, n.Name, replaceRefOfColNameName)
+		a.apply(node, n.Qualifier, replaceRefOfColNameQualifier)
 	case *CollateExpr:
-		a.apply(node, n.Expr, replaceStructCollateExprExpr)
+		a.apply(node, n.Expr, replaceRefOfCollateExprExpr)
 	case *ColumnDefinition:
-		a.apply(node, n.Name, replaceStructColumnDefinitionName)
+		a.apply(node, n.Name, replaceRefOfColumnDefinitionName)
 	case *ColumnType:
-		a.apply(node, n.Length, replaceStructColumnTypeLength)
-		a.apply(node, n.Scale, replaceStructColumnTypeScale)
+		a.apply(node, n.Length, replaceRefOfColumnTypeLength)
+		a.apply(node, n.Scale, replaceRefOfColumnTypeScale)
 	case Columns:
 		for x, el := range n {
-			a.apply(node, el, replaceSliceColumns(x))
+			a.apply(node, el, replaceColumns(x))
 		}
 	case Comments:
 	case *Commit:
 	case *ComparisonExpr:
-		a.apply(node, n.Left, replaceStructComparisonExprLeft)
-		a.apply(node, n.Right, replaceStructComparisonExprRight)
-		a.apply(node, n.Escape, replaceStructComparisonExprEscape)
+		a.apply(node, n.Left, replaceRefOfComparisonExprLeft)
+		a.apply(node, n.Right, replaceRefOfComparisonExprRight)
+		a.apply(node, n.Escape, replaceRefOfComparisonExprEscape)
 	case *ConstraintDefinition:
-		a.apply(node, n.Details, replaceStructConstraintDefinitionDetails)
+		a.apply(node, n.Details, replaceRefOfConstraintDefinitionDetails)
 	case *ConvertExpr:
-		a.apply(node, n.Expr, replaceStructConvertExprExpr)
-		a.apply(node, n.Type, replaceStructConvertExprType)
+		a.apply(node, n.Expr, replaceRefOfConvertExprExpr)
+		a.apply(node, n.Type, replaceRefOfConvertExprType)
 	case *ConvertType:
-		a.apply(node, n.Length, replaceStructConvertTypeLength)
-		a.apply(node, n.Scale, replaceStructConvertTypeScale)
+		a.apply(node, n.Length, replaceRefOfConvertTypeLength)
+		a.apply(node, n.Scale, replaceRefOfConvertTypeScale)
 	case *ConvertUsingExpr:
-		a.apply(node, n.Expr, replaceStructConvertUsingExprExpr)
+		a.apply(node, n.Expr, replaceRefOfConvertUsingExprExpr)
 	case *CreateDatabase:
 	case *CreateTable:
-		a.apply(node, n.Table, replaceStructCreateTableTable)
-		a.apply(node, n.TableSpec, replaceStructCreateTableTableSpec)
-		a.apply(node, n.OptLike, replaceStructCreateTableOptLike)
+		a.apply(node, n.Table, replaceRefOfCreateTableTable)
+		a.apply(node, n.TableSpec, replaceRefOfCreateTableTableSpec)
+		a.apply(node, n.OptLike, replaceRefOfCreateTableOptLike)
 	case *CreateView:
-		a.apply(node, n.ViewName, replaceStructCreateViewViewName)
-		a.apply(node, n.Columns, replaceStructCreateViewColumns)
-		a.apply(node, n.Select, replaceStructCreateViewSelect)
+		a.apply(node, n.ViewName, replaceRefOfCreateViewViewName)
+		a.apply(node, n.Columns, replaceRefOfCreateViewColumns)
+		a.apply(node, n.Select, replaceRefOfCreateViewSelect)
 	case *CurTimeFuncExpr:
-		a.apply(node, n.Name, replaceStructCurTimeFuncExprName)
-		a.apply(node, n.Fsp, replaceStructCurTimeFuncExprFsp)
+		a.apply(node, n.Name, replaceRefOfCurTimeFuncExprName)
+		a.apply(node, n.Fsp, replaceRefOfCurTimeFuncExprFsp)
 	case *Default:
 	case *Delete:
-		a.apply(node, n.Comments, replaceStructDeleteComments)
-		a.apply(node, n.Targets, replaceStructDeleteTargets)
-		a.apply(node, n.TableExprs, replaceStructDeleteTableExprs)
-		a.apply(node, n.Partitions, replaceStructDeletePartitions)
-		a.apply(node, n.Where, replaceStructDeleteWhere)
-		a.apply(node, n.OrderBy, replaceStructDeleteOrderBy)
-		a.apply(node, n.Limit, replaceStructDeleteLimit)
+		a.apply(node, n.Comments, replaceRefOfDeleteComments)
+		a.apply(node, n.Targets, replaceRefOfDeleteTargets)
+		a.apply(node, n.TableExprs, replaceRefOfDeleteTableExprs)
+		a.apply(node, n.Partitions, replaceRefOfDeletePartitions)
+		a.apply(node, n.Where, replaceRefOfDeleteWhere)
+		a.apply(node, n.OrderBy, replaceRefOfDeleteOrderBy)
+		a.apply(node, n.Limit, replaceRefOfDeleteLimit)
 	case *DerivedTable:
-		a.apply(node, n.Select, replaceStructDerivedTableSelect)
+		a.apply(node, n.Select, replaceRefOfDerivedTableSelect)
 	case *DropColumn:
-		a.apply(node, n.Name, replaceStructDropColumnName)
+		a.apply(node, n.Name, replaceRefOfDropColumnName)
 	case *DropDatabase:
 	case *DropKey:
 	case *DropTable:
-		a.apply(node, n.FromTables, replaceStructDropTableFromTables)
+		a.apply(node, n.FromTables, replaceRefOfDropTableFromTables)
 	case *DropView:
-		a.apply(node, n.FromTables, replaceStructDropViewFromTables)
+		a.apply(node, n.FromTables, replaceRefOfDropViewFromTables)
 	case *ExistsExpr:
-		a.apply(node, n.Subquery, replaceStructExistsExprSubquery)
+		a.apply(node, n.Subquery, replaceRefOfExistsExprSubquery)
 	case *ExplainStmt:
-		a.apply(node, n.Statement, replaceStructExplainStmtStatement)
+		a.apply(node, n.Statement, replaceRefOfExplainStmtStatement)
 	case *ExplainTab:
-		a.apply(node, n.Table, replaceStructExplainTabTable)
+		a.apply(node, n.Table, replaceRefOfExplainTabTable)
 	case Exprs:
 		for x, el := range n {
-			a.apply(node, el, replaceSliceExprs(x))
+			a.apply(node, el, replaceExprs(x))
 		}
 	case *Flush:
-		a.apply(node, n.TableNames, replaceStructFlushTableNames)
+		a.apply(node, n.TableNames, replaceRefOfFlushTableNames)
 	case *Force:
 	case *ForeignKeyDefinition:
-		a.apply(node, n.Source, replaceStructForeignKeyDefinitionSource)
-		a.apply(node, n.ReferencedTable, replaceStructForeignKeyDefinitionReferencedTable)
-		a.apply(node, n.ReferencedColumns, replaceStructForeignKeyDefinitionReferencedColumns)
-		a.apply(node, n.OnDelete, replaceStructForeignKeyDefinitionOnDelete)
-		a.apply(node, n.OnUpdate, replaceStructForeignKeyDefinitionOnUpdate)
+		a.apply(node, n.Source, replaceRefOfForeignKeyDefinitionSource)
+		a.apply(node, n.ReferencedTable, replaceRefOfForeignKeyDefinitionReferencedTable)
+		a.apply(node, n.ReferencedColumns, replaceRefOfForeignKeyDefinitionReferencedColumns)
+		a.apply(node, n.OnDelete, replaceRefOfForeignKeyDefinitionOnDelete)
+		a.apply(node, n.OnUpdate, replaceRefOfForeignKeyDefinitionOnUpdate)
 	case *FuncExpr:
-		a.apply(node, n.Qualifier, replaceStructFuncExprQualifier)
-		a.apply(node, n.Name, replaceStructFuncExprName)
-		a.apply(node, n.Exprs, replaceStructFuncExprExprs)
+		a.apply(node, n.Qualifier, replaceRefOfFuncExprQualifier)
+		a.apply(node, n.Name, replaceRefOfFuncExprName)
+		a.apply(node, n.Exprs, replaceRefOfFuncExprExprs)
 	case GroupBy:
 		for x, el := range n {
-			a.apply(node, el, replaceSliceGroupBy(x))
+			a.apply(node, el, replaceGroupBy(x))
 		}
 	case *GroupConcatExpr:
-		a.apply(node, n.Exprs, replaceStructGroupConcatExprExprs)
-		a.apply(node, n.OrderBy, replaceStructGroupConcatExprOrderBy)
-		a.apply(node, n.Limit, replaceStructGroupConcatExprLimit)
+		a.apply(node, n.Exprs, replaceRefOfGroupConcatExprExprs)
+		a.apply(node, n.OrderBy, replaceRefOfGroupConcatExprOrderBy)
+		a.apply(node, n.Limit, replaceRefOfGroupConcatExprLimit)
 	case *IndexDefinition:
-		a.apply(node, n.Info, replaceStructIndexDefinitionInfo)
+		a.apply(node, n.Info, replaceRefOfIndexDefinitionInfo)
 	case *IndexHints:
 		for x, el := range n.Indexes {
-			a.apply(node, el, replaceIndexHintsIndexes(x))
+			a.apply(node, el, replaceRefOfIndexHintsIndexes(x))
 		}
 	case *IndexInfo:
-		a.apply(node, n.Name, replaceStructIndexInfoName)
-		a.apply(node, n.ConstraintName, replaceStructIndexInfoConstraintName)
+		a.apply(node, n.Name, replaceRefOfIndexInfoName)
+		a.apply(node, n.ConstraintName, replaceRefOfIndexInfoConstraintName)
 	case *Insert:
-		a.apply(node, n.Comments, replaceStructInsertComments)
-		a.apply(node, n.Table, replaceStructInsertTable)
-		a.apply(node, n.Partitions, replaceStructInsertPartitions)
-		a.apply(node, n.Columns, replaceStructInsertColumns)
-		a.apply(node, n.Rows, replaceStructInsertRows)
-		a.apply(node, n.OnDup, replaceStructInsertOnDup)
+		a.apply(node, n.Comments, replaceRefOfInsertComments)
+		a.apply(node, n.Table, replaceRefOfInsertTable)
+		a.apply(node, n.Partitions, replaceRefOfInsertPartitions)
+		a.apply(node, n.Columns, replaceRefOfInsertColumns)
+		a.apply(node, n.Rows, replaceRefOfInsertRows)
+		a.apply(node, n.OnDup, replaceRefOfInsertOnDup)
 	case *IntervalExpr:
-		a.apply(node, n.Expr, replaceStructIntervalExprExpr)
+		a.apply(node, n.Expr, replaceRefOfIntervalExprExpr)
 	case *IsExpr:
-		a.apply(node, n.Expr, replaceStructIsExprExpr)
+		a.apply(node, n.Expr, replaceRefOfIsExprExpr)
 	case JoinCondition:
 		a.apply(node, n.On, replacePanic("JoinCondition On"))
 		a.apply(node, n.Using, replacePanic("JoinCondition Using"))
 	case *JoinCondition:
-		a.apply(node, n.On, replaceStructJoinConditionOn)
-		a.apply(node, n.Using, replaceStructJoinConditionUsing)
+		a.apply(node, n.On, replaceRefOfJoinConditionOn)
+		a.apply(node, n.Using, replaceRefOfJoinConditionUsing)
 	case *JoinTableExpr:
-		a.apply(node, n.LeftExpr, replaceStructJoinTableExprLeftExpr)
-		a.apply(node, n.RightExpr, replaceStructJoinTableExprRightExpr)
-		a.apply(node, n.Condition, replaceStructJoinTableExprCondition)
+		a.apply(node, n.LeftExpr, replaceRefOfJoinTableExprLeftExpr)
+		a.apply(node, n.RightExpr, replaceRefOfJoinTableExprRightExpr)
+		a.apply(node, n.Condition, replaceRefOfJoinTableExprCondition)
 	case *KeyState:
 	case *Limit:
-		a.apply(node, n.Offset, replaceStructLimitOffset)
-		a.apply(node, n.Rowcount, replaceStructLimitRowcount)
+		a.apply(node, n.Offset, replaceRefOfLimitOffset)
+		a.apply(node, n.Rowcount, replaceRefOfLimitRowcount)
 	case ListArg:
 	case *Literal:
 	case *Load:
 	case *LockOption:
 	case *LockTables:
 	case *MatchExpr:
-		a.apply(node, n.Columns, replaceStructMatchExprColumns)
-		a.apply(node, n.Expr, replaceStructMatchExprExpr)
+		a.apply(node, n.Columns, replaceRefOfMatchExprColumns)
+		a.apply(node, n.Expr, replaceRefOfMatchExprExpr)
 	case *ModifyColumn:
-		a.apply(node, n.NewColDefinition, replaceStructModifyColumnNewColDefinition)
-		a.apply(node, n.First, replaceStructModifyColumnFirst)
-		a.apply(node, n.After, replaceStructModifyColumnAfter)
+		a.apply(node, n.NewColDefinition, replaceRefOfModifyColumnNewColDefinition)
+		a.apply(node, n.First, replaceRefOfModifyColumnFirst)
+		a.apply(node, n.After, replaceRefOfModifyColumnAfter)
 	case Nextval:
 		a.apply(node, n.Expr, replacePanic("Nextval Expr"))
 	case *Nextval:
-		a.apply(node, n.Expr, replaceStructNextvalExpr)
+		a.apply(node, n.Expr, replaceRefOfNextvalExpr)
 	case *NotExpr:
-		a.apply(node, n.Expr, replaceStructNotExprExpr)
+		a.apply(node, n.Expr, replaceRefOfNotExprExpr)
 	case *NullVal:
 	case OnDup:
 		for x, el := range n {
-			a.apply(node, el, replaceSliceOnDup(x))
+			a.apply(node, el, replaceOnDup(x))
 		}
 	case *OptLike:
-		a.apply(node, n.LikeTable, replaceStructOptLikeLikeTable)
+		a.apply(node, n.LikeTable, replaceRefOfOptLikeLikeTable)
 	case *OrExpr:
-		a.apply(node, n.Left, replaceStructOrExprLeft)
-		a.apply(node, n.Right, replaceStructOrExprRight)
+		a.apply(node, n.Left, replaceRefOfOrExprLeft)
+		a.apply(node, n.Right, replaceRefOfOrExprRight)
 	case *Order:
-		a.apply(node, n.Expr, replaceStructOrderExpr)
+		a.apply(node, n.Expr, replaceRefOfOrderExpr)
 	case OrderBy:
 		for x, el := range n {
-			a.apply(node, el, replaceSliceOrderBy(x))
+			a.apply(node, el, replaceOrderBy(x))
 		}
 	case *OrderByOption:
-		a.apply(node, n.Cols, replaceStructOrderByOptionCols)
+		a.apply(node, n.Cols, replaceRefOfOrderByOptionCols)
 	case *OtherAdmin:
 	case *OtherRead:
 	case *ParenSelect:
-		a.apply(node, n.Select, replaceStructParenSelectSelect)
+		a.apply(node, n.Select, replaceRefOfParenSelectSelect)
 	case *ParenTableExpr:
-		a.apply(node, n.Exprs, replaceStructParenTableExprExprs)
+		a.apply(node, n.Exprs, replaceRefOfParenTableExprExprs)
 	case *PartitionDefinition:
-		a.apply(node, n.Name, replaceStructPartitionDefinitionName)
-		a.apply(node, n.Limit, replaceStructPartitionDefinitionLimit)
+		a.apply(node, n.Name, replaceRefOfPartitionDefinitionName)
+		a.apply(node, n.Limit, replaceRefOfPartitionDefinitionLimit)
 	case *PartitionSpec:
-		a.apply(node, n.Names, replaceStructPartitionSpecNames)
-		a.apply(node, n.Number, replaceStructPartitionSpecNumber)
-		a.apply(node, n.TableName, replaceStructPartitionSpecTableName)
+		a.apply(node, n.Names, replaceRefOfPartitionSpecNames)
+		a.apply(node, n.Number, replaceRefOfPartitionSpecNumber)
+		a.apply(node, n.TableName, replaceRefOfPartitionSpecTableName)
 		for x, el := range n.Definitions {
-			a.apply(node, el, replacePartitionSpecDefinitions(x))
+			a.apply(node, el, replaceRefOfPartitionSpecDefinitions(x))
 		}
 	case Partitions:
 		for x, el := range n {
-			a.apply(node, el, replaceSlicePartitions(x))
+			a.apply(node, el, replacePartitions(x))
 		}
 	case *RangeCond:
-		a.apply(node, n.Left, replaceStructRangeCondLeft)
-		a.apply(node, n.From, replaceStructRangeCondFrom)
-		a.apply(node, n.To, replaceStructRangeCondTo)
+		a.apply(node, n.Left, replaceRefOfRangeCondLeft)
+		a.apply(node, n.From, replaceRefOfRangeCondFrom)
+		a.apply(node, n.To, replaceRefOfRangeCondTo)
 	case *Release:
-		a.apply(node, n.Name, replaceStructReleaseName)
+		a.apply(node, n.Name, replaceRefOfReleaseName)
 	case *RenameIndex:
 	case *RenameTable:
 	case *RenameTableName:
-		a.apply(node, n.Table, replaceStructRenameTableNameTable)
+		a.apply(node, n.Table, replaceRefOfRenameTableNameTable)
 	case *Rollback:
 	case *SRollback:
-		a.apply(node, n.Name, replaceStructSRollbackName)
+		a.apply(node, n.Name, replaceRefOfSRollbackName)
 	case *Savepoint:
-		a.apply(node, n.Name, replaceStructSavepointName)
+		a.apply(node, n.Name, replaceRefOfSavepointName)
 	case *Select:
-		a.apply(node, n.Comments, replaceStructSelectComments)
-		a.apply(node, n.SelectExprs, replaceStructSelectSelectExprs)
-		a.apply(node, n.From, replaceStructSelectFrom)
-		a.apply(node, n.Where, replaceStructSelectWhere)
-		a.apply(node, n.GroupBy, replaceStructSelectGroupBy)
-		a.apply(node, n.Having, replaceStructSelectHaving)
-		a.apply(node, n.OrderBy, replaceStructSelectOrderBy)
-		a.apply(node, n.Limit, replaceStructSelectLimit)
-		a.apply(node, n.Into, replaceStructSelectInto)
+		a.apply(node, n.Comments, replaceRefOfSelectComments)
+		a.apply(node, n.SelectExprs, replaceRefOfSelectSelectExprs)
+		a.apply(node, n.From, replaceRefOfSelectFrom)
+		a.apply(node, n.Where, replaceRefOfSelectWhere)
+		a.apply(node, n.GroupBy, replaceRefOfSelectGroupBy)
+		a.apply(node, n.Having, replaceRefOfSelectHaving)
+		a.apply(node, n.OrderBy, replaceRefOfSelectOrderBy)
+		a.apply(node, n.Limit, replaceRefOfSelectLimit)
+		a.apply(node, n.Into, replaceRefOfSelectInto)
 	case SelectExprs:
 		for x, el := range n {
-			a.apply(node, el, replaceSliceSelectExprs(x))
+			a.apply(node, el, replaceSelectExprs(x))
 		}
 	case *SelectInto:
 	case *Set:
-		a.apply(node, n.Comments, replaceStructSetComments)
-		a.apply(node, n.Exprs, replaceStructSetExprs)
+		a.apply(node, n.Comments, replaceRefOfSetComments)
+		a.apply(node, n.Exprs, replaceRefOfSetExprs)
 	case *SetExpr:
-		a.apply(node, n.Name, replaceStructSetExprName)
-		a.apply(node, n.Expr, replaceStructSetExprExpr)
+		a.apply(node, n.Name, replaceRefOfSetExprName)
+		a.apply(node, n.Expr, replaceRefOfSetExprExpr)
 	case SetExprs:
 		for x, el := range n {
-			a.apply(node, el, replaceSliceSetExprs(x))
+			a.apply(node, el, replaceSetExprs(x))
 		}
 	case *SetTransaction:
-		a.apply(node, n.SQLNode, replaceStructSetTransactionSQLNode)
-		a.apply(node, n.Comments, replaceStructSetTransactionComments)
+		a.apply(node, n.SQLNode, replaceRefOfSetTransactionSQLNode)
+		a.apply(node, n.Comments, replaceRefOfSetTransactionComments)
 		for x, el := range n.Characteristics {
-			a.apply(node, el, replaceSetTransactionCharacteristics(x))
+			a.apply(node, el, replaceRefOfSetTransactionCharacteristics(x))
 		}
 	case *Show:
-		a.apply(node, n.Internal, replaceStructShowInternal)
+		a.apply(node, n.Internal, replaceRefOfShowInternal)
 	case *ShowBasic:
-		a.apply(node, n.Tbl, replaceStructShowBasicTbl)
-		a.apply(node, n.Filter, replaceStructShowBasicFilter)
+		a.apply(node, n.Tbl, replaceRefOfShowBasicTbl)
+		a.apply(node, n.Filter, replaceRefOfShowBasicFilter)
 	case *ShowCreate:
-		a.apply(node, n.Op, replaceStructShowCreateOp)
+		a.apply(node, n.Op, replaceRefOfShowCreateOp)
 	case *ShowFilter:
-		a.apply(node, n.Filter, replaceStructShowFilterFilter)
+		a.apply(node, n.Filter, replaceRefOfShowFilterFilter)
 	case *ShowLegacy:
-		a.apply(node, n.OnTable, replaceStructShowLegacyOnTable)
-		a.apply(node, n.Table, replaceStructShowLegacyTable)
-		a.apply(node, n.ShowCollationFilterOpt, replaceStructShowLegacyShowCollationFilterOpt)
+		a.apply(node, n.OnTable, replaceRefOfShowLegacyOnTable)
+		a.apply(node, n.Table, replaceRefOfShowLegacyTable)
+		a.apply(node, n.ShowCollationFilterOpt, replaceRefOfShowLegacyShowCollationFilterOpt)
 	case *StarExpr:
-		a.apply(node, n.TableName, replaceStructStarExprTableName)
+		a.apply(node, n.TableName, replaceRefOfStarExprTableName)
 	case *Stream:
-		a.apply(node, n.Comments, replaceStructStreamComments)
-		a.apply(node, n.SelectExpr, replaceStructStreamSelectExpr)
-		a.apply(node, n.Table, replaceStructStreamTable)
+		a.apply(node, n.Comments, replaceRefOfStreamComments)
+		a.apply(node, n.SelectExpr, replaceRefOfStreamSelectExpr)
+		a.apply(node, n.Table, replaceRefOfStreamTable)
 	case *Subquery:
-		a.apply(node, n.Select, replaceStructSubquerySelect)
+		a.apply(node, n.Select, replaceRefOfSubquerySelect)
 	case *SubstrExpr:
-		a.apply(node, n.Name, replaceStructSubstrExprName)
-		a.apply(node, n.StrVal, replaceStructSubstrExprStrVal)
-		a.apply(node, n.From, replaceStructSubstrExprFrom)
-		a.apply(node, n.To, replaceStructSubstrExprTo)
+		a.apply(node, n.Name, replaceRefOfSubstrExprName)
+		a.apply(node, n.StrVal, replaceRefOfSubstrExprStrVal)
+		a.apply(node, n.From, replaceRefOfSubstrExprFrom)
+		a.apply(node, n.To, replaceRefOfSubstrExprTo)
 	case TableExprs:
 		for x, el := range n {
-			a.apply(node, el, replaceSliceTableExprs(x))
+			a.apply(node, el, replaceTableExprs(x))
 		}
 	case TableIdent:
 	case *TableIdent:
@@ -1070,93 +1070,93 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 		a.apply(node, n.Name, replacePanic("TableName Name"))
 		a.apply(node, n.Qualifier, replacePanic("TableName Qualifier"))
 	case *TableName:
-		a.apply(node, n.Name, replaceStructTableNameName)
-		a.apply(node, n.Qualifier, replaceStructTableNameQualifier)
+		a.apply(node, n.Name, replaceRefOfTableNameName)
+		a.apply(node, n.Qualifier, replaceRefOfTableNameQualifier)
 	case TableNames:
 		for x, el := range n {
-			a.apply(node, el, replaceSliceTableNames(x))
+			a.apply(node, el, replaceTableNames(x))
 		}
 	case TableOptions:
 	case *TableSpec:
 		for x, el := range n.Columns {
-			a.apply(node, el, replaceTableSpecColumns(x))
+			a.apply(node, el, replaceRefOfTableSpecColumns(x))
 		}
 		for x, el := range n.Indexes {
-			a.apply(node, el, replaceTableSpecIndexes(x))
+			a.apply(node, el, replaceRefOfTableSpecIndexes(x))
 		}
 		for x, el := range n.Constraints {
-			a.apply(node, el, replaceTableSpecConstraints(x))
+			a.apply(node, el, replaceRefOfTableSpecConstraints(x))
 		}
-		a.apply(node, n.Options, replaceStructTableSpecOptions)
+		a.apply(node, n.Options, replaceRefOfTableSpecOptions)
 	case *TablespaceOperation:
 	case *TimestampFuncExpr:
-		a.apply(node, n.Expr1, replaceStructTimestampFuncExprExpr1)
-		a.apply(node, n.Expr2, replaceStructTimestampFuncExprExpr2)
+		a.apply(node, n.Expr1, replaceRefOfTimestampFuncExprExpr1)
+		a.apply(node, n.Expr2, replaceRefOfTimestampFuncExprExpr2)
 	case *TruncateTable:
-		a.apply(node, n.Table, replaceStructTruncateTableTable)
+		a.apply(node, n.Table, replaceRefOfTruncateTableTable)
 	case *UnaryExpr:
-		a.apply(node, n.Expr, replaceStructUnaryExprExpr)
+		a.apply(node, n.Expr, replaceRefOfUnaryExprExpr)
 	case *Union:
-		a.apply(node, n.FirstStatement, replaceStructUnionFirstStatement)
+		a.apply(node, n.FirstStatement, replaceRefOfUnionFirstStatement)
 		for x, el := range n.UnionSelects {
-			a.apply(node, el, replaceUnionUnionSelects(x))
+			a.apply(node, el, replaceRefOfUnionUnionSelects(x))
 		}
-		a.apply(node, n.OrderBy, replaceStructUnionOrderBy)
-		a.apply(node, n.Limit, replaceStructUnionLimit)
+		a.apply(node, n.OrderBy, replaceRefOfUnionOrderBy)
+		a.apply(node, n.Limit, replaceRefOfUnionLimit)
 	case *UnionSelect:
-		a.apply(node, n.Statement, replaceStructUnionSelectStatement)
+		a.apply(node, n.Statement, replaceRefOfUnionSelectStatement)
 	case *UnlockTables:
 	case *Update:
-		a.apply(node, n.Comments, replaceStructUpdateComments)
-		a.apply(node, n.TableExprs, replaceStructUpdateTableExprs)
-		a.apply(node, n.Exprs, replaceStructUpdateExprs)
-		a.apply(node, n.Where, replaceStructUpdateWhere)
-		a.apply(node, n.OrderBy, replaceStructUpdateOrderBy)
-		a.apply(node, n.Limit, replaceStructUpdateLimit)
+		a.apply(node, n.Comments, replaceRefOfUpdateComments)
+		a.apply(node, n.TableExprs, replaceRefOfUpdateTableExprs)
+		a.apply(node, n.Exprs, replaceRefOfUpdateExprs)
+		a.apply(node, n.Where, replaceRefOfUpdateWhere)
+		a.apply(node, n.OrderBy, replaceRefOfUpdateOrderBy)
+		a.apply(node, n.Limit, replaceRefOfUpdateLimit)
 	case *UpdateExpr:
-		a.apply(node, n.Name, replaceStructUpdateExprName)
-		a.apply(node, n.Expr, replaceStructUpdateExprExpr)
+		a.apply(node, n.Name, replaceRefOfUpdateExprName)
+		a.apply(node, n.Expr, replaceRefOfUpdateExprExpr)
 	case UpdateExprs:
 		for x, el := range n {
-			a.apply(node, el, replaceSliceUpdateExprs(x))
+			a.apply(node, el, replaceUpdateExprs(x))
 		}
 	case *Use:
-		a.apply(node, n.DBName, replaceStructUseDBName)
+		a.apply(node, n.DBName, replaceRefOfUseDBName)
 	case *VStream:
-		a.apply(node, n.Comments, replaceStructVStreamComments)
-		a.apply(node, n.SelectExpr, replaceStructVStreamSelectExpr)
-		a.apply(node, n.Table, replaceStructVStreamTable)
-		a.apply(node, n.Where, replaceStructVStreamWhere)
-		a.apply(node, n.Limit, replaceStructVStreamLimit)
+		a.apply(node, n.Comments, replaceRefOfVStreamComments)
+		a.apply(node, n.SelectExpr, replaceRefOfVStreamSelectExpr)
+		a.apply(node, n.Table, replaceRefOfVStreamTable)
+		a.apply(node, n.Where, replaceRefOfVStreamWhere)
+		a.apply(node, n.Limit, replaceRefOfVStreamLimit)
 	case ValTuple:
 		for x, el := range n {
-			a.apply(node, el, replaceSliceValTuple(x))
+			a.apply(node, el, replaceValTuple(x))
 		}
 	case *Validation:
 	case Values:
 		for x, el := range n {
-			a.apply(node, el, replaceSliceValues(x))
+			a.apply(node, el, replaceValues(x))
 		}
 	case *ValuesFuncExpr:
-		a.apply(node, n.Name, replaceStructValuesFuncExprName)
+		a.apply(node, n.Name, replaceRefOfValuesFuncExprName)
 	case VindexParam:
 		a.apply(node, n.Key, replacePanic("VindexParam Key"))
 	case *VindexParam:
-		a.apply(node, n.Key, replaceStructVindexParamKey)
+		a.apply(node, n.Key, replaceRefOfVindexParamKey)
 	case *VindexSpec:
-		a.apply(node, n.Name, replaceStructVindexSpecName)
-		a.apply(node, n.Type, replaceStructVindexSpecType)
+		a.apply(node, n.Name, replaceRefOfVindexSpecName)
+		a.apply(node, n.Type, replaceRefOfVindexSpecType)
 		for x, el := range n.Params {
-			a.apply(node, el, replaceVindexSpecParams(x))
+			a.apply(node, el, replaceRefOfVindexSpecParams(x))
 		}
 	case *When:
-		a.apply(node, n.Cond, replaceStructWhenCond)
-		a.apply(node, n.Val, replaceStructWhenVal)
+		a.apply(node, n.Cond, replaceRefOfWhenCond)
+		a.apply(node, n.Val, replaceRefOfWhenVal)
 	case *Where:
-		a.apply(node, n.Expr, replaceStructWhereExpr)
+		a.apply(node, n.Expr, replaceRefOfWhereExpr)
 	case *XorExpr:
-		a.apply(node, n.Left, replaceStructXorExprLeft)
-		a.apply(node, n.Right, replaceStructXorExprRight)
+		a.apply(node, n.Left, replaceRefOfXorExprLeft)
+		a.apply(node, n.Right, replaceRefOfXorExprRight)
 	}
 	if a.post != nil && !a.post(&a.cursor) {
 		panic(abort)
