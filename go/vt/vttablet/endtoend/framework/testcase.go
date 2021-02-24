@@ -108,6 +108,9 @@ func (tc *TestCase) Test(name string, client *QueryClient) error {
 		name = tc.Name
 	}
 
+	// wait for all previous test cases to have been settled in cache
+	client.server.QueryPlanCacheWait()
+
 	catcher := NewQueryCatcher()
 	defer catcher.Close()
 

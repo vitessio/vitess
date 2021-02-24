@@ -301,6 +301,9 @@ func TestQueryExecutorPlans(t *testing.T) {
 			assert.Equal(t, tcase.planWant, qre.logStats.PlanType, tcase.input)
 			assert.Equal(t, tcase.logWant, qre.logStats.RewrittenSQL(), tcase.input)
 
+			// Wait for the existing query to be processed by the cache
+			tsv.QueryPlanCacheWait()
+
 			// Test inside a transaction.
 			target := tsv.sm.Target()
 			txid, alias, err := tsv.Begin(ctx, &target, nil)
