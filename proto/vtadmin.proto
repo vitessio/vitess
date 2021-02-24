@@ -43,6 +43,8 @@ service VTAdmin {
     rpc GetTablet(GetTabletRequest) returns (Tablet) {};
     // GetTablets returns all tablets across all the specified clusters.
     rpc GetTablets(GetTabletsRequest) returns (GetTabletsResponse) {};
+    // VTExplain provides information on how Vitess plans to execute a particular query.
+    rpc VTExplain(VTExplainRequest) returns (VTExplainResponse) {};
 }
 
 /* Data types */
@@ -150,4 +152,14 @@ message GetTabletsRequest {
 
 message GetTabletsResponse {
     repeated Tablet tablets = 1;
+}
+
+message VTExplainRequest {
+    string cluster = 1;
+    string keyspace = 2;
+    string sql = 3;
+}
+
+message VTExplainResponse {
+    string response = 1;
 }
