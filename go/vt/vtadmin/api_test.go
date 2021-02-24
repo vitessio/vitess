@@ -1587,8 +1587,10 @@ func TestVTExplain(t *testing.T) {
 			})
 
 			testutil.WithTestServer(t, vtctldserver, func(t *testing.T, vtctldClient vtctldclient.VtctldClient) {
-
-				toposerver.UpdateSrvVSchema(context.Background(), "c0_cell1", tt.srvVSchema)
+				if tt.srvVSchema != nil {
+					err := toposerver.UpdateSrvVSchema(context.Background(), "c0_cell1", tt.srvVSchema)
+					require.NoError(t, err)
+				}
 				testutil.AddKeyspaces(context.Background(), t, toposerver, tt.keyspaces...)
 				testutil.AddShards(context.Background(), t, toposerver, tt.shards...)
 
