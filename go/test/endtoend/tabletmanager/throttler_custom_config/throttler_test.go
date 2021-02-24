@@ -76,6 +76,7 @@ var (
 )
 
 const (
+	testThreshold     = 5
 	throttlerInitWait = 10 * time.Second
 )
 
@@ -100,7 +101,7 @@ func TestMain(m *testing.M) {
 			"-enable_replication_reporter",
 			"-enable-lag-throttler",
 			"-throttle_metrics_query", "show global status like 'threads_running'",
-			"-throttle_metrics_threshold", "2",
+			"-throttle_metrics_threshold", fmt.Sprintf("%d", testThreshold),
 			"-throttle_check_as_check_self",
 			"-heartbeat_enable",
 			"-heartbeat_interval", "250ms",
@@ -188,7 +189,9 @@ func TestThreadsRunning(t *testing.T) {
 	defer cluster.PanicHandler(t)
 
 	sleepSeconds := 6
-	go vtgateExec(t, fmt.Sprintf("select sleep(%d)", sleepSeconds), "")
+	for i := 0; i < testThreshold; i++ {
+		go vtgateExec(t, fmt.Sprintf("select sleep(%d)", sleepSeconds), "")
+	}
 	t.Run("exceeds threshold", func(t *testing.T) {
 		time.Sleep(3 * time.Second)
 		// by this time we will have +1 threads_running, and we should hit the threshold
