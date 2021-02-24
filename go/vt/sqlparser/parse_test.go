@@ -2718,7 +2718,9 @@ func TestCreateTable(t *testing.T) {
 			"	username varchar,\n" +
 			"	a int,\n" +
 			"	b int,\n" +
-			"	checkTestColIdentSize (b in (0, 1))\n" +
+			"	check (b in (0, 1)),\n" +
+			"	constraint a_positive check (a > 0),\n" +
+			"	check (a > b)\n"+
 			")",
 
 		// table options
@@ -2890,6 +2892,29 @@ func TestCreateTable(t *testing.T) {
 			"	time3 timestamp default utc_time() on update utc_time(),\n" +
 			"	time4 timestamp default utc_time() on update utc_time(),\n" +
 			"	time5 timestamp(5) default utc_time(5) on update utc_time(5)\n" +
+			")",
+	}, {
+		// test inline check constraint
+		input: "create table t (\n" +
+			"	a int,\n" +
+			"	b int constraint b_positive check (b > 0)\n" +
+			")",
+		output: "create table t (\n" +
+			"	a int,\n" +
+			"	b int,\n" +
+			"	constraint b_positive check (b > 0)\n" +
+			")",
+	}, {
+		// test initial table constraint
+		input: "create table t (\n" +
+			"	check (a <> b),\n"+
+			"	a int,\n" +
+			"	b int\n" +
+			")",
+		output: "create table t (\n" +
+			"	a int,\n" +
+			"	b int,\n" +
+			"	check (a != b)\n" +
 			")",
 	}, {
 		// test utc_date with and without ()
