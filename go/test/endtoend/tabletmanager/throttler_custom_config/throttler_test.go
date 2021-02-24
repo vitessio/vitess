@@ -16,6 +16,7 @@ limitations under the License.
 package master
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"net/http"
@@ -23,11 +24,14 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 var (
@@ -68,13 +72,11 @@ var (
 	httpClient       = base.SetupHTTPClient(time.Second)
 	checkAPIPath     = "throttler/check"
 	checkSelfAPIPath = "throttler/check-self"
+	vtParams         mysql.ConnParams
 )
 
 const (
-	throttlerInitWait            = 10 * time.Second
-	accumulateLagWait            = 2 * time.Second
-	throttlerRefreshIntervalWait = 12 * time.Second
-	replicationCatchUpWait       = 5 * time.Second
+	throttlerInitWait = 10 * time.Second
 )
 
 func TestMain(m *testing.M) {
@@ -98,7 +100,8 @@ func TestMain(m *testing.M) {
 			"-enable_replication_reporter",
 			"-enable-lag-throttler",
 			"-throttle_metrics_query", "show global status like 'threads_running'",
-			"-throttle_metrics_threshold", "1",
+			"-throttle_metrics_threshold", "2",
+			"-throttle_check_as_check_self",
 			"-heartbeat_enable",
 			"-heartbeat_interval", "250ms",
 		}
@@ -126,6 +129,20 @@ func TestMain(m *testing.M) {
 			}
 		}
 
+		vtgateInstance := clusterInstance.NewVtgateInstance()
+		// set the gateway we want to use
+		vtgateInstance.GatewayImplementation = "tabletgateway"
+		// Start vtgate
+		if err := vtgateInstance.Setup(); err != nil {
+			return 1
+		}
+		// ensure it is torn down during cluster TearDown
+		clusterInstance.VtgateProcess = *vtgateInstance
+		vtParams = mysql.ConnParams{
+			Host: clusterInstance.Hostname,
+			Port: clusterInstance.VtgateMySQLPort,
+		}
+
 		return m.Run()
 	}()
 	os.Exit(exitCode)
@@ -139,15 +156,13 @@ func throttleCheckSelf(tablet *cluster.Vttablet) (*http.Response, error) {
 	return httpClient.Head(fmt.Sprintf("http://localhost:%d/%s", tablet.HTTPPort, checkSelfAPIPath))
 }
 
-func TestThrottlerBeforeMetricsCollected(t *testing.T) {
+func TestThrottlerThresholdOK(t *testing.T) {
 	defer cluster.PanicHandler(t)
 
-	// Immediately after startup, we expect this response:
-	// {"StatusCode":404,"Value":0,"Threshold":0,"Message":"No such metric"}
 	{
 		resp, err := throttleCheck(primaryTablet)
 		assert.NoError(t, err)
-		assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
 	}
 }
 
@@ -167,23 +182,17 @@ func TestThrottlerAfterMetricsCollected(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 	}
-	{
-		resp, err := throttleCheckSelf(replicaTablet)
-		assert.NoError(t, err)
-		assert.Equal(t, http.StatusOK, resp.StatusCode)
-	}
 }
 
-func TestLag(t *testing.T) {
+func TestThreadsRunning(t *testing.T) {
 	defer cluster.PanicHandler(t)
 
-	{
-		err := clusterInstance.VtctlclientProcess.ExecuteCommand("StopReplication", replicaTablet.Alias)
-		assert.NoError(t, err)
-
-		time.Sleep(accumulateLagWait)
-		// Lag will have accumulated
-		// {"StatusCode":429,"Value":4.864921,"Threshold":1,"Message":"Threshold exceeded"}
+	sleepSeconds := 6
+	go vtgateExec(t, fmt.Sprintf("select sleep(%d)", sleepSeconds), "")
+	t.Run("exceeds threshold", func(t *testing.T) {
+		time.Sleep(3 * time.Second)
+		// by this time we will have +1 threads_running, and we should hit the threshold
+		// {"StatusCode":429,"Value":2,"Threshold":2,"Message":"Threshold exceeded"}
 		{
 			resp, err := throttleCheck(primaryTablet)
 			assert.NoError(t, err)
@@ -192,20 +201,11 @@ func TestLag(t *testing.T) {
 		{
 			resp, err := throttleCheckSelf(primaryTablet)
 			assert.NoError(t, err)
-			// self (on primary) is unaffected by replication lag
-			assert.Equal(t, http.StatusOK, resp.StatusCode)
-		}
-		{
-			resp, err := throttleCheckSelf(replicaTablet)
-			assert.NoError(t, err)
 			assert.Equal(t, http.StatusTooManyRequests, resp.StatusCode)
 		}
-	}
-	{
-		err := clusterInstance.VtctlclientProcess.ExecuteCommand("StartReplication", replicaTablet.Alias)
-		assert.NoError(t, err)
-
-		time.Sleep(replicationCatchUpWait)
+	})
+	t.Run("restored below threshold", func(t *testing.T) {
+		time.Sleep(time.Duration(sleepSeconds) * time.Second)
 		// Restore
 		{
 			resp, err := throttleCheck(primaryTablet)
@@ -217,35 +217,23 @@ func TestLag(t *testing.T) {
 			assert.NoError(t, err)
 			assert.Equal(t, http.StatusOK, resp.StatusCode)
 		}
-		{
-			resp, err := throttleCheckSelf(replicaTablet)
-			assert.NoError(t, err)
-			assert.Equal(t, http.StatusOK, resp.StatusCode)
-		}
-	}
+	})
 }
 
-func TestNoReplicas(t *testing.T) {
-	defer cluster.PanicHandler(t)
-	{
-		err := clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", replicaTablet.Alias, "RDONLY")
-		assert.NoError(t, err)
+func vtgateExec(t *testing.T, query string, expectError string) *sqltypes.Result {
+	t.Helper()
 
-		time.Sleep(throttlerRefreshIntervalWait)
-		// This makes no REPLICA servers available. We expect something like:
-		// {"StatusCode":200,"Value":0,"Threshold":1,"Message":""}
-		resp, err := throttleCheck(primaryTablet)
-		assert.NoError(t, err)
-		assert.Equal(t, http.StatusOK, resp.StatusCode)
-	}
-	{
-		err := clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", replicaTablet.Alias, "REPLICA")
-		assert.NoError(t, err)
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.Nil(t, err)
+	defer conn.Close()
 
-		time.Sleep(throttlerRefreshIntervalWait)
-		// Restore valid replica
-		resp, err := throttleCheck(primaryTablet)
-		assert.NoError(t, err)
-		assert.Equal(t, http.StatusOK, resp.StatusCode)
+	qr, err := conn.ExecuteFetch(query, 1000, true)
+	if expectError == "" {
+		require.NoError(t, err)
+	} else {
+		require.Error(t, err, "error should not be nil")
+		assert.Contains(t, err.Error(), expectError, "Unexpected error")
 	}
+	return qr
 }
