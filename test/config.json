@@ -290,7 +290,7 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "onlineddl_vrepl_stress",
-			"RetryMax": 1,
+			"RetryMax": 0,
 			"Tags": []
 		},
 		"onlineddl_revert": {
@@ -299,7 +299,7 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "onlineddl_revert",
-			"RetryMax": 1,
+			"RetryMax": 0,
 			"Tags": []
 		},
 		"pitr": {
