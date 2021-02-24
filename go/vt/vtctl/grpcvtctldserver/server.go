@@ -327,7 +327,7 @@ func (s *VtctldServer) EmergencyReparentShard(ctx context.Context, req *vtctldat
 		waitReplicasTimeout = time.Second * 30
 	}
 
-	m := sync.Mutex{}
+	m := sync.RWMutex{}
 	logstream := []*logutilpb.Event{}
 	logger := logutil.NewCallbackLogger(func(e *logutilpb.Event) {
 		m.Lock()
@@ -349,7 +349,6 @@ func (s *VtctldServer) EmergencyReparentShard(ctx context.Context, req *vtctldat
 	resp := &vtctldatapb.EmergencyReparentShardResponse{
 		Keyspace: req.Keyspace,
 		Shard:    req.Shard,
-		Events:   logstream,
 	}
 
 	if ev != nil {
@@ -360,6 +359,12 @@ func (s *VtctldServer) EmergencyReparentShard(ctx context.Context, req *vtctldat
 			resp.PromotedPrimary = ev.NewMaster.Alias
 		}
 	}
+
+	m.RLock()
+	defer m.RUnlock()
+
+	resp.Events = make([]*logutilpb.Event, len(logstream))
+	copy(resp.Events, logstream)
 
 	return resp, err
 }
@@ -694,21 +699,28 @@ func (s *VtctldServer) InitShardPrimary(ctx context.Context, req *vtctldatapb.In
 	}
 	defer unlock(&err)
 
-	m := sync.Mutex{}
+	m := sync.RWMutex{}
 	ev := &events.Reparent{}
+	logstream := []*logutilpb.Event{}
 
 	resp := &vtctldatapb.InitShardPrimaryResponse{}
 	err = s.InitShardPrimaryLocked(ctx, ev, req, waitReplicasTimeout, tmclient.NewTabletManagerClient(), logutil.NewCallbackLogger(func(e *logutilpb.Event) {
 		m.Lock()
 		defer m.Unlock()
 
-		resp.Events = append(resp.Events, e)
+		logstream = append(logstream, e)
 	}))
 	if err != nil {
 		event.DispatchUpdate(ev, "failed InitShardPrimary: "+err.Error())
 	} else {
 		event.DispatchUpdate(ev, "finished InitShardPrimary")
 	}
+
+	m.RLock()
+	defer m.RUnlock()
+
+	resp.Events = make([]*logutilpb.Event, len(logstream))
+	copy(resp.Events, logstream)
 
 	return resp, err
 }
@@ -925,7 +937,7 @@ func (s *VtctldServer) PlannedReparentShard(ctx context.Context, req *vtctldatap
 		waitReplicasTimeout = time.Second * 30
 	}
 
-	m := sync.Mutex{}
+	m := sync.RWMutex{}
 	logstream := []*logutilpb.Event{}
 	logger := logutil.NewCallbackLogger(func(e *logutilpb.Event) {
 		m.Lock()
@@ -947,7 +959,6 @@ func (s *VtctldServer) PlannedReparentShard(ctx context.Context, req *vtctldatap
 	resp := &vtctldatapb.PlannedReparentShardResponse{
 		Keyspace: req.Keyspace,
 		Shard:    req.Shard,
-		Events:   logstream,
 	}
 
 	if ev != nil {
@@ -958,6 +969,12 @@ func (s *VtctldServer) PlannedReparentShard(ctx context.Context, req *vtctldatap
 			resp.PromotedPrimary = ev.NewMaster.Alias
 		}
 	}
+
+	m.RLock()
+	defer m.RUnlock()
+
+	resp.Events = make([]*logutilpb.Event, len(logstream))
+	copy(resp.Events, logstream)
 
 	return resp, err
 }
