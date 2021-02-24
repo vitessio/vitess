@@ -51,12 +51,22 @@ func (r *ReplaceVariables) GetTableName() string {
 
 // Execute implements the Primitive interface
 func (r *ReplaceVariables) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	panic("implement me")
+	qr, err := r.Input.Execute(vcursor, bindVars, wantfields)
+	if err != nil {
+		return nil, err
+	}
+	replaceVariables(qr, bindVars)
+	return qr, nil
 }
 
 // StreamExecute implements the Primitive interface
 func (r *ReplaceVariables) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	panic("implement me")
+	innerCallback := callback
+	callback = func(result *sqltypes.Result) error {
+		replaceVariables(result, bindVars)
+		return innerCallback(result)
+	}
+	return r.Input.StreamExecute(vcursor, bindVars, wantfields, callback)
 }
 
 // GetFields implements the Primitive interface
@@ -73,5 +83,15 @@ func (r *ReplaceVariables) Inputs() []Primitive {
 func (r *ReplaceVariables) description() PrimitiveDescription {
 	return PrimitiveDescription{
 		OperatorType: "ReplaceVariables",
+	}
+}
+
+func replaceVariables(qr *sqltypes.Result, bindVars map[string]*querypb.BindVariable) {
+	for i, row := range qr.Rows {
+		variableName := row[0].ToString()
+		res, found := bindVars["__vt"+variableName]
+		if found {
+			qr.Rows[i][1] = sqltypes.NewVarChar(string(res.GetValue()))
+		}
 	}
 }
