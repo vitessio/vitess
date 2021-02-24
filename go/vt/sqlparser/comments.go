@@ -181,6 +181,9 @@ func ExtractMysqlComment(sql string) (string, string) {
 	if endOfVersionIndex < 0 {
 		return "", ""
 	}
+	if endOfVersionIndex < 5 {
+		endOfVersionIndex = 0
+	}
 	version := sql[0:endOfVersionIndex]
 	innerSQL := strings.TrimFunc(sql[endOfVersionIndex:], unicode.IsSpace)
 

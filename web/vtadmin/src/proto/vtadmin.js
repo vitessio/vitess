@@ -248,6 +248,39 @@ $root.vtadmin = (function() {
          * @variation 2
          */
 
+        /**
+         * Callback as used by {@link vtadmin.VTAdmin#vTExplain}.
+         * @memberof vtadmin.VTAdmin
+         * @typedef VTExplainCallback
+         * @type {function}
+         * @param {Error|null} error Error, if any
+         * @param {vtadmin.VTExplainResponse} [response] VTExplainResponse
+         */
+
+        /**
+         * Calls VTExplain.
+         * @function vTExplain
+         * @memberof vtadmin.VTAdmin
+         * @instance
+         * @param {vtadmin.IVTExplainRequest} request VTExplainRequest message or plain object
+         * @param {vtadmin.VTAdmin.VTExplainCallback} callback Node-style callback called with the error, if any, and VTExplainResponse
+         * @returns {undefined}
+         * @variation 1
+         */
+        Object.defineProperty(VTAdmin.prototype.vTExplain = function vTExplain(request, callback) {
+            return this.rpcCall(vTExplain, $root.vtadmin.VTExplainRequest, $root.vtadmin.VTExplainResponse, request, callback);
+        }, "name", { value: "VTExplain" });
+
+        /**
+         * Calls VTExplain.
+         * @function vTExplain
+         * @memberof vtadmin.VTAdmin
+         * @instance
+         * @param {vtadmin.IVTExplainRequest} request VTExplainRequest message or plain object
+         * @returns {Promise<vtadmin.VTExplainResponse>} Promise
+         * @variation 2
+         */
+
         return VTAdmin;
     })();
 
@@ -4030,6 +4063,425 @@ $root.vtadmin = (function() {
         };
 
         return GetTabletsResponse;
+    })();
+
+    vtadmin.VTExplainRequest = (function() {
+
+        /**
+         * Properties of a VTExplainRequest.
+         * @memberof vtadmin
+         * @interface IVTExplainRequest
+         * @property {string|null} [cluster] VTExplainRequest cluster
+         * @property {string|null} [keyspace] VTExplainRequest keyspace
+         * @property {string|null} [sql] VTExplainRequest sql
+         */
+
+        /**
+         * Constructs a new VTExplainRequest.
+         * @memberof vtadmin
+         * @classdesc Represents a VTExplainRequest.
+         * @implements IVTExplainRequest
+         * @constructor
+         * @param {vtadmin.IVTExplainRequest=} [properties] Properties to set
+         */
+        function VTExplainRequest(properties) {
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * VTExplainRequest cluster.
+         * @member {string} cluster
+         * @memberof vtadmin.VTExplainRequest
+         * @instance
+         */
+        VTExplainRequest.prototype.cluster = "";
+
+        /**
+         * VTExplainRequest keyspace.
+         * @member {string} keyspace
+         * @memberof vtadmin.VTExplainRequest
+         * @instance
+         */
+        VTExplainRequest.prototype.keyspace = "";
+
+        /**
+         * VTExplainRequest sql.
+         * @member {string} sql
+         * @memberof vtadmin.VTExplainRequest
+         * @instance
+         */
+        VTExplainRequest.prototype.sql = "";
+
+        /**
+         * Creates a new VTExplainRequest instance using the specified properties.
+         * @function create
+         * @memberof vtadmin.VTExplainRequest
+         * @static
+         * @param {vtadmin.IVTExplainRequest=} [properties] Properties to set
+         * @returns {vtadmin.VTExplainRequest} VTExplainRequest instance
+         */
+        VTExplainRequest.create = function create(properties) {
+            return new VTExplainRequest(properties);
+        };
+
+        /**
+         * Encodes the specified VTExplainRequest message. Does not implicitly {@link vtadmin.VTExplainRequest.verify|verify} messages.
+         * @function encode
+         * @memberof vtadmin.VTExplainRequest
+         * @static
+         * @param {vtadmin.IVTExplainRequest} message VTExplainRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        VTExplainRequest.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.cluster != null && Object.hasOwnProperty.call(message, "cluster"))
+                writer.uint32(/* id 1, wireType 2 =*/10).string(message.cluster);
+            if (message.keyspace != null && Object.hasOwnProperty.call(message, "keyspace"))
+                writer.uint32(/* id 2, wireType 2 =*/18).string(message.keyspace);
+            if (message.sql != null && Object.hasOwnProperty.call(message, "sql"))
+                writer.uint32(/* id 3, wireType 2 =*/26).string(message.sql);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified VTExplainRequest message, length delimited. Does not implicitly {@link vtadmin.VTExplainRequest.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtadmin.VTExplainRequest
+         * @static
+         * @param {vtadmin.IVTExplainRequest} message VTExplainRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        VTExplainRequest.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a VTExplainRequest message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtadmin.VTExplainRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtadmin.VTExplainRequest} VTExplainRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        VTExplainRequest.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.VTExplainRequest();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.cluster = reader.string();
+                    break;
+                case 2:
+                    message.keyspace = reader.string();
+                    break;
+                case 3:
+                    message.sql = reader.string();
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a VTExplainRequest message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtadmin.VTExplainRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtadmin.VTExplainRequest} VTExplainRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        VTExplainRequest.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a VTExplainRequest message.
+         * @function verify
+         * @memberof vtadmin.VTExplainRequest
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        VTExplainRequest.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.cluster != null && message.hasOwnProperty("cluster"))
+                if (!$util.isString(message.cluster))
+                    return "cluster: string expected";
+            if (message.keyspace != null && message.hasOwnProperty("keyspace"))
+                if (!$util.isString(message.keyspace))
+                    return "keyspace: string expected";
+            if (message.sql != null && message.hasOwnProperty("sql"))
+                if (!$util.isString(message.sql))
+                    return "sql: string expected";
+            return null;
+        };
+
+        /**
+         * Creates a VTExplainRequest message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtadmin.VTExplainRequest
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtadmin.VTExplainRequest} VTExplainRequest
+         */
+        VTExplainRequest.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtadmin.VTExplainRequest)
+                return object;
+            var message = new $root.vtadmin.VTExplainRequest();
+            if (object.cluster != null)
+                message.cluster = String(object.cluster);
+            if (object.keyspace != null)
+                message.keyspace = String(object.keyspace);
+            if (object.sql != null)
+                message.sql = String(object.sql);
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a VTExplainRequest message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtadmin.VTExplainRequest
+         * @static
+         * @param {vtadmin.VTExplainRequest} message VTExplainRequest
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        VTExplainRequest.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.defaults) {
+                object.cluster = "";
+                object.keyspace = "";
+                object.sql = "";
+            }
+            if (message.cluster != null && message.hasOwnProperty("cluster"))
+                object.cluster = message.cluster;
+            if (message.keyspace != null && message.hasOwnProperty("keyspace"))
+                object.keyspace = message.keyspace;
+            if (message.sql != null && message.hasOwnProperty("sql"))
+                object.sql = message.sql;
+            return object;
+        };
+
+        /**
+         * Converts this VTExplainRequest to JSON.
+         * @function toJSON
+         * @memberof vtadmin.VTExplainRequest
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        VTExplainRequest.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return VTExplainRequest;
+    })();
+
+    vtadmin.VTExplainResponse = (function() {
+
+        /**
+         * Properties of a VTExplainResponse.
+         * @memberof vtadmin
+         * @interface IVTExplainResponse
+         * @property {string|null} [response] VTExplainResponse response
+         */
+
+        /**
+         * Constructs a new VTExplainResponse.
+         * @memberof vtadmin
+         * @classdesc Represents a VTExplainResponse.
+         * @implements IVTExplainResponse
+         * @constructor
+         * @param {vtadmin.IVTExplainResponse=} [properties] Properties to set
+         */
+        function VTExplainResponse(properties) {
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * VTExplainResponse response.
+         * @member {string} response
+         * @memberof vtadmin.VTExplainResponse
+         * @instance
+         */
+        VTExplainResponse.prototype.response = "";
+
+        /**
+         * Creates a new VTExplainResponse instance using the specified properties.
+         * @function create
+         * @memberof vtadmin.VTExplainResponse
+         * @static
+         * @param {vtadmin.IVTExplainResponse=} [properties] Properties to set
+         * @returns {vtadmin.VTExplainResponse} VTExplainResponse instance
+         */
+        VTExplainResponse.create = function create(properties) {
+            return new VTExplainResponse(properties);
+        };
+
+        /**
+         * Encodes the specified VTExplainResponse message. Does not implicitly {@link vtadmin.VTExplainResponse.verify|verify} messages.
+         * @function encode
+         * @memberof vtadmin.VTExplainResponse
+         * @static
+         * @param {vtadmin.IVTExplainResponse} message VTExplainResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        VTExplainResponse.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.response != null && Object.hasOwnProperty.call(message, "response"))
+                writer.uint32(/* id 1, wireType 2 =*/10).string(message.response);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified VTExplainResponse message, length delimited. Does not implicitly {@link vtadmin.VTExplainResponse.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtadmin.VTExplainResponse
+         * @static
+         * @param {vtadmin.IVTExplainResponse} message VTExplainResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        VTExplainResponse.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a VTExplainResponse message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtadmin.VTExplainResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtadmin.VTExplainResponse} VTExplainResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        VTExplainResponse.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.VTExplainResponse();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.response = reader.string();
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a VTExplainResponse message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtadmin.VTExplainResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtadmin.VTExplainResponse} VTExplainResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        VTExplainResponse.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a VTExplainResponse message.
+         * @function verify
+         * @memberof vtadmin.VTExplainResponse
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        VTExplainResponse.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.response != null && message.hasOwnProperty("response"))
+                if (!$util.isString(message.response))
+                    return "response: string expected";
+            return null;
+        };
+
+        /**
+         * Creates a VTExplainResponse message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtadmin.VTExplainResponse
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtadmin.VTExplainResponse} VTExplainResponse
+         */
+        VTExplainResponse.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtadmin.VTExplainResponse)
+                return object;
+            var message = new $root.vtadmin.VTExplainResponse();
+            if (object.response != null)
+                message.response = String(object.response);
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a VTExplainResponse message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtadmin.VTExplainResponse
+         * @static
+         * @param {vtadmin.VTExplainResponse} message VTExplainResponse
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        VTExplainResponse.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.defaults)
+                object.response = "";
+            if (message.response != null && message.hasOwnProperty("response"))
+                object.response = message.response;
+            return object;
+        };
+
+        /**
+         * Converts this VTExplainResponse to JSON.
+         * @function toJSON
+         * @memberof vtadmin.VTExplainResponse
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        VTExplainResponse.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return VTExplainResponse;
     })();
 
     return vtadmin;
