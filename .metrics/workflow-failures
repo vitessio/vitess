@@ -2957,3 +2957,6 @@
 2021-02-24T07:06:25Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/595211977
 2021-02-24T08:59:23Z,Cluster (tabletmanager_throttler_custom_config),https://github.com/vitessio/vitess/actions/runs/595477189
 2021-02-24T08:59:23Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/595477162
+2021-02-24T09:12:54Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/595512031
+2021-02-24T09:12:54Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/595512033
+2021-02-24T09:35:15Z,Cluster (onlineddl_vrepl_stress),https://github.com/vitessio/vitess/actions/runs/595571523
