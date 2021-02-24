@@ -2955,3 +2955,5 @@
 2021-02-23T23:30:44Z,local_example,https://github.com/vitessio/vitess/actions/runs/594221373
 2021-02-24T07:06:25Z,Cluster (tabletmanager_throttler_custom_config),https://github.com/vitessio/vitess/actions/runs/595212001
 2021-02-24T07:06:25Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/595211977
+2021-02-24T08:59:23Z,Cluster (tabletmanager_throttler_custom_config),https://github.com/vitessio/vitess/actions/runs/595477189
+2021-02-24T08:59:23Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/595477162
