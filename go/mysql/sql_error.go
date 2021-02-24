@@ -132,7 +132,8 @@ func NewSQLErrorFromError(err error) error {
 			num = ERNotSupportedYet
 			ss = SSSyntaxErrorOrAccessViolation
 		case vtrpcpb.Code_INTERNAL:
-			num = ERUnknownError
+			num = ERInternalError
+			ss = SSUnknownSQLState
 		case vtrpcpb.Code_UNAVAILABLE:
 			num = ERUnknownError
 		case vtrpcpb.Code_DATA_LOSS:
