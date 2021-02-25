@@ -46,25 +46,6 @@ func makeLabels(labelNames []string, labelValsCombined string) []string {
 	return tags
 }
 
-func (sb StatsBackend) addHistogram(name string, h *stats.Histogram, tags []string) {
-	labels := h.Labels()
-	buckets := h.Buckets()
-	for i := range labels {
-		name := fmt.Sprintf("%s.%s", name, labels[i])
-		sb.statsdClient.Gauge(name, float64(buckets[i]), tags, sb.sampleRate)
-	}
-	sb.statsdClient.Gauge(fmt.Sprintf("%s.%s", name, h.CountLabel()),
-		(float64)(h.Count()),
-		tags,
-		sb.sampleRate,
-	)
-	sb.statsdClient.Gauge(fmt.Sprintf("%s.%s", name, h.TotalLabel()),
-		(float64)(h.Total()),
-		tags,
-		sb.sampleRate,
-	)
-}
-
 // Init initializes the statsd with the given namespace.
 func Init(namespace string) {
 	servenv.OnRun(func() {
@@ -81,16 +62,23 @@ func Init(namespace string) {
 		sb.statsdClient = statsdC
 		sb.sampleRate = *statsdSampleRate
 		stats.RegisterPushBackend("statsd", sb)
+		stats.RegisterTimerHook(func(statsName, name string, value int64, timings *stats.Timings) {
+			tags := makeLabels(strings.Split(timings.Label(), "."), name)
+			if err := statsdC.TimeInMilliseconds(statsName, float64(value), tags, sb.sampleRate); err != nil {
+				log.Errorf("Fail to TimeInMilliseconds %v: %v", statsName, err)
+			}
+		})
+		stats.RegisterHistogramHook(func(name string, val int64) {
+			if err := statsdC.Histogram(name, float64(val), []string{}, sb.sampleRate); err != nil {
+				log.Errorf("Fail to Histogram for %v: %v", name, err)
+			}
+		})
 	})
 }
 
 func (sb StatsBackend) addExpVar(kv expvar.KeyValue) {
 	k := kv.Key
 	switch v := kv.Value.(type) {
-	case *stats.String:
-		if err := sb.statsdClient.Set(k, v.Get(), nil, sb.sampleRate); err != nil {
-			log.Errorf("Failed to add String %v for key %v", v, k)
-		}
 	case *stats.Counter:
 		if err := sb.statsdClient.Count(k, v.Get(), nil, sb.sampleRate); err != nil {
 			log.Errorf("Failed to add Counter %v for key %v", v, k)
@@ -159,25 +147,9 @@ func (sb StatsBackend) addExpVar(kv expvar.KeyValue) {
 				log.Errorf("Failed to add GaugesWithSingleLabel %v for key %v", v, k)
 			}
 		}
-	case *stats.MultiTimings:
-		labels := v.Labels()
-		hists := v.Histograms()
-		for labelValsCombined, histogram := range hists {
-			sb.addHistogram(k, histogram, makeLabels(labels, labelValsCombined))
-		}
-	case *stats.Timings:
-		// TODO: for statsd.timing metrics, there is no good way to transfer the histogram to it
-		// If we store a in memory buffer for stats.Timings and flush it here it's hard to make the stats
-		// thread safe.
-		// Instead, we export the timings stats as histogram here. We won't have the percentile breakdown
-		// for the metrics, but we can still get the average from total and count
-		labels := []string{v.Label()}
-		hists := v.Histograms()
-		for labelValsCombined, histogram := range hists {
-			sb.addHistogram(k, histogram, makeLabels(labels, labelValsCombined))
-		}
-	case *stats.Histogram:
-		sb.addHistogram(k, v, []string{})
+	case *stats.Timings, *stats.MultiTimings, *stats.Histogram:
+		// it does not make sense to export static expvar to statsd,
+		// instead we rely on hooks to integrate with statsd' timing and histogram api directly
 	case expvar.Func:
 		// Export memstats as gauge so that we don't need to call extra ReadMemStats
 		if k == "memstats" {
@@ -209,7 +181,7 @@ func (sb StatsBackend) addExpVar(kv expvar.KeyValue) {
 				}
 			}
 		}
-	case *stats.StringMapFunc, *stats.Rates, *stats.RatesFunc:
+	case *stats.Rates, *stats.RatesFunc, *stats.String, *stats.StringFunc, *stats.StringMapFunc:
 		// Silently ignore metrics that does not make sense to be exported to statsd
 	default:
 		log.Warningf("Silently ignore metrics with key %v [%T]", k, kv.Value)

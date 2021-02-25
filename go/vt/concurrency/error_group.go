@@ -75,6 +75,10 @@ func (eg ErrorGroup) Wait(cancel context.CancelFunc, errors chan error) *AllErro
 	responseCounter := 0
 	rec := &AllErrorRecorder{}
 
+	if eg.NumGoroutines < 1 {
+		return rec
+	}
+
 	for err := range errors {
 		responseCounter++
 

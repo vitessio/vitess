@@ -45,20 +45,20 @@ type (
 
 	// SelectStatement any SELECT statement.
 	SelectStatement interface {
+		Statement
 		iSelectStatement()
-		iStatement()
 		iInsertRows()
 		AddOrder(*Order)
 		SetLimit(*Limit)
 		SetLock(lock Lock)
 		MakeDistinct()
-		SQLNode
 	}
 
 	// DDLStatement represents any DDL Statement
 	DDLStatement interface {
 		iDDLStatement()
 		IsFullyParsed() bool
+		IsTemporary() bool
 		GetTable() TableName
 		GetAction() DDLAction
 		GetOptLike() *OptLike
@@ -84,6 +84,12 @@ type (
 	AlterOption interface {
 		iAlterOption()
 		SQLNode
+	}
+
+	// Explain is an interface that represents the Explain statements
+	Explain interface {
+		Statement
+		iExplain()
 	}
 
 	// AddConstraintDefinition represents a ADD CONSTRAINT alter option
@@ -416,6 +422,7 @@ type (
 
 	// DropTable represents a DROP TABLE statement.
 	DropTable struct {
+		Temp       bool
 		FromTables TableNames
 		// The following fields are set if a DDL was fully analyzed.
 		IfExists bool
@@ -429,6 +436,7 @@ type (
 
 	// CreateTable represents a CREATE TABLE statement.
 	CreateTable struct {
+		Temp        bool
 		Table       TableName
 		IfNotExists bool
 		TableSpec   *TableSpec
@@ -505,31 +513,11 @@ type (
 		Name ColIdent
 	}
 
-	// Explain represents an EXPLAIN statement
-	Explain struct {
-		Type      ExplainType
-		Statement Statement
-	}
-
-	// ExplainType is an enum for Explain.Type
-	ExplainType int8
-
 	// CallProc represents a CALL statement
 	CallProc struct {
 		Name   TableName
 		Params Exprs
 	}
-
-	// OtherRead represents a DESCRIBE, or EXPLAIN statement.
-	// It should be used only as an indicator. It does not contain
-	// the full AST for the statement.
-	OtherRead struct{}
-
-	// OtherAdmin represents a misc statement that relies on ADMIN privileges,
-	// such as REPAIR, OPTIMIZE, or TRUNCATE statement.
-	// It should be used only as an indicator. It does not contain
-	// the full AST for the statement.
-	OtherAdmin struct{}
 
 	// LockType is an enum for Lock Types
 	LockType int8
@@ -550,6 +538,32 @@ type (
 
 	// UnlockTables represents the unlock statement
 	UnlockTables struct{}
+
+	// ExplainType is an enum for ExplainStmt.Type
+	ExplainType int8
+
+	// ExplainStmt represents an Explain statement
+	ExplainStmt struct {
+		Type      ExplainType
+		Statement Statement
+	}
+
+	// ExplainTab represents the Explain table
+	ExplainTab struct {
+		Table TableName
+		Wild  string
+	}
+
+	// OtherRead represents a DESCRIBE, or EXPLAIN statement.
+	// It should be used only as an indicator. It does not contain
+	// the full AST for the statement.
+	OtherRead struct{}
+
+	// OtherAdmin represents a misc statement that relies on ADMIN privileges,
+	// such as REPAIR, OPTIMIZE, or TRUNCATE statement.
+	// It should be used only as an indicator. It does not contain
+	// the full AST for the statement.
+	OtherAdmin struct{}
 )
 
 func (*Union) iStatement()             {}
@@ -571,7 +585,6 @@ func (*Rollback) iStatement()          {}
 func (*SRollback) iStatement()         {}
 func (*Savepoint) iStatement()         {}
 func (*Release) iStatement()           {}
-func (*Explain) iStatement()           {}
 func (*OtherRead) iStatement()         {}
 func (*OtherAdmin) iStatement()        {}
 func (*Select) iSelectStatement()      {}
@@ -592,6 +605,8 @@ func (*DropView) iStatement()          {}
 func (*TruncateTable) iStatement()     {}
 func (*RenameTable) iStatement()       {}
 func (*CallProc) iStatement()          {}
+func (*ExplainStmt) iStatement()       {}
+func (*ExplainTab) iStatement()        {}
 
 func (*CreateView) iDDLStatement()    {}
 func (*AlterView) iDDLStatement()     {}
@@ -621,6 +636,9 @@ func (*RenameTableName) iAlterOption()         {}
 func (*RenameIndex) iAlterOption()             {}
 func (*Validation) iAlterOption()              {}
 func (TableOptions) iAlterOption()             {}
+
+func (*ExplainStmt) iExplain() {}
+func (*ExplainTab) iExplain()  {}
 
 // IsFullyParsed implements the DDLStatement interface
 func (*TruncateTable) IsFullyParsed() bool {
@@ -660,6 +678,46 @@ func (node *DropTable) IsFullyParsed() bool {
 // IsFullyParsed implements the DDLStatement interface
 func (node *AlterView) IsFullyParsed() bool {
 	return true
+}
+
+// IsTemporary implements the DDLStatement interface
+func (*TruncateTable) IsTemporary() bool {
+	return false
+}
+
+// IsTemporary implements the DDLStatement interface
+func (*RenameTable) IsTemporary() bool {
+	return false
+}
+
+// IsTemporary implements the DDLStatement interface
+func (node *CreateTable) IsTemporary() bool {
+	return node.Temp
+}
+
+// IsTemporary implements the DDLStatement interface
+func (node *AlterTable) IsTemporary() bool {
+	return false
+}
+
+// IsTemporary implements the DDLStatement interface
+func (node *CreateView) IsTemporary() bool {
+	return false
+}
+
+// IsTemporary implements the DDLStatement interface
+func (node *DropView) IsTemporary() bool {
+	return false
+}
+
+// IsTemporary implements the DDLStatement interface
+func (node *DropTable) IsTemporary() bool {
+	return node.Temp
+}
+
+// IsTemporary implements the DDLStatement interface
+func (node *AlterView) IsTemporary() bool {
+	return false
 }
 
 // GetTable implements the DDLStatement interface
@@ -1150,34 +1208,28 @@ type (
 		ShowCollationFilterOpt Expr
 	}
 
-	// ShowColumns is of ShowInternal type, holds the show columns statement.
-	ShowColumns struct {
-		Full   string
-		Table  TableName
-		DbName string
-		Filter *ShowFilter
-	}
-
-	// ShowTableStatus is of ShowInternal type, holds SHOW TABLE STATUS queries.
-	ShowTableStatus struct {
-		DatabaseName string
-		Filter       *ShowFilter
-	}
-
 	// ShowCommandType represents the show statement type.
 	ShowCommandType int8
 
 	// ShowBasic is of ShowInternal type, holds Simple SHOW queries with a filter.
 	ShowBasic struct {
 		Command ShowCommandType
+		Full    bool
+		Tbl     TableName
+		DbName  string
 		Filter  *ShowFilter
+	}
+
+	// ShowCreate is of ShowInternal type, holds SHOW CREATE queries.
+	ShowCreate struct {
+		Command ShowCommandType
+		Op      TableName
 	}
 )
 
-func (*ShowLegacy) isShowInternal()      {}
-func (*ShowColumns) isShowInternal()     {}
-func (*ShowTableStatus) isShowInternal() {}
-func (*ShowBasic) isShowInternal()       {}
+func (*ShowLegacy) isShowInternal() {}
+func (*ShowBasic) isShowInternal()  {}
+func (*ShowCreate) isShowInternal() {}
 
 // InsertRows represents the rows for an INSERT statement.
 type InsertRows interface {
@@ -1241,11 +1293,7 @@ type ColumnType struct {
 	Type string
 
 	// Generic field options.
-	NotNull       bool
-	Autoincrement bool
-	Default       Expr
-	OnUpdate      Expr
-	Comment       *Literal
+	Options *ColumnTypeOptions
 
 	// Numeric field options
 	Length   *Literal
@@ -1259,6 +1307,15 @@ type ColumnType struct {
 
 	// Enum values
 	EnumValues []string
+}
+
+// ColumnTypeOptions are generic field options for a column type
+type ColumnTypeOptions struct {
+	NotNull       bool
+	Autoincrement bool
+	Default       Expr
+	OnUpdate      Expr
+	Comment       *Literal
 
 	// Key specification
 	KeyOpt ColumnKeyOption
@@ -2220,37 +2277,37 @@ func (ct *ColumnType) Format(buf *TrackedBuffer) {
 	if ct.Collate != "" {
 		opts = append(opts, keywordStrings[COLLATE], ct.Collate)
 	}
-	if ct.NotNull {
+	if ct.Options.NotNull {
 		opts = append(opts, keywordStrings[NOT], keywordStrings[NULL])
 	}
-	if ct.Default != nil {
-		opts = append(opts, keywordStrings[DEFAULT], String(ct.Default))
+	if ct.Options.Default != nil {
+		opts = append(opts, keywordStrings[DEFAULT], String(ct.Options.Default))
 	}
-	if ct.OnUpdate != nil {
-		opts = append(opts, keywordStrings[ON], keywordStrings[UPDATE], String(ct.OnUpdate))
+	if ct.Options.OnUpdate != nil {
+		opts = append(opts, keywordStrings[ON], keywordStrings[UPDATE], String(ct.Options.OnUpdate))
 	}
-	if ct.Autoincrement {
+	if ct.Options.Autoincrement {
 		opts = append(opts, keywordStrings[AUTO_INCREMENT])
 	}
-	if ct.Comment != nil {
-		opts = append(opts, keywordStrings[COMMENT_KEYWORD], String(ct.Comment))
+	if ct.Options.Comment != nil {
+		opts = append(opts, keywordStrings[COMMENT_KEYWORD], String(ct.Options.Comment))
 	}
-	if ct.KeyOpt == colKeyPrimary {
+	if ct.Options.KeyOpt == colKeyPrimary {
 		opts = append(opts, keywordStrings[PRIMARY], keywordStrings[KEY])
 	}
-	if ct.KeyOpt == colKeyUnique {
+	if ct.Options.KeyOpt == colKeyUnique {
 		opts = append(opts, keywordStrings[UNIQUE])
 	}
-	if ct.KeyOpt == colKeyUniqueKey {
+	if ct.Options.KeyOpt == colKeyUniqueKey {
 		opts = append(opts, keywordStrings[UNIQUE], keywordStrings[KEY])
 	}
-	if ct.KeyOpt == colKeySpatialKey {
+	if ct.Options.KeyOpt == colKeySpatialKey {
 		opts = append(opts, keywordStrings[SPATIAL], keywordStrings[KEY])
 	}
-	if ct.KeyOpt == colKeyFulltextKey {
+	if ct.Options.KeyOpt == colKeyFulltextKey {
 		opts = append(opts, keywordStrings[FULLTEXT], keywordStrings[KEY])
 	}
-	if ct.KeyOpt == colKey {
+	if ct.Options.KeyOpt == colKey {
 		opts = append(opts, keywordStrings[KEY])
 	}
 
@@ -2369,9 +2426,7 @@ func (f *ForeignKeyDefinition) Format(buf *TrackedBuffer) {
 // Format formats the node.
 func (c *CheckConstraintDefinition) Format(buf *TrackedBuffer) {
 	buf.astPrintf(c, "check (%v)", c.Expr)
-	if c.Enforced {
-		buf.astPrintf(c, " enforced")
-	} else {
+	if !c.Enforced {
 		buf.astPrintf(c, " not enforced")
 	}
 }
@@ -2379,17 +2434,6 @@ func (c *CheckConstraintDefinition) Format(buf *TrackedBuffer) {
 // Format formats the node.
 func (node *Show) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "%v", node.Internal)
-}
-
-// Format formats the node.
-func (node *ShowColumns) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "show %s", node.Full)
-	buf.astPrintf(node, "columns from %v", node.Table)
-
-	buf.printIf(node.DbName != "", " from "+node.DbName)
-	if node.Filter != nil {
-		buf.astPrintf(node, "%v", node.Filter)
-	}
 }
 
 // Format formats the node.
@@ -2486,7 +2530,7 @@ func (node *Release) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
-func (node *Explain) Format(buf *TrackedBuffer) {
+func (node *ExplainStmt) Format(buf *TrackedBuffer) {
 	format := ""
 	switch node.Type {
 	case EmptyType: // do nothing
@@ -2496,6 +2540,14 @@ func (node *Explain) Format(buf *TrackedBuffer) {
 		format = "format = " + node.Type.ToString() + " "
 	}
 	buf.astPrintf(node, "explain %s%v", format, node.Statement)
+}
+
+// Format formats the node.
+func (node *ExplainTab) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "explain %v", node.Table)
+	if node.Wild != "" {
+		buf.astPrintf(node, " %s", node.Wild)
+	}
 }
 
 // Format formats the node.
@@ -3078,18 +3130,24 @@ func (node *Load) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
-func (node *ShowTableStatus) Format(buf *TrackedBuffer) {
-	buf.WriteString("show table status")
-	if node.DatabaseName != "" {
-		buf.WriteString(" from ")
-		buf.WriteString(node.DatabaseName)
+func (node *ShowBasic) Format(buf *TrackedBuffer) {
+	buf.WriteString("show")
+	if node.Full {
+		buf.WriteString(" full")
+	}
+	buf.astPrintf(node, "%s", node.Command.ToString())
+	if !node.Tbl.IsEmpty() {
+		buf.astPrintf(node, " from %v", node.Tbl)
+	}
+	if node.DbName != "" {
+		buf.astPrintf(node, " from %s", node.DbName)
 	}
 	buf.astPrintf(node, "%v", node.Filter)
 }
 
 // Format formats the node.
-func (node *ShowBasic) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "show%s%v", node.Command.ToString(), node.Filter)
+func (node *ShowCreate) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "show%s %v", node.Command.ToString(), node.Op)
 }
 
 // Format formats the node.
@@ -3144,11 +3202,17 @@ func (node *AlterDatabase) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *CreateTable) Format(buf *TrackedBuffer) {
-	if node.IfNotExists {
-		buf.astPrintf(node, "create table if not exists %v", node.Table)
-	} else {
-		buf.astPrintf(node, "create table %v", node.Table)
+	buf.WriteString("create ")
+	if node.Temp {
+		buf.WriteString("temporary ")
 	}
+	buf.WriteString("table ")
+
+	if node.IfNotExists {
+		buf.WriteString("if not exists ")
+	}
+	buf.astPrintf(node, "%v", node.Table)
+
 	if node.OptLike != nil {
 		buf.astPrintf(node, " %v", node.OptLike)
 	}
@@ -3213,11 +3277,15 @@ func (node *AlterView) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *DropTable) Format(buf *TrackedBuffer) {
+	temp := ""
+	if node.Temp {
+		temp = " temporary"
+	}
 	exists := ""
 	if node.IfExists {
 		exists = " if exists"
 	}
-	buf.astPrintf(node, "drop table%s %v", exists, node.FromTables)
+	buf.astPrintf(node, "drop%s table%s %v", temp, exists, node.FromTables)
 }
 
 // Format formats the node.

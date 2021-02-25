@@ -214,13 +214,13 @@ func TestQueryExecutorPlans(t *testing.T) {
 	}, {
 		input: "create index a on user(id)",
 		dbResponses: []dbResponse{{
-			query:  "alter table user add index a (id)",
+			query:  "alter table `user` add index a (id)",
 			result: emptyResult,
 		}},
 		resultWant: emptyResult,
 		planWant:   "DDL",
-		logWant:    "alter table user add index a (id)",
-		inTxWant:   "alter table user add index a (id)",
+		logWant:    "alter table `user` add index a (id)",
+		inTxWant:   "alter table `user` add index a (id)",
 	}, {
 		input: "create index a on user(id1 + id2)",
 		dbResponses: []dbResponse{{
@@ -251,6 +251,33 @@ func TestQueryExecutorPlans(t *testing.T) {
 		planWant:   "Release",
 		logWant:    "RELEASE savepoint a",
 		inTxWant:   "RELEASE savepoint a",
+	}, {
+		input: "show create database db_name",
+		dbResponses: []dbResponse{{
+			query:  "show create database ks",
+			result: emptyResult,
+		}},
+		resultWant: emptyResult,
+		planWant:   "Show",
+		logWant:    "show create database ks",
+	}, {
+		input: "show create database mysql",
+		dbResponses: []dbResponse{{
+			query:  "show create database mysql",
+			result: emptyResult,
+		}},
+		resultWant: emptyResult,
+		planWant:   "Show",
+		logWant:    "show create database mysql",
+	}, {
+		input: "show create table mysql.user",
+		dbResponses: []dbResponse{{
+			query:  "show create table mysql.`user`",
+			result: emptyResult,
+		}},
+		resultWant: emptyResult,
+		planWant:   "Show",
+		logWant:    "show create table mysql.`user`",
 	}}
 	for _, tcase := range testcases {
 		t.Run(tcase.input, func(t *testing.T) {
@@ -261,6 +288,7 @@ func TestQueryExecutorPlans(t *testing.T) {
 			}
 			ctx := context.Background()
 			tsv := newTestTabletServer(ctx, noFlags, db)
+			tsv.config.DB.DBName = "ks"
 			defer tsv.StopService()
 
 			tsv.SetPassthroughDMLs(tcase.passThrough)
@@ -272,6 +300,9 @@ func TestQueryExecutorPlans(t *testing.T) {
 			assert.Equal(t, tcase.resultWant, got, tcase.input)
 			assert.Equal(t, tcase.planWant, qre.logStats.PlanType, tcase.input)
 			assert.Equal(t, tcase.logWant, qre.logStats.RewrittenSQL(), tcase.input)
+
+			// Wait for the existing query to be processed by the cache
+			tsv.QueryPlanCacheWait()
 
 			// Test inside a transaction.
 			target := tsv.sm.Target()
@@ -604,7 +635,6 @@ func TestQueryExecutorPlanNextval(t *testing.T) {
 			sqltypes.NewInt64(7),
 			sqltypes.NewInt64(3),
 		}},
-		RowsAffected: 2,
 	})
 	updateQuery = "update seq set next_id = 13 where id = 0"
 	db.AddQuery(updateQuery, &sqltypes.Result{})
@@ -1158,14 +1188,29 @@ func newTestQueryExecutor(ctx context.Context, tsv *TabletServer, sql string, tx
 
 func setUpQueryExecutorTest(t *testing.T) *fakesqldb.DB {
 	db := fakesqldb.New(t)
-	initQueryExecutorTestDB(db, true)
+	initQueryExecutorTestDB(db)
 	return db
 }
 
-func initQueryExecutorTestDB(db *fakesqldb.DB, testTableHasMultipleUniqueKeys bool) {
-	for query, result := range getQueryExecutorSupportedQueries(testTableHasMultipleUniqueKeys) {
+const baseShowTablesPattern = `SELECT t\.table_name.*`
+
+func initQueryExecutorTestDB(db *fakesqldb.DB) {
+	for query, result := range getQueryExecutorSupportedQueries() {
 		db.AddQuery(query, result)
 	}
+	db.AddQueryPattern(baseShowTablesPattern, &sqltypes.Result{
+		Fields: mysql.BaseShowTablesFields,
+		Rows: [][]sqltypes.Value{
+			mysql.BaseShowTablesRow("test_table", false, ""),
+			mysql.BaseShowTablesRow("seq", false, "vitess_sequence"),
+			mysql.BaseShowTablesRow("msg", false, "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30"),
+		},
+	})
+	db.AddQuery("show status like 'Innodb_rows_read'", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+		"Variable_name|Value",
+		"varchar|int64"),
+		"Innodb_rows_read|0",
+	))
 }
 
 func getTestTableFields() []*querypb.Field {
@@ -1176,7 +1221,7 @@ func getTestTableFields() []*querypb.Field {
 	}
 }
 
-func getQueryExecutorSupportedQueries(testTableHasMultipleUniqueKeys bool) map[string]*sqltypes.Result {
+func getQueryExecutorSupportedQueries() map[string]*sqltypes.Result {
 	return map[string]*sqltypes.Result{
 		// queries for twopc
 		fmt.Sprintf(sqlCreateSidecarDB, "_vt"):          {},
@@ -1238,24 +1283,13 @@ func getQueryExecutorSupportedQueries(testTableHasMultipleUniqueKeys bool) map[s
 			Fields: []*querypb.Field{{
 				Type: sqltypes.Uint64,
 			}},
-			Rows:         [][]sqltypes.Value{},
-			RowsAffected: 0,
+			Rows: [][]sqltypes.Value{},
 		},
 		"(select 0 as x from dual where 1 != 1) union (select 1 as y from dual where 1 != 1) limit 10001": {
 			Fields: []*querypb.Field{{
 				Type: sqltypes.Uint64,
 			}},
-			Rows:         [][]sqltypes.Value{},
-			RowsAffected: 0,
-		},
-		mysql.BaseShowTables: {
-			Fields: mysql.BaseShowTablesFields,
-			Rows: [][]sqltypes.Value{
-				mysql.BaseShowTablesRow("test_table", false, ""),
-				mysql.BaseShowTablesRow("seq", false, "vitess_sequence"),
-				mysql.BaseShowTablesRow("msg", false, "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30"),
-			},
-			RowsAffected: 3,
+			Rows: [][]sqltypes.Value{},
 		},
 		mysql.BaseShowPrimary: {
 			Fields: mysql.ShowPrimaryFields,
@@ -1264,7 +1298,6 @@ func getQueryExecutorSupportedQueries(testTableHasMultipleUniqueKeys bool) map[s
 				mysql.ShowPrimaryRow("seq", "id"),
 				mysql.ShowPrimaryRow("msg", "id"),
 			},
-			RowsAffected: 3,
 		},
 		"select * from test_table where 1 != 1": {
 			Fields: []*querypb.Field{{

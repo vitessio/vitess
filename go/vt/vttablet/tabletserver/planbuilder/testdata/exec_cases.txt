@@ -808,7 +808,7 @@ options:PassthroughDMLs
 # show tables #1
 "show tables like 'key%'"
 {
-  "PlanID": "ShowTables",
+  "PlanID": "Show",
   "TableName":"",
   "FullQuery": "show tables like 'key%'"
 }
@@ -816,7 +816,7 @@ options:PassthroughDMLs
 # show tables #2
 "show tables where Tables_in_keyspace='apa'"
 {
-  "PlanID": "ShowTables",
+  "PlanID": "Show",
   "TableName":"",
   "FullQuery": "show tables where Tables_in_dbName = 'apa'"
 }
@@ -824,15 +824,41 @@ options:PassthroughDMLs
 # show table status #1
 "show table status like 'key%'"
 {
-  "PlanID": "OtherRead",
-  "TableName": ""
+  "PlanID": "Show",
+  "TableName":"",
+  "FullQuery": "show table status like 'key%'"
 }
 
 # show table status #2
 "show table status where Name='apa'"
 {
-  "PlanID": "OtherRead",
-  "TableName": ""
+  "PlanID": "Show",
+  "TableName":"",
+  "FullQuery": "show table status where `Name` = 'apa'"
+}
+
+# show create table
+"show create table t1"
+{
+  "PlanID": "Show",
+  "TableName": "",
+  "FullQuery": "show create table t1"
+}
+
+# show create database system_schema
+"show create database mysql"
+{
+  "PlanID": "Show",
+  "TableName": "",
+  "FullQuery": "show create database mysql"
+}
+
+# show create database
+"show create database anything"
+{
+  "PlanID": "Show",
+  "TableName": "",
+  "FullQuery": "show create database dbName"
 }
 
 # load data

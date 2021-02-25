@@ -49,6 +49,8 @@ var (
 )
 
 func commandGetCellInfoNames(cmd *cobra.Command, args []string) error {
+	cli.FinishedParsing(cmd)
+
 	resp, err := client.GetCellInfoNames(commandCtx, &vtctldatapb.GetCellInfoNamesRequest{})
 	if err != nil {
 		return err
@@ -60,9 +62,11 @@ func commandGetCellInfoNames(cmd *cobra.Command, args []string) error {
 }
 
 func commandGetCellInfo(cmd *cobra.Command, args []string) error {
-	cell := cmd.Flags().Arg(0)
-	resp, err := client.GetCellInfo(commandCtx, &vtctldatapb.GetCellInfoRequest{Cell: cell})
+	cli.FinishedParsing(cmd)
 
+	cell := cmd.Flags().Arg(0)
+
+	resp, err := client.GetCellInfo(commandCtx, &vtctldatapb.GetCellInfoRequest{Cell: cell})
 	if err != nil {
 		return err
 	}
@@ -78,6 +82,8 @@ func commandGetCellInfo(cmd *cobra.Command, args []string) error {
 }
 
 func commandGetCellsAliases(cmd *cobra.Command, args []string) error {
+	cli.FinishedParsing(cmd)
+
 	resp, err := client.GetCellsAliases(commandCtx, &vtctldatapb.GetCellsAliasesRequest{})
 	if err != nil {
 		return err

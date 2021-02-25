@@ -20,6 +20,8 @@ package testutil
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -27,6 +29,7 @@ import (
 	"google.golang.org/grpc"
 
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl/vtctldclient"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -69,6 +72,31 @@ func AddKeyspace(ctx context.Context, t *testing.T, ts *topo.Server, ks *vtctlda
 	require.NoError(t, err)
 }
 
+// AddKeyspaces adds a list of keyspaces to the topology, failing a test if any
+// of those keyspaces cannot be added. See AddKeyspace for details.
+func AddKeyspaces(ctx context.Context, t *testing.T, ts *topo.Server, keyspaces ...*vtctldatapb.Keyspace) {
+	for _, keyspace := range keyspaces {
+		AddKeyspace(ctx, t, ts, keyspace)
+	}
+}
+
+// AddTabletOptions is a container for different behaviors tests need from
+// AddTablet.
+type AddTabletOptions struct {
+	// AlsoSetShardMaster is an option to control additional setup to take when
+	// AddTablet receives a tablet of type MASTER. When set, AddTablet will also
+	// update the shard record to make that tablet the primary, and fail the
+	// test if the shard record has a serving primary already.
+	AlsoSetShardMaster bool
+	// ForceSetShardMaster, when combined with AlsoSetShardMaster, will ignore
+	// any existing primary in the shard, making the current tablet the serving
+	// primary (given it is type MASTER), and log that it has done so.
+	ForceSetShardMaster bool
+	// SkipShardCreation, when set, makes AddTablet never attempt to create a
+	// shard record in the topo under any circumstances.
+	SkipShardCreation bool
+}
+
 // AddTablet adds a tablet to the topology, failing a test if that tablet record
 // could not be created. It shallow copies to prevent XXX_ fields from changing,
 // including nested proto message fields.
@@ -76,13 +104,27 @@ func AddKeyspace(ctx context.Context, t *testing.T, ts *topo.Server, ks *vtctlda
 // AddTablet also optionally adds empty keyspace and shard records to the
 // topology, if they are set on the tablet record and they cannot be retrieved
 // from the topo server without error.
-func AddTablet(ctx context.Context, t *testing.T, ts *topo.Server, tablet *topodatapb.Tablet) {
+//
+// If AddTablet receives a tablet record with a keyspace and shard set, and that
+// tablet's type is MASTER, and opts.AlsoSetShardMaster is set, then AddTablet
+// will update the shard record to make that tablet the shard master and set the
+// shard to serving. If that shard record already has a serving primary, then
+// AddTablet will fail the test.
+func AddTablet(ctx context.Context, t *testing.T, ts *topo.Server, tablet *topodatapb.Tablet, opts *AddTabletOptions) {
 	in := *tablet
 	alias := *tablet.Alias
 	in.Alias = &alias
 
+	if opts == nil {
+		opts = &AddTabletOptions{}
+	}
+
 	err := ts.CreateTablet(ctx, &in)
 	require.NoError(t, err, "CreateTablet(%+v)", &in)
+
+	if opts.SkipShardCreation {
+		return
+	}
 
 	if tablet.Keyspace != "" {
 		if _, err := ts.GetKeyspace(ctx, tablet.Keyspace); err != nil {
@@ -95,6 +137,85 @@ func AddTablet(ctx context.Context, t *testing.T, ts *topo.Server, tablet *topod
 				err := ts.CreateShard(ctx, tablet.Keyspace, tablet.Shard)
 				require.NoError(t, err, "CreateShard(%s, %s)", tablet.Keyspace, tablet.Shard)
 			}
+
+			if tablet.Type == topodatapb.TabletType_MASTER && opts.AlsoSetShardMaster {
+				_, err := ts.UpdateShardFields(ctx, tablet.Keyspace, tablet.Shard, func(si *topo.ShardInfo) error {
+					if si.IsMasterServing && si.MasterAlias != nil {
+						msg := fmt.Sprintf("shard %v/%v already has a serving master (%v)", tablet.Keyspace, tablet.Shard, topoproto.TabletAliasString(si.MasterAlias))
+
+						if !opts.ForceSetShardMaster {
+							return errors.New(msg)
+						}
+
+						t.Logf("%s; replacing with %v because ForceSetShardMaster = true", msg, topoproto.TabletAliasString(tablet.Alias))
+					}
+
+					si.MasterAlias = tablet.Alias
+					si.IsMasterServing = true
+					si.MasterTermStartTime = tablet.MasterTermStartTime
+
+					return nil
+				})
+				require.NoError(t, err, "UpdateShardFields(%s, %s) to set %s as serving primary failed", tablet.Keyspace, tablet.Shard, topoproto.TabletAliasString(tablet.Alias))
+			}
+		}
+	}
+}
+
+// AddTablets adds a list of tablets to the topology. See AddTablet for more
+// details.
+func AddTablets(ctx context.Context, t *testing.T, ts *topo.Server, opts *AddTabletOptions, tablets ...*topodatapb.Tablet) {
+	for _, tablet := range tablets {
+		AddTablet(ctx, t, ts, tablet, opts)
+	}
+}
+
+// AddShards adds a list of shards to the topology, failing a test if any of the
+// shard records could not be created. It also ensures that every shard's
+// keyspace exists, or creates an empty keyspace if that shard's keyspace does
+// not exist.
+func AddShards(ctx context.Context, t *testing.T, ts *topo.Server, shards ...*vtctldatapb.Shard) {
+	for _, shard := range shards {
+		if shard.Keyspace != "" {
+			if _, err := ts.GetKeyspace(ctx, shard.Keyspace); err != nil {
+				err := ts.CreateKeyspace(ctx, shard.Keyspace, &topodatapb.Keyspace{})
+				require.NoError(t, err, "CreateKeyspace(%s)", shard.Keyspace)
+			}
+		}
+
+		err := ts.CreateShard(ctx, shard.Keyspace, shard.Name)
+		require.NoError(t, err, "CreateShard(%s/%s)", shard.Keyspace, shard.Name)
+
+		if shard.Shard != nil {
+			_, err := ts.UpdateShardFields(ctx, shard.Keyspace, shard.Name, func(si *topo.ShardInfo) error {
+				si.Shard = shard.Shard
+
+				return nil
+			})
+			require.NoError(t, err, "UpdateShardFields(%s/%s, %v)", shard.Keyspace, shard.Name, shard.Shard)
+		}
+	}
+}
+
+// SetupReplicationGraphs creates a set of ShardReplication objects in the topo,
+// failing the test if any of the records could not be created.
+func SetupReplicationGraphs(ctx context.Context, t *testing.T, ts *topo.Server, replicationGraphs ...*topo.ShardReplicationInfo) {
+	for _, graph := range replicationGraphs {
+		err := ts.UpdateShardReplicationFields(ctx, graph.Cell(), graph.Keyspace(), graph.Shard(), func(sr *topodatapb.ShardReplication) error {
+			sr.Nodes = graph.Nodes
+			return nil
+		})
+		require.NoError(t, err, "could not save replication graph for %s/%s in cell %v", graph.Keyspace(), graph.Shard(), graph.Cell())
+	}
+}
+
+// UpdateSrvKeyspaces updates a set of SrvKeyspace records, grouped by cell and
+// then by keyspace. It fails the test if any records cannot be updated.
+func UpdateSrvKeyspaces(ctx context.Context, t *testing.T, ts *topo.Server, srvkeyspacesByCellByKeyspace map[string]map[string]*topodatapb.SrvKeyspace) {
+	for cell, srvKeyspacesByKeyspace := range srvkeyspacesByCellByKeyspace {
+		for keyspace, srvKeyspace := range srvKeyspacesByKeyspace {
+			err := ts.UpdateSrvKeyspace(ctx, cell, keyspace, srvKeyspace)
+			require.NoError(t, err, "UpdateSrvKeyspace(%v, %v, %v)", cell, keyspace, srvKeyspace)
 		}
 	}
 }

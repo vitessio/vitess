@@ -101,7 +101,7 @@ type Executor struct {
 	vschema      *vindexes.VSchema
 	normalize    bool
 	streamSize   int
-	plans        *cache.LRUCache
+	plans        cache.Cache
 	vschemaStats *VSchemaStats
 
 	vm *VSchemaManager
@@ -114,14 +114,14 @@ const pathScatterStats = "/debug/scatter_stats"
 const pathVSchema = "/debug/vschema"
 
 // NewExecutor creates a new Executor.
-func NewExecutor(ctx context.Context, serv srvtopo.Server, cell string, resolver *Resolver, normalize bool, streamSize int, queryPlanCacheSize int64) *Executor {
+func NewExecutor(ctx context.Context, serv srvtopo.Server, cell string, resolver *Resolver, normalize bool, streamSize int, cacheCfg *cache.Config) *Executor {
 	e := &Executor{
 		serv:        serv,
 		cell:        cell,
 		resolver:    resolver,
 		scatterConn: resolver.scatterConn,
 		txConn:      resolver.scatterConn.txConn,
-		plans:       cache.NewLRUCache(queryPlanCacheSize),
+		plans:       cache.NewDefaultCacheImpl(cacheCfg),
 		normalize:   normalize,
 		streamSize:  streamSize,
 	}
@@ -131,13 +131,12 @@ func NewExecutor(ctx context.Context, serv srvtopo.Server, cell string, resolver
 	e.vm.watchSrvVSchema(ctx, cell)
 
 	executorOnce.Do(func() {
-		stats.NewGaugeFunc("QueryPlanCacheLength", "Query plan cache length", e.plans.Length)
-		stats.NewGaugeFunc("QueryPlanCacheSize", "Query plan cache size", e.plans.Size)
-		stats.NewGaugeFunc("QueryPlanCacheCapacity", "Query plan cache capacity", e.plans.Capacity)
+		stats.NewGaugeFunc("QueryPlanCacheLength", "Query plan cache length", func() int64 {
+			return int64(e.plans.Len())
+		})
+		stats.NewGaugeFunc("QueryPlanCacheSize", "Query plan cache size", e.plans.UsedCapacity)
+		stats.NewGaugeFunc("QueryPlanCacheCapacity", "Query plan cache capacity", e.plans.MaxCapacity)
 		stats.NewCounterFunc("QueryPlanCacheEvictions", "Query plan cache evictions", e.plans.Evictions)
-		stats.Publish("QueryPlanCacheOldest", stats.StringFunc(func() string {
-			return fmt.Sprintf("%v", e.plans.Oldest())
-		}))
 		http.Handle(pathQueryPlans, e)
 		http.Handle(pathScatterStats, e)
 		http.Handle(pathVSchema, e)
@@ -373,7 +372,7 @@ func (e *Executor) handleBegin(ctx context.Context, safeSession *SafeSession, lo
 func (e *Executor) handleCommit(ctx context.Context, safeSession *SafeSession, logStats *LogStats) (*sqltypes.Result, error) {
 	execStart := time.Now()
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
-	logStats.ShardQueries = uint32(len(safeSession.ShardSessions))
+	logStats.ShardQueries = uint64(len(safeSession.ShardSessions))
 	e.updateQueryCounts("Commit", "", "", int64(logStats.ShardQueries))
 
 	err := e.txConn.Commit(ctx, safeSession)
@@ -389,7 +388,7 @@ func (e *Executor) Commit(ctx context.Context, safeSession *SafeSession) error {
 func (e *Executor) handleRollback(ctx context.Context, safeSession *SafeSession, logStats *LogStats) (*sqltypes.Result, error) {
 	execStart := time.Now()
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
-	logStats.ShardQueries = uint32(len(safeSession.ShardSessions))
+	logStats.ShardQueries = uint64(len(safeSession.ShardSessions))
 	e.updateQueryCounts("Rollback", "", "", int64(logStats.ShardQueries))
 	err := e.txConn.Rollback(ctx, safeSession)
 	logStats.CommitTime = time.Since(execStart)
@@ -399,7 +398,7 @@ func (e *Executor) handleRollback(ctx context.Context, safeSession *SafeSession,
 func (e *Executor) handleSavepoint(ctx context.Context, safeSession *SafeSession, sql string, planType string, logStats *LogStats, nonTxResponse func(query string) (*sqltypes.Result, error), ignoreMaxMemoryRows bool) (*sqltypes.Result, error) {
 	execStart := time.Now()
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
-	logStats.ShardQueries = uint32(len(safeSession.ShardSessions))
+	logStats.ShardQueries = uint64(len(safeSession.ShardSessions))
 	e.updateQueryCounts(planType, "", "", int64(logStats.ShardQueries))
 	defer func() {
 		logStats.ExecuteTime = time.Since(execStart)
@@ -642,55 +641,6 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 			Fields: buildVarCharFields("Name", "Status", "Type", "Library", "License"),
 			Rows:   rows,
 		}, nil
-	case "create table":
-		if !show.Table.Qualifier.IsEmpty() {
-			// Explicit keyspace was passed. Use that for targeting but remove from the query itself.
-			destKeyspace = show.Table.Qualifier.String()
-			show.Table.Qualifier = sqlparser.NewTableIdent("")
-		} else {
-			// No keyspace was indicated. Try to find one using the vschema.
-			tbl, err := e.VSchema().FindTable(destKeyspace, show.Table.Name.String())
-			if err != nil {
-				return nil, err
-			}
-			destKeyspace = tbl.Keyspace.Name
-		}
-		sql = sqlparser.String(show)
-	case sqlparser.KeywordString(sqlparser.COLUMNS):
-		if !show.OnTable.Qualifier.IsEmpty() {
-			destKeyspace = show.OnTable.Qualifier.String()
-			show.OnTable.Qualifier = sqlparser.NewTableIdent("")
-		} else if show.ShowTablesOpt != nil {
-			if show.ShowTablesOpt.DbName != "" {
-				destKeyspace = show.ShowTablesOpt.DbName
-				show.ShowTablesOpt.DbName = ""
-			}
-		} else {
-			break
-		}
-		sql = sqlparser.String(show)
-	case sqlparser.KeywordString(sqlparser.INDEX), sqlparser.KeywordString(sqlparser.KEYS), sqlparser.KeywordString(sqlparser.INDEXES):
-		if !show.OnTable.Qualifier.IsEmpty() {
-			destKeyspace = show.OnTable.Qualifier.String()
-			show.OnTable.Qualifier = sqlparser.NewTableIdent("")
-		} else if show.ShowTablesOpt != nil {
-			if show.ShowTablesOpt.DbName != "" {
-				destKeyspace = show.ShowTablesOpt.DbName
-				show.ShowTablesOpt.DbName = ""
-			}
-		} else {
-			break
-		}
-		sql = sqlparser.String(show)
-	case sqlparser.KeywordString(sqlparser.TABLES):
-		if show.ShowTablesOpt != nil && show.ShowTablesOpt.DbName != "" {
-			if destKeyspace == "" {
-				// Change "show tables from <keyspace>" to "show tables" directed to that keyspace.
-				destKeyspace = show.ShowTablesOpt.DbName
-			}
-			show.ShowTablesOpt.DbName = ""
-		}
-		sql = sqlparser.String(show)
 	case sqlparser.KeywordString(sqlparser.VITESS_SHARDS):
 		showVitessShardsFilters := func(show *sqlparser.ShowLegacy) ([]func(string) bool, []func(string, *topodatapb.ShardReference) bool) {
 			keyspaceFilters := []func(string) bool{}
@@ -1286,11 +1236,6 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 	ignoreMaxMemoryRows := sqlparser.IgnoreMaxMaxMemoryRowsDirective(stmt)
 	vcursor.SetIgnoreMaxMemoryRows(ignoreMaxMemoryRows)
 
-	planKey := vcursor.planPrefixKey() + ":" + sql
-	if plan, ok := e.plans.Get(planKey); ok {
-		return plan.(*engine.Plan), nil
-	}
-
 	// Normalize if possible and retry.
 	if (e.normalize && sqlparser.CanNormalize(stmt)) || sqlparser.IsSetStatement(stmt) {
 		parameterize := e.normalize // the public flag is called normalize
@@ -1308,10 +1253,11 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 		logStats.BindVariables = bindVars
 	}
 
-	planKey = vcursor.planPrefixKey() + ":" + query
+	planKey := vcursor.planPrefixKey() + ":" + query
 	if plan, ok := e.plans.Get(planKey); ok {
 		return plan.(*engine.Plan), nil
 	}
+
 	plan, err := planbuilder.BuildFromStmt(query, statement, vcursor, bindVarNeeds)
 	if err != nil {
 		return nil, err
@@ -1327,7 +1273,24 @@ func skipQueryPlanCache(safeSession *SafeSession) bool {
 	if safeSession == nil || safeSession.Options == nil {
 		return false
 	}
-	return safeSession.Options.SkipQueryPlanCache
+	return safeSession.Options.SkipQueryPlanCache || safeSession.Options.HasCreatedTempTables
+}
+
+type cacheItem struct {
+	Key   string
+	Value *engine.Plan
+}
+
+func (e *Executor) debugCacheEntries() (items []cacheItem) {
+	e.plans.ForEach(func(value interface{}) bool {
+		plan := value.(*engine.Plan)
+		items = append(items, cacheItem{
+			Key:   plan.Original,
+			Value: plan,
+		})
+		return true
+	})
+	return
 }
 
 // ServeHTTP shows the current plans in the query cache.
@@ -1339,7 +1302,7 @@ func (e *Executor) ServeHTTP(response http.ResponseWriter, request *http.Request
 
 	switch request.URL.Path {
 	case pathQueryPlans:
-		returnAsJSON(response, e.plans.Items())
+		returnAsJSON(response, e.debugCacheEntries())
 	case pathVSchema:
 		returnAsJSON(response, e.VSchema())
 	case pathScatterStats:
@@ -1362,7 +1325,7 @@ func returnAsJSON(response http.ResponseWriter, stuff interface{}) {
 }
 
 // Plans returns the LRU plan cache
-func (e *Executor) Plans() *cache.LRUCache {
+func (e *Executor) Plans() cache.Cache {
 	return e.plans
 }
 
@@ -1600,6 +1563,12 @@ func (e *Executor) handlePrepare(ctx context.Context, safeSession *SafeSession, 
 		return nil, err
 	}
 
+	err = e.addNeededBindVars(plan.BindVarNeeds, bindVars, safeSession)
+	if err != nil {
+		logStats.Error = err
+		return nil, err
+	}
+
 	qr, err := plan.Instructions.GetFields(vcursor, bindVars)
 	logStats.ExecuteTime = time.Since(execStart)
 	var errCount uint64
@@ -1610,7 +1579,7 @@ func (e *Executor) handlePrepare(ctx context.Context, safeSession *SafeSession, 
 	}
 	logStats.RowsAffected = qr.RowsAffected
 
-	plan.AddStats(1, time.Since(logStats.StartTime), uint64(logStats.ShardQueries), qr.RowsAffected, uint64(len(qr.Rows)), errCount)
+	plan.AddStats(1, time.Since(logStats.StartTime), logStats.ShardQueries, qr.RowsAffected, uint64(len(qr.Rows)), errCount)
 
 	return qr.Fields, err
 }

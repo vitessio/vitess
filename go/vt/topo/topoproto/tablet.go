@@ -134,6 +134,18 @@ func (tal TabletAliasList) Swap(i, j int) {
 	tal[i], tal[j] = tal[j], tal[i]
 }
 
+// ToStringSlice returns a slice which is the result of mapping
+// TabletAliasString over a slice of TabletAliases.
+func (tal TabletAliasList) ToStringSlice() []string {
+	result := make([]string, len(tal))
+
+	for i, alias := range tal {
+		result[i] = TabletAliasString(alias)
+	}
+
+	return result
+}
+
 // AllTabletTypes lists all the possible tablet types
 var AllTabletTypes = []topodatapb.TabletType{
 	topodatapb.TabletType_MASTER,
