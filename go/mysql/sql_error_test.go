@@ -140,6 +140,11 @@ func TestNewSQLErrorFromError(t *testing.T) {
 			num: ERUnknownError,
 			ss:  SSUnknownSQLState,
 		},
+		{
+			err: vterrors.NewErrorf(vtrpc.Code_ALREADY_EXISTS, vterrors.DbCreateExists, "create db exists"),
+			num: ERDbCreateExists,
+			ss:  SSUnknownSQLState,
+		},
 	}
 
 	for _, tc := range tCases {
