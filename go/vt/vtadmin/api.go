@@ -539,7 +539,7 @@ func (api *API) getTablets(ctx context.Context, c *cluster.Cluster) ([]*vtadminp
 		return nil, err
 	}
 
-	return ParseTablets(rows, c)
+	return c.ParseTablets(rows)
 }
 
 // findTablet returns the first tablet in a given cluster that satisfies the filter function.
