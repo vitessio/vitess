@@ -1313,7 +1313,7 @@ REAL float_length_opt
     $$.Length = $3.Length
     $$.Scale = $3.Scale
   }
-| FLOAT_TYPE float_length_opt
+| FLOAT_TYPE decimal_length_opt
   {
     $$ = ColumnType{Type: string($1)}
     $$.Length = $2.Length
