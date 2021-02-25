@@ -3018,7 +3018,7 @@ func TestCreateTable(t *testing.T) {
 		output := fmt.Sprintf("create table t (\n\t`%s` bigint\n)", key)
 		t.Run(input, func(t *testing.T) {
 			if _, ok := nonsupported[key]; ok {
-				t.Skipf("Dolt does not currently support keyword as column name: %s", key)
+				t.Skipf("Keyword currently not supported as a column name: %s", key)
 			}
 			tree, err := ParseStrictDDL(input)
 			if err != nil {
