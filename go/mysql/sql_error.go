@@ -104,45 +104,24 @@ func NewSQLErrorFromError(err error) error {
 		num := ERUnknownError
 		ss := SSUnknownSQLState
 		switch code {
-		case vtrpcpb.Code_CANCELED:
+		case vtrpcpb.Code_CANCELED, vtrpcpb.Code_DEADLINE_EXCEEDED, vtrpcpb.Code_ABORTED:
 			num = ERQueryInterrupted
-		case vtrpcpb.Code_UNKNOWN:
+			ss = SSQueryInterrupted
+		case vtrpcpb.Code_UNKNOWN, vtrpcpb.Code_INVALID_ARGUMENT, vtrpcpb.Code_NOT_FOUND, vtrpcpb.Code_ALREADY_EXISTS,
+			vtrpcpb.Code_FAILED_PRECONDITION, vtrpcpb.Code_OUT_OF_RANGE, vtrpcpb.Code_UNAVAILABLE, vtrpcpb.Code_DATA_LOSS:
 			num = ERUnknownError
-		case vtrpcpb.Code_INVALID_ARGUMENT:
-			// TODO/demmer there are several more appropriate mysql error
-			// codes for the various invalid argument cases.
-			// it would be better to change the call sites to use
-			// the mysql style "(errno X) (sqlstate Y)" format rather than
-			// trying to add vitess error codes for all these cases
-			num = ERUnknownError
-		case vtrpcpb.Code_DEADLINE_EXCEEDED:
-			num = ERQueryInterrupted
-		case vtrpcpb.Code_NOT_FOUND:
-			num = ERUnknownError
-		case vtrpcpb.Code_ALREADY_EXISTS:
-			num = ERUnknownError
-		case vtrpcpb.Code_PERMISSION_DENIED:
+		case vtrpcpb.Code_PERMISSION_DENIED, vtrpcpb.Code_UNAUTHENTICATED:
 			num = ERAccessDeniedError
-		case vtrpcpb.Code_UNAUTHENTICATED:
-			num = ERAccessDeniedError
+			ss = SSAccessDeniedError
 		case vtrpcpb.Code_RESOURCE_EXHAUSTED:
 			num = demuxResourceExhaustedErrors(err.Error())
-		case vtrpcpb.Code_FAILED_PRECONDITION:
-			num = ERUnknownError
-		case vtrpcpb.Code_ABORTED:
-			num = ERQueryInterrupted
-		case vtrpcpb.Code_OUT_OF_RANGE:
-			num = ERUnknownError
+			ss = SSSyntaxErrorOrAccessViolation
 		case vtrpcpb.Code_UNIMPLEMENTED:
 			num = ERNotSupportedYet
 			ss = SSSyntaxErrorOrAccessViolation
 		case vtrpcpb.Code_INTERNAL:
 			num = ERInternalError
 			ss = SSUnknownSQLState
-		case vtrpcpb.Code_UNAVAILABLE:
-			num = ERUnknownError
-		case vtrpcpb.Code_DATA_LOSS:
-			num = ERUnknownError
 		}
 
 		// Not found, build a generic SQLError.

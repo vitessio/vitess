@@ -63,7 +63,7 @@ func TestNewSQLErrorFromError(t *testing.T) {
 		{
 			err: vterrors.Errorf(vtrpc.Code_CANCELED, "cancelled"),
 			num: ERQueryInterrupted,
-			ss:  SSUnknownSQLState,
+			ss:  SSQueryInterrupted,
 		},
 		{
 			err: vterrors.Errorf(vtrpc.Code_UNKNOWN, "unknown"),
@@ -78,7 +78,7 @@ func TestNewSQLErrorFromError(t *testing.T) {
 		{
 			err: vterrors.Errorf(vtrpc.Code_DEADLINE_EXCEEDED, "deadline exceeded"),
 			num: ERQueryInterrupted,
-			ss:  SSUnknownSQLState,
+			ss:  SSQueryInterrupted,
 		},
 		{
 			err: vterrors.Errorf(vtrpc.Code_NOT_FOUND, "code not found"),
@@ -93,17 +93,17 @@ func TestNewSQLErrorFromError(t *testing.T) {
 		{
 			err: vterrors.Errorf(vtrpc.Code_PERMISSION_DENIED, "permission denied"),
 			num: ERAccessDeniedError,
-			ss:  SSUnknownSQLState,
+			ss:  SSAccessDeniedError,
 		},
 		{
 			err: vterrors.Errorf(vtrpc.Code_UNAUTHENTICATED, "unauthenticated"),
 			num: ERAccessDeniedError,
-			ss:  SSUnknownSQLState,
+			ss:  SSAccessDeniedError,
 		},
 		{
 			err: vterrors.Errorf(vtrpc.Code_RESOURCE_EXHAUSTED, "resource exhausted"),
 			num: ERTooManyUserConnections,
-			ss:  SSUnknownSQLState,
+			ss:  SSSyntaxErrorOrAccessViolation,
 		},
 		{
 			err: vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "failed precondition"),
@@ -113,7 +113,7 @@ func TestNewSQLErrorFromError(t *testing.T) {
 		{
 			err: vterrors.Errorf(vtrpc.Code_ABORTED, "aborted"),
 			num: ERQueryInterrupted,
-			ss:  SSUnknownSQLState,
+			ss:  SSQueryInterrupted,
 		},
 		{
 			err: vterrors.Errorf(vtrpc.Code_OUT_OF_RANGE, "out of range"),

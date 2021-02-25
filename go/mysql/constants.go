@@ -559,6 +559,9 @@ const (
 
 	// SSBadFieldError is ER_BAD_FIELD_ERROR
 	SSBadFieldError = "42S22"
+
+	// SSQueryInterrupted is ER_QUERY_INTERRUPTED;
+	SSQueryInterrupted = "70100"
 )
 
 // A few interesting character set values.
