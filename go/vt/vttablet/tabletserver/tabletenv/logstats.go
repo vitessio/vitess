@@ -61,6 +61,7 @@ type LogStats struct {
 	TransactionID        int64
 	ReservedID           int64
 	Error                error
+	CachedPlan           bool
 }
 
 // NewLogStats constructs a new LogStats with supplied Method and ctx

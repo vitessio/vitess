@@ -230,7 +230,7 @@ func (topo *TopoProcess) TearDown(Cell string, originalVtRoot string, currentRoo
 		// Attempt graceful shutdown with SIGTERM first
 		_ = topo.proc.Process.Signal(syscall.SIGTERM)
 
-		if !*keepData {
+		if !(*keepData || keepdata) {
 			_ = os.RemoveAll(topo.DataDirectory)
 			_ = os.RemoveAll(currentRoot)
 		}

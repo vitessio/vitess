@@ -18,11 +18,15 @@ import { Link, NavLink } from 'react-router-dom';
 
 import style from './NavRail.module.scss';
 import logo from '../img/vitess-icon-color.svg';
-import { useTablets } from '../hooks/api';
+import { useClusters, useGates, useKeyspaces, useTableDefinitions, useTablets } from '../hooks/api';
 import { Icon, Icons } from './Icon';
 
 export const NavRail = () => {
-    const { data: tabletData } = useTablets();
+    const { data: clusters = [] } = useClusters();
+    const { data: keyspaces = [] } = useKeyspaces();
+    const { data: gates = [] } = useGates();
+    const { data: schemas = [] } = useTableDefinitions();
+    const { data: tablets = [] } = useTablets();
 
     return (
         <div className={style.container}>
@@ -43,19 +47,19 @@ export const NavRail = () => {
                 <ul className={style.navList}>
                     <li>
                         {/* FIXME replace this with a C when we have one */}
-                        <NavRailLink icon={Icons.keyR} text="Clusters" to="/clusters" count={0} />
+                        <NavRailLink icon={Icons.keyR} text="Clusters" to="/clusters" count={clusters.length} />
                     </li>
                     <li>
-                        <NavRailLink icon={Icons.keyG} text="Gates" to="/gates" count={0} />
+                        <NavRailLink icon={Icons.keyG} text="Gates" to="/gates" count={gates.length} />
                     </li>
                     <li>
-                        <NavRailLink icon={Icons.keyK} text="Keyspaces" to="/keyspaces" count={0} />
+                        <NavRailLink icon={Icons.keyK} text="Keyspaces" to="/keyspaces" count={keyspaces.length} />
                     </li>
                     <li>
-                        <NavRailLink icon={Icons.keyS} text="Schemas" to="/schemas" count={0} />
+                        <NavRailLink icon={Icons.keyS} text="Schemas" to="/schemas" count={schemas.length} />
                     </li>
                     <li>
-                        <NavRailLink icon={Icons.keyT} text="Tablets" to="/tablets" count={(tabletData || []).length} />
+                        <NavRailLink icon={Icons.keyT} text="Tablets" to="/tablets" count={tablets.length} />
                     </li>
                 </ul>
 

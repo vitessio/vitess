@@ -551,6 +551,33 @@
 			"RetryMax": 0,
 			"Tags": []
 		},
+		"topo_zk2": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/topotest/zk2", "--topo-flavor=zk2"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "25",
+			"RetryMax": 0,
+			"Tags": []
+		},
+		"topo_consul": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/topotest/consul", "--topo-flavor=consul"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "18",
+			"RetryMax": 0,
+			"Tags": []
+		},
+		"topo_etcd2": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/topotest/etcd2"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "17",
+			"RetryMax": 0,
+			"Tags": []
+		},
 		"web_test": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vtctldweb"],
@@ -594,8 +621,8 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "MultiCell"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "22",
-			"RetryMax": 3,
+			"Shard": "vreplication_multicell",
+			"RetryMax": 0,
 			"Tags": []
 		},
 		"vreplication_cellalias": {
@@ -603,8 +630,8 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "CellAlias"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "23",
-			"RetryMax": 3,
+			"Shard": "vreplication_cellalias",
+			"RetryMax": 0,
 			"Tags": []
 		},
 		"vreplication_basic": {
@@ -613,7 +640,7 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_basic",
-			"RetryMax": 3,
+			"RetryMax": 0,
 			"Tags": []
 		},
 		"orchestrator": {
@@ -639,8 +666,8 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestBasicV2Workflows"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "21",
-			"RetryMax": 3,
+			"Shard": "vreplication_v2",
+			"RetryMax": 0,
 			"Tags": []
 		}
 	}

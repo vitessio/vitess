@@ -732,10 +732,10 @@ var (
 	}, {
 		input: "insert /* bool expression on duplicate */ into a values (1, 2) on duplicate key update b = func(a), c = a > d",
 	}, {
-		input: "insert into user(username, `status`) values ('Chuck', default(`status`))",
+		input: "insert into `user`(username, `status`) values ('Chuck', default(`status`))",
 	}, {
 		input:  "insert into user(format, tree, vitess) values ('Chuck', 42, 'Barry')",
-		output: "insert into user(`format`, `tree`, `vitess`) values ('Chuck', 42, 'Barry')",
+		output: "insert into `user`(`format`, `tree`, `vitess`) values ('Chuck', 42, 'Barry')",
 	}, {
 		input:  "insert into customer () values ()",
 		output: "insert into customer values ()",
@@ -1021,7 +1021,7 @@ var (
 		output: "alter table a add constraint b unique key c (id)",
 	}, {
 		input:  "alter table a add constraint check (id)",
-		output: "alter table a add check (id) enforced",
+		output: "alter table a add check (id)",
 	}, {
 		input:  "alter table a add id int",
 		output: "alter table a add column id int",
@@ -1051,6 +1051,12 @@ var (
 	}, {
 		input:  "alter table a drop id",
 		output: "alter table a drop column id",
+	}, {
+		input:  "ALTER TABLE `product115s` CHANGE `part_number` `part_number` varchar(255) DEFAULT '0' NOT NULL",
+		output: "alter table product115s change column part_number part_number varchar(255) not null default '0'",
+	}, {
+		input:  "ALTER TABLE distributors ADD CONSTRAINT zipchk CHECK (char_length(zipcode) = 5)",
+		output: "alter table distributors add constraint zipchk check (char_length(zipcode) = 5)",
 	}, {
 		input: "alter database character set geostd8",
 	}, {
@@ -1119,6 +1125,14 @@ var (
 		input:  "create table a (b1 bool NOT NULL PRIMARY KEY, b2 boolean not null, KEY b2_idx(b))",
 		output: "create table a (\n\tb1 bool not null primary key,\n\tb2 boolean not null,\n\tKEY b2_idx (b)\n)",
 	}, {
+		input: "create temporary table a (\n\tid bigint\n)",
+	}, {
+		input:  "CREATE TABLE pkai (id INT PRIMARY KEY AUTO_INCREMENT);",
+		output: "create table pkai (\n\tid INT auto_increment primary key\n)",
+	}, {
+		input:  "CREATE TABLE aipk (id INT AUTO_INCREMENT PRIMARY KEY)",
+		output: "create table aipk (\n\tid INT auto_increment primary key\n)",
+	}, {
 		input: "alter vschema create vindex hash_vdx using hash",
 	}, {
 		input: "alter vschema create vindex keyspace.hash_vdx using hash",
@@ -1168,7 +1182,7 @@ var (
 		output: "alter vschema on a add vindex hash (id) using hash",
 	}, {
 		input:  "alter vschema on user add vindex name_lookup_vdx (name) using lookup_hash with owner=user, table=name_user_idx, from=name, to=user_id",
-		output: "alter vschema on user add vindex name_lookup_vdx (`name`) using lookup_hash with owner=user, table=name_user_idx, from=name, to=user_id",
+		output: "alter vschema on `user` add vindex name_lookup_vdx (`name`) using lookup_hash with owner=user, table=name_user_idx, from=name, to=user_id",
 	}, {
 		input:  "alter vschema on user2 add vindex name_lastname_lookup_vdx (name,lastname) using lookup with owner=`user`, table=`name_lastname_keyspace_id_map`, from=`name,lastname`, to=`keyspace_id`",
 		output: "alter vschema on user2 add vindex name_lastname_lookup_vdx (`name`, lastname) using lookup with owner=user, table=name_lastname_keyspace_id_map, from=name,lastname, to=keyspace_id",
@@ -1252,6 +1266,8 @@ var (
 		input:  "drop table if exists a,b restrict",
 		output: "drop table if exists a, b",
 	}, {
+		input: "drop temporary table if exists a, b",
+	}, {
 		input:  "drop view if exists a cascade",
 		output: "drop view if exists a",
 	}, {
@@ -1309,28 +1325,22 @@ var (
 		input:  "show collation where `Charset` = 'utf8' and `Collation` = 'utf8_bin'",
 		output: "show collation where `Charset` = 'utf8' and `Collation` = 'utf8_bin'",
 	}, {
-		input:  "show create database d",
-		output: "show create database",
+		input: "show create database d",
 	}, {
-		input:  "show create event e",
-		output: "show create event",
+		input: "show create event e",
 	}, {
 		input: "show create function f",
 	}, {
-		input:  "show create procedure p",
-		output: "show create procedure",
+		input: "show create procedure p",
 	}, {
-		input:  "show create table t",
-		output: "show create table t",
+		input: "show create table t",
 	}, {
-		input:  "show create trigger t",
-		output: "show create trigger",
+		input: "show create trigger t",
 	}, {
 		input:  "show create user u",
 		output: "show create user",
 	}, {
-		input:  "show create view v",
-		output: "show create view",
+		input: "show create view v",
 	}, {
 		input:  "show databases",
 		output: "show databases",
@@ -1363,17 +1373,18 @@ var (
 		input:  "show grants for 'root@localhost'",
 		output: "show grants",
 	}, {
-		input: "show index from t",
+		input:  "show index from t",
+		output: "show indexes from t",
 	}, {
 		input: "show indexes from t",
 	}, {
-		input: "show keys from t",
+		input:  "show keys from t",
+		output: "show indexes from t",
 	}, {
 		input:  "show master status",
 		output: "show master",
 	}, {
-		input:  "show open tables",
-		output: "show open",
+		input: "show open tables",
 	}, {
 		input:  "show plugins",
 		output: "show plugins",
@@ -1534,13 +1545,13 @@ var (
 		output: "explain select * from t",
 	}, {
 		input:  "desc foobar",
-		output: "otherread",
+		output: "explain foobar",
 	}, {
-		input:  "explain t1",
-		output: "otherread",
+		input: "explain t1",
 	}, {
-		input:  "explain t1 col",
-		output: "otherread",
+		input: "explain t1 col",
+	}, {
+		input: "explain t1 '%col%'",
 	}, {
 		input: "explain select * from t",
 	}, {
@@ -1747,6 +1758,9 @@ var (
 		output:     "create database test_db",
 		partialDDL: true,
 	}, {
+		input:  "CREATE DATABASE /*!32312 IF NOT EXISTS*/ `mysql` /*!40100 DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci */ /*!80016 DEFAULT ENCRYPTION='N' */;",
+		output: "create database if not exists mysql default character set utf8mb4 collate utf8mb4_0900_ai_ci",
+	}, {
 		input: "drop database test_db",
 	}, {
 		input:  "drop schema test_db",
@@ -1773,22 +1787,22 @@ var (
 		output: "show full columns from AO_E8B6CC_ISSUE_MAPPING from jiradb like '%'",
 	}, {
 		input:  "SHOW KEYS FROM `AO_E8B6CC_ISSUE_MAPPING` FROM `jiradb`",
-		output: "show keys from AO_E8B6CC_ISSUE_MAPPING from jiradb",
+		output: "show indexes from AO_E8B6CC_ISSUE_MAPPING from jiradb",
 	}, {
 		input:  "SHOW CREATE TABLE `jiradb`.`AO_E8B6CC_ISSUE_MAPPING`",
 		output: "show create table jiradb.AO_E8B6CC_ISSUE_MAPPING",
 	}, {
 		input:  "SHOW INDEX FROM `AO_E8B6CC_ISSUE_MAPPING` FROM `jiradb`",
-		output: "show index from AO_E8B6CC_ISSUE_MAPPING from jiradb",
+		output: "show indexes from AO_E8B6CC_ISSUE_MAPPING from jiradb",
 	}, {
 		input:  "SHOW FULL TABLES FROM `jiradb` LIKE '%'",
 		output: "show full tables from jiradb like '%'",
 	}, {
 		input:  "SHOW EXTENDED INDEX FROM `AO_E8B6CC_PROJECT_MAPPING` FROM `jiradb`",
-		output: "show extended index from AO_E8B6CC_PROJECT_MAPPING from jiradb",
+		output: "show indexes from AO_E8B6CC_PROJECT_MAPPING from jiradb",
 	}, {
 		input:  "SHOW EXTENDED KEYS FROM `AO_E8B6CC_ISSUE_MAPPING` FROM `jiradb`",
-		output: "show extended keys from AO_E8B6CC_ISSUE_MAPPING from jiradb",
+		output: "show indexes from AO_E8B6CC_ISSUE_MAPPING from jiradb",
 	}, {
 		input:  "SHOW CREATE TABLE `jiradb`.`AO_E8B6CC_ISSUE_MAPPING`",
 		output: "show create table jiradb.AO_E8B6CC_ISSUE_MAPPING",
@@ -1798,12 +1812,12 @@ var (
 			"\tc1 int,\n" +
 			"\tc2 int,\n" +
 			"\tc3 int,\n" +
-			"\tcheck (c1 != c2) enforced,\n" +
-			"\tcheck (c1 > 10) enforced,\n" +
-			"\tconstraint c2_positive check (c2 > 0) enforced,\n" +
-			"\tcheck (c3 < 100) enforced,\n" +
-			"\tconstraint c1_nonzero check (c1 != 0) enforced,\n" +
-			"\tcheck (c1 > c3) enforced\n)",
+			"\tcheck (c1 != c2),\n" +
+			"\tcheck (c1 > 10),\n" +
+			"\tconstraint c2_positive check (c2 > 0),\n" +
+			"\tcheck (c3 < 100),\n" +
+			"\tconstraint c1_nonzero check (c1 != 0),\n" +
+			"\tcheck (c1 > c3)\n)",
 	}, {
 		input:  "SHOW INDEXES FROM `AO_E8B6CC_ISSUE_MAPPING` FROM `jiradb`",
 		output: "show indexes from AO_E8B6CC_ISSUE_MAPPING from jiradb",
@@ -1812,10 +1826,10 @@ var (
 		output: "show full tables from jiradb like '%'",
 	}, {
 		input:  "SHOW EXTENDED INDEXES FROM `AO_E8B6CC_PROJECT_MAPPING` FROM `jiradb`",
-		output: "show extended indexes from AO_E8B6CC_PROJECT_MAPPING from jiradb",
+		output: "show indexes from AO_E8B6CC_PROJECT_MAPPING from jiradb",
 	}, {
 		input:  "SHOW EXTENDED INDEXES IN `AO_E8B6CC_PROJECT_MAPPING` IN `jiradb`",
-		output: "show extended indexes from AO_E8B6CC_PROJECT_MAPPING from jiradb",
+		output: "show indexes from AO_E8B6CC_PROJECT_MAPPING from jiradb",
 	}, {
 		input:  "do 1",
 		output: "otheradmin",

@@ -86,6 +86,13 @@ type Conn struct {
 	// fields, this is set to an empty array (but not nil).
 	fields []*querypb.Field
 
+	// salt is sent by the server during initial handshake to be used for authentication
+	salt []byte
+
+	// authPluginName is the name of server's authentication plugin.
+	// It is set during the initial handshake.
+	authPluginName string
+
 	// schemaName is the default database name to use. It is set
 	// during handshake, and by ComInitDb packets. Both client and
 	// servers maintain it. This member is private because it's

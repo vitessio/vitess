@@ -4,6 +4,7 @@
 /docker/ @derekperkins @dkhenry
 /examples/compose @shlomi-noach
 /examples/local @rohit-nayak-ps
+/go/cache @vmg
 /go/cmd/vtadmin @ajm188 @doeg
 /go/cmd/vtctldclient @ajm188 @doeg
 /go/mysql @harshit-gangal @systay
@@ -16,7 +17,7 @@
 /go/vt/orchestrator @deepthi @shlomi-noach
 /go/vt/proto/vtadmin @ajm188 @doeg
 /go/vt/schema @shlomi-noach
-/go/vt/sqlparser @harshit-gangal @systay
+/go/vt/sqlparser @harshit-gangal @systay @GuptaManan100
 /go/vt/vtadmin @ajm188 @doeg
 /go/vt/vtctl @deepthi
 /go/vt/vtctl/vtctl.go @ajm188 @doeg

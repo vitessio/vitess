@@ -212,20 +212,8 @@ func replaceColumnDefinitionName(newNode, parent SQLNode) {
 	parent.(*ColumnDefinition).Name = newNode.(ColIdent)
 }
 
-func replaceColumnTypeComment(newNode, parent SQLNode) {
-	parent.(*ColumnType).Comment = newNode.(*Literal)
-}
-
-func replaceColumnTypeDefault(newNode, parent SQLNode) {
-	parent.(*ColumnType).Default = newNode.(Expr)
-}
-
 func replaceColumnTypeLength(newNode, parent SQLNode) {
 	parent.(*ColumnType).Length = newNode.(*Literal)
-}
-
-func replaceColumnTypeOnUpdate(newNode, parent SQLNode) {
-	parent.(*ColumnType).OnUpdate = newNode.(Expr)
 }
 
 func replaceColumnTypeScale(newNode, parent SQLNode) {
@@ -358,8 +346,12 @@ func replaceExistsExprSubquery(newNode, parent SQLNode) {
 	parent.(*ExistsExpr).Subquery = newNode.(*Subquery)
 }
 
-func replaceExplainStatement(newNode, parent SQLNode) {
-	parent.(*Explain).Statement = newNode.(Statement)
+func replaceExplainStmtStatement(newNode, parent SQLNode) {
+	parent.(*ExplainStmt).Statement = newNode.(Statement)
+}
+
+func replaceExplainTabTable(newNode, parent SQLNode) {
+	parent.(*ExplainTab).Table = newNode.(TableName)
 }
 
 type replaceExprsItems int
@@ -753,12 +745,12 @@ func replaceShowBasicFilter(newNode, parent SQLNode) {
 	parent.(*ShowBasic).Filter = newNode.(*ShowFilter)
 }
 
-func replaceShowColumnsFilter(newNode, parent SQLNode) {
-	parent.(*ShowColumns).Filter = newNode.(*ShowFilter)
+func replaceShowBasicTbl(newNode, parent SQLNode) {
+	parent.(*ShowBasic).Tbl = newNode.(TableName)
 }
 
-func replaceShowColumnsTable(newNode, parent SQLNode) {
-	parent.(*ShowColumns).Table = newNode.(TableName)
+func replaceShowCreateOp(newNode, parent SQLNode) {
+	parent.(*ShowCreate).Op = newNode.(TableName)
 }
 
 func replaceShowFilterFilter(newNode, parent SQLNode) {
@@ -775,10 +767,6 @@ func replaceShowLegacyShowCollationFilterOpt(newNode, parent SQLNode) {
 
 func replaceShowLegacyTable(newNode, parent SQLNode) {
 	parent.(*ShowLegacy).Table = newNode.(TableName)
-}
-
-func replaceShowTableStatusFilter(newNode, parent SQLNode) {
-	parent.(*ShowTableStatus).Filter = newNode.(*ShowFilter)
 }
 
 func replaceStarExprTableName(newNode, parent SQLNode) {
@@ -1196,10 +1184,7 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 		a.apply(node, n.Name, replaceColumnDefinitionName)
 
 	case *ColumnType:
-		a.apply(node, n.Comment, replaceColumnTypeComment)
-		a.apply(node, n.Default, replaceColumnTypeDefault)
 		a.apply(node, n.Length, replaceColumnTypeLength)
-		a.apply(node, n.OnUpdate, replaceColumnTypeOnUpdate)
 		a.apply(node, n.Scale, replaceColumnTypeScale)
 
 	case Columns:
@@ -1279,8 +1264,11 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 	case *ExistsExpr:
 		a.apply(node, n.Subquery, replaceExistsExprSubquery)
 
-	case *Explain:
-		a.apply(node, n.Statement, replaceExplainStatement)
+	case *ExplainStmt:
+		a.apply(node, n.Statement, replaceExplainStmtStatement)
+
+	case *ExplainTab:
+		a.apply(node, n.Table, replaceExplainTabTable)
 
 	case Exprs:
 		replacer := replaceExprsItems(0)
@@ -1531,10 +1519,10 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 
 	case *ShowBasic:
 		a.apply(node, n.Filter, replaceShowBasicFilter)
+		a.apply(node, n.Tbl, replaceShowBasicTbl)
 
-	case *ShowColumns:
-		a.apply(node, n.Filter, replaceShowColumnsFilter)
-		a.apply(node, n.Table, replaceShowColumnsTable)
+	case *ShowCreate:
+		a.apply(node, n.Op, replaceShowCreateOp)
 
 	case *ShowFilter:
 		a.apply(node, n.Filter, replaceShowFilterFilter)
@@ -1543,9 +1531,6 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 		a.apply(node, n.OnTable, replaceShowLegacyOnTable)
 		a.apply(node, n.ShowCollationFilterOpt, replaceShowLegacyShowCollationFilterOpt)
 		a.apply(node, n.Table, replaceShowLegacyTable)
-
-	case *ShowTableStatus:
-		a.apply(node, n.Filter, replaceShowTableStatusFilter)
 
 	case *StarExpr:
 		a.apply(node, n.TableName, replaceStarExprTableName)

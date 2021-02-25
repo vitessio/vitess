@@ -10,9 +10,9 @@
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select user.col1 from user where 1 != 1",
-    "Query": "select user.col1 from user having col2 = 2",
-    "Table": "user"
+    "FieldQuery": "select `user`.col1 from `user` where 1 != 1",
+    "Query": "select `user`.col1 from `user` having col2 = 2",
+    "Table": "`user`"
   }
 }
 
@@ -29,7 +29,7 @@
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1,1",
-    "TableName": "user_user_extra",
+    "TableName": "`user`_user_extra",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -38,9 +38,9 @@
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select user.col1 from user where 1 != 1",
-        "Query": "select user.col1 from user",
-        "Table": "user"
+        "FieldQuery": "select `user`.col1 from `user` where 1 != 1",
+        "Query": "select `user`.col1 from `user`",
+        "Table": "`user`"
       },
       {
         "OperatorType": "Route",
@@ -66,7 +66,7 @@
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1,-2,1",
-    "TableName": "user_user_extra",
+    "TableName": "`user`_user_extra",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -75,9 +75,9 @@
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select user.col1 as a, user.col2 from user where 1 != 1",
-        "Query": "select user.col1 as a, user.col2 from user having 1 = 1 and a = 1 and a = user.col2",
-        "Table": "user"
+        "FieldQuery": "select `user`.col1 as a, `user`.col2 from `user` where 1 != 1",
+        "Query": "select `user`.col1 as a, `user`.col2 from `user` having 1 = 1 and a = 1 and a = `user`.col2",
+        "Table": "`user`"
       },
       {
         "OperatorType": "Route",
@@ -110,9 +110,9 @@
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select col from user where 1 != 1",
-        "Query": "select col from user",
-        "Table": "user"
+        "FieldQuery": "select col from `user` where 1 != 1",
+        "Query": "select col from `user`",
+        "Table": "`user`"
       },
       {
         "OperatorType": "Route",
@@ -121,9 +121,9 @@
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select id from user where 1 != 1",
-        "Query": "select id from user having :__sq_has_values1 = 1 and id in ::__vals",
-        "Table": "user",
+        "FieldQuery": "select id from `user` where 1 != 1",
+        "Query": "select id from `user` having :__sq_has_values1 = 1 and id in ::__vals",
+        "Table": "`user`",
         "Values": [
           "::__sq1"
         ],
@@ -145,9 +145,9 @@
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select col from user where 1 != 1",
-    "Query": "select col from user where id = 5 order by aa asc",
-    "Table": "user",
+    "FieldQuery": "select col from `user` where 1 != 1",
+    "Query": "select col from `user` where id = 5 order by aa asc",
+    "Table": "`user`",
     "Values": [
       5
     ],
@@ -168,9 +168,9 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select col from user where 1 != 1",
-    "Query": "select col from user where id = 1 order by 1 asc",
-    "Table": "user",
+    "FieldQuery": "select col from `user` where 1 != 1",
+    "Query": "select col from `user` where id = 1 order by 1 asc",
+    "Table": "`user`",
     "Values": [
       1
     ],
@@ -191,10 +191,10 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select col from user where 1 != 1",
+    "FieldQuery": "select col from `user` where 1 != 1",
     "OrderBy": "0 ASC",
-    "Query": "select col from user order by col asc",
-    "Table": "user"
+    "Query": "select col from `user` order by col asc",
+    "Table": "`user`"
   }
 }
 
@@ -248,10 +248,10 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select a, textcol1, b, weight_string(textcol1) from user where 1 != 1",
+    "FieldQuery": "select a, textcol1, b, weight_string(textcol1) from `user` where 1 != 1",
     "OrderBy": "0 ASC, 3 ASC, 2 ASC",
-    "Query": "select a, textcol1, b, weight_string(textcol1) from user order by a asc, textcol1 asc, b asc",
-    "Table": "user"
+    "Query": "select a, textcol1, b, weight_string(textcol1) from `user` order by a asc, textcol1 asc, b asc",
+    "Table": "`user`"
   }
 }
 
@@ -267,10 +267,10 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select a, user.textcol1, b, weight_string(user.textcol1) from user where 1 != 1",
+    "FieldQuery": "select a, `user`.textcol1, b, weight_string(`user`.textcol1) from `user` where 1 != 1",
     "OrderBy": "0 ASC, 3 ASC, 2 ASC",
-    "Query": "select a, user.textcol1, b, weight_string(user.textcol1) from user order by a asc, textcol1 asc, b asc",
-    "Table": "user"
+    "Query": "select a, `user`.textcol1, b, weight_string(`user`.textcol1) from `user` order by a asc, textcol1 asc, b asc",
+    "Table": "`user`"
   }
 }
 
@@ -286,10 +286,10 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select a, textcol1, b, textcol2, weight_string(textcol1), weight_string(textcol2) from user where 1 != 1",
+    "FieldQuery": "select a, textcol1, b, textcol2, weight_string(textcol1), weight_string(textcol2) from `user` where 1 != 1",
     "OrderBy": "0 ASC, 4 ASC, 2 ASC, 5 ASC",
-    "Query": "select a, textcol1, b, textcol2, weight_string(textcol1), weight_string(textcol2) from user order by a asc, textcol1 asc, b asc, textcol2 asc",
-    "Table": "user"
+    "Query": "select a, textcol1, b, textcol2, weight_string(textcol1), weight_string(textcol2) from `user` order by a asc, textcol1 asc, b asc, textcol2 asc",
+    "Table": "`user`"
   }
 }
 
@@ -309,9 +309,9 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select col from user where 1 != 1",
-    "Query": "select col from user order by null",
-    "Table": "user"
+    "FieldQuery": "select col from `user` where 1 != 1",
+    "Query": "select col from `user` order by null",
+    "Table": "`user`"
   }
 }
 Gen4 plan same as above
@@ -332,9 +332,9 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select col2 from user where 1 != 1",
-        "Query": "select col2 from user",
-        "Table": "user"
+        "FieldQuery": "select col2 from `user` where 1 != 1",
+        "Query": "select col2 from `user`",
+        "Table": "`user`"
       },
       {
         "OperatorType": "Route",
@@ -343,10 +343,10 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select col from user where 1 != 1",
+        "FieldQuery": "select col from `user` where 1 != 1",
         "OrderBy": "0 ASC",
-        "Query": "select col from user where :__sq_has_values1 = 1 and col in ::__sq1 order by col asc",
-        "Table": "user"
+        "Query": "select col from `user` where :__sq_has_values1 = 1 and col in ::__sq1 order by col asc",
+        "Table": "`user`"
       }
     ]
   }
@@ -361,7 +361,7 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1,-2,1",
-    "TableName": "user_music",
+    "TableName": "`user`_music",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -370,9 +370,9 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select user.col1 as a, user.col2, user.id from user where 1 != 1",
-        "Query": "select user.col1 as a, user.col2, user.id from user where user.id = 1 order by null",
-        "Table": "user",
+        "FieldQuery": "select `user`.col1 as a, `user`.col2, `user`.id from `user` where 1 != 1",
+        "Query": "select `user`.col1 as a, `user`.col2, `user`.id from `user` where `user`.id = 1 order by null",
+        "Table": "`user`",
         "Values": [
           1
         ],
@@ -406,7 +406,7 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1,-2,1",
-    "TableName": "user_music",
+    "TableName": "`user`_music",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -415,9 +415,9 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select user.col1 as a, user.col2, user.id from user where 1 != 1",
-        "Query": "select user.col1 as a, user.col2, user.id from user where user.id = 1 order by a asc",
-        "Table": "user",
+        "FieldQuery": "select `user`.col1 as a, `user`.col2, `user`.id from `user` where 1 != 1",
+        "Query": "select `user`.col1 as a, `user`.col2, `user`.id from `user` where `user`.id = 1 order by a asc",
+        "Table": "`user`",
         "Values": [
           1
         ],
@@ -451,7 +451,7 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1,-2,1",
-    "TableName": "user_music",
+    "TableName": "`user`_music",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -460,9 +460,9 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select user.col1 as a, user.col2, user.id from user where 1 != 1",
-        "Query": "select user.col1 as a, user.col2, user.id from user where user.id = 1 order by a asc",
-        "Table": "user",
+        "FieldQuery": "select `user`.col1 as a, `user`.col2, `user`.id from `user` where 1 != 1",
+        "Query": "select `user`.col1 as a, `user`.col2, `user`.id from `user` where `user`.id = 1 order by a asc",
+        "Table": "`user`",
         "Values": [
           1
         ],
@@ -503,9 +503,9 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select col2 from user where 1 != 1",
-        "Query": "select col2 from user",
-        "Table": "user"
+        "FieldQuery": "select col2 from `user` where 1 != 1",
+        "Query": "select col2 from `user`",
+        "Table": "`user`"
       },
       {
         "OperatorType": "Route",
@@ -514,9 +514,9 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select col from user where 1 != 1",
-        "Query": "select col from user where :__sq_has_values1 = 1 and col in ::__sq1 order by null",
-        "Table": "user"
+        "FieldQuery": "select col from `user` where 1 != 1",
+        "Query": "select col from `user` where :__sq_has_values1 = 1 and col in ::__sq1 order by null",
+        "Table": "`user`"
       }
     ]
   }
@@ -534,9 +534,9 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select col from user where 1 != 1",
-    "Query": "select col from user order by RAND()",
-    "Table": "user"
+    "FieldQuery": "select col from `user` where 1 != 1",
+    "Query": "select col from `user` order by RAND()",
+    "Table": "`user`"
   }
 }
 Gen4 plan same as above
@@ -550,7 +550,7 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1,-2,1",
-    "TableName": "user_music",
+    "TableName": "`user`_music",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -559,9 +559,9 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select user.col1 as a, user.col2, user.id from user where 1 != 1",
-        "Query": "select user.col1 as a, user.col2, user.id from user where user.id = 1 order by RAND()",
-        "Table": "user",
+        "FieldQuery": "select `user`.col1 as a, `user`.col2, `user`.id from `user` where 1 != 1",
+        "Query": "select `user`.col1 as a, `user`.col2, `user`.id from `user` where `user`.id = 1 order by RAND()",
+        "Table": "`user`",
         "Values": [
           1
         ],
@@ -602,9 +602,9 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select col2 from user where 1 != 1",
-        "Query": "select col2 from user",
-        "Table": "user"
+        "FieldQuery": "select col2 from `user` where 1 != 1",
+        "Query": "select col2 from `user`",
+        "Table": "`user`"
       },
       {
         "OperatorType": "Route",
@@ -613,9 +613,9 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select col from user where 1 != 1",
-        "Query": "select col from user where :__sq_has_values1 = 1 and col in ::__sq1 order by rand()",
-        "Table": "user"
+        "FieldQuery": "select col from `user` where 1 != 1",
+        "Query": "select col from `user` where :__sq_has_values1 = 1 and col in ::__sq1 order by rand()",
+        "Table": "`user`"
       }
     ]
   }
@@ -633,9 +633,9 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select * from user where 1 != 1",
-    "Query": "select * from user where id = 5 order by col asc",
-    "Table": "user",
+    "FieldQuery": "select * from `user` where 1 != 1",
+    "Query": "select * from `user` where id = 5 order by col asc",
+    "Table": "`user`",
     "Values": [
       5
     ],
@@ -656,9 +656,9 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select user.* from user where 1 != 1",
-    "Query": "select user.* from user where id = 5 order by user.col asc",
-    "Table": "user",
+    "FieldQuery": "select `user`.* from `user` where 1 != 1",
+    "Query": "select `user`.* from `user` where id = 5 order by `user`.col asc",
+    "Table": "`user`",
     "Values": [
       5
     ],
@@ -679,9 +679,9 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select * from user where 1 != 1",
-    "Query": "select * from user where id = 5 order by user.col asc",
-    "Table": "user",
+    "FieldQuery": "select * from `user` where 1 != 1",
+    "Query": "select * from `user` where id = 5 order by `user`.col asc",
+    "Table": "`user`",
     "Values": [
       5
     ],
@@ -699,7 +699,7 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1,1",
-    "TableName": "user_user_extra",
+    "TableName": "`user`_user_extra",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -708,9 +708,9 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select u.id, u.col from user as u where 1 != 1",
-        "Query": "select u.id, u.col from user as u where u.col in (select * from user where user.id = u.id order by col asc)",
-        "Table": "user"
+        "FieldQuery": "select u.id, u.col from `user` as u where 1 != 1",
+        "Query": "select u.id, u.col from `user` as u where u.col in (select * from `user` where `user`.id = u.id order by col asc)",
+        "Table": "`user`"
       },
       {
         "OperatorType": "Route",
@@ -755,9 +755,9 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select * from user where 1 != 1",
-    "Query": "select * from user where id = 5 order by user.col collate utf8_general_ci asc",
-    "Table": "user",
+    "FieldQuery": "select * from `user` where 1 != 1",
+    "Query": "select * from `user` where id = 5 order by `user`.col collate utf8_general_ci asc",
+    "Table": "`user`",
     "Values": [
       5
     ],
@@ -778,9 +778,9 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select * from user where 1 != 1",
-    "Query": "select * from user where id = 5 order by -col1 asc",
-    "Table": "user",
+    "FieldQuery": "select * from `user` where 1 != 1",
+    "Query": "select * from `user` where id = 5 order by -col1 asc",
+    "Table": "`user`",
     "Values": [
       5
     ],
@@ -801,9 +801,9 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select * from user where 1 != 1",
-    "Query": "select * from user where id = 5 order by concat(col, col1) collate utf8_general_ci desc",
-    "Table": "user",
+    "FieldQuery": "select * from `user` where 1 != 1",
+    "Query": "select * from `user` where id = 5 order by concat(col, col1) collate utf8_general_ci desc",
+    "Table": "`user`",
     "Values": [
       5
     ],
@@ -824,9 +824,9 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select * from user where 1 != 1",
-    "Query": "select * from user where id = 5 order by id + col collate utf8_general_ci desc",
-    "Table": "user",
+    "FieldQuery": "select * from `user` where 1 != 1",
+    "Query": "select * from `user` where id = 5 order by id + col collate utf8_general_ci desc",
+    "Table": "`user`",
     "Values": [
       5
     ],
@@ -847,9 +847,9 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select * from user as u join (select user_id from user_extra where 1 != 1) as eu on u.id = eu.user_id where 1 != 1",
-    "Query": "select * from user as u join (select user_id from user_extra where user_id = 5) as eu on u.id = eu.user_id where u.id = 5 order by eu.user_id asc",
-    "Table": "user",
+    "FieldQuery": "select * from `user` as u join (select user_id from user_extra where 1 != 1) as eu on u.id = eu.user_id where 1 != 1",
+    "Query": "select * from `user` as u join (select user_id from user_extra where user_id = 5) as eu on u.id = eu.user_id where u.id = 5 order by eu.user_id asc",
+    "Table": "`user`",
     "Values": [
       5
     ],
@@ -869,9 +869,9 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select col from user as route1 where 1 != 1",
-    "Query": "select col from user as route1 where id = 1 order by col asc",
-    "Table": "user",
+    "FieldQuery": "select col from `user` as route1 where 1 != 1",
+    "Query": "select col from `user` as route1 where id = 1 order by col asc",
+    "Table": "`user`",
     "Values": [
       1
     ],
@@ -891,9 +891,9 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select col1 from user where 1 != 1",
-    "Query": "select col1 from user where id = 1 limit 1",
-    "Table": "user",
+    "FieldQuery": "select col1 from `user` where 1 != 1",
+    "Query": "select col1 from `user` where id = 1 limit 1",
+    "Table": "`user`",
     "Values": [
       1
     ],
@@ -916,7 +916,7 @@ Gen4 plan same as above
         "OperatorType": "Join",
         "Variant": "Join",
         "JoinColumnIndexes": "-1",
-        "TableName": "user_user_extra",
+        "TableName": "`user`_user_extra",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -925,9 +925,9 @@ Gen4 plan same as above
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select user.col from user where 1 != 1",
-            "Query": "select user.col from user",
-            "Table": "user"
+            "FieldQuery": "select `user`.col from `user` where 1 != 1",
+            "Query": "select `user`.col from `user`",
+            "Table": "`user`"
           },
           {
             "OperatorType": "Route",
@@ -962,9 +962,9 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select col from user where 1 != 1",
-        "Query": "select col from user limit :__upper_limit",
-        "Table": "user"
+        "FieldQuery": "select col from `user` where 1 != 1",
+        "Query": "select col from `user` limit :__upper_limit",
+        "Table": "`user`"
       }
     ]
   }
@@ -987,9 +987,9 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select col from user where 1 != 1",
-        "Query": "select col from user limit :__upper_limit",
-        "Table": "user"
+        "FieldQuery": "select col from `user` where 1 != 1",
+        "Query": "select col from `user` limit :__upper_limit",
+        "Table": "`user`"
       }
     ]
   }
@@ -1012,9 +1012,9 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select * from user where 1 != 1",
-        "Query": "select * from user where id1 = 4 and name1 = 'abc' limit :__upper_limit",
-        "Table": "user"
+        "FieldQuery": "select * from `user` where 1 != 1",
+        "Query": "select * from `user` where id1 = 4 and name1 = 'abc' limit :__upper_limit",
+        "Table": "`user`"
       }
     ]
   }
@@ -1041,9 +1041,9 @@ Gen4 plan same as above
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select col1 from user where 1 != 1",
-            "Query": "select col1 from user",
-            "Table": "user"
+            "FieldQuery": "select col1 from `user` where 1 != 1",
+            "Query": "select col1 from `user`",
+            "Table": "`user`"
           },
           {
             "OperatorType": "Route",
@@ -1052,9 +1052,9 @@ Gen4 plan same as above
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select col from user where 1 != 1",
-            "Query": "select col from user where :__sq_has_values1 = 1 and col in ::__sq1 limit :__upper_limit",
-            "Table": "user"
+            "FieldQuery": "select col from `user` where 1 != 1",
+            "Query": "select col from `user` where :__sq_has_values1 = 1 and col in ::__sq1 limit :__upper_limit",
+            "Table": "`user`"
           }
         ]
       }

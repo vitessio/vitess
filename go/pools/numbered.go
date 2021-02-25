@@ -47,15 +47,13 @@ type unregistered struct {
 	timeUnregistered time.Time
 }
 
-func (u *unregistered) Size() int {
-	return 1
-}
-
 //NewNumbered creates a new numbered
 func NewNumbered() *Numbered {
 	n := &Numbered{
-		resources:            make(map[int64]*numberedWrapper),
-		recentlyUnregistered: cache.NewLRUCache(1000),
+		resources: make(map[int64]*numberedWrapper),
+		recentlyUnregistered: cache.NewLRUCache(1000, func(_ interface{}) int64 {
+			return 1
+		}),
 	}
 	n.empty = sync.NewCond(&n.mu)
 	return n

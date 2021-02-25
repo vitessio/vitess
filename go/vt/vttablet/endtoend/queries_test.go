@@ -1783,6 +1783,7 @@ func TestQueries(t *testing.T) {
 			},
 		},
 	}
+
 	for _, tcase := range testCases {
 		if err := tcase.Test("", client); err != nil {
 			t.Error(err)

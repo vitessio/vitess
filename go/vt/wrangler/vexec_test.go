@@ -378,7 +378,7 @@ func TestVExecValidations(t *testing.T) {
 		{
 			name:        "unsupported query",
 			query:       "describe _vt.vreplication",
-			errorString: "query not supported by vexec: otherread",
+			errorString: "query not supported by vexec: explain _vt.vreplication",
 		},
 	}
 	for _, bq := range badQueries {

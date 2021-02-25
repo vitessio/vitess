@@ -352,6 +352,9 @@ func TestExplainPassthrough(t *testing.T) {
 	got := fmt.Sprintf("%v", result.Rows)
 	require.Contains(t, got, "SIMPLE") // there is a lot more coming from mysql,
 	// but we are trying to make the test less fragile
+
+	result = exec(t, conn, "explain ks.t1")
+	require.EqualValues(t, 2, len(result.Rows))
 }
 
 func TestXXHash(t *testing.T) {
