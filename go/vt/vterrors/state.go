@@ -10,4 +10,6 @@ const (
 	NoDB
 	WrongNumberOfColumnsInSelect
 	BadFieldError
+	DbDropExists
+	DbCreateExists
 )

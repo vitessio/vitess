@@ -149,22 +149,28 @@ func NewSQLErrorFromError(err error) error {
 	return serr
 }
 
+var stateToMysqlCode = map[vterrors.State]struct {
+	num   int
+	state string
+}{
+	vterrors.DataOutOfRange:               {num: ERDataOutOfRange, state: SSDataOutOfRange},
+	vterrors.NoDB:                         {num: ERNoDb, state: SSNoDB},
+	vterrors.WrongNumberOfColumnsInSelect: {num: ERWrongNumberOfColumnsInSelect, state: SSWrongNumberOfColumns},
+	vterrors.BadFieldError:                {num: ERBadFieldError, state: SSBadFieldError},
+	vterrors.DbCreateExists:               {num: ERDbCreateExists, state: SSUnknownSQLState},
+	vterrors.DbDropExists:                 {num: ERDbDropExists, state: SSUnknownSQLState},
+}
+
 func convertToMysqlError(err error) error {
 	errState := vterrors.ErrState(err)
 	if errState == vterrors.Undefined {
 		return err
 	}
-	switch errState {
-	case vterrors.DataOutOfRange:
-		err = NewSQLError(ERDataOutOfRange, SSDataOutOfRange, err.Error())
-	case vterrors.NoDB:
-		err = NewSQLError(ERNoDb, SSNoDB, err.Error())
-	case vterrors.WrongNumberOfColumnsInSelect:
-		err = NewSQLError(ERWrongNumberOfColumnsInSelect, SSWrongNumberOfColumns, err.Error())
-	case vterrors.BadFieldError:
-		err = NewSQLError(ERBadFieldError, SSBadFieldError, err.Error())
+	mysqlCode, ok := stateToMysqlCode[errState]
+	if !ok {
+		return err
 	}
-	return err
+	return NewSQLError(mysqlCode.num, mysqlCode.state, err.Error())
 }
 
 var isGRPCOverflowRE = regexp.MustCompile(`.*grpc: received message larger than max \(\d+ vs. \d+\)`)

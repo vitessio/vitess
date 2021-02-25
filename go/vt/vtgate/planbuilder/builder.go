@@ -20,8 +20,6 @@ import (
 	"errors"
 	"sort"
 
-	"vitess.io/vitess/go/mysql"
-
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
@@ -206,7 +204,7 @@ func buildDBDDLPlan(stmt sqlparser.Statement, vschema ContextVSchema) (engine.Pr
 			return engine.NewRowsPrimitive(make([][]sqltypes.Value, 0), make([]*querypb.Field, 0)), nil
 		}
 		if !ksExists {
-			return nil, mysql.NewSQLError(mysql.ERDbDropExists, mysql.SSUnknownSQLState, "Can't drop database '%s'; database doesn't exists", ksName)
+			return nil, vterrors.NewErrorf(vtrpcpb.Code_ALREADY_EXISTS, vterrors.DbDropExists, "Can't drop database '%s'; database doesn't exists", ksName)
 		}
 		return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "drop database not allowed")
 	case *sqlparser.AlterDatabase:
@@ -219,7 +217,7 @@ func buildDBDDLPlan(stmt sqlparser.Statement, vschema ContextVSchema) (engine.Pr
 			return engine.NewRowsPrimitive(make([][]sqltypes.Value, 0), make([]*querypb.Field, 0)), nil
 		}
 		if !dbDDL.IfNotExists && ksExists {
-			return nil, mysql.NewSQLError(mysql.ERDbCreateExists, mysql.SSUnknownSQLState, "Can't create database '%s'; database exists", ksName)
+			return nil, vterrors.NewErrorf(vtrpcpb.Code_ALREADY_EXISTS, vterrors.DbCreateExists, "Can't create database '%s'; database exists", ksName)
 		}
 		return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "create database not allowed")
 	}
