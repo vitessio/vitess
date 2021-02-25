@@ -153,14 +153,26 @@ var stateToMysqlCode = map[vterrors.State]struct {
 	num   int
 	state string
 }{
+	vterrors.Undefined:                    {num: ERUnknownError, state: SSUnknownSQLState},
 	vterrors.DataOutOfRange:               {num: ERDataOutOfRange, state: SSDataOutOfRange},
 	vterrors.NoDB:                         {num: ERNoDb, state: SSNoDB},
 	vterrors.WrongNumberOfColumnsInSelect: {num: ERWrongNumberOfColumnsInSelect, state: SSWrongNumberOfColumns},
 	vterrors.BadFieldError:                {num: ERBadFieldError, state: SSBadFieldError},
 	vterrors.DbCreateExists:               {num: ERDbCreateExists, state: SSUnknownSQLState},
 	vterrors.DbDropExists:                 {num: ERDbDropExists, state: SSUnknownSQLState},
+	vterrors.ForbidSchemaChange:           {num: ERForbidSchemaChange, state: SSUnknownSQLState},
 	vterrors.NetPacketTooLarge:            {num: ERNetPacketTooLarge, state: SSNetError},
 	vterrors.SPDoesNotExist:               {num: ERSPDoesNotExist, state: SSClientError},
+	vterrors.QueryInterrupted:             {num: ERQueryInterrupted, state: SSQueryInterrupted},
+	vterrors.CantUseOptionHere:            {num: ERCantUseOptionHere, state: SSClientError},
+	vterrors.NonUniqTable:                 {num: ERNonUniqTable, state: SSClientError},
+	vterrors.BadDb:                        {num: ERBadDb, state: SSClientError},
+}
+
+func init() {
+	if len(stateToMysqlCode) != int(vterrors.NumOfStates) {
+		panic("all vterrors states are not mapped to mysql errors")
+	}
 }
 
 func convertToMysqlError(err error) error {

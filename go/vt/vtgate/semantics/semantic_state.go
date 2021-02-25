@@ -17,7 +17,8 @@ limitations under the License.
 package semantics
 
 import (
-	"vitess.io/vitess/go/mysql"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 )
@@ -85,7 +86,7 @@ func newScope(parent *scope) *scope {
 func (s *scope) addTable(name string, table *sqlparser.AliasedTableExpr) error {
 	_, found := s.tables[name]
 	if found {
-		return mysql.NewSQLError(mysql.ERNonUniqTable, mysql.SSClientError, "Not unique table/alias: '%s'", name)
+		return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.NonUniqTable, "Not unique table/alias: '%s'", name)
 	}
 	s.tables[name] = table
 	return nil

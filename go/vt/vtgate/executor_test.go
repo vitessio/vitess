@@ -1858,7 +1858,7 @@ func TestExecutorMaxPayloadSizeExceeded(t *testing.T) {
 	for _, query := range testMaxPayloadSizeExceeded {
 		_, err := executor.Execute(context.Background(), "TestExecutorMaxPayloadSizeExceeded", session, query, nil)
 		require.NotNil(t, err)
-		assert.EqualError(t, err, "query payload size above threshold (errno 1153) (sqlstate HY000)")
+		assert.EqualError(t, err, "query payload size above threshold")
 	}
 	assert.Equal(t, warningCount, warnings.Counts()["WarnPayloadSizeExceeded"], "warnings count")
 

@@ -22,8 +22,6 @@ import (
 
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 
-	"vitess.io/vitess/go/mysql"
-
 	"vitess.io/vitess/go/vt/key"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -164,6 +162,9 @@ func dependsOnRoute(solves semantics.TableSet, expr sqlparser.Expr, semTable *se
 	return !sqlparser.IsValue(expr)
 }
 
+var errSQLCalcFoundRows = vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.CantUseOptionHere, "Incorrect usage/placement of 'SQL_CALC_FOUND_ROWS'")
+var errInto = vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.CantUseOptionHere, "Incorrect usage/placement of 'INTO'")
+
 // processSelect builds a primitive tree for the given query or subquery.
 // The tree built by this function has the following general structure:
 //
@@ -208,7 +209,7 @@ func (pb *primitiveBuilder) processSelect(sel *sqlparser.Select, outer *symtab, 
 	}
 	if sel.SQLCalcFoundRows {
 		if outer != nil || query == "" {
-			return mysql.NewSQLError(mysql.ERCantUseOptionHere, mysql.SSClientError, "Incorrect usage/placement of 'SQL_CALC_FOUND_ROWS'")
+			return errSQLCalcFoundRows
 		}
 		sel.SQLCalcFoundRows = false
 		if sel.Limit != nil {
@@ -223,7 +224,7 @@ func (pb *primitiveBuilder) processSelect(sel *sqlparser.Select, outer *symtab, 
 
 	// Into is not supported in subquery.
 	if sel.Into != nil && (outer != nil || query == "") {
-		return mysql.NewSQLError(mysql.ERCantUseOptionHere, mysql.SSClientError, "Incorrect usage/placement of 'INTO'")
+		return errInto
 	}
 
 	var where sqlparser.Expr

@@ -1160,7 +1160,7 @@ func TestErrorCodes(t *testing.T) {
 				vtrpcpb.Code_DEADLINE_EXCEEDED,
 				"connection deadline exceeded"),
 			code:     ERQueryInterrupted,
-			sqlState: SSUnknownSQLState,
+			sqlState: SSQueryInterrupted,
 			text:     "deadline exceeded",
 		},
 		{
@@ -1168,7 +1168,7 @@ func TestErrorCodes(t *testing.T) {
 				vtrpcpb.Code_RESOURCE_EXHAUSTED,
 				"query pool timeout"),
 			code:     ERTooManyUserConnections,
-			sqlState: SSUnknownSQLState,
+			sqlState: SSClientError,
 			text:     "resource exhausted",
 		},
 		{
@@ -1180,27 +1180,17 @@ func TestErrorCodes(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		th.SetErr(NewSQLErrorFromError(test.err))
-		result, err := client.ExecuteFetch("error", 100, false)
-		if err == nil {
-			t.Fatalf("mysql should have failed but returned: %v", result)
-		}
-		serr, ok := err.(*SQLError)
-		if !ok {
-			t.Fatalf("mysql should have returned a SQLError")
-		}
+		t.Run(test.err.Error(), func(t *testing.T) {
+			th.SetErr(NewSQLErrorFromError(test.err))
+			rs, err := client.ExecuteFetch("error", 100, false)
+			require.Error(t, err, "mysql should have failed but returned: %v", rs)
+			serr, ok := err.(*SQLError)
+			require.True(t, ok, "mysql should have returned a SQLError")
 
-		if serr.Number() != test.code {
-			t.Errorf("error in %s: want code %v got %v", test.text, test.code, serr.Number())
-		}
-
-		if serr.SQLState() != test.sqlState {
-			t.Errorf("error in %s: want sqlState %v got %v", test.text, test.sqlState, serr.SQLState())
-		}
-
-		if !strings.Contains(serr.Error(), test.err.Error()) {
-			t.Errorf("error in %s: want err %v got %v", test.text, test.err.Error(), serr.Error())
-		}
+			assert.Equal(t, test.code, serr.Number(), "error in %s: want code %v got %v", test.text, test.code, serr.Number())
+			assert.Equal(t, test.sqlState, serr.SQLState(), "error in %s: want sqlState %v got %v", test.text, test.sqlState, serr.SQLState())
+			assert.Contains(t, serr.Error(), test.err.Error())
+		})
 	}
 }
 

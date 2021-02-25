@@ -511,6 +511,7 @@ const (
 	ERQueryInterrupted             = 1317
 	ERTruncatedWrongValueForField  = 1366
 	ERDataTooLong                  = 1406
+	ERForbidSchemaChange           = 1450
 	ERDataOutOfRange               = 1690
 )
 

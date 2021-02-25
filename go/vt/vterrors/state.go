@@ -15,4 +15,11 @@ const (
 	ForbidSchemaChange
 	NetPacketTooLarge
 	SPDoesNotExist
+	QueryInterrupted
+	CantUseOptionHere
+	NonUniqTable
+	BadDb
+
+	// No state should be added below NumOfStates
+	NumOfStates
 )
