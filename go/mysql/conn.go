@@ -1214,7 +1214,7 @@ func (c *Conn) handleComQuery(handler Handler, data []byte) (kontinue bool) {
 	}
 
 	if len(queries) == 0 {
-		err := NewSQLError(EREmptyQuery, SSSyntaxErrorOrAccessViolation, "Query was empty")
+		err := NewSQLError(EREmptyQuery, SSClientError, "Query was empty")
 		return c.writeErrorPacketFromErrorAndLog(err)
 	}
 
