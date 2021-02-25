@@ -383,11 +383,6 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 		return nil, fmt.Errorf("can't strip checksum from binlog event: %v, event data: %#v", err, ev)
 	}
 
-	// Get the DbName for vstreamer
-	params, err := vs.cp.MysqlParams()
-	if err != nil {
-		return nil, err
-	}
 	var vevents []*binlogdatapb.VEvent
 	switch {
 	case ev.IsGTID():
@@ -418,7 +413,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 
 		switch cat := sqlparser.Preview(q.SQL); cat {
 		case sqlparser.StmtInsert:
-			mustSend := mustSendStmt(q, params.DbName)
+			mustSend := mustSendStmt(q, vs.cp.DBName())
 			if mustSend {
 				vevents = append(vevents, &binlogdatapb.VEvent{
 					Type: binlogdatapb.VEventType_INSERT,
@@ -426,7 +421,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 				})
 			}
 		case sqlparser.StmtUpdate:
-			mustSend := mustSendStmt(q, params.DbName)
+			mustSend := mustSendStmt(q, vs.cp.DBName())
 			if mustSend {
 				vevents = append(vevents, &binlogdatapb.VEvent{
 					Type: binlogdatapb.VEventType_UPDATE,
@@ -434,7 +429,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 				})
 			}
 		case sqlparser.StmtDelete:
-			mustSend := mustSendStmt(q, params.DbName)
+			mustSend := mustSendStmt(q, vs.cp.DBName())
 			if mustSend {
 				vevents = append(vevents, &binlogdatapb.VEvent{
 					Type: binlogdatapb.VEventType_DELETE,
@@ -442,7 +437,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 				})
 			}
 		case sqlparser.StmtReplace:
-			mustSend := mustSendStmt(q, params.DbName)
+			mustSend := mustSendStmt(q, vs.cp.DBName())
 			if mustSend {
 				vevents = append(vevents, &binlogdatapb.VEvent{
 					Type: binlogdatapb.VEventType_REPLACE,
@@ -458,7 +453,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 				Type: binlogdatapb.VEventType_COMMIT,
 			})
 		case sqlparser.StmtDDL:
-			if mustSendDDL(q, params.DbName, vs.filter) {
+			if mustSendDDL(q, vs.cp.DBName(), vs.filter) {
 				vevents = append(vevents, &binlogdatapb.VEvent{
 					Type: binlogdatapb.VEventType_GTID,
 					Gtid: mysql.EncodePosition(vs.pos),
@@ -481,7 +476,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 			}
 			vs.se.ReloadAt(context.Background(), vs.pos)
 		case sqlparser.StmtSavepoint:
-			mustSend := mustSendStmt(q, params.DbName)
+			mustSend := mustSendStmt(q, vs.cp.DBName())
 			if mustSend {
 				vevents = append(vevents, &binlogdatapb.VEvent{
 					Type:      binlogdatapb.VEventType_SAVEPOINT,
@@ -526,7 +521,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 			// Generates a Version event when it detects that a schema is stored in the schema_version table.
 			return nil, vs.buildVersionPlan(id, tm)
 		}
-		if tm.Database != "" && tm.Database != params.DbName {
+		if tm.Database != "" && tm.Database != vs.cp.DBName() {
 			vs.plans[id] = nil
 			return nil, nil
 		}
