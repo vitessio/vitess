@@ -159,6 +159,8 @@ var stateToMysqlCode = map[vterrors.State]struct {
 	vterrors.BadFieldError:                {num: ERBadFieldError, state: SSBadFieldError},
 	vterrors.DbCreateExists:               {num: ERDbCreateExists, state: SSUnknownSQLState},
 	vterrors.DbDropExists:                 {num: ERDbDropExists, state: SSUnknownSQLState},
+	vterrors.NetPacketTooLarge:            {num: ERNetPacketTooLarge, state: SSNetError},
+	vterrors.SPDoesNotExist:               {num: ERSPDoesNotExist, state: SSClientError},
 }
 
 func convertToMysqlError(err error) error {

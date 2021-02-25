@@ -17,6 +17,7 @@ limitations under the License.
 package mysql
 
 import (
+	"context"
 	"crypto/tls"
 	"fmt"
 	"io/ioutil"
@@ -28,8 +29,6 @@ import (
 	"sync"
 	"testing"
 	"time"
-
-	"context"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -1349,7 +1348,7 @@ func TestListenerShutdown(t *testing.T) {
 		if sqlErr.Number() != ERServerShutdown {
 			t.Fatalf("Unexpected sql error code: %d", sqlErr.Number())
 		}
-		if sqlErr.SQLState() != SSServerShutdown {
+		if sqlErr.SQLState() != SSNetError {
 			t.Fatalf("Unexpected error sql state: %s", sqlErr.SQLState())
 		}
 		if sqlErr.Message != "Server shutdown in progress" {

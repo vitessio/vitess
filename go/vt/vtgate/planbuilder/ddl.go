@@ -1,7 +1,6 @@
 package planbuilder
 
 import (
-	"vitess.io/vitess/go/mysql"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -292,7 +291,7 @@ func buildRenameTable(vschema ContextVSchema, renameTable *sqlparser.RenameTable
 				return nil, nil, err
 			}
 			if keyspaceTo.Name != keyspaceFrom.Name {
-				return nil, nil, mysql.NewSQLError(1450, mysql.SSUnknownSQLState, "Changing schema from '%s' to '%s' is not allowed", keyspaceFrom.Name, keyspaceTo.Name)
+				return nil, nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.ForbidSchemaChange, "Changing schema from '%s' to '%s' is not allowed", keyspaceFrom.Name, keyspaceTo.Name)
 			}
 			tabPair.ToTable = sqlparser.TableName{
 				Name: tabPair.ToTable.Name,
