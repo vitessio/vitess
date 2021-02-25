@@ -986,8 +986,8 @@ var (
 			input:  "alter table a add primary key",
 			output: "alter table a",
 		}, {
-			input:  "alter table a add constraint",
-			output: "alter table a",
+			input:  "alter table a add constraint ch_1 check (b > 0)",
+			output: "alter table a add check (b > 0)",
 		}, {
 			input: "alter table a drop column id",
 		}, {
@@ -997,11 +997,11 @@ var (
 			input:  "alter table a drop index idx",
 			output: "alter table a drop index idx",
 		}, {
-			input:  "alter table a add check ch_1",
-			output: "alter table a",
+			input:  "alter table a add check (b > 0)",
+			output: "alter table a add check (b > 0)",
 		}, {
 			input:  "alter table a drop check ch_1",
-			output: "alter table a",
+			output: "alter table a drop constraint ch_1",
 		}, {
 			input:  "alter table a drop foreign key fk_something",
 			output: "alter table a drop foreign key fk_something",
@@ -2721,7 +2721,7 @@ func TestCreateTable(t *testing.T) {
 			"	b int,\n" +
 			"	check (b in (0, 1)),\n" +
 			"	constraint a_positive check (a > 0),\n" +
-			"	check (a > b)\n"+
+			"	check (a > b)\n" +
 			")",
 
 		// table options
@@ -2908,7 +2908,7 @@ func TestCreateTable(t *testing.T) {
 	}, {
 		// test initial table constraint
 		input: "create table t (\n" +
-			"	check (a <> b),\n"+
+			"	check (a <> b),\n" +
 			"	a int,\n" +
 			"	b int\n" +
 			")",

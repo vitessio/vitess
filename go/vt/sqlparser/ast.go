@@ -1372,12 +1372,18 @@ func (node *DDL) Format(buf *TrackedBuffer) {
 		} else if node.IndexSpec != nil {
 			buf.Myprintf("%s table %v %v", node.Action, node.Table, node.IndexSpec)
 		} else if node.ConstraintAction == AddStr && node.TableSpec != nil && len(node.TableSpec.Constraints) == 1 {
-			fkDef, ok := node.TableSpec.Constraints[0].Details.(*ForeignKeyDefinition)
-			if ok {
-				buf.Myprintf("%s table %v add %v", node.Action, node.Table, fkDef)
-			} else {
+			switch def := node.TableSpec.Constraints[0].Details.(type) {
+			case *ForeignKeyDefinition, *CheckConstraintDefinition:
+				buf.Myprintf("%s table %v add %v", node.Action, node.Table, def)
+			default:
 				buf.Myprintf("%s table %v", node.Action, node.Table)
 			}
+			//fkDef, ok := node.TableSpec.Constraints[0].Details.(*ForeignKeyDefinition)
+			//if ok {
+			//buf.Myprintf("%s table %v add %v", node.Action, node.Table, fkDef)
+			//} else {
+			//buf.Myprintf("%s table %v", node.Action, node.Table)
+			//}
 		} else if node.ConstraintAction == DropStr && node.TableSpec != nil && len(node.TableSpec.Constraints) == 1 {
 			_, ok := node.TableSpec.Constraints[0].Details.(*ForeignKeyDefinition)
 			if ok {
@@ -4551,21 +4557,12 @@ type ColIdent struct {
 	// last field in the struct.
 	_            [0]struct{ _ []byte }
 	val, lowered string
-	at           AtCount
 }
 
 // NewColIdent makes a new ColIdent.
 func NewColIdent(str string) ColIdent {
 	return ColIdent{
 		val: str,
-	}
-}
-
-// NewColIdentWithAt makes a new ColIdent.
-func NewColIdentWithAt(str string, at AtCount) ColIdent {
-	return ColIdent{
-		val: str,
-		at:  at,
 	}
 }
 
