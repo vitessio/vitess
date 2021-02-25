@@ -231,7 +231,7 @@ func TestSetTarget(t *testing.T) {
 	}, {
 		vschema:       vschemaWith2KS,
 		targetString:  "ks3",
-		expectedError: "Unknown database 'ks3' (errno 1049) (sqlstate 42000)",
+		expectedError: "Unknown database 'ks3'",
 	}, {
 		vschema:       vschemaWith2KS,
 		targetString:  "ks2@replica",

@@ -95,7 +95,7 @@ func TestExecutorMaxMemoryRowsExceeded(t *testing.T) {
 		err   string
 	}{
 		{"select /*vt+ IGNORE_MAX_MEMORY_ROWS=1 */ * from main1", ""},
-		{"select * from main1", "in-memory row count exceeded allowed limit of 3 (errno 1153) (sqlstate HY000)"},
+		{"select * from main1", "in-memory row count exceeded allowed limit of 3"},
 	}
 
 	for _, test := range testCases {
@@ -936,7 +936,7 @@ func TestExecutorUse(t *testing.T) {
 	}
 
 	_, err = executor.Execute(ctx, "TestExecute", NewSafeSession(&vtgatepb.Session{}), "use UnexistentKeyspace", nil)
-	wantErr = "Unknown database 'UnexistentKeyspace' (errno 1049) (sqlstate 42000)"
+	wantErr = "Unknown database 'UnexistentKeyspace'"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("got: %v, want %v", err, wantErr)
 	}
