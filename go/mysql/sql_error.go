@@ -115,10 +115,10 @@ func NewSQLErrorFromError(err error) error {
 			ss = SSAccessDeniedError
 		case vtrpcpb.Code_RESOURCE_EXHAUSTED:
 			num = demuxResourceExhaustedErrors(err.Error())
-			ss = SSSyntaxErrorOrAccessViolation
+			ss = SSClientError
 		case vtrpcpb.Code_UNIMPLEMENTED:
 			num = ERNotSupportedYet
-			ss = SSSyntaxErrorOrAccessViolation
+			ss = SSClientError
 		case vtrpcpb.Code_INTERNAL:
 			num = ERInternalError
 			ss = SSUnknownSQLState

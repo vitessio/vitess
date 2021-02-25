@@ -554,8 +554,8 @@ const (
 	// SSLockDeadlock is ER_LOCK_DEADLOCK
 	SSLockDeadlock = "40001"
 
-	//SSSyntaxErrorOrAccessViolation is the state on syntax errors or access violations
-	SSSyntaxErrorOrAccessViolation = "42000"
+	//SSClientError is the state on client errors
+	SSClientError = "42000"
 
 	// SSBadFieldError is ER_BAD_FIELD_ERROR
 	SSBadFieldError = "42S22"

@@ -103,7 +103,7 @@ func TestNewSQLErrorFromError(t *testing.T) {
 		{
 			err: vterrors.Errorf(vtrpc.Code_RESOURCE_EXHAUSTED, "resource exhausted"),
 			num: ERTooManyUserConnections,
-			ss:  SSSyntaxErrorOrAccessViolation,
+			ss:  SSClientError,
 		},
 		{
 			err: vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "failed precondition"),
@@ -123,7 +123,7 @@ func TestNewSQLErrorFromError(t *testing.T) {
 		{
 			err: vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED, "unimplemented"),
 			num: ERNotSupportedYet,
-			ss:  SSSyntaxErrorOrAccessViolation,
+			ss:  SSClientError,
 		},
 		{
 			err: vterrors.Errorf(vtrpc.Code_INTERNAL, "internal"),
@@ -144,6 +144,11 @@ func TestNewSQLErrorFromError(t *testing.T) {
 			err: vterrors.NewErrorf(vtrpc.Code_ALREADY_EXISTS, vterrors.DbCreateExists, "create db exists"),
 			num: ERDbCreateExists,
 			ss:  SSUnknownSQLState,
+		},
+		{
+			err: vterrors.NewErrorf(vtrpc.Code_FAILED_PRECONDITION, vterrors.NoDB, "no db selected"),
+			num: ERNoDb,
+			ss:  SSNoDB,
 		},
 	}
 

@@ -85,7 +85,7 @@ func newScope(parent *scope) *scope {
 func (s *scope) addTable(name string, table *sqlparser.AliasedTableExpr) error {
 	_, found := s.tables[name]
 	if found {
-		return mysql.NewSQLError(mysql.ERNonUniqTable, mysql.SSSyntaxErrorOrAccessViolation, "Not unique table/alias: '%s'", name)
+		return mysql.NewSQLError(mysql.ERNonUniqTable, mysql.SSClientError, "Not unique table/alias: '%s'", name)
 	}
 	s.tables[name] = table
 	return nil
