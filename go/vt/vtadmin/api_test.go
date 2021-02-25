@@ -18,29 +18,21 @@ package vtadmin
 
 import (
 	"context"
-	"database/sql"
 	"errors"
-	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"google.golang.org/grpc"
 
-	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
-	"vitess.io/vitess/go/vt/vitessdriver"
 	"vitess.io/vitess/go/vt/vtadmin/cluster"
 	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery/fakediscovery"
 	vtadminerrors "vitess.io/vitess/go/vt/vtadmin/errors"
 	"vitess.io/vitess/go/vt/vtadmin/grpcserver"
 	"vitess.io/vitess/go/vt/vtadmin/http"
 	vtadmintestutil "vitess.io/vitess/go/vt/vtadmin/testutil"
-	vtadminvtctldclient "vitess.io/vitess/go/vt/vtadmin/vtctldclient"
-	"vitess.io/vitess/go/vt/vtadmin/vtsql"
-	"vitess.io/vitess/go/vt/vtadmin/vtsql/fakevtsql"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver/testutil"
 	"vitess.io/vitess/go/vt/vtctl/vtctldclient"
@@ -398,8 +390,8 @@ func TestGetKeyspaces(t *testing.T) {
 				clusterClients := []vtctldclient.VtctldClient{cluster0Client, cluster1Client}
 
 				clusters := []*cluster.Cluster{
-					buildCluster(0, clusterClients[0], nil, nil),
-					buildCluster(1, clusterClients[1], nil, nil),
+					vtadmintestutil.BuildCluster(0, clusterClients[0], nil, nil),
+					vtadmintestutil.BuildCluster(1, clusterClients[1], nil, nil),
 				}
 
 				api := NewAPI(clusters, grpcserver.Options{}, http.Options{})
@@ -900,7 +892,7 @@ func TestGetSchemas(t *testing.T) {
 							}
 						}
 
-						clusters[cdx] = buildCluster(cdx, clusterClients[cdx], cts, nil)
+						clusters[cdx] = vtadmintestutil.BuildCluster(cdx, clusterClients[cdx], cts, nil)
 					}
 
 					api := NewAPI(clusters, grpcserver.Options{}, http.Options{})
@@ -919,7 +911,7 @@ func TestGetTablets(t *testing.T) {
 	tests := []struct {
 		name           string
 		clusterTablets [][]*vtadminpb.Tablet
-		dbconfigs      map[string]*dbcfg
+		dbconfigs      map[string]*vtadmintestutil.Dbcfg
 		req            *vtadminpb.GetTabletsRequest
 		expected       []*vtadminpb.Tablet
 		shouldErr      bool
@@ -944,7 +936,7 @@ func TestGetTablets(t *testing.T) {
 					},
 				},
 			},
-			dbconfigs: map[string]*dbcfg{},
+			dbconfigs: map[string]*vtadmintestutil.Dbcfg{},
 			req:       &vtadminpb.GetTabletsRequest{},
 			expected: []*vtadminpb.Tablet{
 				{
@@ -1003,8 +995,8 @@ func TestGetTablets(t *testing.T) {
 					},
 				},
 			},
-			dbconfigs: map[string]*dbcfg{
-				"c1": {shouldErr: true},
+			dbconfigs: map[string]*vtadmintestutil.Dbcfg{
+				"c1": {ShouldErr: true},
 			},
 			req:       &vtadminpb.GetTabletsRequest{},
 			expected:  nil,
@@ -1046,7 +1038,7 @@ func TestGetTablets(t *testing.T) {
 					},
 				},
 			},
-			dbconfigs: map[string]*dbcfg{},
+			dbconfigs: map[string]*vtadmintestutil.Dbcfg{},
 			req:       &vtadminpb.GetTabletsRequest{ClusterIds: []string{"c0"}},
 			expected: []*vtadminpb.Tablet{
 				{
@@ -1076,7 +1068,7 @@ func TestGetTablets(t *testing.T) {
 			clusters := make([]*cluster.Cluster, len(tt.clusterTablets))
 
 			for i, tablets := range tt.clusterTablets {
-				cluster := buildCluster(i, nil, tablets, tt.dbconfigs)
+				cluster := vtadmintestutil.BuildCluster(i, nil, tablets, tt.dbconfigs)
 				clusters[i] = cluster
 			}
 
@@ -1097,7 +1089,7 @@ func TestGetTablet(t *testing.T) {
 	tests := []struct {
 		name           string
 		clusterTablets [][]*vtadminpb.Tablet
-		dbconfigs      map[string]*dbcfg
+		dbconfigs      map[string]*vtadmintestutil.Dbcfg
 		req            *vtadminpb.GetTabletRequest
 		expected       *vtadminpb.Tablet
 		shouldErr      bool
@@ -1122,7 +1114,7 @@ func TestGetTablet(t *testing.T) {
 					},
 				},
 			},
-			dbconfigs: map[string]*dbcfg{},
+			dbconfigs: map[string]*vtadmintestutil.Dbcfg{},
 			req: &vtadminpb.GetTabletRequest{
 				Hostname: "ks1-00-00-zone1-a",
 			},
@@ -1181,8 +1173,8 @@ func TestGetTablet(t *testing.T) {
 					},
 				},
 			},
-			dbconfigs: map[string]*dbcfg{
-				"c1": {shouldErr: true},
+			dbconfigs: map[string]*vtadmintestutil.Dbcfg{
+				"c1": {ShouldErr: true},
 			},
 			req: &vtadminpb.GetTabletRequest{
 				Hostname: "doesn't matter",
@@ -1226,7 +1218,7 @@ func TestGetTablet(t *testing.T) {
 					},
 				},
 			},
-			dbconfigs: map[string]*dbcfg{},
+			dbconfigs: map[string]*vtadmintestutil.Dbcfg{},
 			req: &vtadminpb.GetTabletRequest{
 				Hostname:   "ks1-00-00-zone1-a",
 				ClusterIds: []string{"c0"},
@@ -1286,7 +1278,7 @@ func TestGetTablet(t *testing.T) {
 					},
 				},
 			},
-			dbconfigs: map[string]*dbcfg{},
+			dbconfigs: map[string]*vtadmintestutil.Dbcfg{},
 			req: &vtadminpb.GetTabletRequest{
 				Hostname: "ks1-00-00-zone1-a",
 			},
@@ -1299,7 +1291,7 @@ func TestGetTablet(t *testing.T) {
 				/* cluster 0 */
 				{},
 			},
-			dbconfigs: map[string]*dbcfg{},
+			dbconfigs: map[string]*vtadmintestutil.Dbcfg{},
 			req: &vtadminpb.GetTabletRequest{
 				Hostname: "ks1-00-00-zone1-a",
 			},
@@ -1313,7 +1305,7 @@ func TestGetTablet(t *testing.T) {
 			clusters := make([]*cluster.Cluster, len(tt.clusterTablets))
 
 			for i, tablets := range tt.clusterTablets {
-				cluster := buildCluster(i, nil, tablets, tt.dbconfigs)
+				cluster := vtadmintestutil.BuildCluster(i, nil, tablets, tt.dbconfigs)
 				clusters[i] = cluster
 			}
 
@@ -1588,7 +1580,7 @@ func TestVTExplain(t *testing.T) {
 					}
 				}
 
-				c := buildCluster(0, vtctldClient, tt.tablets, nil)
+				c := vtadmintestutil.BuildCluster(0, vtctldClient, tt.tablets, nil)
 				clusters := []*cluster.Cluster{c}
 
 				api := NewAPI(clusters, grpcserver.Options{}, http.Options{})
@@ -1606,51 +1598,6 @@ func TestVTExplain(t *testing.T) {
 			})
 		})
 	}
-}
-
-type dbcfg struct {
-	shouldErr bool
-}
-
-// shared helper for building a cluster that contains the given tablets and
-// talking to the given vtctld server. dbconfigs contains an optional config
-// for controlling the behavior of the cluster's DB at the package sql level.
-func buildCluster(i int, vtctldClient vtctldclient.VtctldClient, tablets []*vtadminpb.Tablet, dbconfigs map[string]*dbcfg) *cluster.Cluster {
-	disco := fakediscovery.New()
-	disco.AddTaggedGates(nil, &vtadminpb.VTGate{Hostname: fmt.Sprintf("cluster%d-gate", i)})
-	disco.AddTaggedVtctlds(nil, &vtadminpb.Vtctld{Hostname: "doesn't matter"})
-
-	cluster := &cluster.Cluster{
-		ID:        fmt.Sprintf("c%d", i),
-		Name:      fmt.Sprintf("cluster%d", i),
-		Discovery: disco,
-	}
-
-	dbconfig, ok := dbconfigs[cluster.ID]
-	if !ok {
-		dbconfig = &dbcfg{shouldErr: false}
-	}
-
-	db := vtsql.New(&vtsql.Config{
-		Cluster:   cluster.ToProto(),
-		Discovery: disco,
-	})
-	db.DialFunc = func(cfg vitessdriver.Configuration) (*sql.DB, error) {
-		return sql.OpenDB(&fakevtsql.Connector{Tablets: tablets, ShouldErr: dbconfig.shouldErr}), nil
-	}
-
-	vtctld := vtadminvtctldclient.New(&vtadminvtctldclient.Config{
-		Cluster:   cluster.ToProto(),
-		Discovery: disco,
-	})
-	vtctld.DialFunc = func(addr string, ff grpcclient.FailFast, opts ...grpc.DialOption) (vtctldclient.VtctldClient, error) {
-		return vtctldClient, nil
-	}
-
-	cluster.DB = db
-	cluster.Vtctld = vtctld
-
-	return cluster
 }
 
 func init() {
