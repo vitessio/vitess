@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package cluster
+package cluster_test
 
 import (
 	"context"
@@ -24,6 +24,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"vitess.io/vitess/go/vt/vitessdriver"
+	"vitess.io/vitess/go/vt/vtadmin/cluster"
 	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery/fakediscovery"
 	"vitess.io/vitess/go/vt/vtadmin/vtsql"
 
@@ -45,7 +46,7 @@ func TestGetTablets(t *testing.T) {
 		return nil, assert.AnError
 	}
 
-	cluster := &Cluster{DB: db}
-	_, err := cluster.GetTablets(context.Background())
+	c := &cluster.Cluster{DB: db}
+	_, err := c.GetTablets(context.Background())
 	assert.Error(t, err)
 }
