@@ -2013,7 +2013,7 @@ alter_table_statement:
 | ALTER ignore_opt TABLE table_name DROP CHECK ID
   {
     $$ = &DDL{Action: AlterStr, ConstraintAction: DropStr, Table: $4, TableSpec: &TableSpec{Constraints:
-        []*ConstraintDefinition{&ConstraintDefinition{Name: string($7)}}}}
+        []*ConstraintDefinition{&ConstraintDefinition{Name: string($7), Details: &CheckConstraintDefinition{}}}}}
   }
 | ALTER ignore_opt TABLE table_name DROP index_or_key sql_id
   {

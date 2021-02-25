@@ -1001,7 +1001,7 @@ var (
 			output: "alter table a add check (b > 0)",
 		}, {
 			input:  "alter table a drop check ch_1",
-			output: "alter table a drop constraint ch_1",
+			output: "alter table a drop check ch_1",
 		}, {
 			input:  "alter table a drop foreign key fk_something",
 			output: "alter table a drop foreign key fk_something",

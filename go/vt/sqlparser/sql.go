@@ -6766,7 +6766,7 @@ yydefault:
 		yyDollar = yyS[yypt-7 : yypt+1]
 //line sql.y:2014
 		{
-			yyVAL.statement = &DDL{Action: AlterStr, ConstraintAction: DropStr, Table: yyDollar[4].tableName, TableSpec: &TableSpec{Constraints: []*ConstraintDefinition{&ConstraintDefinition{Name: string(yyDollar[7].bytes)}}}}
+			yyVAL.statement = &DDL{Action: AlterStr, ConstraintAction: DropStr, Table: yyDollar[4].tableName, TableSpec: &TableSpec{Constraints: []*ConstraintDefinition{&ConstraintDefinition{Name: string(yyDollar[7].bytes), Details: &CheckConstraintDefinition{}}}}}
 		}
 	case 384:
 		yyDollar = yyS[yypt-7 : yypt+1]

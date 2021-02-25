@@ -1378,17 +1378,13 @@ func (node *DDL) Format(buf *TrackedBuffer) {
 			default:
 				buf.Myprintf("%s table %v", node.Action, node.Table)
 			}
-			//fkDef, ok := node.TableSpec.Constraints[0].Details.(*ForeignKeyDefinition)
-			//if ok {
-			//buf.Myprintf("%s table %v add %v", node.Action, node.Table, fkDef)
-			//} else {
-			//buf.Myprintf("%s table %v", node.Action, node.Table)
-			//}
 		} else if node.ConstraintAction == DropStr && node.TableSpec != nil && len(node.TableSpec.Constraints) == 1 {
-			_, ok := node.TableSpec.Constraints[0].Details.(*ForeignKeyDefinition)
-			if ok {
+			switch node.TableSpec.Constraints[0].Details.(type) {
+			case *ForeignKeyDefinition:
 				buf.Myprintf("%s table %v drop foreign key %s", node.Action, node.Table, node.TableSpec.Constraints[0].Name)
-			} else {
+			case *CheckConstraintDefinition:
+				buf.Myprintf("%s table %v drop check %s", node.Action, node.Table, node.TableSpec.Constraints[0].Name)
+			default:
 				buf.Myprintf("%s table %v drop constraint %s", node.Action, node.Table, node.TableSpec.Constraints[0].Name)
 			}
 		} else {
