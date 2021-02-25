@@ -1031,8 +1031,14 @@ func (tkn *Tokenizer) scanMySQLSpecificComment() (int, []byte) {
 		}
 		tkn.consumeNext(buffer)
 	}
-	_, sql := ExtractMysqlComment(buffer.String())
-	tkn.specialComment = NewStringTokenizer(sql)
+
+	commentVersion, sql := ExtractMysqlComment(buffer.String())
+
+	if MySQLVersion >= commentVersion {
+		// Only add the special comment to the tokenizer if the version of MySQL is higher or equal to the comment version
+		tkn.specialComment = NewStringTokenizer(sql)
+	}
+
 	return tkn.Scan()
 }
 

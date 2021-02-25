@@ -22,8 +22,6 @@ option go_package = "vitess.io/vitess/go/vt/proto/vtctldata";
 
 package vtctldata;
 
-import "google/protobuf/duration.proto";
-
 import "logutil.proto";
 import "mysqlctl.proto";
 import "tabletmanagerdata.proto";
@@ -151,6 +149,37 @@ message DeleteTabletsRequest {
 message DeleteTabletsResponse {
 }
 
+message EmergencyReparentShardRequest {
+  // Keyspace is the name of the keyspace to perform the Emergency Reparent in.
+  string keyspace = 1;
+  // Shard is the name of the shard to perform the Emergency Reparent in.
+  string shard = 2;
+  // Optional alias of a tablet that should become the new shard primary. If not
+  // not specified, the vtctld will select the most up-to-date canditate to
+  // promote.
+  topodata.TabletAlias new_primary = 3;
+  // List of replica aliases to ignore during the Emergency Reparent. The vtctld
+  // will not attempt to stop replication on these tablets, nor attempt to
+  // demote any that may think they are the shard primary.
+  repeated topodata.TabletAlias ignore_replicas = 4;
+  // WaitReplicasTimeout is the duration of time to wait for replicas to catch
+  // up in reparenting.
+  vttime.Duration wait_replicas_timeout = 5;
+}
+
+message EmergencyReparentShardResponse {
+  // Keyspace is the name of the keyspace the Emergency Reparent took place in.
+  string keyspace = 1;
+  // Shard is the name of the shard the Emergency Reparent took place in.
+  string shard = 2;
+  // PromotedPrimary is the alias of the tablet that was promoted to shard
+  // primary. If NewPrimary was set in the request, then this will be the same
+  // alias. Otherwise, it will be the alias of the tablet found to be most
+  // up-to-date.
+  topodata.TabletAlias promoted_primary = 3;
+  repeated logutil.Event events = 4;
+}
+
 message GetBackupsRequest {
   string keyspace = 1;
   string shard = 2;
@@ -186,7 +215,7 @@ message GetKeyspacesRequest {
 }
 
 message GetKeyspacesResponse {
-  repeated Keyspace keyspaces = 1; 
+  repeated Keyspace keyspaces = 1;
 }
 
 message GetKeyspaceRequest {
@@ -273,11 +302,49 @@ message InitShardPrimaryRequest {
   string shard = 2;
   topodata.TabletAlias primary_elect_tablet_alias = 3;
   bool force = 4;
-  google.protobuf.Duration wait_replicas_timeout = 5;
+  vttime.Duration wait_replicas_timeout = 5;
 }
 
 message InitShardPrimaryResponse {
   repeated logutil.Event events = 1;
+}
+
+message PlannedReparentShardRequest {
+  // Keyspace is the name of the keyspace to perform the Planned Reparent in.
+  string keyspace = 1;
+  // Shard is the name of the shard to perform teh Planned Reparent in.
+  string shard = 2;
+  // NewPrimary is the alias of the tablet to promote to shard primary. If not
+  // specified, the vtctld will select the most up-to-date candidate to promote.
+  //
+  // It is an error to set NewPrimary and AvoidPrimary to the same alias.
+  topodata.TabletAlias new_primary = 3;
+  // AvoidPrimary is the alias of the tablet to demote. In other words,
+  // specifying an AvoidPrimary alias tells the vtctld to promote any replica
+  // other than this one. A shard whose current primary is not this one is then
+  // a no-op.
+  //
+  // It is an error to set NewPrimary and AvoidPrimary to the same alias.
+  topodata.TabletAlias avoid_primary = 4;
+  // WaitReplicasTimeout is the duration of time to wait for replicas to catch
+  // up in replication both before and after the reparent. The timeout is not
+  // cumulative across both wait periods, meaning that the replicas have
+  // WaitReplicasTimeout time to catch up before the reparent, and an additional
+  // WaitReplicasTimeout time to catch up after the reparent.
+  vttime.Duration wait_replicas_timeout = 5;
+}
+
+message PlannedReparentShardResponse {
+  // Keyspace is the name of the keyspace the Planned Reparent took place in.
+  string keyspace = 1;
+  // Shard is the name of the shard the Planned Reparent took place in.
+  string shard = 2;
+  // PromotedPrimary is the alias of the tablet that was promoted to shard
+  // primary. If NewPrimary was set in the request, then this will be the same
+  // alias. Otherwise, it will be the alias of the tablet found to be most
+  // up-to-date.
+  topodata.TabletAlias promoted_primary = 3;
+  repeated logutil.Event events = 4;
 }
 
 message RemoveKeyspaceCellRequest {
@@ -313,6 +380,34 @@ message RemoveShardCellRequest {
 message RemoveShardCellResponse {
   // (TODO:@amason) Consider including the deleted SrvKeyspacePartitions objects
   // and any deleted Tablet objects here.
+}
+
+message ReparentTabletRequest {
+  // Tablet is the alias of the tablet that should be reparented under the
+  // current shard primary.
+  topodata.TabletAlias tablet = 1;
+}
+
+message ReparentTabletResponse {
+  // Keyspace is the name of the keyspace the tablet was reparented in.
+  string keyspace = 1;
+  // Shard is the name of the shard the tablet was reparented in.
+  string shard = 2;
+  // Primary is the alias of the tablet that the tablet was reparented under.
+  topodata.TabletAlias primary = 3;
+}
+
+message TabletExternallyReparentedRequest {
+  // Tablet is the alias of the tablet that was promoted externally and should
+  // be updated to the shard primary in the topo.
+  topodata.TabletAlias tablet = 1;
+}
+
+message TabletExternallyReparentedResponse {
+  string keyspace = 1;
+  string shard = 2;
+  topodata.TabletAlias new_primary = 3;
+  topodata.TabletAlias old_primary = 4;
 }
 
 message Keyspace {
