@@ -121,7 +121,6 @@ func skipToEnd(yylex interface{}) {
   vindexParam   VindexParam
   vindexParams  []VindexParam
   showFilter    *ShowFilter
-  optLike       *OptLike
   over          *Over
   caseStatementCases []CaseStatementCase
   caseStatementCase CaseStatementCase
@@ -344,7 +343,7 @@ func skipToEnd(yylex interface{}) {
 %type <boolVal> null_or_not_null auto_increment local_opt optionally_opt
 %type <colKeyOpt> column_key
 %type <strs> enum_values
-%type <columnDefinition> column_definition
+%type <columnDefinition> column_definition column_definition_for_create
 %type <indexDefinition> index_definition
 %type <constraintDefinition> constraint_definition
 %type <str> index_or_key indexes_or_keys index_or_key_opt
@@ -352,7 +351,6 @@ func skipToEnd(yylex interface{}) {
 %type <str> name_opt
 %type <str> equal_opt
 %type <TableSpec> table_spec table_column_list
-%type <optLike> create_like
 %type <str> table_option_list table_option table_opt_value
 %type <indexInfo> index_info
 %type <indexColumn> index_column
@@ -668,10 +666,9 @@ create_statement:
     }
     $$ = $1
   }
-| create_table_prefix create_like
+| create_table_prefix LIKE table_name
   {
-    // Create table [name] like [name]
-    $1.OptLike = $2
+    $1.OptLike = &OptLike{LikeTable: $3}
     $$ = $1
   }
 | CREATE key_type_opt INDEX sql_id using_opt ON table_name '(' index_column_list ')' index_option_list_opt
@@ -1136,23 +1133,13 @@ table_spec:
     $$.Options = $4
   }
 
-create_like:
-  LIKE table_name
-  {
-    $$ = &OptLike{LikeTable: $2}
-  }
-| '(' LIKE table_name ')'
-  {
-    $$ = &OptLike{LikeTable: $3}
-  }
-
 table_column_list:
-  column_definition
+  column_definition_for_create
   {
     $$ = &TableSpec{}
     $$.AddColumn($1)
   }
-| table_column_list ',' column_definition
+| table_column_list ',' column_definition_for_create
   {
     $$.AddColumn($3)
   }
@@ -1173,6 +1160,16 @@ column_definition:
       return 1
     }
     $$ = &ColumnDefinition{Name: NewColIdent(string($1)), Type: $2}
+  }
+
+column_definition_for_create:
+  reserved_sql_id column_type column_type_options
+  {
+    if err := $2.merge($3); err != nil {
+      yylex.Error(err.Error())
+      return 1
+    }
+    $$ = &ColumnDefinition{Name: $1, Type: $2}
   }
 
 column_type_options:
@@ -4501,6 +4498,8 @@ non_reserved_keyword:
 | ACTION
 | ACTIVE
 | ADMIN
+| ALTER
+| BEFORE
 | BEGIN
 | BIGINT
 | BIT
@@ -4510,6 +4509,7 @@ non_reserved_keyword:
 | BUCKETS
 | CASCADE
 | CATALOG_NAME
+| CHANGE
 | CHAR
 | CHARACTER
 | CHARSET
@@ -4523,6 +4523,7 @@ non_reserved_keyword:
 | COMMIT
 | COMMITTED
 | COMPONENT
+| CONSTRAINT
 | CONSTRAINT_CATALOG
 | CONSTRAINT_NAME
 | CONSTRAINT_SCHEMA
@@ -4532,16 +4533,19 @@ non_reserved_keyword:
 | DATE
 | DATETIME
 | DECIMAL
+| DEFINER
 | DEFINITION
 | DESCRIPTION
 | DOUBLE
 | DUPLICATE
+| EACH
 | ENFORCED
 | ENGINES
 | ENUM
 | EXCLUDE
 | EXPANSION
 | FIELDS
+| FIXED
 | FLOAT_TYPE
 | FLUSH
 | FOLLOWING
@@ -4556,6 +4560,7 @@ non_reserved_keyword:
 | HISTOGRAM
 | HISTORY
 | INACTIVE
+| INDEXES
 | INT
 | INTEGER
 | INVISIBLE
@@ -4584,11 +4589,13 @@ non_reserved_keyword:
 | MEDIUMTEXT
 | MESSAGE_TEXT
 | MODE
+| MODIFY
 | MULTILINESTRING
 | MULTIPOINT
 | MULTIPOLYGON
 | MYSQL_ERRNO
 | NAMES
+| NATIONAL
 | NCHAR
 | NESTED
 | NETWORK_NAMESPACE
@@ -4613,7 +4620,9 @@ non_reserved_keyword:
 | PLUGINS
 | POINT
 | POLYGON
+| PRECEDES
 | PRECEDING
+| PRECISION
 | PRIMARY
 | PRIVILEGE_CHECKS_USER
 | PROCEDURE
@@ -4636,6 +4645,7 @@ non_reserved_keyword:
 | REUSE
 | ROLE
 | ROLLBACK
+| SCHEMAS
 | SCHEMA_NAME
 | SECONDARY
 | SECONDARY_ENGINE
@@ -4656,6 +4666,7 @@ non_reserved_keyword:
 | START
 | STARTING
 | STATUS
+| STREAM
 | SUBCLASS_ORIGIN
 | TABLES
 | TABLE_NAME
@@ -4676,9 +4687,11 @@ non_reserved_keyword:
 | UNCOMMITTED
 | UNSIGNED
 | UNUSED
+| VALUE
 | VARBINARY
 | VARCHAR
 | VARIABLES
+| VARYING
 | VCPU
 | VIEW
 | VINDEX

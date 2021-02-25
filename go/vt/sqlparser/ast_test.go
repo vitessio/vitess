@@ -251,16 +251,16 @@ func TestDDL(t *testing.T) {
 	}, {
 		query: "alter table a auto_increment 19",
 		output: &DDL{
-			Action: AlterStr,
-			Table: TableName{Name: NewTableIdent("a")},
+			Action:      AlterStr,
+			Table:       TableName{Name: NewTableIdent("a")},
 			AutoIncSpec: &AutoIncSpec{Value: newIntVal("19")},
 		},
 		affected: []string{"a"},
 	}, {
 		query: "alter table a auto_increment 19.9",
 		output: &DDL{
-			Action: AlterStr,
-			Table: TableName{Name: NewTableIdent("a")},
+			Action:      AlterStr,
+			Table:       TableName{Name: NewTableIdent("a")},
 			AutoIncSpec: &AutoIncSpec{Value: newFloatVal("19.9")},
 		},
 		affected: []string{"a"},

@@ -21,8 +21,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/dolthub/vitess/go/vt/proto/vttime"
+	"github.com/golang/protobuf/proto"
 )
 
 const (
