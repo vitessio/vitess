@@ -19,6 +19,7 @@ package cluster_test
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -26,6 +27,7 @@ import (
 	"vitess.io/vitess/go/vt/vitessdriver"
 	"vitess.io/vitess/go/vt/vtadmin/cluster"
 	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery/fakediscovery"
+	vtadminerrors "vitess.io/vitess/go/vt/vtadmin/errors"
 	"vitess.io/vitess/go/vt/vtadmin/testutil"
 	"vitess.io/vitess/go/vt/vtadmin/vtsql"
 
@@ -34,6 +36,8 @@ import (
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 )
 
+// This test only validates the error handling on dialing database connections.
+// Other cases are covered by one or both of TestFindTablets and TestFindTablet.
 func TestGetTablets(t *testing.T) {
 	disco := fakediscovery.New()
 	disco.AddTaggedGates(nil, &vtadminpb.VTGate{Hostname: "gate"})
@@ -242,5 +246,110 @@ func TestFindTablets(t *testing.T) {
 
 		assert.NoError(t, err)
 		testutil.AssertTabletSlicesEqual(t, tt.expected, tablets)
+	}
+}
+
+func TestFindTablet(t *testing.T) {
+	tests := []struct {
+		name          string
+		tablets       []*vtadminpb.Tablet
+		filter        func(*vtadminpb.Tablet) bool
+		expected      *vtadminpb.Tablet
+		expectedError error
+	}{
+		{
+			name: "returns the first matching tablet",
+			tablets: []*vtadminpb.Tablet{
+				{
+					State: vtadminpb.Tablet_NOT_SERVING,
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "c0_cell1",
+							Uid:  100,
+						},
+						Keyspace: "commerce",
+					},
+				},
+				{
+					State: vtadminpb.Tablet_SERVING,
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "c0_cell1",
+							Uid:  101,
+						},
+						Keyspace: "commerce",
+					},
+				},
+				{
+					State: vtadminpb.Tablet_SERVING,
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "c0_cell1",
+							Uid:  102,
+						},
+						Keyspace: "commerce",
+					},
+				},
+			},
+
+			filter: func(t *vtadminpb.Tablet) bool {
+				return t.State == vtadminpb.Tablet_SERVING
+			},
+			expected: &vtadminpb.Tablet{
+				Cluster: &vtadmin.Cluster{
+					Id:   "c0",
+					Name: "cluster0",
+				},
+				State: vtadminpb.Tablet_SERVING,
+				Tablet: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "c0_cell1",
+						Uid:  101,
+					},
+					Keyspace: "commerce",
+				},
+			},
+		},
+		{
+			name: "returns an error if no match found",
+			tablets: []*vtadminpb.Tablet{
+				{
+					State: vtadminpb.Tablet_NOT_SERVING,
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "c0_cell1",
+							Uid:  100,
+						},
+						Keyspace: "commerce",
+					},
+				},
+				{
+					State: vtadminpb.Tablet_NOT_SERVING,
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "c0_cell1",
+							Uid:  101,
+						},
+						Keyspace: "commerce",
+					},
+				},
+			},
+			filter: func(t *vtadminpb.Tablet) bool {
+				return t.State == vtadminpb.Tablet_SERVING
+			},
+			expectedError: vtadminerrors.ErrNoTablet,
+		},
+	}
+
+	for _, tt := range tests {
+		cluster := testutil.BuildCluster(0, nil, tt.tablets, nil)
+		tablet, err := cluster.FindTablet(context.Background(), tt.filter)
+
+		if tt.expectedError != nil {
+			assert.True(t, errors.Is(err, tt.expectedError), "expected error type %w does not match actual error type %w", err, tt.expectedError)
+		} else {
+			assert.NoError(t, err)
+			testutil.AssertTabletsEqual(t, tt.expected, tablet)
+		}
 	}
 }
