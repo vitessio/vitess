@@ -110,7 +110,7 @@ func buildPFlagSlice(flags map[string]string) []string {
 
 // ParseTablets converts a set of *sql.Rows into a slice of Tablets, for the
 // given cluster.
-func (c Cluster) ParseTablets(rows *sql.Rows) ([]*vtadminpb.Tablet, error) {
+func (c *Cluster) ParseTablets(rows *sql.Rows) ([]*vtadminpb.Tablet, error) {
 	var tablets []*vtadminpb.Tablet
 
 	for rows.Next() {
@@ -135,7 +135,7 @@ func (c Cluster) ParseTablets(rows *sql.Rows) ([]*vtadminpb.Tablet, error) {
 
 // Fields are:
 // Cell | Keyspace | Shard | TabletType (string) | ServingState (string) | Alias | Hostname | MasterTermStartTime.
-func (c Cluster) parseTablet(rows *sql.Rows) (*vtadminpb.Tablet, error) {
+func (c *Cluster) parseTablet(rows *sql.Rows) (*vtadminpb.Tablet, error) {
 	var (
 		cell            string
 		tabletTypeStr   string
@@ -197,7 +197,8 @@ func (c Cluster) parseTablet(rows *sql.Rows) (*vtadminpb.Tablet, error) {
 	return tablet, nil
 }
 
-func (c Cluster) GetTablets(ctx context.Context) ([]*vtadminpb.Tablet, error) {
+// GetTablets returns all tablets in the cluster.
+func (c *Cluster) GetTablets(ctx context.Context) ([]*vtadminpb.Tablet, error) {
 	if err := c.DB.Dial(ctx, ""); err != nil {
 		return nil, err
 	}
@@ -211,7 +212,7 @@ func (c Cluster) GetTablets(ctx context.Context) ([]*vtadminpb.Tablet, error) {
 }
 
 // FindTablet returns the first tablet in a given cluster that satisfies the filter function.
-func (c Cluster) FindTablet(ctx context.Context, filter func(*vtadminpb.Tablet) bool) (*vtadminpb.Tablet, error) {
+func (c *Cluster) FindTablet(ctx context.Context, filter func(*vtadminpb.Tablet) bool) (*vtadminpb.Tablet, error) {
 	tablets, err := c.FindTablets(ctx, filter, 1)
 	if err != nil {
 		return nil, err
@@ -227,7 +228,7 @@ func (c Cluster) FindTablet(ctx context.Context, filter func(*vtadminpb.Tablet) 
 // FindTablets returns the first N tablets in the given cluster that satisfy
 // the filter function. If N = -1, then all matching tablets are returned.
 // Ordering is not guaranteed, and callers should write their filter functions accordingly.
-func (c Cluster) FindTablets(ctx context.Context, filter func(*vtadminpb.Tablet) bool, n int) ([]*vtadminpb.Tablet, error) {
+func (c *Cluster) FindTablets(ctx context.Context, filter func(*vtadminpb.Tablet) bool, n int) ([]*vtadminpb.Tablet, error) {
 	tablets, err := c.GetTablets(ctx)
 	if err != nil {
 		return nil, err
