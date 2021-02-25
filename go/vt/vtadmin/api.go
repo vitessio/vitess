@@ -303,7 +303,7 @@ func (api *API) GetSchemas(ctx context.Context, req *vtadminpb.GetSchemasRequest
 
 			// Since tablets are per-cluster, we can fetch them once
 			// and use them throughout the other waitgroups.
-			tablets, err := api.getTablets(ctx, c)
+			tablets, err := c.GetTablets(ctx)
 			if err != nil {
 				er.RecordError(err)
 				return
@@ -450,7 +450,7 @@ func (api *API) GetTablet(ctx context.Context, req *vtadminpb.GetTabletRequest) 
 		go func(c *cluster.Cluster) {
 			defer wg.Done()
 
-			ts, err := api.getTablets(ctx, c)
+			ts, err := c.GetTablets(ctx)
 			if err != nil {
 				er.RecordError(err)
 				return
@@ -506,7 +506,7 @@ func (api *API) GetTablets(ctx context.Context, req *vtadminpb.GetTabletsRequest
 		go func(c *cluster.Cluster) {
 			defer wg.Done()
 
-			ts, err := api.getTablets(ctx, c)
+			ts, err := c.GetTablets(ctx)
 			if err != nil {
 				er.RecordError(err)
 				return
@@ -527,60 +527,6 @@ func (api *API) GetTablets(ctx context.Context, req *vtadminpb.GetTabletsRequest
 	return &vtadminpb.GetTabletsResponse{
 		Tablets: tablets,
 	}, nil
-}
-
-func (api *API) getTablets(ctx context.Context, c *cluster.Cluster) ([]*vtadminpb.Tablet, error) {
-	if err := c.DB.Dial(ctx, ""); err != nil {
-		return nil, err
-	}
-
-	rows, err := c.DB.ShowTablets(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	return c.ParseTablets(rows)
-}
-
-// findTablet returns the first tablet in a given cluster that satisfies the filter function.
-func (api *API) findTablet(ctx context.Context, cluster *cluster.Cluster, filter func(*vtadminpb.Tablet) bool) (*vtadminpb.Tablet, error) {
-	tablets, err := api.findTablets(ctx, cluster, filter, 1)
-	if err != nil {
-		return nil, err
-	}
-
-	if len(tablets) != 1 {
-		return nil, errors.ErrNoTablet
-	}
-
-	return tablets[0], nil
-}
-
-// findTablets returns the first N tablets in the given cluster that satisfy
-// the filter function. If N = -1, then all matching tablets are returned.
-// Ordering is not guaranteed, and callers should write their filter functions accordingly.
-func (api *API) findTablets(ctx context.Context, cluster *cluster.Cluster, filter func(*vtadminpb.Tablet) bool, n int) ([]*vtadminpb.Tablet, error) {
-	tablets, err := api.getTablets(ctx, cluster)
-	if err != nil {
-		return nil, err
-	}
-
-	if n == -1 {
-		n = len(tablets)
-	}
-
-	results := make([]*vtadminpb.Tablet, 0, n)
-	for _, t := range tablets {
-		if len(results) >= n {
-			break
-		}
-
-		if filter(t) {
-			results = append(results, t)
-		}
-	}
-
-	return results, nil
 }
 
 func (api *API) getClustersForRequest(ids []string) ([]*cluster.Cluster, []string) {
@@ -627,7 +573,7 @@ func (api *API) VTExplain(ctx context.Context, req *vtadminpb.VTExplainRequest) 
 		return nil, errors.ErrUnsupportedCluster
 	}
 
-	tablet, err := api.findTablet(ctx, c, func(t *vtadminpb.Tablet) bool {
+	tablet, err := c.FindTablet(ctx, func(t *vtadminpb.Tablet) bool {
 		return t.Tablet.Keyspace == req.Keyspace && topo.IsInServingGraph(t.Tablet.Type) && t.Tablet.Type != topodatapb.TabletType_MASTER && t.State == vtadminpb.Tablet_SERVING
 	})
 
