@@ -1093,30 +1093,6 @@ func TestGetTablets(t *testing.T) {
 	}
 }
 
-// This test only validates the error handling on dialing database connections.
-// Other cases are covered by one or both of TestGetTablets and TestGetTablet.
-func Test_getTablets(t *testing.T) {
-	api := &API{}
-	disco := fakediscovery.New()
-	disco.AddTaggedGates(nil, &vtadminpb.VTGate{Hostname: "gate"})
-
-	db := vtsql.New(&vtsql.Config{
-		Cluster: &vtadminpb.Cluster{
-			Id:   "c1",
-			Name: "one",
-		},
-		Discovery: disco,
-	})
-	db.DialFunc = func(cfg vitessdriver.Configuration) (*sql.DB, error) {
-		return nil, assert.AnError
-	}
-
-	_, err := api.getTablets(context.Background(), &cluster.Cluster{
-		DB: db,
-	})
-	assert.Error(t, err)
-}
-
 func TestGetTablet(t *testing.T) {
 	tests := []struct {
 		name           string

@@ -17,6 +17,7 @@ limitations under the License.
 package cluster
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"time"
@@ -25,6 +26,7 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery"
+	"vitess.io/vitess/go/vt/vtadmin/errors"
 	"vitess.io/vitess/go/vt/vtadmin/vtadminproto"
 	"vitess.io/vitess/go/vt/vtadmin/vtctldclient"
 	"vitess.io/vitess/go/vt/vtadmin/vtsql"
@@ -193,4 +195,58 @@ func (c Cluster) parseTablet(rows *sql.Rows) (*vtadminpb.Tablet, error) {
 	}
 
 	return tablet, nil
+}
+
+func (c Cluster) GetTablets(ctx context.Context) ([]*vtadminpb.Tablet, error) {
+	if err := c.DB.Dial(ctx, ""); err != nil {
+		return nil, err
+	}
+
+	rows, err := c.DB.ShowTablets(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.ParseTablets(rows)
+}
+
+// FindTablet returns the first tablet in a given cluster that satisfies the filter function.
+func (c Cluster) FindTablet(ctx context.Context, filter func(*vtadminpb.Tablet) bool) (*vtadminpb.Tablet, error) {
+	tablets, err := c.FindTablets(ctx, filter, 1)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(tablets) != 1 {
+		return nil, errors.ErrNoTablet
+	}
+
+	return tablets[0], nil
+}
+
+// FindTablets returns the first N tablets in the given cluster that satisfy
+// the filter function. If N = -1, then all matching tablets are returned.
+// Ordering is not guaranteed, and callers should write their filter functions accordingly.
+func (c Cluster) FindTablets(ctx context.Context, filter func(*vtadminpb.Tablet) bool, n int) ([]*vtadminpb.Tablet, error) {
+	tablets, err := c.GetTablets(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if n == -1 {
+		n = len(tablets)
+	}
+
+	results := make([]*vtadminpb.Tablet, 0, n)
+	for _, t := range tablets {
+		if len(results) >= n {
+			break
+		}
+
+		if filter(t) {
+			results = append(results, t)
+		}
+	}
+
+	return results, nil
 }
