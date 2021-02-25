@@ -31,6 +31,7 @@ import (
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtadmin/cluster"
+	"vitess.io/vitess/go/vt/vtadmin/errors"
 	"vitess.io/vitess/go/vt/vtadmin/grpcserver"
 	vtadminhttp "vitess.io/vitess/go/vt/vtadmin/http"
 	vthandlers "vitess.io/vitess/go/vt/vtadmin/http/handlers"
@@ -477,12 +478,12 @@ func (api *API) GetTablet(ctx context.Context, req *vtadminpb.GetTabletRequest) 
 
 	switch len(tablets) {
 	case 0:
-		return nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "%s: %s, searched clusters = %v", ErrNoTablet, req.Hostname, ids)
+		return nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "%s: %s, searched clusters = %v", errors.ErrNoTablet, req.Hostname, ids)
 	case 1:
 		return tablets[0], nil
 	}
 
-	return nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "%s: %s, searched clusters = %v", ErrAmbiguousTablet, req.Hostname, ids)
+	return nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "%s: %s, searched clusters = %v", errors.ErrAmbiguousTablet, req.Hostname, ids)
 }
 
 // GetTablets is part of the vtadminpb.VTAdminServer interface.
@@ -549,7 +550,7 @@ func (api *API) findTablet(ctx context.Context, cluster *cluster.Cluster, filter
 	}
 
 	if len(tablets) != 1 {
-		return nil, ErrNoTablet
+		return nil, errors.ErrNoTablet
 	}
 
 	return tablets[0], nil
@@ -610,20 +611,20 @@ func (api *API) VTExplain(ctx context.Context, req *vtadminpb.VTExplainRequest) 
 	defer span.Finish()
 
 	if req.Cluster == "" {
-		return nil, fmt.Errorf("%w: cluster ID is required", ErrInvalidRequest)
+		return nil, fmt.Errorf("%w: cluster ID is required", errors.ErrInvalidRequest)
 	}
 
 	if req.Keyspace == "" {
-		return nil, fmt.Errorf("%w: keyspace name is required", ErrInvalidRequest)
+		return nil, fmt.Errorf("%w: keyspace name is required", errors.ErrInvalidRequest)
 	}
 
 	if req.Sql == "" {
-		return nil, fmt.Errorf("%w: SQL query is required", ErrInvalidRequest)
+		return nil, fmt.Errorf("%w: SQL query is required", errors.ErrInvalidRequest)
 	}
 
 	c, ok := api.clusterMap[req.Cluster]
 	if !ok {
-		return nil, ErrUnsupportedCluster
+		return nil, errors.ErrUnsupportedCluster
 	}
 
 	tablet, err := api.findTablet(ctx, c, func(t *vtadminpb.Tablet) bool {
@@ -690,7 +691,7 @@ func (api *API) VTExplain(ctx context.Context, req *vtadminpb.VTExplainRequest) 
 
 		ksvs, ok := res.SrvVSchema.Keyspaces[req.Keyspace]
 		if !ok {
-			er.RecordError(fmt.Errorf("%w: keyspace %s", ErrNoSrvVSchema, req.Keyspace))
+			er.RecordError(fmt.Errorf("%w: keyspace %s", errors.ErrNoSrvVSchema, req.Keyspace))
 			return
 		}
 
