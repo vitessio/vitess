@@ -214,7 +214,6 @@
   }
 }
 
-
 # show variables
 "show variables"
 {
@@ -232,7 +231,6 @@
     "SingleShardOnly": true
   }
 }
-
 
 # show databases
 "show databases"

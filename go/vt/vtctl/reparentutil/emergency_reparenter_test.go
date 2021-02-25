@@ -29,10 +29,8 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
-	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools/events"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver/testutil"
-	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -115,7 +113,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 		name string
 		// setup
 		ts         *topo.Server
-		tmc        *emergencyReparenterTestTMClient
+		tmc        *testutil.TabletManagerClient
 		unlockTopo bool
 		shards     []*vtctldatapb.Shard
 		tablets    []*topodatapb.Tablet
@@ -129,7 +127,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 		{
 			name: "success",
 			ts:   memorytopo.NewServer("zone1"),
-			tmc: &emergencyReparenterTestTMClient{
+			tmc: &testutil.TabletManagerClient{
 				PopulateReparentJournalResults: map[string]error{
 					"zone1-0000000102": nil,
 				},
@@ -234,7 +232,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 			// zone1-101.
 			name: "success with requested primary-elect",
 			ts:   memorytopo.NewServer("zone1"),
-			tmc: &emergencyReparenterTestTMClient{
+			tmc: &testutil.TabletManagerClient{
 				PopulateReparentJournalResults: map[string]error{
 					"zone1-0000000101": nil,
 				},
@@ -339,9 +337,114 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 			shouldErr: false,
 		},
 		{
+			name: "success with existing primary",
+			ts:   memorytopo.NewServer("zone1"),
+			tmc: &testutil.TabletManagerClient{
+				DemoteMasterResults: map[string]struct {
+					Status *replicationdatapb.MasterStatus
+					Error  error
+				}{
+					"zone1-0000000100": {
+						Status: &replicationdatapb.MasterStatus{
+							Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
+						},
+					},
+				},
+				PopulateReparentJournalResults: map[string]error{
+					"zone1-0000000102": nil,
+				},
+				PromoteReplicaResults: map[string]struct {
+					Result string
+					Error  error
+				}{
+					"zone1-0000000102": {
+						Result: "ok",
+						Error:  nil,
+					},
+				},
+				SetMasterResults: map[string]error{
+					"zone1-0000000100": nil,
+					"zone1-0000000101": nil,
+				},
+				StopReplicationAndGetStatusResults: map[string]struct {
+					Status     *replicationdatapb.Status
+					StopStatus *replicationdatapb.StopReplicationStatus
+					Error      error
+				}{
+					"zone1-0000000100": { // This tablet claims MASTER, so is not running replication.
+						Error: mysql.ErrNotReplica,
+					},
+					"zone1-0000000101": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{},
+							After: &replicationdatapb.Status{
+								MasterUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
+								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
+							},
+						},
+					},
+					"zone1-0000000102": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{},
+							After: &replicationdatapb.Status{
+								MasterUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
+								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-26",
+							},
+						},
+					},
+				},
+				WaitForPositionResults: map[string]map[string]error{
+					"zone1-0000000101": {
+						"MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21": nil,
+					},
+					"zone1-0000000102": {
+						"MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-26": nil,
+					},
+				},
+			},
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "testkeyspace",
+					Name:     "-",
+				},
+			},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+					Type:     topodatapb.TabletType_MASTER,
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  101,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  102,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+					Hostname: "most up-to-date position, wins election",
+				},
+			},
+			keyspace:  "testkeyspace",
+			shard:     "-",
+			opts:      EmergencyReparentOptions{},
+			shouldErr: false,
+		},
+		{
 			name:       "shard not found",
 			ts:         memorytopo.NewServer("zone1"),
-			tmc:        &emergencyReparenterTestTMClient{},
+			tmc:        &testutil.TabletManagerClient{},
 			unlockTopo: true, // we shouldn't try to lock the nonexistent shard
 			shards:     nil,
 			keyspace:   "testkeyspace",
@@ -352,7 +455,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 		{
 			name: "cannot stop replication",
 			ts:   memorytopo.NewServer("zone1"),
-			tmc: &emergencyReparenterTestTMClient{
+			tmc: &testutil.TabletManagerClient{
 				StopReplicationAndGetStatusResults: map[string]struct {
 					Status     *replicationdatapb.Status
 					StopStatus *replicationdatapb.StopReplicationStatus
@@ -410,7 +513,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 		{
 			name: "lost topo lock",
 			ts:   memorytopo.NewServer("zone1"),
-			tmc: &emergencyReparenterTestTMClient{
+			tmc: &testutil.TabletManagerClient{
 				StopReplicationAndGetStatusResults: map[string]struct {
 					Status     *replicationdatapb.Status
 					StopStatus *replicationdatapb.StopReplicationStatus
@@ -468,7 +571,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 		{
 			name: "cannot get reparent candidates",
 			ts:   memorytopo.NewServer("zone1"),
-			tmc: &emergencyReparenterTestTMClient{
+			tmc: &testutil.TabletManagerClient{
 				StopReplicationAndGetStatusResults: map[string]struct {
 					Status     *replicationdatapb.Status
 					StopStatus *replicationdatapb.StopReplicationStatus
@@ -538,7 +641,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 		{
 			name: "zero valid reparent candidates",
 			ts:   memorytopo.NewServer("zone1"),
-			tmc:  &emergencyReparenterTestTMClient{},
+			tmc:  &testutil.TabletManagerClient{},
 			shards: []*vtctldatapb.Shard{
 				{
 					Keyspace: "testkeyspace",
@@ -553,7 +656,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 		{
 			name: "error waiting for relay logs to apply",
 			ts:   memorytopo.NewServer("zone1"),
-			tmc: &emergencyReparenterTestTMClient{
+			tmc: &testutil.TabletManagerClient{
 				StopReplicationAndGetStatusResults: map[string]struct {
 					Status     *replicationdatapb.Status
 					StopStatus *replicationdatapb.StopReplicationStatus
@@ -643,7 +746,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 		{
 			name: "requested primary-elect is not in tablet map",
 			ts:   memorytopo.NewServer("zone1"),
-			tmc: &emergencyReparenterTestTMClient{
+			tmc: &testutil.TabletManagerClient{
 				StopReplicationAndGetStatusResults: map[string]struct {
 					Status     *replicationdatapb.Status
 					StopStatus *replicationdatapb.StopReplicationStatus
@@ -731,7 +834,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 		{
 			name: "requested primary-elect is not winning primary-elect",
 			ts:   memorytopo.NewServer("zone1"),
-			tmc: &emergencyReparenterTestTMClient{
+			tmc: &testutil.TabletManagerClient{
 				StopReplicationAndGetStatusResults: map[string]struct {
 					Status     *replicationdatapb.Status
 					StopStatus *replicationdatapb.StopReplicationStatus
@@ -820,7 +923,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 		{
 			name: "cannot promote new primary",
 			ts:   memorytopo.NewServer("zone1"),
-			tmc: &emergencyReparenterTestTMClient{
+			tmc: &testutil.TabletManagerClient{
 				PromoteReplicaResults: map[string]struct {
 					Result string
 					Error  error
@@ -965,7 +1068,7 @@ func TestEmergencyReparenter_promoteNewPrimary(t *testing.T) {
 	tests := []struct {
 		name                  string
 		ts                    *topo.Server
-		tmc                   *emergencyReparenterTestTMClient
+		tmc                   *testutil.TabletManagerClient
 		unlockTopo            bool
 		keyspace              string
 		shard                 string
@@ -978,7 +1081,7 @@ func TestEmergencyReparenter_promoteNewPrimary(t *testing.T) {
 		{
 			name: "success",
 			ts:   memorytopo.NewServer("zone1"),
-			tmc: &emergencyReparenterTestTMClient{
+			tmc: &testutil.TabletManagerClient{
 				PopulateReparentJournalResults: map[string]error{
 					"zone1-0000000100": nil,
 				},
@@ -1058,7 +1161,7 @@ func TestEmergencyReparenter_promoteNewPrimary(t *testing.T) {
 		{
 			name:                  "primary not in tablet map",
 			ts:                    memorytopo.NewServer("zone1"),
-			tmc:                   &emergencyReparenterTestTMClient{},
+			tmc:                   &testutil.TabletManagerClient{},
 			keyspace:              "testkeyspace",
 			shard:                 "-",
 			newPrimaryTabletAlias: "zone2-0000000200",
@@ -1073,7 +1176,7 @@ func TestEmergencyReparenter_promoteNewPrimary(t *testing.T) {
 		{
 			name: "PromoteReplica error",
 			ts:   memorytopo.NewServer("zone1"),
-			tmc: &emergencyReparenterTestTMClient{
+			tmc: &testutil.TabletManagerClient{
 				PromoteReplicaResults: map[string]struct {
 					Result string
 					Error  error
@@ -1111,7 +1214,7 @@ func TestEmergencyReparenter_promoteNewPrimary(t *testing.T) {
 		{
 			name: "lost topology lock",
 			ts:   memorytopo.NewServer("zone1"),
-			tmc: &emergencyReparenterTestTMClient{
+			tmc: &testutil.TabletManagerClient{
 				PromoteReplicaResults: map[string]struct {
 					Result string
 					Error  error
@@ -1150,7 +1253,7 @@ func TestEmergencyReparenter_promoteNewPrimary(t *testing.T) {
 		{
 			name: "cannot repopulate reparent journal on new primary",
 			ts:   memorytopo.NewServer("zone1"),
-			tmc: &emergencyReparenterTestTMClient{
+			tmc: &testutil.TabletManagerClient{
 				PopulateReparentJournalResults: map[string]error{
 					"zone1-0000000100": assert.AnError,
 				},
@@ -1191,7 +1294,7 @@ func TestEmergencyReparenter_promoteNewPrimary(t *testing.T) {
 		{
 			name: "all replicas failing to SetMaster does fail the promotion",
 			ts:   memorytopo.NewServer("zone1"),
-			tmc: &emergencyReparenterTestTMClient{
+			tmc: &testutil.TabletManagerClient{
 				PopulateReparentJournalResults: map[string]error{
 					"zone1-0000000100": nil,
 				},
@@ -1245,7 +1348,7 @@ func TestEmergencyReparenter_promoteNewPrimary(t *testing.T) {
 		{
 			name: "all replicas slow to SetMaster does fail the promotion",
 			ts:   memorytopo.NewServer("zone1"),
-			tmc: &emergencyReparenterTestTMClient{
+			tmc: &testutil.TabletManagerClient{
 				PopulateReparentJournalResults: map[string]error{
 					"zone1-0000000100": nil,
 				},
@@ -1305,7 +1408,7 @@ func TestEmergencyReparenter_promoteNewPrimary(t *testing.T) {
 		{
 			name: "one replica failing to SetMaster does not fail the promotion",
 			ts:   memorytopo.NewServer("zone1"),
-			tmc: &emergencyReparenterTestTMClient{
+			tmc: &testutil.TabletManagerClient{
 				PopulateReparentJournalResults: map[string]error{
 					"zone1-0000000100": nil,
 				},
@@ -1410,7 +1513,7 @@ func TestEmergencyReparenter_waitForAllRelayLogsToApply(t *testing.T) {
 	}
 	tests := []struct {
 		name       string
-		tmc        *emergencyReparenterTestTMClient
+		tmc        *testutil.TabletManagerClient
 		candidates map[string]mysql.Position
 		tabletMap  map[string]*topo.TabletInfo
 		statusMap  map[string]*replicationdatapb.StopReplicationStatus
@@ -1418,7 +1521,7 @@ func TestEmergencyReparenter_waitForAllRelayLogsToApply(t *testing.T) {
 	}{
 		{
 			name: "all tablet pass",
-			tmc: &emergencyReparenterTestTMClient{
+			tmc: &testutil.TabletManagerClient{
 				WaitForPositionResults: map[string]map[string]error{
 					"zone1-0000000100": {
 						"position1": nil,
@@ -1466,7 +1569,7 @@ func TestEmergencyReparenter_waitForAllRelayLogsToApply(t *testing.T) {
 		},
 		{
 			name: "one tablet fails",
-			tmc: &emergencyReparenterTestTMClient{
+			tmc: &testutil.TabletManagerClient{
 				WaitForPositionResults: map[string]map[string]error{
 					"zone1-0000000100": {
 						"position1": nil,
@@ -1514,7 +1617,7 @@ func TestEmergencyReparenter_waitForAllRelayLogsToApply(t *testing.T) {
 		},
 		{
 			name: "multiple tablets fail",
-			tmc: &emergencyReparenterTestTMClient{
+			tmc: &testutil.TabletManagerClient{
 				WaitForPositionResults: map[string]map[string]error{
 					"zone1-0000000100": {
 						"position1": nil,
@@ -1579,7 +1682,7 @@ func TestEmergencyReparenter_waitForAllRelayLogsToApply(t *testing.T) {
 		},
 		{
 			name: "one slow tablet",
-			tmc: &emergencyReparenterTestTMClient{
+			tmc: &testutil.TabletManagerClient{
 				WaitForPositionDelays: map[string]time.Duration{
 					"zone1-0000000101": time.Minute,
 				},
@@ -1646,352 +1749,4 @@ func TestEmergencyReparenter_waitForAllRelayLogsToApply(t *testing.T) {
 			assert.NoError(t, err)
 		})
 	}
-}
-
-type emergencyReparenterTestTMClient struct {
-	tmclient.TabletManagerClient
-	// keyed by tablet alias.
-	DemoteMasterDelays map[string]time.Duration
-	// keyed by tablet alias.
-	DemoteMasterResults map[string]struct {
-		Status *replicationdatapb.MasterStatus
-		Error  error
-	}
-	// keyed by tablet alias.
-	MasterPositionDelays map[string]time.Duration
-	// keyed by tablet alias.
-	MasterPositionResults map[string]struct {
-		Position string
-		Error    error
-	}
-	// keyed by tablet alias.
-	PopulateReparentJournalDelays map[string]time.Duration
-	// keyed by tablet alias
-	PopulateReparentJournalResults map[string]error
-	// keyed by tablet alias.
-	PromoteReplicaDelays map[string]time.Duration
-	// keyed by tablet alias. injects a sleep to the end of the function
-	// regardless of parent context timeout or error result.
-	PromoteReplicaPostDelays map[string]time.Duration
-	// keyed by tablet alias.
-	PromoteReplicaResults map[string]struct {
-		Result string
-		Error  error
-	}
-	ReplicationStatusResults map[string]struct {
-		Position *replicationdatapb.Status
-		Error    error
-	}
-	// keyed by tablet alias.
-	SetMasterDelays map[string]time.Duration
-	// keyed by tablet alias.
-	SetMasterResults map[string]error
-	// keyed by tablet alias.
-	SetReadWriteDelays map[string]time.Duration
-	// keyed by tablet alias.
-	SetReadWriteResults map[string]error
-	// keyed by tablet alias.
-	StopReplicationAndGetStatusDelays map[string]time.Duration
-	// keyed by tablet alias.
-	StopReplicationAndGetStatusResults map[string]struct {
-		Status     *replicationdatapb.Status
-		StopStatus *replicationdatapb.StopReplicationStatus
-		Error      error
-	}
-	// keyed by tablet alias.
-	WaitForPositionDelays map[string]time.Duration
-	// keyed by tablet alias. injects a sleep to the end of the function
-	// regardless of parent context timeout or error result.
-	WaitForPositionPostDelays map[string]time.Duration
-	// WaitForPosition(tablet *topodatapb.Tablet, position string) error, so we
-	// key by tablet alias and then by position.
-	WaitForPositionResults map[string]map[string]error
-	// keyed by tablet alias.
-	UndoDemoteMasterDelays map[string]time.Duration
-	// keyed by tablet alias
-	UndoDemoteMasterResults map[string]error
-}
-
-func (fake *emergencyReparenterTestTMClient) DemoteMaster(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.MasterStatus, error) {
-	if fake.DemoteMasterResults == nil {
-		return nil, assert.AnError
-	}
-
-	if tablet.Alias == nil {
-		return nil, assert.AnError
-	}
-
-	key := topoproto.TabletAliasString(tablet.Alias)
-
-	if fake.DemoteMasterDelays != nil {
-		if delay, ok := fake.DemoteMasterDelays[key]; ok {
-			select {
-			case <-ctx.Done():
-				return nil, ctx.Err()
-			case <-time.After(delay):
-				// proceed to results
-			}
-		}
-	}
-
-	if result, ok := fake.DemoteMasterResults[key]; ok {
-		return result.Status, result.Error
-	}
-
-	return nil, assert.AnError
-}
-
-func (fake *emergencyReparenterTestTMClient) MasterPosition(ctx context.Context, tablet *topodatapb.Tablet) (string, error) {
-	if fake.MasterPositionResults == nil {
-		return "", assert.AnError
-	}
-
-	if tablet.Alias == nil {
-		return "", assert.AnError
-	}
-
-	key := topoproto.TabletAliasString(tablet.Alias)
-
-	if fake.MasterPositionDelays != nil {
-		if delay, ok := fake.MasterPositionDelays[key]; ok {
-			select {
-			case <-ctx.Done():
-				return "", ctx.Err()
-			case <-time.After(delay):
-				// proceed to results
-			}
-		}
-	}
-
-	if result, ok := fake.MasterPositionResults[key]; ok {
-		return result.Position, result.Error
-	}
-
-	return "", assert.AnError
-}
-
-func (fake *emergencyReparenterTestTMClient) PopulateReparentJournal(ctx context.Context, tablet *topodatapb.Tablet, timeCreatedNS int64, actionName string, primaryAlias *topodatapb.TabletAlias, pos string) error {
-	if fake.PopulateReparentJournalResults == nil {
-		return assert.AnError
-	}
-
-	key := topoproto.TabletAliasString(tablet.Alias)
-
-	if fake.PopulateReparentJournalDelays != nil {
-		if delay, ok := fake.PopulateReparentJournalDelays[key]; ok {
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			case <-time.After(delay):
-				// proceed to results
-			}
-		}
-	}
-	if result, ok := fake.PopulateReparentJournalResults[key]; ok {
-		return result
-	}
-
-	return assert.AnError
-}
-
-func (fake *emergencyReparenterTestTMClient) PromoteReplica(ctx context.Context, tablet *topodatapb.Tablet) (string, error) {
-	if fake.PromoteReplicaResults == nil {
-		return "", assert.AnError
-	}
-
-	key := topoproto.TabletAliasString(tablet.Alias)
-
-	defer func() {
-		if fake.PromoteReplicaPostDelays == nil {
-			return
-		}
-
-		if delay, ok := fake.PromoteReplicaPostDelays[key]; ok {
-			time.Sleep(delay)
-		}
-	}()
-
-	if fake.PromoteReplicaDelays != nil {
-		if delay, ok := fake.PromoteReplicaDelays[key]; ok {
-			select {
-			case <-ctx.Done():
-				return "", ctx.Err()
-			case <-time.After(delay):
-				// proceed to results
-			}
-		}
-	}
-
-	if result, ok := fake.PromoteReplicaResults[key]; ok {
-		return result.Result, result.Error
-	}
-
-	return "", assert.AnError
-}
-
-func (fake *emergencyReparenterTestTMClient) ReplicationStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.Status, error) {
-	if fake.ReplicationStatusResults == nil {
-		return nil, assert.AnError
-	}
-
-	key := topoproto.TabletAliasString(tablet.Alias)
-
-	if result, ok := fake.ReplicationStatusResults[key]; ok {
-		return result.Position, result.Error
-	}
-
-	return nil, assert.AnError
-}
-
-func (fake *emergencyReparenterTestTMClient) SetMaster(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool) error {
-	if fake.SetMasterResults == nil {
-		return assert.AnError
-	}
-
-	key := topoproto.TabletAliasString(tablet.Alias)
-
-	if fake.SetMasterDelays != nil {
-		if delay, ok := fake.SetMasterDelays[key]; ok {
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			case <-time.After(delay):
-				// proceed to results
-			}
-		}
-	}
-
-	if result, ok := fake.SetMasterResults[key]; ok {
-		return result
-	}
-
-	return assert.AnError
-}
-
-func (fake *emergencyReparenterTestTMClient) SetReadWrite(ctx context.Context, tablet *topodatapb.Tablet) error {
-	if fake.SetReadWriteResults == nil {
-		return assert.AnError
-	}
-
-	if tablet.Alias == nil {
-		return assert.AnError
-	}
-
-	key := topoproto.TabletAliasString(tablet.Alias)
-
-	if fake.SetReadWriteDelays != nil {
-		if delay, ok := fake.SetReadWriteDelays[key]; ok {
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			case <-time.After(delay):
-				// proceed to results
-			}
-		}
-	}
-
-	if err, ok := fake.SetReadWriteResults[key]; ok {
-		return err
-	}
-
-	return assert.AnError
-}
-
-func (fake *emergencyReparenterTestTMClient) StopReplicationAndGetStatus(ctx context.Context, tablet *topodatapb.Tablet, mode replicationdatapb.StopReplicationMode) (*replicationdatapb.Status, *replicationdatapb.StopReplicationStatus, error) {
-	if fake.StopReplicationAndGetStatusResults == nil {
-		return nil, nil, assert.AnError
-	}
-
-	if tablet.Alias == nil {
-		return nil, nil, assert.AnError
-	}
-
-	key := topoproto.TabletAliasString(tablet.Alias)
-
-	if fake.StopReplicationAndGetStatusDelays != nil {
-		if delay, ok := fake.StopReplicationAndGetStatusDelays[key]; ok {
-			select {
-			case <-ctx.Done():
-				return nil, nil, ctx.Err()
-			case <-time.After(delay):
-				// proceed to results
-			}
-		}
-	}
-
-	if result, ok := fake.StopReplicationAndGetStatusResults[key]; ok {
-		return result.Status, result.StopStatus, result.Error
-	}
-
-	return nil, nil, assert.AnError
-}
-
-func (fake *emergencyReparenterTestTMClient) WaitForPosition(ctx context.Context, tablet *topodatapb.Tablet, position string) error {
-	tabletKey := topoproto.TabletAliasString(tablet.Alias)
-
-	defer func() {
-		if fake.WaitForPositionPostDelays == nil {
-			return
-		}
-
-		if delay, ok := fake.WaitForPositionPostDelays[tabletKey]; ok {
-			time.Sleep(delay)
-		}
-	}()
-
-	if fake.WaitForPositionDelays != nil {
-		if delay, ok := fake.WaitForPositionDelays[tabletKey]; ok {
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			case <-time.After(delay):
-				// proceed to results
-			}
-		}
-	}
-
-	if fake.WaitForPositionResults == nil {
-		return assert.AnError
-	}
-
-	tabletResultsByPosition, ok := fake.WaitForPositionResults[tabletKey]
-	if !ok {
-		return assert.AnError
-	}
-
-	result, ok := tabletResultsByPosition[position]
-	if !ok {
-		return assert.AnError
-	}
-
-	return result
-}
-
-func (fake *emergencyReparenterTestTMClient) UndoDemoteMaster(ctx context.Context, tablet *topodatapb.Tablet) error {
-	if fake.UndoDemoteMasterResults == nil {
-		return assert.AnError
-	}
-
-	if tablet.Alias == nil {
-		return assert.AnError
-	}
-
-	key := topoproto.TabletAliasString(tablet.Alias)
-
-	if fake.UndoDemoteMasterDelays != nil {
-		if delay, ok := fake.UndoDemoteMasterDelays[key]; ok {
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			case <-time.After(delay):
-				// proceed to results
-			}
-		}
-	}
-
-	if result, ok := fake.UndoDemoteMasterResults[key]; ok {
-		return result
-	}
-
-	return assert.AnError
 }
