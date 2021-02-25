@@ -71,3 +71,34 @@ func AssertSchemaSlicesEqual(t *testing.T, expected []*vtadminpb.Schema, actual 
 
 	assert.ElementsMatch(t, expected, actual, msgAndArgs...)
 }
+
+// AssertTabletSlicesEqual is a convenience function to assert that two
+// []*vtadminpb.Tablet slices are equal, after clearing out any reserved
+// proto XXX_ fields.
+func AssertTabletSlicesEqual(t *testing.T, expected []*vtadminpb.Tablet, actual []*vtadminpb.Tablet, msgAndArgs ...interface{}) {
+	t.Helper()
+
+	for _, ts := range [][]*vtadminpb.Tablet{expected, actual} {
+		for _, t := range ts {
+			t.XXX_sizecache = 0
+			t.XXX_unrecognized = nil
+
+			if t.Cluster != nil {
+				t.Cluster.XXX_sizecache = 0
+				t.Cluster.XXX_unrecognized = nil
+			}
+
+			if t.Tablet != nil {
+				t.Tablet.XXX_sizecache = 0
+				t.Tablet.XXX_unrecognized = nil
+
+				if t.Tablet.Alias != nil {
+					t.Tablet.Alias.XXX_sizecache = 0
+					t.Tablet.Alias.XXX_unrecognized = nil
+				}
+			}
+		}
+	}
+
+	assert.ElementsMatch(t, expected, actual, msgAndArgs...)
+}
