@@ -103,6 +103,9 @@ func AssertTabletSlicesEqual(t *testing.T, expected []*vtadminpb.Tablet, actual 
 	assert.ElementsMatch(t, expected, actual, msgAndArgs...)
 }
 
+// AssertTabletsEqual is a convenience function to assert that two
+// *vtadminpb.Tablets are equal, after clearing out any reserved
+// proto XXX_ fields.
 func AssertTabletsEqual(t *testing.T, expected *vtadminpb.Tablet, actual *vtadminpb.Tablet, msgAndArgs ...interface{}) {
 	t.Helper()
 

@@ -108,9 +108,9 @@ func buildPFlagSlice(flags map[string]string) []string {
 	return args
 }
 
-// ParseTablets converts a set of *sql.Rows into a slice of Tablets, for the
+// parseTablets converts a set of *sql.Rows into a slice of Tablets, for the
 // given cluster.
-func (c *Cluster) ParseTablets(rows *sql.Rows) ([]*vtadminpb.Tablet, error) {
+func (c *Cluster) parseTablets(rows *sql.Rows) ([]*vtadminpb.Tablet, error) {
 	var tablets []*vtadminpb.Tablet
 
 	for rows.Next() {
@@ -208,7 +208,7 @@ func (c *Cluster) GetTablets(ctx context.Context) ([]*vtadminpb.Tablet, error) {
 		return nil, err
 	}
 
-	return c.ParseTablets(rows)
+	return c.parseTablets(rows)
 }
 
 // FindTablet returns the first tablet in a given cluster that satisfies the filter function.

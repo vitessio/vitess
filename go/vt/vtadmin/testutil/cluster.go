@@ -34,11 +34,13 @@ import (
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 )
 
+// Dbcfg is a test utility for controlling the behavior of the cluster's DB
+// at the package sql level.
 type Dbcfg struct {
 	ShouldErr bool
 }
 
-// shared helper for building a cluster that contains the given tablets and
+// BuildCluster is a shared helper for building a cluster that contains the given tablets and
 // talking to the given vtctld server. dbconfigs contains an optional config
 // for controlling the behavior of the cluster's DB at the package sql level.
 func BuildCluster(i int, vtctldClient vtctldclient.VtctldClient, tablets []*vtadminpb.Tablet, dbconfigs map[string]*Dbcfg) *cluster.Cluster {
