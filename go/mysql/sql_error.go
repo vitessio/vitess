@@ -161,6 +161,8 @@ func convertToMysqlError(err error) error {
 		err = NewSQLError(ERNoDb, SSNoDB, err.Error())
 	case vterrors.WrongNumberOfColumnsInSelect:
 		err = NewSQLError(ERWrongNumberOfColumnsInSelect, SSWrongNumberOfColumns, err.Error())
+	case vterrors.BadFieldError:
+		err = NewSQLError(ERBadFieldError, SSBadFieldError, err.Error())
 	}
 	return err
 }
