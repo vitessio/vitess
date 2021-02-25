@@ -9,4 +9,5 @@ const (
 	DataOutOfRange
 	NoDB
 	WrongNumberOfColumnsInSelect
+	BadFieldError
 )
