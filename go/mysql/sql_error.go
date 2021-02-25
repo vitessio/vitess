@@ -91,6 +91,11 @@ func NewSQLErrorFromError(err error) error {
 		return serr
 	}
 
+	sErr := convertToMysqlError(err)
+	if _, ok := sErr.(*SQLError); ok {
+		return sErr
+	}
+
 	msg := err.Error()
 	match := errExtract.FindStringSubmatch(msg)
 	if len(match) < 2 {
@@ -163,6 +168,22 @@ func NewSQLErrorFromError(err error) error {
 		Message: msg,
 	}
 	return serr
+}
+
+func convertToMysqlError(err error) error {
+	errState := vterrors.ErrState(err)
+	if errState == vterrors.Undefined {
+		return err
+	}
+	switch errState {
+	case vterrors.DataOutOfRange:
+		err = NewSQLError(ERDataOutOfRange, SSDataOutOfRange, err.Error())
+	case vterrors.NoDB:
+		err = NewSQLError(ERNoDb, SSNoDB, err.Error())
+	case vterrors.WrongNumberOfColumnsInSelect:
+		err = NewSQLError(ERWrongNumberOfColumnsInSelect, SSWrongNumberOfColumns, err.Error())
+	}
+	return err
 }
 
 var isGRPCOverflowRE = regexp.MustCompile(`.*grpc: received message larger than max \(\d+ vs. \d+\)`)
