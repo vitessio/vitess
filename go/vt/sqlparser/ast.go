@@ -4533,18 +4533,6 @@ func (node OnDup) walkSubtree(visit Visit) error {
 	return Walk(visit, SetExprs(node))
 }
 
-const (
-	// NoAt represents no @
-	NoAt AtCount = iota
-	// SingleAt represents @
-	SingleAt
-	// DoubleAt represnts @@
-	DoubleAt
-)
-
-// AtCount represents the '@' count in ColIdent
-type AtCount int
-
 // ColIdent is a case insensitive SQL identifier. It will be escaped with
 // backquotes if necessary.
 type ColIdent struct {
