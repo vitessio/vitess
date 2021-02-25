@@ -43,7 +43,7 @@ var (
 	}
 	// InitShardPrimary makes an InitShardPrimary gRPC call to a vtctld.
 	InitShardPrimary = &cobra.Command{
-		Use:  "InitShardPrimary",
+		Use:  "InitShardPrimary <keyspace/shard> <primary alias>",
 		Args: cobra.ExactArgs(2),
 		RunE: commandInitShardPrimary,
 	}
@@ -56,7 +56,7 @@ var (
 	}
 	// ReparentTablet makes a ReparentTablet gRPC call to a vtctld.
 	ReparentTablet = &cobra.Command{
-		Use: "ReparentTablet ALIAS",
+		Use: "ReparentTablet <alias>",
 		Long: "Reparent a tablet to the current primary in the shard. This only works if the current replica position " +
 			"matches the last known reparent action.",
 		Args: cobra.ExactArgs(1),
@@ -65,7 +65,7 @@ var (
 	// TabletExternallyReparented makes a TabletExternallyReparented gRPC call
 	// to a vtctld.
 	TabletExternallyReparented = &cobra.Command{
-		Use:  "TabletExternallyReparented ALIAS",
+		Use:  "TabletExternallyReparented <alias>",
 		Args: cobra.ExactArgs(1),
 		RunE: commandTabletExternallyReparented,
 	}
