@@ -260,7 +260,7 @@ func (stc *ScatterConn) ExecuteMultiShard(
 	)
 
 	if !ignoreMaxMemoryRows && len(qr.Rows) > *maxMemoryRows {
-		return nil, []error{mysql.NewSQLError(mysql.ERNetPacketTooLarge, "", "in-memory row count exceeded allowed limit of %d", *maxMemoryRows)}
+		return nil, []error{vterrors.NewErrorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.NetPacketTooLarge, "in-memory row count exceeded allowed limit of %d", *maxMemoryRows)}
 	}
 
 	return qr, allErrors.GetErrors()
