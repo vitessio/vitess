@@ -34,6 +34,7 @@ import (
 	"vitess.io/vitess/go/vt/vitessdriver"
 	"vitess.io/vitess/go/vt/vtadmin/cluster"
 	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery/fakediscovery"
+	vtadminerrors "vitess.io/vitess/go/vt/vtadmin/errors"
 	"vitess.io/vitess/go/vt/vtadmin/grpcserver"
 	"vitess.io/vitess/go/vt/vtadmin/http"
 	vtadmintestutil "vitess.io/vitess/go/vt/vtadmin/testutil"
@@ -1543,7 +1544,7 @@ func TestVTExplain(t *testing.T) {
 				Keyspace: "commerce",
 				Sql:      "select * from customers",
 			},
-			expectedError: ErrNoTablet,
+			expectedError: vtadminerrors.ErrNoTablet,
 		},
 		{
 			name: "returns an error if cluster unspecified in request",
@@ -1551,7 +1552,7 @@ func TestVTExplain(t *testing.T) {
 				Keyspace: "commerce",
 				Sql:      "select * from customers",
 			},
-			expectedError: ErrInvalidRequest,
+			expectedError: vtadminerrors.ErrInvalidRequest,
 		},
 		{
 			name: "returns an error if keyspace unspecified in request",
@@ -1559,7 +1560,7 @@ func TestVTExplain(t *testing.T) {
 				Cluster: "c0",
 				Sql:     "select * from customers",
 			},
-			expectedError: ErrInvalidRequest,
+			expectedError: vtadminerrors.ErrInvalidRequest,
 		},
 		{
 			name: "returns an error if SQL unspecified in request",
@@ -1567,7 +1568,7 @@ func TestVTExplain(t *testing.T) {
 				Cluster:  "c0",
 				Keyspace: "commerce",
 			},
-			expectedError: ErrInvalidRequest,
+			expectedError: vtadminerrors.ErrInvalidRequest,
 		},
 	}
 
