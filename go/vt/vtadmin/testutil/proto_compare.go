@@ -102,3 +102,9 @@ func AssertTabletSlicesEqual(t *testing.T, expected []*vtadminpb.Tablet, actual 
 
 	assert.ElementsMatch(t, expected, actual, msgAndArgs...)
 }
+
+func AssertTabletsEqual(t *testing.T, expected *vtadminpb.Tablet, actual *vtadminpb.Tablet, msgAndArgs ...interface{}) {
+	t.Helper()
+
+	AssertTabletSlicesEqual(t, []*vtadminpb.Tablet{expected}, []*vtadminpb.Tablet{actual}, msgAndArgs...)
+}
