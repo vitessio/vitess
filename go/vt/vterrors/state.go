@@ -12,4 +12,7 @@ const (
 	BadFieldError
 	DbDropExists
 	DbCreateExists
+	ForbidSchemaChange
+	NetPacketTooLarge
+	SPDoesNotExist
 )

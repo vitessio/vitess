@@ -396,6 +396,7 @@ const (
 	ERFeatureDisabled               = 1289
 	EROptionPreventsStatement       = 1290
 	ERDuplicatedValueInType         = 1291
+	ERSPDoesNotExist                = 1305
 	ERRowIsReferenced2              = 1451
 	ErNoReferencedRow2              = 1452
 	ErSPNotVarArg                   = 1414
@@ -504,7 +505,6 @@ const (
 	ERInvalidOnUpdate              = 1294
 	ERUnknownTimeZone              = 1298
 	ERInvalidCharacterString       = 1300
-	ERSavepointNotExist            = 1305
 	ERIllegalReference             = 1247
 	ERDerivedMustHaveAlias         = 1248
 	ERTableNameNotAllowedHere      = 1250
@@ -526,8 +526,8 @@ const (
 	// SSUnknownComError is ER_UNKNOWN_COM_ERROR
 	SSUnknownComError = "08S01"
 
-	// SSServerShutdown is ER_SERVER_SHUTDOWN
-	SSServerShutdown = "08S01"
+	// SSNetError is network related error
+	SSNetError = "08S01"
 
 	// SSWrongNumberOfColumns is related to columns error
 	SSWrongNumberOfColumns = "21000"

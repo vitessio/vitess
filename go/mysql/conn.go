@@ -1176,7 +1176,7 @@ func (c *Conn) handleComPing() bool {
 	c.recycleReadPacket()
 	// Return error if listener was shut down and OK otherwise
 	if c.listener.isShutdown() {
-		if !c.writeErrorAndLog(ERServerShutdown, SSServerShutdown, "Server shutdown in progress") {
+		if !c.writeErrorAndLog(ERServerShutdown, SSNetError, "Server shutdown in progress") {
 			return false
 		}
 	} else {

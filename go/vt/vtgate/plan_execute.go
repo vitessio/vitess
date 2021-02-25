@@ -20,8 +20,6 @@ import (
 	"context"
 	"time"
 
-	"vitess.io/vitess/go/mysql"
-
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -94,13 +92,13 @@ func (e *Executor) newExecute(ctx context.Context, safeSession *SafeSession, sql
 	case sqlparser.StmtSRollback:
 		qr, err := e.handleSavepoint(ctx, safeSession, plan.Original, "Rollback Savepoint", logStats, func(query string) (*sqltypes.Result, error) {
 			// Error as there is no transaction, so there is no savepoint that exists.
-			return nil, mysql.NewSQLError(mysql.ERSavepointNotExist, mysql.SSClientError, "SAVEPOINT does not exist: %s", query)
+			return nil, vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.SPDoesNotExist, "SAVEPOINT does not exist: %s", query)
 		}, vcursor.ignoreMaxMemoryRows)
 		return sqlparser.StmtSRollback, qr, err
 	case sqlparser.StmtRelease:
 		qr, err := e.handleSavepoint(ctx, safeSession, plan.Original, "Release Savepoint", logStats, func(query string) (*sqltypes.Result, error) {
 			// Error as there is no transaction, so there is no savepoint that exists.
-			return nil, mysql.NewSQLError(mysql.ERSavepointNotExist, mysql.SSClientError, "SAVEPOINT does not exist: %s", query)
+			return nil, vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.SPDoesNotExist, "SAVEPOINT does not exist: %s", query)
 		}, vcursor.ignoreMaxMemoryRows)
 		return sqlparser.StmtRelease, qr, err
 	}
