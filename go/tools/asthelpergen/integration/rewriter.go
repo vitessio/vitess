@@ -22,6 +22,11 @@ func replaceInterfaceSlice(idx int) func(AST, AST) {
 		container.(InterfaceSlice)[idx] = newNode.(AST)
 	}
 }
+func replaceLeafSlice(idx int) func(AST, AST) {
+	return func(newNode, container AST) {
+		container.(LeafSlice)[idx] = newNode.(*Leaf)
+	}
+}
 func replaceRefOfRefContainerASTType(newNode, parent AST) {
 	parent.(*RefContainer).ASTType = newNode.(AST)
 }
@@ -37,6 +42,9 @@ func replaceRefOfRefSliceContainerASTImplementationElements(idx int) func(AST, A
 	return func(newNode, container AST) {
 		container.(*RefSliceContainer).ASTImplementationElements[idx] = newNode.(*Leaf)
 	}
+}
+func replaceRefOfSubImplinner(newNode, parent AST) {
+	parent.(*SubImpl).inner = newNode.(SubIface)
 }
 func replaceRefOfValueContainerASTType(newNode, parent AST) {
 	parent.(*ValueContainer).ASTType = newNode.(AST)
@@ -83,6 +91,10 @@ func (a *application) apply(parent, node AST, replacer replacerFunc) {
 			a.apply(node, el, replaceInterfaceSlice(x))
 		}
 	case *Leaf:
+	case LeafSlice:
+		for x, el := range n {
+			a.apply(node, el, replaceLeafSlice(x))
+		}
 	case *RefContainer:
 		a.apply(node, n.ASTType, replaceRefOfRefContainerASTType)
 		a.apply(node, n.ASTImplementationType, replaceRefOfRefContainerASTImplementationType)
@@ -93,6 +105,8 @@ func (a *application) apply(parent, node AST, replacer replacerFunc) {
 		for x, el := range n.ASTImplementationElements {
 			a.apply(node, el, replaceRefOfRefSliceContainerASTImplementationElements(x))
 		}
+	case *SubImpl:
+		a.apply(node, n.inner, replaceRefOfSubImplinner)
 	case ValueContainer:
 		a.apply(node, n.ASTType, replacePanic("ValueContainer ASTType"))
 		a.apply(node, n.ASTImplementationType, replacePanic("ValueContainer ASTImplementationType"))

@@ -46,6 +46,7 @@ limitations under the License.`
 
 type generator interface {
 	visitStruct(t types.Type, stroct *types.Struct) error
+	visitInterface(t types.Type, iface *types.Interface) error
 	visitSlice(t types.Type, slice *types.Slice) error
 	createFile(pkgName string) (string, *jen.File)
 }
@@ -111,6 +112,16 @@ func (gen *astHelperGen) visitSlice(t types.Type, slice *types.Slice) error {
 	return nil
 }
 
+func (gen *astHelperGen) visitInterface(t types.Type, iface *types.Interface) error {
+	for _, g := range gen.gens {
+		err := g.visitInterface(t, iface)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (gen *astHelperGen) GenerateCode() (map[string]*jen.File, error) {
 	pkg := gen.namedIface.Obj().Pkg()
 	iface, ok := gen.iface.Underlying().(*types.Interface)
@@ -129,6 +140,8 @@ func (gen *astHelperGen) GenerateCode() (map[string]*jen.File, error) {
 			if isStrct {
 				return gen.visitStruct(t, strct)
 			}
+		case *types.Interface:
+			return gen.visitInterface(t, n)
 		default:
 			// do nothing
 		}
@@ -150,26 +163,16 @@ func (gen *astHelperGen) GenerateCode() (map[string]*jen.File, error) {
 }
 
 // printableTypeName returns a string that can be used as a valid golang identifier
-func printableTypeName(t types.Type, named *types.Named) string {
+func printableTypeName(t types.Type) string {
 	switch t := t.(type) {
 	case *types.Pointer:
-		return "RefOf" + printableTypeName(t.Elem(), named)
+		return "RefOf" + printableTypeName(t.Elem())
 	case *types.Slice:
-		return "SliceOf" + printableTypeName(t.Elem(), named)
+		return "SliceOf" + printableTypeName(t.Elem())
 	case *types.Named:
 		return t.Obj().Name()
-	case *types.Struct:
-		if named == nil {
-			return t.String()
-		}
-		return named.Obj().Name()
 	case *types.Basic:
 		return t.Name()
-	case *types.Interface:
-		if named == nil {
-			return t.String()
-		}
-		return "I" + named.Obj().Name()
 	default:
 		panic(fmt.Sprintf("unknown type %T", t))
 	}
@@ -283,6 +286,7 @@ func GenerateASTHelpers(packagePatterns []string, rootIface string) (map[string]
 		return types.Implements(t, iface)
 	}
 	rewriter := newRewriterGen(interestingType, nt.Obj().Name())
+	//clone := newCloneGen(iface, interestingType, scope)
 
 	generator := newGenerator(loaded[0].Module, loaded[0].TypesSizes, nt, rewriter)
 	it, err := generator.GenerateCode()
