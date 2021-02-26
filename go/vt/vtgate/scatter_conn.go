@@ -281,7 +281,7 @@ func getQueryService(rs *srvtopo.ResolvedShard, info *shardActionInfo) (queryser
 	if usingLegacyGw {
 		switch info.actionNeeded {
 		case reserve, reserveBegin:
-			return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "reserved connections are not supported on old gen gateway")
+			return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "reserved connections are not supported on old gen gateway")
 		}
 	}
 	if usingLegacyGw || info.alias == nil {
@@ -301,7 +301,7 @@ func (stc *ScatterConn) processOneStreamingResult(mu *sync.Mutex, fieldSent *boo
 	} else {
 		if len(qr.Fields) == 0 {
 			// Unreachable: this can happen only if vttablet misbehaves.
-			return vterrors.New(vtrpcpb.Code_INTERNAL, "received rows before fields for shard")
+			return vterrors.New(vtrpcpb.Code_INTERNAL, "received rows before fields")
 		}
 		*fieldSent = true
 	}

@@ -155,13 +155,13 @@ func buildAlterView(vschema ContextVSchema, ddl *sqlparser.AlterView) (key.Desti
 	}
 	routePlan, isRoute := selectPlan.(*engine.Route)
 	if !isRoute {
-		return nil, nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, ViewComplex)
+		return nil, nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, ViewComplex)
 	}
 	if keyspace.Name != routePlan.GetKeyspaceName() {
-		return nil, nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, ViewDifferentKeyspace)
+		return nil, nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, ViewDifferentKeyspace)
 	}
 	if routePlan.Opcode != engine.SelectUnsharded && routePlan.Opcode != engine.SelectEqualUnique && routePlan.Opcode != engine.SelectScatter {
-		return nil, nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, ViewComplex)
+		return nil, nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, ViewComplex)
 	}
 	sqlparser.Rewrite(ddl.Select, func(cursor *sqlparser.Cursor) bool {
 		switch tableName := cursor.Node().(type) {
@@ -191,13 +191,13 @@ func buildCreateView(vschema ContextVSchema, ddl *sqlparser.CreateView) (key.Des
 	}
 	routePlan, isRoute := selectPlan.(*engine.Route)
 	if !isRoute {
-		return nil, nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, ViewComplex)
+		return nil, nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, ViewComplex)
 	}
 	if keyspace.Name != routePlan.GetKeyspaceName() {
-		return nil, nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, ViewDifferentKeyspace)
+		return nil, nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, ViewDifferentKeyspace)
 	}
 	if routePlan.Opcode != engine.SelectUnsharded && routePlan.Opcode != engine.SelectEqualUnique && routePlan.Opcode != engine.SelectScatter {
-		return nil, nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, ViewComplex)
+		return nil, nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, ViewComplex)
 	}
 	sqlparser.Rewrite(ddl.Select, func(cursor *sqlparser.Cursor) bool {
 		switch tableName := cursor.Node().(type) {
@@ -247,7 +247,7 @@ func buildDropViewOrTable(vschema ContextVSchema, ddlStatement sqlparser.DDLStat
 			keyspace = keyspaceTab
 		}
 		if destination != destinationTab || keyspace != keyspaceTab {
-			return nil, nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, DifferentDestinations)
+			return nil, nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, DifferentDestinations)
 		}
 	}
 	return destination, keyspace, nil
@@ -303,7 +303,7 @@ func buildRenameTable(vschema ContextVSchema, renameTable *sqlparser.RenameTable
 			keyspace = keyspaceFrom
 		}
 		if destination != destinationFrom || keyspace != keyspaceFrom {
-			return nil, nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, DifferentDestinations)
+			return nil, nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, DifferentDestinations)
 		}
 	}
 	return destination, keyspace, nil

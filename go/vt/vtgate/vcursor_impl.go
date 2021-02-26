@@ -288,6 +288,8 @@ func (vc *vcursorImpl) DefaultKeyspace() (*vindexes.Keyspace, error) {
 	return ks.Keyspace, nil
 }
 
+var errNoDbAvailable = vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.NoDB, "no database available")
+
 func (vc *vcursorImpl) AnyKeyspace() (*vindexes.Keyspace, error) {
 	keyspace, err := vc.DefaultKeyspace()
 	if err == nil {
@@ -298,7 +300,7 @@ func (vc *vcursorImpl) AnyKeyspace() (*vindexes.Keyspace, error) {
 	}
 
 	if len(vc.vschema.Keyspaces) == 0 {
-		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "no keyspaces available")
+		return nil, errNoDbAvailable
 	}
 
 	// Looks for any sharded keyspace if present, otherwise take any keyspace.
@@ -313,7 +315,7 @@ func (vc *vcursorImpl) AnyKeyspace() (*vindexes.Keyspace, error) {
 
 func (vc *vcursorImpl) FirstSortedKeyspace() (*vindexes.Keyspace, error) {
 	if len(vc.vschema.Keyspaces) == 0 {
-		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "no keyspaces available")
+		return nil, errNoDbAvailable
 	}
 	kss := vc.vschema.Keyspaces
 	keys := make([]string, 0, len(kss))
@@ -338,7 +340,7 @@ func (vc *vcursorImpl) KeyspaceExists(ks string) bool {
 // AllKeyspace implements the ContextVSchema interface
 func (vc *vcursorImpl) AllKeyspace() ([]*vindexes.Keyspace, error) {
 	if len(vc.vschema.Keyspaces) == 0 {
-		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "no keyspaces available")
+		return nil, errNoDbAvailable
 	}
 	var kss []*vindexes.Keyspace
 	for _, ks := range vc.vschema.Keyspaces {
