@@ -2676,7 +2676,7 @@ select_expression_list:
   {
     if ae, ok := $2.(*AliasedExpr); ok {
       ae.StartParsePos = $1
-      ae.EndParsePos = $3
+      ae.EndParsePos = $3-1
     }
     $$ = SelectExprs{$2}
   }
@@ -2684,7 +2684,7 @@ select_expression_list:
   {
     if ae, ok := $4.(*AliasedExpr); ok {
       ae.StartParsePos = $3
-      ae.EndParsePos = $5
+      ae.EndParsePos = $5-1
     }
     $$ = append($$, $4)
   }

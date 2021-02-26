@@ -43,7 +43,19 @@ var (
 			output: "select 1 from dual",
 		}, {
 			input: "select 1 from t",
-		}, {
+		},
+		{
+			input: "select a, b from t",
+		},
+		{
+			input: "select a,  b from t",
+			output: "select a, b from t",
+		},
+		{
+			input: "select a,b from t",
+			output: "select a, b from t",
+		},
+		{
 			input:  "select * from information_schema.columns",
 			output: "select * from information_schema.`columns`",
 		}, {

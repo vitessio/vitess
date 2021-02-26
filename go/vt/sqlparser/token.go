@@ -539,7 +539,6 @@ func (tkn *Tokenizer) Error(err string) {
 // Scan scans the tokenizer for the next token and returns
 // the token type and an optional value.
 func (tkn *Tokenizer) Scan() (int, []byte) {
-	tkn.OldPosition = tkn.Position
 	if tkn.specialComment != nil {
 		// Enter specialComment scan mode.
 		// for scanning such kind of comment: /*! MySQL-specific code */
@@ -552,6 +551,8 @@ func (tkn *Tokenizer) Scan() (int, []byte) {
 		// leave specialComment scan mode after all stream consumed.
 		tkn.specialComment = nil
 	}
+
+	tkn.OldPosition = tkn.Position
 	if tkn.lastChar == 0 {
 		tkn.next()
 	}

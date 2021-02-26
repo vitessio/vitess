@@ -106,12 +106,15 @@ func Parse(sql string) (Statement, error) {
 		return nil, ErrEmpty
 	}
 
-	tokenizer.ParseTree.walkSubtree(func(node SQLNode) (kontinue bool, err error) {
-		if node, ok := node.(*AliasedExpr); ok && node.EndParsePos > 0 {
-			node.InputExpression = sql[node.StartParsePos:node.EndParsePos]
-		}
-		return true, nil
-	})
+	// For select statements, capture the verbatim select expressions from the original query text
+	if s, ok := tokenizer.ParseTree.(SelectStatement); ok {
+		s.walkSubtree(func(node SQLNode) (kontinue bool, err error) {
+			if node, ok := node.(*AliasedExpr); ok && node.EndParsePos > 0 {
+				node.InputExpression = strings.TrimLeft(sql[node.StartParsePos:node.EndParsePos], " \n\t")
+			}
+			return true, nil
+		})
+	}
 
 	return tokenizer.ParseTree, nil
 }
@@ -2457,9 +2460,10 @@ type AliasedExpr struct {
 
 // Format formats the node.
 func (node *AliasedExpr) Format(buf *TrackedBuffer) {
-	buf.Myprintf("%v", node.Expr)
-	if !node.As.IsEmpty() {
-		buf.Myprintf(" as %v", node.As)
+	if len(node.InputExpression) > 0 {
+		buf.Myprintf("%s", node.InputExpression)
+	} else if !node.As.IsEmpty() {
+		buf.Myprintf("%v as %v", node.Expr, node.As)
 	}
 }
 
