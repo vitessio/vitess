@@ -33,8 +33,6 @@ sleep 5 # Give vtgate time to really start.
 
 mysql < ../common/insert_commerce_data.sql
 mysql --table < ../common/select_commerce_data.sql
-exit
-
 
 ./201_customer_tablets.sh
 

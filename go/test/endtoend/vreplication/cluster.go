@@ -29,25 +29,22 @@ var (
 	externalClusterConfig *ClusterConfig
 )
 
-// ClusterConfig defines the parameters like ports, tmpDir, tablet types for a test vitess cluster
+// ClusterConfig defines the parameters like ports, tmpDir, tablet types which uniquely define a vitess cluster
 type ClusterConfig struct {
-	hostname        string
-	topoPort        int
-	vtctldPort      int
-	vtctldGrpcPort  int
-	vtdataroot      string
-	tmpDir          string
-	vtgatePort      int
-	vtgateGrpcPort  int
-	vtgateMySQLPort int
-	tabletTypes     string
+	hostname            string
+	topoPort            int
+	vtctldPort          int
+	vtctldGrpcPort      int
+	vtdataroot          string
+	tmpDir              string
+	vtgatePort          int
+	vtgateGrpcPort      int
+	vtgateMySQLPort     int
+	tabletTypes         string
+	tabletPortBase      int
+	tabletGrpcPortBase  int
+	tabletMysqlPortBase int
 }
-
-var (
-	tabletPortBase      = 15000
-	tabletGrpcPortBase  = 20000
-	tabletMysqlPortBase = 25000
-)
 
 // VitessCluster represents all components within the test cluster
 type VitessCluster struct {
@@ -104,54 +101,48 @@ func setTempVtDataRoot() string {
 	return vtdataroot
 }
 
+func getClusterConfig(idx int, dataRootDir string) *ClusterConfig {
+	basePort := 15000
+	etcdPort := 2379
+
+	basePort += idx * 10000
+	etcdPort += idx * 10000
+	if _, err := os.Stat(dataRootDir); os.IsNotExist(err) {
+		os.Mkdir(dataRootDir, 0700)
+	}
+
+	return &ClusterConfig{
+		hostname:            "localhost",
+		topoPort:            etcdPort,
+		vtctldPort:          basePort,
+		vtctldGrpcPort:      basePort + 999,
+		tmpDir:              dataRootDir + "/tmp",
+		vtgatePort:          basePort + 1,
+		vtgateGrpcPort:      basePort + 991,
+		vtgateMySQLPort:     basePort + 306,
+		tabletTypes:         "master",
+		vtdataroot:          dataRootDir,
+		tabletPortBase:      basePort + 1000,
+		tabletGrpcPortBase:  basePort + 1991,
+		tabletMysqlPortBase: basePort + 1306,
+	}
+}
+
 func init() {
 	rand.Seed(time.Now().UTC().UnixNano())
 	originalVtdataroot = os.Getenv("VTDATAROOT")
-	var mainVtDataRoot, extVtDataRoot string
+	var mainVtDataRoot string
 	if debug {
 		mainVtDataRoot = originalVtdataroot
 	} else {
 		mainVtDataRoot = setTempVtDataRoot()
 	}
-	basePort := 15000
-	etcdPort := 2379
-	mainClusterConfig = &ClusterConfig{
-		hostname:        "localhost",
-		topoPort:        etcdPort,
-		vtctldPort:      basePort,
-		vtctldGrpcPort:  basePort + 999,
-		tmpDir:          mainVtDataRoot + "/tmp",
-		vtgatePort:      basePort + 1,
-		vtgateGrpcPort:  basePort + 991,
-		vtgateMySQLPort: basePort + 306,
-		tabletTypes:     "",
-		vtdataroot:      mainVtDataRoot,
-	}
-	basePort += 10000
-	extVtDataRoot = mainVtDataRoot + "/ext"
-	if _, err := os.Stat(extVtDataRoot); os.IsNotExist(err) {
-		os.Mkdir(extVtDataRoot, 0700)
-	}
-	externalClusterConfig = &ClusterConfig{
-		hostname:        "localhost",
-		topoPort:        etcdPort + 10000,
-		vtctldPort:      basePort,
-		vtctldGrpcPort:  basePort + 999,
-		tmpDir:          extVtDataRoot + "/tmp",
-		vtgatePort:      basePort + 1,
-		vtgateGrpcPort:  basePort + 991,
-		vtgateMySQLPort: basePort + 306,
-		tabletTypes:     "",
-		vtdataroot:      extVtDataRoot,
-	}
-}
-
-func initGlobals() {
+	mainClusterConfig = getClusterConfig(0, mainVtDataRoot)
+	externalClusterConfig = getClusterConfig(1, mainVtDataRoot+"/ext")
 }
 
 // NewVitessCluster starts a basic cluster with vtgate, vtctld and the topo
 func NewVitessCluster(t *testing.T, name string, cellNames []string, clusterConfig *ClusterConfig) *VitessCluster {
-	initGlobals()
 	vc := &VitessCluster{Name: name, Cells: make(map[string]*Cell), ClusterConfig: clusterConfig}
 	require.NotNil(t, vc)
 	topo := cluster.TopoProcessInstance(vc.ClusterConfig.topoPort, vc.ClusterConfig.topoPort+1, vc.ClusterConfig.hostname, "etcd2", "global")
@@ -233,8 +224,8 @@ func (vc *VitessCluster) AddTablet(t *testing.T, cell *Cell, keyspace *Keyspace,
 	tablet := &Tablet{}
 
 	vttablet := cluster.VttabletProcessInstance(
-		tabletPortBase+tabletID,
-		tabletGrpcPortBase+tabletID,
+		vc.ClusterConfig.tabletPortBase+tabletID,
+		vc.ClusterConfig.tabletGrpcPortBase+tabletID,
 		tabletID,
 		cell.Name,
 		shard.Name,
@@ -255,7 +246,7 @@ func (vc *VitessCluster) AddTablet(t *testing.T, cell *Cell, keyspace *Keyspace,
 	require.NotNil(t, vttablet)
 	vttablet.SupportsBackup = false
 
-	tablet.DbServer = cluster.MysqlCtlProcessInstance(tabletID, tabletMysqlPortBase+tabletID, vc.ClusterConfig.tmpDir)
+	tablet.DbServer = cluster.MysqlCtlProcessInstance(tabletID, vc.ClusterConfig.tabletMysqlPortBase+tabletID, vc.ClusterConfig.tmpDir)
 	require.NotNil(t, tablet.DbServer)
 	tablet.DbServer.InitMysql = true
 	proc, err := tablet.DbServer.StartProcess()

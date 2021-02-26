@@ -267,7 +267,7 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		insertQuery1 := "insert into customer(cid, name) values(1001, 'tempCustomer1')"
 		matchInsertQuery1 := "insert into customer(cid, `name`) values (:vtg1, :vtg2)"
 		require.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, productTab, "product", insertQuery1, matchInsertQuery1))
-		vdiff(t, ksWorkflow)
+		vdiff(t, ksWorkflow, "")
 		switchReadsDryRun(t, allCellNames, ksWorkflow, dryRunResultsReadCustomerShard)
 		switchReads(t, allCellNames, ksWorkflow)
 		require.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, productTab, "customer", query, query))
@@ -477,7 +477,7 @@ func reshard(t *testing.T, ksName string, tableName string, workflow string, sou
 				continue
 			}
 		}
-		vdiff(t, ksWorkflow)
+		vdiff(t, ksWorkflow, "")
 		switchReads(t, allCellNames, ksWorkflow)
 		if dryRunResultSwitchWrites != nil {
 			switchWritesDryRun(t, ksWorkflow, dryRunResultSwitchWrites)
@@ -510,7 +510,7 @@ func shardOrders(t *testing.T) {
 		customerTab2 := custKs.Shards["80-"].Tablets["zone1-300"].Vttablet
 		catchup(t, customerTab1, workflow, "MoveTables")
 		catchup(t, customerTab2, workflow, "MoveTables")
-		vdiff(t, ksWorkflow)
+		vdiff(t, ksWorkflow, "")
 		switchReads(t, allCellNames, ksWorkflow)
 		switchWrites(t, ksWorkflow, false)
 		dropSources(t, ksWorkflow)
@@ -544,7 +544,7 @@ func shardMerchant(t *testing.T) {
 		catchup(t, merchantTab1, workflow, "MoveTables")
 		catchup(t, merchantTab2, workflow, "MoveTables")
 
-		vdiff(t, "merchant.p2m")
+		vdiff(t, "merchant.p2m", "")
 		switchReads(t, allCellNames, ksWorkflow)
 		switchWrites(t, ksWorkflow, false)
 		dropSources(t, ksWorkflow)
@@ -555,9 +555,9 @@ func shardMerchant(t *testing.T) {
 	})
 }
 
-func vdiff(t *testing.T, workflow string) {
+func vdiff(t *testing.T, workflow, cells string) {
 	t.Run("vdiff", func(t *testing.T) {
-		output, err := vc.VtctlClient.ExecuteCommandWithOutput("VDiff", "-format", "json", workflow)
+		output, err := vc.VtctlClient.ExecuteCommandWithOutput("VDiff", "-tablet_types=master", "-source_cell="+cells, "-format", "json", workflow)
 		fmt.Printf("vdiff err: %+v, output: %+v\n", err, output)
 		require.Nil(t, err)
 		require.NotNil(t, output)
@@ -570,7 +570,7 @@ func vdiff(t *testing.T, workflow string) {
 		require.True(t, len(diffReports) > 0)
 		for key, diffReport := range diffReports {
 			if diffReport.ProcessedRows != diffReport.MatchingRows {
-				t.Errorf("vdiff error for %d : %#v\n", key, diffReport)
+				require.Failf(t, "vdiff failed", "Table %d : %#v\n", key, diffReport)
 			}
 		}
 	})
