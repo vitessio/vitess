@@ -3171,3 +3171,5 @@
 2021-02-26T13:00:35Z,unit_race,https://github.com/vitessio/vitess/actions/runs/602794691
 2021-02-26T14:19:36Z,unit_race,https://github.com/vitessio/vitess/actions/runs/602987912
 2021-02-26T14:26:43Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/603006845
+2021-02-26T14:49:40Z,endtoend,https://github.com/vitessio/vitess/actions/runs/603068203
+2021-02-26T14:49:40Z,gomod-tidy,https://github.com/vitessio/vitess/actions/runs/603068206
