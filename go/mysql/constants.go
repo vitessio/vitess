@@ -400,6 +400,7 @@ const (
 	ERRowIsReferenced2              = 1451
 	ErNoReferencedRow2              = 1452
 	ErSPNotVarArg                   = 1414
+	ERInnodbReadOnly                = 1874
 
 	// already exists
 	ERTableExists    = 1050
@@ -560,6 +561,9 @@ const (
 
 	// SSBadFieldError is ER_BAD_FIELD_ERROR
 	SSBadFieldError = "42S22"
+
+	// SSUnknownTable is ER_UNKNOWN_TABLE
+	SSUnknownTable = "42S02"
 
 	// SSQueryInterrupted is ER_QUERY_INTERRUPTED;
 	SSQueryInterrupted = "70100"

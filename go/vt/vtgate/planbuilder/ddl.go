@@ -32,7 +32,7 @@ func buildGeneralDDLPlan(sql string, ddlStatement sqlparser.DDLStatement, vschem
 
 	if ddlStatement.IsTemporary() {
 		if normalDDLPlan.Keyspace.Sharded {
-			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Temporary table not supported in sharded keyspace: %s", normalDDLPlan.Keyspace.Name)
+			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Temporary table not supported in sharded database %s", normalDDLPlan.Keyspace.Name)
 		}
 		onlineDDLPlan = nil // emptying this so it does not accidentally gets used somewhere
 	}
@@ -89,7 +89,7 @@ func buildDDLPlans(sql string, ddlStatement sqlparser.DDLStatement, vschema Cont
 		}
 
 	default:
-		return nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: unexpected statement type: %T", ddlStatement)
+		return nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unexpected ddl statement type: %T", ddlStatement)
 	}
 
 	if destination == nil {

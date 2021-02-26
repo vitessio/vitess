@@ -36,7 +36,7 @@
 
 # CALL not allowed on sharded keyspaces
 "call user.proc()"
-"CALL is only allowed for targeted queries or on unsharded keyspaces"
+"CALL is not supported for sharded database"
 
 # CALL with expressions and parameters 
 "call proc(1, 'foo', @var)"

@@ -89,10 +89,10 @@ func TestExecutorSet(t *testing.T) {
 		out: &vtgatepb.Session{},
 	}, {
 		in:  "set AUTOCOMMIT = 'aa'",
-		err: "System setting 'autocommit' can't be set to this value: 'aa' is not a boolean",
+		err: "Variable 'autocommit' can't be set to the value: 'aa' is not a boolean",
 	}, {
 		in:  "set autocommit = 2",
-		err: "System setting 'autocommit' can't be set to this value: 2 is not a boolean",
+		err: "Variable 'autocommit' can't be set to the value: 2 is not a boolean",
 	}, {
 		in:  "set client_found_rows = 1",
 		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{ClientFoundRows: true}},
@@ -110,10 +110,10 @@ func TestExecutorSet(t *testing.T) {
 		err: "cannot use scope and @@",
 	}, {
 		in:  "set client_found_rows = 'aa'",
-		err: "System setting 'client_found_rows' can't be set to this value: 'aa' is not a boolean",
+		err: "Variable 'client_found_rows' can't be set to the value: 'aa' is not a boolean",
 	}, {
 		in:  "set client_found_rows = 2",
-		err: "System setting 'client_found_rows' can't be set to this value: 2 is not a boolean",
+		err: "Variable 'client_found_rows' can't be set to the value: 2 is not a boolean",
 	}, {
 		in:  "set transaction_mode = 'unspecified'",
 		out: &vtgatepb.Session{Autocommit: true, TransactionMode: vtgatepb.TransactionMode_UNSPECIFIED},
@@ -167,7 +167,7 @@ func TestExecutorSet(t *testing.T) {
 		err: "failed to evaluate value for sql_select_limit: expected int, unexpected value type: string",
 	}, {
 		in:  "set autocommit = 1+1",
-		err: "System setting 'autocommit' can't be set to this value: 2 is not a boolean",
+		err: "Variable 'autocommit' can't be set to the value: 2 is not a boolean",
 	}, {
 		in:  "set autocommit = 1+0",
 		out: &vtgatepb.Session{Autocommit: true},
@@ -200,10 +200,10 @@ func TestExecutorSet(t *testing.T) {
 		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{}},
 	}, {
 		in:  "set tx_read_only = 2",
-		err: "System setting 'tx_read_only' can't be set to this value: 2 is not a boolean",
+		err: "Variable 'tx_read_only' can't be set to the value: 2 is not a boolean",
 	}, {
 		in:  "set transaction_read_only = 2",
-		err: "System setting 'transaction_read_only' can't be set to this value: 2 is not a boolean",
+		err: "Variable 'transaction_read_only' can't be set to the value: 2 is not a boolean",
 	}, {
 		in:  "set session transaction isolation level repeatable read",
 		out: &vtgatepb.Session{Autocommit: true},
