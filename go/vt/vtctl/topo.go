@@ -85,11 +85,11 @@ func DecodeContent(filename string, data []byte, json bool) (string, error) {
 	case topo.RoutingRulesFile:
 		p = new(vschemapb.RoutingRules)
 	default:
-		log.Infof("Default: %s, dir %s, vc %s", filename, dir, topo.GetVitessClusterDir())
+		log.Infof("Default: %s, dir %s, vc %s", filename, dir, topo.GetExternalVitessClusterDir())
 		switch dir {
-		case "/" + topo.GetVitessClusterDir():
+		case "/" + topo.GetExternalVitessClusterDir():
 			log.Infof("in Decode for Vitess Cluster for %s\n", name)
-			p = new(topodatapb.VitessCluster)
+			p = new(topodatapb.ExternalVitessCluster)
 		default:
 		}
 		if p == nil {

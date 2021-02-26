@@ -407,22 +407,17 @@ message CellsAlias {
   repeated string cells = 2;
 }
 
-message MySQLCluster {
-
-}
-
 message TopoConfig {
   string topo_type = 1;
   string server = 2;
   string root = 3;
 }
 
-message VitessCluster {
+message ExternalVitessCluster {
   TopoConfig topo_config = 1;
 }
 
 // ExternalClusters
 message ExternalClusters {
-  repeated MySQLCluster mysql_cluster= 1;
-  repeated VitessCluster vitess_cluster = 2;
+  repeated ExternalVitessCluster vitess_cluster = 1;
 }
