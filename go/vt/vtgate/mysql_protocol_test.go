@@ -133,7 +133,7 @@ func TestMySQLProtocolExecuteUseStatement(t *testing.T) {
 	// No replica tablets, this should also fail
 	_, err = c.ExecuteFetch("select id from t1", 10, true /* wantfields */)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "no valid tablet")
+	assert.Contains(t, err.Error(), `no healthy tablet available for 'keyspace:"TestUnsharded" shard:"0" tablet_type:REPLICA`)
 }
 
 func TestMysqlProtocolInvalidDB(t *testing.T) {

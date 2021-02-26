@@ -366,7 +366,7 @@ func testDiscoveryGatewayGeneric(t *testing.T, f func(dg *DiscoveryGateway, targ
 	// no tablet
 	hc.Reset()
 	dg.tsc.ResetForTesting()
-	want := []string{"target: ks.0.replica", "no valid tablet"}
+	want := []string{"target: ks.0.replica", `no healthy tablet available for 'keyspace:"ks" shard:"0" tablet_type:REPLICA`}
 	err := f(dg, target)
 	verifyShardErrors(t, err, want, vtrpcpb.Code_UNAVAILABLE)
 
