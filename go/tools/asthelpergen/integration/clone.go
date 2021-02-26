@@ -44,9 +44,10 @@ func CloneAST(in AST) AST {
 		return CloneValueContainer(in)
 	case ValueSliceContainer:
 		return CloneValueSliceContainer(in)
+	default:
+		// this should never happen
+		return nil
 	}
-	// this should never happen
-	return nil
 }
 func CloneSubIface(in SubIface) SubIface {
 	if in == nil {
@@ -55,9 +56,10 @@ func CloneSubIface(in SubIface) SubIface {
 	switch in := in.(type) {
 	case *SubImpl:
 		return CloneRefOfSubImpl(in)
+	default:
+		// this should never happen
+		return nil
 	}
-	// this should never happen
-	return nil
 }
 func CloneBytes(n Bytes) Bytes {
 	res := make(Bytes, len(n))
