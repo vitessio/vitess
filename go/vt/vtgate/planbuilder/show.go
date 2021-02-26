@@ -54,9 +54,10 @@ func buildShowBasicPlan(show *sqlparser.ShowBasic, vschema ContextVSchema) (engi
 	switch show.Command {
 	case sqlparser.Charset:
 		return buildCharsetPlan(show)
-	case sqlparser.Collation, sqlparser.Function, sqlparser.Privilege, sqlparser.Procedure,
-		sqlparser.VariableGlobal, sqlparser.VariableSession:
+	case sqlparser.Collation, sqlparser.Function, sqlparser.Privilege, sqlparser.Procedure:
 		return buildSendAnywherePlan(show, vschema)
+	case sqlparser.VariableGlobal, sqlparser.VariableSession:
+		return buildVariablePlan(show, vschema)
 	case sqlparser.Column, sqlparser.Index:
 		return buildShowTblPlan(show, vschema)
 	case sqlparser.Database, sqlparser.Keyspace:
@@ -96,6 +97,15 @@ func buildSendAnywherePlan(show *sqlparser.ShowBasic, vschema ContextVSchema) (e
 		IsDML:             false,
 		SingleShardOnly:   true,
 	}, nil
+}
+
+func buildVariablePlan(show *sqlparser.ShowBasic, vschema ContextVSchema) (engine.Primitive, error) {
+	plan, err := buildSendAnywherePlan(show, vschema)
+	if err != nil {
+		return nil, err
+	}
+	plan = engine.NewReplaceVariables(plan)
+	return plan, nil
 }
 
 func buildShowTblPlan(show *sqlparser.ShowBasic, vschema ContextVSchema) (engine.Primitive, error) {
