@@ -54,11 +54,6 @@ func createTypeString(t types.Type) string {
 	}
 }
 
-func isInterface(t types.Type) bool {
-	_, res := t.Underlying().(*types.Interface)
-	return res
-}
-
 func isSlice(t types.Type) bool {
 	_, res := t.Underlying().(*types.Slice)
 	return res
@@ -93,14 +88,14 @@ func (c *cloneGen) makeStructCloneMethod(t types.Type, stroct *types.Struct) err
 	values := make(jen.Dict)
 	for i := 0; i < stroct.NumFields(); i++ {
 		field := stroct.Field(i)
+		if field.Name() == "_" {
+			continue
+		}
 		id := jen.Id(field.Name())
 		switch {
 		case isSlice(field.Type()) || c.isInterestingType(field.Type()):
 			// v: n.Clone()
 			values[id] = c.readType(field.Type(), jen.Id("n").Dot(field.Name()))
-		case isInterface(field.Type()) || c.isInterestingType(field.Type()):
-			// v: CloneAST(n)
-			values[id] = c.readType(field.Type(), jen.Id("n"))
 		default:
 			// v: n.v
 			values[id] = jen.Id("n").Dot(field.Name())
@@ -237,21 +232,12 @@ func (c *cloneGen) createFile(pkgName string) (string, *jen.File) {
 		if c.tryInterface(underlying, t) ||
 			c.trySlice(underlying, t) ||
 			c.tryStruct(underlying, t) ||
-			c.tryPtrOfStruct(underlying, t) ||
-			c.tryPtrOfSlice(underlying, t) {
+			c.tryPtr(underlying, t) {
 			addedCloneFor[typeName] = true
 			continue
 		}
 
-		//ptr, ok := underlying.(*types.Pointer)
-		//if ok {
-		//	fmt.Printf(">> %T %v\n", ptr.Elem(), ptr.Elem())
-		//	addedCloneFor[typeName] = true
-		//	continue
-		//}
-
 		log.Errorf("don't know how to handle %s %T", typeName, underlying)
-		fmt.Println(c.tryPtrOfStruct(underlying, t))
 	}
 
 	for _, method := range c.methods {
@@ -273,7 +259,7 @@ func (c *cloneGen) tryStruct(underlying, t types.Type) bool {
 	}
 	return true
 }
-func (c *cloneGen) tryPtrOfStruct(underlying, t types.Type) bool {
+func (c *cloneGen) tryPtr(underlying, t types.Type) bool {
 	ptr, ok := underlying.(*types.Pointer)
 	if !ok {
 		return false
@@ -298,23 +284,6 @@ func (c *cloneGen) makePtrCloneMethod(t types.Type, ptr *types.Pointer) error {
 	return nil
 }
 
-func (c *cloneGen) tryPtrOfSlice(underlying, t types.Type) bool {
-	ptr, ok := underlying.(*types.Pointer)
-	if !ok {
-		return false
-	}
-
-	slice, ok := ptr.Elem().Underlying().(*types.Slice)
-	if !ok {
-		return false
-	}
-
-	err := c.makeSliceCloneMethod(t, slice)
-	if err != nil {
-		panic(err) // todo
-	}
-	return true
-}
 func (c *cloneGen) tryInterface(underlying, t types.Type) bool {
 	iface, ok := underlying.(*types.Interface)
 	if !ok {
