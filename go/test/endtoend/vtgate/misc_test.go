@@ -541,6 +541,23 @@ func TestFlush(t *testing.T) {
 	exec(t, conn, "flush local tables t1, t2")
 }
 
+func TestShowVariables(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+	res := exec(t, conn, "show variables like \"%version%\";")
+	found := false
+	for _, row := range res.Rows {
+		if row[0].ToString() == "version" {
+			assert.Contains(t, row[1].ToString(), "vitess")
+			found = true
+		}
+	}
+	require.True(t, found, "Expected a row for version in show query")
+}
+
 func assertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {
 	t.Helper()
 	qr := exec(t, conn, query)
