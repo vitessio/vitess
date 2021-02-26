@@ -66,7 +66,10 @@ func isSlice(t types.Type) bool {
 
 const cloneName = "Clone"
 
-func (c *cloneGen) cloneFuncFor(t types.Type, arg jen.Code) jen.Code {
+func (c *cloneGen) readType(t types.Type, arg jen.Code) jen.Code {
+	if _, ok := t.Underlying().(*types.Basic); ok {
+		return arg
+	}
 	c.todo = append(c.todo, t)
 	return jen.Id(cloneName + printableTypeName(t)).Call(arg)
 }
@@ -80,14 +83,6 @@ func (c *cloneGen) makeStructCloneMethod(t types.Type, stroct *types.Struct) err
 	receiveType := types.TypeString(t, noQualifier)
 
 	var stmts []jen.Code
-	if ptr, ok := t.(*types.Pointer); ok {
-		if types.Implements(ptr.Elem(), c.iface) {
-			// this means we are dealing with the reference to a value type that implements the interface
-			// we'll use the
-			return nil
-		}
-		stmts = append(stmts, ifNilReturnNil("n"))
-	}
 
 	values := make(jen.Dict)
 	for i := 0; i < stroct.NumFields(); i++ {
@@ -96,10 +91,10 @@ func (c *cloneGen) makeStructCloneMethod(t types.Type, stroct *types.Struct) err
 		switch {
 		case isSlice(field.Type()) || c.isInterestingType(field.Type()):
 			// v: n.Clone()
-			values[id] = c.cloneFuncFor(field.Type(), jen.Id("n").Dot(field.Name()))
+			values[id] = c.readType(field.Type(), jen.Id("n").Dot(field.Name()))
 		case isInterface(field.Type()) || c.isInterestingType(field.Type()):
 			// v: CloneAST(n)
-			values[id] = c.cloneFuncFor(field.Type(), jen.Id("n"))
+			values[id] = c.readType(field.Type(), jen.Id("n"))
 		default:
 			// v: n.v
 			values[id] = jen.Id("n").Dot(field.Name())
@@ -152,7 +147,7 @@ func (c *cloneGen) copySliceElement(elType types.Type) jen.Code {
 	//}
 	c.todo = append(c.todo, elType)
 	return jen.For(jen.List(jen.Id("i"), jen.Id("x"))).Op(":=").Range().Id("n").Block(
-		jen.Id("res").Index(jen.Id("i")).Op("=").Add(c.cloneFuncFor(elType, jen.Id("x"))),
+		jen.Id("res").Index(jen.Id("i")).Op("=").Add(c.readType(elType, jen.Id("x"))),
 	)
 }
 
@@ -189,7 +184,7 @@ func (c *cloneGen) makeInterface(t types.Type, iface *types.Interface) error {
 			if !isIface {
 				typeString := types.TypeString(t, noQualifier)
 				cases = append(cases, jen.Case(jen.Id(typeString)).Block(
-					jen.Return(c.cloneFuncFor(t, jen.Id("in")))))
+					jen.Return(c.readType(t, jen.Id("in")))))
 			}
 
 		case *types.Named:
@@ -197,7 +192,7 @@ func (c *cloneGen) makeInterface(t types.Type, iface *types.Interface) error {
 			if !isIface {
 				typeString := types.TypeString(t, noQualifier)
 				cases = append(cases, jen.Case(jen.Id(typeString)).Block(
-					jen.Return(c.cloneFuncFor(t, jen.Id("in")))))
+					jen.Return(c.readType(t, jen.Id("in")))))
 			}
 
 		default:
@@ -292,7 +287,7 @@ func (c *cloneGen) makePtrCloneMethod(t types.Type, ptr *types.Pointer) error {
 	c.methods = append(c.methods,
 		jen.Func().Id("Clone"+printableTypeName(t)).Call(jen.Id("n").Id(receiveType)).Id(receiveType).Block(
 			ifNilReturnNil("n"),
-			jen.Id("out").Op(":=").Add(c.cloneFuncFor(ptr.Elem(), jen.Op("*").Id("n"))),
+			jen.Id("out").Op(":=").Add(c.readType(ptr.Elem(), jen.Op("*").Id("n"))),
 			jen.Return(jen.Op("&").Id("out")),
 		))
 	return nil
