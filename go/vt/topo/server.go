@@ -336,7 +336,7 @@ func (ts *Server) clearCellAliasesCache() {
 
 // OpenExternalVitessClusterServer returns the topo server of the external cluster
 func (ts *Server) OpenExternalVitessClusterServer(ctx context.Context, clusterName string) (*Server, error) {
-	vc, err := ts.GetVitessCluster(ctx, clusterName)
+	vc, err := ts.GetExternalVitessCluster(ctx, clusterName)
 	if err != nil {
 		return nil, err
 	}

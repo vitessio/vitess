@@ -359,8 +359,8 @@ var commands = []commandGroup{
 					" This can be used as sanity check to ensure that the tablets were drained after running vtctl MigrateServedTypes " +
 					" and vtgate is no longer using them. If -timeout is set, it fails when the timeout is reached."},
 			{"Mount", commandMount,
-				"-t [mysql|vitess] [-unmount] [-list] [-show] [cluster_specific_params] [<cluster_name>]",
-				"Mount and unmount an external cluster in the file system"},
+				"[-topo_type=etcd2|consul|zookeeper] [-topo_server=topo_url] [-topo_root=root_topo_node> [-unmount] [-list] [-show]  [<cluster_name>]",
+				"Add/Remove/Display/List external cluster(s) to this vitess cluster"},
 		},
 	},
 	{
@@ -3463,12 +3463,10 @@ func commandWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.
 }
 
 func commandMount(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	clusterType := subFlags.String("type", "vitess", "Specify cluster type: mysql or vitess")
+	clusterType := subFlags.String("type", "vitess", "Specify cluster type: mysql or vitess, only vitess clustered right now")
 	unmount := subFlags.Bool("unmount", false, "Unmount cluster")
 	show := subFlags.Bool("show", false, "Display contents of cluster")
 	list := subFlags.Bool("list", false, "List all clusters")
-
-	//FIXME: add validations for parameters and combinations
 
 	// vitess cluster params
 	topoType := subFlags.String("topo_type", "", "Type of cluster's topology server")
@@ -3479,7 +3477,7 @@ func commandMount(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fla
 		return err
 	}
 	if *list {
-		clusters, err := wr.TopoServer().GetVitessClusters(ctx)
+		clusters, err := wr.TopoServer().GetExternalVitessClusters(ctx)
 		if err != nil {
 			return err
 		}
@@ -3495,9 +3493,9 @@ func commandMount(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fla
 	case "vitess":
 		switch {
 		case *unmount:
-			return wr.UnmountVitessCluster(ctx, clusterName)
+			return wr.UnmountExternalVitessCluster(ctx, clusterName)
 		case *show:
-			vci, err := wr.TopoServer().GetVitessCluster(ctx, clusterName)
+			vci, err := wr.TopoServer().GetExternalVitessCluster(ctx, clusterName)
 			if err != nil {
 				return err
 			}
@@ -3511,7 +3509,7 @@ func commandMount(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fla
 			wr.Logger().Printf("%s\n", string(data))
 			return nil
 		default:
-			return wr.MountVitessCluster(ctx, clusterName, *topoType, *topoServer, *topoRoot)
+			return wr.MountExternalVitessCluster(ctx, clusterName, *topoType, *topoServer, *topoRoot)
 		}
 	case "mysql":
 		return fmt.Errorf("mysql cluster type not yet supported")
