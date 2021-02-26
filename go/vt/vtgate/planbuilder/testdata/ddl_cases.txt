@@ -116,7 +116,7 @@
 
 # alter db foo
 "alter database foo collate utf8"
-"Can't alter database 'foo'; database doesn't exists"
+"Can't alter database 'foo'; unknown database"
 
 # alter db main
 "alter database main collate utf8"

@@ -505,7 +505,7 @@ func (svss *SysVarSetAware) setBoolSysVar(env evalengine.ExpressionEnv, setter f
 	}
 	boolValue, err := value.ToBooleanStrict()
 	if err != nil {
-		return vterrors.Wrapf(err, "System setting '%s' can't be set to this value", svss.Name)
+		return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValueForVar, "Variable '%s' can't be set to the value: %s", svss.Name, err.Error())
 	}
 	return setter(boolValue)
 }

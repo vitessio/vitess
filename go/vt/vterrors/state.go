@@ -6,19 +6,42 @@ type State int
 // All the error states
 const (
 	Undefined State = iota
-	DataOutOfRange
-	NoDB
-	WrongNumberOfColumnsInSelect
+
+	// invalid argument
 	BadFieldError
-	DbDropExists
-	DbCreateExists
-	ForbidSchemaChange
-	NetPacketTooLarge
-	SPDoesNotExist
-	QueryInterrupted
 	CantUseOptionHere
+	DataOutOfRange
+	ForbidSchemaChange
 	NonUniqTable
+	SyntaxError
+	WrongValueForVar
+
+	// failed precondition
+	NoDB
+	InnodbReadOnly
+	WrongNumberOfColumnsInSelect
+
+	// not found
 	BadDb
+	DbDropExists
+	NoSuchTable
+	SPDoesNotExist
+	UnknownTable
+
+	// already exists
+	DbCreateExists
+
+	// resource exhausted
+	NetPacketTooLarge
+
+	// cancelled
+	QueryInterrupted
+
+	// unimplemented
+	NotSupportedYet
+
+	// permission denied
+	AccessDeniedError
 
 	// No state should be added below NumOfStates
 	NumOfStates

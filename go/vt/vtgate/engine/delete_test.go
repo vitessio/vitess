@@ -55,7 +55,7 @@ func TestDeleteUnsharded(t *testing.T) {
 
 	vc = &loggingVCursor{}
 	_, err = del.Execute(vc, map[string]*querypb.BindVariable{}, false)
-	require.EqualError(t, err, "Keyspace does not have exactly one shard: []")
+	require.EqualError(t, err, "cannot send query to multiple shards for un-sharded database: []")
 }
 
 func TestDeleteEqual(t *testing.T) {

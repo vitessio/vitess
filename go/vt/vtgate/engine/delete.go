@@ -108,7 +108,7 @@ func (del *Delete) execDeleteUnsharded(vcursor VCursor, bindVars map[string]*que
 		return nil, err
 	}
 	if len(rss) != 1 {
-		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "Keyspace does not have exactly one shard: %v", rss)
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot send query to multiple shards for un-sharded database: %v", rss)
 	}
 	err = allowOnlyMaster(rss...)
 	if err != nil {

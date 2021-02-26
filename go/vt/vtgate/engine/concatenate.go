@@ -240,7 +240,7 @@ func compareFields(fields1 []*querypb.Field, fields2 []*querypb.Field) error {
 	for i, field2 := range fields2 {
 		field1 := fields1[i]
 		if field1.Type != field2.Type {
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "column field type does not match for name: (%v, %v) types: (%v, %v)", field1.Name, field2.Name, field1.Type, field2.Type)
+			return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "merging field of different types is not supported, name: (%v, %v) types: (%v, %v)", field1.Name, field2.Name, field1.Type, field2.Type)
 		}
 	}
 	return nil

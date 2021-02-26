@@ -76,7 +76,7 @@ func (a *analyzer) resolveColumn(colName *sqlparser.ColName, current *scope) (Ta
 	var t table
 	var err error
 	if colName.Qualifier.IsEmpty() {
-		t, err = a.resolveUnQualifiedColumn(current)
+		t, err = a.resolveUnQualifiedColumn(current, colName)
 	} else {
 		t, err = a.resolveQualifiedColumn(current, colName)
 	}
@@ -131,13 +131,13 @@ func (a *analyzer) resolveQualifiedColumn(current *scope, expr *sqlparser.ColNam
 }
 
 // resolveUnQualifiedColumn
-func (a *analyzer) resolveUnQualifiedColumn(current *scope) (table, error) {
+func (a *analyzer) resolveUnQualifiedColumn(current *scope, expr *sqlparser.ColName) (table, error) {
 	if len(current.tables) == 1 {
 		for _, tableExpr := range current.tables {
 			return tableExpr, nil
 		}
 	}
-	return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "todo - figure out which table this column belongs to")
+	return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unable to map column to a table: %s", sqlparser.String(expr))
 }
 
 func (a *analyzer) tableSetFor(t table) TableSet {

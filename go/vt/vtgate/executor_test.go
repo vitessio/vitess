@@ -772,7 +772,7 @@ func TestExecutorShow(t *testing.T) {
 
 	query = "show vschema vindexes on TestExecutor.garbage"
 	_, err = executor.Execute(ctx, "TestExecute", session, query, nil)
-	wantErr = "table `garbage` does not exist in keyspace `TestExecutor`"
+	wantErr = "table 'garbage' does not exist in keyspace 'TestExecutor'"
 	assert.EqualError(t, err, wantErr, query)
 
 	query = "show vschema vindexes on user"
@@ -803,7 +803,7 @@ func TestExecutorShow(t *testing.T) {
 
 	query = "show vschema vindexes on garbage"
 	_, err = executor.Execute(ctx, "TestExecute", session, query, nil)
-	wantErr = "table `garbage` does not exist in keyspace `TestExecutor`"
+	wantErr = "table 'garbage' does not exist in keyspace 'TestExecutor'"
 	assert.EqualError(t, err, wantErr, query)
 
 	query = "show warnings"
@@ -904,7 +904,7 @@ func TestExecutorShow(t *testing.T) {
 	query = "show vschema tables"
 	session = NewSafeSession(&vtgatepb.Session{TargetString: "no_such_keyspace"})
 	_, err = executor.Execute(ctx, "TestExecute", session, query, nil)
-	want = "keyspace no_such_keyspace not found in vschema"
+	want = "Unknown database 'no_such_keyspace' in vschema"
 	assert.EqualError(t, err, want, query)
 }
 
@@ -2259,7 +2259,7 @@ func TestExecutorCallProc(t *testing.T) {
 			if tc.hasNoKeyspaceErr {
 				assert.EqualError(t, err, "keyspace not specified")
 			} else if tc.unshardedOnlyErr {
-				require.EqualError(t, err, "CALL is only allowed for targeted queries or on unsharded keyspaces")
+				require.EqualError(t, err, "CALL is not supported for sharded database")
 			} else {
 				assert.NoError(t, err)
 			}

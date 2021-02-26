@@ -192,7 +192,7 @@ Gen4 plan same as above
 
 # sharded delete with limit clasue
 "delete from user_extra limit 10"
-"unsupported: multi shard delete with limit"
+"multi shard delete with limit is not supported"
 Gen4 plan same as above
 
 # sharded subquery in unsharded subquery in unsharded delete
@@ -207,7 +207,7 @@ Gen4 plan same as above
 
 # scatter update with limit clause
 "update user_extra set val = 1 where (name = 'foo' or id = 1) limit 1"
-"unsupported: multi shard update with limit"
+"multi shard update with limit is not supported"
 Gen4 plan same as above
 
 # multi delete multi table
