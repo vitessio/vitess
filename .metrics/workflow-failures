@@ -3158,6 +3158,7 @@
 2021-02-26T12:59:20Z,check_make_visitor,https://github.com/vitessio/vitess/actions/runs/602791487
 2021-02-26T12:59:20Z,cluster_initial_sharding_multi,https://github.com/vitessio/vitess/actions/runs/602791501
 2021-02-26T12:59:20Z,docker_test_1,https://github.com/vitessio/vitess/actions/runs/602791531
+2021-02-26T12:59:20Z,docker_test_2,https://github.com/vitessio/vitess/actions/runs/602791535
 2021-02-26T12:59:20Z,docker_test_3,https://github.com/vitessio/vitess/actions/runs/602791517
 2021-02-26T12:59:20Z,e2e_race,https://github.com/vitessio/vitess/actions/runs/602791483
 2021-02-26T12:59:20Z,endtoend,https://github.com/vitessio/vitess/actions/runs/602791522
