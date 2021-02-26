@@ -18,7 +18,10 @@ package vtadmin
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 
 	"github.com/gorilla/handlers"
@@ -26,13 +29,16 @@ import (
 
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/concurrency"
+	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtadmin/cluster"
 	"vitess.io/vitess/go/vt/vtadmin/grpcserver"
 	vtadminhttp "vitess.io/vitess/go/vt/vtadmin/http"
 	vthandlers "vitess.io/vitess/go/vt/vtadmin/http/handlers"
 	"vitess.io/vitess/go/vt/vtadmin/sort"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtexplain"
 
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -83,6 +89,7 @@ func NewAPI(clusters []*cluster.Cluster, opts grpcserver.Options, httpOpts vtadm
 	router.HandleFunc("/schemas", httpAPI.Adapt(vtadminhttp.GetSchemas)).Name("API.GetSchemas")
 	router.HandleFunc("/tablets", httpAPI.Adapt(vtadminhttp.GetTablets)).Name("API.GetTablets")
 	router.HandleFunc("/tablet/{tablet}", httpAPI.Adapt(vtadminhttp.GetTablet)).Name("API.GetTablet")
+	router.HandleFunc("/vtexplain", httpAPI.Adapt(vtadminhttp.VTExplain)).Name("API.VTExplain")
 
 	// Middlewares are executed in order of addition. Our ordering (all
 	// middlewares being optional) is:
@@ -534,6 +541,47 @@ func (api *API) getTablets(ctx context.Context, c *cluster.Cluster) ([]*vtadminp
 	return ParseTablets(rows, c)
 }
 
+// findTablet returns the first tablet in a given cluster that satisfies the filter function.
+func (api *API) findTablet(ctx context.Context, cluster *cluster.Cluster, filter func(*vtadminpb.Tablet) bool) (*vtadminpb.Tablet, error) {
+	tablets, err := api.findTablets(ctx, cluster, filter, 1)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(tablets) != 1 {
+		return nil, ErrNoTablet
+	}
+
+	return tablets[0], nil
+}
+
+// findTablets returns the first N tablets in the given cluster that satisfy
+// the filter function. If N = -1, then all matching tablets are returned.
+// Ordering is not guaranteed, and callers should write their filter functions accordingly.
+func (api *API) findTablets(ctx context.Context, cluster *cluster.Cluster, filter func(*vtadminpb.Tablet) bool, n int) ([]*vtadminpb.Tablet, error) {
+	tablets, err := api.getTablets(ctx, cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	if n == -1 {
+		n = len(tablets)
+	}
+
+	results := make([]*vtadminpb.Tablet, 0, n)
+	for _, t := range tablets {
+		if len(results) >= n {
+			break
+		}
+
+		if filter(t) {
+			results = append(results, t)
+		}
+	}
+
+	return results, nil
+}
+
 func (api *API) getClustersForRequest(ids []string) ([]*cluster.Cluster, []string) {
 	if len(ids) == 0 {
 		clusterIDs := make([]string, 0, len(api.clusters))
@@ -554,4 +602,153 @@ func (api *API) getClustersForRequest(ids []string) ([]*cluster.Cluster, []strin
 	}
 
 	return clusters, ids
+}
+
+// VTExplain is part of the vtadminpb.VTAdminServer interface.
+func (api *API) VTExplain(ctx context.Context, req *vtadminpb.VTExplainRequest) (*vtadminpb.VTExplainResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.VTExplain")
+	defer span.Finish()
+
+	if req.Cluster == "" {
+		return nil, fmt.Errorf("%w: cluster ID is required", ErrInvalidRequest)
+	}
+
+	if req.Keyspace == "" {
+		return nil, fmt.Errorf("%w: keyspace name is required", ErrInvalidRequest)
+	}
+
+	if req.Sql == "" {
+		return nil, fmt.Errorf("%w: SQL query is required", ErrInvalidRequest)
+	}
+
+	c, ok := api.clusterMap[req.Cluster]
+	if !ok {
+		return nil, ErrUnsupportedCluster
+	}
+
+	tablet, err := api.findTablet(ctx, c, func(t *vtadminpb.Tablet) bool {
+		return t.Tablet.Keyspace == req.Keyspace && topo.IsInServingGraph(t.Tablet.Type) && t.Tablet.Type != topodatapb.TabletType_MASTER && t.State == vtadminpb.Tablet_SERVING
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	if err := c.Vtctld.Dial(ctx); err != nil {
+		return nil, err
+	}
+
+	var (
+		wg sync.WaitGroup
+		er concurrency.AllErrorRecorder
+
+		// Writes to these three variables are, in the strictest sense, unsafe.
+		// However, there is one goroutine responsible for writing each of these
+		// values (so, no concurrent writes), and reads are blocked on the call to
+		// wg.Wait(), so we guarantee that all writes have finished before attempting
+		// to read anything.
+		srvVSchema string
+		schema     string
+		shardMap   string
+	)
+
+	wg.Add(3)
+
+	// GetSchema
+	go func(c *cluster.Cluster) {
+		defer wg.Done()
+
+		res, err := c.Vtctld.GetSchema(ctx, &vtctldatapb.GetSchemaRequest{
+			TabletAlias: tablet.Tablet.Alias,
+		})
+
+		if err != nil {
+			er.RecordError(err)
+			return
+		}
+
+		schemas := make([]string, len(res.Schema.TableDefinitions))
+		for i, td := range res.Schema.TableDefinitions {
+			schemas[i] = td.Schema
+		}
+
+		schema = strings.Join(schemas, ";")
+	}(c)
+
+	// GetSrvVSchema
+	go func(c *cluster.Cluster) {
+		defer wg.Done()
+
+		res, err := c.Vtctld.GetSrvVSchema(ctx, &vtctldatapb.GetSrvVSchemaRequest{
+			Cell: tablet.Tablet.Alias.Cell,
+		})
+
+		if err != nil {
+			er.RecordError(err)
+			return
+		}
+
+		ksvs, ok := res.SrvVSchema.Keyspaces[req.Keyspace]
+		if !ok {
+			er.RecordError(fmt.Errorf("%w: keyspace %s", ErrNoSrvVSchema, req.Keyspace))
+			return
+		}
+
+		ksvsb, err := json.Marshal(&ksvs)
+		if err != nil {
+			er.RecordError(err)
+			return
+		}
+
+		srvVSchema = fmt.Sprintf(`{"%s": %s}`, req.Keyspace, string(ksvsb))
+	}(c)
+
+	// FindAllShardsInKeyspace
+	go func(c *cluster.Cluster) {
+		defer wg.Done()
+
+		ksm, err := c.Vtctld.FindAllShardsInKeyspace(ctx, &vtctldatapb.FindAllShardsInKeyspaceRequest{
+			Keyspace: req.Keyspace,
+		})
+
+		if err != nil {
+			er.RecordError(err)
+			return
+		}
+
+		vtsm := make(map[string]*topodatapb.Shard)
+		for _, s := range ksm.Shards {
+			vtsm[s.Name] = s.Shard
+		}
+
+		vtsb, err := json.Marshal(&vtsm)
+		if err != nil {
+			er.RecordError(err)
+			return
+		}
+
+		shardMap = fmt.Sprintf(`{"%s": %s}`, req.Keyspace, string(vtsb))
+	}(c)
+
+	wg.Wait()
+
+	if er.HasErrors() {
+		return nil, er.Error()
+	}
+
+	opts := &vtexplain.Options{ReplicationMode: "ROW"}
+
+	if err := vtexplain.Init(srvVSchema, schema, shardMap, opts); err != nil {
+		return nil, err
+	}
+
+	plans, err := vtexplain.Run(req.Sql)
+	if err != nil {
+		return nil, err
+	}
+
+	response := vtexplain.ExplainsAsText(plans)
+	return &vtadminpb.VTExplainResponse{
+		Response: response,
+	}, nil
 }

@@ -1032,7 +1032,7 @@ func commandRefreshStateByShard(ctx context.Context, wr *wrangler.Wrangler, subF
 	if *cellsStr != "" {
 		cells = strings.Split(*cellsStr, ",")
 	}
-	return wr.RefreshTabletsByShard(ctx, si, nil /* tabletTypes */, cells)
+	return wr.RefreshTabletsByShard(ctx, si, cells)
 }
 
 func commandRunHealthCheck(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
