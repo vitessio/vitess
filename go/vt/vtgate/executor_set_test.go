@@ -134,7 +134,7 @@ func TestExecutorSet(t *testing.T) {
 		err: "invalid transaction_mode: aa",
 	}, {
 		in:  "set transaction_mode = 1",
-		err: "unexpected value type for transaction_mode: INT64",
+		err: "Incorrect argument type to variable 'transaction_mode': INT64",
 	}, {
 		in:  "set workload = 'unspecified'",
 		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{Workload: querypb.ExecuteOptions_UNSPECIFIED}},
@@ -152,7 +152,7 @@ func TestExecutorSet(t *testing.T) {
 		err: "invalid workload: aa",
 	}, {
 		in:  "set workload = 1",
-		err: "unexpected value type for workload: INT64",
+		err: "Incorrect argument type to variable 'workload': INT64",
 	}, {
 		in:  "set transaction_mode = 'twopc', autocommit=1",
 		out: &vtgatepb.Session{Autocommit: true, TransactionMode: vtgatepb.TransactionMode_TWOPC},
@@ -164,7 +164,7 @@ func TestExecutorSet(t *testing.T) {
 		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{SqlSelectLimit: 0}},
 	}, {
 		in:  "set sql_select_limit = 'asdfasfd'",
-		err: "failed to evaluate value for sql_select_limit: expected int, unexpected value type: string",
+		err: "Incorrect argument type to variable 'sql_select_limit': VARBINARY",
 	}, {
 		in:  "set autocommit = 1+1",
 		err: "Variable 'autocommit' can't be set to the value: 2 is not a boolean",
@@ -176,7 +176,7 @@ func TestExecutorSet(t *testing.T) {
 		out: &vtgatepb.Session{Autocommit: true},
 	}, {
 		in:  "set foo = 1",
-		err: "unsupported construct in set: session foo = 1",
+		err: "Unknown system variable 'session foo = 1'",
 	}, {
 		in:  "set names utf8",
 		out: &vtgatepb.Session{Autocommit: true},

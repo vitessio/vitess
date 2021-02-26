@@ -85,7 +85,7 @@ func pushProjection(expr *sqlparser.AliasedExpr, plan logicalPlan, semTable *sem
 		}
 		return len(node.Cols) - 1, nil
 	default:
-		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "not yet supported %T", node)
+		return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%T not yet supported", node)
 	}
 }
 
@@ -139,7 +139,7 @@ func pushPredicate(exprs []sqlparser.Expr, plan logicalPlan, semTable *semantics
 		err = pushPredicate(rhs, node.Right, semTable)
 		return err
 	default:
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "not yet supported %T", node)
+		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%T not yet supported", node)
 	}
 }
 
@@ -204,7 +204,7 @@ func (pb *primitiveBuilder) processSelect(sel *sqlparser.Select, outer *symtab, 
 	// Check and error if there is any locking function present in select expression.
 	for _, expr := range sel.SelectExprs {
 		if aExpr, ok := expr.(*sqlparser.AliasedExpr); ok && sqlparser.IsLockingFunc(aExpr.Expr) {
-			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%v allowed only with dual", sqlparser.String(aExpr))
+			return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%v allowed only with dual", sqlparser.String(aExpr))
 		}
 	}
 	if sel.SQLCalcFoundRows {
@@ -289,7 +289,7 @@ func setMiscFunc(in logicalPlan, sel *sqlparser.Select) error {
 			query.Lock = sel.Lock
 			if sel.Into != nil {
 				if node.eroute.Opcode != engine.SelectUnsharded {
-					return false, nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: this construct is not supported on sharded keyspace")
+					return false, nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "INTO is not supported on sharded keyspace")
 				}
 				query.Into = sel.Into
 			}

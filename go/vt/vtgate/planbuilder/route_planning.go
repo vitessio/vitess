@@ -39,7 +39,7 @@ func gen4Planner(_ string) func(sqlparser.Statement, ContextVSchema) (engine.Pri
 	return func(stmt sqlparser.Statement, vschema ContextVSchema) (engine.Primitive, error) {
 		sel, ok := stmt.(*sqlparser.Select)
 		if !ok {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "%T not yet supported", stmt)
+			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%T not yet supported", stmt)
 		}
 		return newBuildSelectPlan(sel, vschema)
 	}
@@ -131,7 +131,7 @@ func planProjections(sel *sqlparser.Select, plan logicalPlan, semTable *semantic
 					return err
 				}
 			default:
-				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "not yet supported %T", e)
+				return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "not yet supported %T", e)
 			}
 		}
 

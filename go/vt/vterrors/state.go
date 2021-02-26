@@ -14,6 +14,8 @@ const (
 	ForbidSchemaChange
 	NonUniqTable
 	SyntaxError
+	WrongGroupField
+	WrongTypeForVar
 	WrongValueForVar
 
 	// failed precondition
@@ -26,6 +28,7 @@ const (
 	DbDropExists
 	NoSuchTable
 	SPDoesNotExist
+	UnknownSystemVariable
 	UnknownTable
 
 	// already exists
