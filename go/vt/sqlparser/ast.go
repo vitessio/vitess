@@ -105,6 +105,14 @@ func Parse(sql string) (Statement, error) {
 	if tokenizer.ParseTree == nil {
 		return nil, ErrEmpty
 	}
+
+	tokenizer.ParseTree.walkSubtree(func(node SQLNode) (kontinue bool, err error) {
+		if node, ok := node.(*AliasedExpr); ok && node.EndParsePos > 0 {
+			node.InputExpression = sql[node.StartParsePos:node.EndParsePos]
+		}
+		return true, nil
+	})
+
 	return tokenizer.ParseTree, nil
 }
 
@@ -2444,6 +2452,7 @@ type AliasedExpr struct {
 	As   ColIdent
 	StartParsePos int
 	EndParsePos int
+	InputExpression string
 }
 
 // Format formats the node.

@@ -40,6 +40,7 @@ type Tokenizer struct {
 	SkipToEnd           bool
 	lastChar            uint16
 	Position            int
+	OldPosition         int
 	lastToken           []byte
 	lastNonNilToken     []byte
 	LastError           error
@@ -538,6 +539,7 @@ func (tkn *Tokenizer) Error(err string) {
 // Scan scans the tokenizer for the next token and returns
 // the token type and an optional value.
 func (tkn *Tokenizer) Scan() (int, []byte) {
+	tkn.OldPosition = tkn.Position
 	if tkn.specialComment != nil {
 		// Enter specialComment scan mode.
 		// for scanning such kind of comment: /*! MySQL-specific code */
