@@ -219,8 +219,7 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 			retryDone, bufferErr := gw.buffer.WaitForFailoverEnd(ctx, target.Keyspace, target.Shard, err)
 			if bufferErr != nil {
 				// Buffering failed e.g. buffer is already full. Do not retry.
-				err = vterrors.Errorf(
-					vterrors.Code(bufferErr),
+				err = vterrors.Errorf(vterrors.Code(bufferErr),
 					"failed to automatically buffer and retry failed request during failover: %v original err (type=%T): %v",
 					bufferErr, err, err)
 				break
