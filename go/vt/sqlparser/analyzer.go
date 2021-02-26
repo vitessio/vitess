@@ -130,7 +130,7 @@ func CachePlan(stmt Statement) bool {
 	return false
 }
 
-//MustRewriteAST takes Statement and returns if the statement is set statement.
+//MustRewriteAST takes Statement and returns true if RewriteAST must run on it for correct execution irrespective of user flags.
 func MustRewriteAST(stmt Statement) bool {
 	switch node := stmt.(type) {
 	case *Set:
