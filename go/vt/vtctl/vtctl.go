@@ -312,13 +312,13 @@ var commands = []commandGroup{
 				"[-dry_run] [-rename_tables] <keyspace.workflow>",
 				"After a MoveTables or Resharding workflow cleanup unused artifacts like source tables, source shards and blacklists"},
 			{"CreateLookupVindex", commandCreateLookupVindex,
-				"[-cell=<cell>] [-tablet_types=<source_tablet_types>] <keyspace> <json_spec>",
+				"[-cell=<source_cells> DEPRECATED] [-cells=<source_cells>] [-tablet_types=<source_tablet_types>] <keyspace> <json_spec>",
 				`Create and backfill a lookup vindex. the json_spec must contain the vindex and colvindex specs for the new lookup.`},
 			{"ExternalizeVindex", commandExternalizeVindex,
 				"<keyspace>.<vindex>",
 				`Externalize a backfilled vindex.`},
 			{"Materialize", commandMaterialize,
-				`<json_spec>, example : '{"workflow": "aaa", "source_keyspace": "source", "target_keyspace": "target", "table_settings": [{"target_table": "customer", "source_expression": "select * from customer", "create_ddl": "copy"}]}'`,
+				`[-cells=<cells>] [-tablet_types=<source_tablet_types>] <json_spec>, example : '{"workflow": "aaa", "source_keyspace": "source", "target_keyspace": "target", "table_settings": [{"target_table": "customer", "source_expression": "select * from customer", "create_ddl": "copy"}]}'`,
 				"Performs materialization based on the json spec. Is used directly to form VReplication rules, with an optional step to copy table structure/DDL."},
 			{"SplitClone", commandSplitClone,
 				"<keyspace> <from_shards> <to_shards>",
@@ -2263,6 +2263,8 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 }
 
 func commandCreateLookupVindex(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	cells := subFlags.String("cells", "", "Cells to replicate from.")
+	//TODO: keep -cell around for backward compatibility and remove it in a future version
 	cell := subFlags.String("cell", "", "Cell to replicate from.")
 	tabletTypes := subFlags.String("tablet_types", "", "Source tablet types to replicate from.")
 	if err := subFlags.Parse(args); err != nil {
@@ -2270,6 +2272,9 @@ func commandCreateLookupVindex(ctx context.Context, wr *wrangler.Wrangler, subFl
 	}
 	if subFlags.NArg() != 2 {
 		return fmt.Errorf("two arguments are required: keyspace and json_spec")
+	}
+	if *cells == "" && *cell != "" {
+		*cells = *cell
 	}
 	keyspace := subFlags.Arg(0)
 	specs := &vschemapb.Keyspace{}
@@ -2290,6 +2295,8 @@ func commandExternalizeVindex(ctx context.Context, wr *wrangler.Wrangler, subFla
 }
 
 func commandMaterialize(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	cells := subFlags.String("cells", "", "Cell to replicate from.")
+	tabletTypes := subFlags.String("tablet_types", "", "Source tablet types to replicate from.")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -2300,6 +2307,8 @@ func commandMaterialize(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 	if err := json2.Unmarshal([]byte(subFlags.Arg(0)), ms); err != nil {
 		return err
 	}
+	ms.Cell = *cells
+	ms.TabletTypes = *tabletTypes
 	return wr.Materialize(ctx, ms)
 }
 
