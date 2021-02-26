@@ -150,6 +150,14 @@ func (r *SubImpl) String() string {
 }
 func (r *SubImpl) iface() {}
 
+type InterfaceContainer struct {
+	v interface{}
+}
+
+func (r InterfaceContainer) String() string {
+	return fmt.Sprintf("%v", r.v)
+}
+
 // ast type helpers
 
 func sliceStringAST(els ...AST) string {
