@@ -22,22 +22,6 @@ func replaceInterfaceSlice(idx int) func(AST, AST) {
 		container.(InterfaceSlice)[idx] = newNode.(AST)
 	}
 }
-
-type leafSlicer int
-
-func (l *leafSlicer) replace(new, container AST) {
-	container.(LeafSlice)[int(*l)] = new.(*Leaf)
-}
-
-func (l *leafSlicer) inc() {
-	*l++
-}
-
-/*
-pkg: vitess.io/vitess/go/tools/asthelpergen/integration
-BenchmarkSliceReplacerA-16        939621              1290 ns/op
-BenchmarkSliceReplacerB-16       1000000              1183 ns/op
-*/
 func replaceLeafSlice(idx int) func(AST, AST) {
 	return func(newNode, container AST) {
 		container.(LeafSlice)[idx] = newNode.(*Leaf)
@@ -96,15 +80,8 @@ func (a *application) apply(parent, node AST, replacer replacerFunc) {
 		for x, el := range n {
 			a.apply(node, el, replaceLeafSlice(x))
 		}
-		replacer := leafSlicer(0)
-		for _, el := range n {
-			a.apply(node, el, replacer.replace)
-			replacer.inc()
-		}
 	case *RefContainer:
-		a.apply(node, n.ASTType, func(newNode, parent AST) {
-			parent.(*RefContainer).ASTType = newNode.(AST)
-		})
+		a.apply(node, n.ASTType, replaceRefOfRefContainerASTType)
 		a.apply(node, n.ASTImplementationType, replaceRefOfRefContainerASTImplementationType)
 	case *RefSliceContainer:
 		for x, el := range n.ASTElements {

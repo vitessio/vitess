@@ -60,9 +60,10 @@ func CloneAlterOption(in AlterOption) AlterOption {
 		return CloneRefOfTablespaceOperation(in)
 	case *Validation:
 		return CloneRefOfValidation(in)
+	default:
+		// this should never happen
+		return nil
 	}
-	// this should never happen
-	return nil
 }
 func CloneCharacteristic(in Characteristic) Characteristic {
 	if in == nil {
@@ -73,9 +74,10 @@ func CloneCharacteristic(in Characteristic) Characteristic {
 		return in
 	case IsolationLevel:
 		return in
+	default:
+		// this should never happen
+		return nil
 	}
-	// this should never happen
-	return nil
 }
 func CloneColTuple(in ColTuple) ColTuple {
 	if in == nil {
@@ -88,9 +90,10 @@ func CloneColTuple(in ColTuple) ColTuple {
 		return CloneRefOfSubquery(in)
 	case ValTuple:
 		return CloneValTuple(in)
+	default:
+		// this should never happen
+		return nil
 	}
-	// this should never happen
-	return nil
 }
 func CloneConstraintInfo(in ConstraintInfo) ConstraintInfo {
 	if in == nil {
@@ -101,9 +104,10 @@ func CloneConstraintInfo(in ConstraintInfo) ConstraintInfo {
 		return CloneRefOfCheckConstraintDefinition(in)
 	case *ForeignKeyDefinition:
 		return CloneRefOfForeignKeyDefinition(in)
+	default:
+		// this should never happen
+		return nil
 	}
-	// this should never happen
-	return nil
 }
 func CloneDBDDLStatement(in DBDDLStatement) DBDDLStatement {
 	if in == nil {
@@ -116,9 +120,10 @@ func CloneDBDDLStatement(in DBDDLStatement) DBDDLStatement {
 		return CloneRefOfCreateDatabase(in)
 	case *DropDatabase:
 		return CloneRefOfDropDatabase(in)
+	default:
+		// this should never happen
+		return nil
 	}
-	// this should never happen
-	return nil
 }
 func CloneDDLStatement(in DDLStatement) DDLStatement {
 	if in == nil {
@@ -141,9 +146,10 @@ func CloneDDLStatement(in DDLStatement) DDLStatement {
 		return CloneRefOfRenameTable(in)
 	case *TruncateTable:
 		return CloneRefOfTruncateTable(in)
+	default:
+		// this should never happen
+		return nil
 	}
-	// this should never happen
-	return nil
 }
 func CloneExplain(in Explain) Explain {
 	if in == nil {
@@ -154,9 +160,10 @@ func CloneExplain(in Explain) Explain {
 		return CloneRefOfExplainStmt(in)
 	case *ExplainTab:
 		return CloneRefOfExplainTab(in)
+	default:
+		// this should never happen
+		return nil
 	}
-	// this should never happen
-	return nil
 }
 func CloneExpr(in Expr) Expr {
 	if in == nil {
@@ -225,9 +232,10 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfValuesFuncExpr(in)
 	case *XorExpr:
 		return CloneRefOfXorExpr(in)
+	default:
+		// this should never happen
+		return nil
 	}
-	// this should never happen
-	return nil
 }
 func CloneInsertRows(in InsertRows) InsertRows {
 	if in == nil {
@@ -242,9 +250,10 @@ func CloneInsertRows(in InsertRows) InsertRows {
 		return CloneRefOfUnion(in)
 	case Values:
 		return CloneValues(in)
+	default:
+		// this should never happen
+		return nil
 	}
-	// this should never happen
-	return nil
 }
 func CloneSQLNode(in SQLNode) SQLNode {
 	if in == nil {
@@ -539,9 +548,10 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfWhere(in)
 	case *XorExpr:
 		return CloneRefOfXorExpr(in)
+	default:
+		// this should never happen
+		return nil
 	}
-	// this should never happen
-	return nil
 }
 func CloneSelectExpr(in SelectExpr) SelectExpr {
 	if in == nil {
@@ -554,9 +564,10 @@ func CloneSelectExpr(in SelectExpr) SelectExpr {
 		return CloneNextval(in)
 	case *StarExpr:
 		return CloneRefOfStarExpr(in)
+	default:
+		// this should never happen
+		return nil
 	}
-	// this should never happen
-	return nil
 }
 func CloneSelectStatement(in SelectStatement) SelectStatement {
 	if in == nil {
@@ -569,9 +580,10 @@ func CloneSelectStatement(in SelectStatement) SelectStatement {
 		return CloneRefOfSelect(in)
 	case *Union:
 		return CloneRefOfUnion(in)
+	default:
+		// this should never happen
+		return nil
 	}
-	// this should never happen
-	return nil
 }
 func CloneShowInternal(in ShowInternal) ShowInternal {
 	if in == nil {
@@ -584,9 +596,10 @@ func CloneShowInternal(in ShowInternal) ShowInternal {
 		return CloneRefOfShowCreate(in)
 	case *ShowLegacy:
 		return CloneRefOfShowLegacy(in)
+	default:
+		// this should never happen
+		return nil
 	}
-	// this should never happen
-	return nil
 }
 func CloneSimpleTableExpr(in SimpleTableExpr) SimpleTableExpr {
 	if in == nil {
@@ -597,9 +610,10 @@ func CloneSimpleTableExpr(in SimpleTableExpr) SimpleTableExpr {
 		return CloneRefOfDerivedTable(in)
 	case TableName:
 		return CloneTableName(in)
+	default:
+		// this should never happen
+		return nil
 	}
-	// this should never happen
-	return nil
 }
 func CloneStatement(in Statement) Statement {
 	if in == nil {
@@ -684,9 +698,10 @@ func CloneStatement(in Statement) Statement {
 		return CloneRefOfUse(in)
 	case *VStream:
 		return CloneRefOfVStream(in)
+	default:
+		// this should never happen
+		return nil
 	}
-	// this should never happen
-	return nil
 }
 func CloneTableExpr(in TableExpr) TableExpr {
 	if in == nil {
@@ -699,9 +714,10 @@ func CloneTableExpr(in TableExpr) TableExpr {
 		return CloneRefOfJoinTableExpr(in)
 	case *ParenTableExpr:
 		return CloneRefOfParenTableExpr(in)
+	default:
+		// this should never happen
+		return nil
 	}
-	// this should never happen
-	return nil
 }
 func CloneRefOfAddColumns(n *AddColumns) *AddColumns {
 	if n == nil {
@@ -2020,7 +2036,7 @@ func CloneParenSelect(n ParenSelect) ParenSelect {
 }
 func CloneSelect(n Select) Select {
 	return Select{
-		Cache:            n.Cache,
+		Cache:            CloneRefOfbool(n.Cache),
 		Comments:         CloneComments(n.Comments),
 		Distinct:         n.Distinct,
 		From:             CloneTableExprs(n.From),
@@ -2086,7 +2102,7 @@ func CloneCallProc(n CallProc) CallProc {
 func CloneColumnDefinition(n ColumnDefinition) ColumnDefinition {
 	return ColumnDefinition{
 		Name: CloneColIdent(n.Name),
-		Type: n.Type,
+		Type: CloneColumnType(n.Type),
 	}
 }
 func CloneColumnType(n ColumnType) ColumnType {
@@ -2095,7 +2111,7 @@ func CloneColumnType(n ColumnType) ColumnType {
 		Collate:    n.Collate,
 		EnumValues: CloneSliceOfstring(n.EnumValues),
 		Length:     CloneRefOfLiteral(n.Length),
-		Options:    n.Options,
+		Options:    CloneRefOfColumnTypeOptions(n.Options),
 		Scale:      CloneRefOfLiteral(n.Scale),
 		Type:       n.Type,
 		Unsigned:   n.Unsigned,
@@ -2315,7 +2331,7 @@ func CloneShowLegacy(n ShowLegacy) ShowLegacy {
 		OnTable:                CloneTableName(n.OnTable),
 		Scope:                  n.Scope,
 		ShowCollationFilterOpt: CloneExpr(n.ShowCollationFilterOpt),
-		ShowTablesOpt:          n.ShowTablesOpt,
+		ShowTablesOpt:          CloneRefOfShowTablesOpt(n.ShowTablesOpt),
 		Table:                  CloneTableName(n.Table),
 		Type:                   n.Type,
 	}
@@ -2438,6 +2454,13 @@ func CloneSliceOfRefOfWhen(n []*When) []*When {
 	}
 	return res
 }
+func CloneRefOfbool(n *bool) *bool {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	return &out
+}
 func CloneSliceOfRefOfUnionSelect(n []*UnionSelect) []*UnionSelect {
 	res := make([]*UnionSelect, len(n))
 	for i, x := range n {
@@ -2451,6 +2474,13 @@ func CloneSliceOfColIdent(n []ColIdent) []ColIdent {
 		res[i] = CloneColIdent(x)
 	}
 	return res
+}
+func CloneRefOfColumnTypeOptions(n *ColumnTypeOptions) *ColumnTypeOptions {
+	if n == nil {
+		return nil
+	}
+	out := CloneColumnTypeOptions(*n)
+	return &out
 }
 func CloneSliceOfstring(n []string) []string {
 	res := make([]string, len(n))
@@ -2492,6 +2522,13 @@ func CloneSliceOfCharacteristic(n []Characteristic) []Characteristic {
 	}
 	return res
 }
+func CloneRefOfShowTablesOpt(n *ShowTablesOpt) *ShowTablesOpt {
+	if n == nil {
+		return nil
+	}
+	out := CloneShowTablesOpt(*n)
+	return &out
+}
 func CloneSliceOfRefOfIndexDefinition(n []*IndexDefinition) []*IndexDefinition {
 	res := make([]*IndexDefinition, len(n))
 	for i, x := range n {
@@ -2527,6 +2564,16 @@ func CloneRefOfRenameTablePair(n *RenameTablePair) *RenameTablePair {
 	out := CloneRenameTablePair(*n)
 	return &out
 }
+func CloneColumnTypeOptions(n ColumnTypeOptions) ColumnTypeOptions {
+	return ColumnTypeOptions{
+		Autoincrement: n.Autoincrement,
+		Comment:       CloneRefOfLiteral(n.Comment),
+		Default:       CloneExpr(n.Default),
+		KeyOpt:        n.KeyOpt,
+		NotNull:       n.NotNull,
+		OnUpdate:      CloneExpr(n.OnUpdate),
+	}
+}
 func CloneRefOfIndexColumn(n *IndexColumn) *IndexColumn {
 	if n == nil {
 		return nil
@@ -2547,6 +2594,13 @@ func CloneRefOfTableAndLockType(n *TableAndLockType) *TableAndLockType {
 	}
 	out := CloneTableAndLockType(*n)
 	return &out
+}
+func CloneShowTablesOpt(n ShowTablesOpt) ShowTablesOpt {
+	return ShowTablesOpt{
+		DbName: n.DbName,
+		Filter: CloneRefOfShowFilter(n.Filter),
+		Full:   n.Full,
+	}
 }
 func CloneRenameTablePair(n RenameTablePair) RenameTablePair {
 	return RenameTablePair{
