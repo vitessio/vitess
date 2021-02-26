@@ -212,7 +212,7 @@ func (ins *Insert) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.B
 
 // GetFields fetches the field info.
 func (ins *Insert) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: unreachable code for %q", ins.Query)
+	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unreachable code for %q", ins.Query)
 }
 
 func (ins *Insert) execInsertUnsharded(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
@@ -363,7 +363,7 @@ func (ins *Insert) getInsertShardedRoute(vcursor VCursor, bindVars map[string]*q
 	rowCount := 0
 	for vIdx, vColValues := range ins.VindexValues {
 		if len(vColValues.Values) != len(ins.Table.ColumnVindexes[vIdx].Columns) {
-			return nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: supplied vindex column values don't match vschema: %v %v", vColValues, ins.Table.ColumnVindexes[vIdx].Columns)
+			return nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] supplied vindex column values don't match vschema: %v %v", vColValues, ins.Table.ColumnVindexes[vIdx].Columns)
 		}
 		for colIdx, colValues := range vColValues.Values {
 			rowsResolvedValues, err := colValues.ResolveList(bindVars)
@@ -373,13 +373,13 @@ func (ins *Insert) getInsertShardedRoute(vcursor VCursor, bindVars map[string]*q
 			// This is the first iteration: allocate for transpose.
 			if colIdx == 0 {
 				if len(rowsResolvedValues) == 0 {
-					return nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: rowcount is zero for inserts: %v", rowsResolvedValues)
+					return nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] rowcount is zero for inserts: %v", rowsResolvedValues)
 				}
 				if rowCount == 0 {
 					rowCount = len(rowsResolvedValues)
 				}
 				if rowCount != len(rowsResolvedValues) {
-					return nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: uneven row values for inserts: %d %d", rowCount, len(rowsResolvedValues))
+					return nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] uneven row values for inserts: %d %d", rowCount, len(rowsResolvedValues))
 				}
 				vindexRowsValues[vIdx] = make([][]sqltypes.Value, rowCount)
 			}

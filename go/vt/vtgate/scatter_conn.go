@@ -161,7 +161,7 @@ func (stc *ScatterConn) ExecuteMultiShard(
 ) (qr *sqltypes.Result, errs []error) {
 
 	if len(rss) != len(queries) {
-		return nil, []error{vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: got mismatched number of queries and shards")}
+		return nil, []error{vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] got mismatched number of queries and shards")}
 	}
 
 	// mu protects qr
@@ -246,7 +246,7 @@ func (stc *ScatterConn) ExecuteMultiShard(
 					return info.updateTransactionAndReservedID(transactionID, reservedID, alias), err
 				}
 			default:
-				return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: unexpected actionNeeded on ScatterConn#ExecuteMultiShard %v", info.actionNeeded)
+				return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unexpected actionNeeded on query execution: %v", info.actionNeeded)
 			}
 			mu.Lock()
 			defer mu.Unlock()
@@ -632,7 +632,7 @@ func (stc *ScatterConn) ExecuteLock(
 	switch info.actionNeeded {
 	case nothing:
 		if reservedID == 0 {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: reservedID zero not expected %v", reservedID)
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] reserved id zero not expected %v", reservedID)
 		}
 		qr, err = qs.Execute(ctx, rs.Target, query.Sql, query.BindVariables, 0 /* transactionID */, reservedID, opts)
 		if err != nil && wasConnectionClosed(err) {
@@ -654,7 +654,7 @@ func (stc *ScatterConn) ExecuteLock(
 			})
 		}
 	default:
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: unexpected actionNeeded on ScatterConn#ExecuteLock %v", info.actionNeeded)
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unexpected actionNeeded on lock execution: %v", info.actionNeeded)
 	}
 
 	if err != nil {
@@ -710,7 +710,7 @@ func lockInfo(target *querypb.Target, session *SafeSession) (*shardActionInfo, e
 	}
 
 	if !proto.Equal(target, session.LockSession.Target) {
-		return nil, vterrors.Errorf(vtrpcpb.Code_ALREADY_EXISTS, "target does match the existing lock session target: (%v, %v)", target, session.LockSession.Target)
+		return nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "target does match the existing lock session target: (%v, %v)", target, session.LockSession.Target)
 	}
 
 	return &shardActionInfo{

@@ -107,7 +107,7 @@ func createQGFromSelectStatement(selStmt sqlparser.SelectStatement, semTable *se
 		return createQGFromSelectStatement(stmt.Select, semTable)
 	}
 
-	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: not reachable %T", selStmt)
+	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] not reachable %T", selStmt)
 }
 
 func newQueryGraph() *queryGraph {

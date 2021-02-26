@@ -45,7 +45,7 @@
 
 # simple create table with table qualifier that does not exists
 "create table a.b(id int)"
-"no keyspace with name [a] found"
+"Unknown database 'a' in vschema"
 
 #Alter table
 "alter table a ADD id int"
