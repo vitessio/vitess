@@ -237,7 +237,7 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 		tablets := gw.hc.GetHealthyTabletStats(target)
 		if len(tablets) == 0 {
 			// fail fast if there is no tablet
-			err = vterrors.New(vtrpcpb.Code_UNAVAILABLE, "no valid tablet")
+			err = vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "no healthy tablet available for '%s'", target.String())
 			break
 		}
 		gw.shuffleTablets(gw.localCell, tablets)

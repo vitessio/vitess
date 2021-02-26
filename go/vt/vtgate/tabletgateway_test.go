@@ -202,7 +202,7 @@ func testTabletGatewayGeneric(t *testing.T, f func(tg *TabletGateway, target *qu
 	tg := NewTabletGateway(context.Background(), hc, nil, "cell")
 
 	// no tablet
-	want := []string{"target: ks.0.replica", "no valid tablet"}
+	want := []string{"target: ks.0.replica", `no healthy tablet available for 'keyspace:"ks" shard:"0" tablet_type:REPLICA`}
 	err := f(tg, target)
 	verifyShardErrors(t, err, want, vtrpcpb.Code_UNAVAILABLE)
 

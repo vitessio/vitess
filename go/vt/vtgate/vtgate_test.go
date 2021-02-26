@@ -21,6 +21,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"context"
 
 	"github.com/golang/protobuf/proto"
@@ -173,10 +175,8 @@ func TestVTGateExecuteWithKeyspaceShard(t *testing.T) {
 		"select id from none",
 		nil,
 	)
-	want = "TestUnsharded.noshard.master: no valid tablet"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("Execute: %v, want %s", err, want)
-	}
+	require.Error(t, err)
+	require.Contains(t, err.Error(), `no healthy tablet available for 'keyspace:"TestUnsharded" shard:"noshard" tablet_type:MASTER`)
 }
 
 func TestVTGateStreamExecute(t *testing.T) {
