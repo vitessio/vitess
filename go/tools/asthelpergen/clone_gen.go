@@ -67,8 +67,14 @@ func isSlice(t types.Type) bool {
 const cloneName = "Clone"
 
 func (c *cloneGen) readType(t types.Type, arg jen.Code) jen.Code {
-	if _, ok := t.Underlying().(*types.Basic); ok {
+	switch t.Underlying().(type) {
+	case *types.Basic:
 		return arg
+	case *types.Interface:
+		if types.TypeString(t, noQualifier) == "interface{}" {
+			// these fields have to be taken care of manually
+			return arg
+		}
 	}
 	c.todo = append(c.todo, t)
 	return jen.Id(cloneName + printableTypeName(t)).Call(arg)
@@ -177,12 +183,12 @@ func (c *cloneGen) makeInterface(t types.Type, iface *types.Interface) error {
 
 	var cases []jen.Code
 	_ = findImplementations(c.scope, iface, func(t types.Type) error {
+		typeString := types.TypeString(t, noQualifier)
 
 		switch t := t.(type) {
 		case *types.Pointer:
 			_, isIface := t.Elem().(*types.Interface)
 			if !isIface {
-				typeString := types.TypeString(t, noQualifier)
 				cases = append(cases, jen.Case(jen.Id(typeString)).Block(
 					jen.Return(c.readType(t, jen.Id("in")))))
 			}
@@ -190,14 +196,13 @@ func (c *cloneGen) makeInterface(t types.Type, iface *types.Interface) error {
 		case *types.Named:
 			_, isIface := t.Underlying().(*types.Interface)
 			if !isIface {
-				typeString := types.TypeString(t, noQualifier)
 				cases = append(cases, jen.Case(jen.Id(typeString)).Block(
 					jen.Return(c.readType(t, jen.Id("in")))))
 			}
 
 		default:
 
-			panic(fmt.Sprintf("%T\n", t))
+			panic(fmt.Sprintf("%T %s", t, typeString))
 		}
 
 		return nil

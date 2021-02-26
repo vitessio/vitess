@@ -30,6 +30,10 @@ func CloneAST(in AST) AST {
 		return CloneBytes(in)
 	case *Bytes:
 		return CloneRefOfBytes(in)
+	case InterfaceContainer:
+		return CloneInterfaceContainer(in)
+	case *InterfaceContainer:
+		return CloneRefOfInterfaceContainer(in)
 	case InterfaceSlice:
 		return CloneInterfaceSlice(in)
 	case *InterfaceSlice:
@@ -86,6 +90,16 @@ func CloneRefOfBytes(n *Bytes) *Bytes {
 		return nil
 	}
 	out := CloneBytes(*n)
+	return &out
+}
+func CloneInterfaceContainer(n InterfaceContainer) InterfaceContainer {
+	return InterfaceContainer{v: n}
+}
+func CloneRefOfInterfaceContainer(n *InterfaceContainer) *InterfaceContainer {
+	if n == nil {
+		return nil
+	}
+	out := CloneInterfaceContainer(*n)
 	return &out
 }
 func CloneInterfaceSlice(n InterfaceSlice) InterfaceSlice {
