@@ -22,6 +22,10 @@ func CloneAST(in AST) AST {
 		return nil
 	}
 	switch in := in.(type) {
+	case BasicType:
+		return in
+	case *BasicType:
+		return CloneRefOfBasicType(in)
 	case Bytes:
 		return CloneBytes(in)
 	case *Bytes:
@@ -64,6 +68,13 @@ func CloneSubIface(in SubIface) SubIface {
 	}
 	// this should never happen
 	return nil
+}
+func CloneRefOfBasicType(n *BasicType) *BasicType {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	return &out
 }
 func CloneBytes(n Bytes) Bytes {
 	res := make(Bytes, len(n))

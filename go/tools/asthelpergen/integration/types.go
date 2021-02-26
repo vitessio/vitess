@@ -128,6 +128,12 @@ func (r LeafSlice) String() string {
 	return strings.Join(elements, ", ")
 }
 
+type BasicType int
+
+func (r BasicType) String() string {
+	return fmt.Sprintf("int(%d)", r)
+}
+
 // We want to support all types that are used as field types, which can include interfaces.
 // Example would be sqlparser.Expr that implements sqlparser.SQLNode
 type SubIface interface {

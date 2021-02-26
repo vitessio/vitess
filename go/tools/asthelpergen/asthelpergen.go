@@ -174,7 +174,7 @@ func printableTypeName(t types.Type) string {
 	case *types.Basic:
 		return t.Name()
 	default:
-		panic(fmt.Sprintf("unknown type %T", t))
+		panic(fmt.Sprintf("unknown type %T %v", t, t))
 	}
 }
 

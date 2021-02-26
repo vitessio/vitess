@@ -41,3 +41,7 @@ func TestClone2(t *testing.T) {
 	container.ASTImplementationType.v = 5
 	assert.NotEqual(t, container, clone)
 }
+
+func TestComplexStruct(t *testing.T) {
+
+}
