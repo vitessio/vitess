@@ -163,7 +163,7 @@ func Map(vindex Vindex, vcursor VCursor, rowsColValues [][]sqltypes.Value) ([]ke
 	case SingleColumn:
 		return vindex.Map(vcursor, firstColsOnly(rowsColValues))
 	}
-	return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "vindex does not have Map functions")
+	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vindex '%T' does not have Map function", vindex)
 }
 
 // Verify invokes the Verify implementation supplied by the vindex.
@@ -174,7 +174,7 @@ func Verify(vindex Vindex, vcursor VCursor, rowsColValues [][]sqltypes.Value, ks
 	case SingleColumn:
 		return vindex.Verify(vcursor, firstColsOnly(rowsColValues), ksids)
 	}
-	return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "vindex does not have Map functions")
+	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vindex '%T' does not have Verify function", vindex)
 }
 
 func firstColsOnly(rowsColValues [][]sqltypes.Value) []sqltypes.Value {

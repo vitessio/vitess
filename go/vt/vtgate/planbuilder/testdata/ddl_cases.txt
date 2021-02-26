@@ -98,7 +98,7 @@
 
 # create db foo
 "create database foo"
-"create database not allowed"
+"create database is not supported"
 
 # create db main
 "create database main"
@@ -120,7 +120,7 @@
 
 # alter db main
 "alter database main collate utf8"
-"alter database not allowed"
+"alter database is not supported"
 
 # drop db foo
 "drop database foo"
@@ -128,11 +128,11 @@
 
 # drop db main
 "drop database main"
-"drop database not allowed"
+"drop database is not supported"
 
 # drop db if exists main
 "drop database if exists main"
-"drop database not allowed"
+"drop database is not supported"
 
 # drop db if exists foo
 "drop schema if exists foo"

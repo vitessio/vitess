@@ -231,7 +231,7 @@ func (e *Executor) legacyExecute(ctx context.Context, safeSession *SafeSession, 
 	switch stmtType {
 	case sqlparser.StmtSelect, sqlparser.StmtInsert, sqlparser.StmtReplace, sqlparser.StmtUpdate,
 		sqlparser.StmtDelete, sqlparser.StmtDDL, sqlparser.StmtUse, sqlparser.StmtExplain, sqlparser.StmtOther, sqlparser.StmtFlush:
-		return 0, nil, vterrors.New(vtrpcpb.Code_INTERNAL, "BUG: not reachable as handled with plan execute")
+		return 0, nil, vterrors.New(vtrpcpb.Code_INTERNAL, "[BUG] not reachable, should be handled with plan execute")
 	case sqlparser.StmtSet:
 		qr, err := e.handleSet(ctx, sql, logStats)
 		return sqlparser.StmtSet, qr, err
