@@ -327,6 +327,7 @@ const (
 
 	// unimplemented
 	ERNotSupportedYet = 1235
+	ERUnsupportedPS   = 1295
 
 	// resource exhausted
 	ERDiskFull               = 1021
@@ -476,6 +477,7 @@ const (
 	ERBlobKeyWithoutLength         = 1170
 	ERPrimaryCantHaveNull          = 1171
 	ERTooManyRows                  = 1172
+	ERLockOrActiveTransaction      = 1192
 	ERUnknownSystemVariable        = 1193
 	ERSetConstantsOnly             = 1204
 	ERWrongArguments               = 1210

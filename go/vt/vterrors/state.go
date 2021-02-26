@@ -17,6 +17,7 @@ const (
 	WrongGroupField
 	WrongTypeForVar
 	WrongValueForVar
+	LockOrActiveTransaction
 
 	// failed precondition
 	NoDB
@@ -42,6 +43,7 @@ const (
 
 	// unimplemented
 	NotSupportedYet
+	UnsupportedPS
 
 	// permission denied
 	AccessDeniedError
