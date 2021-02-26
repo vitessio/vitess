@@ -22,6 +22,22 @@ func replaceInterfaceSlice(idx int) func(AST, AST) {
 		container.(InterfaceSlice)[idx] = newNode.(AST)
 	}
 }
+
+type leafSlicer int
+
+func (l *leafSlicer) replace(new, container AST) {
+	container.(LeafSlice)[int(*l)] = new.(*Leaf)
+}
+
+func (l *leafSlicer) inc() {
+	*l++
+}
+
+/*
+pkg: vitess.io/vitess/go/tools/asthelpergen/integration
+BenchmarkSliceReplacerA-16        939621              1290 ns/op
+BenchmarkSliceReplacerB-16       1000000              1183 ns/op
+*/
 func replaceLeafSlice(idx int) func(AST, AST) {
 	return func(newNode, container AST) {
 		container.(LeafSlice)[idx] = newNode.(*Leaf)
@@ -46,12 +62,6 @@ func replaceRefOfRefSliceContainerASTImplementationElements(idx int) func(AST, A
 func replaceRefOfSubImplinner(newNode, parent AST) {
 	parent.(*SubImpl).inner = newNode.(SubIface)
 }
-func replaceRefOfValueContainerASTType(newNode, parent AST) {
-	parent.(*ValueContainer).ASTType = newNode.(AST)
-}
-func replaceRefOfValueContainerASTImplementationType(newNode, parent AST) {
-	parent.(*ValueContainer).ASTImplementationType = newNode.(*Leaf)
-}
 func replaceValueSliceContainerASTElements(idx int) func(AST, AST) {
 	return func(newNode, container AST) {
 		container.(ValueSliceContainer).ASTElements[idx] = newNode.(AST)
@@ -60,16 +70,6 @@ func replaceValueSliceContainerASTElements(idx int) func(AST, AST) {
 func replaceValueSliceContainerASTImplementationElements(idx int) func(AST, AST) {
 	return func(newNode, container AST) {
 		container.(ValueSliceContainer).ASTImplementationElements[idx] = newNode.(*Leaf)
-	}
-}
-func replaceRefOfValueSliceContainerASTElements(idx int) func(AST, AST) {
-	return func(newNode, container AST) {
-		container.(*ValueSliceContainer).ASTElements[idx] = newNode.(AST)
-	}
-}
-func replaceRefOfValueSliceContainerASTImplementationElements(idx int) func(AST, AST) {
-	return func(newNode, container AST) {
-		container.(*ValueSliceContainer).ASTImplementationElements[idx] = newNode.(*Leaf)
 	}
 }
 func (a *application) apply(parent, node AST, replacer replacerFunc) {
@@ -87,7 +87,6 @@ func (a *application) apply(parent, node AST, replacer replacerFunc) {
 	switch n := node.(type) {
 	case Bytes:
 	case InterfaceContainer:
-	case *InterfaceContainer:
 	case InterfaceSlice:
 		for x, el := range n {
 			a.apply(node, el, replaceInterfaceSlice(x))
@@ -97,8 +96,15 @@ func (a *application) apply(parent, node AST, replacer replacerFunc) {
 		for x, el := range n {
 			a.apply(node, el, replaceLeafSlice(x))
 		}
+		replacer := leafSlicer(0)
+		for _, el := range n {
+			a.apply(node, el, replacer.replace)
+			replacer.inc()
+		}
 	case *RefContainer:
-		a.apply(node, n.ASTType, replaceRefOfRefContainerASTType)
+		a.apply(node, n.ASTType, func(newNode, parent AST) {
+			parent.(*RefContainer).ASTType = newNode.(AST)
+		})
 		a.apply(node, n.ASTImplementationType, replaceRefOfRefContainerASTImplementationType)
 	case *RefSliceContainer:
 		for x, el := range n.ASTElements {
@@ -112,22 +118,12 @@ func (a *application) apply(parent, node AST, replacer replacerFunc) {
 	case ValueContainer:
 		a.apply(node, n.ASTType, replacePanic("ValueContainer ASTType"))
 		a.apply(node, n.ASTImplementationType, replacePanic("ValueContainer ASTImplementationType"))
-	case *ValueContainer:
-		a.apply(node, n.ASTType, replaceRefOfValueContainerASTType)
-		a.apply(node, n.ASTImplementationType, replaceRefOfValueContainerASTImplementationType)
 	case ValueSliceContainer:
 		for x, el := range n.ASTElements {
 			a.apply(node, el, replaceValueSliceContainerASTElements(x))
 		}
 		for x, el := range n.ASTImplementationElements {
 			a.apply(node, el, replaceValueSliceContainerASTImplementationElements(x))
-		}
-	case *ValueSliceContainer:
-		for x, el := range n.ASTElements {
-			a.apply(node, el, replaceRefOfValueSliceContainerASTElements(x))
-		}
-		for x, el := range n.ASTImplementationElements {
-			a.apply(node, el, replaceRefOfValueSliceContainerASTImplementationElements(x))
 		}
 	}
 	if a.post != nil && !a.post(&a.cursor) {

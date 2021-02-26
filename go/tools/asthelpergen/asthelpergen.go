@@ -74,12 +74,16 @@ func newGenerator(mod *packages.Module, sizes types.Sizes, named *types.Named, g
 func findImplementations(scope *types.Scope, iff *types.Interface, impl func(types.Type) error) error {
 	for _, name := range scope.Names() {
 		obj := scope.Lookup(name)
+		if _, ok := obj.(*types.TypeName); !ok {
+			continue
+		}
 		baseType := obj.Type()
 		if types.Implements(baseType, iff) {
 			err := impl(baseType)
 			if err != nil {
 				return err
 			}
+			continue
 		}
 		pointerT := types.NewPointer(baseType)
 		if types.Implements(pointerT, iff) {
@@ -87,6 +91,7 @@ func findImplementations(scope *types.Scope, iff *types.Interface, impl func(typ
 			if err != nil {
 				return err
 			}
+			continue
 		}
 	}
 	return nil
@@ -288,9 +293,9 @@ func GenerateASTHelpers(packagePatterns []string, rootIface string) (map[string]
 		return types.Implements(t, iface)
 	}
 	rewriter := newRewriterGen(interestingType, nt.Obj().Name())
-	//clone := newCloneGen(iface, interestingType, scope)
+	clone := newCloneGen(iface, interestingType, scope)
 
-	generator := newGenerator(loaded[0].Module, loaded[0].TypesSizes, nt, rewriter)
+	generator := newGenerator(loaded[0].Module, loaded[0].TypesSizes, nt, rewriter, clone)
 	it, err := generator.GenerateCode()
 	if err != nil {
 		return nil, err

@@ -134,6 +134,11 @@ func (r BasicType) String() string {
 	return fmt.Sprintf("int(%d)", r)
 }
 
+const (
+	thisIsNotAType  BasicType = 1
+	thisIsNotAType2 BasicType = 2
+)
+
 // We want to support all types that are used as field types, which can include interfaces.
 // Example would be sqlparser.Expr that implements sqlparser.SQLNode
 type SubIface interface {

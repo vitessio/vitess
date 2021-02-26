@@ -24,26 +24,16 @@ func CloneAST(in AST) AST {
 	switch in := in.(type) {
 	case BasicType:
 		return in
-	case *BasicType:
-		return CloneRefOfBasicType(in)
 	case Bytes:
 		return CloneBytes(in)
-	case *Bytes:
-		return CloneRefOfBytes(in)
 	case InterfaceContainer:
 		return CloneInterfaceContainer(in)
-	case *InterfaceContainer:
-		return CloneRefOfInterfaceContainer(in)
 	case InterfaceSlice:
 		return CloneInterfaceSlice(in)
-	case *InterfaceSlice:
-		return CloneRefOfInterfaceSlice(in)
 	case *Leaf:
 		return CloneRefOfLeaf(in)
 	case LeafSlice:
 		return CloneLeafSlice(in)
-	case *LeafSlice:
-		return CloneRefOfLeafSlice(in)
 	case *RefContainer:
 		return CloneRefOfRefContainer(in)
 	case *RefSliceContainer:
@@ -52,12 +42,8 @@ func CloneAST(in AST) AST {
 		return CloneRefOfSubImpl(in)
 	case ValueContainer:
 		return CloneValueContainer(in)
-	case *ValueContainer:
-		return CloneRefOfValueContainer(in)
 	case ValueSliceContainer:
 		return CloneValueSliceContainer(in)
-	case *ValueSliceContainer:
-		return CloneRefOfValueSliceContainer(in)
 	}
 	// this should never happen
 	return nil
@@ -73,34 +59,13 @@ func CloneSubIface(in SubIface) SubIface {
 	// this should never happen
 	return nil
 }
-func CloneRefOfBasicType(n *BasicType) *BasicType {
-	if n == nil {
-		return nil
-	}
-	out := *n
-	return &out
-}
 func CloneBytes(n Bytes) Bytes {
 	res := make(Bytes, len(n))
 	copy(res, n)
 	return res
 }
-func CloneRefOfBytes(n *Bytes) *Bytes {
-	if n == nil {
-		return nil
-	}
-	out := CloneBytes(*n)
-	return &out
-}
 func CloneInterfaceContainer(n InterfaceContainer) InterfaceContainer {
-	return InterfaceContainer{v: n}
-}
-func CloneRefOfInterfaceContainer(n *InterfaceContainer) *InterfaceContainer {
-	if n == nil {
-		return nil
-	}
-	out := CloneInterfaceContainer(*n)
-	return &out
+	return InterfaceContainer{v: n.v}
 }
 func CloneInterfaceSlice(n InterfaceSlice) InterfaceSlice {
 	res := make(InterfaceSlice, len(n))
@@ -108,13 +73,6 @@ func CloneInterfaceSlice(n InterfaceSlice) InterfaceSlice {
 		res[i] = CloneAST(x)
 	}
 	return res
-}
-func CloneRefOfInterfaceSlice(n *InterfaceSlice) *InterfaceSlice {
-	if n == nil {
-		return nil
-	}
-	out := CloneInterfaceSlice(*n)
-	return &out
 }
 func CloneRefOfLeaf(n *Leaf) *Leaf {
 	if n == nil {
@@ -129,13 +87,6 @@ func CloneLeafSlice(n LeafSlice) LeafSlice {
 		res[i] = CloneRefOfLeaf(x)
 	}
 	return res
-}
-func CloneRefOfLeafSlice(n *LeafSlice) *LeafSlice {
-	if n == nil {
-		return nil
-	}
-	out := CloneLeafSlice(*n)
-	return &out
 }
 func CloneRefOfRefContainer(n *RefContainer) *RefContainer {
 	if n == nil {
@@ -165,26 +116,12 @@ func CloneValueContainer(n ValueContainer) ValueContainer {
 		NotASTType:            n.NotASTType,
 	}
 }
-func CloneRefOfValueContainer(n *ValueContainer) *ValueContainer {
-	if n == nil {
-		return nil
-	}
-	out := CloneValueContainer(*n)
-	return &out
-}
 func CloneValueSliceContainer(n ValueSliceContainer) ValueSliceContainer {
 	return ValueSliceContainer{
 		ASTElements:               CloneSliceOfAST(n.ASTElements),
 		ASTImplementationElements: CloneSliceOfRefOfLeaf(n.ASTImplementationElements),
 		NotASTElements:            CloneSliceOfint(n.NotASTElements),
 	}
-}
-func CloneRefOfValueSliceContainer(n *ValueSliceContainer) *ValueSliceContainer {
-	if n == nil {
-		return nil
-	}
-	out := CloneValueSliceContainer(*n)
-	return &out
 }
 func CloneLeaf(n Leaf) Leaf {
 	return Leaf{v: n.v}

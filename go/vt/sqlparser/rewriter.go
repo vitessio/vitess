@@ -342,12 +342,6 @@ func replaceRefOfIntervalExprExpr(newNode, parent SQLNode) {
 func replaceRefOfIsExprExpr(newNode, parent SQLNode) {
 	parent.(*IsExpr).Expr = newNode.(Expr)
 }
-func replaceRefOfJoinConditionOn(newNode, parent SQLNode) {
-	parent.(*JoinCondition).On = newNode.(Expr)
-}
-func replaceRefOfJoinConditionUsing(newNode, parent SQLNode) {
-	parent.(*JoinCondition).Using = newNode.(Columns)
-}
 func replaceRefOfJoinTableExprLeftExpr(newNode, parent SQLNode) {
 	parent.(*JoinTableExpr).LeftExpr = newNode.(TableExpr)
 }
@@ -377,9 +371,6 @@ func replaceRefOfModifyColumnFirst(newNode, parent SQLNode) {
 }
 func replaceRefOfModifyColumnAfter(newNode, parent SQLNode) {
 	parent.(*ModifyColumn).After = newNode.(*ColName)
-}
-func replaceRefOfNextvalExpr(newNode, parent SQLNode) {
-	parent.(*Nextval).Expr = newNode.(Expr)
 }
 func replaceRefOfNotExprExpr(newNode, parent SQLNode) {
 	parent.(*NotExpr).Expr = newNode.(Expr)
@@ -577,12 +568,6 @@ func replaceTableExprs(idx int) func(SQLNode, SQLNode) {
 		container.(TableExprs)[idx] = newNode.(TableExpr)
 	}
 }
-func replaceRefOfTableNameName(newNode, parent SQLNode) {
-	parent.(*TableName).Name = newNode.(TableIdent)
-}
-func replaceRefOfTableNameQualifier(newNode, parent SQLNode) {
-	parent.(*TableName).Qualifier = newNode.(TableIdent)
-}
 func replaceTableNames(idx int) func(SQLNode, SQLNode) {
 	return func(newNode, container SQLNode) {
 		container.(TableNames)[idx] = newNode.(TableName)
@@ -695,9 +680,6 @@ func replaceValues(idx int) func(SQLNode, SQLNode) {
 func replaceRefOfValuesFuncExprName(newNode, parent SQLNode) {
 	parent.(*ValuesFuncExpr).Name = newNode.(*ColName)
 }
-func replaceRefOfVindexParamKey(newNode, parent SQLNode) {
-	parent.(*VindexParam).Key = newNode.(ColIdent)
-}
 func replaceRefOfVindexSpecName(newNode, parent SQLNode) {
 	parent.(*VindexSpec).Name = newNode.(ColIdent)
 }
@@ -805,7 +787,6 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 	case *CheckConstraintDefinition:
 		a.apply(node, n.Expr, replaceRefOfCheckConstraintDefinitionExpr)
 	case ColIdent:
-	case *ColIdent:
 	case *ColName:
 		a.apply(node, n.Name, replaceRefOfColNameName)
 		a.apply(node, n.Qualifier, replaceRefOfColNameQualifier)
@@ -921,9 +902,6 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 	case JoinCondition:
 		a.apply(node, n.On, replacePanic("JoinCondition On"))
 		a.apply(node, n.Using, replacePanic("JoinCondition Using"))
-	case *JoinCondition:
-		a.apply(node, n.On, replaceRefOfJoinConditionOn)
-		a.apply(node, n.Using, replaceRefOfJoinConditionUsing)
 	case *JoinTableExpr:
 		a.apply(node, n.LeftExpr, replaceRefOfJoinTableExprLeftExpr)
 		a.apply(node, n.RightExpr, replaceRefOfJoinTableExprRightExpr)
@@ -946,8 +924,6 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 		a.apply(node, n.After, replaceRefOfModifyColumnAfter)
 	case Nextval:
 		a.apply(node, n.Expr, replacePanic("Nextval Expr"))
-	case *Nextval:
-		a.apply(node, n.Expr, replaceRefOfNextvalExpr)
 	case *NotExpr:
 		a.apply(node, n.Expr, replaceRefOfNotExprExpr)
 	case *NullVal:
@@ -1065,13 +1041,9 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 			a.apply(node, el, replaceTableExprs(x))
 		}
 	case TableIdent:
-	case *TableIdent:
 	case TableName:
 		a.apply(node, n.Name, replacePanic("TableName Name"))
 		a.apply(node, n.Qualifier, replacePanic("TableName Qualifier"))
-	case *TableName:
-		a.apply(node, n.Name, replaceRefOfTableNameName)
-		a.apply(node, n.Qualifier, replaceRefOfTableNameQualifier)
 	case TableNames:
 		for x, el := range n {
 			a.apply(node, el, replaceTableNames(x))
@@ -1141,8 +1113,6 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 		a.apply(node, n.Name, replaceRefOfValuesFuncExprName)
 	case VindexParam:
 		a.apply(node, n.Key, replacePanic("VindexParam Key"))
-	case *VindexParam:
-		a.apply(node, n.Key, replaceRefOfVindexParamKey)
 	case *VindexSpec:
 		a.apply(node, n.Name, replaceRefOfVindexSpecName)
 		a.apply(node, n.Type, replaceRefOfVindexSpecType)
