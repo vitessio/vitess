@@ -39,7 +39,7 @@ var noQualifier = func(p *types.Package) string {
 
 func (r *rewriterGen) visitStruct(t types.Type, stroct *types.Struct) error {
 	typeString := types.TypeString(t, noQualifier)
-	typeName := printableTypeName(t, nil)
+	typeName := printableTypeName(t)
 	var caseStmts []jen.Code
 	for i := 0; i < stroct.NumFields(); i++ {
 		field := stroct.Field(i)
@@ -64,9 +64,13 @@ func (r *rewriterGen) visitStruct(t types.Type, stroct *types.Struct) error {
 	return nil
 }
 
+func (r *rewriterGen) visitInterface(types.Type, *types.Interface) error {
+	return nil // rewriter doesn't deal with interfaces
+}
+
 func (r *rewriterGen) visitSlice(t types.Type, slice *types.Slice) error {
 	typeString := types.TypeString(t, noQualifier)
-	typeName := printableTypeName(t, nil)
+	typeName := printableTypeName(t)
 
 	var stmts []jen.Code
 	if r.interestingType(slice.Elem()) {

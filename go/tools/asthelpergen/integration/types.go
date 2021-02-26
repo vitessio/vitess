@@ -107,6 +107,7 @@ func (r InterfaceSlice) String() string {
 	for _, el := range r {
 		elements = append(elements, el.String())
 	}
+
 	return strings.Join(elements, ", ")
 }
 
@@ -116,6 +117,32 @@ type Bytes []byte
 func (r Bytes) String() string {
 	return string(r)
 }
+
+type LeafSlice []*Leaf
+
+func (r LeafSlice) String() string {
+	var elements []string
+	for _, el := range r {
+		elements = append(elements, el.String())
+	}
+	return strings.Join(elements, ", ")
+}
+
+// We want to support all types that are used as field types, which can include interfaces.
+// Example would be sqlparser.Expr that implements sqlparser.SQLNode
+type SubIface interface {
+	AST
+	iface()
+}
+
+type SubImpl struct {
+	inner SubIface
+}
+
+func (r *SubImpl) String() string {
+	return "SubImpl"
+}
+func (r *SubImpl) iface() {}
 
 // ast type helpers
 
