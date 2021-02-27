@@ -18,7 +18,6 @@ package vexec
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sync"
 
@@ -100,6 +99,7 @@ func (planner *VReplicationQueryPlanner) planSelect(sel *sqlparser.Select) (*Que
 
 	return &QueryPlan{
 		ParsedQuery: buf.ParsedQuery(),
+		workflow:    planner.workflow,
 		tmc:         planner.tmc,
 	}, nil
 }
@@ -107,12 +107,13 @@ func (planner *VReplicationQueryPlanner) planSelect(sel *sqlparser.Select) (*Que
 type QueryPlan struct {
 	ParsedQuery *sqlparser.ParsedQuery
 
-	tmc tmclient.TabletManagerClient
+	workflow string
+	tmc      tmclient.TabletManagerClient
 }
 
 func (qp *QueryPlan) Execute(ctx context.Context, target *topo.TabletInfo) (qr *querypb.QueryResult, err error) {
 	if qp.ParsedQuery == nil {
-		return nil, errors.New("TODO: some error about executing a query before it was planned")
+		return nil, fmt.Errorf("%w: call PlanQuery on a query planner first", ErrUnpreparedQuery)
 	}
 
 	targetAliasStr := target.AliasString()
@@ -134,7 +135,7 @@ func (qp *QueryPlan) Execute(ctx context.Context, target *topo.TabletInfo) (qr *
 	}
 
 	if qr.RowsAffected == 0 {
-		log.Infof("no matching streams found for workflows %s, tablet %s, query %s", "TODO: pass through workflow", targetAliasStr, qp.ParsedQuery.Query)
+		log.Infof("no matching streams found for workflows %s, tablet %s, query %s", qp.workflow, targetAliasStr, qp.ParsedQuery.Query)
 	}
 
 	return qr, nil
