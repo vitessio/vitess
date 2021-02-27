@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package workflow
+package vexec
 
 import (
 	"context"
@@ -24,7 +24,6 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
-	"vitess.io/vitess/go/vt/vtctl/workflow/vexec"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -139,10 +138,10 @@ func ExtractTableName(stmt sqlparser.Statement) (string, error) { // TODO: priva
 	return "", fmt.Errorf("%w: %+v", ErrUnsupportedQuery, sqlparser.String(stmt))
 }
 
-func (vx *VExec) GetPlanner(table string) (vexec.QueryPlanner, error) { // TODO: private?
+func (vx *VExec) GetPlanner(table string) (QueryPlanner, error) { // TODO: private?
 	switch table {
 	case qualifiedTableName(VReplicationTableName):
-		return vexec.NewVReplicationQueryPlanner(vx.tmc, "", vx.primaries[0].DbName()), nil
+		return NewVReplicationQueryPlanner(vx.tmc, "", vx.primaries[0].DbName()), nil
 	case qualifiedTableName(SchemaMigrationsTableName):
 		return nil, errors.New("Schema Migrations not yet supported in new workflow package")
 	default:

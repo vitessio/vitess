@@ -27,6 +27,7 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vtctl/workflow/vexec"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
@@ -72,7 +73,7 @@ func (manager *Manager) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWo
 		where,
 	)
 
-	vx := NewVExec(req.Keyspace, manager.ts, manager.tmc)
+	vx := vexec.NewVExec(req.Keyspace, manager.ts, manager.tmc)
 	results, err := vx.QueryContext(ctx, query)
 	if err != nil {
 		return nil, err
