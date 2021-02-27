@@ -18,6 +18,7 @@ package workflow
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -34,6 +35,12 @@ import (
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	"vitess.io/vitess/go/vt/proto/vttime"
+)
+
+var (
+	ErrInvalidWorkflow         = errors.New("invalid workflow")
+	ErrMultipleSourceKeyspaces = errors.New("multiple source keyspaces for a single workflow")
+	ErrMultipleTargetKeyspaces = errors.New("multiple target keyspaces for a single workflow")
 )
 
 type Manager struct {
@@ -178,13 +185,13 @@ func (manager *Manager) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWo
 		targetShardsByWorkflow[workflow.Name].Insert(tablet.Shard)
 
 		if ks, ok := sourceKeyspaceByWorkflow[workflow.Name]; ok && ks != status.BinlogSource.Keyspace {
-			// error, this is impossible
+			return fmt.Errorf("%w: workflow = %v, ks1 = %v, ks2 = %v", ErrMultipleSourceKeyspaces, workflow.Name, ks, status.BinlogSource.Keyspace)
 		}
 
 		sourceKeyspaceByWorkflow[workflow.Name] = status.BinlogSource.Keyspace
 
 		if ks, ok := targetKeyspaceByWorkflow[workflow.Name]; ok && ks != tablet.Keyspace {
-			// error, this is impossible
+			return fmt.Errorf("%w: workflow = %v, ks1 = %v, ks2 = %v", ErrMultipleTargetKeyspaces, workflow.Name, ks, tablet.Keyspace)
 		}
 
 		targetKeyspaceByWorkflow[workflow.Name] = tablet.Keyspace
@@ -242,21 +249,27 @@ func (manager *Manager) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWo
 	for name, workflow := range workflowsMap {
 		sourceShards, ok := sourceShardsByWorkflow[name]
 		if !ok {
-			// error
+			return nil, fmt.Errorf("%w: %s has no source shards", ErrInvalidWorkflow, name)
 		}
 
 		sourceKeyspace, ok := sourceKeyspaceByWorkflow[name]
+		if !ok {
+			return nil, fmt.Errorf("%w: %s has no source keyspace", ErrInvalidWorkflow, name)
+		}
 
 		targetShards, ok := targetShardsByWorkflow[name]
 		if !ok {
-			// error
+			return nil, fmt.Errorf("%w: %s has no target shards", ErrInvalidWorkflow, name)
 		}
 
 		targetKeyspace, ok := targetKeyspaceByWorkflow[name]
+		if !ok {
+			return nil, fmt.Errorf("%w: %s has no target keyspace", ErrInvalidWorkflow, name)
+		}
 
 		maxVReplicationLag, ok := maxVReplicationLagByWorkflow[name]
 		if !ok {
-			// error
+			return nil, fmt.Errorf("%w: %s has no tracked vreplication lag", ErrInvalidWorkflow, name)
 		}
 
 		workflow.Source = &vtctldatapb.Workflow_ReplicationLocation{

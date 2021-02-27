@@ -40,8 +40,25 @@ type VExec struct {
 	ts  *topo.Server
 	tmc tmclient.TabletManagerClient
 
-	keyspace  string
+	keyspace string
+	// (TODO:@ajm188) Consider renaming this field to "targets", and then
+	// support different Strategy functions for loading target tablets from a
+	// topo.Server.
+	//
+	// For this, I'm currently thinking:
+	// 		type TargetStrategy func(ts *topo.Server) ([]*topo.TabletInfo, error)
+	//
+	// We _may_ want this if we ever want a vexec query to target anything other
+	// than "all of the shard primaries in a given keyspace", and I'm not sure
+	// about potential future usages yet.
 	primaries []*topo.TabletInfo
+	// (TODO:@ajm188) Similar to supporting a TargetStrategy for controlling how
+	// a VExec picks which tablets to query, we may also want an
+	// ExecutionStrategy (I'm far less sure about whether we would want this at
+	// all, or what its type definition might look like, than TargetStrategy),
+	// to support running in modes like:
+	// - Execute serially rather than concurrently.
+	// - Only return error if greater than some percentage of the targets fail.
 }
 
 func NewVExec(keyspace string, ts *topo.Server, tmc tmclient.TabletManagerClient) *VExec {
