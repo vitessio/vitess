@@ -597,10 +597,7 @@ func (tm *TabletManager) handleRestore(ctx context.Context) (bool, error) {
 		return false, fmt.Errorf("you cannot enable -restore_from_backup without a my.cnf file")
 	}
 
-	// two cases then:
-	// - restoreFromBackup is set: we restore, then initHealthCheck, all
-	//   in the background
-	// - restoreFromBackup is not set: we initHealthCheck right away
+	// Restore in the background
 	if *restoreFromBackup {
 		go func() {
 			// Open the state manager after restore is done.
