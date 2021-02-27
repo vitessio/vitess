@@ -41,6 +41,8 @@ type VExec struct {
 	tmc tmclient.TabletManagerClient
 
 	keyspace string
+	workflow string
+
 	// (TODO:@ajm188) Consider renaming this field to "targets", and then
 	// support different Strategy functions for loading target tablets from a
 	// topo.Server.
@@ -61,11 +63,12 @@ type VExec struct {
 	// - Only return error if greater than some percentage of the targets fail.
 }
 
-func NewVExec(keyspace string, ts *topo.Server, tmc tmclient.TabletManagerClient) *VExec {
+func NewVExec(keyspace string, workflow string, ts *topo.Server, tmc tmclient.TabletManagerClient) *VExec {
 	return &VExec{
 		ts:       ts,
 		tmc:      tmc,
 		keyspace: keyspace,
+		workflow: workflow,
 	}
 }
 
@@ -158,7 +161,7 @@ func ExtractTableName(stmt sqlparser.Statement) (string, error) { // TODO: priva
 func (vx *VExec) GetPlanner(table string) (QueryPlanner, error) { // TODO: private?
 	switch table {
 	case qualifiedTableName(VReplicationTableName):
-		return NewVReplicationQueryPlanner(vx.tmc, "", vx.primaries[0].DbName()), nil
+		return NewVReplicationQueryPlanner(vx.tmc, vx.workflow, vx.primaries[0].DbName()), nil
 	case qualifiedTableName(SchemaMigrationsTableName):
 		return nil, errors.New("Schema Migrations not yet supported in new workflow package")
 	default:
