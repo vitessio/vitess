@@ -53,9 +53,11 @@ func TestNullMap(t *testing.T) {
 		sqltypes.NewInt64(5),
 		sqltypes.NewInt64(6),
 		sqltypes.NewVarChar("1234567890123"),
+		sqltypes.NULL,
 	})
 	require.NoError(t, err)
 	want := []key.Destination{
+		key.DestinationKeyspaceID([]byte{0}),
 		key.DestinationKeyspaceID([]byte{0}),
 		key.DestinationKeyspaceID([]byte{0}),
 		key.DestinationKeyspaceID([]byte{0}),
