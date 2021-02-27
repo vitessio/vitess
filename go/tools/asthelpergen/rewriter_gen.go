@@ -24,7 +24,6 @@ import (
 
 type rewriterGen struct {
 	cases           []jen.Code
-	replaceMethods  []jen.Code
 	interestingType func(types.Type) bool
 	ifaceName       string
 }
@@ -45,19 +44,16 @@ func (r *rewriterGen) visitStruct(t types.Type, stroct *types.Struct) error {
 		field := stroct.Field(i)
 		if r.interestingType(field.Type()) {
 			if _, ok := t.(*types.Pointer); ok {
-				replacerName, method := r.createReplaceMethod(typeName, typeString, field)
-				r.replaceMethods = append(r.replaceMethods, method)
-
-				caseStmts = append(caseStmts, caseStmtFor(field, replacerName))
+				function := r.createReplaceMethod(typeString, field)
+				caseStmts = append(caseStmts, caseStmtFor(field, function))
 			} else {
 				caseStmts = append(caseStmts, casePanicStmtFor(field, typeName+" "+field.Name()))
 			}
 		}
 		sliceT, ok := field.Type().(*types.Slice)
 		if ok && r.interestingType(sliceT.Elem()) { // we have a field containing a slice of interesting elements
-			replacerName, methods := r.createReplaceCodeForSliceField(typeName, typeString, field)
-			r.replaceMethods = append(r.replaceMethods, methods...)
-			caseStmts = append(caseStmts, caseStmtForSliceField(field, replacerName)...)
+			function := r.createReplaceCodeForSliceField(typeString, field)
+			caseStmts = append(caseStmts, caseStmtForSliceField(field, function))
 		}
 	}
 	r.cases = append(r.cases, jen.Case(jen.Id(typeString)).Block(caseStmts...))
@@ -70,46 +66,45 @@ func (r *rewriterGen) visitInterface(types.Type, *types.Interface) error {
 
 func (r *rewriterGen) visitSlice(t types.Type, slice *types.Slice) error {
 	typeString := types.TypeString(t, noQualifier)
-	typeName := printableTypeName(t)
 
 	var stmts []jen.Code
 	if r.interestingType(slice.Elem()) {
-		name, replaceMethod := r.createReplaceCodeForSlice(typeName, typeString, types.TypeString(slice.Elem(), noQualifier))
-		r.replaceMethods = append(r.replaceMethods, replaceMethod)
-		stmts = append(stmts, caseStmtForSlice(name))
+		function := r.createReplaceCodeForSlice(typeString, types.TypeString(slice.Elem(), noQualifier))
+		stmts = append(stmts, caseStmtForSlice(function))
 	}
 	r.cases = append(r.cases, jen.Case(jen.Id(typeString)).Block(stmts...))
 	return nil
 }
 
-func caseStmtFor(field *types.Var, name string) *jen.Statement {
-	return jen.Id("a").Dot("apply").Call(jen.Id("node"), jen.Id("n").Dot(field.Name()), jen.Id(name))
+func caseStmtFor(field *types.Var, expr jen.Code) *jen.Statement {
+	// a.apply(node, node.Field, replacerMethod)
+	return jen.Id("a").Dot("apply").Call(jen.Id("node"), jen.Id("n").Dot(field.Name()), expr)
 }
 
 func casePanicStmtFor(field *types.Var, name string) *jen.Statement {
 	return jen.Id("a").Dot("apply").Call(jen.Id("node"), jen.Id("n").Dot(field.Name()), jen.Id("replacePanic").Call(jen.Lit(name)))
 }
 
-func caseStmtForSlice(name string) jen.Code {
+func caseStmtForSlice(function *jen.Statement) jen.Code {
 	return jen.For(jen.List(jen.Op("x"), jen.Id("el"))).Op(":=").Range().Id("n").Block(
 		jen.Id("a").Dot("apply").Call(
 			jen.Id("node"),
 			jen.Id("el"),
-			jen.Id(name).Call(jen.Id("x")),
+			function.Call(jen.Id("x")),
 		),
 	)
 }
 
-func caseStmtForSliceField(field *types.Var, name string) []jen.Code {
-	return []jen.Code{
-		jen.For(jen.List(jen.Op("x"), jen.Id("el"))).Op(":=").Range().Id("n").Dot(field.Name()).Block(
-			jen.Id("a").Dot("apply").Call(
-				jen.Id("node"),
-				jen.Id("el"),
-				jen.Id(name).Call(jen.Id("x")),
-			),
+func caseStmtForSliceField(field *types.Var, function *jen.Statement) jen.Code {
+	//for x, el := range n {
+	return jen.For(jen.List(jen.Op("x"), jen.Id("el"))).Op(":=").Range().Id("n").Dot(field.Name()).Block(
+		jen.Id("a").Dot("apply").Call(
+			//	a.apply(node, el, replaceInterfaceSlice(x))
+			jen.Id("node"),
+			jen.Id("el"),
+			function.Call(jen.Id("x")),
 		),
-	}
+	)
 }
 
 func (r *rewriterGen) structCase(name string, stroct *types.Struct) (jen.Code, error) {
@@ -123,9 +118,8 @@ func (r *rewriterGen) structCase(name string, stroct *types.Struct) (jen.Code, e
 	return jen.Case(jen.Op("*").Id(name)).Block(stmts...), nil
 }
 
-func (r *rewriterGen) createReplaceMethod(structName, structType string, field *types.Var) (string, jen.Code) {
-	name := "replace" + structName + field.Name()
-	return name, jen.Func().Id(name).Params(
+func (r *rewriterGen) createReplaceMethod(structType string, field *types.Var) jen.Code {
+	return jen.Func().Params(
 		jen.Id("newNode"),
 		jen.Id("parent").Id(r.ifaceName),
 	).Block(
@@ -133,8 +127,7 @@ func (r *rewriterGen) createReplaceMethod(structName, structType string, field *
 	)
 }
 
-func (r *rewriterGen) createReplaceCodeForSlice(structName, structType, elemType string) (string, jen.Code) {
-	name := "replace" + structName
+func (r *rewriterGen) createReplaceCodeForSlice(structType, elemType string) *jen.Statement {
 	/*
 		func replacer(idx int) func(AST, AST) {
 			return func(newnode, container AST) {
@@ -144,22 +137,19 @@ func (r *rewriterGen) createReplaceCodeForSlice(structName, structType, elemType
 
 	*/
 
-	s := jen.Func().Id(name).Params(jen.Id("idx").Int()).Func().Params(jen.List(jen.Id(r.ifaceName), jen.Id(r.ifaceName))).Block(
+	return jen.Func().Params(jen.Id("idx").Int()).Func().Params(jen.List(jen.Id(r.ifaceName), jen.Id(r.ifaceName))).Block(
 		jen.Return(jen.Func().Params(jen.List(jen.Id("newNode"), jen.Id("container")).Id(r.ifaceName))).Block(
 			jen.Id("container").Assert(jen.Id(structType)).Index(jen.Id("idx")).Op("=").
 				Id("newNode").Assert(jen.Id(elemType)),
 		),
 	)
-
-	return name, s
 }
 
-func (r *rewriterGen) createReplaceCodeForSliceField(structName, structType string, field *types.Var) (string, []jen.Code) {
-	name := "replace" + structName + field.Name()
+func (r *rewriterGen) createReplaceCodeForSliceField(structType string, field *types.Var) *jen.Statement {
 	elemType := field.Type().(*types.Slice).Elem()
 
 	/*
-		func replacerStructField(idx int) func(AST, AST) {
+		func(idx int) func(AST, AST) {
 			return func(newNode, container AST) {
 				container.(*Struct)[idx] = newNode.(AST)
 			}
@@ -167,16 +157,12 @@ func (r *rewriterGen) createReplaceCodeForSliceField(structName, structType stri
 
 	*/
 
-	s := jen.Func().Id(name).Params(jen.Id("idx").Int()).Func().Params(jen.List(jen.Id(r.ifaceName), jen.Id(r.ifaceName))).Block(
+	return jen.Func().Params(jen.Id("idx").Int()).Func().Params(jen.List(jen.Id(r.ifaceName), jen.Id(r.ifaceName))).Block(
 		jen.Return(jen.Func().Params(jen.List(jen.Id("newNode"), jen.Id("container")).Id(r.ifaceName))).Block(
 			jen.Id("container").Assert(jen.Id(structType)).Dot(field.Name()).Index(jen.Id("idx")).Op("=").
 				Id("newNode").Assert(jen.Id(types.TypeString(elemType, noQualifier))),
 		),
 	)
-
-	return name, []jen.Code{
-		s,
-	}
 }
 
 func (r *rewriterGen) createFile(pkgName string) (string, *jen.File) {
@@ -184,69 +170,62 @@ func (r *rewriterGen) createFile(pkgName string) (string, *jen.File) {
 	out.HeaderComment(licenseFileHeader)
 	out.HeaderComment("Code generated by ASTHelperGen. DO NOT EDIT.")
 
-	for _, method := range r.replaceMethods {
-		out.Add(method)
-	}
+	out.Add(
+		// func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
+		jen.Func().Params(
+			jen.Id("a").Op("*").Id("application"),
+		).Id("apply").Params(
+			jen.Id("parent"),
+			jen.Id("node").Id(r.ifaceName),
+			jen.Id("replacer").Id("replacerFunc"),
+		).Block(
+			/*
+				if node == nil || isNilValue(node) {
+					return
+				}
+			*/
+			jen.If(
+				jen.Id("node").Op("==").Nil().Op("||").
+					Id("isNilValue").Call(jen.Id("node"))).Block(
+				jen.Return(),
+			),
+			/*
+				saved := a.cursor
+				a.cursor.replacer = replacer
+				a.cursor.node = node
+				a.cursor.parent = parent
+			*/
+			jen.Id("saved").Op(":=").Id("a").Dot("cursor"),
+			jen.Id("a").Dot("cursor").Dot("replacer").Op("=").Id("replacer"),
+			jen.Id("a").Dot("cursor").Dot("node").Op("=").Id("node"),
+			jen.Id("a").Dot("cursor").Dot("parent").Op("=").Id("parent"),
+			jen.If(
+				jen.Id("a").Dot("pre").Op("!=").Nil().Op("&&").
+					Op("!").Id("a").Dot("pre").Call(jen.Op("&").Id("a").Dot("cursor"))).Block(
+				jen.Id("a").Dot("cursor").Op("=").Id("saved"),
+				jen.Return(),
+			),
 
-	out.Add(r.applyFunc())
+			//	switch n := node.(type) {
+			jen.Switch(jen.Id("n").Op(":=").Id("node").Assert(jen.Id("type")).Block(
+				r.cases...,
+			)),
+
+			/*
+				if a.post != nil && !a.post(&a.cursor) {
+					panic(abort)
+				}
+			*/
+			jen.If(
+				jen.Id("a").Dot("post").Op("!=").Nil().Op("&&").
+					Op("!").Id("a").Dot("post").Call(jen.Op("&").Id("a").Dot("cursor"))).Block(
+				jen.Id("panic").Call(jen.Id("abort")),
+			),
+
+			// 	a.cursor = saved
+			jen.Id("a").Dot("cursor").Op("=").Id("saved"),
+		),
+	)
 
 	return "rewriter.go", out
-}
-
-func (r *rewriterGen) applyFunc() *jen.Statement {
-	// func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
-	apply := jen.Func().Params(
-		jen.Id("a").Op("*").Id("application"),
-	).Id("apply").Params(
-		jen.Id("parent"),
-		jen.Id("node").Id(r.ifaceName),
-		jen.Id("replacer").Id("replacerFunc"),
-	).Block(
-		/*
-			if node == nil || isNilValue(node) {
-				return
-			}
-		*/
-		jen.If(
-			jen.Id("node").Op("==").Nil().Op("||").
-				Id("isNilValue").Call(jen.Id("node"))).Block(
-			jen.Return(),
-		),
-		/*
-			saved := a.cursor
-			a.cursor.replacer = replacer
-			a.cursor.node = node
-			a.cursor.parent = parent
-		*/
-		jen.Id("saved").Op(":=").Id("a").Dot("cursor"),
-		jen.Id("a").Dot("cursor").Dot("replacer").Op("=").Id("replacer"),
-		jen.Id("a").Dot("cursor").Dot("node").Op("=").Id("node"),
-		jen.Id("a").Dot("cursor").Dot("parent").Op("=").Id("parent"),
-		jen.If(
-			jen.Id("a").Dot("pre").Op("!=").Nil().Op("&&").
-				Op("!").Id("a").Dot("pre").Call(jen.Op("&").Id("a").Dot("cursor"))).Block(
-			jen.Id("a").Dot("cursor").Op("=").Id("saved"),
-			jen.Return(),
-		),
-
-		//	switch n := node.(type) {
-		jen.Switch(jen.Id("n").Op(":=").Id("node").Assert(jen.Id("type")).Block(
-			r.cases...,
-		)),
-
-		/*
-			if a.post != nil && !a.post(&a.cursor) {
-				panic(abort)
-			}
-		*/
-		jen.If(
-			jen.Id("a").Dot("post").Op("!=").Nil().Op("&&").
-				Op("!").Id("a").Dot("post").Call(jen.Op("&").Id("a").Dot("cursor"))).Block(
-			jen.Id("panic").Call(jen.Id("abort")),
-		),
-
-		// 	a.cursor = saved
-		jen.Id("a").Dot("cursor").Op("=").Id("saved"),
-	)
-	return apply
 }
