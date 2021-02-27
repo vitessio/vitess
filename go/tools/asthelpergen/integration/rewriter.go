@@ -17,45 +17,6 @@ limitations under the License.
 
 package integration
 
-func replaceInterfaceSlice(idx int) func(AST, AST) {
-	return func(newNode, container AST) {
-		container.(InterfaceSlice)[idx] = newNode.(AST)
-	}
-}
-func replaceLeafSlice(idx int) func(AST, AST) {
-	return func(newNode, container AST) {
-		container.(LeafSlice)[idx] = newNode.(*Leaf)
-	}
-}
-func replaceRefOfRefContainerASTType(newNode, parent AST) {
-	parent.(*RefContainer).ASTType = newNode.(AST)
-}
-func replaceRefOfRefContainerASTImplementationType(newNode, parent AST) {
-	parent.(*RefContainer).ASTImplementationType = newNode.(*Leaf)
-}
-func replaceRefOfRefSliceContainerASTElements(idx int) func(AST, AST) {
-	return func(newNode, container AST) {
-		container.(*RefSliceContainer).ASTElements[idx] = newNode.(AST)
-	}
-}
-func replaceRefOfRefSliceContainerASTImplementationElements(idx int) func(AST, AST) {
-	return func(newNode, container AST) {
-		container.(*RefSliceContainer).ASTImplementationElements[idx] = newNode.(*Leaf)
-	}
-}
-func replaceRefOfSubImplinner(newNode, parent AST) {
-	parent.(*SubImpl).inner = newNode.(SubIface)
-}
-func replaceValueSliceContainerASTElements(idx int) func(AST, AST) {
-	return func(newNode, container AST) {
-		container.(ValueSliceContainer).ASTElements[idx] = newNode.(AST)
-	}
-}
-func replaceValueSliceContainerASTImplementationElements(idx int) func(AST, AST) {
-	return func(newNode, container AST) {
-		container.(ValueSliceContainer).ASTImplementationElements[idx] = newNode.(*Leaf)
-	}
-}
 func (a *application) apply(parent, node AST, replacer replacerFunc) {
 	if node == nil || isNilValue(node) {
 		return
@@ -73,35 +34,65 @@ func (a *application) apply(parent, node AST, replacer replacerFunc) {
 	case InterfaceContainer:
 	case InterfaceSlice:
 		for x, el := range n {
-			a.apply(node, el, replaceInterfaceSlice(x))
+			a.apply(node, el, func(idx int) func(AST, AST) {
+				return func(newNode, container AST) {
+					container.(InterfaceSlice)[idx] = newNode.(AST)
+				}
+			}(x))
 		}
 	case *Leaf:
 	case LeafSlice:
 		for x, el := range n {
-			a.apply(node, el, replaceLeafSlice(x))
+			a.apply(node, el, func(idx int) func(AST, AST) {
+				return func(newNode, container AST) {
+					container.(LeafSlice)[idx] = newNode.(*Leaf)
+				}
+			}(x))
 		}
 	case *NoCloneType:
 	case *RefContainer:
-		a.apply(node, n.ASTType, replaceRefOfRefContainerASTType)
-		a.apply(node, n.ASTImplementationType, replaceRefOfRefContainerASTImplementationType)
+		a.apply(node, n.ASTType, func(newNode, parent AST) {
+			parent.(*RefContainer).ASTType = newNode.(AST)
+		})
+		a.apply(node, n.ASTImplementationType, func(newNode, parent AST) {
+			parent.(*RefContainer).ASTImplementationType = newNode.(*Leaf)
+		})
 	case *RefSliceContainer:
 		for x, el := range n.ASTElements {
-			a.apply(node, el, replaceRefOfRefSliceContainerASTElements(x))
+			a.apply(node, el, func(idx int) func(AST, AST) {
+				return func(newNode, container AST) {
+					container.(*RefSliceContainer).ASTElements[idx] = newNode.(AST)
+				}
+			}(x))
 		}
 		for x, el := range n.ASTImplementationElements {
-			a.apply(node, el, replaceRefOfRefSliceContainerASTImplementationElements(x))
+			a.apply(node, el, func(idx int) func(AST, AST) {
+				return func(newNode, container AST) {
+					container.(*RefSliceContainer).ASTImplementationElements[idx] = newNode.(*Leaf)
+				}
+			}(x))
 		}
 	case *SubImpl:
-		a.apply(node, n.inner, replaceRefOfSubImplinner)
+		a.apply(node, n.inner, func(newNode, parent AST) {
+			parent.(*SubImpl).inner = newNode.(SubIface)
+		})
 	case ValueContainer:
 		a.apply(node, n.ASTType, replacePanic("ValueContainer ASTType"))
 		a.apply(node, n.ASTImplementationType, replacePanic("ValueContainer ASTImplementationType"))
 	case ValueSliceContainer:
 		for x, el := range n.ASTElements {
-			a.apply(node, el, replaceValueSliceContainerASTElements(x))
+			a.apply(node, el, func(idx int) func(AST, AST) {
+				return func(newNode, container AST) {
+					container.(ValueSliceContainer).ASTElements[idx] = newNode.(AST)
+				}
+			}(x))
 		}
 		for x, el := range n.ASTImplementationElements {
-			a.apply(node, el, replaceValueSliceContainerASTImplementationElements(x))
+			a.apply(node, el, func(idx int) func(AST, AST) {
+				return func(newNode, container AST) {
+					container.(ValueSliceContainer).ASTImplementationElements[idx] = newNode.(*Leaf)
+				}
+			}(x))
 		}
 	}
 	if a.post != nil && !a.post(&a.cursor) {
