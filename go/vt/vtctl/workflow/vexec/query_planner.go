@@ -32,8 +32,6 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
-var ErrUnsupportedQuery = errors.New("query not supported by vexec")
-
 type QueryPlanner interface {
 	PlanQuery(stmt sqlparser.Statement) (*QueryPlan, error)
 	QueryParams() QueryParams
