@@ -105,7 +105,10 @@ func (vx *VExec) QueryContext(ctx context.Context, query string) (map[*topo.Tabl
 func (vx *VExec) initialize(ctx context.Context) error {
 	vx.primaries = nil
 
-	shards, err := vx.ts.GetShardNames(ctx, vx.keyspace)
+	getShardsCtx, getShardsCancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+	defer getShardsCancel()
+
+	shards, err := vx.ts.GetShardNames(getShardsCtx, vx.keyspace)
 	if err != nil {
 		return err
 	}
@@ -117,6 +120,9 @@ func (vx *VExec) initialize(ctx context.Context) error {
 	primaries := make([]*topo.TabletInfo, 0, len(shards))
 
 	for _, shard := range shards {
+		ctx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+		defer cancel()
+
 		si, err := vx.ts.GetShard(ctx, vx.keyspace, shard)
 		if err != nil {
 			return err
