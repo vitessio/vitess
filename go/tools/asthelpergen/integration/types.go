@@ -19,7 +19,6 @@ package integration
 
 import (
 	"fmt"
-	"reflect"
 	"strings"
 )
 
@@ -57,13 +56,13 @@ func (r *RefContainer) String() string {
 	if r == nil {
 		return "nil"
 	}
-	asttype := ""
+	var astType = ""
 	if r.ASTType == nil {
-		asttype = "nil"
+		astType = "nil"
 	} else {
-		asttype = r.ASTType.String()
+		astType = r.ASTType.String()
 	}
-	return fmt.Sprintf("RefContainer{%s, %d, %s}", asttype, r.NotASTType, r.ASTImplementationType.String())
+	return fmt.Sprintf("RefContainer{%s, %d, %s}", astType, r.NotASTType, r.ASTImplementationType.String())
 }
 
 // Container implements the interface ByRef
@@ -108,7 +107,7 @@ func (r InterfaceSlice) String() string {
 		elements = append(elements, el.String())
 	}
 
-	return strings.Join(elements, ", ")
+	return "[" + strings.Join(elements, ", ") + "]"
 }
 
 // We need to support these types - a slice of AST elements can implement the interface
@@ -135,6 +134,7 @@ func (r BasicType) String() string {
 }
 
 const (
+	// these consts are here to try to trick the generator
 	thisIsNotAType  BasicType = 1
 	thisIsNotAType2 BasicType = 2
 )
@@ -163,77 +163,10 @@ func (r InterfaceContainer) String() string {
 	return fmt.Sprintf("%v", r.v)
 }
 
-// ast type helpers
-
-func sliceStringAST(els ...AST) string {
-	result := make([]string, len(els))
-	for i, el := range els {
-		result[i] = el.String()
-	}
-	return strings.Join(result, ", ")
-}
-func sliceStringLeaf(els ...*Leaf) string {
-	result := make([]string, len(els))
-	for i, el := range els {
-		result[i] = el.String()
-	}
-	return strings.Join(result, ", ")
+type NoCloneType struct {
+	v int
 }
 
-// the methods below are what the generated code expected to be there in the package
-
-type application struct {
-	pre, post ApplyFunc
-	cursor    Cursor
-}
-
-type ApplyFunc func(*Cursor) bool
-
-type Cursor struct {
-	parent   AST
-	replacer replacerFunc
-	node     AST
-}
-
-// Node returns the current Node.
-func (c *Cursor) Node() AST { return c.node }
-
-// Parent returns the parent of the current Node.
-func (c *Cursor) Parent() AST { return c.parent }
-
-// Replace replaces the current node in the parent field with this new object. The use needs to make sure to not
-// replace the object with something of the wrong type, or the visitor will panic.
-func (c *Cursor) Replace(newNode AST) {
-	c.replacer(newNode, c.parent)
-	c.node = newNode
-}
-
-type replacerFunc func(newNode, parent AST)
-
-func isNilValue(i interface{}) bool {
-	valueOf := reflect.ValueOf(i)
-	kind := valueOf.Kind()
-	isNullable := kind == reflect.Ptr || kind == reflect.Array || kind == reflect.Slice
-	return isNullable && valueOf.IsNil()
-}
-
-var abort = new(int) // singleton, to signal termination of Apply
-
-func Rewrite(node AST, pre, post ApplyFunc) (result AST) {
-	parent := &struct{ AST }{node}
-
-	a := &application{
-		pre:    pre,
-		post:   post,
-		cursor: Cursor{},
-	}
-
-	a.apply(parent.AST, node, nil)
-	return parent.AST
-}
-
-func replacePanic(msg string) func(newNode, parent AST) {
-	return func(newNode, parent AST) {
-		panic("Tried replacing a field of a value type. This is not supported. " + msg)
-	}
+func (r *NoCloneType) String() string {
+	return fmt.Sprintf("NoClone(%d)", r.v)
 }

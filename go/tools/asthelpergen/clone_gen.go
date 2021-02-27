@@ -28,18 +28,20 @@ import (
 // starting from a root interface type. While creating the clone method for this root interface, more types that need
 // to be cloned are discovered. This continues type by type until all necessary types have been traversed.
 type cloneGen struct {
-	methods []jen.Code
-	iface   *types.Interface
-	scope   *types.Scope
-	todo    []types.Type
+	methods    []jen.Code
+	iface      *types.Interface
+	scope      *types.Scope
+	todo       []types.Type
+	exceptType string
 }
 
 var _ generator = (*cloneGen)(nil)
 
-func newCloneGen(iface *types.Interface, scope *types.Scope) *cloneGen {
+func newCloneGen(iface *types.Interface, scope *types.Scope, exceptType string) *cloneGen {
 	return &cloneGen{
-		iface: iface,
-		scope: scope,
+		iface:      iface,
+		scope:      scope,
+		exceptType: exceptType,
 	}
 }
 
@@ -256,42 +258,7 @@ func (c *cloneGen) tryPtr(underlying, t types.Type) bool {
 	}
 
 	if strct, isStruct := ptr.Elem().Underlying().(*types.Struct); isStruct {
-		receiveType := types.TypeString(t, noQualifier)
-
-		var fields []jen.Code
-		for i := 0; i < strct.NumFields(); i++ {
-			field := strct.Field(i)
-			if isBasic(field.Type()) || field.Name() == "_" {
-				continue
-			}
-			// out.Field = CloneType(n.Field)
-			fields = append(fields,
-				jen.Id("out").Dot(field.Name()).Op("=").Add(c.readValueOfType(field.Type(), jen.Id("n").Dot(field.Name()))))
-		}
-
-		stmts := []jen.Code{
-			// if n == nil { return nil }
-			ifNilReturnNil("n"),
-			// 	out := *n
-			jen.Id("out").Op(":=").Op("*").Id("n"),
-		}
-
-		// handle all fields with CloneAble types
-		stmts = append(stmts, fields...)
-
-		stmts = append(stmts,
-			// return &out
-			jen.Return(jen.Op("&").Id("out")),
-		)
-
-		funcName := "Clone" + printableTypeName(t)
-
-		//func CloneRefOfType(n *Type) *Type
-		funcDeclaration := jen.Func().Id(funcName).Call(jen.Id("n").Id(receiveType)).Id(receiveType)
-		c.addFunc(funcName,
-			funcDeclaration.Block(stmts...),
-		)
-
+		c.makePtrToStructCloneMethod(t, strct)
 		return true
 	}
 
@@ -300,6 +267,51 @@ func (c *cloneGen) tryPtr(underlying, t types.Type) bool {
 		panic(err) // todo
 	}
 	return true
+}
+
+func (c *cloneGen) makePtrToStructCloneMethod(t types.Type, strct *types.Struct) {
+	receiveType := types.TypeString(t, noQualifier)
+	funcName := "Clone" + printableTypeName(t)
+
+	//func CloneRefOfType(n *Type) *Type
+	funcDeclaration := jen.Func().Id(funcName).Call(jen.Id("n").Id(receiveType)).Id(receiveType)
+
+	if receiveType == c.exceptType {
+		c.addFunc(funcName, funcDeclaration.Block(
+			jen.Return(jen.Id("n")),
+		))
+		return
+	}
+
+	var fields []jen.Code
+	for i := 0; i < strct.NumFields(); i++ {
+		field := strct.Field(i)
+		if isBasic(field.Type()) || field.Name() == "_" {
+			continue
+		}
+		// out.Field = CloneType(n.Field)
+		fields = append(fields,
+			jen.Id("out").Dot(field.Name()).Op("=").Add(c.readValueOfType(field.Type(), jen.Id("n").Dot(field.Name()))))
+	}
+
+	stmts := []jen.Code{
+		// if n == nil { return nil }
+		ifNilReturnNil("n"),
+		// 	out := *n
+		jen.Id("out").Op(":=").Op("*").Id("n"),
+	}
+
+	// handle all fields with CloneAble types
+	stmts = append(stmts, fields...)
+
+	stmts = append(stmts,
+		// return &out
+		jen.Return(jen.Op("&").Id("out")),
+	)
+
+	c.addFunc(funcName,
+		funcDeclaration.Block(stmts...),
+	)
 }
 func (c *cloneGen) tryInterface(underlying, t types.Type) bool {
 	iface, ok := underlying.(*types.Interface)

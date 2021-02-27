@@ -80,6 +80,7 @@ func (a *application) apply(parent, node AST, replacer replacerFunc) {
 		for x, el := range n {
 			a.apply(node, el, replaceLeafSlice(x))
 		}
+	case *NoCloneType:
 	case *RefContainer:
 		a.apply(node, n.ASTType, replaceRefOfRefContainerASTType)
 		a.apply(node, n.ASTImplementationType, replaceRefOfRefContainerASTImplementationType)
