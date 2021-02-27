@@ -40,6 +40,7 @@ import (
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/topotools/events"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil"
+	"vitess.io/vitess/go/vt/vtctl/workflow"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
@@ -61,11 +62,18 @@ const (
 type VtctldServer struct {
 	ts  *topo.Server
 	tmc tmclient.TabletManagerClient
+	wm  *workflow.Manager
 }
 
 // NewVtctldServer returns a new VtctldServer for the given topo server.
 func NewVtctldServer(ts *topo.Server) *VtctldServer {
-	return &VtctldServer{ts: ts, tmc: tmclient.NewTabletManagerClient()}
+	tmc := tmclient.NewTabletManagerClient()
+
+	return &VtctldServer{
+		ts:  ts,
+		tmc: tmc,
+		wm:  workflow.NewManager(ts, tmc),
+	}
 }
 
 // ChangeTabletType is part of the vtctlservicepb.VtctldServer interface.
@@ -678,7 +686,7 @@ func (s *VtctldServer) GetVSchema(ctx context.Context, req *vtctldatapb.GetVSche
 
 // GetWorkflows is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflowsRequest) (*vtctldatapb.GetWorkflowsResponse, error) {
-	panic("unimplemented!")
+	return s.wm.GetWorkflows(ctx, req)
 }
 
 // InitShardPrimary is part of the vtctlservicepb.VtctldServer interface.
