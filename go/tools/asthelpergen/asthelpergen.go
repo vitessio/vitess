@@ -198,15 +198,16 @@ func (t *typePaths) Set(path string) error {
 
 func main() {
 	var patterns typePaths
-	var generate string
+	var generate, except string
 	var verify bool
 
 	flag.Var(&patterns, "in", "Go packages to load the generator")
 	flag.StringVar(&generate, "iface", "", "Root interface generate rewriter for")
 	flag.BoolVar(&verify, "verify", false, "ensure that the generated files are correct")
+	flag.StringVar(&except, "except", "", "don't deep clone these types")
 	flag.Parse()
 
-	result, err := GenerateASTHelpers(patterns, generate)
+	result, err := GenerateASTHelpers(patterns, generate, except)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -252,7 +253,7 @@ func VerifyFilesOnDisk(result map[string]*jen.File) (errors []error) {
 
 // GenerateASTHelpers generates the auxiliary code that implements CachedSize helper methods
 // for all the types listed in typePatterns
-func GenerateASTHelpers(packagePatterns []string, rootIface string) (map[string]*jen.File, error) {
+func GenerateASTHelpers(packagePatterns []string, rootIface, exceptCloneType string) (map[string]*jen.File, error) {
 	loaded, err := packages.Load(&packages.Config{
 		Mode: packages.NeedName | packages.NeedTypes | packages.NeedTypesSizes | packages.NeedTypesInfo | packages.NeedDeps | packages.NeedImports | packages.NeedModule,
 		Logf: log.Printf,
@@ -293,7 +294,7 @@ func GenerateASTHelpers(packagePatterns []string, rootIface string) (map[string]
 		return types.Implements(t, iface)
 	}
 	rewriter := newRewriterGen(interestingType, nt.Obj().Name())
-	clone := newCloneGen(iface, scope)
+	clone := newCloneGen(iface, scope, exceptCloneType)
 
 	generator := newGenerator(loaded[0].Module, loaded[0].TypesSizes, nt, rewriter, clone)
 	it, err := generator.GenerateCode()

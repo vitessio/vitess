@@ -103,8 +103,8 @@ func TestVisitValueSliceContainer(t *testing.T) {
 	leaf2 := &Leaf{2}
 	leaf3 := &Leaf{3}
 	leaf4 := &Leaf{4}
-	container := &ValueSliceContainer{ASTElements: []AST{leaf1, leaf2}, ASTImplementationElements: []*Leaf{leaf3, leaf4}}
-	containerContainer := &ValueSliceContainer{ASTElements: []AST{container}}
+	container := ValueSliceContainer{ASTElements: []AST{leaf1, leaf2}, ASTImplementationElements: []*Leaf{leaf3, leaf4}}
+	containerContainer := ValueSliceContainer{ASTElements: []AST{container}}
 
 	tv := &testVisitor{}
 

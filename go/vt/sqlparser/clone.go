@@ -1158,14 +1158,7 @@ func CloneRefOfCaseExpr(n *CaseExpr) *CaseExpr {
 
 // CloneRefOfColName creates a deep clone of the input.
 func CloneRefOfColName(n *ColName) *ColName {
-	if n == nil {
-		return nil
-	}
-	out := *n
-	out.Metadata = n.Metadata
-	out.Name = CloneColIdent(n.Name)
-	out.Qualifier = CloneTableName(n.Qualifier)
-	return &out
+	return n
 }
 
 // CloneRefOfCollateExpr creates a deep clone of the input.

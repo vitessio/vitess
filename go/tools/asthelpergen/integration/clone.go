@@ -35,6 +35,8 @@ func CloneAST(in AST) AST {
 		return CloneRefOfLeaf(in)
 	case LeafSlice:
 		return CloneLeafSlice(in)
+	case *NoCloneType:
+		return CloneRefOfNoCloneType(in)
 	case *RefContainer:
 		return CloneRefOfRefContainer(in)
 	case *RefSliceContainer:
@@ -102,6 +104,11 @@ func CloneLeafSlice(n LeafSlice) LeafSlice {
 		res = append(res, CloneRefOfLeaf(x))
 	}
 	return res
+}
+
+// CloneRefOfNoCloneType creates a deep clone of the input.
+func CloneRefOfNoCloneType(n *NoCloneType) *NoCloneType {
+	return n
 }
 
 // CloneRefOfRefContainer creates a deep clone of the input.
