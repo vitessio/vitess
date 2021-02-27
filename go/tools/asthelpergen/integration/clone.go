@@ -62,17 +62,17 @@ func CloneSubIface(in SubIface) SubIface {
 	}
 }
 func CloneBytes(n Bytes) Bytes {
-	res := make(Bytes, len(n))
+	res := make(Bytes, 0, len(n))
 	copy(res, n)
 	return res
 }
 func CloneInterfaceContainer(n InterfaceContainer) InterfaceContainer {
-	return InterfaceContainer{v: n.v}
+	return *CloneRefOfInterfaceContainer(&n)
 }
 func CloneInterfaceSlice(n InterfaceSlice) InterfaceSlice {
-	res := make(InterfaceSlice, len(n))
-	for i, x := range n {
-		res[i] = CloneAST(x)
+	res := make(InterfaceSlice, 0, len(n))
+	for _, x := range n {
+		res = append(res, CloneAST(x))
 	}
 	return res
 }
@@ -80,13 +80,13 @@ func CloneRefOfLeaf(n *Leaf) *Leaf {
 	if n == nil {
 		return nil
 	}
-	out := CloneLeaf(*n)
+	out := *n
 	return &out
 }
 func CloneLeafSlice(n LeafSlice) LeafSlice {
-	res := make(LeafSlice, len(n))
-	for i, x := range n {
-		res[i] = CloneRefOfLeaf(x)
+	res := make(LeafSlice, 0, len(n))
+	for _, x := range n {
+		res = append(res, CloneRefOfLeaf(x))
 	}
 	return res
 }
@@ -94,73 +94,78 @@ func CloneRefOfRefContainer(n *RefContainer) *RefContainer {
 	if n == nil {
 		return nil
 	}
-	out := CloneRefContainer(*n)
+	out := *n
+	out.ASTType = CloneAST(n.ASTType)
+	out.ASTImplementationType = CloneRefOfLeaf(n.ASTImplementationType)
 	return &out
 }
 func CloneRefOfRefSliceContainer(n *RefSliceContainer) *RefSliceContainer {
 	if n == nil {
 		return nil
 	}
-	out := CloneRefSliceContainer(*n)
+	out := *n
+	out.ASTElements = CloneSliceOfAST(n.ASTElements)
+	out.NotASTElements = CloneSliceOfint(n.NotASTElements)
+	out.ASTImplementationElements = CloneSliceOfRefOfLeaf(n.ASTImplementationElements)
 	return &out
 }
 func CloneRefOfSubImpl(n *SubImpl) *SubImpl {
 	if n == nil {
 		return nil
 	}
-	out := CloneSubImpl(*n)
+	out := *n
+	out.inner = CloneSubIface(n.inner)
 	return &out
 }
 func CloneValueContainer(n ValueContainer) ValueContainer {
-	return ValueContainer{
-		ASTImplementationType: CloneRefOfLeaf(n.ASTImplementationType),
-		ASTType:               CloneAST(n.ASTType),
-		NotASTType:            n.NotASTType,
-	}
+	return *CloneRefOfValueContainer(&n)
 }
 func CloneValueSliceContainer(n ValueSliceContainer) ValueSliceContainer {
-	return ValueSliceContainer{
-		ASTElements:               CloneSliceOfAST(n.ASTElements),
-		ASTImplementationElements: CloneSliceOfRefOfLeaf(n.ASTImplementationElements),
-		NotASTElements:            CloneSliceOfint(n.NotASTElements),
+	return *CloneRefOfValueSliceContainer(&n)
+}
+func CloneRefOfInterfaceContainer(n *InterfaceContainer) *InterfaceContainer {
+	if n == nil {
+		return nil
 	}
-}
-func CloneLeaf(n Leaf) Leaf {
-	return Leaf{v: n.v}
-}
-func CloneRefContainer(n RefContainer) RefContainer {
-	return RefContainer{
-		ASTImplementationType: CloneRefOfLeaf(n.ASTImplementationType),
-		ASTType:               CloneAST(n.ASTType),
-		NotASTType:            n.NotASTType,
-	}
-}
-func CloneRefSliceContainer(n RefSliceContainer) RefSliceContainer {
-	return RefSliceContainer{
-		ASTElements:               CloneSliceOfAST(n.ASTElements),
-		ASTImplementationElements: CloneSliceOfRefOfLeaf(n.ASTImplementationElements),
-		NotASTElements:            CloneSliceOfint(n.NotASTElements),
-	}
-}
-func CloneSubImpl(n SubImpl) SubImpl {
-	return SubImpl{inner: CloneSubIface(n.inner)}
+	out := *n
+	out.v = n.v
+	return &out
 }
 func CloneSliceOfAST(n []AST) []AST {
-	res := make([]AST, len(n))
-	for i, x := range n {
-		res[i] = CloneAST(x)
+	res := make([]AST, 0, len(n))
+	for _, x := range n {
+		res = append(res, CloneAST(x))
 	}
 	return res
 }
 func CloneSliceOfint(n []int) []int {
-	res := make([]int, len(n))
+	res := make([]int, 0, len(n))
 	copy(res, n)
 	return res
 }
 func CloneSliceOfRefOfLeaf(n []*Leaf) []*Leaf {
-	res := make([]*Leaf, len(n))
-	for i, x := range n {
-		res[i] = CloneRefOfLeaf(x)
+	res := make([]*Leaf, 0, len(n))
+	for _, x := range n {
+		res = append(res, CloneRefOfLeaf(x))
 	}
 	return res
+}
+func CloneRefOfValueContainer(n *ValueContainer) *ValueContainer {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.ASTType = CloneAST(n.ASTType)
+	out.ASTImplementationType = CloneRefOfLeaf(n.ASTImplementationType)
+	return &out
+}
+func CloneRefOfValueSliceContainer(n *ValueSliceContainer) *ValueSliceContainer {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.ASTElements = CloneSliceOfAST(n.ASTElements)
+	out.NotASTElements = CloneSliceOfint(n.NotASTElements)
+	out.ASTImplementationElements = CloneSliceOfRefOfLeaf(n.ASTImplementationElements)
+	return &out
 }
