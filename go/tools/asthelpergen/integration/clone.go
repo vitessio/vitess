@@ -17,6 +17,7 @@ limitations under the License.
 
 package integration
 
+// CloneAST creates a deep clone of the input.
 func CloneAST(in AST) AST {
 	if in == nil {
 		return nil
@@ -49,6 +50,8 @@ func CloneAST(in AST) AST {
 		return nil
 	}
 }
+
+// CloneSubIface creates a deep clone of the input.
 func CloneSubIface(in SubIface) SubIface {
 	if in == nil {
 		return nil
@@ -61,14 +64,20 @@ func CloneSubIface(in SubIface) SubIface {
 		return nil
 	}
 }
+
+// CloneBytes creates a deep clone of the input.
 func CloneBytes(n Bytes) Bytes {
 	res := make(Bytes, 0, len(n))
 	copy(res, n)
 	return res
 }
+
+// CloneInterfaceContainer creates a deep clone of the input.
 func CloneInterfaceContainer(n InterfaceContainer) InterfaceContainer {
 	return *CloneRefOfInterfaceContainer(&n)
 }
+
+// CloneInterfaceSlice creates a deep clone of the input.
 func CloneInterfaceSlice(n InterfaceSlice) InterfaceSlice {
 	res := make(InterfaceSlice, 0, len(n))
 	for _, x := range n {
@@ -76,6 +85,8 @@ func CloneInterfaceSlice(n InterfaceSlice) InterfaceSlice {
 	}
 	return res
 }
+
+// CloneRefOfLeaf creates a deep clone of the input.
 func CloneRefOfLeaf(n *Leaf) *Leaf {
 	if n == nil {
 		return nil
@@ -83,6 +94,8 @@ func CloneRefOfLeaf(n *Leaf) *Leaf {
 	out := *n
 	return &out
 }
+
+// CloneLeafSlice creates a deep clone of the input.
 func CloneLeafSlice(n LeafSlice) LeafSlice {
 	res := make(LeafSlice, 0, len(n))
 	for _, x := range n {
@@ -90,6 +103,8 @@ func CloneLeafSlice(n LeafSlice) LeafSlice {
 	}
 	return res
 }
+
+// CloneRefOfRefContainer creates a deep clone of the input.
 func CloneRefOfRefContainer(n *RefContainer) *RefContainer {
 	if n == nil {
 		return nil
@@ -99,6 +114,8 @@ func CloneRefOfRefContainer(n *RefContainer) *RefContainer {
 	out.ASTImplementationType = CloneRefOfLeaf(n.ASTImplementationType)
 	return &out
 }
+
+// CloneRefOfRefSliceContainer creates a deep clone of the input.
 func CloneRefOfRefSliceContainer(n *RefSliceContainer) *RefSliceContainer {
 	if n == nil {
 		return nil
@@ -109,6 +126,8 @@ func CloneRefOfRefSliceContainer(n *RefSliceContainer) *RefSliceContainer {
 	out.ASTImplementationElements = CloneSliceOfRefOfLeaf(n.ASTImplementationElements)
 	return &out
 }
+
+// CloneRefOfSubImpl creates a deep clone of the input.
 func CloneRefOfSubImpl(n *SubImpl) *SubImpl {
 	if n == nil {
 		return nil
@@ -117,12 +136,18 @@ func CloneRefOfSubImpl(n *SubImpl) *SubImpl {
 	out.inner = CloneSubIface(n.inner)
 	return &out
 }
+
+// CloneValueContainer creates a deep clone of the input.
 func CloneValueContainer(n ValueContainer) ValueContainer {
 	return *CloneRefOfValueContainer(&n)
 }
+
+// CloneValueSliceContainer creates a deep clone of the input.
 func CloneValueSliceContainer(n ValueSliceContainer) ValueSliceContainer {
 	return *CloneRefOfValueSliceContainer(&n)
 }
+
+// CloneRefOfInterfaceContainer creates a deep clone of the input.
 func CloneRefOfInterfaceContainer(n *InterfaceContainer) *InterfaceContainer {
 	if n == nil {
 		return nil
@@ -131,6 +156,8 @@ func CloneRefOfInterfaceContainer(n *InterfaceContainer) *InterfaceContainer {
 	out.v = n.v
 	return &out
 }
+
+// CloneSliceOfAST creates a deep clone of the input.
 func CloneSliceOfAST(n []AST) []AST {
 	res := make([]AST, 0, len(n))
 	for _, x := range n {
@@ -138,11 +165,15 @@ func CloneSliceOfAST(n []AST) []AST {
 	}
 	return res
 }
+
+// CloneSliceOfint creates a deep clone of the input.
 func CloneSliceOfint(n []int) []int {
 	res := make([]int, 0, len(n))
 	copy(res, n)
 	return res
 }
+
+// CloneSliceOfRefOfLeaf creates a deep clone of the input.
 func CloneSliceOfRefOfLeaf(n []*Leaf) []*Leaf {
 	res := make([]*Leaf, 0, len(n))
 	for _, x := range n {
@@ -150,6 +181,8 @@ func CloneSliceOfRefOfLeaf(n []*Leaf) []*Leaf {
 	}
 	return res
 }
+
+// CloneRefOfValueContainer creates a deep clone of the input.
 func CloneRefOfValueContainer(n *ValueContainer) *ValueContainer {
 	if n == nil {
 		return nil
@@ -159,6 +192,8 @@ func CloneRefOfValueContainer(n *ValueContainer) *ValueContainer {
 	out.ASTImplementationType = CloneRefOfLeaf(n.ASTImplementationType)
 	return &out
 }
+
+// CloneRefOfValueSliceContainer creates a deep clone of the input.
 func CloneRefOfValueSliceContainer(n *ValueSliceContainer) *ValueSliceContainer {
 	if n == nil {
 		return nil

@@ -24,6 +24,9 @@ import (
 	"github.com/dave/jennifer/jen"
 )
 
+// cloneGen creates the deep clone methods for the AST. It works by discovering the types that it needs to support,
+// starting from a root interface type. While creating the clone method for this root interface, more types that need
+// to be cloned are discovered. This continues type by type until all necessary types have been traversed.
 type cloneGen struct {
 	methods []jen.Code
 	iface   *types.Interface
@@ -55,6 +58,10 @@ func (c *cloneGen) visitInterface(t types.Type, _ *types.Interface) error {
 
 const cloneName = "Clone"
 
+func (c *cloneGen) addFunc(name string, code jen.Code) {
+	c.methods = append(c.methods, jen.Comment(name+" creates a deep clone of the input."), code)
+}
+
 // readValueOfType produces code to read the expression of type `t`, and adds the type to the todo-list
 func (c *cloneGen) readValueOfType(t types.Type, expr jen.Code) jen.Code {
 	switch t.Underlying().(type) {
@@ -70,10 +77,11 @@ func (c *cloneGen) readValueOfType(t types.Type, expr jen.Code) jen.Code {
 	return jen.Id(cloneName + printableTypeName(t)).Call(expr)
 }
 
-func (c *cloneGen) makeStructCloneMethod(t types.Type, stroct *types.Struct) error {
+func (c *cloneGen) makeStructCloneMethod(t types.Type) error {
 	receiveType := types.TypeString(t, noQualifier)
-	c.methods = append(c.methods,
-		jen.Func().Id("Clone"+printableTypeName(t)).Call(jen.Id("n").Id(receiveType)).Id(receiveType).Block(
+	funcName := "Clone" + printableTypeName(t)
+	c.addFunc(funcName,
+		jen.Func().Id(funcName).Call(jen.Id("n").Id(receiveType)).Id(receiveType).Block(
 			jen.Return(jen.Op("*").Add(c.readValueOfType(types.NewPointer(t), jen.Op("&").Id("n")))),
 		))
 	return nil
@@ -81,18 +89,18 @@ func (c *cloneGen) makeStructCloneMethod(t types.Type, stroct *types.Struct) err
 
 func (c *cloneGen) makeSliceCloneMethod(t types.Type, slice *types.Slice) error {
 	typeString := types.TypeString(t, noQualifier)
-
-	//func (n Bytes) Clone() Bytes {
 	name := printableTypeName(t)
-	x := jen.Func().Id(cloneName+name).Call(jen.Id("n").Id(typeString)).Id(typeString).Block(
-		//	res := make(Bytes, len(n))
-		jen.Id("res").Op(":=").Id("make").Call(jen.Id(typeString), jen.Lit(0), jen.Id("len").Call(jen.Id("n"))),
-		c.copySliceElement(slice.Elem()),
-		//	return res
-		jen.Return(jen.Id("res")),
-	)
+	funcName := cloneName + name
 
-	c.methods = append(c.methods, x)
+	c.addFunc(funcName,
+		//func (n Bytes) Clone() Bytes {
+		jen.Func().Id(funcName).Call(jen.Id("n").Id(typeString)).Id(typeString).Block(
+			//	res := make(Bytes, len(n))
+			jen.Id("res").Op(":=").Id("make").Call(jen.Id(typeString), jen.Lit(0), jen.Id("len").Call(jen.Id("n"))),
+			c.copySliceElement(slice.Elem()),
+			//	return res
+			jen.Return(jen.Id("res")),
+		))
 	return nil
 }
 
@@ -167,20 +175,23 @@ func (c *cloneGen) makeInterfaceCloneMethod(t types.Type, iface *types.Interface
 		cases...,
 	)))
 
-	funcDecl := jen.Func().Id(cloneName + typeName).Call(jen.Id("in").Id(typeString)).Id(typeString).Block(stmts...)
-	c.methods = append(c.methods, funcDecl)
+	funcName := cloneName + typeName
+	funcDecl := jen.Func().Id(funcName).Call(jen.Id("in").Id(typeString)).Id(typeString).Block(stmts...)
+	c.addFunc(funcName, funcDecl)
 	return nil
 }
 
 func (c *cloneGen) makePtrCloneMethod(t types.Type, ptr *types.Pointer) error {
 	receiveType := types.TypeString(t, noQualifier)
 
-	c.methods = append(c.methods,
-		jen.Func().Id("Clone"+printableTypeName(t)).Call(jen.Id("n").Id(receiveType)).Id(receiveType).Block(
+	funcName := "Clone" + printableTypeName(t)
+	c.addFunc(funcName,
+		jen.Func().Id(funcName).Call(jen.Id("n").Id(receiveType)).Id(receiveType).Block(
 			ifNilReturnNil("n"),
 			jen.Id("out").Op(":=").Add(c.readValueOfType(ptr.Elem(), jen.Op("*").Id("n"))),
 			jen.Return(jen.Op("&").Id("out")),
 		))
+
 	return nil
 }
 
@@ -227,12 +238,12 @@ func isBasic(t types.Type) bool {
 }
 
 func (c *cloneGen) tryStruct(underlying, t types.Type) bool {
-	strct, ok := underlying.(*types.Struct)
+	_, ok := underlying.(*types.Struct)
 	if !ok {
 		return false
 	}
 
-	err := c.makeStructCloneMethod(t, strct)
+	err := c.makeStructCloneMethod(t)
 	if err != nil {
 		panic(err) // todo
 	}
@@ -273,10 +284,11 @@ func (c *cloneGen) tryPtr(underlying, t types.Type) bool {
 			jen.Return(jen.Op("&").Id("out")),
 		)
 
-		//func CloneRefOfType(n *Type) *Type
-		funcDeclaration := jen.Func().Id("Clone" + printableTypeName(t)).Call(jen.Id("n").Id(receiveType)).Id(receiveType)
+		funcName := "Clone" + printableTypeName(t)
 
-		c.methods = append(c.methods,
+		//func CloneRefOfType(n *Type) *Type
+		funcDeclaration := jen.Func().Id(funcName).Call(jen.Id("n").Id(receiveType)).Id(receiveType)
+		c.addFunc(funcName,
 			funcDeclaration.Block(stmts...),
 		)
 
