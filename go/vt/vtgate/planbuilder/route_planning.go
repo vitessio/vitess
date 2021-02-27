@@ -446,7 +446,7 @@ func pushPredicate2(exprs []sqlparser.Expr, tree joinTree, semTable *semantics.S
 }
 
 func breakPredicateInLHSandRHS(expr sqlparser.Expr, semTable *semantics.SemTable, lhs semantics.TableSet) (columns []*sqlparser.ColName, predicate sqlparser.Expr, err error) {
-	predicate = expr.Clone()
+	predicate = sqlparser.CloneExpr(expr)
 	sqlparser.Rewrite(predicate, nil, func(cursor *sqlparser.Cursor) bool {
 		switch node := cursor.Node().(type) {
 		case *sqlparser.ColName:

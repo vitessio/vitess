@@ -1538,7 +1538,6 @@ type (
 	Expr interface {
 		iExpr()
 		SQLNode
-		Clone() Expr
 	}
 
 	// AndExpr represents an AND expression.
