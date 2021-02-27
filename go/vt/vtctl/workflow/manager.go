@@ -80,7 +80,7 @@ func (manager *Manager) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWo
 		where,
 	)
 
-	vx := vexec.NewVExec(req.Keyspace, manager.ts, manager.tmc)
+	vx := vexec.NewVExec(req.Keyspace, "", manager.ts, manager.tmc)
 	results, err := vx.QueryContext(ctx, query)
 	if err != nil {
 		return nil, err
