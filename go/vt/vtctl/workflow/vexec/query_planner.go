@@ -18,6 +18,7 @@ package vexec
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 
@@ -29,6 +30,15 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
+)
+
+var ( // Query planning errors.
+	ErrCannotUpdateImmutableColumn = errors.New("cannot update immutable column")
+	ErrUnsupportedQueryConstruct   = errors.New("unsupported query construct")
+)
+
+var ( // Query execution errors.
+	ErrUnpreparedQuery = errors.New("attempted to execute unprepared query")
 )
 
 type QueryPlanner interface {
