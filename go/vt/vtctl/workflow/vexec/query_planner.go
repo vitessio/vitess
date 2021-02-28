@@ -33,27 +33,70 @@ import (
 )
 
 var ( // Query planning errors.
+	// ErrCannotUpdateImmutableColumn is returned when attempting to plan a
+	// query that updates a column that should be treated as immutable.
 	ErrCannotUpdateImmutableColumn = errors.New("cannot update immutable column")
-	ErrUnsupportedQueryConstruct   = errors.New("unsupported query construct")
+	// ErrUnsupportedQueryConstruct is returned when a particular query
+	// construct is unsupported by a QueryPlanner, despite the more general kind
+	// of query being supported.
+	//
+	// For example, VReplication supports DELETEs, but does not support DELETEs
+	// with LIMIT clauses, so planning a "DELETE ... LIMIT" will return
+	// ErrUnsupportedQueryConstruct rather than a "CREATE TABLE", which would
+	// return an ErrUnsupportedQuery.
+	ErrUnsupportedQueryConstruct = errors.New("unsupported query construct")
 )
 
 var ( // Query execution errors.
+	// ErrUnpreparedQuery is returned when attempting to execute an unprepared
+	// QueryPlan.
 	ErrUnpreparedQuery = errors.New("attempted to execute unprepared query")
 )
 
+// QueryPlanner defines the interface that VExec uses to build QueryPlans for
+// various vexec workflows. A given vexec table, which is to say a table in the
+// "_vt" database, will have at most one QueryPlanner implementation, which is
+// responsible for defining both what queries are supported for that table, as
+// well as how to build plans for those queries.
+//
+// VReplicationQueryPlanner is a good example implementation to refer to.
 type QueryPlanner interface {
-	PlanQuery(stmt sqlparser.Statement) (*QueryPlan, error)
-	QueryParams() QueryParams
+	// (NOTE:@ajm188) I don't think this method fits on the query planner. To
+	// me, especially given that it's only implemented by the vrep query planner
+	// in the old implementation (the schema migration query planner no-ops this
+	// method), this fits better on our workflow.Manager struct, probably as a
+	// method called something like "VReplicationExec(ctx, query, Options{DryRun: true})"
+	// DryRun(ctx context.Context) error
 
-	DBName() string
-	WorkflowName() string
+	// PlanQuery contsructs and returns a QueryPlan for a given statement. The
+	// resulting QueryPlan is suitable for repeated, concurrent use.
+	PlanQuery(stmt sqlparser.Statement) (*QueryPlan, error)
+	// QueryParams returns a struct of column parameters the QueryPlanner uses.
+	// It is used primarily to abstract the adding of default WHERE clauses to
+	// queries by a private function of this package, and may be removed from
+	// the interface later.
+	QueryParams() QueryParams
 }
 
+// QueryParams is a struct that QueryPlanner implementations can provide to
+// control the addition of default WHERE clauses to their queries.
 type QueryParams struct {
-	DBNameColumn   string
+	// DBName is the value that the column referred to by DBNameColumn should
+	// equal in a WHERE clause, if set.
+	DBName string
+	// DBNameColumn is the name of the column that DBName should equal in a
+	// WHERE clause, if set.
+	DBNameColumn string
+	// Workflow is the value that the column referred to by WorkflowColumn
+	// should equal in a WHERE clause, if set.
+	Workflow string
+	// WorkflowColumn is the name of the column that Workflow should equal in a
+	// WHERE clause, if set.
 	WorkflowColumn string
 }
 
+// VReplicationQueryPlanner implements the QueryPlanner interface for queries on
+// the _vt.vreplication table.
 type VReplicationQueryPlanner struct {
 	tmc tmclient.TabletManagerClient
 
@@ -61,6 +104,8 @@ type VReplicationQueryPlanner struct {
 	workflow string
 }
 
+// NewVReplicationQueryPlanner returns a new VReplicationQueryPlanner. It is
+// valid to pass empty strings for both the dbname and workflow parameters.
 func NewVReplicationQueryPlanner(tmc tmclient.TabletManagerClient, workflow string, dbname string) *VReplicationQueryPlanner {
 	return &VReplicationQueryPlanner{
 		tmc:      tmc,
@@ -69,10 +114,16 @@ func NewVReplicationQueryPlanner(tmc tmclient.TabletManagerClient, workflow stri
 	}
 }
 
-func (planner *VReplicationQueryPlanner) DBName() string {
-	return planner.dbname
-}
-
+// PlanQuery is part of the QueryPlanner interface.
+//
+// For vreplication query planners, only SELECT, UPDATE, and DELETE queries are
+// supported.
+//
+// For UPDATE queries, ORDER BY and LIMIT clauses are not supported. Attempting
+// to update vreplication.id is an error.
+//
+// For DELETE queries, USING, PARTITION, ORDER BY, and LIMIT clauses are not
+// supported.
 func (planner *VReplicationQueryPlanner) PlanQuery(stmt sqlparser.Statement) (plan *QueryPlan, err error) {
 	switch stmt := stmt.(type) {
 	case *sqlparser.Select:
@@ -94,21 +145,25 @@ func (planner *VReplicationQueryPlanner) PlanQuery(stmt sqlparser.Statement) (pl
 	return plan, nil
 }
 
+// QueryParams is part of the QueryPlanner interface. A VReplicationQueryPlanner
+// will attach the following WHERE clauses iff (a) DBName, Workflow are set,
+// respectively, and (b) db_name and workflow do not appear in the original
+// query's WHERE clause:
+//
+// 		WHERE (db_name = {{ .DBName }} AND)? (workflow = {{ .Workflow }} AND)? {{ .OriginalWhere }}
 func (planner *VReplicationQueryPlanner) QueryParams() QueryParams {
 	return QueryParams{
+		DBName:         planner.dbname,
 		DBNameColumn:   "db_name",
+		Workflow:       planner.workflow,
 		WorkflowColumn: "workflow",
 	}
-}
-
-func (planner *VReplicationQueryPlanner) WorkflowName() string {
-	return planner.workflow
 }
 
 func (planner *VReplicationQueryPlanner) planDelete(del *sqlparser.Delete) (*QueryPlan, error) {
 	if del.Targets != nil {
 		return nil, fmt.Errorf(
-			"%w: DELETE must not have explicit targets (have: %v): %v",
+			"%w: DELETE must not have USING clause (have: %v): %v",
 			ErrUnsupportedQueryConstruct,
 			del.Targets,
 			sqlparser.String(del),
@@ -195,6 +250,8 @@ func (planner *VReplicationQueryPlanner) planUpdate(upd *sqlparser.Update) (*Que
 	}, nil
 }
 
+// QueryPlan wraps a planned query produced by a QueryPlanner. It is safe to
+// execute a QueryPlan repeatedly and in multiple goroutines.
 type QueryPlan struct {
 	ParsedQuery *sqlparser.ParsedQuery
 
@@ -202,6 +259,7 @@ type QueryPlan struct {
 	tmc      tmclient.TabletManagerClient
 }
 
+// Execute executes a QueryPlan on a single target.
 func (qp *QueryPlan) Execute(ctx context.Context, target *topo.TabletInfo) (qr *querypb.QueryResult, err error) {
 	if qp.ParsedQuery == nil {
 		return nil, fmt.Errorf("%w: call PlanQuery on a query planner first", ErrUnpreparedQuery)
@@ -232,7 +290,18 @@ func (qp *QueryPlan) Execute(ctx context.Context, target *topo.TabletInfo) (qr *
 	return qr, nil
 }
 
+// ExecuteScatter executes a QueryPlan on multiple targets concurrently,
+// returning a mapping of target tablet to querypb.QueryResult. Errors from
+// individual targets are aggregated into a singular error.
 func (qp *QueryPlan) ExecuteScatter(ctx context.Context, targets ...*topo.TabletInfo) (map[*topo.TabletInfo]*querypb.QueryResult, error) {
+	if qp.ParsedQuery == nil {
+		// This check is an "optimization" on error handling. We check here,
+		// even though we will check this during the individual Execute calls,
+		// so that we return one error, rather than the same error aggregated
+		// len(targets) times.
+		return nil, fmt.Errorf("%w: call PlanQuery on a query planner first", ErrUnpreparedQuery)
+	}
+
 	var (
 		m       sync.Mutex
 		wg      sync.WaitGroup
@@ -289,7 +358,7 @@ func addDefaultWheres(planner QueryPlanner, where *sqlparser.Where) *sqlparser.W
 				Name: sqlparser.NewColIdent(params.DBNameColumn),
 			},
 			Operator: sqlparser.EqualOp,
-			Right:    sqlparser.NewStrLiteral([]byte(planner.DBName())),
+			Right:    sqlparser.NewStrLiteral([]byte(params.DBName)),
 		}
 
 		switch newWhere {
@@ -306,13 +375,13 @@ func addDefaultWheres(planner QueryPlanner, where *sqlparser.Where) *sqlparser.W
 		}
 	}
 
-	if !hasWorkflowCol && planner.WorkflowName() != "" {
+	if !hasWorkflowCol && params.Workflow != "" {
 		expr := &sqlparser.ComparisonExpr{
 			Left: &sqlparser.ColName{
 				Name: sqlparser.NewColIdent(params.WorkflowColumn),
 			},
 			Operator: sqlparser.EqualOp,
-			Right:    sqlparser.NewStrLiteral([]byte(planner.WorkflowName())),
+			Right:    sqlparser.NewStrLiteral([]byte(params.Workflow)),
 		}
 
 		newWhere.Expr = &sqlparser.AndExpr{

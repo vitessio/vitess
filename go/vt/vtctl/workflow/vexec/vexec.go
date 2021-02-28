@@ -30,22 +30,41 @@ import (
 )
 
 const (
+	// VExecTableQualifier is the qualifier that all tables supported by vexec
+	// are prefixed by.
 	VExecTableQualifier = "_vt"
 
+	// SchemaMigrationsTableName is the unqualified name of the schema
+	// migrations table supported by vexec.
 	SchemaMigrationsTableName = "schema_migrations"
-	VReplicationTableName     = "vreplication"
+	// VReplicationTableName is the unqualified name of the vreplication table
+	// supported by vexec.
+	VReplicationTableName = "vreplication"
 )
 
 var ( // Topo lookup errors.
-	ErrNoShardPrimary      = errors.New("no primary found for shard")
+	// ErrNoShardPrimary occurs when a shard is found with no serving
+	// primary.
+	ErrNoShardPrimary = errors.New("no primary found for shard")
+	// ErrNoShardsForKeyspace occurs when attempting to run a vexec on an empty
+	// keyspace.
 	ErrNoShardsForKeyspace = errors.New("no shards found in keyspace")
 )
 
 var ( // Query parsing and planning errors.
+	// ErrUnsupportedQuery occurs when attempting to run an unsupported query
+	// through vexec.
 	ErrUnsupportedQuery = errors.New("query not supported by vexec")
+	// ErrUnsupportedTable occurs when attempting to run vexec on an unsupported
+	// table. At the time of writing, this occurs when attempting to query any
+	// table other than _vt.vreplication.
 	ErrUnsupportedTable = errors.New("table not supported by vexec")
 )
 
+// VExec provides the main interface to planning and executing vexec queries
+// (normally, queries on tables in the `_vt` database). It currently supports
+// some limited vreplication queries; this set of supported behavior will expand
+// over time. It may be extended to support schema_migrations queries as well.
 type VExec struct {
 	ts  *topo.Server
 	tmc tmclient.TabletManagerClient
@@ -73,6 +92,11 @@ type VExec struct {
 	// - Only return error if greater than some percentage of the targets fail.
 }
 
+// NewVExec returns a new instance suitable for making vexec queries to a given
+// keyspace (required) and workflow (optional, omit by providing the empty
+// string). The provided topo server is used to look up target tablets for
+// queries. A given instance will discover targets exactly once for its
+// lifetime, so to force a refresh, create another instance.
 func NewVExec(keyspace string, workflow string, ts *topo.Server, tmc tmclient.TabletManagerClient) *VExec {
 	return &VExec{
 		ts:       ts,
@@ -82,6 +106,15 @@ func NewVExec(keyspace string, workflow string, ts *topo.Server, tmc tmclient.Ta
 	}
 }
 
+// QueryContext executes the given vexec query, returning a mapping of tablet
+// to querypb.QueryResult.
+//
+// On first use, QueryContext will also cause the VExec instance to discover
+// target tablets from the topo; that target list will be reused for all future
+// queries made by this instance.
+//
+// For details on query parsing and planning, see GetPlanner and the
+// QueryPlanner interface.
 func (vx *VExec) QueryContext(ctx context.Context, query string) (map[*topo.TabletInfo]*querypb.QueryResult, error) {
 	if vx.primaries == nil {
 		if err := vx.initialize(ctx); err != nil {
@@ -94,12 +127,12 @@ func (vx *VExec) QueryContext(ctx context.Context, query string) (map[*topo.Tabl
 		return nil, err
 	}
 
-	table, err := ExtractTableName(stmt)
+	table, err := extractTableName(stmt)
 	if err != nil {
 		return nil, err
 	}
 
-	planner, err := vx.GetPlanner(table)
+	planner, err := vx.GetPlanner(ctx, table)
 	if err != nil {
 		return nil, err
 	}
@@ -159,7 +192,30 @@ func (vx *VExec) initialize(ctx context.Context) error {
 	return nil
 }
 
-func ExtractTableName(stmt sqlparser.Statement) (string, error) { // TODO: private?
+// GetPlanner returns an appropriate implementation of a QueryPlanner, depending
+// on the table being queried.
+//
+// On first use, GetPlanner will also cause the VExec instance to discover
+// target tablets from the topo; that target list will be reused for all future
+// queries made by this instance.
+func (vx *VExec) GetPlanner(ctx context.Context, table string) (QueryPlanner, error) { // TODO: private?
+	if vx.primaries == nil {
+		if err := vx.initialize(ctx); err != nil {
+			return nil, fmt.Errorf("error while initializing target list: %w", err)
+		}
+	}
+
+	switch table {
+	case qualifiedTableName(VReplicationTableName):
+		return NewVReplicationQueryPlanner(vx.tmc, vx.workflow, vx.primaries[0].DbName()), nil
+	case qualifiedTableName(SchemaMigrationsTableName):
+		return nil, errors.New("Schema Migrations not yet supported in new workflow package")
+	default:
+		return nil, fmt.Errorf("%w: %v", ErrUnsupportedTable, table)
+	}
+}
+
+func extractTableName(stmt sqlparser.Statement) (string, error) {
 	switch stmt := stmt.(type) {
 	case *sqlparser.Update:
 		return sqlparser.String(stmt.TableExprs), nil
@@ -172,17 +228,6 @@ func ExtractTableName(stmt sqlparser.Statement) (string, error) { // TODO: priva
 	}
 
 	return "", fmt.Errorf("%w: %+v", ErrUnsupportedQuery, sqlparser.String(stmt))
-}
-
-func (vx *VExec) GetPlanner(table string) (QueryPlanner, error) { // TODO: private?
-	switch table {
-	case qualifiedTableName(VReplicationTableName):
-		return NewVReplicationQueryPlanner(vx.tmc, vx.workflow, vx.primaries[0].DbName()), nil
-	case qualifiedTableName(SchemaMigrationsTableName):
-		return nil, errors.New("Schema Migrations not yet supported in new workflow package")
-	default:
-		return nil, fmt.Errorf("%w: %v", ErrUnsupportedTable, table)
-	}
 }
 
 func qualifiedTableName(name string) string {
