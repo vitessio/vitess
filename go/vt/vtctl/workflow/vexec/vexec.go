@@ -36,6 +36,16 @@ const (
 	VReplicationTableName     = "vreplication"
 )
 
+var ( // Topo lookup errors.
+	ErrNoShardPrimary      = errors.New("no primary found for shard")
+	ErrNoShardsForKeyspace = errors.New("no shards found in keyspace")
+)
+
+var ( // Query parsing and planning errors.
+	ErrUnsupportedQuery = errors.New("query not supported by vexec")
+	ErrUnsupportedTable = errors.New("table not supported by vexec")
+)
+
 type VExec struct {
 	ts  *topo.Server
 	tmc tmclient.TabletManagerClient
