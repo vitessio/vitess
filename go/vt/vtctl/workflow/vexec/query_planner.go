@@ -67,8 +67,12 @@ func (planner *VReplicationQueryPlanner) PlanQuery(stmt sqlparser.Statement) (pl
 	switch stmt := stmt.(type) {
 	case *sqlparser.Select:
 		plan, err = planner.planSelect(stmt)
-	case *sqlparser.Insert, *sqlparser.Update, *sqlparser.Delete:
-		plan, err = nil, fmt.Errorf("%w: bother @ajm188, this is still WIP", ErrUnsupportedQuery)
+	case *sqlparser.Insert:
+		err = ErrUnsupportedQuery
+	case *sqlparser.Update:
+		plan, err = planner.planUpdate(stmt)
+	case *sqlparser.Delete:
+		plan, err = planner.planDelete(stmt)
 	default:
 		err = ErrUnsupportedQuery
 	}
@@ -91,11 +95,88 @@ func (planner *VReplicationQueryPlanner) WorkflowName() string {
 	return planner.workflow
 }
 
+func (planner *VReplicationQueryPlanner) planDelete(del *sqlparser.Delete) (*QueryPlan, error) {
+	if del.Targets != nil {
+		return nil, fmt.Errorf(
+			"%w: DELETE must not have explicit targets (have: %v): %v",
+			ErrUnsupportedQueryConstruct,
+			del.Targets,
+			sqlparser.String(del),
+		)
+	}
+
+	if del.Partitions != nil {
+		return nil, fmt.Errorf(
+			"%w: DELETE must not have explicit partitions (have: %v): %v",
+			ErrUnsupportedQueryConstruct,
+			del.Partitions,
+			sqlparser.String(del),
+		)
+	}
+
+	if del.OrderBy != nil || del.Limit != nil {
+		return nil, fmt.Errorf(
+			"%w: DELETE must not have explicit ordering (have: %v) or limit clauses (have: %v): %v",
+			ErrUnsupportedQueryConstruct,
+			del.OrderBy,
+			del.Limit,
+			sqlparser.String(del),
+		)
+	}
+
+	del.Where = addDefaultWheres(planner, del.Where)
+
+	buf := sqlparser.NewTrackedBuffer(nil)
+	buf.Myprintf("%v", del)
+
+	return &QueryPlan{
+		ParsedQuery: buf.ParsedQuery(),
+		workflow:    planner.workflow,
+		tmc:         planner.tmc,
+	}, nil
+}
+
 func (planner *VReplicationQueryPlanner) planSelect(sel *sqlparser.Select) (*QueryPlan, error) {
 	sel.Where = addDefaultWheres(planner, sel.Where)
 
 	buf := sqlparser.NewTrackedBuffer(nil)
 	buf.Myprintf("%v", sel)
+
+	return &QueryPlan{
+		ParsedQuery: buf.ParsedQuery(),
+		workflow:    planner.workflow,
+		tmc:         planner.tmc,
+	}, nil
+}
+
+func (planner *VReplicationQueryPlanner) planUpdate(upd *sqlparser.Update) (*QueryPlan, error) {
+	if upd.OrderBy != nil || upd.Limit != nil {
+		return nil, fmt.Errorf(
+			"%w: UPDATE must not have explicit ordering (have: %v) or limit clauses (have: %v): %v",
+			ErrUnsupportedQueryConstruct,
+			upd.OrderBy,
+			upd.Limit,
+			sqlparser.String(upd),
+		)
+	}
+
+	// For updates on the _vt.vreplication table, we ban updates to the `id`
+	// column, and allow updates to all other columns.
+	for _, expr := range upd.Exprs {
+		if expr.Name.Name.EqualString("id") {
+			return nil, fmt.Errorf(
+				"%w %+v: %v",
+				ErrCannotUpdateImmutableColumn,
+				expr.Name.Name,
+				sqlparser.String(expr),
+			)
+		}
+	}
+
+	upd.Where = addDefaultWheres(planner, upd.Where)
+
+	buf := sqlparser.NewTrackedBuffer(nil)
+	buf.Myprintf("%v", upd)
 
 	return &QueryPlan{
 		ParsedQuery: buf.ParsedQuery(),
