@@ -28,3 +28,7 @@ message Time {
   int32 nanoseconds = 2;
 }
 
+message Duration {
+  int64 seconds = 1;
+  int32 nanos = 2;
+}
