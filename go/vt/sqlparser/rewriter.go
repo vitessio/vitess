@@ -475,8 +475,10 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 		a.apply(node, n.After, func(newNode, parent SQLNode) {
 			parent.(*ModifyColumn).After = newNode.(*ColName)
 		})
-	case Nextval:
-		a.apply(node, n.Expr, replacePanic("Nextval Expr"))
+	case *Nextval:
+		a.apply(node, n.Expr, func(newNode, parent SQLNode) {
+			parent.(*Nextval).Expr = newNode.(Expr)
+		})
 	case *NotExpr:
 		a.apply(node, n.Expr, func(newNode, parent SQLNode) {
 			parent.(*NotExpr).Expr = newNode.(Expr)
