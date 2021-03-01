@@ -25,8 +25,6 @@ import (
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/vt/topotools"
-
 	"vitess.io/vitess/go/vt/topo/topoproto"
 
 	"vitess.io/vitess/go/vt/discovery"
@@ -276,7 +274,7 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 		}
 		break
 	}
-	return NewShardError(err, target, tabletLastUsed)
+	return NewShardError(err, target)
 }
 
 func (gw *TabletGateway) updateStats(target *querypb.Target, startTime time.Time, err error) {
@@ -354,12 +352,9 @@ func (gw *TabletGateway) TabletsCacheStatus() discovery.TabletsCacheStatusList {
 }
 
 // NewShardError returns a new error with the shard info amended.
-func NewShardError(in error, target *querypb.Target, tablet *topodatapb.Tablet) error {
+func NewShardError(in error, target *querypb.Target) error {
 	if in == nil {
 		return nil
-	}
-	if tablet != nil {
-		return vterrors.Wrapf(in, "target: %s.%s.%s, used tablet: %s", target.Keyspace, target.Shard, topoproto.TabletTypeLString(target.TabletType), topotools.TabletIdent(tablet))
 	}
 	if target != nil {
 		return vterrors.Wrapf(in, "target: %s.%s.%s", target.Keyspace, target.Shard, topoproto.TabletTypeLString(target.TabletType))

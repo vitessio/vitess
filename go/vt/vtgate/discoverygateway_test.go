@@ -30,7 +30,6 @@ import (
 	"vitess.io/vitess/go/vt/srvtopo/srvtopotest"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
-	"vitess.io/vitess/go/vt/topotools"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/proto/topodata"
@@ -391,14 +390,9 @@ func testDiscoveryGatewayGeneric(t *testing.T, f func(dg *DiscoveryGateway, targ
 	sc2 := hc.AddTestTablet("cell", "1.1.1.1", 1002, keyspace, shard, tabletType, true, 10, nil)
 	sc1.MustFailCodes[vtrpcpb.Code_FAILED_PRECONDITION] = 1
 	sc2.MustFailCodes[vtrpcpb.Code_FAILED_PRECONDITION] = 1
-	ep1 := sc1.Tablet()
-	ep2 := sc2.Tablet()
 
 	err = f(dg, target)
 	verifyContainsError(t, err, "target: ks.0.replica", vtrpcpb.Code_FAILED_PRECONDITION)
-	verifyShardErrorEither(t, err,
-		fmt.Sprintf(`used tablet: %s`, topotools.TabletIdent(ep1)),
-		fmt.Sprintf(`used tablet: %s`, topotools.TabletIdent(ep2)))
 
 	// fatal error
 	hc.Reset()
@@ -407,22 +401,16 @@ func testDiscoveryGatewayGeneric(t *testing.T, f func(dg *DiscoveryGateway, targ
 	sc2 = hc.AddTestTablet("cell", "1.1.1.1", 1002, keyspace, shard, tabletType, true, 10, nil)
 	sc1.MustFailCodes[vtrpcpb.Code_FAILED_PRECONDITION] = 1
 	sc2.MustFailCodes[vtrpcpb.Code_FAILED_PRECONDITION] = 1
-	ep1 = sc1.Tablet()
-	ep2 = sc2.Tablet()
 	err = f(dg, target)
 	verifyContainsError(t, err, "target: ks.0.replica", vtrpcpb.Code_FAILED_PRECONDITION)
-	verifyShardErrorEither(t, err,
-		fmt.Sprintf(`used tablet: %s`, topotools.TabletIdent(ep1)),
-		fmt.Sprintf(`used tablet: %s`, topotools.TabletIdent(ep2)))
 
 	// server error - no retry
 	hc.Reset()
 	dg.tsc.ResetForTesting()
 	sc1 = hc.AddTestTablet("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, true, 10, nil)
 	sc1.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
-	ep1 = sc1.Tablet()
 	err = f(dg, target)
-	verifyContainsError(t, err, fmt.Sprintf(`used tablet: %s`, topotools.TabletIdent(ep1)), vtrpcpb.Code_INVALID_ARGUMENT)
+	verifyContainsError(t, err, "target: ks.0.replica", vtrpcpb.Code_INVALID_ARGUMENT)
 
 	// no failure
 	hc.Reset()
@@ -453,23 +441,15 @@ func testDiscoveryGatewayTransact(t *testing.T, f func(dg *DiscoveryGateway, tar
 	sc2 := hc.AddTestTablet("cell", "1.1.1.1", 1002, keyspace, shard, tabletType, true, 10, nil)
 	sc1.MustFailCodes[vtrpcpb.Code_FAILED_PRECONDITION] = 1
 	sc2.MustFailCodes[vtrpcpb.Code_FAILED_PRECONDITION] = 1
-	ep1 := sc1.Tablet()
-	ep2 := sc2.Tablet()
 
 	err := f(dg, target)
 	verifyContainsError(t, err, "target: ks.0.replica", vtrpcpb.Code_FAILED_PRECONDITION)
-	format := `used tablet: %s`
-	verifyShardErrorEither(t, err,
-		fmt.Sprintf(format, topotools.TabletIdent(ep1)),
-		fmt.Sprintf(format, topotools.TabletIdent(ep2)))
 
 	// server error - no retry
 	hc.Reset()
 	dg.tsc.ResetForTesting()
 	sc1 = hc.AddTestTablet("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, true, 10, nil)
 	sc1.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
-	ep1 = sc1.Tablet()
 	err = f(dg, target)
 	verifyContainsError(t, err, "target: ks.0.replica", vtrpcpb.Code_INVALID_ARGUMENT)
-	verifyContainsError(t, err, fmt.Sprintf(format, topotools.TabletIdent(ep1)), vtrpcpb.Code_INVALID_ARGUMENT)
 }
