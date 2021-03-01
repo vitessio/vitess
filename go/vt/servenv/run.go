@@ -52,7 +52,7 @@ func Run(port int) {
 	go http.Serve(l, nil)
 
 	ExitChan := make(chan os.Signal, 1)
-	signal.Notify(ExitChan, syscall.SIGTERM, syscall.SIGUSR1, syscall.SIGINT)
+	signal.Notify(ExitChan, syscall.SIGTERM, syscall.SIGINT)
 	// Wait for signal
 	<-ExitChan
 	l.Close()
