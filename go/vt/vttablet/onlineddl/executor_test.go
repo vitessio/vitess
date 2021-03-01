@@ -1,5 +1,5 @@
 /*
-Copyright 2020 The Vitess Authors.
+Copyright 2021 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,14 +14,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+/*
+Functionality of this Executor is tested in go/test/endtoend/onlineddl_ghost/... and go/test/endtoend/onlineddl_vrepl/...
+*/
+
 package onlineddl
-
-import (
-	"vitess.io/vitess/go/stats"
-)
-
-var (
-	startedMigrations    = stats.NewCounter("StartedMigrations", "Count of initiated migrations")
-	successfulMigrations = stats.NewCounter("SuccessfulMigrations", "Count of successful migrations, a subset of StartedMigrations")
-	failedMigrations     = stats.NewCounter("FailedMigrations", "Count of failed migrations, a subset of StartedMigrations")
-)
