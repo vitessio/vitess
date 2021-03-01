@@ -18,27 +18,21 @@ package vtadmin
 
 import (
 	"context"
-	"database/sql"
-	"fmt"
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"google.golang.org/grpc"
 
-	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
-	"vitess.io/vitess/go/vt/vitessdriver"
 	"vitess.io/vitess/go/vt/vtadmin/cluster"
 	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery/fakediscovery"
+	vtadminerrors "vitess.io/vitess/go/vt/vtadmin/errors"
 	"vitess.io/vitess/go/vt/vtadmin/grpcserver"
 	"vitess.io/vitess/go/vt/vtadmin/http"
 	vtadmintestutil "vitess.io/vitess/go/vt/vtadmin/testutil"
-	vtadminvtctldclient "vitess.io/vitess/go/vt/vtadmin/vtctldclient"
-	"vitess.io/vitess/go/vt/vtadmin/vtsql"
-	"vitess.io/vitess/go/vt/vtadmin/vtsql/fakevtsql"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver/testutil"
 	"vitess.io/vitess/go/vt/vtctl/vtctldclient"
@@ -47,6 +41,7 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	vtctlservicepb "vitess.io/vitess/go/vt/proto/vtctlservice"
@@ -395,8 +390,8 @@ func TestGetKeyspaces(t *testing.T) {
 				clusterClients := []vtctldclient.VtctldClient{cluster0Client, cluster1Client}
 
 				clusters := []*cluster.Cluster{
-					buildCluster(0, clusterClients[0], nil, nil),
-					buildCluster(1, clusterClients[1], nil, nil),
+					vtadmintestutil.BuildCluster(0, clusterClients[0], nil, nil),
+					vtadmintestutil.BuildCluster(1, clusterClients[1], nil, nil),
 				}
 
 				api := NewAPI(clusters, grpcserver.Options{}, http.Options{})
@@ -897,7 +892,7 @@ func TestGetSchemas(t *testing.T) {
 							}
 						}
 
-						clusters[cdx] = buildCluster(cdx, clusterClients[cdx], cts, nil)
+						clusters[cdx] = vtadmintestutil.BuildCluster(cdx, clusterClients[cdx], cts, nil)
 					}
 
 					api := NewAPI(clusters, grpcserver.Options{}, http.Options{})
@@ -916,7 +911,7 @@ func TestGetTablets(t *testing.T) {
 	tests := []struct {
 		name           string
 		clusterTablets [][]*vtadminpb.Tablet
-		dbconfigs      map[string]*dbcfg
+		dbconfigs      map[string]*vtadmintestutil.Dbcfg
 		req            *vtadminpb.GetTabletsRequest
 		expected       []*vtadminpb.Tablet
 		shouldErr      bool
@@ -941,7 +936,7 @@ func TestGetTablets(t *testing.T) {
 					},
 				},
 			},
-			dbconfigs: map[string]*dbcfg{},
+			dbconfigs: map[string]*vtadmintestutil.Dbcfg{},
 			req:       &vtadminpb.GetTabletsRequest{},
 			expected: []*vtadminpb.Tablet{
 				{
@@ -1000,8 +995,8 @@ func TestGetTablets(t *testing.T) {
 					},
 				},
 			},
-			dbconfigs: map[string]*dbcfg{
-				"c1": {shouldErr: true},
+			dbconfigs: map[string]*vtadmintestutil.Dbcfg{
+				"c1": {ShouldErr: true},
 			},
 			req:       &vtadminpb.GetTabletsRequest{},
 			expected:  nil,
@@ -1043,7 +1038,7 @@ func TestGetTablets(t *testing.T) {
 					},
 				},
 			},
-			dbconfigs: map[string]*dbcfg{},
+			dbconfigs: map[string]*vtadmintestutil.Dbcfg{},
 			req:       &vtadminpb.GetTabletsRequest{ClusterIds: []string{"c0"}},
 			expected: []*vtadminpb.Tablet{
 				{
@@ -1073,7 +1068,7 @@ func TestGetTablets(t *testing.T) {
 			clusters := make([]*cluster.Cluster, len(tt.clusterTablets))
 
 			for i, tablets := range tt.clusterTablets {
-				cluster := buildCluster(i, nil, tablets, tt.dbconfigs)
+				cluster := vtadmintestutil.BuildCluster(i, nil, tablets, tt.dbconfigs)
 				clusters[i] = cluster
 			}
 
@@ -1090,35 +1085,11 @@ func TestGetTablets(t *testing.T) {
 	}
 }
 
-// This test only validates the error handling on dialing database connections.
-// Other cases are covered by one or both of TestGetTablets and TestGetTablet.
-func Test_getTablets(t *testing.T) {
-	api := &API{}
-	disco := fakediscovery.New()
-	disco.AddTaggedGates(nil, &vtadminpb.VTGate{Hostname: "gate"})
-
-	db := vtsql.New(&vtsql.Config{
-		Cluster: &vtadminpb.Cluster{
-			Id:   "c1",
-			Name: "one",
-		},
-		Discovery: disco,
-	})
-	db.DialFunc = func(cfg vitessdriver.Configuration) (*sql.DB, error) {
-		return nil, assert.AnError
-	}
-
-	_, err := api.getTablets(context.Background(), &cluster.Cluster{
-		DB: db,
-	})
-	assert.Error(t, err)
-}
-
 func TestGetTablet(t *testing.T) {
 	tests := []struct {
 		name           string
 		clusterTablets [][]*vtadminpb.Tablet
-		dbconfigs      map[string]*dbcfg
+		dbconfigs      map[string]*vtadmintestutil.Dbcfg
 		req            *vtadminpb.GetTabletRequest
 		expected       *vtadminpb.Tablet
 		shouldErr      bool
@@ -1143,7 +1114,7 @@ func TestGetTablet(t *testing.T) {
 					},
 				},
 			},
-			dbconfigs: map[string]*dbcfg{},
+			dbconfigs: map[string]*vtadmintestutil.Dbcfg{},
 			req: &vtadminpb.GetTabletRequest{
 				Hostname: "ks1-00-00-zone1-a",
 			},
@@ -1202,8 +1173,8 @@ func TestGetTablet(t *testing.T) {
 					},
 				},
 			},
-			dbconfigs: map[string]*dbcfg{
-				"c1": {shouldErr: true},
+			dbconfigs: map[string]*vtadmintestutil.Dbcfg{
+				"c1": {ShouldErr: true},
 			},
 			req: &vtadminpb.GetTabletRequest{
 				Hostname: "doesn't matter",
@@ -1247,7 +1218,7 @@ func TestGetTablet(t *testing.T) {
 					},
 				},
 			},
-			dbconfigs: map[string]*dbcfg{},
+			dbconfigs: map[string]*vtadmintestutil.Dbcfg{},
 			req: &vtadminpb.GetTabletRequest{
 				Hostname:   "ks1-00-00-zone1-a",
 				ClusterIds: []string{"c0"},
@@ -1307,7 +1278,7 @@ func TestGetTablet(t *testing.T) {
 					},
 				},
 			},
-			dbconfigs: map[string]*dbcfg{},
+			dbconfigs: map[string]*vtadmintestutil.Dbcfg{},
 			req: &vtadminpb.GetTabletRequest{
 				Hostname: "ks1-00-00-zone1-a",
 			},
@@ -1320,7 +1291,7 @@ func TestGetTablet(t *testing.T) {
 				/* cluster 0 */
 				{},
 			},
-			dbconfigs: map[string]*dbcfg{},
+			dbconfigs: map[string]*vtadmintestutil.Dbcfg{},
 			req: &vtadminpb.GetTabletRequest{
 				Hostname: "ks1-00-00-zone1-a",
 			},
@@ -1334,7 +1305,7 @@ func TestGetTablet(t *testing.T) {
 			clusters := make([]*cluster.Cluster, len(tt.clusterTablets))
 
 			for i, tablets := range tt.clusterTablets {
-				cluster := buildCluster(i, nil, tablets, tt.dbconfigs)
+				cluster := vtadmintestutil.BuildCluster(i, nil, tablets, tt.dbconfigs)
 				clusters[i] = cluster
 			}
 
@@ -1351,49 +1322,282 @@ func TestGetTablet(t *testing.T) {
 	}
 }
 
-type dbcfg struct {
-	shouldErr bool
-}
-
-// shared helper for building a cluster that contains the given tablets and
-// talking to the given vtctld server. dbconfigs contains an optional config
-// for controlling the behavior of the cluster's DB at the package sql level.
-func buildCluster(i int, vtctldClient vtctldclient.VtctldClient, tablets []*vtadminpb.Tablet, dbconfigs map[string]*dbcfg) *cluster.Cluster {
-	disco := fakediscovery.New()
-	disco.AddTaggedGates(nil, &vtadminpb.VTGate{Hostname: fmt.Sprintf("cluster%d-gate", i)})
-	disco.AddTaggedVtctlds(nil, &vtadminpb.Vtctld{Hostname: "doesn't matter"})
-
-	cluster := &cluster.Cluster{
-		ID:        fmt.Sprintf("c%d", i),
-		Name:      fmt.Sprintf("cluster%d", i),
-		Discovery: disco,
+func TestVTExplain(t *testing.T) {
+	tests := []struct {
+		name          string
+		keyspaces     []*vtctldatapb.Keyspace
+		shards        []*vtctldatapb.Shard
+		srvVSchema    *vschemapb.SrvVSchema
+		tabletSchemas map[string]*tabletmanagerdatapb.SchemaDefinition
+		tablets       []*vtadminpb.Tablet
+		req           *vtadminpb.VTExplainRequest
+		expectedError error
+	}{
+		{
+			name: "runs VTExplain given a valid request in a valid topology",
+			keyspaces: []*vtctldatapb.Keyspace{
+				{
+					Name:     "commerce",
+					Keyspace: &topodatapb.Keyspace{},
+				},
+			},
+			shards: []*vtctldatapb.Shard{
+				{
+					Name:     "-",
+					Keyspace: "commerce",
+				},
+			},
+			srvVSchema: &vschemapb.SrvVSchema{
+				Keyspaces: map[string]*vschemapb.Keyspace{
+					"commerce": {
+						Sharded: false,
+						Tables: map[string]*vschemapb.Table{
+							"customers": {},
+						},
+					},
+				},
+				RoutingRules: &vschemapb.RoutingRules{
+					Rules: []*vschemapb.RoutingRule{},
+				},
+			},
+			tabletSchemas: map[string]*tabletmanagerdatapb.SchemaDefinition{
+				"c0_cell1-0000000100": {
+					DatabaseSchema: "CREATE DATABASE commerce",
+					TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+						{
+							Name:       "t1",
+							Schema:     `CREATE TABLE customers (id int(11) not null,PRIMARY KEY (id));`,
+							Type:       "BASE",
+							Columns:    []string{"id"},
+							DataLength: 100,
+							RowCount:   50,
+							Fields: []*querypb.Field{
+								{
+									Name: "id",
+									Type: querypb.Type_INT32,
+								},
+							},
+						},
+					},
+				},
+			},
+			tablets: []*vtadminpb.Tablet{
+				{
+					Cluster: &vtadminpb.Cluster{
+						Id:   "c0",
+						Name: "cluster0",
+					},
+					State: vtadminpb.Tablet_SERVING,
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Uid:  100,
+							Cell: "c0_cell1",
+						},
+						Hostname: "tablet-cell1-a",
+						Keyspace: "commerce",
+						Shard:    "-",
+						Type:     topodatapb.TabletType_REPLICA,
+					},
+				},
+			},
+			req: &vtadminpb.VTExplainRequest{
+				Cluster:  "c0",
+				Keyspace: "commerce",
+				Sql:      "select * from customers",
+			},
+		},
+		{
+			name: "returns an error if no appropriate tablet found in keyspace",
+			keyspaces: []*vtctldatapb.Keyspace{
+				{
+					Name:     "commerce",
+					Keyspace: &topodatapb.Keyspace{},
+				},
+			},
+			shards: []*vtctldatapb.Shard{
+				{
+					Name:     "-",
+					Keyspace: "commerce",
+				},
+			},
+			srvVSchema: &vschemapb.SrvVSchema{
+				Keyspaces: map[string]*vschemapb.Keyspace{
+					"commerce": {
+						Sharded: false,
+						Tables: map[string]*vschemapb.Table{
+							"customers": {},
+						},
+					},
+				},
+				RoutingRules: &vschemapb.RoutingRules{
+					Rules: []*vschemapb.RoutingRule{},
+				},
+			},
+			tabletSchemas: map[string]*tabletmanagerdatapb.SchemaDefinition{
+				"c0_cell1-0000000102": {
+					DatabaseSchema: "CREATE DATABASE commerce",
+					TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+						{
+							Name:       "t1",
+							Schema:     `CREATE TABLE customers (id int(11) not null,PRIMARY KEY (id));`,
+							Type:       "BASE",
+							Columns:    []string{"id"},
+							DataLength: 100,
+							RowCount:   50,
+							Fields: []*querypb.Field{
+								{
+									Name: "id",
+									Type: querypb.Type_INT32,
+								},
+							},
+						},
+					},
+				},
+			},
+			tablets: []*vtadminpb.Tablet{
+				{
+					Cluster: &vtadminpb.Cluster{
+						Id:   "c0",
+						Name: "cluster0",
+					},
+					State: vtadminpb.Tablet_SERVING,
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Uid:  100,
+							Cell: "c0_cell1",
+						},
+						Hostname: "tablet-cell1-a",
+						Keyspace: "commerce",
+						Shard:    "-",
+						Type:     topodatapb.TabletType_MASTER,
+					},
+				},
+				{
+					Cluster: &vtadminpb.Cluster{
+						Id:   "c0",
+						Name: "cluster0",
+					},
+					State: vtadminpb.Tablet_SERVING,
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Uid:  101,
+							Cell: "c0_cell1",
+						},
+						Hostname: "tablet-cell1-b",
+						Keyspace: "commerce",
+						Shard:    "-",
+						Type:     topodatapb.TabletType_DRAINED,
+					},
+				},
+				{
+					Cluster: &vtadminpb.Cluster{
+						Id:   "c0",
+						Name: "cluster0",
+					},
+					State: vtadminpb.Tablet_NOT_SERVING,
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Uid:  102,
+							Cell: "c0_cell1",
+						},
+						Hostname: "tablet-cell1-c",
+						Keyspace: "commerce",
+						Shard:    "-",
+						Type:     topodatapb.TabletType_REPLICA,
+					},
+				},
+			},
+			req: &vtadminpb.VTExplainRequest{
+				Cluster:  "c0",
+				Keyspace: "commerce",
+				Sql:      "select * from customers",
+			},
+			expectedError: vtadminerrors.ErrNoTablet,
+		},
+		{
+			name: "returns an error if cluster unspecified in request",
+			req: &vtadminpb.VTExplainRequest{
+				Keyspace: "commerce",
+				Sql:      "select * from customers",
+			},
+			expectedError: vtadminerrors.ErrInvalidRequest,
+		},
+		{
+			name: "returns an error if keyspace unspecified in request",
+			req: &vtadminpb.VTExplainRequest{
+				Cluster: "c0",
+				Sql:     "select * from customers",
+			},
+			expectedError: vtadminerrors.ErrInvalidRequest,
+		},
+		{
+			name: "returns an error if SQL unspecified in request",
+			req: &vtadminpb.VTExplainRequest{
+				Cluster:  "c0",
+				Keyspace: "commerce",
+			},
+			expectedError: vtadminerrors.ErrInvalidRequest,
+		},
 	}
 
-	dbconfig, ok := dbconfigs[cluster.ID]
-	if !ok {
-		dbconfig = &dbcfg{shouldErr: false}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			toposerver := memorytopo.NewServer("c0_cell1")
+
+			tmc := testutil.TabletManagerClient{
+				GetSchemaResults: map[string]struct {
+					Schema *tabletmanagerdatapb.SchemaDefinition
+					Error  error
+				}{},
+			}
+
+			vtctldserver := testutil.NewVtctldServerWithTabletManagerClient(t, toposerver, &tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+				return grpcvtctldserver.NewVtctldServer(ts)
+			})
+
+			testutil.WithTestServer(t, vtctldserver, func(t *testing.T, vtctldClient vtctldclient.VtctldClient) {
+				if tt.srvVSchema != nil {
+					err := toposerver.UpdateSrvVSchema(context.Background(), "c0_cell1", tt.srvVSchema)
+					require.NoError(t, err)
+				}
+				testutil.AddKeyspaces(context.Background(), t, toposerver, tt.keyspaces...)
+				testutil.AddShards(context.Background(), t, toposerver, tt.shards...)
+
+				for _, tablet := range tt.tablets {
+					testutil.AddTablet(context.Background(), t, toposerver, tablet.Tablet, nil)
+
+					// Adds each SchemaDefinition to the fake TabletManagerClient, or nil
+					// if there are no schemas for that tablet. (All tablet aliases must
+					// exist in the map. Otherwise, TabletManagerClient will return an error when
+					// looking up the schema with tablet alias that doesn't exist.)
+					alias := topoproto.TabletAliasString(tablet.Tablet.Alias)
+					tmc.GetSchemaResults[alias] = struct {
+						Schema *tabletmanagerdatapb.SchemaDefinition
+						Error  error
+					}{
+						Schema: tt.tabletSchemas[alias],
+						Error:  nil,
+					}
+				}
+
+				c := vtadmintestutil.BuildCluster(0, vtctldClient, tt.tablets, nil)
+				clusters := []*cluster.Cluster{c}
+
+				api := NewAPI(clusters, grpcserver.Options{}, http.Options{})
+				resp, err := api.VTExplain(context.Background(), tt.req)
+
+				if tt.expectedError != nil {
+					assert.True(t, errors.Is(err, tt.expectedError), "expected error type %w does not match actual error type %w", err, tt.expectedError)
+				} else {
+					require.NoError(t, err)
+
+					// We don't particularly care to test the contents of the VTExplain response,
+					// just that it exists.
+					assert.NotEmpty(t, resp.Response)
+				}
+			})
+		})
 	}
-
-	db := vtsql.New(&vtsql.Config{
-		Cluster:   cluster.ToProto(),
-		Discovery: disco,
-	})
-	db.DialFunc = func(cfg vitessdriver.Configuration) (*sql.DB, error) {
-		return sql.OpenDB(&fakevtsql.Connector{Tablets: tablets, ShouldErr: dbconfig.shouldErr}), nil
-	}
-
-	vtctld := vtadminvtctldclient.New(&vtadminvtctldclient.Config{
-		Cluster:   cluster.ToProto(),
-		Discovery: disco,
-	})
-	vtctld.DialFunc = func(addr string, ff grpcclient.FailFast, opts ...grpc.DialOption) (vtctldclient.VtctldClient, error) {
-		return vtctldClient, nil
-	}
-
-	cluster.DB = db
-	cluster.Vtctld = vtctld
-
-	return cluster
 }
 
 func init() {

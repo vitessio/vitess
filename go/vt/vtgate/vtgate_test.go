@@ -21,6 +21,8 @@ import (
 	"strings"
 	"testing"
 
+	"vitess.io/vitess/go/test/utils"
+
 	"github.com/stretchr/testify/require"
 
 	"context"
@@ -207,9 +209,7 @@ func TestVTGateStreamExecute(t *testing.T) {
 	}, {
 		Rows: sandboxconn.StreamRowResult.Rows,
 	}}
-	if !reflect.DeepEqual(want, qrs) {
-		t.Errorf("want \n%+v, got \n%+v", want, qrs)
-	}
+	utils.MustMatch(t, want, qrs)
 	if !proto.Equal(sbc.Options[0], executeOptions) {
 		t.Errorf("got ExecuteOptions \n%+v, want \n%+v", sbc.Options[0], executeOptions)
 	}

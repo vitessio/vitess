@@ -130,11 +130,17 @@ func CachePlan(stmt Statement) bool {
 	return false
 }
 
-//IsSetStatement takes Statement and returns if the statement is set statement.
-func IsSetStatement(stmt Statement) bool {
-	switch stmt.(type) {
+//MustRewriteAST takes Statement and returns true if RewriteAST must run on it for correct execution irrespective of user flags.
+func MustRewriteAST(stmt Statement) bool {
+	switch node := stmt.(type) {
 	case *Set:
 		return true
+	case *Show:
+		switch node.Internal.(type) {
+		case *ShowBasic:
+			return true
+		}
+		return false
 	}
 	return false
 }

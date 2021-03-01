@@ -77,6 +77,18 @@ func TestShowColumns(t *testing.T) {
 	assertMatches(t, conn, "SHOW columns FROM `t5_null_vindex` in `ks`", expected)
 }
 
+func TestShowTables(t *testing.T) {
+	conn, err := mysql.Connect(context.Background(), &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	query := "show tables;"
+	qr := exec(t, conn, query)
+
+	assert.Equal(t, "information_schema", qr.Fields[0].Database)
+	assert.Equal(t, "Tables_in_ks", qr.Fields[0].Name)
+}
+
 func TestCastConvert(t *testing.T) {
 	conn, err := mysql.Connect(context.Background(), &vtParams)
 	require.NoError(t, err)
@@ -527,6 +539,23 @@ func TestFlush(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 	exec(t, conn, "flush local tables t1, t2")
+}
+
+func TestShowVariables(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+	res := exec(t, conn, "show variables like \"%version%\";")
+	found := false
+	for _, row := range res.Rows {
+		if row[0].ToString() == "version" {
+			assert.Contains(t, row[1].ToString(), "vitess")
+			found = true
+		}
+	}
+	require.True(t, found, "Expected a row for version in show query")
 }
 
 func assertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {

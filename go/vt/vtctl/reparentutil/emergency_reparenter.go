@@ -335,6 +335,8 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		return err
 	}
 
+	ev.NewMaster = *tabletMap[winningPrimaryTabletAliasStr].Tablet
+
 	return nil
 }
 
@@ -351,17 +353,44 @@ func (erp *EmergencyReparenter) waitForAllRelayLogsToApply(
 	groupCtx, groupCancel := context.WithTimeout(ctx, opts.WaitReplicasTimeout)
 	defer groupCancel()
 
+	waiterCount := 0
+
 	for candidate := range validCandidates {
+		// When we called StopReplicationAndBuildStatusMaps, we got back two
+		// maps: (1) the StopReplicationStatus of any replicas that actually
+		// stopped replication; and (2) the MasterStatus of anything that
+		// returned ErrNotReplica, which is a tablet that is either the current
+		// primary or is stuck thinking it is a MASTER but is not in actuality.
+		//
+		// If we have a tablet in the validCandidates map that does not appear
+		// in the statusMap, then we have either (a) the current primary, which
+		// is not replicating, so it is not applying relay logs; or (b) a tablet
+		// that is stuck thinking it is MASTER but is not in actuality. In that
+		// second case - (b) - we will most likely find that the stuck MASTER
+		// does not have a winning position, and fail the ERS. If, on the other
+		// hand, it does have a winning position, we are trusting the operator
+		// to know what they are doing by emergency-reparenting onto that
+		// tablet. In either case, it does not make sense to wait for relay logs
+		// to apply on a tablet that was never applying relay logs in the first
+		// place, so we skip it, and log that we did.
+		status, ok := statusMap[candidate]
+		if !ok {
+			erp.logger.Infof("EmergencyReparent candidate %v not in replica status map; this means it was not running replication (because it was formerly MASTER), so skipping WaitForRelayLogsToApply step for this candidate", candidate)
+			continue
+		}
+
 		go func(alias string) {
 			var err error
 			defer func() { errCh <- err }()
-			err = WaitForRelayLogsToApply(groupCtx, erp.tmc, tabletMap[alias], statusMap[alias])
+			err = WaitForRelayLogsToApply(groupCtx, erp.tmc, tabletMap[alias], status)
 		}(candidate)
+
+		waiterCount++
 	}
 
 	errgroup := concurrency.ErrorGroup{
-		NumGoroutines:        len(validCandidates),
-		NumRequiredSuccesses: len(validCandidates),
+		NumGoroutines:        waiterCount,
+		NumRequiredSuccesses: waiterCount,
 		NumAllowedErrors:     0,
 	}
 	rec := errgroup.Wait(groupCancel, errCh)
