@@ -178,6 +178,13 @@ func (er *expressionRewriter) rewrite(cursor *Cursor) bool {
 			node.Expr = aliasTableName
 			cursor.Replace(node)
 		}
+	case *ShowBasic:
+		if node.Command == VariableGlobal || node.Command == VariableSession {
+			varsToAdd := sysvars.GetInterestingVariables()
+			for _, sysVar := range varsToAdd {
+				er.bindVars.AddSysVar(sysVar)
+			}
+		}
 	}
 	return true
 }

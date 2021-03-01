@@ -1,5 +1,5 @@
 /*
-Copyright 2020 The Vitess Authors.
+Copyright 2021 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,17 +14,21 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package vtadmin
+package http
 
-import "errors"
+import (
+	"context"
 
-var (
-	// ErrAmbiguousTablet occurs when more than one tablet is found for a given
-	// set of filter criteria.
-	ErrAmbiguousTablet = errors.New("multiple tablets found")
-	// ErrNoTablet occurs when a tablet cannot be found for a given set of
-	// filter criteria.
-	ErrNoTablet = errors.New("no such tablet")
-	// ErrUnsupportedCluster occurs when a cluster parameter is invalid.
-	ErrUnsupportedCluster = errors.New("unsupported cluster(s)")
+	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 )
+
+// VTExplain implements the http wrapper for /vtexplain?cluster=&keyspace=&sql=
+func VTExplain(ctx context.Context, r Request, api *API) *JSONResponse {
+	query := r.URL.Query()
+	res, err := api.server.VTExplain(ctx, &vtadminpb.VTExplainRequest{
+		Cluster:  query.Get("cluster"),
+		Keyspace: query.Get("keyspace"),
+		Sql:      query.Get("sql"),
+	})
+	return NewJSONResponse(res, err)
+}

@@ -55,6 +55,9 @@ service Vtctld {
   rpc DeleteShards(vtctldata.DeleteShardsRequest) returns (vtctldata.DeleteShardsResponse) {};
   // DeleteTablets deletes one or more tablets from the topology.
   rpc DeleteTablets(vtctldata.DeleteTabletsRequest) returns (vtctldata.DeleteTabletsResponse) {};
+  // EmergencyReparentShard reparents the shard to the new primary. It assumes
+  // the old primary is dead or otherwise not responding.
+  rpc EmergencyReparentShard(vtctldata.EmergencyReparentShardRequest) returns (vtctldata.EmergencyReparentShardResponse) {};
   // FindAllShardsInKeyspace returns a map of shard names to shard references
   // for a given keyspace.
   rpc FindAllShardsInKeyspace(vtctldata.FindAllShardsInKeyspaceRequest) returns (vtctldata.FindAllShardsInKeyspaceResponse) {};
@@ -92,6 +95,14 @@ service Vtctld {
   // PlannedReparentShard or EmergencyReparentShard should be used in those
   // cases instead.
   rpc InitShardPrimary(vtctldata.InitShardPrimaryRequest) returns (vtctldata.InitShardPrimaryResponse) {};
+  // PlannedReparentShard reparents the shard to the new primary, or away from
+  // an old primary. Both the old and new primaries need to be reachable and
+  // running.
+  //
+  // **NOTE**: The vtctld will not consider any replicas outside the cell the
+  // current shard primary is in for promotion unless NewPrimary is explicitly
+  // provided in the request.
+  rpc PlannedReparentShard(vtctldata.PlannedReparentShardRequest) returns (vtctldata.PlannedReparentShardResponse) {};
   // RemoveKeyspaceCell removes the specified cell from the Cells list for all
   // shards in the specified keyspace, as well as from the SrvKeyspace for that
   // keyspace in that cell.
@@ -99,4 +110,15 @@ service Vtctld {
   // RemoveShardCell removes the specified cell from the specified shard's Cells
   // list.
   rpc RemoveShardCell(vtctldata.RemoveShardCellRequest) returns (vtctldata.RemoveShardCellResponse) {};
+  // ReparentTablet reparents a tablet to the current primary in the shard. This
+  // only works if the current replica position matches the last known reparent
+  // action.
+  rpc ReparentTablet(vtctldata.ReparentTabletRequest) returns (vtctldata.ReparentTabletResponse) {};
+  // TabletExternallyReparented changes metadata in the topology server to
+  // acknowledge a shard primary change performed by an external tool (e.g.
+  // orchestrator).
+  //
+  // See the Reparenting guide for more information:
+  // https://vitess.io/docs/user-guides/configuration-advanced/reparenting/#external-reparenting.
+  rpc TabletExternallyReparented(vtctldata.TabletExternallyReparentedRequest) returns (vtctldata.TabletExternallyReparentedResponse) {};
 }

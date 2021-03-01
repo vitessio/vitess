@@ -1574,6 +1574,8 @@ func TestMaterializerOneToOne(t *testing.T) {
 				CreateDdl:        "t4ddl",
 			},
 		},
+		Cell:        "zone1",
+		TabletTypes: "master,rdonly",
 	}
 	env := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"0"})
 	defer env.close()
@@ -1590,7 +1592,7 @@ func TestMaterializerOneToOne(t *testing.T) {
 				`rules:<match:\\"t2\\" filter:\\"select.*t3\\" > `+
 				`rules:<match:\\"t4\\" > `+
 				`> ', `)+
-			`'', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_targetks'`+
+			`'', [0-9]*, [0-9]*, 'zone1', 'master,rdonly', [0-9]*, 0, 'Stopped', 'vt_targetks'`+
 			`\)`+eol,
 		&sqltypes.Result{},
 	)
