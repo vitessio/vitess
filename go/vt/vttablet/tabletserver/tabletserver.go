@@ -720,7 +720,11 @@ func (tsv *TabletServer) Execute(ctx context.Context, target *querypb.Target, sq
 			if sqltypes.IncludeFieldsOrDefault(options) == querypb.ExecuteOptions_ALL {
 				for _, f := range result.Fields {
 					if f.Database != "" {
-						f.Database = tsv.sm.target.Keyspace
+						if qre.plan.PlanID == planbuilder.PlanShow {
+							f.Database = "information_schema"
+						} else {
+							f.Database = tsv.sm.target.Keyspace
+						}
 					}
 				}
 			}
