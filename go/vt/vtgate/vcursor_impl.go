@@ -115,7 +115,7 @@ func (vc *vcursorImpl) ExecuteVSchema(keyspace string, vschemaDDL *sqlparser.Alt
 	user := callerid.ImmediateCallerIDFromContext(vc.ctx)
 	allowed := vschemaacl.Authorized(user)
 	if !allowed {
-		return vterrors.NewErrorf(vtrpcpb.Code_PERMISSION_DENIED, vterrors.AccessDeniedError, "User '%s' to perform vschema operations", user.GetUsername())
+		return vterrors.NewErrorf(vtrpcpb.Code_PERMISSION_DENIED, vterrors.AccessDeniedError, "User '%s' is not allowed to perform vschema operations", user.GetUsername())
 	}
 
 	// Resolve the keyspace either from the table qualifier or the target keyspace
