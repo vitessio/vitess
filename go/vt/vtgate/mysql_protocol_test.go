@@ -138,7 +138,7 @@ func TestMySQLProtocolExecuteUseStatement(t *testing.T) {
 
 func TestMysqlProtocolInvalidDB(t *testing.T) {
 	_, err := mysqlConnect(&mysql.ConnParams{DbName: "invalidDB"})
-	require.EqualError(t, err, "vtgate: : Unknown database 'invalidDB' (errno 1049) (sqlstate 42000)")
+	require.EqualError(t, err, "Unknown database 'invalidDB' (errno 1049) (sqlstate 42000)")
 }
 
 func TestMySQLProtocolClientFoundRows(t *testing.T) {

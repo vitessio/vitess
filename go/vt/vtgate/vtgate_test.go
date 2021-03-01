@@ -21,6 +21,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"vitess.io/vitess/go/test/utils"
 
 	"github.com/stretchr/testify/require"
@@ -147,10 +149,8 @@ func TestVTGateExecuteWithKeyspaceShard(t *testing.T) {
 		"select id from none",
 		nil,
 	)
-	want := "vtgate: : keyspace invalid_keyspace not found in vschema"
-	if err == nil || err.Error() != want {
-		t.Errorf("Execute: %v, want %s", err, want)
-	}
+	want := "keyspace invalid_keyspace not found in vschema"
+	assert.EqualError(t, err, want)
 
 	// Valid keyspace/shard.
 	_, qr, err = rpcVTGate.Execute(
