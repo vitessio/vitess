@@ -487,7 +487,7 @@ func (c *Conn) readComQueryResponse() (affectedRows uint64, lastInsertID uint64,
 	case ErrPacket:
 		// Error
 		return 0, 0, 0, false, 0, ParseErrorPacket(data)
-	case 0xfb:
+	case LocalInfilePacket:
 		// Local infile
 		return 0, 0, 0, false, 0, vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED, "not implemented")
 	}

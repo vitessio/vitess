@@ -189,6 +189,8 @@ const (
 	// EOFPacket is the header of the EOF packet.
 	EOFPacket = 0xfe
 
+	LocalInfilePacket = 0xFB
+
 	// AuthSwitchRequestPacket is used to switch auth method.
 	AuthSwitchRequestPacket = 0xfe
 
