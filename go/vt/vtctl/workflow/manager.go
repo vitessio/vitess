@@ -38,16 +38,33 @@ import (
 )
 
 var (
-	ErrInvalidWorkflow         = errors.New("invalid workflow")
+	// ErrInvalidWorkflow is a catchall error type for conditions that should be
+	// impossible when operating on a workflow.
+	ErrInvalidWorkflow = errors.New("invalid workflow")
+	// ErrMultipleSourceKeyspaces occurs when a workflow somehow has multiple
+	// source keyspaces across different shard primaries. This should be
+	// impossible.
 	ErrMultipleSourceKeyspaces = errors.New("multiple source keyspaces for a single workflow")
+	// ErrMultipleTargetKeyspaces occurs when a workflow somehow has multiple
+	// target keyspaces across different shard primaries. This should be
+	// impossible.
 	ErrMultipleTargetKeyspaces = errors.New("multiple target keyspaces for a single workflow")
 )
 
+// Manager manages Vitess workflows, like vreplication workflows (MoveTables,
+// Reshard, etc) and schema migration workflows.
+//
+// NB: This is in alpha, and you probably don't want to depend on it (yet!).
+// Currently, it provides only a read-only API to vreplication workflows. Write
+// actions on vreplication workflows, and schema migration workflows entirely,
+// are not yet supported, but planned.
 type Manager struct {
 	ts  *topo.Server
 	tmc tmclient.TabletManagerClient
 }
 
+// NewManager returns a new manager instance with the given topo.Server and
+// TabletManagerClient.
 func NewManager(ts *topo.Server, tmc tmclient.TabletManagerClient) *Manager {
 	return &Manager{
 		ts:  ts,
@@ -55,6 +72,13 @@ func NewManager(ts *topo.Server, tmc tmclient.TabletManagerClient) *Manager {
 	}
 }
 
+// GetWorkflows returns a list of all workflows that exist in a given keyspace,
+// with some additional filtering depending on the request parameters (for
+// example, ActiveOnly=true restricts the search to only workflows that are
+// currently running).
+//
+// It has the same signature as the vtctlservicepb.VtctldServer's GetWorkflows
+// rpc, and grpcvtctldserver delegates to this function.
 func (manager *Manager) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflowsRequest) (*vtctldatapb.GetWorkflowsResponse, error) {
 	where := ""
 	if req.ActiveOnly {
