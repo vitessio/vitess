@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"k8s.io/apimachinery/pkg/util/sets"
 
 	"vitess.io/vitess/go/event"
 	"vitess.io/vitess/go/protoutil"
@@ -38,6 +39,7 @@ import (
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/topotools/events"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
@@ -314,6 +316,57 @@ func (s *VtctldServer) DeleteTablets(ctx context.Context, req *vtctldatapb.Delet
 	}
 
 	return &vtctldatapb.DeleteTabletsResponse{}, nil
+}
+
+// EmergencyReparentShard is part of the vtctldservicepb.VtctldServer interface.
+func (s *VtctldServer) EmergencyReparentShard(ctx context.Context, req *vtctldatapb.EmergencyReparentShardRequest) (*vtctldatapb.EmergencyReparentShardResponse, error) {
+	waitReplicasTimeout, ok, err := protoutil.DurationFromProto(req.WaitReplicasTimeout)
+	if err != nil {
+		return nil, err
+	} else if !ok {
+		waitReplicasTimeout = time.Second * 30
+	}
+
+	m := sync.RWMutex{}
+	logstream := []*logutilpb.Event{}
+	logger := logutil.NewCallbackLogger(func(e *logutilpb.Event) {
+		m.Lock()
+		defer m.Unlock()
+
+		logstream = append(logstream, e)
+	})
+
+	ev, err := reparentutil.NewEmergencyReparenter(s.ts, s.tmc, logger).ReparentShard(ctx,
+		req.Keyspace,
+		req.Shard,
+		reparentutil.EmergencyReparentOptions{
+			NewPrimaryAlias:     req.NewPrimary,
+			IgnoreReplicas:      sets.NewString(topoproto.TabletAliasList(req.IgnoreReplicas).ToStringSlice()...),
+			WaitReplicasTimeout: waitReplicasTimeout,
+		},
+	)
+
+	resp := &vtctldatapb.EmergencyReparentShardResponse{
+		Keyspace: req.Keyspace,
+		Shard:    req.Shard,
+	}
+
+	if ev != nil {
+		resp.Keyspace = ev.ShardInfo.Keyspace()
+		resp.Shard = ev.ShardInfo.ShardName()
+
+		if !topoproto.TabletAliasIsZero(ev.NewMaster.Alias) {
+			resp.PromotedPrimary = ev.NewMaster.Alias
+		}
+	}
+
+	m.RLock()
+	defer m.RUnlock()
+
+	resp.Events = make([]*logutilpb.Event, len(logstream))
+	copy(resp.Events, logstream)
+
+	return resp, err
 }
 
 // FindAllShardsInKeyspace is part of the vtctlservicepb.VtctldServer interface.
@@ -646,17 +699,28 @@ func (s *VtctldServer) InitShardPrimary(ctx context.Context, req *vtctldatapb.In
 	}
 	defer unlock(&err)
 
+	m := sync.RWMutex{}
 	ev := &events.Reparent{}
+	logstream := []*logutilpb.Event{}
 
 	resp := &vtctldatapb.InitShardPrimaryResponse{}
 	err = s.InitShardPrimaryLocked(ctx, ev, req, waitReplicasTimeout, tmclient.NewTabletManagerClient(), logutil.NewCallbackLogger(func(e *logutilpb.Event) {
-		resp.Events = append(resp.Events, e)
+		m.Lock()
+		defer m.Unlock()
+
+		logstream = append(logstream, e)
 	}))
 	if err != nil {
 		event.DispatchUpdate(ev, "failed InitShardPrimary: "+err.Error())
 	} else {
 		event.DispatchUpdate(ev, "finished InitShardPrimary")
 	}
+
+	m.RLock()
+	defer m.RUnlock()
+
+	resp.Events = make([]*logutilpb.Event, len(logstream))
+	copy(resp.Events, logstream)
 
 	return resp, err
 }
@@ -864,6 +928,57 @@ func (s *VtctldServer) InitShardPrimaryLocked(
 	return nil
 }
 
+// PlannedReparentShard is part of the vtctldservicepb.VtctldServer interface.
+func (s *VtctldServer) PlannedReparentShard(ctx context.Context, req *vtctldatapb.PlannedReparentShardRequest) (*vtctldatapb.PlannedReparentShardResponse, error) {
+	waitReplicasTimeout, ok, err := protoutil.DurationFromProto(req.WaitReplicasTimeout)
+	if err != nil {
+		return nil, err
+	} else if !ok {
+		waitReplicasTimeout = time.Second * 30
+	}
+
+	m := sync.RWMutex{}
+	logstream := []*logutilpb.Event{}
+	logger := logutil.NewCallbackLogger(func(e *logutilpb.Event) {
+		m.Lock()
+		defer m.Unlock()
+
+		logstream = append(logstream, e)
+	})
+
+	ev, err := reparentutil.NewPlannedReparenter(s.ts, s.tmc, logger).ReparentShard(ctx,
+		req.Keyspace,
+		req.Shard,
+		reparentutil.PlannedReparentOptions{
+			AvoidPrimaryAlias:   req.AvoidPrimary,
+			NewPrimaryAlias:     req.NewPrimary,
+			WaitReplicasTimeout: waitReplicasTimeout,
+		},
+	)
+
+	resp := &vtctldatapb.PlannedReparentShardResponse{
+		Keyspace: req.Keyspace,
+		Shard:    req.Shard,
+	}
+
+	if ev != nil {
+		resp.Keyspace = ev.ShardInfo.Keyspace()
+		resp.Shard = ev.ShardInfo.ShardName()
+
+		if !topoproto.TabletAliasIsZero(ev.NewMaster.Alias) {
+			resp.PromotedPrimary = ev.NewMaster.Alias
+		}
+	}
+
+	m.RLock()
+	defer m.RUnlock()
+
+	resp.Events = make([]*logutilpb.Event, len(logstream))
+	copy(resp.Events, logstream)
+
+	return resp, err
+}
+
 // RemoveKeyspaceCell is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) RemoveKeyspaceCell(ctx context.Context, req *vtctldatapb.RemoveKeyspaceCellRequest) (*vtctldatapb.RemoveKeyspaceCellResponse, error) {
 	shards, err := s.ts.GetShardNames(ctx, req.Keyspace)
@@ -895,6 +1010,110 @@ func (s *VtctldServer) RemoveShardCell(ctx context.Context, req *vtctldatapb.Rem
 	}
 
 	return &vtctldatapb.RemoveShardCellResponse{}, nil
+}
+
+// ReparentTablet is part of the vtctldservicepb.VtctldServer interface.
+func (s *VtctldServer) ReparentTablet(ctx context.Context, req *vtctldatapb.ReparentTabletRequest) (*vtctldatapb.ReparentTabletResponse, error) {
+	if req.Tablet == nil {
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "tablet alias must not be nil")
+	}
+
+	tablet, err := s.ts.GetTablet(ctx, req.Tablet)
+	if err != nil {
+		return nil, err
+	}
+
+	shard, err := s.ts.GetShard(ctx, tablet.Keyspace, tablet.Shard)
+	if err != nil {
+		return nil, err
+	}
+
+	if !shard.HasMaster() {
+		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "no master tablet for shard %v/%v", tablet.Keyspace, tablet.Shard)
+	}
+
+	shardPrimary, err := s.ts.GetTablet(ctx, shard.MasterAlias)
+	if err != nil {
+		return nil, fmt.Errorf("cannot lookup primary tablet %v for shard %v/%v: %w", topoproto.TabletAliasString(shard.MasterAlias), tablet.Keyspace, tablet.Shard, err)
+	}
+
+	if shardPrimary.Type != topodatapb.TabletType_MASTER {
+		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "TopologyServer has incosistent state for shard master %v", topoproto.TabletAliasString(shard.MasterAlias))
+	}
+
+	if shardPrimary.Keyspace != tablet.Keyspace || shardPrimary.Shard != tablet.Shard {
+		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "master %v and potential replica %v not in same keypace shard (%v/%v)", topoproto.TabletAliasString(shard.MasterAlias), topoproto.TabletAliasString(req.Tablet), tablet.Keyspace, tablet.Shard)
+	}
+
+	if err := s.tmc.SetMaster(ctx, tablet.Tablet, shard.MasterAlias, 0, "", false); err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.ReparentTabletResponse{
+		Keyspace: tablet.Keyspace,
+		Shard:    tablet.Shard,
+		Primary:  shard.MasterAlias,
+	}, nil
+}
+
+// TabletExternallyReparented is part of the vtctldservicepb.VtctldServer interface.
+func (s *VtctldServer) TabletExternallyReparented(ctx context.Context, req *vtctldatapb.TabletExternallyReparentedRequest) (*vtctldatapb.TabletExternallyReparentedResponse, error) {
+	if req.Tablet == nil {
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "TabletExternallyReparentedRequest.Tablet must not be nil")
+	}
+
+	tablet, err := s.ts.GetTablet(ctx, req.Tablet)
+	if err != nil {
+		log.Warningf("TabletExternallyReparented: failed to read tablet record for %v: %v", topoproto.TabletAliasString(req.Tablet), err)
+		return nil, err
+	}
+
+	shard, err := s.ts.GetShard(ctx, tablet.Keyspace, tablet.Shard)
+	if err != nil {
+		log.Warningf("TabletExternallyReparented: failed to read global shard record for %v/%v: %v", tablet.Keyspace, tablet.Shard, err)
+		return nil, err
+	}
+
+	resp := &vtctldatapb.TabletExternallyReparentedResponse{
+		Keyspace:   shard.Keyspace(),
+		Shard:      shard.ShardName(),
+		NewPrimary: req.Tablet,
+		OldPrimary: shard.MasterAlias,
+	}
+
+	// If the externally reparented (new primary) tablet is already MASTER in
+	// the topo, this is a no-op.
+	if tablet.Type == topodatapb.TabletType_MASTER {
+		return resp, nil
+	}
+
+	log.Infof("TabletExternallyReparented: executing tablet type change %v -> MASTER on %v", tablet.Type, topoproto.TabletAliasString(req.Tablet))
+	ev := &events.Reparent{
+		ShardInfo: *shard,
+		NewMaster: *tablet.Tablet,
+		OldMaster: topodatapb.Tablet{
+			Alias: shard.MasterAlias,
+			Type:  topodatapb.TabletType_MASTER,
+		},
+	}
+
+	defer func() {
+		// Ensure we dispatch an update with any failure.
+		if err != nil {
+			event.DispatchUpdate(ev, "failed: "+err.Error())
+		}
+	}()
+
+	event.DispatchUpdate(ev, "starting external reparent")
+
+	if err := s.tmc.ChangeType(ctx, tablet.Tablet, topodatapb.TabletType_MASTER); err != nil {
+		log.Warningf("ChangeType(%v, MASTER): %v", topoproto.TabletAliasString(req.Tablet), err)
+		return nil, err
+	}
+
+	event.DispatchUpdate(ev, "finished")
+
+	return resp, nil
 }
 
 // StartServer registers a VtctldServer for RPCs on the given gRPC server.

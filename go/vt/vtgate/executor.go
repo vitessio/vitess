@@ -1237,7 +1237,7 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 	vcursor.SetIgnoreMaxMemoryRows(ignoreMaxMemoryRows)
 
 	// Normalize if possible and retry.
-	if (e.normalize && sqlparser.CanNormalize(stmt)) || sqlparser.IsSetStatement(stmt) {
+	if (e.normalize && sqlparser.CanNormalize(stmt)) || sqlparser.MustRewriteAST(stmt) {
 		parameterize := e.normalize // the public flag is called normalize
 		result, err := sqlparser.PrepareAST(stmt, bindVars, "vtg", parameterize, vcursor.keyspace)
 		if err != nil {

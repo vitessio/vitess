@@ -266,7 +266,7 @@ func (stc *ScatterConn) ExecuteMultiShard(
 	return qr, allErrors.GetErrors()
 }
 
-var errRegx = regexp.MustCompile("transaction ([a-z0-9:]+) ended")
+var errRegx = regexp.MustCompile("transaction ([a-z0-9:]+) (?:ended|not found)")
 
 func checkAndResetShardSession(info *shardActionInfo, err error, session *SafeSession) bool {
 	if info.reservedID != 0 && info.transactionID == 0 && wasConnectionClosed(err) {
