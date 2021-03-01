@@ -578,9 +578,9 @@ func (node *Load) walkSubtree(visit Visit) error {
 }
 
 type Fields struct {
-	TerminatedBy string
+	TerminatedBy *SQLVal
 	*EnclosedBy
-	EscapedBy    string
+	EscapedBy    *SQLVal
 	SQLNode
 }
 
@@ -590,13 +590,13 @@ func (node *Fields) Format(buf *TrackedBuffer) {
 	}
 
 	terminated := ""
-	if node.TerminatedBy != "" {
-		terminated = "terminated by " + node.TerminatedBy
+	if node.TerminatedBy != nil {
+		terminated = "terminated by " + "'" + string(node.TerminatedBy.Val) + "'"
 	}
 
 	escaped := ""
-	if node.EscapedBy != "" {
-		escaped = " escaped by " + node.EscapedBy
+	if node.EscapedBy != nil {
+		escaped = " escaped by " + "'" + string(node.EscapedBy.Val) + "'"
 	}
 
 	buf.Myprintf(" fields %s%v%s", terminated, node.EnclosedBy, escaped)
@@ -611,7 +611,7 @@ func (node *Fields) walkSubtree(visit Visit) error {
 
 type EnclosedBy struct {
 	Optionally BoolVal
-	Delim string
+	Delim *SQLVal
 	SQLNode
 }
 
@@ -620,7 +620,7 @@ func (node *EnclosedBy) Format(buf *TrackedBuffer) {
 		return
 	}
 
-	enclosed := "enclosed by " + node.Delim
+	enclosed := "enclosed by " + "'" + string(node.Delim.Val) + "'"
 	if node.Optionally {
 		enclosed = " optionally " + enclosed
 	} else {
@@ -631,8 +631,8 @@ func (node *EnclosedBy) Format(buf *TrackedBuffer) {
 }
 
 type Lines struct {
-	StartingBy string
-	TerminatedBy string
+	StartingBy *SQLVal
+	TerminatedBy *SQLVal
 	SQLNode
 }
 
@@ -642,13 +642,13 @@ func (node *Lines) Format(buf *TrackedBuffer) {
 	}
 
 	starting := ""
-	if node.StartingBy != "" {
-		starting = " starting by " + node.StartingBy
+	if node.StartingBy != nil {
+		starting = " starting by " + "'" + string(node.StartingBy.Val) + "'"
 	}
 
 	terminated := ""
-	if node.TerminatedBy != "" {
-		terminated = " terminated by " + node.TerminatedBy
+	if node.TerminatedBy != nil {
+		terminated = " terminated by " + "'" + string(node.TerminatedBy.Val) + "'"
 	}
 
 	buf.Myprintf(" lines%s%s", starting, terminated)
