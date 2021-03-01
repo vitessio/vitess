@@ -431,8 +431,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfMatchExpr(in)
 	case *ModifyColumn:
 		return CloneRefOfModifyColumn(in)
-	case Nextval:
-		return CloneNextval(in)
+	case *Nextval:
+		return CloneRefOfNextval(in)
 	case *NotExpr:
 		return CloneRefOfNotExpr(in)
 	case *NullVal:
@@ -581,8 +581,8 @@ func CloneSelectExpr(in SelectExpr) SelectExpr {
 	switch in := in.(type) {
 	case *AliasedExpr:
 		return CloneRefOfAliasedExpr(in)
-	case Nextval:
-		return CloneNextval(in)
+	case *Nextval:
+		return CloneRefOfNextval(in)
 	case *StarExpr:
 		return CloneRefOfStarExpr(in)
 	default:
@@ -1742,9 +1742,14 @@ func CloneRefOfLockTables(n *LockTables) *LockTables {
 	return &out
 }
 
-// CloneNextval creates a deep clone of the input.
-func CloneNextval(n Nextval) Nextval {
-	return *CloneRefOfNextval(&n)
+// CloneRefOfNextval creates a deep clone of the input.
+func CloneRefOfNextval(n *Nextval) *Nextval {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Expr = CloneExpr(n.Expr)
+	return &out
 }
 
 // CloneOnDup creates a deep clone of the input.
@@ -2338,16 +2343,6 @@ func CloneTableAndLockTypes(n TableAndLockTypes) TableAndLockTypes {
 		res = append(res, CloneRefOfTableAndLockType(x))
 	}
 	return res
-}
-
-// CloneRefOfNextval creates a deep clone of the input.
-func CloneRefOfNextval(n *Nextval) *Nextval {
-	if n == nil {
-		return nil
-	}
-	out := *n
-	out.Expr = CloneExpr(n.Expr)
-	return &out
 }
 
 // CloneSliceOfRefOfPartitionDefinition creates a deep clone of the input.
