@@ -32,7 +32,7 @@ const (
 	unitTestDatabases = "percona56, mysql57, mysql80, mariadb101, mariadb102, mariadb103"
 
 	clusterTestTemplate = "templates/cluster_endtoend_test.tpl"
-	clusterList         = "11,12,13,14,15,16,17,18,19,20,21,22,23,24,27,vreplication_basic,vreplication_multicell,vreplication_cellalias,vreplication_v2,onlineddl_ghost,onlineddl_vrepl,onlineddl_vrepl_stress"
+	clusterList         = "11,12,13,14,15,16,17,18,19,20,21,22,23,24,26,27,vreplication_basic,vreplication_multicell,vreplication_cellalias,vreplication_v2,onlineddl_ghost,onlineddl_vrepl,onlineddl_vrepl_stress"
 	// TODO: currently some percona tools including xtrabackup are installed on all clusters, we can possibly optimize
 	// this by only installing them in the required clusters
 	clustersRequiringXtraBackup = clusterList
