@@ -483,7 +483,6 @@ func TestDisableActiveReparents(t *testing.T) {
 	}
 	sourceTablet.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"STOP SLAVE",
-		"START SLAVE",
 	}
 	sourceTablet.StartActionLoop(t, wr)
 	defer sourceTablet.StopActionLoop(t)
@@ -499,7 +498,7 @@ func TestDisableActiveReparents(t *testing.T) {
 
 	// verify the full status
 	require.NoError(t, sourceTablet.FakeMysqlDaemon.CheckSuperQueryList())
-	assert.True(t, sourceTablet.FakeMysqlDaemon.Replicating)
+	assert.False(t, sourceTablet.FakeMysqlDaemon.Replicating)
 	assert.True(t, sourceTablet.FakeMysqlDaemon.Running)
 
 	// create a destination tablet, set it up so we can do restores
