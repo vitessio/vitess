@@ -51,22 +51,22 @@ var (
 	ErrMultipleTargetKeyspaces = errors.New("multiple target keyspaces for a single workflow")
 )
 
-// Manager manages Vitess workflows, like vreplication workflows (MoveTables,
-// Reshard, etc) and schema migration workflows.
+// Server provides an API to work with Vitess workflows, like vreplication
+// workflows (MoveTables, Reshard, etc) and schema migration workflows.
 //
 // NB: This is in alpha, and you probably don't want to depend on it (yet!).
 // Currently, it provides only a read-only API to vreplication workflows. Write
 // actions on vreplication workflows, and schema migration workflows entirely,
 // are not yet supported, but planned.
-type Manager struct {
+type Server struct {
 	ts  *topo.Server
 	tmc tmclient.TabletManagerClient
 }
 
-// NewManager returns a new manager instance with the given topo.Server and
+// NewServer returns a new server instance with the given topo.Server and
 // TabletManagerClient.
-func NewManager(ts *topo.Server, tmc tmclient.TabletManagerClient) *Manager {
-	return &Manager{
+func NewServer(ts *topo.Server, tmc tmclient.TabletManagerClient) *Server {
+	return &Server{
 		ts:  ts,
 		tmc: tmc,
 	}
@@ -79,7 +79,7 @@ func NewManager(ts *topo.Server, tmc tmclient.TabletManagerClient) *Manager {
 //
 // It has the same signature as the vtctlservicepb.VtctldServer's GetWorkflows
 // rpc, and grpcvtctldserver delegates to this function.
-func (manager *Manager) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflowsRequest) (*vtctldatapb.GetWorkflowsResponse, error) {
+func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflowsRequest) (*vtctldatapb.GetWorkflowsResponse, error) {
 	where := ""
 	if req.ActiveOnly {
 		where = "WHERE state <> 'Stopped'"
@@ -104,7 +104,7 @@ func (manager *Manager) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWo
 		where,
 	)
 
-	vx := vexec.NewVExec(req.Keyspace, "", manager.ts, manager.tmc)
+	vx := vexec.NewVExec(req.Keyspace, "", s.ts, s.tmc)
 	results, err := vx.QueryContext(ctx, query)
 	if err != nil {
 		return nil, err
@@ -170,7 +170,7 @@ func (manager *Manager) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWo
 			Message: message,
 		}
 
-		status.CopyStates, err = manager.getWorkflowCopyStates(ctx, tablet, id)
+		status.CopyStates, err = s.getWorkflowCopyStates(ctx, tablet, id)
 		if err != nil {
 			return err
 		}
@@ -190,7 +190,7 @@ func (manager *Manager) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWo
 			ctx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
 			defer cancel()
 
-			si, err := manager.ts.GetShard(ctx, req.Keyspace, tablet.Shard)
+			si, err := s.ts.GetShard(ctx, req.Keyspace, tablet.Shard)
 			if err != nil {
 				return err
 			}
@@ -316,9 +316,9 @@ func (manager *Manager) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWo
 	}, nil
 }
 
-func (manager *Manager) getWorkflowCopyStates(ctx context.Context, tablet *topo.TabletInfo, id int64) ([]*vtctldatapb.Workflow_ReplicationStatus_CopyState, error) {
+func (s *Server) getWorkflowCopyStates(ctx context.Context, tablet *topo.TabletInfo, id int64) ([]*vtctldatapb.Workflow_ReplicationStatus_CopyState, error) {
 	query := fmt.Sprintf("select table_name, lastpk from _vt.copy_state where vrepl_id = %d", id)
-	qr, err := manager.tmc.VReplicationExec(ctx, tablet.Tablet, query)
+	qr, err := s.tmc.VReplicationExec(ctx, tablet.Tablet, query)
 	if err != nil {
 		return nil, err
 	}

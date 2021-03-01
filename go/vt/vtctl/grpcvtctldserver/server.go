@@ -62,7 +62,7 @@ const (
 type VtctldServer struct {
 	ts  *topo.Server
 	tmc tmclient.TabletManagerClient
-	wm  *workflow.Manager
+	ws  *workflow.Server
 }
 
 // NewVtctldServer returns a new VtctldServer for the given topo server.
@@ -72,7 +72,7 @@ func NewVtctldServer(ts *topo.Server) *VtctldServer {
 	return &VtctldServer{
 		ts:  ts,
 		tmc: tmc,
-		wm:  workflow.NewManager(ts, tmc),
+		ws:  workflow.NewServer(ts, tmc),
 	}
 }
 
@@ -686,7 +686,7 @@ func (s *VtctldServer) GetVSchema(ctx context.Context, req *vtctldatapb.GetVSche
 
 // GetWorkflows is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflowsRequest) (*vtctldatapb.GetWorkflowsResponse, error) {
-	return s.wm.GetWorkflows(ctx, req)
+	return s.ws.GetWorkflows(ctx, req)
 }
 
 // InitShardPrimary is part of the vtctlservicepb.VtctldServer interface.
