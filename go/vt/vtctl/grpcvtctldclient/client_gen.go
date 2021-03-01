@@ -82,6 +82,15 @@ func (client *gRPCVtctldClient) DeleteTablets(ctx context.Context, in *vtctldata
 	return client.c.DeleteTablets(ctx, in, opts...)
 }
 
+// EmergencyReparentShard is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) EmergencyReparentShard(ctx context.Context, in *vtctldatapb.EmergencyReparentShardRequest, opts ...grpc.CallOption) (*vtctldatapb.EmergencyReparentShardResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.EmergencyReparentShard(ctx, in, opts...)
+}
+
 // FindAllShardsInKeyspace is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) FindAllShardsInKeyspace(ctx context.Context, in *vtctldatapb.FindAllShardsInKeyspaceRequest, opts ...grpc.CallOption) (*vtctldatapb.FindAllShardsInKeyspaceResponse, error) {
 	if client.c == nil {
@@ -208,6 +217,15 @@ func (client *gRPCVtctldClient) InitShardPrimary(ctx context.Context, in *vtctld
 	return client.c.InitShardPrimary(ctx, in, opts...)
 }
 
+// PlannedReparentShard is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) PlannedReparentShard(ctx context.Context, in *vtctldatapb.PlannedReparentShardRequest, opts ...grpc.CallOption) (*vtctldatapb.PlannedReparentShardResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.PlannedReparentShard(ctx, in, opts...)
+}
+
 // RemoveKeyspaceCell is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) RemoveKeyspaceCell(ctx context.Context, in *vtctldatapb.RemoveKeyspaceCellRequest, opts ...grpc.CallOption) (*vtctldatapb.RemoveKeyspaceCellResponse, error) {
 	if client.c == nil {
@@ -224,4 +242,22 @@ func (client *gRPCVtctldClient) RemoveShardCell(ctx context.Context, in *vtctlda
 	}
 
 	return client.c.RemoveShardCell(ctx, in, opts...)
+}
+
+// ReparentTablet is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) ReparentTablet(ctx context.Context, in *vtctldatapb.ReparentTabletRequest, opts ...grpc.CallOption) (*vtctldatapb.ReparentTabletResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.ReparentTablet(ctx, in, opts...)
+}
+
+// TabletExternallyReparented is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) TabletExternallyReparented(ctx context.Context, in *vtctldatapb.TabletExternallyReparentedRequest, opts ...grpc.CallOption) (*vtctldatapb.TabletExternallyReparentedResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.TabletExternallyReparented(ctx, in, opts...)
 }

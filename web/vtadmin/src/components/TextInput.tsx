@@ -15,10 +15,10 @@ interface Props extends NativeInputProps {
     className?: string;
     iconLeft?: Icons;
     iconRight?: Icons;
-    size?: 'large' | 'medium'; // We have no need for small inputs right now.
+    size?: 'large';
 }
 
-export const TextInput = ({ className, iconLeft, iconRight, size = 'medium', ...props }: Props) => {
+export const TextInput = ({ className, iconLeft, iconRight, size, ...props }: Props) => {
     const inputClass = cx(style.input, {
         [style.large]: size === 'large',
         [style.withIconLeft]: !!iconLeft,

@@ -337,6 +337,10 @@ loop:
 	for {
 		select {
 		case i := <-c.setBuf:
+			if i.wg != nil {
+				i.wg.Done()
+				continue
+			}
 			if i.flag != itemUpdate {
 				// In itemUpdate, the value is already set in the store.  So, no need to call
 				// onEvict here.

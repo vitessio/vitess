@@ -22,7 +22,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	durationpb "github.com/golang/protobuf/ptypes/duration"
+	"vitess.io/vitess/go/vt/proto/vttime"
 )
 
 func TestDurationFromProto(t *testing.T) {
@@ -30,14 +30,14 @@ func TestDurationFromProto(t *testing.T) {
 
 	tests := []struct {
 		name      string
-		in        *durationpb.Duration
+		in        *vttime.Duration
 		expected  time.Duration
 		isOk      bool
 		shouldErr bool
 	}{
 		{
 			name:      "success",
-			in:        &durationpb.Duration{Seconds: 1000},
+			in:        &vttime.Duration{Seconds: 1000},
 			expected:  time.Second * 1000,
 			isOk:      true,
 			shouldErr: false,
@@ -51,7 +51,7 @@ func TestDurationFromProto(t *testing.T) {
 		},
 		{
 			name: "error",
-			in: &durationpb.Duration{
+			in: &vttime.Duration{
 				// This is the max allowed seconds for a durationpb, plus 1.
 				Seconds: int64(10000*365.25*24*60*60) + 1,
 			},
@@ -71,7 +71,6 @@ func TestDurationFromProto(t *testing.T) {
 			if tt.shouldErr {
 				assert.Error(t, err)
 				assert.Equal(t, tt.isOk, ok, "expected (_, ok, _) = DurationFromProto; to be ok = %v", tt.isOk)
-
 				return
 			}
 

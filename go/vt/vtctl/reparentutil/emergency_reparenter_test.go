@@ -337,6 +337,111 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 			shouldErr: false,
 		},
 		{
+			name: "success with existing primary",
+			ts:   memorytopo.NewServer("zone1"),
+			tmc: &testutil.TabletManagerClient{
+				DemoteMasterResults: map[string]struct {
+					Status *replicationdatapb.MasterStatus
+					Error  error
+				}{
+					"zone1-0000000100": {
+						Status: &replicationdatapb.MasterStatus{
+							Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
+						},
+					},
+				},
+				PopulateReparentJournalResults: map[string]error{
+					"zone1-0000000102": nil,
+				},
+				PromoteReplicaResults: map[string]struct {
+					Result string
+					Error  error
+				}{
+					"zone1-0000000102": {
+						Result: "ok",
+						Error:  nil,
+					},
+				},
+				SetMasterResults: map[string]error{
+					"zone1-0000000100": nil,
+					"zone1-0000000101": nil,
+				},
+				StopReplicationAndGetStatusResults: map[string]struct {
+					Status     *replicationdatapb.Status
+					StopStatus *replicationdatapb.StopReplicationStatus
+					Error      error
+				}{
+					"zone1-0000000100": { // This tablet claims MASTER, so is not running replication.
+						Error: mysql.ErrNotReplica,
+					},
+					"zone1-0000000101": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{},
+							After: &replicationdatapb.Status{
+								MasterUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
+								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21",
+							},
+						},
+					},
+					"zone1-0000000102": {
+						StopStatus: &replicationdatapb.StopReplicationStatus{
+							Before: &replicationdatapb.Status{},
+							After: &replicationdatapb.Status{
+								MasterUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
+								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-26",
+							},
+						},
+					},
+				},
+				WaitForPositionResults: map[string]map[string]error{
+					"zone1-0000000101": {
+						"MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-21": nil,
+					},
+					"zone1-0000000102": {
+						"MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-26": nil,
+					},
+				},
+			},
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "testkeyspace",
+					Name:     "-",
+				},
+			},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+					Type:     topodatapb.TabletType_MASTER,
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  101,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  102,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+					Hostname: "most up-to-date position, wins election",
+				},
+			},
+			keyspace:  "testkeyspace",
+			shard:     "-",
+			opts:      EmergencyReparentOptions{},
+			shouldErr: false,
+		},
+		{
 			name:       "shard not found",
 			ts:         memorytopo.NewServer("zone1"),
 			tmc:        &testutil.TabletManagerClient{},

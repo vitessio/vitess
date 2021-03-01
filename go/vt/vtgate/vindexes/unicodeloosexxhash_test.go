@@ -42,40 +42,44 @@ func TestUnicodeLooseXXHashInfo(t *testing.T) {
 
 func TestUnicodeLooseXXHashMap(t *testing.T) {
 	tcases := []struct {
-		in, out string
+		in  sqltypes.Value
+		out string
 	}{{
-		in:  "Test",
+		in:  sqltypes.NewVarBinary("Test"),
 		out: "B\xd2\x13a\bzL\a",
 	}, {
-		in:  "TEst",
+		in:  sqltypes.NewVarBinary("TEst"),
 		out: "B\xd2\x13a\bzL\a",
 	}, {
-		in:  "Te\u0301st",
+		in:  sqltypes.NewVarBinary("Te\u0301st"),
 		out: "B\xd2\x13a\bzL\a",
 	}, {
-		in:  "Tést",
+		in:  sqltypes.NewVarBinary("Tést"),
 		out: "B\xd2\x13a\bzL\a",
 	}, {
-		in:  "Bést",
+		in:  sqltypes.NewVarBinary("Bést"),
 		out: "\x92iu\xb9\xce.\xc3\x16",
 	}, {
-		in:  "Test ",
+		in:  sqltypes.NewVarBinary("Test "),
 		out: "B\xd2\x13a\bzL\a",
 	}, {
-		in:  " Test",
+		in:  sqltypes.NewVarBinary(" Test"),
 		out: "Oˋ\xe3N\xc0Wu",
 	}, {
-		in:  "Test\t",
+		in:  sqltypes.NewVarBinary("Test\t"),
 		out: " \xaf\x87\xfc6\xe3\xfdQ",
 	}, {
-		in:  "TéstLooong",
+		in:  sqltypes.NewVarBinary("TéstLooong"),
 		out: "\xd3\xea\x879B\xb4\x84\xa7",
 	}, {
-		in:  "T",
+		in:  sqltypes.NewVarBinary("T"),
 		out: "\xf8\x1c;\xe2\xd5\x01\xfe\x18",
+	}, {
+		in:  sqltypes.NULL,
+		out: "\x99\xe9\xd8Q7\xdbF\xef",
 	}}
 	for _, tcase := range tcases {
-		got, err := charVindexXXHash.Map(nil, []sqltypes.Value{sqltypes.NewVarBinary(tcase.in)})
+		got, err := charVindexXXHash.Map(nil, []sqltypes.Value{tcase.in})
 		if err != nil {
 			t.Error(err)
 		}
