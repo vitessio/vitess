@@ -66,6 +66,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/txserializer"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/txthrottler"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer"
+	"vitess.io/vitess/go/vt/vttablet/vexec"
 )
 
 // logPoolFull is for throttling transaction / query pool full messages in the log.
@@ -412,7 +413,7 @@ func (tsv *TabletServer) QueryService() queryservice.QueryService {
 }
 
 // OnlineDDLExecutor returns the onlineddl.Executor part of TabletServer.
-func (tsv *TabletServer) OnlineDDLExecutor() *onlineddl.Executor {
+func (tsv *TabletServer) OnlineDDLExecutor() vexec.Executor {
 	return tsv.onlineDDLExecutor
 }
 

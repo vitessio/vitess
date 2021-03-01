@@ -32,8 +32,12 @@ var (
 	migrationBasePath                 = "schema-migration"
 	onlineDdlUUIDRegexp               = regexp.MustCompile(`^[0-f]{8}_[0-f]{4}_[0-f]{4}_[0-f]{4}_[0-f]{12}$`)
 	strategyParserRegexp              = regexp.MustCompile(`^([\S]+)\s+(.*)$`)
-	onlineDDLGeneratedTableNameRegexp = regexp.MustCompile(`^_[0-f]{8}_[0-f]{4}_[0-f]{4}_[0-f]{4}_[0-f]{12}_([0-9]{14})_(gho|ghc|del|new)$`)
+	onlineDDLGeneratedTableNameRegexp = regexp.MustCompile(`^_[0-f]{8}_[0-f]{4}_[0-f]{4}_[0-f]{4}_[0-f]{12}_([0-9]{14})_(gho|ghc|del|new|vrepl)$`)
 	ptOSCGeneratedTableNameRegexp     = regexp.MustCompile(`^_.*_old$`)
+)
+
+const (
+	SchemaMigrationsTableName = "schema_migrations"
 )
 
 // MigrationBasePath is the root for all schema migration entries
@@ -82,6 +86,8 @@ type DDLStrategy string
 const (
 	// DDLStrategyDirect means not an online-ddl migration. Just a normal MySQL ALTER TABLE
 	DDLStrategyDirect DDLStrategy = "direct"
+	// DDLStrategyOnline requests vreplication to run the migration
+	DDLStrategyOnline DDLStrategy = "online"
 	// DDLStrategyGhost requests gh-ost to run the migration
 	DDLStrategyGhost DDLStrategy = "gh-ost"
 	// DDLStrategyPTOSC requests pt-online-schema-change to run the migration
@@ -92,7 +98,7 @@ const (
 // A strategy is direct if it's not explciitly one of the online DDL strategies
 func (s DDLStrategy) IsDirect() bool {
 	switch s {
-	case DDLStrategyGhost, DDLStrategyPTOSC:
+	case DDLStrategyOnline, DDLStrategyGhost, DDLStrategyPTOSC:
 		return false
 	}
 	return true
@@ -125,7 +131,7 @@ func ParseDDLStrategy(strategyVariable string) (strategy DDLStrategy, options st
 	switch strategy = DDLStrategy(strategyName); strategy {
 	case "": // backwards compatiblity and to handle unspecified values
 		return DDLStrategyDirect, options, nil
-	case DDLStrategyGhost, DDLStrategyPTOSC, DDLStrategyDirect:
+	case DDLStrategyOnline, DDLStrategyGhost, DDLStrategyPTOSC, DDLStrategyDirect:
 		return strategy, options, nil
 	default:
 		return DDLStrategyDirect, options, fmt.Errorf("Unknown online DDL strategy: '%v'", strategy)
