@@ -84,15 +84,12 @@ var (
 		}, {
 			input:  "select 1 from t // aa\n",
 			output: "select 1 from t",
-			serializeSelectExprs: true,
 		}, {
 			input:  "select 1 from t -- aa\n",
 			output: "select 1 from t",
-			serializeSelectExprs: true,
 		}, {
 			input:  "select 1 from t # aa\n",
 			output: "select 1 from t",
-			serializeSelectExprs: true,
 		}, {
 			input:  "select 1 --aa\nfrom t",
 			output: "select 1 from t",
@@ -1640,6 +1637,8 @@ var (
 		}, {
 			input: "select name, group_concat(score) from t group by name",
 		}, {
+			input: `select concAt(  "a",    "b", "c"  ) from t group by name`,
+		}, {
 			input: "select name, group_concat(distinct id, score order by id desc separator ':') from t group by name",
 		}, {
 			input: "select * from t partition (p0)",
@@ -1938,6 +1937,37 @@ func TestValid(t *testing.T) {
 	validSQL = append(validSQL, validMultiStatementSql...)
 	for _, tcase := range validSQL {
 		runParseTestCase(t, tcase)
+	}
+}
+
+// Skipped tests for queries where the select expression can't accurately be captured because of comments
+func TestBrokenCommentSelection(t *testing.T) {
+	testcases := []parseTest{{
+		input:  "select 1 --aa\nfrom t",
+		output: "select 1 from t",
+	}, {
+		input:  "select 1 #aa\nfrom t",
+		output: "select 1 from t",
+	}, {
+		input:  "select concat(a, -- this is a\n b -- this is b\n) from t",
+		output: "select concat(a, b) from t",
+	}, {
+		input:  "select concat( /*comment*/ a, b) from t",
+		output: "select concat(  a, b) from t",
+	}, {
+		input:  "select 1 /* drop this comment */ from t",
+		output: "select 1 from t",
+	}, {
+		input:  "select 1, 2 /* drop this comment */, 3 from t",
+		output:  "select 1, 2, 3 from t",
+	},
+	}
+
+	for _, tcase := range testcases {
+		t.Run(tcase.input, func(t *testing.T) {
+			t.Skip()
+			runParseTestCase(t, tcase)
+		})
 	}
 }
 
@@ -2351,7 +2381,8 @@ func TestKeywords(t *testing.T) {
 		serializeSelectExprs: true,
 	}, {
 		input:  "select a, current_USER from t",
-		output: "select a, current_USER from t",
+	}, {
+		input:  "select a, Current_USER(     ) from t",
 	}, {
 		input:  "insert into t(a, b) values (current_date, current_date())",
 		output: "insert into t(a, b) values (current_date(), current_date())",
