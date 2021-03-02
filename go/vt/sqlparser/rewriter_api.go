@@ -52,7 +52,7 @@ func Rewrite(node SQLNode, pre, post ApplyFunc) (result SQLNode) {
 	}
 
 	// this is the root-replacer, used when the user replaces the root of the ast
-	replacer := func(newNode SQLNode, _ SQLNode) {
+	replacer := func(newNode SQLNode) {
 		parent.SQLNode = newNode
 	}
 
@@ -89,11 +89,11 @@ func (c *Cursor) Parent() SQLNode { return c.parent }
 // Replace replaces the current node in the parent field with this new object. The use needs to make sure to not
 // replace the object with something of the wrong type, or the visitor will panic.
 func (c *Cursor) Replace(newNode SQLNode) {
-	c.replacer(newNode, c.parent)
+	c.replacer(newNode)
 	c.node = newNode
 }
 
-type replacerFunc func(newNode, parent SQLNode)
+type replacerFunc func(newNode SQLNode)
 
 // application carries all the shared data so we can pass it around cheaply.
 type application struct {
@@ -108,8 +108,8 @@ func isNilValue(i interface{}) bool {
 	return isNullable && valueOf.IsNil()
 }
 
-func replacePanic(msg string) func(newNode, parent SQLNode) {
-	return func(newNode, parent SQLNode) {
+func replacePanic(msg string) func(SQLNode) {
+	return func(_ SQLNode) {
 		panic("Tried replacing a field of a value type. This is not supported. " + msg)
 	}
 }
