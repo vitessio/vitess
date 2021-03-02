@@ -18,6 +18,8 @@ package sqlparser
 
 import (
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func BenchmarkVisitLargeExpression(b *testing.B) {
@@ -26,12 +28,13 @@ func BenchmarkVisitLargeExpression(b *testing.B) {
 
 	depth := 0
 	for i := 0; i < b.N; i++ {
-		Rewrite(exp, func(cursor *Cursor) bool {
+		_, err := Rewrite(exp, func(cursor *Cursor) bool {
 			depth++
 			return true
 		}, func(cursor *Cursor) bool {
 			depth--
 			return true
 		})
+		require.NoError(b, err)
 	}
 }

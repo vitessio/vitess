@@ -40,7 +40,10 @@ func QueryMatchesTemplates(query string, queryTemplates []string) (match bool, e
 		if err != nil {
 			return "", err
 		}
-		Normalize(stmt, bv, "")
+		err = Normalize(stmt, bv, "")
+		if err != nil {
+			return "", err
+		}
 		normalized := String(stmt)
 		return normalized, nil
 	}

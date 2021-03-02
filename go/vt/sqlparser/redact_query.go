@@ -29,7 +29,10 @@ func RedactSQLQuery(sql string) (string, error) {
 	}
 
 	prefix := "redacted"
-	Normalize(stmt, bv, prefix)
+	err = Normalize(stmt, bv, prefix)
+	if err != nil {
+		return "", err
+	}
 
 	return comments.Leading + String(stmt) + comments.Trailing, nil
 }
