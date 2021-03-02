@@ -249,8 +249,8 @@ func skipToEnd(yylex interface{}) {
 %type <statement> stream_statement insert_statement update_statement delete_statement set_statement trigger_body
 %type <statement> create_statement rename_statement drop_statement truncate_statement flush_statement call_statement
 %type <statement> trigger_begin_end_block statement_list_statement case_statement if_statement signal_statement
-%type <statement> proc_allowed_statement proc_begin_end_block
-%type <statements> statement_list proc_allowed_statement_list
+%type <statement> begin_end_block
+%type <statements> statement_list
 %type <caseStatementCases> case_statement_case_list
 %type <caseStatementCase> case_statement_case
 %type <ifStatementConditions> elseif_list
@@ -704,7 +704,7 @@ create_statement:
   {
     $$ = &DDL{Action: CreateStr, Table: $8, TriggerSpec: &TriggerSpec{Name: string($4), Time: $5, Event: $6, Order: $12, Body: $14}, SubStatementPositionStart: $13, SubStatementPositionEnd: $15 - 1}
   }
-| CREATE definer_opt PROCEDURE ID '(' proc_param_list_opt ')' characteristic_list_opt lexer_position proc_allowed_statement lexer_position
+| CREATE definer_opt PROCEDURE ID '(' proc_param_list_opt ')' characteristic_list_opt lexer_position statement_list_statement lexer_position
   {
     $$ = &DDL{Action: CreateStr, ProcedureSpec: &ProcedureSpec{Name: string($4), Definer: $2, Params: $6, Characteristics: $8, Body: $10}, SubStatementPositionStart: $9, SubStatementPositionEnd: $11 - 1}
   }
@@ -807,47 +807,10 @@ characteristic:
     $$ = Characteristic{Type: CharacteristicValue_SqlSecurityInvoker}
   }
 
-proc_allowed_statement:
-  select_statement
-  {
-    $$ = $1
-  }
-| insert_statement
-| update_statement
-| delete_statement
-| set_statement
-| create_statement
-| alter_statement
-| rename_statement
-| drop_statement
-| case_statement
-| if_statement
-| truncate_statement
-| analyze_statement
-| show_statement
-| start_transaction_statement
-| commit_statement
-| rollback_statement
-| explain_statement
-| describe_statement
-| signal_statement
-| call_statement
-| proc_begin_end_block
-
-proc_begin_end_block:
-  BEGIN proc_allowed_statement_list ';' END
+begin_end_block:
+  BEGIN statement_list ';' END
   {
     $$ = &BeginEndBlock{Statements: $2}
-  }
-
-proc_allowed_statement_list:
-  proc_allowed_statement
-  {
-    $$ = Statements{$1}
-  }
-| proc_allowed_statement_list ';' proc_allowed_statement
-  {
-    $$ = append($$, $3)
   }
 
 definer_opt:
@@ -1069,10 +1032,23 @@ statement_list_statement:
 | update_statement
 | delete_statement
 | set_statement
+| create_statement
+| alter_statement
+| rename_statement
+| drop_statement
 | case_statement
 | if_statement
+| truncate_statement
+| analyze_statement
+| show_statement
+| start_transaction_statement
+| commit_statement
+| rollback_statement
+| explain_statement
+| describe_statement
 | signal_statement
-| trigger_begin_end_block
+| call_statement
+| begin_end_block
 
 vindex_type_opt:
   {
