@@ -44,7 +44,7 @@ func (r *rewriterGen) visitStruct(t types.Type, stroct *types.Struct) error {
 		field := stroct.Field(i)
 		if r.interestingType(field.Type()) {
 			if _, ok := t.(*types.Pointer); ok {
-				function := r.createReplaceMethod(field)
+				function := r.createReplaceMethod(typeString, field)
 				caseStmts = append(caseStmts, caseStmtFor(field, function))
 			} else {
 				caseStmts = append(caseStmts, casePanicStmtFor(field, typeName+" "+field.Name()))
@@ -52,7 +52,7 @@ func (r *rewriterGen) visitStruct(t types.Type, stroct *types.Struct) error {
 		}
 		sliceT, ok := field.Type().(*types.Slice)
 		if ok && r.interestingType(sliceT.Elem()) { // we have a field containing a slice of interesting elements
-			function := r.createReplacementMethod(sliceT.Elem(), jen.Dot(field.Name()))
+			function := r.createReplacementMethod(t, sliceT.Elem(), jen.Dot(field.Name()))
 			caseStmts = append(caseStmts, caseStmtForSliceField(field, function))
 		}
 	}
@@ -69,7 +69,7 @@ func (r *rewriterGen) visitSlice(t types.Type, slice *types.Slice) error {
 
 	var stmts []jen.Code
 	if r.interestingType(slice.Elem()) {
-		function := r.createReplacementMethod(slice.Elem(), jen.Empty())
+		function := r.createReplacementMethod(t, slice.Elem(), jen.Empty())
 		stmts = append(stmts, caseStmtForSlice(function))
 	}
 	r.cases = append(r.cases, jen.Case(jen.Id(typeString)).Block(stmts...))
@@ -118,15 +118,16 @@ func (r *rewriterGen) structCase(name string, stroct *types.Struct) (jen.Code, e
 	return jen.Case(jen.Op("*").Id(name)).Block(stmts...), nil
 }
 
-func (r *rewriterGen) createReplaceMethod(field *types.Var) jen.Code {
+func (r *rewriterGen) createReplaceMethod(structType string, field *types.Var) jen.Code {
 	return jen.Func().Params(
-		jen.Id("newNode").Id(r.ifaceName),
+		jen.Id("newNode"),
+		jen.Id("parent").Id(r.ifaceName),
 	).Block(
-		jen.Id("n").Dot(field.Name()).Op("=").Id("newNode").Assert(jen.Id(types.TypeString(field.Type(), noQualifier))),
+		jen.Id("parent").Assert(jen.Id(structType)).Dot(field.Name()).Op("=").Id("newNode").Assert(jen.Id(types.TypeString(field.Type(), noQualifier))),
 	)
 }
 
-func (r *rewriterGen) createReplacementMethod(elem types.Type, x jen.Code) *jen.Statement {
+func (r *rewriterGen) createReplacementMethod(container, elem types.Type, x jen.Code) *jen.Statement {
 	/*
 		func replacer(idx int) func(AST, AST) {
 			return func(newnode, container AST) {
@@ -135,8 +136,8 @@ func (r *rewriterGen) createReplacementMethod(elem types.Type, x jen.Code) *jen.
 		}
 
 	*/
-	return jen.Func().Params(jen.Id("newNode").Id(r.ifaceName)).Block(
-		jen.Id("n").Add(x).Index(jen.Id("x")).Op("=").
+	return jen.Func().Params(jen.List(jen.Id("newNode"), jen.Id("container")).Id(r.ifaceName)).Block(
+		jen.Id("container").Assert(jen.Id(types.TypeString(container, noQualifier))).Add(x).Index(jen.Id("x")).Op("=").
 			Id("newNode").Assert(jen.Id(types.TypeString(elem, noQualifier))),
 	)
 }
