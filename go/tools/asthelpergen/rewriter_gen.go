@@ -90,7 +90,7 @@ func caseStmtForSlice(function *jen.Statement) jen.Code {
 		jen.Id("a").Dot("apply").Call(
 			jen.Id("node"),
 			jen.Id("el"),
-			function.Call(jen.Id("x")),
+			function,
 		),
 	)
 }
@@ -102,7 +102,7 @@ func caseStmtForSliceField(field *types.Var, function *jen.Statement) jen.Code {
 			//	a.apply(node, el, replaceInterfaceSlice(x))
 			jen.Id("node"),
 			jen.Id("el"),
-			function.Call(jen.Id("x")),
+			function,
 		),
 	)
 }
@@ -136,11 +136,9 @@ func (r *rewriterGen) createReplacementMethod(container, elem types.Type, x jen.
 		}
 
 	*/
-	return jen.Func().Params(jen.Id("idx").Int()).Func().Params(jen.List(jen.Id(r.ifaceName), jen.Id(r.ifaceName))).Block(
-		jen.Return(jen.Func().Params(jen.List(jen.Id("newNode"), jen.Id("container")).Id(r.ifaceName))).Block(
-			jen.Id("container").Assert(jen.Id(types.TypeString(container, noQualifier))).Add(x).Index(jen.Id("idx")).Op("=").
-				Id("newNode").Assert(jen.Id(types.TypeString(elem, noQualifier))),
-		),
+	return jen.Func().Params(jen.List(jen.Id("newNode"), jen.Id("container")).Id(r.ifaceName)).Block(
+		jen.Id("container").Assert(jen.Id(types.TypeString(container, noQualifier))).Add(x).Index(jen.Id("x")).Op("=").
+			Id("newNode").Assert(jen.Id(types.TypeString(elem, noQualifier))),
 	)
 }
 

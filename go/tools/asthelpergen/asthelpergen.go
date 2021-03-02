@@ -51,6 +51,8 @@ type generator interface {
 	createFile(pkgName string) (string, *jen.File)
 }
 
+// astHelperGen finds implementations of the given interface,
+// and uses the supplied `generator`s to produce the output code
 type astHelperGen struct {
 	DebugTypes bool
 	mod        *packages.Module
@@ -127,6 +129,7 @@ func (gen *astHelperGen) visitInterface(t types.Type, iface *types.Interface) er
 	return nil
 }
 
+// GenerateCode is the main loop where we build up the code per file.
 func (gen *astHelperGen) GenerateCode() (map[string]*jen.File, error) {
 	pkg := gen.namedIface.Obj().Pkg()
 	iface, ok := gen.iface.Underlying().(*types.Interface)
@@ -165,24 +168,6 @@ func (gen *astHelperGen) GenerateCode() (map[string]*jen.File, error) {
 	}
 
 	return result, nil
-}
-
-// printableTypeName returns a string that can be used as a valid golang identifier
-func printableTypeName(t types.Type) string {
-	switch t := t.(type) {
-	case *types.Pointer:
-		return "RefOf" + printableTypeName(t.Elem())
-	case *types.Slice:
-		return "SliceOf" + printableTypeName(t.Elem())
-	case *types.Named:
-		return t.Obj().Name()
-	case *types.Basic:
-		return t.Name()
-	case *types.Interface:
-		return t.String()
-	default:
-		panic(fmt.Sprintf("unknown type %T %v", t, t))
-	}
 }
 
 type typePaths []string
@@ -251,8 +236,8 @@ func VerifyFilesOnDisk(result map[string]*jen.File) (errors []error) {
 	return errors
 }
 
-// GenerateASTHelpers generates the auxiliary code that implements CachedSize helper methods
-// for all the types listed in typePatterns
+// GenerateASTHelpers loads the input code, constructs the necessary generators,
+// and generates the rewriter and clone methods for the AST
 func GenerateASTHelpers(packagePatterns []string, rootIface, exceptCloneType string) (map[string]*jen.File, error) {
 	loaded, err := packages.Load(&packages.Config{
 		Mode: packages.NeedName | packages.NeedTypes | packages.NeedTypesSizes | packages.NeedTypesInfo | packages.NeedDeps | packages.NeedImports | packages.NeedModule,

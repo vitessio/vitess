@@ -17,6 +17,7 @@ limitations under the License.
 package main
 
 import (
+	"fmt"
 	"go/types"
 
 	"vitess.io/vitess/go/vt/log"
@@ -313,6 +314,7 @@ func (c *cloneGen) makePtrToStructCloneMethod(t types.Type, strct *types.Struct)
 		funcDeclaration.Block(stmts...),
 	)
 }
+
 func (c *cloneGen) tryInterface(underlying, t types.Type) bool {
 	iface, ok := underlying.(*types.Interface)
 	if !ok {
@@ -325,6 +327,7 @@ func (c *cloneGen) tryInterface(underlying, t types.Type) bool {
 	}
 	return true
 }
+
 func (c *cloneGen) trySlice(underlying, t types.Type) bool {
 	slice, ok := underlying.(*types.Slice)
 	if !ok {
@@ -336,4 +339,22 @@ func (c *cloneGen) trySlice(underlying, t types.Type) bool {
 		panic(err) // todo
 	}
 	return true
+}
+
+// printableTypeName returns a string that can be used as a valid golang identifier
+func printableTypeName(t types.Type) string {
+	switch t := t.(type) {
+	case *types.Pointer:
+		return "RefOf" + printableTypeName(t.Elem())
+	case *types.Slice:
+		return "SliceOf" + printableTypeName(t.Elem())
+	case *types.Named:
+		return t.Obj().Name()
+	case *types.Basic:
+		return t.Name()
+	case *types.Interface:
+		return t.String()
+	default:
+		panic(fmt.Sprintf("unknown type %T %v", t, t))
+	}
 }
