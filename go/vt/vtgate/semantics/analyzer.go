@@ -171,8 +171,10 @@ func (a *analyzer) bindTable(alias *sqlparser.AliasedTableExpr, expr sqlparser.S
 }
 
 func (a *analyzer) analyze(statement sqlparser.Statement) error {
-	_ = sqlparser.Rewrite(statement, a.analyzeDown, a.analyzeUp)
-
+	_, err := sqlparser.Rewrite(statement, a.analyzeDown, a.analyzeUp)
+	if err != nil {
+		return err
+	}
 	return a.err
 }
 

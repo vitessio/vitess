@@ -170,14 +170,6 @@ func findImplementations(scope *types.Scope, iff *types.Interface, impl func(typ
 	}
 }
 
-func (sizegen *sizegen) generateKnownInterface(pkg *types.Package, iff *types.Interface) {
-	findImplementations(pkg.Scope(), iff, func(tt types.Type) {
-		if named, ok := tt.(*types.Named); ok {
-			sizegen.generateKnownType(named)
-		}
-	})
-}
-
 func (sizegen *sizegen) finalize() map[string]*jen.File {
 	var complete bool
 
