@@ -327,3 +327,63 @@ func (tv *testVisitor) assertEquals(t *testing.T, expected []step) {
 	}
 
 }
+
+// below follows two different ways of creating the replacement method for slices, and benchmark
+// between them. Diff seems to be very small, so I'll use the most readable form
+type replaceA int
+
+func (r *replaceA) replace(newNode, container AST) {
+	container.(InterfaceSlice)[int(*r)] = newNode.(AST)
+}
+
+func (r *replaceA) inc() {
+	*r++
+}
+
+func replaceB(idx int) func(AST, AST) {
+	return func(newNode, container AST) {
+		container.(InterfaceSlice)[idx] = newNode.(AST)
+	}
+}
+
+func BenchmarkSliceReplacerA(b *testing.B) {
+	islice := make(InterfaceSlice, 20)
+	for i := range islice {
+		islice[i] = &Leaf{i}
+	}
+	a := &application{
+		pre: func(c *Cursor) bool {
+			return true
+		},
+		post:   nil,
+		cursor: Cursor{},
+	}
+
+	for i := 0; i < b.N; i++ {
+		replacer := replaceA(0)
+		for _, el := range islice {
+			a.apply(islice, el, replacer.replace)
+			replacer.inc()
+		}
+	}
+}
+
+func BenchmarkSliceReplacerB(b *testing.B) {
+	islice := make(InterfaceSlice, 20)
+	for i := range islice {
+		islice[i] = &Leaf{i}
+	}
+	a := &application{
+		pre: func(c *Cursor) bool {
+			return true
+		},
+		post:   nil,
+		cursor: Cursor{},
+	}
+
+	for i := 0; i < b.N; i++ {
+		for x, el := range islice {
+			a.apply(islice, el, replaceB(x))
+		}
+	}
+}

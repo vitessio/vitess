@@ -62,11 +62,11 @@ func (c *Cursor) Parent() AST { return c.parent }
 // Replace replaces the current node in the parent field with this new object. The use needs to make sure to not
 // replace the object with something of the wrong type, or the visitor will panic.
 func (c *Cursor) Replace(newNode AST) {
-	c.replacer(newNode)
+	c.replacer(newNode, c.parent)
 	c.node = newNode
 }
 
-type replacerFunc func(newNode AST)
+type replacerFunc func(newNode, parent AST)
 
 func isNilValue(i interface{}) bool {
 	valueOf := reflect.ValueOf(i)
@@ -90,8 +90,8 @@ func Rewrite(node AST, pre, post ApplyFunc) (result AST) {
 	return parent.AST
 }
 
-func replacePanic(msg string) func(AST) {
-	return func(_ AST) {
+func replacePanic(msg string) func(newNode, parent AST) {
+	return func(newNode, parent AST) {
 		panic("Tried replacing a field of a value type. This is not supported. " + msg)
 	}
 }
