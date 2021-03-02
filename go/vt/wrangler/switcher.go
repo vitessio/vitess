@@ -31,6 +31,10 @@ type switcher struct {
 	wr *Wrangler
 }
 
+func (r *switcher) addParticipatingTablesToKeyspace(ctx context.Context, keyspace, tableSpecs string) error {
+	return r.ts.addParticipatingTablesToKeyspace(ctx, keyspace, tableSpecs)
+}
+
 func (r *switcher) deleteRoutingRules(ctx context.Context) error {
 	return r.ts.deleteRoutingRules(ctx)
 }
