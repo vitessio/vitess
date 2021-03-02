@@ -18,8 +18,11 @@ package tabletmanager
 
 import (
 	"encoding/json"
+	"os"
 	"testing"
 	"time"
+
+	"vitess.io/vitess/go/vt/servenv"
 
 	"context"
 
@@ -254,4 +257,31 @@ func TestPublishStateNew(t *testing.T) {
 	ttablet, err = tm.TopoServer.GetTablet(ctx, tm.tabletAlias)
 	require.NoError(t, err)
 	assert.Equal(t, tab2, ttablet.Tablet)
+}
+
+func TestPublishDeleted(t *testing.T) {
+	ctx := context.Background()
+	ts := memorytopo.NewServer("cell1")
+	tm := newTestTM(t, ts, 2, "ks", "0")
+	defer tm.Stop()
+
+	alias := &topodatapb.TabletAlias{
+		Cell: "cell1",
+		Uid:  2,
+	}
+
+	err := tm.tmState.ChangeTabletType(ctx, topodatapb.TabletType_MASTER, DBActionSetReadWrite)
+	require.NoError(t, err)
+
+	err = ts.DeleteTablet(ctx, alias)
+	require.NoError(t, err)
+
+	// we need to make sure to catch the signal
+	servenv.ExitChan = make(chan os.Signal, 1)
+	// Now change the tablet type and publish
+	err = tm.tmState.ChangeTabletType(ctx, topodatapb.TabletType_REPLICA, DBActionNone)
+	require.NoError(t, err)
+	tm.tmState.mu.Lock()
+	assert.False(t, tm.tmState.isPublishing)
+	tm.tmState.mu.Unlock()
 }

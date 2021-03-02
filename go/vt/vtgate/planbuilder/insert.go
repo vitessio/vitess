@@ -46,7 +46,7 @@ func buildInsertPlan(stmt sqlparser.Statement, vschema ContextVSchema) (engine.P
 
 	if len(pb.st.tables) != 1 {
 		// Unreachable.
-		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: multi-table insert statement in sharded keyspace")
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "multi-table insert statement in not supported in sharded keyspace")
 	}
 	var vschemaTable *vindexes.Table
 	for _, tval := range pb.st.tables {

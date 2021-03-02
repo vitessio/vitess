@@ -1066,7 +1066,7 @@ func TestSelectScatterPartial(t *testing.T) {
 	// Fail 1 of N without the directive fails the whole operation
 	conns[2].MustFailCodes[vtrpcpb.Code_RESOURCE_EXHAUSTED] = 1000
 	results, err := executorExec(executor, "select id from user", nil)
-	wantErr := "TestExecutor.40-60.master, used tablet: aa-0 (40-60)"
+	wantErr := "TestExecutor.40-60.master"
 	if err == nil || !strings.Contains(err.Error(), wantErr) {
 		t.Errorf("want error %v, got %v", wantErr, err)
 	}

@@ -168,7 +168,7 @@ func setLock(in logicalPlan, lock sqlparser.Lock) error {
 			node.Select.SetLock(lock)
 			return false, node, nil
 		case *sqlCalcFoundRows, *vindexFunc:
-			return false, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "%T.locking: unreachable", in)
+			return false, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unreachable %T.locking", in)
 		}
 		return true, plan, nil
 	})

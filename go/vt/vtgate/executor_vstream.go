@@ -44,7 +44,7 @@ func (e *Executor) handleVStream(ctx context.Context, sql string, target querypb
 	vstreamStmt, ok := stmt.(*sqlparser.VStream)
 	if !ok {
 		logStats.Error = err
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unrecognized VSTREAM statement: %v", sql)
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unrecognized VSTREAM statement: %v", sql)
 	}
 
 	table, _, _, _, err := vcursor.FindTable(vstreamStmt.Table)

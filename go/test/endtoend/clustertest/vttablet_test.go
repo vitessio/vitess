@@ -24,6 +24,8 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/test/endtoend/cluster"
 )
 
@@ -41,4 +43,12 @@ func TestVttabletProcess(t *testing.T) {
 	if got, want := resultMap["TabletKeyspace"], "commerce"; got != want {
 		t.Errorf("select:\n%v want\n%v for %s", got, want, "Keyspace of tablet should match")
 	}
+}
+
+func TestDeleteTablet(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	primary := clusterInstance.Keyspaces[0].Shards[0].MasterTablet()
+	require.NotNil(t, primary)
+	_, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("DeleteTablet", "-allow_master", primary.Alias)
+	require.Nil(t, err, "Error: %v", err)
 }

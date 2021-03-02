@@ -74,10 +74,10 @@ func (v *AlterVSchema) Execute(vcursor VCursor, bindVars map[string]*query.BindV
 
 //StreamExecute implements the Primitive interface
 func (v *AlterVSchema) StreamExecute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantields bool, callback func(*sqltypes.Result) error) error {
-	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "not reachable") // TODO: systay - this should work
+	return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Alter vschema not supported in streaming")
 }
 
 //GetFields implements the Primitive interface
 func (v *AlterVSchema) GetFields(vcursor VCursor, bindVars map[string]*query.BindVariable) (*sqltypes.Result, error) {
-	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "not reachable") // TODO: systay - this should work
+	return nil, vterrors.NewErrorf(vtrpcpb.Code_UNIMPLEMENTED, vterrors.UnsupportedPS, "This command is not supported in the prepared statement protocol yet")
 }
