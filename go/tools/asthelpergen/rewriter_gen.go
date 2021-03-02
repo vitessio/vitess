@@ -52,7 +52,7 @@ func (r *rewriterGen) visitStruct(t types.Type, stroct *types.Struct) error {
 		}
 		sliceT, ok := field.Type().(*types.Slice)
 		if ok && r.interestingType(sliceT.Elem()) { // we have a field containing a slice of interesting elements
-			function := r.createReplaceCodeForSliceField(typeString, field)
+			function := r.createReplacementMethod(t, sliceT.Elem(), jen.Dot(field.Name()))
 			caseStmts = append(caseStmts, caseStmtForSliceField(field, function))
 		}
 	}
@@ -69,7 +69,7 @@ func (r *rewriterGen) visitSlice(t types.Type, slice *types.Slice) error {
 
 	var stmts []jen.Code
 	if r.interestingType(slice.Elem()) {
-		function := r.createReplaceCodeForSlice(typeString, types.TypeString(slice.Elem(), noQualifier))
+		function := r.createReplacementMethod(t, slice.Elem(), jen.Empty())
 		stmts = append(stmts, caseStmtForSlice(function))
 	}
 	r.cases = append(r.cases, jen.Case(jen.Id(typeString)).Block(stmts...))
@@ -127,7 +127,7 @@ func (r *rewriterGen) createReplaceMethod(structType string, field *types.Var) j
 	)
 }
 
-func (r *rewriterGen) createReplaceCodeForSlice(structType, elemType string) *jen.Statement {
+func (r *rewriterGen) createReplacementMethod(container, elem types.Type, x jen.Code) *jen.Statement {
 	/*
 		func replacer(idx int) func(AST, AST) {
 			return func(newnode, container AST) {
@@ -136,31 +136,10 @@ func (r *rewriterGen) createReplaceCodeForSlice(structType, elemType string) *je
 		}
 
 	*/
-
 	return jen.Func().Params(jen.Id("idx").Int()).Func().Params(jen.List(jen.Id(r.ifaceName), jen.Id(r.ifaceName))).Block(
 		jen.Return(jen.Func().Params(jen.List(jen.Id("newNode"), jen.Id("container")).Id(r.ifaceName))).Block(
-			jen.Id("container").Assert(jen.Id(structType)).Index(jen.Id("idx")).Op("=").
-				Id("newNode").Assert(jen.Id(elemType)),
-		),
-	)
-}
-
-func (r *rewriterGen) createReplaceCodeForSliceField(structType string, field *types.Var) *jen.Statement {
-	elemType := field.Type().(*types.Slice).Elem()
-
-	/*
-		func(idx int) func(AST, AST) {
-			return func(newNode, container AST) {
-				container.(*Struct)[idx] = newNode.(AST)
-			}
-		}
-
-	*/
-
-	return jen.Func().Params(jen.Id("idx").Int()).Func().Params(jen.List(jen.Id(r.ifaceName), jen.Id(r.ifaceName))).Block(
-		jen.Return(jen.Func().Params(jen.List(jen.Id("newNode"), jen.Id("container")).Id(r.ifaceName))).Block(
-			jen.Id("container").Assert(jen.Id(structType)).Dot(field.Name()).Index(jen.Id("idx")).Op("=").
-				Id("newNode").Assert(jen.Id(types.TypeString(elemType, noQualifier))),
+			jen.Id("container").Assert(jen.Id(types.TypeString(container, noQualifier))).Add(x).Index(jen.Id("idx")).Op("=").
+				Id("newNode").Assert(jen.Id(types.TypeString(elem, noQualifier))),
 		),
 	)
 }
