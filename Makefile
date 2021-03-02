@@ -103,7 +103,7 @@ parser:
 	make -C go/vt/sqlparser
 
 visitor:
-	go generate go/vt/sqlparser/rewriter.go
+	go run ./go/tools/asthelpergen -in ./go/vt/sqlparser -iface vitess.io/vitess/go/vt/sqlparser.SQLNode -except "*ColName"
 
 sizegen:
 	go run go/tools/sizegen/sizegen.go \
@@ -172,7 +172,7 @@ java_test:
 	VTROOT=${PWD} mvn -f java/pom.xml -B clean verify
 
 install_protoc-gen-go:
-	go install github.com/golang/protobuf/protoc-gen-go
+	go install github.com/gogo/protobuf/protoc-gen-gofast
 
 PROTO_SRCS = $(wildcard proto/*.proto)
 PROTO_SRC_NAMES = $(basename $(notdir $(PROTO_SRCS)))
@@ -187,7 +187,7 @@ endif
 
 $(PROTO_GO_OUTS): minimaltools install_protoc-gen-go proto/*.proto
 	for name in $(PROTO_SRC_NAMES); do \
-		$(VTROOT)/bin/protoc --go_out=plugins=grpc:. -I${PWD}/dist/vt-protoc-3.6.1/include:proto proto/$${name}.proto && \
+		$(VTROOT)/bin/protoc --gofast_out=plugins=grpc:. -I${PWD}/dist/vt-protoc-3.6.1/include:proto proto/$${name}.proto && \
 		goimports -w vitess.io/vitess/go/vt/proto/$${name}/$${name}.pb.go; \
 	done
 	cp -Rf vitess.io/vitess/go/vt/proto/* go/vt/proto

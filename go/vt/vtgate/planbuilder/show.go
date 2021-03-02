@@ -54,9 +54,10 @@ func buildShowBasicPlan(show *sqlparser.ShowBasic, vschema ContextVSchema) (engi
 	switch show.Command {
 	case sqlparser.Charset:
 		return buildCharsetPlan(show)
-	case sqlparser.Collation, sqlparser.Function, sqlparser.Privilege, sqlparser.Procedure,
-		sqlparser.VariableGlobal, sqlparser.VariableSession:
+	case sqlparser.Collation, sqlparser.Function, sqlparser.Privilege, sqlparser.Procedure:
 		return buildSendAnywherePlan(show, vschema)
+	case sqlparser.VariableGlobal, sqlparser.VariableSession:
+		return buildVariablePlan(show, vschema)
 	case sqlparser.Column, sqlparser.Index:
 		return buildShowTblPlan(show, vschema)
 	case sqlparser.Database, sqlparser.Keyspace:
@@ -66,7 +67,7 @@ func buildShowBasicPlan(show *sqlparser.ShowBasic, vschema ContextVSchema) (engi
 	case sqlparser.StatusGlobal, sqlparser.StatusSession:
 		return engine.NewRowsPrimitive(make([][]sqltypes.Value, 0, 2), buildVarCharFields("Variable_name", "Value")), nil
 	}
-	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: unknown show query type %s", show.Command.ToString())
+	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unknown show query type %s", show.Command.ToString())
 
 }
 
@@ -85,7 +86,7 @@ func buildCharsetPlan(show *sqlparser.ShowBasic) (engine.Primitive, error) {
 }
 
 func buildSendAnywherePlan(show *sqlparser.ShowBasic, vschema ContextVSchema) (engine.Primitive, error) {
-	ks, err := vschema.FirstSortedKeyspace()
+	ks, err := vschema.AnyKeyspace()
 	if err != nil {
 		return nil, err
 	}
@@ -98,6 +99,15 @@ func buildSendAnywherePlan(show *sqlparser.ShowBasic, vschema ContextVSchema) (e
 	}, nil
 }
 
+func buildVariablePlan(show *sqlparser.ShowBasic, vschema ContextVSchema) (engine.Primitive, error) {
+	plan, err := buildSendAnywherePlan(show, vschema)
+	if err != nil {
+		return nil, err
+	}
+	plan = engine.NewReplaceVariables(plan)
+	return plan, nil
+}
+
 func buildShowTblPlan(show *sqlparser.ShowBasic, vschema ContextVSchema) (engine.Primitive, error) {
 	if show.DbName != "" {
 		show.Tbl.Qualifier = sqlparser.NewTableIdent(show.DbName)
@@ -107,7 +117,7 @@ func buildShowTblPlan(show *sqlparser.ShowBasic, vschema ContextVSchema) (engine
 		return nil, err
 	}
 	if table == nil {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "table does not exists: %s", show.Tbl.Name.String())
+		return nil, vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.UnknownTable, "Table '%s' doesn't exist", show.Tbl.Name.String())
 	}
 	if destination == nil {
 		destination = key.DestinationAnyShard{}
@@ -164,17 +174,18 @@ func buildDBPlan(show *sqlparser.ShowBasic, vschema ContextVSchema) (engine.Prim
 
 func buildPlanWithDB(show *sqlparser.ShowBasic, vschema ContextVSchema) (engine.Primitive, error) {
 	dbName := show.DbName
-	if sqlparser.SystemSchema(dbName) {
+	dbDestination := show.DbName
+	if sqlparser.SystemSchema(dbDestination) {
 		ks, err := vschema.AnyKeyspace()
 		if err != nil {
 			return nil, err
 		}
-		dbName = ks.Name
+		dbDestination = ks.Name
 	} else {
 		// Remove Database Name from the query.
 		show.DbName = ""
 	}
-	destination, keyspace, _, err := vschema.TargetDestination(dbName)
+	destination, keyspace, _, err := vschema.TargetDestination(dbDestination)
 	if err != nil {
 		return nil, err
 	}
@@ -182,14 +193,26 @@ func buildPlanWithDB(show *sqlparser.ShowBasic, vschema ContextVSchema) (engine.
 		destination = key.DestinationAnyShard{}
 	}
 
+	if dbName == "" {
+		dbName = keyspace.Name
+	}
+
 	query := sqlparser.String(show)
-	return &engine.Send{
+	var plan engine.Primitive
+	plan = &engine.Send{
 		Keyspace:          keyspace,
 		TargetDestination: destination,
 		Query:             query,
 		IsDML:             false,
 		SingleShardOnly:   true,
-	}, nil
+	}
+	if show.Command == sqlparser.Table {
+		plan, err = engine.NewRenameField([]string{"Tables_in_" + dbName}, []int{0}, plan)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return plan, nil
 
 }
 
@@ -231,19 +254,19 @@ func generateCharsetRows(showFilter *sqlparser.ShowFilter, colNames []string) ([
 	} else {
 		cmpExp, ok := showFilter.Filter.(*sqlparser.ComparisonExpr)
 		if !ok {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "expect a 'LIKE' or '=' expression")
+			return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.SyntaxError, "expect a 'LIKE' or '=' expression")
 		}
 
 		left, ok := cmpExp.Left.(*sqlparser.ColName)
 		if !ok {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "expect left side to be 'charset'")
+			return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.SyntaxError, "expect left side to be 'charset'")
 		}
 		leftOk := left.Name.EqualString(charset)
 
 		if leftOk {
 			literal, ok := cmpExp.Right.(*sqlparser.Literal)
 			if !ok {
-				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "we expect the right side to be a string")
+				return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.SyntaxError, "we expect the right side to be a string")
 			}
 			rightString := string(literal.Val)
 
@@ -315,7 +338,7 @@ func buildShowCreatePlan(show *sqlparser.ShowCreate, vschema ContextVSchema) (en
 	case sqlparser.CreateTbl:
 		return buildCreateTblPlan(show, vschema)
 	}
-	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: unknown show query type %s", show.Command.ToString())
+	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unknown show query type %s", show.Command.ToString())
 }
 
 func buildCreateDbPlan(show *sqlparser.ShowCreate, vschema ContextVSchema) (engine.Primitive, error) {
@@ -362,7 +385,7 @@ func buildCreateTblPlan(show *sqlparser.ShowCreate, vschema ContextVSchema) (eng
 			return nil, err
 		}
 		if tbl == nil {
-			return nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "table now found: %v", show.Op)
+			return nil, vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.UnknownTable, "Table '%s' doesn't exist", sqlparser.String(show.Op))
 		}
 		ks = tbl.Keyspace
 		if destKs != nil {

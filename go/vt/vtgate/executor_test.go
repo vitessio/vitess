@@ -95,7 +95,7 @@ func TestExecutorMaxMemoryRowsExceeded(t *testing.T) {
 		err   string
 	}{
 		{"select /*vt+ IGNORE_MAX_MEMORY_ROWS=1 */ * from main1", ""},
-		{"select * from main1", "in-memory row count exceeded allowed limit of 3 (errno 1153) (sqlstate HY000)"},
+		{"select * from main1", "in-memory row count exceeded allowed limit of 3"},
 	}
 
 	for _, test := range testCases {
@@ -183,7 +183,7 @@ func TestLegacyExecutorTransactionsNoAutoCommit(t *testing.T) {
 	session = NewSafeSession(&vtgatepb.Session{TargetString: "@replica", InTransaction: true})
 	_, err = executor.Execute(ctx, "TestExecute", session, "select id from main1", nil)
 	require.Error(t, err)
-	want := "transactions are supported only for master tablet types, current type: REPLICA"
+	want := "transaction is supported only for master tablet type, current type: REPLICA"
 	require.Contains(t, err.Error(), want)
 
 	// Prevent begin on non-master.
@@ -195,10 +195,7 @@ func TestLegacyExecutorTransactionsNoAutoCommit(t *testing.T) {
 	// Prevent use of non-master if in_transaction is on.
 	session = NewSafeSession(&vtgatepb.Session{TargetString: "@master", InTransaction: true})
 	_, err = executor.Execute(ctx, "TestExecute", session, "use @replica", nil)
-	want = "cannot change to a non-master type in the middle of a transaction: REPLICA"
-	if err == nil || err.Error() != want {
-		t.Errorf("Execute(@replica, in_transaction) err: %v, want %s", err, want)
-	}
+	require.EqualError(t, err, `Can't execute the given command because you have an active transaction`)
 }
 
 func TestDirectTargetRewrites(t *testing.T) {
@@ -437,7 +434,7 @@ func TestExecutorShowColumns(t *testing.T) {
 
 func TestExecutorShow(t *testing.T) {
 	executor, _, _, sbclookup := createLegacyExecutorEnv()
-	session := NewSafeSession(&vtgatepb.Session{TargetString: "@master"})
+	session := NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"})
 
 	for _, query := range []string{"show vitess_keyspaces", "show keyspaces"} {
 		qr, err := executor.Execute(ctx, "TestExecute", session, query, nil)
@@ -459,8 +456,10 @@ func TestExecutorShow(t *testing.T) {
 	_, err = executor.Execute(ctx, "TestExecute", session, "show collation where `Charset` = 'utf8' and `Collation` = 'utf8_bin'", nil)
 	require.NoError(t, err)
 
+	_, err = executor.Execute(ctx, "TestExecute", session, "use @master", nil)
+	require.NoError(t, err)
 	_, err = executor.Execute(ctx, "TestExecute", session, "show tables", nil)
-	assert.EqualError(t, err, "keyspace not specified", "'show tables' should fail without a keyspace")
+	assert.EqualError(t, err, errNoKeyspace.Error(), "'show tables' should fail without a keyspace")
 	assert.Empty(t, sbclookup.Queries, "sbclookup unexpectedly has queries already")
 
 	showResults := &sqltypes.Result{
@@ -770,7 +769,7 @@ func TestExecutorShow(t *testing.T) {
 
 	query = "show vschema vindexes on TestExecutor.garbage"
 	_, err = executor.Execute(ctx, "TestExecute", session, query, nil)
-	wantErr = "table `garbage` does not exist in keyspace `TestExecutor`"
+	wantErr = "table 'garbage' does not exist in keyspace 'TestExecutor'"
 	assert.EqualError(t, err, wantErr, query)
 
 	query = "show vschema vindexes on user"
@@ -801,7 +800,7 @@ func TestExecutorShow(t *testing.T) {
 
 	query = "show vschema vindexes on garbage"
 	_, err = executor.Execute(ctx, "TestExecute", session, query, nil)
-	wantErr = "table `garbage` does not exist in keyspace `TestExecutor`"
+	wantErr = "table 'garbage' does not exist in keyspace 'TestExecutor'"
 	assert.EqualError(t, err, wantErr, query)
 
 	query = "show warnings"
@@ -902,7 +901,7 @@ func TestExecutorShow(t *testing.T) {
 	query = "show vschema tables"
 	session = NewSafeSession(&vtgatepb.Session{TargetString: "no_such_keyspace"})
 	_, err = executor.Execute(ctx, "TestExecute", session, query, nil)
-	want = "keyspace no_such_keyspace not found in vschema"
+	want = "Unknown database 'no_such_keyspace' in vschema"
 	assert.EqualError(t, err, want, query)
 }
 
@@ -934,7 +933,7 @@ func TestExecutorUse(t *testing.T) {
 	}
 
 	_, err = executor.Execute(ctx, "TestExecute", NewSafeSession(&vtgatepb.Session{}), "use UnexistentKeyspace", nil)
-	wantErr = "Unknown database 'UnexistentKeyspace' (errno 1049) (sqlstate 42000)"
+	wantErr = "Unknown database 'UnexistentKeyspace'"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("got: %v, want %v", err, wantErr)
 	}
@@ -1130,7 +1129,7 @@ func TestExecutorDDL(t *testing.T) {
 			stmtType := "DDL"
 			_, err := executor.Execute(ctx, "TestExecute", NewSafeSession(&vtgatepb.Session{TargetString: tc.targetStr}), stmt, nil)
 			if tc.hasNoKeyspaceErr {
-				require.EqualError(t, err, "keyspace not specified", "expect query to fail")
+				require.EqualError(t, err, errNoKeyspace.Error(), "expect query to fail")
 				stmtType = "" // For error case, plan is not generated to query log will not contain any stmtType.
 			} else {
 				require.NoError(t, err)
@@ -1167,7 +1166,7 @@ func TestExecutorDDL(t *testing.T) {
 		sbclookup.ExecCount.Set(0)
 		_, err := executor.Execute(ctx, "TestExecute", NewSafeSession(&vtgatepb.Session{TargetString: ""}), stmt.input, nil)
 		if stmt.hasErr {
-			require.EqualError(t, err, "keyspace not specified", "expect query to fail")
+			require.EqualError(t, err, errNoKeyspace.Error(), "expect query to fail")
 			testQueryLog(t, logChan, "TestExecute", "", stmt.input, 0)
 		} else {
 			require.NoError(t, err)
@@ -1335,16 +1334,11 @@ func TestExecutorVindexDDLACL(t *testing.T) {
 
 	// test that by default no users can perform the operation
 	stmt := "alter vschema create vindex test_hash using hash"
-	authErr := "not authorized to perform vschema operations"
 	_, err := executor.Execute(ctxRedUser, "TestExecute", session, stmt, nil)
-	if err == nil || err.Error() != authErr {
-		t.Errorf("expected error '%s' got '%v'", authErr, err)
-	}
+	require.EqualError(t, err, `User 'redUser' is not allowed to perform vschema operations`)
 
 	_, err = executor.Execute(ctxBlueUser, "TestExecute", session, stmt, nil)
-	if err == nil || err.Error() != authErr {
-		t.Errorf("expected error '%s' got '%v'", authErr, err)
-	}
+	require.EqualError(t, err, `User 'blueUser' is not allowed to perform vschema operations`)
 
 	// test when all users are enabled
 	*vschemaacl.AuthorizedDDLUsers = "%"
@@ -1363,9 +1357,8 @@ func TestExecutorVindexDDLACL(t *testing.T) {
 	*vschemaacl.AuthorizedDDLUsers = "orangeUser, blueUser, greenUser"
 	vschemaacl.Init()
 	_, err = executor.Execute(ctxRedUser, "TestExecute", session, stmt, nil)
-	if err == nil || err.Error() != authErr {
-		t.Errorf("expected error '%s' got '%v'", authErr, err)
-	}
+	require.EqualError(t, err, `User 'redUser' is not allowed to perform vschema operations`)
+
 	stmt = "alter vschema create vindex test_hash3 using hash"
 	_, err = executor.Execute(ctxBlueUser, "TestExecute", session, stmt, nil)
 	if err != nil {
@@ -1856,7 +1849,7 @@ func TestExecutorMaxPayloadSizeExceeded(t *testing.T) {
 	for _, query := range testMaxPayloadSizeExceeded {
 		_, err := executor.Execute(context.Background(), "TestExecutorMaxPayloadSizeExceeded", session, query, nil)
 		require.NotNil(t, err)
-		assert.EqualError(t, err, "query payload size above threshold (errno 1153) (sqlstate HY000)")
+		assert.EqualError(t, err, "query payload size above threshold")
 	}
 	assert.Equal(t, warningCount, warnings.Counts()["WarnPayloadSizeExceeded"], "warnings count")
 
@@ -1959,24 +1952,26 @@ func TestExecutorOtherRead(t *testing.T) {
 
 	for _, stmt := range stmts {
 		for _, tc := range tcs {
-			sbc1.ExecCount.Set(0)
-			sbc2.ExecCount.Set(0)
-			sbclookup.ExecCount.Set(0)
+			t.Run(stmt+tc.targetStr, func(t *testing.T) {
+				sbc1.ExecCount.Set(0)
+				sbc2.ExecCount.Set(0)
+				sbclookup.ExecCount.Set(0)
 
-			_, err := executor.Execute(context.Background(), "TestExecute", NewSafeSession(&vtgatepb.Session{TargetString: tc.targetStr}), stmt, nil)
-			if tc.hasNoKeyspaceErr {
-				assert.EqualError(t, err, "keyspace not specified")
-			} else if tc.hasDestinationShardErr {
-				assert.Errorf(t, err, "Destination can only be a single shard for statement: %s, got: DestinationExactKeyRange(-)", stmt)
-			} else {
-				assert.NoError(t, err)
-			}
+				_, err := executor.Execute(context.Background(), "TestExecute", NewSafeSession(&vtgatepb.Session{TargetString: tc.targetStr}), stmt, nil)
+				if tc.hasNoKeyspaceErr {
+					assert.EqualError(t, err, errNoKeyspace.Error())
+				} else if tc.hasDestinationShardErr {
+					assert.Errorf(t, err, "Destination can only be a single shard for statement: %s, got: DestinationExactKeyRange(-)", stmt)
+				} else {
+					assert.NoError(t, err)
+				}
 
-			utils.MustMatch(t, tc.wantCnts, cnts{
-				Sbc1Cnt:      sbc1.ExecCount.Get(),
-				Sbc2Cnt:      sbc2.ExecCount.Get(),
-				SbcLookupCnt: sbclookup.ExecCount.Get(),
-			}, "count did not match")
+				utils.MustMatch(t, tc.wantCnts, cnts{
+					Sbc1Cnt:      sbc1.ExecCount.Get(),
+					Sbc2Cnt:      sbc2.ExecCount.Get(),
+					SbcLookupCnt: sbclookup.ExecCount.Get(),
+				}, "count did not match")
+			})
 		}
 	}
 }
@@ -2255,9 +2250,9 @@ func TestExecutorCallProc(t *testing.T) {
 
 			_, err := executor.Execute(context.Background(), "TestExecute", NewSafeSession(&vtgatepb.Session{TargetString: tc.targetStr}), "CALL proc()", nil)
 			if tc.hasNoKeyspaceErr {
-				assert.EqualError(t, err, "keyspace not specified")
+				assert.EqualError(t, err, errNoKeyspace.Error())
 			} else if tc.unshardedOnlyErr {
-				require.EqualError(t, err, "CALL is only allowed for targeted queries or on unsharded keyspaces")
+				require.EqualError(t, err, "CALL is not supported for sharded database")
 			} else {
 				assert.NoError(t, err)
 			}

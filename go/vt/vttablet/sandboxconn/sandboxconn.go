@@ -505,7 +505,7 @@ func (sbc *SandboxConn) getNextResult(stmt sqlparser.Statement) *sqltypes.Result
 	}
 	if stmt == nil {
 		// if we didn't get a valid query, we'll assume we need a SELECT
-		return SingleRowResult
+		return getSingleRowResult()
 	}
 	switch stmt.(type) {
 	case *sqlparser.Select,
@@ -513,7 +513,7 @@ func (sbc *SandboxConn) getNextResult(stmt sqlparser.Statement) *sqltypes.Result
 		*sqlparser.Show,
 		sqlparser.Explain,
 		*sqlparser.OtherRead:
-		return SingleRowResult
+		return getSingleRowResult()
 	case *sqlparser.Set,
 		sqlparser.DDLStatement,
 		*sqlparser.AlterVschema,
@@ -549,6 +549,25 @@ func (sbc *SandboxConn) StringQueries() []string {
 		result[i] = query.Sql
 	}
 	return result
+}
+
+// getSingleRowResult is used to get a SingleRowResult but it creates separate fields because some tests change the fields
+// If these fields are not created separately then the constants value also changes which leads to some other tests failing later
+func getSingleRowResult() *sqltypes.Result {
+	singleRowResult := &sqltypes.Result{
+		InsertID:    SingleRowResult.InsertID,
+		StatusFlags: SingleRowResult.StatusFlags,
+		Rows:        SingleRowResult.Rows,
+	}
+
+	for _, field := range SingleRowResult.Fields {
+		singleRowResult.Fields = append(singleRowResult.Fields, &querypb.Field{
+			Name: field.Name,
+			Type: field.Type,
+		})
+	}
+
+	return singleRowResult
 }
 
 // SingleRowResult is returned when there is no pre-stored result.

@@ -86,6 +86,13 @@ type Conn struct {
 	// fields, this is set to an empty array (but not nil).
 	fields []*querypb.Field
 
+	// salt is sent by the server during initial handshake to be used for authentication
+	salt []byte
+
+	// authPluginName is the name of server's authentication plugin.
+	// It is set during the initial handshake.
+	authPluginName string
+
 	// schemaName is the default database name to use. It is set
 	// during handshake, and by ComInitDb packets. Both client and
 	// servers maintain it. This member is private because it's
@@ -1169,7 +1176,7 @@ func (c *Conn) handleComPing() bool {
 	c.recycleReadPacket()
 	// Return error if listener was shut down and OK otherwise
 	if c.listener.isShutdown() {
-		if !c.writeErrorAndLog(ERServerShutdown, SSServerShutdown, "Server shutdown in progress") {
+		if !c.writeErrorAndLog(ERServerShutdown, SSNetError, "Server shutdown in progress") {
 			return false
 		}
 	} else {
@@ -1207,7 +1214,7 @@ func (c *Conn) handleComQuery(handler Handler, data []byte) (kontinue bool) {
 	}
 
 	if len(queries) == 0 {
-		err := NewSQLError(EREmptyQuery, SSSyntaxErrorOrAccessViolation, "Query was empty")
+		err := NewSQLError(EREmptyQuery, SSClientError, "Query was empty")
 		return c.writeErrorPacketFromErrorAndLog(err)
 	}
 

@@ -47,15 +47,21 @@ type cachedObject interface {
 // implementation.
 func NewDefaultCacheImpl(cfg *Config) Cache {
 	switch {
-	case cfg == nil || (cfg.MaxEntries == 0 && cfg.MaxMemoryUsage == 0):
+	case cfg == nil:
 		return &nullCache{}
 
 	case cfg.LFU:
+		if cfg.MaxEntries == 0 || cfg.MaxMemoryUsage == 0 {
+			return &nullCache{}
+		}
 		return NewRistrettoCache(cfg.MaxEntries, cfg.MaxMemoryUsage, func(val interface{}) int64 {
 			return val.(cachedObject).CachedSize(true)
 		})
 
 	default:
+		if cfg.MaxEntries == 0 {
+			return &nullCache{}
+		}
 		return NewLRUCache(cfg.MaxEntries, func(_ interface{}) int64 {
 			return 1
 		})

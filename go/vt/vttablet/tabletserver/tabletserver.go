@@ -66,6 +66,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/txserializer"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/txthrottler"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer"
+	"vitess.io/vitess/go/vt/vttablet/vexec"
 )
 
 // logPoolFull is for throttling transaction / query pool full messages in the log.
@@ -412,7 +413,7 @@ func (tsv *TabletServer) QueryService() queryservice.QueryService {
 }
 
 // OnlineDDLExecutor returns the onlineddl.Executor part of TabletServer.
-func (tsv *TabletServer) OnlineDDLExecutor() *onlineddl.Executor {
+func (tsv *TabletServer) OnlineDDLExecutor() vexec.Executor {
 	return tsv.onlineDDLExecutor
 }
 
@@ -719,7 +720,11 @@ func (tsv *TabletServer) Execute(ctx context.Context, target *querypb.Target, sq
 			if sqltypes.IncludeFieldsOrDefault(options) == querypb.ExecuteOptions_ALL {
 				for _, f := range result.Fields {
 					if f.Database != "" {
-						f.Database = tsv.sm.target.Keyspace
+						if qre.plan.PlanID == planbuilder.PlanShow {
+							f.Database = "information_schema"
+						} else {
+							f.Database = tsv.sm.target.Keyspace
+						}
 					}
 				}
 			}
@@ -1740,6 +1745,11 @@ func (tsv *TabletServer) QueryPlanCacheCap() int {
 // QueryPlanCacheLen returns the plan cache length
 func (tsv *TabletServer) QueryPlanCacheLen() int {
 	return tsv.qe.QueryPlanCacheLen()
+}
+
+// QueryPlanCacheWait waits until the query plan cache has processed all recent queries
+func (tsv *TabletServer) QueryPlanCacheWait() {
+	tsv.qe.plans.Wait()
 }
 
 // SetMaxResultSize changes the max result size to the specified value.

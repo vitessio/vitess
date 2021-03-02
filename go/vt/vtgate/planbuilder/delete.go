@@ -17,7 +17,7 @@ limitations under the License.
 package planbuilder
 
 import (
-	"vitess.io/vitess/go/vt/proto/vtrpc"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -39,11 +39,11 @@ func buildDeletePlan(stmt sqlparser.Statement, vschema ContextVSchema) (engine.P
 	}
 
 	if len(del.Targets) > 1 {
-		return nil, vterrors.New(vtrpc.Code_UNIMPLEMENTED, "unsupported: multi-table delete statement in sharded keyspace")
+		return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "multi-table delete statement in not supported in sharded database")
 	}
 
 	if len(del.Targets) == 1 && del.Targets[0].Name != edel.Table.Name {
-		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "Unknown table '%s' in MULTI DELETE", del.Targets[0].Name.String())
+		return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.UnknownTable, "Unknown table '%s' in MULTI DELETE", del.Targets[0].Name.String())
 	}
 
 	if len(edel.Table.Owned) > 0 {

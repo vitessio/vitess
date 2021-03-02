@@ -50,6 +50,9 @@ func TestBinaryMap(t *testing.T) {
 		in:  sqltypes.NewVarChar("test1"),
 		out: []byte("test1"),
 	}, {
+		in:  sqltypes.NULL,
+		out: []byte(nil),
+	}, {
 		in:  sqltypes.NewVarChar("test2"),
 		out: []byte("test2"),
 	}}
