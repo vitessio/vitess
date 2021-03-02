@@ -2336,6 +2336,10 @@ func TestKeywords(t *testing.T) {
 	{
 		input:  "select current_timestamp",
 		output: "select current_timestamp() from dual",
+		serializeSelectExprs: true,
+	}, {
+		input:  "select current_TIMESTAMP",
+		output: "select current_TIMESTAMP from dual",
 	}, {
 		input: "update t set a = current_timestamp()",
 	}, {
@@ -2343,9 +2347,17 @@ func TestKeywords(t *testing.T) {
 	}, {
 		input:  "select a, current_date from t",
 		output: "select a, current_date() from t",
+		serializeSelectExprs: true,
+	}, {
+		input:  "select a, current_DATE from t",
+		output: "select a, current_DATE from t",
 	}, {
 		input:  "select a, current_user from t",
 		output: "select a, current_user() from t",
+		serializeSelectExprs: true,
+	}, {
+		input:  "select a, current_USER from t",
+		output: "select a, current_USER from t",
 	}, {
 		input:  "insert into t(a, b) values (current_date, current_date())",
 		output: "insert into t(a, b) values (current_date(), current_date())",
@@ -2359,6 +2371,10 @@ func TestKeywords(t *testing.T) {
 	}, {
 		input:  "select utc_time, utc_date, utc_time(6)",
 		output: "select utc_time(), utc_date(), utc_time(6) from dual",
+		serializeSelectExprs: true,
+	}, {
+		input:  "select utc_TIME, UTC_date, utc_time(6)",
+		output: "select utc_TIME, UTC_date, utc_time(6) from dual",
 	}, {
 		input:  "select 1 from dual where localtime > utc_time",
 		output: "select 1 from dual where localtime() > utc_time()",
@@ -2395,18 +2411,31 @@ func TestKeywords(t *testing.T) {
 	}, {
 		input:  "select /* non-reserved keywords as unqualified cols */ date, view, offset from t",
 		output: "select /* non-reserved keywords as unqualified cols */ `date`, `view`, `offset` from t",
+		serializeSelectExprs: true,
+	}, {
+		input:  "select /* non-reserved keywords as unqualified cols */ date, view, offset from t",
 	}, {
 		input:  "select /* share and mode as cols */ share, mode from t where share = 'foo'",
 		output: "select /* share and mode as cols */ `share`, `mode` from t where `share` = 'foo'",
+		serializeSelectExprs: true,
+	}, {
+		input:  "select /* share and mode as cols */ share, mode from t where share = 'foo'",
+		output:  "select /* share and mode as cols */ share, mode from t where `share` = 'foo'",
 	}, {
 		input:  "select /* unused keywords as cols */ write, virtual from t where trailing = 'foo'",
 		output: "select /* unused keywords as cols */ `write`, `virtual` from t where `trailing` = 'foo'",
+		serializeSelectExprs: true,
+	}, {
+		input:  "select /* unused keywords as cols */ write, virtual from t where trailing = 'foo'",
+		output: "select /* unused keywords as cols */ write, virtual from t where `trailing` = 'foo'",
 	}, {
 		input:  "select status from t",
 		output: "select `status` from t",
+		serializeSelectExprs: true,
 	}, {
 		input:  "select variables from t",
 		output: "select `variables` from t",
+		serializeSelectExprs: true,
 	}}
 
 	for _, tcase := range validSQL {
@@ -2435,9 +2464,13 @@ func runParseTestCase(t *testing.T, tcase parseTest) bool {
 }
 
 func TestConvert(t *testing.T) {
-	validSQL := []parseTest{{
+	validSQL := []parseTest{
+	{
 		input:  "select cast('abc' as date) from t",
 		output: "select convert('abc', date) from t",
+		serializeSelectExprs: true,
+	}, {
+		input:  "select cast('abc' as date) from t",
 	}, {
 		input: "select convert('abc', binary(4)) from t",
 	}, {
@@ -2461,10 +2494,18 @@ func TestConvert(t *testing.T) {
 	}, {
 		input:  "select convert('abc', signed integer) from t",
 		output: "select convert('abc', signed) from t",
+		serializeSelectExprs: true,
+	}, {
+		input:  "select convert('abc', signed) from t",
+		output: "select convert('abc', signed) from t",
 	}, {
 		input: "select convert('abc', unsigned) from t",
 	}, {
 		input:  "select convert('abc', unsigned integer) from t",
+		output: "select convert('abc', unsigned) from t",
+		serializeSelectExprs: true,
+	}, {
+		input:  "select convert('abc', unsigned) from t",
 		output: "select convert('abc', unsigned) from t",
 	}, {
 		input: "select convert('abc', decimal(3, 4)) from t",
@@ -2528,6 +2569,7 @@ func TestConvert(t *testing.T) {
 
 func TestSubStr(t *testing.T) {
 
+	// serializeSelectExprs here is not a bug: these are tests that various substring forms get parsed correctly
 	validSQL := []parseTest{{
 		input: `select substr('foobar', 1) from t`,
 	}, {
@@ -2541,24 +2583,39 @@ func TestSubStr(t *testing.T) {
 	}, {
 		input:  "select substring(a from 1 for 6) from t",
 		output: "select substr(a, 1, 6) from t",
+		serializeSelectExprs: true,
+	}, {
+		input:  "select substring(a from 1 for 6) from t",
 	}, {
 		input:  "select substring(a from 1 for 6) from t",
 		output: "select substr(a, 1, 6) from t",
+		serializeSelectExprs: true,
+	}, {
+		input:  "select substring(a from 1 for 6) from t",
+	}, {
+		input:  "select substring(a from 1  for   6) from t",
 	}, {
 		input:  `select substr("foo" from 1 for 2) from t`,
 		output: `select substr('foo', 1, 2) from t`,
+		serializeSelectExprs: true,
 	}, {
 		input:  `select substring("foo", 1, 2) from t`,
 		output: `select substring('foo', 1, 2) from t`,
+		serializeSelectExprs: true,
 	}, {
 		input:  `select substr(substr("foo" from 1 for 2), 1, 2) from t`,
 		output: `select substr(substr('foo', 1, 2), 1, 2) from t`,
+		serializeSelectExprs: true,
+	}, {
+		input:  `select substr(substr("foo" from 1 for 2), 1, 2) from t`,
 	}, {
 		input:  `select substr(substring("foo", 1, 2), 3, 4) from t`,
 		output: `select substr(substring('foo', 1, 2), 3, 4) from t`,
+		serializeSelectExprs: true,
 	}, {
 		input:  `select substr(substr("foo", 1), 2) from t`,
 		output: `select substr(substr('foo', 1), 2) from t`,
+		serializeSelectExprs: true,
 	}}
 
 	for _, tcase := range validSQL {
