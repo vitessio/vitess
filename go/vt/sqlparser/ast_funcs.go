@@ -1642,3 +1642,19 @@ func (node *Default) Clone() Expr {
 	}
 	return &Default{ColName: node.ColName}
 }
+
+// handleUnaryMinus handles the case when a unary minus operator is seen in the parser. It takes 1 argument which is the expr to which the unary minus has been added to.
+func handleUnaryMinus(expr Expr) Expr {
+	if num, ok := expr.(*Literal); ok && num.Type == IntVal {
+		// Handle double negative
+		if num.Val[0] == '-' {
+			num.Val = num.Val[1:]
+			return num
+		}
+		return NewIntLiteral(append([]byte("-"), num.Val...))
+	}
+	if unaryExpr, ok := expr.(*UnaryExpr); ok && unaryExpr.Operator == UMinusOp {
+		return unaryExpr.Expr
+	}
+	return &UnaryExpr{Operator: UMinusOp, Expr: expr}
+}
