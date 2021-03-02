@@ -24,6 +24,8 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -718,6 +720,58 @@ func (c *Conn) writeErrorPacketFromError(err error) error {
 	return c.writeErrorPacket(ERUnknownError, SSUnknownSQLState, "unknown error: %v", err)
 }
 
+func (c *Conn) writeLoadInfilePacket(fileName string) error {
+	length :=  1 + len(fileName)
+	data := c.startEphemeralPacket(length)
+	pos := 0
+	pos = writeByte(data, pos, LocalInfilePacket)
+	pos = writeEOFString(data, pos, fileName)
+
+	return c.writeEphemeralPacket()
+}
+
+func (c *Conn) HandleLoadDataLocalQuery(tmpdir string, tmpfileName string, file string) error {
+	// First send the load infile packet and flush the connector
+	err := c.writeLoadInfilePacket(file)
+	if err != nil {
+		return err
+	}
+
+	err = c.flush()
+	if err != nil {
+		return err
+	}
+
+	fileName := filepath.Join(tmpdir, tmpfileName)
+
+	f, err := os.Create(fileName)
+	if err != nil {
+		return err
+	}
+
+	defer f.Close()
+
+	fileData, err := c.readEphemeralPacket();
+	if err != nil {
+		return err
+	}
+
+	for len(fileData) != 0 {
+		_, err := f.Write(fileData)
+		if err != nil {
+			return err
+		}
+
+		c.recycleReadPacket()
+
+		fileData, err = c.readEphemeralPacket();
+	}
+
+	c.recycleReadPacket()
+
+	return nil
+}
+
 // writeEOFPacket writes an EOF packet, through the buffer, and
 // doesn't flush (as it is used as part of a query result).
 func (c *Conn) writeEOFPacket(flags uint16, warnings uint16) error {
@@ -782,6 +836,7 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 
 		queryStart := time.Now()
 		query := c.parseComQuery(data)
+
 		c.recycleReadPacket()
 
 		var queries []string

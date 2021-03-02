@@ -22,9 +22,9 @@ import (
 	"io"
 	"time"
 
-	"golang.org/x/net/context"
 	"github.com/dolthub/vitess/go/vt/proto/vtrpc"
 	"github.com/dolthub/vitess/go/vt/vterrors"
+	"golang.org/x/net/context"
 )
 
 // mariadbFlavor implements the Flavor interface for MariaDB.

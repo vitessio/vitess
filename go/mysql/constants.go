@@ -189,6 +189,8 @@ const (
 	// EOFPacket is the header of the EOF packet.
 	EOFPacket = 0xfe
 
+	LocalInfilePacket = 0xFB
+
 	// AuthSwitchRequestPacket is used to switch auth method.
 	AuthSwitchRequestPacket = 0xfe
 
@@ -339,10 +341,10 @@ const (
 	ErNoReferencedRow2              = 1452
 
 	// already exists
-	ERTableExists = 1050
-	ERDupEntry    = 1062
-	ERFileExists  = 1086
-	ERUDFExists   = 1125
+	ERTableExists    = 1050
+	ERDupEntry       = 1062
+	ERFileExists     = 1086
+	ERUDFExists      = 1125
 	ERDbCreateExists = 1007
 
 	// aborted

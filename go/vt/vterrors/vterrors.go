@@ -90,8 +90,8 @@ import (
 	"fmt"
 	"io"
 
-	"golang.org/x/net/context"
 	vtrpcpb "github.com/dolthub/vitess/go/vt/proto/vtrpc"
+	"golang.org/x/net/context"
 )
 
 // LogErrStacks controls whether or not printing errors includes the
@@ -144,9 +144,9 @@ func Errorf(code vtrpcpb.Code, format string, args ...interface{}) error {
 
 // fundamental is an error that has a message and a stack, but no caller.
 type fundamental struct {
-	msg  string
+	msg   string
 	cause error
-	code vtrpcpb.Code
+	code  vtrpcpb.Code
 	*stack
 }
 
@@ -319,13 +319,13 @@ func Print(err error) string {
 }
 
 type SyntaxError struct {
-	Message string
-	Position int
+	Message   string
+	Position  int
 	Statement string
 }
 
 func (se SyntaxError) WithStatement(statement string) SyntaxError {
-	return SyntaxError{Message:se.Message, Position:se.Position, Statement:se.Statement}
+	return SyntaxError{Message: se.Message, Position: se.Position, Statement: se.Statement}
 }
 
 func (se SyntaxError) Error() string {

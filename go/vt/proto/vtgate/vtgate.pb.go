@@ -7,11 +7,11 @@ import (
 	fmt "fmt"
 	math "math"
 
-	proto "github.com/golang/protobuf/proto"
 	binlogdata "github.com/dolthub/vitess/go/vt/proto/binlogdata"
 	query "github.com/dolthub/vitess/go/vt/proto/query"
 	topodata "github.com/dolthub/vitess/go/vt/proto/topodata"
 	vtrpc "github.com/dolthub/vitess/go/vt/proto/vtrpc"
+	proto "github.com/golang/protobuf/proto"
 )
 
 // Reference imports to suppress errors if they are not otherwise used.
