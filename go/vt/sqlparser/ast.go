@@ -2461,11 +2461,17 @@ type AliasedExpr struct {
 // Format formats the node.
 func (node *AliasedExpr) Format(buf *TrackedBuffer) {
 	if len(node.InputExpression) > 0 {
-		buf.Myprintf("%s", node.InputExpression)
+		if !node.As.IsEmpty() {
+			// The AS is omitted here because it gets captured by the InputExpression. A bug, but not a major one since
+			// we use the alias expression for the column in the return schema.
+			buf.Myprintf("%s %v", node.InputExpression, node.As)
+		} else {
+			buf.Myprintf("%s", node.InputExpression)
+		}
 	} else if !node.As.IsEmpty() {
 		buf.Myprintf("%v as %v", node.Expr, node.As)
 	} else {
-		buf.Myprintf("%v", node.Expr, node.As)
+		buf.Myprintf("%v", node.Expr)
 	}
 }
 

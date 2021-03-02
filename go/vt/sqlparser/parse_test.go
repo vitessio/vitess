@@ -34,7 +34,7 @@ import (
 type parseTest struct {
 	input  string
 	output string
-	verbatim bool
+	serializeSelectExprs bool
 }
 
 var (
@@ -73,22 +73,34 @@ var (
 			input: "select -1 from t where b = -2",
 		}, {
 			input:  "select - -1 from t",
+			output: "select - -1 from t",
+		}, {
+			input:  "select -   -1 from t",
+			output: "select -   -1 from t",
+		}, {
+			input:  "select - -1 from t",
 			output: "select 1 from t",
+			serializeSelectExprs: true, // not a bug, we are testing that - -1 becomes 1
 		}, {
 			input:  "select 1 from t // aa\n",
 			output: "select 1 from t",
+			serializeSelectExprs: true,
 		}, {
 			input:  "select 1 from t -- aa\n",
 			output: "select 1 from t",
+			serializeSelectExprs: true,
 		}, {
 			input:  "select 1 from t # aa\n",
 			output: "select 1 from t",
+			serializeSelectExprs: true,
 		}, {
 			input:  "select 1 --aa\nfrom t",
 			output: "select 1 from t",
+			serializeSelectExprs: true,
 		}, {
 			input:  "select 1 #aa\nfrom t",
 			output: "select 1 from t",
+			serializeSelectExprs: true,
 		}, {
 			input: "select /* simplest */ 1 from t",
 		}, {
@@ -116,6 +128,7 @@ var (
 		}, {
 			input:  "select 1 /* drop this comment */ from t",
 			output: "select 1 from t",
+			serializeSelectExprs: true,
 		}, {
 			input: "select /* union */ 1 from t union select 1 from t",
 		}, {
@@ -158,6 +171,7 @@ var (
 			output: "select col from t",
 		}, {
 			input: "select /* straight_join */ straight_join 1 from t",
+			serializeSelectExprs: true,
 		}, {
 			input: "select /* for update */ 1 from t for update",
 		}, {
@@ -171,11 +185,15 @@ var (
 		}, {
 			input: "select /* a.b.* */ a.b.* from t",
 		}, {
-			input:  "select /* column alias */ a b from t",
+			input:  "select /* column alias */ a as b from t",
 			output: "select /* column alias */ a as b from t",
 		}, {
+			input:  "select /* column alias */ a b from t",
+			output: "select /* column alias */ a as b from t",
+			serializeSelectExprs: true,
+		}, {
 			input:  "select t.Date as Date from t",
-			output: "select t.`Date` as `Date` from t",
+			output: "select t.Date as `Date` from t",
 		}, {
 			input:  "select t.col as YeAr from t",
 			output: "select t.col as `YeAr` from t",
@@ -189,6 +207,7 @@ var (
 		}, {
 			input:  "select /* column alias as string without as */ a \"b\" from t",
 			output: "select /* column alias as string without as */ a as b from t",
+			serializeSelectExprs: true,
 		}, {
 			input: "select /* a.* */ a.* from t",
 		}, {
@@ -546,15 +565,25 @@ var (
 		}, {
 			input:  "select /* double quoted string */ \"a\" from t",
 			output: "select /* double quoted string */ 'a' from t",
+			serializeSelectExprs: true,
+		}, {
+			input:  "select /* double quoted string */ \"a\" from t",
+			output: "select /* double quoted string */ \"a\" from t",
 		}, {
 			input:  "select /* quote quote in string */ 'a''a' from t",
 			output: "select /* quote quote in string */ 'a\\'a' from t",
+			serializeSelectExprs: true,
 		}, {
 			input:  "select /* double quote quote in string */ \"a\"\"a\" from t",
 			output: "select /* double quote quote in string */ 'a\\\"a' from t",
+			serializeSelectExprs: true,
 		}, {
 			input:  "select /* quote in double quoted string */ \"a'a\" from t",
 			output: "select /* quote in double quoted string */ 'a\\'a' from t",
+			serializeSelectExprs: true,
+		}, {
+			input:  "select /* quote in double quoted string */ \"a'a\" from t",
+			output: "select /* quote in double quoted string */ \"a'a\" from t",
 		}, {
 			input: "select /* backslash quote in string */ 'a\\'a' from t",
 		}, {
@@ -564,6 +593,10 @@ var (
 		}, {
 			input:  "select /* non-escape */ '\\x' from t",
 			output: "select /* non-escape */ 'x' from t",
+			serializeSelectExprs: true,
+		}, {
+			input:  "select /* non-escape */ '\\x' from t",
+			output: "select /* non-escape */ '\\x' from t",
 		}, {
 			input: "select /* unescaped backslash */ '\\n' from t",
 		}, {
@@ -575,9 +608,13 @@ var (
 		}, {
 			input:  "select /* positional argument */ ? from t",
 			output: "select /* positional argument */ :v1 from t",
+			serializeSelectExprs: true,
+		}, {
+			input:  "select /* positional argument */ ? from t",
 		}, {
 			input:  "select /* multiple positional arguments */ ?, ? from t",
 			output: "select /* multiple positional arguments */ :v1, :v2 from t",
+			serializeSelectExprs: true,
 		}, {
 			input: "select /* list arg */ * from t where a in ::list",
 		}, {
@@ -589,11 +626,17 @@ var (
 		}, {
 			input:  "select /* hex */ x'f0A1' from t",
 			output: "select /* hex */ X'f0A1' from t",
+			serializeSelectExprs: true,
+		}, {
+			input:  "select /* hex */ x'f0A1' from t",
 		}, {
 			input: "select /* hex caps */ X'F0a1' from t",
 		}, {
 			input:  "select /* bit literal */ b'0101' from t",
 			output: "select /* bit literal */ B'0101' from t",
+			serializeSelectExprs: true,
+		}, {
+			input:  "select /* bit literal */ b'0101' from t",
 		}, {
 			input: "select /* bit literal caps */ B'010011011010' from t",
 		}, {
@@ -620,6 +663,9 @@ var (
 		}, {
 			input:  "select /* binary unary */ a- -b from t",
 			output: "select /* binary unary */ a - -b from t",
+			serializeSelectExprs: true,
+		}, {
+			input:  "select /* binary unary */ a- -b from t",
 		}, {
 			input: "select /* - - */ - -b from t",
 		}, {
@@ -634,10 +680,8 @@ var (
 			input: "select /* interval keyword */ adddate('2008-01-02', interval 1 year) from t",
 		}, {
 			input:  "select /* TIMESTAMPADD */ TIMESTAMPADD(MINUTE, 1, '2008-01-04') from t",
-			output: "select /* TIMESTAMPADD */ timestampadd(MINUTE, 1, '2008-01-04') from t",
 		}, {
 			input:  "select /* TIMESTAMPDIFF */ TIMESTAMPDIFF(MINUTE, '2008-01-02', '2008-01-04') from t",
-			output: "select /* TIMESTAMPDIFF */ timestampdiff(MINUTE, '2008-01-02', '2008-01-04') from t",
 		}, {
 			input: "select /* dual */ 1 from dual",
 		}, {
@@ -1464,6 +1508,7 @@ var (
 		}, {
 			input:  "select warnings from t",
 			output: "select `warnings` from t",
+			serializeSelectExprs: true,
 		}, {
 			input:  "show foobar",
 			output: "show foobar",
@@ -1544,6 +1589,7 @@ var (
 			output: "select * from t order by a collate utf8_general_ci asc",
 		}, {
 			input: "select k collate latin1_german2_ci as k1 from t1 order by k1 asc",
+			serializeSelectExprs: true,
 		}, {
 			input: "select * from t group by a collate utf8_general_ci",
 		}, {
@@ -1573,6 +1619,7 @@ var (
 		}, {
 			input:  "select k collate 'latin1_german2_ci' as k1 from t1 order by k1 asc",
 			output: "select k collate latin1_german2_ci as k1 from t1 order by k1 asc",
+			serializeSelectExprs: true,
 		}, {
 			input:  "select /* drop trailing semicolon */ 1 from dual;",
 			output: "select /* drop trailing semicolon */ 1 from dual",
@@ -1711,24 +1758,21 @@ var (
 			input: "select name, row_number() over (partition by b order by c asc) from t",
 		}, {
 			input: "select name, dense_rank() over (order by b) from t",
-			output: "select name, dense_rank() over ( order by b asc) from t",
 		}, {
 			input: "select name, dense_rank() over (partition by b order by c) from t",
-			output: "select name, dense_rank() over (partition by b order by c asc) from t",
 		}, {
 			input: "select name, dense_rank() over (partition by b order by c), lag(d) over (order by e desc) from t",
-			output: "select name, dense_rank() over (partition by b order by c asc), lag(d) over ( order by e desc) from t",
 		}, {
 			input: "select name, dense_rank() over window_name from t",
 		}, {
 			input: `SELECT pk,
-					(SELECT max(pk) FROM one_pk WHERE pk < opk.pk) AS max,
-					(SELECT min(pk) FROM one_pk WHERE pk > opk.pk) AS min
+					(SELECT max(pk) FROM one_pk WHERE pk < opk.pk) as max,
+					(SELECT min(pk) FROM one_pk WHERE pk > opk.pk) as min
 					FROM one_pk opk
 					WHERE (SELECT min(pk) FROM one_pk WHERE pk > opk.pk) IS NOT NULL
 					ORDER BY max`,
-			output: "select pk, (select max(pk) from one_pk where pk < opk.pk) as `max`," +
-				" (select min(pk) from one_pk where pk > opk.pk) as `min` " +
+			output: "select pk, (SELECT max(pk) FROM one_pk WHERE pk < opk.pk) as `max`," +
+				" (SELECT min(pk) FROM one_pk WHERE pk > opk.pk) as `min` " +
 				"from one_pk as opk " +
 				"where (select min(pk) from one_pk where pk > opk.pk) " +
 				"is not null order by `max` asc",
@@ -1899,16 +1943,15 @@ end`,
 func TestValid(t *testing.T) {
 	validSQL = append(validSQL, validMultiStatementSql...)
 	for _, tcase := range validSQL {
-		t.Run(tcase.input, func(t *testing.T) {
-			runParseTestCase(t, tcase)
-		})
+		runParseTestCase(t, tcase)
 	}
 }
 
 func assertTestcaseOutput(t *testing.T, tcase parseTest, tree Statement) {
-	// For non-verbatim tests, clear the InputExpression of selected expressions so they print their reproduced
-	// values, rather than the input values.
-	if !tcase.verbatim {
+	// For tests that require it, clear the InputExpression of selected expressions so they print their reproduced
+	// values, rather than the input values. In most cases this is due to a bug in parsing, and there should be a
+	// skipped test. But in some cases it's intentional, to test the behavior of parser logic.
+	if tcase.serializeSelectExprs {
 		tree.walkSubtree(func(node SQLNode) (kontinue bool, err error) {
 			if ae, ok := node.(*AliasedExpr); ok {
 				ae.InputExpression = ""
@@ -2251,9 +2294,12 @@ func TestCaseSensitivity(t *testing.T) {
 	}, {
 		input:  "select A(ALL B, C) from b",
 		output: "select A(B, C) from b",
+		serializeSelectExprs: true,
+	}, {
+		input:  "select A(ALL B, C) from b",
+		output: "select A(ALL B, C) from b",
 	}, {
 		input:  "select IF(B, C) from b",
-		output: "select IF(B, C) from b",
 	}, {
 		input: "select * from b use index (A)",
 	}, {
