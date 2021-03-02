@@ -157,6 +157,20 @@ func (cached *Distinct) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *DropCreateDatabase) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(40)
+	}
+	// field name string
+	size += int64(len(cached.name))
+	// field verb string
+	size += int64(len(cached.verb))
+	return size
+}
 func (cached *Generate) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -439,6 +453,45 @@ func (cached *PulloutSubquery) CachedSize(alloc bool) int64 {
 	}
 	// field Underlying vitess.io/vitess/go/vt/vtgate/engine.Primitive
 	if cc, ok := cached.Underlying.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
+func (cached *RenameFields) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(64)
+	}
+	// field Cols []string
+	{
+		size += int64(cap(cached.Cols)) * int64(16)
+		for _, elem := range cached.Cols {
+			size += int64(len(elem))
+		}
+	}
+	// field Indices []int
+	{
+		size += int64(cap(cached.Indices)) * int64(8)
+	}
+	// field Input vitess.io/vitess/go/vt/vtgate/engine.Primitive
+	if cc, ok := cached.Input.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
+func (cached *ReplaceVariables) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(16)
+	}
+	// field Input vitess.io/vitess/go/vt/vtgate/engine.Primitive
+	if cc, ok := cached.Input.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
 	return size

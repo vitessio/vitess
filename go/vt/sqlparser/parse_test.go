@@ -77,7 +77,7 @@ var (
 		input:  "select 1 from t # aa\n",
 		output: "select 1 from t",
 	}, {
-		input:  "select 1 --aa\nfrom t",
+		input:  "select 1 -- aa\nfrom t",
 		output: "select 1 from t",
 	}, {
 		input:  "select 1 #aa\nfrom t",
@@ -840,6 +840,9 @@ var (
 	}, {
 		input:  "set character set 'utf8'",
 		output: "set charset 'utf8'",
+	}, {
+		input:  "set s = 1--4",
+		output: "set s = 1 - -4",
 	}, {
 		input:  "set character set \"utf8\"",
 		output: "set charset 'utf8'",
@@ -1757,6 +1760,9 @@ var (
 		input:      "create database test_db character set * unparsable",
 		output:     "create database test_db",
 		partialDDL: true,
+	}, {
+		input:  "CREATE DATABASE /*!32312 IF NOT EXISTS*/ `mysql` /*!40100 DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci */ /*!80016 DEFAULT ENCRYPTION='N' */;",
+		output: "create database if not exists mysql default character set utf8mb4 collate utf8mb4_0900_ai_ci",
 	}, {
 		input: "drop database test_db",
 	}, {

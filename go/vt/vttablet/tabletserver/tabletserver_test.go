@@ -1853,7 +1853,7 @@ func TestTerseErrorsIgnoreFailoverInProgress(t *testing.T) {
 	defer tl.Close()
 	err := tsv.convertAndLogError(ctx, "select * from test_table where id = :a",
 		map[string]*querypb.BindVariable{"a": sqltypes.Int64BindVariable(1)},
-		mysql.NewSQLError(1227, mysql.SSSyntaxErrorOrAccessViolation, "failover in progress"),
+		mysql.NewSQLError(1227, mysql.SSClientError, "failover in progress"),
 		nil,
 	)
 	if got, want := err.Error(), "failover in progress (errno 1227) (sqlstate 42000)"; !strings.HasPrefix(got, want) {
@@ -2465,6 +2465,11 @@ func setupFakeDB(t *testing.T) *fakesqldb.DB {
 			mysql.BaseShowTablesRow("msg", false, "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30"),
 		},
 	})
+	db.AddQuery("show status like 'Innodb_rows_read'", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+		"Variable_name|Value",
+		"varchar|int64"),
+		"Innodb_rows_read|0",
+	))
 
 	return db
 }

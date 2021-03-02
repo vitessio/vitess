@@ -19,7 +19,6 @@ package sqlparser
 import (
 	"bytes"
 	"fmt"
-	"io"
 	"strings"
 
 	"vitess.io/vitess/go/bytes2"
@@ -27,14 +26,12 @@ import (
 )
 
 const (
-	defaultBufSize = 4096
-	eofChar        = 0x100
+	eofChar = 0x100
 )
 
 // Tokenizer is the struct used to generate SQL
 // tokens for the parser.
 type Tokenizer struct {
-	InStream            io.Reader
 	AllowComments       bool
 	SkipSpecialComments bool
 	SkipToEnd           bool
@@ -61,15 +58,6 @@ func NewStringTokenizer(sql string) *Tokenizer {
 	return &Tokenizer{
 		buf:     buf,
 		bufSize: len(buf),
-	}
-}
-
-// NewTokenizer creates a new Tokenizer reading a sql
-// string from the io.Reader.
-func NewTokenizer(r io.Reader) *Tokenizer {
-	return &Tokenizer{
-		InStream: r,
-		buf:      make([]byte, defaultBufSize),
 	}
 }
 
@@ -691,8 +679,11 @@ func (tkn *Tokenizer) Scan() (int, []byte) {
 		case '-':
 			switch tkn.lastChar {
 			case '-':
-				tkn.next()
-				return tkn.scanCommentType1("--")
+				nextChar := tkn.peek(0)
+				if nextChar == ' ' || nextChar == '\n' || nextChar == '\t' || nextChar == '\r' || nextChar == eofChar {
+					tkn.next()
+					return tkn.scanCommentType1("--")
+				}
 			case '>':
 				tkn.next()
 				if tkn.lastChar == '>' {
@@ -1031,8 +1022,14 @@ func (tkn *Tokenizer) scanMySQLSpecificComment() (int, []byte) {
 		}
 		tkn.consumeNext(buffer)
 	}
-	_, sql := ExtractMysqlComment(buffer.String())
-	tkn.specialComment = NewStringTokenizer(sql)
+
+	commentVersion, sql := ExtractMysqlComment(buffer.String())
+
+	if MySQLVersion >= commentVersion {
+		// Only add the special comment to the tokenizer if the version of MySQL is higher or equal to the comment version
+		tkn.specialComment = NewStringTokenizer(sql)
+	}
+
 	return tkn.Scan()
 }
 
@@ -1046,15 +1043,6 @@ func (tkn *Tokenizer) consumeNext(buffer *bytes2.Buffer) {
 }
 
 func (tkn *Tokenizer) next() {
-	if tkn.bufPos >= tkn.bufSize && tkn.InStream != nil {
-		// Try and refill the buffer
-		var err error
-		tkn.bufPos = 0
-		if tkn.bufSize, err = tkn.InStream.Read(tkn.buf); err != io.EOF && err != nil {
-			tkn.LastError = err
-		}
-	}
-
 	if tkn.bufPos >= tkn.bufSize {
 		if tkn.lastChar != eofChar {
 			tkn.Position++
@@ -1065,6 +1053,13 @@ func (tkn *Tokenizer) next() {
 		tkn.lastChar = uint16(tkn.buf[tkn.bufPos])
 		tkn.bufPos++
 	}
+}
+
+func (tkn *Tokenizer) peek(dist int) uint16 {
+	if tkn.bufPos+dist >= tkn.bufSize {
+		return eofChar
+	}
+	return uint16(tkn.buf[tkn.bufPos+dist])
 }
 
 // reset clears any internal state.

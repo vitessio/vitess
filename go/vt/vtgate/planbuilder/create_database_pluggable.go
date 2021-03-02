@@ -32,12 +32,12 @@ type defaultHandler struct{}
 
 // CreateDatabase implements the DropCreateDB interface
 func (defaultHandler) CreateDatabase(*sqlparser.CreateDatabase) error {
-	return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "create database not allowed")
+	return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "create database is not supported")
 }
 
 // DropDatabase implements the DropCreateDB interface
 func (defaultHandler) DropDatabase(*sqlparser.DropDatabase) error {
-	return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "drop database not allowed")
+	return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "drop database is not supported")
 }
 
 //goland:noinspection GoVarAndConstTypeMayBeOmitted

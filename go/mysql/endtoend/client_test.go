@@ -124,7 +124,7 @@ func TestDupEntry(t *testing.T) {
 		t.Fatalf("first insert failed: %v", err)
 	}
 	_, err = conn.ExecuteFetch("insert into dup_entry(id, name) values(2, 10)", 0, false)
-	assertSQLError(t, err, mysql.ERDupEntry, mysql.SSDupKey, "Duplicate entry", "insert into dup_entry(id, name) values(2, 10)")
+	assertSQLError(t, err, mysql.ERDupEntry, mysql.SSConstraintViolation, "Duplicate entry", "insert into dup_entry(id, name) values(2, 10)")
 }
 
 // TestClientFoundRows tests if the CLIENT_FOUND_ROWS flag works.
@@ -315,4 +315,45 @@ func TestSessionTrackGTIDs(t *testing.T) {
 	qr, err = conn.ExecuteFetch(`insert into vttest.t1 values (1)`, 1000, false)
 	require.NoError(t, err)
 	require.NotEmpty(t, qr.SessionStateChanges)
+}
+
+func TestCachingSha2Password(t *testing.T) {
+	ctx := context.Background()
+
+	// connect as an existing user to create a user account with caching_sha2_password
+	params := connParams
+	conn, err := mysql.Connect(ctx, &params)
+	expectNoError(t, err)
+	defer conn.Close()
+
+	qr, err := conn.ExecuteFetch(`select true from information_schema.PLUGINS where PLUGIN_NAME='caching_sha2_password' and PLUGIN_STATUS='ACTIVE'`, 1, false)
+	if err != nil {
+		t.Errorf("select true from information_schema.PLUGINS failed: %v", err)
+	}
+
+	if len(qr.Rows) != 1 {
+		t.Skip("Server does not support caching_sha2_password plugin")
+	}
+
+	// create a user using caching_sha2_password password
+	if _, err = conn.ExecuteFetch(`create user 'sha2user'@'localhost' identified with caching_sha2_password by 'password';`, 0, false); err != nil {
+		t.Fatalf("Create user with caching_sha2_password failed: %v", err)
+	}
+	conn.Close()
+
+	// connect as sha2user
+	params.Uname = "sha2user"
+	params.Pass = "password"
+	params.DbName = "information_schema"
+	conn, err = mysql.Connect(ctx, &params)
+	expectNoError(t, err)
+	defer conn.Close()
+
+	if qr, err = conn.ExecuteFetch(`select user()`, 1, true); err != nil {
+		t.Fatalf("select user() failed: %v", err)
+	}
+
+	if len(qr.Rows) != 1 || qr.Rows[0][0].ToString() != "sha2user@localhost" {
+		t.Errorf("Logged in user is not sha2user")
+	}
 }

@@ -418,7 +418,7 @@ overflow:
 func intPlusIntWithError(v1, v2 int64) (EvalResult, error) {
 	result := v1 + v2
 	if (result > v1) != (v2 > 0) {
-		return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT value is out of range in %v + %v", v1, v2)
+		return EvalResult{}, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.DataOutOfRange, "%s value is out of range in %v + %v", "BIGINT", v1, v2)
 	}
 	return EvalResult{typ: sqltypes.Int64, ival: result}, nil
 }
@@ -427,7 +427,7 @@ func intMinusIntWithError(v1, v2 int64) (EvalResult, error) {
 	result := v1 - v2
 
 	if (result < v1) != (v2 > 0) {
-		return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT value is out of range in %v - %v", v1, v2)
+		return EvalResult{}, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.DataOutOfRange, "%s value is out of range in %v - %v", "BIGINT", v1, v2)
 	}
 	return EvalResult{typ: sqltypes.Int64, ival: result}, nil
 }
@@ -435,7 +435,7 @@ func intMinusIntWithError(v1, v2 int64) (EvalResult, error) {
 func intTimesIntWithError(v1, v2 int64) (EvalResult, error) {
 	result := v1 * v2
 	if v1 != 0 && result/v1 != v2 {
-		return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT value is out of range in %v * %v", v1, v2)
+		return EvalResult{}, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.DataOutOfRange, "%s value is out of range in %v * %v", "BIGINT", v1, v2)
 	}
 	return EvalResult{typ: sqltypes.Int64, ival: result}, nil
 
@@ -443,7 +443,7 @@ func intTimesIntWithError(v1, v2 int64) (EvalResult, error) {
 
 func intMinusUintWithError(v1 int64, v2 uint64) (EvalResult, error) {
 	if v1 < 0 || v1 < int64(v2) {
-		return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT UNSIGNED value is out of range in %v - %v", v1, v2)
+		return EvalResult{}, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.DataOutOfRange, "%s value is out of range in %v - %v", "BIGINT UNSIGNED", v1, v2)
 	}
 	return uintMinusUintWithError(uint64(v1), v2)
 }
@@ -454,7 +454,7 @@ func uintPlusInt(v1 uint64, v2 int64) EvalResult {
 
 func uintPlusIntWithError(v1 uint64, v2 int64) (EvalResult, error) {
 	if v2 < 0 && v1 < uint64(v2) {
-		return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT UNSIGNED value is out of range in %v + %v", v1, v2)
+		return EvalResult{}, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.DataOutOfRange, "%s value is out of range in %v + %v", "BIGINT UNSIGNED", v1, v2)
 	}
 	// convert to int -> uint is because for numeric operators (such as + or -)
 	// where one of the operands is an unsigned integer, the result is unsigned by default.
@@ -463,7 +463,7 @@ func uintPlusIntWithError(v1 uint64, v2 int64) (EvalResult, error) {
 
 func uintMinusIntWithError(v1 uint64, v2 int64) (EvalResult, error) {
 	if int64(v1) < v2 && v2 > 0 {
-		return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT UNSIGNED value is out of range in %v - %v", v1, v2)
+		return EvalResult{}, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.DataOutOfRange, "%s value is out of range in %v - %v", "BIGINT UNSIGNED", v1, v2)
 	}
 	// uint - (- int) = uint + int
 	if v2 < 0 {
@@ -474,7 +474,7 @@ func uintMinusIntWithError(v1 uint64, v2 int64) (EvalResult, error) {
 
 func uintTimesIntWithError(v1 uint64, v2 int64) (EvalResult, error) {
 	if v2 < 0 || int64(v1) < 0 {
-		return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT UNSIGNED value is out of range in %v * %v", v1, v2)
+		return EvalResult{}, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.DataOutOfRange, "%s value is out of range in %v * %v", "BIGINT UNSIGNED", v1, v2)
 	}
 	return uintTimesUintWithError(v1, uint64(v2))
 }
@@ -490,7 +490,7 @@ func uintPlusUint(v1, v2 uint64) EvalResult {
 func uintPlusUintWithError(v1, v2 uint64) (EvalResult, error) {
 	result := v1 + v2
 	if result < v2 {
-		return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT UNSIGNED value is out of range in %v + %v", v1, v2)
+		return EvalResult{}, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.DataOutOfRange, "%s value is out of range in %v + %v", "BIGINT UNSIGNED", v1, v2)
 	}
 	return EvalResult{typ: sqltypes.Uint64, uval: result}, nil
 }
@@ -498,7 +498,7 @@ func uintPlusUintWithError(v1, v2 uint64) (EvalResult, error) {
 func uintMinusUintWithError(v1, v2 uint64) (EvalResult, error) {
 	result := v1 - v2
 	if v2 > v1 {
-		return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT UNSIGNED value is out of range in %v - %v", v1, v2)
+		return EvalResult{}, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.DataOutOfRange, "%s value is out of range in %v - %v", "BIGINT UNSIGNED", v1, v2)
 	}
 
 	return EvalResult{typ: sqltypes.Uint64, uval: result}, nil
@@ -507,7 +507,7 @@ func uintMinusUintWithError(v1, v2 uint64) (EvalResult, error) {
 func uintTimesUintWithError(v1, v2 uint64) (EvalResult, error) {
 	result := v1 * v2
 	if result < v2 || result < v1 {
-		return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT UNSIGNED value is out of range in %v * %v", v1, v2)
+		return EvalResult{}, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.DataOutOfRange, "%s value is out of range in %v * %v", "BIGINT UNSIGNED", v1, v2)
 	}
 	return EvalResult{typ: sqltypes.Uint64, uval: result}, nil
 }
@@ -554,7 +554,7 @@ func floatDivideAnyWithError(v1 float64, v2 EvalResult) (EvalResult, error) {
 	resultMismatch := v2.fval*result != v1
 
 	if divisorLessThanOne && resultMismatch {
-		return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT is out of range in %v / %v", v1, v2.fval)
+		return EvalResult{}, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.DataOutOfRange, "%s value is out of range in %v / %v", "BIGINT", v1, v2.fval)
 	}
 
 	return EvalResult{typ: sqltypes.Float64, fval: v1 / v2.fval}, nil

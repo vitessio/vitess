@@ -301,6 +301,9 @@ func TestQueryExecutorPlans(t *testing.T) {
 			assert.Equal(t, tcase.planWant, qre.logStats.PlanType, tcase.input)
 			assert.Equal(t, tcase.logWant, qre.logStats.RewrittenSQL(), tcase.input)
 
+			// Wait for the existing query to be processed by the cache
+			tsv.QueryPlanCacheWait()
+
 			// Test inside a transaction.
 			target := tsv.sm.Target()
 			txid, alias, err := tsv.Begin(ctx, &target, nil)
@@ -1203,6 +1206,11 @@ func initQueryExecutorTestDB(db *fakesqldb.DB) {
 			mysql.BaseShowTablesRow("msg", false, "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30"),
 		},
 	})
+	db.AddQuery("show status like 'Innodb_rows_read'", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+		"Variable_name|Value",
+		"varchar|int64"),
+		"Innodb_rows_read|0",
+	))
 }
 
 func getTestTableFields() []*querypb.Field {

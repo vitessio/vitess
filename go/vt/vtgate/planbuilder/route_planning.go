@@ -39,7 +39,7 @@ func gen4Planner(_ string) func(sqlparser.Statement, ContextVSchema) (engine.Pri
 	return func(stmt sqlparser.Statement, vschema ContextVSchema) (engine.Primitive, error) {
 		sel, ok := stmt.(*sqlparser.Select)
 		if !ok {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "%T not yet supported", stmt)
+			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%T not yet supported", stmt)
 		}
 		return newBuildSelectPlan(sel, vschema)
 	}
@@ -131,7 +131,7 @@ func planProjections(sel *sqlparser.Select, plan logicalPlan, semTable *semantic
 					return err
 				}
 			default:
-				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "not yet supported %T", e)
+				return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "not yet supported %T", e)
 			}
 		}
 
@@ -446,8 +446,8 @@ func pushPredicate2(exprs []sqlparser.Expr, tree joinTree, semTable *semantics.S
 }
 
 func breakPredicateInLHSandRHS(expr sqlparser.Expr, semTable *semantics.SemTable, lhs semantics.TableSet) (columns []*sqlparser.ColName, predicate sqlparser.Expr, err error) {
-	predicate = expr.Clone()
-	sqlparser.Rewrite(predicate, nil, func(cursor *sqlparser.Cursor) bool {
+	predicate = sqlparser.CloneExpr(expr)
+	_, err = sqlparser.Rewrite(predicate, nil, func(cursor *sqlparser.Cursor) bool {
 		switch node := cursor.Node().(type) {
 		case *sqlparser.ColName:
 			deps := semTable.Dependencies(node)
@@ -463,6 +463,9 @@ func breakPredicateInLHSandRHS(expr sqlparser.Expr, semTable *semantics.SemTable
 		}
 		return true
 	})
+	if err != nil {
+		return nil, nil, err
+	}
 	return
 }
 

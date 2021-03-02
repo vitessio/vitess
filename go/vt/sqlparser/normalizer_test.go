@@ -21,6 +21,8 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
@@ -229,7 +231,8 @@ func TestNormalize(t *testing.T) {
 			continue
 		}
 		bv := make(map[string]*querypb.BindVariable)
-		Normalize(stmt, bv, prefix)
+		require.NoError(t,
+			Normalize(stmt, bv, prefix))
 		outstmt := String(stmt)
 		if outstmt != tc.outstmt {
 			t.Errorf("Query:\n%s:\n%s, want\n%s", tc.in, outstmt, tc.outstmt)
@@ -271,6 +274,7 @@ func BenchmarkNormalize(b *testing.B) {
 		b.Fatal(err)
 	}
 	for i := 0; i < b.N; i++ {
-		Normalize(ast, map[string]*querypb.BindVariable{}, "")
+		require.NoError(b,
+			Normalize(ast, map[string]*querypb.BindVariable{}, ""))
 	}
 }
