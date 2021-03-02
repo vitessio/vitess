@@ -152,7 +152,7 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 
 		message := row[10].ToString()
 
-		status := &vtctldatapb.Workflow_ReplicationStatus{
+		stream := &vtctldatapb.Workflow_Stream{
 			Id:           id,
 			Shard:        tablet.Shard,
 			Tablet:       tablet.Alias,
@@ -170,22 +170,22 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 			Message: message,
 		}
 
-		status.CopyStates, err = s.getWorkflowCopyStates(ctx, tablet, id)
+		stream.CopyStates, err = s.getWorkflowCopyStates(ctx, tablet, id)
 		if err != nil {
 			return err
 		}
 
 		switch {
-		case strings.Contains(strings.ToLower(status.Message), "error"):
-			status.State = "Error"
-		case status.State == "Running" && len(status.CopyStates) > 0:
-			status.State = "Copying"
-		case status.State == "Running" && int64(time.Now().Second())-timeUpdatedSeconds > 10:
-			status.State = "Lagging"
+		case strings.Contains(strings.ToLower(stream.Message), "error"):
+			stream.State = "Error"
+		case stream.State == "Running" && len(stream.CopyStates) > 0:
+			stream.State = "Copying"
+		case stream.State == "Running" && int64(time.Now().Second())-timeUpdatedSeconds > 10:
+			stream.State = "Lagging"
 		}
 
-		shardStatusKey := fmt.Sprintf("%s/%s", tablet.Shard, tablet.AliasString())
-		shardStatus, ok := workflow.ShardStatuses[shardStatusKey]
+		shardStreamKey := fmt.Sprintf("%s/%s", tablet.Shard, tablet.AliasString())
+		shardStream, ok := workflow.ShardStreams[shardStreamKey]
 		if !ok {
 			ctx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
 			defer cancel()
@@ -195,24 +195,24 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 				return err
 			}
 
-			shardStatus = &vtctldatapb.Workflow_ShardReplicationStatus{
-				PrimaryReplicationStatuses: nil,
-				TabletControls:             si.TabletControls,
-				IsPrimaryServing:           si.IsMasterServing,
+			shardStream = &vtctldatapb.Workflow_ShardStream{
+				Streams:          nil,
+				TabletControls:   si.TabletControls,
+				IsPrimaryServing: si.IsMasterServing,
 			}
 
-			workflow.ShardStatuses[shardStatusKey] = shardStatus
+			workflow.ShardStreams[shardStreamKey] = shardStream
 		}
 
-		shardStatus.PrimaryReplicationStatuses = append(shardStatus.PrimaryReplicationStatuses, status)
-		sourceShardsByWorkflow[workflow.Name].Insert(status.BinlogSource.Shard)
+		shardStream.Streams = append(shardStream.Streams, stream)
+		sourceShardsByWorkflow[workflow.Name].Insert(stream.BinlogSource.Shard)
 		targetShardsByWorkflow[workflow.Name].Insert(tablet.Shard)
 
-		if ks, ok := sourceKeyspaceByWorkflow[workflow.Name]; ok && ks != status.BinlogSource.Keyspace {
-			return fmt.Errorf("%w: workflow = %v, ks1 = %v, ks2 = %v", ErrMultipleSourceKeyspaces, workflow.Name, ks, status.BinlogSource.Keyspace)
+		if ks, ok := sourceKeyspaceByWorkflow[workflow.Name]; ok && ks != stream.BinlogSource.Keyspace {
+			return fmt.Errorf("%w: workflow = %v, ks1 = %v, ks2 = %v", ErrMultipleSourceKeyspaces, workflow.Name, ks, stream.BinlogSource.Keyspace)
 		}
 
-		sourceKeyspaceByWorkflow[workflow.Name] = status.BinlogSource.Keyspace
+		sourceKeyspaceByWorkflow[workflow.Name] = stream.BinlogSource.Keyspace
 
 		if ks, ok := targetKeyspaceByWorkflow[workflow.Name]; ok && ks != tablet.Keyspace {
 			return fmt.Errorf("%w: workflow = %v, ks1 = %v, ks2 = %v", ErrMultipleTargetKeyspaces, workflow.Name, ks, tablet.Keyspace)
@@ -253,8 +253,8 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 			workflow, ok := workflowsMap[workflowName]
 			if !ok {
 				workflow = &vtctldatapb.Workflow{
-					Name:          workflowName,
-					ShardStatuses: map[string]*vtctldatapb.Workflow_ShardReplicationStatus{},
+					Name:         workflowName,
+					ShardStreams: map[string]*vtctldatapb.Workflow_ShardStream{},
 				}
 
 				workflowsMap[workflowName] = workflow
@@ -316,7 +316,7 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 	}, nil
 }
 
-func (s *Server) getWorkflowCopyStates(ctx context.Context, tablet *topo.TabletInfo, id int64) ([]*vtctldatapb.Workflow_ReplicationStatus_CopyState, error) {
+func (s *Server) getWorkflowCopyStates(ctx context.Context, tablet *topo.TabletInfo, id int64) ([]*vtctldatapb.Workflow_Stream_CopyState, error) {
 	query := fmt.Sprintf("select table_name, lastpk from _vt.copy_state where vrepl_id = %d", id)
 	qr, err := s.tmc.VReplicationExec(ctx, tablet.Tablet, query)
 	if err != nil {
@@ -328,10 +328,10 @@ func (s *Server) getWorkflowCopyStates(ctx context.Context, tablet *topo.TabletI
 		return nil, nil
 	}
 
-	copyStates := make([]*vtctldatapb.Workflow_ReplicationStatus_CopyState, len(result.Rows))
+	copyStates := make([]*vtctldatapb.Workflow_Stream_CopyState, len(result.Rows))
 	for i, row := range result.Rows {
 		// These fields are technically varbinary, but this is close enough.
-		copyStates[i] = &vtctldatapb.Workflow_ReplicationStatus_CopyState{
+		copyStates[i] = &vtctldatapb.Workflow_Stream_CopyState{
 			Table:  row[0].ToString(),
 			LastPk: row[1].ToString(),
 		}

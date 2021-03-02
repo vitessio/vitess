@@ -90,14 +90,20 @@ message Workflow {
   ReplicationLocation source = 2;
   ReplicationLocation target = 3;
   int64 max_v_replication_lag = 4;
-  map<string, ShardReplicationStatus> shard_statuses = 5;
+  map<string, ShardStream> shard_streams = 5;
 
   message ReplicationLocation {
     string keyspace = 1;
     repeated string shards = 2;
   }
 
-  message ReplicationStatus {
+  message ShardStream {
+    repeated Stream streams = 1;
+    repeated topodata.Shard.TabletControl tablet_controls = 2;
+    bool is_primary_serving = 3;
+  }
+
+  message Stream {
     int64 id = 1;
     string shard = 2;
     topodata.TabletAlias tablet = 3;
@@ -115,12 +121,6 @@ message Workflow {
       string table = 1;
       string last_pk = 2;
     }
-  }
-
-  message ShardReplicationStatus {
-    repeated ReplicationStatus primary_replication_statuses = 1;
-    repeated topodata.Shard.TabletControl tablet_controls = 2;
-    bool is_primary_serving = 3;
   }
 }
 
