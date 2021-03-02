@@ -78,7 +78,6 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
-Gen4 plan same as above
 
 # distinct and group by together for single route.
 "select distinct col1, id from user group by col1"
@@ -97,7 +96,6 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
-Gen4 plan same as above
 
 # scatter group by a text column
 "select count(*), a, textcol1, b from user group by a, textcol1, b"
@@ -347,7 +345,6 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
-Gen4 plan same as above
 
 # group by a unique vindex and other column should use a simple route
 "select id, col, count(*) from user group by id, col"
@@ -366,7 +363,6 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
-Gen4 plan same as above
 
 # group by a non-vindex column should use an OrderdAggregate primitive
 "select col, count(*) from user group by col"
@@ -445,7 +441,6 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
-Gen4 plan same as above
 
 # group by a unique vindex where alias from select list is used
 "select id as val, 1+count(*) from user group by val"
@@ -464,7 +459,6 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
-Gen4 plan same as above
 
 # group by a unique vindex where expression is qualified (alias should be ignored)
 "select val as id, 1+count(*) from user group by user.id"
@@ -483,7 +477,6 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
-Gen4 plan same as above
 
 # group by a unique vindex where it should skip non-aliased expressions.
 "select *, id, 1+count(*) from user group by id"
@@ -502,7 +495,6 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
-Gen4 plan same as above
 
 # group by a unique vindex should revert to simple route, and having clause should find the correct symbols.
 "select id, count(*) c from user group by id having id=1 and c=10"
@@ -657,7 +649,6 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
-Gen4 plan same as above
 
 # count with distinct unique vindex
 "select col, count(distinct id) from user group by col"
