@@ -53,7 +53,7 @@ func planOrdering(pb *primitiveBuilder, input logicalPlan, orderBy sqlparser.Ord
 	if orderBy == nil {
 		return input, nil
 	}
-	return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "%T.ordering: unreachable", input)
+	return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "[BUG] unreachable %T.ordering", input)
 }
 
 func planOAOrdering(pb *primitiveBuilder, orderBy sqlparser.OrderBy, oa *orderedAggregate) (logicalPlan, error) {

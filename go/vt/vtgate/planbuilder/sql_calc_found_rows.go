@@ -91,13 +91,13 @@ func (s *sqlCalcFoundRows) SupplyCol(col *sqlparser.ColName) (*resultColumn, int
 
 //SupplyWeightString implements the logicalPlan interface
 func (s *sqlCalcFoundRows) SupplyWeightString(int) (weightcolNumber int, err error) {
-	return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unreachable: sqlCalcFoundRows.SupplyWeightString")
+	return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unreachable: sqlCalcFoundRows.SupplyWeightString")
 }
 
 // Rewrite implements the logicalPlan interface
 func (s *sqlCalcFoundRows) Rewrite(inputs ...logicalPlan) error {
 	if len(inputs) != 2 {
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "sqlCalcFoundRows: wrong number of inputs")
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] wrong number of inputs for SQL_CALC_FOUND_ROWS: %d", len(inputs))
 	}
 	s.LimitQuery = inputs[0]
 	s.CountQuery = inputs[1]

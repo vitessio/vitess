@@ -117,7 +117,7 @@ func (upd *Update) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindV
 func (upd *Update) execUpdateUnsharded(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	rss, _, err := vcursor.ResolveDestinations(upd.Keyspace.Name, nil, []key.Destination{key.DestinationAllShards{}})
 	if err != nil {
-		return nil, vterrors.Wrap(err, "execUpdateUnsharded")
+		return nil, err
 	}
 	if len(rss) != 1 {
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "Keyspace does not have exactly one shard: %v", rss)
@@ -132,11 +132,11 @@ func (upd *Update) execUpdateUnsharded(vcursor VCursor, bindVars map[string]*que
 func (upd *Update) execUpdateEqual(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	key, err := upd.Values[0].ResolveValue(bindVars)
 	if err != nil {
-		return nil, vterrors.Wrap(err, "execUpdateEqual")
+		return nil, err
 	}
 	rs, ksid, err := resolveSingleShard(vcursor, upd.Vindex, upd.Keyspace, key)
 	if err != nil {
-		return nil, vterrors.Wrap(err, "execUpdateEqual")
+		return nil, err
 	}
 	err = allowOnlyMaster(rs)
 	if err != nil {
@@ -147,7 +147,7 @@ func (upd *Update) execUpdateEqual(vcursor VCursor, bindVars map[string]*querypb
 	}
 	if len(upd.ChangedVindexValues) != 0 {
 		if err := upd.updateVindexEntries(vcursor, bindVars, []*srvtopo.ResolvedShard{rs}); err != nil {
-			return nil, vterrors.Wrap(err, "execUpdateEqual")
+			return nil, err
 		}
 	}
 	return execShard(vcursor, upd.Query, bindVars, rs, true /* rollbackOnError */, true /* canAutocommit */)
@@ -164,7 +164,7 @@ func (upd *Update) execUpdateIn(vcursor VCursor, bindVars map[string]*querypb.Bi
 	}
 	if len(upd.ChangedVindexValues) != 0 {
 		if err := upd.updateVindexEntries(vcursor, bindVars, rss); err != nil {
-			return nil, vterrors.Wrap(err, "execUpdateIn")
+			return nil, err
 		}
 	}
 	return execMultiShard(vcursor, rss, queries, upd.MultiShardAutocommit)
@@ -173,7 +173,7 @@ func (upd *Update) execUpdateIn(vcursor VCursor, bindVars map[string]*querypb.Bi
 func (upd *Update) execUpdateByDestination(vcursor VCursor, bindVars map[string]*querypb.BindVariable, dest key.Destination) (*sqltypes.Result, error) {
 	rss, _, err := vcursor.ResolveDestinations(upd.Keyspace.Name, nil, []key.Destination{dest})
 	if err != nil {
-		return nil, vterrors.Wrap(err, "execUpdateByDestination")
+		return nil, err
 	}
 	err = allowOnlyMaster(rss...)
 	if err != nil {
@@ -191,7 +191,7 @@ func (upd *Update) execUpdateByDestination(vcursor VCursor, bindVars map[string]
 	// update any owned vindexes
 	if len(upd.ChangedVindexValues) != 0 {
 		if err := upd.updateVindexEntries(vcursor, bindVars, rss); err != nil {
-			return nil, vterrors.Wrap(err, "execUpdateByDestination")
+			return nil, err
 		}
 	}
 	return execMultiShard(vcursor, rss, queries, upd.MultiShardAutocommit)
@@ -211,7 +211,7 @@ func (upd *Update) updateVindexEntries(vcursor VCursor, bindVars map[string]*que
 	subQueryResult, errors := vcursor.ExecuteMultiShard(rss, queries, false, false)
 	for _, err := range errors {
 		if err != nil {
-			return vterrors.Wrap(err, "updateVindexEntries")
+			return err
 		}
 	}
 
