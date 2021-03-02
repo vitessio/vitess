@@ -280,6 +280,11 @@ func (api *API) GetKeyspaces(ctx context.Context, req *vtadminpb.GetKeyspacesReq
 	}, nil
 }
 
+// GetSchema is part of the vtadminpb.VTAdminServer interface.
+func (api *API) GetSchema(ctx context.Context, req *vtadminpb.GetSchemaRequest) (*vtadminpb.Schema, error) {
+	panic("unimplemented!")
+}
+
 // GetSchemas is part of the vtadminpb.VTAdminServer interface.
 func (api *API) GetSchemas(ctx context.Context, req *vtadminpb.GetSchemasRequest) (*vtadminpb.GetSchemasResponse, error) {
 	span, ctx := trace.NewSpan(ctx, "API.GetSchemas")
