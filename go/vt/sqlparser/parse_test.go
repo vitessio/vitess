@@ -906,6 +906,9 @@ var (
 		input:  "set S= +++-++-+(4+1)",
 		output: "set S = +(4 + 1)",
 	}, {
+		input:  "set S= +- - - - -(4+1)",
+		output: "set S = -(4 + 1)",
+	}, {
 		input:  "alter table a add foo int first v",
 		output: "alter table a add column foo int first v",
 	}, {
