@@ -114,7 +114,7 @@ func planLimit(limit *sqlparser.Limit, plan logicalPlan) (logicalPlan, error) {
 
 func planProjections(sel *sqlparser.Select, plan logicalPlan, semTable *semantics.SemTable) error {
 	rb, ok := plan.(*route)
-	if ok {
+	if ok && rb.isSingleShard() {
 		ast := rb.Select.(*sqlparser.Select)
 		ast.Distinct = sel.Distinct
 		ast.GroupBy = sel.GroupBy
@@ -122,16 +122,24 @@ func planProjections(sel *sqlparser.Select, plan logicalPlan, semTable *semantic
 		ast.SelectExprs = sel.SelectExprs
 		ast.Comments = sel.Comments
 	} else {
-
 		// TODO real horizon planning to be done
+		if sel.Distinct {
+			return semantics.Gen4NotSupportedF("DISTINCT")
+		}
+		if sel.GroupBy != nil {
+			return semantics.Gen4NotSupportedF("GROUP BY")
+		}
 		for _, expr := range sel.SelectExprs {
 			switch e := expr.(type) {
 			case *sqlparser.AliasedExpr:
+				if nodeHasAggregates(e.Expr) {
+					return semantics.Gen4NotSupportedF("aggregation [%s]", sqlparser.String(e))
+				}
 				if _, err := pushProjection(e, plan, semTable); err != nil {
 					return err
 				}
 			default:
-				return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "not yet supported %T", e)
+				return semantics.Gen4NotSupportedF("%T", e)
 			}
 		}
 
@@ -312,6 +320,8 @@ func (rp *routePlan) searchForNewVindexes(predicates []sqlparser.Expr) (bool, er
 						}
 					}
 				}
+			default:
+				return false, semantics.Gen4NotSupportedF("%s", sqlparser.String(filter))
 			}
 		}
 	}
@@ -622,6 +632,9 @@ func createRoutePlan(table *queryTable, solves semantics.TableSet, vschema Conte
 	vschemaTable, _, _, _, _, err := vschema.FindTableOrVindex(table.table)
 	if err != nil {
 		return nil, err
+	}
+	if vschemaTable.Name.String() != table.table.Name.String() {
+		return nil, semantics.Gen4NotSupportedF("routed tables")
 	}
 	plan := &routePlan{
 		solved: solves,
