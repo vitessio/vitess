@@ -56,7 +56,10 @@ func Walk(visit Visit, nodes ...SQLNode) error {
 			return err == nil // now we can abort the traversal if an error was found
 		}
 
-		Rewrite(node, pre, post)
+		_, rewriterErr := Rewrite(node, pre, post)
+		if rewriterErr != nil {
+			return rewriterErr
+		}
 		if err != nil {
 			return err
 		}
@@ -391,10 +394,15 @@ func NewWhere(typ WhereType, expr Expr) *Where {
 // and replaces it with to. If from matches root,
 // then to is returned.
 func ReplaceExpr(root, from, to Expr) Expr {
-	tmp := Rewrite(root, replaceExpr(from, to), nil)
+	tmp, err := Rewrite(root, replaceExpr(from, to), nil)
+	if err != nil {
+		log.Errorf("Failed to rewrite expression. Rewriter returned an error: %s", err.Error())
+		return from
+	}
+
 	expr, success := tmp.(Expr)
 	if !success {
-		log.Errorf("Failed to rewrite expression. Rewriter returned a non-expression: " + String(tmp))
+		log.Errorf("Failed to rewrite expression. Rewriter returned a non-expression:  %s", String(tmp))
 		return from
 	}
 

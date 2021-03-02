@@ -36,7 +36,7 @@ import "reflect"
 // Only fields that refer to AST nodes are considered children;
 // i.e., fields of basic types (strings, []byte, etc.) are ignored.
 //
-func Rewrite(node SQLNode, pre, post ApplyFunc) (result SQLNode) {
+func Rewrite(node SQLNode, pre, post ApplyFunc) (result SQLNode, err error) {
 	parent := &struct{ SQLNode }{node}
 	defer func() {
 		if r := recover(); r != nil && r != abort {
@@ -58,7 +58,7 @@ func Rewrite(node SQLNode, pre, post ApplyFunc) (result SQLNode) {
 
 	a.apply(parent, node, replacer)
 
-	return parent.SQLNode
+	return parent.SQLNode, nil
 }
 
 // An ApplyFunc is invoked by Rewrite for each node n, even if n is nil,
