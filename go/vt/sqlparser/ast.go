@@ -2283,7 +2283,7 @@ func (c *CheckConstraintDefinition) Format(buf *TrackedBuffer) {
 }
 
 func (f *CheckConstraintDefinition) walkSubtree(visit Visit) error {
-	return nil
+	return Walk(visit, f.Expr)
 }
 
 func (f *CheckConstraintDefinition) constraintInfo() {}

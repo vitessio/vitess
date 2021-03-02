@@ -3335,12 +3335,16 @@ var (
 	}, {
 		input:  "INSERT INTO TABLE a VALUES (1)",
 		output: "syntax error at position 18 near 'TABLE'",
+	}, {
+		input:        "create table t (id int constraint fk foreign key id references t2 (a))",
+		output:       "syntax error at position 34 near 'constraint'",
+		excludeMulti: true,
 	}}
 )
 
 func TestErrors(t *testing.T) {
 	for _, tcase := range invalidSQL {
-		_, err := Parse(tcase.input)
+		_, err := ParseStrictDDL(tcase.input)
 		if err == nil || err.Error() != tcase.output {
 			t.Errorf("%s: %v, want %s", tcase.input, err, tcase.output)
 		}

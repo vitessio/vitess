@@ -347,7 +347,7 @@ func skipToEnd(yylex interface{}) {
 %type <strs> enum_values
 %type <columnDefinition> column_definition column_definition_for_create
 %type <indexDefinition> index_definition
-%type <constraintDefinition> constraint_definition
+%type <constraintDefinition> constraint_definition, check_constraint_definition
 %type <str> index_or_key indexes_or_keys index_or_key_opt
 %type <str> from_or_in show_database_opt
 %type <str> name_opt
@@ -359,7 +359,7 @@ func skipToEnd(yylex interface{}) {
 %type <indexColumns> index_column_list
 %type <indexOption> index_option
 %type <indexOptions> index_option_list index_option_list_opt
-%type <constraintInfo> constraint_info
+%type <constraintInfo> constraint_info, check_constraint_info
 %type <partDefs> partition_definitions
 %type <partDef> partition_definition
 %type <partSpec> partition_operation
@@ -1137,21 +1137,21 @@ table_spec:
   }
 
 table_column_list:
- constraint_definition
-  {
-    $$ = &TableSpec{}
-    $$.AddConstraint($1)
-  }
-| column_definition_for_create
+  column_definition_for_create
   {
     $$ = &TableSpec{}
     $$.AddColumn($1)
+  }
+| check_constraint_definition
+  {
+    $$ = &TableSpec{}
+    $$.AddConstraint($1)
   }
 | table_column_list ',' column_definition_for_create
   {
     $$.AddColumn($3)
   }
-| table_column_list ',' column_definition_for_create constraint_definition
+| table_column_list ',' column_definition_for_create check_constraint_definition
   {
     $$.AddColumn($3)
     $$.AddConstraint($4)
@@ -1161,6 +1161,10 @@ table_column_list:
     $$.AddIndex($3)
   }
 | table_column_list ',' constraint_definition
+  {
+    $$.AddConstraint($3)
+  }
+| table_column_list ',' check_constraint_definition
   {
     $$.AddConstraint($3)
   }
@@ -1825,7 +1829,18 @@ constraint_info:
   {
     $$ = &ForeignKeyDefinition{Source: $4, ReferencedTable: $7, ReferencedColumns: $9, OnDelete: $12, OnUpdate: $11}
   }
-|
+
+check_constraint_definition:
+  CONSTRAINT ID check_constraint_info
+  {
+    $$ = &ConstraintDefinition{Name: string($2), Details: $3}
+  }
+|  check_constraint_info
+  {
+    $$ = &ConstraintDefinition{Details: $1}
+  }
+
+check_constraint_info:
   CHECK '(' expression ')' enforced_opt
   {
     $$ = &CheckConstraintDefinition{Expr: $3, Enforced: $5}
@@ -2042,6 +2057,12 @@ alter_table_statement:
     $$ = &DDL{Action: AlterStr, Table: $4, PartitionSpec: $5}
   }
 | ALTER ignore_opt TABLE table_name ADD constraint_definition
+  {
+    ddl := &DDL{Action: AlterStr, ConstraintAction: AddStr, Table: $4, TableSpec: &TableSpec{}}
+    ddl.TableSpec.AddConstraint($6)
+    $$ = ddl
+  }
+| ALTER ignore_opt TABLE table_name ADD check_constraint_definition
   {
     ddl := &DDL{Action: AlterStr, ConstraintAction: AddStr, Table: $4, TableSpec: &TableSpec{}}
     ddl.TableSpec.AddConstraint($6)
