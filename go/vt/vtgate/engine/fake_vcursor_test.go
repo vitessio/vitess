@@ -521,13 +521,6 @@ func (f *loggingVCursor) nextResult() (*sqltypes.Result, error) {
 	return r, nil
 }
 
-func expectError(t *testing.T, msg string, err error, want string) {
-	t.Helper()
-	if err == nil || err.Error() != want {
-		t.Errorf("%s: %v, want %s", msg, err, want)
-	}
-}
-
 func expectResult(t *testing.T, msg string, result, want *sqltypes.Result) {
 	t.Helper()
 	if !reflect.DeepEqual(result, want) {

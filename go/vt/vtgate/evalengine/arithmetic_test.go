@@ -342,7 +342,7 @@ func TestArithmetics(t *testing.T) {
 			// testing for overflow of float64
 			v1:  NewFloat64(math.MaxFloat64),
 			v2:  NewFloat64(0.5),
-			err: "BIGINT is out of range in 1.7976931348623157e+308 / 0.5",
+			err: "BIGINT value is out of range in 1.7976931348623157e+308 / 0.5",
 		}},
 	}, {
 		operator: "*",

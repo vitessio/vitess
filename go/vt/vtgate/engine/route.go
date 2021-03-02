@@ -383,7 +383,7 @@ func (route *Route) GetFields(vcursor VCursor, bindVars map[string]*querypb.Bind
 func (route *Route) paramsAllShards(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
 	rss, _, err := vcursor.ResolveDestinations(route.Keyspace.Name, nil, []key.Destination{key.DestinationAllShards{}})
 	if err != nil {
-		return nil, nil, vterrors.Wrap(err, "paramsAllShards")
+		return nil, nil, err
 	}
 	multiBindVars := make([]map[string]*querypb.BindVariable, len(rss))
 	for i := range multiBindVars {
@@ -502,7 +502,7 @@ func setReplaceSchemaName(bindVars map[string]*querypb.BindVariable) {
 func (route *Route) paramsAnyShard(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
 	rss, _, err := vcursor.ResolveDestinations(route.Keyspace.Name, nil, []key.Destination{key.DestinationAnyShard{}})
 	if err != nil {
-		return nil, nil, vterrors.Wrap(err, "paramsAnyShard")
+		return nil, nil, err
 	}
 	multiBindVars := make([]map[string]*querypb.BindVariable, len(rss))
 	for i := range multiBindVars {
@@ -514,11 +514,11 @@ func (route *Route) paramsAnyShard(vcursor VCursor, bindVars map[string]*querypb
 func (route *Route) paramsSelectEqual(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
 	key, err := route.Values[0].ResolveValue(bindVars)
 	if err != nil {
-		return nil, nil, vterrors.Wrap(err, "paramsSelectEqual")
+		return nil, nil, err
 	}
 	rss, _, err := resolveShards(vcursor, route.Vindex, route.Keyspace, []sqltypes.Value{key})
 	if err != nil {
-		return nil, nil, vterrors.Wrap(err, "paramsSelectEqual")
+		return nil, nil, err
 	}
 	multiBindVars := make([]map[string]*querypb.BindVariable, len(rss))
 	for i := range multiBindVars {
@@ -530,11 +530,11 @@ func (route *Route) paramsSelectEqual(vcursor VCursor, bindVars map[string]*quer
 func (route *Route) paramsSelectIn(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
 	keys, err := route.Values[0].ResolveList(bindVars)
 	if err != nil {
-		return nil, nil, vterrors.Wrap(err, "paramsSelectIn")
+		return nil, nil, err
 	}
 	rss, values, err := resolveShards(vcursor, route.Vindex, route.Keyspace, keys)
 	if err != nil {
-		return nil, nil, vterrors.Wrap(err, "paramsSelectIn")
+		return nil, nil, err
 	}
 	return rss, shardVars(bindVars, values), nil
 }
@@ -542,11 +542,11 @@ func (route *Route) paramsSelectIn(vcursor VCursor, bindVars map[string]*querypb
 func (route *Route) paramsSelectMultiEqual(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
 	keys, err := route.Values[0].ResolveList(bindVars)
 	if err != nil {
-		return nil, nil, vterrors.Wrap(err, "paramsSelectIn")
+		return nil, nil, err
 	}
 	rss, _, err := resolveShards(vcursor, route.Vindex, route.Keyspace, keys)
 	if err != nil {
-		return nil, nil, vterrors.Wrap(err, "paramsSelectIn")
+		return nil, nil, err
 	}
 	multiBindVars := make([]map[string]*querypb.BindVariable, len(rss))
 	for i := range multiBindVars {
@@ -705,7 +705,7 @@ func shardVars(bv map[string]*querypb.BindVariable, mapVals [][]*querypb.Value) 
 func allowOnlyMaster(rss ...*srvtopo.ResolvedShard) error {
 	for _, rs := range rss {
 		if rs != nil && rs.Target.TabletType != topodatapb.TabletType_MASTER {
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "supported only for master tablet type, current type: %v", topoproto.TabletTypeLString(rs.Target.TabletType))
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "supported only for master tablet type, current type: %v", topoproto.TabletTypeLString(rs.Target.TabletType))
 		}
 	}
 	return nil
