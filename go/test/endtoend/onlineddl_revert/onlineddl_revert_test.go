@@ -103,6 +103,12 @@ var (
 			key updates_idx(updates)
 		) ENGINE=InnoDB
 	`
+	createIfNotExistsStatement = `
+		CREATE TABLE IF NOT EXISTS stress_test (
+			id bigint(20) not null,
+			PRIMARY KEY (id)
+		) ENGINE=InnoDB
+	`
 	dropStatement = `
 		DROP TABLE stress_test
 	`
@@ -217,6 +223,34 @@ func TestSchemaChange(t *testing.T) {
 
 	var uuids []string
 	// CREATE
+	t.Run("CREATE TABLE IF NOT EXISTS where table does not exist", func(t *testing.T) {
+		// The table does not exist
+		uuid := testOnlineDDLStatement(t, createIfNotExistsStatement, "online", "vtgate", "")
+		uuids = append(uuids, uuid)
+		checkRecentMigrations(t, uuid, schema.OnlineDDLStatusComplete)
+		checkTable(t, tableName, true)
+	})
+	t.Run("revert CREATE TABLE IF NOT EXISTS where did not exist", func(t *testing.T) {
+		// The table existed, so it will now be dropped (renamed)
+		uuid := testRevertMigration(t, uuids[len(uuids)-1])
+		uuids = append(uuids, uuid)
+		checkRecentMigrations(t, uuid, schema.OnlineDDLStatusComplete)
+		checkTable(t, tableName, false)
+	})
+	t.Run("revert revert CREATE TABLE IF NOT EXISTS where did not exist", func(t *testing.T) {
+		// Table was dropped (renamed) so it will now be restored
+		uuid := testRevertMigration(t, uuids[len(uuids)-1])
+		uuids = append(uuids, uuid)
+		checkRecentMigrations(t, uuid, schema.OnlineDDLStatusComplete)
+		checkTable(t, tableName, true)
+	})
+	t.Run("revert revert revert CREATE TABLE IF NOT EXISTS where did not exist", func(t *testing.T) {
+		// Table was restored, so it will now be dropped (renamed)
+		uuid := testRevertMigration(t, uuids[len(uuids)-1])
+		uuids = append(uuids, uuid)
+		checkRecentMigrations(t, uuid, schema.OnlineDDLStatusComplete)
+		checkTable(t, tableName, false)
+	})
 	t.Run("online CREATE TABLE", func(t *testing.T) {
 		uuid := testOnlineDDLStatement(t, createStatement, "online", "vtgate", "just-created")
 		uuids = append(uuids, uuid)
@@ -246,6 +280,36 @@ func TestSchemaChange(t *testing.T) {
 		uuids = append(uuids, uuid)
 		checkRecentMigrations(t, uuid, schema.OnlineDDLStatusFailed)
 	})
+	t.Run("CREATE TABLE IF NOT EXISTS where table exists", func(t *testing.T) {
+		// The table exists. A noop.
+		uuid := testOnlineDDLStatement(t, createIfNotExistsStatement, "online", "vtgate", "")
+		uuids = append(uuids, uuid)
+		checkRecentMigrations(t, uuid, schema.OnlineDDLStatusComplete)
+		checkTable(t, tableName, true)
+	})
+	t.Run("revert CREATE TABLE IF NOT EXISTS where table existed", func(t *testing.T) {
+		// Since the table already existed, thus not created by the reverts migration,
+		// we expect to _not_ drop it in this revert. A noop.
+		uuid := testRevertMigration(t, uuids[len(uuids)-1])
+		uuids = append(uuids, uuid)
+		checkRecentMigrations(t, uuid, schema.OnlineDDLStatusComplete)
+		checkTable(t, tableName, true)
+	})
+	t.Run("revert revert CREATE TABLE IF NOT EXISTS where table existed", func(t *testing.T) {
+		// Table was not dropped, thus isn't re-created, and it just still exists. A noop.
+		uuid := testRevertMigration(t, uuids[len(uuids)-1])
+		uuids = append(uuids, uuid)
+		checkRecentMigrations(t, uuid, schema.OnlineDDLStatusComplete)
+		checkTable(t, tableName, true)
+	})
+	t.Run("fail online CREATE TABLE", func(t *testing.T) {
+		// Table already exists
+		uuid := testOnlineDDLStatement(t, createStatement, "online", "vtgate", "just-created")
+		uuids = append(uuids, uuid)
+		checkRecentMigrations(t, uuid, schema.OnlineDDLStatusFailed)
+		checkTable(t, tableName, true)
+	})
+
 	// ALTER
 
 	// Run two ALTER TABLE statements.
@@ -445,22 +509,25 @@ func testRevertMigration(t *testing.T, revertUUID string) (uuid string) {
 }
 
 // checkTable checks the number of tables in the first two shards.
-func checkTable(t *testing.T, showTableName string, expectExists bool) {
+func checkTable(t *testing.T, showTableName string, expectExists bool) bool {
 	expectCount := 0
 	if expectExists {
 		expectCount = 1
 	}
 	for i := range clusterInstance.Keyspaces[0].Shards {
-		checkTablesCount(t, clusterInstance.Keyspaces[0].Shards[i].Vttablets[0], showTableName, expectCount)
+		if !checkTablesCount(t, clusterInstance.Keyspaces[0].Shards[i].Vttablets[0], showTableName, expectCount) {
+			return false
+		}
 	}
+	return true
 }
 
 // checkTablesCount checks the number of tables in the given tablet
-func checkTablesCount(t *testing.T, tablet *cluster.Vttablet, showTableName string, expectCount int) {
+func checkTablesCount(t *testing.T, tablet *cluster.Vttablet, showTableName string, expectCount int) bool {
 	query := fmt.Sprintf(`show tables like '%%%s%%';`, showTableName)
 	queryResult, err := tablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
 	require.Nil(t, err)
-	assert.Equal(t, expectCount, len(queryResult.Rows))
+	return assert.Equal(t, expectCount, len(queryResult.Rows))
 }
 
 // checkRecentMigrations checks 'OnlineDDL <keyspace> show recent' output. Example to such output:
@@ -615,6 +682,8 @@ func runSingleConnection(ctx context.Context, t *testing.T, done *int64) {
 
 func runMultipleConnections(ctx context.Context, t *testing.T) {
 	log.Infof("Running multiple connections")
+
+	require.True(t, checkTable(t, tableName, true))
 	var done int64
 	var wg sync.WaitGroup
 	for i := 0; i < maxConcurrency; i++ {
