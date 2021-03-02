@@ -1,5 +1,5 @@
 /*
-Copyright 2020 The Vitess Authors.
+Copyright 2021 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -30,13 +30,13 @@ var _ Primitive = (*DropCreateDatabase)(nil)
 // The default behaviour is to just return an error
 type DropCreateDatabase struct {
 	name, verb string
-	plugin     func() error
+	plugin     func(VCursor) error
 	noInputs
 	noTxNeeded
 }
 
 // CreateDropCreateDatabase creates the engine primitive
-func CreateDropCreateDatabase(dbName, verb string, plugin func() error) *DropCreateDatabase {
+func CreateDropCreateDatabase(dbName, verb string, plugin func(VCursor) error) *DropCreateDatabase {
 	return &DropCreateDatabase{
 		name:   dbName,
 		verb:   verb,
@@ -60,13 +60,15 @@ func (c *DropCreateDatabase) GetTableName() string {
 }
 
 // Execute implements the Primitive interface
-func (c *DropCreateDatabase) Execute(VCursor, map[string]*querypb.BindVariable, bool) (*sqltypes.Result, error) {
-	err := c.plugin()
+func (c *DropCreateDatabase) Execute(vcursor VCursor, _ map[string]*querypb.BindVariable, _ bool) (*sqltypes.Result, error) {
+	err := c.plugin(vcursor)
 	if err != nil {
 		return nil, err
 	}
 
-	return &sqltypes.Result{}, nil
+	return &sqltypes.Result{
+		RowsAffected: 1,
+	}, nil
 }
 
 // StreamExecute implements the Primitive interface
