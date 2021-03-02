@@ -709,7 +709,6 @@ func (wr *Wrangler) dropArtifacts(ctx context.Context, sw iswitcher) error {
 
 // finalizeMigrateWorkflow deletes the streams for the Migrate workflow.
 // We only cleanup the target for external sources
-// FIXME: implement dryRun
 func (wr *Wrangler) finalizeMigrateWorkflow(ctx context.Context, targetKeyspace, workflow, tableSpecs string,
 	cancel, keepData, dryRun bool) (*[]string, error) {
 	ts, err := wr.buildTrafficSwitcher(ctx, targetKeyspace, workflow)
@@ -1820,6 +1819,8 @@ func reverseName(workflow string) string {
 	return workflow + reverse
 }
 
+// addParticipatingTablesToKeyspace updates the vschema with the new tables that were created as part of the
+// Migrate flow. It is called when the Migrate flow is Completed
 func (ts *trafficSwitcher) addParticipatingTablesToKeyspace(ctx context.Context, keyspace, tableSpecs string) error {
 	var err error
 	var vschema *vschemapb.Keyspace
@@ -1830,10 +1831,10 @@ func (ts *trafficSwitcher) addParticipatingTablesToKeyspace(ctx context.Context,
 	if vschema == nil {
 		return fmt.Errorf("no vschema found for keyspace %s", keyspace)
 	}
-	if strings.HasPrefix(tableSpecs, "{") {
-		if vschema.Tables == nil {
-			vschema.Tables = make(map[string]*vschemapb.Table)
-		}
+	if vschema.Tables == nil {
+		vschema.Tables = make(map[string]*vschemapb.Table)
+	}
+	if strings.HasPrefix(tableSpecs, "{") { // user defined the vschema snippet, typically for a sharded target
 		wrap := fmt.Sprintf(`{"tables": %s}`, tableSpecs)
 		ks := &vschemapb.Keyspace{}
 		if err := json2.Unmarshal([]byte(wrap), ks); err != nil {
@@ -1846,15 +1847,11 @@ func (ts *trafficSwitcher) addParticipatingTablesToKeyspace(ctx context.Context,
 			vschema.Tables[table] = vtab
 		}
 	} else {
-		if !vschema.Sharded {
-			if vschema.Tables == nil {
-				vschema.Tables = make(map[string]*vschemapb.Table)
-			}
-			for _, table := range ts.tables {
-				vschema.Tables[table] = &vschemapb.Table{}
-			}
-		} else {
+		if vschema.Sharded {
 			return fmt.Errorf("no sharded vschema was provided, so you will need to update the vschema of the target manually for the moved tables")
+		}
+		for _, table := range ts.tables {
+			vschema.Tables[table] = &vschemapb.Table{}
 		}
 	}
 	return ts.wr.ts.SaveVSchema(ctx, keyspace, vschema)

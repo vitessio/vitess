@@ -340,6 +340,9 @@ func (ts *Server) OpenExternalVitessClusterServer(ctx context.Context, clusterNa
 	if err != nil {
 		return nil, err
 	}
+	if vc == nil {
+		return nil, fmt.Errorf("no vitess cluster found with name %s", clusterName)
+	}
 	var externalTopo *Server
 	externalTopo, err = OpenServer(vc.TopoConfig.TopoType, vc.TopoConfig.Server, vc.TopoConfig.Root)
 	if err != nil {
