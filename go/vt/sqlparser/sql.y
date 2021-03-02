@@ -3609,6 +3609,8 @@ value_expression:
   {
     if num, ok := $2.(*Literal); ok && num.Type == IntVal {
       $$ = num
+    } else if unaryExpr, ok := $2.(*UnaryExpr); ok && ( unaryExpr.Operator == UPlusOp || unaryExpr.Operator == UMinusOp ) {
+      $$ = unaryExpr
     } else {
       $$ = &UnaryExpr{Operator: UPlusOp, Expr: $2}
     }
@@ -3623,6 +3625,13 @@ value_expression:
       } else {
         $$ = NewIntLiteral(append([]byte("-"), num.Val...))
       }
+    } else if unaryExpr, ok := $2.(*UnaryExpr); ok && ( unaryExpr.Operator == UPlusOp || unaryExpr.Operator == UMinusOp ) {
+      if unaryExpr.Operator == UPlusOp {
+        unaryExpr.Operator = UMinusOp
+      } else {
+      	unaryExpr.Operator = UPlusOp
+      }
+      $$ = unaryExpr
     } else {
       $$ = &UnaryExpr{Operator: UMinusOp, Expr: $2}
     }

@@ -607,7 +607,8 @@ var (
 		input:  "select /* binary unary */ a- -b from t",
 		output: "select /* binary unary */ a - -b from t",
 	}, {
-		input: "select /* - - */ - -b from t",
+		input:  "select /* - - */ - -b from t",
+		output: "select /* - - */ +b from t",
 	}, {
 		input: "select /* binary binary */ binary  binary b from t",
 	}, {
@@ -901,6 +902,9 @@ var (
 		input: "set @variable = 42",
 	}, {
 		input: "set @period.variable = 42",
+	}, {
+		input:  "set S= +++-++-+(4+1)",
+		output: "set S = +(4 + 1)",
 	}, {
 		input:  "alter table a add foo int first v",
 		output: "alter table a add column foo int first v",
