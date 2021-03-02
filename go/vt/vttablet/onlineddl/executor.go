@@ -98,6 +98,7 @@ var vexecInsertTemplates = []string{
 }
 
 var emptyResult = &sqltypes.Result{}
+var acceptableDropTableIfExistsErrorCodes = []int{mysql.ERCantFindFile, mysql.ERNoSuchTable}
 
 var ghostOverridePath = flag.String("gh-ost-path", "", "override default gh-ost binary full path")
 var ptOSCOverridePath = flag.String("pt-osc-path", "", "override default pt-online-schema-change binary full path")
@@ -1391,27 +1392,35 @@ func (e *Executor) executeRevert(ctx context.Context, onlineDDL *schema.OnlineDD
 		{
 			// We are reverting a CREATE migration. The revert is to DROP, only we don't actually
 			// drop the table, we rename it into lifecycle
+			// Possibly this was a CREATE TABLE IF NOT EXISTS, and possibly the table already existed
+			// before the DDL, in which case the CREATE was a noop. In that scenario we _do not_ drop
+			// the table.
+			// We can tell the difference by looking at the artifacts. A successful CREATE TABLE, where
+			// a table actually gets created, has a sentry, dummy artifact. A noop has not.
+
 			if err := e.updateDDLAction(ctx, onlineDDL.UUID, sqlparser.DropStr); err != nil {
 				return err
 			}
 			if err := e.updateMySQLTable(ctx, onlineDDL.UUID, revertMigration.Table); err != nil {
 				return err
 			}
-			var toTableName string
-			onlineDDL.SQL, toTableName, err = schema.GenerateRenameStatementWithUUID(revertMigration.Table, schema.HoldTableGCState, onlineDDL.GetGCUUID(), time.Now().UTC().Add(*retainOnlineDDLTables))
-			if err != nil {
-				return err
+
+			artifacts := row["artifacts"].ToString()
+			artifactTables := textutil.SplitDelimitedList(artifacts)
+			if len(artifactTables) > 1 {
+				return fmt.Errorf("cannot run migration %s reverting %s: found %d artifact tables, expected maximum 1", onlineDDL.UUID, revertMigration.UUID, len(artifactTables))
 			}
-			if err := e.updateArtifacts(ctx, onlineDDL.UUID, toTableName); err != nil {
-				return err
+			if len(artifactTables) == 0 {
+				// This indicates no table was actually created. this must have beena CREATE TABLE IF NOT EXISTS where the table already existed.
+				_ = e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusComplete, false, progressPctFull)
 			}
-			acceptableErrCodeFound, err := e.executeDirectly(ctx, onlineDDL, mysql.ERCantFindFile, mysql.ERNoSuchTable)
-			if err != nil {
-				return err
-			}
-			if acceptableErrCodeFound {
-				// Table did not exist after all. There is no artifact
-				if err := e.clearArtifacts(ctx, onlineDDL.UUID); err != nil {
+
+			for _, artifactTable := range artifactTables {
+				if err := e.updateArtifacts(ctx, onlineDDL.UUID, artifactTable); err != nil {
+					return err
+				}
+				onlineDDL.SQL = sqlparser.BuildParsedQuery(sqlRenameTable, revertMigration.Table, artifactTable).Query
+				if _, err := e.executeDirectly(ctx, onlineDDL); err != nil {
 					return err
 				}
 			}
@@ -1437,6 +1446,9 @@ func (e *Executor) executeRevert(ctx context.Context, onlineDDL *schema.OnlineDD
 				_ = e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusComplete, false, progressPctFull)
 			}
 			for _, artifactTable := range artifactTables {
+				if err := e.updateArtifacts(ctx, onlineDDL.UUID, artifactTable); err != nil {
+					return err
+				}
 				onlineDDL.SQL = sqlparser.BuildParsedQuery(sqlRenameTable, artifactTable, revertMigration.Table).Query
 				if _, err := e.executeDirectly(ctx, onlineDDL); err != nil {
 					return err
@@ -1508,7 +1520,7 @@ func (e *Executor) executeMigration(ctx context.Context, onlineDDL *schema.Onlin
 
 			acceptableErrorCodes := []int{}
 			if ddlStmt.GetIfExists() {
-				acceptableErrorCodes = append(acceptableErrorCodes, mysql.ERCantFindFile, mysql.ERNoSuchTable)
+				acceptableErrorCodes = acceptableDropTableIfExistsErrorCodes
 			}
 			acceptableErrCodeFound, err := e.executeDirectly(ctx, onlineDDL, acceptableErrorCodes...)
 			if err != nil {
@@ -1524,13 +1536,43 @@ func (e *Executor) executeMigration(ctx context.Context, onlineDDL *schema.Onlin
 			return nil
 		}()
 	case sqlparser.CreateDDLAction:
-		go func() {
+		go func() error {
 			e.migrationMutex.Lock()
 			defer e.migrationMutex.Unlock()
 
+			sentryArtifactTableName, err := schema.GenerateGCTableName(schema.HoldTableGCState, time.Now().UTC().Add(*retainOnlineDDLTables))
+			if err != nil {
+				return failMigration(err)
+			}
+			// we create a dummy artifact. Its existence means the table was created by this migration.
+			// It will be read by the revert operation.
+			if err := e.updateArtifacts(ctx, onlineDDL.UUID, sentryArtifactTableName); err != nil {
+				return err
+			}
+			ddlStmt, _, err := schema.ParseOnlineDDLStatement(onlineDDL.SQL)
+			if err != nil {
+				return failMigration(err)
+			}
+			if ddlStmt.GetIfNotExists() {
+				// This is a CREATE TABLE IF NOT EXISTS
+				// We want to know if the table actually exists before running this migration.
+				// If so, then the operation is noop, and when we revert the migration, we also do a noop.
+				exists, err := e.tableExists(ctx, onlineDDL.Table)
+				if err != nil {
+					return failMigration(err)
+				}
+				if exists {
+					// the table already exists. This CREATE TABLE IF NOT EXISTS statement is a noop.
+					// We therefore clear the artifact field. A revert operation will use this as a hint.
+					if err := e.clearArtifacts(ctx, onlineDDL.UUID); err != nil {
+						return failMigration(err)
+					}
+				}
+			}
 			if _, err := e.executeDirectly(ctx, onlineDDL); err != nil {
 				failMigration(err)
 			}
+			return nil
 		}()
 	case sqlparser.AlterDDLAction:
 		switch onlineDDL.Strategy {
