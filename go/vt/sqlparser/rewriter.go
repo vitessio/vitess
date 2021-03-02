@@ -32,11 +32,9 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 	switch n := node.(type) {
 	case *AddColumns:
 		for x, el := range n.Columns {
-			a.apply(node, el, func(idx int) func(SQLNode, SQLNode) {
-				return func(newNode, container SQLNode) {
-					container.(*AddColumns).Columns[idx] = newNode.(*ColumnDefinition)
-				}
-			}(x))
+			a.apply(node, el, func(newNode, container SQLNode) {
+				container.(*AddColumns).Columns[x] = newNode.(*ColumnDefinition)
+			})
 		}
 		a.apply(node, n.First, func(newNode, parent SQLNode) {
 			parent.(*AddColumns).First = newNode.(*ColName)
@@ -86,11 +84,9 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 			parent.(*AlterTable).Table = newNode.(TableName)
 		})
 		for x, el := range n.AlterOptions {
-			a.apply(node, el, func(idx int) func(SQLNode, SQLNode) {
-				return func(newNode, container SQLNode) {
-					container.(*AlterTable).AlterOptions[idx] = newNode.(AlterOption)
-				}
-			}(x))
+			a.apply(node, el, func(newNode, container SQLNode) {
+				container.(*AlterTable).AlterOptions[x] = newNode.(AlterOption)
+			})
 		}
 		a.apply(node, n.PartitionSpec, func(newNode, parent SQLNode) {
 			parent.(*AlterTable).PartitionSpec = newNode.(*PartitionSpec)
@@ -113,11 +109,9 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 			parent.(*AlterVschema).VindexSpec = newNode.(*VindexSpec)
 		})
 		for x, el := range n.VindexCols {
-			a.apply(node, el, func(idx int) func(SQLNode, SQLNode) {
-				return func(newNode, container SQLNode) {
-					container.(*AlterVschema).VindexCols[idx] = newNode.(ColIdent)
-				}
-			}(x))
+			a.apply(node, el, func(newNode, container SQLNode) {
+				container.(*AlterVschema).VindexCols[x] = newNode.(ColIdent)
+			})
 		}
 		a.apply(node, n.AutoIncSpec, func(newNode, parent SQLNode) {
 			parent.(*AlterVschema).AutoIncSpec = newNode.(*AutoIncSpec)
@@ -157,11 +151,9 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 			parent.(*CaseExpr).Expr = newNode.(Expr)
 		})
 		for x, el := range n.Whens {
-			a.apply(node, el, func(idx int) func(SQLNode, SQLNode) {
-				return func(newNode, container SQLNode) {
-					container.(*CaseExpr).Whens[idx] = newNode.(*When)
-				}
-			}(x))
+			a.apply(node, el, func(newNode, container SQLNode) {
+				container.(*CaseExpr).Whens[x] = newNode.(*When)
+			})
 		}
 		a.apply(node, n.Else, func(newNode, parent SQLNode) {
 			parent.(*CaseExpr).Else = newNode.(Expr)
@@ -208,11 +200,9 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 		})
 	case Columns:
 		for x, el := range n {
-			a.apply(node, el, func(idx int) func(SQLNode, SQLNode) {
-				return func(newNode, container SQLNode) {
-					container.(Columns)[idx] = newNode.(ColIdent)
-				}
-			}(x))
+			a.apply(node, el, func(newNode, container SQLNode) {
+				container.(Columns)[x] = newNode.(ColIdent)
+			})
 		}
 	case Comments:
 	case *Commit:
@@ -331,11 +321,9 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 		})
 	case Exprs:
 		for x, el := range n {
-			a.apply(node, el, func(idx int) func(SQLNode, SQLNode) {
-				return func(newNode, container SQLNode) {
-					container.(Exprs)[idx] = newNode.(Expr)
-				}
-			}(x))
+			a.apply(node, el, func(newNode, container SQLNode) {
+				container.(Exprs)[x] = newNode.(Expr)
+			})
 		}
 	case *Flush:
 		a.apply(node, n.TableNames, func(newNode, parent SQLNode) {
@@ -370,11 +358,9 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 		})
 	case GroupBy:
 		for x, el := range n {
-			a.apply(node, el, func(idx int) func(SQLNode, SQLNode) {
-				return func(newNode, container SQLNode) {
-					container.(GroupBy)[idx] = newNode.(Expr)
-				}
-			}(x))
+			a.apply(node, el, func(newNode, container SQLNode) {
+				container.(GroupBy)[x] = newNode.(Expr)
+			})
 		}
 	case *GroupConcatExpr:
 		a.apply(node, n.Exprs, func(newNode, parent SQLNode) {
@@ -392,11 +378,9 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 		})
 	case *IndexHints:
 		for x, el := range n.Indexes {
-			a.apply(node, el, func(idx int) func(SQLNode, SQLNode) {
-				return func(newNode, container SQLNode) {
-					container.(*IndexHints).Indexes[idx] = newNode.(ColIdent)
-				}
-			}(x))
+			a.apply(node, el, func(newNode, container SQLNode) {
+				container.(*IndexHints).Indexes[x] = newNode.(ColIdent)
+			})
 		}
 	case *IndexInfo:
 		a.apply(node, n.Name, func(newNode, parent SQLNode) {
@@ -486,11 +470,9 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 	case *NullVal:
 	case OnDup:
 		for x, el := range n {
-			a.apply(node, el, func(idx int) func(SQLNode, SQLNode) {
-				return func(newNode, container SQLNode) {
-					container.(OnDup)[idx] = newNode.(*UpdateExpr)
-				}
-			}(x))
+			a.apply(node, el, func(newNode, container SQLNode) {
+				container.(OnDup)[x] = newNode.(*UpdateExpr)
+			})
 		}
 	case *OptLike:
 		a.apply(node, n.LikeTable, func(newNode, parent SQLNode) {
@@ -509,11 +491,9 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 		})
 	case OrderBy:
 		for x, el := range n {
-			a.apply(node, el, func(idx int) func(SQLNode, SQLNode) {
-				return func(newNode, container SQLNode) {
-					container.(OrderBy)[idx] = newNode.(*Order)
-				}
-			}(x))
+			a.apply(node, el, func(newNode, container SQLNode) {
+				container.(OrderBy)[x] = newNode.(*Order)
+			})
 		}
 	case *OrderByOption:
 		a.apply(node, n.Cols, func(newNode, parent SQLNode) {
@@ -547,19 +527,15 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 			parent.(*PartitionSpec).TableName = newNode.(TableName)
 		})
 		for x, el := range n.Definitions {
-			a.apply(node, el, func(idx int) func(SQLNode, SQLNode) {
-				return func(newNode, container SQLNode) {
-					container.(*PartitionSpec).Definitions[idx] = newNode.(*PartitionDefinition)
-				}
-			}(x))
+			a.apply(node, el, func(newNode, container SQLNode) {
+				container.(*PartitionSpec).Definitions[x] = newNode.(*PartitionDefinition)
+			})
 		}
 	case Partitions:
 		for x, el := range n {
-			a.apply(node, el, func(idx int) func(SQLNode, SQLNode) {
-				return func(newNode, container SQLNode) {
-					container.(Partitions)[idx] = newNode.(ColIdent)
-				}
-			}(x))
+			a.apply(node, el, func(newNode, container SQLNode) {
+				container.(Partitions)[x] = newNode.(ColIdent)
+			})
 		}
 	case *RangeCond:
 		a.apply(node, n.Left, func(newNode, parent SQLNode) {
@@ -620,11 +596,9 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 		})
 	case SelectExprs:
 		for x, el := range n {
-			a.apply(node, el, func(idx int) func(SQLNode, SQLNode) {
-				return func(newNode, container SQLNode) {
-					container.(SelectExprs)[idx] = newNode.(SelectExpr)
-				}
-			}(x))
+			a.apply(node, el, func(newNode, container SQLNode) {
+				container.(SelectExprs)[x] = newNode.(SelectExpr)
+			})
 		}
 	case *SelectInto:
 	case *Set:
@@ -643,11 +617,9 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 		})
 	case SetExprs:
 		for x, el := range n {
-			a.apply(node, el, func(idx int) func(SQLNode, SQLNode) {
-				return func(newNode, container SQLNode) {
-					container.(SetExprs)[idx] = newNode.(*SetExpr)
-				}
-			}(x))
+			a.apply(node, el, func(newNode, container SQLNode) {
+				container.(SetExprs)[x] = newNode.(*SetExpr)
+			})
 		}
 	case *SetTransaction:
 		a.apply(node, n.SQLNode, func(newNode, parent SQLNode) {
@@ -657,11 +629,9 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 			parent.(*SetTransaction).Comments = newNode.(Comments)
 		})
 		for x, el := range n.Characteristics {
-			a.apply(node, el, func(idx int) func(SQLNode, SQLNode) {
-				return func(newNode, container SQLNode) {
-					container.(*SetTransaction).Characteristics[idx] = newNode.(Characteristic)
-				}
-			}(x))
+			a.apply(node, el, func(newNode, container SQLNode) {
+				container.(*SetTransaction).Characteristics[x] = newNode.(Characteristic)
+			})
 		}
 	case *Show:
 		a.apply(node, n.Internal, func(newNode, parent SQLNode) {
@@ -725,11 +695,9 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 		})
 	case TableExprs:
 		for x, el := range n {
-			a.apply(node, el, func(idx int) func(SQLNode, SQLNode) {
-				return func(newNode, container SQLNode) {
-					container.(TableExprs)[idx] = newNode.(TableExpr)
-				}
-			}(x))
+			a.apply(node, el, func(newNode, container SQLNode) {
+				container.(TableExprs)[x] = newNode.(TableExpr)
+			})
 		}
 	case TableIdent:
 	case TableName:
@@ -737,34 +705,26 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 		a.apply(node, n.Qualifier, replacePanic("TableName Qualifier"))
 	case TableNames:
 		for x, el := range n {
-			a.apply(node, el, func(idx int) func(SQLNode, SQLNode) {
-				return func(newNode, container SQLNode) {
-					container.(TableNames)[idx] = newNode.(TableName)
-				}
-			}(x))
+			a.apply(node, el, func(newNode, container SQLNode) {
+				container.(TableNames)[x] = newNode.(TableName)
+			})
 		}
 	case TableOptions:
 	case *TableSpec:
 		for x, el := range n.Columns {
-			a.apply(node, el, func(idx int) func(SQLNode, SQLNode) {
-				return func(newNode, container SQLNode) {
-					container.(*TableSpec).Columns[idx] = newNode.(*ColumnDefinition)
-				}
-			}(x))
+			a.apply(node, el, func(newNode, container SQLNode) {
+				container.(*TableSpec).Columns[x] = newNode.(*ColumnDefinition)
+			})
 		}
 		for x, el := range n.Indexes {
-			a.apply(node, el, func(idx int) func(SQLNode, SQLNode) {
-				return func(newNode, container SQLNode) {
-					container.(*TableSpec).Indexes[idx] = newNode.(*IndexDefinition)
-				}
-			}(x))
+			a.apply(node, el, func(newNode, container SQLNode) {
+				container.(*TableSpec).Indexes[x] = newNode.(*IndexDefinition)
+			})
 		}
 		for x, el := range n.Constraints {
-			a.apply(node, el, func(idx int) func(SQLNode, SQLNode) {
-				return func(newNode, container SQLNode) {
-					container.(*TableSpec).Constraints[idx] = newNode.(*ConstraintDefinition)
-				}
-			}(x))
+			a.apply(node, el, func(newNode, container SQLNode) {
+				container.(*TableSpec).Constraints[x] = newNode.(*ConstraintDefinition)
+			})
 		}
 		a.apply(node, n.Options, func(newNode, parent SQLNode) {
 			parent.(*TableSpec).Options = newNode.(TableOptions)
@@ -790,11 +750,9 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 			parent.(*Union).FirstStatement = newNode.(SelectStatement)
 		})
 		for x, el := range n.UnionSelects {
-			a.apply(node, el, func(idx int) func(SQLNode, SQLNode) {
-				return func(newNode, container SQLNode) {
-					container.(*Union).UnionSelects[idx] = newNode.(*UnionSelect)
-				}
-			}(x))
+			a.apply(node, el, func(newNode, container SQLNode) {
+				container.(*Union).UnionSelects[x] = newNode.(*UnionSelect)
+			})
 		}
 		a.apply(node, n.OrderBy, func(newNode, parent SQLNode) {
 			parent.(*Union).OrderBy = newNode.(OrderBy)
@@ -835,11 +793,9 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 		})
 	case UpdateExprs:
 		for x, el := range n {
-			a.apply(node, el, func(idx int) func(SQLNode, SQLNode) {
-				return func(newNode, container SQLNode) {
-					container.(UpdateExprs)[idx] = newNode.(*UpdateExpr)
-				}
-			}(x))
+			a.apply(node, el, func(newNode, container SQLNode) {
+				container.(UpdateExprs)[x] = newNode.(*UpdateExpr)
+			})
 		}
 	case *Use:
 		a.apply(node, n.DBName, func(newNode, parent SQLNode) {
@@ -863,20 +819,16 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 		})
 	case ValTuple:
 		for x, el := range n {
-			a.apply(node, el, func(idx int) func(SQLNode, SQLNode) {
-				return func(newNode, container SQLNode) {
-					container.(ValTuple)[idx] = newNode.(Expr)
-				}
-			}(x))
+			a.apply(node, el, func(newNode, container SQLNode) {
+				container.(ValTuple)[x] = newNode.(Expr)
+			})
 		}
 	case *Validation:
 	case Values:
 		for x, el := range n {
-			a.apply(node, el, func(idx int) func(SQLNode, SQLNode) {
-				return func(newNode, container SQLNode) {
-					container.(Values)[idx] = newNode.(ValTuple)
-				}
-			}(x))
+			a.apply(node, el, func(newNode, container SQLNode) {
+				container.(Values)[x] = newNode.(ValTuple)
+			})
 		}
 	case *ValuesFuncExpr:
 		a.apply(node, n.Name, func(newNode, parent SQLNode) {
@@ -892,11 +844,9 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 			parent.(*VindexSpec).Type = newNode.(ColIdent)
 		})
 		for x, el := range n.Params {
-			a.apply(node, el, func(idx int) func(SQLNode, SQLNode) {
-				return func(newNode, container SQLNode) {
-					container.(*VindexSpec).Params[idx] = newNode.(VindexParam)
-				}
-			}(x))
+			a.apply(node, el, func(newNode, container SQLNode) {
+				container.(*VindexSpec).Params[x] = newNode.(VindexParam)
+			})
 		}
 	case *When:
 		a.apply(node, n.Cond, func(newNode, parent SQLNode) {
