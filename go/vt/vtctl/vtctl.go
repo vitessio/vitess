@@ -1969,6 +1969,15 @@ func commandMigrate(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.F
 	return commandVRWorkflow(ctx, wr, subFlags, args, wrangler.MigrateWorkflow)
 }
 
+// getSourceKeyspace expects a keyspace of the form "externalClusterName.keyspaceName" and returns the components
+func getSourceKeyspace(clusterKeyspace string) (clusterName string, sourceKeyspace string, err error) {
+	splits := strings.Split(clusterKeyspace, ".")
+	if len(splits) != 2 {
+		return "", "", fmt.Errorf("invalid format for external source cluster: %s", clusterKeyspace)
+	}
+	return splits[0], splits[1], nil
+}
+
 // commandVRWorkflow is the common entry point for MoveTables/Reshard/Migrate workflows
 // FIXME: this needs a refactor. Also validations for params need to be done per workflow type
 func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string,
@@ -2088,13 +2097,10 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 				return fmt.Errorf("source keyspace is not specified")
 			}
 			if workflowType == wrangler.MigrateWorkflow {
-				splits := strings.Split(*sourceKeyspace, ".")
-				if len(splits) != 2 {
-					return fmt.Errorf("invalid format for external source cluster: %s", *sourceKeyspace)
+				externalClusterName, *sourceKeyspace, err = getSourceKeyspace(*sourceKeyspace)
+				if err != nil {
+					return err
 				}
-				externalClusterName = splits[0]
-				*sourceKeyspace = splits[1]
-
 				sourceTopo, err = sourceTopo.OpenExternalVitessClusterServer(ctx, externalClusterName)
 				if err != nil {
 					return err
