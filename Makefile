@@ -103,7 +103,7 @@ parser:
 	make -C go/vt/sqlparser
 
 visitor:
-	go generate go/vt/sqlparser/rewriter.go
+	go run ./go/tools/asthelpergen -in ./go/vt/sqlparser -iface vitess.io/vitess/go/vt/sqlparser.SQLNode -except "*ColName"
 
 sizegen:
 	go run go/tools/sizegen/sizegen.go \
