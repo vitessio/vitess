@@ -3607,34 +3607,11 @@ value_expression:
   }
 | '+'  value_expression %prec UNARY
   {
-    if num, ok := $2.(*Literal); ok && num.Type == IntVal {
-      $$ = num
-    } else if unaryExpr, ok := $2.(*UnaryExpr); ok && ( unaryExpr.Operator == UPlusOp || unaryExpr.Operator == UMinusOp ) {
-      $$ = unaryExpr
-    } else {
-      $$ = &UnaryExpr{Operator: UPlusOp, Expr: $2}
-    }
+    $$ = $2
   }
 | '-'  value_expression %prec UNARY
   {
-    if num, ok := $2.(*Literal); ok && num.Type == IntVal {
-      // Handle double negative
-      if num.Val[0] == '-' {
-        num.Val = num.Val[1:]
-        $$ = num
-      } else {
-        $$ = NewIntLiteral(append([]byte("-"), num.Val...))
-      }
-    } else if unaryExpr, ok := $2.(*UnaryExpr); ok && ( unaryExpr.Operator == UPlusOp || unaryExpr.Operator == UMinusOp ) {
-      if unaryExpr.Operator == UPlusOp {
-        unaryExpr.Operator = UMinusOp
-      } else {
-      	unaryExpr.Operator = UPlusOp
-      }
-      $$ = unaryExpr
-    } else {
-      $$ = &UnaryExpr{Operator: UMinusOp, Expr: $2}
-    }
+    $$ = handleUnaryMinus($2)
   }
 | '~'  value_expression
   {
