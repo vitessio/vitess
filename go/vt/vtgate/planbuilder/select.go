@@ -22,8 +22,6 @@ import (
 
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 
-	"vitess.io/vitess/go/mysql"
-
 	"vitess.io/vitess/go/vt/key"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -87,7 +85,7 @@ func pushProjection(expr *sqlparser.AliasedExpr, plan logicalPlan, semTable *sem
 		}
 		return len(node.Cols) - 1, nil
 	default:
-		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "not yet supported %T", node)
+		return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%T not yet supported", node)
 	}
 }
 
@@ -141,7 +139,7 @@ func pushPredicate(exprs []sqlparser.Expr, plan logicalPlan, semTable *semantics
 		err = pushPredicate(rhs, node.Right, semTable)
 		return err
 	default:
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "not yet supported %T", node)
+		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%T not yet supported", node)
 	}
 }
 
@@ -163,6 +161,9 @@ func dependsOnRoute(solves semantics.TableSet, expr sqlparser.Expr, semTable *se
 	}
 	return !sqlparser.IsValue(expr)
 }
+
+var errSQLCalcFoundRows = vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.CantUseOptionHere, "Incorrect usage/placement of 'SQL_CALC_FOUND_ROWS'")
+var errInto = vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.CantUseOptionHere, "Incorrect usage/placement of 'INTO'")
 
 // processSelect builds a primitive tree for the given query or subquery.
 // The tree built by this function has the following general structure:
@@ -203,12 +204,12 @@ func (pb *primitiveBuilder) processSelect(sel *sqlparser.Select, outer *symtab, 
 	// Check and error if there is any locking function present in select expression.
 	for _, expr := range sel.SelectExprs {
 		if aExpr, ok := expr.(*sqlparser.AliasedExpr); ok && sqlparser.IsLockingFunc(aExpr.Expr) {
-			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%v allowed only with dual", sqlparser.String(aExpr))
+			return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%v allowed only with dual", sqlparser.String(aExpr))
 		}
 	}
 	if sel.SQLCalcFoundRows {
 		if outer != nil || query == "" {
-			return mysql.NewSQLError(mysql.ERCantUseOptionHere, mysql.SSSyntaxErrorOrAccessViolation, "Incorrect usage/placement of 'SQL_CALC_FOUND_ROWS'")
+			return errSQLCalcFoundRows
 		}
 		sel.SQLCalcFoundRows = false
 		if sel.Limit != nil {
@@ -223,7 +224,7 @@ func (pb *primitiveBuilder) processSelect(sel *sqlparser.Select, outer *symtab, 
 
 	// Into is not supported in subquery.
 	if sel.Into != nil && (outer != nil || query == "") {
-		return mysql.NewSQLError(mysql.ERCantUseOptionHere, mysql.SSSyntaxErrorOrAccessViolation, "Incorrect usage/placement of 'INTO'")
+		return errInto
 	}
 
 	var where sqlparser.Expr
@@ -288,7 +289,7 @@ func setMiscFunc(in logicalPlan, sel *sqlparser.Select) error {
 			query.Lock = sel.Lock
 			if sel.Into != nil {
 				if node.eroute.Opcode != engine.SelectUnsharded {
-					return false, nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: this construct is not supported on sharded keyspace")
+					return false, nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "INTO is not supported on sharded keyspace")
 				}
 				query.Into = sel.Into
 			}

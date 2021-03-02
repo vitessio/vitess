@@ -335,7 +335,7 @@ func (vw *vschemaWrapper) TargetDestination(qualifier string) (key.Destination, 
 	}
 	keyspace := vw.v.Keyspaces[keyspaceName]
 	if keyspace == nil {
-		return nil, nil, 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "no keyspace with name [%s] found", keyspaceName)
+		return nil, nil, 0, vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.BadDb, "Unknown database '%s' in vschema", keyspaceName)
 	}
 	return vw.dest, keyspace.Keyspace, vw.tabletType, nil
 

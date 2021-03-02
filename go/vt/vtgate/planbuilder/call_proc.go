@@ -37,7 +37,7 @@ func buildCallProcPlan(stmt *sqlparser.CallProc, vschema ContextVSchema) (engine
 
 	if dest == nil {
 		if keyspace.Sharded {
-			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, errNotAllowWhenSharded)
+			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, errNotAllowWhenSharded)
 		}
 		dest = key.DestinationAnyShard{}
 	}
@@ -51,4 +51,4 @@ func buildCallProcPlan(stmt *sqlparser.CallProc, vschema ContextVSchema) (engine
 	}, nil
 }
 
-const errNotAllowWhenSharded = "CALL is only allowed for targeted queries or on unsharded keyspaces"
+const errNotAllowWhenSharded = "CALL is not supported for sharded database"

@@ -192,7 +192,7 @@ Gen4 plan same as above
 
 # sharded delete with limit clasue
 "delete from user_extra limit 10"
-"unsupported: multi shard delete with limit"
+"multi shard delete with limit is not supported"
 Gen4 plan same as above
 
 # sharded subquery in unsharded subquery in unsharded delete
@@ -207,7 +207,7 @@ Gen4 plan same as above
 
 # scatter update with limit clause
 "update user_extra set val = 1 where (name = 'foo' or id = 1) limit 1"
-"unsupported: multi shard update with limit"
+"multi shard update with limit is not supported"
 Gen4 plan same as above
 
 # multi delete multi table
@@ -419,7 +419,7 @@ Gen4 plan same as above
 
 # Multi shard query using into outfile s3
 "select * from user into outfile s3 'out_file_name'"
-"unsupported: this construct is not supported on sharded keyspace"
+"INTO is not supported on sharded keyspace"
 
 # unsupported two predicates specifying the database for the same table if they are different
 "SELECT cc.constraint_name AS 'name' FROM information_schema.check_constraints cc  WHERE cc.constraint_schema = 'constraint_schema' AND cc.table_schema = 'a'"
