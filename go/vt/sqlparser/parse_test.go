@@ -34,6 +34,7 @@ import (
 type parseTest struct {
 	input  string
 	output string
+	verbatim bool
 }
 
 var (
@@ -1899,24 +1900,25 @@ func TestValid(t *testing.T) {
 	validSQL = append(validSQL, validMultiStatementSql...)
 	for _, tcase := range validSQL {
 		t.Run(tcase.input, func(t *testing.T) {
-			if tcase.output == "" {
-				tcase.output = tcase.input
-			}
-			tree, err := Parse(tcase.input)
-			require.NoError(t, err)
-
-			out := String(tree)
-			assert.Equal(t, tcase.output, out)
-
-			// This test just exercises the tree walking functionality.
-			// There's no way automated way to verify that a node calls
-			// all its children. But we can examine code coverage and
-			// ensure that all walkSubtree functions were called.
-			Walk(func(node SQLNode) (bool, error) {
-				return true, nil
-			}, tree)
+			runParseTestCase(t, tcase)
 		})
 	}
+}
+
+func assertTestcaseOutput(t *testing.T, tcase parseTest, tree Statement) {
+	// For non-verbatim tests, clear the InputExpression of selected expressions so they print their reproduced
+	// values, rather than the input values.
+	if !tcase.verbatim {
+		tree.walkSubtree(func(node SQLNode) (kontinue bool, err error) {
+			if ae, ok := node.(*AliasedExpr); ok {
+				ae.InputExpression = ""
+			}
+			return true, nil
+		})
+	}
+
+	out := String(tree)
+	assert.Equal(t, tcase.output, out)
 }
 
 var ignoreWhitespaceTests = []parseTest{
@@ -2081,19 +2083,24 @@ func TestValidParallel(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			for j := 0; j < numIters; j++ {
+				// can't run each test in its own test case, there are so many it bogs down an IDE
 				tcase := validSQL[rand.Intn(len(validSQL))]
 				if tcase.output == "" {
 					tcase.output = tcase.input
 				}
 				tree, err := Parse(tcase.input)
-				if err != nil {
-					t.Errorf("Parse(%q) err: %v, want nil", tcase.input, err)
-					continue
-				}
-				out := String(tree)
-				if out != tcase.output {
-					t.Errorf("Parse(%q) = %q, want: %q", tcase.input, out, tcase.output)
-				}
+				require.NoError(t, err)
+
+				assertTestcaseOutput(t, tcase, tree)
+
+				// This test just exercises the tree walking functionality.
+				// There's no way automated way to verify that a node calls
+				// all its children. But we can examine code coverage and
+				// ensure that all walkSubtree functions were called.
+				Walk(func(node SQLNode) (bool, error) {
+					return true, nil
+				}, tree)
+
 			}
 		}()
 	}
@@ -2186,10 +2193,8 @@ func TestInvalid(t *testing.T) {
 }
 
 func TestCaseSensitivity(t *testing.T) {
-	validSQL := []struct {
-		input  string
-		output string
-	}{{
+	validSQL := []parseTest{
+	{
 		input:  "create table A (\n\t`B` int\n)",
 		output: "create table A (\n\tB int\n)",
 	}, {
@@ -2274,27 +2279,15 @@ func TestCaseSensitivity(t *testing.T) {
 	}, {
 		input: "select /* use */ 1 from t1 use index (A) where b = 1",
 	}}
+
 	for _, tcase := range validSQL {
-		if tcase.output == "" {
-			tcase.output = tcase.input
-		}
-		tree, err := Parse(tcase.input)
-		if err != nil {
-			t.Errorf("input: %s, err: %v", tcase.input, err)
-			continue
-		}
-		out := String(tree)
-		if out != tcase.output {
-			t.Errorf("out: %s, want %s", out, tcase.output)
-		}
+		runParseTestCase(t, tcase)
 	}
 }
 
 func TestKeywords(t *testing.T) {
-	validSQL := []struct {
-		input  string
-		output string
-	}{{
+	validSQL := []parseTest {
+	{
 		input:  "select current_timestamp",
 		output: "select current_timestamp() from dual",
 	}, {
@@ -2371,26 +2364,32 @@ func TestKeywords(t *testing.T) {
 	}}
 
 	for _, tcase := range validSQL {
+		runParseTestCase(t, tcase)
+	}
+}
+
+func runParseTestCase(t *testing.T, tcase parseTest) bool {
+	return t.Run(tcase.input, func(t *testing.T) {
 		if tcase.output == "" {
 			tcase.output = tcase.input
 		}
 		tree, err := Parse(tcase.input)
-		if err != nil {
-			t.Errorf("input: %s, err: %v", tcase.input, err)
-			continue
-		}
-		out := String(tree)
-		if out != tcase.output {
-			t.Errorf("out: %s, want %s", out, tcase.output)
-		}
-	}
+		require.NoError(t, err)
+
+		assertTestcaseOutput(t, tcase, tree)
+
+		// This test just exercises the tree walking functionality.
+		// There's no way automated way to verify that a node calls
+		// all its children. But we can examine code coverage and
+		// ensure that all walkSubtree functions were called.
+		Walk(func(node SQLNode) (bool, error) {
+			return true, nil
+		}, tree)
+	})
 }
 
 func TestConvert(t *testing.T) {
-	validSQL := []struct {
-		input  string
-		output string
-	}{{
+	validSQL := []parseTest{{
 		input:  "select cast('abc' as date) from t",
 		output: "select convert('abc', date) from t",
 	}, {
@@ -2444,18 +2443,7 @@ func TestConvert(t *testing.T) {
 	}}
 
 	for _, tcase := range validSQL {
-		if tcase.output == "" {
-			tcase.output = tcase.input
-		}
-		tree, err := Parse(tcase.input)
-		if err != nil {
-			t.Errorf("input: %s, err: %v", tcase.input, err)
-			continue
-		}
-		out := String(tree)
-		if out != tcase.output {
-			t.Errorf("out: %s, want %s", out, tcase.output)
-		}
+		runParseTestCase(t, tcase)
 	}
 
 	invalidSQL := []struct {
@@ -2494,10 +2482,7 @@ func TestConvert(t *testing.T) {
 
 func TestSubStr(t *testing.T) {
 
-	validSQL := []struct {
-		input  string
-		output string
-	}{{
+	validSQL := []parseTest{{
 		input: `select substr('foobar', 1) from t`,
 	}, {
 		input: "select substr(a, 1, 6) from t",
@@ -2531,18 +2516,7 @@ func TestSubStr(t *testing.T) {
 	}}
 
 	for _, tcase := range validSQL {
-		if tcase.output == "" {
-			tcase.output = tcase.input
-		}
-		tree, err := Parse(tcase.input)
-		if err != nil {
-			t.Errorf("input: %s, err: %v", tcase.input, err)
-			continue
-		}
-		out := String(tree)
-		if out != tcase.output {
-			t.Errorf("out: %s, want %s", out, tcase.output)
-		}
+		runParseTestCase(t, tcase)
 	}
 }
 

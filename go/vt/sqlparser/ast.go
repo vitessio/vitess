@@ -109,7 +109,7 @@ func Parse(sql string) (Statement, error) {
 	// For select statements, capture the verbatim select expressions from the original query text
 	if s, ok := tokenizer.ParseTree.(SelectStatement); ok {
 		s.walkSubtree(func(node SQLNode) (kontinue bool, err error) {
-			if node, ok := node.(*AliasedExpr); ok && node.EndParsePos > 0 {
+			if node, ok := node.(*AliasedExpr); ok && node.EndParsePos > node.StartParsePos {
 				node.InputExpression = strings.TrimLeft(sql[node.StartParsePos:node.EndParsePos], " \n\t")
 			}
 			return true, nil
@@ -2464,6 +2464,8 @@ func (node *AliasedExpr) Format(buf *TrackedBuffer) {
 		buf.Myprintf("%s", node.InputExpression)
 	} else if !node.As.IsEmpty() {
 		buf.Myprintf("%v as %v", node.Expr, node.As)
+	} else {
+		buf.Myprintf("%v", node.Expr, node.As)
 	}
 }
 
