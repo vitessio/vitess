@@ -106,7 +106,13 @@ func Parse(sql string) (Statement, error) {
 		return nil, ErrEmpty
 	}
 
-	// For select statements, capture the verbatim select expressions from the original query text
+	captureSelectExpressions(sql, tokenizer)
+
+	return tokenizer.ParseTree, nil
+}
+
+// For select statements, capture the verbatim select expressions from the original query text
+func captureSelectExpressions(sql string, tokenizer *Tokenizer) {
 	if s, ok := tokenizer.ParseTree.(SelectStatement); ok {
 		s.walkSubtree(func(node SQLNode) (kontinue bool, err error) {
 			if node, ok := node.(*AliasedExpr); ok && node.EndParsePos > node.StartParsePos {
@@ -115,8 +121,6 @@ func Parse(sql string) (Statement, error) {
 			return true, nil
 		})
 	}
-
-	return tokenizer.ParseTree, nil
 }
 
 // ParseStrictDDL is the same as Parse except it errors on
@@ -174,6 +178,9 @@ func parseNext(tokenizer *Tokenizer, strict bool) (Statement, error) {
 	if tokenizer.ParseTree == nil {
 		return ParseNext(tokenizer)
 	}
+
+	captureSelectExpressions((string)(tokenizer.queryBuf), tokenizer)
+
 	return tokenizer.ParseTree, nil
 }
 

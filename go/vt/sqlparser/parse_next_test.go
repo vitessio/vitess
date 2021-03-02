@@ -21,6 +21,8 @@ import (
 	"io"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 // TestParseNextValid concatenates all the valid SQL test cases and check it can read
@@ -33,22 +35,16 @@ func TestParseNextValid(t *testing.T) {
 	}
 
 	tokens := NewTokenizer(&sql)
-	for i, tcase := range validSQL {
-		input := tcase.input + ";"
-		want := tcase.output
-		if want == "" {
-			want = tcase.input
-		}
+	for _, tcase := range validSQL {
+		t.Run(tcase.input, func(t *testing.T) {
+			if tcase.output == "" {
+				tcase.output = tcase.input
+			}
 
-		tree, err := ParseNext(tokens)
-		if err != nil {
-			t.Fatalf("[%d] ParseNext(%q) err: %q, want nil", i, input, err)
-			continue
-		}
-
-		if got := String(tree); got != want {
-			t.Fatalf("[%d] ParseNext(%q) = %q, want %q", i, input, got, want)
-		}
+			tree, err := ParseNext(tokens)
+			require.NoError(t, err)
+			assertTestcaseOutput(t, tcase, tree)
+		})
 	}
 
 	// Read once more and it should be EOF.

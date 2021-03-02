@@ -54,6 +54,8 @@ type Tokenizer struct {
 	buf     []byte
 	bufPos  int
 	bufSize int
+
+	queryBuf    []byte
 }
 
 // NewStringTokenizer creates a new Tokenizer for the
@@ -995,6 +997,9 @@ func (tkn *Tokenizer) next() {
 		if tkn.bufSize, err = tkn.InStream.Read(tkn.buf); err != io.EOF && err != nil {
 			tkn.LastError = err
 		}
+
+		// Fill in the buffer for this query only
+		tkn.queryBuf = append(tkn.queryBuf, tkn.buf...)
 	}
 
 	if tkn.bufPos >= tkn.bufSize {
@@ -1017,6 +1022,10 @@ func (tkn *Tokenizer) reset() {
 	tkn.posVarIndex = 0
 	tkn.nesting = 0
 	tkn.SkipToEnd = false
+	bufLeft := tkn.bufSize - tkn.bufPos
+	tkn.queryBuf = tkn.queryBuf[len(tkn.queryBuf)-bufLeft:]
+	tkn.Position = 0
+	tkn.OldPosition = 0
 }
 
 func isLetter(ch uint16) bool {
