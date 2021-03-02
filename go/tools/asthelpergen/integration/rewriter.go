@@ -34,52 +34,52 @@ func (a *application) apply(parent, node AST, replacer replacerFunc) {
 	case InterfaceContainer:
 	case InterfaceSlice:
 		for x, el := range n {
-			a.apply(node, el, func(newNode, container AST) {
-				container.(InterfaceSlice)[x] = newNode.(AST)
+			a.apply(node, el, func(newNode AST) {
+				n[x] = newNode.(AST)
 			})
 		}
 	case *Leaf:
 	case LeafSlice:
 		for x, el := range n {
-			a.apply(node, el, func(newNode, container AST) {
-				container.(LeafSlice)[x] = newNode.(*Leaf)
+			a.apply(node, el, func(newNode AST) {
+				n[x] = newNode.(*Leaf)
 			})
 		}
 	case *NoCloneType:
 	case *RefContainer:
-		a.apply(node, n.ASTType, func(newNode, parent AST) {
-			parent.(*RefContainer).ASTType = newNode.(AST)
+		a.apply(node, n.ASTType, func(newNode AST) {
+			n.ASTType = newNode.(AST)
 		})
-		a.apply(node, n.ASTImplementationType, func(newNode, parent AST) {
-			parent.(*RefContainer).ASTImplementationType = newNode.(*Leaf)
+		a.apply(node, n.ASTImplementationType, func(newNode AST) {
+			n.ASTImplementationType = newNode.(*Leaf)
 		})
 	case *RefSliceContainer:
 		for x, el := range n.ASTElements {
-			a.apply(node, el, func(newNode, container AST) {
-				container.(*RefSliceContainer).ASTElements[x] = newNode.(AST)
+			a.apply(node, el, func(newNode AST) {
+				n.ASTElements[x] = newNode.(AST)
 			})
 		}
 		for x, el := range n.ASTImplementationElements {
-			a.apply(node, el, func(newNode, container AST) {
-				container.(*RefSliceContainer).ASTImplementationElements[x] = newNode.(*Leaf)
+			a.apply(node, el, func(newNode AST) {
+				n.ASTImplementationElements[x] = newNode.(*Leaf)
 			})
 		}
 	case *SubImpl:
-		a.apply(node, n.inner, func(newNode, parent AST) {
-			parent.(*SubImpl).inner = newNode.(SubIface)
+		a.apply(node, n.inner, func(newNode AST) {
+			n.inner = newNode.(SubIface)
 		})
 	case ValueContainer:
 		a.apply(node, n.ASTType, replacePanic("ValueContainer ASTType"))
 		a.apply(node, n.ASTImplementationType, replacePanic("ValueContainer ASTImplementationType"))
 	case ValueSliceContainer:
 		for x, el := range n.ASTElements {
-			a.apply(node, el, func(newNode, container AST) {
-				container.(ValueSliceContainer).ASTElements[x] = newNode.(AST)
+			a.apply(node, el, func(newNode AST) {
+				n.ASTElements[x] = newNode.(AST)
 			})
 		}
 		for x, el := range n.ASTImplementationElements {
-			a.apply(node, el, func(newNode, container AST) {
-				container.(ValueSliceContainer).ASTImplementationElements[x] = newNode.(*Leaf)
+			a.apply(node, el, func(newNode AST) {
+				n.ASTImplementationElements[x] = newNode.(*Leaf)
 			})
 		}
 	}
