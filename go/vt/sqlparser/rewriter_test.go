@@ -38,3 +38,30 @@ func BenchmarkVisitLargeExpression(b *testing.B) {
 		require.NoError(b, err)
 	}
 }
+
+func TestBadTypeReturnsErrorAndNotPanic(t *testing.T) {
+	parse, err := Parse("select 42 from dual")
+	require.NoError(t, err)
+	_, err = Rewrite(parse, func(cursor *Cursor) bool {
+		_, ok := cursor.Node().(*Literal)
+		if ok {
+			cursor.Replace(&AliasedTableExpr{}) // this is not a valid replacement because of types
+		}
+		return true
+	}, nil)
+	require.Error(t, err)
+}
+
+func TestChangeValueTypeGivesError(t *testing.T) {
+	parse, err := Parse("select * from a join b on a.id = b.id")
+	require.NoError(t, err)
+	_, err = Rewrite(parse, func(cursor *Cursor) bool {
+		_, ok := cursor.Node().(*ComparisonExpr)
+		if ok {
+			cursor.Replace(&NullVal{}) // this is not a valid replacement because the container is a value type
+		}
+		return true
+	}, nil)
+	require.Error(t, err)
+
+}

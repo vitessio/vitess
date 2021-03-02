@@ -16,7 +16,10 @@ limitations under the License.
 
 package sqlparser
 
-import "reflect"
+import (
+	"reflect"
+	"runtime"
+)
 
 // The rewriter was heavily inspired by https://github.com/golang/tools/blob/master/go/ast/astutil/rewrite.go
 
@@ -39,8 +42,17 @@ import "reflect"
 func Rewrite(node SQLNode, pre, post ApplyFunc) (result SQLNode, err error) {
 	parent := &struct{ SQLNode }{node}
 	defer func() {
-		if r := recover(); r != nil && r != abort {
-			panic(r)
+		if r := recover(); r != nil {
+			switch r := r.(type) {
+			case abortT: // nothing to do
+
+			case *runtime.TypeAssertionError:
+				err = r
+			case *valueTypeFieldCantChangeErr:
+				err = r
+			default:
+				panic(r)
+			}
 		}
 		result = parent.SQLNode
 	}()
@@ -69,7 +81,9 @@ func Rewrite(node SQLNode, pre, post ApplyFunc) (result SQLNode, err error) {
 // See Rewrite for details.
 type ApplyFunc func(*Cursor) bool
 
-var abort = new(int) // singleton, to signal termination of Apply
+type abortT int
+
+var abort = abortT(0) // singleton, to signal termination of Apply
 
 // A Cursor describes a node encountered during Apply.
 // Information about the node and its parent is available
@@ -108,8 +122,18 @@ func isNilValue(i interface{}) bool {
 	return isNullable && valueOf.IsNil()
 }
 
+// this type is here so we can catch it in the Rewrite method above
+type valueTypeFieldCantChangeErr struct {
+	msg string
+}
+
+// Error implements the error interface
+func (e *valueTypeFieldCantChangeErr) Error() string {
+	return "Tried replacing a field of a value type. This is not supported. " + e.msg
+}
+
 func replacePanic(msg string) func(newNode, parent SQLNode) {
 	return func(newNode, parent SQLNode) {
-		panic("Tried replacing a field of a value type. This is not supported. " + msg)
+		panic(&valueTypeFieldCantChangeErr{msg: msg})
 	}
 }
