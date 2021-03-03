@@ -19,6 +19,7 @@ package engine
 import (
 	"context"
 	"strings"
+	"vitess.io/vitess/go/vt/log"
 
 	"vitess.io/vitess/go/mysql"
 
@@ -78,7 +79,11 @@ func (c *DBDDL) GetTableName() string {
 // Execute implements the Primitive interface
 func (c *DBDDL) Execute(vcursor VCursor, _ map[string]*querypb.BindVariable, _ bool) (*sqltypes.Result, error) {
 	name := vcursor.GetDBDDLPluginName()
-	plugin := databaseCreatorPlugins[name]
+	plugin, ok := databaseCreatorPlugins[name]
+	if !ok {
+		log.Errorf("'%s' database ddl plugin is not registered. Falling back to default plugin", name)
+		plugin = databaseCreatorPlugins[defaultDBDDLPlugin]
+	}
 	if c.create {
 		err := plugin.CreateDatabase(vcursor.Context(), c.name)
 		if err != nil {

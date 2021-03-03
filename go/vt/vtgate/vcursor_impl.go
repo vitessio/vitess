@@ -695,7 +695,7 @@ func (vc *vcursorImpl) HasCreatedTempTable() {
 }
 
 func (vc *vcursorImpl) GetDBDDLPluginName() string {
-	return *createDropDbPlugin
+	return *dbDDLPlugin
 }
 
 // ParseDestinationTarget parses destination target string and sets default keyspace if possible.

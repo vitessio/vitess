@@ -47,7 +47,13 @@ func (noOp) DropDatabase(context.Context, string) error {
 	return nil
 }
 
+const (
+	faildbDDL = "fail"
+	noOpdbDDL = "noop"
+	defaultDBDDLPlugin = faildbDDL
+)
+
 func init() {
-	databaseCreatorPlugins["fail"] = failDBDDL{}
-	databaseCreatorPlugins["noop"] = noOp{}
+	databaseCreatorPlugins[faildbDDL] = failDBDDL{}
+	databaseCreatorPlugins[noOpdbDDL] = noOp{}
 }
