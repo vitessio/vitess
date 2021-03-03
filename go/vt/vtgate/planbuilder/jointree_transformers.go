@@ -38,7 +38,7 @@ func transformToLogicalPlan(tree joinTree, semTable *semantics.SemTable) (logica
 		return transformJoinPlan(n, semTable)
 	}
 
-	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: unknown type encountered: %T", tree)
+	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unknown type encountered: %T", tree)
 }
 
 func transformJoinPlan(n *joinPlan, semTable *semantics.SemTable) (logicalPlan, error) {

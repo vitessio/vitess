@@ -64,11 +64,11 @@ func throttleResponse(tablet *cluster.VttabletProcess, path string) (resp *http.
 	return resp, respBody, err
 }
 
-func throttleStreamer(tablet *cluster.VttabletProcess, app string) (*http.Response, string, error) {
+func throttleApp(tablet *cluster.VttabletProcess, app string) (*http.Response, string, error) {
 	return throttleResponse(tablet, fmt.Sprintf("throttler/throttle-app?app=%s&duration=1h", app))
 }
 
-func unthrottleStreamer(tablet *cluster.VttabletProcess, app string) (*http.Response, string, error) {
+func unthrottleApp(tablet *cluster.VttabletProcess, app string) (*http.Response, string, error) {
 	return throttleResponse(tablet, fmt.Sprintf("throttler/unthrottle-app?app=%s", app))
 }
 
@@ -87,7 +87,7 @@ func TestBasicVreplicationWorkflow(t *testing.T) {
 	defaultCellName := "zone1"
 	allCells := []string{"zone1"}
 	allCellNames = "zone1"
-	vc = InitCluster(t, allCells)
+	vc = NewVitessCluster(t, "TestBasicVreplicationWorkflow", allCells, mainClusterConfig)
 
 	require.NotNil(t, vc)
 	defaultReplicas = 0 // because of CI resource constraints we can only run this test with master tablets
@@ -101,9 +101,9 @@ func TestBasicVreplicationWorkflow(t *testing.T) {
 	require.NotNil(t, vtgate)
 	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.master", "product", "0"), 1)
 
-	vtgateConn = getConnection(t, globalConfig.vtgateMySQLPort)
+	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	defer vtgateConn.Close()
-	verifyClusterHealth(t)
+	verifyClusterHealth(t, vc)
 	insertInitialData(t)
 	materializeRollup(t)
 
@@ -135,7 +135,7 @@ func TestMultiCellVreplicationWorkflow(t *testing.T) {
 	cells := []string{"zone1", "zone2"}
 	allCellNames = "zone1,zone2"
 
-	vc = InitCluster(t, cells)
+	vc = NewVitessCluster(t, "TestBasicVreplicationWorkflow", cells, mainClusterConfig)
 	require.NotNil(t, vc)
 	defaultCellName := "zone1"
 	defaultCell = vc.Cells[defaultCellName]
@@ -151,9 +151,9 @@ func TestMultiCellVreplicationWorkflow(t *testing.T) {
 	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.master", "product", "0"), 1)
 	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", "product", "0"), 2)
 
-	vtgateConn = getConnection(t, globalConfig.vtgateMySQLPort)
+	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	defer vtgateConn.Close()
-	verifyClusterHealth(t)
+	verifyClusterHealth(t, vc)
 	insertInitialData(t)
 	shardCustomer(t, true, []*Cell{cell1, cell2}, cell2.Name)
 }
@@ -161,7 +161,7 @@ func TestMultiCellVreplicationWorkflow(t *testing.T) {
 func TestCellAliasVreplicationWorkflow(t *testing.T) {
 	cells := []string{"zone1", "zone2"}
 
-	vc = InitCluster(t, cells)
+	vc = NewVitessCluster(t, "TestBasicVreplicationWorkflow", cells, mainClusterConfig)
 	require.NotNil(t, vc)
 	allCellNames = "zone1,zone2"
 	defaultCellName := "zone1"
@@ -182,9 +182,9 @@ func TestCellAliasVreplicationWorkflow(t *testing.T) {
 	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.master", "product", "0"), 1)
 	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", "product", "0"), 2)
 
-	vtgateConn = getConnection(t, globalConfig.vtgateMySQLPort)
+	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	defer vtgateConn.Close()
-	verifyClusterHealth(t)
+	verifyClusterHealth(t, vc)
 	insertInitialData(t)
 	shardCustomer(t, true, []*Cell{cell1, cell2}, "alias")
 }
@@ -267,7 +267,7 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		insertQuery1 := "insert into customer(cid, name) values(1001, 'tempCustomer1')"
 		matchInsertQuery1 := "insert into customer(cid, `name`) values (:vtg1, :vtg2)"
 		require.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, productTab, "product", insertQuery1, matchInsertQuery1))
-		vdiff(t, ksWorkflow)
+		vdiff(t, ksWorkflow, "")
 		switchReadsDryRun(t, allCellNames, ksWorkflow, dryRunResultsReadCustomerShard)
 		switchReads(t, allCellNames, ksWorkflow)
 		require.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, productTab, "customer", query, query))
@@ -477,7 +477,7 @@ func reshard(t *testing.T, ksName string, tableName string, workflow string, sou
 				continue
 			}
 		}
-		vdiff(t, ksWorkflow)
+		vdiff(t, ksWorkflow, "")
 		switchReads(t, allCellNames, ksWorkflow)
 		if dryRunResultSwitchWrites != nil {
 			switchWritesDryRun(t, ksWorkflow, dryRunResultSwitchWrites)
@@ -510,7 +510,7 @@ func shardOrders(t *testing.T) {
 		customerTab2 := custKs.Shards["80-"].Tablets["zone1-300"].Vttablet
 		catchup(t, customerTab1, workflow, "MoveTables")
 		catchup(t, customerTab2, workflow, "MoveTables")
-		vdiff(t, ksWorkflow)
+		vdiff(t, ksWorkflow, "")
 		switchReads(t, allCellNames, ksWorkflow)
 		switchWrites(t, ksWorkflow, false)
 		dropSources(t, ksWorkflow)
@@ -544,7 +544,7 @@ func shardMerchant(t *testing.T) {
 		catchup(t, merchantTab1, workflow, "MoveTables")
 		catchup(t, merchantTab2, workflow, "MoveTables")
 
-		vdiff(t, "merchant.p2m")
+		vdiff(t, "merchant.p2m", "")
 		switchReads(t, allCellNames, ksWorkflow)
 		switchWrites(t, ksWorkflow, false)
 		dropSources(t, ksWorkflow)
@@ -555,9 +555,9 @@ func shardMerchant(t *testing.T) {
 	})
 }
 
-func vdiff(t *testing.T, workflow string) {
+func vdiff(t *testing.T, workflow, cells string) {
 	t.Run("vdiff", func(t *testing.T) {
-		output, err := vc.VtctlClient.ExecuteCommandWithOutput("VDiff", "-format", "json", workflow)
+		output, err := vc.VtctlClient.ExecuteCommandWithOutput("VDiff", "-tablet_types=master", "-source_cell="+cells, "-format", "json", workflow)
 		fmt.Printf("vdiff err: %+v, output: %+v\n", err, output)
 		require.Nil(t, err)
 		require.NotNil(t, output)
@@ -570,7 +570,7 @@ func vdiff(t *testing.T, workflow string) {
 		require.True(t, len(diffReports) > 0)
 		for key, diffReport := range diffReports {
 			if diffReport.ProcessedRows != diffReport.MatchingRows {
-				t.Errorf("vdiff error for %d : %#v\n", key, diffReport)
+				require.Failf(t, "vdiff failed", "Table %d : %#v\n", key, diffReport)
 			}
 		}
 	})
@@ -604,7 +604,7 @@ func materializeProduct(t *testing.T) {
 		t.Run("throttle-app-product", func(t *testing.T) {
 			// Now, throttle the streamer on source tablets, insert some rows
 			for _, tab := range productTablets {
-				_, body, err := throttleStreamer(tab, sourceThrottlerAppName)
+				_, body, err := throttleApp(tab, sourceThrottlerAppName)
 				assert.NoError(t, err)
 				assert.Contains(t, body, sourceThrottlerAppName)
 			}
@@ -633,7 +633,7 @@ func materializeProduct(t *testing.T) {
 		t.Run("unthrottle-app-product", func(t *testing.T) {
 			// unthrottle on source tablets, and expect the rows to show up
 			for _, tab := range productTablets {
-				_, body, err := unthrottleStreamer(tab, sourceThrottlerAppName)
+				_, body, err := unthrottleApp(tab, sourceThrottlerAppName)
 				assert.NoError(t, err)
 				assert.Contains(t, body, sourceThrottlerAppName)
 			}
@@ -654,7 +654,7 @@ func materializeProduct(t *testing.T) {
 		t.Run("throttle-app-customer", func(t *testing.T) {
 			// Now, throttle the streamer on source tablets, insert some rows
 			for _, tab := range customerTablets {
-				_, body, err := throttleStreamer(tab, targetThrottlerAppName)
+				_, body, err := throttleApp(tab, targetThrottlerAppName)
 				assert.NoError(t, err)
 				assert.Contains(t, body, targetThrottlerAppName)
 			}
@@ -683,7 +683,7 @@ func materializeProduct(t *testing.T) {
 		t.Run("unthrottle-app-customer", func(t *testing.T) {
 			// unthrottle on source tablets, and expect the rows to show up
 			for _, tab := range customerTablets {
-				_, body, err := unthrottleStreamer(tab, targetThrottlerAppName)
+				_, body, err := unthrottleApp(tab, targetThrottlerAppName)
 				assert.NoError(t, err)
 				assert.Contains(t, body, targetThrottlerAppName)
 			}
@@ -776,8 +776,8 @@ func checkTabletHealth(t *testing.T, tablet *Tablet) {
 	}
 }
 
-func iterateTablets(t *testing.T, f func(t *testing.T, tablet *Tablet)) {
-	for _, cell := range vc.Cells {
+func iterateTablets(t *testing.T, cluster *VitessCluster, f func(t *testing.T, tablet *Tablet)) {
+	for _, cell := range cluster.Cells {
 		for _, ks := range cell.Keyspaces {
 			for _, shard := range ks.Shards {
 				for _, tablet := range shard.Tablets {
@@ -788,15 +788,15 @@ func iterateTablets(t *testing.T, f func(t *testing.T, tablet *Tablet)) {
 	}
 }
 
-func iterateCells(t *testing.T, f func(t *testing.T, cell *Cell)) {
-	for _, cell := range vc.Cells {
+func iterateCells(t *testing.T, cluster *VitessCluster, f func(t *testing.T, cell *Cell)) {
+	for _, cell := range cluster.Cells {
 		f(t, cell)
 	}
 }
 
-func verifyClusterHealth(t *testing.T) {
-	iterateCells(t, checkVtgateHealth)
-	iterateTablets(t, checkTabletHealth)
+func verifyClusterHealth(t *testing.T, cluster *VitessCluster) {
+	iterateCells(t, cluster, checkVtgateHealth)
+	iterateTablets(t, cluster, checkTabletHealth)
 }
 
 func catchup(t *testing.T, vttablet *cluster.VttabletProcess, workflow, info string) {

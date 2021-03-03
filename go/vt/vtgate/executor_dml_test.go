@@ -635,10 +635,7 @@ func TestInsertShardedKeyrange(t *testing.T) {
 
 	// If a unique vindex returns a keyrange, we fail the insert
 	_, err := executorExec(executor, "insert into keyrange_table(krcol_unique, krcol) values(1, 1)", nil)
-	want := "execInsertSharded: getInsertShardedRoute: could not map [INT64(1)] to a unique keyspace id: DestinationKeyRange(-10)"
-	if err == nil || err.Error() != want {
-		t.Errorf("executorExec error: %v, want %s", err, want)
-	}
+	require.EqualError(t, err, "could not map [INT64(1)] to a unique keyspace id: DestinationKeyRange(-10)")
 }
 
 func TestInsertShardedAutocommitLookup(t *testing.T) {
@@ -1241,10 +1238,7 @@ func TestInsertPartialFail1(t *testing.T) {
 		"insert into user(id, v, name) values (1, 2, 'myname')",
 		nil,
 	)
-	want := "execInsertSharded:"
-	if err == nil || !strings.HasPrefix(err.Error(), want) {
-		t.Errorf("insert first DML fail: %v, must start with %s", err, want)
-	}
+	require.Error(t, err)
 }
 
 // If a statement gets broken up into two, and the second one fails
@@ -1609,7 +1603,7 @@ func TestKeyDestRangeQuery(t *testing.T) {
 	masterSession.TargetString = "TestExecutor[-]"
 	_, err := executorExec(executor, insertInput, nil)
 
-	require.EqualError(t, err, "range queries not supported for inserts: TestExecutor[-]")
+	require.EqualError(t, err, "range queries are not allowed for insert statement: TestExecutor[-]")
 
 	masterSession.TargetString = ""
 }

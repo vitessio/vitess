@@ -39,7 +39,7 @@ func buildExplainPlan(stmt sqlparser.Explain, vschema ContextVSchema) (engine.Pr
 		}
 		return buildOtherReadAndAdmin(sqlparser.String(explain), vschema)
 	}
-	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG unexpected explain type: %T", stmt)
+	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unexpected explain type: %T", stmt)
 }
 
 func explainTabPlan(explain *sqlparser.ExplainTab, vschema ContextVSchema) (engine.Primitive, error) {

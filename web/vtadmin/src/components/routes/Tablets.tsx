@@ -17,7 +17,7 @@ import * as React from 'react';
 
 import { useTablets } from '../../hooks/api';
 import { vtadmin as pb, topodata } from '../../proto/vtadmin';
-import { orderBy } from 'lodash-es';
+import { invertBy, orderBy } from 'lodash-es';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import { DataTable } from '../dataTable/DataTable';
 import { TextInput } from '../TextInput';
@@ -33,26 +33,8 @@ export const Tablets = () => {
     const { data = [] } = useTablets();
 
     const filteredData = React.useMemo(() => {
-        // Properties prefixed with "_" are hidden and included for filtering only.
-        // They also won't work as keys in key:value searches, e.g., you cannot
-        // search for `_keyspaceShard:customers/20-40`, by design, mostly because it's
-        // unexpected and a little weird to key on properties that you can't see.
-        const mapped = data.map((t) => ({
-            cluster: t.cluster?.name,
-            keyspace: t.tablet?.keyspace,
-            shard: t.tablet?.shard,
-            alias: formatAlias(t),
-            hostname: t.tablet?.hostname,
-            displayType: formatDisplayType(t),
-            state: formatState(t),
-            _keyspaceShard: `${t.tablet?.keyspace}/${t.tablet?.shard}`,
-            // Include the unformatted type so (string) filtering by "master" works
-            // even if "primary" is what we display, and what we use for key:value searches.
-            _type: formatType(t),
-        }));
-        const filtered = filterNouns(filter, mapped);
-        return orderBy(filtered, ['cluster', 'keyspace', 'shard', 'displayType']);
-    }, [filter, data]);
+        return formatRows(data, filter);
+    }, [data, filter]);
 
     const renderRows = React.useCallback((rows: typeof filteredData) => {
         return rows.map((t, tdx) => (
@@ -60,7 +42,7 @@ export const Tablets = () => {
                 <td>{t.cluster}</td>
                 <td>{t.keyspace}</td>
                 <td>{t.shard}</td>
-                <td>{t.displayType}</td>
+                <td>{t.type}</td>
                 <td>{t.state}</td>
                 <td>{t.alias}</td>
                 <td>{t.hostname}</td>
@@ -93,7 +75,16 @@ export const Tablets = () => {
 };
 
 const SERVING_STATES = Object.keys(pb.Tablet.ServingState);
-const TABLET_TYPES = Object.keys(topodata.TabletType);
+
+// TABLET_TYPES maps numeric tablet types back to human readable strings.
+// Note that topodata.TabletType allows duplicate values: specifically,
+// both RDONLY (new name) and BATCH (old name) share the same numeric value.
+// So, we make the assumption that if there are duplicate keys, we will
+// always take the first value.
+const TABLET_TYPES = Object.entries(invertBy(topodata.TabletType)).reduce((acc, [k, vs]) => {
+    acc[k] = vs[0];
+    return acc;
+}, {} as { [k: string]: string });
 
 const formatAlias = (t: pb.Tablet) =>
     t.tablet?.alias?.cell && t.tablet?.alias?.uid && `${t.tablet.alias.cell}-${t.tablet.alias.uid}`;
@@ -108,3 +99,29 @@ const formatDisplayType = (t: pb.Tablet) => {
 };
 
 const formatState = (t: pb.Tablet) => t.state && SERVING_STATES[t.state];
+
+export const formatRows = (tablets: pb.Tablet[] | null, filter: string) => {
+    if (!tablets) return [];
+
+    // Properties prefixed with "_" are hidden and included for filtering only.
+    // They also won't work as keys in key:value searches, e.g., you cannot
+    // search for `_keyspaceShard:customers/20-40`, by design, mostly because it's
+    // unexpected and a little weird to key on properties that you can't see.
+    const mapped = tablets.map((t) => ({
+        cluster: t.cluster?.name,
+        keyspace: t.tablet?.keyspace,
+        shard: t.tablet?.shard,
+        alias: formatAlias(t),
+        hostname: t.tablet?.hostname,
+        type: formatDisplayType(t),
+        state: formatState(t),
+        _keyspaceShard: `${t.tablet?.keyspace}/${t.tablet?.shard}`,
+        // Include the unformatted type so (string) filtering by "master" works
+        // even if "primary" is what we display, and what we use for key:value searches.
+        _rawType: formatType(t),
+        // Always sort primary tablets first, then sort alphabetically by type, etc.
+        _typeSortOrder: formatDisplayType(t) === 'PRIMARY' ? 1 : 2,
+    }));
+    const filtered = filterNouns(filter, mapped);
+    return orderBy(filtered, ['cluster', 'keyspace', 'shard', '_typeSortOrder', 'type', 'alias']);
+};

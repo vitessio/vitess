@@ -31,6 +31,7 @@ func TestCreateUUID(t *testing.T) {
 
 func TestIsDirect(t *testing.T) {
 	assert.True(t, DDLStrategyDirect.IsDirect())
+	assert.False(t, DDLStrategyOnline.IsDirect())
 	assert.False(t, DDLStrategyGhost.IsDirect())
 	assert.False(t, DDLStrategyPTOSC.IsDirect())
 	assert.True(t, DDLStrategy("").IsDirect())
@@ -49,6 +50,10 @@ func TestParseDDLStrategy(t *testing.T) {
 		{
 			strategyVariable: "direct",
 			strategy:         DDLStrategyDirect,
+		},
+		{
+			strategyVariable: "online",
+			strategy:         DDLStrategyOnline,
 		},
 		{
 			strategyVariable: "gh-ost",
@@ -151,6 +156,7 @@ func TestIsOnlineDDLTableName(t *testing.T) {
 		"_4e5dcf80_354b_11eb_82cd_f875a4d24e90_20201203114014_ghc",
 		"_4e5dcf80_354b_11eb_82cd_f875a4d24e90_20201203114014_del",
 		"_4e5dcf80_354b_11eb_82cd_f875a4d24e90_20201203114013_new",
+		"_84371a37_6153_11eb_9917_f875a4d24e90_20210128122816_vrepl",
 		"_table_old",
 		"__table_old",
 	}
@@ -164,6 +170,7 @@ func TestIsOnlineDDLTableName(t *testing.T) {
 		"_table_gho",
 		"_table_ghc",
 		"_table_del",
+		"_table_vrepl",
 		"table_old",
 	}
 	for _, tableName := range irrelevantNames {
