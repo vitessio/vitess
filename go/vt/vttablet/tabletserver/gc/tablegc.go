@@ -431,9 +431,9 @@ func (collector *TableGC) purge(ctx context.Context) (tableName string, err erro
 	// avoids excessive IO on the replicas.
 	// (note that the user may skip the PURGE step if they want, but the step is on by default)
 
-	// However, disabling SQL_LOG_BIN requires SUPER privileges, and we don;t know that we have that.
-	// e.g. on Amazon Aurora we do not have SUPER and can disable log bin.
-	// We therefore disable log bin on best-effort base. Te logic is still fine and sound if binary logging
+	// However, disabling SQL_LOG_BIN requires SUPER privileges, and we don't know that we have that.
+	// e.g. on Amazon Aurora we do not have SUPER and cannot disable log bin.
+	// We therefore disable log bin on best-effort base. The logic is still fine and sound if binary logging
 	// is left enabled. We just lose some optimization.
 	disableLogBin := func() (bool, error) {
 		_, err := conn.ExecuteFetch("SET sql_log_bin = OFF", 0, false)
