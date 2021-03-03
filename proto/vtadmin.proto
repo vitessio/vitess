@@ -30,6 +30,13 @@ import "vtctldata.proto";
 // VTAdmin is the Vitess Admin API service. It provides RPCs that operate on
 // across a range of Vitess clusters.
 service VTAdmin {
+    // FindSchema returns a single Schema that matches the provided table name
+    // across all specified clusters IDs. Not specifying a set of cluster IDs
+    // causes the search to span all configured clusters.
+    //
+    // An error occurs if either no table exists across any of the clusters with
+    // the specified table name, or if multiple tables exist with that name.
+    rpc FindSchema(FindSchemaRequest) returns (Schema) {};
     // GetClusters returns all configured clusters.
     rpc GetClusters(GetClustersRequest) returns (GetClustersResponse) {};
     // GetGates returns all gates across all the specified clusters.
@@ -111,6 +118,12 @@ message VTGate {
 }
 
 /* Request/Response types */
+
+message FindSchemaRequest {
+    string table = 1;
+    repeated string cluster_ids = 2;
+}
+
 message GetClustersRequest {}
 
 message GetClustersResponse {

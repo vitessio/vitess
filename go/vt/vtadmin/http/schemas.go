@@ -22,6 +22,12 @@ import (
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 )
 
+// FindSchema implements the http wrapper for the
+// /schema/{table}[?cluster=[&cluster=]] route.
+func FindSchema(ctx context.Context, r Request, api *API) *JSONResponse {
+	panic("unimplemented!")
+}
+
 // GetSchema implements the http wrapper for the
 // /schema/{cluster_id}/{keyspace}/{table} route.
 func GetSchema(ctx context.Context, r Request, api *API) *JSONResponse {

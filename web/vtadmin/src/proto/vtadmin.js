@@ -51,6 +51,39 @@ $root.vtadmin = (function() {
         };
 
         /**
+         * Callback as used by {@link vtadmin.VTAdmin#findSchema}.
+         * @memberof vtadmin.VTAdmin
+         * @typedef FindSchemaCallback
+         * @type {function}
+         * @param {Error|null} error Error, if any
+         * @param {vtadmin.Schema} [response] Schema
+         */
+
+        /**
+         * Calls FindSchema.
+         * @function findSchema
+         * @memberof vtadmin.VTAdmin
+         * @instance
+         * @param {vtadmin.IFindSchemaRequest} request FindSchemaRequest message or plain object
+         * @param {vtadmin.VTAdmin.FindSchemaCallback} callback Node-style callback called with the error, if any, and Schema
+         * @returns {undefined}
+         * @variation 1
+         */
+        Object.defineProperty(VTAdmin.prototype.findSchema = function findSchema(request, callback) {
+            return this.rpcCall(findSchema, $root.vtadmin.FindSchemaRequest, $root.vtadmin.Schema, request, callback);
+        }, "name", { value: "FindSchema" });
+
+        /**
+         * Calls FindSchema.
+         * @function findSchema
+         * @memberof vtadmin.VTAdmin
+         * @instance
+         * @param {vtadmin.IFindSchemaRequest} request FindSchemaRequest message or plain object
+         * @returns {Promise<vtadmin.Schema>} Promise
+         * @variation 2
+         */
+
+        /**
          * Callback as used by {@link vtadmin.VTAdmin#getClusters}.
          * @memberof vtadmin.VTAdmin
          * @typedef GetClustersCallback
@@ -1858,6 +1891,232 @@ $root.vtadmin = (function() {
         };
 
         return VTGate;
+    })();
+
+    vtadmin.FindSchemaRequest = (function() {
+
+        /**
+         * Properties of a FindSchemaRequest.
+         * @memberof vtadmin
+         * @interface IFindSchemaRequest
+         * @property {string|null} [table] FindSchemaRequest table
+         * @property {Array.<string>|null} [cluster_ids] FindSchemaRequest cluster_ids
+         */
+
+        /**
+         * Constructs a new FindSchemaRequest.
+         * @memberof vtadmin
+         * @classdesc Represents a FindSchemaRequest.
+         * @implements IFindSchemaRequest
+         * @constructor
+         * @param {vtadmin.IFindSchemaRequest=} [properties] Properties to set
+         */
+        function FindSchemaRequest(properties) {
+            this.cluster_ids = [];
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * FindSchemaRequest table.
+         * @member {string} table
+         * @memberof vtadmin.FindSchemaRequest
+         * @instance
+         */
+        FindSchemaRequest.prototype.table = "";
+
+        /**
+         * FindSchemaRequest cluster_ids.
+         * @member {Array.<string>} cluster_ids
+         * @memberof vtadmin.FindSchemaRequest
+         * @instance
+         */
+        FindSchemaRequest.prototype.cluster_ids = $util.emptyArray;
+
+        /**
+         * Creates a new FindSchemaRequest instance using the specified properties.
+         * @function create
+         * @memberof vtadmin.FindSchemaRequest
+         * @static
+         * @param {vtadmin.IFindSchemaRequest=} [properties] Properties to set
+         * @returns {vtadmin.FindSchemaRequest} FindSchemaRequest instance
+         */
+        FindSchemaRequest.create = function create(properties) {
+            return new FindSchemaRequest(properties);
+        };
+
+        /**
+         * Encodes the specified FindSchemaRequest message. Does not implicitly {@link vtadmin.FindSchemaRequest.verify|verify} messages.
+         * @function encode
+         * @memberof vtadmin.FindSchemaRequest
+         * @static
+         * @param {vtadmin.IFindSchemaRequest} message FindSchemaRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        FindSchemaRequest.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.table != null && Object.hasOwnProperty.call(message, "table"))
+                writer.uint32(/* id 1, wireType 2 =*/10).string(message.table);
+            if (message.cluster_ids != null && message.cluster_ids.length)
+                for (var i = 0; i < message.cluster_ids.length; ++i)
+                    writer.uint32(/* id 2, wireType 2 =*/18).string(message.cluster_ids[i]);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified FindSchemaRequest message, length delimited. Does not implicitly {@link vtadmin.FindSchemaRequest.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtadmin.FindSchemaRequest
+         * @static
+         * @param {vtadmin.IFindSchemaRequest} message FindSchemaRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        FindSchemaRequest.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a FindSchemaRequest message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtadmin.FindSchemaRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtadmin.FindSchemaRequest} FindSchemaRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        FindSchemaRequest.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.FindSchemaRequest();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.table = reader.string();
+                    break;
+                case 2:
+                    if (!(message.cluster_ids && message.cluster_ids.length))
+                        message.cluster_ids = [];
+                    message.cluster_ids.push(reader.string());
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a FindSchemaRequest message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtadmin.FindSchemaRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtadmin.FindSchemaRequest} FindSchemaRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        FindSchemaRequest.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a FindSchemaRequest message.
+         * @function verify
+         * @memberof vtadmin.FindSchemaRequest
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        FindSchemaRequest.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.table != null && message.hasOwnProperty("table"))
+                if (!$util.isString(message.table))
+                    return "table: string expected";
+            if (message.cluster_ids != null && message.hasOwnProperty("cluster_ids")) {
+                if (!Array.isArray(message.cluster_ids))
+                    return "cluster_ids: array expected";
+                for (var i = 0; i < message.cluster_ids.length; ++i)
+                    if (!$util.isString(message.cluster_ids[i]))
+                        return "cluster_ids: string[] expected";
+            }
+            return null;
+        };
+
+        /**
+         * Creates a FindSchemaRequest message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtadmin.FindSchemaRequest
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtadmin.FindSchemaRequest} FindSchemaRequest
+         */
+        FindSchemaRequest.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtadmin.FindSchemaRequest)
+                return object;
+            var message = new $root.vtadmin.FindSchemaRequest();
+            if (object.table != null)
+                message.table = String(object.table);
+            if (object.cluster_ids) {
+                if (!Array.isArray(object.cluster_ids))
+                    throw TypeError(".vtadmin.FindSchemaRequest.cluster_ids: array expected");
+                message.cluster_ids = [];
+                for (var i = 0; i < object.cluster_ids.length; ++i)
+                    message.cluster_ids[i] = String(object.cluster_ids[i]);
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a FindSchemaRequest message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtadmin.FindSchemaRequest
+         * @static
+         * @param {vtadmin.FindSchemaRequest} message FindSchemaRequest
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        FindSchemaRequest.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.arrays || options.defaults)
+                object.cluster_ids = [];
+            if (options.defaults)
+                object.table = "";
+            if (message.table != null && message.hasOwnProperty("table"))
+                object.table = message.table;
+            if (message.cluster_ids && message.cluster_ids.length) {
+                object.cluster_ids = [];
+                for (var j = 0; j < message.cluster_ids.length; ++j)
+                    object.cluster_ids[j] = message.cluster_ids[j];
+            }
+            return object;
+        };
+
+        /**
+         * Converts this FindSchemaRequest to JSON.
+         * @function toJSON
+         * @memberof vtadmin.FindSchemaRequest
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        FindSchemaRequest.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return FindSchemaRequest;
     })();
 
     vtadmin.GetClustersRequest = (function() {

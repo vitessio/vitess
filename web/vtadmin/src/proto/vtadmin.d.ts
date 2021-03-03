@@ -23,6 +23,20 @@ export namespace vtadmin {
         public static create(rpcImpl: $protobuf.RPCImpl, requestDelimited?: boolean, responseDelimited?: boolean): VTAdmin;
 
         /**
+         * Calls FindSchema.
+         * @param request FindSchemaRequest message or plain object
+         * @param callback Node-style callback called with the error, if any, and Schema
+         */
+        public findSchema(request: vtadmin.IFindSchemaRequest, callback: vtadmin.VTAdmin.FindSchemaCallback): void;
+
+        /**
+         * Calls FindSchema.
+         * @param request FindSchemaRequest message or plain object
+         * @returns Promise
+         */
+        public findSchema(request: vtadmin.IFindSchemaRequest): Promise<vtadmin.Schema>;
+
+        /**
          * Calls GetClusters.
          * @param request GetClustersRequest message or plain object
          * @param callback Node-style callback called with the error, if any, and GetClustersResponse
@@ -136,6 +150,13 @@ export namespace vtadmin {
     }
 
     namespace VTAdmin {
+
+        /**
+         * Callback as used by {@link vtadmin.VTAdmin#findSchema}.
+         * @param error Error, if any
+         * @param [response] Schema
+         */
+        type FindSchemaCallback = (error: (Error|null), response?: vtadmin.Schema) => void;
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#getClusters}.
@@ -811,6 +832,102 @@ export namespace vtadmin {
 
         /**
          * Converts this VTGate to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a FindSchemaRequest. */
+    interface IFindSchemaRequest {
+
+        /** FindSchemaRequest table */
+        table?: (string|null);
+
+        /** FindSchemaRequest cluster_ids */
+        cluster_ids?: (string[]|null);
+    }
+
+    /** Represents a FindSchemaRequest. */
+    class FindSchemaRequest implements IFindSchemaRequest {
+
+        /**
+         * Constructs a new FindSchemaRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.IFindSchemaRequest);
+
+        /** FindSchemaRequest table. */
+        public table: string;
+
+        /** FindSchemaRequest cluster_ids. */
+        public cluster_ids: string[];
+
+        /**
+         * Creates a new FindSchemaRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns FindSchemaRequest instance
+         */
+        public static create(properties?: vtadmin.IFindSchemaRequest): vtadmin.FindSchemaRequest;
+
+        /**
+         * Encodes the specified FindSchemaRequest message. Does not implicitly {@link vtadmin.FindSchemaRequest.verify|verify} messages.
+         * @param message FindSchemaRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.IFindSchemaRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified FindSchemaRequest message, length delimited. Does not implicitly {@link vtadmin.FindSchemaRequest.verify|verify} messages.
+         * @param message FindSchemaRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.IFindSchemaRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a FindSchemaRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns FindSchemaRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.FindSchemaRequest;
+
+        /**
+         * Decodes a FindSchemaRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns FindSchemaRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.FindSchemaRequest;
+
+        /**
+         * Verifies a FindSchemaRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a FindSchemaRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns FindSchemaRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.FindSchemaRequest;
+
+        /**
+         * Creates a plain object from a FindSchemaRequest message. Also converts values to other types if specified.
+         * @param message FindSchemaRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.FindSchemaRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this FindSchemaRequest to JSON.
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
