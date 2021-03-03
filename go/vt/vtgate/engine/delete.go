@@ -105,10 +105,10 @@ func (del *Delete) GetFields(VCursor, map[string]*querypb.BindVariable) (*sqltyp
 func (del *Delete) execDeleteUnsharded(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	rss, _, err := vcursor.ResolveDestinations(del.Keyspace.Name, nil, []key.Destination{key.DestinationAllShards{}})
 	if err != nil {
-		return nil, vterrors.Wrap(err, "execDeleteUnsharded")
+		return nil, err
 	}
 	if len(rss) != 1 {
-		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "Keyspace does not have exactly one shard: %v", rss)
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot send query to multiple shards for un-sharded database: %v", rss)
 	}
 	err = allowOnlyMaster(rss...)
 	if err != nil {
@@ -120,11 +120,11 @@ func (del *Delete) execDeleteUnsharded(vcursor VCursor, bindVars map[string]*que
 func (del *Delete) execDeleteEqual(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	key, err := del.Values[0].ResolveValue(bindVars)
 	if err != nil {
-		return nil, vterrors.Wrap(err, "execDeleteEqual")
+		return nil, err
 	}
 	rs, ksid, err := resolveSingleShard(vcursor, del.Vindex, del.Keyspace, key)
 	if err != nil {
-		return nil, vterrors.Wrap(err, "execDeleteEqual")
+		return nil, err
 	}
 	err = allowOnlyMaster(rs)
 	if err != nil {
@@ -137,7 +137,7 @@ func (del *Delete) execDeleteEqual(vcursor VCursor, bindVars map[string]*querypb
 	if del.OwnedVindexQuery != "" {
 		err = del.deleteVindexEntries(vcursor, bindVars, []*srvtopo.ResolvedShard{rs})
 		if err != nil {
-			return nil, vterrors.Wrap(err, "execDeleteEqual")
+			return nil, err
 		}
 	}
 	return execShard(vcursor, del.Query, bindVars, rs, true /* rollbackOnError */, true /* canAutocommit */)
@@ -155,7 +155,7 @@ func (del *Delete) execDeleteIn(vcursor VCursor, bindVars map[string]*querypb.Bi
 
 	if del.OwnedVindexQuery != "" {
 		if err := del.deleteVindexEntries(vcursor, bindVars, rss); err != nil {
-			return nil, vterrors.Wrap(err, "execDeleteIn")
+			return nil, err
 		}
 	}
 	return execMultiShard(vcursor, rss, queries, del.MultiShardAutocommit)
@@ -164,7 +164,7 @@ func (del *Delete) execDeleteIn(vcursor VCursor, bindVars map[string]*querypb.Bi
 func (del *Delete) execDeleteByDestination(vcursor VCursor, bindVars map[string]*querypb.BindVariable, dest key.Destination) (*sqltypes.Result, error) {
 	rss, _, err := vcursor.ResolveDestinations(del.Keyspace.Name, nil, []key.Destination{dest})
 	if err != nil {
-		return nil, vterrors.Wrap(err, "execDeleteScatter")
+		return nil, err
 	}
 	err = allowOnlyMaster(rss...)
 	if err != nil {
@@ -198,7 +198,7 @@ func (del *Delete) deleteVindexEntries(vcursor VCursor, bindVars map[string]*que
 	subQueryResults, errors := vcursor.ExecuteMultiShard(rss, queries, false, false)
 	for _, err := range errors {
 		if err != nil {
-			return vterrors.Wrap(err, "deleteVindexEntries")
+			return err
 		}
 	}
 
