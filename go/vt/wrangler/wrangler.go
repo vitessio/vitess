@@ -42,19 +42,21 @@ var (
 // Multiple go routines can use the same Wrangler at the same time,
 // provided they want to share the same logger / topo server / lock timeout.
 type Wrangler struct {
-	logger logutil.Logger
-	ts     *topo.Server
-	tmc    tmclient.TabletManagerClient
-	vtctld vtctlservicepb.VtctldServer
+	logger   logutil.Logger
+	ts       *topo.Server
+	tmc      tmclient.TabletManagerClient
+	vtctld   vtctlservicepb.VtctldServer
+	sourceTs *topo.Server
 }
 
 // New creates a new Wrangler object.
 func New(logger logutil.Logger, ts *topo.Server, tmc tmclient.TabletManagerClient) *Wrangler {
 	return &Wrangler{
-		logger: logger,
-		ts:     ts,
-		tmc:    tmc,
-		vtctld: grpcvtctldserver.NewVtctldServer(ts),
+		logger:   logger,
+		ts:       ts,
+		tmc:      tmc,
+		vtctld:   grpcvtctldserver.NewVtctldServer(ts),
+		sourceTs: ts,
 	}
 }
 

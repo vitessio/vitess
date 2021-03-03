@@ -108,21 +108,6 @@ Gen4 plan same as above
     "Table": "unsharded"
   }
 }
-{
-  "QueryType": "SELECT",
-  "Original": "select m1.col from unsharded as m1 join unsharded as m2",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectUnsharded",
-    "Keyspace": {
-      "Name": "main",
-      "Sharded": false
-    },
-    "FieldQuery": "select m1.col from unsharded as m1, unsharded as m2 where 1 != 1",
-    "Query": "select m1.col from unsharded as m1, unsharded as m2",
-    "Table": "unsharded"
-  }
-}
 
 # Multi-table, multi-chunk
 "select music.col from user join music"
@@ -179,7 +164,6 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
-Gen4 plan same as above
 
 # routing rules where table name matches, and there's an alias.
 "select * from second_user.user as a"
@@ -198,7 +182,6 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
-Gen4 plan same as above
 
 # routing rules where table name does not match, and there's no alias.
 "select * from route1"
@@ -319,7 +302,6 @@ Gen4 plan same as above
     "Table": "unsharded"
   }
 }
-Gen4 plan same as above
 
 # ',' join information_schema
 "select a.id,b.id from information_schema.a as a, information_schema.b as b"
@@ -355,7 +337,6 @@ Gen4 plan same as above
     "Table": "unsharded"
   }
 }
-Gen4 plan same as above
 
 # Left join, single chunk
 "select m1.col from unsharded as m1 left join unsharded as m2 on m1.a=m2.b"
@@ -632,40 +613,6 @@ Gen4 plan same as above
     ]
   }
 }
-{
-  "QueryType": "SELECT",
-  "Original": "select user.col from user join unsharded as m1 join unsharded as m2",
-  "Instructions": {
-    "OperatorType": "Join",
-    "Variant": "Join",
-    "JoinColumnIndexes": "-1",
-    "TableName": "`user`_unsharded",
-    "Inputs": [
-      {
-        "OperatorType": "Route",
-        "Variant": "SelectScatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select `user`.col from `user` where 1 != 1",
-        "Query": "select `user`.col from `user`",
-        "Table": "`user`"
-      },
-      {
-        "OperatorType": "Route",
-        "Variant": "SelectUnsharded",
-        "Keyspace": {
-          "Name": "main",
-          "Sharded": false
-        },
-        "FieldQuery": "select 1 from unsharded as m1, unsharded as m2 where 1 != 1",
-        "Query": "select 1 from unsharded as m1, unsharded as m2",
-        "Table": "unsharded"
-      }
-    ]
-  }
-}
 
 # Parenthesized, single chunk
 "select user.col from user join (unsharded as m1 join unsharded as m2)"
@@ -698,40 +645,6 @@ Gen4 plan same as above
         },
         "FieldQuery": "select 1 from (unsharded as m1 join unsharded as m2) where 1 != 1",
         "Query": "select 1 from (unsharded as m1 join unsharded as m2)",
-        "Table": "unsharded"
-      }
-    ]
-  }
-}
-{
-  "QueryType": "SELECT",
-  "Original": "select user.col from user join (unsharded as m1 join unsharded as m2)",
-  "Instructions": {
-    "OperatorType": "Join",
-    "Variant": "Join",
-    "JoinColumnIndexes": "-1",
-    "TableName": "`user`_unsharded",
-    "Inputs": [
-      {
-        "OperatorType": "Route",
-        "Variant": "SelectScatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select `user`.col from `user` where 1 != 1",
-        "Query": "select `user`.col from `user`",
-        "Table": "`user`"
-      },
-      {
-        "OperatorType": "Route",
-        "Variant": "SelectUnsharded",
-        "Keyspace": {
-          "Name": "main",
-          "Sharded": false
-        },
-        "FieldQuery": "select 1 from unsharded as m1, unsharded as m2 where 1 != 1",
-        "Query": "select 1 from unsharded as m1, unsharded as m2",
         "Table": "unsharded"
       }
     ]
@@ -1020,40 +933,6 @@ Gen4 plan same as above
     ]
   }
 }
-{
-  "QueryType": "SELECT",
-  "Original": "select user.col from user join user_extra on user.id \u003c user_extra.user_id",
-  "Instructions": {
-    "OperatorType": "Join",
-    "Variant": "Join",
-    "JoinColumnIndexes": "-2",
-    "TableName": "`user`_user_extra",
-    "Inputs": [
-      {
-        "OperatorType": "Route",
-        "Variant": "SelectScatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select `user`.id, `user`.col from `user` where 1 != 1",
-        "Query": "select `user`.id, `user`.col from `user`",
-        "Table": "`user`"
-      },
-      {
-        "OperatorType": "Route",
-        "Variant": "SelectScatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select 1 from user_extra where 1 != 1",
-        "Query": "select 1 from user_extra where :user_id \u003c user_extra.user_id",
-        "Table": "user_extra"
-      }
-    ]
-  }
-}
 
 # sharded join, non-col reference RHS
 "select user.col from user join user_extra on user.id = 5"
@@ -1287,21 +1166,6 @@ Gen4 plan same as above
     },
     "FieldQuery": "select r1.col from ref as r1 join ref where 1 != 1",
     "Query": "select r1.col from ref as r1 join ref",
-    "Table": "ref"
-  }
-}
-{
-  "QueryType": "SELECT",
-  "Original": "select r1.col from ref r1 join ref",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectReference",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "FieldQuery": "select r1.col from ref as r1, ref where 1 != 1",
-    "Query": "select r1.col from ref as r1, ref",
     "Table": "ref"
   }
 }

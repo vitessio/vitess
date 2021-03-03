@@ -19,6 +19,7 @@ package sqlparser
 // String constants to be used in ast.
 const (
 	// Select.Distinct
+	AllStr              = "all "
 	DistinctStr         = "distinct "
 	StraightJoinHint    = "straight_join "
 	SQLCalcFoundRowsStr = "sql_calc_found_rows "
