@@ -32,7 +32,6 @@ import (
 	"vitess.io/vitess/go/vt/vtadmin/vtsql"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/proto/vtadmin"
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 )
 
@@ -116,7 +115,7 @@ func TestFindTablets(t *testing.T) {
 			n: 2,
 			expected: []*vtadminpb.Tablet{
 				{
-					Cluster: &vtadmin.Cluster{
+					Cluster: &vtadminpb.Cluster{
 						Id:   "c0",
 						Name: "cluster0",
 					},
@@ -130,7 +129,7 @@ func TestFindTablets(t *testing.T) {
 					},
 				},
 				{
-					Cluster: &vtadmin.Cluster{
+					Cluster: &vtadminpb.Cluster{
 						Id:   "c0",
 						Name: "cluster0",
 					},
@@ -195,7 +194,7 @@ func TestFindTablets(t *testing.T) {
 			n: -1,
 			expected: []*vtadminpb.Tablet{
 				{
-					Cluster: &vtadmin.Cluster{
+					Cluster: &vtadminpb.Cluster{
 						Id:   "c0",
 						Name: "cluster0",
 					},
@@ -209,7 +208,7 @@ func TestFindTablets(t *testing.T) {
 					},
 				},
 				{
-					Cluster: &vtadmin.Cluster{
+					Cluster: &vtadminpb.Cluster{
 						Id:   "c0",
 						Name: "cluster0",
 					},
@@ -223,7 +222,7 @@ func TestFindTablets(t *testing.T) {
 					},
 				},
 				{
-					Cluster: &vtadmin.Cluster{
+					Cluster: &vtadminpb.Cluster{
 						Id:   "c0",
 						Name: "cluster0",
 					},
@@ -296,7 +295,7 @@ func TestFindTablet(t *testing.T) {
 				return t.State == vtadminpb.Tablet_SERVING
 			},
 			expected: &vtadminpb.Tablet{
-				Cluster: &vtadmin.Cluster{
+				Cluster: &vtadminpb.Cluster{
 					Id:   "c0",
 					Name: "cluster0",
 				},
