@@ -19,10 +19,15 @@ package engine
 import (
 	"context"
 	"strings"
+	"time"
+
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
+
+	"vitess.io/vitess/go/vt/key"
+	"vitess.io/vitess/go/vt/srvtopo"
 
 	"vitess.io/vitess/go/vt/log"
-
-	"vitess.io/vitess/go/mysql"
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -85,34 +90,57 @@ func (c *DBDDL) Execute(vcursor VCursor, _ map[string]*querypb.BindVariable, _ b
 		log.Errorf("'%s' database ddl plugin is not registered. Falling back to default plugin", name)
 		plugin = databaseCreatorPlugins[defaultDBDDLPlugin]
 	}
+
 	if c.create {
-		err := plugin.CreateDatabase(vcursor.Context(), c.name)
+		ctx := vcursor.Context()
+		err := plugin.CreateDatabase(ctx, c.name)
 		if err != nil {
 			return nil, err
 		}
-		done := false
-		oldDb := vcursor.GetKeyspace()
-		for !done {
+		var destinations []*srvtopo.ResolvedShard
+		for {
 			// loop until we have found a valid shard
-			err := vcursor.Session().SetTarget(c.name)
+			destinations, _, err = vcursor.ResolveDestinations(c.name, nil, []key.Destination{key.DestinationAllShards{}})
 			if err == nil {
-				done = true
+				break
 			}
-			log.Error(err)
+			log.Errorf("waiting for db create, step1: %s", err.Error())
+			select {
+			case <-ctx.Done(): //context cancelled
+				return nil, vterrors.Errorf(vtrpc.Code_DEADLINE_EXCEEDED, "could not validate created database")
+			case <-time.After(500 * time.Millisecond): //timeout
+			}
 		}
-		err = vcursor.Session().SetTarget(oldDb)
-		if err != nil {
-			return nil, err
+		var queries []*querypb.BoundQuery
+		for range destinations {
+			queries = append(queries, &querypb.BoundQuery{
+				Sql:           "select 42 from dual where null",
+				BindVariables: nil,
+			})
+		}
+
+		for {
+			_, errors := vcursor.ExecuteMultiShard(destinations, queries, false, true)
+
+			for _, err := range errors {
+				if err != nil {
+					log.Errorf("waiting for db create, step2: %s", err.Error())
+					select {
+					case <-ctx.Done(): //context cancelled
+						return nil, vterrors.Errorf(vtrpc.Code_DEADLINE_EXCEEDED, "could not validate created database")
+					case <-time.After(500 * time.Millisecond): //timeout
+					}
+					continue
+				}
+			}
+
+			break
 		}
 
 		return &sqltypes.Result{RowsAffected: 1}, nil
 	}
 
-	err := plugin.DropDatabase(vcursor.Context(), c.name)
-	if err != nil {
-		return nil, err
-	}
-	return &sqltypes.Result{StatusFlags: mysql.ServerStatusDbDropped}, nil
+	panic("implement me")
 }
 
 // StreamExecute implements the Primitive interface
