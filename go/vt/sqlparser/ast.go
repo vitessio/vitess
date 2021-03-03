@@ -1466,7 +1466,7 @@ type (
 
 func (*StarExpr) iSelectExpr()    {}
 func (*AliasedExpr) iSelectExpr() {}
-func (Nextval) iSelectExpr()      {}
+func (*Nextval) iSelectExpr()     {}
 
 // Columns represents an insert column list.
 type Columns []ColIdent
@@ -1579,7 +1579,6 @@ type (
 	Expr interface {
 		iExpr()
 		SQLNode
-		Clone() Expr
 	}
 
 	// AndExpr represents an AND expression.
@@ -2639,7 +2638,7 @@ func (node *AliasedExpr) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
-func (node Nextval) Format(buf *TrackedBuffer) {
+func (node *Nextval) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "next %v values", node.Expr)
 }
 

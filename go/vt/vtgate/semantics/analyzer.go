@@ -53,7 +53,7 @@ func (a *analyzer) analyzeDown(cursor *sqlparser.Cursor) bool {
 			return false
 		}
 	case *sqlparser.DerivedTable:
-		a.err = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%T not supported", node)
+		a.err = Gen4NotSupportedF("derived tables")
 	case *sqlparser.TableExprs:
 		// this has already been visited when we encountered the SELECT struct
 		return false
@@ -98,10 +98,13 @@ func (a *analyzer) analyzeTableExprs(tablExprs sqlparser.TableExprs) error {
 func (a *analyzer) analyzeTableExpr(tableExpr sqlparser.TableExpr) error {
 	switch table := tableExpr.(type) {
 	case *sqlparser.AliasedTableExpr:
+		if !table.As.IsEmpty() {
+			return Gen4NotSupportedF("table aliases")
+		}
 		return a.bindTable(table, table.Expr)
 	case *sqlparser.JoinTableExpr:
 		if table.Join != sqlparser.NormalJoinType {
-			return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Join type not supported: %s", table.Join.ToString())
+			return Gen4NotSupportedF("join type %s", table.Join.ToString())
 		}
 		if err := a.analyzeTableExpr(table.LeftExpr); err != nil {
 			return err
@@ -137,7 +140,7 @@ func (a *analyzer) resolveUnQualifiedColumn(current *scope, expr *sqlparser.ColN
 			return tableExpr, nil
 		}
 	}
-	return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unable to map column to a table: %s", sqlparser.String(expr))
+	return nil, Gen4NotSupportedF("unable to map column to a table: %s", sqlparser.String(expr))
 }
 
 func (a *analyzer) tableSetFor(t table) TableSet {
@@ -171,8 +174,10 @@ func (a *analyzer) bindTable(alias *sqlparser.AliasedTableExpr, expr sqlparser.S
 }
 
 func (a *analyzer) analyze(statement sqlparser.Statement) error {
-	_ = sqlparser.Rewrite(statement, a.analyzeDown, a.analyzeUp)
-
+	_, err := sqlparser.Rewrite(statement, a.analyzeDown, a.analyzeUp)
+	if err != nil {
+		return err
+	}
 	return a.err
 }
 
@@ -203,4 +208,9 @@ func (a *analyzer) currentScope() *scope {
 		return nil
 	}
 	return a.scopes[size-1]
+}
+
+// Gen4NotSupportedF returns a common error for shortcomings in the gen4 planner
+func Gen4NotSupportedF(format string, args ...interface{}) error {
+	return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "gen4 does not yet support: "+format, args...)
 }

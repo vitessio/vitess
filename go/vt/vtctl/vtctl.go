@@ -308,6 +308,9 @@ var commands = []commandGroup{
 			{"MoveTables", commandMoveTables,
 				"[-cells=<cells>] [-tablet_types=<source_tablet_types>] -workflow=<workflow> <source_keyspace> <target_keyspace> <table_specs>",
 				`Move table(s) to another keyspace, table_specs is a list of tables or the tables section of the vschema for the target keyspace. Example: '{"t1":{"column_vindexes": [{"column": "id1", "name": "hash"}]}, "t2":{"column_vindexes": [{"column": "id2", "name": "hash"}]}}'.  In the case of an unsharded target keyspace the vschema for each table may be empty. Example: '{"t1":{}, "t2":{}}'.`},
+			{"Migrate", commandMigrate,
+				"[-cells=<cells>] [-tablet_types=<source_tablet_types>] -workflow=<workflow> <source_keyspace> <target_keyspace> <table_specs>",
+				`Move table(s) to another keyspace, table_specs is a list of tables or the tables section of the vschema for the target keyspace. Example: '{"t1":{"column_vindexes": [{"column": "id1", "name": "hash"}]}, "t2":{"column_vindexes": [{"column": "id2", "name": "hash"}]}}'.  In the case of an unsharded target keyspace the vschema for each table may be empty. Example: '{"t1":{}, "t2":{}}'.`},
 			{"DropSources", commandDropSources,
 				"[-dry_run] [-rename_tables] <keyspace.workflow>",
 				"After a MoveTables or Resharding workflow cleanup unused artifacts like source tables, source shards and blacklists"},
@@ -355,6 +358,9 @@ var commands = []commandGroup{
 				"Blocks until no new queries were observed on all tablets with the given tablet type in the specified keyspace. " +
 					" This can be used as sanity check to ensure that the tablets were drained after running vtctl MigrateServedTypes " +
 					" and vtgate is no longer using them. If -timeout is set, it fails when the timeout is reached."},
+			{"Mount", commandMount,
+				"[-topo_type=etcd2|consul|zookeeper] [-topo_server=topo_url] [-topo_root=root_topo_node> [-unmount] [-list] [-show]  [<cluster_name>]",
+				"Add/Remove/Display/List external cluster(s) to this vitess cluster"},
 		},
 	},
 	{
@@ -1942,7 +1948,7 @@ func commandMoveTables(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 	target := subFlags.Arg(1)
 	tableSpecs := subFlags.Arg(2)
 	return wr.MoveTables(ctx, *workflow, source, target, tableSpecs, *cells, *tabletTypes, *allTables,
-		*excludes, *autoStart, *stopAfterCopy)
+		*excludes, *autoStart, *stopAfterCopy, "")
 }
 
 // VReplicationWorkflowAction defines subcommands passed to vtctl for movetables or reshard
@@ -1959,6 +1965,21 @@ const (
 	vReplicationWorkflowActionGetState       = "getstate"
 )
 
+func commandMigrate(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	return commandVRWorkflow(ctx, wr, subFlags, args, wrangler.MigrateWorkflow)
+}
+
+// getSourceKeyspace expects a keyspace of the form "externalClusterName.keyspaceName" and returns the components
+func getSourceKeyspace(clusterKeyspace string) (clusterName string, sourceKeyspace string, err error) {
+	splits := strings.Split(clusterKeyspace, ".")
+	if len(splits) != 2 {
+		return "", "", fmt.Errorf("invalid format for external source cluster: %s", clusterKeyspace)
+	}
+	return splits[0], splits[1], nil
+}
+
+// commandVRWorkflow is the common entry point for MoveTables/Reshard/Migrate workflows
+// FIXME: this needs a refactor. Also validations for params need to be done per workflow type
 func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string,
 	workflowType wrangler.VReplicationWorkflowType) error {
 
@@ -1972,14 +1993,16 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 	autoStart := subFlags.Bool("auto_start", true, "If false, streams will start in the Stopped state and will need to be explicitly started")
 	stopAfterCopy := subFlags.Bool("stop_after_copy", false, "Streams will be stopped once the copy phase is completed")
 
-	// MoveTables-only params
-	sourceKeyspace := subFlags.String("source", "", "Source keyspace")
+	// MoveTables and Migrate params
 	tables := subFlags.String("tables", "", "A table spec or a list of tables")
 	allTables := subFlags.Bool("all", false, "Move all tables from the source keyspace")
 	excludes := subFlags.String("exclude", "", "Tables to exclude (comma-separated) if -all is specified")
+	sourceKeyspace := subFlags.String("source", "", "Source keyspace")
+
+	// MoveTables-only params
 	renameTables := subFlags.Bool("rename_tables", false, "Rename tables instead of dropping them")
 
-	// Reshard-only params
+	// Reshard params
 	sourceShards := subFlags.String("source_shards", "", "Source shards")
 	targetShards := subFlags.String("target_shards", "", "Target shards")
 	skipSchemaCopy := subFlags.Bool("skip_schema_copy", false, "Skip copying of schema to target shards")
@@ -2054,14 +2077,37 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 	//TODO: check if invalid parameters were passed in that do not apply to this action
 	originalAction := action
 	action = strings.ToLower(action) // allow users to input action in a case-insensitive manner
+	if workflowType == wrangler.MigrateWorkflow {
+		switch action {
+		case vReplicationWorkflowActionCreate, vReplicationWorkflowActionCancel, vReplicationWorkflowActionComplete:
+		default:
+			return fmt.Errorf("invalid action for Migrate: %s", action)
+		}
+	}
+
 	switch action {
 	case vReplicationWorkflowActionCreate:
 		switch workflowType {
-		case wrangler.MoveTablesWorkflow:
+		case wrangler.MoveTablesWorkflow, wrangler.MigrateWorkflow:
+			var sourceTopo *topo.Server
+			var externalClusterName string
+
+			sourceTopo = wr.TopoServer()
 			if *sourceKeyspace == "" {
 				return fmt.Errorf("source keyspace is not specified")
 			}
-			_, err := wr.TopoServer().GetKeyspace(ctx, *sourceKeyspace)
+			if workflowType == wrangler.MigrateWorkflow {
+				externalClusterName, *sourceKeyspace, err = getSourceKeyspace(*sourceKeyspace)
+				if err != nil {
+					return err
+				}
+				sourceTopo, err = sourceTopo.OpenExternalVitessClusterServer(ctx, externalClusterName)
+				if err != nil {
+					return err
+				}
+			}
+
+			_, err := sourceTopo.GetKeyspace(ctx, *sourceKeyspace)
 			if err != nil {
 				wr.Logger().Errorf("keyspace %s not found", *sourceKeyspace)
 				return err
@@ -2074,7 +2120,7 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 			vrwp.AllTables = *allTables
 			vrwp.ExcludeTables = *excludes
 			vrwp.Timeout = *timeout
-			workflowType = wrangler.MoveTablesWorkflow
+			vrwp.ExternalCluster = externalClusterName
 		case wrangler.ReshardWorkflow:
 			if *sourceShards == "" || *targetShards == "" {
 				return fmt.Errorf("source and target shards are not specified")
@@ -2083,8 +2129,6 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 			vrwp.TargetShards = strings.Split(*targetShards, ",")
 			vrwp.SkipSchemaCopy = *skipSchemaCopy
 			vrwp.SourceKeyspace = target
-			workflowType = wrangler.ReshardWorkflow
-			log.Infof("params are %s, %s, %+v", *sourceShards, *targetShards, vrwp)
 		default:
 			return fmt.Errorf("unknown workflow type passed: %v", workflowType)
 		}
@@ -2105,12 +2149,13 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 		case wrangler.MoveTablesWorkflow:
 			vrwp.RenameTables = *renameTables
 		case wrangler.ReshardWorkflow:
+		case wrangler.MigrateWorkflow:
 		default:
 			return fmt.Errorf("unknown workflow type passed: %v", workflowType)
 		}
 		vrwp.KeepData = *keepData
 	}
-
+	vrwp.WorkflowType = workflowType
 	wf, err := wr.NewVReplicationWorkflow(ctx, workflowType, vrwp)
 	if err != nil {
 		log.Warningf("NewVReplicationWorkflow returned error %+v", wf)
@@ -3449,6 +3494,62 @@ func commandWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.
 
 	printQueryResult(loggerWriter{wr.Logger()}, qr)
 	return nil
+}
+
+func commandMount(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	clusterType := subFlags.String("type", "vitess", "Specify cluster type: mysql or vitess, only vitess clustered right now")
+	unmount := subFlags.Bool("unmount", false, "Unmount cluster")
+	show := subFlags.Bool("show", false, "Display contents of cluster")
+	list := subFlags.Bool("list", false, "List all clusters")
+
+	// vitess cluster params
+	topoType := subFlags.String("topo_type", "", "Type of cluster's topology server")
+	topoServer := subFlags.String("topo_server", "", "Server url of cluster's topology server")
+	topoRoot := subFlags.String("topo_root", "", "Root node of cluster's topology")
+
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if *list {
+		clusters, err := wr.TopoServer().GetExternalVitessClusters(ctx)
+		if err != nil {
+			return err
+		}
+		wr.Logger().Printf("%s\n", strings.Join(clusters, ","))
+		return nil
+	}
+	if subFlags.NArg() != 1 {
+		return fmt.Errorf("cluster name needs to be provided")
+	}
+
+	clusterName := subFlags.Arg(0)
+	switch *clusterType {
+	case "vitess":
+		switch {
+		case *unmount:
+			return wr.UnmountExternalVitessCluster(ctx, clusterName)
+		case *show:
+			vci, err := wr.TopoServer().GetExternalVitessCluster(ctx, clusterName)
+			if err != nil {
+				return err
+			}
+			if vci == nil {
+				return fmt.Errorf("there is no vitess cluster named %s", clusterName)
+			}
+			data, err := json.Marshal(vci)
+			if err != nil {
+				return err
+			}
+			wr.Logger().Printf("%s\n", string(data))
+			return nil
+		default:
+			return wr.MountExternalVitessCluster(ctx, clusterName, *topoType, *topoServer, *topoRoot)
+		}
+	case "mysql":
+		return fmt.Errorf("mysql cluster type not yet supported")
+	default:
+		return fmt.Errorf("cluster type can be only one of vitess or mysql")
+	}
 }
 
 func commandGenerateShardRanges(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
