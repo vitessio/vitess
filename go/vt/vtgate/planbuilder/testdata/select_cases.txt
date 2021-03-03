@@ -34,7 +34,6 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
-Gen4 plan same as above
 
 # unqualified '*' expression for simple route
 "select * from user"
@@ -53,7 +52,6 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
-Gen4 plan same as above
 
 # select with timeout directive sets QueryTimeout in the route
 "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from user"
@@ -72,7 +70,6 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
-Gen4 plan same as above
 
 # select aggregation with timeout directive sets QueryTimeout in the route
 "select /*vt+ QUERY_TIMEOUT_MS=1000 */ count(*) from user"
@@ -123,7 +120,6 @@ Gen4 plan same as above
     ]
   }
 }
-Gen4 plan same as above
 
 # select with partial scatter directive
 "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ * from user"
@@ -142,7 +138,6 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
-Gen4 plan same as above
 
 # select aggregation with partial scatter directive
 "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ count(*) from user"
@@ -219,7 +214,6 @@ Gen4 plan same as above
     ]
   }
 }
-Gen4 plan same as above
 
 # qualified '*' expression for simple route
 "select user.* from user"
@@ -238,7 +232,6 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
-Gen4 plan same as above
 
 # fully qualified '*' expression for simple route
 "select user.user.* from user.user"
@@ -838,7 +831,6 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
-Gen4 plan same as above
 
 # sharded limit offset
 "select user_id from music order by user_id limit 10, 20"
@@ -956,7 +948,6 @@ Gen4 plan same as above
     "Vindex": "user_index"
   }
 }
-Gen4 plan same as above
 
 # Column Aliasing with Column
 "select user0_.col as col0_ from user user0_ where id = 1 order by col0_ desc limit 3"
@@ -979,7 +970,6 @@ Gen4 plan same as above
     "Vindex": "user_index"
   }
 }
-Gen4 plan same as above
 
 # Booleans and parenthesis
 "select * from user where (id = 1) AND name = true limit 5"

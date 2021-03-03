@@ -314,7 +314,6 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
-Gen4 plan same as above
 
 # ORDER BY after pull-out subquery
 "select col from user where col in (select col2 from user) order by col"
@@ -539,7 +538,6 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
-Gen4 plan same as above
 
 # ORDER BY RAND() for join
 "select user.col1 as a, user.col2, music.col3 from user join music on user.id = music.id where user.id = 1 order by RAND()"
@@ -1019,7 +1017,6 @@ Gen4 plan same as above
     ]
   }
 }
-Gen4 plan same as above
 
 # scatter limit after pullout subquery
 "select col from user where col in (select col1 from user) limit 1"

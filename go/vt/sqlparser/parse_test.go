@@ -77,7 +77,7 @@ var (
 		input:  "select 1 from t # aa\n",
 		output: "select 1 from t",
 	}, {
-		input:  "select 1 --aa\nfrom t",
+		input:  "select 1 -- aa\nfrom t",
 		output: "select 1 from t",
 	}, {
 		input:  "select 1 #aa\nfrom t",
@@ -840,6 +840,9 @@ var (
 	}, {
 		input:  "set character set 'utf8'",
 		output: "set charset 'utf8'",
+	}, {
+		input:  "set s = 1--4",
+		output: "set s = 1 - -4",
 	}, {
 		input:  "set character set \"utf8\"",
 		output: "set charset 'utf8'",

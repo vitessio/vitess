@@ -518,7 +518,6 @@ func (throttler *Throttler) collectMySQLMetrics(ctx context.Context) error {
 
 // refreshMySQLInventory will re-structure the inventory based on reading config settings
 func (throttler *Throttler) refreshMySQLInventory(ctx context.Context) error {
-	log.Infof("refreshing MySQL inventory")
 
 	addInstanceKey := func(key *mysql.InstanceKey, clusterName string, clusterSettings *config.MySQLClusterConfigurationSettings, probes *mysql.Probes) {
 		for _, ignore := range clusterSettings.IgnoreHosts {
@@ -531,7 +530,6 @@ func (throttler *Throttler) refreshMySQLInventory(ctx context.Context) error {
 			log.Infof("Throttler: read invalid instance key: [%+v] for cluster %+v", key, clusterName)
 			return
 		}
-		log.Infof("Throttler: read instance key: %+v", key)
 
 		probe := &mysql.Probe{
 			Key:         *key,
@@ -596,7 +594,6 @@ func (throttler *Throttler) refreshMySQLInventory(ctx context.Context) error {
 
 // synchronous update of inventory
 func (throttler *Throttler) updateMySQLClusterProbes(ctx context.Context, clusterProbes *mysql.ClusterProbes) error {
-	log.Infof("Throttler: updating MySQLClusterProbes: %s", clusterProbes.ClusterName)
 	throttler.mysqlInventory.ClustersProbes[clusterProbes.ClusterName] = clusterProbes.InstanceProbes
 	throttler.mysqlInventory.IgnoreHostsCount[clusterProbes.ClusterName] = clusterProbes.IgnoreHostsCount
 	throttler.mysqlInventory.IgnoreHostsThreshold[clusterProbes.ClusterName] = clusterProbes.IgnoreHostsThreshold
