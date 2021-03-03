@@ -122,8 +122,6 @@ func skipToEnd(yylex interface{}) {
   partDefs      []*PartitionDefinition
   partDef       *PartitionDefinition
   partSpec      *PartitionSpec
-  vindexParam   VindexParam
-  vindexParams  []VindexParam
   showFilter    *ShowFilter
   over          *Over
   caseStatementCases []CaseStatementCase
@@ -190,7 +188,6 @@ func skipToEnd(yylex interface{}) {
 %token <bytes> FIRST AFTER
 %token <bytes> SHOW DESCRIBE EXPLAIN DATE ESCAPE REPAIR OPTIMIZE TRUNCATE FORMAT
 %token <bytes> MAXVALUE PARTITION REORGANIZE LESS THAN PROCEDURE TRIGGER TRIGGERS FUNCTION
-%token <bytes> VINDEX VINDEXES
 %token <bytes> STATUS VARIABLES WARNINGS
 %token <bytes> SEQUENCE
 %token <bytes> EACH ROW BEFORE FOLLOWS PRECEDES DEFINER INVOKER
@@ -216,7 +213,7 @@ func skipToEnd(yylex interface{}) {
 %token <bytes> NULLX AUTO_INCREMENT APPROXNUM SIGNED UNSIGNED ZEROFILL LOCAL
 
 // Supported SHOW tokens
-%token <bytes> COLLATION DATABASES SCHEMAS TABLES VITESS_METADATA VSCHEMA FULL PROCESSLIST COLUMNS FIELDS ENGINES PLUGINS
+%token <bytes> COLLATION DATABASES SCHEMAS TABLES FULL PROCESSLIST COLUMNS FIELDS ENGINES PLUGINS
 
 // SET tokens
 %token <bytes> NAMES CHARSET GLOBAL SESSION ISOLATION LEVEL READ WRITE ONLY REPEATABLE COMMITTED UNCOMMITTED SERIALIZABLE
@@ -263,7 +260,7 @@ func skipToEnd(yylex interface{}) {
 %type <signalInfos> signal_information_item_list
 %type <bytes> signal_information_name signal_condition_value
 %type <str> trigger_time trigger_event
-%type <statement> alter_statement alter_table_statement alter_view_statement alter_vschema_statement
+%type <statement> alter_statement alter_table_statement alter_view_statement
 %type <ddl> create_table_prefix rename_list
 %type <statement> analyze_statement show_statement use_statement other_statement
 %type <statement> describe_statement explain_statement explainable_statement
@@ -323,7 +320,7 @@ func skipToEnd(yylex interface{}) {
 %type <bytes> for_from
 %type <str> ignore_opt default_opt
 %type <str> full_opt from_database_opt tables_or_processlist columns_or_fields
-%type <showFilter> like_or_where_opt like_opt
+%type <showFilter> like_or_where_opt
 %type <byt> exists_opt not_exists_opt
 %type <str> key_type key_type_opt
 %type <empty> non_add_drop_or_rename_operation
@@ -365,9 +362,6 @@ func skipToEnd(yylex interface{}) {
 %type <partDefs> partition_definitions
 %type <partDef> partition_definition
 %type <partSpec> partition_operation
-%type <vindexParam> vindex_param
-%type <vindexParams> vindex_param_list vindex_params_opt
-%type <colIdent> vindex_type vindex_type_opt
 %type <bytes> ignored_alter_object_type
 %type <ReferenceAction> fk_reference_action fk_on_delete fk_on_update
 %type <str> constraint_symbol_opt infile_opt
@@ -1062,48 +1056,6 @@ statement_list_statement:
 | signal_statement
 | call_statement
 | begin_end_block
-
-vindex_type_opt:
-  {
-    $$ = NewColIdent("")
-  }
-| USING vindex_type
-  {
-    $$ = $2
-  }
-
-vindex_type:
-  ID
-  {
-    $$ = NewColIdent(string($1))
-  }
-
-vindex_params_opt:
-  {
-    var v []VindexParam
-    $$ = v
-  }
-| WITH vindex_param_list
-  {
-    $$ = $2
-  }
-
-vindex_param_list:
-  vindex_param
-  {
-    $$ = make([]VindexParam, 0, 4)
-    $$ = append($$, $1)
-  }
-| vindex_param_list ',' vindex_param
-  {
-    $$ = append($$, $3)
-  }
-
-vindex_param:
-  reserved_sql_id '=' table_opt_value
-  {
-    $$ = VindexParam{Key: $1, Val: $3}
-  }
 
 create_table_prefix:
   CREATE TABLE not_exists_opt table_name
@@ -1916,7 +1868,6 @@ constraint_symbol_opt:
 alter_statement:
   alter_table_statement
 | alter_view_statement
-| alter_vschema_statement
 
 alter_table_statement:
   ALTER ignore_opt TABLE table_name non_add_drop_or_rename_operation skip_to_end
@@ -2029,76 +1980,6 @@ alter_view_statement:
   ALTER VIEW table_name ddl_skip_to_end
   {
     $$ = &DDL{Action: AlterStr, Table: $3.ToViewName()}
-  }
-
-alter_vschema_statement:
-  ALTER VSCHEMA CREATE VINDEX table_name vindex_type_opt vindex_params_opt
-  {
-    $$ = &DDL{
-        Action: CreateVindexStr,
-        Table: $5,
-        VindexSpec: &VindexSpec{
-          Name: NewColIdent($5.Name.String()),
-          Type: $6,
-          Params: $7,
-        },
-      }
-  }
-| ALTER VSCHEMA DROP VINDEX table_name
-  {
-    $$ = &DDL{
-        Action: DropVindexStr,
-        Table: $5,
-        VindexSpec: &VindexSpec{
-          Name: NewColIdent($5.Name.String()),
-        },
-      }
-  }
-| ALTER VSCHEMA ADD TABLE table_name
-  {
-    $$ = &DDL{Action: AddVschemaTableStr, Table: $5}
-  }
-| ALTER VSCHEMA DROP TABLE table_name
-  {
-    $$ = &DDL{Action: DropVschemaTableStr, Table: $5}
-  }
-| ALTER VSCHEMA ON table_name ADD VINDEX sql_id '(' column_list ')' vindex_type_opt vindex_params_opt
-  {
-    $$ = &DDL{
-        Action: AddColVindexStr,
-        Table: $4,
-        VindexSpec: &VindexSpec{
-            Name: $7,
-            Type: $11,
-            Params: $12,
-        },
-        VindexCols: $9,
-      }
-  }
-| ALTER VSCHEMA ON table_name DROP VINDEX sql_id
-  {
-    $$ = &DDL{
-        Action: DropColVindexStr,
-        Table: $4,
-        VindexSpec: &VindexSpec{
-            Name: $7,
-        },
-      }
-  }
-| ALTER VSCHEMA ADD SEQUENCE table_name
-  {
-    $$ = &DDL{Action: AddSequenceStr, Table: $5}
-  }
-| ALTER VSCHEMA ON table_name ADD AUTO_INCREMENT sql_id USING table_name
-  {
-    $$ = &DDL{
-        Action: AddAutoIncStr,
-        Table: $4,
-        AutoIncSpec: &AutoIncSpec{
-            Column: $7,
-            Sequence: $9,
-        },
-    }
   }
 
 
@@ -2351,23 +2232,6 @@ show_statement:
     var ex Expr = cmp
     $$ = &Show{Type: string($2), ShowCollationFilterOpt: &ex}
   }
-| SHOW VITESS_METADATA VARIABLES like_opt
-  {
-    showTablesOpt := &ShowTablesOpt{Filter: $4}
-    $$ = &Show{Scope: string($2), Type: string($3), ShowTablesOpt: showTablesOpt}
-  }
-| SHOW VSCHEMA TABLES
-  {
-    $$ = &Show{Type: string($2) + " " + string($3)}
-  }
-| SHOW VSCHEMA VINDEXES
-  {
-    $$ = &Show{Type: string($2) + " " + string($3)}
-  }
-| SHOW VSCHEMA VINDEXES ON table_name
-  {
-    $$ = &Show{Type: string($2) + " " + string($3), OnTable: $5}
-  }
 | SHOW WARNINGS
   {
     $$ = &Show{Type: string($2)}
@@ -2377,10 +2241,6 @@ show_statement:
  *
  *  SHOW BINARY LOGS
  *  SHOW INVALID
- *  SHOW VITESS_KEYSPACES
- *  SHOW VITESS_TABLETS
- *  SHOW VITESS_SHARDS
- *  SHOW VITESS_TARGET
  */
 | SHOW ID ddl_skip_to_end
   {
@@ -2450,16 +2310,6 @@ like_or_where_opt:
   {
     $$ = &ShowFilter{Filter:$2}
   }
-
-like_opt:
-  /* empty */
-    {
-      $$ = nil
-    }
-  | LIKE STRING
-    {
-      $$ = &ShowFilter{Like:string($2)}
-    }
 
 show_session_or_global:
   /* empty */
@@ -4711,11 +4561,7 @@ non_reserved_keyword:
 | VARYING
 | VCPU
 | VIEW
-| VINDEX
-| VINDEXES
 | VISIBLE
-| VITESS_METADATA
-| VSCHEMA
 | WARNINGS
 | WITH
 | WRITE
