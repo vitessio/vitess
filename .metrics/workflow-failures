@@ -3265,5 +3265,6 @@
 2021-03-03T12:13:29Z,check_make_parser,https://github.com/vitessio/vitess/actions/runs/617476285
 2021-03-03T12:21:20Z,Cluster (15),https://github.com/vitessio/vitess/actions/runs/617496876
 2021-03-03T12:21:20Z,Cluster (onlineddl_vrepl),https://github.com/vitessio/vitess/actions/runs/617496884
+2021-03-03T12:35:49Z,Cluster (12),https://github.com/vitessio/vitess/actions/runs/617534972
 2021-03-03T12:35:49Z,check_formatting,https://github.com/vitessio/vitess/actions/runs/617534982
 2021-03-03T12:35:49Z,golangci-lint,https://github.com/vitessio/vitess/actions/runs/617534970
