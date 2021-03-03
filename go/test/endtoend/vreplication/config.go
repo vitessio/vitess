@@ -288,4 +288,17 @@ create table customer_seq2(id int, next_id bigint, cache bigint, primary key(id)
   }]
 }
 `
+	initialExternalSchema = `
+create table review(rid int, pid int, review varbinary(128), primary key(rid));
+create table rating(gid int, pid int, rating int, primary key(gid));
+`
+
+	initialExternalVSchema = `
+{
+  "tables": {
+	"review": {},
+	"rating": {}
+  }
+}
+`
 )

@@ -118,7 +118,15 @@ func newController(ctx context.Context, params map[string]string, dbClientFactor
 		}
 		log.Infof("creating tablet picker for source keyspace/shard %v/%v with cell: %v and tabletTypes: %v", ct.source.Keyspace, ct.source.Shard, cell, tabletTypesStr)
 		cells := strings.Split(cell, ",")
-		tp, err := discovery.NewTabletPicker(ts, cells, ct.source.Keyspace, ct.source.Shard, tabletTypesStr)
+
+		sourceTopo := ts
+		if ct.source.ExternalCluster != "" {
+			sourceTopo, err = sourceTopo.OpenExternalVitessClusterServer(ctx, ct.source.ExternalCluster)
+			if err != nil {
+				return nil, err
+			}
+		}
+		tp, err := discovery.NewTabletPicker(sourceTopo, cells, ct.source.Keyspace, ct.source.Shard, tabletTypesStr)
 		if err != nil {
 			return nil, err
 		}

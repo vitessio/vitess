@@ -32,8 +32,6 @@ const (
 	unitTestDatabases = "percona56, mysql57, mysql80, mariadb101, mariadb102, mariadb103"
 
 	clusterTestTemplate = "templates/cluster_endtoend_test.tpl"
-	// TODO: currently some percona tools including xtrabackup are installed on all clusters, we can possibly optimize
-	// this by only installing them in the required clusters
 )
 
 var (
@@ -61,7 +59,10 @@ var (
 		"onlineddl_ghost",
 		"onlineddl_vrepl",
 		"onlineddl_vrepl_stress",
+		"vreplication_migrate",
 	}
+	// TODO: currently some percona tools including xtrabackup are installed on all clusters, we can possibly optimize
+	// this by only installing them in the required clusters
 	clustersRequiringXtraBackup = clusterList
 	clustersRequiringMakeTools  = []string{
 		"18",
