@@ -3262,3 +3262,4 @@
 2021-03-03T10:45:05Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/617262204
 2021-03-03T10:45:56Z,Cluster (onlineddl_vrepl_stress),https://github.com/vitessio/vitess/actions/runs/617264655
 2021-03-03T11:40:18Z,docker_test_1,https://github.com/vitessio/vitess/actions/runs/617400977
+2021-03-03T12:13:29Z,check_make_parser,https://github.com/vitessio/vitess/actions/runs/617476285
