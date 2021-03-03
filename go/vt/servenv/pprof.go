@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"runtime"
 	"runtime/pprof"
@@ -28,6 +29,7 @@ import (
 	"strconv"
 	"strings"
 	"sync/atomic"
+	"syscall"
 
 	"vitess.io/vitess/go/vt/log"
 )
@@ -134,6 +136,14 @@ func parseProfileFlag(pf string) (*profile, error) {
 
 var profileStarted uint32
 
+func stopCallback(stop func()) func() {
+	return func() {
+		if atomic.CompareAndSwapUint32(&profileStarted, 1, 0) {
+			stop()
+		}
+	}
+}
+
 // start begins the configured profiling process and returns a cleanup function
 // that must be executed before process termination to flush the profile to disk.
 // Based on the profiling code in github.com/pkg/profile
@@ -172,15 +182,15 @@ func (prof *profile) start() func() {
 	switch prof.mode {
 	case profileCPU:
 		pprof.StartCPUProfile(f)
-		return func() {
+		return stopCallback(func() {
 			pprof.StopCPUProfile()
 			f.Close()
-		}
+		})
 
 	case profileMemHeap, profileMemAllocs:
 		old := runtime.MemProfileRate
 		runtime.MemProfileRate = prof.rate
-		return func() {
+		return stopCallback(func() {
 			tt := "heap"
 			if prof.mode == profileMemAllocs {
 				tt = "allocs"
@@ -188,50 +198,50 @@ func (prof *profile) start() func() {
 			pprof.Lookup(tt).WriteTo(f, 0)
 			f.Close()
 			runtime.MemProfileRate = old
-		}
+		})
 
 	case profileMutex:
 		runtime.SetMutexProfileFraction(prof.rate)
-		return func() {
+		return stopCallback(func() {
 			if mp := pprof.Lookup("mutex"); mp != nil {
 				mp.WriteTo(f, 0)
 			}
 			f.Close()
 			runtime.SetMutexProfileFraction(0)
-		}
+		})
 
 	case profileBlock:
 		runtime.SetBlockProfileRate(prof.rate)
-		return func() {
+		return stopCallback(func() {
 			pprof.Lookup("block").WriteTo(f, 0)
 			f.Close()
 			runtime.SetBlockProfileRate(0)
-		}
+		})
 
 	case profileThreads:
-		return func() {
+		return stopCallback(func() {
 			if mp := pprof.Lookup("threadcreate"); mp != nil {
 				mp.WriteTo(f, 0)
 			}
 			f.Close()
-		}
+		})
 
 	case profileTrace:
 		if err := trace.Start(f); err != nil {
 			log.Fatalf("pprof: could not start trace: %v", err)
 		}
-		return func() {
+		return stopCallback(func() {
 			trace.Stop()
 			f.Close()
-		}
+		})
 
 	case profileGoroutine:
-		return func() {
+		return stopCallback(func() {
 			if mp := pprof.Lookup("goroutine"); mp != nil {
 				mp.WriteTo(f, 0)
 			}
 			f.Close()
-		}
+		})
 
 	default:
 		panic("unsupported profile mode")
@@ -246,6 +256,15 @@ func init() {
 		}
 		if prof != nil {
 			stop := prof.start()
+
+			go func() {
+				ch := make(chan os.Signal, 1)
+				signal.Notify(ch, syscall.SIGUSR1)
+
+				<-ch
+				stop()
+			}()
+
 			OnTerm(stop)
 		}
 	})
