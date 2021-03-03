@@ -998,8 +998,11 @@ func (tkn *Tokenizer) next() {
 			tkn.LastError = err
 		}
 
-		// Fill in the buffer for this query only
-		tkn.queryBuf = append(tkn.queryBuf, tkn.buf...)
+		// In multi mode (parseNext), we need to keep track of the contents of the current statement string so that
+		// lexer offsets work properly on statements that need them
+		if tkn.multi {
+			tkn.queryBuf = append(tkn.queryBuf, tkn.buf...)
+		}
 	}
 
 	if tkn.bufPos >= tkn.bufSize {
