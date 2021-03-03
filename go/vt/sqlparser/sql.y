@@ -45,6 +45,10 @@ func yyPosition(yylex interface{}) int {
   return yylex.(*Tokenizer).Position
 }
 
+func yyOldPosition(yylex interface{}) int {
+  return yylex.(*Tokenizer).OldPosition
+}
+
 // skipToEnd forces the lexer to end prematurely. Not all SQL statements
 // are supported by the Parser, thus calling skipToEnd will make the lexer
 // return EOF early.
@@ -268,10 +272,10 @@ func skipToEnd(yylex interface{}) {
 %type <str> union_op insert_or_replace
 %type <str> distinct_opt straight_join_opt cache_opt match_option separator_opt format_opt
 %type <expr> like_escape_opt
-%type <selectExprs> select_expression_list select_expression_list_opt
-%type <selectExpr> select_expression
+%type <selectExprs> select_expression_list argument_expression_list argument_expression_list_opt
+%type <selectExpr> select_expression argument_expression
 %type <expr> expression naked_like group_by
-%type <tableExprs> from_opt table_references
+%type <tableExprs> table_references
 %type <tableExpr> table_reference table_factor join_table
 %type <joinCondition> join_condition join_condition_opt on_expression_opt
 %type <tableNames> table_name_list delete_table_list view_name_list
@@ -305,7 +309,7 @@ func skipToEnd(yylex interface{}) {
 %type <triggerOrder> trigger_order_opt
 %type <order> order
 %type <over> over over_opt
-%type <int> lexer_position
+%type <int> lexer_position lexer_old_position
 %type <str> asc_desc_opt
 %type <limit> limit_opt
 %type <str> lock_opt
@@ -456,9 +460,13 @@ stream_statement:
 
 // base_select is an unparenthesized SELECT with no order by clause or beyond.
 base_select:
-  SELECT comment_opt cache_opt distinct_opt straight_join_opt select_expression_list from_opt where_expression_opt group_by_opt having_opt
+  SELECT comment_opt cache_opt distinct_opt straight_join_opt select_expression_list where_expression_opt group_by_opt having_opt
   {
-    $$ = &Select{Comments: Comments($2), Cache: $3, Distinct: $4, Hints: $5, SelectExprs: $6, From: $7, Where: NewWhere(WhereStr, $8), GroupBy: GroupBy($9), Having: NewWhere(HavingStr, $10)}
+    $$ = &Select{Comments: Comments($2), Cache: $3, Distinct: $4, Hints: $5, SelectExprs: $6, From: TableExprs{&AliasedTableExpr{Expr:TableName{Name: NewTableIdent("dual")}}}, Where: NewWhere(WhereStr, $7), GroupBy: GroupBy($8), Having: NewWhere(HavingStr, $9)}
+  }
+| SELECT comment_opt cache_opt distinct_opt straight_join_opt select_expression_list FROM table_references where_expression_opt group_by_opt having_opt
+  {
+    $$ = &Select{Comments: Comments($2), Cache: $3, Distinct: $4, Hints: $5, SelectExprs: $6, From: $8, Where: NewWhere(WhereStr, $9), GroupBy: GroupBy($10), Having: NewWhere(HavingStr, $11)}
   }
 
 union_lhs:
@@ -656,6 +664,11 @@ set_session_or_global:
 lexer_position:
   {
     $$ = yyPosition(yylex)
+  }
+
+lexer_old_position:
+  {
+    $$ = yyOldPosition(yylex)
   }
 
 create_statement:
@@ -2638,23 +2651,41 @@ straight_join_opt:
     $$ = StraightJoinHint
   }
 
-select_expression_list_opt:
+select_expression_list:
+  lexer_old_position select_expression lexer_old_position
   {
-    $$ = nil
+    if ae, ok := $2.(*AliasedExpr); ok {
+      ae.StartParsePos = $1
+      ae.EndParsePos = $3-1
+    }
+    $$ = SelectExprs{$2}
   }
-| select_expression_list
+| select_expression_list ',' lexer_old_position select_expression lexer_old_position
   {
-    $$ = $1
+    if ae, ok := $4.(*AliasedExpr); ok {
+      ae.StartParsePos = $3
+      ae.EndParsePos = $5-1
+    }
+    $$ = append($$, $4)
   }
 
-select_expression_list:
-  select_expression
+// argument_expression is identical to select_expression except aliases are not allowed
+argument_expression:
+  '*'
   {
-    $$ = SelectExprs{$1}
+    $$ = &StarExpr{}
   }
-| select_expression_list ',' select_expression
+| expression
   {
-    $$ = append($$, $3)
+    $$ = &AliasedExpr{Expr: $1}
+  }
+| table_id '.' '*'
+  {
+    $$ = &StarExpr{TableName: TableName{Name: $1}}
+  }
+| table_id '.' reserved_table_id '.' '*'
+  {
+    $$ = &StarExpr{TableName: TableName{Qualifier: $1, Name: $3}}
   }
 
 select_expression:
@@ -2728,15 +2759,6 @@ col_alias:
 | STRING
   {
     $$ = NewColIdent(string($1))
-  }
-
-from_opt:
-  {
-    $$ = TableExprs{&AliasedTableExpr{Expr:TableName{Name: NewTableIdent("dual")}}}
-  }
-| FROM table_references
-  {
-    $$ = $2
   }
 
 table_references:
@@ -3201,6 +3223,22 @@ subquery:
     $$ = &Subquery{$2}
   }
 
+argument_expression_list_opt:
+  {
+    $$ = nil
+  }
+| argument_expression_list
+
+argument_expression_list:
+  argument_expression
+  {
+    $$ = SelectExprs{$1}
+  }
+| argument_expression_list ',' argument_expression
+  {
+    $$ = append($1, $3)
+  }
+
 expression_list:
   expression
   {
@@ -3354,11 +3392,11 @@ value_expression:
   introduce side effects due to being a simple identifier
 */
 function_call_generic:
-  sql_id openb distinct_opt select_expression_list_opt closeb
+  sql_id openb distinct_opt argument_expression_list_opt closeb
   {
     $$ = &FuncExpr{Name: $1, Distinct: $3 == DistinctStr, Exprs: $4}
   }
-| table_id '.' reserved_sql_id openb select_expression_list_opt closeb
+| table_id '.' reserved_sql_id openb argument_expression_list_opt closeb
   {
     $$ = &FuncExpr{Qualifier: $1, Name: $3, Exprs: $5}
   }
@@ -3368,71 +3406,71 @@ function_call_generic:
    OVER clause (not legal on any other non-window, non-aggregate function)
  */
 function_call_aggregate_with_window:
- MAX openb distinct_opt select_expression_list closeb over_opt
+ MAX openb distinct_opt argument_expression_list closeb over_opt
   {
     $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $4, Distinct: $3 == DistinctStr, Over: $6}
   }
-| AVG openb distinct_opt select_expression_list closeb over_opt
+| AVG openb distinct_opt argument_expression_list closeb over_opt
   {
     $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $4, Distinct: $3 == DistinctStr, Over: $6}
   }
-| BIT_AND openb select_expression_list closeb over_opt
+| BIT_AND openb argument_expression_list closeb over_opt
   {
     $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $5}
   }
-| BIT_OR openb select_expression_list closeb over_opt
+| BIT_OR openb argument_expression_list closeb over_opt
   {
     $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $5}
   }
-| BIT_XOR openb select_expression_list closeb over_opt
+| BIT_XOR openb argument_expression_list closeb over_opt
   {
     $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $5}
   }
-| COUNT openb distinct_opt select_expression_list closeb over_opt
+| COUNT openb distinct_opt argument_expression_list closeb over_opt
   {
     $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $4, Distinct: $3 == DistinctStr, Over: $6}
   }
-| JSON_ARRAYAGG openb select_expression_list closeb over_opt
+| JSON_ARRAYAGG openb argument_expression_list closeb over_opt
   {
     $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $5}
   }
-| JSON_OBJECTAGG openb select_expression_list closeb over_opt
+| JSON_OBJECTAGG openb argument_expression_list closeb over_opt
   {
     $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $5}
   }
-| MIN openb distinct_opt select_expression_list closeb over_opt
+| MIN openb distinct_opt argument_expression_list closeb over_opt
   {
     $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $4, Distinct: $3 == DistinctStr, Over: $6}
   }
-| STDDEV_POP openb select_expression_list closeb over_opt
+| STDDEV_POP openb argument_expression_list closeb over_opt
   {
     $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $5}
   }
-| STDDEV openb select_expression_list closeb over_opt
+| STDDEV openb argument_expression_list closeb over_opt
   {
     $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $5}
   }
-| STD openb select_expression_list closeb over_opt
+| STD openb argument_expression_list closeb over_opt
   {
     $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $5}
   }
-| STDDEV_SAMP openb select_expression_list closeb over_opt
+| STDDEV_SAMP openb argument_expression_list closeb over_opt
   {
     $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $5}
   }
-| SUM openb distinct_opt select_expression_list closeb over_opt
+| SUM openb distinct_opt argument_expression_list closeb over_opt
   {
     $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $4, Distinct: $3 == DistinctStr, Over: $6}
   }
-| VAR_POP openb select_expression_list closeb over_opt
+| VAR_POP openb argument_expression_list closeb over_opt
   {
     $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $5}
   }
-| VARIANCE openb select_expression_list closeb over_opt
+| VARIANCE openb argument_expression_list closeb over_opt
   {
     $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $5}
   }
-| VAR_SAMP openb select_expression_list closeb over_opt
+| VAR_SAMP openb argument_expression_list closeb over_opt
   {
     $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $5}
   }
@@ -3449,23 +3487,23 @@ function_call_window:
   {
     $$ = &FuncExpr{Name: NewColIdent(string($1)), Over: $4}
   }
-| FIRST_VALUE openb select_expression closeb over
+| FIRST_VALUE openb argument_expression closeb over
   {
     $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: SelectExprs{$3}, Over: $5}
   }
-| LAG openb select_expression_list closeb over
+| LAG openb argument_expression_list closeb over
   {
     $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $5}
   }
-| LAST_VALUE openb select_expression closeb over
+| LAST_VALUE openb argument_expression closeb over
   {
     $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: SelectExprs{$3}, Over: $5}
   }
-| LEAD openb select_expression_list closeb over
+| LEAD openb argument_expression_list closeb over
   {
     $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $5}
   }
-| NTH_VALUE openb select_expression_list closeb over
+| NTH_VALUE openb argument_expression_list closeb over
   {
     $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $5}
   }
@@ -3489,19 +3527,20 @@ function_call_window:
 /*
   Function calls using reserved keywords, with dedicated grammar rules
   as a result
+  TODO: some of these change the case or even the name of the function expression. Should be preserved.
 */
 function_call_keyword:
-  LEFT openb select_expression_list closeb
+  LEFT openb argument_expression_list closeb
   {
-    $$ = &FuncExpr{Name: NewColIdent("left"), Exprs: $3}
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3}
   }
-| RIGHT openb select_expression_list closeb
+| RIGHT openb argument_expression_list closeb
   {
-    $$ = &FuncExpr{Name: NewColIdent("right"), Exprs: $3}
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3}
   }
 | SCHEMA openb closeb
   {
-    $$ = &FuncExpr{Name: NewColIdent("schema")}
+    $$ = &FuncExpr{Name: NewColIdent(string($1))}
   }
 | CONVERT openb expression ',' convert_type closeb
   {
@@ -3531,15 +3570,15 @@ function_call_keyword:
   {
     $$ = &SubstrExpr{StrVal: NewStrVal($3), From: $5, To: $7}
   }
-| MATCH openb select_expression_list closeb AGAINST openb value_expression match_option closeb
+| MATCH openb argument_expression_list closeb AGAINST openb value_expression match_option closeb
   {
   $$ = &MatchExpr{Columns: $3, Expr: $7, Option: $8}
   }
-| FIRST openb select_expression_list closeb
+| FIRST openb argument_expression_list closeb
   {
-    $$ = &FuncExpr{Name: NewColIdent("first"), Exprs: $3}
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3}
   }
-| GROUP_CONCAT openb distinct_opt select_expression_list order_by_opt separator_opt closeb
+| GROUP_CONCAT openb distinct_opt argument_expression_list order_by_opt separator_opt closeb
   {
     $$ = &GroupConcatExpr{Distinct: $3, Exprs: $4, OrderBy: $5, Separator: $6}
   }
@@ -3557,75 +3596,75 @@ function_call_keyword:
   Dedicated grammar rules are needed because of the special syntax
 */
 function_call_nonkeyword:
-  CURRENT_TIMESTAMP func_datetime_opt
+  CURRENT_TIMESTAMP func_parens_opt
   {
-    $$ = &FuncExpr{Name:NewColIdent("current_timestamp")}
+    $$ = &FuncExpr{Name:NewColIdent(string($1))}
   }
-| UTC_TIMESTAMP func_datetime_opt
+| UTC_TIMESTAMP func_parens_opt
   {
-    $$ = &FuncExpr{Name:NewColIdent("utc_timestamp")}
+    $$ = &FuncExpr{Name:NewColIdent(string($1))}
   }
-| UTC_TIME func_datetime_opt
+| UTC_TIME func_parens_opt
   {
-    $$ = &FuncExpr{Name:NewColIdent("utc_time")}
+    $$ = &FuncExpr{Name:NewColIdent(string($1))}
   }
 /* doesn't support fsp */
-| UTC_DATE func_datetime_opt
+| UTC_DATE func_parens_opt
   {
-    $$ = &FuncExpr{Name:NewColIdent("utc_date")}
+    $$ = &FuncExpr{Name:NewColIdent(string($1))}
   }
   // now
-| LOCALTIME func_datetime_opt
+| LOCALTIME func_parens_opt
   {
-    $$ = &FuncExpr{Name:NewColIdent("localtime")}
+    $$ = &FuncExpr{Name:NewColIdent(string($1))}
   }
   // now
-| LOCALTIMESTAMP func_datetime_opt
+| LOCALTIMESTAMP func_parens_opt
   {
-    $$ = &FuncExpr{Name:NewColIdent("localtimestamp")}
+    $$ = &FuncExpr{Name:NewColIdent(string($1))}
   }
   // curdate
 /* doesn't support fsp */
-| CURRENT_DATE func_datetime_opt
+| CURRENT_DATE func_parens_opt
   {
-    $$ = &FuncExpr{Name:NewColIdent("current_date")}
+    $$ = &FuncExpr{Name:NewColIdent(string($1))}
   }
   // curtime
-| CURRENT_TIME func_datetime_opt
+| CURRENT_TIME func_parens_opt
   {
-    $$ = &FuncExpr{Name:NewColIdent("current_time")}
+    $$ = &FuncExpr{Name:NewColIdent(string($1))}
   }
-| CURRENT_USER func_datetime_opt
+| CURRENT_USER func_parens_opt
   {
-    $$ = &FuncExpr{Name:NewColIdent("current_user")}
+    $$ = &FuncExpr{Name:NewColIdent(string($1))}
   }
 // these functions can also be called with an optional argument
 | CURRENT_TIMESTAMP func_datetime_precision
   {
-    $$ = &CurTimeFuncExpr{Name:NewColIdent("current_timestamp"), Fsp:$2}
+    $$ = &CurTimeFuncExpr{Name:NewColIdent(string($1)), Fsp:$2}
   }
 | UTC_TIMESTAMP func_datetime_precision
   {
-    $$ = &CurTimeFuncExpr{Name:NewColIdent("utc_timestamp"), Fsp:$2}
+    $$ = &CurTimeFuncExpr{Name:NewColIdent(string($1)), Fsp:$2}
   }
 | UTC_TIME func_datetime_precision
   {
-    $$ = &CurTimeFuncExpr{Name:NewColIdent("utc_time"), Fsp:$2}
+    $$ = &CurTimeFuncExpr{Name:NewColIdent(string($1)), Fsp:$2}
   }
   // now
 | LOCALTIME func_datetime_precision
   {
-    $$ = &CurTimeFuncExpr{Name:NewColIdent("localtime"), Fsp:$2}
+    $$ = &CurTimeFuncExpr{Name:NewColIdent(string($1)), Fsp:$2}
   }
   // now
 | LOCALTIMESTAMP func_datetime_precision
   {
-    $$ = &CurTimeFuncExpr{Name:NewColIdent("localtimestamp"), Fsp:$2}
+    $$ = &CurTimeFuncExpr{Name:NewColIdent(string($1)), Fsp:$2}
   }
   // curtime
 | CURRENT_TIME func_datetime_precision
   {
-    $$ = &CurTimeFuncExpr{Name:NewColIdent("current_time"), Fsp:$2}
+    $$ = &CurTimeFuncExpr{Name:NewColIdent(string($1)), Fsp:$2}
   }
 | TIMESTAMPADD openb sql_id ',' value_expression ',' value_expression closeb
   {
@@ -3636,7 +3675,8 @@ function_call_nonkeyword:
     $$ = &TimestampFuncExpr{Name:string("timestampdiff"), Unit:$3.String(), Expr1:$5, Expr2:$7}
   }
 
-func_datetime_opt:
+// Optional parens for certain keyword functions that don't require them.
+func_parens_opt:
   /* empty */
 | openb closeb
 
@@ -3651,29 +3691,29 @@ func_datetime_precision:
   the names are non-reserved, they need a dedicated rule so as not to conflict
 */
 function_call_conflict:
-  IF openb select_expression_list closeb
+  IF openb argument_expression_list closeb
   {
-    $$ = &FuncExpr{Name: NewColIdent("if"), Exprs: $3}
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3}
   }
-| DATABASE openb select_expression_list_opt closeb
+| DATABASE openb argument_expression_list_opt closeb
   {
-    $$ = &FuncExpr{Name: NewColIdent("database"), Exprs: $3}
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3}
   }
-| MOD openb select_expression_list closeb
+| MOD openb argument_expression_list closeb
   {
-    $$ = &FuncExpr{Name: NewColIdent("mod"), Exprs: $3}
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3}
   }
-| REPLACE openb select_expression_list closeb
+| REPLACE openb argument_expression_list closeb
   {
-    $$ = &FuncExpr{Name: NewColIdent("replace"), Exprs: $3}
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3}
   }
-| SUBSTR openb select_expression_list closeb
+| SUBSTR openb argument_expression_list closeb
   {
-    $$ = &FuncExpr{Name: NewColIdent("substr"), Exprs: $3}
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3}
   }
-| SUBSTRING openb select_expression_list closeb
+| SUBSTRING openb argument_expression_list closeb
   {
-    $$ = &FuncExpr{Name: NewColIdent("substr"), Exprs: $3}
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3}
   }
 
 match_option:

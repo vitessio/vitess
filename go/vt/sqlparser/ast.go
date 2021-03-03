@@ -105,7 +105,22 @@ func Parse(sql string) (Statement, error) {
 	if tokenizer.ParseTree == nil {
 		return nil, ErrEmpty
 	}
+
+	captureSelectExpressions(sql, tokenizer)
+
 	return tokenizer.ParseTree, nil
+}
+
+// For select statements, capture the verbatim select expressions from the original query text
+func captureSelectExpressions(sql string, tokenizer *Tokenizer) {
+	if s, ok := tokenizer.ParseTree.(SelectStatement); ok {
+		s.walkSubtree(func(node SQLNode) (kontinue bool, err error) {
+			if node, ok := node.(*AliasedExpr); ok && node.EndParsePos > node.StartParsePos {
+				node.InputExpression = strings.TrimLeft(sql[node.StartParsePos:node.EndParsePos], " \n\t")
+			}
+			return true, nil
+		})
+	}
 }
 
 // ParseStrictDDL is the same as Parse except it errors on
@@ -163,6 +178,9 @@ func parseNext(tokenizer *Tokenizer, strict bool) (Statement, error) {
 	if tokenizer.ParseTree == nil {
 		return ParseNext(tokenizer)
 	}
+
+	captureSelectExpressions((string)(tokenizer.queryBuf), tokenizer)
+
 	return tokenizer.ParseTree, nil
 }
 
@@ -2593,13 +2611,25 @@ func (node *StarExpr) walkSubtree(visit Visit) error {
 type AliasedExpr struct {
 	Expr Expr
 	As   ColIdent
+	StartParsePos int
+	EndParsePos int
+	InputExpression string
 }
 
 // Format formats the node.
 func (node *AliasedExpr) Format(buf *TrackedBuffer) {
-	buf.Myprintf("%v", node.Expr)
-	if !node.As.IsEmpty() {
-		buf.Myprintf(" as %v", node.As)
+	if len(node.InputExpression) > 0 {
+		if !node.As.IsEmpty() {
+			// The AS is omitted here because it gets captured by the InputExpression. A bug, but not a major one since
+			// we use the alias expression for the column in the return schema.
+			buf.Myprintf("%s %v", node.InputExpression, node.As)
+		} else {
+			buf.Myprintf("%s", node.InputExpression)
+		}
+	} else if !node.As.IsEmpty() {
+		buf.Myprintf("%v as %v", node.Expr, node.As)
+	} else {
+		buf.Myprintf("%v", node.Expr)
 	}
 }
 

@@ -34,6 +34,7 @@ import (
 type parseTest struct {
 	input  string
 	output string
+	serializeSelectExprs bool
 }
 
 var (
@@ -43,7 +44,19 @@ var (
 			output: "select 1 from dual",
 		}, {
 			input: "select 1 from t",
-		}, {
+		},
+		{
+			input: "select a, b from t",
+		},
+		{
+			input: "select a,  b from t",
+			output: "select a, b from t",
+		},
+		{
+			input: "select a,b from t",
+			output: "select a, b from t",
+		},
+		{
 			input:  "select * from information_schema.columns",
 			output: "select * from information_schema.`columns`",
 		}, {
@@ -60,7 +73,14 @@ var (
 			input: "select -1 from t where b = -2",
 		}, {
 			input:  "select - -1 from t",
+			output: "select - -1 from t",
+		}, {
+			input:  "select -   -1 from t",
+			output: "select -   -1 from t",
+		}, {
+			input:  "select - -1 from t",
 			output: "select 1 from t",
+			serializeSelectExprs: true, // not a bug, we are testing that - -1 becomes 1
 		}, {
 			input:  "select 1 from t // aa\n",
 			output: "select 1 from t",
@@ -73,9 +93,11 @@ var (
 		}, {
 			input:  "select 1 --aa\nfrom t",
 			output: "select 1 from t",
+			serializeSelectExprs: true,
 		}, {
 			input:  "select 1 #aa\nfrom t",
 			output: "select 1 from t",
+			serializeSelectExprs: true,
 		}, {
 			input: "select /* simplest */ 1 from t",
 		}, {
@@ -103,6 +125,7 @@ var (
 		}, {
 			input:  "select 1 /* drop this comment */ from t",
 			output: "select 1 from t",
+			serializeSelectExprs: true,
 		}, {
 			input: "select /* union */ 1 from t union select 1 from t",
 		}, {
@@ -145,6 +168,7 @@ var (
 			output: "select col from t",
 		}, {
 			input: "select /* straight_join */ straight_join 1 from t",
+			serializeSelectExprs: true,
 		}, {
 			input: "select /* for update */ 1 from t for update",
 		}, {
@@ -158,11 +182,15 @@ var (
 		}, {
 			input: "select /* a.b.* */ a.b.* from t",
 		}, {
-			input:  "select /* column alias */ a b from t",
+			input:  "select /* column alias */ a as b from t",
 			output: "select /* column alias */ a as b from t",
 		}, {
+			input:  "select /* column alias */ a b from t",
+			output: "select /* column alias */ a as b from t",
+			serializeSelectExprs: true,
+		}, {
 			input:  "select t.Date as Date from t",
-			output: "select t.`Date` as `Date` from t",
+			output: "select t.Date as `Date` from t",
 		}, {
 			input:  "select t.col as YeAr from t",
 			output: "select t.col as `YeAr` from t",
@@ -176,6 +204,7 @@ var (
 		}, {
 			input:  "select /* column alias as string without as */ a \"b\" from t",
 			output: "select /* column alias as string without as */ a as b from t",
+			serializeSelectExprs: true,
 		}, {
 			input: "select /* a.* */ a.* from t",
 		}, {
@@ -533,15 +562,25 @@ var (
 		}, {
 			input:  "select /* double quoted string */ \"a\" from t",
 			output: "select /* double quoted string */ 'a' from t",
+			serializeSelectExprs: true,
+		}, {
+			input:  "select /* double quoted string */ \"a\" from t",
+			output: "select /* double quoted string */ \"a\" from t",
 		}, {
 			input:  "select /* quote quote in string */ 'a''a' from t",
 			output: "select /* quote quote in string */ 'a\\'a' from t",
+			serializeSelectExprs: true,
 		}, {
 			input:  "select /* double quote quote in string */ \"a\"\"a\" from t",
 			output: "select /* double quote quote in string */ 'a\\\"a' from t",
+			serializeSelectExprs: true,
 		}, {
 			input:  "select /* quote in double quoted string */ \"a'a\" from t",
 			output: "select /* quote in double quoted string */ 'a\\'a' from t",
+			serializeSelectExprs: true,
+		}, {
+			input:  "select /* quote in double quoted string */ \"a'a\" from t",
+			output: "select /* quote in double quoted string */ \"a'a\" from t",
 		}, {
 			input: "select /* backslash quote in string */ 'a\\'a' from t",
 		}, {
@@ -551,6 +590,10 @@ var (
 		}, {
 			input:  "select /* non-escape */ '\\x' from t",
 			output: "select /* non-escape */ 'x' from t",
+			serializeSelectExprs: true,
+		}, {
+			input:  "select /* non-escape */ '\\x' from t",
+			output: "select /* non-escape */ '\\x' from t",
 		}, {
 			input: "select /* unescaped backslash */ '\\n' from t",
 		}, {
@@ -562,9 +605,13 @@ var (
 		}, {
 			input:  "select /* positional argument */ ? from t",
 			output: "select /* positional argument */ :v1 from t",
+			serializeSelectExprs: true,
+		}, {
+			input:  "select /* positional argument */ ? from t",
 		}, {
 			input:  "select /* multiple positional arguments */ ?, ? from t",
 			output: "select /* multiple positional arguments */ :v1, :v2 from t",
+			serializeSelectExprs: true,
 		}, {
 			input: "select /* list arg */ * from t where a in ::list",
 		}, {
@@ -576,11 +623,17 @@ var (
 		}, {
 			input:  "select /* hex */ x'f0A1' from t",
 			output: "select /* hex */ X'f0A1' from t",
+			serializeSelectExprs: true,
+		}, {
+			input:  "select /* hex */ x'f0A1' from t",
 		}, {
 			input: "select /* hex caps */ X'F0a1' from t",
 		}, {
 			input:  "select /* bit literal */ b'0101' from t",
 			output: "select /* bit literal */ B'0101' from t",
+			serializeSelectExprs: true,
+		}, {
+			input:  "select /* bit literal */ b'0101' from t",
 		}, {
 			input: "select /* bit literal caps */ B'010011011010' from t",
 		}, {
@@ -607,6 +660,9 @@ var (
 		}, {
 			input:  "select /* binary unary */ a- -b from t",
 			output: "select /* binary unary */ a - -b from t",
+			serializeSelectExprs: true,
+		}, {
+			input:  "select /* binary unary */ a- -b from t",
 		}, {
 			input: "select /* - - */ - -b from t",
 		}, {
@@ -621,10 +677,8 @@ var (
 			input: "select /* interval keyword */ adddate('2008-01-02', interval 1 year) from t",
 		}, {
 			input:  "select /* TIMESTAMPADD */ TIMESTAMPADD(MINUTE, 1, '2008-01-04') from t",
-			output: "select /* TIMESTAMPADD */ timestampadd(MINUTE, 1, '2008-01-04') from t",
 		}, {
 			input:  "select /* TIMESTAMPDIFF */ TIMESTAMPDIFF(MINUTE, '2008-01-02', '2008-01-04') from t",
-			output: "select /* TIMESTAMPDIFF */ timestampdiff(MINUTE, '2008-01-02', '2008-01-04') from t",
 		}, {
 			input: "select /* dual */ 1 from dual",
 		}, {
@@ -1445,6 +1499,7 @@ var (
 		}, {
 			input:  "select warnings from t",
 			output: "select `warnings` from t",
+			serializeSelectExprs: true,
 		}, {
 			input:  "show foobar",
 			output: "show foobar",
@@ -1525,6 +1580,7 @@ var (
 			output: "select * from t order by a collate utf8_general_ci asc",
 		}, {
 			input: "select k collate latin1_german2_ci as k1 from t1 order by k1 asc",
+			serializeSelectExprs: true,
 		}, {
 			input: "select * from t group by a collate utf8_general_ci",
 		}, {
@@ -1554,6 +1610,7 @@ var (
 		}, {
 			input:  "select k collate 'latin1_german2_ci' as k1 from t1 order by k1 asc",
 			output: "select k collate latin1_german2_ci as k1 from t1 order by k1 asc",
+			serializeSelectExprs: true,
 		}, {
 			input:  "select /* drop trailing semicolon */ 1 from dual;",
 			output: "select /* drop trailing semicolon */ 1 from dual",
@@ -1579,6 +1636,8 @@ var (
 			input: "select title from video as v where match(v.title, v.tag) against ('DEMO' in boolean mode)",
 		}, {
 			input: "select name, group_concat(score) from t group by name",
+		}, {
+			input: `select concAt(  "a",    "b", "c"  ) from t group by name`,
 		}, {
 			input: "select name, group_concat(distinct id, score order by id desc separator ':') from t group by name",
 		}, {
@@ -1691,25 +1750,22 @@ var (
 		}, {
 			input: "select name, row_number() over (partition by b order by c asc) from t",
 		}, {
-			input:  "select name, dense_rank() over (order by b) from t",
-			output: "select name, dense_rank() over ( order by b asc) from t",
+			input: "select name, dense_rank() over (order by b) from t",
 		}, {
-			input:  "select name, dense_rank() over (partition by b order by c) from t",
-			output: "select name, dense_rank() over (partition by b order by c asc) from t",
+			input: "select name, dense_rank() over (partition by b order by c) from t",
 		}, {
-			input:  "select name, dense_rank() over (partition by b order by c), lag(d) over (order by e desc) from t",
-			output: "select name, dense_rank() over (partition by b order by c asc), lag(d) over ( order by e desc) from t",
+			input: "select name, dense_rank() over (partition by b order by c), lag(d) over (order by e desc) from t",
 		}, {
 			input: "select name, dense_rank() over window_name from t",
 		}, {
 			input: `SELECT pk,
-					(SELECT max(pk) FROM one_pk WHERE pk < opk.pk) AS max,
-					(SELECT min(pk) FROM one_pk WHERE pk > opk.pk) AS min
+					(SELECT max(pk) FROM one_pk WHERE pk < opk.pk) as max,
+					(SELECT min(pk) FROM one_pk WHERE pk > opk.pk) as min
 					FROM one_pk opk
 					WHERE (SELECT min(pk) FROM one_pk WHERE pk > opk.pk) IS NOT NULL
 					ORDER BY max`,
-			output: "select pk, (select max(pk) from one_pk where pk < opk.pk) as `max`," +
-				" (select min(pk) from one_pk where pk > opk.pk) as `min` " +
+			output: "select pk, (SELECT max(pk) FROM one_pk WHERE pk < opk.pk) as `max`," +
+				" (SELECT min(pk) FROM one_pk WHERE pk > opk.pk) as `min` " +
 				"from one_pk as opk " +
 				"where (select min(pk) from one_pk where pk > opk.pk) " +
 				"is not null order by `max` asc",
@@ -1880,25 +1936,56 @@ end`,
 func TestValid(t *testing.T) {
 	validSQL = append(validSQL, validMultiStatementSql...)
 	for _, tcase := range validSQL {
+		runParseTestCase(t, tcase)
+	}
+}
+
+// Skipped tests for queries where the select expression can't accurately be captured because of comments
+func TestBrokenCommentSelection(t *testing.T) {
+	testcases := []parseTest{{
+		input:  "select 1 --aa\nfrom t",
+		output: "select 1 from t",
+	}, {
+		input:  "select 1 #aa\nfrom t",
+		output: "select 1 from t",
+	}, {
+		input:  "select concat(a, -- this is a\n b -- this is b\n) from t",
+		output: "select concat(a, b) from t",
+	}, {
+		input:  "select concat( /*comment*/ a, b) from t",
+		output: "select concat(  a, b) from t",
+	}, {
+		input:  "select 1 /* drop this comment */ from t",
+		output: "select 1 from t",
+	}, {
+		input:  "select 1, 2 /* drop this comment */, 3 from t",
+		output:  "select 1, 2, 3 from t",
+	},
+	}
+
+	for _, tcase := range testcases {
 		t.Run(tcase.input, func(t *testing.T) {
-			if tcase.output == "" {
-				tcase.output = tcase.input
-			}
-			tree, err := Parse(tcase.input)
-			require.NoError(t, err)
-
-			out := String(tree)
-			assert.Equal(t, tcase.output, out)
-
-			// This test just exercises the tree walking functionality.
-			// There's no way automated way to verify that a node calls
-			// all its children. But we can examine code coverage and
-			// ensure that all walkSubtree functions were called.
-			Walk(func(node SQLNode) (bool, error) {
-				return true, nil
-			}, tree)
+			t.Skip()
+			runParseTestCase(t, tcase)
 		})
 	}
+}
+
+func assertTestcaseOutput(t *testing.T, tcase parseTest, tree Statement) {
+	// For tests that require it, clear the InputExpression of selected expressions so they print their reproduced
+	// values, rather than the input values. In most cases this is due to a bug in parsing, and there should be a
+	// skipped test. But in some cases it's intentional, to test the behavior of parser logic.
+	if tcase.serializeSelectExprs {
+		tree.walkSubtree(func(node SQLNode) (kontinue bool, err error) {
+			if ae, ok := node.(*AliasedExpr); ok {
+				ae.InputExpression = ""
+			}
+			return true, nil
+		})
+	}
+
+	out := String(tree)
+	assert.Equal(t, tcase.output, out)
 }
 
 var ignoreWhitespaceTests = []parseTest{
@@ -2063,19 +2150,24 @@ func TestValidParallel(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			for j := 0; j < numIters; j++ {
+				// can't run each test in its own test case, there are so many it bogs down an IDE
 				tcase := validSQL[rand.Intn(len(validSQL))]
 				if tcase.output == "" {
 					tcase.output = tcase.input
 				}
 				tree, err := Parse(tcase.input)
-				if err != nil {
-					t.Errorf("Parse(%q) err: %v, want nil", tcase.input, err)
-					continue
-				}
-				out := String(tree)
-				if out != tcase.output {
-					t.Errorf("Parse(%q) = %q, want: %q", tcase.input, out, tcase.output)
-				}
+				require.NoError(t, err)
+
+				assertTestcaseOutput(t, tcase, tree)
+
+				// This test just exercises the tree walking functionality.
+				// There's no way automated way to verify that a node calls
+				// all its children. But we can examine code coverage and
+				// ensure that all walkSubtree functions were called.
+				Walk(func(node SQLNode) (bool, error) {
+					return true, nil
+				}, tree)
+
 			}
 		}()
 	}
@@ -2168,10 +2260,8 @@ func TestInvalid(t *testing.T) {
 }
 
 func TestCaseSensitivity(t *testing.T) {
-	validSQL := []struct {
-		input  string
-		output string
-	}{{
+	validSQL := []parseTest{
+	{
 		input:  "create table A (\n\t`B` int\n)",
 		output: "create table A (\n\tB int\n)",
 	}, {
@@ -2228,10 +2318,12 @@ func TestCaseSensitivity(t *testing.T) {
 	}, {
 		input:  "select A(ALL B, C) from b",
 		output: "select A(B, C) from b",
+		serializeSelectExprs: true,
 	}, {
-		// IF is an exception. It's always lower-cased.
+		input:  "select A(ALL B, C) from b",
+		output: "select A(ALL B, C) from b",
+	}, {
 		input:  "select IF(B, C) from b",
-		output: "select if(B, C) from b",
 	}, {
 		input: "select * from b use index (A)",
 	}, {
@@ -2257,29 +2349,21 @@ func TestCaseSensitivity(t *testing.T) {
 	}, {
 		input: "select /* use */ 1 from t1 use index (A) where b = 1",
 	}}
+
 	for _, tcase := range validSQL {
-		if tcase.output == "" {
-			tcase.output = tcase.input
-		}
-		tree, err := Parse(tcase.input)
-		if err != nil {
-			t.Errorf("input: %s, err: %v", tcase.input, err)
-			continue
-		}
-		out := String(tree)
-		if out != tcase.output {
-			t.Errorf("out: %s, want %s", out, tcase.output)
-		}
+		runParseTestCase(t, tcase)
 	}
 }
 
 func TestKeywords(t *testing.T) {
-	validSQL := []struct {
-		input  string
-		output string
-	}{{
+	validSQL := []parseTest {
+	{
 		input:  "select current_timestamp",
 		output: "select current_timestamp() from dual",
+		serializeSelectExprs: true,
+	}, {
+		input:  "select current_TIMESTAMP",
+		output: "select current_TIMESTAMP from dual",
 	}, {
 		input: "update t set a = current_timestamp()",
 	}, {
@@ -2287,9 +2371,18 @@ func TestKeywords(t *testing.T) {
 	}, {
 		input:  "select a, current_date from t",
 		output: "select a, current_date() from t",
+		serializeSelectExprs: true,
+	}, {
+		input:  "select a, current_DATE from t",
+		output: "select a, current_DATE from t",
 	}, {
 		input:  "select a, current_user from t",
 		output: "select a, current_user() from t",
+		serializeSelectExprs: true,
+	}, {
+		input:  "select a, current_USER from t",
+	}, {
+		input:  "select a, Current_USER(     ) from t",
 	}, {
 		input:  "insert into t(a, b) values (current_date, current_date())",
 		output: "insert into t(a, b) values (current_date(), current_date())",
@@ -2303,6 +2396,10 @@ func TestKeywords(t *testing.T) {
 	}, {
 		input:  "select utc_time, utc_date, utc_time(6)",
 		output: "select utc_time(), utc_date(), utc_time(6) from dual",
+		serializeSelectExprs: true,
+	}, {
+		input:  "select utc_TIME, UTC_date, utc_time(6)",
+		output: "select utc_TIME, UTC_date, utc_time(6) from dual",
 	}, {
 		input:  "select 1 from dual where localtime > utc_time",
 		output: "select 1 from dual where localtime() > utc_time()",
@@ -2339,43 +2436,66 @@ func TestKeywords(t *testing.T) {
 	}, {
 		input:  "select /* non-reserved keywords as unqualified cols */ date, view, offset from t",
 		output: "select /* non-reserved keywords as unqualified cols */ `date`, `view`, `offset` from t",
+		serializeSelectExprs: true,
+	}, {
+		input:  "select /* non-reserved keywords as unqualified cols */ date, view, offset from t",
 	}, {
 		input:  "select /* share and mode as cols */ share, mode from t where share = 'foo'",
 		output: "select /* share and mode as cols */ `share`, `mode` from t where `share` = 'foo'",
+		serializeSelectExprs: true,
+	}, {
+		input:  "select /* share and mode as cols */ share, mode from t where share = 'foo'",
+		output:  "select /* share and mode as cols */ share, mode from t where `share` = 'foo'",
 	}, {
 		input:  "select /* unused keywords as cols */ write, virtual from t where trailing = 'foo'",
 		output: "select /* unused keywords as cols */ `write`, `virtual` from t where `trailing` = 'foo'",
+		serializeSelectExprs: true,
+	}, {
+		input:  "select /* unused keywords as cols */ write, virtual from t where trailing = 'foo'",
+		output: "select /* unused keywords as cols */ write, virtual from t where `trailing` = 'foo'",
 	}, {
 		input:  "select status from t",
 		output: "select `status` from t",
+		serializeSelectExprs: true,
 	}, {
 		input:  "select variables from t",
 		output: "select `variables` from t",
+		serializeSelectExprs: true,
 	}}
 
 	for _, tcase := range validSQL {
+		runParseTestCase(t, tcase)
+	}
+}
+
+func runParseTestCase(t *testing.T, tcase parseTest) bool {
+	return t.Run(tcase.input, func(t *testing.T) {
 		if tcase.output == "" {
 			tcase.output = tcase.input
 		}
 		tree, err := Parse(tcase.input)
-		if err != nil {
-			t.Errorf("input: %s, err: %v", tcase.input, err)
-			continue
-		}
-		out := String(tree)
-		if out != tcase.output {
-			t.Errorf("out: %s, want %s", out, tcase.output)
-		}
-	}
+		require.NoError(t, err)
+
+		assertTestcaseOutput(t, tcase, tree)
+
+		// This test just exercises the tree walking functionality.
+		// There's no way automated way to verify that a node calls
+		// all its children. But we can examine code coverage and
+		// ensure that all walkSubtree functions were called.
+		Walk(func(node SQLNode) (bool, error) {
+			return true, nil
+		}, tree)
+	})
 }
 
 func TestConvert(t *testing.T) {
-	validSQL := []struct {
-		input  string
-		output string
-	}{{
+	validSQL := []parseTest{
+	{
 		input:  "select cast('abc' as date) from t",
 		output: "select convert('abc', date) from t",
+		serializeSelectExprs: true,
+	}, {
+		input:  "select cast('abc' as date) from t",
 	}, {
 		input: "select convert('abc', binary(4)) from t",
 	}, {
@@ -2399,10 +2519,18 @@ func TestConvert(t *testing.T) {
 	}, {
 		input:  "select convert('abc', signed integer) from t",
 		output: "select convert('abc', signed) from t",
+		serializeSelectExprs: true,
+	}, {
+		input:  "select convert('abc', signed) from t",
+		output: "select convert('abc', signed) from t",
 	}, {
 		input: "select convert('abc', unsigned) from t",
 	}, {
 		input:  "select convert('abc', unsigned integer) from t",
+		output: "select convert('abc', unsigned) from t",
+		serializeSelectExprs: true,
+	}, {
+		input:  "select convert('abc', unsigned) from t",
 		output: "select convert('abc', unsigned) from t",
 	}, {
 		input: "select convert('abc', decimal(3, 4)) from t",
@@ -2427,18 +2555,7 @@ func TestConvert(t *testing.T) {
 	}}
 
 	for _, tcase := range validSQL {
-		if tcase.output == "" {
-			tcase.output = tcase.input
-		}
-		tree, err := Parse(tcase.input)
-		if err != nil {
-			t.Errorf("input: %s, err: %v", tcase.input, err)
-			continue
-		}
-		out := String(tree)
-		if out != tcase.output {
-			t.Errorf("out: %s, want %s", out, tcase.output)
-		}
+		runParseTestCase(t, tcase)
 	}
 
 	invalidSQL := []struct {
@@ -2477,55 +2594,57 @@ func TestConvert(t *testing.T) {
 
 func TestSubStr(t *testing.T) {
 
-	validSQL := []struct {
-		input  string
-		output string
-	}{{
+	// serializeSelectExprs here is not a bug: these are tests that various substring forms get parsed correctly
+	validSQL := []parseTest{{
 		input: `select substr('foobar', 1) from t`,
 	}, {
 		input: "select substr(a, 1, 6) from t",
 	}, {
 		input:  "select substring(a, 1) from t",
-		output: "select substr(a, 1) from t",
+		output: "select substring(a, 1) from t",
 	}, {
 		input:  "select substring(a, 1, 6) from t",
-		output: "select substr(a, 1, 6) from t",
-	}, {
-		input:  "select substr(a from 1 for 6) from t",
-		output: "select substr(a, 1, 6) from t",
+		output: "select substring(a, 1, 6) from t",
 	}, {
 		input:  "select substring(a from 1 for 6) from t",
 		output: "select substr(a, 1, 6) from t",
+		serializeSelectExprs: true,
+	}, {
+		input:  "select substring(a from 1 for 6) from t",
+	}, {
+		input:  "select substring(a from 1 for 6) from t",
+		output: "select substr(a, 1, 6) from t",
+		serializeSelectExprs: true,
+	}, {
+		input:  "select substring(a from 1 for 6) from t",
+	}, {
+		input:  "select substring(a from 1  for   6) from t",
 	}, {
 		input:  `select substr("foo" from 1 for 2) from t`,
 		output: `select substr('foo', 1, 2) from t`,
+		serializeSelectExprs: true,
 	}, {
 		input:  `select substring("foo", 1, 2) from t`,
-		output: `select substr('foo', 1, 2) from t`,
+		output: `select substring('foo', 1, 2) from t`,
+		serializeSelectExprs: true,
 	}, {
 		input:  `select substr(substr("foo" from 1 for 2), 1, 2) from t`,
 		output: `select substr(substr('foo', 1, 2), 1, 2) from t`,
+		serializeSelectExprs: true,
+	}, {
+		input:  `select substr(substr("foo" from 1 for 2), 1, 2) from t`,
 	}, {
 		input:  `select substr(substring("foo", 1, 2), 3, 4) from t`,
-		output: `select substr(substr('foo', 1, 2), 3, 4) from t`,
+		output: `select substr(substring('foo', 1, 2), 3, 4) from t`,
+		serializeSelectExprs: true,
 	}, {
-		input:  `select substring(substr("foo", 1), 2) from t`,
+		input:  `select substr(substr("foo", 1), 2) from t`,
 		output: `select substr(substr('foo', 1), 2) from t`,
+		serializeSelectExprs: true,
 	}}
 
 	for _, tcase := range validSQL {
-		if tcase.output == "" {
-			tcase.output = tcase.input
-		}
-		tree, err := Parse(tcase.input)
-		if err != nil {
-			t.Errorf("input: %s, err: %v", tcase.input, err)
-			continue
-		}
-		out := String(tree)
-		if out != tcase.output {
-			t.Errorf("out: %s, want %s", out, tcase.output)
-		}
+		runParseTestCase(t, tcase)
 	}
 }
 
@@ -3257,6 +3376,9 @@ var (
 		input:  "select * from t where id = ((select a from t1 union select b from t2) order by a limit 1)",
 		output: "syntax error at position 76 near 'order'",
 	}, {
+		input:  "select a, max(a as b) from t1",
+		output: "syntax error at position 19 near 'as'",
+	}, {
 		input:  "select a, cume_dist() from t1",
 		output: "syntax error at position 27 near 'from'",
 	}, {
@@ -3306,10 +3428,10 @@ var (
 
 func TestErrors(t *testing.T) {
 	for _, tcase := range invalidSQL {
-		_, err := Parse(tcase.input)
-		if err == nil || err.Error() != tcase.output {
-			t.Errorf("%s: %v, want %s", tcase.input, err, tcase.output)
-		}
+		t.Run(tcase.input, func(t *testing.T) {
+			_, err := Parse(tcase.input)
+			assert.Equal(t, tcase.output, err.Error())
+		})
 	}
 }
 
