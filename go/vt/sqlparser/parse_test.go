@@ -1787,6 +1787,12 @@ var (
 	}, {
 		input: "select `weird function name`() from t",
 	}, {
+		input:  "select all* from t",
+		output: "select * from t",
+	}, {
+		input:  "select distinct* from t",
+		output: "select distinct * from t",
+	}, {
 		input: "select status() from t", // should not escape function names that are keywords
 	}, {
 		input: "select * from `weird table name`",
