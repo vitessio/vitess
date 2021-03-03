@@ -394,7 +394,7 @@ func (se *Engine) reload(ctx context.Context) error {
 }
 
 func (se *Engine) updateInnoDBRowsRead(ctx context.Context, conn *connpool.DBConn) error {
-	readRowsData, err := conn.Exec(ctx, "show status like 'Innodb_rows_read'", 10, false)
+	readRowsData, err := conn.Exec(ctx, mysql.ShowRowsRead, 10, false)
 	if err != nil {
 		return err
 	}
