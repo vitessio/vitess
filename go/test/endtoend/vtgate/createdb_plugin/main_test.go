@@ -21,6 +21,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"sync"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -89,8 +90,13 @@ func TestDBDDLPluginSync(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	qr := exec(t, conn, `create database aaa`)
-	require.EqualValues(t, 1, qr.RowsAffected)
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		qr := exec(t, conn, `create database aaa`)
+		require.EqualValues(t, 1, qr.RowsAffected)
+	}()
 
 	keyspace := &cluster.Keyspace{
 		Name: "aaa",
@@ -99,6 +105,7 @@ func TestDBDDLPluginSync(t *testing.T) {
 		clusterInstance.StartUnshardedKeyspace(*keyspace, 0, false),
 		"new database creation failed")
 
+	// wait until the create database query has returned
 	exec(t, conn, `use aaa`)
 
 	exec(t, conn, `create table t (id bigint primary key)`)
@@ -107,40 +114,7 @@ func TestDBDDLPluginSync(t *testing.T) {
 
 	exec(t, conn, `drop database aaa`)
 
-	execAssertError(t, conn, "select count(*) from t", `some error`)
-}
-
-func TestDBDDLPluginASync(t *testing.T) {
-	defer cluster.PanicHandler(t)
-	ctx := context.Background()
-	vtParams := mysql.ConnParams{
-		Host: "localhost",
-		Port: clusterInstance.VtgateMySQLPort,
-	}
-	conn, err := mysql.Connect(ctx, &vtParams)
-	require.NoError(t, err)
-	defer conn.Close()
-
-	qr := exec(t, conn, `create database aaa`)
-	require.EqualValues(t, 1, qr.RowsAffected)
-
-	go func() {
-		keyspace := &cluster.Keyspace{
-			Name: "aaa",
-		}
-		require.NoError(t,
-			clusterInstance.StartUnshardedKeyspace(*keyspace, 0, false),
-			"new database creation failed")
-	}()
-
-	exec(t, conn, `use aaa`)
-
-	exec(t, conn, `create table t (id bigint primary key)`)
-	exec(t, conn, `insert into t(id) values (1),(2),(3),(4),(5)`)
-	assertMatches(t, conn, "select count(*) from t", `[[INT64(5)]]`)
-
-	exec(t, conn, `drop database aaa`)
-
+	// TODO: we should chant down babylon here (aka take down the keyspace with all tablets)
 	execAssertError(t, conn, "select count(*) from t", `some error`)
 }
 
