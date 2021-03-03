@@ -235,6 +235,10 @@ func (t noopVCursor) SubmitOnlineDDL(onlineDDl *schema.OnlineDDL) error {
 	panic("unimplemented")
 }
 
+func (t noopVCursor) GetDBDDLPluginName() string {
+	panic("unimplemented")
+}
+
 var _ VCursor = (*loggingVCursor)(nil)
 var _ SessionActions = (*loggingVCursor)(nil)
 
@@ -506,6 +510,10 @@ func (f *loggingVCursor) SetPlannerVersion(querypb.ExecuteOptions_PlannerVersion
 func (f *loggingVCursor) FindRoutedTable(tbl sqlparser.TableName) (*vindexes.Table, error) {
 	f.log = append(f.log, fmt.Sprintf("FindTable(%s)", sqlparser.String(tbl)))
 	return f.tableRoutes.tbl, nil
+}
+
+func (f *loggingVCursor) GetDBDDLPluginName() string {
+	panic("implement me")
 }
 
 func (f *loggingVCursor) nextResult() (*sqltypes.Result, error) {
