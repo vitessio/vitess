@@ -14,31 +14,40 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package planbuilder
+package engine
 
 import (
+	"context"
+
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
-// DropCreateDB is the interface that you need to implement to add a custom CREATE/DROP DATABASE handler
-type DropCreateDB interface {
-	CreateDatabase(ast *sqlparser.CreateDatabase) error
-	DropDatabase(ast *sqlparser.DropDatabase) error
-}
-
-type defaultHandler struct{}
+type failDBDDL struct{}
 
 // CreateDatabase implements the DropCreateDB interface
-func (defaultHandler) CreateDatabase(*sqlparser.CreateDatabase) error {
+func (failDBDDL) CreateDatabase(context.Context, string) error {
 	return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "create database is not supported")
 }
 
 // DropDatabase implements the DropCreateDB interface
-func (defaultHandler) DropDatabase(*sqlparser.DropDatabase) error {
+func (failDBDDL) DropDatabase(context.Context, string) error {
 	return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "drop database is not supported")
 }
 
-//goland:noinspection GoVarAndConstTypeMayBeOmitted
-var databaseCreator DropCreateDB = defaultHandler{}
+type noOp struct{}
+
+// CreateDatabase implements the DropCreateDB interface
+func (noOp) CreateDatabase(context.Context, string) error {
+	return nil
+}
+
+// DropDatabase implements the DropCreateDB interface
+func (noOp) DropDatabase(context.Context, string) error {
+	return nil
+}
+
+func init() {
+	databaseCreatorPlugins["fail"] = failDBDDL{}
+	databaseCreatorPlugins["noop"] = noOp{}
+}

@@ -205,7 +205,7 @@ func buildDBDDLPlan(stmt sqlparser.Statement, vschema ContextVSchema) (engine.Pr
 		if !ksExists {
 			return nil, vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.DbDropExists, "Can't drop database '%s'; database doesn't exists", ksName)
 		}
-		return engine.CreateDropCreateDatabase(dbDDL.DBName, "drop", func(_ engine.VCursor) error { return databaseCreator.DropDatabase(dbDDL) }), nil
+		return engine.CreateDropCreateDatabase(ksName, false), nil
 	case *sqlparser.AlterDatabase:
 		if !ksExists {
 			return nil, vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.BadDb, "Can't alter database '%s'; unknown database", ksName)
@@ -218,7 +218,7 @@ func buildDBDDLPlan(stmt sqlparser.Statement, vschema ContextVSchema) (engine.Pr
 		if !dbDDL.IfNotExists && ksExists {
 			return nil, vterrors.NewErrorf(vtrpcpb.Code_ALREADY_EXISTS, vterrors.DbCreateExists, "Can't create database '%s'; database exists", ksName)
 		}
-		return engine.CreateDropCreateDatabase(dbDDL.DBName, "create", func(_ engine.VCursor) error { return databaseCreator.CreateDatabase(dbDDL) }), nil
+		return engine.CreateDropCreateDatabase(ksName, true), nil
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] database ddl not recognized: %s", sqlparser.String(dbDDLstmt))
 }

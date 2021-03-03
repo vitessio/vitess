@@ -17,62 +17,85 @@ limitations under the License.
 package engine
 
 import (
+	"context"
 	"strings"
+
+	"vitess.io/vitess/go/mysql"
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
-var _ Primitive = (*DropCreateDatabase)(nil)
+var _ Primitive = (*DBDDL)(nil)
 
-// DropCreateDatabase is just a container around custom database provisioning plugins
+//goland:noinspection GoVarAndConstTypeMayBeOmitted
+var databaseCreatorPlugins = map[string]DBDDLPlugin{}
+
+// DBDDLPlugin is the interface that you need to implement to add a custom CREATE/DROP DATABASE handler
+type DBDDLPlugin interface {
+	CreateDatabase(ctx context.Context, name string) error
+	DropDatabase(ctx context.Context, name string) error
+}
+
+// DBDDL is just a container around custom database provisioning plugins
 // The default behaviour is to just return an error
-type DropCreateDatabase struct {
-	name, verb string
-	plugin     func(VCursor) error
+type DBDDL struct {
+	name   string
+	create bool
+
 	noInputs
 	noTxNeeded
 }
 
 // CreateDropCreateDatabase creates the engine primitive
-func CreateDropCreateDatabase(dbName, verb string, plugin func(VCursor) error) *DropCreateDatabase {
-	return &DropCreateDatabase{
+// `create` will be true for CREATE, and false for DROP
+func CreateDropCreateDatabase(dbName string, create bool) *DBDDL {
+	return &DBDDL{
 		name:   dbName,
-		verb:   verb,
-		plugin: plugin,
+		create: create,
 	}
 }
 
 // RouteType implements the Primitive interface
-func (c *DropCreateDatabase) RouteType() string {
-	return c.verb + " database"
+func (c *DBDDL) RouteType() string {
+	if c.create {
+		return "create database"
+	}
+	return "drop database"
 }
 
 // GetKeyspaceName implements the Primitive interface
-func (c *DropCreateDatabase) GetKeyspaceName() string {
+func (c *DBDDL) GetKeyspaceName() string {
 	return c.name
 }
 
 // GetTableName implements the Primitive interface
-func (c *DropCreateDatabase) GetTableName() string {
+func (c *DBDDL) GetTableName() string {
 	return ""
 }
 
 // Execute implements the Primitive interface
-func (c *DropCreateDatabase) Execute(vcursor VCursor, _ map[string]*querypb.BindVariable, _ bool) (*sqltypes.Result, error) {
-	err := c.plugin(vcursor)
+func (c *DBDDL) Execute(vcursor VCursor, _ map[string]*querypb.BindVariable, _ bool) (*sqltypes.Result, error) {
+	name := vcursor.GetDBDDLPluginName()
+	plugin := databaseCreatorPlugins[name]
+	if c.create {
+		err := plugin.CreateDatabase(vcursor.Context(), c.name)
+		if err != nil {
+			return nil, err
+		}
+		return &sqltypes.Result{RowsAffected: 1}, nil
+	}
+
+	err := plugin.DropDatabase(vcursor.Context(), c.name)
 	if err != nil {
 		return nil, err
 	}
-
-	return &sqltypes.Result{
-		RowsAffected: 1,
-	}, nil
+	return &sqltypes.Result{StatusFlags: mysql.ServerStatusDbDropped}, nil
 }
 
 // StreamExecute implements the Primitive interface
-func (c *DropCreateDatabase) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (c *DBDDL) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	res, err := c.Execute(vcursor, bindVars, wantfields)
 	if err != nil {
 		return err
@@ -81,14 +104,14 @@ func (c *DropCreateDatabase) StreamExecute(vcursor VCursor, bindVars map[string]
 }
 
 // GetFields implements the Primitive interface
-func (c *DropCreateDatabase) GetFields(VCursor, map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (c *DBDDL) GetFields(VCursor, map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	return &sqltypes.Result{}, nil
 }
 
 // description implements the Primitive interface
-func (c *DropCreateDatabase) description() PrimitiveDescription {
+func (c *DBDDL) description() PrimitiveDescription {
 	return PrimitiveDescription{
-		OperatorType: strings.ToUpper(c.verb + " DATABASE"),
+		OperatorType: strings.ToUpper(c.RouteType()),
 		Keyspace:     &vindexes.Keyspace{Name: c.name},
 	}
 }

@@ -72,6 +72,18 @@ func (cached *Concatenate) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *DBDDL) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(17)
+	}
+	// field name string
+	size += int64(len(cached.name))
+	return size
+}
 func (cached *DDL) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -155,20 +167,6 @@ func (cached *Distinct) CachedSize(alloc bool) int64 {
 	if cc, ok := cached.Source.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
-	return size
-}
-func (cached *DropCreateDatabase) CachedSize(alloc bool) int64 {
-	if cached == nil {
-		return int64(0)
-	}
-	size := int64(0)
-	if alloc {
-		size += int64(40)
-	}
-	// field name string
-	size += int64(len(cached.name))
-	// field verb string
-	size += int64(len(cached.verb))
 	return size
 }
 func (cached *Generate) CachedSize(alloc bool) int64 {
