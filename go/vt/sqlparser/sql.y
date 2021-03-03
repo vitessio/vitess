@@ -3006,6 +3006,10 @@ select_option:
   {
     $$ = SQLCalcFoundRowsStr
   }
+| ALL
+  {
+    $$ = AllStr // These are not picked up by NewSelect, and so ALL will be dropped. But this is OK, since it's redundant anyway
+  }
 
 select_expression_list:
   select_expression
