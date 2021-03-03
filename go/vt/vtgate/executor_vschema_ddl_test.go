@@ -725,16 +725,11 @@ func TestPlanExecutorVindexDDLACL(t *testing.T) {
 
 	// test that by default no users can perform the operation
 	stmt := "alter vschema create vindex test_hash using hash"
-	authErr := "not authorized to perform vschema operations"
 	_, err := executor.Execute(ctxRedUser, "TestExecute", session, stmt, nil)
-	if err == nil || err.Error() != authErr {
-		t.Errorf("expected error '%s' got '%v'", authErr, err)
-	}
+	require.EqualError(t, err, `User 'redUser' is not allowed to perform vschema operations`)
 
 	_, err = executor.Execute(ctxBlueUser, "TestExecute", session, stmt, nil)
-	if err == nil || err.Error() != authErr {
-		t.Errorf("expected error '%s' got '%v'", authErr, err)
-	}
+	require.EqualError(t, err, `User 'blueUser' is not allowed to perform vschema operations`)
 
 	// test when all users are enabled
 	*vschemaacl.AuthorizedDDLUsers = "%"
@@ -753,9 +748,8 @@ func TestPlanExecutorVindexDDLACL(t *testing.T) {
 	*vschemaacl.AuthorizedDDLUsers = "orangeUser, blueUser, greenUser"
 	vschemaacl.Init()
 	_, err = executor.Execute(ctxRedUser, "TestExecute", session, stmt, nil)
-	if err == nil || err.Error() != authErr {
-		t.Errorf("expected error '%s' got '%v'", authErr, err)
-	}
+	require.EqualError(t, err, `User 'redUser' is not allowed to perform vschema operations`)
+
 	stmt = "alter vschema create vindex test_hash3 using hash"
 	_, err = executor.Execute(ctxBlueUser, "TestExecute", session, stmt, nil)
 	if err != nil {

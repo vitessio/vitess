@@ -19,8 +19,6 @@ package engine
 import (
 	"sync"
 
-	"vitess.io/vitess/go/mysql"
-
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -65,6 +63,8 @@ func formatTwoOptionsNicely(a, b string) string {
 	return a + "_" + b
 }
 
+var errWrongNumberOfColumnsInSelect = vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.WrongNumberOfColumnsInSelect, "The used SELECT statements have a different number of columns")
+
 // Execute performs a non-streaming exec.
 func (c *Concatenate) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	res, err := c.execSources(vcursor, bindVars, wantfields)
@@ -86,7 +86,7 @@ func (c *Concatenate) Execute(vcursor VCursor, bindVars map[string]*querypb.Bind
 		if len(rows) > 0 &&
 			len(r.Rows) > 0 &&
 			len(rows[0]) != len(r.Rows[0]) {
-			return nil, mysql.NewSQLError(mysql.ERWrongNumberOfColumnsInSelect, "21000", "The used SELECT statements have a different number of columns")
+			return nil, errWrongNumberOfColumnsInSelect
 		}
 
 		rows = append(rows, r.Rows...)
@@ -134,7 +134,7 @@ func (c *Concatenate) execSources(vcursor VCursor, bindVars map[string]*querypb.
 	}
 
 	if err := g.Wait(); err != nil {
-		return nil, vterrors.Wrap(err, "Concatenate.Execute")
+		return nil, err
 	}
 	return results, nil
 }
@@ -235,12 +235,12 @@ func (c *Concatenate) description() PrimitiveDescription {
 
 func compareFields(fields1 []*querypb.Field, fields2 []*querypb.Field) error {
 	if len(fields1) != len(fields2) {
-		return mysql.NewSQLError(mysql.ERWrongNumberOfColumnsInSelect, "21000", "The used SELECT statements have a different number of columns")
+		return errWrongNumberOfColumnsInSelect
 	}
 	for i, field2 := range fields2 {
 		field1 := fields1[i]
 		if field1.Type != field2.Type {
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "column field type does not match for name: (%v, %v) types: (%v, %v)", field1.Name, field2.Name, field1.Type, field2.Type)
+			return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "merging field of different types is not supported, name: (%v, %v) types: (%v, %v)", field1.Name, field2.Name, field1.Type, field2.Type)
 		}
 	}
 	return nil

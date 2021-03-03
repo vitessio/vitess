@@ -29,8 +29,6 @@ import (
 
 	"golang.org/x/sync/errgroup"
 
-	"vitess.io/vitess/go/mysql"
-
 	"vitess.io/vitess/go/vt/callerid"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	"vitess.io/vitess/go/vt/schema"
@@ -114,10 +112,10 @@ func (vc *vcursorImpl) ExecuteVSchema(keyspace string, vschemaDDL *sqlparser.Alt
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vschema not loaded")
 	}
 
-	allowed := vschemaacl.Authorized(callerid.ImmediateCallerIDFromContext(vc.ctx))
+	user := callerid.ImmediateCallerIDFromContext(vc.ctx)
+	allowed := vschemaacl.Authorized(user)
 	if !allowed {
-		return vterrors.Errorf(vtrpcpb.Code_PERMISSION_DENIED, "not authorized to perform vschema operations")
-
+		return vterrors.NewErrorf(vtrpcpb.Code_PERMISSION_DENIED, vterrors.AccessDeniedError, "User '%s' is not allowed to perform vschema operations", user.GetUsername())
 	}
 
 	// Resolve the keyspace either from the table qualifier or the target keyspace
@@ -157,7 +155,7 @@ func newVCursorImpl(ctx context.Context, safeSession *SafeSession, marginComment
 
 	// With DiscoveryGateway transactions are only allowed on master.
 	if UsingLegacyGateway() && safeSession.InTransaction() && tabletType != topodatapb.TabletType_MASTER {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "newVCursorImpl: transactions are supported only for master tablet types, current type: %v", tabletType)
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "transaction is supported only for master tablet type, current type: %v", tabletType)
 	}
 	var ts *topo.Server
 	if serv != nil {
@@ -285,10 +283,12 @@ func (vc *vcursorImpl) DefaultKeyspace() (*vindexes.Keyspace, error) {
 	}
 	ks, ok := vc.vschema.Keyspaces[vc.keyspace]
 	if !ok {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "keyspace %s not found in vschema", vc.keyspace)
+		return nil, vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.BadDb, "Unknown database '%s' in vschema", vc.keyspace)
 	}
 	return ks.Keyspace, nil
 }
+
+var errNoDbAvailable = vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.NoDB, "no database available")
 
 func (vc *vcursorImpl) AnyKeyspace() (*vindexes.Keyspace, error) {
 	keyspace, err := vc.DefaultKeyspace()
@@ -300,7 +300,7 @@ func (vc *vcursorImpl) AnyKeyspace() (*vindexes.Keyspace, error) {
 	}
 
 	if len(vc.vschema.Keyspaces) == 0 {
-		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "no keyspaces available")
+		return nil, errNoDbAvailable
 	}
 
 	// Looks for any sharded keyspace if present, otherwise take any keyspace.
@@ -315,7 +315,7 @@ func (vc *vcursorImpl) AnyKeyspace() (*vindexes.Keyspace, error) {
 
 func (vc *vcursorImpl) FirstSortedKeyspace() (*vindexes.Keyspace, error) {
 	if len(vc.vschema.Keyspaces) == 0 {
-		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "no keyspaces available")
+		return nil, errNoDbAvailable
 	}
 	kss := vc.vschema.Keyspaces
 	keys := make([]string, 0, len(kss))
@@ -340,7 +340,7 @@ func (vc *vcursorImpl) KeyspaceExists(ks string) bool {
 // AllKeyspace implements the ContextVSchema interface
 func (vc *vcursorImpl) AllKeyspace() ([]*vindexes.Keyspace, error) {
 	if len(vc.vschema.Keyspaces) == 0 {
-		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "no keyspaces available")
+		return nil, errNoDbAvailable
 	}
 	var kss []*vindexes.Keyspace
 	for _, ks := range vc.vschema.Keyspaces {
@@ -497,11 +497,11 @@ func (vc *vcursorImpl) SetTarget(target string) error {
 		return err
 	}
 	if _, ok := vc.vschema.Keyspaces[keyspace]; !ignoreKeyspace(keyspace) && !ok {
-		return mysql.NewSQLError(mysql.ERBadDb, mysql.SSSyntaxErrorOrAccessViolation, "Unknown database '%s'", keyspace)
+		return vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.BadDb, "Unknown database '%s'", keyspace)
 	}
 
 	if vc.safeSession.InTransaction() && tabletType != topodatapb.TabletType_MASTER {
-		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "cannot change to a non-master type in the middle of a transaction: %v", tabletType)
+		return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.LockOrActiveTransaction, "Can't execute the given command because you have an active transaction")
 	}
 	vc.safeSession.SetTargetString(target)
 	return nil
@@ -589,11 +589,11 @@ func (vc *vcursorImpl) TargetDestination(qualifier string) (key.Destination, *vi
 		keyspaceName = qualifier
 	}
 	if keyspaceName == "" {
-		return nil, nil, 0, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "keyspace not specified")
+		return nil, nil, 0, errNoKeyspace
 	}
 	keyspace := vc.vschema.Keyspaces[keyspaceName]
 	if keyspace == nil {
-		return nil, nil, 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "no keyspace with name [%s] found", keyspaceName)
+		return nil, nil, 0, vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.BadDb, "Unknown database '%s' in vschema", keyspaceName)
 	}
 	return vc.destination, keyspace.Keyspace, vc.tabletType, nil
 }

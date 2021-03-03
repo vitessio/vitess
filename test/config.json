@@ -266,13 +266,31 @@
 				"site_test"
 			]
 		},
-		"onlineddl": {
+		"onlineddl_ghost": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl_ghost"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "26",
+			"Shard": "onlineddl_ghost",
 			"RetryMax": 0,
+			"Tags": []
+		},
+		"onlineddl_vrepl": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl_vrepl"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "onlineddl_vrepl",
+			"RetryMax": 0,
+			"Tags": []
+		},
+		"onlineddl_vrepl_stress": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl_vrepl_stress"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "onlineddl_vrepl_stress",
+			"RetryMax": 1,
 			"Tags": []
 		},
 		"pitr": {
@@ -667,6 +685,15 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_v2",
+			"RetryMax": 0,
+			"Tags": []
+		},
+		"vreplication_migrate": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestMigrate"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vreplication_migrate",
 			"RetryMax": 0,
 			"Tags": []
 		}

@@ -65,7 +65,7 @@ func createReshardWorkflow(t *testing.T, sourceShards, targetShards string) erro
 	time.Sleep(1 * time.Second)
 	catchup(t, targetTab1, workflowName, "Reshard")
 	catchup(t, targetTab2, workflowName, "Reshard")
-	vdiff(t, ksWorkflow)
+	vdiff(t, ksWorkflow, "")
 	return nil
 }
 
@@ -79,7 +79,7 @@ func createMoveTablesWorkflow(t *testing.T, tables string) error {
 	catchup(t, targetTab1, workflowName, "MoveTables")
 	catchup(t, targetTab2, workflowName, "MoveTables")
 	time.Sleep(1 * time.Second)
-	vdiff(t, ksWorkflow)
+	vdiff(t, ksWorkflow, "")
 	return nil
 }
 
@@ -233,7 +233,7 @@ func getCurrentState(t *testing.T) string {
 func TestBasicV2Workflows(t *testing.T) {
 	vc = setupCluster(t)
 	defer vtgateConn.Close()
-	//defer vc.TearDown()
+	defer vc.TearDown()
 
 	testMoveTablesV2Workflow(t)
 	testReshardV2Workflow(t)
@@ -387,7 +387,7 @@ func testRestOfWorkflow(t *testing.T) {
 func setupCluster(t *testing.T) *VitessCluster {
 	cells := []string{"zone1", "zone2"}
 
-	vc = InitCluster(t, cells)
+	vc = NewVitessCluster(t, "TestBasicVreplicationWorkflow", cells, mainClusterConfig)
 	require.NotNil(t, vc)
 	defaultCellName := "zone1"
 	allCellNames = defaultCellName
@@ -403,8 +403,8 @@ func setupCluster(t *testing.T) *VitessCluster {
 	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.master", "product", "0"), 1)
 	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", "product", "0"), 2)
 
-	vtgateConn = getConnection(t, globalConfig.vtgateMySQLPort)
-	verifyClusterHealth(t)
+	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+	verifyClusterHealth(t, vc)
 	insertInitialData(t)
 
 	sourceReplicaTab = vc.Cells[defaultCell.Name].Keyspaces["product"].Shards["0"].Tablets["zone1-101"].Vttablet
@@ -463,7 +463,7 @@ func moveCustomerTableSwitchFlows(t *testing.T, cells []*Cell, sourceCellOrAlias
 		moveTables(t, sourceCellOrAlias, workflow, sourceKs, targetKs, tables)
 		catchup(t, targetTab1, workflow, "MoveTables")
 		catchup(t, targetTab2, workflow, "MoveTables")
-		vdiff(t, ksWorkflow)
+		vdiff(t, ksWorkflow, "")
 	}
 
 	var switchReadsFollowedBySwitchWrites = func() {

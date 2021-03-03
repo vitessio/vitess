@@ -20,8 +20,6 @@ import (
 	"errors"
 	"sort"
 
-	"vitess.io/vitess/go/mysql"
-
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
@@ -112,8 +110,6 @@ func BuildFromStmt(query string, stmt sqlparser.Statement, vschema ContextVSchem
 
 func getConfiguredPlanner(vschema ContextVSchema) (selectPlanner, error) {
 	switch vschema.Planner() {
-	case V3:
-		return buildSelectPlan, nil
 	case Gen4, Gen4Left2Right, Gen4GreedyOnly:
 		return gen4Planner, nil
 	case Gen4WithFallback:
@@ -123,7 +119,8 @@ func getConfiguredPlanner(vschema ContextVSchema) (selectPlanner, error) {
 		}
 		return fp.plan, nil
 	default:
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unknown planner selected %d", vschema.Planner())
+		// default is v3 plan
+		return buildSelectPlan, nil
 	}
 }
 
@@ -206,24 +203,24 @@ func buildDBDDLPlan(stmt sqlparser.Statement, vschema ContextVSchema) (engine.Pr
 			return engine.NewRowsPrimitive(make([][]sqltypes.Value, 0), make([]*querypb.Field, 0)), nil
 		}
 		if !ksExists {
-			return nil, mysql.NewSQLError(mysql.ERDbDropExists, mysql.SSUnknownSQLState, "Can't drop database '%s'; database doesn't exists", ksName)
+			return nil, vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.DbDropExists, "Can't drop database '%s'; database doesn't exists", ksName)
 		}
-		return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "drop database not allowed")
+		return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "drop database is not supported")
 	case *sqlparser.AlterDatabase:
 		if !ksExists {
-			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "Can't alter database '%s'; database doesn't exists", ksName)
+			return nil, vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.BadDb, "Can't alter database '%s'; unknown database", ksName)
 		}
-		return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "alter database not allowed")
+		return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "alter database is not supported")
 	case *sqlparser.CreateDatabase:
 		if dbDDL.IfNotExists && ksExists {
 			return engine.NewRowsPrimitive(make([][]sqltypes.Value, 0), make([]*querypb.Field, 0)), nil
 		}
 		if !dbDDL.IfNotExists && ksExists {
-			return nil, mysql.NewSQLError(mysql.ERDbCreateExists, mysql.SSUnknownSQLState, "Can't create database '%s'; database exists", ksName)
+			return nil, vterrors.NewErrorf(vtrpcpb.Code_ALREADY_EXISTS, vterrors.DbCreateExists, "Can't create database '%s'; database exists", ksName)
 		}
-		return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "create database not allowed")
+		return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "create database is not supported")
 	}
-	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unreachable code path: %s", sqlparser.String(dbDDLstmt))
+	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] database ddl not recognized: %s", sqlparser.String(dbDDLstmt))
 }
 
 func buildLoadPlan(query string, vschema ContextVSchema) (engine.Primitive, error) {
@@ -235,7 +232,7 @@ func buildLoadPlan(query string, vschema ContextVSchema) (engine.Primitive, erro
 	destination := vschema.Destination()
 	if destination == nil {
 		if keyspace.Sharded {
-			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: this construct is not supported on sharded keyspace")
+			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "LOAD is not supported on sharded database")
 		}
 		destination = key.DestinationAnyShard{}
 	}

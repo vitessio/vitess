@@ -35,7 +35,10 @@ type RewriteASTResult struct {
 // PrepareAST will normalize the query
 func PrepareAST(in Statement, bindVars map[string]*querypb.BindVariable, prefix string, parameterize bool, keyspace string) (*RewriteASTResult, error) {
 	if parameterize {
-		Normalize(in, bindVars, prefix)
+		err := Normalize(in, bindVars, prefix)
+		if err != nil {
+			return nil, err
+		}
 	}
 	return RewriteAST(in, keyspace)
 }
@@ -45,7 +48,11 @@ func RewriteAST(in Statement, keyspace string) (*RewriteASTResult, error) {
 	er := newExpressionRewriter(keyspace)
 	er.shouldRewriteDatabaseFunc = shouldRewriteDatabaseFunc(in)
 	setRewriter := &setNormalizer{}
-	out, ok := Rewrite(in, er.rewrite, setRewriter.rewriteSetComingUp).(Statement)
+	result, err := Rewrite(in, er.rewrite, setRewriter.rewriteSetComingUp)
+	if err != nil {
+		return nil, err
+	}
+	out, ok := result.(Statement)
 	if !ok {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "statement rewriting returned a non statement: %s", String(out))
 	}
@@ -114,7 +121,10 @@ const (
 func (er *expressionRewriter) rewriteAliasedExpr(node *AliasedExpr) (*BindVarNeeds, error) {
 	inner := newExpressionRewriter(er.keyspace)
 	inner.shouldRewriteDatabaseFunc = er.shouldRewriteDatabaseFunc
-	tmp := Rewrite(node.Expr, inner.rewrite, nil)
+	tmp, err := Rewrite(node.Expr, inner.rewrite, nil)
+	if err != nil {
+		return nil, err
+	}
 	newExpr, ok := tmp.(Expr)
 	if !ok {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to rewrite AST. function expected to return Expr returned a %s", String(tmp))
@@ -177,6 +187,13 @@ func (er *expressionRewriter) rewrite(cursor *Cursor) bool {
 			aliasTableName.Qualifier = NewTableIdent(er.keyspace)
 			node.Expr = aliasTableName
 			cursor.Replace(node)
+		}
+	case *ShowBasic:
+		if node.Command == VariableGlobal || node.Command == VariableSession {
+			varsToAdd := sysvars.GetInterestingVariables()
+			for _, sysVar := range varsToAdd {
+				er.bindVars.AddSysVar(sysVar)
+			}
 		}
 	}
 	return true
@@ -305,7 +322,11 @@ func (er *expressionRewriter) unnestSubQueries(cursor *Cursor, subquery *Subquer
 	er.bindVars.NoteRewrite()
 	// we need to make sure that the inner expression also gets rewritten,
 	// so we fire off another rewriter traversal here
-	rewrittenExpr := Rewrite(expr.Expr, er.rewrite, nil)
+	rewrittenExpr, err := Rewrite(expr.Expr, er.rewrite, nil)
+	if err != nil {
+		er.err = err
+		return
+	}
 	cursor.Replace(rewrittenExpr)
 }
 
