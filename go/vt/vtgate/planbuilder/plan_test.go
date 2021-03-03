@@ -335,7 +335,7 @@ func (vw *vschemaWrapper) TargetDestination(qualifier string) (key.Destination, 
 	}
 	keyspace := vw.v.Keyspaces[keyspaceName]
 	if keyspace == nil {
-		return nil, nil, 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "no keyspace with name [%s] found", keyspaceName)
+		return nil, nil, 0, vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.BadDb, "Unknown database '%s' in vschema", keyspaceName)
 	}
 	return vw.dest, keyspace.Keyspace, vw.tabletType, nil
 
@@ -433,8 +433,9 @@ func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper, c
 			//       this is shown by not having any info at all after the result for the V3 planner
 			//       with this last expectation, it is an error if the V4 planner
 			//       produces the same plan as the V3 planner does
+			testName := fmt.Sprintf("%d V4: %s", tcase.lineno, tcase.comments)
 			if !empty || checkAllTests {
-				t.Run(fmt.Sprintf("%d V4: %s", tcase.lineno, tcase.comments), func(t *testing.T) {
+				t.Run(testName, func(t *testing.T) {
 					if out != tcase.output2ndPlanner {
 						fail = true
 						t.Errorf("V4 - %s:%d\nDiff:\n%s\n[%s] \n[%s]", filename, tcase.lineno, cmp.Diff(tcase.output2ndPlanner, out), tcase.output, out)
@@ -452,7 +453,7 @@ func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper, c
 				})
 			} else {
 				if out == tcase.output && checkV4equalPlan {
-					t.Run("V4: "+tcase.comments, func(t *testing.T) {
+					t.Run(testName, func(t *testing.T) {
 						t.Errorf("V4 - %s:%d\nplanner produces same output as V3", filename, tcase.lineno)
 					})
 				}
