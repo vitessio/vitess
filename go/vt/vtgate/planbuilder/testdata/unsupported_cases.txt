@@ -192,7 +192,7 @@ Gen4 plan same as above
 
 # sharded delete with limit clasue
 "delete from user_extra limit 10"
-"unsupported: multi shard delete with limit"
+"multi shard delete with limit is not supported"
 Gen4 plan same as above
 
 # sharded subquery in unsharded subquery in unsharded delete
@@ -207,7 +207,7 @@ Gen4 plan same as above
 
 # scatter update with limit clause
 "update user_extra set val = 1 where (name = 'foo' or id = 1) limit 1"
-"unsupported: multi shard update with limit"
+"multi shard update with limit is not supported"
 Gen4 plan same as above
 
 # multi delete multi table
@@ -419,7 +419,7 @@ Gen4 plan same as above
 
 # Multi shard query using into outfile s3
 "select * from user into outfile s3 'out_file_name'"
-"unsupported: this construct is not supported on sharded keyspace"
+"INTO is not supported on sharded keyspace"
 
 # unsupported two predicates specifying the database for the same table if they are different
 "SELECT cc.constraint_name AS 'name' FROM information_schema.check_constraints cc  WHERE cc.constraint_schema = 'constraint_schema' AND cc.table_schema = 'a'"
@@ -446,14 +446,11 @@ Gen4 plan same as above
 # create view with sql_calc_found_rows with limit
 "create view user.view_a as select sql_calc_found_rows * from music limit 100"
 "Complex select queries are not supported in create or alter view statements"
-Gen4 plan same as above
 
 # create view with sql_calc_found_rows with group by and having
 "create view user.view_a as select sql_calc_found_rows user_id, count(id) from music group by user_id having count(user_id) = 1 order by user_id limit 2"
 "Complex select queries are not supported in create or alter view statements"
-Gen4 plan same as above
 
 # create view with incompatible keyspaces
 "create view main.view_a as select * from user.user_extra"
 "Select query does not belong to the same keyspace as the view statement"
-Gen4 plan same as above

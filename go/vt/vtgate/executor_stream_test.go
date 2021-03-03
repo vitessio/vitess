@@ -98,7 +98,7 @@ func TestStreamError(t *testing.T) {
 		t.Run(query, func(t *testing.T) {
 			_, err := executorStreamMessages(executor, query)
 			require.Error(t, err)
-			require.Contains(t, err.Error(), "unsupported statement type for OLAP")
+			require.Contains(t, err.Error(), "OLAP does not supported statement")
 		})
 	}
 }
