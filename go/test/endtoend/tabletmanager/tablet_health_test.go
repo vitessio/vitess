@@ -28,6 +28,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/stretchr/testify/assert"
+
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -125,8 +126,7 @@ func TestHealthCheck(t *testing.T) {
 	exec(t, masterConn, "stop slave")
 
 	// stop replication, make sure we don't go unhealthy.
-	// TODO: replace with StopReplication once StopSlave has been removed
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("StopSlave", rTablet.Alias)
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("StopReplication", rTablet.Alias)
 	require.NoError(t, err)
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("RunHealthCheck", rTablet.Alias)
 	require.NoError(t, err)
@@ -237,7 +237,7 @@ func TestHealthCheckDrainedStateDoesNotShutdownQueryService(t *testing.T) {
 	// Restart replication. Tablet will become healthy again.
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", rdonlyTablet.Alias, "rdonly")
 	require.NoError(t, err)
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("StartSlave", rdonlyTablet.Alias)
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("StartReplication", rdonlyTablet.Alias)
 	require.NoError(t, err)
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("RunHealthCheck", rdonlyTablet.Alias)
 	require.NoError(t, err)

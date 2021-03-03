@@ -35,6 +35,9 @@ var parserPool = sync.Pool{}
 // zeroParser is a zero-initialized parser to help reinitialize the parser for pooling.
 var zeroParser = *(yyNewParser().(*yyParserImpl))
 
+// MySQLVersion is the version of MySQL that the parser would emulate
+var MySQLVersion string = "50709"
+
 // yyParsePooled is a wrapper around yyParse that pools the parser objects. There isn't a
 // particularly good reason to use yyParse directly, since it immediately discards its parser.  What
 // would be ideal down the line is to actually pool the stacks themselves rather than the parser
@@ -192,21 +195,29 @@ func SplitStatementToPieces(blob string) (pieces []string, err error) {
 	tkn := 0
 	var stmt string
 	stmtBegin := 0
+	emptyStatement := true
+loop:
 	for {
 		tkn, _ = tokenizer.Scan()
-		if tkn == ';' {
+		switch tkn {
+		case ';':
 			stmt = blob[stmtBegin : tokenizer.Position-2]
-			pieces = append(pieces, stmt)
+			if !emptyStatement {
+				pieces = append(pieces, stmt)
+				emptyStatement = true
+			}
 			stmtBegin = tokenizer.Position - 1
-
-		} else if tkn == 0 || tkn == eofChar {
+		case 0, eofChar:
 			blobTail := tokenizer.Position - 2
-
 			if stmtBegin < blobTail {
 				stmt = blob[stmtBegin : blobTail+1]
-				pieces = append(pieces, stmt)
+				if !emptyStatement {
+					pieces = append(pieces, stmt)
+				}
 			}
-			break
+			break loop
+		default:
+			emptyStatement = false
 		}
 	}
 

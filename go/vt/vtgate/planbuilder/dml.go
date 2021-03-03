@@ -103,7 +103,7 @@ func nameMatch(node sqlparser.Expr, col sqlparser.ColIdent) bool {
 func buildDMLPlan(vschema ContextVSchema, dmlType string, stmt sqlparser.Statement, tableExprs sqlparser.TableExprs, where *sqlparser.Where, orderBy sqlparser.OrderBy, limit *sqlparser.Limit, comments sqlparser.Comments, nodes ...sqlparser.SQLNode) (*engine.DML, vindexes.SingleColumn, string, error) {
 	edml := &engine.DML{}
 	pb := newPrimitiveBuilder(vschema, newJointab(sqlparser.GetBindvars(stmt)))
-	rb, err := pb.processDMLTable(tableExprs)
+	rb, err := pb.processDMLTable(tableExprs, nil)
 	if err != nil {
 		return nil, nil, "", err
 	}
@@ -139,7 +139,7 @@ func buildDMLPlan(vschema ContextVSchema, dmlType string, stmt sqlparser.Stateme
 	edml.QueryTimeout = queryTimeout(directives)
 
 	if len(pb.st.tables) != 1 {
-		return nil, nil, "", vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: multi-table %s statement in sharded keyspace", dmlType)
+		return nil, nil, "", vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "multi-table %s statement is not supported in sharded database", dmlType)
 	}
 	for _, tval := range pb.st.tables {
 		// There is only one table.
@@ -153,7 +153,7 @@ func buildDMLPlan(vschema ContextVSchema, dmlType string, stmt sqlparser.Stateme
 
 	if rb.eroute.TargetDestination != nil {
 		if rb.eroute.TargetTabletType != topodatapb.TabletType_MASTER {
-			return nil, nil, "", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported: %s statement with a replica target", dmlType)
+			return nil, nil, "", vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.InnodbReadOnly, "unsupported: %s statement with a replica target", dmlType)
 		}
 		edml.Opcode = engine.ByDestination
 		edml.TargetDestination = rb.eroute.TargetDestination
@@ -163,7 +163,7 @@ func buildDMLPlan(vschema ContextVSchema, dmlType string, stmt sqlparser.Stateme
 	edml.Opcode = routingType
 	if routingType == engine.Scatter {
 		if limit != nil {
-			return nil, nil, "", vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: multi shard %s with limit", dmlType)
+			return nil, nil, "", vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "multi shard %s with limit is not supported", dmlType)
 		}
 	} else {
 		edml.Vindex = vindex

@@ -24,7 +24,13 @@ import (
 	"strings"
 	"testing"
 
-	"golang.org/x/net/context"
+	"github.com/stretchr/testify/require"
+
+	"github.com/stretchr/testify/assert"
+
+	"context"
+
+	"vitess.io/vitess/go/cache"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/vt/discovery"
@@ -299,7 +305,6 @@ var unshardedVSchema = `
 
 const (
 	testBufferSize = 10
-	testCacheSize  = int64(10)
 )
 
 type DestinationAnyShardPickerFirstShard struct{}
@@ -393,7 +398,7 @@ func createLegacyExecutorEnv() (executor *Executor, sbc1, sbc2, sbclookup *sandb
 	bad.VSchema = badVSchema
 
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
-	executor = NewExecutor(context.Background(), serv, cell, resolver, false, testBufferSize, testCacheSize)
+	executor = NewExecutor(context.Background(), serv, cell, resolver, false, testBufferSize, cache.DefaultConfig)
 
 	key.AnyShardPicker = DestinationAnyShardPickerFirstShard{}
 	return executor, sbc1, sbc2, sbclookup
@@ -428,7 +433,7 @@ func createExecutorEnv() (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn
 	bad.VSchema = badVSchema
 
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
-	executor = NewExecutor(context.Background(), serv, cell, resolver, false, testBufferSize, testCacheSize)
+	executor = NewExecutor(context.Background(), serv, cell, resolver, false, testBufferSize, cache.DefaultConfig)
 
 	key.AnyShardPicker = DestinationAnyShardPickerFirstShard{}
 	return executor, sbc1, sbc2, sbclookup
@@ -448,7 +453,7 @@ func createCustomExecutor(vschema string) (executor *Executor, sbc1, sbc2, sbclo
 	sbclookup = hc.AddTestTablet(cell, "0", 1, KsTestUnsharded, "0", topodatapb.TabletType_MASTER, true, 1, nil)
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
 
-	executor = NewExecutor(context.Background(), serv, cell, resolver, false, testBufferSize, testCacheSize)
+	executor = NewExecutor(context.Background(), serv, cell, resolver, false, testBufferSize, cache.DefaultConfig)
 	return executor, sbc1, sbc2, sbclookup
 }
 
@@ -545,19 +550,14 @@ func testQueryLog(t *testing.T, logChan chan interface{}, method, stmtType, sql 
 	t.Helper()
 
 	logStats := getQueryLog(logChan)
-	if logStats == nil {
-		t.Errorf("logstats: no querylog in channel, want sql %s", sql)
-		return nil
-	}
+	require.NotNil(t, logStats)
 
 	var log bytes.Buffer
 	streamlog.GetFormatter(QueryLogger)(&log, nil, logStats)
 	fields := strings.Split(log.String(), "\t")
 
 	// fields[0] is the method
-	if method != fields[0] {
-		t.Errorf("logstats: method want %q got %q", method, fields[0])
-	}
+	assert.Equal(t, method, fields[0], "logstats: method")
 
 	// fields[1] - fields[6] are the caller id, start/end times, etc
 
@@ -587,22 +587,16 @@ func testQueryLog(t *testing.T, logChan chan interface{}, method, stmtType, sql 
 	}
 
 	// fields[11] is the statement type
-	if stmtType != fields[11] {
-		t.Errorf("logstats: stmtType want %q got %q", stmtType, fields[11])
-	}
+	assert.Equal(t, stmtType, fields[11], "logstats: stmtType")
 
 	// fields[12] is the original sql
 	wantSQL := fmt.Sprintf("%q", sql)
-	if wantSQL != fields[12] {
-		t.Errorf("logstats: SQL want %s got %s", wantSQL, fields[12])
-	}
+	assert.Equal(t, wantSQL, fields[12], "logstats: SQL")
 
 	// fields[13] contains the formatted bind vars
 
 	// fields[14] is the count of shard queries
-	if fmt.Sprintf("%v", shardQueries) != fields[14] {
-		t.Errorf("logstats: ShardQueries want %v got %v", shardQueries, fields[14])
-	}
+	assert.Equal(t, fmt.Sprintf("%v", shardQueries), fields[14], "logstats: ShardQueries")
 
 	return logStats
 }

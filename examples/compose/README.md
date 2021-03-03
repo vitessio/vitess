@@ -54,14 +54,35 @@ Flags available:
     List of `<external_db_name>,<DB_HOST>,<DB_PORT>,<DB_USER>,<DB_PASS>,<DB_CHARSET>` separated by ';'.  
     When using this, make sure to have the external_db_name/keyspace in the `keyspaceData` flag with no schema_file_names specified.  
     ```
-    go run vtcompose/vtcompose.go -keyspaces="test:0:2::" -externalDbData="test:192.68.99.101:3306:admin:pass:CHARACTER SET utf8 COLLATE utf8_general_ci"
+    go run vtcompose/vtcompose.go -keyspaceData="commerce:0:2::" -externalDbData="commerce:external_db_host:3306:external_db_user:external_db_password:"
     ```
 
 
 ### Start the cluster
-To start Consul(which saves the topology config), vtctld, vtgate and a few vttablets with MySQL running on them.
+To start Consul(which saves the topology config), vtctld, vtgate, orchestrator and a few vttablets with MySQL running on them.
 ```
 vitess/examples/compose$ docker-compose up -d
+```
+
+### Check cluster status
+Check the status of the cluster.
+```
+vitess/examples/compose$ docker-compose ps
+           Name                         Command                  State                                                                     Ports
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+compose_consul1_1            docker-entrypoint.sh agent ...   Up             8300/tcp, 8301/tcp, 8301/udp, 8302/tcp, 8302/udp, 0.0.0.0:8400->8400/tcp, 0.0.0.0:8500->8500/tcp, 0.0.0.0:8600->8600/tcp, 8600/udp
+compose_consul2_1            docker-entrypoint.sh agent ...   Up             8300/tcp, 8301/tcp, 8301/udp, 8302/tcp, 8302/udp, 8400/tcp, 8500/tcp, 8600/tcp, 8600/udp
+compose_consul3_1            docker-entrypoint.sh agent ...   Up             8300/tcp, 8301/tcp, 8301/udp, 8302/tcp, 8302/udp, 8400/tcp, 8500/tcp, 8600/tcp, 8600/udp
+compose_external_db_host_1   docker-entrypoint.sh mysqld      Up (healthy)   0.0.0.0:32835->3306/tcp, 33060/tcp
+compose_schemaload_1         sh -c /script/schemaload.sh      Exit 0
+compose_vreplication_1       sh -c [ $EXTERNAL_DB -eq 1 ...   Exit 0
+compose_vtctld_1             sh -c  /vt/bin/vtctld -top ...   Up             0.0.0.0:32836->15999/tcp, 0.0.0.0:15000->8080/tcp
+compose_vtgate_1             sh -c /vt/bin/vtgate -topo ...   Up             0.0.0.0:15306->15306/tcp, 0.0.0.0:32845->15999/tcp, 0.0.0.0:15099->8080/tcp
+compose_vtorc_1              sh -c /script/vtorc-up.sh        Up (healthy)   0.0.0.0:13000->3000/tcp
+compose_vttablet100_1        sh -c [ $EXTERNAL_DB -eq 1 ...   Exit 0
+compose_vttablet101_1        sh -c /script/vttablet-up. ...   Up (healthy)   0.0.0.0:32838->15999/tcp, 0.0.0.0:32840->3306/tcp, 0.0.0.0:15101->8080/tcp
+compose_vttablet102_1        sh -c /script/vttablet-up. ...   Up (healthy)   0.0.0.0:32842->15999/tcp, 0.0.0.0:32844->3306/tcp, 0.0.0.0:15102->8080/tcp
+compose_vttablet103_1        sh -c /script/vttablet-up. ...   Up (healthy)   0.0.0.0:32841->15999/tcp, 0.0.0.0:32843->3306/tcp, 0.0.0.0:15103->8080/tcp
 ```
 
 ### Check the status of the containers
@@ -72,7 +93,7 @@ vitess/examples/compose$ docker-compose logs -f vtgate
 ```
 
 ### Load the schema
-***Note: Should not be needed if VtCompose was used.***
+This step is carried out by the **schemaload** container
 
 We need to create a few tables into our new cluster. To do that, we can run the `ApplySchema` command.	
 ```	
@@ -80,17 +101,11 @@ vitess/examples/compose$ ./lvtctl.sh ApplySchema -sql "$(cat tables/create_messa
 ```
 
 ### Create Vschema	
-***Note: Should not be needed if VtCompose was used.***  
+This step is carried out by the **schemaload** container
+
 Create Vschema
 ```	
 vitess/examples/compose$ ./lvtctl.sh ApplyVschema -vschema '{"sharded": false }' test_keyspace	
-```
-
-### Run the client to insert and read some data
-This will build and run the `client.go` file. It will insert and read data from the master and from the replica.
-[See Possible Errors.](#common-errors "Go to common errors")
-```
-vitess/examples/compose$ ./client.sh
 ```
 
 ### Connect to vgate and run queries
@@ -125,6 +140,9 @@ vitess/examples/compose$ ./lvtctl.sh Help
 
 - vtgate web ui:
   http://localhost:15099/debug/status
+
+- orchestrator web ui:
+  http://localhost:13000
   
 - Stream querylog
   `curl -S localhost:15099/debug/querylog`
@@ -154,72 +172,101 @@ DB_PASS=external_db_password
 DB_CHARSET=CHARACTER SET utf8 COLLATE utf8_general_ci
 ```
 
-Ensure you have log bin enabled on your external database.
+**Important** Ensure you have log bin enabled on your external database.
+Refer to the .cnf files [here](./external_db/mysql)
 
 ### Start the cluster
+To simulate running vitess against an external cluster, simply change
+`EXTERNAL_DB=1` when you copy your `template.env` then run the command below
 ```
 vitess/examples/compose$ docker-compose up -d
 ```
 
-### Check replication status
-Once vitess starts, check if replication is working
+### Check cluster status
+Once vitess starts, check cluster status
 ```
-vitess/examples/compose$ ./lfixrepl.sh status
+vitess/examples/compose$ docker-compose ps
+
+           Name                         Command                  State                                                                     Ports
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+compose_consul1_1            docker-entrypoint.sh agent ...   Up             8300/tcp, 8301/tcp, 8301/udp, 8302/tcp, 8302/udp, 0.0.0.0:8400->8400/tcp, 0.0.0.0:8500->8500/tcp, 0.0.0.0:8600->8600/tcp, 8600/udp
+compose_consul2_1            docker-entrypoint.sh agent ...   Up             8300/tcp, 8301/tcp, 8301/udp, 8302/tcp, 8302/udp, 8400/tcp, 8500/tcp, 8600/tcp, 8600/udp
+compose_consul3_1            docker-entrypoint.sh agent ...   Up             8300/tcp, 8301/tcp, 8301/udp, 8302/tcp, 8302/udp, 8400/tcp, 8500/tcp, 8600/tcp, 8600/udp
+compose_external_db_host_1   docker-entrypoint.sh mysqld      Up (healthy)   0.0.0.0:32846->3306/tcp, 33060/tcp
+compose_schemaload_1         sh -c /script/schemaload.sh      Exit 0
+compose_vreplication_1       sh -c [ $EXTERNAL_DB -eq 1 ...   Exit 0
+compose_vtctld_1             sh -c  /vt/bin/vtctld -top ...   Up             0.0.0.0:32847->15999/tcp, 0.0.0.0:15000->8080/tcp
+compose_vtgate_1             sh -c /vt/bin/vtgate -topo ...   Up             0.0.0.0:15306->15306/tcp, 0.0.0.0:32856->15999/tcp, 0.0.0.0:15099->8080/tcp
+compose_vtorc_1              sh -c /script/vtorc-up.sh        Up (healthy)   0.0.0.0:13000->3000/tcp
+compose_vttablet100_1        sh -c [ $EXTERNAL_DB -eq 1 ...   Up (healthy)   0.0.0.0:32848->15999/tcp, 0.0.0.0:32849->3306/tcp, 0.0.0.0:15100->8080/tcp
+compose_vttablet101_1        sh -c /script/vttablet-up. ...   Up (healthy)   0.0.0.0:32850->15999/tcp, 0.0.0.0:32851->3306/tcp, 0.0.0.0:15101->8080/tcp
+compose_vttablet102_1        sh -c /script/vttablet-up. ...   Up (healthy)   0.0.0.0:32853->15999/tcp, 0.0.0.0:32855->3306/tcp, 0.0.0.0:15102->8080/tcp
+compose_vttablet103_1        sh -c /script/vttablet-up. ...   Up (healthy)   0.0.0.0:32852->15999/tcp, 0.0.0.0:32854->3306/tcp, 0.0.0.0:15103->8080/tcp
+
 ```
 
-### Fix replication
-To fix replication, place a mysqldump of the database in vitess/examples/compose/script with filename 'database.sql'
-You may then run the following command
+### Check replication
+The vreplication container included performs the following actions;
+1. Identifies the correct source and destination tablets for you
+2. Copies schema from external database to Vitess managed tablet
+3. Starts VReplication from external keyspace to managed keyspace
+4. Prints out helpful debug information for you.
 ```
-vitess/examples/compose$ ./lfixrepl.sh
-```
-
-### Apply Vschema
-Apply Vschema for the unsharded keyspace	
-```	
-vitess/examples/compose$ ./lvtctl.sh ApplyVschema -vschema '{"sharded":false, "tables": {"*": {} } }' external_db_name	
+vitess/examples/compose$ docker-compose logs -f vreplication
+vreplication_1      | + /vt/bin/vtctlclient --server vtctld:15999 VReplicationExec local-0000000101 'insert into _vt.vreplication (db_name, source, pos, max_tps, max_replication_lag, tablet_types, time_updated, transaction_timestamp, state) values('\''commerce'\'', '\''keyspace:\"ext_commerce\" shard:\"0\" filter:<rules:<match:\"/.*\" > > on_ddl:EXEC_IGNORE '\'', '\'''\'', 9999, 9999, '\''master'\'', 0, 0, '\''Running'\'')'
+vreplication_1      | + /vt/bin/vtctlclient --server vtctld:15999 VReplicationExec local-0000000101 'select * from _vt.vreplication'
+vreplication_1      | +----+----------+--------------------------------+-----+----------+---------+---------------------+------+--------------+--------------+-----------------------+---------+---------+----------+
+vreplication_1      | | id | workflow |             source             | pos | stop_pos | max_tps | max_replication_lag | cell | tablet_types | time_updated | transaction_timestamp |  state  | message | db_name  |
+vreplication_1      | +----+----------+--------------------------------+-----+----------+---------+---------------------+------+--------------+--------------+-----------------------+---------+---------+----------+
+vreplication_1      | |  1 |          | keyspace:"ext_commerce"        |     |          |    9999 |                9999 |      | master       |            0 |                     0 | Running |         | commerce |
+vreplication_1      | |    |          | shard:"0"                      |     |          |         |                     |      |              |              |                       |         |         |         |
+vreplication_1      | |    |          | filter:<rules:<match:"/.*" > > |     |          |         |                     |      |              |              |                       |         |         |         |
+vreplication_1      | |    |          | on_ddl:EXEC_IGNORE             |     |          |         |                     |      |              |              |                       |         |         |         |
+vreplication_1      | +----+----------+--------------------------------+-----+----------+---------+---------------------+------+--------------+--------------+-----------------------+---------+---------+----------+
+compose_vreplication_1 exited with code 0
 ```
 
 ### Connect to vgate and run queries
 vtgate responds to the MySQL protocol, so we can connect to it using the default MySQL client command line.
+Verify that data was copied and is replicating successfully.
 ```sh
-vitess/examples/compose$ mysql --port=15306 --host=<host of machine containers are running in e.g. 127.0.0.1, docker-machine ip e.t.c>
+vitess/examples/compose$ ./lmysql --port=15306 --host=<host of machine containers are running in e.g. 127.0.0.1, docker-machine ip e.t.c>
 
 mysql> show databases;
-+--------------------+
-| Databases          |
-+--------------------+
-| external_db_name   |
-+--------------------+
-1 row in set (0.00 sec)
-mysql> use external_db_name@master or use external_db_name@replica or use external_db_name@rdonly;
-Reading table information for completion of table and column names
-You can turn off this feature to get a quicker startup with -A
-
-Database changed
-mysql> use external_db_name@replica;
+mysql> show databases;
++--------------+
+| Databases    |
++--------------+
+| commerce     |
+| ext_commerce |
++--------------+
+2 rows in set (0.01 sec)
+mysql> use commerce@replica;
 Reading table information for completion of table and column names
 You can turn off this feature to get a quicker startup with -A
 
 Database changed
 mysql> show tables;
-+--------------------------------------------+
-| Tables_in_external_db_name                 |
-+--------------------------------------------+
-| DATABASECHANGELOG                          |
-| ......................                     |
-| table_name_1                               |
-| table_name_2                               |
-| ......................                     |
-|                                            |
-+--------------------------------------------+
-29 rows in set (0.00 sec)
++--------------------+
+| Tables_in_commerce |
++--------------------+
+| users              |
++--------------------+
+1 row in set (0.00 sec)
+
+mysql> select count(*) from users;
++----------+
+| count(*) |
++----------+
+|     1000 |
++----------+
+1 row in set (0.00 sec)
+
 ```
 
 ## Helper Scripts
 The following helper scripts are included to help you perform various actions easily
 * vitess/examples/compose/lvtctl.sh
-* vitess/examples/compose/lfixrepl.sh
 * vitess/examples/compose/lmysql.sh
 
 You may run them as below
@@ -233,29 +280,14 @@ To run against a specific compose service/container, use the environment variabl
 vitess/examples/compose$ (export CS=vttablet101; ./lvtctl.sh <args> )
 ```
 
-## Common Errors
-
-1. Running ./client.sh may generate the following error
-```sh
-vitess/examples/compose$ ./client.sh
-Inserting into master...
-exec failed: Code: FAILED_PRECONDITION
-vtgate: ...vttablet: The MySQL server is running with the --read-only option so it cannot execute this statement (errno 1290) ...
-exit status 1
-```
-To resolve use the [SetReadWrite](../../doc/Troubleshooting.md#master-starts-up-read-only) command on master.
-```sh
-vitess/examples/compose$ ./lvtctl.sh SetReadWrite test-101
-
-```
-<strike>
-2. Running ./lvtctl.sh ApplyVschema -vschema '{"sharded":false }' may result in an error referenced by this [issue](https://github.com/vitessio/vitess/issues/4013 )
+## Custom Image Tags
+You  may specify a custom `vitess:lite` image tag by setting the evnironment variable `VITESS_TAG`.  
+This is optional and defaults to the `latest` tag. Example;
+* Set `VITESS_TAG=8.0.0` in your `.env` before running `docker-compose up -d`
+* Run `VITESS_TAG=8.0.0; docker-compose up -d`
 
 
-A quick fix for unsharded db is;
-```
-vitess/examples/compose$ ./lvtctl.sh ApplyVschema -vschema '{"sharded":false, "tables": {"*": {} } }' external_db_name
-```
-</strike>
-This has since been fixed by  
-https://github.com/vitessio/vitess/pull/4868 & https://github.com/vitessio/vitess/pull/5010
+## Reference
+Checkout this excellent post about [The Life of a Vitess Cluster](https://vitess.io/blog/2020-04-27-life-of-a-cluster/)
+
+

@@ -45,7 +45,7 @@ func testLogf(w io.Writer, params url.Values, m interface{}) error {
 }
 
 func TestHTTP(t *testing.T) {
-	l, err := net.Listen("tcp", ":0")
+	l, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		t.Fatal(err)
 	}

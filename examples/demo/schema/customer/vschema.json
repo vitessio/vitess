@@ -1,0 +1,79 @@
+{
+  "sharded": true,
+  "vindexes": {
+    "hash": {
+      "type": "hash"
+    },
+    "corder_keyspace_idx": {
+      "type": "consistent_lookup_unique",
+      "params": {
+        "table": "product.corder_keyspace_idx",
+        "from": "corder_id",
+        "to": "keyspace_id"
+      },
+      "owner": "corder"
+    },
+    "oname_keyspace_idx": {
+      "type": "consistent_lookup",
+      "params": {
+        "table": "customer.oname_keyspace_idx",
+        "from": "oname,corder_id",
+        "to": "keyspace_id"
+      },
+      "owner": "corder"
+    },
+    "unicode_loose_md5": {
+      "type": "unicode_loose_md5"
+    },
+    "binary": {
+      "type": "binary"
+    }
+  },
+  "tables": {
+    "customer": {
+      "column_vindexes": [{
+        "column": "customer_id",
+        "name": "hash"
+      }],
+      "auto_increment": {
+        "column": "customer_id",
+        "sequence": "product.customer_seq"
+      }
+    },
+    "corder": {
+      "column_vindexes": [{
+        "column": "customer_id",
+        "name": "hash"
+      }, {
+        "column": "corder_id",
+        "name": "corder_keyspace_idx"
+      }, {
+        "columns": ["oname", "corder_id"],
+        "name": "oname_keyspace_idx"
+      }],
+      "auto_increment": {
+        "column": "corder_id",
+        "sequence": "product.corder_seq"
+      }
+    },
+    "corder_event": {
+      "column_vindexes": [{
+        "column": "corder_id",
+        "name": "corder_keyspace_idx"
+      }, {
+        "column": "keyspace_id",
+        "name": "binary"
+      }],
+      "auto_increment": {
+        "column": "corder_event_id",
+        "sequence": "product.corder_event_seq"
+      }
+    },
+    "oname_keyspace_idx": {
+      "column_vindexes": [{
+        "column": "oname",
+        "name": "unicode_loose_md5"
+      }]
+    }
+  }
+}

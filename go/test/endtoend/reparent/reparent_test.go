@@ -204,7 +204,7 @@ func TestReparentReplicaOffline(t *testing.T) {
 	// Perform a graceful reparent operation.
 	out, err := prsWithTimeout(t, tab2, false, "", "31s")
 	require.Error(t, err)
-	assert.Contains(t, out, fmt.Sprintf("tablet %s SetMaster failed", tab4.Alias))
+	assert.Contains(t, out, fmt.Sprintf("tablet %s failed to SetMaster", tab4.Alias))
 	checkMasterTablet(t, tab2)
 }
 
@@ -345,7 +345,7 @@ func TestReparentWithDownReplica(t *testing.T) {
 	// Perform a graceful reparent operation. It will fail as one tablet is down.
 	out, err := prs(t, tab2)
 	require.Error(t, err)
-	assert.Contains(t, out, fmt.Sprintf("tablet %s SetMaster failed", tab3.Alias))
+	assert.Contains(t, out, fmt.Sprintf("tablet %s failed to SetMaster", tab3.Alias))
 
 	// insert data into the new master, check the connected replica work
 	confirmReplication(t, tab2, []*cluster.Vttablet{tab1, tab4})
@@ -374,8 +374,7 @@ func TestChangeTypeSemiSync(t *testing.T) {
 	master, replica, rdonly1, rdonly2 := tab1, tab2, tab3, tab4
 
 	// Updated rdonly tablet and set tablet type to rdonly
-	// TODO: replace with ChangeTabletType once ChangeSlaveType is removed
-	err := clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeSlaveType", rdonly1.Alias, "rdonly")
+	err := clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", rdonly1.Alias, "rdonly")
 	require.NoError(t, err)
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", rdonly2.Alias, "rdonly")
 	require.NoError(t, err)
@@ -442,5 +441,5 @@ func TestReparentDoesntHangIfMasterFails(t *testing.T) {
 	// insert.  The replicas should then abort right away.
 	out, err := prs(t, tab2)
 	require.Error(t, err)
-	assert.Contains(t, out, "master failed to PopulateReparentJournal")
+	assert.Contains(t, out, "primary failed to PopulateReparentJournal")
 }

@@ -21,9 +21,16 @@ import (
 	"strings"
 	"testing"
 
-	"golang.org/x/net/context"
+	"github.com/stretchr/testify/assert"
+
+	"vitess.io/vitess/go/test/utils"
+
+	"github.com/stretchr/testify/require"
+
+	"context"
 
 	"github.com/golang/protobuf/proto"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -100,7 +107,9 @@ func TestVTGateExecute(t *testing.T) {
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
 	}
-	if !reflect.DeepEqual(sandboxconn.SingleRowResult, qr) {
+	want := *sandboxconn.SingleRowResult
+	want.StatusFlags = 0 // VTGate result set does not contain status flags in sqltypes.Result
+	if !reflect.DeepEqual(&want, qr) {
 		t.Errorf("want \n%+v, got \n%+v", sandboxconn.SingleRowResult, qr)
 	}
 	if !proto.Equal(sbc.Options[0], executeOptions) {
@@ -125,7 +134,9 @@ func TestVTGateExecuteWithKeyspaceShard(t *testing.T) {
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
 	}
-	if !reflect.DeepEqual(sandboxconn.SingleRowResult, qr) {
+	wantQr := *sandboxconn.SingleRowResult
+	wantQr.StatusFlags = 0 // VTGate result set does not contain status flags in sqltypes.Result
+	if !reflect.DeepEqual(&wantQr, qr) {
 		t.Errorf("want \n%+v, got \n%+v", sandboxconn.SingleRowResult, qr)
 	}
 
@@ -138,10 +149,8 @@ func TestVTGateExecuteWithKeyspaceShard(t *testing.T) {
 		"select id from none",
 		nil,
 	)
-	want := "vtgate: : keyspace invalid_keyspace not found in vschema"
-	if err == nil || err.Error() != want {
-		t.Errorf("Execute: %v, want %s", err, want)
-	}
+	want := "keyspace invalid_keyspace not found in vschema"
+	assert.EqualError(t, err, want)
 
 	// Valid keyspace/shard.
 	_, qr, err = rpcVTGate.Execute(
@@ -155,7 +164,7 @@ func TestVTGateExecuteWithKeyspaceShard(t *testing.T) {
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
 	}
-	if !reflect.DeepEqual(sandboxconn.SingleRowResult, qr) {
+	if !reflect.DeepEqual(&wantQr, qr) {
 		t.Errorf("want \n%+v, got \n%+v", sandboxconn.SingleRowResult, qr)
 	}
 
@@ -168,10 +177,8 @@ func TestVTGateExecuteWithKeyspaceShard(t *testing.T) {
 		"select id from none",
 		nil,
 	)
-	want = "TestUnsharded.noshard.master: no valid tablet"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("Execute: %v, want %s", err, want)
-	}
+	require.Error(t, err)
+	require.Contains(t, err.Error(), `no healthy tablet available for 'keyspace:"TestUnsharded" shard:"noshard" tablet_type:MASTER`)
 }
 
 func TestVTGateStreamExecute(t *testing.T) {
@@ -202,9 +209,7 @@ func TestVTGateStreamExecute(t *testing.T) {
 	}, {
 		Rows: sandboxconn.StreamRowResult.Rows,
 	}}
-	if !reflect.DeepEqual(want, qrs) {
-		t.Errorf("want \n%+v, got \n%+v", want, qrs)
-	}
+	utils.MustMatch(t, want, qrs)
 	if !proto.Equal(sbc.Options[0], executeOptions) {
 		t.Errorf("got ExecuteOptions \n%+v, want \n%+v", sbc.Options[0], executeOptions)
 	}

@@ -20,16 +20,37 @@ import (
 	"reflect"
 
 	"github.com/golang/protobuf/proto"
+
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 // Result represents a query result.
 type Result struct {
-	Fields       []*querypb.Field `json:"fields"`
-	RowsAffected uint64           `json:"rows_affected"`
-	InsertID     uint64           `json:"insert_id"`
-	Rows         [][]Value        `json:"rows"`
+	Fields              []*querypb.Field `json:"fields"`
+	RowsAffected        uint64           `json:"rows_affected"`
+	InsertID            uint64           `json:"insert_id"`
+	Rows                [][]Value        `json:"rows"`
+	SessionStateChanges string           `json:"session_state_changes"`
+	StatusFlags         uint16           `json:"status_flags"`
 }
+
+//goland:noinspection GoUnusedConst
+const (
+	ServerStatusInTrans            = 0x0001
+	ServerStatusAutocommit         = 0x0002
+	ServerMoreResultsExists        = 0x0008
+	ServerStatusNoGoodIndexUsed    = 0x0010
+	ServerStatusNoIndexUsed        = 0x0020
+	ServerStatusCursorExists       = 0x0040
+	ServerStatusLastRowSent        = 0x0080
+	ServerStatusDbDropped          = 0x0100
+	ServerStatusNoBackslashEscapes = 0x0200
+	ServerStatusMetadataChanged    = 0x0400
+	ServerQueryWasSlow             = 0x0800
+	ServerPsOutParams              = 0x1000
+	ServerStatusInTransReadonly    = 0x2000
+	ServerSessionStateChanged      = 0x4000
+)
 
 // ResultStream is an interface for receiving Result. It is used for
 // RPC interfaces.
@@ -206,7 +227,7 @@ func (result *Result) StripMetadata(incl querypb.ExecuteOptions_IncludedFields) 
 // to another result.Note currently it doesn't handle cases like
 // if two results have different fields.We will enhance this function.
 func (result *Result) AppendResult(src *Result) {
-	if src.RowsAffected == 0 && len(src.Fields) == 0 {
+	if src.RowsAffected == 0 && len(src.Rows) == 0 && len(src.Fields) == 0 {
 		return
 	}
 	if result.Fields == nil {
@@ -222,4 +243,14 @@ func (result *Result) AppendResult(src *Result) {
 // Named returns a NamedResult based on this struct
 func (result *Result) Named() *NamedResult {
 	return ToNamedResult(result)
+}
+
+// IsMoreResultsExists returns true if the status flag has SERVER_MORE_RESULTS_EXISTS set
+func (result *Result) IsMoreResultsExists() bool {
+	return result.StatusFlags&ServerMoreResultsExists == ServerMoreResultsExists
+}
+
+// IsInTransaction returns true if the status flag has SERVER_STATUS_IN_TRANS set
+func (result *Result) IsInTransaction() bool {
+	return result.StatusFlags&ServerStatusInTrans == ServerStatusInTrans
 }

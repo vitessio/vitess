@@ -18,9 +18,12 @@ package topo
 
 import (
 	"path"
+	"strings"
+
+	"context"
 
 	"github.com/golang/protobuf/proto"
-	"golang.org/x/net/context"
+
 	"vitess.io/vitess/go/vt/vterrors"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -168,4 +171,42 @@ func (ts *Server) GetKnownCells(ctx context.Context) ([]string, error) {
 		return nil, err
 	}
 	return DirEntriesToStringArray(entries), nil
+}
+
+// ExpandCells takes a comma-separated list of cells and returns an array of cell names
+// Aliases are expanded and an empty string returns all cells
+func (ts *Server) ExpandCells(ctx context.Context, cells string) ([]string, error) {
+	var err error
+	var outputCells []string
+	inputCells := strings.Split(cells, ",")
+	if cells == "" {
+		inputCells, err = ts.GetCellInfoNames(ctx)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	for _, cell := range inputCells {
+		cell2 := strings.TrimSpace(cell)
+		shortCtx, cancel := context.WithTimeout(ctx, *RemoteOperationTimeout)
+		defer cancel()
+		_, err := ts.GetCellInfo(shortCtx, cell2, false)
+		if err != nil {
+			// not a valid cell, check whether it is a cell alias
+			shortCtx, cancel := context.WithTimeout(ctx, *RemoteOperationTimeout)
+			defer cancel()
+			alias, err2 := ts.GetCellsAlias(shortCtx, cell2, false)
+			// if we get an error, either cellAlias doesn't exist or it isn't a cell alias at all. Ignore and continue
+			if err2 == nil {
+				outputCells = append(outputCells, alias.Cells...)
+			}
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			// valid cell, add it to our list
+			outputCells = append(outputCells, cell2)
+		}
+	}
+	return outputCells, nil
 }

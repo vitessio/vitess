@@ -25,17 +25,19 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"testing"
 
-	"vitess.io/vitess/go/vt/log"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	vttestpb "vitess.io/vitess/go/vt/proto/vttest"
+
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 	"vitess.io/vitess/go/vt/vttest"
+
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	vttestpb "vitess.io/vitess/go/vt/proto/vttest"
 )
 
 var (
@@ -123,9 +125,9 @@ func TestStandalone(t *testing.T) {
 
 	for i := idStart; i < idStart+rowCount; i++ {
 		bindVariables := map[string]*querypb.BindVariable{
-			"id":          {Type: querypb.Type_UINT64, Value: []byte(fmt.Sprint(i))},
-			"msg":         {Type: querypb.Type_VARCHAR, Value: []byte(fmt.Sprint("test", i))},
-			"keyspace_id": {Type: querypb.Type_UINT64, Value: []byte(fmt.Sprint(i))},
+			"id":          {Type: querypb.Type_UINT64, Value: []byte(strconv.FormatInt(int64(i), 10))},
+			"msg":         {Type: querypb.Type_VARCHAR, Value: []byte("test" + strconv.FormatInt(int64(i), 10))},
+			"keyspace_id": {Type: querypb.Type_UINT64, Value: []byte(strconv.FormatInt(int64(i), 10))},
 		}
 		_, err = cur.Execute(ctx, query, bindVariables)
 		require.Nil(t, err)
@@ -136,7 +138,7 @@ func TestStandalone(t *testing.T) {
 
 	cur = conn.Session(ks1+":-80@rdonly", nil)
 	bindVariables := map[string]*querypb.BindVariable{
-		"id_start": {Type: querypb.Type_UINT64, Value: []byte(fmt.Sprint(idStart))},
+		"id_start": {Type: querypb.Type_UINT64, Value: []byte(strconv.FormatInt(int64(idStart), 10))},
 	}
 	res, err := cur.Execute(ctx, "select * from test_table where id >= :id_start", bindVariables)
 	require.Nil(t, err)
@@ -145,7 +147,7 @@ func TestStandalone(t *testing.T) {
 
 	cur = conn.Session(redirected+":-80@replica", nil)
 	bindVariables = map[string]*querypb.BindVariable{
-		"id_start": {Type: querypb.Type_UINT64, Value: []byte(fmt.Sprint(idStart))},
+		"id_start": {Type: querypb.Type_UINT64, Value: []byte(strconv.FormatInt(int64(idStart), 10))},
 	}
 	res, err = cur.Execute(ctx, "select * from test_table where id = :id_start", bindVariables)
 	require.Nil(t, err)
@@ -158,9 +160,9 @@ func TestStandalone(t *testing.T) {
 
 	i := 0x810000000000000
 	bindVariables = map[string]*querypb.BindVariable{
-		"id":          {Type: querypb.Type_UINT64, Value: []byte(fmt.Sprint(i))},
-		"msg":         {Type: querypb.Type_VARCHAR, Value: []byte(fmt.Sprint("test", i))},
-		"keyspace_id": {Type: querypb.Type_UINT64, Value: []byte(fmt.Sprint(i))},
+		"id":          {Type: querypb.Type_UINT64, Value: []byte(strconv.FormatInt(int64(i), 10))},
+		"msg":         {Type: querypb.Type_VARCHAR, Value: []byte("test" + strconv.FormatInt(int64(i), 10))},
+		"keyspace_id": {Type: querypb.Type_UINT64, Value: []byte(strconv.FormatInt(int64(i), 10))},
 	}
 	_, err = cur.Execute(ctx, query, bindVariables)
 	require.Nil(t, err)

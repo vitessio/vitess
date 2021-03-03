@@ -21,8 +21,9 @@ import (
 	"testing"
 
 	"vitess.io/vitess/go/sqltypes"
-
 	querypb "vitess.io/vitess/go/vt/proto/query"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestNewParsedQuery(t *testing.T) {
@@ -144,14 +145,61 @@ func TestGenerateQuery(t *testing.T) {
 		buf.Myprintf("%v", tree)
 		pq := buf.ParsedQuery()
 		bytes, err := pq.GenerateQuery(tcase.bindVars, tcase.extras)
-		var got string
 		if err != nil {
-			got = err.Error()
+			assert.Equal(t, tcase.output, err.Error())
 		} else {
-			got = string(bytes)
+			assert.Equal(t, tcase.output, string(bytes))
 		}
-		if got != tcase.output {
-			t.Errorf("for test case: %s, got: '%s', want '%s'", tcase.desc, got, tcase.output)
-		}
+	}
+}
+
+func TestParseAndBind(t *testing.T) {
+	testcases := []struct {
+		in    string
+		binds []*querypb.BindVariable
+		out   string
+	}{
+		{
+			in:  "select * from tbl",
+			out: "select * from tbl",
+		}, {
+			in:  "select * from tbl where b=4 or a=3",
+			out: "select * from tbl where b=4 or a=3",
+		}, {
+			in:  "select * from tbl where b = 4 or a = 3",
+			out: "select * from tbl where b = 4 or a = 3",
+		}, {
+			in:    "select * from tbl where name=%a",
+			binds: []*querypb.BindVariable{sqltypes.StringBindVariable("xyz")},
+			out:   "select * from tbl where name='xyz'",
+		}, {
+			in:    "select * from tbl where c=%a",
+			binds: []*querypb.BindVariable{sqltypes.Int64BindVariable(17)},
+			out:   "select * from tbl where c=17",
+		}, {
+			in:    "select * from tbl where name=%a and c=%a",
+			binds: []*querypb.BindVariable{sqltypes.StringBindVariable("xyz"), sqltypes.Int64BindVariable(17)},
+			out:   "select * from tbl where name='xyz' and c=17",
+		}, {
+			in:    "select * from tbl where name=%a",
+			binds: []*querypb.BindVariable{sqltypes.StringBindVariable("it's")},
+			out:   "select * from tbl where name='it\\'s'",
+		}, {
+			in:    "where name=%a",
+			binds: []*querypb.BindVariable{sqltypes.StringBindVariable("xyz")},
+			out:   "where name='xyz'",
+		}, {
+			in:    "name=%a",
+			binds: []*querypb.BindVariable{sqltypes.StringBindVariable("xyz")},
+			out:   "name='xyz'",
+		},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.in, func(t *testing.T) {
+			query, err := ParseAndBind(tc.in, tc.binds...)
+			assert.NoError(t, err)
+			assert.Equal(t, tc.out, query)
+		})
 	}
 }

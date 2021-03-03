@@ -184,7 +184,9 @@ func (env *LocalTestEnv) VtcomboArguments() []string {
 	return []string{
 		"-service_map", strings.Join(
 			[]string{"grpc-vtgateservice", "grpc-vtctl"}, ",",
-		)}
+		),
+		"-enable_queries",
+	}
 }
 
 // LogDirectory implements LogDirectory for LocalTestEnv.

@@ -22,9 +22,10 @@ import (
 	"testing"
 	"time"
 
+	"context"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
@@ -172,7 +173,7 @@ func newTestLoadTable(tableType string, comment string, db *fakesqldb.DB) (*Tabl
 	}
 	defer conn.Recycle()
 
-	return LoadTable(conn, "test_table", tableType, comment)
+	return LoadTable(conn, "test_table", comment)
 }
 
 func getTestLoadTableQueries() map[string]*sqltypes.Result {

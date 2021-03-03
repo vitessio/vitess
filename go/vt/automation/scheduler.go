@@ -26,7 +26,8 @@ import (
 	"fmt"
 	"sync"
 
-	"golang.org/x/net/context"
+	"context"
+
 	"vitess.io/vitess/go/vt/log"
 	automationpb "vitess.io/vitess/go/vt/proto/automation"
 	"vitess.io/vitess/go/vt/vterrors"

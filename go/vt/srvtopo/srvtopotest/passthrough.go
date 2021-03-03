@@ -17,7 +17,7 @@ limitations under the License.
 package srvtopotest
 
 import (
-	"golang.org/x/net/context"
+	"context"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"

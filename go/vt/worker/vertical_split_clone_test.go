@@ -22,7 +22,7 @@ import (
 
 	"vitess.io/vitess/go/vt/discovery"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
@@ -113,10 +113,10 @@ func TestVerticalSplitClone(t *testing.T) {
 		topodatapb.TabletType_RDONLY, nil, testlib.TabletKeyspaceShard(t, "destination_ks", "0"))
 
 	// add the topo and schema data we'll need
-	if err := wi.wr.RebuildKeyspaceGraph(ctx, "source_ks", nil); err != nil {
+	if err := wi.wr.RebuildKeyspaceGraph(ctx, "source_ks", nil, false); err != nil {
 		t.Fatalf("RebuildKeyspaceGraph failed: %v", err)
 	}
-	if err := wi.wr.RebuildKeyspaceGraph(ctx, "destination_ks", nil); err != nil {
+	if err := wi.wr.RebuildKeyspaceGraph(ctx, "destination_ks", nil, false); err != nil {
 		t.Fatalf("RebuildKeyspaceGraph failed: %v", err)
 	}
 

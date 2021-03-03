@@ -25,7 +25,8 @@ import (
 
 	"github.com/golang/protobuf/proto"
 
-	"golang.org/x/net/context"
+	"context"
+
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/vt/concurrency"
@@ -401,7 +402,7 @@ func (ts *Server) UpdateDisableQueryService(ctx context.Context, keyspace string
 		return err
 	}
 
-	// The caller intents to update all cells in this case
+	// The caller intends to update all cells in this case
 	if len(cells) == 0 {
 		cells, err = ts.GetCellInfoNames(ctx)
 		if err != nil {
@@ -699,4 +700,23 @@ func ShardIsServing(srvKeyspace *topodatapb.SrvKeyspace, shard *topodatapb.Shard
 		}
 	}
 	return false
+}
+
+// ValidateSrvKeyspace validates that the SrvKeyspace for given keyspace in the provided cells is not corrupted
+func (ts *Server) ValidateSrvKeyspace(ctx context.Context, keyspace, cells string) error {
+	cellsToValidate, err := ts.ExpandCells(ctx, cells)
+	if err != nil {
+		return err
+	}
+	for _, cell := range cellsToValidate {
+		srvKeyspace, err := ts.GetSrvKeyspace(ctx, cell, keyspace)
+		if err != nil {
+			return err
+		}
+		err = OrderAndCheckPartitions(cell, srvKeyspace)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }

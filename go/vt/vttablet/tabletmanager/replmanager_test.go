@@ -20,8 +20,10 @@ import (
 	"testing"
 	"time"
 
+	"context"
+
 	"github.com/stretchr/testify/assert"
-	"golang.org/x/net/context"
+
 	"vitess.io/vitess/go/vt/mysqlctl"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )

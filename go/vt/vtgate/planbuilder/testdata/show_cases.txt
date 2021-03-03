@@ -1,5 +1,3 @@
-# Test cases in this file are for SHOW commands.
-#
 # Show table status without database name or conditions.
 "SHOW table StatUs"
 {
@@ -17,6 +15,7 @@
     "SingleShardOnly": true
   }
 }
+
 # Show Table status with a keyspace name
 "SHOW table StatUs from main"
 {
@@ -34,6 +33,7 @@
     "SingleShardOnly": true
   }
 }
+
 # Show Table status with a keyspace name using IN
 "SHOW table StatUs In main"
 {
@@ -51,6 +51,7 @@
     "SingleShardOnly": true
   }
 }
+
 # Show Table status with a keyspace name with a condition
 "SHOW table StatUs In user WHERE Rows > 70"
 {
@@ -68,6 +69,7 @@
     "SingleShardOnly": true
   }
 }
+
 # Show Table status with a Like condition
 "SHOW table StatUs LIKe '%a'"
 {
@@ -83,5 +85,422 @@
     "IsDML": false,
     "Query": "show table status like '%a'",
     "SingleShardOnly": true
+  }
+}
+
+# show columns from user keyspace
+"show full columns from user.user_extra"
+{
+  "QueryType": "SHOW",
+  "Original": "show full columns from user.user_extra",
+  "Instructions": {
+    "OperatorType": "Send",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetDestination": "AnyShard()",
+    "IsDML": false,
+    "Query": "show full columns from user_extra",
+    "SingleShardOnly": true
+  }
+}
+
+# show columns from main keyspace
+"show full columns from unsharded"
+{
+  "QueryType": "SHOW",
+  "Original": "show full columns from unsharded",
+  "Instructions": {
+    "OperatorType": "Send",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetDestination": "AnyShard()",
+    "IsDML": false,
+    "Query": "show full columns from unsharded",
+    "SingleShardOnly": true
+  }
+}
+
+# show columns pass as dbname in from clause supersedes the qualifier
+"show full columns from user.unsharded from main"
+{
+  "QueryType": "SHOW",
+  "Original": "show full columns from user.unsharded from main",
+  "Instructions": {
+    "OperatorType": "Send",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetDestination": "AnyShard()",
+    "IsDML": false,
+    "Query": "show full columns from unsharded",
+    "SingleShardOnly": true
+  }
+}
+
+# show columns fails as table does not exists in user keyspace
+"show full columns from unsharded from user"
+"table unsharded not found"
+
+# show columns fails as table does not exists in user keyspace
+"show full columns from user.unsharded"
+"table unsharded not found"
+
+# show charset
+"show charset"
+{
+  "QueryType": "SHOW",
+  "Original": "show charset",
+  "Instructions": {
+    "OperatorType": "Rows"
+  }
+}
+
+# show function
+"show function status"
+{
+  "QueryType": "SHOW",
+  "Original": "show function status",
+  "Instructions": {
+    "OperatorType": "Send",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetDestination": "AnyShard()",
+    "IsDML": false,
+    "Query": "show function status",
+    "SingleShardOnly": true
+  }
+}
+
+# show privileges
+"show privileges"
+{
+  "QueryType": "SHOW",
+  "Original": "show privileges",
+  "Instructions": {
+    "OperatorType": "Send",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetDestination": "AnyShard()",
+    "IsDML": false,
+    "Query": "show privileges",
+    "SingleShardOnly": true
+  }
+}
+
+# show procedure status
+"show procedure status"
+{
+  "QueryType": "SHOW",
+  "Original": "show procedure status",
+  "Instructions": {
+    "OperatorType": "Send",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetDestination": "AnyShard()",
+    "IsDML": false,
+    "Query": "show procedure status",
+    "SingleShardOnly": true
+  }
+}
+
+# show variables
+"show variables"
+{
+  "QueryType": "SHOW",
+  "Original": "show variables",
+  "Instructions": {
+    "OperatorType": "ReplaceVariables",
+    "Inputs": [
+      {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "AnyShard()",
+        "IsDML": false,
+        "Query": "show variables",
+        "SingleShardOnly": true
+      }
+    ]
+  }
+}
+
+# show global variables
+"show global variables"
+{
+  "QueryType": "SHOW",
+  "Original": "show global variables",
+  "Instructions": {
+    "OperatorType": "ReplaceVariables",
+    "Inputs": [
+      {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "AnyShard()",
+        "IsDML": false,
+        "Query": "show global variables",
+        "SingleShardOnly": true
+      }
+    ]
+  }
+}
+
+# show databases
+"show databases"
+{
+  "QueryType": "SHOW",
+  "Original": "show databases",
+  "Instructions": {
+    "OperatorType": "Rows"
+  }
+}
+
+# show create database
+"show create database user"
+{
+  "QueryType": "SHOW",
+  "Original": "show create database user",
+  "Instructions": {
+    "OperatorType": "Send",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetDestination": "AnyShard()",
+    "IsDML": false,
+    "Query": "show create database `user`",
+    "SingleShardOnly": true
+  }
+}
+
+# show create database system_schema
+"show create database mysql"
+{
+  "QueryType": "SHOW",
+  "Original": "show create database mysql",
+  "Instructions": {
+    "OperatorType": "Send",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetDestination": "AnyShard()",
+    "IsDML": false,
+    "Query": "show create database mysql",
+    "SingleShardOnly": true
+  }
+}
+
+# show create procedure
+"show create procedure proc"
+{
+  "QueryType": "SHOW",
+  "Original": "show create procedure proc",
+  "Instructions": {
+    "OperatorType": "Send",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetDestination": "AnyShard()",
+    "IsDML": false,
+    "Query": "show create procedure proc",
+    "SingleShardOnly": true
+  }
+}
+
+# show create procedure from system_schema
+"show create procedure information_schema.proc"
+{
+  "QueryType": "SHOW",
+  "Original": "show create procedure information_schema.proc",
+  "Instructions": {
+    "OperatorType": "Send",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetDestination": "AnyShard()",
+    "IsDML": false,
+    "Query": "show create procedure information_schema.proc",
+    "SingleShardOnly": true
+  }
+}
+
+# show create table on table present in sharded but as unsharded is selected it goes to unsharded keyspace
+"show create table user_extra"
+{
+  "QueryType": "SHOW",
+  "Original": "show create table user_extra",
+  "Instructions": {
+    "OperatorType": "Send",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetDestination": "AnyShard()",
+    "IsDML": false,
+    "Query": "show create table user_extra",
+    "SingleShardOnly": true
+  }
+}
+
+# show create table with qualifier
+"show create table user.user_extra"
+{
+  "QueryType": "SHOW",
+  "Original": "show create table user.user_extra",
+  "Instructions": {
+    "OperatorType": "Send",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetDestination": "AnyShard()",
+    "IsDML": false,
+    "Query": "show create table user_extra",
+    "SingleShardOnly": true
+  }
+}
+
+# show create table with unsharded as default keyspace
+"show create table unknown"
+{
+  "QueryType": "SHOW",
+  "Original": "show create table unknown",
+  "Instructions": {
+    "OperatorType": "Send",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetDestination": "AnyShard()",
+    "IsDML": false,
+    "Query": "show create table unknown",
+    "SingleShardOnly": true
+  }
+}
+
+# show create table with table not present with qualifier
+"show create table user.unknown"
+"table unknown not found"
+
+# show create table from system_schema
+"show create table information_schema.tables"
+{
+  "QueryType": "SHOW",
+  "Original": "show create table information_schema.tables",
+  "Instructions": {
+    "OperatorType": "Send",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetDestination": "AnyShard()",
+    "IsDML": false,
+    "Query": "show create table information_schema.`tables`",
+    "SingleShardOnly": true
+  }
+}
+
+# show tables
+"show tables"
+{
+  "QueryType": "SHOW",
+  "Original": "show tables",
+  "Instructions": {
+    "OperatorType": "RenameFields",
+    "Columns": [
+      "Tables_in_main"
+    ],
+    "Indices": [
+      0
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "AnyShard()",
+        "IsDML": false,
+        "Query": "show tables",
+        "SingleShardOnly": true
+      }
+    ]
+  }
+}
+
+# show tables from db
+"show tables from user"
+{
+  "QueryType": "SHOW",
+  "Original": "show tables from user",
+  "Instructions": {
+    "OperatorType": "RenameFields",
+    "Columns": [
+      "Tables_in_user"
+    ],
+    "Indices": [
+      0
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetDestination": "AnyShard()",
+        "IsDML": false,
+        "Query": "show tables",
+        "SingleShardOnly": true
+      }
+    ]
+  }
+}
+
+# show tables from system schema
+"show tables from performance_schema"
+{
+  "QueryType": "SHOW",
+  "Original": "show tables from performance_schema",
+  "Instructions": {
+    "OperatorType": "RenameFields",
+    "Columns": [
+      "Tables_in_performance_schema"
+    ],
+    "Indices": [
+      0
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "AnyShard()",
+        "IsDML": false,
+        "Query": "show tables from performance_schema",
+        "SingleShardOnly": true
+      }
+    ]
   }
 }

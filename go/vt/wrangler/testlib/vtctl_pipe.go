@@ -28,7 +28,8 @@ import (
 
 	"google.golang.org/grpc"
 
-	"golang.org/x/net/context"
+	"context"
+
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"

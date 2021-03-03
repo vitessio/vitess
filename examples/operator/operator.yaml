@@ -1164,11 +1164,8 @@ spec:
               properties:
                 engine:
                   description: 'Engine specifies the Vitess backup engine to use,
-                    either "builtin" or "xtrabackup". Note that if you change this
-                    after a Vitess cluster is already deployed, you must roll the
-                    change out to all tablets and then take a new backup from one
-                    tablet in each shard. Otherwise, new tablets trying to restore
-                    will find that the latest backup was created with the wrong engine.
+                    either "builtin" or "xtrabackup". Restores will always be done
+                    with whichever engine created a given backup.
                     Default: builtin'
                   enum:
                   - builtin
@@ -5776,7 +5773,7 @@ spec:
               fieldPath: metadata.name
         - name: OPERATOR_NAME
           value: vitess-operator
-        image: planetscale/vitess-operator:v2.0.0
+        image: planetscale/vitess-operator:latest
         imagePullPolicy: IfNotPresent
         name: vitess-operator
         resources:

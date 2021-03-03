@@ -4,12 +4,12 @@ metadata:
   name: example
 spec:
   images:
-    vtctld: us.gcr.io/planetscale-vitess/lite:2020-04-24.228e6fe
-    vtgate: us.gcr.io/planetscale-vitess/lite:2020-04-24.228e6fe
-    vttablet: us.gcr.io/planetscale-vitess/lite:2020-04-24.228e6fe
-    vtbackup: us.gcr.io/planetscale-vitess/lite:2020-04-24.228e6fe
+    vtctld: vitess/lite:latest
+    vtgate: vitess/lite:latest
+    vttablet: vitess/lite:latest
+    vtbackup: vitess/lite:latest
     mysqld:
-      mysql56Compatible: us.gcr.io/planetscale-vitess/lite:2020-04-24.228e6fe
+      mysql56Compatible: vitess/lite:latest
     mysqldExporter: prom/mysqld-exporter:v0.11.0
   cells:
   - name: zone1

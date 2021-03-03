@@ -31,9 +31,13 @@ import (
 // Within Select constructs, bind vars are deduped. This allows
 // us to identify vindex equality. Otherwise, every value is
 // treated as distinct.
-func Normalize(stmt Statement, bindVars map[string]*querypb.BindVariable, prefix string) {
+func Normalize(stmt Statement, bindVars map[string]*querypb.BindVariable, prefix string) error {
 	nz := newNormalizer(stmt, bindVars, prefix)
-	Rewrite(stmt, nz.WalkStatement, nil)
+	_, err := Rewrite(stmt, nz.WalkStatement, nil)
+	if err != nil {
+		return err
+	}
+	return nz.err
 }
 
 type normalizer struct {
@@ -42,6 +46,7 @@ type normalizer struct {
 	reserved map[string]struct{}
 	counter  int
 	vals     map[string]string
+	err      error
 }
 
 func newNormalizer(stmt Statement, bindVars map[string]*querypb.BindVariable, prefix string) *normalizer {
@@ -60,10 +65,11 @@ func newNormalizer(stmt Statement, bindVars map[string]*querypb.BindVariable, pr
 func (nz *normalizer) WalkStatement(cursor *Cursor) bool {
 	switch node := cursor.Node().(type) {
 	// no need to normalize the statement types
-	case *Set, *Show, *Begin, *Commit, *Rollback, *Savepoint, *SetTransaction, *DDL, *SRollback, *Release, *OtherAdmin, *OtherRead:
+	case *Set, *Show, *Begin, *Commit, *Rollback, *Savepoint, *SetTransaction, DDLStatement, *SRollback, *Release, *OtherAdmin, *OtherRead:
 		return false
 	case *Select:
-		Rewrite(node, nz.WalkSelect, nil)
+		_, err := Rewrite(node, nz.WalkSelect, nil)
+		nz.err = err
 		// Don't continue
 		return false
 	case *Literal:
@@ -77,7 +83,7 @@ func (nz *normalizer) WalkStatement(cursor *Cursor) bool {
 	case *ConvertType: // we should not rewrite the type description
 		return false
 	}
-	return true
+	return nz.err == nil // only continue if we haven't found any errors
 }
 
 // WalkSelect normalizes the AST in Select mode.
@@ -98,7 +104,7 @@ func (nz *normalizer) WalkSelect(cursor *Cursor) bool {
 		// we should not rewrite the type description
 		return false
 	}
-	return true
+	return nz.err == nil // only continue if we haven't found any errors
 }
 
 func (nz *normalizer) convertLiteralDedup(node *Literal, cursor *Cursor) {

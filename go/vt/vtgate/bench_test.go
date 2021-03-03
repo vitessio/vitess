@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"testing"
 
-	"golang.org/x/net/context"
+	"context"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"

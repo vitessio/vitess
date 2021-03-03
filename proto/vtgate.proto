@@ -134,6 +134,26 @@ message Session {
 
   // last_lock_heartbeat keep tracks of when last lock heartbeat was sent.
   int64 last_lock_heartbeat = 19;
+
+  // read_after_write tracks the ReadAfterWrite settings for this session.
+  ReadAfterWrite read_after_write = 20;
+
+  // DDL strategy
+  string DDLStrategy = 21;
+
+  // Session UUID
+  string SessionUUID = 22;
+
+  // enable_system_settings defines if we can use reserved connections.
+  bool enable_system_settings = 23;
+}
+
+// ReadAfterWrite contains information regarding gtid set and timeout
+// Also if the gtid information needs to be passed to client.
+message ReadAfterWrite {
+  string read_after_write_gtid = 1;
+  double read_after_write_timeout = 2;
+  bool session_track_gtids = 3;
 }
 
 // ExecuteRequest is the payload to Execute.

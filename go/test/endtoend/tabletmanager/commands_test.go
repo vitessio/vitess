@@ -27,6 +27,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/stretchr/testify/assert"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 )
@@ -119,9 +120,8 @@ func assertExcludeFields(t *testing.T, qr string) {
 	err := json.Unmarshal([]byte(qr), &resultMap)
 	require.Nil(t, err)
 
-	rowsAffected := resultMap["rows_affected"]
-	want := float64(2)
-	assert.Equal(t, want, rowsAffected)
+	rows := resultMap["rows"].([]interface{})
+	assert.Equal(t, 2, len(rows))
 
 	fields := resultMap["fields"]
 	assert.NotContainsf(t, fields, "name", "name should not be in field list")

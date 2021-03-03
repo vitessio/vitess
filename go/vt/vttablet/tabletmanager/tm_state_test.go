@@ -18,12 +18,17 @@ package tabletmanager
 
 import (
 	"encoding/json"
+	"os"
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/servenv"
+
+	"context"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/net/context"
+
 	"vitess.io/vitess/go/vt/mysqlctl/fakemysqldaemon"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -168,8 +173,12 @@ func TestStateNonServing(t *testing.T) {
 func TestStateChangeTabletType(t *testing.T) {
 	ctx := context.Background()
 	ts := memorytopo.NewServer("cell1")
+	statsTabletTypeCount.ResetAll()
 	tm := newTestTM(t, ts, 2, "ks", "0")
 	defer tm.Stop()
+
+	assert.Equal(t, 1, len(statsTabletTypeCount.Counts()))
+	assert.Equal(t, int64(1), statsTabletTypeCount.Counts()["replica"])
 
 	alias := &topodatapb.TabletAlias{
 		Cell: "cell1",
@@ -182,6 +191,9 @@ func TestStateChangeTabletType(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, topodatapb.TabletType_MASTER, ti.Type)
 	assert.NotNil(t, ti.MasterTermStartTime)
+	assert.Equal(t, "master", statsTabletType.Get())
+	assert.Equal(t, 2, len(statsTabletTypeCount.Counts()))
+	assert.Equal(t, int64(1), statsTabletTypeCount.Counts()["master"])
 
 	err = tm.tmState.ChangeTabletType(ctx, topodatapb.TabletType_REPLICA, DBActionNone)
 	require.NoError(t, err)
@@ -189,6 +201,9 @@ func TestStateChangeTabletType(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, topodatapb.TabletType_REPLICA, ti.Type)
 	assert.Nil(t, ti.MasterTermStartTime)
+	assert.Equal(t, "replica", statsTabletType.Get())
+	assert.Equal(t, 2, len(statsTabletTypeCount.Counts()))
+	assert.Equal(t, int64(2), statsTabletTypeCount.Counts()["replica"])
 }
 
 func TestPublishStateNew(t *testing.T) {
@@ -242,4 +257,31 @@ func TestPublishStateNew(t *testing.T) {
 	ttablet, err = tm.TopoServer.GetTablet(ctx, tm.tabletAlias)
 	require.NoError(t, err)
 	assert.Equal(t, tab2, ttablet.Tablet)
+}
+
+func TestPublishDeleted(t *testing.T) {
+	ctx := context.Background()
+	ts := memorytopo.NewServer("cell1")
+	tm := newTestTM(t, ts, 2, "ks", "0")
+	defer tm.Stop()
+
+	alias := &topodatapb.TabletAlias{
+		Cell: "cell1",
+		Uid:  2,
+	}
+
+	err := tm.tmState.ChangeTabletType(ctx, topodatapb.TabletType_MASTER, DBActionSetReadWrite)
+	require.NoError(t, err)
+
+	err = ts.DeleteTablet(ctx, alias)
+	require.NoError(t, err)
+
+	// we need to make sure to catch the signal
+	servenv.ExitChan = make(chan os.Signal, 1)
+	// Now change the tablet type and publish
+	err = tm.tmState.ChangeTabletType(ctx, topodatapb.TabletType_REPLICA, DBActionNone)
+	require.NoError(t, err)
+	tm.tmState.mu.Lock()
+	assert.False(t, tm.tmState.isPublishing)
+	tm.tmState.mu.Unlock()
 }

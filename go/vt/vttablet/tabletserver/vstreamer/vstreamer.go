@@ -17,13 +17,18 @@ limitations under the License.
 package vstreamer
 
 import (
+	"bytes"
 	"context"
 	"flag"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
+	vtschema "vitess.io/vitess/go/vt/schema"
+
 	"github.com/golang/protobuf/proto"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/sync2"
@@ -38,7 +43,7 @@ import (
 )
 
 // PacketSize is the suggested packet size for VReplication streamer.
-var PacketSize = flag.Int("vstream_packet_size", 30000, "Suggested packet size for VReplication streamer. This is used only as a recommendation. The actual packet size may be more or less than this amount.")
+var PacketSize = flag.Int("vstream_packet_size", 250000, "Suggested packet size for VReplication streamer. This is used only as a recommendation. The actual packet size may be more or less than this amount.")
 
 // HeartbeatTime is set to slightly below 1s, compared to idleTimeout
 // set by VPlayer at slightly above 1s. This minimizes conflicts
@@ -264,6 +269,27 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 	// Main loop: calls bufferAndTransmit as events arrive.
 	timer := time.NewTimer(HeartbeatTime)
 	defer timer.Stop()
+
+	// throttledEvents can be read just like you would read from events
+	// throttledEvents pulls data from events, but throttles pulling data,
+	// which in turn blocks the BinlogConnection from pushing events to the channel
+	throttledEvents := make(chan mysql.BinlogEvent)
+	go func() {
+		for {
+			// check throttler.
+			if !vs.vse.throttlerClient.ThrottleCheckOKOrWait(ctx) {
+				continue
+			}
+
+			ev, ok := <-events
+			if ok {
+				throttledEvents <- ev
+			} else {
+				close(throttledEvents)
+				return
+			}
+		}
+	}()
 	for {
 		timer.Reset(HeartbeatTime)
 		// Drain event if timer fired before reset.
@@ -273,7 +299,7 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 		}
 
 		select {
-		case ev, ok := <-events:
+		case ev, ok := <-throttledEvents:
 			if !ok {
 				select {
 				case <-ctx.Done():
@@ -357,11 +383,6 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 		return nil, fmt.Errorf("can't strip checksum from binlog event: %v, event data: %#v", err, ev)
 	}
 
-	// Get the DbName for vstreamer
-	params, err := vs.cp.MysqlParams()
-	if err != nil {
-		return nil, err
-	}
 	var vevents []*binlogdatapb.VEvent
 	switch {
 	case ev.IsGTID():
@@ -392,7 +413,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 
 		switch cat := sqlparser.Preview(q.SQL); cat {
 		case sqlparser.StmtInsert:
-			mustSend := mustSendStmt(q, params.DbName)
+			mustSend := mustSendStmt(q, vs.cp.DBName())
 			if mustSend {
 				vevents = append(vevents, &binlogdatapb.VEvent{
 					Type: binlogdatapb.VEventType_INSERT,
@@ -400,7 +421,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 				})
 			}
 		case sqlparser.StmtUpdate:
-			mustSend := mustSendStmt(q, params.DbName)
+			mustSend := mustSendStmt(q, vs.cp.DBName())
 			if mustSend {
 				vevents = append(vevents, &binlogdatapb.VEvent{
 					Type: binlogdatapb.VEventType_UPDATE,
@@ -408,7 +429,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 				})
 			}
 		case sqlparser.StmtDelete:
-			mustSend := mustSendStmt(q, params.DbName)
+			mustSend := mustSendStmt(q, vs.cp.DBName())
 			if mustSend {
 				vevents = append(vevents, &binlogdatapb.VEvent{
 					Type: binlogdatapb.VEventType_DELETE,
@@ -416,7 +437,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 				})
 			}
 		case sqlparser.StmtReplace:
-			mustSend := mustSendStmt(q, params.DbName)
+			mustSend := mustSendStmt(q, vs.cp.DBName())
 			if mustSend {
 				vevents = append(vevents, &binlogdatapb.VEvent{
 					Type: binlogdatapb.VEventType_REPLACE,
@@ -432,7 +453,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 				Type: binlogdatapb.VEventType_COMMIT,
 			})
 		case sqlparser.StmtDDL:
-			if mustSendDDL(q, params.DbName, vs.filter) {
+			if mustSendDDL(q, vs.cp.DBName(), vs.filter) {
 				vevents = append(vevents, &binlogdatapb.VEvent{
 					Type: binlogdatapb.VEventType_GTID,
 					Gtid: mysql.EncodePosition(vs.pos),
@@ -440,10 +461,6 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 					Type:      binlogdatapb.VEventType_DDL,
 					Statement: q.SQL,
 				})
-				// Reload schema only if the DDL change is relevant.
-				// TODO(sougou): move this back to always load after
-				// the schema reload bug is fixed.
-				vs.se.ReloadAt(context.Background(), vs.pos)
 			} else {
 				// If the DDL need not be sent, send a dummy OTHER event.
 				vevents = append(vevents, &binlogdatapb.VEvent{
@@ -455,14 +472,14 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 			}
 			vs.se.ReloadAt(context.Background(), vs.pos)
 		case sqlparser.StmtSavepoint:
-			mustSend := mustSendStmt(q, params.DbName)
+			mustSend := mustSendStmt(q, vs.cp.DBName())
 			if mustSend {
 				vevents = append(vevents, &binlogdatapb.VEvent{
 					Type:      binlogdatapb.VEventType_SAVEPOINT,
 					Statement: q.SQL,
 				})
 			}
-		case sqlparser.StmtOther, sqlparser.StmtPriv, sqlparser.StmtSet:
+		case sqlparser.StmtOther, sqlparser.StmtPriv, sqlparser.StmtSet, sqlparser.StmtComment, sqlparser.StmtFlush:
 			// These are either:
 			// 1) DBA statements like REPAIR that can be ignored.
 			// 2) Privilege-altering statements like GRANT/REVOKE
@@ -500,7 +517,11 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 			// Generates a Version event when it detects that a schema is stored in the schema_version table.
 			return nil, vs.buildVersionPlan(id, tm)
 		}
-		if tm.Database != "" && tm.Database != params.DbName {
+		if tm.Database != "" && tm.Database != vs.cp.DBName() {
+			vs.plans[id] = nil
+			return nil, nil
+		}
+		if vtschema.IsInternalOperationTableName(tm.Name) { // ignore tables created by onlineddl/gh-ost/pt-osc
 			vs.plans[id] = nil
 			return nil, nil
 		}
@@ -689,7 +710,53 @@ func (vs *vstreamer) buildTableColumns(tm *mysql.TableMap) ([]*querypb.Field, er
 
 	// Columns should be truncated to match those in tm.
 	fields = st.Fields[:len(tm.Types)]
+	extColInfos, err := vs.getExtColInfos(tm.Name, tm.Database)
+	if err != nil {
+		return nil, err
+	}
+	for _, field := range fields {
+		typ := strings.ToLower(field.Type.String())
+		if typ == "enum" || typ == "set" {
+			if extColInfo, ok := extColInfos[field.Name]; ok {
+				field.ColumnType = extColInfo.columnType
+			}
+		}
+	}
 	return fields, nil
+}
+
+// additional column attributes from information_schema.columns. Currently only column_type is used, but
+// we expect to add more in the future
+type extColInfo struct {
+	columnType string
+}
+
+func encodeString(in string) string {
+	buf := bytes.NewBuffer(nil)
+	sqltypes.NewVarChar(in).EncodeSQL(buf)
+	return buf.String()
+}
+
+func (vs *vstreamer) getExtColInfos(table, database string) (map[string]*extColInfo, error) {
+	extColInfos := make(map[string]*extColInfo)
+	conn, err := vs.cp.Connect(vs.ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+	queryTemplate := "select column_name, column_type from information_schema.columns where table_schema=%s and table_name=%s;"
+	query := fmt.Sprintf(queryTemplate, encodeString(database), encodeString(table))
+	qr, err := conn.ExecuteFetch(query, 10000, false)
+	if err != nil {
+		return nil, err
+	}
+	for _, row := range qr.Rows {
+		extColInfo := &extColInfo{
+			columnType: row[1].ToString(),
+		}
+		extColInfos[row[0].ToString()] = extColInfo
+	}
+	return extColInfos, nil
 }
 
 func (vs *vstreamer) processJournalEvent(vevents []*binlogdatapb.VEvent, plan *streamerPlan, rows mysql.Rows) ([]*binlogdatapb.VEvent, error) {

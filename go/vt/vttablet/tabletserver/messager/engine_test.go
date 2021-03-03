@@ -20,7 +20,7 @@ import (
 	"reflect"
 	"testing"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"

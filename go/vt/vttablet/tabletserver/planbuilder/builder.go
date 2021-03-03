@@ -46,7 +46,7 @@ func analyzeSelect(sel *sqlparser.Select, tables map[string]*schema.Table) (plan
 	}
 
 	// Check if it's a NEXT VALUE statement.
-	if nextVal, ok := sel.SelectExprs[0].(sqlparser.Nextval); ok {
+	if nextVal, ok := sel.SelectExprs[0].(*sqlparser.Nextval); ok {
 		if plan.Table == nil || plan.Table.Type != schema.Sequence {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%s is not a sequence", sqlparser.String(sel.From))
 		}
@@ -127,23 +127,52 @@ func analyzeInsert(ins *sqlparser.Insert, tables map[string]*schema.Table) (plan
 	return plan, nil
 }
 
-func analyzeShowTables(show *sqlparser.Show, dbName string) {
-	// rewrite WHERE clause if it exists
-	// `where Tables_in_Keyspace` => `where Tables_in_DbName`
-	if show.ShowTablesOpt != nil && show.ShowTablesOpt.Filter != nil {
-		filter := show.ShowTablesOpt.Filter.Filter
-		if filter != nil {
-			sqlparser.Rewrite(filter, func(cursor *sqlparser.Cursor) bool {
-				switch n := cursor.Node().(type) {
-				case *sqlparser.ColName:
-					if n.Qualifier.IsEmpty() && strings.HasPrefix(n.Name.Lowered(), "tables_in_") {
-						cursor.Replace(sqlparser.NewColName("Tables_in_" + dbName))
-					}
+func analyzeShow(show *sqlparser.Show, dbName string) (plan *Plan, err error) {
+	switch showInternal := show.Internal.(type) {
+	case *sqlparser.ShowBasic:
+		if showInternal.Command == sqlparser.Table {
+			// rewrite WHERE clause if it exists
+			// `where Tables_in_Keyspace` => `where Tables_in_DbName`
+			if showInternal.Filter != nil {
+				err := showTableRewrite(showInternal, dbName)
+				if err != nil {
+					return nil, err
 				}
-				return true
-			}, nil)
+			}
+		}
+		return &Plan{
+			PlanID:    PlanShow,
+			FullQuery: GenerateFullQuery(show),
+		}, nil
+	case *sqlparser.ShowCreate:
+		if showInternal.Command == sqlparser.CreateDb && !sqlparser.SystemSchema(showInternal.Op.Name.String()) {
+			showInternal.Op.Name = sqlparser.NewTableIdent(dbName)
+		}
+		return &Plan{
+			PlanID:    PlanShow,
+			FullQuery: GenerateFullQuery(show),
+		}, nil
+	}
+	return &Plan{PlanID: PlanOtherRead}, nil
+}
+
+func showTableRewrite(show *sqlparser.ShowBasic, dbName string) error {
+	filter := show.Filter.Filter
+	if filter != nil {
+		_, err := sqlparser.Rewrite(filter, func(cursor *sqlparser.Cursor) bool {
+			switch n := cursor.Node().(type) {
+			case *sqlparser.ColName:
+				if n.Qualifier.IsEmpty() && strings.HasPrefix(n.Name.Lowered(), "tables_in_") {
+					cursor.Replace(sqlparser.NewColName("Tables_in_" + dbName))
+				}
+			}
+			return true
+		}, nil)
+		if err != nil {
+			return err
 		}
 	}
+	return nil
 }
 
 func analyzeSet(set *sqlparser.Set) (plan *Plan) {

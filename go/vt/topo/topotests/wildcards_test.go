@@ -19,7 +19,7 @@ package topotests
 import (
 	"testing"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"

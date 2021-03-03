@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+
 	"vitess.io/vitess/go/vt/vttls"
 )
 

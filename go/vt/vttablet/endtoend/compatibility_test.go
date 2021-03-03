@@ -33,7 +33,7 @@ func TestCharaterSet(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := sqltypes.Result{
+	want := &sqltypes.Result{
 		Fields: []*querypb.Field{
 			{
 				Name:         "intval",
@@ -77,7 +77,6 @@ func TestCharaterSet(t *testing.T) {
 				Flags:        128,
 			},
 		},
-		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			{
 				sqltypes.TestValue(sqltypes.Int32, "1"),
@@ -87,9 +86,7 @@ func TestCharaterSet(t *testing.T) {
 			},
 		},
 	}
-	if !reflect.DeepEqual(*qr, want) {
-		t.Errorf("Execute: \n%#v, want \n%#v", prettyPrint(*qr), prettyPrint(want))
-	}
+	mustMatch(t, want, qr)
 }
 
 func TestInts(t *testing.T) {
@@ -120,7 +117,7 @@ func TestInts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := sqltypes.Result{
+	want := &sqltypes.Result{
 		Fields: []*querypb.Field{
 			{
 				Name:         "tiny",
@@ -234,7 +231,6 @@ func TestInts(t *testing.T) {
 				Flags:        32864,
 			},
 		},
-		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			{
 				sqltypes.TestValue(sqltypes.Int8, "-128"),
@@ -251,9 +247,8 @@ func TestInts(t *testing.T) {
 			},
 		},
 	}
-	if !reflect.DeepEqual(*qr, want) {
-		t.Errorf("Execute: \n%#v, want \n%#v", prettyPrint(*qr), prettyPrint(want))
-	}
+	mustMatch(t, want, qr)
+
 	// This test was added because the following query causes mysql to
 	// return flags with both binary and unsigned set. The test ensures
 	// that a Uint64 is produced in spite of the stray binary flag.
@@ -261,7 +256,7 @@ func TestInts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want = sqltypes.Result{
+	want = &sqltypes.Result{
 		Fields: []*querypb.Field{
 			{
 				Name:         "max(bigu)",
@@ -271,16 +266,14 @@ func TestInts(t *testing.T) {
 				Flags:        32928,
 			},
 		},
-		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			{
 				sqltypes.TestValue(sqltypes.Uint64, "18446744073709551615"),
 			},
 		},
 	}
-	if !reflect.DeepEqual(*qr, want) {
-		t.Errorf("Execute: \n%#v, want \n%#v", prettyPrint(*qr), prettyPrint(want))
-	}
+	mustMatch(t, want, qr)
+
 }
 
 func TestFractionals(t *testing.T) {
@@ -304,7 +297,7 @@ func TestFractionals(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := sqltypes.Result{
+	want := &sqltypes.Result{
 		Fields: []*querypb.Field{
 			{
 				Name:         "id",
@@ -362,7 +355,6 @@ func TestFractionals(t *testing.T) {
 				Flags:        32768,
 			},
 		},
-		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			{
 				sqltypes.TestValue(sqltypes.Int32, "1"),
@@ -373,9 +365,7 @@ func TestFractionals(t *testing.T) {
 			},
 		},
 	}
-	if !reflect.DeepEqual(*qr, want) {
-		t.Errorf("Execute: \n%#v, want \n%#v", prettyPrint(*qr), prettyPrint(want))
-	}
+	mustMatch(t, want, qr)
 }
 
 func TestStrings(t *testing.T) {
@@ -405,7 +395,7 @@ func TestStrings(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := sqltypes.Result{
+	want := &sqltypes.Result{
 		Fields: []*querypb.Field{
 			{
 				Name:         "vb",
@@ -507,7 +497,6 @@ func TestStrings(t *testing.T) {
 				Flags:        2048,
 			},
 		},
-		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			{
 				sqltypes.TestValue(sqltypes.VarBinary, "a"),
@@ -523,9 +512,7 @@ func TestStrings(t *testing.T) {
 			},
 		},
 	}
-	if !reflect.DeepEqual(*qr, want) {
-		t.Errorf("Execute: \n%#v, want \n%#v", prettyPrint(*qr), prettyPrint(want))
-	}
+	mustMatch(t, want, qr)
 }
 
 func TestMiscTypes(t *testing.T) {
@@ -549,7 +536,7 @@ func TestMiscTypes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := sqltypes.Result{
+	want := &sqltypes.Result{
 		Fields: []*querypb.Field{
 			{
 				Name:         "id",
@@ -613,7 +600,6 @@ func TestMiscTypes(t *testing.T) {
 				Flags:        144,
 			},
 		},
-		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			{
 				sqltypes.TestValue(sqltypes.Int32, "1"),
@@ -625,9 +611,7 @@ func TestMiscTypes(t *testing.T) {
 			},
 		},
 	}
-	if !reflect.DeepEqual(*qr, want) {
-		t.Errorf("Execute: \n%#v, want \n%#v", prettyPrint(*qr), prettyPrint(want))
-	}
+	mustMatch(t, want, qr)
 }
 
 func TestNull(t *testing.T) {
@@ -636,7 +620,7 @@ func TestNull(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := sqltypes.Result{
+	want := &sqltypes.Result{
 		Fields: []*querypb.Field{
 			{
 				Name:    "NULL",
@@ -645,16 +629,13 @@ func TestNull(t *testing.T) {
 				Flags:   32896,
 			},
 		},
-		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			{
 				{},
 			},
 		},
 	}
-	if !reflect.DeepEqual(*qr, want) {
-		t.Errorf("Execute: \n%#v, want \n%#v", prettyPrint(*qr), prettyPrint(want))
-	}
+	mustMatch(t, want, qr)
 }
 
 func TestJSONType(t *testing.T) {
@@ -677,7 +658,7 @@ func TestJSONType(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := sqltypes.Result{
+	want := &sqltypes.Result{
 		Fields: []*querypb.Field{
 			{
 				Name:         "id",
@@ -701,23 +682,21 @@ func TestJSONType(t *testing.T) {
 				Flags:        144,
 			},
 		},
-		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			{
 				sqltypes.TestValue(sqltypes.Int32, "1"),
 				sqltypes.TestValue(sqltypes.TypeJSON, "{\"foo\": \"bar\"}"),
 			},
 		},
+		StatusFlags: sqltypes.ServerStatusNoIndexUsed | sqltypes.ServerStatusAutocommit,
 	}
-	if !reflect.DeepEqual(*qr, want) {
+	if !reflect.DeepEqual(qr, want) {
 		// MariaDB 10.3 has different behavior.
 		want2 := want.Copy()
 		want2.Fields[1].Type = sqltypes.Blob
 		want2.Fields[1].Charset = 33
 		want2.Rows[0][1] = sqltypes.TestValue(sqltypes.Blob, "{\"foo\": \"bar\"}")
-		if !reflect.DeepEqual(*qr, *want2) {
-			t.Errorf("Execute:\n%v, want\n%v or\n%v", prettyPrint(*qr), prettyPrint(want), prettyPrint(*want2))
-		}
+		mustMatch(t, want2, qr)
 	}
 
 }

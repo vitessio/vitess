@@ -24,7 +24,7 @@ import (
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/sync2"
@@ -264,6 +264,7 @@ func (sdw *SplitDiffWorker) findTargets(ctx context.Context) error {
 	for {
 		select {
 		case <-shortCtx.Done():
+			cancel()
 			return vterrors.Errorf(vtrpc.Code_ABORTED, "could not find healthy table for %v/%v%v: after: %v, aborting", sdw.cell, sdw.keyspace, sdw.sourceShard.Shard, *remoteActionsTimeout)
 		default:
 			sdw.sourceAlias, err = FindWorkerTablet(ctx, sdw.wr, sdw.cleaner, nil /* tsc */, sdw.cell, sdw.keyspace, sdw.sourceShard.Shard, sdw.minHealthyRdonlyTablets, topodatapb.TabletType_RDONLY)

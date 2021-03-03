@@ -22,7 +22,9 @@ import (
 	"strings"
 	"time"
 
-	"golang.org/x/net/context"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+
+	"context"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/log"
@@ -561,6 +563,10 @@ func (tm *TabletManager) setMasterLocked(ctx context.Context, parentAlias *topod
 	}
 	// Update the master address only if needed.
 	// We don't want to interrupt replication for no reason.
+	if parentAlias == nil {
+		// if there is no master in the shard, return an error so that we can retry
+		return vterrors.New(vtrpc.Code_FAILED_PRECONDITION, "Shard masterAlias is nil")
+	}
 	parent, err := tm.TopoServer.GetTablet(ctx, parentAlias)
 	if err != nil {
 		return err
@@ -870,49 +876,4 @@ func (tm *TabletManager) repairReplication(ctx context.Context) error {
 	}
 
 	return tm.setMasterRepairReplication(ctx, si.MasterAlias, 0, "", true)
-}
-
-// SlaveStatus is deprecated
-func (tm *TabletManager) SlaveStatus(ctx context.Context) (*replicationdatapb.Status, error) {
-	return tm.ReplicationStatus(ctx)
-}
-
-// StopSlave is deprecated
-func (tm *TabletManager) StopSlave(ctx context.Context) error {
-	return tm.StopReplication(ctx)
-}
-
-// StopSlaveMinimum is deprecated
-func (tm *TabletManager) StopSlaveMinimum(ctx context.Context, position string, waitTime time.Duration) (string, error) {
-	return tm.StopReplicationMinimum(ctx, position, waitTime)
-}
-
-// StartSlave is deprecated
-func (tm *TabletManager) StartSlave(ctx context.Context) error {
-	return tm.StartReplication(ctx)
-}
-
-// StartSlaveUntilAfter is deprecated
-func (tm *TabletManager) StartSlaveUntilAfter(ctx context.Context, position string, waitTime time.Duration) error {
-	return tm.StartReplicationUntilAfter(ctx, position, waitTime)
-}
-
-// GetSlaves is deprecated
-func (tm *TabletManager) GetSlaves(ctx context.Context) ([]string, error) {
-	return tm.GetReplicas(ctx)
-}
-
-// InitSlave is deprecated
-func (tm *TabletManager) InitSlave(ctx context.Context, parent *topodatapb.TabletAlias, position string, timeCreatedNS int64) error {
-	return tm.InitReplica(ctx, parent, position, timeCreatedNS)
-}
-
-// SlaveWasPromoted is deprecated
-func (tm *TabletManager) SlaveWasPromoted(ctx context.Context) error {
-	return tm.ReplicaWasPromoted(ctx)
-}
-
-// SlaveWasRestarted is deprecated
-func (tm *TabletManager) SlaveWasRestarted(ctx context.Context, parent *topodatapb.TabletAlias) error {
-	return tm.ReplicaWasRestarted(ctx, parent)
 }

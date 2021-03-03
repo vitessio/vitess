@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
-	"net/http"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -43,9 +42,6 @@ import (
 const (
 	leaderCheckInterval     = 5 * time.Second
 	purgeReentranceInterval = 1 * time.Minute
-	// throttleCheckDuration controls both how frequently the throttler is checked. as well as
-	// how long to sleep if throttler blocks us
-	throttleCheckDuration = 250 * time.Millisecond
 	// evacHours is a hard coded, reasonable time for a table to spend in EVAC state
 	evacHours        = 72
 	throttlerAppName = "tablegc"
@@ -58,12 +54,9 @@ var checkInterval = flag.Duration("gc_check_interval", 1*time.Hour, "Interval be
 var gcLifecycle = flag.String("table_gc_lifecycle", "hold,purge,evac,drop", "States for a DROP TABLE garbage collection cycle. Default is 'hold,purge,evac,drop', use any subset ('drop' implcitly always included)")
 
 var (
-	sqlPurgeTable   = `delete from %a limit 50`
-	sqlShowVtTables = `show tables like '\_vt\_%'`
-	sqlDropTable    = "drop table if exists `%a`"
-	throttleFlags   = &throttle.CheckFlags{
-		LowPriority: true,
-	}
+	sqlPurgeTable       = `delete from %a limit 50`
+	sqlShowVtTables     = `show tables like '\_vt\_%'`
+	sqlDropTable        = "drop table if exists `%a`"
 	purgeReentranceFlag int64
 )
 
@@ -71,6 +64,7 @@ var (
 type transitionRequest struct {
 	fromTableName string
 	toGCState     schema.TableGCState
+	uuid          string
 }
 
 func init() {
@@ -90,16 +84,15 @@ type TableGC struct {
 	shard    string
 	dbName   string
 
-	lagThrottler *throttle.Throttler
-	isPrimary    int64
-	isOpen       int64
+	isPrimary int64
+	isOpen    int64
+
+	throttlerClient *throttle.Client
 
 	env            tabletenv.Env
 	pool           *connpool.Pool
 	tabletTypeFunc func() topodatapb.TabletType
 	ts             *topo.Server
-
-	lastSuccessfulThrottleCheck time.Time
 
 	initMutex  sync.Mutex
 	purgeMutex sync.Mutex
@@ -129,9 +122,9 @@ type GCStatus struct {
 // NewTableGC creates a table collector
 func NewTableGC(env tabletenv.Env, ts *topo.Server, tabletTypeFunc func() topodatapb.TabletType, lagThrottler *throttle.Throttler) *TableGC {
 	collector := &TableGC{
-		lagThrottler: lagThrottler,
-		isPrimary:    0,
-		isOpen:       0,
+		throttlerClient: throttle.NewBackgroundClient(lagThrottler, throttlerAppName, throttle.ThrottleCheckPrimaryWrite),
+		isPrimary:       0,
+		isOpen:          0,
 
 		env:            env,
 		tabletTypeFunc: tabletTypeFunc,
@@ -304,7 +297,7 @@ func (collector *TableGC) nextState(fromState schema.TableGCState) *schema.Table
 
 // generateTansition creates a transition request, based on current state and taking configured lifecycleStates
 // into consideration (we may skip some states)
-func (collector *TableGC) generateTansition(ctx context.Context, fromState schema.TableGCState, fromTableName string) *transitionRequest {
+func (collector *TableGC) generateTansition(ctx context.Context, fromState schema.TableGCState, fromTableName, uuid string) *transitionRequest {
 	nextState := collector.nextState(fromState)
 	if nextState == nil {
 		return nil
@@ -312,18 +305,41 @@ func (collector *TableGC) generateTansition(ctx context.Context, fromState schem
 	return &transitionRequest{
 		fromTableName: fromTableName,
 		toGCState:     *nextState,
+		uuid:          uuid,
 	}
 }
 
 // submitTransitionRequest generates and queues a transition request for a given table
-func (collector *TableGC) submitTransitionRequest(ctx context.Context, fromState schema.TableGCState, fromTableName string) {
+func (collector *TableGC) submitTransitionRequest(ctx context.Context, fromState schema.TableGCState, fromTableName, uuid string) {
 	log.Infof("TableGC: submitting transition request for %s", fromTableName)
 	go func() {
-		transition := collector.generateTansition(ctx, fromState, fromTableName)
+		transition := collector.generateTansition(ctx, fromState, fromTableName, uuid)
 		if transition != nil {
 			collector.transitionRequestsChan <- transition
 		}
 	}()
+}
+
+// shouldTransitionTable checks if the given table is a GC table and if it's time to transition it to next state
+func (collector *TableGC) shouldTransitionTable(tableName string) (shouldTransition bool, state schema.TableGCState, uuid string, err error) {
+	isGCTable, state, uuid, t, err := schema.AnalyzeGCTableName(tableName)
+	if err != nil {
+		return false, state, uuid, err
+	}
+	if !isGCTable {
+		// irrelevant table
+		return false, state, uuid, nil
+	}
+	if _, ok := collector.lifecycleStates[state]; ok {
+		// this state is in our expected lifecycle. Let's check table's time hint:
+		timeNow := time.Now().UTC()
+		if timeNow.Before(t) {
+			// not yet time to operate on this table
+			return false, state, uuid, nil
+		}
+		// If the state is not in our expected lifecycle, we ignore the time hint and just move it to the next phase
+	}
+	return true, state, uuid, nil
 }
 
 // checkTables looks for potential GC tables in the MySQL server+schema.
@@ -350,25 +366,22 @@ func (collector *TableGC) checkTables(ctx context.Context) error {
 	for _, row := range res.Rows {
 		tableName := row[0].ToString()
 
-		isGCTable, state, t, err := schema.AnalyzeGCTableName(tableName)
+		shouldTransition, state, uuid, err := collector.shouldTransitionTable(tableName)
+
 		if err != nil {
 			log.Errorf("TableGC: error while checking tables: %+v", err)
 			continue
 		}
-		timeNow := time.Now().UTC()
-		if !isGCTable {
+		if !shouldTransition {
 			// irrelevant table
 			continue
 		}
-		if timeNow.Before(t) {
-			// net yet time to operate on this table
-			continue
-		}
+
 		log.Infof("TableGC: will operate on table %s", tableName)
 
 		if state == schema.HoldTableGCState {
 			// Hold period expired. Moving to next state
-			collector.submitTransitionRequest(ctx, state, tableName)
+			collector.submitTransitionRequest(ctx, state, tableName, uuid)
 		}
 		if state == schema.PurgeTableGCState {
 			// This table needs to be purged. Make sure to enlist it (we may already have)
@@ -376,7 +389,7 @@ func (collector *TableGC) checkTables(ctx context.Context) error {
 		}
 		if state == schema.EvacTableGCState {
 			// This table was in EVAC state for the required period. It will transition into DROP state
-			collector.submitTransitionRequest(ctx, state, tableName)
+			collector.submitTransitionRequest(ctx, state, tableName, uuid)
 		}
 		if state == schema.DropTableGCState {
 			// This table needs to be dropped immediately.
@@ -430,15 +443,8 @@ func (collector *TableGC) purge(ctx context.Context) (tableName string, err erro
 
 	log.Infof("TableGC: purge begin for %s", tableName)
 	for {
-		if time.Since(collector.lastSuccessfulThrottleCheck) > throttleCheckDuration {
-			// It's time to run a throttler check
-			checkResult := collector.lagThrottler.Check(ctx, throttlerAppName, "", throttleFlags)
-			if checkResult.StatusCode != http.StatusOK {
-				// sorry, we got throttled. Back off, sleep, try again
-				time.Sleep(throttleCheckDuration)
-				continue
-			}
-			collector.lastSuccessfulThrottleCheck = time.Now()
+		if !collector.throttlerClient.ThrottleCheckOKOrWait(ctx) {
+			continue
 		}
 		// OK, we're clear to go!
 
@@ -452,7 +458,8 @@ func (collector *TableGC) purge(ctx context.Context) (tableName string, err erro
 			// The table is now empty!
 			// we happen to know at this time that the table is in PURGE state,
 			// I mean, that's why we're here. We can hard code that.
-			collector.submitTransitionRequest(ctx, schema.PurgeTableGCState, tableName)
+			_, _, uuid, _, _ := schema.AnalyzeGCTableName(tableName)
+			collector.submitTransitionRequest(ctx, schema.PurgeTableGCState, tableName, uuid)
 			collector.removePurgingTable(tableName)
 			// finished with this table. Maybe more tables are looking to be purged.
 			// Trigger another call to purge(), instead of waiting a full purgeReentranceInterval cycle
@@ -512,7 +519,7 @@ func (collector *TableGC) transitionTable(ctx context.Context, transition *trans
 		t = t.Add(evacHours * time.Hour)
 	}
 
-	renameStatement, toTableName, err := schema.GenerateRenameStatement(transition.fromTableName, transition.toGCState, t)
+	renameStatement, toTableName, err := schema.GenerateRenameStatementWithUUID(transition.fromTableName, transition.toGCState, transition.uuid, t)
 	if err != nil {
 		return err
 	}
@@ -557,8 +564,8 @@ func (collector *TableGC) nextTableToPurge() (tableName string, ok bool) {
 		tableNames = append(tableNames, tableName)
 	}
 	sort.SliceStable(tableNames, func(i, j int) bool {
-		_, _, ti, _ := schema.AnalyzeGCTableName(tableNames[i])
-		_, _, tj, _ := schema.AnalyzeGCTableName(tableNames[j])
+		_, _, _, ti, _ := schema.AnalyzeGCTableName(tableNames[i])
+		_, _, _, tj, _ := schema.AnalyzeGCTableName(tableNames[j])
 
 		return ti.Before(tj)
 	})

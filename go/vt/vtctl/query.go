@@ -24,9 +24,11 @@ import (
 	"io"
 	"strconv"
 
+	"context"
+
 	"github.com/golang/protobuf/proto"
 	"github.com/olekukonko/tablewriter"
-	"golang.org/x/net/context"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/grpcclient"

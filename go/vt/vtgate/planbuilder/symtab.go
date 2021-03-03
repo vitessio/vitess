@@ -229,7 +229,7 @@ func (st *symtab) SetResultColumns(rcs []*resultColumn) {
 	st.ResultColumns = rcs
 }
 
-// Find returns the builder for the symbol referenced by col.
+// Find returns the logicalPlan for the symbol referenced by col.
 // If a reference is found, col.Metadata is set to point
 // to it. Subsequent searches will reuse this metadata.
 //
@@ -257,7 +257,7 @@ func (st *symtab) SetResultColumns(rcs []*resultColumn) {
 // as true. Otherwise, it's returned as false and the symbol
 // gets added to the Externs list, which can later be used
 // to decide where to push-down the subquery.
-func (st *symtab) Find(col *sqlparser.ColName) (origin builder, isLocal bool, err error) {
+func (st *symtab) Find(col *sqlparser.ColName) (origin logicalPlan, isLocal bool, err error) {
 	// Return previously cached info if present.
 	if column, ok := col.Metadata.(*column); ok {
 		return column.Origin(), column.st == st, nil
@@ -452,13 +452,13 @@ func (st *symtab) ResolveSymbols(node sqlparser.SQLNode) error {
 
 // table is part of symtab.
 // It represents a table alias in a FROM clause. It points
-// to the builder that represents it.
+// to the logicalPlan that represents it.
 type table struct {
 	alias           sqlparser.TableName
 	columns         map[string]*column
 	columnNames     []sqlparser.ColIdent
 	isAuthoritative bool
-	origin          builder
+	origin          logicalPlan
 	vschemaTable    *vindexes.Table
 }
 
@@ -497,7 +497,7 @@ func (t *table) mergeColumn(alias sqlparser.ColIdent, c *column) (*column, error
 }
 
 // Origin returns the route that originates the table.
-func (t *table) Origin() builder {
+func (t *table) Origin() logicalPlan {
 	// If it's a route, we have to resolve it.
 	if rb, ok := t.origin.(*route); ok {
 		return rb.Resolve()
@@ -507,7 +507,7 @@ func (t *table) Origin() builder {
 
 // column represents a unique symbol in the query that other
 // parts can refer to.
-// Every column contains the builder it originates from.
+// Every column contains the logicalPlan it originates from.
 // If a column has associated vindexes, then the one with the
 // lowest cost is set.
 //
@@ -516,7 +516,7 @@ func (t *table) Origin() builder {
 // For subquery and vindexFunc, the colNumber is also set because
 // the column order is known and unchangeable.
 type column struct {
-	origin    builder
+	origin    logicalPlan
 	st        *symtab
 	vindex    vindexes.SingleColumn
 	typ       querypb.Type
@@ -524,7 +524,7 @@ type column struct {
 }
 
 // Origin returns the route that originates the column.
-func (c *column) Origin() builder {
+func (c *column) Origin() logicalPlan {
 	// If it's a route, we have to resolve it.
 	if rb, ok := c.origin.(*route); ok {
 		return rb.Resolve()
@@ -549,7 +549,7 @@ type resultColumn struct {
 // NewResultColumn creates a new resultColumn based on the supplied expression.
 // The created symbol is not remembered until it is later set as ResultColumns
 // after all select expressions are analyzed.
-func newResultColumn(expr *sqlparser.AliasedExpr, origin builder) *resultColumn {
+func newResultColumn(expr *sqlparser.AliasedExpr, origin logicalPlan) *resultColumn {
 	rc := &resultColumn{
 		alias: expr.As,
 	}

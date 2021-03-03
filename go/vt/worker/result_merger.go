@@ -21,8 +21,9 @@ import (
 	"fmt"
 	"io"
 
+	"context"
+
 	"github.com/golang/protobuf/proto"
-	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -172,9 +173,8 @@ func (rm *ResultMerger) Next() (*sqltypes.Result, error) {
 	}
 
 	result := &sqltypes.Result{
-		Fields:       rm.fields,
-		RowsAffected: uint64(len(rm.output)),
-		Rows:         rm.output,
+		Fields: rm.fields,
+		Rows:   rm.output,
 	}
 	rm.reset()
 

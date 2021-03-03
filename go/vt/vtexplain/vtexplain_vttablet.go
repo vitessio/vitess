@@ -23,7 +23,7 @@ import (
 	"strings"
 	"sync"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
@@ -270,7 +270,7 @@ func (t *explainTablet) Close(ctx context.Context) error {
 	return t.tsv.Close(ctx)
 }
 
-func initTabletEnvironment(ddls []*sqlparser.DDL, opts *Options) error {
+func initTabletEnvironment(ddls []sqlparser.DDLStatement, opts *Options) error {
 	tableColumns = make(map[string]map[string]querypb.Type)
 	schemaQueries = map[string]*sqltypes.Result{
 		"select unix_timestamp()": {
@@ -370,27 +370,36 @@ func initTabletEnvironment(ddls []*sqlparser.DDL, opts *Options) error {
 
 	showTableRows := make([][]sqltypes.Value, 0, 4)
 	for _, ddl := range ddls {
-		table := ddl.Table.Name.String()
-		showTableRows = append(showTableRows, mysql.BaseShowTablesRow(table, false, ""))
+		table := ddl.GetTable().Name.String()
+		options := ""
+		spec := ddl.GetTableSpec()
+		if spec != nil {
+			for _, option := range spec.Options {
+				if option.Name == "comment" && string(option.Value.Val) == "vitess_sequence" {
+					options = "vitess_sequence"
+				}
+			}
+		}
+		showTableRows = append(showTableRows, mysql.BaseShowTablesRow(table, false, options))
 	}
-	schemaQueries[mysql.BaseShowTables] = &sqltypes.Result{
+	schemaQueries[mysql.TablesWithSize57] = &sqltypes.Result{
 		Fields: mysql.BaseShowTablesFields,
 		Rows:   showTableRows,
 	}
 
 	indexRows := make([][]sqltypes.Value, 0, 4)
 	for _, ddl := range ddls {
-		table := sqlparser.String(ddl.Table.Name)
+		table := sqlparser.String(ddl.GetTable().Name)
 
-		if ddl.OptLike != nil {
-			likeTable := ddl.OptLike.LikeTable.Name.String()
+		if ddl.GetOptLike() != nil {
+			likeTable := ddl.GetOptLike().LikeTable.Name.String()
 			if _, ok := schemaQueries["select * from "+likeTable+" where 1 != 1"]; !ok {
 				return fmt.Errorf("check your schema, table[%s] doesn't exist", likeTable)
 			}
 			schemaQueries["select * from "+table+" where 1 != 1"] = schemaQueries["select * from "+likeTable+" where 1 != 1"]
 			continue
 		}
-		for _, idx := range ddl.TableSpec.Indexes {
+		for _, idx := range ddl.GetTableSpec().Indexes {
 			if !idx.Info.Primary {
 				continue
 			}
@@ -402,7 +411,7 @@ func initTabletEnvironment(ddls []*sqlparser.DDL, opts *Options) error {
 
 		tableColumns[table] = make(map[string]querypb.Type)
 		var rowTypes []*querypb.Field
-		for _, col := range ddl.TableSpec.Columns {
+		for _, col := range ddl.GetTableSpec().Columns {
 			colName := strings.ToLower(col.Name.String())
 			rowType := &querypb.Field{
 				Name: colName,

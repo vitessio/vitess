@@ -8,8 +8,10 @@ import (
 	reflect "reflect"
 	time "time"
 
+	context "context"
+
 	gomock "github.com/golang/mock/gomock"
-	context "golang.org/x/net/context"
+
 	topodata "vitess.io/vitess/go/vt/proto/topodata"
 )
 

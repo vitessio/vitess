@@ -22,7 +22,7 @@ import (
 	"strings"
 	"time"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
@@ -47,6 +47,14 @@ type FakeMysqlDaemon struct {
 
 	// Running is used by Start / Shutdown
 	Running bool
+
+	// StartupTime is used to simulate mysqlds that take some time to respond
+	// to a "start" command. It is used by Start.
+	StartupTime time.Duration
+
+	// ShutdownTime is used to simulate mysqlds that take some time to respond
+	// to a "stop" request (i.e. a wedged systemd unit). It is used by Shutdown.
+	ShutdownTime time.Duration
 
 	// MysqlPort will be returned by GetMysqlPort(). Set to -1 to
 	// return an error.
@@ -181,6 +189,15 @@ func (fmd *FakeMysqlDaemon) Start(ctx context.Context, cnf *mysqlctl.Mycnf, mysq
 	if fmd.Running {
 		return fmt.Errorf("fake mysql daemon already running")
 	}
+
+	if fmd.StartupTime > 0 {
+		select {
+		case <-time.After(fmd.StartupTime):
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+
 	fmd.Running = true
 	return nil
 }
@@ -190,6 +207,15 @@ func (fmd *FakeMysqlDaemon) Shutdown(ctx context.Context, cnf *mysqlctl.Mycnf, w
 	if !fmd.Running {
 		return fmt.Errorf("fake mysql daemon not running")
 	}
+
+	if fmd.ShutdownTime > 0 {
+		select {
+		case <-time.After(fmd.ShutdownTime):
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+
 	fmd.Running = false
 	return nil
 }

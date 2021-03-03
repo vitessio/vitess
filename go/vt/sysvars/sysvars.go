@@ -37,21 +37,33 @@ type SystemVariable struct {
 	Name string
 }
 
+// System Settings
 var (
 	on   = "1"
 	off  = "0"
 	utf8 = "'utf8'"
 
-	Autocommit          = SystemVariable{Name: "autocommit", IsBoolean: true, Default: on}
-	ClientFoundRows     = SystemVariable{Name: "client_found_rows", IsBoolean: true, Default: off}
-	SkipQueryPlanCache  = SystemVariable{Name: "skip_query_plan_cache", IsBoolean: true, Default: off}
-	TxReadOnly          = SystemVariable{Name: "tx_read_only", IsBoolean: true, Default: off}
-	TransactionReadOnly = SystemVariable{Name: "transaction_read_only", IsBoolean: true, Default: off}
-	SQLSelectLimit      = SystemVariable{Name: "sql_select_limit", Default: off}
-	TransactionMode     = SystemVariable{Name: "transaction_mode", IdentifierAsString: true}
-	Workload            = SystemVariable{Name: "workload", IdentifierAsString: true}
-	Charset             = SystemVariable{Name: "charset", Default: utf8, IdentifierAsString: true}
-	Names               = SystemVariable{Name: "names", Default: utf8, IdentifierAsString: true}
+	Autocommit                  = SystemVariable{Name: "autocommit", IsBoolean: true, Default: on}
+	ClientFoundRows             = SystemVariable{Name: "client_found_rows", IsBoolean: true, Default: off}
+	SkipQueryPlanCache          = SystemVariable{Name: "skip_query_plan_cache", IsBoolean: true, Default: off}
+	TxReadOnly                  = SystemVariable{Name: "tx_read_only", IsBoolean: true, Default: off}
+	TransactionReadOnly         = SystemVariable{Name: "transaction_read_only", IsBoolean: true, Default: off}
+	SQLSelectLimit              = SystemVariable{Name: "sql_select_limit", Default: off}
+	TransactionMode             = SystemVariable{Name: "transaction_mode", IdentifierAsString: true}
+	Workload                    = SystemVariable{Name: "workload", IdentifierAsString: true}
+	Charset                     = SystemVariable{Name: "charset", Default: utf8, IdentifierAsString: true}
+	Names                       = SystemVariable{Name: "names", Default: utf8, IdentifierAsString: true}
+	SessionUUID                 = SystemVariable{Name: "session_uuid", IdentifierAsString: true}
+	SessionEnableSystemSettings = SystemVariable{Name: "enable_system_settings", IsBoolean: true, Default: on}
+	// Online DDL
+	DDLStrategy    = SystemVariable{Name: "ddl_strategy", IdentifierAsString: true}
+	Version        = SystemVariable{Name: "version"}
+	VersionComment = SystemVariable{Name: "version_comment"}
+
+	// Read After Write settings
+	ReadAfterWriteGTID    = SystemVariable{Name: "read_after_write_gtid"}
+	ReadAfterWriteTimeOut = SystemVariable{Name: "read_after_write_timeout"}
+	SessionTrackGTIDs     = SystemVariable{Name: "session_track_gtids", IdentifierAsString: true}
 
 	VitessAware = []SystemVariable{
 		Autocommit,
@@ -61,9 +73,15 @@ var (
 		TransactionReadOnly,
 		SQLSelectLimit,
 		TransactionMode,
+		DDLStrategy,
 		Workload,
 		Charset,
 		Names,
+		SessionUUID,
+		SessionEnableSystemSettings,
+		ReadAfterWriteGTID,
+		ReadAfterWriteTimeOut,
+		SessionTrackGTIDs,
 	}
 
 	IgnoreThese = []SystemVariable{
@@ -142,6 +160,7 @@ var (
 		{Name: "explicit_defaults_for_timestamp"},
 		{Name: "foreign_key_checks", IsBoolean: true},
 		{Name: "group_concat_max_len"},
+		{Name: "information_schema_stats_expiry"},
 		{Name: "max_heap_table_size"},
 		{Name: "max_seeks_for_key"},
 		{Name: "max_tmp_tables"},
@@ -174,6 +193,7 @@ var (
 		{Name: "sql_quote_show_create", IsBoolean: true},
 		{Name: "sql_safe_updates", IsBoolean: true},
 		{Name: "sql_warnings", IsBoolean: true},
+		{Name: "time_zone"},
 		{Name: "tmp_table_size"},
 		{Name: "transaction_prealloc_size"},
 		{Name: "unique_checks", IsBoolean: true},
@@ -210,13 +230,24 @@ var (
 		{Name: "net_read_timeout"},
 		{Name: "net_retry_count"},
 		{Name: "net_write_timeout"},
-		{Name: "session_track_gtids"},
 		{Name: "session_track_schema", IsBoolean: true},
 		{Name: "session_track_state_change", IsBoolean: true},
 		{Name: "session_track_system_variables"},
 		{Name: "session_track_transaction_info"},
 		{Name: "sql_auto_is_null", IsBoolean: true},
-		{Name: "time_zone"},
 		{Name: "version_tokens_session"},
 	}
 )
+
+// GetInterestingVariables is used to return all the variables that may be listed in a SHOW VARIABLES command.
+func GetInterestingVariables() []string {
+	var res []string
+	// Add all the vitess aware variables
+	for _, variable := range VitessAware {
+		res = append(res, variable.Name)
+	}
+	// Also add version and version comment
+	res = append(res, Version.Name)
+	res = append(res, VersionComment.Name)
+	return res
+}

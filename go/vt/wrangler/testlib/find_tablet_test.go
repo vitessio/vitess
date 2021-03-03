@@ -19,7 +19,7 @@ package testlib
 import (
 	"testing"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
@@ -43,7 +43,7 @@ func TestFindTablet(t *testing.T) {
 	goodReplica2 := NewFakeTablet(t, wr, "cell2", 3, topodatapb.TabletType_REPLICA, nil)
 
 	// Build keyspace graph
-	err := topotools.RebuildKeyspace(context.Background(), logutil.NewConsoleLogger(), ts, oldMaster.Tablet.Keyspace, []string{"cell1", "cell2"})
+	err := topotools.RebuildKeyspace(context.Background(), logutil.NewConsoleLogger(), ts, oldMaster.Tablet.Keyspace, []string{"cell1", "cell2"}, false)
 	if err != nil {
 		t.Fatalf("RebuildKeyspaceLocked failed: %v", err)
 	}

@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/proto/binlogdata"
@@ -159,4 +160,8 @@ func TestVReplicationStats(t *testing.T) {
 	blpStats.CopyRowCount.Add(200)
 	require.Equal(t, int64(100), testStats.status().Controllers[0].CopyLoopCount)
 	require.Equal(t, int64(200), testStats.status().Controllers[0].CopyRowCount)
+
+	var tm int64 = 1234567890
+	blpStats.RecordHeartbeat(tm)
+	require.Equal(t, tm, blpStats.Heartbeat())
 }

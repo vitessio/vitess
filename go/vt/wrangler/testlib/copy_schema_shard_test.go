@@ -22,7 +22,7 @@ import (
 
 	"vitess.io/vitess/go/vt/discovery"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"

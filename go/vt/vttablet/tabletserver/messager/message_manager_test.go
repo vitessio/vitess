@@ -30,8 +30,9 @@ import (
 
 	"vitess.io/vitess/go/test/utils"
 
+	"context"
+
 	"github.com/stretchr/testify/assert"
-	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/sync2"

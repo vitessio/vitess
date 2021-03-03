@@ -665,11 +665,17 @@ func TestVSchemaRoutingRules(t *testing.T) {
 				FromTable: "rt2",
 				ToTables:  []string{"ks2.t2"},
 			}, {
+				FromTable: "escaped",
+				ToTables:  []string{"`ks2`.`t2`"},
+			}, {
 				FromTable: "dup",
 				ToTables:  []string{"ks1.t1"},
 			}, {
 				FromTable: "dup",
 				ToTables:  []string{"ks1.t1"},
+			}, {
+				FromTable: "badname",
+				ToTables:  []string{"t1.t2.t3"},
 			}, {
 				FromTable: "unqualified",
 				ToTables:  []string{"t1"},
@@ -753,8 +759,14 @@ func TestVSchemaRoutingRules(t *testing.T) {
 			"rt2": {
 				Tables: []*Table{t2},
 			},
+			"escaped": {
+				Tables: []*Table{t2},
+			},
 			"dup": {
 				Error: errors.New("duplicate rule for entry dup"),
+			},
+			"badname": {
+				Error: errors.New("invalid table name: t1.t2.t3"),
 			},
 			"unqualified": {
 				Error: errors.New("table t1 must be qualified"),
@@ -1856,7 +1868,7 @@ func TestSequence(t *testing.T) {
 						},
 						AutoIncrement: &vschemapb.AutoIncrement{
 							Column:   "c2",
-							Sequence: "unsharded.seq",
+							Sequence: "`unsharded`.`seq`",
 						},
 					},
 				},
@@ -2072,9 +2084,9 @@ func TestBadSequenceName(t *testing.T) {
 	}
 	got, _ := BuildVSchema(&bad)
 	err := got.Keyspaces["sharded"].Error
-	want := "cannot resolve sequence a.b.seq: table a.b.seq not found"
-	if err == nil || err.Error() != want {
-		t.Errorf("BuildVSchema: %v, want %v", err, want)
+	want := "invalid table name: a.b.seq"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("BuildVSchema: %v, must contain %v", err, want)
 	}
 	if t1 := got.Keyspaces["sharded"].Tables["t1"]; t1 != nil {
 		t.Errorf("BuildVSchema: table t1 must not be present in the keyspace: %v", t1)

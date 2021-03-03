@@ -24,7 +24,10 @@ import (
 	"testing"
 	"time"
 
-	"golang.org/x/net/context"
+	"context"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
@@ -51,7 +54,7 @@ func TestDBConnExec(t *testing.T) {
 		Fields: []*querypb.Field{
 			{Type: sqltypes.VarChar},
 		},
-		RowsAffected: 1,
+		RowsAffected: 0,
 		Rows: [][]sqltypes.Value{
 			{sqltypes.NewVarChar("123")},
 		},
@@ -123,7 +126,7 @@ func TestDBConnDeadline(t *testing.T) {
 		Fields: []*querypb.Field{
 			{Type: sqltypes.VarChar},
 		},
-		RowsAffected: 1,
+		RowsAffected: 0,
 		Rows: [][]sqltypes.Value{
 			{sqltypes.NewVarChar("123")},
 		},
@@ -231,6 +234,34 @@ func TestDBConnKill(t *testing.T) {
 	}
 }
 
+// TestDBConnClose tests that an Exec returns immediately if a connection
+// is asynchronously killed (and closed) in the middle of an execution.
+func TestDBConnClose(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	connPool := newPool()
+	connPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
+	defer connPool.Close()
+	dbConn, err := NewDBConn(context.Background(), connPool, db.ConnParams())
+	require.NoError(t, err)
+	defer dbConn.Close()
+
+	query := "sleep"
+	db.AddQuery(query, &sqltypes.Result{})
+	db.SetBeforeFunc(query, func() {
+		time.Sleep(100 * time.Millisecond)
+	})
+
+	start := time.Now()
+	go func() {
+		time.Sleep(10 * time.Millisecond)
+		dbConn.Kill("test kill", 0)
+	}()
+	_, err = dbConn.Exec(context.Background(), query, 1, false)
+	assert.Contains(t, err.Error(), "(errno 2013) due to")
+	assert.True(t, time.Since(start) < 100*time.Millisecond, "%v %v", time.Since(start), 100*time.Millisecond)
+}
+
 func TestDBNoPoolConnKill(t *testing.T) {
 	db := fakesqldb.New(t)
 	connPool := newPool()
@@ -329,4 +360,34 @@ func TestDBConnStream(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("Error: '%v', must contain '%s'", err, want)
 	}
+}
+
+func TestDBConnStreamKill(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	sql := "select * from test_table limit 1000"
+	expectedResult := &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Type: sqltypes.VarChar},
+		},
+	}
+	db.AddQuery(sql, expectedResult)
+	connPool := newPool()
+	connPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
+	defer connPool.Close()
+	dbConn, err := NewDBConn(context.Background(), connPool, db.ConnParams())
+	require.NoError(t, err)
+	defer dbConn.Close()
+
+	go func() {
+		time.Sleep(10 * time.Millisecond)
+		dbConn.Kill("test kill", 0)
+	}()
+
+	err = dbConn.Stream(context.Background(), sql, func(r *sqltypes.Result) error {
+		time.Sleep(100 * time.Millisecond)
+		return nil
+	}, 10, querypb.ExecuteOptions_ALL)
+
+	assert.Contains(t, err.Error(), "(errno 2013) due to")
 }

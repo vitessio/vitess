@@ -22,7 +22,7 @@ option go_package = "vitess.io/vitess/go/vt/proto/query";
 
 package query;
 
-option java_package="io.vitess.proto";
+option java_package = "io.vitess.proto";
 
 import "topodata.proto";
 import "vtrpc.proto";
@@ -70,6 +70,8 @@ message EventToken {
 
 // Flags sent from the MySQL C API
 enum MySqlFlag {
+  option allow_alias = true;
+  
   EMPTY = 0;
   NOT_NULL_FLAG = 1;
   PRI_KEY_FLAG = 2;
@@ -90,8 +92,6 @@ enum MySqlFlag {
   GROUP_FLAG = 32768;
   UNIQUE_FLAG = 65536;
   BINCMP_FLAG = 131072;
-
-  option allow_alias = true;
 }
 
 // Flag allows us to qualify types by their common properties.
@@ -297,6 +297,24 @@ message ExecuteOptions {
   // skip_query_plan_cache specifies if the query plan should be cached by vitess.
   // By default all query plans are cached.
   bool skip_query_plan_cache = 10;
+
+  enum PlannerVersion {
+    DEFAULT_PLANNER = 0;
+    V3 = 1;
+    Gen4 = 2;
+    Gen4Greedy = 3;
+    Gen4Left2Right = 4;
+    Gen4WithFallback = 5;
+  }
+  
+  // PlannerVersion specifies which planner to use. 
+  // If DEFAULT is chosen, whatever vtgate was started with will be used
+  PlannerVersion planner_version = 11;
+
+  // has_created_temp_tables signals whether plans created in this session should be cached or not
+  // if the user has created temp tables, Vitess will not reuse plans created for this session in other sessions.
+  // The current session can still use other sessions cached plans.
+  bool has_created_temp_tables = 12;
 }
 
 // Field describes a single column returned by a query
@@ -326,6 +344,9 @@ message Field {
 
   // flags is actually a uint16. Only the lower 16 bits are used.
   uint32 flags = 10;
+
+  // column_type is optionally populated from information_schema.columns
+  string column_type = 11;
 }
 
 // Row is a database row.

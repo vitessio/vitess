@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/sqltypes"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -265,7 +266,7 @@ func TestJoinExecuteErrors(t *testing.T) {
 		Left:   leftPrim,
 	}
 	_, err := jn.Execute(noopVCursor{}, map[string]*querypb.BindVariable{}, true)
-	expectError(t, "jn.Execute", err, "left err")
+	require.EqualError(t, err, "left err")
 
 	// Error on right query
 	leftPrim = &fakePrimitive{
@@ -295,7 +296,7 @@ func TestJoinExecuteErrors(t *testing.T) {
 		},
 	}
 	_, err = jn.Execute(noopVCursor{}, map[string]*querypb.BindVariable{}, true)
-	expectError(t, "jn.Execute", err, "right err")
+	require.EqualError(t, err, "right err")
 
 	// Error on right getfields
 	leftPrim = &fakePrimitive{
@@ -322,7 +323,7 @@ func TestJoinExecuteErrors(t *testing.T) {
 		},
 	}
 	_, err = jn.Execute(noopVCursor{}, map[string]*querypb.BindVariable{}, true)
-	expectError(t, "jn.Execute", err, "right err")
+	require.EqualError(t, err, "right err")
 }
 
 func TestJoinStreamExecute(t *testing.T) {
@@ -501,7 +502,7 @@ func TestGetFieldsErrors(t *testing.T) {
 		},
 	}
 	_, err := jn.GetFields(nil, map[string]*querypb.BindVariable{})
-	expectError(t, "jn.GetFields", err, "left err")
+	require.EqualError(t, err, "left err")
 
 	jn.Left = &fakePrimitive{
 		results: []*sqltypes.Result{
@@ -514,5 +515,5 @@ func TestGetFieldsErrors(t *testing.T) {
 		},
 	}
 	_, err = jn.GetFields(nil, map[string]*querypb.BindVariable{})
-	expectError(t, "jn.GetFields", err, "right err")
+	require.EqualError(t, err, "right err")
 }

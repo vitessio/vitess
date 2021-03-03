@@ -45,13 +45,155 @@ type (
 
 	// SelectStatement any SELECT statement.
 	SelectStatement interface {
+		Statement
 		iSelectStatement()
-		iStatement()
 		iInsertRows()
 		AddOrder(*Order)
 		SetLimit(*Limit)
 		SetLock(lock Lock)
+		MakeDistinct()
+	}
+
+	// DDLStatement represents any DDL Statement
+	DDLStatement interface {
+		iDDLStatement()
+		IsFullyParsed() bool
+		IsTemporary() bool
+		GetTable() TableName
+		GetAction() DDLAction
+		GetOptLike() *OptLike
+		GetIfExists() bool
+		GetTableSpec() *TableSpec
+		GetFromTables() TableNames
+		GetToTables() TableNames
+		AffectedTables() TableNames
+		SetTable(qualifier string, name string)
+		SetFromTables(tables TableNames)
+		Statement
+	}
+
+	// DBDDLStatement represents any DBDDL Statement
+	DBDDLStatement interface {
+		iDBDDLStatement()
+		IsFullyParsed() bool
+		GetDatabaseName() string
+		Statement
+	}
+
+	// AlterOption is an interface that represents the various options in ALTER TABLE statements
+	AlterOption interface {
+		iAlterOption()
 		SQLNode
+	}
+
+	// Explain is an interface that represents the Explain statements
+	Explain interface {
+		Statement
+		iExplain()
+	}
+
+	// AddConstraintDefinition represents a ADD CONSTRAINT alter option
+	AddConstraintDefinition struct {
+		ConstraintDefinition *ConstraintDefinition
+	}
+
+	// AddIndexDefinition represents a ADD INDEX alter option
+	AddIndexDefinition struct {
+		IndexDefinition *IndexDefinition
+	}
+
+	// AddColumns represents a ADD COLUMN alter option
+	AddColumns struct {
+		Columns []*ColumnDefinition
+		First   *ColName
+		After   *ColName
+	}
+
+	// AlgorithmValue is the algorithm specified in the alter table command
+	AlgorithmValue string
+
+	// AlterColumn is used to add or drop defaults to columns in alter table command
+	AlterColumn struct {
+		Column      *ColName
+		DropDefault bool
+		DefaultVal  Expr
+	}
+
+	// ChangeColumn is used to change the column definition, can also rename the column in alter table command
+	ChangeColumn struct {
+		OldColumn        *ColName
+		NewColDefinition *ColumnDefinition
+		First            *ColName
+		After            *ColName
+	}
+
+	// ModifyColumn is used to change the column definition in alter table command
+	ModifyColumn struct {
+		NewColDefinition *ColumnDefinition
+		First            *ColName
+		After            *ColName
+	}
+
+	// AlterCharset is used to set the default or change the character set and collation in alter table command
+	AlterCharset struct {
+		CharacterSet string
+		Collate      string
+	}
+
+	// KeyState is used to disable or enable the keys in an alter table statement
+	KeyState struct {
+		Enable bool
+	}
+
+	// TablespaceOperation is used to discard or import the tablespace in an alter table statement
+	TablespaceOperation struct {
+		Import bool
+	}
+
+	// DropColumn is used to drop a column in an alter table statement
+	DropColumn struct {
+		Name *ColName
+	}
+
+	// DropKeyType is an enum that represents the type of key being dropped in an alter table statement
+	DropKeyType int8
+
+	// DropKey is used to drop a key in an alter table statement
+	DropKey struct {
+		Type DropKeyType
+		Name string
+	}
+
+	// Force is used to specify force alter option in an alter table statement
+	Force struct{}
+
+	// LockOptionType is an enum for LockOption.Type
+	LockOptionType int8
+
+	// LockOption is used to specify the type of lock to use in an alter table statement
+	LockOption struct {
+		Type LockOptionType
+	}
+
+	// OrderByOption clause is used to specify the order by in an alter table statement
+	OrderByOption struct {
+		Cols Columns
+	}
+
+	// RenameTableName clause is used to rename the table in an alter table statement
+	RenameTableName struct {
+		Table TableName
+	}
+
+	// RenameIndex clause is used to rename indexes in an alter table statement
+	RenameIndex struct {
+		OldName string
+		NewName string
+	}
+
+	// Validation clause is used to specify whether to use validation or not
+	Validation struct {
+		With bool
 	}
 
 	// Select represents a SELECT statement.
@@ -69,21 +211,31 @@ type (
 		OrderBy          OrderBy
 		Limit            *Limit
 		Lock             Lock
-		IntoOutfileS3    string
+		Into             *SelectInto
 	}
+
+	// SelectInto is a struct that represent the INTO part of a select query
+	SelectInto struct {
+		Type         SelectIntoType
+		FileName     string
+		Charset      string
+		FormatOption string
+		ExportOption string
+		Manifest     string
+		Overwrite    string
+	}
+
+	// SelectIntoType is an enum for SelectInto.Type
+	SelectIntoType int8
 
 	// Lock is an enum for the type of lock in the statement
 	Lock int8
 
 	// UnionSelect represents union type and select statement after first select statement.
 	UnionSelect struct {
-		Type      UnionType
+		Distinct  bool
 		Statement SelectStatement
 	}
-
-	// UnionType is the type of union
-	UnionType int8
-
 	// Union represents a UNION statement.
 	Union struct {
 		FirstStatement SelectStatement
@@ -188,46 +340,67 @@ type (
 	// AccessMode is enum for the mode - ReadOnly or ReadWrite
 	AccessMode int8
 
-	// DBDDL represents a CREATE, DROP, or ALTER database statement.
-	DBDDL struct {
-		Action      DBDDLAction
-		DBName      string
-		IfExists    bool
-		IfNotExists bool
-		Collate     string
-		Charset     string
+	// DropDatabase represents a DROP database statement.
+	DropDatabase struct {
+		DBName   string
+		IfExists bool
 	}
 
-	// DDLStrategy suggests how an ALTER TABLE should run (e.g. "" for normal, "gh-ost" or "pt-osc")
-	DDLStrategy string
+	// CollateAndCharsetType is an enum for CollateAndCharset.Type
+	CollateAndCharsetType int8
 
-	// OnlineDDLHint indicates strategy and options for running an online DDL
-	OnlineDDLHint struct {
-		Strategy DDLStrategy
-		Options  string
+	// CollateAndCharset is a struct that stores Collation or Character Set value
+	CollateAndCharset struct {
+		Type      CollateAndCharsetType
+		IsDefault bool
+		Value     string
 	}
-	// DBDDLAction is an enum for DBDDL Actions
-	DBDDLAction int8
 
-	// DDL represents a CREATE, ALTER, DROP, RENAME, TRUNCATE or ANALYZE statement.
-	DDL struct {
-		Action DDLAction
+	// CreateDatabase represents a CREATE database statement.
+	CreateDatabase struct {
+		DBName        string
+		IfNotExists   bool
+		CreateOptions []CollateAndCharset
+		FullyParsed   bool
+	}
 
-		// FromTables is set if Action is RenameDDLAction or DropDDLAction.
-		FromTables TableNames
+	// AlterDatabase represents a ALTER database statement.
+	AlterDatabase struct {
+		DBName              string
+		UpdateDataDirectory bool
+		AlterOptions        []CollateAndCharset
+		FullyParsed         bool
+	}
 
-		// ToTables is set if Action is RenameDDLAction.
-		ToTables TableNames
+	// Flush represents a FLUSH statement.
+	Flush struct {
+		IsLocal      bool
+		FlushOptions []string
+		TableNames   TableNames
+		WithLock     bool
+		ForExport    bool
+	}
 
-		// Table is set if Action is other than RenameDDLAction or DropDDLAction.
+	// RenameTablePair represents the name of the original table and what it is going to be set in a RENAME TABLE statement.
+	RenameTablePair struct {
+		FromTable TableName
+		ToTable   TableName
+	}
+
+	// RenameTable represents a RENAME TABLE statement.
+	RenameTable struct {
+		TablePairs []*RenameTablePair
+	}
+
+	// TruncateTable represents a TRUNCATE TABLE statement.
+	TruncateTable struct {
 		Table TableName
+	}
 
-		// The following fields are set if a DDL was fully analyzed.
-		IfExists      bool
-		TableSpec     *TableSpec
-		OptLike       *OptLike
-		PartitionSpec *PartitionSpec
-		OnlineHint    *OnlineDDLHint
+	// AlterVschema represents a ALTER VSCHEMA statement.
+	AlterVschema struct {
+		Action DDLAction
+		Table  TableName
 
 		// VindexSpec is set for CreateVindexDDLAction, DropVindexDDLAction, AddColVindexDDLAction, DropColVindexDDLAction.
 		VindexSpec *VindexSpec
@@ -239,11 +412,66 @@ type (
 		AutoIncSpec *AutoIncSpec
 	}
 
+	// AlterTable represents a ALTER TABLE statement.
+	AlterTable struct {
+		Table         TableName
+		AlterOptions  []AlterOption
+		PartitionSpec *PartitionSpec
+		FullyParsed   bool
+	}
+
+	// DropTable represents a DROP TABLE statement.
+	DropTable struct {
+		Temp       bool
+		FromTables TableNames
+		// The following fields are set if a DDL was fully analyzed.
+		IfExists bool
+	}
+
+	// DropView represents a DROP VIEW statement.
+	DropView struct {
+		FromTables TableNames
+		IfExists   bool
+	}
+
+	// CreateTable represents a CREATE TABLE statement.
+	CreateTable struct {
+		Temp        bool
+		Table       TableName
+		IfNotExists bool
+		TableSpec   *TableSpec
+		OptLike     *OptLike
+		FullyParsed bool
+	}
+
+	// CreateView represents a CREATE VIEW query
+	CreateView struct {
+		ViewName    TableName
+		Algorithm   string
+		Definer     string
+		Security    string
+		Columns     Columns
+		Select      SelectStatement
+		CheckOption string
+		IsReplace   bool
+	}
+
+	// AlterView represents a ALTER VIEW query
+	AlterView struct {
+		ViewName    TableName
+		Algorithm   string
+		Definer     string
+		Security    string
+		Columns     Columns
+		Select      SelectStatement
+		CheckOption string
+	}
+
 	// DDLAction is an enum for DDL.Action
 	DDLAction int8
 
+	// Load represents a LOAD statement
 	Load struct {
-		InfileS3 string
 	}
 
 	// ParenSelect is a parenthesized SELECT statement.
@@ -253,19 +481,7 @@ type (
 
 	// Show represents a show statement.
 	Show struct {
-		Extended               string
-		Type                   string
-		OnTable                TableName
-		Table                  TableName
-		ShowTablesOpt          *ShowTablesOpt
-		Scope                  Scope
-		ShowCollationFilterOpt Expr
-	}
-
-	// ShowTableStatus is a struct for SHOW TABLE STATUS queries.
-	ShowTableStatus struct {
-		DatabaseName string
-		Filter       *ShowFilter
+		Internal ShowInternal
 	}
 
 	// Use represents a use statement.
@@ -297,14 +513,46 @@ type (
 		Name ColIdent
 	}
 
-	// Explain represents an EXPLAIN statement
-	Explain struct {
+	// CallProc represents a CALL statement
+	CallProc struct {
+		Name   TableName
+		Params Exprs
+	}
+
+	// LockType is an enum for Lock Types
+	LockType int8
+
+	// TableAndLockType contains table and lock association
+	TableAndLockType struct {
+		Table TableExpr
+		Lock  LockType
+	}
+
+	// TableAndLockTypes is a slice of TableAndLockType
+	TableAndLockTypes []*TableAndLockType
+
+	// LockTables represents the lock statement
+	LockTables struct {
+		Tables TableAndLockTypes
+	}
+
+	// UnlockTables represents the unlock statement
+	UnlockTables struct{}
+
+	// ExplainType is an enum for ExplainStmt.Type
+	ExplainType int8
+
+	// ExplainStmt represents an Explain statement
+	ExplainStmt struct {
 		Type      ExplainType
 		Statement Statement
 	}
 
-	// ExplainType is an enum for Explain.Type
-	ExplainType int8
+	// ExplainTab represents the Explain table
+	ExplainTab struct {
+		Table TableName
+		Wild  string
+	}
 
 	// OtherRead represents a DESCRIBE, or EXPLAIN statement.
 	// It should be used only as an indicator. It does not contain
@@ -327,8 +575,8 @@ func (*Update) iStatement()            {}
 func (*Delete) iStatement()            {}
 func (*Set) iStatement()               {}
 func (*SetTransaction) iStatement()    {}
-func (*DBDDL) iStatement()             {}
-func (*DDL) iStatement()               {}
+func (*DropDatabase) iStatement()      {}
+func (*Flush) iStatement()             {}
 func (*Show) iStatement()              {}
 func (*Use) iStatement()               {}
 func (*Begin) iStatement()             {}
@@ -337,19 +585,651 @@ func (*Rollback) iStatement()          {}
 func (*SRollback) iStatement()         {}
 func (*Savepoint) iStatement()         {}
 func (*Release) iStatement()           {}
-func (*Explain) iStatement()           {}
 func (*OtherRead) iStatement()         {}
 func (*OtherAdmin) iStatement()        {}
 func (*Select) iSelectStatement()      {}
 func (*Union) iSelectStatement()       {}
 func (*ParenSelect) iSelectStatement() {}
 func (*Load) iStatement()              {}
-func (*ShowTableStatus) iStatement()   {}
+func (*CreateDatabase) iStatement()    {}
+func (*AlterDatabase) iStatement()     {}
+func (*CreateTable) iStatement()       {}
+func (*CreateView) iStatement()        {}
+func (*AlterView) iStatement()         {}
+func (*LockTables) iStatement()        {}
+func (*UnlockTables) iStatement()      {}
+func (*AlterTable) iStatement()        {}
+func (*AlterVschema) iStatement()      {}
+func (*DropTable) iStatement()         {}
+func (*DropView) iStatement()          {}
+func (*TruncateTable) iStatement()     {}
+func (*RenameTable) iStatement()       {}
+func (*CallProc) iStatement()          {}
+func (*ExplainStmt) iStatement()       {}
+func (*ExplainTab) iStatement()        {}
+
+func (*CreateView) iDDLStatement()    {}
+func (*AlterView) iDDLStatement()     {}
+func (*CreateTable) iDDLStatement()   {}
+func (*DropTable) iDDLStatement()     {}
+func (*DropView) iDDLStatement()      {}
+func (*AlterTable) iDDLStatement()    {}
+func (*TruncateTable) iDDLStatement() {}
+func (*RenameTable) iDDLStatement()   {}
+
+func (*AddConstraintDefinition) iAlterOption() {}
+func (*AddIndexDefinition) iAlterOption()      {}
+func (*AddColumns) iAlterOption()              {}
+func (AlgorithmValue) iAlterOption()           {}
+func (*AlterColumn) iAlterOption()             {}
+func (*ChangeColumn) iAlterOption()            {}
+func (*ModifyColumn) iAlterOption()            {}
+func (*AlterCharset) iAlterOption()            {}
+func (*KeyState) iAlterOption()                {}
+func (*TablespaceOperation) iAlterOption()     {}
+func (*DropColumn) iAlterOption()              {}
+func (*DropKey) iAlterOption()                 {}
+func (*Force) iAlterOption()                   {}
+func (*LockOption) iAlterOption()              {}
+func (*OrderByOption) iAlterOption()           {}
+func (*RenameTableName) iAlterOption()         {}
+func (*RenameIndex) iAlterOption()             {}
+func (*Validation) iAlterOption()              {}
+func (TableOptions) iAlterOption()             {}
+
+func (*ExplainStmt) iExplain() {}
+func (*ExplainTab) iExplain()  {}
+
+// IsFullyParsed implements the DDLStatement interface
+func (*TruncateTable) IsFullyParsed() bool {
+	return true
+}
+
+// IsFullyParsed implements the DDLStatement interface
+func (*RenameTable) IsFullyParsed() bool {
+	return true
+}
+
+// IsFullyParsed implements the DDLStatement interface
+func (node *CreateTable) IsFullyParsed() bool {
+	return node.FullyParsed
+}
+
+// IsFullyParsed implements the DDLStatement interface
+func (node *AlterTable) IsFullyParsed() bool {
+	return node.FullyParsed
+}
+
+// IsFullyParsed implements the DDLStatement interface
+func (node *CreateView) IsFullyParsed() bool {
+	return true
+}
+
+// IsFullyParsed implements the DDLStatement interface
+func (node *DropView) IsFullyParsed() bool {
+	return true
+}
+
+// IsFullyParsed implements the DDLStatement interface
+func (node *DropTable) IsFullyParsed() bool {
+	return true
+}
+
+// IsFullyParsed implements the DDLStatement interface
+func (node *AlterView) IsFullyParsed() bool {
+	return true
+}
+
+// IsTemporary implements the DDLStatement interface
+func (*TruncateTable) IsTemporary() bool {
+	return false
+}
+
+// IsTemporary implements the DDLStatement interface
+func (*RenameTable) IsTemporary() bool {
+	return false
+}
+
+// IsTemporary implements the DDLStatement interface
+func (node *CreateTable) IsTemporary() bool {
+	return node.Temp
+}
+
+// IsTemporary implements the DDLStatement interface
+func (node *AlterTable) IsTemporary() bool {
+	return false
+}
+
+// IsTemporary implements the DDLStatement interface
+func (node *CreateView) IsTemporary() bool {
+	return false
+}
+
+// IsTemporary implements the DDLStatement interface
+func (node *DropView) IsTemporary() bool {
+	return false
+}
+
+// IsTemporary implements the DDLStatement interface
+func (node *DropTable) IsTemporary() bool {
+	return node.Temp
+}
+
+// IsTemporary implements the DDLStatement interface
+func (node *AlterView) IsTemporary() bool {
+	return false
+}
+
+// GetTable implements the DDLStatement interface
+func (node *TruncateTable) GetTable() TableName {
+	return node.Table
+}
+
+// GetTable implements the DDLStatement interface
+func (node *CreateTable) GetTable() TableName {
+	return node.Table
+}
+
+// GetTable implements the DDLStatement interface
+func (node *AlterTable) GetTable() TableName {
+	return node.Table
+}
+
+// GetTable implements the DDLStatement interface
+func (node *CreateView) GetTable() TableName {
+	return node.ViewName
+}
+
+// GetTable implements the DDLStatement interface
+func (node *AlterView) GetTable() TableName {
+	return node.ViewName
+}
+
+// GetTable implements the DDLStatement interface
+func (node *DropView) GetTable() TableName {
+	return TableName{}
+}
+
+// GetTable implements the DDLStatement interface
+func (node *DropTable) GetTable() TableName {
+	return TableName{}
+}
+
+// GetTable implements the DDLStatement interface
+func (node *RenameTable) GetTable() TableName {
+	return TableName{}
+}
+
+// GetAction implements the DDLStatement interface
+func (node *TruncateTable) GetAction() DDLAction {
+	return TruncateDDLAction
+}
+
+// GetAction implements the DDLStatement interface
+func (node *AlterTable) GetAction() DDLAction {
+	return AlterDDLAction
+}
+
+// GetAction implements the DDLStatement interface
+func (node *CreateTable) GetAction() DDLAction {
+	return CreateDDLAction
+}
+
+// GetAction implements the DDLStatement interface
+func (node *CreateView) GetAction() DDLAction {
+	return CreateDDLAction
+}
+
+// GetAction implements the DDLStatement interface
+func (node *AlterView) GetAction() DDLAction {
+	return AlterDDLAction
+}
+
+// GetAction implements the DDLStatement interface
+func (node *RenameTable) GetAction() DDLAction {
+	return RenameDDLAction
+}
+
+// GetAction implements the DDLStatement interface
+func (node *DropTable) GetAction() DDLAction {
+	return DropDDLAction
+}
+
+// GetAction implements the DDLStatement interface
+func (node *DropView) GetAction() DDLAction {
+	return DropDDLAction
+}
+
+// GetOptLike implements the DDLStatement interface
+func (node *CreateTable) GetOptLike() *OptLike {
+	return node.OptLike
+}
+
+// GetOptLike implements the DDLStatement interface
+func (node *TruncateTable) GetOptLike() *OptLike {
+	return nil
+}
+
+// GetOptLike implements the DDLStatement interface
+func (node *RenameTable) GetOptLike() *OptLike {
+	return nil
+}
+
+// GetOptLike implements the DDLStatement interface
+func (node *AlterTable) GetOptLike() *OptLike {
+	return nil
+}
+
+// GetOptLike implements the DDLStatement interface
+func (node *CreateView) GetOptLike() *OptLike {
+	return nil
+}
+
+// GetOptLike implements the DDLStatement interface
+func (node *AlterView) GetOptLike() *OptLike {
+	return nil
+}
+
+// GetOptLike implements the DDLStatement interface
+func (node *DropTable) GetOptLike() *OptLike {
+	return nil
+}
+
+// GetOptLike implements the DDLStatement interface
+func (node *DropView) GetOptLike() *OptLike {
+	return nil
+}
+
+// GetIfExists implements the DDLStatement interface
+func (node *RenameTable) GetIfExists() bool {
+	return false
+}
+
+// GetIfExists implements the DDLStatement interface
+func (node *CreateTable) GetIfExists() bool {
+	return false
+}
+
+// GetIfExists implements the DDLStatement interface
+func (node *TruncateTable) GetIfExists() bool {
+	return false
+}
+
+// GetIfExists implements the DDLStatement interface
+func (node *AlterTable) GetIfExists() bool {
+	return false
+}
+
+// GetIfExists implements the DDLStatement interface
+func (node *CreateView) GetIfExists() bool {
+	return false
+}
+
+// GetIfExists implements the DDLStatement interface
+func (node *AlterView) GetIfExists() bool {
+	return false
+}
+
+// GetIfExists implements the DDLStatement interface
+func (node *DropTable) GetIfExists() bool {
+	return node.IfExists
+}
+
+// GetIfExists implements the DDLStatement interface
+func (node *DropView) GetIfExists() bool {
+	return node.IfExists
+}
+
+// GetTableSpec implements the DDLStatement interface
+func (node *CreateTable) GetTableSpec() *TableSpec {
+	return node.TableSpec
+}
+
+// GetTableSpec implements the DDLStatement interface
+func (node *RenameTable) GetTableSpec() *TableSpec {
+	return nil
+}
+
+// GetTableSpec implements the DDLStatement interface
+func (node *TruncateTable) GetTableSpec() *TableSpec {
+	return nil
+}
+
+// GetTableSpec implements the DDLStatement interface
+func (node *AlterTable) GetTableSpec() *TableSpec {
+	return nil
+}
+
+// GetTableSpec implements the DDLStatement interface
+func (node *CreateView) GetTableSpec() *TableSpec {
+	return nil
+}
+
+// GetTableSpec implements the DDLStatement interface
+func (node *AlterView) GetTableSpec() *TableSpec {
+	return nil
+}
+
+// GetTableSpec implements the DDLStatement interface
+func (node *DropTable) GetTableSpec() *TableSpec {
+	return nil
+}
+
+// GetTableSpec implements the DDLStatement interface
+func (node *DropView) GetTableSpec() *TableSpec {
+	return nil
+}
+
+// GetFromTables implements the DDLStatement interface
+func (node *RenameTable) GetFromTables() TableNames {
+	var fromTables TableNames
+	for _, pair := range node.TablePairs {
+		fromTables = append(fromTables, pair.FromTable)
+	}
+	return fromTables
+}
+
+// GetFromTables implements the DDLStatement interface
+func (node *TruncateTable) GetFromTables() TableNames {
+	return nil
+}
+
+// GetFromTables implements the DDLStatement interface
+func (node *AlterTable) GetFromTables() TableNames {
+	return nil
+}
+
+// GetFromTables implements the DDLStatement interface
+func (node *CreateTable) GetFromTables() TableNames {
+	return nil
+}
+
+// GetFromTables implements the DDLStatement interface
+func (node *CreateView) GetFromTables() TableNames {
+	return nil
+}
+
+// GetFromTables implements the DDLStatement interface
+func (node *DropTable) GetFromTables() TableNames {
+	return node.FromTables
+}
+
+// GetFromTables implements the DDLStatement interface
+func (node *DropView) GetFromTables() TableNames {
+	return node.FromTables
+}
+
+// GetFromTables implements the DDLStatement interface
+func (node *AlterView) GetFromTables() TableNames {
+	return nil
+}
+
+// SetFromTables implements DDLStatement.
+func (node *RenameTable) SetFromTables(tables TableNames) {
+	if len(node.TablePairs) != len(tables) {
+		return
+	}
+	for i := range node.TablePairs {
+		node.TablePairs[i].FromTable = tables[i]
+	}
+}
+
+// SetFromTables implements DDLStatement.
+func (node *TruncateTable) SetFromTables(tables TableNames) {
+	// irrelevant
+}
+
+// SetFromTables implements DDLStatement.
+func (node *AlterTable) SetFromTables(tables TableNames) {
+	// irrelevant
+}
+
+// SetFromTables implements DDLStatement.
+func (node *CreateTable) SetFromTables(tables TableNames) {
+	// irrelevant
+}
+
+// SetFromTables implements DDLStatement.
+func (node *CreateView) SetFromTables(tables TableNames) {
+	// irrelevant
+}
+
+// SetFromTables implements DDLStatement.
+func (node *DropTable) SetFromTables(tables TableNames) {
+	node.FromTables = tables
+}
+
+// SetFromTables implements DDLStatement.
+func (node *DropView) SetFromTables(tables TableNames) {
+	node.FromTables = tables
+}
+
+// SetFromTables implements DDLStatement.
+func (node *AlterView) SetFromTables(tables TableNames) {
+	// irrelevant
+}
+
+// GetToTables implements the DDLStatement interface
+func (node *RenameTable) GetToTables() TableNames {
+	var toTables TableNames
+	for _, pair := range node.TablePairs {
+		toTables = append(toTables, pair.ToTable)
+	}
+	return toTables
+}
+
+// GetToTables implements the DDLStatement interface
+func (node *TruncateTable) GetToTables() TableNames {
+	return nil
+}
+
+// GetToTables implements the DDLStatement interface
+func (node *AlterTable) GetToTables() TableNames {
+	for _, option := range node.AlterOptions {
+		switch altOption := option.(type) {
+		case *RenameTableName:
+			return TableNames{altOption.Table}
+		}
+	}
+	return nil
+}
+
+// GetToTables implements the DDLStatement interface
+func (node *CreateView) GetToTables() TableNames {
+	return nil
+}
+
+// GetToTables implements the DDLStatement interface
+func (node *AlterView) GetToTables() TableNames {
+	return nil
+}
+
+// GetToTables implements the DDLStatement interface
+func (node *CreateTable) GetToTables() TableNames {
+	return nil
+}
+
+// GetToTables implements the DDLStatement interface
+func (node *DropTable) GetToTables() TableNames {
+	return nil
+}
+
+// GetToTables implements the DDLStatement interface
+func (node *DropView) GetToTables() TableNames {
+	return nil
+}
+
+// AffectedTables returns the list table names affected by the DDLStatement.
+func (node *RenameTable) AffectedTables() TableNames {
+	list := make(TableNames, 0, 2*len(node.TablePairs))
+	for _, pair := range node.TablePairs {
+		list = append(list, pair.FromTable)
+		list = append(list, pair.ToTable)
+	}
+	return list
+}
+
+// AffectedTables returns the list table names affected by the DDLStatement.
+func (node *AlterTable) AffectedTables() TableNames {
+	affectedTables := TableNames{node.Table}
+	for _, option := range node.AlterOptions {
+		switch altOption := option.(type) {
+		case *RenameTableName:
+			affectedTables = append(affectedTables, altOption.Table)
+		}
+	}
+	return affectedTables
+}
+
+// AffectedTables implements DDLStatement.
+func (node *TruncateTable) AffectedTables() TableNames {
+	return TableNames{node.Table}
+}
+
+// AffectedTables implements DDLStatement.
+func (node *CreateTable) AffectedTables() TableNames {
+	return TableNames{node.Table}
+}
+
+// AffectedTables implements DDLStatement.
+func (node *CreateView) AffectedTables() TableNames {
+	return TableNames{node.ViewName}
+}
+
+// AffectedTables implements DDLStatement.
+func (node *AlterView) AffectedTables() TableNames {
+	return TableNames{node.ViewName}
+}
+
+// AffectedTables returns the list table names affected by the DDLStatement.
+func (node *DropTable) AffectedTables() TableNames {
+	return node.FromTables
+}
+
+// AffectedTables returns the list table names affected by the DDLStatement.
+func (node *DropView) AffectedTables() TableNames {
+	return node.FromTables
+}
+
+// SetTable implements DDLStatement.
+func (node *TruncateTable) SetTable(qualifier string, name string) {
+	node.Table.Qualifier = NewTableIdent(qualifier)
+	node.Table.Name = NewTableIdent(name)
+}
+
+// SetTable implements DDLStatement.
+func (node *AlterTable) SetTable(qualifier string, name string) {
+	node.Table.Qualifier = NewTableIdent(qualifier)
+	node.Table.Name = NewTableIdent(name)
+}
+
+// SetTable implements DDLStatement.
+func (node *CreateTable) SetTable(qualifier string, name string) {
+	node.Table.Qualifier = NewTableIdent(qualifier)
+	node.Table.Name = NewTableIdent(name)
+}
+
+// SetTable implements DDLStatement.
+func (node *CreateView) SetTable(qualifier string, name string) {
+	node.ViewName.Qualifier = NewTableIdent(qualifier)
+	node.ViewName.Name = NewTableIdent(name)
+}
+
+// SetTable implements DDLStatement.
+func (node *AlterView) SetTable(qualifier string, name string) {
+	node.ViewName.Qualifier = NewTableIdent(qualifier)
+	node.ViewName.Name = NewTableIdent(name)
+}
+
+// SetTable implements DDLStatement.
+func (node *RenameTable) SetTable(qualifier string, name string) {}
+
+// SetTable implements DDLStatement.
+func (node *DropTable) SetTable(qualifier string, name string) {}
+
+// SetTable implements DDLStatement.
+func (node *DropView) SetTable(qualifier string, name string) {}
+
+func (*DropDatabase) iDBDDLStatement()   {}
+func (*CreateDatabase) iDBDDLStatement() {}
+func (*AlterDatabase) iDBDDLStatement()  {}
+
+// IsFullyParsed implements the DBDDLStatement interface
+func (node *DropDatabase) IsFullyParsed() bool {
+	return true
+}
+
+// IsFullyParsed implements the DBDDLStatement interface
+func (node *CreateDatabase) IsFullyParsed() bool {
+	return node.FullyParsed
+}
+
+// IsFullyParsed implements the DBDDLStatement interface
+func (node *AlterDatabase) IsFullyParsed() bool {
+	return node.FullyParsed
+}
+
+// GetDatabaseName implements the DBDDLStatement interface
+func (node *DropDatabase) GetDatabaseName() string {
+	return node.DBName
+}
+
+// GetDatabaseName implements the DBDDLStatement interface
+func (node *CreateDatabase) GetDatabaseName() string {
+	return node.DBName
+}
+
+// GetDatabaseName implements the DBDDLStatement interface
+func (node *AlterDatabase) GetDatabaseName() string {
+	return node.DBName
+}
 
 // ParenSelect can actually not be a top level statement,
 // but we have to allow it because it's a requirement
 // of SelectStatement.
 func (*ParenSelect) iStatement() {}
+
+type (
+
+	// ShowInternal will represent all the show statement types.
+	ShowInternal interface {
+		isShowInternal()
+		SQLNode
+	}
+
+	// ShowLegacy is of ShowInternal type, holds the legacy show ast struct.
+	ShowLegacy struct {
+		Extended               string
+		Type                   string
+		OnTable                TableName
+		Table                  TableName
+		ShowTablesOpt          *ShowTablesOpt
+		Scope                  Scope
+		ShowCollationFilterOpt Expr
+	}
+
+	// ShowCommandType represents the show statement type.
+	ShowCommandType int8
+
+	// ShowBasic is of ShowInternal type, holds Simple SHOW queries with a filter.
+	ShowBasic struct {
+		Command ShowCommandType
+		Full    bool
+		Tbl     TableName
+		DbName  string
+		Filter  *ShowFilter
+	}
+
+	// ShowCreate is of ShowInternal type, holds SHOW CREATE queries.
+	ShowCreate struct {
+		Command ShowCommandType
+		Op      TableName
+	}
+)
+
+func (*ShowLegacy) isShowInternal() {}
+func (*ShowBasic) isShowInternal()  {}
+func (*ShowCreate) isShowInternal() {}
 
 // InsertRows represents the rows for an INSERT statement.
 type InsertRows interface {
@@ -367,11 +1247,15 @@ type OptLike struct {
 	LikeTable TableName
 }
 
-// PartitionSpec describe partition actions (for alter and create)
+// PartitionSpec describe partition actions (for alter statements)
 type PartitionSpec struct {
-	Action      PartitionSpecAction
-	Name        ColIdent
-	Definitions []*PartitionDefinition
+	Action            PartitionSpecAction
+	Names             Partitions
+	Number            *Literal
+	IsAll             bool
+	TableName         TableName
+	WithoutValidation bool
+	Definitions       []*PartitionDefinition
 }
 
 // PartitionSpecAction is an enum for PartitionSpec.Action
@@ -384,12 +1268,15 @@ type PartitionDefinition struct {
 	Maxvalue bool
 }
 
+// TableOptions specifies a list of table options
+type TableOptions []*TableOption
+
 // TableSpec describes the structure of a table from a CREATE TABLE statement
 type TableSpec struct {
 	Columns     []*ColumnDefinition
 	Indexes     []*IndexDefinition
 	Constraints []*ConstraintDefinition
-	Options     string
+	Options     TableOptions
 }
 
 // ColumnDefinition describes a column in a CREATE TABLE statement
@@ -406,11 +1293,7 @@ type ColumnType struct {
 	Type string
 
 	// Generic field options.
-	NotNull       bool
-	Autoincrement bool
-	Default       Expr
-	OnUpdate      Expr
-	Comment       *Literal
+	Options *ColumnTypeOptions
 
 	// Numeric field options
 	Length   *Literal
@@ -424,6 +1307,15 @@ type ColumnType struct {
 
 	// Enum values
 	EnumValues []string
+}
+
+// ColumnTypeOptions are generic field options for a column type
+type ColumnTypeOptions struct {
+	NotNull       bool
+	Autoincrement bool
+	Default       Expr
+	OnUpdate      Expr
+	Comment       *Literal
 
 	// Key specification
 	KeyOpt ColumnKeyOption
@@ -438,11 +1330,13 @@ type IndexDefinition struct {
 
 // IndexInfo describes the name and type of an index in a CREATE TABLE statement
 type IndexInfo struct {
-	Type    string
-	Name    ColIdent
-	Primary bool
-	Spatial bool
-	Unique  bool
+	Type           string
+	Name           ColIdent
+	ConstraintName ColIdent
+	Primary        bool
+	Spatial        bool
+	Fulltext       bool
+	Unique         bool
 }
 
 // VindexSpec defines a vindex for a CREATE VINDEX or DROP VINDEX statement
@@ -485,6 +1379,12 @@ type (
 		OnDelete          ReferenceAction
 		OnUpdate          ReferenceAction
 	}
+
+	// CheckConstraintDefinition describes a check constraint in a CREATE TABLE statement
+	CheckConstraintDefinition struct {
+		Expr     Expr
+		Enforced bool
+	}
 )
 
 // ShowFilter is show tables filter
@@ -525,7 +1425,7 @@ type (
 
 func (*StarExpr) iSelectExpr()    {}
 func (*AliasedExpr) iSelectExpr() {}
-func (Nextval) iSelectExpr()      {}
+func (*Nextval) iSelectExpr()     {}
 
 // Columns represents an insert column list.
 type Columns []ColIdent
@@ -590,14 +1490,19 @@ type (
 		Name, Qualifier TableIdent
 	}
 
-	// Subquery represents a subquery.
+	// Subquery represents a subquery used as an value expression.
 	Subquery struct {
+		Select SelectStatement
+	}
+
+	// DerivedTable represents a subquery used as a table expression.
+	DerivedTable struct {
 		Select SelectStatement
 	}
 )
 
-func (TableName) iSimpleTableExpr() {}
-func (*Subquery) iSimpleTableExpr() {}
+func (TableName) iSimpleTableExpr()     {}
+func (*DerivedTable) iSimpleTableExpr() {}
 
 // TableNames is a list of TableName.
 type TableNames []TableName
@@ -914,7 +1819,7 @@ type Order struct {
 	Direction OrderDirection
 }
 
-// OrderDirection is an enum for Order.Direction
+// OrderDirection is an enum for the direction in which to order - asc or desc.
 type OrderDirection int8
 
 // Limit represents a LIMIT clause.
@@ -985,14 +1890,11 @@ func (node *Select) Format(buf *TrackedBuffer) {
 	addIf(node.StraightJoinHint, StraightJoinHint)
 	addIf(node.SQLCalcFoundRows, SQLCalcFoundRowsStr)
 
-	buf.astPrintf(node, "select %v%s%v from %v%v%v%v%v%v%s",
+	buf.astPrintf(node, "select %v%s%v from %v%v%v%v%v%v%s%v",
 		node.Comments, options, node.SelectExprs,
 		node.From, node.Where,
 		node.GroupBy, node.Having, node.OrderBy,
-		node.Limit, node.Lock.ToString())
-	if node.IntoOutfileS3 != "" {
-		buf.astPrintf(node, " into outfile s3 '%s'", node.IntoOutfileS3)
-	}
+		node.Limit, node.Lock.ToString(), node.Into)
 }
 
 // Format formats the node.
@@ -1011,15 +1913,10 @@ func (node *Union) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *UnionSelect) Format(buf *TrackedBuffer) {
-	switch node.Type {
-	case UnionBasic:
+	if node.Distinct {
 		buf.astPrintf(node, " %s %v", UnionStr, node.Statement)
-	case UnionAll:
+	} else {
 		buf.astPrintf(node, " %s %v", UnionAllStr, node.Statement)
-	case UnionDistinct:
-		buf.astPrintf(node, " %s %v", UnionDistinctStr, node.Statement)
-	default:
-		buf.astPrintf(node, " %s %v", "Unknown Union Type", node.Statement)
 	}
 }
 
@@ -1098,55 +1995,43 @@ func (node *SetTransaction) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
-func (node *DBDDL) Format(buf *TrackedBuffer) {
-	switch node.Action {
-	case CreateDBDDLAction:
-		notExists := ""
-		if node.IfNotExists {
-			notExists = " if not exists"
+func (node *DropDatabase) Format(buf *TrackedBuffer) {
+	exists := ""
+	if node.IfExists {
+		exists = " if exists"
+	}
+	buf.WriteString(fmt.Sprintf("%s database%s %v", DropStr, exists, node.DBName))
+}
+
+// Format formats the node.
+func (node *Flush) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "%s", FlushStr)
+	if node.IsLocal {
+		buf.WriteString(" local")
+	}
+	if len(node.FlushOptions) != 0 {
+		prefix := " "
+		for _, option := range node.FlushOptions {
+			buf.astPrintf(node, "%s%s", prefix, option)
+			prefix = ", "
 		}
-		buf.WriteString(fmt.Sprintf("%s database%s %v", CreateStr, notExists, node.DBName))
-	case AlterDBDDLAction:
-		buf.WriteString(fmt.Sprintf("%s database %s", AlterStr, node.DBName))
-	case DropDBDDLAction:
-		exists := ""
-		if node.IfExists {
-			exists = " if exists"
+	} else {
+		buf.WriteString(" tables")
+		if len(node.TableNames) != 0 {
+			buf.astPrintf(node, " %v", node.TableNames)
 		}
-		buf.WriteString(fmt.Sprintf("%s database%s %v", DropStr, exists, node.DBName))
+		if node.ForExport {
+			buf.WriteString(" for export")
+		}
+		if node.WithLock {
+			buf.WriteString(" with read lock")
+		}
 	}
 }
 
 // Format formats the node.
-func (node *DDL) Format(buf *TrackedBuffer) {
+func (node *AlterVschema) Format(buf *TrackedBuffer) {
 	switch node.Action {
-	case CreateDDLAction:
-		if node.OptLike != nil {
-			buf.astPrintf(node, "%s table %v %v", CreateStr, node.Table, node.OptLike)
-		} else if node.TableSpec != nil {
-			buf.astPrintf(node, "%s table %v %v", CreateStr, node.Table, node.TableSpec)
-		} else {
-			buf.astPrintf(node, "%s table %v", CreateStr, node.Table)
-		}
-	case DropDDLAction:
-		exists := ""
-		if node.IfExists {
-			exists = " if exists"
-		}
-		buf.astPrintf(node, "%s table%s %v", DropStr, exists, node.FromTables)
-	case RenameDDLAction:
-		buf.astPrintf(node, "%s table %v to %v", RenameStr, node.FromTables[0], node.ToTables[0])
-		for i := 1; i < len(node.FromTables); i++ {
-			buf.astPrintf(node, ", %v to %v", node.FromTables[i], node.ToTables[i])
-		}
-	case AlterDDLAction:
-		if node.PartitionSpec != nil {
-			buf.astPrintf(node, "%s table %v %v", AlterStr, node.Table, node.PartitionSpec)
-		} else {
-			buf.astPrintf(node, "%s table %v", AlterStr, node.Table)
-		}
-	case FlushDDLAction:
-		buf.astPrintf(node, "%s", FlushStr)
 	case CreateVindexDDLAction:
 		buf.astPrintf(node, "alter vschema create vindex %v %v", node.Table, node.VindexSpec)
 	case DropVindexDDLAction:
@@ -1188,13 +2073,129 @@ func (node *OptLike) Format(buf *TrackedBuffer) {
 func (node *PartitionSpec) Format(buf *TrackedBuffer) {
 	switch node.Action {
 	case ReorganizeAction:
-		buf.astPrintf(node, "%s %v into (", ReorganizeStr, node.Name)
-		var prefix string
+		buf.astPrintf(node, "%s ", ReorganizeStr)
+		prefix := ""
+		for _, n := range node.Names {
+			buf.astPrintf(node, "%s%v", prefix, n)
+			prefix = ", "
+		}
+		buf.WriteString(" into (")
+		prefix = ""
 		for _, pd := range node.Definitions {
 			buf.astPrintf(node, "%s%v", prefix, pd)
 			prefix = ", "
 		}
 		buf.astPrintf(node, ")")
+	case AddAction:
+		buf.astPrintf(node, "%s (%v)", AddStr, node.Definitions[0])
+	case DropAction:
+		buf.astPrintf(node, "%s ", DropPartitionStr)
+		prefix := ""
+		for _, n := range node.Names {
+			buf.astPrintf(node, "%s%v", prefix, n)
+			prefix = ", "
+		}
+	case DiscardAction:
+		buf.astPrintf(node, "%s ", DiscardStr)
+		if node.IsAll {
+			buf.WriteString("all")
+		} else {
+			prefix := ""
+			for _, n := range node.Names {
+				buf.astPrintf(node, "%s%v", prefix, n)
+				prefix = ", "
+			}
+		}
+		buf.WriteString(" tablespace")
+	case ImportAction:
+		buf.astPrintf(node, "%s ", ImportStr)
+		if node.IsAll {
+			buf.WriteString("all")
+		} else {
+			prefix := ""
+			for _, n := range node.Names {
+				buf.astPrintf(node, "%s%v", prefix, n)
+				prefix = ", "
+			}
+		}
+		buf.WriteString(" tablespace")
+	case TruncateAction:
+		buf.astPrintf(node, "%s ", TruncatePartitionStr)
+		if node.IsAll {
+			buf.WriteString("all")
+		} else {
+			prefix := ""
+			for _, n := range node.Names {
+				buf.astPrintf(node, "%s%v", prefix, n)
+				prefix = ", "
+			}
+		}
+	case CoalesceAction:
+		buf.astPrintf(node, "%s %v", CoalesceStr, node.Number)
+	case ExchangeAction:
+		buf.astPrintf(node, "%s %v with table %v", ExchangeStr, node.Names[0], node.TableName)
+		if node.WithoutValidation {
+			buf.WriteString(" without validation")
+		}
+	case AnalyzeAction:
+		buf.astPrintf(node, "%s ", AnalyzePartitionStr)
+		if node.IsAll {
+			buf.WriteString("all")
+		} else {
+			prefix := ""
+			for _, n := range node.Names {
+				buf.astPrintf(node, "%s%v", prefix, n)
+				prefix = ", "
+			}
+		}
+	case CheckAction:
+		buf.astPrintf(node, "%s ", CheckStr)
+		if node.IsAll {
+			buf.WriteString("all")
+		} else {
+			prefix := ""
+			for _, n := range node.Names {
+				buf.astPrintf(node, "%s%v", prefix, n)
+				prefix = ", "
+			}
+		}
+	case OptimizeAction:
+		buf.astPrintf(node, "%s ", OptimizeStr)
+		if node.IsAll {
+			buf.WriteString("all")
+		} else {
+			prefix := ""
+			for _, n := range node.Names {
+				buf.astPrintf(node, "%s%v", prefix, n)
+				prefix = ", "
+			}
+		}
+	case RebuildAction:
+		buf.astPrintf(node, "%s ", RebuildStr)
+		if node.IsAll {
+			buf.WriteString("all")
+		} else {
+			prefix := ""
+			for _, n := range node.Names {
+				buf.astPrintf(node, "%s%v", prefix, n)
+				prefix = ", "
+			}
+		}
+	case RepairAction:
+		buf.astPrintf(node, "%s ", RepairStr)
+		if node.IsAll {
+			buf.WriteString("all")
+		} else {
+			prefix := ""
+			for _, n := range node.Names {
+				buf.astPrintf(node, "%s%v", prefix, n)
+				prefix = ", "
+			}
+		}
+	case RemoveAction:
+		buf.WriteString(RemoveStr)
+	case UpgradeAction:
+		buf.WriteString(UpgradeStr)
 	default:
 		panic("unimplemented")
 	}
@@ -1226,7 +2227,20 @@ func (ts *TableSpec) Format(buf *TrackedBuffer) {
 		buf.astPrintf(ts, ",\n\t%v", c)
 	}
 
-	buf.astPrintf(ts, "\n)%s", strings.Replace(ts.Options, ", ", ",\n  ", -1))
+	buf.astPrintf(ts, "\n)")
+	for i, opt := range ts.Options {
+		if i != 0 {
+			buf.WriteString(",\n ")
+		}
+		buf.astPrintf(ts, " %s", opt.Name)
+		if opt.String != "" {
+			buf.astPrintf(ts, " %s", opt.String)
+		} else if opt.Value != nil {
+			buf.astPrintf(ts, " %v", opt.Value)
+		} else {
+			buf.astPrintf(ts, " (%v)", opt.Tables)
+		}
+	}
 }
 
 // Format formats the node.
@@ -1262,34 +2276,37 @@ func (ct *ColumnType) Format(buf *TrackedBuffer) {
 	if ct.Collate != "" {
 		opts = append(opts, keywordStrings[COLLATE], ct.Collate)
 	}
-	if ct.NotNull {
+	if ct.Options.NotNull {
 		opts = append(opts, keywordStrings[NOT], keywordStrings[NULL])
 	}
-	if ct.Default != nil {
-		opts = append(opts, keywordStrings[DEFAULT], String(ct.Default))
+	if ct.Options.Default != nil {
+		opts = append(opts, keywordStrings[DEFAULT], String(ct.Options.Default))
 	}
-	if ct.OnUpdate != nil {
-		opts = append(opts, keywordStrings[ON], keywordStrings[UPDATE], String(ct.OnUpdate))
+	if ct.Options.OnUpdate != nil {
+		opts = append(opts, keywordStrings[ON], keywordStrings[UPDATE], String(ct.Options.OnUpdate))
 	}
-	if ct.Autoincrement {
+	if ct.Options.Autoincrement {
 		opts = append(opts, keywordStrings[AUTO_INCREMENT])
 	}
-	if ct.Comment != nil {
-		opts = append(opts, keywordStrings[COMMENT_KEYWORD], String(ct.Comment))
+	if ct.Options.Comment != nil {
+		opts = append(opts, keywordStrings[COMMENT_KEYWORD], String(ct.Options.Comment))
 	}
-	if ct.KeyOpt == colKeyPrimary {
+	if ct.Options.KeyOpt == colKeyPrimary {
 		opts = append(opts, keywordStrings[PRIMARY], keywordStrings[KEY])
 	}
-	if ct.KeyOpt == colKeyUnique {
+	if ct.Options.KeyOpt == colKeyUnique {
 		opts = append(opts, keywordStrings[UNIQUE])
 	}
-	if ct.KeyOpt == colKeyUniqueKey {
+	if ct.Options.KeyOpt == colKeyUniqueKey {
 		opts = append(opts, keywordStrings[UNIQUE], keywordStrings[KEY])
 	}
-	if ct.KeyOpt == colKeySpatialKey {
+	if ct.Options.KeyOpt == colKeySpatialKey {
 		opts = append(opts, keywordStrings[SPATIAL], keywordStrings[KEY])
 	}
-	if ct.KeyOpt == colKey {
+	if ct.Options.KeyOpt == colKeyFulltextKey {
+		opts = append(opts, keywordStrings[FULLTEXT], keywordStrings[KEY])
+	}
+	if ct.Options.KeyOpt == colKey {
 		opts = append(opts, keywordStrings[KEY])
 	}
 
@@ -1310,13 +2327,16 @@ func (idx *IndexDefinition) Format(buf *TrackedBuffer) {
 		if col.Length != nil {
 			buf.astPrintf(idx, "(%v)", col.Length)
 		}
+		if col.Direction == DescOrder {
+			buf.astPrintf(idx, " desc")
+		}
 	}
 	buf.astPrintf(idx, ")")
 
 	for _, opt := range idx.Options {
 		buf.astPrintf(idx, " %s", opt.Name)
-		if opt.Using != "" {
-			buf.astPrintf(idx, " %s", opt.Using)
+		if opt.String != "" {
+			buf.astPrintf(idx, " %s", opt.String)
 		} else {
 			buf.astPrintf(idx, " %v", opt.Value)
 		}
@@ -1325,6 +2345,9 @@ func (idx *IndexDefinition) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (ii *IndexInfo) Format(buf *TrackedBuffer) {
+	if !ii.ConstraintName.IsEmpty() {
+		buf.astPrintf(ii, "constraint %v ", ii.ConstraintName)
+	}
 	if ii.Primary {
 		buf.astPrintf(ii, "%s", ii.Type)
 	} else {
@@ -1400,10 +2423,23 @@ func (f *ForeignKeyDefinition) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
+func (c *CheckConstraintDefinition) Format(buf *TrackedBuffer) {
+	buf.astPrintf(c, "check (%v)", c.Expr)
+	if !c.Enforced {
+		buf.astPrintf(c, " not enforced")
+	}
+}
+
+// Format formats the node.
 func (node *Show) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "%v", node.Internal)
+}
+
+// Format formats the node.
+func (node *ShowLegacy) Format(buf *TrackedBuffer) {
 	nodeType := strings.ToLower(node.Type)
 	if (nodeType == "tables" || nodeType == "columns" || nodeType == "fields" || nodeType == "index" || nodeType == "keys" || nodeType == "indexes" ||
-		nodeType == "databases" || nodeType == "keyspaces" || nodeType == "vitess_keyspaces" || nodeType == "vitess_shards" || nodeType == "vitess_tablets") && node.ShowTablesOpt != nil {
+		nodeType == "databases" || nodeType == "schemas" || nodeType == "keyspaces" || nodeType == "vitess_keyspaces" || nodeType == "vitess_shards" || nodeType == "vitess_tablets") && node.ShowTablesOpt != nil {
 		opt := node.ShowTablesOpt
 		if node.Extended != "" {
 			buf.astPrintf(node, "show %s%s", node.Extended, nodeType)
@@ -1493,7 +2529,7 @@ func (node *Release) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
-func (node *Explain) Format(buf *TrackedBuffer) {
+func (node *ExplainStmt) Format(buf *TrackedBuffer) {
 	format := ""
 	switch node.Type {
 	case EmptyType: // do nothing
@@ -1503,6 +2539,19 @@ func (node *Explain) Format(buf *TrackedBuffer) {
 		format = "format = " + node.Type.ToString() + " "
 	}
 	buf.astPrintf(node, "explain %s%v", format, node.Statement)
+}
+
+// Format formats the node.
+func (node *ExplainTab) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "explain %v", node.Table)
+	if node.Wild != "" {
+		buf.astPrintf(node, " %s", node.Wild)
+	}
+}
+
+// Format formats the node.
+func (node *CallProc) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "call %v(%v)", node.Name, node.Params)
 }
 
 // Format formats the node.
@@ -1548,7 +2597,7 @@ func (node *AliasedExpr) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
-func (node Nextval) Format(buf *TrackedBuffer) {
+func (node *Nextval) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "next %v values", node.Expr)
 }
 
@@ -1764,6 +2813,11 @@ func (node ValTuple) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *Subquery) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "(%v)", node.Select)
+}
+
+// Format formats the node.
+func (node *DerivedTable) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "(%v)", node.Select)
 }
 
@@ -2075,11 +3129,368 @@ func (node *Load) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
-func (node *ShowTableStatus) Format(buf *TrackedBuffer) {
-	buf.WriteString("show table status")
-	if node.DatabaseName != "" {
-		buf.WriteString(" from ")
-		buf.WriteString(node.DatabaseName)
+func (node *ShowBasic) Format(buf *TrackedBuffer) {
+	buf.WriteString("show")
+	if node.Full {
+		buf.WriteString(" full")
+	}
+	buf.astPrintf(node, "%s", node.Command.ToString())
+	if !node.Tbl.IsEmpty() {
+		buf.astPrintf(node, " from %v", node.Tbl)
+	}
+	if node.DbName != "" {
+		buf.astPrintf(node, " from %s", node.DbName)
 	}
 	buf.astPrintf(node, "%v", node.Filter)
+}
+
+// Format formats the node.
+func (node *ShowCreate) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "show%s %v", node.Command.ToString(), node.Op)
+}
+
+// Format formats the node.
+func (node *SelectInto) Format(buf *TrackedBuffer) {
+	if node == nil {
+		return
+	}
+	buf.astPrintf(node, "%s'%s'", node.Type.ToString(), node.FileName)
+	if node.Charset != "" {
+		buf.astPrintf(node, " character set %s", node.Charset)
+	}
+	buf.astPrintf(node, "%s%s%s%s", node.FormatOption, node.ExportOption, node.Manifest, node.Overwrite)
+}
+
+// Format formats the node.
+func (node *CreateDatabase) Format(buf *TrackedBuffer) {
+	buf.WriteString("create database")
+	if node.IfNotExists {
+		buf.WriteString(" if not exists")
+	}
+	buf.astPrintf(node, " %s", node.DBName)
+	if node.CreateOptions != nil {
+		for _, createOption := range node.CreateOptions {
+			if createOption.IsDefault {
+				buf.WriteString(" default")
+			}
+			buf.WriteString(createOption.Type.ToString())
+			buf.WriteString(" " + createOption.Value)
+		}
+	}
+}
+
+// Format formats the node.
+func (node *AlterDatabase) Format(buf *TrackedBuffer) {
+	buf.WriteString("alter database")
+	if node.DBName != "" {
+		buf.astPrintf(node, " %s", node.DBName)
+	}
+	if node.UpdateDataDirectory {
+		buf.WriteString(" upgrade data directory name")
+	}
+	if node.AlterOptions != nil {
+		for _, createOption := range node.AlterOptions {
+			if createOption.IsDefault {
+				buf.WriteString(" default")
+			}
+			buf.WriteString(createOption.Type.ToString())
+			buf.WriteString(" " + createOption.Value)
+		}
+	}
+}
+
+// Format formats the node.
+func (node *CreateTable) Format(buf *TrackedBuffer) {
+	buf.WriteString("create ")
+	if node.Temp {
+		buf.WriteString("temporary ")
+	}
+	buf.WriteString("table ")
+
+	if node.IfNotExists {
+		buf.WriteString("if not exists ")
+	}
+	buf.astPrintf(node, "%v", node.Table)
+
+	if node.OptLike != nil {
+		buf.astPrintf(node, " %v", node.OptLike)
+	}
+	if node.TableSpec != nil {
+		buf.astPrintf(node, " %v", node.TableSpec)
+	}
+}
+
+// Format formats the node.
+func (node *CreateView) Format(buf *TrackedBuffer) {
+	buf.WriteString("create")
+	if node.IsReplace {
+		buf.WriteString(" or replace")
+	}
+	if node.Algorithm != "" {
+		buf.astPrintf(node, " algorithm = %s", node.Algorithm)
+	}
+	if node.Definer != "" {
+		buf.astPrintf(node, " definer = %s", node.Definer)
+	}
+	if node.Security != "" {
+		buf.astPrintf(node, " sql security %s", node.Security)
+	}
+	buf.astPrintf(node, " view %v", node.ViewName)
+	buf.astPrintf(node, "%v as %v", node.Columns, node.Select)
+	if node.CheckOption != "" {
+		buf.astPrintf(node, " with %s check option", node.CheckOption)
+	}
+}
+
+// Format formats the LockTables node.
+func (node *LockTables) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "lock tables %v %s", node.Tables[0].Table, node.Tables[0].Lock.ToString())
+	for i := 1; i < len(node.Tables); i++ {
+		buf.astPrintf(node, ", %v %s", node.Tables[i].Table, node.Tables[i].Lock.ToString())
+	}
+}
+
+// Format formats the UnlockTables node.
+func (node *UnlockTables) Format(buf *TrackedBuffer) {
+	buf.WriteString("unlock tables")
+}
+
+// Format formats the node.
+func (node *AlterView) Format(buf *TrackedBuffer) {
+	buf.WriteString("alter")
+	if node.Algorithm != "" {
+		buf.astPrintf(node, " algorithm = %s", node.Algorithm)
+	}
+	if node.Definer != "" {
+		buf.astPrintf(node, " definer = %s", node.Definer)
+	}
+	if node.Security != "" {
+		buf.astPrintf(node, " sql security %s", node.Security)
+	}
+	buf.astPrintf(node, " view %v", node.ViewName)
+	buf.astPrintf(node, "%v as %v", node.Columns, node.Select)
+	if node.CheckOption != "" {
+		buf.astPrintf(node, " with %s check option", node.CheckOption)
+	}
+}
+
+// Format formats the node.
+func (node *DropTable) Format(buf *TrackedBuffer) {
+	temp := ""
+	if node.Temp {
+		temp = " temporary"
+	}
+	exists := ""
+	if node.IfExists {
+		exists = " if exists"
+	}
+	buf.astPrintf(node, "drop%s table%s %v", temp, exists, node.FromTables)
+}
+
+// Format formats the node.
+func (node *DropView) Format(buf *TrackedBuffer) {
+	exists := ""
+	if node.IfExists {
+		exists = " if exists"
+	}
+	buf.astPrintf(node, "drop view%s %v", exists, node.FromTables)
+}
+
+// Format formats the AlterTable node.
+func (node *AlterTable) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "alter table %v", node.Table)
+	prefix := ""
+	for i, option := range node.AlterOptions {
+		if i != 0 {
+			buf.WriteString(",")
+		}
+		buf.astPrintf(node, " %v", option)
+		if node.PartitionSpec != nil && node.PartitionSpec.Action != RemoveAction {
+			prefix = ","
+		}
+	}
+	if node.PartitionSpec != nil {
+		buf.astPrintf(node, "%s %v", prefix, node.PartitionSpec)
+	}
+}
+
+// Format formats the node.
+func (node *AddConstraintDefinition) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "add %v", node.ConstraintDefinition)
+}
+
+// Format formats the node.
+func (node *AddIndexDefinition) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "add %v", node.IndexDefinition)
+}
+
+// Format formats the node.
+func (node *AddColumns) Format(buf *TrackedBuffer) {
+
+	if len(node.Columns) == 1 {
+		buf.astPrintf(node, "add column %v", node.Columns[0])
+		if node.First != nil {
+			buf.astPrintf(node, " first %v", node.First)
+		}
+		if node.After != nil {
+			buf.astPrintf(node, " after %v", node.After)
+		}
+	} else {
+		for i, col := range node.Columns {
+			if i == 0 {
+				buf.astPrintf(node, "add column (%v", col)
+			} else {
+				buf.astPrintf(node, ", %v", col)
+			}
+		}
+		buf.WriteString(")")
+	}
+}
+
+// Format formats the node.
+func (node AlgorithmValue) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "algorithm = %s", string(node))
+}
+
+// Format formats the node
+func (node *AlterColumn) Format(buf *TrackedBuffer) {
+	if node.DropDefault {
+		buf.astPrintf(node, "alter column %v drop default", node.Column)
+	} else {
+		buf.astPrintf(node, "alter column %v set default", node.Column)
+		buf.astPrintf(node, " %v", node.DefaultVal)
+	}
+}
+
+// Format formats the node
+func (node *ChangeColumn) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "change column %v %v", node.OldColumn, node.NewColDefinition)
+	if node.First != nil {
+		buf.astPrintf(node, " first %v", node.First)
+	}
+	if node.After != nil {
+		buf.astPrintf(node, " after %v", node.After)
+	}
+}
+
+// Format formats the node
+func (node *ModifyColumn) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "modify column %v", node.NewColDefinition)
+	if node.First != nil {
+		buf.astPrintf(node, " first %v", node.First)
+	}
+	if node.After != nil {
+		buf.astPrintf(node, " after %v", node.After)
+	}
+}
+
+// Format formats the node
+func (node *AlterCharset) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "convert to character set %s", node.CharacterSet)
+	if node.Collate != "" {
+		buf.astPrintf(node, " collate %s", node.Collate)
+	}
+}
+
+// Format formats the node
+func (node *KeyState) Format(buf *TrackedBuffer) {
+	if node.Enable {
+		buf.WriteString("enable keys")
+	} else {
+		buf.WriteString("disable keys")
+	}
+
+}
+
+// Format formats the node
+func (node *TablespaceOperation) Format(buf *TrackedBuffer) {
+	if node.Import {
+		buf.WriteString("import tablespace")
+	} else {
+		buf.WriteString("discard tablespace")
+	}
+}
+
+// Format formats the node
+func (node *DropColumn) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "drop column %v", node.Name)
+}
+
+// Format formats the node
+func (node *DropKey) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "drop %s", node.Type.ToString())
+	if node.Name != "" {
+		buf.astPrintf(node, " %s", node.Name)
+	}
+}
+
+// Format formats the node
+func (node *Force) Format(buf *TrackedBuffer) {
+	buf.WriteString("force")
+}
+
+// Format formats the node
+func (node *LockOption) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "lock %s", node.Type.ToString())
+}
+
+// Format formats the node
+func (node *OrderByOption) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "order by ")
+	prefix := ""
+	for _, n := range node.Cols {
+		buf.astPrintf(node, "%s%v", prefix, n)
+		prefix = ", "
+	}
+}
+
+// Format formats the node
+func (node *RenameTableName) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "rename %v", node.Table)
+}
+
+// Format formats the node
+func (node *RenameIndex) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "rename index %s to %s", node.OldName, node.NewName)
+}
+
+// Format formats the node
+func (node *Validation) Format(buf *TrackedBuffer) {
+	if node.With {
+		buf.WriteString("with validation")
+	} else {
+		buf.WriteString("without validation")
+	}
+}
+
+// Format formats the node
+func (node TableOptions) Format(buf *TrackedBuffer) {
+	for i, option := range node {
+		if i != 0 {
+			buf.WriteString(" ")
+		}
+		buf.astPrintf(node, "%s", option.Name)
+		if option.String != "" {
+			buf.astPrintf(node, " %s", option.String)
+		} else if option.Value != nil {
+			buf.astPrintf(node, " %v", option.Value)
+		} else {
+			buf.astPrintf(node, " (%v)", option.Tables)
+		}
+	}
+}
+
+// Format formats the node
+func (node *TruncateTable) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "truncate table %v", node.Table)
+}
+
+// Format formats the node.
+func (node *RenameTable) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "rename table")
+	prefix := " "
+	for _, pair := range node.TablePairs {
+		buf.astPrintf(node, "%s%v to %v", prefix, pair.FromTable, pair.ToTable)
+		prefix = ", "
+	}
 }

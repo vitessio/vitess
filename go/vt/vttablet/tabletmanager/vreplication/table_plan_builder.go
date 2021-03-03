@@ -22,6 +22,8 @@ import (
 	"sort"
 	"strings"
 
+	querypb "vitess.io/vitess/go/vt/proto/query"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -55,6 +57,7 @@ type tablePlanBuilder struct {
 // compute the value of one column of the target table.
 type colExpr struct {
 	colName sqlparser.ColIdent
+	colType querypb.Type
 	// operation==opExpr: full expression is set
 	// operation==opCount: nothing is set.
 	// operation==opSum: for 'sum(a)', expr is set to 'a'.
@@ -65,8 +68,10 @@ type colExpr struct {
 	// references contains all the column names referenced in the expression.
 	references map[string]bool
 
-	isGrouped bool
-	isPK      bool
+	isGrouped  bool
+	isPK       bool
+	dataType   string
+	columnType string
 }
 
 // operation is the opcode for the colExpr.
@@ -396,6 +401,7 @@ func (tpb *tablePlanBuilder) analyzeExpr(selExpr sqlparser.SelectExpr) (*colExpr
 	err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		switch node := node.(type) {
 		case *sqlparser.ColName:
+
 			if !node.Qualifier.IsEmpty() {
 				return false, fmt.Errorf("unsupported qualifier for column: %v", sqlparser.String(node))
 			}
@@ -470,12 +476,14 @@ func (tpb *tablePlanBuilder) analyzePK(pkInfoMap map[string][]*PrimaryKeyInfo) e
 	for _, pkcol := range pkcols {
 		cexpr := tpb.findCol(sqlparser.NewColIdent(pkcol.Name))
 		if cexpr == nil {
-			return fmt.Errorf("primary key column %s not found in select list", pkcol)
+			return fmt.Errorf("primary key column %v not found in select list", pkcol)
 		}
 		if cexpr.operation != opExpr {
-			return fmt.Errorf("primary key column %s is not allowed to reference an aggregate expression", pkcol)
+			return fmt.Errorf("primary key column %v is not allowed to reference an aggregate expression", pkcol)
 		}
 		cexpr.isPK = true
+		cexpr.dataType = pkcol.DataType
+		cexpr.columnType = pkcol.ColumnType
 		tpb.pkCols = append(tpb.pkCols, cexpr)
 	}
 	return nil
@@ -532,7 +540,11 @@ func (tpb *tablePlanBuilder) generateValuesPart(buf *sqlparser.TrackedBuffer, bv
 		separator = ","
 		switch cexpr.operation {
 		case opExpr:
-			buf.Myprintf("%v", cexpr.expr)
+			if cexpr.colType == querypb.Type_JSON {
+				buf.Myprintf("convert(%v using utf8mb4)", cexpr.expr)
+			} else {
+				buf.Myprintf("%v", cexpr.expr)
+			}
 		case opCount:
 			buf.WriteString("1")
 		case opSum:
@@ -662,16 +674,29 @@ func (tpb *tablePlanBuilder) generateDeleteStatement() *sqlparser.ParsedQuery {
 	return buf.ParsedQuery()
 }
 
+// For binary(n) column types, the value in the where clause needs to be padded with nulls upto the length of the column
+// for MySQL comparison to work properly. This is achieved by casting it to the column type
+func castIfNecessary(buf *sqlparser.TrackedBuffer, cexpr *colExpr) {
+	if cexpr.dataType == "binary" {
+		buf.Myprintf("cast(%v as %s)", cexpr.expr, cexpr.columnType)
+		return
+	}
+	buf.Myprintf("%v", cexpr.expr)
+}
+
 func (tpb *tablePlanBuilder) generateWhere(buf *sqlparser.TrackedBuffer, bvf *bindvarFormatter) {
 	buf.WriteString(" where ")
 	bvf.mode = bvBefore
 	separator := ""
 	for _, cexpr := range tpb.pkCols {
 		if _, ok := cexpr.expr.(*sqlparser.ColName); ok {
-			buf.Myprintf("%s%v=%v", separator, cexpr.colName, cexpr.expr)
+			buf.Myprintf("%s%v=", separator, cexpr.colName)
+			castIfNecessary(buf, cexpr)
 		} else {
 			// Parenthesize non-trivial expressions.
-			buf.Myprintf("%s%v=(%v)", separator, cexpr.colName, cexpr.expr)
+			buf.Myprintf("%s%v=(", separator, cexpr.colName)
+			castIfNecessary(buf, cexpr)
+			buf.Myprintf(")")
 		}
 		separator = " and "
 	}

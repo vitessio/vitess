@@ -17,6 +17,7 @@ limitations under the License.
 package endtoend
 
 import (
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -25,6 +26,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/cache"
+	"vitess.io/vitess/go/cache/ristretto"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -34,21 +37,9 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
-// compareIntDiff returns an error if end[tag] != start[tag]+diff.
-func compareIntDiff(t *testing.T, end map[string]interface{}, tag string, start map[string]interface{}, diff int) {
-	t.Helper()
-	verifyIntValue(t, end, tag, framework.FetchInt(start, tag)+diff)
-}
-
-// verifyIntValue returns an error if values[tag] != want.
-func verifyIntValue(t *testing.T, values map[string]interface{}, tag string, want int) {
-	t.Helper()
-	require.Equal(t, want, framework.FetchInt(values, tag), tag)
-}
-
 func TestPoolSize(t *testing.T) {
-	defer framework.Server.SetPoolSize(framework.Server.PoolSize())
-	framework.Server.SetPoolSize(1)
+	revert := changeVar(t, "PoolSize", "1")
+	defer revert()
 
 	vstart := framework.DebugVars()
 	verifyIntValue(t, vstart, "ConnPoolCapacity", 1)
@@ -75,6 +66,22 @@ func TestPoolSize(t *testing.T) {
 	assert.LessOrEqual(t, want, got)
 }
 
+func TestStreamPoolSize(t *testing.T) {
+	revert := changeVar(t, "StreamPoolSize", "1")
+	defer revert()
+
+	vstart := framework.DebugVars()
+	verifyIntValue(t, vstart, "StreamConnPoolCapacity", 1)
+}
+
+func TestQueryCacheCapacity(t *testing.T) {
+	revert := changeVar(t, "QueryCacheCapacity", "1")
+	defer revert()
+
+	vstart := framework.DebugVars()
+	verifyIntValue(t, vstart, "QueryCacheCapacity", 1)
+}
+
 func TestDisableConsolidator(t *testing.T) {
 	totalConsolidationsTag := "Waits/Histograms/Consolidations/Count"
 	initial := framework.FetchInt(framework.DebugVars(), totalConsolidationsTag)
@@ -92,8 +99,8 @@ func TestDisableConsolidator(t *testing.T) {
 	afterOne := framework.FetchInt(framework.DebugVars(), totalConsolidationsTag)
 	assert.Equal(t, initial+1, afterOne, "expected one consolidation")
 
-	framework.Server.SetConsolidatorMode(tabletenv.Disable)
-	defer framework.Server.SetConsolidatorMode(tabletenv.Enable)
+	revert := changeVar(t, "Consolidator", tabletenv.Disable)
+	defer revert()
 	var wg2 sync.WaitGroup
 	wg2.Add(2)
 	go func() {
@@ -126,8 +133,8 @@ func TestConsolidatorReplicasOnly(t *testing.T) {
 	afterOne := framework.FetchInt(framework.DebugVars(), totalConsolidationsTag)
 	assert.Equal(t, initial+1, afterOne, "expected one consolidation")
 
-	framework.Server.SetConsolidatorMode(tabletenv.NotOnMaster)
-	defer framework.Server.SetConsolidatorMode(tabletenv.Enable)
+	revert := changeVar(t, "Consolidator", tabletenv.NotOnMaster)
+	defer revert()
 
 	// master should not do query consolidation
 	var wg2 sync.WaitGroup
@@ -171,11 +178,23 @@ func TestConsolidatorReplicasOnly(t *testing.T) {
 }
 
 func TestQueryPlanCache(t *testing.T) {
+	if cache.DefaultConfig.LFU {
+		const cachedPlanSize = 2352 + int(ristretto.CacheItemSize)
+		const cachePlanSize2 = 2326 + int(ristretto.CacheItemSize)
+		testQueryPlanCache(t, cachedPlanSize, cachePlanSize2)
+	} else {
+		testQueryPlanCache(t, 1, 1)
+	}
+}
+
+func testQueryPlanCache(t *testing.T, cachedPlanSize, cachePlanSize2 int) {
+	t.Helper()
+
 	//sleep to avoid race between SchemaChanged event clearing out the plans cache which breaks this test
 	time.Sleep(1 * time.Second)
 
 	defer framework.Server.SetQueryPlanCacheCap(framework.Server.QueryPlanCacheCap())
-	framework.Server.SetQueryPlanCacheCap(1)
+	framework.Server.SetQueryPlanCacheCap(cachedPlanSize)
 
 	bindVars := map[string]*querypb.BindVariable{
 		"ival1": sqltypes.Int64BindVariable(1),
@@ -184,25 +203,32 @@ func TestQueryPlanCache(t *testing.T) {
 	client := framework.NewClient()
 	_, _ = client.Execute("select * from vitess_test where intval=:ival1", bindVars)
 	_, _ = client.Execute("select * from vitess_test where intval=:ival2", bindVars)
+	assert.Equal(t, 1, framework.Server.QueryPlanCacheLen())
+
 	vend := framework.DebugVars()
 	verifyIntValue(t, vend, "QueryCacheLength", 1)
-	verifyIntValue(t, vend, "QueryCacheSize", 1)
-	verifyIntValue(t, vend, "QueryCacheCapacity", 1)
+	verifyIntValue(t, vend, "QueryCacheSize", cachedPlanSize)
+	verifyIntValue(t, vend, "QueryCacheCapacity", cachedPlanSize)
 
-	framework.Server.SetQueryPlanCacheCap(10)
+	framework.Server.SetQueryPlanCacheCap(64 * 1024)
 	_, _ = client.Execute("select * from vitess_test where intval=:ival1", bindVars)
+	require.Equal(t, 2, framework.Server.QueryPlanCacheLen())
+
 	vend = framework.DebugVars()
 	verifyIntValue(t, vend, "QueryCacheLength", 2)
-	verifyIntValue(t, vend, "QueryCacheSize", 2)
+	verifyIntValue(t, vend, "QueryCacheSize", cachedPlanSize*2)
+
 	_, _ = client.Execute("select * from vitess_test where intval=1", bindVars)
+	require.Equal(t, 3, framework.Server.QueryPlanCacheLen())
+
 	vend = framework.DebugVars()
 	verifyIntValue(t, vend, "QueryCacheLength", 3)
-	verifyIntValue(t, vend, "QueryCacheSize", 3)
+	verifyIntValue(t, vend, "QueryCacheSize", cachedPlanSize*2+cachePlanSize2)
 }
 
 func TestMaxResultSize(t *testing.T) {
-	defer framework.Server.SetMaxResultSize(framework.Server.MaxResultSize())
-	framework.Server.SetMaxResultSize(2)
+	revert := changeVar(t, "MaxResultSize", "2")
+	defer revert()
 
 	client := framework.NewClient()
 	query := "select * from vitess_test"
@@ -217,8 +243,8 @@ func TestMaxResultSize(t *testing.T) {
 }
 
 func TestWarnResultSize(t *testing.T) {
-	defer framework.Server.SetWarnResultSize(framework.Server.WarnResultSize())
-	framework.Server.SetWarnResultSize(2)
+	revert := changeVar(t, "WarnResultSize", "2")
+	defer revert()
 	client := framework.NewClient()
 
 	originalWarningsResultsExceededCount := framework.FetchInt(framework.DebugVars(), "Warnings/ResultsExceeded")
@@ -251,4 +277,45 @@ func TestQueryTimeout(t *testing.T) {
 	vend := framework.DebugVars()
 	verifyIntValue(t, vend, "QueryTimeout", int(100*time.Millisecond))
 	compareIntDiff(t, vend, "Kills/Queries", vstart, 1)
+}
+
+func changeVar(t *testing.T, name, value string) (revert func()) {
+	t.Helper()
+
+	vals := framework.FetchJSON("/debug/env?format=json")
+	initial, ok := vals[name]
+	if !ok {
+		t.Fatalf("%s not found in: %v", name, vals)
+	}
+	vals = framework.PostJSON("/debug/env?format=json", map[string]string{
+		"varname": name,
+		"value":   value,
+	})
+	verifyMapValue(t, vals, name, value)
+	return func() {
+		vals = framework.PostJSON("/debug/env?format=json", map[string]string{
+			"varname": name,
+			"value":   fmt.Sprintf("%v", initial),
+		})
+		verifyMapValue(t, vals, name, initial)
+	}
+}
+
+func verifyMapValue(t *testing.T, values map[string]interface{}, tag string, want interface{}) {
+	t.Helper()
+	val, ok := values[tag]
+	if !ok {
+		t.Fatalf("%s not found in: %v", tag, values)
+	}
+	assert.Equal(t, want, val)
+}
+
+func compareIntDiff(t *testing.T, end map[string]interface{}, tag string, start map[string]interface{}, diff int) {
+	t.Helper()
+	verifyIntValue(t, end, tag, framework.FetchInt(start, tag)+diff)
+}
+
+func verifyIntValue(t *testing.T, values map[string]interface{}, tag string, want int) {
+	t.Helper()
+	require.Equal(t, want, framework.FetchInt(values, tag), tag)
 }

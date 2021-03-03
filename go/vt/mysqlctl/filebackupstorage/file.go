@@ -26,7 +26,7 @@ import (
 	"os"
 	"path"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"

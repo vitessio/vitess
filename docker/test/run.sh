@@ -98,7 +98,8 @@ while true ; do
 done
 # Positional flags.
 flavor=$1
-cmd=$2
+version=${2:-0}
+cmd=$3
 args=
 
 if [[ -z "$flavor" ]]; then
@@ -115,7 +116,7 @@ if [[ ! -f bootstrap.sh ]]; then
   exit 1
 fi
 
-image=vitess/bootstrap:$flavor
+image=vitess/bootstrap:$version-$flavor
 if [[ -n "$existing_cache_image" ]]; then
   image=$existing_cache_image
 fi

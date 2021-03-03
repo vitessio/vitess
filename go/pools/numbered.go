@@ -47,15 +47,13 @@ type unregistered struct {
 	timeUnregistered time.Time
 }
 
-func (u *unregistered) Size() int {
-	return 1
-}
-
 //NewNumbered creates a new numbered
 func NewNumbered() *Numbered {
 	n := &Numbered{
-		resources:            make(map[int64]*numberedWrapper),
-		recentlyUnregistered: cache.NewLRUCache(1000),
+		resources: make(map[int64]*numberedWrapper),
+		recentlyUnregistered: cache.NewLRUCache(1000, func(_ interface{}) int64 {
+			return 1
+		}),
 	}
 	n.empty = sync.NewCond(&n.mu)
 	return n
@@ -150,6 +148,24 @@ func (nu *Numbered) GetAll() (vals []interface{}) {
 	vals = make([]interface{}, 0, len(nu.resources))
 	for _, nw := range nu.resources {
 		vals = append(vals, nw.val)
+	}
+	return vals
+}
+
+// GetByFilter returns a list of resources that match the filter.
+// It does not return any resources that are already locked.
+func (nu *Numbered) GetByFilter(purpose string, match func(val interface{}) bool) (vals []interface{}) {
+	nu.mu.Lock()
+	defer nu.mu.Unlock()
+	for _, nw := range nu.resources {
+		if nw.inUse || !nw.enforceTimeout {
+			continue
+		}
+		if match(nw.val) {
+			nw.inUse = true
+			nw.purpose = purpose
+			vals = append(vals, nw.val)
+		}
 	}
 	return vals
 }

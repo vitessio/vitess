@@ -258,7 +258,7 @@ func (c *Conn) parseRow(data []byte, fields []*querypb.Field) ([]sqltypes.Value,
 	result := make([]sqltypes.Value, colNumber)
 	pos := 0
 	for i := 0; i < colNumber; i++ {
-		if data[pos] == 0xfb {
+		if data[pos] == NullValue {
 			pos++
 			continue
 		}
@@ -319,6 +319,9 @@ func (c *Conn) ExecuteFetchMulti(query string, maxrows int, wantfields bool) (re
 	}
 
 	res, more, _, err := c.ReadQueryResult(maxrows, wantfields)
+	if err != nil {
+		return nil, false, err
+	}
 	return res, more, err
 }
 
@@ -344,23 +347,26 @@ func (c *Conn) ExecuteFetchWithWarningCount(query string, maxrows int, wantfield
 }
 
 // ReadQueryResult gets the result from the last written query.
-func (c *Conn) ReadQueryResult(maxrows int, wantfields bool) (result *sqltypes.Result, more bool, warnings uint16, err error) {
+func (c *Conn) ReadQueryResult(maxrows int, wantfields bool) (*sqltypes.Result, bool, uint16, error) {
 	// Get the result.
-	affectedRows, lastInsertID, colNumber, more, warnings, err := c.readComQueryResponse()
+	colNumber, packetOk, err := c.readComQueryResponse()
 	if err != nil {
 		return nil, false, 0, err
 	}
-
+	more := packetOk.statusFlags&ServerMoreResultsExists != 0
+	warnings := packetOk.warnings
 	if colNumber == 0 {
 		// OK packet, means no results. Just use the numbers.
 		return &sqltypes.Result{
-			RowsAffected: affectedRows,
-			InsertID:     lastInsertID,
+			RowsAffected:        packetOk.affectedRows,
+			InsertID:            packetOk.lastInsertID,
+			SessionStateChanges: packetOk.sessionStateData,
+			StatusFlags:         packetOk.statusFlags,
 		}, more, warnings, nil
 	}
 
 	fields := make([]querypb.Field, colNumber)
-	result = &sqltypes.Result{
+	result := &sqltypes.Result{
 		Fields: make([]*querypb.Field, colNumber),
 	}
 
@@ -404,42 +410,53 @@ func (c *Conn) ReadQueryResult(maxrows int, wantfields bool) (result *sqltypes.R
 
 	// read each row until EOF or OK packet.
 	for {
-		data, err := c.ReadPacket()
+		data, err := c.readEphemeralPacket()
 		if err != nil {
 			return nil, false, 0, err
 		}
 
+		// TODO: harshit - the EOF packet is deprecated as of MySQL 5.7.5.
+		// https://dev.mysql.com/doc/internals/en/packet-EOF_Packet.html
+		// It will be OK Packet with EOF Header. This needs to change in the code here.
 		if isEOFPacket(data) {
+			defer c.recycleReadPacket()
+
 			// Strip the partial Fields before returning.
 			if !wantfields {
 				result.Fields = nil
 			}
-			result.RowsAffected = uint64(len(result.Rows))
 
 			// The deprecated EOF packets change means that this is either an
 			// EOF packet or an OK packet with the EOF type code.
 			if c.Capabilities&CapabilityClientDeprecateEOF == 0 {
-				warnings, more, err = parseEOFPacket(data)
-				if err != nil {
-					return nil, false, 0, err
-				}
-			} else {
 				var statusFlags uint16
-				_, _, statusFlags, warnings, err = parseOKPacket(data)
+				warnings, statusFlags, err = parseEOFPacket(data)
 				if err != nil {
 					return nil, false, 0, err
 				}
 				more = (statusFlags & ServerMoreResultsExists) != 0
+				result.StatusFlags = statusFlags
+			} else {
+				packetOk, err := c.parseOKPacket(data)
+				if err != nil {
+					return nil, false, 0, err
+				}
+				warnings = packetOk.warnings
+				more = (packetOk.statusFlags & ServerMoreResultsExists) != 0
+				result.SessionStateChanges = packetOk.sessionStateData
+				result.StatusFlags = packetOk.statusFlags
 			}
 			return result, more, warnings, nil
 
 		} else if isErrorPacket(data) {
+			defer c.recycleReadPacket()
 			// Error packet.
 			return nil, false, 0, ParseErrorPacket(data)
 		}
 
 		// Check we're not over the limit before we add more.
 		if len(result.Rows) == maxrows {
+			c.recycleReadPacket()
 			if err := c.drainResults(); err != nil {
 				return nil, false, 0, err
 			}
@@ -449,9 +466,11 @@ func (c *Conn) ReadQueryResult(maxrows int, wantfields bool) (result *sqltypes.R
 		// Regular row.
 		row, err := c.parseRow(data, result.Fields)
 		if err != nil {
+			c.recycleReadPacket()
 			return nil, false, 0, err
 		}
 		result.Rows = append(result.Rows, row)
+		c.recycleReadPacket()
 	}
 }
 
@@ -473,35 +492,35 @@ func (c *Conn) drainResults() error {
 	}
 }
 
-func (c *Conn) readComQueryResponse() (affectedRows uint64, lastInsertID uint64, status int, more bool, warnings uint16, err error) {
+func (c *Conn) readComQueryResponse() (int, *PacketOK, error) {
 	data, err := c.readEphemeralPacket()
 	if err != nil {
-		return 0, 0, 0, false, 0, NewSQLError(CRServerLost, SSUnknownSQLState, "%v", err)
+		return 0, nil, NewSQLError(CRServerLost, SSUnknownSQLState, "%v", err)
 	}
 	defer c.recycleReadPacket()
 	if len(data) == 0 {
-		return 0, 0, 0, false, 0, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "invalid empty COM_QUERY response packet")
+		return 0, nil, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "invalid empty COM_QUERY response packet")
 	}
 
 	switch data[0] {
 	case OKPacket:
-		affectedRows, lastInsertID, status, warnings, err := parseOKPacket(data)
-		return affectedRows, lastInsertID, 0, (status & ServerMoreResultsExists) != 0, warnings, err
+		packetOk, err := c.parseOKPacket(data)
+		return 0, packetOk, err
 	case ErrPacket:
 		// Error
-		return 0, 0, 0, false, 0, ParseErrorPacket(data)
+		return 0, nil, ParseErrorPacket(data)
 	case 0xfb:
 		// Local infile
-		return 0, 0, 0, false, 0, vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED, "not implemented")
+		return 0, nil, vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED, "not implemented")
 	}
 	n, pos, ok := readLenEncInt(data, 0)
 	if !ok {
-		return 0, 0, 0, false, 0, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "cannot get column number")
+		return 0, nil, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "cannot get column number")
 	}
 	if pos != len(data) {
-		return 0, 0, 0, false, 0, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "extra data in COM_QUERY response")
+		return 0, nil, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "extra data in COM_QUERY response")
 	}
-	return 0, 0, int(n), false, 0, nil
+	return int(n), &PacketOK{}, nil
 }
 
 //
@@ -990,12 +1009,26 @@ func (c *Conn) writeEndResult(more bool, affectedRows, lastInsertID uint64, warn
 		}
 	} else {
 		// This will flush too.
-		if err := c.writeOKPacketWithEOFHeader(affectedRows, lastInsertID, flags, warnings); err != nil {
+		if err := c.writeOKPacketWithEOFHeader(&PacketOK{
+			affectedRows: affectedRows,
+			lastInsertID: lastInsertID,
+			statusFlags:  flags,
+			warnings:     warnings,
+		}); err != nil {
 			return err
 		}
 	}
 
 	return nil
+}
+
+// PacketComStmtPrepareOK contains the COM_STMT_PREPARE_OK packet details
+type PacketComStmtPrepareOK struct {
+	status       uint8
+	stmtID       uint32
+	numCols      uint16
+	numParams    uint16
+	warningCount uint16
 }
 
 // writePrepare writes a prepare query response to the wire.
@@ -1009,14 +1042,21 @@ func (c *Conn) writePrepare(fld []*querypb.Field, prepare *PrepareData) error {
 		prepare.ColumnNames = make([]string, columnCount)
 	}
 
-	data, pos := c.startEphemeralPacketWithHeader(12)
-
-	pos = writeByte(data, pos, 0x00)
-	pos = writeUint32(data, pos, uint32(prepare.StatementID))
-	pos = writeUint16(data, pos, uint16(columnCount))
-	pos = writeUint16(data, pos, uint16(paramsCount))
-	pos = writeByte(data, pos, 0x00)
-	writeUint16(data, pos, 0x0000)
+	ok := PacketComStmtPrepareOK{
+		status:       OKPacket,
+		stmtID:       prepare.StatementID,
+		numCols:      (uint16)(columnCount),
+		numParams:    paramsCount,
+		warningCount: 0,
+	}
+	bytes, pos := c.startEphemeralPacketWithHeader(12)
+	data := &coder{data: bytes, pos: pos}
+	data.writeByte(ok.status)
+	data.writeUint32(ok.stmtID)
+	data.writeUint16(ok.numCols)
+	data.writeUint16(ok.numParams)
+	data.writeByte(0x00) // reserved 1 byte
+	data.writeUint16(ok.warningCount)
 
 	if err := c.writeEphemeralPacket(); err != nil {
 		return err

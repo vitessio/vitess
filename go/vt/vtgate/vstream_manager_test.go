@@ -21,10 +21,12 @@ import (
 	"strings"
 	"testing"
 
+	"context"
+
 	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/net/context"
+
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/proto/binlogdata"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"

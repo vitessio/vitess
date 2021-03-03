@@ -17,6 +17,7 @@ limitations under the License.
 package mysql
 
 import (
+	"context"
 	"crypto/tls"
 	"fmt"
 	"io/ioutil"
@@ -31,7 +32,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/sqltypes"
 	vtenv "vitess.io/vitess/go/vt/env"
@@ -64,7 +64,6 @@ var selectRowsResult = &sqltypes.Result{
 			sqltypes.MakeTrusted(querypb.Type_VARCHAR, []byte("nicer name")),
 		},
 	},
-	RowsAffected: 2,
 }
 
 type testHandler struct {
@@ -1151,9 +1150,9 @@ func TestErrorCodes(t *testing.T) {
 		{
 			err: vterrors.Errorf(
 				vtrpcpb.Code_INVALID_ARGUMENT,
-				"(errno %v) (sqlstate %v) invalid argument with errno", ERDupEntry, SSDupKey),
+				"(errno %v) (sqlstate %v) invalid argument with errno", ERDupEntry, SSConstraintViolation),
 			code:     ERDupEntry,
-			sqlState: SSDupKey,
+			sqlState: SSConstraintViolation,
 			text:     "invalid argument with errno",
 		},
 		{
@@ -1161,7 +1160,7 @@ func TestErrorCodes(t *testing.T) {
 				vtrpcpb.Code_DEADLINE_EXCEEDED,
 				"connection deadline exceeded"),
 			code:     ERQueryInterrupted,
-			sqlState: SSUnknownSQLState,
+			sqlState: SSQueryInterrupted,
 			text:     "deadline exceeded",
 		},
 		{
@@ -1169,7 +1168,7 @@ func TestErrorCodes(t *testing.T) {
 				vtrpcpb.Code_RESOURCE_EXHAUSTED,
 				"query pool timeout"),
 			code:     ERTooManyUserConnections,
-			sqlState: SSUnknownSQLState,
+			sqlState: SSClientError,
 			text:     "resource exhausted",
 		},
 		{
@@ -1181,27 +1180,17 @@ func TestErrorCodes(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		th.SetErr(NewSQLErrorFromError(test.err))
-		result, err := client.ExecuteFetch("error", 100, false)
-		if err == nil {
-			t.Fatalf("mysql should have failed but returned: %v", result)
-		}
-		serr, ok := err.(*SQLError)
-		if !ok {
-			t.Fatalf("mysql should have returned a SQLError")
-		}
+		t.Run(test.err.Error(), func(t *testing.T) {
+			th.SetErr(NewSQLErrorFromError(test.err))
+			rs, err := client.ExecuteFetch("error", 100, false)
+			require.Error(t, err, "mysql should have failed but returned: %v", rs)
+			serr, ok := err.(*SQLError)
+			require.True(t, ok, "mysql should have returned a SQLError")
 
-		if serr.Number() != test.code {
-			t.Errorf("error in %s: want code %v got %v", test.text, test.code, serr.Number())
-		}
-
-		if serr.SQLState() != test.sqlState {
-			t.Errorf("error in %s: want sqlState %v got %v", test.text, test.sqlState, serr.SQLState())
-		}
-
-		if !strings.Contains(serr.Error(), test.err.Error()) {
-			t.Errorf("error in %s: want err %v got %v", test.text, test.err.Error(), serr.Error())
-		}
+			assert.Equal(t, test.code, serr.Number(), "error in %s: want code %v got %v", test.text, test.code, serr.Number())
+			assert.Equal(t, test.sqlState, serr.SQLState(), "error in %s: want sqlState %v got %v", test.text, test.sqlState, serr.SQLState())
+			assert.Contains(t, serr.Error(), test.err.Error())
+		})
 	}
 }
 
@@ -1349,7 +1338,7 @@ func TestListenerShutdown(t *testing.T) {
 		if sqlErr.Number() != ERServerShutdown {
 			t.Fatalf("Unexpected sql error code: %d", sqlErr.Number())
 		}
-		if sqlErr.SQLState() != SSServerShutdown {
+		if sqlErr.SQLState() != SSNetError {
 			t.Fatalf("Unexpected error sql state: %s", sqlErr.SQLState())
 		}
 		if sqlErr.Message != "Server shutdown in progress" {

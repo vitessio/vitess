@@ -24,6 +24,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/test/endtoend/cluster"
 )
 
@@ -42,7 +43,7 @@ func TestFallbackSecurityPolicy(t *testing.T) {
 	require.NoError(t, err)
 
 	// It should deny ADMIN role.
-	url := fmt.Sprintf("http://localhost:%d/streamqueryz/terminate", mTablet.HTTPPort)
+	url := fmt.Sprintf("http://localhost:%d/livequeryz/terminate", mTablet.HTTPPort)
 	assertNotAllowedURLTest(t, url)
 
 	// It should deny MONITORING role.
@@ -97,7 +98,7 @@ func TestDenyAllSecurityPolicy(t *testing.T) {
 	require.NoError(t, err)
 
 	// It should deny ADMIN role.
-	url := fmt.Sprintf("http://localhost:%d/streamqueryz/terminate", mTablet.HTTPPort)
+	url := fmt.Sprintf("http://localhost:%d/livequeryz/terminate", mTablet.HTTPPort)
 	assertNotAllowedURLTest(t, url)
 
 	// It should deny MONITORING role.
@@ -129,7 +130,7 @@ func TestReadOnlySecurityPolicy(t *testing.T) {
 	require.NoError(t, err)
 
 	// It should deny ADMIN role.
-	url := fmt.Sprintf("http://localhost:%d/streamqueryz/terminate", mTablet.HTTPPort)
+	url := fmt.Sprintf("http://localhost:%d/livequeryz/terminate", mTablet.HTTPPort)
 	assertNotAllowedURLTest(t, url)
 
 	// It should deny MONITORING role.

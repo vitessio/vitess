@@ -64,7 +64,14 @@ const (
 	PlanSavepoint
 	PlanRelease
 	PlanSRollback
-	PlanShowTables
+	PlanShow
+	// PlanLoad is for Load data statements
+	PlanLoad
+	// PlanFlush is for FLUSH statements
+	PlanFlush
+	PlanLockTables
+	PlanUnlockTables
+	PlanCallProc
 	NumPlans
 )
 
@@ -89,7 +96,12 @@ var planName = []string{
 	"Savepoint",
 	"Release",
 	"RollbackSavepoint",
-	"ShowTables",
+	"Show",
+	"Load",
+	"Flush",
+	"LockTables",
+	"UnlockTables",
+	"CallProcedure",
 }
 
 func (pt PlanType) String() string {
@@ -178,21 +190,19 @@ func Build(statement sqlparser.Statement, tables map[string]*schema.Table, isRes
 		plan, err = analyzeDelete(stmt, tables)
 	case *sqlparser.Set:
 		plan, err = analyzeSet(stmt), nil
-	case *sqlparser.DDL:
-		// DDLs and other statements below don't get fully parsed.
+	case sqlparser.DDLStatement:
+		// DDLs and some other statements below don't get fully parsed.
 		// We have to use the original query at the time of execution.
-		plan = &Plan{PlanID: PlanDDL}
-	case *sqlparser.Show:
-		if stmt.Type == sqlparser.KeywordString(sqlparser.TABLES) {
-			analyzeShowTables(stmt, dbName)
-			plan = &Plan{
-				PlanID:    PlanShowTables,
-				FullQuery: GenerateFullQuery(stmt),
-			}
-		} else {
-			plan, err = &Plan{PlanID: PlanOtherRead}, nil
+		// We are in the process of changing this
+		var fullQuery *sqlparser.ParsedQuery
+		// If the query is fully parsed, then use the ast and store the fullQuery
+		if stmt.IsFullyParsed() {
+			fullQuery = GenerateFullQuery(stmt)
 		}
-	case *sqlparser.OtherRead, *sqlparser.Explain:
+		plan = &Plan{PlanID: PlanDDL, FullQuery: fullQuery}
+	case *sqlparser.Show:
+		plan, err = analyzeShow(stmt, dbName)
+	case *sqlparser.OtherRead, sqlparser.Explain:
 		plan, err = &Plan{PlanID: PlanOtherRead}, nil
 	case *sqlparser.OtherAdmin:
 		plan, err = &Plan{PlanID: PlanOtherAdmin}, nil
@@ -202,11 +212,12 @@ func Build(statement sqlparser.Statement, tables map[string]*schema.Table, isRes
 		plan, err = &Plan{PlanID: PlanRelease}, nil
 	case *sqlparser.SRollback:
 		plan, err = &Plan{PlanID: PlanSRollback}, nil
-	case *sqlparser.ShowTableStatus:
-		plan = &Plan{
-			PlanID:    PlanShowTables,
-			FullQuery: GenerateFullQuery(stmt),
-		}
+	case *sqlparser.Load:
+		plan, err = &Plan{PlanID: PlanLoad}, nil
+	case *sqlparser.Flush:
+		plan, err = &Plan{PlanID: PlanFlush, FullQuery: GenerateFullQuery(stmt)}, nil
+	case *sqlparser.CallProc:
+		plan, err = &Plan{PlanID: PlanCallProc, FullQuery: GenerateFullQuery(stmt)}, nil
 	default:
 		return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "invalid SQL")
 	}
@@ -243,7 +254,7 @@ func BuildStreaming(sql string, tables map[string]*schema.Table, isReservedConn 
 			return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "select with lock not allowed for streaming")
 		}
 		plan.Table = lookupTable(stmt.From, tables)
-	case *sqlparser.OtherRead, *sqlparser.Show, *sqlparser.Union, *sqlparser.ShowTableStatus:
+	case *sqlparser.OtherRead, *sqlparser.Show, *sqlparser.Union, *sqlparser.CallProc, sqlparser.Explain:
 		// pass
 	default:
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "'%v' not allowed for streaming", sqlparser.String(stmt))
@@ -283,11 +294,7 @@ func checkForPoolingUnsafeConstructs(expr sqlparser.SQLNode) error {
 	return sqlparser.Walk(func(in sqlparser.SQLNode) (kontinue bool, err error) {
 		switch node := in.(type) {
 		case *sqlparser.Set:
-			for _, setExpr := range node.Exprs {
-				if setExpr.Name.AtCount() > 0 {
-					return false, genError(node)
-				}
-			}
+			return false, genError(node)
 		case *sqlparser.FuncExpr:
 			if sqlparser.IsLockingFunc(node) {
 				return false, genError(node)

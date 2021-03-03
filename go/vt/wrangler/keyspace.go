@@ -24,7 +24,8 @@ import (
 	"sync"
 	"time"
 
-	"golang.org/x/net/context"
+	"context"
+
 	"vitess.io/vitess/go/event"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
@@ -121,8 +122,8 @@ func (wr *Wrangler) validateNewWorkflow(ctx context.Context, keyspace, workflow 
 				fmt.Sprintf("workflow %s already exists in keyspace %s on tablet %d", workflow, keyspace, master.Alias.Uid),
 			}, {
 				fmt.Sprintf("select 1 from _vt.vreplication where db_name=%s and message='FROZEN'", encodeString(master.DbName())),
-				fmt.Sprintf("workflow %s.%s is in a frozen state on tablet %d, please review and delete it before resharding",
-					keyspace, workflow, master.Alias.Uid),
+				fmt.Sprintf("found previous frozen workflow on tablet %d, please review and delete it first before creating a new workflow",
+					master.Alias.Uid),
 			}}
 			for _, validation := range validations {
 				p3qr, err := wr.tmc.VReplicationExec(ctx, master.Tablet, validation.query)
@@ -378,7 +379,7 @@ func (wr *Wrangler) cancelHorizontalResharding(ctx context.Context, keyspace, sh
 
 		destinationShards[i] = updatedShard
 
-		if err := wr.RefreshTabletsByShard(ctx, si, nil, nil); err != nil {
+		if err := wr.RefreshTabletsByShard(ctx, si, nil); err != nil {
 			return err
 		}
 	}
@@ -449,6 +450,8 @@ func (wr *Wrangler) MigrateServedTypes(ctx context.Context, keyspace, shard stri
 	// refresh
 	// TODO(b/26388813): Integrate vtctl WaitForDrain here instead of just sleeping.
 	// Anything that's not a replica will use the RDONLY sleep time.
+	// Master Migrate performs its own refresh but we will refresh all non master
+	// tablets after each migration
 	waitForDrainSleep := *waitForDrainSleepRdonly
 	if servedType == topodatapb.TabletType_REPLICA {
 		waitForDrainSleep = *waitForDrainSleepReplica
@@ -464,7 +467,7 @@ func (wr *Wrangler) MigrateServedTypes(ctx context.Context, keyspace, shard stri
 		refreshShards = destinationShards
 	}
 	for _, si := range refreshShards {
-		rec.RecordError(wr.RefreshTabletsByShard(ctx, si, []topodatapb.TabletType{servedType}, cells))
+		rec.RecordError(wr.RefreshTabletsByShard(ctx, si, cells))
 	}
 	return rec.Error()
 }
@@ -812,6 +815,12 @@ func (wr *Wrangler) masterMigrateServedType(ctx context.Context, keyspace string
 		}
 	}
 
+	for _, si := range destinationShards {
+		if err := wr.RefreshTabletsByShard(ctx, si, nil); err != nil {
+			return err
+		}
+	}
+
 	event.DispatchUpdate(ev, "finished")
 	return nil
 }
@@ -931,7 +940,7 @@ func (wr *Wrangler) updateShardRecords(ctx context.Context, keyspace string, sha
 		// For 'to' shards, refresh to make them serve.
 		// The 'from' shards will be refreshed after traffic has migrated.
 		if !isFrom {
-			wr.RefreshTabletsByShard(ctx, si, []topodatapb.TabletType{servedType}, cells)
+			wr.RefreshTabletsByShard(ctx, si, cells)
 		}
 	}
 	return nil
@@ -1184,7 +1193,7 @@ func (wr *Wrangler) MigrateServedFrom(ctx context.Context, keyspace, shard strin
 
 	// rebuild the keyspace serving graph if there was no error
 	if err == nil {
-		err = topotools.RebuildKeyspaceLocked(ctx, wr.logger, wr.ts, keyspace, cells)
+		err = topotools.RebuildKeyspaceLocked(ctx, wr.logger, wr.ts, keyspace, cells, false)
 	}
 
 	return err
@@ -1267,7 +1276,7 @@ func (wr *Wrangler) replicaMigrateServedFrom(ctx context.Context, ki *topo.Keysp
 	// Now refresh the source servers so they reload their
 	// blacklisted table list
 	event.DispatchUpdate(ev, "refreshing sources tablets state so they update their blacklisted tables")
-	return wr.RefreshTabletsByShard(ctx, sourceShard, []topodatapb.TabletType{servedType}, cells)
+	return wr.RefreshTabletsByShard(ctx, sourceShard, cells)
 }
 
 // masterMigrateServedFrom handles the master migration. The ordering is
@@ -1373,10 +1382,8 @@ func (wr *Wrangler) SetKeyspaceServedFrom(ctx context.Context, keyspace string, 
 	return wr.ts.UpdateKeyspace(ctx, ki)
 }
 
-// RefreshTabletsByShard calls RefreshState on all the tables of a
-// given type in a shard. It would work for the master, but the
-// discovery wouldn't be very efficient.
-func (wr *Wrangler) RefreshTabletsByShard(ctx context.Context, si *topo.ShardInfo, tabletTypes []topodatapb.TabletType, cells []string) error {
+// RefreshTabletsByShard calls RefreshState on all the tablets in a given shard.
+func (wr *Wrangler) RefreshTabletsByShard(ctx context.Context, si *topo.ShardInfo, cells []string) error {
 	wr.Logger().Infof("RefreshTabletsByShard called on shard %v/%v", si.Keyspace(), si.ShardName())
 	tabletMap, err := wr.ts.GetTabletMapForShardByCell(ctx, si.Keyspace(), si.ShardName(), cells)
 	switch {
@@ -1391,9 +1398,6 @@ func (wr *Wrangler) RefreshTabletsByShard(ctx context.Context, si *topo.ShardInf
 	// ignore errors in this phase
 	wg := sync.WaitGroup{}
 	for _, ti := range tabletMap {
-		if tabletTypes != nil && !topoproto.IsTypeInList(ti.Type, tabletTypes) {
-			continue
-		}
 		if ti.Hostname == "" {
 			// The tablet is not running, we don't have the host
 			// name to connect to, so we just skip this tablet.

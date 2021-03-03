@@ -23,7 +23,8 @@ import (
 	"testing"
 	"time"
 
-	"golang.org/x/net/context"
+	"context"
+
 	"vitess.io/vitess/go/sqltypes"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -190,9 +191,8 @@ func mergedResults(fields []*querypb.Field, rowsTotal, rowsPerResult int) []*sql
 		// Last row in the Result or last row in total.
 		if id%rowsPerResult == (rowsPerResult-1) || id == (rowsTotal-1) {
 			results = append(results, &sqltypes.Result{
-				Fields:       fields,
-				RowsAffected: uint64(len(rows)),
-				Rows:         rows,
+				Fields: fields,
+				Rows:   rows,
 			})
 			rows = make([][]sqltypes.Value, 0)
 		}
@@ -283,7 +283,6 @@ func TestResultMerger(t *testing.T) {
 				results := mergedResults(singlePk, 3, ResultSizeRows)
 				// Duplicate Row 1. New Rows: 0, 1, 1, 2
 				results[0].Rows = append(results[0].Rows[:2], results[0].Rows[1:]...)
-				results[0].RowsAffected = 4
 				return results
 			}(),
 		},
@@ -298,7 +297,6 @@ func TestResultMerger(t *testing.T) {
 				results := mergedResults(singlePk, 3, ResultSizeRows)
 				// Remove row 1. New Rows: 0, 2
 				results[0].Rows = append(results[0].Rows[:1], results[0].Rows[2:]...)
-				results[0].RowsAffected = 2
 				return results
 			}(),
 		},

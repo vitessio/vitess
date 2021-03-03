@@ -19,12 +19,14 @@ package preparestmt
 import (
 	"database/sql"
 	"fmt"
+	"strconv"
 	"testing"
 	"time"
 
 	"github.com/icrowley/fake"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/test/endtoend/cluster"
 )
 
@@ -34,6 +36,22 @@ func TestSelect(t *testing.T) {
 	dbo := Connect(t)
 	defer dbo.Close()
 	selectWhere(t, dbo, "")
+}
+
+func TestSelectDatabase(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	dbo := Connect(t)
+	defer dbo.Close()
+	prepare, err := dbo.Prepare("select database()")
+	require.NoError(t, err)
+	rows, err := prepare.Query()
+	require.NoError(t, err)
+	defer rows.Close()
+	var resultBytes sql.RawBytes
+	require.True(t, rows.Next(), "no rows found")
+	err = rows.Scan(&resultBytes)
+	require.NoError(t, err)
+	assert.Equal(t, string(resultBytes), "test_keyspace")
 }
 
 // TestInsertUpdateDelete validates all insert, update and
@@ -55,7 +73,7 @@ func TestInsertUpdateDelete(t *testing.T) {
 	for i := 1; i <= 100; i++ {
 		// preparing value for the insert testing
 		insertValue := []interface{}{
-			i, fmt.Sprint(i) + "21", i * 100,
+			i, strconv.FormatInt(int64(i), 10) + "21", i * 100,
 			127, 1, 32767, 8388607, 2147483647, 2.55, 64.9, 55.5,
 			time.Date(2009, 5, 5, 0, 0, 0, 50000, time.UTC),
 			time.Date(2009, 5, 5, 0, 0, 0, 50000, location),

@@ -23,7 +23,7 @@ import (
 	"net/url"
 	"time"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/streamlog"
@@ -47,8 +47,9 @@ type LogStats struct {
 	BindVariables map[string]*querypb.BindVariable
 	StartTime     time.Time
 	EndTime       time.Time
-	ShardQueries  uint32
+	ShardQueries  uint64
 	RowsAffected  uint64
+	RowsReturned  uint64
 	PlanTime      time.Duration
 	ExecuteTime   time.Duration
 	CommitTime    time.Duration
@@ -125,7 +126,7 @@ func (stats *LogStats) RemoteAddrUsername() (string, string) {
 // Logf formats the log record to the given writer, either as
 // tab-separated list of logged fields or as JSON.
 func (stats *LogStats) Logf(w io.Writer, params url.Values) error {
-	if !streamlog.ShouldEmitLog(stats.SQL) {
+	if !streamlog.ShouldEmitLog(stats.SQL, stats.RowsAffected, stats.RowsReturned) {
 		return nil
 	}
 

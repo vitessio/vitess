@@ -17,6 +17,7 @@ limitations under the License.
 package netutil
 
 import (
+	"fmt"
 	"math/rand"
 	"net"
 	"reflect"
@@ -56,7 +57,7 @@ func testUniformity(t *testing.T, size int, margin float64) {
 	rand.Seed(1)
 	data := make([]*net.SRV, size)
 	for i := 0; i < size; i++ {
-		data[i] = &net.SRV{Target: string('a' + i), Weight: 1}
+		data[i] = &net.SRV{Target: fmt.Sprintf("%c", 'a'+i), Weight: 1}
 	}
 	checkDistribution(t, data, margin)
 }

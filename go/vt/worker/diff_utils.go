@@ -32,9 +32,10 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 	"vitess.io/vitess/go/vt/wrangler"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"github.com/golang/protobuf/proto"
+
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/grpcclient"

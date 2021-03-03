@@ -17,7 +17,8 @@ limitations under the License.
 package k8stopo
 
 import (
-	"golang.org/x/net/context"
+	"context"
+
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/client-go/tools/cache"
 
@@ -57,6 +58,7 @@ func (s *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, <
 	if err != nil {
 		// Per the topo.Conn interface:
 		// current.Err is set, and 'changes'/'cancel' are nil
+		watchCancel()
 		current.Err = err
 		return current, nil, nil
 	}

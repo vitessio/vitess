@@ -16,6 +16,11 @@ limitations under the License.
 
 package sqlparser
 
+import (
+	"reflect"
+	"runtime"
+)
+
 // The rewriter was heavily inspired by https://github.com/golang/tools/blob/master/go/ast/astutil/rewrite.go
 
 // Rewrite traverses a syntax tree recursively, starting with root,
@@ -34,11 +39,20 @@ package sqlparser
 // Only fields that refer to AST nodes are considered children;
 // i.e., fields of basic types (strings, []byte, etc.) are ignored.
 //
-func Rewrite(node SQLNode, pre, post ApplyFunc) (result SQLNode) {
+func Rewrite(node SQLNode, pre, post ApplyFunc) (result SQLNode, err error) {
 	parent := &struct{ SQLNode }{node}
 	defer func() {
-		if r := recover(); r != nil && r != abort {
-			panic(r)
+		if r := recover(); r != nil {
+			switch r := r.(type) {
+			case abortT: // nothing to do
+
+			case *runtime.TypeAssertionError:
+				err = r
+			case *valueTypeFieldCantChangeErr:
+				err = r
+			default:
+				panic(r)
+			}
 		}
 		result = parent.SQLNode
 	}()
@@ -56,7 +70,7 @@ func Rewrite(node SQLNode, pre, post ApplyFunc) (result SQLNode) {
 
 	a.apply(parent, node, replacer)
 
-	return parent.SQLNode
+	return parent.SQLNode, nil
 }
 
 // An ApplyFunc is invoked by Rewrite for each node n, even if n is nil,
@@ -67,7 +81,9 @@ func Rewrite(node SQLNode, pre, post ApplyFunc) (result SQLNode) {
 // See Rewrite for details.
 type ApplyFunc func(*Cursor) bool
 
-var abort = new(int) // singleton, to signal termination of Apply
+type abortT int
+
+var abort = abortT(0) // singleton, to signal termination of Apply
 
 // A Cursor describes a node encountered during Apply.
 // Information about the node and its parent is available
@@ -88,4 +104,36 @@ func (c *Cursor) Parent() SQLNode { return c.parent }
 // replace the object with something of the wrong type, or the visitor will panic.
 func (c *Cursor) Replace(newNode SQLNode) {
 	c.replacer(newNode, c.parent)
+	c.node = newNode
+}
+
+type replacerFunc func(newNode, parent SQLNode)
+
+// application carries all the shared data so we can pass it around cheaply.
+type application struct {
+	pre, post ApplyFunc
+	cursor    Cursor
+}
+
+func isNilValue(i interface{}) bool {
+	valueOf := reflect.ValueOf(i)
+	kind := valueOf.Kind()
+	isNullable := kind == reflect.Ptr || kind == reflect.Array || kind == reflect.Slice
+	return isNullable && valueOf.IsNil()
+}
+
+// this type is here so we can catch it in the Rewrite method above
+type valueTypeFieldCantChangeErr struct {
+	msg string
+}
+
+// Error implements the error interface
+func (e *valueTypeFieldCantChangeErr) Error() string {
+	return "Tried replacing a field of a value type. This is not supported. " + e.msg
+}
+
+func replacePanic(msg string) func(newNode, parent SQLNode) {
+	return func(newNode, parent SQLNode) {
+		panic(&valueTypeFieldCantChangeErr{msg: msg})
+	}
 }

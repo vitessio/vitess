@@ -22,7 +22,7 @@ import (
 
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"vitess.io/vitess/go/sqltypes"
 
@@ -66,12 +66,12 @@ func (ms *MergeSort) GetTableName() string { return "" }
 
 // Execute is not supported.
 func (ms *MergeSort) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Execute is not supported")
+	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] Execute is not reachable")
 }
 
 // GetFields is not supported.
 func (ms *MergeSort) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "GetFields is not supported")
+	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] GetFields is not reachable")
 }
 
 // StreamExecute performs a streaming exec.

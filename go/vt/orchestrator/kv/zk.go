@@ -23,6 +23,7 @@ import (
 	"time"
 
 	zkconstants "github.com/samuel/go-zookeeper/zk"
+
 	"vitess.io/vitess/go/vt/orchestrator/config"
 	"vitess.io/vitess/go/vt/orchestrator/external/zk"
 )

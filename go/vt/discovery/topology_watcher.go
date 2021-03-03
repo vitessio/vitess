@@ -29,7 +29,8 @@ import (
 
 	"vitess.io/vitess/go/vt/key"
 
-	"golang.org/x/net/context"
+	"context"
+
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/trace"
 

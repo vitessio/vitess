@@ -27,9 +27,10 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"github.com/golang/protobuf/proto"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/grpcclient"

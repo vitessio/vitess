@@ -45,7 +45,8 @@ import (
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/vterrors"
 
-	"golang.org/x/net/context"
+	"context"
+
 	"vitess.io/vitess/go/vt/dbconnpool"
 
 	"vitess.io/vitess/go/netutil"
@@ -429,7 +430,7 @@ func (tm *TabletManager) rebuildKeyspace(keyspace string, retryInterval time.Dur
 				return
 			}
 		}
-		err = topotools.RebuildKeyspace(tm.BatchCtx, logutil.NewConsoleLogger(), tm.TopoServer, keyspace, []string{tm.tabletAlias.Cell})
+		err = topotools.RebuildKeyspace(tm.BatchCtx, logutil.NewConsoleLogger(), tm.TopoServer, keyspace, []string{tm.tabletAlias.Cell}, false)
 		if err == nil {
 			srvKeyspace, err = tm.TopoServer.GetSrvKeyspace(tm.BatchCtx, tm.tabletAlias.Cell, keyspace)
 			if err == nil {
@@ -511,7 +512,11 @@ func (tm *TabletManager) checkMastership(ctx context.Context, si *topo.ShardInfo
 }
 
 func (tm *TabletManager) checkMysql(ctx context.Context) error {
-	if appConfig, _ := tm.DBConfigs.AppWithDB().MysqlParams(); appConfig.Host != "" {
+	appConfig, err := tm.DBConfigs.AppWithDB().MysqlParams()
+	if err != nil {
+		return err
+	}
+	if appConfig.Host != "" {
 		tm.tmState.UpdateTablet(func(tablet *topodatapb.Tablet) {
 			tablet.MysqlHostname = appConfig.Host
 			tablet.MysqlPort = int32(appConfig.Port)
@@ -631,6 +636,8 @@ func (tm *TabletManager) exportStats() {
 	tablet := tm.Tablet()
 	statsKeyspace.Set(tablet.Keyspace)
 	statsShard.Set(tablet.Shard)
+	statsTabletType.Set(topoproto.TabletTypeLString(tm.tmState.tablet.Type))
+	statsTabletTypeCount.Add(topoproto.TabletTypeLString(tm.tmState.tablet.Type), 1)
 	if key.KeyRangeIsPartial(tablet.KeyRange) {
 		statsKeyRangeStart.Set(hex.EncodeToString(tablet.KeyRange.Start))
 		statsKeyRangeEnd.Set(hex.EncodeToString(tablet.KeyRange.End))

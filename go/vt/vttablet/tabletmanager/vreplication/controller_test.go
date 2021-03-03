@@ -22,7 +22,7 @@ import (
 	"testing"
 	"time"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/sync2"
@@ -36,9 +36,8 @@ import (
 
 var (
 	testSettingsResponse = &sqltypes.Result{
-		Fields:       nil,
-		RowsAffected: 1,
-		InsertID:     0,
+		Fields:   nil,
+		InsertID: 0,
 		Rows: [][]sqltypes.Value{
 			{
 				sqltypes.NewVarBinary("MariaDB/0-1-1083"), // pos
@@ -67,6 +66,7 @@ func TestControllerKeyRange(t *testing.T) {
 	}
 
 	dbClient := binlogplayer.NewMockDBClient(t)
+	dbClient.ExpectRequestRE("update _vt.vreplication set message='Picked source tablet.*", testDMLResponse, nil)
 	dbClient.ExpectRequest("update _vt.vreplication set state='Running', message='' where id=1", testDMLResponse, nil)
 	dbClient.ExpectRequest("select pos, stop_pos, max_tps, max_replication_lag, state from _vt.vreplication where id=1", testSettingsResponse, nil)
 	dbClient.ExpectRequest("begin", nil, nil)
@@ -102,6 +102,7 @@ func TestControllerTables(t *testing.T) {
 	}
 
 	dbClient := binlogplayer.NewMockDBClient(t)
+	dbClient.ExpectRequestRE("update _vt.vreplication set message='Picked source tablet.*", testDMLResponse, nil)
 	dbClient.ExpectRequest("update _vt.vreplication set state='Running', message='' where id=1", testDMLResponse, nil)
 	dbClient.ExpectRequest("select pos, stop_pos, max_tps, max_replication_lag, state from _vt.vreplication where id=1", testSettingsResponse, nil)
 	dbClient.ExpectRequest("begin", nil, nil)
@@ -194,6 +195,7 @@ func TestControllerOverrides(t *testing.T) {
 	}
 
 	dbClient := binlogplayer.NewMockDBClient(t)
+	dbClient.ExpectRequestRE("update _vt.vreplication set message='Picked source tablet.*", testDMLResponse, nil)
 	dbClient.ExpectRequest("update _vt.vreplication set state='Running', message='' where id=1", testDMLResponse, nil)
 	dbClient.ExpectRequest("select pos, stop_pos, max_tps, max_replication_lag, state from _vt.vreplication where id=1", testSettingsResponse, nil)
 	dbClient.ExpectRequest("begin", nil, nil)
@@ -258,9 +260,11 @@ func TestControllerRetry(t *testing.T) {
 	}
 
 	dbClient := binlogplayer.NewMockDBClient(t)
+	dbClient.ExpectRequestRE("update _vt.vreplication set message='Picked source tablet.*", testDMLResponse, nil)
 	dbClient.ExpectRequest("update _vt.vreplication set state='Running', message='' where id=1", testDMLResponse, nil)
 	dbClient.ExpectRequest("select pos, stop_pos, max_tps, max_replication_lag, state from _vt.vreplication where id=1", nil, errors.New("(expected error)"))
 	dbClient.ExpectRequest("update _vt.vreplication set state='Error', message='error (expected error) in selecting vreplication settings select pos, stop_pos, max_tps, max_replication_lag, state from _vt.vreplication where id=1' where id=1", testDMLResponse, nil)
+	dbClient.ExpectRequestRE("update _vt.vreplication set message='Picked source tablet.*", testDMLResponse, nil)
 	dbClient.ExpectRequest("update _vt.vreplication set state='Running', message='' where id=1", testDMLResponse, nil)
 	dbClient.ExpectRequest("select pos, stop_pos, max_tps, max_replication_lag, state from _vt.vreplication where id=1", testSettingsResponse, nil)
 	dbClient.ExpectRequest("begin", nil, nil)
@@ -291,11 +295,11 @@ func TestControllerStopPosition(t *testing.T) {
 	}
 
 	dbClient := binlogplayer.NewMockDBClient(t)
+	dbClient.ExpectRequestRE("update _vt.vreplication set message='Picked source tablet.*", testDMLResponse, nil)
 	dbClient.ExpectRequest("update _vt.vreplication set state='Running', message='' where id=1", testDMLResponse, nil)
 	withStop := &sqltypes.Result{
-		Fields:       nil,
-		RowsAffected: 1,
-		InsertID:     0,
+		Fields:   nil,
+		InsertID: 0,
 		Rows: [][]sqltypes.Value{
 			{
 				sqltypes.NewVarBinary("MariaDB/0-1-1083"),    // pos

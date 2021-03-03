@@ -43,18 +43,14 @@ func newJointab(bindvars map[string]struct{}) *jointab {
 
 // Procure requests for the specified column from the plan
 // and returns the join var name for it.
-func (jt *jointab) Procure(bldr builder, col *sqlparser.ColName, to int) string {
+func (jt *jointab) Procure(plan logicalPlan, col *sqlparser.ColName, to int) string {
 	from, joinVar := jt.Lookup(col)
 	// If joinVar is empty, generate a unique name.
 	if joinVar == "" {
 		suffix := ""
 		i := 0
 		for {
-			if !col.Qualifier.IsEmpty() {
-				joinVar = col.Qualifier.Name.CompliantName() + "_" + col.Name.CompliantName() + suffix
-			} else {
-				joinVar = col.Name.CompliantName() + suffix
-			}
+			joinVar = col.CompliantName(suffix)
 			if _, ok := jt.vars[joinVar]; !ok {
 				break
 			}
@@ -64,7 +60,7 @@ func (jt *jointab) Procure(bldr builder, col *sqlparser.ColName, to int) string 
 		jt.vars[joinVar] = struct{}{}
 		jt.refs[col.Metadata.(*column)] = joinVar
 	}
-	bldr.SupplyVar(from, to, col, joinVar)
+	plan.SupplyVar(from, to, col, joinVar)
 	return joinVar
 }
 

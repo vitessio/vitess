@@ -1135,7 +1135,7 @@ The scoping rule works in our favor here because this type of name generation co
 
 For the sake of simplicity, we’ll not allow dependencies to use non-standard column names. For example, we’ll fail a query like this:
 
-`select * from (select a, count(*) from t1) t where t.`count(*)` > 0`
+`select * from (select a, count(*) from t1) t where t.count(*) > 0`
 
 This should instead be rewritten as:
 

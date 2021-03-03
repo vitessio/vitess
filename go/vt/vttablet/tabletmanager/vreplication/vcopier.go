@@ -24,8 +24,9 @@ import (
 	"strings"
 	"time"
 
+	"context"
+
 	"github.com/golang/protobuf/proto"
-	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
@@ -220,11 +221,18 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 	var updateCopyState *sqlparser.ParsedQuery
 	var bv map[string]*querypb.BindVariable
 	err = vc.vr.sourceVStreamer.VStreamRows(ctx, initialPlan.SendRule.Filter, lastpkpb, func(rows *binlogdatapb.VStreamRowsResponse) error {
-		select {
-		case <-ctx.Done():
-			return io.EOF
-		default:
+		for {
+			select {
+			case <-ctx.Done():
+				return io.EOF
+			default:
+			}
+			// verify throttler is happy, otherwise keep looping
+			if vc.vr.vre.throttlerClient.ThrottleCheckOKOrWait(ctx) {
+				break
+			}
 		}
+
 		if vc.tablePlan == nil {
 			if len(rows.Fields) == 0 {
 				return fmt.Errorf("expecting field event first, got: %v", rows)
@@ -248,6 +256,7 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 		if len(rows.Rows) == 0 {
 			return nil
 		}
+
 		// The number of rows we receive depends on the packet size set
 		// for the row streamer. Since the packet size is roughly equivalent
 		// to data size, this should map to a uniform amount of pages affected

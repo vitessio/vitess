@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"strconv"
 	"testing"
 
 	"vitess.io/vitess/go/vt/proto/vschema"
@@ -15,6 +16,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	"github.com/stretchr/testify/require"
+
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -164,35 +166,37 @@ func TestDestinationKeyspace(t *testing.T) {
 		vschema:       vschemaWith1KS,
 		targetString:  "ks2",
 		qualifier:     "",
-		expectedError: "no keyspace with name [ks2] found",
+		expectedError: "Unknown database 'ks2' in vschema",
 	}, {
 		vschema:       vschemaWith1KS,
 		targetString:  "ks2:-80",
 		qualifier:     "",
-		expectedError: "no keyspace with name [ks2] found",
+		expectedError: "Unknown database 'ks2' in vschema",
 	}, {
 		vschema:       vschemaWith1KS,
 		targetString:  "",
 		qualifier:     "ks2",
-		expectedError: "no keyspace with name [ks2] found",
+		expectedError: "Unknown database 'ks2' in vschema",
 	}, {
 		vschema:       vschemaWith2KS,
 		targetString:  "",
-		expectedError: "keyspace not specified",
+		expectedError: errNoKeyspace.Error(),
 	}}
 
-	for _, tc := range tests {
-		impl, _ := newVCursorImpl(context.Background(), NewSafeSession(&vtgatepb.Session{TargetString: tc.targetString}), sqlparser.MarginComments{}, nil, nil, &fakeVSchemaOperator{vschema: tc.vschema}, tc.vschema, nil, nil)
-		impl.vschema = tc.vschema
-		dest, keyspace, tabletType, err := impl.TargetDestination(tc.qualifier)
-		if tc.expectedError == "" {
-			require.NoError(t, err)
-			require.Equal(t, tc.expectedDest, dest)
-			require.Equal(t, tc.expectedKeyspace, keyspace.Name)
-			require.Equal(t, tc.expectedTabletType, tabletType)
-		} else {
-			require.EqualError(t, err, tc.expectedError)
-		}
+	for i, tc := range tests {
+		t.Run(strconv.Itoa(i)+tc.targetString, func(t *testing.T) {
+			impl, _ := newVCursorImpl(context.Background(), NewSafeSession(&vtgatepb.Session{TargetString: tc.targetString}), sqlparser.MarginComments{}, nil, nil, &fakeVSchemaOperator{vschema: tc.vschema}, tc.vschema, nil, nil)
+			impl.vschema = tc.vschema
+			dest, keyspace, tabletType, err := impl.TargetDestination(tc.qualifier)
+			if tc.expectedError == "" {
+				require.NoError(t, err)
+				require.Equal(t, tc.expectedDest, dest)
+				require.Equal(t, tc.expectedKeyspace, keyspace.Name)
+				require.Equal(t, tc.expectedTabletType, tabletType)
+			} else {
+				require.EqualError(t, err, tc.expectedError)
+			}
+		})
 	}
 }
 
@@ -230,11 +234,11 @@ func TestSetTarget(t *testing.T) {
 	}, {
 		vschema:       vschemaWith2KS,
 		targetString:  "ks3",
-		expectedError: "Unknown database 'ks3' (errno 1049) (sqlstate 42000)",
+		expectedError: "Unknown database 'ks3'",
 	}, {
 		vschema:       vschemaWith2KS,
 		targetString:  "ks2@replica",
-		expectedError: "cannot change to a non-master type in the middle of a transaction: REPLICA",
+		expectedError: "Can't execute the given command because you have an active transaction",
 	}}
 
 	for i, tc := range tests {

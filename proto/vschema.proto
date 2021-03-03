@@ -67,7 +67,13 @@ message Vindex {
 // Table is the table info for a Keyspace.
 message Table {
   // If the table is a sequence, type must be
-  // "sequence". Otherwise, it should be empty.
+  // "sequence".
+  //
+  // If the table is a reference, type must be
+  // "reference".
+  // See https://vitess.io/docs/reference/features/vschema/#reference-tables.
+  //
+  // Otherwise, it should be empty.
   string type = 1;
   // column_vindexes associates columns to vindexes.
   repeated ColumnVindex column_vindexes = 2;

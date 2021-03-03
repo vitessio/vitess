@@ -19,7 +19,6 @@ package sqlparser
 import (
 	"bytes"
 	"fmt"
-	"io"
 	"strings"
 
 	"vitess.io/vitess/go/bytes2"
@@ -27,14 +26,12 @@ import (
 )
 
 const (
-	defaultBufSize = 4096
-	eofChar        = 0x100
+	eofChar = 0x100
 )
 
 // Tokenizer is the struct used to generate SQL
 // tokens for the parser.
 type Tokenizer struct {
-	InStream            io.Reader
 	AllowComments       bool
 	SkipSpecialComments bool
 	SkipToEnd           bool
@@ -44,7 +41,7 @@ type Tokenizer struct {
 	LastError           error
 	posVarIndex         int
 	ParseTree           Statement
-	partialDDL          *DDL
+	partialDDL          Statement
 	nesting             int
 	multi               bool
 	specialComment      *Tokenizer
@@ -64,15 +61,6 @@ func NewStringTokenizer(sql string) *Tokenizer {
 	}
 }
 
-// NewTokenizer creates a new Tokenizer reading a sql
-// string from the io.Reader.
-func NewTokenizer(r io.Reader) *Tokenizer {
-	return &Tokenizer{
-		InStream: r,
-		buf:      make([]byte, defaultBufSize),
-	}
-}
-
 // keywords is a map of mysql keywords that fall into two categories:
 // 1) keywords considered reserved by MySQL
 // 2) keywords for us to handle specially in sql.y
@@ -87,7 +75,9 @@ var keywords = map[string]int{
 	"accessible":          UNUSED,
 	"action":              ACTION,
 	"add":                 ADD,
+	"after":               AFTER,
 	"against":             AGAINST,
+	"algorithm":           ALGORITHM,
 	"all":                 ALL,
 	"alter":               ALTER,
 	"analyze":             ANALYZE,
@@ -96,6 +86,7 @@ var keywords = map[string]int{
 	"asc":                 ASC,
 	"asensitive":          UNUSED,
 	"auto_increment":      AUTO_INCREMENT,
+	"avg_row_length":      AVG_ROW_LENGTH,
 	"before":              UNUSED,
 	"begin":               BEGIN,
 	"between":             BETWEEN,
@@ -111,15 +102,20 @@ var keywords = map[string]int{
 	"boolean":             BOOLEAN,
 	"both":                UNUSED,
 	"by":                  BY,
-	"call":                UNUSED,
+	"call":                CALL,
 	"cascade":             CASCADE,
+	"cascaded":            CASCADED,
 	"case":                CASE,
 	"cast":                CAST,
-	"change":              UNUSED,
+	"channel":             CHANNEL,
+	"change":              CHANGE,
 	"char":                CHAR,
 	"character":           CHARACTER,
 	"charset":             CHARSET,
 	"check":               CHECK,
+	"checksum":            CHECKSUM,
+	"coalesce":            COALESCE,
+	"code":                CODE,
 	"collate":             COLLATE,
 	"collation":           COLLATION,
 	"column":              COLUMN,
@@ -127,18 +123,24 @@ var keywords = map[string]int{
 	"comment":             COMMENT_KEYWORD,
 	"committed":           COMMITTED,
 	"commit":              COMMIT,
+	"compact":             COMPACT,
+	"compressed":          COMPRESSED,
+	"compression":         COMPRESSION,
 	"condition":           UNUSED,
+	"connection":          CONNECTION,
 	"constraint":          CONSTRAINT,
 	"continue":            UNUSED,
 	"convert":             CONVERT,
+	"copy":                COPY,
 	"substr":              SUBSTR,
 	"substring":           SUBSTRING,
 	"create":              CREATE,
 	"cross":               CROSS,
+	"csv":                 CSV,
 	"current_date":        CURRENT_DATE,
 	"current_time":        CURRENT_TIME,
 	"current_timestamp":   CURRENT_TIMESTAMP,
-	"current_user":        UNUSED,
+	"current_user":        CURRENT_USER,
 	"cursor":              UNUSED,
 	"data":                DATA,
 	"database":            DATABASE,
@@ -153,35 +155,54 @@ var keywords = map[string]int{
 	"decimal":             DECIMAL,
 	"declare":             UNUSED,
 	"default":             DEFAULT,
+	"definer":             DEFINER,
+	"delay_key_write":     DELAY_KEY_WRITE,
 	"delayed":             UNUSED,
 	"delete":              DELETE,
 	"desc":                DESC,
 	"describe":            DESCRIBE,
 	"deterministic":       UNUSED,
+	"directory":           DIRECTORY,
+	"disable":             DISABLE,
+	"discard":             DISCARD,
+	"disk":                DISK,
 	"distinct":            DISTINCT,
 	"distinctrow":         DISTINCTROW,
 	"div":                 DIV,
 	"double":              DOUBLE,
 	"do":                  DO,
 	"drop":                DROP,
+	"dumpfile":            DUMPFILE,
 	"duplicate":           DUPLICATE,
+	"dynamic":             DYNAMIC,
 	"each":                UNUSED,
 	"else":                ELSE,
 	"elseif":              UNUSED,
-	"enclosed":            UNUSED,
+	"enable":              ENABLE,
+	"enclosed":            ENCLOSED,
+	"encryption":          ENCRYPTION,
 	"end":                 END,
+	"enforced":            ENFORCED,
+	"engine":              ENGINE,
 	"engines":             ENGINES,
 	"enum":                ENUM,
+	"error":               ERROR,
 	"escape":              ESCAPE,
-	"escaped":             UNUSED,
+	"escaped":             ESCAPED,
+	"event":               EVENT,
+	"exchange":            EXCHANGE,
+	"exclusive":           EXCLUSIVE,
 	"exists":              EXISTS,
 	"exit":                UNUSED,
 	"explain":             EXPLAIN,
 	"expansion":           EXPANSION,
+	"export":              EXPORT,
 	"extended":            EXTENDED,
 	"false":               FALSE,
 	"fetch":               UNUSED,
 	"fields":              FIELDS,
+	"first":               FIRST,
+	"fixed":               FIXED,
 	"float":               FLOAT_TYPE,
 	"float4":              UNUSED,
 	"float8":              UNUSED,
@@ -193,6 +214,8 @@ var keywords = map[string]int{
 	"from":                FROM,
 	"full":                FULL,
 	"fulltext":            FULLTEXT,
+	"function":            FUNCTION,
+	"general":             GENERAL,
 	"generated":           UNUSED,
 	"geometry":            GEOMETRY,
 	"geometrycollection":  GEOMETRYCOLLECTION,
@@ -202,20 +225,25 @@ var keywords = map[string]int{
 	"group":               GROUP,
 	"group_concat":        GROUP_CONCAT,
 	"having":              HAVING,
+	"header":              HEADER,
 	"high_priority":       UNUSED,
+	"hosts":               HOSTS,
 	"hour_microsecond":    UNUSED,
 	"hour_minute":         UNUSED,
 	"hour_second":         UNUSED,
 	"if":                  IF,
 	"ignore":              IGNORE,
+	"import":              IMPORT,
 	"in":                  IN,
 	"index":               INDEX,
 	"indexes":             INDEXES,
 	"infile":              UNUSED,
 	"inout":               UNUSED,
 	"inner":               INNER,
+	"inplace":             INPLACE,
 	"insensitive":         UNUSED,
 	"insert":              INSERT,
+	"insert_method":       INSERT_METHOD,
 	"int":                 INT,
 	"int1":                UNUSED,
 	"int2":                UNUSED,
@@ -229,6 +257,7 @@ var keywords = map[string]int{
 	"is":                  IS,
 	"isolation":           ISOLATION,
 	"iterate":             UNUSED,
+	"invoker":             INVOKER,
 	"join":                JOIN,
 	"json":                JSON,
 	"key":                 KEY,
@@ -236,6 +265,7 @@ var keywords = map[string]int{
 	"keyspaces":           KEYSPACES,
 	"key_block_size":      KEY_BLOCK_SIZE,
 	"kill":                UNUSED,
+	"last":                LAST,
 	"language":            LANGUAGE,
 	"last_insert_id":      LAST_INSERT_ID,
 	"leading":             UNUSED,
@@ -246,60 +276,77 @@ var keywords = map[string]int{
 	"like":                LIKE,
 	"limit":               LIMIT,
 	"linear":              UNUSED,
-	"lines":               UNUSED,
+	"lines":               LINES,
 	"linestring":          LINESTRING,
 	"load":                LOAD,
+	"local":               LOCAL,
 	"localtime":           LOCALTIME,
 	"localtimestamp":      LOCALTIMESTAMP,
 	"lock":                LOCK,
+	"logs":                LOGS,
 	"long":                UNUSED,
 	"longblob":            LONGBLOB,
 	"longtext":            LONGTEXT,
 	"loop":                UNUSED,
-	"low_priority":        UNUSED,
+	"low_priority":        LOW_PRIORITY,
+	"manifest":            MANIFEST,
 	"master_bind":         UNUSED,
 	"match":               MATCH,
+	"max_rows":            MAX_ROWS,
 	"maxvalue":            MAXVALUE,
 	"mediumblob":          MEDIUMBLOB,
 	"mediumint":           MEDIUMINT,
 	"mediumtext":          MEDIUMTEXT,
+	"memory":              MEMORY,
+	"merge":               MERGE,
 	"middleint":           UNUSED,
+	"min_rows":            MIN_ROWS,
 	"minute_microsecond":  UNUSED,
 	"minute_second":       UNUSED,
 	"mod":                 MOD,
 	"mode":                MODE,
+	"modify":              MODIFY,
 	"modifies":            UNUSED,
 	"multilinestring":     MULTILINESTRING,
 	"multipoint":          MULTIPOINT,
 	"multipolygon":        MULTIPOLYGON,
+	"name":                NAME,
 	"names":               NAMES,
 	"natural":             NATURAL,
 	"nchar":               NCHAR,
 	"next":                NEXT,
 	"no":                  NO,
+	"none":                NONE,
 	"not":                 NOT,
-	"no_write_to_binlog":  UNUSED,
+	"no_write_to_binlog":  NO_WRITE_TO_BINLOG,
 	"null":                NULL,
 	"numeric":             NUMERIC,
 	"off":                 OFF,
 	"offset":              OFFSET,
 	"on":                  ON,
 	"only":                ONLY,
+	"open":                OPEN,
 	"optimize":            OPTIMIZE,
-	"optimizer_costs":     UNUSED,
-	"option":              UNUSED,
-	"optionally":          UNUSED,
+	"optimizer_costs":     OPTIMIZER_COSTS,
+	"option":              OPTION,
+	"optionally":          OPTIONALLY,
 	"or":                  OR,
 	"order":               ORDER,
 	"out":                 UNUSED,
 	"outer":               OUTER,
 	"outfile":             OUTFILE,
+	"overwrite":           OVERWRITE,
+	"pack_keys":           PACK_KEYS,
+	"parser":              PARSER,
 	"partition":           PARTITION,
+	"partitioning":        PARTITIONING,
+	"password":            PASSWORD,
 	"plugins":             PLUGINS,
 	"point":               POINT,
 	"polygon":             POLYGON,
 	"precision":           UNUSED,
 	"primary":             PRIMARY,
+	"privileges":          PRIVILEGES,
 	"processlist":         PROCESSLIST,
 	"procedure":           PROCEDURE,
 	"query":               QUERY,
@@ -308,9 +355,13 @@ var keywords = map[string]int{
 	"reads":               UNUSED,
 	"read_write":          UNUSED,
 	"real":                REAL,
+	"rebuild":             REBUILD,
+	"redundant":           REDUNDANT,
 	"references":          REFERENCES,
 	"regexp":              REGEXP,
+	"relay":               RELAY,
 	"release":             RELEASE,
+	"remove":              REMOVE,
 	"rename":              RENAME,
 	"reorganize":          REORGANIZE,
 	"repair":              REPAIR,
@@ -325,10 +376,13 @@ var keywords = map[string]int{
 	"right":               RIGHT,
 	"rlike":               REGEXP,
 	"rollback":            ROLLBACK,
+	"row_format":          ROW_FORMAT,
 	"s3":                  S3,
 	"savepoint":           SAVEPOINT,
 	"schema":              SCHEMA,
+	"schemas":             SCHEMAS,
 	"second_microsecond":  UNUSED,
+	"security":            SECURITY,
 	"select":              SELECT,
 	"sensitive":           UNUSED,
 	"separator":           SEPARATOR,
@@ -337,13 +391,15 @@ var keywords = map[string]int{
 	"session":             SESSION,
 	"set":                 SET,
 	"share":               SHARE,
+	"shared":              SHARED,
 	"show":                SHOW,
 	"signal":              UNUSED,
 	"signed":              SIGNED,
+	"slow":                SLOW,
 	"smallint":            SMALLINT,
 	"spatial":             SPATIAL,
 	"specific":            UNUSED,
-	"sql":                 UNUSED,
+	"sql":                 SQL,
 	"sqlexception":        UNUSED,
 	"sqlstate":            UNUSED,
 	"sqlwarning":          UNUSED,
@@ -354,15 +410,22 @@ var keywords = map[string]int{
 	"sql_small_result":    UNUSED,
 	"ssl":                 UNUSED,
 	"start":               START,
-	"starting":            UNUSED,
+	"starting":            STARTING,
+	"stats_auto_recalc":   STATS_AUTO_RECALC,
+	"stats_persistent":    STATS_PERSISTENT,
+	"stats_sample_pages":  STATS_SAMPLE_PAGES,
 	"status":              STATUS,
+	"storage":             STORAGE,
 	"stored":              UNUSED,
 	"straight_join":       STRAIGHT_JOIN,
 	"stream":              STREAM,
 	"vstream":             VSTREAM,
 	"table":               TABLE,
 	"tables":              TABLES,
-	"terminated":          UNUSED,
+	"tablespace":          TABLESPACE,
+	"temporary":           TEMPORARY,
+	"temptable":           TEMPTABLE,
+	"terminated":          TERMINATED,
 	"text":                TEXT,
 	"than":                THAN,
 	"then":                THEN,
@@ -379,21 +442,27 @@ var keywords = map[string]int{
 	"tree":                TREE,
 	"traditional":         TRADITIONAL,
 	"trigger":             TRIGGER,
+	"triggers":            TRIGGERS,
 	"true":                TRUE,
 	"truncate":            TRUNCATE,
 	"uncommitted":         UNCOMMITTED,
+	"undefined":           UNDEFINED,
 	"undo":                UNUSED,
 	"union":               UNION,
 	"unique":              UNIQUE,
 	"unlock":              UNLOCK,
 	"unsigned":            UNSIGNED,
 	"update":              UPDATE,
+	"upgrade":             UPGRADE,
 	"usage":               UNUSED,
 	"use":                 USE,
+	"user":                USER,
+	"user_resources":      USER_RESOURCES,
 	"using":               USING,
 	"utc_date":            UTC_DATE,
 	"utc_time":            UTC_TIME,
 	"utc_timestamp":       UTC_TIMESTAMP,
+	"validation":          VALIDATION,
 	"values":              VALUES,
 	"variables":           VARIABLES,
 	"varbinary":           VARBINARY,
@@ -415,6 +484,7 @@ var keywords = map[string]int{
 	"where":               WHERE,
 	"while":               UNUSED,
 	"with":                WITH,
+	"without":             WITHOUT,
 	"work":                WORK,
 	"write":               WRITE,
 	"xor":                 XOR,
@@ -609,8 +679,11 @@ func (tkn *Tokenizer) Scan() (int, []byte) {
 		case '-':
 			switch tkn.lastChar {
 			case '-':
-				tkn.next()
-				return tkn.scanCommentType1("--")
+				nextChar := tkn.peek(0)
+				if nextChar == ' ' || nextChar == '\n' || nextChar == '\t' || nextChar == '\r' || nextChar == eofChar {
+					tkn.next()
+					return tkn.scanCommentType1("--")
+				}
 			case '>':
 				tkn.next()
 				if tkn.lastChar == '>' {
@@ -693,6 +766,9 @@ func (tkn *Tokenizer) scanIdentifier(firstByte byte, isVariable bool) (int, []by
 		isDigit(tkn.lastChar) ||
 		tkn.lastChar == '@' ||
 		(isVariable && isCarat(tkn.lastChar)) {
+		if tkn.lastChar == '@' {
+			isVariable = true
+		}
 		buffer.WriteByte(byte(tkn.lastChar))
 		tkn.next()
 	}
@@ -946,8 +1022,14 @@ func (tkn *Tokenizer) scanMySQLSpecificComment() (int, []byte) {
 		}
 		tkn.consumeNext(buffer)
 	}
-	_, sql := ExtractMysqlComment(buffer.String())
-	tkn.specialComment = NewStringTokenizer(sql)
+
+	commentVersion, sql := ExtractMysqlComment(buffer.String())
+
+	if MySQLVersion >= commentVersion {
+		// Only add the special comment to the tokenizer if the version of MySQL is higher or equal to the comment version
+		tkn.specialComment = NewStringTokenizer(sql)
+	}
+
 	return tkn.Scan()
 }
 
@@ -961,15 +1043,6 @@ func (tkn *Tokenizer) consumeNext(buffer *bytes2.Buffer) {
 }
 
 func (tkn *Tokenizer) next() {
-	if tkn.bufPos >= tkn.bufSize && tkn.InStream != nil {
-		// Try and refill the buffer
-		var err error
-		tkn.bufPos = 0
-		if tkn.bufSize, err = tkn.InStream.Read(tkn.buf); err != io.EOF && err != nil {
-			tkn.LastError = err
-		}
-	}
-
 	if tkn.bufPos >= tkn.bufSize {
 		if tkn.lastChar != eofChar {
 			tkn.Position++
@@ -980,6 +1053,13 @@ func (tkn *Tokenizer) next() {
 		tkn.lastChar = uint16(tkn.buf[tkn.bufPos])
 		tkn.bufPos++
 	}
+}
+
+func (tkn *Tokenizer) peek(dist int) uint16 {
+	if tkn.bufPos+dist >= tkn.bufSize {
+		return eofChar
+	}
+	return uint16(tkn.buf[tkn.bufPos+dist])
 }
 
 // reset clears any internal state.

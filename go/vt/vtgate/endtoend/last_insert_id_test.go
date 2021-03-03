@@ -25,6 +25,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/mysql"
 )
 

@@ -34,6 +34,7 @@ import (
 	"github.com/patrickmn/go-cache"
 	"github.com/rcrowley/go-metrics"
 	"github.com/sjmudd/stopwatch"
+
 	"vitess.io/vitess/go/tb"
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/math"

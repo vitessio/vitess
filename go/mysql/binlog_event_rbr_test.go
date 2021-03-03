@@ -406,14 +406,14 @@ func TestCellLengthAndData(t *testing.T) {
 		data: []byte{0x0f, 0x00,
 			0, 1, 0, 14, 0, 11, 0, 1, 0, 12, 12, 0, 97, 1, 98},
 		out: sqltypes.MakeTrusted(sqltypes.Expression,
-			[]byte(`JSON_OBJECT('a','b')`)),
+			[]byte(`{"a":"b"}`)),
 	}, {
 		typ:      TypeJSON,
 		metadata: 4,
 		data: []byte{0x0f, 0x00, 0x00, 0x00,
 			0, 1, 0, 14, 0, 11, 0, 1, 0, 12, 12, 0, 97, 1, 98},
 		out: sqltypes.MakeTrusted(sqltypes.Expression,
-			[]byte(`JSON_OBJECT('a','b')`)),
+			[]byte(`{"a":"b"}`)),
 	}, {
 		typ:      TypeEnum,
 		metadata: 1,
@@ -468,6 +468,12 @@ func TestCellLengthAndData(t *testing.T) {
 		data:     []byte{0x81, 0x0D, 0xFB, 0x38, 0xD2, 0x00, 0x01},
 		out: sqltypes.MakeTrusted(querypb.Type_DECIMAL,
 			[]byte("1234567890.0001")),
+	}, {
+		typ:      TypeNewDecimal,
+		metadata: 20<<8 | 2, // DECIMAL(20,2)
+		data:     []byte{0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0, 0x01, 0x0a},
+		out: sqltypes.MakeTrusted(querypb.Type_DECIMAL,
+			[]byte("1.10")),
 	}, {
 		typ:      TypeBlob,
 		metadata: 1,
@@ -539,13 +545,15 @@ func TestCellLengthAndData(t *testing.T) {
 		// Test cellLength.
 		l, err := cellLength(padded, 1, tcase.typ, tcase.metadata)
 		if err != nil || l != len(tcase.data) {
-			t.Errorf("testcase cellLength(%v,%v) returned unexpected result: %v %v was expected %v <nil>", tcase.typ, tcase.data, l, err, len(tcase.data))
+			t.Errorf("testcase cellLength(%v,%v) returned unexpected result: %v %v was expected %v <nil>",
+				tcase.typ, tcase.data, l, err, len(tcase.data))
 		}
 
 		// Test CellValue.
 		out, l, err := CellValue(padded, 1, tcase.typ, tcase.metadata, tcase.styp)
 		if err != nil || l != len(tcase.data) || out.Type() != tcase.out.Type() || !bytes.Equal(out.Raw(), tcase.out.Raw()) {
-			t.Errorf("testcase cellData(%v,%v) returned unexpected result: %v %v %v, was expecting %v %v <nil>", tcase.typ, tcase.data, out, l, err, tcase.out, len(tcase.data))
+			t.Errorf("testcase cellData(%v,%v) returned unexpected result: %v %v %v, was expecting %v %v <nil>",
+				tcase.typ, tcase.data, out, l, err, tcase.out, len(tcase.data))
 		}
 	}
 }

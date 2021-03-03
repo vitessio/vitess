@@ -32,9 +32,10 @@ import (
 	"syscall"
 	"time"
 
+	"context"
+
 	"github.com/z-division/go-zookeeper/zk"
 	"golang.org/x/crypto/ssh/terminal"
-	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/vt/log"

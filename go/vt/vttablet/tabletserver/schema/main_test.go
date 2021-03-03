@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
@@ -33,10 +34,10 @@ func getTestSchemaEngine(t *testing.T) (*Engine, *fakesqldb.DB, func()) {
 		"int64"),
 		"1427325876",
 	))
-	db.AddQuery(mysql.BaseShowTables, &sqltypes.Result{})
-
+	db.AddQueryPattern(baseShowTablesPattern, &sqltypes.Result{})
 	db.AddQuery(mysql.BaseShowPrimary, &sqltypes.Result{})
-	se := newEngine(10, 10*time.Second, 10*time.Second, true, db)
+	AddFakeInnoDBReadRowsResult(db, 1)
+	se := newEngine(10, 10*time.Second, 10*time.Second, db)
 	require.NoError(t, se.Open())
 	cancel := func() {
 		defer db.Close()

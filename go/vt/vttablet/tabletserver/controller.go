@@ -17,16 +17,16 @@ limitations under the License.
 package tabletserver
 
 import (
-	"golang.org/x/net/context"
+	"context"
 
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/vttablet/onlineddl"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"vitess.io/vitess/go/vt/vttablet/vexec"
 
 	"time"
 
@@ -83,7 +83,7 @@ type Controller interface {
 	QueryService() queryservice.QueryService
 
 	// OnlineDDLExecutor the online DDL executor used by this Controller
-	OnlineDDLExecutor() *onlineddl.Executor
+	OnlineDDLExecutor() vexec.Executor
 
 	// SchemaEngine returns the SchemaEngine object used by this Controller
 	SchemaEngine() *schema.Engine

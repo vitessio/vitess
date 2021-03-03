@@ -47,7 +47,8 @@ import (
 	"fmt"
 	"sync"
 
-	"golang.org/x/net/context"
+	"context"
+
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/vt/log"
@@ -75,6 +76,7 @@ const (
 	SrvVSchemaFile       = "SrvVSchema"
 	SrvKeyspaceFile      = "SrvKeyspace"
 	RoutingRulesFile     = "RoutingRules"
+	ExternalClustersFile = "ExternalClusters"
 )
 
 // Path for all object types.
@@ -85,6 +87,9 @@ const (
 	ShardsPath       = "shards"
 	TabletsPath      = "tablets"
 	MetadataPath     = "metadata"
+
+	ExternalClusterMySQL  = "mysql"
+	ExternalClusterVitess = "vitess"
 )
 
 // Factory is a factory interface to create Conn objects.
@@ -327,4 +332,24 @@ func (ts *Server) clearCellAliasesCache() {
 	cellsAliases.mu.Lock()
 	defer cellsAliases.mu.Unlock()
 	cellsAliases.cellsToAliases = make(map[string]string)
+}
+
+// OpenExternalVitessClusterServer returns the topo server of the external cluster
+func (ts *Server) OpenExternalVitessClusterServer(ctx context.Context, clusterName string) (*Server, error) {
+	vc, err := ts.GetExternalVitessCluster(ctx, clusterName)
+	if err != nil {
+		return nil, err
+	}
+	if vc == nil {
+		return nil, fmt.Errorf("no vitess cluster found with name %s", clusterName)
+	}
+	var externalTopo *Server
+	externalTopo, err = OpenServer(vc.TopoConfig.TopoType, vc.TopoConfig.Server, vc.TopoConfig.Root)
+	if err != nil {
+		return nil, err
+	}
+	if externalTopo == nil {
+		return nil, fmt.Errorf("unable to open external topo for config %s", clusterName)
+	}
+	return externalTopo, nil
 }

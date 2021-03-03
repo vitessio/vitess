@@ -12,7 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM vitess/base AS base
+ARG VT_BASE_VER=latest
+
+FROM vitess/base:${VT_BASE_VER} AS base
 
 FROM debian:buster-slim
 

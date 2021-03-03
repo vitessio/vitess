@@ -18,7 +18,7 @@ limitations under the License.
 // a sortable table on a webpage.
 //
 // It is used by many internal vttablet pages e.g. /queryz, /querylogz, /schemaz
-// /streamqueryz or /txlogz.
+// /livequeryz or /txlogz.
 //
 // See tabletserver/querylogz.go for an example how to use it.
 package logz

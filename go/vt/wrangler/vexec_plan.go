@@ -24,6 +24,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	"github.com/olekukonko/tablewriter"
@@ -92,11 +93,11 @@ func (p vreplicationPlanner) dryRun(ctx context.Context) error {
 		p.vx.plannedQuery, p.vx.keyspace, p.vx.workflow)
 	tableString := &strings.Builder{}
 	table := tablewriter.NewWriter(tableString)
-	table.SetHeader([]string{"Tablet", "ID", "BinLogSource", "State", "DBName", "Current GTID", "MaxReplicationLag"})
+	table.SetHeader([]string{"Tablet", "ID", "BinLogSource", "State", "DBName", "Current GTID"})
 	for _, master := range p.vx.masters {
 		key := fmt.Sprintf("%s/%s", master.Shard, master.AliasString())
 		for _, stream := range rsr.ShardStatuses[key].MasterReplicationStatuses {
-			table.Append([]string{key, fmt.Sprintf("%d", stream.ID), stream.Bls.String(), stream.State, stream.DBName, stream.Pos, fmt.Sprintf("%d", stream.MaxReplicationLag)})
+			table.Append([]string{key, fmt.Sprintf("%d", stream.ID), stream.Bls.String(), stream.State, stream.DBName, stream.Pos})
 		}
 	}
 	table.SetAutoMergeCellsByColumnIndex([]int{0})
@@ -135,10 +136,12 @@ func newSchemaMigrationsPlanner(vx *vexec) vexecPlanner {
 					migration_statement,
 					strategy,
 					options,
+					ddl_action,
 					requested_timestamp,
+					migration_context,
 					migration_status
 				) VALUES (
-					'val', 'val', 'val', 'val', 'val', 'val', 'val', 'val', FROM_UNIXTIME(0), 'val'
+					'val', 'val', 'val', 'val', 'val', 'val', 'val', 'val', 'val', FROM_UNIXTIME(0), 'val', 'val'
 				)`,
 			},
 		},
@@ -188,7 +191,7 @@ func qualifiedTableName(tableName string) string {
 // getPlanner returns a specific planner appropriate for the queried table
 func (vx *vexec) getPlanner(ctx context.Context) error {
 	switch vx.tableName {
-	case qualifiedTableName(schemaMigrationsTableName):
+	case qualifiedTableName(schema.SchemaMigrationsTableName):
 		vx.planner = newSchemaMigrationsPlanner(vx)
 	case qualifiedTableName(vreplicationTableName):
 		vx.planner = newVReplicationPlanner(vx)

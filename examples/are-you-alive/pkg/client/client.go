@@ -3,11 +3,12 @@ package client
 import (
 	"database/sql"
 	"fmt"
+	"strings"
+
 	mysql "github.com/go-sql-driver/mysql"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/sirupsen/logrus"
-	"strings"
 )
 
 /*

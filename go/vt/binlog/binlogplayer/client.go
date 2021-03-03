@@ -19,7 +19,7 @@ package binlogplayer
 import (
 	"flag"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"vitess.io/vitess/go/vt/log"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"

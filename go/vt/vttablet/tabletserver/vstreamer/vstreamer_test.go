@@ -17,7 +17,6 @@ limitations under the License.
 package vstreamer
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -27,13 +26,13 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/mysql"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
@@ -51,6 +50,115 @@ func checkIfOptionIsSupported(t *testing.T, variable string) bool {
 		return true
 	}
 	return false
+}
+
+type TestColumn struct {
+	name, dataType, colType string
+	len, charset            int64
+}
+
+type TestFieldEvent struct {
+	table, db string
+	cols      []*TestColumn
+}
+
+func (tfe *TestFieldEvent) String() string {
+	s := fmt.Sprintf("type:FIELD field_event:<table_name:\"%s\"", tfe.table)
+	fld := " "
+	for _, col := range tfe.cols {
+		fld += fmt.Sprintf("fields:<name:\"%s\" type:%s table:\"%s\" org_table:\"%s\" database:\"%s\" org_name:\"%s\" column_length:%d charset:%d",
+			col.name, col.dataType, tfe.table, tfe.table, tfe.db, col.name, col.len, col.charset)
+		if col.colType != "" {
+			fld += fmt.Sprintf(" column_type:\"%s\"", col.colType)
+		}
+		fld += " > "
+	}
+	s += fld
+	s += "> "
+	return s
+}
+
+func TestSetAndEnum(t *testing.T) {
+	execStatements(t, []string{
+		"create table t1(id int, val binary(4), color set('red','green','blue'), size enum('S','M','L'), primary key(id))",
+	})
+	defer execStatements(t, []string{
+		"drop table t1",
+	})
+	engine.se.Reload(context.Background())
+	queries := []string{
+		"begin",
+		"insert into t1 values (1, 'aaa', 'red,blue', 'S')",
+		"insert into t1 values (2, 'bbb', 'green', 'M')",
+		"insert into t1 values (3, 'ccc', 'red,blue,green', 'L')",
+		"commit",
+	}
+
+	fe := &TestFieldEvent{
+		table: "t1",
+		db:    "vttest",
+		cols: []*TestColumn{
+			{name: "id", dataType: "INT32", colType: "", len: 11, charset: 63},
+			{name: "val", dataType: "BINARY", colType: "", len: 4, charset: 63},
+			{name: "color", dataType: "SET", colType: "set('red','green','blue')", len: 42, charset: 33},
+			{name: "size", dataType: "ENUM", colType: "enum('S','M','L')", len: 3, charset: 33},
+		},
+	}
+
+	testcases := []testcase{{
+		input: queries,
+		output: [][]string{{
+			`begin`,
+			fe.String(),
+			`type:ROW row_event:<table_name:"t1" row_changes:<after:<lengths:1 lengths:3 lengths:1 lengths:1 values:"1aaa51" > > > `,
+			`type:ROW row_event:<table_name:"t1" row_changes:<after:<lengths:1 lengths:3 lengths:1 lengths:1 values:"2bbb22" > > > `,
+			`type:ROW row_event:<table_name:"t1" row_changes:<after:<lengths:1 lengths:3 lengths:1 lengths:1 values:"3ccc73" > > > `,
+			`gtid`,
+			`commit`,
+		}},
+	}}
+	runCases(t, nil, testcases, "current", nil)
+}
+
+func TestCellValuePadding(t *testing.T) {
+
+	execStatements(t, []string{
+		"create table t1(id int, val binary(4), primary key(val))",
+		"create table t2(id int, val char(4), primary key(val))",
+	})
+	defer execStatements(t, []string{
+		"drop table t1",
+		"drop table t2",
+	})
+	engine.se.Reload(context.Background())
+	queries := []string{
+		"begin",
+		"insert into t1 values (1, 'aaa')",
+		"insert into t1 values (2, 'bbb')",
+		"update t1 set id = 11 where val = 'aaa\000'",
+		"insert into t2 values (1, 'aaa')",
+		"insert into t2 values (2, 'bbb')",
+		"update t2 set id = 11 where val = 'aaa'",
+		"commit",
+	}
+
+	testcases := []testcase{{
+		input: queries,
+		output: [][]string{{
+			`begin`,
+			`type:FIELD field_event:<table_name:"t1" fields:<name:"id" type:INT32 table:"t1" org_table:"t1" database:"vttest" org_name:"id" column_length:11 charset:63 > fields:<name:"val" type:BINARY table:"t1" org_table:"t1" database:"vttest" org_name:"val" column_length:4 charset:63 > > `,
+			`type:ROW row_event:<table_name:"t1" row_changes:<after:<lengths:1 lengths:3 values:"1aaa" > > > `,
+			`type:ROW row_event:<table_name:"t1" row_changes:<after:<lengths:1 lengths:3 values:"2bbb" > > > `,
+			`type:ROW row_event:<table_name:"t1" row_changes:<before:<lengths:1 lengths:3 values:"1aaa" > after:<lengths:2 lengths:3 values:"11aaa" > > > `,
+			`type:FIELD field_event:<table_name:"t2" fields:<name:"id" type:INT32 table:"t2" org_table:"t2" database:"vttest" org_name:"id" column_length:11 charset:63 > fields:<name:"val" type:CHAR table:"t2" org_table:"t2" database:"vttest" org_name:"val" column_length:12 charset:33 > > `,
+			`type:ROW row_event:<table_name:"t2" row_changes:<after:<lengths:1 lengths:3 values:"1aaa" > > > `,
+			`type:ROW row_event:<table_name:"t2" row_changes:<after:<lengths:1 lengths:3 values:"2bbb" > > > `,
+			`type:ROW row_event:<table_name:"t2" row_changes:<before:<lengths:1 lengths:3 values:"1aaa" > after:<lengths:2 lengths:3 values:"11aaa" > > > `,
+			`gtid`,
+			`commit`,
+		}},
+	}}
+	runCases(t, nil, testcases, "current", nil)
 }
 
 func TestSetStatement(t *testing.T) {
@@ -94,6 +202,41 @@ func TestSetStatement(t *testing.T) {
 	runCases(t, nil, testcases, "current", nil)
 }
 
+func TestStmtComment(t *testing.T) {
+
+	if testing.Short() {
+		t.Skip()
+	}
+
+	execStatements(t, []string{
+		"create table t1(id int, val varbinary(128), primary key(id))",
+	})
+	defer execStatements(t, []string{
+		"drop table t1",
+	})
+	engine.se.Reload(context.Background())
+	queries := []string{
+		"begin",
+		"insert into t1 values (1, 'aaa')",
+		"commit",
+		"/*!40000 ALTER TABLE `t1` DISABLE KEYS */",
+	}
+	testcases := []testcase{{
+		input: queries,
+		output: [][]string{{
+			`begin`,
+			`type:FIELD field_event:<table_name:"t1" fields:<name:"id" type:INT32 table:"t1" org_table:"t1" database:"vttest" org_name:"id" column_length:11 charset:63 > fields:<name:"val" type:VARBINARY table:"t1" org_table:"t1" database:"vttest" org_name:"val" column_length:128 charset:63 > > `,
+			`type:ROW row_event:<table_name:"t1" row_changes:<after:<lengths:1 lengths:3 values:"1aaa" > > > `,
+			`gtid`,
+			`commit`,
+		}, {
+			`gtid`,
+			`other`,
+		}},
+	}}
+	runCases(t, nil, testcases, "current", nil)
+}
+
 func TestVersion(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
@@ -108,7 +251,7 @@ func TestVersion(t *testing.T) {
 	require.NoError(t, err)
 	defer env.SchemaEngine.EnableHistorian(false)
 
-	engine = NewEngine(engine.env, env.SrvTopo, env.SchemaEngine, env.Cells[0])
+	engine = NewEngine(engine.env, env.SrvTopo, env.SchemaEngine, nil, env.Cells[0])
 	engine.InitDBConfig(env.KeyspaceName)
 	engine.Open()
 	defer engine.Close()
@@ -558,6 +701,7 @@ func TestSavepoint(t *testing.T) {
 	}}
 	runCases(t, nil, testcases, "current", nil)
 }
+
 func TestStatements(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
@@ -1300,6 +1444,62 @@ func TestBestEffortNameInFieldEvent(t *testing.T) {
 	runCases(t, filter, testcases, position, nil)
 }
 
+// test that vstreamer ignores tables created by OnlineDDL
+func TestInternalTables(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+	filter := &binlogdatapb.Filter{
+		FieldEventMode: binlogdatapb.Filter_BEST_EFFORT,
+		Rules: []*binlogdatapb.Rule{{
+			Match: "/.*/",
+		}},
+	}
+	// Modeled after vttablet endtoend compatibility tests.
+	execStatements(t, []string{
+		"create table vitess_test(id int, val varbinary(128), primary key(id))",
+		"create table _1e275eef_3b20_11eb_a38f_04ed332e05c2_20201210204529_gho(id int, val varbinary(128), primary key(id))",
+		"create table _vt_PURGE_1f9194b43b2011eb8a0104ed332e05c2_20201210194431(id int, val varbinary(128), primary key(id))",
+		"create table _product_old(id int, val varbinary(128), primary key(id))",
+	})
+	position := masterPosition(t)
+	execStatements(t, []string{
+		"insert into vitess_test values(1, 'abc')",
+		"insert into _1e275eef_3b20_11eb_a38f_04ed332e05c2_20201210204529_gho values(1, 'abc')",
+		"insert into _vt_PURGE_1f9194b43b2011eb8a0104ed332e05c2_20201210194431 values(1, 'abc')",
+		"insert into _product_old values(1, 'abc')",
+	})
+
+	defer execStatements(t, []string{
+		"drop table vitess_test",
+		"drop table _1e275eef_3b20_11eb_a38f_04ed332e05c2_20201210204529_gho",
+		"drop table _vt_PURGE_1f9194b43b2011eb8a0104ed332e05c2_20201210194431",
+		"drop table _product_old",
+	})
+	engine.se.Reload(context.Background())
+	testcases := []testcase{{
+		input: []string{
+			"insert into vitess_test values(2, 'abc')",
+		},
+		// In this case, we don't have information about vitess_test since it was renamed to vitess_test_test.
+		// information returned by binlog for val column == varchar (rather than varbinary).
+		output: [][]string{{
+			`begin`,
+			`type:FIELD field_event:<table_name:"vitess_test" fields:<name:"id" type:INT32 table:"vitess_test" org_table:"vitess_test" database:"vttest" org_name:"id" column_length:11 charset:63 > fields:<name:"val" type:VARBINARY table:"vitess_test" org_table:"vitess_test" database:"vttest" org_name:"val" column_length:128 charset:63 > > `,
+			`type:ROW row_event:<table_name:"vitess_test" row_changes:<after:<lengths:1 lengths:3 values:"1abc" > > > `,
+			`gtid`,
+			`commit`,
+		}, {`begin`, `gtid`, `commit`}, {`begin`, `gtid`, `commit`}, {`begin`, `gtid`, `commit`}, // => inserts into the three internal comments
+			{
+				`begin`,
+				`type:ROW row_event:<table_name:"vitess_test" row_changes:<after:<lengths:1 lengths:3 values:"2abc" > > > `,
+				`gtid`,
+				`commit`,
+			}},
+	}}
+	runCases(t, filter, testcases, position, nil)
+}
+
 func TestTypes(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
@@ -1312,6 +1512,7 @@ func TestTypes(t *testing.T) {
 		"create table vitess_strings(vb varbinary(16), c char(16), vc varchar(16), b binary(4), tb tinyblob, bl blob, ttx tinytext, tx text, en enum('a','b'), s set('a','b'), primary key(vb))",
 		"create table vitess_misc(id int, b bit(8), d date, dt datetime, t time, g geometry, primary key(id))",
 		"create table vitess_null(id int, val varbinary(128), primary key(id))",
+		"create table vitess_decimal(id int, dec1 decimal(12,4), dec2 decimal(13,4), primary key(id))",
 	})
 	defer execStatements(t, []string{
 		"drop table vitess_ints",
@@ -1319,6 +1520,7 @@ func TestTypes(t *testing.T) {
 		"drop table vitess_strings",
 		"drop table vitess_misc",
 		"drop table vitess_null",
+		"drop table vitess_decimal",
 	})
 	engine.se.Reload(context.Background())
 
@@ -1363,9 +1565,9 @@ func TestTypes(t *testing.T) {
 		},
 		output: [][]string{{
 			`begin`,
-			`type:FIELD field_event:<table_name:"vitess_strings" fields:<name:"vb" type:VARBINARY table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"vb" column_length:16 charset:63 > fields:<name:"c" type:CHAR table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"c" column_length:48 charset:33 > fields:<name:"vc" type:VARCHAR table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"vc" column_length:48 charset:33 > fields:<name:"b" type:BINARY table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"b" column_length:4 charset:63 > fields:<name:"tb" type:BLOB table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"tb" column_length:255 charset:63 > fields:<name:"bl" type:BLOB table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"bl" column_length:65535 charset:63 > fields:<name:"ttx" type:TEXT table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"ttx" column_length:765 charset:33 > fields:<name:"tx" type:TEXT table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"tx" column_length:196605 charset:33 > fields:<name:"en" type:ENUM table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"en" column_length:3 charset:33 > fields:<name:"s" type:SET table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"s" column_length:9 charset:33 > > `,
-			`type:ROW row_event:<table_name:"vitess_strings" row_changes:<after:<lengths:1 lengths:1 lengths:1 lengths:4 lengths:1 lengths:1 lengths:1 lengths:1 lengths:1 lengths:1 ` +
-				`values:"abcd\000\000\000efgh13" > > > `,
+			`type:FIELD field_event:<table_name:"vitess_strings" fields:<name:"vb" type:VARBINARY table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"vb" column_length:16 charset:63 > fields:<name:"c" type:CHAR table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"c" column_length:48 charset:33 > fields:<name:"vc" type:VARCHAR table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"vc" column_length:48 charset:33 > fields:<name:"b" type:BINARY table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"b" column_length:4 charset:63 > fields:<name:"tb" type:BLOB table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"tb" column_length:255 charset:63 > fields:<name:"bl" type:BLOB table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"bl" column_length:65535 charset:63 > fields:<name:"ttx" type:TEXT table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"ttx" column_length:765 charset:33 > fields:<name:"tx" type:TEXT table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"tx" column_length:196605 charset:33 > fields:<name:"en" type:ENUM table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"en" column_length:3 charset:33 column_type:"enum('a','b')" > fields:<name:"s" type:SET table:"vitess_strings" org_table:"vitess_strings" database:"vttest" org_name:"s" column_length:9 charset:33 column_type:"set('a','b')" > > `,
+			`type:ROW row_event:<table_name:"vitess_strings" row_changes:<after:<lengths:1 lengths:1 lengths:1 lengths:1 lengths:1 lengths:1 lengths:1 lengths:1 lengths:1 lengths:1 ` +
+				`values:"abcdefgh13" > > > `,
 			`gtid`,
 			`commit`,
 		}},
@@ -1392,14 +1594,45 @@ func TestTypes(t *testing.T) {
 			`gtid`,
 			`commit`,
 		}},
+	}, {
+		input: []string{
+			"insert into vitess_decimal values(1, 1.23, 1.23)",
+			"insert into vitess_decimal values(2, -1.23, -1.23)",
+			"insert into vitess_decimal values(3, 0000000001.23, 0000000001.23)",
+			"insert into vitess_decimal values(4, -0000000001.23, -0000000001.23)",
+		},
+		output: [][]string{{
+			`begin`,
+			`type:FIELD field_event:<table_name:"vitess_decimal" fields:<name:"id" type:INT32 table:"vitess_decimal" org_table:"vitess_decimal" database:"vttest" org_name:"id" column_length:11 charset:63 > fields:<name:"dec1" type:DECIMAL table:"vitess_decimal" org_table:"vitess_decimal" database:"vttest" org_name:"dec1" column_length:14 charset:63 decimals:4 > fields:<name:"dec2" type:DECIMAL table:"vitess_decimal" org_table:"vitess_decimal" database:"vttest" org_name:"dec2" column_length:15 charset:63 decimals:4 > > `,
+			`type:ROW row_event:<table_name:"vitess_decimal" row_changes:<after:<lengths:1 lengths:6 lengths:6 values:"11.23001.2300" > > > `,
+			`gtid`,
+			`commit`,
+		}, {
+			`begin`,
+			`type:ROW row_event:<table_name:"vitess_decimal" row_changes:<after:<lengths:1 lengths:7 lengths:7 values:"2-1.2300-1.2300" > > > `,
+			`gtid`,
+			`commit`,
+		}, {
+			`begin`,
+			`type:ROW row_event:<table_name:"vitess_decimal" row_changes:<after:<lengths:1 lengths:6 lengths:6 values:"31.23001.2300" > > > `,
+			`gtid`,
+			`commit`,
+		}, {
+			`begin`,
+			`type:ROW row_event:<table_name:"vitess_decimal" row_changes:<after:<lengths:1 lengths:7 lengths:7 values:"4-1.2300-1.2300" > > > `,
+			`gtid`,
+			`commit`,
+		}},
 	}}
 	runCases(t, nil, testcases, "", nil)
 }
 
 func TestJSON(t *testing.T) {
-	t.Skip("This test is disabled because every flavor of mysql has a different behavior.")
-
+	log.Errorf("TestJSON: flavor is %s", env.Flavor)
 	// JSON is supported only after mysql57.
+	if !strings.Contains(env.Flavor, "mysql57") {
+		return
+	}
 	if err := env.Mysqld.ExecuteSuperQuery(context.Background(), "create table vitess_json(id int default 1, val json, primary key(id))"); err != nil {
 		// If it's a syntax error, MySQL is an older version. Skip this test.
 		if strings.Contains(err.Error(), "syntax") {
@@ -1409,18 +1642,34 @@ func TestJSON(t *testing.T) {
 	}
 	defer execStatement(t, "drop table vitess_json")
 	engine.se.Reload(context.Background())
+	jsonValues := []string{"{}", "123456", `"vtTablet"`, `{"foo":"bar"}`, `["abc",3.14,true]`}
 
+	var inputs, outputs []string
+	var outputsArray [][]string
+	fieldAdded := false
+	var expect = func(in string) string {
+		return strings.ReplaceAll(in, "\"", "\\\"")
+	}
+	for i, val := range jsonValues {
+		inputs = append(inputs, fmt.Sprintf("insert into vitess_json values(%d, %s)", i+1, encodeString(val)))
+
+		outputs = []string{}
+		outputs = append(outputs, `begin`)
+		if !fieldAdded {
+			outputs = append(outputs, `type:FIELD field_event:<table_name:"vitess_json" fields:<name:"id" type:INT32 table:"vitess_json" org_table:"vitess_json" database:"vttest" org_name:"id" column_length:11 charset:63 > fields:<name:"val" type:JSON table:"vitess_json" org_table:"vitess_json" database:"vttest" org_name:"val" column_length:4294967295 charset:63 > > `)
+			fieldAdded = true
+		}
+		out := expect(val)
+
+		outputs = append(outputs, fmt.Sprintf(`type:ROW row_event:<table_name:"vitess_json" row_changes:<after:<lengths:1 lengths:%d values:"%d%s" > > > `,
+			len(val), i+1 /*id increments*/, out))
+		outputs = append(outputs, `gtid`)
+		outputs = append(outputs, `commit`)
+		outputsArray = append(outputsArray, outputs)
+	}
 	testcases := []testcase{{
-		input: []string{
-			`insert into vitess_json values(1, '{"foo": "bar"}')`,
-		},
-		output: [][]string{{
-			`begin`,
-			`type:FIELD field_event:<table_name:"vitess_json" fields:<name:"id" type:INT32 > fields:<name:"val" type:JSON > > `,
-			`type:ROW row_event:<table_name:"vitess_json" row_changes:<after:<lengths:1 lengths:24 values:"1JSON_OBJECT('foo','bar')" > > > `,
-			`gtid`,
-			`commit`,
-		}},
+		input:  inputs,
+		output: outputsArray,
 	}}
 	runCases(t, nil, testcases, "", nil)
 }
@@ -1674,7 +1923,7 @@ func TestFilteredMultipleWhere(t *testing.T) {
 }
 
 func runCases(t *testing.T, filter *binlogdatapb.Filter, testcases []testcase, position string, tablePK []*binlogdatapb.TableLastPK) {
-	t.Helper()
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	wg, ch := startStream(ctx, t, filter, position, tablePK)
@@ -1707,7 +1956,6 @@ func runCases(t *testing.T, filter *binlogdatapb.Filter, testcases []testcase, p
 }
 
 func expectLog(ctx context.Context, t *testing.T, input interface{}, ch <-chan []*binlogdatapb.VEvent, output [][]string) {
-	t.Helper()
 	timer := time.NewTimer(1 * time.Minute)
 	defer timer.Stop()
 	for _, wantset := range output {
@@ -1796,9 +2044,7 @@ func startStream(ctx context.Context, t *testing.T, filter *binlogdatapb.Filter,
 	go func() {
 		defer close(ch)
 		defer wg.Done()
-		log.Infof(">>>>>>>>>>> before vstream")
 		vstream(ctx, t, position, tablePKs, filter, ch)
-		log.Infof(">>>>>>>>>> after vstream")
 	}()
 	return &wg, ch
 }
@@ -1812,11 +2058,17 @@ func vstream(ctx context.Context, t *testing.T, pos string, tablePKs []*binlogda
 		}
 	}
 	return engine.Stream(ctx, pos, tablePKs, filter, func(evs []*binlogdatapb.VEvent) error {
+		timer := time.NewTimer(2 * time.Second)
+		defer timer.Stop()
+
 		t.Logf("Received events: %v", evs)
 		select {
 		case ch <- evs:
 		case <-ctx.Done():
 			return fmt.Errorf("engine.Stream Done() stream ended early")
+		case <-timer.C:
+			t.Log("VStream timed out waiting for events")
+			return io.EOF
 		}
 		return nil
 	})
@@ -1875,10 +2127,4 @@ func setVSchema(t *testing.T, vschema string) {
 	if !updated {
 		t.Error("vschema did not get updated")
 	}
-}
-
-func encodeString(in string) string {
-	buf := bytes.NewBuffer(nil)
-	sqltypes.NewVarChar(in).EncodeSQL(buf)
-	return buf.String()
 }

@@ -23,6 +23,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 
 	"github.com/golang/protobuf/proto"
+
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/proto/topodata"

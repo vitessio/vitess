@@ -32,11 +32,11 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 
-	"golang.org/x/net/context"
-	"vitess.io/vitess/go/trace"
+	"context"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/callinfo"
 	"vitess.io/vitess/go/vt/log"
@@ -45,6 +45,8 @@ import (
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
+
+	"github.com/google/uuid"
 )
 
 var (
@@ -52,9 +54,8 @@ var (
 	mysqlServerBindAddress        = flag.String("mysql_server_bind_address", "", "Binds on this address when listening to MySQL binary protocol. Useful to restrict listening to 'localhost' only for instance.")
 	mysqlServerSocketPath         = flag.String("mysql_server_socket_path", "", "This option specifies the Unix socket file to use when listening for local connections. By default it will be empty and it won't listen to a unix socket")
 	mysqlTCPVersion               = flag.String("mysql_tcp_version", "tcp", "Select tcp, tcp4, or tcp6 to control the socket type.")
-	mysqlAuthServerImpl           = flag.String("mysql_auth_server_impl", "static", "Which auth server implementation to use.")
+	mysqlAuthServerImpl           = flag.String("mysql_auth_server_impl", "static", "Which auth server implementation to use. Options: none, ldap, clientcert, static, vault.")
 	mysqlAllowClearTextWithoutTLS = flag.Bool("mysql_allow_clear_text_without_tls", false, "If set, the server will allow the use of a clear text password over non-SSL connections.")
-	mysqlServerVersion            = flag.String("mysql_server_version", mysql.DefaultServerVersion, "MySQL server version to advertise.")
 	mysqlProxyProtocol            = flag.Bool("proxy_protocol", false, "Enable HAProxy PROXY protocol on MySQL listener socket")
 
 	mysqlServerRequireSecureTransport = flag.Bool("mysql_server_require_secure_transport", false, "Reject insecure connections but only if mysql_server_ssl_cert and mysql_server_ssl_key are provided")
@@ -69,7 +70,7 @@ var (
 	mysqlConnWriteTimeout = flag.Duration("mysql_server_write_timeout", 0, "connection write timeout")
 	mysqlQueryTimeout     = flag.Duration("mysql_server_query_timeout", 0, "mysql query timeout")
 
-	mysqlDefaultWorkloadName = flag.String("mysql_default_workload", "UNSPECIFIED", "Default session workload (OLTP, OLAP, DBA)")
+	mysqlDefaultWorkloadName = flag.String("mysql_default_workload", "OLTP", "Default session workload (OLTP, OLAP, DBA)")
 	mysqlDefaultWorkload     int32
 
 	busyConnections int32
@@ -225,9 +226,9 @@ func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query string, callback func(*sq
 
 func fillInTxStatusFlags(c *mysql.Conn, session *vtgatepb.Session) {
 	if session.InTransaction {
-		c.StatusFlags |= mysql.ServerStatusInTransaction
+		c.StatusFlags |= mysql.ServerStatusInTrans
 	} else {
-		c.StatusFlags &= mysql.NoServerStatusInTransaction
+		c.StatusFlags &= mysql.NoServerStatusInTrans
 	}
 	if session.Autocommit {
 		c.StatusFlags |= mysql.ServerStatusAutocommit
@@ -334,12 +335,16 @@ func (vh *vtgateHandler) WarningCount(c *mysql.Conn) uint16 {
 func (vh *vtgateHandler) session(c *mysql.Conn) *vtgatepb.Session {
 	session, _ := c.ClientData.(*vtgatepb.Session)
 	if session == nil {
+		u, _ := uuid.NewUUID()
 		session = &vtgatepb.Session{
 			Options: &querypb.ExecuteOptions{
 				IncludedFields: querypb.ExecuteOptions_ALL,
 				Workload:       querypb.ExecuteOptions_Workload(mysqlDefaultWorkload),
 			},
-			Autocommit: true,
+			Autocommit:           true,
+			DDLStrategy:          *defaultDDLStrategy,
+			SessionUUID:          u.String(),
+			EnableSystemSettings: *sysVarSetEnabled,
 		}
 		if c.Capabilities&mysql.CapabilityClientFoundRows != 0 {
 			session.Options.ClientFoundRows = true
@@ -419,8 +424,8 @@ func initMySQLProtocol() {
 		if err != nil {
 			log.Exitf("mysql.NewListener failed: %v", err)
 		}
-		if *mysqlServerVersion != "" {
-			mysqlListener.ServerVersion = *mysqlServerVersion
+		if *servenv.MySQLServerVersion != "" {
+			mysqlListener.ServerVersion = *servenv.MySQLServerVersion
 		}
 		if *mysqlSslCert != "" && *mysqlSslKey != "" {
 			initTLSConfig(mysqlListener, *mysqlSslCert, *mysqlSslKey, *mysqlSslCa, *mysqlServerRequireSecureTransport)

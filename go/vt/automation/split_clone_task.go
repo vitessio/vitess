@@ -17,7 +17,8 @@ limitations under the License.
 package automation
 
 import (
-	"golang.org/x/net/context"
+	"context"
+
 	automationpb "vitess.io/vitess/go/vt/proto/automation"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 )

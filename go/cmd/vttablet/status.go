@@ -65,7 +65,6 @@ var (
       <a href="/debug/tablet_plans">Schema&nbsp;Query&nbsp;Plans</a></br>
       <a href="/debug/query_stats">Schema&nbsp;Query&nbsp;Stats</a></br>
       <a href="/queryz">Query&nbsp;Stats</a></br>
-      <a href="/streamqueryz">Streaming&nbsp;Query&nbsp;Stats</a></br>
     </td>
     <td width="25%" border="">
       <a href="/debug/consolidations">Consolidations</a></br>
@@ -76,8 +75,9 @@ var (
     <td width="25%" border="">
       <a href="/healthz">Health Check</a></br>
       <a href="/debug/health">Query Service Health Check</a></br>
-      <a href="/streamqueryz">Current Stream Queries</a></br>
+      <a href="/livequeryz/">Real-time Queries</a></br>
       <a href="/debug/status_details">JSON Status Details</a></br>
+      <a href="/debug/env">View/Change Environment variables</a></br>
     </td>
   </tr>
 </table>

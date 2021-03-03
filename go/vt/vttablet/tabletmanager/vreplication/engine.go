@@ -17,6 +17,7 @@ limitations under the License.
 package vreplication
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"fmt"
@@ -24,23 +25,22 @@ import (
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/sync2"
-	"vitess.io/vitess/go/vt/dbconfigs"
-	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
-	"vitess.io/vitess/go/vt/withddl"
-
-	"golang.org/x/net/context"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
+	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
+	"vitess.io/vitess/go/vt/withddl"
 )
 
 const (
@@ -64,6 +64,10 @@ const (
 
 var withDDL *withddl.WithDDL
 
+const (
+	throttlerAppName = "vreplication"
+)
+
 func init() {
 	allddls := append([]string{}, binlogplayer.CreateVReplicationTable()...)
 	allddls = append(allddls, binlogplayer.AlterVReplicationTable...)
@@ -71,7 +75,9 @@ func init() {
 	withDDL = withddl.New(allddls)
 }
 
-var tabletTypesStr = flag.String("vreplication_tablet_type", "REPLICA", "comma separated list of tablet types used as a source")
+// this are the default tablet_types that will be used by the tablet picker to find sources for a vreplication stream
+// it can be overridden by passing a different list to the MoveTables or Reshard commands
+var tabletTypesStr = flag.String("vreplication_tablet_type", "MASTER,REPLICA", "comma separated list of tablet types used as a source")
 
 // waitRetryTime can be changed to a smaller value for tests.
 // A VReplication stream can be created by sending an insert statement
@@ -108,6 +114,8 @@ type Engine struct {
 
 	journaler map[string]*journalEvent
 	ec        *externalConnector
+
+	throttlerClient *throttle.Client
 }
 
 type journalEvent struct {
@@ -118,14 +126,15 @@ type journalEvent struct {
 
 // NewEngine creates a new Engine.
 // A nil ts means that the Engine is disabled.
-func NewEngine(config *tabletenv.TabletConfig, ts *topo.Server, cell string, mysqld mysqlctl.MysqlDaemon) *Engine {
+func NewEngine(config *tabletenv.TabletConfig, ts *topo.Server, cell string, mysqld mysqlctl.MysqlDaemon, lagThrottler *throttle.Throttler) *Engine {
 	vre := &Engine{
-		controllers: make(map[int]*controller),
-		ts:          ts,
-		cell:        cell,
-		mysqld:      mysqld,
-		journaler:   make(map[string]*journalEvent),
-		ec:          newExternalConnector(config.ExternalConnections),
+		controllers:     make(map[int]*controller),
+		ts:              ts,
+		cell:            cell,
+		mysqld:          mysqld,
+		journaler:       make(map[string]*journalEvent),
+		ec:              newExternalConnector(config.ExternalConnections),
+		throttlerClient: throttle.NewBackgroundClient(lagThrottler, throttlerAppName, throttle.ThrottleCheckPrimaryWrite),
 	}
 	return vre
 }

@@ -1,0 +1,57 @@
+# simple call proc on current keyspace
+"call proc()"
+{
+  "QueryType": "CALL_PROC",
+  "Original": "call proc()",
+  "Instructions": {
+    "OperatorType": "Send",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetDestination": "AnyShard()",
+    "IsDML": false,
+    "Query": "call proc()",
+    "SingleShardOnly": false
+  }
+}
+
+# call qualified keyspace
+"call main.proc()"
+{
+  "QueryType": "CALL_PROC",
+  "Original": "call main.proc()",
+  "Instructions": {
+    "OperatorType": "Send",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetDestination": "AnyShard()",
+    "IsDML": false,
+    "Query": "call proc()",
+    "SingleShardOnly": false
+  }
+}
+
+# CALL not allowed on sharded keyspaces
+"call user.proc()"
+"CALL is not supported for sharded database"
+
+# CALL with expressions and parameters 
+"call proc(1, 'foo', @var)"
+{
+  "QueryType": "CALL_PROC",
+  "Original": "call proc(1, 'foo', @var)",
+  "Instructions": {
+    "OperatorType": "Send",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetDestination": "AnyShard()",
+    "IsDML": false,
+    "Query": "call proc(1, 'foo', :__vtudvvar)",
+    "SingleShardOnly": false
+  }
+}

@@ -19,10 +19,11 @@ package reservedconn
 import (
 	"flag"
 	"fmt"
-	"github.com/google/go-cmp/cmp"
-	"github.com/stretchr/testify/assert"
 	"os"
 	"testing"
+
+	"github.com/google/go-cmp/cmp"
+	"github.com/stretchr/testify/assert"
 
 	"github.com/stretchr/testify/require"
 
@@ -167,4 +168,14 @@ func assertIsEmpty(t *testing.T, conn *mysql.Conn, query string) {
 	t.Helper()
 	qr := checkedExec(t, conn, query)
 	assert.Empty(t, qr.Rows)
+}
+
+func assertResponseMatch(t *testing.T, conn *mysql.Conn, query1, query2 string) {
+	qr1 := checkedExec(t, conn, query1)
+	got1 := fmt.Sprintf("%v", qr1.Rows)
+
+	qr2 := checkedExec(t, conn, query2)
+	got2 := fmt.Sprintf("%v", qr2.Rows)
+
+	assert.Equal(t, got1, got2)
 }

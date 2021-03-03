@@ -19,6 +19,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -60,14 +61,14 @@ func runCluster() {
 		Config: vttest.Config{
 			Topology: &vttestpb.VTTestTopology{
 				Keyspaces: []*vttestpb.Keyspace{{
-					Name: "user",
+					Name: "customer",
 					Shards: []*vttestpb.Shard{{
 						Name: "-80",
 					}, {
 						Name: "80-",
 					}},
 				}, {
-					Name: "lookup",
+					Name: "product",
 					Shards: []*vttestpb.Shard{{
 						Name: "0",
 					}},
@@ -75,6 +76,8 @@ func runCluster() {
 			},
 			SchemaDir:     path.Join(os.Getenv("VTROOT"), "examples/demo/schema"),
 			MySQLBindHost: "0.0.0.0",
+			// VSchemaDDLAuthorizedUsers allows you to experiment with vschema DDLs.
+			VSchemaDDLAuthorizedUsers: "%",
 		},
 	}
 	env, err := vttest.NewLocalTestEnv("", 12345)
@@ -140,21 +143,17 @@ func exec(w http.ResponseWriter, req *http.Request) {
 	}
 	response["queries"] = queries
 
-	execQuery(conn, "user0", "select * from user", "user", "-80", response)
-	execQuery(conn, "user1", "select * from user", "user", "80-", response)
-	execQuery(conn, "user_extra0", "select * from user_extra", "user", "-80", response)
-	execQuery(conn, "user_extra1", "select * from user_extra", "user", "80-", response)
-	execQuery(conn, "music0", "select * from music", "user", "-80", response)
-	execQuery(conn, "music1", "select * from music", "user", "80-", response)
-	execQuery(conn, "music_extra0", "select * from music_extra", "user", "-80", response)
-	execQuery(conn, "music_extra1", "select * from music_extra", "user", "80-", response)
-	execQuery(conn, "name_info0", "select * from name_info", "user", "-80", response)
-	execQuery(conn, "name_info1", "select * from name_info", "user", "80-", response)
-	execQuery(conn, "music_keyspace_idx0", "select music_id, hex(keyspace_id) from music_keyspace_idx", "user", "-80", response)
-	execQuery(conn, "music_keyspace_idx1", "select music_id, hex(keyspace_id) from music_keyspace_idx", "user", "80-", response)
-	execQuery(conn, "user_seq", "select * from user_seq", "lookup", "0", response)
-	execQuery(conn, "music_seq", "select * from music_seq", "lookup", "0", response)
-	execQuery(conn, "name_keyspace_idx", "select name, hex(keyspace_id) from name_keyspace_idx", "lookup", "0", response)
+	execQuery(conn, "customer0", "select * from customer", "customer", "-80", response)
+	execQuery(conn, "customer1", "select * from customer", "customer", "80-", response)
+	execQuery(conn, "corder0", "select * from corder", "customer", "-80", response)
+	execQuery(conn, "corder1", "select * from corder", "customer", "80-", response)
+	execQuery(conn, "corder_event0", "select * from corder_event", "customer", "-80", response)
+	execQuery(conn, "corder_event1", "select * from corder_event", "customer", "80-", response)
+	execQuery(conn, "oname_keyspace_idx0", "select * from oname_keyspace_idx", "customer", "-80", response)
+	execQuery(conn, "oname_keyspace_idx1", "select * from oname_keyspace_idx", "customer", "80-", response)
+	execQuery(conn, "product", "select * from product", "product", "0", response)
+	execQuery(conn, "customer_seq", "select * from customer_seq", "product", "0", response)
+	execQuery(conn, "corder_keyspace_idx", "select * from corder_keyspace_idx", "product", "0", response)
 	enc.Encode(response)
 }
 
@@ -181,6 +180,9 @@ func execQuery(conn *mysql.Conn, key, query, keyspace, shard string, response ma
 	}
 	qr, err := conn.ExecuteFetch(query, 10000, true)
 	if err != nil {
+		if strings.Contains(err.Error(), "doesn't exist") {
+			return
+		}
 		response[key] = map[string]interface{}{
 			"title": title,
 			"error": err.Error(),
@@ -200,7 +202,11 @@ func resultToMap(title string, qr *sqltypes.Result) map[string]interface{} {
 	for _, row := range qr.Rows {
 		srow := make([]string, 0, len(row))
 		for _, value := range row {
-			srow = append(srow, value.ToString())
+			if value.Type() == sqltypes.VarBinary {
+				srow = append(srow, hex.EncodeToString(value.ToBytes()))
+			} else {
+				srow = append(srow, value.ToString())
+			}
 		}
 		rows = append(rows, srow)
 	}

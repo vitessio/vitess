@@ -24,7 +24,8 @@ import (
 	"strings"
 	"time"
 
-	"golang.org/x/net/context"
+	"context"
+
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 
 	"vitess.io/vitess/go/vt/log"

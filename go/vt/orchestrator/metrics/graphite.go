@@ -23,6 +23,7 @@ import (
 
 	graphite "github.com/cyberdelia/go-metrics-graphite"
 	"github.com/rcrowley/go-metrics"
+
 	"vitess.io/vitess/go/vt/orchestrator/config"
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
 	"vitess.io/vitess/go/vt/orchestrator/process"

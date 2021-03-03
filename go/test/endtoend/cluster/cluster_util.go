@@ -27,6 +27,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/mysql"
 	tabletpb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"

@@ -25,6 +25,7 @@ import (
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	watch "k8s.io/apimachinery/pkg/watch"
 	cache "k8s.io/client-go/tools/cache"
+
 	topov1beta1 "vitess.io/vitess/go/vt/topo/k8stopo/apis/topo/v1beta1"
 	versioned "vitess.io/vitess/go/vt/topo/k8stopo/client/clientset/versioned"
 	internalinterfaces "vitess.io/vitess/go/vt/topo/k8stopo/client/informers/externalversions/internalinterfaces"

@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/mysql"
 )
 

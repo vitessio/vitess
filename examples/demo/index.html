@@ -5,67 +5,73 @@
   href="https://stackpath.bootstrapcdn.com/bootswatch/4.3.1/minty/bootstrap.min.css">
 <head>
 <meta charset="US-ASCII">
-<title>Vitess V3 demo</title>
+<title>Vitess VSchema demo</title>
 </head>
 <body data-ng-controller="DemoController">
   <div class="container-fluid text-dark">
     <div class="row">
-      <h4 class="col-md-9">Vitess V3 demo</h4>
+      <h4 class="col-md-9">Vitess VSchema demo</h4>
     </div>
     <div class="row">
-      <div class="col-md-10">
+      <div class="col-md-8">
         <div class="card mt-3 mb-3">
           <div class="card-heading">
             <h4 class="text-center">customer</h4>
           </div>
           <div class="row">
-            <div class="col-md-3">
-              <div data-ng-repeat="curResult in [result.user0]"
-                data-ng-include="'result.html'"></div>
-              <div data-ng-repeat="curResult in [result.user_extra0]"
-                data-ng-include="'result.html'"></div>
-              <div data-ng-repeat="curResult in [result.music0]"
+            <div class="col-md-6">
+              <div data-ng-show="result.customer0" data-ng-repeat="curResult in [result.customer0]"
                 data-ng-include="'result.html'"></div>
             </div>
-            <div class="col-md-3">
-              <div data-ng-repeat="curResult in [result.music_extra0]"
-                data-ng-include="'result.html'"></div>
-              <div data-ng-repeat="curResult in [result.name_info0]"
-                data-ng-include="'result.html'"></div>
-              <div data-ng-repeat="curResult in [result.music_keyspace_idx0]"
+            <div class="col-md-6">
+              <div data-ng-show="result.customer1" data-ng-repeat="curResult in [result.customer1]"
                 data-ng-include="'result.html'"></div>
             </div>
-            <div class="col-md-3">
-              <div data-ng-repeat="curResult in [result.user1]"
-                data-ng-include="'result.html'"></div>
-              <div data-ng-repeat="curResult in [result.user_extra1]"
-                data-ng-include="'result.html'"></div>
-              <div data-ng-repeat="curResult in [result.music1]"
+          </div>
+          <div class="row">
+            <div class="col-md-6">
+              <div data-ng-show="result.corder0" data-ng-repeat="curResult in [result.corder0]"
                 data-ng-include="'result.html'"></div>
             </div>
-            <div class="col-md-3">
-              <div data-ng-repeat="curResult in [result.music_extra1]"
+            <div class="col-md-6">
+              <div data-ng-show="result.corder1" data-ng-repeat="curResult in [result.corder1]"
                 data-ng-include="'result.html'"></div>
-              <div data-ng-repeat="curResult in [result.name_info1]"
+            </div>
+          </div>
+          <div class="row">
+            <div class="col-md-6">
+              <div data-ng-show="result.corder_event0" data-ng-repeat="curResult in [result.corder_event0]"
                 data-ng-include="'result.html'"></div>
-              <div data-ng-repeat="curResult in [result.music_keyspace_idx1]"
+            </div>
+            <div class="col-md-6">
+              <div data-ng-show="result.corder_event1" data-ng-repeat="curResult in [result.corder_event1]"
+                data-ng-include="'result.html'"></div>
+            </div>
+          </div>
+          <div class="row">
+            <div class="col-md-6">
+              <div data-ng-show="result.oname_keyspace_idx0" data-ng-repeat="curResult in [result.oname_keyspace_idx0]"
+                data-ng-include="'result.html'"></div>
+            </div>
+            <div class="col-md-6">
+              <div data-ng-show="result.oname_keyspace_idx1" data-ng-repeat="curResult in [result.oname_keyspace_idx1]"
                 data-ng-include="'result.html'"></div>
             </div>
           </div>
         </div>
       </div>
-      <div class="col-md-2">
+      <div class="col-md-4">
         <div class="card mt-3 mb-3">
           <div class="card-heading">
-            <h4 class="text-center">lookup</h4>
+            <h4 class="text-center">product</h4>
           </div>
           <div class="row">
             <div class="col-md-12">
-              <div data-ng-repeat="curResult in [result.user_seq]"
+              <div data-ng-show="result.product" data-ng-repeat="curResult in [result.product]"
                 data-ng-include="'result.html'"></div>
-              <div data-ng-repeat="curResult in [result.music_seq]"
+              <div data-ng-show="result.customer_seq" data-ng-repeat="curResult in [result.customer_seq]"
                 data-ng-include="'result.html'"></div>
-              <div data-ng-repeat="curResult in [result.name_keyspace_idx]"
+              <div data-ng-show="result.corder_keyspace_idx" data-ng-repeat="curResult in [result.corder_keyspace_idx]"
                 data-ng-include="'result.html'"></div>
             </div>
           </div>

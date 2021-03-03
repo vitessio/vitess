@@ -37,7 +37,7 @@ func TestVExec(t *testing.T) {
 	workflow := "wrWorkflow"
 	keyspace := "target"
 	query := "update _vt.vreplication set state = 'Running'"
-	env := newWranglerTestEnv([]string{"0"}, []string{"-80", "80-"}, "", nil)
+	env := newWranglerTestEnv([]string{"0"}, []string{"-80", "80-"}, "", nil, time.Now().Unix())
 	defer env.close()
 	var logger = logutil.NewMemoryLogger()
 	wr := New(logger, env.topoServ, env.tmc)
@@ -73,6 +73,10 @@ func TestVExec(t *testing.T) {
 
 	vx.plannedQuery = plan.parsedQuery.Query
 	vx.exec()
+
+	res, err := wr.getStreams(ctx, workflow, keyspace)
+	require.NoError(t, err)
+	require.Less(t, res.MaxVReplicationLag, int64(3 /*seconds*/)) // lag should be very small
 
 	type TestCase struct {
 		name        string
@@ -149,36 +153,47 @@ func TestVExec(t *testing.T) {
 	dryRunResults := []string{
 		"Query: delete from _vt.vreplication where db_name = 'vt_target' and workflow = 'wrWorkflow'",
 		"will be run on the following streams in keyspace target for workflow wrWorkflow:\n\n",
-		"+----------------------+----+--------------------------------+---------+-----------+--------------+-------------------+",
-		"|        TABLET        | ID |          BINLOGSOURCE          |  STATE  |  DBNAME   | CURRENT GTID | MAXREPLICATIONLAG |",
-		"+----------------------+----+--------------------------------+---------+-----------+--------------+-------------------+",
-		"| -80/zone1-0000000200 |  1 | keyspace:\"source\" shard:\"0\"    | Copying | vt_target | pos          |                 0 |",
-		"|                      |    | filter:<rules:<match:\"t1\" > >  |         |           |              |                   |",
-		"+----------------------+----+--------------------------------+---------+-----------+--------------+-------------------+",
-		"| 80-/zone1-0000000210 |  1 | keyspace:\"source\" shard:\"0\"    | Copying | vt_target | pos          |                 0 |",
-		"|                      |    | filter:<rules:<match:\"t1\" > >  |         |           |              |                   |",
-		"+----------------------+----+--------------------------------+---------+-----------+--------------+-------------------+",
+		"+----------------------+----+--------------------------------+---------+-----------+--------------+",
+		"|        TABLET        | ID |          BINLOGSOURCE          |  STATE  |  DBNAME   | CURRENT GTID |",
+		"+----------------------+----+--------------------------------+---------+-----------+--------------+",
+		"| -80/zone1-0000000200 |  1 | keyspace:\"source\" shard:\"0\"    | Copying | vt_target | pos          |",
+		"|                      |    | filter:<rules:<match:\"t1\" > >  |         |           |              |",
+		"+----------------------+----+--------------------------------+---------+-----------+--------------+",
+		"| 80-/zone1-0000000210 |  1 | keyspace:\"source\" shard:\"0\"    | Copying | vt_target | pos          |",
+		"|                      |    | filter:<rules:<match:\"t1\" > >  |         |           |              |",
+		"+----------------------+----+--------------------------------+---------+-----------+--------------+",
 	}
 	require.Equal(t, strings.Join(dryRunResults, "\n")+"\n\n\n\n\n", logger.String())
 }
 
 func TestWorkflowStatusUpdate(t *testing.T) {
-	require.Equal(t, "Error", updateState("master tablet not contactable", "Running", nil, 0))
+	require.Equal(t, "Running", updateState("for vdiff", "Running", nil, int64(time.Now().Second())))
+	require.Equal(t, "Running", updateState("", "Running", nil, int64(time.Now().Second())))
 	require.Equal(t, "Lagging", updateState("", "Running", nil, int64(time.Now().Second())-100))
 	require.Equal(t, "Copying", updateState("", "Running", []copyState{{Table: "t1", LastPK: "[[INT64(10)]]"}}, int64(time.Now().Second())))
+	require.Equal(t, "Error", updateState("error: master tablet not contactable", "Running", nil, 0))
 }
 
 func TestWorkflowListStreams(t *testing.T) {
 	ctx := context.Background()
 	workflow := "wrWorkflow"
 	keyspace := "target"
-	env := newWranglerTestEnv([]string{"0"}, []string{"-80", "80-"}, "", nil)
+	env := newWranglerTestEnv([]string{"0"}, []string{"-80", "80-"}, "", nil, 1234)
 	defer env.close()
 	logger := logutil.NewMemoryLogger()
 	wr := New(logger, env.topoServ, env.tmc)
 
-	_, err := wr.WorkflowAction(ctx, workflow, keyspace, "show", false)
-	require.Nil(t, err)
+	_, err := wr.WorkflowAction(ctx, workflow, keyspace, "listall", false)
+	require.NoError(t, err)
+
+	_, err = wr.WorkflowAction(ctx, workflow, "badks", "show", false)
+	require.Errorf(t, err, "node doesn't exist: keyspaces/badks/shards")
+
+	_, err = wr.WorkflowAction(ctx, "badwf", keyspace, "show", false)
+	require.Errorf(t, err, "no streams found for workflow badwf in keyspace target")
+	logger.Clear()
+	_, err = wr.WorkflowAction(ctx, workflow, keyspace, "show", false)
+	require.NoError(t, err)
 	want := `{
 	"Workflow": "wrWorkflow",
 	"SourceLocation": {
@@ -216,7 +231,6 @@ func TestWorkflowListStreams(t *testing.T) {
 					"Pos": "pos",
 					"StopPos": "",
 					"State": "Copying",
-					"MaxReplicationLag": 0,
 					"DBName": "vt_target",
 					"TransactionTimestamp": 0,
 					"TimeUpdated": 1234,
@@ -252,7 +266,6 @@ func TestWorkflowListStreams(t *testing.T) {
 					"Pos": "pos",
 					"StopPos": "",
 					"State": "Copying",
-					"MaxReplicationLag": 0,
 					"DBName": "vt_target",
 					"TransactionTimestamp": 0,
 					"TimeUpdated": 1234,
@@ -299,15 +312,15 @@ func TestWorkflowListStreams(t *testing.T) {
 will be run on the following streams in keyspace target for workflow wrWorkflow:
 
 
-+----------------------+----+--------------------------------+---------+-----------+--------------+-------------------+
-|        TABLET        | ID |          BINLOGSOURCE          |  STATE  |  DBNAME   | CURRENT GTID | MAXREPLICATIONLAG |
-+----------------------+----+--------------------------------+---------+-----------+--------------+-------------------+
-| -80/zone1-0000000200 |  1 | keyspace:"source" shard:"0"    | Copying | vt_target | pos          |                 0 |
-|                      |    | filter:<rules:<match:"t1" > >  |         |           |              |                   |
-+----------------------+----+--------------------------------+---------+-----------+--------------+-------------------+
-| 80-/zone1-0000000210 |  1 | keyspace:"source" shard:"0"    | Copying | vt_target | pos          |                 0 |
-|                      |    | filter:<rules:<match:"t1" > >  |         |           |              |                   |
-+----------------------+----+--------------------------------+---------+-----------+--------------+-------------------+
++----------------------+----+--------------------------------+---------+-----------+--------------+
+|        TABLET        | ID |          BINLOGSOURCE          |  STATE  |  DBNAME   | CURRENT GTID |
++----------------------+----+--------------------------------+---------+-----------+--------------+
+| -80/zone1-0000000200 |  1 | keyspace:"source" shard:"0"    | Copying | vt_target | pos          |
+|                      |    | filter:<rules:<match:"t1" > >  |         |           |              |
++----------------------+----+--------------------------------+---------+-----------+--------------+
+| 80-/zone1-0000000210 |  1 | keyspace:"source" shard:"0"    | Copying | vt_target | pos          |
+|                      |    | filter:<rules:<match:"t1" > >  |         |           |              |
++----------------------+----+--------------------------------+---------+-----------+--------------+
 
 
 
@@ -320,14 +333,18 @@ func TestWorkflowListAll(t *testing.T) {
 	ctx := context.Background()
 	keyspace := "target"
 	workflow := "wrWorkflow"
-	env := newWranglerTestEnv([]string{"0"}, []string{"-80", "80-"}, "", nil)
+	env := newWranglerTestEnv([]string{"0"}, []string{"-80", "80-"}, "", nil, 0)
 	defer env.close()
 	logger := logutil.NewMemoryLogger()
 	wr := New(logger, env.topoServ, env.tmc)
 
-	workflows, err := wr.ListAllWorkflows(ctx, keyspace)
+	workflows, err := wr.ListAllWorkflows(ctx, keyspace, true)
 	require.Nil(t, err)
 	require.Equal(t, []string{workflow}, workflows)
+
+	workflows, err = wr.ListAllWorkflows(ctx, keyspace, false)
+	require.Nil(t, err)
+	require.Equal(t, []string{workflow, "wrWorkflow2"}, workflows)
 }
 
 func TestVExecValidations(t *testing.T) {
@@ -335,7 +352,7 @@ func TestVExecValidations(t *testing.T) {
 	workflow := "wf"
 	keyspace := "ks"
 	query := ""
-	env := newWranglerTestEnv([]string{"0"}, []string{"-80", "80-"}, "", nil)
+	env := newWranglerTestEnv([]string{"0"}, []string{"-80", "80-"}, "", nil, 0)
 	defer env.close()
 
 	wr := New(logutil.NewConsoleLogger(), env.topoServ, env.tmc)
@@ -361,7 +378,7 @@ func TestVExecValidations(t *testing.T) {
 		{
 			name:        "unsupported query",
 			query:       "describe _vt.vreplication",
-			errorString: "query not supported by vexec: otherread",
+			errorString: "query not supported by vexec: explain _vt.vreplication",
 		},
 	}
 	for _, bq := range badQueries {

@@ -25,7 +25,7 @@ import (
 	"sync"
 	"time"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"

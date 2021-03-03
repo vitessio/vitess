@@ -22,7 +22,8 @@ import (
 	"os/signal"
 	"syscall"
 
-	"golang.org/x/net/context"
+	"context"
+
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/worker/vtworkerclient"

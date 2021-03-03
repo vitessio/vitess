@@ -48,8 +48,10 @@ import (
 	"sync"
 	"time"
 
+	"context"
+
 	"github.com/golang/protobuf/proto"
-	"golang.org/x/net/context"
+
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/sync2"
@@ -766,6 +768,7 @@ func (hc *LegacyHealthCheckImpl) AddTablet(tablet *topodatapb.Tablet, name strin
 	if hc.addrToHealth == nil {
 		// already closed.
 		hc.mu.Unlock()
+		cancelFunc()
 		return
 	}
 	if th, ok := hc.addrToHealth[key]; ok {
@@ -774,6 +777,7 @@ func (hc *LegacyHealthCheckImpl) AddTablet(tablet *topodatapb.Tablet, name strin
 		if topoproto.TabletAliasEqual(th.latestTabletStats.Tablet.Alias, tablet.Alias) {
 			hc.mu.Unlock()
 			log.Warningf("refusing to add duplicate tablet %v for %v: %+v", name, tablet.Alias.Cell, tablet)
+			cancelFunc()
 			return
 		}
 		// If it's a different tablet, then we trust this new tablet that claims

@@ -27,9 +27,10 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+
 	"vitess.io/vitess/go/trace"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
@@ -233,8 +234,8 @@ func newTestAuthServerStatic() *mysql.AuthServerStatic {
 func TestDefaultWorkloadEmpty(t *testing.T) {
 	vh := &vtgateHandler{}
 	sess := vh.session(&mysql.Conn{})
-	if sess.Options.Workload != querypb.ExecuteOptions_UNSPECIFIED {
-		t.Fatalf("Expected default workload UNSPECIFIED")
+	if sess.Options.Workload != querypb.ExecuteOptions_OLTP {
+		t.Fatalf("Expected default workload OLTP")
 	}
 }
 

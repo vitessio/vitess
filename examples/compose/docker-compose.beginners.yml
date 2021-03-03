@@ -28,37 +28,67 @@ services:
     command: "agent -server -retry-join consul1 -disable-host-node-id"
     depends_on:
       - consul1
+  # This is a convenience container to quickly test vitess against an external database.
+  # In practice you will point Vitess to your existing database and migrate to a Vitess managed cluster.
+  external_db_host:
+    build:
+      context: ./external_db/mysql
+      dockerfile: Dockerfile
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-pass}
+      MYSQL_DATABASE: ${DB:-commerce}
+      MYSQL_USER: ${DB_USER:-external_db_user}
+      MYSQL_PASSWORD: ${DB_PASS:-external_db_password}
+    volumes:
+      - ./external_db/mysql/:/docker-entrypoint-initdb.d/
+      - ./external_db/mysql/log:/var/log/mysql
+    command:
+      - --server-id=1
+      - --log-bin=mysql-bin
+      - --gtid_mode=ON
+      - --enforce_gtid_consistency
+      - --general_log=1
+      - --slow_query_log=1
+    healthcheck:
+      test: "/usr/bin/mysql --user=root --password=$${MYSQL_ROOT_PASSWORD} --execute \"SHOW DATABASES;\""
+      timeout: 10s
+      retries: 10
+    ports:
+      - "3306"
 
   vtctld:
-    image: vitess/base
+    image: vitess/lite:${VITESS_TAG:-latest}
     ports:
       - "15000:$WEB_PORT"
       - "$GRPC_PORT"
-    command: ["sh", "-c", " $$VTROOT/bin/vtctld \
+    command: ["sh", "-c", " /vt/bin/vtctld \
         $TOPOLOGY_FLAGS \
         -cell $CELL \
         -workflow_manager_init \
         -workflow_manager_use_election \
         -service_map 'grpc-vtctl' \
         -backup_storage_implementation file \
-        -file_backup_storage_root $$VTDATAROOT/backups \
+        -file_backup_storage_root /vt/vtdataroot/backups \
         -logtostderr=true \
         -port $WEB_PORT \
-        -grpc_port $GRPC_PORT \
-        -pid_file $$VTDATAROOT/tmp/vtctld.pid
+        -grpc_port $GRPC_PORT
         "]
     depends_on:
       - consul1
       - consul2
       - consul3
+    depends_on:
+      external_db_host:
+        condition: service_healthy
 
   vtgate:
-    image: vitess/base
+    image: vitess/lite:${VITESS_TAG:-latest}
     ports:
       - "15099:$WEB_PORT"
       - "$GRPC_PORT"
       - "15306:$MYSQL_PORT"
-    command: ["sh", "-c", "$$VTROOT/bin/vtgate \
+    command: ["sh", "-c", "/vt/bin/vtgate \
         $TOPOLOGY_FLAGS \
         -logtostderr=true \
         -port $WEB_PORT \
@@ -68,9 +98,8 @@ services:
         -cell $CELL \
         -cells_to_watch $CELL \
         -tablet_types_to_wait MASTER,REPLICA \
-        -gateway_implementation discoverygateway \
         -service_map 'grpc-vtgateservice' \
-        -pid_file $$VTDATAROOT/tmp/vtgate.pid \
+        -enable_system_settings=true \
         "]
     volumes:
       - ".:/script"
@@ -84,7 +113,7 @@ services:
         condition: service_healthy
 
   schemaload:
-    image: vitess/base
+    image: vitess/lite:${VITESS_TAG:-latest}
     command:
     - sh
     - -c
@@ -107,8 +136,40 @@ services:
       vttablet101:
         condition: service_healthy
 
+  vttablet100:
+    image: vitess/lite:${VITESS_TAG:-latest}
+    ports:
+      - "15100:$WEB_PORT"
+      - "$GRPC_PORT"
+      - "3306"
+    volumes:
+      - ".:/script"
+      - "./backups:/vt/vtdataroot/backups"
+    environment:
+      - TOPOLOGY_FLAGS
+      - WEB_PORT
+      - GRPC_PORT
+      - CELL
+      - KEYSPACE
+      - DB
+      - EXTERNAL_DB
+      - DB_PORT
+      - DB_HOST
+      - DB_USER
+      - DB_PASS
+      - DB_CHARSET
+      - ROLE=master
+    command: ["sh", "-c", "[ $$EXTERNAL_DB -eq 1 ] && /script/vttablet-up.sh 100 || exit 0"]
+    depends_on:
+      - vtctld
+    healthcheck:
+      test: ["CMD-SHELL","curl -s --fail --show-error localhost:$$WEB_PORT/debug/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 15
+
   vttablet101:
-    image: vitess/base
+    image: vitess/lite:${VITESS_TAG:-latest}
     ports:
       - "15101:$WEB_PORT"
       - "$GRPC_PORT"
@@ -134,13 +195,13 @@ services:
     depends_on:
       - vtctld
     healthcheck:
-      test: ["CMD-SHELL","curl localhost:$$WEB_PORT/debug/health"]
+      test: ["CMD-SHELL","curl -s --fail --show-error localhost:$$WEB_PORT/debug/health"]
       interval: 30s
       timeout: 10s
       retries: 15
 
   vttablet102:
-    image: vitess/base
+    image: vitess/lite:${VITESS_TAG:-latest}
     ports:
       - "15102:$WEB_PORT"
       - "$GRPC_PORT"
@@ -156,6 +217,8 @@ services:
       - KEYSPACE
       - DB
       - EXTERNAL_DB
+      - DB_PORT
+      - DB_HOST
       - DB_USER
       - DB_PASS
       - DB_CHARSET
@@ -164,13 +227,13 @@ services:
       - vtctld
       - vttablet101
     healthcheck:
-      test: ["CMD-SHELL","curl localhost:$$WEB_PORT/debug/health"]
+      test: ["CMD-SHELL","curl -s --fail --show-error localhost:$$WEB_PORT/debug/health"]
       interval: 30s
       timeout: 10s
       retries: 15
 
   vttablet103:
-    image: vitess/base
+    image: vitess/lite:${VITESS_TAG:-latest}
     ports:
       - "15103:$WEB_PORT"
       - "$GRPC_PORT"
@@ -186,6 +249,8 @@ services:
       - KEYSPACE
       - DB
       - EXTERNAL_DB
+      - DB_PORT
+      - DB_HOST
       - DB_USER
       - DB_PASS
       - DB_CHARSET
@@ -194,7 +259,56 @@ services:
       - vtctld
       - vttablet101
     healthcheck:
-      test: ["CMD-SHELL","curl localhost:$$WEB_PORT/debug/health"]
+      test: ["CMD-SHELL","curl -s --fail --show-error localhost:$$WEB_PORT/debug/health"]
       interval: 30s
       timeout: 10s
       retries: 15
+
+  vtorc:
+    image: vitess/lite:${VITESS_TAG:-latest}
+    command: ["sh", "-c", "/script/vtorc-up.sh"]
+    depends_on:
+      - vtctld
+    ports:
+      - "13000:3000"
+    volumes:
+      - ".:/script"
+    environment:
+      - TOPOLOGY_FLAGS
+      - WEB_PORT
+      - GRPC_PORT
+      - CELL
+      - KEYSPACE
+      - DB
+      - EXTERNAL_DB
+      - DB_PORT
+      - DB_HOST
+      - DB_USER
+      - DB_PASS
+      - DB_CHARSET
+    healthcheck:
+      test: ["CMD-SHELL","curl -s --fail --show-error localhost:3000/api/status"]
+      interval: 5s
+      timeout: 10s
+      retries: 15
+
+  vreplication:
+    image: vitess/lite:${VITESS_TAG:-latest}
+    volumes:
+      - ".:/script"
+    environment:
+      - TOPOLOGY_FLAGS
+      - WEB_PORT
+      - GRPC_PORT
+      - CELL
+      - KEYSPACE
+      - DB
+      - EXTERNAL_DB
+      - DB_PORT
+      - DB_HOST
+      - DB_USER
+      - DB_PASS
+      - DB_CHARSET
+    command: ["sh", "-c", "[ $$EXTERNAL_DB -eq 1 ] && /script/externaldb_vreplication.sh || exit 0"]
+    depends_on:
+      - vtctld

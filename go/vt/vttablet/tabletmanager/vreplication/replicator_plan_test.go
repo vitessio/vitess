@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
 	"vitess.io/vitess/go/sqltypes"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )

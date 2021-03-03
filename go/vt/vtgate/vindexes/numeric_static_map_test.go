@@ -22,6 +22,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 )
@@ -62,6 +63,7 @@ func TestNumericStaticMapMap(t *testing.T) {
 		sqltypes.NewInt64(6),
 		sqltypes.NewInt64(7),
 		sqltypes.NewInt64(8),
+		sqltypes.NULL,
 	})
 	require.NoError(t, err)
 
@@ -77,6 +79,7 @@ func TestNumericStaticMapMap(t *testing.T) {
 		key.DestinationKeyspaceID([]byte("\x00\x00\x00\x00\x00\x00\x00\x06")),
 		key.DestinationKeyspaceID([]byte("\x00\x00\x00\x00\x00\x00\x00\x07")),
 		key.DestinationKeyspaceID([]byte("\x00\x00\x00\x00\x00\x00\x00\x08")),
+		key.DestinationNone{},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("Map(): %+v, want %+v", got, want)
@@ -99,8 +102,5 @@ func TestNumericStaticMapVerify(t *testing.T) {
 
 	// Failure test
 	_, err = numericStaticMap.Verify(nil, []sqltypes.Value{sqltypes.NewVarBinary("aa")}, [][]byte{nil})
-	wantErr := "NumericStaticMap.Verify: could not parse value: 'aa'"
-	if err == nil || err.Error() != wantErr {
-		t.Errorf("hash.Verify err: %v, want %s", err, wantErr)
-	}
+	require.EqualError(t, err, "could not parse value: 'aa'")
 }

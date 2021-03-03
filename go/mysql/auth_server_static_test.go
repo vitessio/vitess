@@ -92,7 +92,7 @@ func TestValidateHashGetter(t *testing.T) {
 		t.Fatalf("error generating salt: %v", err)
 	}
 
-	scrambled := ScramblePassword(salt, []byte("password"))
+	scrambled := ScrambleMysqlNativePassword(salt, []byte("password"))
 	getter, err := auth.ValidateHash(salt, "mysql_user", scrambled, addr)
 	if err != nil {
 		t.Fatalf("error validating password: %v", err)
@@ -207,10 +207,6 @@ func hupTestWithRotation(t *testing.T, aStatic *AuthServerStatic, tmpFile *os.Fi
 		t.Fatalf("couldn't overwrite temp file: %v", err)
 	}
 
-	if aStatic.getEntries()[oldStr][0].Password != oldStr {
-		t.Fatalf("%s's Password should still be '%s'", oldStr, oldStr)
-	}
-
 	time.Sleep(20 * time.Millisecond) // wait for signal handler
 
 	if aStatic.getEntries()[oldStr] != nil {
@@ -274,7 +270,7 @@ func TestStaticPasswords(t *testing.T) {
 				t.Fatalf("error generating salt: %v", err)
 			}
 
-			scrambled := ScramblePassword(salt, []byte(c.password))
+			scrambled := ScrambleMysqlNativePassword(salt, []byte(c.password))
 			_, err = auth.ValidateHash(salt, c.user, scrambled, addr)
 
 			if c.success {

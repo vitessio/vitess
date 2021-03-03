@@ -21,7 +21,7 @@ package callinfo
 import (
 	"html/template"
 
-	"golang.org/x/net/context"
+	"context"
 )
 
 // CallInfo is the extra data stored in the Context

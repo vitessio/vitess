@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"time"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"

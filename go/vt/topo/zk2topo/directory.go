@@ -21,7 +21,8 @@ import (
 	"sort"
 	"sync"
 
-	"golang.org/x/net/context"
+	"context"
+
 	"vitess.io/vitess/go/vt/topo"
 )
 

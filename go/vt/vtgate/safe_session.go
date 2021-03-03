@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/proto"
+
 	"vitess.io/vitess/go/vt/vterrors"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -198,8 +199,11 @@ func addOrUpdate(shardSession *vtgatepb.Session_ShardSession, sessions []*vtgate
 			sess.Target.TabletType == shardSession.Target.TabletType &&
 			sess.Target.Shard == shardSession.Target.Shard
 		if targetedAtSameTablet {
-			if sess.TabletAlias.Cell != shardSession.TabletAlias.Cell || sess.TabletAlias.Uid != shardSession.TabletAlias.Uid {
-				return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "got a different alias for the same target")
+			if !proto.Equal(sess.TabletAlias, shardSession.TabletAlias) {
+				errorDetails := fmt.Sprintf("got non-matching aliases (%v vs %v) for the same target (keyspace: %v, tabletType: %v, shard: %v)",
+					sess.TabletAlias, shardSession.TabletAlias,
+					sess.Target.Keyspace, sess.Target.TabletType, sess.Target.Shard)
+				return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, errorDetails)
 			}
 			// replace the old info with the new one
 			sessions[i] = shardSession
@@ -224,11 +228,11 @@ func (session *SafeSession) AppendOrUpdate(shardSession *vtgatepb.Session_ShardS
 	// that needs to be stored as shard session.
 	if session.autocommitState == autocommitted && shardSession.TransactionId != 0 {
 		// Should be unreachable
-		return vterrors.New(vtrpcpb.Code_INTERNAL, "BUG: SafeSession.AppendOrUpdate: unexpected autocommit state")
+		return vterrors.New(vtrpcpb.Code_INTERNAL, "[BUG] unexpected 'autocommitted' state in transaction")
 	}
 	if !(session.Session.InTransaction || session.Session.InReservedConn) {
 		// Should be unreachable
-		return vterrors.New(vtrpcpb.Code_INTERNAL, "BUG: SafeSession.AppendOrUpdate: not in transaction and not in reserved connection")
+		return vterrors.New(vtrpcpb.Code_INTERNAL, "[BUG] current session neither in transaction nor in reserved connection")
 	}
 	session.autocommitState = notAutocommittable
 
@@ -243,7 +247,7 @@ func (session *SafeSession) AppendOrUpdate(shardSession *vtgatepb.Session_ShardS
 		// isSingle is enforced only for normmal commit order operations.
 		if session.isSingleDB(txMode) && len(session.ShardSessions) > 1 {
 			session.mustRollback = true
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "multi-db transaction attempted: %v", session.ShardSessions)
+			return vterrors.Errorf(vtrpcpb.Code_ABORTED, "multi-db transaction attempted: %v", session.ShardSessions)
 		}
 	case vtgatepb.CommitOrder_PRE:
 		newSessions, err := addOrUpdate(shardSession, session.PreSessions)
@@ -259,7 +263,7 @@ func (session *SafeSession) AppendOrUpdate(shardSession *vtgatepb.Session_ShardS
 		session.PostSessions = newSessions
 	default:
 		// Should be unreachable
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: SafeSession.AppendOrUpdate: unexpected commitOrder")
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] SafeSession.AppendOrUpdate: unexpected commitOrder")
 	}
 
 	return nil
@@ -448,9 +452,74 @@ func (session *SafeSession) ResetShard(tabletAlias *topodatapb.TabletAlias) erro
 		session.PostSessions = newSessions
 	default:
 		// Should be unreachable
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: SafeSession.ResetShard: unexpected commitOrder")
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] SafeSession.ResetShard: unexpected commitOrder")
 	}
 	return nil
+}
+
+// SetDDLStrategy set the DDLStrategy setting.
+func (session *SafeSession) SetDDLStrategy(strategy string) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	session.DDLStrategy = strategy
+}
+
+// GetDDLStrategy returns the DDLStrategy value.
+func (session *SafeSession) GetDDLStrategy() string {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	return session.DDLStrategy
+}
+
+// GetSessionUUID returns the SessionUUID value.
+func (session *SafeSession) GetSessionUUID() string {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	return session.SessionUUID
+}
+
+// SetSessionEnableSystemSettings set the SessionEnableSystemSettings setting.
+func (session *SafeSession) SetSessionEnableSystemSettings(allow bool) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	session.EnableSystemSettings = allow
+}
+
+// GetSessionEnableSystemSettings returns the SessionEnableSystemSettings value.
+func (session *SafeSession) GetSessionEnableSystemSettings() bool {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	return session.EnableSystemSettings
+}
+
+// SetReadAfterWriteGTID set the ReadAfterWriteGtid setting.
+func (session *SafeSession) SetReadAfterWriteGTID(vtgtid string) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	if session.ReadAfterWrite == nil {
+		session.ReadAfterWrite = &vtgatepb.ReadAfterWrite{}
+	}
+	session.ReadAfterWrite.ReadAfterWriteGtid = vtgtid
+}
+
+// SetReadAfterWriteTimeout set the ReadAfterWriteTimeout setting.
+func (session *SafeSession) SetReadAfterWriteTimeout(timeout float64) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	if session.ReadAfterWrite == nil {
+		session.ReadAfterWrite = &vtgatepb.ReadAfterWrite{}
+	}
+	session.ReadAfterWrite.ReadAfterWriteTimeout = timeout
+}
+
+// SetSessionTrackGtids set the SessionTrackGtids setting.
+func (session *SafeSession) SetSessionTrackGtids(enable bool) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	if session.ReadAfterWrite == nil {
+		session.ReadAfterWrite = &vtgatepb.ReadAfterWrite{}
+	}
+	session.ReadAfterWrite.SessionTrackGtids = enable
 }
 
 func removeShard(tabletAlias *topodatapb.TabletAlias, sessions []*vtgatepb.Session_ShardSession) ([]*vtgatepb.Session_ShardSession, error) {
@@ -458,7 +527,7 @@ func removeShard(tabletAlias *topodatapb.TabletAlias, sessions []*vtgatepb.Sessi
 	for i, session := range sessions {
 		if proto.Equal(session.TabletAlias, tabletAlias) {
 			if session.TransactionId != 0 {
-				return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "BUG: SafeSession.ResetShard: in transaction")
+				return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "[BUG] removing shard session when in transaction")
 			}
 			idx = i
 		}

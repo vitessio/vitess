@@ -34,7 +34,7 @@ func buildInsertPlan(stmt sqlparser.Statement, vschema ContextVSchema) (engine.P
 	ins := stmt.(*sqlparser.Insert)
 	pb := newPrimitiveBuilder(vschema, newJointab(sqlparser.GetBindvars(ins)))
 	exprs := sqlparser.TableExprs{&sqlparser.AliasedTableExpr{Expr: ins.Table}}
-	rb, err := pb.processDMLTable(exprs)
+	rb, err := pb.processDMLTable(exprs, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -46,7 +46,7 @@ func buildInsertPlan(stmt sqlparser.Statement, vschema ContextVSchema) (engine.P
 
 	if len(pb.st.tables) != 1 {
 		// Unreachable.
-		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: multi-table insert statement in sharded keyspace")
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "multi-table insert statement in not supported in sharded keyspace")
 	}
 	var vschemaTable *vindexes.Table
 	for _, tval := range pb.st.tables {
@@ -127,8 +127,6 @@ func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table) (engin
 	if len(ins.Columns) == 0 {
 		if table.ColumnListAuthoritative {
 			populateInsertColumnlist(ins, table)
-		} else {
-			return nil, errors.New("no column list")
 		}
 	}
 
