@@ -7,6 +7,7 @@ bootstrap.sh @deepthi
 /examples/local @rohit-nayak-ps
 /examples/operator @askdba
 /examples/region_sharding @deepthi
+/java/ @harshit-gangal
 /go/cache @vmg
 /go/cmd/vtadmin @ajm188 @doeg
 /go/cmd/vtctldclient @ajm188 @doeg
@@ -22,7 +23,8 @@ bootstrap.sh @deepthi
 /go/vt/schema @shlomi-noach
 /go/vt/servenv @deepthi
 /go/vt/sqlparser @harshit-gangal @systay @GuptaManan100
-/go/vt/topo @deepthi
+/go/vt/srvtopo @rafael
+/go/vt/topo @deepthi @rafael
 /go/vt/vtadmin @ajm188 @doeg @rohit-nayak-ps
 /go/vt/vtctl @deepthi
 /go/vt/vtctl/vtctl.go @ajm188 @doeg
