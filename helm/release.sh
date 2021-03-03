@@ -27,6 +27,11 @@ docker tag vitess/mysqlctld:$vt_base_version-buster vitess/mysqlctld:$vt_base_ve
 docker push vitess/mysqlctld:$vt_base_version-buster
 docker push vitess/mysqlctld:$vt_base_version
 
+docker build --build-arg VT_BASE_VER=$vt_base_version -t vitess/mysqlctl:$vt_base_version-buster mysqlctl
+docker tag vitess/mysqlctl:$vt_base_version-buster vitess/mysqlctl:$vt_base_version
+docker push vitess/mysqlctl:$vt_base_version-buster
+docker push vitess/mysqlctl:$vt_base_version
+
 docker build --build-arg VT_BASE_VER=$vt_base_version -t vitess/vtctl:$vt_base_version-buster vtctl
 docker tag vitess/vtctl:$vt_base_version-buster vitess/vtctl:$vt_base_version
 docker push vitess/vtctl:$vt_base_version-buster

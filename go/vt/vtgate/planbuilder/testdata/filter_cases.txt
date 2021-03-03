@@ -15,21 +15,7 @@
     "Table": "`user`"
   }
 }
-{
-  "QueryType": "SELECT",
-  "Original": "select id from user",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectScatter",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "FieldQuery": "select id from `user` where 1 != 1",
-    "Query": "select id from `user`",
-    "Table": "`user`"
-  }
-}
+Gen4 plan same as above
 
 # Query that always return empty
 "select id from user where someColumn = null"
@@ -48,21 +34,7 @@
     "Table": "`user`"
   }
 }
-{
-  "QueryType": "SELECT",
-  "Original": "select id from user where someColumn = null",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectNone",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "FieldQuery": "select id from `user` where 1 != 1",
-    "Query": "select id from `user` where someColumn = null",
-    "Table": "`user`"
-  }
-}
+Gen4 plan same as above
 
 # Single table unique vindex route
 "select id from user where user.id = 5"
@@ -85,25 +57,7 @@
     "Vindex": "user_index"
   }
 }
-{
-  "QueryType": "SELECT",
-  "Original": "select id from user where user.id = 5",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "FieldQuery": "select id from `user` where 1 != 1",
-    "Query": "select id from `user` where `user`.id = 5",
-    "Table": "`user`",
-    "Values": [
-      5
-    ],
-    "Vindex": "user_index"
-  }
-}
+Gen4 plan same as above
 
 # Single table unique vindex route, but complex expr
 "select id from user where user.id = 5+5"
@@ -122,21 +76,7 @@
     "Table": "`user`"
   }
 }
-{
-  "QueryType": "SELECT",
-  "Original": "select id from user where user.id = 5+5",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectScatter",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "FieldQuery": "select id from `user` where 1 != 1",
-    "Query": "select id from `user` where `user`.id = 5 + 5",
-    "Table": "`user`"
-  }
-}
+Gen4 plan same as above
 
 # Single table multiple unique vindex match
 "select id from music where id = 5 and user_id = 4"
@@ -182,25 +122,7 @@ Gen4 plan same as above
     "Vindex": "name_user_map"
   }
 }
-{
-  "QueryType": "SELECT",
-  "Original": "select id from user where costly = 'aa' and name = 'bb'",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectEqual",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "FieldQuery": "select id from `user` where 1 != 1",
-    "Query": "select id from `user` where costly = 'aa' and `name` = 'bb'",
-    "Table": "`user`",
-    "Values": [
-      "bb"
-    ],
-    "Vindex": "name_user_map"
-  }
-}
+Gen4 plan same as above
 
 # Single table multiple non-unique vindex match for IN clause
 "select id from user where costly in ('aa', 'bb') and name in ('aa', 'bb')"
@@ -372,25 +294,6 @@ Gen4 plan same as above
     "Vindex": "user_index"
   }
 }
-{
-  "QueryType": "SELECT",
-  "Original": "select id from user where (col, name) in (('aa', 'bb')) and id = 5",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "FieldQuery": "select id from `user` where 1 != 1",
-    "Query": "select id from `user` where (col, `name`) in (('aa', 'bb')) and id = 5",
-    "Table": "`user`",
-    "Values": [
-      5
-    ],
-    "Vindex": "user_index"
-  }
-}
 
 # Composite IN: multiple vindex matches
 "select id from user where (costly, name) in (('aa', 'bb'), ('cc', 'dd'))"
@@ -484,21 +387,6 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
-{
-  "QueryType": "SELECT",
-  "Original": "select id from user where ((col1, name), col2) in (('aa', 'bb', 'cc'), (('dd', 'ee'), 'ff'))",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectScatter",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "FieldQuery": "select id from `user` where 1 != 1",
-    "Query": "select id from `user` where ((col1, `name`), col2) in (('aa', 'bb', 'cc'), (('dd', 'ee'), 'ff'))",
-    "Table": "`user`"
-  }
-}
 
 # Composite IN: RHS not tuple
 "select id from user where (col1, name) in (select * from music where music.user_id=user.id)"
@@ -520,21 +408,6 @@ Gen4 plan same as above
 
 # Composite IN: RHS has no simple values
 "select id from user where (col1, name) in (('aa', 1+1))"
-{
-  "QueryType": "SELECT",
-  "Original": "select id from user where (col1, name) in (('aa', 1+1))",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectScatter",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "FieldQuery": "select id from `user` where 1 != 1",
-    "Query": "select id from `user` where (col1, `name`) in (('aa', 1 + 1))",
-    "Table": "`user`"
-  }
-}
 {
   "QueryType": "SELECT",
   "Original": "select id from user where (col1, name) in (('aa', 1+1))",
@@ -586,21 +459,6 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
-{
-  "QueryType": "SELECT",
-  "Original": "select id from user where name in (col, 'bb')",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectScatter",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "FieldQuery": "select id from `user` where 1 != 1",
-    "Query": "select id from `user` where `name` in (col, 'bb')",
-    "Table": "`user`"
-  }
-}
 
 # Single table equality route with val arg
 "select id from user where name = :a"
@@ -623,25 +481,7 @@ Gen4 plan same as above
     "Vindex": "name_user_map"
   }
 }
-{
-  "QueryType": "SELECT",
-  "Original": "select id from user where name = :a",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectEqual",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "FieldQuery": "select id from `user` where 1 != 1",
-    "Query": "select id from `user` where `name` = :a",
-    "Table": "`user`",
-    "Values": [
-      ":a"
-    ],
-    "Vindex": "name_user_map"
-  }
-}
+Gen4 plan same as above
 
 # Single table equality route with unsigned value
 "select id from user where name = 18446744073709551615"
@@ -664,25 +504,7 @@ Gen4 plan same as above
     "Vindex": "name_user_map"
   }
 }
-{
-  "QueryType": "SELECT",
-  "Original": "select id from user where name = 18446744073709551615",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectEqual",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "FieldQuery": "select id from `user` where 1 != 1",
-    "Query": "select id from `user` where `name` = 18446744073709551615",
-    "Table": "`user`",
-    "Values": [
-      18446744073709551615
-    ],
-    "Vindex": "name_user_map"
-  }
-}
+Gen4 plan same as above
 
 # Single table in clause list arg
 "select id from user where name in ::list"
@@ -834,44 +656,7 @@ Gen4 plan same as above
     ]
   }
 }
-{
-  "QueryType": "SELECT",
-  "Original": "select user_extra.id from user join user_extra on user.col = user_extra.col where user.id = 5",
-  "Instructions": {
-    "OperatorType": "Join",
-    "Variant": "Join",
-    "JoinColumnIndexes": "1",
-    "TableName": "`user`_user_extra",
-    "Inputs": [
-      {
-        "OperatorType": "Route",
-        "Variant": "SelectEqualUnique",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select `user`.col from `user` where 1 != 1",
-        "Query": "select `user`.col from `user` where `user`.id = 5",
-        "Table": "`user`",
-        "Values": [
-          5
-        ],
-        "Vindex": "user_index"
-      },
-      {
-        "OperatorType": "Route",
-        "Variant": "SelectScatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select user_extra.id from user_extra where 1 != 1",
-        "Query": "select user_extra.id from user_extra where user_extra.col = :user_col",
-        "Table": "user_extra"
-      }
-    ]
-  }
-}
+Gen4 plan same as above
 
 # Multi-route unique vindex route on both routes
 "select user_extra.id from user join user_extra on user.col = user_extra.col where user.id = 5 and user_extra.user_id = 5"
@@ -1067,47 +852,9 @@ Gen4 plan same as above
     "Vindex": "name_user_map"
   }
 }
-{
-  "QueryType": "SELECT",
-  "Original": "select (id or col) as val from user where user.col = 5 and user.id in (1, 2) and user.name = 'aa'",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectEqual",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "FieldQuery": "select id or col as val from `user` where 1 != 1",
-    "Query": "select id or col as val from `user` where `user`.col = 5 and `user`.id in (1, 2) and `user`.`name` = 'aa'",
-    "Table": "`user`",
-    "Values": [
-      "aa"
-    ],
-    "Vindex": "name_user_map"
-  }
-}
 
 # Route with multiple route constraints, SelectEqual is the best constraint.
 "select id from user where user.col = false and user.id in (1, 2) and user.name = 'aa'"
-{
-  "QueryType": "SELECT",
-  "Original": "select id from user where user.col = false and user.id in (1, 2) and user.name = 'aa'",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectEqual",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "FieldQuery": "select id from `user` where 1 != 1",
-    "Query": "select id from `user` where `user`.col = false and `user`.id in (1, 2) and `user`.`name` = 'aa'",
-    "Table": "`user`",
-    "Values": [
-      "aa"
-    ],
-    "Vindex": "name_user_map"
-  }
-}
 {
   "QueryType": "SELECT",
   "Original": "select id from user where user.col = false and user.id in (1, 2) and user.name = 'aa'",
@@ -1149,47 +896,9 @@ Gen4 plan same as above
     "Vindex": "user_index"
   }
 }
-{
-  "QueryType": "SELECT",
-  "Original": "select id from user where user.col = 5 and user.id in (1, 2) and user.name = 'aa' and user.id = 1",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "FieldQuery": "select id from `user` where 1 != 1",
-    "Query": "select id from `user` where `user`.col = 5 and `user`.id in (1, 2) and `user`.`name` = 'aa' and `user`.id = 1",
-    "Table": "`user`",
-    "Values": [
-      1
-    ],
-    "Vindex": "user_index"
-  }
-}
 
 # Route with multiple route constraints, SelectEqualUnique is the best constraint, order reversed.
 "select id from user where user.id = 1 and user.name = 'aa' and user.id in (1, 2) and user.col = 5"
-{
-  "QueryType": "SELECT",
-  "Original": "select id from user where user.id = 1 and user.name = 'aa' and user.id in (1, 2) and user.col = 5",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "FieldQuery": "select id from `user` where 1 != 1",
-    "Query": "select id from `user` where `user`.id = 1 and `user`.`name` = 'aa' and `user`.id in (1, 2) and `user`.col = 5",
-    "Table": "`user`",
-    "Values": [
-      1
-    ],
-    "Vindex": "user_index"
-  }
-}
 {
   "QueryType": "SELECT",
   "Original": "select id from user where user.id = 1 and user.name = 'aa' and user.id in (1, 2) and user.col = 5",
@@ -1227,21 +936,7 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
-{
-  "QueryType": "SELECT",
-  "Original": "select id from user where user.id = 1 or user.name = 'aa' and user.id in (1, 2)",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectScatter",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "FieldQuery": "select id from `user` where 1 != 1",
-    "Query": "select id from `user` where `user`.id = 1 or `user`.`name` = 'aa' and `user`.id in (1, 2)",
-    "Table": "`user`"
-  }
-}
+Gen4 plan same as above
 
 # Unsharded route
 "select unsharded.id from user join unsharded where unsharded.id = user.id"
@@ -2037,7 +1732,6 @@ Gen4 plan same as above
     "Vindex": "user_index"
   }
 }
-Gen4 plan same as above
 
 # Single table with unique vindex match and NOT IN (null, 1, 2)
 "select id from music where user_id = 4 and id NOT IN (null, 1, 2)"
