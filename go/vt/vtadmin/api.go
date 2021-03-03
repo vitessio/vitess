@@ -30,6 +30,7 @@ import (
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtadmin/cluster"
 	"vitess.io/vitess/go/vt/vtadmin/errors"
 	"vitess.io/vitess/go/vt/vtadmin/grpcserver"
@@ -87,6 +88,7 @@ func NewAPI(clusters []*cluster.Cluster, opts grpcserver.Options, httpOpts vtadm
 	router.HandleFunc("/clusters", httpAPI.Adapt(vtadminhttp.GetClusters)).Name("API.GetClusters")
 	router.HandleFunc("/gates", httpAPI.Adapt(vtadminhttp.GetGates)).Name("API.GetGates")
 	router.HandleFunc("/keyspaces", httpAPI.Adapt(vtadminhttp.GetKeyspaces)).Name("API.GetKeyspaces")
+	router.HandleFunc("/schema/{cluster_id}/{keyspace}/{table}", httpAPI.Adapt(vtadminhttp.GetSchema)).Name("API.GetSchema")
 	router.HandleFunc("/schemas", httpAPI.Adapt(vtadminhttp.GetSchemas)).Name("API.GetSchemas")
 	router.HandleFunc("/tablets", httpAPI.Adapt(vtadminhttp.GetTablets)).Name("API.GetTablets")
 	router.HandleFunc("/tablet/{tablet}", httpAPI.Adapt(vtadminhttp.GetTablet)).Name("API.GetTablet")
@@ -282,7 +284,36 @@ func (api *API) GetKeyspaces(ctx context.Context, req *vtadminpb.GetKeyspacesReq
 
 // GetSchema is part of the vtadminpb.VTAdminServer interface.
 func (api *API) GetSchema(ctx context.Context, req *vtadminpb.GetSchemaRequest) (*vtadminpb.Schema, error) {
-	panic("unimplemented!")
+	span, ctx := trace.NewSpan(ctx, "API.GetSchema")
+	defer span.Finish()
+
+	span.Annotate("cluster_id", req.ClusterId)
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("table", req.Table)
+
+	clusters, _ := api.getClustersForRequest([]string{req.ClusterId})
+	if len(clusters) == 0 {
+		return nil, fmt.Errorf("%w: no cluster with id %s", errors.ErrUnsupportedCluster, req.ClusterId)
+	}
+
+	cluster := clusters[0]
+
+	tablet, err := cluster.FindTablet(ctx, func(t *vtadminpb.Tablet) bool {
+		return t.Tablet.Keyspace == req.Keyspace && t.State == vtadminpb.Tablet_SERVING
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	span.Annotate("tablet_alias", topoproto.TabletAliasString(tablet.Tablet.Alias))
+
+	if err := cluster.Vtctld.Dial(ctx); err != nil {
+		return nil, err
+	}
+
+	return cluster.GetSchema(ctx, &vtctldatapb.GetSchemaRequest{
+		Tables: []string{req.Table},
+	}, tablet)
 }
 
 // GetSchemas is part of the vtadminpb.VTAdminServer interface.
@@ -408,10 +439,7 @@ func (api *API) getSchemasForKeyspace(ctx context.Context, c *cluster.Cluster, k
 		return nil, err
 	}
 
-	s, err := c.Vtctld.GetSchema(ctx, &vtctldatapb.GetSchemaRequest{
-		TabletAlias: kt.Tablet.Alias,
-	})
-
+	s, err := c.GetSchema(ctx, &vtctldatapb.GetSchemaRequest{}, kt)
 	if err != nil {
 		return nil, err
 	}
@@ -419,18 +447,11 @@ func (api *API) getSchemasForKeyspace(ctx context.Context, c *cluster.Cluster, k
 	// Ignore any schemas without table definitions; otherwise we return
 	// a vtadminpb.Schema object with only Cluster and Keyspace defined,
 	// which is not particularly useful.
-	if s == nil || s.Schema == nil || len(s.Schema.TableDefinitions) == 0 {
+	if s == nil || len(s.TableDefinitions) == 0 {
 		return nil, nil
 	}
 
-	return &vtadminpb.Schema{
-		Cluster: &vtadminpb.Cluster{
-			Id:   c.ID,
-			Name: c.Name,
-		},
-		Keyspace:         ks.Name,
-		TableDefinitions: s.Schema.TableDefinitions,
-	}, nil
+	return s, nil
 }
 
 // GetTablet is part of the vtadminpb.VTAdminServer interface.
