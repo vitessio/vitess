@@ -25,7 +25,15 @@ import (
 // GetSchema implements the http wrapper for the
 // /schema/{cluster_id}/{keyspace}/{table} route.
 func GetSchema(ctx context.Context, r Request, api *API) *JSONResponse {
-	panic("unimplemented!")
+	vars := r.Vars()
+
+	schema, err := api.server.GetSchema(ctx, &vtadminpb.GetSchemaRequest{
+		ClusterId: vars["cluster_id"],
+		Keyspace:  vars["keyspace"],
+		Table:     vars["table"],
+	})
+
+	return NewJSONResponse(schema, err)
 }
 
 // GetSchemas implements the http wrapper for the /schemas[?cluster=[&cluster=]
