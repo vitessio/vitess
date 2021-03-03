@@ -715,7 +715,7 @@ func containEscapableChars(s string, at AtCount) bool {
 }
 
 func isKeyword(s string) bool {
-	_, isKeyword := keywords[s]
+	_, isKeyword := keywordLookupTable.LookupString(s)
 	return isKeyword
 }
 
