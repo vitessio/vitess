@@ -22,6 +22,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -54,24 +55,19 @@ func TestParseNextValid(t *testing.T) {
 }
 
 func TestIgnoreSpecialComments(t *testing.T) {
-	input := `SELECT 1;/*! ALTER TABLE foo DISABLE KEYS */;SELECT 2;`
+	var sql bytes.Buffer
+	sql.WriteString(`SELECT 1;/*! ALTER TABLE foo DISABLE KEYS */;SELECT 2;`)
 
-	tokenizer := NewStringTokenizer(input)
+	tokenizer := NewTokenizer(&sql)
 	tokenizer.SkipSpecialComments = true
 	one, err := ParseNextStrictDDL(tokenizer)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
+
 	two, err := ParseNextStrictDDL(tokenizer)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got, want := String(one), "select 1 from dual"; got != want {
-		t.Fatalf("got %s want %s", got, want)
-	}
-	if got, want := String(two), "select 2 from dual"; got != want {
-		t.Fatalf("got %s want %s", got, want)
-	}
+	require.NoError(t, err)
+
+	assert.Equal(t, "select 1 from dual", String(one))
+	assert.Equal(t, "select 2 from dual", String(two))
 }
 
 // TestParseNextErrors tests all the error cases, and ensures a valid
@@ -83,8 +79,10 @@ func TestParseNextErrors(t *testing.T) {
 			continue
 		}
 
-		sql := tcase.input + "; select 1 from t"
-		tokens := NewStringTokenizer(sql)
+		var sql bytes.Buffer
+		sql.WriteString(tcase.input)
+		sql.WriteString("; select 1 from t")
+		tokens := NewTokenizer(&sql)
 
 		// The first statement should be an error
 		_, err := ParseNext(tokens)
@@ -153,7 +151,9 @@ func TestParseNextEdgeCases(t *testing.T) {
 	}}
 
 	for _, test := range tests {
-		tokens := NewStringTokenizer(test.input)
+		var sql bytes.Buffer
+		sql.WriteString(test.input)
+		tokens := NewTokenizer(&sql)
 
 		for i, want := range test.want {
 			tree, err := ParseNext(tokens)
@@ -186,7 +186,10 @@ func TestParseNextStrictNonStrict(t *testing.T) {
 	want := []string{"create table a", "select 1 from a"}
 
 	// First go through as expected with non-strict DDL parsing.
-	tokens := NewStringTokenizer(input)
+	var sql bytes.Buffer
+	sql.WriteString(input)
+	tokens := NewTokenizer(&sql)
+
 	for i, want := range want {
 		tree, err := ParseNext(tokens)
 		if err != nil {
@@ -198,7 +201,9 @@ func TestParseNextStrictNonStrict(t *testing.T) {
 	}
 
 	// Now try again with strict parsing and observe the expected error.
-	tokens = NewStringTokenizer(input)
+	sql = bytes.Buffer{}
+	sql.WriteString(input)
+	tokens = NewTokenizer(&sql)
 	_, err := ParseNextStrictDDL(tokens)
 	if err == nil || !strings.Contains(err.Error(), "ignore") {
 		t.Fatalf("ParseNext(%q) err = %q, want ignore", input, err)

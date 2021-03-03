@@ -1022,8 +1022,10 @@ func (tkn *Tokenizer) reset() {
 	tkn.posVarIndex = 0
 	tkn.nesting = 0
 	tkn.SkipToEnd = false
-	bufLeft := tkn.bufSize - tkn.bufPos
-	tkn.queryBuf = tkn.queryBuf[len(tkn.queryBuf)-bufLeft:]
+	bufLeft := len(tkn.buf) - tkn.bufPos
+	if len(tkn.queryBuf) > bufLeft {
+		tkn.queryBuf = tkn.queryBuf[len(tkn.queryBuf)-bufLeft:]
+	}
 	tkn.Position = 0
 	tkn.OldPosition = 0
 }
