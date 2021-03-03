@@ -28,7 +28,7 @@ func buildPlanForBypass(stmt sqlparser.Statement, vschema ContextVSchema) (engin
 	switch vschema.Destination().(type) {
 	case key.DestinationExactKeyRange:
 		if _, ok := stmt.(*sqlparser.Insert); ok {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "range queries not supported for inserts: %s", vschema.TargetString())
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "range queries are not allowed for insert statement: %s", vschema.TargetString())
 		}
 	}
 

@@ -56,7 +56,7 @@ func planGroupBy(pb *primitiveBuilder, input logicalPlan, groupBy sqlparser.Grou
 			case *sqlparser.ColName:
 				c := e.Metadata.(*column)
 				if c.Origin() == node {
-					return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "group by expression cannot reference an aggregate function: %v", sqlparser.String(e))
+					return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongGroupField, "group by expression cannot reference an aggregate function: %v", sqlparser.String(e))
 				}
 				for i, rc := range node.resultColumns {
 					if rc.column == c {
@@ -91,7 +91,7 @@ func planGroupBy(pb *primitiveBuilder, input logicalPlan, groupBy sqlparser.Grou
 
 		return node, nil
 	}
-	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "%T.groupBy: unreachable", input)
+	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unreachable %T.groupBy: ", input)
 }
 
 // planDistinct makes the output distinct
@@ -122,5 +122,5 @@ func planDistinct(input logicalPlan) (logicalPlan, error) {
 		return input, nil
 	}
 
-	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "%T.distinct: unreachable", input)
+	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unreachable %T.distinct", input)
 }

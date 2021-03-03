@@ -100,9 +100,15 @@ func (ps *PulloutSubquery) GetFields(vcursor VCursor, bindVars map[string]*query
 	return ps.Underlying.GetFields(vcursor, combinedVars)
 }
 
+// NeedsTransaction implements the Primitive interface
 func (ps *PulloutSubquery) NeedsTransaction() bool {
 	return ps.Subquery.NeedsTransaction() || ps.Underlying.NeedsTransaction()
 }
+
+var (
+	errSqRow    = vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "subquery returned more than one row")
+	errSqColumn = vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "subquery returned more than one column")
+)
 
 func (ps *PulloutSubquery) execSubquery(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (map[string]*querypb.BindVariable, error) {
 	result, err := ps.Subquery.Execute(vcursor, bindVars, false)
@@ -120,11 +126,11 @@ func (ps *PulloutSubquery) execSubquery(vcursor VCursor, bindVars map[string]*qu
 			combinedVars[ps.SubqueryResult] = sqltypes.NullBindVariable
 		case 1:
 			if len(result.Rows[0]) != 1 {
-				return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "subquery returned more than one column")
+				return nil, errSqColumn
 			}
 			combinedVars[ps.SubqueryResult] = sqltypes.ValueBindVariable(result.Rows[0][0])
 		default:
-			return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "subquery returned more than one row")
+			return nil, errSqRow
 		}
 	case PulloutIn, PulloutNotIn:
 		switch len(result.Rows) {
@@ -137,7 +143,7 @@ func (ps *PulloutSubquery) execSubquery(vcursor VCursor, bindVars map[string]*qu
 			}
 		default:
 			if len(result.Rows[0]) != 1 {
-				return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "subquery returned more than one column")
+				return nil, errSqColumn
 			}
 			combinedVars[ps.HasValues] = sqltypes.Int64BindVariable(1)
 			values := &querypb.BindVariable{
