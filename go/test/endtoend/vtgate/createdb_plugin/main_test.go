@@ -106,6 +106,7 @@ func TestDBDDLPluginSync(t *testing.T) {
 		"new database creation failed")
 
 	// wait until the create database query has returned
+	wg.Wait()
 	exec(t, conn, `use aaa`)
 
 	exec(t, conn, `create table t (id bigint primary key)`)

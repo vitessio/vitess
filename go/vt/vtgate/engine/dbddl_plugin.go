@@ -48,8 +48,8 @@ func (noOp) DropDatabase(context.Context, string) error {
 }
 
 const (
-	faildbDDL = "fail"
-	noOpdbDDL = "noop"
+	faildbDDL          = "fail"
+	noOpdbDDL          = "noop"
 	defaultDBDDLPlugin = faildbDDL
 )
 
