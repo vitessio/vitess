@@ -302,7 +302,7 @@ func (api *API) GetSchema(ctx context.Context, req *vtadminpb.GetSchemaRequest) 
 		return t.Tablet.Keyspace == req.Keyspace && t.State == vtadminpb.Tablet_SERVING
 	})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%w: no serving tablet found for keyspace %s", err, req.Keyspace)
 	}
 
 	span.Annotate("tablet_alias", topoproto.TabletAliasString(tablet.Tablet.Alias))
