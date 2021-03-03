@@ -19,6 +19,7 @@ package engine
 import (
 	"context"
 	"strings"
+
 	"vitess.io/vitess/go/vt/log"
 
 	"vitess.io/vitess/go/mysql"
@@ -49,9 +50,9 @@ type DBDDL struct {
 	noTxNeeded
 }
 
-// CreateDropCreateDatabase creates the engine primitive
+// NewDBDDL creates the engine primitive
 // `create` will be true for CREATE, and false for DROP
-func CreateDropCreateDatabase(dbName string, create bool) *DBDDL {
+func NewDBDDL(dbName string, create bool) *DBDDL {
 	return &DBDDL{
 		name:   dbName,
 		create: create,
@@ -89,6 +90,21 @@ func (c *DBDDL) Execute(vcursor VCursor, _ map[string]*querypb.BindVariable, _ b
 		if err != nil {
 			return nil, err
 		}
+		done := false
+		oldDb := vcursor.GetKeyspace()
+		for !done {
+			// loop until we have found a valid shard
+			err := vcursor.Session().SetTarget(c.name)
+			if err == nil {
+				done = true
+			}
+			log.Error(err)
+		}
+		err = vcursor.Session().SetTarget(oldDb)
+		if err != nil {
+			return nil, err
+		}
+
 		return &sqltypes.Result{RowsAffected: 1}, nil
 	}
 
