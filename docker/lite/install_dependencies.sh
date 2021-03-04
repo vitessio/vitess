@@ -58,6 +58,7 @@ BASE_PACKAGES=(
     sysstat
     wget
     curl
+    percona-toolkit
 )
 
 apt-get update
