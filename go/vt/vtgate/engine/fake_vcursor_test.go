@@ -267,6 +267,7 @@ type loggingVCursor struct {
 	resolvedTargetTabletType topodatapb.TabletType
 
 	tableRoutes tableRoutes
+	dbDDLPlugin string
 }
 
 type tableRoutes struct {
@@ -513,7 +514,7 @@ func (f *loggingVCursor) FindRoutedTable(tbl sqlparser.TableName) (*vindexes.Tab
 }
 
 func (f *loggingVCursor) GetDBDDLPluginName() string {
-	panic("implement me")
+	return f.dbDDLPlugin
 }
 
 func (f *loggingVCursor) nextResult() (*sqltypes.Result, error) {
