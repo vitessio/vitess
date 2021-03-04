@@ -3558,6 +3558,7 @@
 2021-03-04T18:19:53Z,region_example,https://github.com/vitessio/vitess/actions/runs/621973377
 2021-03-04T18:20:18Z,Cluster (11),https://github.com/vitessio/vitess/actions/runs/621974550
 2021-03-04T18:20:18Z,Cluster (13),https://github.com/vitessio/vitess/actions/runs/621974567
+2021-03-04T18:20:18Z,Cluster (14),https://github.com/vitessio/vitess/actions/runs/621974582
 2021-03-04T18:20:18Z,Cluster (16),https://github.com/vitessio/vitess/actions/runs/621974575
 2021-03-04T18:20:18Z,Cluster (17),https://github.com/vitessio/vitess/actions/runs/621974578
 2021-03-04T18:20:18Z,Cluster (18),https://github.com/vitessio/vitess/actions/runs/621974568
@@ -3581,6 +3582,7 @@
 2021-03-04T18:20:18Z,docker_test_2,https://github.com/vitessio/vitess/actions/runs/621974554
 2021-03-04T18:20:18Z,docker_test_3,https://github.com/vitessio/vitess/actions/runs/621974564
 2021-03-04T18:20:18Z,local_example,https://github.com/vitessio/vitess/actions/runs/621974558
+2021-03-04T18:20:18Z,local_example,https://github.com/vitessio/vitess/actions/runs/621974561
 2021-03-04T18:20:18Z,region_example,https://github.com/vitessio/vitess/actions/runs/621974548
 2021-03-04T18:20:19Z,Cluster (12),https://github.com/vitessio/vitess/actions/runs/621974587
 2021-03-04T18:20:19Z,Cluster (15),https://github.com/vitessio/vitess/actions/runs/621974603
