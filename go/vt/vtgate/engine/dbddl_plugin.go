@@ -54,6 +54,6 @@ const (
 )
 
 func init() {
-	databaseCreatorPlugins[faildbDDL] = failDBDDL{}
-	databaseCreatorPlugins[noOpdbDDL] = noOp{}
+	DBDDLRegister(faildbDDL, failDBDDL{})
+	DBDDLRegister(noOpdbDDL, noOp{})
 }
