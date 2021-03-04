@@ -367,7 +367,12 @@ func TestGetKeyspaces(t *testing.T) {
 		},
 	}
 
+	ctx := context.Background()
+
 	for _, tt := range tests {
+		// Note that these test cases were written prior to the existence of
+		// WithTestServers, so they are all written with the assumption that
+		// there are exactly 2 clusters.
 		topos := []*topo.Server{
 			memorytopo.NewServer("c0_cell1"),
 			memorytopo.NewServer("c1_cell1"),
@@ -375,32 +380,31 @@ func TestGetKeyspaces(t *testing.T) {
 
 		for cdx, cks := range tt.clusterKeyspaces {
 			for _, ks := range cks {
-				testutil.AddKeyspace(context.Background(), t, topos[cdx], ks)
+				testutil.AddKeyspace(ctx, t, topos[cdx], ks)
 			}
 		}
 
 		for cdx, css := range tt.clusterShards {
-			testutil.AddShards(context.Background(), t, topos[cdx], css...)
+			testutil.AddShards(ctx, t, topos[cdx], css...)
 		}
 
-		// Setting up WithTestServer in a generic, recursive way is... unpleasant,
-		// so all tests are set-up and run in the context of these two clusters.
-		testutil.WithTestServer(t, grpcvtctldserver.NewVtctldServer(topos[0]), func(t *testing.T, cluster0Client vtctldclient.VtctldClient) {
-			testutil.WithTestServer(t, grpcvtctldserver.NewVtctldServer(topos[1]), func(t *testing.T, cluster1Client vtctldclient.VtctldClient) {
-				clusterClients := []vtctldclient.VtctldClient{cluster0Client, cluster1Client}
+		servers := []vtctlservicepb.VtctldServer{
+			grpcvtctldserver.NewVtctldServer(topos[0]),
+			grpcvtctldserver.NewVtctldServer(topos[1]),
+		}
 
-				clusters := []*cluster.Cluster{
-					vtadmintestutil.BuildCluster(0, clusterClients[0], nil, nil),
-					vtadmintestutil.BuildCluster(1, clusterClients[1], nil, nil),
-				}
+		testutil.WithTestServers(t, func(t *testing.T, clients ...vtctldclient.VtctldClient) {
+			clusters := []*cluster.Cluster{
+				vtadmintestutil.BuildCluster(0, clients[0], nil, nil),
+				vtadmintestutil.BuildCluster(1, clients[1], nil, nil),
+			}
 
-				api := NewAPI(clusters, grpcserver.Options{}, http.Options{})
-				resp, err := api.GetKeyspaces(context.Background(), tt.req)
-				require.NoError(t, err)
+			api := NewAPI(clusters, grpcserver.Options{}, http.Options{})
+			resp, err := api.GetKeyspaces(ctx, tt.req)
+			require.NoError(t, err)
 
-				vtadmintestutil.AssertKeyspaceSlicesEqual(t, tt.expected.Keyspaces, resp.Keyspaces)
-			})
-		})
+			vtadmintestutil.AssertKeyspaceSlicesEqual(t, tt.expected.Keyspaces, resp.Keyspaces)
+		}, servers...)
 	}
 }
 
@@ -1052,7 +1056,12 @@ func TestGetSchemas(t *testing.T) {
 		},
 	}
 
+	ctx := context.Background()
+
 	for _, tt := range tests {
+		// Note that these test cases were written prior to the existence of
+		// WithTestServers, so they are all written with the assumption that
+		// there are exactly 2 clusters.
 		tt := tt
 
 		t.Run(tt.name, func(t *testing.T) {
@@ -1079,51 +1088,43 @@ func TestGetSchemas(t *testing.T) {
 				}),
 			}
 
-			// Setting up WithTestServer in a generic, recursive way is... unpleasant,
-			// so all tests are set-up and run in the context of these two clusters.
-			testutil.WithTestServer(t, vtctlds[0], func(t *testing.T, cluster0Client vtctldclient.VtctldClient) {
-				testutil.WithTestServer(t, vtctlds[1], func(t *testing.T, cluster1Client vtctldclient.VtctldClient) {
-					// Put 'em in a slice so we can look them up by index
-					clusterClients := []vtctldclient.VtctldClient{cluster0Client, cluster1Client}
-
-					// Build the clusters
-					clusters := make([]*cluster.Cluster, len(topos))
-					for cdx, toposerver := range topos {
-						// Handle when a test doesn't define any tablets for a given cluster.
-						var cts []*vtadminpb.Tablet
-						if cdx < len(tt.clusterTablets) {
-							cts = tt.clusterTablets[cdx]
-						}
-
-						for _, tablet := range cts {
-							// AddTablet also adds the keyspace + shard for us.
-							testutil.AddTablet(context.Background(), t, toposerver, tablet.Tablet, nil)
-
-							// Adds each SchemaDefinition to the fake TabletManagerClient, or nil
-							// if there are no schemas for that tablet. (All tablet aliases must
-							// exist in the map. Otherwise, TabletManagerClient will return an error when
-							// looking up the schema with tablet alias that doesn't exist.)
-							alias := topoproto.TabletAliasString(tablet.Tablet.Alias)
-							tmc.GetSchemaResults[alias] = struct {
-								Schema *tabletmanagerdatapb.SchemaDefinition
-								Error  error
-							}{
-								Schema: tt.tabletSchemas[alias],
-								Error:  nil,
-							}
-						}
-
-						clusters[cdx] = vtadmintestutil.BuildCluster(cdx, clusterClients[cdx], cts, nil)
+			testutil.WithTestServers(t, func(t *testing.T, clients ...vtctldclient.VtctldClient) {
+				clusters := make([]*cluster.Cluster, len(topos))
+				for cdx, toposerver := range topos {
+					// Handle when a test doesn't define any tablets for a given cluster.
+					var cts []*vtadminpb.Tablet
+					if cdx < len(tt.clusterTablets) {
+						cts = tt.clusterTablets[cdx]
 					}
 
-					api := NewAPI(clusters, grpcserver.Options{}, http.Options{})
+					for _, tablet := range cts {
+						// AddTablet also adds the keyspace + shard for us.
+						testutil.AddTablet(ctx, t, toposerver, tablet.Tablet, nil)
 
-					resp, err := api.GetSchemas(context.Background(), tt.req)
-					require.NoError(t, err)
+						// Adds each SchemaDefinition to the fake TabletManagerClient, or nil
+						// if there are no schemas for that tablet. (All tablet aliases must
+						// exist in the map. Otherwise, TabletManagerClient will return an error when
+						// looking up the schema with tablet alias that doesn't exist.)
+						alias := topoproto.TabletAliasString(tablet.Tablet.Alias)
+						tmc.GetSchemaResults[alias] = struct {
+							Schema *tabletmanagerdatapb.SchemaDefinition
+							Error  error
+						}{
+							Schema: tt.tabletSchemas[alias],
+							Error:  nil,
+						}
+					}
 
-					vtadmintestutil.AssertSchemaSlicesEqual(t, tt.expected.Schemas, resp.Schemas, tt.name)
-				})
-			})
+					clusters[cdx] = vtadmintestutil.BuildCluster(cdx, clients[cdx], cts, nil)
+				}
+
+				api := NewAPI(clusters, grpcserver.Options{}, http.Options{})
+
+				resp, err := api.GetSchemas(ctx, tt.req)
+				require.NoError(t, err)
+
+				vtadmintestutil.AssertSchemaSlicesEqual(t, tt.expected.Schemas, resp.Schemas, tt.name)
+			}, vtctlds...)
 		})
 	}
 }
