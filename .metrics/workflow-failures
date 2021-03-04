@@ -3525,3 +3525,29 @@
 2021-03-04T17:05:00Z,local_example,https://github.com/vitessio/vitess/actions/runs/621765726
 2021-03-04T17:05:00Z,local_example,https://github.com/vitessio/vitess/actions/runs/621765745
 2021-03-04T17:05:00Z,region_example,https://github.com/vitessio/vitess/actions/runs/621765737
+2021-03-04T18:19:53Z,Cluster (13),https://github.com/vitessio/vitess/actions/runs/621973399
+2021-03-04T18:19:53Z,Cluster (19),https://github.com/vitessio/vitess/actions/runs/621973384
+2021-03-04T18:19:53Z,Cluster (20),https://github.com/vitessio/vitess/actions/runs/621973345
+2021-03-04T18:19:53Z,Cluster (24),https://github.com/vitessio/vitess/actions/runs/621973392
+2021-03-04T18:19:53Z,Cluster (26),https://github.com/vitessio/vitess/actions/runs/621973353
+2021-03-04T18:19:53Z,Cluster (27),https://github.com/vitessio/vitess/actions/runs/621973357
+2021-03-04T18:19:53Z,Cluster (onlineddl_ghost),https://github.com/vitessio/vitess/actions/runs/621973400
+2021-03-04T18:19:53Z,Cluster (onlineddl_vrepl),https://github.com/vitessio/vitess/actions/runs/621973366
+2021-03-04T18:19:53Z,Cluster (onlineddl_vrepl_stress),https://github.com/vitessio/vitess/actions/runs/621973367
+2021-03-04T18:19:53Z,Cluster (upgrade),https://github.com/vitessio/vitess/actions/runs/621973351
+2021-03-04T18:19:53Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/621973347
+2021-03-04T18:19:53Z,Cluster (vreplication_cellalias),https://github.com/vitessio/vitess/actions/runs/621973362
+2021-03-04T18:19:53Z,Cluster (vreplication_migrate),https://github.com/vitessio/vitess/actions/runs/621973403
+2021-03-04T18:19:53Z,Cluster (vreplication_multicell),https://github.com/vitessio/vitess/actions/runs/621973356
+2021-03-04T18:19:53Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/621973368
+2021-03-04T18:19:53Z,local_example,https://github.com/vitessio/vitess/actions/runs/621973354
+2021-03-04T18:19:53Z,region_example,https://github.com/vitessio/vitess/actions/runs/621973377
+2021-03-04T18:20:18Z,Cluster (19),https://github.com/vitessio/vitess/actions/runs/621974543
+2021-03-04T18:20:18Z,Cluster (20),https://github.com/vitessio/vitess/actions/runs/621974560
+2021-03-04T18:20:18Z,Cluster (24),https://github.com/vitessio/vitess/actions/runs/621974555
+2021-03-04T18:20:18Z,Cluster (26),https://github.com/vitessio/vitess/actions/runs/621974546
+2021-03-04T18:20:18Z,Cluster (onlineddl_vrepl_stress),https://github.com/vitessio/vitess/actions/runs/621974553
+2021-03-04T18:20:18Z,Cluster (vreplication_cellalias),https://github.com/vitessio/vitess/actions/runs/621974565
+2021-03-04T18:20:18Z,Cluster (vreplication_multicell),https://github.com/vitessio/vitess/actions/runs/621974544
+2021-03-04T18:20:18Z,local_example,https://github.com/vitessio/vitess/actions/runs/621974558
+2021-03-04T18:20:19Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/621974585
