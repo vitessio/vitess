@@ -25,7 +25,6 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
@@ -98,12 +97,7 @@ func TestDBDDLPluginSync(t *testing.T) {
 		require.EqualValues(t, 1, qr.RowsAffected)
 	}()
 
-	keyspace := &cluster.Keyspace{
-		Name: "aaa",
-	}
-	require.NoError(t,
-		clusterInstance.StartUnshardedKeyspace(*keyspace, 0, false),
-		"new database creation failed")
+	start(t, "aaa")
 
 	// wait until the create database query has returned
 	wg.Wait()
@@ -115,8 +109,38 @@ func TestDBDDLPluginSync(t *testing.T) {
 
 	exec(t, conn, `drop database aaa`)
 
-	// TODO: we should chant down babylon here (aka take down the keyspace with all tablets)
-	execAssertError(t, conn, "select count(*) from t", `some error`)
+	shutdown("aaa")
+
+	_, err = conn.ExecuteFetch(`select count(*) from t`, 1000, true)
+	require.Error(t, err)
+}
+
+func start(t *testing.T, ksName string) {
+	keyspace := &cluster.Keyspace{
+		Name: ksName,
+	}
+	require.NoError(t,
+		clusterInstance.StartUnshardedKeyspace(*keyspace, 0, false),
+		"new database creation failed")
+}
+
+func shutdown(ksName string) {
+	for _, ks := range clusterInstance.Keyspaces {
+		if ks.Name != ksName {
+			continue
+		}
+		for _, shard := range ks.Shards {
+			for _, tablet := range shard.Vttablets {
+				if tablet.MysqlctlProcess.TabletUID > 0 {
+					tablet.MysqlctlProcess.StopProcess()
+				}
+				if tablet.MysqlctldProcess.TabletUID > 0 {
+					tablet.MysqlctldProcess.Stop()
+				}
+				tablet.VttabletProcess.TearDown()
+			}
+		}
+	}
 }
 
 func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
@@ -124,13 +148,6 @@ func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
 	qr, err := conn.ExecuteFetch(query, 1000, true)
 	require.NoError(t, err)
 	return qr
-}
-
-func execAssertError(t *testing.T, conn *mysql.Conn, query string, errorString string) {
-	t.Helper()
-	_, err := conn.ExecuteFetch(query, 1000, true)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), errorString)
 }
 
 func assertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {
