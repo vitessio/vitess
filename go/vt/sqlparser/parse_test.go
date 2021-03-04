@@ -3032,7 +3032,7 @@ var (
 		output: "syntax error at position 66 near 'using'",
 	}, {
 		input:        "select 'aa",
-		output:       "syntax error at position 11 near 'aa'",
+		output:       "syntax error at position 12 near 'aa'",
 		excludeMulti: true,
 	}, {
 		input:        "select 'aa\\",
