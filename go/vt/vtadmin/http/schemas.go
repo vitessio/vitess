@@ -25,7 +25,15 @@ import (
 // FindSchema implements the http wrapper for the
 // /schema/{table}[?cluster=[&cluster=]] route.
 func FindSchema(ctx context.Context, r Request, api *API) *JSONResponse {
-	panic("unimplemented!")
+	vars := r.Vars()
+	query := r.URL.Query()
+
+	schema, err := api.server.FindSchema(ctx, &vtadminpb.FindSchemaRequest{
+		Table:      vars["table"],
+		ClusterIds: query["cluster"],
+	})
+
+	return NewJSONResponse(schema, err)
 }
 
 // GetSchema implements the http wrapper for the
