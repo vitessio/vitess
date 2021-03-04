@@ -91,8 +91,8 @@ func (c *DBDDL) Execute(vcursor VCursor, _ map[string]*querypb.BindVariable, _ b
 		plugin = databaseCreatorPlugins[defaultDBDDLPlugin]
 	}
 
+	ctx := vcursor.Context()
 	if c.create {
-		ctx := vcursor.Context()
 		err := plugin.CreateDatabase(ctx, c.name)
 		if err != nil {
 			return nil, err
@@ -122,25 +122,31 @@ func (c *DBDDL) Execute(vcursor VCursor, _ map[string]*querypb.BindVariable, _ b
 		for {
 			_, errors := vcursor.ExecuteMultiShard(destinations, queries, false, true)
 
+			noErr := true
 			for _, err := range errors {
 				if err != nil {
+					noErr = false
 					log.Errorf("waiting for db create, step2: %s", err.Error())
 					select {
 					case <-ctx.Done(): //context cancelled
 						return nil, vterrors.Errorf(vtrpc.Code_DEADLINE_EXCEEDED, "could not validate created database")
 					case <-time.After(500 * time.Millisecond): //timeout
 					}
-					continue
+					break
 				}
 			}
-
-			break
+			if noErr {
+				break
+			}
 		}
-
 		return &sqltypes.Result{RowsAffected: 1}, nil
 	}
 
-	panic("implement me")
+	err := plugin.DropDatabase(ctx, c.name)
+	if err != nil {
+		return nil, err
+	}
+	return &sqltypes.Result{StatusFlags: sqltypes.ServerStatusDbDropped}, err
 }
 
 // StreamExecute implements the Primitive interface
