@@ -78,7 +78,7 @@ func (cached *DBDDL) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(17)
+		size += int64(32)
 	}
 	// field name string
 	size += int64(len(cached.name))

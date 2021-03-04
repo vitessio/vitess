@@ -58,8 +58,9 @@ type DBDDLPlugin interface {
 // DBDDL is just a container around custom database provisioning plugins
 // The default behaviour is to just return an error
 type DBDDL struct {
-	name   string
-	create bool
+	name         string
+	create       bool
+	queryTimeout int
 
 	noInputs
 	noTxNeeded
@@ -67,10 +68,11 @@ type DBDDL struct {
 
 // NewDBDDL creates the engine primitive
 // `create` will be true for CREATE, and false for DROP
-func NewDBDDL(dbName string, create bool) *DBDDL {
+func NewDBDDL(dbName string, create bool, timeout int) *DBDDL {
 	return &DBDDL{
-		name:   dbName,
-		create: create,
+		name:         dbName,
+		create:       create,
+		queryTimeout: timeout,
 	}
 }
 
@@ -99,6 +101,10 @@ func (c *DBDDL) Execute(vcursor VCursor, _ map[string]*querypb.BindVariable, _ b
 	if !ok {
 		log.Errorf("'%s' database ddl plugin is not registered. Falling back to default plugin", name)
 		plugin = databaseCreatorPlugins[defaultDBDDLPlugin]
+	}
+	if c.queryTimeout != 0 {
+		cancel := vcursor.SetContextTimeout(time.Duration(c.queryTimeout) * time.Millisecond)
+		defer cancel()
 	}
 
 	ctx := vcursor.Context()
