@@ -3698,3 +3698,4 @@
 2021-03-04T20:55:44Z,check_formatting,https://github.com/vitessio/vitess/actions/runs/622354616
 2021-03-04T20:55:44Z,golangci-lint,https://github.com/vitessio/vitess/actions/runs/622354614
 2021-03-04T21:03:51Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/622371178
+2021-03-04T21:04:08Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/622371963
