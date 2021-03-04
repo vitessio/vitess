@@ -22,6 +22,7 @@ option go_package = "vitess.io/vitess/go/vt/proto/vtctldata";
 
 package vtctldata;
 
+import "binlogdata.proto";
 import "logutil.proto";
 import "mysqlctl.proto";
 import "tabletmanagerdata.proto";
@@ -40,6 +41,90 @@ message ExecuteVtctlCommandRequest {
 message ExecuteVtctlCommandResponse {
   logutil.Event event = 1;
 }
+
+// TableMaterializeSttings contains the settings for one table.
+message TableMaterializeSettings {
+  string target_table = 1;
+  // source_expression is a select statement.
+  string source_expression = 2;
+  // create_ddl contains the DDL to create the target table.
+  // If empty, the target table must already exist.
+  // if "copy", the target table DDL is the same as the source table.
+  string create_ddl = 3;
+}
+
+// MaterializeSettings contains the settings for the Materialize command.
+message MaterializeSettings {
+  // workflow is the name of the workflow.
+  string workflow = 1;
+  string source_keyspace = 2;
+  string target_keyspace = 3;
+  // stop_after_copy specifies if vreplication should be stopped after copying.
+  bool stop_after_copy = 4;
+  repeated TableMaterializeSettings table_settings = 5;
+  // optional parameters.
+  string cell = 6;
+  string tablet_types = 7;
+  // ExternalCluster is the name of the mounted cluster which has the source keyspace/db for this workflow
+  // it is of the type <cluster_type.cluster_name>
+  string external_cluster = 8;
+
+}
+
+/* Data types for VtctldServer */
+
+message Keyspace {
+  string name = 1;
+  topodata.Keyspace keyspace = 2;
+}
+
+message Shard {
+  string keyspace = 1;
+  string name = 2;
+  topodata.Shard shard = 3;
+}
+
+// TODO: comment the hell out of this.
+message Workflow {
+  string name = 1;
+  ReplicationLocation source = 2;
+  ReplicationLocation target = 3;
+  int64 max_v_replication_lag = 4;
+  map<string, ShardStream> shard_streams = 5;
+
+  message ReplicationLocation {
+    string keyspace = 1;
+    repeated string shards = 2;
+  }
+
+  message ShardStream {
+    repeated Stream streams = 1;
+    repeated topodata.Shard.TabletControl tablet_controls = 2;
+    bool is_primary_serving = 3;
+  }
+
+  message Stream {
+    int64 id = 1;
+    string shard = 2;
+    topodata.TabletAlias tablet = 3;
+    binlogdata.BinlogSource binlog_source = 4;
+    string position = 5;
+    string stop_position = 6;
+    string state = 7;
+    string db_name = 8;
+    vttime.Time transaction_timestamp = 9;
+    vttime.Time time_updated = 10;
+    string message = 11;
+    repeated CopyState copy_states = 12;
+
+    message CopyState {
+      string table = 1;
+      string last_pk = 2;
+    }
+  }
+}
+
+/* Request/response types for VtctldServer */
 
 message ChangeTabletTypeRequest {
   topodata.TabletAlias tablet_alias = 1;
@@ -180,6 +265,14 @@ message EmergencyReparentShardResponse {
   repeated logutil.Event events = 4;
 }
 
+message FindAllShardsInKeyspaceRequest {
+  string keyspace = 1;
+}
+
+message FindAllShardsInKeyspaceResponse {
+  map<string, Shard> shards = 1;
+}
+
 message GetBackupsRequest {
   string keyspace = 1;
   string shard = 2;
@@ -297,6 +390,15 @@ message GetVSchemaResponse {
   vschema.Keyspace v_schema = 1;
 }
 
+message GetWorkflowsRequest {
+  string keyspace = 1;
+  bool active_only = 2;
+}
+
+message GetWorkflowsResponse {
+  repeated Workflow workflows = 1;
+}
+
 message InitShardPrimaryRequest {
   string keyspace = 1;
   string shard = 2;
@@ -408,52 +510,4 @@ message TabletExternallyReparentedResponse {
   string shard = 2;
   topodata.TabletAlias new_primary = 3;
   topodata.TabletAlias old_primary = 4;
-}
-
-message Keyspace {
-  string name = 1;
-  topodata.Keyspace keyspace = 2;
-}
-
-message FindAllShardsInKeyspaceRequest {
-  string keyspace = 1;
-}
-
-message FindAllShardsInKeyspaceResponse {
-  map<string, Shard> shards = 1;
-}
-
-message Shard {
-  string keyspace = 1;
-  string name = 2;
-  topodata.Shard shard = 3;
-}
-
-// TableMaterializeSttings contains the settings for one table.
-message TableMaterializeSettings {
-  string target_table = 1;
-  // source_expression is a select statement.
-  string source_expression = 2;
-  // create_ddl contains the DDL to create the target table.
-  // If empty, the target table must already exist.
-  // if "copy", the target table DDL is the same as the source table.
-  string create_ddl = 3;
-}
-
-// MaterializeSettings contains the settings for the Materialize command.
-message MaterializeSettings {
-  // workflow is the name of the workflow.
-  string workflow = 1;
-  string source_keyspace = 2;
-  string target_keyspace = 3;
-  // stop_after_copy specifies if vreplication should be stopped after copying.
-  bool stop_after_copy = 4;
-  repeated TableMaterializeSettings table_settings = 5;
-  // optional parameters.
-  string cell = 6;
-  string tablet_types = 7;
-  // ExternalCluster is the name of the mounted cluster which has the source keyspace/db for this workflow
-  // it is of the type <cluster_type.cluster_name>
-  string external_cluster = 8;
-
 }
