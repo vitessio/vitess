@@ -36,6 +36,9 @@ service VTAdmin {
     rpc GetGates(GetGatesRequest) returns (GetGatesResponse) {};
     // GetKeyspaces returns all keyspaces across the specified clusters.
     rpc GetKeyspaces(GetKeyspacesRequest) returns (GetKeyspacesResponse) {};
+    // GetSchema returns the schema for the specified (cluster, keyspace, table)
+    // tuple.
+    rpc GetSchema(GetSchemaRequest) returns (Schema) {};
     // GetSchemas returns all schemas across the specified clusters.
     rpc GetSchemas(GetSchemasRequest) returns (GetSchemasResponse) {};
     // GetTablet looks up a tablet by hostname across all clusters and returns
@@ -128,6 +131,12 @@ message GetKeyspacesRequest {
 
 message GetKeyspacesResponse {
     repeated Keyspace keyspaces = 1;
+}
+
+message GetSchemaRequest {
+    string cluster_id = 1;
+    string keyspace = 2;
+    string table = 3;
 }
 
 message GetSchemasRequest {
