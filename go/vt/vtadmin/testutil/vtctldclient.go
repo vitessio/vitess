@@ -34,6 +34,10 @@ import (
 type VtctldClient struct {
 	vtctldclient.VtctldClient
 
+	GetKeyspacesResults struct {
+		Keyspaces []*vtctldatapb.Keyspace
+		Error     error
+	}
 	GetSchemaResults map[string]struct {
 		Response *vtctldatapb.GetSchemaResponse
 		Error    error
@@ -43,6 +47,17 @@ type VtctldClient struct {
 // Compile-time type assertion to make sure we haven't overriden a method
 // incorrectly.
 var _ vtctldclient.VtctldClient = (*VtctldClient)(nil)
+
+// GetKeyspaces is part of the vtctldclient.VtctldClient interface.
+func (fake *VtctldClient) GetKeyspaces(ctx context.Context, req *vtctldatapb.GetKeyspacesRequest, opts ...grpc.CallOption) (*vtctldatapb.GetKeyspacesResponse, error) {
+	if fake.GetKeyspacesResults.Error != nil {
+		return nil, fake.GetKeyspacesResults.Error
+	}
+
+	return &vtctldatapb.GetKeyspacesResponse{
+		Keyspaces: fake.GetKeyspacesResults.Keyspaces,
+	}, nil
+}
 
 // GetSchema is part of the vtctldclient.VtctldClient interface.
 func (fake *VtctldClient) GetSchema(ctx context.Context, req *vtctldatapb.GetSchemaRequest, opts ...grpc.CallOption) (*vtctldatapb.GetSchemaResponse, error) {
