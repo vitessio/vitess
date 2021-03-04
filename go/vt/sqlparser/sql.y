@@ -272,8 +272,8 @@ func skipToEnd(yylex interface{}) {
 %type <selectExprs> select_expression_list argument_expression_list argument_expression_list_opt
 %type <selectExpr> select_expression argument_expression
 %type <expr> expression naked_like group_by
-%type <tableExprs> table_references
-%type <tableExpr> table_reference table_factor join_table
+%type <tableExprs> table_references with_clause cte_list
+%type <tableExpr> table_reference table_factor join_table common_table_expression
 %type <joinCondition> join_condition join_condition_opt on_expression_opt
 %type <tableNames> table_name_list delete_table_list view_name_list
 %type <str> inner_join outer_join straight_join natural_join
@@ -461,6 +461,36 @@ base_select:
 | SELECT comment_opt cache_opt distinct_opt straight_join_opt select_expression_list FROM table_references where_expression_opt group_by_opt having_opt
   {
     $$ = &Select{Comments: Comments($2), Cache: $3, Distinct: $4, Hints: $5, SelectExprs: $6, From: $8, Where: NewWhere(WhereStr, $9), GroupBy: GroupBy($10), Having: NewWhere(HavingStr, $11)}
+  }
+| with_clause SELECT comment_opt cache_opt distinct_opt straight_join_opt select_expression_list FROM table_references where_expression_opt group_by_opt having_opt
+  {
+    $$ = &Select{Comments: Comments($2), Cache: $3, Distinct: $4, Hints: $5, SelectExprs: $6, From: $8, Where: NewWhere(WhereStr, $9), GroupBy: GroupBy($10), Having: NewWhere(HavingStr, $11)}
+  }
+
+with_clause:
+  WITH cte_list
+  {
+    $$ = $2
+  }
+
+cte_list:
+  common_table_expression
+  {
+    $$ = TableExprs{$1}
+  }
+| cte_list ',' common_table_expression
+  {
+    $$ = append($1, $2)
+  }
+
+common_table_expression:
+  table_alias AS subquery
+  {
+    $$ = &CommonTableExpression{AliasedTableExpr{Expr:$3, As: $1}, nil}
+  }
+| openb ins_column_list closeb table_alias AS subquery
+  {
+    $$ = &CommonTableExpression{AliasedTableExpr{Expr:$6, As: $4}, $2}
   }
 
 union_lhs:
@@ -4352,6 +4382,7 @@ reserved_keyword:
 | WHEN
 | WHERE
 | WINDOW
+| WITH
 
 /*
   These are non-reserved Vitess, because they don't cause conflicts in the grammar.
@@ -4563,7 +4594,6 @@ non_reserved_keyword:
 | VIEW
 | VISIBLE
 | WARNINGS
-| WITH
 | WRITE
 | YEAR
 | ZEROFILL

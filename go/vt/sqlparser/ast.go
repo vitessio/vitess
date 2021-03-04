@@ -27,6 +27,7 @@ import (
 
 	"github.com/dolthub/vitess/go/sqltypes"
 	"github.com/dolthub/vitess/go/vt/log"
+	"github.com/dolthub/vitess/go/vt/sqlparser"
 	"github.com/dolthub/vitess/go/vt/vterrors"
 
 	querypb "github.com/dolthub/vitess/go/vt/proto/query"
@@ -2658,6 +2659,7 @@ type TableExpr interface {
 func (*AliasedTableExpr) iTableExpr() {}
 func (*ParenTableExpr) iTableExpr()   {}
 func (*JoinTableExpr) iTableExpr()    {}
+func (*CommonTableExpr) iTableExpr()  {}
 
 // AliasedTableExpr represents a table expression
 // coupled with an optional alias, AS OF expression, and index hints.
@@ -2718,6 +2720,18 @@ func (node *AliasedTableExpr) RemoveHints() *AliasedTableExpr {
 	noHints := *node
 	noHints.Hints = nil
 	return &noHints
+}
+
+type CommonTableExpr struct {
+	AliasedTableExpr
+	Columns Columns
+}
+
+func (e *CommonTableExpr) Format(buf *sqlparser.TrackedBuffer) {
+}
+
+func (e *CommonTableExpr) walkSubtree(visit Visit) error {
+	return nil
 }
 
 // SimpleTableExpr represents a simple table expression.
