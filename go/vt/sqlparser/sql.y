@@ -863,9 +863,9 @@ create_index_prefix:
   }
 
 create_database_prefix:
-  CREATE database_or_schema not_exists_opt id_or_var
+  CREATE database_or_schema comment_opt not_exists_opt id_or_var
   {
-    $$ = &CreateDatabase{DBName: string($4.String()), IfNotExists: $3}
+    $$ = &CreateDatabase{Comments: Comments($3), DBName: string($5.String()), IfNotExists: $4}
     setDDL(yylex,$$)
   }
 
@@ -2291,9 +2291,9 @@ drop_statement:
   {
     $$ = &DropView{FromTables: $4, IfExists: $3}
   }
-| DROP database_or_schema exists_opt id_or_var
+| DROP database_or_schema comment_opt exists_opt id_or_var
   {
-    $$ = &DropDatabase{DBName: string($4.String()), IfExists: $3}
+    $$ = &DropDatabase{Comments: Comments($3), DBName: string($5.String()), IfExists: $4}
   }
 
 truncate_statement:
