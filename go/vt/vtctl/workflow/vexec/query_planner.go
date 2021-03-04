@@ -60,7 +60,7 @@ type QueryPlanner interface {
 	// method called something like "VReplicationExec(ctx, query, Options{DryRun: true})"
 	// DryRun(ctx context.Context) error
 
-	// PlanQuery contsructs and returns a QueryPlan for a given statement. The
+	// PlanQuery constructs and returns a QueryPlan for a given statement. The
 	// resulting QueryPlan is suitable for repeated, concurrent use.
 	PlanQuery(stmt sqlparser.Statement) (*QueryPlan, error)
 	// QueryParams returns a struct of column parameters the QueryPlanner uses.
