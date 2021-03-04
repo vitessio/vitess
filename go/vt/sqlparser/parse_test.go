@@ -344,6 +344,18 @@ var (
 		}, {
 			input: "select /* join using (a, b, c) */ 1 from t1 join t2 using (a, b, c)",
 		}, {
+			input: "with cte1 as (select a from b) select * from cte1",
+		}, {
+			input: "with cte1 as (select a from b), cte2 as (select c from d) select * from cte1 join cte2",
+		}, {
+			input: "with cte1 (x, y) as (select a from b) select * from cte1",
+		}, {
+			input: "with cte1 (w, x) as (select a from b), cte2 (y, z) as (select c from d) select * from cte1 join cte2",
+		}, {
+			input: "with cte1 (w, x) as (select a from b) select a, (with cte2 (y, z) as (select c from d) select y from cte2) from cte1",
+		}, {
+			input: "with cte1 (w, x) as (select a from b) select a from cte1 join (with cte2 (y, z) as (select c from d) select * from cte2) as sub1 where a = b",
+		}, {
 			input: "select /* s.t */ 1 from s.t",
 		}, {
 			input: "select /* keyword schema & table name */ 1 from `By`.`bY`",

@@ -464,7 +464,7 @@ base_select:
   }
 | with_clause SELECT comment_opt cache_opt distinct_opt straight_join_opt select_expression_list FROM table_references where_expression_opt group_by_opt having_opt
   {
-    $$ = &Select{Comments: Comments($2), Cache: $3, Distinct: $4, Hints: $5, SelectExprs: $6, From: $8, Where: NewWhere(WhereStr, $9), GroupBy: GroupBy($10), Having: NewWhere(HavingStr, $11)}
+    $$ = &Select{CommonTableExprs: $1, Comments: Comments($3), Cache: $4, Distinct: $5, Hints: $6, SelectExprs: $7, From: $9, Where: NewWhere(WhereStr, $10), GroupBy: GroupBy($11), Having: NewWhere(HavingStr, $12)}
   }
 
 with_clause:
@@ -480,17 +480,17 @@ cte_list:
   }
 | cte_list ',' common_table_expression
   {
-    $$ = append($1, $2)
+    $$ = append($1, $3)
   }
 
 common_table_expression:
   table_alias AS subquery
   {
-    $$ = &CommonTableExpression{AliasedTableExpr{Expr:$3, As: $1}, nil}
+    $$ = &CommonTableExpr{&AliasedTableExpr{Expr:$3, As: $1}, nil}
   }
-| openb ins_column_list closeb table_alias AS subquery
+| table_alias openb ins_column_list closeb AS subquery
   {
-    $$ = &CommonTableExpression{AliasedTableExpr{Expr:$6, As: $4}, $2}
+    $$ = &CommonTableExpr{&AliasedTableExpr{Expr:$6, As: $1}, $3}
   }
 
 union_lhs:
