@@ -18,6 +18,7 @@ package engine
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
@@ -38,6 +39,15 @@ var _ Primitive = (*DBDDL)(nil)
 
 //goland:noinspection GoVarAndConstTypeMayBeOmitted
 var databaseCreatorPlugins = map[string]DBDDLPlugin{}
+
+// DBDDLRegister registers a dbDDL plugin under the specified name.
+// A duplicate plugin will generate a panic.
+func DBDDLRegister(name string, plugin DBDDLPlugin) {
+	if _, ok := databaseCreatorPlugins[name]; ok {
+		panic(fmt.Sprintf("%s is already registered", name))
+	}
+	databaseCreatorPlugins[name] = plugin
+}
 
 // DBDDLPlugin is the interface that you need to implement to add a custom CREATE/DROP DATABASE handler
 type DBDDLPlugin interface {
