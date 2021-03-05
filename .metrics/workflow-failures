@@ -3760,3 +3760,6 @@
 2021-03-05T18:21:13Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/625305453
 2021-03-05T18:21:13Z,unit_race,https://github.com/vitessio/vitess/actions/runs/625305473
 2021-03-05T18:28:49Z,unit_race,https://github.com/vitessio/vitess/actions/runs/625323638
+2021-03-05T18:56:06Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/625387643
+2021-03-05T18:56:06Z,unit_race,https://github.com/vitessio/vitess/actions/runs/625387656
+2021-03-05T18:56:33Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/625388707
