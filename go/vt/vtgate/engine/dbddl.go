@@ -120,7 +120,7 @@ func (c *DBDDL) Execute(vcursor VCursor, _ map[string]*querypb.BindVariable, _ b
 			if err == nil {
 				break
 			}
-			log.Errorf("waiting for db create, step1: %s", err.Error())
+			log.Errorf("waiting for topo to be updated after create db: %s", err.Error())
 			select {
 			case <-ctx.Done(): //context cancelled
 				return nil, vterrors.Errorf(vtrpc.Code_DEADLINE_EXCEEDED, "could not validate created database")
@@ -142,7 +142,7 @@ func (c *DBDDL) Execute(vcursor VCursor, _ map[string]*querypb.BindVariable, _ b
 			for _, err := range errors {
 				if err != nil {
 					noErr = false
-					log.Errorf("waiting for db create, step2: %s", err.Error())
+					log.Errorf("waiting for healthy tablets to be available after create db: %s", err.Error())
 					select {
 					case <-ctx.Done(): //context cancelled
 						return nil, vterrors.Errorf(vtrpc.Code_DEADLINE_EXCEEDED, "could not validate created database")
