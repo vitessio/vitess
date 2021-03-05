@@ -344,6 +344,18 @@ var (
 		}, {
 			input: "select /* join using (a, b, c) */ 1 from t1 join t2 using (a, b, c)",
 		}, {
+			input: "with cte1 as (select a from b) select * from cte1",
+		}, {
+			input: "with cte1 as (select a from b), cte2 as (select c from d) select * from cte1 join cte2",
+		}, {
+			input: "with cte1 (x, y) as (select a from b) select * from cte1",
+		}, {
+			input: "with cte1 (w, x) as (select a from b), cte2 (y, z) as (select c from d) select * from cte1 join cte2",
+		}, {
+			input: "with cte1 (w, x) as (select a from b) select a, (with cte2 (y, z) as (select c from d) select y from cte2) from cte1",
+		}, {
+			input: "with cte1 (w, x) as (select a from b) select a from cte1 join (with cte2 (y, z) as (select c from d) select * from cte2) as sub1 where a = b",
+		}, {
 			input: "select /* s.t */ 1 from s.t",
 		}, {
 			input: "select /* keyword schema & table name */ 1 from `By`.`bY`",
@@ -1094,72 +1106,6 @@ var (
 			input:  "create table a (b1 bool not null primary key, b2 boolean not null)",
 			output: "create table a (\n\tb1 bool not null primary key,\n\tb2 boolean not null\n)",
 		}, {
-			input: "alter vschema create vindex hash_vdx using hash",
-		}, {
-			input: "alter vschema create vindex keyspace.hash_vdx using hash",
-		}, {
-			input: "alter vschema create vindex lookup_vdx using lookup with owner=user, table=name_user_idx, from=name, to=user_id",
-		}, {
-			input: "alter vschema create vindex xyz_vdx using xyz with param1=hello, param2='world', param3=123",
-		}, {
-			input: "alter vschema drop vindex hash_vdx",
-		}, {
-			input: "alter vschema drop vindex ks.hash_vdx",
-		}, {
-			input: "alter vschema add table a",
-		}, {
-			input: "alter vschema add table ks.a",
-		}, {
-			input: "alter vschema add sequence a_seq",
-		}, {
-			input: "alter vschema add sequence ks.a_seq",
-		}, {
-			input: "alter vschema on a add auto_increment id using a_seq",
-		}, {
-			input: "alter vschema on ks.a add auto_increment id using a_seq",
-		}, {
-			input: "alter vschema drop table a",
-		}, {
-			input: "alter vschema drop table ks.a",
-		}, {
-			input: "alter vschema on a add vindex hash (id)",
-		}, {
-			input: "alter vschema on ks.a add vindex hash (id)",
-		}, {
-			input:  "alter vschema on a add vindex `hash` (`id`)",
-			output: "alter vschema on a add vindex hash (id)",
-		}, {
-			input:  "alter vschema on `ks`.a add vindex `hash` (`id`)",
-			output: "alter vschema on ks.a add vindex hash (id)",
-		}, {
-			input:  "alter vschema on a add vindex hash (id) using `hash`",
-			output: "alter vschema on a add vindex hash (id) using hash",
-		}, {
-			input: "alter vschema on a add vindex `add` (`add`)",
-		}, {
-			input: "alter vschema on a add vindex hash (id) using hash",
-		}, {
-			input:  "alter vschema on a add vindex hash (id) using `hash`",
-			output: "alter vschema on a add vindex hash (id) using hash",
-		}, {
-			input: "alter vschema on user add vindex name_lookup_vdx (name) using lookup_hash with owner=user, table=name_user_idx, from=name, to=user_id",
-		}, {
-			input:  "alter vschema on user2 add vindex name_lastname_lookup_vdx (name,lastname) using lookup with owner=`user`, table=`name_lastname_keyspace_id_map`, from=`name,lastname`, to=`keyspace_id`",
-			output: "alter vschema on user2 add vindex name_lastname_lookup_vdx (name, lastname) using lookup with owner=user, table=name_lastname_keyspace_id_map, from=name,lastname, to=keyspace_id",
-		}, {
-			input: "alter vschema on a drop vindex hash",
-		}, {
-			input: "alter vschema on ks.a drop vindex hash",
-		}, {
-			input:  "alter vschema on a drop vindex `hash`",
-			output: "alter vschema on a drop vindex hash",
-		}, {
-			input:  "alter vschema on a drop vindex hash",
-			output: "alter vschema on a drop vindex hash",
-		}, {
-			input:  "alter vschema on a drop vindex `add`",
-			output: "alter vschema on a drop vindex `add`",
-		}, {
 			input:  "create index a on b (id)",
 			output: "alter table b add index a (id)",
 		}, {
@@ -1481,18 +1427,6 @@ var (
 		}, {
 			input:  "show session variables",
 			output: "show session variables",
-		}, {
-			input: "show vitess_keyspaces",
-		}, {
-			input: "show vitess_shards",
-		}, {
-			input: "show vitess_tablets",
-		}, {
-			input: "show vschema tables",
-		}, {
-			input: "show vschema vindexes",
-		}, {
-			input: "show vschema vindexes on t",
 		}, {
 			input:  "show warnings",
 			output: "show warnings",

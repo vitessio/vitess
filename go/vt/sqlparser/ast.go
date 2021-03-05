@@ -347,18 +347,19 @@ func (*ParenSelect) iSelectStatement() {}
 
 // Select represents a SELECT statement.
 type Select struct {
-	Cache       string
-	Comments    Comments
-	Distinct    string
-	Hints       string
-	SelectExprs SelectExprs
-	From        TableExprs
-	Where       *Where
-	GroupBy     GroupBy
-	Having      *Where
-	OrderBy     OrderBy
-	Limit       *Limit
-	Lock        string
+	Cache            string
+	Comments         Comments
+	Distinct         string
+	Hints            string
+	CommonTableExprs TableExprs
+	SelectExprs      SelectExprs
+	From             TableExprs
+	Where            *Where
+	GroupBy          GroupBy
+	Having           *Where
+	OrderBy          OrderBy
+	Limit            *Limit
+	Lock             string
 }
 
 // Select.Distinct
@@ -391,6 +392,17 @@ func (node *Select) SetLimit(limit *Limit) {
 
 // Format formats the node.
 func (node *Select) Format(buf *TrackedBuffer) {
+	if len(node.CommonTableExprs) > 0 {
+		buf.Myprintf("with ")
+		for i, cte := range node.CommonTableExprs {
+			if i > 0 {
+				buf.Myprintf(", ")
+			}
+			buf.Myprintf("%v", cte)
+		}
+		buf.Myprintf(" ")
+	}
+
 	buf.Myprintf("select %v%s%s%s%v from %v%v%v%v%v%v%s",
 		node.Comments, node.Cache, node.Distinct, node.Hints, node.SelectExprs,
 		node.From, node.Where,
@@ -918,9 +930,6 @@ func (node *Stream) walkSubtree(visit Visit) error {
 // Replace is the counterpart to `INSERT IGNORE`, and works exactly like a
 // normal INSERT except if the row exists. In that case it first deletes
 // the row and re-inserts with new values. For that reason we keep it as an Insert struct.
-// Replaces are currently disallowed in sharded schemas because
-// of the implications the deletion part may have on vindexes.
-// If you add fields here, consider adding them to calls to validateUnshardedRoute.
 type Insert struct {
 	Action     string
 	Comments   Comments
@@ -1050,7 +1059,6 @@ type Set struct {
 const (
 	SessionStr        = "session"
 	GlobalStr         = "global"
-	VitessMetadataStr = "vitess_metadata"
 	ImplicitStr       = ""
 )
 
@@ -1219,12 +1227,6 @@ type DDL struct {
 	OptLike       *OptLike
 	PartitionSpec *PartitionSpec
 
-	// VindexSpec is set for CreateVindexStr, DropVindexStr, AddColVindexStr, DropColVindexStr.
-	VindexSpec *VindexSpec
-
-	// VindexCols is set for AddColVindexStr.
-	VindexCols []ColIdent
-
 	// AutoIncSpec is set for AddAutoIncStr.
 	AutoIncSpec *AutoIncSpec
 
@@ -1265,20 +1267,10 @@ const (
 	DeleteStr           = "delete"
 	FollowsStr          = "follows"
 	PrecedesStr         = "precedes"
-	CreateVindexStr     = "create vindex"
-	DropVindexStr       = "drop vindex"
-	AddVschemaTableStr  = "add vschema table"
-	DropVschemaTableStr = "drop vschema table"
-	AddColVindexStr     = "on table add vindex"
-	DropColVindexStr    = "on table drop vindex"
-	AddSequenceStr      = "add sequence"
 	AddAutoIncStr       = "add auto_increment"
 	UniqueStr           = "unique"
 	SpatialStr          = "spatial"
 	FulltextStr         = "fulltext"
-
-	// Vindex DDL param to specify the owner of a vindex
-	VindexOwnerStr = "owner"
 )
 
 // Format formats the node.
@@ -1408,31 +1400,6 @@ func (node *DDL) Format(buf *TrackedBuffer) {
 		}
 	case FlushStr:
 		buf.Myprintf("%s", node.Action)
-	case CreateVindexStr:
-		buf.Myprintf("alter vschema create vindex %v %v", node.Table, node.VindexSpec)
-	case DropVindexStr:
-		buf.Myprintf("alter vschema drop vindex %v", node.Table)
-	case AddVschemaTableStr:
-		buf.Myprintf("alter vschema add table %v", node.Table)
-	case DropVschemaTableStr:
-		buf.Myprintf("alter vschema drop table %v", node.Table)
-	case AddColVindexStr:
-		buf.Myprintf("alter vschema on %v add vindex %v (", node.Table, node.VindexSpec.Name)
-		for i, col := range node.VindexCols {
-			if i != 0 {
-				buf.Myprintf(", %v", col)
-			} else {
-				buf.Myprintf("%v", col)
-			}
-		}
-		buf.Myprintf(")")
-		if node.VindexSpec.Type.String() != "" {
-			buf.Myprintf(" %v", node.VindexSpec)
-		}
-	case DropColVindexStr:
-		buf.Myprintf("alter vschema on %v drop vindex %v", node.Table, node.VindexSpec.Name)
-	case AddSequenceStr:
-		buf.Myprintf("alter vschema add sequence %v", node.Table)
 	case AddAutoIncStr:
 		buf.Myprintf("alter vschema on %v add auto_increment %v", node.Table, node.AutoIncSpec)
 	default:
@@ -2097,13 +2064,6 @@ const (
 	colKey
 )
 
-// VindexSpec defines a vindex for a CREATE VINDEX or DROP VINDEX statement
-type VindexSpec struct {
-	Name   ColIdent
-	Type   ColIdent
-	Params []VindexParam
-}
-
 // AutoIncSpec defines an autoincrement value for a ADD AUTO_INCREMENT statement
 type AutoIncSpec struct {
 	Column   ColIdent
@@ -2120,75 +2080,6 @@ func (node *AutoIncSpec) Format(buf *TrackedBuffer) {
 func (node *AutoIncSpec) walkSubtree(visit Visit) error {
 	err := Walk(visit, node.Sequence, node.Column)
 	return err
-}
-
-// ParseParams parses the vindex parameter list, pulling out the special-case
-// "owner" parameter
-func (node *VindexSpec) ParseParams() (string, map[string]string) {
-	var owner string
-	params := map[string]string{}
-	for _, p := range node.Params {
-		if p.Key.Lowered() == VindexOwnerStr {
-			owner = p.Val
-		} else {
-			params[p.Key.String()] = p.Val
-		}
-	}
-	return owner, params
-}
-
-// Format formats the node. The "CREATE VINDEX" preamble was formatted in
-// the containing DDL node Format, so this just prints the type, any
-// parameters, and optionally the owner
-func (node *VindexSpec) Format(buf *TrackedBuffer) {
-	buf.Myprintf("using %v", node.Type)
-
-	numParams := len(node.Params)
-	if numParams != 0 {
-		buf.Myprintf(" with ")
-		for i, p := range node.Params {
-			if i != 0 {
-				buf.Myprintf(", ")
-			}
-			buf.Myprintf("%v", p)
-		}
-	}
-}
-
-func (node *VindexSpec) walkSubtree(visit Visit) error {
-	err := Walk(visit,
-		node.Name,
-	)
-
-	if err != nil {
-		return err
-	}
-
-	for _, p := range node.Params {
-		err := Walk(visit, p)
-
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// VindexParam defines a key/value parameter for a CREATE VINDEX statement
-type VindexParam struct {
-	Key ColIdent
-	Val string
-}
-
-// Format formats the node.
-func (node VindexParam) Format(buf *TrackedBuffer) {
-	buf.Myprintf("%s=%s", node.Key.String(), node.Val)
-}
-
-func (node VindexParam) walkSubtree(visit Visit) error {
-	return Walk(visit,
-		node.Key,
-	)
 }
 
 // ConstraintDefinition describes a constraint in a CREATE TABLE statement
@@ -2779,6 +2670,7 @@ type TableExpr interface {
 func (*AliasedTableExpr) iTableExpr() {}
 func (*ParenTableExpr) iTableExpr()   {}
 func (*JoinTableExpr) iTableExpr()    {}
+func (*CommonTableExpr) iTableExpr()  {}
 
 // AliasedTableExpr represents a table expression
 // coupled with an optional alias, AS OF expression, and index hints.
@@ -2839,6 +2731,38 @@ func (node *AliasedTableExpr) RemoveHints() *AliasedTableExpr {
 	noHints := *node
 	noHints.Hints = nil
 	return &noHints
+}
+
+type CommonTableExpr struct {
+	*AliasedTableExpr
+	Columns Columns
+}
+
+func (e *CommonTableExpr) Format(buf *TrackedBuffer) {
+	sq := e.AliasedTableExpr.Expr.(*Subquery)
+	as := e.AliasedTableExpr.As
+
+	var cols strings.Builder
+	if len(e.Columns) > 0 {
+		cols.WriteRune('(')
+		for i, col := range e.Columns {
+			if i > 0 {
+				cols.WriteString(", ")
+			}
+			cols.WriteString(col.String())
+		}
+		cols.WriteString(") ")
+	}
+
+	buf.Myprintf("%v %sas %v", as, cols.String(), sq)
+}
+
+func (e *CommonTableExpr) walkSubtree(visit Visit) error {
+	return Walk(
+		visit,
+		e.AliasedTableExpr,
+		e.Columns,
+	)
 }
 
 // SimpleTableExpr represents a simple table expression.
