@@ -17,6 +17,7 @@ limitations under the License.
 package tabletmanager
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"strings"
@@ -35,6 +36,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -66,7 +68,7 @@ type tmState struct {
 	blacklistedTables map[topodatapb.TabletType][]string
 	tablet            *topodatapb.Tablet
 	isPublishing      bool
-
+	tabletControlsRPC tabletmanagerdatapb.TabletControl
 	// displayState contains the current snapshot of the internal state
 	// and has its own mutex.
 	displayState displayState
@@ -79,9 +81,10 @@ func newTMState(tm *TabletManager, tablet *topodatapb.Tablet) *tmState {
 		displayState: displayState{
 			tablet: proto.Clone(tablet).(*topodatapb.Tablet),
 		},
-		tablet: tablet,
-		ctx:    ctx,
-		cancel: cancel,
+		tablet:            tablet,
+		ctx:               ctx,
+		tabletControlsRPC: tabletmanagerdatapb.TabletControl{},
+		cancel:            cancel,
 	}
 }
 
@@ -258,6 +261,11 @@ func (ts *tmState) updateLocked(ctx context.Context) {
 			log.Errorf("Cannot start query service: %v", err)
 		}
 	}
+}
+
+// UpdateTabletControls will update tmState.tabletControlsRPC
+func (ts *tmState) UpdateTabletControls(tc *tabletmanagerdatapb.TabletControl) error {
+	return errors.New("Unimplemented")
 }
 
 func (ts *tmState) canServe(tabletType topodatapb.TabletType) string {

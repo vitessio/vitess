@@ -89,6 +89,8 @@ type TabletManagerClient interface {
 	// ApplySchema will apply a schema change
 	ApplySchema(ctx context.Context, tablet *topodatapb.Tablet, change *tmutils.SchemaChange) (*tabletmanagerdatapb.SchemaChangeResult, error)
 
+	UpdateTabletControls(ctx context.Context, tablet *topodatapb.Tablet, tc tabletmanagerdatapb.TabletControl) (*tabletmanagerdatapb.UpdateTabletControlsResponse, error)
+
 	LockTables(ctx context.Context, tablet *topodatapb.Tablet) error
 
 	UnlockTables(ctx context.Context, tablet *topodatapb.Tablet) error

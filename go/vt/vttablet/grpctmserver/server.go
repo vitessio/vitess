@@ -150,6 +150,13 @@ func (s *server) ReloadSchema(ctx context.Context, request *tabletmanagerdatapb.
 	return response, s.tm.ReloadSchema(ctx, request.WaitPosition)
 }
 
+func (s *server) UpdateTabletControls(ctx context.Context, request *tabletmanagerdatapb.UpdateTabletControlsRequest) (response *tabletmanagerdatapb.UpdateTabletControlsResponse, err error) {
+	defer s.tm.HandleRPCPanic(ctx, "UpdateTabletControls", request, response, true /*verbose*/, &err)
+	ctx = callinfo.GRPCCallInfo(ctx)
+	response = &tabletmanagerdatapb.UpdateTabletControlsResponse{}
+	return response, s.tm.UpdateTabletControls(ctx, request.Tc)
+}
+
 func (s *server) PreflightSchema(ctx context.Context, request *tabletmanagerdatapb.PreflightSchemaRequest) (response *tabletmanagerdatapb.PreflightSchemaResponse, err error) {
 	defer s.tm.HandleRPCPanic(ctx, "PreflightSchema", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)

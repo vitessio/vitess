@@ -134,6 +134,14 @@ func (tm *TabletManager) RunHealthCheck(ctx context.Context) {
 	tm.QueryServiceControl.BroadcastHealth()
 }
 
+// UpdateTabletControls will update the tablet controls with the values in the UpdateTabletControlsRequest
+func (tm *TabletManager) UpdateTabletControls(ctx context.Context, tabletControls *tabletmanagerdatapb.TabletControl) error {
+	if tm.Tablet().GetType() == topodatapb.TabletType_MASTER {
+		return tm.tmState.UpdateTabletControls(tabletControls)
+	}
+	return fmt.Errorf("Tablet %v is not the primary in %s/%s, cannot update TabletControls manually", tm.tabletAlias, tm.Tablet().Keyspace, tm.Tablet().KeyRange.String())
+}
+
 // IgnoreHealthError sets the regexp for health check errors to ignore.
 func (tm *TabletManager) IgnoreHealthError(ctx context.Context, pattern string) error {
 	return vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "deprecated")

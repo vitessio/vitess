@@ -71,6 +71,22 @@ message SchemaChangeResult {
   SchemaDefinition after_schema = 2;
 }
 
+// TabletControl controls tablet behavior regarding routing and is partly used
+// to determine if we can serve data
+message TabletControl {
+  // Tablet type
+  topodata.TabletType tablet_type = 1;
+
+  string cell = 2;
+
+  // should query service be enabled on this shard
+  bool query_service = 3;
+
+  repeated string denylist_tables = 4;
+
+  bool frozen = 5;
+}
+
 // UserPermission describes a single row in the mysql.user table
 // Primary key is Host+User
 // PasswordChecksum is the crc64 of the password, for security reasons
@@ -169,6 +185,13 @@ message RefreshStateRequest {
 }
 
 message RefreshStateResponse {
+}
+
+message UpdateTabletControlsRequest {
+  TabletControl tc = 1;
+}
+
+message UpdateTabletControlsResponse {
 }
 
 message RunHealthCheckRequest {

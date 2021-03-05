@@ -557,6 +557,14 @@ func (itmc *internalTabletManagerClient) GetSchema(ctx context.Context, tablet *
 	return t.tm.GetSchema(ctx, tables, excludeTables, includeViews)
 }
 
+func (itmc *internalTabletManagerClient) UpdateTabletControls(ctx context.Context, tablet *topodatapb.Tablet, tc tabletmanagerdatapb.TabletControl) (*tabletmanagerdatapb.UpdateTabletControlsResponse, error) {
+	t, ok := tabletMap[tablet.Alias.Uid]
+	if !ok {
+		return nil, fmt.Errorf("tmclient: cannot find tablet %v", tablet.Alias.Uid)
+	}
+	return &tabletmanagerdatapb.UpdateTabletControlsResponse{}, t.tm.UpdateTabletControls(ctx, &tc)
+}
+
 func (itmc *internalTabletManagerClient) GetPermissions(ctx context.Context, tablet *topodatapb.Tablet) (*tabletmanagerdatapb.Permissions, error) {
 	t, ok := tabletMap[tablet.Alias.Uid]
 	if !ok {

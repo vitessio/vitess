@@ -502,6 +502,27 @@ func tmRPCTestRunHealthCheckPanic(ctx context.Context, t *testing.T, client tmcl
 	expectHandleRPCPanic(t, "RunHealthCheck", false /*verbose*/, err)
 }
 
+var testUpdateTabletControlsCalled = false
+
+func tmRTPCTestUpdateTabletControlsUnimplemented(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
+	tc := tabletmanagerdatapb.TabletControl{}
+	_, err := client.UpdateTabletControls(ctx, tablet, tc)
+	if err != nil {
+		t.Errorf("UpdateTableControls errors when not expected")
+	}
+	if !testUpdateTabletControlsCalled {
+		t.Errorf("UpdateTabletControls didn't call the server side")
+	}
+}
+
+func (fra *fakeRPCTM) UpdateTabletControls(ctx context.Context, tabletControls *tabletmanagerdatapb.TabletControl) error {
+	if fra.panics {
+		return fmt.Errorf("test triggered panic")
+	}
+	testUpdateTabletControlsCalled = true
+	return nil
+}
+
 func tmRPCTestIgnoreHealthError(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	err := client.IgnoreHealthError(ctx, tablet, testIgnoreHealthErrorValue)
 	if err != nil {
@@ -1258,6 +1279,7 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.T
 	tmRPCTestPreflightSchema(ctx, t, client, tablet)
 	tmRPCTestApplySchema(ctx, t, client, tablet)
 	tmRPCTestExecuteFetch(ctx, t, client, tablet)
+	tmRTPCTestUpdateTabletControlsUnimplemented(ctx, t, client, tablet)
 
 	// Replication related methods
 	tmRPCTestMasterPosition(ctx, t, client, tablet)

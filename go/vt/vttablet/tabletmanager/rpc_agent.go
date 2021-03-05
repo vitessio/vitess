@@ -58,6 +58,8 @@ type RPCTM interface {
 
 	RunHealthCheck(ctx context.Context)
 
+	UpdateTabletControls(ctx context.Context, tabletControls *tabletmanagerdatapb.TabletControl) error
+
 	IgnoreHealthError(ctx context.Context, pattern string) error
 
 	ReloadSchema(ctx context.Context, waitPosition string) error
