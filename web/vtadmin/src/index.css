@@ -154,8 +154,19 @@ h3 {
 }
 
 code {
+  display: inline-block;
   font-family: var(--fontFamilyMonospace);
-  font-size: var(--fontSizeDefault);
+  margin: 0 2px;
+}
+
+/* Links */
+a,
+a:visited,
+a:focus,
+a:active {
+  color: var(--colorPrimary);
+  cursor: pointer;
+  text-decoration: none;
 }
 
 /* Tables */

@@ -15,6 +15,7 @@
  */
 import { orderBy } from 'lodash-es';
 import * as React from 'react';
+import { Link } from 'react-router-dom';
 import { TableDefinition, useTableDefinitions } from '../../hooks/api';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import { DataTable } from '../dataTable/DataTable';
@@ -32,7 +33,11 @@ export const Schemas = () => {
             <tr key={idx}>
                 <td>{row.cluster?.name}</td>
                 <td>{row.keyspace}</td>
-                <td>{row.tableDefinition?.name}</td>
+                <td>
+                    <Link to={`/schema/${row.cluster?.id}/${row.keyspace}/${row.tableDefinition?.name}`}>
+                        {row.tableDefinition?.name}
+                    </Link>
+                </td>
             </tr>
         ));
 
