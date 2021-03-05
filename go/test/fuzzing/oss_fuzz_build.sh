@@ -15,7 +15,9 @@
 # limitations under the License.
 
 compile_go_fuzzer ./go/test/fuzzing Fuzz vtctl_fuzzer
-compile_go_fuzzer ./go/vt/sqlparser Fuzz fuzz
+compile_go_fuzzer ./go/test/fuzzing FuzzIsDML is_dml_fuzzer
+compile_go_fuzzer ./go/test/fuzzing FuzzNormalizer normalizer_fuzzer
+compile_go_fuzzer ./go/test/fuzzing FuzzParser parser_fuzzer
 
 
 # Build dictionaries
