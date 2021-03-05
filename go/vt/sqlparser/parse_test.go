@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"path"
 	"strings"
 	"sync"
 	"testing"
@@ -3091,21 +3092,23 @@ func TestSkipToEnd(t *testing.T) {
 	}
 }
 
-func TestParseDjangoQueries(t *testing.T) {
-
-	file, err := os.Open("./test_queries/django_queries.txt")
-	if err != nil {
-		t.Errorf(" Error: %v", err)
-	}
+func loadQueries(t testing.TB, filename string) (queries []string) {
+	file, err := os.Open(path.Join("testdata", filename))
+	require.NoError(t, err)
 	defer file.Close()
+
 	scanner := bufio.NewScanner(file)
-
 	for scanner.Scan() {
+		queries = append(queries, scanner.Text())
+	}
+	return queries
+}
 
-		_, err := Parse(string(scanner.Text()))
+func TestParseDjangoQueries(t *testing.T) {
+	for _, query := range loadQueries(t, "django_queries.txt") {
+		_, err := Parse(query)
 		if err != nil {
-			t.Error(scanner.Text())
-			t.Errorf(" Error: %v", err)
+			t.Errorf("failed to parse %q: %v", query, err)
 		}
 	}
 }
@@ -3142,25 +3145,35 @@ const (
 	sql2 = "select aaaa, bbb, ccc, ddd, eeee, ffff, gggg, hhhh, iiii from tttt, ttt1, ttt3 where aaaa = bbbb and bbbb = cccc and dddd+1 = eeee group by fff, gggg having hhhh = iiii and iiii = jjjj order by kkkk, llll limit 3, 4"
 )
 
-func BenchmarkParse1(b *testing.B) {
-	sql := sql1
+func BenchmarkParseDjango(b *testing.B) {
+	queries := loadQueries(b, "django_queries.txt")
+	b.ResetTimer()
+
 	for i := 0; i < b.N; i++ {
-		ast, err := Parse(sql)
+		_, err := Parse(queries[rand.Intn(len(queries))])
 		if err != nil {
 			b.Fatal(err)
 		}
-		_ = String(ast)
+	}
+}
+
+func BenchmarkParse1(b *testing.B) {
+	sql := sql1
+	for i := 0; i < b.N; i++ {
+		_, err := Parse(sql)
+		if err != nil {
+			b.Fatal(err)
+		}
 	}
 }
 
 func BenchmarkParse2(b *testing.B) {
 	sql := sql2
 	for i := 0; i < b.N; i++ {
-		ast, err := Parse(sql)
+		_, err := Parse(sql)
 		if err != nil {
 			b.Fatal(err)
 		}
-		_ = String(ast)
 	}
 }
 
@@ -3177,9 +3190,7 @@ func BenchmarkParse2Parallel(b *testing.B) {
 	})
 }
 
-var benchQuery string
-
-func init() {
+func BenchmarkParse3(b *testing.B) {
 	// benchQuerySize is the approximate size of the query.
 	benchQuerySize := 1000000
 
@@ -3198,10 +3209,9 @@ func init() {
 	for i := 0; i < 10; i++ {
 		fmt.Fprintf(&buf, " and v%d = \"%d%s\"", i, i, baseval.String())
 	}
-	benchQuery = buf.String()
-}
+	benchQuery := buf.String()
+	b.ResetTimer()
 
-func BenchmarkParse3(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		if _, err := Parse(benchQuery); err != nil {
 			b.Fatal(err)
