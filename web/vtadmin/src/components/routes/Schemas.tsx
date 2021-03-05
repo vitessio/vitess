@@ -29,17 +29,19 @@ export const Schemas = () => {
     }, [data]);
 
     const renderRows = (rows: TableDefinition[]) =>
-        rows.map((row, idx) => (
-            <tr key={idx}>
-                <td>{row.cluster?.name}</td>
-                <td>{row.keyspace}</td>
-                <td>
-                    <Link to={`/schema/${row.cluster?.id}/${row.keyspace}/${row.tableDefinition?.name}`}>
-                        {row.tableDefinition?.name}
-                    </Link>
-                </td>
-            </tr>
-        ));
+        rows.map((row, idx) => {
+            const href =
+                row.cluster?.id && row.keyspace && row.tableDefinition?.name
+                    ? `/schema/${row.cluster.id}/${row.keyspace}/${row.tableDefinition.name}`
+                    : null;
+            return (
+                <tr key={idx}>
+                    <td>{row.cluster?.name}</td>
+                    <td>{row.keyspace}</td>
+                    <td>{href ? <Link to={href}>{row.tableDefinition?.name}</Link> : row.tableDefinition?.name}</td>
+                </tr>
+            );
+        });
 
     return (
         <div>
