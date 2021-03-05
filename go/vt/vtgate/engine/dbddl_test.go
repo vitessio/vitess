@@ -2,21 +2,30 @@ package engine
 
 import (
 	"context"
+	"fmt"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
 
 type dbddlTestFake struct {
 	createCalled, dropCalled bool
+	sleep                    int
 }
 
 func (d *dbddlTestFake) CreateDatabase(ctx context.Context, name string) error {
+	if d.sleep > 0 {
+		time.Sleep(time.Duration(d.sleep) * time.Second)
+	}
 	d.createCalled = true
 	return nil
 }
 
 func (d *dbddlTestFake) DropDatabase(ctx context.Context, name string) error {
+	if d.sleep > 0 {
+		time.Sleep(time.Duration(d.sleep) * time.Second)
+	}
 	d.dropCalled = true
 	return nil
 }
@@ -54,4 +63,21 @@ func TestDBDDLDropExecute(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, plugin.createCalled)
 	require.True(t, plugin.dropCalled)
+}
+
+func TestDBDDLTimeout(t *testing.T) {
+	pluginName := "timeoutFake"
+	plugin := &dbddlTestFake{sleep: 2}
+	DBDDLRegister(pluginName, plugin)
+
+	primitive := &DBDDL{
+		name:         "ks",
+		create:       true,
+		queryTimeout: 100,
+	}
+
+	vc := &loggingVCursor{dbDDLPlugin: pluginName, shardErr: fmt.Errorf("db not available")}
+
+	_, err := primitive.Execute(vc, nil, false)
+	require.EqualError(t, err, "could not validate created database")
 }
