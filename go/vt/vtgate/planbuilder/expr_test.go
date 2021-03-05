@@ -40,59 +40,59 @@ func TestValEqual(t *testing.T) {
 		in2: &sqlparser.ColName{Metadata: c2, Name: sqlparser.NewColIdent("c1")},
 		out: false,
 	}, {
-		in1: newValArg(":aa"),
+		in1: sqlparser.NewArgument(":aa"),
 		in2: &sqlparser.ColName{Metadata: c1, Name: sqlparser.NewColIdent("c1")},
 		out: false,
 	}, {
-		in1: newValArg(":aa"),
-		in2: newValArg(":aa"),
+		in1: sqlparser.NewArgument(":aa"),
+		in2: sqlparser.NewArgument(":aa"),
 		out: true,
 	}, {
-		in1: newValArg(":aa"),
-		in2: newValArg(":bb"),
+		in1: sqlparser.NewArgument(":aa"),
+		in2: sqlparser.NewArgument(":bb"),
 	}, {
-		in1: newStrLiteral("aa"),
-		in2: newStrLiteral("aa"),
+		in1: sqlparser.NewStrLiteral("aa"),
+		in2: sqlparser.NewStrLiteral("aa"),
 		out: true,
 	}, {
-		in1: newStrLiteral("11"),
-		in2: newHexLiteral("3131"),
+		in1: sqlparser.NewStrLiteral("11"),
+		in2: sqlparser.NewHexLiteral("3131"),
 		out: true,
 	}, {
-		in1: newHexLiteral("3131"),
-		in2: newStrLiteral("11"),
+		in1: sqlparser.NewHexLiteral("3131"),
+		in2: sqlparser.NewStrLiteral("11"),
 		out: true,
 	}, {
-		in1: newHexLiteral("3131"),
-		in2: newHexLiteral("3131"),
+		in1: sqlparser.NewHexLiteral("3131"),
+		in2: sqlparser.NewHexLiteral("3131"),
 		out: true,
 	}, {
-		in1: newHexLiteral("3131"),
-		in2: newHexLiteral("3132"),
+		in1: sqlparser.NewHexLiteral("3131"),
+		in2: sqlparser.NewHexLiteral("3132"),
 		out: false,
 	}, {
-		in1: newHexLiteral("313"),
-		in2: newHexLiteral("3132"),
+		in1: sqlparser.NewHexLiteral("313"),
+		in2: sqlparser.NewHexLiteral("3132"),
 		out: false,
 	}, {
-		in1: newHexLiteral("3132"),
-		in2: newHexLiteral("313"),
+		in1: sqlparser.NewHexLiteral("3132"),
+		in2: sqlparser.NewHexLiteral("313"),
 		out: false,
 	}, {
-		in1: newIntLiteral("313"),
-		in2: newHexLiteral("3132"),
+		in1: sqlparser.NewIntLiteral("313"),
+		in2: sqlparser.NewHexLiteral("3132"),
 		out: false,
 	}, {
-		in1: newHexLiteral("3132"),
-		in2: newIntLiteral("313"),
+		in1: sqlparser.NewHexLiteral("3132"),
+		in2: sqlparser.NewIntLiteral("313"),
 		out: false,
 	}, {
-		in1: newIntLiteral("313"),
-		in2: newIntLiteral("313"),
+		in1: sqlparser.NewIntLiteral("313"),
+		in2: sqlparser.NewIntLiteral("313"),
 		out: true,
 	}, {
-		in1: newIntLiteral("313"),
-		in2: newIntLiteral("314"),
+		in1: sqlparser.NewIntLiteral("313"),
+		in2: sqlparser.NewIntLiteral("314"),
 		out: false,
 	}}
 	for _, tc := range testcases {
@@ -101,20 +101,4 @@ func TestValEqual(t *testing.T) {
 			t.Errorf("valEqual(%#v, %#v): %v, want %v", tc.in1, tc.in2, out, tc.out)
 		}
 	}
-}
-
-func newStrLiteral(in string) *sqlparser.Literal {
-	return sqlparser.NewStrLiteral([]byte(in))
-}
-
-func newIntLiteral(in string) *sqlparser.Literal {
-	return sqlparser.NewIntLiteral([]byte(in))
-}
-
-func newHexLiteral(in string) *sqlparser.Literal {
-	return sqlparser.NewHexLiteral([]byte(in))
-}
-
-func newValArg(in string) sqlparser.Expr {
-	return sqlparser.NewArgument([]byte(in))
 }
