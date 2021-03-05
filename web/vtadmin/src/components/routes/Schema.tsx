@@ -81,7 +81,11 @@ export const Schema = () => {
             {is404 && (
                 <div className={style.errorPlaceholder}>
                     <span className={style.errorEmoji}>😖</span>
-                    <h1>Table not found</h1>
+                    <h1>Schema not found</h1>
+                    <p>
+                        No schema found with table <code>{table}</code> in keyspace <code>{keyspace}</code> (cluster{' '}
+                        <code>{clusterID}</code>).
+                    </p>
                     <p>
                         <Link to="/schemas">← All schemas</Link>
                     </p>
