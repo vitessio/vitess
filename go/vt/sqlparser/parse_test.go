@@ -3094,9 +3094,7 @@ func TestSkipToEnd(t *testing.T) {
 
 func loadQueries(t testing.TB, filename string) (queries []string) {
 	file, err := os.Open(path.Join("testdata", filename))
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer file.Close()
 
 	scanner := bufio.NewScanner(file)
