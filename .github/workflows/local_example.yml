@@ -7,7 +7,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest]
+        os: [ubuntu-20.04]
         topo: [etcd,k8s]
 
     steps:
@@ -22,7 +22,7 @@ jobs:
 
     - name: Get dependencies
       run: |
-        if [ ${{matrix.os}} = "ubuntu-latest" ]; then
+        if [ ${{matrix.os}} = "ubuntu-20.04" ]; then
           sudo apt-get update
           sudo apt-get install -y mysql-server mysql-client make unzip g++ etcd curl git wget eatmydata
           sudo service mysql stop

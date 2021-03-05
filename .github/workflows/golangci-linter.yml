@@ -3,7 +3,7 @@ on: [push, pull_request]
 jobs:
   build:
     name: Lint using golangci-lint
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     steps:
       - name: Set up Go 1.15
         uses: actions/setup-go@v1
