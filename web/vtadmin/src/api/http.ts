@@ -26,6 +26,9 @@ interface HttpErrorResponse {
 }
 
 export const MALFORMED_HTTP_RESPONSE_ERROR = 'MalformedHttpResponseError';
+
+// MalformedHttpResponseError is thrown when the JSON response envelope
+// is an unexpected shape.
 class MalformedHttpResponseError extends Error {
     responseJson: object;
 
@@ -37,6 +40,9 @@ class MalformedHttpResponseError extends Error {
 }
 
 export const HTTP_RESPONSE_NOT_OK_ERROR = 'HttpResponseNotOkError';
+
+// HttpResponseNotOkError is throw when the `ok` is false in
+// the JSON response envelope.
 class HttpResponseNotOkError extends Error {
     response: HttpErrorResponse | null;
 
