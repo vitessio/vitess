@@ -3852,3 +3852,4 @@
 2021-03-05T22:11:01Z,golangci-lint,https://github.com/vitessio/vitess/actions/runs/625817536
 2021-03-05T22:15:22Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/625827149
 2021-03-05T23:16:39Z,Cluster (18),https://github.com/vitessio/vitess/actions/runs/625953176
+2021-03-05T23:41:23Z,Cluster (onlineddl_vrepl_stress),https://github.com/vitessio/vitess/actions/runs/626002634
