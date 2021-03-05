@@ -188,7 +188,7 @@ func CloneExpr(in Expr) Expr {
 	case *AndExpr:
 		return CloneRefOfAndExpr(in)
 	case Argument:
-		return CloneArgument(in)
+		return in
 	case *BinaryExpr:
 		return CloneRefOfBinaryExpr(in)
 	case BoolVal:
@@ -308,7 +308,7 @@ func CloneSQLNode(in SQLNode) SQLNode {
 	case *AndExpr:
 		return CloneRefOfAndExpr(in)
 	case Argument:
-		return CloneArgument(in)
+		return in
 	case *AutoIncSpec:
 		return CloneRefOfAutoIncSpec(in)
 	case *Begin:
@@ -1126,13 +1126,6 @@ func CloneRefOfAndExpr(n *AndExpr) *AndExpr {
 	return &out
 }
 
-// CloneArgument creates a deep clone of the input.
-func CloneArgument(n Argument) Argument {
-	res := make(Argument, 0, len(n))
-	copy(res, n)
-	return res
-}
-
 // CloneRefOfBinaryExpr creates a deep clone of the input.
 func CloneRefOfBinaryExpr(n *BinaryExpr) *BinaryExpr {
 	if n == nil {
@@ -1284,7 +1277,6 @@ func CloneRefOfLiteral(n *Literal) *Literal {
 		return nil
 	}
 	out := *n
-	out.Val = CloneSliceOfbyte(n.Val)
 	return &out
 }
 
@@ -1556,9 +1548,7 @@ func CloneColumns(n Columns) Columns {
 // CloneComments creates a deep clone of the input.
 func CloneComments(n Comments) Comments {
 	res := make(Comments, 0, len(n))
-	for _, x := range n {
-		res = append(res, CloneSliceOfbyte(x))
-	}
+	copy(res, n)
 	return res
 }
 
@@ -2237,13 +2227,6 @@ func CloneSliceOfRefOfWhen(n []*When) []*When {
 	for _, x := range n {
 		res = append(res, CloneRefOfWhen(x))
 	}
-	return res
-}
-
-// CloneSliceOfbyte creates a deep clone of the input.
-func CloneSliceOfbyte(n []byte) []byte {
-	res := make([]byte, 0, len(n))
-	copy(res, n)
 	return res
 }
 

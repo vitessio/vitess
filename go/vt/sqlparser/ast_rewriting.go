@@ -331,7 +331,7 @@ func (er *expressionRewriter) unnestSubQueries(cursor *Cursor, subquery *Subquer
 }
 
 func bindVarExpression(name string) Expr {
-	return NewArgument([]byte(":" + name))
+	return NewArgument(":" + name)
 }
 
 // SystemSchema returns true if the schema passed is system schema
