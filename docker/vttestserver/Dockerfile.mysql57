@@ -56,6 +56,6 @@ VOLUME /vt/vtdataroot
 USER vitess
 
 COPY docker/vttestserver/setupVschemaFolder.sh /vt/setupVschemaFolder.sh
-COPY docker/vttestserver/runMysql57.sh /vt/run.sh
+COPY docker/vttestserver/run.sh /vt/run.sh
 
-CMD /vt/run.sh
+CMD /vt/run.sh "5.7.9-vitess"

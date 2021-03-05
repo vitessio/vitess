@@ -17,4 +17,4 @@
 # Setup the Vschema Folder
 /vt/setupVschemaFolder.sh "$KEYSPACES" "$NUM_SHARDS"
 # Run the vttestserver binary
-/vt/bin/vttestserver -port "$PORT" -keyspaces "$KEYSPACES" -num_shards "$NUM_SHARDS" -mysql_bind_host "${MYSQL_BIND_HOST:-127.0.0.1}" -mysql_server_version "${MYSQL_SERVER_VERSION:-5.7.9-vitess}" -vschema_ddl_authorized_users=% -schema_dir="/vt/schema/"
+/vt/bin/vttestserver -port "$PORT" -keyspaces "$KEYSPACES" -num_shards "$NUM_SHARDS" -mysql_bind_host "${MYSQL_BIND_HOST:-127.0.0.1}" -mysql_server_version "${MYSQL_SERVER_VERSION:-$1}" -vschema_ddl_authorized_users=% -schema_dir="/vt/schema/"
