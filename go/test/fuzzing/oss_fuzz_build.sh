@@ -14,4 +14,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+compile_go_fuzzer ./go/test/fuzzing Fuzz vtctl_fuzzer
 compile_go_fuzzer ./go/vt/sqlparser Fuzz fuzz
+
+
+# Build dictionaries
+cp $SRC/vitess/go/test/fuzzing/vtctl_fuzzer.dict $OUT/
