@@ -3712,3 +3712,5 @@
 2021-03-05T02:15:58Z,unit_race,https://github.com/vitessio/vitess/actions/runs/623057214
 2021-03-05T02:26:20Z,Unit Test (mariadb101),https://github.com/vitessio/vitess/actions/runs/623077806
 2021-03-05T10:04:45Z,Cluster (onlineddl_vrepl_stress),https://github.com/vitessio/vitess/actions/runs/624055857
+2021-03-05T13:04:11Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/624487481
+2021-03-05T13:04:11Z,unit_race,https://github.com/vitessio/vitess/actions/runs/624487466
