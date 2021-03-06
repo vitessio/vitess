@@ -689,6 +689,14 @@ func (api *API) GetVSchemas(ctx context.Context, req *vtadminpb.GetVSchemasReque
 		vschemas []*vtadminpb.VSchema
 	)
 
+	if len(clusters) == 0 {
+		if len(req.ClusterIds) > 0 {
+			return nil, fmt.Errorf("%w: %s", errors.ErrUnsupportedCluster, strings.Join(req.ClusterIds, ", "))
+		}
+
+		return &vtadminpb.GetVSchemasResponse{VSchemas: []*vtadminpb.VSchema{}}, nil
+	}
+
 	for _, c := range clusters {
 		wg.Add(1)
 
@@ -714,7 +722,7 @@ func (api *API) GetVSchemas(ctx context.Context, req *vtadminpb.GetVSchemasReque
 			var (
 				clusterM        sync.Mutex
 				clusterWG       sync.WaitGroup
-				clusterRec      concurrency.ErrorRecorder
+				clusterRec      concurrency.AllErrorRecorder
 				clusterVSchemas = make([]*vtadminpb.VSchema, 0, len(keyspaces.Keyspaces))
 			)
 
