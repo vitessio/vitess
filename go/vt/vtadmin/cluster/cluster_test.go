@@ -20,6 +20,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -178,7 +179,15 @@ func TestGetSchema(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			cluster := testutil.BuildCluster(i, tt.vtctld, nil, nil)
+			cluster := testutil.BuildCluster(testutil.TestClusterConfig{
+				Cluster: &vtadminpb.Cluster{
+					Id:   fmt.Sprintf("c%d", i),
+					Name: fmt.Sprintf("cluster%d", i),
+				},
+				VtctldClient: tt.vtctld,
+				Tablets:      nil,
+				DBConfig:     testutil.Dbcfg{},
+			})
 
 			ctx := context.Background()
 			err := cluster.Vtctld.Dial(ctx)
@@ -226,7 +235,13 @@ func TestGetSchema(t *testing.T) {
 			},
 		}
 
-		cluster := testutil.BuildCluster(0, vtctld, nil, nil)
+		cluster := testutil.BuildCluster(testutil.TestClusterConfig{
+			Cluster: &vtadminpb.Cluster{
+				Id:   "c0",
+				Name: "cluster0",
+			},
+			VtctldClient: vtctld,
+		})
 
 		err := cluster.Vtctld.Dial(ctx)
 		require.NoError(t, err, "could not dial test vtctld")
@@ -419,12 +434,24 @@ func TestFindTablets(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
-		cluster := testutil.BuildCluster(0, nil, tt.tablets, nil)
-		tablets, err := cluster.FindTablets(context.Background(), tt.filter, tt.n)
+	ctx := context.Background()
 
-		assert.NoError(t, err)
-		testutil.AssertTabletSlicesEqual(t, tt.expected, tablets)
+	for _, tt := range tests {
+		tt := tt
+
+		t.Run(tt.name, func(t *testing.T) {
+			cluster := testutil.BuildCluster(testutil.TestClusterConfig{
+				Cluster: &vtadminpb.Cluster{
+					Id:   "c0",
+					Name: "cluster0",
+				},
+				Tablets: tt.tablets,
+			})
+			tablets, err := cluster.FindTablets(ctx, tt.filter, tt.n)
+
+			assert.NoError(t, err)
+			testutil.AssertTabletSlicesEqual(t, tt.expected, tablets)
+		})
 	}
 }
 
@@ -520,15 +547,27 @@ func TestFindTablet(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
-		cluster := testutil.BuildCluster(0, nil, tt.tablets, nil)
-		tablet, err := cluster.FindTablet(context.Background(), tt.filter)
+	ctx := context.Background()
 
-		if tt.expectedError != nil {
-			assert.True(t, errors.Is(err, tt.expectedError), "expected error type %w does not match actual error type %w", err, tt.expectedError)
-		} else {
-			assert.NoError(t, err)
-			testutil.AssertTabletsEqual(t, tt.expected, tablet)
-		}
+	for _, tt := range tests {
+		tt := tt
+
+		t.Run(tt.name, func(t *testing.T) {
+			cluster := testutil.BuildCluster(testutil.TestClusterConfig{
+				Cluster: &vtadminpb.Cluster{
+					Id:   "c0",
+					Name: "cluster0",
+				},
+				Tablets: tt.tablets,
+			})
+			tablet, err := cluster.FindTablet(ctx, tt.filter)
+
+			if tt.expectedError != nil {
+				assert.True(t, errors.Is(err, tt.expectedError), "expected error type %w does not match actual error type %w", err, tt.expectedError)
+			} else {
+				assert.NoError(t, err)
+				testutil.AssertTabletsEqual(t, tt.expected, tablet)
+			}
+		})
 	}
 }
