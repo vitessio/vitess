@@ -94,6 +94,8 @@ func NewAPI(clusters []*cluster.Cluster, opts grpcserver.Options, httpOpts vtadm
 	router.HandleFunc("/schemas", httpAPI.Adapt(vtadminhttp.GetSchemas)).Name("API.GetSchemas")
 	router.HandleFunc("/tablets", httpAPI.Adapt(vtadminhttp.GetTablets)).Name("API.GetTablets")
 	router.HandleFunc("/tablet/{tablet}", httpAPI.Adapt(vtadminhttp.GetTablet)).Name("API.GetTablet")
+	router.HandleFunc("/vschema/{cluster_id}/{keyspace}", nil).Name("API.GetVSchema")
+	router.HandleFunc("/vschemas", nil).Name("API.GetVSchemas")
 	router.HandleFunc("/vtexplain", httpAPI.Adapt(vtadminhttp.VTExplain)).Name("API.VTExplain")
 
 	// Middlewares are executed in order of addition. Our ordering (all
@@ -652,6 +654,16 @@ func (api *API) getClustersForRequest(ids []string) ([]*cluster.Cluster, []strin
 	}
 
 	return clusters, ids
+}
+
+// GetVSchema is part of the vtadminpb.VTAdminServer interface.
+func (api *API) GetVSchema(ctx context.Context, req *vtadminpb.GetVSchemaRequest) (*vtadminpb.VSchema, error) {
+	panic("unimplemented!")
+}
+
+// GetVSchemas is part of the vtadminpb.VTAdminServer interface.
+func (api *API) GetVSchemas(ctx context.Context, req *vtadminpb.GetVSchemasRequest) (*vtadminpb.GetVSchemasResponse, error) {
+	panic("unimplemented!")
 }
 
 // VTExplain is part of the vtadminpb.VTAdminServer interface.

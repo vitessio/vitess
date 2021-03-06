@@ -315,6 +315,72 @@ $root.vtadmin = (function() {
          */
 
         /**
+         * Callback as used by {@link vtadmin.VTAdmin#getVSchema}.
+         * @memberof vtadmin.VTAdmin
+         * @typedef GetVSchemaCallback
+         * @type {function}
+         * @param {Error|null} error Error, if any
+         * @param {vtadmin.VSchema} [response] VSchema
+         */
+
+        /**
+         * Calls GetVSchema.
+         * @function getVSchema
+         * @memberof vtadmin.VTAdmin
+         * @instance
+         * @param {vtadmin.IGetVSchemaRequest} request GetVSchemaRequest message or plain object
+         * @param {vtadmin.VTAdmin.GetVSchemaCallback} callback Node-style callback called with the error, if any, and VSchema
+         * @returns {undefined}
+         * @variation 1
+         */
+        Object.defineProperty(VTAdmin.prototype.getVSchema = function getVSchema(request, callback) {
+            return this.rpcCall(getVSchema, $root.vtadmin.GetVSchemaRequest, $root.vtadmin.VSchema, request, callback);
+        }, "name", { value: "GetVSchema" });
+
+        /**
+         * Calls GetVSchema.
+         * @function getVSchema
+         * @memberof vtadmin.VTAdmin
+         * @instance
+         * @param {vtadmin.IGetVSchemaRequest} request GetVSchemaRequest message or plain object
+         * @returns {Promise<vtadmin.VSchema>} Promise
+         * @variation 2
+         */
+
+        /**
+         * Callback as used by {@link vtadmin.VTAdmin#getVSchemas}.
+         * @memberof vtadmin.VTAdmin
+         * @typedef GetVSchemasCallback
+         * @type {function}
+         * @param {Error|null} error Error, if any
+         * @param {vtadmin.GetVSchemasResponse} [response] GetVSchemasResponse
+         */
+
+        /**
+         * Calls GetVSchemas.
+         * @function getVSchemas
+         * @memberof vtadmin.VTAdmin
+         * @instance
+         * @param {vtadmin.IGetVSchemasRequest} request GetVSchemasRequest message or plain object
+         * @param {vtadmin.VTAdmin.GetVSchemasCallback} callback Node-style callback called with the error, if any, and GetVSchemasResponse
+         * @returns {undefined}
+         * @variation 1
+         */
+        Object.defineProperty(VTAdmin.prototype.getVSchemas = function getVSchemas(request, callback) {
+            return this.rpcCall(getVSchemas, $root.vtadmin.GetVSchemasRequest, $root.vtadmin.GetVSchemasResponse, request, callback);
+        }, "name", { value: "GetVSchemas" });
+
+        /**
+         * Calls GetVSchemas.
+         * @function getVSchemas
+         * @memberof vtadmin.VTAdmin
+         * @instance
+         * @param {vtadmin.IGetVSchemasRequest} request GetVSchemasRequest message or plain object
+         * @returns {Promise<vtadmin.GetVSchemasResponse>} Promise
+         * @variation 2
+         */
+
+        /**
          * Callback as used by {@link vtadmin.VTAdmin#vTExplain}.
          * @memberof vtadmin.VTAdmin
          * @typedef VTExplainCallback
@@ -1378,6 +1444,248 @@ $root.vtadmin = (function() {
         })();
 
         return Tablet;
+    })();
+
+    vtadmin.VSchema = (function() {
+
+        /**
+         * Properties of a VSchema.
+         * @memberof vtadmin
+         * @interface IVSchema
+         * @property {vtadmin.ICluster|null} [cluster] VSchema cluster
+         * @property {string|null} [name] VSchema name
+         * @property {vschema.IKeyspace|null} [v_schema] VSchema v_schema
+         */
+
+        /**
+         * Constructs a new VSchema.
+         * @memberof vtadmin
+         * @classdesc Represents a VSchema.
+         * @implements IVSchema
+         * @constructor
+         * @param {vtadmin.IVSchema=} [properties] Properties to set
+         */
+        function VSchema(properties) {
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * VSchema cluster.
+         * @member {vtadmin.ICluster|null|undefined} cluster
+         * @memberof vtadmin.VSchema
+         * @instance
+         */
+        VSchema.prototype.cluster = null;
+
+        /**
+         * VSchema name.
+         * @member {string} name
+         * @memberof vtadmin.VSchema
+         * @instance
+         */
+        VSchema.prototype.name = "";
+
+        /**
+         * VSchema v_schema.
+         * @member {vschema.IKeyspace|null|undefined} v_schema
+         * @memberof vtadmin.VSchema
+         * @instance
+         */
+        VSchema.prototype.v_schema = null;
+
+        /**
+         * Creates a new VSchema instance using the specified properties.
+         * @function create
+         * @memberof vtadmin.VSchema
+         * @static
+         * @param {vtadmin.IVSchema=} [properties] Properties to set
+         * @returns {vtadmin.VSchema} VSchema instance
+         */
+        VSchema.create = function create(properties) {
+            return new VSchema(properties);
+        };
+
+        /**
+         * Encodes the specified VSchema message. Does not implicitly {@link vtadmin.VSchema.verify|verify} messages.
+         * @function encode
+         * @memberof vtadmin.VSchema
+         * @static
+         * @param {vtadmin.IVSchema} message VSchema message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        VSchema.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.cluster != null && Object.hasOwnProperty.call(message, "cluster"))
+                $root.vtadmin.Cluster.encode(message.cluster, writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
+            if (message.name != null && Object.hasOwnProperty.call(message, "name"))
+                writer.uint32(/* id 2, wireType 2 =*/18).string(message.name);
+            if (message.v_schema != null && Object.hasOwnProperty.call(message, "v_schema"))
+                $root.vschema.Keyspace.encode(message.v_schema, writer.uint32(/* id 3, wireType 2 =*/26).fork()).ldelim();
+            return writer;
+        };
+
+        /**
+         * Encodes the specified VSchema message, length delimited. Does not implicitly {@link vtadmin.VSchema.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtadmin.VSchema
+         * @static
+         * @param {vtadmin.IVSchema} message VSchema message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        VSchema.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a VSchema message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtadmin.VSchema
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtadmin.VSchema} VSchema
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        VSchema.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.VSchema();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.cluster = $root.vtadmin.Cluster.decode(reader, reader.uint32());
+                    break;
+                case 2:
+                    message.name = reader.string();
+                    break;
+                case 3:
+                    message.v_schema = $root.vschema.Keyspace.decode(reader, reader.uint32());
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a VSchema message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtadmin.VSchema
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtadmin.VSchema} VSchema
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        VSchema.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a VSchema message.
+         * @function verify
+         * @memberof vtadmin.VSchema
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        VSchema.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.cluster != null && message.hasOwnProperty("cluster")) {
+                var error = $root.vtadmin.Cluster.verify(message.cluster);
+                if (error)
+                    return "cluster." + error;
+            }
+            if (message.name != null && message.hasOwnProperty("name"))
+                if (!$util.isString(message.name))
+                    return "name: string expected";
+            if (message.v_schema != null && message.hasOwnProperty("v_schema")) {
+                var error = $root.vschema.Keyspace.verify(message.v_schema);
+                if (error)
+                    return "v_schema." + error;
+            }
+            return null;
+        };
+
+        /**
+         * Creates a VSchema message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtadmin.VSchema
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtadmin.VSchema} VSchema
+         */
+        VSchema.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtadmin.VSchema)
+                return object;
+            var message = new $root.vtadmin.VSchema();
+            if (object.cluster != null) {
+                if (typeof object.cluster !== "object")
+                    throw TypeError(".vtadmin.VSchema.cluster: object expected");
+                message.cluster = $root.vtadmin.Cluster.fromObject(object.cluster);
+            }
+            if (object.name != null)
+                message.name = String(object.name);
+            if (object.v_schema != null) {
+                if (typeof object.v_schema !== "object")
+                    throw TypeError(".vtadmin.VSchema.v_schema: object expected");
+                message.v_schema = $root.vschema.Keyspace.fromObject(object.v_schema);
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a VSchema message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtadmin.VSchema
+         * @static
+         * @param {vtadmin.VSchema} message VSchema
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        VSchema.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.defaults) {
+                object.cluster = null;
+                object.name = "";
+                object.v_schema = null;
+            }
+            if (message.cluster != null && message.hasOwnProperty("cluster"))
+                object.cluster = $root.vtadmin.Cluster.toObject(message.cluster, options);
+            if (message.name != null && message.hasOwnProperty("name"))
+                object.name = message.name;
+            if (message.v_schema != null && message.hasOwnProperty("v_schema"))
+                object.v_schema = $root.vschema.Keyspace.toObject(message.v_schema, options);
+            return object;
+        };
+
+        /**
+         * Converts this VSchema to JSON.
+         * @function toJSON
+         * @memberof vtadmin.VSchema
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        VSchema.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return VSchema;
     })();
 
     vtadmin.Vtctld = (function() {
@@ -4587,6 +4895,627 @@ $root.vtadmin = (function() {
         };
 
         return GetTabletsResponse;
+    })();
+
+    vtadmin.GetVSchemaRequest = (function() {
+
+        /**
+         * Properties of a GetVSchemaRequest.
+         * @memberof vtadmin
+         * @interface IGetVSchemaRequest
+         * @property {string|null} [cluster_id] GetVSchemaRequest cluster_id
+         * @property {string|null} [keyspace] GetVSchemaRequest keyspace
+         */
+
+        /**
+         * Constructs a new GetVSchemaRequest.
+         * @memberof vtadmin
+         * @classdesc Represents a GetVSchemaRequest.
+         * @implements IGetVSchemaRequest
+         * @constructor
+         * @param {vtadmin.IGetVSchemaRequest=} [properties] Properties to set
+         */
+        function GetVSchemaRequest(properties) {
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * GetVSchemaRequest cluster_id.
+         * @member {string} cluster_id
+         * @memberof vtadmin.GetVSchemaRequest
+         * @instance
+         */
+        GetVSchemaRequest.prototype.cluster_id = "";
+
+        /**
+         * GetVSchemaRequest keyspace.
+         * @member {string} keyspace
+         * @memberof vtadmin.GetVSchemaRequest
+         * @instance
+         */
+        GetVSchemaRequest.prototype.keyspace = "";
+
+        /**
+         * Creates a new GetVSchemaRequest instance using the specified properties.
+         * @function create
+         * @memberof vtadmin.GetVSchemaRequest
+         * @static
+         * @param {vtadmin.IGetVSchemaRequest=} [properties] Properties to set
+         * @returns {vtadmin.GetVSchemaRequest} GetVSchemaRequest instance
+         */
+        GetVSchemaRequest.create = function create(properties) {
+            return new GetVSchemaRequest(properties);
+        };
+
+        /**
+         * Encodes the specified GetVSchemaRequest message. Does not implicitly {@link vtadmin.GetVSchemaRequest.verify|verify} messages.
+         * @function encode
+         * @memberof vtadmin.GetVSchemaRequest
+         * @static
+         * @param {vtadmin.IGetVSchemaRequest} message GetVSchemaRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        GetVSchemaRequest.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.cluster_id != null && Object.hasOwnProperty.call(message, "cluster_id"))
+                writer.uint32(/* id 1, wireType 2 =*/10).string(message.cluster_id);
+            if (message.keyspace != null && Object.hasOwnProperty.call(message, "keyspace"))
+                writer.uint32(/* id 2, wireType 2 =*/18).string(message.keyspace);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified GetVSchemaRequest message, length delimited. Does not implicitly {@link vtadmin.GetVSchemaRequest.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtadmin.GetVSchemaRequest
+         * @static
+         * @param {vtadmin.IGetVSchemaRequest} message GetVSchemaRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        GetVSchemaRequest.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a GetVSchemaRequest message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtadmin.GetVSchemaRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtadmin.GetVSchemaRequest} GetVSchemaRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        GetVSchemaRequest.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.GetVSchemaRequest();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.cluster_id = reader.string();
+                    break;
+                case 2:
+                    message.keyspace = reader.string();
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a GetVSchemaRequest message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtadmin.GetVSchemaRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtadmin.GetVSchemaRequest} GetVSchemaRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        GetVSchemaRequest.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a GetVSchemaRequest message.
+         * @function verify
+         * @memberof vtadmin.GetVSchemaRequest
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        GetVSchemaRequest.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.cluster_id != null && message.hasOwnProperty("cluster_id"))
+                if (!$util.isString(message.cluster_id))
+                    return "cluster_id: string expected";
+            if (message.keyspace != null && message.hasOwnProperty("keyspace"))
+                if (!$util.isString(message.keyspace))
+                    return "keyspace: string expected";
+            return null;
+        };
+
+        /**
+         * Creates a GetVSchemaRequest message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtadmin.GetVSchemaRequest
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtadmin.GetVSchemaRequest} GetVSchemaRequest
+         */
+        GetVSchemaRequest.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtadmin.GetVSchemaRequest)
+                return object;
+            var message = new $root.vtadmin.GetVSchemaRequest();
+            if (object.cluster_id != null)
+                message.cluster_id = String(object.cluster_id);
+            if (object.keyspace != null)
+                message.keyspace = String(object.keyspace);
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a GetVSchemaRequest message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtadmin.GetVSchemaRequest
+         * @static
+         * @param {vtadmin.GetVSchemaRequest} message GetVSchemaRequest
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        GetVSchemaRequest.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.defaults) {
+                object.cluster_id = "";
+                object.keyspace = "";
+            }
+            if (message.cluster_id != null && message.hasOwnProperty("cluster_id"))
+                object.cluster_id = message.cluster_id;
+            if (message.keyspace != null && message.hasOwnProperty("keyspace"))
+                object.keyspace = message.keyspace;
+            return object;
+        };
+
+        /**
+         * Converts this GetVSchemaRequest to JSON.
+         * @function toJSON
+         * @memberof vtadmin.GetVSchemaRequest
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        GetVSchemaRequest.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return GetVSchemaRequest;
+    })();
+
+    vtadmin.GetVSchemasRequest = (function() {
+
+        /**
+         * Properties of a GetVSchemasRequest.
+         * @memberof vtadmin
+         * @interface IGetVSchemasRequest
+         * @property {Array.<string>|null} [cluster_ids] GetVSchemasRequest cluster_ids
+         */
+
+        /**
+         * Constructs a new GetVSchemasRequest.
+         * @memberof vtadmin
+         * @classdesc Represents a GetVSchemasRequest.
+         * @implements IGetVSchemasRequest
+         * @constructor
+         * @param {vtadmin.IGetVSchemasRequest=} [properties] Properties to set
+         */
+        function GetVSchemasRequest(properties) {
+            this.cluster_ids = [];
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * GetVSchemasRequest cluster_ids.
+         * @member {Array.<string>} cluster_ids
+         * @memberof vtadmin.GetVSchemasRequest
+         * @instance
+         */
+        GetVSchemasRequest.prototype.cluster_ids = $util.emptyArray;
+
+        /**
+         * Creates a new GetVSchemasRequest instance using the specified properties.
+         * @function create
+         * @memberof vtadmin.GetVSchemasRequest
+         * @static
+         * @param {vtadmin.IGetVSchemasRequest=} [properties] Properties to set
+         * @returns {vtadmin.GetVSchemasRequest} GetVSchemasRequest instance
+         */
+        GetVSchemasRequest.create = function create(properties) {
+            return new GetVSchemasRequest(properties);
+        };
+
+        /**
+         * Encodes the specified GetVSchemasRequest message. Does not implicitly {@link vtadmin.GetVSchemasRequest.verify|verify} messages.
+         * @function encode
+         * @memberof vtadmin.GetVSchemasRequest
+         * @static
+         * @param {vtadmin.IGetVSchemasRequest} message GetVSchemasRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        GetVSchemasRequest.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.cluster_ids != null && message.cluster_ids.length)
+                for (var i = 0; i < message.cluster_ids.length; ++i)
+                    writer.uint32(/* id 1, wireType 2 =*/10).string(message.cluster_ids[i]);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified GetVSchemasRequest message, length delimited. Does not implicitly {@link vtadmin.GetVSchemasRequest.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtadmin.GetVSchemasRequest
+         * @static
+         * @param {vtadmin.IGetVSchemasRequest} message GetVSchemasRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        GetVSchemasRequest.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a GetVSchemasRequest message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtadmin.GetVSchemasRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtadmin.GetVSchemasRequest} GetVSchemasRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        GetVSchemasRequest.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.GetVSchemasRequest();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    if (!(message.cluster_ids && message.cluster_ids.length))
+                        message.cluster_ids = [];
+                    message.cluster_ids.push(reader.string());
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a GetVSchemasRequest message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtadmin.GetVSchemasRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtadmin.GetVSchemasRequest} GetVSchemasRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        GetVSchemasRequest.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a GetVSchemasRequest message.
+         * @function verify
+         * @memberof vtadmin.GetVSchemasRequest
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        GetVSchemasRequest.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.cluster_ids != null && message.hasOwnProperty("cluster_ids")) {
+                if (!Array.isArray(message.cluster_ids))
+                    return "cluster_ids: array expected";
+                for (var i = 0; i < message.cluster_ids.length; ++i)
+                    if (!$util.isString(message.cluster_ids[i]))
+                        return "cluster_ids: string[] expected";
+            }
+            return null;
+        };
+
+        /**
+         * Creates a GetVSchemasRequest message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtadmin.GetVSchemasRequest
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtadmin.GetVSchemasRequest} GetVSchemasRequest
+         */
+        GetVSchemasRequest.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtadmin.GetVSchemasRequest)
+                return object;
+            var message = new $root.vtadmin.GetVSchemasRequest();
+            if (object.cluster_ids) {
+                if (!Array.isArray(object.cluster_ids))
+                    throw TypeError(".vtadmin.GetVSchemasRequest.cluster_ids: array expected");
+                message.cluster_ids = [];
+                for (var i = 0; i < object.cluster_ids.length; ++i)
+                    message.cluster_ids[i] = String(object.cluster_ids[i]);
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a GetVSchemasRequest message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtadmin.GetVSchemasRequest
+         * @static
+         * @param {vtadmin.GetVSchemasRequest} message GetVSchemasRequest
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        GetVSchemasRequest.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.arrays || options.defaults)
+                object.cluster_ids = [];
+            if (message.cluster_ids && message.cluster_ids.length) {
+                object.cluster_ids = [];
+                for (var j = 0; j < message.cluster_ids.length; ++j)
+                    object.cluster_ids[j] = message.cluster_ids[j];
+            }
+            return object;
+        };
+
+        /**
+         * Converts this GetVSchemasRequest to JSON.
+         * @function toJSON
+         * @memberof vtadmin.GetVSchemasRequest
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        GetVSchemasRequest.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return GetVSchemasRequest;
+    })();
+
+    vtadmin.GetVSchemasResponse = (function() {
+
+        /**
+         * Properties of a GetVSchemasResponse.
+         * @memberof vtadmin
+         * @interface IGetVSchemasResponse
+         * @property {Array.<vtadmin.IVSchema>|null} [v_schemas] GetVSchemasResponse v_schemas
+         */
+
+        /**
+         * Constructs a new GetVSchemasResponse.
+         * @memberof vtadmin
+         * @classdesc Represents a GetVSchemasResponse.
+         * @implements IGetVSchemasResponse
+         * @constructor
+         * @param {vtadmin.IGetVSchemasResponse=} [properties] Properties to set
+         */
+        function GetVSchemasResponse(properties) {
+            this.v_schemas = [];
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * GetVSchemasResponse v_schemas.
+         * @member {Array.<vtadmin.IVSchema>} v_schemas
+         * @memberof vtadmin.GetVSchemasResponse
+         * @instance
+         */
+        GetVSchemasResponse.prototype.v_schemas = $util.emptyArray;
+
+        /**
+         * Creates a new GetVSchemasResponse instance using the specified properties.
+         * @function create
+         * @memberof vtadmin.GetVSchemasResponse
+         * @static
+         * @param {vtadmin.IGetVSchemasResponse=} [properties] Properties to set
+         * @returns {vtadmin.GetVSchemasResponse} GetVSchemasResponse instance
+         */
+        GetVSchemasResponse.create = function create(properties) {
+            return new GetVSchemasResponse(properties);
+        };
+
+        /**
+         * Encodes the specified GetVSchemasResponse message. Does not implicitly {@link vtadmin.GetVSchemasResponse.verify|verify} messages.
+         * @function encode
+         * @memberof vtadmin.GetVSchemasResponse
+         * @static
+         * @param {vtadmin.IGetVSchemasResponse} message GetVSchemasResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        GetVSchemasResponse.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.v_schemas != null && message.v_schemas.length)
+                for (var i = 0; i < message.v_schemas.length; ++i)
+                    $root.vtadmin.VSchema.encode(message.v_schemas[i], writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
+            return writer;
+        };
+
+        /**
+         * Encodes the specified GetVSchemasResponse message, length delimited. Does not implicitly {@link vtadmin.GetVSchemasResponse.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtadmin.GetVSchemasResponse
+         * @static
+         * @param {vtadmin.IGetVSchemasResponse} message GetVSchemasResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        GetVSchemasResponse.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a GetVSchemasResponse message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtadmin.GetVSchemasResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtadmin.GetVSchemasResponse} GetVSchemasResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        GetVSchemasResponse.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.GetVSchemasResponse();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    if (!(message.v_schemas && message.v_schemas.length))
+                        message.v_schemas = [];
+                    message.v_schemas.push($root.vtadmin.VSchema.decode(reader, reader.uint32()));
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a GetVSchemasResponse message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtadmin.GetVSchemasResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtadmin.GetVSchemasResponse} GetVSchemasResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        GetVSchemasResponse.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a GetVSchemasResponse message.
+         * @function verify
+         * @memberof vtadmin.GetVSchemasResponse
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        GetVSchemasResponse.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.v_schemas != null && message.hasOwnProperty("v_schemas")) {
+                if (!Array.isArray(message.v_schemas))
+                    return "v_schemas: array expected";
+                for (var i = 0; i < message.v_schemas.length; ++i) {
+                    var error = $root.vtadmin.VSchema.verify(message.v_schemas[i]);
+                    if (error)
+                        return "v_schemas." + error;
+                }
+            }
+            return null;
+        };
+
+        /**
+         * Creates a GetVSchemasResponse message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtadmin.GetVSchemasResponse
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtadmin.GetVSchemasResponse} GetVSchemasResponse
+         */
+        GetVSchemasResponse.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtadmin.GetVSchemasResponse)
+                return object;
+            var message = new $root.vtadmin.GetVSchemasResponse();
+            if (object.v_schemas) {
+                if (!Array.isArray(object.v_schemas))
+                    throw TypeError(".vtadmin.GetVSchemasResponse.v_schemas: array expected");
+                message.v_schemas = [];
+                for (var i = 0; i < object.v_schemas.length; ++i) {
+                    if (typeof object.v_schemas[i] !== "object")
+                        throw TypeError(".vtadmin.GetVSchemasResponse.v_schemas: object expected");
+                    message.v_schemas[i] = $root.vtadmin.VSchema.fromObject(object.v_schemas[i]);
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a GetVSchemasResponse message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtadmin.GetVSchemasResponse
+         * @static
+         * @param {vtadmin.GetVSchemasResponse} message GetVSchemasResponse
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        GetVSchemasResponse.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.arrays || options.defaults)
+                object.v_schemas = [];
+            if (message.v_schemas && message.v_schemas.length) {
+                object.v_schemas = [];
+                for (var j = 0; j < message.v_schemas.length; ++j)
+                    object.v_schemas[j] = $root.vtadmin.VSchema.toObject(message.v_schemas[j], options);
+            }
+            return object;
+        };
+
+        /**
+         * Converts this GetVSchemasResponse to JSON.
+         * @function toJSON
+         * @memberof vtadmin.GetVSchemasResponse
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        GetVSchemasResponse.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return GetVSchemasResponse;
     })();
 
     vtadmin.VTExplainRequest = (function() {
@@ -48603,6 +49532,2495 @@ $root.logutil = (function() {
     return logutil;
 })();
 
+$root.vschema = (function() {
+
+    /**
+     * Namespace vschema.
+     * @exports vschema
+     * @namespace
+     */
+    var vschema = {};
+
+    vschema.RoutingRules = (function() {
+
+        /**
+         * Properties of a RoutingRules.
+         * @memberof vschema
+         * @interface IRoutingRules
+         * @property {Array.<vschema.IRoutingRule>|null} [rules] RoutingRules rules
+         */
+
+        /**
+         * Constructs a new RoutingRules.
+         * @memberof vschema
+         * @classdesc Represents a RoutingRules.
+         * @implements IRoutingRules
+         * @constructor
+         * @param {vschema.IRoutingRules=} [properties] Properties to set
+         */
+        function RoutingRules(properties) {
+            this.rules = [];
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * RoutingRules rules.
+         * @member {Array.<vschema.IRoutingRule>} rules
+         * @memberof vschema.RoutingRules
+         * @instance
+         */
+        RoutingRules.prototype.rules = $util.emptyArray;
+
+        /**
+         * Creates a new RoutingRules instance using the specified properties.
+         * @function create
+         * @memberof vschema.RoutingRules
+         * @static
+         * @param {vschema.IRoutingRules=} [properties] Properties to set
+         * @returns {vschema.RoutingRules} RoutingRules instance
+         */
+        RoutingRules.create = function create(properties) {
+            return new RoutingRules(properties);
+        };
+
+        /**
+         * Encodes the specified RoutingRules message. Does not implicitly {@link vschema.RoutingRules.verify|verify} messages.
+         * @function encode
+         * @memberof vschema.RoutingRules
+         * @static
+         * @param {vschema.IRoutingRules} message RoutingRules message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        RoutingRules.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.rules != null && message.rules.length)
+                for (var i = 0; i < message.rules.length; ++i)
+                    $root.vschema.RoutingRule.encode(message.rules[i], writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
+            return writer;
+        };
+
+        /**
+         * Encodes the specified RoutingRules message, length delimited. Does not implicitly {@link vschema.RoutingRules.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vschema.RoutingRules
+         * @static
+         * @param {vschema.IRoutingRules} message RoutingRules message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        RoutingRules.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a RoutingRules message from the specified reader or buffer.
+         * @function decode
+         * @memberof vschema.RoutingRules
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vschema.RoutingRules} RoutingRules
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        RoutingRules.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vschema.RoutingRules();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    if (!(message.rules && message.rules.length))
+                        message.rules = [];
+                    message.rules.push($root.vschema.RoutingRule.decode(reader, reader.uint32()));
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a RoutingRules message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vschema.RoutingRules
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vschema.RoutingRules} RoutingRules
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        RoutingRules.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a RoutingRules message.
+         * @function verify
+         * @memberof vschema.RoutingRules
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        RoutingRules.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.rules != null && message.hasOwnProperty("rules")) {
+                if (!Array.isArray(message.rules))
+                    return "rules: array expected";
+                for (var i = 0; i < message.rules.length; ++i) {
+                    var error = $root.vschema.RoutingRule.verify(message.rules[i]);
+                    if (error)
+                        return "rules." + error;
+                }
+            }
+            return null;
+        };
+
+        /**
+         * Creates a RoutingRules message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vschema.RoutingRules
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vschema.RoutingRules} RoutingRules
+         */
+        RoutingRules.fromObject = function fromObject(object) {
+            if (object instanceof $root.vschema.RoutingRules)
+                return object;
+            var message = new $root.vschema.RoutingRules();
+            if (object.rules) {
+                if (!Array.isArray(object.rules))
+                    throw TypeError(".vschema.RoutingRules.rules: array expected");
+                message.rules = [];
+                for (var i = 0; i < object.rules.length; ++i) {
+                    if (typeof object.rules[i] !== "object")
+                        throw TypeError(".vschema.RoutingRules.rules: object expected");
+                    message.rules[i] = $root.vschema.RoutingRule.fromObject(object.rules[i]);
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a RoutingRules message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vschema.RoutingRules
+         * @static
+         * @param {vschema.RoutingRules} message RoutingRules
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        RoutingRules.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.arrays || options.defaults)
+                object.rules = [];
+            if (message.rules && message.rules.length) {
+                object.rules = [];
+                for (var j = 0; j < message.rules.length; ++j)
+                    object.rules[j] = $root.vschema.RoutingRule.toObject(message.rules[j], options);
+            }
+            return object;
+        };
+
+        /**
+         * Converts this RoutingRules to JSON.
+         * @function toJSON
+         * @memberof vschema.RoutingRules
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        RoutingRules.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return RoutingRules;
+    })();
+
+    vschema.RoutingRule = (function() {
+
+        /**
+         * Properties of a RoutingRule.
+         * @memberof vschema
+         * @interface IRoutingRule
+         * @property {string|null} [from_table] RoutingRule from_table
+         * @property {Array.<string>|null} [to_tables] RoutingRule to_tables
+         */
+
+        /**
+         * Constructs a new RoutingRule.
+         * @memberof vschema
+         * @classdesc Represents a RoutingRule.
+         * @implements IRoutingRule
+         * @constructor
+         * @param {vschema.IRoutingRule=} [properties] Properties to set
+         */
+        function RoutingRule(properties) {
+            this.to_tables = [];
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * RoutingRule from_table.
+         * @member {string} from_table
+         * @memberof vschema.RoutingRule
+         * @instance
+         */
+        RoutingRule.prototype.from_table = "";
+
+        /**
+         * RoutingRule to_tables.
+         * @member {Array.<string>} to_tables
+         * @memberof vschema.RoutingRule
+         * @instance
+         */
+        RoutingRule.prototype.to_tables = $util.emptyArray;
+
+        /**
+         * Creates a new RoutingRule instance using the specified properties.
+         * @function create
+         * @memberof vschema.RoutingRule
+         * @static
+         * @param {vschema.IRoutingRule=} [properties] Properties to set
+         * @returns {vschema.RoutingRule} RoutingRule instance
+         */
+        RoutingRule.create = function create(properties) {
+            return new RoutingRule(properties);
+        };
+
+        /**
+         * Encodes the specified RoutingRule message. Does not implicitly {@link vschema.RoutingRule.verify|verify} messages.
+         * @function encode
+         * @memberof vschema.RoutingRule
+         * @static
+         * @param {vschema.IRoutingRule} message RoutingRule message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        RoutingRule.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.from_table != null && Object.hasOwnProperty.call(message, "from_table"))
+                writer.uint32(/* id 1, wireType 2 =*/10).string(message.from_table);
+            if (message.to_tables != null && message.to_tables.length)
+                for (var i = 0; i < message.to_tables.length; ++i)
+                    writer.uint32(/* id 2, wireType 2 =*/18).string(message.to_tables[i]);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified RoutingRule message, length delimited. Does not implicitly {@link vschema.RoutingRule.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vschema.RoutingRule
+         * @static
+         * @param {vschema.IRoutingRule} message RoutingRule message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        RoutingRule.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a RoutingRule message from the specified reader or buffer.
+         * @function decode
+         * @memberof vschema.RoutingRule
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vschema.RoutingRule} RoutingRule
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        RoutingRule.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vschema.RoutingRule();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.from_table = reader.string();
+                    break;
+                case 2:
+                    if (!(message.to_tables && message.to_tables.length))
+                        message.to_tables = [];
+                    message.to_tables.push(reader.string());
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a RoutingRule message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vschema.RoutingRule
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vschema.RoutingRule} RoutingRule
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        RoutingRule.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a RoutingRule message.
+         * @function verify
+         * @memberof vschema.RoutingRule
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        RoutingRule.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.from_table != null && message.hasOwnProperty("from_table"))
+                if (!$util.isString(message.from_table))
+                    return "from_table: string expected";
+            if (message.to_tables != null && message.hasOwnProperty("to_tables")) {
+                if (!Array.isArray(message.to_tables))
+                    return "to_tables: array expected";
+                for (var i = 0; i < message.to_tables.length; ++i)
+                    if (!$util.isString(message.to_tables[i]))
+                        return "to_tables: string[] expected";
+            }
+            return null;
+        };
+
+        /**
+         * Creates a RoutingRule message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vschema.RoutingRule
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vschema.RoutingRule} RoutingRule
+         */
+        RoutingRule.fromObject = function fromObject(object) {
+            if (object instanceof $root.vschema.RoutingRule)
+                return object;
+            var message = new $root.vschema.RoutingRule();
+            if (object.from_table != null)
+                message.from_table = String(object.from_table);
+            if (object.to_tables) {
+                if (!Array.isArray(object.to_tables))
+                    throw TypeError(".vschema.RoutingRule.to_tables: array expected");
+                message.to_tables = [];
+                for (var i = 0; i < object.to_tables.length; ++i)
+                    message.to_tables[i] = String(object.to_tables[i]);
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a RoutingRule message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vschema.RoutingRule
+         * @static
+         * @param {vschema.RoutingRule} message RoutingRule
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        RoutingRule.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.arrays || options.defaults)
+                object.to_tables = [];
+            if (options.defaults)
+                object.from_table = "";
+            if (message.from_table != null && message.hasOwnProperty("from_table"))
+                object.from_table = message.from_table;
+            if (message.to_tables && message.to_tables.length) {
+                object.to_tables = [];
+                for (var j = 0; j < message.to_tables.length; ++j)
+                    object.to_tables[j] = message.to_tables[j];
+            }
+            return object;
+        };
+
+        /**
+         * Converts this RoutingRule to JSON.
+         * @function toJSON
+         * @memberof vschema.RoutingRule
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        RoutingRule.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return RoutingRule;
+    })();
+
+    vschema.Keyspace = (function() {
+
+        /**
+         * Properties of a Keyspace.
+         * @memberof vschema
+         * @interface IKeyspace
+         * @property {boolean|null} [sharded] Keyspace sharded
+         * @property {Object.<string,vschema.IVindex>|null} [vindexes] Keyspace vindexes
+         * @property {Object.<string,vschema.ITable>|null} [tables] Keyspace tables
+         * @property {boolean|null} [require_explicit_routing] Keyspace require_explicit_routing
+         */
+
+        /**
+         * Constructs a new Keyspace.
+         * @memberof vschema
+         * @classdesc Represents a Keyspace.
+         * @implements IKeyspace
+         * @constructor
+         * @param {vschema.IKeyspace=} [properties] Properties to set
+         */
+        function Keyspace(properties) {
+            this.vindexes = {};
+            this.tables = {};
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * Keyspace sharded.
+         * @member {boolean} sharded
+         * @memberof vschema.Keyspace
+         * @instance
+         */
+        Keyspace.prototype.sharded = false;
+
+        /**
+         * Keyspace vindexes.
+         * @member {Object.<string,vschema.IVindex>} vindexes
+         * @memberof vschema.Keyspace
+         * @instance
+         */
+        Keyspace.prototype.vindexes = $util.emptyObject;
+
+        /**
+         * Keyspace tables.
+         * @member {Object.<string,vschema.ITable>} tables
+         * @memberof vschema.Keyspace
+         * @instance
+         */
+        Keyspace.prototype.tables = $util.emptyObject;
+
+        /**
+         * Keyspace require_explicit_routing.
+         * @member {boolean} require_explicit_routing
+         * @memberof vschema.Keyspace
+         * @instance
+         */
+        Keyspace.prototype.require_explicit_routing = false;
+
+        /**
+         * Creates a new Keyspace instance using the specified properties.
+         * @function create
+         * @memberof vschema.Keyspace
+         * @static
+         * @param {vschema.IKeyspace=} [properties] Properties to set
+         * @returns {vschema.Keyspace} Keyspace instance
+         */
+        Keyspace.create = function create(properties) {
+            return new Keyspace(properties);
+        };
+
+        /**
+         * Encodes the specified Keyspace message. Does not implicitly {@link vschema.Keyspace.verify|verify} messages.
+         * @function encode
+         * @memberof vschema.Keyspace
+         * @static
+         * @param {vschema.IKeyspace} message Keyspace message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        Keyspace.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.sharded != null && Object.hasOwnProperty.call(message, "sharded"))
+                writer.uint32(/* id 1, wireType 0 =*/8).bool(message.sharded);
+            if (message.vindexes != null && Object.hasOwnProperty.call(message, "vindexes"))
+                for (var keys = Object.keys(message.vindexes), i = 0; i < keys.length; ++i) {
+                    writer.uint32(/* id 2, wireType 2 =*/18).fork().uint32(/* id 1, wireType 2 =*/10).string(keys[i]);
+                    $root.vschema.Vindex.encode(message.vindexes[keys[i]], writer.uint32(/* id 2, wireType 2 =*/18).fork()).ldelim().ldelim();
+                }
+            if (message.tables != null && Object.hasOwnProperty.call(message, "tables"))
+                for (var keys = Object.keys(message.tables), i = 0; i < keys.length; ++i) {
+                    writer.uint32(/* id 3, wireType 2 =*/26).fork().uint32(/* id 1, wireType 2 =*/10).string(keys[i]);
+                    $root.vschema.Table.encode(message.tables[keys[i]], writer.uint32(/* id 2, wireType 2 =*/18).fork()).ldelim().ldelim();
+                }
+            if (message.require_explicit_routing != null && Object.hasOwnProperty.call(message, "require_explicit_routing"))
+                writer.uint32(/* id 4, wireType 0 =*/32).bool(message.require_explicit_routing);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified Keyspace message, length delimited. Does not implicitly {@link vschema.Keyspace.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vschema.Keyspace
+         * @static
+         * @param {vschema.IKeyspace} message Keyspace message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        Keyspace.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a Keyspace message from the specified reader or buffer.
+         * @function decode
+         * @memberof vschema.Keyspace
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vschema.Keyspace} Keyspace
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        Keyspace.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vschema.Keyspace(), key, value;
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.sharded = reader.bool();
+                    break;
+                case 2:
+                    if (message.vindexes === $util.emptyObject)
+                        message.vindexes = {};
+                    var end2 = reader.uint32() + reader.pos;
+                    key = "";
+                    value = null;
+                    while (reader.pos < end2) {
+                        var tag2 = reader.uint32();
+                        switch (tag2 >>> 3) {
+                        case 1:
+                            key = reader.string();
+                            break;
+                        case 2:
+                            value = $root.vschema.Vindex.decode(reader, reader.uint32());
+                            break;
+                        default:
+                            reader.skipType(tag2 & 7);
+                            break;
+                        }
+                    }
+                    message.vindexes[key] = value;
+                    break;
+                case 3:
+                    if (message.tables === $util.emptyObject)
+                        message.tables = {};
+                    var end2 = reader.uint32() + reader.pos;
+                    key = "";
+                    value = null;
+                    while (reader.pos < end2) {
+                        var tag2 = reader.uint32();
+                        switch (tag2 >>> 3) {
+                        case 1:
+                            key = reader.string();
+                            break;
+                        case 2:
+                            value = $root.vschema.Table.decode(reader, reader.uint32());
+                            break;
+                        default:
+                            reader.skipType(tag2 & 7);
+                            break;
+                        }
+                    }
+                    message.tables[key] = value;
+                    break;
+                case 4:
+                    message.require_explicit_routing = reader.bool();
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a Keyspace message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vschema.Keyspace
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vschema.Keyspace} Keyspace
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        Keyspace.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a Keyspace message.
+         * @function verify
+         * @memberof vschema.Keyspace
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        Keyspace.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.sharded != null && message.hasOwnProperty("sharded"))
+                if (typeof message.sharded !== "boolean")
+                    return "sharded: boolean expected";
+            if (message.vindexes != null && message.hasOwnProperty("vindexes")) {
+                if (!$util.isObject(message.vindexes))
+                    return "vindexes: object expected";
+                var key = Object.keys(message.vindexes);
+                for (var i = 0; i < key.length; ++i) {
+                    var error = $root.vschema.Vindex.verify(message.vindexes[key[i]]);
+                    if (error)
+                        return "vindexes." + error;
+                }
+            }
+            if (message.tables != null && message.hasOwnProperty("tables")) {
+                if (!$util.isObject(message.tables))
+                    return "tables: object expected";
+                var key = Object.keys(message.tables);
+                for (var i = 0; i < key.length; ++i) {
+                    var error = $root.vschema.Table.verify(message.tables[key[i]]);
+                    if (error)
+                        return "tables." + error;
+                }
+            }
+            if (message.require_explicit_routing != null && message.hasOwnProperty("require_explicit_routing"))
+                if (typeof message.require_explicit_routing !== "boolean")
+                    return "require_explicit_routing: boolean expected";
+            return null;
+        };
+
+        /**
+         * Creates a Keyspace message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vschema.Keyspace
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vschema.Keyspace} Keyspace
+         */
+        Keyspace.fromObject = function fromObject(object) {
+            if (object instanceof $root.vschema.Keyspace)
+                return object;
+            var message = new $root.vschema.Keyspace();
+            if (object.sharded != null)
+                message.sharded = Boolean(object.sharded);
+            if (object.vindexes) {
+                if (typeof object.vindexes !== "object")
+                    throw TypeError(".vschema.Keyspace.vindexes: object expected");
+                message.vindexes = {};
+                for (var keys = Object.keys(object.vindexes), i = 0; i < keys.length; ++i) {
+                    if (typeof object.vindexes[keys[i]] !== "object")
+                        throw TypeError(".vschema.Keyspace.vindexes: object expected");
+                    message.vindexes[keys[i]] = $root.vschema.Vindex.fromObject(object.vindexes[keys[i]]);
+                }
+            }
+            if (object.tables) {
+                if (typeof object.tables !== "object")
+                    throw TypeError(".vschema.Keyspace.tables: object expected");
+                message.tables = {};
+                for (var keys = Object.keys(object.tables), i = 0; i < keys.length; ++i) {
+                    if (typeof object.tables[keys[i]] !== "object")
+                        throw TypeError(".vschema.Keyspace.tables: object expected");
+                    message.tables[keys[i]] = $root.vschema.Table.fromObject(object.tables[keys[i]]);
+                }
+            }
+            if (object.require_explicit_routing != null)
+                message.require_explicit_routing = Boolean(object.require_explicit_routing);
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a Keyspace message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vschema.Keyspace
+         * @static
+         * @param {vschema.Keyspace} message Keyspace
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        Keyspace.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.objects || options.defaults) {
+                object.vindexes = {};
+                object.tables = {};
+            }
+            if (options.defaults) {
+                object.sharded = false;
+                object.require_explicit_routing = false;
+            }
+            if (message.sharded != null && message.hasOwnProperty("sharded"))
+                object.sharded = message.sharded;
+            var keys2;
+            if (message.vindexes && (keys2 = Object.keys(message.vindexes)).length) {
+                object.vindexes = {};
+                for (var j = 0; j < keys2.length; ++j)
+                    object.vindexes[keys2[j]] = $root.vschema.Vindex.toObject(message.vindexes[keys2[j]], options);
+            }
+            if (message.tables && (keys2 = Object.keys(message.tables)).length) {
+                object.tables = {};
+                for (var j = 0; j < keys2.length; ++j)
+                    object.tables[keys2[j]] = $root.vschema.Table.toObject(message.tables[keys2[j]], options);
+            }
+            if (message.require_explicit_routing != null && message.hasOwnProperty("require_explicit_routing"))
+                object.require_explicit_routing = message.require_explicit_routing;
+            return object;
+        };
+
+        /**
+         * Converts this Keyspace to JSON.
+         * @function toJSON
+         * @memberof vschema.Keyspace
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        Keyspace.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return Keyspace;
+    })();
+
+    vschema.Vindex = (function() {
+
+        /**
+         * Properties of a Vindex.
+         * @memberof vschema
+         * @interface IVindex
+         * @property {string|null} [type] Vindex type
+         * @property {Object.<string,string>|null} [params] Vindex params
+         * @property {string|null} [owner] Vindex owner
+         */
+
+        /**
+         * Constructs a new Vindex.
+         * @memberof vschema
+         * @classdesc Represents a Vindex.
+         * @implements IVindex
+         * @constructor
+         * @param {vschema.IVindex=} [properties] Properties to set
+         */
+        function Vindex(properties) {
+            this.params = {};
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * Vindex type.
+         * @member {string} type
+         * @memberof vschema.Vindex
+         * @instance
+         */
+        Vindex.prototype.type = "";
+
+        /**
+         * Vindex params.
+         * @member {Object.<string,string>} params
+         * @memberof vschema.Vindex
+         * @instance
+         */
+        Vindex.prototype.params = $util.emptyObject;
+
+        /**
+         * Vindex owner.
+         * @member {string} owner
+         * @memberof vschema.Vindex
+         * @instance
+         */
+        Vindex.prototype.owner = "";
+
+        /**
+         * Creates a new Vindex instance using the specified properties.
+         * @function create
+         * @memberof vschema.Vindex
+         * @static
+         * @param {vschema.IVindex=} [properties] Properties to set
+         * @returns {vschema.Vindex} Vindex instance
+         */
+        Vindex.create = function create(properties) {
+            return new Vindex(properties);
+        };
+
+        /**
+         * Encodes the specified Vindex message. Does not implicitly {@link vschema.Vindex.verify|verify} messages.
+         * @function encode
+         * @memberof vschema.Vindex
+         * @static
+         * @param {vschema.IVindex} message Vindex message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        Vindex.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.type != null && Object.hasOwnProperty.call(message, "type"))
+                writer.uint32(/* id 1, wireType 2 =*/10).string(message.type);
+            if (message.params != null && Object.hasOwnProperty.call(message, "params"))
+                for (var keys = Object.keys(message.params), i = 0; i < keys.length; ++i)
+                    writer.uint32(/* id 2, wireType 2 =*/18).fork().uint32(/* id 1, wireType 2 =*/10).string(keys[i]).uint32(/* id 2, wireType 2 =*/18).string(message.params[keys[i]]).ldelim();
+            if (message.owner != null && Object.hasOwnProperty.call(message, "owner"))
+                writer.uint32(/* id 3, wireType 2 =*/26).string(message.owner);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified Vindex message, length delimited. Does not implicitly {@link vschema.Vindex.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vschema.Vindex
+         * @static
+         * @param {vschema.IVindex} message Vindex message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        Vindex.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a Vindex message from the specified reader or buffer.
+         * @function decode
+         * @memberof vschema.Vindex
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vschema.Vindex} Vindex
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        Vindex.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vschema.Vindex(), key, value;
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.type = reader.string();
+                    break;
+                case 2:
+                    if (message.params === $util.emptyObject)
+                        message.params = {};
+                    var end2 = reader.uint32() + reader.pos;
+                    key = "";
+                    value = "";
+                    while (reader.pos < end2) {
+                        var tag2 = reader.uint32();
+                        switch (tag2 >>> 3) {
+                        case 1:
+                            key = reader.string();
+                            break;
+                        case 2:
+                            value = reader.string();
+                            break;
+                        default:
+                            reader.skipType(tag2 & 7);
+                            break;
+                        }
+                    }
+                    message.params[key] = value;
+                    break;
+                case 3:
+                    message.owner = reader.string();
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a Vindex message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vschema.Vindex
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vschema.Vindex} Vindex
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        Vindex.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a Vindex message.
+         * @function verify
+         * @memberof vschema.Vindex
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        Vindex.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.type != null && message.hasOwnProperty("type"))
+                if (!$util.isString(message.type))
+                    return "type: string expected";
+            if (message.params != null && message.hasOwnProperty("params")) {
+                if (!$util.isObject(message.params))
+                    return "params: object expected";
+                var key = Object.keys(message.params);
+                for (var i = 0; i < key.length; ++i)
+                    if (!$util.isString(message.params[key[i]]))
+                        return "params: string{k:string} expected";
+            }
+            if (message.owner != null && message.hasOwnProperty("owner"))
+                if (!$util.isString(message.owner))
+                    return "owner: string expected";
+            return null;
+        };
+
+        /**
+         * Creates a Vindex message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vschema.Vindex
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vschema.Vindex} Vindex
+         */
+        Vindex.fromObject = function fromObject(object) {
+            if (object instanceof $root.vschema.Vindex)
+                return object;
+            var message = new $root.vschema.Vindex();
+            if (object.type != null)
+                message.type = String(object.type);
+            if (object.params) {
+                if (typeof object.params !== "object")
+                    throw TypeError(".vschema.Vindex.params: object expected");
+                message.params = {};
+                for (var keys = Object.keys(object.params), i = 0; i < keys.length; ++i)
+                    message.params[keys[i]] = String(object.params[keys[i]]);
+            }
+            if (object.owner != null)
+                message.owner = String(object.owner);
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a Vindex message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vschema.Vindex
+         * @static
+         * @param {vschema.Vindex} message Vindex
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        Vindex.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.objects || options.defaults)
+                object.params = {};
+            if (options.defaults) {
+                object.type = "";
+                object.owner = "";
+            }
+            if (message.type != null && message.hasOwnProperty("type"))
+                object.type = message.type;
+            var keys2;
+            if (message.params && (keys2 = Object.keys(message.params)).length) {
+                object.params = {};
+                for (var j = 0; j < keys2.length; ++j)
+                    object.params[keys2[j]] = message.params[keys2[j]];
+            }
+            if (message.owner != null && message.hasOwnProperty("owner"))
+                object.owner = message.owner;
+            return object;
+        };
+
+        /**
+         * Converts this Vindex to JSON.
+         * @function toJSON
+         * @memberof vschema.Vindex
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        Vindex.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return Vindex;
+    })();
+
+    vschema.Table = (function() {
+
+        /**
+         * Properties of a Table.
+         * @memberof vschema
+         * @interface ITable
+         * @property {string|null} [type] Table type
+         * @property {Array.<vschema.IColumnVindex>|null} [column_vindexes] Table column_vindexes
+         * @property {vschema.IAutoIncrement|null} [auto_increment] Table auto_increment
+         * @property {Array.<vschema.IColumn>|null} [columns] Table columns
+         * @property {string|null} [pinned] Table pinned
+         * @property {boolean|null} [column_list_authoritative] Table column_list_authoritative
+         */
+
+        /**
+         * Constructs a new Table.
+         * @memberof vschema
+         * @classdesc Represents a Table.
+         * @implements ITable
+         * @constructor
+         * @param {vschema.ITable=} [properties] Properties to set
+         */
+        function Table(properties) {
+            this.column_vindexes = [];
+            this.columns = [];
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * Table type.
+         * @member {string} type
+         * @memberof vschema.Table
+         * @instance
+         */
+        Table.prototype.type = "";
+
+        /**
+         * Table column_vindexes.
+         * @member {Array.<vschema.IColumnVindex>} column_vindexes
+         * @memberof vschema.Table
+         * @instance
+         */
+        Table.prototype.column_vindexes = $util.emptyArray;
+
+        /**
+         * Table auto_increment.
+         * @member {vschema.IAutoIncrement|null|undefined} auto_increment
+         * @memberof vschema.Table
+         * @instance
+         */
+        Table.prototype.auto_increment = null;
+
+        /**
+         * Table columns.
+         * @member {Array.<vschema.IColumn>} columns
+         * @memberof vschema.Table
+         * @instance
+         */
+        Table.prototype.columns = $util.emptyArray;
+
+        /**
+         * Table pinned.
+         * @member {string} pinned
+         * @memberof vschema.Table
+         * @instance
+         */
+        Table.prototype.pinned = "";
+
+        /**
+         * Table column_list_authoritative.
+         * @member {boolean} column_list_authoritative
+         * @memberof vschema.Table
+         * @instance
+         */
+        Table.prototype.column_list_authoritative = false;
+
+        /**
+         * Creates a new Table instance using the specified properties.
+         * @function create
+         * @memberof vschema.Table
+         * @static
+         * @param {vschema.ITable=} [properties] Properties to set
+         * @returns {vschema.Table} Table instance
+         */
+        Table.create = function create(properties) {
+            return new Table(properties);
+        };
+
+        /**
+         * Encodes the specified Table message. Does not implicitly {@link vschema.Table.verify|verify} messages.
+         * @function encode
+         * @memberof vschema.Table
+         * @static
+         * @param {vschema.ITable} message Table message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        Table.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.type != null && Object.hasOwnProperty.call(message, "type"))
+                writer.uint32(/* id 1, wireType 2 =*/10).string(message.type);
+            if (message.column_vindexes != null && message.column_vindexes.length)
+                for (var i = 0; i < message.column_vindexes.length; ++i)
+                    $root.vschema.ColumnVindex.encode(message.column_vindexes[i], writer.uint32(/* id 2, wireType 2 =*/18).fork()).ldelim();
+            if (message.auto_increment != null && Object.hasOwnProperty.call(message, "auto_increment"))
+                $root.vschema.AutoIncrement.encode(message.auto_increment, writer.uint32(/* id 3, wireType 2 =*/26).fork()).ldelim();
+            if (message.columns != null && message.columns.length)
+                for (var i = 0; i < message.columns.length; ++i)
+                    $root.vschema.Column.encode(message.columns[i], writer.uint32(/* id 4, wireType 2 =*/34).fork()).ldelim();
+            if (message.pinned != null && Object.hasOwnProperty.call(message, "pinned"))
+                writer.uint32(/* id 5, wireType 2 =*/42).string(message.pinned);
+            if (message.column_list_authoritative != null && Object.hasOwnProperty.call(message, "column_list_authoritative"))
+                writer.uint32(/* id 6, wireType 0 =*/48).bool(message.column_list_authoritative);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified Table message, length delimited. Does not implicitly {@link vschema.Table.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vschema.Table
+         * @static
+         * @param {vschema.ITable} message Table message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        Table.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a Table message from the specified reader or buffer.
+         * @function decode
+         * @memberof vschema.Table
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vschema.Table} Table
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        Table.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vschema.Table();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.type = reader.string();
+                    break;
+                case 2:
+                    if (!(message.column_vindexes && message.column_vindexes.length))
+                        message.column_vindexes = [];
+                    message.column_vindexes.push($root.vschema.ColumnVindex.decode(reader, reader.uint32()));
+                    break;
+                case 3:
+                    message.auto_increment = $root.vschema.AutoIncrement.decode(reader, reader.uint32());
+                    break;
+                case 4:
+                    if (!(message.columns && message.columns.length))
+                        message.columns = [];
+                    message.columns.push($root.vschema.Column.decode(reader, reader.uint32()));
+                    break;
+                case 5:
+                    message.pinned = reader.string();
+                    break;
+                case 6:
+                    message.column_list_authoritative = reader.bool();
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a Table message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vschema.Table
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vschema.Table} Table
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        Table.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a Table message.
+         * @function verify
+         * @memberof vschema.Table
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        Table.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.type != null && message.hasOwnProperty("type"))
+                if (!$util.isString(message.type))
+                    return "type: string expected";
+            if (message.column_vindexes != null && message.hasOwnProperty("column_vindexes")) {
+                if (!Array.isArray(message.column_vindexes))
+                    return "column_vindexes: array expected";
+                for (var i = 0; i < message.column_vindexes.length; ++i) {
+                    var error = $root.vschema.ColumnVindex.verify(message.column_vindexes[i]);
+                    if (error)
+                        return "column_vindexes." + error;
+                }
+            }
+            if (message.auto_increment != null && message.hasOwnProperty("auto_increment")) {
+                var error = $root.vschema.AutoIncrement.verify(message.auto_increment);
+                if (error)
+                    return "auto_increment." + error;
+            }
+            if (message.columns != null && message.hasOwnProperty("columns")) {
+                if (!Array.isArray(message.columns))
+                    return "columns: array expected";
+                for (var i = 0; i < message.columns.length; ++i) {
+                    var error = $root.vschema.Column.verify(message.columns[i]);
+                    if (error)
+                        return "columns." + error;
+                }
+            }
+            if (message.pinned != null && message.hasOwnProperty("pinned"))
+                if (!$util.isString(message.pinned))
+                    return "pinned: string expected";
+            if (message.column_list_authoritative != null && message.hasOwnProperty("column_list_authoritative"))
+                if (typeof message.column_list_authoritative !== "boolean")
+                    return "column_list_authoritative: boolean expected";
+            return null;
+        };
+
+        /**
+         * Creates a Table message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vschema.Table
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vschema.Table} Table
+         */
+        Table.fromObject = function fromObject(object) {
+            if (object instanceof $root.vschema.Table)
+                return object;
+            var message = new $root.vschema.Table();
+            if (object.type != null)
+                message.type = String(object.type);
+            if (object.column_vindexes) {
+                if (!Array.isArray(object.column_vindexes))
+                    throw TypeError(".vschema.Table.column_vindexes: array expected");
+                message.column_vindexes = [];
+                for (var i = 0; i < object.column_vindexes.length; ++i) {
+                    if (typeof object.column_vindexes[i] !== "object")
+                        throw TypeError(".vschema.Table.column_vindexes: object expected");
+                    message.column_vindexes[i] = $root.vschema.ColumnVindex.fromObject(object.column_vindexes[i]);
+                }
+            }
+            if (object.auto_increment != null) {
+                if (typeof object.auto_increment !== "object")
+                    throw TypeError(".vschema.Table.auto_increment: object expected");
+                message.auto_increment = $root.vschema.AutoIncrement.fromObject(object.auto_increment);
+            }
+            if (object.columns) {
+                if (!Array.isArray(object.columns))
+                    throw TypeError(".vschema.Table.columns: array expected");
+                message.columns = [];
+                for (var i = 0; i < object.columns.length; ++i) {
+                    if (typeof object.columns[i] !== "object")
+                        throw TypeError(".vschema.Table.columns: object expected");
+                    message.columns[i] = $root.vschema.Column.fromObject(object.columns[i]);
+                }
+            }
+            if (object.pinned != null)
+                message.pinned = String(object.pinned);
+            if (object.column_list_authoritative != null)
+                message.column_list_authoritative = Boolean(object.column_list_authoritative);
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a Table message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vschema.Table
+         * @static
+         * @param {vschema.Table} message Table
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        Table.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.arrays || options.defaults) {
+                object.column_vindexes = [];
+                object.columns = [];
+            }
+            if (options.defaults) {
+                object.type = "";
+                object.auto_increment = null;
+                object.pinned = "";
+                object.column_list_authoritative = false;
+            }
+            if (message.type != null && message.hasOwnProperty("type"))
+                object.type = message.type;
+            if (message.column_vindexes && message.column_vindexes.length) {
+                object.column_vindexes = [];
+                for (var j = 0; j < message.column_vindexes.length; ++j)
+                    object.column_vindexes[j] = $root.vschema.ColumnVindex.toObject(message.column_vindexes[j], options);
+            }
+            if (message.auto_increment != null && message.hasOwnProperty("auto_increment"))
+                object.auto_increment = $root.vschema.AutoIncrement.toObject(message.auto_increment, options);
+            if (message.columns && message.columns.length) {
+                object.columns = [];
+                for (var j = 0; j < message.columns.length; ++j)
+                    object.columns[j] = $root.vschema.Column.toObject(message.columns[j], options);
+            }
+            if (message.pinned != null && message.hasOwnProperty("pinned"))
+                object.pinned = message.pinned;
+            if (message.column_list_authoritative != null && message.hasOwnProperty("column_list_authoritative"))
+                object.column_list_authoritative = message.column_list_authoritative;
+            return object;
+        };
+
+        /**
+         * Converts this Table to JSON.
+         * @function toJSON
+         * @memberof vschema.Table
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        Table.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return Table;
+    })();
+
+    vschema.ColumnVindex = (function() {
+
+        /**
+         * Properties of a ColumnVindex.
+         * @memberof vschema
+         * @interface IColumnVindex
+         * @property {string|null} [column] ColumnVindex column
+         * @property {string|null} [name] ColumnVindex name
+         * @property {Array.<string>|null} [columns] ColumnVindex columns
+         */
+
+        /**
+         * Constructs a new ColumnVindex.
+         * @memberof vschema
+         * @classdesc Represents a ColumnVindex.
+         * @implements IColumnVindex
+         * @constructor
+         * @param {vschema.IColumnVindex=} [properties] Properties to set
+         */
+        function ColumnVindex(properties) {
+            this.columns = [];
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * ColumnVindex column.
+         * @member {string} column
+         * @memberof vschema.ColumnVindex
+         * @instance
+         */
+        ColumnVindex.prototype.column = "";
+
+        /**
+         * ColumnVindex name.
+         * @member {string} name
+         * @memberof vschema.ColumnVindex
+         * @instance
+         */
+        ColumnVindex.prototype.name = "";
+
+        /**
+         * ColumnVindex columns.
+         * @member {Array.<string>} columns
+         * @memberof vschema.ColumnVindex
+         * @instance
+         */
+        ColumnVindex.prototype.columns = $util.emptyArray;
+
+        /**
+         * Creates a new ColumnVindex instance using the specified properties.
+         * @function create
+         * @memberof vschema.ColumnVindex
+         * @static
+         * @param {vschema.IColumnVindex=} [properties] Properties to set
+         * @returns {vschema.ColumnVindex} ColumnVindex instance
+         */
+        ColumnVindex.create = function create(properties) {
+            return new ColumnVindex(properties);
+        };
+
+        /**
+         * Encodes the specified ColumnVindex message. Does not implicitly {@link vschema.ColumnVindex.verify|verify} messages.
+         * @function encode
+         * @memberof vschema.ColumnVindex
+         * @static
+         * @param {vschema.IColumnVindex} message ColumnVindex message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        ColumnVindex.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.column != null && Object.hasOwnProperty.call(message, "column"))
+                writer.uint32(/* id 1, wireType 2 =*/10).string(message.column);
+            if (message.name != null && Object.hasOwnProperty.call(message, "name"))
+                writer.uint32(/* id 2, wireType 2 =*/18).string(message.name);
+            if (message.columns != null && message.columns.length)
+                for (var i = 0; i < message.columns.length; ++i)
+                    writer.uint32(/* id 3, wireType 2 =*/26).string(message.columns[i]);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified ColumnVindex message, length delimited. Does not implicitly {@link vschema.ColumnVindex.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vschema.ColumnVindex
+         * @static
+         * @param {vschema.IColumnVindex} message ColumnVindex message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        ColumnVindex.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a ColumnVindex message from the specified reader or buffer.
+         * @function decode
+         * @memberof vschema.ColumnVindex
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vschema.ColumnVindex} ColumnVindex
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        ColumnVindex.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vschema.ColumnVindex();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.column = reader.string();
+                    break;
+                case 2:
+                    message.name = reader.string();
+                    break;
+                case 3:
+                    if (!(message.columns && message.columns.length))
+                        message.columns = [];
+                    message.columns.push(reader.string());
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a ColumnVindex message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vschema.ColumnVindex
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vschema.ColumnVindex} ColumnVindex
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        ColumnVindex.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a ColumnVindex message.
+         * @function verify
+         * @memberof vschema.ColumnVindex
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        ColumnVindex.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.column != null && message.hasOwnProperty("column"))
+                if (!$util.isString(message.column))
+                    return "column: string expected";
+            if (message.name != null && message.hasOwnProperty("name"))
+                if (!$util.isString(message.name))
+                    return "name: string expected";
+            if (message.columns != null && message.hasOwnProperty("columns")) {
+                if (!Array.isArray(message.columns))
+                    return "columns: array expected";
+                for (var i = 0; i < message.columns.length; ++i)
+                    if (!$util.isString(message.columns[i]))
+                        return "columns: string[] expected";
+            }
+            return null;
+        };
+
+        /**
+         * Creates a ColumnVindex message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vschema.ColumnVindex
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vschema.ColumnVindex} ColumnVindex
+         */
+        ColumnVindex.fromObject = function fromObject(object) {
+            if (object instanceof $root.vschema.ColumnVindex)
+                return object;
+            var message = new $root.vschema.ColumnVindex();
+            if (object.column != null)
+                message.column = String(object.column);
+            if (object.name != null)
+                message.name = String(object.name);
+            if (object.columns) {
+                if (!Array.isArray(object.columns))
+                    throw TypeError(".vschema.ColumnVindex.columns: array expected");
+                message.columns = [];
+                for (var i = 0; i < object.columns.length; ++i)
+                    message.columns[i] = String(object.columns[i]);
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a ColumnVindex message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vschema.ColumnVindex
+         * @static
+         * @param {vschema.ColumnVindex} message ColumnVindex
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        ColumnVindex.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.arrays || options.defaults)
+                object.columns = [];
+            if (options.defaults) {
+                object.column = "";
+                object.name = "";
+            }
+            if (message.column != null && message.hasOwnProperty("column"))
+                object.column = message.column;
+            if (message.name != null && message.hasOwnProperty("name"))
+                object.name = message.name;
+            if (message.columns && message.columns.length) {
+                object.columns = [];
+                for (var j = 0; j < message.columns.length; ++j)
+                    object.columns[j] = message.columns[j];
+            }
+            return object;
+        };
+
+        /**
+         * Converts this ColumnVindex to JSON.
+         * @function toJSON
+         * @memberof vschema.ColumnVindex
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        ColumnVindex.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return ColumnVindex;
+    })();
+
+    vschema.AutoIncrement = (function() {
+
+        /**
+         * Properties of an AutoIncrement.
+         * @memberof vschema
+         * @interface IAutoIncrement
+         * @property {string|null} [column] AutoIncrement column
+         * @property {string|null} [sequence] AutoIncrement sequence
+         */
+
+        /**
+         * Constructs a new AutoIncrement.
+         * @memberof vschema
+         * @classdesc Represents an AutoIncrement.
+         * @implements IAutoIncrement
+         * @constructor
+         * @param {vschema.IAutoIncrement=} [properties] Properties to set
+         */
+        function AutoIncrement(properties) {
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * AutoIncrement column.
+         * @member {string} column
+         * @memberof vschema.AutoIncrement
+         * @instance
+         */
+        AutoIncrement.prototype.column = "";
+
+        /**
+         * AutoIncrement sequence.
+         * @member {string} sequence
+         * @memberof vschema.AutoIncrement
+         * @instance
+         */
+        AutoIncrement.prototype.sequence = "";
+
+        /**
+         * Creates a new AutoIncrement instance using the specified properties.
+         * @function create
+         * @memberof vschema.AutoIncrement
+         * @static
+         * @param {vschema.IAutoIncrement=} [properties] Properties to set
+         * @returns {vschema.AutoIncrement} AutoIncrement instance
+         */
+        AutoIncrement.create = function create(properties) {
+            return new AutoIncrement(properties);
+        };
+
+        /**
+         * Encodes the specified AutoIncrement message. Does not implicitly {@link vschema.AutoIncrement.verify|verify} messages.
+         * @function encode
+         * @memberof vschema.AutoIncrement
+         * @static
+         * @param {vschema.IAutoIncrement} message AutoIncrement message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        AutoIncrement.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.column != null && Object.hasOwnProperty.call(message, "column"))
+                writer.uint32(/* id 1, wireType 2 =*/10).string(message.column);
+            if (message.sequence != null && Object.hasOwnProperty.call(message, "sequence"))
+                writer.uint32(/* id 2, wireType 2 =*/18).string(message.sequence);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified AutoIncrement message, length delimited. Does not implicitly {@link vschema.AutoIncrement.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vschema.AutoIncrement
+         * @static
+         * @param {vschema.IAutoIncrement} message AutoIncrement message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        AutoIncrement.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes an AutoIncrement message from the specified reader or buffer.
+         * @function decode
+         * @memberof vschema.AutoIncrement
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vschema.AutoIncrement} AutoIncrement
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        AutoIncrement.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vschema.AutoIncrement();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.column = reader.string();
+                    break;
+                case 2:
+                    message.sequence = reader.string();
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes an AutoIncrement message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vschema.AutoIncrement
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vschema.AutoIncrement} AutoIncrement
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        AutoIncrement.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies an AutoIncrement message.
+         * @function verify
+         * @memberof vschema.AutoIncrement
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        AutoIncrement.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.column != null && message.hasOwnProperty("column"))
+                if (!$util.isString(message.column))
+                    return "column: string expected";
+            if (message.sequence != null && message.hasOwnProperty("sequence"))
+                if (!$util.isString(message.sequence))
+                    return "sequence: string expected";
+            return null;
+        };
+
+        /**
+         * Creates an AutoIncrement message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vschema.AutoIncrement
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vschema.AutoIncrement} AutoIncrement
+         */
+        AutoIncrement.fromObject = function fromObject(object) {
+            if (object instanceof $root.vschema.AutoIncrement)
+                return object;
+            var message = new $root.vschema.AutoIncrement();
+            if (object.column != null)
+                message.column = String(object.column);
+            if (object.sequence != null)
+                message.sequence = String(object.sequence);
+            return message;
+        };
+
+        /**
+         * Creates a plain object from an AutoIncrement message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vschema.AutoIncrement
+         * @static
+         * @param {vschema.AutoIncrement} message AutoIncrement
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        AutoIncrement.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.defaults) {
+                object.column = "";
+                object.sequence = "";
+            }
+            if (message.column != null && message.hasOwnProperty("column"))
+                object.column = message.column;
+            if (message.sequence != null && message.hasOwnProperty("sequence"))
+                object.sequence = message.sequence;
+            return object;
+        };
+
+        /**
+         * Converts this AutoIncrement to JSON.
+         * @function toJSON
+         * @memberof vschema.AutoIncrement
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        AutoIncrement.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return AutoIncrement;
+    })();
+
+    vschema.Column = (function() {
+
+        /**
+         * Properties of a Column.
+         * @memberof vschema
+         * @interface IColumn
+         * @property {string|null} [name] Column name
+         * @property {query.Type|null} [type] Column type
+         */
+
+        /**
+         * Constructs a new Column.
+         * @memberof vschema
+         * @classdesc Represents a Column.
+         * @implements IColumn
+         * @constructor
+         * @param {vschema.IColumn=} [properties] Properties to set
+         */
+        function Column(properties) {
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * Column name.
+         * @member {string} name
+         * @memberof vschema.Column
+         * @instance
+         */
+        Column.prototype.name = "";
+
+        /**
+         * Column type.
+         * @member {query.Type} type
+         * @memberof vschema.Column
+         * @instance
+         */
+        Column.prototype.type = 0;
+
+        /**
+         * Creates a new Column instance using the specified properties.
+         * @function create
+         * @memberof vschema.Column
+         * @static
+         * @param {vschema.IColumn=} [properties] Properties to set
+         * @returns {vschema.Column} Column instance
+         */
+        Column.create = function create(properties) {
+            return new Column(properties);
+        };
+
+        /**
+         * Encodes the specified Column message. Does not implicitly {@link vschema.Column.verify|verify} messages.
+         * @function encode
+         * @memberof vschema.Column
+         * @static
+         * @param {vschema.IColumn} message Column message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        Column.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.name != null && Object.hasOwnProperty.call(message, "name"))
+                writer.uint32(/* id 1, wireType 2 =*/10).string(message.name);
+            if (message.type != null && Object.hasOwnProperty.call(message, "type"))
+                writer.uint32(/* id 2, wireType 0 =*/16).int32(message.type);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified Column message, length delimited. Does not implicitly {@link vschema.Column.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vschema.Column
+         * @static
+         * @param {vschema.IColumn} message Column message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        Column.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a Column message from the specified reader or buffer.
+         * @function decode
+         * @memberof vschema.Column
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vschema.Column} Column
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        Column.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vschema.Column();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.name = reader.string();
+                    break;
+                case 2:
+                    message.type = reader.int32();
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a Column message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vschema.Column
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vschema.Column} Column
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        Column.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a Column message.
+         * @function verify
+         * @memberof vschema.Column
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        Column.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.name != null && message.hasOwnProperty("name"))
+                if (!$util.isString(message.name))
+                    return "name: string expected";
+            if (message.type != null && message.hasOwnProperty("type"))
+                switch (message.type) {
+                default:
+                    return "type: enum value expected";
+                case 0:
+                case 257:
+                case 770:
+                case 259:
+                case 772:
+                case 261:
+                case 774:
+                case 263:
+                case 776:
+                case 265:
+                case 778:
+                case 1035:
+                case 1036:
+                case 2061:
+                case 2062:
+                case 2063:
+                case 2064:
+                case 785:
+                case 18:
+                case 6163:
+                case 10260:
+                case 6165:
+                case 10262:
+                case 6167:
+                case 10264:
+                case 2073:
+                case 2074:
+                case 2075:
+                case 28:
+                case 2077:
+                case 2078:
+                case 31:
+                    break;
+                }
+            return null;
+        };
+
+        /**
+         * Creates a Column message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vschema.Column
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vschema.Column} Column
+         */
+        Column.fromObject = function fromObject(object) {
+            if (object instanceof $root.vschema.Column)
+                return object;
+            var message = new $root.vschema.Column();
+            if (object.name != null)
+                message.name = String(object.name);
+            switch (object.type) {
+            case "NULL_TYPE":
+            case 0:
+                message.type = 0;
+                break;
+            case "INT8":
+            case 257:
+                message.type = 257;
+                break;
+            case "UINT8":
+            case 770:
+                message.type = 770;
+                break;
+            case "INT16":
+            case 259:
+                message.type = 259;
+                break;
+            case "UINT16":
+            case 772:
+                message.type = 772;
+                break;
+            case "INT24":
+            case 261:
+                message.type = 261;
+                break;
+            case "UINT24":
+            case 774:
+                message.type = 774;
+                break;
+            case "INT32":
+            case 263:
+                message.type = 263;
+                break;
+            case "UINT32":
+            case 776:
+                message.type = 776;
+                break;
+            case "INT64":
+            case 265:
+                message.type = 265;
+                break;
+            case "UINT64":
+            case 778:
+                message.type = 778;
+                break;
+            case "FLOAT32":
+            case 1035:
+                message.type = 1035;
+                break;
+            case "FLOAT64":
+            case 1036:
+                message.type = 1036;
+                break;
+            case "TIMESTAMP":
+            case 2061:
+                message.type = 2061;
+                break;
+            case "DATE":
+            case 2062:
+                message.type = 2062;
+                break;
+            case "TIME":
+            case 2063:
+                message.type = 2063;
+                break;
+            case "DATETIME":
+            case 2064:
+                message.type = 2064;
+                break;
+            case "YEAR":
+            case 785:
+                message.type = 785;
+                break;
+            case "DECIMAL":
+            case 18:
+                message.type = 18;
+                break;
+            case "TEXT":
+            case 6163:
+                message.type = 6163;
+                break;
+            case "BLOB":
+            case 10260:
+                message.type = 10260;
+                break;
+            case "VARCHAR":
+            case 6165:
+                message.type = 6165;
+                break;
+            case "VARBINARY":
+            case 10262:
+                message.type = 10262;
+                break;
+            case "CHAR":
+            case 6167:
+                message.type = 6167;
+                break;
+            case "BINARY":
+            case 10264:
+                message.type = 10264;
+                break;
+            case "BIT":
+            case 2073:
+                message.type = 2073;
+                break;
+            case "ENUM":
+            case 2074:
+                message.type = 2074;
+                break;
+            case "SET":
+            case 2075:
+                message.type = 2075;
+                break;
+            case "TUPLE":
+            case 28:
+                message.type = 28;
+                break;
+            case "GEOMETRY":
+            case 2077:
+                message.type = 2077;
+                break;
+            case "JSON":
+            case 2078:
+                message.type = 2078;
+                break;
+            case "EXPRESSION":
+            case 31:
+                message.type = 31;
+                break;
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a Column message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vschema.Column
+         * @static
+         * @param {vschema.Column} message Column
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        Column.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.defaults) {
+                object.name = "";
+                object.type = options.enums === String ? "NULL_TYPE" : 0;
+            }
+            if (message.name != null && message.hasOwnProperty("name"))
+                object.name = message.name;
+            if (message.type != null && message.hasOwnProperty("type"))
+                object.type = options.enums === String ? $root.query.Type[message.type] : message.type;
+            return object;
+        };
+
+        /**
+         * Converts this Column to JSON.
+         * @function toJSON
+         * @memberof vschema.Column
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        Column.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return Column;
+    })();
+
+    vschema.SrvVSchema = (function() {
+
+        /**
+         * Properties of a SrvVSchema.
+         * @memberof vschema
+         * @interface ISrvVSchema
+         * @property {Object.<string,vschema.IKeyspace>|null} [keyspaces] SrvVSchema keyspaces
+         * @property {vschema.IRoutingRules|null} [routing_rules] SrvVSchema routing_rules
+         */
+
+        /**
+         * Constructs a new SrvVSchema.
+         * @memberof vschema
+         * @classdesc Represents a SrvVSchema.
+         * @implements ISrvVSchema
+         * @constructor
+         * @param {vschema.ISrvVSchema=} [properties] Properties to set
+         */
+        function SrvVSchema(properties) {
+            this.keyspaces = {};
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * SrvVSchema keyspaces.
+         * @member {Object.<string,vschema.IKeyspace>} keyspaces
+         * @memberof vschema.SrvVSchema
+         * @instance
+         */
+        SrvVSchema.prototype.keyspaces = $util.emptyObject;
+
+        /**
+         * SrvVSchema routing_rules.
+         * @member {vschema.IRoutingRules|null|undefined} routing_rules
+         * @memberof vschema.SrvVSchema
+         * @instance
+         */
+        SrvVSchema.prototype.routing_rules = null;
+
+        /**
+         * Creates a new SrvVSchema instance using the specified properties.
+         * @function create
+         * @memberof vschema.SrvVSchema
+         * @static
+         * @param {vschema.ISrvVSchema=} [properties] Properties to set
+         * @returns {vschema.SrvVSchema} SrvVSchema instance
+         */
+        SrvVSchema.create = function create(properties) {
+            return new SrvVSchema(properties);
+        };
+
+        /**
+         * Encodes the specified SrvVSchema message. Does not implicitly {@link vschema.SrvVSchema.verify|verify} messages.
+         * @function encode
+         * @memberof vschema.SrvVSchema
+         * @static
+         * @param {vschema.ISrvVSchema} message SrvVSchema message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        SrvVSchema.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.keyspaces != null && Object.hasOwnProperty.call(message, "keyspaces"))
+                for (var keys = Object.keys(message.keyspaces), i = 0; i < keys.length; ++i) {
+                    writer.uint32(/* id 1, wireType 2 =*/10).fork().uint32(/* id 1, wireType 2 =*/10).string(keys[i]);
+                    $root.vschema.Keyspace.encode(message.keyspaces[keys[i]], writer.uint32(/* id 2, wireType 2 =*/18).fork()).ldelim().ldelim();
+                }
+            if (message.routing_rules != null && Object.hasOwnProperty.call(message, "routing_rules"))
+                $root.vschema.RoutingRules.encode(message.routing_rules, writer.uint32(/* id 2, wireType 2 =*/18).fork()).ldelim();
+            return writer;
+        };
+
+        /**
+         * Encodes the specified SrvVSchema message, length delimited. Does not implicitly {@link vschema.SrvVSchema.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vschema.SrvVSchema
+         * @static
+         * @param {vschema.ISrvVSchema} message SrvVSchema message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        SrvVSchema.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a SrvVSchema message from the specified reader or buffer.
+         * @function decode
+         * @memberof vschema.SrvVSchema
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vschema.SrvVSchema} SrvVSchema
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        SrvVSchema.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vschema.SrvVSchema(), key, value;
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    if (message.keyspaces === $util.emptyObject)
+                        message.keyspaces = {};
+                    var end2 = reader.uint32() + reader.pos;
+                    key = "";
+                    value = null;
+                    while (reader.pos < end2) {
+                        var tag2 = reader.uint32();
+                        switch (tag2 >>> 3) {
+                        case 1:
+                            key = reader.string();
+                            break;
+                        case 2:
+                            value = $root.vschema.Keyspace.decode(reader, reader.uint32());
+                            break;
+                        default:
+                            reader.skipType(tag2 & 7);
+                            break;
+                        }
+                    }
+                    message.keyspaces[key] = value;
+                    break;
+                case 2:
+                    message.routing_rules = $root.vschema.RoutingRules.decode(reader, reader.uint32());
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a SrvVSchema message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vschema.SrvVSchema
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vschema.SrvVSchema} SrvVSchema
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        SrvVSchema.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a SrvVSchema message.
+         * @function verify
+         * @memberof vschema.SrvVSchema
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        SrvVSchema.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.keyspaces != null && message.hasOwnProperty("keyspaces")) {
+                if (!$util.isObject(message.keyspaces))
+                    return "keyspaces: object expected";
+                var key = Object.keys(message.keyspaces);
+                for (var i = 0; i < key.length; ++i) {
+                    var error = $root.vschema.Keyspace.verify(message.keyspaces[key[i]]);
+                    if (error)
+                        return "keyspaces." + error;
+                }
+            }
+            if (message.routing_rules != null && message.hasOwnProperty("routing_rules")) {
+                var error = $root.vschema.RoutingRules.verify(message.routing_rules);
+                if (error)
+                    return "routing_rules." + error;
+            }
+            return null;
+        };
+
+        /**
+         * Creates a SrvVSchema message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vschema.SrvVSchema
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vschema.SrvVSchema} SrvVSchema
+         */
+        SrvVSchema.fromObject = function fromObject(object) {
+            if (object instanceof $root.vschema.SrvVSchema)
+                return object;
+            var message = new $root.vschema.SrvVSchema();
+            if (object.keyspaces) {
+                if (typeof object.keyspaces !== "object")
+                    throw TypeError(".vschema.SrvVSchema.keyspaces: object expected");
+                message.keyspaces = {};
+                for (var keys = Object.keys(object.keyspaces), i = 0; i < keys.length; ++i) {
+                    if (typeof object.keyspaces[keys[i]] !== "object")
+                        throw TypeError(".vschema.SrvVSchema.keyspaces: object expected");
+                    message.keyspaces[keys[i]] = $root.vschema.Keyspace.fromObject(object.keyspaces[keys[i]]);
+                }
+            }
+            if (object.routing_rules != null) {
+                if (typeof object.routing_rules !== "object")
+                    throw TypeError(".vschema.SrvVSchema.routing_rules: object expected");
+                message.routing_rules = $root.vschema.RoutingRules.fromObject(object.routing_rules);
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a SrvVSchema message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vschema.SrvVSchema
+         * @static
+         * @param {vschema.SrvVSchema} message SrvVSchema
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        SrvVSchema.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.objects || options.defaults)
+                object.keyspaces = {};
+            if (options.defaults)
+                object.routing_rules = null;
+            var keys2;
+            if (message.keyspaces && (keys2 = Object.keys(message.keyspaces)).length) {
+                object.keyspaces = {};
+                for (var j = 0; j < keys2.length; ++j)
+                    object.keyspaces[keys2[j]] = $root.vschema.Keyspace.toObject(message.keyspaces[keys2[j]], options);
+            }
+            if (message.routing_rules != null && message.hasOwnProperty("routing_rules"))
+                object.routing_rules = $root.vschema.RoutingRules.toObject(message.routing_rules, options);
+            return object;
+        };
+
+        /**
+         * Converts this SrvVSchema to JSON.
+         * @function toJSON
+         * @memberof vschema.SrvVSchema
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        SrvVSchema.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return SrvVSchema;
+    })();
+
+    return vschema;
+})();
+
 $root.vtctldata = (function() {
 
     /**
@@ -73343,2495 +76761,6 @@ $root.mysqlctl = (function() {
     })();
 
     return mysqlctl;
-})();
-
-$root.vschema = (function() {
-
-    /**
-     * Namespace vschema.
-     * @exports vschema
-     * @namespace
-     */
-    var vschema = {};
-
-    vschema.RoutingRules = (function() {
-
-        /**
-         * Properties of a RoutingRules.
-         * @memberof vschema
-         * @interface IRoutingRules
-         * @property {Array.<vschema.IRoutingRule>|null} [rules] RoutingRules rules
-         */
-
-        /**
-         * Constructs a new RoutingRules.
-         * @memberof vschema
-         * @classdesc Represents a RoutingRules.
-         * @implements IRoutingRules
-         * @constructor
-         * @param {vschema.IRoutingRules=} [properties] Properties to set
-         */
-        function RoutingRules(properties) {
-            this.rules = [];
-            if (properties)
-                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
-                    if (properties[keys[i]] != null)
-                        this[keys[i]] = properties[keys[i]];
-        }
-
-        /**
-         * RoutingRules rules.
-         * @member {Array.<vschema.IRoutingRule>} rules
-         * @memberof vschema.RoutingRules
-         * @instance
-         */
-        RoutingRules.prototype.rules = $util.emptyArray;
-
-        /**
-         * Creates a new RoutingRules instance using the specified properties.
-         * @function create
-         * @memberof vschema.RoutingRules
-         * @static
-         * @param {vschema.IRoutingRules=} [properties] Properties to set
-         * @returns {vschema.RoutingRules} RoutingRules instance
-         */
-        RoutingRules.create = function create(properties) {
-            return new RoutingRules(properties);
-        };
-
-        /**
-         * Encodes the specified RoutingRules message. Does not implicitly {@link vschema.RoutingRules.verify|verify} messages.
-         * @function encode
-         * @memberof vschema.RoutingRules
-         * @static
-         * @param {vschema.IRoutingRules} message RoutingRules message or plain object to encode
-         * @param {$protobuf.Writer} [writer] Writer to encode to
-         * @returns {$protobuf.Writer} Writer
-         */
-        RoutingRules.encode = function encode(message, writer) {
-            if (!writer)
-                writer = $Writer.create();
-            if (message.rules != null && message.rules.length)
-                for (var i = 0; i < message.rules.length; ++i)
-                    $root.vschema.RoutingRule.encode(message.rules[i], writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
-            return writer;
-        };
-
-        /**
-         * Encodes the specified RoutingRules message, length delimited. Does not implicitly {@link vschema.RoutingRules.verify|verify} messages.
-         * @function encodeDelimited
-         * @memberof vschema.RoutingRules
-         * @static
-         * @param {vschema.IRoutingRules} message RoutingRules message or plain object to encode
-         * @param {$protobuf.Writer} [writer] Writer to encode to
-         * @returns {$protobuf.Writer} Writer
-         */
-        RoutingRules.encodeDelimited = function encodeDelimited(message, writer) {
-            return this.encode(message, writer).ldelim();
-        };
-
-        /**
-         * Decodes a RoutingRules message from the specified reader or buffer.
-         * @function decode
-         * @memberof vschema.RoutingRules
-         * @static
-         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
-         * @param {number} [length] Message length if known beforehand
-         * @returns {vschema.RoutingRules} RoutingRules
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        RoutingRules.decode = function decode(reader, length) {
-            if (!(reader instanceof $Reader))
-                reader = $Reader.create(reader);
-            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vschema.RoutingRules();
-            while (reader.pos < end) {
-                var tag = reader.uint32();
-                switch (tag >>> 3) {
-                case 1:
-                    if (!(message.rules && message.rules.length))
-                        message.rules = [];
-                    message.rules.push($root.vschema.RoutingRule.decode(reader, reader.uint32()));
-                    break;
-                default:
-                    reader.skipType(tag & 7);
-                    break;
-                }
-            }
-            return message;
-        };
-
-        /**
-         * Decodes a RoutingRules message from the specified reader or buffer, length delimited.
-         * @function decodeDelimited
-         * @memberof vschema.RoutingRules
-         * @static
-         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
-         * @returns {vschema.RoutingRules} RoutingRules
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        RoutingRules.decodeDelimited = function decodeDelimited(reader) {
-            if (!(reader instanceof $Reader))
-                reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
-        };
-
-        /**
-         * Verifies a RoutingRules message.
-         * @function verify
-         * @memberof vschema.RoutingRules
-         * @static
-         * @param {Object.<string,*>} message Plain object to verify
-         * @returns {string|null} `null` if valid, otherwise the reason why it is not
-         */
-        RoutingRules.verify = function verify(message) {
-            if (typeof message !== "object" || message === null)
-                return "object expected";
-            if (message.rules != null && message.hasOwnProperty("rules")) {
-                if (!Array.isArray(message.rules))
-                    return "rules: array expected";
-                for (var i = 0; i < message.rules.length; ++i) {
-                    var error = $root.vschema.RoutingRule.verify(message.rules[i]);
-                    if (error)
-                        return "rules." + error;
-                }
-            }
-            return null;
-        };
-
-        /**
-         * Creates a RoutingRules message from a plain object. Also converts values to their respective internal types.
-         * @function fromObject
-         * @memberof vschema.RoutingRules
-         * @static
-         * @param {Object.<string,*>} object Plain object
-         * @returns {vschema.RoutingRules} RoutingRules
-         */
-        RoutingRules.fromObject = function fromObject(object) {
-            if (object instanceof $root.vschema.RoutingRules)
-                return object;
-            var message = new $root.vschema.RoutingRules();
-            if (object.rules) {
-                if (!Array.isArray(object.rules))
-                    throw TypeError(".vschema.RoutingRules.rules: array expected");
-                message.rules = [];
-                for (var i = 0; i < object.rules.length; ++i) {
-                    if (typeof object.rules[i] !== "object")
-                        throw TypeError(".vschema.RoutingRules.rules: object expected");
-                    message.rules[i] = $root.vschema.RoutingRule.fromObject(object.rules[i]);
-                }
-            }
-            return message;
-        };
-
-        /**
-         * Creates a plain object from a RoutingRules message. Also converts values to other types if specified.
-         * @function toObject
-         * @memberof vschema.RoutingRules
-         * @static
-         * @param {vschema.RoutingRules} message RoutingRules
-         * @param {$protobuf.IConversionOptions} [options] Conversion options
-         * @returns {Object.<string,*>} Plain object
-         */
-        RoutingRules.toObject = function toObject(message, options) {
-            if (!options)
-                options = {};
-            var object = {};
-            if (options.arrays || options.defaults)
-                object.rules = [];
-            if (message.rules && message.rules.length) {
-                object.rules = [];
-                for (var j = 0; j < message.rules.length; ++j)
-                    object.rules[j] = $root.vschema.RoutingRule.toObject(message.rules[j], options);
-            }
-            return object;
-        };
-
-        /**
-         * Converts this RoutingRules to JSON.
-         * @function toJSON
-         * @memberof vschema.RoutingRules
-         * @instance
-         * @returns {Object.<string,*>} JSON object
-         */
-        RoutingRules.prototype.toJSON = function toJSON() {
-            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
-        };
-
-        return RoutingRules;
-    })();
-
-    vschema.RoutingRule = (function() {
-
-        /**
-         * Properties of a RoutingRule.
-         * @memberof vschema
-         * @interface IRoutingRule
-         * @property {string|null} [from_table] RoutingRule from_table
-         * @property {Array.<string>|null} [to_tables] RoutingRule to_tables
-         */
-
-        /**
-         * Constructs a new RoutingRule.
-         * @memberof vschema
-         * @classdesc Represents a RoutingRule.
-         * @implements IRoutingRule
-         * @constructor
-         * @param {vschema.IRoutingRule=} [properties] Properties to set
-         */
-        function RoutingRule(properties) {
-            this.to_tables = [];
-            if (properties)
-                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
-                    if (properties[keys[i]] != null)
-                        this[keys[i]] = properties[keys[i]];
-        }
-
-        /**
-         * RoutingRule from_table.
-         * @member {string} from_table
-         * @memberof vschema.RoutingRule
-         * @instance
-         */
-        RoutingRule.prototype.from_table = "";
-
-        /**
-         * RoutingRule to_tables.
-         * @member {Array.<string>} to_tables
-         * @memberof vschema.RoutingRule
-         * @instance
-         */
-        RoutingRule.prototype.to_tables = $util.emptyArray;
-
-        /**
-         * Creates a new RoutingRule instance using the specified properties.
-         * @function create
-         * @memberof vschema.RoutingRule
-         * @static
-         * @param {vschema.IRoutingRule=} [properties] Properties to set
-         * @returns {vschema.RoutingRule} RoutingRule instance
-         */
-        RoutingRule.create = function create(properties) {
-            return new RoutingRule(properties);
-        };
-
-        /**
-         * Encodes the specified RoutingRule message. Does not implicitly {@link vschema.RoutingRule.verify|verify} messages.
-         * @function encode
-         * @memberof vschema.RoutingRule
-         * @static
-         * @param {vschema.IRoutingRule} message RoutingRule message or plain object to encode
-         * @param {$protobuf.Writer} [writer] Writer to encode to
-         * @returns {$protobuf.Writer} Writer
-         */
-        RoutingRule.encode = function encode(message, writer) {
-            if (!writer)
-                writer = $Writer.create();
-            if (message.from_table != null && Object.hasOwnProperty.call(message, "from_table"))
-                writer.uint32(/* id 1, wireType 2 =*/10).string(message.from_table);
-            if (message.to_tables != null && message.to_tables.length)
-                for (var i = 0; i < message.to_tables.length; ++i)
-                    writer.uint32(/* id 2, wireType 2 =*/18).string(message.to_tables[i]);
-            return writer;
-        };
-
-        /**
-         * Encodes the specified RoutingRule message, length delimited. Does not implicitly {@link vschema.RoutingRule.verify|verify} messages.
-         * @function encodeDelimited
-         * @memberof vschema.RoutingRule
-         * @static
-         * @param {vschema.IRoutingRule} message RoutingRule message or plain object to encode
-         * @param {$protobuf.Writer} [writer] Writer to encode to
-         * @returns {$protobuf.Writer} Writer
-         */
-        RoutingRule.encodeDelimited = function encodeDelimited(message, writer) {
-            return this.encode(message, writer).ldelim();
-        };
-
-        /**
-         * Decodes a RoutingRule message from the specified reader or buffer.
-         * @function decode
-         * @memberof vschema.RoutingRule
-         * @static
-         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
-         * @param {number} [length] Message length if known beforehand
-         * @returns {vschema.RoutingRule} RoutingRule
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        RoutingRule.decode = function decode(reader, length) {
-            if (!(reader instanceof $Reader))
-                reader = $Reader.create(reader);
-            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vschema.RoutingRule();
-            while (reader.pos < end) {
-                var tag = reader.uint32();
-                switch (tag >>> 3) {
-                case 1:
-                    message.from_table = reader.string();
-                    break;
-                case 2:
-                    if (!(message.to_tables && message.to_tables.length))
-                        message.to_tables = [];
-                    message.to_tables.push(reader.string());
-                    break;
-                default:
-                    reader.skipType(tag & 7);
-                    break;
-                }
-            }
-            return message;
-        };
-
-        /**
-         * Decodes a RoutingRule message from the specified reader or buffer, length delimited.
-         * @function decodeDelimited
-         * @memberof vschema.RoutingRule
-         * @static
-         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
-         * @returns {vschema.RoutingRule} RoutingRule
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        RoutingRule.decodeDelimited = function decodeDelimited(reader) {
-            if (!(reader instanceof $Reader))
-                reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
-        };
-
-        /**
-         * Verifies a RoutingRule message.
-         * @function verify
-         * @memberof vschema.RoutingRule
-         * @static
-         * @param {Object.<string,*>} message Plain object to verify
-         * @returns {string|null} `null` if valid, otherwise the reason why it is not
-         */
-        RoutingRule.verify = function verify(message) {
-            if (typeof message !== "object" || message === null)
-                return "object expected";
-            if (message.from_table != null && message.hasOwnProperty("from_table"))
-                if (!$util.isString(message.from_table))
-                    return "from_table: string expected";
-            if (message.to_tables != null && message.hasOwnProperty("to_tables")) {
-                if (!Array.isArray(message.to_tables))
-                    return "to_tables: array expected";
-                for (var i = 0; i < message.to_tables.length; ++i)
-                    if (!$util.isString(message.to_tables[i]))
-                        return "to_tables: string[] expected";
-            }
-            return null;
-        };
-
-        /**
-         * Creates a RoutingRule message from a plain object. Also converts values to their respective internal types.
-         * @function fromObject
-         * @memberof vschema.RoutingRule
-         * @static
-         * @param {Object.<string,*>} object Plain object
-         * @returns {vschema.RoutingRule} RoutingRule
-         */
-        RoutingRule.fromObject = function fromObject(object) {
-            if (object instanceof $root.vschema.RoutingRule)
-                return object;
-            var message = new $root.vschema.RoutingRule();
-            if (object.from_table != null)
-                message.from_table = String(object.from_table);
-            if (object.to_tables) {
-                if (!Array.isArray(object.to_tables))
-                    throw TypeError(".vschema.RoutingRule.to_tables: array expected");
-                message.to_tables = [];
-                for (var i = 0; i < object.to_tables.length; ++i)
-                    message.to_tables[i] = String(object.to_tables[i]);
-            }
-            return message;
-        };
-
-        /**
-         * Creates a plain object from a RoutingRule message. Also converts values to other types if specified.
-         * @function toObject
-         * @memberof vschema.RoutingRule
-         * @static
-         * @param {vschema.RoutingRule} message RoutingRule
-         * @param {$protobuf.IConversionOptions} [options] Conversion options
-         * @returns {Object.<string,*>} Plain object
-         */
-        RoutingRule.toObject = function toObject(message, options) {
-            if (!options)
-                options = {};
-            var object = {};
-            if (options.arrays || options.defaults)
-                object.to_tables = [];
-            if (options.defaults)
-                object.from_table = "";
-            if (message.from_table != null && message.hasOwnProperty("from_table"))
-                object.from_table = message.from_table;
-            if (message.to_tables && message.to_tables.length) {
-                object.to_tables = [];
-                for (var j = 0; j < message.to_tables.length; ++j)
-                    object.to_tables[j] = message.to_tables[j];
-            }
-            return object;
-        };
-
-        /**
-         * Converts this RoutingRule to JSON.
-         * @function toJSON
-         * @memberof vschema.RoutingRule
-         * @instance
-         * @returns {Object.<string,*>} JSON object
-         */
-        RoutingRule.prototype.toJSON = function toJSON() {
-            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
-        };
-
-        return RoutingRule;
-    })();
-
-    vschema.Keyspace = (function() {
-
-        /**
-         * Properties of a Keyspace.
-         * @memberof vschema
-         * @interface IKeyspace
-         * @property {boolean|null} [sharded] Keyspace sharded
-         * @property {Object.<string,vschema.IVindex>|null} [vindexes] Keyspace vindexes
-         * @property {Object.<string,vschema.ITable>|null} [tables] Keyspace tables
-         * @property {boolean|null} [require_explicit_routing] Keyspace require_explicit_routing
-         */
-
-        /**
-         * Constructs a new Keyspace.
-         * @memberof vschema
-         * @classdesc Represents a Keyspace.
-         * @implements IKeyspace
-         * @constructor
-         * @param {vschema.IKeyspace=} [properties] Properties to set
-         */
-        function Keyspace(properties) {
-            this.vindexes = {};
-            this.tables = {};
-            if (properties)
-                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
-                    if (properties[keys[i]] != null)
-                        this[keys[i]] = properties[keys[i]];
-        }
-
-        /**
-         * Keyspace sharded.
-         * @member {boolean} sharded
-         * @memberof vschema.Keyspace
-         * @instance
-         */
-        Keyspace.prototype.sharded = false;
-
-        /**
-         * Keyspace vindexes.
-         * @member {Object.<string,vschema.IVindex>} vindexes
-         * @memberof vschema.Keyspace
-         * @instance
-         */
-        Keyspace.prototype.vindexes = $util.emptyObject;
-
-        /**
-         * Keyspace tables.
-         * @member {Object.<string,vschema.ITable>} tables
-         * @memberof vschema.Keyspace
-         * @instance
-         */
-        Keyspace.prototype.tables = $util.emptyObject;
-
-        /**
-         * Keyspace require_explicit_routing.
-         * @member {boolean} require_explicit_routing
-         * @memberof vschema.Keyspace
-         * @instance
-         */
-        Keyspace.prototype.require_explicit_routing = false;
-
-        /**
-         * Creates a new Keyspace instance using the specified properties.
-         * @function create
-         * @memberof vschema.Keyspace
-         * @static
-         * @param {vschema.IKeyspace=} [properties] Properties to set
-         * @returns {vschema.Keyspace} Keyspace instance
-         */
-        Keyspace.create = function create(properties) {
-            return new Keyspace(properties);
-        };
-
-        /**
-         * Encodes the specified Keyspace message. Does not implicitly {@link vschema.Keyspace.verify|verify} messages.
-         * @function encode
-         * @memberof vschema.Keyspace
-         * @static
-         * @param {vschema.IKeyspace} message Keyspace message or plain object to encode
-         * @param {$protobuf.Writer} [writer] Writer to encode to
-         * @returns {$protobuf.Writer} Writer
-         */
-        Keyspace.encode = function encode(message, writer) {
-            if (!writer)
-                writer = $Writer.create();
-            if (message.sharded != null && Object.hasOwnProperty.call(message, "sharded"))
-                writer.uint32(/* id 1, wireType 0 =*/8).bool(message.sharded);
-            if (message.vindexes != null && Object.hasOwnProperty.call(message, "vindexes"))
-                for (var keys = Object.keys(message.vindexes), i = 0; i < keys.length; ++i) {
-                    writer.uint32(/* id 2, wireType 2 =*/18).fork().uint32(/* id 1, wireType 2 =*/10).string(keys[i]);
-                    $root.vschema.Vindex.encode(message.vindexes[keys[i]], writer.uint32(/* id 2, wireType 2 =*/18).fork()).ldelim().ldelim();
-                }
-            if (message.tables != null && Object.hasOwnProperty.call(message, "tables"))
-                for (var keys = Object.keys(message.tables), i = 0; i < keys.length; ++i) {
-                    writer.uint32(/* id 3, wireType 2 =*/26).fork().uint32(/* id 1, wireType 2 =*/10).string(keys[i]);
-                    $root.vschema.Table.encode(message.tables[keys[i]], writer.uint32(/* id 2, wireType 2 =*/18).fork()).ldelim().ldelim();
-                }
-            if (message.require_explicit_routing != null && Object.hasOwnProperty.call(message, "require_explicit_routing"))
-                writer.uint32(/* id 4, wireType 0 =*/32).bool(message.require_explicit_routing);
-            return writer;
-        };
-
-        /**
-         * Encodes the specified Keyspace message, length delimited. Does not implicitly {@link vschema.Keyspace.verify|verify} messages.
-         * @function encodeDelimited
-         * @memberof vschema.Keyspace
-         * @static
-         * @param {vschema.IKeyspace} message Keyspace message or plain object to encode
-         * @param {$protobuf.Writer} [writer] Writer to encode to
-         * @returns {$protobuf.Writer} Writer
-         */
-        Keyspace.encodeDelimited = function encodeDelimited(message, writer) {
-            return this.encode(message, writer).ldelim();
-        };
-
-        /**
-         * Decodes a Keyspace message from the specified reader or buffer.
-         * @function decode
-         * @memberof vschema.Keyspace
-         * @static
-         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
-         * @param {number} [length] Message length if known beforehand
-         * @returns {vschema.Keyspace} Keyspace
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        Keyspace.decode = function decode(reader, length) {
-            if (!(reader instanceof $Reader))
-                reader = $Reader.create(reader);
-            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vschema.Keyspace(), key, value;
-            while (reader.pos < end) {
-                var tag = reader.uint32();
-                switch (tag >>> 3) {
-                case 1:
-                    message.sharded = reader.bool();
-                    break;
-                case 2:
-                    if (message.vindexes === $util.emptyObject)
-                        message.vindexes = {};
-                    var end2 = reader.uint32() + reader.pos;
-                    key = "";
-                    value = null;
-                    while (reader.pos < end2) {
-                        var tag2 = reader.uint32();
-                        switch (tag2 >>> 3) {
-                        case 1:
-                            key = reader.string();
-                            break;
-                        case 2:
-                            value = $root.vschema.Vindex.decode(reader, reader.uint32());
-                            break;
-                        default:
-                            reader.skipType(tag2 & 7);
-                            break;
-                        }
-                    }
-                    message.vindexes[key] = value;
-                    break;
-                case 3:
-                    if (message.tables === $util.emptyObject)
-                        message.tables = {};
-                    var end2 = reader.uint32() + reader.pos;
-                    key = "";
-                    value = null;
-                    while (reader.pos < end2) {
-                        var tag2 = reader.uint32();
-                        switch (tag2 >>> 3) {
-                        case 1:
-                            key = reader.string();
-                            break;
-                        case 2:
-                            value = $root.vschema.Table.decode(reader, reader.uint32());
-                            break;
-                        default:
-                            reader.skipType(tag2 & 7);
-                            break;
-                        }
-                    }
-                    message.tables[key] = value;
-                    break;
-                case 4:
-                    message.require_explicit_routing = reader.bool();
-                    break;
-                default:
-                    reader.skipType(tag & 7);
-                    break;
-                }
-            }
-            return message;
-        };
-
-        /**
-         * Decodes a Keyspace message from the specified reader or buffer, length delimited.
-         * @function decodeDelimited
-         * @memberof vschema.Keyspace
-         * @static
-         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
-         * @returns {vschema.Keyspace} Keyspace
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        Keyspace.decodeDelimited = function decodeDelimited(reader) {
-            if (!(reader instanceof $Reader))
-                reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
-        };
-
-        /**
-         * Verifies a Keyspace message.
-         * @function verify
-         * @memberof vschema.Keyspace
-         * @static
-         * @param {Object.<string,*>} message Plain object to verify
-         * @returns {string|null} `null` if valid, otherwise the reason why it is not
-         */
-        Keyspace.verify = function verify(message) {
-            if (typeof message !== "object" || message === null)
-                return "object expected";
-            if (message.sharded != null && message.hasOwnProperty("sharded"))
-                if (typeof message.sharded !== "boolean")
-                    return "sharded: boolean expected";
-            if (message.vindexes != null && message.hasOwnProperty("vindexes")) {
-                if (!$util.isObject(message.vindexes))
-                    return "vindexes: object expected";
-                var key = Object.keys(message.vindexes);
-                for (var i = 0; i < key.length; ++i) {
-                    var error = $root.vschema.Vindex.verify(message.vindexes[key[i]]);
-                    if (error)
-                        return "vindexes." + error;
-                }
-            }
-            if (message.tables != null && message.hasOwnProperty("tables")) {
-                if (!$util.isObject(message.tables))
-                    return "tables: object expected";
-                var key = Object.keys(message.tables);
-                for (var i = 0; i < key.length; ++i) {
-                    var error = $root.vschema.Table.verify(message.tables[key[i]]);
-                    if (error)
-                        return "tables." + error;
-                }
-            }
-            if (message.require_explicit_routing != null && message.hasOwnProperty("require_explicit_routing"))
-                if (typeof message.require_explicit_routing !== "boolean")
-                    return "require_explicit_routing: boolean expected";
-            return null;
-        };
-
-        /**
-         * Creates a Keyspace message from a plain object. Also converts values to their respective internal types.
-         * @function fromObject
-         * @memberof vschema.Keyspace
-         * @static
-         * @param {Object.<string,*>} object Plain object
-         * @returns {vschema.Keyspace} Keyspace
-         */
-        Keyspace.fromObject = function fromObject(object) {
-            if (object instanceof $root.vschema.Keyspace)
-                return object;
-            var message = new $root.vschema.Keyspace();
-            if (object.sharded != null)
-                message.sharded = Boolean(object.sharded);
-            if (object.vindexes) {
-                if (typeof object.vindexes !== "object")
-                    throw TypeError(".vschema.Keyspace.vindexes: object expected");
-                message.vindexes = {};
-                for (var keys = Object.keys(object.vindexes), i = 0; i < keys.length; ++i) {
-                    if (typeof object.vindexes[keys[i]] !== "object")
-                        throw TypeError(".vschema.Keyspace.vindexes: object expected");
-                    message.vindexes[keys[i]] = $root.vschema.Vindex.fromObject(object.vindexes[keys[i]]);
-                }
-            }
-            if (object.tables) {
-                if (typeof object.tables !== "object")
-                    throw TypeError(".vschema.Keyspace.tables: object expected");
-                message.tables = {};
-                for (var keys = Object.keys(object.tables), i = 0; i < keys.length; ++i) {
-                    if (typeof object.tables[keys[i]] !== "object")
-                        throw TypeError(".vschema.Keyspace.tables: object expected");
-                    message.tables[keys[i]] = $root.vschema.Table.fromObject(object.tables[keys[i]]);
-                }
-            }
-            if (object.require_explicit_routing != null)
-                message.require_explicit_routing = Boolean(object.require_explicit_routing);
-            return message;
-        };
-
-        /**
-         * Creates a plain object from a Keyspace message. Also converts values to other types if specified.
-         * @function toObject
-         * @memberof vschema.Keyspace
-         * @static
-         * @param {vschema.Keyspace} message Keyspace
-         * @param {$protobuf.IConversionOptions} [options] Conversion options
-         * @returns {Object.<string,*>} Plain object
-         */
-        Keyspace.toObject = function toObject(message, options) {
-            if (!options)
-                options = {};
-            var object = {};
-            if (options.objects || options.defaults) {
-                object.vindexes = {};
-                object.tables = {};
-            }
-            if (options.defaults) {
-                object.sharded = false;
-                object.require_explicit_routing = false;
-            }
-            if (message.sharded != null && message.hasOwnProperty("sharded"))
-                object.sharded = message.sharded;
-            var keys2;
-            if (message.vindexes && (keys2 = Object.keys(message.vindexes)).length) {
-                object.vindexes = {};
-                for (var j = 0; j < keys2.length; ++j)
-                    object.vindexes[keys2[j]] = $root.vschema.Vindex.toObject(message.vindexes[keys2[j]], options);
-            }
-            if (message.tables && (keys2 = Object.keys(message.tables)).length) {
-                object.tables = {};
-                for (var j = 0; j < keys2.length; ++j)
-                    object.tables[keys2[j]] = $root.vschema.Table.toObject(message.tables[keys2[j]], options);
-            }
-            if (message.require_explicit_routing != null && message.hasOwnProperty("require_explicit_routing"))
-                object.require_explicit_routing = message.require_explicit_routing;
-            return object;
-        };
-
-        /**
-         * Converts this Keyspace to JSON.
-         * @function toJSON
-         * @memberof vschema.Keyspace
-         * @instance
-         * @returns {Object.<string,*>} JSON object
-         */
-        Keyspace.prototype.toJSON = function toJSON() {
-            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
-        };
-
-        return Keyspace;
-    })();
-
-    vschema.Vindex = (function() {
-
-        /**
-         * Properties of a Vindex.
-         * @memberof vschema
-         * @interface IVindex
-         * @property {string|null} [type] Vindex type
-         * @property {Object.<string,string>|null} [params] Vindex params
-         * @property {string|null} [owner] Vindex owner
-         */
-
-        /**
-         * Constructs a new Vindex.
-         * @memberof vschema
-         * @classdesc Represents a Vindex.
-         * @implements IVindex
-         * @constructor
-         * @param {vschema.IVindex=} [properties] Properties to set
-         */
-        function Vindex(properties) {
-            this.params = {};
-            if (properties)
-                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
-                    if (properties[keys[i]] != null)
-                        this[keys[i]] = properties[keys[i]];
-        }
-
-        /**
-         * Vindex type.
-         * @member {string} type
-         * @memberof vschema.Vindex
-         * @instance
-         */
-        Vindex.prototype.type = "";
-
-        /**
-         * Vindex params.
-         * @member {Object.<string,string>} params
-         * @memberof vschema.Vindex
-         * @instance
-         */
-        Vindex.prototype.params = $util.emptyObject;
-
-        /**
-         * Vindex owner.
-         * @member {string} owner
-         * @memberof vschema.Vindex
-         * @instance
-         */
-        Vindex.prototype.owner = "";
-
-        /**
-         * Creates a new Vindex instance using the specified properties.
-         * @function create
-         * @memberof vschema.Vindex
-         * @static
-         * @param {vschema.IVindex=} [properties] Properties to set
-         * @returns {vschema.Vindex} Vindex instance
-         */
-        Vindex.create = function create(properties) {
-            return new Vindex(properties);
-        };
-
-        /**
-         * Encodes the specified Vindex message. Does not implicitly {@link vschema.Vindex.verify|verify} messages.
-         * @function encode
-         * @memberof vschema.Vindex
-         * @static
-         * @param {vschema.IVindex} message Vindex message or plain object to encode
-         * @param {$protobuf.Writer} [writer] Writer to encode to
-         * @returns {$protobuf.Writer} Writer
-         */
-        Vindex.encode = function encode(message, writer) {
-            if (!writer)
-                writer = $Writer.create();
-            if (message.type != null && Object.hasOwnProperty.call(message, "type"))
-                writer.uint32(/* id 1, wireType 2 =*/10).string(message.type);
-            if (message.params != null && Object.hasOwnProperty.call(message, "params"))
-                for (var keys = Object.keys(message.params), i = 0; i < keys.length; ++i)
-                    writer.uint32(/* id 2, wireType 2 =*/18).fork().uint32(/* id 1, wireType 2 =*/10).string(keys[i]).uint32(/* id 2, wireType 2 =*/18).string(message.params[keys[i]]).ldelim();
-            if (message.owner != null && Object.hasOwnProperty.call(message, "owner"))
-                writer.uint32(/* id 3, wireType 2 =*/26).string(message.owner);
-            return writer;
-        };
-
-        /**
-         * Encodes the specified Vindex message, length delimited. Does not implicitly {@link vschema.Vindex.verify|verify} messages.
-         * @function encodeDelimited
-         * @memberof vschema.Vindex
-         * @static
-         * @param {vschema.IVindex} message Vindex message or plain object to encode
-         * @param {$protobuf.Writer} [writer] Writer to encode to
-         * @returns {$protobuf.Writer} Writer
-         */
-        Vindex.encodeDelimited = function encodeDelimited(message, writer) {
-            return this.encode(message, writer).ldelim();
-        };
-
-        /**
-         * Decodes a Vindex message from the specified reader or buffer.
-         * @function decode
-         * @memberof vschema.Vindex
-         * @static
-         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
-         * @param {number} [length] Message length if known beforehand
-         * @returns {vschema.Vindex} Vindex
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        Vindex.decode = function decode(reader, length) {
-            if (!(reader instanceof $Reader))
-                reader = $Reader.create(reader);
-            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vschema.Vindex(), key, value;
-            while (reader.pos < end) {
-                var tag = reader.uint32();
-                switch (tag >>> 3) {
-                case 1:
-                    message.type = reader.string();
-                    break;
-                case 2:
-                    if (message.params === $util.emptyObject)
-                        message.params = {};
-                    var end2 = reader.uint32() + reader.pos;
-                    key = "";
-                    value = "";
-                    while (reader.pos < end2) {
-                        var tag2 = reader.uint32();
-                        switch (tag2 >>> 3) {
-                        case 1:
-                            key = reader.string();
-                            break;
-                        case 2:
-                            value = reader.string();
-                            break;
-                        default:
-                            reader.skipType(tag2 & 7);
-                            break;
-                        }
-                    }
-                    message.params[key] = value;
-                    break;
-                case 3:
-                    message.owner = reader.string();
-                    break;
-                default:
-                    reader.skipType(tag & 7);
-                    break;
-                }
-            }
-            return message;
-        };
-
-        /**
-         * Decodes a Vindex message from the specified reader or buffer, length delimited.
-         * @function decodeDelimited
-         * @memberof vschema.Vindex
-         * @static
-         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
-         * @returns {vschema.Vindex} Vindex
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        Vindex.decodeDelimited = function decodeDelimited(reader) {
-            if (!(reader instanceof $Reader))
-                reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
-        };
-
-        /**
-         * Verifies a Vindex message.
-         * @function verify
-         * @memberof vschema.Vindex
-         * @static
-         * @param {Object.<string,*>} message Plain object to verify
-         * @returns {string|null} `null` if valid, otherwise the reason why it is not
-         */
-        Vindex.verify = function verify(message) {
-            if (typeof message !== "object" || message === null)
-                return "object expected";
-            if (message.type != null && message.hasOwnProperty("type"))
-                if (!$util.isString(message.type))
-                    return "type: string expected";
-            if (message.params != null && message.hasOwnProperty("params")) {
-                if (!$util.isObject(message.params))
-                    return "params: object expected";
-                var key = Object.keys(message.params);
-                for (var i = 0; i < key.length; ++i)
-                    if (!$util.isString(message.params[key[i]]))
-                        return "params: string{k:string} expected";
-            }
-            if (message.owner != null && message.hasOwnProperty("owner"))
-                if (!$util.isString(message.owner))
-                    return "owner: string expected";
-            return null;
-        };
-
-        /**
-         * Creates a Vindex message from a plain object. Also converts values to their respective internal types.
-         * @function fromObject
-         * @memberof vschema.Vindex
-         * @static
-         * @param {Object.<string,*>} object Plain object
-         * @returns {vschema.Vindex} Vindex
-         */
-        Vindex.fromObject = function fromObject(object) {
-            if (object instanceof $root.vschema.Vindex)
-                return object;
-            var message = new $root.vschema.Vindex();
-            if (object.type != null)
-                message.type = String(object.type);
-            if (object.params) {
-                if (typeof object.params !== "object")
-                    throw TypeError(".vschema.Vindex.params: object expected");
-                message.params = {};
-                for (var keys = Object.keys(object.params), i = 0; i < keys.length; ++i)
-                    message.params[keys[i]] = String(object.params[keys[i]]);
-            }
-            if (object.owner != null)
-                message.owner = String(object.owner);
-            return message;
-        };
-
-        /**
-         * Creates a plain object from a Vindex message. Also converts values to other types if specified.
-         * @function toObject
-         * @memberof vschema.Vindex
-         * @static
-         * @param {vschema.Vindex} message Vindex
-         * @param {$protobuf.IConversionOptions} [options] Conversion options
-         * @returns {Object.<string,*>} Plain object
-         */
-        Vindex.toObject = function toObject(message, options) {
-            if (!options)
-                options = {};
-            var object = {};
-            if (options.objects || options.defaults)
-                object.params = {};
-            if (options.defaults) {
-                object.type = "";
-                object.owner = "";
-            }
-            if (message.type != null && message.hasOwnProperty("type"))
-                object.type = message.type;
-            var keys2;
-            if (message.params && (keys2 = Object.keys(message.params)).length) {
-                object.params = {};
-                for (var j = 0; j < keys2.length; ++j)
-                    object.params[keys2[j]] = message.params[keys2[j]];
-            }
-            if (message.owner != null && message.hasOwnProperty("owner"))
-                object.owner = message.owner;
-            return object;
-        };
-
-        /**
-         * Converts this Vindex to JSON.
-         * @function toJSON
-         * @memberof vschema.Vindex
-         * @instance
-         * @returns {Object.<string,*>} JSON object
-         */
-        Vindex.prototype.toJSON = function toJSON() {
-            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
-        };
-
-        return Vindex;
-    })();
-
-    vschema.Table = (function() {
-
-        /**
-         * Properties of a Table.
-         * @memberof vschema
-         * @interface ITable
-         * @property {string|null} [type] Table type
-         * @property {Array.<vschema.IColumnVindex>|null} [column_vindexes] Table column_vindexes
-         * @property {vschema.IAutoIncrement|null} [auto_increment] Table auto_increment
-         * @property {Array.<vschema.IColumn>|null} [columns] Table columns
-         * @property {string|null} [pinned] Table pinned
-         * @property {boolean|null} [column_list_authoritative] Table column_list_authoritative
-         */
-
-        /**
-         * Constructs a new Table.
-         * @memberof vschema
-         * @classdesc Represents a Table.
-         * @implements ITable
-         * @constructor
-         * @param {vschema.ITable=} [properties] Properties to set
-         */
-        function Table(properties) {
-            this.column_vindexes = [];
-            this.columns = [];
-            if (properties)
-                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
-                    if (properties[keys[i]] != null)
-                        this[keys[i]] = properties[keys[i]];
-        }
-
-        /**
-         * Table type.
-         * @member {string} type
-         * @memberof vschema.Table
-         * @instance
-         */
-        Table.prototype.type = "";
-
-        /**
-         * Table column_vindexes.
-         * @member {Array.<vschema.IColumnVindex>} column_vindexes
-         * @memberof vschema.Table
-         * @instance
-         */
-        Table.prototype.column_vindexes = $util.emptyArray;
-
-        /**
-         * Table auto_increment.
-         * @member {vschema.IAutoIncrement|null|undefined} auto_increment
-         * @memberof vschema.Table
-         * @instance
-         */
-        Table.prototype.auto_increment = null;
-
-        /**
-         * Table columns.
-         * @member {Array.<vschema.IColumn>} columns
-         * @memberof vschema.Table
-         * @instance
-         */
-        Table.prototype.columns = $util.emptyArray;
-
-        /**
-         * Table pinned.
-         * @member {string} pinned
-         * @memberof vschema.Table
-         * @instance
-         */
-        Table.prototype.pinned = "";
-
-        /**
-         * Table column_list_authoritative.
-         * @member {boolean} column_list_authoritative
-         * @memberof vschema.Table
-         * @instance
-         */
-        Table.prototype.column_list_authoritative = false;
-
-        /**
-         * Creates a new Table instance using the specified properties.
-         * @function create
-         * @memberof vschema.Table
-         * @static
-         * @param {vschema.ITable=} [properties] Properties to set
-         * @returns {vschema.Table} Table instance
-         */
-        Table.create = function create(properties) {
-            return new Table(properties);
-        };
-
-        /**
-         * Encodes the specified Table message. Does not implicitly {@link vschema.Table.verify|verify} messages.
-         * @function encode
-         * @memberof vschema.Table
-         * @static
-         * @param {vschema.ITable} message Table message or plain object to encode
-         * @param {$protobuf.Writer} [writer] Writer to encode to
-         * @returns {$protobuf.Writer} Writer
-         */
-        Table.encode = function encode(message, writer) {
-            if (!writer)
-                writer = $Writer.create();
-            if (message.type != null && Object.hasOwnProperty.call(message, "type"))
-                writer.uint32(/* id 1, wireType 2 =*/10).string(message.type);
-            if (message.column_vindexes != null && message.column_vindexes.length)
-                for (var i = 0; i < message.column_vindexes.length; ++i)
-                    $root.vschema.ColumnVindex.encode(message.column_vindexes[i], writer.uint32(/* id 2, wireType 2 =*/18).fork()).ldelim();
-            if (message.auto_increment != null && Object.hasOwnProperty.call(message, "auto_increment"))
-                $root.vschema.AutoIncrement.encode(message.auto_increment, writer.uint32(/* id 3, wireType 2 =*/26).fork()).ldelim();
-            if (message.columns != null && message.columns.length)
-                for (var i = 0; i < message.columns.length; ++i)
-                    $root.vschema.Column.encode(message.columns[i], writer.uint32(/* id 4, wireType 2 =*/34).fork()).ldelim();
-            if (message.pinned != null && Object.hasOwnProperty.call(message, "pinned"))
-                writer.uint32(/* id 5, wireType 2 =*/42).string(message.pinned);
-            if (message.column_list_authoritative != null && Object.hasOwnProperty.call(message, "column_list_authoritative"))
-                writer.uint32(/* id 6, wireType 0 =*/48).bool(message.column_list_authoritative);
-            return writer;
-        };
-
-        /**
-         * Encodes the specified Table message, length delimited. Does not implicitly {@link vschema.Table.verify|verify} messages.
-         * @function encodeDelimited
-         * @memberof vschema.Table
-         * @static
-         * @param {vschema.ITable} message Table message or plain object to encode
-         * @param {$protobuf.Writer} [writer] Writer to encode to
-         * @returns {$protobuf.Writer} Writer
-         */
-        Table.encodeDelimited = function encodeDelimited(message, writer) {
-            return this.encode(message, writer).ldelim();
-        };
-
-        /**
-         * Decodes a Table message from the specified reader or buffer.
-         * @function decode
-         * @memberof vschema.Table
-         * @static
-         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
-         * @param {number} [length] Message length if known beforehand
-         * @returns {vschema.Table} Table
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        Table.decode = function decode(reader, length) {
-            if (!(reader instanceof $Reader))
-                reader = $Reader.create(reader);
-            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vschema.Table();
-            while (reader.pos < end) {
-                var tag = reader.uint32();
-                switch (tag >>> 3) {
-                case 1:
-                    message.type = reader.string();
-                    break;
-                case 2:
-                    if (!(message.column_vindexes && message.column_vindexes.length))
-                        message.column_vindexes = [];
-                    message.column_vindexes.push($root.vschema.ColumnVindex.decode(reader, reader.uint32()));
-                    break;
-                case 3:
-                    message.auto_increment = $root.vschema.AutoIncrement.decode(reader, reader.uint32());
-                    break;
-                case 4:
-                    if (!(message.columns && message.columns.length))
-                        message.columns = [];
-                    message.columns.push($root.vschema.Column.decode(reader, reader.uint32()));
-                    break;
-                case 5:
-                    message.pinned = reader.string();
-                    break;
-                case 6:
-                    message.column_list_authoritative = reader.bool();
-                    break;
-                default:
-                    reader.skipType(tag & 7);
-                    break;
-                }
-            }
-            return message;
-        };
-
-        /**
-         * Decodes a Table message from the specified reader or buffer, length delimited.
-         * @function decodeDelimited
-         * @memberof vschema.Table
-         * @static
-         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
-         * @returns {vschema.Table} Table
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        Table.decodeDelimited = function decodeDelimited(reader) {
-            if (!(reader instanceof $Reader))
-                reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
-        };
-
-        /**
-         * Verifies a Table message.
-         * @function verify
-         * @memberof vschema.Table
-         * @static
-         * @param {Object.<string,*>} message Plain object to verify
-         * @returns {string|null} `null` if valid, otherwise the reason why it is not
-         */
-        Table.verify = function verify(message) {
-            if (typeof message !== "object" || message === null)
-                return "object expected";
-            if (message.type != null && message.hasOwnProperty("type"))
-                if (!$util.isString(message.type))
-                    return "type: string expected";
-            if (message.column_vindexes != null && message.hasOwnProperty("column_vindexes")) {
-                if (!Array.isArray(message.column_vindexes))
-                    return "column_vindexes: array expected";
-                for (var i = 0; i < message.column_vindexes.length; ++i) {
-                    var error = $root.vschema.ColumnVindex.verify(message.column_vindexes[i]);
-                    if (error)
-                        return "column_vindexes." + error;
-                }
-            }
-            if (message.auto_increment != null && message.hasOwnProperty("auto_increment")) {
-                var error = $root.vschema.AutoIncrement.verify(message.auto_increment);
-                if (error)
-                    return "auto_increment." + error;
-            }
-            if (message.columns != null && message.hasOwnProperty("columns")) {
-                if (!Array.isArray(message.columns))
-                    return "columns: array expected";
-                for (var i = 0; i < message.columns.length; ++i) {
-                    var error = $root.vschema.Column.verify(message.columns[i]);
-                    if (error)
-                        return "columns." + error;
-                }
-            }
-            if (message.pinned != null && message.hasOwnProperty("pinned"))
-                if (!$util.isString(message.pinned))
-                    return "pinned: string expected";
-            if (message.column_list_authoritative != null && message.hasOwnProperty("column_list_authoritative"))
-                if (typeof message.column_list_authoritative !== "boolean")
-                    return "column_list_authoritative: boolean expected";
-            return null;
-        };
-
-        /**
-         * Creates a Table message from a plain object. Also converts values to their respective internal types.
-         * @function fromObject
-         * @memberof vschema.Table
-         * @static
-         * @param {Object.<string,*>} object Plain object
-         * @returns {vschema.Table} Table
-         */
-        Table.fromObject = function fromObject(object) {
-            if (object instanceof $root.vschema.Table)
-                return object;
-            var message = new $root.vschema.Table();
-            if (object.type != null)
-                message.type = String(object.type);
-            if (object.column_vindexes) {
-                if (!Array.isArray(object.column_vindexes))
-                    throw TypeError(".vschema.Table.column_vindexes: array expected");
-                message.column_vindexes = [];
-                for (var i = 0; i < object.column_vindexes.length; ++i) {
-                    if (typeof object.column_vindexes[i] !== "object")
-                        throw TypeError(".vschema.Table.column_vindexes: object expected");
-                    message.column_vindexes[i] = $root.vschema.ColumnVindex.fromObject(object.column_vindexes[i]);
-                }
-            }
-            if (object.auto_increment != null) {
-                if (typeof object.auto_increment !== "object")
-                    throw TypeError(".vschema.Table.auto_increment: object expected");
-                message.auto_increment = $root.vschema.AutoIncrement.fromObject(object.auto_increment);
-            }
-            if (object.columns) {
-                if (!Array.isArray(object.columns))
-                    throw TypeError(".vschema.Table.columns: array expected");
-                message.columns = [];
-                for (var i = 0; i < object.columns.length; ++i) {
-                    if (typeof object.columns[i] !== "object")
-                        throw TypeError(".vschema.Table.columns: object expected");
-                    message.columns[i] = $root.vschema.Column.fromObject(object.columns[i]);
-                }
-            }
-            if (object.pinned != null)
-                message.pinned = String(object.pinned);
-            if (object.column_list_authoritative != null)
-                message.column_list_authoritative = Boolean(object.column_list_authoritative);
-            return message;
-        };
-
-        /**
-         * Creates a plain object from a Table message. Also converts values to other types if specified.
-         * @function toObject
-         * @memberof vschema.Table
-         * @static
-         * @param {vschema.Table} message Table
-         * @param {$protobuf.IConversionOptions} [options] Conversion options
-         * @returns {Object.<string,*>} Plain object
-         */
-        Table.toObject = function toObject(message, options) {
-            if (!options)
-                options = {};
-            var object = {};
-            if (options.arrays || options.defaults) {
-                object.column_vindexes = [];
-                object.columns = [];
-            }
-            if (options.defaults) {
-                object.type = "";
-                object.auto_increment = null;
-                object.pinned = "";
-                object.column_list_authoritative = false;
-            }
-            if (message.type != null && message.hasOwnProperty("type"))
-                object.type = message.type;
-            if (message.column_vindexes && message.column_vindexes.length) {
-                object.column_vindexes = [];
-                for (var j = 0; j < message.column_vindexes.length; ++j)
-                    object.column_vindexes[j] = $root.vschema.ColumnVindex.toObject(message.column_vindexes[j], options);
-            }
-            if (message.auto_increment != null && message.hasOwnProperty("auto_increment"))
-                object.auto_increment = $root.vschema.AutoIncrement.toObject(message.auto_increment, options);
-            if (message.columns && message.columns.length) {
-                object.columns = [];
-                for (var j = 0; j < message.columns.length; ++j)
-                    object.columns[j] = $root.vschema.Column.toObject(message.columns[j], options);
-            }
-            if (message.pinned != null && message.hasOwnProperty("pinned"))
-                object.pinned = message.pinned;
-            if (message.column_list_authoritative != null && message.hasOwnProperty("column_list_authoritative"))
-                object.column_list_authoritative = message.column_list_authoritative;
-            return object;
-        };
-
-        /**
-         * Converts this Table to JSON.
-         * @function toJSON
-         * @memberof vschema.Table
-         * @instance
-         * @returns {Object.<string,*>} JSON object
-         */
-        Table.prototype.toJSON = function toJSON() {
-            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
-        };
-
-        return Table;
-    })();
-
-    vschema.ColumnVindex = (function() {
-
-        /**
-         * Properties of a ColumnVindex.
-         * @memberof vschema
-         * @interface IColumnVindex
-         * @property {string|null} [column] ColumnVindex column
-         * @property {string|null} [name] ColumnVindex name
-         * @property {Array.<string>|null} [columns] ColumnVindex columns
-         */
-
-        /**
-         * Constructs a new ColumnVindex.
-         * @memberof vschema
-         * @classdesc Represents a ColumnVindex.
-         * @implements IColumnVindex
-         * @constructor
-         * @param {vschema.IColumnVindex=} [properties] Properties to set
-         */
-        function ColumnVindex(properties) {
-            this.columns = [];
-            if (properties)
-                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
-                    if (properties[keys[i]] != null)
-                        this[keys[i]] = properties[keys[i]];
-        }
-
-        /**
-         * ColumnVindex column.
-         * @member {string} column
-         * @memberof vschema.ColumnVindex
-         * @instance
-         */
-        ColumnVindex.prototype.column = "";
-
-        /**
-         * ColumnVindex name.
-         * @member {string} name
-         * @memberof vschema.ColumnVindex
-         * @instance
-         */
-        ColumnVindex.prototype.name = "";
-
-        /**
-         * ColumnVindex columns.
-         * @member {Array.<string>} columns
-         * @memberof vschema.ColumnVindex
-         * @instance
-         */
-        ColumnVindex.prototype.columns = $util.emptyArray;
-
-        /**
-         * Creates a new ColumnVindex instance using the specified properties.
-         * @function create
-         * @memberof vschema.ColumnVindex
-         * @static
-         * @param {vschema.IColumnVindex=} [properties] Properties to set
-         * @returns {vschema.ColumnVindex} ColumnVindex instance
-         */
-        ColumnVindex.create = function create(properties) {
-            return new ColumnVindex(properties);
-        };
-
-        /**
-         * Encodes the specified ColumnVindex message. Does not implicitly {@link vschema.ColumnVindex.verify|verify} messages.
-         * @function encode
-         * @memberof vschema.ColumnVindex
-         * @static
-         * @param {vschema.IColumnVindex} message ColumnVindex message or plain object to encode
-         * @param {$protobuf.Writer} [writer] Writer to encode to
-         * @returns {$protobuf.Writer} Writer
-         */
-        ColumnVindex.encode = function encode(message, writer) {
-            if (!writer)
-                writer = $Writer.create();
-            if (message.column != null && Object.hasOwnProperty.call(message, "column"))
-                writer.uint32(/* id 1, wireType 2 =*/10).string(message.column);
-            if (message.name != null && Object.hasOwnProperty.call(message, "name"))
-                writer.uint32(/* id 2, wireType 2 =*/18).string(message.name);
-            if (message.columns != null && message.columns.length)
-                for (var i = 0; i < message.columns.length; ++i)
-                    writer.uint32(/* id 3, wireType 2 =*/26).string(message.columns[i]);
-            return writer;
-        };
-
-        /**
-         * Encodes the specified ColumnVindex message, length delimited. Does not implicitly {@link vschema.ColumnVindex.verify|verify} messages.
-         * @function encodeDelimited
-         * @memberof vschema.ColumnVindex
-         * @static
-         * @param {vschema.IColumnVindex} message ColumnVindex message or plain object to encode
-         * @param {$protobuf.Writer} [writer] Writer to encode to
-         * @returns {$protobuf.Writer} Writer
-         */
-        ColumnVindex.encodeDelimited = function encodeDelimited(message, writer) {
-            return this.encode(message, writer).ldelim();
-        };
-
-        /**
-         * Decodes a ColumnVindex message from the specified reader or buffer.
-         * @function decode
-         * @memberof vschema.ColumnVindex
-         * @static
-         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
-         * @param {number} [length] Message length if known beforehand
-         * @returns {vschema.ColumnVindex} ColumnVindex
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        ColumnVindex.decode = function decode(reader, length) {
-            if (!(reader instanceof $Reader))
-                reader = $Reader.create(reader);
-            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vschema.ColumnVindex();
-            while (reader.pos < end) {
-                var tag = reader.uint32();
-                switch (tag >>> 3) {
-                case 1:
-                    message.column = reader.string();
-                    break;
-                case 2:
-                    message.name = reader.string();
-                    break;
-                case 3:
-                    if (!(message.columns && message.columns.length))
-                        message.columns = [];
-                    message.columns.push(reader.string());
-                    break;
-                default:
-                    reader.skipType(tag & 7);
-                    break;
-                }
-            }
-            return message;
-        };
-
-        /**
-         * Decodes a ColumnVindex message from the specified reader or buffer, length delimited.
-         * @function decodeDelimited
-         * @memberof vschema.ColumnVindex
-         * @static
-         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
-         * @returns {vschema.ColumnVindex} ColumnVindex
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        ColumnVindex.decodeDelimited = function decodeDelimited(reader) {
-            if (!(reader instanceof $Reader))
-                reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
-        };
-
-        /**
-         * Verifies a ColumnVindex message.
-         * @function verify
-         * @memberof vschema.ColumnVindex
-         * @static
-         * @param {Object.<string,*>} message Plain object to verify
-         * @returns {string|null} `null` if valid, otherwise the reason why it is not
-         */
-        ColumnVindex.verify = function verify(message) {
-            if (typeof message !== "object" || message === null)
-                return "object expected";
-            if (message.column != null && message.hasOwnProperty("column"))
-                if (!$util.isString(message.column))
-                    return "column: string expected";
-            if (message.name != null && message.hasOwnProperty("name"))
-                if (!$util.isString(message.name))
-                    return "name: string expected";
-            if (message.columns != null && message.hasOwnProperty("columns")) {
-                if (!Array.isArray(message.columns))
-                    return "columns: array expected";
-                for (var i = 0; i < message.columns.length; ++i)
-                    if (!$util.isString(message.columns[i]))
-                        return "columns: string[] expected";
-            }
-            return null;
-        };
-
-        /**
-         * Creates a ColumnVindex message from a plain object. Also converts values to their respective internal types.
-         * @function fromObject
-         * @memberof vschema.ColumnVindex
-         * @static
-         * @param {Object.<string,*>} object Plain object
-         * @returns {vschema.ColumnVindex} ColumnVindex
-         */
-        ColumnVindex.fromObject = function fromObject(object) {
-            if (object instanceof $root.vschema.ColumnVindex)
-                return object;
-            var message = new $root.vschema.ColumnVindex();
-            if (object.column != null)
-                message.column = String(object.column);
-            if (object.name != null)
-                message.name = String(object.name);
-            if (object.columns) {
-                if (!Array.isArray(object.columns))
-                    throw TypeError(".vschema.ColumnVindex.columns: array expected");
-                message.columns = [];
-                for (var i = 0; i < object.columns.length; ++i)
-                    message.columns[i] = String(object.columns[i]);
-            }
-            return message;
-        };
-
-        /**
-         * Creates a plain object from a ColumnVindex message. Also converts values to other types if specified.
-         * @function toObject
-         * @memberof vschema.ColumnVindex
-         * @static
-         * @param {vschema.ColumnVindex} message ColumnVindex
-         * @param {$protobuf.IConversionOptions} [options] Conversion options
-         * @returns {Object.<string,*>} Plain object
-         */
-        ColumnVindex.toObject = function toObject(message, options) {
-            if (!options)
-                options = {};
-            var object = {};
-            if (options.arrays || options.defaults)
-                object.columns = [];
-            if (options.defaults) {
-                object.column = "";
-                object.name = "";
-            }
-            if (message.column != null && message.hasOwnProperty("column"))
-                object.column = message.column;
-            if (message.name != null && message.hasOwnProperty("name"))
-                object.name = message.name;
-            if (message.columns && message.columns.length) {
-                object.columns = [];
-                for (var j = 0; j < message.columns.length; ++j)
-                    object.columns[j] = message.columns[j];
-            }
-            return object;
-        };
-
-        /**
-         * Converts this ColumnVindex to JSON.
-         * @function toJSON
-         * @memberof vschema.ColumnVindex
-         * @instance
-         * @returns {Object.<string,*>} JSON object
-         */
-        ColumnVindex.prototype.toJSON = function toJSON() {
-            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
-        };
-
-        return ColumnVindex;
-    })();
-
-    vschema.AutoIncrement = (function() {
-
-        /**
-         * Properties of an AutoIncrement.
-         * @memberof vschema
-         * @interface IAutoIncrement
-         * @property {string|null} [column] AutoIncrement column
-         * @property {string|null} [sequence] AutoIncrement sequence
-         */
-
-        /**
-         * Constructs a new AutoIncrement.
-         * @memberof vschema
-         * @classdesc Represents an AutoIncrement.
-         * @implements IAutoIncrement
-         * @constructor
-         * @param {vschema.IAutoIncrement=} [properties] Properties to set
-         */
-        function AutoIncrement(properties) {
-            if (properties)
-                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
-                    if (properties[keys[i]] != null)
-                        this[keys[i]] = properties[keys[i]];
-        }
-
-        /**
-         * AutoIncrement column.
-         * @member {string} column
-         * @memberof vschema.AutoIncrement
-         * @instance
-         */
-        AutoIncrement.prototype.column = "";
-
-        /**
-         * AutoIncrement sequence.
-         * @member {string} sequence
-         * @memberof vschema.AutoIncrement
-         * @instance
-         */
-        AutoIncrement.prototype.sequence = "";
-
-        /**
-         * Creates a new AutoIncrement instance using the specified properties.
-         * @function create
-         * @memberof vschema.AutoIncrement
-         * @static
-         * @param {vschema.IAutoIncrement=} [properties] Properties to set
-         * @returns {vschema.AutoIncrement} AutoIncrement instance
-         */
-        AutoIncrement.create = function create(properties) {
-            return new AutoIncrement(properties);
-        };
-
-        /**
-         * Encodes the specified AutoIncrement message. Does not implicitly {@link vschema.AutoIncrement.verify|verify} messages.
-         * @function encode
-         * @memberof vschema.AutoIncrement
-         * @static
-         * @param {vschema.IAutoIncrement} message AutoIncrement message or plain object to encode
-         * @param {$protobuf.Writer} [writer] Writer to encode to
-         * @returns {$protobuf.Writer} Writer
-         */
-        AutoIncrement.encode = function encode(message, writer) {
-            if (!writer)
-                writer = $Writer.create();
-            if (message.column != null && Object.hasOwnProperty.call(message, "column"))
-                writer.uint32(/* id 1, wireType 2 =*/10).string(message.column);
-            if (message.sequence != null && Object.hasOwnProperty.call(message, "sequence"))
-                writer.uint32(/* id 2, wireType 2 =*/18).string(message.sequence);
-            return writer;
-        };
-
-        /**
-         * Encodes the specified AutoIncrement message, length delimited. Does not implicitly {@link vschema.AutoIncrement.verify|verify} messages.
-         * @function encodeDelimited
-         * @memberof vschema.AutoIncrement
-         * @static
-         * @param {vschema.IAutoIncrement} message AutoIncrement message or plain object to encode
-         * @param {$protobuf.Writer} [writer] Writer to encode to
-         * @returns {$protobuf.Writer} Writer
-         */
-        AutoIncrement.encodeDelimited = function encodeDelimited(message, writer) {
-            return this.encode(message, writer).ldelim();
-        };
-
-        /**
-         * Decodes an AutoIncrement message from the specified reader or buffer.
-         * @function decode
-         * @memberof vschema.AutoIncrement
-         * @static
-         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
-         * @param {number} [length] Message length if known beforehand
-         * @returns {vschema.AutoIncrement} AutoIncrement
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        AutoIncrement.decode = function decode(reader, length) {
-            if (!(reader instanceof $Reader))
-                reader = $Reader.create(reader);
-            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vschema.AutoIncrement();
-            while (reader.pos < end) {
-                var tag = reader.uint32();
-                switch (tag >>> 3) {
-                case 1:
-                    message.column = reader.string();
-                    break;
-                case 2:
-                    message.sequence = reader.string();
-                    break;
-                default:
-                    reader.skipType(tag & 7);
-                    break;
-                }
-            }
-            return message;
-        };
-
-        /**
-         * Decodes an AutoIncrement message from the specified reader or buffer, length delimited.
-         * @function decodeDelimited
-         * @memberof vschema.AutoIncrement
-         * @static
-         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
-         * @returns {vschema.AutoIncrement} AutoIncrement
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        AutoIncrement.decodeDelimited = function decodeDelimited(reader) {
-            if (!(reader instanceof $Reader))
-                reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
-        };
-
-        /**
-         * Verifies an AutoIncrement message.
-         * @function verify
-         * @memberof vschema.AutoIncrement
-         * @static
-         * @param {Object.<string,*>} message Plain object to verify
-         * @returns {string|null} `null` if valid, otherwise the reason why it is not
-         */
-        AutoIncrement.verify = function verify(message) {
-            if (typeof message !== "object" || message === null)
-                return "object expected";
-            if (message.column != null && message.hasOwnProperty("column"))
-                if (!$util.isString(message.column))
-                    return "column: string expected";
-            if (message.sequence != null && message.hasOwnProperty("sequence"))
-                if (!$util.isString(message.sequence))
-                    return "sequence: string expected";
-            return null;
-        };
-
-        /**
-         * Creates an AutoIncrement message from a plain object. Also converts values to their respective internal types.
-         * @function fromObject
-         * @memberof vschema.AutoIncrement
-         * @static
-         * @param {Object.<string,*>} object Plain object
-         * @returns {vschema.AutoIncrement} AutoIncrement
-         */
-        AutoIncrement.fromObject = function fromObject(object) {
-            if (object instanceof $root.vschema.AutoIncrement)
-                return object;
-            var message = new $root.vschema.AutoIncrement();
-            if (object.column != null)
-                message.column = String(object.column);
-            if (object.sequence != null)
-                message.sequence = String(object.sequence);
-            return message;
-        };
-
-        /**
-         * Creates a plain object from an AutoIncrement message. Also converts values to other types if specified.
-         * @function toObject
-         * @memberof vschema.AutoIncrement
-         * @static
-         * @param {vschema.AutoIncrement} message AutoIncrement
-         * @param {$protobuf.IConversionOptions} [options] Conversion options
-         * @returns {Object.<string,*>} Plain object
-         */
-        AutoIncrement.toObject = function toObject(message, options) {
-            if (!options)
-                options = {};
-            var object = {};
-            if (options.defaults) {
-                object.column = "";
-                object.sequence = "";
-            }
-            if (message.column != null && message.hasOwnProperty("column"))
-                object.column = message.column;
-            if (message.sequence != null && message.hasOwnProperty("sequence"))
-                object.sequence = message.sequence;
-            return object;
-        };
-
-        /**
-         * Converts this AutoIncrement to JSON.
-         * @function toJSON
-         * @memberof vschema.AutoIncrement
-         * @instance
-         * @returns {Object.<string,*>} JSON object
-         */
-        AutoIncrement.prototype.toJSON = function toJSON() {
-            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
-        };
-
-        return AutoIncrement;
-    })();
-
-    vschema.Column = (function() {
-
-        /**
-         * Properties of a Column.
-         * @memberof vschema
-         * @interface IColumn
-         * @property {string|null} [name] Column name
-         * @property {query.Type|null} [type] Column type
-         */
-
-        /**
-         * Constructs a new Column.
-         * @memberof vschema
-         * @classdesc Represents a Column.
-         * @implements IColumn
-         * @constructor
-         * @param {vschema.IColumn=} [properties] Properties to set
-         */
-        function Column(properties) {
-            if (properties)
-                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
-                    if (properties[keys[i]] != null)
-                        this[keys[i]] = properties[keys[i]];
-        }
-
-        /**
-         * Column name.
-         * @member {string} name
-         * @memberof vschema.Column
-         * @instance
-         */
-        Column.prototype.name = "";
-
-        /**
-         * Column type.
-         * @member {query.Type} type
-         * @memberof vschema.Column
-         * @instance
-         */
-        Column.prototype.type = 0;
-
-        /**
-         * Creates a new Column instance using the specified properties.
-         * @function create
-         * @memberof vschema.Column
-         * @static
-         * @param {vschema.IColumn=} [properties] Properties to set
-         * @returns {vschema.Column} Column instance
-         */
-        Column.create = function create(properties) {
-            return new Column(properties);
-        };
-
-        /**
-         * Encodes the specified Column message. Does not implicitly {@link vschema.Column.verify|verify} messages.
-         * @function encode
-         * @memberof vschema.Column
-         * @static
-         * @param {vschema.IColumn} message Column message or plain object to encode
-         * @param {$protobuf.Writer} [writer] Writer to encode to
-         * @returns {$protobuf.Writer} Writer
-         */
-        Column.encode = function encode(message, writer) {
-            if (!writer)
-                writer = $Writer.create();
-            if (message.name != null && Object.hasOwnProperty.call(message, "name"))
-                writer.uint32(/* id 1, wireType 2 =*/10).string(message.name);
-            if (message.type != null && Object.hasOwnProperty.call(message, "type"))
-                writer.uint32(/* id 2, wireType 0 =*/16).int32(message.type);
-            return writer;
-        };
-
-        /**
-         * Encodes the specified Column message, length delimited. Does not implicitly {@link vschema.Column.verify|verify} messages.
-         * @function encodeDelimited
-         * @memberof vschema.Column
-         * @static
-         * @param {vschema.IColumn} message Column message or plain object to encode
-         * @param {$protobuf.Writer} [writer] Writer to encode to
-         * @returns {$protobuf.Writer} Writer
-         */
-        Column.encodeDelimited = function encodeDelimited(message, writer) {
-            return this.encode(message, writer).ldelim();
-        };
-
-        /**
-         * Decodes a Column message from the specified reader or buffer.
-         * @function decode
-         * @memberof vschema.Column
-         * @static
-         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
-         * @param {number} [length] Message length if known beforehand
-         * @returns {vschema.Column} Column
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        Column.decode = function decode(reader, length) {
-            if (!(reader instanceof $Reader))
-                reader = $Reader.create(reader);
-            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vschema.Column();
-            while (reader.pos < end) {
-                var tag = reader.uint32();
-                switch (tag >>> 3) {
-                case 1:
-                    message.name = reader.string();
-                    break;
-                case 2:
-                    message.type = reader.int32();
-                    break;
-                default:
-                    reader.skipType(tag & 7);
-                    break;
-                }
-            }
-            return message;
-        };
-
-        /**
-         * Decodes a Column message from the specified reader or buffer, length delimited.
-         * @function decodeDelimited
-         * @memberof vschema.Column
-         * @static
-         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
-         * @returns {vschema.Column} Column
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        Column.decodeDelimited = function decodeDelimited(reader) {
-            if (!(reader instanceof $Reader))
-                reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
-        };
-
-        /**
-         * Verifies a Column message.
-         * @function verify
-         * @memberof vschema.Column
-         * @static
-         * @param {Object.<string,*>} message Plain object to verify
-         * @returns {string|null} `null` if valid, otherwise the reason why it is not
-         */
-        Column.verify = function verify(message) {
-            if (typeof message !== "object" || message === null)
-                return "object expected";
-            if (message.name != null && message.hasOwnProperty("name"))
-                if (!$util.isString(message.name))
-                    return "name: string expected";
-            if (message.type != null && message.hasOwnProperty("type"))
-                switch (message.type) {
-                default:
-                    return "type: enum value expected";
-                case 0:
-                case 257:
-                case 770:
-                case 259:
-                case 772:
-                case 261:
-                case 774:
-                case 263:
-                case 776:
-                case 265:
-                case 778:
-                case 1035:
-                case 1036:
-                case 2061:
-                case 2062:
-                case 2063:
-                case 2064:
-                case 785:
-                case 18:
-                case 6163:
-                case 10260:
-                case 6165:
-                case 10262:
-                case 6167:
-                case 10264:
-                case 2073:
-                case 2074:
-                case 2075:
-                case 28:
-                case 2077:
-                case 2078:
-                case 31:
-                    break;
-                }
-            return null;
-        };
-
-        /**
-         * Creates a Column message from a plain object. Also converts values to their respective internal types.
-         * @function fromObject
-         * @memberof vschema.Column
-         * @static
-         * @param {Object.<string,*>} object Plain object
-         * @returns {vschema.Column} Column
-         */
-        Column.fromObject = function fromObject(object) {
-            if (object instanceof $root.vschema.Column)
-                return object;
-            var message = new $root.vschema.Column();
-            if (object.name != null)
-                message.name = String(object.name);
-            switch (object.type) {
-            case "NULL_TYPE":
-            case 0:
-                message.type = 0;
-                break;
-            case "INT8":
-            case 257:
-                message.type = 257;
-                break;
-            case "UINT8":
-            case 770:
-                message.type = 770;
-                break;
-            case "INT16":
-            case 259:
-                message.type = 259;
-                break;
-            case "UINT16":
-            case 772:
-                message.type = 772;
-                break;
-            case "INT24":
-            case 261:
-                message.type = 261;
-                break;
-            case "UINT24":
-            case 774:
-                message.type = 774;
-                break;
-            case "INT32":
-            case 263:
-                message.type = 263;
-                break;
-            case "UINT32":
-            case 776:
-                message.type = 776;
-                break;
-            case "INT64":
-            case 265:
-                message.type = 265;
-                break;
-            case "UINT64":
-            case 778:
-                message.type = 778;
-                break;
-            case "FLOAT32":
-            case 1035:
-                message.type = 1035;
-                break;
-            case "FLOAT64":
-            case 1036:
-                message.type = 1036;
-                break;
-            case "TIMESTAMP":
-            case 2061:
-                message.type = 2061;
-                break;
-            case "DATE":
-            case 2062:
-                message.type = 2062;
-                break;
-            case "TIME":
-            case 2063:
-                message.type = 2063;
-                break;
-            case "DATETIME":
-            case 2064:
-                message.type = 2064;
-                break;
-            case "YEAR":
-            case 785:
-                message.type = 785;
-                break;
-            case "DECIMAL":
-            case 18:
-                message.type = 18;
-                break;
-            case "TEXT":
-            case 6163:
-                message.type = 6163;
-                break;
-            case "BLOB":
-            case 10260:
-                message.type = 10260;
-                break;
-            case "VARCHAR":
-            case 6165:
-                message.type = 6165;
-                break;
-            case "VARBINARY":
-            case 10262:
-                message.type = 10262;
-                break;
-            case "CHAR":
-            case 6167:
-                message.type = 6167;
-                break;
-            case "BINARY":
-            case 10264:
-                message.type = 10264;
-                break;
-            case "BIT":
-            case 2073:
-                message.type = 2073;
-                break;
-            case "ENUM":
-            case 2074:
-                message.type = 2074;
-                break;
-            case "SET":
-            case 2075:
-                message.type = 2075;
-                break;
-            case "TUPLE":
-            case 28:
-                message.type = 28;
-                break;
-            case "GEOMETRY":
-            case 2077:
-                message.type = 2077;
-                break;
-            case "JSON":
-            case 2078:
-                message.type = 2078;
-                break;
-            case "EXPRESSION":
-            case 31:
-                message.type = 31;
-                break;
-            }
-            return message;
-        };
-
-        /**
-         * Creates a plain object from a Column message. Also converts values to other types if specified.
-         * @function toObject
-         * @memberof vschema.Column
-         * @static
-         * @param {vschema.Column} message Column
-         * @param {$protobuf.IConversionOptions} [options] Conversion options
-         * @returns {Object.<string,*>} Plain object
-         */
-        Column.toObject = function toObject(message, options) {
-            if (!options)
-                options = {};
-            var object = {};
-            if (options.defaults) {
-                object.name = "";
-                object.type = options.enums === String ? "NULL_TYPE" : 0;
-            }
-            if (message.name != null && message.hasOwnProperty("name"))
-                object.name = message.name;
-            if (message.type != null && message.hasOwnProperty("type"))
-                object.type = options.enums === String ? $root.query.Type[message.type] : message.type;
-            return object;
-        };
-
-        /**
-         * Converts this Column to JSON.
-         * @function toJSON
-         * @memberof vschema.Column
-         * @instance
-         * @returns {Object.<string,*>} JSON object
-         */
-        Column.prototype.toJSON = function toJSON() {
-            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
-        };
-
-        return Column;
-    })();
-
-    vschema.SrvVSchema = (function() {
-
-        /**
-         * Properties of a SrvVSchema.
-         * @memberof vschema
-         * @interface ISrvVSchema
-         * @property {Object.<string,vschema.IKeyspace>|null} [keyspaces] SrvVSchema keyspaces
-         * @property {vschema.IRoutingRules|null} [routing_rules] SrvVSchema routing_rules
-         */
-
-        /**
-         * Constructs a new SrvVSchema.
-         * @memberof vschema
-         * @classdesc Represents a SrvVSchema.
-         * @implements ISrvVSchema
-         * @constructor
-         * @param {vschema.ISrvVSchema=} [properties] Properties to set
-         */
-        function SrvVSchema(properties) {
-            this.keyspaces = {};
-            if (properties)
-                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
-                    if (properties[keys[i]] != null)
-                        this[keys[i]] = properties[keys[i]];
-        }
-
-        /**
-         * SrvVSchema keyspaces.
-         * @member {Object.<string,vschema.IKeyspace>} keyspaces
-         * @memberof vschema.SrvVSchema
-         * @instance
-         */
-        SrvVSchema.prototype.keyspaces = $util.emptyObject;
-
-        /**
-         * SrvVSchema routing_rules.
-         * @member {vschema.IRoutingRules|null|undefined} routing_rules
-         * @memberof vschema.SrvVSchema
-         * @instance
-         */
-        SrvVSchema.prototype.routing_rules = null;
-
-        /**
-         * Creates a new SrvVSchema instance using the specified properties.
-         * @function create
-         * @memberof vschema.SrvVSchema
-         * @static
-         * @param {vschema.ISrvVSchema=} [properties] Properties to set
-         * @returns {vschema.SrvVSchema} SrvVSchema instance
-         */
-        SrvVSchema.create = function create(properties) {
-            return new SrvVSchema(properties);
-        };
-
-        /**
-         * Encodes the specified SrvVSchema message. Does not implicitly {@link vschema.SrvVSchema.verify|verify} messages.
-         * @function encode
-         * @memberof vschema.SrvVSchema
-         * @static
-         * @param {vschema.ISrvVSchema} message SrvVSchema message or plain object to encode
-         * @param {$protobuf.Writer} [writer] Writer to encode to
-         * @returns {$protobuf.Writer} Writer
-         */
-        SrvVSchema.encode = function encode(message, writer) {
-            if (!writer)
-                writer = $Writer.create();
-            if (message.keyspaces != null && Object.hasOwnProperty.call(message, "keyspaces"))
-                for (var keys = Object.keys(message.keyspaces), i = 0; i < keys.length; ++i) {
-                    writer.uint32(/* id 1, wireType 2 =*/10).fork().uint32(/* id 1, wireType 2 =*/10).string(keys[i]);
-                    $root.vschema.Keyspace.encode(message.keyspaces[keys[i]], writer.uint32(/* id 2, wireType 2 =*/18).fork()).ldelim().ldelim();
-                }
-            if (message.routing_rules != null && Object.hasOwnProperty.call(message, "routing_rules"))
-                $root.vschema.RoutingRules.encode(message.routing_rules, writer.uint32(/* id 2, wireType 2 =*/18).fork()).ldelim();
-            return writer;
-        };
-
-        /**
-         * Encodes the specified SrvVSchema message, length delimited. Does not implicitly {@link vschema.SrvVSchema.verify|verify} messages.
-         * @function encodeDelimited
-         * @memberof vschema.SrvVSchema
-         * @static
-         * @param {vschema.ISrvVSchema} message SrvVSchema message or plain object to encode
-         * @param {$protobuf.Writer} [writer] Writer to encode to
-         * @returns {$protobuf.Writer} Writer
-         */
-        SrvVSchema.encodeDelimited = function encodeDelimited(message, writer) {
-            return this.encode(message, writer).ldelim();
-        };
-
-        /**
-         * Decodes a SrvVSchema message from the specified reader or buffer.
-         * @function decode
-         * @memberof vschema.SrvVSchema
-         * @static
-         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
-         * @param {number} [length] Message length if known beforehand
-         * @returns {vschema.SrvVSchema} SrvVSchema
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        SrvVSchema.decode = function decode(reader, length) {
-            if (!(reader instanceof $Reader))
-                reader = $Reader.create(reader);
-            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vschema.SrvVSchema(), key, value;
-            while (reader.pos < end) {
-                var tag = reader.uint32();
-                switch (tag >>> 3) {
-                case 1:
-                    if (message.keyspaces === $util.emptyObject)
-                        message.keyspaces = {};
-                    var end2 = reader.uint32() + reader.pos;
-                    key = "";
-                    value = null;
-                    while (reader.pos < end2) {
-                        var tag2 = reader.uint32();
-                        switch (tag2 >>> 3) {
-                        case 1:
-                            key = reader.string();
-                            break;
-                        case 2:
-                            value = $root.vschema.Keyspace.decode(reader, reader.uint32());
-                            break;
-                        default:
-                            reader.skipType(tag2 & 7);
-                            break;
-                        }
-                    }
-                    message.keyspaces[key] = value;
-                    break;
-                case 2:
-                    message.routing_rules = $root.vschema.RoutingRules.decode(reader, reader.uint32());
-                    break;
-                default:
-                    reader.skipType(tag & 7);
-                    break;
-                }
-            }
-            return message;
-        };
-
-        /**
-         * Decodes a SrvVSchema message from the specified reader or buffer, length delimited.
-         * @function decodeDelimited
-         * @memberof vschema.SrvVSchema
-         * @static
-         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
-         * @returns {vschema.SrvVSchema} SrvVSchema
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        SrvVSchema.decodeDelimited = function decodeDelimited(reader) {
-            if (!(reader instanceof $Reader))
-                reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
-        };
-
-        /**
-         * Verifies a SrvVSchema message.
-         * @function verify
-         * @memberof vschema.SrvVSchema
-         * @static
-         * @param {Object.<string,*>} message Plain object to verify
-         * @returns {string|null} `null` if valid, otherwise the reason why it is not
-         */
-        SrvVSchema.verify = function verify(message) {
-            if (typeof message !== "object" || message === null)
-                return "object expected";
-            if (message.keyspaces != null && message.hasOwnProperty("keyspaces")) {
-                if (!$util.isObject(message.keyspaces))
-                    return "keyspaces: object expected";
-                var key = Object.keys(message.keyspaces);
-                for (var i = 0; i < key.length; ++i) {
-                    var error = $root.vschema.Keyspace.verify(message.keyspaces[key[i]]);
-                    if (error)
-                        return "keyspaces." + error;
-                }
-            }
-            if (message.routing_rules != null && message.hasOwnProperty("routing_rules")) {
-                var error = $root.vschema.RoutingRules.verify(message.routing_rules);
-                if (error)
-                    return "routing_rules." + error;
-            }
-            return null;
-        };
-
-        /**
-         * Creates a SrvVSchema message from a plain object. Also converts values to their respective internal types.
-         * @function fromObject
-         * @memberof vschema.SrvVSchema
-         * @static
-         * @param {Object.<string,*>} object Plain object
-         * @returns {vschema.SrvVSchema} SrvVSchema
-         */
-        SrvVSchema.fromObject = function fromObject(object) {
-            if (object instanceof $root.vschema.SrvVSchema)
-                return object;
-            var message = new $root.vschema.SrvVSchema();
-            if (object.keyspaces) {
-                if (typeof object.keyspaces !== "object")
-                    throw TypeError(".vschema.SrvVSchema.keyspaces: object expected");
-                message.keyspaces = {};
-                for (var keys = Object.keys(object.keyspaces), i = 0; i < keys.length; ++i) {
-                    if (typeof object.keyspaces[keys[i]] !== "object")
-                        throw TypeError(".vschema.SrvVSchema.keyspaces: object expected");
-                    message.keyspaces[keys[i]] = $root.vschema.Keyspace.fromObject(object.keyspaces[keys[i]]);
-                }
-            }
-            if (object.routing_rules != null) {
-                if (typeof object.routing_rules !== "object")
-                    throw TypeError(".vschema.SrvVSchema.routing_rules: object expected");
-                message.routing_rules = $root.vschema.RoutingRules.fromObject(object.routing_rules);
-            }
-            return message;
-        };
-
-        /**
-         * Creates a plain object from a SrvVSchema message. Also converts values to other types if specified.
-         * @function toObject
-         * @memberof vschema.SrvVSchema
-         * @static
-         * @param {vschema.SrvVSchema} message SrvVSchema
-         * @param {$protobuf.IConversionOptions} [options] Conversion options
-         * @returns {Object.<string,*>} Plain object
-         */
-        SrvVSchema.toObject = function toObject(message, options) {
-            if (!options)
-                options = {};
-            var object = {};
-            if (options.objects || options.defaults)
-                object.keyspaces = {};
-            if (options.defaults)
-                object.routing_rules = null;
-            var keys2;
-            if (message.keyspaces && (keys2 = Object.keys(message.keyspaces)).length) {
-                object.keyspaces = {};
-                for (var j = 0; j < keys2.length; ++j)
-                    object.keyspaces[keys2[j]] = $root.vschema.Keyspace.toObject(message.keyspaces[keys2[j]], options);
-            }
-            if (message.routing_rules != null && message.hasOwnProperty("routing_rules"))
-                object.routing_rules = $root.vschema.RoutingRules.toObject(message.routing_rules, options);
-            return object;
-        };
-
-        /**
-         * Converts this SrvVSchema to JSON.
-         * @function toJSON
-         * @memberof vschema.SrvVSchema
-         * @instance
-         * @returns {Object.<string,*>} JSON object
-         */
-        SrvVSchema.prototype.toJSON = function toJSON() {
-            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
-        };
-
-        return SrvVSchema;
-    })();
-
-    return vschema;
 })();
 
 module.exports = $root;
