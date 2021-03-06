@@ -36,6 +36,7 @@ import (
 
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
@@ -250,6 +251,98 @@ func TestGetSchema(t *testing.T) {
 
 		assert.NotEqual(t, req.TabletAlias, tablet.Tablet.Alias, "expected GetSchema to not modify original request object")
 	})
+}
+
+func TestGetVSchema(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		cfg       testutil.TestClusterConfig
+		keyspace  string
+		expected  *vtadminpb.VSchema
+		shouldErr bool
+	}{
+		{
+			name: "success",
+			cfg: testutil.TestClusterConfig{
+				Cluster: &vtadminpb.Cluster{
+					Id:   "c0",
+					Name: "cluster0",
+				},
+				VtctldClient: &testutil.VtctldClient{
+					GetVSchemaResults: map[string]struct {
+						Response *vtctldatapb.GetVSchemaResponse
+						Error    error
+					}{
+						"testkeyspace": {
+							Response: &vtctldatapb.GetVSchemaResponse{
+								VSchema: &vschemapb.Keyspace{Sharded: true},
+							},
+						},
+					},
+				},
+			},
+			keyspace: "testkeyspace",
+			expected: &vtadminpb.VSchema{
+				Cluster: &vtadminpb.Cluster{
+					Id:   "c0",
+					Name: "cluster0",
+				},
+				Name:    "testkeyspace",
+				VSchema: &vschemapb.Keyspace{Sharded: true},
+			},
+			shouldErr: false,
+		},
+		{
+			name: "error",
+			cfg: testutil.TestClusterConfig{
+				Cluster: &vtadminpb.Cluster{
+					Id:   "c0",
+					Name: "cluster0",
+				},
+				VtctldClient: &testutil.VtctldClient{
+					GetVSchemaResults: map[string]struct {
+						Response *vtctldatapb.GetVSchemaResponse
+						Error    error
+					}{
+						"testkeyspace": {
+							Response: &vtctldatapb.GetVSchemaResponse{
+								VSchema: &vschemapb.Keyspace{Sharded: true},
+							},
+						},
+					},
+				},
+			},
+			keyspace:  "notfound",
+			expected:  nil,
+			shouldErr: true,
+		},
+	}
+
+	ctx := context.Background()
+
+	for _, tt := range tests {
+		tt := tt
+
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			cluster := testutil.BuildCluster(tt.cfg)
+			err := cluster.Vtctld.Dial(ctx)
+			require.NoError(t, err, "could not dial test vtctld")
+
+			vschema, err := cluster.GetVSchema(ctx, tt.keyspace)
+			if tt.shouldErr {
+				assert.Error(t, err)
+
+				return
+			}
+
+			assert.NoError(t, err)
+			assert.Equal(t, tt.expected, vschema)
+		})
+	}
 }
 
 func TestFindTablets(t *testing.T) {
