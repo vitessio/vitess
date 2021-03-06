@@ -658,12 +658,106 @@ func (api *API) getClustersForRequest(ids []string) ([]*cluster.Cluster, []strin
 
 // GetVSchema is part of the vtadminpb.VTAdminServer interface.
 func (api *API) GetVSchema(ctx context.Context, req *vtadminpb.GetVSchemaRequest) (*vtadminpb.VSchema, error) {
-	panic("unimplemented!")
+	span, ctx := trace.NewSpan(ctx, "API.GetVSchema")
+	defer span.Finish()
+
+	c, ok := api.clusterMap[req.ClusterId]
+	if !ok {
+		return nil, fmt.Errorf("%w: no such cluster %s", errors.ErrUnsupportedCluster, req.ClusterId)
+	}
+
+	cluster.AnnotateSpan(c, span)
+
+	if err := c.Vtctld.Dial(ctx); err != nil {
+		return nil, err
+	}
+
+	return c.GetVSchema(ctx, req.Keyspace)
 }
 
 // GetVSchemas is part of the vtadminpb.VTAdminServer interface.
 func (api *API) GetVSchemas(ctx context.Context, req *vtadminpb.GetVSchemasRequest) (*vtadminpb.GetVSchemasResponse, error) {
-	panic("unimplemented!")
+	span, ctx := trace.NewSpan(ctx, "API.GetVSchemas")
+	defer span.Finish()
+
+	clusters, _ := api.getClustersForRequest(req.ClusterIds)
+
+	var (
+		m        sync.Mutex
+		wg       sync.WaitGroup
+		rec      concurrency.AllErrorRecorder
+		vschemas []*vtadminpb.VSchema
+	)
+
+	for _, c := range clusters {
+		wg.Add(1)
+
+		go func(c *cluster.Cluster) {
+			defer wg.Done()
+
+			span, ctx := trace.NewSpan(ctx, "API.getVSchemasForCluster")
+			defer span.Finish()
+
+			cluster.AnnotateSpan(c, span)
+
+			if err := c.Vtctld.Dial(ctx); err != nil {
+				rec.RecordError(fmt.Errorf("Vtctld.Dial(cluster = %s): %w", c.ID, err))
+				return
+			}
+
+			keyspaces, err := c.Vtctld.GetKeyspaces(ctx, &vtctldatapb.GetKeyspacesRequest{})
+			if err != nil {
+				rec.RecordError(fmt.Errorf("GetKeyspaces(cluster = %s): %w", c.ID, err))
+				return
+			}
+
+			var (
+				clusterM        sync.Mutex
+				clusterWG       sync.WaitGroup
+				clusterRec      concurrency.ErrorRecorder
+				clusterVSchemas = make([]*vtadminpb.VSchema, 0, len(keyspaces.Keyspaces))
+			)
+
+			for _, keyspace := range keyspaces.Keyspaces {
+				clusterWG.Add(1)
+
+				go func(keyspace *vtctldatapb.Keyspace) {
+					defer clusterWG.Done()
+
+					vschema, err := c.GetVSchema(ctx, keyspace.Name)
+					if err != nil {
+						clusterRec.RecordError(fmt.Errorf("GetVSchema(keyspace = %s): %w", keyspace.Name, err))
+						return
+					}
+
+					clusterM.Lock()
+					clusterVSchemas = append(clusterVSchemas, vschema)
+					clusterM.Unlock()
+				}(keyspace)
+			}
+
+			clusterWG.Wait()
+
+			if clusterRec.HasErrors() {
+				rec.RecordError(fmt.Errorf("GetVSchemas(cluster = %s): %w", c.ID, clusterRec.Error()))
+				return
+			}
+
+			m.Lock()
+			vschemas = append(vschemas, clusterVSchemas...)
+			m.Unlock()
+		}(c)
+	}
+
+	wg.Wait()
+
+	if rec.HasErrors() {
+		return nil, rec.Error()
+	}
+
+	return &vtadminpb.GetVSchemasResponse{
+		VSchemas: vschemas,
+	}, nil
 }
 
 // VTExplain is part of the vtadminpb.VTAdminServer interface.
