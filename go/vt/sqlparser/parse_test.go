@@ -1958,7 +1958,7 @@ func TestInvalid(t *testing.T) {
 		err:   "syntax error",
 	}, {
 		input: "/*!*/",
-		err:   "empty statement",
+		err:   "Query was empty",
 	}}
 
 	for _, tcase := range invalidSQL {
@@ -2264,7 +2264,7 @@ func TestConvert(t *testing.T) {
 		output: "syntax error at position 33",
 	}, {
 		input:  "/* a comment */",
-		output: "empty statement",
+		output: "Query was empty",
 	}, {
 		input:  "set transaction isolation level 12345",
 		output: "syntax error at position 38 near '12345'",
