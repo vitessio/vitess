@@ -17,11 +17,11 @@ limitations under the License.
 package vtgate
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"sync"
-
-	"context"
+	"time"
 
 	"github.com/golang/protobuf/proto"
 
@@ -65,6 +65,26 @@ type vstream struct {
 
 	cancel context.CancelFunc
 	wg     sync.WaitGroup
+
+	// this flag is set by the client, default false
+	// if true skew detection is enabled and we align the streams so that they receive events from
+	// about the same time as each other. Note that there is no exact ordering of events across shards
+	minimizeSkew bool
+
+	// mutex used to synchronize access to skew detection parameters
+	skewMu sync.Mutex
+	// channel is created whenever there is a skew detected. closing it implies the current skew has been fixed
+	skewCh chan bool
+	// if a skew lasts for this long, we timeout the vstream call. currently hardcoded
+	skewTimeoutSeconds int64
+	// the slow streamId which is causing the skew. streamId is of the form <keyspace>.<shard>
+	laggard string
+	// transaction timestamp of the slowest stream
+	lowestTS int64
+	// the timestamp of the most recent event, keyed by streamId. streamId is of the form <keyspace>.<shard>
+	timestamps map[string]int64
+
+	vsm *vstreamManager
 }
 
 type journalEvent struct {
@@ -81,7 +101,8 @@ func newVStreamManager(resolver *srvtopo.Resolver, serv srvtopo.Server, cell str
 	}
 }
 
-func (vsm *vstreamManager) VStream(ctx context.Context, tabletType topodatapb.TabletType, vgtid *binlogdatapb.VGtid, filter *binlogdatapb.Filter, send func(events []*binlogdatapb.VEvent) error) error {
+func (vsm *vstreamManager) VStream(ctx context.Context, tabletType topodatapb.TabletType, vgtid *binlogdatapb.VGtid,
+	filter *binlogdatapb.Filter, minimizeSkew bool, send func(events []*binlogdatapb.VEvent) error) error {
 	vgtid, filter, err := vsm.resolveParams(ctx, tabletType, vgtid, filter)
 	if err != nil {
 		return err
@@ -93,6 +114,11 @@ func (vsm *vstreamManager) VStream(ctx context.Context, tabletType topodatapb.Ta
 		send:       send,
 		resolver:   vsm.resolver,
 		journaler:  make(map[int64]*journalEvent),
+
+		minimizeSkew:       minimizeSkew,
+		skewTimeoutSeconds: 10 * 60,
+		timestamps:         make(map[string]int64),
+		vsm:                vsm,
 	}
 	return vs.stream(ctx)
 }
@@ -157,6 +183,13 @@ func (vsm *vstreamManager) resolveParams(ctx context.Context, tabletType topodat
 	return newvgtid, filter, nil
 }
 
+func (vsm *vstreamManager) RecordStreamDelay() {
+	vstreamSkewDelayCount.Add(1)
+}
+
+func (vsm *vstreamManager) GetTotalStreamDelay() int64 {
+	return vstreamSkewDelayCount.Get()
+}
 func (vs *vstream) stream(ctx context.Context) error {
 	ctx, vs.cancel = context.WithCancel(ctx)
 	defer vs.cancel()
@@ -185,6 +218,99 @@ func (vs *vstream) startOneStream(ctx context.Context, sgtid *binlogdatapb.Shard
 			})
 		}
 	}()
+}
+
+// MaxSkew is the threshold for a skew to be detected. Since MySQL timestamps are in seconds we account for
+// two round-offs: one for the actual event and another while accounting for the clock skew
+const MaxSkew = int64(2)
+
+// computeSkew sets the timestamp of the current event for the calling stream, accounts for a clock skew
+// and declares that a skew has arisen if the streams are too far apart
+func (vs *vstream) computeSkew(streamID string, event *binlogdatapb.VEvent) {
+	vs.skewMu.Lock()
+	defer vs.skewMu.Unlock()
+	// account for skew between this vtgate and the source mysql server
+	secondsInThePast := event.CurrentTime - event.Timestamp
+	vs.timestamps[streamID] = time.Now().Unix() - secondsInThePast
+
+	var minTs, maxTs int64
+	var laggardStream string
+
+	if len(vs.timestamps) <= 1 {
+		return
+	}
+	for k, ts := range vs.timestamps {
+		if ts < minTs || minTs == 0 {
+			minTs = ts
+			laggardStream = k
+		}
+		if ts > maxTs {
+			maxTs = ts
+		}
+	}
+	if vs.skewCh != nil { // we are skewed, check if this event has fixed the skew
+		if (maxTs - minTs) <= MaxSkew {
+			vs.laggard = ""
+			close(vs.skewCh)
+			vs.skewCh = nil
+		}
+	} else {
+		if (maxTs - minTs) > MaxSkew { // check if we are skewed due to this event
+			log.Infof("Skew found, laggard is %s, %+v", laggardStream, vs.timestamps)
+			vs.laggard = laggardStream
+			vs.skewCh = make(chan bool)
+		}
+	}
+}
+
+// mustPause returns true if a skew exists and the stream calling this is not the slowest one
+func (vs *vstream) mustPause(streamID string) bool {
+	switch vs.laggard {
+	case "":
+		return false
+	case streamID:
+		// current stream is the laggard, not pausing
+		return false
+	}
+
+	if (vs.timestamps[streamID] - vs.lowestTS) <= MaxSkew {
+		// current stream is the laggard, but the skew is still within the limit
+		return false
+	}
+	vs.vsm.RecordStreamDelay()
+	return true
+}
+
+// alignStreams is called by each individual shard's stream before an event is sent to the client or after each heartbeat.
+// It checks for skew (if the minimizeSkew option is set). If skew is present this stream is delayed until the skew is fixed
+func (vs *vstream) alignStreams(ctx context.Context, event *binlogdatapb.VEvent, keyspace, shard string) error {
+	if !vs.minimizeSkew || event.Timestamp == 0 {
+		return nil
+	}
+	streamID := fmt.Sprintf("%s/%s", keyspace, shard)
+	for {
+		vs.computeSkew(streamID, event)
+		if event.Type == binlogdatapb.VEventType_HEARTBEAT {
+			return nil
+		}
+		if !vs.mustPause(streamID) {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(time.Duration(vs.skewTimeoutSeconds) * time.Second):
+			log.Errorf("timed out while waiting for skew to reduce: %s", streamID)
+			return fmt.Errorf("timed out while waiting for skew to reduce: %s", streamID)
+		case _, ok := <-vs.skewCh:
+			if !ok {
+				log.Infof("Skew has been fixed")
+			} else {
+				log.Errorf("got items in the skew channel incorrectly")
+				return fmt.Errorf("got items in the skew channel incorrectly")
+			}
+		}
+	}
 }
 
 // streamFromTablet streams from one shard. If transactions come in separate chunks, they are grouped and sent.
@@ -249,6 +375,11 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 				case binlogdatapb.VEventType_COMMIT, binlogdatapb.VEventType_DDL, binlogdatapb.VEventType_OTHER:
 					sendevents = append(sendevents, event)
 					eventss = append(eventss, sendevents)
+
+					if err := vs.alignStreams(ctx, event, sgtid.Keyspace, sgtid.Shard); err != nil {
+						return err
+					}
+
 					if err := vs.sendAll(sgtid, eventss); err != nil {
 						return err
 					}
@@ -258,6 +389,10 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 					// Remove all heartbeat events for now.
 					// Otherwise they can accumulate indefinitely if there are no real events.
 					// TODO(sougou): figure out a model for this.
+					if err := vs.alignStreams(ctx, event, sgtid.Keyspace, sgtid.Shard); err != nil {
+						return err
+					}
+
 				case binlogdatapb.VEventType_JOURNAL:
 					journal := event.Journal
 					// Journal events are not sent to clients.
