@@ -135,6 +135,34 @@ export namespace vtadmin {
         public getTablets(request: vtadmin.IGetTabletsRequest): Promise<vtadmin.GetTabletsResponse>;
 
         /**
+         * Calls GetVSchema.
+         * @param request GetVSchemaRequest message or plain object
+         * @param callback Node-style callback called with the error, if any, and VSchema
+         */
+        public getVSchema(request: vtadmin.IGetVSchemaRequest, callback: vtadmin.VTAdmin.GetVSchemaCallback): void;
+
+        /**
+         * Calls GetVSchema.
+         * @param request GetVSchemaRequest message or plain object
+         * @returns Promise
+         */
+        public getVSchema(request: vtadmin.IGetVSchemaRequest): Promise<vtadmin.VSchema>;
+
+        /**
+         * Calls GetVSchemas.
+         * @param request GetVSchemasRequest message or plain object
+         * @param callback Node-style callback called with the error, if any, and GetVSchemasResponse
+         */
+        public getVSchemas(request: vtadmin.IGetVSchemasRequest, callback: vtadmin.VTAdmin.GetVSchemasCallback): void;
+
+        /**
+         * Calls GetVSchemas.
+         * @param request GetVSchemasRequest message or plain object
+         * @returns Promise
+         */
+        public getVSchemas(request: vtadmin.IGetVSchemasRequest): Promise<vtadmin.GetVSchemasResponse>;
+
+        /**
          * Calls VTExplain.
          * @param request VTExplainRequest message or plain object
          * @param callback Node-style callback called with the error, if any, and VTExplainResponse
@@ -206,6 +234,20 @@ export namespace vtadmin {
          * @param [response] GetTabletsResponse
          */
         type GetTabletsCallback = (error: (Error|null), response?: vtadmin.GetTabletsResponse) => void;
+
+        /**
+         * Callback as used by {@link vtadmin.VTAdmin#getVSchema}.
+         * @param error Error, if any
+         * @param [response] VSchema
+         */
+        type GetVSchemaCallback = (error: (Error|null), response?: vtadmin.VSchema) => void;
+
+        /**
+         * Callback as used by {@link vtadmin.VTAdmin#getVSchemas}.
+         * @param error Error, if any
+         * @param [response] GetVSchemasResponse
+         */
+        type GetVSchemasCallback = (error: (Error|null), response?: vtadmin.GetVSchemasResponse) => void;
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#vTExplain}.
@@ -625,6 +667,108 @@ export namespace vtadmin {
             SERVING = 1,
             NOT_SERVING = 2
         }
+    }
+
+    /** Properties of a VSchema. */
+    interface IVSchema {
+
+        /** VSchema cluster */
+        cluster?: (vtadmin.ICluster|null);
+
+        /** VSchema name */
+        name?: (string|null);
+
+        /** VSchema v_schema */
+        v_schema?: (vschema.IKeyspace|null);
+    }
+
+    /** Represents a VSchema. */
+    class VSchema implements IVSchema {
+
+        /**
+         * Constructs a new VSchema.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.IVSchema);
+
+        /** VSchema cluster. */
+        public cluster?: (vtadmin.ICluster|null);
+
+        /** VSchema name. */
+        public name: string;
+
+        /** VSchema v_schema. */
+        public v_schema?: (vschema.IKeyspace|null);
+
+        /**
+         * Creates a new VSchema instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns VSchema instance
+         */
+        public static create(properties?: vtadmin.IVSchema): vtadmin.VSchema;
+
+        /**
+         * Encodes the specified VSchema message. Does not implicitly {@link vtadmin.VSchema.verify|verify} messages.
+         * @param message VSchema message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.IVSchema, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified VSchema message, length delimited. Does not implicitly {@link vtadmin.VSchema.verify|verify} messages.
+         * @param message VSchema message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.IVSchema, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a VSchema message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns VSchema
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.VSchema;
+
+        /**
+         * Decodes a VSchema message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns VSchema
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.VSchema;
+
+        /**
+         * Verifies a VSchema message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a VSchema message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns VSchema
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.VSchema;
+
+        /**
+         * Creates a plain object from a VSchema message. Also converts values to other types if specified.
+         * @param message VSchema
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.VSchema, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this VSchema to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
     }
 
     /** Properties of a Vtctld. */
@@ -2020,6 +2164,282 @@ export namespace vtadmin {
 
         /**
          * Converts this GetTabletsResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a GetVSchemaRequest. */
+    interface IGetVSchemaRequest {
+
+        /** GetVSchemaRequest cluster_id */
+        cluster_id?: (string|null);
+
+        /** GetVSchemaRequest keyspace */
+        keyspace?: (string|null);
+    }
+
+    /** Represents a GetVSchemaRequest. */
+    class GetVSchemaRequest implements IGetVSchemaRequest {
+
+        /**
+         * Constructs a new GetVSchemaRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.IGetVSchemaRequest);
+
+        /** GetVSchemaRequest cluster_id. */
+        public cluster_id: string;
+
+        /** GetVSchemaRequest keyspace. */
+        public keyspace: string;
+
+        /**
+         * Creates a new GetVSchemaRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns GetVSchemaRequest instance
+         */
+        public static create(properties?: vtadmin.IGetVSchemaRequest): vtadmin.GetVSchemaRequest;
+
+        /**
+         * Encodes the specified GetVSchemaRequest message. Does not implicitly {@link vtadmin.GetVSchemaRequest.verify|verify} messages.
+         * @param message GetVSchemaRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.IGetVSchemaRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified GetVSchemaRequest message, length delimited. Does not implicitly {@link vtadmin.GetVSchemaRequest.verify|verify} messages.
+         * @param message GetVSchemaRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.IGetVSchemaRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a GetVSchemaRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns GetVSchemaRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.GetVSchemaRequest;
+
+        /**
+         * Decodes a GetVSchemaRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns GetVSchemaRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.GetVSchemaRequest;
+
+        /**
+         * Verifies a GetVSchemaRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a GetVSchemaRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns GetVSchemaRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.GetVSchemaRequest;
+
+        /**
+         * Creates a plain object from a GetVSchemaRequest message. Also converts values to other types if specified.
+         * @param message GetVSchemaRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.GetVSchemaRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this GetVSchemaRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a GetVSchemasRequest. */
+    interface IGetVSchemasRequest {
+
+        /** GetVSchemasRequest cluster_ids */
+        cluster_ids?: (string[]|null);
+    }
+
+    /** Represents a GetVSchemasRequest. */
+    class GetVSchemasRequest implements IGetVSchemasRequest {
+
+        /**
+         * Constructs a new GetVSchemasRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.IGetVSchemasRequest);
+
+        /** GetVSchemasRequest cluster_ids. */
+        public cluster_ids: string[];
+
+        /**
+         * Creates a new GetVSchemasRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns GetVSchemasRequest instance
+         */
+        public static create(properties?: vtadmin.IGetVSchemasRequest): vtadmin.GetVSchemasRequest;
+
+        /**
+         * Encodes the specified GetVSchemasRequest message. Does not implicitly {@link vtadmin.GetVSchemasRequest.verify|verify} messages.
+         * @param message GetVSchemasRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.IGetVSchemasRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified GetVSchemasRequest message, length delimited. Does not implicitly {@link vtadmin.GetVSchemasRequest.verify|verify} messages.
+         * @param message GetVSchemasRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.IGetVSchemasRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a GetVSchemasRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns GetVSchemasRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.GetVSchemasRequest;
+
+        /**
+         * Decodes a GetVSchemasRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns GetVSchemasRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.GetVSchemasRequest;
+
+        /**
+         * Verifies a GetVSchemasRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a GetVSchemasRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns GetVSchemasRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.GetVSchemasRequest;
+
+        /**
+         * Creates a plain object from a GetVSchemasRequest message. Also converts values to other types if specified.
+         * @param message GetVSchemasRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.GetVSchemasRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this GetVSchemasRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a GetVSchemasResponse. */
+    interface IGetVSchemasResponse {
+
+        /** GetVSchemasResponse v_schemas */
+        v_schemas?: (vtadmin.IVSchema[]|null);
+    }
+
+    /** Represents a GetVSchemasResponse. */
+    class GetVSchemasResponse implements IGetVSchemasResponse {
+
+        /**
+         * Constructs a new GetVSchemasResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.IGetVSchemasResponse);
+
+        /** GetVSchemasResponse v_schemas. */
+        public v_schemas: vtadmin.IVSchema[];
+
+        /**
+         * Creates a new GetVSchemasResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns GetVSchemasResponse instance
+         */
+        public static create(properties?: vtadmin.IGetVSchemasResponse): vtadmin.GetVSchemasResponse;
+
+        /**
+         * Encodes the specified GetVSchemasResponse message. Does not implicitly {@link vtadmin.GetVSchemasResponse.verify|verify} messages.
+         * @param message GetVSchemasResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.IGetVSchemasResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified GetVSchemasResponse message, length delimited. Does not implicitly {@link vtadmin.GetVSchemasResponse.verify|verify} messages.
+         * @param message GetVSchemasResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.IGetVSchemasResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a GetVSchemasResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns GetVSchemasResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.GetVSchemasResponse;
+
+        /**
+         * Decodes a GetVSchemasResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns GetVSchemasResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.GetVSchemasResponse;
+
+        /**
+         * Verifies a GetVSchemasResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a GetVSchemasResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns GetVSchemasResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.GetVSchemasResponse;
+
+        /**
+         * Creates a plain object from a GetVSchemasResponse message. Also converts values to other types if specified.
+         * @param message GetVSchemasResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.GetVSchemasResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this GetVSchemasResponse to JSON.
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
@@ -20378,6 +20798,916 @@ export namespace logutil {
     }
 }
 
+/** Namespace vschema. */
+export namespace vschema {
+
+    /** Properties of a RoutingRules. */
+    interface IRoutingRules {
+
+        /** RoutingRules rules */
+        rules?: (vschema.IRoutingRule[]|null);
+    }
+
+    /** Represents a RoutingRules. */
+    class RoutingRules implements IRoutingRules {
+
+        /**
+         * Constructs a new RoutingRules.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vschema.IRoutingRules);
+
+        /** RoutingRules rules. */
+        public rules: vschema.IRoutingRule[];
+
+        /**
+         * Creates a new RoutingRules instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns RoutingRules instance
+         */
+        public static create(properties?: vschema.IRoutingRules): vschema.RoutingRules;
+
+        /**
+         * Encodes the specified RoutingRules message. Does not implicitly {@link vschema.RoutingRules.verify|verify} messages.
+         * @param message RoutingRules message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vschema.IRoutingRules, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified RoutingRules message, length delimited. Does not implicitly {@link vschema.RoutingRules.verify|verify} messages.
+         * @param message RoutingRules message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vschema.IRoutingRules, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a RoutingRules message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns RoutingRules
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vschema.RoutingRules;
+
+        /**
+         * Decodes a RoutingRules message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns RoutingRules
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vschema.RoutingRules;
+
+        /**
+         * Verifies a RoutingRules message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a RoutingRules message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns RoutingRules
+         */
+        public static fromObject(object: { [k: string]: any }): vschema.RoutingRules;
+
+        /**
+         * Creates a plain object from a RoutingRules message. Also converts values to other types if specified.
+         * @param message RoutingRules
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vschema.RoutingRules, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this RoutingRules to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a RoutingRule. */
+    interface IRoutingRule {
+
+        /** RoutingRule from_table */
+        from_table?: (string|null);
+
+        /** RoutingRule to_tables */
+        to_tables?: (string[]|null);
+    }
+
+    /** Represents a RoutingRule. */
+    class RoutingRule implements IRoutingRule {
+
+        /**
+         * Constructs a new RoutingRule.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vschema.IRoutingRule);
+
+        /** RoutingRule from_table. */
+        public from_table: string;
+
+        /** RoutingRule to_tables. */
+        public to_tables: string[];
+
+        /**
+         * Creates a new RoutingRule instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns RoutingRule instance
+         */
+        public static create(properties?: vschema.IRoutingRule): vschema.RoutingRule;
+
+        /**
+         * Encodes the specified RoutingRule message. Does not implicitly {@link vschema.RoutingRule.verify|verify} messages.
+         * @param message RoutingRule message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vschema.IRoutingRule, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified RoutingRule message, length delimited. Does not implicitly {@link vschema.RoutingRule.verify|verify} messages.
+         * @param message RoutingRule message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vschema.IRoutingRule, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a RoutingRule message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns RoutingRule
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vschema.RoutingRule;
+
+        /**
+         * Decodes a RoutingRule message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns RoutingRule
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vschema.RoutingRule;
+
+        /**
+         * Verifies a RoutingRule message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a RoutingRule message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns RoutingRule
+         */
+        public static fromObject(object: { [k: string]: any }): vschema.RoutingRule;
+
+        /**
+         * Creates a plain object from a RoutingRule message. Also converts values to other types if specified.
+         * @param message RoutingRule
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vschema.RoutingRule, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this RoutingRule to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a Keyspace. */
+    interface IKeyspace {
+
+        /** Keyspace sharded */
+        sharded?: (boolean|null);
+
+        /** Keyspace vindexes */
+        vindexes?: ({ [k: string]: vschema.IVindex }|null);
+
+        /** Keyspace tables */
+        tables?: ({ [k: string]: vschema.ITable }|null);
+
+        /** Keyspace require_explicit_routing */
+        require_explicit_routing?: (boolean|null);
+    }
+
+    /** Represents a Keyspace. */
+    class Keyspace implements IKeyspace {
+
+        /**
+         * Constructs a new Keyspace.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vschema.IKeyspace);
+
+        /** Keyspace sharded. */
+        public sharded: boolean;
+
+        /** Keyspace vindexes. */
+        public vindexes: { [k: string]: vschema.IVindex };
+
+        /** Keyspace tables. */
+        public tables: { [k: string]: vschema.ITable };
+
+        /** Keyspace require_explicit_routing. */
+        public require_explicit_routing: boolean;
+
+        /**
+         * Creates a new Keyspace instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns Keyspace instance
+         */
+        public static create(properties?: vschema.IKeyspace): vschema.Keyspace;
+
+        /**
+         * Encodes the specified Keyspace message. Does not implicitly {@link vschema.Keyspace.verify|verify} messages.
+         * @param message Keyspace message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vschema.IKeyspace, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified Keyspace message, length delimited. Does not implicitly {@link vschema.Keyspace.verify|verify} messages.
+         * @param message Keyspace message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vschema.IKeyspace, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a Keyspace message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns Keyspace
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vschema.Keyspace;
+
+        /**
+         * Decodes a Keyspace message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns Keyspace
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vschema.Keyspace;
+
+        /**
+         * Verifies a Keyspace message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a Keyspace message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns Keyspace
+         */
+        public static fromObject(object: { [k: string]: any }): vschema.Keyspace;
+
+        /**
+         * Creates a plain object from a Keyspace message. Also converts values to other types if specified.
+         * @param message Keyspace
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vschema.Keyspace, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this Keyspace to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a Vindex. */
+    interface IVindex {
+
+        /** Vindex type */
+        type?: (string|null);
+
+        /** Vindex params */
+        params?: ({ [k: string]: string }|null);
+
+        /** Vindex owner */
+        owner?: (string|null);
+    }
+
+    /** Represents a Vindex. */
+    class Vindex implements IVindex {
+
+        /**
+         * Constructs a new Vindex.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vschema.IVindex);
+
+        /** Vindex type. */
+        public type: string;
+
+        /** Vindex params. */
+        public params: { [k: string]: string };
+
+        /** Vindex owner. */
+        public owner: string;
+
+        /**
+         * Creates a new Vindex instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns Vindex instance
+         */
+        public static create(properties?: vschema.IVindex): vschema.Vindex;
+
+        /**
+         * Encodes the specified Vindex message. Does not implicitly {@link vschema.Vindex.verify|verify} messages.
+         * @param message Vindex message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vschema.IVindex, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified Vindex message, length delimited. Does not implicitly {@link vschema.Vindex.verify|verify} messages.
+         * @param message Vindex message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vschema.IVindex, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a Vindex message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns Vindex
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vschema.Vindex;
+
+        /**
+         * Decodes a Vindex message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns Vindex
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vschema.Vindex;
+
+        /**
+         * Verifies a Vindex message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a Vindex message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns Vindex
+         */
+        public static fromObject(object: { [k: string]: any }): vschema.Vindex;
+
+        /**
+         * Creates a plain object from a Vindex message. Also converts values to other types if specified.
+         * @param message Vindex
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vschema.Vindex, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this Vindex to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a Table. */
+    interface ITable {
+
+        /** Table type */
+        type?: (string|null);
+
+        /** Table column_vindexes */
+        column_vindexes?: (vschema.IColumnVindex[]|null);
+
+        /** Table auto_increment */
+        auto_increment?: (vschema.IAutoIncrement|null);
+
+        /** Table columns */
+        columns?: (vschema.IColumn[]|null);
+
+        /** Table pinned */
+        pinned?: (string|null);
+
+        /** Table column_list_authoritative */
+        column_list_authoritative?: (boolean|null);
+    }
+
+    /** Represents a Table. */
+    class Table implements ITable {
+
+        /**
+         * Constructs a new Table.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vschema.ITable);
+
+        /** Table type. */
+        public type: string;
+
+        /** Table column_vindexes. */
+        public column_vindexes: vschema.IColumnVindex[];
+
+        /** Table auto_increment. */
+        public auto_increment?: (vschema.IAutoIncrement|null);
+
+        /** Table columns. */
+        public columns: vschema.IColumn[];
+
+        /** Table pinned. */
+        public pinned: string;
+
+        /** Table column_list_authoritative. */
+        public column_list_authoritative: boolean;
+
+        /**
+         * Creates a new Table instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns Table instance
+         */
+        public static create(properties?: vschema.ITable): vschema.Table;
+
+        /**
+         * Encodes the specified Table message. Does not implicitly {@link vschema.Table.verify|verify} messages.
+         * @param message Table message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vschema.ITable, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified Table message, length delimited. Does not implicitly {@link vschema.Table.verify|verify} messages.
+         * @param message Table message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vschema.ITable, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a Table message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns Table
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vschema.Table;
+
+        /**
+         * Decodes a Table message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns Table
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vschema.Table;
+
+        /**
+         * Verifies a Table message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a Table message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns Table
+         */
+        public static fromObject(object: { [k: string]: any }): vschema.Table;
+
+        /**
+         * Creates a plain object from a Table message. Also converts values to other types if specified.
+         * @param message Table
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vschema.Table, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this Table to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a ColumnVindex. */
+    interface IColumnVindex {
+
+        /** ColumnVindex column */
+        column?: (string|null);
+
+        /** ColumnVindex name */
+        name?: (string|null);
+
+        /** ColumnVindex columns */
+        columns?: (string[]|null);
+    }
+
+    /** Represents a ColumnVindex. */
+    class ColumnVindex implements IColumnVindex {
+
+        /**
+         * Constructs a new ColumnVindex.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vschema.IColumnVindex);
+
+        /** ColumnVindex column. */
+        public column: string;
+
+        /** ColumnVindex name. */
+        public name: string;
+
+        /** ColumnVindex columns. */
+        public columns: string[];
+
+        /**
+         * Creates a new ColumnVindex instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ColumnVindex instance
+         */
+        public static create(properties?: vschema.IColumnVindex): vschema.ColumnVindex;
+
+        /**
+         * Encodes the specified ColumnVindex message. Does not implicitly {@link vschema.ColumnVindex.verify|verify} messages.
+         * @param message ColumnVindex message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vschema.IColumnVindex, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ColumnVindex message, length delimited. Does not implicitly {@link vschema.ColumnVindex.verify|verify} messages.
+         * @param message ColumnVindex message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vschema.IColumnVindex, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ColumnVindex message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ColumnVindex
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vschema.ColumnVindex;
+
+        /**
+         * Decodes a ColumnVindex message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ColumnVindex
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vschema.ColumnVindex;
+
+        /**
+         * Verifies a ColumnVindex message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ColumnVindex message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ColumnVindex
+         */
+        public static fromObject(object: { [k: string]: any }): vschema.ColumnVindex;
+
+        /**
+         * Creates a plain object from a ColumnVindex message. Also converts values to other types if specified.
+         * @param message ColumnVindex
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vschema.ColumnVindex, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ColumnVindex to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of an AutoIncrement. */
+    interface IAutoIncrement {
+
+        /** AutoIncrement column */
+        column?: (string|null);
+
+        /** AutoIncrement sequence */
+        sequence?: (string|null);
+    }
+
+    /** Represents an AutoIncrement. */
+    class AutoIncrement implements IAutoIncrement {
+
+        /**
+         * Constructs a new AutoIncrement.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vschema.IAutoIncrement);
+
+        /** AutoIncrement column. */
+        public column: string;
+
+        /** AutoIncrement sequence. */
+        public sequence: string;
+
+        /**
+         * Creates a new AutoIncrement instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns AutoIncrement instance
+         */
+        public static create(properties?: vschema.IAutoIncrement): vschema.AutoIncrement;
+
+        /**
+         * Encodes the specified AutoIncrement message. Does not implicitly {@link vschema.AutoIncrement.verify|verify} messages.
+         * @param message AutoIncrement message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vschema.IAutoIncrement, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified AutoIncrement message, length delimited. Does not implicitly {@link vschema.AutoIncrement.verify|verify} messages.
+         * @param message AutoIncrement message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vschema.IAutoIncrement, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes an AutoIncrement message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns AutoIncrement
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vschema.AutoIncrement;
+
+        /**
+         * Decodes an AutoIncrement message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns AutoIncrement
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vschema.AutoIncrement;
+
+        /**
+         * Verifies an AutoIncrement message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates an AutoIncrement message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns AutoIncrement
+         */
+        public static fromObject(object: { [k: string]: any }): vschema.AutoIncrement;
+
+        /**
+         * Creates a plain object from an AutoIncrement message. Also converts values to other types if specified.
+         * @param message AutoIncrement
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vschema.AutoIncrement, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this AutoIncrement to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a Column. */
+    interface IColumn {
+
+        /** Column name */
+        name?: (string|null);
+
+        /** Column type */
+        type?: (query.Type|null);
+    }
+
+    /** Represents a Column. */
+    class Column implements IColumn {
+
+        /**
+         * Constructs a new Column.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vschema.IColumn);
+
+        /** Column name. */
+        public name: string;
+
+        /** Column type. */
+        public type: query.Type;
+
+        /**
+         * Creates a new Column instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns Column instance
+         */
+        public static create(properties?: vschema.IColumn): vschema.Column;
+
+        /**
+         * Encodes the specified Column message. Does not implicitly {@link vschema.Column.verify|verify} messages.
+         * @param message Column message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vschema.IColumn, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified Column message, length delimited. Does not implicitly {@link vschema.Column.verify|verify} messages.
+         * @param message Column message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vschema.IColumn, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a Column message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns Column
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vschema.Column;
+
+        /**
+         * Decodes a Column message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns Column
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vschema.Column;
+
+        /**
+         * Verifies a Column message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a Column message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns Column
+         */
+        public static fromObject(object: { [k: string]: any }): vschema.Column;
+
+        /**
+         * Creates a plain object from a Column message. Also converts values to other types if specified.
+         * @param message Column
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vschema.Column, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this Column to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a SrvVSchema. */
+    interface ISrvVSchema {
+
+        /** SrvVSchema keyspaces */
+        keyspaces?: ({ [k: string]: vschema.IKeyspace }|null);
+
+        /** SrvVSchema routing_rules */
+        routing_rules?: (vschema.IRoutingRules|null);
+    }
+
+    /** Represents a SrvVSchema. */
+    class SrvVSchema implements ISrvVSchema {
+
+        /**
+         * Constructs a new SrvVSchema.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vschema.ISrvVSchema);
+
+        /** SrvVSchema keyspaces. */
+        public keyspaces: { [k: string]: vschema.IKeyspace };
+
+        /** SrvVSchema routing_rules. */
+        public routing_rules?: (vschema.IRoutingRules|null);
+
+        /**
+         * Creates a new SrvVSchema instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns SrvVSchema instance
+         */
+        public static create(properties?: vschema.ISrvVSchema): vschema.SrvVSchema;
+
+        /**
+         * Encodes the specified SrvVSchema message. Does not implicitly {@link vschema.SrvVSchema.verify|verify} messages.
+         * @param message SrvVSchema message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vschema.ISrvVSchema, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified SrvVSchema message, length delimited. Does not implicitly {@link vschema.SrvVSchema.verify|verify} messages.
+         * @param message SrvVSchema message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vschema.ISrvVSchema, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a SrvVSchema message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns SrvVSchema
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vschema.SrvVSchema;
+
+        /**
+         * Decodes a SrvVSchema message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns SrvVSchema
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vschema.SrvVSchema;
+
+        /**
+         * Verifies a SrvVSchema message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a SrvVSchema message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns SrvVSchema
+         */
+        public static fromObject(object: { [k: string]: any }): vschema.SrvVSchema;
+
+        /**
+         * Creates a plain object from a SrvVSchema message. Also converts values to other types if specified.
+         * @param message SrvVSchema
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vschema.SrvVSchema, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this SrvVSchema to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+}
+
 /** Namespace vtctldata. */
 export namespace vtctldata {
 
@@ -30804,916 +32134,6 @@ export namespace mysqlctl {
 
         /**
          * Converts this BackupInfo to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-    }
-}
-
-/** Namespace vschema. */
-export namespace vschema {
-
-    /** Properties of a RoutingRules. */
-    interface IRoutingRules {
-
-        /** RoutingRules rules */
-        rules?: (vschema.IRoutingRule[]|null);
-    }
-
-    /** Represents a RoutingRules. */
-    class RoutingRules implements IRoutingRules {
-
-        /**
-         * Constructs a new RoutingRules.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: vschema.IRoutingRules);
-
-        /** RoutingRules rules. */
-        public rules: vschema.IRoutingRule[];
-
-        /**
-         * Creates a new RoutingRules instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns RoutingRules instance
-         */
-        public static create(properties?: vschema.IRoutingRules): vschema.RoutingRules;
-
-        /**
-         * Encodes the specified RoutingRules message. Does not implicitly {@link vschema.RoutingRules.verify|verify} messages.
-         * @param message RoutingRules message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: vschema.IRoutingRules, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified RoutingRules message, length delimited. Does not implicitly {@link vschema.RoutingRules.verify|verify} messages.
-         * @param message RoutingRules message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: vschema.IRoutingRules, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a RoutingRules message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns RoutingRules
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vschema.RoutingRules;
-
-        /**
-         * Decodes a RoutingRules message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns RoutingRules
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vschema.RoutingRules;
-
-        /**
-         * Verifies a RoutingRules message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a RoutingRules message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns RoutingRules
-         */
-        public static fromObject(object: { [k: string]: any }): vschema.RoutingRules;
-
-        /**
-         * Creates a plain object from a RoutingRules message. Also converts values to other types if specified.
-         * @param message RoutingRules
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: vschema.RoutingRules, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this RoutingRules to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-    }
-
-    /** Properties of a RoutingRule. */
-    interface IRoutingRule {
-
-        /** RoutingRule from_table */
-        from_table?: (string|null);
-
-        /** RoutingRule to_tables */
-        to_tables?: (string[]|null);
-    }
-
-    /** Represents a RoutingRule. */
-    class RoutingRule implements IRoutingRule {
-
-        /**
-         * Constructs a new RoutingRule.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: vschema.IRoutingRule);
-
-        /** RoutingRule from_table. */
-        public from_table: string;
-
-        /** RoutingRule to_tables. */
-        public to_tables: string[];
-
-        /**
-         * Creates a new RoutingRule instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns RoutingRule instance
-         */
-        public static create(properties?: vschema.IRoutingRule): vschema.RoutingRule;
-
-        /**
-         * Encodes the specified RoutingRule message. Does not implicitly {@link vschema.RoutingRule.verify|verify} messages.
-         * @param message RoutingRule message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: vschema.IRoutingRule, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified RoutingRule message, length delimited. Does not implicitly {@link vschema.RoutingRule.verify|verify} messages.
-         * @param message RoutingRule message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: vschema.IRoutingRule, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a RoutingRule message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns RoutingRule
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vschema.RoutingRule;
-
-        /**
-         * Decodes a RoutingRule message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns RoutingRule
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vschema.RoutingRule;
-
-        /**
-         * Verifies a RoutingRule message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a RoutingRule message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns RoutingRule
-         */
-        public static fromObject(object: { [k: string]: any }): vschema.RoutingRule;
-
-        /**
-         * Creates a plain object from a RoutingRule message. Also converts values to other types if specified.
-         * @param message RoutingRule
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: vschema.RoutingRule, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this RoutingRule to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-    }
-
-    /** Properties of a Keyspace. */
-    interface IKeyspace {
-
-        /** Keyspace sharded */
-        sharded?: (boolean|null);
-
-        /** Keyspace vindexes */
-        vindexes?: ({ [k: string]: vschema.IVindex }|null);
-
-        /** Keyspace tables */
-        tables?: ({ [k: string]: vschema.ITable }|null);
-
-        /** Keyspace require_explicit_routing */
-        require_explicit_routing?: (boolean|null);
-    }
-
-    /** Represents a Keyspace. */
-    class Keyspace implements IKeyspace {
-
-        /**
-         * Constructs a new Keyspace.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: vschema.IKeyspace);
-
-        /** Keyspace sharded. */
-        public sharded: boolean;
-
-        /** Keyspace vindexes. */
-        public vindexes: { [k: string]: vschema.IVindex };
-
-        /** Keyspace tables. */
-        public tables: { [k: string]: vschema.ITable };
-
-        /** Keyspace require_explicit_routing. */
-        public require_explicit_routing: boolean;
-
-        /**
-         * Creates a new Keyspace instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns Keyspace instance
-         */
-        public static create(properties?: vschema.IKeyspace): vschema.Keyspace;
-
-        /**
-         * Encodes the specified Keyspace message. Does not implicitly {@link vschema.Keyspace.verify|verify} messages.
-         * @param message Keyspace message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: vschema.IKeyspace, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified Keyspace message, length delimited. Does not implicitly {@link vschema.Keyspace.verify|verify} messages.
-         * @param message Keyspace message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: vschema.IKeyspace, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a Keyspace message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns Keyspace
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vschema.Keyspace;
-
-        /**
-         * Decodes a Keyspace message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns Keyspace
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vschema.Keyspace;
-
-        /**
-         * Verifies a Keyspace message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a Keyspace message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns Keyspace
-         */
-        public static fromObject(object: { [k: string]: any }): vschema.Keyspace;
-
-        /**
-         * Creates a plain object from a Keyspace message. Also converts values to other types if specified.
-         * @param message Keyspace
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: vschema.Keyspace, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this Keyspace to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-    }
-
-    /** Properties of a Vindex. */
-    interface IVindex {
-
-        /** Vindex type */
-        type?: (string|null);
-
-        /** Vindex params */
-        params?: ({ [k: string]: string }|null);
-
-        /** Vindex owner */
-        owner?: (string|null);
-    }
-
-    /** Represents a Vindex. */
-    class Vindex implements IVindex {
-
-        /**
-         * Constructs a new Vindex.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: vschema.IVindex);
-
-        /** Vindex type. */
-        public type: string;
-
-        /** Vindex params. */
-        public params: { [k: string]: string };
-
-        /** Vindex owner. */
-        public owner: string;
-
-        /**
-         * Creates a new Vindex instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns Vindex instance
-         */
-        public static create(properties?: vschema.IVindex): vschema.Vindex;
-
-        /**
-         * Encodes the specified Vindex message. Does not implicitly {@link vschema.Vindex.verify|verify} messages.
-         * @param message Vindex message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: vschema.IVindex, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified Vindex message, length delimited. Does not implicitly {@link vschema.Vindex.verify|verify} messages.
-         * @param message Vindex message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: vschema.IVindex, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a Vindex message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns Vindex
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vschema.Vindex;
-
-        /**
-         * Decodes a Vindex message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns Vindex
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vschema.Vindex;
-
-        /**
-         * Verifies a Vindex message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a Vindex message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns Vindex
-         */
-        public static fromObject(object: { [k: string]: any }): vschema.Vindex;
-
-        /**
-         * Creates a plain object from a Vindex message. Also converts values to other types if specified.
-         * @param message Vindex
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: vschema.Vindex, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this Vindex to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-    }
-
-    /** Properties of a Table. */
-    interface ITable {
-
-        /** Table type */
-        type?: (string|null);
-
-        /** Table column_vindexes */
-        column_vindexes?: (vschema.IColumnVindex[]|null);
-
-        /** Table auto_increment */
-        auto_increment?: (vschema.IAutoIncrement|null);
-
-        /** Table columns */
-        columns?: (vschema.IColumn[]|null);
-
-        /** Table pinned */
-        pinned?: (string|null);
-
-        /** Table column_list_authoritative */
-        column_list_authoritative?: (boolean|null);
-    }
-
-    /** Represents a Table. */
-    class Table implements ITable {
-
-        /**
-         * Constructs a new Table.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: vschema.ITable);
-
-        /** Table type. */
-        public type: string;
-
-        /** Table column_vindexes. */
-        public column_vindexes: vschema.IColumnVindex[];
-
-        /** Table auto_increment. */
-        public auto_increment?: (vschema.IAutoIncrement|null);
-
-        /** Table columns. */
-        public columns: vschema.IColumn[];
-
-        /** Table pinned. */
-        public pinned: string;
-
-        /** Table column_list_authoritative. */
-        public column_list_authoritative: boolean;
-
-        /**
-         * Creates a new Table instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns Table instance
-         */
-        public static create(properties?: vschema.ITable): vschema.Table;
-
-        /**
-         * Encodes the specified Table message. Does not implicitly {@link vschema.Table.verify|verify} messages.
-         * @param message Table message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: vschema.ITable, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified Table message, length delimited. Does not implicitly {@link vschema.Table.verify|verify} messages.
-         * @param message Table message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: vschema.ITable, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a Table message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns Table
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vschema.Table;
-
-        /**
-         * Decodes a Table message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns Table
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vschema.Table;
-
-        /**
-         * Verifies a Table message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a Table message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns Table
-         */
-        public static fromObject(object: { [k: string]: any }): vschema.Table;
-
-        /**
-         * Creates a plain object from a Table message. Also converts values to other types if specified.
-         * @param message Table
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: vschema.Table, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this Table to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-    }
-
-    /** Properties of a ColumnVindex. */
-    interface IColumnVindex {
-
-        /** ColumnVindex column */
-        column?: (string|null);
-
-        /** ColumnVindex name */
-        name?: (string|null);
-
-        /** ColumnVindex columns */
-        columns?: (string[]|null);
-    }
-
-    /** Represents a ColumnVindex. */
-    class ColumnVindex implements IColumnVindex {
-
-        /**
-         * Constructs a new ColumnVindex.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: vschema.IColumnVindex);
-
-        /** ColumnVindex column. */
-        public column: string;
-
-        /** ColumnVindex name. */
-        public name: string;
-
-        /** ColumnVindex columns. */
-        public columns: string[];
-
-        /**
-         * Creates a new ColumnVindex instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns ColumnVindex instance
-         */
-        public static create(properties?: vschema.IColumnVindex): vschema.ColumnVindex;
-
-        /**
-         * Encodes the specified ColumnVindex message. Does not implicitly {@link vschema.ColumnVindex.verify|verify} messages.
-         * @param message ColumnVindex message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: vschema.IColumnVindex, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified ColumnVindex message, length delimited. Does not implicitly {@link vschema.ColumnVindex.verify|verify} messages.
-         * @param message ColumnVindex message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: vschema.IColumnVindex, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a ColumnVindex message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns ColumnVindex
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vschema.ColumnVindex;
-
-        /**
-         * Decodes a ColumnVindex message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns ColumnVindex
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vschema.ColumnVindex;
-
-        /**
-         * Verifies a ColumnVindex message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a ColumnVindex message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns ColumnVindex
-         */
-        public static fromObject(object: { [k: string]: any }): vschema.ColumnVindex;
-
-        /**
-         * Creates a plain object from a ColumnVindex message. Also converts values to other types if specified.
-         * @param message ColumnVindex
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: vschema.ColumnVindex, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this ColumnVindex to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-    }
-
-    /** Properties of an AutoIncrement. */
-    interface IAutoIncrement {
-
-        /** AutoIncrement column */
-        column?: (string|null);
-
-        /** AutoIncrement sequence */
-        sequence?: (string|null);
-    }
-
-    /** Represents an AutoIncrement. */
-    class AutoIncrement implements IAutoIncrement {
-
-        /**
-         * Constructs a new AutoIncrement.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: vschema.IAutoIncrement);
-
-        /** AutoIncrement column. */
-        public column: string;
-
-        /** AutoIncrement sequence. */
-        public sequence: string;
-
-        /**
-         * Creates a new AutoIncrement instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns AutoIncrement instance
-         */
-        public static create(properties?: vschema.IAutoIncrement): vschema.AutoIncrement;
-
-        /**
-         * Encodes the specified AutoIncrement message. Does not implicitly {@link vschema.AutoIncrement.verify|verify} messages.
-         * @param message AutoIncrement message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: vschema.IAutoIncrement, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified AutoIncrement message, length delimited. Does not implicitly {@link vschema.AutoIncrement.verify|verify} messages.
-         * @param message AutoIncrement message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: vschema.IAutoIncrement, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes an AutoIncrement message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns AutoIncrement
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vschema.AutoIncrement;
-
-        /**
-         * Decodes an AutoIncrement message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns AutoIncrement
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vschema.AutoIncrement;
-
-        /**
-         * Verifies an AutoIncrement message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates an AutoIncrement message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns AutoIncrement
-         */
-        public static fromObject(object: { [k: string]: any }): vschema.AutoIncrement;
-
-        /**
-         * Creates a plain object from an AutoIncrement message. Also converts values to other types if specified.
-         * @param message AutoIncrement
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: vschema.AutoIncrement, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this AutoIncrement to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-    }
-
-    /** Properties of a Column. */
-    interface IColumn {
-
-        /** Column name */
-        name?: (string|null);
-
-        /** Column type */
-        type?: (query.Type|null);
-    }
-
-    /** Represents a Column. */
-    class Column implements IColumn {
-
-        /**
-         * Constructs a new Column.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: vschema.IColumn);
-
-        /** Column name. */
-        public name: string;
-
-        /** Column type. */
-        public type: query.Type;
-
-        /**
-         * Creates a new Column instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns Column instance
-         */
-        public static create(properties?: vschema.IColumn): vschema.Column;
-
-        /**
-         * Encodes the specified Column message. Does not implicitly {@link vschema.Column.verify|verify} messages.
-         * @param message Column message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: vschema.IColumn, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified Column message, length delimited. Does not implicitly {@link vschema.Column.verify|verify} messages.
-         * @param message Column message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: vschema.IColumn, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a Column message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns Column
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vschema.Column;
-
-        /**
-         * Decodes a Column message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns Column
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vschema.Column;
-
-        /**
-         * Verifies a Column message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a Column message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns Column
-         */
-        public static fromObject(object: { [k: string]: any }): vschema.Column;
-
-        /**
-         * Creates a plain object from a Column message. Also converts values to other types if specified.
-         * @param message Column
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: vschema.Column, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this Column to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-    }
-
-    /** Properties of a SrvVSchema. */
-    interface ISrvVSchema {
-
-        /** SrvVSchema keyspaces */
-        keyspaces?: ({ [k: string]: vschema.IKeyspace }|null);
-
-        /** SrvVSchema routing_rules */
-        routing_rules?: (vschema.IRoutingRules|null);
-    }
-
-    /** Represents a SrvVSchema. */
-    class SrvVSchema implements ISrvVSchema {
-
-        /**
-         * Constructs a new SrvVSchema.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: vschema.ISrvVSchema);
-
-        /** SrvVSchema keyspaces. */
-        public keyspaces: { [k: string]: vschema.IKeyspace };
-
-        /** SrvVSchema routing_rules. */
-        public routing_rules?: (vschema.IRoutingRules|null);
-
-        /**
-         * Creates a new SrvVSchema instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns SrvVSchema instance
-         */
-        public static create(properties?: vschema.ISrvVSchema): vschema.SrvVSchema;
-
-        /**
-         * Encodes the specified SrvVSchema message. Does not implicitly {@link vschema.SrvVSchema.verify|verify} messages.
-         * @param message SrvVSchema message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: vschema.ISrvVSchema, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified SrvVSchema message, length delimited. Does not implicitly {@link vschema.SrvVSchema.verify|verify} messages.
-         * @param message SrvVSchema message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: vschema.ISrvVSchema, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a SrvVSchema message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns SrvVSchema
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vschema.SrvVSchema;
-
-        /**
-         * Decodes a SrvVSchema message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns SrvVSchema
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vschema.SrvVSchema;
-
-        /**
-         * Verifies a SrvVSchema message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a SrvVSchema message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns SrvVSchema
-         */
-        public static fromObject(object: { [k: string]: any }): vschema.SrvVSchema;
-
-        /**
-         * Creates a plain object from a SrvVSchema message. Also converts values to other types if specified.
-         * @param message SrvVSchema
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: vschema.SrvVSchema, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this SrvVSchema to JSON.
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
