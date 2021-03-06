@@ -2067,6 +2067,469 @@ func TestGetTablet(t *testing.T) {
 	}
 }
 
+func TestGetVSchema(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		clusterCfg vtadmintestutil.TestClusterConfig
+		req        *vtadminpb.GetVSchemaRequest
+		expected   *vtadminpb.VSchema
+		shouldErr  bool
+	}{
+		{
+			name: "success",
+			clusterCfg: vtadmintestutil.TestClusterConfig{
+				Cluster: &vtadminpb.Cluster{
+					Id:   "c1",
+					Name: "cluster1",
+				},
+				VtctldClient: &vtadmintestutil.VtctldClient{
+					GetVSchemaResults: map[string]struct {
+						Response *vtctldatapb.GetVSchemaResponse
+						Error    error
+					}{
+						"testkeyspace": {
+							Response: &vtctldatapb.GetVSchemaResponse{
+								VSchema: &vschemapb.Keyspace{
+									Sharded: true,
+									Vindexes: map[string]*vschemapb.Vindex{
+										"hash": {
+											Type: "md5hash",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			req: &vtadminpb.GetVSchemaRequest{
+				ClusterId: "c1",
+				Keyspace:  "testkeyspace",
+			},
+			expected: &vtadminpb.VSchema{
+				Cluster: &vtadminpb.Cluster{
+					Id:   "c1",
+					Name: "cluster1",
+				},
+				Name: "testkeyspace",
+				VSchema: &vschemapb.Keyspace{
+					Sharded: true,
+					Vindexes: map[string]*vschemapb.Vindex{
+						"hash": {
+							Type: "md5hash",
+						},
+					},
+				},
+			},
+			shouldErr: false,
+		},
+		{
+			name: "no vschema for keyspace",
+			clusterCfg: vtadmintestutil.TestClusterConfig{
+				Cluster: &vtadminpb.Cluster{
+					Id:   "c1",
+					Name: "cluster1",
+				},
+				VtctldClient: &vtadmintestutil.VtctldClient{
+					GetVSchemaResults: map[string]struct {
+						Response *vtctldatapb.GetVSchemaResponse
+						Error    error
+					}{
+						"testkeyspace": {
+							Response: &vtctldatapb.GetVSchemaResponse{
+								VSchema: &vschemapb.Keyspace{
+									Sharded: true,
+									Vindexes: map[string]*vschemapb.Vindex{
+										"hash": {
+											Type: "md5hash",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			req: &vtadminpb.GetVSchemaRequest{
+				ClusterId: "c1",
+				Keyspace:  "otherkeyspace",
+			},
+			expected:  nil,
+			shouldErr: true,
+		},
+		{
+			name: "cluster not found",
+			clusterCfg: vtadmintestutil.TestClusterConfig{
+				Cluster: &vtadminpb.Cluster{
+					Id:   "c1",
+					Name: "cluster1",
+				},
+			},
+			req: &vtadminpb.GetVSchemaRequest{
+				ClusterId: "c2",
+				Keyspace:  "testkeyspace",
+			},
+			expected:  nil,
+			shouldErr: true,
+		},
+	}
+
+	ctx := context.Background()
+
+	for _, tt := range tests {
+		tt := tt
+
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			clusters := []*cluster.Cluster{vtadmintestutil.BuildCluster(tt.clusterCfg)}
+			api := NewAPI(clusters, grpcserver.Options{}, http.Options{})
+
+			resp, err := api.GetVSchema(ctx, tt.req)
+			if tt.shouldErr {
+				assert.Error(t, err)
+
+				return
+			}
+
+			assert.NoError(t, err)
+			assert.Equal(t, tt.expected, resp)
+		})
+	}
+}
+
+func TestGetVSchemas(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name        string
+		clusterCfgs []vtadmintestutil.TestClusterConfig
+		req         *vtadminpb.GetVSchemasRequest
+		expected    *vtadminpb.GetVSchemasResponse
+		shouldErr   bool
+	}{
+		{
+			name: "success",
+			clusterCfgs: []vtadmintestutil.TestClusterConfig{
+				{
+					Cluster: &vtadminpb.Cluster{
+						Id:   "c1",
+						Name: "cluster1",
+					},
+					VtctldClient: &vtadmintestutil.VtctldClient{
+						GetKeyspacesResults: struct {
+							Keyspaces []*vtctldatapb.Keyspace
+							Error     error
+						}{
+							Keyspaces: []*vtctldatapb.Keyspace{
+								{
+									Name: "testkeyspace",
+								},
+							},
+						},
+						GetVSchemaResults: map[string]struct {
+							Response *vtctldatapb.GetVSchemaResponse
+							Error    error
+						}{
+							"testkeyspace": {
+								Response: &vtctldatapb.GetVSchemaResponse{
+									VSchema: &vschemapb.Keyspace{},
+								},
+							},
+						},
+					},
+				},
+				{
+					Cluster: &vtadminpb.Cluster{
+						Id:   "c2",
+						Name: "cluster2",
+					},
+					VtctldClient: &vtadmintestutil.VtctldClient{
+						GetKeyspacesResults: struct {
+							Keyspaces []*vtctldatapb.Keyspace
+							Error     error
+						}{
+							Keyspaces: []*vtctldatapb.Keyspace{
+								{
+									Name: "k2",
+								},
+							},
+						},
+						GetVSchemaResults: map[string]struct {
+							Response *vtctldatapb.GetVSchemaResponse
+							Error    error
+						}{
+							"k2": {
+								Response: &vtctldatapb.GetVSchemaResponse{
+									VSchema: &vschemapb.Keyspace{},
+								},
+							},
+						},
+					},
+				},
+			},
+			req: &vtadminpb.GetVSchemasRequest{},
+			expected: &vtadminpb.GetVSchemasResponse{
+				VSchemas: []*vtadminpb.VSchema{
+					{
+						Cluster: &vtadminpb.Cluster{
+							Id:   "c1",
+							Name: "cluster1",
+						},
+						Name:    "testkeyspace",
+						VSchema: &vschemapb.Keyspace{},
+					},
+					{
+						Cluster: &vtadminpb.Cluster{
+							Id:   "c2",
+							Name: "cluster2",
+						},
+						Name:    "k2",
+						VSchema: &vschemapb.Keyspace{},
+					},
+				},
+			},
+			shouldErr: false,
+		},
+		{
+			name: "requesting specific clusters",
+			clusterCfgs: []vtadmintestutil.TestClusterConfig{
+				{
+					Cluster: &vtadminpb.Cluster{
+						Id:   "c1",
+						Name: "cluster1",
+					},
+					VtctldClient: &vtadmintestutil.VtctldClient{
+						GetKeyspacesResults: struct {
+							Keyspaces []*vtctldatapb.Keyspace
+							Error     error
+						}{
+							Keyspaces: []*vtctldatapb.Keyspace{
+								{
+									Name: "testkeyspace",
+								},
+							},
+						},
+						GetVSchemaResults: map[string]struct {
+							Response *vtctldatapb.GetVSchemaResponse
+							Error    error
+						}{
+							"testkeyspace": {
+								Response: &vtctldatapb.GetVSchemaResponse{
+									VSchema: &vschemapb.Keyspace{},
+								},
+							},
+						},
+					},
+				},
+				{
+					Cluster: &vtadminpb.Cluster{
+						Id:   "c2",
+						Name: "cluster2",
+					},
+					VtctldClient: &vtadmintestutil.VtctldClient{
+						GetKeyspacesResults: struct {
+							Keyspaces []*vtctldatapb.Keyspace
+							Error     error
+						}{
+							Keyspaces: []*vtctldatapb.Keyspace{
+								{
+									Name: "k2",
+								},
+							},
+						},
+						GetVSchemaResults: map[string]struct {
+							Response *vtctldatapb.GetVSchemaResponse
+							Error    error
+						}{
+							"k2": {
+								Response: &vtctldatapb.GetVSchemaResponse{
+									VSchema: &vschemapb.Keyspace{},
+								},
+							},
+						},
+					},
+				},
+			},
+			req: &vtadminpb.GetVSchemasRequest{
+				ClusterIds: []string{"c2"},
+			},
+			expected: &vtadminpb.GetVSchemasResponse{
+				VSchemas: []*vtadminpb.VSchema{
+					{
+						Cluster: &vtadminpb.Cluster{
+							Id:   "c2",
+							Name: "cluster2",
+						},
+						Name:    "k2",
+						VSchema: &vschemapb.Keyspace{},
+					},
+				},
+			},
+			shouldErr: false,
+		},
+		{
+			name: "GetKeyspaces failure",
+			clusterCfgs: []vtadmintestutil.TestClusterConfig{
+				{
+					Cluster: &vtadminpb.Cluster{
+						Id:   "c1",
+						Name: "cluster1",
+					},
+					VtctldClient: &vtadmintestutil.VtctldClient{
+						GetKeyspacesResults: struct {
+							Keyspaces []*vtctldatapb.Keyspace
+							Error     error
+						}{
+							Keyspaces: []*vtctldatapb.Keyspace{
+								{
+									Name: "testkeyspace",
+								},
+							},
+						},
+						GetVSchemaResults: map[string]struct {
+							Response *vtctldatapb.GetVSchemaResponse
+							Error    error
+						}{
+							"testkeyspace": {
+								Response: &vtctldatapb.GetVSchemaResponse{
+									VSchema: &vschemapb.Keyspace{},
+								},
+							},
+						},
+					},
+				},
+				{
+					Cluster: &vtadminpb.Cluster{
+						Id:   "c2",
+						Name: "cluster2",
+					},
+					VtctldClient: &vtadmintestutil.VtctldClient{
+						GetKeyspacesResults: struct {
+							Keyspaces []*vtctldatapb.Keyspace
+							Error     error
+						}{
+							Error: assert.AnError,
+						},
+					},
+				},
+			},
+			req:       &vtadminpb.GetVSchemasRequest{},
+			expected:  nil,
+			shouldErr: true,
+		},
+		{
+			name: "GetVSchema failure",
+			clusterCfgs: []vtadmintestutil.TestClusterConfig{
+				{
+					Cluster: &vtadminpb.Cluster{
+						Id:   "c1",
+						Name: "cluster1",
+					},
+					VtctldClient: &vtadmintestutil.VtctldClient{
+						GetKeyspacesResults: struct {
+							Keyspaces []*vtctldatapb.Keyspace
+							Error     error
+						}{
+							Keyspaces: []*vtctldatapb.Keyspace{
+								{
+									Name: "testkeyspace",
+								},
+							},
+						},
+						GetVSchemaResults: map[string]struct {
+							Response *vtctldatapb.GetVSchemaResponse
+							Error    error
+						}{
+							"testkeyspace": {
+								Error: assert.AnError,
+							},
+						},
+					},
+				},
+				{
+					Cluster: &vtadminpb.Cluster{
+						Id:   "c2",
+						Name: "cluster2",
+					},
+					VtctldClient: &vtadmintestutil.VtctldClient{
+						GetKeyspacesResults: struct {
+							Keyspaces []*vtctldatapb.Keyspace
+							Error     error
+						}{
+							Keyspaces: []*vtctldatapb.Keyspace{
+								{
+									Name: "k2",
+								},
+							},
+						},
+						GetVSchemaResults: map[string]struct {
+							Response *vtctldatapb.GetVSchemaResponse
+							Error    error
+						}{
+							"k2": {
+								Response: &vtctldatapb.GetVSchemaResponse{
+									VSchema: &vschemapb.Keyspace{},
+								},
+							},
+						},
+					},
+				},
+			},
+			req:       &vtadminpb.GetVSchemasRequest{},
+			expected:  nil,
+			shouldErr: true,
+		},
+		{
+			name:        "no clusters specified",
+			clusterCfgs: []vtadmintestutil.TestClusterConfig{},
+			req:         &vtadminpb.GetVSchemasRequest{},
+			expected: &vtadminpb.GetVSchemasResponse{
+				VSchemas: []*vtadminpb.VSchema{},
+			},
+			shouldErr: false,
+		},
+		{
+			name:        "requested invalid cluster",
+			clusterCfgs: []vtadmintestutil.TestClusterConfig{},
+			req: &vtadminpb.GetVSchemasRequest{
+				ClusterIds: []string{"c1"},
+			},
+			expected:  nil,
+			shouldErr: true,
+		},
+	}
+
+	ctx := context.Background()
+
+	for _, tt := range tests {
+		tt := tt
+
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			if tt.req == nil {
+				t.SkipNow()
+			}
+
+			clusters := vtadmintestutil.BuildClusters(tt.clusterCfgs...)
+			api := NewAPI(clusters, grpcserver.Options{}, http.Options{})
+
+			resp, err := api.GetVSchemas(ctx, tt.req)
+			if tt.shouldErr {
+				assert.Error(t, err)
+
+				return
+			}
+
+			assert.NoError(t, err)
+			assert.ElementsMatch(t, tt.expected.VSchemas, resp.VSchemas)
+		})
+	}
+}
+
 func TestVTExplain(t *testing.T) {
 	tests := []struct {
 		name          string
