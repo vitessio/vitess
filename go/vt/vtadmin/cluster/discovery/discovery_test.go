@@ -17,7 +17,9 @@ limitations under the License.
 package discovery
 
 import (
+	"fmt"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 
@@ -60,7 +62,11 @@ func TestNew(t *testing.T) {
 }
 
 func TestRegister(t *testing.T) {
-	Register("testfactory", nil)
+	// Use a timestamp to allow running tests with `-count=N`.
+	ts := time.Now().Unix()
+	factoryName := fmt.Sprintf("testfactory-%d", ts)
+
+	Register(factoryName, nil)
 
 	defer func() {
 		err := recover()
@@ -70,6 +76,6 @@ func TestRegister(t *testing.T) {
 	}()
 
 	// this one panics
-	Register("testfactory", nil)
+	Register(factoryName, nil)
 	assert.Equal(t, 1, 2, "double register should have panicked")
 }
