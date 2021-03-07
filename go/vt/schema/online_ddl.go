@@ -239,7 +239,7 @@ func (onlineDDL *OnlineDDL) GetActionStr() (action sqlparser.DDLAction, actionSt
 
 // GetRevertUUID works when this migration is a revert for another migration. It returns the UUID
 // fo the reverted migration.
-// The functio nreturns error when this is not a revert migration.
+// The function returns error when this is not a revert migration.
 func (onlineDDL *OnlineDDL) GetRevertUUID() (uuid string, err error) {
 	if submatch := revertStatementRegexp.FindStringSubmatch(onlineDDL.SQL); len(submatch) > 0 {
 		return submatch[1], nil
