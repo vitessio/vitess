@@ -230,6 +230,8 @@ func TestConsulDiscoverVTGates(t *testing.T) {
 		},
 	}
 
+	ctx := context.Background()
+
 	for _, tt := range tests {
 		tt := tt
 
@@ -242,7 +244,7 @@ func TestConsulDiscoverVTGates(t *testing.T) {
 				},
 			}
 
-			gates, err := tt.disco.DiscoverVTGates(context.Background(), tt.tags)
+			gates, err := tt.disco.DiscoverVTGates(ctx, tt.tags)
 			if tt.shouldErr {
 				assert.Error(t, err, assert.AnError)
 				return
@@ -339,6 +341,8 @@ func TestConsulDiscoverVTGate(t *testing.T) {
 		},
 	}
 
+	ctx := context.Background()
+
 	for _, tt := range tests {
 		tt := tt
 
@@ -351,7 +355,7 @@ func TestConsulDiscoverVTGate(t *testing.T) {
 				},
 			}
 
-			gate, err := tt.disco.DiscoverVTGate(context.Background(), tt.tags)
+			gate, err := tt.disco.DiscoverVTGate(ctx, tt.tags)
 			if tt.shouldErr {
 				assert.Error(t, err, assert.AnError)
 				return
@@ -435,6 +439,8 @@ func TestConsulDiscoverVTGateAddr(t *testing.T) {
 		},
 	}
 
+	ctx := context.Background()
+
 	for _, tt := range tests {
 		tt := tt
 
@@ -447,7 +453,7 @@ func TestConsulDiscoverVTGateAddr(t *testing.T) {
 				},
 			}
 
-			addr, err := tt.disco.DiscoverVTGateAddr(context.Background(), tt.tags)
+			addr, err := tt.disco.DiscoverVTGateAddr(ctx, tt.tags)
 			if tt.shouldErr {
 				assert.Error(t, err, assert.AnError)
 				return
