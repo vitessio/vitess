@@ -114,7 +114,6 @@ func TestGetGCUUID(t *testing.T) {
 	}
 	assert.Equal(t, count, len(uuids))
 }
-
 func TestGetActionStr(t *testing.T) {
 	tt := []struct {
 		statement string
@@ -139,14 +138,16 @@ func TestGetActionStr(t *testing.T) {
 		},
 	}
 	for _, ts := range tt {
-		onlineDDL := &OnlineDDL{SQL: ts.statement}
-		actionStr, err := onlineDDL.GetActionStr()
-		if ts.isError {
-			assert.Error(t, err)
-		} else {
-			assert.NoError(t, err)
-			assert.Equal(t, actionStr, ts.actionStr)
-		}
+		t.Run(ts.statement, func(t *testing.T) {
+			onlineDDL := &OnlineDDL{SQL: ts.statement}
+			_, actionStr, err := onlineDDL.GetActionStr()
+			if ts.isError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, actionStr, ts.actionStr)
+			}
+		})
 	}
 }
 
@@ -175,5 +176,42 @@ func TestIsOnlineDDLTableName(t *testing.T) {
 	}
 	for _, tableName := range irrelevantNames {
 		assert.False(t, IsOnlineDDLTableName(tableName))
+	}
+}
+
+func TestGetRevertUUID(t *testing.T) {
+	tt := []struct {
+		statement string
+		uuid      string
+		isError   bool
+	}{
+		{
+			statement: "revert 4e5dcf80_354b_11eb_82cd_f875a4d24e90_20201203114014",
+			uuid:      "4e5dcf80_354b_11eb_82cd_f875a4d24e90_20201203114014",
+		},
+		{
+			statement: "REVERT   4e5dcf80_354b_11eb_82cd_f875a4d24e90_20201203114014",
+			uuid:      "4e5dcf80_354b_11eb_82cd_f875a4d24e90_20201203114014",
+		},
+		{
+			statement: "REVERT",
+			isError:   true,
+		},
+		{
+			statement: "alter table t drop column c",
+			isError:   true,
+		},
+	}
+	for _, ts := range tt {
+		t.Run(ts.statement, func(t *testing.T) {
+			onlineDDL := &OnlineDDL{SQL: ts.statement}
+			uuid, err := onlineDDL.GetRevertUUID()
+			if ts.isError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, uuid, ts.uuid)
+			}
+		})
 	}
 }

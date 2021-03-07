@@ -30,12 +30,22 @@ import "vtctldata.proto";
 // VTAdmin is the Vitess Admin API service. It provides RPCs that operate on
 // across a range of Vitess clusters.
 service VTAdmin {
+    // FindSchema returns a single Schema that matches the provided table name
+    // across all specified clusters IDs. Not specifying a set of cluster IDs
+    // causes the search to span all configured clusters.
+    //
+    // An error occurs if either no table exists across any of the clusters with
+    // the specified table name, or if multiple tables exist with that name.
+    rpc FindSchema(FindSchemaRequest) returns (Schema) {};
     // GetClusters returns all configured clusters.
     rpc GetClusters(GetClustersRequest) returns (GetClustersResponse) {};
     // GetGates returns all gates across all the specified clusters.
     rpc GetGates(GetGatesRequest) returns (GetGatesResponse) {};
     // GetKeyspaces returns all keyspaces across the specified clusters.
     rpc GetKeyspaces(GetKeyspacesRequest) returns (GetKeyspacesResponse) {};
+    // GetSchema returns the schema for the specified (cluster, keyspace, table)
+    // tuple.
+    rpc GetSchema(GetSchemaRequest) returns (Schema) {};
     // GetSchemas returns all schemas across the specified clusters.
     rpc GetSchemas(GetSchemasRequest) returns (GetSchemasResponse) {};
     // GetTablet looks up a tablet by hostname across all clusters and returns
@@ -108,6 +118,12 @@ message VTGate {
 }
 
 /* Request/Response types */
+
+message FindSchemaRequest {
+    string table = 1;
+    repeated string cluster_ids = 2;
+}
+
 message GetClustersRequest {}
 
 message GetClustersResponse {
@@ -128,6 +144,12 @@ message GetKeyspacesRequest {
 
 message GetKeyspacesResponse {
     repeated Keyspace keyspaces = 1;
+}
+
+message GetSchemaRequest {
+    string cluster_id = 1;
+    string keyspace = 2;
+    string table = 3;
 }
 
 message GetSchemasRequest {

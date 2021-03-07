@@ -23,6 +23,20 @@ export namespace vtadmin {
         public static create(rpcImpl: $protobuf.RPCImpl, requestDelimited?: boolean, responseDelimited?: boolean): VTAdmin;
 
         /**
+         * Calls FindSchema.
+         * @param request FindSchemaRequest message or plain object
+         * @param callback Node-style callback called with the error, if any, and Schema
+         */
+        public findSchema(request: vtadmin.IFindSchemaRequest, callback: vtadmin.VTAdmin.FindSchemaCallback): void;
+
+        /**
+         * Calls FindSchema.
+         * @param request FindSchemaRequest message or plain object
+         * @returns Promise
+         */
+        public findSchema(request: vtadmin.IFindSchemaRequest): Promise<vtadmin.Schema>;
+
+        /**
          * Calls GetClusters.
          * @param request GetClustersRequest message or plain object
          * @param callback Node-style callback called with the error, if any, and GetClustersResponse
@@ -63,6 +77,20 @@ export namespace vtadmin {
          * @returns Promise
          */
         public getKeyspaces(request: vtadmin.IGetKeyspacesRequest): Promise<vtadmin.GetKeyspacesResponse>;
+
+        /**
+         * Calls GetSchema.
+         * @param request GetSchemaRequest message or plain object
+         * @param callback Node-style callback called with the error, if any, and Schema
+         */
+        public getSchema(request: vtadmin.IGetSchemaRequest, callback: vtadmin.VTAdmin.GetSchemaCallback): void;
+
+        /**
+         * Calls GetSchema.
+         * @param request GetSchemaRequest message or plain object
+         * @returns Promise
+         */
+        public getSchema(request: vtadmin.IGetSchemaRequest): Promise<vtadmin.Schema>;
 
         /**
          * Calls GetSchemas.
@@ -124,6 +152,13 @@ export namespace vtadmin {
     namespace VTAdmin {
 
         /**
+         * Callback as used by {@link vtadmin.VTAdmin#findSchema}.
+         * @param error Error, if any
+         * @param [response] Schema
+         */
+        type FindSchemaCallback = (error: (Error|null), response?: vtadmin.Schema) => void;
+
+        /**
          * Callback as used by {@link vtadmin.VTAdmin#getClusters}.
          * @param error Error, if any
          * @param [response] GetClustersResponse
@@ -143,6 +178,13 @@ export namespace vtadmin {
          * @param [response] GetKeyspacesResponse
          */
         type GetKeyspacesCallback = (error: (Error|null), response?: vtadmin.GetKeyspacesResponse) => void;
+
+        /**
+         * Callback as used by {@link vtadmin.VTAdmin#getSchema}.
+         * @param error Error, if any
+         * @param [response] Schema
+         */
+        type GetSchemaCallback = (error: (Error|null), response?: vtadmin.Schema) => void;
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#getSchemas}.
@@ -795,6 +837,102 @@ export namespace vtadmin {
         public toJSON(): { [k: string]: any };
     }
 
+    /** Properties of a FindSchemaRequest. */
+    interface IFindSchemaRequest {
+
+        /** FindSchemaRequest table */
+        table?: (string|null);
+
+        /** FindSchemaRequest cluster_ids */
+        cluster_ids?: (string[]|null);
+    }
+
+    /** Represents a FindSchemaRequest. */
+    class FindSchemaRequest implements IFindSchemaRequest {
+
+        /**
+         * Constructs a new FindSchemaRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.IFindSchemaRequest);
+
+        /** FindSchemaRequest table. */
+        public table: string;
+
+        /** FindSchemaRequest cluster_ids. */
+        public cluster_ids: string[];
+
+        /**
+         * Creates a new FindSchemaRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns FindSchemaRequest instance
+         */
+        public static create(properties?: vtadmin.IFindSchemaRequest): vtadmin.FindSchemaRequest;
+
+        /**
+         * Encodes the specified FindSchemaRequest message. Does not implicitly {@link vtadmin.FindSchemaRequest.verify|verify} messages.
+         * @param message FindSchemaRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.IFindSchemaRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified FindSchemaRequest message, length delimited. Does not implicitly {@link vtadmin.FindSchemaRequest.verify|verify} messages.
+         * @param message FindSchemaRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.IFindSchemaRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a FindSchemaRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns FindSchemaRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.FindSchemaRequest;
+
+        /**
+         * Decodes a FindSchemaRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns FindSchemaRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.FindSchemaRequest;
+
+        /**
+         * Verifies a FindSchemaRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a FindSchemaRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns FindSchemaRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.FindSchemaRequest;
+
+        /**
+         * Creates a plain object from a FindSchemaRequest message. Also converts values to other types if specified.
+         * @param message FindSchemaRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.FindSchemaRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this FindSchemaRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
     /** Properties of a GetClustersRequest. */
     interface IGetClustersRequest {
     }
@@ -1324,6 +1462,108 @@ export namespace vtadmin {
 
         /**
          * Converts this GetKeyspacesResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a GetSchemaRequest. */
+    interface IGetSchemaRequest {
+
+        /** GetSchemaRequest cluster_id */
+        cluster_id?: (string|null);
+
+        /** GetSchemaRequest keyspace */
+        keyspace?: (string|null);
+
+        /** GetSchemaRequest table */
+        table?: (string|null);
+    }
+
+    /** Represents a GetSchemaRequest. */
+    class GetSchemaRequest implements IGetSchemaRequest {
+
+        /**
+         * Constructs a new GetSchemaRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.IGetSchemaRequest);
+
+        /** GetSchemaRequest cluster_id. */
+        public cluster_id: string;
+
+        /** GetSchemaRequest keyspace. */
+        public keyspace: string;
+
+        /** GetSchemaRequest table. */
+        public table: string;
+
+        /**
+         * Creates a new GetSchemaRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns GetSchemaRequest instance
+         */
+        public static create(properties?: vtadmin.IGetSchemaRequest): vtadmin.GetSchemaRequest;
+
+        /**
+         * Encodes the specified GetSchemaRequest message. Does not implicitly {@link vtadmin.GetSchemaRequest.verify|verify} messages.
+         * @param message GetSchemaRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.IGetSchemaRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified GetSchemaRequest message, length delimited. Does not implicitly {@link vtadmin.GetSchemaRequest.verify|verify} messages.
+         * @param message GetSchemaRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.IGetSchemaRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a GetSchemaRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns GetSchemaRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.GetSchemaRequest;
+
+        /**
+         * Decodes a GetSchemaRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns GetSchemaRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.GetSchemaRequest;
+
+        /**
+         * Verifies a GetSchemaRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a GetSchemaRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns GetSchemaRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.GetSchemaRequest;
+
+        /**
+         * Creates a plain object from a GetSchemaRequest message. Also converts values to other types if specified.
+         * @param message GetSchemaRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.GetSchemaRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this GetSchemaRequest to JSON.
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
@@ -18928,6 +19168,288 @@ export namespace topodata {
          */
         public toJSON(): { [k: string]: any };
     }
+
+    /** Properties of a TopoConfig. */
+    interface ITopoConfig {
+
+        /** TopoConfig topo_type */
+        topo_type?: (string|null);
+
+        /** TopoConfig server */
+        server?: (string|null);
+
+        /** TopoConfig root */
+        root?: (string|null);
+    }
+
+    /** Represents a TopoConfig. */
+    class TopoConfig implements ITopoConfig {
+
+        /**
+         * Constructs a new TopoConfig.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: topodata.ITopoConfig);
+
+        /** TopoConfig topo_type. */
+        public topo_type: string;
+
+        /** TopoConfig server. */
+        public server: string;
+
+        /** TopoConfig root. */
+        public root: string;
+
+        /**
+         * Creates a new TopoConfig instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns TopoConfig instance
+         */
+        public static create(properties?: topodata.ITopoConfig): topodata.TopoConfig;
+
+        /**
+         * Encodes the specified TopoConfig message. Does not implicitly {@link topodata.TopoConfig.verify|verify} messages.
+         * @param message TopoConfig message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: topodata.ITopoConfig, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified TopoConfig message, length delimited. Does not implicitly {@link topodata.TopoConfig.verify|verify} messages.
+         * @param message TopoConfig message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: topodata.ITopoConfig, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a TopoConfig message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns TopoConfig
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): topodata.TopoConfig;
+
+        /**
+         * Decodes a TopoConfig message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns TopoConfig
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): topodata.TopoConfig;
+
+        /**
+         * Verifies a TopoConfig message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a TopoConfig message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns TopoConfig
+         */
+        public static fromObject(object: { [k: string]: any }): topodata.TopoConfig;
+
+        /**
+         * Creates a plain object from a TopoConfig message. Also converts values to other types if specified.
+         * @param message TopoConfig
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: topodata.TopoConfig, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this TopoConfig to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of an ExternalVitessCluster. */
+    interface IExternalVitessCluster {
+
+        /** ExternalVitessCluster topo_config */
+        topo_config?: (topodata.ITopoConfig|null);
+    }
+
+    /** Represents an ExternalVitessCluster. */
+    class ExternalVitessCluster implements IExternalVitessCluster {
+
+        /**
+         * Constructs a new ExternalVitessCluster.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: topodata.IExternalVitessCluster);
+
+        /** ExternalVitessCluster topo_config. */
+        public topo_config?: (topodata.ITopoConfig|null);
+
+        /**
+         * Creates a new ExternalVitessCluster instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ExternalVitessCluster instance
+         */
+        public static create(properties?: topodata.IExternalVitessCluster): topodata.ExternalVitessCluster;
+
+        /**
+         * Encodes the specified ExternalVitessCluster message. Does not implicitly {@link topodata.ExternalVitessCluster.verify|verify} messages.
+         * @param message ExternalVitessCluster message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: topodata.IExternalVitessCluster, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ExternalVitessCluster message, length delimited. Does not implicitly {@link topodata.ExternalVitessCluster.verify|verify} messages.
+         * @param message ExternalVitessCluster message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: topodata.IExternalVitessCluster, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes an ExternalVitessCluster message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ExternalVitessCluster
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): topodata.ExternalVitessCluster;
+
+        /**
+         * Decodes an ExternalVitessCluster message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ExternalVitessCluster
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): topodata.ExternalVitessCluster;
+
+        /**
+         * Verifies an ExternalVitessCluster message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates an ExternalVitessCluster message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ExternalVitessCluster
+         */
+        public static fromObject(object: { [k: string]: any }): topodata.ExternalVitessCluster;
+
+        /**
+         * Creates a plain object from an ExternalVitessCluster message. Also converts values to other types if specified.
+         * @param message ExternalVitessCluster
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: topodata.ExternalVitessCluster, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ExternalVitessCluster to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of an ExternalClusters. */
+    interface IExternalClusters {
+
+        /** ExternalClusters vitess_cluster */
+        vitess_cluster?: (topodata.IExternalVitessCluster[]|null);
+    }
+
+    /** Represents an ExternalClusters. */
+    class ExternalClusters implements IExternalClusters {
+
+        /**
+         * Constructs a new ExternalClusters.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: topodata.IExternalClusters);
+
+        /** ExternalClusters vitess_cluster. */
+        public vitess_cluster: topodata.IExternalVitessCluster[];
+
+        /**
+         * Creates a new ExternalClusters instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ExternalClusters instance
+         */
+        public static create(properties?: topodata.IExternalClusters): topodata.ExternalClusters;
+
+        /**
+         * Encodes the specified ExternalClusters message. Does not implicitly {@link topodata.ExternalClusters.verify|verify} messages.
+         * @param message ExternalClusters message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: topodata.IExternalClusters, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ExternalClusters message, length delimited. Does not implicitly {@link topodata.ExternalClusters.verify|verify} messages.
+         * @param message ExternalClusters message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: topodata.IExternalClusters, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes an ExternalClusters message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ExternalClusters
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): topodata.ExternalClusters;
+
+        /**
+         * Decodes an ExternalClusters message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ExternalClusters
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): topodata.ExternalClusters;
+
+        /**
+         * Verifies an ExternalClusters message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates an ExternalClusters message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ExternalClusters
+         */
+        public static fromObject(object: { [k: string]: any }): topodata.ExternalClusters;
+
+        /**
+         * Creates a plain object from an ExternalClusters message. Also converts values to other types if specified.
+         * @param message ExternalClusters
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: topodata.ExternalClusters, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ExternalClusters to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
 }
 
 /** Namespace vttime. */
@@ -19024,6 +19546,102 @@ export namespace vttime {
 
         /**
          * Converts this Time to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a Duration. */
+    interface IDuration {
+
+        /** Duration seconds */
+        seconds?: (number|Long|null);
+
+        /** Duration nanos */
+        nanos?: (number|null);
+    }
+
+    /** Represents a Duration. */
+    class Duration implements IDuration {
+
+        /**
+         * Constructs a new Duration.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vttime.IDuration);
+
+        /** Duration seconds. */
+        public seconds: (number|Long);
+
+        /** Duration nanos. */
+        public nanos: number;
+
+        /**
+         * Creates a new Duration instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns Duration instance
+         */
+        public static create(properties?: vttime.IDuration): vttime.Duration;
+
+        /**
+         * Encodes the specified Duration message. Does not implicitly {@link vttime.Duration.verify|verify} messages.
+         * @param message Duration message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vttime.IDuration, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified Duration message, length delimited. Does not implicitly {@link vttime.Duration.verify|verify} messages.
+         * @param message Duration message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vttime.IDuration, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a Duration message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns Duration
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vttime.Duration;
+
+        /**
+         * Decodes a Duration message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns Duration
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vttime.Duration;
+
+        /**
+         * Verifies a Duration message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a Duration message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns Duration
+         */
+        public static fromObject(object: { [k: string]: any }): vttime.Duration;
+
+        /**
+         * Creates a plain object from a Duration message. Also converts values to other types if specified.
+         * @param message Duration
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vttime.Duration, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this Duration to JSON.
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
@@ -21132,6 +21750,228 @@ export namespace vtctldata {
 
         /**
          * Converts this DeleteTabletsResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of an EmergencyReparentShardRequest. */
+    interface IEmergencyReparentShardRequest {
+
+        /** EmergencyReparentShardRequest keyspace */
+        keyspace?: (string|null);
+
+        /** EmergencyReparentShardRequest shard */
+        shard?: (string|null);
+
+        /** EmergencyReparentShardRequest new_primary */
+        new_primary?: (topodata.ITabletAlias|null);
+
+        /** EmergencyReparentShardRequest ignore_replicas */
+        ignore_replicas?: (topodata.ITabletAlias[]|null);
+
+        /** EmergencyReparentShardRequest wait_replicas_timeout */
+        wait_replicas_timeout?: (vttime.IDuration|null);
+    }
+
+    /** Represents an EmergencyReparentShardRequest. */
+    class EmergencyReparentShardRequest implements IEmergencyReparentShardRequest {
+
+        /**
+         * Constructs a new EmergencyReparentShardRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IEmergencyReparentShardRequest);
+
+        /** EmergencyReparentShardRequest keyspace. */
+        public keyspace: string;
+
+        /** EmergencyReparentShardRequest shard. */
+        public shard: string;
+
+        /** EmergencyReparentShardRequest new_primary. */
+        public new_primary?: (topodata.ITabletAlias|null);
+
+        /** EmergencyReparentShardRequest ignore_replicas. */
+        public ignore_replicas: topodata.ITabletAlias[];
+
+        /** EmergencyReparentShardRequest wait_replicas_timeout. */
+        public wait_replicas_timeout?: (vttime.IDuration|null);
+
+        /**
+         * Creates a new EmergencyReparentShardRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns EmergencyReparentShardRequest instance
+         */
+        public static create(properties?: vtctldata.IEmergencyReparentShardRequest): vtctldata.EmergencyReparentShardRequest;
+
+        /**
+         * Encodes the specified EmergencyReparentShardRequest message. Does not implicitly {@link vtctldata.EmergencyReparentShardRequest.verify|verify} messages.
+         * @param message EmergencyReparentShardRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IEmergencyReparentShardRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified EmergencyReparentShardRequest message, length delimited. Does not implicitly {@link vtctldata.EmergencyReparentShardRequest.verify|verify} messages.
+         * @param message EmergencyReparentShardRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IEmergencyReparentShardRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes an EmergencyReparentShardRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns EmergencyReparentShardRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.EmergencyReparentShardRequest;
+
+        /**
+         * Decodes an EmergencyReparentShardRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns EmergencyReparentShardRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.EmergencyReparentShardRequest;
+
+        /**
+         * Verifies an EmergencyReparentShardRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates an EmergencyReparentShardRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns EmergencyReparentShardRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.EmergencyReparentShardRequest;
+
+        /**
+         * Creates a plain object from an EmergencyReparentShardRequest message. Also converts values to other types if specified.
+         * @param message EmergencyReparentShardRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.EmergencyReparentShardRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this EmergencyReparentShardRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of an EmergencyReparentShardResponse. */
+    interface IEmergencyReparentShardResponse {
+
+        /** EmergencyReparentShardResponse keyspace */
+        keyspace?: (string|null);
+
+        /** EmergencyReparentShardResponse shard */
+        shard?: (string|null);
+
+        /** EmergencyReparentShardResponse promoted_primary */
+        promoted_primary?: (topodata.ITabletAlias|null);
+
+        /** EmergencyReparentShardResponse events */
+        events?: (logutil.IEvent[]|null);
+    }
+
+    /** Represents an EmergencyReparentShardResponse. */
+    class EmergencyReparentShardResponse implements IEmergencyReparentShardResponse {
+
+        /**
+         * Constructs a new EmergencyReparentShardResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IEmergencyReparentShardResponse);
+
+        /** EmergencyReparentShardResponse keyspace. */
+        public keyspace: string;
+
+        /** EmergencyReparentShardResponse shard. */
+        public shard: string;
+
+        /** EmergencyReparentShardResponse promoted_primary. */
+        public promoted_primary?: (topodata.ITabletAlias|null);
+
+        /** EmergencyReparentShardResponse events. */
+        public events: logutil.IEvent[];
+
+        /**
+         * Creates a new EmergencyReparentShardResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns EmergencyReparentShardResponse instance
+         */
+        public static create(properties?: vtctldata.IEmergencyReparentShardResponse): vtctldata.EmergencyReparentShardResponse;
+
+        /**
+         * Encodes the specified EmergencyReparentShardResponse message. Does not implicitly {@link vtctldata.EmergencyReparentShardResponse.verify|verify} messages.
+         * @param message EmergencyReparentShardResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IEmergencyReparentShardResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified EmergencyReparentShardResponse message, length delimited. Does not implicitly {@link vtctldata.EmergencyReparentShardResponse.verify|verify} messages.
+         * @param message EmergencyReparentShardResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IEmergencyReparentShardResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes an EmergencyReparentShardResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns EmergencyReparentShardResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.EmergencyReparentShardResponse;
+
+        /**
+         * Decodes an EmergencyReparentShardResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns EmergencyReparentShardResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.EmergencyReparentShardResponse;
+
+        /**
+         * Verifies an EmergencyReparentShardResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates an EmergencyReparentShardResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns EmergencyReparentShardResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.EmergencyReparentShardResponse;
+
+        /**
+         * Creates a plain object from an EmergencyReparentShardResponse message. Also converts values to other types if specified.
+         * @param message EmergencyReparentShardResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.EmergencyReparentShardResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this EmergencyReparentShardResponse to JSON.
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
@@ -23349,7 +24189,7 @@ export namespace vtctldata {
         force?: (boolean|null);
 
         /** InitShardPrimaryRequest wait_replicas_timeout */
-        wait_replicas_timeout?: (google.protobuf.IDuration|null);
+        wait_replicas_timeout?: (vttime.IDuration|null);
     }
 
     /** Represents an InitShardPrimaryRequest. */
@@ -23374,7 +24214,7 @@ export namespace vtctldata {
         public force: boolean;
 
         /** InitShardPrimaryRequest wait_replicas_timeout. */
-        public wait_replicas_timeout?: (google.protobuf.IDuration|null);
+        public wait_replicas_timeout?: (vttime.IDuration|null);
 
         /**
          * Creates a new InitShardPrimaryRequest instance using the specified properties.
@@ -23532,6 +24372,228 @@ export namespace vtctldata {
 
         /**
          * Converts this InitShardPrimaryResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a PlannedReparentShardRequest. */
+    interface IPlannedReparentShardRequest {
+
+        /** PlannedReparentShardRequest keyspace */
+        keyspace?: (string|null);
+
+        /** PlannedReparentShardRequest shard */
+        shard?: (string|null);
+
+        /** PlannedReparentShardRequest new_primary */
+        new_primary?: (topodata.ITabletAlias|null);
+
+        /** PlannedReparentShardRequest avoid_primary */
+        avoid_primary?: (topodata.ITabletAlias|null);
+
+        /** PlannedReparentShardRequest wait_replicas_timeout */
+        wait_replicas_timeout?: (vttime.IDuration|null);
+    }
+
+    /** Represents a PlannedReparentShardRequest. */
+    class PlannedReparentShardRequest implements IPlannedReparentShardRequest {
+
+        /**
+         * Constructs a new PlannedReparentShardRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IPlannedReparentShardRequest);
+
+        /** PlannedReparentShardRequest keyspace. */
+        public keyspace: string;
+
+        /** PlannedReparentShardRequest shard. */
+        public shard: string;
+
+        /** PlannedReparentShardRequest new_primary. */
+        public new_primary?: (topodata.ITabletAlias|null);
+
+        /** PlannedReparentShardRequest avoid_primary. */
+        public avoid_primary?: (topodata.ITabletAlias|null);
+
+        /** PlannedReparentShardRequest wait_replicas_timeout. */
+        public wait_replicas_timeout?: (vttime.IDuration|null);
+
+        /**
+         * Creates a new PlannedReparentShardRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns PlannedReparentShardRequest instance
+         */
+        public static create(properties?: vtctldata.IPlannedReparentShardRequest): vtctldata.PlannedReparentShardRequest;
+
+        /**
+         * Encodes the specified PlannedReparentShardRequest message. Does not implicitly {@link vtctldata.PlannedReparentShardRequest.verify|verify} messages.
+         * @param message PlannedReparentShardRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IPlannedReparentShardRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified PlannedReparentShardRequest message, length delimited. Does not implicitly {@link vtctldata.PlannedReparentShardRequest.verify|verify} messages.
+         * @param message PlannedReparentShardRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IPlannedReparentShardRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a PlannedReparentShardRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns PlannedReparentShardRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.PlannedReparentShardRequest;
+
+        /**
+         * Decodes a PlannedReparentShardRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns PlannedReparentShardRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.PlannedReparentShardRequest;
+
+        /**
+         * Verifies a PlannedReparentShardRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a PlannedReparentShardRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns PlannedReparentShardRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.PlannedReparentShardRequest;
+
+        /**
+         * Creates a plain object from a PlannedReparentShardRequest message. Also converts values to other types if specified.
+         * @param message PlannedReparentShardRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.PlannedReparentShardRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this PlannedReparentShardRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a PlannedReparentShardResponse. */
+    interface IPlannedReparentShardResponse {
+
+        /** PlannedReparentShardResponse keyspace */
+        keyspace?: (string|null);
+
+        /** PlannedReparentShardResponse shard */
+        shard?: (string|null);
+
+        /** PlannedReparentShardResponse promoted_primary */
+        promoted_primary?: (topodata.ITabletAlias|null);
+
+        /** PlannedReparentShardResponse events */
+        events?: (logutil.IEvent[]|null);
+    }
+
+    /** Represents a PlannedReparentShardResponse. */
+    class PlannedReparentShardResponse implements IPlannedReparentShardResponse {
+
+        /**
+         * Constructs a new PlannedReparentShardResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IPlannedReparentShardResponse);
+
+        /** PlannedReparentShardResponse keyspace. */
+        public keyspace: string;
+
+        /** PlannedReparentShardResponse shard. */
+        public shard: string;
+
+        /** PlannedReparentShardResponse promoted_primary. */
+        public promoted_primary?: (topodata.ITabletAlias|null);
+
+        /** PlannedReparentShardResponse events. */
+        public events: logutil.IEvent[];
+
+        /**
+         * Creates a new PlannedReparentShardResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns PlannedReparentShardResponse instance
+         */
+        public static create(properties?: vtctldata.IPlannedReparentShardResponse): vtctldata.PlannedReparentShardResponse;
+
+        /**
+         * Encodes the specified PlannedReparentShardResponse message. Does not implicitly {@link vtctldata.PlannedReparentShardResponse.verify|verify} messages.
+         * @param message PlannedReparentShardResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IPlannedReparentShardResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified PlannedReparentShardResponse message, length delimited. Does not implicitly {@link vtctldata.PlannedReparentShardResponse.verify|verify} messages.
+         * @param message PlannedReparentShardResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IPlannedReparentShardResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a PlannedReparentShardResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns PlannedReparentShardResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.PlannedReparentShardResponse;
+
+        /**
+         * Decodes a PlannedReparentShardResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns PlannedReparentShardResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.PlannedReparentShardResponse;
+
+        /**
+         * Verifies a PlannedReparentShardResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a PlannedReparentShardResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns PlannedReparentShardResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.PlannedReparentShardResponse;
+
+        /**
+         * Creates a plain object from a PlannedReparentShardResponse message. Also converts values to other types if specified.
+         * @param message PlannedReparentShardResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.PlannedReparentShardResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this PlannedReparentShardResponse to JSON.
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
@@ -23922,6 +24984,396 @@ export namespace vtctldata {
 
         /**
          * Converts this RemoveShardCellResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a ReparentTabletRequest. */
+    interface IReparentTabletRequest {
+
+        /** ReparentTabletRequest tablet */
+        tablet?: (topodata.ITabletAlias|null);
+    }
+
+    /** Represents a ReparentTabletRequest. */
+    class ReparentTabletRequest implements IReparentTabletRequest {
+
+        /**
+         * Constructs a new ReparentTabletRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IReparentTabletRequest);
+
+        /** ReparentTabletRequest tablet. */
+        public tablet?: (topodata.ITabletAlias|null);
+
+        /**
+         * Creates a new ReparentTabletRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ReparentTabletRequest instance
+         */
+        public static create(properties?: vtctldata.IReparentTabletRequest): vtctldata.ReparentTabletRequest;
+
+        /**
+         * Encodes the specified ReparentTabletRequest message. Does not implicitly {@link vtctldata.ReparentTabletRequest.verify|verify} messages.
+         * @param message ReparentTabletRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IReparentTabletRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ReparentTabletRequest message, length delimited. Does not implicitly {@link vtctldata.ReparentTabletRequest.verify|verify} messages.
+         * @param message ReparentTabletRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IReparentTabletRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ReparentTabletRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ReparentTabletRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.ReparentTabletRequest;
+
+        /**
+         * Decodes a ReparentTabletRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ReparentTabletRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.ReparentTabletRequest;
+
+        /**
+         * Verifies a ReparentTabletRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ReparentTabletRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ReparentTabletRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.ReparentTabletRequest;
+
+        /**
+         * Creates a plain object from a ReparentTabletRequest message. Also converts values to other types if specified.
+         * @param message ReparentTabletRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.ReparentTabletRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ReparentTabletRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a ReparentTabletResponse. */
+    interface IReparentTabletResponse {
+
+        /** ReparentTabletResponse keyspace */
+        keyspace?: (string|null);
+
+        /** ReparentTabletResponse shard */
+        shard?: (string|null);
+
+        /** ReparentTabletResponse primary */
+        primary?: (topodata.ITabletAlias|null);
+    }
+
+    /** Represents a ReparentTabletResponse. */
+    class ReparentTabletResponse implements IReparentTabletResponse {
+
+        /**
+         * Constructs a new ReparentTabletResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IReparentTabletResponse);
+
+        /** ReparentTabletResponse keyspace. */
+        public keyspace: string;
+
+        /** ReparentTabletResponse shard. */
+        public shard: string;
+
+        /** ReparentTabletResponse primary. */
+        public primary?: (topodata.ITabletAlias|null);
+
+        /**
+         * Creates a new ReparentTabletResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ReparentTabletResponse instance
+         */
+        public static create(properties?: vtctldata.IReparentTabletResponse): vtctldata.ReparentTabletResponse;
+
+        /**
+         * Encodes the specified ReparentTabletResponse message. Does not implicitly {@link vtctldata.ReparentTabletResponse.verify|verify} messages.
+         * @param message ReparentTabletResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IReparentTabletResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ReparentTabletResponse message, length delimited. Does not implicitly {@link vtctldata.ReparentTabletResponse.verify|verify} messages.
+         * @param message ReparentTabletResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IReparentTabletResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ReparentTabletResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ReparentTabletResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.ReparentTabletResponse;
+
+        /**
+         * Decodes a ReparentTabletResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ReparentTabletResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.ReparentTabletResponse;
+
+        /**
+         * Verifies a ReparentTabletResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ReparentTabletResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ReparentTabletResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.ReparentTabletResponse;
+
+        /**
+         * Creates a plain object from a ReparentTabletResponse message. Also converts values to other types if specified.
+         * @param message ReparentTabletResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.ReparentTabletResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ReparentTabletResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a TabletExternallyReparentedRequest. */
+    interface ITabletExternallyReparentedRequest {
+
+        /** TabletExternallyReparentedRequest tablet */
+        tablet?: (topodata.ITabletAlias|null);
+    }
+
+    /** Represents a TabletExternallyReparentedRequest. */
+    class TabletExternallyReparentedRequest implements ITabletExternallyReparentedRequest {
+
+        /**
+         * Constructs a new TabletExternallyReparentedRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.ITabletExternallyReparentedRequest);
+
+        /** TabletExternallyReparentedRequest tablet. */
+        public tablet?: (topodata.ITabletAlias|null);
+
+        /**
+         * Creates a new TabletExternallyReparentedRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns TabletExternallyReparentedRequest instance
+         */
+        public static create(properties?: vtctldata.ITabletExternallyReparentedRequest): vtctldata.TabletExternallyReparentedRequest;
+
+        /**
+         * Encodes the specified TabletExternallyReparentedRequest message. Does not implicitly {@link vtctldata.TabletExternallyReparentedRequest.verify|verify} messages.
+         * @param message TabletExternallyReparentedRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.ITabletExternallyReparentedRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified TabletExternallyReparentedRequest message, length delimited. Does not implicitly {@link vtctldata.TabletExternallyReparentedRequest.verify|verify} messages.
+         * @param message TabletExternallyReparentedRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.ITabletExternallyReparentedRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a TabletExternallyReparentedRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns TabletExternallyReparentedRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.TabletExternallyReparentedRequest;
+
+        /**
+         * Decodes a TabletExternallyReparentedRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns TabletExternallyReparentedRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.TabletExternallyReparentedRequest;
+
+        /**
+         * Verifies a TabletExternallyReparentedRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a TabletExternallyReparentedRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns TabletExternallyReparentedRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.TabletExternallyReparentedRequest;
+
+        /**
+         * Creates a plain object from a TabletExternallyReparentedRequest message. Also converts values to other types if specified.
+         * @param message TabletExternallyReparentedRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.TabletExternallyReparentedRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this TabletExternallyReparentedRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a TabletExternallyReparentedResponse. */
+    interface ITabletExternallyReparentedResponse {
+
+        /** TabletExternallyReparentedResponse keyspace */
+        keyspace?: (string|null);
+
+        /** TabletExternallyReparentedResponse shard */
+        shard?: (string|null);
+
+        /** TabletExternallyReparentedResponse new_primary */
+        new_primary?: (topodata.ITabletAlias|null);
+
+        /** TabletExternallyReparentedResponse old_primary */
+        old_primary?: (topodata.ITabletAlias|null);
+    }
+
+    /** Represents a TabletExternallyReparentedResponse. */
+    class TabletExternallyReparentedResponse implements ITabletExternallyReparentedResponse {
+
+        /**
+         * Constructs a new TabletExternallyReparentedResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.ITabletExternallyReparentedResponse);
+
+        /** TabletExternallyReparentedResponse keyspace. */
+        public keyspace: string;
+
+        /** TabletExternallyReparentedResponse shard. */
+        public shard: string;
+
+        /** TabletExternallyReparentedResponse new_primary. */
+        public new_primary?: (topodata.ITabletAlias|null);
+
+        /** TabletExternallyReparentedResponse old_primary. */
+        public old_primary?: (topodata.ITabletAlias|null);
+
+        /**
+         * Creates a new TabletExternallyReparentedResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns TabletExternallyReparentedResponse instance
+         */
+        public static create(properties?: vtctldata.ITabletExternallyReparentedResponse): vtctldata.TabletExternallyReparentedResponse;
+
+        /**
+         * Encodes the specified TabletExternallyReparentedResponse message. Does not implicitly {@link vtctldata.TabletExternallyReparentedResponse.verify|verify} messages.
+         * @param message TabletExternallyReparentedResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.ITabletExternallyReparentedResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified TabletExternallyReparentedResponse message, length delimited. Does not implicitly {@link vtctldata.TabletExternallyReparentedResponse.verify|verify} messages.
+         * @param message TabletExternallyReparentedResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.ITabletExternallyReparentedResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a TabletExternallyReparentedResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns TabletExternallyReparentedResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.TabletExternallyReparentedResponse;
+
+        /**
+         * Decodes a TabletExternallyReparentedResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns TabletExternallyReparentedResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.TabletExternallyReparentedResponse;
+
+        /**
+         * Verifies a TabletExternallyReparentedResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a TabletExternallyReparentedResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns TabletExternallyReparentedResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.TabletExternallyReparentedResponse;
+
+        /**
+         * Creates a plain object from a TabletExternallyReparentedResponse message. Also converts values to other types if specified.
+         * @param message TabletExternallyReparentedResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.TabletExternallyReparentedResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this TabletExternallyReparentedResponse to JSON.
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
@@ -24430,6 +25882,9 @@ export namespace vtctldata {
 
         /** MaterializeSettings tablet_types */
         tablet_types?: (string|null);
+
+        /** MaterializeSettings external_cluster */
+        external_cluster?: (string|null);
     }
 
     /** Represents a MaterializeSettings. */
@@ -24461,6 +25916,9 @@ export namespace vtctldata {
 
         /** MaterializeSettings tablet_types. */
         public tablet_types: string;
+
+        /** MaterializeSettings external_cluster. */
+        public external_cluster: string;
 
         /**
          * Creates a new MaterializeSettings instance using the specified properties.
@@ -24531,110 +25989,6 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
-    }
-}
-
-/** Namespace google. */
-export namespace google {
-
-    /** Namespace protobuf. */
-    namespace protobuf {
-
-        /** Properties of a Duration. */
-        interface IDuration {
-
-            /** Duration seconds */
-            seconds?: (number|Long|null);
-
-            /** Duration nanos */
-            nanos?: (number|null);
-        }
-
-        /** Represents a Duration. */
-        class Duration implements IDuration {
-
-            /**
-             * Constructs a new Duration.
-             * @param [properties] Properties to set
-             */
-            constructor(properties?: google.protobuf.IDuration);
-
-            /** Duration seconds. */
-            public seconds: (number|Long);
-
-            /** Duration nanos. */
-            public nanos: number;
-
-            /**
-             * Creates a new Duration instance using the specified properties.
-             * @param [properties] Properties to set
-             * @returns Duration instance
-             */
-            public static create(properties?: google.protobuf.IDuration): google.protobuf.Duration;
-
-            /**
-             * Encodes the specified Duration message. Does not implicitly {@link google.protobuf.Duration.verify|verify} messages.
-             * @param message Duration message or plain object to encode
-             * @param [writer] Writer to encode to
-             * @returns Writer
-             */
-            public static encode(message: google.protobuf.IDuration, writer?: $protobuf.Writer): $protobuf.Writer;
-
-            /**
-             * Encodes the specified Duration message, length delimited. Does not implicitly {@link google.protobuf.Duration.verify|verify} messages.
-             * @param message Duration message or plain object to encode
-             * @param [writer] Writer to encode to
-             * @returns Writer
-             */
-            public static encodeDelimited(message: google.protobuf.IDuration, writer?: $protobuf.Writer): $protobuf.Writer;
-
-            /**
-             * Decodes a Duration message from the specified reader or buffer.
-             * @param reader Reader or buffer to decode from
-             * @param [length] Message length if known beforehand
-             * @returns Duration
-             * @throws {Error} If the payload is not a reader or valid buffer
-             * @throws {$protobuf.util.ProtocolError} If required fields are missing
-             */
-            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): google.protobuf.Duration;
-
-            /**
-             * Decodes a Duration message from the specified reader or buffer, length delimited.
-             * @param reader Reader or buffer to decode from
-             * @returns Duration
-             * @throws {Error} If the payload is not a reader or valid buffer
-             * @throws {$protobuf.util.ProtocolError} If required fields are missing
-             */
-            public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): google.protobuf.Duration;
-
-            /**
-             * Verifies a Duration message.
-             * @param message Plain object to verify
-             * @returns `null` if valid, otherwise the reason why it is not
-             */
-            public static verify(message: { [k: string]: any }): (string|null);
-
-            /**
-             * Creates a Duration message from a plain object. Also converts values to their respective internal types.
-             * @param object Plain object
-             * @returns Duration
-             */
-            public static fromObject(object: { [k: string]: any }): google.protobuf.Duration;
-
-            /**
-             * Creates a plain object from a Duration message. Also converts values to other types if specified.
-             * @param message Duration
-             * @param [options] Conversion options
-             * @returns Plain object
-             */
-            public static toObject(message: google.protobuf.Duration, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-            /**
-             * Converts this Duration to JSON.
-             * @returns JSON object
-             */
-            public toJSON(): { [k: string]: any };
-        }
     }
 }
 

@@ -17,10 +17,8 @@ limitations under the License.
 package sqlparser
 
 import (
-	"errors"
 	"fmt"
 	"io"
-	"runtime/debug"
 	"sync"
 
 	"vitess.io/vitess/go/vt/log"
@@ -97,7 +95,6 @@ func Parse(sql string) (Statement, error) {
 		return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, tokenizer.LastError.Error())
 	}
 	if tokenizer.ParseTree == nil {
-		log.Infof("Empty Statement: %s", debug.Stack())
 		return nil, ErrEmpty
 	}
 	return tokenizer.ParseTree, nil
@@ -111,8 +108,6 @@ func ParseStrictDDL(sql string) (Statement, error) {
 		return nil, tokenizer.LastError
 	}
 	if tokenizer.ParseTree == nil {
-		log.Infof("Empty Statement DDL: %s", debug.Stack())
-
 		return nil, ErrEmpty
 	}
 	return tokenizer.ParseTree, nil
@@ -164,7 +159,7 @@ func parseNext(tokenizer *Tokenizer, strict bool) (Statement, error) {
 }
 
 // ErrEmpty is a sentinel error returned when parsing empty statements.
-var ErrEmpty = errors.New("empty statement")
+var ErrEmpty = vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.EmptyQuery, "Query was empty")
 
 // SplitStatement returns the first sql statement up to either a ; or EOF
 // and the remainder from the given buffer
