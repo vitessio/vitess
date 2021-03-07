@@ -830,17 +830,14 @@ func (api *API) VTExplain(ctx context.Context, req *vtadminpb.VTExplainRequest) 
 	go func(c *cluster.Cluster) {
 		defer wg.Done()
 
-		res, err := c.Vtctld.GetSchema(ctx, &vtctldatapb.GetSchemaRequest{
-			TabletAlias: tablet.Tablet.Alias,
-		})
-
+		res, err := c.GetSchema(ctx, &vtctldatapb.GetSchemaRequest{}, tablet)
 		if err != nil {
 			er.RecordError(fmt.Errorf("GetSchema(%s): %w", topoproto.TabletAliasString(tablet.Tablet.Alias), err))
 			return
 		}
 
-		schemas := make([]string, len(res.Schema.TableDefinitions))
-		for i, td := range res.Schema.TableDefinitions {
+		schemas := make([]string, len(res.TableDefinitions))
+		for i, td := range res.TableDefinitions {
 			schemas[i] = td.Schema
 		}
 
