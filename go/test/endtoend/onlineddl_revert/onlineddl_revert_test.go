@@ -1,5 +1,5 @@
 /*
-Copyright 2019 The Vitess Authors.
+Copyright 2021 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -275,7 +275,7 @@ func TestSchemaChange(t *testing.T) {
 		testSelectTableMetrics(t)
 	})
 	t.Run("fail revert older change", func(t *testing.T) {
-		// We shouldn't be able to revert one-before-last succcessfulk migration.
+		// We shouldn't be able to revert one-before-last succcessful migration.
 		uuid := testRevertMigration(t, uuids[len(uuids)-2])
 		uuids = append(uuids, uuid)
 		checkRecentMigrations(t, uuid, schema.OnlineDDLStatusFailed)
@@ -544,7 +544,7 @@ func checkRecentMigrations(t *testing.T, uuid string, expectStatus schema.Online
 	fmt.Println("# 'vtctlclient OnlineDDL show recent' output (for debug purposes):")
 	fmt.Println(result)
 	assert.Equal(t, len(clusterInstance.Keyspaces[0].Shards), strings.Count(result, uuid))
-	// We ensure "full word" regexp becuase some column names may conflict
+	// We ensure "full word" regexp because some column names may conflict
 	expectStatusRegexp := fullWordUUIDRegexp(uuid, string(expectStatus))
 	m := expectStatusRegexp.FindAllString(result, -1)
 	assert.Equal(t, len(clusterInstance.Keyspaces[0].Shards), len(m))
