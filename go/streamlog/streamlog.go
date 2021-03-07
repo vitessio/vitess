@@ -42,7 +42,10 @@ var (
 	QueryLogFormat = flag.String("querylog-format", "text", "format for query logs (\"text\" or \"json\")")
 
 	// QueryLogFilterTag contains an optional string that must be present in the query for it to be logged
-	QueryLogFilterTag = flag.String("querylog-filter-tag", "", "string that must be present in the query for it to be logged")
+	QueryLogFilterTag = flag.String("querylog-filter-tag", "", "string that must be present in the query for it to be logged; if using a value as the tag, you need to disable query normalization")
+
+	// QueryLogRowThreshold only log queries returning or affecting this many rows
+	QueryLogRowThreshold = flag.Uint64("querylog-row-threshold", 0, "Number of rows a query has to return or affect before being logged; not useful for streaming queries. 0 means all queries will be logged.")
 
 	sendCount      = stats.NewCountersWithSingleLabel("StreamlogSend", "stream log send count", "logger_names")
 	deliveredCount = stats.NewCountersWithMultiLabels(
@@ -208,9 +211,19 @@ func GetFormatter(logger *StreamLogger) LogFormatter {
 
 // ShouldEmitLog returns whether the log with the given SQL query
 // should be emitted or filtered
-func ShouldEmitLog(sql string) bool {
-	if *QueryLogFilterTag == "" {
-		return true
+func ShouldEmitLog(sql string, rowsAffected, rowsReturned uint64) bool {
+	if *QueryLogRowThreshold > maxUint64(rowsAffected, rowsReturned) && *QueryLogFilterTag == "" {
+		return false
 	}
-	return strings.Contains(sql, *QueryLogFilterTag)
+	if *QueryLogFilterTag != "" {
+		return strings.Contains(sql, *QueryLogFilterTag)
+	}
+	return true
+}
+
+func maxUint64(a, b uint64) uint64 {
+	if a < b {
+		return b
+	}
+	return a
 }

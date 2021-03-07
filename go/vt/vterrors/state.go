@@ -27,6 +27,7 @@ const (
 	BadFieldError
 	CantUseOptionHere
 	DataOutOfRange
+	EmptyQuery
 	ForbidSchemaChange
 	NonUniqTable
 	SyntaxError

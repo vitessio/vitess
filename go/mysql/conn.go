@@ -1188,6 +1188,8 @@ func (c *Conn) handleComPing() bool {
 	return true
 }
 
+var errEmptyStatement = NewSQLError(EREmptyQuery, SSClientError, "Query was empty")
+
 func (c *Conn) handleComQuery(handler Handler, data []byte) (kontinue bool) {
 	c.startWriterBuffering()
 	defer func() {
@@ -1214,8 +1216,7 @@ func (c *Conn) handleComQuery(handler Handler, data []byte) (kontinue bool) {
 	}
 
 	if len(queries) == 0 {
-		err := NewSQLError(EREmptyQuery, SSClientError, "Query was empty")
-		return c.writeErrorPacketFromErrorAndLog(err)
+		return c.writeErrorPacketFromErrorAndLog(errEmptyStatement)
 	}
 
 	for index, sql := range queries {

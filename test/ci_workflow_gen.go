@@ -60,6 +60,7 @@ var (
 		"onlineddl_vrepl",
 		"onlineddl_vrepl_stress",
 		"vreplication_migrate",
+		"onlineddl_revert",
 	}
 	// TODO: currently some percona tools including xtrabackup are installed on all clusters, we can possibly optimize
 	// this by only installing them in the required clusters

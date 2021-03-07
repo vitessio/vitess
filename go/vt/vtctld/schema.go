@@ -78,7 +78,7 @@ func reviewMigrationRequest(ctx context.Context, ts *topo.Server, tmClient tmcli
 	if err != nil {
 		return err
 	}
-	actionStr, err := onlineDDL.GetActionStr()
+	_, actionStr, err := onlineDDL.GetActionStr()
 	if err != nil {
 		return err
 	}
