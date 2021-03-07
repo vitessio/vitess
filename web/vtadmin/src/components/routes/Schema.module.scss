@@ -48,7 +48,8 @@
   border: solid 1px var(--colorScaffoldingHighlight);
   border-radius: 6px;
   padding: 0 2.4rem 2.4rem 2.4rem;
-  width: min-content;
+  max-width: 960px;
+  overflow: auto;
 }
 
 .errorPlaceholder {
