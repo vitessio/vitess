@@ -46,7 +46,11 @@ func gen4Planner(_ string) func(sqlparser.Statement, sqlparser.BindVars, Context
 }
 
 func newBuildSelectPlan(sel *sqlparser.Select, vschema ContextVSchema) (engine.Primitive, error) {
-	semTable, err := semantics.Analyse(sel, vschema)
+	keyspace, err := vschema.DefaultKeyspace()
+	if err != nil {
+		return nil, err
+	}
+	semTable, err := semantics.Analyse(sel, keyspace.Name, vschema)
 	if err != nil {
 		return nil, err
 	}

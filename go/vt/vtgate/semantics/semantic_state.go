@@ -44,9 +44,13 @@ type (
 		exprDependencies map[sqlparser.Expr]TableSet
 	}
 
+	tableID struct {
+		dbName, tableName string
+	}
+
 	scope struct {
 		parent *scope
-		tables map[string]*TableInfo
+		tables map[tableID]*TableInfo
 	}
 
 	// SchemaInformation is used tp provide table information from Vschema.
@@ -100,27 +104,20 @@ func (st *SemTable) Dependencies(expr sqlparser.Expr) TableSet {
 }
 
 func newScope(parent *scope) *scope {
-	return &scope{tables: map[string]*TableInfo{}, parent: parent}
+	return &scope{tables: map[tableID]*TableInfo{}, parent: parent}
 }
 
-func (s *scope) addTable(name string, table *TableInfo) error {
-	_, found := s.tables[name]
+func (s *scope) addTable(dbName, tableName string, table *TableInfo) error {
+	id := tableID{
+		dbName:    dbName,
+		tableName: tableName,
+	}
+	_, found := s.tables[id]
 	if found {
-		return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.NonUniqTable, "Not unique table/alias: '%s'", name)
+		return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.NonUniqTable, "Not unique table/alias: '%s'", tableName)
 	}
-	s.tables[name] = table
+	s.tables[id] = table
 	return nil
-}
-
-// Analyse analyzes the parsed query.
-func Analyse(statement sqlparser.Statement, si SchemaInformation) (*SemTable, error) {
-	analyzer := newAnalyzer(si)
-	// Initial scope
-	err := analyzer.analyze(statement)
-	if err != nil {
-		return nil, err
-	}
-	return &SemTable{exprDependencies: analyzer.exprDeps, Tables: analyzer.Tables}, nil
 }
 
 // IsOverlapping returns true if at least one table exists in both sets

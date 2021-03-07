@@ -29,20 +29,32 @@ type (
 	analyzer struct {
 		si SchemaInformation
 
-		Tables []*TableInfo
-		scopes []*scope
-
-		exprDeps map[sqlparser.Expr]TableSet
-		err      error
+		Tables    []*TableInfo
+		scopes    []*scope
+		exprDeps  map[sqlparser.Expr]TableSet
+		err       error
+		currentDb string
 	}
 )
 
 // newAnalyzer create the semantic analyzer
-func newAnalyzer(si SchemaInformation) *analyzer {
+func newAnalyzer(dbName string, si SchemaInformation) *analyzer {
 	return &analyzer{
-		exprDeps: map[sqlparser.Expr]TableSet{},
-		si:       si,
+		exprDeps:  map[sqlparser.Expr]TableSet{},
+		currentDb: dbName,
+		si:        si,
 	}
+}
+
+// Analyse analyzes the parsed query.
+func Analyse(statement sqlparser.Statement, currentDb string, si SchemaInformation) (*SemTable, error) {
+	analyzer := newAnalyzer(currentDb, si)
+	// Initial scope
+	err := analyzer.analyze(statement)
+	if err != nil {
+		return nil, err
+	}
+	return &SemTable{exprDependencies: analyzer.exprDeps, Tables: analyzer.Tables}, nil
 }
 
 // analyzeDown pushes new scopes when we encounter sub queries,
@@ -103,9 +115,6 @@ func (a *analyzer) analyzeTableExprs(tablExprs sqlparser.TableExprs) error {
 func (a *analyzer) analyzeTableExpr(tableExpr sqlparser.TableExpr) error {
 	switch table := tableExpr.(type) {
 	case *sqlparser.AliasedTableExpr:
-		if !table.As.IsEmpty() {
-			return Gen4NotSupportedF("table aliases")
-		}
 		return a.bindTable(table, table.Expr)
 	case *sqlparser.JoinTableExpr:
 		if table.Join != sqlparser.NormalJoinType {
@@ -125,12 +134,27 @@ func (a *analyzer) analyzeTableExpr(tableExpr sqlparser.TableExpr) error {
 
 // resolveQualifiedColumn handles `tabl.col` expressions
 func (a *analyzer) resolveQualifiedColumn(current *scope, expr *sqlparser.ColName) (*TableInfo, error) {
-	qualifier := expr.Qualifier.Name.String()
+	id := tableID{
+		dbName:    expr.Qualifier.Qualifier.String(),
+		tableName: expr.Qualifier.Name.String(),
+	}
+	id2 := tableID{
+		dbName:    a.currentDb,
+		tableName: expr.Qualifier.Name.String(),
+	}
+	checkCurrentDB := id.dbName == ""
 
+	// search up the scope stack until we find a match
 	for current != nil {
-		tableExpr, found := current.tables[qualifier]
+		tableExpr, found := current.tables[id]
 		if found {
 			return tableExpr, nil
+		}
+		if checkCurrentDB {
+			tableExpr, found := current.tables[id2]
+			if found {
+				return tableExpr, nil
+			}
 		}
 		current = current.parent
 	}
@@ -181,7 +205,8 @@ func (a *analyzer) bindTable(alias *sqlparser.AliasedTableExpr, expr sqlparser.S
 		}
 		a.popScope()
 		scope := a.currentScope()
-		return scope.addTable(alias.As.String(), &TableInfo{alias, nil})
+		dbName := "" // derived tables are always referenced only by their alias - they cannot be found using a fully qualified name
+		return scope.addTable(dbName, alias.As.String(), &TableInfo{alias, nil})
 	case sqlparser.TableName:
 		tbl, vdx, _, _, _, err := a.si.FindTableOrVindex(t)
 		if err != nil {
@@ -194,9 +219,13 @@ func (a *analyzer) bindTable(alias *sqlparser.AliasedTableExpr, expr sqlparser.S
 		table := &TableInfo{alias, tbl}
 		a.Tables = append(a.Tables, table)
 		if alias.As.IsEmpty() {
-			return scope.addTable(t.Name.String(), table)
+			dbName := t.Qualifier.String()
+			if dbName == "" {
+				dbName = a.currentDb
+			}
+			return scope.addTable(dbName, t.Name.String(), table)
 		}
-		return scope.addTable(alias.As.String(), table)
+		return scope.addTable("", alias.As.String(), table)
 	}
 	return nil
 }
