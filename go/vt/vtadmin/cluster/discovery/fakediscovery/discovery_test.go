@@ -26,6 +26,8 @@ import (
 )
 
 func TestDiscoverVTGates(t *testing.T) {
+	t.Parallel()
+
 	fake := New()
 	gates := []*vtadminpb.VTGate{
 		{
