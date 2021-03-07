@@ -152,6 +152,8 @@ func TestDial(t *testing.T) {
 		},
 	}
 
+	ctx := context.Background()
+
 	for _, tt := range tests {
 		tt := tt
 
@@ -166,7 +168,7 @@ func TestDial(t *testing.T) {
 				tt.proxy.discovery = tt.disco
 			}
 
-			err := tt.proxy.Dial(context.Background(), "")
+			err := tt.proxy.Dial(ctx, "")
 			if tt.shouldErr {
 				assert.Error(t, err)
 				return

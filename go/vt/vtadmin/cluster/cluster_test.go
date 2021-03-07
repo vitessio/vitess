@@ -479,6 +479,8 @@ func TestGetSchema(t *testing.T) {
 		},
 	}
 
+	ctx := context.Background()
+
 	for i, tt := range tests {
 		i := i
 		tt := tt
@@ -496,7 +498,6 @@ func TestGetSchema(t *testing.T) {
 				DBConfig:     testutil.Dbcfg{},
 			})
 
-			ctx := context.Background()
 			err := cluster.Vtctld.Dial(ctx)
 			require.NoError(t, err, "could not dial test vtctld")
 
@@ -526,7 +527,6 @@ func TestGetSchema(t *testing.T) {
 			},
 		}
 
-		ctx := context.Background()
 		req := &vtctldatapb.GetSchemaRequest{
 			TabletAlias: &topodatapb.TabletAlias{
 				Cell: "otherzone",

@@ -567,6 +567,8 @@ func TestGetClusters(t *testing.T) {
 		},
 	}
 
+	ctx := context.Background()
+
 	for _, tt := range tests {
 		tt := tt
 
@@ -574,7 +576,6 @@ func TestGetClusters(t *testing.T) {
 			t.Parallel()
 
 			api := NewAPI(tt.clusters, grpcserver.Options{}, http.Options{})
-			ctx := context.Background()
 
 			resp, err := api.GetClusters(ctx, &vtadminpb.GetClustersRequest{})
 			assert.NoError(t, err)
@@ -1105,13 +1106,14 @@ func TestGetSchema(t *testing.T) {
 		},
 	}
 
+	ctx := context.Background()
+
 	for _, tt := range tests {
 		tt := tt
 
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			ctx := context.Background()
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, tt.ts, tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
 				return grpcvtctldserver.NewVtctldServer(ts)
 			})
@@ -1867,6 +1869,8 @@ func TestGetTablet(t *testing.T) {
 		},
 	}
 
+	ctx := context.Background()
+
 	for _, tt := range tests {
 		tt := tt
 
@@ -1890,7 +1894,7 @@ func TestGetTablet(t *testing.T) {
 			}
 
 			api := NewAPI(clusters, grpcserver.Options{}, http.Options{})
-			resp, err := api.GetTablet(context.Background(), tt.req)
+			resp, err := api.GetTablet(ctx, tt.req)
 			if tt.shouldErr {
 				assert.Error(t, err)
 				return
@@ -2060,6 +2064,8 @@ func TestGetTablets(t *testing.T) {
 		},
 	}
 
+	ctx := context.Background()
+
 	for _, tt := range tests {
 		tt := tt
 
@@ -2083,7 +2089,7 @@ func TestGetTablets(t *testing.T) {
 			}
 
 			api := NewAPI(clusters, grpcserver.Options{}, http.Options{})
-			resp, err := api.GetTablets(context.Background(), tt.req)
+			resp, err := api.GetTablets(ctx, tt.req)
 			if tt.shouldErr {
 				assert.Error(t, err)
 				return

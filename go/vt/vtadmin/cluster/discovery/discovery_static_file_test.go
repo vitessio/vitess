@@ -91,6 +91,8 @@ func TestDiscoverVTGate(t *testing.T) {
 		},
 	}
 
+	ctx := context.Background()
+
 	for _, tt := range tests {
 		tt := tt
 
@@ -101,7 +103,7 @@ func TestDiscoverVTGate(t *testing.T) {
 			err := disco.parseConfig(tt.contents)
 			require.NoError(t, err)
 
-			gate, err := disco.DiscoverVTGate(context.Background(), tt.tags)
+			gate, err := disco.DiscoverVTGate(ctx, tt.tags)
 			if tt.shouldErr {
 				assert.Error(t, err)
 				return
@@ -234,6 +236,8 @@ func TestDiscoverVTGates(t *testing.T) {
 		},
 	}
 
+	ctx := context.Background()
+
 	for _, tt := range tests {
 		tt := tt
 
@@ -249,7 +253,7 @@ func TestDiscoverVTGates(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			gates, err := disco.DiscoverVTGates(context.Background(), tt.tags)
+			gates, err := disco.DiscoverVTGates(ctx, tt.tags)
 			if tt.shouldErr {
 				assert.Error(t, err)
 				return
@@ -325,6 +329,8 @@ func TestDiscoverVtctld(t *testing.T) {
 		},
 	}
 
+	ctx := context.Background()
+
 	for _, tt := range tests {
 		tt := tt
 
@@ -335,7 +341,7 @@ func TestDiscoverVtctld(t *testing.T) {
 			err := disco.parseConfig(tt.contents)
 			require.NoError(t, err)
 
-			vtctld, err := disco.DiscoverVtctld(context.Background(), tt.tags)
+			vtctld, err := disco.DiscoverVtctld(ctx, tt.tags)
 			if tt.shouldErr {
 				assert.Error(t, err)
 				return
@@ -468,6 +474,8 @@ func TestDiscoverVtctlds(t *testing.T) {
 		},
 	}
 
+	ctx := context.Background()
+
 	for _, tt := range tests {
 		tt := tt
 
@@ -483,7 +491,7 @@ func TestDiscoverVtctlds(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			vtctlds, err := disco.DiscoverVtctlds(context.Background(), tt.tags)
+			vtctlds, err := disco.DiscoverVtctlds(ctx, tt.tags)
 			if tt.shouldErr {
 				assert.Error(t, err)
 				return
