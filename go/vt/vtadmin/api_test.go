@@ -528,6 +528,8 @@ func TestFindSchema(t *testing.T) {
 }
 
 func TestGetClusters(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name     string
 		clusters []*cluster.Cluster
@@ -566,7 +568,11 @@ func TestGetClusters(t *testing.T) {
 	}
 
 	for _, tt := range tests {
+		tt := tt
+
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			api := NewAPI(tt.clusters, grpcserver.Options{}, http.Options{})
 			ctx := context.Background()
 
@@ -578,6 +584,8 @@ func TestGetClusters(t *testing.T) {
 }
 
 func TestGetGates(t *testing.T) {
+	t.Parallel()
+
 	fakedisco1 := fakediscovery.New()
 	cluster1 := &cluster.Cluster{
 		ID:        "c1",
@@ -663,6 +671,8 @@ func TestGetGates(t *testing.T) {
 }
 
 func TestGetKeyspaces(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name             string
 		clusterKeyspaces [][]*vtctldatapb.Keyspace
@@ -849,53 +859,59 @@ func TestGetKeyspaces(t *testing.T) {
 	ctx := context.Background()
 
 	for _, tt := range tests {
-		// Note that these test cases were written prior to the existence of
-		// WithTestServers, so they are all written with the assumption that
-		// there are exactly 2 clusters.
-		topos := []*topo.Server{
-			memorytopo.NewServer("c0_cell1"),
-			memorytopo.NewServer("c1_cell1"),
-		}
+		tt := tt
 
-		for cdx, cks := range tt.clusterKeyspaces {
-			for _, ks := range cks {
-				testutil.AddKeyspace(ctx, t, topos[cdx], ks)
-			}
-		}
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 
-		for cdx, css := range tt.clusterShards {
-			testutil.AddShards(ctx, t, topos[cdx], css...)
-		}
-
-		servers := []vtctlservicepb.VtctldServer{
-			grpcvtctldserver.NewVtctldServer(topos[0]),
-			grpcvtctldserver.NewVtctldServer(topos[1]),
-		}
-
-		testutil.WithTestServers(t, func(t *testing.T, clients ...vtctldclient.VtctldClient) {
-			clusters := []*cluster.Cluster{
-				vtadmintestutil.BuildCluster(vtadmintestutil.TestClusterConfig{
-					Cluster: &vtadminpb.Cluster{
-						Id:   "c0",
-						Name: "cluster0",
-					},
-					VtctldClient: clients[0],
-				}),
-				vtadmintestutil.BuildCluster(vtadmintestutil.TestClusterConfig{
-					Cluster: &vtadminpb.Cluster{
-						Id:   "c1",
-						Name: "cluster1",
-					},
-					VtctldClient: clients[1],
-				}),
+			// Note that these test cases were written prior to the existence of
+			// WithTestServers, so they are all written with the assumption that
+			// there are exactly 2 clusters.
+			topos := []*topo.Server{
+				memorytopo.NewServer("c0_cell1"),
+				memorytopo.NewServer("c1_cell1"),
 			}
 
-			api := NewAPI(clusters, grpcserver.Options{}, http.Options{})
-			resp, err := api.GetKeyspaces(ctx, tt.req)
-			require.NoError(t, err)
+			for cdx, cks := range tt.clusterKeyspaces {
+				for _, ks := range cks {
+					testutil.AddKeyspace(ctx, t, topos[cdx], ks)
+				}
+			}
 
-			vtadmintestutil.AssertKeyspaceSlicesEqual(t, tt.expected.Keyspaces, resp.Keyspaces)
-		}, servers...)
+			for cdx, css := range tt.clusterShards {
+				testutil.AddShards(ctx, t, topos[cdx], css...)
+			}
+
+			servers := []vtctlservicepb.VtctldServer{
+				grpcvtctldserver.NewVtctldServer(topos[0]),
+				grpcvtctldserver.NewVtctldServer(topos[1]),
+			}
+
+			testutil.WithTestServers(t, func(t *testing.T, clients ...vtctldclient.VtctldClient) {
+				clusters := []*cluster.Cluster{
+					vtadmintestutil.BuildCluster(vtadmintestutil.TestClusterConfig{
+						Cluster: &vtadminpb.Cluster{
+							Id:   "c0",
+							Name: "cluster0",
+						},
+						VtctldClient: clients[0],
+					}),
+					vtadmintestutil.BuildCluster(vtadmintestutil.TestClusterConfig{
+						Cluster: &vtadminpb.Cluster{
+							Id:   "c1",
+							Name: "cluster1",
+						},
+						VtctldClient: clients[1],
+					}),
+				}
+
+				api := NewAPI(clusters, grpcserver.Options{}, http.Options{})
+				resp, err := api.GetKeyspaces(ctx, tt.req)
+				require.NoError(t, err)
+
+				vtadmintestutil.AssertKeyspaceSlicesEqual(t, tt.expected.Keyspaces, resp.Keyspaces)
+			}, servers...)
+		})
 	}
 }
 
@@ -1635,6 +1651,8 @@ func TestGetSchemas(t *testing.T) {
 }
 
 func TestGetTablet(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name           string
 		clusterTablets [][]*vtadminpb.Tablet
@@ -1850,7 +1868,11 @@ func TestGetTablet(t *testing.T) {
 	}
 
 	for _, tt := range tests {
+		tt := tt
+
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			clusters := make([]*cluster.Cluster, len(tt.clusterTablets))
 
 			for i, tablets := range tt.clusterTablets {
@@ -1881,6 +1903,8 @@ func TestGetTablet(t *testing.T) {
 }
 
 func TestGetTablets(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name           string
 		clusterTablets [][]*vtadminpb.Tablet
@@ -2037,7 +2061,11 @@ func TestGetTablets(t *testing.T) {
 	}
 
 	for _, tt := range tests {
+		tt := tt
+
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			clusters := make([]*cluster.Cluster, len(tt.clusterTablets))
 
 			for i, tablets := range tt.clusterTablets {
@@ -2531,6 +2559,8 @@ func TestGetVSchemas(t *testing.T) {
 }
 
 func TestVTExplain(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name          string
 		keyspaces     []*vtctldatapb.Keyspace
@@ -2748,8 +2778,14 @@ func TestVTExplain(t *testing.T) {
 		},
 	}
 
+	ctx := context.Background()
+
 	for _, tt := range tests {
+		tt := tt
+
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			toposerver := memorytopo.NewServer("c0_cell1")
 
 			tmc := testutil.TabletManagerClient{
@@ -2765,14 +2801,14 @@ func TestVTExplain(t *testing.T) {
 
 			testutil.WithTestServer(t, vtctldserver, func(t *testing.T, vtctldClient vtctldclient.VtctldClient) {
 				if tt.srvVSchema != nil {
-					err := toposerver.UpdateSrvVSchema(context.Background(), "c0_cell1", tt.srvVSchema)
+					err := toposerver.UpdateSrvVSchema(ctx, "c0_cell1", tt.srvVSchema)
 					require.NoError(t, err)
 				}
-				testutil.AddKeyspaces(context.Background(), t, toposerver, tt.keyspaces...)
-				testutil.AddShards(context.Background(), t, toposerver, tt.shards...)
+				testutil.AddKeyspaces(ctx, t, toposerver, tt.keyspaces...)
+				testutil.AddShards(ctx, t, toposerver, tt.shards...)
 
 				for _, tablet := range tt.tablets {
-					testutil.AddTablet(context.Background(), t, toposerver, tablet.Tablet, nil)
+					testutil.AddTablet(ctx, t, toposerver, tablet.Tablet, nil)
 
 					// Adds each SchemaDefinition to the fake TabletManagerClient, or nil
 					// if there are no schemas for that tablet. (All tablet aliases must
@@ -2800,7 +2836,7 @@ func TestVTExplain(t *testing.T) {
 				}
 
 				api := NewAPI(clusters, grpcserver.Options{}, http.Options{})
-				resp, err := api.VTExplain(context.Background(), tt.req)
+				resp, err := api.VTExplain(ctx, tt.req)
 
 				if tt.expectedError != nil {
 					assert.True(t, errors.Is(err, tt.expectedError), "expected error type %w does not match actual error type %w", err, tt.expectedError)
