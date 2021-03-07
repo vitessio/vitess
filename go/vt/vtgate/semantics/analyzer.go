@@ -83,10 +83,11 @@ func (a *analyzer) analyzeDown(cursor *sqlparser.Cursor) bool {
 		t, err := a.resolveColumn(node, current)
 		if err != nil {
 			a.err = err
+		} else {
+			a.exprDeps[node] = t
 		}
-		a.exprDeps[node] = t
 	}
-	return a.shouldContinue()
+	return true // we always return true here, and then return false on the going up phase to abort on error
 }
 
 func (a *analyzer) resolveColumn(colName *sqlparser.ColName, current *scope) (TableSet, error) {
@@ -142,7 +143,7 @@ func (a *analyzer) resolveQualifiedColumn(current *scope, expr *sqlparser.ColNam
 		dbName:    a.currentDb,
 		tableName: expr.Qualifier.Name.String(),
 	}
-	checkCurrentDB := id.dbName == ""
+	checkCurrentDB := id.dbName == "" && id != id2
 
 	// search up the scope stack until we find a match
 	for current != nil {
@@ -240,7 +241,7 @@ func (a *analyzer) analyzeUp(cursor *sqlparser.Cursor) bool {
 	case *sqlparser.Union, *sqlparser.Select:
 		a.popScope()
 	}
-	return true
+	return a.shouldContinue()
 }
 
 func (a *analyzer) shouldContinue() bool {

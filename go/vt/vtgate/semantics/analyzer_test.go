@@ -105,24 +105,42 @@ func TestBindingSingleTable(t *testing.T) {
 }
 
 func TestBindingSingleAliasedTable(t *testing.T) {
-	queries := []string{
-		"select col from tabl as X",
-		"select tabl.col from X as tabl",
-		"select col from d.X as tabl",
-		"select tabl.col from d.X as tabl",
-	}
-	for _, query := range queries {
-		t.Run(query, func(t *testing.T) {
-			stmt, semTable := parseAndAnalyze(t, query, "")
-			sel, _ := stmt.(*sqlparser.Select)
-			t1 := sel.From[0].(*sqlparser.AliasedTableExpr)
-			ts := semTable.TableSetFor(t1)
-			assert.EqualValues(t, 1, ts)
+	t.Run("positive tests", func(t *testing.T) {
+		queries := []string{
+			"select col from tabl as X",
+			"select tabl.col from X as tabl",
+			"select col from d.X as tabl",
+			"select tabl.col from d.X as tabl",
+		}
+		for _, query := range queries {
+			t.Run(query, func(t *testing.T) {
+				stmt, semTable := parseAndAnalyze(t, query, "")
+				sel, _ := stmt.(*sqlparser.Select)
+				t1 := sel.From[0].(*sqlparser.AliasedTableExpr)
+				ts := semTable.TableSetFor(t1)
+				assert.EqualValues(t, 1, ts)
 
-			d := semTable.Dependencies(extract(sel, 0))
-			require.Equal(t, T0, d, query)
-		})
-	}
+				d := semTable.Dependencies(extract(sel, 0))
+				require.Equal(t, T0, d, query)
+			})
+		}
+	})
+	t.Run("negative tests", func(t *testing.T) {
+		queries := []string{
+			"select tabl.col from tabl as X",
+			"select X.col from X as tabl",
+			"select d.X.col from d.X as tabl",
+			"select d.tabl.col from d.X as tabl",
+		}
+		for _, query := range queries {
+			t.Run(query, func(t *testing.T) {
+				parse, err := sqlparser.Parse(query)
+				require.NoError(t, err)
+				_, err = Analyse(parse, "")
+				require.Error(t, err)
+			})
+		}
+	})
 }
 
 func TestUnion(t *testing.T) {
@@ -147,40 +165,58 @@ func TestUnion(t *testing.T) {
 }
 
 func TestBindingMultiTable(t *testing.T) {
-	type testCase struct {
-		query string
-		deps  TableSet
-	}
-	queries := []testCase{{
-		query: "select t.col from t, s",
-		deps:  T0,
-	}, {
-		query: "select t.col from t join s",
-		deps:  T0,
-	}, {
-		query: "select max(t.col+s.col) from t, s",
-		deps:  T0 | T1,
-	}, {
-		query: "select max(t.col+s.col) from t join s",
-		deps:  T0 | T1,
-	}, {
-		query: "select case t.col when s.col then r.col else u.col end from t, s, r, w, u",
-		deps:  T0 | T1 | T2 | T4,
-		//}, {
-		//	// make sure that we don't let sub-query Dependencies leak out by mistake
-		//	query: "select t.col + (select 42 from s) from t",
-		//	deps:  T0,
-		//}, {
-		//	query: "select (select 42 from s where r.id = s.id) from r",
-		//	deps:  T0 | T1,
-	}}
-	for _, query := range queries {
-		t.Run(query.query, func(t *testing.T) {
-			stmt, semTable := parseAndAnalyze(t, query.query, "")
-			sel, _ := stmt.(*sqlparser.Select)
-			assert.Equal(t, query.deps, semTable.Dependencies(extract(sel, 0)), query.query)
-		})
-	}
+	t.Run("positive tests", func(t *testing.T) {
+
+		type testCase struct {
+			query string
+			deps  TableSet
+		}
+		queries := []testCase{{
+			query: "select t.col from t, s",
+			deps:  T0,
+		}, {
+			query: "select t.col from t join s",
+			deps:  T0,
+		}, {
+			query: "select max(t.col+s.col) from t, s",
+			deps:  T0 | T1,
+		}, {
+			query: "select max(t.col+s.col) from t join s",
+			deps:  T0 | T1,
+		}, {
+			query: "select case t.col when s.col then r.col else u.col end from t, s, r, w, u",
+			deps:  T0 | T1 | T2 | T4,
+			//}, {
+			//	// make sure that we don't let sub-query Dependencies leak out by mistake
+			//	query: "select t.col + (select 42 from s) from t",
+			//	deps:  T0,
+			//}, {
+			//	query: "select (select 42 from s where r.id = s.id) from r",
+			//	deps:  T0 | T1,
+		}}
+		for _, query := range queries {
+			t.Run(query.query, func(t *testing.T) {
+				stmt, semTable := parseAndAnalyze(t, query.query, "")
+				sel, _ := stmt.(*sqlparser.Select)
+				assert.Equal(t, query.deps, semTable.Dependencies(extract(sel, 0)), query.query)
+			})
+		}
+	})
+
+	t.Run("negative tests", func(t *testing.T) {
+
+		queries := []string{
+			"select 1 from d.tabl, d.foo as tabl",
+		}
+		for _, query := range queries {
+			t.Run(query, func(t *testing.T) {
+				parse, err := sqlparser.Parse(query)
+				require.NoError(t, err)
+				_, err = Analyse(parse, "")
+				require.Error(t, err)
+			})
+		}
+	})
 }
 
 func TestBindingSingleDepPerTable(t *testing.T) {
