@@ -33,6 +33,7 @@ import (
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
 // Cluster is the self-contained unit of services required for vtadmin to talk
@@ -209,6 +210,40 @@ func (c *Cluster) GetTablets(ctx context.Context) ([]*vtadminpb.Tablet, error) {
 	}
 
 	return c.parseTablets(rows)
+}
+
+// GetSchema returns the schema for a GetSchemaRequest on the given tablet. The
+// caller is responsible for making at least one call to c.Vtctld.Dial prior to
+// calling this function.
+//
+// Note that the request's TabletAlias field will be ignored, using the provided
+// tablet's Alias instead. This override is done on a copy of the request, so it
+// is transparent to the caller.
+//
+// This function takes both the request argument and tablet argument to
+// (a) set the Keyspace field on the resulting Schema object, which comes from
+// the provided tablet; and, (b) allow a caller, like vtadmin.API to collect a
+// bunch of tablets once and make a series of GetSchema calls without Cluster
+// refetching the tablet list each time.
+func (c *Cluster) GetSchema(ctx context.Context, req *vtctldatapb.GetSchemaRequest, tablet *vtadminpb.Tablet) (*vtadminpb.Schema, error) {
+	// Copy the request to not mutate the caller's request object.
+	r := *req
+	r.TabletAlias = tablet.Tablet.Alias
+
+	schema, err := c.Vtctld.GetSchema(ctx, &r)
+	if err != nil {
+		return nil, err
+	}
+
+	if schema == nil || schema.Schema == nil {
+		return nil, nil
+	}
+
+	return &vtadminpb.Schema{
+		Cluster:          c.ToProto(),
+		Keyspace:         tablet.Tablet.Keyspace,
+		TableDefinitions: schema.Schema.TableDefinitions,
+	}, nil
 }
 
 // FindTablet returns the first tablet in a given cluster that satisfies the filter function.

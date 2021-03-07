@@ -20,9 +20,11 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/vitessdriver"
 	"vitess.io/vitess/go/vt/vtadmin/cluster"
@@ -30,10 +32,12 @@ import (
 	vtadminerrors "vitess.io/vitess/go/vt/vtadmin/errors"
 	"vitess.io/vitess/go/vt/vtadmin/testutil"
 	"vitess.io/vitess/go/vt/vtadmin/vtsql"
+	"vitess.io/vitess/go/vt/vtctl/vtctldclient"
 
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/proto/vtadmin"
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
 // This test only validates the error handling on dialing database connections.
@@ -56,6 +60,196 @@ func TestGetTablets(t *testing.T) {
 	c := &cluster.Cluster{DB: db}
 	_, err := c.GetTablets(context.Background())
 	assert.Error(t, err)
+}
+
+func TestGetSchema(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		vtctld    vtctldclient.VtctldClient
+		req       *vtctldatapb.GetSchemaRequest
+		tablet    *vtadminpb.Tablet
+		expected  *vtadminpb.Schema
+		shouldErr bool
+	}{
+		{
+			name: "success",
+			vtctld: &testutil.VtctldClient{
+				GetSchemaResults: map[string]struct {
+					Response *vtctldatapb.GetSchemaResponse
+					Error    error
+				}{
+					"zone1-0000000100": {
+						Response: &vtctldatapb.GetSchemaResponse{
+							Schema: &tabletmanagerdatapb.SchemaDefinition{
+								TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+									{
+										Name: "some_table",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			req: &vtctldatapb.GetSchemaRequest{},
+			tablet: &vtadminpb.Tablet{
+				Tablet: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Keyspace: "testkeyspace",
+				},
+			},
+			expected: &vtadminpb.Schema{
+				Cluster: &vtadminpb.Cluster{
+					Name: "cluster0",
+					Id:   "c0",
+				},
+				Keyspace: "testkeyspace",
+				TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+					{
+						Name: "some_table",
+					},
+				},
+			},
+			shouldErr: false,
+		},
+		{
+			name: "error getting schema",
+			vtctld: &testutil.VtctldClient{
+				GetSchemaResults: map[string]struct {
+					Response *vtctldatapb.GetSchemaResponse
+					Error    error
+				}{
+					"zone1-0000000100": {
+						Error: assert.AnError,
+					},
+				},
+			},
+			req: &vtctldatapb.GetSchemaRequest{},
+			tablet: &vtadminpb.Tablet{
+				Tablet: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Keyspace: "testkeyspace",
+				},
+			},
+			expected:  nil,
+			shouldErr: true,
+		},
+		{
+			name: "underlying schema is nil",
+			vtctld: &testutil.VtctldClient{
+				GetSchemaResults: map[string]struct {
+					Response *vtctldatapb.GetSchemaResponse
+					Error    error
+				}{
+					"zone1-0000000100": {
+						Response: &vtctldatapb.GetSchemaResponse{
+							Schema: nil,
+						},
+						Error: nil,
+					},
+				},
+			},
+			req: &vtctldatapb.GetSchemaRequest{},
+			tablet: &vtadminpb.Tablet{
+				Tablet: &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Keyspace: "testkeyspace",
+				},
+			},
+			expected:  nil,
+			shouldErr: false,
+		},
+	}
+
+	for i, tt := range tests {
+		i := i
+		tt := tt
+
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			cluster := testutil.BuildCluster(testutil.TestClusterConfig{
+				Cluster: &vtadminpb.Cluster{
+					Id:   fmt.Sprintf("c%d", i),
+					Name: fmt.Sprintf("cluster%d", i),
+				},
+				VtctldClient: tt.vtctld,
+				Tablets:      nil,
+				DBConfig:     testutil.Dbcfg{},
+			})
+
+			ctx := context.Background()
+			err := cluster.Vtctld.Dial(ctx)
+			require.NoError(t, err, "could not dial test vtctld")
+
+			schema, err := cluster.GetSchema(ctx, tt.req, tt.tablet)
+			if tt.shouldErr {
+				assert.Error(t, err)
+
+				return
+			}
+
+			assert.NoError(t, err)
+			assert.Equal(t, tt.expected, schema)
+		})
+	}
+
+	t.Run("does not modify passed-in request", func(t *testing.T) {
+		t.Parallel()
+
+		vtctld := &testutil.VtctldClient{
+			GetSchemaResults: map[string]struct {
+				Response *vtctldatapb.GetSchemaResponse
+				Error    error
+			}{
+				"zone1-0000000100": {
+					Response: &vtctldatapb.GetSchemaResponse{},
+				},
+			},
+		}
+
+		ctx := context.Background()
+		req := &vtctldatapb.GetSchemaRequest{
+			TabletAlias: &topodatapb.TabletAlias{
+				Cell: "otherzone",
+				Uid:  500,
+			},
+		}
+		tablet := &vtadminpb.Tablet{
+			Tablet: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+		}
+
+		cluster := testutil.BuildCluster(testutil.TestClusterConfig{
+			Cluster: &vtadminpb.Cluster{
+				Id:   "c0",
+				Name: "cluster0",
+			},
+			VtctldClient: vtctld,
+		})
+
+		err := cluster.Vtctld.Dial(ctx)
+		require.NoError(t, err, "could not dial test vtctld")
+
+		cluster.GetSchema(ctx, req, tablet)
+
+		assert.NotEqual(t, req.TabletAlias, tablet.Tablet.Alias, "expected GetSchema to not modify original request object")
+	})
 }
 
 func TestFindTablets(t *testing.T) {
@@ -116,7 +310,7 @@ func TestFindTablets(t *testing.T) {
 			n: 2,
 			expected: []*vtadminpb.Tablet{
 				{
-					Cluster: &vtadmin.Cluster{
+					Cluster: &vtadminpb.Cluster{
 						Id:   "c0",
 						Name: "cluster0",
 					},
@@ -130,7 +324,7 @@ func TestFindTablets(t *testing.T) {
 					},
 				},
 				{
-					Cluster: &vtadmin.Cluster{
+					Cluster: &vtadminpb.Cluster{
 						Id:   "c0",
 						Name: "cluster0",
 					},
@@ -195,7 +389,7 @@ func TestFindTablets(t *testing.T) {
 			n: -1,
 			expected: []*vtadminpb.Tablet{
 				{
-					Cluster: &vtadmin.Cluster{
+					Cluster: &vtadminpb.Cluster{
 						Id:   "c0",
 						Name: "cluster0",
 					},
@@ -209,7 +403,7 @@ func TestFindTablets(t *testing.T) {
 					},
 				},
 				{
-					Cluster: &vtadmin.Cluster{
+					Cluster: &vtadminpb.Cluster{
 						Id:   "c0",
 						Name: "cluster0",
 					},
@@ -223,7 +417,7 @@ func TestFindTablets(t *testing.T) {
 					},
 				},
 				{
-					Cluster: &vtadmin.Cluster{
+					Cluster: &vtadminpb.Cluster{
 						Id:   "c0",
 						Name: "cluster0",
 					},
@@ -240,12 +434,24 @@ func TestFindTablets(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
-		cluster := testutil.BuildCluster(0, nil, tt.tablets, nil)
-		tablets, err := cluster.FindTablets(context.Background(), tt.filter, tt.n)
+	ctx := context.Background()
 
-		assert.NoError(t, err)
-		testutil.AssertTabletSlicesEqual(t, tt.expected, tablets)
+	for _, tt := range tests {
+		tt := tt
+
+		t.Run(tt.name, func(t *testing.T) {
+			cluster := testutil.BuildCluster(testutil.TestClusterConfig{
+				Cluster: &vtadminpb.Cluster{
+					Id:   "c0",
+					Name: "cluster0",
+				},
+				Tablets: tt.tablets,
+			})
+			tablets, err := cluster.FindTablets(ctx, tt.filter, tt.n)
+
+			assert.NoError(t, err)
+			testutil.AssertTabletSlicesEqual(t, tt.expected, tablets)
+		})
 	}
 }
 
@@ -296,7 +502,7 @@ func TestFindTablet(t *testing.T) {
 				return t.State == vtadminpb.Tablet_SERVING
 			},
 			expected: &vtadminpb.Tablet{
-				Cluster: &vtadmin.Cluster{
+				Cluster: &vtadminpb.Cluster{
 					Id:   "c0",
 					Name: "cluster0",
 				},
@@ -341,15 +547,27 @@ func TestFindTablet(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
-		cluster := testutil.BuildCluster(0, nil, tt.tablets, nil)
-		tablet, err := cluster.FindTablet(context.Background(), tt.filter)
+	ctx := context.Background()
 
-		if tt.expectedError != nil {
-			assert.True(t, errors.Is(err, tt.expectedError), "expected error type %w does not match actual error type %w", err, tt.expectedError)
-		} else {
-			assert.NoError(t, err)
-			testutil.AssertTabletsEqual(t, tt.expected, tablet)
-		}
+	for _, tt := range tests {
+		tt := tt
+
+		t.Run(tt.name, func(t *testing.T) {
+			cluster := testutil.BuildCluster(testutil.TestClusterConfig{
+				Cluster: &vtadminpb.Cluster{
+					Id:   "c0",
+					Name: "cluster0",
+				},
+				Tablets: tt.tablets,
+			})
+			tablet, err := cluster.FindTablet(ctx, tt.filter)
+
+			if tt.expectedError != nil {
+				assert.True(t, errors.Is(err, tt.expectedError), "expected error type %w does not match actual error type %w", err, tt.expectedError)
+			} else {
+				assert.NoError(t, err)
+				testutil.AssertTabletsEqual(t, tt.expected, tablet)
+			}
+		})
 	}
 }
