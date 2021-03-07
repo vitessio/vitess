@@ -285,6 +285,7 @@ const (
 	DropColVindexDDLAction
 	AddSequenceDDLAction
 	AddAutoIncDDLAction
+	RevertDDLAction
 )
 
 // Constants for Enum Type - Scope
