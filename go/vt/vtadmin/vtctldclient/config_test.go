@@ -42,7 +42,11 @@ func withTempFile(t *testing.T, tmpdir string, name string, f func(*testing.T, *
 }
 
 func TestParse(t *testing.T) {
+	t.Parallel()
+
 	t.Run("no credentials provided", func(t *testing.T) {
+		t.Parallel()
+
 		cfg, err := Parse(nil, nil, []string{})
 		require.NoError(t, err)
 
@@ -56,6 +60,8 @@ func TestParse(t *testing.T) {
 	})
 
 	t.Run("credential loading", func(t *testing.T) {
+		t.Parallel()
+
 		withTempFile(t, "", "vtctldclient.config_test.testcluster.*", func(t *testing.T, credsfile *os.File) {
 			creds := &grpcclient.StaticAuthClientCreds{
 				Username: "admin",
