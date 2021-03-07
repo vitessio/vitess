@@ -302,6 +302,7 @@ Gen4 plan same as above
     "Table": "unsharded"
   }
 }
+Gen4 plan same as above
 
 # ',' join information_schema
 "select a.id,b.id from information_schema.a as a, information_schema.b as b"
@@ -337,6 +338,7 @@ Gen4 plan same as above
     "Table": "unsharded"
   }
 }
+Gen4 plan same as above
 
 # Left join, single chunk
 "select m1.col from unsharded as m1 left join unsharded as m2 on m1.a=m2.b"
