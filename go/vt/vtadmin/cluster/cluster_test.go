@@ -44,6 +44,8 @@ import (
 // This test only validates the error handling on dialing database connections.
 // Other cases are covered by one or both of TestFindTablets and TestFindTablet.
 func TestGetTablets(t *testing.T) {
+	t.Parallel()
+
 	disco := fakediscovery.New()
 	disco.AddTaggedGates(nil, &vtadminpb.VTGate{Hostname: "gate"})
 
@@ -346,6 +348,8 @@ func TestGetVSchema(t *testing.T) {
 }
 
 func TestFindTablets(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name     string
 		tablets  []*vtadminpb.Tablet
@@ -533,6 +537,8 @@ func TestFindTablets(t *testing.T) {
 		tt := tt
 
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			cluster := testutil.BuildCluster(testutil.TestClusterConfig{
 				Cluster: &vtadminpb.Cluster{
 					Id:   "c0",
@@ -549,6 +555,8 @@ func TestFindTablets(t *testing.T) {
 }
 
 func TestFindTablet(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name          string
 		tablets       []*vtadminpb.Tablet
@@ -646,6 +654,8 @@ func TestFindTablet(t *testing.T) {
 		tt := tt
 
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			cluster := testutil.BuildCluster(testutil.TestClusterConfig{
 				Cluster: &vtadminpb.Cluster{
 					Id:   "c0",
