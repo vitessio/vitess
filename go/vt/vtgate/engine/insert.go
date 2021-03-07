@@ -489,6 +489,9 @@ func (ins *Insert) processPrimary(vcursor VCursor, vindexColumnsKeys [][]sqltype
 			if ins.Opcode != InsertShardedIgnore {
 				return nil, fmt.Errorf("could not map %v to a keyspace id", vindexColumnsKeys[i])
 			}
+			if ins.Opcode == InsertShardedIgnore && vindexColumnsKeys[i][0].Type() == querypb.Type_NULL_TYPE {
+				return nil, fmt.Errorf("could not map %v to a keyspace id", vindexColumnsKeys[i])
+			}
 		default:
 			return nil, fmt.Errorf("could not map %v to a unique keyspace id: %v", vindexColumnsKeys[i], destination)
 		}
