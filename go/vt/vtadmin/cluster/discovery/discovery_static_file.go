@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"math/rand"
 
@@ -106,7 +107,7 @@ func NewStaticFile(cluster *vtadminpb.Cluster, flags *pflag.FlagSet, args []stri
 
 func (d *StaticFileDiscovery) parseConfig(bytes []byte) error {
 	if err := json.Unmarshal(bytes, &d.config); err != nil {
-		return err
+		return fmt.Errorf("failed to unmarshal staticfile config from json: %w", err)
 	}
 
 	d.gates.byName = make(map[string]*vtadminpb.VTGate, len(d.config.VTGates))
