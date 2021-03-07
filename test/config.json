@@ -1,17 +1,17 @@
 {
 	"Tests": {
-        "java": {
-          "File": "",
-          "Args": [],
-          "Command": [
-            "make",
-            "java_test"
-          ],
-          "Manual": false,
-          "Shard": "10",
-          "RetryMax": 0,
-          "Tags": []
-        },
+		"java": {
+			"File": "",
+			"Args": [],
+			"Command": [
+				"make",
+				"java_test"
+			],
+			"Manual": false,
+			"Shard": "10",
+			"RetryMax": 0,
+			"Tags": []
+		},
 		"client_test": {
 			"File": "",
 			"Args": [],
@@ -290,7 +290,16 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "onlineddl_vrepl_stress",
-			"RetryMax": 1,
+			"RetryMax": 0,
+			"Tags": []
+		},
+		"onlineddl_revert": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl_revert"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "onlineddl_revert",
+			"RetryMax": 0,
 			"Tags": []
 		},
 		"pitr": {
