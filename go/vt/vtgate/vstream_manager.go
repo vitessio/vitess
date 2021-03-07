@@ -248,11 +248,10 @@ func (vs *vstream) computeSkew(streamID string, event *binlogdatapb.VEvent) {
 			maxTs = ts
 		}
 	}
-	if vs.skewCh != nil { // we are skewed, check if this event has fixed the skew
+	if vs.laggard != "" { // we are skewed, check if this event has fixed the skew
 		if (maxTs - minTs) <= MaxSkew {
 			vs.laggard = ""
 			close(vs.skewCh)
-			vs.skewCh = nil
 		}
 	} else {
 		if (maxTs - minTs) > MaxSkew { // check if we are skewed due to this event
@@ -302,13 +301,8 @@ func (vs *vstream) alignStreams(ctx context.Context, event *binlogdatapb.VEvent,
 		case <-time.After(time.Duration(vs.skewTimeoutSeconds) * time.Second):
 			log.Errorf("timed out while waiting for skew to reduce: %s", streamID)
 			return fmt.Errorf("timed out while waiting for skew to reduce: %s", streamID)
-		case _, ok := <-vs.skewCh:
-			if !ok {
-				log.Infof("Skew has been fixed")
-			} else {
-				log.Errorf("got items in the skew channel incorrectly")
-				return fmt.Errorf("got items in the skew channel incorrectly")
-			}
+		case <-vs.skewCh:
+			// once skew is fixed the channel is closed and all waiting streams "wake up"
 		}
 	}
 }
