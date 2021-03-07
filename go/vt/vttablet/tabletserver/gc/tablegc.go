@@ -431,8 +431,8 @@ func (collector *TableGC) purge(ctx context.Context) (tableName string, err erro
 	// avoids excessive IO on the replicas.
 	// (note that the user may skip the PURGE step if they want, but the step is on by default)
 
-	// However, disabling SQL_LOG_BIN requires SUPER privileges, and we don;t know that we have that.
-	// e.g. on Amazon Aurora we do not have SUPER and can disable log bin.
+	// However, disabling SQL_LOG_BIN requires SUPER privileges, and we don't know that we have that.
+	// Any externally managed database might not give SUPER privileges to the vitess accounts, and this is known to be the case for Amazon Aurora.
 	// We therefore disable log bin on best-effort base. Te logic is still fine and sound if binary logging
 	// is left enabled. We just lose some optimization.
 	disableLogBin := func() (bool, error) {
