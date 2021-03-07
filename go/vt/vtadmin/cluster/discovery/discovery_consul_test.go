@@ -87,6 +87,8 @@ func consulServiceEntry(name string, tags []string, meta map[string]string) *con
 }
 
 func TestConsulDiscoverVTGates(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name      string
 		disco     *ConsulDiscovery
@@ -229,7 +231,11 @@ func TestConsulDiscoverVTGates(t *testing.T) {
 	}
 
 	for _, tt := range tests {
+		tt := tt
+
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			tt.disco.client = &fakeConsulClient{
 				health: &fakeConsulHealth{
 					entries: tt.entries,
@@ -249,6 +255,8 @@ func TestConsulDiscoverVTGates(t *testing.T) {
 }
 
 func TestConsulDiscoverVTGate(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name      string
 		disco     *ConsulDiscovery
@@ -332,7 +340,11 @@ func TestConsulDiscoverVTGate(t *testing.T) {
 	}
 
 	for _, tt := range tests {
+		tt := tt
+
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			tt.disco.client = &fakeConsulClient{
 				health: &fakeConsulHealth{
 					entries: tt.entries,
@@ -352,6 +364,8 @@ func TestConsulDiscoverVTGate(t *testing.T) {
 }
 
 func TestConsulDiscoverVTGateAddr(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name      string
 		disco     *ConsulDiscovery
@@ -422,7 +436,11 @@ func TestConsulDiscoverVTGateAddr(t *testing.T) {
 	}
 
 	for _, tt := range tests {
+		tt := tt
+
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			tt.disco.client = &fakeConsulClient{
 				health: &fakeConsulHealth{
 					entries: tt.entries,

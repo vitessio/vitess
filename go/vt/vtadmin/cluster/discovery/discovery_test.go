@@ -27,6 +27,8 @@ import (
 )
 
 func TestNew(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name string
 		impl string
@@ -48,7 +50,11 @@ func TestNew(t *testing.T) {
 	}
 
 	for _, tt := range tests {
+		tt := tt
+
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			disco, err := New(tt.impl, &vtadminpb.Cluster{Id: "testid", Name: "testcluster"}, []string{})
 			if tt.err != nil {
 				assert.Error(t, err, tt.err.Error())
@@ -62,8 +68,10 @@ func TestNew(t *testing.T) {
 }
 
 func TestRegister(t *testing.T) {
+	t.Parallel()
+
 	// Use a timestamp to allow running tests with `-count=N`.
-	ts := time.Now().Unix()
+	ts := time.Now().UnixNano()
 	factoryName := fmt.Sprintf("testfactory-%d", ts)
 
 	Register(factoryName, nil)
