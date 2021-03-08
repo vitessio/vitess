@@ -1,16 +1,12 @@
 name: vtadmin_web_build
 on: [push, pull_request]
 
-jobs:
+jobs:   
   build:
-
     runs-on: ubuntu-latest
-
     strategy:
       matrix:
         node-version: [14.x]
-        # See supported Node.js release schedule at https://nodejs.org/en/about/releases/
-
     steps:
     
     - uses: actions/checkout@v2
@@ -26,4 +22,16 @@ jobs:
     
     - name: Build front-end
       run: npm run build
+      working-directory: ./web/vtadmin
+    
+    - name: Run eslint
+      run: npm run lint:eslint
+      working-directory: ./web/vtadmin
+    
+    - name: Run prettier
+      run: npm run lint:prettier
+      working-directory: ./web/vtadmin
+    
+    - name: Run stylelint
+      run: npm run lint:stylelint
       working-directory: ./web/vtadmin
