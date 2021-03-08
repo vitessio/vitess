@@ -803,7 +803,7 @@ func (api *API) VTExplain(ctx context.Context, req *vtadminpb.VTExplainRequest) 
 		return t.Tablet.Keyspace == req.Keyspace && topo.IsInServingGraph(t.Tablet.Type) && t.Tablet.Type != topodatapb.TabletType_MASTER && t.State == vtadminpb.Tablet_SERVING
 	})
 	if err != nil {
-		return nil, fmt.Errorf("cannot find serving, non-MASTER tablet in keyspace=%s: %w", req.Keyspace, err)
+		return nil, fmt.Errorf("cannot find serving, non-primary tablet in keyspace=%s: %w", req.Keyspace, err)
 	}
 
 	if err := c.Vtctld.Dial(ctx); err != nil {
