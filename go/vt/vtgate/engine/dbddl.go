@@ -79,9 +79,9 @@ func NewDBDDL(dbName string, create bool, timeout int) *DBDDL {
 // RouteType implements the Primitive interface
 func (c *DBDDL) RouteType() string {
 	if c.create {
-		return "create database"
+		return "CreateDB"
 	}
-	return "drop database"
+	return "DropDB"
 }
 
 // GetKeyspaceName implements the Primitive interface
@@ -107,60 +107,74 @@ func (c *DBDDL) Execute(vcursor VCursor, _ map[string]*querypb.BindVariable, _ b
 		defer cancel()
 	}
 
-	ctx := vcursor.Context()
 	if c.create {
-		err := plugin.CreateDatabase(ctx, c.name)
-		if err != nil {
-			return nil, err
-		}
-		var destinations []*srvtopo.ResolvedShard
-		for {
-			// loop until we have found a valid shard
-			destinations, _, err = vcursor.ResolveDestinations(c.name, nil, []key.Destination{key.DestinationAllShards{}})
-			if err == nil {
-				break
-			}
-			log.Errorf("waiting for topo to be updated after create db: %s", err.Error())
-			select {
-			case <-ctx.Done(): //context cancelled
-				return nil, vterrors.Errorf(vtrpc.Code_DEADLINE_EXCEEDED, "could not validate created database")
-			case <-time.After(500 * time.Millisecond): //timeout
-			}
-		}
-		var queries []*querypb.BoundQuery
-		for range destinations {
-			queries = append(queries, &querypb.BoundQuery{
-				Sql:           "select 42 from dual where null",
-				BindVariables: nil,
-			})
-		}
-
-		for {
-			_, errors := vcursor.ExecuteMultiShard(destinations, queries, false, true)
-
-			noErr := true
-			for _, err := range errors {
-				if err != nil {
-					noErr = false
-					log.Errorf("waiting for healthy tablets to be available after create db: %s", err.Error())
-					select {
-					case <-ctx.Done(): //context cancelled
-						return nil, vterrors.Errorf(vtrpc.Code_DEADLINE_EXCEEDED, "could not validate created database")
-					case <-time.After(500 * time.Millisecond): //timeout
-					}
-					break
-				}
-			}
-			if noErr {
-				break
-			}
-		}
-		return &sqltypes.Result{RowsAffected: 1}, nil
+		return c.createDatabase(vcursor, plugin)
 	}
 
+	return c.dropDatabase(vcursor, plugin)
+}
+
+func (c *DBDDL) createDatabase(vcursor VCursor, plugin DBDDLPlugin) (*sqltypes.Result, error) {
+	ctx := vcursor.Context()
+	err := plugin.CreateDatabase(ctx, c.name)
+	if err != nil {
+		return nil, err
+	}
+	var destinations []*srvtopo.ResolvedShard
+	for {
+		// loop until we have found a valid shard
+		destinations, _, err = vcursor.ResolveDestinations(c.name, nil, []key.Destination{key.DestinationAllShards{}})
+		if err == nil {
+			break
+		}
+		select {
+		case <-ctx.Done(): //context cancelled
+			return nil, vterrors.Errorf(vtrpc.Code_DEADLINE_EXCEEDED, "could not validate created database")
+		case <-time.After(500 * time.Millisecond): //timeout
+		}
+	}
+	var queries []*querypb.BoundQuery
+	for range destinations {
+		queries = append(queries, &querypb.BoundQuery{
+			Sql:           "select 42 from dual where null",
+			BindVariables: nil,
+		})
+	}
+
+	for {
+		_, errors := vcursor.ExecuteMultiShard(destinations, queries, false, true)
+
+		noErr := true
+		for _, err := range errors {
+			if err != nil {
+				noErr = false
+				select {
+				case <-ctx.Done(): //context cancelled
+					return nil, vterrors.Errorf(vtrpc.Code_DEADLINE_EXCEEDED, "could not validate created database")
+				case <-time.After(500 * time.Millisecond): //timeout
+				}
+				break
+			}
+		}
+		if noErr {
+			break
+		}
+	}
+	return &sqltypes.Result{RowsAffected: 1}, nil
+}
+
+func (c *DBDDL) dropDatabase(vcursor VCursor, plugin DBDDLPlugin) (*sqltypes.Result, error) {
+	ctx := vcursor.Context()
 	err := plugin.DropDatabase(ctx, c.name)
 	if err != nil {
 		return nil, err
+	}
+	for vcursor.FindKeyspace(c.name) {
+		select {
+		case <-ctx.Done(): //context cancelled
+			return nil, vterrors.Errorf(vtrpc.Code_DEADLINE_EXCEEDED, "could not validate drop database")
+		case <-time.After(500 * time.Millisecond): //timeout
+		}
 	}
 	return &sqltypes.Result{StatusFlags: sqltypes.ServerStatusDbDropped}, err
 }

@@ -23,6 +23,7 @@ import (
 	"os"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/require"
@@ -78,7 +79,7 @@ func TestMain(m *testing.M) {
 	os.Exit(exitCode)
 }
 
-func TestDBDDLPluginSync(t *testing.T) {
+func TestDBDDLPlugin(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 	vtParams := mysql.ConnParams{
@@ -96,20 +97,27 @@ func TestDBDDLPluginSync(t *testing.T) {
 		qr := exec(t, conn, `create database aaa`)
 		require.EqualValues(t, 1, qr.RowsAffected)
 	}()
-
+	time.Sleep(300 * time.Millisecond)
 	start(t, "aaa")
 
 	// wait until the create database query has returned
 	wg.Wait()
-	exec(t, conn, `use aaa`)
 
+	exec(t, conn, `use aaa`)
 	exec(t, conn, `create table t (id bigint primary key)`)
 	exec(t, conn, `insert into t(id) values (1),(2),(3),(4),(5)`)
 	assertMatches(t, conn, "select count(*) from t", `[[INT64(5)]]`)
 
-	exec(t, conn, `drop database aaa`)
-
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		_ = exec(t, conn, `drop database aaa`)
+	}()
+	time.Sleep(300 * time.Millisecond)
 	shutdown("aaa")
+
+	// wait until the drop database query has returned
+	wg.Wait()
 
 	_, err = conn.ExecuteFetch(`select count(*) from t`, 1000, true)
 	require.Error(t, err)
@@ -141,6 +149,7 @@ func shutdown(ksName string) {
 			}
 		}
 	}
+	_ = clusterInstance.VtctlclientProcess.ExecuteCommand("DeleteKeyspace", "-recursive", ksName)
 }
 
 func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
