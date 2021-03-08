@@ -2453,9 +2453,9 @@ show_statement:
     showTablesOpt := &ShowTablesOpt{Filter: $4}
     $$ = &Show{&ShowLegacy{Scope: VitessMetadataScope, Type: string($3), ShowTablesOpt: showTablesOpt}}
   }
-| SHOW VITESS_MIGRATIONS like_or_where_opt
+| SHOW VITESS_MIGRATIONS from_database_opt like_or_where_opt
   {
-    $$ = &Show{&ShowBasic{Command: VitessMigrations, Filter: $3}}
+    $$ = &Show{&ShowBasic{Command: VitessMigrations, Filter: $4, DbName: $3}}
   }
 | SHOW VSCHEMA TABLES
   {
