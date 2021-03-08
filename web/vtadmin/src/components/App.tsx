@@ -13,6 +13,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+import * as React from 'react';
+import { BrowserRouter as Router, Redirect, Route, Switch } from 'react-router-dom';
+
+import style from './App.module.scss';
+import { Tablets } from './routes/Tablets';
+import { Debug } from './routes/Debug';
+import { NavRail } from './NavRail';
+import { Error404 } from './routes/Error404';
+import { Clusters } from './routes/Clusters';
+import { Gates } from './routes/Gates';
+import { Keyspaces } from './routes/Keyspaces';
+import { Schemas } from './routes/Schemas';
 
 export const App = () => {
     return (
