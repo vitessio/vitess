@@ -4041,3 +4041,8 @@
 2021-03-08T15:46:19Z,unit_race,https://github.com/vitessio/vitess/actions/runs/632799194
 2021-03-08T16:07:11Z,golangci-lint,https://github.com/vitessio/vitess/actions/runs/632857053
 2021-03-08T16:07:40Z,golangci-lint,https://github.com/vitessio/vitess/actions/runs/632858610
+2021-03-08T16:22:50Z,check_formatting,https://github.com/vitessio/vitess/actions/runs/632902603
+2021-03-08T16:22:50Z,golangci-lint,https://github.com/vitessio/vitess/actions/runs/632902635
+2021-03-08T16:23:12Z,check_formatting,https://github.com/vitessio/vitess/actions/runs/632903744
+2021-03-08T16:23:12Z,golangci-lint,https://github.com/vitessio/vitess/actions/runs/632903734
+2021-03-08T16:53:03Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/632991971
