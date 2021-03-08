@@ -4049,3 +4049,10 @@
 2021-03-08T17:30:27Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/633098208
 2021-03-08T17:30:27Z,gomod-tidy,https://github.com/vitessio/vitess/actions/runs/633098198
 2021-03-08T17:49:23Z,Cluster (14),https://github.com/vitessio/vitess/actions/runs/633152140
+2021-03-08T18:33:04Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/633268522
+2021-03-08T18:33:04Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/633268529
+2021-03-08T18:33:04Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/633268502
+2021-03-08T18:33:04Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/633268517
+2021-03-08T18:33:04Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/633268525
+2021-03-08T18:33:04Z,unit_race,https://github.com/vitessio/vitess/actions/runs/633268504
+2021-03-08T18:33:05Z,Unit Test (mariadb101),https://github.com/vitessio/vitess/actions/runs/633268557
