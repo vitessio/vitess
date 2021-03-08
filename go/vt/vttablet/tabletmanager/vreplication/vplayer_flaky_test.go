@@ -1271,7 +1271,7 @@ func TestPlayerRowMove(t *testing.T) {
 func TestPlayerTypes(t *testing.T) {
 	log.Errorf("TestPlayerTypes: flavor is %s", env.Flavor)
 	enableJSONColumnTesting := false
-	if strings.EqualFold(env.Flavor, "mysql56") || strings.EqualFold(env.Flavor, "mysql57") {
+	if strings.EqualFold(env.Flavor, "mysql57") {
 		enableJSONColumnTesting = true
 	}
 	defer deleteTablet(addTablet(100))
