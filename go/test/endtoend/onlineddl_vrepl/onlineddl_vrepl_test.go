@@ -20,6 +20,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -37,6 +38,7 @@ import (
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
 
+	"github.com/olekukonko/tablewriter"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -103,9 +105,6 @@ var (
 	insertMutex  sync.Mutex
 )
 
-func fullWordUUIDRegexp(uuid, searchWord string) *regexp.Regexp {
-	return regexp.MustCompile(uuid + `.*?\b` + searchWord + `\b`)
-}
 func fullWordRegexp(searchWord string) *regexp.Regexp {
 	return regexp.MustCompile(`.*?\b` + searchWord + `\b`)
 }
@@ -404,15 +403,17 @@ func checkTablesCount(t *testing.T, tablet *cluster.Vttablet, showTableName stri
 // +------------------+-------+--------------+----------------------+--------------------------------------+----------+---------------------+---------------------+------------------+
 
 func checkRecentMigrations(t *testing.T, uuid string, expectStatus schema.OnlineDDLStatus) {
-	result, err := clusterInstance.VtctlclientProcess.OnlineDDLShowRecent(keyspaceName)
-	assert.NoError(t, err)
-	fmt.Println("# 'vtctlclient OnlineDDL show recent' output (for debug purposes):")
-	fmt.Println(result)
-	assert.Equal(t, len(clusterInstance.Keyspaces[0].Shards), strings.Count(result, uuid))
-	// We ensure "full word" regexp becuase some column names may conflict
-	expectStatusRegexp := fullWordUUIDRegexp(uuid, string(expectStatus))
-	m := expectStatusRegexp.FindAllString(result, -1)
-	assert.Equal(t, len(clusterInstance.Keyspaces[0].Shards), len(m))
+	r := vtgateExecQuery(t, "show vitess_migrations", "")
+	fmt.Println("# 'show vitess_migrations' output (for debug purposes):")
+	printQueryResult(os.Stdout, r)
+
+	count := 0
+	for _, row := range r.Named().Rows {
+		if row["migration_uuid"].ToString() == uuid && row["migration_status"].ToString() == string(expectStatus) {
+			count++
+		}
+	}
+	assert.Equal(t, len(clusterInstance.Keyspaces[0].Shards), count)
 }
 
 // checkCancelMigration attempts to cancel a migration, and expects rejection
@@ -518,4 +519,36 @@ func vtgateExec(t *testing.T, ddlStrategy string, query string, expectError stri
 		assert.Contains(t, err.Error(), expectError, "Unexpected error")
 	}
 	return qr
+}
+
+// printQueryResult will pretty-print a QueryResult to the logger.
+func printQueryResult(writer io.Writer, qr *sqltypes.Result) {
+	if qr == nil {
+		return
+	}
+	if len(qr.Rows) == 0 {
+		return
+	}
+
+	table := tablewriter.NewWriter(writer)
+	table.SetAutoFormatHeaders(false)
+
+	// Make header.
+	header := make([]string, 0, len(qr.Fields))
+	for _, field := range qr.Fields {
+		header = append(header, field.Name)
+	}
+	table.SetHeader(header)
+
+	// Add rows.
+	for _, row := range qr.Rows {
+		vals := make([]string, 0, len(row))
+		for _, val := range row {
+			vals = append(vals, val.ToString())
+		}
+		table.Append(vals)
+	}
+
+	// Print table.
+	table.Render()
 }
