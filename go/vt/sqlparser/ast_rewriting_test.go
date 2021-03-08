@@ -31,7 +31,7 @@ type myTestCase struct {
 	liid, db, foundRows, rowCount, rawGTID, rawTimeout, sessTrackGTID  bool
 	ddlStrategy, sessionUUID, sessionEnableSystemSettings              bool
 	udv                                                                int
-	autocommit, clientFoundRows, skipQueryPlanCache                    bool
+	autocommit, clientFoundRows, skipQueryPlanCache, socket            bool
 	sqlSelectLimit, transactionMode, workload, version, versionComment bool
 }
 
@@ -146,6 +146,10 @@ func TestRewrites(in *testing.T) {
 		in:       "SELECT @@workload",
 		expected: "SELECT :__vtworkload as `@@workload`",
 		workload: true,
+	}, {
+		in:       "SELECT @@socket",
+		expected: "SELECT :__vtsocket as `@@socket`",
+		socket:   true,
 	}, {
 		in:       "select (select 42) from dual",
 		expected: "select 42 as `(select 42 from dual)` from dual",
