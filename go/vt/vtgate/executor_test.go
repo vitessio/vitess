@@ -2291,6 +2291,17 @@ func TestExecutorTempTable(t *testing.T) {
 	assert.Equal(t, before, executor.plans.Len())
 }
 
+func TestExecutorShowVitessMigrations(t *testing.T) {
+	executor, sbc1, sbc2, _ := createExecutorEnv()
+	showQuery := "show vitess_migrations"
+	session := NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"})
+	ctx := context.Background()
+	_, err := executor.Execute(ctx, "", session, showQuery, nil)
+	require.NoError(t, err)
+	assert.Contains(t, sbc1.StringQueries(), "SELECT * FROM _vt.schema_migrations")
+	assert.Contains(t, sbc2.StringQueries(), "SELECT * FROM _vt.schema_migrations")
+}
+
 func exec(executor *Executor, session *SafeSession, sql string) (*sqltypes.Result, error) {
 	return executor.Execute(context.Background(), "TestExecute", session, sql, nil)
 }
