@@ -31,7 +31,8 @@
   "scripts": {
     "start": "react-scripts start",
     "build": "react-scripts build",
-    "test": "react-scripts test",
+    "test": "react-scripts test --watchAll=false",
+    "test:watch": "react-scripts test",
     "lint": "npm run lint:eslint && npm run lint:prettier && npm run lint:stylelint",
     "lint:fix": "npm run lint:eslint:fix && npm run lint:prettier:fix && npm run lint:stylelint:fix",
     "lint:eslint": "eslint --ext js,ts,tsx src",
