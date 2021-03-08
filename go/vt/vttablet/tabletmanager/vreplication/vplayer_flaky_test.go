@@ -1270,7 +1270,10 @@ func TestPlayerRowMove(t *testing.T) {
 
 func TestPlayerTypes(t *testing.T) {
 	log.Errorf("TestPlayerTypes: flavor is %s", env.Flavor)
-
+	enableJSONColumnTesting := false
+	if strings.EqualFold(env.Flavor, "mysql56") || strings.EqualFold(env.Flavor, "mysql57") {
+		enableJSONColumnTesting = true
+	}
 	defer deleteTablet(addTablet(100))
 
 	execStatements(t, []string{
@@ -1303,7 +1306,7 @@ func TestPlayerTypes(t *testing.T) {
 		"drop table binary_pk",
 		fmt.Sprintf("drop table %s.binary_pk", vrepldb),
 	})
-	if strings.Contains(env.Flavor, "mysql57") {
+	if enableJSONColumnTesting {
 		execStatements(t, []string{
 			"create table vitess_json(id int auto_increment, val1 json, val2 json, val3 json, val4 json, val5 json, primary key(id))",
 			fmt.Sprintf("create table %s.vitess_json(id int, val1 json, val2 json, val3 json, val4 json, val5 json, primary key(id))", vrepldb),
@@ -1386,8 +1389,7 @@ func TestPlayerTypes(t *testing.T) {
 			{"a\x00\x00\x00", "bbb"},
 		},
 	}}
-
-	if strings.Contains(env.Flavor, "mysql57") {
+	if enableJSONColumnTesting {
 		testcases = append(testcases, testcase{
 			input: "insert into vitess_json(val1,val2,val3,val4,val5) values (null,'{}','123','{\"a\":[42,100]}', '{\"foo\":\"bar\"}')",
 			output: "insert into vitess_json(id,val1,val2,val3,val4,val5) values (1," +
@@ -1396,6 +1398,14 @@ func TestPlayerTypes(t *testing.T) {
 			table: "vitess_json",
 			data: [][]string{
 				{"1", "", "{}", "123", `{"a": [42, 100]}`, `{"foo": "bar"}`},
+			},
+		})
+		testcases = append(testcases, testcase{
+			input:  "update vitess_json set val4 = '{\"a\": [98, 123]}', val5 = convert(x'7b7d' using utf8mb4)",
+			output: "update vitess_json set val1=convert(null using utf8mb4), val2=convert('{}' using utf8mb4), val3=convert('123' using utf8mb4), val4=convert('{\\\"a\\\":[98,123]}' using utf8mb4), val5=convert('{}' using utf8mb4) where id=1",
+			table:  "vitess_json",
+			data: [][]string{
+				{"1", "", "{}", "123", `{"a": [98, 123]}`, `{}`},
 			},
 		})
 	}
