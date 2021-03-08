@@ -42,6 +42,10 @@ type VtctldClient struct {
 		Response *vtctldatapb.GetSchemaResponse
 		Error    error
 	}
+	GetVSchemaResults map[string]struct {
+		Response *vtctldatapb.GetVSchemaResponse
+		Error    error
+	}
 }
 
 // Compile-time type assertion to make sure we haven't overriden a method
@@ -76,4 +80,17 @@ func (fake *VtctldClient) GetSchema(ctx context.Context, req *vtctldatapb.GetSch
 	}
 
 	return nil, fmt.Errorf("%w: no result set for tablet alias %s", assert.AnError, key)
+}
+
+// GetVSchema is part of the vtctldclient.VtctldClient interface.
+func (fake *VtctldClient) GetVSchema(ctx context.Context, req *vtctldatapb.GetVSchemaRequest, opts ...grpc.CallOption) (*vtctldatapb.GetVSchemaResponse, error) {
+	if fake.GetVSchemaResults == nil {
+		return nil, fmt.Errorf("%w: GetVSchemaResults not set of fake vtctldclient", assert.AnError)
+	}
+
+	if result, ok := fake.GetVSchemaResults[req.Keyspace]; ok {
+		return result.Response, result.Error
+	}
+
+	return nil, fmt.Errorf("%w: no result set for keyspace %s", assert.AnError, req.Keyspace)
 }

@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"time"
 
+	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -243,6 +244,31 @@ func (c *Cluster) GetSchema(ctx context.Context, req *vtctldatapb.GetSchemaReque
 		Cluster:          c.ToProto(),
 		Keyspace:         tablet.Tablet.Keyspace,
 		TableDefinitions: schema.Schema.TableDefinitions,
+	}, nil
+}
+
+// GetVSchema returns the vschema for a given keyspace in this cluster. The
+// caller is responsible for making at least one call to c.Vtctld.Dial prior to
+// calling this function.
+func (c *Cluster) GetVSchema(ctx context.Context, keyspace string) (*vtadminpb.VSchema, error) {
+	span, ctx := trace.NewSpan(ctx, "Cluster.GetVSchema")
+	defer span.Finish()
+
+	AnnotateSpan(c, span)
+	span.Annotate("keyspace", keyspace)
+
+	vschema, err := c.Vtctld.GetVSchema(ctx, &vtctldatapb.GetVSchemaRequest{
+		Keyspace: keyspace,
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtadminpb.VSchema{
+		Cluster: c.ToProto(),
+		Name:    keyspace,
+		VSchema: vschema.VSchema,
 	}, nil
 }
 

@@ -103,3 +103,15 @@ func BuildCluster(cfg TestClusterConfig) *cluster.Cluster {
 		Vtctld:    vtctld,
 	}
 }
+
+// BuildClusters is a helper for building multiple clusters from a slice of
+// TestClusterConfigs.
+func BuildClusters(cfgs ...TestClusterConfig) []*cluster.Cluster {
+	clusters := make([]*cluster.Cluster, len(cfgs))
+
+	for i, cfg := range cfgs {
+		clusters[i] = BuildCluster(cfg)
+	}
+
+	return clusters
+}
