@@ -246,18 +246,19 @@ func (er *expressionRewriter) sysVarRewrite(cursor *Cursor, node *ColName) {
 	switch lowered {
 	case sysvars.Autocommit.Name,
 		sysvars.ClientFoundRows.Name,
+		sysvars.DDLStrategy.Name,
 		sysvars.SkipQueryPlanCache.Name,
+		sysvars.Socket.Name,
 		sysvars.SQLSelectLimit.Name,
 		sysvars.TransactionMode.Name,
-		sysvars.Workload.Name,
-		sysvars.DDLStrategy.Name,
-		sysvars.SessionUUID.Name,
-		sysvars.SessionEnableSystemSettings.Name,
 		sysvars.ReadAfterWriteGTID.Name,
 		sysvars.ReadAfterWriteTimeOut.Name,
+		sysvars.SessionEnableSystemSettings.Name,
+		sysvars.SessionTrackGTIDs.Name,
+		sysvars.SessionUUID.Name,
 		sysvars.Version.Name,
 		sysvars.VersionComment.Name,
-		sysvars.SessionTrackGTIDs.Name:
+		sysvars.Workload.Name:
 		cursor.Replace(bindVarExpression("__vt" + lowered))
 		er.bindVars.AddSysVar(lowered)
 	}
