@@ -903,6 +903,14 @@ func TestExecutorShow(t *testing.T) {
 	_, err = executor.Execute(ctx, "TestExecute", session, query, nil)
 	want = "Unknown database 'no_such_keyspace' in vschema"
 	assert.EqualError(t, err, want, query)
+
+	query = "show vitess_migrations"
+	_, err = executor.Execute(ctx, "TestExecute", session, query, nil)
+	require.NoError(t, err)
+
+	query = "show vitess_migrations like '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90'"
+	_, err = executor.Execute(ctx, "TestExecute", session, query, nil)
+	require.NoError(t, err)
 }
 
 func TestExecutorUse(t *testing.T) {

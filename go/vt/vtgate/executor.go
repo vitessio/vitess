@@ -721,6 +721,8 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 		}, nil
 	case sqlparser.KeywordString(sqlparser.VITESS_TABLETS):
 		return e.showTablets(show)
+	case sqlparser.KeywordString(sqlparser.VITESS_MIGRATIONS):
+		return e.showMigrations(ctx, safeSession, show, destKeyspace, logStats)
 	case "vitess_target":
 		var rows [][]sqltypes.Value
 		rows = append(rows, buildVarCharRow(safeSession.TargetString))
@@ -979,6 +981,42 @@ func (e *Executor) showTablets(show *sqlparser.ShowLegacy) (*sqltypes.Result, er
 		Fields: buildVarCharFields("Cell", "Keyspace", "Shard", "TabletType", "State", "Alias", "Hostname", "MasterTermStartTime"),
 		Rows:   rows,
 	}, nil
+}
+
+// showMigrations serves `SHOW VITESS_MIGRATIONS ...` queries. It invokes queries on _vt.schema_migrations on all MASTER tablets on keyspace's shards.
+func (e *Executor) showMigrations(ctx context.Context, safeSession *SafeSession, show *sqlparser.ShowLegacy, destKeyspace string, logStats *LogStats) (*sqltypes.Result, error) {
+	if destKeyspace == "" {
+		return nil, errNoKeyspace
+	}
+
+	sql := "SELECT * FROM _vt.schema_migrations WHERE (migration_uuid LIKE %a OR migration_context LIKE %a OR migration_status LIKE %a)"
+
+	like := "%"
+	if filter := show.ShowTablesOpt.Filter; filter != nil {
+		if filter.Like != "" {
+			like = filter.Like
+		}
+		if filter.Filter != nil {
+			sql = fmt.Sprintf("%s AND (%s)", sql, sqlparser.String(filter.Filter))
+		}
+	}
+	sql, err := sqlparser.ParseAndBind(sql,
+		sqltypes.StringBindVariable(like),
+		sqltypes.StringBindVariable(like),
+		sqltypes.StringBindVariable(like),
+	)
+	if err != nil {
+		return nil, err
+	}
+	dest := key.DestinationAllShards{}
+
+	execStart := time.Now()
+	result, err := e.destinationExec(ctx, safeSession, sql, nil, dest, destKeyspace, topodatapb.TabletType_MASTER, logStats, false)
+
+	e.updateQueryCounts("vitess_migrations", "", "", int64(logStats.ShardQueries))
+
+	logStats.ExecuteTime = time.Since(execStart)
+	return result, err
 }
 
 func (e *Executor) handleOther(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, dest key.Destination, destKeyspace string, destTabletType topodatapb.TabletType, logStats *LogStats, ignoreMaxMemoryRows bool) (*sqltypes.Result, error) {
