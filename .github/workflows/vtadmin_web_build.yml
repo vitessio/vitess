@@ -1,6 +1,10 @@
 name: vtadmin_web_build
 on: [push, pull_request]
 
+defaults:
+  run:
+    working-directory: ./web/vtadmin
+
 jobs:   
   build:
     runs-on: ubuntu-latest
@@ -18,20 +22,15 @@ jobs:
     
     - name: Install dependencies
       run: npm ci
-      working-directory: ./web/vtadmin
     
     - name: Build front-end
       run: npm run build
-      working-directory: ./web/vtadmin
     
     - name: Run eslint
       run: npm run lint:eslint
-      working-directory: ./web/vtadmin
     
     - name: Run prettier
       run: npm run lint:prettier
-      working-directory: ./web/vtadmin
     
     - name: Run stylelint
       run: npm run lint:stylelint
-      working-directory: ./web/vtadmin
