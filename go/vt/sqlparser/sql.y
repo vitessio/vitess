@@ -2453,6 +2453,10 @@ show_statement:
     showTablesOpt := &ShowTablesOpt{Filter: $4}
     $$ = &Show{&ShowLegacy{Scope: VitessMetadataScope, Type: string($3), ShowTablesOpt: showTablesOpt}}
   }
+| SHOW VITESS_MIGRATIONS like_or_where_opt
+  {
+    $$ = &Show{&ShowBasic{Command: VitessMigrations, Filter: $3}}
+  }
 | SHOW VSCHEMA TABLES
   {
     $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3), Scope: ImplicitScope}}
@@ -2503,10 +2507,6 @@ vitess_topo:
     $$ = string($1)
   }
 | VITESS_SHARDS
-  {
-    $$ = string($1)
-  }
-| VITESS_MIGRATIONS
   {
     $$ = string($1)
   }
