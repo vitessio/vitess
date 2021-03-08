@@ -4046,3 +4046,5 @@
 2021-03-08T16:23:12Z,check_formatting,https://github.com/vitessio/vitess/actions/runs/632903744
 2021-03-08T16:23:12Z,golangci-lint,https://github.com/vitessio/vitess/actions/runs/632903734
 2021-03-08T16:53:03Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/632991971
+2021-03-08T17:30:27Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/633098208
+2021-03-08T17:30:27Z,gomod-tidy,https://github.com/vitessio/vitess/actions/runs/633098198
