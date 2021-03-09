@@ -25,8 +25,8 @@ func setAllowComments(yylex interface{}, allow bool) {
   yylex.(*Tokenizer).AllowComments = allow
 }
 
-func setDDL(yylex interface{}, node Statement) {
-  yylex.(*Tokenizer).partialDDL = node
+func setDDL(yylex interface{}, node interface{}) {
+  yylex.(*Tokenizer).partialDDL = node.(Statement)
 }
 
 func incNesting(yylex interface{}) bool {
@@ -50,78 +50,35 @@ func skipToEnd(yylex interface{}) {
 
 %}
 
-%union {
+%struct {
   empty         struct{}
-  statement     Statement
-  selStmt       SelectStatement
-  ins           *Insert
-  byt           byte
   str           string
-  strs          []string
-  selectExprs   SelectExprs
-  selectExpr    SelectExpr
-  columns       Columns
-  partitions    Partitions
-  colName       *ColName
-  tableExprs    TableExprs
-  tableExpr     TableExpr
   joinCondition JoinCondition
   tableName     TableName
-  tableNames    TableNames
-  indexHints    *IndexHints
-  expr          Expr
-  exprs         Exprs
-  boolVal       BoolVal
-  boolean	bool
-  literal        *Literal
-  colTuple      ColTuple
-  values        Values
-  valTuple      ValTuple
-  subquery      *Subquery
-  derivedTable  *DerivedTable
-  whens         []*When
-  when          *When
-  orderBy       OrderBy
-  order         *Order
-  limit         *Limit
-  updateExprs   UpdateExprs
-  setExprs      SetExprs
-  updateExpr    *UpdateExpr
-  setExpr       *SetExpr
-  characteristic Characteristic
-  characteristics []Characteristic
   colIdent      ColIdent
   tableIdent    TableIdent
-  convertType   *ConvertType
-  aliasedTableName *AliasedTableExpr
-  TableSpec  *TableSpec
   columnType    ColumnType
-  colKeyOpt     ColumnKeyOption
-  optVal        Expr
   LengthScaleOption LengthScaleOption
-  columnDefinition *ColumnDefinition
-  columnDefinitions []*ColumnDefinition
-  indexDefinition *IndexDefinition
-  indexInfo     *IndexInfo
-  indexOption   *IndexOption
-  indexOptions  []*IndexOption
-  indexColumn   *IndexColumn
-  indexColumns  []*IndexColumn
-  constraintDefinition *ConstraintDefinition
-  constraintInfo ConstraintInfo
-  ReferenceAction ReferenceAction
-  partDefs      []*PartitionDefinition
-  partDef       *PartitionDefinition
-  partSpec      *PartitionSpec
-  partSpecs     []*PartitionSpec
   vindexParam   VindexParam
-  vindexParams  []VindexParam
-  showFilter    *ShowFilter
-  optLike       *OptLike
+  collateAndCharset CollateAndCharset
+}
+
+%union {
+  boolUnion bool
+
+  boolean bool
+  boolVal BoolVal
+  ignore Ignore
+}
+
+%union {
+  numericUnion int
+
+  colKeyOpt     ColumnKeyOption
+  ReferenceAction ReferenceAction
   isolationLevel IsolationLevel
   insertAction InsertAction
   scope 	Scope
-  ignore 	Ignore
   lock 		Lock
   joinType  	JoinType
   comparisonExprOperator ComparisonExprOperator
@@ -129,22 +86,81 @@ func skipToEnd(yylex interface{}) {
   matchExprOption MatchExprOption
   orderDirection  OrderDirection
   explainType 	  ExplainType
+  lockType LockType
+}
+
+%union {
+  ifaceUnion interface{}
+
+  statement     Statement
+  selStmt       SelectStatement
+  tableExpr     TableExpr
+  expr          Expr
+  colTuple      ColTuple
+  optVal        Expr
+  constraintInfo ConstraintInfo
+  alterOption      AlterOption
+  characteristic Characteristic
+
+  ins           *Insert
+  colName       *ColName
+  indexHints    *IndexHints
+  literal        *Literal
+  subquery      *Subquery
+  derivedTable  *DerivedTable
+  when          *When
+  order         *Order
+  limit         *Limit
+  updateExpr    *UpdateExpr
+  setExpr       *SetExpr
+  convertType   *ConvertType
+  aliasedTableName *AliasedTableExpr
+  tableSpec  *TableSpec
+  columnDefinition *ColumnDefinition
+  indexDefinition *IndexDefinition
+  indexInfo     *IndexInfo
+  indexOption   *IndexOption
+  indexColumn   *IndexColumn
+  partDef       *PartitionDefinition
+  partSpec      *PartitionSpec
+  showFilter    *ShowFilter
+  optLike       *OptLike
   selectInto	  *SelectInto
   createDatabase  *CreateDatabase
   alterDatabase  *AlterDatabase
-  collateAndCharset CollateAndCharset
-  collateAndCharsets []CollateAndCharset
   createTable      *CreateTable
-  tableAndLockTypes []*TableAndLockType
   tableAndLockType *TableAndLockType
-  lockType LockType
   alterTable       *AlterTable
-  alterOption      AlterOption
-  alterOptions	   []AlterOption
   tableOption      *TableOption
-  tableOptions     TableOptions
-  renameTablePairs []*RenameTablePair
   columnTypeOptions *ColumnTypeOptions
+  constraintDefinition *ConstraintDefinition
+
+  strs          []string
+  whens         []*When
+  columnDefinitions []*ColumnDefinition
+  indexOptions  []*IndexOption
+  indexColumns  []*IndexColumn
+  collateAndCharsets []CollateAndCharset
+  tableAndLockTypes TableAndLockTypes
+  renameTablePairs []*RenameTablePair
+  alterOptions	   []AlterOption
+  vindexParams  []VindexParam
+  partDefs      []*PartitionDefinition
+  partSpecs     []*PartitionSpec
+  characteristics []Characteristic
+  selectExpr    SelectExpr
+  columns       Columns
+  partitions    Partitions
+  tableExprs    TableExprs
+  tableNames    TableNames
+  exprs         Exprs
+  values        Values
+  valTuple      ValTuple
+  orderBy       OrderBy
+  updateExprs   UpdateExprs
+  setExprs      SetExprs
+  selectExprs   SelectExprs
+  tableOptions     TableOptions
 }
 
 %token LEX_ERROR
@@ -372,7 +388,7 @@ func skipToEnd(yylex interface{}) {
 %type <str> index_or_key index_symbols from_or_in index_or_key_opt
 %type <str> name_opt constraint_name_opt
 %type <str> equal_opt
-%type <TableSpec> table_spec table_column_list
+%type <tableSpec> table_spec table_column_list
 %type <optLike> create_like
 %type <str> table_opt_value
 %type <tableOption> table_option
@@ -597,11 +613,11 @@ insert_statement:
 insert_or_replace:
   INSERT
   {
-    $$ = InsertAct
+    $$ = int(InsertAct)
   }
 | REPLACE
   {
-    $$ = ReplaceAct
+    $$ = int(ReplaceAct)
   }
 
 update_statement:
@@ -714,29 +730,29 @@ transaction_char:
 isolation_level:
   REPEATABLE READ
   {
-    $$ = RepeatableRead
+    $$ = int(RepeatableRead)
   }
 | READ COMMITTED
   {
-    $$ = ReadCommitted
+    $$ = int(ReadCommitted)
   }
 | READ UNCOMMITTED
   {
-    $$ = ReadUncommitted
+    $$ = int(ReadUncommitted)
   }
 | SERIALIZABLE
   {
-    $$ = Serializable
+    $$ = int(Serializable)
   }
 
 set_session_or_global:
   SESSION
   {
-    $$ = SessionScope
+    $$ = int(SessionScope)
   }
 | GLOBAL
   {
-    $$ = GlobalScope
+    $$ = int(GlobalScope)
   }
 
 create_statement:
@@ -1568,35 +1584,35 @@ check_constraint_info:
 fk_on_delete:
   ON DELETE fk_reference_action
   {
-    $$ = $3
+    $$ = int($3)
   }
 
 fk_on_update:
   ON UPDATE fk_reference_action
   {
-    $$ = $3
+    $$ = int($3)
   }
 
 fk_reference_action:
   RESTRICT
   {
-    $$ = Restrict
+    $$ = int(Restrict)
   }
 | CASCADE
   {
-    $$ = Cascade
+    $$ = int(Cascade)
   }
 | NO ACTION
   {
-    $$ = NoAction
+    $$ = int(NoAction)
   }
 | SET DEFAULT
   {
-    $$ = SetDefault
+    $$ = int(SetDefault)
   }
 | SET NULL
   {
-    $$ = SetNull
+    $$ = int(SetNull)
   }
 
 restrict_or_cascade_opt:
@@ -2652,27 +2668,27 @@ release_statement:
 
 explain_format_opt:
   {
-    $$ = EmptyType
+    $$ = int(EmptyType)
   }
 | FORMAT '=' JSON
   {
-    $$ = JSONType
+    $$ = int(JSONType)
   }
 | FORMAT '=' TREE
   {
-    $$ = TreeType
+    $$ = int(TreeType)
   }
 | FORMAT '=' VITESS
   {
-    $$ = VitessType
+    $$ = int(VitessType)
   }
 | FORMAT '=' TRADITIONAL
   {
-    $$ = TraditionalType
+    $$ = int(TraditionalType)
   }
 | ANALYZE
   {
-    $$ = AnalyzeType
+    $$ = int(AnalyzeType)
   }
 
 explain_synonyms:
@@ -2765,19 +2781,19 @@ lock_table:
 lock_type:
   READ
   {
-    $$ = Read
+    $$ = int(Read)
   }
 | READ LOCAL
   {
-    $$ = ReadLocal
+    $$ = int(ReadLocal)
   }
 | WRITE
   {
-    $$ = Write
+    $$ = int(Write)
   }
 | LOW_PRIORITY WRITE
   {
-    $$ = LowPriorityWrite
+    $$ = int(LowPriorityWrite)
   }
 
 unlock_statement:
@@ -3214,52 +3230,52 @@ table_alias:
 inner_join:
   JOIN
   {
-    $$ = NormalJoinType
+    $$ = int(NormalJoinType)
   }
 | INNER JOIN
   {
-    $$ = NormalJoinType
+    $$ = int(NormalJoinType)
   }
 | CROSS JOIN
   {
-    $$ = NormalJoinType
+    $$ = int(NormalJoinType)
   }
 
 straight_join:
   STRAIGHT_JOIN
   {
-    $$ = StraightJoinType
+    $$ = int(StraightJoinType)
   }
 
 outer_join:
   LEFT JOIN
   {
-    $$ = LeftJoinType
+    $$ = int(LeftJoinType)
   }
 | LEFT OUTER JOIN
   {
-    $$ = LeftJoinType
+    $$ = int(LeftJoinType)
   }
 | RIGHT JOIN
   {
-    $$ = RightJoinType
+    $$ = int(RightJoinType)
   }
 | RIGHT OUTER JOIN
   {
-    $$ = RightJoinType
+    $$ = int(RightJoinType)
   }
 
 natural_join:
  NATURAL JOIN
   {
-    $$ = NaturalJoinType
+    $$ = int(NaturalJoinType)
   }
 | NATURAL outer_join
   {
     if $2 == LeftJoinType {
-      $$ = NaturalLeftJoinType
+      $$ = int(NaturalLeftJoinType)
     } else {
-      $$ = NaturalRightJoinType
+      $$ = int(NaturalRightJoinType)
     }
   }
 
@@ -3366,11 +3382,11 @@ default_opt:
 boolean_value:
   TRUE
   {
-    $$ = BoolVal(true)
+    $$ = true
   }
 | FALSE
   {
-    $$ = BoolVal(false)
+    $$ = false
   }
 
 condition:
@@ -3418,57 +3434,57 @@ condition:
 is_suffix:
   NULL
   {
-    $$ = IsNullOp
+    $$ = int(IsNullOp)
   }
 | NOT NULL
   {
-    $$ = IsNotNullOp
+    $$ = int(IsNotNullOp)
   }
 | TRUE
   {
-    $$ = IsTrueOp
+    $$ = int(IsTrueOp)
   }
 | NOT TRUE
   {
-    $$ = IsNotTrueOp
+    $$ = int(IsNotTrueOp)
   }
 | FALSE
   {
-    $$ = IsFalseOp
+    $$ = int(IsFalseOp)
   }
 | NOT FALSE
   {
-    $$ = IsNotFalseOp
+    $$ = int(IsNotFalseOp)
   }
 
 compare:
   '='
   {
-    $$ = EqualOp
+    $$ = int(EqualOp)
   }
 | '<'
   {
-    $$ = LessThanOp
+    $$ = int(LessThanOp)
   }
 | '>'
   {
-    $$ = GreaterThanOp
+    $$ = int(GreaterThanOp)
   }
 | LE
   {
-    $$ = LessEqualOp
+    $$ = int(LessEqualOp)
   }
 | GE
   {
-    $$ = GreaterEqualOp
+    $$ = int(GreaterEqualOp)
   }
 | NE
   {
-    $$ = NotEqualOp
+    $$ = int(NotEqualOp)
   }
 | NULL_SAFE_EQUAL
   {
-    $$ = NullSafeEqualOp
+    $$ = int(NullSafeEqualOp)
   }
 
 like_escape_opt:
@@ -3847,23 +3863,23 @@ function_call_conflict:
 match_option:
 /*empty*/
   {
-    $$ = NoOption
+    $$ = int(NoOption)
   }
 | IN BOOLEAN MODE
   {
-    $$ = BooleanModeOpt
+    $$ = int(BooleanModeOpt)
   }
 | IN NATURAL LANGUAGE MODE
  {
-    $$ = NaturalLanguageModeOpt
+    $$ = int(NaturalLanguageModeOpt)
  }
 | IN NATURAL LANGUAGE MODE WITH QUERY EXPANSION
  {
-    $$ = NaturalLanguageModeWithQueryExpansionOpt
+    $$ = int(NaturalLanguageModeWithQueryExpansionOpt)
  }
 | WITH QUERY EXPANSION
  {
-    $$ = QueryExpansionOpt
+    $$ = int(QueryExpansionOpt)
  }
 
 charset:
@@ -4091,15 +4107,15 @@ order:
 
 asc_desc_opt:
   {
-    $$ = AscOrder
+    $$ = int(AscOrder)
   }
 | ASC
   {
-    $$ = AscOrder
+    $$ = int(AscOrder)
   }
 | DESC
   {
-    $$ = DescOrder
+    $$ = int(DescOrder)
   }
 
 limit_opt:
@@ -4260,15 +4276,15 @@ CURRENT_USER
 
 lock_opt:
   {
-    $$ = NoLock
+    $$ = int(NoLock)
   }
 | FOR UPDATE
   {
-    $$ = ForUpdateLock
+    $$ = int(ForUpdateLock)
   }
 | LOCK IN SHARE MODE
   {
-    $$ = ShareModeLock
+    $$ = int(ShareModeLock)
   }
 
 into_option:
