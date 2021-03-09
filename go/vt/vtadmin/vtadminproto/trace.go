@@ -14,16 +14,16 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package cluster
+package vtadminproto
 
 import (
 	"vitess.io/vitess/go/trace"
-	"vitess.io/vitess/go/vt/vtadmin/vtadminproto"
+
+	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 )
 
-// AnnotateSpan adds the cluster_id and cluster_name to a span.
-func AnnotateSpan(c *Cluster, span trace.Span) {
-	vtadminproto.AnnotateClusterSpan(c.ToProto(), span)
-	// (TODO:@ajm188) add support for discovery impls to add annotations to a
-	// span, like `discovery_impl` and any parameters that might be relevant.
+// AnnotateClusterSpan adds the cluster_id and cluster_name to a span.
+func AnnotateClusterSpan(c *vtadminpb.Cluster, span trace.Span) {
+	span.Annotate("cluster_id", c.Id)
+	span.Annotate("cluster_name", c.Name)
 }
