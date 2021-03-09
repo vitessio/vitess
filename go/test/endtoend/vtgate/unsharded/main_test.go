@@ -171,6 +171,7 @@ func TestMain(m *testing.M) {
 		}
 
 		// Start vtgate
+		clusterInstance.VtGateExtraArgs = []string{"-warn_sharded_only", "true"}
 		if err := clusterInstance.StartVtgate(); err != nil {
 			log.Fatal(err.Error())
 			return 1
@@ -221,6 +222,7 @@ func TestSelectIntoAndLoadFrom(t *testing.T) {
 	query = `load data infile '` + directory + `x2.txt' replace into table t1 Fields terminated by ';' optionally enclosed by '"' escaped by '\t' lines terminated by '\n'`
 	exec(t, conn, query)
 	assertMatches(t, conn, `select c1,c2,c3 from t1`, `[[INT64(300) INT64(100) INT64(300)]]`)
+	assertMatches(t, conn, "show warnings", "apa")
 }
 
 func TestEmptyStatement(t *testing.T) {
@@ -312,6 +314,8 @@ func TestCallProcedure(t *testing.T) {
 	qr := exec(t, conn, `CALL sp_insert()`)
 	require.EqualValues(t, 1, qr.RowsAffected)
 
+	assertMatches(t, conn, "show warnings", "apa")
+
 	_, err = conn.ExecuteFetch(`CALL sp_select()`, 1000, true)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Multi-Resultset not supported in stored procedure")
@@ -355,6 +359,7 @@ func TestTempTable(t *testing.T) {
 	defer conn1.Close()
 
 	_ = exec(t, conn1, `create temporary table temp_t(id bigint primary key)`)
+	assertMatches(t, conn1, "show warnings", "apa")
 	_ = exec(t, conn1, `insert into temp_t(id) values (1),(2),(3)`)
 	assertMatches(t, conn1, `select id from temp_t order by id`, `[[INT64(1)] [INT64(2)] [INT64(3)]]`)
 	assertMatches(t, conn1, `select count(table_id) from information_schema.innodb_temp_table_info`, `[[INT64(1)]]`)
