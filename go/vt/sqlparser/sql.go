@@ -11,8 +11,8 @@ func setAllowComments(yylex interface{}, allow bool) {
 	yylex.(*Tokenizer).AllowComments = allow
 }
 
-func setDDL(yylex interface{}, node Statement) {
-	yylex.(*Tokenizer).partialDDL = node
+func setDDL(yylex interface{}, node interface{}) {
+	yylex.(*Tokenizer).partialDDL = node.(Statement)
 }
 
 func incNesting(yylex interface{}) bool {
@@ -32,104 +32,6 @@ func decNesting(yylex interface{}) {
 // return EOF early.
 func skipToEnd(yylex interface{}) {
 	yylex.(*Tokenizer).SkipToEnd = true
-}
-
-type yySymType struct {
-	yys                    int
-	empty                  struct{}
-	statement              Statement
-	selStmt                SelectStatement
-	ins                    *Insert
-	byt                    byte
-	str                    string
-	strs                   []string
-	selectExprs            SelectExprs
-	selectExpr             SelectExpr
-	columns                Columns
-	partitions             Partitions
-	colName                *ColName
-	tableExprs             TableExprs
-	tableExpr              TableExpr
-	joinCondition          JoinCondition
-	tableName              TableName
-	tableNames             TableNames
-	indexHints             *IndexHints
-	expr                   Expr
-	exprs                  Exprs
-	boolVal                BoolVal
-	boolean                bool
-	literal                *Literal
-	colTuple               ColTuple
-	values                 Values
-	valTuple               ValTuple
-	subquery               *Subquery
-	derivedTable           *DerivedTable
-	whens                  []*When
-	when                   *When
-	orderBy                OrderBy
-	order                  *Order
-	limit                  *Limit
-	updateExprs            UpdateExprs
-	setExprs               SetExprs
-	updateExpr             *UpdateExpr
-	setExpr                *SetExpr
-	characteristic         Characteristic
-	characteristics        []Characteristic
-	colIdent               ColIdent
-	tableIdent             TableIdent
-	convertType            *ConvertType
-	aliasedTableName       *AliasedTableExpr
-	TableSpec              *TableSpec
-	columnType             ColumnType
-	colKeyOpt              ColumnKeyOption
-	optVal                 Expr
-	LengthScaleOption      LengthScaleOption
-	columnDefinition       *ColumnDefinition
-	columnDefinitions      []*ColumnDefinition
-	indexDefinition        *IndexDefinition
-	indexInfo              *IndexInfo
-	indexOption            *IndexOption
-	indexOptions           []*IndexOption
-	indexColumn            *IndexColumn
-	indexColumns           []*IndexColumn
-	constraintDefinition   *ConstraintDefinition
-	constraintInfo         ConstraintInfo
-	ReferenceAction        ReferenceAction
-	partDefs               []*PartitionDefinition
-	partDef                *PartitionDefinition
-	partSpec               *PartitionSpec
-	partSpecs              []*PartitionSpec
-	vindexParam            VindexParam
-	vindexParams           []VindexParam
-	showFilter             *ShowFilter
-	optLike                *OptLike
-	isolationLevel         IsolationLevel
-	insertAction           InsertAction
-	scope                  Scope
-	ignore                 Ignore
-	lock                   Lock
-	joinType               JoinType
-	comparisonExprOperator ComparisonExprOperator
-	isExprOperator         IsExprOperator
-	matchExprOption        MatchExprOption
-	orderDirection         OrderDirection
-	explainType            ExplainType
-	selectInto             *SelectInto
-	createDatabase         *CreateDatabase
-	alterDatabase          *AlterDatabase
-	collateAndCharset      CollateAndCharset
-	collateAndCharsets     []CollateAndCharset
-	createTable            *CreateTable
-	tableAndLockTypes      []*TableAndLockType
-	tableAndLockType       *TableAndLockType
-	lockType               LockType
-	alterTable             *AlterTable
-	alterOption            AlterOption
-	alterOptions           []AlterOption
-	tableOption            *TableOption
-	tableOptions           TableOptions
-	renameTablePairs       []*RenameTablePair
-	columnTypeOptions      *ColumnTypeOptions
 }
 
 const LEX_ERROR = 57346
@@ -4198,6 +4100,422 @@ var yyPgo = [...]int{
 	126,
 }
 
+type yySymType struct {
+	yys               int
+	empty             struct{}
+	str               string
+	joinCondition     JoinCondition
+	tableName         TableName
+	colIdent          ColIdent
+	tableIdent        TableIdent
+	columnType        ColumnType
+	LengthScaleOption LengthScaleOption
+	vindexParam       VindexParam
+	collateAndCharset CollateAndCharset
+	boolUnion         bool
+	numericUnion      int
+	ifaceUnion        interface{}
+}
+
+func (st *yySymType) tableSpecUnion() *TableSpec {
+	v, _ := st.ifaceUnion.(*TableSpec)
+	return v
+}
+
+func (st *yySymType) optLikeUnion() *OptLike {
+	v, _ := st.ifaceUnion.(*OptLike)
+	return v
+}
+
+func (st *yySymType) lockTypeUnion() LockType {
+	return LockType(st.numericUnion)
+}
+
+func (st *yySymType) indexDefinitionUnion() *IndexDefinition {
+	v, _ := st.ifaceUnion.(*IndexDefinition)
+	return v
+}
+
+func (st *yySymType) alterTableUnion() *AlterTable {
+	v, _ := st.ifaceUnion.(*AlterTable)
+	return v
+}
+
+func (st *yySymType) strsUnion() []string {
+	v, _ := st.ifaceUnion.([]string)
+	return v
+}
+
+func (st *yySymType) boolValUnion() BoolVal {
+	return BoolVal(st.boolUnion)
+}
+
+func (st *yySymType) colKeyOptUnion() ColumnKeyOption {
+	return ColumnKeyOption(st.numericUnion)
+}
+
+func (st *yySymType) indexColumnUnion() *IndexColumn {
+	v, _ := st.ifaceUnion.(*IndexColumn)
+	return v
+}
+
+func (st *yySymType) partitionsUnion() Partitions {
+	v, _ := st.ifaceUnion.(Partitions)
+	return v
+}
+
+func (st *yySymType) tableExprsUnion() TableExprs {
+	v, _ := st.ifaceUnion.(TableExprs)
+	return v
+}
+
+func (st *yySymType) tableOptionsUnion() TableOptions {
+	v, _ := st.ifaceUnion.(TableOptions)
+	return v
+}
+
+func (st *yySymType) joinTypeUnion() JoinType {
+	return JoinType(st.numericUnion)
+}
+
+func (st *yySymType) orderDirectionUnion() OrderDirection {
+	return OrderDirection(st.numericUnion)
+}
+
+func (st *yySymType) selStmtUnion() SelectStatement {
+	v, _ := st.ifaceUnion.(SelectStatement)
+	return v
+}
+
+func (st *yySymType) colTupleUnion() ColTuple {
+	v, _ := st.ifaceUnion.(ColTuple)
+	return v
+}
+
+func (st *yySymType) constraintInfoUnion() ConstraintInfo {
+	v, _ := st.ifaceUnion.(ConstraintInfo)
+	return v
+}
+
+func (st *yySymType) limitUnion() *Limit {
+	v, _ := st.ifaceUnion.(*Limit)
+	return v
+}
+
+func (st *yySymType) columnsUnion() Columns {
+	v, _ := st.ifaceUnion.(Columns)
+	return v
+}
+
+func (st *yySymType) exprsUnion() Exprs {
+	v, _ := st.ifaceUnion.(Exprs)
+	return v
+}
+
+func (st *yySymType) derivedTableUnion() *DerivedTable {
+	v, _ := st.ifaceUnion.(*DerivedTable)
+	return v
+}
+
+func (st *yySymType) columnDefinitionsUnion() []*ColumnDefinition {
+	v, _ := st.ifaceUnion.([]*ColumnDefinition)
+	return v
+}
+
+func (st *yySymType) renameTablePairsUnion() []*RenameTablePair {
+	v, _ := st.ifaceUnion.([]*RenameTablePair)
+	return v
+}
+
+func (st *yySymType) characteristicsUnion() []Characteristic {
+	v, _ := st.ifaceUnion.([]Characteristic)
+	return v
+}
+
+func (st *yySymType) tableNamesUnion() TableNames {
+	v, _ := st.ifaceUnion.(TableNames)
+	return v
+}
+
+func (st *yySymType) selectExprsUnion() SelectExprs {
+	v, _ := st.ifaceUnion.(SelectExprs)
+	return v
+}
+
+func (st *yySymType) alterOptionsUnion() []AlterOption {
+	v, _ := st.ifaceUnion.([]AlterOption)
+	return v
+}
+
+func (st *yySymType) isolationLevelUnion() IsolationLevel {
+	return IsolationLevel(st.numericUnion)
+}
+
+func (st *yySymType) scopeUnion() Scope {
+	return Scope(st.numericUnion)
+}
+
+func (st *yySymType) comparisonExprOperatorUnion() ComparisonExprOperator {
+	return ComparisonExprOperator(st.numericUnion)
+}
+
+func (st *yySymType) optValUnion() Expr {
+	v, _ := st.ifaceUnion.(Expr)
+	return v
+}
+
+func (st *yySymType) columnDefinitionUnion() *ColumnDefinition {
+	v, _ := st.ifaceUnion.(*ColumnDefinition)
+	return v
+}
+
+func (st *yySymType) whensUnion() []*When {
+	v, _ := st.ifaceUnion.([]*When)
+	return v
+}
+
+func (st *yySymType) vindexParamsUnion() []VindexParam {
+	v, _ := st.ifaceUnion.([]VindexParam)
+	return v
+}
+
+func (st *yySymType) insertActionUnion() InsertAction {
+	return InsertAction(st.numericUnion)
+}
+
+func (st *yySymType) ReferenceActionUnion() ReferenceAction {
+	return ReferenceAction(st.numericUnion)
+}
+
+func (st *yySymType) literalUnion() *Literal {
+	v, _ := st.ifaceUnion.(*Literal)
+	return v
+}
+
+func (st *yySymType) convertTypeUnion() *ConvertType {
+	v, _ := st.ifaceUnion.(*ConvertType)
+	return v
+}
+
+func (st *yySymType) createDatabaseUnion() *CreateDatabase {
+	v, _ := st.ifaceUnion.(*CreateDatabase)
+	return v
+}
+
+func (st *yySymType) constraintDefinitionUnion() *ConstraintDefinition {
+	v, _ := st.ifaceUnion.(*ConstraintDefinition)
+	return v
+}
+
+func (st *yySymType) selectExprUnion() SelectExpr {
+	v, _ := st.ifaceUnion.(SelectExpr)
+	return v
+}
+
+func (st *yySymType) lockUnion() Lock {
+	return Lock(st.numericUnion)
+}
+
+func (st *yySymType) explainTypeUnion() ExplainType {
+	return ExplainType(st.numericUnion)
+}
+
+func (st *yySymType) indexHintsUnion() *IndexHints {
+	v, _ := st.ifaceUnion.(*IndexHints)
+	return v
+}
+
+func (st *yySymType) tableAndLockTypeUnion() *TableAndLockType {
+	v, _ := st.ifaceUnion.(*TableAndLockType)
+	return v
+}
+
+func (st *yySymType) partSpecsUnion() []*PartitionSpec {
+	v, _ := st.ifaceUnion.([]*PartitionSpec)
+	return v
+}
+
+func (st *yySymType) alterOptionUnion() AlterOption {
+	v, _ := st.ifaceUnion.(AlterOption)
+	return v
+}
+
+func (st *yySymType) whenUnion() *When {
+	v, _ := st.ifaceUnion.(*When)
+	return v
+}
+
+func (st *yySymType) orderUnion() *Order {
+	v, _ := st.ifaceUnion.(*Order)
+	return v
+}
+
+func (st *yySymType) alterDatabaseUnion() *AlterDatabase {
+	v, _ := st.ifaceUnion.(*AlterDatabase)
+	return v
+}
+
+func (st *yySymType) columnTypeOptionsUnion() *ColumnTypeOptions {
+	v, _ := st.ifaceUnion.(*ColumnTypeOptions)
+	return v
+}
+
+func (st *yySymType) valuesUnion() Values {
+	v, _ := st.ifaceUnion.(Values)
+	return v
+}
+
+func (st *yySymType) valTupleUnion() ValTuple {
+	v, _ := st.ifaceUnion.(ValTuple)
+	return v
+}
+
+func (st *yySymType) ignoreUnion() Ignore {
+	return Ignore(st.boolUnion)
+}
+
+func (st *yySymType) subqueryUnion() *Subquery {
+	v, _ := st.ifaceUnion.(*Subquery)
+	return v
+}
+
+func (st *yySymType) aliasedTableNameUnion() *AliasedTableExpr {
+	v, _ := st.ifaceUnion.(*AliasedTableExpr)
+	return v
+}
+
+func (st *yySymType) showFilterUnion() *ShowFilter {
+	v, _ := st.ifaceUnion.(*ShowFilter)
+	return v
+}
+
+func (st *yySymType) selectIntoUnion() *SelectInto {
+	v, _ := st.ifaceUnion.(*SelectInto)
+	return v
+}
+
+func (st *yySymType) indexOptionsUnion() []*IndexOption {
+	v, _ := st.ifaceUnion.([]*IndexOption)
+	return v
+}
+
+func (st *yySymType) tableAndLockTypesUnion() TableAndLockTypes {
+	v, _ := st.ifaceUnion.(TableAndLockTypes)
+	return v
+}
+
+func (st *yySymType) orderByUnion() OrderBy {
+	v, _ := st.ifaceUnion.(OrderBy)
+	return v
+}
+
+func (st *yySymType) matchExprOptionUnion() MatchExprOption {
+	return MatchExprOption(st.numericUnion)
+}
+
+func (st *yySymType) statementUnion() Statement {
+	v, _ := st.ifaceUnion.(Statement)
+	return v
+}
+
+func (st *yySymType) indexInfoUnion() *IndexInfo {
+	v, _ := st.ifaceUnion.(*IndexInfo)
+	return v
+}
+
+func (st *yySymType) tableOptionUnion() *TableOption {
+	v, _ := st.ifaceUnion.(*TableOption)
+	return v
+}
+
+func (st *yySymType) indexColumnsUnion() []*IndexColumn {
+	v, _ := st.ifaceUnion.([]*IndexColumn)
+	return v
+}
+
+func (st *yySymType) collateAndCharsetsUnion() []CollateAndCharset {
+	v, _ := st.ifaceUnion.([]CollateAndCharset)
+	return v
+}
+
+func (st *yySymType) colNameUnion() *ColName {
+	v, _ := st.ifaceUnion.(*ColName)
+	return v
+}
+
+func (st *yySymType) booleanUnion() bool {
+	return bool(st.boolUnion)
+}
+
+func (st *yySymType) isExprOperatorUnion() IsExprOperator {
+	return IsExprOperator(st.numericUnion)
+}
+
+func (st *yySymType) tableExprUnion() TableExpr {
+	v, _ := st.ifaceUnion.(TableExpr)
+	return v
+}
+
+func (st *yySymType) exprUnion() Expr {
+	v, _ := st.ifaceUnion.(Expr)
+	return v
+}
+
+func (st *yySymType) characteristicUnion() Characteristic {
+	v, _ := st.ifaceUnion.(Characteristic)
+	return v
+}
+
+func (st *yySymType) insUnion() *Insert {
+	v, _ := st.ifaceUnion.(*Insert)
+	return v
+}
+
+func (st *yySymType) updateExprUnion() *UpdateExpr {
+	v, _ := st.ifaceUnion.(*UpdateExpr)
+	return v
+}
+
+func (st *yySymType) partDefUnion() *PartitionDefinition {
+	v, _ := st.ifaceUnion.(*PartitionDefinition)
+	return v
+}
+
+func (st *yySymType) createTableUnion() *CreateTable {
+	v, _ := st.ifaceUnion.(*CreateTable)
+	return v
+}
+
+func (st *yySymType) partDefsUnion() []*PartitionDefinition {
+	v, _ := st.ifaceUnion.([]*PartitionDefinition)
+	return v
+}
+
+func (st *yySymType) setExprsUnion() SetExprs {
+	v, _ := st.ifaceUnion.(SetExprs)
+	return v
+}
+
+func (st *yySymType) setExprUnion() *SetExpr {
+	v, _ := st.ifaceUnion.(*SetExpr)
+	return v
+}
+
+func (st *yySymType) indexOptionUnion() *IndexOption {
+	v, _ := st.ifaceUnion.(*IndexOption)
+	return v
+}
+
+func (st *yySymType) partSpecUnion() *PartitionSpec {
+	v, _ := st.ifaceUnion.(*PartitionSpec)
+	return v
+}
+
+func (st *yySymType) updateExprsUnion() UpdateExprs {
+	v, _ := st.ifaceUnion.(UpdateExprs)
+	return v
+}
+
 var yyR1 = [...]int{
 	0, 274, 275, 275, 1, 1, 1, 1, 1, 1,
 	1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
@@ -5353,7 +5671,7 @@ yydefault:
 	case 1:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			setParseTree(yylex, yyDollar[1].statement)
+			setParseTree(yylex, yyDollar[1].statementUnion())
 		}
 	case 2:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -5366,7 +5684,7 @@ yydefault:
 	case 4:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.statement = yyDollar[1].selStmt
+			yyVAL.ifaceUnion = yyDollar[1].selStmtUnion()
 		}
 	case 33:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -5401,135 +5719,135 @@ yydefault:
 	case 39:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.statement = &OtherAdmin{}
+			yyVAL.ifaceUnion = &OtherAdmin{}
 		}
 	case 40:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.statement = &Load{}
+			yyVAL.ifaceUnion = &Load{}
 		}
 	case 41:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		{
-			sel := yyDollar[1].selStmt.(*Select)
-			sel.OrderBy = yyDollar[2].orderBy
-			sel.Limit = yyDollar[3].limit
-			sel.Lock = yyDollar[4].lock
-			sel.Into = yyDollar[5].selectInto
-			yyVAL.selStmt = sel
+			sel := yyDollar[1].selStmtUnion().(*Select)
+			sel.OrderBy = yyDollar[2].orderByUnion()
+			sel.Limit = yyDollar[3].limitUnion()
+			sel.Lock = yyDollar[4].lockUnion()
+			sel.Into = yyDollar[5].selectIntoUnion()
+			yyVAL.ifaceUnion = sel
 		}
 	case 42:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		{
-			yyVAL.selStmt = &Union{FirstStatement: &ParenSelect{Select: yyDollar[2].selStmt}, OrderBy: yyDollar[4].orderBy, Limit: yyDollar[5].limit, Lock: yyDollar[6].lock}
+			yyVAL.ifaceUnion = &Union{FirstStatement: &ParenSelect{Select: yyDollar[2].selStmtUnion()}, OrderBy: yyDollar[4].orderByUnion(), Limit: yyDollar[5].limitUnion(), Lock: yyDollar[6].lockUnion()}
 		}
 	case 43:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		{
-			yyVAL.selStmt = Unionize(yyDollar[1].selStmt, yyDollar[3].selStmt, yyDollar[2].boolean, yyDollar[4].orderBy, yyDollar[5].limit, yyDollar[6].lock)
+			yyVAL.ifaceUnion = Unionize(yyDollar[1].selStmtUnion(), yyDollar[3].selStmtUnion(), yyDollar[2].booleanUnion(), yyDollar[4].orderByUnion(), yyDollar[5].limitUnion(), yyDollar[6].lockUnion())
 		}
 	case 44:
 		yyDollar = yyS[yypt-7 : yypt+1]
 		{
-			yyVAL.selStmt = NewSelect(Comments(yyDollar[2].strs), SelectExprs{&Nextval{Expr: yyDollar[5].expr}}, []string{yyDollar[3].str} /*options*/, TableExprs{&AliasedTableExpr{Expr: yyDollar[7].tableName}}, nil /*where*/, nil /*groupBy*/, nil /*having*/)
+			yyVAL.ifaceUnion = NewSelect(Comments(yyDollar[2].strsUnion()), SelectExprs{&Nextval{Expr: yyDollar[5].exprUnion()}}, []string{yyDollar[3].str} /*options*/, TableExprs{&AliasedTableExpr{Expr: yyDollar[7].tableName}}, nil /*where*/, nil /*groupBy*/, nil /*having*/)
 		}
 	case 45:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		{
-			sel := yyDollar[1].selStmt.(*Select)
-			sel.OrderBy = yyDollar[2].orderBy
-			sel.Limit = yyDollar[3].limit
-			sel.Lock = yyDollar[4].lock
-			yyVAL.selStmt = sel
+			sel := yyDollar[1].selStmtUnion().(*Select)
+			sel.OrderBy = yyDollar[2].orderByUnion()
+			sel.Limit = yyDollar[3].limitUnion()
+			sel.Lock = yyDollar[4].lockUnion()
+			yyVAL.ifaceUnion = sel
 		}
 	case 46:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		{
-			yyVAL.selStmt = Unionize(yyDollar[1].selStmt, yyDollar[3].selStmt, yyDollar[2].boolean, yyDollar[4].orderBy, yyDollar[5].limit, yyDollar[6].lock)
+			yyVAL.ifaceUnion = Unionize(yyDollar[1].selStmtUnion(), yyDollar[3].selStmtUnion(), yyDollar[2].booleanUnion(), yyDollar[4].orderByUnion(), yyDollar[5].limitUnion(), yyDollar[6].lockUnion())
 		}
 	case 47:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		{
-			yyVAL.statement = &Stream{Comments: Comments(yyDollar[2].strs), SelectExpr: yyDollar[3].selectExpr, Table: yyDollar[5].tableName}
+			yyVAL.ifaceUnion = &Stream{Comments: Comments(yyDollar[2].strsUnion()), SelectExpr: yyDollar[3].selectExprUnion(), Table: yyDollar[5].tableName}
 		}
 	case 48:
 		yyDollar = yyS[yypt-7 : yypt+1]
 		{
-			yyVAL.statement = &VStream{Comments: Comments(yyDollar[2].strs), SelectExpr: yyDollar[3].selectExpr, Table: yyDollar[5].tableName, Where: NewWhere(WhereClause, yyDollar[6].expr), Limit: yyDollar[7].limit}
+			yyVAL.ifaceUnion = &VStream{Comments: Comments(yyDollar[2].strsUnion()), SelectExpr: yyDollar[3].selectExprUnion(), Table: yyDollar[5].tableName, Where: NewWhere(WhereClause, yyDollar[6].exprUnion()), Limit: yyDollar[7].limitUnion()}
 		}
 	case 49:
 		yyDollar = yyS[yypt-8 : yypt+1]
 		{
-			yyVAL.selStmt = NewSelect(Comments(yyDollar[2].strs), yyDollar[4].selectExprs /*SelectExprs*/, yyDollar[3].strs /*options*/, yyDollar[5].tableExprs /*from*/, NewWhere(WhereClause, yyDollar[6].expr), GroupBy(yyDollar[7].exprs), NewWhere(HavingClause, yyDollar[8].expr))
+			yyVAL.ifaceUnion = NewSelect(Comments(yyDollar[2].strsUnion()), yyDollar[4].selectExprsUnion() /*SelectExprs*/, yyDollar[3].strsUnion() /*options*/, yyDollar[5].tableExprsUnion() /*from*/, NewWhere(WhereClause, yyDollar[6].exprUnion()), GroupBy(yyDollar[7].exprsUnion()), NewWhere(HavingClause, yyDollar[8].exprUnion()))
 		}
 	case 50:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.selStmt = yyDollar[1].selStmt
+			yyVAL.ifaceUnion = yyDollar[1].selStmtUnion()
 		}
 	case 51:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.selStmt = &ParenSelect{Select: yyDollar[2].selStmt}
+			yyVAL.ifaceUnion = &ParenSelect{Select: yyDollar[2].selStmtUnion()}
 		}
 	case 52:
 		yyDollar = yyS[yypt-7 : yypt+1]
 		{
 			// insert_data returns a *Insert pre-filled with Columns & Values
-			ins := yyDollar[6].ins
-			ins.Action = yyDollar[1].insertAction
-			ins.Comments = yyDollar[2].strs
-			ins.Ignore = yyDollar[3].ignore
+			ins := yyDollar[6].insUnion()
+			ins.Action = yyDollar[1].insertActionUnion()
+			ins.Comments = yyDollar[2].strsUnion()
+			ins.Ignore = yyDollar[3].ignoreUnion()
 			ins.Table = yyDollar[4].tableName
-			ins.Partitions = yyDollar[5].partitions
-			ins.OnDup = OnDup(yyDollar[7].updateExprs)
-			yyVAL.statement = ins
+			ins.Partitions = yyDollar[5].partitionsUnion()
+			ins.OnDup = OnDup(yyDollar[7].updateExprsUnion())
+			yyVAL.ifaceUnion = ins
 		}
 	case 53:
 		yyDollar = yyS[yypt-8 : yypt+1]
 		{
-			cols := make(Columns, 0, len(yyDollar[7].updateExprs))
-			vals := make(ValTuple, 0, len(yyDollar[8].updateExprs))
-			for _, updateList := range yyDollar[7].updateExprs {
+			cols := make(Columns, 0, len(yyDollar[7].updateExprsUnion()))
+			vals := make(ValTuple, 0, len(yyDollar[8].updateExprsUnion()))
+			for _, updateList := range yyDollar[7].updateExprsUnion() {
 				cols = append(cols, updateList.Name.Name)
 				vals = append(vals, updateList.Expr)
 			}
-			yyVAL.statement = &Insert{Action: yyDollar[1].insertAction, Comments: Comments(yyDollar[2].strs), Ignore: yyDollar[3].ignore, Table: yyDollar[4].tableName, Partitions: yyDollar[5].partitions, Columns: cols, Rows: Values{vals}, OnDup: OnDup(yyDollar[8].updateExprs)}
+			yyVAL.ifaceUnion = &Insert{Action: yyDollar[1].insertActionUnion(), Comments: Comments(yyDollar[2].strsUnion()), Ignore: yyDollar[3].ignoreUnion(), Table: yyDollar[4].tableName, Partitions: yyDollar[5].partitionsUnion(), Columns: cols, Rows: Values{vals}, OnDup: OnDup(yyDollar[8].updateExprsUnion())}
 		}
 	case 54:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.insertAction = InsertAct
+			yyVAL.numericUnion = int(InsertAct)
 		}
 	case 55:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.insertAction = ReplaceAct
+			yyVAL.numericUnion = int(ReplaceAct)
 		}
 	case 56:
 		yyDollar = yyS[yypt-9 : yypt+1]
 		{
-			yyVAL.statement = &Update{Comments: Comments(yyDollar[2].strs), Ignore: yyDollar[3].ignore, TableExprs: yyDollar[4].tableExprs, Exprs: yyDollar[6].updateExprs, Where: NewWhere(WhereClause, yyDollar[7].expr), OrderBy: yyDollar[8].orderBy, Limit: yyDollar[9].limit}
+			yyVAL.ifaceUnion = &Update{Comments: Comments(yyDollar[2].strsUnion()), Ignore: yyDollar[3].ignoreUnion(), TableExprs: yyDollar[4].tableExprsUnion(), Exprs: yyDollar[6].updateExprsUnion(), Where: NewWhere(WhereClause, yyDollar[7].exprUnion()), OrderBy: yyDollar[8].orderByUnion(), Limit: yyDollar[9].limitUnion()}
 		}
 	case 57:
 		yyDollar = yyS[yypt-9 : yypt+1]
 		{
-			yyVAL.statement = &Delete{Comments: Comments(yyDollar[2].strs), Ignore: yyDollar[3].ignore, TableExprs: TableExprs{&AliasedTableExpr{Expr: yyDollar[5].tableName}}, Partitions: yyDollar[6].partitions, Where: NewWhere(WhereClause, yyDollar[7].expr), OrderBy: yyDollar[8].orderBy, Limit: yyDollar[9].limit}
+			yyVAL.ifaceUnion = &Delete{Comments: Comments(yyDollar[2].strsUnion()), Ignore: yyDollar[3].ignoreUnion(), TableExprs: TableExprs{&AliasedTableExpr{Expr: yyDollar[5].tableName}}, Partitions: yyDollar[6].partitionsUnion(), Where: NewWhere(WhereClause, yyDollar[7].exprUnion()), OrderBy: yyDollar[8].orderByUnion(), Limit: yyDollar[9].limitUnion()}
 		}
 	case 58:
 		yyDollar = yyS[yypt-8 : yypt+1]
 		{
-			yyVAL.statement = &Delete{Comments: Comments(yyDollar[2].strs), Ignore: yyDollar[3].ignore, Targets: yyDollar[5].tableNames, TableExprs: yyDollar[7].tableExprs, Where: NewWhere(WhereClause, yyDollar[8].expr)}
+			yyVAL.ifaceUnion = &Delete{Comments: Comments(yyDollar[2].strsUnion()), Ignore: yyDollar[3].ignoreUnion(), Targets: yyDollar[5].tableNamesUnion(), TableExprs: yyDollar[7].tableExprsUnion(), Where: NewWhere(WhereClause, yyDollar[8].exprUnion())}
 		}
 	case 59:
 		yyDollar = yyS[yypt-7 : yypt+1]
 		{
-			yyVAL.statement = &Delete{Comments: Comments(yyDollar[2].strs), Ignore: yyDollar[3].ignore, Targets: yyDollar[4].tableNames, TableExprs: yyDollar[6].tableExprs, Where: NewWhere(WhereClause, yyDollar[7].expr)}
+			yyVAL.ifaceUnion = &Delete{Comments: Comments(yyDollar[2].strsUnion()), Ignore: yyDollar[3].ignoreUnion(), Targets: yyDollar[4].tableNamesUnion(), TableExprs: yyDollar[6].tableExprsUnion(), Where: NewWhere(WhereClause, yyDollar[7].exprUnion())}
 		}
 	case 60:
 		yyDollar = yyS[yypt-7 : yypt+1]
 		{
-			yyVAL.statement = &Delete{Comments: Comments(yyDollar[2].strs), Ignore: yyDollar[3].ignore, Targets: yyDollar[4].tableNames, TableExprs: yyDollar[6].tableExprs, Where: NewWhere(WhereClause, yyDollar[7].expr)}
+			yyVAL.ifaceUnion = &Delete{Comments: Comments(yyDollar[2].strsUnion()), Ignore: yyDollar[3].ignoreUnion(), Targets: yyDollar[4].tableNamesUnion(), TableExprs: yyDollar[6].tableExprsUnion(), Where: NewWhere(WhereClause, yyDollar[7].exprUnion())}
 		}
 	case 61:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -5542,159 +5860,159 @@ yydefault:
 	case 63:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.tableNames = TableNames{yyDollar[1].tableName.ToViewName()}
+			yyVAL.ifaceUnion = TableNames{yyDollar[1].tableName.ToViewName()}
 		}
 	case 64:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.tableNames = append(yyVAL.tableNames, yyDollar[3].tableName.ToViewName())
+			yyVAL.ifaceUnion = append(yyVAL.tableNamesUnion(), yyDollar[3].tableName.ToViewName())
 		}
 	case 65:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.tableNames = TableNames{yyDollar[1].tableName}
+			yyVAL.ifaceUnion = TableNames{yyDollar[1].tableName}
 		}
 	case 66:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.tableNames = append(yyVAL.tableNames, yyDollar[3].tableName)
+			yyVAL.ifaceUnion = append(yyVAL.tableNamesUnion(), yyDollar[3].tableName)
 		}
 	case 67:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.tableNames = TableNames{yyDollar[1].tableName}
+			yyVAL.ifaceUnion = TableNames{yyDollar[1].tableName}
 		}
 	case 68:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.tableNames = append(yyVAL.tableNames, yyDollar[3].tableName)
+			yyVAL.ifaceUnion = append(yyVAL.tableNamesUnion(), yyDollar[3].tableName)
 		}
 	case 69:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		{
-			yyVAL.partitions = nil
+			yyVAL.ifaceUnion = nil
 		}
 	case 70:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		{
-			yyVAL.partitions = yyDollar[3].partitions
+			yyVAL.ifaceUnion = yyDollar[3].partitionsUnion()
 		}
 	case 71:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.statement = &Set{Comments: Comments(yyDollar[2].strs), Exprs: yyDollar[3].setExprs}
+			yyVAL.ifaceUnion = &Set{Comments: Comments(yyDollar[2].strsUnion()), Exprs: yyDollar[3].setExprsUnion()}
 		}
 	case 72:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		{
-			yyVAL.statement = &SetTransaction{Comments: Comments(yyDollar[2].strs), Scope: yyDollar[3].scope, Characteristics: yyDollar[5].characteristics}
+			yyVAL.ifaceUnion = &SetTransaction{Comments: Comments(yyDollar[2].strsUnion()), Scope: yyDollar[3].scopeUnion(), Characteristics: yyDollar[5].characteristicsUnion()}
 		}
 	case 73:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		{
-			yyVAL.statement = &SetTransaction{Comments: Comments(yyDollar[2].strs), Characteristics: yyDollar[4].characteristics, Scope: ImplicitScope}
+			yyVAL.ifaceUnion = &SetTransaction{Comments: Comments(yyDollar[2].strsUnion()), Characteristics: yyDollar[4].characteristicsUnion(), Scope: ImplicitScope}
 		}
 	case 74:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.characteristics = []Characteristic{yyDollar[1].characteristic}
+			yyVAL.ifaceUnion = []Characteristic{yyDollar[1].characteristicUnion()}
 		}
 	case 75:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.characteristics = append(yyVAL.characteristics, yyDollar[3].characteristic)
+			yyVAL.ifaceUnion = append(yyVAL.characteristicsUnion(), yyDollar[3].characteristicUnion())
 		}
 	case 76:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.characteristic = yyDollar[3].isolationLevel
+			yyVAL.ifaceUnion = yyDollar[3].isolationLevelUnion()
 		}
 	case 77:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.characteristic = ReadWrite
+			yyVAL.ifaceUnion = ReadWrite
 		}
 	case 78:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.characteristic = ReadOnly
+			yyVAL.ifaceUnion = ReadOnly
 		}
 	case 79:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.isolationLevel = RepeatableRead
+			yyVAL.numericUnion = int(RepeatableRead)
 		}
 	case 80:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.isolationLevel = ReadCommitted
+			yyVAL.numericUnion = int(ReadCommitted)
 		}
 	case 81:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.isolationLevel = ReadUncommitted
+			yyVAL.numericUnion = int(ReadUncommitted)
 		}
 	case 82:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.isolationLevel = Serializable
+			yyVAL.numericUnion = int(Serializable)
 		}
 	case 83:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.scope = SessionScope
+			yyVAL.numericUnion = int(SessionScope)
 		}
 	case 84:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.scope = GlobalScope
+			yyVAL.numericUnion = int(GlobalScope)
 		}
 	case 85:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyDollar[1].createTable.TableSpec = yyDollar[2].TableSpec
-			yyDollar[1].createTable.FullyParsed = true
-			yyVAL.statement = yyDollar[1].createTable
+			yyDollar[1].createTableUnion().TableSpec = yyDollar[2].tableSpecUnion()
+			yyDollar[1].createTableUnion().FullyParsed = true
+			yyVAL.ifaceUnion = yyDollar[1].createTableUnion()
 		}
 	case 86:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
 			// Create table [name] like [name]
-			yyDollar[1].createTable.OptLike = yyDollar[2].optLike
-			yyDollar[1].createTable.FullyParsed = true
-			yyVAL.statement = yyDollar[1].createTable
+			yyDollar[1].createTableUnion().OptLike = yyDollar[2].optLikeUnion()
+			yyDollar[1].createTableUnion().FullyParsed = true
+			yyVAL.ifaceUnion = yyDollar[1].createTableUnion()
 		}
 	case 87:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		{
-			indexDef := yyDollar[1].alterTable.AlterOptions[0].(*AddIndexDefinition).IndexDefinition
-			indexDef.Columns = yyDollar[3].indexColumns
-			indexDef.Options = append(indexDef.Options, yyDollar[5].indexOptions...)
-			yyDollar[1].alterTable.AlterOptions = append(yyDollar[1].alterTable.AlterOptions, yyDollar[6].alterOptions...)
-			yyDollar[1].alterTable.FullyParsed = true
-			yyVAL.statement = yyDollar[1].alterTable
+			indexDef := yyDollar[1].alterTableUnion().AlterOptions[0].(*AddIndexDefinition).IndexDefinition
+			indexDef.Columns = yyDollar[3].indexColumnsUnion()
+			indexDef.Options = append(indexDef.Options, yyDollar[5].indexOptionsUnion()...)
+			yyDollar[1].alterTableUnion().AlterOptions = append(yyDollar[1].alterTableUnion().AlterOptions, yyDollar[6].alterOptionsUnion()...)
+			yyDollar[1].alterTableUnion().FullyParsed = true
+			yyVAL.ifaceUnion = yyDollar[1].alterTableUnion()
 		}
 	case 88:
 		yyDollar = yyS[yypt-11 : yypt+1]
 		{
-			yyVAL.statement = &CreateView{ViewName: yyDollar[7].tableName.ToViewName(), IsReplace: yyDollar[2].boolean, Algorithm: yyDollar[3].str, Definer: yyDollar[4].str, Security: yyDollar[5].str, Columns: yyDollar[8].columns, Select: yyDollar[10].selStmt, CheckOption: yyDollar[11].str}
+			yyVAL.ifaceUnion = &CreateView{ViewName: yyDollar[7].tableName.ToViewName(), IsReplace: yyDollar[2].booleanUnion(), Algorithm: yyDollar[3].str, Definer: yyDollar[4].str, Security: yyDollar[5].str, Columns: yyDollar[8].columnsUnion(), Select: yyDollar[10].selStmtUnion(), CheckOption: yyDollar[11].str}
 		}
 	case 89:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyDollar[1].createDatabase.FullyParsed = true
-			yyDollar[1].createDatabase.CreateOptions = yyDollar[2].collateAndCharsets
-			yyVAL.statement = yyDollar[1].createDatabase
+			yyDollar[1].createDatabaseUnion().FullyParsed = true
+			yyDollar[1].createDatabaseUnion().CreateOptions = yyDollar[2].collateAndCharsetsUnion()
+			yyVAL.ifaceUnion = yyDollar[1].createDatabaseUnion()
 		}
 	case 90:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		{
-			yyVAL.boolean = false
+			yyVAL.boolUnion = false
 		}
 	case 91:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.boolean = true
+			yyVAL.boolUnion = true
 		}
 	case 92:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -5715,23 +6033,23 @@ yydefault:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		{
 			var v []VindexParam
-			yyVAL.vindexParams = v
+			yyVAL.ifaceUnion = v
 		}
 	case 96:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.vindexParams = yyDollar[2].vindexParams
+			yyVAL.ifaceUnion = yyDollar[2].vindexParamsUnion()
 		}
 	case 97:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.vindexParams = make([]VindexParam, 0, 4)
-			yyVAL.vindexParams = append(yyVAL.vindexParams, yyDollar[1].vindexParam)
+			yyVAL.ifaceUnion = make([]VindexParam, 0, 4)
+			yyVAL.ifaceUnion = append(yyVAL.vindexParamsUnion(), yyDollar[1].vindexParam)
 		}
 	case 98:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.vindexParams = append(yyVAL.vindexParams, yyDollar[3].vindexParam)
+			yyVAL.ifaceUnion = append(yyVAL.vindexParamsUnion(), yyDollar[3].vindexParam)
 		}
 	case 99:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -5741,258 +6059,258 @@ yydefault:
 	case 100:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		{
-			yyVAL.createTable = &CreateTable{Table: yyDollar[5].tableName, IfNotExists: yyDollar[4].boolean, Temp: yyDollar[2].boolean}
-			setDDL(yylex, yyVAL.createTable)
+			yyVAL.ifaceUnion = &CreateTable{Table: yyDollar[5].tableName, IfNotExists: yyDollar[4].booleanUnion(), Temp: yyDollar[2].booleanUnion()}
+			setDDL(yylex, yyVAL.createTableUnion())
 		}
 	case 101:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.alterTable = &AlterTable{Table: yyDollar[3].tableName}
-			setDDL(yylex, yyVAL.alterTable)
+			yyVAL.ifaceUnion = &AlterTable{Table: yyDollar[3].tableName}
+			setDDL(yylex, yyVAL.alterTableUnion())
 		}
 	case 102:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		{
-			yyVAL.alterTable = &AlterTable{Table: yyDollar[6].tableName, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition: &IndexDefinition{Info: &IndexInfo{Name: yyDollar[3].colIdent, Type: string(yyDollar[2].str)}, Options: yyDollar[4].indexOptions}}}}
-			setDDL(yylex, yyVAL.alterTable)
+			yyVAL.ifaceUnion = &AlterTable{Table: yyDollar[6].tableName, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition: &IndexDefinition{Info: &IndexInfo{Name: yyDollar[3].colIdent, Type: string(yyDollar[2].str)}, Options: yyDollar[4].indexOptionsUnion()}}}}
+			setDDL(yylex, yyVAL.alterTableUnion())
 		}
 	case 103:
 		yyDollar = yyS[yypt-7 : yypt+1]
 		{
-			yyVAL.alterTable = &AlterTable{Table: yyDollar[7].tableName, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition: &IndexDefinition{Info: &IndexInfo{Name: yyDollar[4].colIdent, Type: string(yyDollar[2].str) + " " + string(yyDollar[3].str), Fulltext: true}, Options: yyDollar[5].indexOptions}}}}
-			setDDL(yylex, yyVAL.alterTable)
+			yyVAL.ifaceUnion = &AlterTable{Table: yyDollar[7].tableName, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition: &IndexDefinition{Info: &IndexInfo{Name: yyDollar[4].colIdent, Type: string(yyDollar[2].str) + " " + string(yyDollar[3].str), Fulltext: true}, Options: yyDollar[5].indexOptionsUnion()}}}}
+			setDDL(yylex, yyVAL.alterTableUnion())
 		}
 	case 104:
 		yyDollar = yyS[yypt-7 : yypt+1]
 		{
-			yyVAL.alterTable = &AlterTable{Table: yyDollar[7].tableName, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition: &IndexDefinition{Info: &IndexInfo{Name: yyDollar[4].colIdent, Type: string(yyDollar[2].str) + " " + string(yyDollar[3].str), Spatial: true}, Options: yyDollar[5].indexOptions}}}}
-			setDDL(yylex, yyVAL.alterTable)
+			yyVAL.ifaceUnion = &AlterTable{Table: yyDollar[7].tableName, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition: &IndexDefinition{Info: &IndexInfo{Name: yyDollar[4].colIdent, Type: string(yyDollar[2].str) + " " + string(yyDollar[3].str), Spatial: true}, Options: yyDollar[5].indexOptionsUnion()}}}}
+			setDDL(yylex, yyVAL.alterTableUnion())
 		}
 	case 105:
 		yyDollar = yyS[yypt-7 : yypt+1]
 		{
-			yyVAL.alterTable = &AlterTable{Table: yyDollar[7].tableName, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition: &IndexDefinition{Info: &IndexInfo{Name: yyDollar[4].colIdent, Type: string(yyDollar[2].str) + " " + string(yyDollar[3].str), Unique: true}, Options: yyDollar[5].indexOptions}}}}
-			setDDL(yylex, yyVAL.alterTable)
+			yyVAL.ifaceUnion = &AlterTable{Table: yyDollar[7].tableName, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition: &IndexDefinition{Info: &IndexInfo{Name: yyDollar[4].colIdent, Type: string(yyDollar[2].str) + " " + string(yyDollar[3].str), Unique: true}, Options: yyDollar[5].indexOptionsUnion()}}}}
+			setDDL(yylex, yyVAL.alterTableUnion())
 		}
 	case 106:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		{
-			yyVAL.createDatabase = &CreateDatabase{Comments: Comments(yyDollar[3].strs), DBName: string(yyDollar[5].colIdent.String()), IfNotExists: yyDollar[4].boolean}
-			setDDL(yylex, yyVAL.createDatabase)
+			yyVAL.ifaceUnion = &CreateDatabase{Comments: Comments(yyDollar[3].strsUnion()), DBName: string(yyDollar[5].colIdent.String()), IfNotExists: yyDollar[4].booleanUnion()}
+			setDDL(yylex, yyVAL.createDatabaseUnion())
 		}
 	case 107:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.alterDatabase = &AlterDatabase{}
-			setDDL(yylex, yyVAL.alterDatabase)
+			yyVAL.ifaceUnion = &AlterDatabase{}
+			setDDL(yylex, yyVAL.alterDatabaseUnion())
 		}
 	case 110:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		{
-			yyVAL.TableSpec = yyDollar[2].TableSpec
-			yyVAL.TableSpec.Options = yyDollar[4].tableOptions
+			yyVAL.ifaceUnion = yyDollar[2].tableSpecUnion()
+			yyVAL.tableSpecUnion().Options = yyDollar[4].tableOptionsUnion()
 		}
 	case 111:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		{
-			yyVAL.collateAndCharsets = nil
+			yyVAL.ifaceUnion = nil
 		}
 	case 112:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.collateAndCharsets = yyDollar[1].collateAndCharsets
+			yyVAL.ifaceUnion = yyDollar[1].collateAndCharsetsUnion()
 		}
 	case 113:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.collateAndCharsets = []CollateAndCharset{yyDollar[1].collateAndCharset}
+			yyVAL.ifaceUnion = []CollateAndCharset{yyDollar[1].collateAndCharset}
 		}
 	case 114:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.collateAndCharsets = []CollateAndCharset{yyDollar[1].collateAndCharset}
+			yyVAL.ifaceUnion = []CollateAndCharset{yyDollar[1].collateAndCharset}
 		}
 	case 115:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.collateAndCharsets = append(yyDollar[1].collateAndCharsets, yyDollar[2].collateAndCharset)
+			yyVAL.ifaceUnion = append(yyDollar[1].collateAndCharsetsUnion(), yyDollar[2].collateAndCharset)
 		}
 	case 116:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.collateAndCharsets = append(yyDollar[1].collateAndCharsets, yyDollar[2].collateAndCharset)
+			yyVAL.ifaceUnion = append(yyDollar[1].collateAndCharsetsUnion(), yyDollar[2].collateAndCharset)
 		}
 	case 117:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		{
-			yyVAL.boolean = false
+			yyVAL.boolUnion = false
 		}
 	case 118:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.boolean = true
+			yyVAL.boolUnion = true
 		}
 	case 119:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		{
-			yyVAL.collateAndCharset = CollateAndCharset{Type: CharacterSetType, Value: (yyDollar[4].colIdent.String()), IsDefault: yyDollar[1].boolean}
+			yyVAL.collateAndCharset = CollateAndCharset{Type: CharacterSetType, Value: (yyDollar[4].colIdent.String()), IsDefault: yyDollar[1].booleanUnion()}
 		}
 	case 120:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		{
-			yyVAL.collateAndCharset = CollateAndCharset{Type: CharacterSetType, Value: ("'" + string(yyDollar[4].str) + "'"), IsDefault: yyDollar[1].boolean}
+			yyVAL.collateAndCharset = CollateAndCharset{Type: CharacterSetType, Value: ("'" + string(yyDollar[4].str) + "'"), IsDefault: yyDollar[1].booleanUnion()}
 		}
 	case 121:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		{
-			yyVAL.collateAndCharset = CollateAndCharset{Type: CollateType, Value: (yyDollar[4].colIdent.String()), IsDefault: yyDollar[1].boolean}
+			yyVAL.collateAndCharset = CollateAndCharset{Type: CollateType, Value: (yyDollar[4].colIdent.String()), IsDefault: yyDollar[1].booleanUnion()}
 		}
 	case 122:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		{
-			yyVAL.collateAndCharset = CollateAndCharset{Type: CollateType, Value: ("'" + string(yyDollar[4].str) + "'"), IsDefault: yyDollar[1].boolean}
+			yyVAL.collateAndCharset = CollateAndCharset{Type: CollateType, Value: ("'" + string(yyDollar[4].str) + "'"), IsDefault: yyDollar[1].booleanUnion()}
 		}
 	case 123:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.optLike = &OptLike{LikeTable: yyDollar[2].tableName}
+			yyVAL.ifaceUnion = &OptLike{LikeTable: yyDollar[2].tableName}
 		}
 	case 124:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		{
-			yyVAL.optLike = &OptLike{LikeTable: yyDollar[3].tableName}
+			yyVAL.ifaceUnion = &OptLike{LikeTable: yyDollar[3].tableName}
 		}
 	case 125:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.columnDefinitions = []*ColumnDefinition{yyDollar[1].columnDefinition}
+			yyVAL.ifaceUnion = []*ColumnDefinition{yyDollar[1].columnDefinitionUnion()}
 		}
 	case 126:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.columnDefinitions = append(yyDollar[1].columnDefinitions, yyDollar[3].columnDefinition)
+			yyVAL.ifaceUnion = append(yyDollar[1].columnDefinitionsUnion(), yyDollar[3].columnDefinitionUnion())
 		}
 	case 127:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.TableSpec = &TableSpec{}
-			yyVAL.TableSpec.AddColumn(yyDollar[1].columnDefinition)
+			yyVAL.ifaceUnion = &TableSpec{}
+			yyVAL.tableSpecUnion().AddColumn(yyDollar[1].columnDefinitionUnion())
 		}
 	case 128:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.TableSpec = &TableSpec{}
-			yyVAL.TableSpec.AddConstraint(yyDollar[1].constraintDefinition)
+			yyVAL.ifaceUnion = &TableSpec{}
+			yyVAL.tableSpecUnion().AddConstraint(yyDollar[1].constraintDefinitionUnion())
 		}
 	case 129:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.TableSpec.AddColumn(yyDollar[3].columnDefinition)
+			yyVAL.tableSpecUnion().AddColumn(yyDollar[3].columnDefinitionUnion())
 		}
 	case 130:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		{
-			yyVAL.TableSpec.AddColumn(yyDollar[3].columnDefinition)
-			yyVAL.TableSpec.AddConstraint(yyDollar[4].constraintDefinition)
+			yyVAL.tableSpecUnion().AddColumn(yyDollar[3].columnDefinitionUnion())
+			yyVAL.tableSpecUnion().AddConstraint(yyDollar[4].constraintDefinitionUnion())
 		}
 	case 131:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.TableSpec.AddIndex(yyDollar[3].indexDefinition)
+			yyVAL.tableSpecUnion().AddIndex(yyDollar[3].indexDefinitionUnion())
 		}
 	case 132:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.TableSpec.AddConstraint(yyDollar[3].constraintDefinition)
+			yyVAL.tableSpecUnion().AddConstraint(yyDollar[3].constraintDefinitionUnion())
 		}
 	case 133:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.TableSpec.AddConstraint(yyDollar[3].constraintDefinition)
+			yyVAL.tableSpecUnion().AddConstraint(yyDollar[3].constraintDefinitionUnion())
 		}
 	case 134:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyDollar[2].columnType.Options = yyDollar[3].columnTypeOptions
-			yyVAL.columnDefinition = &ColumnDefinition{Name: yyDollar[1].colIdent, Type: yyDollar[2].columnType}
+			yyDollar[2].columnType.Options = yyDollar[3].columnTypeOptionsUnion()
+			yyVAL.ifaceUnion = &ColumnDefinition{Name: yyDollar[1].colIdent, Type: yyDollar[2].columnType}
 		}
 	case 135:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		{
-			yyVAL.columnTypeOptions = &ColumnTypeOptions{NotNull: false, Default: nil, OnUpdate: nil, Autoincrement: false, KeyOpt: colKeyNone, Comment: nil}
+			yyVAL.ifaceUnion = &ColumnTypeOptions{NotNull: false, Default: nil, OnUpdate: nil, Autoincrement: false, KeyOpt: colKeyNone, Comment: nil}
 		}
 	case 136:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyDollar[1].columnTypeOptions.NotNull = false
-			yyVAL.columnTypeOptions = yyDollar[1].columnTypeOptions
+			yyDollar[1].columnTypeOptionsUnion().NotNull = false
+			yyVAL.ifaceUnion = yyDollar[1].columnTypeOptionsUnion()
 		}
 	case 137:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyDollar[1].columnTypeOptions.NotNull = true
-			yyVAL.columnTypeOptions = yyDollar[1].columnTypeOptions
+			yyDollar[1].columnTypeOptionsUnion().NotNull = true
+			yyVAL.ifaceUnion = yyDollar[1].columnTypeOptionsUnion()
 		}
 	case 138:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyDollar[1].columnTypeOptions.Default = yyDollar[3].expr
-			yyVAL.columnTypeOptions = yyDollar[1].columnTypeOptions
+			yyDollar[1].columnTypeOptionsUnion().Default = yyDollar[3].exprUnion()
+			yyVAL.ifaceUnion = yyDollar[1].columnTypeOptionsUnion()
 		}
 	case 139:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		{
-			yyDollar[1].columnTypeOptions.OnUpdate = yyDollar[4].expr
-			yyVAL.columnTypeOptions = yyDollar[1].columnTypeOptions
+			yyDollar[1].columnTypeOptionsUnion().OnUpdate = yyDollar[4].exprUnion()
+			yyVAL.ifaceUnion = yyDollar[1].columnTypeOptionsUnion()
 		}
 	case 140:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyDollar[1].columnTypeOptions.Autoincrement = true
-			yyVAL.columnTypeOptions = yyDollar[1].columnTypeOptions
+			yyDollar[1].columnTypeOptionsUnion().Autoincrement = true
+			yyVAL.ifaceUnion = yyDollar[1].columnTypeOptionsUnion()
 		}
 	case 141:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyDollar[1].columnTypeOptions.Comment = NewStrLiteral(yyDollar[3].str)
-			yyVAL.columnTypeOptions = yyDollar[1].columnTypeOptions
+			yyDollar[1].columnTypeOptionsUnion().Comment = NewStrLiteral(yyDollar[3].str)
+			yyVAL.ifaceUnion = yyDollar[1].columnTypeOptionsUnion()
 		}
 	case 142:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyDollar[1].columnTypeOptions.KeyOpt = colKeyPrimary
-			yyVAL.columnTypeOptions = yyDollar[1].columnTypeOptions
+			yyDollar[1].columnTypeOptionsUnion().KeyOpt = colKeyPrimary
+			yyVAL.ifaceUnion = yyDollar[1].columnTypeOptionsUnion()
 		}
 	case 143:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyDollar[1].columnTypeOptions.KeyOpt = colKey
-			yyVAL.columnTypeOptions = yyDollar[1].columnTypeOptions
+			yyDollar[1].columnTypeOptionsUnion().KeyOpt = colKey
+			yyVAL.ifaceUnion = yyDollar[1].columnTypeOptionsUnion()
 		}
 	case 144:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyDollar[1].columnTypeOptions.KeyOpt = colKeyUniqueKey
-			yyVAL.columnTypeOptions = yyDollar[1].columnTypeOptions
+			yyDollar[1].columnTypeOptionsUnion().KeyOpt = colKeyUniqueKey
+			yyVAL.ifaceUnion = yyDollar[1].columnTypeOptionsUnion()
 		}
 	case 145:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyDollar[1].columnTypeOptions.KeyOpt = colKeyUnique
-			yyVAL.columnTypeOptions = yyDollar[1].columnTypeOptions
+			yyDollar[1].columnTypeOptionsUnion().KeyOpt = colKeyUnique
+			yyVAL.ifaceUnion = yyDollar[1].columnTypeOptionsUnion()
 		}
 	case 146:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
 			yyVAL.columnType = yyDollar[1].columnType
-			yyVAL.columnType.Unsigned = yyDollar[2].boolean
-			yyVAL.columnType.Zerofill = yyDollar[3].boolean
+			yyVAL.columnType.Unsigned = yyDollar[2].booleanUnion()
+			yyVAL.columnType.Zerofill = yyDollar[3].booleanUnion()
 		}
 	case 150:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
 			yyVAL.columnType = yyDollar[1].columnType
-			yyVAL.columnType.Length = yyDollar[2].literal
+			yyVAL.columnType.Length = yyDollar[2].literalUnion()
 		}
 	case 151:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -6087,42 +6405,42 @@ yydefault:
 	case 167:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].str), Length: yyDollar[2].literal}
+			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].str), Length: yyDollar[2].literalUnion()}
 		}
 	case 168:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].str), Length: yyDollar[2].literal}
+			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].str), Length: yyDollar[2].literalUnion()}
 		}
 	case 169:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].str), Length: yyDollar[2].literal}
+			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].str), Length: yyDollar[2].literalUnion()}
 		}
 	case 170:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].str), Length: yyDollar[2].literal}
+			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].str), Length: yyDollar[2].literalUnion()}
 		}
 	case 171:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		{
-			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].str), Length: yyDollar[2].literal, Charset: yyDollar[3].str, Collate: yyDollar[4].str}
+			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].str), Length: yyDollar[2].literalUnion(), Charset: yyDollar[3].str, Collate: yyDollar[4].str}
 		}
 	case 172:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		{
-			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].str), Length: yyDollar[2].literal, Charset: yyDollar[3].str, Collate: yyDollar[4].str}
+			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].str), Length: yyDollar[2].literalUnion(), Charset: yyDollar[3].str, Collate: yyDollar[4].str}
 		}
 	case 173:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].str), Length: yyDollar[2].literal}
+			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].str), Length: yyDollar[2].literalUnion()}
 		}
 	case 174:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].str), Length: yyDollar[2].literal}
+			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].str), Length: yyDollar[2].literalUnion()}
 		}
 	case 175:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -6172,12 +6490,12 @@ yydefault:
 	case 184:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		{
-			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].str), EnumValues: yyDollar[3].strs, Charset: yyDollar[5].str, Collate: yyDollar[6].str}
+			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].str), EnumValues: yyDollar[3].strsUnion(), Charset: yyDollar[5].str, Collate: yyDollar[6].str}
 		}
 	case 185:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		{
-			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].str), EnumValues: yyDollar[3].strs, Charset: yyDollar[5].str, Collate: yyDollar[6].str}
+			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].str), EnumValues: yyDollar[3].strsUnion(), Charset: yyDollar[5].str, Collate: yyDollar[6].str}
 		}
 	case 186:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -6222,23 +6540,23 @@ yydefault:
 	case 194:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.strs = make([]string, 0, 4)
-			yyVAL.strs = append(yyVAL.strs, "'"+string(yyDollar[1].str)+"'")
+			yyVAL.ifaceUnion = make([]string, 0, 4)
+			yyVAL.ifaceUnion = append(yyVAL.strsUnion(), "'"+string(yyDollar[1].str)+"'")
 		}
 	case 195:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.strs = append(yyDollar[1].strs, "'"+string(yyDollar[3].str)+"'")
+			yyVAL.ifaceUnion = append(yyDollar[1].strsUnion(), "'"+string(yyDollar[3].str)+"'")
 		}
 	case 196:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		{
-			yyVAL.literal = nil
+			yyVAL.ifaceUnion = nil
 		}
 	case 197:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.literal = NewIntLiteral(yyDollar[2].str)
+			yyVAL.ifaceUnion = NewIntLiteral(yyDollar[2].str)
 		}
 	case 198:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -6276,22 +6594,22 @@ yydefault:
 	case 203:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		{
-			yyVAL.boolean = false
+			yyVAL.boolUnion = false
 		}
 	case 204:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.boolean = true
+			yyVAL.boolUnion = true
 		}
 	case 205:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		{
-			yyVAL.boolean = false
+			yyVAL.boolUnion = false
 		}
 	case 206:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.boolean = true
+			yyVAL.boolUnion = true
 		}
 	case 207:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -6326,48 +6644,48 @@ yydefault:
 	case 213:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		{
-			yyVAL.indexDefinition = &IndexDefinition{Info: yyDollar[1].indexInfo, Columns: yyDollar[3].indexColumns, Options: yyDollar[5].indexOptions}
+			yyVAL.ifaceUnion = &IndexDefinition{Info: yyDollar[1].indexInfoUnion(), Columns: yyDollar[3].indexColumnsUnion(), Options: yyDollar[5].indexOptionsUnion()}
 		}
 	case 214:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		{
-			yyVAL.indexOptions = nil
+			yyVAL.ifaceUnion = nil
 		}
 	case 215:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.indexOptions = yyDollar[1].indexOptions
+			yyVAL.ifaceUnion = yyDollar[1].indexOptionsUnion()
 		}
 	case 216:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.indexOptions = []*IndexOption{yyDollar[1].indexOption}
+			yyVAL.ifaceUnion = []*IndexOption{yyDollar[1].indexOptionUnion()}
 		}
 	case 217:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.indexOptions = append(yyVAL.indexOptions, yyDollar[2].indexOption)
+			yyVAL.ifaceUnion = append(yyVAL.indexOptionsUnion(), yyDollar[2].indexOptionUnion())
 		}
 	case 218:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.indexOption = yyDollar[1].indexOption
+			yyVAL.ifaceUnion = yyDollar[1].indexOptionUnion()
 		}
 	case 219:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
 			// should not be string
-			yyVAL.indexOption = &IndexOption{Name: string(yyDollar[1].str), Value: NewIntLiteral(yyDollar[3].str)}
+			yyVAL.ifaceUnion = &IndexOption{Name: string(yyDollar[1].str), Value: NewIntLiteral(yyDollar[3].str)}
 		}
 	case 220:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.indexOption = &IndexOption{Name: string(yyDollar[1].str), Value: NewStrLiteral(yyDollar[2].str)}
+			yyVAL.ifaceUnion = &IndexOption{Name: string(yyDollar[1].str), Value: NewStrLiteral(yyDollar[2].str)}
 		}
 	case 221:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.indexOption = &IndexOption{Name: string(yyDollar[1].str) + " " + string(yyDollar[2].str), String: yyDollar[3].colIdent.String()}
+			yyVAL.ifaceUnion = &IndexOption{Name: string(yyDollar[1].str) + " " + string(yyDollar[2].str), String: yyDollar[3].colIdent.String()}
 		}
 	case 222:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -6382,27 +6700,27 @@ yydefault:
 	case 224:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.indexInfo = &IndexInfo{Type: string(yyDollar[2].str) + " " + string(yyDollar[3].str), ConstraintName: NewColIdent(yyDollar[1].str), Name: NewColIdent("PRIMARY"), Primary: true, Unique: true}
+			yyVAL.ifaceUnion = &IndexInfo{Type: string(yyDollar[2].str) + " " + string(yyDollar[3].str), ConstraintName: NewColIdent(yyDollar[1].str), Name: NewColIdent("PRIMARY"), Primary: true, Unique: true}
 		}
 	case 225:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.indexInfo = &IndexInfo{Type: string(yyDollar[1].str) + " " + string(yyDollar[2].str), Name: NewColIdent(yyDollar[3].str), Spatial: true, Unique: false}
+			yyVAL.ifaceUnion = &IndexInfo{Type: string(yyDollar[1].str) + " " + string(yyDollar[2].str), Name: NewColIdent(yyDollar[3].str), Spatial: true, Unique: false}
 		}
 	case 226:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.indexInfo = &IndexInfo{Type: string(yyDollar[1].str) + " " + string(yyDollar[2].str), Name: NewColIdent(yyDollar[3].str), Fulltext: true, Unique: false}
+			yyVAL.ifaceUnion = &IndexInfo{Type: string(yyDollar[1].str) + " " + string(yyDollar[2].str), Name: NewColIdent(yyDollar[3].str), Fulltext: true, Unique: false}
 		}
 	case 227:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		{
-			yyVAL.indexInfo = &IndexInfo{Type: string(yyDollar[2].str) + " " + string(yyDollar[3].str), ConstraintName: NewColIdent(yyDollar[1].str), Name: NewColIdent(yyDollar[4].str), Unique: true}
+			yyVAL.ifaceUnion = &IndexInfo{Type: string(yyDollar[2].str) + " " + string(yyDollar[3].str), ConstraintName: NewColIdent(yyDollar[1].str), Name: NewColIdent(yyDollar[4].str), Unique: true}
 		}
 	case 228:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.indexInfo = &IndexInfo{Type: string(yyDollar[1].str), Name: NewColIdent(yyDollar[2].str), Unique: false}
+			yyVAL.ifaceUnion = &IndexInfo{Type: string(yyDollar[1].str), Name: NewColIdent(yyDollar[2].str), Unique: false}
 		}
 	case 229:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -6472,97 +6790,97 @@ yydefault:
 	case 242:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.indexColumns = []*IndexColumn{yyDollar[1].indexColumn}
+			yyVAL.ifaceUnion = []*IndexColumn{yyDollar[1].indexColumnUnion()}
 		}
 	case 243:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.indexColumns = append(yyVAL.indexColumns, yyDollar[3].indexColumn)
+			yyVAL.ifaceUnion = append(yyVAL.indexColumnsUnion(), yyDollar[3].indexColumnUnion())
 		}
 	case 244:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.indexColumn = &IndexColumn{Column: yyDollar[1].colIdent, Length: yyDollar[2].literal, Direction: yyDollar[3].orderDirection}
+			yyVAL.ifaceUnion = &IndexColumn{Column: yyDollar[1].colIdent, Length: yyDollar[2].literalUnion(), Direction: yyDollar[3].orderDirectionUnion()}
 		}
 	case 245:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.constraintDefinition = &ConstraintDefinition{Name: string(yyDollar[2].colIdent.String()), Details: yyDollar[3].constraintInfo}
+			yyVAL.ifaceUnion = &ConstraintDefinition{Name: string(yyDollar[2].colIdent.String()), Details: yyDollar[3].constraintInfoUnion()}
 		}
 	case 246:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.constraintDefinition = &ConstraintDefinition{Details: yyDollar[1].constraintInfo}
+			yyVAL.ifaceUnion = &ConstraintDefinition{Details: yyDollar[1].constraintInfoUnion()}
 		}
 	case 247:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.constraintDefinition = &ConstraintDefinition{Name: string(yyDollar[2].colIdent.String()), Details: yyDollar[3].constraintInfo}
+			yyVAL.ifaceUnion = &ConstraintDefinition{Name: string(yyDollar[2].colIdent.String()), Details: yyDollar[3].constraintInfoUnion()}
 		}
 	case 248:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.constraintDefinition = &ConstraintDefinition{Details: yyDollar[1].constraintInfo}
+			yyVAL.ifaceUnion = &ConstraintDefinition{Details: yyDollar[1].constraintInfoUnion()}
 		}
 	case 249:
 		yyDollar = yyS[yypt-10 : yypt+1]
 		{
-			yyVAL.constraintInfo = &ForeignKeyDefinition{Source: yyDollar[4].columns, ReferencedTable: yyDollar[7].tableName, ReferencedColumns: yyDollar[9].columns}
+			yyVAL.ifaceUnion = &ForeignKeyDefinition{Source: yyDollar[4].columnsUnion(), ReferencedTable: yyDollar[7].tableName, ReferencedColumns: yyDollar[9].columnsUnion()}
 		}
 	case 250:
 		yyDollar = yyS[yypt-11 : yypt+1]
 		{
-			yyVAL.constraintInfo = &ForeignKeyDefinition{Source: yyDollar[4].columns, ReferencedTable: yyDollar[7].tableName, ReferencedColumns: yyDollar[9].columns, OnDelete: yyDollar[11].ReferenceAction}
+			yyVAL.ifaceUnion = &ForeignKeyDefinition{Source: yyDollar[4].columnsUnion(), ReferencedTable: yyDollar[7].tableName, ReferencedColumns: yyDollar[9].columnsUnion(), OnDelete: yyDollar[11].ReferenceActionUnion()}
 		}
 	case 251:
 		yyDollar = yyS[yypt-11 : yypt+1]
 		{
-			yyVAL.constraintInfo = &ForeignKeyDefinition{Source: yyDollar[4].columns, ReferencedTable: yyDollar[7].tableName, ReferencedColumns: yyDollar[9].columns, OnUpdate: yyDollar[11].ReferenceAction}
+			yyVAL.ifaceUnion = &ForeignKeyDefinition{Source: yyDollar[4].columnsUnion(), ReferencedTable: yyDollar[7].tableName, ReferencedColumns: yyDollar[9].columnsUnion(), OnUpdate: yyDollar[11].ReferenceActionUnion()}
 		}
 	case 252:
 		yyDollar = yyS[yypt-12 : yypt+1]
 		{
-			yyVAL.constraintInfo = &ForeignKeyDefinition{Source: yyDollar[4].columns, ReferencedTable: yyDollar[7].tableName, ReferencedColumns: yyDollar[9].columns, OnDelete: yyDollar[11].ReferenceAction, OnUpdate: yyDollar[12].ReferenceAction}
+			yyVAL.ifaceUnion = &ForeignKeyDefinition{Source: yyDollar[4].columnsUnion(), ReferencedTable: yyDollar[7].tableName, ReferencedColumns: yyDollar[9].columnsUnion(), OnDelete: yyDollar[11].ReferenceActionUnion(), OnUpdate: yyDollar[12].ReferenceActionUnion()}
 		}
 	case 253:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		{
-			yyVAL.constraintInfo = &CheckConstraintDefinition{Expr: yyDollar[3].expr, Enforced: yyDollar[5].boolean}
+			yyVAL.ifaceUnion = &CheckConstraintDefinition{Expr: yyDollar[3].exprUnion(), Enforced: yyDollar[5].booleanUnion()}
 		}
 	case 254:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.ReferenceAction = yyDollar[3].ReferenceAction
+			yyVAL.numericUnion = int(yyDollar[3].ReferenceActionUnion())
 		}
 	case 255:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.ReferenceAction = yyDollar[3].ReferenceAction
+			yyVAL.numericUnion = int(yyDollar[3].ReferenceActionUnion())
 		}
 	case 256:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.ReferenceAction = Restrict
+			yyVAL.numericUnion = int(Restrict)
 		}
 	case 257:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.ReferenceAction = Cascade
+			yyVAL.numericUnion = int(Cascade)
 		}
 	case 258:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.ReferenceAction = NoAction
+			yyVAL.numericUnion = int(NoAction)
 		}
 	case 259:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.ReferenceAction = SetDefault
+			yyVAL.numericUnion = int(SetDefault)
 		}
 	case 260:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.ReferenceAction = SetNull
+			yyVAL.numericUnion = int(SetNull)
 		}
 	case 261:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -6582,197 +6900,197 @@ yydefault:
 	case 264:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		{
-			yyVAL.boolean = true
+			yyVAL.boolUnion = true
 		}
 	case 265:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.boolean = true
+			yyVAL.boolUnion = true
 		}
 	case 266:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.boolean = false
+			yyVAL.boolUnion = false
 		}
 	case 267:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		{
-			yyVAL.tableOptions = nil
+			yyVAL.ifaceUnion = nil
 		}
 	case 268:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.tableOptions = yyDollar[1].tableOptions
+			yyVAL.ifaceUnion = yyDollar[1].tableOptionsUnion()
 		}
 	case 269:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.tableOptions = TableOptions{yyDollar[1].tableOption}
+			yyVAL.ifaceUnion = TableOptions{yyDollar[1].tableOptionUnion()}
 		}
 	case 270:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.tableOptions = append(yyDollar[1].tableOptions, yyDollar[3].tableOption)
+			yyVAL.ifaceUnion = append(yyDollar[1].tableOptionsUnion(), yyDollar[3].tableOptionUnion())
 		}
 	case 271:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.tableOptions = append(yyDollar[1].tableOptions, yyDollar[2].tableOption)
+			yyVAL.ifaceUnion = append(yyDollar[1].tableOptionsUnion(), yyDollar[2].tableOptionUnion())
 		}
 	case 272:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.tableOptions = TableOptions{yyDollar[1].tableOption}
+			yyVAL.ifaceUnion = TableOptions{yyDollar[1].tableOptionUnion()}
 		}
 	case 273:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.tableOptions = append(yyDollar[1].tableOptions, yyDollar[2].tableOption)
+			yyVAL.ifaceUnion = append(yyDollar[1].tableOptionsUnion(), yyDollar[2].tableOptionUnion())
 		}
 	case 274:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.tableOption = &TableOption{Name: string(yyDollar[1].str), Value: NewIntLiteral(yyDollar[3].str)}
+			yyVAL.ifaceUnion = &TableOption{Name: string(yyDollar[1].str), Value: NewIntLiteral(yyDollar[3].str)}
 		}
 	case 275:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.tableOption = &TableOption{Name: string(yyDollar[1].str), Value: NewIntLiteral(yyDollar[3].str)}
+			yyVAL.ifaceUnion = &TableOption{Name: string(yyDollar[1].str), Value: NewIntLiteral(yyDollar[3].str)}
 		}
 	case 276:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		{
-			yyVAL.tableOption = &TableOption{Name: (string(yyDollar[2].str)), String: yyDollar[4].str}
+			yyVAL.ifaceUnion = &TableOption{Name: (string(yyDollar[2].str)), String: yyDollar[4].str}
 		}
 	case 277:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		{
-			yyVAL.tableOption = &TableOption{Name: string(yyDollar[2].str), String: yyDollar[4].str}
+			yyVAL.ifaceUnion = &TableOption{Name: string(yyDollar[2].str), String: yyDollar[4].str}
 		}
 	case 278:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.tableOption = &TableOption{Name: string(yyDollar[1].str), Value: NewIntLiteral(yyDollar[3].str)}
+			yyVAL.ifaceUnion = &TableOption{Name: string(yyDollar[1].str), Value: NewIntLiteral(yyDollar[3].str)}
 		}
 	case 279:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.tableOption = &TableOption{Name: string(yyDollar[1].str), Value: NewStrLiteral(yyDollar[3].str)}
+			yyVAL.ifaceUnion = &TableOption{Name: string(yyDollar[1].str), Value: NewStrLiteral(yyDollar[3].str)}
 		}
 	case 280:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.tableOption = &TableOption{Name: string(yyDollar[1].str), Value: NewStrLiteral(yyDollar[3].str)}
+			yyVAL.ifaceUnion = &TableOption{Name: string(yyDollar[1].str), Value: NewStrLiteral(yyDollar[3].str)}
 		}
 	case 281:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.tableOption = &TableOption{Name: string(yyDollar[1].str), Value: NewStrLiteral(yyDollar[3].str)}
+			yyVAL.ifaceUnion = &TableOption{Name: string(yyDollar[1].str), Value: NewStrLiteral(yyDollar[3].str)}
 		}
 	case 282:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		{
-			yyVAL.tableOption = &TableOption{Name: (string(yyDollar[1].str) + " " + string(yyDollar[2].str)), Value: NewStrLiteral(yyDollar[4].str)}
+			yyVAL.ifaceUnion = &TableOption{Name: (string(yyDollar[1].str) + " " + string(yyDollar[2].str)), Value: NewStrLiteral(yyDollar[4].str)}
 		}
 	case 283:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		{
-			yyVAL.tableOption = &TableOption{Name: (string(yyDollar[1].str) + " " + string(yyDollar[2].str)), Value: NewStrLiteral(yyDollar[4].str)}
+			yyVAL.ifaceUnion = &TableOption{Name: (string(yyDollar[1].str) + " " + string(yyDollar[2].str)), Value: NewStrLiteral(yyDollar[4].str)}
 		}
 	case 284:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.tableOption = &TableOption{Name: string(yyDollar[1].str), Value: NewIntLiteral(yyDollar[3].str)}
+			yyVAL.ifaceUnion = &TableOption{Name: string(yyDollar[1].str), Value: NewIntLiteral(yyDollar[3].str)}
 		}
 	case 285:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.tableOption = &TableOption{Name: string(yyDollar[1].str), Value: NewStrLiteral(yyDollar[3].str)}
+			yyVAL.ifaceUnion = &TableOption{Name: string(yyDollar[1].str), Value: NewStrLiteral(yyDollar[3].str)}
 		}
 	case 286:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.tableOption = &TableOption{Name: string(yyDollar[1].str), String: yyDollar[3].colIdent.String()}
+			yyVAL.ifaceUnion = &TableOption{Name: string(yyDollar[1].str), String: yyDollar[3].colIdent.String()}
 		}
 	case 287:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.tableOption = &TableOption{Name: string(yyDollar[1].str), Value: NewStrLiteral(yyDollar[3].str)}
+			yyVAL.ifaceUnion = &TableOption{Name: string(yyDollar[1].str), Value: NewStrLiteral(yyDollar[3].str)}
 		}
 	case 288:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.tableOption = &TableOption{Name: string(yyDollar[1].str), String: string(yyDollar[3].str)}
+			yyVAL.ifaceUnion = &TableOption{Name: string(yyDollar[1].str), String: string(yyDollar[3].str)}
 		}
 	case 289:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.tableOption = &TableOption{Name: string(yyDollar[1].str), Value: NewIntLiteral(yyDollar[3].str)}
+			yyVAL.ifaceUnion = &TableOption{Name: string(yyDollar[1].str), Value: NewIntLiteral(yyDollar[3].str)}
 		}
 	case 290:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.tableOption = &TableOption{Name: string(yyDollar[1].str), Value: NewIntLiteral(yyDollar[3].str)}
+			yyVAL.ifaceUnion = &TableOption{Name: string(yyDollar[1].str), Value: NewIntLiteral(yyDollar[3].str)}
 		}
 	case 291:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.tableOption = &TableOption{Name: string(yyDollar[1].str), Value: NewIntLiteral(yyDollar[3].str)}
+			yyVAL.ifaceUnion = &TableOption{Name: string(yyDollar[1].str), Value: NewIntLiteral(yyDollar[3].str)}
 		}
 	case 292:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.tableOption = &TableOption{Name: string(yyDollar[1].str), Value: NewIntLiteral(yyDollar[3].str)}
+			yyVAL.ifaceUnion = &TableOption{Name: string(yyDollar[1].str), Value: NewIntLiteral(yyDollar[3].str)}
 		}
 	case 293:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.tableOption = &TableOption{Name: string(yyDollar[1].str), String: string(yyDollar[3].str)}
+			yyVAL.ifaceUnion = &TableOption{Name: string(yyDollar[1].str), String: string(yyDollar[3].str)}
 		}
 	case 294:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.tableOption = &TableOption{Name: string(yyDollar[1].str), Value: NewStrLiteral(yyDollar[3].str)}
+			yyVAL.ifaceUnion = &TableOption{Name: string(yyDollar[1].str), Value: NewStrLiteral(yyDollar[3].str)}
 		}
 	case 295:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.tableOption = &TableOption{Name: string(yyDollar[1].str), String: string(yyDollar[3].str)}
+			yyVAL.ifaceUnion = &TableOption{Name: string(yyDollar[1].str), String: string(yyDollar[3].str)}
 		}
 	case 296:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.tableOption = &TableOption{Name: string(yyDollar[1].str), Value: NewIntLiteral(yyDollar[3].str)}
+			yyVAL.ifaceUnion = &TableOption{Name: string(yyDollar[1].str), Value: NewIntLiteral(yyDollar[3].str)}
 		}
 	case 297:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.tableOption = &TableOption{Name: string(yyDollar[1].str), String: string(yyDollar[3].str)}
+			yyVAL.ifaceUnion = &TableOption{Name: string(yyDollar[1].str), String: string(yyDollar[3].str)}
 		}
 	case 298:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.tableOption = &TableOption{Name: string(yyDollar[1].str), Value: NewIntLiteral(yyDollar[3].str)}
+			yyVAL.ifaceUnion = &TableOption{Name: string(yyDollar[1].str), Value: NewIntLiteral(yyDollar[3].str)}
 		}
 	case 299:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.tableOption = &TableOption{Name: string(yyDollar[1].str), String: string(yyDollar[3].str)}
+			yyVAL.ifaceUnion = &TableOption{Name: string(yyDollar[1].str), String: string(yyDollar[3].str)}
 		}
 	case 300:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.tableOption = &TableOption{Name: string(yyDollar[1].str), Value: NewIntLiteral(yyDollar[3].str)}
+			yyVAL.ifaceUnion = &TableOption{Name: string(yyDollar[1].str), Value: NewIntLiteral(yyDollar[3].str)}
 		}
 	case 301:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		{
-			yyVAL.tableOption = &TableOption{Name: string(yyDollar[1].str), String: (yyDollar[3].colIdent.String() + yyDollar[4].str)}
+			yyVAL.ifaceUnion = &TableOption{Name: string(yyDollar[1].str), String: (yyDollar[3].colIdent.String() + yyDollar[4].str)}
 		}
 	case 302:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		{
-			yyVAL.tableOption = &TableOption{Name: string(yyDollar[1].str), Tables: yyDollar[4].tableNames}
+			yyVAL.ifaceUnion = &TableOption{Name: string(yyDollar[1].str), Tables: yyDollar[4].tableNamesUnion()}
 		}
 	case 303:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -6812,301 +7130,301 @@ yydefault:
 	case 320:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		{
-			yyVAL.colName = nil
+			yyVAL.ifaceUnion = nil
 		}
 	case 321:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.colName = yyDollar[2].colName
+			yyVAL.ifaceUnion = yyDollar[2].colNameUnion()
 		}
 	case 322:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		{
-			yyVAL.colName = nil
+			yyVAL.ifaceUnion = nil
 		}
 	case 323:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.colName = yyDollar[2].colName
+			yyVAL.ifaceUnion = yyDollar[2].colNameUnion()
 		}
 	case 324:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		{
-			yyVAL.alterOptions = nil
+			yyVAL.ifaceUnion = nil
 		}
 	case 325:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.alterOptions = yyDollar[1].alterOptions
+			yyVAL.ifaceUnion = yyDollar[1].alterOptionsUnion()
 		}
 	case 326:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		{
-			yyVAL.alterOptions = append(yyDollar[1].alterOptions, &OrderByOption{Cols: yyDollar[5].columns})
+			yyVAL.ifaceUnion = append(yyDollar[1].alterOptionsUnion(), &OrderByOption{Cols: yyDollar[5].columnsUnion()})
 		}
 	case 327:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.alterOptions = yyDollar[1].alterOptions
+			yyVAL.ifaceUnion = yyDollar[1].alterOptionsUnion()
 		}
 	case 328:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.alterOptions = append(yyDollar[1].alterOptions, yyDollar[3].alterOptions...)
+			yyVAL.ifaceUnion = append(yyDollar[1].alterOptionsUnion(), yyDollar[3].alterOptionsUnion()...)
 		}
 	case 329:
 		yyDollar = yyS[yypt-7 : yypt+1]
 		{
-			yyVAL.alterOptions = append(append(yyDollar[1].alterOptions, yyDollar[3].alterOptions...), &OrderByOption{Cols: yyDollar[7].columns})
+			yyVAL.ifaceUnion = append(append(yyDollar[1].alterOptionsUnion(), yyDollar[3].alterOptionsUnion()...), &OrderByOption{Cols: yyDollar[7].columnsUnion()})
 		}
 	case 330:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.alterOptions = []AlterOption{yyDollar[1].alterOption}
+			yyVAL.ifaceUnion = []AlterOption{yyDollar[1].alterOptionUnion()}
 		}
 	case 331:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.alterOptions = append(yyDollar[1].alterOptions, yyDollar[3].alterOption)
+			yyVAL.ifaceUnion = append(yyDollar[1].alterOptionsUnion(), yyDollar[3].alterOptionUnion())
 		}
 	case 332:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.alterOptions = append(yyDollar[1].alterOptions, yyDollar[3].alterOption)
+			yyVAL.ifaceUnion = append(yyDollar[1].alterOptionsUnion(), yyDollar[3].alterOptionUnion())
 		}
 	case 333:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.alterOption = yyDollar[1].tableOptions
+			yyVAL.ifaceUnion = yyDollar[1].tableOptionsUnion()
 		}
 	case 334:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.alterOption = &AddConstraintDefinition{ConstraintDefinition: yyDollar[2].constraintDefinition}
+			yyVAL.ifaceUnion = &AddConstraintDefinition{ConstraintDefinition: yyDollar[2].constraintDefinitionUnion()}
 		}
 	case 335:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.alterOption = &AddConstraintDefinition{ConstraintDefinition: yyDollar[2].constraintDefinition}
+			yyVAL.ifaceUnion = &AddConstraintDefinition{ConstraintDefinition: yyDollar[2].constraintDefinitionUnion()}
 		}
 	case 336:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.alterOption = &AddIndexDefinition{IndexDefinition: yyDollar[2].indexDefinition}
+			yyVAL.ifaceUnion = &AddIndexDefinition{IndexDefinition: yyDollar[2].indexDefinitionUnion()}
 		}
 	case 337:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		{
-			yyVAL.alterOption = &AddColumns{Columns: yyDollar[4].columnDefinitions}
+			yyVAL.ifaceUnion = &AddColumns{Columns: yyDollar[4].columnDefinitionsUnion()}
 		}
 	case 338:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		{
-			yyVAL.alterOption = &AddColumns{Columns: []*ColumnDefinition{yyDollar[3].columnDefinition}, First: yyDollar[4].colName, After: yyDollar[5].colName}
+			yyVAL.ifaceUnion = &AddColumns{Columns: []*ColumnDefinition{yyDollar[3].columnDefinitionUnion()}, First: yyDollar[4].colNameUnion(), After: yyDollar[5].colNameUnion()}
 		}
 	case 339:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		{
-			yyVAL.alterOption = &AlterColumn{Column: yyDollar[3].colName, DropDefault: true}
+			yyVAL.ifaceUnion = &AlterColumn{Column: yyDollar[3].colNameUnion(), DropDefault: true}
 		}
 	case 340:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		{
-			yyVAL.alterOption = &AlterColumn{Column: yyDollar[3].colName, DropDefault: false, DefaultVal: yyDollar[6].expr}
+			yyVAL.ifaceUnion = &AlterColumn{Column: yyDollar[3].colNameUnion(), DropDefault: false, DefaultVal: yyDollar[6].exprUnion()}
 		}
 	case 341:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		{
-			yyVAL.alterOption = &ChangeColumn{OldColumn: yyDollar[3].colName, NewColDefinition: yyDollar[4].columnDefinition, First: yyDollar[5].colName, After: yyDollar[6].colName}
+			yyVAL.ifaceUnion = &ChangeColumn{OldColumn: yyDollar[3].colNameUnion(), NewColDefinition: yyDollar[4].columnDefinitionUnion(), First: yyDollar[5].colNameUnion(), After: yyDollar[6].colNameUnion()}
 		}
 	case 342:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		{
-			yyVAL.alterOption = &ModifyColumn{NewColDefinition: yyDollar[3].columnDefinition, First: yyDollar[4].colName, After: yyDollar[5].colName}
+			yyVAL.ifaceUnion = &ModifyColumn{NewColDefinition: yyDollar[3].columnDefinitionUnion(), First: yyDollar[4].colNameUnion(), After: yyDollar[5].colNameUnion()}
 		}
 	case 343:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		{
-			yyVAL.alterOption = &AlterCharset{CharacterSet: yyDollar[4].str, Collate: yyDollar[5].str}
+			yyVAL.ifaceUnion = &AlterCharset{CharacterSet: yyDollar[4].str, Collate: yyDollar[5].str}
 		}
 	case 344:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.alterOption = &KeyState{Enable: false}
+			yyVAL.ifaceUnion = &KeyState{Enable: false}
 		}
 	case 345:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.alterOption = &KeyState{Enable: true}
+			yyVAL.ifaceUnion = &KeyState{Enable: true}
 		}
 	case 346:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.alterOption = &TablespaceOperation{Import: false}
+			yyVAL.ifaceUnion = &TablespaceOperation{Import: false}
 		}
 	case 347:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.alterOption = &TablespaceOperation{Import: true}
+			yyVAL.ifaceUnion = &TablespaceOperation{Import: true}
 		}
 	case 348:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.alterOption = &DropColumn{Name: yyDollar[3].colName}
+			yyVAL.ifaceUnion = &DropColumn{Name: yyDollar[3].colNameUnion()}
 		}
 	case 349:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.alterOption = &DropKey{Type: NormalKeyType, Name: yyDollar[3].colIdent.String()}
+			yyVAL.ifaceUnion = &DropKey{Type: NormalKeyType, Name: yyDollar[3].colIdent.String()}
 		}
 	case 350:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.alterOption = &DropKey{Type: PrimaryKeyType}
+			yyVAL.ifaceUnion = &DropKey{Type: PrimaryKeyType}
 		}
 	case 351:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		{
-			yyVAL.alterOption = &DropKey{Type: ForeignKeyType, Name: yyDollar[4].colIdent.String()}
+			yyVAL.ifaceUnion = &DropKey{Type: ForeignKeyType, Name: yyDollar[4].colIdent.String()}
 		}
 	case 352:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.alterOption = &Force{}
+			yyVAL.ifaceUnion = &Force{}
 		}
 	case 353:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.alterOption = &RenameTableName{Table: yyDollar[3].tableName}
+			yyVAL.ifaceUnion = &RenameTableName{Table: yyDollar[3].tableName}
 		}
 	case 354:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		{
-			yyVAL.alterOption = &RenameIndex{OldName: yyDollar[3].colIdent.String(), NewName: yyDollar[5].colIdent.String()}
+			yyVAL.ifaceUnion = &RenameIndex{OldName: yyDollar[3].colIdent.String(), NewName: yyDollar[5].colIdent.String()}
 		}
 	case 355:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.alterOptions = []AlterOption{yyDollar[1].alterOption}
+			yyVAL.ifaceUnion = []AlterOption{yyDollar[1].alterOptionUnion()}
 		}
 	case 356:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.alterOptions = append(yyDollar[1].alterOptions, yyDollar[3].alterOption)
+			yyVAL.ifaceUnion = append(yyDollar[1].alterOptionsUnion(), yyDollar[3].alterOptionUnion())
 		}
 	case 357:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.alterOption = AlgorithmValue(string(yyDollar[3].str))
+			yyVAL.ifaceUnion = AlgorithmValue(string(yyDollar[3].str))
 		}
 	case 358:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.alterOption = AlgorithmValue(string(yyDollar[3].str))
+			yyVAL.ifaceUnion = AlgorithmValue(string(yyDollar[3].str))
 		}
 	case 359:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.alterOption = AlgorithmValue(string(yyDollar[3].str))
+			yyVAL.ifaceUnion = AlgorithmValue(string(yyDollar[3].str))
 		}
 	case 360:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.alterOption = &LockOption{Type: DefaultType}
+			yyVAL.ifaceUnion = &LockOption{Type: DefaultType}
 		}
 	case 361:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.alterOption = &LockOption{Type: NoneType}
+			yyVAL.ifaceUnion = &LockOption{Type: NoneType}
 		}
 	case 362:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.alterOption = &LockOption{Type: SharedType}
+			yyVAL.ifaceUnion = &LockOption{Type: SharedType}
 		}
 	case 363:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.alterOption = &LockOption{Type: ExclusiveType}
+			yyVAL.ifaceUnion = &LockOption{Type: ExclusiveType}
 		}
 	case 364:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.alterOption = &Validation{With: true}
+			yyVAL.ifaceUnion = &Validation{With: true}
 		}
 	case 365:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.alterOption = &Validation{With: false}
+			yyVAL.ifaceUnion = &Validation{With: false}
 		}
 	case 366:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyDollar[1].alterTable.FullyParsed = true
-			yyDollar[1].alterTable.AlterOptions = yyDollar[2].alterOptions
-			yyVAL.statement = yyDollar[1].alterTable
+			yyDollar[1].alterTableUnion().FullyParsed = true
+			yyDollar[1].alterTableUnion().AlterOptions = yyDollar[2].alterOptionsUnion()
+			yyVAL.ifaceUnion = yyDollar[1].alterTableUnion()
 		}
 	case 367:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		{
-			yyDollar[1].alterTable.FullyParsed = true
-			yyDollar[1].alterTable.AlterOptions = yyDollar[2].alterOptions
-			yyDollar[1].alterTable.PartitionSpec = &PartitionSpec{Action: RemoveAction}
-			yyVAL.statement = yyDollar[1].alterTable
+			yyDollar[1].alterTableUnion().FullyParsed = true
+			yyDollar[1].alterTableUnion().AlterOptions = yyDollar[2].alterOptionsUnion()
+			yyDollar[1].alterTableUnion().PartitionSpec = &PartitionSpec{Action: RemoveAction}
+			yyVAL.ifaceUnion = yyDollar[1].alterTableUnion()
 		}
 	case 368:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		{
-			yyDollar[1].alterTable.FullyParsed = true
-			yyDollar[1].alterTable.AlterOptions = yyDollar[2].alterOptions
-			yyDollar[1].alterTable.PartitionSpec = yyDollar[4].partSpec
-			yyVAL.statement = yyDollar[1].alterTable
+			yyDollar[1].alterTableUnion().FullyParsed = true
+			yyDollar[1].alterTableUnion().AlterOptions = yyDollar[2].alterOptionsUnion()
+			yyDollar[1].alterTableUnion().PartitionSpec = yyDollar[4].partSpecUnion()
+			yyVAL.ifaceUnion = yyDollar[1].alterTableUnion()
 		}
 	case 369:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyDollar[1].alterTable.FullyParsed = true
-			yyDollar[1].alterTable.PartitionSpec = yyDollar[2].partSpec
-			yyVAL.statement = yyDollar[1].alterTable
+			yyDollar[1].alterTableUnion().FullyParsed = true
+			yyDollar[1].alterTableUnion().PartitionSpec = yyDollar[2].partSpecUnion()
+			yyVAL.ifaceUnion = yyDollar[1].alterTableUnion()
 		}
 	case 370:
 		yyDollar = yyS[yypt-10 : yypt+1]
 		{
-			yyVAL.statement = &AlterView{ViewName: yyDollar[6].tableName.ToViewName(), Algorithm: yyDollar[2].str, Definer: yyDollar[3].str, Security: yyDollar[4].str, Columns: yyDollar[7].columns, Select: yyDollar[9].selStmt, CheckOption: yyDollar[10].str}
+			yyVAL.ifaceUnion = &AlterView{ViewName: yyDollar[6].tableName.ToViewName(), Algorithm: yyDollar[2].str, Definer: yyDollar[3].str, Security: yyDollar[4].str, Columns: yyDollar[7].columnsUnion(), Select: yyDollar[9].selStmtUnion(), CheckOption: yyDollar[10].str}
 		}
 	case 371:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyDollar[1].alterDatabase.FullyParsed = true
-			yyDollar[1].alterDatabase.DBName = yyDollar[2].colIdent.String()
-			yyDollar[1].alterDatabase.AlterOptions = yyDollar[3].collateAndCharsets
-			yyVAL.statement = yyDollar[1].alterDatabase
+			yyDollar[1].alterDatabaseUnion().FullyParsed = true
+			yyDollar[1].alterDatabaseUnion().DBName = yyDollar[2].colIdent.String()
+			yyDollar[1].alterDatabaseUnion().AlterOptions = yyDollar[3].collateAndCharsetsUnion()
+			yyVAL.ifaceUnion = yyDollar[1].alterDatabaseUnion()
 		}
 	case 372:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		{
-			yyDollar[1].alterDatabase.FullyParsed = true
-			yyDollar[1].alterDatabase.DBName = yyDollar[2].colIdent.String()
-			yyDollar[1].alterDatabase.UpdateDataDirectory = true
-			yyVAL.statement = yyDollar[1].alterDatabase
+			yyDollar[1].alterDatabaseUnion().FullyParsed = true
+			yyDollar[1].alterDatabaseUnion().DBName = yyDollar[2].colIdent.String()
+			yyDollar[1].alterDatabaseUnion().UpdateDataDirectory = true
+			yyVAL.ifaceUnion = yyDollar[1].alterDatabaseUnion()
 		}
 	case 373:
 		yyDollar = yyS[yypt-7 : yypt+1]
 		{
-			yyVAL.statement = &AlterVschema{
+			yyVAL.ifaceUnion = &AlterVschema{
 				Action: CreateVindexDDLAction,
 				Table:  yyDollar[5].tableName,
 				VindexSpec: &VindexSpec{
 					Name:   NewColIdent(yyDollar[5].tableName.Name.String()),
 					Type:   yyDollar[6].colIdent,
-					Params: yyDollar[7].vindexParams,
+					Params: yyDollar[7].vindexParamsUnion(),
 				},
 			}
 		}
 	case 374:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		{
-			yyVAL.statement = &AlterVschema{
+			yyVAL.ifaceUnion = &AlterVschema{
 				Action: DropVindexDDLAction,
 				Table:  yyDollar[5].tableName,
 				VindexSpec: &VindexSpec{
@@ -7117,31 +7435,31 @@ yydefault:
 	case 375:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		{
-			yyVAL.statement = &AlterVschema{Action: AddVschemaTableDDLAction, Table: yyDollar[5].tableName}
+			yyVAL.ifaceUnion = &AlterVschema{Action: AddVschemaTableDDLAction, Table: yyDollar[5].tableName}
 		}
 	case 376:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		{
-			yyVAL.statement = &AlterVschema{Action: DropVschemaTableDDLAction, Table: yyDollar[5].tableName}
+			yyVAL.ifaceUnion = &AlterVschema{Action: DropVschemaTableDDLAction, Table: yyDollar[5].tableName}
 		}
 	case 377:
 		yyDollar = yyS[yypt-12 : yypt+1]
 		{
-			yyVAL.statement = &AlterVschema{
+			yyVAL.ifaceUnion = &AlterVschema{
 				Action: AddColVindexDDLAction,
 				Table:  yyDollar[4].tableName,
 				VindexSpec: &VindexSpec{
 					Name:   yyDollar[7].colIdent,
 					Type:   yyDollar[11].colIdent,
-					Params: yyDollar[12].vindexParams,
+					Params: yyDollar[12].vindexParamsUnion(),
 				},
-				VindexCols: yyDollar[9].columns,
+				VindexCols: yyDollar[9].columnsUnion(),
 			}
 		}
 	case 378:
 		yyDollar = yyS[yypt-7 : yypt+1]
 		{
-			yyVAL.statement = &AlterVschema{
+			yyVAL.ifaceUnion = &AlterVschema{
 				Action: DropColVindexDDLAction,
 				Table:  yyDollar[4].tableName,
 				VindexSpec: &VindexSpec{
@@ -7152,12 +7470,12 @@ yydefault:
 	case 379:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		{
-			yyVAL.statement = &AlterVschema{Action: AddSequenceDDLAction, Table: yyDollar[5].tableName}
+			yyVAL.ifaceUnion = &AlterVschema{Action: AddSequenceDDLAction, Table: yyDollar[5].tableName}
 		}
 	case 380:
 		yyDollar = yyS[yypt-9 : yypt+1]
 		{
-			yyVAL.statement = &AlterVschema{
+			yyVAL.ifaceUnion = &AlterVschema{
 				Action: AddAutoIncDDLAction,
 				Table:  yyDollar[4].tableName,
 				AutoIncSpec: &AutoIncSpec{
@@ -7169,426 +7487,426 @@ yydefault:
 	case 381:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		{
-			yyVAL.partSpec = &PartitionSpec{Action: AddAction, Definitions: []*PartitionDefinition{yyDollar[4].partDef}}
+			yyVAL.ifaceUnion = &PartitionSpec{Action: AddAction, Definitions: []*PartitionDefinition{yyDollar[4].partDefUnion()}}
 		}
 	case 382:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.partSpec = &PartitionSpec{Action: DropAction, Names: yyDollar[3].partitions}
+			yyVAL.ifaceUnion = &PartitionSpec{Action: DropAction, Names: yyDollar[3].partitionsUnion()}
 		}
 	case 383:
 		yyDollar = yyS[yypt-7 : yypt+1]
 		{
-			yyVAL.partSpec = &PartitionSpec{Action: ReorganizeAction, Names: yyDollar[3].partitions, Definitions: yyDollar[6].partDefs}
+			yyVAL.ifaceUnion = &PartitionSpec{Action: ReorganizeAction, Names: yyDollar[3].partitionsUnion(), Definitions: yyDollar[6].partDefsUnion()}
 		}
 	case 384:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		{
-			yyVAL.partSpec = &PartitionSpec{Action: DiscardAction, Names: yyDollar[3].partitions}
+			yyVAL.ifaceUnion = &PartitionSpec{Action: DiscardAction, Names: yyDollar[3].partitionsUnion()}
 		}
 	case 385:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		{
-			yyVAL.partSpec = &PartitionSpec{Action: DiscardAction, IsAll: true}
+			yyVAL.ifaceUnion = &PartitionSpec{Action: DiscardAction, IsAll: true}
 		}
 	case 386:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		{
-			yyVAL.partSpec = &PartitionSpec{Action: ImportAction, Names: yyDollar[3].partitions}
+			yyVAL.ifaceUnion = &PartitionSpec{Action: ImportAction, Names: yyDollar[3].partitionsUnion()}
 		}
 	case 387:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		{
-			yyVAL.partSpec = &PartitionSpec{Action: ImportAction, IsAll: true}
+			yyVAL.ifaceUnion = &PartitionSpec{Action: ImportAction, IsAll: true}
 		}
 	case 388:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.partSpec = &PartitionSpec{Action: TruncateAction, Names: yyDollar[3].partitions}
+			yyVAL.ifaceUnion = &PartitionSpec{Action: TruncateAction, Names: yyDollar[3].partitionsUnion()}
 		}
 	case 389:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.partSpec = &PartitionSpec{Action: TruncateAction, IsAll: true}
+			yyVAL.ifaceUnion = &PartitionSpec{Action: TruncateAction, IsAll: true}
 		}
 	case 390:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.partSpec = &PartitionSpec{Action: CoalesceAction, Number: NewIntLiteral(yyDollar[3].str)}
+			yyVAL.ifaceUnion = &PartitionSpec{Action: CoalesceAction, Number: NewIntLiteral(yyDollar[3].str)}
 		}
 	case 391:
 		yyDollar = yyS[yypt-7 : yypt+1]
 		{
-			yyVAL.partSpec = &PartitionSpec{Action: ExchangeAction, Names: Partitions{yyDollar[3].colIdent}, TableName: yyDollar[6].tableName, WithoutValidation: yyDollar[7].boolean}
+			yyVAL.ifaceUnion = &PartitionSpec{Action: ExchangeAction, Names: Partitions{yyDollar[3].colIdent}, TableName: yyDollar[6].tableName, WithoutValidation: yyDollar[7].booleanUnion()}
 		}
 	case 392:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.partSpec = &PartitionSpec{Action: AnalyzeAction, Names: yyDollar[3].partitions}
+			yyVAL.ifaceUnion = &PartitionSpec{Action: AnalyzeAction, Names: yyDollar[3].partitionsUnion()}
 		}
 	case 393:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.partSpec = &PartitionSpec{Action: AnalyzeAction, IsAll: true}
+			yyVAL.ifaceUnion = &PartitionSpec{Action: AnalyzeAction, IsAll: true}
 		}
 	case 394:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.partSpec = &PartitionSpec{Action: CheckAction, Names: yyDollar[3].partitions}
+			yyVAL.ifaceUnion = &PartitionSpec{Action: CheckAction, Names: yyDollar[3].partitionsUnion()}
 		}
 	case 395:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.partSpec = &PartitionSpec{Action: CheckAction, IsAll: true}
+			yyVAL.ifaceUnion = &PartitionSpec{Action: CheckAction, IsAll: true}
 		}
 	case 396:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.partSpec = &PartitionSpec{Action: OptimizeAction, Names: yyDollar[3].partitions}
+			yyVAL.ifaceUnion = &PartitionSpec{Action: OptimizeAction, Names: yyDollar[3].partitionsUnion()}
 		}
 	case 397:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.partSpec = &PartitionSpec{Action: OptimizeAction, IsAll: true}
+			yyVAL.ifaceUnion = &PartitionSpec{Action: OptimizeAction, IsAll: true}
 		}
 	case 398:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.partSpec = &PartitionSpec{Action: RebuildAction, Names: yyDollar[3].partitions}
+			yyVAL.ifaceUnion = &PartitionSpec{Action: RebuildAction, Names: yyDollar[3].partitionsUnion()}
 		}
 	case 399:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.partSpec = &PartitionSpec{Action: RebuildAction, IsAll: true}
+			yyVAL.ifaceUnion = &PartitionSpec{Action: RebuildAction, IsAll: true}
 		}
 	case 400:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.partSpec = &PartitionSpec{Action: RepairAction, Names: yyDollar[3].partitions}
+			yyVAL.ifaceUnion = &PartitionSpec{Action: RepairAction, Names: yyDollar[3].partitionsUnion()}
 		}
 	case 401:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.partSpec = &PartitionSpec{Action: RepairAction, IsAll: true}
+			yyVAL.ifaceUnion = &PartitionSpec{Action: RepairAction, IsAll: true}
 		}
 	case 402:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.partSpec = &PartitionSpec{Action: UpgradeAction}
+			yyVAL.ifaceUnion = &PartitionSpec{Action: UpgradeAction}
 		}
 	case 403:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		{
-			yyVAL.boolean = false
+			yyVAL.boolUnion = false
 		}
 	case 404:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.boolean = false
+			yyVAL.boolUnion = false
 		}
 	case 405:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.boolean = true
+			yyVAL.boolUnion = true
 		}
 	case 406:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.partDefs = []*PartitionDefinition{yyDollar[1].partDef}
+			yyVAL.ifaceUnion = []*PartitionDefinition{yyDollar[1].partDefUnion()}
 		}
 	case 407:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.partDefs = append(yyDollar[1].partDefs, yyDollar[3].partDef)
+			yyVAL.ifaceUnion = append(yyDollar[1].partDefsUnion(), yyDollar[3].partDefUnion())
 		}
 	case 408:
 		yyDollar = yyS[yypt-8 : yypt+1]
 		{
-			yyVAL.partDef = &PartitionDefinition{Name: yyDollar[2].colIdent, Limit: yyDollar[7].expr}
+			yyVAL.ifaceUnion = &PartitionDefinition{Name: yyDollar[2].colIdent, Limit: yyDollar[7].exprUnion()}
 		}
 	case 409:
 		yyDollar = yyS[yypt-8 : yypt+1]
 		{
-			yyVAL.partDef = &PartitionDefinition{Name: yyDollar[2].colIdent, Maxvalue: true}
+			yyVAL.ifaceUnion = &PartitionDefinition{Name: yyDollar[2].colIdent, Maxvalue: true}
 		}
 	case 410:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.statement = &RenameTable{TablePairs: yyDollar[3].renameTablePairs}
+			yyVAL.ifaceUnion = &RenameTable{TablePairs: yyDollar[3].renameTablePairsUnion()}
 		}
 	case 411:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.renameTablePairs = []*RenameTablePair{{FromTable: yyDollar[1].tableName, ToTable: yyDollar[3].tableName}}
+			yyVAL.ifaceUnion = []*RenameTablePair{{FromTable: yyDollar[1].tableName, ToTable: yyDollar[3].tableName}}
 		}
 	case 412:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		{
-			yyVAL.renameTablePairs = append(yyDollar[1].renameTablePairs, &RenameTablePair{FromTable: yyDollar[3].tableName, ToTable: yyDollar[5].tableName})
+			yyVAL.ifaceUnion = append(yyDollar[1].renameTablePairsUnion(), &RenameTablePair{FromTable: yyDollar[3].tableName, ToTable: yyDollar[5].tableName})
 		}
 	case 413:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		{
-			yyVAL.statement = &DropTable{FromTables: yyDollar[5].tableNames, IfExists: yyDollar[4].boolean, Temp: yyDollar[2].boolean}
+			yyVAL.ifaceUnion = &DropTable{FromTables: yyDollar[5].tableNamesUnion(), IfExists: yyDollar[4].booleanUnion(), Temp: yyDollar[2].booleanUnion()}
 		}
 	case 414:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		{
 			// Change this to an alter statement
 			if yyDollar[3].colIdent.Lowered() == "primary" {
-				yyVAL.statement = &AlterTable{Table: yyDollar[5].tableName, AlterOptions: append([]AlterOption{&DropKey{Type: PrimaryKeyType}}, yyDollar[6].alterOptions...)}
+				yyVAL.ifaceUnion = &AlterTable{Table: yyDollar[5].tableName, AlterOptions: append([]AlterOption{&DropKey{Type: PrimaryKeyType}}, yyDollar[6].alterOptionsUnion()...)}
 			} else {
-				yyVAL.statement = &AlterTable{Table: yyDollar[5].tableName, AlterOptions: append([]AlterOption{&DropKey{Type: NormalKeyType, Name: yyDollar[3].colIdent.String()}}, yyDollar[6].alterOptions...)}
+				yyVAL.ifaceUnion = &AlterTable{Table: yyDollar[5].tableName, AlterOptions: append([]AlterOption{&DropKey{Type: NormalKeyType, Name: yyDollar[3].colIdent.String()}}, yyDollar[6].alterOptionsUnion()...)}
 			}
 		}
 	case 415:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		{
-			yyVAL.statement = &DropView{FromTables: yyDollar[4].tableNames, IfExists: yyDollar[3].boolean}
+			yyVAL.ifaceUnion = &DropView{FromTables: yyDollar[4].tableNamesUnion(), IfExists: yyDollar[3].booleanUnion()}
 		}
 	case 416:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		{
-			yyVAL.statement = &DropDatabase{Comments: Comments(yyDollar[3].strs), DBName: string(yyDollar[5].colIdent.String()), IfExists: yyDollar[4].boolean}
+			yyVAL.ifaceUnion = &DropDatabase{Comments: Comments(yyDollar[3].strsUnion()), DBName: string(yyDollar[5].colIdent.String()), IfExists: yyDollar[4].booleanUnion()}
 		}
 	case 417:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.statement = &TruncateTable{Table: yyDollar[3].tableName}
+			yyVAL.ifaceUnion = &TruncateTable{Table: yyDollar[3].tableName}
 		}
 	case 418:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.statement = &TruncateTable{Table: yyDollar[2].tableName}
+			yyVAL.ifaceUnion = &TruncateTable{Table: yyDollar[2].tableName}
 		}
 	case 419:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.statement = &OtherRead{}
+			yyVAL.ifaceUnion = &OtherRead{}
 		}
 	case 420:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.statement = &Show{&ShowBasic{Command: Charset, Filter: yyDollar[3].showFilter}}
+			yyVAL.ifaceUnion = &Show{&ShowBasic{Command: Charset, Filter: yyDollar[3].showFilterUnion()}}
 		}
 	case 421:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.statement = &Show{&ShowBasic{Command: Collation, Filter: yyDollar[3].showFilter}}
+			yyVAL.ifaceUnion = &Show{&ShowBasic{Command: Collation, Filter: yyDollar[3].showFilterUnion()}}
 		}
 	case 422:
 		yyDollar = yyS[yypt-7 : yypt+1]
 		{
-			yyVAL.statement = &Show{&ShowBasic{Full: yyDollar[2].boolean, Command: Column, Tbl: yyDollar[5].tableName, DbName: yyDollar[6].str, Filter: yyDollar[7].showFilter}}
+			yyVAL.ifaceUnion = &Show{&ShowBasic{Full: yyDollar[2].booleanUnion(), Command: Column, Tbl: yyDollar[5].tableName, DbName: yyDollar[6].str, Filter: yyDollar[7].showFilterUnion()}}
 		}
 	case 423:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.statement = &Show{&ShowBasic{Command: Database, Filter: yyDollar[3].showFilter}}
+			yyVAL.ifaceUnion = &Show{&ShowBasic{Command: Database, Filter: yyDollar[3].showFilterUnion()}}
 		}
 	case 424:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.statement = &Show{&ShowBasic{Command: Database, Filter: yyDollar[3].showFilter}}
+			yyVAL.ifaceUnion = &Show{&ShowBasic{Command: Database, Filter: yyDollar[3].showFilterUnion()}}
 		}
 	case 425:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.statement = &Show{&ShowBasic{Command: Keyspace, Filter: yyDollar[3].showFilter}}
+			yyVAL.ifaceUnion = &Show{&ShowBasic{Command: Keyspace, Filter: yyDollar[3].showFilterUnion()}}
 		}
 	case 426:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.statement = &Show{&ShowBasic{Command: Keyspace, Filter: yyDollar[3].showFilter}}
+			yyVAL.ifaceUnion = &Show{&ShowBasic{Command: Keyspace, Filter: yyDollar[3].showFilterUnion()}}
 		}
 	case 427:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		{
-			yyVAL.statement = &Show{&ShowBasic{Command: Function, Filter: yyDollar[4].showFilter}}
+			yyVAL.ifaceUnion = &Show{&ShowBasic{Command: Function, Filter: yyDollar[4].showFilterUnion()}}
 		}
 	case 428:
 		yyDollar = yyS[yypt-7 : yypt+1]
 		{
-			yyVAL.statement = &Show{&ShowBasic{Command: Index, Tbl: yyDollar[5].tableName, DbName: yyDollar[6].str, Filter: yyDollar[7].showFilter}}
+			yyVAL.ifaceUnion = &Show{&ShowBasic{Command: Index, Tbl: yyDollar[5].tableName, DbName: yyDollar[6].str, Filter: yyDollar[7].showFilterUnion()}}
 		}
 	case 429:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		{
-			yyVAL.statement = &Show{&ShowBasic{Command: OpenTable, DbName: yyDollar[4].str, Filter: yyDollar[5].showFilter}}
+			yyVAL.ifaceUnion = &Show{&ShowBasic{Command: OpenTable, DbName: yyDollar[4].str, Filter: yyDollar[5].showFilterUnion()}}
 		}
 	case 430:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.statement = &Show{&ShowBasic{Command: Privilege}}
+			yyVAL.ifaceUnion = &Show{&ShowBasic{Command: Privilege}}
 		}
 	case 431:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		{
-			yyVAL.statement = &Show{&ShowBasic{Command: Procedure, Filter: yyDollar[4].showFilter}}
+			yyVAL.ifaceUnion = &Show{&ShowBasic{Command: Procedure, Filter: yyDollar[4].showFilterUnion()}}
 		}
 	case 432:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		{
-			yyVAL.statement = &Show{&ShowBasic{Command: StatusSession, Filter: yyDollar[4].showFilter}}
+			yyVAL.ifaceUnion = &Show{&ShowBasic{Command: StatusSession, Filter: yyDollar[4].showFilterUnion()}}
 		}
 	case 433:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		{
-			yyVAL.statement = &Show{&ShowBasic{Command: StatusGlobal, Filter: yyDollar[4].showFilter}}
+			yyVAL.ifaceUnion = &Show{&ShowBasic{Command: StatusGlobal, Filter: yyDollar[4].showFilterUnion()}}
 		}
 	case 434:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		{
-			yyVAL.statement = &Show{&ShowBasic{Command: VariableSession, Filter: yyDollar[4].showFilter}}
+			yyVAL.ifaceUnion = &Show{&ShowBasic{Command: VariableSession, Filter: yyDollar[4].showFilterUnion()}}
 		}
 	case 435:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		{
-			yyVAL.statement = &Show{&ShowBasic{Command: VariableGlobal, Filter: yyDollar[4].showFilter}}
+			yyVAL.ifaceUnion = &Show{&ShowBasic{Command: VariableGlobal, Filter: yyDollar[4].showFilterUnion()}}
 		}
 	case 436:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		{
-			yyVAL.statement = &Show{&ShowBasic{Command: TableStatus, DbName: yyDollar[4].str, Filter: yyDollar[5].showFilter}}
+			yyVAL.ifaceUnion = &Show{&ShowBasic{Command: TableStatus, DbName: yyDollar[4].str, Filter: yyDollar[5].showFilterUnion()}}
 		}
 	case 437:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		{
-			yyVAL.statement = &Show{&ShowBasic{Command: Table, Full: yyDollar[2].boolean, DbName: yyDollar[4].str, Filter: yyDollar[5].showFilter}}
+			yyVAL.ifaceUnion = &Show{&ShowBasic{Command: Table, Full: yyDollar[2].booleanUnion(), DbName: yyDollar[4].str, Filter: yyDollar[5].showFilterUnion()}}
 		}
 	case 438:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		{
-			yyVAL.statement = &Show{&ShowBasic{Command: Trigger, DbName: yyDollar[3].str, Filter: yyDollar[4].showFilter}}
+			yyVAL.ifaceUnion = &Show{&ShowBasic{Command: Trigger, DbName: yyDollar[3].str, Filter: yyDollar[4].showFilterUnion()}}
 		}
 	case 439:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		{
-			yyVAL.statement = &Show{&ShowCreate{Command: CreateDb, Op: yyDollar[4].tableName}}
+			yyVAL.ifaceUnion = &Show{&ShowCreate{Command: CreateDb, Op: yyDollar[4].tableName}}
 		}
 	case 440:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		{
-			yyVAL.statement = &Show{&ShowCreate{Command: CreateE, Op: yyDollar[4].tableName}}
+			yyVAL.ifaceUnion = &Show{&ShowCreate{Command: CreateE, Op: yyDollar[4].tableName}}
 		}
 	case 441:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		{
-			yyVAL.statement = &Show{&ShowCreate{Command: CreateF, Op: yyDollar[4].tableName}}
+			yyVAL.ifaceUnion = &Show{&ShowCreate{Command: CreateF, Op: yyDollar[4].tableName}}
 		}
 	case 442:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		{
-			yyVAL.statement = &Show{&ShowCreate{Command: CreateProc, Op: yyDollar[4].tableName}}
+			yyVAL.ifaceUnion = &Show{&ShowCreate{Command: CreateProc, Op: yyDollar[4].tableName}}
 		}
 	case 443:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		{
-			yyVAL.statement = &Show{&ShowCreate{Command: CreateTbl, Op: yyDollar[4].tableName}}
+			yyVAL.ifaceUnion = &Show{&ShowCreate{Command: CreateTbl, Op: yyDollar[4].tableName}}
 		}
 	case 444:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		{
-			yyVAL.statement = &Show{&ShowCreate{Command: CreateTr, Op: yyDollar[4].tableName}}
+			yyVAL.ifaceUnion = &Show{&ShowCreate{Command: CreateTr, Op: yyDollar[4].tableName}}
 		}
 	case 445:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		{
-			yyVAL.statement = &Show{&ShowCreate{Command: CreateV, Op: yyDollar[4].tableName}}
+			yyVAL.ifaceUnion = &Show{&ShowCreate{Command: CreateV, Op: yyDollar[4].tableName}}
 		}
 	case 446:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		{
-			yyVAL.statement = &Show{&ShowLegacy{Type: string(yyDollar[2].str) + " " + string(yyDollar[3].str), Scope: ImplicitScope}}
+			yyVAL.ifaceUnion = &Show{&ShowLegacy{Type: string(yyDollar[2].str) + " " + string(yyDollar[3].str), Scope: ImplicitScope}}
 		}
 	case 447:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		{
-			yyVAL.statement = &Show{&ShowLegacy{Type: string(yyDollar[2].str) + " " + string(yyDollar[3].colIdent.String()), Scope: ImplicitScope}}
+			yyVAL.ifaceUnion = &Show{&ShowLegacy{Type: string(yyDollar[2].str) + " " + string(yyDollar[3].colIdent.String()), Scope: ImplicitScope}}
 		}
 	case 448:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		{
-			yyVAL.statement = &Show{&ShowLegacy{Type: string(yyDollar[2].str) + " " + string(yyDollar[3].str), Scope: ImplicitScope}}
+			yyVAL.ifaceUnion = &Show{&ShowLegacy{Type: string(yyDollar[2].str) + " " + string(yyDollar[3].str), Scope: ImplicitScope}}
 		}
 	case 449:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.statement = &Show{&ShowLegacy{Type: string(yyDollar[2].str), Scope: ImplicitScope}}
+			yyVAL.ifaceUnion = &Show{&ShowLegacy{Type: string(yyDollar[2].str), Scope: ImplicitScope}}
 		}
 	case 450:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		{
-			yyVAL.statement = &Show{&ShowLegacy{Type: string(yyDollar[2].str) + " " + string(yyDollar[3].str), Table: yyDollar[4].tableName, Scope: ImplicitScope}}
+			yyVAL.ifaceUnion = &Show{&ShowLegacy{Type: string(yyDollar[2].str) + " " + string(yyDollar[3].str), Table: yyDollar[4].tableName, Scope: ImplicitScope}}
 		}
 	case 451:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.statement = &Show{&ShowLegacy{Type: string(yyDollar[2].str), Scope: ImplicitScope}}
+			yyVAL.ifaceUnion = &Show{&ShowLegacy{Type: string(yyDollar[2].str), Scope: ImplicitScope}}
 		}
 	case 452:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		{
-			yyVAL.statement = &Show{&ShowLegacy{Type: string(yyDollar[2].str) + " " + string(yyDollar[3].str), Table: yyDollar[4].tableName, Scope: ImplicitScope}}
+			yyVAL.ifaceUnion = &Show{&ShowLegacy{Type: string(yyDollar[2].str) + " " + string(yyDollar[3].str), Table: yyDollar[4].tableName, Scope: ImplicitScope}}
 		}
 	case 453:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		{
-			yyVAL.statement = &Show{&ShowLegacy{Type: string(yyDollar[3].str), Scope: ImplicitScope}}
+			yyVAL.ifaceUnion = &Show{&ShowLegacy{Type: string(yyDollar[3].str), Scope: ImplicitScope}}
 		}
 	case 454:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		{
-			showTablesOpt := &ShowTablesOpt{Filter: yyDollar[4].showFilter}
-			yyVAL.statement = &Show{&ShowLegacy{Scope: VitessMetadataScope, Type: string(yyDollar[3].str), ShowTablesOpt: showTablesOpt}}
+			showTablesOpt := &ShowTablesOpt{Filter: yyDollar[4].showFilterUnion()}
+			yyVAL.ifaceUnion = &Show{&ShowLegacy{Scope: VitessMetadataScope, Type: string(yyDollar[3].str), ShowTablesOpt: showTablesOpt}}
 		}
 	case 455:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		{
-			yyVAL.statement = &Show{&ShowBasic{Command: VitessMigrations, Filter: yyDollar[4].showFilter, DbName: yyDollar[3].str}}
+			yyVAL.ifaceUnion = &Show{&ShowBasic{Command: VitessMigrations, Filter: yyDollar[4].showFilterUnion(), DbName: yyDollar[3].str}}
 		}
 	case 456:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.statement = &Show{&ShowLegacy{Type: string(yyDollar[2].str) + " " + string(yyDollar[3].str), Scope: ImplicitScope}}
+			yyVAL.ifaceUnion = &Show{&ShowLegacy{Type: string(yyDollar[2].str) + " " + string(yyDollar[3].str), Scope: ImplicitScope}}
 		}
 	case 457:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.statement = &Show{&ShowLegacy{Type: string(yyDollar[2].str) + " " + string(yyDollar[3].str), Scope: ImplicitScope}}
+			yyVAL.ifaceUnion = &Show{&ShowLegacy{Type: string(yyDollar[2].str) + " " + string(yyDollar[3].str), Scope: ImplicitScope}}
 		}
 	case 458:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		{
-			yyVAL.statement = &Show{&ShowLegacy{Type: string(yyDollar[2].str) + " " + string(yyDollar[3].str), OnTable: yyDollar[5].tableName, Scope: ImplicitScope}}
+			yyVAL.ifaceUnion = &Show{&ShowLegacy{Type: string(yyDollar[2].str) + " " + string(yyDollar[3].str), OnTable: yyDollar[5].tableName, Scope: ImplicitScope}}
 		}
 	case 459:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.statement = &Show{&ShowLegacy{Type: string(yyDollar[2].str), Scope: ImplicitScope}}
+			yyVAL.ifaceUnion = &Show{&ShowLegacy{Type: string(yyDollar[2].str), Scope: ImplicitScope}}
 		}
 	case 460:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
 			// This should probably be a different type (ShowVitessTopoOpt), but
 			// just getting the thing working for now
-			showTablesOpt := &ShowTablesOpt{Filter: yyDollar[3].showFilter}
-			yyVAL.statement = &Show{&ShowLegacy{Type: yyDollar[2].str, ShowTablesOpt: showTablesOpt}}
+			showTablesOpt := &ShowTablesOpt{Filter: yyDollar[3].showFilterUnion()}
+			yyVAL.ifaceUnion = &Show{&ShowLegacy{Type: yyDollar[2].str, ShowTablesOpt: showTablesOpt}}
 		}
 	case 461:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.statement = &Show{&ShowLegacy{Type: string(yyDollar[2].colIdent.String()), Scope: ImplicitScope}}
+			yyVAL.ifaceUnion = &Show{&ShowLegacy{Type: string(yyDollar[2].colIdent.String()), Scope: ImplicitScope}}
 		}
 	case 462:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.statement = &Show{&ShowLegacy{Type: string(yyDollar[2].str), Scope: ImplicitScope}}
+			yyVAL.ifaceUnion = &Show{&ShowLegacy{Type: string(yyDollar[2].str), Scope: ImplicitScope}}
 		}
 	case 463:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.statement = &Show{&ShowLegacy{Type: string(yyDollar[2].str), Scope: ImplicitScope}}
+			yyVAL.ifaceUnion = &Show{&ShowLegacy{Type: string(yyDollar[2].str), Scope: ImplicitScope}}
 		}
 	case 464:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -7613,12 +7931,12 @@ yydefault:
 	case 468:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		{
-			yyVAL.boolean = false
+			yyVAL.boolUnion = false
 		}
 	case 469:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.boolean = true
+			yyVAL.boolUnion = true
 		}
 	case 470:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -7648,27 +7966,27 @@ yydefault:
 	case 475:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		{
-			yyVAL.showFilter = nil
+			yyVAL.ifaceUnion = nil
 		}
 	case 476:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.showFilter = &ShowFilter{Like: string(yyDollar[2].str)}
+			yyVAL.ifaceUnion = &ShowFilter{Like: string(yyDollar[2].str)}
 		}
 	case 477:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.showFilter = &ShowFilter{Filter: yyDollar[2].expr}
+			yyVAL.ifaceUnion = &ShowFilter{Filter: yyDollar[2].exprUnion()}
 		}
 	case 478:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		{
-			yyVAL.showFilter = nil
+			yyVAL.ifaceUnion = nil
 		}
 	case 479:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.showFilter = &ShowFilter{Like: string(yyDollar[2].str)}
+			yyVAL.ifaceUnion = &ShowFilter{Like: string(yyDollar[2].str)}
 		}
 	case 480:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -7688,37 +8006,37 @@ yydefault:
 	case 483:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.statement = &Use{DBName: yyDollar[2].tableIdent}
+			yyVAL.ifaceUnion = &Use{DBName: yyDollar[2].tableIdent}
 		}
 	case 484:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.statement = &Use{DBName: TableIdent{v: ""}}
+			yyVAL.ifaceUnion = &Use{DBName: TableIdent{v: ""}}
 		}
 	case 485:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.statement = &Begin{}
+			yyVAL.ifaceUnion = &Begin{}
 		}
 	case 486:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.statement = &Begin{}
+			yyVAL.ifaceUnion = &Begin{}
 		}
 	case 487:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.statement = &Commit{}
+			yyVAL.ifaceUnion = &Commit{}
 		}
 	case 488:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.statement = &Rollback{}
+			yyVAL.ifaceUnion = &Rollback{}
 		}
 	case 489:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		{
-			yyVAL.statement = &SRollback{Name: yyDollar[5].colIdent}
+			yyVAL.ifaceUnion = &SRollback{Name: yyDollar[5].colIdent}
 		}
 	case 490:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -7743,42 +8061,42 @@ yydefault:
 	case 494:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.statement = &Savepoint{Name: yyDollar[2].colIdent}
+			yyVAL.ifaceUnion = &Savepoint{Name: yyDollar[2].colIdent}
 		}
 	case 495:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.statement = &Release{Name: yyDollar[3].colIdent}
+			yyVAL.ifaceUnion = &Release{Name: yyDollar[3].colIdent}
 		}
 	case 496:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		{
-			yyVAL.explainType = EmptyType
+			yyVAL.numericUnion = int(EmptyType)
 		}
 	case 497:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.explainType = JSONType
+			yyVAL.numericUnion = int(JSONType)
 		}
 	case 498:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.explainType = TreeType
+			yyVAL.numericUnion = int(TreeType)
 		}
 	case 499:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.explainType = VitessType
+			yyVAL.numericUnion = int(VitessType)
 		}
 	case 500:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.explainType = TraditionalType
+			yyVAL.numericUnion = int(TraditionalType)
 		}
 	case 501:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.explainType = AnalyzeType
+			yyVAL.numericUnion = int(AnalyzeType)
 		}
 	case 502:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -7798,22 +8116,22 @@ yydefault:
 	case 505:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.statement = yyDollar[1].selStmt
+			yyVAL.ifaceUnion = yyDollar[1].selStmtUnion()
 		}
 	case 506:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.statement = yyDollar[1].statement
+			yyVAL.ifaceUnion = yyDollar[1].statementUnion()
 		}
 	case 507:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.statement = yyDollar[1].statement
+			yyVAL.ifaceUnion = yyDollar[1].statementUnion()
 		}
 	case 508:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.statement = yyDollar[1].statement
+			yyVAL.ifaceUnion = yyDollar[1].statementUnion()
 		}
 	case 509:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -7833,107 +8151,107 @@ yydefault:
 	case 512:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.statement = &ExplainTab{Table: yyDollar[2].tableName, Wild: yyDollar[3].str}
+			yyVAL.ifaceUnion = &ExplainTab{Table: yyDollar[2].tableName, Wild: yyDollar[3].str}
 		}
 	case 513:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.statement = &ExplainStmt{Type: yyDollar[2].explainType, Statement: yyDollar[3].statement}
+			yyVAL.ifaceUnion = &ExplainStmt{Type: yyDollar[2].explainTypeUnion(), Statement: yyDollar[3].statementUnion()}
 		}
 	case 514:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.statement = &OtherAdmin{}
+			yyVAL.ifaceUnion = &OtherAdmin{}
 		}
 	case 515:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.statement = &OtherAdmin{}
+			yyVAL.ifaceUnion = &OtherAdmin{}
 		}
 	case 516:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.statement = &LockTables{Tables: yyDollar[3].tableAndLockTypes}
+			yyVAL.ifaceUnion = &LockTables{Tables: yyDollar[3].tableAndLockTypesUnion()}
 		}
 	case 517:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.tableAndLockTypes = TableAndLockTypes{yyDollar[1].tableAndLockType}
+			yyVAL.ifaceUnion = TableAndLockTypes{yyDollar[1].tableAndLockTypeUnion()}
 		}
 	case 518:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.tableAndLockTypes = append(yyDollar[1].tableAndLockTypes, yyDollar[3].tableAndLockType)
+			yyVAL.ifaceUnion = append(yyDollar[1].tableAndLockTypesUnion(), yyDollar[3].tableAndLockTypeUnion())
 		}
 	case 519:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.tableAndLockType = &TableAndLockType{Table: yyDollar[1].aliasedTableName, Lock: yyDollar[2].lockType}
+			yyVAL.ifaceUnion = &TableAndLockType{Table: yyDollar[1].aliasedTableNameUnion(), Lock: yyDollar[2].lockTypeUnion()}
 		}
 	case 520:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.lockType = Read
+			yyVAL.numericUnion = int(Read)
 		}
 	case 521:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.lockType = ReadLocal
+			yyVAL.numericUnion = int(ReadLocal)
 		}
 	case 522:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.lockType = Write
+			yyVAL.numericUnion = int(Write)
 		}
 	case 523:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.lockType = LowPriorityWrite
+			yyVAL.numericUnion = int(LowPriorityWrite)
 		}
 	case 524:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.statement = &UnlockTables{}
+			yyVAL.ifaceUnion = &UnlockTables{}
 		}
 	case 525:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.statement = &Flush{IsLocal: yyDollar[2].boolean, FlushOptions: yyDollar[3].strs}
+			yyVAL.ifaceUnion = &Flush{IsLocal: yyDollar[2].booleanUnion(), FlushOptions: yyDollar[3].strsUnion()}
 		}
 	case 526:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.statement = &Flush{IsLocal: yyDollar[2].boolean}
+			yyVAL.ifaceUnion = &Flush{IsLocal: yyDollar[2].booleanUnion()}
 		}
 	case 527:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		{
-			yyVAL.statement = &Flush{IsLocal: yyDollar[2].boolean, WithLock: true}
+			yyVAL.ifaceUnion = &Flush{IsLocal: yyDollar[2].booleanUnion(), WithLock: true}
 		}
 	case 528:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		{
-			yyVAL.statement = &Flush{IsLocal: yyDollar[2].boolean, TableNames: yyDollar[4].tableNames}
+			yyVAL.ifaceUnion = &Flush{IsLocal: yyDollar[2].booleanUnion(), TableNames: yyDollar[4].tableNamesUnion()}
 		}
 	case 529:
 		yyDollar = yyS[yypt-7 : yypt+1]
 		{
-			yyVAL.statement = &Flush{IsLocal: yyDollar[2].boolean, TableNames: yyDollar[4].tableNames, WithLock: true}
+			yyVAL.ifaceUnion = &Flush{IsLocal: yyDollar[2].booleanUnion(), TableNames: yyDollar[4].tableNamesUnion(), WithLock: true}
 		}
 	case 530:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		{
-			yyVAL.statement = &Flush{IsLocal: yyDollar[2].boolean, TableNames: yyDollar[4].tableNames, ForExport: true}
+			yyVAL.ifaceUnion = &Flush{IsLocal: yyDollar[2].booleanUnion(), TableNames: yyDollar[4].tableNamesUnion(), ForExport: true}
 		}
 	case 531:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.strs = []string{yyDollar[1].str}
+			yyVAL.ifaceUnion = []string{yyDollar[1].str}
 		}
 	case 532:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.strs = append(yyDollar[1].strs, yyDollar[3].str)
+			yyVAL.ifaceUnion = append(yyDollar[1].strsUnion(), yyDollar[3].str)
 		}
 	case 533:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -7998,17 +8316,17 @@ yydefault:
 	case 545:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		{
-			yyVAL.boolean = false
+			yyVAL.boolUnion = false
 		}
 	case 546:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.boolean = true
+			yyVAL.boolUnion = true
 		}
 	case 547:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.boolean = true
+			yyVAL.boolUnion = true
 		}
 	case 548:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -8028,33 +8346,33 @@ yydefault:
 	case 551:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.strs = yyDollar[2].strs
+			yyVAL.ifaceUnion = yyDollar[2].strsUnion()
 			setAllowComments(yylex, false)
 		}
 	case 552:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		{
-			yyVAL.strs = nil
+			yyVAL.ifaceUnion = nil
 		}
 	case 553:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.strs = append(yyDollar[1].strs, yyDollar[2].str)
+			yyVAL.ifaceUnion = append(yyDollar[1].strsUnion(), yyDollar[2].str)
 		}
 	case 554:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.boolean = true
+			yyVAL.boolUnion = true
 		}
 	case 555:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.boolean = false
+			yyVAL.boolUnion = false
 		}
 	case 556:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.boolean = true
+			yyVAL.boolUnion = true
 		}
 	case 557:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -8074,52 +8392,52 @@ yydefault:
 	case 560:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		{
-			yyVAL.boolean = false
+			yyVAL.boolUnion = false
 		}
 	case 561:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.boolean = true
+			yyVAL.boolUnion = true
 		}
 	case 562:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.boolean = true
+			yyVAL.boolUnion = true
 		}
 	case 563:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		{
-			yyVAL.selectExprs = nil
+			yyVAL.ifaceUnion = nil
 		}
 	case 564:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.selectExprs = yyDollar[1].selectExprs
+			yyVAL.ifaceUnion = yyDollar[1].selectExprsUnion()
 		}
 	case 565:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		{
-			yyVAL.strs = nil
+			yyVAL.ifaceUnion = nil
 		}
 	case 566:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.strs = []string{yyDollar[1].str}
+			yyVAL.ifaceUnion = []string{yyDollar[1].str}
 		}
 	case 567:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{ // TODO: This is a hack since I couldn't get it to work in a nicer way. I got 'conflicts: 8 shift/reduce'
-			yyVAL.strs = []string{yyDollar[1].str, yyDollar[2].str}
+			yyVAL.ifaceUnion = []string{yyDollar[1].str, yyDollar[2].str}
 		}
 	case 568:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.strs = []string{yyDollar[1].str, yyDollar[2].str, yyDollar[3].str}
+			yyVAL.ifaceUnion = []string{yyDollar[1].str, yyDollar[2].str, yyDollar[3].str}
 		}
 	case 569:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		{
-			yyVAL.strs = []string{yyDollar[1].str, yyDollar[2].str, yyDollar[3].str, yyDollar[4].str}
+			yyVAL.ifaceUnion = []string{yyDollar[1].str, yyDollar[2].str, yyDollar[3].str, yyDollar[4].str}
 		}
 	case 570:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -8159,32 +8477,32 @@ yydefault:
 	case 577:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.selectExprs = SelectExprs{yyDollar[1].selectExpr}
+			yyVAL.ifaceUnion = SelectExprs{yyDollar[1].selectExprUnion()}
 		}
 	case 578:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.selectExprs = append(yyVAL.selectExprs, yyDollar[3].selectExpr)
+			yyVAL.ifaceUnion = append(yyVAL.selectExprsUnion(), yyDollar[3].selectExprUnion())
 		}
 	case 579:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.selectExpr = &StarExpr{}
+			yyVAL.ifaceUnion = &StarExpr{}
 		}
 	case 580:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.selectExpr = &AliasedExpr{Expr: yyDollar[1].expr, As: yyDollar[2].colIdent}
+			yyVAL.ifaceUnion = &AliasedExpr{Expr: yyDollar[1].exprUnion(), As: yyDollar[2].colIdent}
 		}
 	case 581:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.selectExpr = &StarExpr{TableName: TableName{Name: yyDollar[1].tableIdent}}
+			yyVAL.ifaceUnion = &StarExpr{TableName: TableName{Name: yyDollar[1].tableIdent}}
 		}
 	case 582:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		{
-			yyVAL.selectExpr = &StarExpr{TableName: TableName{Qualifier: yyDollar[1].tableIdent, Name: yyDollar[3].tableIdent}}
+			yyVAL.ifaceUnion = &StarExpr{TableName: TableName{Qualifier: yyDollar[1].tableIdent, Name: yyDollar[3].tableIdent}}
 		}
 	case 583:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -8209,112 +8527,112 @@ yydefault:
 	case 588:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		{
-			yyVAL.tableExprs = TableExprs{&AliasedTableExpr{Expr: TableName{Name: NewTableIdent("dual")}}}
+			yyVAL.ifaceUnion = TableExprs{&AliasedTableExpr{Expr: TableName{Name: NewTableIdent("dual")}}}
 		}
 	case 589:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.tableExprs = yyDollar[2].tableExprs
+			yyVAL.ifaceUnion = yyDollar[2].tableExprsUnion()
 		}
 	case 590:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.tableExprs = TableExprs{yyDollar[1].tableExpr}
+			yyVAL.ifaceUnion = TableExprs{yyDollar[1].tableExprUnion()}
 		}
 	case 591:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.tableExprs = append(yyVAL.tableExprs, yyDollar[3].tableExpr)
+			yyVAL.ifaceUnion = append(yyVAL.tableExprsUnion(), yyDollar[3].tableExprUnion())
 		}
 	case 594:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.tableExpr = yyDollar[1].aliasedTableName
+			yyVAL.ifaceUnion = yyDollar[1].aliasedTableNameUnion()
 		}
 	case 595:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.tableExpr = &AliasedTableExpr{Expr: yyDollar[1].derivedTable, As: yyDollar[3].tableIdent}
+			yyVAL.ifaceUnion = &AliasedTableExpr{Expr: yyDollar[1].derivedTableUnion(), As: yyDollar[3].tableIdent}
 		}
 	case 596:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.tableExpr = &ParenTableExpr{Exprs: yyDollar[2].tableExprs}
+			yyVAL.ifaceUnion = &ParenTableExpr{Exprs: yyDollar[2].tableExprsUnion()}
 		}
 	case 597:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.derivedTable = &DerivedTable{yyDollar[2].selStmt}
+			yyVAL.ifaceUnion = &DerivedTable{yyDollar[2].selStmtUnion()}
 		}
 	case 598:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.aliasedTableName = &AliasedTableExpr{Expr: yyDollar[1].tableName, As: yyDollar[2].tableIdent, Hints: yyDollar[3].indexHints}
+			yyVAL.ifaceUnion = &AliasedTableExpr{Expr: yyDollar[1].tableName, As: yyDollar[2].tableIdent, Hints: yyDollar[3].indexHintsUnion()}
 		}
 	case 599:
 		yyDollar = yyS[yypt-7 : yypt+1]
 		{
-			yyVAL.aliasedTableName = &AliasedTableExpr{Expr: yyDollar[1].tableName, Partitions: yyDollar[4].partitions, As: yyDollar[6].tableIdent, Hints: yyDollar[7].indexHints}
+			yyVAL.ifaceUnion = &AliasedTableExpr{Expr: yyDollar[1].tableName, Partitions: yyDollar[4].partitionsUnion(), As: yyDollar[6].tableIdent, Hints: yyDollar[7].indexHintsUnion()}
 		}
 	case 600:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		{
-			yyVAL.columns = nil
+			yyVAL.ifaceUnion = nil
 		}
 	case 601:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.columns = yyDollar[2].columns
+			yyVAL.ifaceUnion = yyDollar[2].columnsUnion()
 		}
 	case 602:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.columns = Columns{yyDollar[1].colIdent}
+			yyVAL.ifaceUnion = Columns{yyDollar[1].colIdent}
 		}
 	case 603:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.columns = append(yyVAL.columns, yyDollar[3].colIdent)
+			yyVAL.ifaceUnion = append(yyVAL.columnsUnion(), yyDollar[3].colIdent)
 		}
 	case 604:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.partitions = Partitions{yyDollar[1].colIdent}
+			yyVAL.ifaceUnion = Partitions{yyDollar[1].colIdent}
 		}
 	case 605:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.partitions = append(yyVAL.partitions, yyDollar[3].colIdent)
+			yyVAL.ifaceUnion = append(yyVAL.partitionsUnion(), yyDollar[3].colIdent)
 		}
 	case 606:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		{
-			yyVAL.tableExpr = &JoinTableExpr{LeftExpr: yyDollar[1].tableExpr, Join: yyDollar[2].joinType, RightExpr: yyDollar[3].tableExpr, Condition: yyDollar[4].joinCondition}
+			yyVAL.ifaceUnion = &JoinTableExpr{LeftExpr: yyDollar[1].tableExprUnion(), Join: yyDollar[2].joinTypeUnion(), RightExpr: yyDollar[3].tableExprUnion(), Condition: yyDollar[4].joinCondition}
 		}
 	case 607:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		{
-			yyVAL.tableExpr = &JoinTableExpr{LeftExpr: yyDollar[1].tableExpr, Join: yyDollar[2].joinType, RightExpr: yyDollar[3].tableExpr, Condition: yyDollar[4].joinCondition}
+			yyVAL.ifaceUnion = &JoinTableExpr{LeftExpr: yyDollar[1].tableExprUnion(), Join: yyDollar[2].joinTypeUnion(), RightExpr: yyDollar[3].tableExprUnion(), Condition: yyDollar[4].joinCondition}
 		}
 	case 608:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		{
-			yyVAL.tableExpr = &JoinTableExpr{LeftExpr: yyDollar[1].tableExpr, Join: yyDollar[2].joinType, RightExpr: yyDollar[3].tableExpr, Condition: yyDollar[4].joinCondition}
+			yyVAL.ifaceUnion = &JoinTableExpr{LeftExpr: yyDollar[1].tableExprUnion(), Join: yyDollar[2].joinTypeUnion(), RightExpr: yyDollar[3].tableExprUnion(), Condition: yyDollar[4].joinCondition}
 		}
 	case 609:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.tableExpr = &JoinTableExpr{LeftExpr: yyDollar[1].tableExpr, Join: yyDollar[2].joinType, RightExpr: yyDollar[3].tableExpr}
+			yyVAL.ifaceUnion = &JoinTableExpr{LeftExpr: yyDollar[1].tableExprUnion(), Join: yyDollar[2].joinTypeUnion(), RightExpr: yyDollar[3].tableExprUnion()}
 		}
 	case 610:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.joinCondition = JoinCondition{On: yyDollar[2].expr}
+			yyVAL.joinCondition = JoinCondition{On: yyDollar[2].exprUnion()}
 		}
 	case 611:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		{
-			yyVAL.joinCondition = JoinCondition{Using: yyDollar[3].columns}
+			yyVAL.joinCondition = JoinCondition{Using: yyDollar[3].columnsUnion()}
 		}
 	case 612:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -8334,7 +8652,7 @@ yydefault:
 	case 615:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.joinCondition = JoinCondition{On: yyDollar[2].expr}
+			yyVAL.joinCondition = JoinCondition{On: yyDollar[2].exprUnion()}
 		}
 	case 616:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -8369,55 +8687,55 @@ yydefault:
 	case 623:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.joinType = NormalJoinType
+			yyVAL.numericUnion = int(NormalJoinType)
 		}
 	case 624:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.joinType = NormalJoinType
+			yyVAL.numericUnion = int(NormalJoinType)
 		}
 	case 625:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.joinType = NormalJoinType
+			yyVAL.numericUnion = int(NormalJoinType)
 		}
 	case 626:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.joinType = StraightJoinType
+			yyVAL.numericUnion = int(StraightJoinType)
 		}
 	case 627:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.joinType = LeftJoinType
+			yyVAL.numericUnion = int(LeftJoinType)
 		}
 	case 628:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.joinType = LeftJoinType
+			yyVAL.numericUnion = int(LeftJoinType)
 		}
 	case 629:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.joinType = RightJoinType
+			yyVAL.numericUnion = int(RightJoinType)
 		}
 	case 630:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.joinType = RightJoinType
+			yyVAL.numericUnion = int(RightJoinType)
 		}
 	case 631:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.joinType = NaturalJoinType
+			yyVAL.numericUnion = int(NaturalJoinType)
 		}
 	case 632:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			if yyDollar[2].joinType == LeftJoinType {
-				yyVAL.joinType = NaturalLeftJoinType
+			if yyDollar[2].joinTypeUnion() == LeftJoinType {
+				yyVAL.numericUnion = int(NaturalLeftJoinType)
 			} else {
-				yyVAL.joinType = NaturalRightJoinType
+				yyVAL.numericUnion = int(NaturalRightJoinType)
 			}
 		}
 	case 633:
@@ -8448,77 +8766,77 @@ yydefault:
 	case 638:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		{
-			yyVAL.indexHints = nil
+			yyVAL.ifaceUnion = nil
 		}
 	case 639:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		{
-			yyVAL.indexHints = &IndexHints{Type: UseOp, Indexes: yyDollar[4].columns}
+			yyVAL.ifaceUnion = &IndexHints{Type: UseOp, Indexes: yyDollar[4].columnsUnion()}
 		}
 	case 640:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		{
-			yyVAL.indexHints = &IndexHints{Type: UseOp}
+			yyVAL.ifaceUnion = &IndexHints{Type: UseOp}
 		}
 	case 641:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		{
-			yyVAL.indexHints = &IndexHints{Type: IgnoreOp, Indexes: yyDollar[4].columns}
+			yyVAL.ifaceUnion = &IndexHints{Type: IgnoreOp, Indexes: yyDollar[4].columnsUnion()}
 		}
 	case 642:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		{
-			yyVAL.indexHints = &IndexHints{Type: ForceOp, Indexes: yyDollar[4].columns}
+			yyVAL.ifaceUnion = &IndexHints{Type: ForceOp, Indexes: yyDollar[4].columnsUnion()}
 		}
 	case 643:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		{
-			yyVAL.expr = nil
+			yyVAL.ifaceUnion = nil
 		}
 	case 644:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.expr = yyDollar[2].expr
+			yyVAL.ifaceUnion = yyDollar[2].exprUnion()
 		}
 	case 645:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.expr = yyDollar[1].expr
+			yyVAL.ifaceUnion = yyDollar[1].exprUnion()
 		}
 	case 646:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.expr = &AndExpr{Left: yyDollar[1].expr, Right: yyDollar[3].expr}
+			yyVAL.ifaceUnion = &AndExpr{Left: yyDollar[1].exprUnion(), Right: yyDollar[3].exprUnion()}
 		}
 	case 647:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.expr = &OrExpr{Left: yyDollar[1].expr, Right: yyDollar[3].expr}
+			yyVAL.ifaceUnion = &OrExpr{Left: yyDollar[1].exprUnion(), Right: yyDollar[3].exprUnion()}
 		}
 	case 648:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.expr = &XorExpr{Left: yyDollar[1].expr, Right: yyDollar[3].expr}
+			yyVAL.ifaceUnion = &XorExpr{Left: yyDollar[1].exprUnion(), Right: yyDollar[3].exprUnion()}
 		}
 	case 649:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.expr = &NotExpr{Expr: yyDollar[2].expr}
+			yyVAL.ifaceUnion = &NotExpr{Expr: yyDollar[2].exprUnion()}
 		}
 	case 650:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.expr = &IsExpr{Operator: yyDollar[3].isExprOperator, Expr: yyDollar[1].expr}
+			yyVAL.ifaceUnion = &IsExpr{Operator: yyDollar[3].isExprOperatorUnion(), Expr: yyDollar[1].exprUnion()}
 		}
 	case 651:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.expr = yyDollar[1].expr
+			yyVAL.ifaceUnion = yyDollar[1].exprUnion()
 		}
 	case 652:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.expr = &Default{ColName: yyDollar[2].str}
+			yyVAL.ifaceUnion = &Default{ColName: yyDollar[2].str}
 		}
 	case 653:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -8533,312 +8851,312 @@ yydefault:
 	case 655:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.boolVal = BoolVal(true)
+			yyVAL.boolUnion = true
 		}
 	case 656:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.boolVal = BoolVal(false)
+			yyVAL.boolUnion = false
 		}
 	case 657:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.expr = &ComparisonExpr{Left: yyDollar[1].expr, Operator: yyDollar[2].comparisonExprOperator, Right: yyDollar[3].expr}
+			yyVAL.ifaceUnion = &ComparisonExpr{Left: yyDollar[1].exprUnion(), Operator: yyDollar[2].comparisonExprOperatorUnion(), Right: yyDollar[3].exprUnion()}
 		}
 	case 658:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.expr = &ComparisonExpr{Left: yyDollar[1].expr, Operator: InOp, Right: yyDollar[3].colTuple}
+			yyVAL.ifaceUnion = &ComparisonExpr{Left: yyDollar[1].exprUnion(), Operator: InOp, Right: yyDollar[3].colTupleUnion()}
 		}
 	case 659:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		{
-			yyVAL.expr = &ComparisonExpr{Left: yyDollar[1].expr, Operator: NotInOp, Right: yyDollar[4].colTuple}
+			yyVAL.ifaceUnion = &ComparisonExpr{Left: yyDollar[1].exprUnion(), Operator: NotInOp, Right: yyDollar[4].colTupleUnion()}
 		}
 	case 660:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		{
-			yyVAL.expr = &ComparisonExpr{Left: yyDollar[1].expr, Operator: LikeOp, Right: yyDollar[3].expr, Escape: yyDollar[4].expr}
+			yyVAL.ifaceUnion = &ComparisonExpr{Left: yyDollar[1].exprUnion(), Operator: LikeOp, Right: yyDollar[3].exprUnion(), Escape: yyDollar[4].exprUnion()}
 		}
 	case 661:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		{
-			yyVAL.expr = &ComparisonExpr{Left: yyDollar[1].expr, Operator: NotLikeOp, Right: yyDollar[4].expr, Escape: yyDollar[5].expr}
+			yyVAL.ifaceUnion = &ComparisonExpr{Left: yyDollar[1].exprUnion(), Operator: NotLikeOp, Right: yyDollar[4].exprUnion(), Escape: yyDollar[5].exprUnion()}
 		}
 	case 662:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.expr = &ComparisonExpr{Left: yyDollar[1].expr, Operator: RegexpOp, Right: yyDollar[3].expr}
+			yyVAL.ifaceUnion = &ComparisonExpr{Left: yyDollar[1].exprUnion(), Operator: RegexpOp, Right: yyDollar[3].exprUnion()}
 		}
 	case 663:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		{
-			yyVAL.expr = &ComparisonExpr{Left: yyDollar[1].expr, Operator: NotRegexpOp, Right: yyDollar[4].expr}
+			yyVAL.ifaceUnion = &ComparisonExpr{Left: yyDollar[1].exprUnion(), Operator: NotRegexpOp, Right: yyDollar[4].exprUnion()}
 		}
 	case 664:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		{
-			yyVAL.expr = &RangeCond{Left: yyDollar[1].expr, Operator: BetweenOp, From: yyDollar[3].expr, To: yyDollar[5].expr}
+			yyVAL.ifaceUnion = &RangeCond{Left: yyDollar[1].exprUnion(), Operator: BetweenOp, From: yyDollar[3].exprUnion(), To: yyDollar[5].exprUnion()}
 		}
 	case 665:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		{
-			yyVAL.expr = &RangeCond{Left: yyDollar[1].expr, Operator: NotBetweenOp, From: yyDollar[4].expr, To: yyDollar[6].expr}
+			yyVAL.ifaceUnion = &RangeCond{Left: yyDollar[1].exprUnion(), Operator: NotBetweenOp, From: yyDollar[4].exprUnion(), To: yyDollar[6].exprUnion()}
 		}
 	case 666:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.expr = &ExistsExpr{Subquery: yyDollar[2].subquery}
+			yyVAL.ifaceUnion = &ExistsExpr{Subquery: yyDollar[2].subqueryUnion()}
 		}
 	case 667:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.isExprOperator = IsNullOp
+			yyVAL.numericUnion = int(IsNullOp)
 		}
 	case 668:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.isExprOperator = IsNotNullOp
+			yyVAL.numericUnion = int(IsNotNullOp)
 		}
 	case 669:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.isExprOperator = IsTrueOp
+			yyVAL.numericUnion = int(IsTrueOp)
 		}
 	case 670:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.isExprOperator = IsNotTrueOp
+			yyVAL.numericUnion = int(IsNotTrueOp)
 		}
 	case 671:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.isExprOperator = IsFalseOp
+			yyVAL.numericUnion = int(IsFalseOp)
 		}
 	case 672:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.isExprOperator = IsNotFalseOp
+			yyVAL.numericUnion = int(IsNotFalseOp)
 		}
 	case 673:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.comparisonExprOperator = EqualOp
+			yyVAL.numericUnion = int(EqualOp)
 		}
 	case 674:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.comparisonExprOperator = LessThanOp
+			yyVAL.numericUnion = int(LessThanOp)
 		}
 	case 675:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.comparisonExprOperator = GreaterThanOp
+			yyVAL.numericUnion = int(GreaterThanOp)
 		}
 	case 676:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.comparisonExprOperator = LessEqualOp
+			yyVAL.numericUnion = int(LessEqualOp)
 		}
 	case 677:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.comparisonExprOperator = GreaterEqualOp
+			yyVAL.numericUnion = int(GreaterEqualOp)
 		}
 	case 678:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.comparisonExprOperator = NotEqualOp
+			yyVAL.numericUnion = int(NotEqualOp)
 		}
 	case 679:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.comparisonExprOperator = NullSafeEqualOp
+			yyVAL.numericUnion = int(NullSafeEqualOp)
 		}
 	case 680:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		{
-			yyVAL.expr = nil
+			yyVAL.ifaceUnion = nil
 		}
 	case 681:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.expr = yyDollar[2].expr
+			yyVAL.ifaceUnion = yyDollar[2].exprUnion()
 		}
 	case 682:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.colTuple = yyDollar[1].valTuple
+			yyVAL.ifaceUnion = yyDollar[1].valTupleUnion()
 		}
 	case 683:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.colTuple = yyDollar[1].subquery
+			yyVAL.ifaceUnion = yyDollar[1].subqueryUnion()
 		}
 	case 684:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.colTuple = ListArg(yyDollar[1].str)
+			yyVAL.ifaceUnion = ListArg(yyDollar[1].str)
 		}
 	case 685:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.subquery = &Subquery{yyDollar[2].selStmt}
+			yyVAL.ifaceUnion = &Subquery{yyDollar[2].selStmtUnion()}
 		}
 	case 686:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.exprs = Exprs{yyDollar[1].expr}
+			yyVAL.ifaceUnion = Exprs{yyDollar[1].exprUnion()}
 		}
 	case 687:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.exprs = append(yyDollar[1].exprs, yyDollar[3].expr)
+			yyVAL.ifaceUnion = append(yyDollar[1].exprsUnion(), yyDollar[3].exprUnion())
 		}
 	case 688:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.expr = yyDollar[1].expr
+			yyVAL.ifaceUnion = yyDollar[1].exprUnion()
 		}
 	case 689:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.expr = yyDollar[1].boolVal
+			yyVAL.ifaceUnion = yyDollar[1].boolValUnion()
 		}
 	case 690:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.expr = yyDollar[1].colName
+			yyVAL.ifaceUnion = yyDollar[1].colNameUnion()
 		}
 	case 691:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.expr = yyDollar[1].expr
+			yyVAL.ifaceUnion = yyDollar[1].exprUnion()
 		}
 	case 692:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.expr = yyDollar[1].subquery
+			yyVAL.ifaceUnion = yyDollar[1].subqueryUnion()
 		}
 	case 693:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.expr = &BinaryExpr{Left: yyDollar[1].expr, Operator: BitAndOp, Right: yyDollar[3].expr}
+			yyVAL.ifaceUnion = &BinaryExpr{Left: yyDollar[1].exprUnion(), Operator: BitAndOp, Right: yyDollar[3].exprUnion()}
 		}
 	case 694:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.expr = &BinaryExpr{Left: yyDollar[1].expr, Operator: BitOrOp, Right: yyDollar[3].expr}
+			yyVAL.ifaceUnion = &BinaryExpr{Left: yyDollar[1].exprUnion(), Operator: BitOrOp, Right: yyDollar[3].exprUnion()}
 		}
 	case 695:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.expr = &BinaryExpr{Left: yyDollar[1].expr, Operator: BitXorOp, Right: yyDollar[3].expr}
+			yyVAL.ifaceUnion = &BinaryExpr{Left: yyDollar[1].exprUnion(), Operator: BitXorOp, Right: yyDollar[3].exprUnion()}
 		}
 	case 696:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.expr = &BinaryExpr{Left: yyDollar[1].expr, Operator: PlusOp, Right: yyDollar[3].expr}
+			yyVAL.ifaceUnion = &BinaryExpr{Left: yyDollar[1].exprUnion(), Operator: PlusOp, Right: yyDollar[3].exprUnion()}
 		}
 	case 697:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.expr = &BinaryExpr{Left: yyDollar[1].expr, Operator: MinusOp, Right: yyDollar[3].expr}
+			yyVAL.ifaceUnion = &BinaryExpr{Left: yyDollar[1].exprUnion(), Operator: MinusOp, Right: yyDollar[3].exprUnion()}
 		}
 	case 698:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.expr = &BinaryExpr{Left: yyDollar[1].expr, Operator: MultOp, Right: yyDollar[3].expr}
+			yyVAL.ifaceUnion = &BinaryExpr{Left: yyDollar[1].exprUnion(), Operator: MultOp, Right: yyDollar[3].exprUnion()}
 		}
 	case 699:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.expr = &BinaryExpr{Left: yyDollar[1].expr, Operator: DivOp, Right: yyDollar[3].expr}
+			yyVAL.ifaceUnion = &BinaryExpr{Left: yyDollar[1].exprUnion(), Operator: DivOp, Right: yyDollar[3].exprUnion()}
 		}
 	case 700:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.expr = &BinaryExpr{Left: yyDollar[1].expr, Operator: IntDivOp, Right: yyDollar[3].expr}
+			yyVAL.ifaceUnion = &BinaryExpr{Left: yyDollar[1].exprUnion(), Operator: IntDivOp, Right: yyDollar[3].exprUnion()}
 		}
 	case 701:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.expr = &BinaryExpr{Left: yyDollar[1].expr, Operator: ModOp, Right: yyDollar[3].expr}
+			yyVAL.ifaceUnion = &BinaryExpr{Left: yyDollar[1].exprUnion(), Operator: ModOp, Right: yyDollar[3].exprUnion()}
 		}
 	case 702:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.expr = &BinaryExpr{Left: yyDollar[1].expr, Operator: ModOp, Right: yyDollar[3].expr}
+			yyVAL.ifaceUnion = &BinaryExpr{Left: yyDollar[1].exprUnion(), Operator: ModOp, Right: yyDollar[3].exprUnion()}
 		}
 	case 703:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.expr = &BinaryExpr{Left: yyDollar[1].expr, Operator: ShiftLeftOp, Right: yyDollar[3].expr}
+			yyVAL.ifaceUnion = &BinaryExpr{Left: yyDollar[1].exprUnion(), Operator: ShiftLeftOp, Right: yyDollar[3].exprUnion()}
 		}
 	case 704:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.expr = &BinaryExpr{Left: yyDollar[1].expr, Operator: ShiftRightOp, Right: yyDollar[3].expr}
+			yyVAL.ifaceUnion = &BinaryExpr{Left: yyDollar[1].exprUnion(), Operator: ShiftRightOp, Right: yyDollar[3].exprUnion()}
 		}
 	case 705:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.expr = &BinaryExpr{Left: yyDollar[1].colName, Operator: JSONExtractOp, Right: yyDollar[3].expr}
+			yyVAL.ifaceUnion = &BinaryExpr{Left: yyDollar[1].colNameUnion(), Operator: JSONExtractOp, Right: yyDollar[3].exprUnion()}
 		}
 	case 706:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.expr = &BinaryExpr{Left: yyDollar[1].colName, Operator: JSONUnquoteExtractOp, Right: yyDollar[3].expr}
+			yyVAL.ifaceUnion = &BinaryExpr{Left: yyDollar[1].colNameUnion(), Operator: JSONUnquoteExtractOp, Right: yyDollar[3].exprUnion()}
 		}
 	case 707:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.expr = &CollateExpr{Expr: yyDollar[1].expr, Charset: yyDollar[3].str}
+			yyVAL.ifaceUnion = &CollateExpr{Expr: yyDollar[1].exprUnion(), Charset: yyDollar[3].str}
 		}
 	case 708:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.expr = &UnaryExpr{Operator: BinaryOp, Expr: yyDollar[2].expr}
+			yyVAL.ifaceUnion = &UnaryExpr{Operator: BinaryOp, Expr: yyDollar[2].exprUnion()}
 		}
 	case 709:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.expr = &UnaryExpr{Operator: UBinaryOp, Expr: yyDollar[2].expr}
+			yyVAL.ifaceUnion = &UnaryExpr{Operator: UBinaryOp, Expr: yyDollar[2].exprUnion()}
 		}
 	case 710:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.expr = &UnaryExpr{Operator: Utf8Op, Expr: yyDollar[2].expr}
+			yyVAL.ifaceUnion = &UnaryExpr{Operator: Utf8Op, Expr: yyDollar[2].exprUnion()}
 		}
 	case 711:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.expr = &UnaryExpr{Operator: Utf8mb4Op, Expr: yyDollar[2].expr}
+			yyVAL.ifaceUnion = &UnaryExpr{Operator: Utf8mb4Op, Expr: yyDollar[2].exprUnion()}
 		}
 	case 712:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.expr = &UnaryExpr{Operator: Latin1Op, Expr: yyDollar[2].expr}
+			yyVAL.ifaceUnion = &UnaryExpr{Operator: Latin1Op, Expr: yyDollar[2].exprUnion()}
 		}
 	case 713:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.expr = yyDollar[2].expr
+			yyVAL.ifaceUnion = yyDollar[2].exprUnion()
 		}
 	case 714:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.expr = handleUnaryMinus(yyDollar[2].expr)
+			yyVAL.ifaceUnion = handleUnaryMinus(yyDollar[2].exprUnion())
 		}
 	case 715:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.expr = &UnaryExpr{Operator: TildaOp, Expr: yyDollar[2].expr}
+			yyVAL.ifaceUnion = &UnaryExpr{Operator: TildaOp, Expr: yyDollar[2].exprUnion()}
 		}
 	case 716:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.expr = &UnaryExpr{Operator: BangOp, Expr: yyDollar[2].expr}
+			yyVAL.ifaceUnion = &UnaryExpr{Operator: BangOp, Expr: yyDollar[2].exprUnion()}
 		}
 	case 717:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -8847,237 +9165,237 @@ yydefault:
 			// as a function. If support is needed for that,
 			// we'll need to revisit this. The solution
 			// will be non-trivial because of grammar conflicts.
-			yyVAL.expr = &IntervalExpr{Expr: yyDollar[2].expr, Unit: yyDollar[3].colIdent.String()}
+			yyVAL.ifaceUnion = &IntervalExpr{Expr: yyDollar[2].exprUnion(), Unit: yyDollar[3].colIdent.String()}
 		}
 	case 722:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		{
-			yyVAL.expr = &FuncExpr{Name: yyDollar[1].colIdent, Exprs: yyDollar[3].selectExprs}
+			yyVAL.ifaceUnion = &FuncExpr{Name: yyDollar[1].colIdent, Exprs: yyDollar[3].selectExprsUnion()}
 		}
 	case 723:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		{
-			yyVAL.expr = &FuncExpr{Name: yyDollar[1].colIdent, Distinct: true, Exprs: yyDollar[4].selectExprs}
+			yyVAL.ifaceUnion = &FuncExpr{Name: yyDollar[1].colIdent, Distinct: true, Exprs: yyDollar[4].selectExprsUnion()}
 		}
 	case 724:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		{
-			yyVAL.expr = &FuncExpr{Name: yyDollar[1].colIdent, Distinct: true, Exprs: yyDollar[4].selectExprs}
+			yyVAL.ifaceUnion = &FuncExpr{Name: yyDollar[1].colIdent, Distinct: true, Exprs: yyDollar[4].selectExprsUnion()}
 		}
 	case 725:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		{
-			yyVAL.expr = &FuncExpr{Qualifier: yyDollar[1].tableIdent, Name: yyDollar[3].colIdent, Exprs: yyDollar[5].selectExprs}
+			yyVAL.ifaceUnion = &FuncExpr{Qualifier: yyDollar[1].tableIdent, Name: yyDollar[3].colIdent, Exprs: yyDollar[5].selectExprsUnion()}
 		}
 	case 726:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		{
-			yyVAL.expr = &FuncExpr{Name: NewColIdent("left"), Exprs: yyDollar[3].selectExprs}
+			yyVAL.ifaceUnion = &FuncExpr{Name: NewColIdent("left"), Exprs: yyDollar[3].selectExprsUnion()}
 		}
 	case 727:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		{
-			yyVAL.expr = &FuncExpr{Name: NewColIdent("right"), Exprs: yyDollar[3].selectExprs}
+			yyVAL.ifaceUnion = &FuncExpr{Name: NewColIdent("right"), Exprs: yyDollar[3].selectExprsUnion()}
 		}
 	case 728:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		{
-			yyVAL.expr = &ConvertExpr{Expr: yyDollar[3].expr, Type: yyDollar[5].convertType}
+			yyVAL.ifaceUnion = &ConvertExpr{Expr: yyDollar[3].exprUnion(), Type: yyDollar[5].convertTypeUnion()}
 		}
 	case 729:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		{
-			yyVAL.expr = &ConvertExpr{Expr: yyDollar[3].expr, Type: yyDollar[5].convertType}
+			yyVAL.ifaceUnion = &ConvertExpr{Expr: yyDollar[3].exprUnion(), Type: yyDollar[5].convertTypeUnion()}
 		}
 	case 730:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		{
-			yyVAL.expr = &ConvertUsingExpr{Expr: yyDollar[3].expr, Type: yyDollar[5].str}
+			yyVAL.ifaceUnion = &ConvertUsingExpr{Expr: yyDollar[3].exprUnion(), Type: yyDollar[5].str}
 		}
 	case 731:
 		yyDollar = yyS[yypt-8 : yypt+1]
 		{
-			yyVAL.expr = &SubstrExpr{Name: yyDollar[3].colName, From: yyDollar[5].expr, To: yyDollar[7].expr}
+			yyVAL.ifaceUnion = &SubstrExpr{Name: yyDollar[3].colNameUnion(), From: yyDollar[5].exprUnion(), To: yyDollar[7].exprUnion()}
 		}
 	case 732:
 		yyDollar = yyS[yypt-8 : yypt+1]
 		{
-			yyVAL.expr = &SubstrExpr{Name: yyDollar[3].colName, From: yyDollar[5].expr, To: yyDollar[7].expr}
+			yyVAL.ifaceUnion = &SubstrExpr{Name: yyDollar[3].colNameUnion(), From: yyDollar[5].exprUnion(), To: yyDollar[7].exprUnion()}
 		}
 	case 733:
 		yyDollar = yyS[yypt-8 : yypt+1]
 		{
-			yyVAL.expr = &SubstrExpr{StrVal: NewStrLiteral(yyDollar[3].str), From: yyDollar[5].expr, To: yyDollar[7].expr}
+			yyVAL.ifaceUnion = &SubstrExpr{StrVal: NewStrLiteral(yyDollar[3].str), From: yyDollar[5].exprUnion(), To: yyDollar[7].exprUnion()}
 		}
 	case 734:
 		yyDollar = yyS[yypt-8 : yypt+1]
 		{
-			yyVAL.expr = &SubstrExpr{StrVal: NewStrLiteral(yyDollar[3].str), From: yyDollar[5].expr, To: yyDollar[7].expr}
+			yyVAL.ifaceUnion = &SubstrExpr{StrVal: NewStrLiteral(yyDollar[3].str), From: yyDollar[5].exprUnion(), To: yyDollar[7].exprUnion()}
 		}
 	case 735:
 		yyDollar = yyS[yypt-9 : yypt+1]
 		{
-			yyVAL.expr = &MatchExpr{Columns: yyDollar[3].selectExprs, Expr: yyDollar[7].expr, Option: yyDollar[8].matchExprOption}
+			yyVAL.ifaceUnion = &MatchExpr{Columns: yyDollar[3].selectExprsUnion(), Expr: yyDollar[7].exprUnion(), Option: yyDollar[8].matchExprOptionUnion()}
 		}
 	case 736:
 		yyDollar = yyS[yypt-8 : yypt+1]
 		{
-			yyVAL.expr = &GroupConcatExpr{Distinct: yyDollar[3].boolean, Exprs: yyDollar[4].selectExprs, OrderBy: yyDollar[5].orderBy, Separator: yyDollar[6].str, Limit: yyDollar[7].limit}
+			yyVAL.ifaceUnion = &GroupConcatExpr{Distinct: yyDollar[3].booleanUnion(), Exprs: yyDollar[4].selectExprsUnion(), OrderBy: yyDollar[5].orderByUnion(), Separator: yyDollar[6].str, Limit: yyDollar[7].limitUnion()}
 		}
 	case 737:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		{
-			yyVAL.expr = &CaseExpr{Expr: yyDollar[2].expr, Whens: yyDollar[3].whens, Else: yyDollar[4].expr}
+			yyVAL.ifaceUnion = &CaseExpr{Expr: yyDollar[2].exprUnion(), Whens: yyDollar[3].whensUnion(), Else: yyDollar[4].exprUnion()}
 		}
 	case 738:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		{
-			yyVAL.expr = &ValuesFuncExpr{Name: yyDollar[3].colName}
+			yyVAL.ifaceUnion = &ValuesFuncExpr{Name: yyDollar[3].colNameUnion()}
 		}
 	case 739:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.expr = &FuncExpr{Name: NewColIdent("current_timestamp")}
+			yyVAL.ifaceUnion = &FuncExpr{Name: NewColIdent("current_timestamp")}
 		}
 	case 740:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.expr = &FuncExpr{Name: NewColIdent("utc_timestamp")}
+			yyVAL.ifaceUnion = &FuncExpr{Name: NewColIdent("utc_timestamp")}
 		}
 	case 741:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.expr = &FuncExpr{Name: NewColIdent("utc_time")}
+			yyVAL.ifaceUnion = &FuncExpr{Name: NewColIdent("utc_time")}
 		}
 	case 742:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.expr = &FuncExpr{Name: NewColIdent("utc_date")}
+			yyVAL.ifaceUnion = &FuncExpr{Name: NewColIdent("utc_date")}
 		}
 	case 743:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.expr = &FuncExpr{Name: NewColIdent("localtime")}
+			yyVAL.ifaceUnion = &FuncExpr{Name: NewColIdent("localtime")}
 		}
 	case 744:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.expr = &FuncExpr{Name: NewColIdent("localtimestamp")}
+			yyVAL.ifaceUnion = &FuncExpr{Name: NewColIdent("localtimestamp")}
 		}
 	case 745:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.expr = &FuncExpr{Name: NewColIdent("current_date")}
+			yyVAL.ifaceUnion = &FuncExpr{Name: NewColIdent("current_date")}
 		}
 	case 746:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.expr = &FuncExpr{Name: NewColIdent("current_time")}
+			yyVAL.ifaceUnion = &FuncExpr{Name: NewColIdent("current_time")}
 		}
 	case 747:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.expr = &CurTimeFuncExpr{Name: NewColIdent("current_timestamp"), Fsp: yyDollar[2].expr}
+			yyVAL.ifaceUnion = &CurTimeFuncExpr{Name: NewColIdent("current_timestamp"), Fsp: yyDollar[2].exprUnion()}
 		}
 	case 748:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.expr = &CurTimeFuncExpr{Name: NewColIdent("utc_timestamp"), Fsp: yyDollar[2].expr}
+			yyVAL.ifaceUnion = &CurTimeFuncExpr{Name: NewColIdent("utc_timestamp"), Fsp: yyDollar[2].exprUnion()}
 		}
 	case 749:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.expr = &CurTimeFuncExpr{Name: NewColIdent("utc_time"), Fsp: yyDollar[2].expr}
+			yyVAL.ifaceUnion = &CurTimeFuncExpr{Name: NewColIdent("utc_time"), Fsp: yyDollar[2].exprUnion()}
 		}
 	case 750:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.expr = &CurTimeFuncExpr{Name: NewColIdent("localtime"), Fsp: yyDollar[2].expr}
+			yyVAL.ifaceUnion = &CurTimeFuncExpr{Name: NewColIdent("localtime"), Fsp: yyDollar[2].exprUnion()}
 		}
 	case 751:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.expr = &CurTimeFuncExpr{Name: NewColIdent("localtimestamp"), Fsp: yyDollar[2].expr}
+			yyVAL.ifaceUnion = &CurTimeFuncExpr{Name: NewColIdent("localtimestamp"), Fsp: yyDollar[2].exprUnion()}
 		}
 	case 752:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.expr = &CurTimeFuncExpr{Name: NewColIdent("current_time"), Fsp: yyDollar[2].expr}
+			yyVAL.ifaceUnion = &CurTimeFuncExpr{Name: NewColIdent("current_time"), Fsp: yyDollar[2].exprUnion()}
 		}
 	case 753:
 		yyDollar = yyS[yypt-8 : yypt+1]
 		{
-			yyVAL.expr = &TimestampFuncExpr{Name: string("timestampadd"), Unit: yyDollar[3].colIdent.String(), Expr1: yyDollar[5].expr, Expr2: yyDollar[7].expr}
+			yyVAL.ifaceUnion = &TimestampFuncExpr{Name: string("timestampadd"), Unit: yyDollar[3].colIdent.String(), Expr1: yyDollar[5].exprUnion(), Expr2: yyDollar[7].exprUnion()}
 		}
 	case 754:
 		yyDollar = yyS[yypt-8 : yypt+1]
 		{
-			yyVAL.expr = &TimestampFuncExpr{Name: string("timestampdiff"), Unit: yyDollar[3].colIdent.String(), Expr1: yyDollar[5].expr, Expr2: yyDollar[7].expr}
+			yyVAL.ifaceUnion = &TimestampFuncExpr{Name: string("timestampdiff"), Unit: yyDollar[3].colIdent.String(), Expr1: yyDollar[5].exprUnion(), Expr2: yyDollar[7].exprUnion()}
 		}
 	case 757:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.expr = yyDollar[2].expr
+			yyVAL.ifaceUnion = yyDollar[2].exprUnion()
 		}
 	case 758:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		{
-			yyVAL.expr = &FuncExpr{Name: NewColIdent("if"), Exprs: yyDollar[3].selectExprs}
+			yyVAL.ifaceUnion = &FuncExpr{Name: NewColIdent("if"), Exprs: yyDollar[3].selectExprsUnion()}
 		}
 	case 759:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		{
-			yyVAL.expr = &FuncExpr{Name: NewColIdent("database"), Exprs: yyDollar[3].selectExprs}
+			yyVAL.ifaceUnion = &FuncExpr{Name: NewColIdent("database"), Exprs: yyDollar[3].selectExprsUnion()}
 		}
 	case 760:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		{
-			yyVAL.expr = &FuncExpr{Name: NewColIdent("schema"), Exprs: yyDollar[3].selectExprs}
+			yyVAL.ifaceUnion = &FuncExpr{Name: NewColIdent("schema"), Exprs: yyDollar[3].selectExprsUnion()}
 		}
 	case 761:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		{
-			yyVAL.expr = &FuncExpr{Name: NewColIdent("mod"), Exprs: yyDollar[3].selectExprs}
+			yyVAL.ifaceUnion = &FuncExpr{Name: NewColIdent("mod"), Exprs: yyDollar[3].selectExprsUnion()}
 		}
 	case 762:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		{
-			yyVAL.expr = &FuncExpr{Name: NewColIdent("replace"), Exprs: yyDollar[3].selectExprs}
+			yyVAL.ifaceUnion = &FuncExpr{Name: NewColIdent("replace"), Exprs: yyDollar[3].selectExprsUnion()}
 		}
 	case 763:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		{
-			yyVAL.expr = &FuncExpr{Name: NewColIdent("substr"), Exprs: yyDollar[3].selectExprs}
+			yyVAL.ifaceUnion = &FuncExpr{Name: NewColIdent("substr"), Exprs: yyDollar[3].selectExprsUnion()}
 		}
 	case 764:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		{
-			yyVAL.expr = &FuncExpr{Name: NewColIdent("substr"), Exprs: yyDollar[3].selectExprs}
+			yyVAL.ifaceUnion = &FuncExpr{Name: NewColIdent("substr"), Exprs: yyDollar[3].selectExprsUnion()}
 		}
 	case 765:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		{
-			yyVAL.matchExprOption = NoOption
+			yyVAL.numericUnion = int(NoOption)
 		}
 	case 766:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.matchExprOption = BooleanModeOpt
+			yyVAL.numericUnion = int(BooleanModeOpt)
 		}
 	case 767:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		{
-			yyVAL.matchExprOption = NaturalLanguageModeOpt
+			yyVAL.numericUnion = int(NaturalLanguageModeOpt)
 		}
 	case 768:
 		yyDollar = yyS[yypt-7 : yypt+1]
 		{
-			yyVAL.matchExprOption = NaturalLanguageModeWithQueryExpansionOpt
+			yyVAL.numericUnion = int(NaturalLanguageModeWithQueryExpansionOpt)
 		}
 	case 769:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.matchExprOption = QueryExpansionOpt
+			yyVAL.numericUnion = int(QueryExpansionOpt)
 		}
 	case 770:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -9097,79 +9415,79 @@ yydefault:
 	case 773:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.convertType = &ConvertType{Type: string(yyDollar[1].str), Length: yyDollar[2].literal}
+			yyVAL.ifaceUnion = &ConvertType{Type: string(yyDollar[1].str), Length: yyDollar[2].literalUnion()}
 		}
 	case 774:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.convertType = &ConvertType{Type: string(yyDollar[1].str), Length: yyDollar[2].literal, Charset: yyDollar[3].str, Operator: CharacterSetOp}
+			yyVAL.ifaceUnion = &ConvertType{Type: string(yyDollar[1].str), Length: yyDollar[2].literalUnion(), Charset: yyDollar[3].str, Operator: CharacterSetOp}
 		}
 	case 775:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.convertType = &ConvertType{Type: string(yyDollar[1].str), Length: yyDollar[2].literal, Charset: string(yyDollar[3].colIdent.String())}
+			yyVAL.ifaceUnion = &ConvertType{Type: string(yyDollar[1].str), Length: yyDollar[2].literalUnion(), Charset: string(yyDollar[3].colIdent.String())}
 		}
 	case 776:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.convertType = &ConvertType{Type: string(yyDollar[1].str)}
+			yyVAL.ifaceUnion = &ConvertType{Type: string(yyDollar[1].str)}
 		}
 	case 777:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.convertType = &ConvertType{Type: string(yyDollar[1].str), Length: yyDollar[2].literal}
+			yyVAL.ifaceUnion = &ConvertType{Type: string(yyDollar[1].str), Length: yyDollar[2].literalUnion()}
 		}
 	case 778:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.convertType = &ConvertType{Type: string(yyDollar[1].str)}
-			yyVAL.convertType.Length = yyDollar[2].LengthScaleOption.Length
-			yyVAL.convertType.Scale = yyDollar[2].LengthScaleOption.Scale
+			yyVAL.ifaceUnion = &ConvertType{Type: string(yyDollar[1].str)}
+			yyVAL.convertTypeUnion().Length = yyDollar[2].LengthScaleOption.Length
+			yyVAL.convertTypeUnion().Scale = yyDollar[2].LengthScaleOption.Scale
 		}
 	case 779:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.convertType = &ConvertType{Type: string(yyDollar[1].str)}
+			yyVAL.ifaceUnion = &ConvertType{Type: string(yyDollar[1].str)}
 		}
 	case 780:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.convertType = &ConvertType{Type: string(yyDollar[1].str), Length: yyDollar[2].literal}
+			yyVAL.ifaceUnion = &ConvertType{Type: string(yyDollar[1].str), Length: yyDollar[2].literalUnion()}
 		}
 	case 781:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.convertType = &ConvertType{Type: string(yyDollar[1].str)}
+			yyVAL.ifaceUnion = &ConvertType{Type: string(yyDollar[1].str)}
 		}
 	case 782:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.convertType = &ConvertType{Type: string(yyDollar[1].str)}
+			yyVAL.ifaceUnion = &ConvertType{Type: string(yyDollar[1].str)}
 		}
 	case 783:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.convertType = &ConvertType{Type: string(yyDollar[1].str), Length: yyDollar[2].literal}
+			yyVAL.ifaceUnion = &ConvertType{Type: string(yyDollar[1].str), Length: yyDollar[2].literalUnion()}
 		}
 	case 784:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.convertType = &ConvertType{Type: string(yyDollar[1].str)}
+			yyVAL.ifaceUnion = &ConvertType{Type: string(yyDollar[1].str)}
 		}
 	case 785:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.convertType = &ConvertType{Type: string(yyDollar[1].str)}
+			yyVAL.ifaceUnion = &ConvertType{Type: string(yyDollar[1].str)}
 		}
 	case 786:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		{
-			yyVAL.expr = nil
+			yyVAL.ifaceUnion = nil
 		}
 	case 787:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.expr = yyDollar[1].expr
+			yyVAL.ifaceUnion = yyDollar[1].exprUnion()
 		}
 	case 788:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -9184,82 +9502,82 @@ yydefault:
 	case 790:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.whens = []*When{yyDollar[1].when}
+			yyVAL.ifaceUnion = []*When{yyDollar[1].whenUnion()}
 		}
 	case 791:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.whens = append(yyDollar[1].whens, yyDollar[2].when)
+			yyVAL.ifaceUnion = append(yyDollar[1].whensUnion(), yyDollar[2].whenUnion())
 		}
 	case 792:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		{
-			yyVAL.when = &When{Cond: yyDollar[2].expr, Val: yyDollar[4].expr}
+			yyVAL.ifaceUnion = &When{Cond: yyDollar[2].exprUnion(), Val: yyDollar[4].exprUnion()}
 		}
 	case 793:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		{
-			yyVAL.expr = nil
+			yyVAL.ifaceUnion = nil
 		}
 	case 794:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.expr = yyDollar[2].expr
+			yyVAL.ifaceUnion = yyDollar[2].exprUnion()
 		}
 	case 795:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.colName = &ColName{Name: yyDollar[1].colIdent}
+			yyVAL.ifaceUnion = &ColName{Name: yyDollar[1].colIdent}
 		}
 	case 796:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.colName = &ColName{Qualifier: TableName{Name: yyDollar[1].tableIdent}, Name: yyDollar[3].colIdent}
+			yyVAL.ifaceUnion = &ColName{Qualifier: TableName{Name: yyDollar[1].tableIdent}, Name: yyDollar[3].colIdent}
 		}
 	case 797:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		{
-			yyVAL.colName = &ColName{Qualifier: TableName{Qualifier: yyDollar[1].tableIdent, Name: yyDollar[3].tableIdent}, Name: yyDollar[5].colIdent}
+			yyVAL.ifaceUnion = &ColName{Qualifier: TableName{Qualifier: yyDollar[1].tableIdent, Name: yyDollar[3].tableIdent}, Name: yyDollar[5].colIdent}
 		}
 	case 798:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.expr = NewStrLiteral(yyDollar[1].str)
+			yyVAL.ifaceUnion = NewStrLiteral(yyDollar[1].str)
 		}
 	case 799:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.expr = NewHexLiteral(yyDollar[1].str)
+			yyVAL.ifaceUnion = NewHexLiteral(yyDollar[1].str)
 		}
 	case 800:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.expr = NewBitLiteral(yyDollar[1].str)
+			yyVAL.ifaceUnion = NewBitLiteral(yyDollar[1].str)
 		}
 	case 801:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.expr = NewIntLiteral(yyDollar[1].str)
+			yyVAL.ifaceUnion = NewIntLiteral(yyDollar[1].str)
 		}
 	case 802:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.expr = NewFloatLiteral(yyDollar[1].str)
+			yyVAL.ifaceUnion = NewFloatLiteral(yyDollar[1].str)
 		}
 	case 803:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.expr = NewHexNumLiteral(yyDollar[1].str)
+			yyVAL.ifaceUnion = NewHexNumLiteral(yyDollar[1].str)
 		}
 	case 804:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.expr = NewArgument(yyDollar[1].str)
+			yyVAL.ifaceUnion = NewArgument(yyDollar[1].str)
 		}
 	case 805:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.expr = &NullVal{}
+			yyVAL.ifaceUnion = &NullVal{}
 		}
 	case 806:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -9269,157 +9587,157 @@ yydefault:
 				yylex.Error("expecting value after next")
 				return 1
 			}
-			yyVAL.expr = NewIntLiteral("1")
+			yyVAL.ifaceUnion = NewIntLiteral("1")
 		}
 	case 807:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.expr = NewIntLiteral(yyDollar[1].str)
+			yyVAL.ifaceUnion = NewIntLiteral(yyDollar[1].str)
 		}
 	case 808:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.expr = NewArgument(yyDollar[1].str)
+			yyVAL.ifaceUnion = NewArgument(yyDollar[1].str)
 		}
 	case 809:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		{
-			yyVAL.exprs = nil
+			yyVAL.ifaceUnion = nil
 		}
 	case 810:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.exprs = yyDollar[3].exprs
+			yyVAL.ifaceUnion = yyDollar[3].exprsUnion()
 		}
 	case 811:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		{
-			yyVAL.expr = nil
+			yyVAL.ifaceUnion = nil
 		}
 	case 812:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.expr = yyDollar[2].expr
+			yyVAL.ifaceUnion = yyDollar[2].exprUnion()
 		}
 	case 813:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		{
-			yyVAL.orderBy = nil
+			yyVAL.ifaceUnion = nil
 		}
 	case 814:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.orderBy = yyDollar[3].orderBy
+			yyVAL.ifaceUnion = yyDollar[3].orderByUnion()
 		}
 	case 815:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.orderBy = OrderBy{yyDollar[1].order}
+			yyVAL.ifaceUnion = OrderBy{yyDollar[1].orderUnion()}
 		}
 	case 816:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.orderBy = append(yyDollar[1].orderBy, yyDollar[3].order)
+			yyVAL.ifaceUnion = append(yyDollar[1].orderByUnion(), yyDollar[3].orderUnion())
 		}
 	case 817:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.order = &Order{Expr: yyDollar[1].expr, Direction: yyDollar[2].orderDirection}
+			yyVAL.ifaceUnion = &Order{Expr: yyDollar[1].exprUnion(), Direction: yyDollar[2].orderDirectionUnion()}
 		}
 	case 818:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		{
-			yyVAL.orderDirection = AscOrder
+			yyVAL.numericUnion = int(AscOrder)
 		}
 	case 819:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.orderDirection = AscOrder
+			yyVAL.numericUnion = int(AscOrder)
 		}
 	case 820:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.orderDirection = DescOrder
+			yyVAL.numericUnion = int(DescOrder)
 		}
 	case 821:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		{
-			yyVAL.limit = nil
+			yyVAL.ifaceUnion = nil
 		}
 	case 822:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.limit = &Limit{Rowcount: yyDollar[2].expr}
+			yyVAL.ifaceUnion = &Limit{Rowcount: yyDollar[2].exprUnion()}
 		}
 	case 823:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		{
-			yyVAL.limit = &Limit{Offset: yyDollar[2].expr, Rowcount: yyDollar[4].expr}
+			yyVAL.ifaceUnion = &Limit{Offset: yyDollar[2].exprUnion(), Rowcount: yyDollar[4].exprUnion()}
 		}
 	case 824:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		{
-			yyVAL.limit = &Limit{Offset: yyDollar[4].expr, Rowcount: yyDollar[2].expr}
+			yyVAL.ifaceUnion = &Limit{Offset: yyDollar[4].exprUnion(), Rowcount: yyDollar[2].exprUnion()}
 		}
 	case 825:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		{
-			yyVAL.alterOptions = nil
+			yyVAL.ifaceUnion = nil
 		}
 	case 826:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.alterOptions = []AlterOption{yyDollar[1].alterOption, yyDollar[2].alterOption}
+			yyVAL.ifaceUnion = []AlterOption{yyDollar[1].alterOptionUnion(), yyDollar[2].alterOptionUnion()}
 		}
 	case 827:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.alterOptions = []AlterOption{yyDollar[1].alterOption, yyDollar[2].alterOption}
+			yyVAL.ifaceUnion = []AlterOption{yyDollar[1].alterOptionUnion(), yyDollar[2].alterOptionUnion()}
 		}
 	case 828:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.alterOptions = []AlterOption{yyDollar[1].alterOption}
+			yyVAL.ifaceUnion = []AlterOption{yyDollar[1].alterOptionUnion()}
 		}
 	case 829:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.alterOptions = []AlterOption{yyDollar[1].alterOption}
+			yyVAL.ifaceUnion = []AlterOption{yyDollar[1].alterOptionUnion()}
 		}
 	case 830:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.alterOption = &LockOption{Type: DefaultType}
+			yyVAL.ifaceUnion = &LockOption{Type: DefaultType}
 		}
 	case 831:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.alterOption = &LockOption{Type: NoneType}
+			yyVAL.ifaceUnion = &LockOption{Type: NoneType}
 		}
 	case 832:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.alterOption = &LockOption{Type: SharedType}
+			yyVAL.ifaceUnion = &LockOption{Type: SharedType}
 		}
 	case 833:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.alterOption = &LockOption{Type: ExclusiveType}
+			yyVAL.ifaceUnion = &LockOption{Type: ExclusiveType}
 		}
 	case 834:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.alterOption = AlgorithmValue(yyDollar[3].str)
+			yyVAL.ifaceUnion = AlgorithmValue(yyDollar[3].str)
 		}
 	case 835:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.alterOption = AlgorithmValue(yyDollar[3].str)
+			yyVAL.ifaceUnion = AlgorithmValue(yyDollar[3].str)
 		}
 	case 836:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.alterOption = AlgorithmValue(yyDollar[3].str)
+			yyVAL.ifaceUnion = AlgorithmValue(yyDollar[3].str)
 		}
 	case 837:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -9519,37 +9837,37 @@ yydefault:
 	case 856:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		{
-			yyVAL.lock = NoLock
+			yyVAL.numericUnion = int(NoLock)
 		}
 	case 857:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.lock = ForUpdateLock
+			yyVAL.numericUnion = int(ForUpdateLock)
 		}
 	case 858:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		{
-			yyVAL.lock = ShareModeLock
+			yyVAL.numericUnion = int(ShareModeLock)
 		}
 	case 859:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		{
-			yyVAL.selectInto = nil
+			yyVAL.ifaceUnion = nil
 		}
 	case 860:
 		yyDollar = yyS[yypt-9 : yypt+1]
 		{
-			yyVAL.selectInto = &SelectInto{Type: IntoOutfileS3, FileName: string(yyDollar[4].str), Charset: yyDollar[5].str, FormatOption: yyDollar[6].str, ExportOption: yyDollar[7].str, Manifest: yyDollar[8].str, Overwrite: yyDollar[9].str}
+			yyVAL.ifaceUnion = &SelectInto{Type: IntoOutfileS3, FileName: string(yyDollar[4].str), Charset: yyDollar[5].str, FormatOption: yyDollar[6].str, ExportOption: yyDollar[7].str, Manifest: yyDollar[8].str, Overwrite: yyDollar[9].str}
 		}
 	case 861:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.selectInto = &SelectInto{Type: IntoDumpfile, FileName: string(yyDollar[3].str), Charset: "", FormatOption: "", ExportOption: "", Manifest: "", Overwrite: ""}
+			yyVAL.ifaceUnion = &SelectInto{Type: IntoDumpfile, FileName: string(yyDollar[3].str), Charset: "", FormatOption: "", ExportOption: "", Manifest: "", Overwrite: ""}
 		}
 	case 862:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		{
-			yyVAL.selectInto = &SelectInto{Type: IntoOutfile, FileName: string(yyDollar[3].str), Charset: yyDollar[4].str, FormatOption: "", ExportOption: yyDollar[5].str, Manifest: "", Overwrite: ""}
+			yyVAL.ifaceUnion = &SelectInto{Type: IntoOutfile, FileName: string(yyDollar[3].str), Charset: yyDollar[4].str, FormatOption: "", ExportOption: yyDollar[5].str, Manifest: "", Overwrite: ""}
 		}
 	case 863:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -9684,142 +10002,142 @@ yydefault:
 	case 889:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.ins = &Insert{Rows: yyDollar[2].values}
+			yyVAL.ifaceUnion = &Insert{Rows: yyDollar[2].valuesUnion()}
 		}
 	case 890:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.ins = &Insert{Rows: yyDollar[1].selStmt}
+			yyVAL.ifaceUnion = &Insert{Rows: yyDollar[1].selStmtUnion()}
 		}
 	case 891:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		{
-			yyVAL.ins = &Insert{Columns: yyDollar[2].columns, Rows: yyDollar[5].values}
+			yyVAL.ifaceUnion = &Insert{Columns: yyDollar[2].columnsUnion(), Rows: yyDollar[5].valuesUnion()}
 		}
 	case 892:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		{
-			yyVAL.ins = &Insert{Rows: yyDollar[4].values}
+			yyVAL.ifaceUnion = &Insert{Rows: yyDollar[4].valuesUnion()}
 		}
 	case 893:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		{
-			yyVAL.ins = &Insert{Columns: yyDollar[2].columns, Rows: yyDollar[4].selStmt}
+			yyVAL.ifaceUnion = &Insert{Columns: yyDollar[2].columnsUnion(), Rows: yyDollar[4].selStmtUnion()}
 		}
 	case 894:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.columns = Columns{yyDollar[1].colIdent}
+			yyVAL.ifaceUnion = Columns{yyDollar[1].colIdent}
 		}
 	case 895:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.columns = Columns{yyDollar[3].colIdent}
+			yyVAL.ifaceUnion = Columns{yyDollar[3].colIdent}
 		}
 	case 896:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.columns = append(yyVAL.columns, yyDollar[3].colIdent)
+			yyVAL.ifaceUnion = append(yyVAL.columnsUnion(), yyDollar[3].colIdent)
 		}
 	case 897:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		{
-			yyVAL.columns = append(yyVAL.columns, yyDollar[5].colIdent)
+			yyVAL.ifaceUnion = append(yyVAL.columnsUnion(), yyDollar[5].colIdent)
 		}
 	case 898:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		{
-			yyVAL.updateExprs = nil
+			yyVAL.ifaceUnion = nil
 		}
 	case 899:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		{
-			yyVAL.updateExprs = yyDollar[5].updateExprs
+			yyVAL.ifaceUnion = yyDollar[5].updateExprsUnion()
 		}
 	case 900:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.values = Values{yyDollar[1].valTuple}
+			yyVAL.ifaceUnion = Values{yyDollar[1].valTupleUnion()}
 		}
 	case 901:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.values = append(yyDollar[1].values, yyDollar[3].valTuple)
+			yyVAL.ifaceUnion = append(yyDollar[1].valuesUnion(), yyDollar[3].valTupleUnion())
 		}
 	case 902:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.valTuple = yyDollar[1].valTuple
+			yyVAL.ifaceUnion = yyDollar[1].valTupleUnion()
 		}
 	case 903:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.valTuple = ValTuple{}
+			yyVAL.ifaceUnion = ValTuple{}
 		}
 	case 904:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.valTuple = ValTuple(yyDollar[2].exprs)
+			yyVAL.ifaceUnion = ValTuple(yyDollar[2].exprsUnion())
 		}
 	case 905:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			if len(yyDollar[1].valTuple) == 1 {
-				yyVAL.expr = yyDollar[1].valTuple[0]
+			if len(yyDollar[1].valTupleUnion()) == 1 {
+				yyVAL.ifaceUnion = yyDollar[1].valTupleUnion()[0]
 			} else {
-				yyVAL.expr = yyDollar[1].valTuple
+				yyVAL.ifaceUnion = yyDollar[1].valTupleUnion()
 			}
 		}
 	case 906:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.updateExprs = UpdateExprs{yyDollar[1].updateExpr}
+			yyVAL.ifaceUnion = UpdateExprs{yyDollar[1].updateExprUnion()}
 		}
 	case 907:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.updateExprs = append(yyDollar[1].updateExprs, yyDollar[3].updateExpr)
+			yyVAL.ifaceUnion = append(yyDollar[1].updateExprsUnion(), yyDollar[3].updateExprUnion())
 		}
 	case 908:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.updateExpr = &UpdateExpr{Name: yyDollar[1].colName, Expr: yyDollar[3].expr}
+			yyVAL.ifaceUnion = &UpdateExpr{Name: yyDollar[1].colNameUnion(), Expr: yyDollar[3].exprUnion()}
 		}
 	case 909:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.setExprs = SetExprs{yyDollar[1].setExpr}
+			yyVAL.ifaceUnion = SetExprs{yyDollar[1].setExprUnion()}
 		}
 	case 910:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.setExprs = append(yyDollar[1].setExprs, yyDollar[3].setExpr)
+			yyVAL.ifaceUnion = append(yyDollar[1].setExprsUnion(), yyDollar[3].setExprUnion())
 		}
 	case 911:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.setExpr = &SetExpr{Name: yyDollar[1].colIdent, Scope: ImplicitScope, Expr: NewStrLiteral("on")}
+			yyVAL.ifaceUnion = &SetExpr{Name: yyDollar[1].colIdent, Scope: ImplicitScope, Expr: NewStrLiteral("on")}
 		}
 	case 912:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.setExpr = &SetExpr{Name: yyDollar[1].colIdent, Scope: ImplicitScope, Expr: NewStrLiteral("off")}
+			yyVAL.ifaceUnion = &SetExpr{Name: yyDollar[1].colIdent, Scope: ImplicitScope, Expr: NewStrLiteral("off")}
 		}
 	case 913:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.setExpr = &SetExpr{Name: yyDollar[1].colIdent, Scope: ImplicitScope, Expr: yyDollar[3].expr}
+			yyVAL.ifaceUnion = &SetExpr{Name: yyDollar[1].colIdent, Scope: ImplicitScope, Expr: yyDollar[3].exprUnion()}
 		}
 	case 914:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.setExpr = &SetExpr{Name: NewColIdent(string(yyDollar[1].str)), Scope: ImplicitScope, Expr: yyDollar[2].expr}
+			yyVAL.ifaceUnion = &SetExpr{Name: NewColIdent(string(yyDollar[1].str)), Scope: ImplicitScope, Expr: yyDollar[2].exprUnion()}
 		}
 	case 915:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyDollar[2].setExpr.Scope = yyDollar[1].scope
-			yyVAL.setExpr = yyDollar[2].setExpr
+			yyDollar[2].setExprUnion().Scope = yyDollar[1].scopeUnion()
+			yyVAL.ifaceUnion = yyDollar[2].setExprUnion()
 		}
 	case 917:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -9829,57 +10147,57 @@ yydefault:
 	case 920:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.expr = NewStrLiteral(yyDollar[1].colIdent.String())
+			yyVAL.ifaceUnion = NewStrLiteral(yyDollar[1].colIdent.String())
 		}
 	case 921:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.expr = NewStrLiteral(yyDollar[1].str)
+			yyVAL.ifaceUnion = NewStrLiteral(yyDollar[1].str)
 		}
 	case 922:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.expr = &Default{}
+			yyVAL.ifaceUnion = &Default{}
 		}
 	case 925:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		{
-			yyVAL.boolean = false
+			yyVAL.boolUnion = false
 		}
 	case 926:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.boolean = true
+			yyVAL.boolUnion = true
 		}
 	case 927:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		{
-			yyVAL.boolean = false
+			yyVAL.boolUnion = false
 		}
 	case 928:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.boolean = true
+			yyVAL.boolUnion = true
 		}
 	case 929:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		{
-			yyVAL.boolean = false
+			yyVAL.boolUnion = false
 		}
 	case 930:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.boolean = true
+			yyVAL.boolUnion = true
 		}
 	case 931:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		{
-			yyVAL.ignore = false
+			yyVAL.boolUnion = false
 		}
 	case 932:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.ignore = true
+			yyVAL.boolUnion = true
 		}
 	case 933:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -9899,32 +10217,32 @@ yydefault:
 	case 936:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		{
-			yyVAL.statement = &CallProc{Name: yyDollar[2].tableName, Params: yyDollar[4].exprs}
+			yyVAL.ifaceUnion = &CallProc{Name: yyDollar[2].tableName, Params: yyDollar[4].exprsUnion()}
 		}
 	case 937:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		{
-			yyVAL.exprs = nil
+			yyVAL.ifaceUnion = nil
 		}
 	case 938:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.exprs = yyDollar[1].exprs
+			yyVAL.ifaceUnion = yyDollar[1].exprsUnion()
 		}
 	case 939:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		{
-			yyVAL.indexOptions = nil
+			yyVAL.ifaceUnion = nil
 		}
 	case 940:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.indexOptions = []*IndexOption{yyDollar[1].indexOption}
+			yyVAL.ifaceUnion = []*IndexOption{yyDollar[1].indexOptionUnion()}
 		}
 	case 941:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.indexOption = &IndexOption{Name: string(yyDollar[1].str), String: string(yyDollar[2].colIdent.String())}
+			yyVAL.ifaceUnion = &IndexOption{Name: string(yyDollar[1].str), String: string(yyDollar[2].colIdent.String())}
 		}
 	case 942:
 		yyDollar = yyS[yypt-1 : yypt+1]
