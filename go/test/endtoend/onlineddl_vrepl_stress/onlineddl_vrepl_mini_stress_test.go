@@ -203,7 +203,7 @@ func TestSchemaChange(t *testing.T) {
 	defer cluster.PanicHandler(t)
 
 	t.Run("create schema", func(t *testing.T) {
-		assert.Equal(t, 2, len(clusterInstance.Keyspaces[0].Shards))
+		assert.Equal(t, 1, len(clusterInstance.Keyspaces[0].Shards))
 		testWithInitialSchema(t)
 	})
 	for i := 0; i < countIterations; i++ {
