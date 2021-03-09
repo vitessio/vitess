@@ -1485,6 +1485,29 @@ func (e *Executor) executeMigration(ctx context.Context, onlineDDL *schema.Onlin
 		return failMigration(err)
 	}
 	switch ddlAction {
+	case sqlparser.CreateDDLAction:
+		if onlineDDL.IsDeclarative() {
+			// This CREATE is declarative, meaning it may:
+			// - actually CREATE a table, if that table does not exist, or
+			// - ALTER the table, if it exists and is different, or
+			// - Implicitly do nothing, if the table exists and is identical to CREATE statement
+			func() error {
+				e.migrationMutex.Lock()
+				defer e.migrationMutex.Unlock()
+				exists, err := e.tableExists(ctx, onlineDDL.Table)
+				if err != nil {
+					return failMigration(err)
+				}
+				if exists {
+					// TODO(shlomi): table exists, evaluate a diff. The diff is empty or non empty. If empty, mark this migration as successful and we're done. If non-empty, evaluate ALTER statement using tengo
+					// tengo.QuerySchemaTable()
+					fmt.Printf("exists: %v", exists)
+				}
+				return nil
+			}()
+		}
+	}
+	switch ddlAction {
 	case sqlparser.DropDDLAction:
 		go func() error {
 			e.migrationMutex.Lock()
