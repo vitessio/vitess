@@ -1271,16 +1271,9 @@ func TestPlayerRowMove(t *testing.T) {
 func TestPlayerTypes(t *testing.T) {
 	log.Errorf("TestPlayerTypes: flavor is %s", env.Flavor)
 	enableJSONColumnTesting := true
-	// some unit test
-	supportedFlavorsForJSONColumnTesting := []string{"mysql57", "mysql80"}
-	for _, flavor := range supportedFlavorsForJSONColumnTesting {
-		if strings.EqualFold(env.Flavor, flavor) {
-			log.Warningf("Enabling testing JSON columns for flavor: %s", env.Flavor)
-			enableJSONColumnTesting = true
-			break
-		} else {
-			log.Warningf("Not testing JSON columns for flavor: %s", env.Flavor)
-		}
+	flavor := strings.ToLower(env.Flavor)
+	if strings.Contains(flavor, "percona") || strings.Contains(flavor, "mariadb") {
+		enableJSONColumnTesting = false
 	}
 	defer deleteTablet(addTablet(100))
 
