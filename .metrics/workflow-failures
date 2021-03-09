@@ -4131,3 +4131,7 @@
 2021-03-09T09:17:42Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/635246221
 2021-03-09T13:40:03Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/635948124
 2021-03-09T14:07:32Z,Unit Test (mariadb101),https://github.com/vitessio/vitess/actions/runs/636019609
+2021-03-09T15:36:01Z,.github/workflows/check_runs_analysis.yaml,https://github.com/vitessio/vitess/actions/runs/636278402
+2021-03-09T15:52:11Z,.github/workflows/check_runs_analysis.yaml,https://github.com/vitessio/vitess/actions/runs/636326919
+2021-03-09T16:06:08Z,docker_test_3,https://github.com/vitessio/vitess/actions/runs/636367855
+2021-03-09T16:06:08Z,local_example,https://github.com/vitessio/vitess/actions/runs/636367851
