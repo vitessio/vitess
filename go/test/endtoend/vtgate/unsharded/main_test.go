@@ -165,6 +165,7 @@ func TestMain(m *testing.M) {
 			SchemaSQL: SchemaSQL,
 			VSchema:   VSchema,
 		}
+		clusterInstance.VtTabletExtraArgs = []string{"-queryserver-config-transaction-timeout", "3"}
 		if err := clusterInstance.StartUnshardedKeyspace(*Keyspace, 0, false); err != nil {
 			log.Fatal(err.Error())
 			return 1
@@ -383,7 +384,7 @@ func TestReservedConnDML(t *testing.T) {
 	exec(t, conn, `insert into allDefaults () values ()`)
 	exec(t, conn, `commit`)
 
-	time.Sleep(35 * time.Second)
+	time.Sleep(6 * time.Second)
 
 	exec(t, conn, `begin`)
 	exec(t, conn, `insert into allDefaults () values ()`)
