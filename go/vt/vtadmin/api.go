@@ -26,6 +26,7 @@ import (
 
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
+	"k8s.io/apimachinery/pkg/util/sets"
 
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/concurrency"
@@ -106,8 +107,8 @@ func NewAPI(clusters []*cluster.Cluster, opts grpcserver.Options, httpOpts vtadm
 	router.HandleFunc("/vschema/{cluster_id}/{keyspace}", httpAPI.Adapt(vtadminhttp.GetVSchema)).Name("API.GetVSchema")
 	router.HandleFunc("/vschemas", httpAPI.Adapt(vtadminhttp.GetVSchemas)).Name("API.GetVSchemas")
 	router.HandleFunc("/vtexplain", httpAPI.Adapt(vtadminhttp.VTExplain)).Name("API.VTExplain")
-	router.HandleFunc("/workflow/{cluster_id}/{keyspace}/{name}", nil).Name("API.GetWorkflow")
-	router.HandleFunc("/workflows", nil).Name("API.GetWorkflows")
+	router.HandleFunc("/workflow/{cluster_id}/{keyspace}/{name}", httpAPI.Adapt(vtadminhttp.GetWorkflow)).Name("API.GetWorkflow")
+	router.HandleFunc("/workflows", httpAPI.Adapt(vtadminhttp.GetWorkflows)).Name("API.GetWorkflows")
 
 	// Middlewares are executed in order of addition. Our ordering (all
 	// middlewares being optional) is:
@@ -685,12 +686,86 @@ func (api *API) GetVSchema(ctx context.Context, req *vtadminpb.GetVSchemaRequest
 
 // GetWorkflow is part of the vtadminpb.VTAdminServer interface.
 func (api *API) GetWorkflow(ctx context.Context, req *vtadminpb.GetWorkflowRequest) (*vtadminpb.Workflow, error) {
-	panic("unimplemented!")
+	span, ctx := trace.NewSpan(ctx, "API.GetWorkflow")
+	defer span.Finish()
+
+	c, ok := api.clusterMap[req.ClusterId]
+	if !ok {
+		return nil, fmt.Errorf("%w: no such cluster %s", errors.ErrUnsupportedCluster, req.ClusterId)
+	}
+
+	cluster.AnnotateSpan(c, span)
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("workflow_name", req.Name)
+	span.Annotate("active_only", req.ActiveOnly)
+
+	if err := c.Vtctld.Dial(ctx); err != nil {
+		return nil, err
+	}
+
+	return c.GetWorkflow(ctx, req.Keyspace, req.Name, cluster.GetWorkflowOptions{
+		ActiveOnly: req.ActiveOnly,
+	})
 }
 
 // GetWorkflows is part of the vtadminpb.VTAdminServer interface.
 func (api *API) GetWorkflows(ctx context.Context, req *vtadminpb.GetWorkflowsRequest) (*vtadminpb.GetWorkflowsResponse, error) {
-	panic("unimplemented!")
+	span, ctx := trace.NewSpan(ctx, "API.GetWorkflows")
+	defer span.Finish()
+
+	clusters, _ := api.getClustersForRequest(req.ClusterIds)
+
+	var (
+		m       sync.Mutex
+		wg      sync.WaitGroup
+		rec     concurrency.AllErrorRecorder
+		results []*vtadminpb.Workflow
+	)
+
+	for _, c := range clusters {
+		wg.Add(1)
+
+		go func(c *cluster.Cluster) {
+			defer wg.Done()
+
+			span, ctx := trace.NewSpan(ctx, "API.getWorkflowsForCluster")
+			defer span.Finish()
+
+			cluster.AnnotateSpan(c, span)
+			span.Annotate("active_only", req.ActiveOnly)
+
+			if err := c.Vtctld.Dial(ctx); err != nil {
+				err = fmt.Errorf("failed to dial vtctld for cluster %s: %w", c.ID, err)
+				rec.RecordError(err)
+
+				return
+			}
+
+			workflows, err := c.GetWorkflows(ctx, req.Keyspaces, cluster.GetWorkflowsOptions{
+				ActiveOnly:      req.ActiveOnly,
+				IgnoreKeyspaces: sets.NewString(req.IgnoreKeyspaces...),
+			})
+			if err != nil {
+				rec.RecordError(err)
+
+				return
+			}
+
+			m.Lock()
+			results = append(results, workflows...)
+			m.Unlock()
+		}(c)
+	}
+
+	wg.Wait()
+
+	if rec.HasErrors() {
+		return nil, rec.Error()
+	}
+
+	return &vtadminpb.GetWorkflowsResponse{
+		Workflows: results,
+	}, nil
 }
 
 // GetVSchemas is part of the vtadminpb.VTAdminServer interface.
