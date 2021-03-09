@@ -1518,7 +1518,7 @@ func (e *Executor) executeMigration(ctx context.Context, onlineDDL *schema.Onlin
 			}
 
 			acceptableErrorCodes := []int{}
-			if ddlStmt.GetIfExists() {
+			if ddlStmt.GetIfExists() || onlineDDL.IsDeclarative() {
 				acceptableErrorCodes = acceptableDropTableIfExistsErrorCodes
 			}
 			acceptableErrCodeFound, err := e.executeDirectly(ctx, onlineDDL, acceptableErrorCodes...)
