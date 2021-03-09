@@ -60,7 +60,6 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 
 	"github.com/golang/protobuf/proto"
-	"github.com/google/shlex"
 )
 
 var (
@@ -849,8 +848,7 @@ curl -s 'http://localhost:%d/schema-migration/report-status?uuid=%s&status=%s&dr
 			fmt.Sprintf(`--panic-flag-file=%s`, e.ghostPanicFlagFileName(onlineDDL.UUID)),
 			fmt.Sprintf(`--execute=%t`, execute),
 		}
-		opts, _ := shlex.Split(onlineDDL.Options)
-		args = append(args, opts...)
+		args = append(args, onlineDDL.RuntimeOptions()...)
 		_, err := execCmd("bash", args, os.Environ(), "/tmp", nil, nil)
 		return err
 	}
@@ -1072,8 +1070,7 @@ export MYSQL_PWD
 				`--no-drop-old-table`,
 			)
 		}
-		opts, _ := shlex.Split(onlineDDL.Options)
-		args = append(args, opts...)
+		args = append(args, onlineDDL.RuntimeOptions()...)
 		_, err = execCmd("bash", args, os.Environ(), "/tmp", nil, nil)
 		return err
 	}
