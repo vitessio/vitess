@@ -46,6 +46,15 @@ func makeLabels(labelNames []string, labelValsCombined string) []string {
 	return tags
 }
 
+func makeCommonTags(tags map[string]string) []string {
+	var commonTags []string
+	for k, v := range tags {
+		commonTag := fmt.Sprintf("%s:%s", k, v)
+		commonTags = append(commonTags, commonTag)
+	}
+	return commonTags
+}
+
 // Init initializes the statsd with the given namespace.
 func Init(namespace string) {
 	servenv.OnRun(func() {
@@ -66,12 +75,7 @@ func InitWithoutServenv(namespace string) {
 	}
 	statsdC.Namespace = namespace + "."
 	if tags := stats.ParseCommonTags(*stats.CommonTags); len(tags) > 0 {
-		var commonTags []string
-		for k, v := range tags {
-			commonTag := fmt.Sprintf("%s:%s", k, v)
-			commonTags = append(commonTags, commonTag)
-		}
-		statsdC.Tags = commonTags
+		statsdC.Tags = makeCommonTags(tags)
 	}
 	sb.namespace = namespace
 	sb.statsdClient = statsdC
