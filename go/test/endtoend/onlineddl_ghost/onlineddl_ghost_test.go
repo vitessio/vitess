@@ -20,7 +20,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"io"
 	"os"
 	"path"
 	"regexp"
@@ -35,7 +34,6 @@ import (
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
 
-	"github.com/olekukonko/tablewriter"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -360,9 +358,9 @@ func checkTablesCount(t *testing.T, tablet *cluster.Vttablet, showTableName stri
 
 func checkRecentMigrations(t *testing.T, uuid string, expectStatus schema.OnlineDDLStatus) {
 	showQuery := fmt.Sprintf("show vitess_migrations like '%s'", uuid)
-	r := vtgateExecQuery(t, showQuery, "")
+	r := cluster.VtgateExecQuery(t, &vtParams, showQuery, "")
 	fmt.Printf("# output for `%s`:\n", showQuery)
-	printQueryResult(os.Stdout, r)
+	cluster.PrintQueryResult(os.Stdout, r)
 
 	count := 0
 	for _, row := range r.Named().Rows {
@@ -458,57 +456,4 @@ func vtgateExec(t *testing.T, ddlStrategy string, query string, expectError stri
 		assert.Contains(t, err.Error(), expectError, "Unexpected error")
 	}
 	return qr
-}
-
-func vtgateExecQuery(t *testing.T, query string, expectError string) *sqltypes.Result {
-	t.Helper()
-
-	ctx := context.Background()
-	conn, err := mysql.Connect(ctx, &vtParams)
-	require.Nil(t, err)
-	defer conn.Close()
-
-	qr, err := conn.ExecuteFetch(query, 1000, true)
-	if expectError == "" {
-		require.NoError(t, err)
-	} else {
-		require.Error(t, err, "error should not be nil")
-		assert.Contains(t, err.Error(), expectError, "Unexpected error")
-	}
-	return qr
-}
-
-// printQueryResult will pretty-print a QueryResult to the logger.
-func printQueryResult(writer io.Writer, qr *sqltypes.Result) {
-	if qr == nil {
-		return
-	}
-	if len(qr.Rows) == 0 {
-		return
-	}
-
-	table := tablewriter.NewWriter(writer)
-	table.SetAutoFormatHeaders(false)
-
-	// Make header.
-	header := make([]string, 0, len(qr.Fields))
-	for _, field := range qr.Fields {
-		header = append(header, field.Name)
-	}
-	table.SetHeader(header)
-
-	// Add rows.
-	for _, row := range qr.Rows {
-		vals := make([]string, 0, len(row))
-		for _, val := range row {
-			v := val.ToString()
-			v = strings.ReplaceAll(v, "\r", " ")
-			v = strings.ReplaceAll(v, "\n", " ")
-			vals = append(vals, v)
-		}
-		table.Append(vals)
-	}
-
-	// Print table.
-	table.Render()
 }
