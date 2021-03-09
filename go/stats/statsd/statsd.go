@@ -49,30 +49,36 @@ func makeLabels(labelNames []string, labelValsCombined string) []string {
 // Init initializes the statsd with the given namespace.
 func Init(namespace string) {
 	servenv.OnRun(func() {
-		if *statsdAddress == "" {
-			return
+		InitWithoutServenv(namespace)
+	})
+}
+
+// InitWithoutServenv initializes the statsd using the namespace but without servenv
+func InitWithoutServenv(namespace string) {
+	if *statsdAddress == "" {
+		log.Info("statsdAddress is empty")
+		return
+	}
+	statsdC, err := statsd.NewBuffered(*statsdAddress, 100)
+	if err != nil {
+		log.Errorf("Failed to create statsd client %v", err)
+		return
+	}
+	statsdC.Namespace = namespace + "."
+	sb.namespace = namespace
+	sb.statsdClient = statsdC
+	sb.sampleRate = *statsdSampleRate
+	stats.RegisterPushBackend("statsd", sb)
+	stats.RegisterTimerHook(func(statsName, name string, value int64, timings *stats.Timings) {
+		tags := makeLabels(strings.Split(timings.Label(), "."), name)
+		if err := statsdC.TimeInMilliseconds(statsName, float64(value), tags, sb.sampleRate); err != nil {
+			log.Errorf("Fail to TimeInMilliseconds %v: %v", statsName, err)
 		}
-		statsdC, err := statsd.NewBuffered(*statsdAddress, 100)
-		if err != nil {
-			log.Errorf("Failed to create statsd client %v", err)
-			return
+	})
+	stats.RegisterHistogramHook(func(statsName string, val int64) {
+		if err := statsdC.Histogram(statsName, float64(val), []string{}, sb.sampleRate); err != nil {
+			log.Errorf("Fail to Histogram for %v: %v", statsName, err)
 		}
-		statsdC.Namespace = namespace + "."
-		sb.namespace = namespace
-		sb.statsdClient = statsdC
-		sb.sampleRate = *statsdSampleRate
-		stats.RegisterPushBackend("statsd", sb)
-		stats.RegisterTimerHook(func(statsName, name string, value int64, timings *stats.Timings) {
-			tags := makeLabels(strings.Split(timings.Label(), "."), name)
-			if err := statsdC.TimeInMilliseconds(statsName, float64(value), tags, sb.sampleRate); err != nil {
-				log.Errorf("Fail to TimeInMilliseconds %v: %v", statsName, err)
-			}
-		})
-		stats.RegisterHistogramHook(func(name string, val int64) {
-			if err := statsdC.Histogram(name, float64(val), []string{}, sb.sampleRate); err != nil {
-				log.Errorf("Fail to Histogram for %v: %v", name, err)
-			}
-		})
 	})
 }
 
