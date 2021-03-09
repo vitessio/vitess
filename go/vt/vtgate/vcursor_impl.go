@@ -23,6 +23,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"vitess.io/vitess/go/mysql"
+
 	"github.com/prometheus/common/log"
 
 	"vitess.io/vitess/go/vt/vtgate/semantics"
@@ -100,6 +102,7 @@ type vcursorImpl struct {
 	vschema               *vindexes.VSchema
 	vm                    VSchemaOperator
 	semTable              *semantics.SemTable
+	warnShardedOnly       bool // when using sharded only features, a warning will be added to the session if this field is true
 }
 
 func (vc *vcursorImpl) GetKeyspace() string {
@@ -147,7 +150,17 @@ func (vc *vcursorImpl) ExecuteVSchema(keyspace string, vschemaDDL *sqlparser.Alt
 // the query and supply it here. Trailing comments are typically sent by the application for various reasons,
 // including as identifying markers. So, they have to be added back to all queries that are executed
 // on behalf of the original query.
-func newVCursorImpl(ctx context.Context, safeSession *SafeSession, marginComments sqlparser.MarginComments, executor *Executor, logStats *LogStats, vm VSchemaOperator, vschema *vindexes.VSchema, resolver *srvtopo.Resolver, serv srvtopo.Server) (*vcursorImpl, error) {
+func newVCursorImpl(
+	ctx context.Context,
+	safeSession *SafeSession,
+	marginComments sqlparser.MarginComments,
+	executor *Executor,
+	logStats *LogStats,
+	vm VSchemaOperator,
+	vschema *vindexes.VSchema,
+	resolver *srvtopo.Resolver,
+	serv srvtopo.Server,
+	warnShardedOnly bool) (*vcursorImpl, error) {
 	keyspace, tabletType, destination, err := parseDestinationTarget(safeSession.TargetString, vschema)
 	if err != nil {
 		return nil, err
@@ -166,18 +179,19 @@ func newVCursorImpl(ctx context.Context, safeSession *SafeSession, marginComment
 	}
 
 	return &vcursorImpl{
-		ctx:            ctx,
-		safeSession:    safeSession,
-		keyspace:       keyspace,
-		tabletType:     tabletType,
-		destination:    destination,
-		marginComments: marginComments,
-		executor:       executor,
-		logStats:       logStats,
-		resolver:       resolver,
-		vschema:        vschema,
-		vm:             vm,
-		topoServer:     ts,
+		ctx:             ctx,
+		safeSession:     safeSession,
+		keyspace:        keyspace,
+		tabletType:      tabletType,
+		destination:     destination,
+		marginComments:  marginComments,
+		executor:        executor,
+		logStats:        logStats,
+		resolver:        resolver,
+		vschema:         vschema,
+		vm:              vm,
+		topoServer:      ts,
+		warnShardedOnly: warnShardedOnly,
 	}, nil
 }
 
@@ -694,17 +708,29 @@ func (vc *vcursorImpl) HasCreatedTempTable() {
 	vc.safeSession.GetOrCreateOptions().HasCreatedTempTables = true
 }
 
-// ErrorIfShardedF is used to allow but log on unsharded, and just error when in a sharded keyspace
+// ErrorIfShardedF implements the VCursor interface
 func (vc *vcursorImpl) ErrorIfShardedF(ks *vindexes.Keyspace, warn, errFormat string, params ...interface{}) error {
 	if ks.Sharded {
 		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, errFormat, params...)
 	}
-	log.Warnf("use of feature that is only supported in unsharded mode:%s", warn)
+	if vc.warnShardedOnly {
+		vc.safeSession.RecordWarning(&querypb.QueryWarning{
+			Code:    mysql.ERNotSupportedYet,
+			Message: fmt.Sprintf("use of feature that is only supported in unsharded mode:%s", warn),
+		})
+	}
+
 	return nil
 }
 
+// WarnUnshardedOnly implements the VCursor interface
 func (vc *vcursorImpl) WarnUnshardedOnly(format string, params ...interface{}) {
-	log.Warnf(format, params...)
+	if vc.warnShardedOnly {
+		vc.safeSession.RecordWarning(&querypb.QueryWarning{
+			Code:    mysql.ERNotSupportedYet,
+			Message: fmt.Sprintf(format, params...),
+		})
+	}
 }
 
 // ParseDestinationTarget parses destination target string and sets default keyspace if possible.
