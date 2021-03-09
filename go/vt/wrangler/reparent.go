@@ -901,16 +901,26 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no valid candidates for emergency reparent")
 	}
 
+	waiterCount := 0
+
 	errChan := make(chan error)
 	rec := &concurrency.AllErrorRecorder{}
 	groupCtx, groupCancel := context.WithTimeout(ctx, waitReplicasTimeout)
 	defer groupCancel()
 	for candidate := range validCandidates {
-		go func(alias string) {
+		status, ok := statusMap[candidate]
+		if !ok {
+			wr.logger.Infof("EmergencyReparent candidate %v not in replica status map; this means it was not running replication (because it was formerly MASTER), so skipping WaitForRelayLogsToApply step for this candidate", candidate)
+			continue
+		}
+
+		go func(alias string, status *replicationdatapb.StopReplicationStatus) {
 			var err error
 			defer func() { errChan <- err }()
-			err = wr.WaitForRelayLogsToApply(groupCtx, tabletMap[alias], statusMap[alias])
-		}(candidate)
+			err = wr.WaitForRelayLogsToApply(groupCtx, tabletMap[alias], status)
+		}(candidate, status)
+
+		waiterCount++
 	}
 
 	resultCounter := 0
@@ -920,7 +930,7 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 			rec.RecordError(waitErr)
 			groupCancel()
 		}
-		if resultCounter == len(validCandidates) {
+		if resultCounter == waiterCount {
 			break
 		}
 	}
