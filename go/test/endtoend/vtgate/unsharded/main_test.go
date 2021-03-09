@@ -367,6 +367,29 @@ func TestTempTable(t *testing.T) {
 	execAssertError(t, conn2, `show create table temp_t`, `Table 'vt_customer.temp_t' doesn't exist (errno 1146) (sqlstate 42S02)`)
 }
 
+func TestReservedConnDML(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	vtParams := mysql.ConnParams{
+		Host: "localhost",
+		Port: clusterInstance.VtgateMySQLPort,
+	}
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	exec(t, conn, `set default_week_format = 1`)
+	exec(t, conn, `begin`)
+	exec(t, conn, `insert into allDefaults () values ()`)
+	exec(t, conn, `commit`)
+
+	time.Sleep(35 * time.Second)
+
+	exec(t, conn, `begin`)
+	exec(t, conn, `insert into allDefaults () values ()`)
+	exec(t, conn, `commit`)
+}
+
 func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
 	t.Helper()
 	qr, err := conn.ExecuteFetch(query, 1000, true)
