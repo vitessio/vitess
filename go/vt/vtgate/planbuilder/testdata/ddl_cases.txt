@@ -102,7 +102,7 @@
   "QueryType": "DDL",
   "Original": "create database foo",
   "Instructions": {
-    "OperatorType": "CREATE DATABASE",
+    "OperatorType": "CREATEDB",
     "Keyspace": {
       "Name": "foo",
       "Sharded": false
@@ -142,7 +142,7 @@
   "QueryType": "DDL",
   "Original": "drop database main",
   "Instructions": {
-    "OperatorType": "DROP DATABASE",
+    "OperatorType": "DROPDB",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
@@ -156,7 +156,7 @@
   "QueryType": "DDL",
   "Original": "drop database if exists main",
   "Instructions": {
-    "OperatorType": "DROP DATABASE",
+    "OperatorType": "DROPDB",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
