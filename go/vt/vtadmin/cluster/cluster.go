@@ -65,7 +65,7 @@ func New(cfg Config) (*Cluster, error) {
 
 	disco, err := discovery.New(cfg.DiscoveryImpl, cluster.ToProto(), discoargs)
 	if err != nil {
-		return nil, fmt.Errorf("error while creating discovery impl (%s): %w", cfg.DiscoveryImpl, err)
+		return nil, fmt.Errorf("error creating discovery impl (%s): %w", cfg.DiscoveryImpl, err)
 	}
 
 	cluster.Discovery = disco
@@ -76,14 +76,14 @@ func New(cfg Config) (*Cluster, error) {
 
 	vtsqlCfg, err := vtsql.Parse(protocluster, disco, vtsqlargs)
 	if err != nil {
-		return nil, fmt.Errorf("error while creating vtsql connection config: %w", err)
+		return nil, fmt.Errorf("error creating vtsql connection config: %w", err)
 	}
 
 	vtctldargs := buildPFlagSlice(cfg.VtctldFlags)
 
 	vtctldCfg, err := vtctldclient.Parse(protocluster, disco, vtctldargs)
 	if err != nil {
-		return nil, fmt.Errorf("error while creating vtctldclient proxy config: %w", err)
+		return nil, fmt.Errorf("error creating vtctldclient proxy config: %w", err)
 	}
 
 	cluster.DB = vtsql.New(vtsqlCfg)
@@ -179,7 +179,7 @@ func (c *Cluster) parseTablet(rows *sql.Rows) (*vtadminpb.Tablet, error) {
 
 	topotablet.Alias, err = topoproto.ParseTabletAlias(aliasStr)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to parse tablet_alias %s: %w", aliasStr, err)
 	}
 
 	if topotablet.Alias.Cell != cell {
@@ -190,7 +190,7 @@ func (c *Cluster) parseTablet(rows *sql.Rows) (*vtadminpb.Tablet, error) {
 	if mtstStr != "" {
 		timeTime, err := time.Parse(time.RFC3339, mtstStr)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed parsing master_term_start_time %s: %w", mtstStr, err)
 		}
 
 		topotablet.MasterTermStartTime = logutil.TimeToProto(timeTime)

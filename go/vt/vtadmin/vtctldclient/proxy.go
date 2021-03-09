@@ -18,6 +18,7 @@ package vtctldclient
 
 import (
 	"context"
+	"fmt"
 
 	"google.golang.org/grpc"
 
@@ -92,13 +93,13 @@ func (vtctld *ClientProxy) Dial(ctx context.Context) error {
 
 		// close before reopen. this is safe to call on an already-closed client.
 		if err := vtctld.Close(); err != nil {
-			return err
+			return fmt.Errorf("error closing possibly-stale connection before re-dialing: %w", err)
 		}
 	}
 
 	addr, err := vtctld.discovery.DiscoverVtctldAddr(ctx, nil)
 	if err != nil {
-		return err
+		return fmt.Errorf("error discovering vtctld to dial: %w", err)
 	}
 
 	opts := []grpc.DialOption{}
