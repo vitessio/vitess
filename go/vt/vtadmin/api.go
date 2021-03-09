@@ -106,6 +106,8 @@ func NewAPI(clusters []*cluster.Cluster, opts grpcserver.Options, httpOpts vtadm
 	router.HandleFunc("/vschema/{cluster_id}/{keyspace}", httpAPI.Adapt(vtadminhttp.GetVSchema)).Name("API.GetVSchema")
 	router.HandleFunc("/vschemas", httpAPI.Adapt(vtadminhttp.GetVSchemas)).Name("API.GetVSchemas")
 	router.HandleFunc("/vtexplain", httpAPI.Adapt(vtadminhttp.VTExplain)).Name("API.VTExplain")
+	router.HandleFunc("/workflow/{cluster_id}/{keyspace}/{name}", nil).Name("API.GetWorkflow")
+	router.HandleFunc("/workflows", nil).Name("API.GetWorkflows")
 
 	// Middlewares are executed in order of addition. Our ordering (all
 	// middlewares being optional) is:
@@ -662,28 +664,6 @@ func (api *API) GetTablets(ctx context.Context, req *vtadminpb.GetTabletsRequest
 	}, nil
 }
 
-func (api *API) getClustersForRequest(ids []string) ([]*cluster.Cluster, []string) {
-	if len(ids) == 0 {
-		clusterIDs := make([]string, 0, len(api.clusters))
-
-		for k := range api.clusterMap {
-			clusterIDs = append(clusterIDs, k)
-		}
-
-		return api.clusters, clusterIDs
-	}
-
-	clusters := make([]*cluster.Cluster, 0, len(ids))
-
-	for _, id := range ids {
-		if c, ok := api.clusterMap[id]; ok {
-			clusters = append(clusters, c)
-		}
-	}
-
-	return clusters, ids
-}
-
 // GetVSchema is part of the vtadminpb.VTAdminServer interface.
 func (api *API) GetVSchema(ctx context.Context, req *vtadminpb.GetVSchemaRequest) (*vtadminpb.VSchema, error) {
 	span, ctx := trace.NewSpan(ctx, "API.GetVSchema")
@@ -701,6 +681,16 @@ func (api *API) GetVSchema(ctx context.Context, req *vtadminpb.GetVSchemaRequest
 	}
 
 	return c.GetVSchema(ctx, req.Keyspace)
+}
+
+// GetWorkflow is part of the vtadminpb.VTAdminServer interface.
+func (api *API) GetWorkflow(ctx context.Context, req *vtadminpb.GetWorkflowRequest) (*vtadminpb.Workflow, error) {
+	panic("unimplemented!")
+}
+
+// GetWorkflows is part of the vtadminpb.VTAdminServer interface.
+func (api *API) GetWorkflows(ctx context.Context, req *vtadminpb.GetWorkflowsRequest) (*vtadminpb.GetWorkflowsResponse, error) {
+	panic("unimplemented!")
 }
 
 // GetVSchemas is part of the vtadminpb.VTAdminServer interface.
@@ -961,4 +951,26 @@ func (api *API) VTExplain(ctx context.Context, req *vtadminpb.VTExplainRequest) 
 	return &vtadminpb.VTExplainResponse{
 		Response: response,
 	}, nil
+}
+
+func (api *API) getClustersForRequest(ids []string) ([]*cluster.Cluster, []string) {
+	if len(ids) == 0 {
+		clusterIDs := make([]string, 0, len(api.clusters))
+
+		for k := range api.clusterMap {
+			clusterIDs = append(clusterIDs, k)
+		}
+
+		return api.clusters, clusterIDs
+	}
+
+	clusters := make([]*cluster.Cluster, 0, len(ids))
+
+	for _, id := range ids {
+		if c, ok := api.clusterMap[id]; ok {
+			clusters = append(clusters, c)
+		}
+	}
+
+	return clusters, ids
 }
