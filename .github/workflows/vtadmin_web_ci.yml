@@ -23,11 +23,18 @@ jobs:
       with:
         node-version: ${{ matrix.node-version }}
     
+    # As a future enhancement, we can look into caching node_modules so we can
+    # parallelize linting/unit tests as separate jobs in the workflow.
+    # At the time of writing, this workflow completes in ~2 minutes
+    # so it's not a pressing need (and it does add complexity).
     - name: Install dependencies
       run: npm ci
     
     - name: Build front-end
       run: npm run build
+
+    - name: Run unit tests
+      run: npm run test
     
     - name: Run eslint
       run: npm run lint:eslint
