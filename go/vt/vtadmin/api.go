@@ -799,12 +799,17 @@ func (api *API) VTExplain(ctx context.Context, req *vtadminpb.VTExplainRequest) 
 		return nil, fmt.Errorf("%w: %s", errors.ErrUnsupportedCluster, req.Cluster)
 	}
 
+	span.Annotate("keyspace", req.Keyspace)
+	cluster.AnnotateSpan(c, span)
+
 	tablet, err := c.FindTablet(ctx, func(t *vtadminpb.Tablet) bool {
 		return t.Tablet.Keyspace == req.Keyspace && topo.IsInServingGraph(t.Tablet.Type) && t.Tablet.Type != topodatapb.TabletType_MASTER && t.State == vtadminpb.Tablet_SERVING
 	})
 	if err != nil {
 		return nil, fmt.Errorf("cannot find serving, non-primary tablet in keyspace=%s: %w", req.Keyspace, err)
 	}
+
+	span.Annotate("tablet_alias", topoproto.TabletAliasString(tablet.Tablet.Alias))
 
 	if err := c.Vtctld.Dial(ctx); err != nil {
 		return nil, err
@@ -848,6 +853,12 @@ func (api *API) VTExplain(ctx context.Context, req *vtadminpb.VTExplainRequest) 
 	go func(c *cluster.Cluster) {
 		defer wg.Done()
 
+		span, ctx := trace.NewSpan(ctx, "Cluster.GetSrvVSchema")
+		defer span.Finish()
+
+		span.Annotate("cell", tablet.Tablet.Alias.Cell)
+		cluster.AnnotateSpan(c, span)
+
 		res, err := c.Vtctld.GetSrvVSchema(ctx, &vtctldatapb.GetSrvVSchemaRequest{
 			Cell: tablet.Tablet.Alias.Cell,
 		})
@@ -875,6 +886,12 @@ func (api *API) VTExplain(ctx context.Context, req *vtadminpb.VTExplainRequest) 
 	// FindAllShardsInKeyspace
 	go func(c *cluster.Cluster) {
 		defer wg.Done()
+
+		span, ctx := trace.NewSpan(ctx, "Cluster.FindAllShardsInKeyspace")
+		defer span.Finish()
+
+		span.Annotate("keyspace", req.Keyspace)
+		cluster.AnnotateSpan(c, span)
 
 		ksm, err := c.Vtctld.FindAllShardsInKeyspace(ctx, &vtctldatapb.FindAllShardsInKeyspaceRequest{
 			Keyspace: req.Keyspace,
