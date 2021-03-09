@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/assert"
@@ -213,6 +214,29 @@ func TestDDLUnsharded(t *testing.T) {
 	exec(t, conn, `drop view v1`)
 	exec(t, conn, `drop table tempt1`)
 	assertMatches(t, conn, "show tables", `[[VARCHAR("allDefaults")] [VARCHAR("t1")]]`)
+}
+
+func TestReservedConnDML(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	vtParams := mysql.ConnParams{
+		Host: "localhost",
+		Port: clusterInstance.VtgateMySQLPort,
+	}
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	exec(t, conn, `set default_week_format = 1`)
+	exec(t, conn, `begin`)
+	exec(t, conn, `insert into allDefaults () values ()`)
+	exec(t, conn, `commit`)
+
+	time.Sleep(35 * time.Second)
+
+	exec(t, conn, `begin`)
+	exec(t, conn, `insert into allDefaults () values ()`)
+	exec(t, conn, `commit`)
 }
 
 func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
