@@ -17,7 +17,6 @@ import { rest } from 'msw';
 import { setupServer } from 'msw/node';
 
 import * as api from './http';
-import { vtadmin as pb } from '../proto/vtadmin';
 import { HTTP_RESPONSE_NOT_OK_ERROR, MALFORMED_HTTP_RESPONSE_ERROR } from './http';
 
 // This test suite uses Mock Service Workers (https://github.com/mswjs/msw)
