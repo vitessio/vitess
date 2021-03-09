@@ -303,8 +303,9 @@ func TestSelectEqualUniqueScatter(t *testing.T) {
 	sel.Values = []sqltypes.PlanValue{{Value: sqltypes.NewInt64(1)}}
 
 	vc := &loggingVCursor{
-		shards:  []string{"-20", "20-"},
-		results: []*sqltypes.Result{defaultSelectResult},
+		shards:       []string{"-20", "20-"},
+		shardForKsid: []string{"-20", "20-"},
+		results:      []*sqltypes.Result{defaultSelectResult},
 	}
 	result, err := sel.Execute(vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
@@ -573,6 +574,86 @@ func TestSelectMultiEqual(t *testing.T) {
 		`StreamExecuteMulti dummy_select ks.-20: {} ks.20-: {} `,
 	})
 	expectResult(t, "sel.StreamExecute", result, defaultSelectResult)
+}
+
+func TestSelectLike(t *testing.T) {
+	subshard, _ := vindexes.NewCFC("cfc", map[string]string{"hash": "md5", "offsets": "[1,2]"})
+	vindex := subshard.(*vindexes.CFC).PrefixVindex()
+	vc := &loggingVCursor{
+		// we have shards '-0c80', '0c80-0d', '0d-40', '40-80', '80-'
+		shards:  []string{"\x0c\x80", "\x0d", "\x40", "\x80"},
+		results: []*sqltypes.Result{defaultSelectResult},
+	}
+
+	sel := NewRoute(
+		SelectEqual,
+		&vindexes.Keyspace{
+			Name:    "ks",
+			Sharded: true,
+		},
+		"dummy_select",
+		"dummy_select_field",
+	)
+
+	sel.Vindex = vindex.(vindexes.SingleColumn)
+	sel.Values = []sqltypes.PlanValue{
+		{Value: sqltypes.NewVarBinary("a%")},
+	}
+	// md5("a") = 0cc175b9c0f1b6a831c399e269772661
+	// keyspace id prefix for "a" is 0x0c
+	vc.shardForKsid = []string{"-0c80", "0c80-0d"}
+	result, err := sel.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err)
+
+	// range 0c-0d hits 2 shards ks.-0c80 ks.0c80-0d;
+	// note that 0c-0d should not hit ks.0d-40
+	vc.ExpectLog(t, []string{
+		`ResolveDestinations ks [type:VARBINARY value:"a%" ] Destinations:DestinationKeyRange(0c-0d)`,
+		`ExecuteMultiShard ks.-0c80: dummy_select {} ks.0c80-0d: dummy_select {} false false`,
+	})
+	expectResult(t, "sel.Execute", result, defaultSelectResult)
+
+	vc.Rewind()
+
+	result, err = wrapStreamExecute(sel, vc, map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err)
+
+	vc.ExpectLog(t, []string{
+		`ResolveDestinations ks [type:VARBINARY value:"a%" ] Destinations:DestinationKeyRange(0c-0d)`,
+		`StreamExecuteMulti dummy_select ks.-0c80: {} ks.0c80-0d: {} `,
+	})
+	expectResult(t, "sel.StreamExecute", result, defaultSelectResult)
+
+	vc.Rewind()
+
+	sel.Values = []sqltypes.PlanValue{
+		{Value: sqltypes.NewVarBinary("ab%")},
+	}
+	// md5("b") = 92eb5ffee6ae2fec3ad71c777531578f
+	// keyspace id prefix for "ab" is 0x0c92
+	// adding one byte to the prefix just hit one shard
+	vc.shardForKsid = []string{"0c80-0d"}
+	result, err = sel.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	vc.ExpectLog(t, []string{
+		`ResolveDestinations ks [type:VARBINARY value:"ab%" ] Destinations:DestinationKeyRange(0c92-0c93)`,
+		`ExecuteMultiShard ks.0c80-0d: dummy_select {} false false`,
+	})
+	expectResult(t, "sel.Execute", result, defaultSelectResult)
+
+	vc.Rewind()
+
+	result, err = wrapStreamExecute(sel, vc, map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err)
+
+	vc.ExpectLog(t, []string{
+		`ResolveDestinations ks [type:VARBINARY value:"ab%" ] Destinations:DestinationKeyRange(0c92-0c93)`,
+		`StreamExecuteMulti dummy_select ks.0c80-0d: {} `,
+	})
+	expectResult(t, "sel.StreamExecute", result, defaultSelectResult)
+
 }
 
 func TestSelectNext(t *testing.T) {

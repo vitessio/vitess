@@ -420,7 +420,7 @@ func (f *loggingVCursor) ResolveDestinations(keyspace string, ids []*querypb.Val
 		case key.DestinationAllShards:
 			shards = f.shards
 		case key.DestinationKeyRange:
-			shards = []string{"-20", "20-"}
+			shards = f.shardForKsid
 		case key.DestinationKeyspaceID:
 			if f.shardForKsid == nil || f.curShardForKsid >= len(f.shardForKsid) {
 				shards = []string{"-20"}
