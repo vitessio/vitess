@@ -139,7 +139,7 @@ func (vtgate *VTGateProxy) Dial(ctx context.Context, target string, opts ...grpc
 	if vtgate.host == "" {
 		gate, err := vtgate.discovery.DiscoverVTGateAddr(ctx, vtgate.discoveryTags)
 		if err != nil {
-			return err
+			return fmt.Errorf("error discovering vtgate to dial: %w", err)
 		}
 
 		vtgate.host = gate
@@ -163,7 +163,7 @@ func (vtgate *VTGateProxy) Dial(ctx context.Context, target string, opts ...grpc
 
 	db, err := vtgate.DialFunc(conf)
 	if err != nil {
-		return err
+		return fmt.Errorf("error dialing vtgate %s: %w", vtgate.host, err)
 	}
 
 	vtgate.conn = db

@@ -254,7 +254,7 @@ func (api *API) GetGates(ctx context.Context, req *vtadminpb.GetGatesRequest) (*
 
 			gs, err := c.Discovery.DiscoverVTGates(ctx, []string{})
 			if err != nil {
-				er.RecordError(err)
+				er.RecordError(fmt.Errorf("DiscoverVTGates(cluster = %s): %w", c.ID, err))
 				return
 			}
 
@@ -315,7 +315,7 @@ func (api *API) GetKeyspaces(ctx context.Context, req *vtadminpb.GetKeyspacesReq
 
 			resp, err := c.Vtctld.GetKeyspaces(ctx, &vtctldatapb.GetKeyspacesRequest{})
 			if err != nil {
-				er.RecordError(err)
+				er.RecordError(fmt.Errorf("GetKeyspaces(cluster = %s): %w", c.ID, err))
 				return
 			}
 
@@ -337,7 +337,7 @@ func (api *API) GetKeyspaces(ctx context.Context, req *vtadminpb.GetKeyspacesReq
 					})
 
 					if err != nil {
-						er.RecordError(err)
+						er.RecordError(fmt.Errorf("FindAllShardsInKeyspace(%s): %w", ks.Name, err))
 						return
 					}
 
@@ -566,7 +566,7 @@ func (api *API) GetTablet(ctx context.Context, req *vtadminpb.GetTabletRequest) 
 
 			ts, err := c.GetTablets(ctx)
 			if err != nil {
-				er.RecordError(err)
+				er.RecordError(fmt.Errorf("GetTablets(cluster = %s): %w", c.ID, err))
 				return
 			}
 
@@ -622,7 +622,7 @@ func (api *API) GetTablets(ctx context.Context, req *vtadminpb.GetTabletsRequest
 
 			ts, err := c.GetTablets(ctx)
 			if err != nil {
-				er.RecordError(err)
+				er.RecordError(fmt.Errorf("GetTablets(cluster = %s): %w", c.ID, err))
 				return
 			}
 
@@ -796,15 +796,14 @@ func (api *API) VTExplain(ctx context.Context, req *vtadminpb.VTExplainRequest) 
 
 	c, ok := api.clusterMap[req.Cluster]
 	if !ok {
-		return nil, errors.ErrUnsupportedCluster
+		return nil, fmt.Errorf("%w: %s", errors.ErrUnsupportedCluster, req.Cluster)
 	}
 
 	tablet, err := c.FindTablet(ctx, func(t *vtadminpb.Tablet) bool {
 		return t.Tablet.Keyspace == req.Keyspace && topo.IsInServingGraph(t.Tablet.Type) && t.Tablet.Type != topodatapb.TabletType_MASTER && t.State == vtadminpb.Tablet_SERVING
 	})
-
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("cannot find serving, non-primary tablet in keyspace=%s: %w", req.Keyspace, err)
 	}
 
 	if err := c.Vtctld.Dial(ctx); err != nil {
@@ -831,17 +830,14 @@ func (api *API) VTExplain(ctx context.Context, req *vtadminpb.VTExplainRequest) 
 	go func(c *cluster.Cluster) {
 		defer wg.Done()
 
-		res, err := c.Vtctld.GetSchema(ctx, &vtctldatapb.GetSchemaRequest{
-			TabletAlias: tablet.Tablet.Alias,
-		})
-
+		res, err := c.GetSchema(ctx, &vtctldatapb.GetSchemaRequest{}, tablet)
 		if err != nil {
-			er.RecordError(err)
+			er.RecordError(fmt.Errorf("GetSchema(%s): %w", topoproto.TabletAliasString(tablet.Tablet.Alias), err))
 			return
 		}
 
-		schemas := make([]string, len(res.Schema.TableDefinitions))
-		for i, td := range res.Schema.TableDefinitions {
+		schemas := make([]string, len(res.TableDefinitions))
+		for i, td := range res.TableDefinitions {
 			schemas[i] = td.Schema
 		}
 
@@ -857,7 +853,7 @@ func (api *API) VTExplain(ctx context.Context, req *vtadminpb.VTExplainRequest) 
 		})
 
 		if err != nil {
-			er.RecordError(err)
+			er.RecordError(fmt.Errorf("GetSrvVSchema(%s): %w", tablet.Tablet.Alias.Cell, err))
 			return
 		}
 
@@ -885,7 +881,7 @@ func (api *API) VTExplain(ctx context.Context, req *vtadminpb.VTExplainRequest) 
 		})
 
 		if err != nil {
-			er.RecordError(err)
+			er.RecordError(fmt.Errorf("FindAllShardsInKeyspace(%s): %w", req.Keyspace, err))
 			return
 		}
 
@@ -912,12 +908,12 @@ func (api *API) VTExplain(ctx context.Context, req *vtadminpb.VTExplainRequest) 
 	opts := &vtexplain.Options{ReplicationMode: "ROW"}
 
 	if err := vtexplain.Init(srvVSchema, schema, shardMap, opts); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error initilaizing vtexplain: %w", err)
 	}
 
 	plans, err := vtexplain.Run(req.Sql)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error running vtexplain: %w", err)
 	}
 
 	response := vtexplain.ExplainsAsText(plans)
