@@ -1310,7 +1310,7 @@ func TestListenerShutdown(t *testing.T) {
 		Uname: "user1",
 		Pass:  "password1",
 	}
-	initialconnRefuse := connRefuse.Get()
+	connRefuse.Reset()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -1326,9 +1326,7 @@ func TestListenerShutdown(t *testing.T) {
 
 	l.Shutdown()
 
-	if connRefuse.Get()-initialconnRefuse != 1 {
-		t.Errorf("Expected connRefuse delta=1, got %d", connRefuse.Get()-initialconnRefuse)
-	}
+	assert.EqualValues(t, 1, connRefuse.Get(), "connRefuse")
 
 	if err := conn.Ping(); err != nil {
 		sqlErr, ok := err.(*SQLError)
