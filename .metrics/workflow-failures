@@ -4127,3 +4127,5 @@
 2021-03-09T08:20:21Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/635097523
 2021-03-09T08:20:21Z,unit_race,https://github.com/vitessio/vitess/actions/runs/635097506
 2021-03-09T08:42:47Z,Cluster (17),https://github.com/vitessio/vitess/actions/runs/635153858
+2021-03-09T08:51:39Z,Cluster (onlineddl_vrepl_stress),https://github.com/vitessio/vitess/actions/runs/635177248
+2021-03-09T09:17:42Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/635246221
