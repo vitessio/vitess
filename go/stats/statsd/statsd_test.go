@@ -3,6 +3,7 @@ package statsd
 import (
 	"expvar"
 	"net"
+	"reflect"
 	"sort"
 	"strings"
 	"testing"
@@ -445,4 +446,12 @@ func TestStatsdHistogram(t *testing.T) {
 	if !found {
 		t.Errorf("Stat %s not found...", name)
 	}
+}
+
+func TestMakeCommonTags(t *testing.T) {
+	res1 := makeCommonTags(map[string]string{})
+	assert.Equal(t, 0, len(res1))
+	expected2 := []string{"a:b", "c:d"}
+	res2 := makeCommonTags(map[string]string{"a": "b", "c": "d"})
+	assert.Assert(t, reflect.DeepEqual(expected2, res2))
 }
