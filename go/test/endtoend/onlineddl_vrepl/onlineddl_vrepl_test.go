@@ -103,6 +103,50 @@ var (
 	`
 	countInserts int64
 	insertMutex  sync.Mutex
+
+	vSchema = `
+{
+  "sharded": true,
+  "vindexes": {
+    "hash_index": {
+      "type": "hash"
+    }
+  },
+  "tables": {
+    "vt_onlineddl_test_00": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "hash_index"
+        }
+      ]
+},
+    "vt_onlineddl_test_01": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "hash_index"
+        }
+      ]
+},
+    "vt_onlineddl_test_02": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "hash_index"
+        }
+      ]
+},
+    "vt_onlineddl_test_03": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "hash_index"
+        }
+      ]
+    }
+  }
+}   `
 )
 
 func fullWordRegexp(searchWord string) *regexp.Regexp {
@@ -143,15 +187,12 @@ func TestMain(m *testing.M) {
 			return 1, err
 		}
 
-		// Start keyspace
 		keyspace := &cluster.Keyspace{
-			Name: keyspaceName,
+			Name:    keyspaceName,
+			VSchema: vSchema,
 		}
 
-		if err := clusterInstance.StartUnshardedKeyspace(*keyspace, 2, true); err != nil {
-			return 1, err
-		}
-		if err := clusterInstance.StartKeyspace(*keyspace, []string{"1"}, 1, false); err != nil {
+		if err := clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 1, false); err != nil {
 			return 1, err
 		}
 
