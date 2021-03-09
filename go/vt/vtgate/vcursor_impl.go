@@ -699,8 +699,7 @@ func (vc *vcursorImpl) GetDBDDLPluginName() string {
 }
 
 func (vc *vcursorImpl) FindKeyspace(ks string) bool {
-	_, err := vc.topoServer.GetKeyspace(vc.ctx, ks)
-	return err == nil
+	return vc.KeyspaceExists(ks)
 }
 
 // ParseDestinationTarget parses destination target string and sets default keyspace if possible.
