@@ -25,6 +25,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/vt/grpccommon"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -884,8 +885,12 @@ func TestGetKeyspaces(t *testing.T) {
 			}
 
 			servers := []vtctlservicepb.VtctldServer{
-				grpcvtctldserver.NewVtctldServer(topos[0]),
-				grpcvtctldserver.NewVtctldServer(topos[1]),
+				testutil.NewVtctldServerWithTabletManagerClient(t, topos[0], nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+					return grpcvtctldserver.NewVtctldServer(ts)
+				}),
+				testutil.NewVtctldServerWithTabletManagerClient(t, topos[1], nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+					return grpcvtctldserver.NewVtctldServer(ts)
+				}),
 			}
 
 			testutil.WithTestServers(t, func(t *testing.T, clients ...vtctldclient.VtctldClient) {
@@ -2870,4 +2875,15 @@ func init() {
 	tmclient.RegisterTabletManagerClientFactory("vtadmin.test", func() tmclient.TabletManagerClient {
 		return nil
 	})
+
+	// This prevents data-race failures in tests involving grpc client or server
+	// creation. For example, vtctldclient.New() eventually ends up calling
+	// grpccommon.EnableTracingOpt() which does a synchronized, one-time
+	// mutation of the global grpc.EnableTracing. This variable is also read,
+	// unguarded, by grpc.NewServer(), which is a function call that appears in
+	// most, if not all, vtadmin.API tests.
+	//
+	// Calling this here ensures that one-time write happens before any test
+	// attempts to read that value by way of grpc.NewServer().
+	grpccommon.EnableTracingOpt()
 }
