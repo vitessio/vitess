@@ -22,11 +22,12 @@ jobs:
       uses: actions/setup-node@v1
       with:
         node-version: ${{ matrix.node-version }}
-    
-    # As a future enhancement, we can look into caching node_modules so we can
-    # parallelize linting/unit tests as separate jobs in the workflow.
-    # At the time of writing, this workflow completes in ~2 minutes
-    # so it's not a pressing need (and it does add complexity).
+
+    # Note from the docs: https://github.com/actions/cache/blob/main/examples.md#node---npm
+    #
+    #   It is not recommended to cache node_modules, as it can break across Node versions 
+    #   and won't work with npm ci
+    #
     - name: Install dependencies
       run: npm ci
     
