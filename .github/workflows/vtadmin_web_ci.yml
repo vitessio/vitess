@@ -1,4 +1,4 @@
-name: vtadmin_web_build
+name: vtadmin_web_ci
 on: 
   pull_request:
     paths:
