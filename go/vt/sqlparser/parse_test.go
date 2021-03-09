@@ -2286,6 +2286,8 @@ func TestSelectInto(t *testing.T) {
 		input:  "select * from t order by name limit 100 into outfile s3 'out_file_name'",
 		output: "select * from t order by `name` asc limit 100 into outfile s3 'out_file_name'",
 	}, {
+		input: "select * from TestPerson into outfile s3 's3://test-bucket/export_import/export/users.csv' fields terminated by ',' enclosed by '\"' escaped by '\\\\' overwrite on",
+	}, {
 		input: "select * from t into dumpfile 'out_file_name'",
 	}, {
 		input: "select * from t into outfile 'out_file_name' character set binary fields terminated by 'term' optionally enclosed by 'c' escaped by 'e' lines starting by 'a' terminated by '\n'",
