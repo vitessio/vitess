@@ -65,6 +65,14 @@ func InitWithoutServenv(namespace string) {
 		return
 	}
 	statsdC.Namespace = namespace + "."
+	if tags := stats.ParseCommonTags(*stats.CommonTags); len(tags) > 0 {
+		var commonTags []string
+		for k, v := range tags {
+			commonTag := fmt.Sprintf("%s:%s", k, v)
+			commonTags = append(commonTags, commonTag)
+		}
+		statsdC.Tags = commonTags
+	}
 	sb.namespace = namespace
 	sb.statsdClient = statsdC
 	sb.sampleRate = *statsdSampleRate
