@@ -105,48 +105,49 @@ var (
 	insertMutex  sync.Mutex
 
 	vSchema = `
-{
-  "sharded": true,
-  "vindexes": {
-    "hash_index": {
-      "type": "hash"
-    }
-  },
-  "tables": {
-    "vt_onlineddl_test_00": {
-      "column_vindexes": [
-        {
-          "column": "id",
-          "name": "hash_index"
-        }
-      ]
-},
-    "vt_onlineddl_test_01": {
-      "column_vindexes": [
-        {
-          "column": "id",
-          "name": "hash_index"
-        }
-      ]
-},
-    "vt_onlineddl_test_02": {
-      "column_vindexes": [
-        {
-          "column": "id",
-          "name": "hash_index"
-        }
-      ]
-},
-    "vt_onlineddl_test_03": {
-      "column_vindexes": [
-        {
-          "column": "id",
-          "name": "hash_index"
-        }
-      ]
-    }
-  }
-}   `
+	{
+		"sharded": true,
+		"vindexes": {
+			"hash_index": {
+				"type": "hash"
+			}
+		},
+		"tables": {
+			"vt_onlineddl_test_00": {
+				"column_vindexes": [
+					{
+						"column": "id",
+						"name": "hash_index"
+					}
+				]
+			},
+			"vt_onlineddl_test_01": {
+				"column_vindexes": [
+					{
+						"column": "id",
+						"name": "hash_index"
+					}
+				]
+			},
+			"vt_onlineddl_test_02": {
+				"column_vindexes": [
+					{
+						"column": "id",
+						"name": "hash_index"
+					}
+				]
+			},
+			"vt_onlineddl_test_03": {
+				"column_vindexes": [
+					{
+						"column": "id",
+						"name": "hash_index"
+					}
+				]
+			}
+		}
+	}
+	`
 )
 
 func fullWordRegexp(searchWord string) *regexp.Regexp {
@@ -444,8 +445,9 @@ func checkTablesCount(t *testing.T, tablet *cluster.Vttablet, showTableName stri
 // +------------------+-------+--------------+----------------------+--------------------------------------+----------+---------------------+---------------------+------------------+
 
 func checkRecentMigrations(t *testing.T, uuid string, expectStatus schema.OnlineDDLStatus) {
-	r := vtgateExecQuery(t, "show vitess_migrations", "")
-	fmt.Println("# 'show vitess_migrations' output (for debug purposes):")
+	showQuery := fmt.Sprintf("show vitess_migrations like '%s'", uuid)
+	r := vtgateExecQuery(t, showQuery, "")
+	fmt.Printf("# output for `%s`:\n", showQuery)
 	printQueryResult(os.Stdout, r)
 
 	count := 0
@@ -585,7 +587,10 @@ func printQueryResult(writer io.Writer, qr *sqltypes.Result) {
 	for _, row := range qr.Rows {
 		vals := make([]string, 0, len(row))
 		for _, val := range row {
-			vals = append(vals, val.ToString())
+			v := val.ToString()
+			v = strings.ReplaceAll(v, "\r", " ")
+			v = strings.ReplaceAll(v, "\n", " ")
+			vals = append(vals, v)
 		}
 		table.Append(vals)
 	}
