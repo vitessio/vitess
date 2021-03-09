@@ -17,6 +17,7 @@ limitations under the License.
 package schema
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -45,6 +46,8 @@ func TestParseDDLStrategy(t *testing.T) {
 		strategyVariable string
 		strategy         DDLStrategy
 		options          string
+		isDeclarative    bool
+		runtimeOptions   string
 		err              error
 	}{
 		{
@@ -70,6 +73,21 @@ func TestParseDDLStrategy(t *testing.T) {
 			strategyVariable: "gh-ost --max-load=Threads_running=100 --allow-master",
 			strategy:         DDLStrategyGhost,
 			options:          "--max-load=Threads_running=100 --allow-master",
+			runtimeOptions:   "--max-load=Threads_running=100 --allow-master",
+		},
+		{
+			strategyVariable: "gh-ost --max-load=Threads_running=100 -declarative",
+			strategy:         DDLStrategyGhost,
+			options:          "--max-load=Threads_running=100 -declarative",
+			runtimeOptions:   "--max-load=Threads_running=100",
+			isDeclarative:    true,
+		},
+		{
+			strategyVariable: "gh-ost --declarative --max-load=Threads_running=100",
+			strategy:         DDLStrategyGhost,
+			options:          "--declarative --max-load=Threads_running=100",
+			runtimeOptions:   "--max-load=Threads_running=100",
+			isDeclarative:    true,
 		},
 	}
 	for _, ts := range tt {
@@ -77,6 +95,11 @@ func TestParseDDLStrategy(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, ts.strategy, strategy)
 		assert.Equal(t, ts.options, options)
+		onlineDDL := &OnlineDDL{Options: options}
+		assert.Equal(t, ts.isDeclarative, onlineDDL.IsDeclarative())
+
+		runtimeOptions := strings.Join(onlineDDL.RuntimeOptions(), " ")
+		assert.Equal(t, ts.runtimeOptions, runtimeOptions)
 	}
 	{
 		_, _, err := ParseDDLStrategy("other")
