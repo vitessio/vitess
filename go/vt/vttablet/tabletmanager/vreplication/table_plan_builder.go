@@ -626,7 +626,11 @@ func (tpb *tablePlanBuilder) generateUpdateStatement() *sqlparser.ParsedQuery {
 		switch cexpr.operation {
 		case opExpr:
 			bvf.mode = bvAfter
-			buf.Myprintf("%v", cexpr.expr)
+			if cexpr.colType == querypb.Type_JSON {
+				buf.Myprintf("convert(%v using utf8mb4)", cexpr.expr)
+			} else {
+				buf.Myprintf("%v", cexpr.expr)
+			}
 		case opCount:
 			buf.Myprintf("%v", cexpr.colName)
 		case opSum:
