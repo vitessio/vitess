@@ -694,6 +694,19 @@ func (vc *vcursorImpl) HasCreatedTempTable() {
 	vc.safeSession.GetOrCreateOptions().HasCreatedTempTables = true
 }
 
+// ErrorIfShardedF is used to allow but log on unsharded, and just error when in a sharded keyspace
+func (vc *vcursorImpl) ErrorIfShardedF(ks *vindexes.Keyspace, warn, errFormat string, params ...interface{}) error {
+	if ks.Sharded {
+		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, errFormat, params...)
+	}
+	log.Warnf("use of feature that is only supported in unsharded mode:%s", warn)
+	return nil
+}
+
+func (vc *vcursorImpl) WarnUnshardedOnly(format string, params ...interface{}) {
+	log.Warnf(format, params...)
+}
+
 // ParseDestinationTarget parses destination target string and sets default keyspace if possible.
 func parseDestinationTarget(targetString string, vschema *vindexes.VSchema) (string, topodatapb.TabletType, key.Destination, error) {
 	destKeyspace, destTabletType, dest, err := topoprotopb.ParseDestination(targetString, defaultTabletType)
