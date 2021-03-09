@@ -322,6 +322,8 @@ func isVarDropped(name string) bool {
 }
 
 // ParseCommonTags parses a comma-separated string into map of tags
+// If you want to global service values like host, service name, git revision, etc,
+// this is the place to do it.
 func ParseCommonTags(s string) map[string]string {
 	inputs := strings.Split(s, ",")
 	tags := make(map[string]string)

@@ -98,10 +98,8 @@ func InitWithoutServenv(prefix string) {
 	}
 
 	backend := &openTSDBBackend{
-		prefix: prefix,
-		// If you want to global service values like host, service name, git revision, etc,
-		// this is the place to do it.
-		commonTags: map[string]string{},
+		prefix:     prefix,
+		commonTags: stats.ParseCommonTags(*stats.CommonTags),
 	}
 
 	stats.RegisterPushBackend("opentsdb", backend)
