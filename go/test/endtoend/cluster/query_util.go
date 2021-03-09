@@ -1,5 +1,5 @@
 /*
-Copyright 2019 The Vitess Authors.
+Copyright 2021 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -25,7 +25,7 @@ import (
 	"github.com/olekukonko/tablewriter"
 )
 
-// printQueryResult will pretty-print a QueryResult to the logger.
+// PrintQueryResult will pretty-print a QueryResult to the logger.
 func PrintQueryResult(writer io.Writer, qr *sqltypes.Result) {
 	if qr == nil {
 		return
