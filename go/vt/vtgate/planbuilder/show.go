@@ -22,8 +22,6 @@ import (
 	"strings"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	topoprotopb "vitess.io/vitess/go/vt/topo/topoproto"
-
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	"vitess.io/vitess/go/mysql"
@@ -180,17 +178,22 @@ func buildDBPlan(show *sqlparser.ShowBasic, vschema ContextVSchema) (engine.Prim
 
 // buildShowVMigrationsPlan serves `SHOW VITESS_MIGRATIONS ...` queries. It invokes queries on _vt.schema_migrations on all MASTER tablets on keyspace's shards.
 func buildShowVMigrationsPlan(show *sqlparser.ShowBasic, vschema ContextVSchema) (engine.Primitive, error) {
-	_, keyspace, _, err := vschema.TargetDestination(show.DbName)
+	dest, ks, tabletType, err := vschema.TargetDestination(show.DbName)
 	if err != nil {
 		return nil, err
 	}
-	if keyspace.Name == "" {
+	if ks == nil {
 		return nil, vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.NoDB, "No database selected: use keyspace<:shard><@type> or keyspace<[range]><@type> (<> are optional)")
 	}
-	_, _, dest, err := topoprotopb.ParseDestination(keyspace.Name, topodatapb.TabletType_MASTER)
-	if err != nil {
-		return nil, err
+
+	if tabletType != topodatapb.TabletType_MASTER {
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "show vitess_migrations works only on primary tablet")
 	}
+
+	if dest == nil {
+		dest = key.DestinationAllShards{}
+	}
+
 	sql := "SELECT * FROM _vt.schema_migrations"
 
 	if show.Filter != nil {
@@ -201,11 +204,9 @@ func buildShowVMigrationsPlan(show *sqlparser.ShowBasic, vschema ContextVSchema)
 			sql += fmt.Sprintf(" where migration_uuid LIKE %s OR migration_context LIKE %s OR migration_status LIKE %s", lit, lit, lit)
 		}
 	}
-	return &engine.Route{
-		Keyspace:          keyspace,
-		Opcode:            engine.SelectScatter,
+	return &engine.Send{
+		Keyspace:          ks,
 		TargetDestination: dest,
-		TargetTabletType:  topodatapb.TabletType_MASTER,
 		Query:             sql,
 	}, nil
 }
