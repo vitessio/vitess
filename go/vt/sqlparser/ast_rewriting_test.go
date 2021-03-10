@@ -202,6 +202,7 @@ func TestRewrites(in *testing.T) {
 		rawGTID:                     true,
 		rawTimeout:                  true,
 		sessTrackGTID:               true,
+		socket:                      true,
 	}, {
 		in:                          "SHOW GLOBAL VARIABLES",
 		expected:                    "SHOW GLOBAL VARIABLES",
@@ -219,6 +220,7 @@ func TestRewrites(in *testing.T) {
 		rawGTID:                     true,
 		rawTimeout:                  true,
 		sessTrackGTID:               true,
+		socket:                      true,
 	}}
 
 	for _, tc := range tests {
