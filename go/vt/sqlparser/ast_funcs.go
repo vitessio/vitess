@@ -1281,6 +1281,8 @@ func (ty ShowCommandType) ToString() string {
 		return VariableGlobalStr
 	case VariableSession:
 		return VariableSessionStr
+	case VitessMigrations:
+		return VitessMigrationsStr
 	case Keyspace:
 		return KeyspaceStr
 	default:

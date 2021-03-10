@@ -20,8 +20,10 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 
+	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -64,7 +66,7 @@ func New(cfg Config) (*Cluster, error) {
 
 	disco, err := discovery.New(cfg.DiscoveryImpl, cluster.ToProto(), discoargs)
 	if err != nil {
-		return nil, fmt.Errorf("error while creating discovery impl (%s): %w", cfg.DiscoveryImpl, err)
+		return nil, fmt.Errorf("error creating discovery impl (%s): %w", cfg.DiscoveryImpl, err)
 	}
 
 	cluster.Discovery = disco
@@ -75,14 +77,14 @@ func New(cfg Config) (*Cluster, error) {
 
 	vtsqlCfg, err := vtsql.Parse(protocluster, disco, vtsqlargs)
 	if err != nil {
-		return nil, fmt.Errorf("error while creating vtsql connection config: %w", err)
+		return nil, fmt.Errorf("error creating vtsql connection config: %w", err)
 	}
 
 	vtctldargs := buildPFlagSlice(cfg.VtctldFlags)
 
 	vtctldCfg, err := vtctldclient.Parse(protocluster, disco, vtctldargs)
 	if err != nil {
-		return nil, fmt.Errorf("error while creating vtctldclient proxy config: %w", err)
+		return nil, fmt.Errorf("error creating vtctldclient proxy config: %w", err)
 	}
 
 	cluster.DB = vtsql.New(vtsqlCfg)
@@ -178,7 +180,7 @@ func (c *Cluster) parseTablet(rows *sql.Rows) (*vtadminpb.Tablet, error) {
 
 	topotablet.Alias, err = topoproto.ParseTabletAlias(aliasStr)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to parse tablet_alias %s: %w", aliasStr, err)
 	}
 
 	if topotablet.Alias.Cell != cell {
@@ -189,7 +191,7 @@ func (c *Cluster) parseTablet(rows *sql.Rows) (*vtadminpb.Tablet, error) {
 	if mtstStr != "" {
 		timeTime, err := time.Parse(time.RFC3339, mtstStr)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed parsing master_term_start_time %s: %w", mtstStr, err)
 		}
 
 		topotablet.MasterTermStartTime = logutil.TimeToProto(timeTime)
@@ -200,6 +202,15 @@ func (c *Cluster) parseTablet(rows *sql.Rows) (*vtadminpb.Tablet, error) {
 
 // GetTablets returns all tablets in the cluster.
 func (c *Cluster) GetTablets(ctx context.Context) ([]*vtadminpb.Tablet, error) {
+	span, ctx := trace.NewSpan(ctx, "Cluster.GetTablets")
+	defer span.Finish()
+
+	AnnotateSpan(c, span)
+
+	return c.getTablets(ctx)
+}
+
+func (c *Cluster) getTablets(ctx context.Context) ([]*vtadminpb.Tablet, error) {
 	if err := c.DB.Dial(ctx, ""); err != nil {
 		return nil, err
 	}
@@ -226,9 +237,21 @@ func (c *Cluster) GetTablets(ctx context.Context) ([]*vtadminpb.Tablet, error) {
 // bunch of tablets once and make a series of GetSchema calls without Cluster
 // refetching the tablet list each time.
 func (c *Cluster) GetSchema(ctx context.Context, req *vtctldatapb.GetSchemaRequest, tablet *vtadminpb.Tablet) (*vtadminpb.Schema, error) {
+	span, ctx := trace.NewSpan(ctx, "Cluster.GetSchema")
+	defer span.Finish()
+
+	AnnotateSpan(c, span)
+
 	// Copy the request to not mutate the caller's request object.
 	r := *req
 	r.TabletAlias = tablet.Tablet.Alias
+
+	span.Annotate("tablet_alias", topoproto.TabletAliasString(r.TabletAlias))
+	span.Annotate("exclude_tables", strings.Join(r.ExcludeTables, ","))
+	span.Annotate("tables", strings.Join(r.Tables, ","))
+	span.Annotate("include_views", r.IncludeViews)
+	span.Annotate("table_names_only", r.TableNamesOnly)
+	span.Annotate("table_sizes_only", r.TableSizesOnly)
 
 	schema, err := c.Vtctld.GetSchema(ctx, &r)
 	if err != nil {
@@ -246,9 +269,39 @@ func (c *Cluster) GetSchema(ctx context.Context, req *vtctldatapb.GetSchemaReque
 	}, nil
 }
 
+// GetVSchema returns the vschema for a given keyspace in this cluster. The
+// caller is responsible for making at least one call to c.Vtctld.Dial prior to
+// calling this function.
+func (c *Cluster) GetVSchema(ctx context.Context, keyspace string) (*vtadminpb.VSchema, error) {
+	span, ctx := trace.NewSpan(ctx, "Cluster.GetVSchema")
+	defer span.Finish()
+
+	AnnotateSpan(c, span)
+	span.Annotate("keyspace", keyspace)
+
+	vschema, err := c.Vtctld.GetVSchema(ctx, &vtctldatapb.GetVSchemaRequest{
+		Keyspace: keyspace,
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtadminpb.VSchema{
+		Cluster: c.ToProto(),
+		Name:    keyspace,
+		VSchema: vschema.VSchema,
+	}, nil
+}
+
 // FindTablet returns the first tablet in a given cluster that satisfies the filter function.
 func (c *Cluster) FindTablet(ctx context.Context, filter func(*vtadminpb.Tablet) bool) (*vtadminpb.Tablet, error) {
-	tablets, err := c.FindTablets(ctx, filter, 1)
+	span, ctx := trace.NewSpan(ctx, "Cluster.FindTablet")
+	defer span.Finish()
+
+	AnnotateSpan(c, span)
+
+	tablets, err := c.findTablets(ctx, filter, 1)
 	if err != nil {
 		return nil, err
 	}
@@ -264,6 +317,17 @@ func (c *Cluster) FindTablet(ctx context.Context, filter func(*vtadminpb.Tablet)
 // the filter function. If N = -1, then all matching tablets are returned.
 // Ordering is not guaranteed, and callers should write their filter functions accordingly.
 func (c *Cluster) FindTablets(ctx context.Context, filter func(*vtadminpb.Tablet) bool, n int) ([]*vtadminpb.Tablet, error) {
+	span, ctx := trace.NewSpan(ctx, "Cluster.FindTablets")
+	defer span.Finish()
+
+	AnnotateSpan(c, span)
+
+	return c.findTablets(ctx, filter, n)
+}
+
+func (c *Cluster) findTablets(ctx context.Context, filter func(*vtadminpb.Tablet) bool, n int) ([]*vtadminpb.Tablet, error) {
+	span, _ := trace.FromContext(ctx)
+
 	tablets, err := c.GetTablets(ctx)
 	if err != nil {
 		return nil, err
@@ -271,6 +335,10 @@ func (c *Cluster) FindTablets(ctx context.Context, filter func(*vtadminpb.Tablet
 
 	if n == -1 {
 		n = len(tablets)
+	}
+
+	if span != nil {
+		span.Annotate("max_result_length", n) // this is a bad name; I didn't want just "n", but it's more like, "requested result length".
 	}
 
 	results := make([]*vtadminpb.Tablet, 0, n)

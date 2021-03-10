@@ -1523,6 +1523,16 @@ var (
 	}, {
 		input: "show vschema vindexes on t",
 	}, {
+		input: "show vitess_migrations",
+	}, {
+		input: "show vitess_migrations from ks",
+	}, {
+		input: "show vitess_migrations from ks where col = 42",
+	}, {
+		input: `show vitess_migrations from ks like '%pattern'`,
+	}, {
+		input: "show vitess_migrations like '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90'",
+	}, {
 		input:  "show warnings",
 		output: "show warnings",
 	}, {
