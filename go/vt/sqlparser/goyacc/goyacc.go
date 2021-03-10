@@ -1346,6 +1346,23 @@ l1:
 func cpyyvalaccess(curprod []int, tok int) {
 	const fastAppendPrefix = " append($$,"
 
+	if ntypes == 0 {
+		fmt.Fprintf(fcode, "%sVAL", prefix)
+		return
+	}
+
+	if tok < 0 {
+		tok, _ = fdtype(curprod[0])
+	}
+	ti, ok := gotypes[typeset[tok]]
+	if !ok {
+		errorf("missing Go type information for %s", typeset[tok])
+	}
+	if !ti.union {
+		fmt.Fprintf(fcode, "%sVAL.%s", prefix, typeset[tok])
+		return
+	}
+
 	var buf bytes.Buffer
 	lvalue := false
 	fastAppend := false
@@ -1382,28 +1399,13 @@ loop:
 		}
 	}
 
-	if ntypes != 0 {
-		if tok < 0 {
-			tok, _ = fdtype(curprod[0])
-		}
-		ti, ok := gotypes[typeset[tok]]
-		if !ok {
-			errorf("missing Go type information for %s", typeset[tok])
-		}
-		if ti.union {
-			if fastAppend {
-				fmt.Fprintf(fcode, "\t%sSLICE := (*%s)(%sIaddr(%sVAL.union))\n", prefix, ti.typename, prefix, prefix)
-				fmt.Fprintf(fcode, "\t*%sSLICE = append(*%sSLICE, ", prefix, prefix)
-			} else if lvalue {
-				fmt.Fprintf(fcode, "%sVAL.union", prefix)
-			} else {
-				fmt.Fprintf(fcode, "%sVAL.%sUnion()", prefix, typeset[tok])
-			}
-		} else {
-			fmt.Fprintf(fcode, "%sVAL.%s", prefix, typeset[tok])
-		}
+	if fastAppend {
+		fmt.Fprintf(fcode, "\t%sSLICE := (*%s)(%sIaddr(%sVAL.union))\n", prefix, ti.typename, prefix, prefix)
+		fmt.Fprintf(fcode, "\t*%sSLICE = append(*%sSLICE, ", prefix, prefix)
+	} else if lvalue {
+		fmt.Fprintf(fcode, "%sVAL.union", prefix)
 	} else {
-		fmt.Fprintf(fcode, "%sVAL", prefix)
+		fmt.Fprintf(fcode, "%sVAL.%sUnion()", prefix, typeset[tok])
 	}
 	fcode.Write(buf.Bytes())
 }
