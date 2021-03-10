@@ -137,7 +137,7 @@ type yySymType struct {
 	tableOptions           TableOptions
 	renameTablePairs       []*RenameTablePair
 	columnTypeOptions      *ColumnTypeOptions
-	reverMigration         *RevertMigration
+	revertMigration        *RevertMigration
 }
 
 const LEX_ERROR = 57346
