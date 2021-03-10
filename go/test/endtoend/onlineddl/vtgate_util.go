@@ -60,3 +60,15 @@ func CheckRetryMigration(t *testing.T, vtParams *mysql.ConnParams, shards []clus
 		assert.Equal(t, int(0), int(r.RowsAffected))
 	}
 }
+
+// CheckCancelMigration attempts to cancel a migration, and expects success/failure by counting affected rows
+func CheckCancelMigration(t *testing.T, vtParams *mysql.ConnParams, shards []cluster.Shard, uuid string, expectCancelPossible bool) {
+	cancelQuery := fmt.Sprintf("alter vitess_migration '%s' cancel", uuid)
+	r := VtgateExecQuery(t, vtParams, cancelQuery, "")
+
+	if expectCancelPossible {
+		assert.Equal(t, len(shards), int(r.RowsAffected))
+	} else {
+		assert.Equal(t, int(0), int(r.RowsAffected))
+	}
+}
