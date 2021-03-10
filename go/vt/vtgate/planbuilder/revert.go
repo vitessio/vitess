@@ -17,15 +17,39 @@ limitations under the License.
 package planbuilder
 
 import (
+	"vitess.io/vitess/go/vt/key"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
-func buildRevertPlan(query string, stmt *sqlparser.RevertMigration, vschema ContextVSchema) (engine.Primitive, error) {
+func buildAlterMigrationPlan(query string, stmt *sqlparser.AlterMigration, vschema ContextVSchema) (engine.Primitive, error) {
+	dest, ks, tabletType, err := vschema.TargetDestination("")
+	if err != nil {
+		return nil, err
+	}
+	if ks == nil {
+		return nil, vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.NoDB, "No database selected: use keyspace<:shard><@type> or keyspace<[range]><@type> (<> are optional)")
+	}
+
+	if tabletType != topodatapb.TabletType_MASTER {
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "ALTER VITESS_MIGRATION works only on primary tablet")
+	}
+
+	if dest == nil {
+		dest = key.DestinationAllShards{}
+	}
+
+	return &engine.Send{
+		Keyspace:          ks,
+		TargetDestination: dest,
+		Query:             query,
+	}, nil
+}
+
+func buildRevertMigrationPlan(query string, stmt *sqlparser.RevertMigration, vschema ContextVSchema) (engine.Primitive, error) {
 	_, ks, tabletType, err := vschema.TargetDestination("")
 	if err != nil {
 		return nil, err
@@ -35,7 +59,7 @@ func buildRevertPlan(query string, stmt *sqlparser.RevertMigration, vschema Cont
 	}
 
 	if tabletType != topodatapb.TabletType_MASTER {
-		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "show vitess_migrations works only on primary tablet")
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "REVERT VITESS_MIGRATION works only on primary tablet")
 	}
 
 	return &engine.RevertMigration{
