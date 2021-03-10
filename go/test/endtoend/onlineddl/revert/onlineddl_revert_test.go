@@ -490,10 +490,14 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 
 // testRevertMigration reverts a given migration
 func testRevertMigration(t *testing.T, revertUUID string) (uuid string) {
-	uuid, err := clusterInstance.VtctlclientProcess.OnlineDDLRevertMigration(keyspaceName, revertUUID)
-	assert.NoError(t, err)
+	revertQuery := fmt.Sprintf("revert vitess_migration '%s'", revertUUID)
+	r := onlineddl.VtgateExecQuery(t, &vtParams, revertQuery, "")
 
-	uuid = strings.TrimSpace(uuid)
+	row := r.Named().Row()
+	require.NotNil(t, row)
+
+	uuid = row["uuid"].ToString()
+
 	fmt.Println("# Generated UUID (for debug purposes):")
 	fmt.Printf("<%s>\n", uuid)
 
