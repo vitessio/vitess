@@ -57,10 +57,6 @@ type noopVCursor struct {
 	ctx context.Context
 }
 
-func (t *noopVCursor) FindKeyspace(ks string) bool {
-	panic("implement me")
-}
-
 func (t *noopVCursor) SetDDLStrategy(strategy string) {
 	panic("implement me")
 }
@@ -274,10 +270,6 @@ type loggingVCursor struct {
 
 	tableRoutes tableRoutes
 	dbDDLPlugin string
-}
-
-func (f *loggingVCursor) FindKeyspace(ks string) bool {
-	return len(f.shards) > 0
 }
 
 type tableRoutes struct {
