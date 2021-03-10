@@ -64,8 +64,6 @@ func skipToEnd(yylex interface{}) {
 }
 
 %union {
-  ifaceUnion interface{}
-
   statement     Statement
   selStmt       SelectStatement
   tableExpr     TableExpr
