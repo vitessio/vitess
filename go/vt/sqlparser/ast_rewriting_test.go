@@ -304,3 +304,67 @@ func TestRewritesWithDefaultKeyspace(in *testing.T) {
 		})
 	}
 }
+
+func TestRewriteToCNF(in *testing.T) {
+	tests := []struct {
+		in       string
+		expected string
+	}{{
+		in:       "not (not A = 3)",
+		expected: "A = 3",
+	}, {
+		in:       "not (A = 3 and B = 2)",
+		expected: "not A = 3 or not B = 2",
+	}, {
+		in:       "not (A = 3 or B = 2)",
+		expected: "not A = 3 and not B = 2",
+	}, {
+		in:       "A xor B",
+		expected: "(A or B) and not (A and B)",
+	}, {
+		in:       "(A and B) or C",
+		expected: "(A or C) and (B or C)",
+	}, {
+		in:       "C or (A and B)",
+		expected: "(C or A) and (C or B)",
+	}}
+
+	for _, tc := range tests {
+		in.Run(tc.in, func(t *testing.T) {
+			require := require.New(t)
+			stmt, err := Parse("SELECT * FROM T WHERE " + tc.in)
+			require.NoError(err)
+
+			expr := stmt.(*Select).Where.Expr
+			expr, didNotRewrite := rewriteToCNF(expr)
+			require.False(didNotRewrite)
+			assert.Equal(t, tc.expected, String(expr))
+		})
+	}
+}
+
+func TestFixedPointRewriteToCNF(in *testing.T) {
+	tests := []struct {
+		in       string
+		expected string
+	}{{
+		in:       "A xor B",
+		expected: "(A or B) and (not A or not B)",
+	}, {
+		in:       "((A AND B) OR (A AND C) OR (A AND D)) AND E AND F",
+		expected: "(A or A or A) and (A or C or A) and ((B or A or A) and (B or C or A)) and ((A or A or D) and (A or C or D) and ((B or A or D) and (B or C or D))) and E and F",
+	}}
+
+	for _, tc := range tests {
+		in.Run(tc.in, func(t *testing.T) {
+			require := require.New(t)
+			stmt, err := Parse("SELECT * FROM T WHERE " + tc.in)
+			require.NoError(err)
+
+			expr := stmt.(*Select).Where.Expr
+			expr, err = fixedPointRewriteToCNF(expr)
+			require.NoError(err)
+			assert.Equal(t, tc.expected, String(expr))
+		})
+	}
+}

@@ -341,3 +341,67 @@ func SystemSchema(schema string) bool {
 		strings.EqualFold(schema, "sys") ||
 		strings.EqualFold(schema, "mysql")
 }
+
+func fixedPointRewriteToCNF(expr Expr) (Expr, error) {
+	var finishedRewrite bool
+	var isExpr bool
+	for !finishedRewrite {
+		finishedRewrite = true
+		sqlNode, err := Rewrite(expr, func(cursor *Cursor) bool {
+			e, isExpr := cursor.node.(Expr)
+			if isExpr {
+				rewritten, didNotRewrite := rewriteToCNF(e)
+				if !didNotRewrite {
+					finishedRewrite = false
+					cursor.Replace(rewritten)
+				}
+			}
+			return true
+		}, nil)
+		if err != nil {
+			return nil, err
+		}
+		expr, isExpr = sqlNode.(Expr)
+		if !isExpr {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] Rewriting an expression must return an expression")
+		}
+	}
+	return expr, nil
+}
+
+func rewriteToCNF(expr Expr) (Expr, bool) {
+	switch expr := expr.(type) {
+	case *NotExpr:
+		switch child := expr.Expr.(type) {
+		case *NotExpr:
+			// NOT NOT A => A
+			return child.Expr, false
+		case *OrExpr:
+			// DeMorgan Rewriter
+			// NOT (A OR B) => NOT A AND NOT B
+			return &AndExpr{Right: &NotExpr{Expr: child.Right}, Left: &NotExpr{Expr: child.Left}}, false
+		case *AndExpr:
+			// DeMorgan Rewriter
+			// NOT (A AND B) => NOT A OR NOT B
+			return &OrExpr{Right: &NotExpr{Expr: child.Right}, Left: &NotExpr{Expr: child.Left}}, false
+		}
+	case *OrExpr:
+		switch lchild := expr.Left.(type) {
+		case *AndExpr:
+			// Distribution Law
+			// (A AND B) OR C => (A OR C) AND (B OR C)
+			return &AndExpr{Left: &OrExpr{Left: lchild.Left, Right: expr.Right}, Right: &OrExpr{Left: lchild.Right, Right: expr.Right}}, false
+		}
+		switch rchild := expr.Right.(type) {
+		case *AndExpr:
+			// Distribution Law
+			// C OR (A AND B) => (C OR A) AND (C OR B)
+			return &AndExpr{Left: &OrExpr{Left: expr.Left, Right: rchild.Left}, Right: &OrExpr{Left: expr.Left, Right: rchild.Right}}, false
+		}
+	case *XorExpr:
+		// DeMorgan Rewriter
+		// (A XOR B) => (A OR B) AND NOT (A AND B)
+		return &AndExpr{Left: &OrExpr{Left: expr.Left, Right: expr.Right}, Right: &NotExpr{Expr: &AndExpr{Left: expr.Left, Right: expr.Right}}}, false
+	}
+	return expr, true
+}
