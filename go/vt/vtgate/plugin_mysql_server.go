@@ -540,6 +540,13 @@ func rollbackAtShutdown() {
 	log.Errorf("All connections did not go idle. Shutting down anyway.")
 }
 
+func mysqlSocketPath() string {
+	if mysqlServerSocketPath == nil {
+		return ""
+	}
+	return *mysqlServerSocketPath
+}
+
 func init() {
 	servenv.OnRun(initMySQLProtocol)
 	servenv.OnTermSync(shutdownMysqlProtocolAndDrain)

@@ -19,6 +19,7 @@ package discovery
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"math/rand"
 	"strings"
 	"text/template"
@@ -113,25 +114,25 @@ func NewConsul(cluster *vtadminpb.Cluster, flags *pflag.FlagSet, args []string) 
 	if *vtgateDatacenterTmplStr != "" {
 		disco.vtgateDatacenter, err = generateConsulDatacenter("vtgate", cluster, *vtgateDatacenterTmplStr)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to generate vtgate consul datacenter from template: %w", err)
 		}
 	}
 
 	disco.vtgateAddrTmpl, err = template.New("consul-vtgate-address-template-" + cluster.Id).Parse(*vtgateAddrTmplStr)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to parse vtgate host address template %s: %w", *vtgateAddrTmplStr, err)
 	}
 
 	if *vtctldDatacenterTmplStr != "" {
 		disco.vtctldDatacenter, err = generateConsulDatacenter("vtctld", cluster, *vtctldDatacenterTmplStr)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to generate vtctld consul datacenter from template: %w", err)
 		}
 	}
 
 	disco.vtctldAddrTmpl, err = template.New("consul-vtctld-address-template-" + cluster.Id).Parse(*vtctldAddrTmplStr)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to parse vtctld host address template %s: %w", *vtctldAddrTmplStr, err)
 	}
 
 	return disco, nil
@@ -140,7 +141,7 @@ func NewConsul(cluster *vtadminpb.Cluster, flags *pflag.FlagSet, args []string) 
 func generateConsulDatacenter(component string, cluster *vtadminpb.Cluster, tmplStr string) (string, error) {
 	tmpl, err := template.New("consul-" + component + "-datacenter-" + cluster.Id).Parse(tmplStr)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("error parsing template %s: %w", tmplStr, err)
 	}
 
 	buf := bytes.NewBuffer(nil)
@@ -151,10 +152,10 @@ func generateConsulDatacenter(component string, cluster *vtadminpb.Cluster, tmpl
 	})
 
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to execute template: %w", err)
 	}
 
-	return buf.String(), err
+	return buf.String(), nil
 }
 
 // DiscoverVTGate is part of the Discovery interface.
@@ -190,7 +191,7 @@ func (c *ConsulDiscovery) DiscoverVTGateAddr(ctx context.Context, tags []string)
 
 	buf := bytes.NewBuffer(nil)
 	if err := c.vtgateAddrTmpl.Execute(buf, vtgate); err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to execute vtgate address template for %v: %w", vtgate, err)
 	}
 
 	return buf.String(), nil
@@ -290,7 +291,7 @@ func (c *ConsulDiscovery) DiscoverVtctldAddr(ctx context.Context, tags []string)
 
 	buf := bytes.NewBuffer(nil)
 	if err := c.vtctldAddrTmpl.Execute(buf, vtctld); err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to execute vtctld address template for %v: %w", vtctld, err)
 	}
 
 	return buf.String(), nil
