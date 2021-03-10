@@ -2123,7 +2123,22 @@ func (node *AlterVschema) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *AlterMigration) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "alter vitess_migration '%s'", node.UUID) // TODO(shlomi)
+	buf.astPrintf(node, "alter vitess_migration")
+	if node.UUID != "" {
+		buf.astPrintf(node, " '%s'", node.UUID)
+	}
+	var alterType string
+	switch node.Type {
+	case RetryMigrationType:
+		alterType = "retry"
+	case CompleteMigrationType:
+		alterType = "complete"
+	case CancelMigrationType:
+		alterType = "cancel"
+	case CancelAllMigrationType:
+		alterType = "cancel all"
+	}
+	buf.astPrintf(node, " %s", alterType)
 }
 
 // Format formats the node.
