@@ -156,7 +156,7 @@ var fcode = &bytes.Buffer{}  // saved code
 var ftypes = &bytes.Buffer{} // saved type definitions
 var foutput *bufio.Writer    // y.output file
 
-var fmtImported bool // output file has recorded an import of "fmt"
+var writtenImports bool // output file has recorded an import of "fmt"
 
 var oflag string  // -o [y.go]		- y.go file
 var vflag string  // -v [y.output]	- y.output file
@@ -1065,7 +1065,7 @@ type gotypeinfo struct {
 	unionType string
 }
 
-var gotypes = make(map[string]gotypeinfo)
+var gotypes = make(map[string]*gotypeinfo)
 
 func typeinfo() {
 	if !lflag {
@@ -1134,7 +1134,7 @@ out:
 					unionType = typ.String()
 					fmt.Fprintf(ftypes, "\n\t%s %s", member.Bytes(), typ.Bytes())
 				} else {
-					gotypes[member.String()] = gotypeinfo{
+					gotypes[member.String()] = &gotypeinfo{
 						typename:  typ.String(),
 						unionName: unionName,
 						unionType: unionType,
@@ -1221,12 +1221,13 @@ func cpycode() {
 func emitcode(code []rune, lineno int) {
 	for i, line := range lines(code) {
 		writecode(line)
-		if !fmtImported && isPackageClause(line) {
+		if !writtenImports && isPackageClause(line) {
 			fmt.Fprintln(ftable, `import __yyfmt__ "fmt"`)
+			fmt.Fprintln(ftable, `import __yyunsafe__ "unsafe"`)
 			if !lflag {
 				fmt.Fprintf(ftable, "//line %v:%v\n\t\t", infile, lineno+i)
 			}
-			fmtImported = true
+			writtenImports = true
 		}
 	}
 }
@@ -1359,26 +1360,46 @@ l1:
 	return nl
 }
 
-func cpyyvalaccess(curprod []int, tok int, union bool) {
+func cpyyvalaccess(curprod []int, tok int) {
+	const fastAppendPrefix = " append($$,"
+	const allowFastAppend = true
+
 	var buf bytes.Buffer
 	lvalue := false
+	fastAppend := false
 
 loop:
 	for {
 		c := getrune(finput)
-		buf.WriteRune(c)
 
 		switch c {
 		case ' ', '\t':
+			buf.WriteRune(c)
+
 		case '=':
 			lvalue = true
+			if allowFastAppend {
+				peek, err := finput.Peek(16)
+				if err == nil && bytes.HasPrefix(peek, []byte(fastAppendPrefix)) {
+					fastAppend = true
+					for range fastAppendPrefix {
+						_ = getrune(finput)
+					}
+				} else {
+					buf.WriteRune(c)
+				}
+				break loop
+			}
+
+			buf.WriteRune(c)
 			break loop
+
 		default:
+			buf.WriteRune(c)
 			break loop
 		}
 	}
 
-	fmt.Fprintf(fcode, "%sVAL", prefix)
 	if ntypes != 0 {
 		if tok < 0 {
 			tok, _ = fdtype(curprod[0])
@@ -1388,14 +1409,19 @@ loop:
 			errorf("missing Go type information for %s", typeset[tok])
 		}
 		if ti.unionName != "" {
-			if lvalue || union {
-				fmt.Fprintf(fcode, ".%s", ti.unionName)
+			if fastAppend {
+				fmt.Fprintf(fcode, "\t%sSLICE := (*%s)(%sIaddr(%sVAL.%s))\n", prefix, ti.typename, prefix, prefix, ti.unionName)
+				fmt.Fprintf(fcode, "\t*%sSLICE = append(*%sSLICE, ", prefix, prefix)
+			} else if lvalue {
+				fmt.Fprintf(fcode, "%sVAL.%s", prefix, ti.unionName)
 			} else {
-				fmt.Fprintf(fcode, ".%sUnion()", typeset[tok])
+				fmt.Fprintf(fcode, "%sVAL.%sUnion()", prefix, typeset[tok])
 			}
 		} else {
-			fmt.Fprintf(fcode, ".%s", typeset[tok])
+			fmt.Fprintf(fcode, "%sVAL.%s", prefix, typeset[tok])
 		}
+	} else {
+		fmt.Fprintf(fcode, "%sVAL", prefix)
 	}
 	fcode.Write(buf.Bytes())
 }
@@ -1404,7 +1430,6 @@ loop:
 // copy action to the next ; or closing }
 //
 func cpyact(curprod []int, max int) {
-
 	if !lflag {
 		fmt.Fprintf(fcode, "\n//line %v:%v", infile, lineno)
 	}
@@ -1431,7 +1456,6 @@ loop:
 		case '$':
 			s := 1
 			tok := -1
-			union := false
 			c = getrune(finput)
 
 			// type description
@@ -1443,12 +1467,8 @@ loop:
 				tok = numbval
 				c = getrune(finput)
 			}
-			if c == 'u' {
-				union = true
-				c = getrune(finput)
-			}
 			if c == '$' {
-				cpyyvalaccess(curprod, tok, union)
+				cpyyvalaccess(curprod, tok)
 				continue loop
 			}
 			if c == '-' {
@@ -1515,9 +1535,7 @@ loop:
 				if !ok {
 					errorf("missing Go type information for %s", typeset[tok])
 				}
-				if union {
-					fmt.Fprintf(fcode, ".%s", ti.unionName)
-				} else if ti.unionType != "" {
+				if ti.unionType != "" {
 					fmt.Fprintf(fcode, ".%sUnion()", typeset[tok])
 				} else {
 					fmt.Fprintf(fcode, ".%s", typeset[tok])
@@ -3403,6 +3421,14 @@ func gofmt() {
 var yaccpar string // will be processed version of yaccpartext: s/$$/prefix/g
 var yaccpartext = `
 /*	parser for yacc output	*/
+
+func $$Iaddr(v interface{}) __yyunsafe__.Pointer {
+	type h struct {
+		t __yyunsafe__.Pointer
+		p __yyunsafe__.Pointer
+	}
+	return (*h)(__yyunsafe__.Pointer(&v)).p
+}
 
 var (
 	$$Debug        = 0
