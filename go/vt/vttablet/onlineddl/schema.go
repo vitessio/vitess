@@ -55,6 +55,7 @@ const (
 	alterSchemaMigrationsTableDDLAction          = "ALTER TABLE _vt.schema_migrations add column ddl_action varchar(16) NOT NULL DEFAULT ''"
 	alterSchemaMigrationsTableMessage            = "ALTER TABLE _vt.schema_migrations add column message TEXT NOT NULL"
 	alterSchemaMigrationsTableTableCompleteIndex = "ALTER TABLE _vt.schema_migrations add KEY table_complete_idx (migration_status, keyspace(64), mysql_table(64), completed_timestamp)"
+	alterSchemaMigrationsTableETASeconds         = "ALTER TABLE _vt.schema_migrations add column eta_seconds bigint NOT NULL DEFAULT -1"
 
 	sqlScheduleSingleMigration = `UPDATE _vt.schema_migrations
 		SET
@@ -78,6 +79,11 @@ const (
 	`
 	sqlUpdateMigrationProgress = `UPDATE _vt.schema_migrations
 			SET progress=%a
+		WHERE
+			migration_uuid=%a
+	`
+	sqlUpdateMigrationETASeconds = `UPDATE _vt.schema_migrations
+			SET eta_seconds=%a
 		WHERE
 			migration_uuid=%a
 	`
@@ -313,4 +319,5 @@ var applyDDL = []string{
 	alterSchemaMigrationsTableDDLAction,
 	alterSchemaMigrationsTableMessage,
 	alterSchemaMigrationsTableTableCompleteIndex,
+	alterSchemaMigrationsTableETASeconds,
 }

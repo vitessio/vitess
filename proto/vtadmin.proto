@@ -23,6 +23,7 @@ package vtadmin;
 
 import "tabletmanagerdata.proto";
 import "topodata.proto";
+import "vschema.proto";
 import "vtctldata.proto";
 
 /* Services */
@@ -53,6 +54,11 @@ service VTAdmin {
     rpc GetTablet(GetTabletRequest) returns (Tablet) {};
     // GetTablets returns all tablets across all the specified clusters.
     rpc GetTablets(GetTabletsRequest) returns (GetTabletsResponse) {};
+    // GetVSchema returns a VSchema for the specified keyspace in the specified
+    // cluster.
+    rpc GetVSchema(GetVSchemaRequest) returns (VSchema) {};
+    // GetVSchemas returns the VSchemas for all specified clusters.
+    rpc GetVSchemas(GetVSchemasRequest) returns (GetVSchemasResponse) {};
     // VTExplain provides information on how Vitess plans to execute a particular query.
     rpc VTExplain(VTExplainRequest) returns (VTExplainResponse) {};
 }
@@ -93,6 +99,14 @@ message Tablet {
     }
 
     ServingState state = 3;
+}
+
+// VSchema represents the vschema for a keyspace in the cluster it belongs to.
+message VSchema {
+    Cluster cluster = 1;
+    // Name is the name of the keyspace this VSchema is for.
+    string name = 2;
+    vschema.Keyspace v_schema = 3;
 }
 
 // Vtctld represents information about a single Vtctld host.
@@ -174,6 +188,19 @@ message GetTabletsRequest {
 
 message GetTabletsResponse {
     repeated Tablet tablets = 1;
+}
+
+message GetVSchemaRequest {
+    string cluster_id = 1;
+    string keyspace = 2;
+}
+
+message GetVSchemasRequest {
+    repeated string cluster_ids = 1;
+}
+
+message GetVSchemasResponse {
+    repeated VSchema v_schemas = 1;
 }
 
 message VTExplainRequest {
