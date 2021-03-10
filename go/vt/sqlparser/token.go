@@ -290,6 +290,7 @@ func (tkn *Tokenizer) skipStatement() int {
 	}
 }
 
+// skipBlank skips the cursor while it finds whitespace
 func (tkn *Tokenizer) skipBlank() {
 	ch := tkn.cur()
 	for ch == ' ' || ch == '\n' || ch == '\r' || ch == '\t' {
@@ -298,6 +299,7 @@ func (tkn *Tokenizer) skipBlank() {
 	}
 }
 
+// scanIdentifier scans a language keyword or @-encased variable
 func (tkn *Tokenizer) scanIdentifier(isVariable bool) (int, string) {
 	start := tkn.Pos
 	tkn.skip(1)
@@ -323,6 +325,7 @@ func (tkn *Tokenizer) scanIdentifier(isVariable bool) (int, string) {
 	return ID, keywordName
 }
 
+// scanHex scans a hex numeral; assumes x' or X' has already been scanned
 func (tkn *Tokenizer) scanHex() (int, string) {
 	start := tkn.Pos
 	tkn.scanMantissa(16)
@@ -337,6 +340,7 @@ func (tkn *Tokenizer) scanHex() (int, string) {
 	return HEX, hex
 }
 
+// scanBitLiteral scans a binary numeric literal; assumes b' or B' has already been scanned
 func (tkn *Tokenizer) scanBitLiteral() (int, string) {
 	start := tkn.Pos
 	tkn.scanMantissa(2)
@@ -348,6 +352,11 @@ func (tkn *Tokenizer) scanBitLiteral() (int, string) {
 	return BIT_LITERAL, bit
 }
 
+// scanLiteralIdentifierSlow scans an identifier surrounded by backticks which may
+// contain escape sequences instead of it. This method is only called from
+// scanLiteralIdentifier once the first escape sequence is found in the identifier.
+// The provided `buf` contains the contents of the identifier that have been scanned
+// so far.
 func (tkn *Tokenizer) scanLiteralIdentifierSlow(buf *strings.Builder) (int, string) {
 	backTickSeen := true
 	for {
@@ -376,6 +385,9 @@ func (tkn *Tokenizer) scanLiteralIdentifierSlow(buf *strings.Builder) (int, stri
 	return ID, buf.String()
 }
 
+// scanLiteralIdentifier scans an identifier enclosed by backticks. If the identifier
+// is a simple literal, it'll be returned as a slice of the input buffer. If the identifier
+// contains escape sequences, this function will fall back to scanLiteralIdentifierSlow
 func (tkn *Tokenizer) scanLiteralIdentifier() (int, string) {
 	start := tkn.Pos
 	for {
@@ -402,6 +414,7 @@ func (tkn *Tokenizer) scanLiteralIdentifier() (int, string) {
 	}
 }
 
+// scanBindVar scans a bind variable; assumes a ':' has been scanned right before
 func (tkn *Tokenizer) scanBindVar() (int, string) {
 	start := tkn.Pos
 	token := VALUE_ARG
@@ -424,12 +437,15 @@ func (tkn *Tokenizer) scanBindVar() (int, string) {
 	return token, tkn.buf[start:tkn.Pos]
 }
 
+// scanMantissa scans a sequence of numeric characters with the same base.
+// This is a helper function only called from the numeric scanners
 func (tkn *Tokenizer) scanMantissa(base int) {
 	for digitVal(tkn.cur()) < base {
 		tkn.skip(1)
 	}
 }
 
+// scanNumber scans any SQL numeric literal, either floating point or integer
 func (tkn *Tokenizer) scanNumber() (int, string) {
 	start := tkn.Pos
 	token := INTEGRAL
@@ -479,6 +495,10 @@ exit:
 	return token, tkn.buf[start:tkn.Pos]
 }
 
+// scanString scans a string surrounded by the given `delim`, which can be
+// either single or double quotes. Assumes that the given delimiter has just
+// been scanned. If the skin contains any escape sequences, this function
+// will fall back to scanStringSlow
 func (tkn *Tokenizer) scanString(delim uint16, typ int) (int, string) {
 	start := tkn.Pos
 
@@ -504,6 +524,9 @@ func (tkn *Tokenizer) scanString(delim uint16, typ int) (int, string) {
 	}
 }
 
+// scanString scans a string surrounded by the given `delim` and containing escape
+// sequencse. The given `buffer` contains the contents of the string that have
+// been scanned so far.
 func (tkn *Tokenizer) scanStringSlow(buffer *strings.Builder, delim uint16, typ int) (int, string) {
 	for {
 		ch := tkn.cur()
@@ -554,6 +577,9 @@ func (tkn *Tokenizer) scanStringSlow(buffer *strings.Builder, delim uint16, typ 
 	return typ, buffer.String()
 }
 
+// scanCommentType1 scans a SQL line-comment, which is applied until the end
+// of the line. The given prefix length varies based on whether the comment
+// is started with '//', '--' or '#'.
 func (tkn *Tokenizer) scanCommentType1(prefixLen int) (int, string) {
 	start := tkn.Pos - prefixLen
 	for tkn.cur() != eofChar {
@@ -566,6 +592,8 @@ func (tkn *Tokenizer) scanCommentType1(prefixLen int) (int, string) {
 	return COMMENT, tkn.buf[start:tkn.Pos]
 }
 
+// scanCommentType2 scans a '/*' delimited comment; assumes the opening
+// prefix has already been scanned
 func (tkn *Tokenizer) scanCommentType2() (int, string) {
 	start := tkn.Pos - 2
 	for {
@@ -585,6 +613,7 @@ func (tkn *Tokenizer) scanCommentType2() (int, string) {
 	return COMMENT, tkn.buf[start:tkn.Pos]
 }
 
+// scanMySQLSpecificComment scans a MySQL comment pragma, which always starts with '//*`
 func (tkn *Tokenizer) scanMySQLSpecificComment() (int, string) {
 	start := tkn.Pos - 3
 	for {
