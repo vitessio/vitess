@@ -102,7 +102,9 @@ type vcursorImpl struct {
 	vschema               *vindexes.VSchema
 	vm                    VSchemaOperator
 	semTable              *semantics.SemTable
-	warnShardedOnly       bool // when using sharded only features, a warning will be added to the session if this field is true
+	warnShardedOnly       bool // when using sharded only features, a warning will be warnings field
+
+	warnings []*querypb.QueryWarning // any warnings that are accumulated during the planning phase are stored here
 }
 
 func (vc *vcursorImpl) GetKeyspace() string {
@@ -714,9 +716,9 @@ func (vc *vcursorImpl) ErrorIfShardedF(ks *vindexes.Keyspace, warn, errFormat st
 		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, errFormat, params...)
 	}
 	if vc.warnShardedOnly {
-		vc.safeSession.RecordWarning(&querypb.QueryWarning{
+		vc.warnings = append(vc.warnings, &querypb.QueryWarning{
 			Code:    mysql.ERNotSupportedYet,
-			Message: fmt.Sprintf("use of feature that is only supported in unsharded mode:%s", warn),
+			Message: fmt.Sprintf("use of feature that is only supported in unsharded mode: %s", warn),
 		})
 	}
 
@@ -726,7 +728,7 @@ func (vc *vcursorImpl) ErrorIfShardedF(ks *vindexes.Keyspace, warn, errFormat st
 // WarnUnshardedOnly implements the VCursor interface
 func (vc *vcursorImpl) WarnUnshardedOnly(format string, params ...interface{}) {
 	if vc.warnShardedOnly {
-		vc.safeSession.RecordWarning(&querypb.QueryWarning{
+		vc.warnings = append(vc.warnings, &querypb.QueryWarning{
 			Code:    mysql.ERNotSupportedYet,
 			Message: fmt.Sprintf(format, params...),
 		})

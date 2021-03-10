@@ -1073,6 +1073,11 @@ func (e *Executor) StreamExecute(ctx context.Context, method string, safeSession
 		return err
 	}
 
+	// add any warnings that the planner wants to add
+	for _, warning := range plan.Warnings {
+		safeSession.RecordWarning(warning)
+	}
+
 	execStart := time.Now()
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
 
@@ -1265,6 +1270,10 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 	if err != nil {
 		return nil, err
 	}
+
+	plan.Warnings = vcursor.warnings
+	vcursor.warnings = nil
+
 	if !skipQueryPlanCache && !sqlparser.SkipQueryPlanCacheDirective(statement) && sqlparser.CachePlan(statement) {
 		e.plans.Set(planKey, plan)
 	}

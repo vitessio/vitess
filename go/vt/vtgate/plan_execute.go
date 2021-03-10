@@ -71,6 +71,11 @@ func (e *Executor) newExecute(ctx context.Context, safeSession *SafeSession, sql
 		safeSession.ClearWarnings()
 	}
 
+	// add any warnings that the planner wants to add
+	for _, warning := range plan.Warnings {
+		safeSession.RecordWarning(warning)
+	}
+
 	// We need to explicitly handle errors, and begin/commit/rollback, since these control transactions. Everything else
 	// will fall through and be handled through planning
 	switch plan.Type {
