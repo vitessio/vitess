@@ -18,10 +18,13 @@ package onlineddl
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
+
+	"vitess.io/vitess/go/test/endtoend/cluster"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -44,4 +47,16 @@ func VtgateExecQuery(t *testing.T, vtParams *mysql.ConnParams, query string, exp
 		assert.Contains(t, err.Error(), expectError, "Unexpected error")
 	}
 	return qr
+}
+
+// CheckRetryMigration attempts to retry a migration, and expects success/failure by counting affected rows
+func CheckRetryMigration(t *testing.T, vtParams *mysql.ConnParams, shards []cluster.Shard, uuid string, expectRetryPossible bool) {
+	retryQuery := fmt.Sprintf("alter vitess_migration '%s' retry", uuid)
+	r := VtgateExecQuery(t, vtParams, retryQuery, "")
+
+	if expectRetryPossible {
+		assert.Equal(t, len(shards), int(r.RowsAffected))
+	} else {
+		assert.Equal(t, int(0), int(r.RowsAffected))
+	}
 }
