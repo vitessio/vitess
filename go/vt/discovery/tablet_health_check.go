@@ -202,7 +202,7 @@ func (thc *tabletHealthCheck) processResponse(hc *HealthCheckImpl, shr *query.St
 	thc.setServingState(serving, reason)
 
 	// notify downstream for master change
-	hc.updateHealth(thc.SimpleCopy(), shr, currentTarget, trivialNonMasterUpdate, isMasterUpdate, isMasterChange)
+	hc.updateHealth(thc.SimpleCopy(), currentTarget, trivialNonMasterUpdate, isMasterUpdate, isMasterChange)
 	return nil
 }
 
@@ -240,6 +240,9 @@ func (thc *tabletHealthCheck) checkConn(hc *HealthCheckImpl) {
 		thc.finalizeConn()
 		hc.connsWG.Done()
 	}()
+
+	// Initialize error counter
+	hcErrorCounters.Add([]string{thc.Target.Keyspace, thc.Target.Shard, topoproto.TabletTypeLString(thc.Target.TabletType)}, 0)
 
 	retryDelay := hc.retryDelay
 	for {
@@ -287,12 +290,14 @@ func (thc *tabletHealthCheck) checkConn(hc *HealthCheckImpl) {
 		streamCancel()
 
 		if err != nil {
+			hcErrorCounters.Add([]string{thc.Target.Keyspace, thc.Target.Shard, topoproto.TabletTypeLString(thc.Target.TabletType)}, 1)
 			if strings.Contains(err.Error(), "health stats mismatch") {
 				hc.deleteTablet(thc.Tablet)
 				return
 			}
-			res := thc.SimpleCopy()
-			hc.broadcast(res)
+			// trivialNonMasterUpdate = false because this is an error
+			// It is safe to pass isMasterChange = false because in case of an error there is no information that can be used to update the master
+			hc.updateHealth(thc.SimpleCopy(), thc.Target, false, thc.Target.TabletType == topodata.TabletType_MASTER, false)
 		}
 		// If there was a timeout send an error. We do this after stream has returned.
 		// This will ensure that this update prevails over any previous message that
@@ -301,7 +306,9 @@ func (thc *tabletHealthCheck) checkConn(hc *HealthCheckImpl) {
 			thc.LastError = fmt.Errorf("healthcheck timed out (latest %v)", thc.lastResponseTimestamp)
 			thc.setServingState(false, thc.LastError.Error())
 			hcErrorCounters.Add([]string{thc.Target.Keyspace, thc.Target.Shard, topoproto.TabletTypeLString(thc.Target.TabletType)}, 1)
-			hc.broadcast(thc.SimpleCopy())
+			// trivialNonMasterUpdate = false because this is an error
+			// It is safe to pass isMasterChange = false because in case of timeout there is no information that can be used to update the master
+			hc.updateHealth(thc.SimpleCopy(), thc.Target, false, thc.Target.TabletType == topodata.TabletType_MASTER, false)
 		}
 
 		// Streaming RPC failed e.g. because vttablet was restarted or took too long.
