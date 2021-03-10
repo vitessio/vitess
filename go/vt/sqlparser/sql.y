@@ -147,7 +147,7 @@ func skipToEnd(yylex interface{}) {
   tableOptions     TableOptions
   renameTablePairs []*RenameTablePair
   columnTypeOptions *ColumnTypeOptions
-  reverMigration *RevertMigration
+  revertMigration *RevertMigration
 }
 
 %token LEX_ERROR
