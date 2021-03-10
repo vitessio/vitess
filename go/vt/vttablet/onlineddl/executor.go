@@ -2239,13 +2239,31 @@ func (e *Executor) updateMigrationProgress(ctx context.Context, uuid string, pro
 func (e *Executor) retryMigration(ctx context.Context, whereExpr string) (result *sqltypes.Result, err error) {
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
-	parsed := sqlparser.BuildParsedQuery(sqlRetryMigration, ":tablet", whereExpr)
+	parsed := sqlparser.BuildParsedQuery(sqlRetryMigrationWhere, ":tablet", whereExpr)
 	bindVars := map[string]*querypb.BindVariable{
 		"tablet": sqltypes.StringBindVariable(e.TabletAliasString()),
 	}
 	bound, err := parsed.GenerateQuery(bindVars, nil)
 	result, err = e.execQuery(ctx, bound)
 	return result, err
+}
+
+// RetryMigration marks given migration for retry
+func (e *Executor) RetryMigration(ctx context.Context, uuid string) (result *sqltypes.Result, err error) {
+	if !schema.IsOnlineDDLUUID(uuid) {
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "Not a valid migration ID in RETRY: %s", uuid)
+	}
+	e.migrationMutex.Lock()
+	defer e.migrationMutex.Unlock()
+
+	query, err := sqlparser.ParseAndBind(sqlRetryMigration,
+		sqltypes.StringBindVariable(e.TabletAliasString()),
+		sqltypes.StringBindVariable(uuid),
+	)
+	if err != nil {
+		return nil, err
+	}
+	return e.execQuery(ctx, query)
 }
 
 // onSchemaMigrationStatus is called when a status is set/changed for a running migration
