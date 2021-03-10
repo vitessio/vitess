@@ -65,6 +65,8 @@ func init() {
 }
 
 func TestHealthCheck(t *testing.T) {
+	// reset error counters
+	hcErrorCounters.ResetAll()
 	ts := memorytopo.NewServer("cell")
 	hc := createTestHc(ts)
 	// close healthcheck
@@ -257,6 +259,9 @@ func TestHealthCheckStreamError(t *testing.T) {
 	result = <-resultChan
 	//TODO: figure out how to compare objects that contain errors using utils.MustMatch
 	assert.True(t, want.DeepEqual(result), "Wrong TabletHealth data\n Expected: %v\n Actual:   %v", want, result)
+	// tablet should be removed from healthy list
+	a := hc.GetHealthyTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA})
+	assert.Empty(t, a, "wrong result, expected empty list")
 }
 
 func TestHealthCheckVerifiesTabletAlias(t *testing.T) {
@@ -363,6 +368,8 @@ func TestHealthCheckCloseWaitsForGoRoutines(t *testing.T) {
 }
 
 func TestHealthCheckTimeout(t *testing.T) {
+	// reset counters
+	hcErrorCounters.ResetAll()
 	ts := memorytopo.NewServer("cell")
 	hc := createTestHc(ts)
 	hc.healthCheckTimeout = 500 * time.Millisecond
@@ -409,6 +416,10 @@ func TestHealthCheckTimeout(t *testing.T) {
 	assert.False(t, result.Serving, "tabletHealthCheck: %+v; want not serving", result)
 	assert.Nil(t, checkErrorCounter("k", "s", topodatapb.TabletType_REPLICA, 1))
 	assert.True(t, fc.isCanceled(), "StreamHealth should be canceled after timeout, but is not")
+
+	// tablet should be removed from healthy list
+	a := hc.GetHealthyTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA})
+	assert.Empty(t, a, "wrong result, expected empty list")
 
 	// repeat the wait. It will timeout one more time trying to get the connection.
 	fc.resetCanceledFlag()
