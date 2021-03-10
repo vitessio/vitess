@@ -2268,12 +2268,14 @@ func TestExecutorCallProc(t *testing.T) {
 
 func TestExecutorTempTable(t *testing.T) {
 	executor, _, _, sbcUnsharded := createExecutorEnv()
+	executor.warnShardedOnly = true
 	creatQuery := "create temporary table temp_t(id bigint primary key)"
 	session := NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded})
 	ctx := context.Background()
 	_, err := executor.Execute(ctx, "TestExecutorTempTable", session, creatQuery, nil)
 	require.NoError(t, err)
 	assert.EqualValues(t, 1, sbcUnsharded.ExecCount.Get())
+	assert.NotEmpty(t, session.Warnings)
 
 	before := executor.plans.Len()
 

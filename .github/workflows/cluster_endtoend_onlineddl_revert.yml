@@ -6,7 +6,7 @@ jobs:
 
   build:
     name: Run endtoend tests on Cluster (onlineddl_revert)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-18.04
 
     steps:
     - name: Set up Go
