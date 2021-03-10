@@ -52,15 +52,15 @@ func skipToEnd(yylex interface{}) {
 
 %struct {
   empty         struct{}
-  str           string
-  joinCondition JoinCondition
-  tableName     TableName
-  colIdent      ColIdent
-  tableIdent    TableIdent
-  columnType    ColumnType
   LengthScaleOption LengthScaleOption
+  tableName     TableName
+  tableIdent    TableIdent
+  str           string
   vindexParam   VindexParam
+  colIdent      ColIdent
+  joinCondition JoinCondition
   collateAndCharset CollateAndCharset
+  columnType    ColumnType
 }
 
 %union {
