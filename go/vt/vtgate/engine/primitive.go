@@ -101,8 +101,6 @@ type (
 
 		// GetDBDDLPlugin gets the configured plugin for DROP/CREATE DATABASE
 		GetDBDDLPluginName() string
-
-		FindKeyspace(ks string) bool
 	}
 
 	//SessionActions gives primitives ability to interact with the session state

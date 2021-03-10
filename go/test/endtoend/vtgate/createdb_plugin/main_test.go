@@ -63,7 +63,7 @@ func TestMain(m *testing.M) {
 		}
 
 		// Start vtgate
-		clusterInstance.VtGateExtraArgs = []string{"-dbddl_plugin", "noop"}
+		clusterInstance.VtGateExtraArgs = []string{"-dbddl_plugin", "noop", "-mysql_server_query_timeout", "60s"}
 		vtgateProcess := clusterInstance.NewVtgateInstance()
 		vtgateProcess.SysVarSetEnabled = true
 		if err := vtgateProcess.Setup(); err != nil {
@@ -114,7 +114,7 @@ func TestDBDDLPlugin(t *testing.T) {
 		_ = exec(t, conn, `drop database aaa`)
 	}()
 	time.Sleep(300 * time.Millisecond)
-	shutdown("aaa")
+	shutdown(t, "aaa")
 
 	// wait until the drop database query has returned
 	wg.Wait()
@@ -132,24 +132,9 @@ func start(t *testing.T, ksName string) {
 		"new database creation failed")
 }
 
-func shutdown(ksName string) {
-	for _, ks := range clusterInstance.Keyspaces {
-		if ks.Name != ksName {
-			continue
-		}
-		for _, shard := range ks.Shards {
-			for _, tablet := range shard.Vttablets {
-				if tablet.MysqlctlProcess.TabletUID > 0 {
-					tablet.MysqlctlProcess.StopProcess()
-				}
-				if tablet.MysqlctldProcess.TabletUID > 0 {
-					tablet.MysqlctldProcess.Stop()
-				}
-				tablet.VttabletProcess.TearDown()
-			}
-		}
-	}
-	_ = clusterInstance.VtctlclientProcess.ExecuteCommand("DeleteKeyspace", "-recursive", ksName)
+func shutdown(t *testing.T, ksName string) {
+	require.NoError(t,
+		clusterInstance.VtctlclientProcess.ExecuteCommand("DeleteKeyspace", "-recursive", ksName))
 }
 
 func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
