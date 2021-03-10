@@ -4150,3 +4150,4 @@
 2021-03-10T05:28:46Z,unit_race,https://github.com/vitessio/vitess/actions/runs/638228129
 2021-03-10T05:33:26Z,Cluster (upgrade),https://github.com/vitessio/vitess/actions/runs/638238266
 2021-03-10T05:54:43Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/638280995
+2021-03-10T07:40:41Z,check_make_sizegen,https://github.com/vitessio/vitess/actions/runs/638515389
