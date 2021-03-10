@@ -4112,14 +4112,7 @@ type yySymType struct {
 	LengthScaleOption LengthScaleOption
 	vindexParam       VindexParam
 	collateAndCharset CollateAndCharset
-	boolUnion         bool
-	numericUnion      int
 	ifaceUnion        interface{}
-}
-
-func (st *yySymType) tableSpecUnion() *TableSpec {
-	v, _ := st.ifaceUnion.(*TableSpec)
-	return v
 }
 
 func (st *yySymType) optLikeUnion() *OptLike {
@@ -4127,31 +4120,14 @@ func (st *yySymType) optLikeUnion() *OptLike {
 	return v
 }
 
-func (st *yySymType) lockTypeUnion() LockType {
-	return LockType(st.numericUnion)
-}
-
-func (st *yySymType) indexDefinitionUnion() *IndexDefinition {
-	v, _ := st.ifaceUnion.(*IndexDefinition)
+func (st *yySymType) matchExprOptionUnion() MatchExprOption {
+	v, _ := st.ifaceUnion.(MatchExprOption)
 	return v
 }
 
-func (st *yySymType) alterTableUnion() *AlterTable {
-	v, _ := st.ifaceUnion.(*AlterTable)
+func (st *yySymType) insUnion() *Insert {
+	v, _ := st.ifaceUnion.(*Insert)
 	return v
-}
-
-func (st *yySymType) strsUnion() []string {
-	v, _ := st.ifaceUnion.([]string)
-	return v
-}
-
-func (st *yySymType) boolValUnion() BoolVal {
-	return BoolVal(st.boolUnion)
-}
-
-func (st *yySymType) colKeyOptUnion() ColumnKeyOption {
-	return ColumnKeyOption(st.numericUnion)
 }
 
 func (st *yySymType) indexColumnUnion() *IndexColumn {
@@ -4159,13 +4135,83 @@ func (st *yySymType) indexColumnUnion() *IndexColumn {
 	return v
 }
 
-func (st *yySymType) partitionsUnion() Partitions {
-	v, _ := st.ifaceUnion.(Partitions)
+func (st *yySymType) characteristicUnion() Characteristic {
+	v, _ := st.ifaceUnion.(Characteristic)
 	return v
 }
 
-func (st *yySymType) tableExprsUnion() TableExprs {
-	v, _ := st.ifaceUnion.(TableExprs)
+func (st *yySymType) derivedTableUnion() *DerivedTable {
+	v, _ := st.ifaceUnion.(*DerivedTable)
+	return v
+}
+
+func (st *yySymType) orderUnion() *Order {
+	v, _ := st.ifaceUnion.(*Order)
+	return v
+}
+
+func (st *yySymType) createDatabaseUnion() *CreateDatabase {
+	v, _ := st.ifaceUnion.(*CreateDatabase)
+	return v
+}
+
+func (st *yySymType) renameTablePairsUnion() []*RenameTablePair {
+	v, _ := st.ifaceUnion.([]*RenameTablePair)
+	return v
+}
+
+func (st *yySymType) tableExprUnion() TableExpr {
+	v, _ := st.ifaceUnion.(TableExpr)
+	return v
+}
+
+func (st *yySymType) lockUnion() Lock {
+	v, _ := st.ifaceUnion.(Lock)
+	return v
+}
+
+func (st *yySymType) joinTypeUnion() JoinType {
+	v, _ := st.ifaceUnion.(JoinType)
+	return v
+}
+
+func (st *yySymType) aliasedTableNameUnion() *AliasedTableExpr {
+	v, _ := st.ifaceUnion.(*AliasedTableExpr)
+	return v
+}
+
+func (st *yySymType) constraintDefinitionUnion() *ConstraintDefinition {
+	v, _ := st.ifaceUnion.(*ConstraintDefinition)
+	return v
+}
+
+func (st *yySymType) whensUnion() []*When {
+	v, _ := st.ifaceUnion.([]*When)
+	return v
+}
+
+func (st *yySymType) columnDefinitionsUnion() []*ColumnDefinition {
+	v, _ := st.ifaceUnion.([]*ColumnDefinition)
+	return v
+}
+
+func (st *yySymType) tableNamesUnion() TableNames {
+	v, _ := st.ifaceUnion.(TableNames)
+	return v
+}
+
+func (st *yySymType) colNameUnion() *ColName {
+	v, _ := st.ifaceUnion.(*ColName)
+	return v
+}
+
+func (st *yySymType) updateExprUnion() *UpdateExpr {
+	v, _ := st.ifaceUnion.(*UpdateExpr)
+	return v
+}
+
+func (st *yySymType) selectExprUnion() SelectExpr {
+	v, _ := st.ifaceUnion.(SelectExpr)
 	return v
 }
 
@@ -4174,12 +4220,184 @@ func (st *yySymType) tableOptionsUnion() TableOptions {
 	return v
 }
 
-func (st *yySymType) joinTypeUnion() JoinType {
-	return JoinType(st.numericUnion)
+func (st *yySymType) booleanUnion() bool {
+	v, _ := st.ifaceUnion.(bool)
+	return v
 }
 
-func (st *yySymType) orderDirectionUnion() OrderDirection {
-	return OrderDirection(st.numericUnion)
+func (st *yySymType) subqueryUnion() *Subquery {
+	v, _ := st.ifaceUnion.(*Subquery)
+	return v
+}
+
+func (st *yySymType) whenUnion() *When {
+	v, _ := st.ifaceUnion.(*When)
+	return v
+}
+
+func (st *yySymType) indexInfoUnion() *IndexInfo {
+	v, _ := st.ifaceUnion.(*IndexInfo)
+	return v
+}
+
+func (st *yySymType) ReferenceActionUnion() ReferenceAction {
+	v, _ := st.ifaceUnion.(ReferenceAction)
+	return v
+}
+
+func (st *yySymType) alterOptionUnion() AlterOption {
+	v, _ := st.ifaceUnion.(AlterOption)
+	return v
+}
+
+func (st *yySymType) columnDefinitionUnion() *ColumnDefinition {
+	v, _ := st.ifaceUnion.(*ColumnDefinition)
+	return v
+}
+
+func (st *yySymType) columnsUnion() Columns {
+	v, _ := st.ifaceUnion.(Columns)
+	return v
+}
+
+func (st *yySymType) colKeyOptUnion() ColumnKeyOption {
+	v, _ := st.ifaceUnion.(ColumnKeyOption)
+	return v
+}
+
+func (st *yySymType) ignoreUnion() Ignore {
+	v, _ := st.ifaceUnion.(Ignore)
+	return v
+}
+
+func (st *yySymType) indexOptionsUnion() []*IndexOption {
+	v, _ := st.ifaceUnion.([]*IndexOption)
+	return v
+}
+
+func (st *yySymType) strsUnion() []string {
+	v, _ := st.ifaceUnion.([]string)
+	return v
+}
+
+func (st *yySymType) vindexParamsUnion() []VindexParam {
+	v, _ := st.ifaceUnion.([]VindexParam)
+	return v
+}
+
+func (st *yySymType) insertActionUnion() InsertAction {
+	v, _ := st.ifaceUnion.(InsertAction)
+	return v
+}
+
+func (st *yySymType) explainTypeUnion() ExplainType {
+	v, _ := st.ifaceUnion.(ExplainType)
+	return v
+}
+
+func (st *yySymType) partDefUnion() *PartitionDefinition {
+	v, _ := st.ifaceUnion.(*PartitionDefinition)
+	return v
+}
+
+func (st *yySymType) showFilterUnion() *ShowFilter {
+	v, _ := st.ifaceUnion.(*ShowFilter)
+	return v
+}
+
+func (st *yySymType) tableAndLockTypesUnion() TableAndLockTypes {
+	v, _ := st.ifaceUnion.(TableAndLockTypes)
+	return v
+}
+
+func (st *yySymType) scopeUnion() Scope {
+	v, _ := st.ifaceUnion.(Scope)
+	return v
+}
+
+func (st *yySymType) setExprUnion() *SetExpr {
+	v, _ := st.ifaceUnion.(*SetExpr)
+	return v
+}
+
+func (st *yySymType) alterDatabaseUnion() *AlterDatabase {
+	v, _ := st.ifaceUnion.(*AlterDatabase)
+	return v
+}
+
+func (st *yySymType) tableOptionUnion() *TableOption {
+	v, _ := st.ifaceUnion.(*TableOption)
+	return v
+}
+
+func (st *yySymType) orderByUnion() OrderBy {
+	v, _ := st.ifaceUnion.(OrderBy)
+	return v
+}
+
+func (st *yySymType) updateExprsUnion() UpdateExprs {
+	v, _ := st.ifaceUnion.(UpdateExprs)
+	return v
+}
+
+func (st *yySymType) comparisonExprOperatorUnion() ComparisonExprOperator {
+	v, _ := st.ifaceUnion.(ComparisonExprOperator)
+	return v
+}
+
+func (st *yySymType) indexOptionUnion() *IndexOption {
+	v, _ := st.ifaceUnion.(*IndexOption)
+	return v
+}
+
+func (st *yySymType) tableExprsUnion() TableExprs {
+	v, _ := st.ifaceUnion.(TableExprs)
+	return v
+}
+
+func (st *yySymType) lockTypeUnion() LockType {
+	v, _ := st.ifaceUnion.(LockType)
+	return v
+}
+
+func (st *yySymType) statementUnion() Statement {
+	v, _ := st.ifaceUnion.(Statement)
+	return v
+}
+
+func (st *yySymType) literalUnion() *Literal {
+	v, _ := st.ifaceUnion.(*Literal)
+	return v
+}
+
+func (st *yySymType) selectIntoUnion() *SelectInto {
+	v, _ := st.ifaceUnion.(*SelectInto)
+	return v
+}
+
+func (st *yySymType) indexHintsUnion() *IndexHints {
+	v, _ := st.ifaceUnion.(*IndexHints)
+	return v
+}
+
+func (st *yySymType) alterTableUnion() *AlterTable {
+	v, _ := st.ifaceUnion.(*AlterTable)
+	return v
+}
+
+func (st *yySymType) collateAndCharsetsUnion() []CollateAndCharset {
+	v, _ := st.ifaceUnion.([]CollateAndCharset)
+	return v
+}
+
+func (st *yySymType) exprsUnion() Exprs {
+	v, _ := st.ifaceUnion.(Exprs)
+	return v
+}
+
+func (st *yySymType) boolValUnion() BoolVal {
+	v, _ := st.ifaceUnion.(BoolVal)
+	return v
 }
 
 func (st *yySymType) selStmtUnion() SelectStatement {
@@ -4192,141 +4410,8 @@ func (st *yySymType) colTupleUnion() ColTuple {
 	return v
 }
 
-func (st *yySymType) constraintInfoUnion() ConstraintInfo {
-	v, _ := st.ifaceUnion.(ConstraintInfo)
-	return v
-}
-
-func (st *yySymType) limitUnion() *Limit {
-	v, _ := st.ifaceUnion.(*Limit)
-	return v
-}
-
-func (st *yySymType) columnsUnion() Columns {
-	v, _ := st.ifaceUnion.(Columns)
-	return v
-}
-
-func (st *yySymType) exprsUnion() Exprs {
-	v, _ := st.ifaceUnion.(Exprs)
-	return v
-}
-
-func (st *yySymType) derivedTableUnion() *DerivedTable {
-	v, _ := st.ifaceUnion.(*DerivedTable)
-	return v
-}
-
-func (st *yySymType) columnDefinitionsUnion() []*ColumnDefinition {
-	v, _ := st.ifaceUnion.([]*ColumnDefinition)
-	return v
-}
-
-func (st *yySymType) renameTablePairsUnion() []*RenameTablePair {
-	v, _ := st.ifaceUnion.([]*RenameTablePair)
-	return v
-}
-
-func (st *yySymType) characteristicsUnion() []Characteristic {
-	v, _ := st.ifaceUnion.([]Characteristic)
-	return v
-}
-
-func (st *yySymType) tableNamesUnion() TableNames {
-	v, _ := st.ifaceUnion.(TableNames)
-	return v
-}
-
-func (st *yySymType) selectExprsUnion() SelectExprs {
-	v, _ := st.ifaceUnion.(SelectExprs)
-	return v
-}
-
-func (st *yySymType) alterOptionsUnion() []AlterOption {
-	v, _ := st.ifaceUnion.([]AlterOption)
-	return v
-}
-
-func (st *yySymType) isolationLevelUnion() IsolationLevel {
-	return IsolationLevel(st.numericUnion)
-}
-
-func (st *yySymType) scopeUnion() Scope {
-	return Scope(st.numericUnion)
-}
-
-func (st *yySymType) comparisonExprOperatorUnion() ComparisonExprOperator {
-	return ComparisonExprOperator(st.numericUnion)
-}
-
-func (st *yySymType) optValUnion() Expr {
-	v, _ := st.ifaceUnion.(Expr)
-	return v
-}
-
-func (st *yySymType) columnDefinitionUnion() *ColumnDefinition {
-	v, _ := st.ifaceUnion.(*ColumnDefinition)
-	return v
-}
-
-func (st *yySymType) whensUnion() []*When {
-	v, _ := st.ifaceUnion.([]*When)
-	return v
-}
-
-func (st *yySymType) vindexParamsUnion() []VindexParam {
-	v, _ := st.ifaceUnion.([]VindexParam)
-	return v
-}
-
-func (st *yySymType) insertActionUnion() InsertAction {
-	return InsertAction(st.numericUnion)
-}
-
-func (st *yySymType) ReferenceActionUnion() ReferenceAction {
-	return ReferenceAction(st.numericUnion)
-}
-
-func (st *yySymType) literalUnion() *Literal {
-	v, _ := st.ifaceUnion.(*Literal)
-	return v
-}
-
-func (st *yySymType) convertTypeUnion() *ConvertType {
-	v, _ := st.ifaceUnion.(*ConvertType)
-	return v
-}
-
-func (st *yySymType) createDatabaseUnion() *CreateDatabase {
-	v, _ := st.ifaceUnion.(*CreateDatabase)
-	return v
-}
-
-func (st *yySymType) constraintDefinitionUnion() *ConstraintDefinition {
-	v, _ := st.ifaceUnion.(*ConstraintDefinition)
-	return v
-}
-
-func (st *yySymType) selectExprUnion() SelectExpr {
-	v, _ := st.ifaceUnion.(SelectExpr)
-	return v
-}
-
-func (st *yySymType) lockUnion() Lock {
-	return Lock(st.numericUnion)
-}
-
-func (st *yySymType) explainTypeUnion() ExplainType {
-	return ExplainType(st.numericUnion)
-}
-
-func (st *yySymType) indexHintsUnion() *IndexHints {
-	v, _ := st.ifaceUnion.(*IndexHints)
-	return v
-}
-
-func (st *yySymType) tableAndLockTypeUnion() *TableAndLockType {
-	v, _ := st.ifaceUnion.(*TableAndLockType)
+func (st *yySymType) partDefsUnion() []*PartitionDefinition {
+	v, _ := st.ifaceUnion.([]*PartitionDefinition)
 	return v
 }
 
@@ -4335,28 +4420,23 @@ func (st *yySymType) partSpecsUnion() []*PartitionSpec {
 	return v
 }
 
-func (st *yySymType) alterOptionUnion() AlterOption {
-	v, _ := st.ifaceUnion.(AlterOption)
+func (st *yySymType) valTupleUnion() ValTuple {
+	v, _ := st.ifaceUnion.(ValTuple)
 	return v
 }
 
-func (st *yySymType) whenUnion() *When {
-	v, _ := st.ifaceUnion.(*When)
+func (st *yySymType) limitUnion() *Limit {
+	v, _ := st.ifaceUnion.(*Limit)
 	return v
 }
 
-func (st *yySymType) orderUnion() *Order {
-	v, _ := st.ifaceUnion.(*Order)
+func (st *yySymType) alterOptionsUnion() []AlterOption {
+	v, _ := st.ifaceUnion.([]AlterOption)
 	return v
 }
 
-func (st *yySymType) alterDatabaseUnion() *AlterDatabase {
-	v, _ := st.ifaceUnion.(*AlterDatabase)
-	return v
-}
-
-func (st *yySymType) columnTypeOptionsUnion() *ColumnTypeOptions {
-	v, _ := st.ifaceUnion.(*ColumnTypeOptions)
+func (st *yySymType) partitionsUnion() Partitions {
+	v, _ := st.ifaceUnion.(Partitions)
 	return v
 }
 
@@ -4365,144 +4445,18 @@ func (st *yySymType) valuesUnion() Values {
 	return v
 }
 
-func (st *yySymType) valTupleUnion() ValTuple {
-	v, _ := st.ifaceUnion.(ValTuple)
+func (st *yySymType) isolationLevelUnion() IsolationLevel {
+	v, _ := st.ifaceUnion.(IsolationLevel)
 	return v
 }
 
-func (st *yySymType) ignoreUnion() Ignore {
-	return Ignore(st.boolUnion)
-}
-
-func (st *yySymType) subqueryUnion() *Subquery {
-	v, _ := st.ifaceUnion.(*Subquery)
-	return v
-}
-
-func (st *yySymType) aliasedTableNameUnion() *AliasedTableExpr {
-	v, _ := st.ifaceUnion.(*AliasedTableExpr)
-	return v
-}
-
-func (st *yySymType) showFilterUnion() *ShowFilter {
-	v, _ := st.ifaceUnion.(*ShowFilter)
-	return v
-}
-
-func (st *yySymType) selectIntoUnion() *SelectInto {
-	v, _ := st.ifaceUnion.(*SelectInto)
-	return v
-}
-
-func (st *yySymType) indexOptionsUnion() []*IndexOption {
-	v, _ := st.ifaceUnion.([]*IndexOption)
-	return v
-}
-
-func (st *yySymType) tableAndLockTypesUnion() TableAndLockTypes {
-	v, _ := st.ifaceUnion.(TableAndLockTypes)
-	return v
-}
-
-func (st *yySymType) orderByUnion() OrderBy {
-	v, _ := st.ifaceUnion.(OrderBy)
-	return v
-}
-
-func (st *yySymType) matchExprOptionUnion() MatchExprOption {
-	return MatchExprOption(st.numericUnion)
-}
-
-func (st *yySymType) statementUnion() Statement {
-	v, _ := st.ifaceUnion.(Statement)
-	return v
-}
-
-func (st *yySymType) indexInfoUnion() *IndexInfo {
-	v, _ := st.ifaceUnion.(*IndexInfo)
-	return v
-}
-
-func (st *yySymType) tableOptionUnion() *TableOption {
-	v, _ := st.ifaceUnion.(*TableOption)
-	return v
-}
-
-func (st *yySymType) indexColumnsUnion() []*IndexColumn {
-	v, _ := st.ifaceUnion.([]*IndexColumn)
-	return v
-}
-
-func (st *yySymType) collateAndCharsetsUnion() []CollateAndCharset {
-	v, _ := st.ifaceUnion.([]CollateAndCharset)
-	return v
-}
-
-func (st *yySymType) colNameUnion() *ColName {
-	v, _ := st.ifaceUnion.(*ColName)
-	return v
-}
-
-func (st *yySymType) booleanUnion() bool {
-	return bool(st.boolUnion)
-}
-
-func (st *yySymType) isExprOperatorUnion() IsExprOperator {
-	return IsExprOperator(st.numericUnion)
-}
-
-func (st *yySymType) tableExprUnion() TableExpr {
-	v, _ := st.ifaceUnion.(TableExpr)
-	return v
-}
-
-func (st *yySymType) exprUnion() Expr {
+func (st *yySymType) optValUnion() Expr {
 	v, _ := st.ifaceUnion.(Expr)
 	return v
 }
 
-func (st *yySymType) characteristicUnion() Characteristic {
-	v, _ := st.ifaceUnion.(Characteristic)
-	return v
-}
-
-func (st *yySymType) insUnion() *Insert {
-	v, _ := st.ifaceUnion.(*Insert)
-	return v
-}
-
-func (st *yySymType) updateExprUnion() *UpdateExpr {
-	v, _ := st.ifaceUnion.(*UpdateExpr)
-	return v
-}
-
-func (st *yySymType) partDefUnion() *PartitionDefinition {
-	v, _ := st.ifaceUnion.(*PartitionDefinition)
-	return v
-}
-
-func (st *yySymType) createTableUnion() *CreateTable {
-	v, _ := st.ifaceUnion.(*CreateTable)
-	return v
-}
-
-func (st *yySymType) partDefsUnion() []*PartitionDefinition {
-	v, _ := st.ifaceUnion.([]*PartitionDefinition)
-	return v
-}
-
-func (st *yySymType) setExprsUnion() SetExprs {
-	v, _ := st.ifaceUnion.(SetExprs)
-	return v
-}
-
-func (st *yySymType) setExprUnion() *SetExpr {
-	v, _ := st.ifaceUnion.(*SetExpr)
-	return v
-}
-
-func (st *yySymType) indexOptionUnion() *IndexOption {
-	v, _ := st.ifaceUnion.(*IndexOption)
+func (st *yySymType) constraintInfoUnion() ConstraintInfo {
+	v, _ := st.ifaceUnion.(ConstraintInfo)
 	return v
 }
 
@@ -4511,8 +4465,68 @@ func (st *yySymType) partSpecUnion() *PartitionSpec {
 	return v
 }
 
-func (st *yySymType) updateExprsUnion() UpdateExprs {
-	v, _ := st.ifaceUnion.(UpdateExprs)
+func (st *yySymType) isExprOperatorUnion() IsExprOperator {
+	v, _ := st.ifaceUnion.(IsExprOperator)
+	return v
+}
+
+func (st *yySymType) createTableUnion() *CreateTable {
+	v, _ := st.ifaceUnion.(*CreateTable)
+	return v
+}
+
+func (st *yySymType) columnTypeOptionsUnion() *ColumnTypeOptions {
+	v, _ := st.ifaceUnion.(*ColumnTypeOptions)
+	return v
+}
+
+func (st *yySymType) selectExprsUnion() SelectExprs {
+	v, _ := st.ifaceUnion.(SelectExprs)
+	return v
+}
+
+func (st *yySymType) orderDirectionUnion() OrderDirection {
+	v, _ := st.ifaceUnion.(OrderDirection)
+	return v
+}
+
+func (st *yySymType) exprUnion() Expr {
+	v, _ := st.ifaceUnion.(Expr)
+	return v
+}
+
+func (st *yySymType) tableSpecUnion() *TableSpec {
+	v, _ := st.ifaceUnion.(*TableSpec)
+	return v
+}
+
+func (st *yySymType) characteristicsUnion() []Characteristic {
+	v, _ := st.ifaceUnion.([]Characteristic)
+	return v
+}
+
+func (st *yySymType) tableAndLockTypeUnion() *TableAndLockType {
+	v, _ := st.ifaceUnion.(*TableAndLockType)
+	return v
+}
+
+func (st *yySymType) indexColumnsUnion() []*IndexColumn {
+	v, _ := st.ifaceUnion.([]*IndexColumn)
+	return v
+}
+
+func (st *yySymType) setExprsUnion() SetExprs {
+	v, _ := st.ifaceUnion.(SetExprs)
+	return v
+}
+
+func (st *yySymType) convertTypeUnion() *ConvertType {
+	v, _ := st.ifaceUnion.(*ConvertType)
+	return v
+}
+
+func (st *yySymType) indexDefinitionUnion() *IndexDefinition {
+	v, _ := st.ifaceUnion.(*IndexDefinition)
 	return v
 }
 
@@ -5817,12 +5831,12 @@ yydefault:
 	case 54:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.numericUnion = int(InsertAct)
+			yyVAL.ifaceUnion = InsertAct
 		}
 	case 55:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.numericUnion = int(ReplaceAct)
+			yyVAL.ifaceUnion = ReplaceAct
 		}
 	case 56:
 		yyDollar = yyS[yypt-9 : yypt+1]
@@ -5940,32 +5954,32 @@ yydefault:
 	case 79:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.numericUnion = int(RepeatableRead)
+			yyVAL.ifaceUnion = RepeatableRead
 		}
 	case 80:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.numericUnion = int(ReadCommitted)
+			yyVAL.ifaceUnion = ReadCommitted
 		}
 	case 81:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.numericUnion = int(ReadUncommitted)
+			yyVAL.ifaceUnion = ReadUncommitted
 		}
 	case 82:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.numericUnion = int(Serializable)
+			yyVAL.ifaceUnion = Serializable
 		}
 	case 83:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.numericUnion = int(SessionScope)
+			yyVAL.ifaceUnion = SessionScope
 		}
 	case 84:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.numericUnion = int(GlobalScope)
+			yyVAL.ifaceUnion = GlobalScope
 		}
 	case 85:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -6007,12 +6021,12 @@ yydefault:
 	case 90:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		{
-			yyVAL.boolUnion = false
+			yyVAL.ifaceUnion = false
 		}
 	case 91:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.boolUnion = true
+			yyVAL.ifaceUnion = true
 		}
 	case 92:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -6143,12 +6157,12 @@ yydefault:
 	case 117:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		{
-			yyVAL.boolUnion = false
+			yyVAL.ifaceUnion = false
 		}
 	case 118:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.boolUnion = true
+			yyVAL.ifaceUnion = true
 		}
 	case 119:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -6594,22 +6608,22 @@ yydefault:
 	case 203:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		{
-			yyVAL.boolUnion = false
+			yyVAL.ifaceUnion = false
 		}
 	case 204:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.boolUnion = true
+			yyVAL.ifaceUnion = true
 		}
 	case 205:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		{
-			yyVAL.boolUnion = false
+			yyVAL.ifaceUnion = false
 		}
 	case 206:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.boolUnion = true
+			yyVAL.ifaceUnion = true
 		}
 	case 207:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -6850,37 +6864,37 @@ yydefault:
 	case 254:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.numericUnion = int(yyDollar[3].ReferenceActionUnion())
+			yyVAL.ifaceUnion = yyDollar[3].ReferenceActionUnion()
 		}
 	case 255:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.numericUnion = int(yyDollar[3].ReferenceActionUnion())
+			yyVAL.ifaceUnion = yyDollar[3].ReferenceActionUnion()
 		}
 	case 256:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.numericUnion = int(Restrict)
+			yyVAL.ifaceUnion = Restrict
 		}
 	case 257:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.numericUnion = int(Cascade)
+			yyVAL.ifaceUnion = Cascade
 		}
 	case 258:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.numericUnion = int(NoAction)
+			yyVAL.ifaceUnion = NoAction
 		}
 	case 259:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.numericUnion = int(SetDefault)
+			yyVAL.ifaceUnion = SetDefault
 		}
 	case 260:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.numericUnion = int(SetNull)
+			yyVAL.ifaceUnion = SetNull
 		}
 	case 261:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -6900,17 +6914,17 @@ yydefault:
 	case 264:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		{
-			yyVAL.boolUnion = true
+			yyVAL.ifaceUnion = true
 		}
 	case 265:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.boolUnion = true
+			yyVAL.ifaceUnion = true
 		}
 	case 266:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.boolUnion = false
+			yyVAL.ifaceUnion = false
 		}
 	case 267:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -7597,17 +7611,17 @@ yydefault:
 	case 403:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		{
-			yyVAL.boolUnion = false
+			yyVAL.ifaceUnion = false
 		}
 	case 404:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.boolUnion = false
+			yyVAL.ifaceUnion = false
 		}
 	case 405:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.boolUnion = true
+			yyVAL.ifaceUnion = true
 		}
 	case 406:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -7931,12 +7945,12 @@ yydefault:
 	case 468:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		{
-			yyVAL.boolUnion = false
+			yyVAL.ifaceUnion = false
 		}
 	case 469:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.boolUnion = true
+			yyVAL.ifaceUnion = true
 		}
 	case 470:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -8071,32 +8085,32 @@ yydefault:
 	case 496:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		{
-			yyVAL.numericUnion = int(EmptyType)
+			yyVAL.ifaceUnion = EmptyType
 		}
 	case 497:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.numericUnion = int(JSONType)
+			yyVAL.ifaceUnion = JSONType
 		}
 	case 498:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.numericUnion = int(TreeType)
+			yyVAL.ifaceUnion = TreeType
 		}
 	case 499:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.numericUnion = int(VitessType)
+			yyVAL.ifaceUnion = VitessType
 		}
 	case 500:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.numericUnion = int(TraditionalType)
+			yyVAL.ifaceUnion = TraditionalType
 		}
 	case 501:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.numericUnion = int(AnalyzeType)
+			yyVAL.ifaceUnion = AnalyzeType
 		}
 	case 502:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -8191,22 +8205,22 @@ yydefault:
 	case 520:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.numericUnion = int(Read)
+			yyVAL.ifaceUnion = Read
 		}
 	case 521:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.numericUnion = int(ReadLocal)
+			yyVAL.ifaceUnion = ReadLocal
 		}
 	case 522:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.numericUnion = int(Write)
+			yyVAL.ifaceUnion = Write
 		}
 	case 523:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.numericUnion = int(LowPriorityWrite)
+			yyVAL.ifaceUnion = LowPriorityWrite
 		}
 	case 524:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -8316,17 +8330,17 @@ yydefault:
 	case 545:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		{
-			yyVAL.boolUnion = false
+			yyVAL.ifaceUnion = false
 		}
 	case 546:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.boolUnion = true
+			yyVAL.ifaceUnion = true
 		}
 	case 547:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.boolUnion = true
+			yyVAL.ifaceUnion = true
 		}
 	case 548:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -8362,17 +8376,17 @@ yydefault:
 	case 554:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.boolUnion = true
+			yyVAL.ifaceUnion = true
 		}
 	case 555:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.boolUnion = false
+			yyVAL.ifaceUnion = false
 		}
 	case 556:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.boolUnion = true
+			yyVAL.ifaceUnion = true
 		}
 	case 557:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -8392,17 +8406,17 @@ yydefault:
 	case 560:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		{
-			yyVAL.boolUnion = false
+			yyVAL.ifaceUnion = false
 		}
 	case 561:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.boolUnion = true
+			yyVAL.ifaceUnion = true
 		}
 	case 562:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.boolUnion = true
+			yyVAL.ifaceUnion = true
 		}
 	case 563:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -8687,55 +8701,55 @@ yydefault:
 	case 623:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.numericUnion = int(NormalJoinType)
+			yyVAL.ifaceUnion = NormalJoinType
 		}
 	case 624:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.numericUnion = int(NormalJoinType)
+			yyVAL.ifaceUnion = NormalJoinType
 		}
 	case 625:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.numericUnion = int(NormalJoinType)
+			yyVAL.ifaceUnion = NormalJoinType
 		}
 	case 626:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.numericUnion = int(StraightJoinType)
+			yyVAL.ifaceUnion = StraightJoinType
 		}
 	case 627:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.numericUnion = int(LeftJoinType)
+			yyVAL.ifaceUnion = LeftJoinType
 		}
 	case 628:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.numericUnion = int(LeftJoinType)
+			yyVAL.ifaceUnion = LeftJoinType
 		}
 	case 629:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.numericUnion = int(RightJoinType)
+			yyVAL.ifaceUnion = RightJoinType
 		}
 	case 630:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.numericUnion = int(RightJoinType)
+			yyVAL.ifaceUnion = RightJoinType
 		}
 	case 631:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.numericUnion = int(NaturalJoinType)
+			yyVAL.ifaceUnion = NaturalJoinType
 		}
 	case 632:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
 			if yyDollar[2].joinTypeUnion() == LeftJoinType {
-				yyVAL.numericUnion = int(NaturalLeftJoinType)
+				yyVAL.ifaceUnion = NaturalLeftJoinType
 			} else {
-				yyVAL.numericUnion = int(NaturalRightJoinType)
+				yyVAL.ifaceUnion = NaturalRightJoinType
 			}
 		}
 	case 633:
@@ -8851,12 +8865,12 @@ yydefault:
 	case 655:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.boolUnion = true
+			yyVAL.ifaceUnion = BoolVal(true)
 		}
 	case 656:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.boolUnion = false
+			yyVAL.ifaceUnion = BoolVal(false)
 		}
 	case 657:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -8911,67 +8925,67 @@ yydefault:
 	case 667:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.numericUnion = int(IsNullOp)
+			yyVAL.ifaceUnion = IsNullOp
 		}
 	case 668:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.numericUnion = int(IsNotNullOp)
+			yyVAL.ifaceUnion = IsNotNullOp
 		}
 	case 669:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.numericUnion = int(IsTrueOp)
+			yyVAL.ifaceUnion = IsTrueOp
 		}
 	case 670:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.numericUnion = int(IsNotTrueOp)
+			yyVAL.ifaceUnion = IsNotTrueOp
 		}
 	case 671:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.numericUnion = int(IsFalseOp)
+			yyVAL.ifaceUnion = IsFalseOp
 		}
 	case 672:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.numericUnion = int(IsNotFalseOp)
+			yyVAL.ifaceUnion = IsNotFalseOp
 		}
 	case 673:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.numericUnion = int(EqualOp)
+			yyVAL.ifaceUnion = EqualOp
 		}
 	case 674:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.numericUnion = int(LessThanOp)
+			yyVAL.ifaceUnion = LessThanOp
 		}
 	case 675:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.numericUnion = int(GreaterThanOp)
+			yyVAL.ifaceUnion = GreaterThanOp
 		}
 	case 676:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.numericUnion = int(LessEqualOp)
+			yyVAL.ifaceUnion = LessEqualOp
 		}
 	case 677:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.numericUnion = int(GreaterEqualOp)
+			yyVAL.ifaceUnion = GreaterEqualOp
 		}
 	case 678:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.numericUnion = int(NotEqualOp)
+			yyVAL.ifaceUnion = NotEqualOp
 		}
 	case 679:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.numericUnion = int(NullSafeEqualOp)
+			yyVAL.ifaceUnion = NullSafeEqualOp
 		}
 	case 680:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -9375,27 +9389,27 @@ yydefault:
 	case 765:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		{
-			yyVAL.numericUnion = int(NoOption)
+			yyVAL.ifaceUnion = NoOption
 		}
 	case 766:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.numericUnion = int(BooleanModeOpt)
+			yyVAL.ifaceUnion = BooleanModeOpt
 		}
 	case 767:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		{
-			yyVAL.numericUnion = int(NaturalLanguageModeOpt)
+			yyVAL.ifaceUnion = NaturalLanguageModeOpt
 		}
 	case 768:
 		yyDollar = yyS[yypt-7 : yypt+1]
 		{
-			yyVAL.numericUnion = int(NaturalLanguageModeWithQueryExpansionOpt)
+			yyVAL.ifaceUnion = NaturalLanguageModeWithQueryExpansionOpt
 		}
 	case 769:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.numericUnion = int(QueryExpansionOpt)
+			yyVAL.ifaceUnion = QueryExpansionOpt
 		}
 	case 770:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -9647,17 +9661,17 @@ yydefault:
 	case 818:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		{
-			yyVAL.numericUnion = int(AscOrder)
+			yyVAL.ifaceUnion = AscOrder
 		}
 	case 819:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.numericUnion = int(AscOrder)
+			yyVAL.ifaceUnion = AscOrder
 		}
 	case 820:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.numericUnion = int(DescOrder)
+			yyVAL.ifaceUnion = DescOrder
 		}
 	case 821:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -9837,17 +9851,17 @@ yydefault:
 	case 856:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		{
-			yyVAL.numericUnion = int(NoLock)
+			yyVAL.ifaceUnion = NoLock
 		}
 	case 857:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.numericUnion = int(ForUpdateLock)
+			yyVAL.ifaceUnion = ForUpdateLock
 		}
 	case 858:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		{
-			yyVAL.numericUnion = int(ShareModeLock)
+			yyVAL.ifaceUnion = ShareModeLock
 		}
 	case 859:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -10162,42 +10176,42 @@ yydefault:
 	case 925:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		{
-			yyVAL.boolUnion = false
+			yyVAL.ifaceUnion = false
 		}
 	case 926:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.boolUnion = true
+			yyVAL.ifaceUnion = true
 		}
 	case 927:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		{
-			yyVAL.boolUnion = false
+			yyVAL.ifaceUnion = false
 		}
 	case 928:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		{
-			yyVAL.boolUnion = true
+			yyVAL.ifaceUnion = true
 		}
 	case 929:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		{
-			yyVAL.boolUnion = false
+			yyVAL.ifaceUnion = false
 		}
 	case 930:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		{
-			yyVAL.boolUnion = true
+			yyVAL.ifaceUnion = true
 		}
 	case 931:
 		yyDollar = yyS[yypt-0 : yypt+1]
 		{
-			yyVAL.boolUnion = false
+			yyVAL.ifaceUnion = Ignore(false)
 		}
 	case 932:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		{
-			yyVAL.boolUnion = true
+			yyVAL.ifaceUnion = Ignore(true)
 		}
 	case 933:
 		yyDollar = yyS[yypt-0 : yypt+1]

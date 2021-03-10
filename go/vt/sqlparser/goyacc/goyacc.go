@@ -1086,6 +1086,15 @@ func typeinfo() {
 			fmt.Fprintf(ftable, "\nfunc (st *%sSymType) %sUnion() %s {\n", prefix, member, tt.typename)
 			fmt.Fprintf(ftable, "\treturn %s(st.%s)\n", tt.typename, tt.unionName)
 			fmt.Fprintf(ftable, "}\n")
+		case "[]interface{}":
+			fmt.Fprintf(ftable, "\nfunc (st *%sSymType) %sUnion() %s {\n", prefix, member, tt.typename)
+			fmt.Fprintf(ftable, "\ts := make(%s, 0, len(st.%s))\n", tt.typename, tt.unionName)
+			fmt.Fprintf(ftable, "\tfor _, v := range st.%s {\n", tt.unionName)
+			fmt.Fprintf(ftable, "\t\ts = append(s, v.(%s))\n", tt.typename[2:])
+			fmt.Fprintf(ftable, "\t}\n")
+			fmt.Fprintf(ftable, "\treturn s\n")
+			fmt.Fprintf(ftable, "}\n")
+
 		case "":
 			// no-op
 		default:
@@ -1342,7 +1351,7 @@ l1:
 	return nl
 }
 
-func cpyyvalaccess(curprod []int, tok int) {
+func cpyyvalaccess(curprod []int, tok int, union bool) {
 	var buf bytes.Buffer
 	lvalue := false
 
@@ -1371,7 +1380,7 @@ loop:
 			errorf("missing Go type information for %s", typeset[tok])
 		}
 		if ti.unionName != "" {
-			if lvalue {
+			if lvalue || union {
 				fmt.Fprintf(fcode, ".%s", ti.unionName)
 			} else {
 				fmt.Fprintf(fcode, ".%sUnion()", typeset[tok])
@@ -1414,6 +1423,7 @@ loop:
 		case '$':
 			s := 1
 			tok := -1
+			union := false
 			c = getrune(finput)
 
 			// type description
@@ -1425,8 +1435,12 @@ loop:
 				tok = numbval
 				c = getrune(finput)
 			}
+			if c == 'u' {
+				union = true
+				c = getrune(finput)
+			}
 			if c == '$' {
-				cpyyvalaccess(curprod, tok)
+				cpyyvalaccess(curprod, tok, union)
 				continue loop
 			}
 			if c == '-' {
@@ -1493,7 +1507,9 @@ loop:
 				if !ok {
 					errorf("missing Go type information for %s", typeset[tok])
 				}
-				if ti.unionType != "" {
+				if union {
+					fmt.Fprintf(fcode, ".%s", ti.unionName)
+				} else if ti.unionType != "" {
 					fmt.Fprintf(fcode, ".%sUnion()", typeset[tok])
 				} else {
 					fmt.Fprintf(fcode, ".%s", typeset[tok])
