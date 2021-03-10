@@ -56,8 +56,6 @@ func skipToEnd(yylex interface{}) {
   selStmt       SelectStatement
   ins           *Insert
   byt           byte
-  bytes         []byte
-  bytes2        [][]byte
   str           string
   strs          []string
   selectExprs   SelectExprs
@@ -150,44 +148,44 @@ func skipToEnd(yylex interface{}) {
 }
 
 %token LEX_ERROR
-%left <bytes> UNION
-%token <bytes> SELECT STREAM VSTREAM INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT OFFSET FOR
-%token <bytes> ALL DISTINCT AS EXISTS ASC DESC INTO DUPLICATE KEY DEFAULT SET LOCK UNLOCK KEYS DO CALL
-%token <bytes> DISTINCTROW PARSER
-%token <bytes> OUTFILE S3 DATA LOAD LINES TERMINATED ESCAPED ENCLOSED
-%token <bytes> DUMPFILE CSV HEADER MANIFEST OVERWRITE STARTING OPTIONALLY
-%token <bytes> VALUES LAST_INSERT_ID
-%token <bytes> NEXT VALUE SHARE MODE
-%token <bytes> SQL_NO_CACHE SQL_CACHE SQL_CALC_FOUND_ROWS
-%left <bytes> JOIN STRAIGHT_JOIN LEFT RIGHT INNER OUTER CROSS NATURAL USE FORCE
-%left <bytes> ON USING INPLACE COPY ALGORITHM NONE SHARED EXCLUSIVE
+%left <str> UNION
+%token <str> SELECT STREAM VSTREAM INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT OFFSET FOR
+%token <str> ALL DISTINCT AS EXISTS ASC DESC INTO DUPLICATE KEY DEFAULT SET LOCK UNLOCK KEYS DO CALL
+%token <str> DISTINCTROW PARSER
+%token <str> OUTFILE S3 DATA LOAD LINES TERMINATED ESCAPED ENCLOSED
+%token <str> DUMPFILE CSV HEADER MANIFEST OVERWRITE STARTING OPTIONALLY
+%token <str> VALUES LAST_INSERT_ID
+%token <str> NEXT VALUE SHARE MODE
+%token <str> SQL_NO_CACHE SQL_CACHE SQL_CALC_FOUND_ROWS
+%left <str> JOIN STRAIGHT_JOIN LEFT RIGHT INNER OUTER CROSS NATURAL USE FORCE
+%left <str> ON USING INPLACE COPY ALGORITHM NONE SHARED EXCLUSIVE
 %token <empty> '(' ',' ')'
-%token <bytes> ID AT_ID AT_AT_ID HEX STRING INTEGRAL FLOAT HEXNUM VALUE_ARG LIST_ARG COMMENT COMMENT_KEYWORD BIT_LITERAL COMPRESSION
-%token <bytes> NULL TRUE FALSE OFF
-%token <bytes> DISCARD IMPORT ENABLE DISABLE TABLESPACE
+%token <str> ID AT_ID AT_AT_ID HEX STRING INTEGRAL FLOAT HEXNUM VALUE_ARG LIST_ARG COMMENT COMMENT_KEYWORD BIT_LITERAL COMPRESSION
+%token <str> NULL TRUE FALSE OFF
+%token <str> DISCARD IMPORT ENABLE DISABLE TABLESPACE
 
 // Precedence dictated by mysql. But the vitess grammar is simplified.
 // Some of these operators don't conflict in our situation. Nevertheless,
 // it's better to have these listed in the correct order. Also, we don't
 // support all operators yet.
 // * NOTE: If you change anything here, update precedence.go as well *
-%left <bytes> OR
-%left <bytes> XOR
-%left <bytes> AND
-%right <bytes> NOT '!'
-%left <bytes> BETWEEN CASE WHEN THEN ELSE END
-%left <bytes> '=' '<' '>' LE GE NE NULL_SAFE_EQUAL IS LIKE REGEXP IN
-%left <bytes> '|'
-%left <bytes> '&'
-%left <bytes> SHIFT_LEFT SHIFT_RIGHT
-%left <bytes> '+' '-'
-%left <bytes> '*' '/' DIV '%' MOD
-%left <bytes> '^'
-%right <bytes> '~' UNARY
-%left <bytes> COLLATE
-%right <bytes> BINARY UNDERSCORE_BINARY UNDERSCORE_UTF8MB4 UNDERSCORE_UTF8 UNDERSCORE_LATIN1
-%right <bytes> INTERVAL
-%nonassoc <bytes> '.'
+%left <str> OR
+%left <str> XOR
+%left <str> AND
+%right <str> NOT '!'
+%left <str> BETWEEN CASE WHEN THEN ELSE END
+%left <str> '=' '<' '>' LE GE NE NULL_SAFE_EQUAL IS LIKE REGEXP IN
+%left <str> '|'
+%left <str> '&'
+%left <str> SHIFT_LEFT SHIFT_RIGHT
+%left <str> '+' '-'
+%left <str> '*' '/' DIV '%' MOD
+%left <str> '^'
+%right <str> '~' UNARY
+%left <str> COLLATE
+%right <str> BINARY UNDERSCORE_BINARY UNDERSCORE_UTF8MB4 UNDERSCORE_UTF8 UNDERSCORE_LATIN1
+%right <str> INTERVAL
+%nonassoc <str> '.'
 
 // There is no need to define precedence for the JSON
 // operators because the syntax is restricted enough that
@@ -195,71 +193,71 @@ func skipToEnd(yylex interface{}) {
 %token <empty> JSON_EXTRACT_OP JSON_UNQUOTE_EXTRACT_OP
 
 // DDL Tokens
-%token <bytes> CREATE ALTER DROP RENAME ANALYZE ADD FLUSH CHANGE MODIFY
-%token <bytes> SCHEMA TABLE INDEX VIEW TO IGNORE IF UNIQUE PRIMARY COLUMN SPATIAL FULLTEXT KEY_BLOCK_SIZE CHECK INDEXES
-%token <bytes> ACTION CASCADE CONSTRAINT FOREIGN NO REFERENCES RESTRICT
-%token <bytes> SHOW DESCRIBE EXPLAIN DATE ESCAPE REPAIR OPTIMIZE TRUNCATE COALESCE EXCHANGE REBUILD PARTITIONING REMOVE
-%token <bytes> MAXVALUE PARTITION REORGANIZE LESS THAN PROCEDURE TRIGGER
-%token <bytes> VINDEX VINDEXES DIRECTORY NAME UPGRADE
-%token <bytes> STATUS VARIABLES WARNINGS CASCADED DEFINER OPTION SQL UNDEFINED
-%token <bytes> SEQUENCE MERGE TEMPORARY TEMPTABLE INVOKER SECURITY FIRST AFTER LAST
+%token <str> CREATE ALTER DROP RENAME ANALYZE ADD FLUSH CHANGE MODIFY
+%token <str> SCHEMA TABLE INDEX VIEW TO IGNORE IF UNIQUE PRIMARY COLUMN SPATIAL FULLTEXT KEY_BLOCK_SIZE CHECK INDEXES
+%token <str> ACTION CASCADE CONSTRAINT FOREIGN NO REFERENCES RESTRICT
+%token <str> SHOW DESCRIBE EXPLAIN DATE ESCAPE REPAIR OPTIMIZE TRUNCATE COALESCE EXCHANGE REBUILD PARTITIONING REMOVE
+%token <str> MAXVALUE PARTITION REORGANIZE LESS THAN PROCEDURE TRIGGER
+%token <str> VINDEX VINDEXES DIRECTORY NAME UPGRADE
+%token <str> STATUS VARIABLES WARNINGS CASCADED DEFINER OPTION SQL UNDEFINED
+%token <str> SEQUENCE MERGE TEMPORARY TEMPTABLE INVOKER SECURITY FIRST AFTER LAST
 
 // Transaction Tokens
-%token <bytes> BEGIN START TRANSACTION COMMIT ROLLBACK SAVEPOINT RELEASE WORK
+%token <str> BEGIN START TRANSACTION COMMIT ROLLBACK SAVEPOINT RELEASE WORK
 
 // Type Tokens
-%token <bytes> BIT TINYINT SMALLINT MEDIUMINT INT INTEGER BIGINT INTNUM
-%token <bytes> REAL DOUBLE FLOAT_TYPE DECIMAL NUMERIC
-%token <bytes> TIME TIMESTAMP DATETIME YEAR
-%token <bytes> CHAR VARCHAR BOOL CHARACTER VARBINARY NCHAR 
-%token <bytes> TEXT TINYTEXT MEDIUMTEXT LONGTEXT
-%token <bytes> BLOB TINYBLOB MEDIUMBLOB LONGBLOB JSON ENUM
-%token <bytes> GEOMETRY POINT LINESTRING POLYGON GEOMETRYCOLLECTION MULTIPOINT MULTILINESTRING MULTIPOLYGON
+%token <str> BIT TINYINT SMALLINT MEDIUMINT INT INTEGER BIGINT INTNUM
+%token <str> REAL DOUBLE FLOAT_TYPE DECIMAL NUMERIC
+%token <str> TIME TIMESTAMP DATETIME YEAR
+%token <str> CHAR VARCHAR BOOL CHARACTER VARBINARY NCHAR
+%token <str> TEXT TINYTEXT MEDIUMTEXT LONGTEXT
+%token <str> BLOB TINYBLOB MEDIUMBLOB LONGBLOB JSON ENUM
+%token <str> GEOMETRY POINT LINESTRING POLYGON GEOMETRYCOLLECTION MULTIPOINT MULTILINESTRING MULTIPOLYGON
 
 // Type Modifiers
-%token <bytes> NULLX AUTO_INCREMENT APPROXNUM SIGNED UNSIGNED ZEROFILL
+%token <str> NULLX AUTO_INCREMENT APPROXNUM SIGNED UNSIGNED ZEROFILL
 
 // SHOW tokens
-%token <bytes> COLLATION DATABASES SCHEMAS TABLES VITESS_METADATA VSCHEMA FULL PROCESSLIST COLUMNS FIELDS ENGINES PLUGINS EXTENDED
-%token <bytes> KEYSPACES VITESS_KEYSPACES VITESS_SHARDS VITESS_TABLETS VITESS_MIGRATIONS CODE PRIVILEGES FUNCTION OPEN TRIGGERS EVENT USER
+%token <str> COLLATION DATABASES SCHEMAS TABLES VITESS_METADATA VSCHEMA FULL PROCESSLIST COLUMNS FIELDS ENGINES PLUGINS EXTENDED
+%token <str> KEYSPACES VITESS_KEYSPACES VITESS_SHARDS VITESS_TABLETS VITESS_MIGRATIONS CODE PRIVILEGES FUNCTION OPEN TRIGGERS EVENT USER
 
 // SET tokens
-%token <bytes> NAMES CHARSET GLOBAL SESSION ISOLATION LEVEL READ WRITE ONLY REPEATABLE COMMITTED UNCOMMITTED SERIALIZABLE
+%token <str> NAMES CHARSET GLOBAL SESSION ISOLATION LEVEL READ WRITE ONLY REPEATABLE COMMITTED UNCOMMITTED SERIALIZABLE
 
 // Functions
-%token <bytes> CURRENT_TIMESTAMP DATABASE CURRENT_DATE
-%token <bytes> CURRENT_TIME LOCALTIME LOCALTIMESTAMP CURRENT_USER
-%token <bytes> UTC_DATE UTC_TIME UTC_TIMESTAMP
-%token <bytes> REPLACE
-%token <bytes> CONVERT CAST
-%token <bytes> SUBSTR SUBSTRING
-%token <bytes> GROUP_CONCAT SEPARATOR
-%token <bytes> TIMESTAMPADD TIMESTAMPDIFF
+%token <str> CURRENT_TIMESTAMP DATABASE CURRENT_DATE
+%token <str> CURRENT_TIME LOCALTIME LOCALTIMESTAMP CURRENT_USER
+%token <str> UTC_DATE UTC_TIME UTC_TIMESTAMP
+%token <str> REPLACE
+%token <str> CONVERT CAST
+%token <str> SUBSTR SUBSTRING
+%token <str> GROUP_CONCAT SEPARATOR
+%token <str> TIMESTAMPADD TIMESTAMPDIFF
 
 // Match
-%token <bytes> MATCH AGAINST BOOLEAN LANGUAGE WITH QUERY EXPANSION WITHOUT VALIDATION
+%token <str> MATCH AGAINST BOOLEAN LANGUAGE WITH QUERY EXPANSION WITHOUT VALIDATION
 
 // MySQL reserved words that are unused by this grammar will map to this token.
-%token <bytes> UNUSED ARRAY CUME_DIST DESCRIPTION DENSE_RANK EMPTY EXCEPT FIRST_VALUE GROUPING GROUPS JSON_TABLE LAG LAST_VALUE LATERAL LEAD MEMBER
-%token <bytes> NTH_VALUE NTILE OF OVER PERCENT_RANK RANK RECURSIVE ROW_NUMBER SYSTEM WINDOW
-%token <bytes> ACTIVE ADMIN BUCKETS CLONE COMPONENT DEFINITION ENFORCED EXCLUDE FOLLOWING GEOMCOLLECTION GET_MASTER_PUBLIC_KEY HISTOGRAM HISTORY
-%token <bytes> INACTIVE INVISIBLE LOCKED MASTER_COMPRESSION_ALGORITHMS MASTER_PUBLIC_KEY_PATH MASTER_TLS_CIPHERSUITES MASTER_ZSTD_COMPRESSION_LEVEL
-%token <bytes> NESTED NETWORK_NAMESPACE NOWAIT NULLS OJ OLD OPTIONAL ORDINALITY ORGANIZATION OTHERS PATH PERSIST PERSIST_ONLY PRECEDING PRIVILEGE_CHECKS_USER PROCESS
-%token <bytes> RANDOM REFERENCE REQUIRE_ROW_FORMAT RESOURCE RESPECT RESTART RETAIN REUSE ROLE SECONDARY SECONDARY_ENGINE SECONDARY_LOAD SECONDARY_UNLOAD SKIP SRID
-%token <bytes> THREAD_PRIORITY TIES UNBOUNDED VCPU VISIBLE
+%token <str> UNUSED ARRAY CUME_DIST DESCRIPTION DENSE_RANK EMPTY EXCEPT FIRST_VALUE GROUPING GROUPS JSON_TABLE LAG LAST_VALUE LATERAL LEAD MEMBER
+%token <str> NTH_VALUE NTILE OF OVER PERCENT_RANK RANK RECURSIVE ROW_NUMBER SYSTEM WINDOW
+%token <str> ACTIVE ADMIN BUCKETS CLONE COMPONENT DEFINITION ENFORCED EXCLUDE FOLLOWING GEOMCOLLECTION GET_MASTER_PUBLIC_KEY HISTOGRAM HISTORY
+%token <str> INACTIVE INVISIBLE LOCKED MASTER_COMPRESSION_ALGORITHMS MASTER_PUBLIC_KEY_PATH MASTER_TLS_CIPHERSUITES MASTER_ZSTD_COMPRESSION_LEVEL
+%token <str> NESTED NETWORK_NAMESPACE NOWAIT NULLS OJ OLD OPTIONAL ORDINALITY ORGANIZATION OTHERS PATH PERSIST PERSIST_ONLY PRECEDING PRIVILEGE_CHECKS_USER PROCESS
+%token <str> RANDOM REFERENCE REQUIRE_ROW_FORMAT RESOURCE RESPECT RESTART RETAIN REUSE ROLE SECONDARY SECONDARY_ENGINE SECONDARY_LOAD SECONDARY_UNLOAD SKIP SRID
+%token <str> THREAD_PRIORITY TIES UNBOUNDED VCPU VISIBLE
 
 // Explain tokens
-%token <bytes> FORMAT TREE VITESS TRADITIONAL
+%token <str> FORMAT TREE VITESS TRADITIONAL
 
 // Lock type tokens
-%token <bytes> LOCAL LOW_PRIORITY
+%token <str> LOCAL LOW_PRIORITY
 
 // Flush tokens
-%token <bytes> NO_WRITE_TO_BINLOG LOGS ERROR GENERAL HOSTS OPTIMIZER_COSTS USER_RESOURCES SLOW CHANNEL RELAY EXPORT
+%token <str> NO_WRITE_TO_BINLOG LOGS ERROR GENERAL HOSTS OPTIMIZER_COSTS USER_RESOURCES SLOW CHANNEL RELAY EXPORT
 
 // TableOptions tokens
-%token <bytes> AVG_ROW_LENGTH CONNECTION CHECKSUM DELAY_KEY_WRITE ENCRYPTION ENGINE INSERT_METHOD MAX_ROWS MIN_ROWS PACK_KEYS PASSWORD
-%token <bytes> FIXED DYNAMIC COMPRESSED REDUNDANT COMPACT ROW_FORMAT STATS_AUTO_RECALC STATS_PERSISTENT STATS_SAMPLE_PAGES STORAGE MEMORY DISK
+%token <str> AVG_ROW_LENGTH CONNECTION CHECKSUM DELAY_KEY_WRITE ENCRYPTION ENGINE INSERT_METHOD MAX_ROWS MIN_ROWS PACK_KEYS PASSWORD
+%token <str> FIXED DYNAMIC COMPRESSED REDUNDANT COMPACT ROW_FORMAT STATS_AUTO_RECALC STATS_PERSISTENT STATS_SAMPLE_PAGES STORAGE MEMORY DISK
 
 %type <statement> command
 %type <selStmt> simple_select select_statement base_select union_rhs
@@ -280,11 +278,11 @@ func skipToEnd(yylex interface{}) {
 %type <statement> analyze_statement show_statement use_statement other_statement
 %type <statement> begin_statement commit_statement rollback_statement savepoint_statement release_statement load_statement
 %type <statement> lock_statement unlock_statement call_statement
-%type <bytes2> comment_opt comment_list
+%type <strs> comment_opt comment_list
 %type <str> wild_opt check_option_opt cascade_or_local_opt restrict_or_cascade_opt
 %type <explainType> explain_format_opt
 %type <insertAction> insert_or_replace
-%type <bytes> explain_synonyms
+%type <str> explain_synonyms
 %type <str> cache_opt separator_opt flush_option for_channel_opt
 %type <matchExprOption> match_option
 %type <boolean> distinct_opt union_op replace_opt local_opt
@@ -338,20 +336,20 @@ func skipToEnd(yylex interface{}) {
 %type <updateExprs> on_dup_opt
 %type <updateExprs> update_list
 %type <setExprs> set_list
-%type <bytes> charset_or_character_set charset_or_character_set_or_names
+%type <str> charset_or_character_set charset_or_character_set_or_names
 %type <updateExpr> update_expression
 %type <setExpr> set_expression
 %type <characteristic> transaction_char
 %type <characteristics> transaction_chars
 %type <isolationLevel> isolation_level
-%type <bytes> for_from
+%type <str> for_from
 %type <str> default_opt
 %type <ignore> ignore_opt
 %type <str> from_database_opt columns_or_fields extended_opt storage_opt
 %type <showFilter> like_or_where_opt like_opt
 %type <boolean> exists_opt not_exists_opt enforced_opt temp_opt full_opt
 %type <empty> to_opt
-%type <bytes> reserved_keyword non_reserved_keyword
+%type <str> reserved_keyword non_reserved_keyword
 %type <colIdent> sql_id reserved_sql_id col_alias as_ci_opt
 %type <expr> charset_value
 %type <tableIdent> table_id reserved_table_id table_alias as_opt_id
@@ -391,7 +389,7 @@ func skipToEnd(yylex interface{}) {
 %type <vindexParam> vindex_param
 %type <vindexParams> vindex_param_list vindex_params_opt
 %type <colIdent> id_or_var vindex_type vindex_type_opt id_or_var_opt
-%type <bytes> database_or_schema column_opt insert_method_options row_format_options
+%type <str> database_or_schema column_opt insert_method_options row_format_options
 %type <ReferenceAction> fk_reference_action fk_on_delete fk_on_update
 %type <str> vitess_topo
 %type <tableAndLockTypes> lock_table_list
@@ -1820,7 +1818,7 @@ table_opt_value:
 
 column_opt:
   {
-    $$ = []byte("")
+    $$ = ""
   }
 | COLUMN
 
@@ -2684,11 +2682,11 @@ explain_synonyms:
   }
 | DESCRIBE
   {
-    $$ = $1  
+    $$ = $1
   }
 | DESC
   {
-    $$ = $1  
+    $$ = $1
   }
 
 explainable_statement:
@@ -2696,15 +2694,15 @@ explainable_statement:
   {
     $$ = $1
   }
-| update_statement  
+| update_statement
   {
     $$ = $1
   }
-| insert_statement  
+| insert_statement
   {
     $$ = $1
   }
-| delete_statement  
+| delete_statement
   {
     $$ = $1
   }
@@ -2972,15 +2970,15 @@ select_options:
   {
     $$ = []string{$1}
   }
-| select_option select_option // TODO: figure out a way to do this recursively instead. 
+| select_option select_option // TODO: figure out a way to do this recursively instead.
   {                           // TODO: This is a hack since I couldn't get it to work in a nicer way. I got 'conflicts: 8 shift/reduce'
     $$ = []string{$1, $2}
   }
-| select_option select_option select_option 
+| select_option select_option select_option
   {
     $$ = []string{$1, $2, $3}
   }
-| select_option select_option select_option select_option 
+| select_option select_option select_option select_option
   {
     $$ = []string{$1, $2, $3, $4}
   }
@@ -3658,7 +3656,7 @@ function_call_generic:
 | sql_id openb DISTINCTROW select_expression_list closeb
   {
     $$ = &FuncExpr{Name: $1, Distinct: true, Exprs: $4}
-  }  
+  }
 | table_id '.' reserved_sql_id openb select_expression_list_opt closeb
   {
     $$ = &FuncExpr{Qualifier: $1, Name: $3, Exprs: $5}
@@ -4037,7 +4035,7 @@ num_val:
       yylex.Error("expecting value after next")
       return 1
     }
-    $$ = NewIntLiteral([]byte("1"))
+    $$ = NewIntLiteral("1")
   }
 | INTEGRAL VALUES
   {
@@ -4528,11 +4526,11 @@ set_list:
 set_expression:
   reserved_sql_id '=' ON
   {
-    $$ = &SetExpr{Name: $1, Scope: ImplicitScope, Expr: NewStrLiteral([]byte("on"))}
+    $$ = &SetExpr{Name: $1, Scope: ImplicitScope, Expr: NewStrLiteral("on")}
   }
 | reserved_sql_id '=' OFF
   {
-    $$ = &SetExpr{Name: $1, Scope: ImplicitScope, Expr: NewStrLiteral([]byte("off"))}
+    $$ = &SetExpr{Name: $1, Scope: ImplicitScope, Expr: NewStrLiteral("off")}
   }
 | reserved_sql_id '=' expression
   {
@@ -4552,7 +4550,7 @@ charset_or_character_set:
   CHARSET
 | CHARACTER SET
   {
-    $$ = []byte("charset")
+    $$ = "charset"
   }
 
 charset_or_character_set_or_names:
@@ -4562,7 +4560,7 @@ charset_or_character_set_or_names:
 charset_value:
   sql_id
   {
-    $$ = NewStrLiteral([]byte($1.String()))
+    $$ = NewStrLiteral($1.String())
   }
 | STRING
   {
@@ -4610,7 +4608,7 @@ call_statement:
     $$ = &CallProc{Name: $2, Params: $4}
   }
 
-expression_list_opt:  
+expression_list_opt:
   {
     $$ = nil
   }
@@ -4674,7 +4672,7 @@ reserved_table_id:
 */
 reserved_keyword:
   ADD
-| ARRAY 
+| ARRAY
 | AND
 | AS
 | ASC
