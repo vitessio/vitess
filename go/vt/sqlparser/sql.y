@@ -64,32 +64,6 @@ func skipToEnd(yylex interface{}) {
 }
 
 %union {
-  boolUnion bool
-
-  boolean bool
-  boolVal BoolVal
-  ignore Ignore
-}
-
-%union {
-  numericUnion int
-
-  colKeyOpt     ColumnKeyOption
-  ReferenceAction ReferenceAction
-  isolationLevel IsolationLevel
-  insertAction InsertAction
-  scope 	Scope
-  lock 		Lock
-  joinType  	JoinType
-  comparisonExprOperator ComparisonExprOperator
-  isExprOperator IsExprOperator
-  matchExprOption MatchExprOption
-  orderDirection  OrderDirection
-  explainType 	  ExplainType
-  lockType LockType
-}
-
-%union {
   ifaceUnion interface{}
 
   statement     Statement
@@ -135,11 +109,11 @@ func skipToEnd(yylex interface{}) {
   columnTypeOptions *ColumnTypeOptions
   constraintDefinition *ConstraintDefinition
 
-  strs          []string
   whens         []*When
   columnDefinitions []*ColumnDefinition
   indexOptions  []*IndexOption
   indexColumns  []*IndexColumn
+  strs          []string
   collateAndCharsets []CollateAndCharset
   tableAndLockTypes TableAndLockTypes
   renameTablePairs []*RenameTablePair
@@ -161,6 +135,24 @@ func skipToEnd(yylex interface{}) {
   setExprs      SetExprs
   selectExprs   SelectExprs
   tableOptions     TableOptions
+
+  colKeyOpt     ColumnKeyOption
+  ReferenceAction ReferenceAction
+  isolationLevel IsolationLevel
+  insertAction InsertAction
+  scope 	Scope
+  lock 		Lock
+  joinType  	JoinType
+  comparisonExprOperator ComparisonExprOperator
+  isExprOperator IsExprOperator
+  matchExprOption MatchExprOption
+  orderDirection  OrderDirection
+  explainType 	  ExplainType
+  lockType LockType
+
+  boolean bool
+  boolVal BoolVal
+  ignore Ignore
 }
 
 %token LEX_ERROR
@@ -613,11 +605,11 @@ insert_statement:
 insert_or_replace:
   INSERT
   {
-    $$ = int(InsertAct)
+    $$ = InsertAct
   }
 | REPLACE
   {
-    $$ = int(ReplaceAct)
+    $$ = ReplaceAct
   }
 
 update_statement:
@@ -730,29 +722,29 @@ transaction_char:
 isolation_level:
   REPEATABLE READ
   {
-    $$ = int(RepeatableRead)
+    $$ = RepeatableRead
   }
 | READ COMMITTED
   {
-    $$ = int(ReadCommitted)
+    $$ = ReadCommitted
   }
 | READ UNCOMMITTED
   {
-    $$ = int(ReadUncommitted)
+    $$ = ReadUncommitted
   }
 | SERIALIZABLE
   {
-    $$ = int(Serializable)
+    $$ = Serializable
   }
 
 set_session_or_global:
   SESSION
   {
-    $$ = int(SessionScope)
+    $$ = SessionScope
   }
 | GLOBAL
   {
-    $$ = int(GlobalScope)
+    $$ = GlobalScope
   }
 
 create_statement:
@@ -1584,35 +1576,35 @@ check_constraint_info:
 fk_on_delete:
   ON DELETE fk_reference_action
   {
-    $$ = int($3)
+    $$ = $3
   }
 
 fk_on_update:
   ON UPDATE fk_reference_action
   {
-    $$ = int($3)
+    $$ = $3
   }
 
 fk_reference_action:
   RESTRICT
   {
-    $$ = int(Restrict)
+    $$ = Restrict
   }
 | CASCADE
   {
-    $$ = int(Cascade)
+    $$ = Cascade
   }
 | NO ACTION
   {
-    $$ = int(NoAction)
+    $$ = NoAction
   }
 | SET DEFAULT
   {
-    $$ = int(SetDefault)
+    $$ = SetDefault
   }
 | SET NULL
   {
-    $$ = int(SetNull)
+    $$ = SetNull
   }
 
 restrict_or_cascade_opt:
@@ -2668,27 +2660,27 @@ release_statement:
 
 explain_format_opt:
   {
-    $$ = int(EmptyType)
+    $$ = EmptyType
   }
 | FORMAT '=' JSON
   {
-    $$ = int(JSONType)
+    $$ = JSONType
   }
 | FORMAT '=' TREE
   {
-    $$ = int(TreeType)
+    $$ = TreeType
   }
 | FORMAT '=' VITESS
   {
-    $$ = int(VitessType)
+    $$ = VitessType
   }
 | FORMAT '=' TRADITIONAL
   {
-    $$ = int(TraditionalType)
+    $$ = TraditionalType
   }
 | ANALYZE
   {
-    $$ = int(AnalyzeType)
+    $$ = AnalyzeType
   }
 
 explain_synonyms:
@@ -2781,19 +2773,19 @@ lock_table:
 lock_type:
   READ
   {
-    $$ = int(Read)
+    $$ = Read
   }
 | READ LOCAL
   {
-    $$ = int(ReadLocal)
+    $$ = ReadLocal
   }
 | WRITE
   {
-    $$ = int(Write)
+    $$ = Write
   }
 | LOW_PRIORITY WRITE
   {
-    $$ = int(LowPriorityWrite)
+    $$ = LowPriorityWrite
   }
 
 unlock_statement:
@@ -3230,52 +3222,52 @@ table_alias:
 inner_join:
   JOIN
   {
-    $$ = int(NormalJoinType)
+    $$ = NormalJoinType
   }
 | INNER JOIN
   {
-    $$ = int(NormalJoinType)
+    $$ = NormalJoinType
   }
 | CROSS JOIN
   {
-    $$ = int(NormalJoinType)
+    $$ = NormalJoinType
   }
 
 straight_join:
   STRAIGHT_JOIN
   {
-    $$ = int(StraightJoinType)
+    $$ = StraightJoinType
   }
 
 outer_join:
   LEFT JOIN
   {
-    $$ = int(LeftJoinType)
+    $$ = LeftJoinType
   }
 | LEFT OUTER JOIN
   {
-    $$ = int(LeftJoinType)
+    $$ = LeftJoinType
   }
 | RIGHT JOIN
   {
-    $$ = int(RightJoinType)
+    $$ = RightJoinType
   }
 | RIGHT OUTER JOIN
   {
-    $$ = int(RightJoinType)
+    $$ = RightJoinType
   }
 
 natural_join:
  NATURAL JOIN
   {
-    $$ = int(NaturalJoinType)
+    $$ = NaturalJoinType
   }
 | NATURAL outer_join
   {
     if $2 == LeftJoinType {
-      $$ = int(NaturalLeftJoinType)
+      $$ = NaturalLeftJoinType
     } else {
-      $$ = int(NaturalRightJoinType)
+      $$ = NaturalRightJoinType
     }
   }
 
@@ -3382,11 +3374,11 @@ default_opt:
 boolean_value:
   TRUE
   {
-    $$ = true
+    $$ = BoolVal(true)
   }
 | FALSE
   {
-    $$ = false
+    $$ = BoolVal(false)
   }
 
 condition:
@@ -3434,57 +3426,57 @@ condition:
 is_suffix:
   NULL
   {
-    $$ = int(IsNullOp)
+    $$ = IsNullOp
   }
 | NOT NULL
   {
-    $$ = int(IsNotNullOp)
+    $$ = IsNotNullOp
   }
 | TRUE
   {
-    $$ = int(IsTrueOp)
+    $$ = IsTrueOp
   }
 | NOT TRUE
   {
-    $$ = int(IsNotTrueOp)
+    $$ = IsNotTrueOp
   }
 | FALSE
   {
-    $$ = int(IsFalseOp)
+    $$ = IsFalseOp
   }
 | NOT FALSE
   {
-    $$ = int(IsNotFalseOp)
+    $$ = IsNotFalseOp
   }
 
 compare:
   '='
   {
-    $$ = int(EqualOp)
+    $$ = EqualOp
   }
 | '<'
   {
-    $$ = int(LessThanOp)
+    $$ = LessThanOp
   }
 | '>'
   {
-    $$ = int(GreaterThanOp)
+    $$ = GreaterThanOp
   }
 | LE
   {
-    $$ = int(LessEqualOp)
+    $$ = LessEqualOp
   }
 | GE
   {
-    $$ = int(GreaterEqualOp)
+    $$ = GreaterEqualOp
   }
 | NE
   {
-    $$ = int(NotEqualOp)
+    $$ = NotEqualOp
   }
 | NULL_SAFE_EQUAL
   {
-    $$ = int(NullSafeEqualOp)
+    $$ = NullSafeEqualOp
   }
 
 like_escape_opt:
@@ -3863,23 +3855,23 @@ function_call_conflict:
 match_option:
 /*empty*/
   {
-    $$ = int(NoOption)
+    $$ = NoOption
   }
 | IN BOOLEAN MODE
   {
-    $$ = int(BooleanModeOpt)
+    $$ = BooleanModeOpt
   }
 | IN NATURAL LANGUAGE MODE
  {
-    $$ = int(NaturalLanguageModeOpt)
+    $$ = NaturalLanguageModeOpt
  }
 | IN NATURAL LANGUAGE MODE WITH QUERY EXPANSION
  {
-    $$ = int(NaturalLanguageModeWithQueryExpansionOpt)
+    $$ = NaturalLanguageModeWithQueryExpansionOpt
  }
 | WITH QUERY EXPANSION
  {
-    $$ = int(QueryExpansionOpt)
+    $$ = QueryExpansionOpt
  }
 
 charset:
@@ -4107,15 +4099,15 @@ order:
 
 asc_desc_opt:
   {
-    $$ = int(AscOrder)
+    $$ = AscOrder
   }
 | ASC
   {
-    $$ = int(AscOrder)
+    $$ = AscOrder
   }
 | DESC
   {
-    $$ = int(DescOrder)
+    $$ = DescOrder
   }
 
 limit_opt:
@@ -4276,15 +4268,15 @@ CURRENT_USER
 
 lock_opt:
   {
-    $$ = int(NoLock)
+    $$ = NoLock
   }
 | FOR UPDATE
   {
-    $$ = int(ForUpdateLock)
+    $$ = ForUpdateLock
   }
 | LOCK IN SHARE MODE
   {
-    $$ = int(ShareModeLock)
+    $$ = ShareModeLock
   }
 
 into_option:
@@ -4607,9 +4599,9 @@ not_exists_opt:
   { $$ = true }
 
 ignore_opt:
-  { $$ = false }
+  { $$ = Ignore(false) }
 | IGNORE
-  { $$ = true }
+  { $$ = Ignore(true) }
 
 to_opt:
   { $$ = struct{}{} }
