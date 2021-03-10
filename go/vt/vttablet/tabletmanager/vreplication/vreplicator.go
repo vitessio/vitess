@@ -41,12 +41,20 @@ var (
 	// idleTimeout is set to slightly above 1s, compared to heartbeatTime
 	// set by VStreamer at slightly below 1s. This minimizes conflicts
 	// between the two timeouts.
-	idleTimeout         = 1100 * time.Millisecond
+	idleTimeout = 1100 * time.Millisecond
+
 	dbLockRetryDelay    = 1 * time.Second
 	relayLogMaxSize     = flag.Int("relay_log_max_size", 250000, "Maximum buffer size (in bytes) for VReplication target buffering. If single rows are larger than this, a single row is buffered at a time.")
 	relayLogMaxItems    = flag.Int("relay_log_max_items", 5000, "Maximum number of rows for VReplication target buffering.")
 	copyTimeout         = 1 * time.Hour
 	replicaLagTolerance = 10 * time.Second
+
+	// vreplicationHeartbeatUpdateInterval determines how often the time_updated column is updated if there are no real events on the source and the source
+	// vstream is only sending heartbeats for this long. Keep this low if you expect high QPS and are monitoring this column to alert about potential
+	// outages. Keep this high if
+	// 		you have too many streams the extra write qps or cpu load due to these updates are unacceptable
+	//		you have too many streams and/or a large source field (lot of participating tables) which generates unacceptable increase in your binlog size
+	vreplicationHeartbeatUpdateInterval = flag.Int("vreplication_heartbeat_update_interval", 1, "Frequency (in seconds) at which the time_updated column of a vreplication stream when idling")
 )
 
 // vreplicator provides the core logic to start vreplication streams
