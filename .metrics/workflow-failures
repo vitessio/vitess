@@ -4140,3 +4140,4 @@
 2021-03-09T18:38:59Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/636789291
 2021-03-09T18:41:48Z,unit_race,https://github.com/vitessio/vitess/actions/runs/636796402
 2021-03-09T19:34:33Z,Cluster (vreplication_cellalias),https://github.com/vitessio/vitess/actions/runs/636939324
+2021-03-10T01:47:11Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/637771386
