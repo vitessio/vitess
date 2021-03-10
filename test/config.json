@@ -268,7 +268,7 @@
 		},
 		"onlineddl_ghost": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl_ghost"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl/ghost"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "onlineddl_ghost",
@@ -277,7 +277,7 @@
 		},
 		"onlineddl_vrepl": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl_vrepl"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl/vrepl"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "onlineddl_vrepl",
@@ -286,7 +286,7 @@
 		},
 		"onlineddl_vrepl_stress": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl_vrepl_stress"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl/vrepl_stress"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "onlineddl_vrepl_stress",
@@ -295,7 +295,7 @@
 		},
 		"onlineddl_revert": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl_revert"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl/revert"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "onlineddl_revert",
