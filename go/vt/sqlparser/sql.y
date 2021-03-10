@@ -913,11 +913,11 @@ create_options:
   }
 | create_options collate
   {
-    $$ = append($1,$2)
+    $$ = append($$,$2)
   }
 | create_options character_set
   {
-    $$ = append($1,$2)
+    $$ = append($$,$2)
   }
 
 default_optional:
@@ -967,7 +967,7 @@ column_definition_list:
   }
 | column_definition_list ',' column_definition
   {
-    $$ = append($1,$3)
+    $$ = append($$,$3)
   }
 
 table_column_list:
@@ -1288,7 +1288,7 @@ enum_values:
   }
 | enum_values ',' STRING
   {
-    $$ = append($1, "'" + string($3) + "'")
+    $$ = append($$, "'" + string($3) + "'")
   }
 
 length_opt:
@@ -1649,11 +1649,11 @@ table_option_list:
   }
 | table_option_list ',' table_option
   {
-    $$ = append($1,$3)
+    $$ = append($$,$3)
   }
 | table_option_list table_option
   {
-    $$ = append($1,$2)
+    $$ = append($$,$2)
   }
 
 space_separated_table_option_list:
@@ -1663,7 +1663,7 @@ space_separated_table_option_list:
   }
 | space_separated_table_option_list table_option
   {
-    $$ = append($1,$2)
+    $$ = append($$,$2)
   }
 
 table_option:
@@ -1858,7 +1858,7 @@ alter_commands_list:
   }
 | alter_options ',' ORDER BY column_list
   {
-    $$ = append($1,&OrderByOption{Cols:$5})
+    $$ = append($$,&OrderByOption{Cols:$5})
   }
 | alter_commands_modifier_list
   {
@@ -1866,7 +1866,7 @@ alter_commands_list:
   }
 | alter_commands_modifier_list ',' alter_options
   {
-    $$ = append($1,$3...)
+    $$ = append($$,$3...)
   }
 | alter_commands_modifier_list ',' alter_options ',' ORDER BY column_list
   {
@@ -1880,11 +1880,11 @@ alter_options:
   }
 | alter_options ',' alter_option
   {
-    $$ = append($1,$3)
+    $$ = append($$,$3)
   }
 | alter_options ',' alter_commands_modifier
   {
-    $$ = append($1,$3)
+    $$ = append($$,$3)
   }
 
 alter_option:
@@ -1984,7 +1984,7 @@ alter_commands_modifier_list:
   }
 | alter_commands_modifier_list ',' alter_commands_modifier
   {
-    $$ = append($1,$3)
+    $$ = append($$,$3)
   }
 
 alter_commands_modifier:
@@ -2250,7 +2250,7 @@ partition_definitions:
   }
 | partition_definitions ',' partition_definition
   {
-    $$ = append($1, $3)
+    $$ = append($$, $3)
   }
 
 partition_definition:
@@ -2276,7 +2276,7 @@ rename_list:
   }
 | rename_list ',' table_name TO table_name
   {
-    $$ = append($1, &RenameTablePair{FromTable: $3, ToTable: $5})
+    $$ = append($$, &RenameTablePair{FromTable: $3, ToTable: $5})
   }
 
 drop_statement:
@@ -2761,7 +2761,7 @@ lock_table_list:
   }
 | lock_table_list ',' lock_table
   {
-    $$ = append($1, $3)
+    $$ = append($$, $3)
   }
 
 lock_table:
@@ -2827,7 +2827,7 @@ flush_option_list:
   }
 | flush_option_list ',' flush_option
   {
-    $$ = append($1,$3)
+    $$ = append($$,$3)
   }
 
 flush_option:
@@ -2914,11 +2914,11 @@ comment_opt:
 
 comment_list:
   {
-    $$ = nil
+    $$ = []string{}
   }
 | comment_list COMMENT
   {
-    $$ = append($1, $2)
+    $$ = append($$, $2)
   }
 
 union_op:
@@ -3515,7 +3515,7 @@ expression_list:
   }
 | expression_list ',' expression
   {
-    $$ = append($1, $3)
+    $$ = append($$, $3)
   }
 
 value_expression:
@@ -3969,7 +3969,7 @@ when_expression_list:
   }
 | when_expression_list when_expression
   {
-    $$ = append($1, $2)
+    $$ = append($$, $2)
   }
 
 when_expression:
@@ -4088,7 +4088,7 @@ order_list:
   }
 | order_list ',' order
   {
-    $$ = append($1, $3)
+    $$ = append($$, $3)
   }
 
 order:
@@ -4476,7 +4476,7 @@ tuple_list:
   }
 | tuple_list ',' tuple_or_empty
   {
-    $$ = append($1, $3)
+    $$ = append($$, $3)
   }
 
 tuple_or_empty:
@@ -4512,7 +4512,7 @@ update_list:
   }
 | update_list ',' update_expression
   {
-    $$ = append($1, $3)
+    $$ = append($$, $3)
   }
 
 update_expression:
@@ -4528,7 +4528,7 @@ set_list:
   }
 | set_list ',' set_expression
   {
-    $$ = append($1, $3)
+    $$ = append($$, $3)
   }
 
 set_expression:

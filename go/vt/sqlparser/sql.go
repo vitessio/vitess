@@ -4,6 +4,7 @@
 package sqlparser
 
 import __yyfmt__ "fmt"
+import __yyunsafe__ "unsafe"
 
 //line sql.y:18
 
@@ -5363,6 +5364,14 @@ var yyErrorMessages = [...]struct {
 
 /*	parser for yacc output	*/
 
+func yyIaddr(v interface{}) __yyunsafe__.Pointer {
+	type h struct {
+		t __yyunsafe__.Pointer
+		p __yyunsafe__.Pointer
+	}
+	return (*h)(__yyunsafe__.Pointer(&v)).p
+}
+
 var (
 	yyDebug        = 0
 	yyErrorVerbose = false
@@ -5923,7 +5932,8 @@ yydefault:
 		yyDollar = yyS[yypt-3 : yypt+1]
 //line sql.y:649
 		{
-			yyVAL.ifaceUnion = append(yyVAL.tableNamesUnion(), yyDollar[3].tableName.ToViewName())
+			yySLICE := (*TableNames)(yyIaddr(yyVAL.ifaceUnion))
+			*yySLICE = append(*yySLICE, yyDollar[3].tableName.ToViewName())
 		}
 	case 65:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -5935,7 +5945,8 @@ yydefault:
 		yyDollar = yyS[yypt-3 : yypt+1]
 //line sql.y:659
 		{
-			yyVAL.ifaceUnion = append(yyVAL.tableNamesUnion(), yyDollar[3].tableName)
+			yySLICE := (*TableNames)(yyIaddr(yyVAL.ifaceUnion))
+			*yySLICE = append(*yySLICE, yyDollar[3].tableName)
 		}
 	case 67:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -5947,7 +5958,8 @@ yydefault:
 		yyDollar = yyS[yypt-3 : yypt+1]
 //line sql.y:669
 		{
-			yyVAL.ifaceUnion = append(yyVAL.tableNamesUnion(), yyDollar[3].tableName)
+			yySLICE := (*TableNames)(yyIaddr(yyVAL.ifaceUnion))
+			*yySLICE = append(*yySLICE, yyDollar[3].tableName)
 		}
 	case 69:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -5989,7 +6001,8 @@ yydefault:
 		yyDollar = yyS[yypt-3 : yypt+1]
 //line sql.y:704
 		{
-			yyVAL.ifaceUnion = append(yyVAL.characteristicsUnion(), yyDollar[3].characteristicUnion())
+			yySLICE := (*[]Characteristic)(yyIaddr(yyVAL.ifaceUnion))
+			*yySLICE = append(*yySLICE, yyDollar[3].characteristicUnion())
 		}
 	case 76:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -6135,13 +6148,15 @@ yydefault:
 //line sql.y:820
 		{
 			yyVAL.ifaceUnion = make([]VindexParam, 0, 4)
-			yyVAL.ifaceUnion = append(yyVAL.vindexParamsUnion(), yyDollar[1].vindexParam)
+			yySLICE := (*[]VindexParam)(yyIaddr(yyVAL.ifaceUnion))
+			*yySLICE = append(*yySLICE, yyDollar[1].vindexParam)
 		}
 	case 98:
 		yyDollar = yyS[yypt-3 : yypt+1]
 //line sql.y:825
 		{
-			yyVAL.ifaceUnion = append(yyVAL.vindexParamsUnion(), yyDollar[3].vindexParam)
+			yySLICE := (*[]VindexParam)(yyIaddr(yyVAL.ifaceUnion))
+			*yySLICE = append(*yySLICE, yyDollar[3].vindexParam)
 		}
 	case 99:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -6240,13 +6255,15 @@ yydefault:
 		yyDollar = yyS[yypt-2 : yypt+1]
 //line sql.y:915
 		{
-			yyVAL.ifaceUnion = append(yyDollar[1].collateAndCharsetsUnion(), yyDollar[2].collateAndCharset)
+			yySLICE := (*[]CollateAndCharset)(yyIaddr(yyVAL.ifaceUnion))
+			*yySLICE = append(*yySLICE, yyDollar[2].collateAndCharset)
 		}
 	case 116:
 		yyDollar = yyS[yypt-2 : yypt+1]
 //line sql.y:919
 		{
-			yyVAL.ifaceUnion = append(yyDollar[1].collateAndCharsetsUnion(), yyDollar[2].collateAndCharset)
+			yySLICE := (*[]CollateAndCharset)(yyIaddr(yyVAL.ifaceUnion))
+			*yySLICE = append(*yySLICE, yyDollar[2].collateAndCharset)
 		}
 	case 117:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -6306,7 +6323,8 @@ yydefault:
 		yyDollar = yyS[yypt-3 : yypt+1]
 //line sql.y:969
 		{
-			yyVAL.ifaceUnion = append(yyDollar[1].columnDefinitionsUnion(), yyDollar[3].columnDefinitionUnion())
+			yySLICE := (*[]*ColumnDefinition)(yyIaddr(yyVAL.ifaceUnion))
+			*yySLICE = append(*yySLICE, yyDollar[3].columnDefinitionUnion())
 		}
 	case 127:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -6724,13 +6742,15 @@ yydefault:
 //line sql.y:1285
 		{
 			yyVAL.ifaceUnion = make([]string, 0, 4)
-			yyVAL.ifaceUnion = append(yyVAL.strsUnion(), "'"+string(yyDollar[1].str)+"'")
+			yySLICE := (*[]string)(yyIaddr(yyVAL.ifaceUnion))
+			*yySLICE = append(*yySLICE, "'"+string(yyDollar[1].str)+"'")
 		}
 	case 195:
 		yyDollar = yyS[yypt-3 : yypt+1]
 //line sql.y:1290
 		{
-			yyVAL.ifaceUnion = append(yyDollar[1].strsUnion(), "'"+string(yyDollar[3].str)+"'")
+			yySLICE := (*[]string)(yyIaddr(yyVAL.ifaceUnion))
+			*yySLICE = append(*yySLICE, "'"+string(yyDollar[3].str)+"'")
 		}
 	case 196:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -6870,7 +6890,8 @@ yydefault:
 		yyDollar = yyS[yypt-2 : yypt+1]
 //line sql.y:1399
 		{
-			yyVAL.ifaceUnion = append(yyVAL.indexOptionsUnion(), yyDollar[2].indexOptionUnion())
+			yySLICE := (*[]*IndexOption)(yyIaddr(yyVAL.ifaceUnion))
+			*yySLICE = append(*yySLICE, yyDollar[2].indexOptionUnion())
 		}
 	case 218:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -7027,7 +7048,8 @@ yydefault:
 		yyDollar = yyS[yypt-3 : yypt+1]
 //line sql.y:1522
 		{
-			yyVAL.ifaceUnion = append(yyVAL.indexColumnsUnion(), yyDollar[3].indexColumnUnion())
+			yySLICE := (*[]*IndexColumn)(yyIaddr(yyVAL.ifaceUnion))
+			*yySLICE = append(*yySLICE, yyDollar[3].indexColumnUnion())
 		}
 	case 244:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -7189,13 +7211,15 @@ yydefault:
 		yyDollar = yyS[yypt-3 : yypt+1]
 //line sql.y:1651
 		{
-			yyVAL.ifaceUnion = append(yyDollar[1].tableOptionsUnion(), yyDollar[3].tableOptionUnion())
+			yySLICE := (*TableOptions)(yyIaddr(yyVAL.ifaceUnion))
+			*yySLICE = append(*yySLICE, yyDollar[3].tableOptionUnion())
 		}
 	case 271:
 		yyDollar = yyS[yypt-2 : yypt+1]
 //line sql.y:1655
 		{
-			yyVAL.ifaceUnion = append(yyDollar[1].tableOptionsUnion(), yyDollar[2].tableOptionUnion())
+			yySLICE := (*TableOptions)(yyIaddr(yyVAL.ifaceUnion))
+			*yySLICE = append(*yySLICE, yyDollar[2].tableOptionUnion())
 		}
 	case 272:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -7207,7 +7231,8 @@ yydefault:
 		yyDollar = yyS[yypt-2 : yypt+1]
 //line sql.y:1665
 		{
-			yyVAL.ifaceUnion = append(yyDollar[1].tableOptionsUnion(), yyDollar[2].tableOptionUnion())
+			yySLICE := (*TableOptions)(yyIaddr(yyVAL.ifaceUnion))
+			*yySLICE = append(*yySLICE, yyDollar[2].tableOptionUnion())
 		}
 	case 274:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -7465,7 +7490,8 @@ yydefault:
 		yyDollar = yyS[yypt-5 : yypt+1]
 //line sql.y:1860
 		{
-			yyVAL.ifaceUnion = append(yyDollar[1].alterOptionsUnion(), &OrderByOption{Cols: yyDollar[5].columnsUnion()})
+			yySLICE := (*[]AlterOption)(yyIaddr(yyVAL.ifaceUnion))
+			*yySLICE = append(*yySLICE, &OrderByOption{Cols: yyDollar[5].columnsUnion()})
 		}
 	case 327:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -7477,7 +7503,8 @@ yydefault:
 		yyDollar = yyS[yypt-3 : yypt+1]
 //line sql.y:1868
 		{
-			yyVAL.ifaceUnion = append(yyDollar[1].alterOptionsUnion(), yyDollar[3].alterOptionsUnion()...)
+			yySLICE := (*[]AlterOption)(yyIaddr(yyVAL.ifaceUnion))
+			*yySLICE = append(*yySLICE, yyDollar[3].alterOptionsUnion()...)
 		}
 	case 329:
 		yyDollar = yyS[yypt-7 : yypt+1]
@@ -7495,13 +7522,15 @@ yydefault:
 		yyDollar = yyS[yypt-3 : yypt+1]
 //line sql.y:1882
 		{
-			yyVAL.ifaceUnion = append(yyDollar[1].alterOptionsUnion(), yyDollar[3].alterOptionUnion())
+			yySLICE := (*[]AlterOption)(yyIaddr(yyVAL.ifaceUnion))
+			*yySLICE = append(*yySLICE, yyDollar[3].alterOptionUnion())
 		}
 	case 332:
 		yyDollar = yyS[yypt-3 : yypt+1]
 //line sql.y:1886
 		{
-			yyVAL.ifaceUnion = append(yyDollar[1].alterOptionsUnion(), yyDollar[3].alterOptionUnion())
+			yySLICE := (*[]AlterOption)(yyIaddr(yyVAL.ifaceUnion))
+			*yySLICE = append(*yySLICE, yyDollar[3].alterOptionUnion())
 		}
 	case 333:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -7645,7 +7674,8 @@ yydefault:
 		yyDollar = yyS[yypt-3 : yypt+1]
 //line sql.y:1986
 		{
-			yyVAL.ifaceUnion = append(yyDollar[1].alterOptionsUnion(), yyDollar[3].alterOptionUnion())
+			yySLICE := (*[]AlterOption)(yyIaddr(yyVAL.ifaceUnion))
+			*yySLICE = append(*yySLICE, yyDollar[3].alterOptionUnion())
 		}
 	case 357:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -8003,7 +8033,8 @@ yydefault:
 		yyDollar = yyS[yypt-3 : yypt+1]
 //line sql.y:2252
 		{
-			yyVAL.ifaceUnion = append(yyDollar[1].partDefsUnion(), yyDollar[3].partDefUnion())
+			yySLICE := (*[]*PartitionDefinition)(yyIaddr(yyVAL.ifaceUnion))
+			*yySLICE = append(*yySLICE, yyDollar[3].partDefUnion())
 		}
 	case 408:
 		yyDollar = yyS[yypt-8 : yypt+1]
@@ -8033,7 +8064,8 @@ yydefault:
 		yyDollar = yyS[yypt-5 : yypt+1]
 //line sql.y:2278
 		{
-			yyVAL.ifaceUnion = append(yyDollar[1].renameTablePairsUnion(), &RenameTablePair{FromTable: yyDollar[3].tableName, ToTable: yyDollar[5].tableName})
+			yySLICE := (*[]*RenameTablePair)(yyIaddr(yyVAL.ifaceUnion))
+			*yySLICE = append(*yySLICE, &RenameTablePair{FromTable: yyDollar[3].tableName, ToTable: yyDollar[5].tableName})
 		}
 	case 413:
 		yyDollar = yyS[yypt-6 : yypt+1]
@@ -8678,7 +8710,8 @@ yydefault:
 		yyDollar = yyS[yypt-3 : yypt+1]
 //line sql.y:2763
 		{
-			yyVAL.ifaceUnion = append(yyDollar[1].tableAndLockTypesUnion(), yyDollar[3].tableAndLockTypeUnion())
+			yySLICE := (*TableAndLockTypes)(yyIaddr(yyVAL.ifaceUnion))
+			*yySLICE = append(*yySLICE, yyDollar[3].tableAndLockTypeUnion())
 		}
 	case 519:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -8762,7 +8795,8 @@ yydefault:
 		yyDollar = yyS[yypt-3 : yypt+1]
 //line sql.y:2829
 		{
-			yyVAL.ifaceUnion = append(yyDollar[1].strsUnion(), yyDollar[3].str)
+			yySLICE := (*[]string)(yyIaddr(yyVAL.ifaceUnion))
+			*yySLICE = append(*yySLICE, yyDollar[3].str)
 		}
 	case 533:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -8883,13 +8917,14 @@ yydefault:
 		yyDollar = yyS[yypt-0 : yypt+1]
 //line sql.y:2916
 		{
-			yyVAL.ifaceUnion = nil
+			yyVAL.ifaceUnion = []string{}
 		}
 	case 553:
 		yyDollar = yyS[yypt-2 : yypt+1]
 //line sql.y:2920
 		{
-			yyVAL.ifaceUnion = append(yyDollar[1].strsUnion(), yyDollar[2].str)
+			yySLICE := (*[]string)(yyIaddr(yyVAL.ifaceUnion))
+			*yySLICE = append(*yySLICE, yyDollar[2].str)
 		}
 	case 554:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -9039,7 +9074,8 @@ yydefault:
 		yyDollar = yyS[yypt-3 : yypt+1]
 //line sql.y:3030
 		{
-			yyVAL.ifaceUnion = append(yyVAL.selectExprsUnion(), yyDollar[3].selectExprUnion())
+			yySLICE := (*SelectExprs)(yyIaddr(yyVAL.ifaceUnion))
+			*yySLICE = append(*yySLICE, yyDollar[3].selectExprUnion())
 		}
 	case 579:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -9111,7 +9147,8 @@ yydefault:
 		yyDollar = yyS[yypt-3 : yypt+1]
 //line sql.y:3087
 		{
-			yyVAL.ifaceUnion = append(yyVAL.tableExprsUnion(), yyDollar[3].tableExprUnion())
+			yySLICE := (*TableExprs)(yyIaddr(yyVAL.ifaceUnion))
+			*yySLICE = append(*yySLICE, yyDollar[3].tableExprUnion())
 		}
 	case 594:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -9171,7 +9208,8 @@ yydefault:
 		yyDollar = yyS[yypt-3 : yypt+1]
 //line sql.y:3140
 		{
-			yyVAL.ifaceUnion = append(yyVAL.columnsUnion(), yyDollar[3].colIdent)
+			yySLICE := (*Columns)(yyIaddr(yyVAL.ifaceUnion))
+			*yySLICE = append(*yySLICE, yyDollar[3].colIdent)
 		}
 	case 604:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -9183,7 +9221,8 @@ yydefault:
 		yyDollar = yyS[yypt-3 : yypt+1]
 //line sql.y:3150
 		{
-			yyVAL.ifaceUnion = append(yyVAL.partitionsUnion(), yyDollar[3].colIdent)
+			yySLICE := (*Partitions)(yyIaddr(yyVAL.ifaceUnion))
+			*yySLICE = append(*yySLICE, yyDollar[3].colIdent)
 		}
 	case 606:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -9673,7 +9712,8 @@ yydefault:
 		yyDollar = yyS[yypt-3 : yypt+1]
 //line sql.y:3517
 		{
-			yyVAL.ifaceUnion = append(yyDollar[1].exprsUnion(), yyDollar[3].exprUnion())
+			yySLICE := (*Exprs)(yyIaddr(yyVAL.ifaceUnion))
+			*yySLICE = append(*yySLICE, yyDollar[3].exprUnion())
 		}
 	case 688:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -10267,7 +10307,8 @@ yydefault:
 		yyDollar = yyS[yypt-2 : yypt+1]
 //line sql.y:3971
 		{
-			yyVAL.ifaceUnion = append(yyDollar[1].whensUnion(), yyDollar[2].whenUnion())
+			yySLICE := (*[]*When)(yyIaddr(yyVAL.ifaceUnion))
+			*yySLICE = append(*yySLICE, yyDollar[2].whenUnion())
 		}
 	case 792:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -10422,7 +10463,8 @@ yydefault:
 		yyDollar = yyS[yypt-3 : yypt+1]
 //line sql.y:4090
 		{
-			yyVAL.ifaceUnion = append(yyDollar[1].orderByUnion(), yyDollar[3].orderUnion())
+			yySLICE := (*OrderBy)(yyIaddr(yyVAL.ifaceUnion))
+			*yySLICE = append(*yySLICE, yyDollar[3].orderUnion())
 		}
 	case 817:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -10902,13 +10944,15 @@ yydefault:
 		yyDollar = yyS[yypt-3 : yypt+1]
 //line sql.y:4455
 		{
-			yyVAL.ifaceUnion = append(yyVAL.columnsUnion(), yyDollar[3].colIdent)
+			yySLICE := (*Columns)(yyIaddr(yyVAL.ifaceUnion))
+			*yySLICE = append(*yySLICE, yyDollar[3].colIdent)
 		}
 	case 897:
 		yyDollar = yyS[yypt-5 : yypt+1]
 //line sql.y:4459
 		{
-			yyVAL.ifaceUnion = append(yyVAL.columnsUnion(), yyDollar[5].colIdent)
+			yySLICE := (*Columns)(yyIaddr(yyVAL.ifaceUnion))
+			*yySLICE = append(*yySLICE, yyDollar[5].colIdent)
 		}
 	case 898:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -10932,7 +10976,8 @@ yydefault:
 		yyDollar = yyS[yypt-3 : yypt+1]
 //line sql.y:4478
 		{
-			yyVAL.ifaceUnion = append(yyDollar[1].valuesUnion(), yyDollar[3].valTupleUnion())
+			yySLICE := (*Values)(yyIaddr(yyVAL.ifaceUnion))
+			*yySLICE = append(*yySLICE, yyDollar[3].valTupleUnion())
 		}
 	case 902:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -10972,7 +11017,8 @@ yydefault:
 		yyDollar = yyS[yypt-3 : yypt+1]
 //line sql.y:4514
 		{
-			yyVAL.ifaceUnion = append(yyDollar[1].updateExprsUnion(), yyDollar[3].updateExprUnion())
+			yySLICE := (*UpdateExprs)(yyIaddr(yyVAL.ifaceUnion))
+			*yySLICE = append(*yySLICE, yyDollar[3].updateExprUnion())
 		}
 	case 908:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -10990,7 +11036,8 @@ yydefault:
 		yyDollar = yyS[yypt-3 : yypt+1]
 //line sql.y:4530
 		{
-			yyVAL.ifaceUnion = append(yyDollar[1].setExprsUnion(), yyDollar[3].setExprUnion())
+			yySLICE := (*SetExprs)(yyIaddr(yyVAL.ifaceUnion))
+			*yySLICE = append(*yySLICE, yyDollar[3].setExprUnion())
 		}
 	case 911:
 		yyDollar = yyS[yypt-3 : yypt+1]
