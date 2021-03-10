@@ -62,6 +62,20 @@ func (cached *Field) CachedSize(alloc bool) int64 {
 	size += int64(cap(cached.XXX_unrecognized))
 	return size
 }
+func (cached *QueryWarning) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(52)
+	}
+	// field Message string
+	size += int64(len(cached.Message))
+	// field XXX_unrecognized []byte
+	size += int64(cap(cached.XXX_unrecognized))
+	return size
+}
 func (cached *Target) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
