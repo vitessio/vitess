@@ -151,8 +151,10 @@ func createInstructionFor(query string, stmt sqlparser.Statement, vschema Contex
 		return buildRoutePlan(stmt, vschema, buildUnionPlan)
 	case sqlparser.DDLStatement:
 		return buildGeneralDDLPlan(query, stmt, vschema)
+	case *sqlparser.AlterMigration:
+		return buildAlterMigrationPlan(query, stmt, vschema)
 	case *sqlparser.RevertMigration:
-		return buildRevertPlan(query, stmt, vschema)
+		return buildRevertMigrationPlan(query, stmt, vschema)
 	case *sqlparser.AlterVschema:
 		return buildVSchemaDDLPlan(stmt, vschema)
 	case *sqlparser.Use:
