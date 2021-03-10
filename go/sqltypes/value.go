@@ -283,6 +283,13 @@ func (v Value) EncodeSQL(b BinWriter) {
 	}
 }
 
+// EncodeBytesSQLString encodes the byte string as a SQL string.
+func EncodeBytesSQLString(val []byte) string {
+	b := &bytes2.Buffer{}
+	encodeBytesSQL(val, b)
+	return b.String()
+}
+
 // EncodeASCII encodes the value using 7-bit clean ascii bytes.
 func (v Value) EncodeASCII(b BinWriter) {
 	switch {
