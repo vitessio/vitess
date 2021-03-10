@@ -33,6 +33,8 @@ import (
 )
 
 func TestConfigParse(t *testing.T) {
+	t.Parallel()
+
 	cfg := Config{}
 
 	// This asserts we do not attempt to load a credentialsFlag via its Set func
@@ -41,6 +43,8 @@ func TestConfigParse(t *testing.T) {
 	assert.NoError(t, err)
 
 	t.Run("", func(t *testing.T) {
+		t.Parallel()
+
 		f, err := ioutil.TempFile("", "vtsql-config-test-testcluster-*") // testcluster is going to appear in the template
 		require.NoError(t, err)
 
@@ -93,6 +97,8 @@ func TestConfigParse(t *testing.T) {
 	})
 
 	t.Run("", func(t *testing.T) {
+		t.Parallel()
+
 		f, err := ioutil.TempFile("", "vtsql-config-test-testcluster-*") // testcluster is going to appear in the template
 		require.NoError(t, err)
 
