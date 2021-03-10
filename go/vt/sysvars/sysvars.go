@@ -88,6 +88,8 @@ var (
 
 	ReadOnly = []SystemVariable{
 		Socket,
+		Version,
+		VersionComment,
 	}
 
 	IgnoreThese = []SystemVariable{
@@ -255,5 +257,6 @@ func GetInterestingVariables() []string {
 	// Also add version and version comment
 	res = append(res, Version.Name)
 	res = append(res, VersionComment.Name)
+	res = append(res, Socket.Name)
 	return res
 }
