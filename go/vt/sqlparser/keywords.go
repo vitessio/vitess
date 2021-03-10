@@ -357,6 +357,7 @@ var keywords = []keyword{
 	{"resignal", UNUSED},
 	{"restrict", RESTRICT},
 	{"return", UNUSED},
+	{"revert", REVERT},
 	{"revoke", UNUSED},
 	{"right", RIGHT},
 	{"rlike", REGEXP},
