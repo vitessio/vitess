@@ -1060,9 +1060,8 @@ const (
 )
 
 type gotypeinfo struct {
-	typename  string
-	unionName string
-	unionType string
+	typename string
+	union    bool
 }
 
 var gotypes = make(map[string]*gotypeinfo)
@@ -1073,41 +1072,29 @@ func typeinfo() {
 	}
 	fmt.Fprintf(ftable, "type %sSymType struct {", prefix)
 	fmt.Fprintf(ftable, "\n\tyys int")
+	for _, tt := range gotypes {
+		if tt.union {
+			fmt.Fprintf(ftable, "\n\tunion interface{}")
+			break
+		}
+	}
 	ftable.Write(ftypes.Bytes())
 	fmt.Fprintf(ftable, "\n}\n\n")
 
 	var sortedTypes []string
-	for member := range gotypes {
-		sortedTypes = append(sortedTypes, member)
+	for member, tt := range gotypes {
+		if tt.union {
+			sortedTypes = append(sortedTypes, member)
+		}
 	}
 	sort.Strings(sortedTypes)
 
 	for _, member := range sortedTypes {
 		tt := gotypes[member]
-		switch tt.unionType {
-		case "interface{}":
-			fmt.Fprintf(ftable, "\nfunc (st *%sSymType) %sUnion() %s {\n", prefix, member, tt.typename)
-			fmt.Fprintf(ftable, "\tv, _ := st.%s.(%s)\n", tt.unionName, tt.typename)
-			fmt.Fprintf(ftable, "\treturn v\n")
-			fmt.Fprintf(ftable, "}\n")
-		case "int", "int8", "int16", "int32", "int64", "uint8", "uint16", "uint32", "uint64", "bool":
-			fmt.Fprintf(ftable, "\nfunc (st *%sSymType) %sUnion() %s {\n", prefix, member, tt.typename)
-			fmt.Fprintf(ftable, "\treturn %s(st.%s)\n", tt.typename, tt.unionName)
-			fmt.Fprintf(ftable, "}\n")
-		case "[]interface{}":
-			fmt.Fprintf(ftable, "\nfunc (st *%sSymType) %sUnion() %s {\n", prefix, member, tt.typename)
-			fmt.Fprintf(ftable, "\ts := make(%s, 0, len(st.%s))\n", tt.typename, tt.unionName)
-			fmt.Fprintf(ftable, "\tfor _, v := range st.%s {\n", tt.unionName)
-			fmt.Fprintf(ftable, "\t\ts = append(s, v.(%s))\n", tt.typename[2:])
-			fmt.Fprintf(ftable, "\t}\n")
-			fmt.Fprintf(ftable, "\treturn s\n")
-			fmt.Fprintf(ftable, "}\n")
-
-		case "":
-			// no-op
-		default:
-			errorf("unsupported union type '%s'", tt.unionType)
-		}
+		fmt.Fprintf(ftable, "\nfunc (st *%sSymType) %sUnion() %s {\n", prefix, member, tt.typename)
+		fmt.Fprintf(ftable, "\tv, _ := st.union.(%s)\n", tt.typename)
+		fmt.Fprintf(ftable, "\treturn v\n")
+		fmt.Fprintf(ftable, "}\n")
 	}
 }
 
@@ -1115,7 +1102,6 @@ func typeinfo() {
 // copy the union declaration to the output, and the define file if present
 //
 func parsetypes(union bool) {
-	var unionName, unionType string
 	var member, typ bytes.Buffer
 	state := startUnion
 
@@ -1129,19 +1115,12 @@ out:
 		case '\n':
 			lineno++
 			if state == readingType {
-				if union && unionName == "" && unionType == "" {
-					unionName = member.String()
-					unionType = typ.String()
+				gotypes[member.String()] = &gotypeinfo{
+					typename: typ.String(),
+					union:    union,
+				}
+				if !union {
 					fmt.Fprintf(ftypes, "\n\t%s %s", member.Bytes(), typ.Bytes())
-				} else {
-					gotypes[member.String()] = &gotypeinfo{
-						typename:  typ.String(),
-						unionName: unionName,
-						unionType: unionType,
-					}
-					if !union {
-						fmt.Fprintf(ftypes, "\n\t%s %s", member.Bytes(), typ.Bytes())
-					}
 				}
 				member.Reset()
 				typ.Reset()
@@ -1222,8 +1201,10 @@ func emitcode(code []rune, lineno int) {
 	for i, line := range lines(code) {
 		writecode(line)
 		if !writtenImports && isPackageClause(line) {
-			fmt.Fprintln(ftable, `import __yyfmt__ "fmt"`)
-			fmt.Fprintln(ftable, `import __yyunsafe__ "unsafe"`)
+			fmt.Fprintln(ftable, `import (`)
+			fmt.Fprintln(ftable, `__yyfmt__ "fmt"`)
+			fmt.Fprintln(ftable, `__yyunsafe__ "unsafe"`)
+			fmt.Fprintln(ftable, `)`)
 			if !lflag {
 				fmt.Fprintf(ftable, "//line %v:%v\n\t\t", infile, lineno+i)
 			}
@@ -1362,7 +1343,7 @@ l1:
 
 func cpyyvalaccess(curprod []int, tok int) {
 	const fastAppendPrefix = " append($$,"
-	const allowFastAppend = true
+	const allowFastAppend = false
 
 	var buf bytes.Buffer
 	lvalue := false
@@ -1408,12 +1389,12 @@ loop:
 		if !ok {
 			errorf("missing Go type information for %s", typeset[tok])
 		}
-		if ti.unionName != "" {
+		if ti.union {
 			if fastAppend {
-				fmt.Fprintf(fcode, "\t%sSLICE := (*%s)(%sIaddr(%sVAL.%s))\n", prefix, ti.typename, prefix, prefix, ti.unionName)
+				fmt.Fprintf(fcode, "\t%sSLICE := (*%s)(%sIaddr(%sVAL.union))\n", prefix, ti.typename, prefix, prefix)
 				fmt.Fprintf(fcode, "\t*%sSLICE = append(*%sSLICE, ", prefix, prefix)
 			} else if lvalue {
-				fmt.Fprintf(fcode, "%sVAL.%s", prefix, ti.unionName)
+				fmt.Fprintf(fcode, "%sVAL.union", prefix)
 			} else {
 				fmt.Fprintf(fcode, "%sVAL.%sUnion()", prefix, typeset[tok])
 			}
@@ -1535,7 +1516,7 @@ loop:
 				if !ok {
 					errorf("missing Go type information for %s", typeset[tok])
 				}
-				if ti.unionType != "" {
+				if ti.union {
 					fmt.Fprintf(fcode, ".%sUnion()", typeset[tok])
 				} else {
 					fmt.Fprintf(fcode, ".%s", typeset[tok])
