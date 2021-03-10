@@ -4213,3 +4213,4 @@
 2021-03-10T17:40:02Z,local_example,https://github.com/vitessio/vitess/actions/runs/640134887
 2021-03-10T17:40:02Z,region_example,https://github.com/vitessio/vitess/actions/runs/640134870
 2021-03-10T17:40:02Z,unit_race,https://github.com/vitessio/vitess/actions/runs/640134881
+2021-03-10T19:49:56Z,gomod-tidy,https://github.com/vitessio/vitess/actions/runs/640480215
