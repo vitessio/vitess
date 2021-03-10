@@ -35,6 +35,7 @@ import (
 	"vitess.io/vitess/go/vt/schema"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/endtoend/onlineddl"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -335,9 +336,9 @@ func checkTablesCount(t *testing.T, tablet *cluster.Vttablet, showTableName stri
 
 func checkRecentMigrations(t *testing.T, uuid string, expectStatus schema.OnlineDDLStatus) {
 	showQuery := fmt.Sprintf("show vitess_migrations like '%s'", uuid)
-	r := cluster.VtgateExecQuery(t, &vtParams, showQuery, "")
+	r := onlineddl.VtgateExecQuery(t, &vtParams, showQuery, "")
 	fmt.Printf("# output for `%s`:\n", showQuery)
-	cluster.PrintQueryResult(os.Stdout, r)
+	onlineddl.PrintQueryResult(os.Stdout, r)
 
 	count := 0
 	for _, row := range r.Named().Rows {
