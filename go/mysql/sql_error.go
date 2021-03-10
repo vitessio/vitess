@@ -162,6 +162,7 @@ var stateToMysqlCode = map[vterrors.State]struct {
 	vterrors.DbCreateExists:               {num: ERDbCreateExists, state: SSUnknownSQLState},
 	vterrors.DbDropExists:                 {num: ERDbDropExists, state: SSUnknownSQLState},
 	vterrors.EmptyQuery:                   {num: EREmptyQuery, state: SSClientError},
+	vterrors.IncorrectGlobalLocalVar:      {num: ERIncorrectGlobalLocalVar, state: SSUnknownSQLState},
 	vterrors.InnodbReadOnly:               {num: ERInnodbReadOnly, state: SSUnknownSQLState},
 	vterrors.LockOrActiveTransaction:      {num: ERLockOrActiveTransaction, state: SSUnknownSQLState},
 	vterrors.NoDB:                         {num: ERNoDb, state: SSNoDB},
