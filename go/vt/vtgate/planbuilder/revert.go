@@ -19,7 +19,6 @@ package planbuilder
 import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 
-	"vitess.io/vitess/go/vt/key"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -27,7 +26,7 @@ import (
 )
 
 func buildRevertPlan(query string, stmt *sqlparser.RevertMigration, vschema ContextVSchema) (engine.Primitive, error) {
-	dest, ks, tabletType, err := vschema.TargetDestination("")
+	_, ks, tabletType, err := vschema.TargetDestination("")
 	if err != nil {
 		return nil, err
 	}
@@ -39,13 +38,9 @@ func buildRevertPlan(query string, stmt *sqlparser.RevertMigration, vschema Cont
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "show vitess_migrations works only on primary tablet")
 	}
 
-	if dest == nil {
-		dest = key.DestinationAllShards{}
-	}
-
-	return &engine.Send{
-		Keyspace:          ks,
-		TargetDestination: dest,
-		Query:             query,
+	return &engine.RevertMigration{
+		Keyspace: ks,
+		Stmt:     stmt,
+		Query:    query,
 	}, nil
 }
