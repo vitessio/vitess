@@ -32,9 +32,11 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/schema"
 	throttlebase "vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
+
+	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/endtoend/onlineddl"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -350,7 +352,7 @@ func insertRow(t *testing.T) {
 
 	tableName := fmt.Sprintf("vt_onlineddl_test_%02d", 3)
 	sqlQuery := fmt.Sprintf(insertRowStatement, tableName, countInserts)
-	r := cluster.VtgateExecQuery(t, &vtParams, sqlQuery, "")
+	r := onlineddl.VtgateExecQuery(t, &vtParams, sqlQuery, "")
 	require.NotNil(t, r)
 	countInserts++
 }
@@ -367,7 +369,7 @@ func testRows(t *testing.T) {
 
 	tableName := fmt.Sprintf("vt_onlineddl_test_%02d", 3)
 	sqlQuery := fmt.Sprintf(selectCountRowsStatement, tableName)
-	r := cluster.VtgateExecQuery(t, &vtParams, sqlQuery, "")
+	r := onlineddl.VtgateExecQuery(t, &vtParams, sqlQuery, "")
 	require.NotNil(t, r)
 	row := r.Named().Row()
 	require.NotNil(t, row)
@@ -443,9 +445,9 @@ func checkTablesCount(t *testing.T, tablet *cluster.Vttablet, showTableName stri
 
 func checkRecentMigrations(t *testing.T, uuid string, expectStatus schema.OnlineDDLStatus) {
 	showQuery := fmt.Sprintf("show vitess_migrations like '%s'", uuid)
-	r := cluster.VtgateExecQuery(t, &vtParams, showQuery, "")
+	r := onlineddl.VtgateExecQuery(t, &vtParams, showQuery, "")
 	fmt.Printf("# output for `%s`:\n", showQuery)
-	cluster.PrintQueryResult(os.Stdout, r)
+	onlineddl.PrintQueryResult(os.Stdout, r)
 
 	count := 0
 	for _, row := range r.Named().Rows {
