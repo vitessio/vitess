@@ -464,6 +464,7 @@ var keywords = []keyword{
 	{"vitess_shards", VITESS_SHARDS},
 	{"vitess_tablets", VITESS_TABLETS},
 	{"vitess_migrations", VITESS_MIGRATIONS},
+	{"vitess_migration", VITESS_MIGRATION},
 	{"vschema", VSCHEMA},
 	{"warnings", WARNINGS},
 	{"when", WHEN},
