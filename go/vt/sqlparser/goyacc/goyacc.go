@@ -1071,7 +1071,6 @@ func typeinfo() {
 		fmt.Fprintf(ftable, "\n//line %v:%v\n", infile, lineno)
 	}
 	fmt.Fprintf(ftable, "type %sSymType struct {", prefix)
-	fmt.Fprintf(ftable, "\n\tyys int")
 	for _, tt := range gotypes {
 		if tt.union {
 			fmt.Fprintf(ftable, "\n\tunion interface{}")
@@ -1079,6 +1078,7 @@ func typeinfo() {
 		}
 	}
 	ftable.Write(ftypes.Bytes())
+	fmt.Fprintf(ftable, "\n\tyys int")
 	fmt.Fprintf(ftable, "\n}\n\n")
 
 	var sortedTypes []string

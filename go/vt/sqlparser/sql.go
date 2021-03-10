@@ -4110,18 +4110,18 @@ var yyPgo = [...]int{
 
 //line sql.y:5121
 type yySymType struct {
-	yys               int
 	union             interface{}
 	empty             struct{}
-	str               string
-	joinCondition     JoinCondition
-	tableName         TableName
-	colIdent          ColIdent
-	tableIdent        TableIdent
-	columnType        ColumnType
 	LengthScaleOption LengthScaleOption
+	tableName         TableName
+	tableIdent        TableIdent
+	str               string
 	vindexParam       VindexParam
+	colIdent          ColIdent
+	joinCondition     JoinCondition
 	collateAndCharset CollateAndCharset
+	columnType        ColumnType
+	yys               int
 }
 
 func (st *yySymType) ReferenceActionUnion() ReferenceAction {
