@@ -52,6 +52,7 @@ import (
 	"go/format"
 	"io/ioutil"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"unicode"
@@ -1075,7 +1076,14 @@ func typeinfo() {
 	ftable.Write(ftypes.Bytes())
 	fmt.Fprintf(ftable, "\n}\n\n")
 
-	for member, tt := range gotypes {
+	var sortedTypes []string
+	for member := range gotypes {
+		sortedTypes = append(sortedTypes, member)
+	}
+	sort.Strings(sortedTypes)
+
+	for _, member := range sortedTypes {
+		tt := gotypes[member]
 		switch tt.unionType {
 		case "interface{}":
 			fmt.Fprintf(ftable, "\nfunc (st *%sSymType) %sUnion() %s {\n", prefix, member, tt.typename)
