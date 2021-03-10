@@ -299,6 +299,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfAlterColumn(in)
 	case *AlterDatabase:
 		return CloneRefOfAlterDatabase(in)
+	case *AlterMigration:
+		return CloneRefOfAlterMigration(in)
 	case *AlterTable:
 		return CloneRefOfAlterTable(in)
 	case *AlterView:
@@ -653,6 +655,8 @@ func CloneStatement(in Statement) Statement {
 	switch in := in.(type) {
 	case *AlterDatabase:
 		return CloneRefOfAlterDatabase(in)
+	case *AlterMigration:
+		return CloneRefOfAlterMigration(in)
 	case *AlterTable:
 		return CloneRefOfAlterTable(in)
 	case *AlterView:
@@ -1472,6 +1476,15 @@ func CloneRefOfAliasedTableExpr(n *AliasedTableExpr) *AliasedTableExpr {
 	out.Partitions = ClonePartitions(n.Partitions)
 	out.As = CloneTableIdent(n.As)
 	out.Hints = CloneRefOfIndexHints(n.Hints)
+	return &out
+}
+
+// CloneRefOfAlterMigration creates a deep clone of the input.
+func CloneRefOfAlterMigration(n *AlterMigration) *AlterMigration {
+	if n == nil {
+		return nil
+	}
+	out := *n
 	return &out
 }
 

@@ -148,6 +148,7 @@ func skipToEnd(yylex interface{}) {
   renameTablePairs []*RenameTablePair
   columnTypeOptions *ColumnTypeOptions
   revertMigration *RevertMigration
+  alterMigration  *AlterMigration
 }
 
 %token LEX_ERROR
@@ -206,8 +207,8 @@ func skipToEnd(yylex interface{}) {
 %token <bytes> STATUS VARIABLES WARNINGS CASCADED DEFINER OPTION SQL UNDEFINED
 %token <bytes> SEQUENCE MERGE TEMPORARY TEMPTABLE INVOKER SECURITY FIRST AFTER LAST
 
-// Revert tokens
-%token <bytes> VITESS_MIGRATION
+// Migration tokens
+%token <bytes> VITESS_MIGRATION CANCEL RETRY COMPLETE
 
 // Transaction Tokens
 %token <bytes> BEGIN START TRANSACTION COMMIT ROLLBACK SAVEPOINT RELEASE WORK
@@ -2137,6 +2138,33 @@ alter_statement:
             Column: $7,
             Sequence: $9,
         },
+    }
+  }
+| ALTER VITESS_MIGRATION STRING RETRY
+  {
+    $$ = &AlterMigration{
+      Type: RetryMigrationType,
+      UUID: string($3),
+    }
+  }
+| ALTER VITESS_MIGRATION STRING COMPLETE
+  {
+    $$ = &AlterMigration{
+      Type: CompleteMigrationType,
+      UUID: string($3),
+    }
+  }
+| ALTER VITESS_MIGRATION STRING CANCEL
+  {
+    $$ = &AlterMigration{
+      Type: CancelMigrationType,
+      UUID: string($3),
+    }
+  }
+| ALTER VITESS_MIGRATION CANCEL ALL
+  {
+    $$ = &AlterMigration{
+      Type: CancelAllMigrationType,
     }
   }
 
@@ -4846,6 +4874,7 @@ non_reserved_keyword:
 | BOOL
 | BOOLEAN
 | BUCKETS
+| CANCEL
 | CASCADE
 | CASCADED
 | CHANNEL
@@ -4862,6 +4891,7 @@ non_reserved_keyword:
 | COMMIT
 | COMMITTED
 | COMPACT
+| COMPLETE
 | COMPONENT
 | COMPRESSED
 | COMPRESSION
@@ -5019,6 +5049,7 @@ non_reserved_keyword:
 | RESPECT
 | RESTART
 | RETAIN
+| RETRY
 | REUSE
 | ROLE
 | ROLLBACK
