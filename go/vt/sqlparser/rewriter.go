@@ -581,6 +581,7 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 		a.apply(node, n.Table, func(newNode, parent SQLNode) {
 			parent.(*RenameTableName).Table = newNode.(TableName)
 		})
+	case *RevertMigration:
 	case *Rollback:
 	case *SRollback:
 		a.apply(node, n.Name, func(newNode, parent SQLNode) {

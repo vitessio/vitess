@@ -147,6 +147,7 @@ func skipToEnd(yylex interface{}) {
   tableOptions     TableOptions
   renameTablePairs []*RenameTablePair
   columnTypeOptions *ColumnTypeOptions
+  reverMigration *RevertMigration
 }
 
 %token LEX_ERROR
@@ -196,6 +197,7 @@ func skipToEnd(yylex interface{}) {
 
 // DDL Tokens
 %token <bytes> CREATE ALTER DROP RENAME ANALYZE ADD FLUSH CHANGE MODIFY
+%token <bytes> REVERT
 %token <bytes> SCHEMA TABLE INDEX VIEW TO IGNORE IF UNIQUE PRIMARY COLUMN SPATIAL FULLTEXT KEY_BLOCK_SIZE CHECK INDEXES
 %token <bytes> ACTION CASCADE CONSTRAINT FOREIGN NO REFERENCES RESTRICT
 %token <bytes> SHOW DESCRIBE EXPLAIN DATE ESCAPE REPAIR OPTIMIZE TRUNCATE COALESCE EXCHANGE REBUILD PARTITIONING REMOVE
@@ -203,6 +205,9 @@ func skipToEnd(yylex interface{}) {
 %token <bytes> VINDEX VINDEXES DIRECTORY NAME UPGRADE
 %token <bytes> STATUS VARIABLES WARNINGS CASCADED DEFINER OPTION SQL UNDEFINED
 %token <bytes> SEQUENCE MERGE TEMPORARY TEMPTABLE INVOKER SECURITY FIRST AFTER LAST
+
+// Revert tokens
+%token <bytes> VITESS_MIGRATION
 
 // Transaction Tokens
 %token <bytes> BEGIN START TRANSACTION COMMIT ROLLBACK SAVEPOINT RELEASE WORK
@@ -280,6 +285,7 @@ func skipToEnd(yylex interface{}) {
 %type <statement> analyze_statement show_statement use_statement other_statement
 %type <statement> begin_statement commit_statement rollback_statement savepoint_statement release_statement load_statement
 %type <statement> lock_statement unlock_statement call_statement
+%type <statement> revert_statement
 %type <bytes2> comment_opt comment_list
 %type <str> wild_opt check_option_opt cascade_or_local_opt restrict_or_cascade_opt
 %type <explainType> explain_format_opt
@@ -447,6 +453,7 @@ command:
 | lock_statement
 | unlock_statement
 | call_statement
+| revert_statement
 | /*empty*/
 {
   setParseTree(yylex, nil)
@@ -2788,6 +2795,12 @@ unlock_statement:
     $$ = &UnlockTables{}
   }
 
+revert_statement:
+  REVERT VITESS_MIGRATION STRING
+  {
+    $$ = &RevertMigration{UUID: string($3)}
+  }
+
 flush_statement:
   FLUSH local_opt flush_option_list
   {
@@ -5075,6 +5088,7 @@ non_reserved_keyword:
 | VITESS_METADATA
 | VITESS_SHARDS
 | VITESS_TABLETS
+| VITESS_MIGRATION
 | VITESS_MIGRATIONS
 | VSCHEMA
 | WARNINGS

@@ -475,6 +475,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfRenameTable(in)
 	case *RenameTableName:
 		return CloneRefOfRenameTableName(in)
+	case *RevertMigration:
+		return CloneRefOfRevertMigration(in)
 	case *Rollback:
 		return CloneRefOfRollback(in)
 	case *SRollback:
@@ -699,6 +701,8 @@ func CloneStatement(in Statement) Statement {
 		return CloneRefOfRelease(in)
 	case *RenameTable:
 		return CloneRefOfRenameTable(in)
+	case *RevertMigration:
+		return CloneRefOfRevertMigration(in)
 	case *Rollback:
 		return CloneRefOfRollback(in)
 	case *SRollback:
@@ -1858,6 +1862,15 @@ func CloneRefOfRelease(n *Release) *Release {
 	}
 	out := *n
 	out.Name = CloneColIdent(n.Name)
+	return &out
+}
+
+// CloneRefOfRevertMigration creates a deep clone of the input.
+func CloneRefOfRevertMigration(n *RevertMigration) *RevertMigration {
+	if n == nil {
+		return nil
+	}
+	out := *n
 	return &out
 }
 
