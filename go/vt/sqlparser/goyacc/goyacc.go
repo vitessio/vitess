@@ -162,12 +162,14 @@ var oflag string  // -o [y.go]		- y.go file
 var vflag string  // -v [y.output]	- y.output file
 var lflag bool    // -l			- disable line directives
 var prefix string // name prefix for identifiers, default yy
+var allowFastAppend bool
 
 func init() {
 	flag.StringVar(&oflag, "o", "y.go", "parser output")
 	flag.StringVar(&prefix, "p", "yy", "name prefix to use in generated code")
 	flag.StringVar(&vflag, "v", "y.output", "create parsing tables")
 	flag.BoolVar(&lflag, "l", false, "disable line directives")
+	flag.BoolVar(&allowFastAppend, "fast-append", false, "enable fast-append optimization")
 }
 
 var initialstacksize = 16
@@ -1343,7 +1345,6 @@ l1:
 
 func cpyyvalaccess(curprod []int, tok int) {
 	const fastAppendPrefix = " append($$,"
-	const allowFastAppend = false
 
 	var buf bytes.Buffer
 	lvalue := false
