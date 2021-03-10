@@ -56,6 +56,7 @@ func skipToEnd(yylex interface{}) {
   tableName     TableName
   tableIdent    TableIdent
   str           string
+  strs          []string
   vindexParam   VindexParam
   colIdent      ColIdent
   joinCondition JoinCondition
@@ -111,7 +112,6 @@ func skipToEnd(yylex interface{}) {
   columnDefinitions []*ColumnDefinition
   indexOptions  []*IndexOption
   indexColumns  []*IndexColumn
-  strs          []string
   collateAndCharsets []CollateAndCharset
   tableAndLockTypes TableAndLockTypes
   renameTablePairs []*RenameTablePair
@@ -2912,7 +2912,7 @@ comment_opt:
 
 comment_list:
   {
-    $$ = []string{}
+    $$ = nil
   }
 | comment_list COMMENT
   {
