@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"os"
 	"path"
-	"regexp"
 	"strings"
 	"sync"
 	"testing"
@@ -133,10 +132,6 @@ var (
 		`
 )
 
-func fullWordRegexp(searchWord string) *regexp.Regexp {
-	return regexp.MustCompile(`.*?\b` + searchWord + `\b`)
-}
-
 func TestMain(m *testing.M) {
 	defer cluster.PanicHandler(nil)
 	flag.Parse()
@@ -240,7 +235,7 @@ func TestSchemaChange(t *testing.T) {
 	t.Run("cancel all migrations: nothing to cancel", func(t *testing.T) {
 		// no migrations pending at this time
 		time.Sleep(10 * time.Second)
-		checkCancelAllMigrations(t, 0)
+		onlineddl.CheckCancelAllMigrations(t, &vtParams, 0)
 	})
 	t.Run("cancel all migrations: some migrations to cancel", func(t *testing.T) {
 		// spawn n migrations; cancel them via cancel-all
@@ -254,7 +249,7 @@ func TestSchemaChange(t *testing.T) {
 			}()
 		}
 		wg.Wait()
-		checkCancelAllMigrations(t, count)
+		onlineddl.CheckCancelAllMigrations(t, &vtParams, count)
 	})
 	t.Run("Online DROP, vtctl", func(t *testing.T) {
 		uuid := testOnlineDDLStatement(t, onlineDDLDropTableStatement, "gh-ost", "vtctl", "")
@@ -371,18 +366,6 @@ func checkRecentMigrations(t *testing.T, uuid string, expectStatus schema.Online
 		}
 	}
 	assert.Equal(t, len(clusterInstance.Keyspaces[0].Shards), count)
-}
-
-// checkCancelAllMigrations all pending migrations
-func checkCancelAllMigrations(t *testing.T, expectCount int) {
-	result, err := clusterInstance.VtctlclientProcess.OnlineDDLCancelAllMigrations(keyspaceName)
-	fmt.Println("# 'vtctlclient OnlineDDL cancel-all' output (for debug purposes):")
-	fmt.Println(result)
-	assert.NoError(t, err)
-
-	r := fullWordRegexp(fmt.Sprintf("%d", expectCount))
-	m := r.FindAllString(result, -1)
-	assert.Equal(t, len(clusterInstance.Keyspaces[0].Shards), len(m))
 }
 
 // checkMigratedTables checks the CREATE STATEMENT of a table after migration
