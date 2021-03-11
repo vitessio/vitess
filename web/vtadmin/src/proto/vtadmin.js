@@ -51,6 +51,39 @@ $root.vtadmin = (function() {
         };
 
         /**
+         * Callback as used by {@link vtadmin.VTAdmin#findSchema}.
+         * @memberof vtadmin.VTAdmin
+         * @typedef FindSchemaCallback
+         * @type {function}
+         * @param {Error|null} error Error, if any
+         * @param {vtadmin.Schema} [response] Schema
+         */
+
+        /**
+         * Calls FindSchema.
+         * @function findSchema
+         * @memberof vtadmin.VTAdmin
+         * @instance
+         * @param {vtadmin.IFindSchemaRequest} request FindSchemaRequest message or plain object
+         * @param {vtadmin.VTAdmin.FindSchemaCallback} callback Node-style callback called with the error, if any, and Schema
+         * @returns {undefined}
+         * @variation 1
+         */
+        Object.defineProperty(VTAdmin.prototype.findSchema = function findSchema(request, callback) {
+            return this.rpcCall(findSchema, $root.vtadmin.FindSchemaRequest, $root.vtadmin.Schema, request, callback);
+        }, "name", { value: "FindSchema" });
+
+        /**
+         * Calls FindSchema.
+         * @function findSchema
+         * @memberof vtadmin.VTAdmin
+         * @instance
+         * @param {vtadmin.IFindSchemaRequest} request FindSchemaRequest message or plain object
+         * @returns {Promise<vtadmin.Schema>} Promise
+         * @variation 2
+         */
+
+        /**
          * Callback as used by {@link vtadmin.VTAdmin#getClusters}.
          * @memberof vtadmin.VTAdmin
          * @typedef GetClustersCallback
@@ -150,6 +183,39 @@ $root.vtadmin = (function() {
          */
 
         /**
+         * Callback as used by {@link vtadmin.VTAdmin#getSchema}.
+         * @memberof vtadmin.VTAdmin
+         * @typedef GetSchemaCallback
+         * @type {function}
+         * @param {Error|null} error Error, if any
+         * @param {vtadmin.Schema} [response] Schema
+         */
+
+        /**
+         * Calls GetSchema.
+         * @function getSchema
+         * @memberof vtadmin.VTAdmin
+         * @instance
+         * @param {vtadmin.IGetSchemaRequest} request GetSchemaRequest message or plain object
+         * @param {vtadmin.VTAdmin.GetSchemaCallback} callback Node-style callback called with the error, if any, and Schema
+         * @returns {undefined}
+         * @variation 1
+         */
+        Object.defineProperty(VTAdmin.prototype.getSchema = function getSchema(request, callback) {
+            return this.rpcCall(getSchema, $root.vtadmin.GetSchemaRequest, $root.vtadmin.Schema, request, callback);
+        }, "name", { value: "GetSchema" });
+
+        /**
+         * Calls GetSchema.
+         * @function getSchema
+         * @memberof vtadmin.VTAdmin
+         * @instance
+         * @param {vtadmin.IGetSchemaRequest} request GetSchemaRequest message or plain object
+         * @returns {Promise<vtadmin.Schema>} Promise
+         * @variation 2
+         */
+
+        /**
          * Callback as used by {@link vtadmin.VTAdmin#getSchemas}.
          * @memberof vtadmin.VTAdmin
          * @typedef GetSchemasCallback
@@ -245,6 +311,72 @@ $root.vtadmin = (function() {
          * @instance
          * @param {vtadmin.IGetTabletsRequest} request GetTabletsRequest message or plain object
          * @returns {Promise<vtadmin.GetTabletsResponse>} Promise
+         * @variation 2
+         */
+
+        /**
+         * Callback as used by {@link vtadmin.VTAdmin#getVSchema}.
+         * @memberof vtadmin.VTAdmin
+         * @typedef GetVSchemaCallback
+         * @type {function}
+         * @param {Error|null} error Error, if any
+         * @param {vtadmin.VSchema} [response] VSchema
+         */
+
+        /**
+         * Calls GetVSchema.
+         * @function getVSchema
+         * @memberof vtadmin.VTAdmin
+         * @instance
+         * @param {vtadmin.IGetVSchemaRequest} request GetVSchemaRequest message or plain object
+         * @param {vtadmin.VTAdmin.GetVSchemaCallback} callback Node-style callback called with the error, if any, and VSchema
+         * @returns {undefined}
+         * @variation 1
+         */
+        Object.defineProperty(VTAdmin.prototype.getVSchema = function getVSchema(request, callback) {
+            return this.rpcCall(getVSchema, $root.vtadmin.GetVSchemaRequest, $root.vtadmin.VSchema, request, callback);
+        }, "name", { value: "GetVSchema" });
+
+        /**
+         * Calls GetVSchema.
+         * @function getVSchema
+         * @memberof vtadmin.VTAdmin
+         * @instance
+         * @param {vtadmin.IGetVSchemaRequest} request GetVSchemaRequest message or plain object
+         * @returns {Promise<vtadmin.VSchema>} Promise
+         * @variation 2
+         */
+
+        /**
+         * Callback as used by {@link vtadmin.VTAdmin#getVSchemas}.
+         * @memberof vtadmin.VTAdmin
+         * @typedef GetVSchemasCallback
+         * @type {function}
+         * @param {Error|null} error Error, if any
+         * @param {vtadmin.GetVSchemasResponse} [response] GetVSchemasResponse
+         */
+
+        /**
+         * Calls GetVSchemas.
+         * @function getVSchemas
+         * @memberof vtadmin.VTAdmin
+         * @instance
+         * @param {vtadmin.IGetVSchemasRequest} request GetVSchemasRequest message or plain object
+         * @param {vtadmin.VTAdmin.GetVSchemasCallback} callback Node-style callback called with the error, if any, and GetVSchemasResponse
+         * @returns {undefined}
+         * @variation 1
+         */
+        Object.defineProperty(VTAdmin.prototype.getVSchemas = function getVSchemas(request, callback) {
+            return this.rpcCall(getVSchemas, $root.vtadmin.GetVSchemasRequest, $root.vtadmin.GetVSchemasResponse, request, callback);
+        }, "name", { value: "GetVSchemas" });
+
+        /**
+         * Calls GetVSchemas.
+         * @function getVSchemas
+         * @memberof vtadmin.VTAdmin
+         * @instance
+         * @param {vtadmin.IGetVSchemasRequest} request GetVSchemasRequest message or plain object
+         * @returns {Promise<vtadmin.GetVSchemasResponse>} Promise
          * @variation 2
          */
 
@@ -1314,6 +1446,248 @@ $root.vtadmin = (function() {
         return Tablet;
     })();
 
+    vtadmin.VSchema = (function() {
+
+        /**
+         * Properties of a VSchema.
+         * @memberof vtadmin
+         * @interface IVSchema
+         * @property {vtadmin.ICluster|null} [cluster] VSchema cluster
+         * @property {string|null} [name] VSchema name
+         * @property {vschema.IKeyspace|null} [v_schema] VSchema v_schema
+         */
+
+        /**
+         * Constructs a new VSchema.
+         * @memberof vtadmin
+         * @classdesc Represents a VSchema.
+         * @implements IVSchema
+         * @constructor
+         * @param {vtadmin.IVSchema=} [properties] Properties to set
+         */
+        function VSchema(properties) {
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * VSchema cluster.
+         * @member {vtadmin.ICluster|null|undefined} cluster
+         * @memberof vtadmin.VSchema
+         * @instance
+         */
+        VSchema.prototype.cluster = null;
+
+        /**
+         * VSchema name.
+         * @member {string} name
+         * @memberof vtadmin.VSchema
+         * @instance
+         */
+        VSchema.prototype.name = "";
+
+        /**
+         * VSchema v_schema.
+         * @member {vschema.IKeyspace|null|undefined} v_schema
+         * @memberof vtadmin.VSchema
+         * @instance
+         */
+        VSchema.prototype.v_schema = null;
+
+        /**
+         * Creates a new VSchema instance using the specified properties.
+         * @function create
+         * @memberof vtadmin.VSchema
+         * @static
+         * @param {vtadmin.IVSchema=} [properties] Properties to set
+         * @returns {vtadmin.VSchema} VSchema instance
+         */
+        VSchema.create = function create(properties) {
+            return new VSchema(properties);
+        };
+
+        /**
+         * Encodes the specified VSchema message. Does not implicitly {@link vtadmin.VSchema.verify|verify} messages.
+         * @function encode
+         * @memberof vtadmin.VSchema
+         * @static
+         * @param {vtadmin.IVSchema} message VSchema message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        VSchema.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.cluster != null && Object.hasOwnProperty.call(message, "cluster"))
+                $root.vtadmin.Cluster.encode(message.cluster, writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
+            if (message.name != null && Object.hasOwnProperty.call(message, "name"))
+                writer.uint32(/* id 2, wireType 2 =*/18).string(message.name);
+            if (message.v_schema != null && Object.hasOwnProperty.call(message, "v_schema"))
+                $root.vschema.Keyspace.encode(message.v_schema, writer.uint32(/* id 3, wireType 2 =*/26).fork()).ldelim();
+            return writer;
+        };
+
+        /**
+         * Encodes the specified VSchema message, length delimited. Does not implicitly {@link vtadmin.VSchema.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtadmin.VSchema
+         * @static
+         * @param {vtadmin.IVSchema} message VSchema message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        VSchema.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a VSchema message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtadmin.VSchema
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtadmin.VSchema} VSchema
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        VSchema.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.VSchema();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.cluster = $root.vtadmin.Cluster.decode(reader, reader.uint32());
+                    break;
+                case 2:
+                    message.name = reader.string();
+                    break;
+                case 3:
+                    message.v_schema = $root.vschema.Keyspace.decode(reader, reader.uint32());
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a VSchema message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtadmin.VSchema
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtadmin.VSchema} VSchema
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        VSchema.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a VSchema message.
+         * @function verify
+         * @memberof vtadmin.VSchema
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        VSchema.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.cluster != null && message.hasOwnProperty("cluster")) {
+                var error = $root.vtadmin.Cluster.verify(message.cluster);
+                if (error)
+                    return "cluster." + error;
+            }
+            if (message.name != null && message.hasOwnProperty("name"))
+                if (!$util.isString(message.name))
+                    return "name: string expected";
+            if (message.v_schema != null && message.hasOwnProperty("v_schema")) {
+                var error = $root.vschema.Keyspace.verify(message.v_schema);
+                if (error)
+                    return "v_schema." + error;
+            }
+            return null;
+        };
+
+        /**
+         * Creates a VSchema message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtadmin.VSchema
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtadmin.VSchema} VSchema
+         */
+        VSchema.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtadmin.VSchema)
+                return object;
+            var message = new $root.vtadmin.VSchema();
+            if (object.cluster != null) {
+                if (typeof object.cluster !== "object")
+                    throw TypeError(".vtadmin.VSchema.cluster: object expected");
+                message.cluster = $root.vtadmin.Cluster.fromObject(object.cluster);
+            }
+            if (object.name != null)
+                message.name = String(object.name);
+            if (object.v_schema != null) {
+                if (typeof object.v_schema !== "object")
+                    throw TypeError(".vtadmin.VSchema.v_schema: object expected");
+                message.v_schema = $root.vschema.Keyspace.fromObject(object.v_schema);
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a VSchema message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtadmin.VSchema
+         * @static
+         * @param {vtadmin.VSchema} message VSchema
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        VSchema.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.defaults) {
+                object.cluster = null;
+                object.name = "";
+                object.v_schema = null;
+            }
+            if (message.cluster != null && message.hasOwnProperty("cluster"))
+                object.cluster = $root.vtadmin.Cluster.toObject(message.cluster, options);
+            if (message.name != null && message.hasOwnProperty("name"))
+                object.name = message.name;
+            if (message.v_schema != null && message.hasOwnProperty("v_schema"))
+                object.v_schema = $root.vschema.Keyspace.toObject(message.v_schema, options);
+            return object;
+        };
+
+        /**
+         * Converts this VSchema to JSON.
+         * @function toJSON
+         * @memberof vtadmin.VSchema
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        VSchema.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return VSchema;
+    })();
+
     vtadmin.Vtctld = (function() {
 
         /**
@@ -1825,6 +2199,232 @@ $root.vtadmin = (function() {
         };
 
         return VTGate;
+    })();
+
+    vtadmin.FindSchemaRequest = (function() {
+
+        /**
+         * Properties of a FindSchemaRequest.
+         * @memberof vtadmin
+         * @interface IFindSchemaRequest
+         * @property {string|null} [table] FindSchemaRequest table
+         * @property {Array.<string>|null} [cluster_ids] FindSchemaRequest cluster_ids
+         */
+
+        /**
+         * Constructs a new FindSchemaRequest.
+         * @memberof vtadmin
+         * @classdesc Represents a FindSchemaRequest.
+         * @implements IFindSchemaRequest
+         * @constructor
+         * @param {vtadmin.IFindSchemaRequest=} [properties] Properties to set
+         */
+        function FindSchemaRequest(properties) {
+            this.cluster_ids = [];
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * FindSchemaRequest table.
+         * @member {string} table
+         * @memberof vtadmin.FindSchemaRequest
+         * @instance
+         */
+        FindSchemaRequest.prototype.table = "";
+
+        /**
+         * FindSchemaRequest cluster_ids.
+         * @member {Array.<string>} cluster_ids
+         * @memberof vtadmin.FindSchemaRequest
+         * @instance
+         */
+        FindSchemaRequest.prototype.cluster_ids = $util.emptyArray;
+
+        /**
+         * Creates a new FindSchemaRequest instance using the specified properties.
+         * @function create
+         * @memberof vtadmin.FindSchemaRequest
+         * @static
+         * @param {vtadmin.IFindSchemaRequest=} [properties] Properties to set
+         * @returns {vtadmin.FindSchemaRequest} FindSchemaRequest instance
+         */
+        FindSchemaRequest.create = function create(properties) {
+            return new FindSchemaRequest(properties);
+        };
+
+        /**
+         * Encodes the specified FindSchemaRequest message. Does not implicitly {@link vtadmin.FindSchemaRequest.verify|verify} messages.
+         * @function encode
+         * @memberof vtadmin.FindSchemaRequest
+         * @static
+         * @param {vtadmin.IFindSchemaRequest} message FindSchemaRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        FindSchemaRequest.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.table != null && Object.hasOwnProperty.call(message, "table"))
+                writer.uint32(/* id 1, wireType 2 =*/10).string(message.table);
+            if (message.cluster_ids != null && message.cluster_ids.length)
+                for (var i = 0; i < message.cluster_ids.length; ++i)
+                    writer.uint32(/* id 2, wireType 2 =*/18).string(message.cluster_ids[i]);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified FindSchemaRequest message, length delimited. Does not implicitly {@link vtadmin.FindSchemaRequest.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtadmin.FindSchemaRequest
+         * @static
+         * @param {vtadmin.IFindSchemaRequest} message FindSchemaRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        FindSchemaRequest.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a FindSchemaRequest message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtadmin.FindSchemaRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtadmin.FindSchemaRequest} FindSchemaRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        FindSchemaRequest.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.FindSchemaRequest();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.table = reader.string();
+                    break;
+                case 2:
+                    if (!(message.cluster_ids && message.cluster_ids.length))
+                        message.cluster_ids = [];
+                    message.cluster_ids.push(reader.string());
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a FindSchemaRequest message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtadmin.FindSchemaRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtadmin.FindSchemaRequest} FindSchemaRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        FindSchemaRequest.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a FindSchemaRequest message.
+         * @function verify
+         * @memberof vtadmin.FindSchemaRequest
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        FindSchemaRequest.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.table != null && message.hasOwnProperty("table"))
+                if (!$util.isString(message.table))
+                    return "table: string expected";
+            if (message.cluster_ids != null && message.hasOwnProperty("cluster_ids")) {
+                if (!Array.isArray(message.cluster_ids))
+                    return "cluster_ids: array expected";
+                for (var i = 0; i < message.cluster_ids.length; ++i)
+                    if (!$util.isString(message.cluster_ids[i]))
+                        return "cluster_ids: string[] expected";
+            }
+            return null;
+        };
+
+        /**
+         * Creates a FindSchemaRequest message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtadmin.FindSchemaRequest
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtadmin.FindSchemaRequest} FindSchemaRequest
+         */
+        FindSchemaRequest.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtadmin.FindSchemaRequest)
+                return object;
+            var message = new $root.vtadmin.FindSchemaRequest();
+            if (object.table != null)
+                message.table = String(object.table);
+            if (object.cluster_ids) {
+                if (!Array.isArray(object.cluster_ids))
+                    throw TypeError(".vtadmin.FindSchemaRequest.cluster_ids: array expected");
+                message.cluster_ids = [];
+                for (var i = 0; i < object.cluster_ids.length; ++i)
+                    message.cluster_ids[i] = String(object.cluster_ids[i]);
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a FindSchemaRequest message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtadmin.FindSchemaRequest
+         * @static
+         * @param {vtadmin.FindSchemaRequest} message FindSchemaRequest
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        FindSchemaRequest.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.arrays || options.defaults)
+                object.cluster_ids = [];
+            if (options.defaults)
+                object.table = "";
+            if (message.table != null && message.hasOwnProperty("table"))
+                object.table = message.table;
+            if (message.cluster_ids && message.cluster_ids.length) {
+                object.cluster_ids = [];
+                for (var j = 0; j < message.cluster_ids.length; ++j)
+                    object.cluster_ids[j] = message.cluster_ids[j];
+            }
+            return object;
+        };
+
+        /**
+         * Converts this FindSchemaRequest to JSON.
+         * @function toJSON
+         * @memberof vtadmin.FindSchemaRequest
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        FindSchemaRequest.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return FindSchemaRequest;
     })();
 
     vtadmin.GetClustersRequest = (function() {
@@ -3017,6 +3617,238 @@ $root.vtadmin = (function() {
         return GetKeyspacesResponse;
     })();
 
+    vtadmin.GetSchemaRequest = (function() {
+
+        /**
+         * Properties of a GetSchemaRequest.
+         * @memberof vtadmin
+         * @interface IGetSchemaRequest
+         * @property {string|null} [cluster_id] GetSchemaRequest cluster_id
+         * @property {string|null} [keyspace] GetSchemaRequest keyspace
+         * @property {string|null} [table] GetSchemaRequest table
+         */
+
+        /**
+         * Constructs a new GetSchemaRequest.
+         * @memberof vtadmin
+         * @classdesc Represents a GetSchemaRequest.
+         * @implements IGetSchemaRequest
+         * @constructor
+         * @param {vtadmin.IGetSchemaRequest=} [properties] Properties to set
+         */
+        function GetSchemaRequest(properties) {
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * GetSchemaRequest cluster_id.
+         * @member {string} cluster_id
+         * @memberof vtadmin.GetSchemaRequest
+         * @instance
+         */
+        GetSchemaRequest.prototype.cluster_id = "";
+
+        /**
+         * GetSchemaRequest keyspace.
+         * @member {string} keyspace
+         * @memberof vtadmin.GetSchemaRequest
+         * @instance
+         */
+        GetSchemaRequest.prototype.keyspace = "";
+
+        /**
+         * GetSchemaRequest table.
+         * @member {string} table
+         * @memberof vtadmin.GetSchemaRequest
+         * @instance
+         */
+        GetSchemaRequest.prototype.table = "";
+
+        /**
+         * Creates a new GetSchemaRequest instance using the specified properties.
+         * @function create
+         * @memberof vtadmin.GetSchemaRequest
+         * @static
+         * @param {vtadmin.IGetSchemaRequest=} [properties] Properties to set
+         * @returns {vtadmin.GetSchemaRequest} GetSchemaRequest instance
+         */
+        GetSchemaRequest.create = function create(properties) {
+            return new GetSchemaRequest(properties);
+        };
+
+        /**
+         * Encodes the specified GetSchemaRequest message. Does not implicitly {@link vtadmin.GetSchemaRequest.verify|verify} messages.
+         * @function encode
+         * @memberof vtadmin.GetSchemaRequest
+         * @static
+         * @param {vtadmin.IGetSchemaRequest} message GetSchemaRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        GetSchemaRequest.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.cluster_id != null && Object.hasOwnProperty.call(message, "cluster_id"))
+                writer.uint32(/* id 1, wireType 2 =*/10).string(message.cluster_id);
+            if (message.keyspace != null && Object.hasOwnProperty.call(message, "keyspace"))
+                writer.uint32(/* id 2, wireType 2 =*/18).string(message.keyspace);
+            if (message.table != null && Object.hasOwnProperty.call(message, "table"))
+                writer.uint32(/* id 3, wireType 2 =*/26).string(message.table);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified GetSchemaRequest message, length delimited. Does not implicitly {@link vtadmin.GetSchemaRequest.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtadmin.GetSchemaRequest
+         * @static
+         * @param {vtadmin.IGetSchemaRequest} message GetSchemaRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        GetSchemaRequest.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a GetSchemaRequest message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtadmin.GetSchemaRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtadmin.GetSchemaRequest} GetSchemaRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        GetSchemaRequest.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.GetSchemaRequest();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.cluster_id = reader.string();
+                    break;
+                case 2:
+                    message.keyspace = reader.string();
+                    break;
+                case 3:
+                    message.table = reader.string();
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a GetSchemaRequest message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtadmin.GetSchemaRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtadmin.GetSchemaRequest} GetSchemaRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        GetSchemaRequest.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a GetSchemaRequest message.
+         * @function verify
+         * @memberof vtadmin.GetSchemaRequest
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        GetSchemaRequest.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.cluster_id != null && message.hasOwnProperty("cluster_id"))
+                if (!$util.isString(message.cluster_id))
+                    return "cluster_id: string expected";
+            if (message.keyspace != null && message.hasOwnProperty("keyspace"))
+                if (!$util.isString(message.keyspace))
+                    return "keyspace: string expected";
+            if (message.table != null && message.hasOwnProperty("table"))
+                if (!$util.isString(message.table))
+                    return "table: string expected";
+            return null;
+        };
+
+        /**
+         * Creates a GetSchemaRequest message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtadmin.GetSchemaRequest
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtadmin.GetSchemaRequest} GetSchemaRequest
+         */
+        GetSchemaRequest.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtadmin.GetSchemaRequest)
+                return object;
+            var message = new $root.vtadmin.GetSchemaRequest();
+            if (object.cluster_id != null)
+                message.cluster_id = String(object.cluster_id);
+            if (object.keyspace != null)
+                message.keyspace = String(object.keyspace);
+            if (object.table != null)
+                message.table = String(object.table);
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a GetSchemaRequest message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtadmin.GetSchemaRequest
+         * @static
+         * @param {vtadmin.GetSchemaRequest} message GetSchemaRequest
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        GetSchemaRequest.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.defaults) {
+                object.cluster_id = "";
+                object.keyspace = "";
+                object.table = "";
+            }
+            if (message.cluster_id != null && message.hasOwnProperty("cluster_id"))
+                object.cluster_id = message.cluster_id;
+            if (message.keyspace != null && message.hasOwnProperty("keyspace"))
+                object.keyspace = message.keyspace;
+            if (message.table != null && message.hasOwnProperty("table"))
+                object.table = message.table;
+            return object;
+        };
+
+        /**
+         * Converts this GetSchemaRequest to JSON.
+         * @function toJSON
+         * @memberof vtadmin.GetSchemaRequest
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        GetSchemaRequest.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return GetSchemaRequest;
+    })();
+
     vtadmin.GetSchemasRequest = (function() {
 
         /**
@@ -4063,6 +4895,627 @@ $root.vtadmin = (function() {
         };
 
         return GetTabletsResponse;
+    })();
+
+    vtadmin.GetVSchemaRequest = (function() {
+
+        /**
+         * Properties of a GetVSchemaRequest.
+         * @memberof vtadmin
+         * @interface IGetVSchemaRequest
+         * @property {string|null} [cluster_id] GetVSchemaRequest cluster_id
+         * @property {string|null} [keyspace] GetVSchemaRequest keyspace
+         */
+
+        /**
+         * Constructs a new GetVSchemaRequest.
+         * @memberof vtadmin
+         * @classdesc Represents a GetVSchemaRequest.
+         * @implements IGetVSchemaRequest
+         * @constructor
+         * @param {vtadmin.IGetVSchemaRequest=} [properties] Properties to set
+         */
+        function GetVSchemaRequest(properties) {
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * GetVSchemaRequest cluster_id.
+         * @member {string} cluster_id
+         * @memberof vtadmin.GetVSchemaRequest
+         * @instance
+         */
+        GetVSchemaRequest.prototype.cluster_id = "";
+
+        /**
+         * GetVSchemaRequest keyspace.
+         * @member {string} keyspace
+         * @memberof vtadmin.GetVSchemaRequest
+         * @instance
+         */
+        GetVSchemaRequest.prototype.keyspace = "";
+
+        /**
+         * Creates a new GetVSchemaRequest instance using the specified properties.
+         * @function create
+         * @memberof vtadmin.GetVSchemaRequest
+         * @static
+         * @param {vtadmin.IGetVSchemaRequest=} [properties] Properties to set
+         * @returns {vtadmin.GetVSchemaRequest} GetVSchemaRequest instance
+         */
+        GetVSchemaRequest.create = function create(properties) {
+            return new GetVSchemaRequest(properties);
+        };
+
+        /**
+         * Encodes the specified GetVSchemaRequest message. Does not implicitly {@link vtadmin.GetVSchemaRequest.verify|verify} messages.
+         * @function encode
+         * @memberof vtadmin.GetVSchemaRequest
+         * @static
+         * @param {vtadmin.IGetVSchemaRequest} message GetVSchemaRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        GetVSchemaRequest.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.cluster_id != null && Object.hasOwnProperty.call(message, "cluster_id"))
+                writer.uint32(/* id 1, wireType 2 =*/10).string(message.cluster_id);
+            if (message.keyspace != null && Object.hasOwnProperty.call(message, "keyspace"))
+                writer.uint32(/* id 2, wireType 2 =*/18).string(message.keyspace);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified GetVSchemaRequest message, length delimited. Does not implicitly {@link vtadmin.GetVSchemaRequest.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtadmin.GetVSchemaRequest
+         * @static
+         * @param {vtadmin.IGetVSchemaRequest} message GetVSchemaRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        GetVSchemaRequest.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a GetVSchemaRequest message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtadmin.GetVSchemaRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtadmin.GetVSchemaRequest} GetVSchemaRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        GetVSchemaRequest.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.GetVSchemaRequest();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.cluster_id = reader.string();
+                    break;
+                case 2:
+                    message.keyspace = reader.string();
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a GetVSchemaRequest message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtadmin.GetVSchemaRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtadmin.GetVSchemaRequest} GetVSchemaRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        GetVSchemaRequest.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a GetVSchemaRequest message.
+         * @function verify
+         * @memberof vtadmin.GetVSchemaRequest
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        GetVSchemaRequest.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.cluster_id != null && message.hasOwnProperty("cluster_id"))
+                if (!$util.isString(message.cluster_id))
+                    return "cluster_id: string expected";
+            if (message.keyspace != null && message.hasOwnProperty("keyspace"))
+                if (!$util.isString(message.keyspace))
+                    return "keyspace: string expected";
+            return null;
+        };
+
+        /**
+         * Creates a GetVSchemaRequest message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtadmin.GetVSchemaRequest
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtadmin.GetVSchemaRequest} GetVSchemaRequest
+         */
+        GetVSchemaRequest.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtadmin.GetVSchemaRequest)
+                return object;
+            var message = new $root.vtadmin.GetVSchemaRequest();
+            if (object.cluster_id != null)
+                message.cluster_id = String(object.cluster_id);
+            if (object.keyspace != null)
+                message.keyspace = String(object.keyspace);
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a GetVSchemaRequest message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtadmin.GetVSchemaRequest
+         * @static
+         * @param {vtadmin.GetVSchemaRequest} message GetVSchemaRequest
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        GetVSchemaRequest.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.defaults) {
+                object.cluster_id = "";
+                object.keyspace = "";
+            }
+            if (message.cluster_id != null && message.hasOwnProperty("cluster_id"))
+                object.cluster_id = message.cluster_id;
+            if (message.keyspace != null && message.hasOwnProperty("keyspace"))
+                object.keyspace = message.keyspace;
+            return object;
+        };
+
+        /**
+         * Converts this GetVSchemaRequest to JSON.
+         * @function toJSON
+         * @memberof vtadmin.GetVSchemaRequest
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        GetVSchemaRequest.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return GetVSchemaRequest;
+    })();
+
+    vtadmin.GetVSchemasRequest = (function() {
+
+        /**
+         * Properties of a GetVSchemasRequest.
+         * @memberof vtadmin
+         * @interface IGetVSchemasRequest
+         * @property {Array.<string>|null} [cluster_ids] GetVSchemasRequest cluster_ids
+         */
+
+        /**
+         * Constructs a new GetVSchemasRequest.
+         * @memberof vtadmin
+         * @classdesc Represents a GetVSchemasRequest.
+         * @implements IGetVSchemasRequest
+         * @constructor
+         * @param {vtadmin.IGetVSchemasRequest=} [properties] Properties to set
+         */
+        function GetVSchemasRequest(properties) {
+            this.cluster_ids = [];
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * GetVSchemasRequest cluster_ids.
+         * @member {Array.<string>} cluster_ids
+         * @memberof vtadmin.GetVSchemasRequest
+         * @instance
+         */
+        GetVSchemasRequest.prototype.cluster_ids = $util.emptyArray;
+
+        /**
+         * Creates a new GetVSchemasRequest instance using the specified properties.
+         * @function create
+         * @memberof vtadmin.GetVSchemasRequest
+         * @static
+         * @param {vtadmin.IGetVSchemasRequest=} [properties] Properties to set
+         * @returns {vtadmin.GetVSchemasRequest} GetVSchemasRequest instance
+         */
+        GetVSchemasRequest.create = function create(properties) {
+            return new GetVSchemasRequest(properties);
+        };
+
+        /**
+         * Encodes the specified GetVSchemasRequest message. Does not implicitly {@link vtadmin.GetVSchemasRequest.verify|verify} messages.
+         * @function encode
+         * @memberof vtadmin.GetVSchemasRequest
+         * @static
+         * @param {vtadmin.IGetVSchemasRequest} message GetVSchemasRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        GetVSchemasRequest.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.cluster_ids != null && message.cluster_ids.length)
+                for (var i = 0; i < message.cluster_ids.length; ++i)
+                    writer.uint32(/* id 1, wireType 2 =*/10).string(message.cluster_ids[i]);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified GetVSchemasRequest message, length delimited. Does not implicitly {@link vtadmin.GetVSchemasRequest.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtadmin.GetVSchemasRequest
+         * @static
+         * @param {vtadmin.IGetVSchemasRequest} message GetVSchemasRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        GetVSchemasRequest.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a GetVSchemasRequest message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtadmin.GetVSchemasRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtadmin.GetVSchemasRequest} GetVSchemasRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        GetVSchemasRequest.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.GetVSchemasRequest();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    if (!(message.cluster_ids && message.cluster_ids.length))
+                        message.cluster_ids = [];
+                    message.cluster_ids.push(reader.string());
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a GetVSchemasRequest message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtadmin.GetVSchemasRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtadmin.GetVSchemasRequest} GetVSchemasRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        GetVSchemasRequest.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a GetVSchemasRequest message.
+         * @function verify
+         * @memberof vtadmin.GetVSchemasRequest
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        GetVSchemasRequest.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.cluster_ids != null && message.hasOwnProperty("cluster_ids")) {
+                if (!Array.isArray(message.cluster_ids))
+                    return "cluster_ids: array expected";
+                for (var i = 0; i < message.cluster_ids.length; ++i)
+                    if (!$util.isString(message.cluster_ids[i]))
+                        return "cluster_ids: string[] expected";
+            }
+            return null;
+        };
+
+        /**
+         * Creates a GetVSchemasRequest message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtadmin.GetVSchemasRequest
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtadmin.GetVSchemasRequest} GetVSchemasRequest
+         */
+        GetVSchemasRequest.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtadmin.GetVSchemasRequest)
+                return object;
+            var message = new $root.vtadmin.GetVSchemasRequest();
+            if (object.cluster_ids) {
+                if (!Array.isArray(object.cluster_ids))
+                    throw TypeError(".vtadmin.GetVSchemasRequest.cluster_ids: array expected");
+                message.cluster_ids = [];
+                for (var i = 0; i < object.cluster_ids.length; ++i)
+                    message.cluster_ids[i] = String(object.cluster_ids[i]);
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a GetVSchemasRequest message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtadmin.GetVSchemasRequest
+         * @static
+         * @param {vtadmin.GetVSchemasRequest} message GetVSchemasRequest
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        GetVSchemasRequest.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.arrays || options.defaults)
+                object.cluster_ids = [];
+            if (message.cluster_ids && message.cluster_ids.length) {
+                object.cluster_ids = [];
+                for (var j = 0; j < message.cluster_ids.length; ++j)
+                    object.cluster_ids[j] = message.cluster_ids[j];
+            }
+            return object;
+        };
+
+        /**
+         * Converts this GetVSchemasRequest to JSON.
+         * @function toJSON
+         * @memberof vtadmin.GetVSchemasRequest
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        GetVSchemasRequest.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return GetVSchemasRequest;
+    })();
+
+    vtadmin.GetVSchemasResponse = (function() {
+
+        /**
+         * Properties of a GetVSchemasResponse.
+         * @memberof vtadmin
+         * @interface IGetVSchemasResponse
+         * @property {Array.<vtadmin.IVSchema>|null} [v_schemas] GetVSchemasResponse v_schemas
+         */
+
+        /**
+         * Constructs a new GetVSchemasResponse.
+         * @memberof vtadmin
+         * @classdesc Represents a GetVSchemasResponse.
+         * @implements IGetVSchemasResponse
+         * @constructor
+         * @param {vtadmin.IGetVSchemasResponse=} [properties] Properties to set
+         */
+        function GetVSchemasResponse(properties) {
+            this.v_schemas = [];
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * GetVSchemasResponse v_schemas.
+         * @member {Array.<vtadmin.IVSchema>} v_schemas
+         * @memberof vtadmin.GetVSchemasResponse
+         * @instance
+         */
+        GetVSchemasResponse.prototype.v_schemas = $util.emptyArray;
+
+        /**
+         * Creates a new GetVSchemasResponse instance using the specified properties.
+         * @function create
+         * @memberof vtadmin.GetVSchemasResponse
+         * @static
+         * @param {vtadmin.IGetVSchemasResponse=} [properties] Properties to set
+         * @returns {vtadmin.GetVSchemasResponse} GetVSchemasResponse instance
+         */
+        GetVSchemasResponse.create = function create(properties) {
+            return new GetVSchemasResponse(properties);
+        };
+
+        /**
+         * Encodes the specified GetVSchemasResponse message. Does not implicitly {@link vtadmin.GetVSchemasResponse.verify|verify} messages.
+         * @function encode
+         * @memberof vtadmin.GetVSchemasResponse
+         * @static
+         * @param {vtadmin.IGetVSchemasResponse} message GetVSchemasResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        GetVSchemasResponse.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.v_schemas != null && message.v_schemas.length)
+                for (var i = 0; i < message.v_schemas.length; ++i)
+                    $root.vtadmin.VSchema.encode(message.v_schemas[i], writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
+            return writer;
+        };
+
+        /**
+         * Encodes the specified GetVSchemasResponse message, length delimited. Does not implicitly {@link vtadmin.GetVSchemasResponse.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtadmin.GetVSchemasResponse
+         * @static
+         * @param {vtadmin.IGetVSchemasResponse} message GetVSchemasResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        GetVSchemasResponse.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a GetVSchemasResponse message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtadmin.GetVSchemasResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtadmin.GetVSchemasResponse} GetVSchemasResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        GetVSchemasResponse.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.GetVSchemasResponse();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    if (!(message.v_schemas && message.v_schemas.length))
+                        message.v_schemas = [];
+                    message.v_schemas.push($root.vtadmin.VSchema.decode(reader, reader.uint32()));
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a GetVSchemasResponse message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtadmin.GetVSchemasResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtadmin.GetVSchemasResponse} GetVSchemasResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        GetVSchemasResponse.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a GetVSchemasResponse message.
+         * @function verify
+         * @memberof vtadmin.GetVSchemasResponse
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        GetVSchemasResponse.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.v_schemas != null && message.hasOwnProperty("v_schemas")) {
+                if (!Array.isArray(message.v_schemas))
+                    return "v_schemas: array expected";
+                for (var i = 0; i < message.v_schemas.length; ++i) {
+                    var error = $root.vtadmin.VSchema.verify(message.v_schemas[i]);
+                    if (error)
+                        return "v_schemas." + error;
+                }
+            }
+            return null;
+        };
+
+        /**
+         * Creates a GetVSchemasResponse message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtadmin.GetVSchemasResponse
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtadmin.GetVSchemasResponse} GetVSchemasResponse
+         */
+        GetVSchemasResponse.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtadmin.GetVSchemasResponse)
+                return object;
+            var message = new $root.vtadmin.GetVSchemasResponse();
+            if (object.v_schemas) {
+                if (!Array.isArray(object.v_schemas))
+                    throw TypeError(".vtadmin.GetVSchemasResponse.v_schemas: array expected");
+                message.v_schemas = [];
+                for (var i = 0; i < object.v_schemas.length; ++i) {
+                    if (typeof object.v_schemas[i] !== "object")
+                        throw TypeError(".vtadmin.GetVSchemasResponse.v_schemas: object expected");
+                    message.v_schemas[i] = $root.vtadmin.VSchema.fromObject(object.v_schemas[i]);
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a GetVSchemasResponse message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtadmin.GetVSchemasResponse
+         * @static
+         * @param {vtadmin.GetVSchemasResponse} message GetVSchemasResponse
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        GetVSchemasResponse.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.arrays || options.defaults)
+                object.v_schemas = [];
+            if (message.v_schemas && message.v_schemas.length) {
+                object.v_schemas = [];
+                for (var j = 0; j < message.v_schemas.length; ++j)
+                    object.v_schemas[j] = $root.vtadmin.VSchema.toObject(message.v_schemas[j], options);
+            }
+            return object;
+        };
+
+        /**
+         * Converts this GetVSchemasResponse to JSON.
+         * @function toJSON
+         * @memberof vtadmin.GetVSchemasResponse
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        GetVSchemasResponse.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return GetVSchemasResponse;
     })();
 
     vtadmin.VTExplainRequest = (function() {
@@ -45038,6 +46491,638 @@ $root.topodata = (function() {
         return CellsAlias;
     })();
 
+    topodata.TopoConfig = (function() {
+
+        /**
+         * Properties of a TopoConfig.
+         * @memberof topodata
+         * @interface ITopoConfig
+         * @property {string|null} [topo_type] TopoConfig topo_type
+         * @property {string|null} [server] TopoConfig server
+         * @property {string|null} [root] TopoConfig root
+         */
+
+        /**
+         * Constructs a new TopoConfig.
+         * @memberof topodata
+         * @classdesc Represents a TopoConfig.
+         * @implements ITopoConfig
+         * @constructor
+         * @param {topodata.ITopoConfig=} [properties] Properties to set
+         */
+        function TopoConfig(properties) {
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * TopoConfig topo_type.
+         * @member {string} topo_type
+         * @memberof topodata.TopoConfig
+         * @instance
+         */
+        TopoConfig.prototype.topo_type = "";
+
+        /**
+         * TopoConfig server.
+         * @member {string} server
+         * @memberof topodata.TopoConfig
+         * @instance
+         */
+        TopoConfig.prototype.server = "";
+
+        /**
+         * TopoConfig root.
+         * @member {string} root
+         * @memberof topodata.TopoConfig
+         * @instance
+         */
+        TopoConfig.prototype.root = "";
+
+        /**
+         * Creates a new TopoConfig instance using the specified properties.
+         * @function create
+         * @memberof topodata.TopoConfig
+         * @static
+         * @param {topodata.ITopoConfig=} [properties] Properties to set
+         * @returns {topodata.TopoConfig} TopoConfig instance
+         */
+        TopoConfig.create = function create(properties) {
+            return new TopoConfig(properties);
+        };
+
+        /**
+         * Encodes the specified TopoConfig message. Does not implicitly {@link topodata.TopoConfig.verify|verify} messages.
+         * @function encode
+         * @memberof topodata.TopoConfig
+         * @static
+         * @param {topodata.ITopoConfig} message TopoConfig message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        TopoConfig.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.topo_type != null && Object.hasOwnProperty.call(message, "topo_type"))
+                writer.uint32(/* id 1, wireType 2 =*/10).string(message.topo_type);
+            if (message.server != null && Object.hasOwnProperty.call(message, "server"))
+                writer.uint32(/* id 2, wireType 2 =*/18).string(message.server);
+            if (message.root != null && Object.hasOwnProperty.call(message, "root"))
+                writer.uint32(/* id 3, wireType 2 =*/26).string(message.root);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified TopoConfig message, length delimited. Does not implicitly {@link topodata.TopoConfig.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof topodata.TopoConfig
+         * @static
+         * @param {topodata.ITopoConfig} message TopoConfig message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        TopoConfig.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a TopoConfig message from the specified reader or buffer.
+         * @function decode
+         * @memberof topodata.TopoConfig
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {topodata.TopoConfig} TopoConfig
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        TopoConfig.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.topodata.TopoConfig();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.topo_type = reader.string();
+                    break;
+                case 2:
+                    message.server = reader.string();
+                    break;
+                case 3:
+                    message.root = reader.string();
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a TopoConfig message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof topodata.TopoConfig
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {topodata.TopoConfig} TopoConfig
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        TopoConfig.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a TopoConfig message.
+         * @function verify
+         * @memberof topodata.TopoConfig
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        TopoConfig.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.topo_type != null && message.hasOwnProperty("topo_type"))
+                if (!$util.isString(message.topo_type))
+                    return "topo_type: string expected";
+            if (message.server != null && message.hasOwnProperty("server"))
+                if (!$util.isString(message.server))
+                    return "server: string expected";
+            if (message.root != null && message.hasOwnProperty("root"))
+                if (!$util.isString(message.root))
+                    return "root: string expected";
+            return null;
+        };
+
+        /**
+         * Creates a TopoConfig message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof topodata.TopoConfig
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {topodata.TopoConfig} TopoConfig
+         */
+        TopoConfig.fromObject = function fromObject(object) {
+            if (object instanceof $root.topodata.TopoConfig)
+                return object;
+            var message = new $root.topodata.TopoConfig();
+            if (object.topo_type != null)
+                message.topo_type = String(object.topo_type);
+            if (object.server != null)
+                message.server = String(object.server);
+            if (object.root != null)
+                message.root = String(object.root);
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a TopoConfig message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof topodata.TopoConfig
+         * @static
+         * @param {topodata.TopoConfig} message TopoConfig
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        TopoConfig.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.defaults) {
+                object.topo_type = "";
+                object.server = "";
+                object.root = "";
+            }
+            if (message.topo_type != null && message.hasOwnProperty("topo_type"))
+                object.topo_type = message.topo_type;
+            if (message.server != null && message.hasOwnProperty("server"))
+                object.server = message.server;
+            if (message.root != null && message.hasOwnProperty("root"))
+                object.root = message.root;
+            return object;
+        };
+
+        /**
+         * Converts this TopoConfig to JSON.
+         * @function toJSON
+         * @memberof topodata.TopoConfig
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        TopoConfig.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return TopoConfig;
+    })();
+
+    topodata.ExternalVitessCluster = (function() {
+
+        /**
+         * Properties of an ExternalVitessCluster.
+         * @memberof topodata
+         * @interface IExternalVitessCluster
+         * @property {topodata.ITopoConfig|null} [topo_config] ExternalVitessCluster topo_config
+         */
+
+        /**
+         * Constructs a new ExternalVitessCluster.
+         * @memberof topodata
+         * @classdesc Represents an ExternalVitessCluster.
+         * @implements IExternalVitessCluster
+         * @constructor
+         * @param {topodata.IExternalVitessCluster=} [properties] Properties to set
+         */
+        function ExternalVitessCluster(properties) {
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * ExternalVitessCluster topo_config.
+         * @member {topodata.ITopoConfig|null|undefined} topo_config
+         * @memberof topodata.ExternalVitessCluster
+         * @instance
+         */
+        ExternalVitessCluster.prototype.topo_config = null;
+
+        /**
+         * Creates a new ExternalVitessCluster instance using the specified properties.
+         * @function create
+         * @memberof topodata.ExternalVitessCluster
+         * @static
+         * @param {topodata.IExternalVitessCluster=} [properties] Properties to set
+         * @returns {topodata.ExternalVitessCluster} ExternalVitessCluster instance
+         */
+        ExternalVitessCluster.create = function create(properties) {
+            return new ExternalVitessCluster(properties);
+        };
+
+        /**
+         * Encodes the specified ExternalVitessCluster message. Does not implicitly {@link topodata.ExternalVitessCluster.verify|verify} messages.
+         * @function encode
+         * @memberof topodata.ExternalVitessCluster
+         * @static
+         * @param {topodata.IExternalVitessCluster} message ExternalVitessCluster message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        ExternalVitessCluster.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.topo_config != null && Object.hasOwnProperty.call(message, "topo_config"))
+                $root.topodata.TopoConfig.encode(message.topo_config, writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
+            return writer;
+        };
+
+        /**
+         * Encodes the specified ExternalVitessCluster message, length delimited. Does not implicitly {@link topodata.ExternalVitessCluster.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof topodata.ExternalVitessCluster
+         * @static
+         * @param {topodata.IExternalVitessCluster} message ExternalVitessCluster message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        ExternalVitessCluster.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes an ExternalVitessCluster message from the specified reader or buffer.
+         * @function decode
+         * @memberof topodata.ExternalVitessCluster
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {topodata.ExternalVitessCluster} ExternalVitessCluster
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        ExternalVitessCluster.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.topodata.ExternalVitessCluster();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.topo_config = $root.topodata.TopoConfig.decode(reader, reader.uint32());
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes an ExternalVitessCluster message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof topodata.ExternalVitessCluster
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {topodata.ExternalVitessCluster} ExternalVitessCluster
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        ExternalVitessCluster.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies an ExternalVitessCluster message.
+         * @function verify
+         * @memberof topodata.ExternalVitessCluster
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        ExternalVitessCluster.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.topo_config != null && message.hasOwnProperty("topo_config")) {
+                var error = $root.topodata.TopoConfig.verify(message.topo_config);
+                if (error)
+                    return "topo_config." + error;
+            }
+            return null;
+        };
+
+        /**
+         * Creates an ExternalVitessCluster message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof topodata.ExternalVitessCluster
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {topodata.ExternalVitessCluster} ExternalVitessCluster
+         */
+        ExternalVitessCluster.fromObject = function fromObject(object) {
+            if (object instanceof $root.topodata.ExternalVitessCluster)
+                return object;
+            var message = new $root.topodata.ExternalVitessCluster();
+            if (object.topo_config != null) {
+                if (typeof object.topo_config !== "object")
+                    throw TypeError(".topodata.ExternalVitessCluster.topo_config: object expected");
+                message.topo_config = $root.topodata.TopoConfig.fromObject(object.topo_config);
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from an ExternalVitessCluster message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof topodata.ExternalVitessCluster
+         * @static
+         * @param {topodata.ExternalVitessCluster} message ExternalVitessCluster
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        ExternalVitessCluster.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.defaults)
+                object.topo_config = null;
+            if (message.topo_config != null && message.hasOwnProperty("topo_config"))
+                object.topo_config = $root.topodata.TopoConfig.toObject(message.topo_config, options);
+            return object;
+        };
+
+        /**
+         * Converts this ExternalVitessCluster to JSON.
+         * @function toJSON
+         * @memberof topodata.ExternalVitessCluster
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        ExternalVitessCluster.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return ExternalVitessCluster;
+    })();
+
+    topodata.ExternalClusters = (function() {
+
+        /**
+         * Properties of an ExternalClusters.
+         * @memberof topodata
+         * @interface IExternalClusters
+         * @property {Array.<topodata.IExternalVitessCluster>|null} [vitess_cluster] ExternalClusters vitess_cluster
+         */
+
+        /**
+         * Constructs a new ExternalClusters.
+         * @memberof topodata
+         * @classdesc Represents an ExternalClusters.
+         * @implements IExternalClusters
+         * @constructor
+         * @param {topodata.IExternalClusters=} [properties] Properties to set
+         */
+        function ExternalClusters(properties) {
+            this.vitess_cluster = [];
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * ExternalClusters vitess_cluster.
+         * @member {Array.<topodata.IExternalVitessCluster>} vitess_cluster
+         * @memberof topodata.ExternalClusters
+         * @instance
+         */
+        ExternalClusters.prototype.vitess_cluster = $util.emptyArray;
+
+        /**
+         * Creates a new ExternalClusters instance using the specified properties.
+         * @function create
+         * @memberof topodata.ExternalClusters
+         * @static
+         * @param {topodata.IExternalClusters=} [properties] Properties to set
+         * @returns {topodata.ExternalClusters} ExternalClusters instance
+         */
+        ExternalClusters.create = function create(properties) {
+            return new ExternalClusters(properties);
+        };
+
+        /**
+         * Encodes the specified ExternalClusters message. Does not implicitly {@link topodata.ExternalClusters.verify|verify} messages.
+         * @function encode
+         * @memberof topodata.ExternalClusters
+         * @static
+         * @param {topodata.IExternalClusters} message ExternalClusters message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        ExternalClusters.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.vitess_cluster != null && message.vitess_cluster.length)
+                for (var i = 0; i < message.vitess_cluster.length; ++i)
+                    $root.topodata.ExternalVitessCluster.encode(message.vitess_cluster[i], writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
+            return writer;
+        };
+
+        /**
+         * Encodes the specified ExternalClusters message, length delimited. Does not implicitly {@link topodata.ExternalClusters.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof topodata.ExternalClusters
+         * @static
+         * @param {topodata.IExternalClusters} message ExternalClusters message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        ExternalClusters.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes an ExternalClusters message from the specified reader or buffer.
+         * @function decode
+         * @memberof topodata.ExternalClusters
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {topodata.ExternalClusters} ExternalClusters
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        ExternalClusters.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.topodata.ExternalClusters();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    if (!(message.vitess_cluster && message.vitess_cluster.length))
+                        message.vitess_cluster = [];
+                    message.vitess_cluster.push($root.topodata.ExternalVitessCluster.decode(reader, reader.uint32()));
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes an ExternalClusters message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof topodata.ExternalClusters
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {topodata.ExternalClusters} ExternalClusters
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        ExternalClusters.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies an ExternalClusters message.
+         * @function verify
+         * @memberof topodata.ExternalClusters
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        ExternalClusters.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.vitess_cluster != null && message.hasOwnProperty("vitess_cluster")) {
+                if (!Array.isArray(message.vitess_cluster))
+                    return "vitess_cluster: array expected";
+                for (var i = 0; i < message.vitess_cluster.length; ++i) {
+                    var error = $root.topodata.ExternalVitessCluster.verify(message.vitess_cluster[i]);
+                    if (error)
+                        return "vitess_cluster." + error;
+                }
+            }
+            return null;
+        };
+
+        /**
+         * Creates an ExternalClusters message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof topodata.ExternalClusters
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {topodata.ExternalClusters} ExternalClusters
+         */
+        ExternalClusters.fromObject = function fromObject(object) {
+            if (object instanceof $root.topodata.ExternalClusters)
+                return object;
+            var message = new $root.topodata.ExternalClusters();
+            if (object.vitess_cluster) {
+                if (!Array.isArray(object.vitess_cluster))
+                    throw TypeError(".topodata.ExternalClusters.vitess_cluster: array expected");
+                message.vitess_cluster = [];
+                for (var i = 0; i < object.vitess_cluster.length; ++i) {
+                    if (typeof object.vitess_cluster[i] !== "object")
+                        throw TypeError(".topodata.ExternalClusters.vitess_cluster: object expected");
+                    message.vitess_cluster[i] = $root.topodata.ExternalVitessCluster.fromObject(object.vitess_cluster[i]);
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from an ExternalClusters message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof topodata.ExternalClusters
+         * @static
+         * @param {topodata.ExternalClusters} message ExternalClusters
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        ExternalClusters.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.arrays || options.defaults)
+                object.vitess_cluster = [];
+            if (message.vitess_cluster && message.vitess_cluster.length) {
+                object.vitess_cluster = [];
+                for (var j = 0; j < message.vitess_cluster.length; ++j)
+                    object.vitess_cluster[j] = $root.topodata.ExternalVitessCluster.toObject(message.vitess_cluster[j], options);
+            }
+            return object;
+        };
+
+        /**
+         * Converts this ExternalClusters to JSON.
+         * @function toJSON
+         * @memberof topodata.ExternalClusters
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        ExternalClusters.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return ExternalClusters;
+    })();
+
     return topodata;
 })();
 
@@ -45272,6 +47357,230 @@ $root.vttime = (function() {
         };
 
         return Time;
+    })();
+
+    vttime.Duration = (function() {
+
+        /**
+         * Properties of a Duration.
+         * @memberof vttime
+         * @interface IDuration
+         * @property {number|Long|null} [seconds] Duration seconds
+         * @property {number|null} [nanos] Duration nanos
+         */
+
+        /**
+         * Constructs a new Duration.
+         * @memberof vttime
+         * @classdesc Represents a Duration.
+         * @implements IDuration
+         * @constructor
+         * @param {vttime.IDuration=} [properties] Properties to set
+         */
+        function Duration(properties) {
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * Duration seconds.
+         * @member {number|Long} seconds
+         * @memberof vttime.Duration
+         * @instance
+         */
+        Duration.prototype.seconds = $util.Long ? $util.Long.fromBits(0,0,false) : 0;
+
+        /**
+         * Duration nanos.
+         * @member {number} nanos
+         * @memberof vttime.Duration
+         * @instance
+         */
+        Duration.prototype.nanos = 0;
+
+        /**
+         * Creates a new Duration instance using the specified properties.
+         * @function create
+         * @memberof vttime.Duration
+         * @static
+         * @param {vttime.IDuration=} [properties] Properties to set
+         * @returns {vttime.Duration} Duration instance
+         */
+        Duration.create = function create(properties) {
+            return new Duration(properties);
+        };
+
+        /**
+         * Encodes the specified Duration message. Does not implicitly {@link vttime.Duration.verify|verify} messages.
+         * @function encode
+         * @memberof vttime.Duration
+         * @static
+         * @param {vttime.IDuration} message Duration message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        Duration.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.seconds != null && Object.hasOwnProperty.call(message, "seconds"))
+                writer.uint32(/* id 1, wireType 0 =*/8).int64(message.seconds);
+            if (message.nanos != null && Object.hasOwnProperty.call(message, "nanos"))
+                writer.uint32(/* id 2, wireType 0 =*/16).int32(message.nanos);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified Duration message, length delimited. Does not implicitly {@link vttime.Duration.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vttime.Duration
+         * @static
+         * @param {vttime.IDuration} message Duration message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        Duration.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a Duration message from the specified reader or buffer.
+         * @function decode
+         * @memberof vttime.Duration
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vttime.Duration} Duration
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        Duration.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vttime.Duration();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.seconds = reader.int64();
+                    break;
+                case 2:
+                    message.nanos = reader.int32();
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a Duration message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vttime.Duration
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vttime.Duration} Duration
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        Duration.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a Duration message.
+         * @function verify
+         * @memberof vttime.Duration
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        Duration.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.seconds != null && message.hasOwnProperty("seconds"))
+                if (!$util.isInteger(message.seconds) && !(message.seconds && $util.isInteger(message.seconds.low) && $util.isInteger(message.seconds.high)))
+                    return "seconds: integer|Long expected";
+            if (message.nanos != null && message.hasOwnProperty("nanos"))
+                if (!$util.isInteger(message.nanos))
+                    return "nanos: integer expected";
+            return null;
+        };
+
+        /**
+         * Creates a Duration message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vttime.Duration
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vttime.Duration} Duration
+         */
+        Duration.fromObject = function fromObject(object) {
+            if (object instanceof $root.vttime.Duration)
+                return object;
+            var message = new $root.vttime.Duration();
+            if (object.seconds != null)
+                if ($util.Long)
+                    (message.seconds = $util.Long.fromValue(object.seconds)).unsigned = false;
+                else if (typeof object.seconds === "string")
+                    message.seconds = parseInt(object.seconds, 10);
+                else if (typeof object.seconds === "number")
+                    message.seconds = object.seconds;
+                else if (typeof object.seconds === "object")
+                    message.seconds = new $util.LongBits(object.seconds.low >>> 0, object.seconds.high >>> 0).toNumber();
+            if (object.nanos != null)
+                message.nanos = object.nanos | 0;
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a Duration message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vttime.Duration
+         * @static
+         * @param {vttime.Duration} message Duration
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        Duration.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.defaults) {
+                if ($util.Long) {
+                    var long = new $util.Long(0, 0, false);
+                    object.seconds = options.longs === String ? long.toString() : options.longs === Number ? long.toNumber() : long;
+                } else
+                    object.seconds = options.longs === String ? "0" : 0;
+                object.nanos = 0;
+            }
+            if (message.seconds != null && message.hasOwnProperty("seconds"))
+                if (typeof message.seconds === "number")
+                    object.seconds = options.longs === String ? String(message.seconds) : message.seconds;
+                else
+                    object.seconds = options.longs === String ? $util.Long.prototype.toString.call(message.seconds) : options.longs === Number ? new $util.LongBits(message.seconds.low >>> 0, message.seconds.high >>> 0).toNumber() : message.seconds;
+            if (message.nanos != null && message.hasOwnProperty("nanos"))
+                object.nanos = message.nanos;
+            return object;
+        };
+
+        /**
+         * Converts this Duration to JSON.
+         * @function toJSON
+         * @memberof vttime.Duration
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        Duration.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return Duration;
     })();
 
     return vttime;
@@ -47223,6 +49532,2495 @@ $root.logutil = (function() {
     return logutil;
 })();
 
+$root.vschema = (function() {
+
+    /**
+     * Namespace vschema.
+     * @exports vschema
+     * @namespace
+     */
+    var vschema = {};
+
+    vschema.RoutingRules = (function() {
+
+        /**
+         * Properties of a RoutingRules.
+         * @memberof vschema
+         * @interface IRoutingRules
+         * @property {Array.<vschema.IRoutingRule>|null} [rules] RoutingRules rules
+         */
+
+        /**
+         * Constructs a new RoutingRules.
+         * @memberof vschema
+         * @classdesc Represents a RoutingRules.
+         * @implements IRoutingRules
+         * @constructor
+         * @param {vschema.IRoutingRules=} [properties] Properties to set
+         */
+        function RoutingRules(properties) {
+            this.rules = [];
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * RoutingRules rules.
+         * @member {Array.<vschema.IRoutingRule>} rules
+         * @memberof vschema.RoutingRules
+         * @instance
+         */
+        RoutingRules.prototype.rules = $util.emptyArray;
+
+        /**
+         * Creates a new RoutingRules instance using the specified properties.
+         * @function create
+         * @memberof vschema.RoutingRules
+         * @static
+         * @param {vschema.IRoutingRules=} [properties] Properties to set
+         * @returns {vschema.RoutingRules} RoutingRules instance
+         */
+        RoutingRules.create = function create(properties) {
+            return new RoutingRules(properties);
+        };
+
+        /**
+         * Encodes the specified RoutingRules message. Does not implicitly {@link vschema.RoutingRules.verify|verify} messages.
+         * @function encode
+         * @memberof vschema.RoutingRules
+         * @static
+         * @param {vschema.IRoutingRules} message RoutingRules message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        RoutingRules.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.rules != null && message.rules.length)
+                for (var i = 0; i < message.rules.length; ++i)
+                    $root.vschema.RoutingRule.encode(message.rules[i], writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
+            return writer;
+        };
+
+        /**
+         * Encodes the specified RoutingRules message, length delimited. Does not implicitly {@link vschema.RoutingRules.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vschema.RoutingRules
+         * @static
+         * @param {vschema.IRoutingRules} message RoutingRules message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        RoutingRules.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a RoutingRules message from the specified reader or buffer.
+         * @function decode
+         * @memberof vschema.RoutingRules
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vschema.RoutingRules} RoutingRules
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        RoutingRules.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vschema.RoutingRules();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    if (!(message.rules && message.rules.length))
+                        message.rules = [];
+                    message.rules.push($root.vschema.RoutingRule.decode(reader, reader.uint32()));
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a RoutingRules message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vschema.RoutingRules
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vschema.RoutingRules} RoutingRules
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        RoutingRules.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a RoutingRules message.
+         * @function verify
+         * @memberof vschema.RoutingRules
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        RoutingRules.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.rules != null && message.hasOwnProperty("rules")) {
+                if (!Array.isArray(message.rules))
+                    return "rules: array expected";
+                for (var i = 0; i < message.rules.length; ++i) {
+                    var error = $root.vschema.RoutingRule.verify(message.rules[i]);
+                    if (error)
+                        return "rules." + error;
+                }
+            }
+            return null;
+        };
+
+        /**
+         * Creates a RoutingRules message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vschema.RoutingRules
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vschema.RoutingRules} RoutingRules
+         */
+        RoutingRules.fromObject = function fromObject(object) {
+            if (object instanceof $root.vschema.RoutingRules)
+                return object;
+            var message = new $root.vschema.RoutingRules();
+            if (object.rules) {
+                if (!Array.isArray(object.rules))
+                    throw TypeError(".vschema.RoutingRules.rules: array expected");
+                message.rules = [];
+                for (var i = 0; i < object.rules.length; ++i) {
+                    if (typeof object.rules[i] !== "object")
+                        throw TypeError(".vschema.RoutingRules.rules: object expected");
+                    message.rules[i] = $root.vschema.RoutingRule.fromObject(object.rules[i]);
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a RoutingRules message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vschema.RoutingRules
+         * @static
+         * @param {vschema.RoutingRules} message RoutingRules
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        RoutingRules.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.arrays || options.defaults)
+                object.rules = [];
+            if (message.rules && message.rules.length) {
+                object.rules = [];
+                for (var j = 0; j < message.rules.length; ++j)
+                    object.rules[j] = $root.vschema.RoutingRule.toObject(message.rules[j], options);
+            }
+            return object;
+        };
+
+        /**
+         * Converts this RoutingRules to JSON.
+         * @function toJSON
+         * @memberof vschema.RoutingRules
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        RoutingRules.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return RoutingRules;
+    })();
+
+    vschema.RoutingRule = (function() {
+
+        /**
+         * Properties of a RoutingRule.
+         * @memberof vschema
+         * @interface IRoutingRule
+         * @property {string|null} [from_table] RoutingRule from_table
+         * @property {Array.<string>|null} [to_tables] RoutingRule to_tables
+         */
+
+        /**
+         * Constructs a new RoutingRule.
+         * @memberof vschema
+         * @classdesc Represents a RoutingRule.
+         * @implements IRoutingRule
+         * @constructor
+         * @param {vschema.IRoutingRule=} [properties] Properties to set
+         */
+        function RoutingRule(properties) {
+            this.to_tables = [];
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * RoutingRule from_table.
+         * @member {string} from_table
+         * @memberof vschema.RoutingRule
+         * @instance
+         */
+        RoutingRule.prototype.from_table = "";
+
+        /**
+         * RoutingRule to_tables.
+         * @member {Array.<string>} to_tables
+         * @memberof vschema.RoutingRule
+         * @instance
+         */
+        RoutingRule.prototype.to_tables = $util.emptyArray;
+
+        /**
+         * Creates a new RoutingRule instance using the specified properties.
+         * @function create
+         * @memberof vschema.RoutingRule
+         * @static
+         * @param {vschema.IRoutingRule=} [properties] Properties to set
+         * @returns {vschema.RoutingRule} RoutingRule instance
+         */
+        RoutingRule.create = function create(properties) {
+            return new RoutingRule(properties);
+        };
+
+        /**
+         * Encodes the specified RoutingRule message. Does not implicitly {@link vschema.RoutingRule.verify|verify} messages.
+         * @function encode
+         * @memberof vschema.RoutingRule
+         * @static
+         * @param {vschema.IRoutingRule} message RoutingRule message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        RoutingRule.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.from_table != null && Object.hasOwnProperty.call(message, "from_table"))
+                writer.uint32(/* id 1, wireType 2 =*/10).string(message.from_table);
+            if (message.to_tables != null && message.to_tables.length)
+                for (var i = 0; i < message.to_tables.length; ++i)
+                    writer.uint32(/* id 2, wireType 2 =*/18).string(message.to_tables[i]);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified RoutingRule message, length delimited. Does not implicitly {@link vschema.RoutingRule.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vschema.RoutingRule
+         * @static
+         * @param {vschema.IRoutingRule} message RoutingRule message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        RoutingRule.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a RoutingRule message from the specified reader or buffer.
+         * @function decode
+         * @memberof vschema.RoutingRule
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vschema.RoutingRule} RoutingRule
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        RoutingRule.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vschema.RoutingRule();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.from_table = reader.string();
+                    break;
+                case 2:
+                    if (!(message.to_tables && message.to_tables.length))
+                        message.to_tables = [];
+                    message.to_tables.push(reader.string());
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a RoutingRule message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vschema.RoutingRule
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vschema.RoutingRule} RoutingRule
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        RoutingRule.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a RoutingRule message.
+         * @function verify
+         * @memberof vschema.RoutingRule
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        RoutingRule.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.from_table != null && message.hasOwnProperty("from_table"))
+                if (!$util.isString(message.from_table))
+                    return "from_table: string expected";
+            if (message.to_tables != null && message.hasOwnProperty("to_tables")) {
+                if (!Array.isArray(message.to_tables))
+                    return "to_tables: array expected";
+                for (var i = 0; i < message.to_tables.length; ++i)
+                    if (!$util.isString(message.to_tables[i]))
+                        return "to_tables: string[] expected";
+            }
+            return null;
+        };
+
+        /**
+         * Creates a RoutingRule message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vschema.RoutingRule
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vschema.RoutingRule} RoutingRule
+         */
+        RoutingRule.fromObject = function fromObject(object) {
+            if (object instanceof $root.vschema.RoutingRule)
+                return object;
+            var message = new $root.vschema.RoutingRule();
+            if (object.from_table != null)
+                message.from_table = String(object.from_table);
+            if (object.to_tables) {
+                if (!Array.isArray(object.to_tables))
+                    throw TypeError(".vschema.RoutingRule.to_tables: array expected");
+                message.to_tables = [];
+                for (var i = 0; i < object.to_tables.length; ++i)
+                    message.to_tables[i] = String(object.to_tables[i]);
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a RoutingRule message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vschema.RoutingRule
+         * @static
+         * @param {vschema.RoutingRule} message RoutingRule
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        RoutingRule.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.arrays || options.defaults)
+                object.to_tables = [];
+            if (options.defaults)
+                object.from_table = "";
+            if (message.from_table != null && message.hasOwnProperty("from_table"))
+                object.from_table = message.from_table;
+            if (message.to_tables && message.to_tables.length) {
+                object.to_tables = [];
+                for (var j = 0; j < message.to_tables.length; ++j)
+                    object.to_tables[j] = message.to_tables[j];
+            }
+            return object;
+        };
+
+        /**
+         * Converts this RoutingRule to JSON.
+         * @function toJSON
+         * @memberof vschema.RoutingRule
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        RoutingRule.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return RoutingRule;
+    })();
+
+    vschema.Keyspace = (function() {
+
+        /**
+         * Properties of a Keyspace.
+         * @memberof vschema
+         * @interface IKeyspace
+         * @property {boolean|null} [sharded] Keyspace sharded
+         * @property {Object.<string,vschema.IVindex>|null} [vindexes] Keyspace vindexes
+         * @property {Object.<string,vschema.ITable>|null} [tables] Keyspace tables
+         * @property {boolean|null} [require_explicit_routing] Keyspace require_explicit_routing
+         */
+
+        /**
+         * Constructs a new Keyspace.
+         * @memberof vschema
+         * @classdesc Represents a Keyspace.
+         * @implements IKeyspace
+         * @constructor
+         * @param {vschema.IKeyspace=} [properties] Properties to set
+         */
+        function Keyspace(properties) {
+            this.vindexes = {};
+            this.tables = {};
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * Keyspace sharded.
+         * @member {boolean} sharded
+         * @memberof vschema.Keyspace
+         * @instance
+         */
+        Keyspace.prototype.sharded = false;
+
+        /**
+         * Keyspace vindexes.
+         * @member {Object.<string,vschema.IVindex>} vindexes
+         * @memberof vschema.Keyspace
+         * @instance
+         */
+        Keyspace.prototype.vindexes = $util.emptyObject;
+
+        /**
+         * Keyspace tables.
+         * @member {Object.<string,vschema.ITable>} tables
+         * @memberof vschema.Keyspace
+         * @instance
+         */
+        Keyspace.prototype.tables = $util.emptyObject;
+
+        /**
+         * Keyspace require_explicit_routing.
+         * @member {boolean} require_explicit_routing
+         * @memberof vschema.Keyspace
+         * @instance
+         */
+        Keyspace.prototype.require_explicit_routing = false;
+
+        /**
+         * Creates a new Keyspace instance using the specified properties.
+         * @function create
+         * @memberof vschema.Keyspace
+         * @static
+         * @param {vschema.IKeyspace=} [properties] Properties to set
+         * @returns {vschema.Keyspace} Keyspace instance
+         */
+        Keyspace.create = function create(properties) {
+            return new Keyspace(properties);
+        };
+
+        /**
+         * Encodes the specified Keyspace message. Does not implicitly {@link vschema.Keyspace.verify|verify} messages.
+         * @function encode
+         * @memberof vschema.Keyspace
+         * @static
+         * @param {vschema.IKeyspace} message Keyspace message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        Keyspace.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.sharded != null && Object.hasOwnProperty.call(message, "sharded"))
+                writer.uint32(/* id 1, wireType 0 =*/8).bool(message.sharded);
+            if (message.vindexes != null && Object.hasOwnProperty.call(message, "vindexes"))
+                for (var keys = Object.keys(message.vindexes), i = 0; i < keys.length; ++i) {
+                    writer.uint32(/* id 2, wireType 2 =*/18).fork().uint32(/* id 1, wireType 2 =*/10).string(keys[i]);
+                    $root.vschema.Vindex.encode(message.vindexes[keys[i]], writer.uint32(/* id 2, wireType 2 =*/18).fork()).ldelim().ldelim();
+                }
+            if (message.tables != null && Object.hasOwnProperty.call(message, "tables"))
+                for (var keys = Object.keys(message.tables), i = 0; i < keys.length; ++i) {
+                    writer.uint32(/* id 3, wireType 2 =*/26).fork().uint32(/* id 1, wireType 2 =*/10).string(keys[i]);
+                    $root.vschema.Table.encode(message.tables[keys[i]], writer.uint32(/* id 2, wireType 2 =*/18).fork()).ldelim().ldelim();
+                }
+            if (message.require_explicit_routing != null && Object.hasOwnProperty.call(message, "require_explicit_routing"))
+                writer.uint32(/* id 4, wireType 0 =*/32).bool(message.require_explicit_routing);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified Keyspace message, length delimited. Does not implicitly {@link vschema.Keyspace.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vschema.Keyspace
+         * @static
+         * @param {vschema.IKeyspace} message Keyspace message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        Keyspace.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a Keyspace message from the specified reader or buffer.
+         * @function decode
+         * @memberof vschema.Keyspace
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vschema.Keyspace} Keyspace
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        Keyspace.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vschema.Keyspace(), key, value;
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.sharded = reader.bool();
+                    break;
+                case 2:
+                    if (message.vindexes === $util.emptyObject)
+                        message.vindexes = {};
+                    var end2 = reader.uint32() + reader.pos;
+                    key = "";
+                    value = null;
+                    while (reader.pos < end2) {
+                        var tag2 = reader.uint32();
+                        switch (tag2 >>> 3) {
+                        case 1:
+                            key = reader.string();
+                            break;
+                        case 2:
+                            value = $root.vschema.Vindex.decode(reader, reader.uint32());
+                            break;
+                        default:
+                            reader.skipType(tag2 & 7);
+                            break;
+                        }
+                    }
+                    message.vindexes[key] = value;
+                    break;
+                case 3:
+                    if (message.tables === $util.emptyObject)
+                        message.tables = {};
+                    var end2 = reader.uint32() + reader.pos;
+                    key = "";
+                    value = null;
+                    while (reader.pos < end2) {
+                        var tag2 = reader.uint32();
+                        switch (tag2 >>> 3) {
+                        case 1:
+                            key = reader.string();
+                            break;
+                        case 2:
+                            value = $root.vschema.Table.decode(reader, reader.uint32());
+                            break;
+                        default:
+                            reader.skipType(tag2 & 7);
+                            break;
+                        }
+                    }
+                    message.tables[key] = value;
+                    break;
+                case 4:
+                    message.require_explicit_routing = reader.bool();
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a Keyspace message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vschema.Keyspace
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vschema.Keyspace} Keyspace
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        Keyspace.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a Keyspace message.
+         * @function verify
+         * @memberof vschema.Keyspace
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        Keyspace.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.sharded != null && message.hasOwnProperty("sharded"))
+                if (typeof message.sharded !== "boolean")
+                    return "sharded: boolean expected";
+            if (message.vindexes != null && message.hasOwnProperty("vindexes")) {
+                if (!$util.isObject(message.vindexes))
+                    return "vindexes: object expected";
+                var key = Object.keys(message.vindexes);
+                for (var i = 0; i < key.length; ++i) {
+                    var error = $root.vschema.Vindex.verify(message.vindexes[key[i]]);
+                    if (error)
+                        return "vindexes." + error;
+                }
+            }
+            if (message.tables != null && message.hasOwnProperty("tables")) {
+                if (!$util.isObject(message.tables))
+                    return "tables: object expected";
+                var key = Object.keys(message.tables);
+                for (var i = 0; i < key.length; ++i) {
+                    var error = $root.vschema.Table.verify(message.tables[key[i]]);
+                    if (error)
+                        return "tables." + error;
+                }
+            }
+            if (message.require_explicit_routing != null && message.hasOwnProperty("require_explicit_routing"))
+                if (typeof message.require_explicit_routing !== "boolean")
+                    return "require_explicit_routing: boolean expected";
+            return null;
+        };
+
+        /**
+         * Creates a Keyspace message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vschema.Keyspace
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vschema.Keyspace} Keyspace
+         */
+        Keyspace.fromObject = function fromObject(object) {
+            if (object instanceof $root.vschema.Keyspace)
+                return object;
+            var message = new $root.vschema.Keyspace();
+            if (object.sharded != null)
+                message.sharded = Boolean(object.sharded);
+            if (object.vindexes) {
+                if (typeof object.vindexes !== "object")
+                    throw TypeError(".vschema.Keyspace.vindexes: object expected");
+                message.vindexes = {};
+                for (var keys = Object.keys(object.vindexes), i = 0; i < keys.length; ++i) {
+                    if (typeof object.vindexes[keys[i]] !== "object")
+                        throw TypeError(".vschema.Keyspace.vindexes: object expected");
+                    message.vindexes[keys[i]] = $root.vschema.Vindex.fromObject(object.vindexes[keys[i]]);
+                }
+            }
+            if (object.tables) {
+                if (typeof object.tables !== "object")
+                    throw TypeError(".vschema.Keyspace.tables: object expected");
+                message.tables = {};
+                for (var keys = Object.keys(object.tables), i = 0; i < keys.length; ++i) {
+                    if (typeof object.tables[keys[i]] !== "object")
+                        throw TypeError(".vschema.Keyspace.tables: object expected");
+                    message.tables[keys[i]] = $root.vschema.Table.fromObject(object.tables[keys[i]]);
+                }
+            }
+            if (object.require_explicit_routing != null)
+                message.require_explicit_routing = Boolean(object.require_explicit_routing);
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a Keyspace message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vschema.Keyspace
+         * @static
+         * @param {vschema.Keyspace} message Keyspace
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        Keyspace.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.objects || options.defaults) {
+                object.vindexes = {};
+                object.tables = {};
+            }
+            if (options.defaults) {
+                object.sharded = false;
+                object.require_explicit_routing = false;
+            }
+            if (message.sharded != null && message.hasOwnProperty("sharded"))
+                object.sharded = message.sharded;
+            var keys2;
+            if (message.vindexes && (keys2 = Object.keys(message.vindexes)).length) {
+                object.vindexes = {};
+                for (var j = 0; j < keys2.length; ++j)
+                    object.vindexes[keys2[j]] = $root.vschema.Vindex.toObject(message.vindexes[keys2[j]], options);
+            }
+            if (message.tables && (keys2 = Object.keys(message.tables)).length) {
+                object.tables = {};
+                for (var j = 0; j < keys2.length; ++j)
+                    object.tables[keys2[j]] = $root.vschema.Table.toObject(message.tables[keys2[j]], options);
+            }
+            if (message.require_explicit_routing != null && message.hasOwnProperty("require_explicit_routing"))
+                object.require_explicit_routing = message.require_explicit_routing;
+            return object;
+        };
+
+        /**
+         * Converts this Keyspace to JSON.
+         * @function toJSON
+         * @memberof vschema.Keyspace
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        Keyspace.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return Keyspace;
+    })();
+
+    vschema.Vindex = (function() {
+
+        /**
+         * Properties of a Vindex.
+         * @memberof vschema
+         * @interface IVindex
+         * @property {string|null} [type] Vindex type
+         * @property {Object.<string,string>|null} [params] Vindex params
+         * @property {string|null} [owner] Vindex owner
+         */
+
+        /**
+         * Constructs a new Vindex.
+         * @memberof vschema
+         * @classdesc Represents a Vindex.
+         * @implements IVindex
+         * @constructor
+         * @param {vschema.IVindex=} [properties] Properties to set
+         */
+        function Vindex(properties) {
+            this.params = {};
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * Vindex type.
+         * @member {string} type
+         * @memberof vschema.Vindex
+         * @instance
+         */
+        Vindex.prototype.type = "";
+
+        /**
+         * Vindex params.
+         * @member {Object.<string,string>} params
+         * @memberof vschema.Vindex
+         * @instance
+         */
+        Vindex.prototype.params = $util.emptyObject;
+
+        /**
+         * Vindex owner.
+         * @member {string} owner
+         * @memberof vschema.Vindex
+         * @instance
+         */
+        Vindex.prototype.owner = "";
+
+        /**
+         * Creates a new Vindex instance using the specified properties.
+         * @function create
+         * @memberof vschema.Vindex
+         * @static
+         * @param {vschema.IVindex=} [properties] Properties to set
+         * @returns {vschema.Vindex} Vindex instance
+         */
+        Vindex.create = function create(properties) {
+            return new Vindex(properties);
+        };
+
+        /**
+         * Encodes the specified Vindex message. Does not implicitly {@link vschema.Vindex.verify|verify} messages.
+         * @function encode
+         * @memberof vschema.Vindex
+         * @static
+         * @param {vschema.IVindex} message Vindex message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        Vindex.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.type != null && Object.hasOwnProperty.call(message, "type"))
+                writer.uint32(/* id 1, wireType 2 =*/10).string(message.type);
+            if (message.params != null && Object.hasOwnProperty.call(message, "params"))
+                for (var keys = Object.keys(message.params), i = 0; i < keys.length; ++i)
+                    writer.uint32(/* id 2, wireType 2 =*/18).fork().uint32(/* id 1, wireType 2 =*/10).string(keys[i]).uint32(/* id 2, wireType 2 =*/18).string(message.params[keys[i]]).ldelim();
+            if (message.owner != null && Object.hasOwnProperty.call(message, "owner"))
+                writer.uint32(/* id 3, wireType 2 =*/26).string(message.owner);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified Vindex message, length delimited. Does not implicitly {@link vschema.Vindex.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vschema.Vindex
+         * @static
+         * @param {vschema.IVindex} message Vindex message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        Vindex.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a Vindex message from the specified reader or buffer.
+         * @function decode
+         * @memberof vschema.Vindex
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vschema.Vindex} Vindex
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        Vindex.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vschema.Vindex(), key, value;
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.type = reader.string();
+                    break;
+                case 2:
+                    if (message.params === $util.emptyObject)
+                        message.params = {};
+                    var end2 = reader.uint32() + reader.pos;
+                    key = "";
+                    value = "";
+                    while (reader.pos < end2) {
+                        var tag2 = reader.uint32();
+                        switch (tag2 >>> 3) {
+                        case 1:
+                            key = reader.string();
+                            break;
+                        case 2:
+                            value = reader.string();
+                            break;
+                        default:
+                            reader.skipType(tag2 & 7);
+                            break;
+                        }
+                    }
+                    message.params[key] = value;
+                    break;
+                case 3:
+                    message.owner = reader.string();
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a Vindex message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vschema.Vindex
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vschema.Vindex} Vindex
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        Vindex.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a Vindex message.
+         * @function verify
+         * @memberof vschema.Vindex
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        Vindex.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.type != null && message.hasOwnProperty("type"))
+                if (!$util.isString(message.type))
+                    return "type: string expected";
+            if (message.params != null && message.hasOwnProperty("params")) {
+                if (!$util.isObject(message.params))
+                    return "params: object expected";
+                var key = Object.keys(message.params);
+                for (var i = 0; i < key.length; ++i)
+                    if (!$util.isString(message.params[key[i]]))
+                        return "params: string{k:string} expected";
+            }
+            if (message.owner != null && message.hasOwnProperty("owner"))
+                if (!$util.isString(message.owner))
+                    return "owner: string expected";
+            return null;
+        };
+
+        /**
+         * Creates a Vindex message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vschema.Vindex
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vschema.Vindex} Vindex
+         */
+        Vindex.fromObject = function fromObject(object) {
+            if (object instanceof $root.vschema.Vindex)
+                return object;
+            var message = new $root.vschema.Vindex();
+            if (object.type != null)
+                message.type = String(object.type);
+            if (object.params) {
+                if (typeof object.params !== "object")
+                    throw TypeError(".vschema.Vindex.params: object expected");
+                message.params = {};
+                for (var keys = Object.keys(object.params), i = 0; i < keys.length; ++i)
+                    message.params[keys[i]] = String(object.params[keys[i]]);
+            }
+            if (object.owner != null)
+                message.owner = String(object.owner);
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a Vindex message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vschema.Vindex
+         * @static
+         * @param {vschema.Vindex} message Vindex
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        Vindex.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.objects || options.defaults)
+                object.params = {};
+            if (options.defaults) {
+                object.type = "";
+                object.owner = "";
+            }
+            if (message.type != null && message.hasOwnProperty("type"))
+                object.type = message.type;
+            var keys2;
+            if (message.params && (keys2 = Object.keys(message.params)).length) {
+                object.params = {};
+                for (var j = 0; j < keys2.length; ++j)
+                    object.params[keys2[j]] = message.params[keys2[j]];
+            }
+            if (message.owner != null && message.hasOwnProperty("owner"))
+                object.owner = message.owner;
+            return object;
+        };
+
+        /**
+         * Converts this Vindex to JSON.
+         * @function toJSON
+         * @memberof vschema.Vindex
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        Vindex.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return Vindex;
+    })();
+
+    vschema.Table = (function() {
+
+        /**
+         * Properties of a Table.
+         * @memberof vschema
+         * @interface ITable
+         * @property {string|null} [type] Table type
+         * @property {Array.<vschema.IColumnVindex>|null} [column_vindexes] Table column_vindexes
+         * @property {vschema.IAutoIncrement|null} [auto_increment] Table auto_increment
+         * @property {Array.<vschema.IColumn>|null} [columns] Table columns
+         * @property {string|null} [pinned] Table pinned
+         * @property {boolean|null} [column_list_authoritative] Table column_list_authoritative
+         */
+
+        /**
+         * Constructs a new Table.
+         * @memberof vschema
+         * @classdesc Represents a Table.
+         * @implements ITable
+         * @constructor
+         * @param {vschema.ITable=} [properties] Properties to set
+         */
+        function Table(properties) {
+            this.column_vindexes = [];
+            this.columns = [];
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * Table type.
+         * @member {string} type
+         * @memberof vschema.Table
+         * @instance
+         */
+        Table.prototype.type = "";
+
+        /**
+         * Table column_vindexes.
+         * @member {Array.<vschema.IColumnVindex>} column_vindexes
+         * @memberof vschema.Table
+         * @instance
+         */
+        Table.prototype.column_vindexes = $util.emptyArray;
+
+        /**
+         * Table auto_increment.
+         * @member {vschema.IAutoIncrement|null|undefined} auto_increment
+         * @memberof vschema.Table
+         * @instance
+         */
+        Table.prototype.auto_increment = null;
+
+        /**
+         * Table columns.
+         * @member {Array.<vschema.IColumn>} columns
+         * @memberof vschema.Table
+         * @instance
+         */
+        Table.prototype.columns = $util.emptyArray;
+
+        /**
+         * Table pinned.
+         * @member {string} pinned
+         * @memberof vschema.Table
+         * @instance
+         */
+        Table.prototype.pinned = "";
+
+        /**
+         * Table column_list_authoritative.
+         * @member {boolean} column_list_authoritative
+         * @memberof vschema.Table
+         * @instance
+         */
+        Table.prototype.column_list_authoritative = false;
+
+        /**
+         * Creates a new Table instance using the specified properties.
+         * @function create
+         * @memberof vschema.Table
+         * @static
+         * @param {vschema.ITable=} [properties] Properties to set
+         * @returns {vschema.Table} Table instance
+         */
+        Table.create = function create(properties) {
+            return new Table(properties);
+        };
+
+        /**
+         * Encodes the specified Table message. Does not implicitly {@link vschema.Table.verify|verify} messages.
+         * @function encode
+         * @memberof vschema.Table
+         * @static
+         * @param {vschema.ITable} message Table message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        Table.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.type != null && Object.hasOwnProperty.call(message, "type"))
+                writer.uint32(/* id 1, wireType 2 =*/10).string(message.type);
+            if (message.column_vindexes != null && message.column_vindexes.length)
+                for (var i = 0; i < message.column_vindexes.length; ++i)
+                    $root.vschema.ColumnVindex.encode(message.column_vindexes[i], writer.uint32(/* id 2, wireType 2 =*/18).fork()).ldelim();
+            if (message.auto_increment != null && Object.hasOwnProperty.call(message, "auto_increment"))
+                $root.vschema.AutoIncrement.encode(message.auto_increment, writer.uint32(/* id 3, wireType 2 =*/26).fork()).ldelim();
+            if (message.columns != null && message.columns.length)
+                for (var i = 0; i < message.columns.length; ++i)
+                    $root.vschema.Column.encode(message.columns[i], writer.uint32(/* id 4, wireType 2 =*/34).fork()).ldelim();
+            if (message.pinned != null && Object.hasOwnProperty.call(message, "pinned"))
+                writer.uint32(/* id 5, wireType 2 =*/42).string(message.pinned);
+            if (message.column_list_authoritative != null && Object.hasOwnProperty.call(message, "column_list_authoritative"))
+                writer.uint32(/* id 6, wireType 0 =*/48).bool(message.column_list_authoritative);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified Table message, length delimited. Does not implicitly {@link vschema.Table.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vschema.Table
+         * @static
+         * @param {vschema.ITable} message Table message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        Table.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a Table message from the specified reader or buffer.
+         * @function decode
+         * @memberof vschema.Table
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vschema.Table} Table
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        Table.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vschema.Table();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.type = reader.string();
+                    break;
+                case 2:
+                    if (!(message.column_vindexes && message.column_vindexes.length))
+                        message.column_vindexes = [];
+                    message.column_vindexes.push($root.vschema.ColumnVindex.decode(reader, reader.uint32()));
+                    break;
+                case 3:
+                    message.auto_increment = $root.vschema.AutoIncrement.decode(reader, reader.uint32());
+                    break;
+                case 4:
+                    if (!(message.columns && message.columns.length))
+                        message.columns = [];
+                    message.columns.push($root.vschema.Column.decode(reader, reader.uint32()));
+                    break;
+                case 5:
+                    message.pinned = reader.string();
+                    break;
+                case 6:
+                    message.column_list_authoritative = reader.bool();
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a Table message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vschema.Table
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vschema.Table} Table
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        Table.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a Table message.
+         * @function verify
+         * @memberof vschema.Table
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        Table.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.type != null && message.hasOwnProperty("type"))
+                if (!$util.isString(message.type))
+                    return "type: string expected";
+            if (message.column_vindexes != null && message.hasOwnProperty("column_vindexes")) {
+                if (!Array.isArray(message.column_vindexes))
+                    return "column_vindexes: array expected";
+                for (var i = 0; i < message.column_vindexes.length; ++i) {
+                    var error = $root.vschema.ColumnVindex.verify(message.column_vindexes[i]);
+                    if (error)
+                        return "column_vindexes." + error;
+                }
+            }
+            if (message.auto_increment != null && message.hasOwnProperty("auto_increment")) {
+                var error = $root.vschema.AutoIncrement.verify(message.auto_increment);
+                if (error)
+                    return "auto_increment." + error;
+            }
+            if (message.columns != null && message.hasOwnProperty("columns")) {
+                if (!Array.isArray(message.columns))
+                    return "columns: array expected";
+                for (var i = 0; i < message.columns.length; ++i) {
+                    var error = $root.vschema.Column.verify(message.columns[i]);
+                    if (error)
+                        return "columns." + error;
+                }
+            }
+            if (message.pinned != null && message.hasOwnProperty("pinned"))
+                if (!$util.isString(message.pinned))
+                    return "pinned: string expected";
+            if (message.column_list_authoritative != null && message.hasOwnProperty("column_list_authoritative"))
+                if (typeof message.column_list_authoritative !== "boolean")
+                    return "column_list_authoritative: boolean expected";
+            return null;
+        };
+
+        /**
+         * Creates a Table message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vschema.Table
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vschema.Table} Table
+         */
+        Table.fromObject = function fromObject(object) {
+            if (object instanceof $root.vschema.Table)
+                return object;
+            var message = new $root.vschema.Table();
+            if (object.type != null)
+                message.type = String(object.type);
+            if (object.column_vindexes) {
+                if (!Array.isArray(object.column_vindexes))
+                    throw TypeError(".vschema.Table.column_vindexes: array expected");
+                message.column_vindexes = [];
+                for (var i = 0; i < object.column_vindexes.length; ++i) {
+                    if (typeof object.column_vindexes[i] !== "object")
+                        throw TypeError(".vschema.Table.column_vindexes: object expected");
+                    message.column_vindexes[i] = $root.vschema.ColumnVindex.fromObject(object.column_vindexes[i]);
+                }
+            }
+            if (object.auto_increment != null) {
+                if (typeof object.auto_increment !== "object")
+                    throw TypeError(".vschema.Table.auto_increment: object expected");
+                message.auto_increment = $root.vschema.AutoIncrement.fromObject(object.auto_increment);
+            }
+            if (object.columns) {
+                if (!Array.isArray(object.columns))
+                    throw TypeError(".vschema.Table.columns: array expected");
+                message.columns = [];
+                for (var i = 0; i < object.columns.length; ++i) {
+                    if (typeof object.columns[i] !== "object")
+                        throw TypeError(".vschema.Table.columns: object expected");
+                    message.columns[i] = $root.vschema.Column.fromObject(object.columns[i]);
+                }
+            }
+            if (object.pinned != null)
+                message.pinned = String(object.pinned);
+            if (object.column_list_authoritative != null)
+                message.column_list_authoritative = Boolean(object.column_list_authoritative);
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a Table message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vschema.Table
+         * @static
+         * @param {vschema.Table} message Table
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        Table.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.arrays || options.defaults) {
+                object.column_vindexes = [];
+                object.columns = [];
+            }
+            if (options.defaults) {
+                object.type = "";
+                object.auto_increment = null;
+                object.pinned = "";
+                object.column_list_authoritative = false;
+            }
+            if (message.type != null && message.hasOwnProperty("type"))
+                object.type = message.type;
+            if (message.column_vindexes && message.column_vindexes.length) {
+                object.column_vindexes = [];
+                for (var j = 0; j < message.column_vindexes.length; ++j)
+                    object.column_vindexes[j] = $root.vschema.ColumnVindex.toObject(message.column_vindexes[j], options);
+            }
+            if (message.auto_increment != null && message.hasOwnProperty("auto_increment"))
+                object.auto_increment = $root.vschema.AutoIncrement.toObject(message.auto_increment, options);
+            if (message.columns && message.columns.length) {
+                object.columns = [];
+                for (var j = 0; j < message.columns.length; ++j)
+                    object.columns[j] = $root.vschema.Column.toObject(message.columns[j], options);
+            }
+            if (message.pinned != null && message.hasOwnProperty("pinned"))
+                object.pinned = message.pinned;
+            if (message.column_list_authoritative != null && message.hasOwnProperty("column_list_authoritative"))
+                object.column_list_authoritative = message.column_list_authoritative;
+            return object;
+        };
+
+        /**
+         * Converts this Table to JSON.
+         * @function toJSON
+         * @memberof vschema.Table
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        Table.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return Table;
+    })();
+
+    vschema.ColumnVindex = (function() {
+
+        /**
+         * Properties of a ColumnVindex.
+         * @memberof vschema
+         * @interface IColumnVindex
+         * @property {string|null} [column] ColumnVindex column
+         * @property {string|null} [name] ColumnVindex name
+         * @property {Array.<string>|null} [columns] ColumnVindex columns
+         */
+
+        /**
+         * Constructs a new ColumnVindex.
+         * @memberof vschema
+         * @classdesc Represents a ColumnVindex.
+         * @implements IColumnVindex
+         * @constructor
+         * @param {vschema.IColumnVindex=} [properties] Properties to set
+         */
+        function ColumnVindex(properties) {
+            this.columns = [];
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * ColumnVindex column.
+         * @member {string} column
+         * @memberof vschema.ColumnVindex
+         * @instance
+         */
+        ColumnVindex.prototype.column = "";
+
+        /**
+         * ColumnVindex name.
+         * @member {string} name
+         * @memberof vschema.ColumnVindex
+         * @instance
+         */
+        ColumnVindex.prototype.name = "";
+
+        /**
+         * ColumnVindex columns.
+         * @member {Array.<string>} columns
+         * @memberof vschema.ColumnVindex
+         * @instance
+         */
+        ColumnVindex.prototype.columns = $util.emptyArray;
+
+        /**
+         * Creates a new ColumnVindex instance using the specified properties.
+         * @function create
+         * @memberof vschema.ColumnVindex
+         * @static
+         * @param {vschema.IColumnVindex=} [properties] Properties to set
+         * @returns {vschema.ColumnVindex} ColumnVindex instance
+         */
+        ColumnVindex.create = function create(properties) {
+            return new ColumnVindex(properties);
+        };
+
+        /**
+         * Encodes the specified ColumnVindex message. Does not implicitly {@link vschema.ColumnVindex.verify|verify} messages.
+         * @function encode
+         * @memberof vschema.ColumnVindex
+         * @static
+         * @param {vschema.IColumnVindex} message ColumnVindex message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        ColumnVindex.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.column != null && Object.hasOwnProperty.call(message, "column"))
+                writer.uint32(/* id 1, wireType 2 =*/10).string(message.column);
+            if (message.name != null && Object.hasOwnProperty.call(message, "name"))
+                writer.uint32(/* id 2, wireType 2 =*/18).string(message.name);
+            if (message.columns != null && message.columns.length)
+                for (var i = 0; i < message.columns.length; ++i)
+                    writer.uint32(/* id 3, wireType 2 =*/26).string(message.columns[i]);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified ColumnVindex message, length delimited. Does not implicitly {@link vschema.ColumnVindex.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vschema.ColumnVindex
+         * @static
+         * @param {vschema.IColumnVindex} message ColumnVindex message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        ColumnVindex.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a ColumnVindex message from the specified reader or buffer.
+         * @function decode
+         * @memberof vschema.ColumnVindex
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vschema.ColumnVindex} ColumnVindex
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        ColumnVindex.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vschema.ColumnVindex();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.column = reader.string();
+                    break;
+                case 2:
+                    message.name = reader.string();
+                    break;
+                case 3:
+                    if (!(message.columns && message.columns.length))
+                        message.columns = [];
+                    message.columns.push(reader.string());
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a ColumnVindex message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vschema.ColumnVindex
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vschema.ColumnVindex} ColumnVindex
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        ColumnVindex.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a ColumnVindex message.
+         * @function verify
+         * @memberof vschema.ColumnVindex
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        ColumnVindex.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.column != null && message.hasOwnProperty("column"))
+                if (!$util.isString(message.column))
+                    return "column: string expected";
+            if (message.name != null && message.hasOwnProperty("name"))
+                if (!$util.isString(message.name))
+                    return "name: string expected";
+            if (message.columns != null && message.hasOwnProperty("columns")) {
+                if (!Array.isArray(message.columns))
+                    return "columns: array expected";
+                for (var i = 0; i < message.columns.length; ++i)
+                    if (!$util.isString(message.columns[i]))
+                        return "columns: string[] expected";
+            }
+            return null;
+        };
+
+        /**
+         * Creates a ColumnVindex message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vschema.ColumnVindex
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vschema.ColumnVindex} ColumnVindex
+         */
+        ColumnVindex.fromObject = function fromObject(object) {
+            if (object instanceof $root.vschema.ColumnVindex)
+                return object;
+            var message = new $root.vschema.ColumnVindex();
+            if (object.column != null)
+                message.column = String(object.column);
+            if (object.name != null)
+                message.name = String(object.name);
+            if (object.columns) {
+                if (!Array.isArray(object.columns))
+                    throw TypeError(".vschema.ColumnVindex.columns: array expected");
+                message.columns = [];
+                for (var i = 0; i < object.columns.length; ++i)
+                    message.columns[i] = String(object.columns[i]);
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a ColumnVindex message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vschema.ColumnVindex
+         * @static
+         * @param {vschema.ColumnVindex} message ColumnVindex
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        ColumnVindex.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.arrays || options.defaults)
+                object.columns = [];
+            if (options.defaults) {
+                object.column = "";
+                object.name = "";
+            }
+            if (message.column != null && message.hasOwnProperty("column"))
+                object.column = message.column;
+            if (message.name != null && message.hasOwnProperty("name"))
+                object.name = message.name;
+            if (message.columns && message.columns.length) {
+                object.columns = [];
+                for (var j = 0; j < message.columns.length; ++j)
+                    object.columns[j] = message.columns[j];
+            }
+            return object;
+        };
+
+        /**
+         * Converts this ColumnVindex to JSON.
+         * @function toJSON
+         * @memberof vschema.ColumnVindex
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        ColumnVindex.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return ColumnVindex;
+    })();
+
+    vschema.AutoIncrement = (function() {
+
+        /**
+         * Properties of an AutoIncrement.
+         * @memberof vschema
+         * @interface IAutoIncrement
+         * @property {string|null} [column] AutoIncrement column
+         * @property {string|null} [sequence] AutoIncrement sequence
+         */
+
+        /**
+         * Constructs a new AutoIncrement.
+         * @memberof vschema
+         * @classdesc Represents an AutoIncrement.
+         * @implements IAutoIncrement
+         * @constructor
+         * @param {vschema.IAutoIncrement=} [properties] Properties to set
+         */
+        function AutoIncrement(properties) {
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * AutoIncrement column.
+         * @member {string} column
+         * @memberof vschema.AutoIncrement
+         * @instance
+         */
+        AutoIncrement.prototype.column = "";
+
+        /**
+         * AutoIncrement sequence.
+         * @member {string} sequence
+         * @memberof vschema.AutoIncrement
+         * @instance
+         */
+        AutoIncrement.prototype.sequence = "";
+
+        /**
+         * Creates a new AutoIncrement instance using the specified properties.
+         * @function create
+         * @memberof vschema.AutoIncrement
+         * @static
+         * @param {vschema.IAutoIncrement=} [properties] Properties to set
+         * @returns {vschema.AutoIncrement} AutoIncrement instance
+         */
+        AutoIncrement.create = function create(properties) {
+            return new AutoIncrement(properties);
+        };
+
+        /**
+         * Encodes the specified AutoIncrement message. Does not implicitly {@link vschema.AutoIncrement.verify|verify} messages.
+         * @function encode
+         * @memberof vschema.AutoIncrement
+         * @static
+         * @param {vschema.IAutoIncrement} message AutoIncrement message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        AutoIncrement.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.column != null && Object.hasOwnProperty.call(message, "column"))
+                writer.uint32(/* id 1, wireType 2 =*/10).string(message.column);
+            if (message.sequence != null && Object.hasOwnProperty.call(message, "sequence"))
+                writer.uint32(/* id 2, wireType 2 =*/18).string(message.sequence);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified AutoIncrement message, length delimited. Does not implicitly {@link vschema.AutoIncrement.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vschema.AutoIncrement
+         * @static
+         * @param {vschema.IAutoIncrement} message AutoIncrement message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        AutoIncrement.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes an AutoIncrement message from the specified reader or buffer.
+         * @function decode
+         * @memberof vschema.AutoIncrement
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vschema.AutoIncrement} AutoIncrement
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        AutoIncrement.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vschema.AutoIncrement();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.column = reader.string();
+                    break;
+                case 2:
+                    message.sequence = reader.string();
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes an AutoIncrement message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vschema.AutoIncrement
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vschema.AutoIncrement} AutoIncrement
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        AutoIncrement.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies an AutoIncrement message.
+         * @function verify
+         * @memberof vschema.AutoIncrement
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        AutoIncrement.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.column != null && message.hasOwnProperty("column"))
+                if (!$util.isString(message.column))
+                    return "column: string expected";
+            if (message.sequence != null && message.hasOwnProperty("sequence"))
+                if (!$util.isString(message.sequence))
+                    return "sequence: string expected";
+            return null;
+        };
+
+        /**
+         * Creates an AutoIncrement message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vschema.AutoIncrement
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vschema.AutoIncrement} AutoIncrement
+         */
+        AutoIncrement.fromObject = function fromObject(object) {
+            if (object instanceof $root.vschema.AutoIncrement)
+                return object;
+            var message = new $root.vschema.AutoIncrement();
+            if (object.column != null)
+                message.column = String(object.column);
+            if (object.sequence != null)
+                message.sequence = String(object.sequence);
+            return message;
+        };
+
+        /**
+         * Creates a plain object from an AutoIncrement message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vschema.AutoIncrement
+         * @static
+         * @param {vschema.AutoIncrement} message AutoIncrement
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        AutoIncrement.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.defaults) {
+                object.column = "";
+                object.sequence = "";
+            }
+            if (message.column != null && message.hasOwnProperty("column"))
+                object.column = message.column;
+            if (message.sequence != null && message.hasOwnProperty("sequence"))
+                object.sequence = message.sequence;
+            return object;
+        };
+
+        /**
+         * Converts this AutoIncrement to JSON.
+         * @function toJSON
+         * @memberof vschema.AutoIncrement
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        AutoIncrement.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return AutoIncrement;
+    })();
+
+    vschema.Column = (function() {
+
+        /**
+         * Properties of a Column.
+         * @memberof vschema
+         * @interface IColumn
+         * @property {string|null} [name] Column name
+         * @property {query.Type|null} [type] Column type
+         */
+
+        /**
+         * Constructs a new Column.
+         * @memberof vschema
+         * @classdesc Represents a Column.
+         * @implements IColumn
+         * @constructor
+         * @param {vschema.IColumn=} [properties] Properties to set
+         */
+        function Column(properties) {
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * Column name.
+         * @member {string} name
+         * @memberof vschema.Column
+         * @instance
+         */
+        Column.prototype.name = "";
+
+        /**
+         * Column type.
+         * @member {query.Type} type
+         * @memberof vschema.Column
+         * @instance
+         */
+        Column.prototype.type = 0;
+
+        /**
+         * Creates a new Column instance using the specified properties.
+         * @function create
+         * @memberof vschema.Column
+         * @static
+         * @param {vschema.IColumn=} [properties] Properties to set
+         * @returns {vschema.Column} Column instance
+         */
+        Column.create = function create(properties) {
+            return new Column(properties);
+        };
+
+        /**
+         * Encodes the specified Column message. Does not implicitly {@link vschema.Column.verify|verify} messages.
+         * @function encode
+         * @memberof vschema.Column
+         * @static
+         * @param {vschema.IColumn} message Column message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        Column.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.name != null && Object.hasOwnProperty.call(message, "name"))
+                writer.uint32(/* id 1, wireType 2 =*/10).string(message.name);
+            if (message.type != null && Object.hasOwnProperty.call(message, "type"))
+                writer.uint32(/* id 2, wireType 0 =*/16).int32(message.type);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified Column message, length delimited. Does not implicitly {@link vschema.Column.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vschema.Column
+         * @static
+         * @param {vschema.IColumn} message Column message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        Column.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a Column message from the specified reader or buffer.
+         * @function decode
+         * @memberof vschema.Column
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vschema.Column} Column
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        Column.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vschema.Column();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.name = reader.string();
+                    break;
+                case 2:
+                    message.type = reader.int32();
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a Column message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vschema.Column
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vschema.Column} Column
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        Column.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a Column message.
+         * @function verify
+         * @memberof vschema.Column
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        Column.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.name != null && message.hasOwnProperty("name"))
+                if (!$util.isString(message.name))
+                    return "name: string expected";
+            if (message.type != null && message.hasOwnProperty("type"))
+                switch (message.type) {
+                default:
+                    return "type: enum value expected";
+                case 0:
+                case 257:
+                case 770:
+                case 259:
+                case 772:
+                case 261:
+                case 774:
+                case 263:
+                case 776:
+                case 265:
+                case 778:
+                case 1035:
+                case 1036:
+                case 2061:
+                case 2062:
+                case 2063:
+                case 2064:
+                case 785:
+                case 18:
+                case 6163:
+                case 10260:
+                case 6165:
+                case 10262:
+                case 6167:
+                case 10264:
+                case 2073:
+                case 2074:
+                case 2075:
+                case 28:
+                case 2077:
+                case 2078:
+                case 31:
+                    break;
+                }
+            return null;
+        };
+
+        /**
+         * Creates a Column message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vschema.Column
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vschema.Column} Column
+         */
+        Column.fromObject = function fromObject(object) {
+            if (object instanceof $root.vschema.Column)
+                return object;
+            var message = new $root.vschema.Column();
+            if (object.name != null)
+                message.name = String(object.name);
+            switch (object.type) {
+            case "NULL_TYPE":
+            case 0:
+                message.type = 0;
+                break;
+            case "INT8":
+            case 257:
+                message.type = 257;
+                break;
+            case "UINT8":
+            case 770:
+                message.type = 770;
+                break;
+            case "INT16":
+            case 259:
+                message.type = 259;
+                break;
+            case "UINT16":
+            case 772:
+                message.type = 772;
+                break;
+            case "INT24":
+            case 261:
+                message.type = 261;
+                break;
+            case "UINT24":
+            case 774:
+                message.type = 774;
+                break;
+            case "INT32":
+            case 263:
+                message.type = 263;
+                break;
+            case "UINT32":
+            case 776:
+                message.type = 776;
+                break;
+            case "INT64":
+            case 265:
+                message.type = 265;
+                break;
+            case "UINT64":
+            case 778:
+                message.type = 778;
+                break;
+            case "FLOAT32":
+            case 1035:
+                message.type = 1035;
+                break;
+            case "FLOAT64":
+            case 1036:
+                message.type = 1036;
+                break;
+            case "TIMESTAMP":
+            case 2061:
+                message.type = 2061;
+                break;
+            case "DATE":
+            case 2062:
+                message.type = 2062;
+                break;
+            case "TIME":
+            case 2063:
+                message.type = 2063;
+                break;
+            case "DATETIME":
+            case 2064:
+                message.type = 2064;
+                break;
+            case "YEAR":
+            case 785:
+                message.type = 785;
+                break;
+            case "DECIMAL":
+            case 18:
+                message.type = 18;
+                break;
+            case "TEXT":
+            case 6163:
+                message.type = 6163;
+                break;
+            case "BLOB":
+            case 10260:
+                message.type = 10260;
+                break;
+            case "VARCHAR":
+            case 6165:
+                message.type = 6165;
+                break;
+            case "VARBINARY":
+            case 10262:
+                message.type = 10262;
+                break;
+            case "CHAR":
+            case 6167:
+                message.type = 6167;
+                break;
+            case "BINARY":
+            case 10264:
+                message.type = 10264;
+                break;
+            case "BIT":
+            case 2073:
+                message.type = 2073;
+                break;
+            case "ENUM":
+            case 2074:
+                message.type = 2074;
+                break;
+            case "SET":
+            case 2075:
+                message.type = 2075;
+                break;
+            case "TUPLE":
+            case 28:
+                message.type = 28;
+                break;
+            case "GEOMETRY":
+            case 2077:
+                message.type = 2077;
+                break;
+            case "JSON":
+            case 2078:
+                message.type = 2078;
+                break;
+            case "EXPRESSION":
+            case 31:
+                message.type = 31;
+                break;
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a Column message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vschema.Column
+         * @static
+         * @param {vschema.Column} message Column
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        Column.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.defaults) {
+                object.name = "";
+                object.type = options.enums === String ? "NULL_TYPE" : 0;
+            }
+            if (message.name != null && message.hasOwnProperty("name"))
+                object.name = message.name;
+            if (message.type != null && message.hasOwnProperty("type"))
+                object.type = options.enums === String ? $root.query.Type[message.type] : message.type;
+            return object;
+        };
+
+        /**
+         * Converts this Column to JSON.
+         * @function toJSON
+         * @memberof vschema.Column
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        Column.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return Column;
+    })();
+
+    vschema.SrvVSchema = (function() {
+
+        /**
+         * Properties of a SrvVSchema.
+         * @memberof vschema
+         * @interface ISrvVSchema
+         * @property {Object.<string,vschema.IKeyspace>|null} [keyspaces] SrvVSchema keyspaces
+         * @property {vschema.IRoutingRules|null} [routing_rules] SrvVSchema routing_rules
+         */
+
+        /**
+         * Constructs a new SrvVSchema.
+         * @memberof vschema
+         * @classdesc Represents a SrvVSchema.
+         * @implements ISrvVSchema
+         * @constructor
+         * @param {vschema.ISrvVSchema=} [properties] Properties to set
+         */
+        function SrvVSchema(properties) {
+            this.keyspaces = {};
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * SrvVSchema keyspaces.
+         * @member {Object.<string,vschema.IKeyspace>} keyspaces
+         * @memberof vschema.SrvVSchema
+         * @instance
+         */
+        SrvVSchema.prototype.keyspaces = $util.emptyObject;
+
+        /**
+         * SrvVSchema routing_rules.
+         * @member {vschema.IRoutingRules|null|undefined} routing_rules
+         * @memberof vschema.SrvVSchema
+         * @instance
+         */
+        SrvVSchema.prototype.routing_rules = null;
+
+        /**
+         * Creates a new SrvVSchema instance using the specified properties.
+         * @function create
+         * @memberof vschema.SrvVSchema
+         * @static
+         * @param {vschema.ISrvVSchema=} [properties] Properties to set
+         * @returns {vschema.SrvVSchema} SrvVSchema instance
+         */
+        SrvVSchema.create = function create(properties) {
+            return new SrvVSchema(properties);
+        };
+
+        /**
+         * Encodes the specified SrvVSchema message. Does not implicitly {@link vschema.SrvVSchema.verify|verify} messages.
+         * @function encode
+         * @memberof vschema.SrvVSchema
+         * @static
+         * @param {vschema.ISrvVSchema} message SrvVSchema message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        SrvVSchema.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.keyspaces != null && Object.hasOwnProperty.call(message, "keyspaces"))
+                for (var keys = Object.keys(message.keyspaces), i = 0; i < keys.length; ++i) {
+                    writer.uint32(/* id 1, wireType 2 =*/10).fork().uint32(/* id 1, wireType 2 =*/10).string(keys[i]);
+                    $root.vschema.Keyspace.encode(message.keyspaces[keys[i]], writer.uint32(/* id 2, wireType 2 =*/18).fork()).ldelim().ldelim();
+                }
+            if (message.routing_rules != null && Object.hasOwnProperty.call(message, "routing_rules"))
+                $root.vschema.RoutingRules.encode(message.routing_rules, writer.uint32(/* id 2, wireType 2 =*/18).fork()).ldelim();
+            return writer;
+        };
+
+        /**
+         * Encodes the specified SrvVSchema message, length delimited. Does not implicitly {@link vschema.SrvVSchema.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vschema.SrvVSchema
+         * @static
+         * @param {vschema.ISrvVSchema} message SrvVSchema message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        SrvVSchema.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a SrvVSchema message from the specified reader or buffer.
+         * @function decode
+         * @memberof vschema.SrvVSchema
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vschema.SrvVSchema} SrvVSchema
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        SrvVSchema.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vschema.SrvVSchema(), key, value;
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    if (message.keyspaces === $util.emptyObject)
+                        message.keyspaces = {};
+                    var end2 = reader.uint32() + reader.pos;
+                    key = "";
+                    value = null;
+                    while (reader.pos < end2) {
+                        var tag2 = reader.uint32();
+                        switch (tag2 >>> 3) {
+                        case 1:
+                            key = reader.string();
+                            break;
+                        case 2:
+                            value = $root.vschema.Keyspace.decode(reader, reader.uint32());
+                            break;
+                        default:
+                            reader.skipType(tag2 & 7);
+                            break;
+                        }
+                    }
+                    message.keyspaces[key] = value;
+                    break;
+                case 2:
+                    message.routing_rules = $root.vschema.RoutingRules.decode(reader, reader.uint32());
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a SrvVSchema message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vschema.SrvVSchema
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vschema.SrvVSchema} SrvVSchema
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        SrvVSchema.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a SrvVSchema message.
+         * @function verify
+         * @memberof vschema.SrvVSchema
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        SrvVSchema.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.keyspaces != null && message.hasOwnProperty("keyspaces")) {
+                if (!$util.isObject(message.keyspaces))
+                    return "keyspaces: object expected";
+                var key = Object.keys(message.keyspaces);
+                for (var i = 0; i < key.length; ++i) {
+                    var error = $root.vschema.Keyspace.verify(message.keyspaces[key[i]]);
+                    if (error)
+                        return "keyspaces." + error;
+                }
+            }
+            if (message.routing_rules != null && message.hasOwnProperty("routing_rules")) {
+                var error = $root.vschema.RoutingRules.verify(message.routing_rules);
+                if (error)
+                    return "routing_rules." + error;
+            }
+            return null;
+        };
+
+        /**
+         * Creates a SrvVSchema message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vschema.SrvVSchema
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vschema.SrvVSchema} SrvVSchema
+         */
+        SrvVSchema.fromObject = function fromObject(object) {
+            if (object instanceof $root.vschema.SrvVSchema)
+                return object;
+            var message = new $root.vschema.SrvVSchema();
+            if (object.keyspaces) {
+                if (typeof object.keyspaces !== "object")
+                    throw TypeError(".vschema.SrvVSchema.keyspaces: object expected");
+                message.keyspaces = {};
+                for (var keys = Object.keys(object.keyspaces), i = 0; i < keys.length; ++i) {
+                    if (typeof object.keyspaces[keys[i]] !== "object")
+                        throw TypeError(".vschema.SrvVSchema.keyspaces: object expected");
+                    message.keyspaces[keys[i]] = $root.vschema.Keyspace.fromObject(object.keyspaces[keys[i]]);
+                }
+            }
+            if (object.routing_rules != null) {
+                if (typeof object.routing_rules !== "object")
+                    throw TypeError(".vschema.SrvVSchema.routing_rules: object expected");
+                message.routing_rules = $root.vschema.RoutingRules.fromObject(object.routing_rules);
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a SrvVSchema message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vschema.SrvVSchema
+         * @static
+         * @param {vschema.SrvVSchema} message SrvVSchema
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        SrvVSchema.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.objects || options.defaults)
+                object.keyspaces = {};
+            if (options.defaults)
+                object.routing_rules = null;
+            var keys2;
+            if (message.keyspaces && (keys2 = Object.keys(message.keyspaces)).length) {
+                object.keyspaces = {};
+                for (var j = 0; j < keys2.length; ++j)
+                    object.keyspaces[keys2[j]] = $root.vschema.Keyspace.toObject(message.keyspaces[keys2[j]], options);
+            }
+            if (message.routing_rules != null && message.hasOwnProperty("routing_rules"))
+                object.routing_rules = $root.vschema.RoutingRules.toObject(message.routing_rules, options);
+            return object;
+        };
+
+        /**
+         * Converts this SrvVSchema to JSON.
+         * @function toJSON
+         * @memberof vschema.SrvVSchema
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        SrvVSchema.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return SrvVSchema;
+    })();
+
+    return vschema;
+})();
+
 $root.vtctldata = (function() {
 
     /**
@@ -47662,6 +52460,2594 @@ $root.vtctldata = (function() {
         };
 
         return ExecuteVtctlCommandResponse;
+    })();
+
+    vtctldata.TableMaterializeSettings = (function() {
+
+        /**
+         * Properties of a TableMaterializeSettings.
+         * @memberof vtctldata
+         * @interface ITableMaterializeSettings
+         * @property {string|null} [target_table] TableMaterializeSettings target_table
+         * @property {string|null} [source_expression] TableMaterializeSettings source_expression
+         * @property {string|null} [create_ddl] TableMaterializeSettings create_ddl
+         */
+
+        /**
+         * Constructs a new TableMaterializeSettings.
+         * @memberof vtctldata
+         * @classdesc Represents a TableMaterializeSettings.
+         * @implements ITableMaterializeSettings
+         * @constructor
+         * @param {vtctldata.ITableMaterializeSettings=} [properties] Properties to set
+         */
+        function TableMaterializeSettings(properties) {
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * TableMaterializeSettings target_table.
+         * @member {string} target_table
+         * @memberof vtctldata.TableMaterializeSettings
+         * @instance
+         */
+        TableMaterializeSettings.prototype.target_table = "";
+
+        /**
+         * TableMaterializeSettings source_expression.
+         * @member {string} source_expression
+         * @memberof vtctldata.TableMaterializeSettings
+         * @instance
+         */
+        TableMaterializeSettings.prototype.source_expression = "";
+
+        /**
+         * TableMaterializeSettings create_ddl.
+         * @member {string} create_ddl
+         * @memberof vtctldata.TableMaterializeSettings
+         * @instance
+         */
+        TableMaterializeSettings.prototype.create_ddl = "";
+
+        /**
+         * Creates a new TableMaterializeSettings instance using the specified properties.
+         * @function create
+         * @memberof vtctldata.TableMaterializeSettings
+         * @static
+         * @param {vtctldata.ITableMaterializeSettings=} [properties] Properties to set
+         * @returns {vtctldata.TableMaterializeSettings} TableMaterializeSettings instance
+         */
+        TableMaterializeSettings.create = function create(properties) {
+            return new TableMaterializeSettings(properties);
+        };
+
+        /**
+         * Encodes the specified TableMaterializeSettings message. Does not implicitly {@link vtctldata.TableMaterializeSettings.verify|verify} messages.
+         * @function encode
+         * @memberof vtctldata.TableMaterializeSettings
+         * @static
+         * @param {vtctldata.ITableMaterializeSettings} message TableMaterializeSettings message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        TableMaterializeSettings.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.target_table != null && Object.hasOwnProperty.call(message, "target_table"))
+                writer.uint32(/* id 1, wireType 2 =*/10).string(message.target_table);
+            if (message.source_expression != null && Object.hasOwnProperty.call(message, "source_expression"))
+                writer.uint32(/* id 2, wireType 2 =*/18).string(message.source_expression);
+            if (message.create_ddl != null && Object.hasOwnProperty.call(message, "create_ddl"))
+                writer.uint32(/* id 3, wireType 2 =*/26).string(message.create_ddl);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified TableMaterializeSettings message, length delimited. Does not implicitly {@link vtctldata.TableMaterializeSettings.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtctldata.TableMaterializeSettings
+         * @static
+         * @param {vtctldata.ITableMaterializeSettings} message TableMaterializeSettings message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        TableMaterializeSettings.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a TableMaterializeSettings message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtctldata.TableMaterializeSettings
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtctldata.TableMaterializeSettings} TableMaterializeSettings
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        TableMaterializeSettings.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.TableMaterializeSettings();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.target_table = reader.string();
+                    break;
+                case 2:
+                    message.source_expression = reader.string();
+                    break;
+                case 3:
+                    message.create_ddl = reader.string();
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a TableMaterializeSettings message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtctldata.TableMaterializeSettings
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtctldata.TableMaterializeSettings} TableMaterializeSettings
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        TableMaterializeSettings.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a TableMaterializeSettings message.
+         * @function verify
+         * @memberof vtctldata.TableMaterializeSettings
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        TableMaterializeSettings.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.target_table != null && message.hasOwnProperty("target_table"))
+                if (!$util.isString(message.target_table))
+                    return "target_table: string expected";
+            if (message.source_expression != null && message.hasOwnProperty("source_expression"))
+                if (!$util.isString(message.source_expression))
+                    return "source_expression: string expected";
+            if (message.create_ddl != null && message.hasOwnProperty("create_ddl"))
+                if (!$util.isString(message.create_ddl))
+                    return "create_ddl: string expected";
+            return null;
+        };
+
+        /**
+         * Creates a TableMaterializeSettings message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtctldata.TableMaterializeSettings
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtctldata.TableMaterializeSettings} TableMaterializeSettings
+         */
+        TableMaterializeSettings.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtctldata.TableMaterializeSettings)
+                return object;
+            var message = new $root.vtctldata.TableMaterializeSettings();
+            if (object.target_table != null)
+                message.target_table = String(object.target_table);
+            if (object.source_expression != null)
+                message.source_expression = String(object.source_expression);
+            if (object.create_ddl != null)
+                message.create_ddl = String(object.create_ddl);
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a TableMaterializeSettings message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtctldata.TableMaterializeSettings
+         * @static
+         * @param {vtctldata.TableMaterializeSettings} message TableMaterializeSettings
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        TableMaterializeSettings.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.defaults) {
+                object.target_table = "";
+                object.source_expression = "";
+                object.create_ddl = "";
+            }
+            if (message.target_table != null && message.hasOwnProperty("target_table"))
+                object.target_table = message.target_table;
+            if (message.source_expression != null && message.hasOwnProperty("source_expression"))
+                object.source_expression = message.source_expression;
+            if (message.create_ddl != null && message.hasOwnProperty("create_ddl"))
+                object.create_ddl = message.create_ddl;
+            return object;
+        };
+
+        /**
+         * Converts this TableMaterializeSettings to JSON.
+         * @function toJSON
+         * @memberof vtctldata.TableMaterializeSettings
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        TableMaterializeSettings.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return TableMaterializeSettings;
+    })();
+
+    vtctldata.MaterializeSettings = (function() {
+
+        /**
+         * Properties of a MaterializeSettings.
+         * @memberof vtctldata
+         * @interface IMaterializeSettings
+         * @property {string|null} [workflow] MaterializeSettings workflow
+         * @property {string|null} [source_keyspace] MaterializeSettings source_keyspace
+         * @property {string|null} [target_keyspace] MaterializeSettings target_keyspace
+         * @property {boolean|null} [stop_after_copy] MaterializeSettings stop_after_copy
+         * @property {Array.<vtctldata.ITableMaterializeSettings>|null} [table_settings] MaterializeSettings table_settings
+         * @property {string|null} [cell] MaterializeSettings cell
+         * @property {string|null} [tablet_types] MaterializeSettings tablet_types
+         * @property {string|null} [external_cluster] MaterializeSettings external_cluster
+         */
+
+        /**
+         * Constructs a new MaterializeSettings.
+         * @memberof vtctldata
+         * @classdesc Represents a MaterializeSettings.
+         * @implements IMaterializeSettings
+         * @constructor
+         * @param {vtctldata.IMaterializeSettings=} [properties] Properties to set
+         */
+        function MaterializeSettings(properties) {
+            this.table_settings = [];
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * MaterializeSettings workflow.
+         * @member {string} workflow
+         * @memberof vtctldata.MaterializeSettings
+         * @instance
+         */
+        MaterializeSettings.prototype.workflow = "";
+
+        /**
+         * MaterializeSettings source_keyspace.
+         * @member {string} source_keyspace
+         * @memberof vtctldata.MaterializeSettings
+         * @instance
+         */
+        MaterializeSettings.prototype.source_keyspace = "";
+
+        /**
+         * MaterializeSettings target_keyspace.
+         * @member {string} target_keyspace
+         * @memberof vtctldata.MaterializeSettings
+         * @instance
+         */
+        MaterializeSettings.prototype.target_keyspace = "";
+
+        /**
+         * MaterializeSettings stop_after_copy.
+         * @member {boolean} stop_after_copy
+         * @memberof vtctldata.MaterializeSettings
+         * @instance
+         */
+        MaterializeSettings.prototype.stop_after_copy = false;
+
+        /**
+         * MaterializeSettings table_settings.
+         * @member {Array.<vtctldata.ITableMaterializeSettings>} table_settings
+         * @memberof vtctldata.MaterializeSettings
+         * @instance
+         */
+        MaterializeSettings.prototype.table_settings = $util.emptyArray;
+
+        /**
+         * MaterializeSettings cell.
+         * @member {string} cell
+         * @memberof vtctldata.MaterializeSettings
+         * @instance
+         */
+        MaterializeSettings.prototype.cell = "";
+
+        /**
+         * MaterializeSettings tablet_types.
+         * @member {string} tablet_types
+         * @memberof vtctldata.MaterializeSettings
+         * @instance
+         */
+        MaterializeSettings.prototype.tablet_types = "";
+
+        /**
+         * MaterializeSettings external_cluster.
+         * @member {string} external_cluster
+         * @memberof vtctldata.MaterializeSettings
+         * @instance
+         */
+        MaterializeSettings.prototype.external_cluster = "";
+
+        /**
+         * Creates a new MaterializeSettings instance using the specified properties.
+         * @function create
+         * @memberof vtctldata.MaterializeSettings
+         * @static
+         * @param {vtctldata.IMaterializeSettings=} [properties] Properties to set
+         * @returns {vtctldata.MaterializeSettings} MaterializeSettings instance
+         */
+        MaterializeSettings.create = function create(properties) {
+            return new MaterializeSettings(properties);
+        };
+
+        /**
+         * Encodes the specified MaterializeSettings message. Does not implicitly {@link vtctldata.MaterializeSettings.verify|verify} messages.
+         * @function encode
+         * @memberof vtctldata.MaterializeSettings
+         * @static
+         * @param {vtctldata.IMaterializeSettings} message MaterializeSettings message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        MaterializeSettings.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.workflow != null && Object.hasOwnProperty.call(message, "workflow"))
+                writer.uint32(/* id 1, wireType 2 =*/10).string(message.workflow);
+            if (message.source_keyspace != null && Object.hasOwnProperty.call(message, "source_keyspace"))
+                writer.uint32(/* id 2, wireType 2 =*/18).string(message.source_keyspace);
+            if (message.target_keyspace != null && Object.hasOwnProperty.call(message, "target_keyspace"))
+                writer.uint32(/* id 3, wireType 2 =*/26).string(message.target_keyspace);
+            if (message.stop_after_copy != null && Object.hasOwnProperty.call(message, "stop_after_copy"))
+                writer.uint32(/* id 4, wireType 0 =*/32).bool(message.stop_after_copy);
+            if (message.table_settings != null && message.table_settings.length)
+                for (var i = 0; i < message.table_settings.length; ++i)
+                    $root.vtctldata.TableMaterializeSettings.encode(message.table_settings[i], writer.uint32(/* id 5, wireType 2 =*/42).fork()).ldelim();
+            if (message.cell != null && Object.hasOwnProperty.call(message, "cell"))
+                writer.uint32(/* id 6, wireType 2 =*/50).string(message.cell);
+            if (message.tablet_types != null && Object.hasOwnProperty.call(message, "tablet_types"))
+                writer.uint32(/* id 7, wireType 2 =*/58).string(message.tablet_types);
+            if (message.external_cluster != null && Object.hasOwnProperty.call(message, "external_cluster"))
+                writer.uint32(/* id 8, wireType 2 =*/66).string(message.external_cluster);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified MaterializeSettings message, length delimited. Does not implicitly {@link vtctldata.MaterializeSettings.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtctldata.MaterializeSettings
+         * @static
+         * @param {vtctldata.IMaterializeSettings} message MaterializeSettings message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        MaterializeSettings.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a MaterializeSettings message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtctldata.MaterializeSettings
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtctldata.MaterializeSettings} MaterializeSettings
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        MaterializeSettings.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.MaterializeSettings();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.workflow = reader.string();
+                    break;
+                case 2:
+                    message.source_keyspace = reader.string();
+                    break;
+                case 3:
+                    message.target_keyspace = reader.string();
+                    break;
+                case 4:
+                    message.stop_after_copy = reader.bool();
+                    break;
+                case 5:
+                    if (!(message.table_settings && message.table_settings.length))
+                        message.table_settings = [];
+                    message.table_settings.push($root.vtctldata.TableMaterializeSettings.decode(reader, reader.uint32()));
+                    break;
+                case 6:
+                    message.cell = reader.string();
+                    break;
+                case 7:
+                    message.tablet_types = reader.string();
+                    break;
+                case 8:
+                    message.external_cluster = reader.string();
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a MaterializeSettings message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtctldata.MaterializeSettings
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtctldata.MaterializeSettings} MaterializeSettings
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        MaterializeSettings.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a MaterializeSettings message.
+         * @function verify
+         * @memberof vtctldata.MaterializeSettings
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        MaterializeSettings.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.workflow != null && message.hasOwnProperty("workflow"))
+                if (!$util.isString(message.workflow))
+                    return "workflow: string expected";
+            if (message.source_keyspace != null && message.hasOwnProperty("source_keyspace"))
+                if (!$util.isString(message.source_keyspace))
+                    return "source_keyspace: string expected";
+            if (message.target_keyspace != null && message.hasOwnProperty("target_keyspace"))
+                if (!$util.isString(message.target_keyspace))
+                    return "target_keyspace: string expected";
+            if (message.stop_after_copy != null && message.hasOwnProperty("stop_after_copy"))
+                if (typeof message.stop_after_copy !== "boolean")
+                    return "stop_after_copy: boolean expected";
+            if (message.table_settings != null && message.hasOwnProperty("table_settings")) {
+                if (!Array.isArray(message.table_settings))
+                    return "table_settings: array expected";
+                for (var i = 0; i < message.table_settings.length; ++i) {
+                    var error = $root.vtctldata.TableMaterializeSettings.verify(message.table_settings[i]);
+                    if (error)
+                        return "table_settings." + error;
+                }
+            }
+            if (message.cell != null && message.hasOwnProperty("cell"))
+                if (!$util.isString(message.cell))
+                    return "cell: string expected";
+            if (message.tablet_types != null && message.hasOwnProperty("tablet_types"))
+                if (!$util.isString(message.tablet_types))
+                    return "tablet_types: string expected";
+            if (message.external_cluster != null && message.hasOwnProperty("external_cluster"))
+                if (!$util.isString(message.external_cluster))
+                    return "external_cluster: string expected";
+            return null;
+        };
+
+        /**
+         * Creates a MaterializeSettings message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtctldata.MaterializeSettings
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtctldata.MaterializeSettings} MaterializeSettings
+         */
+        MaterializeSettings.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtctldata.MaterializeSettings)
+                return object;
+            var message = new $root.vtctldata.MaterializeSettings();
+            if (object.workflow != null)
+                message.workflow = String(object.workflow);
+            if (object.source_keyspace != null)
+                message.source_keyspace = String(object.source_keyspace);
+            if (object.target_keyspace != null)
+                message.target_keyspace = String(object.target_keyspace);
+            if (object.stop_after_copy != null)
+                message.stop_after_copy = Boolean(object.stop_after_copy);
+            if (object.table_settings) {
+                if (!Array.isArray(object.table_settings))
+                    throw TypeError(".vtctldata.MaterializeSettings.table_settings: array expected");
+                message.table_settings = [];
+                for (var i = 0; i < object.table_settings.length; ++i) {
+                    if (typeof object.table_settings[i] !== "object")
+                        throw TypeError(".vtctldata.MaterializeSettings.table_settings: object expected");
+                    message.table_settings[i] = $root.vtctldata.TableMaterializeSettings.fromObject(object.table_settings[i]);
+                }
+            }
+            if (object.cell != null)
+                message.cell = String(object.cell);
+            if (object.tablet_types != null)
+                message.tablet_types = String(object.tablet_types);
+            if (object.external_cluster != null)
+                message.external_cluster = String(object.external_cluster);
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a MaterializeSettings message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtctldata.MaterializeSettings
+         * @static
+         * @param {vtctldata.MaterializeSettings} message MaterializeSettings
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        MaterializeSettings.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.arrays || options.defaults)
+                object.table_settings = [];
+            if (options.defaults) {
+                object.workflow = "";
+                object.source_keyspace = "";
+                object.target_keyspace = "";
+                object.stop_after_copy = false;
+                object.cell = "";
+                object.tablet_types = "";
+                object.external_cluster = "";
+            }
+            if (message.workflow != null && message.hasOwnProperty("workflow"))
+                object.workflow = message.workflow;
+            if (message.source_keyspace != null && message.hasOwnProperty("source_keyspace"))
+                object.source_keyspace = message.source_keyspace;
+            if (message.target_keyspace != null && message.hasOwnProperty("target_keyspace"))
+                object.target_keyspace = message.target_keyspace;
+            if (message.stop_after_copy != null && message.hasOwnProperty("stop_after_copy"))
+                object.stop_after_copy = message.stop_after_copy;
+            if (message.table_settings && message.table_settings.length) {
+                object.table_settings = [];
+                for (var j = 0; j < message.table_settings.length; ++j)
+                    object.table_settings[j] = $root.vtctldata.TableMaterializeSettings.toObject(message.table_settings[j], options);
+            }
+            if (message.cell != null && message.hasOwnProperty("cell"))
+                object.cell = message.cell;
+            if (message.tablet_types != null && message.hasOwnProperty("tablet_types"))
+                object.tablet_types = message.tablet_types;
+            if (message.external_cluster != null && message.hasOwnProperty("external_cluster"))
+                object.external_cluster = message.external_cluster;
+            return object;
+        };
+
+        /**
+         * Converts this MaterializeSettings to JSON.
+         * @function toJSON
+         * @memberof vtctldata.MaterializeSettings
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        MaterializeSettings.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return MaterializeSettings;
+    })();
+
+    vtctldata.Keyspace = (function() {
+
+        /**
+         * Properties of a Keyspace.
+         * @memberof vtctldata
+         * @interface IKeyspace
+         * @property {string|null} [name] Keyspace name
+         * @property {topodata.IKeyspace|null} [keyspace] Keyspace keyspace
+         */
+
+        /**
+         * Constructs a new Keyspace.
+         * @memberof vtctldata
+         * @classdesc Represents a Keyspace.
+         * @implements IKeyspace
+         * @constructor
+         * @param {vtctldata.IKeyspace=} [properties] Properties to set
+         */
+        function Keyspace(properties) {
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * Keyspace name.
+         * @member {string} name
+         * @memberof vtctldata.Keyspace
+         * @instance
+         */
+        Keyspace.prototype.name = "";
+
+        /**
+         * Keyspace keyspace.
+         * @member {topodata.IKeyspace|null|undefined} keyspace
+         * @memberof vtctldata.Keyspace
+         * @instance
+         */
+        Keyspace.prototype.keyspace = null;
+
+        /**
+         * Creates a new Keyspace instance using the specified properties.
+         * @function create
+         * @memberof vtctldata.Keyspace
+         * @static
+         * @param {vtctldata.IKeyspace=} [properties] Properties to set
+         * @returns {vtctldata.Keyspace} Keyspace instance
+         */
+        Keyspace.create = function create(properties) {
+            return new Keyspace(properties);
+        };
+
+        /**
+         * Encodes the specified Keyspace message. Does not implicitly {@link vtctldata.Keyspace.verify|verify} messages.
+         * @function encode
+         * @memberof vtctldata.Keyspace
+         * @static
+         * @param {vtctldata.IKeyspace} message Keyspace message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        Keyspace.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.name != null && Object.hasOwnProperty.call(message, "name"))
+                writer.uint32(/* id 1, wireType 2 =*/10).string(message.name);
+            if (message.keyspace != null && Object.hasOwnProperty.call(message, "keyspace"))
+                $root.topodata.Keyspace.encode(message.keyspace, writer.uint32(/* id 2, wireType 2 =*/18).fork()).ldelim();
+            return writer;
+        };
+
+        /**
+         * Encodes the specified Keyspace message, length delimited. Does not implicitly {@link vtctldata.Keyspace.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtctldata.Keyspace
+         * @static
+         * @param {vtctldata.IKeyspace} message Keyspace message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        Keyspace.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a Keyspace message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtctldata.Keyspace
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtctldata.Keyspace} Keyspace
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        Keyspace.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.Keyspace();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.name = reader.string();
+                    break;
+                case 2:
+                    message.keyspace = $root.topodata.Keyspace.decode(reader, reader.uint32());
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a Keyspace message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtctldata.Keyspace
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtctldata.Keyspace} Keyspace
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        Keyspace.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a Keyspace message.
+         * @function verify
+         * @memberof vtctldata.Keyspace
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        Keyspace.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.name != null && message.hasOwnProperty("name"))
+                if (!$util.isString(message.name))
+                    return "name: string expected";
+            if (message.keyspace != null && message.hasOwnProperty("keyspace")) {
+                var error = $root.topodata.Keyspace.verify(message.keyspace);
+                if (error)
+                    return "keyspace." + error;
+            }
+            return null;
+        };
+
+        /**
+         * Creates a Keyspace message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtctldata.Keyspace
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtctldata.Keyspace} Keyspace
+         */
+        Keyspace.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtctldata.Keyspace)
+                return object;
+            var message = new $root.vtctldata.Keyspace();
+            if (object.name != null)
+                message.name = String(object.name);
+            if (object.keyspace != null) {
+                if (typeof object.keyspace !== "object")
+                    throw TypeError(".vtctldata.Keyspace.keyspace: object expected");
+                message.keyspace = $root.topodata.Keyspace.fromObject(object.keyspace);
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a Keyspace message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtctldata.Keyspace
+         * @static
+         * @param {vtctldata.Keyspace} message Keyspace
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        Keyspace.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.defaults) {
+                object.name = "";
+                object.keyspace = null;
+            }
+            if (message.name != null && message.hasOwnProperty("name"))
+                object.name = message.name;
+            if (message.keyspace != null && message.hasOwnProperty("keyspace"))
+                object.keyspace = $root.topodata.Keyspace.toObject(message.keyspace, options);
+            return object;
+        };
+
+        /**
+         * Converts this Keyspace to JSON.
+         * @function toJSON
+         * @memberof vtctldata.Keyspace
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        Keyspace.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return Keyspace;
+    })();
+
+    vtctldata.Shard = (function() {
+
+        /**
+         * Properties of a Shard.
+         * @memberof vtctldata
+         * @interface IShard
+         * @property {string|null} [keyspace] Shard keyspace
+         * @property {string|null} [name] Shard name
+         * @property {topodata.IShard|null} [shard] Shard shard
+         */
+
+        /**
+         * Constructs a new Shard.
+         * @memberof vtctldata
+         * @classdesc Represents a Shard.
+         * @implements IShard
+         * @constructor
+         * @param {vtctldata.IShard=} [properties] Properties to set
+         */
+        function Shard(properties) {
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * Shard keyspace.
+         * @member {string} keyspace
+         * @memberof vtctldata.Shard
+         * @instance
+         */
+        Shard.prototype.keyspace = "";
+
+        /**
+         * Shard name.
+         * @member {string} name
+         * @memberof vtctldata.Shard
+         * @instance
+         */
+        Shard.prototype.name = "";
+
+        /**
+         * Shard shard.
+         * @member {topodata.IShard|null|undefined} shard
+         * @memberof vtctldata.Shard
+         * @instance
+         */
+        Shard.prototype.shard = null;
+
+        /**
+         * Creates a new Shard instance using the specified properties.
+         * @function create
+         * @memberof vtctldata.Shard
+         * @static
+         * @param {vtctldata.IShard=} [properties] Properties to set
+         * @returns {vtctldata.Shard} Shard instance
+         */
+        Shard.create = function create(properties) {
+            return new Shard(properties);
+        };
+
+        /**
+         * Encodes the specified Shard message. Does not implicitly {@link vtctldata.Shard.verify|verify} messages.
+         * @function encode
+         * @memberof vtctldata.Shard
+         * @static
+         * @param {vtctldata.IShard} message Shard message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        Shard.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.keyspace != null && Object.hasOwnProperty.call(message, "keyspace"))
+                writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
+            if (message.name != null && Object.hasOwnProperty.call(message, "name"))
+                writer.uint32(/* id 2, wireType 2 =*/18).string(message.name);
+            if (message.shard != null && Object.hasOwnProperty.call(message, "shard"))
+                $root.topodata.Shard.encode(message.shard, writer.uint32(/* id 3, wireType 2 =*/26).fork()).ldelim();
+            return writer;
+        };
+
+        /**
+         * Encodes the specified Shard message, length delimited. Does not implicitly {@link vtctldata.Shard.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtctldata.Shard
+         * @static
+         * @param {vtctldata.IShard} message Shard message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        Shard.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a Shard message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtctldata.Shard
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtctldata.Shard} Shard
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        Shard.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.Shard();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.keyspace = reader.string();
+                    break;
+                case 2:
+                    message.name = reader.string();
+                    break;
+                case 3:
+                    message.shard = $root.topodata.Shard.decode(reader, reader.uint32());
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a Shard message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtctldata.Shard
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtctldata.Shard} Shard
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        Shard.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a Shard message.
+         * @function verify
+         * @memberof vtctldata.Shard
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        Shard.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.keyspace != null && message.hasOwnProperty("keyspace"))
+                if (!$util.isString(message.keyspace))
+                    return "keyspace: string expected";
+            if (message.name != null && message.hasOwnProperty("name"))
+                if (!$util.isString(message.name))
+                    return "name: string expected";
+            if (message.shard != null && message.hasOwnProperty("shard")) {
+                var error = $root.topodata.Shard.verify(message.shard);
+                if (error)
+                    return "shard." + error;
+            }
+            return null;
+        };
+
+        /**
+         * Creates a Shard message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtctldata.Shard
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtctldata.Shard} Shard
+         */
+        Shard.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtctldata.Shard)
+                return object;
+            var message = new $root.vtctldata.Shard();
+            if (object.keyspace != null)
+                message.keyspace = String(object.keyspace);
+            if (object.name != null)
+                message.name = String(object.name);
+            if (object.shard != null) {
+                if (typeof object.shard !== "object")
+                    throw TypeError(".vtctldata.Shard.shard: object expected");
+                message.shard = $root.topodata.Shard.fromObject(object.shard);
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a Shard message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtctldata.Shard
+         * @static
+         * @param {vtctldata.Shard} message Shard
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        Shard.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.defaults) {
+                object.keyspace = "";
+                object.name = "";
+                object.shard = null;
+            }
+            if (message.keyspace != null && message.hasOwnProperty("keyspace"))
+                object.keyspace = message.keyspace;
+            if (message.name != null && message.hasOwnProperty("name"))
+                object.name = message.name;
+            if (message.shard != null && message.hasOwnProperty("shard"))
+                object.shard = $root.topodata.Shard.toObject(message.shard, options);
+            return object;
+        };
+
+        /**
+         * Converts this Shard to JSON.
+         * @function toJSON
+         * @memberof vtctldata.Shard
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        Shard.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return Shard;
+    })();
+
+    vtctldata.Workflow = (function() {
+
+        /**
+         * Properties of a Workflow.
+         * @memberof vtctldata
+         * @interface IWorkflow
+         * @property {string|null} [name] Workflow name
+         * @property {vtctldata.Workflow.IReplicationLocation|null} [source] Workflow source
+         * @property {vtctldata.Workflow.IReplicationLocation|null} [target] Workflow target
+         * @property {number|Long|null} [max_v_replication_lag] Workflow max_v_replication_lag
+         * @property {Object.<string,vtctldata.Workflow.IShardStream>|null} [shard_streams] Workflow shard_streams
+         */
+
+        /**
+         * Constructs a new Workflow.
+         * @memberof vtctldata
+         * @classdesc Represents a Workflow.
+         * @implements IWorkflow
+         * @constructor
+         * @param {vtctldata.IWorkflow=} [properties] Properties to set
+         */
+        function Workflow(properties) {
+            this.shard_streams = {};
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * Workflow name.
+         * @member {string} name
+         * @memberof vtctldata.Workflow
+         * @instance
+         */
+        Workflow.prototype.name = "";
+
+        /**
+         * Workflow source.
+         * @member {vtctldata.Workflow.IReplicationLocation|null|undefined} source
+         * @memberof vtctldata.Workflow
+         * @instance
+         */
+        Workflow.prototype.source = null;
+
+        /**
+         * Workflow target.
+         * @member {vtctldata.Workflow.IReplicationLocation|null|undefined} target
+         * @memberof vtctldata.Workflow
+         * @instance
+         */
+        Workflow.prototype.target = null;
+
+        /**
+         * Workflow max_v_replication_lag.
+         * @member {number|Long} max_v_replication_lag
+         * @memberof vtctldata.Workflow
+         * @instance
+         */
+        Workflow.prototype.max_v_replication_lag = $util.Long ? $util.Long.fromBits(0,0,false) : 0;
+
+        /**
+         * Workflow shard_streams.
+         * @member {Object.<string,vtctldata.Workflow.IShardStream>} shard_streams
+         * @memberof vtctldata.Workflow
+         * @instance
+         */
+        Workflow.prototype.shard_streams = $util.emptyObject;
+
+        /**
+         * Creates a new Workflow instance using the specified properties.
+         * @function create
+         * @memberof vtctldata.Workflow
+         * @static
+         * @param {vtctldata.IWorkflow=} [properties] Properties to set
+         * @returns {vtctldata.Workflow} Workflow instance
+         */
+        Workflow.create = function create(properties) {
+            return new Workflow(properties);
+        };
+
+        /**
+         * Encodes the specified Workflow message. Does not implicitly {@link vtctldata.Workflow.verify|verify} messages.
+         * @function encode
+         * @memberof vtctldata.Workflow
+         * @static
+         * @param {vtctldata.IWorkflow} message Workflow message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        Workflow.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.name != null && Object.hasOwnProperty.call(message, "name"))
+                writer.uint32(/* id 1, wireType 2 =*/10).string(message.name);
+            if (message.source != null && Object.hasOwnProperty.call(message, "source"))
+                $root.vtctldata.Workflow.ReplicationLocation.encode(message.source, writer.uint32(/* id 2, wireType 2 =*/18).fork()).ldelim();
+            if (message.target != null && Object.hasOwnProperty.call(message, "target"))
+                $root.vtctldata.Workflow.ReplicationLocation.encode(message.target, writer.uint32(/* id 3, wireType 2 =*/26).fork()).ldelim();
+            if (message.max_v_replication_lag != null && Object.hasOwnProperty.call(message, "max_v_replication_lag"))
+                writer.uint32(/* id 4, wireType 0 =*/32).int64(message.max_v_replication_lag);
+            if (message.shard_streams != null && Object.hasOwnProperty.call(message, "shard_streams"))
+                for (var keys = Object.keys(message.shard_streams), i = 0; i < keys.length; ++i) {
+                    writer.uint32(/* id 5, wireType 2 =*/42).fork().uint32(/* id 1, wireType 2 =*/10).string(keys[i]);
+                    $root.vtctldata.Workflow.ShardStream.encode(message.shard_streams[keys[i]], writer.uint32(/* id 2, wireType 2 =*/18).fork()).ldelim().ldelim();
+                }
+            return writer;
+        };
+
+        /**
+         * Encodes the specified Workflow message, length delimited. Does not implicitly {@link vtctldata.Workflow.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtctldata.Workflow
+         * @static
+         * @param {vtctldata.IWorkflow} message Workflow message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        Workflow.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a Workflow message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtctldata.Workflow
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtctldata.Workflow} Workflow
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        Workflow.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.Workflow(), key, value;
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.name = reader.string();
+                    break;
+                case 2:
+                    message.source = $root.vtctldata.Workflow.ReplicationLocation.decode(reader, reader.uint32());
+                    break;
+                case 3:
+                    message.target = $root.vtctldata.Workflow.ReplicationLocation.decode(reader, reader.uint32());
+                    break;
+                case 4:
+                    message.max_v_replication_lag = reader.int64();
+                    break;
+                case 5:
+                    if (message.shard_streams === $util.emptyObject)
+                        message.shard_streams = {};
+                    var end2 = reader.uint32() + reader.pos;
+                    key = "";
+                    value = null;
+                    while (reader.pos < end2) {
+                        var tag2 = reader.uint32();
+                        switch (tag2 >>> 3) {
+                        case 1:
+                            key = reader.string();
+                            break;
+                        case 2:
+                            value = $root.vtctldata.Workflow.ShardStream.decode(reader, reader.uint32());
+                            break;
+                        default:
+                            reader.skipType(tag2 & 7);
+                            break;
+                        }
+                    }
+                    message.shard_streams[key] = value;
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a Workflow message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtctldata.Workflow
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtctldata.Workflow} Workflow
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        Workflow.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a Workflow message.
+         * @function verify
+         * @memberof vtctldata.Workflow
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        Workflow.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.name != null && message.hasOwnProperty("name"))
+                if (!$util.isString(message.name))
+                    return "name: string expected";
+            if (message.source != null && message.hasOwnProperty("source")) {
+                var error = $root.vtctldata.Workflow.ReplicationLocation.verify(message.source);
+                if (error)
+                    return "source." + error;
+            }
+            if (message.target != null && message.hasOwnProperty("target")) {
+                var error = $root.vtctldata.Workflow.ReplicationLocation.verify(message.target);
+                if (error)
+                    return "target." + error;
+            }
+            if (message.max_v_replication_lag != null && message.hasOwnProperty("max_v_replication_lag"))
+                if (!$util.isInteger(message.max_v_replication_lag) && !(message.max_v_replication_lag && $util.isInteger(message.max_v_replication_lag.low) && $util.isInteger(message.max_v_replication_lag.high)))
+                    return "max_v_replication_lag: integer|Long expected";
+            if (message.shard_streams != null && message.hasOwnProperty("shard_streams")) {
+                if (!$util.isObject(message.shard_streams))
+                    return "shard_streams: object expected";
+                var key = Object.keys(message.shard_streams);
+                for (var i = 0; i < key.length; ++i) {
+                    var error = $root.vtctldata.Workflow.ShardStream.verify(message.shard_streams[key[i]]);
+                    if (error)
+                        return "shard_streams." + error;
+                }
+            }
+            return null;
+        };
+
+        /**
+         * Creates a Workflow message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtctldata.Workflow
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtctldata.Workflow} Workflow
+         */
+        Workflow.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtctldata.Workflow)
+                return object;
+            var message = new $root.vtctldata.Workflow();
+            if (object.name != null)
+                message.name = String(object.name);
+            if (object.source != null) {
+                if (typeof object.source !== "object")
+                    throw TypeError(".vtctldata.Workflow.source: object expected");
+                message.source = $root.vtctldata.Workflow.ReplicationLocation.fromObject(object.source);
+            }
+            if (object.target != null) {
+                if (typeof object.target !== "object")
+                    throw TypeError(".vtctldata.Workflow.target: object expected");
+                message.target = $root.vtctldata.Workflow.ReplicationLocation.fromObject(object.target);
+            }
+            if (object.max_v_replication_lag != null)
+                if ($util.Long)
+                    (message.max_v_replication_lag = $util.Long.fromValue(object.max_v_replication_lag)).unsigned = false;
+                else if (typeof object.max_v_replication_lag === "string")
+                    message.max_v_replication_lag = parseInt(object.max_v_replication_lag, 10);
+                else if (typeof object.max_v_replication_lag === "number")
+                    message.max_v_replication_lag = object.max_v_replication_lag;
+                else if (typeof object.max_v_replication_lag === "object")
+                    message.max_v_replication_lag = new $util.LongBits(object.max_v_replication_lag.low >>> 0, object.max_v_replication_lag.high >>> 0).toNumber();
+            if (object.shard_streams) {
+                if (typeof object.shard_streams !== "object")
+                    throw TypeError(".vtctldata.Workflow.shard_streams: object expected");
+                message.shard_streams = {};
+                for (var keys = Object.keys(object.shard_streams), i = 0; i < keys.length; ++i) {
+                    if (typeof object.shard_streams[keys[i]] !== "object")
+                        throw TypeError(".vtctldata.Workflow.shard_streams: object expected");
+                    message.shard_streams[keys[i]] = $root.vtctldata.Workflow.ShardStream.fromObject(object.shard_streams[keys[i]]);
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a Workflow message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtctldata.Workflow
+         * @static
+         * @param {vtctldata.Workflow} message Workflow
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        Workflow.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.objects || options.defaults)
+                object.shard_streams = {};
+            if (options.defaults) {
+                object.name = "";
+                object.source = null;
+                object.target = null;
+                if ($util.Long) {
+                    var long = new $util.Long(0, 0, false);
+                    object.max_v_replication_lag = options.longs === String ? long.toString() : options.longs === Number ? long.toNumber() : long;
+                } else
+                    object.max_v_replication_lag = options.longs === String ? "0" : 0;
+            }
+            if (message.name != null && message.hasOwnProperty("name"))
+                object.name = message.name;
+            if (message.source != null && message.hasOwnProperty("source"))
+                object.source = $root.vtctldata.Workflow.ReplicationLocation.toObject(message.source, options);
+            if (message.target != null && message.hasOwnProperty("target"))
+                object.target = $root.vtctldata.Workflow.ReplicationLocation.toObject(message.target, options);
+            if (message.max_v_replication_lag != null && message.hasOwnProperty("max_v_replication_lag"))
+                if (typeof message.max_v_replication_lag === "number")
+                    object.max_v_replication_lag = options.longs === String ? String(message.max_v_replication_lag) : message.max_v_replication_lag;
+                else
+                    object.max_v_replication_lag = options.longs === String ? $util.Long.prototype.toString.call(message.max_v_replication_lag) : options.longs === Number ? new $util.LongBits(message.max_v_replication_lag.low >>> 0, message.max_v_replication_lag.high >>> 0).toNumber() : message.max_v_replication_lag;
+            var keys2;
+            if (message.shard_streams && (keys2 = Object.keys(message.shard_streams)).length) {
+                object.shard_streams = {};
+                for (var j = 0; j < keys2.length; ++j)
+                    object.shard_streams[keys2[j]] = $root.vtctldata.Workflow.ShardStream.toObject(message.shard_streams[keys2[j]], options);
+            }
+            return object;
+        };
+
+        /**
+         * Converts this Workflow to JSON.
+         * @function toJSON
+         * @memberof vtctldata.Workflow
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        Workflow.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        Workflow.ReplicationLocation = (function() {
+
+            /**
+             * Properties of a ReplicationLocation.
+             * @memberof vtctldata.Workflow
+             * @interface IReplicationLocation
+             * @property {string|null} [keyspace] ReplicationLocation keyspace
+             * @property {Array.<string>|null} [shards] ReplicationLocation shards
+             */
+
+            /**
+             * Constructs a new ReplicationLocation.
+             * @memberof vtctldata.Workflow
+             * @classdesc Represents a ReplicationLocation.
+             * @implements IReplicationLocation
+             * @constructor
+             * @param {vtctldata.Workflow.IReplicationLocation=} [properties] Properties to set
+             */
+            function ReplicationLocation(properties) {
+                this.shards = [];
+                if (properties)
+                    for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                        if (properties[keys[i]] != null)
+                            this[keys[i]] = properties[keys[i]];
+            }
+
+            /**
+             * ReplicationLocation keyspace.
+             * @member {string} keyspace
+             * @memberof vtctldata.Workflow.ReplicationLocation
+             * @instance
+             */
+            ReplicationLocation.prototype.keyspace = "";
+
+            /**
+             * ReplicationLocation shards.
+             * @member {Array.<string>} shards
+             * @memberof vtctldata.Workflow.ReplicationLocation
+             * @instance
+             */
+            ReplicationLocation.prototype.shards = $util.emptyArray;
+
+            /**
+             * Creates a new ReplicationLocation instance using the specified properties.
+             * @function create
+             * @memberof vtctldata.Workflow.ReplicationLocation
+             * @static
+             * @param {vtctldata.Workflow.IReplicationLocation=} [properties] Properties to set
+             * @returns {vtctldata.Workflow.ReplicationLocation} ReplicationLocation instance
+             */
+            ReplicationLocation.create = function create(properties) {
+                return new ReplicationLocation(properties);
+            };
+
+            /**
+             * Encodes the specified ReplicationLocation message. Does not implicitly {@link vtctldata.Workflow.ReplicationLocation.verify|verify} messages.
+             * @function encode
+             * @memberof vtctldata.Workflow.ReplicationLocation
+             * @static
+             * @param {vtctldata.Workflow.IReplicationLocation} message ReplicationLocation message or plain object to encode
+             * @param {$protobuf.Writer} [writer] Writer to encode to
+             * @returns {$protobuf.Writer} Writer
+             */
+            ReplicationLocation.encode = function encode(message, writer) {
+                if (!writer)
+                    writer = $Writer.create();
+                if (message.keyspace != null && Object.hasOwnProperty.call(message, "keyspace"))
+                    writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
+                if (message.shards != null && message.shards.length)
+                    for (var i = 0; i < message.shards.length; ++i)
+                        writer.uint32(/* id 2, wireType 2 =*/18).string(message.shards[i]);
+                return writer;
+            };
+
+            /**
+             * Encodes the specified ReplicationLocation message, length delimited. Does not implicitly {@link vtctldata.Workflow.ReplicationLocation.verify|verify} messages.
+             * @function encodeDelimited
+             * @memberof vtctldata.Workflow.ReplicationLocation
+             * @static
+             * @param {vtctldata.Workflow.IReplicationLocation} message ReplicationLocation message or plain object to encode
+             * @param {$protobuf.Writer} [writer] Writer to encode to
+             * @returns {$protobuf.Writer} Writer
+             */
+            ReplicationLocation.encodeDelimited = function encodeDelimited(message, writer) {
+                return this.encode(message, writer).ldelim();
+            };
+
+            /**
+             * Decodes a ReplicationLocation message from the specified reader or buffer.
+             * @function decode
+             * @memberof vtctldata.Workflow.ReplicationLocation
+             * @static
+             * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+             * @param {number} [length] Message length if known beforehand
+             * @returns {vtctldata.Workflow.ReplicationLocation} ReplicationLocation
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            ReplicationLocation.decode = function decode(reader, length) {
+                if (!(reader instanceof $Reader))
+                    reader = $Reader.create(reader);
+                var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.Workflow.ReplicationLocation();
+                while (reader.pos < end) {
+                    var tag = reader.uint32();
+                    switch (tag >>> 3) {
+                    case 1:
+                        message.keyspace = reader.string();
+                        break;
+                    case 2:
+                        if (!(message.shards && message.shards.length))
+                            message.shards = [];
+                        message.shards.push(reader.string());
+                        break;
+                    default:
+                        reader.skipType(tag & 7);
+                        break;
+                    }
+                }
+                return message;
+            };
+
+            /**
+             * Decodes a ReplicationLocation message from the specified reader or buffer, length delimited.
+             * @function decodeDelimited
+             * @memberof vtctldata.Workflow.ReplicationLocation
+             * @static
+             * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+             * @returns {vtctldata.Workflow.ReplicationLocation} ReplicationLocation
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            ReplicationLocation.decodeDelimited = function decodeDelimited(reader) {
+                if (!(reader instanceof $Reader))
+                    reader = new $Reader(reader);
+                return this.decode(reader, reader.uint32());
+            };
+
+            /**
+             * Verifies a ReplicationLocation message.
+             * @function verify
+             * @memberof vtctldata.Workflow.ReplicationLocation
+             * @static
+             * @param {Object.<string,*>} message Plain object to verify
+             * @returns {string|null} `null` if valid, otherwise the reason why it is not
+             */
+            ReplicationLocation.verify = function verify(message) {
+                if (typeof message !== "object" || message === null)
+                    return "object expected";
+                if (message.keyspace != null && message.hasOwnProperty("keyspace"))
+                    if (!$util.isString(message.keyspace))
+                        return "keyspace: string expected";
+                if (message.shards != null && message.hasOwnProperty("shards")) {
+                    if (!Array.isArray(message.shards))
+                        return "shards: array expected";
+                    for (var i = 0; i < message.shards.length; ++i)
+                        if (!$util.isString(message.shards[i]))
+                            return "shards: string[] expected";
+                }
+                return null;
+            };
+
+            /**
+             * Creates a ReplicationLocation message from a plain object. Also converts values to their respective internal types.
+             * @function fromObject
+             * @memberof vtctldata.Workflow.ReplicationLocation
+             * @static
+             * @param {Object.<string,*>} object Plain object
+             * @returns {vtctldata.Workflow.ReplicationLocation} ReplicationLocation
+             */
+            ReplicationLocation.fromObject = function fromObject(object) {
+                if (object instanceof $root.vtctldata.Workflow.ReplicationLocation)
+                    return object;
+                var message = new $root.vtctldata.Workflow.ReplicationLocation();
+                if (object.keyspace != null)
+                    message.keyspace = String(object.keyspace);
+                if (object.shards) {
+                    if (!Array.isArray(object.shards))
+                        throw TypeError(".vtctldata.Workflow.ReplicationLocation.shards: array expected");
+                    message.shards = [];
+                    for (var i = 0; i < object.shards.length; ++i)
+                        message.shards[i] = String(object.shards[i]);
+                }
+                return message;
+            };
+
+            /**
+             * Creates a plain object from a ReplicationLocation message. Also converts values to other types if specified.
+             * @function toObject
+             * @memberof vtctldata.Workflow.ReplicationLocation
+             * @static
+             * @param {vtctldata.Workflow.ReplicationLocation} message ReplicationLocation
+             * @param {$protobuf.IConversionOptions} [options] Conversion options
+             * @returns {Object.<string,*>} Plain object
+             */
+            ReplicationLocation.toObject = function toObject(message, options) {
+                if (!options)
+                    options = {};
+                var object = {};
+                if (options.arrays || options.defaults)
+                    object.shards = [];
+                if (options.defaults)
+                    object.keyspace = "";
+                if (message.keyspace != null && message.hasOwnProperty("keyspace"))
+                    object.keyspace = message.keyspace;
+                if (message.shards && message.shards.length) {
+                    object.shards = [];
+                    for (var j = 0; j < message.shards.length; ++j)
+                        object.shards[j] = message.shards[j];
+                }
+                return object;
+            };
+
+            /**
+             * Converts this ReplicationLocation to JSON.
+             * @function toJSON
+             * @memberof vtctldata.Workflow.ReplicationLocation
+             * @instance
+             * @returns {Object.<string,*>} JSON object
+             */
+            ReplicationLocation.prototype.toJSON = function toJSON() {
+                return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+            };
+
+            return ReplicationLocation;
+        })();
+
+        Workflow.ShardStream = (function() {
+
+            /**
+             * Properties of a ShardStream.
+             * @memberof vtctldata.Workflow
+             * @interface IShardStream
+             * @property {Array.<vtctldata.Workflow.IStream>|null} [streams] ShardStream streams
+             * @property {Array.<topodata.Shard.ITabletControl>|null} [tablet_controls] ShardStream tablet_controls
+             * @property {boolean|null} [is_primary_serving] ShardStream is_primary_serving
+             */
+
+            /**
+             * Constructs a new ShardStream.
+             * @memberof vtctldata.Workflow
+             * @classdesc Represents a ShardStream.
+             * @implements IShardStream
+             * @constructor
+             * @param {vtctldata.Workflow.IShardStream=} [properties] Properties to set
+             */
+            function ShardStream(properties) {
+                this.streams = [];
+                this.tablet_controls = [];
+                if (properties)
+                    for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                        if (properties[keys[i]] != null)
+                            this[keys[i]] = properties[keys[i]];
+            }
+
+            /**
+             * ShardStream streams.
+             * @member {Array.<vtctldata.Workflow.IStream>} streams
+             * @memberof vtctldata.Workflow.ShardStream
+             * @instance
+             */
+            ShardStream.prototype.streams = $util.emptyArray;
+
+            /**
+             * ShardStream tablet_controls.
+             * @member {Array.<topodata.Shard.ITabletControl>} tablet_controls
+             * @memberof vtctldata.Workflow.ShardStream
+             * @instance
+             */
+            ShardStream.prototype.tablet_controls = $util.emptyArray;
+
+            /**
+             * ShardStream is_primary_serving.
+             * @member {boolean} is_primary_serving
+             * @memberof vtctldata.Workflow.ShardStream
+             * @instance
+             */
+            ShardStream.prototype.is_primary_serving = false;
+
+            /**
+             * Creates a new ShardStream instance using the specified properties.
+             * @function create
+             * @memberof vtctldata.Workflow.ShardStream
+             * @static
+             * @param {vtctldata.Workflow.IShardStream=} [properties] Properties to set
+             * @returns {vtctldata.Workflow.ShardStream} ShardStream instance
+             */
+            ShardStream.create = function create(properties) {
+                return new ShardStream(properties);
+            };
+
+            /**
+             * Encodes the specified ShardStream message. Does not implicitly {@link vtctldata.Workflow.ShardStream.verify|verify} messages.
+             * @function encode
+             * @memberof vtctldata.Workflow.ShardStream
+             * @static
+             * @param {vtctldata.Workflow.IShardStream} message ShardStream message or plain object to encode
+             * @param {$protobuf.Writer} [writer] Writer to encode to
+             * @returns {$protobuf.Writer} Writer
+             */
+            ShardStream.encode = function encode(message, writer) {
+                if (!writer)
+                    writer = $Writer.create();
+                if (message.streams != null && message.streams.length)
+                    for (var i = 0; i < message.streams.length; ++i)
+                        $root.vtctldata.Workflow.Stream.encode(message.streams[i], writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
+                if (message.tablet_controls != null && message.tablet_controls.length)
+                    for (var i = 0; i < message.tablet_controls.length; ++i)
+                        $root.topodata.Shard.TabletControl.encode(message.tablet_controls[i], writer.uint32(/* id 2, wireType 2 =*/18).fork()).ldelim();
+                if (message.is_primary_serving != null && Object.hasOwnProperty.call(message, "is_primary_serving"))
+                    writer.uint32(/* id 3, wireType 0 =*/24).bool(message.is_primary_serving);
+                return writer;
+            };
+
+            /**
+             * Encodes the specified ShardStream message, length delimited. Does not implicitly {@link vtctldata.Workflow.ShardStream.verify|verify} messages.
+             * @function encodeDelimited
+             * @memberof vtctldata.Workflow.ShardStream
+             * @static
+             * @param {vtctldata.Workflow.IShardStream} message ShardStream message or plain object to encode
+             * @param {$protobuf.Writer} [writer] Writer to encode to
+             * @returns {$protobuf.Writer} Writer
+             */
+            ShardStream.encodeDelimited = function encodeDelimited(message, writer) {
+                return this.encode(message, writer).ldelim();
+            };
+
+            /**
+             * Decodes a ShardStream message from the specified reader or buffer.
+             * @function decode
+             * @memberof vtctldata.Workflow.ShardStream
+             * @static
+             * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+             * @param {number} [length] Message length if known beforehand
+             * @returns {vtctldata.Workflow.ShardStream} ShardStream
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            ShardStream.decode = function decode(reader, length) {
+                if (!(reader instanceof $Reader))
+                    reader = $Reader.create(reader);
+                var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.Workflow.ShardStream();
+                while (reader.pos < end) {
+                    var tag = reader.uint32();
+                    switch (tag >>> 3) {
+                    case 1:
+                        if (!(message.streams && message.streams.length))
+                            message.streams = [];
+                        message.streams.push($root.vtctldata.Workflow.Stream.decode(reader, reader.uint32()));
+                        break;
+                    case 2:
+                        if (!(message.tablet_controls && message.tablet_controls.length))
+                            message.tablet_controls = [];
+                        message.tablet_controls.push($root.topodata.Shard.TabletControl.decode(reader, reader.uint32()));
+                        break;
+                    case 3:
+                        message.is_primary_serving = reader.bool();
+                        break;
+                    default:
+                        reader.skipType(tag & 7);
+                        break;
+                    }
+                }
+                return message;
+            };
+
+            /**
+             * Decodes a ShardStream message from the specified reader or buffer, length delimited.
+             * @function decodeDelimited
+             * @memberof vtctldata.Workflow.ShardStream
+             * @static
+             * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+             * @returns {vtctldata.Workflow.ShardStream} ShardStream
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            ShardStream.decodeDelimited = function decodeDelimited(reader) {
+                if (!(reader instanceof $Reader))
+                    reader = new $Reader(reader);
+                return this.decode(reader, reader.uint32());
+            };
+
+            /**
+             * Verifies a ShardStream message.
+             * @function verify
+             * @memberof vtctldata.Workflow.ShardStream
+             * @static
+             * @param {Object.<string,*>} message Plain object to verify
+             * @returns {string|null} `null` if valid, otherwise the reason why it is not
+             */
+            ShardStream.verify = function verify(message) {
+                if (typeof message !== "object" || message === null)
+                    return "object expected";
+                if (message.streams != null && message.hasOwnProperty("streams")) {
+                    if (!Array.isArray(message.streams))
+                        return "streams: array expected";
+                    for (var i = 0; i < message.streams.length; ++i) {
+                        var error = $root.vtctldata.Workflow.Stream.verify(message.streams[i]);
+                        if (error)
+                            return "streams." + error;
+                    }
+                }
+                if (message.tablet_controls != null && message.hasOwnProperty("tablet_controls")) {
+                    if (!Array.isArray(message.tablet_controls))
+                        return "tablet_controls: array expected";
+                    for (var i = 0; i < message.tablet_controls.length; ++i) {
+                        var error = $root.topodata.Shard.TabletControl.verify(message.tablet_controls[i]);
+                        if (error)
+                            return "tablet_controls." + error;
+                    }
+                }
+                if (message.is_primary_serving != null && message.hasOwnProperty("is_primary_serving"))
+                    if (typeof message.is_primary_serving !== "boolean")
+                        return "is_primary_serving: boolean expected";
+                return null;
+            };
+
+            /**
+             * Creates a ShardStream message from a plain object. Also converts values to their respective internal types.
+             * @function fromObject
+             * @memberof vtctldata.Workflow.ShardStream
+             * @static
+             * @param {Object.<string,*>} object Plain object
+             * @returns {vtctldata.Workflow.ShardStream} ShardStream
+             */
+            ShardStream.fromObject = function fromObject(object) {
+                if (object instanceof $root.vtctldata.Workflow.ShardStream)
+                    return object;
+                var message = new $root.vtctldata.Workflow.ShardStream();
+                if (object.streams) {
+                    if (!Array.isArray(object.streams))
+                        throw TypeError(".vtctldata.Workflow.ShardStream.streams: array expected");
+                    message.streams = [];
+                    for (var i = 0; i < object.streams.length; ++i) {
+                        if (typeof object.streams[i] !== "object")
+                            throw TypeError(".vtctldata.Workflow.ShardStream.streams: object expected");
+                        message.streams[i] = $root.vtctldata.Workflow.Stream.fromObject(object.streams[i]);
+                    }
+                }
+                if (object.tablet_controls) {
+                    if (!Array.isArray(object.tablet_controls))
+                        throw TypeError(".vtctldata.Workflow.ShardStream.tablet_controls: array expected");
+                    message.tablet_controls = [];
+                    for (var i = 0; i < object.tablet_controls.length; ++i) {
+                        if (typeof object.tablet_controls[i] !== "object")
+                            throw TypeError(".vtctldata.Workflow.ShardStream.tablet_controls: object expected");
+                        message.tablet_controls[i] = $root.topodata.Shard.TabletControl.fromObject(object.tablet_controls[i]);
+                    }
+                }
+                if (object.is_primary_serving != null)
+                    message.is_primary_serving = Boolean(object.is_primary_serving);
+                return message;
+            };
+
+            /**
+             * Creates a plain object from a ShardStream message. Also converts values to other types if specified.
+             * @function toObject
+             * @memberof vtctldata.Workflow.ShardStream
+             * @static
+             * @param {vtctldata.Workflow.ShardStream} message ShardStream
+             * @param {$protobuf.IConversionOptions} [options] Conversion options
+             * @returns {Object.<string,*>} Plain object
+             */
+            ShardStream.toObject = function toObject(message, options) {
+                if (!options)
+                    options = {};
+                var object = {};
+                if (options.arrays || options.defaults) {
+                    object.streams = [];
+                    object.tablet_controls = [];
+                }
+                if (options.defaults)
+                    object.is_primary_serving = false;
+                if (message.streams && message.streams.length) {
+                    object.streams = [];
+                    for (var j = 0; j < message.streams.length; ++j)
+                        object.streams[j] = $root.vtctldata.Workflow.Stream.toObject(message.streams[j], options);
+                }
+                if (message.tablet_controls && message.tablet_controls.length) {
+                    object.tablet_controls = [];
+                    for (var j = 0; j < message.tablet_controls.length; ++j)
+                        object.tablet_controls[j] = $root.topodata.Shard.TabletControl.toObject(message.tablet_controls[j], options);
+                }
+                if (message.is_primary_serving != null && message.hasOwnProperty("is_primary_serving"))
+                    object.is_primary_serving = message.is_primary_serving;
+                return object;
+            };
+
+            /**
+             * Converts this ShardStream to JSON.
+             * @function toJSON
+             * @memberof vtctldata.Workflow.ShardStream
+             * @instance
+             * @returns {Object.<string,*>} JSON object
+             */
+            ShardStream.prototype.toJSON = function toJSON() {
+                return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+            };
+
+            return ShardStream;
+        })();
+
+        Workflow.Stream = (function() {
+
+            /**
+             * Properties of a Stream.
+             * @memberof vtctldata.Workflow
+             * @interface IStream
+             * @property {number|Long|null} [id] Stream id
+             * @property {string|null} [shard] Stream shard
+             * @property {topodata.ITabletAlias|null} [tablet] Stream tablet
+             * @property {binlogdata.IBinlogSource|null} [binlog_source] Stream binlog_source
+             * @property {string|null} [position] Stream position
+             * @property {string|null} [stop_position] Stream stop_position
+             * @property {string|null} [state] Stream state
+             * @property {string|null} [db_name] Stream db_name
+             * @property {vttime.ITime|null} [transaction_timestamp] Stream transaction_timestamp
+             * @property {vttime.ITime|null} [time_updated] Stream time_updated
+             * @property {string|null} [message] Stream message
+             * @property {Array.<vtctldata.Workflow.Stream.ICopyState>|null} [copy_states] Stream copy_states
+             */
+
+            /**
+             * Constructs a new Stream.
+             * @memberof vtctldata.Workflow
+             * @classdesc Represents a Stream.
+             * @implements IStream
+             * @constructor
+             * @param {vtctldata.Workflow.IStream=} [properties] Properties to set
+             */
+            function Stream(properties) {
+                this.copy_states = [];
+                if (properties)
+                    for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                        if (properties[keys[i]] != null)
+                            this[keys[i]] = properties[keys[i]];
+            }
+
+            /**
+             * Stream id.
+             * @member {number|Long} id
+             * @memberof vtctldata.Workflow.Stream
+             * @instance
+             */
+            Stream.prototype.id = $util.Long ? $util.Long.fromBits(0,0,false) : 0;
+
+            /**
+             * Stream shard.
+             * @member {string} shard
+             * @memberof vtctldata.Workflow.Stream
+             * @instance
+             */
+            Stream.prototype.shard = "";
+
+            /**
+             * Stream tablet.
+             * @member {topodata.ITabletAlias|null|undefined} tablet
+             * @memberof vtctldata.Workflow.Stream
+             * @instance
+             */
+            Stream.prototype.tablet = null;
+
+            /**
+             * Stream binlog_source.
+             * @member {binlogdata.IBinlogSource|null|undefined} binlog_source
+             * @memberof vtctldata.Workflow.Stream
+             * @instance
+             */
+            Stream.prototype.binlog_source = null;
+
+            /**
+             * Stream position.
+             * @member {string} position
+             * @memberof vtctldata.Workflow.Stream
+             * @instance
+             */
+            Stream.prototype.position = "";
+
+            /**
+             * Stream stop_position.
+             * @member {string} stop_position
+             * @memberof vtctldata.Workflow.Stream
+             * @instance
+             */
+            Stream.prototype.stop_position = "";
+
+            /**
+             * Stream state.
+             * @member {string} state
+             * @memberof vtctldata.Workflow.Stream
+             * @instance
+             */
+            Stream.prototype.state = "";
+
+            /**
+             * Stream db_name.
+             * @member {string} db_name
+             * @memberof vtctldata.Workflow.Stream
+             * @instance
+             */
+            Stream.prototype.db_name = "";
+
+            /**
+             * Stream transaction_timestamp.
+             * @member {vttime.ITime|null|undefined} transaction_timestamp
+             * @memberof vtctldata.Workflow.Stream
+             * @instance
+             */
+            Stream.prototype.transaction_timestamp = null;
+
+            /**
+             * Stream time_updated.
+             * @member {vttime.ITime|null|undefined} time_updated
+             * @memberof vtctldata.Workflow.Stream
+             * @instance
+             */
+            Stream.prototype.time_updated = null;
+
+            /**
+             * Stream message.
+             * @member {string} message
+             * @memberof vtctldata.Workflow.Stream
+             * @instance
+             */
+            Stream.prototype.message = "";
+
+            /**
+             * Stream copy_states.
+             * @member {Array.<vtctldata.Workflow.Stream.ICopyState>} copy_states
+             * @memberof vtctldata.Workflow.Stream
+             * @instance
+             */
+            Stream.prototype.copy_states = $util.emptyArray;
+
+            /**
+             * Creates a new Stream instance using the specified properties.
+             * @function create
+             * @memberof vtctldata.Workflow.Stream
+             * @static
+             * @param {vtctldata.Workflow.IStream=} [properties] Properties to set
+             * @returns {vtctldata.Workflow.Stream} Stream instance
+             */
+            Stream.create = function create(properties) {
+                return new Stream(properties);
+            };
+
+            /**
+             * Encodes the specified Stream message. Does not implicitly {@link vtctldata.Workflow.Stream.verify|verify} messages.
+             * @function encode
+             * @memberof vtctldata.Workflow.Stream
+             * @static
+             * @param {vtctldata.Workflow.IStream} message Stream message or plain object to encode
+             * @param {$protobuf.Writer} [writer] Writer to encode to
+             * @returns {$protobuf.Writer} Writer
+             */
+            Stream.encode = function encode(message, writer) {
+                if (!writer)
+                    writer = $Writer.create();
+                if (message.id != null && Object.hasOwnProperty.call(message, "id"))
+                    writer.uint32(/* id 1, wireType 0 =*/8).int64(message.id);
+                if (message.shard != null && Object.hasOwnProperty.call(message, "shard"))
+                    writer.uint32(/* id 2, wireType 2 =*/18).string(message.shard);
+                if (message.tablet != null && Object.hasOwnProperty.call(message, "tablet"))
+                    $root.topodata.TabletAlias.encode(message.tablet, writer.uint32(/* id 3, wireType 2 =*/26).fork()).ldelim();
+                if (message.binlog_source != null && Object.hasOwnProperty.call(message, "binlog_source"))
+                    $root.binlogdata.BinlogSource.encode(message.binlog_source, writer.uint32(/* id 4, wireType 2 =*/34).fork()).ldelim();
+                if (message.position != null && Object.hasOwnProperty.call(message, "position"))
+                    writer.uint32(/* id 5, wireType 2 =*/42).string(message.position);
+                if (message.stop_position != null && Object.hasOwnProperty.call(message, "stop_position"))
+                    writer.uint32(/* id 6, wireType 2 =*/50).string(message.stop_position);
+                if (message.state != null && Object.hasOwnProperty.call(message, "state"))
+                    writer.uint32(/* id 7, wireType 2 =*/58).string(message.state);
+                if (message.db_name != null && Object.hasOwnProperty.call(message, "db_name"))
+                    writer.uint32(/* id 8, wireType 2 =*/66).string(message.db_name);
+                if (message.transaction_timestamp != null && Object.hasOwnProperty.call(message, "transaction_timestamp"))
+                    $root.vttime.Time.encode(message.transaction_timestamp, writer.uint32(/* id 9, wireType 2 =*/74).fork()).ldelim();
+                if (message.time_updated != null && Object.hasOwnProperty.call(message, "time_updated"))
+                    $root.vttime.Time.encode(message.time_updated, writer.uint32(/* id 10, wireType 2 =*/82).fork()).ldelim();
+                if (message.message != null && Object.hasOwnProperty.call(message, "message"))
+                    writer.uint32(/* id 11, wireType 2 =*/90).string(message.message);
+                if (message.copy_states != null && message.copy_states.length)
+                    for (var i = 0; i < message.copy_states.length; ++i)
+                        $root.vtctldata.Workflow.Stream.CopyState.encode(message.copy_states[i], writer.uint32(/* id 12, wireType 2 =*/98).fork()).ldelim();
+                return writer;
+            };
+
+            /**
+             * Encodes the specified Stream message, length delimited. Does not implicitly {@link vtctldata.Workflow.Stream.verify|verify} messages.
+             * @function encodeDelimited
+             * @memberof vtctldata.Workflow.Stream
+             * @static
+             * @param {vtctldata.Workflow.IStream} message Stream message or plain object to encode
+             * @param {$protobuf.Writer} [writer] Writer to encode to
+             * @returns {$protobuf.Writer} Writer
+             */
+            Stream.encodeDelimited = function encodeDelimited(message, writer) {
+                return this.encode(message, writer).ldelim();
+            };
+
+            /**
+             * Decodes a Stream message from the specified reader or buffer.
+             * @function decode
+             * @memberof vtctldata.Workflow.Stream
+             * @static
+             * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+             * @param {number} [length] Message length if known beforehand
+             * @returns {vtctldata.Workflow.Stream} Stream
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            Stream.decode = function decode(reader, length) {
+                if (!(reader instanceof $Reader))
+                    reader = $Reader.create(reader);
+                var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.Workflow.Stream();
+                while (reader.pos < end) {
+                    var tag = reader.uint32();
+                    switch (tag >>> 3) {
+                    case 1:
+                        message.id = reader.int64();
+                        break;
+                    case 2:
+                        message.shard = reader.string();
+                        break;
+                    case 3:
+                        message.tablet = $root.topodata.TabletAlias.decode(reader, reader.uint32());
+                        break;
+                    case 4:
+                        message.binlog_source = $root.binlogdata.BinlogSource.decode(reader, reader.uint32());
+                        break;
+                    case 5:
+                        message.position = reader.string();
+                        break;
+                    case 6:
+                        message.stop_position = reader.string();
+                        break;
+                    case 7:
+                        message.state = reader.string();
+                        break;
+                    case 8:
+                        message.db_name = reader.string();
+                        break;
+                    case 9:
+                        message.transaction_timestamp = $root.vttime.Time.decode(reader, reader.uint32());
+                        break;
+                    case 10:
+                        message.time_updated = $root.vttime.Time.decode(reader, reader.uint32());
+                        break;
+                    case 11:
+                        message.message = reader.string();
+                        break;
+                    case 12:
+                        if (!(message.copy_states && message.copy_states.length))
+                            message.copy_states = [];
+                        message.copy_states.push($root.vtctldata.Workflow.Stream.CopyState.decode(reader, reader.uint32()));
+                        break;
+                    default:
+                        reader.skipType(tag & 7);
+                        break;
+                    }
+                }
+                return message;
+            };
+
+            /**
+             * Decodes a Stream message from the specified reader or buffer, length delimited.
+             * @function decodeDelimited
+             * @memberof vtctldata.Workflow.Stream
+             * @static
+             * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+             * @returns {vtctldata.Workflow.Stream} Stream
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            Stream.decodeDelimited = function decodeDelimited(reader) {
+                if (!(reader instanceof $Reader))
+                    reader = new $Reader(reader);
+                return this.decode(reader, reader.uint32());
+            };
+
+            /**
+             * Verifies a Stream message.
+             * @function verify
+             * @memberof vtctldata.Workflow.Stream
+             * @static
+             * @param {Object.<string,*>} message Plain object to verify
+             * @returns {string|null} `null` if valid, otherwise the reason why it is not
+             */
+            Stream.verify = function verify(message) {
+                if (typeof message !== "object" || message === null)
+                    return "object expected";
+                if (message.id != null && message.hasOwnProperty("id"))
+                    if (!$util.isInteger(message.id) && !(message.id && $util.isInteger(message.id.low) && $util.isInteger(message.id.high)))
+                        return "id: integer|Long expected";
+                if (message.shard != null && message.hasOwnProperty("shard"))
+                    if (!$util.isString(message.shard))
+                        return "shard: string expected";
+                if (message.tablet != null && message.hasOwnProperty("tablet")) {
+                    var error = $root.topodata.TabletAlias.verify(message.tablet);
+                    if (error)
+                        return "tablet." + error;
+                }
+                if (message.binlog_source != null && message.hasOwnProperty("binlog_source")) {
+                    var error = $root.binlogdata.BinlogSource.verify(message.binlog_source);
+                    if (error)
+                        return "binlog_source." + error;
+                }
+                if (message.position != null && message.hasOwnProperty("position"))
+                    if (!$util.isString(message.position))
+                        return "position: string expected";
+                if (message.stop_position != null && message.hasOwnProperty("stop_position"))
+                    if (!$util.isString(message.stop_position))
+                        return "stop_position: string expected";
+                if (message.state != null && message.hasOwnProperty("state"))
+                    if (!$util.isString(message.state))
+                        return "state: string expected";
+                if (message.db_name != null && message.hasOwnProperty("db_name"))
+                    if (!$util.isString(message.db_name))
+                        return "db_name: string expected";
+                if (message.transaction_timestamp != null && message.hasOwnProperty("transaction_timestamp")) {
+                    var error = $root.vttime.Time.verify(message.transaction_timestamp);
+                    if (error)
+                        return "transaction_timestamp." + error;
+                }
+                if (message.time_updated != null && message.hasOwnProperty("time_updated")) {
+                    var error = $root.vttime.Time.verify(message.time_updated);
+                    if (error)
+                        return "time_updated." + error;
+                }
+                if (message.message != null && message.hasOwnProperty("message"))
+                    if (!$util.isString(message.message))
+                        return "message: string expected";
+                if (message.copy_states != null && message.hasOwnProperty("copy_states")) {
+                    if (!Array.isArray(message.copy_states))
+                        return "copy_states: array expected";
+                    for (var i = 0; i < message.copy_states.length; ++i) {
+                        var error = $root.vtctldata.Workflow.Stream.CopyState.verify(message.copy_states[i]);
+                        if (error)
+                            return "copy_states." + error;
+                    }
+                }
+                return null;
+            };
+
+            /**
+             * Creates a Stream message from a plain object. Also converts values to their respective internal types.
+             * @function fromObject
+             * @memberof vtctldata.Workflow.Stream
+             * @static
+             * @param {Object.<string,*>} object Plain object
+             * @returns {vtctldata.Workflow.Stream} Stream
+             */
+            Stream.fromObject = function fromObject(object) {
+                if (object instanceof $root.vtctldata.Workflow.Stream)
+                    return object;
+                var message = new $root.vtctldata.Workflow.Stream();
+                if (object.id != null)
+                    if ($util.Long)
+                        (message.id = $util.Long.fromValue(object.id)).unsigned = false;
+                    else if (typeof object.id === "string")
+                        message.id = parseInt(object.id, 10);
+                    else if (typeof object.id === "number")
+                        message.id = object.id;
+                    else if (typeof object.id === "object")
+                        message.id = new $util.LongBits(object.id.low >>> 0, object.id.high >>> 0).toNumber();
+                if (object.shard != null)
+                    message.shard = String(object.shard);
+                if (object.tablet != null) {
+                    if (typeof object.tablet !== "object")
+                        throw TypeError(".vtctldata.Workflow.Stream.tablet: object expected");
+                    message.tablet = $root.topodata.TabletAlias.fromObject(object.tablet);
+                }
+                if (object.binlog_source != null) {
+                    if (typeof object.binlog_source !== "object")
+                        throw TypeError(".vtctldata.Workflow.Stream.binlog_source: object expected");
+                    message.binlog_source = $root.binlogdata.BinlogSource.fromObject(object.binlog_source);
+                }
+                if (object.position != null)
+                    message.position = String(object.position);
+                if (object.stop_position != null)
+                    message.stop_position = String(object.stop_position);
+                if (object.state != null)
+                    message.state = String(object.state);
+                if (object.db_name != null)
+                    message.db_name = String(object.db_name);
+                if (object.transaction_timestamp != null) {
+                    if (typeof object.transaction_timestamp !== "object")
+                        throw TypeError(".vtctldata.Workflow.Stream.transaction_timestamp: object expected");
+                    message.transaction_timestamp = $root.vttime.Time.fromObject(object.transaction_timestamp);
+                }
+                if (object.time_updated != null) {
+                    if (typeof object.time_updated !== "object")
+                        throw TypeError(".vtctldata.Workflow.Stream.time_updated: object expected");
+                    message.time_updated = $root.vttime.Time.fromObject(object.time_updated);
+                }
+                if (object.message != null)
+                    message.message = String(object.message);
+                if (object.copy_states) {
+                    if (!Array.isArray(object.copy_states))
+                        throw TypeError(".vtctldata.Workflow.Stream.copy_states: array expected");
+                    message.copy_states = [];
+                    for (var i = 0; i < object.copy_states.length; ++i) {
+                        if (typeof object.copy_states[i] !== "object")
+                            throw TypeError(".vtctldata.Workflow.Stream.copy_states: object expected");
+                        message.copy_states[i] = $root.vtctldata.Workflow.Stream.CopyState.fromObject(object.copy_states[i]);
+                    }
+                }
+                return message;
+            };
+
+            /**
+             * Creates a plain object from a Stream message. Also converts values to other types if specified.
+             * @function toObject
+             * @memberof vtctldata.Workflow.Stream
+             * @static
+             * @param {vtctldata.Workflow.Stream} message Stream
+             * @param {$protobuf.IConversionOptions} [options] Conversion options
+             * @returns {Object.<string,*>} Plain object
+             */
+            Stream.toObject = function toObject(message, options) {
+                if (!options)
+                    options = {};
+                var object = {};
+                if (options.arrays || options.defaults)
+                    object.copy_states = [];
+                if (options.defaults) {
+                    if ($util.Long) {
+                        var long = new $util.Long(0, 0, false);
+                        object.id = options.longs === String ? long.toString() : options.longs === Number ? long.toNumber() : long;
+                    } else
+                        object.id = options.longs === String ? "0" : 0;
+                    object.shard = "";
+                    object.tablet = null;
+                    object.binlog_source = null;
+                    object.position = "";
+                    object.stop_position = "";
+                    object.state = "";
+                    object.db_name = "";
+                    object.transaction_timestamp = null;
+                    object.time_updated = null;
+                    object.message = "";
+                }
+                if (message.id != null && message.hasOwnProperty("id"))
+                    if (typeof message.id === "number")
+                        object.id = options.longs === String ? String(message.id) : message.id;
+                    else
+                        object.id = options.longs === String ? $util.Long.prototype.toString.call(message.id) : options.longs === Number ? new $util.LongBits(message.id.low >>> 0, message.id.high >>> 0).toNumber() : message.id;
+                if (message.shard != null && message.hasOwnProperty("shard"))
+                    object.shard = message.shard;
+                if (message.tablet != null && message.hasOwnProperty("tablet"))
+                    object.tablet = $root.topodata.TabletAlias.toObject(message.tablet, options);
+                if (message.binlog_source != null && message.hasOwnProperty("binlog_source"))
+                    object.binlog_source = $root.binlogdata.BinlogSource.toObject(message.binlog_source, options);
+                if (message.position != null && message.hasOwnProperty("position"))
+                    object.position = message.position;
+                if (message.stop_position != null && message.hasOwnProperty("stop_position"))
+                    object.stop_position = message.stop_position;
+                if (message.state != null && message.hasOwnProperty("state"))
+                    object.state = message.state;
+                if (message.db_name != null && message.hasOwnProperty("db_name"))
+                    object.db_name = message.db_name;
+                if (message.transaction_timestamp != null && message.hasOwnProperty("transaction_timestamp"))
+                    object.transaction_timestamp = $root.vttime.Time.toObject(message.transaction_timestamp, options);
+                if (message.time_updated != null && message.hasOwnProperty("time_updated"))
+                    object.time_updated = $root.vttime.Time.toObject(message.time_updated, options);
+                if (message.message != null && message.hasOwnProperty("message"))
+                    object.message = message.message;
+                if (message.copy_states && message.copy_states.length) {
+                    object.copy_states = [];
+                    for (var j = 0; j < message.copy_states.length; ++j)
+                        object.copy_states[j] = $root.vtctldata.Workflow.Stream.CopyState.toObject(message.copy_states[j], options);
+                }
+                return object;
+            };
+
+            /**
+             * Converts this Stream to JSON.
+             * @function toJSON
+             * @memberof vtctldata.Workflow.Stream
+             * @instance
+             * @returns {Object.<string,*>} JSON object
+             */
+            Stream.prototype.toJSON = function toJSON() {
+                return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+            };
+
+            Stream.CopyState = (function() {
+
+                /**
+                 * Properties of a CopyState.
+                 * @memberof vtctldata.Workflow.Stream
+                 * @interface ICopyState
+                 * @property {string|null} [table] CopyState table
+                 * @property {string|null} [last_pk] CopyState last_pk
+                 */
+
+                /**
+                 * Constructs a new CopyState.
+                 * @memberof vtctldata.Workflow.Stream
+                 * @classdesc Represents a CopyState.
+                 * @implements ICopyState
+                 * @constructor
+                 * @param {vtctldata.Workflow.Stream.ICopyState=} [properties] Properties to set
+                 */
+                function CopyState(properties) {
+                    if (properties)
+                        for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                            if (properties[keys[i]] != null)
+                                this[keys[i]] = properties[keys[i]];
+                }
+
+                /**
+                 * CopyState table.
+                 * @member {string} table
+                 * @memberof vtctldata.Workflow.Stream.CopyState
+                 * @instance
+                 */
+                CopyState.prototype.table = "";
+
+                /**
+                 * CopyState last_pk.
+                 * @member {string} last_pk
+                 * @memberof vtctldata.Workflow.Stream.CopyState
+                 * @instance
+                 */
+                CopyState.prototype.last_pk = "";
+
+                /**
+                 * Creates a new CopyState instance using the specified properties.
+                 * @function create
+                 * @memberof vtctldata.Workflow.Stream.CopyState
+                 * @static
+                 * @param {vtctldata.Workflow.Stream.ICopyState=} [properties] Properties to set
+                 * @returns {vtctldata.Workflow.Stream.CopyState} CopyState instance
+                 */
+                CopyState.create = function create(properties) {
+                    return new CopyState(properties);
+                };
+
+                /**
+                 * Encodes the specified CopyState message. Does not implicitly {@link vtctldata.Workflow.Stream.CopyState.verify|verify} messages.
+                 * @function encode
+                 * @memberof vtctldata.Workflow.Stream.CopyState
+                 * @static
+                 * @param {vtctldata.Workflow.Stream.ICopyState} message CopyState message or plain object to encode
+                 * @param {$protobuf.Writer} [writer] Writer to encode to
+                 * @returns {$protobuf.Writer} Writer
+                 */
+                CopyState.encode = function encode(message, writer) {
+                    if (!writer)
+                        writer = $Writer.create();
+                    if (message.table != null && Object.hasOwnProperty.call(message, "table"))
+                        writer.uint32(/* id 1, wireType 2 =*/10).string(message.table);
+                    if (message.last_pk != null && Object.hasOwnProperty.call(message, "last_pk"))
+                        writer.uint32(/* id 2, wireType 2 =*/18).string(message.last_pk);
+                    return writer;
+                };
+
+                /**
+                 * Encodes the specified CopyState message, length delimited. Does not implicitly {@link vtctldata.Workflow.Stream.CopyState.verify|verify} messages.
+                 * @function encodeDelimited
+                 * @memberof vtctldata.Workflow.Stream.CopyState
+                 * @static
+                 * @param {vtctldata.Workflow.Stream.ICopyState} message CopyState message or plain object to encode
+                 * @param {$protobuf.Writer} [writer] Writer to encode to
+                 * @returns {$protobuf.Writer} Writer
+                 */
+                CopyState.encodeDelimited = function encodeDelimited(message, writer) {
+                    return this.encode(message, writer).ldelim();
+                };
+
+                /**
+                 * Decodes a CopyState message from the specified reader or buffer.
+                 * @function decode
+                 * @memberof vtctldata.Workflow.Stream.CopyState
+                 * @static
+                 * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+                 * @param {number} [length] Message length if known beforehand
+                 * @returns {vtctldata.Workflow.Stream.CopyState} CopyState
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                CopyState.decode = function decode(reader, length) {
+                    if (!(reader instanceof $Reader))
+                        reader = $Reader.create(reader);
+                    var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.Workflow.Stream.CopyState();
+                    while (reader.pos < end) {
+                        var tag = reader.uint32();
+                        switch (tag >>> 3) {
+                        case 1:
+                            message.table = reader.string();
+                            break;
+                        case 2:
+                            message.last_pk = reader.string();
+                            break;
+                        default:
+                            reader.skipType(tag & 7);
+                            break;
+                        }
+                    }
+                    return message;
+                };
+
+                /**
+                 * Decodes a CopyState message from the specified reader or buffer, length delimited.
+                 * @function decodeDelimited
+                 * @memberof vtctldata.Workflow.Stream.CopyState
+                 * @static
+                 * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+                 * @returns {vtctldata.Workflow.Stream.CopyState} CopyState
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                CopyState.decodeDelimited = function decodeDelimited(reader) {
+                    if (!(reader instanceof $Reader))
+                        reader = new $Reader(reader);
+                    return this.decode(reader, reader.uint32());
+                };
+
+                /**
+                 * Verifies a CopyState message.
+                 * @function verify
+                 * @memberof vtctldata.Workflow.Stream.CopyState
+                 * @static
+                 * @param {Object.<string,*>} message Plain object to verify
+                 * @returns {string|null} `null` if valid, otherwise the reason why it is not
+                 */
+                CopyState.verify = function verify(message) {
+                    if (typeof message !== "object" || message === null)
+                        return "object expected";
+                    if (message.table != null && message.hasOwnProperty("table"))
+                        if (!$util.isString(message.table))
+                            return "table: string expected";
+                    if (message.last_pk != null && message.hasOwnProperty("last_pk"))
+                        if (!$util.isString(message.last_pk))
+                            return "last_pk: string expected";
+                    return null;
+                };
+
+                /**
+                 * Creates a CopyState message from a plain object. Also converts values to their respective internal types.
+                 * @function fromObject
+                 * @memberof vtctldata.Workflow.Stream.CopyState
+                 * @static
+                 * @param {Object.<string,*>} object Plain object
+                 * @returns {vtctldata.Workflow.Stream.CopyState} CopyState
+                 */
+                CopyState.fromObject = function fromObject(object) {
+                    if (object instanceof $root.vtctldata.Workflow.Stream.CopyState)
+                        return object;
+                    var message = new $root.vtctldata.Workflow.Stream.CopyState();
+                    if (object.table != null)
+                        message.table = String(object.table);
+                    if (object.last_pk != null)
+                        message.last_pk = String(object.last_pk);
+                    return message;
+                };
+
+                /**
+                 * Creates a plain object from a CopyState message. Also converts values to other types if specified.
+                 * @function toObject
+                 * @memberof vtctldata.Workflow.Stream.CopyState
+                 * @static
+                 * @param {vtctldata.Workflow.Stream.CopyState} message CopyState
+                 * @param {$protobuf.IConversionOptions} [options] Conversion options
+                 * @returns {Object.<string,*>} Plain object
+                 */
+                CopyState.toObject = function toObject(message, options) {
+                    if (!options)
+                        options = {};
+                    var object = {};
+                    if (options.defaults) {
+                        object.table = "";
+                        object.last_pk = "";
+                    }
+                    if (message.table != null && message.hasOwnProperty("table"))
+                        object.table = message.table;
+                    if (message.last_pk != null && message.hasOwnProperty("last_pk"))
+                        object.last_pk = message.last_pk;
+                    return object;
+                };
+
+                /**
+                 * Converts this CopyState to JSON.
+                 * @function toJSON
+                 * @memberof vtctldata.Workflow.Stream.CopyState
+                 * @instance
+                 * @returns {Object.<string,*>} JSON object
+                 */
+                CopyState.prototype.toJSON = function toJSON() {
+                    return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+                };
+
+                return CopyState;
+            })();
+
+            return Stream;
+        })();
+
+        return Workflow;
     })();
 
     vtctldata.ChangeTabletTypeRequest = (function() {
@@ -50479,6 +57865,1011 @@ $root.vtctldata = (function() {
         };
 
         return DeleteTabletsResponse;
+    })();
+
+    vtctldata.EmergencyReparentShardRequest = (function() {
+
+        /**
+         * Properties of an EmergencyReparentShardRequest.
+         * @memberof vtctldata
+         * @interface IEmergencyReparentShardRequest
+         * @property {string|null} [keyspace] EmergencyReparentShardRequest keyspace
+         * @property {string|null} [shard] EmergencyReparentShardRequest shard
+         * @property {topodata.ITabletAlias|null} [new_primary] EmergencyReparentShardRequest new_primary
+         * @property {Array.<topodata.ITabletAlias>|null} [ignore_replicas] EmergencyReparentShardRequest ignore_replicas
+         * @property {vttime.IDuration|null} [wait_replicas_timeout] EmergencyReparentShardRequest wait_replicas_timeout
+         */
+
+        /**
+         * Constructs a new EmergencyReparentShardRequest.
+         * @memberof vtctldata
+         * @classdesc Represents an EmergencyReparentShardRequest.
+         * @implements IEmergencyReparentShardRequest
+         * @constructor
+         * @param {vtctldata.IEmergencyReparentShardRequest=} [properties] Properties to set
+         */
+        function EmergencyReparentShardRequest(properties) {
+            this.ignore_replicas = [];
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * EmergencyReparentShardRequest keyspace.
+         * @member {string} keyspace
+         * @memberof vtctldata.EmergencyReparentShardRequest
+         * @instance
+         */
+        EmergencyReparentShardRequest.prototype.keyspace = "";
+
+        /**
+         * EmergencyReparentShardRequest shard.
+         * @member {string} shard
+         * @memberof vtctldata.EmergencyReparentShardRequest
+         * @instance
+         */
+        EmergencyReparentShardRequest.prototype.shard = "";
+
+        /**
+         * EmergencyReparentShardRequest new_primary.
+         * @member {topodata.ITabletAlias|null|undefined} new_primary
+         * @memberof vtctldata.EmergencyReparentShardRequest
+         * @instance
+         */
+        EmergencyReparentShardRequest.prototype.new_primary = null;
+
+        /**
+         * EmergencyReparentShardRequest ignore_replicas.
+         * @member {Array.<topodata.ITabletAlias>} ignore_replicas
+         * @memberof vtctldata.EmergencyReparentShardRequest
+         * @instance
+         */
+        EmergencyReparentShardRequest.prototype.ignore_replicas = $util.emptyArray;
+
+        /**
+         * EmergencyReparentShardRequest wait_replicas_timeout.
+         * @member {vttime.IDuration|null|undefined} wait_replicas_timeout
+         * @memberof vtctldata.EmergencyReparentShardRequest
+         * @instance
+         */
+        EmergencyReparentShardRequest.prototype.wait_replicas_timeout = null;
+
+        /**
+         * Creates a new EmergencyReparentShardRequest instance using the specified properties.
+         * @function create
+         * @memberof vtctldata.EmergencyReparentShardRequest
+         * @static
+         * @param {vtctldata.IEmergencyReparentShardRequest=} [properties] Properties to set
+         * @returns {vtctldata.EmergencyReparentShardRequest} EmergencyReparentShardRequest instance
+         */
+        EmergencyReparentShardRequest.create = function create(properties) {
+            return new EmergencyReparentShardRequest(properties);
+        };
+
+        /**
+         * Encodes the specified EmergencyReparentShardRequest message. Does not implicitly {@link vtctldata.EmergencyReparentShardRequest.verify|verify} messages.
+         * @function encode
+         * @memberof vtctldata.EmergencyReparentShardRequest
+         * @static
+         * @param {vtctldata.IEmergencyReparentShardRequest} message EmergencyReparentShardRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        EmergencyReparentShardRequest.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.keyspace != null && Object.hasOwnProperty.call(message, "keyspace"))
+                writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
+            if (message.shard != null && Object.hasOwnProperty.call(message, "shard"))
+                writer.uint32(/* id 2, wireType 2 =*/18).string(message.shard);
+            if (message.new_primary != null && Object.hasOwnProperty.call(message, "new_primary"))
+                $root.topodata.TabletAlias.encode(message.new_primary, writer.uint32(/* id 3, wireType 2 =*/26).fork()).ldelim();
+            if (message.ignore_replicas != null && message.ignore_replicas.length)
+                for (var i = 0; i < message.ignore_replicas.length; ++i)
+                    $root.topodata.TabletAlias.encode(message.ignore_replicas[i], writer.uint32(/* id 4, wireType 2 =*/34).fork()).ldelim();
+            if (message.wait_replicas_timeout != null && Object.hasOwnProperty.call(message, "wait_replicas_timeout"))
+                $root.vttime.Duration.encode(message.wait_replicas_timeout, writer.uint32(/* id 5, wireType 2 =*/42).fork()).ldelim();
+            return writer;
+        };
+
+        /**
+         * Encodes the specified EmergencyReparentShardRequest message, length delimited. Does not implicitly {@link vtctldata.EmergencyReparentShardRequest.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtctldata.EmergencyReparentShardRequest
+         * @static
+         * @param {vtctldata.IEmergencyReparentShardRequest} message EmergencyReparentShardRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        EmergencyReparentShardRequest.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes an EmergencyReparentShardRequest message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtctldata.EmergencyReparentShardRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtctldata.EmergencyReparentShardRequest} EmergencyReparentShardRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        EmergencyReparentShardRequest.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.EmergencyReparentShardRequest();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.keyspace = reader.string();
+                    break;
+                case 2:
+                    message.shard = reader.string();
+                    break;
+                case 3:
+                    message.new_primary = $root.topodata.TabletAlias.decode(reader, reader.uint32());
+                    break;
+                case 4:
+                    if (!(message.ignore_replicas && message.ignore_replicas.length))
+                        message.ignore_replicas = [];
+                    message.ignore_replicas.push($root.topodata.TabletAlias.decode(reader, reader.uint32()));
+                    break;
+                case 5:
+                    message.wait_replicas_timeout = $root.vttime.Duration.decode(reader, reader.uint32());
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes an EmergencyReparentShardRequest message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtctldata.EmergencyReparentShardRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtctldata.EmergencyReparentShardRequest} EmergencyReparentShardRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        EmergencyReparentShardRequest.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies an EmergencyReparentShardRequest message.
+         * @function verify
+         * @memberof vtctldata.EmergencyReparentShardRequest
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        EmergencyReparentShardRequest.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.keyspace != null && message.hasOwnProperty("keyspace"))
+                if (!$util.isString(message.keyspace))
+                    return "keyspace: string expected";
+            if (message.shard != null && message.hasOwnProperty("shard"))
+                if (!$util.isString(message.shard))
+                    return "shard: string expected";
+            if (message.new_primary != null && message.hasOwnProperty("new_primary")) {
+                var error = $root.topodata.TabletAlias.verify(message.new_primary);
+                if (error)
+                    return "new_primary." + error;
+            }
+            if (message.ignore_replicas != null && message.hasOwnProperty("ignore_replicas")) {
+                if (!Array.isArray(message.ignore_replicas))
+                    return "ignore_replicas: array expected";
+                for (var i = 0; i < message.ignore_replicas.length; ++i) {
+                    var error = $root.topodata.TabletAlias.verify(message.ignore_replicas[i]);
+                    if (error)
+                        return "ignore_replicas." + error;
+                }
+            }
+            if (message.wait_replicas_timeout != null && message.hasOwnProperty("wait_replicas_timeout")) {
+                var error = $root.vttime.Duration.verify(message.wait_replicas_timeout);
+                if (error)
+                    return "wait_replicas_timeout." + error;
+            }
+            return null;
+        };
+
+        /**
+         * Creates an EmergencyReparentShardRequest message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtctldata.EmergencyReparentShardRequest
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtctldata.EmergencyReparentShardRequest} EmergencyReparentShardRequest
+         */
+        EmergencyReparentShardRequest.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtctldata.EmergencyReparentShardRequest)
+                return object;
+            var message = new $root.vtctldata.EmergencyReparentShardRequest();
+            if (object.keyspace != null)
+                message.keyspace = String(object.keyspace);
+            if (object.shard != null)
+                message.shard = String(object.shard);
+            if (object.new_primary != null) {
+                if (typeof object.new_primary !== "object")
+                    throw TypeError(".vtctldata.EmergencyReparentShardRequest.new_primary: object expected");
+                message.new_primary = $root.topodata.TabletAlias.fromObject(object.new_primary);
+            }
+            if (object.ignore_replicas) {
+                if (!Array.isArray(object.ignore_replicas))
+                    throw TypeError(".vtctldata.EmergencyReparentShardRequest.ignore_replicas: array expected");
+                message.ignore_replicas = [];
+                for (var i = 0; i < object.ignore_replicas.length; ++i) {
+                    if (typeof object.ignore_replicas[i] !== "object")
+                        throw TypeError(".vtctldata.EmergencyReparentShardRequest.ignore_replicas: object expected");
+                    message.ignore_replicas[i] = $root.topodata.TabletAlias.fromObject(object.ignore_replicas[i]);
+                }
+            }
+            if (object.wait_replicas_timeout != null) {
+                if (typeof object.wait_replicas_timeout !== "object")
+                    throw TypeError(".vtctldata.EmergencyReparentShardRequest.wait_replicas_timeout: object expected");
+                message.wait_replicas_timeout = $root.vttime.Duration.fromObject(object.wait_replicas_timeout);
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from an EmergencyReparentShardRequest message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtctldata.EmergencyReparentShardRequest
+         * @static
+         * @param {vtctldata.EmergencyReparentShardRequest} message EmergencyReparentShardRequest
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        EmergencyReparentShardRequest.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.arrays || options.defaults)
+                object.ignore_replicas = [];
+            if (options.defaults) {
+                object.keyspace = "";
+                object.shard = "";
+                object.new_primary = null;
+                object.wait_replicas_timeout = null;
+            }
+            if (message.keyspace != null && message.hasOwnProperty("keyspace"))
+                object.keyspace = message.keyspace;
+            if (message.shard != null && message.hasOwnProperty("shard"))
+                object.shard = message.shard;
+            if (message.new_primary != null && message.hasOwnProperty("new_primary"))
+                object.new_primary = $root.topodata.TabletAlias.toObject(message.new_primary, options);
+            if (message.ignore_replicas && message.ignore_replicas.length) {
+                object.ignore_replicas = [];
+                for (var j = 0; j < message.ignore_replicas.length; ++j)
+                    object.ignore_replicas[j] = $root.topodata.TabletAlias.toObject(message.ignore_replicas[j], options);
+            }
+            if (message.wait_replicas_timeout != null && message.hasOwnProperty("wait_replicas_timeout"))
+                object.wait_replicas_timeout = $root.vttime.Duration.toObject(message.wait_replicas_timeout, options);
+            return object;
+        };
+
+        /**
+         * Converts this EmergencyReparentShardRequest to JSON.
+         * @function toJSON
+         * @memberof vtctldata.EmergencyReparentShardRequest
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        EmergencyReparentShardRequest.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return EmergencyReparentShardRequest;
+    })();
+
+    vtctldata.EmergencyReparentShardResponse = (function() {
+
+        /**
+         * Properties of an EmergencyReparentShardResponse.
+         * @memberof vtctldata
+         * @interface IEmergencyReparentShardResponse
+         * @property {string|null} [keyspace] EmergencyReparentShardResponse keyspace
+         * @property {string|null} [shard] EmergencyReparentShardResponse shard
+         * @property {topodata.ITabletAlias|null} [promoted_primary] EmergencyReparentShardResponse promoted_primary
+         * @property {Array.<logutil.IEvent>|null} [events] EmergencyReparentShardResponse events
+         */
+
+        /**
+         * Constructs a new EmergencyReparentShardResponse.
+         * @memberof vtctldata
+         * @classdesc Represents an EmergencyReparentShardResponse.
+         * @implements IEmergencyReparentShardResponse
+         * @constructor
+         * @param {vtctldata.IEmergencyReparentShardResponse=} [properties] Properties to set
+         */
+        function EmergencyReparentShardResponse(properties) {
+            this.events = [];
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * EmergencyReparentShardResponse keyspace.
+         * @member {string} keyspace
+         * @memberof vtctldata.EmergencyReparentShardResponse
+         * @instance
+         */
+        EmergencyReparentShardResponse.prototype.keyspace = "";
+
+        /**
+         * EmergencyReparentShardResponse shard.
+         * @member {string} shard
+         * @memberof vtctldata.EmergencyReparentShardResponse
+         * @instance
+         */
+        EmergencyReparentShardResponse.prototype.shard = "";
+
+        /**
+         * EmergencyReparentShardResponse promoted_primary.
+         * @member {topodata.ITabletAlias|null|undefined} promoted_primary
+         * @memberof vtctldata.EmergencyReparentShardResponse
+         * @instance
+         */
+        EmergencyReparentShardResponse.prototype.promoted_primary = null;
+
+        /**
+         * EmergencyReparentShardResponse events.
+         * @member {Array.<logutil.IEvent>} events
+         * @memberof vtctldata.EmergencyReparentShardResponse
+         * @instance
+         */
+        EmergencyReparentShardResponse.prototype.events = $util.emptyArray;
+
+        /**
+         * Creates a new EmergencyReparentShardResponse instance using the specified properties.
+         * @function create
+         * @memberof vtctldata.EmergencyReparentShardResponse
+         * @static
+         * @param {vtctldata.IEmergencyReparentShardResponse=} [properties] Properties to set
+         * @returns {vtctldata.EmergencyReparentShardResponse} EmergencyReparentShardResponse instance
+         */
+        EmergencyReparentShardResponse.create = function create(properties) {
+            return new EmergencyReparentShardResponse(properties);
+        };
+
+        /**
+         * Encodes the specified EmergencyReparentShardResponse message. Does not implicitly {@link vtctldata.EmergencyReparentShardResponse.verify|verify} messages.
+         * @function encode
+         * @memberof vtctldata.EmergencyReparentShardResponse
+         * @static
+         * @param {vtctldata.IEmergencyReparentShardResponse} message EmergencyReparentShardResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        EmergencyReparentShardResponse.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.keyspace != null && Object.hasOwnProperty.call(message, "keyspace"))
+                writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
+            if (message.shard != null && Object.hasOwnProperty.call(message, "shard"))
+                writer.uint32(/* id 2, wireType 2 =*/18).string(message.shard);
+            if (message.promoted_primary != null && Object.hasOwnProperty.call(message, "promoted_primary"))
+                $root.topodata.TabletAlias.encode(message.promoted_primary, writer.uint32(/* id 3, wireType 2 =*/26).fork()).ldelim();
+            if (message.events != null && message.events.length)
+                for (var i = 0; i < message.events.length; ++i)
+                    $root.logutil.Event.encode(message.events[i], writer.uint32(/* id 4, wireType 2 =*/34).fork()).ldelim();
+            return writer;
+        };
+
+        /**
+         * Encodes the specified EmergencyReparentShardResponse message, length delimited. Does not implicitly {@link vtctldata.EmergencyReparentShardResponse.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtctldata.EmergencyReparentShardResponse
+         * @static
+         * @param {vtctldata.IEmergencyReparentShardResponse} message EmergencyReparentShardResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        EmergencyReparentShardResponse.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes an EmergencyReparentShardResponse message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtctldata.EmergencyReparentShardResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtctldata.EmergencyReparentShardResponse} EmergencyReparentShardResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        EmergencyReparentShardResponse.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.EmergencyReparentShardResponse();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.keyspace = reader.string();
+                    break;
+                case 2:
+                    message.shard = reader.string();
+                    break;
+                case 3:
+                    message.promoted_primary = $root.topodata.TabletAlias.decode(reader, reader.uint32());
+                    break;
+                case 4:
+                    if (!(message.events && message.events.length))
+                        message.events = [];
+                    message.events.push($root.logutil.Event.decode(reader, reader.uint32()));
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes an EmergencyReparentShardResponse message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtctldata.EmergencyReparentShardResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtctldata.EmergencyReparentShardResponse} EmergencyReparentShardResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        EmergencyReparentShardResponse.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies an EmergencyReparentShardResponse message.
+         * @function verify
+         * @memberof vtctldata.EmergencyReparentShardResponse
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        EmergencyReparentShardResponse.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.keyspace != null && message.hasOwnProperty("keyspace"))
+                if (!$util.isString(message.keyspace))
+                    return "keyspace: string expected";
+            if (message.shard != null && message.hasOwnProperty("shard"))
+                if (!$util.isString(message.shard))
+                    return "shard: string expected";
+            if (message.promoted_primary != null && message.hasOwnProperty("promoted_primary")) {
+                var error = $root.topodata.TabletAlias.verify(message.promoted_primary);
+                if (error)
+                    return "promoted_primary." + error;
+            }
+            if (message.events != null && message.hasOwnProperty("events")) {
+                if (!Array.isArray(message.events))
+                    return "events: array expected";
+                for (var i = 0; i < message.events.length; ++i) {
+                    var error = $root.logutil.Event.verify(message.events[i]);
+                    if (error)
+                        return "events." + error;
+                }
+            }
+            return null;
+        };
+
+        /**
+         * Creates an EmergencyReparentShardResponse message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtctldata.EmergencyReparentShardResponse
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtctldata.EmergencyReparentShardResponse} EmergencyReparentShardResponse
+         */
+        EmergencyReparentShardResponse.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtctldata.EmergencyReparentShardResponse)
+                return object;
+            var message = new $root.vtctldata.EmergencyReparentShardResponse();
+            if (object.keyspace != null)
+                message.keyspace = String(object.keyspace);
+            if (object.shard != null)
+                message.shard = String(object.shard);
+            if (object.promoted_primary != null) {
+                if (typeof object.promoted_primary !== "object")
+                    throw TypeError(".vtctldata.EmergencyReparentShardResponse.promoted_primary: object expected");
+                message.promoted_primary = $root.topodata.TabletAlias.fromObject(object.promoted_primary);
+            }
+            if (object.events) {
+                if (!Array.isArray(object.events))
+                    throw TypeError(".vtctldata.EmergencyReparentShardResponse.events: array expected");
+                message.events = [];
+                for (var i = 0; i < object.events.length; ++i) {
+                    if (typeof object.events[i] !== "object")
+                        throw TypeError(".vtctldata.EmergencyReparentShardResponse.events: object expected");
+                    message.events[i] = $root.logutil.Event.fromObject(object.events[i]);
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from an EmergencyReparentShardResponse message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtctldata.EmergencyReparentShardResponse
+         * @static
+         * @param {vtctldata.EmergencyReparentShardResponse} message EmergencyReparentShardResponse
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        EmergencyReparentShardResponse.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.arrays || options.defaults)
+                object.events = [];
+            if (options.defaults) {
+                object.keyspace = "";
+                object.shard = "";
+                object.promoted_primary = null;
+            }
+            if (message.keyspace != null && message.hasOwnProperty("keyspace"))
+                object.keyspace = message.keyspace;
+            if (message.shard != null && message.hasOwnProperty("shard"))
+                object.shard = message.shard;
+            if (message.promoted_primary != null && message.hasOwnProperty("promoted_primary"))
+                object.promoted_primary = $root.topodata.TabletAlias.toObject(message.promoted_primary, options);
+            if (message.events && message.events.length) {
+                object.events = [];
+                for (var j = 0; j < message.events.length; ++j)
+                    object.events[j] = $root.logutil.Event.toObject(message.events[j], options);
+            }
+            return object;
+        };
+
+        /**
+         * Converts this EmergencyReparentShardResponse to JSON.
+         * @function toJSON
+         * @memberof vtctldata.EmergencyReparentShardResponse
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        EmergencyReparentShardResponse.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return EmergencyReparentShardResponse;
+    })();
+
+    vtctldata.FindAllShardsInKeyspaceRequest = (function() {
+
+        /**
+         * Properties of a FindAllShardsInKeyspaceRequest.
+         * @memberof vtctldata
+         * @interface IFindAllShardsInKeyspaceRequest
+         * @property {string|null} [keyspace] FindAllShardsInKeyspaceRequest keyspace
+         */
+
+        /**
+         * Constructs a new FindAllShardsInKeyspaceRequest.
+         * @memberof vtctldata
+         * @classdesc Represents a FindAllShardsInKeyspaceRequest.
+         * @implements IFindAllShardsInKeyspaceRequest
+         * @constructor
+         * @param {vtctldata.IFindAllShardsInKeyspaceRequest=} [properties] Properties to set
+         */
+        function FindAllShardsInKeyspaceRequest(properties) {
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * FindAllShardsInKeyspaceRequest keyspace.
+         * @member {string} keyspace
+         * @memberof vtctldata.FindAllShardsInKeyspaceRequest
+         * @instance
+         */
+        FindAllShardsInKeyspaceRequest.prototype.keyspace = "";
+
+        /**
+         * Creates a new FindAllShardsInKeyspaceRequest instance using the specified properties.
+         * @function create
+         * @memberof vtctldata.FindAllShardsInKeyspaceRequest
+         * @static
+         * @param {vtctldata.IFindAllShardsInKeyspaceRequest=} [properties] Properties to set
+         * @returns {vtctldata.FindAllShardsInKeyspaceRequest} FindAllShardsInKeyspaceRequest instance
+         */
+        FindAllShardsInKeyspaceRequest.create = function create(properties) {
+            return new FindAllShardsInKeyspaceRequest(properties);
+        };
+
+        /**
+         * Encodes the specified FindAllShardsInKeyspaceRequest message. Does not implicitly {@link vtctldata.FindAllShardsInKeyspaceRequest.verify|verify} messages.
+         * @function encode
+         * @memberof vtctldata.FindAllShardsInKeyspaceRequest
+         * @static
+         * @param {vtctldata.IFindAllShardsInKeyspaceRequest} message FindAllShardsInKeyspaceRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        FindAllShardsInKeyspaceRequest.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.keyspace != null && Object.hasOwnProperty.call(message, "keyspace"))
+                writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified FindAllShardsInKeyspaceRequest message, length delimited. Does not implicitly {@link vtctldata.FindAllShardsInKeyspaceRequest.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtctldata.FindAllShardsInKeyspaceRequest
+         * @static
+         * @param {vtctldata.IFindAllShardsInKeyspaceRequest} message FindAllShardsInKeyspaceRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        FindAllShardsInKeyspaceRequest.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a FindAllShardsInKeyspaceRequest message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtctldata.FindAllShardsInKeyspaceRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtctldata.FindAllShardsInKeyspaceRequest} FindAllShardsInKeyspaceRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        FindAllShardsInKeyspaceRequest.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.FindAllShardsInKeyspaceRequest();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.keyspace = reader.string();
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a FindAllShardsInKeyspaceRequest message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtctldata.FindAllShardsInKeyspaceRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtctldata.FindAllShardsInKeyspaceRequest} FindAllShardsInKeyspaceRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        FindAllShardsInKeyspaceRequest.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a FindAllShardsInKeyspaceRequest message.
+         * @function verify
+         * @memberof vtctldata.FindAllShardsInKeyspaceRequest
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        FindAllShardsInKeyspaceRequest.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.keyspace != null && message.hasOwnProperty("keyspace"))
+                if (!$util.isString(message.keyspace))
+                    return "keyspace: string expected";
+            return null;
+        };
+
+        /**
+         * Creates a FindAllShardsInKeyspaceRequest message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtctldata.FindAllShardsInKeyspaceRequest
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtctldata.FindAllShardsInKeyspaceRequest} FindAllShardsInKeyspaceRequest
+         */
+        FindAllShardsInKeyspaceRequest.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtctldata.FindAllShardsInKeyspaceRequest)
+                return object;
+            var message = new $root.vtctldata.FindAllShardsInKeyspaceRequest();
+            if (object.keyspace != null)
+                message.keyspace = String(object.keyspace);
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a FindAllShardsInKeyspaceRequest message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtctldata.FindAllShardsInKeyspaceRequest
+         * @static
+         * @param {vtctldata.FindAllShardsInKeyspaceRequest} message FindAllShardsInKeyspaceRequest
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        FindAllShardsInKeyspaceRequest.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.defaults)
+                object.keyspace = "";
+            if (message.keyspace != null && message.hasOwnProperty("keyspace"))
+                object.keyspace = message.keyspace;
+            return object;
+        };
+
+        /**
+         * Converts this FindAllShardsInKeyspaceRequest to JSON.
+         * @function toJSON
+         * @memberof vtctldata.FindAllShardsInKeyspaceRequest
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        FindAllShardsInKeyspaceRequest.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return FindAllShardsInKeyspaceRequest;
+    })();
+
+    vtctldata.FindAllShardsInKeyspaceResponse = (function() {
+
+        /**
+         * Properties of a FindAllShardsInKeyspaceResponse.
+         * @memberof vtctldata
+         * @interface IFindAllShardsInKeyspaceResponse
+         * @property {Object.<string,vtctldata.IShard>|null} [shards] FindAllShardsInKeyspaceResponse shards
+         */
+
+        /**
+         * Constructs a new FindAllShardsInKeyspaceResponse.
+         * @memberof vtctldata
+         * @classdesc Represents a FindAllShardsInKeyspaceResponse.
+         * @implements IFindAllShardsInKeyspaceResponse
+         * @constructor
+         * @param {vtctldata.IFindAllShardsInKeyspaceResponse=} [properties] Properties to set
+         */
+        function FindAllShardsInKeyspaceResponse(properties) {
+            this.shards = {};
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * FindAllShardsInKeyspaceResponse shards.
+         * @member {Object.<string,vtctldata.IShard>} shards
+         * @memberof vtctldata.FindAllShardsInKeyspaceResponse
+         * @instance
+         */
+        FindAllShardsInKeyspaceResponse.prototype.shards = $util.emptyObject;
+
+        /**
+         * Creates a new FindAllShardsInKeyspaceResponse instance using the specified properties.
+         * @function create
+         * @memberof vtctldata.FindAllShardsInKeyspaceResponse
+         * @static
+         * @param {vtctldata.IFindAllShardsInKeyspaceResponse=} [properties] Properties to set
+         * @returns {vtctldata.FindAllShardsInKeyspaceResponse} FindAllShardsInKeyspaceResponse instance
+         */
+        FindAllShardsInKeyspaceResponse.create = function create(properties) {
+            return new FindAllShardsInKeyspaceResponse(properties);
+        };
+
+        /**
+         * Encodes the specified FindAllShardsInKeyspaceResponse message. Does not implicitly {@link vtctldata.FindAllShardsInKeyspaceResponse.verify|verify} messages.
+         * @function encode
+         * @memberof vtctldata.FindAllShardsInKeyspaceResponse
+         * @static
+         * @param {vtctldata.IFindAllShardsInKeyspaceResponse} message FindAllShardsInKeyspaceResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        FindAllShardsInKeyspaceResponse.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.shards != null && Object.hasOwnProperty.call(message, "shards"))
+                for (var keys = Object.keys(message.shards), i = 0; i < keys.length; ++i) {
+                    writer.uint32(/* id 1, wireType 2 =*/10).fork().uint32(/* id 1, wireType 2 =*/10).string(keys[i]);
+                    $root.vtctldata.Shard.encode(message.shards[keys[i]], writer.uint32(/* id 2, wireType 2 =*/18).fork()).ldelim().ldelim();
+                }
+            return writer;
+        };
+
+        /**
+         * Encodes the specified FindAllShardsInKeyspaceResponse message, length delimited. Does not implicitly {@link vtctldata.FindAllShardsInKeyspaceResponse.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtctldata.FindAllShardsInKeyspaceResponse
+         * @static
+         * @param {vtctldata.IFindAllShardsInKeyspaceResponse} message FindAllShardsInKeyspaceResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        FindAllShardsInKeyspaceResponse.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a FindAllShardsInKeyspaceResponse message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtctldata.FindAllShardsInKeyspaceResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtctldata.FindAllShardsInKeyspaceResponse} FindAllShardsInKeyspaceResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        FindAllShardsInKeyspaceResponse.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.FindAllShardsInKeyspaceResponse(), key, value;
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    if (message.shards === $util.emptyObject)
+                        message.shards = {};
+                    var end2 = reader.uint32() + reader.pos;
+                    key = "";
+                    value = null;
+                    while (reader.pos < end2) {
+                        var tag2 = reader.uint32();
+                        switch (tag2 >>> 3) {
+                        case 1:
+                            key = reader.string();
+                            break;
+                        case 2:
+                            value = $root.vtctldata.Shard.decode(reader, reader.uint32());
+                            break;
+                        default:
+                            reader.skipType(tag2 & 7);
+                            break;
+                        }
+                    }
+                    message.shards[key] = value;
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a FindAllShardsInKeyspaceResponse message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtctldata.FindAllShardsInKeyspaceResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtctldata.FindAllShardsInKeyspaceResponse} FindAllShardsInKeyspaceResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        FindAllShardsInKeyspaceResponse.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a FindAllShardsInKeyspaceResponse message.
+         * @function verify
+         * @memberof vtctldata.FindAllShardsInKeyspaceResponse
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        FindAllShardsInKeyspaceResponse.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.shards != null && message.hasOwnProperty("shards")) {
+                if (!$util.isObject(message.shards))
+                    return "shards: object expected";
+                var key = Object.keys(message.shards);
+                for (var i = 0; i < key.length; ++i) {
+                    var error = $root.vtctldata.Shard.verify(message.shards[key[i]]);
+                    if (error)
+                        return "shards." + error;
+                }
+            }
+            return null;
+        };
+
+        /**
+         * Creates a FindAllShardsInKeyspaceResponse message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtctldata.FindAllShardsInKeyspaceResponse
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtctldata.FindAllShardsInKeyspaceResponse} FindAllShardsInKeyspaceResponse
+         */
+        FindAllShardsInKeyspaceResponse.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtctldata.FindAllShardsInKeyspaceResponse)
+                return object;
+            var message = new $root.vtctldata.FindAllShardsInKeyspaceResponse();
+            if (object.shards) {
+                if (typeof object.shards !== "object")
+                    throw TypeError(".vtctldata.FindAllShardsInKeyspaceResponse.shards: object expected");
+                message.shards = {};
+                for (var keys = Object.keys(object.shards), i = 0; i < keys.length; ++i) {
+                    if (typeof object.shards[keys[i]] !== "object")
+                        throw TypeError(".vtctldata.FindAllShardsInKeyspaceResponse.shards: object expected");
+                    message.shards[keys[i]] = $root.vtctldata.Shard.fromObject(object.shards[keys[i]]);
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a FindAllShardsInKeyspaceResponse message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtctldata.FindAllShardsInKeyspaceResponse
+         * @static
+         * @param {vtctldata.FindAllShardsInKeyspaceResponse} message FindAllShardsInKeyspaceResponse
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        FindAllShardsInKeyspaceResponse.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.objects || options.defaults)
+                object.shards = {};
+            var keys2;
+            if (message.shards && (keys2 = Object.keys(message.shards)).length) {
+                object.shards = {};
+                for (var j = 0; j < keys2.length; ++j)
+                    object.shards[keys2[j]] = $root.vtctldata.Shard.toObject(message.shards[keys2[j]], options);
+            }
+            return object;
+        };
+
+        /**
+         * Converts this FindAllShardsInKeyspaceResponse to JSON.
+         * @function toJSON
+         * @memberof vtctldata.FindAllShardsInKeyspaceResponse
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        FindAllShardsInKeyspaceResponse.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return FindAllShardsInKeyspaceResponse;
     })();
 
     vtctldata.GetBackupsRequest = (function() {
@@ -55307,6 +63698,424 @@ $root.vtctldata = (function() {
         return GetVSchemaResponse;
     })();
 
+    vtctldata.GetWorkflowsRequest = (function() {
+
+        /**
+         * Properties of a GetWorkflowsRequest.
+         * @memberof vtctldata
+         * @interface IGetWorkflowsRequest
+         * @property {string|null} [keyspace] GetWorkflowsRequest keyspace
+         * @property {boolean|null} [active_only] GetWorkflowsRequest active_only
+         */
+
+        /**
+         * Constructs a new GetWorkflowsRequest.
+         * @memberof vtctldata
+         * @classdesc Represents a GetWorkflowsRequest.
+         * @implements IGetWorkflowsRequest
+         * @constructor
+         * @param {vtctldata.IGetWorkflowsRequest=} [properties] Properties to set
+         */
+        function GetWorkflowsRequest(properties) {
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * GetWorkflowsRequest keyspace.
+         * @member {string} keyspace
+         * @memberof vtctldata.GetWorkflowsRequest
+         * @instance
+         */
+        GetWorkflowsRequest.prototype.keyspace = "";
+
+        /**
+         * GetWorkflowsRequest active_only.
+         * @member {boolean} active_only
+         * @memberof vtctldata.GetWorkflowsRequest
+         * @instance
+         */
+        GetWorkflowsRequest.prototype.active_only = false;
+
+        /**
+         * Creates a new GetWorkflowsRequest instance using the specified properties.
+         * @function create
+         * @memberof vtctldata.GetWorkflowsRequest
+         * @static
+         * @param {vtctldata.IGetWorkflowsRequest=} [properties] Properties to set
+         * @returns {vtctldata.GetWorkflowsRequest} GetWorkflowsRequest instance
+         */
+        GetWorkflowsRequest.create = function create(properties) {
+            return new GetWorkflowsRequest(properties);
+        };
+
+        /**
+         * Encodes the specified GetWorkflowsRequest message. Does not implicitly {@link vtctldata.GetWorkflowsRequest.verify|verify} messages.
+         * @function encode
+         * @memberof vtctldata.GetWorkflowsRequest
+         * @static
+         * @param {vtctldata.IGetWorkflowsRequest} message GetWorkflowsRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        GetWorkflowsRequest.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.keyspace != null && Object.hasOwnProperty.call(message, "keyspace"))
+                writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
+            if (message.active_only != null && Object.hasOwnProperty.call(message, "active_only"))
+                writer.uint32(/* id 2, wireType 0 =*/16).bool(message.active_only);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified GetWorkflowsRequest message, length delimited. Does not implicitly {@link vtctldata.GetWorkflowsRequest.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtctldata.GetWorkflowsRequest
+         * @static
+         * @param {vtctldata.IGetWorkflowsRequest} message GetWorkflowsRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        GetWorkflowsRequest.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a GetWorkflowsRequest message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtctldata.GetWorkflowsRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtctldata.GetWorkflowsRequest} GetWorkflowsRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        GetWorkflowsRequest.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.GetWorkflowsRequest();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.keyspace = reader.string();
+                    break;
+                case 2:
+                    message.active_only = reader.bool();
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a GetWorkflowsRequest message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtctldata.GetWorkflowsRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtctldata.GetWorkflowsRequest} GetWorkflowsRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        GetWorkflowsRequest.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a GetWorkflowsRequest message.
+         * @function verify
+         * @memberof vtctldata.GetWorkflowsRequest
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        GetWorkflowsRequest.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.keyspace != null && message.hasOwnProperty("keyspace"))
+                if (!$util.isString(message.keyspace))
+                    return "keyspace: string expected";
+            if (message.active_only != null && message.hasOwnProperty("active_only"))
+                if (typeof message.active_only !== "boolean")
+                    return "active_only: boolean expected";
+            return null;
+        };
+
+        /**
+         * Creates a GetWorkflowsRequest message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtctldata.GetWorkflowsRequest
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtctldata.GetWorkflowsRequest} GetWorkflowsRequest
+         */
+        GetWorkflowsRequest.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtctldata.GetWorkflowsRequest)
+                return object;
+            var message = new $root.vtctldata.GetWorkflowsRequest();
+            if (object.keyspace != null)
+                message.keyspace = String(object.keyspace);
+            if (object.active_only != null)
+                message.active_only = Boolean(object.active_only);
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a GetWorkflowsRequest message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtctldata.GetWorkflowsRequest
+         * @static
+         * @param {vtctldata.GetWorkflowsRequest} message GetWorkflowsRequest
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        GetWorkflowsRequest.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.defaults) {
+                object.keyspace = "";
+                object.active_only = false;
+            }
+            if (message.keyspace != null && message.hasOwnProperty("keyspace"))
+                object.keyspace = message.keyspace;
+            if (message.active_only != null && message.hasOwnProperty("active_only"))
+                object.active_only = message.active_only;
+            return object;
+        };
+
+        /**
+         * Converts this GetWorkflowsRequest to JSON.
+         * @function toJSON
+         * @memberof vtctldata.GetWorkflowsRequest
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        GetWorkflowsRequest.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return GetWorkflowsRequest;
+    })();
+
+    vtctldata.GetWorkflowsResponse = (function() {
+
+        /**
+         * Properties of a GetWorkflowsResponse.
+         * @memberof vtctldata
+         * @interface IGetWorkflowsResponse
+         * @property {Array.<vtctldata.IWorkflow>|null} [workflows] GetWorkflowsResponse workflows
+         */
+
+        /**
+         * Constructs a new GetWorkflowsResponse.
+         * @memberof vtctldata
+         * @classdesc Represents a GetWorkflowsResponse.
+         * @implements IGetWorkflowsResponse
+         * @constructor
+         * @param {vtctldata.IGetWorkflowsResponse=} [properties] Properties to set
+         */
+        function GetWorkflowsResponse(properties) {
+            this.workflows = [];
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * GetWorkflowsResponse workflows.
+         * @member {Array.<vtctldata.IWorkflow>} workflows
+         * @memberof vtctldata.GetWorkflowsResponse
+         * @instance
+         */
+        GetWorkflowsResponse.prototype.workflows = $util.emptyArray;
+
+        /**
+         * Creates a new GetWorkflowsResponse instance using the specified properties.
+         * @function create
+         * @memberof vtctldata.GetWorkflowsResponse
+         * @static
+         * @param {vtctldata.IGetWorkflowsResponse=} [properties] Properties to set
+         * @returns {vtctldata.GetWorkflowsResponse} GetWorkflowsResponse instance
+         */
+        GetWorkflowsResponse.create = function create(properties) {
+            return new GetWorkflowsResponse(properties);
+        };
+
+        /**
+         * Encodes the specified GetWorkflowsResponse message. Does not implicitly {@link vtctldata.GetWorkflowsResponse.verify|verify} messages.
+         * @function encode
+         * @memberof vtctldata.GetWorkflowsResponse
+         * @static
+         * @param {vtctldata.IGetWorkflowsResponse} message GetWorkflowsResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        GetWorkflowsResponse.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.workflows != null && message.workflows.length)
+                for (var i = 0; i < message.workflows.length; ++i)
+                    $root.vtctldata.Workflow.encode(message.workflows[i], writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
+            return writer;
+        };
+
+        /**
+         * Encodes the specified GetWorkflowsResponse message, length delimited. Does not implicitly {@link vtctldata.GetWorkflowsResponse.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtctldata.GetWorkflowsResponse
+         * @static
+         * @param {vtctldata.IGetWorkflowsResponse} message GetWorkflowsResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        GetWorkflowsResponse.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a GetWorkflowsResponse message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtctldata.GetWorkflowsResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtctldata.GetWorkflowsResponse} GetWorkflowsResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        GetWorkflowsResponse.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.GetWorkflowsResponse();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    if (!(message.workflows && message.workflows.length))
+                        message.workflows = [];
+                    message.workflows.push($root.vtctldata.Workflow.decode(reader, reader.uint32()));
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a GetWorkflowsResponse message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtctldata.GetWorkflowsResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtctldata.GetWorkflowsResponse} GetWorkflowsResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        GetWorkflowsResponse.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a GetWorkflowsResponse message.
+         * @function verify
+         * @memberof vtctldata.GetWorkflowsResponse
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        GetWorkflowsResponse.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.workflows != null && message.hasOwnProperty("workflows")) {
+                if (!Array.isArray(message.workflows))
+                    return "workflows: array expected";
+                for (var i = 0; i < message.workflows.length; ++i) {
+                    var error = $root.vtctldata.Workflow.verify(message.workflows[i]);
+                    if (error)
+                        return "workflows." + error;
+                }
+            }
+            return null;
+        };
+
+        /**
+         * Creates a GetWorkflowsResponse message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtctldata.GetWorkflowsResponse
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtctldata.GetWorkflowsResponse} GetWorkflowsResponse
+         */
+        GetWorkflowsResponse.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtctldata.GetWorkflowsResponse)
+                return object;
+            var message = new $root.vtctldata.GetWorkflowsResponse();
+            if (object.workflows) {
+                if (!Array.isArray(object.workflows))
+                    throw TypeError(".vtctldata.GetWorkflowsResponse.workflows: array expected");
+                message.workflows = [];
+                for (var i = 0; i < object.workflows.length; ++i) {
+                    if (typeof object.workflows[i] !== "object")
+                        throw TypeError(".vtctldata.GetWorkflowsResponse.workflows: object expected");
+                    message.workflows[i] = $root.vtctldata.Workflow.fromObject(object.workflows[i]);
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a GetWorkflowsResponse message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtctldata.GetWorkflowsResponse
+         * @static
+         * @param {vtctldata.GetWorkflowsResponse} message GetWorkflowsResponse
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        GetWorkflowsResponse.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.arrays || options.defaults)
+                object.workflows = [];
+            if (message.workflows && message.workflows.length) {
+                object.workflows = [];
+                for (var j = 0; j < message.workflows.length; ++j)
+                    object.workflows[j] = $root.vtctldata.Workflow.toObject(message.workflows[j], options);
+            }
+            return object;
+        };
+
+        /**
+         * Converts this GetWorkflowsResponse to JSON.
+         * @function toJSON
+         * @memberof vtctldata.GetWorkflowsResponse
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        GetWorkflowsResponse.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return GetWorkflowsResponse;
+    })();
+
     vtctldata.InitShardPrimaryRequest = (function() {
 
         /**
@@ -55317,7 +64126,7 @@ $root.vtctldata = (function() {
          * @property {string|null} [shard] InitShardPrimaryRequest shard
          * @property {topodata.ITabletAlias|null} [primary_elect_tablet_alias] InitShardPrimaryRequest primary_elect_tablet_alias
          * @property {boolean|null} [force] InitShardPrimaryRequest force
-         * @property {google.protobuf.IDuration|null} [wait_replicas_timeout] InitShardPrimaryRequest wait_replicas_timeout
+         * @property {vttime.IDuration|null} [wait_replicas_timeout] InitShardPrimaryRequest wait_replicas_timeout
          */
 
         /**
@@ -55369,7 +64178,7 @@ $root.vtctldata = (function() {
 
         /**
          * InitShardPrimaryRequest wait_replicas_timeout.
-         * @member {google.protobuf.IDuration|null|undefined} wait_replicas_timeout
+         * @member {vttime.IDuration|null|undefined} wait_replicas_timeout
          * @memberof vtctldata.InitShardPrimaryRequest
          * @instance
          */
@@ -55408,7 +64217,7 @@ $root.vtctldata = (function() {
             if (message.force != null && Object.hasOwnProperty.call(message, "force"))
                 writer.uint32(/* id 4, wireType 0 =*/32).bool(message.force);
             if (message.wait_replicas_timeout != null && Object.hasOwnProperty.call(message, "wait_replicas_timeout"))
-                $root.google.protobuf.Duration.encode(message.wait_replicas_timeout, writer.uint32(/* id 5, wireType 2 =*/42).fork()).ldelim();
+                $root.vttime.Duration.encode(message.wait_replicas_timeout, writer.uint32(/* id 5, wireType 2 =*/42).fork()).ldelim();
             return writer;
         };
 
@@ -55456,7 +64265,7 @@ $root.vtctldata = (function() {
                     message.force = reader.bool();
                     break;
                 case 5:
-                    message.wait_replicas_timeout = $root.google.protobuf.Duration.decode(reader, reader.uint32());
+                    message.wait_replicas_timeout = $root.vttime.Duration.decode(reader, reader.uint32());
                     break;
                 default:
                     reader.skipType(tag & 7);
@@ -55508,7 +64317,7 @@ $root.vtctldata = (function() {
                 if (typeof message.force !== "boolean")
                     return "force: boolean expected";
             if (message.wait_replicas_timeout != null && message.hasOwnProperty("wait_replicas_timeout")) {
-                var error = $root.google.protobuf.Duration.verify(message.wait_replicas_timeout);
+                var error = $root.vttime.Duration.verify(message.wait_replicas_timeout);
                 if (error)
                     return "wait_replicas_timeout." + error;
             }
@@ -55541,7 +64350,7 @@ $root.vtctldata = (function() {
             if (object.wait_replicas_timeout != null) {
                 if (typeof object.wait_replicas_timeout !== "object")
                     throw TypeError(".vtctldata.InitShardPrimaryRequest.wait_replicas_timeout: object expected");
-                message.wait_replicas_timeout = $root.google.protobuf.Duration.fromObject(object.wait_replicas_timeout);
+                message.wait_replicas_timeout = $root.vttime.Duration.fromObject(object.wait_replicas_timeout);
             }
             return message;
         };
@@ -55575,7 +64384,7 @@ $root.vtctldata = (function() {
             if (message.force != null && message.hasOwnProperty("force"))
                 object.force = message.force;
             if (message.wait_replicas_timeout != null && message.hasOwnProperty("wait_replicas_timeout"))
-                object.wait_replicas_timeout = $root.google.protobuf.Duration.toObject(message.wait_replicas_timeout, options);
+                object.wait_replicas_timeout = $root.vttime.Duration.toObject(message.wait_replicas_timeout, options);
             return object;
         };
 
@@ -55799,6 +64608,578 @@ $root.vtctldata = (function() {
         };
 
         return InitShardPrimaryResponse;
+    })();
+
+    vtctldata.PlannedReparentShardRequest = (function() {
+
+        /**
+         * Properties of a PlannedReparentShardRequest.
+         * @memberof vtctldata
+         * @interface IPlannedReparentShardRequest
+         * @property {string|null} [keyspace] PlannedReparentShardRequest keyspace
+         * @property {string|null} [shard] PlannedReparentShardRequest shard
+         * @property {topodata.ITabletAlias|null} [new_primary] PlannedReparentShardRequest new_primary
+         * @property {topodata.ITabletAlias|null} [avoid_primary] PlannedReparentShardRequest avoid_primary
+         * @property {vttime.IDuration|null} [wait_replicas_timeout] PlannedReparentShardRequest wait_replicas_timeout
+         */
+
+        /**
+         * Constructs a new PlannedReparentShardRequest.
+         * @memberof vtctldata
+         * @classdesc Represents a PlannedReparentShardRequest.
+         * @implements IPlannedReparentShardRequest
+         * @constructor
+         * @param {vtctldata.IPlannedReparentShardRequest=} [properties] Properties to set
+         */
+        function PlannedReparentShardRequest(properties) {
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * PlannedReparentShardRequest keyspace.
+         * @member {string} keyspace
+         * @memberof vtctldata.PlannedReparentShardRequest
+         * @instance
+         */
+        PlannedReparentShardRequest.prototype.keyspace = "";
+
+        /**
+         * PlannedReparentShardRequest shard.
+         * @member {string} shard
+         * @memberof vtctldata.PlannedReparentShardRequest
+         * @instance
+         */
+        PlannedReparentShardRequest.prototype.shard = "";
+
+        /**
+         * PlannedReparentShardRequest new_primary.
+         * @member {topodata.ITabletAlias|null|undefined} new_primary
+         * @memberof vtctldata.PlannedReparentShardRequest
+         * @instance
+         */
+        PlannedReparentShardRequest.prototype.new_primary = null;
+
+        /**
+         * PlannedReparentShardRequest avoid_primary.
+         * @member {topodata.ITabletAlias|null|undefined} avoid_primary
+         * @memberof vtctldata.PlannedReparentShardRequest
+         * @instance
+         */
+        PlannedReparentShardRequest.prototype.avoid_primary = null;
+
+        /**
+         * PlannedReparentShardRequest wait_replicas_timeout.
+         * @member {vttime.IDuration|null|undefined} wait_replicas_timeout
+         * @memberof vtctldata.PlannedReparentShardRequest
+         * @instance
+         */
+        PlannedReparentShardRequest.prototype.wait_replicas_timeout = null;
+
+        /**
+         * Creates a new PlannedReparentShardRequest instance using the specified properties.
+         * @function create
+         * @memberof vtctldata.PlannedReparentShardRequest
+         * @static
+         * @param {vtctldata.IPlannedReparentShardRequest=} [properties] Properties to set
+         * @returns {vtctldata.PlannedReparentShardRequest} PlannedReparentShardRequest instance
+         */
+        PlannedReparentShardRequest.create = function create(properties) {
+            return new PlannedReparentShardRequest(properties);
+        };
+
+        /**
+         * Encodes the specified PlannedReparentShardRequest message. Does not implicitly {@link vtctldata.PlannedReparentShardRequest.verify|verify} messages.
+         * @function encode
+         * @memberof vtctldata.PlannedReparentShardRequest
+         * @static
+         * @param {vtctldata.IPlannedReparentShardRequest} message PlannedReparentShardRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        PlannedReparentShardRequest.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.keyspace != null && Object.hasOwnProperty.call(message, "keyspace"))
+                writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
+            if (message.shard != null && Object.hasOwnProperty.call(message, "shard"))
+                writer.uint32(/* id 2, wireType 2 =*/18).string(message.shard);
+            if (message.new_primary != null && Object.hasOwnProperty.call(message, "new_primary"))
+                $root.topodata.TabletAlias.encode(message.new_primary, writer.uint32(/* id 3, wireType 2 =*/26).fork()).ldelim();
+            if (message.avoid_primary != null && Object.hasOwnProperty.call(message, "avoid_primary"))
+                $root.topodata.TabletAlias.encode(message.avoid_primary, writer.uint32(/* id 4, wireType 2 =*/34).fork()).ldelim();
+            if (message.wait_replicas_timeout != null && Object.hasOwnProperty.call(message, "wait_replicas_timeout"))
+                $root.vttime.Duration.encode(message.wait_replicas_timeout, writer.uint32(/* id 5, wireType 2 =*/42).fork()).ldelim();
+            return writer;
+        };
+
+        /**
+         * Encodes the specified PlannedReparentShardRequest message, length delimited. Does not implicitly {@link vtctldata.PlannedReparentShardRequest.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtctldata.PlannedReparentShardRequest
+         * @static
+         * @param {vtctldata.IPlannedReparentShardRequest} message PlannedReparentShardRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        PlannedReparentShardRequest.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a PlannedReparentShardRequest message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtctldata.PlannedReparentShardRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtctldata.PlannedReparentShardRequest} PlannedReparentShardRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        PlannedReparentShardRequest.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.PlannedReparentShardRequest();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.keyspace = reader.string();
+                    break;
+                case 2:
+                    message.shard = reader.string();
+                    break;
+                case 3:
+                    message.new_primary = $root.topodata.TabletAlias.decode(reader, reader.uint32());
+                    break;
+                case 4:
+                    message.avoid_primary = $root.topodata.TabletAlias.decode(reader, reader.uint32());
+                    break;
+                case 5:
+                    message.wait_replicas_timeout = $root.vttime.Duration.decode(reader, reader.uint32());
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a PlannedReparentShardRequest message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtctldata.PlannedReparentShardRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtctldata.PlannedReparentShardRequest} PlannedReparentShardRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        PlannedReparentShardRequest.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a PlannedReparentShardRequest message.
+         * @function verify
+         * @memberof vtctldata.PlannedReparentShardRequest
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        PlannedReparentShardRequest.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.keyspace != null && message.hasOwnProperty("keyspace"))
+                if (!$util.isString(message.keyspace))
+                    return "keyspace: string expected";
+            if (message.shard != null && message.hasOwnProperty("shard"))
+                if (!$util.isString(message.shard))
+                    return "shard: string expected";
+            if (message.new_primary != null && message.hasOwnProperty("new_primary")) {
+                var error = $root.topodata.TabletAlias.verify(message.new_primary);
+                if (error)
+                    return "new_primary." + error;
+            }
+            if (message.avoid_primary != null && message.hasOwnProperty("avoid_primary")) {
+                var error = $root.topodata.TabletAlias.verify(message.avoid_primary);
+                if (error)
+                    return "avoid_primary." + error;
+            }
+            if (message.wait_replicas_timeout != null && message.hasOwnProperty("wait_replicas_timeout")) {
+                var error = $root.vttime.Duration.verify(message.wait_replicas_timeout);
+                if (error)
+                    return "wait_replicas_timeout." + error;
+            }
+            return null;
+        };
+
+        /**
+         * Creates a PlannedReparentShardRequest message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtctldata.PlannedReparentShardRequest
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtctldata.PlannedReparentShardRequest} PlannedReparentShardRequest
+         */
+        PlannedReparentShardRequest.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtctldata.PlannedReparentShardRequest)
+                return object;
+            var message = new $root.vtctldata.PlannedReparentShardRequest();
+            if (object.keyspace != null)
+                message.keyspace = String(object.keyspace);
+            if (object.shard != null)
+                message.shard = String(object.shard);
+            if (object.new_primary != null) {
+                if (typeof object.new_primary !== "object")
+                    throw TypeError(".vtctldata.PlannedReparentShardRequest.new_primary: object expected");
+                message.new_primary = $root.topodata.TabletAlias.fromObject(object.new_primary);
+            }
+            if (object.avoid_primary != null) {
+                if (typeof object.avoid_primary !== "object")
+                    throw TypeError(".vtctldata.PlannedReparentShardRequest.avoid_primary: object expected");
+                message.avoid_primary = $root.topodata.TabletAlias.fromObject(object.avoid_primary);
+            }
+            if (object.wait_replicas_timeout != null) {
+                if (typeof object.wait_replicas_timeout !== "object")
+                    throw TypeError(".vtctldata.PlannedReparentShardRequest.wait_replicas_timeout: object expected");
+                message.wait_replicas_timeout = $root.vttime.Duration.fromObject(object.wait_replicas_timeout);
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a PlannedReparentShardRequest message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtctldata.PlannedReparentShardRequest
+         * @static
+         * @param {vtctldata.PlannedReparentShardRequest} message PlannedReparentShardRequest
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        PlannedReparentShardRequest.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.defaults) {
+                object.keyspace = "";
+                object.shard = "";
+                object.new_primary = null;
+                object.avoid_primary = null;
+                object.wait_replicas_timeout = null;
+            }
+            if (message.keyspace != null && message.hasOwnProperty("keyspace"))
+                object.keyspace = message.keyspace;
+            if (message.shard != null && message.hasOwnProperty("shard"))
+                object.shard = message.shard;
+            if (message.new_primary != null && message.hasOwnProperty("new_primary"))
+                object.new_primary = $root.topodata.TabletAlias.toObject(message.new_primary, options);
+            if (message.avoid_primary != null && message.hasOwnProperty("avoid_primary"))
+                object.avoid_primary = $root.topodata.TabletAlias.toObject(message.avoid_primary, options);
+            if (message.wait_replicas_timeout != null && message.hasOwnProperty("wait_replicas_timeout"))
+                object.wait_replicas_timeout = $root.vttime.Duration.toObject(message.wait_replicas_timeout, options);
+            return object;
+        };
+
+        /**
+         * Converts this PlannedReparentShardRequest to JSON.
+         * @function toJSON
+         * @memberof vtctldata.PlannedReparentShardRequest
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        PlannedReparentShardRequest.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return PlannedReparentShardRequest;
+    })();
+
+    vtctldata.PlannedReparentShardResponse = (function() {
+
+        /**
+         * Properties of a PlannedReparentShardResponse.
+         * @memberof vtctldata
+         * @interface IPlannedReparentShardResponse
+         * @property {string|null} [keyspace] PlannedReparentShardResponse keyspace
+         * @property {string|null} [shard] PlannedReparentShardResponse shard
+         * @property {topodata.ITabletAlias|null} [promoted_primary] PlannedReparentShardResponse promoted_primary
+         * @property {Array.<logutil.IEvent>|null} [events] PlannedReparentShardResponse events
+         */
+
+        /**
+         * Constructs a new PlannedReparentShardResponse.
+         * @memberof vtctldata
+         * @classdesc Represents a PlannedReparentShardResponse.
+         * @implements IPlannedReparentShardResponse
+         * @constructor
+         * @param {vtctldata.IPlannedReparentShardResponse=} [properties] Properties to set
+         */
+        function PlannedReparentShardResponse(properties) {
+            this.events = [];
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * PlannedReparentShardResponse keyspace.
+         * @member {string} keyspace
+         * @memberof vtctldata.PlannedReparentShardResponse
+         * @instance
+         */
+        PlannedReparentShardResponse.prototype.keyspace = "";
+
+        /**
+         * PlannedReparentShardResponse shard.
+         * @member {string} shard
+         * @memberof vtctldata.PlannedReparentShardResponse
+         * @instance
+         */
+        PlannedReparentShardResponse.prototype.shard = "";
+
+        /**
+         * PlannedReparentShardResponse promoted_primary.
+         * @member {topodata.ITabletAlias|null|undefined} promoted_primary
+         * @memberof vtctldata.PlannedReparentShardResponse
+         * @instance
+         */
+        PlannedReparentShardResponse.prototype.promoted_primary = null;
+
+        /**
+         * PlannedReparentShardResponse events.
+         * @member {Array.<logutil.IEvent>} events
+         * @memberof vtctldata.PlannedReparentShardResponse
+         * @instance
+         */
+        PlannedReparentShardResponse.prototype.events = $util.emptyArray;
+
+        /**
+         * Creates a new PlannedReparentShardResponse instance using the specified properties.
+         * @function create
+         * @memberof vtctldata.PlannedReparentShardResponse
+         * @static
+         * @param {vtctldata.IPlannedReparentShardResponse=} [properties] Properties to set
+         * @returns {vtctldata.PlannedReparentShardResponse} PlannedReparentShardResponse instance
+         */
+        PlannedReparentShardResponse.create = function create(properties) {
+            return new PlannedReparentShardResponse(properties);
+        };
+
+        /**
+         * Encodes the specified PlannedReparentShardResponse message. Does not implicitly {@link vtctldata.PlannedReparentShardResponse.verify|verify} messages.
+         * @function encode
+         * @memberof vtctldata.PlannedReparentShardResponse
+         * @static
+         * @param {vtctldata.IPlannedReparentShardResponse} message PlannedReparentShardResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        PlannedReparentShardResponse.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.keyspace != null && Object.hasOwnProperty.call(message, "keyspace"))
+                writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
+            if (message.shard != null && Object.hasOwnProperty.call(message, "shard"))
+                writer.uint32(/* id 2, wireType 2 =*/18).string(message.shard);
+            if (message.promoted_primary != null && Object.hasOwnProperty.call(message, "promoted_primary"))
+                $root.topodata.TabletAlias.encode(message.promoted_primary, writer.uint32(/* id 3, wireType 2 =*/26).fork()).ldelim();
+            if (message.events != null && message.events.length)
+                for (var i = 0; i < message.events.length; ++i)
+                    $root.logutil.Event.encode(message.events[i], writer.uint32(/* id 4, wireType 2 =*/34).fork()).ldelim();
+            return writer;
+        };
+
+        /**
+         * Encodes the specified PlannedReparentShardResponse message, length delimited. Does not implicitly {@link vtctldata.PlannedReparentShardResponse.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtctldata.PlannedReparentShardResponse
+         * @static
+         * @param {vtctldata.IPlannedReparentShardResponse} message PlannedReparentShardResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        PlannedReparentShardResponse.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a PlannedReparentShardResponse message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtctldata.PlannedReparentShardResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtctldata.PlannedReparentShardResponse} PlannedReparentShardResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        PlannedReparentShardResponse.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.PlannedReparentShardResponse();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.keyspace = reader.string();
+                    break;
+                case 2:
+                    message.shard = reader.string();
+                    break;
+                case 3:
+                    message.promoted_primary = $root.topodata.TabletAlias.decode(reader, reader.uint32());
+                    break;
+                case 4:
+                    if (!(message.events && message.events.length))
+                        message.events = [];
+                    message.events.push($root.logutil.Event.decode(reader, reader.uint32()));
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a PlannedReparentShardResponse message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtctldata.PlannedReparentShardResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtctldata.PlannedReparentShardResponse} PlannedReparentShardResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        PlannedReparentShardResponse.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a PlannedReparentShardResponse message.
+         * @function verify
+         * @memberof vtctldata.PlannedReparentShardResponse
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        PlannedReparentShardResponse.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.keyspace != null && message.hasOwnProperty("keyspace"))
+                if (!$util.isString(message.keyspace))
+                    return "keyspace: string expected";
+            if (message.shard != null && message.hasOwnProperty("shard"))
+                if (!$util.isString(message.shard))
+                    return "shard: string expected";
+            if (message.promoted_primary != null && message.hasOwnProperty("promoted_primary")) {
+                var error = $root.topodata.TabletAlias.verify(message.promoted_primary);
+                if (error)
+                    return "promoted_primary." + error;
+            }
+            if (message.events != null && message.hasOwnProperty("events")) {
+                if (!Array.isArray(message.events))
+                    return "events: array expected";
+                for (var i = 0; i < message.events.length; ++i) {
+                    var error = $root.logutil.Event.verify(message.events[i]);
+                    if (error)
+                        return "events." + error;
+                }
+            }
+            return null;
+        };
+
+        /**
+         * Creates a PlannedReparentShardResponse message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtctldata.PlannedReparentShardResponse
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtctldata.PlannedReparentShardResponse} PlannedReparentShardResponse
+         */
+        PlannedReparentShardResponse.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtctldata.PlannedReparentShardResponse)
+                return object;
+            var message = new $root.vtctldata.PlannedReparentShardResponse();
+            if (object.keyspace != null)
+                message.keyspace = String(object.keyspace);
+            if (object.shard != null)
+                message.shard = String(object.shard);
+            if (object.promoted_primary != null) {
+                if (typeof object.promoted_primary !== "object")
+                    throw TypeError(".vtctldata.PlannedReparentShardResponse.promoted_primary: object expected");
+                message.promoted_primary = $root.topodata.TabletAlias.fromObject(object.promoted_primary);
+            }
+            if (object.events) {
+                if (!Array.isArray(object.events))
+                    throw TypeError(".vtctldata.PlannedReparentShardResponse.events: array expected");
+                message.events = [];
+                for (var i = 0; i < object.events.length; ++i) {
+                    if (typeof object.events[i] !== "object")
+                        throw TypeError(".vtctldata.PlannedReparentShardResponse.events: object expected");
+                    message.events[i] = $root.logutil.Event.fromObject(object.events[i]);
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a PlannedReparentShardResponse message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtctldata.PlannedReparentShardResponse
+         * @static
+         * @param {vtctldata.PlannedReparentShardResponse} message PlannedReparentShardResponse
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        PlannedReparentShardResponse.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.arrays || options.defaults)
+                object.events = [];
+            if (options.defaults) {
+                object.keyspace = "";
+                object.shard = "";
+                object.promoted_primary = null;
+            }
+            if (message.keyspace != null && message.hasOwnProperty("keyspace"))
+                object.keyspace = message.keyspace;
+            if (message.shard != null && message.hasOwnProperty("shard"))
+                object.shard = message.shard;
+            if (message.promoted_primary != null && message.hasOwnProperty("promoted_primary"))
+                object.promoted_primary = $root.topodata.TabletAlias.toObject(message.promoted_primary, options);
+            if (message.events && message.events.length) {
+                object.events = [];
+                for (var j = 0; j < message.events.length; ++j)
+                    object.events[j] = $root.logutil.Event.toObject(message.events[j], options);
+            }
+            return object;
+        };
+
+        /**
+         * Converts this PlannedReparentShardResponse to JSON.
+         * @function toJSON
+         * @memberof vtctldata.PlannedReparentShardResponse
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        PlannedReparentShardResponse.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return PlannedReparentShardResponse;
     })();
 
     vtctldata.RemoveKeyspaceCellRequest = (function() {
@@ -56651,25 +66032,24 @@ $root.vtctldata = (function() {
         return RemoveShardCellResponse;
     })();
 
-    vtctldata.Keyspace = (function() {
+    vtctldata.ReparentTabletRequest = (function() {
 
         /**
-         * Properties of a Keyspace.
+         * Properties of a ReparentTabletRequest.
          * @memberof vtctldata
-         * @interface IKeyspace
-         * @property {string|null} [name] Keyspace name
-         * @property {topodata.IKeyspace|null} [keyspace] Keyspace keyspace
+         * @interface IReparentTabletRequest
+         * @property {topodata.ITabletAlias|null} [tablet] ReparentTabletRequest tablet
          */
 
         /**
-         * Constructs a new Keyspace.
+         * Constructs a new ReparentTabletRequest.
          * @memberof vtctldata
-         * @classdesc Represents a Keyspace.
-         * @implements IKeyspace
+         * @classdesc Represents a ReparentTabletRequest.
+         * @implements IReparentTabletRequest
          * @constructor
-         * @param {vtctldata.IKeyspace=} [properties] Properties to set
+         * @param {vtctldata.IReparentTabletRequest=} [properties] Properties to set
          */
-        function Keyspace(properties) {
+        function ReparentTabletRequest(properties) {
             if (properties)
                 for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
                     if (properties[keys[i]] != null)
@@ -56677,88 +66057,75 @@ $root.vtctldata = (function() {
         }
 
         /**
-         * Keyspace name.
-         * @member {string} name
-         * @memberof vtctldata.Keyspace
+         * ReparentTabletRequest tablet.
+         * @member {topodata.ITabletAlias|null|undefined} tablet
+         * @memberof vtctldata.ReparentTabletRequest
          * @instance
          */
-        Keyspace.prototype.name = "";
+        ReparentTabletRequest.prototype.tablet = null;
 
         /**
-         * Keyspace keyspace.
-         * @member {topodata.IKeyspace|null|undefined} keyspace
-         * @memberof vtctldata.Keyspace
-         * @instance
-         */
-        Keyspace.prototype.keyspace = null;
-
-        /**
-         * Creates a new Keyspace instance using the specified properties.
+         * Creates a new ReparentTabletRequest instance using the specified properties.
          * @function create
-         * @memberof vtctldata.Keyspace
+         * @memberof vtctldata.ReparentTabletRequest
          * @static
-         * @param {vtctldata.IKeyspace=} [properties] Properties to set
-         * @returns {vtctldata.Keyspace} Keyspace instance
+         * @param {vtctldata.IReparentTabletRequest=} [properties] Properties to set
+         * @returns {vtctldata.ReparentTabletRequest} ReparentTabletRequest instance
          */
-        Keyspace.create = function create(properties) {
-            return new Keyspace(properties);
+        ReparentTabletRequest.create = function create(properties) {
+            return new ReparentTabletRequest(properties);
         };
 
         /**
-         * Encodes the specified Keyspace message. Does not implicitly {@link vtctldata.Keyspace.verify|verify} messages.
+         * Encodes the specified ReparentTabletRequest message. Does not implicitly {@link vtctldata.ReparentTabletRequest.verify|verify} messages.
          * @function encode
-         * @memberof vtctldata.Keyspace
+         * @memberof vtctldata.ReparentTabletRequest
          * @static
-         * @param {vtctldata.IKeyspace} message Keyspace message or plain object to encode
+         * @param {vtctldata.IReparentTabletRequest} message ReparentTabletRequest message or plain object to encode
          * @param {$protobuf.Writer} [writer] Writer to encode to
          * @returns {$protobuf.Writer} Writer
          */
-        Keyspace.encode = function encode(message, writer) {
+        ReparentTabletRequest.encode = function encode(message, writer) {
             if (!writer)
                 writer = $Writer.create();
-            if (message.name != null && Object.hasOwnProperty.call(message, "name"))
-                writer.uint32(/* id 1, wireType 2 =*/10).string(message.name);
-            if (message.keyspace != null && Object.hasOwnProperty.call(message, "keyspace"))
-                $root.topodata.Keyspace.encode(message.keyspace, writer.uint32(/* id 2, wireType 2 =*/18).fork()).ldelim();
+            if (message.tablet != null && Object.hasOwnProperty.call(message, "tablet"))
+                $root.topodata.TabletAlias.encode(message.tablet, writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
             return writer;
         };
 
         /**
-         * Encodes the specified Keyspace message, length delimited. Does not implicitly {@link vtctldata.Keyspace.verify|verify} messages.
+         * Encodes the specified ReparentTabletRequest message, length delimited. Does not implicitly {@link vtctldata.ReparentTabletRequest.verify|verify} messages.
          * @function encodeDelimited
-         * @memberof vtctldata.Keyspace
+         * @memberof vtctldata.ReparentTabletRequest
          * @static
-         * @param {vtctldata.IKeyspace} message Keyspace message or plain object to encode
+         * @param {vtctldata.IReparentTabletRequest} message ReparentTabletRequest message or plain object to encode
          * @param {$protobuf.Writer} [writer] Writer to encode to
          * @returns {$protobuf.Writer} Writer
          */
-        Keyspace.encodeDelimited = function encodeDelimited(message, writer) {
+        ReparentTabletRequest.encodeDelimited = function encodeDelimited(message, writer) {
             return this.encode(message, writer).ldelim();
         };
 
         /**
-         * Decodes a Keyspace message from the specified reader or buffer.
+         * Decodes a ReparentTabletRequest message from the specified reader or buffer.
          * @function decode
-         * @memberof vtctldata.Keyspace
+         * @memberof vtctldata.ReparentTabletRequest
          * @static
          * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
          * @param {number} [length] Message length if known beforehand
-         * @returns {vtctldata.Keyspace} Keyspace
+         * @returns {vtctldata.ReparentTabletRequest} ReparentTabletRequest
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        Keyspace.decode = function decode(reader, length) {
+        ReparentTabletRequest.decode = function decode(reader, length) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
-            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.Keyspace();
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.ReparentTabletRequest();
             while (reader.pos < end) {
                 var tag = reader.uint32();
                 switch (tag >>> 3) {
                 case 1:
-                    message.name = reader.string();
-                    break;
-                case 2:
-                    message.keyspace = $root.topodata.Keyspace.decode(reader, reader.uint32());
+                    message.tablet = $root.topodata.TabletAlias.decode(reader, reader.uint32());
                     break;
                 default:
                     reader.skipType(tag & 7);
@@ -56769,309 +66136,114 @@ $root.vtctldata = (function() {
         };
 
         /**
-         * Decodes a Keyspace message from the specified reader or buffer, length delimited.
+         * Decodes a ReparentTabletRequest message from the specified reader or buffer, length delimited.
          * @function decodeDelimited
-         * @memberof vtctldata.Keyspace
+         * @memberof vtctldata.ReparentTabletRequest
          * @static
          * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
-         * @returns {vtctldata.Keyspace} Keyspace
+         * @returns {vtctldata.ReparentTabletRequest} ReparentTabletRequest
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        Keyspace.decodeDelimited = function decodeDelimited(reader) {
+        ReparentTabletRequest.decodeDelimited = function decodeDelimited(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
             return this.decode(reader, reader.uint32());
         };
 
         /**
-         * Verifies a Keyspace message.
+         * Verifies a ReparentTabletRequest message.
          * @function verify
-         * @memberof vtctldata.Keyspace
+         * @memberof vtctldata.ReparentTabletRequest
          * @static
          * @param {Object.<string,*>} message Plain object to verify
          * @returns {string|null} `null` if valid, otherwise the reason why it is not
          */
-        Keyspace.verify = function verify(message) {
+        ReparentTabletRequest.verify = function verify(message) {
             if (typeof message !== "object" || message === null)
                 return "object expected";
-            if (message.name != null && message.hasOwnProperty("name"))
-                if (!$util.isString(message.name))
-                    return "name: string expected";
-            if (message.keyspace != null && message.hasOwnProperty("keyspace")) {
-                var error = $root.topodata.Keyspace.verify(message.keyspace);
+            if (message.tablet != null && message.hasOwnProperty("tablet")) {
+                var error = $root.topodata.TabletAlias.verify(message.tablet);
                 if (error)
-                    return "keyspace." + error;
+                    return "tablet." + error;
             }
             return null;
         };
 
         /**
-         * Creates a Keyspace message from a plain object. Also converts values to their respective internal types.
+         * Creates a ReparentTabletRequest message from a plain object. Also converts values to their respective internal types.
          * @function fromObject
-         * @memberof vtctldata.Keyspace
+         * @memberof vtctldata.ReparentTabletRequest
          * @static
          * @param {Object.<string,*>} object Plain object
-         * @returns {vtctldata.Keyspace} Keyspace
+         * @returns {vtctldata.ReparentTabletRequest} ReparentTabletRequest
          */
-        Keyspace.fromObject = function fromObject(object) {
-            if (object instanceof $root.vtctldata.Keyspace)
+        ReparentTabletRequest.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtctldata.ReparentTabletRequest)
                 return object;
-            var message = new $root.vtctldata.Keyspace();
-            if (object.name != null)
-                message.name = String(object.name);
-            if (object.keyspace != null) {
-                if (typeof object.keyspace !== "object")
-                    throw TypeError(".vtctldata.Keyspace.keyspace: object expected");
-                message.keyspace = $root.topodata.Keyspace.fromObject(object.keyspace);
+            var message = new $root.vtctldata.ReparentTabletRequest();
+            if (object.tablet != null) {
+                if (typeof object.tablet !== "object")
+                    throw TypeError(".vtctldata.ReparentTabletRequest.tablet: object expected");
+                message.tablet = $root.topodata.TabletAlias.fromObject(object.tablet);
             }
             return message;
         };
 
         /**
-         * Creates a plain object from a Keyspace message. Also converts values to other types if specified.
+         * Creates a plain object from a ReparentTabletRequest message. Also converts values to other types if specified.
          * @function toObject
-         * @memberof vtctldata.Keyspace
+         * @memberof vtctldata.ReparentTabletRequest
          * @static
-         * @param {vtctldata.Keyspace} message Keyspace
+         * @param {vtctldata.ReparentTabletRequest} message ReparentTabletRequest
          * @param {$protobuf.IConversionOptions} [options] Conversion options
          * @returns {Object.<string,*>} Plain object
          */
-        Keyspace.toObject = function toObject(message, options) {
-            if (!options)
-                options = {};
-            var object = {};
-            if (options.defaults) {
-                object.name = "";
-                object.keyspace = null;
-            }
-            if (message.name != null && message.hasOwnProperty("name"))
-                object.name = message.name;
-            if (message.keyspace != null && message.hasOwnProperty("keyspace"))
-                object.keyspace = $root.topodata.Keyspace.toObject(message.keyspace, options);
-            return object;
-        };
-
-        /**
-         * Converts this Keyspace to JSON.
-         * @function toJSON
-         * @memberof vtctldata.Keyspace
-         * @instance
-         * @returns {Object.<string,*>} JSON object
-         */
-        Keyspace.prototype.toJSON = function toJSON() {
-            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
-        };
-
-        return Keyspace;
-    })();
-
-    vtctldata.FindAllShardsInKeyspaceRequest = (function() {
-
-        /**
-         * Properties of a FindAllShardsInKeyspaceRequest.
-         * @memberof vtctldata
-         * @interface IFindAllShardsInKeyspaceRequest
-         * @property {string|null} [keyspace] FindAllShardsInKeyspaceRequest keyspace
-         */
-
-        /**
-         * Constructs a new FindAllShardsInKeyspaceRequest.
-         * @memberof vtctldata
-         * @classdesc Represents a FindAllShardsInKeyspaceRequest.
-         * @implements IFindAllShardsInKeyspaceRequest
-         * @constructor
-         * @param {vtctldata.IFindAllShardsInKeyspaceRequest=} [properties] Properties to set
-         */
-        function FindAllShardsInKeyspaceRequest(properties) {
-            if (properties)
-                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
-                    if (properties[keys[i]] != null)
-                        this[keys[i]] = properties[keys[i]];
-        }
-
-        /**
-         * FindAllShardsInKeyspaceRequest keyspace.
-         * @member {string} keyspace
-         * @memberof vtctldata.FindAllShardsInKeyspaceRequest
-         * @instance
-         */
-        FindAllShardsInKeyspaceRequest.prototype.keyspace = "";
-
-        /**
-         * Creates a new FindAllShardsInKeyspaceRequest instance using the specified properties.
-         * @function create
-         * @memberof vtctldata.FindAllShardsInKeyspaceRequest
-         * @static
-         * @param {vtctldata.IFindAllShardsInKeyspaceRequest=} [properties] Properties to set
-         * @returns {vtctldata.FindAllShardsInKeyspaceRequest} FindAllShardsInKeyspaceRequest instance
-         */
-        FindAllShardsInKeyspaceRequest.create = function create(properties) {
-            return new FindAllShardsInKeyspaceRequest(properties);
-        };
-
-        /**
-         * Encodes the specified FindAllShardsInKeyspaceRequest message. Does not implicitly {@link vtctldata.FindAllShardsInKeyspaceRequest.verify|verify} messages.
-         * @function encode
-         * @memberof vtctldata.FindAllShardsInKeyspaceRequest
-         * @static
-         * @param {vtctldata.IFindAllShardsInKeyspaceRequest} message FindAllShardsInKeyspaceRequest message or plain object to encode
-         * @param {$protobuf.Writer} [writer] Writer to encode to
-         * @returns {$protobuf.Writer} Writer
-         */
-        FindAllShardsInKeyspaceRequest.encode = function encode(message, writer) {
-            if (!writer)
-                writer = $Writer.create();
-            if (message.keyspace != null && Object.hasOwnProperty.call(message, "keyspace"))
-                writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
-            return writer;
-        };
-
-        /**
-         * Encodes the specified FindAllShardsInKeyspaceRequest message, length delimited. Does not implicitly {@link vtctldata.FindAllShardsInKeyspaceRequest.verify|verify} messages.
-         * @function encodeDelimited
-         * @memberof vtctldata.FindAllShardsInKeyspaceRequest
-         * @static
-         * @param {vtctldata.IFindAllShardsInKeyspaceRequest} message FindAllShardsInKeyspaceRequest message or plain object to encode
-         * @param {$protobuf.Writer} [writer] Writer to encode to
-         * @returns {$protobuf.Writer} Writer
-         */
-        FindAllShardsInKeyspaceRequest.encodeDelimited = function encodeDelimited(message, writer) {
-            return this.encode(message, writer).ldelim();
-        };
-
-        /**
-         * Decodes a FindAllShardsInKeyspaceRequest message from the specified reader or buffer.
-         * @function decode
-         * @memberof vtctldata.FindAllShardsInKeyspaceRequest
-         * @static
-         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
-         * @param {number} [length] Message length if known beforehand
-         * @returns {vtctldata.FindAllShardsInKeyspaceRequest} FindAllShardsInKeyspaceRequest
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        FindAllShardsInKeyspaceRequest.decode = function decode(reader, length) {
-            if (!(reader instanceof $Reader))
-                reader = $Reader.create(reader);
-            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.FindAllShardsInKeyspaceRequest();
-            while (reader.pos < end) {
-                var tag = reader.uint32();
-                switch (tag >>> 3) {
-                case 1:
-                    message.keyspace = reader.string();
-                    break;
-                default:
-                    reader.skipType(tag & 7);
-                    break;
-                }
-            }
-            return message;
-        };
-
-        /**
-         * Decodes a FindAllShardsInKeyspaceRequest message from the specified reader or buffer, length delimited.
-         * @function decodeDelimited
-         * @memberof vtctldata.FindAllShardsInKeyspaceRequest
-         * @static
-         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
-         * @returns {vtctldata.FindAllShardsInKeyspaceRequest} FindAllShardsInKeyspaceRequest
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        FindAllShardsInKeyspaceRequest.decodeDelimited = function decodeDelimited(reader) {
-            if (!(reader instanceof $Reader))
-                reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
-        };
-
-        /**
-         * Verifies a FindAllShardsInKeyspaceRequest message.
-         * @function verify
-         * @memberof vtctldata.FindAllShardsInKeyspaceRequest
-         * @static
-         * @param {Object.<string,*>} message Plain object to verify
-         * @returns {string|null} `null` if valid, otherwise the reason why it is not
-         */
-        FindAllShardsInKeyspaceRequest.verify = function verify(message) {
-            if (typeof message !== "object" || message === null)
-                return "object expected";
-            if (message.keyspace != null && message.hasOwnProperty("keyspace"))
-                if (!$util.isString(message.keyspace))
-                    return "keyspace: string expected";
-            return null;
-        };
-
-        /**
-         * Creates a FindAllShardsInKeyspaceRequest message from a plain object. Also converts values to their respective internal types.
-         * @function fromObject
-         * @memberof vtctldata.FindAllShardsInKeyspaceRequest
-         * @static
-         * @param {Object.<string,*>} object Plain object
-         * @returns {vtctldata.FindAllShardsInKeyspaceRequest} FindAllShardsInKeyspaceRequest
-         */
-        FindAllShardsInKeyspaceRequest.fromObject = function fromObject(object) {
-            if (object instanceof $root.vtctldata.FindAllShardsInKeyspaceRequest)
-                return object;
-            var message = new $root.vtctldata.FindAllShardsInKeyspaceRequest();
-            if (object.keyspace != null)
-                message.keyspace = String(object.keyspace);
-            return message;
-        };
-
-        /**
-         * Creates a plain object from a FindAllShardsInKeyspaceRequest message. Also converts values to other types if specified.
-         * @function toObject
-         * @memberof vtctldata.FindAllShardsInKeyspaceRequest
-         * @static
-         * @param {vtctldata.FindAllShardsInKeyspaceRequest} message FindAllShardsInKeyspaceRequest
-         * @param {$protobuf.IConversionOptions} [options] Conversion options
-         * @returns {Object.<string,*>} Plain object
-         */
-        FindAllShardsInKeyspaceRequest.toObject = function toObject(message, options) {
+        ReparentTabletRequest.toObject = function toObject(message, options) {
             if (!options)
                 options = {};
             var object = {};
             if (options.defaults)
-                object.keyspace = "";
-            if (message.keyspace != null && message.hasOwnProperty("keyspace"))
-                object.keyspace = message.keyspace;
+                object.tablet = null;
+            if (message.tablet != null && message.hasOwnProperty("tablet"))
+                object.tablet = $root.topodata.TabletAlias.toObject(message.tablet, options);
             return object;
         };
 
         /**
-         * Converts this FindAllShardsInKeyspaceRequest to JSON.
+         * Converts this ReparentTabletRequest to JSON.
          * @function toJSON
-         * @memberof vtctldata.FindAllShardsInKeyspaceRequest
+         * @memberof vtctldata.ReparentTabletRequest
          * @instance
          * @returns {Object.<string,*>} JSON object
          */
-        FindAllShardsInKeyspaceRequest.prototype.toJSON = function toJSON() {
+        ReparentTabletRequest.prototype.toJSON = function toJSON() {
             return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
         };
 
-        return FindAllShardsInKeyspaceRequest;
+        return ReparentTabletRequest;
     })();
 
-    vtctldata.FindAllShardsInKeyspaceResponse = (function() {
+    vtctldata.ReparentTabletResponse = (function() {
 
         /**
-         * Properties of a FindAllShardsInKeyspaceResponse.
+         * Properties of a ReparentTabletResponse.
          * @memberof vtctldata
-         * @interface IFindAllShardsInKeyspaceResponse
-         * @property {Object.<string,vtctldata.IShard>|null} [shards] FindAllShardsInKeyspaceResponse shards
+         * @interface IReparentTabletResponse
+         * @property {string|null} [keyspace] ReparentTabletResponse keyspace
+         * @property {string|null} [shard] ReparentTabletResponse shard
+         * @property {topodata.ITabletAlias|null} [primary] ReparentTabletResponse primary
          */
 
         /**
-         * Constructs a new FindAllShardsInKeyspaceResponse.
+         * Constructs a new ReparentTabletResponse.
          * @memberof vtctldata
-         * @classdesc Represents a FindAllShardsInKeyspaceResponse.
-         * @implements IFindAllShardsInKeyspaceResponse
+         * @classdesc Represents a ReparentTabletResponse.
+         * @implements IReparentTabletResponse
          * @constructor
-         * @param {vtctldata.IFindAllShardsInKeyspaceResponse=} [properties] Properties to set
+         * @param {vtctldata.IReparentTabletResponse=} [properties] Properties to set
          */
-        function FindAllShardsInKeyspaceResponse(properties) {
-            this.shards = {};
+        function ReparentTabletResponse(properties) {
             if (properties)
                 for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
                     if (properties[keys[i]] != null)
@@ -57079,320 +66251,90 @@ $root.vtctldata = (function() {
         }
 
         /**
-         * FindAllShardsInKeyspaceResponse shards.
-         * @member {Object.<string,vtctldata.IShard>} shards
-         * @memberof vtctldata.FindAllShardsInKeyspaceResponse
-         * @instance
-         */
-        FindAllShardsInKeyspaceResponse.prototype.shards = $util.emptyObject;
-
-        /**
-         * Creates a new FindAllShardsInKeyspaceResponse instance using the specified properties.
-         * @function create
-         * @memberof vtctldata.FindAllShardsInKeyspaceResponse
-         * @static
-         * @param {vtctldata.IFindAllShardsInKeyspaceResponse=} [properties] Properties to set
-         * @returns {vtctldata.FindAllShardsInKeyspaceResponse} FindAllShardsInKeyspaceResponse instance
-         */
-        FindAllShardsInKeyspaceResponse.create = function create(properties) {
-            return new FindAllShardsInKeyspaceResponse(properties);
-        };
-
-        /**
-         * Encodes the specified FindAllShardsInKeyspaceResponse message. Does not implicitly {@link vtctldata.FindAllShardsInKeyspaceResponse.verify|verify} messages.
-         * @function encode
-         * @memberof vtctldata.FindAllShardsInKeyspaceResponse
-         * @static
-         * @param {vtctldata.IFindAllShardsInKeyspaceResponse} message FindAllShardsInKeyspaceResponse message or plain object to encode
-         * @param {$protobuf.Writer} [writer] Writer to encode to
-         * @returns {$protobuf.Writer} Writer
-         */
-        FindAllShardsInKeyspaceResponse.encode = function encode(message, writer) {
-            if (!writer)
-                writer = $Writer.create();
-            if (message.shards != null && Object.hasOwnProperty.call(message, "shards"))
-                for (var keys = Object.keys(message.shards), i = 0; i < keys.length; ++i) {
-                    writer.uint32(/* id 1, wireType 2 =*/10).fork().uint32(/* id 1, wireType 2 =*/10).string(keys[i]);
-                    $root.vtctldata.Shard.encode(message.shards[keys[i]], writer.uint32(/* id 2, wireType 2 =*/18).fork()).ldelim().ldelim();
-                }
-            return writer;
-        };
-
-        /**
-         * Encodes the specified FindAllShardsInKeyspaceResponse message, length delimited. Does not implicitly {@link vtctldata.FindAllShardsInKeyspaceResponse.verify|verify} messages.
-         * @function encodeDelimited
-         * @memberof vtctldata.FindAllShardsInKeyspaceResponse
-         * @static
-         * @param {vtctldata.IFindAllShardsInKeyspaceResponse} message FindAllShardsInKeyspaceResponse message or plain object to encode
-         * @param {$protobuf.Writer} [writer] Writer to encode to
-         * @returns {$protobuf.Writer} Writer
-         */
-        FindAllShardsInKeyspaceResponse.encodeDelimited = function encodeDelimited(message, writer) {
-            return this.encode(message, writer).ldelim();
-        };
-
-        /**
-         * Decodes a FindAllShardsInKeyspaceResponse message from the specified reader or buffer.
-         * @function decode
-         * @memberof vtctldata.FindAllShardsInKeyspaceResponse
-         * @static
-         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
-         * @param {number} [length] Message length if known beforehand
-         * @returns {vtctldata.FindAllShardsInKeyspaceResponse} FindAllShardsInKeyspaceResponse
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        FindAllShardsInKeyspaceResponse.decode = function decode(reader, length) {
-            if (!(reader instanceof $Reader))
-                reader = $Reader.create(reader);
-            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.FindAllShardsInKeyspaceResponse(), key, value;
-            while (reader.pos < end) {
-                var tag = reader.uint32();
-                switch (tag >>> 3) {
-                case 1:
-                    if (message.shards === $util.emptyObject)
-                        message.shards = {};
-                    var end2 = reader.uint32() + reader.pos;
-                    key = "";
-                    value = null;
-                    while (reader.pos < end2) {
-                        var tag2 = reader.uint32();
-                        switch (tag2 >>> 3) {
-                        case 1:
-                            key = reader.string();
-                            break;
-                        case 2:
-                            value = $root.vtctldata.Shard.decode(reader, reader.uint32());
-                            break;
-                        default:
-                            reader.skipType(tag2 & 7);
-                            break;
-                        }
-                    }
-                    message.shards[key] = value;
-                    break;
-                default:
-                    reader.skipType(tag & 7);
-                    break;
-                }
-            }
-            return message;
-        };
-
-        /**
-         * Decodes a FindAllShardsInKeyspaceResponse message from the specified reader or buffer, length delimited.
-         * @function decodeDelimited
-         * @memberof vtctldata.FindAllShardsInKeyspaceResponse
-         * @static
-         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
-         * @returns {vtctldata.FindAllShardsInKeyspaceResponse} FindAllShardsInKeyspaceResponse
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        FindAllShardsInKeyspaceResponse.decodeDelimited = function decodeDelimited(reader) {
-            if (!(reader instanceof $Reader))
-                reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
-        };
-
-        /**
-         * Verifies a FindAllShardsInKeyspaceResponse message.
-         * @function verify
-         * @memberof vtctldata.FindAllShardsInKeyspaceResponse
-         * @static
-         * @param {Object.<string,*>} message Plain object to verify
-         * @returns {string|null} `null` if valid, otherwise the reason why it is not
-         */
-        FindAllShardsInKeyspaceResponse.verify = function verify(message) {
-            if (typeof message !== "object" || message === null)
-                return "object expected";
-            if (message.shards != null && message.hasOwnProperty("shards")) {
-                if (!$util.isObject(message.shards))
-                    return "shards: object expected";
-                var key = Object.keys(message.shards);
-                for (var i = 0; i < key.length; ++i) {
-                    var error = $root.vtctldata.Shard.verify(message.shards[key[i]]);
-                    if (error)
-                        return "shards." + error;
-                }
-            }
-            return null;
-        };
-
-        /**
-         * Creates a FindAllShardsInKeyspaceResponse message from a plain object. Also converts values to their respective internal types.
-         * @function fromObject
-         * @memberof vtctldata.FindAllShardsInKeyspaceResponse
-         * @static
-         * @param {Object.<string,*>} object Plain object
-         * @returns {vtctldata.FindAllShardsInKeyspaceResponse} FindAllShardsInKeyspaceResponse
-         */
-        FindAllShardsInKeyspaceResponse.fromObject = function fromObject(object) {
-            if (object instanceof $root.vtctldata.FindAllShardsInKeyspaceResponse)
-                return object;
-            var message = new $root.vtctldata.FindAllShardsInKeyspaceResponse();
-            if (object.shards) {
-                if (typeof object.shards !== "object")
-                    throw TypeError(".vtctldata.FindAllShardsInKeyspaceResponse.shards: object expected");
-                message.shards = {};
-                for (var keys = Object.keys(object.shards), i = 0; i < keys.length; ++i) {
-                    if (typeof object.shards[keys[i]] !== "object")
-                        throw TypeError(".vtctldata.FindAllShardsInKeyspaceResponse.shards: object expected");
-                    message.shards[keys[i]] = $root.vtctldata.Shard.fromObject(object.shards[keys[i]]);
-                }
-            }
-            return message;
-        };
-
-        /**
-         * Creates a plain object from a FindAllShardsInKeyspaceResponse message. Also converts values to other types if specified.
-         * @function toObject
-         * @memberof vtctldata.FindAllShardsInKeyspaceResponse
-         * @static
-         * @param {vtctldata.FindAllShardsInKeyspaceResponse} message FindAllShardsInKeyspaceResponse
-         * @param {$protobuf.IConversionOptions} [options] Conversion options
-         * @returns {Object.<string,*>} Plain object
-         */
-        FindAllShardsInKeyspaceResponse.toObject = function toObject(message, options) {
-            if (!options)
-                options = {};
-            var object = {};
-            if (options.objects || options.defaults)
-                object.shards = {};
-            var keys2;
-            if (message.shards && (keys2 = Object.keys(message.shards)).length) {
-                object.shards = {};
-                for (var j = 0; j < keys2.length; ++j)
-                    object.shards[keys2[j]] = $root.vtctldata.Shard.toObject(message.shards[keys2[j]], options);
-            }
-            return object;
-        };
-
-        /**
-         * Converts this FindAllShardsInKeyspaceResponse to JSON.
-         * @function toJSON
-         * @memberof vtctldata.FindAllShardsInKeyspaceResponse
-         * @instance
-         * @returns {Object.<string,*>} JSON object
-         */
-        FindAllShardsInKeyspaceResponse.prototype.toJSON = function toJSON() {
-            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
-        };
-
-        return FindAllShardsInKeyspaceResponse;
-    })();
-
-    vtctldata.Shard = (function() {
-
-        /**
-         * Properties of a Shard.
-         * @memberof vtctldata
-         * @interface IShard
-         * @property {string|null} [keyspace] Shard keyspace
-         * @property {string|null} [name] Shard name
-         * @property {topodata.IShard|null} [shard] Shard shard
-         */
-
-        /**
-         * Constructs a new Shard.
-         * @memberof vtctldata
-         * @classdesc Represents a Shard.
-         * @implements IShard
-         * @constructor
-         * @param {vtctldata.IShard=} [properties] Properties to set
-         */
-        function Shard(properties) {
-            if (properties)
-                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
-                    if (properties[keys[i]] != null)
-                        this[keys[i]] = properties[keys[i]];
-        }
-
-        /**
-         * Shard keyspace.
+         * ReparentTabletResponse keyspace.
          * @member {string} keyspace
-         * @memberof vtctldata.Shard
+         * @memberof vtctldata.ReparentTabletResponse
          * @instance
          */
-        Shard.prototype.keyspace = "";
+        ReparentTabletResponse.prototype.keyspace = "";
 
         /**
-         * Shard name.
-         * @member {string} name
-         * @memberof vtctldata.Shard
+         * ReparentTabletResponse shard.
+         * @member {string} shard
+         * @memberof vtctldata.ReparentTabletResponse
          * @instance
          */
-        Shard.prototype.name = "";
+        ReparentTabletResponse.prototype.shard = "";
 
         /**
-         * Shard shard.
-         * @member {topodata.IShard|null|undefined} shard
-         * @memberof vtctldata.Shard
+         * ReparentTabletResponse primary.
+         * @member {topodata.ITabletAlias|null|undefined} primary
+         * @memberof vtctldata.ReparentTabletResponse
          * @instance
          */
-        Shard.prototype.shard = null;
+        ReparentTabletResponse.prototype.primary = null;
 
         /**
-         * Creates a new Shard instance using the specified properties.
+         * Creates a new ReparentTabletResponse instance using the specified properties.
          * @function create
-         * @memberof vtctldata.Shard
+         * @memberof vtctldata.ReparentTabletResponse
          * @static
-         * @param {vtctldata.IShard=} [properties] Properties to set
-         * @returns {vtctldata.Shard} Shard instance
+         * @param {vtctldata.IReparentTabletResponse=} [properties] Properties to set
+         * @returns {vtctldata.ReparentTabletResponse} ReparentTabletResponse instance
          */
-        Shard.create = function create(properties) {
-            return new Shard(properties);
+        ReparentTabletResponse.create = function create(properties) {
+            return new ReparentTabletResponse(properties);
         };
 
         /**
-         * Encodes the specified Shard message. Does not implicitly {@link vtctldata.Shard.verify|verify} messages.
+         * Encodes the specified ReparentTabletResponse message. Does not implicitly {@link vtctldata.ReparentTabletResponse.verify|verify} messages.
          * @function encode
-         * @memberof vtctldata.Shard
+         * @memberof vtctldata.ReparentTabletResponse
          * @static
-         * @param {vtctldata.IShard} message Shard message or plain object to encode
+         * @param {vtctldata.IReparentTabletResponse} message ReparentTabletResponse message or plain object to encode
          * @param {$protobuf.Writer} [writer] Writer to encode to
          * @returns {$protobuf.Writer} Writer
          */
-        Shard.encode = function encode(message, writer) {
+        ReparentTabletResponse.encode = function encode(message, writer) {
             if (!writer)
                 writer = $Writer.create();
             if (message.keyspace != null && Object.hasOwnProperty.call(message, "keyspace"))
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
-            if (message.name != null && Object.hasOwnProperty.call(message, "name"))
-                writer.uint32(/* id 2, wireType 2 =*/18).string(message.name);
             if (message.shard != null && Object.hasOwnProperty.call(message, "shard"))
-                $root.topodata.Shard.encode(message.shard, writer.uint32(/* id 3, wireType 2 =*/26).fork()).ldelim();
+                writer.uint32(/* id 2, wireType 2 =*/18).string(message.shard);
+            if (message.primary != null && Object.hasOwnProperty.call(message, "primary"))
+                $root.topodata.TabletAlias.encode(message.primary, writer.uint32(/* id 3, wireType 2 =*/26).fork()).ldelim();
             return writer;
         };
 
         /**
-         * Encodes the specified Shard message, length delimited. Does not implicitly {@link vtctldata.Shard.verify|verify} messages.
+         * Encodes the specified ReparentTabletResponse message, length delimited. Does not implicitly {@link vtctldata.ReparentTabletResponse.verify|verify} messages.
          * @function encodeDelimited
-         * @memberof vtctldata.Shard
+         * @memberof vtctldata.ReparentTabletResponse
          * @static
-         * @param {vtctldata.IShard} message Shard message or plain object to encode
+         * @param {vtctldata.IReparentTabletResponse} message ReparentTabletResponse message or plain object to encode
          * @param {$protobuf.Writer} [writer] Writer to encode to
          * @returns {$protobuf.Writer} Writer
          */
-        Shard.encodeDelimited = function encodeDelimited(message, writer) {
+        ReparentTabletResponse.encodeDelimited = function encodeDelimited(message, writer) {
             return this.encode(message, writer).ldelim();
         };
 
         /**
-         * Decodes a Shard message from the specified reader or buffer.
+         * Decodes a ReparentTabletResponse message from the specified reader or buffer.
          * @function decode
-         * @memberof vtctldata.Shard
+         * @memberof vtctldata.ReparentTabletResponse
          * @static
          * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
          * @param {number} [length] Message length if known beforehand
-         * @returns {vtctldata.Shard} Shard
+         * @returns {vtctldata.ReparentTabletResponse} ReparentTabletResponse
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        Shard.decode = function decode(reader, length) {
+        ReparentTabletResponse.decode = function decode(reader, length) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
-            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.Shard();
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.ReparentTabletResponse();
             while (reader.pos < end) {
                 var tag = reader.uint32();
                 switch (tag >>> 3) {
@@ -57400,10 +66342,10 @@ $root.vtctldata = (function() {
                     message.keyspace = reader.string();
                     break;
                 case 2:
-                    message.name = reader.string();
+                    message.shard = reader.string();
                     break;
                 case 3:
-                    message.shard = $root.topodata.Shard.decode(reader, reader.uint32());
+                    message.primary = $root.topodata.TabletAlias.decode(reader, reader.uint32());
                     break;
                 default:
                     reader.skipType(tag & 7);
@@ -57414,131 +66356,129 @@ $root.vtctldata = (function() {
         };
 
         /**
-         * Decodes a Shard message from the specified reader or buffer, length delimited.
+         * Decodes a ReparentTabletResponse message from the specified reader or buffer, length delimited.
          * @function decodeDelimited
-         * @memberof vtctldata.Shard
+         * @memberof vtctldata.ReparentTabletResponse
          * @static
          * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
-         * @returns {vtctldata.Shard} Shard
+         * @returns {vtctldata.ReparentTabletResponse} ReparentTabletResponse
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        Shard.decodeDelimited = function decodeDelimited(reader) {
+        ReparentTabletResponse.decodeDelimited = function decodeDelimited(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
             return this.decode(reader, reader.uint32());
         };
 
         /**
-         * Verifies a Shard message.
+         * Verifies a ReparentTabletResponse message.
          * @function verify
-         * @memberof vtctldata.Shard
+         * @memberof vtctldata.ReparentTabletResponse
          * @static
          * @param {Object.<string,*>} message Plain object to verify
          * @returns {string|null} `null` if valid, otherwise the reason why it is not
          */
-        Shard.verify = function verify(message) {
+        ReparentTabletResponse.verify = function verify(message) {
             if (typeof message !== "object" || message === null)
                 return "object expected";
             if (message.keyspace != null && message.hasOwnProperty("keyspace"))
                 if (!$util.isString(message.keyspace))
                     return "keyspace: string expected";
-            if (message.name != null && message.hasOwnProperty("name"))
-                if (!$util.isString(message.name))
-                    return "name: string expected";
-            if (message.shard != null && message.hasOwnProperty("shard")) {
-                var error = $root.topodata.Shard.verify(message.shard);
+            if (message.shard != null && message.hasOwnProperty("shard"))
+                if (!$util.isString(message.shard))
+                    return "shard: string expected";
+            if (message.primary != null && message.hasOwnProperty("primary")) {
+                var error = $root.topodata.TabletAlias.verify(message.primary);
                 if (error)
-                    return "shard." + error;
+                    return "primary." + error;
             }
             return null;
         };
 
         /**
-         * Creates a Shard message from a plain object. Also converts values to their respective internal types.
+         * Creates a ReparentTabletResponse message from a plain object. Also converts values to their respective internal types.
          * @function fromObject
-         * @memberof vtctldata.Shard
+         * @memberof vtctldata.ReparentTabletResponse
          * @static
          * @param {Object.<string,*>} object Plain object
-         * @returns {vtctldata.Shard} Shard
+         * @returns {vtctldata.ReparentTabletResponse} ReparentTabletResponse
          */
-        Shard.fromObject = function fromObject(object) {
-            if (object instanceof $root.vtctldata.Shard)
+        ReparentTabletResponse.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtctldata.ReparentTabletResponse)
                 return object;
-            var message = new $root.vtctldata.Shard();
+            var message = new $root.vtctldata.ReparentTabletResponse();
             if (object.keyspace != null)
                 message.keyspace = String(object.keyspace);
-            if (object.name != null)
-                message.name = String(object.name);
-            if (object.shard != null) {
-                if (typeof object.shard !== "object")
-                    throw TypeError(".vtctldata.Shard.shard: object expected");
-                message.shard = $root.topodata.Shard.fromObject(object.shard);
+            if (object.shard != null)
+                message.shard = String(object.shard);
+            if (object.primary != null) {
+                if (typeof object.primary !== "object")
+                    throw TypeError(".vtctldata.ReparentTabletResponse.primary: object expected");
+                message.primary = $root.topodata.TabletAlias.fromObject(object.primary);
             }
             return message;
         };
 
         /**
-         * Creates a plain object from a Shard message. Also converts values to other types if specified.
+         * Creates a plain object from a ReparentTabletResponse message. Also converts values to other types if specified.
          * @function toObject
-         * @memberof vtctldata.Shard
+         * @memberof vtctldata.ReparentTabletResponse
          * @static
-         * @param {vtctldata.Shard} message Shard
+         * @param {vtctldata.ReparentTabletResponse} message ReparentTabletResponse
          * @param {$protobuf.IConversionOptions} [options] Conversion options
          * @returns {Object.<string,*>} Plain object
          */
-        Shard.toObject = function toObject(message, options) {
+        ReparentTabletResponse.toObject = function toObject(message, options) {
             if (!options)
                 options = {};
             var object = {};
             if (options.defaults) {
                 object.keyspace = "";
-                object.name = "";
-                object.shard = null;
+                object.shard = "";
+                object.primary = null;
             }
             if (message.keyspace != null && message.hasOwnProperty("keyspace"))
                 object.keyspace = message.keyspace;
-            if (message.name != null && message.hasOwnProperty("name"))
-                object.name = message.name;
             if (message.shard != null && message.hasOwnProperty("shard"))
-                object.shard = $root.topodata.Shard.toObject(message.shard, options);
+                object.shard = message.shard;
+            if (message.primary != null && message.hasOwnProperty("primary"))
+                object.primary = $root.topodata.TabletAlias.toObject(message.primary, options);
             return object;
         };
 
         /**
-         * Converts this Shard to JSON.
+         * Converts this ReparentTabletResponse to JSON.
          * @function toJSON
-         * @memberof vtctldata.Shard
+         * @memberof vtctldata.ReparentTabletResponse
          * @instance
          * @returns {Object.<string,*>} JSON object
          */
-        Shard.prototype.toJSON = function toJSON() {
+        ReparentTabletResponse.prototype.toJSON = function toJSON() {
             return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
         };
 
-        return Shard;
+        return ReparentTabletResponse;
     })();
 
-    vtctldata.TableMaterializeSettings = (function() {
+    vtctldata.TabletExternallyReparentedRequest = (function() {
 
         /**
-         * Properties of a TableMaterializeSettings.
+         * Properties of a TabletExternallyReparentedRequest.
          * @memberof vtctldata
-         * @interface ITableMaterializeSettings
-         * @property {string|null} [target_table] TableMaterializeSettings target_table
-         * @property {string|null} [source_expression] TableMaterializeSettings source_expression
-         * @property {string|null} [create_ddl] TableMaterializeSettings create_ddl
+         * @interface ITabletExternallyReparentedRequest
+         * @property {topodata.ITabletAlias|null} [tablet] TabletExternallyReparentedRequest tablet
          */
 
         /**
-         * Constructs a new TableMaterializeSettings.
+         * Constructs a new TabletExternallyReparentedRequest.
          * @memberof vtctldata
-         * @classdesc Represents a TableMaterializeSettings.
-         * @implements ITableMaterializeSettings
+         * @classdesc Represents a TabletExternallyReparentedRequest.
+         * @implements ITabletExternallyReparentedRequest
          * @constructor
-         * @param {vtctldata.ITableMaterializeSettings=} [properties] Properties to set
+         * @param {vtctldata.ITabletExternallyReparentedRequest=} [properties] Properties to set
          */
-        function TableMaterializeSettings(properties) {
+        function TabletExternallyReparentedRequest(properties) {
             if (properties)
                 for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
                     if (properties[keys[i]] != null)
@@ -57546,101 +66486,75 @@ $root.vtctldata = (function() {
         }
 
         /**
-         * TableMaterializeSettings target_table.
-         * @member {string} target_table
-         * @memberof vtctldata.TableMaterializeSettings
+         * TabletExternallyReparentedRequest tablet.
+         * @member {topodata.ITabletAlias|null|undefined} tablet
+         * @memberof vtctldata.TabletExternallyReparentedRequest
          * @instance
          */
-        TableMaterializeSettings.prototype.target_table = "";
+        TabletExternallyReparentedRequest.prototype.tablet = null;
 
         /**
-         * TableMaterializeSettings source_expression.
-         * @member {string} source_expression
-         * @memberof vtctldata.TableMaterializeSettings
-         * @instance
-         */
-        TableMaterializeSettings.prototype.source_expression = "";
-
-        /**
-         * TableMaterializeSettings create_ddl.
-         * @member {string} create_ddl
-         * @memberof vtctldata.TableMaterializeSettings
-         * @instance
-         */
-        TableMaterializeSettings.prototype.create_ddl = "";
-
-        /**
-         * Creates a new TableMaterializeSettings instance using the specified properties.
+         * Creates a new TabletExternallyReparentedRequest instance using the specified properties.
          * @function create
-         * @memberof vtctldata.TableMaterializeSettings
+         * @memberof vtctldata.TabletExternallyReparentedRequest
          * @static
-         * @param {vtctldata.ITableMaterializeSettings=} [properties] Properties to set
-         * @returns {vtctldata.TableMaterializeSettings} TableMaterializeSettings instance
+         * @param {vtctldata.ITabletExternallyReparentedRequest=} [properties] Properties to set
+         * @returns {vtctldata.TabletExternallyReparentedRequest} TabletExternallyReparentedRequest instance
          */
-        TableMaterializeSettings.create = function create(properties) {
-            return new TableMaterializeSettings(properties);
+        TabletExternallyReparentedRequest.create = function create(properties) {
+            return new TabletExternallyReparentedRequest(properties);
         };
 
         /**
-         * Encodes the specified TableMaterializeSettings message. Does not implicitly {@link vtctldata.TableMaterializeSettings.verify|verify} messages.
+         * Encodes the specified TabletExternallyReparentedRequest message. Does not implicitly {@link vtctldata.TabletExternallyReparentedRequest.verify|verify} messages.
          * @function encode
-         * @memberof vtctldata.TableMaterializeSettings
+         * @memberof vtctldata.TabletExternallyReparentedRequest
          * @static
-         * @param {vtctldata.ITableMaterializeSettings} message TableMaterializeSettings message or plain object to encode
+         * @param {vtctldata.ITabletExternallyReparentedRequest} message TabletExternallyReparentedRequest message or plain object to encode
          * @param {$protobuf.Writer} [writer] Writer to encode to
          * @returns {$protobuf.Writer} Writer
          */
-        TableMaterializeSettings.encode = function encode(message, writer) {
+        TabletExternallyReparentedRequest.encode = function encode(message, writer) {
             if (!writer)
                 writer = $Writer.create();
-            if (message.target_table != null && Object.hasOwnProperty.call(message, "target_table"))
-                writer.uint32(/* id 1, wireType 2 =*/10).string(message.target_table);
-            if (message.source_expression != null && Object.hasOwnProperty.call(message, "source_expression"))
-                writer.uint32(/* id 2, wireType 2 =*/18).string(message.source_expression);
-            if (message.create_ddl != null && Object.hasOwnProperty.call(message, "create_ddl"))
-                writer.uint32(/* id 3, wireType 2 =*/26).string(message.create_ddl);
+            if (message.tablet != null && Object.hasOwnProperty.call(message, "tablet"))
+                $root.topodata.TabletAlias.encode(message.tablet, writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
             return writer;
         };
 
         /**
-         * Encodes the specified TableMaterializeSettings message, length delimited. Does not implicitly {@link vtctldata.TableMaterializeSettings.verify|verify} messages.
+         * Encodes the specified TabletExternallyReparentedRequest message, length delimited. Does not implicitly {@link vtctldata.TabletExternallyReparentedRequest.verify|verify} messages.
          * @function encodeDelimited
-         * @memberof vtctldata.TableMaterializeSettings
+         * @memberof vtctldata.TabletExternallyReparentedRequest
          * @static
-         * @param {vtctldata.ITableMaterializeSettings} message TableMaterializeSettings message or plain object to encode
+         * @param {vtctldata.ITabletExternallyReparentedRequest} message TabletExternallyReparentedRequest message or plain object to encode
          * @param {$protobuf.Writer} [writer] Writer to encode to
          * @returns {$protobuf.Writer} Writer
          */
-        TableMaterializeSettings.encodeDelimited = function encodeDelimited(message, writer) {
+        TabletExternallyReparentedRequest.encodeDelimited = function encodeDelimited(message, writer) {
             return this.encode(message, writer).ldelim();
         };
 
         /**
-         * Decodes a TableMaterializeSettings message from the specified reader or buffer.
+         * Decodes a TabletExternallyReparentedRequest message from the specified reader or buffer.
          * @function decode
-         * @memberof vtctldata.TableMaterializeSettings
+         * @memberof vtctldata.TabletExternallyReparentedRequest
          * @static
          * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
          * @param {number} [length] Message length if known beforehand
-         * @returns {vtctldata.TableMaterializeSettings} TableMaterializeSettings
+         * @returns {vtctldata.TabletExternallyReparentedRequest} TabletExternallyReparentedRequest
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        TableMaterializeSettings.decode = function decode(reader, length) {
+        TabletExternallyReparentedRequest.decode = function decode(reader, length) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
-            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.TableMaterializeSettings();
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.TabletExternallyReparentedRequest();
             while (reader.pos < end) {
                 var tag = reader.uint32();
                 switch (tag >>> 3) {
                 case 1:
-                    message.target_table = reader.string();
-                    break;
-                case 2:
-                    message.source_expression = reader.string();
-                    break;
-                case 3:
-                    message.create_ddl = reader.string();
+                    message.tablet = $root.topodata.TabletAlias.decode(reader, reader.uint32());
                     break;
                 default:
                     reader.skipType(tag & 7);
@@ -57651,131 +66565,115 @@ $root.vtctldata = (function() {
         };
 
         /**
-         * Decodes a TableMaterializeSettings message from the specified reader or buffer, length delimited.
+         * Decodes a TabletExternallyReparentedRequest message from the specified reader or buffer, length delimited.
          * @function decodeDelimited
-         * @memberof vtctldata.TableMaterializeSettings
+         * @memberof vtctldata.TabletExternallyReparentedRequest
          * @static
          * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
-         * @returns {vtctldata.TableMaterializeSettings} TableMaterializeSettings
+         * @returns {vtctldata.TabletExternallyReparentedRequest} TabletExternallyReparentedRequest
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        TableMaterializeSettings.decodeDelimited = function decodeDelimited(reader) {
+        TabletExternallyReparentedRequest.decodeDelimited = function decodeDelimited(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
             return this.decode(reader, reader.uint32());
         };
 
         /**
-         * Verifies a TableMaterializeSettings message.
+         * Verifies a TabletExternallyReparentedRequest message.
          * @function verify
-         * @memberof vtctldata.TableMaterializeSettings
+         * @memberof vtctldata.TabletExternallyReparentedRequest
          * @static
          * @param {Object.<string,*>} message Plain object to verify
          * @returns {string|null} `null` if valid, otherwise the reason why it is not
          */
-        TableMaterializeSettings.verify = function verify(message) {
+        TabletExternallyReparentedRequest.verify = function verify(message) {
             if (typeof message !== "object" || message === null)
                 return "object expected";
-            if (message.target_table != null && message.hasOwnProperty("target_table"))
-                if (!$util.isString(message.target_table))
-                    return "target_table: string expected";
-            if (message.source_expression != null && message.hasOwnProperty("source_expression"))
-                if (!$util.isString(message.source_expression))
-                    return "source_expression: string expected";
-            if (message.create_ddl != null && message.hasOwnProperty("create_ddl"))
-                if (!$util.isString(message.create_ddl))
-                    return "create_ddl: string expected";
+            if (message.tablet != null && message.hasOwnProperty("tablet")) {
+                var error = $root.topodata.TabletAlias.verify(message.tablet);
+                if (error)
+                    return "tablet." + error;
+            }
             return null;
         };
 
         /**
-         * Creates a TableMaterializeSettings message from a plain object. Also converts values to their respective internal types.
+         * Creates a TabletExternallyReparentedRequest message from a plain object. Also converts values to their respective internal types.
          * @function fromObject
-         * @memberof vtctldata.TableMaterializeSettings
+         * @memberof vtctldata.TabletExternallyReparentedRequest
          * @static
          * @param {Object.<string,*>} object Plain object
-         * @returns {vtctldata.TableMaterializeSettings} TableMaterializeSettings
+         * @returns {vtctldata.TabletExternallyReparentedRequest} TabletExternallyReparentedRequest
          */
-        TableMaterializeSettings.fromObject = function fromObject(object) {
-            if (object instanceof $root.vtctldata.TableMaterializeSettings)
+        TabletExternallyReparentedRequest.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtctldata.TabletExternallyReparentedRequest)
                 return object;
-            var message = new $root.vtctldata.TableMaterializeSettings();
-            if (object.target_table != null)
-                message.target_table = String(object.target_table);
-            if (object.source_expression != null)
-                message.source_expression = String(object.source_expression);
-            if (object.create_ddl != null)
-                message.create_ddl = String(object.create_ddl);
+            var message = new $root.vtctldata.TabletExternallyReparentedRequest();
+            if (object.tablet != null) {
+                if (typeof object.tablet !== "object")
+                    throw TypeError(".vtctldata.TabletExternallyReparentedRequest.tablet: object expected");
+                message.tablet = $root.topodata.TabletAlias.fromObject(object.tablet);
+            }
             return message;
         };
 
         /**
-         * Creates a plain object from a TableMaterializeSettings message. Also converts values to other types if specified.
+         * Creates a plain object from a TabletExternallyReparentedRequest message. Also converts values to other types if specified.
          * @function toObject
-         * @memberof vtctldata.TableMaterializeSettings
+         * @memberof vtctldata.TabletExternallyReparentedRequest
          * @static
-         * @param {vtctldata.TableMaterializeSettings} message TableMaterializeSettings
+         * @param {vtctldata.TabletExternallyReparentedRequest} message TabletExternallyReparentedRequest
          * @param {$protobuf.IConversionOptions} [options] Conversion options
          * @returns {Object.<string,*>} Plain object
          */
-        TableMaterializeSettings.toObject = function toObject(message, options) {
+        TabletExternallyReparentedRequest.toObject = function toObject(message, options) {
             if (!options)
                 options = {};
             var object = {};
-            if (options.defaults) {
-                object.target_table = "";
-                object.source_expression = "";
-                object.create_ddl = "";
-            }
-            if (message.target_table != null && message.hasOwnProperty("target_table"))
-                object.target_table = message.target_table;
-            if (message.source_expression != null && message.hasOwnProperty("source_expression"))
-                object.source_expression = message.source_expression;
-            if (message.create_ddl != null && message.hasOwnProperty("create_ddl"))
-                object.create_ddl = message.create_ddl;
+            if (options.defaults)
+                object.tablet = null;
+            if (message.tablet != null && message.hasOwnProperty("tablet"))
+                object.tablet = $root.topodata.TabletAlias.toObject(message.tablet, options);
             return object;
         };
 
         /**
-         * Converts this TableMaterializeSettings to JSON.
+         * Converts this TabletExternallyReparentedRequest to JSON.
          * @function toJSON
-         * @memberof vtctldata.TableMaterializeSettings
+         * @memberof vtctldata.TabletExternallyReparentedRequest
          * @instance
          * @returns {Object.<string,*>} JSON object
          */
-        TableMaterializeSettings.prototype.toJSON = function toJSON() {
+        TabletExternallyReparentedRequest.prototype.toJSON = function toJSON() {
             return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
         };
 
-        return TableMaterializeSettings;
+        return TabletExternallyReparentedRequest;
     })();
 
-    vtctldata.MaterializeSettings = (function() {
+    vtctldata.TabletExternallyReparentedResponse = (function() {
 
         /**
-         * Properties of a MaterializeSettings.
+         * Properties of a TabletExternallyReparentedResponse.
          * @memberof vtctldata
-         * @interface IMaterializeSettings
-         * @property {string|null} [workflow] MaterializeSettings workflow
-         * @property {string|null} [source_keyspace] MaterializeSettings source_keyspace
-         * @property {string|null} [target_keyspace] MaterializeSettings target_keyspace
-         * @property {boolean|null} [stop_after_copy] MaterializeSettings stop_after_copy
-         * @property {Array.<vtctldata.ITableMaterializeSettings>|null} [table_settings] MaterializeSettings table_settings
-         * @property {string|null} [cell] MaterializeSettings cell
-         * @property {string|null} [tablet_types] MaterializeSettings tablet_types
+         * @interface ITabletExternallyReparentedResponse
+         * @property {string|null} [keyspace] TabletExternallyReparentedResponse keyspace
+         * @property {string|null} [shard] TabletExternallyReparentedResponse shard
+         * @property {topodata.ITabletAlias|null} [new_primary] TabletExternallyReparentedResponse new_primary
+         * @property {topodata.ITabletAlias|null} [old_primary] TabletExternallyReparentedResponse old_primary
          */
 
         /**
-         * Constructs a new MaterializeSettings.
+         * Constructs a new TabletExternallyReparentedResponse.
          * @memberof vtctldata
-         * @classdesc Represents a MaterializeSettings.
-         * @implements IMaterializeSettings
+         * @classdesc Represents a TabletExternallyReparentedResponse.
+         * @implements ITabletExternallyReparentedResponse
          * @constructor
-         * @param {vtctldata.IMaterializeSettings=} [properties] Properties to set
+         * @param {vtctldata.ITabletExternallyReparentedResponse=} [properties] Properties to set
          */
-        function MaterializeSettings(properties) {
-            this.table_settings = [];
+        function TabletExternallyReparentedResponse(properties) {
             if (properties)
                 for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
                     if (properties[keys[i]] != null)
@@ -57783,156 +66681,114 @@ $root.vtctldata = (function() {
         }
 
         /**
-         * MaterializeSettings workflow.
-         * @member {string} workflow
-         * @memberof vtctldata.MaterializeSettings
+         * TabletExternallyReparentedResponse keyspace.
+         * @member {string} keyspace
+         * @memberof vtctldata.TabletExternallyReparentedResponse
          * @instance
          */
-        MaterializeSettings.prototype.workflow = "";
+        TabletExternallyReparentedResponse.prototype.keyspace = "";
 
         /**
-         * MaterializeSettings source_keyspace.
-         * @member {string} source_keyspace
-         * @memberof vtctldata.MaterializeSettings
+         * TabletExternallyReparentedResponse shard.
+         * @member {string} shard
+         * @memberof vtctldata.TabletExternallyReparentedResponse
          * @instance
          */
-        MaterializeSettings.prototype.source_keyspace = "";
+        TabletExternallyReparentedResponse.prototype.shard = "";
 
         /**
-         * MaterializeSettings target_keyspace.
-         * @member {string} target_keyspace
-         * @memberof vtctldata.MaterializeSettings
+         * TabletExternallyReparentedResponse new_primary.
+         * @member {topodata.ITabletAlias|null|undefined} new_primary
+         * @memberof vtctldata.TabletExternallyReparentedResponse
          * @instance
          */
-        MaterializeSettings.prototype.target_keyspace = "";
+        TabletExternallyReparentedResponse.prototype.new_primary = null;
 
         /**
-         * MaterializeSettings stop_after_copy.
-         * @member {boolean} stop_after_copy
-         * @memberof vtctldata.MaterializeSettings
+         * TabletExternallyReparentedResponse old_primary.
+         * @member {topodata.ITabletAlias|null|undefined} old_primary
+         * @memberof vtctldata.TabletExternallyReparentedResponse
          * @instance
          */
-        MaterializeSettings.prototype.stop_after_copy = false;
+        TabletExternallyReparentedResponse.prototype.old_primary = null;
 
         /**
-         * MaterializeSettings table_settings.
-         * @member {Array.<vtctldata.ITableMaterializeSettings>} table_settings
-         * @memberof vtctldata.MaterializeSettings
-         * @instance
-         */
-        MaterializeSettings.prototype.table_settings = $util.emptyArray;
-
-        /**
-         * MaterializeSettings cell.
-         * @member {string} cell
-         * @memberof vtctldata.MaterializeSettings
-         * @instance
-         */
-        MaterializeSettings.prototype.cell = "";
-
-        /**
-         * MaterializeSettings tablet_types.
-         * @member {string} tablet_types
-         * @memberof vtctldata.MaterializeSettings
-         * @instance
-         */
-        MaterializeSettings.prototype.tablet_types = "";
-
-        /**
-         * Creates a new MaterializeSettings instance using the specified properties.
+         * Creates a new TabletExternallyReparentedResponse instance using the specified properties.
          * @function create
-         * @memberof vtctldata.MaterializeSettings
+         * @memberof vtctldata.TabletExternallyReparentedResponse
          * @static
-         * @param {vtctldata.IMaterializeSettings=} [properties] Properties to set
-         * @returns {vtctldata.MaterializeSettings} MaterializeSettings instance
+         * @param {vtctldata.ITabletExternallyReparentedResponse=} [properties] Properties to set
+         * @returns {vtctldata.TabletExternallyReparentedResponse} TabletExternallyReparentedResponse instance
          */
-        MaterializeSettings.create = function create(properties) {
-            return new MaterializeSettings(properties);
+        TabletExternallyReparentedResponse.create = function create(properties) {
+            return new TabletExternallyReparentedResponse(properties);
         };
 
         /**
-         * Encodes the specified MaterializeSettings message. Does not implicitly {@link vtctldata.MaterializeSettings.verify|verify} messages.
+         * Encodes the specified TabletExternallyReparentedResponse message. Does not implicitly {@link vtctldata.TabletExternallyReparentedResponse.verify|verify} messages.
          * @function encode
-         * @memberof vtctldata.MaterializeSettings
+         * @memberof vtctldata.TabletExternallyReparentedResponse
          * @static
-         * @param {vtctldata.IMaterializeSettings} message MaterializeSettings message or plain object to encode
+         * @param {vtctldata.ITabletExternallyReparentedResponse} message TabletExternallyReparentedResponse message or plain object to encode
          * @param {$protobuf.Writer} [writer] Writer to encode to
          * @returns {$protobuf.Writer} Writer
          */
-        MaterializeSettings.encode = function encode(message, writer) {
+        TabletExternallyReparentedResponse.encode = function encode(message, writer) {
             if (!writer)
                 writer = $Writer.create();
-            if (message.workflow != null && Object.hasOwnProperty.call(message, "workflow"))
-                writer.uint32(/* id 1, wireType 2 =*/10).string(message.workflow);
-            if (message.source_keyspace != null && Object.hasOwnProperty.call(message, "source_keyspace"))
-                writer.uint32(/* id 2, wireType 2 =*/18).string(message.source_keyspace);
-            if (message.target_keyspace != null && Object.hasOwnProperty.call(message, "target_keyspace"))
-                writer.uint32(/* id 3, wireType 2 =*/26).string(message.target_keyspace);
-            if (message.stop_after_copy != null && Object.hasOwnProperty.call(message, "stop_after_copy"))
-                writer.uint32(/* id 4, wireType 0 =*/32).bool(message.stop_after_copy);
-            if (message.table_settings != null && message.table_settings.length)
-                for (var i = 0; i < message.table_settings.length; ++i)
-                    $root.vtctldata.TableMaterializeSettings.encode(message.table_settings[i], writer.uint32(/* id 5, wireType 2 =*/42).fork()).ldelim();
-            if (message.cell != null && Object.hasOwnProperty.call(message, "cell"))
-                writer.uint32(/* id 6, wireType 2 =*/50).string(message.cell);
-            if (message.tablet_types != null && Object.hasOwnProperty.call(message, "tablet_types"))
-                writer.uint32(/* id 7, wireType 2 =*/58).string(message.tablet_types);
+            if (message.keyspace != null && Object.hasOwnProperty.call(message, "keyspace"))
+                writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
+            if (message.shard != null && Object.hasOwnProperty.call(message, "shard"))
+                writer.uint32(/* id 2, wireType 2 =*/18).string(message.shard);
+            if (message.new_primary != null && Object.hasOwnProperty.call(message, "new_primary"))
+                $root.topodata.TabletAlias.encode(message.new_primary, writer.uint32(/* id 3, wireType 2 =*/26).fork()).ldelim();
+            if (message.old_primary != null && Object.hasOwnProperty.call(message, "old_primary"))
+                $root.topodata.TabletAlias.encode(message.old_primary, writer.uint32(/* id 4, wireType 2 =*/34).fork()).ldelim();
             return writer;
         };
 
         /**
-         * Encodes the specified MaterializeSettings message, length delimited. Does not implicitly {@link vtctldata.MaterializeSettings.verify|verify} messages.
+         * Encodes the specified TabletExternallyReparentedResponse message, length delimited. Does not implicitly {@link vtctldata.TabletExternallyReparentedResponse.verify|verify} messages.
          * @function encodeDelimited
-         * @memberof vtctldata.MaterializeSettings
+         * @memberof vtctldata.TabletExternallyReparentedResponse
          * @static
-         * @param {vtctldata.IMaterializeSettings} message MaterializeSettings message or plain object to encode
+         * @param {vtctldata.ITabletExternallyReparentedResponse} message TabletExternallyReparentedResponse message or plain object to encode
          * @param {$protobuf.Writer} [writer] Writer to encode to
          * @returns {$protobuf.Writer} Writer
          */
-        MaterializeSettings.encodeDelimited = function encodeDelimited(message, writer) {
+        TabletExternallyReparentedResponse.encodeDelimited = function encodeDelimited(message, writer) {
             return this.encode(message, writer).ldelim();
         };
 
         /**
-         * Decodes a MaterializeSettings message from the specified reader or buffer.
+         * Decodes a TabletExternallyReparentedResponse message from the specified reader or buffer.
          * @function decode
-         * @memberof vtctldata.MaterializeSettings
+         * @memberof vtctldata.TabletExternallyReparentedResponse
          * @static
          * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
          * @param {number} [length] Message length if known beforehand
-         * @returns {vtctldata.MaterializeSettings} MaterializeSettings
+         * @returns {vtctldata.TabletExternallyReparentedResponse} TabletExternallyReparentedResponse
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        MaterializeSettings.decode = function decode(reader, length) {
+        TabletExternallyReparentedResponse.decode = function decode(reader, length) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
-            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.MaterializeSettings();
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.TabletExternallyReparentedResponse();
             while (reader.pos < end) {
                 var tag = reader.uint32();
                 switch (tag >>> 3) {
                 case 1:
-                    message.workflow = reader.string();
+                    message.keyspace = reader.string();
                     break;
                 case 2:
-                    message.source_keyspace = reader.string();
+                    message.shard = reader.string();
                     break;
                 case 3:
-                    message.target_keyspace = reader.string();
+                    message.new_primary = $root.topodata.TabletAlias.decode(reader, reader.uint32());
                     break;
                 case 4:
-                    message.stop_after_copy = reader.bool();
-                    break;
-                case 5:
-                    if (!(message.table_settings && message.table_settings.length))
-                        message.table_settings = [];
-                    message.table_settings.push($root.vtctldata.TableMaterializeSettings.decode(reader, reader.uint32()));
-                    break;
-                case 6:
-                    message.cell = reader.string();
-                    break;
-                case 7:
-                    message.tablet_types = reader.string();
+                    message.old_primary = $root.topodata.TabletAlias.decode(reader, reader.uint32());
                     break;
                 default:
                     reader.skipType(tag & 7);
@@ -57943,196 +66799,621 @@ $root.vtctldata = (function() {
         };
 
         /**
-         * Decodes a MaterializeSettings message from the specified reader or buffer, length delimited.
+         * Decodes a TabletExternallyReparentedResponse message from the specified reader or buffer, length delimited.
          * @function decodeDelimited
-         * @memberof vtctldata.MaterializeSettings
+         * @memberof vtctldata.TabletExternallyReparentedResponse
          * @static
          * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
-         * @returns {vtctldata.MaterializeSettings} MaterializeSettings
+         * @returns {vtctldata.TabletExternallyReparentedResponse} TabletExternallyReparentedResponse
          * @throws {Error} If the payload is not a reader or valid buffer
          * @throws {$protobuf.util.ProtocolError} If required fields are missing
          */
-        MaterializeSettings.decodeDelimited = function decodeDelimited(reader) {
+        TabletExternallyReparentedResponse.decodeDelimited = function decodeDelimited(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
             return this.decode(reader, reader.uint32());
         };
 
         /**
-         * Verifies a MaterializeSettings message.
+         * Verifies a TabletExternallyReparentedResponse message.
          * @function verify
-         * @memberof vtctldata.MaterializeSettings
+         * @memberof vtctldata.TabletExternallyReparentedResponse
          * @static
          * @param {Object.<string,*>} message Plain object to verify
          * @returns {string|null} `null` if valid, otherwise the reason why it is not
          */
-        MaterializeSettings.verify = function verify(message) {
+        TabletExternallyReparentedResponse.verify = function verify(message) {
             if (typeof message !== "object" || message === null)
                 return "object expected";
-            if (message.workflow != null && message.hasOwnProperty("workflow"))
-                if (!$util.isString(message.workflow))
-                    return "workflow: string expected";
-            if (message.source_keyspace != null && message.hasOwnProperty("source_keyspace"))
-                if (!$util.isString(message.source_keyspace))
-                    return "source_keyspace: string expected";
-            if (message.target_keyspace != null && message.hasOwnProperty("target_keyspace"))
-                if (!$util.isString(message.target_keyspace))
-                    return "target_keyspace: string expected";
-            if (message.stop_after_copy != null && message.hasOwnProperty("stop_after_copy"))
-                if (typeof message.stop_after_copy !== "boolean")
-                    return "stop_after_copy: boolean expected";
-            if (message.table_settings != null && message.hasOwnProperty("table_settings")) {
-                if (!Array.isArray(message.table_settings))
-                    return "table_settings: array expected";
-                for (var i = 0; i < message.table_settings.length; ++i) {
-                    var error = $root.vtctldata.TableMaterializeSettings.verify(message.table_settings[i]);
-                    if (error)
-                        return "table_settings." + error;
-                }
+            if (message.keyspace != null && message.hasOwnProperty("keyspace"))
+                if (!$util.isString(message.keyspace))
+                    return "keyspace: string expected";
+            if (message.shard != null && message.hasOwnProperty("shard"))
+                if (!$util.isString(message.shard))
+                    return "shard: string expected";
+            if (message.new_primary != null && message.hasOwnProperty("new_primary")) {
+                var error = $root.topodata.TabletAlias.verify(message.new_primary);
+                if (error)
+                    return "new_primary." + error;
             }
-            if (message.cell != null && message.hasOwnProperty("cell"))
-                if (!$util.isString(message.cell))
-                    return "cell: string expected";
-            if (message.tablet_types != null && message.hasOwnProperty("tablet_types"))
-                if (!$util.isString(message.tablet_types))
-                    return "tablet_types: string expected";
+            if (message.old_primary != null && message.hasOwnProperty("old_primary")) {
+                var error = $root.topodata.TabletAlias.verify(message.old_primary);
+                if (error)
+                    return "old_primary." + error;
+            }
             return null;
         };
 
         /**
-         * Creates a MaterializeSettings message from a plain object. Also converts values to their respective internal types.
+         * Creates a TabletExternallyReparentedResponse message from a plain object. Also converts values to their respective internal types.
          * @function fromObject
-         * @memberof vtctldata.MaterializeSettings
+         * @memberof vtctldata.TabletExternallyReparentedResponse
          * @static
          * @param {Object.<string,*>} object Plain object
-         * @returns {vtctldata.MaterializeSettings} MaterializeSettings
+         * @returns {vtctldata.TabletExternallyReparentedResponse} TabletExternallyReparentedResponse
          */
-        MaterializeSettings.fromObject = function fromObject(object) {
-            if (object instanceof $root.vtctldata.MaterializeSettings)
+        TabletExternallyReparentedResponse.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtctldata.TabletExternallyReparentedResponse)
                 return object;
-            var message = new $root.vtctldata.MaterializeSettings();
-            if (object.workflow != null)
-                message.workflow = String(object.workflow);
-            if (object.source_keyspace != null)
-                message.source_keyspace = String(object.source_keyspace);
-            if (object.target_keyspace != null)
-                message.target_keyspace = String(object.target_keyspace);
-            if (object.stop_after_copy != null)
-                message.stop_after_copy = Boolean(object.stop_after_copy);
-            if (object.table_settings) {
-                if (!Array.isArray(object.table_settings))
-                    throw TypeError(".vtctldata.MaterializeSettings.table_settings: array expected");
-                message.table_settings = [];
-                for (var i = 0; i < object.table_settings.length; ++i) {
-                    if (typeof object.table_settings[i] !== "object")
-                        throw TypeError(".vtctldata.MaterializeSettings.table_settings: object expected");
-                    message.table_settings[i] = $root.vtctldata.TableMaterializeSettings.fromObject(object.table_settings[i]);
-                }
+            var message = new $root.vtctldata.TabletExternallyReparentedResponse();
+            if (object.keyspace != null)
+                message.keyspace = String(object.keyspace);
+            if (object.shard != null)
+                message.shard = String(object.shard);
+            if (object.new_primary != null) {
+                if (typeof object.new_primary !== "object")
+                    throw TypeError(".vtctldata.TabletExternallyReparentedResponse.new_primary: object expected");
+                message.new_primary = $root.topodata.TabletAlias.fromObject(object.new_primary);
             }
-            if (object.cell != null)
-                message.cell = String(object.cell);
-            if (object.tablet_types != null)
-                message.tablet_types = String(object.tablet_types);
+            if (object.old_primary != null) {
+                if (typeof object.old_primary !== "object")
+                    throw TypeError(".vtctldata.TabletExternallyReparentedResponse.old_primary: object expected");
+                message.old_primary = $root.topodata.TabletAlias.fromObject(object.old_primary);
+            }
             return message;
         };
 
         /**
-         * Creates a plain object from a MaterializeSettings message. Also converts values to other types if specified.
+         * Creates a plain object from a TabletExternallyReparentedResponse message. Also converts values to other types if specified.
          * @function toObject
-         * @memberof vtctldata.MaterializeSettings
+         * @memberof vtctldata.TabletExternallyReparentedResponse
          * @static
-         * @param {vtctldata.MaterializeSettings} message MaterializeSettings
+         * @param {vtctldata.TabletExternallyReparentedResponse} message TabletExternallyReparentedResponse
          * @param {$protobuf.IConversionOptions} [options] Conversion options
          * @returns {Object.<string,*>} Plain object
          */
-        MaterializeSettings.toObject = function toObject(message, options) {
+        TabletExternallyReparentedResponse.toObject = function toObject(message, options) {
             if (!options)
                 options = {};
             var object = {};
-            if (options.arrays || options.defaults)
-                object.table_settings = [];
             if (options.defaults) {
-                object.workflow = "";
-                object.source_keyspace = "";
-                object.target_keyspace = "";
-                object.stop_after_copy = false;
-                object.cell = "";
-                object.tablet_types = "";
+                object.keyspace = "";
+                object.shard = "";
+                object.new_primary = null;
+                object.old_primary = null;
             }
-            if (message.workflow != null && message.hasOwnProperty("workflow"))
-                object.workflow = message.workflow;
-            if (message.source_keyspace != null && message.hasOwnProperty("source_keyspace"))
-                object.source_keyspace = message.source_keyspace;
-            if (message.target_keyspace != null && message.hasOwnProperty("target_keyspace"))
-                object.target_keyspace = message.target_keyspace;
-            if (message.stop_after_copy != null && message.hasOwnProperty("stop_after_copy"))
-                object.stop_after_copy = message.stop_after_copy;
-            if (message.table_settings && message.table_settings.length) {
-                object.table_settings = [];
-                for (var j = 0; j < message.table_settings.length; ++j)
-                    object.table_settings[j] = $root.vtctldata.TableMaterializeSettings.toObject(message.table_settings[j], options);
-            }
-            if (message.cell != null && message.hasOwnProperty("cell"))
-                object.cell = message.cell;
-            if (message.tablet_types != null && message.hasOwnProperty("tablet_types"))
-                object.tablet_types = message.tablet_types;
+            if (message.keyspace != null && message.hasOwnProperty("keyspace"))
+                object.keyspace = message.keyspace;
+            if (message.shard != null && message.hasOwnProperty("shard"))
+                object.shard = message.shard;
+            if (message.new_primary != null && message.hasOwnProperty("new_primary"))
+                object.new_primary = $root.topodata.TabletAlias.toObject(message.new_primary, options);
+            if (message.old_primary != null && message.hasOwnProperty("old_primary"))
+                object.old_primary = $root.topodata.TabletAlias.toObject(message.old_primary, options);
             return object;
         };
 
         /**
-         * Converts this MaterializeSettings to JSON.
+         * Converts this TabletExternallyReparentedResponse to JSON.
          * @function toJSON
-         * @memberof vtctldata.MaterializeSettings
+         * @memberof vtctldata.TabletExternallyReparentedResponse
          * @instance
          * @returns {Object.<string,*>} JSON object
          */
-        MaterializeSettings.prototype.toJSON = function toJSON() {
+        TabletExternallyReparentedResponse.prototype.toJSON = function toJSON() {
             return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
         };
 
-        return MaterializeSettings;
+        return TabletExternallyReparentedResponse;
     })();
 
     return vtctldata;
 })();
 
-$root.google = (function() {
+$root.binlogdata = (function() {
 
     /**
-     * Namespace google.
-     * @exports google
+     * Namespace binlogdata.
+     * @exports binlogdata
      * @namespace
      */
-    var google = {};
+    var binlogdata = {};
 
-    google.protobuf = (function() {
+    binlogdata.Charset = (function() {
 
         /**
-         * Namespace protobuf.
-         * @memberof google
-         * @namespace
+         * Properties of a Charset.
+         * @memberof binlogdata
+         * @interface ICharset
+         * @property {number|null} [client] Charset client
+         * @property {number|null} [conn] Charset conn
+         * @property {number|null} [server] Charset server
          */
-        var protobuf = {};
 
-        protobuf.Duration = (function() {
+        /**
+         * Constructs a new Charset.
+         * @memberof binlogdata
+         * @classdesc Represents a Charset.
+         * @implements ICharset
+         * @constructor
+         * @param {binlogdata.ICharset=} [properties] Properties to set
+         */
+        function Charset(properties) {
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * Charset client.
+         * @member {number} client
+         * @memberof binlogdata.Charset
+         * @instance
+         */
+        Charset.prototype.client = 0;
+
+        /**
+         * Charset conn.
+         * @member {number} conn
+         * @memberof binlogdata.Charset
+         * @instance
+         */
+        Charset.prototype.conn = 0;
+
+        /**
+         * Charset server.
+         * @member {number} server
+         * @memberof binlogdata.Charset
+         * @instance
+         */
+        Charset.prototype.server = 0;
+
+        /**
+         * Creates a new Charset instance using the specified properties.
+         * @function create
+         * @memberof binlogdata.Charset
+         * @static
+         * @param {binlogdata.ICharset=} [properties] Properties to set
+         * @returns {binlogdata.Charset} Charset instance
+         */
+        Charset.create = function create(properties) {
+            return new Charset(properties);
+        };
+
+        /**
+         * Encodes the specified Charset message. Does not implicitly {@link binlogdata.Charset.verify|verify} messages.
+         * @function encode
+         * @memberof binlogdata.Charset
+         * @static
+         * @param {binlogdata.ICharset} message Charset message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        Charset.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.client != null && Object.hasOwnProperty.call(message, "client"))
+                writer.uint32(/* id 1, wireType 0 =*/8).int32(message.client);
+            if (message.conn != null && Object.hasOwnProperty.call(message, "conn"))
+                writer.uint32(/* id 2, wireType 0 =*/16).int32(message.conn);
+            if (message.server != null && Object.hasOwnProperty.call(message, "server"))
+                writer.uint32(/* id 3, wireType 0 =*/24).int32(message.server);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified Charset message, length delimited. Does not implicitly {@link binlogdata.Charset.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof binlogdata.Charset
+         * @static
+         * @param {binlogdata.ICharset} message Charset message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        Charset.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a Charset message from the specified reader or buffer.
+         * @function decode
+         * @memberof binlogdata.Charset
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {binlogdata.Charset} Charset
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        Charset.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.binlogdata.Charset();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.client = reader.int32();
+                    break;
+                case 2:
+                    message.conn = reader.int32();
+                    break;
+                case 3:
+                    message.server = reader.int32();
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a Charset message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof binlogdata.Charset
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {binlogdata.Charset} Charset
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        Charset.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a Charset message.
+         * @function verify
+         * @memberof binlogdata.Charset
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        Charset.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.client != null && message.hasOwnProperty("client"))
+                if (!$util.isInteger(message.client))
+                    return "client: integer expected";
+            if (message.conn != null && message.hasOwnProperty("conn"))
+                if (!$util.isInteger(message.conn))
+                    return "conn: integer expected";
+            if (message.server != null && message.hasOwnProperty("server"))
+                if (!$util.isInteger(message.server))
+                    return "server: integer expected";
+            return null;
+        };
+
+        /**
+         * Creates a Charset message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof binlogdata.Charset
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {binlogdata.Charset} Charset
+         */
+        Charset.fromObject = function fromObject(object) {
+            if (object instanceof $root.binlogdata.Charset)
+                return object;
+            var message = new $root.binlogdata.Charset();
+            if (object.client != null)
+                message.client = object.client | 0;
+            if (object.conn != null)
+                message.conn = object.conn | 0;
+            if (object.server != null)
+                message.server = object.server | 0;
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a Charset message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof binlogdata.Charset
+         * @static
+         * @param {binlogdata.Charset} message Charset
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        Charset.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.defaults) {
+                object.client = 0;
+                object.conn = 0;
+                object.server = 0;
+            }
+            if (message.client != null && message.hasOwnProperty("client"))
+                object.client = message.client;
+            if (message.conn != null && message.hasOwnProperty("conn"))
+                object.conn = message.conn;
+            if (message.server != null && message.hasOwnProperty("server"))
+                object.server = message.server;
+            return object;
+        };
+
+        /**
+         * Converts this Charset to JSON.
+         * @function toJSON
+         * @memberof binlogdata.Charset
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        Charset.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return Charset;
+    })();
+
+    binlogdata.BinlogTransaction = (function() {
+
+        /**
+         * Properties of a BinlogTransaction.
+         * @memberof binlogdata
+         * @interface IBinlogTransaction
+         * @property {Array.<binlogdata.BinlogTransaction.IStatement>|null} [statements] BinlogTransaction statements
+         * @property {query.IEventToken|null} [event_token] BinlogTransaction event_token
+         */
+
+        /**
+         * Constructs a new BinlogTransaction.
+         * @memberof binlogdata
+         * @classdesc Represents a BinlogTransaction.
+         * @implements IBinlogTransaction
+         * @constructor
+         * @param {binlogdata.IBinlogTransaction=} [properties] Properties to set
+         */
+        function BinlogTransaction(properties) {
+            this.statements = [];
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * BinlogTransaction statements.
+         * @member {Array.<binlogdata.BinlogTransaction.IStatement>} statements
+         * @memberof binlogdata.BinlogTransaction
+         * @instance
+         */
+        BinlogTransaction.prototype.statements = $util.emptyArray;
+
+        /**
+         * BinlogTransaction event_token.
+         * @member {query.IEventToken|null|undefined} event_token
+         * @memberof binlogdata.BinlogTransaction
+         * @instance
+         */
+        BinlogTransaction.prototype.event_token = null;
+
+        /**
+         * Creates a new BinlogTransaction instance using the specified properties.
+         * @function create
+         * @memberof binlogdata.BinlogTransaction
+         * @static
+         * @param {binlogdata.IBinlogTransaction=} [properties] Properties to set
+         * @returns {binlogdata.BinlogTransaction} BinlogTransaction instance
+         */
+        BinlogTransaction.create = function create(properties) {
+            return new BinlogTransaction(properties);
+        };
+
+        /**
+         * Encodes the specified BinlogTransaction message. Does not implicitly {@link binlogdata.BinlogTransaction.verify|verify} messages.
+         * @function encode
+         * @memberof binlogdata.BinlogTransaction
+         * @static
+         * @param {binlogdata.IBinlogTransaction} message BinlogTransaction message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        BinlogTransaction.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.statements != null && message.statements.length)
+                for (var i = 0; i < message.statements.length; ++i)
+                    $root.binlogdata.BinlogTransaction.Statement.encode(message.statements[i], writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
+            if (message.event_token != null && Object.hasOwnProperty.call(message, "event_token"))
+                $root.query.EventToken.encode(message.event_token, writer.uint32(/* id 4, wireType 2 =*/34).fork()).ldelim();
+            return writer;
+        };
+
+        /**
+         * Encodes the specified BinlogTransaction message, length delimited. Does not implicitly {@link binlogdata.BinlogTransaction.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof binlogdata.BinlogTransaction
+         * @static
+         * @param {binlogdata.IBinlogTransaction} message BinlogTransaction message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        BinlogTransaction.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a BinlogTransaction message from the specified reader or buffer.
+         * @function decode
+         * @memberof binlogdata.BinlogTransaction
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {binlogdata.BinlogTransaction} BinlogTransaction
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        BinlogTransaction.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.binlogdata.BinlogTransaction();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    if (!(message.statements && message.statements.length))
+                        message.statements = [];
+                    message.statements.push($root.binlogdata.BinlogTransaction.Statement.decode(reader, reader.uint32()));
+                    break;
+                case 4:
+                    message.event_token = $root.query.EventToken.decode(reader, reader.uint32());
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a BinlogTransaction message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof binlogdata.BinlogTransaction
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {binlogdata.BinlogTransaction} BinlogTransaction
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        BinlogTransaction.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a BinlogTransaction message.
+         * @function verify
+         * @memberof binlogdata.BinlogTransaction
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        BinlogTransaction.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.statements != null && message.hasOwnProperty("statements")) {
+                if (!Array.isArray(message.statements))
+                    return "statements: array expected";
+                for (var i = 0; i < message.statements.length; ++i) {
+                    var error = $root.binlogdata.BinlogTransaction.Statement.verify(message.statements[i]);
+                    if (error)
+                        return "statements." + error;
+                }
+            }
+            if (message.event_token != null && message.hasOwnProperty("event_token")) {
+                var error = $root.query.EventToken.verify(message.event_token);
+                if (error)
+                    return "event_token." + error;
+            }
+            return null;
+        };
+
+        /**
+         * Creates a BinlogTransaction message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof binlogdata.BinlogTransaction
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {binlogdata.BinlogTransaction} BinlogTransaction
+         */
+        BinlogTransaction.fromObject = function fromObject(object) {
+            if (object instanceof $root.binlogdata.BinlogTransaction)
+                return object;
+            var message = new $root.binlogdata.BinlogTransaction();
+            if (object.statements) {
+                if (!Array.isArray(object.statements))
+                    throw TypeError(".binlogdata.BinlogTransaction.statements: array expected");
+                message.statements = [];
+                for (var i = 0; i < object.statements.length; ++i) {
+                    if (typeof object.statements[i] !== "object")
+                        throw TypeError(".binlogdata.BinlogTransaction.statements: object expected");
+                    message.statements[i] = $root.binlogdata.BinlogTransaction.Statement.fromObject(object.statements[i]);
+                }
+            }
+            if (object.event_token != null) {
+                if (typeof object.event_token !== "object")
+                    throw TypeError(".binlogdata.BinlogTransaction.event_token: object expected");
+                message.event_token = $root.query.EventToken.fromObject(object.event_token);
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a BinlogTransaction message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof binlogdata.BinlogTransaction
+         * @static
+         * @param {binlogdata.BinlogTransaction} message BinlogTransaction
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        BinlogTransaction.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.arrays || options.defaults)
+                object.statements = [];
+            if (options.defaults)
+                object.event_token = null;
+            if (message.statements && message.statements.length) {
+                object.statements = [];
+                for (var j = 0; j < message.statements.length; ++j)
+                    object.statements[j] = $root.binlogdata.BinlogTransaction.Statement.toObject(message.statements[j], options);
+            }
+            if (message.event_token != null && message.hasOwnProperty("event_token"))
+                object.event_token = $root.query.EventToken.toObject(message.event_token, options);
+            return object;
+        };
+
+        /**
+         * Converts this BinlogTransaction to JSON.
+         * @function toJSON
+         * @memberof binlogdata.BinlogTransaction
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        BinlogTransaction.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        BinlogTransaction.Statement = (function() {
 
             /**
-             * Properties of a Duration.
-             * @memberof google.protobuf
-             * @interface IDuration
-             * @property {number|Long|null} [seconds] Duration seconds
-             * @property {number|null} [nanos] Duration nanos
+             * Properties of a Statement.
+             * @memberof binlogdata.BinlogTransaction
+             * @interface IStatement
+             * @property {binlogdata.BinlogTransaction.Statement.Category|null} [category] Statement category
+             * @property {binlogdata.ICharset|null} [charset] Statement charset
+             * @property {Uint8Array|null} [sql] Statement sql
              */
 
             /**
-             * Constructs a new Duration.
-             * @memberof google.protobuf
-             * @classdesc Represents a Duration.
-             * @implements IDuration
+             * Constructs a new Statement.
+             * @memberof binlogdata.BinlogTransaction
+             * @classdesc Represents a Statement.
+             * @implements IStatement
              * @constructor
-             * @param {google.protobuf.IDuration=} [properties] Properties to set
+             * @param {binlogdata.BinlogTransaction.IStatement=} [properties] Properties to set
              */
-            function Duration(properties) {
+            function Statement(properties) {
                 if (properties)
                     for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
                         if (properties[keys[i]] != null)
@@ -58140,88 +67421,101 @@ $root.google = (function() {
             }
 
             /**
-             * Duration seconds.
-             * @member {number|Long} seconds
-             * @memberof google.protobuf.Duration
+             * Statement category.
+             * @member {binlogdata.BinlogTransaction.Statement.Category} category
+             * @memberof binlogdata.BinlogTransaction.Statement
              * @instance
              */
-            Duration.prototype.seconds = $util.Long ? $util.Long.fromBits(0,0,false) : 0;
+            Statement.prototype.category = 0;
 
             /**
-             * Duration nanos.
-             * @member {number} nanos
-             * @memberof google.protobuf.Duration
+             * Statement charset.
+             * @member {binlogdata.ICharset|null|undefined} charset
+             * @memberof binlogdata.BinlogTransaction.Statement
              * @instance
              */
-            Duration.prototype.nanos = 0;
+            Statement.prototype.charset = null;
 
             /**
-             * Creates a new Duration instance using the specified properties.
+             * Statement sql.
+             * @member {Uint8Array} sql
+             * @memberof binlogdata.BinlogTransaction.Statement
+             * @instance
+             */
+            Statement.prototype.sql = $util.newBuffer([]);
+
+            /**
+             * Creates a new Statement instance using the specified properties.
              * @function create
-             * @memberof google.protobuf.Duration
+             * @memberof binlogdata.BinlogTransaction.Statement
              * @static
-             * @param {google.protobuf.IDuration=} [properties] Properties to set
-             * @returns {google.protobuf.Duration} Duration instance
+             * @param {binlogdata.BinlogTransaction.IStatement=} [properties] Properties to set
+             * @returns {binlogdata.BinlogTransaction.Statement} Statement instance
              */
-            Duration.create = function create(properties) {
-                return new Duration(properties);
+            Statement.create = function create(properties) {
+                return new Statement(properties);
             };
 
             /**
-             * Encodes the specified Duration message. Does not implicitly {@link google.protobuf.Duration.verify|verify} messages.
+             * Encodes the specified Statement message. Does not implicitly {@link binlogdata.BinlogTransaction.Statement.verify|verify} messages.
              * @function encode
-             * @memberof google.protobuf.Duration
+             * @memberof binlogdata.BinlogTransaction.Statement
              * @static
-             * @param {google.protobuf.IDuration} message Duration message or plain object to encode
+             * @param {binlogdata.BinlogTransaction.IStatement} message Statement message or plain object to encode
              * @param {$protobuf.Writer} [writer] Writer to encode to
              * @returns {$protobuf.Writer} Writer
              */
-            Duration.encode = function encode(message, writer) {
+            Statement.encode = function encode(message, writer) {
                 if (!writer)
                     writer = $Writer.create();
-                if (message.seconds != null && Object.hasOwnProperty.call(message, "seconds"))
-                    writer.uint32(/* id 1, wireType 0 =*/8).int64(message.seconds);
-                if (message.nanos != null && Object.hasOwnProperty.call(message, "nanos"))
-                    writer.uint32(/* id 2, wireType 0 =*/16).int32(message.nanos);
+                if (message.category != null && Object.hasOwnProperty.call(message, "category"))
+                    writer.uint32(/* id 1, wireType 0 =*/8).int32(message.category);
+                if (message.charset != null && Object.hasOwnProperty.call(message, "charset"))
+                    $root.binlogdata.Charset.encode(message.charset, writer.uint32(/* id 2, wireType 2 =*/18).fork()).ldelim();
+                if (message.sql != null && Object.hasOwnProperty.call(message, "sql"))
+                    writer.uint32(/* id 3, wireType 2 =*/26).bytes(message.sql);
                 return writer;
             };
 
             /**
-             * Encodes the specified Duration message, length delimited. Does not implicitly {@link google.protobuf.Duration.verify|verify} messages.
+             * Encodes the specified Statement message, length delimited. Does not implicitly {@link binlogdata.BinlogTransaction.Statement.verify|verify} messages.
              * @function encodeDelimited
-             * @memberof google.protobuf.Duration
+             * @memberof binlogdata.BinlogTransaction.Statement
              * @static
-             * @param {google.protobuf.IDuration} message Duration message or plain object to encode
+             * @param {binlogdata.BinlogTransaction.IStatement} message Statement message or plain object to encode
              * @param {$protobuf.Writer} [writer] Writer to encode to
              * @returns {$protobuf.Writer} Writer
              */
-            Duration.encodeDelimited = function encodeDelimited(message, writer) {
+            Statement.encodeDelimited = function encodeDelimited(message, writer) {
                 return this.encode(message, writer).ldelim();
             };
 
             /**
-             * Decodes a Duration message from the specified reader or buffer.
+             * Decodes a Statement message from the specified reader or buffer.
              * @function decode
-             * @memberof google.protobuf.Duration
+             * @memberof binlogdata.BinlogTransaction.Statement
              * @static
              * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
              * @param {number} [length] Message length if known beforehand
-             * @returns {google.protobuf.Duration} Duration
+             * @returns {binlogdata.BinlogTransaction.Statement} Statement
              * @throws {Error} If the payload is not a reader or valid buffer
              * @throws {$protobuf.util.ProtocolError} If required fields are missing
              */
-            Duration.decode = function decode(reader, length) {
+            Statement.decode = function decode(reader, length) {
                 if (!(reader instanceof $Reader))
                     reader = $Reader.create(reader);
-                var end = length === undefined ? reader.len : reader.pos + length, message = new $root.google.protobuf.Duration();
+                var end = length === undefined ? reader.len : reader.pos + length, message = new $root.binlogdata.BinlogTransaction.Statement();
                 while (reader.pos < end) {
                     var tag = reader.uint32();
                     switch (tag >>> 3) {
                     case 1:
-                        message.seconds = reader.int64();
+                        message.category = reader.int32();
                         break;
                     case 2:
-                        message.nanos = reader.int32();
+                        message.charset = $root.binlogdata.Charset.decode(reader, reader.uint32());
+                        break;
+                    case 3:
+                        message.sql = reader.bytes();
                         break;
                     default:
                         reader.skipType(tag & 7);
@@ -58232,116 +67526,7149 @@ $root.google = (function() {
             };
 
             /**
-             * Decodes a Duration message from the specified reader or buffer, length delimited.
+             * Decodes a Statement message from the specified reader or buffer, length delimited.
              * @function decodeDelimited
-             * @memberof google.protobuf.Duration
+             * @memberof binlogdata.BinlogTransaction.Statement
              * @static
              * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
-             * @returns {google.protobuf.Duration} Duration
+             * @returns {binlogdata.BinlogTransaction.Statement} Statement
              * @throws {Error} If the payload is not a reader or valid buffer
              * @throws {$protobuf.util.ProtocolError} If required fields are missing
              */
-            Duration.decodeDelimited = function decodeDelimited(reader) {
+            Statement.decodeDelimited = function decodeDelimited(reader) {
                 if (!(reader instanceof $Reader))
                     reader = new $Reader(reader);
                 return this.decode(reader, reader.uint32());
             };
 
             /**
-             * Verifies a Duration message.
+             * Verifies a Statement message.
              * @function verify
-             * @memberof google.protobuf.Duration
+             * @memberof binlogdata.BinlogTransaction.Statement
              * @static
              * @param {Object.<string,*>} message Plain object to verify
              * @returns {string|null} `null` if valid, otherwise the reason why it is not
              */
-            Duration.verify = function verify(message) {
+            Statement.verify = function verify(message) {
                 if (typeof message !== "object" || message === null)
                     return "object expected";
-                if (message.seconds != null && message.hasOwnProperty("seconds"))
-                    if (!$util.isInteger(message.seconds) && !(message.seconds && $util.isInteger(message.seconds.low) && $util.isInteger(message.seconds.high)))
-                        return "seconds: integer|Long expected";
-                if (message.nanos != null && message.hasOwnProperty("nanos"))
-                    if (!$util.isInteger(message.nanos))
-                        return "nanos: integer expected";
+                if (message.category != null && message.hasOwnProperty("category"))
+                    switch (message.category) {
+                    default:
+                        return "category: enum value expected";
+                    case 0:
+                    case 1:
+                    case 2:
+                    case 3:
+                    case 4:
+                    case 5:
+                    case 6:
+                    case 7:
+                    case 8:
+                    case 9:
+                        break;
+                    }
+                if (message.charset != null && message.hasOwnProperty("charset")) {
+                    var error = $root.binlogdata.Charset.verify(message.charset);
+                    if (error)
+                        return "charset." + error;
+                }
+                if (message.sql != null && message.hasOwnProperty("sql"))
+                    if (!(message.sql && typeof message.sql.length === "number" || $util.isString(message.sql)))
+                        return "sql: buffer expected";
                 return null;
             };
 
             /**
-             * Creates a Duration message from a plain object. Also converts values to their respective internal types.
+             * Creates a Statement message from a plain object. Also converts values to their respective internal types.
              * @function fromObject
-             * @memberof google.protobuf.Duration
+             * @memberof binlogdata.BinlogTransaction.Statement
              * @static
              * @param {Object.<string,*>} object Plain object
-             * @returns {google.protobuf.Duration} Duration
+             * @returns {binlogdata.BinlogTransaction.Statement} Statement
              */
-            Duration.fromObject = function fromObject(object) {
-                if (object instanceof $root.google.protobuf.Duration)
+            Statement.fromObject = function fromObject(object) {
+                if (object instanceof $root.binlogdata.BinlogTransaction.Statement)
                     return object;
-                var message = new $root.google.protobuf.Duration();
-                if (object.seconds != null)
-                    if ($util.Long)
-                        (message.seconds = $util.Long.fromValue(object.seconds)).unsigned = false;
-                    else if (typeof object.seconds === "string")
-                        message.seconds = parseInt(object.seconds, 10);
-                    else if (typeof object.seconds === "number")
-                        message.seconds = object.seconds;
-                    else if (typeof object.seconds === "object")
-                        message.seconds = new $util.LongBits(object.seconds.low >>> 0, object.seconds.high >>> 0).toNumber();
-                if (object.nanos != null)
-                    message.nanos = object.nanos | 0;
+                var message = new $root.binlogdata.BinlogTransaction.Statement();
+                switch (object.category) {
+                case "BL_UNRECOGNIZED":
+                case 0:
+                    message.category = 0;
+                    break;
+                case "BL_BEGIN":
+                case 1:
+                    message.category = 1;
+                    break;
+                case "BL_COMMIT":
+                case 2:
+                    message.category = 2;
+                    break;
+                case "BL_ROLLBACK":
+                case 3:
+                    message.category = 3;
+                    break;
+                case "BL_DML_DEPRECATED":
+                case 4:
+                    message.category = 4;
+                    break;
+                case "BL_DDL":
+                case 5:
+                    message.category = 5;
+                    break;
+                case "BL_SET":
+                case 6:
+                    message.category = 6;
+                    break;
+                case "BL_INSERT":
+                case 7:
+                    message.category = 7;
+                    break;
+                case "BL_UPDATE":
+                case 8:
+                    message.category = 8;
+                    break;
+                case "BL_DELETE":
+                case 9:
+                    message.category = 9;
+                    break;
+                }
+                if (object.charset != null) {
+                    if (typeof object.charset !== "object")
+                        throw TypeError(".binlogdata.BinlogTransaction.Statement.charset: object expected");
+                    message.charset = $root.binlogdata.Charset.fromObject(object.charset);
+                }
+                if (object.sql != null)
+                    if (typeof object.sql === "string")
+                        $util.base64.decode(object.sql, message.sql = $util.newBuffer($util.base64.length(object.sql)), 0);
+                    else if (object.sql.length)
+                        message.sql = object.sql;
                 return message;
             };
 
             /**
-             * Creates a plain object from a Duration message. Also converts values to other types if specified.
+             * Creates a plain object from a Statement message. Also converts values to other types if specified.
              * @function toObject
-             * @memberof google.protobuf.Duration
+             * @memberof binlogdata.BinlogTransaction.Statement
              * @static
-             * @param {google.protobuf.Duration} message Duration
+             * @param {binlogdata.BinlogTransaction.Statement} message Statement
              * @param {$protobuf.IConversionOptions} [options] Conversion options
              * @returns {Object.<string,*>} Plain object
              */
-            Duration.toObject = function toObject(message, options) {
+            Statement.toObject = function toObject(message, options) {
                 if (!options)
                     options = {};
                 var object = {};
                 if (options.defaults) {
-                    if ($util.Long) {
-                        var long = new $util.Long(0, 0, false);
-                        object.seconds = options.longs === String ? long.toString() : options.longs === Number ? long.toNumber() : long;
-                    } else
-                        object.seconds = options.longs === String ? "0" : 0;
-                    object.nanos = 0;
+                    object.category = options.enums === String ? "BL_UNRECOGNIZED" : 0;
+                    object.charset = null;
+                    if (options.bytes === String)
+                        object.sql = "";
+                    else {
+                        object.sql = [];
+                        if (options.bytes !== Array)
+                            object.sql = $util.newBuffer(object.sql);
+                    }
                 }
-                if (message.seconds != null && message.hasOwnProperty("seconds"))
-                    if (typeof message.seconds === "number")
-                        object.seconds = options.longs === String ? String(message.seconds) : message.seconds;
-                    else
-                        object.seconds = options.longs === String ? $util.Long.prototype.toString.call(message.seconds) : options.longs === Number ? new $util.LongBits(message.seconds.low >>> 0, message.seconds.high >>> 0).toNumber() : message.seconds;
-                if (message.nanos != null && message.hasOwnProperty("nanos"))
-                    object.nanos = message.nanos;
+                if (message.category != null && message.hasOwnProperty("category"))
+                    object.category = options.enums === String ? $root.binlogdata.BinlogTransaction.Statement.Category[message.category] : message.category;
+                if (message.charset != null && message.hasOwnProperty("charset"))
+                    object.charset = $root.binlogdata.Charset.toObject(message.charset, options);
+                if (message.sql != null && message.hasOwnProperty("sql"))
+                    object.sql = options.bytes === String ? $util.base64.encode(message.sql, 0, message.sql.length) : options.bytes === Array ? Array.prototype.slice.call(message.sql) : message.sql;
                 return object;
             };
 
             /**
-             * Converts this Duration to JSON.
+             * Converts this Statement to JSON.
              * @function toJSON
-             * @memberof google.protobuf.Duration
+             * @memberof binlogdata.BinlogTransaction.Statement
              * @instance
              * @returns {Object.<string,*>} JSON object
              */
-            Duration.prototype.toJSON = function toJSON() {
+            Statement.prototype.toJSON = function toJSON() {
                 return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
             };
 
-            return Duration;
+            /**
+             * Category enum.
+             * @name binlogdata.BinlogTransaction.Statement.Category
+             * @enum {number}
+             * @property {number} BL_UNRECOGNIZED=0 BL_UNRECOGNIZED value
+             * @property {number} BL_BEGIN=1 BL_BEGIN value
+             * @property {number} BL_COMMIT=2 BL_COMMIT value
+             * @property {number} BL_ROLLBACK=3 BL_ROLLBACK value
+             * @property {number} BL_DML_DEPRECATED=4 BL_DML_DEPRECATED value
+             * @property {number} BL_DDL=5 BL_DDL value
+             * @property {number} BL_SET=6 BL_SET value
+             * @property {number} BL_INSERT=7 BL_INSERT value
+             * @property {number} BL_UPDATE=8 BL_UPDATE value
+             * @property {number} BL_DELETE=9 BL_DELETE value
+             */
+            Statement.Category = (function() {
+                var valuesById = {}, values = Object.create(valuesById);
+                values[valuesById[0] = "BL_UNRECOGNIZED"] = 0;
+                values[valuesById[1] = "BL_BEGIN"] = 1;
+                values[valuesById[2] = "BL_COMMIT"] = 2;
+                values[valuesById[3] = "BL_ROLLBACK"] = 3;
+                values[valuesById[4] = "BL_DML_DEPRECATED"] = 4;
+                values[valuesById[5] = "BL_DDL"] = 5;
+                values[valuesById[6] = "BL_SET"] = 6;
+                values[valuesById[7] = "BL_INSERT"] = 7;
+                values[valuesById[8] = "BL_UPDATE"] = 8;
+                values[valuesById[9] = "BL_DELETE"] = 9;
+                return values;
+            })();
+
+            return Statement;
         })();
 
-        return protobuf;
+        return BinlogTransaction;
     })();
 
-    return google;
+    binlogdata.StreamKeyRangeRequest = (function() {
+
+        /**
+         * Properties of a StreamKeyRangeRequest.
+         * @memberof binlogdata
+         * @interface IStreamKeyRangeRequest
+         * @property {string|null} [position] StreamKeyRangeRequest position
+         * @property {topodata.IKeyRange|null} [key_range] StreamKeyRangeRequest key_range
+         * @property {binlogdata.ICharset|null} [charset] StreamKeyRangeRequest charset
+         */
+
+        /**
+         * Constructs a new StreamKeyRangeRequest.
+         * @memberof binlogdata
+         * @classdesc Represents a StreamKeyRangeRequest.
+         * @implements IStreamKeyRangeRequest
+         * @constructor
+         * @param {binlogdata.IStreamKeyRangeRequest=} [properties] Properties to set
+         */
+        function StreamKeyRangeRequest(properties) {
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * StreamKeyRangeRequest position.
+         * @member {string} position
+         * @memberof binlogdata.StreamKeyRangeRequest
+         * @instance
+         */
+        StreamKeyRangeRequest.prototype.position = "";
+
+        /**
+         * StreamKeyRangeRequest key_range.
+         * @member {topodata.IKeyRange|null|undefined} key_range
+         * @memberof binlogdata.StreamKeyRangeRequest
+         * @instance
+         */
+        StreamKeyRangeRequest.prototype.key_range = null;
+
+        /**
+         * StreamKeyRangeRequest charset.
+         * @member {binlogdata.ICharset|null|undefined} charset
+         * @memberof binlogdata.StreamKeyRangeRequest
+         * @instance
+         */
+        StreamKeyRangeRequest.prototype.charset = null;
+
+        /**
+         * Creates a new StreamKeyRangeRequest instance using the specified properties.
+         * @function create
+         * @memberof binlogdata.StreamKeyRangeRequest
+         * @static
+         * @param {binlogdata.IStreamKeyRangeRequest=} [properties] Properties to set
+         * @returns {binlogdata.StreamKeyRangeRequest} StreamKeyRangeRequest instance
+         */
+        StreamKeyRangeRequest.create = function create(properties) {
+            return new StreamKeyRangeRequest(properties);
+        };
+
+        /**
+         * Encodes the specified StreamKeyRangeRequest message. Does not implicitly {@link binlogdata.StreamKeyRangeRequest.verify|verify} messages.
+         * @function encode
+         * @memberof binlogdata.StreamKeyRangeRequest
+         * @static
+         * @param {binlogdata.IStreamKeyRangeRequest} message StreamKeyRangeRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        StreamKeyRangeRequest.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.position != null && Object.hasOwnProperty.call(message, "position"))
+                writer.uint32(/* id 1, wireType 2 =*/10).string(message.position);
+            if (message.key_range != null && Object.hasOwnProperty.call(message, "key_range"))
+                $root.topodata.KeyRange.encode(message.key_range, writer.uint32(/* id 2, wireType 2 =*/18).fork()).ldelim();
+            if (message.charset != null && Object.hasOwnProperty.call(message, "charset"))
+                $root.binlogdata.Charset.encode(message.charset, writer.uint32(/* id 3, wireType 2 =*/26).fork()).ldelim();
+            return writer;
+        };
+
+        /**
+         * Encodes the specified StreamKeyRangeRequest message, length delimited. Does not implicitly {@link binlogdata.StreamKeyRangeRequest.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof binlogdata.StreamKeyRangeRequest
+         * @static
+         * @param {binlogdata.IStreamKeyRangeRequest} message StreamKeyRangeRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        StreamKeyRangeRequest.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a StreamKeyRangeRequest message from the specified reader or buffer.
+         * @function decode
+         * @memberof binlogdata.StreamKeyRangeRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {binlogdata.StreamKeyRangeRequest} StreamKeyRangeRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        StreamKeyRangeRequest.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.binlogdata.StreamKeyRangeRequest();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.position = reader.string();
+                    break;
+                case 2:
+                    message.key_range = $root.topodata.KeyRange.decode(reader, reader.uint32());
+                    break;
+                case 3:
+                    message.charset = $root.binlogdata.Charset.decode(reader, reader.uint32());
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a StreamKeyRangeRequest message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof binlogdata.StreamKeyRangeRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {binlogdata.StreamKeyRangeRequest} StreamKeyRangeRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        StreamKeyRangeRequest.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a StreamKeyRangeRequest message.
+         * @function verify
+         * @memberof binlogdata.StreamKeyRangeRequest
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        StreamKeyRangeRequest.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.position != null && message.hasOwnProperty("position"))
+                if (!$util.isString(message.position))
+                    return "position: string expected";
+            if (message.key_range != null && message.hasOwnProperty("key_range")) {
+                var error = $root.topodata.KeyRange.verify(message.key_range);
+                if (error)
+                    return "key_range." + error;
+            }
+            if (message.charset != null && message.hasOwnProperty("charset")) {
+                var error = $root.binlogdata.Charset.verify(message.charset);
+                if (error)
+                    return "charset." + error;
+            }
+            return null;
+        };
+
+        /**
+         * Creates a StreamKeyRangeRequest message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof binlogdata.StreamKeyRangeRequest
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {binlogdata.StreamKeyRangeRequest} StreamKeyRangeRequest
+         */
+        StreamKeyRangeRequest.fromObject = function fromObject(object) {
+            if (object instanceof $root.binlogdata.StreamKeyRangeRequest)
+                return object;
+            var message = new $root.binlogdata.StreamKeyRangeRequest();
+            if (object.position != null)
+                message.position = String(object.position);
+            if (object.key_range != null) {
+                if (typeof object.key_range !== "object")
+                    throw TypeError(".binlogdata.StreamKeyRangeRequest.key_range: object expected");
+                message.key_range = $root.topodata.KeyRange.fromObject(object.key_range);
+            }
+            if (object.charset != null) {
+                if (typeof object.charset !== "object")
+                    throw TypeError(".binlogdata.StreamKeyRangeRequest.charset: object expected");
+                message.charset = $root.binlogdata.Charset.fromObject(object.charset);
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a StreamKeyRangeRequest message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof binlogdata.StreamKeyRangeRequest
+         * @static
+         * @param {binlogdata.StreamKeyRangeRequest} message StreamKeyRangeRequest
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        StreamKeyRangeRequest.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.defaults) {
+                object.position = "";
+                object.key_range = null;
+                object.charset = null;
+            }
+            if (message.position != null && message.hasOwnProperty("position"))
+                object.position = message.position;
+            if (message.key_range != null && message.hasOwnProperty("key_range"))
+                object.key_range = $root.topodata.KeyRange.toObject(message.key_range, options);
+            if (message.charset != null && message.hasOwnProperty("charset"))
+                object.charset = $root.binlogdata.Charset.toObject(message.charset, options);
+            return object;
+        };
+
+        /**
+         * Converts this StreamKeyRangeRequest to JSON.
+         * @function toJSON
+         * @memberof binlogdata.StreamKeyRangeRequest
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        StreamKeyRangeRequest.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return StreamKeyRangeRequest;
+    })();
+
+    binlogdata.StreamKeyRangeResponse = (function() {
+
+        /**
+         * Properties of a StreamKeyRangeResponse.
+         * @memberof binlogdata
+         * @interface IStreamKeyRangeResponse
+         * @property {binlogdata.IBinlogTransaction|null} [binlog_transaction] StreamKeyRangeResponse binlog_transaction
+         */
+
+        /**
+         * Constructs a new StreamKeyRangeResponse.
+         * @memberof binlogdata
+         * @classdesc Represents a StreamKeyRangeResponse.
+         * @implements IStreamKeyRangeResponse
+         * @constructor
+         * @param {binlogdata.IStreamKeyRangeResponse=} [properties] Properties to set
+         */
+        function StreamKeyRangeResponse(properties) {
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * StreamKeyRangeResponse binlog_transaction.
+         * @member {binlogdata.IBinlogTransaction|null|undefined} binlog_transaction
+         * @memberof binlogdata.StreamKeyRangeResponse
+         * @instance
+         */
+        StreamKeyRangeResponse.prototype.binlog_transaction = null;
+
+        /**
+         * Creates a new StreamKeyRangeResponse instance using the specified properties.
+         * @function create
+         * @memberof binlogdata.StreamKeyRangeResponse
+         * @static
+         * @param {binlogdata.IStreamKeyRangeResponse=} [properties] Properties to set
+         * @returns {binlogdata.StreamKeyRangeResponse} StreamKeyRangeResponse instance
+         */
+        StreamKeyRangeResponse.create = function create(properties) {
+            return new StreamKeyRangeResponse(properties);
+        };
+
+        /**
+         * Encodes the specified StreamKeyRangeResponse message. Does not implicitly {@link binlogdata.StreamKeyRangeResponse.verify|verify} messages.
+         * @function encode
+         * @memberof binlogdata.StreamKeyRangeResponse
+         * @static
+         * @param {binlogdata.IStreamKeyRangeResponse} message StreamKeyRangeResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        StreamKeyRangeResponse.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.binlog_transaction != null && Object.hasOwnProperty.call(message, "binlog_transaction"))
+                $root.binlogdata.BinlogTransaction.encode(message.binlog_transaction, writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
+            return writer;
+        };
+
+        /**
+         * Encodes the specified StreamKeyRangeResponse message, length delimited. Does not implicitly {@link binlogdata.StreamKeyRangeResponse.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof binlogdata.StreamKeyRangeResponse
+         * @static
+         * @param {binlogdata.IStreamKeyRangeResponse} message StreamKeyRangeResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        StreamKeyRangeResponse.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a StreamKeyRangeResponse message from the specified reader or buffer.
+         * @function decode
+         * @memberof binlogdata.StreamKeyRangeResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {binlogdata.StreamKeyRangeResponse} StreamKeyRangeResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        StreamKeyRangeResponse.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.binlogdata.StreamKeyRangeResponse();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.binlog_transaction = $root.binlogdata.BinlogTransaction.decode(reader, reader.uint32());
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a StreamKeyRangeResponse message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof binlogdata.StreamKeyRangeResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {binlogdata.StreamKeyRangeResponse} StreamKeyRangeResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        StreamKeyRangeResponse.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a StreamKeyRangeResponse message.
+         * @function verify
+         * @memberof binlogdata.StreamKeyRangeResponse
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        StreamKeyRangeResponse.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.binlog_transaction != null && message.hasOwnProperty("binlog_transaction")) {
+                var error = $root.binlogdata.BinlogTransaction.verify(message.binlog_transaction);
+                if (error)
+                    return "binlog_transaction." + error;
+            }
+            return null;
+        };
+
+        /**
+         * Creates a StreamKeyRangeResponse message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof binlogdata.StreamKeyRangeResponse
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {binlogdata.StreamKeyRangeResponse} StreamKeyRangeResponse
+         */
+        StreamKeyRangeResponse.fromObject = function fromObject(object) {
+            if (object instanceof $root.binlogdata.StreamKeyRangeResponse)
+                return object;
+            var message = new $root.binlogdata.StreamKeyRangeResponse();
+            if (object.binlog_transaction != null) {
+                if (typeof object.binlog_transaction !== "object")
+                    throw TypeError(".binlogdata.StreamKeyRangeResponse.binlog_transaction: object expected");
+                message.binlog_transaction = $root.binlogdata.BinlogTransaction.fromObject(object.binlog_transaction);
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a StreamKeyRangeResponse message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof binlogdata.StreamKeyRangeResponse
+         * @static
+         * @param {binlogdata.StreamKeyRangeResponse} message StreamKeyRangeResponse
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        StreamKeyRangeResponse.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.defaults)
+                object.binlog_transaction = null;
+            if (message.binlog_transaction != null && message.hasOwnProperty("binlog_transaction"))
+                object.binlog_transaction = $root.binlogdata.BinlogTransaction.toObject(message.binlog_transaction, options);
+            return object;
+        };
+
+        /**
+         * Converts this StreamKeyRangeResponse to JSON.
+         * @function toJSON
+         * @memberof binlogdata.StreamKeyRangeResponse
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        StreamKeyRangeResponse.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return StreamKeyRangeResponse;
+    })();
+
+    binlogdata.StreamTablesRequest = (function() {
+
+        /**
+         * Properties of a StreamTablesRequest.
+         * @memberof binlogdata
+         * @interface IStreamTablesRequest
+         * @property {string|null} [position] StreamTablesRequest position
+         * @property {Array.<string>|null} [tables] StreamTablesRequest tables
+         * @property {binlogdata.ICharset|null} [charset] StreamTablesRequest charset
+         */
+
+        /**
+         * Constructs a new StreamTablesRequest.
+         * @memberof binlogdata
+         * @classdesc Represents a StreamTablesRequest.
+         * @implements IStreamTablesRequest
+         * @constructor
+         * @param {binlogdata.IStreamTablesRequest=} [properties] Properties to set
+         */
+        function StreamTablesRequest(properties) {
+            this.tables = [];
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * StreamTablesRequest position.
+         * @member {string} position
+         * @memberof binlogdata.StreamTablesRequest
+         * @instance
+         */
+        StreamTablesRequest.prototype.position = "";
+
+        /**
+         * StreamTablesRequest tables.
+         * @member {Array.<string>} tables
+         * @memberof binlogdata.StreamTablesRequest
+         * @instance
+         */
+        StreamTablesRequest.prototype.tables = $util.emptyArray;
+
+        /**
+         * StreamTablesRequest charset.
+         * @member {binlogdata.ICharset|null|undefined} charset
+         * @memberof binlogdata.StreamTablesRequest
+         * @instance
+         */
+        StreamTablesRequest.prototype.charset = null;
+
+        /**
+         * Creates a new StreamTablesRequest instance using the specified properties.
+         * @function create
+         * @memberof binlogdata.StreamTablesRequest
+         * @static
+         * @param {binlogdata.IStreamTablesRequest=} [properties] Properties to set
+         * @returns {binlogdata.StreamTablesRequest} StreamTablesRequest instance
+         */
+        StreamTablesRequest.create = function create(properties) {
+            return new StreamTablesRequest(properties);
+        };
+
+        /**
+         * Encodes the specified StreamTablesRequest message. Does not implicitly {@link binlogdata.StreamTablesRequest.verify|verify} messages.
+         * @function encode
+         * @memberof binlogdata.StreamTablesRequest
+         * @static
+         * @param {binlogdata.IStreamTablesRequest} message StreamTablesRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        StreamTablesRequest.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.position != null && Object.hasOwnProperty.call(message, "position"))
+                writer.uint32(/* id 1, wireType 2 =*/10).string(message.position);
+            if (message.tables != null && message.tables.length)
+                for (var i = 0; i < message.tables.length; ++i)
+                    writer.uint32(/* id 2, wireType 2 =*/18).string(message.tables[i]);
+            if (message.charset != null && Object.hasOwnProperty.call(message, "charset"))
+                $root.binlogdata.Charset.encode(message.charset, writer.uint32(/* id 3, wireType 2 =*/26).fork()).ldelim();
+            return writer;
+        };
+
+        /**
+         * Encodes the specified StreamTablesRequest message, length delimited. Does not implicitly {@link binlogdata.StreamTablesRequest.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof binlogdata.StreamTablesRequest
+         * @static
+         * @param {binlogdata.IStreamTablesRequest} message StreamTablesRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        StreamTablesRequest.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a StreamTablesRequest message from the specified reader or buffer.
+         * @function decode
+         * @memberof binlogdata.StreamTablesRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {binlogdata.StreamTablesRequest} StreamTablesRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        StreamTablesRequest.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.binlogdata.StreamTablesRequest();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.position = reader.string();
+                    break;
+                case 2:
+                    if (!(message.tables && message.tables.length))
+                        message.tables = [];
+                    message.tables.push(reader.string());
+                    break;
+                case 3:
+                    message.charset = $root.binlogdata.Charset.decode(reader, reader.uint32());
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a StreamTablesRequest message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof binlogdata.StreamTablesRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {binlogdata.StreamTablesRequest} StreamTablesRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        StreamTablesRequest.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a StreamTablesRequest message.
+         * @function verify
+         * @memberof binlogdata.StreamTablesRequest
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        StreamTablesRequest.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.position != null && message.hasOwnProperty("position"))
+                if (!$util.isString(message.position))
+                    return "position: string expected";
+            if (message.tables != null && message.hasOwnProperty("tables")) {
+                if (!Array.isArray(message.tables))
+                    return "tables: array expected";
+                for (var i = 0; i < message.tables.length; ++i)
+                    if (!$util.isString(message.tables[i]))
+                        return "tables: string[] expected";
+            }
+            if (message.charset != null && message.hasOwnProperty("charset")) {
+                var error = $root.binlogdata.Charset.verify(message.charset);
+                if (error)
+                    return "charset." + error;
+            }
+            return null;
+        };
+
+        /**
+         * Creates a StreamTablesRequest message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof binlogdata.StreamTablesRequest
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {binlogdata.StreamTablesRequest} StreamTablesRequest
+         */
+        StreamTablesRequest.fromObject = function fromObject(object) {
+            if (object instanceof $root.binlogdata.StreamTablesRequest)
+                return object;
+            var message = new $root.binlogdata.StreamTablesRequest();
+            if (object.position != null)
+                message.position = String(object.position);
+            if (object.tables) {
+                if (!Array.isArray(object.tables))
+                    throw TypeError(".binlogdata.StreamTablesRequest.tables: array expected");
+                message.tables = [];
+                for (var i = 0; i < object.tables.length; ++i)
+                    message.tables[i] = String(object.tables[i]);
+            }
+            if (object.charset != null) {
+                if (typeof object.charset !== "object")
+                    throw TypeError(".binlogdata.StreamTablesRequest.charset: object expected");
+                message.charset = $root.binlogdata.Charset.fromObject(object.charset);
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a StreamTablesRequest message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof binlogdata.StreamTablesRequest
+         * @static
+         * @param {binlogdata.StreamTablesRequest} message StreamTablesRequest
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        StreamTablesRequest.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.arrays || options.defaults)
+                object.tables = [];
+            if (options.defaults) {
+                object.position = "";
+                object.charset = null;
+            }
+            if (message.position != null && message.hasOwnProperty("position"))
+                object.position = message.position;
+            if (message.tables && message.tables.length) {
+                object.tables = [];
+                for (var j = 0; j < message.tables.length; ++j)
+                    object.tables[j] = message.tables[j];
+            }
+            if (message.charset != null && message.hasOwnProperty("charset"))
+                object.charset = $root.binlogdata.Charset.toObject(message.charset, options);
+            return object;
+        };
+
+        /**
+         * Converts this StreamTablesRequest to JSON.
+         * @function toJSON
+         * @memberof binlogdata.StreamTablesRequest
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        StreamTablesRequest.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return StreamTablesRequest;
+    })();
+
+    binlogdata.StreamTablesResponse = (function() {
+
+        /**
+         * Properties of a StreamTablesResponse.
+         * @memberof binlogdata
+         * @interface IStreamTablesResponse
+         * @property {binlogdata.IBinlogTransaction|null} [binlog_transaction] StreamTablesResponse binlog_transaction
+         */
+
+        /**
+         * Constructs a new StreamTablesResponse.
+         * @memberof binlogdata
+         * @classdesc Represents a StreamTablesResponse.
+         * @implements IStreamTablesResponse
+         * @constructor
+         * @param {binlogdata.IStreamTablesResponse=} [properties] Properties to set
+         */
+        function StreamTablesResponse(properties) {
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * StreamTablesResponse binlog_transaction.
+         * @member {binlogdata.IBinlogTransaction|null|undefined} binlog_transaction
+         * @memberof binlogdata.StreamTablesResponse
+         * @instance
+         */
+        StreamTablesResponse.prototype.binlog_transaction = null;
+
+        /**
+         * Creates a new StreamTablesResponse instance using the specified properties.
+         * @function create
+         * @memberof binlogdata.StreamTablesResponse
+         * @static
+         * @param {binlogdata.IStreamTablesResponse=} [properties] Properties to set
+         * @returns {binlogdata.StreamTablesResponse} StreamTablesResponse instance
+         */
+        StreamTablesResponse.create = function create(properties) {
+            return new StreamTablesResponse(properties);
+        };
+
+        /**
+         * Encodes the specified StreamTablesResponse message. Does not implicitly {@link binlogdata.StreamTablesResponse.verify|verify} messages.
+         * @function encode
+         * @memberof binlogdata.StreamTablesResponse
+         * @static
+         * @param {binlogdata.IStreamTablesResponse} message StreamTablesResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        StreamTablesResponse.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.binlog_transaction != null && Object.hasOwnProperty.call(message, "binlog_transaction"))
+                $root.binlogdata.BinlogTransaction.encode(message.binlog_transaction, writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
+            return writer;
+        };
+
+        /**
+         * Encodes the specified StreamTablesResponse message, length delimited. Does not implicitly {@link binlogdata.StreamTablesResponse.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof binlogdata.StreamTablesResponse
+         * @static
+         * @param {binlogdata.IStreamTablesResponse} message StreamTablesResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        StreamTablesResponse.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a StreamTablesResponse message from the specified reader or buffer.
+         * @function decode
+         * @memberof binlogdata.StreamTablesResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {binlogdata.StreamTablesResponse} StreamTablesResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        StreamTablesResponse.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.binlogdata.StreamTablesResponse();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.binlog_transaction = $root.binlogdata.BinlogTransaction.decode(reader, reader.uint32());
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a StreamTablesResponse message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof binlogdata.StreamTablesResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {binlogdata.StreamTablesResponse} StreamTablesResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        StreamTablesResponse.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a StreamTablesResponse message.
+         * @function verify
+         * @memberof binlogdata.StreamTablesResponse
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        StreamTablesResponse.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.binlog_transaction != null && message.hasOwnProperty("binlog_transaction")) {
+                var error = $root.binlogdata.BinlogTransaction.verify(message.binlog_transaction);
+                if (error)
+                    return "binlog_transaction." + error;
+            }
+            return null;
+        };
+
+        /**
+         * Creates a StreamTablesResponse message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof binlogdata.StreamTablesResponse
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {binlogdata.StreamTablesResponse} StreamTablesResponse
+         */
+        StreamTablesResponse.fromObject = function fromObject(object) {
+            if (object instanceof $root.binlogdata.StreamTablesResponse)
+                return object;
+            var message = new $root.binlogdata.StreamTablesResponse();
+            if (object.binlog_transaction != null) {
+                if (typeof object.binlog_transaction !== "object")
+                    throw TypeError(".binlogdata.StreamTablesResponse.binlog_transaction: object expected");
+                message.binlog_transaction = $root.binlogdata.BinlogTransaction.fromObject(object.binlog_transaction);
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a StreamTablesResponse message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof binlogdata.StreamTablesResponse
+         * @static
+         * @param {binlogdata.StreamTablesResponse} message StreamTablesResponse
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        StreamTablesResponse.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.defaults)
+                object.binlog_transaction = null;
+            if (message.binlog_transaction != null && message.hasOwnProperty("binlog_transaction"))
+                object.binlog_transaction = $root.binlogdata.BinlogTransaction.toObject(message.binlog_transaction, options);
+            return object;
+        };
+
+        /**
+         * Converts this StreamTablesResponse to JSON.
+         * @function toJSON
+         * @memberof binlogdata.StreamTablesResponse
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        StreamTablesResponse.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return StreamTablesResponse;
+    })();
+
+    binlogdata.Rule = (function() {
+
+        /**
+         * Properties of a Rule.
+         * @memberof binlogdata
+         * @interface IRule
+         * @property {string|null} [match] Rule match
+         * @property {string|null} [filter] Rule filter
+         */
+
+        /**
+         * Constructs a new Rule.
+         * @memberof binlogdata
+         * @classdesc Represents a Rule.
+         * @implements IRule
+         * @constructor
+         * @param {binlogdata.IRule=} [properties] Properties to set
+         */
+        function Rule(properties) {
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * Rule match.
+         * @member {string} match
+         * @memberof binlogdata.Rule
+         * @instance
+         */
+        Rule.prototype.match = "";
+
+        /**
+         * Rule filter.
+         * @member {string} filter
+         * @memberof binlogdata.Rule
+         * @instance
+         */
+        Rule.prototype.filter = "";
+
+        /**
+         * Creates a new Rule instance using the specified properties.
+         * @function create
+         * @memberof binlogdata.Rule
+         * @static
+         * @param {binlogdata.IRule=} [properties] Properties to set
+         * @returns {binlogdata.Rule} Rule instance
+         */
+        Rule.create = function create(properties) {
+            return new Rule(properties);
+        };
+
+        /**
+         * Encodes the specified Rule message. Does not implicitly {@link binlogdata.Rule.verify|verify} messages.
+         * @function encode
+         * @memberof binlogdata.Rule
+         * @static
+         * @param {binlogdata.IRule} message Rule message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        Rule.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.match != null && Object.hasOwnProperty.call(message, "match"))
+                writer.uint32(/* id 1, wireType 2 =*/10).string(message.match);
+            if (message.filter != null && Object.hasOwnProperty.call(message, "filter"))
+                writer.uint32(/* id 2, wireType 2 =*/18).string(message.filter);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified Rule message, length delimited. Does not implicitly {@link binlogdata.Rule.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof binlogdata.Rule
+         * @static
+         * @param {binlogdata.IRule} message Rule message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        Rule.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a Rule message from the specified reader or buffer.
+         * @function decode
+         * @memberof binlogdata.Rule
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {binlogdata.Rule} Rule
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        Rule.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.binlogdata.Rule();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.match = reader.string();
+                    break;
+                case 2:
+                    message.filter = reader.string();
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a Rule message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof binlogdata.Rule
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {binlogdata.Rule} Rule
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        Rule.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a Rule message.
+         * @function verify
+         * @memberof binlogdata.Rule
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        Rule.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.match != null && message.hasOwnProperty("match"))
+                if (!$util.isString(message.match))
+                    return "match: string expected";
+            if (message.filter != null && message.hasOwnProperty("filter"))
+                if (!$util.isString(message.filter))
+                    return "filter: string expected";
+            return null;
+        };
+
+        /**
+         * Creates a Rule message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof binlogdata.Rule
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {binlogdata.Rule} Rule
+         */
+        Rule.fromObject = function fromObject(object) {
+            if (object instanceof $root.binlogdata.Rule)
+                return object;
+            var message = new $root.binlogdata.Rule();
+            if (object.match != null)
+                message.match = String(object.match);
+            if (object.filter != null)
+                message.filter = String(object.filter);
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a Rule message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof binlogdata.Rule
+         * @static
+         * @param {binlogdata.Rule} message Rule
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        Rule.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.defaults) {
+                object.match = "";
+                object.filter = "";
+            }
+            if (message.match != null && message.hasOwnProperty("match"))
+                object.match = message.match;
+            if (message.filter != null && message.hasOwnProperty("filter"))
+                object.filter = message.filter;
+            return object;
+        };
+
+        /**
+         * Converts this Rule to JSON.
+         * @function toJSON
+         * @memberof binlogdata.Rule
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        Rule.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return Rule;
+    })();
+
+    binlogdata.Filter = (function() {
+
+        /**
+         * Properties of a Filter.
+         * @memberof binlogdata
+         * @interface IFilter
+         * @property {Array.<binlogdata.IRule>|null} [rules] Filter rules
+         * @property {binlogdata.Filter.FieldEventMode|null} [fieldEventMode] Filter fieldEventMode
+         */
+
+        /**
+         * Constructs a new Filter.
+         * @memberof binlogdata
+         * @classdesc Represents a Filter.
+         * @implements IFilter
+         * @constructor
+         * @param {binlogdata.IFilter=} [properties] Properties to set
+         */
+        function Filter(properties) {
+            this.rules = [];
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * Filter rules.
+         * @member {Array.<binlogdata.IRule>} rules
+         * @memberof binlogdata.Filter
+         * @instance
+         */
+        Filter.prototype.rules = $util.emptyArray;
+
+        /**
+         * Filter fieldEventMode.
+         * @member {binlogdata.Filter.FieldEventMode} fieldEventMode
+         * @memberof binlogdata.Filter
+         * @instance
+         */
+        Filter.prototype.fieldEventMode = 0;
+
+        /**
+         * Creates a new Filter instance using the specified properties.
+         * @function create
+         * @memberof binlogdata.Filter
+         * @static
+         * @param {binlogdata.IFilter=} [properties] Properties to set
+         * @returns {binlogdata.Filter} Filter instance
+         */
+        Filter.create = function create(properties) {
+            return new Filter(properties);
+        };
+
+        /**
+         * Encodes the specified Filter message. Does not implicitly {@link binlogdata.Filter.verify|verify} messages.
+         * @function encode
+         * @memberof binlogdata.Filter
+         * @static
+         * @param {binlogdata.IFilter} message Filter message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        Filter.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.rules != null && message.rules.length)
+                for (var i = 0; i < message.rules.length; ++i)
+                    $root.binlogdata.Rule.encode(message.rules[i], writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
+            if (message.fieldEventMode != null && Object.hasOwnProperty.call(message, "fieldEventMode"))
+                writer.uint32(/* id 2, wireType 0 =*/16).int32(message.fieldEventMode);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified Filter message, length delimited. Does not implicitly {@link binlogdata.Filter.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof binlogdata.Filter
+         * @static
+         * @param {binlogdata.IFilter} message Filter message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        Filter.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a Filter message from the specified reader or buffer.
+         * @function decode
+         * @memberof binlogdata.Filter
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {binlogdata.Filter} Filter
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        Filter.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.binlogdata.Filter();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    if (!(message.rules && message.rules.length))
+                        message.rules = [];
+                    message.rules.push($root.binlogdata.Rule.decode(reader, reader.uint32()));
+                    break;
+                case 2:
+                    message.fieldEventMode = reader.int32();
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a Filter message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof binlogdata.Filter
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {binlogdata.Filter} Filter
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        Filter.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a Filter message.
+         * @function verify
+         * @memberof binlogdata.Filter
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        Filter.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.rules != null && message.hasOwnProperty("rules")) {
+                if (!Array.isArray(message.rules))
+                    return "rules: array expected";
+                for (var i = 0; i < message.rules.length; ++i) {
+                    var error = $root.binlogdata.Rule.verify(message.rules[i]);
+                    if (error)
+                        return "rules." + error;
+                }
+            }
+            if (message.fieldEventMode != null && message.hasOwnProperty("fieldEventMode"))
+                switch (message.fieldEventMode) {
+                default:
+                    return "fieldEventMode: enum value expected";
+                case 0:
+                case 1:
+                    break;
+                }
+            return null;
+        };
+
+        /**
+         * Creates a Filter message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof binlogdata.Filter
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {binlogdata.Filter} Filter
+         */
+        Filter.fromObject = function fromObject(object) {
+            if (object instanceof $root.binlogdata.Filter)
+                return object;
+            var message = new $root.binlogdata.Filter();
+            if (object.rules) {
+                if (!Array.isArray(object.rules))
+                    throw TypeError(".binlogdata.Filter.rules: array expected");
+                message.rules = [];
+                for (var i = 0; i < object.rules.length; ++i) {
+                    if (typeof object.rules[i] !== "object")
+                        throw TypeError(".binlogdata.Filter.rules: object expected");
+                    message.rules[i] = $root.binlogdata.Rule.fromObject(object.rules[i]);
+                }
+            }
+            switch (object.fieldEventMode) {
+            case "ERR_ON_MISMATCH":
+            case 0:
+                message.fieldEventMode = 0;
+                break;
+            case "BEST_EFFORT":
+            case 1:
+                message.fieldEventMode = 1;
+                break;
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a Filter message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof binlogdata.Filter
+         * @static
+         * @param {binlogdata.Filter} message Filter
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        Filter.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.arrays || options.defaults)
+                object.rules = [];
+            if (options.defaults)
+                object.fieldEventMode = options.enums === String ? "ERR_ON_MISMATCH" : 0;
+            if (message.rules && message.rules.length) {
+                object.rules = [];
+                for (var j = 0; j < message.rules.length; ++j)
+                    object.rules[j] = $root.binlogdata.Rule.toObject(message.rules[j], options);
+            }
+            if (message.fieldEventMode != null && message.hasOwnProperty("fieldEventMode"))
+                object.fieldEventMode = options.enums === String ? $root.binlogdata.Filter.FieldEventMode[message.fieldEventMode] : message.fieldEventMode;
+            return object;
+        };
+
+        /**
+         * Converts this Filter to JSON.
+         * @function toJSON
+         * @memberof binlogdata.Filter
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        Filter.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        /**
+         * FieldEventMode enum.
+         * @name binlogdata.Filter.FieldEventMode
+         * @enum {number}
+         * @property {number} ERR_ON_MISMATCH=0 ERR_ON_MISMATCH value
+         * @property {number} BEST_EFFORT=1 BEST_EFFORT value
+         */
+        Filter.FieldEventMode = (function() {
+            var valuesById = {}, values = Object.create(valuesById);
+            values[valuesById[0] = "ERR_ON_MISMATCH"] = 0;
+            values[valuesById[1] = "BEST_EFFORT"] = 1;
+            return values;
+        })();
+
+        return Filter;
+    })();
+
+    /**
+     * OnDDLAction enum.
+     * @name binlogdata.OnDDLAction
+     * @enum {number}
+     * @property {number} IGNORE=0 IGNORE value
+     * @property {number} STOP=1 STOP value
+     * @property {number} EXEC=2 EXEC value
+     * @property {number} EXEC_IGNORE=3 EXEC_IGNORE value
+     */
+    binlogdata.OnDDLAction = (function() {
+        var valuesById = {}, values = Object.create(valuesById);
+        values[valuesById[0] = "IGNORE"] = 0;
+        values[valuesById[1] = "STOP"] = 1;
+        values[valuesById[2] = "EXEC"] = 2;
+        values[valuesById[3] = "EXEC_IGNORE"] = 3;
+        return values;
+    })();
+
+    binlogdata.BinlogSource = (function() {
+
+        /**
+         * Properties of a BinlogSource.
+         * @memberof binlogdata
+         * @interface IBinlogSource
+         * @property {string|null} [keyspace] BinlogSource keyspace
+         * @property {string|null} [shard] BinlogSource shard
+         * @property {topodata.TabletType|null} [tablet_type] BinlogSource tablet_type
+         * @property {topodata.IKeyRange|null} [key_range] BinlogSource key_range
+         * @property {Array.<string>|null} [tables] BinlogSource tables
+         * @property {binlogdata.IFilter|null} [filter] BinlogSource filter
+         * @property {binlogdata.OnDDLAction|null} [on_ddl] BinlogSource on_ddl
+         * @property {string|null} [external_mysql] BinlogSource external_mysql
+         * @property {boolean|null} [stop_after_copy] BinlogSource stop_after_copy
+         * @property {string|null} [external_cluster] BinlogSource external_cluster
+         */
+
+        /**
+         * Constructs a new BinlogSource.
+         * @memberof binlogdata
+         * @classdesc Represents a BinlogSource.
+         * @implements IBinlogSource
+         * @constructor
+         * @param {binlogdata.IBinlogSource=} [properties] Properties to set
+         */
+        function BinlogSource(properties) {
+            this.tables = [];
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * BinlogSource keyspace.
+         * @member {string} keyspace
+         * @memberof binlogdata.BinlogSource
+         * @instance
+         */
+        BinlogSource.prototype.keyspace = "";
+
+        /**
+         * BinlogSource shard.
+         * @member {string} shard
+         * @memberof binlogdata.BinlogSource
+         * @instance
+         */
+        BinlogSource.prototype.shard = "";
+
+        /**
+         * BinlogSource tablet_type.
+         * @member {topodata.TabletType} tablet_type
+         * @memberof binlogdata.BinlogSource
+         * @instance
+         */
+        BinlogSource.prototype.tablet_type = 0;
+
+        /**
+         * BinlogSource key_range.
+         * @member {topodata.IKeyRange|null|undefined} key_range
+         * @memberof binlogdata.BinlogSource
+         * @instance
+         */
+        BinlogSource.prototype.key_range = null;
+
+        /**
+         * BinlogSource tables.
+         * @member {Array.<string>} tables
+         * @memberof binlogdata.BinlogSource
+         * @instance
+         */
+        BinlogSource.prototype.tables = $util.emptyArray;
+
+        /**
+         * BinlogSource filter.
+         * @member {binlogdata.IFilter|null|undefined} filter
+         * @memberof binlogdata.BinlogSource
+         * @instance
+         */
+        BinlogSource.prototype.filter = null;
+
+        /**
+         * BinlogSource on_ddl.
+         * @member {binlogdata.OnDDLAction} on_ddl
+         * @memberof binlogdata.BinlogSource
+         * @instance
+         */
+        BinlogSource.prototype.on_ddl = 0;
+
+        /**
+         * BinlogSource external_mysql.
+         * @member {string} external_mysql
+         * @memberof binlogdata.BinlogSource
+         * @instance
+         */
+        BinlogSource.prototype.external_mysql = "";
+
+        /**
+         * BinlogSource stop_after_copy.
+         * @member {boolean} stop_after_copy
+         * @memberof binlogdata.BinlogSource
+         * @instance
+         */
+        BinlogSource.prototype.stop_after_copy = false;
+
+        /**
+         * BinlogSource external_cluster.
+         * @member {string} external_cluster
+         * @memberof binlogdata.BinlogSource
+         * @instance
+         */
+        BinlogSource.prototype.external_cluster = "";
+
+        /**
+         * Creates a new BinlogSource instance using the specified properties.
+         * @function create
+         * @memberof binlogdata.BinlogSource
+         * @static
+         * @param {binlogdata.IBinlogSource=} [properties] Properties to set
+         * @returns {binlogdata.BinlogSource} BinlogSource instance
+         */
+        BinlogSource.create = function create(properties) {
+            return new BinlogSource(properties);
+        };
+
+        /**
+         * Encodes the specified BinlogSource message. Does not implicitly {@link binlogdata.BinlogSource.verify|verify} messages.
+         * @function encode
+         * @memberof binlogdata.BinlogSource
+         * @static
+         * @param {binlogdata.IBinlogSource} message BinlogSource message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        BinlogSource.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.keyspace != null && Object.hasOwnProperty.call(message, "keyspace"))
+                writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
+            if (message.shard != null && Object.hasOwnProperty.call(message, "shard"))
+                writer.uint32(/* id 2, wireType 2 =*/18).string(message.shard);
+            if (message.tablet_type != null && Object.hasOwnProperty.call(message, "tablet_type"))
+                writer.uint32(/* id 3, wireType 0 =*/24).int32(message.tablet_type);
+            if (message.key_range != null && Object.hasOwnProperty.call(message, "key_range"))
+                $root.topodata.KeyRange.encode(message.key_range, writer.uint32(/* id 4, wireType 2 =*/34).fork()).ldelim();
+            if (message.tables != null && message.tables.length)
+                for (var i = 0; i < message.tables.length; ++i)
+                    writer.uint32(/* id 5, wireType 2 =*/42).string(message.tables[i]);
+            if (message.filter != null && Object.hasOwnProperty.call(message, "filter"))
+                $root.binlogdata.Filter.encode(message.filter, writer.uint32(/* id 6, wireType 2 =*/50).fork()).ldelim();
+            if (message.on_ddl != null && Object.hasOwnProperty.call(message, "on_ddl"))
+                writer.uint32(/* id 7, wireType 0 =*/56).int32(message.on_ddl);
+            if (message.external_mysql != null && Object.hasOwnProperty.call(message, "external_mysql"))
+                writer.uint32(/* id 8, wireType 2 =*/66).string(message.external_mysql);
+            if (message.stop_after_copy != null && Object.hasOwnProperty.call(message, "stop_after_copy"))
+                writer.uint32(/* id 9, wireType 0 =*/72).bool(message.stop_after_copy);
+            if (message.external_cluster != null && Object.hasOwnProperty.call(message, "external_cluster"))
+                writer.uint32(/* id 10, wireType 2 =*/82).string(message.external_cluster);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified BinlogSource message, length delimited. Does not implicitly {@link binlogdata.BinlogSource.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof binlogdata.BinlogSource
+         * @static
+         * @param {binlogdata.IBinlogSource} message BinlogSource message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        BinlogSource.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a BinlogSource message from the specified reader or buffer.
+         * @function decode
+         * @memberof binlogdata.BinlogSource
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {binlogdata.BinlogSource} BinlogSource
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        BinlogSource.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.binlogdata.BinlogSource();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.keyspace = reader.string();
+                    break;
+                case 2:
+                    message.shard = reader.string();
+                    break;
+                case 3:
+                    message.tablet_type = reader.int32();
+                    break;
+                case 4:
+                    message.key_range = $root.topodata.KeyRange.decode(reader, reader.uint32());
+                    break;
+                case 5:
+                    if (!(message.tables && message.tables.length))
+                        message.tables = [];
+                    message.tables.push(reader.string());
+                    break;
+                case 6:
+                    message.filter = $root.binlogdata.Filter.decode(reader, reader.uint32());
+                    break;
+                case 7:
+                    message.on_ddl = reader.int32();
+                    break;
+                case 8:
+                    message.external_mysql = reader.string();
+                    break;
+                case 9:
+                    message.stop_after_copy = reader.bool();
+                    break;
+                case 10:
+                    message.external_cluster = reader.string();
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a BinlogSource message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof binlogdata.BinlogSource
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {binlogdata.BinlogSource} BinlogSource
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        BinlogSource.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a BinlogSource message.
+         * @function verify
+         * @memberof binlogdata.BinlogSource
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        BinlogSource.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.keyspace != null && message.hasOwnProperty("keyspace"))
+                if (!$util.isString(message.keyspace))
+                    return "keyspace: string expected";
+            if (message.shard != null && message.hasOwnProperty("shard"))
+                if (!$util.isString(message.shard))
+                    return "shard: string expected";
+            if (message.tablet_type != null && message.hasOwnProperty("tablet_type"))
+                switch (message.tablet_type) {
+                default:
+                    return "tablet_type: enum value expected";
+                case 0:
+                case 1:
+                case 2:
+                case 3:
+                case 3:
+                case 4:
+                case 5:
+                case 6:
+                case 7:
+                case 8:
+                    break;
+                }
+            if (message.key_range != null && message.hasOwnProperty("key_range")) {
+                var error = $root.topodata.KeyRange.verify(message.key_range);
+                if (error)
+                    return "key_range." + error;
+            }
+            if (message.tables != null && message.hasOwnProperty("tables")) {
+                if (!Array.isArray(message.tables))
+                    return "tables: array expected";
+                for (var i = 0; i < message.tables.length; ++i)
+                    if (!$util.isString(message.tables[i]))
+                        return "tables: string[] expected";
+            }
+            if (message.filter != null && message.hasOwnProperty("filter")) {
+                var error = $root.binlogdata.Filter.verify(message.filter);
+                if (error)
+                    return "filter." + error;
+            }
+            if (message.on_ddl != null && message.hasOwnProperty("on_ddl"))
+                switch (message.on_ddl) {
+                default:
+                    return "on_ddl: enum value expected";
+                case 0:
+                case 1:
+                case 2:
+                case 3:
+                    break;
+                }
+            if (message.external_mysql != null && message.hasOwnProperty("external_mysql"))
+                if (!$util.isString(message.external_mysql))
+                    return "external_mysql: string expected";
+            if (message.stop_after_copy != null && message.hasOwnProperty("stop_after_copy"))
+                if (typeof message.stop_after_copy !== "boolean")
+                    return "stop_after_copy: boolean expected";
+            if (message.external_cluster != null && message.hasOwnProperty("external_cluster"))
+                if (!$util.isString(message.external_cluster))
+                    return "external_cluster: string expected";
+            return null;
+        };
+
+        /**
+         * Creates a BinlogSource message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof binlogdata.BinlogSource
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {binlogdata.BinlogSource} BinlogSource
+         */
+        BinlogSource.fromObject = function fromObject(object) {
+            if (object instanceof $root.binlogdata.BinlogSource)
+                return object;
+            var message = new $root.binlogdata.BinlogSource();
+            if (object.keyspace != null)
+                message.keyspace = String(object.keyspace);
+            if (object.shard != null)
+                message.shard = String(object.shard);
+            switch (object.tablet_type) {
+            case "UNKNOWN":
+            case 0:
+                message.tablet_type = 0;
+                break;
+            case "MASTER":
+            case 1:
+                message.tablet_type = 1;
+                break;
+            case "REPLICA":
+            case 2:
+                message.tablet_type = 2;
+                break;
+            case "RDONLY":
+            case 3:
+                message.tablet_type = 3;
+                break;
+            case "BATCH":
+            case 3:
+                message.tablet_type = 3;
+                break;
+            case "SPARE":
+            case 4:
+                message.tablet_type = 4;
+                break;
+            case "EXPERIMENTAL":
+            case 5:
+                message.tablet_type = 5;
+                break;
+            case "BACKUP":
+            case 6:
+                message.tablet_type = 6;
+                break;
+            case "RESTORE":
+            case 7:
+                message.tablet_type = 7;
+                break;
+            case "DRAINED":
+            case 8:
+                message.tablet_type = 8;
+                break;
+            }
+            if (object.key_range != null) {
+                if (typeof object.key_range !== "object")
+                    throw TypeError(".binlogdata.BinlogSource.key_range: object expected");
+                message.key_range = $root.topodata.KeyRange.fromObject(object.key_range);
+            }
+            if (object.tables) {
+                if (!Array.isArray(object.tables))
+                    throw TypeError(".binlogdata.BinlogSource.tables: array expected");
+                message.tables = [];
+                for (var i = 0; i < object.tables.length; ++i)
+                    message.tables[i] = String(object.tables[i]);
+            }
+            if (object.filter != null) {
+                if (typeof object.filter !== "object")
+                    throw TypeError(".binlogdata.BinlogSource.filter: object expected");
+                message.filter = $root.binlogdata.Filter.fromObject(object.filter);
+            }
+            switch (object.on_ddl) {
+            case "IGNORE":
+            case 0:
+                message.on_ddl = 0;
+                break;
+            case "STOP":
+            case 1:
+                message.on_ddl = 1;
+                break;
+            case "EXEC":
+            case 2:
+                message.on_ddl = 2;
+                break;
+            case "EXEC_IGNORE":
+            case 3:
+                message.on_ddl = 3;
+                break;
+            }
+            if (object.external_mysql != null)
+                message.external_mysql = String(object.external_mysql);
+            if (object.stop_after_copy != null)
+                message.stop_after_copy = Boolean(object.stop_after_copy);
+            if (object.external_cluster != null)
+                message.external_cluster = String(object.external_cluster);
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a BinlogSource message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof binlogdata.BinlogSource
+         * @static
+         * @param {binlogdata.BinlogSource} message BinlogSource
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        BinlogSource.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.arrays || options.defaults)
+                object.tables = [];
+            if (options.defaults) {
+                object.keyspace = "";
+                object.shard = "";
+                object.tablet_type = options.enums === String ? "UNKNOWN" : 0;
+                object.key_range = null;
+                object.filter = null;
+                object.on_ddl = options.enums === String ? "IGNORE" : 0;
+                object.external_mysql = "";
+                object.stop_after_copy = false;
+                object.external_cluster = "";
+            }
+            if (message.keyspace != null && message.hasOwnProperty("keyspace"))
+                object.keyspace = message.keyspace;
+            if (message.shard != null && message.hasOwnProperty("shard"))
+                object.shard = message.shard;
+            if (message.tablet_type != null && message.hasOwnProperty("tablet_type"))
+                object.tablet_type = options.enums === String ? $root.topodata.TabletType[message.tablet_type] : message.tablet_type;
+            if (message.key_range != null && message.hasOwnProperty("key_range"))
+                object.key_range = $root.topodata.KeyRange.toObject(message.key_range, options);
+            if (message.tables && message.tables.length) {
+                object.tables = [];
+                for (var j = 0; j < message.tables.length; ++j)
+                    object.tables[j] = message.tables[j];
+            }
+            if (message.filter != null && message.hasOwnProperty("filter"))
+                object.filter = $root.binlogdata.Filter.toObject(message.filter, options);
+            if (message.on_ddl != null && message.hasOwnProperty("on_ddl"))
+                object.on_ddl = options.enums === String ? $root.binlogdata.OnDDLAction[message.on_ddl] : message.on_ddl;
+            if (message.external_mysql != null && message.hasOwnProperty("external_mysql"))
+                object.external_mysql = message.external_mysql;
+            if (message.stop_after_copy != null && message.hasOwnProperty("stop_after_copy"))
+                object.stop_after_copy = message.stop_after_copy;
+            if (message.external_cluster != null && message.hasOwnProperty("external_cluster"))
+                object.external_cluster = message.external_cluster;
+            return object;
+        };
+
+        /**
+         * Converts this BinlogSource to JSON.
+         * @function toJSON
+         * @memberof binlogdata.BinlogSource
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        BinlogSource.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return BinlogSource;
+    })();
+
+    /**
+     * VEventType enum.
+     * @name binlogdata.VEventType
+     * @enum {number}
+     * @property {number} UNKNOWN=0 UNKNOWN value
+     * @property {number} GTID=1 GTID value
+     * @property {number} BEGIN=2 BEGIN value
+     * @property {number} COMMIT=3 COMMIT value
+     * @property {number} ROLLBACK=4 ROLLBACK value
+     * @property {number} DDL=5 DDL value
+     * @property {number} INSERT=6 INSERT value
+     * @property {number} REPLACE=7 REPLACE value
+     * @property {number} UPDATE=8 UPDATE value
+     * @property {number} DELETE=9 DELETE value
+     * @property {number} SET=10 SET value
+     * @property {number} OTHER=11 OTHER value
+     * @property {number} ROW=12 ROW value
+     * @property {number} FIELD=13 FIELD value
+     * @property {number} HEARTBEAT=14 HEARTBEAT value
+     * @property {number} VGTID=15 VGTID value
+     * @property {number} JOURNAL=16 JOURNAL value
+     * @property {number} VERSION=17 VERSION value
+     * @property {number} LASTPK=18 LASTPK value
+     * @property {number} SAVEPOINT=19 SAVEPOINT value
+     */
+    binlogdata.VEventType = (function() {
+        var valuesById = {}, values = Object.create(valuesById);
+        values[valuesById[0] = "UNKNOWN"] = 0;
+        values[valuesById[1] = "GTID"] = 1;
+        values[valuesById[2] = "BEGIN"] = 2;
+        values[valuesById[3] = "COMMIT"] = 3;
+        values[valuesById[4] = "ROLLBACK"] = 4;
+        values[valuesById[5] = "DDL"] = 5;
+        values[valuesById[6] = "INSERT"] = 6;
+        values[valuesById[7] = "REPLACE"] = 7;
+        values[valuesById[8] = "UPDATE"] = 8;
+        values[valuesById[9] = "DELETE"] = 9;
+        values[valuesById[10] = "SET"] = 10;
+        values[valuesById[11] = "OTHER"] = 11;
+        values[valuesById[12] = "ROW"] = 12;
+        values[valuesById[13] = "FIELD"] = 13;
+        values[valuesById[14] = "HEARTBEAT"] = 14;
+        values[valuesById[15] = "VGTID"] = 15;
+        values[valuesById[16] = "JOURNAL"] = 16;
+        values[valuesById[17] = "VERSION"] = 17;
+        values[valuesById[18] = "LASTPK"] = 18;
+        values[valuesById[19] = "SAVEPOINT"] = 19;
+        return values;
+    })();
+
+    binlogdata.RowChange = (function() {
+
+        /**
+         * Properties of a RowChange.
+         * @memberof binlogdata
+         * @interface IRowChange
+         * @property {query.IRow|null} [before] RowChange before
+         * @property {query.IRow|null} [after] RowChange after
+         */
+
+        /**
+         * Constructs a new RowChange.
+         * @memberof binlogdata
+         * @classdesc Represents a RowChange.
+         * @implements IRowChange
+         * @constructor
+         * @param {binlogdata.IRowChange=} [properties] Properties to set
+         */
+        function RowChange(properties) {
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * RowChange before.
+         * @member {query.IRow|null|undefined} before
+         * @memberof binlogdata.RowChange
+         * @instance
+         */
+        RowChange.prototype.before = null;
+
+        /**
+         * RowChange after.
+         * @member {query.IRow|null|undefined} after
+         * @memberof binlogdata.RowChange
+         * @instance
+         */
+        RowChange.prototype.after = null;
+
+        /**
+         * Creates a new RowChange instance using the specified properties.
+         * @function create
+         * @memberof binlogdata.RowChange
+         * @static
+         * @param {binlogdata.IRowChange=} [properties] Properties to set
+         * @returns {binlogdata.RowChange} RowChange instance
+         */
+        RowChange.create = function create(properties) {
+            return new RowChange(properties);
+        };
+
+        /**
+         * Encodes the specified RowChange message. Does not implicitly {@link binlogdata.RowChange.verify|verify} messages.
+         * @function encode
+         * @memberof binlogdata.RowChange
+         * @static
+         * @param {binlogdata.IRowChange} message RowChange message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        RowChange.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.before != null && Object.hasOwnProperty.call(message, "before"))
+                $root.query.Row.encode(message.before, writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
+            if (message.after != null && Object.hasOwnProperty.call(message, "after"))
+                $root.query.Row.encode(message.after, writer.uint32(/* id 2, wireType 2 =*/18).fork()).ldelim();
+            return writer;
+        };
+
+        /**
+         * Encodes the specified RowChange message, length delimited. Does not implicitly {@link binlogdata.RowChange.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof binlogdata.RowChange
+         * @static
+         * @param {binlogdata.IRowChange} message RowChange message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        RowChange.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a RowChange message from the specified reader or buffer.
+         * @function decode
+         * @memberof binlogdata.RowChange
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {binlogdata.RowChange} RowChange
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        RowChange.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.binlogdata.RowChange();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.before = $root.query.Row.decode(reader, reader.uint32());
+                    break;
+                case 2:
+                    message.after = $root.query.Row.decode(reader, reader.uint32());
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a RowChange message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof binlogdata.RowChange
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {binlogdata.RowChange} RowChange
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        RowChange.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a RowChange message.
+         * @function verify
+         * @memberof binlogdata.RowChange
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        RowChange.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.before != null && message.hasOwnProperty("before")) {
+                var error = $root.query.Row.verify(message.before);
+                if (error)
+                    return "before." + error;
+            }
+            if (message.after != null && message.hasOwnProperty("after")) {
+                var error = $root.query.Row.verify(message.after);
+                if (error)
+                    return "after." + error;
+            }
+            return null;
+        };
+
+        /**
+         * Creates a RowChange message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof binlogdata.RowChange
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {binlogdata.RowChange} RowChange
+         */
+        RowChange.fromObject = function fromObject(object) {
+            if (object instanceof $root.binlogdata.RowChange)
+                return object;
+            var message = new $root.binlogdata.RowChange();
+            if (object.before != null) {
+                if (typeof object.before !== "object")
+                    throw TypeError(".binlogdata.RowChange.before: object expected");
+                message.before = $root.query.Row.fromObject(object.before);
+            }
+            if (object.after != null) {
+                if (typeof object.after !== "object")
+                    throw TypeError(".binlogdata.RowChange.after: object expected");
+                message.after = $root.query.Row.fromObject(object.after);
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a RowChange message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof binlogdata.RowChange
+         * @static
+         * @param {binlogdata.RowChange} message RowChange
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        RowChange.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.defaults) {
+                object.before = null;
+                object.after = null;
+            }
+            if (message.before != null && message.hasOwnProperty("before"))
+                object.before = $root.query.Row.toObject(message.before, options);
+            if (message.after != null && message.hasOwnProperty("after"))
+                object.after = $root.query.Row.toObject(message.after, options);
+            return object;
+        };
+
+        /**
+         * Converts this RowChange to JSON.
+         * @function toJSON
+         * @memberof binlogdata.RowChange
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        RowChange.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return RowChange;
+    })();
+
+    binlogdata.RowEvent = (function() {
+
+        /**
+         * Properties of a RowEvent.
+         * @memberof binlogdata
+         * @interface IRowEvent
+         * @property {string|null} [table_name] RowEvent table_name
+         * @property {Array.<binlogdata.IRowChange>|null} [row_changes] RowEvent row_changes
+         */
+
+        /**
+         * Constructs a new RowEvent.
+         * @memberof binlogdata
+         * @classdesc Represents a RowEvent.
+         * @implements IRowEvent
+         * @constructor
+         * @param {binlogdata.IRowEvent=} [properties] Properties to set
+         */
+        function RowEvent(properties) {
+            this.row_changes = [];
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * RowEvent table_name.
+         * @member {string} table_name
+         * @memberof binlogdata.RowEvent
+         * @instance
+         */
+        RowEvent.prototype.table_name = "";
+
+        /**
+         * RowEvent row_changes.
+         * @member {Array.<binlogdata.IRowChange>} row_changes
+         * @memberof binlogdata.RowEvent
+         * @instance
+         */
+        RowEvent.prototype.row_changes = $util.emptyArray;
+
+        /**
+         * Creates a new RowEvent instance using the specified properties.
+         * @function create
+         * @memberof binlogdata.RowEvent
+         * @static
+         * @param {binlogdata.IRowEvent=} [properties] Properties to set
+         * @returns {binlogdata.RowEvent} RowEvent instance
+         */
+        RowEvent.create = function create(properties) {
+            return new RowEvent(properties);
+        };
+
+        /**
+         * Encodes the specified RowEvent message. Does not implicitly {@link binlogdata.RowEvent.verify|verify} messages.
+         * @function encode
+         * @memberof binlogdata.RowEvent
+         * @static
+         * @param {binlogdata.IRowEvent} message RowEvent message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        RowEvent.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.table_name != null && Object.hasOwnProperty.call(message, "table_name"))
+                writer.uint32(/* id 1, wireType 2 =*/10).string(message.table_name);
+            if (message.row_changes != null && message.row_changes.length)
+                for (var i = 0; i < message.row_changes.length; ++i)
+                    $root.binlogdata.RowChange.encode(message.row_changes[i], writer.uint32(/* id 2, wireType 2 =*/18).fork()).ldelim();
+            return writer;
+        };
+
+        /**
+         * Encodes the specified RowEvent message, length delimited. Does not implicitly {@link binlogdata.RowEvent.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof binlogdata.RowEvent
+         * @static
+         * @param {binlogdata.IRowEvent} message RowEvent message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        RowEvent.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a RowEvent message from the specified reader or buffer.
+         * @function decode
+         * @memberof binlogdata.RowEvent
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {binlogdata.RowEvent} RowEvent
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        RowEvent.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.binlogdata.RowEvent();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.table_name = reader.string();
+                    break;
+                case 2:
+                    if (!(message.row_changes && message.row_changes.length))
+                        message.row_changes = [];
+                    message.row_changes.push($root.binlogdata.RowChange.decode(reader, reader.uint32()));
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a RowEvent message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof binlogdata.RowEvent
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {binlogdata.RowEvent} RowEvent
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        RowEvent.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a RowEvent message.
+         * @function verify
+         * @memberof binlogdata.RowEvent
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        RowEvent.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.table_name != null && message.hasOwnProperty("table_name"))
+                if (!$util.isString(message.table_name))
+                    return "table_name: string expected";
+            if (message.row_changes != null && message.hasOwnProperty("row_changes")) {
+                if (!Array.isArray(message.row_changes))
+                    return "row_changes: array expected";
+                for (var i = 0; i < message.row_changes.length; ++i) {
+                    var error = $root.binlogdata.RowChange.verify(message.row_changes[i]);
+                    if (error)
+                        return "row_changes." + error;
+                }
+            }
+            return null;
+        };
+
+        /**
+         * Creates a RowEvent message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof binlogdata.RowEvent
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {binlogdata.RowEvent} RowEvent
+         */
+        RowEvent.fromObject = function fromObject(object) {
+            if (object instanceof $root.binlogdata.RowEvent)
+                return object;
+            var message = new $root.binlogdata.RowEvent();
+            if (object.table_name != null)
+                message.table_name = String(object.table_name);
+            if (object.row_changes) {
+                if (!Array.isArray(object.row_changes))
+                    throw TypeError(".binlogdata.RowEvent.row_changes: array expected");
+                message.row_changes = [];
+                for (var i = 0; i < object.row_changes.length; ++i) {
+                    if (typeof object.row_changes[i] !== "object")
+                        throw TypeError(".binlogdata.RowEvent.row_changes: object expected");
+                    message.row_changes[i] = $root.binlogdata.RowChange.fromObject(object.row_changes[i]);
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a RowEvent message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof binlogdata.RowEvent
+         * @static
+         * @param {binlogdata.RowEvent} message RowEvent
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        RowEvent.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.arrays || options.defaults)
+                object.row_changes = [];
+            if (options.defaults)
+                object.table_name = "";
+            if (message.table_name != null && message.hasOwnProperty("table_name"))
+                object.table_name = message.table_name;
+            if (message.row_changes && message.row_changes.length) {
+                object.row_changes = [];
+                for (var j = 0; j < message.row_changes.length; ++j)
+                    object.row_changes[j] = $root.binlogdata.RowChange.toObject(message.row_changes[j], options);
+            }
+            return object;
+        };
+
+        /**
+         * Converts this RowEvent to JSON.
+         * @function toJSON
+         * @memberof binlogdata.RowEvent
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        RowEvent.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return RowEvent;
+    })();
+
+    binlogdata.FieldEvent = (function() {
+
+        /**
+         * Properties of a FieldEvent.
+         * @memberof binlogdata
+         * @interface IFieldEvent
+         * @property {string|null} [table_name] FieldEvent table_name
+         * @property {Array.<query.IField>|null} [fields] FieldEvent fields
+         */
+
+        /**
+         * Constructs a new FieldEvent.
+         * @memberof binlogdata
+         * @classdesc Represents a FieldEvent.
+         * @implements IFieldEvent
+         * @constructor
+         * @param {binlogdata.IFieldEvent=} [properties] Properties to set
+         */
+        function FieldEvent(properties) {
+            this.fields = [];
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * FieldEvent table_name.
+         * @member {string} table_name
+         * @memberof binlogdata.FieldEvent
+         * @instance
+         */
+        FieldEvent.prototype.table_name = "";
+
+        /**
+         * FieldEvent fields.
+         * @member {Array.<query.IField>} fields
+         * @memberof binlogdata.FieldEvent
+         * @instance
+         */
+        FieldEvent.prototype.fields = $util.emptyArray;
+
+        /**
+         * Creates a new FieldEvent instance using the specified properties.
+         * @function create
+         * @memberof binlogdata.FieldEvent
+         * @static
+         * @param {binlogdata.IFieldEvent=} [properties] Properties to set
+         * @returns {binlogdata.FieldEvent} FieldEvent instance
+         */
+        FieldEvent.create = function create(properties) {
+            return new FieldEvent(properties);
+        };
+
+        /**
+         * Encodes the specified FieldEvent message. Does not implicitly {@link binlogdata.FieldEvent.verify|verify} messages.
+         * @function encode
+         * @memberof binlogdata.FieldEvent
+         * @static
+         * @param {binlogdata.IFieldEvent} message FieldEvent message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        FieldEvent.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.table_name != null && Object.hasOwnProperty.call(message, "table_name"))
+                writer.uint32(/* id 1, wireType 2 =*/10).string(message.table_name);
+            if (message.fields != null && message.fields.length)
+                for (var i = 0; i < message.fields.length; ++i)
+                    $root.query.Field.encode(message.fields[i], writer.uint32(/* id 2, wireType 2 =*/18).fork()).ldelim();
+            return writer;
+        };
+
+        /**
+         * Encodes the specified FieldEvent message, length delimited. Does not implicitly {@link binlogdata.FieldEvent.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof binlogdata.FieldEvent
+         * @static
+         * @param {binlogdata.IFieldEvent} message FieldEvent message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        FieldEvent.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a FieldEvent message from the specified reader or buffer.
+         * @function decode
+         * @memberof binlogdata.FieldEvent
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {binlogdata.FieldEvent} FieldEvent
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        FieldEvent.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.binlogdata.FieldEvent();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.table_name = reader.string();
+                    break;
+                case 2:
+                    if (!(message.fields && message.fields.length))
+                        message.fields = [];
+                    message.fields.push($root.query.Field.decode(reader, reader.uint32()));
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a FieldEvent message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof binlogdata.FieldEvent
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {binlogdata.FieldEvent} FieldEvent
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        FieldEvent.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a FieldEvent message.
+         * @function verify
+         * @memberof binlogdata.FieldEvent
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        FieldEvent.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.table_name != null && message.hasOwnProperty("table_name"))
+                if (!$util.isString(message.table_name))
+                    return "table_name: string expected";
+            if (message.fields != null && message.hasOwnProperty("fields")) {
+                if (!Array.isArray(message.fields))
+                    return "fields: array expected";
+                for (var i = 0; i < message.fields.length; ++i) {
+                    var error = $root.query.Field.verify(message.fields[i]);
+                    if (error)
+                        return "fields." + error;
+                }
+            }
+            return null;
+        };
+
+        /**
+         * Creates a FieldEvent message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof binlogdata.FieldEvent
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {binlogdata.FieldEvent} FieldEvent
+         */
+        FieldEvent.fromObject = function fromObject(object) {
+            if (object instanceof $root.binlogdata.FieldEvent)
+                return object;
+            var message = new $root.binlogdata.FieldEvent();
+            if (object.table_name != null)
+                message.table_name = String(object.table_name);
+            if (object.fields) {
+                if (!Array.isArray(object.fields))
+                    throw TypeError(".binlogdata.FieldEvent.fields: array expected");
+                message.fields = [];
+                for (var i = 0; i < object.fields.length; ++i) {
+                    if (typeof object.fields[i] !== "object")
+                        throw TypeError(".binlogdata.FieldEvent.fields: object expected");
+                    message.fields[i] = $root.query.Field.fromObject(object.fields[i]);
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a FieldEvent message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof binlogdata.FieldEvent
+         * @static
+         * @param {binlogdata.FieldEvent} message FieldEvent
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        FieldEvent.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.arrays || options.defaults)
+                object.fields = [];
+            if (options.defaults)
+                object.table_name = "";
+            if (message.table_name != null && message.hasOwnProperty("table_name"))
+                object.table_name = message.table_name;
+            if (message.fields && message.fields.length) {
+                object.fields = [];
+                for (var j = 0; j < message.fields.length; ++j)
+                    object.fields[j] = $root.query.Field.toObject(message.fields[j], options);
+            }
+            return object;
+        };
+
+        /**
+         * Converts this FieldEvent to JSON.
+         * @function toJSON
+         * @memberof binlogdata.FieldEvent
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        FieldEvent.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return FieldEvent;
+    })();
+
+    binlogdata.ShardGtid = (function() {
+
+        /**
+         * Properties of a ShardGtid.
+         * @memberof binlogdata
+         * @interface IShardGtid
+         * @property {string|null} [keyspace] ShardGtid keyspace
+         * @property {string|null} [shard] ShardGtid shard
+         * @property {string|null} [gtid] ShardGtid gtid
+         * @property {Array.<binlogdata.ITableLastPK>|null} [table_p_ks] ShardGtid table_p_ks
+         */
+
+        /**
+         * Constructs a new ShardGtid.
+         * @memberof binlogdata
+         * @classdesc Represents a ShardGtid.
+         * @implements IShardGtid
+         * @constructor
+         * @param {binlogdata.IShardGtid=} [properties] Properties to set
+         */
+        function ShardGtid(properties) {
+            this.table_p_ks = [];
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * ShardGtid keyspace.
+         * @member {string} keyspace
+         * @memberof binlogdata.ShardGtid
+         * @instance
+         */
+        ShardGtid.prototype.keyspace = "";
+
+        /**
+         * ShardGtid shard.
+         * @member {string} shard
+         * @memberof binlogdata.ShardGtid
+         * @instance
+         */
+        ShardGtid.prototype.shard = "";
+
+        /**
+         * ShardGtid gtid.
+         * @member {string} gtid
+         * @memberof binlogdata.ShardGtid
+         * @instance
+         */
+        ShardGtid.prototype.gtid = "";
+
+        /**
+         * ShardGtid table_p_ks.
+         * @member {Array.<binlogdata.ITableLastPK>} table_p_ks
+         * @memberof binlogdata.ShardGtid
+         * @instance
+         */
+        ShardGtid.prototype.table_p_ks = $util.emptyArray;
+
+        /**
+         * Creates a new ShardGtid instance using the specified properties.
+         * @function create
+         * @memberof binlogdata.ShardGtid
+         * @static
+         * @param {binlogdata.IShardGtid=} [properties] Properties to set
+         * @returns {binlogdata.ShardGtid} ShardGtid instance
+         */
+        ShardGtid.create = function create(properties) {
+            return new ShardGtid(properties);
+        };
+
+        /**
+         * Encodes the specified ShardGtid message. Does not implicitly {@link binlogdata.ShardGtid.verify|verify} messages.
+         * @function encode
+         * @memberof binlogdata.ShardGtid
+         * @static
+         * @param {binlogdata.IShardGtid} message ShardGtid message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        ShardGtid.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.keyspace != null && Object.hasOwnProperty.call(message, "keyspace"))
+                writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
+            if (message.shard != null && Object.hasOwnProperty.call(message, "shard"))
+                writer.uint32(/* id 2, wireType 2 =*/18).string(message.shard);
+            if (message.gtid != null && Object.hasOwnProperty.call(message, "gtid"))
+                writer.uint32(/* id 3, wireType 2 =*/26).string(message.gtid);
+            if (message.table_p_ks != null && message.table_p_ks.length)
+                for (var i = 0; i < message.table_p_ks.length; ++i)
+                    $root.binlogdata.TableLastPK.encode(message.table_p_ks[i], writer.uint32(/* id 4, wireType 2 =*/34).fork()).ldelim();
+            return writer;
+        };
+
+        /**
+         * Encodes the specified ShardGtid message, length delimited. Does not implicitly {@link binlogdata.ShardGtid.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof binlogdata.ShardGtid
+         * @static
+         * @param {binlogdata.IShardGtid} message ShardGtid message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        ShardGtid.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a ShardGtid message from the specified reader or buffer.
+         * @function decode
+         * @memberof binlogdata.ShardGtid
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {binlogdata.ShardGtid} ShardGtid
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        ShardGtid.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.binlogdata.ShardGtid();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.keyspace = reader.string();
+                    break;
+                case 2:
+                    message.shard = reader.string();
+                    break;
+                case 3:
+                    message.gtid = reader.string();
+                    break;
+                case 4:
+                    if (!(message.table_p_ks && message.table_p_ks.length))
+                        message.table_p_ks = [];
+                    message.table_p_ks.push($root.binlogdata.TableLastPK.decode(reader, reader.uint32()));
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a ShardGtid message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof binlogdata.ShardGtid
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {binlogdata.ShardGtid} ShardGtid
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        ShardGtid.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a ShardGtid message.
+         * @function verify
+         * @memberof binlogdata.ShardGtid
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        ShardGtid.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.keyspace != null && message.hasOwnProperty("keyspace"))
+                if (!$util.isString(message.keyspace))
+                    return "keyspace: string expected";
+            if (message.shard != null && message.hasOwnProperty("shard"))
+                if (!$util.isString(message.shard))
+                    return "shard: string expected";
+            if (message.gtid != null && message.hasOwnProperty("gtid"))
+                if (!$util.isString(message.gtid))
+                    return "gtid: string expected";
+            if (message.table_p_ks != null && message.hasOwnProperty("table_p_ks")) {
+                if (!Array.isArray(message.table_p_ks))
+                    return "table_p_ks: array expected";
+                for (var i = 0; i < message.table_p_ks.length; ++i) {
+                    var error = $root.binlogdata.TableLastPK.verify(message.table_p_ks[i]);
+                    if (error)
+                        return "table_p_ks." + error;
+                }
+            }
+            return null;
+        };
+
+        /**
+         * Creates a ShardGtid message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof binlogdata.ShardGtid
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {binlogdata.ShardGtid} ShardGtid
+         */
+        ShardGtid.fromObject = function fromObject(object) {
+            if (object instanceof $root.binlogdata.ShardGtid)
+                return object;
+            var message = new $root.binlogdata.ShardGtid();
+            if (object.keyspace != null)
+                message.keyspace = String(object.keyspace);
+            if (object.shard != null)
+                message.shard = String(object.shard);
+            if (object.gtid != null)
+                message.gtid = String(object.gtid);
+            if (object.table_p_ks) {
+                if (!Array.isArray(object.table_p_ks))
+                    throw TypeError(".binlogdata.ShardGtid.table_p_ks: array expected");
+                message.table_p_ks = [];
+                for (var i = 0; i < object.table_p_ks.length; ++i) {
+                    if (typeof object.table_p_ks[i] !== "object")
+                        throw TypeError(".binlogdata.ShardGtid.table_p_ks: object expected");
+                    message.table_p_ks[i] = $root.binlogdata.TableLastPK.fromObject(object.table_p_ks[i]);
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a ShardGtid message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof binlogdata.ShardGtid
+         * @static
+         * @param {binlogdata.ShardGtid} message ShardGtid
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        ShardGtid.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.arrays || options.defaults)
+                object.table_p_ks = [];
+            if (options.defaults) {
+                object.keyspace = "";
+                object.shard = "";
+                object.gtid = "";
+            }
+            if (message.keyspace != null && message.hasOwnProperty("keyspace"))
+                object.keyspace = message.keyspace;
+            if (message.shard != null && message.hasOwnProperty("shard"))
+                object.shard = message.shard;
+            if (message.gtid != null && message.hasOwnProperty("gtid"))
+                object.gtid = message.gtid;
+            if (message.table_p_ks && message.table_p_ks.length) {
+                object.table_p_ks = [];
+                for (var j = 0; j < message.table_p_ks.length; ++j)
+                    object.table_p_ks[j] = $root.binlogdata.TableLastPK.toObject(message.table_p_ks[j], options);
+            }
+            return object;
+        };
+
+        /**
+         * Converts this ShardGtid to JSON.
+         * @function toJSON
+         * @memberof binlogdata.ShardGtid
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        ShardGtid.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return ShardGtid;
+    })();
+
+    binlogdata.VGtid = (function() {
+
+        /**
+         * Properties of a VGtid.
+         * @memberof binlogdata
+         * @interface IVGtid
+         * @property {Array.<binlogdata.IShardGtid>|null} [shard_gtids] VGtid shard_gtids
+         */
+
+        /**
+         * Constructs a new VGtid.
+         * @memberof binlogdata
+         * @classdesc Represents a VGtid.
+         * @implements IVGtid
+         * @constructor
+         * @param {binlogdata.IVGtid=} [properties] Properties to set
+         */
+        function VGtid(properties) {
+            this.shard_gtids = [];
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * VGtid shard_gtids.
+         * @member {Array.<binlogdata.IShardGtid>} shard_gtids
+         * @memberof binlogdata.VGtid
+         * @instance
+         */
+        VGtid.prototype.shard_gtids = $util.emptyArray;
+
+        /**
+         * Creates a new VGtid instance using the specified properties.
+         * @function create
+         * @memberof binlogdata.VGtid
+         * @static
+         * @param {binlogdata.IVGtid=} [properties] Properties to set
+         * @returns {binlogdata.VGtid} VGtid instance
+         */
+        VGtid.create = function create(properties) {
+            return new VGtid(properties);
+        };
+
+        /**
+         * Encodes the specified VGtid message. Does not implicitly {@link binlogdata.VGtid.verify|verify} messages.
+         * @function encode
+         * @memberof binlogdata.VGtid
+         * @static
+         * @param {binlogdata.IVGtid} message VGtid message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        VGtid.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.shard_gtids != null && message.shard_gtids.length)
+                for (var i = 0; i < message.shard_gtids.length; ++i)
+                    $root.binlogdata.ShardGtid.encode(message.shard_gtids[i], writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
+            return writer;
+        };
+
+        /**
+         * Encodes the specified VGtid message, length delimited. Does not implicitly {@link binlogdata.VGtid.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof binlogdata.VGtid
+         * @static
+         * @param {binlogdata.IVGtid} message VGtid message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        VGtid.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a VGtid message from the specified reader or buffer.
+         * @function decode
+         * @memberof binlogdata.VGtid
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {binlogdata.VGtid} VGtid
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        VGtid.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.binlogdata.VGtid();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    if (!(message.shard_gtids && message.shard_gtids.length))
+                        message.shard_gtids = [];
+                    message.shard_gtids.push($root.binlogdata.ShardGtid.decode(reader, reader.uint32()));
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a VGtid message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof binlogdata.VGtid
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {binlogdata.VGtid} VGtid
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        VGtid.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a VGtid message.
+         * @function verify
+         * @memberof binlogdata.VGtid
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        VGtid.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.shard_gtids != null && message.hasOwnProperty("shard_gtids")) {
+                if (!Array.isArray(message.shard_gtids))
+                    return "shard_gtids: array expected";
+                for (var i = 0; i < message.shard_gtids.length; ++i) {
+                    var error = $root.binlogdata.ShardGtid.verify(message.shard_gtids[i]);
+                    if (error)
+                        return "shard_gtids." + error;
+                }
+            }
+            return null;
+        };
+
+        /**
+         * Creates a VGtid message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof binlogdata.VGtid
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {binlogdata.VGtid} VGtid
+         */
+        VGtid.fromObject = function fromObject(object) {
+            if (object instanceof $root.binlogdata.VGtid)
+                return object;
+            var message = new $root.binlogdata.VGtid();
+            if (object.shard_gtids) {
+                if (!Array.isArray(object.shard_gtids))
+                    throw TypeError(".binlogdata.VGtid.shard_gtids: array expected");
+                message.shard_gtids = [];
+                for (var i = 0; i < object.shard_gtids.length; ++i) {
+                    if (typeof object.shard_gtids[i] !== "object")
+                        throw TypeError(".binlogdata.VGtid.shard_gtids: object expected");
+                    message.shard_gtids[i] = $root.binlogdata.ShardGtid.fromObject(object.shard_gtids[i]);
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a VGtid message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof binlogdata.VGtid
+         * @static
+         * @param {binlogdata.VGtid} message VGtid
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        VGtid.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.arrays || options.defaults)
+                object.shard_gtids = [];
+            if (message.shard_gtids && message.shard_gtids.length) {
+                object.shard_gtids = [];
+                for (var j = 0; j < message.shard_gtids.length; ++j)
+                    object.shard_gtids[j] = $root.binlogdata.ShardGtid.toObject(message.shard_gtids[j], options);
+            }
+            return object;
+        };
+
+        /**
+         * Converts this VGtid to JSON.
+         * @function toJSON
+         * @memberof binlogdata.VGtid
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        VGtid.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return VGtid;
+    })();
+
+    binlogdata.KeyspaceShard = (function() {
+
+        /**
+         * Properties of a KeyspaceShard.
+         * @memberof binlogdata
+         * @interface IKeyspaceShard
+         * @property {string|null} [keyspace] KeyspaceShard keyspace
+         * @property {string|null} [shard] KeyspaceShard shard
+         */
+
+        /**
+         * Constructs a new KeyspaceShard.
+         * @memberof binlogdata
+         * @classdesc Represents a KeyspaceShard.
+         * @implements IKeyspaceShard
+         * @constructor
+         * @param {binlogdata.IKeyspaceShard=} [properties] Properties to set
+         */
+        function KeyspaceShard(properties) {
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * KeyspaceShard keyspace.
+         * @member {string} keyspace
+         * @memberof binlogdata.KeyspaceShard
+         * @instance
+         */
+        KeyspaceShard.prototype.keyspace = "";
+
+        /**
+         * KeyspaceShard shard.
+         * @member {string} shard
+         * @memberof binlogdata.KeyspaceShard
+         * @instance
+         */
+        KeyspaceShard.prototype.shard = "";
+
+        /**
+         * Creates a new KeyspaceShard instance using the specified properties.
+         * @function create
+         * @memberof binlogdata.KeyspaceShard
+         * @static
+         * @param {binlogdata.IKeyspaceShard=} [properties] Properties to set
+         * @returns {binlogdata.KeyspaceShard} KeyspaceShard instance
+         */
+        KeyspaceShard.create = function create(properties) {
+            return new KeyspaceShard(properties);
+        };
+
+        /**
+         * Encodes the specified KeyspaceShard message. Does not implicitly {@link binlogdata.KeyspaceShard.verify|verify} messages.
+         * @function encode
+         * @memberof binlogdata.KeyspaceShard
+         * @static
+         * @param {binlogdata.IKeyspaceShard} message KeyspaceShard message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        KeyspaceShard.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.keyspace != null && Object.hasOwnProperty.call(message, "keyspace"))
+                writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
+            if (message.shard != null && Object.hasOwnProperty.call(message, "shard"))
+                writer.uint32(/* id 2, wireType 2 =*/18).string(message.shard);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified KeyspaceShard message, length delimited. Does not implicitly {@link binlogdata.KeyspaceShard.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof binlogdata.KeyspaceShard
+         * @static
+         * @param {binlogdata.IKeyspaceShard} message KeyspaceShard message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        KeyspaceShard.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a KeyspaceShard message from the specified reader or buffer.
+         * @function decode
+         * @memberof binlogdata.KeyspaceShard
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {binlogdata.KeyspaceShard} KeyspaceShard
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        KeyspaceShard.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.binlogdata.KeyspaceShard();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.keyspace = reader.string();
+                    break;
+                case 2:
+                    message.shard = reader.string();
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a KeyspaceShard message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof binlogdata.KeyspaceShard
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {binlogdata.KeyspaceShard} KeyspaceShard
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        KeyspaceShard.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a KeyspaceShard message.
+         * @function verify
+         * @memberof binlogdata.KeyspaceShard
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        KeyspaceShard.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.keyspace != null && message.hasOwnProperty("keyspace"))
+                if (!$util.isString(message.keyspace))
+                    return "keyspace: string expected";
+            if (message.shard != null && message.hasOwnProperty("shard"))
+                if (!$util.isString(message.shard))
+                    return "shard: string expected";
+            return null;
+        };
+
+        /**
+         * Creates a KeyspaceShard message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof binlogdata.KeyspaceShard
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {binlogdata.KeyspaceShard} KeyspaceShard
+         */
+        KeyspaceShard.fromObject = function fromObject(object) {
+            if (object instanceof $root.binlogdata.KeyspaceShard)
+                return object;
+            var message = new $root.binlogdata.KeyspaceShard();
+            if (object.keyspace != null)
+                message.keyspace = String(object.keyspace);
+            if (object.shard != null)
+                message.shard = String(object.shard);
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a KeyspaceShard message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof binlogdata.KeyspaceShard
+         * @static
+         * @param {binlogdata.KeyspaceShard} message KeyspaceShard
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        KeyspaceShard.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.defaults) {
+                object.keyspace = "";
+                object.shard = "";
+            }
+            if (message.keyspace != null && message.hasOwnProperty("keyspace"))
+                object.keyspace = message.keyspace;
+            if (message.shard != null && message.hasOwnProperty("shard"))
+                object.shard = message.shard;
+            return object;
+        };
+
+        /**
+         * Converts this KeyspaceShard to JSON.
+         * @function toJSON
+         * @memberof binlogdata.KeyspaceShard
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        KeyspaceShard.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return KeyspaceShard;
+    })();
+
+    /**
+     * MigrationType enum.
+     * @name binlogdata.MigrationType
+     * @enum {number}
+     * @property {number} TABLES=0 TABLES value
+     * @property {number} SHARDS=1 SHARDS value
+     */
+    binlogdata.MigrationType = (function() {
+        var valuesById = {}, values = Object.create(valuesById);
+        values[valuesById[0] = "TABLES"] = 0;
+        values[valuesById[1] = "SHARDS"] = 1;
+        return values;
+    })();
+
+    binlogdata.Journal = (function() {
+
+        /**
+         * Properties of a Journal.
+         * @memberof binlogdata
+         * @interface IJournal
+         * @property {number|Long|null} [id] Journal id
+         * @property {binlogdata.MigrationType|null} [migration_type] Journal migration_type
+         * @property {Array.<string>|null} [tables] Journal tables
+         * @property {string|null} [local_position] Journal local_position
+         * @property {Array.<binlogdata.IShardGtid>|null} [shard_gtids] Journal shard_gtids
+         * @property {Array.<binlogdata.IKeyspaceShard>|null} [participants] Journal participants
+         * @property {Array.<string>|null} [source_workflows] Journal source_workflows
+         */
+
+        /**
+         * Constructs a new Journal.
+         * @memberof binlogdata
+         * @classdesc Represents a Journal.
+         * @implements IJournal
+         * @constructor
+         * @param {binlogdata.IJournal=} [properties] Properties to set
+         */
+        function Journal(properties) {
+            this.tables = [];
+            this.shard_gtids = [];
+            this.participants = [];
+            this.source_workflows = [];
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * Journal id.
+         * @member {number|Long} id
+         * @memberof binlogdata.Journal
+         * @instance
+         */
+        Journal.prototype.id = $util.Long ? $util.Long.fromBits(0,0,false) : 0;
+
+        /**
+         * Journal migration_type.
+         * @member {binlogdata.MigrationType} migration_type
+         * @memberof binlogdata.Journal
+         * @instance
+         */
+        Journal.prototype.migration_type = 0;
+
+        /**
+         * Journal tables.
+         * @member {Array.<string>} tables
+         * @memberof binlogdata.Journal
+         * @instance
+         */
+        Journal.prototype.tables = $util.emptyArray;
+
+        /**
+         * Journal local_position.
+         * @member {string} local_position
+         * @memberof binlogdata.Journal
+         * @instance
+         */
+        Journal.prototype.local_position = "";
+
+        /**
+         * Journal shard_gtids.
+         * @member {Array.<binlogdata.IShardGtid>} shard_gtids
+         * @memberof binlogdata.Journal
+         * @instance
+         */
+        Journal.prototype.shard_gtids = $util.emptyArray;
+
+        /**
+         * Journal participants.
+         * @member {Array.<binlogdata.IKeyspaceShard>} participants
+         * @memberof binlogdata.Journal
+         * @instance
+         */
+        Journal.prototype.participants = $util.emptyArray;
+
+        /**
+         * Journal source_workflows.
+         * @member {Array.<string>} source_workflows
+         * @memberof binlogdata.Journal
+         * @instance
+         */
+        Journal.prototype.source_workflows = $util.emptyArray;
+
+        /**
+         * Creates a new Journal instance using the specified properties.
+         * @function create
+         * @memberof binlogdata.Journal
+         * @static
+         * @param {binlogdata.IJournal=} [properties] Properties to set
+         * @returns {binlogdata.Journal} Journal instance
+         */
+        Journal.create = function create(properties) {
+            return new Journal(properties);
+        };
+
+        /**
+         * Encodes the specified Journal message. Does not implicitly {@link binlogdata.Journal.verify|verify} messages.
+         * @function encode
+         * @memberof binlogdata.Journal
+         * @static
+         * @param {binlogdata.IJournal} message Journal message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        Journal.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.id != null && Object.hasOwnProperty.call(message, "id"))
+                writer.uint32(/* id 1, wireType 0 =*/8).int64(message.id);
+            if (message.migration_type != null && Object.hasOwnProperty.call(message, "migration_type"))
+                writer.uint32(/* id 2, wireType 0 =*/16).int32(message.migration_type);
+            if (message.tables != null && message.tables.length)
+                for (var i = 0; i < message.tables.length; ++i)
+                    writer.uint32(/* id 3, wireType 2 =*/26).string(message.tables[i]);
+            if (message.local_position != null && Object.hasOwnProperty.call(message, "local_position"))
+                writer.uint32(/* id 4, wireType 2 =*/34).string(message.local_position);
+            if (message.shard_gtids != null && message.shard_gtids.length)
+                for (var i = 0; i < message.shard_gtids.length; ++i)
+                    $root.binlogdata.ShardGtid.encode(message.shard_gtids[i], writer.uint32(/* id 5, wireType 2 =*/42).fork()).ldelim();
+            if (message.participants != null && message.participants.length)
+                for (var i = 0; i < message.participants.length; ++i)
+                    $root.binlogdata.KeyspaceShard.encode(message.participants[i], writer.uint32(/* id 6, wireType 2 =*/50).fork()).ldelim();
+            if (message.source_workflows != null && message.source_workflows.length)
+                for (var i = 0; i < message.source_workflows.length; ++i)
+                    writer.uint32(/* id 7, wireType 2 =*/58).string(message.source_workflows[i]);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified Journal message, length delimited. Does not implicitly {@link binlogdata.Journal.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof binlogdata.Journal
+         * @static
+         * @param {binlogdata.IJournal} message Journal message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        Journal.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a Journal message from the specified reader or buffer.
+         * @function decode
+         * @memberof binlogdata.Journal
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {binlogdata.Journal} Journal
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        Journal.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.binlogdata.Journal();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.id = reader.int64();
+                    break;
+                case 2:
+                    message.migration_type = reader.int32();
+                    break;
+                case 3:
+                    if (!(message.tables && message.tables.length))
+                        message.tables = [];
+                    message.tables.push(reader.string());
+                    break;
+                case 4:
+                    message.local_position = reader.string();
+                    break;
+                case 5:
+                    if (!(message.shard_gtids && message.shard_gtids.length))
+                        message.shard_gtids = [];
+                    message.shard_gtids.push($root.binlogdata.ShardGtid.decode(reader, reader.uint32()));
+                    break;
+                case 6:
+                    if (!(message.participants && message.participants.length))
+                        message.participants = [];
+                    message.participants.push($root.binlogdata.KeyspaceShard.decode(reader, reader.uint32()));
+                    break;
+                case 7:
+                    if (!(message.source_workflows && message.source_workflows.length))
+                        message.source_workflows = [];
+                    message.source_workflows.push(reader.string());
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a Journal message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof binlogdata.Journal
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {binlogdata.Journal} Journal
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        Journal.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a Journal message.
+         * @function verify
+         * @memberof binlogdata.Journal
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        Journal.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.id != null && message.hasOwnProperty("id"))
+                if (!$util.isInteger(message.id) && !(message.id && $util.isInteger(message.id.low) && $util.isInteger(message.id.high)))
+                    return "id: integer|Long expected";
+            if (message.migration_type != null && message.hasOwnProperty("migration_type"))
+                switch (message.migration_type) {
+                default:
+                    return "migration_type: enum value expected";
+                case 0:
+                case 1:
+                    break;
+                }
+            if (message.tables != null && message.hasOwnProperty("tables")) {
+                if (!Array.isArray(message.tables))
+                    return "tables: array expected";
+                for (var i = 0; i < message.tables.length; ++i)
+                    if (!$util.isString(message.tables[i]))
+                        return "tables: string[] expected";
+            }
+            if (message.local_position != null && message.hasOwnProperty("local_position"))
+                if (!$util.isString(message.local_position))
+                    return "local_position: string expected";
+            if (message.shard_gtids != null && message.hasOwnProperty("shard_gtids")) {
+                if (!Array.isArray(message.shard_gtids))
+                    return "shard_gtids: array expected";
+                for (var i = 0; i < message.shard_gtids.length; ++i) {
+                    var error = $root.binlogdata.ShardGtid.verify(message.shard_gtids[i]);
+                    if (error)
+                        return "shard_gtids." + error;
+                }
+            }
+            if (message.participants != null && message.hasOwnProperty("participants")) {
+                if (!Array.isArray(message.participants))
+                    return "participants: array expected";
+                for (var i = 0; i < message.participants.length; ++i) {
+                    var error = $root.binlogdata.KeyspaceShard.verify(message.participants[i]);
+                    if (error)
+                        return "participants." + error;
+                }
+            }
+            if (message.source_workflows != null && message.hasOwnProperty("source_workflows")) {
+                if (!Array.isArray(message.source_workflows))
+                    return "source_workflows: array expected";
+                for (var i = 0; i < message.source_workflows.length; ++i)
+                    if (!$util.isString(message.source_workflows[i]))
+                        return "source_workflows: string[] expected";
+            }
+            return null;
+        };
+
+        /**
+         * Creates a Journal message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof binlogdata.Journal
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {binlogdata.Journal} Journal
+         */
+        Journal.fromObject = function fromObject(object) {
+            if (object instanceof $root.binlogdata.Journal)
+                return object;
+            var message = new $root.binlogdata.Journal();
+            if (object.id != null)
+                if ($util.Long)
+                    (message.id = $util.Long.fromValue(object.id)).unsigned = false;
+                else if (typeof object.id === "string")
+                    message.id = parseInt(object.id, 10);
+                else if (typeof object.id === "number")
+                    message.id = object.id;
+                else if (typeof object.id === "object")
+                    message.id = new $util.LongBits(object.id.low >>> 0, object.id.high >>> 0).toNumber();
+            switch (object.migration_type) {
+            case "TABLES":
+            case 0:
+                message.migration_type = 0;
+                break;
+            case "SHARDS":
+            case 1:
+                message.migration_type = 1;
+                break;
+            }
+            if (object.tables) {
+                if (!Array.isArray(object.tables))
+                    throw TypeError(".binlogdata.Journal.tables: array expected");
+                message.tables = [];
+                for (var i = 0; i < object.tables.length; ++i)
+                    message.tables[i] = String(object.tables[i]);
+            }
+            if (object.local_position != null)
+                message.local_position = String(object.local_position);
+            if (object.shard_gtids) {
+                if (!Array.isArray(object.shard_gtids))
+                    throw TypeError(".binlogdata.Journal.shard_gtids: array expected");
+                message.shard_gtids = [];
+                for (var i = 0; i < object.shard_gtids.length; ++i) {
+                    if (typeof object.shard_gtids[i] !== "object")
+                        throw TypeError(".binlogdata.Journal.shard_gtids: object expected");
+                    message.shard_gtids[i] = $root.binlogdata.ShardGtid.fromObject(object.shard_gtids[i]);
+                }
+            }
+            if (object.participants) {
+                if (!Array.isArray(object.participants))
+                    throw TypeError(".binlogdata.Journal.participants: array expected");
+                message.participants = [];
+                for (var i = 0; i < object.participants.length; ++i) {
+                    if (typeof object.participants[i] !== "object")
+                        throw TypeError(".binlogdata.Journal.participants: object expected");
+                    message.participants[i] = $root.binlogdata.KeyspaceShard.fromObject(object.participants[i]);
+                }
+            }
+            if (object.source_workflows) {
+                if (!Array.isArray(object.source_workflows))
+                    throw TypeError(".binlogdata.Journal.source_workflows: array expected");
+                message.source_workflows = [];
+                for (var i = 0; i < object.source_workflows.length; ++i)
+                    message.source_workflows[i] = String(object.source_workflows[i]);
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a Journal message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof binlogdata.Journal
+         * @static
+         * @param {binlogdata.Journal} message Journal
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        Journal.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.arrays || options.defaults) {
+                object.tables = [];
+                object.shard_gtids = [];
+                object.participants = [];
+                object.source_workflows = [];
+            }
+            if (options.defaults) {
+                if ($util.Long) {
+                    var long = new $util.Long(0, 0, false);
+                    object.id = options.longs === String ? long.toString() : options.longs === Number ? long.toNumber() : long;
+                } else
+                    object.id = options.longs === String ? "0" : 0;
+                object.migration_type = options.enums === String ? "TABLES" : 0;
+                object.local_position = "";
+            }
+            if (message.id != null && message.hasOwnProperty("id"))
+                if (typeof message.id === "number")
+                    object.id = options.longs === String ? String(message.id) : message.id;
+                else
+                    object.id = options.longs === String ? $util.Long.prototype.toString.call(message.id) : options.longs === Number ? new $util.LongBits(message.id.low >>> 0, message.id.high >>> 0).toNumber() : message.id;
+            if (message.migration_type != null && message.hasOwnProperty("migration_type"))
+                object.migration_type = options.enums === String ? $root.binlogdata.MigrationType[message.migration_type] : message.migration_type;
+            if (message.tables && message.tables.length) {
+                object.tables = [];
+                for (var j = 0; j < message.tables.length; ++j)
+                    object.tables[j] = message.tables[j];
+            }
+            if (message.local_position != null && message.hasOwnProperty("local_position"))
+                object.local_position = message.local_position;
+            if (message.shard_gtids && message.shard_gtids.length) {
+                object.shard_gtids = [];
+                for (var j = 0; j < message.shard_gtids.length; ++j)
+                    object.shard_gtids[j] = $root.binlogdata.ShardGtid.toObject(message.shard_gtids[j], options);
+            }
+            if (message.participants && message.participants.length) {
+                object.participants = [];
+                for (var j = 0; j < message.participants.length; ++j)
+                    object.participants[j] = $root.binlogdata.KeyspaceShard.toObject(message.participants[j], options);
+            }
+            if (message.source_workflows && message.source_workflows.length) {
+                object.source_workflows = [];
+                for (var j = 0; j < message.source_workflows.length; ++j)
+                    object.source_workflows[j] = message.source_workflows[j];
+            }
+            return object;
+        };
+
+        /**
+         * Converts this Journal to JSON.
+         * @function toJSON
+         * @memberof binlogdata.Journal
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        Journal.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return Journal;
+    })();
+
+    binlogdata.VEvent = (function() {
+
+        /**
+         * Properties of a VEvent.
+         * @memberof binlogdata
+         * @interface IVEvent
+         * @property {binlogdata.VEventType|null} [type] VEvent type
+         * @property {number|Long|null} [timestamp] VEvent timestamp
+         * @property {string|null} [gtid] VEvent gtid
+         * @property {string|null} [statement] VEvent statement
+         * @property {binlogdata.IRowEvent|null} [row_event] VEvent row_event
+         * @property {binlogdata.IFieldEvent|null} [field_event] VEvent field_event
+         * @property {binlogdata.IVGtid|null} [vgtid] VEvent vgtid
+         * @property {binlogdata.IJournal|null} [journal] VEvent journal
+         * @property {string|null} [dml] VEvent dml
+         * @property {number|Long|null} [current_time] VEvent current_time
+         * @property {binlogdata.ILastPKEvent|null} [last_p_k_event] VEvent last_p_k_event
+         */
+
+        /**
+         * Constructs a new VEvent.
+         * @memberof binlogdata
+         * @classdesc Represents a VEvent.
+         * @implements IVEvent
+         * @constructor
+         * @param {binlogdata.IVEvent=} [properties] Properties to set
+         */
+        function VEvent(properties) {
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * VEvent type.
+         * @member {binlogdata.VEventType} type
+         * @memberof binlogdata.VEvent
+         * @instance
+         */
+        VEvent.prototype.type = 0;
+
+        /**
+         * VEvent timestamp.
+         * @member {number|Long} timestamp
+         * @memberof binlogdata.VEvent
+         * @instance
+         */
+        VEvent.prototype.timestamp = $util.Long ? $util.Long.fromBits(0,0,false) : 0;
+
+        /**
+         * VEvent gtid.
+         * @member {string} gtid
+         * @memberof binlogdata.VEvent
+         * @instance
+         */
+        VEvent.prototype.gtid = "";
+
+        /**
+         * VEvent statement.
+         * @member {string} statement
+         * @memberof binlogdata.VEvent
+         * @instance
+         */
+        VEvent.prototype.statement = "";
+
+        /**
+         * VEvent row_event.
+         * @member {binlogdata.IRowEvent|null|undefined} row_event
+         * @memberof binlogdata.VEvent
+         * @instance
+         */
+        VEvent.prototype.row_event = null;
+
+        /**
+         * VEvent field_event.
+         * @member {binlogdata.IFieldEvent|null|undefined} field_event
+         * @memberof binlogdata.VEvent
+         * @instance
+         */
+        VEvent.prototype.field_event = null;
+
+        /**
+         * VEvent vgtid.
+         * @member {binlogdata.IVGtid|null|undefined} vgtid
+         * @memberof binlogdata.VEvent
+         * @instance
+         */
+        VEvent.prototype.vgtid = null;
+
+        /**
+         * VEvent journal.
+         * @member {binlogdata.IJournal|null|undefined} journal
+         * @memberof binlogdata.VEvent
+         * @instance
+         */
+        VEvent.prototype.journal = null;
+
+        /**
+         * VEvent dml.
+         * @member {string} dml
+         * @memberof binlogdata.VEvent
+         * @instance
+         */
+        VEvent.prototype.dml = "";
+
+        /**
+         * VEvent current_time.
+         * @member {number|Long} current_time
+         * @memberof binlogdata.VEvent
+         * @instance
+         */
+        VEvent.prototype.current_time = $util.Long ? $util.Long.fromBits(0,0,false) : 0;
+
+        /**
+         * VEvent last_p_k_event.
+         * @member {binlogdata.ILastPKEvent|null|undefined} last_p_k_event
+         * @memberof binlogdata.VEvent
+         * @instance
+         */
+        VEvent.prototype.last_p_k_event = null;
+
+        /**
+         * Creates a new VEvent instance using the specified properties.
+         * @function create
+         * @memberof binlogdata.VEvent
+         * @static
+         * @param {binlogdata.IVEvent=} [properties] Properties to set
+         * @returns {binlogdata.VEvent} VEvent instance
+         */
+        VEvent.create = function create(properties) {
+            return new VEvent(properties);
+        };
+
+        /**
+         * Encodes the specified VEvent message. Does not implicitly {@link binlogdata.VEvent.verify|verify} messages.
+         * @function encode
+         * @memberof binlogdata.VEvent
+         * @static
+         * @param {binlogdata.IVEvent} message VEvent message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        VEvent.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.type != null && Object.hasOwnProperty.call(message, "type"))
+                writer.uint32(/* id 1, wireType 0 =*/8).int32(message.type);
+            if (message.timestamp != null && Object.hasOwnProperty.call(message, "timestamp"))
+                writer.uint32(/* id 2, wireType 0 =*/16).int64(message.timestamp);
+            if (message.gtid != null && Object.hasOwnProperty.call(message, "gtid"))
+                writer.uint32(/* id 3, wireType 2 =*/26).string(message.gtid);
+            if (message.statement != null && Object.hasOwnProperty.call(message, "statement"))
+                writer.uint32(/* id 4, wireType 2 =*/34).string(message.statement);
+            if (message.row_event != null && Object.hasOwnProperty.call(message, "row_event"))
+                $root.binlogdata.RowEvent.encode(message.row_event, writer.uint32(/* id 5, wireType 2 =*/42).fork()).ldelim();
+            if (message.field_event != null && Object.hasOwnProperty.call(message, "field_event"))
+                $root.binlogdata.FieldEvent.encode(message.field_event, writer.uint32(/* id 6, wireType 2 =*/50).fork()).ldelim();
+            if (message.vgtid != null && Object.hasOwnProperty.call(message, "vgtid"))
+                $root.binlogdata.VGtid.encode(message.vgtid, writer.uint32(/* id 7, wireType 2 =*/58).fork()).ldelim();
+            if (message.journal != null && Object.hasOwnProperty.call(message, "journal"))
+                $root.binlogdata.Journal.encode(message.journal, writer.uint32(/* id 8, wireType 2 =*/66).fork()).ldelim();
+            if (message.dml != null && Object.hasOwnProperty.call(message, "dml"))
+                writer.uint32(/* id 9, wireType 2 =*/74).string(message.dml);
+            if (message.current_time != null && Object.hasOwnProperty.call(message, "current_time"))
+                writer.uint32(/* id 20, wireType 0 =*/160).int64(message.current_time);
+            if (message.last_p_k_event != null && Object.hasOwnProperty.call(message, "last_p_k_event"))
+                $root.binlogdata.LastPKEvent.encode(message.last_p_k_event, writer.uint32(/* id 21, wireType 2 =*/170).fork()).ldelim();
+            return writer;
+        };
+
+        /**
+         * Encodes the specified VEvent message, length delimited. Does not implicitly {@link binlogdata.VEvent.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof binlogdata.VEvent
+         * @static
+         * @param {binlogdata.IVEvent} message VEvent message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        VEvent.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a VEvent message from the specified reader or buffer.
+         * @function decode
+         * @memberof binlogdata.VEvent
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {binlogdata.VEvent} VEvent
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        VEvent.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.binlogdata.VEvent();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.type = reader.int32();
+                    break;
+                case 2:
+                    message.timestamp = reader.int64();
+                    break;
+                case 3:
+                    message.gtid = reader.string();
+                    break;
+                case 4:
+                    message.statement = reader.string();
+                    break;
+                case 5:
+                    message.row_event = $root.binlogdata.RowEvent.decode(reader, reader.uint32());
+                    break;
+                case 6:
+                    message.field_event = $root.binlogdata.FieldEvent.decode(reader, reader.uint32());
+                    break;
+                case 7:
+                    message.vgtid = $root.binlogdata.VGtid.decode(reader, reader.uint32());
+                    break;
+                case 8:
+                    message.journal = $root.binlogdata.Journal.decode(reader, reader.uint32());
+                    break;
+                case 9:
+                    message.dml = reader.string();
+                    break;
+                case 20:
+                    message.current_time = reader.int64();
+                    break;
+                case 21:
+                    message.last_p_k_event = $root.binlogdata.LastPKEvent.decode(reader, reader.uint32());
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a VEvent message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof binlogdata.VEvent
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {binlogdata.VEvent} VEvent
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        VEvent.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a VEvent message.
+         * @function verify
+         * @memberof binlogdata.VEvent
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        VEvent.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.type != null && message.hasOwnProperty("type"))
+                switch (message.type) {
+                default:
+                    return "type: enum value expected";
+                case 0:
+                case 1:
+                case 2:
+                case 3:
+                case 4:
+                case 5:
+                case 6:
+                case 7:
+                case 8:
+                case 9:
+                case 10:
+                case 11:
+                case 12:
+                case 13:
+                case 14:
+                case 15:
+                case 16:
+                case 17:
+                case 18:
+                case 19:
+                    break;
+                }
+            if (message.timestamp != null && message.hasOwnProperty("timestamp"))
+                if (!$util.isInteger(message.timestamp) && !(message.timestamp && $util.isInteger(message.timestamp.low) && $util.isInteger(message.timestamp.high)))
+                    return "timestamp: integer|Long expected";
+            if (message.gtid != null && message.hasOwnProperty("gtid"))
+                if (!$util.isString(message.gtid))
+                    return "gtid: string expected";
+            if (message.statement != null && message.hasOwnProperty("statement"))
+                if (!$util.isString(message.statement))
+                    return "statement: string expected";
+            if (message.row_event != null && message.hasOwnProperty("row_event")) {
+                var error = $root.binlogdata.RowEvent.verify(message.row_event);
+                if (error)
+                    return "row_event." + error;
+            }
+            if (message.field_event != null && message.hasOwnProperty("field_event")) {
+                var error = $root.binlogdata.FieldEvent.verify(message.field_event);
+                if (error)
+                    return "field_event." + error;
+            }
+            if (message.vgtid != null && message.hasOwnProperty("vgtid")) {
+                var error = $root.binlogdata.VGtid.verify(message.vgtid);
+                if (error)
+                    return "vgtid." + error;
+            }
+            if (message.journal != null && message.hasOwnProperty("journal")) {
+                var error = $root.binlogdata.Journal.verify(message.journal);
+                if (error)
+                    return "journal." + error;
+            }
+            if (message.dml != null && message.hasOwnProperty("dml"))
+                if (!$util.isString(message.dml))
+                    return "dml: string expected";
+            if (message.current_time != null && message.hasOwnProperty("current_time"))
+                if (!$util.isInteger(message.current_time) && !(message.current_time && $util.isInteger(message.current_time.low) && $util.isInteger(message.current_time.high)))
+                    return "current_time: integer|Long expected";
+            if (message.last_p_k_event != null && message.hasOwnProperty("last_p_k_event")) {
+                var error = $root.binlogdata.LastPKEvent.verify(message.last_p_k_event);
+                if (error)
+                    return "last_p_k_event." + error;
+            }
+            return null;
+        };
+
+        /**
+         * Creates a VEvent message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof binlogdata.VEvent
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {binlogdata.VEvent} VEvent
+         */
+        VEvent.fromObject = function fromObject(object) {
+            if (object instanceof $root.binlogdata.VEvent)
+                return object;
+            var message = new $root.binlogdata.VEvent();
+            switch (object.type) {
+            case "UNKNOWN":
+            case 0:
+                message.type = 0;
+                break;
+            case "GTID":
+            case 1:
+                message.type = 1;
+                break;
+            case "BEGIN":
+            case 2:
+                message.type = 2;
+                break;
+            case "COMMIT":
+            case 3:
+                message.type = 3;
+                break;
+            case "ROLLBACK":
+            case 4:
+                message.type = 4;
+                break;
+            case "DDL":
+            case 5:
+                message.type = 5;
+                break;
+            case "INSERT":
+            case 6:
+                message.type = 6;
+                break;
+            case "REPLACE":
+            case 7:
+                message.type = 7;
+                break;
+            case "UPDATE":
+            case 8:
+                message.type = 8;
+                break;
+            case "DELETE":
+            case 9:
+                message.type = 9;
+                break;
+            case "SET":
+            case 10:
+                message.type = 10;
+                break;
+            case "OTHER":
+            case 11:
+                message.type = 11;
+                break;
+            case "ROW":
+            case 12:
+                message.type = 12;
+                break;
+            case "FIELD":
+            case 13:
+                message.type = 13;
+                break;
+            case "HEARTBEAT":
+            case 14:
+                message.type = 14;
+                break;
+            case "VGTID":
+            case 15:
+                message.type = 15;
+                break;
+            case "JOURNAL":
+            case 16:
+                message.type = 16;
+                break;
+            case "VERSION":
+            case 17:
+                message.type = 17;
+                break;
+            case "LASTPK":
+            case 18:
+                message.type = 18;
+                break;
+            case "SAVEPOINT":
+            case 19:
+                message.type = 19;
+                break;
+            }
+            if (object.timestamp != null)
+                if ($util.Long)
+                    (message.timestamp = $util.Long.fromValue(object.timestamp)).unsigned = false;
+                else if (typeof object.timestamp === "string")
+                    message.timestamp = parseInt(object.timestamp, 10);
+                else if (typeof object.timestamp === "number")
+                    message.timestamp = object.timestamp;
+                else if (typeof object.timestamp === "object")
+                    message.timestamp = new $util.LongBits(object.timestamp.low >>> 0, object.timestamp.high >>> 0).toNumber();
+            if (object.gtid != null)
+                message.gtid = String(object.gtid);
+            if (object.statement != null)
+                message.statement = String(object.statement);
+            if (object.row_event != null) {
+                if (typeof object.row_event !== "object")
+                    throw TypeError(".binlogdata.VEvent.row_event: object expected");
+                message.row_event = $root.binlogdata.RowEvent.fromObject(object.row_event);
+            }
+            if (object.field_event != null) {
+                if (typeof object.field_event !== "object")
+                    throw TypeError(".binlogdata.VEvent.field_event: object expected");
+                message.field_event = $root.binlogdata.FieldEvent.fromObject(object.field_event);
+            }
+            if (object.vgtid != null) {
+                if (typeof object.vgtid !== "object")
+                    throw TypeError(".binlogdata.VEvent.vgtid: object expected");
+                message.vgtid = $root.binlogdata.VGtid.fromObject(object.vgtid);
+            }
+            if (object.journal != null) {
+                if (typeof object.journal !== "object")
+                    throw TypeError(".binlogdata.VEvent.journal: object expected");
+                message.journal = $root.binlogdata.Journal.fromObject(object.journal);
+            }
+            if (object.dml != null)
+                message.dml = String(object.dml);
+            if (object.current_time != null)
+                if ($util.Long)
+                    (message.current_time = $util.Long.fromValue(object.current_time)).unsigned = false;
+                else if (typeof object.current_time === "string")
+                    message.current_time = parseInt(object.current_time, 10);
+                else if (typeof object.current_time === "number")
+                    message.current_time = object.current_time;
+                else if (typeof object.current_time === "object")
+                    message.current_time = new $util.LongBits(object.current_time.low >>> 0, object.current_time.high >>> 0).toNumber();
+            if (object.last_p_k_event != null) {
+                if (typeof object.last_p_k_event !== "object")
+                    throw TypeError(".binlogdata.VEvent.last_p_k_event: object expected");
+                message.last_p_k_event = $root.binlogdata.LastPKEvent.fromObject(object.last_p_k_event);
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a VEvent message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof binlogdata.VEvent
+         * @static
+         * @param {binlogdata.VEvent} message VEvent
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        VEvent.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.defaults) {
+                object.type = options.enums === String ? "UNKNOWN" : 0;
+                if ($util.Long) {
+                    var long = new $util.Long(0, 0, false);
+                    object.timestamp = options.longs === String ? long.toString() : options.longs === Number ? long.toNumber() : long;
+                } else
+                    object.timestamp = options.longs === String ? "0" : 0;
+                object.gtid = "";
+                object.statement = "";
+                object.row_event = null;
+                object.field_event = null;
+                object.vgtid = null;
+                object.journal = null;
+                object.dml = "";
+                if ($util.Long) {
+                    var long = new $util.Long(0, 0, false);
+                    object.current_time = options.longs === String ? long.toString() : options.longs === Number ? long.toNumber() : long;
+                } else
+                    object.current_time = options.longs === String ? "0" : 0;
+                object.last_p_k_event = null;
+            }
+            if (message.type != null && message.hasOwnProperty("type"))
+                object.type = options.enums === String ? $root.binlogdata.VEventType[message.type] : message.type;
+            if (message.timestamp != null && message.hasOwnProperty("timestamp"))
+                if (typeof message.timestamp === "number")
+                    object.timestamp = options.longs === String ? String(message.timestamp) : message.timestamp;
+                else
+                    object.timestamp = options.longs === String ? $util.Long.prototype.toString.call(message.timestamp) : options.longs === Number ? new $util.LongBits(message.timestamp.low >>> 0, message.timestamp.high >>> 0).toNumber() : message.timestamp;
+            if (message.gtid != null && message.hasOwnProperty("gtid"))
+                object.gtid = message.gtid;
+            if (message.statement != null && message.hasOwnProperty("statement"))
+                object.statement = message.statement;
+            if (message.row_event != null && message.hasOwnProperty("row_event"))
+                object.row_event = $root.binlogdata.RowEvent.toObject(message.row_event, options);
+            if (message.field_event != null && message.hasOwnProperty("field_event"))
+                object.field_event = $root.binlogdata.FieldEvent.toObject(message.field_event, options);
+            if (message.vgtid != null && message.hasOwnProperty("vgtid"))
+                object.vgtid = $root.binlogdata.VGtid.toObject(message.vgtid, options);
+            if (message.journal != null && message.hasOwnProperty("journal"))
+                object.journal = $root.binlogdata.Journal.toObject(message.journal, options);
+            if (message.dml != null && message.hasOwnProperty("dml"))
+                object.dml = message.dml;
+            if (message.current_time != null && message.hasOwnProperty("current_time"))
+                if (typeof message.current_time === "number")
+                    object.current_time = options.longs === String ? String(message.current_time) : message.current_time;
+                else
+                    object.current_time = options.longs === String ? $util.Long.prototype.toString.call(message.current_time) : options.longs === Number ? new $util.LongBits(message.current_time.low >>> 0, message.current_time.high >>> 0).toNumber() : message.current_time;
+            if (message.last_p_k_event != null && message.hasOwnProperty("last_p_k_event"))
+                object.last_p_k_event = $root.binlogdata.LastPKEvent.toObject(message.last_p_k_event, options);
+            return object;
+        };
+
+        /**
+         * Converts this VEvent to JSON.
+         * @function toJSON
+         * @memberof binlogdata.VEvent
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        VEvent.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return VEvent;
+    })();
+
+    binlogdata.MinimalTable = (function() {
+
+        /**
+         * Properties of a MinimalTable.
+         * @memberof binlogdata
+         * @interface IMinimalTable
+         * @property {string|null} [name] MinimalTable name
+         * @property {Array.<query.IField>|null} [fields] MinimalTable fields
+         * @property {Array.<number|Long>|null} [p_k_columns] MinimalTable p_k_columns
+         */
+
+        /**
+         * Constructs a new MinimalTable.
+         * @memberof binlogdata
+         * @classdesc Represents a MinimalTable.
+         * @implements IMinimalTable
+         * @constructor
+         * @param {binlogdata.IMinimalTable=} [properties] Properties to set
+         */
+        function MinimalTable(properties) {
+            this.fields = [];
+            this.p_k_columns = [];
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * MinimalTable name.
+         * @member {string} name
+         * @memberof binlogdata.MinimalTable
+         * @instance
+         */
+        MinimalTable.prototype.name = "";
+
+        /**
+         * MinimalTable fields.
+         * @member {Array.<query.IField>} fields
+         * @memberof binlogdata.MinimalTable
+         * @instance
+         */
+        MinimalTable.prototype.fields = $util.emptyArray;
+
+        /**
+         * MinimalTable p_k_columns.
+         * @member {Array.<number|Long>} p_k_columns
+         * @memberof binlogdata.MinimalTable
+         * @instance
+         */
+        MinimalTable.prototype.p_k_columns = $util.emptyArray;
+
+        /**
+         * Creates a new MinimalTable instance using the specified properties.
+         * @function create
+         * @memberof binlogdata.MinimalTable
+         * @static
+         * @param {binlogdata.IMinimalTable=} [properties] Properties to set
+         * @returns {binlogdata.MinimalTable} MinimalTable instance
+         */
+        MinimalTable.create = function create(properties) {
+            return new MinimalTable(properties);
+        };
+
+        /**
+         * Encodes the specified MinimalTable message. Does not implicitly {@link binlogdata.MinimalTable.verify|verify} messages.
+         * @function encode
+         * @memberof binlogdata.MinimalTable
+         * @static
+         * @param {binlogdata.IMinimalTable} message MinimalTable message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        MinimalTable.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.name != null && Object.hasOwnProperty.call(message, "name"))
+                writer.uint32(/* id 1, wireType 2 =*/10).string(message.name);
+            if (message.fields != null && message.fields.length)
+                for (var i = 0; i < message.fields.length; ++i)
+                    $root.query.Field.encode(message.fields[i], writer.uint32(/* id 2, wireType 2 =*/18).fork()).ldelim();
+            if (message.p_k_columns != null && message.p_k_columns.length) {
+                writer.uint32(/* id 3, wireType 2 =*/26).fork();
+                for (var i = 0; i < message.p_k_columns.length; ++i)
+                    writer.int64(message.p_k_columns[i]);
+                writer.ldelim();
+            }
+            return writer;
+        };
+
+        /**
+         * Encodes the specified MinimalTable message, length delimited. Does not implicitly {@link binlogdata.MinimalTable.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof binlogdata.MinimalTable
+         * @static
+         * @param {binlogdata.IMinimalTable} message MinimalTable message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        MinimalTable.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a MinimalTable message from the specified reader or buffer.
+         * @function decode
+         * @memberof binlogdata.MinimalTable
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {binlogdata.MinimalTable} MinimalTable
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        MinimalTable.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.binlogdata.MinimalTable();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.name = reader.string();
+                    break;
+                case 2:
+                    if (!(message.fields && message.fields.length))
+                        message.fields = [];
+                    message.fields.push($root.query.Field.decode(reader, reader.uint32()));
+                    break;
+                case 3:
+                    if (!(message.p_k_columns && message.p_k_columns.length))
+                        message.p_k_columns = [];
+                    if ((tag & 7) === 2) {
+                        var end2 = reader.uint32() + reader.pos;
+                        while (reader.pos < end2)
+                            message.p_k_columns.push(reader.int64());
+                    } else
+                        message.p_k_columns.push(reader.int64());
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a MinimalTable message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof binlogdata.MinimalTable
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {binlogdata.MinimalTable} MinimalTable
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        MinimalTable.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a MinimalTable message.
+         * @function verify
+         * @memberof binlogdata.MinimalTable
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        MinimalTable.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.name != null && message.hasOwnProperty("name"))
+                if (!$util.isString(message.name))
+                    return "name: string expected";
+            if (message.fields != null && message.hasOwnProperty("fields")) {
+                if (!Array.isArray(message.fields))
+                    return "fields: array expected";
+                for (var i = 0; i < message.fields.length; ++i) {
+                    var error = $root.query.Field.verify(message.fields[i]);
+                    if (error)
+                        return "fields." + error;
+                }
+            }
+            if (message.p_k_columns != null && message.hasOwnProperty("p_k_columns")) {
+                if (!Array.isArray(message.p_k_columns))
+                    return "p_k_columns: array expected";
+                for (var i = 0; i < message.p_k_columns.length; ++i)
+                    if (!$util.isInteger(message.p_k_columns[i]) && !(message.p_k_columns[i] && $util.isInteger(message.p_k_columns[i].low) && $util.isInteger(message.p_k_columns[i].high)))
+                        return "p_k_columns: integer|Long[] expected";
+            }
+            return null;
+        };
+
+        /**
+         * Creates a MinimalTable message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof binlogdata.MinimalTable
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {binlogdata.MinimalTable} MinimalTable
+         */
+        MinimalTable.fromObject = function fromObject(object) {
+            if (object instanceof $root.binlogdata.MinimalTable)
+                return object;
+            var message = new $root.binlogdata.MinimalTable();
+            if (object.name != null)
+                message.name = String(object.name);
+            if (object.fields) {
+                if (!Array.isArray(object.fields))
+                    throw TypeError(".binlogdata.MinimalTable.fields: array expected");
+                message.fields = [];
+                for (var i = 0; i < object.fields.length; ++i) {
+                    if (typeof object.fields[i] !== "object")
+                        throw TypeError(".binlogdata.MinimalTable.fields: object expected");
+                    message.fields[i] = $root.query.Field.fromObject(object.fields[i]);
+                }
+            }
+            if (object.p_k_columns) {
+                if (!Array.isArray(object.p_k_columns))
+                    throw TypeError(".binlogdata.MinimalTable.p_k_columns: array expected");
+                message.p_k_columns = [];
+                for (var i = 0; i < object.p_k_columns.length; ++i)
+                    if ($util.Long)
+                        (message.p_k_columns[i] = $util.Long.fromValue(object.p_k_columns[i])).unsigned = false;
+                    else if (typeof object.p_k_columns[i] === "string")
+                        message.p_k_columns[i] = parseInt(object.p_k_columns[i], 10);
+                    else if (typeof object.p_k_columns[i] === "number")
+                        message.p_k_columns[i] = object.p_k_columns[i];
+                    else if (typeof object.p_k_columns[i] === "object")
+                        message.p_k_columns[i] = new $util.LongBits(object.p_k_columns[i].low >>> 0, object.p_k_columns[i].high >>> 0).toNumber();
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a MinimalTable message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof binlogdata.MinimalTable
+         * @static
+         * @param {binlogdata.MinimalTable} message MinimalTable
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        MinimalTable.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.arrays || options.defaults) {
+                object.fields = [];
+                object.p_k_columns = [];
+            }
+            if (options.defaults)
+                object.name = "";
+            if (message.name != null && message.hasOwnProperty("name"))
+                object.name = message.name;
+            if (message.fields && message.fields.length) {
+                object.fields = [];
+                for (var j = 0; j < message.fields.length; ++j)
+                    object.fields[j] = $root.query.Field.toObject(message.fields[j], options);
+            }
+            if (message.p_k_columns && message.p_k_columns.length) {
+                object.p_k_columns = [];
+                for (var j = 0; j < message.p_k_columns.length; ++j)
+                    if (typeof message.p_k_columns[j] === "number")
+                        object.p_k_columns[j] = options.longs === String ? String(message.p_k_columns[j]) : message.p_k_columns[j];
+                    else
+                        object.p_k_columns[j] = options.longs === String ? $util.Long.prototype.toString.call(message.p_k_columns[j]) : options.longs === Number ? new $util.LongBits(message.p_k_columns[j].low >>> 0, message.p_k_columns[j].high >>> 0).toNumber() : message.p_k_columns[j];
+            }
+            return object;
+        };
+
+        /**
+         * Converts this MinimalTable to JSON.
+         * @function toJSON
+         * @memberof binlogdata.MinimalTable
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        MinimalTable.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return MinimalTable;
+    })();
+
+    binlogdata.MinimalSchema = (function() {
+
+        /**
+         * Properties of a MinimalSchema.
+         * @memberof binlogdata
+         * @interface IMinimalSchema
+         * @property {Array.<binlogdata.IMinimalTable>|null} [tables] MinimalSchema tables
+         */
+
+        /**
+         * Constructs a new MinimalSchema.
+         * @memberof binlogdata
+         * @classdesc Represents a MinimalSchema.
+         * @implements IMinimalSchema
+         * @constructor
+         * @param {binlogdata.IMinimalSchema=} [properties] Properties to set
+         */
+        function MinimalSchema(properties) {
+            this.tables = [];
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * MinimalSchema tables.
+         * @member {Array.<binlogdata.IMinimalTable>} tables
+         * @memberof binlogdata.MinimalSchema
+         * @instance
+         */
+        MinimalSchema.prototype.tables = $util.emptyArray;
+
+        /**
+         * Creates a new MinimalSchema instance using the specified properties.
+         * @function create
+         * @memberof binlogdata.MinimalSchema
+         * @static
+         * @param {binlogdata.IMinimalSchema=} [properties] Properties to set
+         * @returns {binlogdata.MinimalSchema} MinimalSchema instance
+         */
+        MinimalSchema.create = function create(properties) {
+            return new MinimalSchema(properties);
+        };
+
+        /**
+         * Encodes the specified MinimalSchema message. Does not implicitly {@link binlogdata.MinimalSchema.verify|verify} messages.
+         * @function encode
+         * @memberof binlogdata.MinimalSchema
+         * @static
+         * @param {binlogdata.IMinimalSchema} message MinimalSchema message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        MinimalSchema.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.tables != null && message.tables.length)
+                for (var i = 0; i < message.tables.length; ++i)
+                    $root.binlogdata.MinimalTable.encode(message.tables[i], writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
+            return writer;
+        };
+
+        /**
+         * Encodes the specified MinimalSchema message, length delimited. Does not implicitly {@link binlogdata.MinimalSchema.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof binlogdata.MinimalSchema
+         * @static
+         * @param {binlogdata.IMinimalSchema} message MinimalSchema message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        MinimalSchema.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a MinimalSchema message from the specified reader or buffer.
+         * @function decode
+         * @memberof binlogdata.MinimalSchema
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {binlogdata.MinimalSchema} MinimalSchema
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        MinimalSchema.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.binlogdata.MinimalSchema();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    if (!(message.tables && message.tables.length))
+                        message.tables = [];
+                    message.tables.push($root.binlogdata.MinimalTable.decode(reader, reader.uint32()));
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a MinimalSchema message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof binlogdata.MinimalSchema
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {binlogdata.MinimalSchema} MinimalSchema
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        MinimalSchema.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a MinimalSchema message.
+         * @function verify
+         * @memberof binlogdata.MinimalSchema
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        MinimalSchema.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.tables != null && message.hasOwnProperty("tables")) {
+                if (!Array.isArray(message.tables))
+                    return "tables: array expected";
+                for (var i = 0; i < message.tables.length; ++i) {
+                    var error = $root.binlogdata.MinimalTable.verify(message.tables[i]);
+                    if (error)
+                        return "tables." + error;
+                }
+            }
+            return null;
+        };
+
+        /**
+         * Creates a MinimalSchema message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof binlogdata.MinimalSchema
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {binlogdata.MinimalSchema} MinimalSchema
+         */
+        MinimalSchema.fromObject = function fromObject(object) {
+            if (object instanceof $root.binlogdata.MinimalSchema)
+                return object;
+            var message = new $root.binlogdata.MinimalSchema();
+            if (object.tables) {
+                if (!Array.isArray(object.tables))
+                    throw TypeError(".binlogdata.MinimalSchema.tables: array expected");
+                message.tables = [];
+                for (var i = 0; i < object.tables.length; ++i) {
+                    if (typeof object.tables[i] !== "object")
+                        throw TypeError(".binlogdata.MinimalSchema.tables: object expected");
+                    message.tables[i] = $root.binlogdata.MinimalTable.fromObject(object.tables[i]);
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a MinimalSchema message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof binlogdata.MinimalSchema
+         * @static
+         * @param {binlogdata.MinimalSchema} message MinimalSchema
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        MinimalSchema.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.arrays || options.defaults)
+                object.tables = [];
+            if (message.tables && message.tables.length) {
+                object.tables = [];
+                for (var j = 0; j < message.tables.length; ++j)
+                    object.tables[j] = $root.binlogdata.MinimalTable.toObject(message.tables[j], options);
+            }
+            return object;
+        };
+
+        /**
+         * Converts this MinimalSchema to JSON.
+         * @function toJSON
+         * @memberof binlogdata.MinimalSchema
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        MinimalSchema.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return MinimalSchema;
+    })();
+
+    binlogdata.VStreamRequest = (function() {
+
+        /**
+         * Properties of a VStreamRequest.
+         * @memberof binlogdata
+         * @interface IVStreamRequest
+         * @property {vtrpc.ICallerID|null} [effective_caller_id] VStreamRequest effective_caller_id
+         * @property {query.IVTGateCallerID|null} [immediate_caller_id] VStreamRequest immediate_caller_id
+         * @property {query.ITarget|null} [target] VStreamRequest target
+         * @property {string|null} [position] VStreamRequest position
+         * @property {binlogdata.IFilter|null} [filter] VStreamRequest filter
+         * @property {Array.<binlogdata.ITableLastPK>|null} [table_last_p_ks] VStreamRequest table_last_p_ks
+         */
+
+        /**
+         * Constructs a new VStreamRequest.
+         * @memberof binlogdata
+         * @classdesc Represents a VStreamRequest.
+         * @implements IVStreamRequest
+         * @constructor
+         * @param {binlogdata.IVStreamRequest=} [properties] Properties to set
+         */
+        function VStreamRequest(properties) {
+            this.table_last_p_ks = [];
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * VStreamRequest effective_caller_id.
+         * @member {vtrpc.ICallerID|null|undefined} effective_caller_id
+         * @memberof binlogdata.VStreamRequest
+         * @instance
+         */
+        VStreamRequest.prototype.effective_caller_id = null;
+
+        /**
+         * VStreamRequest immediate_caller_id.
+         * @member {query.IVTGateCallerID|null|undefined} immediate_caller_id
+         * @memberof binlogdata.VStreamRequest
+         * @instance
+         */
+        VStreamRequest.prototype.immediate_caller_id = null;
+
+        /**
+         * VStreamRequest target.
+         * @member {query.ITarget|null|undefined} target
+         * @memberof binlogdata.VStreamRequest
+         * @instance
+         */
+        VStreamRequest.prototype.target = null;
+
+        /**
+         * VStreamRequest position.
+         * @member {string} position
+         * @memberof binlogdata.VStreamRequest
+         * @instance
+         */
+        VStreamRequest.prototype.position = "";
+
+        /**
+         * VStreamRequest filter.
+         * @member {binlogdata.IFilter|null|undefined} filter
+         * @memberof binlogdata.VStreamRequest
+         * @instance
+         */
+        VStreamRequest.prototype.filter = null;
+
+        /**
+         * VStreamRequest table_last_p_ks.
+         * @member {Array.<binlogdata.ITableLastPK>} table_last_p_ks
+         * @memberof binlogdata.VStreamRequest
+         * @instance
+         */
+        VStreamRequest.prototype.table_last_p_ks = $util.emptyArray;
+
+        /**
+         * Creates a new VStreamRequest instance using the specified properties.
+         * @function create
+         * @memberof binlogdata.VStreamRequest
+         * @static
+         * @param {binlogdata.IVStreamRequest=} [properties] Properties to set
+         * @returns {binlogdata.VStreamRequest} VStreamRequest instance
+         */
+        VStreamRequest.create = function create(properties) {
+            return new VStreamRequest(properties);
+        };
+
+        /**
+         * Encodes the specified VStreamRequest message. Does not implicitly {@link binlogdata.VStreamRequest.verify|verify} messages.
+         * @function encode
+         * @memberof binlogdata.VStreamRequest
+         * @static
+         * @param {binlogdata.IVStreamRequest} message VStreamRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        VStreamRequest.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.effective_caller_id != null && Object.hasOwnProperty.call(message, "effective_caller_id"))
+                $root.vtrpc.CallerID.encode(message.effective_caller_id, writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
+            if (message.immediate_caller_id != null && Object.hasOwnProperty.call(message, "immediate_caller_id"))
+                $root.query.VTGateCallerID.encode(message.immediate_caller_id, writer.uint32(/* id 2, wireType 2 =*/18).fork()).ldelim();
+            if (message.target != null && Object.hasOwnProperty.call(message, "target"))
+                $root.query.Target.encode(message.target, writer.uint32(/* id 3, wireType 2 =*/26).fork()).ldelim();
+            if (message.position != null && Object.hasOwnProperty.call(message, "position"))
+                writer.uint32(/* id 4, wireType 2 =*/34).string(message.position);
+            if (message.filter != null && Object.hasOwnProperty.call(message, "filter"))
+                $root.binlogdata.Filter.encode(message.filter, writer.uint32(/* id 5, wireType 2 =*/42).fork()).ldelim();
+            if (message.table_last_p_ks != null && message.table_last_p_ks.length)
+                for (var i = 0; i < message.table_last_p_ks.length; ++i)
+                    $root.binlogdata.TableLastPK.encode(message.table_last_p_ks[i], writer.uint32(/* id 6, wireType 2 =*/50).fork()).ldelim();
+            return writer;
+        };
+
+        /**
+         * Encodes the specified VStreamRequest message, length delimited. Does not implicitly {@link binlogdata.VStreamRequest.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof binlogdata.VStreamRequest
+         * @static
+         * @param {binlogdata.IVStreamRequest} message VStreamRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        VStreamRequest.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a VStreamRequest message from the specified reader or buffer.
+         * @function decode
+         * @memberof binlogdata.VStreamRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {binlogdata.VStreamRequest} VStreamRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        VStreamRequest.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.binlogdata.VStreamRequest();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.effective_caller_id = $root.vtrpc.CallerID.decode(reader, reader.uint32());
+                    break;
+                case 2:
+                    message.immediate_caller_id = $root.query.VTGateCallerID.decode(reader, reader.uint32());
+                    break;
+                case 3:
+                    message.target = $root.query.Target.decode(reader, reader.uint32());
+                    break;
+                case 4:
+                    message.position = reader.string();
+                    break;
+                case 5:
+                    message.filter = $root.binlogdata.Filter.decode(reader, reader.uint32());
+                    break;
+                case 6:
+                    if (!(message.table_last_p_ks && message.table_last_p_ks.length))
+                        message.table_last_p_ks = [];
+                    message.table_last_p_ks.push($root.binlogdata.TableLastPK.decode(reader, reader.uint32()));
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a VStreamRequest message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof binlogdata.VStreamRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {binlogdata.VStreamRequest} VStreamRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        VStreamRequest.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a VStreamRequest message.
+         * @function verify
+         * @memberof binlogdata.VStreamRequest
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        VStreamRequest.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.effective_caller_id != null && message.hasOwnProperty("effective_caller_id")) {
+                var error = $root.vtrpc.CallerID.verify(message.effective_caller_id);
+                if (error)
+                    return "effective_caller_id." + error;
+            }
+            if (message.immediate_caller_id != null && message.hasOwnProperty("immediate_caller_id")) {
+                var error = $root.query.VTGateCallerID.verify(message.immediate_caller_id);
+                if (error)
+                    return "immediate_caller_id." + error;
+            }
+            if (message.target != null && message.hasOwnProperty("target")) {
+                var error = $root.query.Target.verify(message.target);
+                if (error)
+                    return "target." + error;
+            }
+            if (message.position != null && message.hasOwnProperty("position"))
+                if (!$util.isString(message.position))
+                    return "position: string expected";
+            if (message.filter != null && message.hasOwnProperty("filter")) {
+                var error = $root.binlogdata.Filter.verify(message.filter);
+                if (error)
+                    return "filter." + error;
+            }
+            if (message.table_last_p_ks != null && message.hasOwnProperty("table_last_p_ks")) {
+                if (!Array.isArray(message.table_last_p_ks))
+                    return "table_last_p_ks: array expected";
+                for (var i = 0; i < message.table_last_p_ks.length; ++i) {
+                    var error = $root.binlogdata.TableLastPK.verify(message.table_last_p_ks[i]);
+                    if (error)
+                        return "table_last_p_ks." + error;
+                }
+            }
+            return null;
+        };
+
+        /**
+         * Creates a VStreamRequest message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof binlogdata.VStreamRequest
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {binlogdata.VStreamRequest} VStreamRequest
+         */
+        VStreamRequest.fromObject = function fromObject(object) {
+            if (object instanceof $root.binlogdata.VStreamRequest)
+                return object;
+            var message = new $root.binlogdata.VStreamRequest();
+            if (object.effective_caller_id != null) {
+                if (typeof object.effective_caller_id !== "object")
+                    throw TypeError(".binlogdata.VStreamRequest.effective_caller_id: object expected");
+                message.effective_caller_id = $root.vtrpc.CallerID.fromObject(object.effective_caller_id);
+            }
+            if (object.immediate_caller_id != null) {
+                if (typeof object.immediate_caller_id !== "object")
+                    throw TypeError(".binlogdata.VStreamRequest.immediate_caller_id: object expected");
+                message.immediate_caller_id = $root.query.VTGateCallerID.fromObject(object.immediate_caller_id);
+            }
+            if (object.target != null) {
+                if (typeof object.target !== "object")
+                    throw TypeError(".binlogdata.VStreamRequest.target: object expected");
+                message.target = $root.query.Target.fromObject(object.target);
+            }
+            if (object.position != null)
+                message.position = String(object.position);
+            if (object.filter != null) {
+                if (typeof object.filter !== "object")
+                    throw TypeError(".binlogdata.VStreamRequest.filter: object expected");
+                message.filter = $root.binlogdata.Filter.fromObject(object.filter);
+            }
+            if (object.table_last_p_ks) {
+                if (!Array.isArray(object.table_last_p_ks))
+                    throw TypeError(".binlogdata.VStreamRequest.table_last_p_ks: array expected");
+                message.table_last_p_ks = [];
+                for (var i = 0; i < object.table_last_p_ks.length; ++i) {
+                    if (typeof object.table_last_p_ks[i] !== "object")
+                        throw TypeError(".binlogdata.VStreamRequest.table_last_p_ks: object expected");
+                    message.table_last_p_ks[i] = $root.binlogdata.TableLastPK.fromObject(object.table_last_p_ks[i]);
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a VStreamRequest message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof binlogdata.VStreamRequest
+         * @static
+         * @param {binlogdata.VStreamRequest} message VStreamRequest
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        VStreamRequest.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.arrays || options.defaults)
+                object.table_last_p_ks = [];
+            if (options.defaults) {
+                object.effective_caller_id = null;
+                object.immediate_caller_id = null;
+                object.target = null;
+                object.position = "";
+                object.filter = null;
+            }
+            if (message.effective_caller_id != null && message.hasOwnProperty("effective_caller_id"))
+                object.effective_caller_id = $root.vtrpc.CallerID.toObject(message.effective_caller_id, options);
+            if (message.immediate_caller_id != null && message.hasOwnProperty("immediate_caller_id"))
+                object.immediate_caller_id = $root.query.VTGateCallerID.toObject(message.immediate_caller_id, options);
+            if (message.target != null && message.hasOwnProperty("target"))
+                object.target = $root.query.Target.toObject(message.target, options);
+            if (message.position != null && message.hasOwnProperty("position"))
+                object.position = message.position;
+            if (message.filter != null && message.hasOwnProperty("filter"))
+                object.filter = $root.binlogdata.Filter.toObject(message.filter, options);
+            if (message.table_last_p_ks && message.table_last_p_ks.length) {
+                object.table_last_p_ks = [];
+                for (var j = 0; j < message.table_last_p_ks.length; ++j)
+                    object.table_last_p_ks[j] = $root.binlogdata.TableLastPK.toObject(message.table_last_p_ks[j], options);
+            }
+            return object;
+        };
+
+        /**
+         * Converts this VStreamRequest to JSON.
+         * @function toJSON
+         * @memberof binlogdata.VStreamRequest
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        VStreamRequest.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return VStreamRequest;
+    })();
+
+    binlogdata.VStreamResponse = (function() {
+
+        /**
+         * Properties of a VStreamResponse.
+         * @memberof binlogdata
+         * @interface IVStreamResponse
+         * @property {Array.<binlogdata.IVEvent>|null} [events] VStreamResponse events
+         */
+
+        /**
+         * Constructs a new VStreamResponse.
+         * @memberof binlogdata
+         * @classdesc Represents a VStreamResponse.
+         * @implements IVStreamResponse
+         * @constructor
+         * @param {binlogdata.IVStreamResponse=} [properties] Properties to set
+         */
+        function VStreamResponse(properties) {
+            this.events = [];
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * VStreamResponse events.
+         * @member {Array.<binlogdata.IVEvent>} events
+         * @memberof binlogdata.VStreamResponse
+         * @instance
+         */
+        VStreamResponse.prototype.events = $util.emptyArray;
+
+        /**
+         * Creates a new VStreamResponse instance using the specified properties.
+         * @function create
+         * @memberof binlogdata.VStreamResponse
+         * @static
+         * @param {binlogdata.IVStreamResponse=} [properties] Properties to set
+         * @returns {binlogdata.VStreamResponse} VStreamResponse instance
+         */
+        VStreamResponse.create = function create(properties) {
+            return new VStreamResponse(properties);
+        };
+
+        /**
+         * Encodes the specified VStreamResponse message. Does not implicitly {@link binlogdata.VStreamResponse.verify|verify} messages.
+         * @function encode
+         * @memberof binlogdata.VStreamResponse
+         * @static
+         * @param {binlogdata.IVStreamResponse} message VStreamResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        VStreamResponse.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.events != null && message.events.length)
+                for (var i = 0; i < message.events.length; ++i)
+                    $root.binlogdata.VEvent.encode(message.events[i], writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
+            return writer;
+        };
+
+        /**
+         * Encodes the specified VStreamResponse message, length delimited. Does not implicitly {@link binlogdata.VStreamResponse.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof binlogdata.VStreamResponse
+         * @static
+         * @param {binlogdata.IVStreamResponse} message VStreamResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        VStreamResponse.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a VStreamResponse message from the specified reader or buffer.
+         * @function decode
+         * @memberof binlogdata.VStreamResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {binlogdata.VStreamResponse} VStreamResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        VStreamResponse.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.binlogdata.VStreamResponse();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    if (!(message.events && message.events.length))
+                        message.events = [];
+                    message.events.push($root.binlogdata.VEvent.decode(reader, reader.uint32()));
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a VStreamResponse message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof binlogdata.VStreamResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {binlogdata.VStreamResponse} VStreamResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        VStreamResponse.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a VStreamResponse message.
+         * @function verify
+         * @memberof binlogdata.VStreamResponse
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        VStreamResponse.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.events != null && message.hasOwnProperty("events")) {
+                if (!Array.isArray(message.events))
+                    return "events: array expected";
+                for (var i = 0; i < message.events.length; ++i) {
+                    var error = $root.binlogdata.VEvent.verify(message.events[i]);
+                    if (error)
+                        return "events." + error;
+                }
+            }
+            return null;
+        };
+
+        /**
+         * Creates a VStreamResponse message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof binlogdata.VStreamResponse
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {binlogdata.VStreamResponse} VStreamResponse
+         */
+        VStreamResponse.fromObject = function fromObject(object) {
+            if (object instanceof $root.binlogdata.VStreamResponse)
+                return object;
+            var message = new $root.binlogdata.VStreamResponse();
+            if (object.events) {
+                if (!Array.isArray(object.events))
+                    throw TypeError(".binlogdata.VStreamResponse.events: array expected");
+                message.events = [];
+                for (var i = 0; i < object.events.length; ++i) {
+                    if (typeof object.events[i] !== "object")
+                        throw TypeError(".binlogdata.VStreamResponse.events: object expected");
+                    message.events[i] = $root.binlogdata.VEvent.fromObject(object.events[i]);
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a VStreamResponse message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof binlogdata.VStreamResponse
+         * @static
+         * @param {binlogdata.VStreamResponse} message VStreamResponse
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        VStreamResponse.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.arrays || options.defaults)
+                object.events = [];
+            if (message.events && message.events.length) {
+                object.events = [];
+                for (var j = 0; j < message.events.length; ++j)
+                    object.events[j] = $root.binlogdata.VEvent.toObject(message.events[j], options);
+            }
+            return object;
+        };
+
+        /**
+         * Converts this VStreamResponse to JSON.
+         * @function toJSON
+         * @memberof binlogdata.VStreamResponse
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        VStreamResponse.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return VStreamResponse;
+    })();
+
+    binlogdata.VStreamRowsRequest = (function() {
+
+        /**
+         * Properties of a VStreamRowsRequest.
+         * @memberof binlogdata
+         * @interface IVStreamRowsRequest
+         * @property {vtrpc.ICallerID|null} [effective_caller_id] VStreamRowsRequest effective_caller_id
+         * @property {query.IVTGateCallerID|null} [immediate_caller_id] VStreamRowsRequest immediate_caller_id
+         * @property {query.ITarget|null} [target] VStreamRowsRequest target
+         * @property {string|null} [query] VStreamRowsRequest query
+         * @property {query.IQueryResult|null} [lastpk] VStreamRowsRequest lastpk
+         */
+
+        /**
+         * Constructs a new VStreamRowsRequest.
+         * @memberof binlogdata
+         * @classdesc Represents a VStreamRowsRequest.
+         * @implements IVStreamRowsRequest
+         * @constructor
+         * @param {binlogdata.IVStreamRowsRequest=} [properties] Properties to set
+         */
+        function VStreamRowsRequest(properties) {
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * VStreamRowsRequest effective_caller_id.
+         * @member {vtrpc.ICallerID|null|undefined} effective_caller_id
+         * @memberof binlogdata.VStreamRowsRequest
+         * @instance
+         */
+        VStreamRowsRequest.prototype.effective_caller_id = null;
+
+        /**
+         * VStreamRowsRequest immediate_caller_id.
+         * @member {query.IVTGateCallerID|null|undefined} immediate_caller_id
+         * @memberof binlogdata.VStreamRowsRequest
+         * @instance
+         */
+        VStreamRowsRequest.prototype.immediate_caller_id = null;
+
+        /**
+         * VStreamRowsRequest target.
+         * @member {query.ITarget|null|undefined} target
+         * @memberof binlogdata.VStreamRowsRequest
+         * @instance
+         */
+        VStreamRowsRequest.prototype.target = null;
+
+        /**
+         * VStreamRowsRequest query.
+         * @member {string} query
+         * @memberof binlogdata.VStreamRowsRequest
+         * @instance
+         */
+        VStreamRowsRequest.prototype.query = "";
+
+        /**
+         * VStreamRowsRequest lastpk.
+         * @member {query.IQueryResult|null|undefined} lastpk
+         * @memberof binlogdata.VStreamRowsRequest
+         * @instance
+         */
+        VStreamRowsRequest.prototype.lastpk = null;
+
+        /**
+         * Creates a new VStreamRowsRequest instance using the specified properties.
+         * @function create
+         * @memberof binlogdata.VStreamRowsRequest
+         * @static
+         * @param {binlogdata.IVStreamRowsRequest=} [properties] Properties to set
+         * @returns {binlogdata.VStreamRowsRequest} VStreamRowsRequest instance
+         */
+        VStreamRowsRequest.create = function create(properties) {
+            return new VStreamRowsRequest(properties);
+        };
+
+        /**
+         * Encodes the specified VStreamRowsRequest message. Does not implicitly {@link binlogdata.VStreamRowsRequest.verify|verify} messages.
+         * @function encode
+         * @memberof binlogdata.VStreamRowsRequest
+         * @static
+         * @param {binlogdata.IVStreamRowsRequest} message VStreamRowsRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        VStreamRowsRequest.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.effective_caller_id != null && Object.hasOwnProperty.call(message, "effective_caller_id"))
+                $root.vtrpc.CallerID.encode(message.effective_caller_id, writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
+            if (message.immediate_caller_id != null && Object.hasOwnProperty.call(message, "immediate_caller_id"))
+                $root.query.VTGateCallerID.encode(message.immediate_caller_id, writer.uint32(/* id 2, wireType 2 =*/18).fork()).ldelim();
+            if (message.target != null && Object.hasOwnProperty.call(message, "target"))
+                $root.query.Target.encode(message.target, writer.uint32(/* id 3, wireType 2 =*/26).fork()).ldelim();
+            if (message.query != null && Object.hasOwnProperty.call(message, "query"))
+                writer.uint32(/* id 4, wireType 2 =*/34).string(message.query);
+            if (message.lastpk != null && Object.hasOwnProperty.call(message, "lastpk"))
+                $root.query.QueryResult.encode(message.lastpk, writer.uint32(/* id 5, wireType 2 =*/42).fork()).ldelim();
+            return writer;
+        };
+
+        /**
+         * Encodes the specified VStreamRowsRequest message, length delimited. Does not implicitly {@link binlogdata.VStreamRowsRequest.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof binlogdata.VStreamRowsRequest
+         * @static
+         * @param {binlogdata.IVStreamRowsRequest} message VStreamRowsRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        VStreamRowsRequest.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a VStreamRowsRequest message from the specified reader or buffer.
+         * @function decode
+         * @memberof binlogdata.VStreamRowsRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {binlogdata.VStreamRowsRequest} VStreamRowsRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        VStreamRowsRequest.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.binlogdata.VStreamRowsRequest();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.effective_caller_id = $root.vtrpc.CallerID.decode(reader, reader.uint32());
+                    break;
+                case 2:
+                    message.immediate_caller_id = $root.query.VTGateCallerID.decode(reader, reader.uint32());
+                    break;
+                case 3:
+                    message.target = $root.query.Target.decode(reader, reader.uint32());
+                    break;
+                case 4:
+                    message.query = reader.string();
+                    break;
+                case 5:
+                    message.lastpk = $root.query.QueryResult.decode(reader, reader.uint32());
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a VStreamRowsRequest message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof binlogdata.VStreamRowsRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {binlogdata.VStreamRowsRequest} VStreamRowsRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        VStreamRowsRequest.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a VStreamRowsRequest message.
+         * @function verify
+         * @memberof binlogdata.VStreamRowsRequest
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        VStreamRowsRequest.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.effective_caller_id != null && message.hasOwnProperty("effective_caller_id")) {
+                var error = $root.vtrpc.CallerID.verify(message.effective_caller_id);
+                if (error)
+                    return "effective_caller_id." + error;
+            }
+            if (message.immediate_caller_id != null && message.hasOwnProperty("immediate_caller_id")) {
+                var error = $root.query.VTGateCallerID.verify(message.immediate_caller_id);
+                if (error)
+                    return "immediate_caller_id." + error;
+            }
+            if (message.target != null && message.hasOwnProperty("target")) {
+                var error = $root.query.Target.verify(message.target);
+                if (error)
+                    return "target." + error;
+            }
+            if (message.query != null && message.hasOwnProperty("query"))
+                if (!$util.isString(message.query))
+                    return "query: string expected";
+            if (message.lastpk != null && message.hasOwnProperty("lastpk")) {
+                var error = $root.query.QueryResult.verify(message.lastpk);
+                if (error)
+                    return "lastpk." + error;
+            }
+            return null;
+        };
+
+        /**
+         * Creates a VStreamRowsRequest message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof binlogdata.VStreamRowsRequest
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {binlogdata.VStreamRowsRequest} VStreamRowsRequest
+         */
+        VStreamRowsRequest.fromObject = function fromObject(object) {
+            if (object instanceof $root.binlogdata.VStreamRowsRequest)
+                return object;
+            var message = new $root.binlogdata.VStreamRowsRequest();
+            if (object.effective_caller_id != null) {
+                if (typeof object.effective_caller_id !== "object")
+                    throw TypeError(".binlogdata.VStreamRowsRequest.effective_caller_id: object expected");
+                message.effective_caller_id = $root.vtrpc.CallerID.fromObject(object.effective_caller_id);
+            }
+            if (object.immediate_caller_id != null) {
+                if (typeof object.immediate_caller_id !== "object")
+                    throw TypeError(".binlogdata.VStreamRowsRequest.immediate_caller_id: object expected");
+                message.immediate_caller_id = $root.query.VTGateCallerID.fromObject(object.immediate_caller_id);
+            }
+            if (object.target != null) {
+                if (typeof object.target !== "object")
+                    throw TypeError(".binlogdata.VStreamRowsRequest.target: object expected");
+                message.target = $root.query.Target.fromObject(object.target);
+            }
+            if (object.query != null)
+                message.query = String(object.query);
+            if (object.lastpk != null) {
+                if (typeof object.lastpk !== "object")
+                    throw TypeError(".binlogdata.VStreamRowsRequest.lastpk: object expected");
+                message.lastpk = $root.query.QueryResult.fromObject(object.lastpk);
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a VStreamRowsRequest message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof binlogdata.VStreamRowsRequest
+         * @static
+         * @param {binlogdata.VStreamRowsRequest} message VStreamRowsRequest
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        VStreamRowsRequest.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.defaults) {
+                object.effective_caller_id = null;
+                object.immediate_caller_id = null;
+                object.target = null;
+                object.query = "";
+                object.lastpk = null;
+            }
+            if (message.effective_caller_id != null && message.hasOwnProperty("effective_caller_id"))
+                object.effective_caller_id = $root.vtrpc.CallerID.toObject(message.effective_caller_id, options);
+            if (message.immediate_caller_id != null && message.hasOwnProperty("immediate_caller_id"))
+                object.immediate_caller_id = $root.query.VTGateCallerID.toObject(message.immediate_caller_id, options);
+            if (message.target != null && message.hasOwnProperty("target"))
+                object.target = $root.query.Target.toObject(message.target, options);
+            if (message.query != null && message.hasOwnProperty("query"))
+                object.query = message.query;
+            if (message.lastpk != null && message.hasOwnProperty("lastpk"))
+                object.lastpk = $root.query.QueryResult.toObject(message.lastpk, options);
+            return object;
+        };
+
+        /**
+         * Converts this VStreamRowsRequest to JSON.
+         * @function toJSON
+         * @memberof binlogdata.VStreamRowsRequest
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        VStreamRowsRequest.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return VStreamRowsRequest;
+    })();
+
+    binlogdata.VStreamRowsResponse = (function() {
+
+        /**
+         * Properties of a VStreamRowsResponse.
+         * @memberof binlogdata
+         * @interface IVStreamRowsResponse
+         * @property {Array.<query.IField>|null} [fields] VStreamRowsResponse fields
+         * @property {Array.<query.IField>|null} [pkfields] VStreamRowsResponse pkfields
+         * @property {string|null} [gtid] VStreamRowsResponse gtid
+         * @property {Array.<query.IRow>|null} [rows] VStreamRowsResponse rows
+         * @property {query.IRow|null} [lastpk] VStreamRowsResponse lastpk
+         */
+
+        /**
+         * Constructs a new VStreamRowsResponse.
+         * @memberof binlogdata
+         * @classdesc Represents a VStreamRowsResponse.
+         * @implements IVStreamRowsResponse
+         * @constructor
+         * @param {binlogdata.IVStreamRowsResponse=} [properties] Properties to set
+         */
+        function VStreamRowsResponse(properties) {
+            this.fields = [];
+            this.pkfields = [];
+            this.rows = [];
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * VStreamRowsResponse fields.
+         * @member {Array.<query.IField>} fields
+         * @memberof binlogdata.VStreamRowsResponse
+         * @instance
+         */
+        VStreamRowsResponse.prototype.fields = $util.emptyArray;
+
+        /**
+         * VStreamRowsResponse pkfields.
+         * @member {Array.<query.IField>} pkfields
+         * @memberof binlogdata.VStreamRowsResponse
+         * @instance
+         */
+        VStreamRowsResponse.prototype.pkfields = $util.emptyArray;
+
+        /**
+         * VStreamRowsResponse gtid.
+         * @member {string} gtid
+         * @memberof binlogdata.VStreamRowsResponse
+         * @instance
+         */
+        VStreamRowsResponse.prototype.gtid = "";
+
+        /**
+         * VStreamRowsResponse rows.
+         * @member {Array.<query.IRow>} rows
+         * @memberof binlogdata.VStreamRowsResponse
+         * @instance
+         */
+        VStreamRowsResponse.prototype.rows = $util.emptyArray;
+
+        /**
+         * VStreamRowsResponse lastpk.
+         * @member {query.IRow|null|undefined} lastpk
+         * @memberof binlogdata.VStreamRowsResponse
+         * @instance
+         */
+        VStreamRowsResponse.prototype.lastpk = null;
+
+        /**
+         * Creates a new VStreamRowsResponse instance using the specified properties.
+         * @function create
+         * @memberof binlogdata.VStreamRowsResponse
+         * @static
+         * @param {binlogdata.IVStreamRowsResponse=} [properties] Properties to set
+         * @returns {binlogdata.VStreamRowsResponse} VStreamRowsResponse instance
+         */
+        VStreamRowsResponse.create = function create(properties) {
+            return new VStreamRowsResponse(properties);
+        };
+
+        /**
+         * Encodes the specified VStreamRowsResponse message. Does not implicitly {@link binlogdata.VStreamRowsResponse.verify|verify} messages.
+         * @function encode
+         * @memberof binlogdata.VStreamRowsResponse
+         * @static
+         * @param {binlogdata.IVStreamRowsResponse} message VStreamRowsResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        VStreamRowsResponse.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.fields != null && message.fields.length)
+                for (var i = 0; i < message.fields.length; ++i)
+                    $root.query.Field.encode(message.fields[i], writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
+            if (message.pkfields != null && message.pkfields.length)
+                for (var i = 0; i < message.pkfields.length; ++i)
+                    $root.query.Field.encode(message.pkfields[i], writer.uint32(/* id 2, wireType 2 =*/18).fork()).ldelim();
+            if (message.gtid != null && Object.hasOwnProperty.call(message, "gtid"))
+                writer.uint32(/* id 3, wireType 2 =*/26).string(message.gtid);
+            if (message.rows != null && message.rows.length)
+                for (var i = 0; i < message.rows.length; ++i)
+                    $root.query.Row.encode(message.rows[i], writer.uint32(/* id 4, wireType 2 =*/34).fork()).ldelim();
+            if (message.lastpk != null && Object.hasOwnProperty.call(message, "lastpk"))
+                $root.query.Row.encode(message.lastpk, writer.uint32(/* id 5, wireType 2 =*/42).fork()).ldelim();
+            return writer;
+        };
+
+        /**
+         * Encodes the specified VStreamRowsResponse message, length delimited. Does not implicitly {@link binlogdata.VStreamRowsResponse.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof binlogdata.VStreamRowsResponse
+         * @static
+         * @param {binlogdata.IVStreamRowsResponse} message VStreamRowsResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        VStreamRowsResponse.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a VStreamRowsResponse message from the specified reader or buffer.
+         * @function decode
+         * @memberof binlogdata.VStreamRowsResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {binlogdata.VStreamRowsResponse} VStreamRowsResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        VStreamRowsResponse.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.binlogdata.VStreamRowsResponse();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    if (!(message.fields && message.fields.length))
+                        message.fields = [];
+                    message.fields.push($root.query.Field.decode(reader, reader.uint32()));
+                    break;
+                case 2:
+                    if (!(message.pkfields && message.pkfields.length))
+                        message.pkfields = [];
+                    message.pkfields.push($root.query.Field.decode(reader, reader.uint32()));
+                    break;
+                case 3:
+                    message.gtid = reader.string();
+                    break;
+                case 4:
+                    if (!(message.rows && message.rows.length))
+                        message.rows = [];
+                    message.rows.push($root.query.Row.decode(reader, reader.uint32()));
+                    break;
+                case 5:
+                    message.lastpk = $root.query.Row.decode(reader, reader.uint32());
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a VStreamRowsResponse message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof binlogdata.VStreamRowsResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {binlogdata.VStreamRowsResponse} VStreamRowsResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        VStreamRowsResponse.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a VStreamRowsResponse message.
+         * @function verify
+         * @memberof binlogdata.VStreamRowsResponse
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        VStreamRowsResponse.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.fields != null && message.hasOwnProperty("fields")) {
+                if (!Array.isArray(message.fields))
+                    return "fields: array expected";
+                for (var i = 0; i < message.fields.length; ++i) {
+                    var error = $root.query.Field.verify(message.fields[i]);
+                    if (error)
+                        return "fields." + error;
+                }
+            }
+            if (message.pkfields != null && message.hasOwnProperty("pkfields")) {
+                if (!Array.isArray(message.pkfields))
+                    return "pkfields: array expected";
+                for (var i = 0; i < message.pkfields.length; ++i) {
+                    var error = $root.query.Field.verify(message.pkfields[i]);
+                    if (error)
+                        return "pkfields." + error;
+                }
+            }
+            if (message.gtid != null && message.hasOwnProperty("gtid"))
+                if (!$util.isString(message.gtid))
+                    return "gtid: string expected";
+            if (message.rows != null && message.hasOwnProperty("rows")) {
+                if (!Array.isArray(message.rows))
+                    return "rows: array expected";
+                for (var i = 0; i < message.rows.length; ++i) {
+                    var error = $root.query.Row.verify(message.rows[i]);
+                    if (error)
+                        return "rows." + error;
+                }
+            }
+            if (message.lastpk != null && message.hasOwnProperty("lastpk")) {
+                var error = $root.query.Row.verify(message.lastpk);
+                if (error)
+                    return "lastpk." + error;
+            }
+            return null;
+        };
+
+        /**
+         * Creates a VStreamRowsResponse message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof binlogdata.VStreamRowsResponse
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {binlogdata.VStreamRowsResponse} VStreamRowsResponse
+         */
+        VStreamRowsResponse.fromObject = function fromObject(object) {
+            if (object instanceof $root.binlogdata.VStreamRowsResponse)
+                return object;
+            var message = new $root.binlogdata.VStreamRowsResponse();
+            if (object.fields) {
+                if (!Array.isArray(object.fields))
+                    throw TypeError(".binlogdata.VStreamRowsResponse.fields: array expected");
+                message.fields = [];
+                for (var i = 0; i < object.fields.length; ++i) {
+                    if (typeof object.fields[i] !== "object")
+                        throw TypeError(".binlogdata.VStreamRowsResponse.fields: object expected");
+                    message.fields[i] = $root.query.Field.fromObject(object.fields[i]);
+                }
+            }
+            if (object.pkfields) {
+                if (!Array.isArray(object.pkfields))
+                    throw TypeError(".binlogdata.VStreamRowsResponse.pkfields: array expected");
+                message.pkfields = [];
+                for (var i = 0; i < object.pkfields.length; ++i) {
+                    if (typeof object.pkfields[i] !== "object")
+                        throw TypeError(".binlogdata.VStreamRowsResponse.pkfields: object expected");
+                    message.pkfields[i] = $root.query.Field.fromObject(object.pkfields[i]);
+                }
+            }
+            if (object.gtid != null)
+                message.gtid = String(object.gtid);
+            if (object.rows) {
+                if (!Array.isArray(object.rows))
+                    throw TypeError(".binlogdata.VStreamRowsResponse.rows: array expected");
+                message.rows = [];
+                for (var i = 0; i < object.rows.length; ++i) {
+                    if (typeof object.rows[i] !== "object")
+                        throw TypeError(".binlogdata.VStreamRowsResponse.rows: object expected");
+                    message.rows[i] = $root.query.Row.fromObject(object.rows[i]);
+                }
+            }
+            if (object.lastpk != null) {
+                if (typeof object.lastpk !== "object")
+                    throw TypeError(".binlogdata.VStreamRowsResponse.lastpk: object expected");
+                message.lastpk = $root.query.Row.fromObject(object.lastpk);
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a VStreamRowsResponse message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof binlogdata.VStreamRowsResponse
+         * @static
+         * @param {binlogdata.VStreamRowsResponse} message VStreamRowsResponse
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        VStreamRowsResponse.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.arrays || options.defaults) {
+                object.fields = [];
+                object.pkfields = [];
+                object.rows = [];
+            }
+            if (options.defaults) {
+                object.gtid = "";
+                object.lastpk = null;
+            }
+            if (message.fields && message.fields.length) {
+                object.fields = [];
+                for (var j = 0; j < message.fields.length; ++j)
+                    object.fields[j] = $root.query.Field.toObject(message.fields[j], options);
+            }
+            if (message.pkfields && message.pkfields.length) {
+                object.pkfields = [];
+                for (var j = 0; j < message.pkfields.length; ++j)
+                    object.pkfields[j] = $root.query.Field.toObject(message.pkfields[j], options);
+            }
+            if (message.gtid != null && message.hasOwnProperty("gtid"))
+                object.gtid = message.gtid;
+            if (message.rows && message.rows.length) {
+                object.rows = [];
+                for (var j = 0; j < message.rows.length; ++j)
+                    object.rows[j] = $root.query.Row.toObject(message.rows[j], options);
+            }
+            if (message.lastpk != null && message.hasOwnProperty("lastpk"))
+                object.lastpk = $root.query.Row.toObject(message.lastpk, options);
+            return object;
+        };
+
+        /**
+         * Converts this VStreamRowsResponse to JSON.
+         * @function toJSON
+         * @memberof binlogdata.VStreamRowsResponse
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        VStreamRowsResponse.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return VStreamRowsResponse;
+    })();
+
+    binlogdata.LastPKEvent = (function() {
+
+        /**
+         * Properties of a LastPKEvent.
+         * @memberof binlogdata
+         * @interface ILastPKEvent
+         * @property {binlogdata.ITableLastPK|null} [table_last_p_k] LastPKEvent table_last_p_k
+         * @property {boolean|null} [completed] LastPKEvent completed
+         */
+
+        /**
+         * Constructs a new LastPKEvent.
+         * @memberof binlogdata
+         * @classdesc Represents a LastPKEvent.
+         * @implements ILastPKEvent
+         * @constructor
+         * @param {binlogdata.ILastPKEvent=} [properties] Properties to set
+         */
+        function LastPKEvent(properties) {
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * LastPKEvent table_last_p_k.
+         * @member {binlogdata.ITableLastPK|null|undefined} table_last_p_k
+         * @memberof binlogdata.LastPKEvent
+         * @instance
+         */
+        LastPKEvent.prototype.table_last_p_k = null;
+
+        /**
+         * LastPKEvent completed.
+         * @member {boolean} completed
+         * @memberof binlogdata.LastPKEvent
+         * @instance
+         */
+        LastPKEvent.prototype.completed = false;
+
+        /**
+         * Creates a new LastPKEvent instance using the specified properties.
+         * @function create
+         * @memberof binlogdata.LastPKEvent
+         * @static
+         * @param {binlogdata.ILastPKEvent=} [properties] Properties to set
+         * @returns {binlogdata.LastPKEvent} LastPKEvent instance
+         */
+        LastPKEvent.create = function create(properties) {
+            return new LastPKEvent(properties);
+        };
+
+        /**
+         * Encodes the specified LastPKEvent message. Does not implicitly {@link binlogdata.LastPKEvent.verify|verify} messages.
+         * @function encode
+         * @memberof binlogdata.LastPKEvent
+         * @static
+         * @param {binlogdata.ILastPKEvent} message LastPKEvent message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        LastPKEvent.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.table_last_p_k != null && Object.hasOwnProperty.call(message, "table_last_p_k"))
+                $root.binlogdata.TableLastPK.encode(message.table_last_p_k, writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
+            if (message.completed != null && Object.hasOwnProperty.call(message, "completed"))
+                writer.uint32(/* id 2, wireType 0 =*/16).bool(message.completed);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified LastPKEvent message, length delimited. Does not implicitly {@link binlogdata.LastPKEvent.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof binlogdata.LastPKEvent
+         * @static
+         * @param {binlogdata.ILastPKEvent} message LastPKEvent message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        LastPKEvent.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a LastPKEvent message from the specified reader or buffer.
+         * @function decode
+         * @memberof binlogdata.LastPKEvent
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {binlogdata.LastPKEvent} LastPKEvent
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        LastPKEvent.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.binlogdata.LastPKEvent();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.table_last_p_k = $root.binlogdata.TableLastPK.decode(reader, reader.uint32());
+                    break;
+                case 2:
+                    message.completed = reader.bool();
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a LastPKEvent message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof binlogdata.LastPKEvent
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {binlogdata.LastPKEvent} LastPKEvent
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        LastPKEvent.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a LastPKEvent message.
+         * @function verify
+         * @memberof binlogdata.LastPKEvent
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        LastPKEvent.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.table_last_p_k != null && message.hasOwnProperty("table_last_p_k")) {
+                var error = $root.binlogdata.TableLastPK.verify(message.table_last_p_k);
+                if (error)
+                    return "table_last_p_k." + error;
+            }
+            if (message.completed != null && message.hasOwnProperty("completed"))
+                if (typeof message.completed !== "boolean")
+                    return "completed: boolean expected";
+            return null;
+        };
+
+        /**
+         * Creates a LastPKEvent message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof binlogdata.LastPKEvent
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {binlogdata.LastPKEvent} LastPKEvent
+         */
+        LastPKEvent.fromObject = function fromObject(object) {
+            if (object instanceof $root.binlogdata.LastPKEvent)
+                return object;
+            var message = new $root.binlogdata.LastPKEvent();
+            if (object.table_last_p_k != null) {
+                if (typeof object.table_last_p_k !== "object")
+                    throw TypeError(".binlogdata.LastPKEvent.table_last_p_k: object expected");
+                message.table_last_p_k = $root.binlogdata.TableLastPK.fromObject(object.table_last_p_k);
+            }
+            if (object.completed != null)
+                message.completed = Boolean(object.completed);
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a LastPKEvent message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof binlogdata.LastPKEvent
+         * @static
+         * @param {binlogdata.LastPKEvent} message LastPKEvent
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        LastPKEvent.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.defaults) {
+                object.table_last_p_k = null;
+                object.completed = false;
+            }
+            if (message.table_last_p_k != null && message.hasOwnProperty("table_last_p_k"))
+                object.table_last_p_k = $root.binlogdata.TableLastPK.toObject(message.table_last_p_k, options);
+            if (message.completed != null && message.hasOwnProperty("completed"))
+                object.completed = message.completed;
+            return object;
+        };
+
+        /**
+         * Converts this LastPKEvent to JSON.
+         * @function toJSON
+         * @memberof binlogdata.LastPKEvent
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        LastPKEvent.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return LastPKEvent;
+    })();
+
+    binlogdata.TableLastPK = (function() {
+
+        /**
+         * Properties of a TableLastPK.
+         * @memberof binlogdata
+         * @interface ITableLastPK
+         * @property {string|null} [table_name] TableLastPK table_name
+         * @property {query.IQueryResult|null} [lastpk] TableLastPK lastpk
+         */
+
+        /**
+         * Constructs a new TableLastPK.
+         * @memberof binlogdata
+         * @classdesc Represents a TableLastPK.
+         * @implements ITableLastPK
+         * @constructor
+         * @param {binlogdata.ITableLastPK=} [properties] Properties to set
+         */
+        function TableLastPK(properties) {
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * TableLastPK table_name.
+         * @member {string} table_name
+         * @memberof binlogdata.TableLastPK
+         * @instance
+         */
+        TableLastPK.prototype.table_name = "";
+
+        /**
+         * TableLastPK lastpk.
+         * @member {query.IQueryResult|null|undefined} lastpk
+         * @memberof binlogdata.TableLastPK
+         * @instance
+         */
+        TableLastPK.prototype.lastpk = null;
+
+        /**
+         * Creates a new TableLastPK instance using the specified properties.
+         * @function create
+         * @memberof binlogdata.TableLastPK
+         * @static
+         * @param {binlogdata.ITableLastPK=} [properties] Properties to set
+         * @returns {binlogdata.TableLastPK} TableLastPK instance
+         */
+        TableLastPK.create = function create(properties) {
+            return new TableLastPK(properties);
+        };
+
+        /**
+         * Encodes the specified TableLastPK message. Does not implicitly {@link binlogdata.TableLastPK.verify|verify} messages.
+         * @function encode
+         * @memberof binlogdata.TableLastPK
+         * @static
+         * @param {binlogdata.ITableLastPK} message TableLastPK message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        TableLastPK.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.table_name != null && Object.hasOwnProperty.call(message, "table_name"))
+                writer.uint32(/* id 1, wireType 2 =*/10).string(message.table_name);
+            if (message.lastpk != null && Object.hasOwnProperty.call(message, "lastpk"))
+                $root.query.QueryResult.encode(message.lastpk, writer.uint32(/* id 3, wireType 2 =*/26).fork()).ldelim();
+            return writer;
+        };
+
+        /**
+         * Encodes the specified TableLastPK message, length delimited. Does not implicitly {@link binlogdata.TableLastPK.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof binlogdata.TableLastPK
+         * @static
+         * @param {binlogdata.ITableLastPK} message TableLastPK message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        TableLastPK.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a TableLastPK message from the specified reader or buffer.
+         * @function decode
+         * @memberof binlogdata.TableLastPK
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {binlogdata.TableLastPK} TableLastPK
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        TableLastPK.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.binlogdata.TableLastPK();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.table_name = reader.string();
+                    break;
+                case 3:
+                    message.lastpk = $root.query.QueryResult.decode(reader, reader.uint32());
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a TableLastPK message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof binlogdata.TableLastPK
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {binlogdata.TableLastPK} TableLastPK
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        TableLastPK.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a TableLastPK message.
+         * @function verify
+         * @memberof binlogdata.TableLastPK
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        TableLastPK.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.table_name != null && message.hasOwnProperty("table_name"))
+                if (!$util.isString(message.table_name))
+                    return "table_name: string expected";
+            if (message.lastpk != null && message.hasOwnProperty("lastpk")) {
+                var error = $root.query.QueryResult.verify(message.lastpk);
+                if (error)
+                    return "lastpk." + error;
+            }
+            return null;
+        };
+
+        /**
+         * Creates a TableLastPK message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof binlogdata.TableLastPK
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {binlogdata.TableLastPK} TableLastPK
+         */
+        TableLastPK.fromObject = function fromObject(object) {
+            if (object instanceof $root.binlogdata.TableLastPK)
+                return object;
+            var message = new $root.binlogdata.TableLastPK();
+            if (object.table_name != null)
+                message.table_name = String(object.table_name);
+            if (object.lastpk != null) {
+                if (typeof object.lastpk !== "object")
+                    throw TypeError(".binlogdata.TableLastPK.lastpk: object expected");
+                message.lastpk = $root.query.QueryResult.fromObject(object.lastpk);
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a TableLastPK message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof binlogdata.TableLastPK
+         * @static
+         * @param {binlogdata.TableLastPK} message TableLastPK
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        TableLastPK.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.defaults) {
+                object.table_name = "";
+                object.lastpk = null;
+            }
+            if (message.table_name != null && message.hasOwnProperty("table_name"))
+                object.table_name = message.table_name;
+            if (message.lastpk != null && message.hasOwnProperty("lastpk"))
+                object.lastpk = $root.query.QueryResult.toObject(message.lastpk, options);
+            return object;
+        };
+
+        /**
+         * Converts this TableLastPK to JSON.
+         * @function toJSON
+         * @memberof binlogdata.TableLastPK
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        TableLastPK.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return TableLastPK;
+    })();
+
+    binlogdata.VStreamResultsRequest = (function() {
+
+        /**
+         * Properties of a VStreamResultsRequest.
+         * @memberof binlogdata
+         * @interface IVStreamResultsRequest
+         * @property {vtrpc.ICallerID|null} [effective_caller_id] VStreamResultsRequest effective_caller_id
+         * @property {query.IVTGateCallerID|null} [immediate_caller_id] VStreamResultsRequest immediate_caller_id
+         * @property {query.ITarget|null} [target] VStreamResultsRequest target
+         * @property {string|null} [query] VStreamResultsRequest query
+         */
+
+        /**
+         * Constructs a new VStreamResultsRequest.
+         * @memberof binlogdata
+         * @classdesc Represents a VStreamResultsRequest.
+         * @implements IVStreamResultsRequest
+         * @constructor
+         * @param {binlogdata.IVStreamResultsRequest=} [properties] Properties to set
+         */
+        function VStreamResultsRequest(properties) {
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * VStreamResultsRequest effective_caller_id.
+         * @member {vtrpc.ICallerID|null|undefined} effective_caller_id
+         * @memberof binlogdata.VStreamResultsRequest
+         * @instance
+         */
+        VStreamResultsRequest.prototype.effective_caller_id = null;
+
+        /**
+         * VStreamResultsRequest immediate_caller_id.
+         * @member {query.IVTGateCallerID|null|undefined} immediate_caller_id
+         * @memberof binlogdata.VStreamResultsRequest
+         * @instance
+         */
+        VStreamResultsRequest.prototype.immediate_caller_id = null;
+
+        /**
+         * VStreamResultsRequest target.
+         * @member {query.ITarget|null|undefined} target
+         * @memberof binlogdata.VStreamResultsRequest
+         * @instance
+         */
+        VStreamResultsRequest.prototype.target = null;
+
+        /**
+         * VStreamResultsRequest query.
+         * @member {string} query
+         * @memberof binlogdata.VStreamResultsRequest
+         * @instance
+         */
+        VStreamResultsRequest.prototype.query = "";
+
+        /**
+         * Creates a new VStreamResultsRequest instance using the specified properties.
+         * @function create
+         * @memberof binlogdata.VStreamResultsRequest
+         * @static
+         * @param {binlogdata.IVStreamResultsRequest=} [properties] Properties to set
+         * @returns {binlogdata.VStreamResultsRequest} VStreamResultsRequest instance
+         */
+        VStreamResultsRequest.create = function create(properties) {
+            return new VStreamResultsRequest(properties);
+        };
+
+        /**
+         * Encodes the specified VStreamResultsRequest message. Does not implicitly {@link binlogdata.VStreamResultsRequest.verify|verify} messages.
+         * @function encode
+         * @memberof binlogdata.VStreamResultsRequest
+         * @static
+         * @param {binlogdata.IVStreamResultsRequest} message VStreamResultsRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        VStreamResultsRequest.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.effective_caller_id != null && Object.hasOwnProperty.call(message, "effective_caller_id"))
+                $root.vtrpc.CallerID.encode(message.effective_caller_id, writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
+            if (message.immediate_caller_id != null && Object.hasOwnProperty.call(message, "immediate_caller_id"))
+                $root.query.VTGateCallerID.encode(message.immediate_caller_id, writer.uint32(/* id 2, wireType 2 =*/18).fork()).ldelim();
+            if (message.target != null && Object.hasOwnProperty.call(message, "target"))
+                $root.query.Target.encode(message.target, writer.uint32(/* id 3, wireType 2 =*/26).fork()).ldelim();
+            if (message.query != null && Object.hasOwnProperty.call(message, "query"))
+                writer.uint32(/* id 4, wireType 2 =*/34).string(message.query);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified VStreamResultsRequest message, length delimited. Does not implicitly {@link binlogdata.VStreamResultsRequest.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof binlogdata.VStreamResultsRequest
+         * @static
+         * @param {binlogdata.IVStreamResultsRequest} message VStreamResultsRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        VStreamResultsRequest.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a VStreamResultsRequest message from the specified reader or buffer.
+         * @function decode
+         * @memberof binlogdata.VStreamResultsRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {binlogdata.VStreamResultsRequest} VStreamResultsRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        VStreamResultsRequest.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.binlogdata.VStreamResultsRequest();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.effective_caller_id = $root.vtrpc.CallerID.decode(reader, reader.uint32());
+                    break;
+                case 2:
+                    message.immediate_caller_id = $root.query.VTGateCallerID.decode(reader, reader.uint32());
+                    break;
+                case 3:
+                    message.target = $root.query.Target.decode(reader, reader.uint32());
+                    break;
+                case 4:
+                    message.query = reader.string();
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a VStreamResultsRequest message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof binlogdata.VStreamResultsRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {binlogdata.VStreamResultsRequest} VStreamResultsRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        VStreamResultsRequest.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a VStreamResultsRequest message.
+         * @function verify
+         * @memberof binlogdata.VStreamResultsRequest
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        VStreamResultsRequest.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.effective_caller_id != null && message.hasOwnProperty("effective_caller_id")) {
+                var error = $root.vtrpc.CallerID.verify(message.effective_caller_id);
+                if (error)
+                    return "effective_caller_id." + error;
+            }
+            if (message.immediate_caller_id != null && message.hasOwnProperty("immediate_caller_id")) {
+                var error = $root.query.VTGateCallerID.verify(message.immediate_caller_id);
+                if (error)
+                    return "immediate_caller_id." + error;
+            }
+            if (message.target != null && message.hasOwnProperty("target")) {
+                var error = $root.query.Target.verify(message.target);
+                if (error)
+                    return "target." + error;
+            }
+            if (message.query != null && message.hasOwnProperty("query"))
+                if (!$util.isString(message.query))
+                    return "query: string expected";
+            return null;
+        };
+
+        /**
+         * Creates a VStreamResultsRequest message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof binlogdata.VStreamResultsRequest
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {binlogdata.VStreamResultsRequest} VStreamResultsRequest
+         */
+        VStreamResultsRequest.fromObject = function fromObject(object) {
+            if (object instanceof $root.binlogdata.VStreamResultsRequest)
+                return object;
+            var message = new $root.binlogdata.VStreamResultsRequest();
+            if (object.effective_caller_id != null) {
+                if (typeof object.effective_caller_id !== "object")
+                    throw TypeError(".binlogdata.VStreamResultsRequest.effective_caller_id: object expected");
+                message.effective_caller_id = $root.vtrpc.CallerID.fromObject(object.effective_caller_id);
+            }
+            if (object.immediate_caller_id != null) {
+                if (typeof object.immediate_caller_id !== "object")
+                    throw TypeError(".binlogdata.VStreamResultsRequest.immediate_caller_id: object expected");
+                message.immediate_caller_id = $root.query.VTGateCallerID.fromObject(object.immediate_caller_id);
+            }
+            if (object.target != null) {
+                if (typeof object.target !== "object")
+                    throw TypeError(".binlogdata.VStreamResultsRequest.target: object expected");
+                message.target = $root.query.Target.fromObject(object.target);
+            }
+            if (object.query != null)
+                message.query = String(object.query);
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a VStreamResultsRequest message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof binlogdata.VStreamResultsRequest
+         * @static
+         * @param {binlogdata.VStreamResultsRequest} message VStreamResultsRequest
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        VStreamResultsRequest.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.defaults) {
+                object.effective_caller_id = null;
+                object.immediate_caller_id = null;
+                object.target = null;
+                object.query = "";
+            }
+            if (message.effective_caller_id != null && message.hasOwnProperty("effective_caller_id"))
+                object.effective_caller_id = $root.vtrpc.CallerID.toObject(message.effective_caller_id, options);
+            if (message.immediate_caller_id != null && message.hasOwnProperty("immediate_caller_id"))
+                object.immediate_caller_id = $root.query.VTGateCallerID.toObject(message.immediate_caller_id, options);
+            if (message.target != null && message.hasOwnProperty("target"))
+                object.target = $root.query.Target.toObject(message.target, options);
+            if (message.query != null && message.hasOwnProperty("query"))
+                object.query = message.query;
+            return object;
+        };
+
+        /**
+         * Converts this VStreamResultsRequest to JSON.
+         * @function toJSON
+         * @memberof binlogdata.VStreamResultsRequest
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        VStreamResultsRequest.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return VStreamResultsRequest;
+    })();
+
+    binlogdata.VStreamResultsResponse = (function() {
+
+        /**
+         * Properties of a VStreamResultsResponse.
+         * @memberof binlogdata
+         * @interface IVStreamResultsResponse
+         * @property {Array.<query.IField>|null} [fields] VStreamResultsResponse fields
+         * @property {string|null} [gtid] VStreamResultsResponse gtid
+         * @property {Array.<query.IRow>|null} [rows] VStreamResultsResponse rows
+         */
+
+        /**
+         * Constructs a new VStreamResultsResponse.
+         * @memberof binlogdata
+         * @classdesc Represents a VStreamResultsResponse.
+         * @implements IVStreamResultsResponse
+         * @constructor
+         * @param {binlogdata.IVStreamResultsResponse=} [properties] Properties to set
+         */
+        function VStreamResultsResponse(properties) {
+            this.fields = [];
+            this.rows = [];
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * VStreamResultsResponse fields.
+         * @member {Array.<query.IField>} fields
+         * @memberof binlogdata.VStreamResultsResponse
+         * @instance
+         */
+        VStreamResultsResponse.prototype.fields = $util.emptyArray;
+
+        /**
+         * VStreamResultsResponse gtid.
+         * @member {string} gtid
+         * @memberof binlogdata.VStreamResultsResponse
+         * @instance
+         */
+        VStreamResultsResponse.prototype.gtid = "";
+
+        /**
+         * VStreamResultsResponse rows.
+         * @member {Array.<query.IRow>} rows
+         * @memberof binlogdata.VStreamResultsResponse
+         * @instance
+         */
+        VStreamResultsResponse.prototype.rows = $util.emptyArray;
+
+        /**
+         * Creates a new VStreamResultsResponse instance using the specified properties.
+         * @function create
+         * @memberof binlogdata.VStreamResultsResponse
+         * @static
+         * @param {binlogdata.IVStreamResultsResponse=} [properties] Properties to set
+         * @returns {binlogdata.VStreamResultsResponse} VStreamResultsResponse instance
+         */
+        VStreamResultsResponse.create = function create(properties) {
+            return new VStreamResultsResponse(properties);
+        };
+
+        /**
+         * Encodes the specified VStreamResultsResponse message. Does not implicitly {@link binlogdata.VStreamResultsResponse.verify|verify} messages.
+         * @function encode
+         * @memberof binlogdata.VStreamResultsResponse
+         * @static
+         * @param {binlogdata.IVStreamResultsResponse} message VStreamResultsResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        VStreamResultsResponse.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.fields != null && message.fields.length)
+                for (var i = 0; i < message.fields.length; ++i)
+                    $root.query.Field.encode(message.fields[i], writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
+            if (message.gtid != null && Object.hasOwnProperty.call(message, "gtid"))
+                writer.uint32(/* id 3, wireType 2 =*/26).string(message.gtid);
+            if (message.rows != null && message.rows.length)
+                for (var i = 0; i < message.rows.length; ++i)
+                    $root.query.Row.encode(message.rows[i], writer.uint32(/* id 4, wireType 2 =*/34).fork()).ldelim();
+            return writer;
+        };
+
+        /**
+         * Encodes the specified VStreamResultsResponse message, length delimited. Does not implicitly {@link binlogdata.VStreamResultsResponse.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof binlogdata.VStreamResultsResponse
+         * @static
+         * @param {binlogdata.IVStreamResultsResponse} message VStreamResultsResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        VStreamResultsResponse.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a VStreamResultsResponse message from the specified reader or buffer.
+         * @function decode
+         * @memberof binlogdata.VStreamResultsResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {binlogdata.VStreamResultsResponse} VStreamResultsResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        VStreamResultsResponse.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.binlogdata.VStreamResultsResponse();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    if (!(message.fields && message.fields.length))
+                        message.fields = [];
+                    message.fields.push($root.query.Field.decode(reader, reader.uint32()));
+                    break;
+                case 3:
+                    message.gtid = reader.string();
+                    break;
+                case 4:
+                    if (!(message.rows && message.rows.length))
+                        message.rows = [];
+                    message.rows.push($root.query.Row.decode(reader, reader.uint32()));
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a VStreamResultsResponse message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof binlogdata.VStreamResultsResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {binlogdata.VStreamResultsResponse} VStreamResultsResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        VStreamResultsResponse.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a VStreamResultsResponse message.
+         * @function verify
+         * @memberof binlogdata.VStreamResultsResponse
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        VStreamResultsResponse.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.fields != null && message.hasOwnProperty("fields")) {
+                if (!Array.isArray(message.fields))
+                    return "fields: array expected";
+                for (var i = 0; i < message.fields.length; ++i) {
+                    var error = $root.query.Field.verify(message.fields[i]);
+                    if (error)
+                        return "fields." + error;
+                }
+            }
+            if (message.gtid != null && message.hasOwnProperty("gtid"))
+                if (!$util.isString(message.gtid))
+                    return "gtid: string expected";
+            if (message.rows != null && message.hasOwnProperty("rows")) {
+                if (!Array.isArray(message.rows))
+                    return "rows: array expected";
+                for (var i = 0; i < message.rows.length; ++i) {
+                    var error = $root.query.Row.verify(message.rows[i]);
+                    if (error)
+                        return "rows." + error;
+                }
+            }
+            return null;
+        };
+
+        /**
+         * Creates a VStreamResultsResponse message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof binlogdata.VStreamResultsResponse
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {binlogdata.VStreamResultsResponse} VStreamResultsResponse
+         */
+        VStreamResultsResponse.fromObject = function fromObject(object) {
+            if (object instanceof $root.binlogdata.VStreamResultsResponse)
+                return object;
+            var message = new $root.binlogdata.VStreamResultsResponse();
+            if (object.fields) {
+                if (!Array.isArray(object.fields))
+                    throw TypeError(".binlogdata.VStreamResultsResponse.fields: array expected");
+                message.fields = [];
+                for (var i = 0; i < object.fields.length; ++i) {
+                    if (typeof object.fields[i] !== "object")
+                        throw TypeError(".binlogdata.VStreamResultsResponse.fields: object expected");
+                    message.fields[i] = $root.query.Field.fromObject(object.fields[i]);
+                }
+            }
+            if (object.gtid != null)
+                message.gtid = String(object.gtid);
+            if (object.rows) {
+                if (!Array.isArray(object.rows))
+                    throw TypeError(".binlogdata.VStreamResultsResponse.rows: array expected");
+                message.rows = [];
+                for (var i = 0; i < object.rows.length; ++i) {
+                    if (typeof object.rows[i] !== "object")
+                        throw TypeError(".binlogdata.VStreamResultsResponse.rows: object expected");
+                    message.rows[i] = $root.query.Row.fromObject(object.rows[i]);
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a VStreamResultsResponse message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof binlogdata.VStreamResultsResponse
+         * @static
+         * @param {binlogdata.VStreamResultsResponse} message VStreamResultsResponse
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        VStreamResultsResponse.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.arrays || options.defaults) {
+                object.fields = [];
+                object.rows = [];
+            }
+            if (options.defaults)
+                object.gtid = "";
+            if (message.fields && message.fields.length) {
+                object.fields = [];
+                for (var j = 0; j < message.fields.length; ++j)
+                    object.fields[j] = $root.query.Field.toObject(message.fields[j], options);
+            }
+            if (message.gtid != null && message.hasOwnProperty("gtid"))
+                object.gtid = message.gtid;
+            if (message.rows && message.rows.length) {
+                object.rows = [];
+                for (var j = 0; j < message.rows.length; ++j)
+                    object.rows[j] = $root.query.Row.toObject(message.rows[j], options);
+            }
+            return object;
+        };
+
+        /**
+         * Converts this VStreamResultsResponse to JSON.
+         * @function toJSON
+         * @memberof binlogdata.VStreamResultsResponse
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        VStreamResultsResponse.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return VStreamResultsResponse;
+    })();
+
+    return binlogdata;
 })();
 
 $root.mysqlctl = (function() {
@@ -60434,2495 +76761,6 @@ $root.mysqlctl = (function() {
     })();
 
     return mysqlctl;
-})();
-
-$root.vschema = (function() {
-
-    /**
-     * Namespace vschema.
-     * @exports vschema
-     * @namespace
-     */
-    var vschema = {};
-
-    vschema.RoutingRules = (function() {
-
-        /**
-         * Properties of a RoutingRules.
-         * @memberof vschema
-         * @interface IRoutingRules
-         * @property {Array.<vschema.IRoutingRule>|null} [rules] RoutingRules rules
-         */
-
-        /**
-         * Constructs a new RoutingRules.
-         * @memberof vschema
-         * @classdesc Represents a RoutingRules.
-         * @implements IRoutingRules
-         * @constructor
-         * @param {vschema.IRoutingRules=} [properties] Properties to set
-         */
-        function RoutingRules(properties) {
-            this.rules = [];
-            if (properties)
-                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
-                    if (properties[keys[i]] != null)
-                        this[keys[i]] = properties[keys[i]];
-        }
-
-        /**
-         * RoutingRules rules.
-         * @member {Array.<vschema.IRoutingRule>} rules
-         * @memberof vschema.RoutingRules
-         * @instance
-         */
-        RoutingRules.prototype.rules = $util.emptyArray;
-
-        /**
-         * Creates a new RoutingRules instance using the specified properties.
-         * @function create
-         * @memberof vschema.RoutingRules
-         * @static
-         * @param {vschema.IRoutingRules=} [properties] Properties to set
-         * @returns {vschema.RoutingRules} RoutingRules instance
-         */
-        RoutingRules.create = function create(properties) {
-            return new RoutingRules(properties);
-        };
-
-        /**
-         * Encodes the specified RoutingRules message. Does not implicitly {@link vschema.RoutingRules.verify|verify} messages.
-         * @function encode
-         * @memberof vschema.RoutingRules
-         * @static
-         * @param {vschema.IRoutingRules} message RoutingRules message or plain object to encode
-         * @param {$protobuf.Writer} [writer] Writer to encode to
-         * @returns {$protobuf.Writer} Writer
-         */
-        RoutingRules.encode = function encode(message, writer) {
-            if (!writer)
-                writer = $Writer.create();
-            if (message.rules != null && message.rules.length)
-                for (var i = 0; i < message.rules.length; ++i)
-                    $root.vschema.RoutingRule.encode(message.rules[i], writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
-            return writer;
-        };
-
-        /**
-         * Encodes the specified RoutingRules message, length delimited. Does not implicitly {@link vschema.RoutingRules.verify|verify} messages.
-         * @function encodeDelimited
-         * @memberof vschema.RoutingRules
-         * @static
-         * @param {vschema.IRoutingRules} message RoutingRules message or plain object to encode
-         * @param {$protobuf.Writer} [writer] Writer to encode to
-         * @returns {$protobuf.Writer} Writer
-         */
-        RoutingRules.encodeDelimited = function encodeDelimited(message, writer) {
-            return this.encode(message, writer).ldelim();
-        };
-
-        /**
-         * Decodes a RoutingRules message from the specified reader or buffer.
-         * @function decode
-         * @memberof vschema.RoutingRules
-         * @static
-         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
-         * @param {number} [length] Message length if known beforehand
-         * @returns {vschema.RoutingRules} RoutingRules
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        RoutingRules.decode = function decode(reader, length) {
-            if (!(reader instanceof $Reader))
-                reader = $Reader.create(reader);
-            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vschema.RoutingRules();
-            while (reader.pos < end) {
-                var tag = reader.uint32();
-                switch (tag >>> 3) {
-                case 1:
-                    if (!(message.rules && message.rules.length))
-                        message.rules = [];
-                    message.rules.push($root.vschema.RoutingRule.decode(reader, reader.uint32()));
-                    break;
-                default:
-                    reader.skipType(tag & 7);
-                    break;
-                }
-            }
-            return message;
-        };
-
-        /**
-         * Decodes a RoutingRules message from the specified reader or buffer, length delimited.
-         * @function decodeDelimited
-         * @memberof vschema.RoutingRules
-         * @static
-         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
-         * @returns {vschema.RoutingRules} RoutingRules
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        RoutingRules.decodeDelimited = function decodeDelimited(reader) {
-            if (!(reader instanceof $Reader))
-                reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
-        };
-
-        /**
-         * Verifies a RoutingRules message.
-         * @function verify
-         * @memberof vschema.RoutingRules
-         * @static
-         * @param {Object.<string,*>} message Plain object to verify
-         * @returns {string|null} `null` if valid, otherwise the reason why it is not
-         */
-        RoutingRules.verify = function verify(message) {
-            if (typeof message !== "object" || message === null)
-                return "object expected";
-            if (message.rules != null && message.hasOwnProperty("rules")) {
-                if (!Array.isArray(message.rules))
-                    return "rules: array expected";
-                for (var i = 0; i < message.rules.length; ++i) {
-                    var error = $root.vschema.RoutingRule.verify(message.rules[i]);
-                    if (error)
-                        return "rules." + error;
-                }
-            }
-            return null;
-        };
-
-        /**
-         * Creates a RoutingRules message from a plain object. Also converts values to their respective internal types.
-         * @function fromObject
-         * @memberof vschema.RoutingRules
-         * @static
-         * @param {Object.<string,*>} object Plain object
-         * @returns {vschema.RoutingRules} RoutingRules
-         */
-        RoutingRules.fromObject = function fromObject(object) {
-            if (object instanceof $root.vschema.RoutingRules)
-                return object;
-            var message = new $root.vschema.RoutingRules();
-            if (object.rules) {
-                if (!Array.isArray(object.rules))
-                    throw TypeError(".vschema.RoutingRules.rules: array expected");
-                message.rules = [];
-                for (var i = 0; i < object.rules.length; ++i) {
-                    if (typeof object.rules[i] !== "object")
-                        throw TypeError(".vschema.RoutingRules.rules: object expected");
-                    message.rules[i] = $root.vschema.RoutingRule.fromObject(object.rules[i]);
-                }
-            }
-            return message;
-        };
-
-        /**
-         * Creates a plain object from a RoutingRules message. Also converts values to other types if specified.
-         * @function toObject
-         * @memberof vschema.RoutingRules
-         * @static
-         * @param {vschema.RoutingRules} message RoutingRules
-         * @param {$protobuf.IConversionOptions} [options] Conversion options
-         * @returns {Object.<string,*>} Plain object
-         */
-        RoutingRules.toObject = function toObject(message, options) {
-            if (!options)
-                options = {};
-            var object = {};
-            if (options.arrays || options.defaults)
-                object.rules = [];
-            if (message.rules && message.rules.length) {
-                object.rules = [];
-                for (var j = 0; j < message.rules.length; ++j)
-                    object.rules[j] = $root.vschema.RoutingRule.toObject(message.rules[j], options);
-            }
-            return object;
-        };
-
-        /**
-         * Converts this RoutingRules to JSON.
-         * @function toJSON
-         * @memberof vschema.RoutingRules
-         * @instance
-         * @returns {Object.<string,*>} JSON object
-         */
-        RoutingRules.prototype.toJSON = function toJSON() {
-            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
-        };
-
-        return RoutingRules;
-    })();
-
-    vschema.RoutingRule = (function() {
-
-        /**
-         * Properties of a RoutingRule.
-         * @memberof vschema
-         * @interface IRoutingRule
-         * @property {string|null} [from_table] RoutingRule from_table
-         * @property {Array.<string>|null} [to_tables] RoutingRule to_tables
-         */
-
-        /**
-         * Constructs a new RoutingRule.
-         * @memberof vschema
-         * @classdesc Represents a RoutingRule.
-         * @implements IRoutingRule
-         * @constructor
-         * @param {vschema.IRoutingRule=} [properties] Properties to set
-         */
-        function RoutingRule(properties) {
-            this.to_tables = [];
-            if (properties)
-                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
-                    if (properties[keys[i]] != null)
-                        this[keys[i]] = properties[keys[i]];
-        }
-
-        /**
-         * RoutingRule from_table.
-         * @member {string} from_table
-         * @memberof vschema.RoutingRule
-         * @instance
-         */
-        RoutingRule.prototype.from_table = "";
-
-        /**
-         * RoutingRule to_tables.
-         * @member {Array.<string>} to_tables
-         * @memberof vschema.RoutingRule
-         * @instance
-         */
-        RoutingRule.prototype.to_tables = $util.emptyArray;
-
-        /**
-         * Creates a new RoutingRule instance using the specified properties.
-         * @function create
-         * @memberof vschema.RoutingRule
-         * @static
-         * @param {vschema.IRoutingRule=} [properties] Properties to set
-         * @returns {vschema.RoutingRule} RoutingRule instance
-         */
-        RoutingRule.create = function create(properties) {
-            return new RoutingRule(properties);
-        };
-
-        /**
-         * Encodes the specified RoutingRule message. Does not implicitly {@link vschema.RoutingRule.verify|verify} messages.
-         * @function encode
-         * @memberof vschema.RoutingRule
-         * @static
-         * @param {vschema.IRoutingRule} message RoutingRule message or plain object to encode
-         * @param {$protobuf.Writer} [writer] Writer to encode to
-         * @returns {$protobuf.Writer} Writer
-         */
-        RoutingRule.encode = function encode(message, writer) {
-            if (!writer)
-                writer = $Writer.create();
-            if (message.from_table != null && Object.hasOwnProperty.call(message, "from_table"))
-                writer.uint32(/* id 1, wireType 2 =*/10).string(message.from_table);
-            if (message.to_tables != null && message.to_tables.length)
-                for (var i = 0; i < message.to_tables.length; ++i)
-                    writer.uint32(/* id 2, wireType 2 =*/18).string(message.to_tables[i]);
-            return writer;
-        };
-
-        /**
-         * Encodes the specified RoutingRule message, length delimited. Does not implicitly {@link vschema.RoutingRule.verify|verify} messages.
-         * @function encodeDelimited
-         * @memberof vschema.RoutingRule
-         * @static
-         * @param {vschema.IRoutingRule} message RoutingRule message or plain object to encode
-         * @param {$protobuf.Writer} [writer] Writer to encode to
-         * @returns {$protobuf.Writer} Writer
-         */
-        RoutingRule.encodeDelimited = function encodeDelimited(message, writer) {
-            return this.encode(message, writer).ldelim();
-        };
-
-        /**
-         * Decodes a RoutingRule message from the specified reader or buffer.
-         * @function decode
-         * @memberof vschema.RoutingRule
-         * @static
-         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
-         * @param {number} [length] Message length if known beforehand
-         * @returns {vschema.RoutingRule} RoutingRule
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        RoutingRule.decode = function decode(reader, length) {
-            if (!(reader instanceof $Reader))
-                reader = $Reader.create(reader);
-            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vschema.RoutingRule();
-            while (reader.pos < end) {
-                var tag = reader.uint32();
-                switch (tag >>> 3) {
-                case 1:
-                    message.from_table = reader.string();
-                    break;
-                case 2:
-                    if (!(message.to_tables && message.to_tables.length))
-                        message.to_tables = [];
-                    message.to_tables.push(reader.string());
-                    break;
-                default:
-                    reader.skipType(tag & 7);
-                    break;
-                }
-            }
-            return message;
-        };
-
-        /**
-         * Decodes a RoutingRule message from the specified reader or buffer, length delimited.
-         * @function decodeDelimited
-         * @memberof vschema.RoutingRule
-         * @static
-         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
-         * @returns {vschema.RoutingRule} RoutingRule
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        RoutingRule.decodeDelimited = function decodeDelimited(reader) {
-            if (!(reader instanceof $Reader))
-                reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
-        };
-
-        /**
-         * Verifies a RoutingRule message.
-         * @function verify
-         * @memberof vschema.RoutingRule
-         * @static
-         * @param {Object.<string,*>} message Plain object to verify
-         * @returns {string|null} `null` if valid, otherwise the reason why it is not
-         */
-        RoutingRule.verify = function verify(message) {
-            if (typeof message !== "object" || message === null)
-                return "object expected";
-            if (message.from_table != null && message.hasOwnProperty("from_table"))
-                if (!$util.isString(message.from_table))
-                    return "from_table: string expected";
-            if (message.to_tables != null && message.hasOwnProperty("to_tables")) {
-                if (!Array.isArray(message.to_tables))
-                    return "to_tables: array expected";
-                for (var i = 0; i < message.to_tables.length; ++i)
-                    if (!$util.isString(message.to_tables[i]))
-                        return "to_tables: string[] expected";
-            }
-            return null;
-        };
-
-        /**
-         * Creates a RoutingRule message from a plain object. Also converts values to their respective internal types.
-         * @function fromObject
-         * @memberof vschema.RoutingRule
-         * @static
-         * @param {Object.<string,*>} object Plain object
-         * @returns {vschema.RoutingRule} RoutingRule
-         */
-        RoutingRule.fromObject = function fromObject(object) {
-            if (object instanceof $root.vschema.RoutingRule)
-                return object;
-            var message = new $root.vschema.RoutingRule();
-            if (object.from_table != null)
-                message.from_table = String(object.from_table);
-            if (object.to_tables) {
-                if (!Array.isArray(object.to_tables))
-                    throw TypeError(".vschema.RoutingRule.to_tables: array expected");
-                message.to_tables = [];
-                for (var i = 0; i < object.to_tables.length; ++i)
-                    message.to_tables[i] = String(object.to_tables[i]);
-            }
-            return message;
-        };
-
-        /**
-         * Creates a plain object from a RoutingRule message. Also converts values to other types if specified.
-         * @function toObject
-         * @memberof vschema.RoutingRule
-         * @static
-         * @param {vschema.RoutingRule} message RoutingRule
-         * @param {$protobuf.IConversionOptions} [options] Conversion options
-         * @returns {Object.<string,*>} Plain object
-         */
-        RoutingRule.toObject = function toObject(message, options) {
-            if (!options)
-                options = {};
-            var object = {};
-            if (options.arrays || options.defaults)
-                object.to_tables = [];
-            if (options.defaults)
-                object.from_table = "";
-            if (message.from_table != null && message.hasOwnProperty("from_table"))
-                object.from_table = message.from_table;
-            if (message.to_tables && message.to_tables.length) {
-                object.to_tables = [];
-                for (var j = 0; j < message.to_tables.length; ++j)
-                    object.to_tables[j] = message.to_tables[j];
-            }
-            return object;
-        };
-
-        /**
-         * Converts this RoutingRule to JSON.
-         * @function toJSON
-         * @memberof vschema.RoutingRule
-         * @instance
-         * @returns {Object.<string,*>} JSON object
-         */
-        RoutingRule.prototype.toJSON = function toJSON() {
-            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
-        };
-
-        return RoutingRule;
-    })();
-
-    vschema.Keyspace = (function() {
-
-        /**
-         * Properties of a Keyspace.
-         * @memberof vschema
-         * @interface IKeyspace
-         * @property {boolean|null} [sharded] Keyspace sharded
-         * @property {Object.<string,vschema.IVindex>|null} [vindexes] Keyspace vindexes
-         * @property {Object.<string,vschema.ITable>|null} [tables] Keyspace tables
-         * @property {boolean|null} [require_explicit_routing] Keyspace require_explicit_routing
-         */
-
-        /**
-         * Constructs a new Keyspace.
-         * @memberof vschema
-         * @classdesc Represents a Keyspace.
-         * @implements IKeyspace
-         * @constructor
-         * @param {vschema.IKeyspace=} [properties] Properties to set
-         */
-        function Keyspace(properties) {
-            this.vindexes = {};
-            this.tables = {};
-            if (properties)
-                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
-                    if (properties[keys[i]] != null)
-                        this[keys[i]] = properties[keys[i]];
-        }
-
-        /**
-         * Keyspace sharded.
-         * @member {boolean} sharded
-         * @memberof vschema.Keyspace
-         * @instance
-         */
-        Keyspace.prototype.sharded = false;
-
-        /**
-         * Keyspace vindexes.
-         * @member {Object.<string,vschema.IVindex>} vindexes
-         * @memberof vschema.Keyspace
-         * @instance
-         */
-        Keyspace.prototype.vindexes = $util.emptyObject;
-
-        /**
-         * Keyspace tables.
-         * @member {Object.<string,vschema.ITable>} tables
-         * @memberof vschema.Keyspace
-         * @instance
-         */
-        Keyspace.prototype.tables = $util.emptyObject;
-
-        /**
-         * Keyspace require_explicit_routing.
-         * @member {boolean} require_explicit_routing
-         * @memberof vschema.Keyspace
-         * @instance
-         */
-        Keyspace.prototype.require_explicit_routing = false;
-
-        /**
-         * Creates a new Keyspace instance using the specified properties.
-         * @function create
-         * @memberof vschema.Keyspace
-         * @static
-         * @param {vschema.IKeyspace=} [properties] Properties to set
-         * @returns {vschema.Keyspace} Keyspace instance
-         */
-        Keyspace.create = function create(properties) {
-            return new Keyspace(properties);
-        };
-
-        /**
-         * Encodes the specified Keyspace message. Does not implicitly {@link vschema.Keyspace.verify|verify} messages.
-         * @function encode
-         * @memberof vschema.Keyspace
-         * @static
-         * @param {vschema.IKeyspace} message Keyspace message or plain object to encode
-         * @param {$protobuf.Writer} [writer] Writer to encode to
-         * @returns {$protobuf.Writer} Writer
-         */
-        Keyspace.encode = function encode(message, writer) {
-            if (!writer)
-                writer = $Writer.create();
-            if (message.sharded != null && Object.hasOwnProperty.call(message, "sharded"))
-                writer.uint32(/* id 1, wireType 0 =*/8).bool(message.sharded);
-            if (message.vindexes != null && Object.hasOwnProperty.call(message, "vindexes"))
-                for (var keys = Object.keys(message.vindexes), i = 0; i < keys.length; ++i) {
-                    writer.uint32(/* id 2, wireType 2 =*/18).fork().uint32(/* id 1, wireType 2 =*/10).string(keys[i]);
-                    $root.vschema.Vindex.encode(message.vindexes[keys[i]], writer.uint32(/* id 2, wireType 2 =*/18).fork()).ldelim().ldelim();
-                }
-            if (message.tables != null && Object.hasOwnProperty.call(message, "tables"))
-                for (var keys = Object.keys(message.tables), i = 0; i < keys.length; ++i) {
-                    writer.uint32(/* id 3, wireType 2 =*/26).fork().uint32(/* id 1, wireType 2 =*/10).string(keys[i]);
-                    $root.vschema.Table.encode(message.tables[keys[i]], writer.uint32(/* id 2, wireType 2 =*/18).fork()).ldelim().ldelim();
-                }
-            if (message.require_explicit_routing != null && Object.hasOwnProperty.call(message, "require_explicit_routing"))
-                writer.uint32(/* id 4, wireType 0 =*/32).bool(message.require_explicit_routing);
-            return writer;
-        };
-
-        /**
-         * Encodes the specified Keyspace message, length delimited. Does not implicitly {@link vschema.Keyspace.verify|verify} messages.
-         * @function encodeDelimited
-         * @memberof vschema.Keyspace
-         * @static
-         * @param {vschema.IKeyspace} message Keyspace message or plain object to encode
-         * @param {$protobuf.Writer} [writer] Writer to encode to
-         * @returns {$protobuf.Writer} Writer
-         */
-        Keyspace.encodeDelimited = function encodeDelimited(message, writer) {
-            return this.encode(message, writer).ldelim();
-        };
-
-        /**
-         * Decodes a Keyspace message from the specified reader or buffer.
-         * @function decode
-         * @memberof vschema.Keyspace
-         * @static
-         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
-         * @param {number} [length] Message length if known beforehand
-         * @returns {vschema.Keyspace} Keyspace
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        Keyspace.decode = function decode(reader, length) {
-            if (!(reader instanceof $Reader))
-                reader = $Reader.create(reader);
-            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vschema.Keyspace(), key, value;
-            while (reader.pos < end) {
-                var tag = reader.uint32();
-                switch (tag >>> 3) {
-                case 1:
-                    message.sharded = reader.bool();
-                    break;
-                case 2:
-                    if (message.vindexes === $util.emptyObject)
-                        message.vindexes = {};
-                    var end2 = reader.uint32() + reader.pos;
-                    key = "";
-                    value = null;
-                    while (reader.pos < end2) {
-                        var tag2 = reader.uint32();
-                        switch (tag2 >>> 3) {
-                        case 1:
-                            key = reader.string();
-                            break;
-                        case 2:
-                            value = $root.vschema.Vindex.decode(reader, reader.uint32());
-                            break;
-                        default:
-                            reader.skipType(tag2 & 7);
-                            break;
-                        }
-                    }
-                    message.vindexes[key] = value;
-                    break;
-                case 3:
-                    if (message.tables === $util.emptyObject)
-                        message.tables = {};
-                    var end2 = reader.uint32() + reader.pos;
-                    key = "";
-                    value = null;
-                    while (reader.pos < end2) {
-                        var tag2 = reader.uint32();
-                        switch (tag2 >>> 3) {
-                        case 1:
-                            key = reader.string();
-                            break;
-                        case 2:
-                            value = $root.vschema.Table.decode(reader, reader.uint32());
-                            break;
-                        default:
-                            reader.skipType(tag2 & 7);
-                            break;
-                        }
-                    }
-                    message.tables[key] = value;
-                    break;
-                case 4:
-                    message.require_explicit_routing = reader.bool();
-                    break;
-                default:
-                    reader.skipType(tag & 7);
-                    break;
-                }
-            }
-            return message;
-        };
-
-        /**
-         * Decodes a Keyspace message from the specified reader or buffer, length delimited.
-         * @function decodeDelimited
-         * @memberof vschema.Keyspace
-         * @static
-         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
-         * @returns {vschema.Keyspace} Keyspace
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        Keyspace.decodeDelimited = function decodeDelimited(reader) {
-            if (!(reader instanceof $Reader))
-                reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
-        };
-
-        /**
-         * Verifies a Keyspace message.
-         * @function verify
-         * @memberof vschema.Keyspace
-         * @static
-         * @param {Object.<string,*>} message Plain object to verify
-         * @returns {string|null} `null` if valid, otherwise the reason why it is not
-         */
-        Keyspace.verify = function verify(message) {
-            if (typeof message !== "object" || message === null)
-                return "object expected";
-            if (message.sharded != null && message.hasOwnProperty("sharded"))
-                if (typeof message.sharded !== "boolean")
-                    return "sharded: boolean expected";
-            if (message.vindexes != null && message.hasOwnProperty("vindexes")) {
-                if (!$util.isObject(message.vindexes))
-                    return "vindexes: object expected";
-                var key = Object.keys(message.vindexes);
-                for (var i = 0; i < key.length; ++i) {
-                    var error = $root.vschema.Vindex.verify(message.vindexes[key[i]]);
-                    if (error)
-                        return "vindexes." + error;
-                }
-            }
-            if (message.tables != null && message.hasOwnProperty("tables")) {
-                if (!$util.isObject(message.tables))
-                    return "tables: object expected";
-                var key = Object.keys(message.tables);
-                for (var i = 0; i < key.length; ++i) {
-                    var error = $root.vschema.Table.verify(message.tables[key[i]]);
-                    if (error)
-                        return "tables." + error;
-                }
-            }
-            if (message.require_explicit_routing != null && message.hasOwnProperty("require_explicit_routing"))
-                if (typeof message.require_explicit_routing !== "boolean")
-                    return "require_explicit_routing: boolean expected";
-            return null;
-        };
-
-        /**
-         * Creates a Keyspace message from a plain object. Also converts values to their respective internal types.
-         * @function fromObject
-         * @memberof vschema.Keyspace
-         * @static
-         * @param {Object.<string,*>} object Plain object
-         * @returns {vschema.Keyspace} Keyspace
-         */
-        Keyspace.fromObject = function fromObject(object) {
-            if (object instanceof $root.vschema.Keyspace)
-                return object;
-            var message = new $root.vschema.Keyspace();
-            if (object.sharded != null)
-                message.sharded = Boolean(object.sharded);
-            if (object.vindexes) {
-                if (typeof object.vindexes !== "object")
-                    throw TypeError(".vschema.Keyspace.vindexes: object expected");
-                message.vindexes = {};
-                for (var keys = Object.keys(object.vindexes), i = 0; i < keys.length; ++i) {
-                    if (typeof object.vindexes[keys[i]] !== "object")
-                        throw TypeError(".vschema.Keyspace.vindexes: object expected");
-                    message.vindexes[keys[i]] = $root.vschema.Vindex.fromObject(object.vindexes[keys[i]]);
-                }
-            }
-            if (object.tables) {
-                if (typeof object.tables !== "object")
-                    throw TypeError(".vschema.Keyspace.tables: object expected");
-                message.tables = {};
-                for (var keys = Object.keys(object.tables), i = 0; i < keys.length; ++i) {
-                    if (typeof object.tables[keys[i]] !== "object")
-                        throw TypeError(".vschema.Keyspace.tables: object expected");
-                    message.tables[keys[i]] = $root.vschema.Table.fromObject(object.tables[keys[i]]);
-                }
-            }
-            if (object.require_explicit_routing != null)
-                message.require_explicit_routing = Boolean(object.require_explicit_routing);
-            return message;
-        };
-
-        /**
-         * Creates a plain object from a Keyspace message. Also converts values to other types if specified.
-         * @function toObject
-         * @memberof vschema.Keyspace
-         * @static
-         * @param {vschema.Keyspace} message Keyspace
-         * @param {$protobuf.IConversionOptions} [options] Conversion options
-         * @returns {Object.<string,*>} Plain object
-         */
-        Keyspace.toObject = function toObject(message, options) {
-            if (!options)
-                options = {};
-            var object = {};
-            if (options.objects || options.defaults) {
-                object.vindexes = {};
-                object.tables = {};
-            }
-            if (options.defaults) {
-                object.sharded = false;
-                object.require_explicit_routing = false;
-            }
-            if (message.sharded != null && message.hasOwnProperty("sharded"))
-                object.sharded = message.sharded;
-            var keys2;
-            if (message.vindexes && (keys2 = Object.keys(message.vindexes)).length) {
-                object.vindexes = {};
-                for (var j = 0; j < keys2.length; ++j)
-                    object.vindexes[keys2[j]] = $root.vschema.Vindex.toObject(message.vindexes[keys2[j]], options);
-            }
-            if (message.tables && (keys2 = Object.keys(message.tables)).length) {
-                object.tables = {};
-                for (var j = 0; j < keys2.length; ++j)
-                    object.tables[keys2[j]] = $root.vschema.Table.toObject(message.tables[keys2[j]], options);
-            }
-            if (message.require_explicit_routing != null && message.hasOwnProperty("require_explicit_routing"))
-                object.require_explicit_routing = message.require_explicit_routing;
-            return object;
-        };
-
-        /**
-         * Converts this Keyspace to JSON.
-         * @function toJSON
-         * @memberof vschema.Keyspace
-         * @instance
-         * @returns {Object.<string,*>} JSON object
-         */
-        Keyspace.prototype.toJSON = function toJSON() {
-            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
-        };
-
-        return Keyspace;
-    })();
-
-    vschema.Vindex = (function() {
-
-        /**
-         * Properties of a Vindex.
-         * @memberof vschema
-         * @interface IVindex
-         * @property {string|null} [type] Vindex type
-         * @property {Object.<string,string>|null} [params] Vindex params
-         * @property {string|null} [owner] Vindex owner
-         */
-
-        /**
-         * Constructs a new Vindex.
-         * @memberof vschema
-         * @classdesc Represents a Vindex.
-         * @implements IVindex
-         * @constructor
-         * @param {vschema.IVindex=} [properties] Properties to set
-         */
-        function Vindex(properties) {
-            this.params = {};
-            if (properties)
-                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
-                    if (properties[keys[i]] != null)
-                        this[keys[i]] = properties[keys[i]];
-        }
-
-        /**
-         * Vindex type.
-         * @member {string} type
-         * @memberof vschema.Vindex
-         * @instance
-         */
-        Vindex.prototype.type = "";
-
-        /**
-         * Vindex params.
-         * @member {Object.<string,string>} params
-         * @memberof vschema.Vindex
-         * @instance
-         */
-        Vindex.prototype.params = $util.emptyObject;
-
-        /**
-         * Vindex owner.
-         * @member {string} owner
-         * @memberof vschema.Vindex
-         * @instance
-         */
-        Vindex.prototype.owner = "";
-
-        /**
-         * Creates a new Vindex instance using the specified properties.
-         * @function create
-         * @memberof vschema.Vindex
-         * @static
-         * @param {vschema.IVindex=} [properties] Properties to set
-         * @returns {vschema.Vindex} Vindex instance
-         */
-        Vindex.create = function create(properties) {
-            return new Vindex(properties);
-        };
-
-        /**
-         * Encodes the specified Vindex message. Does not implicitly {@link vschema.Vindex.verify|verify} messages.
-         * @function encode
-         * @memberof vschema.Vindex
-         * @static
-         * @param {vschema.IVindex} message Vindex message or plain object to encode
-         * @param {$protobuf.Writer} [writer] Writer to encode to
-         * @returns {$protobuf.Writer} Writer
-         */
-        Vindex.encode = function encode(message, writer) {
-            if (!writer)
-                writer = $Writer.create();
-            if (message.type != null && Object.hasOwnProperty.call(message, "type"))
-                writer.uint32(/* id 1, wireType 2 =*/10).string(message.type);
-            if (message.params != null && Object.hasOwnProperty.call(message, "params"))
-                for (var keys = Object.keys(message.params), i = 0; i < keys.length; ++i)
-                    writer.uint32(/* id 2, wireType 2 =*/18).fork().uint32(/* id 1, wireType 2 =*/10).string(keys[i]).uint32(/* id 2, wireType 2 =*/18).string(message.params[keys[i]]).ldelim();
-            if (message.owner != null && Object.hasOwnProperty.call(message, "owner"))
-                writer.uint32(/* id 3, wireType 2 =*/26).string(message.owner);
-            return writer;
-        };
-
-        /**
-         * Encodes the specified Vindex message, length delimited. Does not implicitly {@link vschema.Vindex.verify|verify} messages.
-         * @function encodeDelimited
-         * @memberof vschema.Vindex
-         * @static
-         * @param {vschema.IVindex} message Vindex message or plain object to encode
-         * @param {$protobuf.Writer} [writer] Writer to encode to
-         * @returns {$protobuf.Writer} Writer
-         */
-        Vindex.encodeDelimited = function encodeDelimited(message, writer) {
-            return this.encode(message, writer).ldelim();
-        };
-
-        /**
-         * Decodes a Vindex message from the specified reader or buffer.
-         * @function decode
-         * @memberof vschema.Vindex
-         * @static
-         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
-         * @param {number} [length] Message length if known beforehand
-         * @returns {vschema.Vindex} Vindex
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        Vindex.decode = function decode(reader, length) {
-            if (!(reader instanceof $Reader))
-                reader = $Reader.create(reader);
-            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vschema.Vindex(), key, value;
-            while (reader.pos < end) {
-                var tag = reader.uint32();
-                switch (tag >>> 3) {
-                case 1:
-                    message.type = reader.string();
-                    break;
-                case 2:
-                    if (message.params === $util.emptyObject)
-                        message.params = {};
-                    var end2 = reader.uint32() + reader.pos;
-                    key = "";
-                    value = "";
-                    while (reader.pos < end2) {
-                        var tag2 = reader.uint32();
-                        switch (tag2 >>> 3) {
-                        case 1:
-                            key = reader.string();
-                            break;
-                        case 2:
-                            value = reader.string();
-                            break;
-                        default:
-                            reader.skipType(tag2 & 7);
-                            break;
-                        }
-                    }
-                    message.params[key] = value;
-                    break;
-                case 3:
-                    message.owner = reader.string();
-                    break;
-                default:
-                    reader.skipType(tag & 7);
-                    break;
-                }
-            }
-            return message;
-        };
-
-        /**
-         * Decodes a Vindex message from the specified reader or buffer, length delimited.
-         * @function decodeDelimited
-         * @memberof vschema.Vindex
-         * @static
-         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
-         * @returns {vschema.Vindex} Vindex
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        Vindex.decodeDelimited = function decodeDelimited(reader) {
-            if (!(reader instanceof $Reader))
-                reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
-        };
-
-        /**
-         * Verifies a Vindex message.
-         * @function verify
-         * @memberof vschema.Vindex
-         * @static
-         * @param {Object.<string,*>} message Plain object to verify
-         * @returns {string|null} `null` if valid, otherwise the reason why it is not
-         */
-        Vindex.verify = function verify(message) {
-            if (typeof message !== "object" || message === null)
-                return "object expected";
-            if (message.type != null && message.hasOwnProperty("type"))
-                if (!$util.isString(message.type))
-                    return "type: string expected";
-            if (message.params != null && message.hasOwnProperty("params")) {
-                if (!$util.isObject(message.params))
-                    return "params: object expected";
-                var key = Object.keys(message.params);
-                for (var i = 0; i < key.length; ++i)
-                    if (!$util.isString(message.params[key[i]]))
-                        return "params: string{k:string} expected";
-            }
-            if (message.owner != null && message.hasOwnProperty("owner"))
-                if (!$util.isString(message.owner))
-                    return "owner: string expected";
-            return null;
-        };
-
-        /**
-         * Creates a Vindex message from a plain object. Also converts values to their respective internal types.
-         * @function fromObject
-         * @memberof vschema.Vindex
-         * @static
-         * @param {Object.<string,*>} object Plain object
-         * @returns {vschema.Vindex} Vindex
-         */
-        Vindex.fromObject = function fromObject(object) {
-            if (object instanceof $root.vschema.Vindex)
-                return object;
-            var message = new $root.vschema.Vindex();
-            if (object.type != null)
-                message.type = String(object.type);
-            if (object.params) {
-                if (typeof object.params !== "object")
-                    throw TypeError(".vschema.Vindex.params: object expected");
-                message.params = {};
-                for (var keys = Object.keys(object.params), i = 0; i < keys.length; ++i)
-                    message.params[keys[i]] = String(object.params[keys[i]]);
-            }
-            if (object.owner != null)
-                message.owner = String(object.owner);
-            return message;
-        };
-
-        /**
-         * Creates a plain object from a Vindex message. Also converts values to other types if specified.
-         * @function toObject
-         * @memberof vschema.Vindex
-         * @static
-         * @param {vschema.Vindex} message Vindex
-         * @param {$protobuf.IConversionOptions} [options] Conversion options
-         * @returns {Object.<string,*>} Plain object
-         */
-        Vindex.toObject = function toObject(message, options) {
-            if (!options)
-                options = {};
-            var object = {};
-            if (options.objects || options.defaults)
-                object.params = {};
-            if (options.defaults) {
-                object.type = "";
-                object.owner = "";
-            }
-            if (message.type != null && message.hasOwnProperty("type"))
-                object.type = message.type;
-            var keys2;
-            if (message.params && (keys2 = Object.keys(message.params)).length) {
-                object.params = {};
-                for (var j = 0; j < keys2.length; ++j)
-                    object.params[keys2[j]] = message.params[keys2[j]];
-            }
-            if (message.owner != null && message.hasOwnProperty("owner"))
-                object.owner = message.owner;
-            return object;
-        };
-
-        /**
-         * Converts this Vindex to JSON.
-         * @function toJSON
-         * @memberof vschema.Vindex
-         * @instance
-         * @returns {Object.<string,*>} JSON object
-         */
-        Vindex.prototype.toJSON = function toJSON() {
-            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
-        };
-
-        return Vindex;
-    })();
-
-    vschema.Table = (function() {
-
-        /**
-         * Properties of a Table.
-         * @memberof vschema
-         * @interface ITable
-         * @property {string|null} [type] Table type
-         * @property {Array.<vschema.IColumnVindex>|null} [column_vindexes] Table column_vindexes
-         * @property {vschema.IAutoIncrement|null} [auto_increment] Table auto_increment
-         * @property {Array.<vschema.IColumn>|null} [columns] Table columns
-         * @property {string|null} [pinned] Table pinned
-         * @property {boolean|null} [column_list_authoritative] Table column_list_authoritative
-         */
-
-        /**
-         * Constructs a new Table.
-         * @memberof vschema
-         * @classdesc Represents a Table.
-         * @implements ITable
-         * @constructor
-         * @param {vschema.ITable=} [properties] Properties to set
-         */
-        function Table(properties) {
-            this.column_vindexes = [];
-            this.columns = [];
-            if (properties)
-                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
-                    if (properties[keys[i]] != null)
-                        this[keys[i]] = properties[keys[i]];
-        }
-
-        /**
-         * Table type.
-         * @member {string} type
-         * @memberof vschema.Table
-         * @instance
-         */
-        Table.prototype.type = "";
-
-        /**
-         * Table column_vindexes.
-         * @member {Array.<vschema.IColumnVindex>} column_vindexes
-         * @memberof vschema.Table
-         * @instance
-         */
-        Table.prototype.column_vindexes = $util.emptyArray;
-
-        /**
-         * Table auto_increment.
-         * @member {vschema.IAutoIncrement|null|undefined} auto_increment
-         * @memberof vschema.Table
-         * @instance
-         */
-        Table.prototype.auto_increment = null;
-
-        /**
-         * Table columns.
-         * @member {Array.<vschema.IColumn>} columns
-         * @memberof vschema.Table
-         * @instance
-         */
-        Table.prototype.columns = $util.emptyArray;
-
-        /**
-         * Table pinned.
-         * @member {string} pinned
-         * @memberof vschema.Table
-         * @instance
-         */
-        Table.prototype.pinned = "";
-
-        /**
-         * Table column_list_authoritative.
-         * @member {boolean} column_list_authoritative
-         * @memberof vschema.Table
-         * @instance
-         */
-        Table.prototype.column_list_authoritative = false;
-
-        /**
-         * Creates a new Table instance using the specified properties.
-         * @function create
-         * @memberof vschema.Table
-         * @static
-         * @param {vschema.ITable=} [properties] Properties to set
-         * @returns {vschema.Table} Table instance
-         */
-        Table.create = function create(properties) {
-            return new Table(properties);
-        };
-
-        /**
-         * Encodes the specified Table message. Does not implicitly {@link vschema.Table.verify|verify} messages.
-         * @function encode
-         * @memberof vschema.Table
-         * @static
-         * @param {vschema.ITable} message Table message or plain object to encode
-         * @param {$protobuf.Writer} [writer] Writer to encode to
-         * @returns {$protobuf.Writer} Writer
-         */
-        Table.encode = function encode(message, writer) {
-            if (!writer)
-                writer = $Writer.create();
-            if (message.type != null && Object.hasOwnProperty.call(message, "type"))
-                writer.uint32(/* id 1, wireType 2 =*/10).string(message.type);
-            if (message.column_vindexes != null && message.column_vindexes.length)
-                for (var i = 0; i < message.column_vindexes.length; ++i)
-                    $root.vschema.ColumnVindex.encode(message.column_vindexes[i], writer.uint32(/* id 2, wireType 2 =*/18).fork()).ldelim();
-            if (message.auto_increment != null && Object.hasOwnProperty.call(message, "auto_increment"))
-                $root.vschema.AutoIncrement.encode(message.auto_increment, writer.uint32(/* id 3, wireType 2 =*/26).fork()).ldelim();
-            if (message.columns != null && message.columns.length)
-                for (var i = 0; i < message.columns.length; ++i)
-                    $root.vschema.Column.encode(message.columns[i], writer.uint32(/* id 4, wireType 2 =*/34).fork()).ldelim();
-            if (message.pinned != null && Object.hasOwnProperty.call(message, "pinned"))
-                writer.uint32(/* id 5, wireType 2 =*/42).string(message.pinned);
-            if (message.column_list_authoritative != null && Object.hasOwnProperty.call(message, "column_list_authoritative"))
-                writer.uint32(/* id 6, wireType 0 =*/48).bool(message.column_list_authoritative);
-            return writer;
-        };
-
-        /**
-         * Encodes the specified Table message, length delimited. Does not implicitly {@link vschema.Table.verify|verify} messages.
-         * @function encodeDelimited
-         * @memberof vschema.Table
-         * @static
-         * @param {vschema.ITable} message Table message or plain object to encode
-         * @param {$protobuf.Writer} [writer] Writer to encode to
-         * @returns {$protobuf.Writer} Writer
-         */
-        Table.encodeDelimited = function encodeDelimited(message, writer) {
-            return this.encode(message, writer).ldelim();
-        };
-
-        /**
-         * Decodes a Table message from the specified reader or buffer.
-         * @function decode
-         * @memberof vschema.Table
-         * @static
-         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
-         * @param {number} [length] Message length if known beforehand
-         * @returns {vschema.Table} Table
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        Table.decode = function decode(reader, length) {
-            if (!(reader instanceof $Reader))
-                reader = $Reader.create(reader);
-            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vschema.Table();
-            while (reader.pos < end) {
-                var tag = reader.uint32();
-                switch (tag >>> 3) {
-                case 1:
-                    message.type = reader.string();
-                    break;
-                case 2:
-                    if (!(message.column_vindexes && message.column_vindexes.length))
-                        message.column_vindexes = [];
-                    message.column_vindexes.push($root.vschema.ColumnVindex.decode(reader, reader.uint32()));
-                    break;
-                case 3:
-                    message.auto_increment = $root.vschema.AutoIncrement.decode(reader, reader.uint32());
-                    break;
-                case 4:
-                    if (!(message.columns && message.columns.length))
-                        message.columns = [];
-                    message.columns.push($root.vschema.Column.decode(reader, reader.uint32()));
-                    break;
-                case 5:
-                    message.pinned = reader.string();
-                    break;
-                case 6:
-                    message.column_list_authoritative = reader.bool();
-                    break;
-                default:
-                    reader.skipType(tag & 7);
-                    break;
-                }
-            }
-            return message;
-        };
-
-        /**
-         * Decodes a Table message from the specified reader or buffer, length delimited.
-         * @function decodeDelimited
-         * @memberof vschema.Table
-         * @static
-         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
-         * @returns {vschema.Table} Table
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        Table.decodeDelimited = function decodeDelimited(reader) {
-            if (!(reader instanceof $Reader))
-                reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
-        };
-
-        /**
-         * Verifies a Table message.
-         * @function verify
-         * @memberof vschema.Table
-         * @static
-         * @param {Object.<string,*>} message Plain object to verify
-         * @returns {string|null} `null` if valid, otherwise the reason why it is not
-         */
-        Table.verify = function verify(message) {
-            if (typeof message !== "object" || message === null)
-                return "object expected";
-            if (message.type != null && message.hasOwnProperty("type"))
-                if (!$util.isString(message.type))
-                    return "type: string expected";
-            if (message.column_vindexes != null && message.hasOwnProperty("column_vindexes")) {
-                if (!Array.isArray(message.column_vindexes))
-                    return "column_vindexes: array expected";
-                for (var i = 0; i < message.column_vindexes.length; ++i) {
-                    var error = $root.vschema.ColumnVindex.verify(message.column_vindexes[i]);
-                    if (error)
-                        return "column_vindexes." + error;
-                }
-            }
-            if (message.auto_increment != null && message.hasOwnProperty("auto_increment")) {
-                var error = $root.vschema.AutoIncrement.verify(message.auto_increment);
-                if (error)
-                    return "auto_increment." + error;
-            }
-            if (message.columns != null && message.hasOwnProperty("columns")) {
-                if (!Array.isArray(message.columns))
-                    return "columns: array expected";
-                for (var i = 0; i < message.columns.length; ++i) {
-                    var error = $root.vschema.Column.verify(message.columns[i]);
-                    if (error)
-                        return "columns." + error;
-                }
-            }
-            if (message.pinned != null && message.hasOwnProperty("pinned"))
-                if (!$util.isString(message.pinned))
-                    return "pinned: string expected";
-            if (message.column_list_authoritative != null && message.hasOwnProperty("column_list_authoritative"))
-                if (typeof message.column_list_authoritative !== "boolean")
-                    return "column_list_authoritative: boolean expected";
-            return null;
-        };
-
-        /**
-         * Creates a Table message from a plain object. Also converts values to their respective internal types.
-         * @function fromObject
-         * @memberof vschema.Table
-         * @static
-         * @param {Object.<string,*>} object Plain object
-         * @returns {vschema.Table} Table
-         */
-        Table.fromObject = function fromObject(object) {
-            if (object instanceof $root.vschema.Table)
-                return object;
-            var message = new $root.vschema.Table();
-            if (object.type != null)
-                message.type = String(object.type);
-            if (object.column_vindexes) {
-                if (!Array.isArray(object.column_vindexes))
-                    throw TypeError(".vschema.Table.column_vindexes: array expected");
-                message.column_vindexes = [];
-                for (var i = 0; i < object.column_vindexes.length; ++i) {
-                    if (typeof object.column_vindexes[i] !== "object")
-                        throw TypeError(".vschema.Table.column_vindexes: object expected");
-                    message.column_vindexes[i] = $root.vschema.ColumnVindex.fromObject(object.column_vindexes[i]);
-                }
-            }
-            if (object.auto_increment != null) {
-                if (typeof object.auto_increment !== "object")
-                    throw TypeError(".vschema.Table.auto_increment: object expected");
-                message.auto_increment = $root.vschema.AutoIncrement.fromObject(object.auto_increment);
-            }
-            if (object.columns) {
-                if (!Array.isArray(object.columns))
-                    throw TypeError(".vschema.Table.columns: array expected");
-                message.columns = [];
-                for (var i = 0; i < object.columns.length; ++i) {
-                    if (typeof object.columns[i] !== "object")
-                        throw TypeError(".vschema.Table.columns: object expected");
-                    message.columns[i] = $root.vschema.Column.fromObject(object.columns[i]);
-                }
-            }
-            if (object.pinned != null)
-                message.pinned = String(object.pinned);
-            if (object.column_list_authoritative != null)
-                message.column_list_authoritative = Boolean(object.column_list_authoritative);
-            return message;
-        };
-
-        /**
-         * Creates a plain object from a Table message. Also converts values to other types if specified.
-         * @function toObject
-         * @memberof vschema.Table
-         * @static
-         * @param {vschema.Table} message Table
-         * @param {$protobuf.IConversionOptions} [options] Conversion options
-         * @returns {Object.<string,*>} Plain object
-         */
-        Table.toObject = function toObject(message, options) {
-            if (!options)
-                options = {};
-            var object = {};
-            if (options.arrays || options.defaults) {
-                object.column_vindexes = [];
-                object.columns = [];
-            }
-            if (options.defaults) {
-                object.type = "";
-                object.auto_increment = null;
-                object.pinned = "";
-                object.column_list_authoritative = false;
-            }
-            if (message.type != null && message.hasOwnProperty("type"))
-                object.type = message.type;
-            if (message.column_vindexes && message.column_vindexes.length) {
-                object.column_vindexes = [];
-                for (var j = 0; j < message.column_vindexes.length; ++j)
-                    object.column_vindexes[j] = $root.vschema.ColumnVindex.toObject(message.column_vindexes[j], options);
-            }
-            if (message.auto_increment != null && message.hasOwnProperty("auto_increment"))
-                object.auto_increment = $root.vschema.AutoIncrement.toObject(message.auto_increment, options);
-            if (message.columns && message.columns.length) {
-                object.columns = [];
-                for (var j = 0; j < message.columns.length; ++j)
-                    object.columns[j] = $root.vschema.Column.toObject(message.columns[j], options);
-            }
-            if (message.pinned != null && message.hasOwnProperty("pinned"))
-                object.pinned = message.pinned;
-            if (message.column_list_authoritative != null && message.hasOwnProperty("column_list_authoritative"))
-                object.column_list_authoritative = message.column_list_authoritative;
-            return object;
-        };
-
-        /**
-         * Converts this Table to JSON.
-         * @function toJSON
-         * @memberof vschema.Table
-         * @instance
-         * @returns {Object.<string,*>} JSON object
-         */
-        Table.prototype.toJSON = function toJSON() {
-            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
-        };
-
-        return Table;
-    })();
-
-    vschema.ColumnVindex = (function() {
-
-        /**
-         * Properties of a ColumnVindex.
-         * @memberof vschema
-         * @interface IColumnVindex
-         * @property {string|null} [column] ColumnVindex column
-         * @property {string|null} [name] ColumnVindex name
-         * @property {Array.<string>|null} [columns] ColumnVindex columns
-         */
-
-        /**
-         * Constructs a new ColumnVindex.
-         * @memberof vschema
-         * @classdesc Represents a ColumnVindex.
-         * @implements IColumnVindex
-         * @constructor
-         * @param {vschema.IColumnVindex=} [properties] Properties to set
-         */
-        function ColumnVindex(properties) {
-            this.columns = [];
-            if (properties)
-                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
-                    if (properties[keys[i]] != null)
-                        this[keys[i]] = properties[keys[i]];
-        }
-
-        /**
-         * ColumnVindex column.
-         * @member {string} column
-         * @memberof vschema.ColumnVindex
-         * @instance
-         */
-        ColumnVindex.prototype.column = "";
-
-        /**
-         * ColumnVindex name.
-         * @member {string} name
-         * @memberof vschema.ColumnVindex
-         * @instance
-         */
-        ColumnVindex.prototype.name = "";
-
-        /**
-         * ColumnVindex columns.
-         * @member {Array.<string>} columns
-         * @memberof vschema.ColumnVindex
-         * @instance
-         */
-        ColumnVindex.prototype.columns = $util.emptyArray;
-
-        /**
-         * Creates a new ColumnVindex instance using the specified properties.
-         * @function create
-         * @memberof vschema.ColumnVindex
-         * @static
-         * @param {vschema.IColumnVindex=} [properties] Properties to set
-         * @returns {vschema.ColumnVindex} ColumnVindex instance
-         */
-        ColumnVindex.create = function create(properties) {
-            return new ColumnVindex(properties);
-        };
-
-        /**
-         * Encodes the specified ColumnVindex message. Does not implicitly {@link vschema.ColumnVindex.verify|verify} messages.
-         * @function encode
-         * @memberof vschema.ColumnVindex
-         * @static
-         * @param {vschema.IColumnVindex} message ColumnVindex message or plain object to encode
-         * @param {$protobuf.Writer} [writer] Writer to encode to
-         * @returns {$protobuf.Writer} Writer
-         */
-        ColumnVindex.encode = function encode(message, writer) {
-            if (!writer)
-                writer = $Writer.create();
-            if (message.column != null && Object.hasOwnProperty.call(message, "column"))
-                writer.uint32(/* id 1, wireType 2 =*/10).string(message.column);
-            if (message.name != null && Object.hasOwnProperty.call(message, "name"))
-                writer.uint32(/* id 2, wireType 2 =*/18).string(message.name);
-            if (message.columns != null && message.columns.length)
-                for (var i = 0; i < message.columns.length; ++i)
-                    writer.uint32(/* id 3, wireType 2 =*/26).string(message.columns[i]);
-            return writer;
-        };
-
-        /**
-         * Encodes the specified ColumnVindex message, length delimited. Does not implicitly {@link vschema.ColumnVindex.verify|verify} messages.
-         * @function encodeDelimited
-         * @memberof vschema.ColumnVindex
-         * @static
-         * @param {vschema.IColumnVindex} message ColumnVindex message or plain object to encode
-         * @param {$protobuf.Writer} [writer] Writer to encode to
-         * @returns {$protobuf.Writer} Writer
-         */
-        ColumnVindex.encodeDelimited = function encodeDelimited(message, writer) {
-            return this.encode(message, writer).ldelim();
-        };
-
-        /**
-         * Decodes a ColumnVindex message from the specified reader or buffer.
-         * @function decode
-         * @memberof vschema.ColumnVindex
-         * @static
-         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
-         * @param {number} [length] Message length if known beforehand
-         * @returns {vschema.ColumnVindex} ColumnVindex
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        ColumnVindex.decode = function decode(reader, length) {
-            if (!(reader instanceof $Reader))
-                reader = $Reader.create(reader);
-            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vschema.ColumnVindex();
-            while (reader.pos < end) {
-                var tag = reader.uint32();
-                switch (tag >>> 3) {
-                case 1:
-                    message.column = reader.string();
-                    break;
-                case 2:
-                    message.name = reader.string();
-                    break;
-                case 3:
-                    if (!(message.columns && message.columns.length))
-                        message.columns = [];
-                    message.columns.push(reader.string());
-                    break;
-                default:
-                    reader.skipType(tag & 7);
-                    break;
-                }
-            }
-            return message;
-        };
-
-        /**
-         * Decodes a ColumnVindex message from the specified reader or buffer, length delimited.
-         * @function decodeDelimited
-         * @memberof vschema.ColumnVindex
-         * @static
-         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
-         * @returns {vschema.ColumnVindex} ColumnVindex
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        ColumnVindex.decodeDelimited = function decodeDelimited(reader) {
-            if (!(reader instanceof $Reader))
-                reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
-        };
-
-        /**
-         * Verifies a ColumnVindex message.
-         * @function verify
-         * @memberof vschema.ColumnVindex
-         * @static
-         * @param {Object.<string,*>} message Plain object to verify
-         * @returns {string|null} `null` if valid, otherwise the reason why it is not
-         */
-        ColumnVindex.verify = function verify(message) {
-            if (typeof message !== "object" || message === null)
-                return "object expected";
-            if (message.column != null && message.hasOwnProperty("column"))
-                if (!$util.isString(message.column))
-                    return "column: string expected";
-            if (message.name != null && message.hasOwnProperty("name"))
-                if (!$util.isString(message.name))
-                    return "name: string expected";
-            if (message.columns != null && message.hasOwnProperty("columns")) {
-                if (!Array.isArray(message.columns))
-                    return "columns: array expected";
-                for (var i = 0; i < message.columns.length; ++i)
-                    if (!$util.isString(message.columns[i]))
-                        return "columns: string[] expected";
-            }
-            return null;
-        };
-
-        /**
-         * Creates a ColumnVindex message from a plain object. Also converts values to their respective internal types.
-         * @function fromObject
-         * @memberof vschema.ColumnVindex
-         * @static
-         * @param {Object.<string,*>} object Plain object
-         * @returns {vschema.ColumnVindex} ColumnVindex
-         */
-        ColumnVindex.fromObject = function fromObject(object) {
-            if (object instanceof $root.vschema.ColumnVindex)
-                return object;
-            var message = new $root.vschema.ColumnVindex();
-            if (object.column != null)
-                message.column = String(object.column);
-            if (object.name != null)
-                message.name = String(object.name);
-            if (object.columns) {
-                if (!Array.isArray(object.columns))
-                    throw TypeError(".vschema.ColumnVindex.columns: array expected");
-                message.columns = [];
-                for (var i = 0; i < object.columns.length; ++i)
-                    message.columns[i] = String(object.columns[i]);
-            }
-            return message;
-        };
-
-        /**
-         * Creates a plain object from a ColumnVindex message. Also converts values to other types if specified.
-         * @function toObject
-         * @memberof vschema.ColumnVindex
-         * @static
-         * @param {vschema.ColumnVindex} message ColumnVindex
-         * @param {$protobuf.IConversionOptions} [options] Conversion options
-         * @returns {Object.<string,*>} Plain object
-         */
-        ColumnVindex.toObject = function toObject(message, options) {
-            if (!options)
-                options = {};
-            var object = {};
-            if (options.arrays || options.defaults)
-                object.columns = [];
-            if (options.defaults) {
-                object.column = "";
-                object.name = "";
-            }
-            if (message.column != null && message.hasOwnProperty("column"))
-                object.column = message.column;
-            if (message.name != null && message.hasOwnProperty("name"))
-                object.name = message.name;
-            if (message.columns && message.columns.length) {
-                object.columns = [];
-                for (var j = 0; j < message.columns.length; ++j)
-                    object.columns[j] = message.columns[j];
-            }
-            return object;
-        };
-
-        /**
-         * Converts this ColumnVindex to JSON.
-         * @function toJSON
-         * @memberof vschema.ColumnVindex
-         * @instance
-         * @returns {Object.<string,*>} JSON object
-         */
-        ColumnVindex.prototype.toJSON = function toJSON() {
-            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
-        };
-
-        return ColumnVindex;
-    })();
-
-    vschema.AutoIncrement = (function() {
-
-        /**
-         * Properties of an AutoIncrement.
-         * @memberof vschema
-         * @interface IAutoIncrement
-         * @property {string|null} [column] AutoIncrement column
-         * @property {string|null} [sequence] AutoIncrement sequence
-         */
-
-        /**
-         * Constructs a new AutoIncrement.
-         * @memberof vschema
-         * @classdesc Represents an AutoIncrement.
-         * @implements IAutoIncrement
-         * @constructor
-         * @param {vschema.IAutoIncrement=} [properties] Properties to set
-         */
-        function AutoIncrement(properties) {
-            if (properties)
-                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
-                    if (properties[keys[i]] != null)
-                        this[keys[i]] = properties[keys[i]];
-        }
-
-        /**
-         * AutoIncrement column.
-         * @member {string} column
-         * @memberof vschema.AutoIncrement
-         * @instance
-         */
-        AutoIncrement.prototype.column = "";
-
-        /**
-         * AutoIncrement sequence.
-         * @member {string} sequence
-         * @memberof vschema.AutoIncrement
-         * @instance
-         */
-        AutoIncrement.prototype.sequence = "";
-
-        /**
-         * Creates a new AutoIncrement instance using the specified properties.
-         * @function create
-         * @memberof vschema.AutoIncrement
-         * @static
-         * @param {vschema.IAutoIncrement=} [properties] Properties to set
-         * @returns {vschema.AutoIncrement} AutoIncrement instance
-         */
-        AutoIncrement.create = function create(properties) {
-            return new AutoIncrement(properties);
-        };
-
-        /**
-         * Encodes the specified AutoIncrement message. Does not implicitly {@link vschema.AutoIncrement.verify|verify} messages.
-         * @function encode
-         * @memberof vschema.AutoIncrement
-         * @static
-         * @param {vschema.IAutoIncrement} message AutoIncrement message or plain object to encode
-         * @param {$protobuf.Writer} [writer] Writer to encode to
-         * @returns {$protobuf.Writer} Writer
-         */
-        AutoIncrement.encode = function encode(message, writer) {
-            if (!writer)
-                writer = $Writer.create();
-            if (message.column != null && Object.hasOwnProperty.call(message, "column"))
-                writer.uint32(/* id 1, wireType 2 =*/10).string(message.column);
-            if (message.sequence != null && Object.hasOwnProperty.call(message, "sequence"))
-                writer.uint32(/* id 2, wireType 2 =*/18).string(message.sequence);
-            return writer;
-        };
-
-        /**
-         * Encodes the specified AutoIncrement message, length delimited. Does not implicitly {@link vschema.AutoIncrement.verify|verify} messages.
-         * @function encodeDelimited
-         * @memberof vschema.AutoIncrement
-         * @static
-         * @param {vschema.IAutoIncrement} message AutoIncrement message or plain object to encode
-         * @param {$protobuf.Writer} [writer] Writer to encode to
-         * @returns {$protobuf.Writer} Writer
-         */
-        AutoIncrement.encodeDelimited = function encodeDelimited(message, writer) {
-            return this.encode(message, writer).ldelim();
-        };
-
-        /**
-         * Decodes an AutoIncrement message from the specified reader or buffer.
-         * @function decode
-         * @memberof vschema.AutoIncrement
-         * @static
-         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
-         * @param {number} [length] Message length if known beforehand
-         * @returns {vschema.AutoIncrement} AutoIncrement
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        AutoIncrement.decode = function decode(reader, length) {
-            if (!(reader instanceof $Reader))
-                reader = $Reader.create(reader);
-            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vschema.AutoIncrement();
-            while (reader.pos < end) {
-                var tag = reader.uint32();
-                switch (tag >>> 3) {
-                case 1:
-                    message.column = reader.string();
-                    break;
-                case 2:
-                    message.sequence = reader.string();
-                    break;
-                default:
-                    reader.skipType(tag & 7);
-                    break;
-                }
-            }
-            return message;
-        };
-
-        /**
-         * Decodes an AutoIncrement message from the specified reader or buffer, length delimited.
-         * @function decodeDelimited
-         * @memberof vschema.AutoIncrement
-         * @static
-         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
-         * @returns {vschema.AutoIncrement} AutoIncrement
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        AutoIncrement.decodeDelimited = function decodeDelimited(reader) {
-            if (!(reader instanceof $Reader))
-                reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
-        };
-
-        /**
-         * Verifies an AutoIncrement message.
-         * @function verify
-         * @memberof vschema.AutoIncrement
-         * @static
-         * @param {Object.<string,*>} message Plain object to verify
-         * @returns {string|null} `null` if valid, otherwise the reason why it is not
-         */
-        AutoIncrement.verify = function verify(message) {
-            if (typeof message !== "object" || message === null)
-                return "object expected";
-            if (message.column != null && message.hasOwnProperty("column"))
-                if (!$util.isString(message.column))
-                    return "column: string expected";
-            if (message.sequence != null && message.hasOwnProperty("sequence"))
-                if (!$util.isString(message.sequence))
-                    return "sequence: string expected";
-            return null;
-        };
-
-        /**
-         * Creates an AutoIncrement message from a plain object. Also converts values to their respective internal types.
-         * @function fromObject
-         * @memberof vschema.AutoIncrement
-         * @static
-         * @param {Object.<string,*>} object Plain object
-         * @returns {vschema.AutoIncrement} AutoIncrement
-         */
-        AutoIncrement.fromObject = function fromObject(object) {
-            if (object instanceof $root.vschema.AutoIncrement)
-                return object;
-            var message = new $root.vschema.AutoIncrement();
-            if (object.column != null)
-                message.column = String(object.column);
-            if (object.sequence != null)
-                message.sequence = String(object.sequence);
-            return message;
-        };
-
-        /**
-         * Creates a plain object from an AutoIncrement message. Also converts values to other types if specified.
-         * @function toObject
-         * @memberof vschema.AutoIncrement
-         * @static
-         * @param {vschema.AutoIncrement} message AutoIncrement
-         * @param {$protobuf.IConversionOptions} [options] Conversion options
-         * @returns {Object.<string,*>} Plain object
-         */
-        AutoIncrement.toObject = function toObject(message, options) {
-            if (!options)
-                options = {};
-            var object = {};
-            if (options.defaults) {
-                object.column = "";
-                object.sequence = "";
-            }
-            if (message.column != null && message.hasOwnProperty("column"))
-                object.column = message.column;
-            if (message.sequence != null && message.hasOwnProperty("sequence"))
-                object.sequence = message.sequence;
-            return object;
-        };
-
-        /**
-         * Converts this AutoIncrement to JSON.
-         * @function toJSON
-         * @memberof vschema.AutoIncrement
-         * @instance
-         * @returns {Object.<string,*>} JSON object
-         */
-        AutoIncrement.prototype.toJSON = function toJSON() {
-            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
-        };
-
-        return AutoIncrement;
-    })();
-
-    vschema.Column = (function() {
-
-        /**
-         * Properties of a Column.
-         * @memberof vschema
-         * @interface IColumn
-         * @property {string|null} [name] Column name
-         * @property {query.Type|null} [type] Column type
-         */
-
-        /**
-         * Constructs a new Column.
-         * @memberof vschema
-         * @classdesc Represents a Column.
-         * @implements IColumn
-         * @constructor
-         * @param {vschema.IColumn=} [properties] Properties to set
-         */
-        function Column(properties) {
-            if (properties)
-                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
-                    if (properties[keys[i]] != null)
-                        this[keys[i]] = properties[keys[i]];
-        }
-
-        /**
-         * Column name.
-         * @member {string} name
-         * @memberof vschema.Column
-         * @instance
-         */
-        Column.prototype.name = "";
-
-        /**
-         * Column type.
-         * @member {query.Type} type
-         * @memberof vschema.Column
-         * @instance
-         */
-        Column.prototype.type = 0;
-
-        /**
-         * Creates a new Column instance using the specified properties.
-         * @function create
-         * @memberof vschema.Column
-         * @static
-         * @param {vschema.IColumn=} [properties] Properties to set
-         * @returns {vschema.Column} Column instance
-         */
-        Column.create = function create(properties) {
-            return new Column(properties);
-        };
-
-        /**
-         * Encodes the specified Column message. Does not implicitly {@link vschema.Column.verify|verify} messages.
-         * @function encode
-         * @memberof vschema.Column
-         * @static
-         * @param {vschema.IColumn} message Column message or plain object to encode
-         * @param {$protobuf.Writer} [writer] Writer to encode to
-         * @returns {$protobuf.Writer} Writer
-         */
-        Column.encode = function encode(message, writer) {
-            if (!writer)
-                writer = $Writer.create();
-            if (message.name != null && Object.hasOwnProperty.call(message, "name"))
-                writer.uint32(/* id 1, wireType 2 =*/10).string(message.name);
-            if (message.type != null && Object.hasOwnProperty.call(message, "type"))
-                writer.uint32(/* id 2, wireType 0 =*/16).int32(message.type);
-            return writer;
-        };
-
-        /**
-         * Encodes the specified Column message, length delimited. Does not implicitly {@link vschema.Column.verify|verify} messages.
-         * @function encodeDelimited
-         * @memberof vschema.Column
-         * @static
-         * @param {vschema.IColumn} message Column message or plain object to encode
-         * @param {$protobuf.Writer} [writer] Writer to encode to
-         * @returns {$protobuf.Writer} Writer
-         */
-        Column.encodeDelimited = function encodeDelimited(message, writer) {
-            return this.encode(message, writer).ldelim();
-        };
-
-        /**
-         * Decodes a Column message from the specified reader or buffer.
-         * @function decode
-         * @memberof vschema.Column
-         * @static
-         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
-         * @param {number} [length] Message length if known beforehand
-         * @returns {vschema.Column} Column
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        Column.decode = function decode(reader, length) {
-            if (!(reader instanceof $Reader))
-                reader = $Reader.create(reader);
-            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vschema.Column();
-            while (reader.pos < end) {
-                var tag = reader.uint32();
-                switch (tag >>> 3) {
-                case 1:
-                    message.name = reader.string();
-                    break;
-                case 2:
-                    message.type = reader.int32();
-                    break;
-                default:
-                    reader.skipType(tag & 7);
-                    break;
-                }
-            }
-            return message;
-        };
-
-        /**
-         * Decodes a Column message from the specified reader or buffer, length delimited.
-         * @function decodeDelimited
-         * @memberof vschema.Column
-         * @static
-         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
-         * @returns {vschema.Column} Column
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        Column.decodeDelimited = function decodeDelimited(reader) {
-            if (!(reader instanceof $Reader))
-                reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
-        };
-
-        /**
-         * Verifies a Column message.
-         * @function verify
-         * @memberof vschema.Column
-         * @static
-         * @param {Object.<string,*>} message Plain object to verify
-         * @returns {string|null} `null` if valid, otherwise the reason why it is not
-         */
-        Column.verify = function verify(message) {
-            if (typeof message !== "object" || message === null)
-                return "object expected";
-            if (message.name != null && message.hasOwnProperty("name"))
-                if (!$util.isString(message.name))
-                    return "name: string expected";
-            if (message.type != null && message.hasOwnProperty("type"))
-                switch (message.type) {
-                default:
-                    return "type: enum value expected";
-                case 0:
-                case 257:
-                case 770:
-                case 259:
-                case 772:
-                case 261:
-                case 774:
-                case 263:
-                case 776:
-                case 265:
-                case 778:
-                case 1035:
-                case 1036:
-                case 2061:
-                case 2062:
-                case 2063:
-                case 2064:
-                case 785:
-                case 18:
-                case 6163:
-                case 10260:
-                case 6165:
-                case 10262:
-                case 6167:
-                case 10264:
-                case 2073:
-                case 2074:
-                case 2075:
-                case 28:
-                case 2077:
-                case 2078:
-                case 31:
-                    break;
-                }
-            return null;
-        };
-
-        /**
-         * Creates a Column message from a plain object. Also converts values to their respective internal types.
-         * @function fromObject
-         * @memberof vschema.Column
-         * @static
-         * @param {Object.<string,*>} object Plain object
-         * @returns {vschema.Column} Column
-         */
-        Column.fromObject = function fromObject(object) {
-            if (object instanceof $root.vschema.Column)
-                return object;
-            var message = new $root.vschema.Column();
-            if (object.name != null)
-                message.name = String(object.name);
-            switch (object.type) {
-            case "NULL_TYPE":
-            case 0:
-                message.type = 0;
-                break;
-            case "INT8":
-            case 257:
-                message.type = 257;
-                break;
-            case "UINT8":
-            case 770:
-                message.type = 770;
-                break;
-            case "INT16":
-            case 259:
-                message.type = 259;
-                break;
-            case "UINT16":
-            case 772:
-                message.type = 772;
-                break;
-            case "INT24":
-            case 261:
-                message.type = 261;
-                break;
-            case "UINT24":
-            case 774:
-                message.type = 774;
-                break;
-            case "INT32":
-            case 263:
-                message.type = 263;
-                break;
-            case "UINT32":
-            case 776:
-                message.type = 776;
-                break;
-            case "INT64":
-            case 265:
-                message.type = 265;
-                break;
-            case "UINT64":
-            case 778:
-                message.type = 778;
-                break;
-            case "FLOAT32":
-            case 1035:
-                message.type = 1035;
-                break;
-            case "FLOAT64":
-            case 1036:
-                message.type = 1036;
-                break;
-            case "TIMESTAMP":
-            case 2061:
-                message.type = 2061;
-                break;
-            case "DATE":
-            case 2062:
-                message.type = 2062;
-                break;
-            case "TIME":
-            case 2063:
-                message.type = 2063;
-                break;
-            case "DATETIME":
-            case 2064:
-                message.type = 2064;
-                break;
-            case "YEAR":
-            case 785:
-                message.type = 785;
-                break;
-            case "DECIMAL":
-            case 18:
-                message.type = 18;
-                break;
-            case "TEXT":
-            case 6163:
-                message.type = 6163;
-                break;
-            case "BLOB":
-            case 10260:
-                message.type = 10260;
-                break;
-            case "VARCHAR":
-            case 6165:
-                message.type = 6165;
-                break;
-            case "VARBINARY":
-            case 10262:
-                message.type = 10262;
-                break;
-            case "CHAR":
-            case 6167:
-                message.type = 6167;
-                break;
-            case "BINARY":
-            case 10264:
-                message.type = 10264;
-                break;
-            case "BIT":
-            case 2073:
-                message.type = 2073;
-                break;
-            case "ENUM":
-            case 2074:
-                message.type = 2074;
-                break;
-            case "SET":
-            case 2075:
-                message.type = 2075;
-                break;
-            case "TUPLE":
-            case 28:
-                message.type = 28;
-                break;
-            case "GEOMETRY":
-            case 2077:
-                message.type = 2077;
-                break;
-            case "JSON":
-            case 2078:
-                message.type = 2078;
-                break;
-            case "EXPRESSION":
-            case 31:
-                message.type = 31;
-                break;
-            }
-            return message;
-        };
-
-        /**
-         * Creates a plain object from a Column message. Also converts values to other types if specified.
-         * @function toObject
-         * @memberof vschema.Column
-         * @static
-         * @param {vschema.Column} message Column
-         * @param {$protobuf.IConversionOptions} [options] Conversion options
-         * @returns {Object.<string,*>} Plain object
-         */
-        Column.toObject = function toObject(message, options) {
-            if (!options)
-                options = {};
-            var object = {};
-            if (options.defaults) {
-                object.name = "";
-                object.type = options.enums === String ? "NULL_TYPE" : 0;
-            }
-            if (message.name != null && message.hasOwnProperty("name"))
-                object.name = message.name;
-            if (message.type != null && message.hasOwnProperty("type"))
-                object.type = options.enums === String ? $root.query.Type[message.type] : message.type;
-            return object;
-        };
-
-        /**
-         * Converts this Column to JSON.
-         * @function toJSON
-         * @memberof vschema.Column
-         * @instance
-         * @returns {Object.<string,*>} JSON object
-         */
-        Column.prototype.toJSON = function toJSON() {
-            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
-        };
-
-        return Column;
-    })();
-
-    vschema.SrvVSchema = (function() {
-
-        /**
-         * Properties of a SrvVSchema.
-         * @memberof vschema
-         * @interface ISrvVSchema
-         * @property {Object.<string,vschema.IKeyspace>|null} [keyspaces] SrvVSchema keyspaces
-         * @property {vschema.IRoutingRules|null} [routing_rules] SrvVSchema routing_rules
-         */
-
-        /**
-         * Constructs a new SrvVSchema.
-         * @memberof vschema
-         * @classdesc Represents a SrvVSchema.
-         * @implements ISrvVSchema
-         * @constructor
-         * @param {vschema.ISrvVSchema=} [properties] Properties to set
-         */
-        function SrvVSchema(properties) {
-            this.keyspaces = {};
-            if (properties)
-                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
-                    if (properties[keys[i]] != null)
-                        this[keys[i]] = properties[keys[i]];
-        }
-
-        /**
-         * SrvVSchema keyspaces.
-         * @member {Object.<string,vschema.IKeyspace>} keyspaces
-         * @memberof vschema.SrvVSchema
-         * @instance
-         */
-        SrvVSchema.prototype.keyspaces = $util.emptyObject;
-
-        /**
-         * SrvVSchema routing_rules.
-         * @member {vschema.IRoutingRules|null|undefined} routing_rules
-         * @memberof vschema.SrvVSchema
-         * @instance
-         */
-        SrvVSchema.prototype.routing_rules = null;
-
-        /**
-         * Creates a new SrvVSchema instance using the specified properties.
-         * @function create
-         * @memberof vschema.SrvVSchema
-         * @static
-         * @param {vschema.ISrvVSchema=} [properties] Properties to set
-         * @returns {vschema.SrvVSchema} SrvVSchema instance
-         */
-        SrvVSchema.create = function create(properties) {
-            return new SrvVSchema(properties);
-        };
-
-        /**
-         * Encodes the specified SrvVSchema message. Does not implicitly {@link vschema.SrvVSchema.verify|verify} messages.
-         * @function encode
-         * @memberof vschema.SrvVSchema
-         * @static
-         * @param {vschema.ISrvVSchema} message SrvVSchema message or plain object to encode
-         * @param {$protobuf.Writer} [writer] Writer to encode to
-         * @returns {$protobuf.Writer} Writer
-         */
-        SrvVSchema.encode = function encode(message, writer) {
-            if (!writer)
-                writer = $Writer.create();
-            if (message.keyspaces != null && Object.hasOwnProperty.call(message, "keyspaces"))
-                for (var keys = Object.keys(message.keyspaces), i = 0; i < keys.length; ++i) {
-                    writer.uint32(/* id 1, wireType 2 =*/10).fork().uint32(/* id 1, wireType 2 =*/10).string(keys[i]);
-                    $root.vschema.Keyspace.encode(message.keyspaces[keys[i]], writer.uint32(/* id 2, wireType 2 =*/18).fork()).ldelim().ldelim();
-                }
-            if (message.routing_rules != null && Object.hasOwnProperty.call(message, "routing_rules"))
-                $root.vschema.RoutingRules.encode(message.routing_rules, writer.uint32(/* id 2, wireType 2 =*/18).fork()).ldelim();
-            return writer;
-        };
-
-        /**
-         * Encodes the specified SrvVSchema message, length delimited. Does not implicitly {@link vschema.SrvVSchema.verify|verify} messages.
-         * @function encodeDelimited
-         * @memberof vschema.SrvVSchema
-         * @static
-         * @param {vschema.ISrvVSchema} message SrvVSchema message or plain object to encode
-         * @param {$protobuf.Writer} [writer] Writer to encode to
-         * @returns {$protobuf.Writer} Writer
-         */
-        SrvVSchema.encodeDelimited = function encodeDelimited(message, writer) {
-            return this.encode(message, writer).ldelim();
-        };
-
-        /**
-         * Decodes a SrvVSchema message from the specified reader or buffer.
-         * @function decode
-         * @memberof vschema.SrvVSchema
-         * @static
-         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
-         * @param {number} [length] Message length if known beforehand
-         * @returns {vschema.SrvVSchema} SrvVSchema
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        SrvVSchema.decode = function decode(reader, length) {
-            if (!(reader instanceof $Reader))
-                reader = $Reader.create(reader);
-            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vschema.SrvVSchema(), key, value;
-            while (reader.pos < end) {
-                var tag = reader.uint32();
-                switch (tag >>> 3) {
-                case 1:
-                    if (message.keyspaces === $util.emptyObject)
-                        message.keyspaces = {};
-                    var end2 = reader.uint32() + reader.pos;
-                    key = "";
-                    value = null;
-                    while (reader.pos < end2) {
-                        var tag2 = reader.uint32();
-                        switch (tag2 >>> 3) {
-                        case 1:
-                            key = reader.string();
-                            break;
-                        case 2:
-                            value = $root.vschema.Keyspace.decode(reader, reader.uint32());
-                            break;
-                        default:
-                            reader.skipType(tag2 & 7);
-                            break;
-                        }
-                    }
-                    message.keyspaces[key] = value;
-                    break;
-                case 2:
-                    message.routing_rules = $root.vschema.RoutingRules.decode(reader, reader.uint32());
-                    break;
-                default:
-                    reader.skipType(tag & 7);
-                    break;
-                }
-            }
-            return message;
-        };
-
-        /**
-         * Decodes a SrvVSchema message from the specified reader or buffer, length delimited.
-         * @function decodeDelimited
-         * @memberof vschema.SrvVSchema
-         * @static
-         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
-         * @returns {vschema.SrvVSchema} SrvVSchema
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        SrvVSchema.decodeDelimited = function decodeDelimited(reader) {
-            if (!(reader instanceof $Reader))
-                reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
-        };
-
-        /**
-         * Verifies a SrvVSchema message.
-         * @function verify
-         * @memberof vschema.SrvVSchema
-         * @static
-         * @param {Object.<string,*>} message Plain object to verify
-         * @returns {string|null} `null` if valid, otherwise the reason why it is not
-         */
-        SrvVSchema.verify = function verify(message) {
-            if (typeof message !== "object" || message === null)
-                return "object expected";
-            if (message.keyspaces != null && message.hasOwnProperty("keyspaces")) {
-                if (!$util.isObject(message.keyspaces))
-                    return "keyspaces: object expected";
-                var key = Object.keys(message.keyspaces);
-                for (var i = 0; i < key.length; ++i) {
-                    var error = $root.vschema.Keyspace.verify(message.keyspaces[key[i]]);
-                    if (error)
-                        return "keyspaces." + error;
-                }
-            }
-            if (message.routing_rules != null && message.hasOwnProperty("routing_rules")) {
-                var error = $root.vschema.RoutingRules.verify(message.routing_rules);
-                if (error)
-                    return "routing_rules." + error;
-            }
-            return null;
-        };
-
-        /**
-         * Creates a SrvVSchema message from a plain object. Also converts values to their respective internal types.
-         * @function fromObject
-         * @memberof vschema.SrvVSchema
-         * @static
-         * @param {Object.<string,*>} object Plain object
-         * @returns {vschema.SrvVSchema} SrvVSchema
-         */
-        SrvVSchema.fromObject = function fromObject(object) {
-            if (object instanceof $root.vschema.SrvVSchema)
-                return object;
-            var message = new $root.vschema.SrvVSchema();
-            if (object.keyspaces) {
-                if (typeof object.keyspaces !== "object")
-                    throw TypeError(".vschema.SrvVSchema.keyspaces: object expected");
-                message.keyspaces = {};
-                for (var keys = Object.keys(object.keyspaces), i = 0; i < keys.length; ++i) {
-                    if (typeof object.keyspaces[keys[i]] !== "object")
-                        throw TypeError(".vschema.SrvVSchema.keyspaces: object expected");
-                    message.keyspaces[keys[i]] = $root.vschema.Keyspace.fromObject(object.keyspaces[keys[i]]);
-                }
-            }
-            if (object.routing_rules != null) {
-                if (typeof object.routing_rules !== "object")
-                    throw TypeError(".vschema.SrvVSchema.routing_rules: object expected");
-                message.routing_rules = $root.vschema.RoutingRules.fromObject(object.routing_rules);
-            }
-            return message;
-        };
-
-        /**
-         * Creates a plain object from a SrvVSchema message. Also converts values to other types if specified.
-         * @function toObject
-         * @memberof vschema.SrvVSchema
-         * @static
-         * @param {vschema.SrvVSchema} message SrvVSchema
-         * @param {$protobuf.IConversionOptions} [options] Conversion options
-         * @returns {Object.<string,*>} Plain object
-         */
-        SrvVSchema.toObject = function toObject(message, options) {
-            if (!options)
-                options = {};
-            var object = {};
-            if (options.objects || options.defaults)
-                object.keyspaces = {};
-            if (options.defaults)
-                object.routing_rules = null;
-            var keys2;
-            if (message.keyspaces && (keys2 = Object.keys(message.keyspaces)).length) {
-                object.keyspaces = {};
-                for (var j = 0; j < keys2.length; ++j)
-                    object.keyspaces[keys2[j]] = $root.vschema.Keyspace.toObject(message.keyspaces[keys2[j]], options);
-            }
-            if (message.routing_rules != null && message.hasOwnProperty("routing_rules"))
-                object.routing_rules = $root.vschema.RoutingRules.toObject(message.routing_rules, options);
-            return object;
-        };
-
-        /**
-         * Converts this SrvVSchema to JSON.
-         * @function toJSON
-         * @memberof vschema.SrvVSchema
-         * @instance
-         * @returns {Object.<string,*>} JSON object
-         */
-        SrvVSchema.prototype.toJSON = function toJSON() {
-            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
-        };
-
-        return SrvVSchema;
-    })();
-
-    return vschema;
 })();
 
 module.exports = $root;

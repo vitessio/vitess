@@ -25,11 +25,13 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -181,6 +183,17 @@ type TabletManagerClient struct {
 		Error      error
 	}
 	// keyed by tablet alias.
+	UndoDemoteMasterDelays map[string]time.Duration
+	// keyed by tablet alias
+	UndoDemoteMasterResults map[string]error
+	// tablet alias => duration
+	VReplicationExecDelays map[string]time.Duration
+	// tablet alias => query string => result
+	VReplicationExecResults map[string]map[string]struct {
+		Result *querypb.QueryResult
+		Error  error
+	}
+	// keyed by tablet alias.
 	WaitForPositionDelays map[string]time.Duration
 	// keyed by tablet alias. injects a sleep to the end of the function
 	// regardless of parent context timeout or error result.
@@ -188,10 +201,6 @@ type TabletManagerClient struct {
 	// WaitForPosition(tablet *topodatapb.Tablet, position string) error, so we
 	// key by tablet alias and then by position.
 	WaitForPositionResults map[string]map[string]error
-	// keyed by tablet alias.
-	UndoDemoteMasterDelays map[string]time.Duration
-	// keyed by tablet alias
-	UndoDemoteMasterResults map[string]error
 }
 
 // ChangeType is part of the tmclient.TabletManagerClient interface.
@@ -528,4 +537,49 @@ func (fake *TabletManagerClient) UndoDemoteMaster(ctx context.Context, tablet *t
 	}
 
 	return assert.AnError
+}
+
+// VReplicationExec is part of the tmclient.TabletManagerCLient interface.
+func (fake *TabletManagerClient) VReplicationExec(ctx context.Context, tablet *topodatapb.Tablet, query string) (*querypb.QueryResult, error) {
+	if fake.VReplicationExecResults == nil {
+		return nil, assert.AnError
+	}
+
+	if tablet.Alias == nil {
+		return nil, assert.AnError
+	}
+
+	key := topoproto.TabletAliasString(tablet.Alias)
+
+	if fake.VReplicationExecDelays != nil {
+		if delay, ok := fake.VReplicationExecDelays[key]; ok {
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(delay):
+				// proceed to results
+			}
+		}
+	}
+
+	if resultsForTablet, ok := fake.VReplicationExecResults[key]; ok {
+		// Round trip the expected query both to ensure it's valid and to
+		// standardize on capitalization and formatting.
+		stmt, err := sqlparser.Parse(query)
+		if err != nil {
+			return nil, err
+		}
+
+		buf := sqlparser.NewTrackedBuffer(nil)
+		buf.Myprintf("%v", stmt)
+
+		parsedQuery := buf.ParsedQuery().Query
+
+		// Now do the map lookup.
+		if result, ok := resultsForTablet[parsedQuery]; ok {
+			return result.Result, result.Error
+		}
+	}
+
+	return nil, assert.AnError
 }

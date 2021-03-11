@@ -403,8 +403,8 @@ var commands = []commandGroup{
 				"[-exclude_tables=''] [-include-views] [-skip-no-master] <keyspace name>",
 				"Validates that the master schema from shard 0 matches the schema on all of the other tablets in the keyspace."},
 			{"ApplySchema", commandApplySchema,
-				"[-allow_long_unavailability] [-wait_replicas_timeout=10s] [-ddl_strategy=<ddl_strategy>] {-sql=<sql> || -sql-file=<filename>} <keyspace>",
-				"Applies the schema change to the specified keyspace on every master, running in parallel on all shards. The changes are then propagated to replicas via replication. If -allow_long_unavailability is set, schema changes affecting a large number of rows (and possibly incurring a longer period of unavailability) will not be rejected. ddl_strategy is used to intruct migrations via gh-ost or pt-osc with optional parameters"},
+				"[-allow_long_unavailability] [-wait_replicas_timeout=10s] [-ddl_strategy=<ddl_strategy>] [-skip_preflight] {-sql=<sql> || -sql-file=<filename>} <keyspace>",
+				"Applies the schema change to the specified keyspace on every master, running in parallel on all shards. The changes are then propagated to replicas via replication. If -allow_long_unavailability is set, schema changes affecting a large number of rows (and possibly incurring a longer period of unavailability) will not be rejected. ddl_strategy is used to intruct migrations via gh-ost or pt-osc with optional parameters. If -skip_preflight, SQL goes directly to shards without going through sanity checks"},
 			{"CopySchemaShard", commandCopySchemaShard,
 				"[-tables=<table1>,<table2>,...] [-exclude_tables=<table1>,<table2>,...] [-include-views] [-skip-verify] [-wait_replicas_timeout=10s] {<source keyspace/shard> || <source tablet alias>} <destination keyspace/shard>",
 				"Copies the schema from a source shard's master (or a specific tablet) to a destination shard. The schema is applied directly on the master of the destination shard, and it is propagated to the replicas through binlogs."},
@@ -2853,6 +2853,7 @@ func commandApplySchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 	sqlFile := subFlags.String("sql-file", "", "Identifies the file that contains the SQL commands")
 	ddlStrategy := subFlags.String("ddl_strategy", string(schema.DDLStrategyDirect), "Online DDL strategy, compatible with @@ddl_strategy session variable (examples: 'gh-ost', 'pt-osc', 'gh-ost --max-load=Threads_running=100'")
 	waitReplicasTimeout := subFlags.Duration("wait_replicas_timeout", wrangler.DefaultWaitReplicasTimeout, "The amount of time to wait for replicas to receive the schema change via replication.")
+	skipPreflight := subFlags.Bool("skip_preflight", false, "Skip pre-apply schema checks, and dircetly forward schema change query to shards")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -2873,6 +2874,9 @@ func commandApplySchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 	executor := schemamanager.NewTabletExecutor(requestContext, wr, *waitReplicasTimeout)
 	if *allowLongUnavailability {
 		executor.AllowBigSchemaChange()
+	}
+	if *skipPreflight {
+		executor.SkipPreflight()
 	}
 	if err := executor.SetDDLStrategy(*ddlStrategy); err != nil {
 		return nil
@@ -2955,6 +2959,34 @@ func commandOnlineDDL(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag
 				return fmt.Errorf("UUID not allowed in %s", command)
 			}
 			query = `update _vt.schema_migrations set migration_status='cancel-all'`
+		}
+	case "revert":
+		{
+			if arg == "" {
+				return fmt.Errorf("UUID required")
+			}
+			uuid = arg
+			contextUUID, err := schema.CreateUUID()
+			if err != nil {
+				return err
+			}
+			requestContext := fmt.Sprintf("vtctl:%s", contextUUID)
+
+			onlineDDL, err := schema.NewOnlineDDL(keyspace, "", fmt.Sprintf("revert %s", uuid), schema.DDLStrategyOnline, "", requestContext)
+			if err != nil {
+				return err
+			}
+			conn, err := wr.TopoServer().ConnForCell(ctx, topo.GlobalCell)
+			if err != nil {
+				return err
+			}
+			err = onlineDDL.WriteTopo(ctx, conn, schema.MigrationRequestsPath())
+			if err != nil {
+				return err
+			}
+			wr.Logger().Infof("UUID=%+v", onlineDDL.UUID)
+			wr.Logger().Printf("%s\n", onlineDDL.UUID)
+			return nil
 		}
 	default:
 		return fmt.Errorf("Unknown OnlineDDL command: %s", command)

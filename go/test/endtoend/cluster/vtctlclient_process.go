@@ -122,6 +122,16 @@ func (vtctlclient *VtctlClientProcess) OnlineDDLRetryMigration(Keyspace, uuid st
 	)
 }
 
+// OnlineDDLRevertMigration reverts a given migration uuid
+func (vtctlclient *VtctlClientProcess) OnlineDDLRevertMigration(Keyspace, uuid string) (result string, err error) {
+	return vtctlclient.ExecuteCommandWithOutput(
+		"OnlineDDL",
+		Keyspace,
+		"revert",
+		uuid,
+	)
+}
+
 // VExec runs a VExec query
 func (vtctlclient *VtctlClientProcess) VExec(Keyspace, workflow, query string) (result string, err error) {
 	return vtctlclient.ExecuteCommandWithOutput(
