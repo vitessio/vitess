@@ -54,7 +54,10 @@ var (
 	// outages. Keep this high if
 	// 		you have too many streams the extra write qps or cpu load due to these updates are unacceptable
 	//		you have too many streams and/or a large source field (lot of participating tables) which generates unacceptable increase in your binlog size
-	vreplicationHeartbeatUpdateInterval = flag.Int("vreplication_heartbeat_update_interval", 1, "Frequency (in seconds) at which the time_updated column of a vreplication stream when idling")
+	vreplicationHeartbeatUpdateInterval = flag.Int("vreplication_heartbeat_update_interval", 1, "Frequency (in seconds, default 1, max 60) at which the time_updated column of a vreplication stream when idling")
+	// vreplicationMinimumHeartbeatUpdateInterval overrides vreplicationHeartbeatUpdateInterval if the latter is higher than this
+	// to ensure that it satisfies liveness criteria implicitly expected by internal processes like Online DDL
+	vreplicationMinimumHeartbeatUpdateInterval = 60
 )
 
 // vreplicator provides the core logic to start vreplication streams

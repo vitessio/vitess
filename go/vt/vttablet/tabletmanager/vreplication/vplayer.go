@@ -262,7 +262,8 @@ func (vp *vplayer) updateCurrentTime(tm int64) error {
 }
 
 func (vp *vplayer) mustUpdateCurrentTime() bool {
-	return vp.numAccumulatedHeartbeats >= *vreplicationHeartbeatUpdateInterval
+	return vp.numAccumulatedHeartbeats >= *vreplicationHeartbeatUpdateInterval ||
+		vp.numAccumulatedHeartbeats >= vreplicationMinimumHeartbeatUpdateInterval
 }
 
 func (vp *vplayer) recordHeartbeat() error {
