@@ -302,7 +302,7 @@ func TestSchemaChange(t *testing.T) {
 			}()
 		}
 		wg.Wait()
-		onlineddl.CheckCancelAllMigrations(t, &vtParams, count)
+		onlineddl.CheckCancelAllMigrations(t, &vtParams, len(shards)*count)
 	})
 	t.Run("Online DROP, vtctl", func(t *testing.T) {
 		uuid := testOnlineDDLStatement(t, onlineDDLDropTableStatement, "online", "vtctl", "")
