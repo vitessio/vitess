@@ -692,6 +692,253 @@ $root.vtadmin = (function() {
         return Cluster;
     })();
 
+    vtadmin.ClusterWorkflows = (function() {
+
+        /**
+         * Properties of a ClusterWorkflows.
+         * @memberof vtadmin
+         * @interface IClusterWorkflows
+         * @property {Array.<vtadmin.IWorkflow>|null} [workflows] ClusterWorkflows workflows
+         * @property {Array.<string>|null} [warnings] ClusterWorkflows warnings
+         */
+
+        /**
+         * Constructs a new ClusterWorkflows.
+         * @memberof vtadmin
+         * @classdesc Represents a ClusterWorkflows.
+         * @implements IClusterWorkflows
+         * @constructor
+         * @param {vtadmin.IClusterWorkflows=} [properties] Properties to set
+         */
+        function ClusterWorkflows(properties) {
+            this.workflows = [];
+            this.warnings = [];
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * ClusterWorkflows workflows.
+         * @member {Array.<vtadmin.IWorkflow>} workflows
+         * @memberof vtadmin.ClusterWorkflows
+         * @instance
+         */
+        ClusterWorkflows.prototype.workflows = $util.emptyArray;
+
+        /**
+         * ClusterWorkflows warnings.
+         * @member {Array.<string>} warnings
+         * @memberof vtadmin.ClusterWorkflows
+         * @instance
+         */
+        ClusterWorkflows.prototype.warnings = $util.emptyArray;
+
+        /**
+         * Creates a new ClusterWorkflows instance using the specified properties.
+         * @function create
+         * @memberof vtadmin.ClusterWorkflows
+         * @static
+         * @param {vtadmin.IClusterWorkflows=} [properties] Properties to set
+         * @returns {vtadmin.ClusterWorkflows} ClusterWorkflows instance
+         */
+        ClusterWorkflows.create = function create(properties) {
+            return new ClusterWorkflows(properties);
+        };
+
+        /**
+         * Encodes the specified ClusterWorkflows message. Does not implicitly {@link vtadmin.ClusterWorkflows.verify|verify} messages.
+         * @function encode
+         * @memberof vtadmin.ClusterWorkflows
+         * @static
+         * @param {vtadmin.IClusterWorkflows} message ClusterWorkflows message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        ClusterWorkflows.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.workflows != null && message.workflows.length)
+                for (var i = 0; i < message.workflows.length; ++i)
+                    $root.vtadmin.Workflow.encode(message.workflows[i], writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
+            if (message.warnings != null && message.warnings.length)
+                for (var i = 0; i < message.warnings.length; ++i)
+                    writer.uint32(/* id 2, wireType 2 =*/18).string(message.warnings[i]);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified ClusterWorkflows message, length delimited. Does not implicitly {@link vtadmin.ClusterWorkflows.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtadmin.ClusterWorkflows
+         * @static
+         * @param {vtadmin.IClusterWorkflows} message ClusterWorkflows message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        ClusterWorkflows.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a ClusterWorkflows message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtadmin.ClusterWorkflows
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtadmin.ClusterWorkflows} ClusterWorkflows
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        ClusterWorkflows.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.ClusterWorkflows();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    if (!(message.workflows && message.workflows.length))
+                        message.workflows = [];
+                    message.workflows.push($root.vtadmin.Workflow.decode(reader, reader.uint32()));
+                    break;
+                case 2:
+                    if (!(message.warnings && message.warnings.length))
+                        message.warnings = [];
+                    message.warnings.push(reader.string());
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a ClusterWorkflows message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtadmin.ClusterWorkflows
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtadmin.ClusterWorkflows} ClusterWorkflows
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        ClusterWorkflows.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a ClusterWorkflows message.
+         * @function verify
+         * @memberof vtadmin.ClusterWorkflows
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        ClusterWorkflows.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.workflows != null && message.hasOwnProperty("workflows")) {
+                if (!Array.isArray(message.workflows))
+                    return "workflows: array expected";
+                for (var i = 0; i < message.workflows.length; ++i) {
+                    var error = $root.vtadmin.Workflow.verify(message.workflows[i]);
+                    if (error)
+                        return "workflows." + error;
+                }
+            }
+            if (message.warnings != null && message.hasOwnProperty("warnings")) {
+                if (!Array.isArray(message.warnings))
+                    return "warnings: array expected";
+                for (var i = 0; i < message.warnings.length; ++i)
+                    if (!$util.isString(message.warnings[i]))
+                        return "warnings: string[] expected";
+            }
+            return null;
+        };
+
+        /**
+         * Creates a ClusterWorkflows message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtadmin.ClusterWorkflows
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtadmin.ClusterWorkflows} ClusterWorkflows
+         */
+        ClusterWorkflows.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtadmin.ClusterWorkflows)
+                return object;
+            var message = new $root.vtadmin.ClusterWorkflows();
+            if (object.workflows) {
+                if (!Array.isArray(object.workflows))
+                    throw TypeError(".vtadmin.ClusterWorkflows.workflows: array expected");
+                message.workflows = [];
+                for (var i = 0; i < object.workflows.length; ++i) {
+                    if (typeof object.workflows[i] !== "object")
+                        throw TypeError(".vtadmin.ClusterWorkflows.workflows: object expected");
+                    message.workflows[i] = $root.vtadmin.Workflow.fromObject(object.workflows[i]);
+                }
+            }
+            if (object.warnings) {
+                if (!Array.isArray(object.warnings))
+                    throw TypeError(".vtadmin.ClusterWorkflows.warnings: array expected");
+                message.warnings = [];
+                for (var i = 0; i < object.warnings.length; ++i)
+                    message.warnings[i] = String(object.warnings[i]);
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a ClusterWorkflows message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtadmin.ClusterWorkflows
+         * @static
+         * @param {vtadmin.ClusterWorkflows} message ClusterWorkflows
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        ClusterWorkflows.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.arrays || options.defaults) {
+                object.workflows = [];
+                object.warnings = [];
+            }
+            if (message.workflows && message.workflows.length) {
+                object.workflows = [];
+                for (var j = 0; j < message.workflows.length; ++j)
+                    object.workflows[j] = $root.vtadmin.Workflow.toObject(message.workflows[j], options);
+            }
+            if (message.warnings && message.warnings.length) {
+                object.warnings = [];
+                for (var j = 0; j < message.warnings.length; ++j)
+                    object.warnings[j] = message.warnings[j];
+            }
+            return object;
+        };
+
+        /**
+         * Converts this ClusterWorkflows to JSON.
+         * @function toJSON
+         * @memberof vtadmin.ClusterWorkflows
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        ClusterWorkflows.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return ClusterWorkflows;
+    })();
+
     vtadmin.Keyspace = (function() {
 
         /**
@@ -6389,7 +6636,7 @@ $root.vtadmin = (function() {
          * Properties of a GetWorkflowsResponse.
          * @memberof vtadmin
          * @interface IGetWorkflowsResponse
-         * @property {Array.<vtadmin.IWorkflow>|null} [workflows] GetWorkflowsResponse workflows
+         * @property {Object.<string,vtadmin.IClusterWorkflows>|null} [workflows_by_cluster] GetWorkflowsResponse workflows_by_cluster
          */
 
         /**
@@ -6401,7 +6648,7 @@ $root.vtadmin = (function() {
          * @param {vtadmin.IGetWorkflowsResponse=} [properties] Properties to set
          */
         function GetWorkflowsResponse(properties) {
-            this.workflows = [];
+            this.workflows_by_cluster = {};
             if (properties)
                 for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
                     if (properties[keys[i]] != null)
@@ -6409,12 +6656,12 @@ $root.vtadmin = (function() {
         }
 
         /**
-         * GetWorkflowsResponse workflows.
-         * @member {Array.<vtadmin.IWorkflow>} workflows
+         * GetWorkflowsResponse workflows_by_cluster.
+         * @member {Object.<string,vtadmin.IClusterWorkflows>} workflows_by_cluster
          * @memberof vtadmin.GetWorkflowsResponse
          * @instance
          */
-        GetWorkflowsResponse.prototype.workflows = $util.emptyArray;
+        GetWorkflowsResponse.prototype.workflows_by_cluster = $util.emptyObject;
 
         /**
          * Creates a new GetWorkflowsResponse instance using the specified properties.
@@ -6440,9 +6687,11 @@ $root.vtadmin = (function() {
         GetWorkflowsResponse.encode = function encode(message, writer) {
             if (!writer)
                 writer = $Writer.create();
-            if (message.workflows != null && message.workflows.length)
-                for (var i = 0; i < message.workflows.length; ++i)
-                    $root.vtadmin.Workflow.encode(message.workflows[i], writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
+            if (message.workflows_by_cluster != null && Object.hasOwnProperty.call(message, "workflows_by_cluster"))
+                for (var keys = Object.keys(message.workflows_by_cluster), i = 0; i < keys.length; ++i) {
+                    writer.uint32(/* id 1, wireType 2 =*/10).fork().uint32(/* id 1, wireType 2 =*/10).string(keys[i]);
+                    $root.vtadmin.ClusterWorkflows.encode(message.workflows_by_cluster[keys[i]], writer.uint32(/* id 2, wireType 2 =*/18).fork()).ldelim().ldelim();
+                }
             return writer;
         };
 
@@ -6473,14 +6722,31 @@ $root.vtadmin = (function() {
         GetWorkflowsResponse.decode = function decode(reader, length) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
-            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.GetWorkflowsResponse();
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.GetWorkflowsResponse(), key, value;
             while (reader.pos < end) {
                 var tag = reader.uint32();
                 switch (tag >>> 3) {
                 case 1:
-                    if (!(message.workflows && message.workflows.length))
-                        message.workflows = [];
-                    message.workflows.push($root.vtadmin.Workflow.decode(reader, reader.uint32()));
+                    if (message.workflows_by_cluster === $util.emptyObject)
+                        message.workflows_by_cluster = {};
+                    var end2 = reader.uint32() + reader.pos;
+                    key = "";
+                    value = null;
+                    while (reader.pos < end2) {
+                        var tag2 = reader.uint32();
+                        switch (tag2 >>> 3) {
+                        case 1:
+                            key = reader.string();
+                            break;
+                        case 2:
+                            value = $root.vtadmin.ClusterWorkflows.decode(reader, reader.uint32());
+                            break;
+                        default:
+                            reader.skipType(tag2 & 7);
+                            break;
+                        }
+                    }
+                    message.workflows_by_cluster[key] = value;
                     break;
                 default:
                     reader.skipType(tag & 7);
@@ -6517,13 +6783,14 @@ $root.vtadmin = (function() {
         GetWorkflowsResponse.verify = function verify(message) {
             if (typeof message !== "object" || message === null)
                 return "object expected";
-            if (message.workflows != null && message.hasOwnProperty("workflows")) {
-                if (!Array.isArray(message.workflows))
-                    return "workflows: array expected";
-                for (var i = 0; i < message.workflows.length; ++i) {
-                    var error = $root.vtadmin.Workflow.verify(message.workflows[i]);
+            if (message.workflows_by_cluster != null && message.hasOwnProperty("workflows_by_cluster")) {
+                if (!$util.isObject(message.workflows_by_cluster))
+                    return "workflows_by_cluster: object expected";
+                var key = Object.keys(message.workflows_by_cluster);
+                for (var i = 0; i < key.length; ++i) {
+                    var error = $root.vtadmin.ClusterWorkflows.verify(message.workflows_by_cluster[key[i]]);
                     if (error)
-                        return "workflows." + error;
+                        return "workflows_by_cluster." + error;
                 }
             }
             return null;
@@ -6541,14 +6808,14 @@ $root.vtadmin = (function() {
             if (object instanceof $root.vtadmin.GetWorkflowsResponse)
                 return object;
             var message = new $root.vtadmin.GetWorkflowsResponse();
-            if (object.workflows) {
-                if (!Array.isArray(object.workflows))
-                    throw TypeError(".vtadmin.GetWorkflowsResponse.workflows: array expected");
-                message.workflows = [];
-                for (var i = 0; i < object.workflows.length; ++i) {
-                    if (typeof object.workflows[i] !== "object")
-                        throw TypeError(".vtadmin.GetWorkflowsResponse.workflows: object expected");
-                    message.workflows[i] = $root.vtadmin.Workflow.fromObject(object.workflows[i]);
+            if (object.workflows_by_cluster) {
+                if (typeof object.workflows_by_cluster !== "object")
+                    throw TypeError(".vtadmin.GetWorkflowsResponse.workflows_by_cluster: object expected");
+                message.workflows_by_cluster = {};
+                for (var keys = Object.keys(object.workflows_by_cluster), i = 0; i < keys.length; ++i) {
+                    if (typeof object.workflows_by_cluster[keys[i]] !== "object")
+                        throw TypeError(".vtadmin.GetWorkflowsResponse.workflows_by_cluster: object expected");
+                    message.workflows_by_cluster[keys[i]] = $root.vtadmin.ClusterWorkflows.fromObject(object.workflows_by_cluster[keys[i]]);
                 }
             }
             return message;
@@ -6567,12 +6834,13 @@ $root.vtadmin = (function() {
             if (!options)
                 options = {};
             var object = {};
-            if (options.arrays || options.defaults)
-                object.workflows = [];
-            if (message.workflows && message.workflows.length) {
-                object.workflows = [];
-                for (var j = 0; j < message.workflows.length; ++j)
-                    object.workflows[j] = $root.vtadmin.Workflow.toObject(message.workflows[j], options);
+            if (options.objects || options.defaults)
+                object.workflows_by_cluster = {};
+            var keys2;
+            if (message.workflows_by_cluster && (keys2 = Object.keys(message.workflows_by_cluster)).length) {
+                object.workflows_by_cluster = {};
+                for (var j = 0; j < keys2.length; ++j)
+                    object.workflows_by_cluster[keys2[j]] = $root.vtadmin.ClusterWorkflows.toObject(message.workflows_by_cluster[keys2[j]], options);
             }
             return object;
         };

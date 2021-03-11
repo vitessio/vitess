@@ -395,6 +395,102 @@ export namespace vtadmin {
         public toJSON(): { [k: string]: any };
     }
 
+    /** Properties of a ClusterWorkflows. */
+    interface IClusterWorkflows {
+
+        /** ClusterWorkflows workflows */
+        workflows?: (vtadmin.IWorkflow[]|null);
+
+        /** ClusterWorkflows warnings */
+        warnings?: (string[]|null);
+    }
+
+    /** Represents a ClusterWorkflows. */
+    class ClusterWorkflows implements IClusterWorkflows {
+
+        /**
+         * Constructs a new ClusterWorkflows.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.IClusterWorkflows);
+
+        /** ClusterWorkflows workflows. */
+        public workflows: vtadmin.IWorkflow[];
+
+        /** ClusterWorkflows warnings. */
+        public warnings: string[];
+
+        /**
+         * Creates a new ClusterWorkflows instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ClusterWorkflows instance
+         */
+        public static create(properties?: vtadmin.IClusterWorkflows): vtadmin.ClusterWorkflows;
+
+        /**
+         * Encodes the specified ClusterWorkflows message. Does not implicitly {@link vtadmin.ClusterWorkflows.verify|verify} messages.
+         * @param message ClusterWorkflows message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.IClusterWorkflows, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ClusterWorkflows message, length delimited. Does not implicitly {@link vtadmin.ClusterWorkflows.verify|verify} messages.
+         * @param message ClusterWorkflows message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.IClusterWorkflows, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ClusterWorkflows message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ClusterWorkflows
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.ClusterWorkflows;
+
+        /**
+         * Decodes a ClusterWorkflows message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ClusterWorkflows
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.ClusterWorkflows;
+
+        /**
+         * Verifies a ClusterWorkflows message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ClusterWorkflows message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ClusterWorkflows
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.ClusterWorkflows;
+
+        /**
+         * Creates a plain object from a ClusterWorkflows message. Also converts values to other types if specified.
+         * @param message ClusterWorkflows
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.ClusterWorkflows, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ClusterWorkflows to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
     /** Properties of a Keyspace. */
     interface IKeyspace {
 
@@ -2808,8 +2904,8 @@ export namespace vtadmin {
     /** Properties of a GetWorkflowsResponse. */
     interface IGetWorkflowsResponse {
 
-        /** GetWorkflowsResponse workflows */
-        workflows?: (vtadmin.IWorkflow[]|null);
+        /** GetWorkflowsResponse workflows_by_cluster */
+        workflows_by_cluster?: ({ [k: string]: vtadmin.IClusterWorkflows }|null);
     }
 
     /** Represents a GetWorkflowsResponse. */
@@ -2821,8 +2917,8 @@ export namespace vtadmin {
          */
         constructor(properties?: vtadmin.IGetWorkflowsResponse);
 
-        /** GetWorkflowsResponse workflows. */
-        public workflows: vtadmin.IWorkflow[];
+        /** GetWorkflowsResponse workflows_by_cluster. */
+        public workflows_by_cluster: { [k: string]: vtadmin.IClusterWorkflows };
 
         /**
          * Creates a new GetWorkflowsResponse instance using the specified properties.
