@@ -409,8 +409,8 @@ handleError:
 }
 
 // VStream streams binlog events.
-func (vtg *VTGate) VStream(ctx context.Context, tabletType topodatapb.TabletType, vgtid *binlogdatapb.VGtid, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
-	return vtg.vsm.VStream(ctx, tabletType, vgtid, filter, false, send)
+func (vtg *VTGate) VStream(ctx context.Context, tabletType topodatapb.TabletType, vgtid *binlogdatapb.VGtid, filter *binlogdatapb.Filter, flags *vtgatepb.VStreamFlags, send func([]*binlogdatapb.VEvent) error) error {
+	return vtg.vsm.VStream(ctx, tabletType, vgtid, filter, flags, send)
 }
 
 // GetGatewayCacheStatus returns a displayable version of the Gateway cache.

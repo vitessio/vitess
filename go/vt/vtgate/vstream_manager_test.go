@@ -23,6 +23,8 @@ import (
 	"testing"
 	"time"
 
+	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
+
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/vttablet/sandboxconn"
 
@@ -192,7 +194,7 @@ func TestVStreamEvents(t *testing.T) {
 	}
 	ch := make(chan *binlogdatapb.VStreamResponse)
 	go func() {
-		err := vsm.VStream(ctx, topodatapb.TabletType_MASTER, vgtid, nil, false, func(events []*binlogdatapb.VEvent) error {
+		err := vsm.VStream(ctx, topodatapb.TabletType_MASTER, vgtid, nil, &vtgatepb.VStreamFlags{}, func(events []*binlogdatapb.VEvent) error {
 			ch <- &binlogdatapb.VStreamResponse{Events: events}
 			return nil
 		})
@@ -243,7 +245,7 @@ func TestVStreamChunks(t *testing.T) {
 			Gtid:     "pos",
 		}},
 	}
-	_ = vsm.VStream(ctx, topodatapb.TabletType_MASTER, vgtid, nil, false, func(events []*binlogdatapb.VEvent) error {
+	_ = vsm.VStream(ctx, topodatapb.TabletType_MASTER, vgtid, nil, &vtgatepb.VStreamFlags{}, func(events []*binlogdatapb.VEvent) error {
 		switch events[0].Type {
 		case binlogdatapb.VEventType_ROW:
 			if doneCounting {
@@ -368,7 +370,7 @@ func TestVStreamRetry(t *testing.T) {
 			Gtid:     "pos",
 		}},
 	}
-	err := vsm.VStream(ctx, topodatapb.TabletType_MASTER, vgtid, nil, false, func(events []*binlogdatapb.VEvent) error {
+	err := vsm.VStream(ctx, topodatapb.TabletType_MASTER, vgtid, nil, &vtgatepb.VStreamFlags{}, func(events []*binlogdatapb.VEvent) error {
 		count++
 		return nil
 	})
@@ -809,7 +811,7 @@ func TestVStreamJournalPartialMatch(t *testing.T) {
 			Gtid:     "pos1020",
 		}},
 	}
-	err := vsm.VStream(ctx, topodatapb.TabletType_MASTER, vgtid, nil, false, func(events []*binlogdatapb.VEvent) error {
+	err := vsm.VStream(ctx, topodatapb.TabletType_MASTER, vgtid, nil, &vtgatepb.VStreamFlags{}, func(events []*binlogdatapb.VEvent) error {
 		t.Errorf("unexpected events: %v", events)
 		return nil
 	})
@@ -838,7 +840,7 @@ func TestVStreamJournalPartialMatch(t *testing.T) {
 		}},
 	}
 	sbc2.AddVStreamEvents(send, nil)
-	err = vsm.VStream(ctx, topodatapb.TabletType_MASTER, vgtid, nil, false, func(events []*binlogdatapb.VEvent) error {
+	err = vsm.VStream(ctx, topodatapb.TabletType_MASTER, vgtid, nil, &vtgatepb.VStreamFlags{}, func(events []*binlogdatapb.VEvent) error {
 		t.Errorf("unexpected events: %v", events)
 		return nil
 	})
@@ -984,7 +986,7 @@ func newTestVStreamManager(hc discovery.HealthCheck, serv srvtopo.Server, cell s
 func startVStream(ctx context.Context, t *testing.T, vsm *vstreamManager, vgtid *binlogdatapb.VGtid, minimizeSkew bool) <-chan *binlogdatapb.VStreamResponse {
 	ch := make(chan *binlogdatapb.VStreamResponse)
 	go func() {
-		_ = vsm.VStream(ctx, topodatapb.TabletType_MASTER, vgtid, nil, minimizeSkew, func(events []*binlogdatapb.VEvent) error {
+		_ = vsm.VStream(ctx, topodatapb.TabletType_MASTER, vgtid, nil, &vtgatepb.VStreamFlags{MinimizeSkew: true}, func(events []*binlogdatapb.VEvent) error {
 			ch <- &binlogdatapb.VStreamResponse{Events: events}
 			return nil
 		})
