@@ -186,10 +186,8 @@ func (thc *tabletHealthCheck) processResponse(hc *HealthCheckImpl, shr *query.St
 
 	currentTarget := thc.Target
 	// check whether this is a trivial update so as to update healthy map
-	trivialNonMasterUpdate := thc.LastError == nil && thc.Serving && shr.RealtimeStats.HealthError == "" && shr.Serving &&
+	trivialUpdate := thc.LastError == nil && thc.Serving && shr.RealtimeStats.HealthError == "" && shr.Serving &&
 		currentTarget.TabletType != topodata.TabletType_MASTER && currentTarget.TabletType == shr.Target.TabletType && thc.isTrivialReplagChange(shr.RealtimeStats)
-	isMasterUpdate := shr.Target.TabletType == topodata.TabletType_MASTER
-	isMasterChange := thc.Target.TabletType != topodata.TabletType_MASTER && shr.Target.TabletType == topodata.TabletType_MASTER
 	thc.lastResponseTimestamp = time.Now()
 	thc.Target = shr.Target
 	thc.MasterTermStartTime = shr.TabletExternallyReparentedTimestamp
@@ -202,7 +200,7 @@ func (thc *tabletHealthCheck) processResponse(hc *HealthCheckImpl, shr *query.St
 	thc.setServingState(serving, reason)
 
 	// notify downstream for master change
-	hc.updateHealth(thc.SimpleCopy(), currentTarget, trivialNonMasterUpdate, isMasterUpdate, isMasterChange)
+	hc.updateHealth(thc.SimpleCopy(), currentTarget, trivialUpdate, true)
 	return nil
 }
 
@@ -295,9 +293,9 @@ func (thc *tabletHealthCheck) checkConn(hc *HealthCheckImpl) {
 				hc.deleteTablet(thc.Tablet)
 				return
 			}
-			// trivialNonMasterUpdate = false because this is an error
-			// It is safe to pass isMasterChange = false because in case of an error there is no information that can be used to update the master
-			hc.updateHealth(thc.SimpleCopy(), thc.Target, false, thc.Target.TabletType == topodata.TabletType_MASTER, false)
+			// trivialUpdate = false because this is an error
+			// isPrimaryUp = false because we did not get a healthy response
+			hc.updateHealth(thc.SimpleCopy(), thc.Target, false, false)
 		}
 		// If there was a timeout send an error. We do this after stream has returned.
 		// This will ensure that this update prevails over any previous message that
@@ -306,9 +304,9 @@ func (thc *tabletHealthCheck) checkConn(hc *HealthCheckImpl) {
 			thc.LastError = fmt.Errorf("healthcheck timed out (latest %v)", thc.lastResponseTimestamp)
 			thc.setServingState(false, thc.LastError.Error())
 			hcErrorCounters.Add([]string{thc.Target.Keyspace, thc.Target.Shard, topoproto.TabletTypeLString(thc.Target.TabletType)}, 1)
-			// trivialNonMasterUpdate = false because this is an error
-			// It is safe to pass isMasterChange = false because in case of timeout there is no information that can be used to update the master
-			hc.updateHealth(thc.SimpleCopy(), thc.Target, false, thc.Target.TabletType == topodata.TabletType_MASTER, false)
+			// trivialUpdate = false because this is an error
+			// isPrimaryUp = false because we did not get a healthy response within the timeout
+			hc.updateHealth(thc.SimpleCopy(), thc.Target, false, false)
 		}
 
 		// Streaming RPC failed e.g. because vttablet was restarted or took too long.
