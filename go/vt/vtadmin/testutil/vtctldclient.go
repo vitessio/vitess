@@ -46,6 +46,10 @@ type VtctldClient struct {
 		Response *vtctldatapb.GetVSchemaResponse
 		Error    error
 	}
+	GetWorkflowsResults map[string]struct {
+		Response *vtctldatapb.GetWorkflowsResponse
+		Error    error
+	}
 }
 
 // Compile-time type assertion to make sure we haven't overriden a method
@@ -89,6 +93,19 @@ func (fake *VtctldClient) GetVSchema(ctx context.Context, req *vtctldatapb.GetVS
 	}
 
 	if result, ok := fake.GetVSchemaResults[req.Keyspace]; ok {
+		return result.Response, result.Error
+	}
+
+	return nil, fmt.Errorf("%w: no result set for keyspace %s", assert.AnError, req.Keyspace)
+}
+
+// GetWorkflows is part of the vtctldclient.VtctldClient interface.
+func (fake *VtctldClient) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflowsRequest, opts ...grpc.CallOption) (*vtctldatapb.GetWorkflowsResponse, error) {
+	if fake.GetWorkflowsResults == nil {
+		return nil, fmt.Errorf("%w: GetWorkflowsResults not set on fake vtctldclient", assert.AnError)
+	}
+
+	if result, ok := fake.GetWorkflowsResults[req.Keyspace]; ok {
 		return result.Response, result.Error
 	}
 
