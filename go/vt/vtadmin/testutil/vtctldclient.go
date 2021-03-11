@@ -85,7 +85,7 @@ func (fake *VtctldClient) GetSchema(ctx context.Context, req *vtctldatapb.GetSch
 // GetVSchema is part of the vtctldclient.VtctldClient interface.
 func (fake *VtctldClient) GetVSchema(ctx context.Context, req *vtctldatapb.GetVSchemaRequest, opts ...grpc.CallOption) (*vtctldatapb.GetVSchemaResponse, error) {
 	if fake.GetVSchemaResults == nil {
-		return nil, fmt.Errorf("%w: GetVSchemaResults not set of fake vtctldclient", assert.AnError)
+		return nil, fmt.Errorf("%w: GetVSchemaResults not set on fake vtctldclient", assert.AnError)
 	}
 
 	if result, ok := fake.GetVSchemaResults[req.Keyspace]; ok {
