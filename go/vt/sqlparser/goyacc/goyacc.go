@@ -53,6 +53,7 @@ import (
 	"go/format"
 	"io/ioutil"
 	"os"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -626,7 +627,18 @@ outer:
 			levprd[nprod] |= ACTFLAG
 			fmt.Fprintf(fcode, "\n\tcase %v:", nprod)
 			fmt.Fprintf(fcode, "\n\t\t%sDollar = %sS[%spt-%v:%spt+1]", prefix, prefix, prefix, mem-1, prefix)
-			cpyact(curprod, mem)
+
+			var act bytes.Buffer
+			var unionType string
+			cpyact(&act, curprod, mem, &unionType)
+
+			if unionType != "" {
+				fmt.Fprintf(fcode, "\n\t\tvar %sLOCAL %s", prefix, unionType)
+			}
+			fcode.Write(act.Bytes())
+			if unionType != "" {
+				fmt.Fprintf(fcode, "\n\t\t%sVAL.union = %sLOCAL", prefix, prefix)
+			}
 
 			// action within rule...
 			t = gettok()
@@ -1344,9 +1356,9 @@ l1:
 	return nl
 }
 
-func cpyyvalaccess(curprod []int, tok int) {
-	const fastAppendPrefix = " append($$,"
+var fastAppendRe = regexp.MustCompile(`\s+append\(\$[$1],`)
 
+func cpyyvalaccess(fcode *bytes.Buffer, curprod []int, tok int, unionType *string) {
 	if ntypes == 0 {
 		fmt.Fprintf(fcode, "%sVAL", prefix)
 		return
@@ -1378,11 +1390,15 @@ loop:
 
 		case '=':
 			lvalue = true
-			if allowFastAppend {
+			if allowFastAppend && *unionType == "" {
 				peek, err := finput.Peek(16)
-				if err == nil && bytes.HasPrefix(peek, []byte(fastAppendPrefix)) {
+				if err != nil {
+					errorf("failed to scan forward: %v", err)
+				}
+				match := fastAppendRe.Find(peek)
+				if len(match) > 0 {
 					fastAppend = true
-					for range fastAppendPrefix {
+					for range match {
 						_ = getrune(finput)
 					}
 				} else {
@@ -1404,9 +1420,12 @@ loop:
 		fmt.Fprintf(fcode, "\t%sSLICE := (*%s)(%sIaddr(%sVAL.union))\n", prefix, ti.typename, prefix, prefix)
 		fmt.Fprintf(fcode, "\t*%sSLICE = append(*%sSLICE, ", prefix, prefix)
 	} else if lvalue {
-		fmt.Fprintf(fcode, "%sVAL.union", prefix)
-	} else {
+		fmt.Fprintf(fcode, "%sLOCAL", prefix)
+		*unionType = ti.typename
+	} else if *unionType == "" {
 		fmt.Fprintf(fcode, "%sVAL.%sUnion()", prefix, typeset[tok])
+	} else {
+		fmt.Fprintf(fcode, "%sLOCAL", prefix)
 	}
 	fcode.Write(buf.Bytes())
 }
@@ -1414,7 +1433,7 @@ loop:
 //
 // copy action to the next ; or closing }
 //
-func cpyact(curprod []int, max int) {
+func cpyact(fcode *bytes.Buffer, curprod []int, max int, unionType *string) {
 	if !lflag {
 		fmt.Fprintf(fcode, "\n//line %v:%v", infile, lineno)
 	}
@@ -1453,7 +1472,7 @@ loop:
 				c = getrune(finput)
 			}
 			if c == '$' {
-				cpyyvalaccess(curprod, tok)
+				cpyyvalaccess(fcode, curprod, tok, unionType)
 				continue loop
 			}
 			if c == '-' {
