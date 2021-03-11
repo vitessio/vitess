@@ -227,6 +227,10 @@ func (c *Cluster) FindWorkflows(ctx context.Context, keyspaces []string, opts Fi
 	AnnotateSpan(c, span)
 	span.Annotate("active_only", opts.ActiveOnly)
 
+	if err := c.Vtctld.Dial(ctx); err != nil {
+		return nil, fmt.Errorf("FindWorkflows(cluster = %v, keyspaces = %v, opts = %v) dial failed: %w", c.ID, keyspaces, opts, err)
+	}
+
 	return c.findWorkflows(ctx, keyspaces, opts)
 }
 
@@ -445,6 +449,10 @@ func (c *Cluster) GetWorkflow(ctx context.Context, keyspace string, name string,
 	span.Annotate("keyspace", keyspace)
 	span.Annotate("workflow_name", name)
 
+	if err := c.Vtctld.Dial(ctx); err != nil {
+		return nil, fmt.Errorf("GetWorkflow(cluster = %v, keyspace = %v, workflow = %v, opts = %+v) dial failed: %w", c.ID, keyspace, name, opts, err)
+	}
+
 	workflows, err := c.findWorkflows(ctx, []string{keyspace}, FindWorkflowsOptions{
 		ActiveOnly: opts.ActiveOnly,
 		Filter: func(workflow *vtadminpb.Workflow) bool {
@@ -484,6 +492,10 @@ func (c *Cluster) GetWorkflows(ctx context.Context, keyspaces []string, opts Get
 
 	AnnotateSpan(c, span)
 	span.Annotate("active_only", opts.ActiveOnly)
+
+	if err := c.Vtctld.Dial(ctx); err != nil {
+		return nil, fmt.Errorf("GetWorkflows(cluster = %v, keyspaces = %v, opts = %v) dial failed: %w", c.ID, keyspaces, opts, err)
+	}
 
 	return c.findWorkflows(ctx, keyspaces, FindWorkflowsOptions{
 		ActiveOnly:      opts.ActiveOnly,
