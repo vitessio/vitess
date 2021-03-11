@@ -797,10 +797,6 @@ func (api *API) GetWorkflow(ctx context.Context, req *vtadminpb.GetWorkflowReque
 	span.Annotate("workflow_name", req.Name)
 	span.Annotate("active_only", req.ActiveOnly)
 
-	if err := c.Vtctld.Dial(ctx); err != nil {
-		return nil, err
-	}
-
 	return c.GetWorkflow(ctx, req.Keyspace, req.Name, cluster.GetWorkflowOptions{
 		ActiveOnly: req.ActiveOnly,
 	})
@@ -825,19 +821,6 @@ func (api *API) GetWorkflows(ctx context.Context, req *vtadminpb.GetWorkflowsReq
 
 		go func(c *cluster.Cluster) {
 			defer wg.Done()
-
-			span, ctx := trace.NewSpan(ctx, "API.getWorkflowsForCluster")
-			defer span.Finish()
-
-			cluster.AnnotateSpan(c, span)
-			span.Annotate("active_only", req.ActiveOnly)
-
-			if err := c.Vtctld.Dial(ctx); err != nil {
-				err = fmt.Errorf("failed to dial vtctld for cluster %s: %w", c.ID, err)
-				rec.RecordError(err)
-
-				return
-			}
 
 			workflows, err := c.GetWorkflows(ctx, req.Keyspaces, cluster.GetWorkflowsOptions{
 				ActiveOnly:      req.ActiveOnly,

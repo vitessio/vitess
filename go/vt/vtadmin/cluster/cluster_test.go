@@ -879,9 +879,6 @@ func TestFindWorkflows(t *testing.T) {
 			t.Parallel()
 
 			c := testutil.BuildCluster(tt.cfg)
-			err := c.Vtctld.Dial(ctx)
-			require.NoError(t, err, "could not dial vtctld for testing")
-
 			workflows, err := c.FindWorkflows(ctx, tt.keyspaces, tt.opts)
 			if tt.shouldErr {
 				assert.Error(t, err)
@@ -1155,9 +1152,6 @@ func TestGetWorkflow(t *testing.T) {
 			t.Parallel()
 
 			c := testutil.BuildCluster(tt.cfg)
-			err := c.Vtctld.Dial(ctx)
-			require.NoError(t, err, "could not dial vtctld for test")
-
 			workflow, err := c.GetWorkflow(ctx, tt.keyspace, tt.workflow, tt.opts)
 			if tt.shouldErr {
 				assert.Error(t, err)
@@ -1286,9 +1280,6 @@ func TestGetWorkflows(t *testing.T) {
 			t.Parallel()
 
 			c := testutil.BuildCluster(tt.cfg)
-			err := c.Vtctld.Dial(ctx)
-			require.NoError(t, err, "could not dial vtctld for test")
-
 			workflows, err := c.GetWorkflows(ctx, tt.keyspaces, tt.opts)
 			if tt.shouldErr {
 				assert.Error(t, err)
