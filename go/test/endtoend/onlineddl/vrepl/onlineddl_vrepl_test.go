@@ -255,7 +255,7 @@ func TestSchemaChange(t *testing.T) {
 		uuid := testOnlineDDLStatement(t, alterTableSuccessfulStatement, "online", "vtgate", "vrepl_col")
 		checkRecentMigrations(t, uuid, schema.OnlineDDLStatusComplete)
 		testRows(t)
-		checkCancelMigration(t, uuid, false)
+		onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, false)
 		onlineddl.CheckRetryMigration(t, &vtParams, shards, uuid, false)
 	})
 	t.Run("successful online alter, vtctl", func(t *testing.T) {
@@ -263,7 +263,7 @@ func TestSchemaChange(t *testing.T) {
 		uuid := testOnlineDDLStatement(t, alterTableTrivialStatement, "online", "vtctl", "vrepl_col")
 		checkRecentMigrations(t, uuid, schema.OnlineDDLStatusComplete)
 		testRows(t)
-		checkCancelMigration(t, uuid, false)
+		onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, false)
 		onlineddl.CheckRetryMigration(t, &vtParams, shards, uuid, false)
 	})
 	t.Run("throttled migration", func(t *testing.T) {
@@ -275,7 +275,7 @@ func TestSchemaChange(t *testing.T) {
 		uuid := testOnlineDDLStatement(t, alterTableThrottlingStatement, "online", "vtgate", "vrepl_col")
 		checkRecentMigrations(t, uuid, schema.OnlineDDLStatusRunning)
 		testRows(t)
-		checkCancelMigration(t, uuid, true)
+		onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, true)
 		time.Sleep(2 * time.Second)
 		checkRecentMigrations(t, uuid, schema.OnlineDDLStatusFailed)
 	})
@@ -284,7 +284,7 @@ func TestSchemaChange(t *testing.T) {
 		uuid := testOnlineDDLStatement(t, alterTableFailedStatement, "online", "vtgate", "vrepl_col")
 		checkRecentMigrations(t, uuid, schema.OnlineDDLStatusFailed)
 		testRows(t)
-		checkCancelMigration(t, uuid, false)
+		onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, false)
 		onlineddl.CheckRetryMigration(t, &vtParams, shards, uuid, true)
 		// migration will fail again
 	})
@@ -314,19 +314,19 @@ func TestSchemaChange(t *testing.T) {
 	t.Run("Online DROP, vtctl", func(t *testing.T) {
 		uuid := testOnlineDDLStatement(t, onlineDDLDropTableStatement, "online", "vtctl", "")
 		checkRecentMigrations(t, uuid, schema.OnlineDDLStatusComplete)
-		checkCancelMigration(t, uuid, false)
+		onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, false)
 		onlineddl.CheckRetryMigration(t, &vtParams, shards, uuid, false)
 	})
 	t.Run("Online CREATE, vtctl", func(t *testing.T) {
 		uuid := testOnlineDDLStatement(t, onlineDDLCreateTableStatement, "online", "vtctl", "online_ddl_create_col")
 		checkRecentMigrations(t, uuid, schema.OnlineDDLStatusComplete)
-		checkCancelMigration(t, uuid, false)
+		onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, false)
 		onlineddl.CheckRetryMigration(t, &vtParams, shards, uuid, false)
 	})
 	t.Run("Online DROP TABLE IF EXISTS, vtgate", func(t *testing.T) {
 		uuid := testOnlineDDLStatement(t, onlineDDLDropTableIfExistsStatement, "online", "vtgate", "")
 		checkRecentMigrations(t, uuid, schema.OnlineDDLStatusComplete)
-		checkCancelMigration(t, uuid, false)
+		onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, false)
 		onlineddl.CheckRetryMigration(t, &vtParams, shards, uuid, false)
 		// this table existed
 		checkTables(t, schema.OnlineDDLToGCUUID(uuid), 1)
@@ -334,7 +334,7 @@ func TestSchemaChange(t *testing.T) {
 	t.Run("Online DROP TABLE IF EXISTS for nonexistent table, vtgate", func(t *testing.T) {
 		uuid := testOnlineDDLStatement(t, onlineDDLDropTableIfExistsStatement, "online", "vtgate", "")
 		checkRecentMigrations(t, uuid, schema.OnlineDDLStatusComplete)
-		checkCancelMigration(t, uuid, false)
+		onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, false)
 		onlineddl.CheckRetryMigration(t, &vtParams, shards, uuid, false)
 		// this table did not exist
 		checkTables(t, schema.OnlineDDLToGCUUID(uuid), 0)
@@ -342,7 +342,7 @@ func TestSchemaChange(t *testing.T) {
 	t.Run("Online DROP TABLE for nonexistent table, expect error, vtgate", func(t *testing.T) {
 		uuid := testOnlineDDLStatement(t, onlineDDLDropTableStatement, "online", "vtgate", "")
 		checkRecentMigrations(t, uuid, schema.OnlineDDLStatusFailed)
-		checkCancelMigration(t, uuid, false)
+		onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, false)
 		onlineddl.CheckRetryMigration(t, &vtParams, shards, uuid, true)
 	})
 }
@@ -457,23 +457,6 @@ func checkRecentMigrations(t *testing.T, uuid string, expectStatus schema.Online
 		}
 	}
 	assert.Equal(t, len(clusterInstance.Keyspaces[0].Shards), count)
-}
-
-// checkCancelMigration attempts to cancel a migration, and expects rejection
-func checkCancelMigration(t *testing.T, uuid string, expectCancelPossible bool) {
-	result, err := clusterInstance.VtctlclientProcess.OnlineDDLCancelMigration(keyspaceName, uuid)
-	fmt.Println("# 'vtctlclient OnlineDDL cancel <uuid>' output (for debug purposes):")
-	fmt.Println(result)
-	assert.NoError(t, err)
-
-	var r *regexp.Regexp
-	if expectCancelPossible {
-		r = fullWordRegexp("1")
-	} else {
-		r = fullWordRegexp("0")
-	}
-	m := r.FindAllString(result, -1)
-	assert.Equal(t, len(clusterInstance.Keyspaces[0].Shards), len(m))
 }
 
 // checkCancelAllMigrations all pending migrations
