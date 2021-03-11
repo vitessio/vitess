@@ -213,7 +213,7 @@ func TestMain(m *testing.M) {
 func TestSchemaChange(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	shards := clusterInstance.Keyspaces[0].Shards
-	assert.Equal(t, 2, len(shards))
+	require.Equal(t, 1, len(shards))
 
 	var uuids []string
 	// CREATE
