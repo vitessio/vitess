@@ -4406,3 +4406,5 @@
 2021-03-11T06:44:24Z,check_make_sizegen,https://github.com/vitessio/vitess/actions/runs/641894638
 2021-03-11T06:48:17Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/641903954
 2021-03-11T06:48:17Z,check_make_sizegen,https://github.com/vitessio/vitess/actions/runs/641903953
+2021-03-11T08:22:57Z,Cluster (15),https://github.com/vitessio/vitess/actions/runs/642120581
+2021-03-11T08:22:57Z,check_make_sizegen,https://github.com/vitessio/vitess/actions/runs/642120589
