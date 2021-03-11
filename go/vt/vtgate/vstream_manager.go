@@ -226,7 +226,7 @@ const MaxSkew = int64(2)
 
 // computeSkew sets the timestamp of the current event for the calling stream, accounts for a clock skew
 // and declares that a skew has arisen if the streams are too far apart
-func (vs *vstream) computeSkew(streamID string, event *binlogdatapb.VEvent) {
+func (vs *vstream) computeSkew(streamID string, event *binlogdatapb.VEvent) bool {
 	vs.skewMu.Lock()
 	defer vs.skewMu.Unlock()
 	// account for skew between this vtgate and the source mysql server
@@ -237,7 +237,7 @@ func (vs *vstream) computeSkew(streamID string, event *binlogdatapb.VEvent) {
 	var laggardStream string
 
 	if len(vs.timestamps) <= 1 {
-		return
+		return false
 	}
 	for k, ts := range vs.timestamps {
 		if ts < minTs || minTs == 0 {
@@ -260,6 +260,7 @@ func (vs *vstream) computeSkew(streamID string, event *binlogdatapb.VEvent) {
 			vs.skewCh = make(chan bool)
 		}
 	}
+	return vs.mustPause(streamID)
 }
 
 // mustPause returns true if a skew exists and the stream calling this is not the slowest one
@@ -273,7 +274,7 @@ func (vs *vstream) mustPause(streamID string) bool {
 	}
 
 	if (vs.timestamps[streamID] - vs.lowestTS) <= MaxSkew {
-		// current stream is the laggard, but the skew is still within the limit
+		// current stream is not the laggard, but the skew is still within the limit
 		return false
 	}
 	vs.vsm.RecordStreamDelay()
@@ -282,17 +283,18 @@ func (vs *vstream) mustPause(streamID string) bool {
 
 // alignStreams is called by each individual shard's stream before an event is sent to the client or after each heartbeat.
 // It checks for skew (if the minimizeSkew option is set). If skew is present this stream is delayed until the skew is fixed
+// The faster stream detects the skew and waits. The slower stream resets the skew when it catches up.
 func (vs *vstream) alignStreams(ctx context.Context, event *binlogdatapb.VEvent, keyspace, shard string) error {
 	if !vs.minimizeSkew || event.Timestamp == 0 {
 		return nil
 	}
 	streamID := fmt.Sprintf("%s/%s", keyspace, shard)
 	for {
-		vs.computeSkew(streamID, event)
+		mustPause := vs.computeSkew(streamID, event)
 		if event.Type == binlogdatapb.VEventType_HEARTBEAT {
 			return nil
 		}
-		if !vs.mustPause(streamID) {
+		if !mustPause {
 			return nil
 		}
 		select {
