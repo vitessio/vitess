@@ -2274,6 +2274,7 @@ $root.vtadmin = (function() {
          * @memberof vtadmin
          * @interface IWorkflow
          * @property {vtadmin.ICluster|null} [cluster] Workflow cluster
+         * @property {string|null} [keyspace] Workflow keyspace
          * @property {vtctldata.IWorkflow|null} [workflow] Workflow workflow
          */
 
@@ -2299,6 +2300,14 @@ $root.vtadmin = (function() {
          * @instance
          */
         Workflow.prototype.cluster = null;
+
+        /**
+         * Workflow keyspace.
+         * @member {string} keyspace
+         * @memberof vtadmin.Workflow
+         * @instance
+         */
+        Workflow.prototype.keyspace = "";
 
         /**
          * Workflow workflow.
@@ -2334,8 +2343,10 @@ $root.vtadmin = (function() {
                 writer = $Writer.create();
             if (message.cluster != null && Object.hasOwnProperty.call(message, "cluster"))
                 $root.vtadmin.Cluster.encode(message.cluster, writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
+            if (message.keyspace != null && Object.hasOwnProperty.call(message, "keyspace"))
+                writer.uint32(/* id 2, wireType 2 =*/18).string(message.keyspace);
             if (message.workflow != null && Object.hasOwnProperty.call(message, "workflow"))
-                $root.vtctldata.Workflow.encode(message.workflow, writer.uint32(/* id 2, wireType 2 =*/18).fork()).ldelim();
+                $root.vtctldata.Workflow.encode(message.workflow, writer.uint32(/* id 3, wireType 2 =*/26).fork()).ldelim();
             return writer;
         };
 
@@ -2374,6 +2385,9 @@ $root.vtadmin = (function() {
                     message.cluster = $root.vtadmin.Cluster.decode(reader, reader.uint32());
                     break;
                 case 2:
+                    message.keyspace = reader.string();
+                    break;
+                case 3:
                     message.workflow = $root.vtctldata.Workflow.decode(reader, reader.uint32());
                     break;
                 default:
@@ -2416,6 +2430,9 @@ $root.vtadmin = (function() {
                 if (error)
                     return "cluster." + error;
             }
+            if (message.keyspace != null && message.hasOwnProperty("keyspace"))
+                if (!$util.isString(message.keyspace))
+                    return "keyspace: string expected";
             if (message.workflow != null && message.hasOwnProperty("workflow")) {
                 var error = $root.vtctldata.Workflow.verify(message.workflow);
                 if (error)
@@ -2441,6 +2458,8 @@ $root.vtadmin = (function() {
                     throw TypeError(".vtadmin.Workflow.cluster: object expected");
                 message.cluster = $root.vtadmin.Cluster.fromObject(object.cluster);
             }
+            if (object.keyspace != null)
+                message.keyspace = String(object.keyspace);
             if (object.workflow != null) {
                 if (typeof object.workflow !== "object")
                     throw TypeError(".vtadmin.Workflow.workflow: object expected");
@@ -2464,10 +2483,13 @@ $root.vtadmin = (function() {
             var object = {};
             if (options.defaults) {
                 object.cluster = null;
+                object.keyspace = "";
                 object.workflow = null;
             }
             if (message.cluster != null && message.hasOwnProperty("cluster"))
                 object.cluster = $root.vtadmin.Cluster.toObject(message.cluster, options);
+            if (message.keyspace != null && message.hasOwnProperty("keyspace"))
+                object.keyspace = message.keyspace;
             if (message.workflow != null && message.hasOwnProperty("workflow"))
                 object.workflow = $root.vtctldata.Workflow.toObject(message.workflow, options);
             return object;
@@ -6066,6 +6088,8 @@ $root.vtadmin = (function() {
          * @interface IGetWorkflowsRequest
          * @property {Array.<string>|null} [cluster_ids] GetWorkflowsRequest cluster_ids
          * @property {boolean|null} [active_only] GetWorkflowsRequest active_only
+         * @property {Array.<string>|null} [keyspaces] GetWorkflowsRequest keyspaces
+         * @property {Array.<string>|null} [ignore_keyspaces] GetWorkflowsRequest ignore_keyspaces
          */
 
         /**
@@ -6078,6 +6102,8 @@ $root.vtadmin = (function() {
          */
         function GetWorkflowsRequest(properties) {
             this.cluster_ids = [];
+            this.keyspaces = [];
+            this.ignore_keyspaces = [];
             if (properties)
                 for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
                     if (properties[keys[i]] != null)
@@ -6099,6 +6125,22 @@ $root.vtadmin = (function() {
          * @instance
          */
         GetWorkflowsRequest.prototype.active_only = false;
+
+        /**
+         * GetWorkflowsRequest keyspaces.
+         * @member {Array.<string>} keyspaces
+         * @memberof vtadmin.GetWorkflowsRequest
+         * @instance
+         */
+        GetWorkflowsRequest.prototype.keyspaces = $util.emptyArray;
+
+        /**
+         * GetWorkflowsRequest ignore_keyspaces.
+         * @member {Array.<string>} ignore_keyspaces
+         * @memberof vtadmin.GetWorkflowsRequest
+         * @instance
+         */
+        GetWorkflowsRequest.prototype.ignore_keyspaces = $util.emptyArray;
 
         /**
          * Creates a new GetWorkflowsRequest instance using the specified properties.
@@ -6129,6 +6171,12 @@ $root.vtadmin = (function() {
                     writer.uint32(/* id 1, wireType 2 =*/10).string(message.cluster_ids[i]);
             if (message.active_only != null && Object.hasOwnProperty.call(message, "active_only"))
                 writer.uint32(/* id 2, wireType 0 =*/16).bool(message.active_only);
+            if (message.keyspaces != null && message.keyspaces.length)
+                for (var i = 0; i < message.keyspaces.length; ++i)
+                    writer.uint32(/* id 3, wireType 2 =*/26).string(message.keyspaces[i]);
+            if (message.ignore_keyspaces != null && message.ignore_keyspaces.length)
+                for (var i = 0; i < message.ignore_keyspaces.length; ++i)
+                    writer.uint32(/* id 4, wireType 2 =*/34).string(message.ignore_keyspaces[i]);
             return writer;
         };
 
@@ -6170,6 +6218,16 @@ $root.vtadmin = (function() {
                     break;
                 case 2:
                     message.active_only = reader.bool();
+                    break;
+                case 3:
+                    if (!(message.keyspaces && message.keyspaces.length))
+                        message.keyspaces = [];
+                    message.keyspaces.push(reader.string());
+                    break;
+                case 4:
+                    if (!(message.ignore_keyspaces && message.ignore_keyspaces.length))
+                        message.ignore_keyspaces = [];
+                    message.ignore_keyspaces.push(reader.string());
                     break;
                 default:
                     reader.skipType(tag & 7);
@@ -6216,6 +6274,20 @@ $root.vtadmin = (function() {
             if (message.active_only != null && message.hasOwnProperty("active_only"))
                 if (typeof message.active_only !== "boolean")
                     return "active_only: boolean expected";
+            if (message.keyspaces != null && message.hasOwnProperty("keyspaces")) {
+                if (!Array.isArray(message.keyspaces))
+                    return "keyspaces: array expected";
+                for (var i = 0; i < message.keyspaces.length; ++i)
+                    if (!$util.isString(message.keyspaces[i]))
+                        return "keyspaces: string[] expected";
+            }
+            if (message.ignore_keyspaces != null && message.hasOwnProperty("ignore_keyspaces")) {
+                if (!Array.isArray(message.ignore_keyspaces))
+                    return "ignore_keyspaces: array expected";
+                for (var i = 0; i < message.ignore_keyspaces.length; ++i)
+                    if (!$util.isString(message.ignore_keyspaces[i]))
+                        return "ignore_keyspaces: string[] expected";
+            }
             return null;
         };
 
@@ -6240,6 +6312,20 @@ $root.vtadmin = (function() {
             }
             if (object.active_only != null)
                 message.active_only = Boolean(object.active_only);
+            if (object.keyspaces) {
+                if (!Array.isArray(object.keyspaces))
+                    throw TypeError(".vtadmin.GetWorkflowsRequest.keyspaces: array expected");
+                message.keyspaces = [];
+                for (var i = 0; i < object.keyspaces.length; ++i)
+                    message.keyspaces[i] = String(object.keyspaces[i]);
+            }
+            if (object.ignore_keyspaces) {
+                if (!Array.isArray(object.ignore_keyspaces))
+                    throw TypeError(".vtadmin.GetWorkflowsRequest.ignore_keyspaces: array expected");
+                message.ignore_keyspaces = [];
+                for (var i = 0; i < object.ignore_keyspaces.length; ++i)
+                    message.ignore_keyspaces[i] = String(object.ignore_keyspaces[i]);
+            }
             return message;
         };
 
@@ -6256,8 +6342,11 @@ $root.vtadmin = (function() {
             if (!options)
                 options = {};
             var object = {};
-            if (options.arrays || options.defaults)
+            if (options.arrays || options.defaults) {
                 object.cluster_ids = [];
+                object.keyspaces = [];
+                object.ignore_keyspaces = [];
+            }
             if (options.defaults)
                 object.active_only = false;
             if (message.cluster_ids && message.cluster_ids.length) {
@@ -6267,6 +6356,16 @@ $root.vtadmin = (function() {
             }
             if (message.active_only != null && message.hasOwnProperty("active_only"))
                 object.active_only = message.active_only;
+            if (message.keyspaces && message.keyspaces.length) {
+                object.keyspaces = [];
+                for (var j = 0; j < message.keyspaces.length; ++j)
+                    object.keyspaces[j] = message.keyspaces[j];
+            }
+            if (message.ignore_keyspaces && message.ignore_keyspaces.length) {
+                object.ignore_keyspaces = [];
+                for (var j = 0; j < message.ignore_keyspaces.length; ++j)
+                    object.ignore_keyspaces[j] = message.ignore_keyspaces[j];
+            }
             return object;
         };
 
