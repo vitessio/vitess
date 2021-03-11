@@ -310,6 +310,7 @@ func (c *Cluster) findWorkflows(ctx context.Context, keyspaces []string, opts Fi
 			for _, wf := range resp.Workflows {
 				workflow := &vtadminpb.Workflow{
 					Cluster:  clusterpb,
+					Keyspace: ks,
 					Workflow: wf,
 				}
 
