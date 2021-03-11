@@ -130,7 +130,6 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 		a.apply(node, n.Right, func(newNode, parent SQLNode) {
 			parent.(*AndExpr).Right = newNode.(Expr)
 		})
-	case Argument:
 	case *AutoIncSpec:
 		a.apply(node, n.Column, func(newNode, parent SQLNode) {
 			parent.(*AutoIncSpec).Column = newNode.(ColIdent)

@@ -180,7 +180,7 @@ func (rb *route) Wireup(plan logicalPlan, jt *jointab) error {
 			if len(node.SelectExprs) == 0 {
 				node.SelectExprs = sqlparser.SelectExprs([]sqlparser.SelectExpr{
 					&sqlparser.AliasedExpr{
-						Expr: sqlparser.NewIntLiteral([]byte{'1'}),
+						Expr: sqlparser.NewIntLiteral("1"),
 					},
 				})
 			}
@@ -233,7 +233,7 @@ func (rb *route) prepareTheAST() {
 			if len(node.SelectExprs) == 0 {
 				node.SelectExprs = []sqlparser.SelectExpr{
 					&sqlparser.AliasedExpr{
-						Expr: sqlparser.NewIntLiteral([]byte{'1'}),
+						Expr: sqlparser.NewIntLiteral("1"),
 					},
 				}
 			}
