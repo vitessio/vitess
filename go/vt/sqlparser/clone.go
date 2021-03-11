@@ -994,6 +994,7 @@ func CloneRefOfCreateDatabase(n *CreateDatabase) *CreateDatabase {
 		return nil
 	}
 	out := *n
+	out.Comments = CloneComments(n.Comments)
 	out.CreateOptions = CloneSliceOfCollateAndCharset(n.CreateOptions)
 	return &out
 }
@@ -1004,6 +1005,7 @@ func CloneRefOfDropDatabase(n *DropDatabase) *DropDatabase {
 		return nil
 	}
 	out := *n
+	out.Comments = CloneComments(n.Comments)
 	return &out
 }
 

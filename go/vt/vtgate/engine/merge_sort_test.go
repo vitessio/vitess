@@ -286,7 +286,7 @@ func testMergeSort(shardResults []*shardResult, orderBy []OrderbyParams, callbac
 		Primitives: prims,
 		OrderBy:    orderBy,
 	}
-	return ms.StreamExecute(noopVCursor{}, nil, true, callback)
+	return ms.StreamExecute(&noopVCursor{}, nil, true, callback)
 }
 
 type shardResult struct {
