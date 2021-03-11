@@ -44,6 +44,9 @@ import (
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/log"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -54,10 +57,6 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 	"vitess.io/vitess/go/vt/vttablet/vexec"
-
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 
 	"github.com/golang/protobuf/proto"
 )
@@ -1484,9 +1483,12 @@ func (e *Executor) executeMigration(ctx context.Context, onlineDDL *schema.Onlin
 	if err != nil {
 		return failMigration(err)
 	}
-	switch ddlAction {
-	case sqlparser.CreateDDLAction:
-		if onlineDDL.IsDeclarative() {
+
+	if onlineDDL.IsDeclarative() {
+		switch ddlAction {
+		case sqlparser.AlterDDLAction:
+			return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "strategy is declarative. ALTER cannot run in declarative mode for migration %v", onlineDDL.UUID)
+		case sqlparser.CreateDDLAction:
 			// This CREATE is declarative, meaning it may:
 			// - actually CREATE a table, if that table does not exist, or
 			// - ALTER the table, if it exists and is different, or
