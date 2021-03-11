@@ -1487,15 +1487,13 @@ func (e *Executor) executeMigration(ctx context.Context, onlineDDL *schema.Onlin
 	if onlineDDL.IsDeclarative() {
 		switch ddlAction {
 		case sqlparser.AlterDDLAction:
-			return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "strategy is declarative. ALTER cannot run in declarative mode for migration %v", onlineDDL.UUID)
+			return failMigration(vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "strategy is declarative. ALTER cannot run in declarative mode for migration %v", onlineDDL.UUID))
 		case sqlparser.CreateDDLAction:
 			// This CREATE is declarative, meaning it may:
 			// - actually CREATE a table, if that table does not exist, or
 			// - ALTER the table, if it exists and is different, or
 			// - Implicitly do nothing, if the table exists and is identical to CREATE statement
 			func() error {
-				e.migrationMutex.Lock()
-				defer e.migrationMutex.Unlock()
 				exists, err := e.tableExists(ctx, onlineDDL.Table)
 				if err != nil {
 					return failMigration(err)
