@@ -30,13 +30,15 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/topo"
+	vtctldvexec "vitess.io/vitess/go/vt/vtctl/workflow/vexec" // renamed to avoid a collision with the vexec struct in this package
+	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
 const (
@@ -508,7 +510,8 @@ func (wr *Wrangler) ListAllWorkflows(ctx context.Context, keyspace string, activ
 		where = " where state <> 'Stopped'"
 	}
 	query := "select distinct workflow from _vt.vreplication" + where
-	results, err := wr.runVexec(ctx, "", keyspace, query, false)
+	vx := vtctldvexec.NewVExec(keyspace, "", wr.ts, wr.tmc)
+	results, err := vx.QueryContext(ctx, query)
 	if err != nil {
 		return nil, err
 	}

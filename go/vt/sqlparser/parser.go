@@ -17,10 +17,8 @@ limitations under the License.
 package sqlparser
 
 import (
-	"errors"
 	"fmt"
 	"io"
-	"runtime/debug"
 	"sync"
 
 	"vitess.io/vitess/go/vt/log"
@@ -97,7 +95,6 @@ func Parse(sql string) (Statement, error) {
 		return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, tokenizer.LastError.Error())
 	}
 	if tokenizer.ParseTree == nil {
-		log.Infof("Empty Statement: %s", debug.Stack())
 		return nil, ErrEmpty
 	}
 	return tokenizer.ParseTree, nil
@@ -111,8 +108,6 @@ func ParseStrictDDL(sql string) (Statement, error) {
 		return nil, tokenizer.LastError
 	}
 	if tokenizer.ParseTree == nil {
-		log.Infof("Empty Statement DDL: %s", debug.Stack())
-
 		return nil, ErrEmpty
 	}
 	return tokenizer.ParseTree, nil
@@ -140,11 +135,11 @@ func ParseNextStrictDDL(tokenizer *Tokenizer) (Statement, error) {
 }
 
 func parseNext(tokenizer *Tokenizer, strict bool) (Statement, error) {
-	if tokenizer.lastChar == ';' {
-		tokenizer.next()
+	if tokenizer.cur() == ';' {
+		tokenizer.skip(1)
 		tokenizer.skipBlank()
 	}
-	if tokenizer.lastChar == eofChar {
+	if tokenizer.cur() == eofChar {
 		return nil, io.EOF
 	}
 
@@ -164,7 +159,7 @@ func parseNext(tokenizer *Tokenizer, strict bool) (Statement, error) {
 }
 
 // ErrEmpty is a sentinel error returned when parsing empty statements.
-var ErrEmpty = errors.New("empty statement")
+var ErrEmpty = vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.EmptyQuery, "Query was empty")
 
 // SplitStatement returns the first sql statement up to either a ; or EOF
 // and the remainder from the given buffer
@@ -181,7 +176,7 @@ func SplitStatement(blob string) (string, string, error) {
 		return "", "", tokenizer.LastError
 	}
 	if tkn == ';' {
-		return blob[:tokenizer.Position-2], blob[tokenizer.Position-1:], nil
+		return blob[:tokenizer.Pos-1], blob[tokenizer.Pos:], nil
 	}
 	return blob, "", nil
 }
@@ -201,14 +196,14 @@ loop:
 		tkn, _ = tokenizer.Scan()
 		switch tkn {
 		case ';':
-			stmt = blob[stmtBegin : tokenizer.Position-2]
+			stmt = blob[stmtBegin : tokenizer.Pos-1]
 			if !emptyStatement {
 				pieces = append(pieces, stmt)
 				emptyStatement = true
 			}
-			stmtBegin = tokenizer.Position - 1
+			stmtBegin = tokenizer.Pos
 		case 0, eofChar:
-			blobTail := tokenizer.Position - 2
+			blobTail := tokenizer.Pos - 1
 			if stmtBegin < blobTail {
 				stmt = blob[stmtBegin : blobTail+1]
 				if !emptyStatement {

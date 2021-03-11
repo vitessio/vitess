@@ -62,6 +62,7 @@ type (
 		GetAction() DDLAction
 		GetOptLike() *OptLike
 		GetIfExists() bool
+		GetIfNotExists() bool
 		GetTableSpec() *TableSpec
 		GetFromTables() TableNames
 		GetToTables() TableNames
@@ -881,6 +882,46 @@ func (node *DropView) GetIfExists() bool {
 	return node.IfExists
 }
 
+// GetIfNotExists implements the DDLStatement interface
+func (node *RenameTable) GetIfNotExists() bool {
+	return false
+}
+
+// GetIfNotExists implements the DDLStatement interface
+func (node *CreateTable) GetIfNotExists() bool {
+	return node.IfNotExists
+}
+
+// GetIfNotExists implements the DDLStatement interface
+func (node *TruncateTable) GetIfNotExists() bool {
+	return false
+}
+
+// GetIfNotExists implements the DDLStatement interface
+func (node *AlterTable) GetIfNotExists() bool {
+	return false
+}
+
+// GetIfNotExists implements the DDLStatement interface
+func (node *CreateView) GetIfNotExists() bool {
+	return false
+}
+
+// GetIfNotExists implements the DDLStatement interface
+func (node *AlterView) GetIfNotExists() bool {
+	return false
+}
+
+// GetIfNotExists implements the DDLStatement interface
+func (node *DropTable) GetIfNotExists() bool {
+	return false
+}
+
+// GetIfNotExists implements the DDLStatement interface
+func (node *DropView) GetIfNotExists() bool {
+	return false
+}
+
 // GetTableSpec implements the DDLStatement interface
 func (node *CreateTable) GetTableSpec() *TableSpec {
 	return node.TableSpec
@@ -1395,7 +1436,7 @@ type ShowFilter struct {
 }
 
 // Comments represents a list of comments.
-type Comments [][]byte
+type Comments []string
 
 // SelectExprs represents SELECT expressions.
 type SelectExprs []SelectExpr
@@ -1598,11 +1639,11 @@ type (
 	// Literal represents a fixed value.
 	Literal struct {
 		Type ValType
-		Val  []byte
+		Val  string
 	}
 
 	// Argument represents bindvariable expression
-	Argument []byte
+	Argument string
 
 	// NullVal represents a NULL value.
 	NullVal struct{}
@@ -2768,7 +2809,7 @@ func (node *ExistsExpr) Format(buf *TrackedBuffer) {
 func (node *Literal) Format(buf *TrackedBuffer) {
 	switch node.Type {
 	case StrVal:
-		sqltypes.MakeTrusted(sqltypes.VarBinary, node.Val).EncodeSQL(buf)
+		sqltypes.MakeTrusted(sqltypes.VarBinary, node.Bytes()).EncodeSQL(buf)
 	case IntVal, FloatVal, HexNum:
 		buf.astPrintf(node, "%s", node.Val)
 	case HexVal:

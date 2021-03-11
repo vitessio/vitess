@@ -208,6 +208,15 @@ func (client *gRPCVtctldClient) GetVSchema(ctx context.Context, in *vtctldatapb.
 	return client.c.GetVSchema(ctx, in, opts...)
 }
 
+// GetWorkflows is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) GetWorkflows(ctx context.Context, in *vtctldatapb.GetWorkflowsRequest, opts ...grpc.CallOption) (*vtctldatapb.GetWorkflowsResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.GetWorkflows(ctx, in, opts...)
+}
+
 // InitShardPrimary is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) InitShardPrimary(ctx context.Context, in *vtctldatapb.InitShardPrimaryRequest, opts ...grpc.CallOption) (*vtctldatapb.InitShardPrimaryResponse, error) {
 	if client.c == nil {

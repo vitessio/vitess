@@ -19,17 +19,23 @@ package errors
 import "errors"
 
 var (
+	// ErrAmbiguousSchema occurs when more than one schema is found for a given
+	// set of filter criteria.
+	ErrAmbiguousSchema = errors.New("multiple schemas found")
 	// ErrAmbiguousTablet occurs when more than one tablet is found for a given
 	// set of filter criteria.
 	ErrAmbiguousTablet = errors.New("multiple tablets found")
 	// ErrInvalidRequest occurs when a request is invalid for any reason.
 	// For example, if mandatory parameters are undefined.
 	ErrInvalidRequest = errors.New("Invalid request")
+	// ErrNoSchema occurs when a schema definition cannot be found for a given
+	// set of filter criteria.
+	ErrNoSchema = errors.New("no such schema")
+	// ErrNoSrvVSchema occurs when no SrvVSchema is found for a given keyspace.
+	ErrNoSrvVSchema = errors.New("SrvVSchema not found")
 	// ErrNoTablet occurs when a tablet cannot be found for a given set of
 	// filter criteria.
 	ErrNoTablet = errors.New("no such tablet")
 	// ErrUnsupportedCluster occurs when a cluster parameter is invalid.
 	ErrUnsupportedCluster = errors.New("unsupported cluster(s)")
-	// ErrNoSrvVSchema occurs when no SrvVSchema is found for a given keyspace.
-	ErrNoSrvVSchema = errors.New("SrvVSchema not found")
 )

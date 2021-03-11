@@ -522,3 +522,8 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+
+# change read only variable
+"set socket = ''"
+"Variable 'socket' is a read only variable"
+Gen4 plan same as above
