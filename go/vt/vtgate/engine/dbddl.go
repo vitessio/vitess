@@ -182,7 +182,7 @@ func (c *DBDDL) dropDatabase(vcursor VCursor, plugin DBDDLPlugin) (*sqltypes.Res
 		case <-time.After(500 * time.Millisecond): //timeout
 		}
 	}
-	return &sqltypes.Result{StatusFlags: sqltypes.ServerStatusDbDropped}, err
+	return &sqltypes.Result{StatusFlags: sqltypes.ServerStatusDbDropped}, nil
 }
 
 // StreamExecute implements the Primitive interface
