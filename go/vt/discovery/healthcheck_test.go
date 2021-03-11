@@ -264,6 +264,66 @@ func TestHealthCheckStreamError(t *testing.T) {
 	assert.Empty(t, a, "wrong result, expected empty list")
 }
 
+// TestHealthCheckErrorOnPrimary is the same as TestHealthCheckStreamError except for tablet type
+func TestHealthCheckErrorOnPrimary(t *testing.T) {
+	ts := memorytopo.NewServer("cell")
+	hc := createTestHc(ts)
+	defer hc.Close()
+
+	tablet := createTestTablet(0, "cell", "a")
+	input := make(chan *querypb.StreamHealthResponse)
+	resultChan := hc.Subscribe()
+	fc := createFakeConn(tablet, input)
+	fc.errCh = make(chan error)
+	hc.AddTablet(tablet)
+
+	// Immediately after AddTablet() there will be the first notification.
+	want := &TabletHealth{
+		Tablet:              tablet,
+		Target:              &querypb.Target{Keyspace: "k", Shard: "s"},
+		Serving:             false,
+		MasterTermStartTime: 0,
+	}
+	result := <-resultChan
+	mustMatch(t, want, result, "Wrong TabletHealth data")
+
+	// one tablet after receiving a StreamHealthResponse
+	shr := &querypb.StreamHealthResponse{
+		TabletAlias:                         tablet.Alias,
+		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
+		Serving:                             true,
+		TabletExternallyReparentedTimestamp: 10,
+		RealtimeStats:                       &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
+	}
+	want = &TabletHealth{
+		Tablet:              tablet,
+		Target:              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
+		Serving:             true,
+		Stats:               &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
+		MasterTermStartTime: 10,
+	}
+	input <- shr
+	result = <-resultChan
+	mustMatch(t, want, result, "Wrong TabletHealth data")
+
+	// Stream error
+	fc.errCh <- fmt.Errorf("some stream error")
+	want = &TabletHealth{
+		Tablet:              tablet,
+		Target:              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER},
+		Serving:             false,
+		Stats:               &querypb.RealtimeStats{SecondsBehindMaster: 1, CpuUsage: 0.2},
+		MasterTermStartTime: 10,
+		LastError:           fmt.Errorf("some stream error"),
+	}
+	result = <-resultChan
+	//TODO: figure out how to compare objects that contain errors using utils.MustMatch
+	assert.True(t, want.DeepEqual(result), "Wrong TabletHealth data\n Expected: %v\n Actual:   %v", want, result)
+	// tablet should be removed from healthy list
+	a := hc.GetHealthyTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER})
+	assert.Empty(t, a, "wrong result, expected empty list")
+}
+
 func TestHealthCheckVerifiesTabletAlias(t *testing.T) {
 	ts := memorytopo.NewServer("cell")
 	hc := createTestHc(ts)

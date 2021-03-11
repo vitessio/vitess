@@ -404,7 +404,7 @@ func (hc *HealthCheckImpl) deleteTablet(tablet *topodata.Tablet) {
 	}
 }
 
-func (hc *HealthCheckImpl) updateHealth(th *TabletHealth, currentTarget *query.Target, trivialNonMasterUpdate bool, isMasterUpdate bool, isMasterChange bool) {
+func (hc *HealthCheckImpl) updateHealth(th *TabletHealth, currentTarget *query.Target, trivialUpdate bool, isPrimaryUp bool) {
 	// hc.healthByAlias is authoritative, it should be updated
 	hc.mu.Lock()
 	defer hc.mu.Unlock()
@@ -427,26 +427,31 @@ func (hc *HealthCheckImpl) updateHealth(th *TabletHealth, currentTarget *query.T
 	// add it to the map by target
 	hc.healthData[targetKey][tabletAlias] = th
 
-	if isMasterUpdate {
-		if len(hc.healthy[targetKey]) == 0 {
-			hc.healthy[targetKey] = append(hc.healthy[targetKey], th)
-		} else {
-			// We already have one up server, see if we
-			// need to replace it.
-			if th.MasterTermStartTime < hc.healthy[targetKey][0].MasterTermStartTime {
-				log.Warningf("not marking healthy master %s as Up for %s because its MasterTermStartTime is smaller than the highest known timestamp from previous MASTERs %s: %d < %d ",
-					topoproto.TabletAliasString(th.Tablet.Alias),
-					topoproto.KeyspaceShardString(th.Target.Keyspace, th.Target.Shard),
-					topoproto.TabletAliasString(hc.healthy[targetKey][0].Tablet.Alias),
-					th.MasterTermStartTime,
-					hc.healthy[targetKey][0].MasterTermStartTime)
+	if th.Target.TabletType == topodata.TabletType_MASTER {
+		if isPrimaryUp {
+			if len(hc.healthy[targetKey]) == 0 {
+				hc.healthy[targetKey] = append(hc.healthy[targetKey], th)
 			} else {
-				// Just replace it.
-				hc.healthy[targetKey][0] = th
+				// We already have one up server, see if we
+				// need to replace it.
+				if th.MasterTermStartTime < hc.healthy[targetKey][0].MasterTermStartTime {
+					log.Warningf("not marking healthy master %s as Up for %s because its MasterTermStartTime is smaller than the highest known timestamp from previous MASTERs %s: %d < %d ",
+						topoproto.TabletAliasString(th.Tablet.Alias),
+						topoproto.KeyspaceShardString(th.Target.Keyspace, th.Target.Shard),
+						topoproto.TabletAliasString(hc.healthy[targetKey][0].Tablet.Alias),
+						th.MasterTermStartTime,
+						hc.healthy[targetKey][0].MasterTermStartTime)
+				} else {
+					// Just replace it.
+					hc.healthy[targetKey][0] = th
+				}
 			}
+		} else {
+			// No healthy master tablet
+			hc.healthy[targetKey] = []*TabletHealth{}
 		}
 	}
-	if !trivialNonMasterUpdate {
+	if !trivialUpdate {
 		// We re-sort the healthy tablet list whenever we get a health update for tablets we can route to.
 		// Tablets from other cells for non-master targets should not trigger a re-sort;
 		// they should also be excluded from healthy list.
@@ -458,7 +463,7 @@ func (hc *HealthCheckImpl) updateHealth(th *TabletHealth, currentTarget *query.T
 			hc.recomputeHealthy(oldTargetKey)
 		}
 	}
-	if isMasterChange {
+	if currentTarget.TabletType != topodata.TabletType_MASTER && th.Target.TabletType == topodata.TabletType_MASTER {
 		log.Errorf("Adding 1 to MasterPromoted counter for target: %v, tablet: %v, tabletType: %v", currentTarget, topoproto.TabletAliasString(th.Tablet.Alias), th.Target.TabletType)
 		hcMasterPromotedCounters.Add([]string{th.Target.Keyspace, th.Target.Shard}, 1)
 	}
