@@ -203,6 +203,9 @@ func TestMain(m *testing.M) {
 func TestSchemaChange(t *testing.T) {
 	defer cluster.PanicHandler(t)
 
+	shards := clusterInstance.Keyspaces[0].Shards
+	assert.Equal(t, 2, len(shards))
+
 	t.Run("create schema", func(t *testing.T) {
 		assert.Equal(t, 1, len(clusterInstance.Keyspaces[0].Shards))
 		testWithInitialSchema(t)
@@ -242,7 +245,7 @@ func TestSchemaChange(t *testing.T) {
 		initTable(t)
 		hint := "hint-alter-without-workload"
 		uuid := testOnlineDDLStatement(t, fmt.Sprintf(alterHintStatement, hint), "online", "vtgate", hint)
-		checkRecentMigrations(t, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 		testSelectTableMetrics(t)
 	})
 
@@ -265,7 +268,7 @@ func TestSchemaChange(t *testing.T) {
 			}()
 			hint := fmt.Sprintf("hint-alter-with-workload-%d", i)
 			uuid := testOnlineDDLStatement(t, fmt.Sprintf(alterHintStatement, hint), "online", "vtgate", hint)
-			checkRecentMigrations(t, uuid, schema.OnlineDDLStatusComplete)
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 			cancel() // will cause runMultipleConnections() to terminate
 			wg.Wait()
 			testSelectTableMetrics(t)
@@ -324,29 +327,6 @@ func checkTablesCount(t *testing.T, tablet *cluster.Vttablet, showTableName stri
 	queryResult, err := tablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
 	require.Nil(t, err)
 	assert.Equal(t, expectCount, len(queryResult.Rows))
-}
-
-// checkRecentMigrations checks 'OnlineDDL <keyspace> show recent' output. Example to such output:
-// +------------------+-------+--------------+-------------+--------------------------------------+----------+---------------------+---------------------+------------------+
-// |      Tablet      | shard | mysql_schema | mysql_table |            migration_uuid            | strategy |  started_timestamp  | completed_timestamp | migration_status |
-// +------------------+-------+--------------+-------------+--------------------------------------+----------+---------------------+---------------------+------------------+
-// | zone1-0000003880 |     0 | vt_ks        | stress_test | a0638f6b_ec7b_11ea_9bf8_000d3a9b8a9a | online   | 2020-09-01 17:50:40 | 2020-09-01 17:50:41 | complete         |
-// | zone1-0000003884 |     1 | vt_ks        | stress_test | a0638f6b_ec7b_11ea_9bf8_000d3a9b8a9a | online   | 2020-09-01 17:50:40 | 2020-09-01 17:50:41 | complete         |
-// +------------------+-------+--------------+-------------+--------------------------------------+----------+---------------------+---------------------+------------------+
-
-func checkRecentMigrations(t *testing.T, uuid string, expectStatus schema.OnlineDDLStatus) {
-	showQuery := fmt.Sprintf("show vitess_migrations like '%s'", uuid)
-	r := onlineddl.VtgateExecQuery(t, &vtParams, showQuery, "")
-	fmt.Printf("# output for `%s`:\n", showQuery)
-	onlineddl.PrintQueryResult(os.Stdout, r)
-
-	count := 0
-	for _, row := range r.Named().Rows {
-		if row["migration_uuid"].ToString() == uuid && row["migration_status"].ToString() == string(expectStatus) {
-			count++
-		}
-	}
-	assert.Equal(t, len(clusterInstance.Keyspaces[0].Shards), count)
 }
 
 // checkMigratedTables checks the CREATE STATEMENT of a table after migration

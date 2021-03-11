@@ -19,10 +19,12 @@ package onlineddl
 import (
 	"context"
 	"fmt"
+	"os"
 	"testing"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/schema"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
 
@@ -38,6 +40,29 @@ func VtgateExecQuery(t *testing.T, vtParams *mysql.ConnParams, query string, exp
 	conn, err := mysql.Connect(ctx, vtParams)
 	require.Nil(t, err)
 	defer conn.Close()
+
+	qr, err := conn.ExecuteFetch(query, 1000, true)
+	if expectError == "" {
+		require.NoError(t, err)
+	} else {
+		require.Error(t, err, "error should not be nil")
+		assert.Contains(t, err.Error(), expectError, "Unexpected error")
+	}
+	return qr
+}
+
+// VtgateExecDDL executes a DDL query with given strategy
+func VtgateExecDDL(t *testing.T, vtParams *mysql.ConnParams, ddlStrategy string, query string, expectError string) *sqltypes.Result {
+	t.Helper()
+
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, vtParams)
+	require.Nil(t, err)
+	defer conn.Close()
+
+	setSession := fmt.Sprintf("set @@ddl_strategy='%s'", ddlStrategy)
+	_, err = conn.ExecuteFetch(setSession, 1000, true)
+	assert.NoError(t, err)
 
 	qr, err := conn.ExecuteFetch(query, 1000, true)
 	if expectError == "" {
@@ -79,4 +104,20 @@ func CheckCancelAllMigrations(t *testing.T, vtParams *mysql.ConnParams, expectCo
 	r := VtgateExecQuery(t, vtParams, cancelQuery, "")
 
 	assert.Equal(t, expectCount, int(r.RowsAffected))
+}
+
+// CheckMigrationStatus verifies that the migration indicated by given UUID has the given expected status
+func CheckMigrationStatus(t *testing.T, vtParams *mysql.ConnParams, shards []cluster.Shard, uuid string, expectStatus schema.OnlineDDLStatus) {
+	showQuery := fmt.Sprintf("show vitess_migrations like '%s'", uuid)
+	r := VtgateExecQuery(t, vtParams, showQuery, "")
+	fmt.Printf("# output for `%s`:\n", showQuery)
+	PrintQueryResult(os.Stdout, r)
+
+	count := 0
+	for _, row := range r.Named().Rows {
+		if row["migration_uuid"].ToString() == uuid && row["migration_status"].ToString() == string(expectStatus) {
+			count++
+		}
+	}
+	assert.Equal(t, len(shards), count)
 }
