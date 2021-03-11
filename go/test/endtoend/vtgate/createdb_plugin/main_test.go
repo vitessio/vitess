@@ -25,6 +25,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/require"
 
@@ -90,37 +92,47 @@ func TestDBDDLPlugin(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	wg := sync.WaitGroup{}
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		qr := exec(t, conn, `create database aaa`)
-		require.EqualValues(t, 1, qr.RowsAffected)
-	}()
-	time.Sleep(300 * time.Millisecond)
-	start(t, "aaa")
+	createAndDrop := func(t *testing.T) {
+		wg := sync.WaitGroup{}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			qr := exec(t, conn, `create database aaa`)
+			require.EqualValues(t, 1, qr.RowsAffected)
+		}()
+		time.Sleep(300 * time.Millisecond)
+		start(t, "aaa")
 
-	// wait until the create database query has returned
-	wg.Wait()
+		// wait until the create database query has returned
+		wg.Wait()
 
-	exec(t, conn, `use aaa`)
-	exec(t, conn, `create table t (id bigint primary key)`)
-	exec(t, conn, `insert into t(id) values (1),(2),(3),(4),(5)`)
-	assertMatches(t, conn, "select count(*) from t", `[[INT64(5)]]`)
+		exec(t, conn, `use aaa`)
+		exec(t, conn, `create table t (id bigint primary key)`)
+		exec(t, conn, `insert into t(id) values (1),(2),(3),(4),(5)`)
+		assertMatches(t, conn, "select count(*) from t", `[[INT64(5)]]`)
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		_ = exec(t, conn, `drop database aaa`)
-	}()
-	time.Sleep(300 * time.Millisecond)
-	shutdown(t, "aaa")
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_ = exec(t, conn, `drop database aaa`)
+		}()
+		time.Sleep(300 * time.Millisecond)
+		shutdown(t, "aaa")
 
-	// wait until the drop database query has returned
-	wg.Wait()
+		// wait until the drop database query has returned
+		wg.Wait()
 
-	_, err = conn.ExecuteFetch(`select count(*) from t`, 1000, true)
-	require.Error(t, err)
+		_, err = conn.ExecuteFetch(`select count(*) from t`, 1000, true)
+		require.Error(t, err)
+	}
+	t.Run("first try", func(t *testing.T) {
+		createAndDrop(t)
+	})
+	if !t.Failed() {
+		t.Run("second try", func(t *testing.T) {
+			createAndDrop(t)
+		})
+	}
 }
 
 func start(t *testing.T, ksName string) {
@@ -133,8 +145,30 @@ func start(t *testing.T, ksName string) {
 }
 
 func shutdown(t *testing.T, ksName string) {
+	for _, ks := range clusterInstance.Keyspaces {
+		if ks.Name != ksName {
+			continue
+		}
+		for _, shard := range ks.Shards {
+			for _, tablet := range shard.Vttablets {
+				if tablet.MysqlctlProcess.TabletUID > 0 {
+					_, err := tablet.MysqlctlProcess.StopProcess()
+					assert.NoError(t, err)
+				}
+				if tablet.MysqlctldProcess.TabletUID > 0 {
+					err := tablet.MysqlctldProcess.Stop()
+					assert.NoError(t, err)
+				}
+				_ = tablet.VttabletProcess.TearDown()
+			}
+		}
+	}
+
 	require.NoError(t,
 		clusterInstance.VtctlclientProcess.ExecuteCommand("DeleteKeyspace", "-recursive", ksName))
+
+	require.NoError(t,
+		clusterInstance.VtctlclientProcess.ExecuteCommand("RebuildVSchemaGraph"))
 }
 
 func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {

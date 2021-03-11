@@ -57,6 +57,10 @@ type noopVCursor struct {
 	ctx context.Context
 }
 
+func (t *noopVCursor) KeyspaceAvailable(ks string) bool {
+	panic("implement me")
+}
+
 func (t *noopVCursor) SetDDLStrategy(strategy string) {
 	panic("implement me")
 }
@@ -270,10 +274,15 @@ type loggingVCursor struct {
 
 	tableRoutes tableRoutes
 	dbDDLPlugin string
+	ksAvailable bool
 }
 
 type tableRoutes struct {
 	tbl *vindexes.Table
+}
+
+func (f *loggingVCursor) KeyspaceAvailable(ks string) bool {
+	return f.ksAvailable
 }
 
 func (f *loggingVCursor) SetFoundRows(u uint64) {
