@@ -101,6 +101,9 @@ type (
 
 		// GetDBDDLPlugin gets the configured plugin for DROP/CREATE DATABASE
 		GetDBDDLPluginName() string
+
+		// KeyspaceAvailable returns true when a keyspace is visible from vtgate
+		KeyspaceAvailable(ks string) bool
 	}
 
 	//SessionActions gives primitives ability to interact with the session state

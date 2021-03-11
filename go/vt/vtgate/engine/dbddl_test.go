@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/stretchr/testify/require"
 )
 
@@ -57,7 +59,7 @@ func TestDBDDLDropExecute(t *testing.T) {
 
 	primitive := &DBDDL{name: "ks"}
 
-	vc := &loggingVCursor{dbDDLPlugin: pluginName}
+	vc := &loggingVCursor{dbDDLPlugin: pluginName, ksAvailable: false}
 
 	_, err := primitive.Execute(vc, nil, false)
 	require.NoError(t, err)
@@ -70,14 +72,13 @@ func TestDBDDLTimeout(t *testing.T) {
 	plugin := &dbddlTestFake{sleep: 2}
 	DBDDLRegister(pluginName, plugin)
 
-	primitive := &DBDDL{
-		name:         "ks",
-		create:       true,
-		queryTimeout: 100,
-	}
-
+	primitive := &DBDDL{name: "ks", create: true, queryTimeout: 100}
 	vc := &loggingVCursor{dbDDLPlugin: pluginName, shardErr: fmt.Errorf("db not available")}
-
 	_, err := primitive.Execute(vc, nil, false)
-	require.EqualError(t, err, "could not validate created database")
+	assert.EqualError(t, err, "could not validate create database: destination not resolved")
+
+	primitive = &DBDDL{name: "ks", queryTimeout: 100}
+	vc = &loggingVCursor{dbDDLPlugin: pluginName, ksAvailable: true}
+	_, err = primitive.Execute(vc, nil, false)
+	assert.EqualError(t, err, "could not validate drop database: keyspace still available in vschema")
 }
