@@ -76,6 +76,13 @@ message Cluster {
     string name = 2;
 }
 
+message ClusterWorkflows {
+    repeated Workflow workflows = 1;
+    // Warnings is a list of non-fatal errors encountered when fetching
+    // workflows for a particular cluster.
+    repeated string warnings = 2;
+}
+
 // Keyspace represents information about a keyspace in a particular Vitess
 // cluster.
 message Keyspace {
@@ -244,7 +251,7 @@ message GetWorkflowsRequest {
 }
 
 message GetWorkflowsResponse {
-    repeated Workflow workflows = 1;
+    map <string, ClusterWorkflows> workflows_by_cluster = 1;
 }
 
 message VTExplainRequest {
