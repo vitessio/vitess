@@ -47,23 +47,29 @@ func TestHeartbeatFrequencyFlag(t *testing.T) {
 	stats := binlogplayer.NewStats()
 	vp := &vplayer{vr: &vreplicator{dbClient: newVDBClient(realDBClientFactory(), stats), stats: stats}}
 
-	t.Run("default frequency", func(t *testing.T) {
-		vp.numAccumulatedHeartbeats = 0
-		require.False(t, vp.mustUpdateCurrentTime())
-		vp.numAccumulatedHeartbeats = 1
-		require.True(t, vp.mustUpdateCurrentTime())
-	})
-
-	*vreplicationHeartbeatUpdateInterval = 4
-
-	t.Run("custom frequency", func(t *testing.T) {
-		vp.numAccumulatedHeartbeats = 0
-		require.False(t, vp.mustUpdateCurrentTime())
-		vp.numAccumulatedHeartbeats = 3
-		require.False(t, vp.mustUpdateCurrentTime())
-		vp.numAccumulatedHeartbeats = 4
-		require.True(t, vp.mustUpdateCurrentTime())
-	})
+	type testcount struct {
+		count      int
+		mustUpdate bool
+	}
+	type testcase struct {
+		name     string
+		interval int
+		counts   []testcount
+	}
+	testcases := []*testcase{
+		{"default frequency", 1, []testcount{{count: 0, mustUpdate: false}, {1, true}}},
+		{"custom frequency", 4, []testcount{{count: 0, mustUpdate: false}, {count: 3, mustUpdate: false}, {4, true}}},
+		{"minumum frequency", 61, []testcount{{count: 59, mustUpdate: false}, {count: 60, mustUpdate: true}, {61, true}}},
+	}
+	for _, tcase := range testcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			*vreplicationHeartbeatUpdateInterval = tcase.interval
+			for _, tcount := range tcase.counts {
+				vp.numAccumulatedHeartbeats = tcount.count
+				require.Equal(t, tcount.mustUpdate, vp.mustUpdateCurrentTime())
+			}
+		})
+	}
 }
 
 func TestVReplicationTimeUpdated(t *testing.T) {
