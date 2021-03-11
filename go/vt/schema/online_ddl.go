@@ -250,25 +250,31 @@ func (onlineDDL *OnlineDDL) GetRevertUUID() (uuid string, err error) {
 	return "", fmt.Errorf("Not a Revert DDL: '%s'", onlineDDL.SQL)
 }
 
-func isDeclarativeFlag(s string) bool {
-	if s == fmt.Sprintf("-%s", declarativeFlag) {
+// isFlag return true when the given string is a CLI flag of the given name
+func isFlag(s string, name string) bool {
+	if s == fmt.Sprintf("-%s", name) {
 		return true
 	}
-	if s == fmt.Sprintf("--%s", declarativeFlag) {
+	if s == fmt.Sprintf("--%s", name) {
 		return true
+	}
+	return false
+}
+
+// hasFlag returns true when Options include named flag
+func (onlineDDL *OnlineDDL) hasFlag(name string) bool {
+	opts, _ := shlex.Split(onlineDDL.Options)
+	for _, opt := range opts {
+		if isFlag(opt, name) {
+			return true
+		}
 	}
 	return false
 }
 
 // IsDeclarative checks if strategy options include -declarative
 func (onlineDDL *OnlineDDL) IsDeclarative() bool {
-	opts, _ := shlex.Split(onlineDDL.Options)
-	for _, opt := range opts {
-		if isDeclarativeFlag(opt) {
-			return true
-		}
-	}
-	return false
+	return onlineDDL.hasFlag(declarativeFlag)
 }
 
 // RuntimeOptions returns the options used as runtime flags for given strategy, removing any internal hint options
@@ -277,7 +283,7 @@ func (onlineDDL *OnlineDDL) RuntimeOptions() []string {
 	validOpts := []string{}
 	for _, opt := range opts {
 		switch {
-		case isDeclarativeFlag(opt):
+		case isFlag(opt, declarativeFlag):
 		default:
 			validOpts = append(validOpts, opt)
 		}
