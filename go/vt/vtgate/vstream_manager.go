@@ -23,6 +23,8 @@ import (
 	"sync"
 	"time"
 
+	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
+
 	"github.com/golang/protobuf/proto"
 
 	"vitess.io/vitess/go/vt/key"
@@ -102,7 +104,7 @@ func newVStreamManager(resolver *srvtopo.Resolver, serv srvtopo.Server, cell str
 }
 
 func (vsm *vstreamManager) VStream(ctx context.Context, tabletType topodatapb.TabletType, vgtid *binlogdatapb.VGtid,
-	filter *binlogdatapb.Filter, minimizeSkew bool, send func(events []*binlogdatapb.VEvent) error) error {
+	filter *binlogdatapb.Filter, flags *vtgatepb.VStreamFlags, send func(events []*binlogdatapb.VEvent) error) error {
 	vgtid, filter, err := vsm.resolveParams(ctx, tabletType, vgtid, filter)
 	if err != nil {
 		return err
@@ -115,7 +117,7 @@ func (vsm *vstreamManager) VStream(ctx context.Context, tabletType topodatapb.Ta
 		resolver:   vsm.resolver,
 		journaler:  make(map[int64]*journalEvent),
 
-		minimizeSkew:       minimizeSkew,
+		minimizeSkew:       flags.MinimizeSkew,
 		skewTimeoutSeconds: 10 * 60,
 		timestamps:         make(map[string]int64),
 		vsm:                vsm,
