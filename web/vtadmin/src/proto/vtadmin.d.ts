@@ -1029,6 +1029,9 @@ export namespace vtadmin {
         /** Workflow cluster */
         cluster?: (vtadmin.ICluster|null);
 
+        /** Workflow keyspace */
+        keyspace?: (string|null);
+
         /** Workflow workflow */
         workflow?: (vtctldata.IWorkflow|null);
     }
@@ -1044,6 +1047,9 @@ export namespace vtadmin {
 
         /** Workflow cluster. */
         public cluster?: (vtadmin.ICluster|null);
+
+        /** Workflow keyspace. */
+        public keyspace: string;
 
         /** Workflow workflow. */
         public workflow?: (vtctldata.IWorkflow|null);
@@ -2699,6 +2705,12 @@ export namespace vtadmin {
 
         /** GetWorkflowsRequest active_only */
         active_only?: (boolean|null);
+
+        /** GetWorkflowsRequest keyspaces */
+        keyspaces?: (string[]|null);
+
+        /** GetWorkflowsRequest ignore_keyspaces */
+        ignore_keyspaces?: (string[]|null);
     }
 
     /** Represents a GetWorkflowsRequest. */
@@ -2715,6 +2727,12 @@ export namespace vtadmin {
 
         /** GetWorkflowsRequest active_only. */
         public active_only: boolean;
+
+        /** GetWorkflowsRequest keyspaces. */
+        public keyspaces: string[];
+
+        /** GetWorkflowsRequest ignore_keyspaces. */
+        public ignore_keyspaces: string[];
 
         /**
          * Creates a new GetWorkflowsRequest instance using the specified properties.
