@@ -200,7 +200,7 @@ func buildShowVMigrationsPlan(show *sqlparser.ShowBasic, vschema ContextVSchema)
 		if show.Filter.Filter != nil {
 			sql += fmt.Sprintf(" where %s", sqlparser.String(show.Filter.Filter))
 		} else if show.Filter.Like != "" {
-			lit := sqlparser.String(sqlparser.NewStrLiteral([]byte(show.Filter.Like)))
+			lit := sqlparser.String(sqlparser.NewStrLiteral(show.Filter.Like))
 			sql += fmt.Sprintf(" where migration_uuid LIKE %s OR migration_context LIKE %s OR migration_status LIKE %s", lit, lit, lit)
 		}
 	}

@@ -12,15 +12,10 @@ type keyword struct {
 }
 
 func (k *keyword) match(input []byte) bool {
-	return keywordASCIIMatch(input, k.name)
-}
-
-func (k *keyword) matchStr(input string) bool {
 	if len(input) != len(k.name) {
 		return false
 	}
-	for i := 0; i < len(input); i++ {
-		c := input[i]
+	for i, c := range input {
 		if 'A' <= c && c <= 'Z' {
 			c += 'a' - 'A'
 		}
@@ -31,11 +26,16 @@ func (k *keyword) matchStr(input string) bool {
 	return true
 }
 
-func keywordASCIIMatch(input []byte, expected string) bool {
+func (k *keyword) matchStr(input string) bool {
+	return keywordASCIIMatch(input, k.name)
+}
+
+func keywordASCIIMatch(input string, expected string) bool {
 	if len(input) != len(expected) {
 		return false
 	}
-	for i, c := range input {
+	for i := 0; i < len(input); i++ {
+		c := input[i]
 		if 'A' <= c && c <= 'Z' {
 			c += 'a' - 'A'
 		}
