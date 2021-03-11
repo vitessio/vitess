@@ -17,7 +17,6 @@ limitations under the License.
 package vrepl
 
 import (
-	"context"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -30,7 +29,6 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/schema"
 	throttlebase "vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
 
@@ -390,7 +388,7 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 	tableName := fmt.Sprintf("vt_onlineddl_test_%02d", 3)
 	sqlQuery := fmt.Sprintf(alterStatement, tableName)
 	if executeStrategy == "vtgate" {
-		row := vtgateExec(t, ddlStrategy, sqlQuery, "").Named().Row()
+		row := onlineddl.VtgateExecDDL(t, &vtParams, ddlStrategy, sqlQuery, "").Named().Row()
 		if row != nil {
 			uuid = row.AsString("uuid", "")
 		}
@@ -448,26 +446,4 @@ func getCreateTableStatement(t *testing.T, tablet *cluster.Vttablet, tableName s
 	assert.Equal(t, len(queryResult.Rows[0]), 2) // table name, create statement
 	statement = queryResult.Rows[0][1].ToString()
 	return statement
-}
-
-func vtgateExec(t *testing.T, ddlStrategy string, query string, expectError string) *sqltypes.Result {
-	t.Helper()
-
-	ctx := context.Background()
-	conn, err := mysql.Connect(ctx, &vtParams)
-	require.Nil(t, err)
-	defer conn.Close()
-
-	setSession := fmt.Sprintf("set @@ddl_strategy='%s'", ddlStrategy)
-	_, err = conn.ExecuteFetch(setSession, 1000, true)
-	assert.NoError(t, err)
-
-	qr, err := conn.ExecuteFetch(query, 1000, true)
-	if expectError == "" {
-		require.NoError(t, err)
-	} else {
-		require.Error(t, err, "error should not be nil")
-		assert.Contains(t, err.Error(), expectError, "Unexpected error")
-	}
-	return qr
 }

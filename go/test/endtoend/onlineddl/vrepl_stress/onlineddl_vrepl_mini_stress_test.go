@@ -30,7 +30,6 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/schema"
 
@@ -288,7 +287,7 @@ func testWithInitialSchema(t *testing.T) {
 // testOnlineDDLStatement runs an online DDL, ALTER statement
 func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy string, executeStrategy string, expectHint string) (uuid string) {
 	if executeStrategy == "vtgate" {
-		row := vtgateExec(t, ddlStrategy, alterStatement, "").Named().Row()
+		row := onlineddl.VtgateExecDDL(t, &vtParams, ddlStrategy, alterStatement, "").Named().Row()
 		if row != nil {
 			uuid = row.AsString("uuid", "")
 		}
@@ -523,26 +522,4 @@ func testSelectTableMetrics(t *testing.T) {
 	assert.NotZero(t, writeMetrics.updates)
 	assert.Equal(t, writeMetrics.inserts-writeMetrics.deletes, numRows)
 	assert.Equal(t, writeMetrics.updates-writeMetrics.deletes, sumUpdates) // because we DELETE WHERE updates=1
-}
-
-func vtgateExec(t *testing.T, ddlStrategy string, query string, expectError string) *sqltypes.Result {
-	t.Helper()
-
-	ctx := context.Background()
-	conn, err := mysql.Connect(ctx, &vtParams)
-	require.Nil(t, err)
-	defer conn.Close()
-
-	setSession := fmt.Sprintf("set @@ddl_strategy='%s'", ddlStrategy)
-	_, err = conn.ExecuteFetch(setSession, 1000, true)
-	assert.NoError(t, err)
-
-	qr, err := conn.ExecuteFetch(query, 1000, true)
-	if expectError == "" {
-		require.NoError(t, err)
-	} else {
-		require.Error(t, err, "error should not be nil")
-		assert.Contains(t, err.Error(), expectError, "Unexpected error")
-	}
-	return qr
 }
