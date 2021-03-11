@@ -40,7 +40,7 @@ func (r Request) Vars() map[string]string {
 // into a boolean value. If the parameter is not set, the provided default value
 // is returned.
 func (r Request) ParseQueryParamAsBool(name string, defaultVal bool) (bool, error) {
-	if param := r.URL.Query().Get(name); name != "" {
+	if param := r.URL.Query().Get(name); param != "" {
 		val, err := strconv.ParseBool(param)
 		if err != nil {
 			return defaultVal, &errors.BadRequest{
