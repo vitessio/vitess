@@ -4422,3 +4422,6 @@
 2021-03-11T16:55:48Z,golangci-lint,https://github.com/vitessio/vitess/actions/runs/643507566
 2021-03-11T16:55:48Z,unit,https://github.com/vitessio/vitess/actions/runs/643507575
 2021-03-11T16:55:48Z,unit_race,https://github.com/vitessio/vitess/actions/runs/643507559
+2021-03-11T19:06:40Z,cluster_initial_sharding_multi,https://github.com/vitessio/vitess/actions/runs/643854603
+2021-03-11T19:06:40Z,endtoend,https://github.com/vitessio/vitess/actions/runs/643854591
+2021-03-11T19:06:40Z,golangci-lint,https://github.com/vitessio/vitess/actions/runs/643854599
