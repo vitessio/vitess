@@ -2525,7 +2525,7 @@ func (node *ShowFilter) Format(buf *TrackedBuffer) {
 		return
 	}
 	if node.Like != "" {
-		buf.astPrintf(node, " like %s", encodeBytesSQLString([]byte(node.Like)))
+		buf.astPrintf(node, " like %s", encodeSQLString(node.Like))
 	} else {
 		buf.astPrintf(node, " where %v", node.Filter)
 	}

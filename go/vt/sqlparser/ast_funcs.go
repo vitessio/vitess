@@ -1356,7 +1356,7 @@ func handleUnaryMinus(expr Expr) Expr {
 	return &UnaryExpr{Operator: UMinusOp, Expr: expr}
 }
 
-// encodeBytesSQLString encodes the byte string as a SQL string.
-func encodeBytesSQLString(val []byte) string {
-	return sqltypes.EncodeBytesSQLString(val)
+// encodeSQLString encodes the string as a SQL string.
+func encodeSQLString(val string) string {
+	return sqltypes.EncodeStringSQL(val)
 }
