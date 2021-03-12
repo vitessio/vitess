@@ -1747,7 +1747,8 @@ func TestReservedConnDML(t *testing.T) {
 	defer QueryLogger.Unsubscribe(logChan)
 
 	ctx := context.Background()
-	session := NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true})
+	*sysVarSetEnabled = true
+	session := NewAutocommitSession(&vtgatepb.Session{})
 
 	_, err := executor.Execute(ctx, "TestReservedConnDML", session, "use "+KsTestUnsharded, nil)
 	require.NoError(t, err)
@@ -1778,7 +1779,7 @@ func TestReservedConnDML(t *testing.T) {
 	_, err = executor.Execute(ctx, "TestReservedConnDML", session, "begin", nil)
 	require.NoError(t, err)
 
-	sbc.EphemeralShardErr = mysql.NewSQLError(mysql.CRServerGone, mysql.SSNetError, "connection gone")
+	sbc.EphemeralShardErr = mysql.NewSQLError(mysql.CRServerGone, mysql.SSUnknownSQLState, "connection gone")
 	// as the first time the query fails due to connection loss i.e. reserved conn lost. It will be recreated to set statement will be executed again.
 	wantQueries = append(wantQueries,
 		&querypb.BoundQuery{Sql: "set @@default_week_format = 1", BindVariables: map[string]*querypb.BindVariable{}},
