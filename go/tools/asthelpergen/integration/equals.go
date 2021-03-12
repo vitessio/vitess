@@ -19,7 +19,7 @@ package integration
 
 // EqualsAST does deep equals.
 func EqualsAST(inA, inB AST) bool {
-	if inA == inB {
+	if inA == nil && inB == nil {
 		return true
 	}
 	if inA == nil || inB == nil {
@@ -107,7 +107,7 @@ func EqualsAST(inA, inB AST) bool {
 
 // EqualsSubIface does deep equals.
 func EqualsSubIface(inA, inB SubIface) bool {
-	if inA == inB {
+	if inA == nil && inB == nil {
 		return true
 	}
 	if inA == nil || inB == nil {

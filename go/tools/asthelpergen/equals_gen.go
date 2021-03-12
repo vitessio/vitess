@@ -105,7 +105,7 @@ func (e *equalsGen) makeInterfaceEqualsMethod(t types.Type, iface *types.Interfa
 		}
 	*/
 	stmts := []jen.Code{
-		jen.If(jen.Id("inA == inB")).Block(jen.Return(jen.True())),
+		jen.If(jen.Id("inA == nil").Op("&&").Id("inB == nil")).Block(jen.Return(jen.True())),
 		jen.If(jen.Id("inA == nil").Op("||").Id("inB == nil")).Block(jen.Return(jen.False())),
 	}
 
