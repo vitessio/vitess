@@ -569,7 +569,7 @@ func TestFindWorkflows(t *testing.T) {
 		cfg       testutil.TestClusterConfig
 		keyspaces []string
 		opts      cluster.FindWorkflowsOptions
-		expected  []*vtadminpb.Workflow
+		expected  *vtadminpb.ClusterWorkflows
 		shouldErr bool
 	}{
 		{
@@ -597,22 +597,24 @@ func TestFindWorkflows(t *testing.T) {
 				},
 			},
 			keyspaces: []string{"ks1"},
-			expected: []*vtadminpb.Workflow{
-				{
-					Cluster: &vtadminpb.Cluster{
-						Id:   "c1",
-						Name: "cluster1",
-					},
-					Keyspace: "ks1",
-					Workflow: &vtctldatapb.Workflow{
-						Name: "workflow1",
+			expected: &vtadminpb.ClusterWorkflows{
+				Workflows: []*vtadminpb.Workflow{
+					{
+						Cluster: &vtadminpb.Cluster{
+							Id:   "c1",
+							Name: "cluster1",
+						},
+						Keyspace: "ks1",
+						Workflow: &vtctldatapb.Workflow{
+							Name: "workflow1",
+						},
 					},
 				},
 			},
 			shouldErr: false,
 		},
 		{
-			name: "error getting keyspaces",
+			name: "error getting keyspaces is fatal",
 			cfg: testutil.TestClusterConfig{
 				Cluster: &vtadminpb.Cluster{
 					Id:   "c1",
@@ -650,7 +652,9 @@ func TestFindWorkflows(t *testing.T) {
 				},
 			},
 			keyspaces: nil,
-			expected:  []*vtadminpb.Workflow{},
+			expected: &vtadminpb.ClusterWorkflows{
+				Workflows: []*vtadminpb.Workflow{},
+			},
 			shouldErr: false,
 		},
 		{
@@ -707,15 +711,17 @@ func TestFindWorkflows(t *testing.T) {
 			opts: cluster.FindWorkflowsOptions{
 				IgnoreKeyspaces: sets.NewString("ks2"),
 			},
-			expected: []*vtadminpb.Workflow{
-				{
-					Cluster: &vtadminpb.Cluster{
-						Id:   "c1",
-						Name: "cluster1",
-					},
-					Keyspace: "ks2",
-					Workflow: &vtctldatapb.Workflow{
-						Name: "workflow_a",
+			expected: &vtadminpb.ClusterWorkflows{
+				Workflows: []*vtadminpb.Workflow{
+					{
+						Cluster: &vtadminpb.Cluster{
+							Id:   "c1",
+							Name: "cluster1",
+						},
+						Keyspace: "ks2",
+						Workflow: &vtctldatapb.Workflow{
+							Name: "workflow_a",
+						},
 					},
 				},
 			},
@@ -775,32 +781,34 @@ func TestFindWorkflows(t *testing.T) {
 			opts: cluster.FindWorkflowsOptions{
 				IgnoreKeyspaces: sets.NewString("ks2"),
 			},
-			expected: []*vtadminpb.Workflow{
-				{
-					Cluster: &vtadminpb.Cluster{
-						Id:   "c1",
-						Name: "cluster1",
+			expected: &vtadminpb.ClusterWorkflows{
+				Workflows: []*vtadminpb.Workflow{
+					{
+						Cluster: &vtadminpb.Cluster{
+							Id:   "c1",
+							Name: "cluster1",
+						},
+						Keyspace: "ks1",
+						Workflow: &vtctldatapb.Workflow{
+							Name: "workflow1",
+						},
 					},
-					Keyspace: "ks1",
-					Workflow: &vtctldatapb.Workflow{
-						Name: "workflow1",
-					},
-				},
-				{
-					Cluster: &vtadminpb.Cluster{
-						Id:   "c1",
-						Name: "cluster1",
-					},
-					Keyspace: "ks1",
-					Workflow: &vtctldatapb.Workflow{
-						Name: "workflow2",
+					{
+						Cluster: &vtadminpb.Cluster{
+							Id:   "c1",
+							Name: "cluster1",
+						},
+						Keyspace: "ks1",
+						Workflow: &vtctldatapb.Workflow{
+							Name: "workflow2",
+						},
 					},
 				},
 			},
 			shouldErr: false,
 		},
 		{
-			name: "error getting workflows",
+			name: "error getting workflows is fatal if all keyspaces fail",
 			cfg: testutil.TestClusterConfig{
 				Cluster: &vtadminpb.Cluster{
 					Id:   "c1",
@@ -820,6 +828,51 @@ func TestFindWorkflows(t *testing.T) {
 			keyspaces: []string{"ks1"},
 			expected:  nil,
 			shouldErr: true,
+		},
+		{
+			name: "error getting workflows is non-fatal if some keyspaces fail",
+			cfg: testutil.TestClusterConfig{
+				Cluster: &vtadminpb.Cluster{
+					Id:   "c1",
+					Name: "cluster1",
+				},
+				VtctldClient: &testutil.VtctldClient{
+					GetWorkflowsResults: map[string]struct {
+						Response *vtctldatapb.GetWorkflowsResponse
+						Error    error
+					}{
+						"ks1": {
+							Error: assert.AnError,
+						},
+						"ks2": {
+							Response: &vtctldatapb.GetWorkflowsResponse{
+								Workflows: []*vtctldatapb.Workflow{
+									{
+										Name: "workflow1",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			keyspaces: []string{"ks1", "ks2"},
+			expected: &vtadminpb.ClusterWorkflows{
+				Workflows: []*vtadminpb.Workflow{
+					{
+						Cluster: &vtadminpb.Cluster{
+							Id:   "c1",
+							Name: "cluster1",
+						},
+						Keyspace: "ks2",
+						Workflow: &vtctldatapb.Workflow{
+							Name: "workflow1",
+						},
+					},
+				},
+				Warnings: []string{"something about ks1"},
+			},
+			shouldErr: false,
 		},
 		{
 			name: "filtered workflows",
@@ -854,15 +907,17 @@ func TestFindWorkflows(t *testing.T) {
 					return strings.HasPrefix(workflow.Workflow.Name, "include_me")
 				},
 			},
-			expected: []*vtadminpb.Workflow{
-				{
-					Cluster: &vtadminpb.Cluster{
-						Id:   "c1",
-						Name: "cluster1",
-					},
-					Keyspace: "ks1",
-					Workflow: &vtctldatapb.Workflow{
-						Name: "include_me",
+			expected: &vtadminpb.ClusterWorkflows{
+				Workflows: []*vtadminpb.Workflow{
+					{
+						Cluster: &vtadminpb.Cluster{
+							Id:   "c1",
+							Name: "cluster1",
+						},
+						Keyspace: "ks1",
+						Workflow: &vtctldatapb.Workflow{
+							Name: "include_me",
+						},
 					},
 				},
 			},
@@ -887,7 +942,7 @@ func TestFindWorkflows(t *testing.T) {
 			}
 
 			assert.NoError(t, err)
-			assert.ElementsMatch(t, tt.expected, workflows)
+			testutil.AssertClusterWorkflowsEqual(t, tt.expected, workflows)
 		})
 	}
 }
@@ -1177,7 +1232,7 @@ func TestGetWorkflows(t *testing.T) {
 		cfg       testutil.TestClusterConfig
 		keyspaces []string
 		opts      cluster.GetWorkflowsOptions
-		expected  []*vtadminpb.Workflow
+		expected  *vtadminpb.ClusterWorkflows
 		shouldErr bool
 	}{
 		{
@@ -1214,32 +1269,34 @@ func TestGetWorkflows(t *testing.T) {
 				},
 			},
 			keyspaces: []string{"ks1", "ks2"},
-			expected: []*vtadminpb.Workflow{
-				{
-					Cluster: &vtadminpb.Cluster{
-						Id:   "c1",
-						Name: "cluster1",
+			expected: &vtadminpb.ClusterWorkflows{
+				Workflows: []*vtadminpb.Workflow{
+					{
+						Cluster: &vtadminpb.Cluster{
+							Id:   "c1",
+							Name: "cluster1",
+						},
+						Keyspace: "ks1",
+						Workflow: &vtctldatapb.Workflow{
+							Name: "ks1-workflow1",
+						},
 					},
-					Keyspace: "ks1",
-					Workflow: &vtctldatapb.Workflow{
-						Name: "ks1-workflow1",
-					},
-				},
-				{
-					Cluster: &vtadminpb.Cluster{
-						Id:   "c1",
-						Name: "cluster1",
-					},
-					Keyspace: "ks2",
-					Workflow: &vtctldatapb.Workflow{
-						Name: "ks2-workflow1",
+					{
+						Cluster: &vtadminpb.Cluster{
+							Id:   "c1",
+							Name: "cluster1",
+						},
+						Keyspace: "ks2",
+						Workflow: &vtctldatapb.Workflow{
+							Name: "ks2-workflow1",
+						},
 					},
 				},
 			},
 			shouldErr: false,
 		},
 		{
-			name: "error",
+			name: "partial error",
 			cfg: testutil.TestClusterConfig{
 				Cluster: &vtadminpb.Cluster{
 					Id:   "c1",
@@ -1266,6 +1323,42 @@ func TestGetWorkflows(t *testing.T) {
 				},
 			},
 			keyspaces: []string{"ks1", "ks2"},
+			expected: &vtadminpb.ClusterWorkflows{
+				Workflows: []*vtadminpb.Workflow{
+					{
+						Cluster: &vtadminpb.Cluster{
+							Id:   "c1",
+							Name: "cluster1",
+						},
+						Keyspace: "ks1",
+						Workflow: &vtctldatapb.Workflow{
+							Name: "ks1-workflow1",
+						},
+					},
+				},
+				Warnings: []string{"something about ks2"},
+			},
+			shouldErr: false,
+		},
+		{
+			name: "error",
+			cfg: testutil.TestClusterConfig{
+				Cluster: &vtadminpb.Cluster{
+					Id:   "c1",
+					Name: "cluster1",
+				},
+				VtctldClient: &testutil.VtctldClient{
+					GetWorkflowsResults: map[string]struct {
+						Response *vtctldatapb.GetWorkflowsResponse
+						Error    error
+					}{
+						"ks1": {
+							Error: assert.AnError,
+						},
+					},
+				},
+			},
+			keyspaces: []string{"ks1"},
 			expected:  nil,
 			shouldErr: true,
 		},
@@ -1288,7 +1381,7 @@ func TestGetWorkflows(t *testing.T) {
 			}
 
 			assert.NoError(t, err)
-			assert.ElementsMatch(t, tt.expected, workflows)
+			testutil.AssertClusterWorkflowsEqual(t, tt.expected, workflows)
 		})
 	}
 }

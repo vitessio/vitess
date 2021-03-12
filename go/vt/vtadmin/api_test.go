@@ -2785,35 +2785,43 @@ func TestGetWorkflows(t *testing.T) {
 			},
 			req: &vtadminpb.GetWorkflowsRequest{},
 			expected: &vtadminpb.GetWorkflowsResponse{
-				Workflows: []*vtadminpb.Workflow{
-					{
-						Cluster: &vtadminpb.Cluster{
-							Id:   "c1",
-							Name: "cluster1",
-						},
-						Keyspace: "testkeyspace",
-						Workflow: &vtctldatapb.Workflow{
-							Name: "workflow1",
+				WorkflowsByCluster: map[string]*vtadminpb.ClusterWorkflows{
+					"c1": {
+						Workflows: []*vtadminpb.Workflow{
+							{
+								Cluster: &vtadminpb.Cluster{
+									Id:   "c1",
+									Name: "cluster1",
+								},
+								Keyspace: "testkeyspace",
+								Workflow: &vtctldatapb.Workflow{
+									Name: "workflow1",
+								},
+							},
+							{
+								Cluster: &vtadminpb.Cluster{
+									Id:   "c1",
+									Name: "cluster1",
+								},
+								Keyspace: "testkeyspace",
+								Workflow: &vtctldatapb.Workflow{
+									Name: "workflow2",
+								},
+							},
 						},
 					},
-					{
-						Cluster: &vtadminpb.Cluster{
-							Id:   "c1",
-							Name: "cluster1",
-						},
-						Keyspace: "testkeyspace",
-						Workflow: &vtctldatapb.Workflow{
-							Name: "workflow2",
-						},
-					},
-					{
-						Cluster: &vtadminpb.Cluster{
-							Id:   "c2",
-							Name: "cluster2",
-						},
-						Keyspace: "otherkeyspace",
-						Workflow: &vtctldatapb.Workflow{
-							Name: "workflow1",
+					"c2": {
+						Workflows: []*vtadminpb.Workflow{
+							{
+								Cluster: &vtadminpb.Cluster{
+									Id:   "c2",
+									Name: "cluster2",
+								},
+								Keyspace: "otherkeyspace",
+								Workflow: &vtctldatapb.Workflow{
+									Name: "workflow1",
+								},
+							},
 						},
 					},
 				},
@@ -2821,7 +2829,7 @@ func TestGetWorkflows(t *testing.T) {
 			shouldErr: false,
 		},
 		{
-			name: "one cluster errors, fails the request",
+			name: "one cluster has partial error then request succeeds",
 			cfgs: []vtadmintestutil.TestClusterConfig{
 				{
 					Cluster: &vtadminpb.Cluster{
@@ -2897,9 +2905,52 @@ func TestGetWorkflows(t *testing.T) {
 					},
 				},
 			},
-			req:       &vtadminpb.GetWorkflowsRequest{},
-			expected:  nil,
-			shouldErr: true,
+			req: &vtadminpb.GetWorkflowsRequest{},
+			expected: &vtadminpb.GetWorkflowsResponse{
+				WorkflowsByCluster: map[string]*vtadminpb.ClusterWorkflows{
+					"c1": {
+						Workflows: []*vtadminpb.Workflow{
+							{
+								Cluster: &vtadminpb.Cluster{
+									Id:   "c1",
+									Name: "cluster1",
+								},
+								Keyspace: "testkeyspace",
+								Workflow: &vtctldatapb.Workflow{
+									Name: "workflow1",
+								},
+							},
+							{
+								Cluster: &vtadminpb.Cluster{
+									Id:   "c1",
+									Name: "cluster1",
+								},
+								Keyspace: "testkeyspace",
+								Workflow: &vtctldatapb.Workflow{
+									Name: "workflow2",
+								},
+							},
+						},
+						Warnings: []string{},
+					},
+					"c2": {
+						Workflows: []*vtadminpb.Workflow{
+							{
+								Cluster: &vtadminpb.Cluster{
+									Id:   "c2",
+									Name: "cluster2",
+								},
+								Keyspace: "otherkeyspace",
+								Workflow: &vtctldatapb.Workflow{
+									Name: "workflow1",
+								},
+							},
+						},
+						Warnings: []string{"some warning about badkeyspace"},
+					},
+				},
+			},
+			shouldErr: false,
 		},
 		{
 			name: "IgnoreKeyspaces applies across clusters",
@@ -2988,20 +3039,82 @@ func TestGetWorkflows(t *testing.T) {
 				IgnoreKeyspaces: []string{"testkeyspace"},
 			},
 			expected: &vtadminpb.GetWorkflowsResponse{
-				Workflows: []*vtadminpb.Workflow{
-					{
-						Cluster: &vtadminpb.Cluster{
-							Id:   "c2",
-							Name: "cluster2",
-						},
-						Keyspace: "otherkeyspace",
-						Workflow: &vtctldatapb.Workflow{
-							Name: "workflow1",
+				WorkflowsByCluster: map[string]*vtadminpb.ClusterWorkflows{
+					"c1": {},
+					"c2": {
+						Workflows: []*vtadminpb.Workflow{
+							{
+								Cluster: &vtadminpb.Cluster{
+									Id:   "c2",
+									Name: "cluster2",
+								},
+								Keyspace: "otherkeyspace",
+								Workflow: &vtctldatapb.Workflow{
+									Name: "workflow1",
+								},
+							},
 						},
 					},
 				},
 			},
 			shouldErr: false,
+		},
+		{
+			name: "one cluster has fatal error, request fails",
+			cfgs: []vtadmintestutil.TestClusterConfig{
+				{
+					Cluster: &vtadminpb.Cluster{
+						Id:   "c1",
+						Name: "cluster1",
+					},
+					VtctldClient: &vtadmintestutil.VtctldClient{
+						GetKeyspacesResults: struct {
+							Keyspaces []*vtctldatapb.Keyspace
+							Error     error
+						}{
+							Keyspaces: []*vtctldatapb.Keyspace{
+								{
+									Name: "testkeyspace",
+								},
+							},
+						},
+						GetWorkflowsResults: map[string]struct {
+							Response *vtctldatapb.GetWorkflowsResponse
+							Error    error
+						}{
+							"testkeyspace": {
+								Response: &vtctldatapb.GetWorkflowsResponse{
+									Workflows: []*vtctldatapb.Workflow{
+										{
+											Name: "workflow1",
+										},
+										{
+											Name: "workflow2",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				{
+					Cluster: &vtadminpb.Cluster{
+						Id:   "c2",
+						Name: "cluster2",
+					},
+					VtctldClient: &vtadmintestutil.VtctldClient{
+						GetKeyspacesResults: struct {
+							Keyspaces []*vtctldatapb.Keyspace
+							Error     error
+						}{
+							Error: assert.AnError, // GetKeyspaces is a fatal error
+						},
+					},
+				},
+			},
+			req:       &vtadminpb.GetWorkflowsRequest{},
+			expected:  nil,
+			shouldErr: true,
 		},
 	}
 
@@ -3012,10 +3125,6 @@ func TestGetWorkflows(t *testing.T) {
 
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-
-			if tt.expected == nil && !tt.shouldErr {
-				t.SkipNow()
-			}
 
 			api := NewAPI(
 				vtadmintestutil.BuildClusters(tt.cfgs...),
@@ -3032,7 +3141,8 @@ func TestGetWorkflows(t *testing.T) {
 
 			assert.NoError(t, err)
 			require.NotNil(t, resp)
-			assert.ElementsMatch(t, tt.expected.Workflows, resp.Workflows)
+
+			vtadmintestutil.AssertGetWorkflowsResponsesEqual(t, tt.expected, resp)
 		})
 	}
 }

@@ -220,7 +220,13 @@ type FindWorkflowsOptions struct {
 //
 // Callers should use this function when they want more fine-grained filtering,
 // and GetWorkflows when they just want to filter on keyspace name.
-func (c *Cluster) FindWorkflows(ctx context.Context, keyspaces []string, opts FindWorkflowsOptions) ([]*vtadminpb.Workflow, error) {
+//
+// Note that if only a subset of keyspaces error on their vtctld GetWorkflows
+// rpc, this is treated as a partial success, and the ClusterWorkflows response
+// will include any errors in the Warnings slice. If all keyspaces fail, or if
+// non-(Vtctld.GetWorkflows) calls fail, this is treated as an error by this
+// function.
+func (c *Cluster) FindWorkflows(ctx context.Context, keyspaces []string, opts FindWorkflowsOptions) (*vtadminpb.ClusterWorkflows, error) {
 	span, ctx := trace.NewSpan(ctx, "Cluster.FindWorkflows")
 	defer span.Finish()
 
@@ -234,7 +240,7 @@ func (c *Cluster) FindWorkflows(ctx context.Context, keyspaces []string, opts Fi
 	return c.findWorkflows(ctx, keyspaces, opts)
 }
 
-func (c *Cluster) findWorkflows(ctx context.Context, keyspaces []string, opts FindWorkflowsOptions) ([]*vtadminpb.Workflow, error) {
+func (c *Cluster) findWorkflows(ctx context.Context, keyspaces []string, opts FindWorkflowsOptions) (*vtadminpb.ClusterWorkflows, error) {
 	if opts.Filter == nil {
 		opts.Filter = func(_ *vtadminpb.Workflow) bool { return true }
 	}
@@ -331,11 +337,17 @@ func (c *Cluster) findWorkflows(ctx context.Context, keyspaces []string, opts Fi
 
 	wg.Wait()
 
-	if rec.HasErrors() {
+	// If every keyspace failed, treat this as an error.
+	if rec.HasErrors() && len(rec.Errors) == len(keyspaces) {
 		return nil, rec.Error()
 	}
 
-	return results, nil
+	// Otherwise, append any failures into the warnings slice, and return what
+	// results we have.
+	return &vtadminpb.ClusterWorkflows{
+		Workflows: results,
+		Warnings:  rec.ErrorStrings(),
+	}, nil
 }
 
 // GetTablets returns all tablets in the cluster.
@@ -463,13 +475,18 @@ func (c *Cluster) GetWorkflow(ctx context.Context, keyspace string, name string,
 		return nil, err
 	}
 
-	switch len(workflows) {
+	switch len(workflows.Workflows) {
 	case 0:
-		return nil, fmt.Errorf("%w for keyspace %s and name %s (active_only = %v)", errors.ErrNoWorkflow, keyspace, name, opts.ActiveOnly)
+		msg := "%w for keyspace %s and name %s (active_only = %v)"
+		if len(workflows.Warnings) > 0 {
+			return nil, fmt.Errorf(msg+"; warnings: %v", errors.ErrNoWorkflow, keyspace, name, opts.ActiveOnly, workflows.Warnings)
+		}
+
+		return nil, fmt.Errorf(msg, errors.ErrNoWorkflow, keyspace, name, opts.ActiveOnly)
 	case 1:
-		return workflows[0], nil
+		return workflows.Workflows[0], nil
 	default:
-		return nil, fmt.Errorf("%w: found %d workflows in keyspace %s with name %s (active_only = %v); this should be impossible", errors.ErrAmbiguousWorkflow, len(workflows), keyspace, name, opts.ActiveOnly)
+		return nil, fmt.Errorf("%w: found %d workflows in keyspace %s with name %s (active_only = %v); this should be impossible", errors.ErrAmbiguousWorkflow, len(workflows.Workflows), keyspace, name, opts.ActiveOnly)
 	}
 }
 
@@ -486,7 +503,7 @@ type GetWorkflowsOptions struct {
 // If the list of keyspaces to check is empty, then GetWorkflows will use the
 // result of GetKeyspaces to search all keyspaces in the cluster. In this case,
 // opts.IgnoreKeyspaces is respected.
-func (c *Cluster) GetWorkflows(ctx context.Context, keyspaces []string, opts GetWorkflowsOptions) ([]*vtadminpb.Workflow, error) {
+func (c *Cluster) GetWorkflows(ctx context.Context, keyspaces []string, opts GetWorkflowsOptions) (*vtadminpb.ClusterWorkflows, error) {
 	span, ctx := trace.NewSpan(ctx, "Cluster.GetWorkflows")
 	defer span.Finish()
 
