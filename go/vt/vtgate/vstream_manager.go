@@ -105,7 +105,7 @@ func newVStreamManager(resolver *srvtopo.Resolver, serv srvtopo.Server, cell str
 
 func (vsm *vstreamManager) VStream(ctx context.Context, tabletType topodatapb.TabletType, vgtid *binlogdatapb.VGtid,
 	filter *binlogdatapb.Filter, flags *vtgatepb.VStreamFlags, send func(events []*binlogdatapb.VEvent) error) error {
-	vgtid, filter, err := vsm.resolveParams(ctx, tabletType, vgtid, filter)
+	vgtid, filter, flags, err := vsm.resolveParams(ctx, tabletType, vgtid, filter, flags)
 	if err != nil {
 		return err
 	}
@@ -126,7 +126,9 @@ func (vsm *vstreamManager) VStream(ctx context.Context, tabletType topodatapb.Ta
 }
 
 // resolveParams provides defaults for the inputs if they're not specified.
-func (vsm *vstreamManager) resolveParams(ctx context.Context, tabletType topodatapb.TabletType, vgtid *binlogdatapb.VGtid, filter *binlogdatapb.Filter) (*binlogdatapb.VGtid, *binlogdatapb.Filter, error) {
+func (vsm *vstreamManager) resolveParams(ctx context.Context, tabletType topodatapb.TabletType, vgtid *binlogdatapb.VGtid,
+	filter *binlogdatapb.Filter, flags *vtgatepb.VStreamFlags) (*binlogdatapb.VGtid, *binlogdatapb.Filter, *vtgatepb.VStreamFlags, error) {
+
 	if filter == nil {
 		filter = &binlogdatapb.Filter{
 			Rules: []*binlogdatapb.Rule{{
@@ -134,8 +136,12 @@ func (vsm *vstreamManager) resolveParams(ctx context.Context, tabletType topodat
 			}},
 		}
 	}
+
+	if flags == nil {
+		flags = &vtgatepb.VStreamFlags{}
+	}
 	if vgtid == nil || len(vgtid.ShardGtids) == 0 {
-		return nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "vgtid must have at least one value with a starting position")
+		return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "vgtid must have at least one value with a starting position")
 	}
 	// To fetch from all keyspaces, the input must contain a single ShardGtid
 	// that has an empty keyspace, and the Gtid must be "current". In the
@@ -143,11 +149,11 @@ func (vsm *vstreamManager) resolveParams(ctx context.Context, tabletType topodat
 	// copying of existing data.
 	if len(vgtid.ShardGtids) == 1 && vgtid.ShardGtids[0].Keyspace == "" {
 		if vgtid.ShardGtids[0].Gtid != "current" {
-			return nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "for an empty keyspace, the Gtid value must be 'current': %v", vgtid)
+			return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "for an empty keyspace, the Gtid value must be 'current': %v", vgtid)
 		}
 		keyspaces, err := vsm.toposerv.GetSrvKeyspaceNames(ctx, vsm.cell, false)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 		newvgtid := &binlogdatapb.VGtid{}
 		for _, keyspace := range keyspaces {
@@ -162,12 +168,12 @@ func (vsm *vstreamManager) resolveParams(ctx context.Context, tabletType topodat
 	for _, sgtid := range vgtid.ShardGtids {
 		if sgtid.Shard == "" {
 			if sgtid.Gtid != "current" {
-				return nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "if shards are unspecified, the Gtid value must be 'current': %v", vgtid)
+				return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "if shards are unspecified, the Gtid value must be 'current': %v", vgtid)
 			}
 			// TODO(sougou): this should work with the new Migrate workflow
 			_, _, allShards, err := vsm.resolver.GetKeyspaceShards(ctx, sgtid.Keyspace, tabletType)
 			if err != nil {
-				return nil, nil, err
+				return nil, nil, nil, err
 			}
 			for _, shard := range allShards {
 				newvgtid.ShardGtids = append(newvgtid.ShardGtids, &binlogdatapb.ShardGtid{
@@ -180,9 +186,10 @@ func (vsm *vstreamManager) resolveParams(ctx context.Context, tabletType topodat
 			newvgtid.ShardGtids = append(newvgtid.ShardGtids, sgtid)
 		}
 	}
+
 	//TODO add tablepk validations
 
-	return newvgtid, filter, nil
+	return newvgtid, filter, flags, nil
 }
 
 func (vsm *vstreamManager) RecordStreamDelay() {
