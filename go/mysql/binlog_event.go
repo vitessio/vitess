@@ -122,6 +122,9 @@ type BinlogEvent interface {
 
 	// IsPseudo is for custom implementations of GTID.
 	IsPseudo() bool
+
+	// IsCompressed returns true if a compressed event is found (binlog_transaction_compression=ON)
+	IsCompressed() bool
 }
 
 // BinlogFormat contains relevant data from the FORMAT_DESCRIPTION_EVENT.
