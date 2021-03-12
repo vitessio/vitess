@@ -813,7 +813,7 @@ func (api *API) GetWorkflows(ctx context.Context, req *vtadminpb.GetWorkflowsReq
 		m       sync.Mutex
 		wg      sync.WaitGroup
 		rec     concurrency.AllErrorRecorder
-		results []*vtadminpb.Workflow
+		results = map[string]*vtadminpb.ClusterWorkflows{}
 	)
 
 	for _, c := range clusters {
@@ -833,7 +833,7 @@ func (api *API) GetWorkflows(ctx context.Context, req *vtadminpb.GetWorkflowsReq
 			}
 
 			m.Lock()
-			results = append(results, workflows...)
+			results[c.ID] = workflows
 			m.Unlock()
 		}(c)
 	}
@@ -845,7 +845,7 @@ func (api *API) GetWorkflows(ctx context.Context, req *vtadminpb.GetWorkflowsReq
 	}
 
 	return &vtadminpb.GetWorkflowsResponse{
-		Workflows: results,
+		WorkflowsByCluster: results,
 	}, nil
 }
 
