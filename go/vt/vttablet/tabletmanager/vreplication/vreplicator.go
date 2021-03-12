@@ -98,6 +98,10 @@ type vreplicator struct {
 //   More advanced constructs can be used. Please see the table plan builder
 //   documentation for more info.
 func newVReplicator(id uint32, source *binlogdatapb.BinlogSource, sourceVStreamer VStreamerClient, stats *binlogplayer.Stats, dbClient binlogplayer.DBClient, mysqld mysqlctl.MysqlDaemon, vre *Engine) *vreplicator {
+	if *vreplicationHeartbeatUpdateInterval > vreplicationMinimumHeartbeatUpdateInterval {
+		log.Warningf("the supplied value for vreplication_heartbeat_update_interval:%d seconds is larger than the maximum allowed:%d seconds, vreplication will fallback to %d",
+			*vreplicationHeartbeatUpdateInterval, vreplicationMinimumHeartbeatUpdateInterval, vreplicationMinimumHeartbeatUpdateInterval)
+	}
 	return &vreplicator{
 		vre:             vre,
 		id:              id,
