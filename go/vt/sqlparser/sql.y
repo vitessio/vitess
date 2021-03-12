@@ -45,6 +45,10 @@ func yyPosition(yylex interface{}) int {
   return yylex.(*Tokenizer).Position
 }
 
+func yyOldPosition(yylex interface{}) int {
+  return yylex.(*Tokenizer).OldPosition
+}
+
 // skipToEnd forces the lexer to end prematurely. Not all SQL statements
 // are supported by the Parser, thus calling skipToEnd will make the lexer
 // return EOF early.
@@ -119,8 +123,6 @@ func skipToEnd(yylex interface{}) {
   partDefs      []*PartitionDefinition
   partDef       *PartitionDefinition
   partSpec      *PartitionSpec
-  vindexParam   VindexParam
-  vindexParams  []VindexParam
   showFilter    *ShowFilter
   over          *Over
   caseStatementCases []CaseStatementCase
@@ -187,7 +189,6 @@ func skipToEnd(yylex interface{}) {
 %token <bytes> FIRST AFTER
 %token <bytes> SHOW DESCRIBE EXPLAIN DATE ESCAPE REPAIR OPTIMIZE TRUNCATE FORMAT
 %token <bytes> MAXVALUE PARTITION REORGANIZE LESS THAN PROCEDURE TRIGGER TRIGGERS FUNCTION
-%token <bytes> VINDEX VINDEXES
 %token <bytes> STATUS VARIABLES WARNINGS
 %token <bytes> SEQUENCE
 %token <bytes> EACH ROW BEFORE FOLLOWS PRECEDES DEFINER INVOKER
@@ -213,7 +214,7 @@ func skipToEnd(yylex interface{}) {
 %token <bytes> NULLX AUTO_INCREMENT APPROXNUM SIGNED UNSIGNED ZEROFILL LOCAL
 
 // Supported SHOW tokens
-%token <bytes> COLLATION DATABASES SCHEMAS TABLES VITESS_METADATA VSCHEMA FULL PROCESSLIST COLUMNS FIELDS ENGINES PLUGINS
+%token <bytes> COLLATION DATABASES SCHEMAS TABLES FULL PROCESSLIST COLUMNS FIELDS ENGINES PLUGINS
 
 // SET tokens
 %token <bytes> NAMES CHARSET GLOBAL SESSION ISOLATION LEVEL READ WRITE ONLY REPEATABLE COMMITTED UNCOMMITTED SERIALIZABLE
@@ -250,8 +251,8 @@ func skipToEnd(yylex interface{}) {
 %type <statement> stream_statement insert_statement update_statement delete_statement set_statement trigger_body
 %type <statement> create_statement rename_statement drop_statement truncate_statement flush_statement call_statement
 %type <statement> trigger_begin_end_block statement_list_statement case_statement if_statement signal_statement
-%type <statement> proc_allowed_statement proc_begin_end_block
-%type <statements> statement_list proc_allowed_statement_list
+%type <statement> begin_end_block
+%type <statements> statement_list
 %type <caseStatementCases> case_statement_case_list
 %type <caseStatementCase> case_statement_case
 %type <ifStatementConditions> elseif_list
@@ -260,7 +261,7 @@ func skipToEnd(yylex interface{}) {
 %type <signalInfos> signal_information_item_list
 %type <bytes> signal_information_name signal_condition_value
 %type <str> trigger_time trigger_event
-%type <statement> alter_statement alter_table_statement alter_view_statement alter_vschema_statement
+%type <statement> alter_statement alter_table_statement alter_view_statement
 %type <ddl> create_table_prefix rename_list
 %type <statement> analyze_statement show_statement use_statement other_statement
 %type <statement> describe_statement explain_statement explainable_statement
@@ -269,11 +270,11 @@ func skipToEnd(yylex interface{}) {
 %type <str> union_op insert_or_replace
 %type <str> distinct_opt straight_join_opt cache_opt match_option separator_opt format_opt
 %type <expr> like_escape_opt
-%type <selectExprs> select_expression_list select_expression_list_opt
-%type <selectExpr> select_expression
+%type <selectExprs> select_expression_list argument_expression_list argument_expression_list_opt
+%type <selectExpr> select_expression argument_expression
 %type <expr> expression naked_like group_by
-%type <tableExprs> from_opt table_references
-%type <tableExpr> table_reference table_factor join_table
+%type <tableExprs> table_references with_clause cte_list
+%type <tableExpr> table_reference table_factor join_table common_table_expression
 %type <joinCondition> join_condition join_condition_opt on_expression_opt
 %type <tableNames> table_name_list delete_table_list view_name_list
 %type <str> inner_join outer_join straight_join natural_join
@@ -307,7 +308,7 @@ func skipToEnd(yylex interface{}) {
 %type <triggerOrder> trigger_order_opt
 %type <order> order
 %type <over> over over_opt
-%type <int> lexer_position
+%type <int> lexer_position lexer_old_position
 %type <str> asc_desc_opt
 %type <limit> limit_opt
 %type <str> lock_opt
@@ -321,7 +322,7 @@ func skipToEnd(yylex interface{}) {
 %type <bytes> for_from
 %type <str> ignore_opt default_opt
 %type <str> full_opt from_database_opt tables_or_processlist columns_or_fields
-%type <showFilter> like_or_where_opt like_opt
+%type <showFilter> like_or_where_opt
 %type <byt> exists_opt not_exists_opt
 %type <str> key_type key_type_opt
 %type <empty> non_add_drop_or_rename_operation
@@ -363,9 +364,6 @@ func skipToEnd(yylex interface{}) {
 %type <partDefs> partition_definitions
 %type <partDef> partition_definition
 %type <partSpec> partition_operation
-%type <vindexParam> vindex_param
-%type <vindexParams> vindex_param_list vindex_params_opt
-%type <colIdent> vindex_type vindex_type_opt
 %type <bytes> ignored_alter_object_type
 %type <ReferenceAction> fk_reference_action fk_on_delete fk_on_update
 %type <str> constraint_symbol_opt infile_opt
@@ -458,9 +456,43 @@ stream_statement:
 
 // base_select is an unparenthesized SELECT with no order by clause or beyond.
 base_select:
-  SELECT comment_opt cache_opt distinct_opt straight_join_opt select_expression_list from_opt where_expression_opt group_by_opt having_opt
+  SELECT comment_opt cache_opt distinct_opt straight_join_opt select_expression_list where_expression_opt group_by_opt having_opt
   {
-    $$ = &Select{Comments: Comments($2), Cache: $3, Distinct: $4, Hints: $5, SelectExprs: $6, From: $7, Where: NewWhere(WhereStr, $8), GroupBy: GroupBy($9), Having: NewWhere(HavingStr, $10)}
+    $$ = &Select{Comments: Comments($2), Cache: $3, Distinct: $4, Hints: $5, SelectExprs: $6, From: TableExprs{&AliasedTableExpr{Expr:TableName{Name: NewTableIdent("dual")}}}, Where: NewWhere(WhereStr, $7), GroupBy: GroupBy($8), Having: NewWhere(HavingStr, $9)}
+  }
+| SELECT comment_opt cache_opt distinct_opt straight_join_opt select_expression_list FROM table_references where_expression_opt group_by_opt having_opt
+  {
+    $$ = &Select{Comments: Comments($2), Cache: $3, Distinct: $4, Hints: $5, SelectExprs: $6, From: $8, Where: NewWhere(WhereStr, $9), GroupBy: GroupBy($10), Having: NewWhere(HavingStr, $11)}
+  }
+| with_clause SELECT comment_opt cache_opt distinct_opt straight_join_opt select_expression_list FROM table_references where_expression_opt group_by_opt having_opt
+  {
+    $$ = &Select{CommonTableExprs: $1, Comments: Comments($3), Cache: $4, Distinct: $5, Hints: $6, SelectExprs: $7, From: $9, Where: NewWhere(WhereStr, $10), GroupBy: GroupBy($11), Having: NewWhere(HavingStr, $12)}
+  }
+
+with_clause:
+  WITH cte_list
+  {
+    $$ = $2
+  }
+
+cte_list:
+  common_table_expression
+  {
+    $$ = TableExprs{$1}
+  }
+| cte_list ',' common_table_expression
+  {
+    $$ = append($1, $3)
+  }
+
+common_table_expression:
+  table_alias AS subquery
+  {
+    $$ = &CommonTableExpr{&AliasedTableExpr{Expr:$3, As: $1}, nil}
+  }
+| table_alias openb ins_column_list closeb AS subquery
+  {
+    $$ = &CommonTableExpr{&AliasedTableExpr{Expr:$6, As: $1}, $3}
   }
 
 union_lhs:
@@ -660,6 +692,11 @@ lexer_position:
     $$ = yyPosition(yylex)
   }
 
+lexer_old_position:
+  {
+    $$ = yyOldPosition(yylex)
+  }
+
 create_statement:
   create_table_prefix table_spec
   {
@@ -706,7 +743,7 @@ create_statement:
   {
     $$ = &DDL{Action: CreateStr, Table: $8, TriggerSpec: &TriggerSpec{Name: string($4), Time: $5, Event: $6, Order: $12, Body: $14}, SubStatementPositionStart: $13, SubStatementPositionEnd: $15 - 1}
   }
-| CREATE definer_opt PROCEDURE ID '(' proc_param_list_opt ')' characteristic_list_opt lexer_position proc_allowed_statement lexer_position
+| CREATE definer_opt PROCEDURE ID '(' proc_param_list_opt ')' characteristic_list_opt lexer_position statement_list_statement lexer_position
   {
     $$ = &DDL{Action: CreateStr, ProcedureSpec: &ProcedureSpec{Name: string($4), Definer: $2, Params: $6, Characteristics: $8, Body: $10}, SubStatementPositionStart: $9, SubStatementPositionEnd: $11 - 1}
   }
@@ -809,47 +846,10 @@ characteristic:
     $$ = Characteristic{Type: CharacteristicValue_SqlSecurityInvoker}
   }
 
-proc_allowed_statement:
-  select_statement
-  {
-    $$ = $1
-  }
-| insert_statement
-| update_statement
-| delete_statement
-| set_statement
-| create_statement
-| alter_statement
-| rename_statement
-| drop_statement
-| case_statement
-| if_statement
-| truncate_statement
-| analyze_statement
-| show_statement
-| start_transaction_statement
-| commit_statement
-| rollback_statement
-| explain_statement
-| describe_statement
-| signal_statement
-| call_statement
-| proc_begin_end_block
-
-proc_begin_end_block:
-  BEGIN proc_allowed_statement_list ';' END
+begin_end_block:
+  BEGIN statement_list ';' END
   {
     $$ = &BeginEndBlock{Statements: $2}
-  }
-
-proc_allowed_statement_list:
-  proc_allowed_statement
-  {
-    $$ = Statements{$1}
-  }
-| proc_allowed_statement_list ';' proc_allowed_statement
-  {
-    $$ = append($$, $3)
   }
 
 definer_opt:
@@ -1071,52 +1071,23 @@ statement_list_statement:
 | update_statement
 | delete_statement
 | set_statement
+| create_statement
+| alter_statement
+| rename_statement
+| drop_statement
 | case_statement
 | if_statement
+| truncate_statement
+| analyze_statement
+| show_statement
+| start_transaction_statement
+| commit_statement
+| rollback_statement
+| explain_statement
+| describe_statement
 | signal_statement
-| trigger_begin_end_block
-
-vindex_type_opt:
-  {
-    $$ = NewColIdent("")
-  }
-| USING vindex_type
-  {
-    $$ = $2
-  }
-
-vindex_type:
-  ID
-  {
-    $$ = NewColIdent(string($1))
-  }
-
-vindex_params_opt:
-  {
-    var v []VindexParam
-    $$ = v
-  }
-| WITH vindex_param_list
-  {
-    $$ = $2
-  }
-
-vindex_param_list:
-  vindex_param
-  {
-    $$ = make([]VindexParam, 0, 4)
-    $$ = append($$, $1)
-  }
-| vindex_param_list ',' vindex_param
-  {
-    $$ = append($$, $3)
-  }
-
-vindex_param:
-  reserved_sql_id '=' table_opt_value
-  {
-    $$ = VindexParam{Key: $1, Val: $3}
-  }
+| call_statement
+| begin_end_block
 
 create_table_prefix:
   CREATE TABLE not_exists_opt table_name
@@ -1977,7 +1948,6 @@ constraint_symbol_opt:
 alter_statement:
   alter_table_statement
 | alter_view_statement
-| alter_vschema_statement
 
 alter_table_statement:
   ALTER ignore_opt TABLE table_name non_add_drop_or_rename_operation skip_to_end
@@ -2101,76 +2071,6 @@ alter_view_statement:
   ALTER VIEW table_name ddl_skip_to_end
   {
     $$ = &DDL{Action: AlterStr, Table: $3.ToViewName()}
-  }
-
-alter_vschema_statement:
-  ALTER VSCHEMA CREATE VINDEX table_name vindex_type_opt vindex_params_opt
-  {
-    $$ = &DDL{
-        Action: CreateVindexStr,
-        Table: $5,
-        VindexSpec: &VindexSpec{
-          Name: NewColIdent($5.Name.String()),
-          Type: $6,
-          Params: $7,
-        },
-      }
-  }
-| ALTER VSCHEMA DROP VINDEX table_name
-  {
-    $$ = &DDL{
-        Action: DropVindexStr,
-        Table: $5,
-        VindexSpec: &VindexSpec{
-          Name: NewColIdent($5.Name.String()),
-        },
-      }
-  }
-| ALTER VSCHEMA ADD TABLE table_name
-  {
-    $$ = &DDL{Action: AddVschemaTableStr, Table: $5}
-  }
-| ALTER VSCHEMA DROP TABLE table_name
-  {
-    $$ = &DDL{Action: DropVschemaTableStr, Table: $5}
-  }
-| ALTER VSCHEMA ON table_name ADD VINDEX sql_id '(' column_list ')' vindex_type_opt vindex_params_opt
-  {
-    $$ = &DDL{
-        Action: AddColVindexStr,
-        Table: $4,
-        VindexSpec: &VindexSpec{
-            Name: $7,
-            Type: $11,
-            Params: $12,
-        },
-        VindexCols: $9,
-      }
-  }
-| ALTER VSCHEMA ON table_name DROP VINDEX sql_id
-  {
-    $$ = &DDL{
-        Action: DropColVindexStr,
-        Table: $4,
-        VindexSpec: &VindexSpec{
-            Name: $7,
-        },
-      }
-  }
-| ALTER VSCHEMA ADD SEQUENCE table_name
-  {
-    $$ = &DDL{Action: AddSequenceStr, Table: $5}
-  }
-| ALTER VSCHEMA ON table_name ADD AUTO_INCREMENT sql_id USING table_name
-  {
-    $$ = &DDL{
-        Action: AddAutoIncStr,
-        Table: $4,
-        AutoIncSpec: &AutoIncSpec{
-            Column: $7,
-            Sequence: $9,
-        },
-    }
   }
 
 
@@ -2303,13 +2203,13 @@ show_statement:
     $$ = &Show{Type: string($2) + " " + string($3)}
   }
 /* SHOW CHARACTER SET and SHOW CHARSET are equivalent */
-| SHOW CHARACTER SET ddl_skip_to_end
+| SHOW CHARACTER SET like_or_where_opt
   {
-    $$ = &Show{Type: CharsetStr}
+    $$ = &Show{Type: CharsetStr, Filter: $4}
   }
-| SHOW CHARSET ddl_skip_to_end
+| SHOW CHARSET like_or_where_opt
   {
-    $$ = &Show{Type: string($2)}
+    $$ = &Show{Type: string($2), Filter: $3}
   }
 | SHOW CREATE DATABASE not_exists_opt ID ddl_skip_to_end
   {
@@ -2366,11 +2266,11 @@ show_statement:
   }
 | SHOW PROCEDURE STATUS like_or_where_opt
   {
-    $$ = &Show{Type: string($2) + " " + string($3), ProcFuncFilter: $4}
+    $$ = &Show{Type: string($2) + " " + string($3), Filter: $4}
   }
 | SHOW FUNCTION STATUS like_or_where_opt
   {
-    $$ = &Show{Type: string($2) + " " + string($3), ProcFuncFilter: $4}
+    $$ = &Show{Type: string($2) + " " + string($3), Filter: $4}
   }
 | SHOW show_session_or_global STATUS ddl_skip_to_end
   {
@@ -2421,23 +2321,6 @@ show_statement:
     var ex Expr = cmp
     $$ = &Show{Type: string($2), ShowCollationFilterOpt: &ex}
   }
-| SHOW VITESS_METADATA VARIABLES like_opt
-  {
-    showTablesOpt := &ShowTablesOpt{Filter: $4}
-    $$ = &Show{Scope: string($2), Type: string($3), ShowTablesOpt: showTablesOpt}
-  }
-| SHOW VSCHEMA TABLES
-  {
-    $$ = &Show{Type: string($2) + " " + string($3)}
-  }
-| SHOW VSCHEMA VINDEXES
-  {
-    $$ = &Show{Type: string($2) + " " + string($3)}
-  }
-| SHOW VSCHEMA VINDEXES ON table_name
-  {
-    $$ = &Show{Type: string($2) + " " + string($3), OnTable: $5}
-  }
 | SHOW WARNINGS
   {
     $$ = &Show{Type: string($2)}
@@ -2447,10 +2330,6 @@ show_statement:
  *
  *  SHOW BINARY LOGS
  *  SHOW INVALID
- *  SHOW VITESS_KEYSPACES
- *  SHOW VITESS_TABLETS
- *  SHOW VITESS_SHARDS
- *  SHOW VITESS_TARGET
  */
 | SHOW ID ddl_skip_to_end
   {
@@ -2520,16 +2399,6 @@ like_or_where_opt:
   {
     $$ = &ShowFilter{Filter:$2}
   }
-
-like_opt:
-  /* empty */
-    {
-      $$ = nil
-    }
-  | LIKE STRING
-    {
-      $$ = &ShowFilter{Like:string($2)}
-    }
 
 show_session_or_global:
   /* empty */
@@ -2721,23 +2590,41 @@ straight_join_opt:
     $$ = StraightJoinHint
   }
 
-select_expression_list_opt:
+select_expression_list:
+  lexer_old_position select_expression lexer_old_position
   {
-    $$ = nil
+    if ae, ok := $2.(*AliasedExpr); ok {
+      ae.StartParsePos = $1
+      ae.EndParsePos = $3-1
+    }
+    $$ = SelectExprs{$2}
   }
-| select_expression_list
+| select_expression_list ',' lexer_old_position select_expression lexer_old_position
   {
-    $$ = $1
+    if ae, ok := $4.(*AliasedExpr); ok {
+      ae.StartParsePos = $3
+      ae.EndParsePos = $5-1
+    }
+    $$ = append($$, $4)
   }
 
-select_expression_list:
-  select_expression
+// argument_expression is identical to select_expression except aliases are not allowed
+argument_expression:
+  '*'
   {
-    $$ = SelectExprs{$1}
+    $$ = &StarExpr{}
   }
-| select_expression_list ',' select_expression
+| expression
   {
-    $$ = append($$, $3)
+    $$ = &AliasedExpr{Expr: $1}
+  }
+| table_id '.' '*'
+  {
+    $$ = &StarExpr{TableName: TableName{Name: $1}}
+  }
+| table_id '.' reserved_table_id '.' '*'
+  {
+    $$ = &StarExpr{TableName: TableName{Qualifier: $1, Name: $3}}
   }
 
 select_expression:
@@ -2811,15 +2698,6 @@ col_alias:
 | STRING
   {
     $$ = NewColIdent(string($1))
-  }
-
-from_opt:
-  {
-    $$ = TableExprs{&AliasedTableExpr{Expr:TableName{Name: NewTableIdent("dual")}}}
-  }
-| FROM table_references
-  {
-    $$ = $2
   }
 
 table_references:
@@ -3284,6 +3162,22 @@ subquery:
     $$ = &Subquery{$2}
   }
 
+argument_expression_list_opt:
+  {
+    $$ = nil
+  }
+| argument_expression_list
+
+argument_expression_list:
+  argument_expression
+  {
+    $$ = SelectExprs{$1}
+  }
+| argument_expression_list ',' argument_expression
+  {
+    $$ = append($1, $3)
+  }
+
 expression_list:
   expression
   {
@@ -3437,11 +3331,11 @@ value_expression:
   introduce side effects due to being a simple identifier
 */
 function_call_generic:
-  sql_id openb distinct_opt select_expression_list_opt closeb
+  sql_id openb distinct_opt argument_expression_list_opt closeb
   {
     $$ = &FuncExpr{Name: $1, Distinct: $3 == DistinctStr, Exprs: $4}
   }
-| table_id '.' reserved_sql_id openb select_expression_list_opt closeb
+| table_id '.' reserved_sql_id openb argument_expression_list_opt closeb
   {
     $$ = &FuncExpr{Qualifier: $1, Name: $3, Exprs: $5}
   }
@@ -3451,71 +3345,71 @@ function_call_generic:
    OVER clause (not legal on any other non-window, non-aggregate function)
  */
 function_call_aggregate_with_window:
- MAX openb distinct_opt select_expression_list closeb over_opt
+ MAX openb distinct_opt argument_expression_list closeb over_opt
   {
     $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $4, Distinct: $3 == DistinctStr, Over: $6}
   }
-| AVG openb distinct_opt select_expression_list closeb over_opt
+| AVG openb distinct_opt argument_expression_list closeb over_opt
   {
     $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $4, Distinct: $3 == DistinctStr, Over: $6}
   }
-| BIT_AND openb select_expression_list closeb over_opt
+| BIT_AND openb argument_expression_list closeb over_opt
   {
     $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $5}
   }
-| BIT_OR openb select_expression_list closeb over_opt
+| BIT_OR openb argument_expression_list closeb over_opt
   {
     $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $5}
   }
-| BIT_XOR openb select_expression_list closeb over_opt
+| BIT_XOR openb argument_expression_list closeb over_opt
   {
     $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $5}
   }
-| COUNT openb distinct_opt select_expression_list closeb over_opt
+| COUNT openb distinct_opt argument_expression_list closeb over_opt
   {
     $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $4, Distinct: $3 == DistinctStr, Over: $6}
   }
-| JSON_ARRAYAGG openb select_expression_list closeb over_opt
+| JSON_ARRAYAGG openb argument_expression_list closeb over_opt
   {
     $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $5}
   }
-| JSON_OBJECTAGG openb select_expression_list closeb over_opt
+| JSON_OBJECTAGG openb argument_expression_list closeb over_opt
   {
     $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $5}
   }
-| MIN openb distinct_opt select_expression_list closeb over_opt
+| MIN openb distinct_opt argument_expression_list closeb over_opt
   {
     $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $4, Distinct: $3 == DistinctStr, Over: $6}
   }
-| STDDEV_POP openb select_expression_list closeb over_opt
+| STDDEV_POP openb argument_expression_list closeb over_opt
   {
     $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $5}
   }
-| STDDEV openb select_expression_list closeb over_opt
+| STDDEV openb argument_expression_list closeb over_opt
   {
     $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $5}
   }
-| STD openb select_expression_list closeb over_opt
+| STD openb argument_expression_list closeb over_opt
   {
     $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $5}
   }
-| STDDEV_SAMP openb select_expression_list closeb over_opt
+| STDDEV_SAMP openb argument_expression_list closeb over_opt
   {
     $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $5}
   }
-| SUM openb distinct_opt select_expression_list closeb over_opt
+| SUM openb distinct_opt argument_expression_list closeb over_opt
   {
     $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $4, Distinct: $3 == DistinctStr, Over: $6}
   }
-| VAR_POP openb select_expression_list closeb over_opt
+| VAR_POP openb argument_expression_list closeb over_opt
   {
     $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $5}
   }
-| VARIANCE openb select_expression_list closeb over_opt
+| VARIANCE openb argument_expression_list closeb over_opt
   {
     $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $5}
   }
-| VAR_SAMP openb select_expression_list closeb over_opt
+| VAR_SAMP openb argument_expression_list closeb over_opt
   {
     $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $5}
   }
@@ -3532,23 +3426,23 @@ function_call_window:
   {
     $$ = &FuncExpr{Name: NewColIdent(string($1)), Over: $4}
   }
-| FIRST_VALUE openb select_expression closeb over
+| FIRST_VALUE openb argument_expression closeb over
   {
     $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: SelectExprs{$3}, Over: $5}
   }
-| LAG openb select_expression_list closeb over
+| LAG openb argument_expression_list closeb over
   {
     $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $5}
   }
-| LAST_VALUE openb select_expression closeb over
+| LAST_VALUE openb argument_expression closeb over
   {
     $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: SelectExprs{$3}, Over: $5}
   }
-| LEAD openb select_expression_list closeb over
+| LEAD openb argument_expression_list closeb over
   {
     $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $5}
   }
-| NTH_VALUE openb select_expression_list closeb over
+| NTH_VALUE openb argument_expression_list closeb over
   {
     $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3, Over: $5}
   }
@@ -3572,19 +3466,20 @@ function_call_window:
 /*
   Function calls using reserved keywords, with dedicated grammar rules
   as a result
+  TODO: some of these change the case or even the name of the function expression. Should be preserved.
 */
 function_call_keyword:
-  LEFT openb select_expression_list closeb
+  LEFT openb argument_expression_list closeb
   {
-    $$ = &FuncExpr{Name: NewColIdent("left"), Exprs: $3}
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3}
   }
-| RIGHT openb select_expression_list closeb
+| RIGHT openb argument_expression_list closeb
   {
-    $$ = &FuncExpr{Name: NewColIdent("right"), Exprs: $3}
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3}
   }
 | SCHEMA openb closeb
   {
-    $$ = &FuncExpr{Name: NewColIdent("schema")}
+    $$ = &FuncExpr{Name: NewColIdent(string($1))}
   }
 | CONVERT openb expression ',' convert_type closeb
   {
@@ -3614,15 +3509,15 @@ function_call_keyword:
   {
     $$ = &SubstrExpr{StrVal: NewStrVal($3), From: $5, To: $7}
   }
-| MATCH openb select_expression_list closeb AGAINST openb value_expression match_option closeb
+| MATCH openb argument_expression_list closeb AGAINST openb value_expression match_option closeb
   {
   $$ = &MatchExpr{Columns: $3, Expr: $7, Option: $8}
   }
-| FIRST openb select_expression_list closeb
+| FIRST openb argument_expression_list closeb
   {
-    $$ = &FuncExpr{Name: NewColIdent("first"), Exprs: $3}
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3}
   }
-| GROUP_CONCAT openb distinct_opt select_expression_list order_by_opt separator_opt closeb
+| GROUP_CONCAT openb distinct_opt argument_expression_list order_by_opt separator_opt closeb
   {
     $$ = &GroupConcatExpr{Distinct: $3, Exprs: $4, OrderBy: $5, Separator: $6}
   }
@@ -3640,75 +3535,75 @@ function_call_keyword:
   Dedicated grammar rules are needed because of the special syntax
 */
 function_call_nonkeyword:
-  CURRENT_TIMESTAMP func_datetime_opt
+  CURRENT_TIMESTAMP func_parens_opt
   {
-    $$ = &FuncExpr{Name:NewColIdent("current_timestamp")}
+    $$ = &FuncExpr{Name:NewColIdent(string($1))}
   }
-| UTC_TIMESTAMP func_datetime_opt
+| UTC_TIMESTAMP func_parens_opt
   {
-    $$ = &FuncExpr{Name:NewColIdent("utc_timestamp")}
+    $$ = &FuncExpr{Name:NewColIdent(string($1))}
   }
-| UTC_TIME func_datetime_opt
+| UTC_TIME func_parens_opt
   {
-    $$ = &FuncExpr{Name:NewColIdent("utc_time")}
+    $$ = &FuncExpr{Name:NewColIdent(string($1))}
   }
 /* doesn't support fsp */
-| UTC_DATE func_datetime_opt
+| UTC_DATE func_parens_opt
   {
-    $$ = &FuncExpr{Name:NewColIdent("utc_date")}
+    $$ = &FuncExpr{Name:NewColIdent(string($1))}
   }
   // now
-| LOCALTIME func_datetime_opt
+| LOCALTIME func_parens_opt
   {
-    $$ = &FuncExpr{Name:NewColIdent("localtime")}
+    $$ = &FuncExpr{Name:NewColIdent(string($1))}
   }
   // now
-| LOCALTIMESTAMP func_datetime_opt
+| LOCALTIMESTAMP func_parens_opt
   {
-    $$ = &FuncExpr{Name:NewColIdent("localtimestamp")}
+    $$ = &FuncExpr{Name:NewColIdent(string($1))}
   }
   // curdate
 /* doesn't support fsp */
-| CURRENT_DATE func_datetime_opt
+| CURRENT_DATE func_parens_opt
   {
-    $$ = &FuncExpr{Name:NewColIdent("current_date")}
+    $$ = &FuncExpr{Name:NewColIdent(string($1))}
   }
   // curtime
-| CURRENT_TIME func_datetime_opt
+| CURRENT_TIME func_parens_opt
   {
-    $$ = &FuncExpr{Name:NewColIdent("current_time")}
+    $$ = &FuncExpr{Name:NewColIdent(string($1))}
   }
-| CURRENT_USER func_datetime_opt
+| CURRENT_USER func_parens_opt
   {
-    $$ = &FuncExpr{Name:NewColIdent("current_user")}
+    $$ = &FuncExpr{Name:NewColIdent(string($1))}
   }
 // these functions can also be called with an optional argument
 | CURRENT_TIMESTAMP func_datetime_precision
   {
-    $$ = &CurTimeFuncExpr{Name:NewColIdent("current_timestamp"), Fsp:$2}
+    $$ = &CurTimeFuncExpr{Name:NewColIdent(string($1)), Fsp:$2}
   }
 | UTC_TIMESTAMP func_datetime_precision
   {
-    $$ = &CurTimeFuncExpr{Name:NewColIdent("utc_timestamp"), Fsp:$2}
+    $$ = &CurTimeFuncExpr{Name:NewColIdent(string($1)), Fsp:$2}
   }
 | UTC_TIME func_datetime_precision
   {
-    $$ = &CurTimeFuncExpr{Name:NewColIdent("utc_time"), Fsp:$2}
+    $$ = &CurTimeFuncExpr{Name:NewColIdent(string($1)), Fsp:$2}
   }
   // now
 | LOCALTIME func_datetime_precision
   {
-    $$ = &CurTimeFuncExpr{Name:NewColIdent("localtime"), Fsp:$2}
+    $$ = &CurTimeFuncExpr{Name:NewColIdent(string($1)), Fsp:$2}
   }
   // now
 | LOCALTIMESTAMP func_datetime_precision
   {
-    $$ = &CurTimeFuncExpr{Name:NewColIdent("localtimestamp"), Fsp:$2}
+    $$ = &CurTimeFuncExpr{Name:NewColIdent(string($1)), Fsp:$2}
   }
   // curtime
 | CURRENT_TIME func_datetime_precision
   {
-    $$ = &CurTimeFuncExpr{Name:NewColIdent("current_time"), Fsp:$2}
+    $$ = &CurTimeFuncExpr{Name:NewColIdent(string($1)), Fsp:$2}
   }
 | TIMESTAMPADD openb sql_id ',' value_expression ',' value_expression closeb
   {
@@ -3719,7 +3614,8 @@ function_call_nonkeyword:
     $$ = &TimestampFuncExpr{Name:string("timestampdiff"), Unit:$3.String(), Expr1:$5, Expr2:$7}
   }
 
-func_datetime_opt:
+// Optional parens for certain keyword functions that don't require them.
+func_parens_opt:
   /* empty */
 | openb closeb
 
@@ -3734,29 +3630,29 @@ func_datetime_precision:
   the names are non-reserved, they need a dedicated rule so as not to conflict
 */
 function_call_conflict:
-  IF openb select_expression_list closeb
+  IF openb argument_expression_list closeb
   {
-    $$ = &FuncExpr{Name: NewColIdent("if"), Exprs: $3}
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3}
   }
-| DATABASE openb select_expression_list_opt closeb
+| DATABASE openb argument_expression_list_opt closeb
   {
-    $$ = &FuncExpr{Name: NewColIdent("database"), Exprs: $3}
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3}
   }
-| MOD openb select_expression_list closeb
+| MOD openb argument_expression_list closeb
   {
-    $$ = &FuncExpr{Name: NewColIdent("mod"), Exprs: $3}
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3}
   }
-| REPLACE openb select_expression_list closeb
+| REPLACE openb argument_expression_list closeb
   {
-    $$ = &FuncExpr{Name: NewColIdent("replace"), Exprs: $3}
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3}
   }
-| SUBSTR openb select_expression_list closeb
+| SUBSTR openb argument_expression_list closeb
   {
-    $$ = &FuncExpr{Name: NewColIdent("substr"), Exprs: $3}
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3}
   }
-| SUBSTRING openb select_expression_list closeb
+| SUBSTRING openb argument_expression_list closeb
   {
-    $$ = &FuncExpr{Name: NewColIdent("substr"), Exprs: $3}
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3}
   }
 
 match_option:
@@ -4545,6 +4441,7 @@ reserved_keyword:
 | WHEN
 | WHERE
 | WINDOW
+| WITH
 
 /*
   These are non-reserved Vitess, because they don't cause conflicts in the grammar.
@@ -4754,13 +4651,8 @@ non_reserved_keyword:
 | VARYING
 | VCPU
 | VIEW
-| VINDEX
-| VINDEXES
 | VISIBLE
-| VITESS_METADATA
-| VSCHEMA
 | WARNINGS
-| WITH
 | WRITE
 | YEAR
 | ZEROFILL

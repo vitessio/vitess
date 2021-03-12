@@ -868,3 +868,23 @@ func TestSplitStatementToPieces(t *testing.T) {
 		}
 	}
 }
+
+func newStrVal(in string) *SQLVal {
+	return NewStrVal([]byte(in))
+}
+
+func newIntVal(in string) *SQLVal {
+	return NewIntVal([]byte(in))
+}
+
+func newFloatVal(in string) *SQLVal {
+	return NewFloatVal([]byte(in))
+}
+
+func newHexVal(in string) *SQLVal {
+	return NewHexVal([]byte(in))
+}
+
+func newValArg(in string) *SQLVal {
+	return NewValArg([]byte(in))
+}

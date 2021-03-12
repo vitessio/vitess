@@ -40,6 +40,7 @@ type Tokenizer struct {
 	SkipToEnd           bool
 	lastChar            uint16
 	Position            int
+	OldPosition         int
 	lastToken           []byte
 	lastNonNilToken     []byte
 	LastError           error
@@ -53,6 +54,8 @@ type Tokenizer struct {
 	buf     []byte
 	bufPos  int
 	bufSize int
+
+	queryBuf []byte
 }
 
 // NewStringTokenizer creates a new Tokenizer for the
@@ -184,7 +187,7 @@ var keywords = map[string]int{
 	"elseif":              ELSEIF,
 	"enclosed":            ENCLOSED,
 	"end":                 END,
-    "enforced":            ENFORCED,
+	"enforced":            ENFORCED,
 	"engines":             ENGINES,
 	"enum":                ENUM,
 	"escape":              ESCAPE,
@@ -454,11 +457,7 @@ var keywords = map[string]int{
 	"variance":            VARIANCE,
 	"varying":             VARYING,
 	"view":                VIEW,
-	"vindex":              VINDEX,
-	"vindexes":            VINDEXES,
 	"virtual":             UNUSED,
-	"vitess_metadata":     VITESS_METADATA,
-	"vschema":             VSCHEMA,
 	"warnings":            WARNINGS,
 	"when":                WHEN,
 	"where":               WHERE,
@@ -551,6 +550,8 @@ func (tkn *Tokenizer) Scan() (int, []byte) {
 		// leave specialComment scan mode after all stream consumed.
 		tkn.specialComment = nil
 	}
+
+	tkn.OldPosition = tkn.Position
 	if tkn.lastChar == 0 {
 		tkn.next()
 	}
@@ -993,6 +994,12 @@ func (tkn *Tokenizer) next() {
 		if tkn.bufSize, err = tkn.InStream.Read(tkn.buf); err != io.EOF && err != nil {
 			tkn.LastError = err
 		}
+
+		// In multi mode (parseNext), we need to keep track of the contents of the current statement string so that
+		// lexer offsets work properly on statements that need them
+		if tkn.multi {
+			tkn.queryBuf = append(tkn.queryBuf, tkn.buf...)
+		}
 	}
 
 	if tkn.bufPos >= tkn.bufSize {
@@ -1015,6 +1022,12 @@ func (tkn *Tokenizer) reset() {
 	tkn.posVarIndex = 0
 	tkn.nesting = 0
 	tkn.SkipToEnd = false
+	bufLeft := len(tkn.buf) - tkn.bufPos
+	if len(tkn.queryBuf) > bufLeft {
+		tkn.queryBuf = tkn.queryBuf[len(tkn.queryBuf)-bufLeft:]
+	}
+	tkn.Position = 0
+	tkn.OldPosition = 0
 }
 
 func isLetter(ch uint16) bool {
