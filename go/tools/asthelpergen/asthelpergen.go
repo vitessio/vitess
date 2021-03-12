@@ -14,15 +14,13 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package main
+package asthelpergen
 
 import (
 	"bytes"
-	"flag"
 	"fmt"
 	"go/types"
 	"io/ioutil"
-	"log"
 	"path"
 	"strings"
 
@@ -170,46 +168,17 @@ func (gen *astHelperGen) GenerateCode() (map[string]*jen.File, error) {
 	return result, nil
 }
 
-type typePaths []string
+// TypePaths are the packages
+type TypePaths []string
 
-func (t *typePaths) String() string {
+func (t *TypePaths) String() string {
 	return fmt.Sprintf("%v", *t)
 }
 
-func (t *typePaths) Set(path string) error {
+// Set adds the package path
+func (t *TypePaths) Set(path string) error {
 	*t = append(*t, path)
 	return nil
-}
-
-func main() {
-	var patterns typePaths
-	var generate, except string
-	var verify bool
-
-	flag.Var(&patterns, "in", "Go packages to load the generator")
-	flag.StringVar(&generate, "iface", "", "Root interface generate rewriter for")
-	flag.BoolVar(&verify, "verify", false, "ensure that the generated files are correct")
-	flag.StringVar(&except, "except", "", "don't deep clone these types")
-	flag.Parse()
-
-	result, err := GenerateASTHelpers(patterns, generate, except)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	if verify {
-		for _, err := range VerifyFilesOnDisk(result) {
-			log.Fatal(err)
-		}
-		log.Printf("%d files OK", len(result))
-	} else {
-		for fullPath, file := range result {
-			if err := file.Save(fullPath); err != nil {
-				log.Fatalf("failed to save file to '%s': %v", fullPath, err)
-			}
-			log.Printf("saved '%s'", fullPath)
-		}
-	}
 }
 
 // VerifyFilesOnDisk compares the generated results from the codegen against the files that
@@ -279,8 +248,9 @@ func GenerateASTHelpers(packagePatterns []string, rootIface, exceptCloneType str
 	}
 	rewriter := newRewriterGen(interestingType, nt.Obj().Name())
 	clone := newCloneGen(iface, scope, exceptCloneType)
+	equals := newEqualsGen()
 
-	generator := newGenerator(loaded[0].Module, loaded[0].TypesSizes, nt, rewriter, clone)
+	generator := newGenerator(loaded[0].Module, loaded[0].TypesSizes, nt, rewriter, clone, equals)
 	it, err := generator.GenerateCode()
 	if err != nil {
 		return nil, err
