@@ -184,10 +184,10 @@ func (thc *tabletHealthCheck) processResponse(hc *HealthCheckImpl, shr *query.St
 		return vterrors.New(vtrpc.Code_FAILED_PRECONDITION, fmt.Sprintf("health stats mismatch, tablet %+v alias does not match response alias %v", thc.Tablet, shr.TabletAlias))
 	}
 
-	currentTarget := thc.Target
+	prevTarget := thc.Target
 	// check whether this is a trivial update so as to update healthy map
 	trivialUpdate := thc.LastError == nil && thc.Serving && shr.RealtimeStats.HealthError == "" && shr.Serving &&
-		currentTarget.TabletType != topodata.TabletType_MASTER && currentTarget.TabletType == shr.Target.TabletType && thc.isTrivialReplagChange(shr.RealtimeStats)
+		prevTarget.TabletType != topodata.TabletType_MASTER && prevTarget.TabletType == shr.Target.TabletType && thc.isTrivialReplagChange(shr.RealtimeStats)
 	thc.lastResponseTimestamp = time.Now()
 	thc.Target = shr.Target
 	thc.MasterTermStartTime = shr.TabletExternallyReparentedTimestamp
@@ -200,7 +200,7 @@ func (thc *tabletHealthCheck) processResponse(hc *HealthCheckImpl, shr *query.St
 	thc.setServingState(serving, reason)
 
 	// notify downstream for master change
-	hc.updateHealth(thc.SimpleCopy(), currentTarget, trivialUpdate, true)
+	hc.updateHealth(thc.SimpleCopy(), prevTarget, trivialUpdate, true)
 	return nil
 }
 

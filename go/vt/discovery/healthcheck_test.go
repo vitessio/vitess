@@ -869,7 +869,7 @@ func TestMasterInOtherCell(t *testing.T) {
 
 	// check that MASTER tablet from other cell IS in healthy tablet list
 	a := hc.GetHealthyTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_MASTER})
-	assert.Len(t, a, 1, "")
+	require.Len(t, a, 1, "")
 	mustMatch(t, want, a[0], "Expecting healthy master")
 }
 
