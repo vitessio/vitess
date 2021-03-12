@@ -69,7 +69,7 @@ func TestMemorySortExecute(t *testing.T) {
 	}
 
 	fp.rewind()
-	upperlimit, err := sqlparser.NewPlanValue(sqlparser.NewArgument([]byte(":__upper_limit")))
+	upperlimit, err := sqlparser.NewPlanValue(sqlparser.NewArgument(":__upper_limit"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -116,7 +116,7 @@ func TestMemorySortStreamExecute(t *testing.T) {
 	}
 
 	var results []*sqltypes.Result
-	err := ms.StreamExecute(noopVCursor{}, nil, false, func(qr *sqltypes.Result) error {
+	err := ms.StreamExecute(&noopVCursor{}, nil, false, func(qr *sqltypes.Result) error {
 		results = append(results, qr)
 		return nil
 	})
@@ -137,7 +137,7 @@ func TestMemorySortStreamExecute(t *testing.T) {
 	}
 
 	fp.rewind()
-	upperlimit, err := sqlparser.NewPlanValue(sqlparser.NewArgument([]byte(":__upper_limit")))
+	upperlimit, err := sqlparser.NewPlanValue(sqlparser.NewArgument(":__upper_limit"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -145,7 +145,7 @@ func TestMemorySortStreamExecute(t *testing.T) {
 	bv := map[string]*querypb.BindVariable{"__upper_limit": sqltypes.Int64BindVariable(3)}
 
 	results = nil
-	err = ms.StreamExecute(noopVCursor{}, bv, false, func(qr *sqltypes.Result) error {
+	err = ms.StreamExecute(&noopVCursor{}, bv, false, func(qr *sqltypes.Result) error {
 		results = append(results, qr)
 		return nil
 	})
@@ -253,7 +253,7 @@ func TestMemorySortStreamExecuteTruncate(t *testing.T) {
 	}
 
 	var results []*sqltypes.Result
-	err := ms.StreamExecute(noopVCursor{}, nil, false, func(qr *sqltypes.Result) error {
+	err := ms.StreamExecute(&noopVCursor{}, nil, false, func(qr *sqltypes.Result) error {
 		results = append(results, qr)
 		return nil
 	})
@@ -318,7 +318,7 @@ func TestMemorySortMultiColumn(t *testing.T) {
 	}
 
 	fp.rewind()
-	upperlimit, err := sqlparser.NewPlanValue(sqlparser.NewArgument([]byte(":__upper_limit")))
+	upperlimit, err := sqlparser.NewPlanValue(sqlparser.NewArgument(":__upper_limit"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -381,7 +381,7 @@ func TestMemorySortMaxMemoryRows(t *testing.T) {
 		}
 
 		testIgnoreMaxMemoryRows = test.ignoreMaxMemoryRows
-		err := ms.StreamExecute(noopVCursor{}, nil, false, func(qr *sqltypes.Result) error {
+		err := ms.StreamExecute(&noopVCursor{}, nil, false, func(qr *sqltypes.Result) error {
 			return nil
 		})
 		if testIgnoreMaxMemoryRows {
@@ -422,7 +422,7 @@ func TestMemorySortExecuteNoVarChar(t *testing.T) {
 	}
 
 	fp.rewind()
-	err = ms.StreamExecute(noopVCursor{}, nil, false, func(qr *sqltypes.Result) error {
+	err = ms.StreamExecute(&noopVCursor{}, nil, false, func(qr *sqltypes.Result) error {
 		return nil
 	})
 	if err == nil || err.Error() != want {

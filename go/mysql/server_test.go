@@ -839,7 +839,8 @@ func TestTLSServer(t *testing.T) {
 	serverConfig, err := vttls.ServerConfig(
 		path.Join(root, "server-cert.pem"),
 		path.Join(root, "server-key.pem"),
-		path.Join(root, "ca-cert.pem"))
+		path.Join(root, "ca-cert.pem"),
+		"")
 	require.NoError(t, err)
 	l.TLSConfig.Store(serverConfig)
 	go l.Accept()
@@ -927,7 +928,8 @@ func TestTLSRequired(t *testing.T) {
 	serverConfig, err := vttls.ServerConfig(
 		path.Join(root, "server-cert.pem"),
 		path.Join(root, "server-key.pem"),
-		path.Join(root, "ca-cert.pem"))
+		path.Join(root, "ca-cert.pem"),
+		"")
 	require.NoError(t, err)
 	l.TLSConfig.Store(serverConfig)
 	l.RequireSecureTransport = true
