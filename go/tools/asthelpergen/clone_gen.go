@@ -14,13 +14,12 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package main
+package asthelpergen
 
 import (
 	"fmt"
 	"go/types"
-
-	"vitess.io/vitess/go/vt/log"
+	"log"
 
 	"github.com/dave/jennifer/jen"
 )
@@ -161,7 +160,7 @@ func (c *cloneGen) makeInterfaceCloneMethod(t types.Type, iface *types.Interface
 			}
 
 		default:
-			log.Errorf("unexpected type encountered: %s", typeString)
+			log.Fatalf("unexpected type encountered: %s", typeString)
 		}
 
 		return nil
@@ -221,7 +220,7 @@ func (c *cloneGen) createFile(pkgName string) (string, *jen.File) {
 			continue
 		}
 
-		log.Errorf("don't know how to handle %s %T", typeName, underlying)
+		log.Fatalf("don't know how to handle %s %T", typeName, underlying)
 	}
 
 	for _, method := range c.methods {
