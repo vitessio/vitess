@@ -184,6 +184,7 @@ var keywords = map[string]int{
 	"elseif":              ELSEIF,
 	"enclosed":            ENCLOSED,
 	"end":                 END,
+    "enforced":            ENFORCED,
 	"engines":             ENGINES,
 	"enum":                ENUM,
 	"escape":              ESCAPE,

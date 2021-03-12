@@ -1147,6 +1147,12 @@ table_column_list:
     $$ = &TableSpec{}
     $$.AddConstraint($1)
   }
+| column_definition_for_create check_constraint_definition
+  {
+    $$ = &TableSpec{}
+    $$.AddColumn($1)
+    $$.AddConstraint($2)
+  }
 | table_column_list ',' column_definition_for_create
   {
     $$.AddColumn($3)

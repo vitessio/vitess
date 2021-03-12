@@ -986,9 +986,6 @@ var (
 			input:  "alter table a add primary key",
 			output: "alter table a",
 		}, {
-			input:  "alter table a add constraint ch_1 check (b > 0)",
-			output: "alter table a add check (b > 0)",
-		}, {
 			input: "alter table a drop column id",
 		}, {
 			input:  "alter table a drop partition p2712",
@@ -996,6 +993,15 @@ var (
 		}, {
 			input:  "alter table a drop index idx",
 			output: "alter table a drop index idx",
+		}, {
+			input:  "alter table a add constraint ch_1 check (b > 0)",
+			output: "alter table a add check (b > 0)",
+		}, {
+			input:  "alter table a add constraint ch_1 check (b > 0) enforced",
+			output: "alter table a add check (b > 0)",
+		}, {
+			input:  "alter table a add constraint ch_1 check (b > 0) not enforced",
+			output: "alter table a add check (b > 0) not enforced",
 		}, {
 			input:  "alter table a add check (b > 0)",
 			output: "alter table a add check (b > 0)",
@@ -3049,7 +3055,8 @@ func TestCreateTable(t *testing.T) {
 	}
 
 	for key := range keywords {
-		input := fmt.Sprintf("create table t (%s bigint)", key)
+		//input := fmt.Sprintf("create table t {key} bigint)")
+		input := fmt.Sprintf("create table t (\n\t`%s` bigint\n)", key)
 		output := fmt.Sprintf("create table t (\n\t`%s` bigint\n)", key)
 		t.Run(input, func(t *testing.T) {
 			if _, ok := nonsupported[key]; ok {
@@ -3337,7 +3344,7 @@ var (
 		output: "syntax error at position 18 near 'TABLE'",
 	}, {
 		input:        "create table t (id int constraint fk foreign key id references t2 (a))",
-		output:       "syntax error at position 34 near 'constraint'",
+		output:       "syntax error at position 45 near 'foreign'",
 		excludeMulti: true,
 	}}
 )
