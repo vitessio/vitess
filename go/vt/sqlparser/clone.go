@@ -1406,7 +1406,7 @@ func CloneRefOfSelect(n *Select) *Select {
 		return nil
 	}
 	out := *n
-	out.Cache = CloneRefOfbool(n.Cache)
+	out.Cache = CloneRefOfBool(n.Cache)
 	out.Comments = CloneComments(n.Comments)
 	out.SelectExprs = CloneSelectExprs(n.SelectExprs)
 	out.From = CloneTableExprs(n.From)
@@ -1534,7 +1534,7 @@ func CloneRefOfColumnType(n *ColumnType) *ColumnType {
 	out.Options = CloneRefOfColumnTypeOptions(n.Options)
 	out.Length = CloneRefOfLiteral(n.Length)
 	out.Scale = CloneRefOfLiteral(n.Scale)
-	out.EnumValues = CloneSliceOfstring(n.EnumValues)
+	out.EnumValues = CloneSliceOfString(n.EnumValues)
 	return &out
 }
 
@@ -1625,7 +1625,7 @@ func CloneRefOfFlush(n *Flush) *Flush {
 		return nil
 	}
 	out := *n
-	out.FlushOptions = CloneSliceOfstring(n.FlushOptions)
+	out.FlushOptions = CloneSliceOfString(n.FlushOptions)
 	out.TableNames = CloneTableNames(n.TableNames)
 	return &out
 }
@@ -2232,8 +2232,8 @@ func CloneSliceOfRefOfWhen(n []*When) []*When {
 	return res
 }
 
-// CloneRefOfbool creates a deep clone of the input.
-func CloneRefOfbool(n *bool) *bool {
+// CloneRefOfBool creates a deep clone of the input.
+func CloneRefOfBool(n *bool) *bool {
 	if n == nil {
 		return nil
 	}
@@ -2285,8 +2285,8 @@ func CloneRefOfColumnTypeOptions(n *ColumnTypeOptions) *ColumnTypeOptions {
 	return &out
 }
 
-// CloneSliceOfstring creates a deep clone of the input.
-func CloneSliceOfstring(n []string) []string {
+// CloneSliceOfString creates a deep clone of the input.
+func CloneSliceOfString(n []string) []string {
 	res := make([]string, 0, len(n))
 	copy(res, n)
 	return res
