@@ -28,7 +28,6 @@ import (
 	"strings"
 	"sync"
 	"testing"
-	"unsafe"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -3237,44 +3236,5 @@ func BenchmarkParse3(b *testing.B) {
 
 	b.Run("escaped", func(b *testing.B) {
 		largeQueryBenchmark(b, true)
-	})
-}
-
-func iface(v interface{}) (unsafe.Pointer, unsafe.Pointer) {
-	type h struct {
-		t unsafe.Pointer
-		p unsafe.Pointer
-	}
-	header := (*h)(unsafe.Pointer(&v))
-	return header.t, header.p
-}
-
-func BenchmarkAllocations(b *testing.B) {
-	b.Run("", func(b *testing.B) {
-		b.ReportAllocs()
-
-		for i := 0; i < b.N; i++ {
-			var i1 interface{} = BoolVal(false)
-			if i1.(BoolVal) == true {
-				b.Errorf("kk: %v", i1)
-			}
-
-			var i2 interface{} = ColumnKeyOption(1)
-			if i2.(ColumnKeyOption) == colKeyNone {
-				b.Errorf("kk: %v", i2)
-			}
-
-			var i3 interface{} = ReferenceAction(23)
-			if i3.(ReferenceAction) == Cascade {
-				b.Errorf("kk: %v", i3)
-			}
-
-			var i5 interface{} = int(23)
-			t1, p1 := iface(i3)
-			t2, p2 := iface(i5)
-			if i == 0 {
-				b.Logf("%p %p / %p %p", t1, p1, t2, p2)
-			}
-		}
 	})
 }
