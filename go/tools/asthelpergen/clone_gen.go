@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"go/types"
 	"log"
+	"strings"
 
 	"github.com/dave/jennifer/jen"
 )
@@ -350,7 +351,7 @@ func printableTypeName(t types.Type) string {
 	case *types.Named:
 		return t.Obj().Name()
 	case *types.Basic:
-		return t.Name()
+		return strings.Title(t.Name())
 	case *types.Interface:
 		return t.String()
 	default:
