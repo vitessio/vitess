@@ -5968,7 +5968,7 @@ yydefault:
 		yyDollar = yyS[yypt-4 : yypt+1]
 //line sql.y:930
 		{
-			yyVAL.collateAndCharset = CollateAndCharset{Type: CharacterSetType, Value: (encodeBytesSQLString(yyDollar[4].str)), IsDefault: yyDollar[1].boolean}
+			yyVAL.collateAndCharset = CollateAndCharset{Type: CharacterSetType, Value: (encodeSQLString(yyDollar[4].str)), IsDefault: yyDollar[1].boolean}
 		}
 	case 121:
 		yyDollar = yyS[yypt-4 : yypt+1]
@@ -5980,7 +5980,7 @@ yydefault:
 		yyDollar = yyS[yypt-4 : yypt+1]
 //line sql.y:940
 		{
-			yyVAL.collateAndCharset = CollateAndCharset{Type: CollateType, Value: (encodeBytesSQLString(yyDollar[4].str)), IsDefault: yyDollar[1].boolean}
+			yyVAL.collateAndCharset = CollateAndCharset{Type: CollateType, Value: (encodeSQLString(yyDollar[4].str)), IsDefault: yyDollar[1].boolean}
 		}
 	case 123:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -6422,13 +6422,13 @@ yydefault:
 //line sql.y:1277
 		{
 			yyVAL.strs = make([]string, 0, 4)
-			yyVAL.strs = append(yyVAL.strs, encodeBytesSQLString(yyDollar[1].str))
+			yyVAL.strs = append(yyVAL.strs, encodeSQLString(yyDollar[1].str))
 		}
 	case 195:
 		yyDollar = yyS[yypt-3 : yypt+1]
 //line sql.y:1282
 		{
-			yyVAL.strs = append(yyDollar[1].strs, encodeBytesSQLString(yyDollar[3].str))
+			yyVAL.strs = append(yyDollar[1].strs, encodeSQLString(yyDollar[3].str))
 		}
 	case 196:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -6520,7 +6520,7 @@ yydefault:
 		yyDollar = yyS[yypt-2 : yypt+1]
 //line sql.y:1352
 		{
-			yyVAL.str = encodeBytesSQLString(yyDollar[2].str)
+			yyVAL.str = encodeSQLString(yyDollar[2].str)
 		}
 	case 210:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -6544,7 +6544,7 @@ yydefault:
 		yyDollar = yyS[yypt-2 : yypt+1]
 //line sql.y:1369
 		{
-			yyVAL.str = encodeBytesSQLString(yyDollar[2].str)
+			yyVAL.str = encodeSQLString(yyDollar[2].str)
 		}
 	case 214:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -7115,7 +7115,7 @@ yydefault:
 		yyDollar = yyS[yypt-1 : yypt+1]
 //line sql.y:1815
 		{
-			yyVAL.str = encodeBytesSQLString(yyDollar[1].str)
+			yyVAL.str = encodeSQLString(yyDollar[1].str)
 		}
 	case 318:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -8340,7 +8340,7 @@ yydefault:
 		yyDollar = yyS[yypt-1 : yypt+1]
 //line sql.y:2723
 		{
-			yyVAL.str = encodeBytesSQLString(yyDollar[1].str)
+			yyVAL.str = encodeSQLString(yyDollar[1].str)
 		}
 	case 513:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -9959,7 +9959,7 @@ yydefault:
 		yyDollar = yyS[yypt-2 : yypt+1]
 //line sql.y:3957
 		{
-			yyVAL.str = " separator " + encodeBytesSQLString(yyDollar[2].str)
+			yyVAL.str = " separator " + encodeSQLString(yyDollar[2].str)
 		}
 	case 791:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -10354,7 +10354,7 @@ yydefault:
 		yyDollar = yyS[yypt-2 : yypt+1]
 //line sql.y:4257
 		{
-			yyVAL.str = encodeBytesSQLString(yyDollar[1].str) + "@" + string(yyDollar[2].str)
+			yyVAL.str = encodeSQLString(yyDollar[1].str) + "@" + string(yyDollar[2].str)
 		}
 	case 856:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -10390,19 +10390,19 @@ yydefault:
 		yyDollar = yyS[yypt-9 : yypt+1]
 //line sql.y:4283
 		{
-			yyVAL.selectInto = &SelectInto{Type: IntoOutfileS3, FileName: encodeBytesSQLString(yyDollar[4].str), Charset: yyDollar[5].str, FormatOption: yyDollar[6].str, ExportOption: yyDollar[7].str, Manifest: yyDollar[8].str, Overwrite: yyDollar[9].str}
+			yyVAL.selectInto = &SelectInto{Type: IntoOutfileS3, FileName: encodeSQLString(yyDollar[4].str), Charset: yyDollar[5].str, FormatOption: yyDollar[6].str, ExportOption: yyDollar[7].str, Manifest: yyDollar[8].str, Overwrite: yyDollar[9].str}
 		}
 	case 862:
 		yyDollar = yyS[yypt-3 : yypt+1]
 //line sql.y:4287
 		{
-			yyVAL.selectInto = &SelectInto{Type: IntoDumpfile, FileName: encodeBytesSQLString(yyDollar[3].str), Charset: "", FormatOption: "", ExportOption: "", Manifest: "", Overwrite: ""}
+			yyVAL.selectInto = &SelectInto{Type: IntoDumpfile, FileName: encodeSQLString(yyDollar[3].str), Charset: "", FormatOption: "", ExportOption: "", Manifest: "", Overwrite: ""}
 		}
 	case 863:
 		yyDollar = yyS[yypt-5 : yypt+1]
 //line sql.y:4291
 		{
-			yyVAL.selectInto = &SelectInto{Type: IntoOutfile, FileName: encodeBytesSQLString(yyDollar[3].str), Charset: yyDollar[4].str, FormatOption: "", ExportOption: yyDollar[5].str, Manifest: "", Overwrite: ""}
+			yyVAL.selectInto = &SelectInto{Type: IntoOutfile, FileName: encodeSQLString(yyDollar[3].str), Charset: yyDollar[4].str, FormatOption: "", ExportOption: yyDollar[5].str, Manifest: "", Overwrite: ""}
 		}
 	case 864:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -10504,13 +10504,13 @@ yydefault:
 		yyDollar = yyS[yypt-3 : yypt+1]
 //line sql.y:4370
 		{
-			yyVAL.str = " starting by " + encodeBytesSQLString(yyDollar[3].str)
+			yyVAL.str = " starting by " + encodeSQLString(yyDollar[3].str)
 		}
 	case 881:
 		yyDollar = yyS[yypt-3 : yypt+1]
 //line sql.y:4374
 		{
-			yyVAL.str = " terminated by " + encodeBytesSQLString(yyDollar[3].str)
+			yyVAL.str = " terminated by " + encodeSQLString(yyDollar[3].str)
 		}
 	case 882:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -10540,19 +10540,19 @@ yydefault:
 		yyDollar = yyS[yypt-3 : yypt+1]
 //line sql.y:4399
 		{
-			yyVAL.str = " terminated by " + encodeBytesSQLString(yyDollar[3].str)
+			yyVAL.str = " terminated by " + encodeSQLString(yyDollar[3].str)
 		}
 	case 887:
 		yyDollar = yyS[yypt-4 : yypt+1]
 //line sql.y:4403
 		{
-			yyVAL.str = yyDollar[1].str + " enclosed by " + encodeBytesSQLString(yyDollar[4].str)
+			yyVAL.str = yyDollar[1].str + " enclosed by " + encodeSQLString(yyDollar[4].str)
 		}
 	case 888:
 		yyDollar = yyS[yypt-3 : yypt+1]
 //line sql.y:4407
 		{
-			yyVAL.str = " escaped by " + encodeBytesSQLString(yyDollar[3].str)
+			yyVAL.str = " escaped by " + encodeSQLString(yyDollar[3].str)
 		}
 	case 889:
 		yyDollar = yyS[yypt-0 : yypt+1]
