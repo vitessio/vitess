@@ -22,6 +22,8 @@ import (
 	"sort"
 	"strings"
 
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 
@@ -224,6 +226,29 @@ func (tp *TablePlan) applyBulkInsert(rows *binlogdatapb.VStreamRowsResponse, exe
 	return executor(buf.String())
 }
 
+// During the copy phase we run catchup and fastforward, which stream binlogs. During this we should only process
+// rows whose PK has already been copied. Ideally we should compare the PKs before applying the change and never send
+// such rows to the target. However reliably comparing primary keys in a manner compatible to MySQL will require a lot of
+// coding: consider composite PKs, character sets ... So we send these rows to the target which then does the comparison
+// in sql, through where clauses.
+// But this does generate a lot of unnecessary sql statements which are effectively no-ops since the the where
+// clauses are always false. This can create a significant cpu load on the target for high qps servers resulting in a
+// much lower copy bandwidth (or needing to provision much higher configuration servers).
+// isOutsidePKRange currently checks for rows with single primary keys which are currently comparable in Vitess:
+// (see NullsafeCompare() for types supported)
+func (tp *TablePlan) isOutsidePKRange(bindvars map[string]*querypb.BindVariable) bool {
+	// Ensure there is one and only one value in lastpk and pkrefs.
+	if tp.Lastpk != nil && len(tp.Lastpk.Fields) == 1 && len(tp.Lastpk.Rows) == 1 && len(tp.Lastpk.Rows[0]) == 1 && len(tp.PKReferences) == 1 {
+		rowVal, _ := sqltypes.BindVariableToValue(bindvars["a_"+tp.PKReferences[0]])
+		result, err := evalengine.NullsafeCompare(rowVal, tp.Lastpk.Rows[0][0])
+		// If rowVal is > last pk, transaction will be a noop
+		if err == nil && result > 0 {
+			return true
+		}
+	}
+	return false
+}
+
 func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor func(string) (*sqltypes.Result, error)) (*sqltypes.Result, error) {
 	// MakeRowTrusted is needed here because Proto3ToResult is not convenient.
 	var before, after bool
@@ -241,6 +266,9 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 		for i, field := range tp.Fields {
 			bindvars["a_"+field.Name] = sqltypes.ValueBindVariable(vals[i])
 		}
+	}
+	if tp.isOutsidePKRange(bindvars) {
+		return nil, nil
 	}
 	switch {
 	case !before && after:

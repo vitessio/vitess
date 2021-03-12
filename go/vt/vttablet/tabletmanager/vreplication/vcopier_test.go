@@ -620,8 +620,6 @@ func TestPlayerCopyBigTable(t *testing.T) {
 		"/update _vt.vreplication set state='Copying'",
 		"insert into dst(id,val) values (1,'aaa')",
 		`/update _vt.copy_state set lastpk='fields:<name:\\"id\\" type:INT32 > rows:<lengths:1 values:\\"1\\" > ' where vrepl_id=.*`,
-		// The next catchup executes the new row insert, but will be a no-op.
-		"insert into dst(id,val) select 3, 'ccc' from dual where (3) <= (1)",
 		// fastForward has nothing to add. Just saves position.
 		// Second row gets copied.
 		"insert into dst(id,val) values (2,'bbb')",
@@ -737,8 +735,6 @@ func TestPlayerCopyWildcardRule(t *testing.T) {
 		// The first fast-forward has no starting point. So, it just saves the current position.
 		"insert into src(id,val) values (1,'aaa')",
 		`/update _vt.copy_state set lastpk='fields:<name:\\"id\\" type:INT32 > rows:<lengths:1 values:\\"1\\" > ' where vrepl_id=.*`,
-		// The next catchup executes the new row insert, but will be a no-op.
-		"insert into src(id,val) select 3, 'ccc' from dual where (3) <= (1)",
 		// fastForward has nothing to add. Just saves position.
 		// Second row gets copied.
 		"insert into src(id,val) values (2,'bbb')",
@@ -984,7 +980,6 @@ func TestPlayerCopyWildcardTableContinuation(t *testing.T) {
 		"/insert into _vt.vreplication",
 		"/update _vt.vreplication set state = 'Copying'",
 		"/update _vt.vreplication set message='Picked source tablet.*",
-		"insert into dst(id,val) select 4, 'new' from dual where (4) <= (2)",
 		// Copy
 		"insert into dst(id,val) values (3,'uncopied'), (4,'new')",
 		`/update _vt.copy_state set lastpk.*`,
