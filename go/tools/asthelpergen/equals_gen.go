@@ -10,12 +10,15 @@ import (
 type equalsGen struct {
 	todo    []types.Type
 	methods []jen.Code
+	scope   *types.Scope
 }
 
 var _ generator = (*equalsGen)(nil)
 
-func newEqualsGen() *equalsGen {
-	return &equalsGen{}
+func newEqualsGen(scope *types.Scope) *equalsGen {
+	return &equalsGen{
+		scope: scope,
+	}
 }
 
 func (e *equalsGen) visitStruct(t types.Type, stroct *types.Struct) error {
@@ -87,6 +90,14 @@ func (e *equalsGen) makeInterfaceEqualsMethod(t types.Type, iface *types.Interfa
 			if a == nil || b == nil {
 				return false
 			}
+			switch a := inA.(type) {
+			case *SubImpl:
+				b, ok := inB.(*SubImpl)
+				if !ok {
+					return false
+				}
+				return EqualsSubImpl(a, b)
+			}
 			return false
 		}
 	*/
@@ -94,13 +105,40 @@ func (e *equalsGen) makeInterfaceEqualsMethod(t types.Type, iface *types.Interfa
 	typeName := printableTypeName(t)
 
 	stmts := []jen.Code{
-		jen.If(jen.Id("a == b")).Block(jen.Return(jen.True())),
-		jen.If(jen.Id("a == nil").Op("||").Id("b == nil")).Block(jen.Return(jen.False())),
-		jen.Return(jen.False()),
+		jen.If(jen.Id("inA == inB")).Block(jen.Return(jen.True())),
+		jen.If(jen.Id("inA == nil").Op("||").Id("inB == nil")).Block(jen.Return(jen.False())),
 	}
 
+	var cases []jen.Code
+	_ = findImplementations(e.scope, iface, func(t types.Type) error {
+		if _, ok := t.Underlying().(*types.Interface); ok {
+			return nil
+		}
+		typeString := types.TypeString(t, noQualifier)
+		caseBlock := jen.Case(jen.Id(typeString)).Block(
+			jen.Id("b, ok := inB.").Call(jen.Id(typeString)),
+			jen.If(jen.Id("!ok")).Block(jen.Return(jen.False())),
+			jen.Return(jen.Id(equalsName+printableTypeName(t)).Call(jen.Id("a, b"))),
+		)
+		cases = append(cases, caseBlock)
+		e.todo = append(e.todo, t)
+		return nil
+	})
+
+	cases = append(cases,
+		jen.Default().Block(
+			jen.Comment("this should never happen"),
+			jen.Return(jen.False()),
+		))
+
+	stmts = append(stmts, jen.Switch(jen.Id("a := inA.(type)").Block(
+		cases...,
+	)))
+
+	stmts = append(stmts, jen.Return(jen.False()))
+
 	funcName := equalsName + typeName
-	funcDecl := jen.Func().Id(funcName).Call(jen.List(jen.Id("a"), jen.Id("b")).Id(typeString)).Bool().Block(stmts...)
+	funcDecl := jen.Func().Id(funcName).Call(jen.List(jen.Id("inA"), jen.Id("inB")).Id(typeString)).Bool().Block(stmts...)
 	e.addFunc(funcName, funcDecl)
 
 	return nil
