@@ -953,7 +953,7 @@ func TestResolveVStreamParams(t *testing.T) {
 		}},
 	}
 	for _, tcase := range testcases {
-		vgtid, filter, err := vsm.resolveParams(context.Background(), topodatapb.TabletType_REPLICA, tcase.input, nil)
+		vgtid, filter, flags, err := vsm.resolveParams(context.Background(), topodatapb.TabletType_REPLICA, tcase.input, nil, nil)
 		if tcase.err != "" {
 			if err == nil || !strings.Contains(err.Error(), tcase.err) {
 				t.Errorf("resolve(%v) err: %v, must contain %v", tcase.input, err, tcase.err)
@@ -963,6 +963,7 @@ func TestResolveVStreamParams(t *testing.T) {
 		require.NoError(t, err, tcase.input)
 		assert.Equal(t, tcase.output, vgtid, tcase.input)
 		assert.Equal(t, wantFilter, filter, tcase.input)
+		require.False(t, flags.MinimizeSkew)
 	}
 	// Special-case: empty keyspace because output is too big.
 	input := &binlogdatapb.VGtid{
@@ -970,11 +971,27 @@ func TestResolveVStreamParams(t *testing.T) {
 			Gtid: "current",
 		}},
 	}
-	vgtid, _, err := vsm.resolveParams(context.Background(), topodatapb.TabletType_REPLICA, input, nil)
+	vgtid, _, _, err := vsm.resolveParams(context.Background(), topodatapb.TabletType_REPLICA, input, nil, nil)
 	require.NoError(t, err, input)
 	if got, want := len(vgtid.ShardGtids), 8; want >= got {
 		t.Errorf("len(vgtid.ShardGtids): %v, must be >%d", got, want)
 	}
+	for _, minimizeSkew := range []bool{true, false} {
+		t.Run(fmt.Sprintf("resolveParams MinimizeSkew %t", minimizeSkew), func(t *testing.T) {
+			flags := &vtgatepb.VStreamFlags{MinimizeSkew: minimizeSkew}
+			vgtid := &binlogdatapb.VGtid{
+				ShardGtids: []*binlogdatapb.ShardGtid{{
+					Keyspace: "TestVStream",
+					Shard:    "-20",
+					Gtid:     "current",
+				}},
+			}
+			_, _, flags2, err := vsm.resolveParams(context.Background(), topodatapb.TabletType_REPLICA, vgtid, nil, flags)
+			require.NoError(t, err)
+			require.Equal(t, minimizeSkew, flags2.MinimizeSkew)
+		})
+	}
+
 }
 
 func newTestVStreamManager(hc discovery.HealthCheck, serv srvtopo.Server, cell string) *vstreamManager {
