@@ -134,10 +134,14 @@ func EqualsInterfaceContainer(inA, inB InterfaceContainer) bool {
 
 // EqualsValueContainer does deep equals.
 func EqualsValueContainer(inA, inB ValueContainer) bool {
-	return inA.NotASTType == inB.NotASTType && EqualsAST(inA.ASTType, inB.ASTType) && EqualsRefOfLeaf(inA.ASTImplementationType, inB.ASTImplementationType)
+	return inA.NotASTType == inB.NotASTType &&
+		EqualsAST(inA.ASTType, inB.ASTType) &&
+		EqualsRefOfLeaf(inA.ASTImplementationType, inB.ASTImplementationType)
 }
 
 // EqualsValueSliceContainer does deep equals.
 func EqualsValueSliceContainer(inA, inB ValueSliceContainer) bool {
-	return EqualsSliceOfAST(inA.ASTElements, inB.ASTElements) && EqualsSliceOfint(inA.NotASTElements, inB.NotASTElements) && EqualsSliceOfRefOfLeaf(inA.ASTImplementationElements, inB.ASTImplementationElements)
+	return EqualsSliceOfAST(inA.ASTElements, inB.ASTElements) &&
+		EqualsSliceOfint(inA.NotASTElements, inB.NotASTElements) &&
+		EqualsSliceOfRefOfLeaf(inA.ASTImplementationElements, inB.ASTImplementationElements)
 }

@@ -196,7 +196,7 @@ func (e *equalsGen) makeStructEqualsMethod(t types.Type, stroct *types.Struct) e
 		if ret == nil {
 			ret = pred
 		} else {
-			ret = ret.Op("&&").Add(pred)
+			ret = ret.Op("&&").Line().Add(pred)
 		}
 	}
 
@@ -204,7 +204,7 @@ func (e *equalsGen) makeStructEqualsMethod(t types.Type, stroct *types.Struct) e
 		if ret == nil {
 			ret = pred
 		} else {
-			ret = ret.Op("&&").Add(pred)
+			ret = ret.Op("&&").Line().Add(pred)
 		}
 	}
 
