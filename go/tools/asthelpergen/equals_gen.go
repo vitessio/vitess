@@ -134,8 +134,6 @@ func (e *equalsGen) makeInterfaceEqualsMethod(t types.Type, iface *types.Interfa
 		cases...,
 	)))
 
-	stmts = append(stmts, jen.Return(jen.False()))
-
 	typeString := types.TypeString(t, noQualifier)
 	funcName := equalsName + printableTypeName(t)
 	funcDecl := jen.Func().Id(funcName).Call(jen.List(jen.Id("inA"), jen.Id("inB")).Id(typeString)).Bool().Block(stmts...)
@@ -201,7 +199,7 @@ func (e *equalsGen) compareAllStructFields(stroct *types.Struct) jen.Code {
 	var others []*jen.Statement
 	for i := 0; i < stroct.NumFields(); i++ {
 		field := stroct.Field(i)
-		if field.Type().Underlying().String() == "interface{}" {
+		if field.Type().Underlying().String() == "interface{}" || field.Name() == "_" {
 			// we can safely ignore this, we do not want ast to contain interface{} types.
 			continue
 		}
@@ -244,15 +242,21 @@ func (e *equalsGen) tryPtr(underlying, t types.Type) bool {
 		return false
 	}
 
-	if strct, isStruct := ptr.Elem().Underlying().(*types.Struct); isStruct {
-		e.makePtrToStructCloneMethod(t, strct)
+	ptrToType := ptr.Elem().Underlying()
+
+	switch ptrToType := ptrToType.(type) {
+	case *types.Struct:
+		e.makePtrToStructEqualsMethod(t, ptrToType)
+		return true
+	case *types.Basic:
+		e.makePtrToBasicEqualsMethod(t)
 		return true
 	}
 
 	return false
 }
 
-func (e *equalsGen) makePtrToStructCloneMethod(t types.Type, strct *types.Struct) {
+func (e *equalsGen) makePtrToStructEqualsMethod(t types.Type, strct *types.Struct) {
 	typeString := types.TypeString(t, noQualifier)
 	funcName := equalsName + printableTypeName(t)
 
@@ -264,7 +268,31 @@ func (e *equalsGen) makePtrToStructCloneMethod(t types.Type, strct *types.Struct
 		jen.Return(e.compareAllStructFields(strct)),
 	}
 
-	e.methods = append(e.methods, funcDeclaration.Block(stmts...))
+	e.addFunc(funcName, funcDeclaration.Block(stmts...))
+}
+func (e *equalsGen) makePtrToBasicEqualsMethod(t types.Type) {
+	/*
+		func EqualsRefOfBool(a, b *bool) bool {
+			if a == b {
+				return true
+			}
+			if a == nil || b == nil {
+				return false
+			}
+			return *a == *b
+		}
+	*/
+	typeString := types.TypeString(t, noQualifier)
+	funcName := equalsName + printableTypeName(t)
+
+	//func EqualsRefOfType(a,b  *Type) *Type
+	funcDeclaration := jen.Func().Id(funcName).Call(jen.Id("a"), jen.Id("b").Id(typeString)).Bool()
+	stmts := []jen.Code{
+		jen.If(jen.Id("a == b")).Block(jen.Return(jen.True())),
+		jen.If(jen.Id("a == nil").Op("||").Id("b == nil")).Block(jen.Return(jen.False())),
+		jen.Return(jen.Id("*a == *b")),
+	}
+	e.addFunc(funcName, funcDeclaration.Block(stmts...))
 }
 
 func (e *equalsGen) trySlice(underlying, t types.Type) bool {

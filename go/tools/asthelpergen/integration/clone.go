@@ -133,7 +133,7 @@ func CloneRefOfRefSliceContainer(n *RefSliceContainer) *RefSliceContainer {
 	}
 	out := *n
 	out.ASTElements = CloneSliceOfAST(n.ASTElements)
-	out.NotASTElements = CloneSliceOfint(n.NotASTElements)
+	out.NotASTElements = CloneSliceOfInt(n.NotASTElements)
 	out.ASTImplementationElements = CloneSliceOfRefOfLeaf(n.ASTImplementationElements)
 	return &out
 }
@@ -145,6 +145,7 @@ func CloneRefOfSubImpl(n *SubImpl) *SubImpl {
 	}
 	out := *n
 	out.inner = CloneSubIface(n.inner)
+	out.field = CloneRefOfBool(n.field)
 	return &out
 }
 
@@ -177,8 +178,8 @@ func CloneSliceOfAST(n []AST) []AST {
 	return res
 }
 
-// CloneSliceOfint creates a deep clone of the input.
-func CloneSliceOfint(n []int) []int {
+// CloneSliceOfInt creates a deep clone of the input.
+func CloneSliceOfInt(n []int) []int {
 	res := make([]int, 0, len(n))
 	copy(res, n)
 	return res
@@ -191,6 +192,15 @@ func CloneSliceOfRefOfLeaf(n []*Leaf) []*Leaf {
 		res = append(res, CloneRefOfLeaf(x))
 	}
 	return res
+}
+
+// CloneRefOfBool creates a deep clone of the input.
+func CloneRefOfBool(n *bool) *bool {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	return &out
 }
 
 // CloneRefOfValueContainer creates a deep clone of the input.
@@ -211,7 +221,7 @@ func CloneRefOfValueSliceContainer(n *ValueSliceContainer) *ValueSliceContainer 
 	}
 	out := *n
 	out.ASTElements = CloneSliceOfAST(n.ASTElements)
-	out.NotASTElements = CloneSliceOfint(n.NotASTElements)
+	out.NotASTElements = CloneSliceOfInt(n.NotASTElements)
 	out.ASTImplementationElements = CloneSliceOfRefOfLeaf(n.ASTImplementationElements)
 	return &out
 }

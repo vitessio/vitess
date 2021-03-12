@@ -148,6 +148,7 @@ type SubIface interface {
 
 type SubImpl struct {
 	inner SubIface
+	field *bool
 }
 
 func (r *SubImpl) String() string {

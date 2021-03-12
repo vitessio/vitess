@@ -38,6 +38,7 @@ func TestEquals(t *testing.T) {
 }
 
 func createObjs() []AST {
+	t := true
 	return []AST{
 		nil,
 		&Leaf{1},
@@ -53,6 +54,10 @@ func createObjs() []AST {
 			},
 			&Leaf{2},
 			&Leaf{3},
+		},
+		&SubImpl{
+			inner: &SubImpl{},
+			field: &t,
 		},
 	}
 }
