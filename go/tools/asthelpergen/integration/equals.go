@@ -128,12 +128,12 @@ func EqualsSubIface(inA, inB SubIface) bool {
 }
 
 // EqualsBytes does deep equals.
-func EqualsBytes(inA, inB Bytes) bool {
-	if len(inA) != len(inB) {
+func EqualsBytes(a, b Bytes) bool {
+	if len(a) != len(b) {
 		return false
 	}
-	for i := 0; i < len(inA); i++ {
-		if inA[i] != inB[i] {
+	for i := 0; i < len(a); i++ {
+		if a[i] != b[i] {
 			return false
 		}
 	}
@@ -141,57 +141,106 @@ func EqualsBytes(inA, inB Bytes) bool {
 }
 
 // EqualsInterfaceContainer does deep equals.
-func EqualsInterfaceContainer(inA, inB InterfaceContainer) bool {
+func EqualsInterfaceContainer(a, b InterfaceContainer) bool {
 	return true
 }
 
 // EqualsInterfaceSlice does deep equals.
-func EqualsInterfaceSlice(inA, inB InterfaceSlice) bool {
-	if len(inA) != len(inB) {
+func EqualsInterfaceSlice(a, b InterfaceSlice) bool {
+	if len(a) != len(b) {
 		return false
 	}
-	for i := 0; i < len(inA); i++ {
-		if !EqualsAST(inA[i], inB[i]) {
+	for i := 0; i < len(a); i++ {
+		if !EqualsAST(a[i], b[i]) {
 			return false
 		}
 	}
 	return true
+}
+func EqualsRefOfLeaf(a, b *Leaf) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.v == b.v
 }
 
 // EqualsLeafSlice does deep equals.
-func EqualsLeafSlice(inA, inB LeafSlice) bool {
-	if len(inA) != len(inB) {
+func EqualsLeafSlice(a, b LeafSlice) bool {
+	if len(a) != len(b) {
 		return false
 	}
-	for i := 0; i < len(inA); i++ {
-		if !EqualsRefOfLeaf(inA[i], inB[i]) {
+	for i := 0; i < len(a); i++ {
+		if !EqualsRefOfLeaf(a[i], b[i]) {
 			return false
 		}
 	}
 	return true
 }
+func EqualsRefOfNoCloneType(a, b *NoCloneType) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.v == b.v
+}
+func EqualsRefOfRefContainer(a, b *RefContainer) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.NotASTType == b.NotASTType &&
+		EqualsAST(a.ASTType, b.ASTType) &&
+		EqualsRefOfLeaf(a.ASTImplementationType, b.ASTImplementationType)
+}
+func EqualsRefOfRefSliceContainer(a, b *RefSliceContainer) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsSliceOfAST(a.ASTElements, b.ASTElements) &&
+		EqualsSliceOfint(a.NotASTElements, b.NotASTElements) &&
+		EqualsSliceOfRefOfLeaf(a.ASTImplementationElements, b.ASTImplementationElements)
+}
+func EqualsRefOfSubImpl(a, b *SubImpl) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsSubIface(a.inner, b.inner)
+}
 
 // EqualsValueContainer does deep equals.
-func EqualsValueContainer(inA, inB ValueContainer) bool {
-	return inA.NotASTType == inB.NotASTType &&
-		EqualsAST(inA.ASTType, inB.ASTType) &&
-		EqualsRefOfLeaf(inA.ASTImplementationType, inB.ASTImplementationType)
+func EqualsValueContainer(a, b ValueContainer) bool {
+	return a.NotASTType == b.NotASTType &&
+		EqualsAST(a.ASTType, b.ASTType) &&
+		EqualsRefOfLeaf(a.ASTImplementationType, b.ASTImplementationType)
 }
 
 // EqualsValueSliceContainer does deep equals.
-func EqualsValueSliceContainer(inA, inB ValueSliceContainer) bool {
-	return EqualsSliceOfAST(inA.ASTElements, inB.ASTElements) &&
-		EqualsSliceOfint(inA.NotASTElements, inB.NotASTElements) &&
-		EqualsSliceOfRefOfLeaf(inA.ASTImplementationElements, inB.ASTImplementationElements)
+func EqualsValueSliceContainer(a, b ValueSliceContainer) bool {
+	return EqualsSliceOfAST(a.ASTElements, b.ASTElements) &&
+		EqualsSliceOfint(a.NotASTElements, b.NotASTElements) &&
+		EqualsSliceOfRefOfLeaf(a.ASTImplementationElements, b.ASTImplementationElements)
 }
 
 // EqualsSliceOfAST does deep equals.
-func EqualsSliceOfAST(inA, inB []AST) bool {
-	if len(inA) != len(inB) {
+func EqualsSliceOfAST(a, b []AST) bool {
+	if len(a) != len(b) {
 		return false
 	}
-	for i := 0; i < len(inA); i++ {
-		if !EqualsAST(inA[i], inB[i]) {
+	for i := 0; i < len(a); i++ {
+		if !EqualsAST(a[i], b[i]) {
 			return false
 		}
 	}
@@ -199,12 +248,12 @@ func EqualsSliceOfAST(inA, inB []AST) bool {
 }
 
 // EqualsSliceOfint does deep equals.
-func EqualsSliceOfint(inA, inB []int) bool {
-	if len(inA) != len(inB) {
+func EqualsSliceOfint(a, b []int) bool {
+	if len(a) != len(b) {
 		return false
 	}
-	for i := 0; i < len(inA); i++ {
-		if inA[i] != inB[i] {
+	for i := 0; i < len(a); i++ {
+		if a[i] != b[i] {
 			return false
 		}
 	}
@@ -212,12 +261,12 @@ func EqualsSliceOfint(inA, inB []int) bool {
 }
 
 // EqualsSliceOfRefOfLeaf does deep equals.
-func EqualsSliceOfRefOfLeaf(inA, inB []*Leaf) bool {
-	if len(inA) != len(inB) {
+func EqualsSliceOfRefOfLeaf(a, b []*Leaf) bool {
+	if len(a) != len(b) {
 		return false
 	}
-	for i := 0; i < len(inA); i++ {
-		if !EqualsRefOfLeaf(inA[i], inB[i]) {
+	for i := 0; i < len(a); i++ {
+		if !EqualsRefOfLeaf(a[i], b[i]) {
 			return false
 		}
 	}

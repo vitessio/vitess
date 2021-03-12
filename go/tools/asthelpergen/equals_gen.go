@@ -52,7 +52,8 @@ func (e *equalsGen) createFile(pkgName string) (string, *jen.File) {
 
 		if e.tryInterface(underlying, t) ||
 			e.tryStruct(underlying, t) ||
-			e.trySlice(underlying, t) {
+			e.trySlice(underlying, t) ||
+			e.tryPtr(underlying, t) {
 			alreadyDone[typeName] = true
 			continue
 		}
@@ -85,11 +86,11 @@ const equalsName = "Equals"
 func (e *equalsGen) makeInterfaceEqualsMethod(t types.Type, iface *types.Interface) error {
 
 	/*
-		func EqualsAST(a, b *AST) bool {
-			if a == b {
+		func EqualsAST(inA, inB AST) bool {
+			if inA == inB {
 				return true
 			}
-			if a == nil || b == nil {
+			if inA == nil || inB8 == nil {
 				return false
 			}
 			switch a := inA.(type) {
@@ -179,16 +180,23 @@ func (e *equalsGen) tryStruct(underlying, t types.Type) bool {
 
 func (e *equalsGen) makeStructEqualsMethod(t types.Type, stroct *types.Struct) error {
 	/*
-		func EqualsRefOfRefContainer(inA *RefContainer, inB *RefContainer) bool {
-			if inA == inB {
-				return true
-			}
+		func EqualsRefOfRefContainer(inA RefContainer, inB RefContainer) bool {
 			return EqualsRefOfLeaf(inA.ASTImplementationType, inB.ASTImplementationType) &&
 				EqualsAST(inA.ASTType, inB.ASTType) && inA.NotASTType == inB.NotASTType
 		}
 
 	*/
 
+	typeString := types.TypeString(t, noQualifier)
+	funcName := equalsName + printableTypeName(t)
+	funcDecl := jen.Func().Id(funcName).Call(jen.List(jen.Id("a"), jen.Id("b")).Id(typeString)).Bool().
+		Block(jen.Return(e.compareAllStructFields(stroct)))
+	e.addFunc(funcName, funcDecl)
+
+	return nil
+}
+
+func (e *equalsGen) compareAllStructFields(stroct *types.Struct) jen.Code {
 	var basicsPred []*jen.Statement
 	var others []*jen.Statement
 	for i := 0; i < stroct.NumFields(); i++ {
@@ -197,8 +205,8 @@ func (e *equalsGen) makeStructEqualsMethod(t types.Type, stroct *types.Struct) e
 			// we can safely ignore this, we do not want ast to contain interface{} types.
 			continue
 		}
-		fieldA := jen.Id("inA").Dot(field.Name())
-		fieldB := jen.Id("inB").Dot(field.Name())
+		fieldA := jen.Id("a").Dot(field.Name())
+		fieldB := jen.Id("b").Dot(field.Name())
 		pred := e.compareValueType(field.Type(), fieldA, fieldB, true)
 		if _, ok := field.Type().(*types.Basic); ok {
 			basicsPred = append(basicsPred, pred)
@@ -224,21 +232,39 @@ func (e *equalsGen) makeStructEqualsMethod(t types.Type, stroct *types.Struct) e
 		}
 	}
 
-	var stmt jen.Code
-
 	if ret == nil {
-		stmt = jen.Return(jen.True())
-	} else {
-		stmt = jen.Return(ret)
+		return jen.True()
+	}
+	return ret
+}
+
+func (e *equalsGen) tryPtr(underlying, t types.Type) bool {
+	ptr, ok := underlying.(*types.Pointer)
+	if !ok {
+		return false
 	}
 
+	if strct, isStruct := ptr.Elem().Underlying().(*types.Struct); isStruct {
+		e.makePtrToStructCloneMethod(t, strct)
+		return true
+	}
+
+	return false
+}
+
+func (e *equalsGen) makePtrToStructCloneMethod(t types.Type, strct *types.Struct) {
 	typeString := types.TypeString(t, noQualifier)
 	funcName := equalsName + printableTypeName(t)
-	funcDecl := jen.Func().Id(funcName).Call(jen.List(jen.Id("inA"), jen.Id("inB")).Id(typeString)).Bool().
-		Block(stmt)
-	e.addFunc(funcName, funcDecl)
 
-	return nil
+	//func EqualsRefOfType(a,b  *Type) *Type
+	funcDeclaration := jen.Func().Id(funcName).Call(jen.Id("a"), jen.Id("b").Id(typeString)).Bool()
+	stmts := []jen.Code{
+		jen.If(jen.Id("a == b")).Block(jen.Return(jen.True())),
+		jen.If(jen.Id("a == nil").Op("||").Id("b == nil")).Block(jen.Return(jen.False())),
+		jen.Return(e.compareAllStructFields(strct)),
+	}
+
+	e.methods = append(e.methods, funcDeclaration.Block(stmts...))
 }
 
 func (e *equalsGen) trySlice(underlying, t types.Type) bool {
@@ -256,12 +282,12 @@ func (e *equalsGen) trySlice(underlying, t types.Type) bool {
 
 func (e *equalsGen) makeSliceEqualsMethod(t types.Type, slice *types.Slice) error {
 	/*
-		func EqualsSliceOfRefOfLeaf(inA, inB []*Leaf) bool {
-			if len(inA) != len(inB) {
+		func EqualsSliceOfRefOfLeaf(a, b []*Leaf) bool {
+			if len(a) != len(b) {
 				return false
 			}
-			for i := 0; i < len(inA); i++ {
-				if !EqualsRefOfLeaf(inA[i], inB[i]) {
+			for i := 0; i < len(a); i++ {
+				if !EqualsRefOfLeaf(a[i], b[i]) {
 					return false
 				}
 			}
@@ -269,15 +295,15 @@ func (e *equalsGen) makeSliceEqualsMethod(t types.Type, slice *types.Slice) erro
 		}
 	*/
 
-	stmts := []jen.Code{jen.If(jen.Id("len(inA) != len(inB)")).Block(jen.Return(jen.False())),
-		jen.For(jen.Id("i := 0; i < len(inA); i++")).Block(
-			jen.If(e.compareValueType(slice.Elem(), jen.Id("inA[i]"), jen.Id("inB[i]"), false)).Block(jen.Return(jen.False()))),
+	stmts := []jen.Code{jen.If(jen.Id("len(a) != len(b)")).Block(jen.Return(jen.False())),
+		jen.For(jen.Id("i := 0; i < len(a); i++")).Block(
+			jen.If(e.compareValueType(slice.Elem(), jen.Id("a[i]"), jen.Id("b[i]"), false)).Block(jen.Return(jen.False()))),
 		jen.Return(jen.True()),
 	}
 
 	typeString := types.TypeString(t, noQualifier)
 	funcName := equalsName + printableTypeName(t)
-	funcDecl := jen.Func().Id(funcName).Call(jen.List(jen.Id("inA"), jen.Id("inB")).Id(typeString)).Bool().Block(stmts...)
+	funcDecl := jen.Func().Id(funcName).Call(jen.List(jen.Id("a"), jen.Id("b")).Id(typeString)).Bool().Block(stmts...)
 	e.addFunc(funcName, funcDecl)
 	return nil
 }
