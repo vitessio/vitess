@@ -80,10 +80,10 @@ func (c *cloneGen) readValueOfType(t types.Type, expr jen.Code) jen.Code {
 }
 
 func (c *cloneGen) makeStructCloneMethod(t types.Type) error {
-	receiveType := types.TypeString(t, noQualifier)
-	funcName := "Clone" + printableTypeName(t)
+	typeString := types.TypeString(t, noQualifier)
+	funcName := cloneName + printableTypeName(t)
 	c.addFunc(funcName,
-		jen.Func().Id(funcName).Call(jen.Id("n").Id(receiveType)).Id(receiveType).Block(
+		jen.Func().Id(funcName).Call(jen.Id("n").Id(typeString)).Id(typeString).Block(
 			jen.Return(jen.Op("*").Add(c.readValueOfType(types.NewPointer(t), jen.Op("&").Id("n")))),
 		))
 	return nil
@@ -247,7 +247,7 @@ func (c *cloneGen) tryStruct(underlying, t types.Type) bool {
 
 	err := c.makeStructCloneMethod(t)
 	if err != nil {
-		panic(err) // todo
+		log.Fatalf("%v", err)
 	}
 	return true
 }

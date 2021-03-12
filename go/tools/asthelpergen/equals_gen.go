@@ -50,12 +50,13 @@ func (e *equalsGen) createFile(pkgName string) (string, *jen.File) {
 			continue
 		}
 
-		if e.tryInterface(underlying, t) {
+		if e.tryInterface(underlying, t) ||
+			e.tryStruct(underlying, t) {
 			alreadyDone[typeName] = true
 			continue
 		}
 
-		log.Fatalf("don't know how to handle %s %T", typeName, underlying)
+		log.Printf("don't know how to handle %s %T", typeName, underlying)
 	}
 
 	for _, method := range e.methods {
@@ -101,9 +102,6 @@ func (e *equalsGen) makeInterfaceEqualsMethod(t types.Type, iface *types.Interfa
 			return false
 		}
 	*/
-	typeString := types.TypeString(t, noQualifier)
-	typeName := printableTypeName(t)
-
 	stmts := []jen.Code{
 		jen.If(jen.Id("inA == inB")).Block(jen.Return(jen.True())),
 		jen.If(jen.Id("inA == nil").Op("||").Id("inB == nil")).Block(jen.Return(jen.False())),
@@ -137,7 +135,8 @@ func (e *equalsGen) makeInterfaceEqualsMethod(t types.Type, iface *types.Interfa
 
 	stmts = append(stmts, jen.Return(jen.False()))
 
-	funcName := equalsName + typeName
+	typeString := types.TypeString(t, noQualifier)
+	funcName := equalsName + printableTypeName(t)
 	funcDecl := jen.Func().Id(funcName).Call(jen.List(jen.Id("inA"), jen.Id("inB")).Id(typeString)).Bool().Block(stmts...)
 	e.addFunc(funcName, funcDecl)
 
@@ -146,4 +145,81 @@ func (e *equalsGen) makeInterfaceEqualsMethod(t types.Type, iface *types.Interfa
 
 func (e *equalsGen) addFunc(name string, code jen.Code) {
 	e.methods = append(e.methods, jen.Comment(name+" does deep equals."), code)
+}
+
+func (e *equalsGen) tryStruct(underlying, t types.Type) bool {
+	stroct, ok := underlying.(*types.Struct)
+	if !ok {
+		return false
+	}
+
+	err := e.makeStructEqualsMethod(t, stroct)
+	if err != nil {
+		log.Fatalf("%v", err)
+	}
+	return true
+}
+
+func (e *equalsGen) makeStructEqualsMethod(t types.Type, stroct *types.Struct) error {
+	/*
+		func EqualsRefOfRefContainer(inA *RefContainer, inB *RefContainer) bool {
+			if inA == inB {
+				return true
+			}
+			return EqualsRefOfLeaf(inA.ASTImplementationType, inB.ASTImplementationType) &&
+				EqualsAST(inA.ASTType, inB.ASTType) && inA.NotASTType == inB.NotASTType
+		}
+
+	*/
+
+	typeString := types.TypeString(t, noQualifier)
+	typeName := printableTypeName(t)
+
+	var basicsPred []*jen.Statement
+	var others []*jen.Statement
+	for i := 0; i < stroct.NumFields(); i++ {
+		field := stroct.Field(i)
+		_, ok := field.Type().(*types.Basic)
+		if ok {
+			basicsPred = append(basicsPred, jen.Id("inA").Dot(field.Name()).Op("==").Id("inB").Dot(field.Name()))
+			continue
+		}
+		if field.Type().Underlying().String() == "interface{}" {
+			// we can safely ignore this, we do not want ast to contain interface{} types.
+			continue
+		}
+		others = append(others, jen.Id(equalsName+printableTypeName(field.Type())).Call(jen.Id("inA").Dot(field.Name()), jen.Id("inB").Dot(field.Name())))
+	}
+
+	var ret *jen.Statement
+	for _, pred := range basicsPred {
+		if ret == nil {
+			ret = pred
+		} else {
+			ret = ret.Op("&&").Add(pred)
+		}
+	}
+
+	for _, pred := range others {
+		if ret == nil {
+			ret = pred
+		} else {
+			ret = ret.Op("&&").Add(pred)
+		}
+	}
+
+	var stmt jen.Code
+
+	if ret == nil {
+		stmt = jen.Return(jen.True())
+	} else {
+		stmt = jen.Return(ret)
+	}
+
+	funcName := equalsName + typeName
+	funcDecl := jen.Func().Id(funcName).Call(jen.List(jen.Id("inA"), jen.Id("inB")).Id(typeString)).Bool().
+		Block(stmt)
+	e.addFunc(funcName, funcDecl)
+
+	return nil
 }
