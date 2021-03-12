@@ -2144,13 +2144,13 @@ show_statement:
     $$ = &Show{Type: string($2) + " " + string($3)}
   }
 /* SHOW CHARACTER SET and SHOW CHARSET are equivalent */
-| SHOW CHARACTER SET ddl_skip_to_end
+| SHOW CHARACTER SET like_or_where_opt
   {
-    $$ = &Show{Type: CharsetStr}
+    $$ = &Show{Type: CharsetStr, Filter: $4}
   }
-| SHOW CHARSET ddl_skip_to_end
+| SHOW CHARSET like_or_where_opt
   {
-    $$ = &Show{Type: string($2)}
+    $$ = &Show{Type: string($2), Filter: $3}
   }
 | SHOW CREATE DATABASE not_exists_opt ID ddl_skip_to_end
   {
@@ -2207,11 +2207,11 @@ show_statement:
   }
 | SHOW PROCEDURE STATUS like_or_where_opt
   {
-    $$ = &Show{Type: string($2) + " " + string($3), ProcFuncFilter: $4}
+    $$ = &Show{Type: string($2) + " " + string($3), Filter: $4}
   }
 | SHOW FUNCTION STATUS like_or_where_opt
   {
-    $$ = &Show{Type: string($2) + " " + string($3), ProcFuncFilter: $4}
+    $$ = &Show{Type: string($2) + " " + string($3), Filter: $4}
   }
 | SHOW show_session_or_global STATUS ddl_skip_to_end
   {
