@@ -335,7 +335,7 @@ func (c *cloneGen) trySlice(underlying, t types.Type) bool {
 
 	err := c.makeSliceCloneMethod(t, slice)
 	if err != nil {
-		panic(err) // todo
+		log.Fatalf("%v", err)
 	}
 	return true
 }

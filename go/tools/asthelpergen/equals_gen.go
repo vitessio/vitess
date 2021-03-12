@@ -51,7 +51,8 @@ func (e *equalsGen) createFile(pkgName string) (string, *jen.File) {
 		}
 
 		if e.tryInterface(underlying, t) ||
-			e.tryStruct(underlying, t) {
+			e.tryStruct(underlying, t) ||
+			e.trySlice(underlying, t) {
 			alreadyDone[typeName] = true
 			continue
 		}
@@ -116,10 +117,9 @@ func (e *equalsGen) makeInterfaceEqualsMethod(t types.Type, iface *types.Interfa
 		caseBlock := jen.Case(jen.Id(typeString)).Block(
 			jen.Id("b, ok := inB.").Call(jen.Id(typeString)),
 			jen.If(jen.Id("!ok")).Block(jen.Return(jen.False())),
-			jen.Return(jen.Id(equalsName+printableTypeName(t)).Call(jen.Id("a, b"))),
+			jen.Return(e.compareValueType(t, jen.Id("a"), jen.Id("b"), true)),
 		)
 		cases = append(cases, caseBlock)
-		e.todo = append(e.todo, t)
 		return nil
 	})
 
@@ -141,6 +141,23 @@ func (e *equalsGen) makeInterfaceEqualsMethod(t types.Type, iface *types.Interfa
 	e.addFunc(funcName, funcDecl)
 
 	return nil
+}
+
+func (e *equalsGen) compareValueType(t types.Type, a, b *jen.Statement, eq bool) *jen.Statement {
+	switch t.Underlying().(type) {
+	case *types.Basic:
+		if eq {
+			return a.Op("==").Add(b)
+		}
+		return a.Op("!=").Add(b)
+	}
+
+	e.todo = append(e.todo, t)
+	var neg = "!"
+	if eq {
+		neg = ""
+	}
+	return jen.Id(neg+equalsName+printableTypeName(t)).Call(a, b)
 }
 
 func (e *equalsGen) addFunc(name string, code jen.Code) {
@@ -172,23 +189,22 @@ func (e *equalsGen) makeStructEqualsMethod(t types.Type, stroct *types.Struct) e
 
 	*/
 
-	typeString := types.TypeString(t, noQualifier)
-	typeName := printableTypeName(t)
-
 	var basicsPred []*jen.Statement
 	var others []*jen.Statement
 	for i := 0; i < stroct.NumFields(); i++ {
 		field := stroct.Field(i)
-		_, ok := field.Type().(*types.Basic)
-		if ok {
-			basicsPred = append(basicsPred, jen.Id("inA").Dot(field.Name()).Op("==").Id("inB").Dot(field.Name()))
-			continue
-		}
 		if field.Type().Underlying().String() == "interface{}" {
 			// we can safely ignore this, we do not want ast to contain interface{} types.
 			continue
 		}
-		others = append(others, jen.Id(equalsName+printableTypeName(field.Type())).Call(jen.Id("inA").Dot(field.Name()), jen.Id("inB").Dot(field.Name())))
+		fieldA := jen.Id("inA").Dot(field.Name())
+		fieldB := jen.Id("inB").Dot(field.Name())
+		pred := e.compareValueType(field.Type(), fieldA, fieldB, true)
+		if _, ok := field.Type().(*types.Basic); ok {
+			basicsPred = append(basicsPred, pred)
+			continue
+		}
+		others = append(others, pred)
 	}
 
 	var ret *jen.Statement
@@ -216,10 +232,52 @@ func (e *equalsGen) makeStructEqualsMethod(t types.Type, stroct *types.Struct) e
 		stmt = jen.Return(ret)
 	}
 
-	funcName := equalsName + typeName
+	typeString := types.TypeString(t, noQualifier)
+	funcName := equalsName + printableTypeName(t)
 	funcDecl := jen.Func().Id(funcName).Call(jen.List(jen.Id("inA"), jen.Id("inB")).Id(typeString)).Bool().
 		Block(stmt)
 	e.addFunc(funcName, funcDecl)
 
+	return nil
+}
+
+func (e *equalsGen) trySlice(underlying, t types.Type) bool {
+	slice, ok := underlying.(*types.Slice)
+	if !ok {
+		return false
+	}
+
+	err := e.makeSliceEqualsMethod(t, slice)
+	if err != nil {
+		log.Fatalf("%v", err)
+	}
+	return true
+}
+
+func (e *equalsGen) makeSliceEqualsMethod(t types.Type, slice *types.Slice) error {
+	/*
+		func EqualsSliceOfRefOfLeaf(inA, inB []*Leaf) bool {
+			if len(inA) != len(inB) {
+				return false
+			}
+			for i := 0; i < len(inA); i++ {
+				if !EqualsRefOfLeaf(inA[i], inB[i]) {
+					return false
+				}
+			}
+			return false
+		}
+	*/
+
+	stmts := []jen.Code{jen.If(jen.Id("len(inA) != len(inB)")).Block(jen.Return(jen.False())),
+		jen.For(jen.Id("i := 0; i < len(inA); i++")).Block(
+			jen.If(e.compareValueType(slice.Elem(), jen.Id("inA[i]"), jen.Id("inB[i]"), false)).Block(jen.Return(jen.False()))),
+		jen.Return(jen.True()),
+	}
+
+	typeString := types.TypeString(t, noQualifier)
+	funcName := equalsName + printableTypeName(t)
+	funcDecl := jen.Func().Id(funcName).Call(jen.List(jen.Id("inA"), jen.Id("inB")).Id(typeString)).Bool().Block(stmts...)
+	e.addFunc(funcName, funcDecl)
 	return nil
 }
