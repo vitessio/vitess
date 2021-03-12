@@ -248,7 +248,7 @@ func GenerateASTHelpers(packagePatterns []string, rootIface, exceptCloneType str
 	}
 	rewriter := newRewriterGen(interestingType, nt.Obj().Name())
 	clone := newCloneGen(iface, scope, exceptCloneType)
-	equals := newEqualsGen()
+	equals := newEqualsGen(scope)
 
 	generator := newGenerator(loaded[0].Module, loaded[0].TypesSizes, nt, rewriter, clone, equals)
 	it, err := generator.GenerateCode()

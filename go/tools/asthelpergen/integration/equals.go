@@ -18,22 +18,110 @@ limitations under the License.
 package integration
 
 // EqualsAST does deep equals.
-func EqualsAST(a, b AST) bool {
-	if a == b {
+func EqualsAST(inA, inB AST) bool {
+	if inA == inB {
 		return true
 	}
-	if a == nil || b == nil {
+	if inA == nil || inB == nil {
+		return false
+	}
+	switch a := inA.(type) {
+	case BasicType:
+		b, ok := inB.(BasicType)
+		if !ok {
+			return false
+		}
+		return EqualsBasicType(a, b)
+	case Bytes:
+		b, ok := inB.(Bytes)
+		if !ok {
+			return false
+		}
+		return EqualsBytes(a, b)
+	case InterfaceContainer:
+		b, ok := inB.(InterfaceContainer)
+		if !ok {
+			return false
+		}
+		return EqualsInterfaceContainer(a, b)
+	case InterfaceSlice:
+		b, ok := inB.(InterfaceSlice)
+		if !ok {
+			return false
+		}
+		return EqualsInterfaceSlice(a, b)
+	case *Leaf:
+		b, ok := inB.(*Leaf)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfLeaf(a, b)
+	case LeafSlice:
+		b, ok := inB.(LeafSlice)
+		if !ok {
+			return false
+		}
+		return EqualsLeafSlice(a, b)
+	case *NoCloneType:
+		b, ok := inB.(*NoCloneType)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfNoCloneType(a, b)
+	case *RefContainer:
+		b, ok := inB.(*RefContainer)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfRefContainer(a, b)
+	case *RefSliceContainer:
+		b, ok := inB.(*RefSliceContainer)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfRefSliceContainer(a, b)
+	case *SubImpl:
+		b, ok := inB.(*SubImpl)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfSubImpl(a, b)
+	case ValueContainer:
+		b, ok := inB.(ValueContainer)
+		if !ok {
+			return false
+		}
+		return EqualsValueContainer(a, b)
+	case ValueSliceContainer:
+		b, ok := inB.(ValueSliceContainer)
+		if !ok {
+			return false
+		}
+		return EqualsValueSliceContainer(a, b)
+	default:
+		// this should never happen
 		return false
 	}
 	return false
 }
 
 // EqualsSubIface does deep equals.
-func EqualsSubIface(a, b SubIface) bool {
-	if a == b {
+func EqualsSubIface(inA, inB SubIface) bool {
+	if inA == inB {
 		return true
 	}
-	if a == nil || b == nil {
+	if inA == nil || inB == nil {
+		return false
+	}
+	switch a := inA.(type) {
+	case *SubImpl:
+		b, ok := inB.(*SubImpl)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfSubImpl(a, b)
+	default:
+		// this should never happen
 		return false
 	}
 	return false
