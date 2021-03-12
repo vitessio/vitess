@@ -271,7 +271,7 @@ func (c *cloneGen) tryPtr(underlying, t types.Type) bool {
 
 func (c *cloneGen) makePtrToStructCloneMethod(t types.Type, strct *types.Struct) {
 	receiveType := types.TypeString(t, noQualifier)
-	funcName := "Clone" + printableTypeName(t)
+	funcName := cloneName + printableTypeName(t)
 
 	//func CloneRefOfType(n *Type) *Type
 	funcDeclaration := jen.Func().Id(funcName).Call(jen.Id("n").Id(receiveType)).Id(receiveType)
