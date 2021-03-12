@@ -81,7 +81,8 @@ patches, understand exact mitigation steps, etc.
 
 **Disclosure of Fixed Vulnerability**
 
-- The Fix Lead will update Vitess Slack informing users that there are new releases available to address an identified vulnerability.  - As much as possible this email should be actionable and include links to CVEs, and how to apply the fix to user's environments; this can include links to external distributor documentation.
+- The Fix Lead will post a notice on Vitess Slack informing users that there are new releases available to address an identified vulnerability.  
+- As much as possible this notice should be actionable and include links to CVEs, and how to apply the fix to user's environments; this can include links to external distributor documentation.
 
 ### Embargo Policy
 
