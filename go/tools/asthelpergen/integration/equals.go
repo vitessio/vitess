@@ -31,7 +31,7 @@ func EqualsAST(inA, inB AST) bool {
 		if !ok {
 			return false
 		}
-		return EqualsBasicType(a, b)
+		return a == b
 	case Bytes:
 		b, ok := inB.(Bytes)
 		if !ok {
@@ -127,8 +127,47 @@ func EqualsSubIface(inA, inB SubIface) bool {
 	return false
 }
 
+// EqualsBytes does deep equals.
+func EqualsBytes(inA, inB Bytes) bool {
+	if len(inA) != len(inB) {
+		return false
+	}
+	for i := 0; i < len(inA); i++ {
+		if inA[i] != inB[i] {
+			return false
+		}
+	}
+	return true
+}
+
 // EqualsInterfaceContainer does deep equals.
 func EqualsInterfaceContainer(inA, inB InterfaceContainer) bool {
+	return true
+}
+
+// EqualsInterfaceSlice does deep equals.
+func EqualsInterfaceSlice(inA, inB InterfaceSlice) bool {
+	if len(inA) != len(inB) {
+		return false
+	}
+	for i := 0; i < len(inA); i++ {
+		if !EqualsAST(inA[i], inB[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+// EqualsLeafSlice does deep equals.
+func EqualsLeafSlice(inA, inB LeafSlice) bool {
+	if len(inA) != len(inB) {
+		return false
+	}
+	for i := 0; i < len(inA); i++ {
+		if !EqualsRefOfLeaf(inA[i], inB[i]) {
+			return false
+		}
+	}
 	return true
 }
 
@@ -144,4 +183,43 @@ func EqualsValueSliceContainer(inA, inB ValueSliceContainer) bool {
 	return EqualsSliceOfAST(inA.ASTElements, inB.ASTElements) &&
 		EqualsSliceOfint(inA.NotASTElements, inB.NotASTElements) &&
 		EqualsSliceOfRefOfLeaf(inA.ASTImplementationElements, inB.ASTImplementationElements)
+}
+
+// EqualsSliceOfAST does deep equals.
+func EqualsSliceOfAST(inA, inB []AST) bool {
+	if len(inA) != len(inB) {
+		return false
+	}
+	for i := 0; i < len(inA); i++ {
+		if !EqualsAST(inA[i], inB[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+// EqualsSliceOfint does deep equals.
+func EqualsSliceOfint(inA, inB []int) bool {
+	if len(inA) != len(inB) {
+		return false
+	}
+	for i := 0; i < len(inA); i++ {
+		if inA[i] != inB[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// EqualsSliceOfRefOfLeaf does deep equals.
+func EqualsSliceOfRefOfLeaf(inA, inB []*Leaf) bool {
+	if len(inA) != len(inB) {
+		return false
+	}
+	for i := 0; i < len(inA); i++ {
+		if !EqualsRefOfLeaf(inA[i], inB[i]) {
+			return false
+		}
+	}
+	return true
 }
