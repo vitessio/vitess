@@ -100,15 +100,15 @@ message Schema {
     map<string, TableSize> table_sizes = 4;
 
     message ShardTableSize {
-        int64 row_count = 1;
-        int64 data_length = 2;
+        uint64 row_count = 1;
+        uint64 data_length = 2;
     }
 
     // TableSize aggregates table size information across all shards containing
     // in the given keyspace and cluster, as well as per-shard size information.
     message TableSize {
-        int64 row_count = 1;
-        int64 data_length = 2;
+        uint64 row_count = 1;
+        uint64 data_length = 2;
         map<string, ShardTableSize> by_shard = 3;
     }
 }
