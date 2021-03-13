@@ -437,7 +437,7 @@ func (c *Cluster) GetSchemaForKeyspace(ctx context.Context, keyspace string, opt
 			return tablet.Tablet.Keyspace == keyspace
 		}, -1)
 		if err != nil {
-			return nil, err
+			return nil, err // TODO: wrap this
 		}
 	}
 
@@ -450,6 +450,10 @@ func (c *Cluster) GetSchemaForKeyspace(ctx context.Context, keyspace string, opt
 
 	if opts.BaseRequest == nil {
 		opts.BaseRequest = &vtctldatapb.GetSchemaRequest{}
+	}
+
+	if err := c.Vtctld.Dial(ctx); err != nil {
+		return nil, err // TODO: wrap this
 	}
 
 	var tabletsToQuery []*vtadminpb.Tablet
