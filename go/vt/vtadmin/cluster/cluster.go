@@ -556,13 +556,12 @@ func (c *Cluster) GetSchemaForKeyspace(ctx context.Context, keyspace string, opt
 					return
 				}
 
-				tableSize.RowCount += int64(td.RowCount)     // TODO: change proto to uint64
-				tableSize.DataLength += int64(td.DataLength) // TODO: cahnge proto to uint64
+				tableSize.RowCount += td.RowCount
+				tableSize.DataLength += td.DataLength
 
 				tableSize.ByShard[tablet.Tablet.Shard] = &vtadminpb.Schema_ShardTableSize{
-					// TODO: same thing about uint64 here
-					RowCount:   int64(td.RowCount),
-					DataLength: int64(td.DataLength),
+					RowCount:   td.RowCount,
+					DataLength: td.DataLength,
 				}
 			}
 		}(tablet, sizesOnly)
