@@ -395,6 +395,8 @@ func (api *API) GetSchema(ctx context.Context, req *vtadminpb.GetSchemaRequest) 
 	span.Annotate("cluster_id", req.ClusterId)
 	span.Annotate("keyspace", req.Keyspace)
 	span.Annotate("table", req.Table)
+	span.Annotate("aggregate_schema_sizes", req.TableSizeOptions.AggregateSizes)
+	span.Annotate("include_non_serving_shards", req.TableSizeOptions.IncludeNonServingShards)
 
 	c, ok := api.clusterMap[req.ClusterId]
 	if !ok {
@@ -405,9 +407,7 @@ func (api *API) GetSchema(ctx context.Context, req *vtadminpb.GetSchemaRequest) 
 		BaseRequest: &vtctldatapb.GetSchemaRequest{
 			Tables: []string{req.Table},
 		},
-		SizeOpts: &vtadminpb.GetSchemaTableSizeOptions{
-			AggregateSizes: true,
-		},
+		SizeOpts: req.TableSizeOptions,
 	})
 
 	/*
@@ -909,7 +909,9 @@ func (api *API) VTExplain(ctx context.Context, req *vtadminpb.VTExplainRequest) 
 	go func(c *cluster.Cluster) {
 		defer wg.Done()
 
-		res, err := c.GetSchema(ctx, &vtctldatapb.GetSchemaRequest{}, tablet)
+		res, err := c.GetSchemaForKeyspace(ctx, req.Keyspace, cluster.GetSchemaOptions{
+			Tablets: []*vtadminpb.Tablet{tablet},
+		})
 		if err != nil {
 			er.RecordError(fmt.Errorf("GetSchema(%s): %w", topoproto.TabletAliasString(tablet.Tablet.Alias), err))
 			return
