@@ -70,6 +70,7 @@ type iExecute interface {
 
 	// TODO: remove when resolver is gone
 	ParseDestinationTarget(targetString string) (string, topodatapb.TabletType, key.Destination, error)
+	VSchema() *vindexes.VSchema
 }
 
 //VSchemaOperator is an interface to Vschema Operations
@@ -692,6 +693,17 @@ func (vc *vcursorImpl) SetSessionTrackGTIDs(enable bool) {
 // HasCreatedTempTable implements the SessionActions interface
 func (vc *vcursorImpl) HasCreatedTempTable() {
 	vc.safeSession.GetOrCreateOptions().HasCreatedTempTables = true
+}
+
+// GetDBDDLPluginName implements the VCursor interface
+func (vc *vcursorImpl) GetDBDDLPluginName() string {
+	return *dbDDLPlugin
+}
+
+// KeyspaceAvailable implements the VCursor interface
+func (vc *vcursorImpl) KeyspaceAvailable(ks string) bool {
+	_, exists := vc.executor.VSchema().Keyspaces[ks]
+	return exists
 }
 
 // ParseDestinationTarget parses destination target string and sets default keyspace if possible.

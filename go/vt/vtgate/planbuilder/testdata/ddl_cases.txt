@@ -98,7 +98,17 @@
 
 # create db foo
 "create database foo"
-"create database is not supported"
+{
+  "QueryType": "DDL",
+  "Original": "create database foo",
+  "Instructions": {
+    "OperatorType": "CREATEDB",
+    "Keyspace": {
+      "Name": "foo",
+      "Sharded": false
+    }
+  }
+}
 
 # create db main
 "create database main"
@@ -128,11 +138,31 @@
 
 # drop db main
 "drop database main"
-"drop database is not supported"
+{
+  "QueryType": "DDL",
+  "Original": "drop database main",
+  "Instructions": {
+    "OperatorType": "DROPDB",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    }
+  }
+}
 
 # drop db if exists main
 "drop database if exists main"
-"drop database is not supported"
+{
+  "QueryType": "DDL",
+  "Original": "drop database if exists main",
+  "Instructions": {
+    "OperatorType": "DROPDB",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    }
+  }
+}
 
 # drop db if exists foo
 "drop schema if exists foo"

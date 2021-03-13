@@ -129,7 +129,6 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 		a.apply(node, n.Right, func(newNode, parent SQLNode) {
 			parent.(*AndExpr).Right = newNode.(Expr)
 		})
-	case Argument:
 	case *AutoIncSpec:
 		a.apply(node, n.Column, func(newNode, parent SQLNode) {
 			parent.(*AutoIncSpec).Column = newNode.(ColIdent)
@@ -249,6 +248,9 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 			parent.(*ConvertUsingExpr).Expr = newNode.(Expr)
 		})
 	case *CreateDatabase:
+		a.apply(node, n.Comments, func(newNode, parent SQLNode) {
+			parent.(*CreateDatabase).Comments = newNode.(Comments)
+		})
 	case *CreateTable:
 		a.apply(node, n.Table, func(newNode, parent SQLNode) {
 			parent.(*CreateTable).Table = newNode.(TableName)
@@ -308,6 +310,9 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 			parent.(*DropColumn).Name = newNode.(*ColName)
 		})
 	case *DropDatabase:
+		a.apply(node, n.Comments, func(newNode, parent SQLNode) {
+			parent.(*DropDatabase).Comments = newNode.(Comments)
+		})
 	case *DropKey:
 	case *DropTable:
 		a.apply(node, n.FromTables, func(newNode, parent SQLNode) {

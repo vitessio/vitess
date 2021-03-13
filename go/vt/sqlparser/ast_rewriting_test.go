@@ -31,7 +31,7 @@ type myTestCase struct {
 	liid, db, foundRows, rowCount, rawGTID, rawTimeout, sessTrackGTID  bool
 	ddlStrategy, sessionUUID, sessionEnableSystemSettings              bool
 	udv                                                                int
-	autocommit, clientFoundRows, skipQueryPlanCache                    bool
+	autocommit, clientFoundRows, skipQueryPlanCache, socket            bool
 	sqlSelectLimit, transactionMode, workload, version, versionComment bool
 }
 
@@ -147,6 +147,10 @@ func TestRewrites(in *testing.T) {
 		expected: "SELECT :__vtworkload as `@@workload`",
 		workload: true,
 	}, {
+		in:       "SELECT @@socket",
+		expected: "SELECT :__vtsocket as `@@socket`",
+		socket:   true,
+	}, {
 		in:       "select (select 42) from dual",
 		expected: "select 42 as `(select 42 from dual)` from dual",
 	}, {
@@ -198,6 +202,7 @@ func TestRewrites(in *testing.T) {
 		rawGTID:                     true,
 		rawTimeout:                  true,
 		sessTrackGTID:               true,
+		socket:                      true,
 	}, {
 		in:                          "SHOW GLOBAL VARIABLES",
 		expected:                    "SHOW GLOBAL VARIABLES",
@@ -215,6 +220,7 @@ func TestRewrites(in *testing.T) {
 		rawGTID:                     true,
 		rawTimeout:                  true,
 		sessTrackGTID:               true,
+		socket:                      true,
 	}}
 
 	for _, tc := range tests {
@@ -251,6 +257,7 @@ func TestRewrites(in *testing.T) {
 			assert.Equal(tc.sessTrackGTID, result.NeedsSysVar(sysvars.SessionTrackGTIDs.Name), "should need sessTrackGTID")
 			assert.Equal(tc.version, result.NeedsSysVar(sysvars.Version.Name), "should need Vitess version")
 			assert.Equal(tc.versionComment, result.NeedsSysVar(sysvars.VersionComment.Name), "should need Vitess version")
+			assert.Equal(tc.socket, result.NeedsSysVar(sysvars.Socket.Name), "should need :__vtsocket")
 		})
 	}
 }
