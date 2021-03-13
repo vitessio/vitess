@@ -4506,3 +4506,7 @@
 2021-03-12T18:02:28Z,local_example,https://github.com/vitessio/vitess/actions/runs/647058177
 2021-03-13T01:09:55Z,unit_race,https://github.com/vitessio/vitess/actions/runs/647929856
 2021-03-13T06:29:21Z,Cluster (14),https://github.com/vitessio/vitess/actions/runs/648455525
+2021-03-13T07:43:49Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/648573963
+2021-03-13T07:43:49Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/648573976
+2021-03-13T07:43:49Z,golangci-lint,https://github.com/vitessio/vitess/actions/runs/648573965
+2021-03-13T07:43:49Z,unit_race,https://github.com/vitessio/vitess/actions/runs/648573942
