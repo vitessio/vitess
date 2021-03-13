@@ -108,11 +108,7 @@ func CloneLeafSlice(n LeafSlice) LeafSlice {
 
 // CloneRefOfNoCloneType creates a deep clone of the input.
 func CloneRefOfNoCloneType(n *NoCloneType) *NoCloneType {
-	if n == nil {
-		return nil
-	}
-	out := *n
-	return &out
+	return n
 }
 
 // CloneRefOfRefContainer creates a deep clone of the input.
