@@ -135,11 +135,11 @@ func ParseNextStrictDDL(tokenizer *Tokenizer) (Statement, error) {
 }
 
 func parseNext(tokenizer *Tokenizer, strict bool) (Statement, error) {
-	if tokenizer.lastChar == ';' {
-		tokenizer.next()
+	if tokenizer.cur() == ';' {
+		tokenizer.skip(1)
 		tokenizer.skipBlank()
 	}
-	if tokenizer.lastChar == eofChar {
+	if tokenizer.cur() == eofChar {
 		return nil, io.EOF
 	}
 
@@ -176,7 +176,7 @@ func SplitStatement(blob string) (string, string, error) {
 		return "", "", tokenizer.LastError
 	}
 	if tkn == ';' {
-		return blob[:tokenizer.Position-2], blob[tokenizer.Position-1:], nil
+		return blob[:tokenizer.Pos-1], blob[tokenizer.Pos:], nil
 	}
 	return blob, "", nil
 }
@@ -196,14 +196,14 @@ loop:
 		tkn, _ = tokenizer.Scan()
 		switch tkn {
 		case ';':
-			stmt = blob[stmtBegin : tokenizer.Position-2]
+			stmt = blob[stmtBegin : tokenizer.Pos-1]
 			if !emptyStatement {
 				pieces = append(pieces, stmt)
 				emptyStatement = true
 			}
-			stmtBegin = tokenizer.Position - 1
+			stmtBegin = tokenizer.Pos
 		case 0, eofChar:
-			blobTail := tokenizer.Position - 2
+			blobTail := tokenizer.Pos - 1
 			if stmtBegin < blobTail {
 				stmt = blob[stmtBegin : blobTail+1]
 				if !emptyStatement {

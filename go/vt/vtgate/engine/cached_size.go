@@ -72,6 +72,18 @@ func (cached *Concatenate) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *DBDDL) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(32)
+	}
+	// field name string
+	size += int64(len(cached.name))
+	return size
+}
 func (cached *DDL) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)

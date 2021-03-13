@@ -135,8 +135,6 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 			return nil, err
 		}
 		return qr, nil
-	case p.PlanSelectLock:
-		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%s disallowed outside transaction", qre.plan.PlanID.String())
 	case p.PlanOtherRead, p.PlanOtherAdmin, p.PlanFlush:
 		return qre.execOther()
 	case p.PlanSavepoint, p.PlanRelease, p.PlanSRollback:
@@ -208,7 +206,7 @@ func (qre *QueryExecutor) txConnExec(conn *StatefulConnection) (*sqltypes.Result
 		return qre.execStatefulConn(conn, qre.query, true)
 	case p.PlanSavepoint, p.PlanRelease, p.PlanSRollback:
 		return qre.execStatefulConn(conn, qre.query, true)
-	case p.PlanSelect, p.PlanSelectLock, p.PlanSelectImpossible, p.PlanShow:
+	case p.PlanSelect, p.PlanSelectImpossible, p.PlanShow:
 		maxrows := qre.getSelectLimit()
 		qre.bindVars["#maxLimit"] = sqltypes.Int64BindVariable(maxrows + 1)
 		if qre.bindVars[sqltypes.BvReplaceSchemaName] != nil {
