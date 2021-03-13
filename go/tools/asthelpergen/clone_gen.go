@@ -184,7 +184,7 @@ func (c *cloneGen) makeInterfaceCloneMethod(t types.Type, iface *types.Interface
 	return nil
 }
 
-func (c *cloneGen) makePtrCloneMethod(t types.Type, ptr *types.Pointer) error {
+func (c *cloneGen) makePtrCloneMethod(t types.Type, ptr *types.Pointer) {
 	receiveType := types.TypeString(t, noQualifier)
 
 	funcName := "Clone" + printableTypeName(t)
@@ -194,8 +194,6 @@ func (c *cloneGen) makePtrCloneMethod(t types.Type, ptr *types.Pointer) error {
 			jen.Id("out").Op(":=").Add(c.readValueOfType(ptr.Elem(), jen.Op("*").Id("n"))),
 			jen.Return(jen.Op("&").Id("out")),
 		))
-
-	return nil
 }
 
 func (c *cloneGen) createFile(pkgName string) (string, *jen.File) {
@@ -241,13 +239,15 @@ func isBasic(t types.Type) bool {
 }
 
 func (c *cloneGen) tryStruct(underlying, t types.Type) bool {
-	_, ok := underlying.(*types.Struct)
+	strct, ok := underlying.(*types.Struct)
 	if !ok {
 		return false
 	}
 
-	err := c.makeStructCloneMethod(t)
-	if err != nil {
+	if err := c.makeStructCloneMethod(t); err != nil {
+		log.Fatalf("%v", err)
+	}
+	if err := c.makeStructEqualsMethod(t, strct); err != nil {
 		log.Fatalf("%v", err)
 	}
 	return true
@@ -258,15 +258,21 @@ func (c *cloneGen) tryPtr(underlying, t types.Type) bool {
 		return false
 	}
 
-	if strct, isStruct := ptr.Elem().Underlying().(*types.Struct); isStruct {
-		c.makePtrToStructCloneMethod(t, strct)
+	ptrToType := ptr.Elem().Underlying()
+
+	switch ptrToType := ptrToType.(type) {
+	case *types.Struct:
+		c.makePtrToStructCloneMethod(t, ptrToType)
+		c.makePtrToStructEqualsMethod(t, ptrToType)
 		return true
+	case *types.Basic:
+		c.makePtrToBasicEqualsMethod(t)
+		c.makePtrCloneMethod(t, ptr)
+		return true
+	default:
+		c.makePtrCloneMethod(t, ptr)
 	}
 
-	err := c.makePtrCloneMethod(t, ptr)
-	if err != nil {
-		panic(err) // todo
-	}
 	return true
 }
 
@@ -321,9 +327,12 @@ func (c *cloneGen) tryInterface(underlying, t types.Type) bool {
 		return false
 	}
 
-	err := c.makeInterfaceCloneMethod(t, iface)
-	if err != nil {
-		panic(err) // todo
+	if err := c.makeInterfaceCloneMethod(t, iface); err != nil {
+		log.Fatalf("%v", err)
+	}
+
+	if err := c.makeInterfaceEqualsMethod(t, iface); err != nil {
+		log.Fatalf("%v", err)
 	}
 	return true
 }
@@ -334,8 +343,10 @@ func (c *cloneGen) trySlice(underlying, t types.Type) bool {
 		return false
 	}
 
-	err := c.makeSliceCloneMethod(t, slice)
-	if err != nil {
+	if err := c.makeSliceCloneMethod(t, slice); err != nil {
+		log.Fatalf("%v", err)
+	}
+	if err := c.makeSliceEqualsMethod(t, slice); err != nil {
 		log.Fatalf("%v", err)
 	}
 	return true
