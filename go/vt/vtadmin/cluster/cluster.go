@@ -20,6 +20,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"math/rand"
 	"strings"
 	"sync"
 	"time"
@@ -417,6 +418,181 @@ func (c *Cluster) GetSchema(ctx context.Context, req *vtctldatapb.GetSchemaReque
 		Keyspace:         tablet.Tablet.Keyspace,
 		TableDefinitions: schema.Schema.TableDefinitions,
 	}, nil
+}
+
+// GetSchemaOptions blah blah TODO document this.
+type GetSchemaOptions struct {
+	Tablets     []*vtadminpb.Tablet
+	BaseRequest *vtctldatapb.GetSchemaRequest
+	SizeOpts    *vtadminpb.GetSchemaTableSizeOptions
+}
+
+// GetSchemaForKeyspace blah blah TODO: unify this with GetSchema.
+func (c *Cluster) GetSchemaForKeyspace(ctx context.Context, keyspace string, opts GetSchemaOptions) (*vtadminpb.Schema, error) {
+	if len(opts.Tablets) == 0 {
+		// Fetch all tablets for the keyspace.
+		var err error
+
+		opts.Tablets, err = c.FindTablets(ctx, func(tablet *vtadminpb.Tablet) bool {
+			return tablet.Tablet.Keyspace == keyspace
+		}, -1)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if opts.SizeOpts == nil {
+		opts.SizeOpts = &vtadminpb.GetSchemaTableSizeOptions{
+			AggregateSizes:          false,
+			IncludeNonServingShards: false,
+		}
+	}
+
+	if opts.BaseRequest == nil {
+		opts.BaseRequest = &vtctldatapb.GetSchemaRequest{}
+	}
+
+	// TODO: move this to vtadminproto and export
+	filterTablets := func(cond func(tablet *vtadminpb.Tablet) bool) []*vtadminpb.Tablet {
+		tablets := make([]*vtadminpb.Tablet, 0, len(opts.Tablets))
+
+		for _, tablet := range opts.Tablets {
+			if cond(tablet) {
+				tablets = append(tablets, tablet)
+			}
+		}
+
+		return tablets
+	}
+
+	var tabletsToQuery []*vtadminpb.Tablet
+
+	if opts.SizeOpts.AggregateSizes {
+		resp, err := c.Vtctld.FindAllShardsInKeyspace(ctx, &vtctldatapb.FindAllShardsInKeyspaceRequest{
+			Keyspace: keyspace,
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		for _, shard := range resp.Shards {
+			if !shard.Shard.IsMasterServing {
+				if !opts.SizeOpts.IncludeNonServingShards {
+					log.Infof("log thing about skipping this shard")
+					continue
+				}
+			}
+
+			shardTablets := filterTablets(func(tablet *vtadminpb.Tablet) bool {
+				return tablet.Tablet.Shard == shard.Name && tablet.State == vtadminpb.Tablet_SERVING
+			})
+
+			if len(shardTablets) == 0 {
+				return nil, fmt.Errorf("no serving tablet for shard %s/%s", shard.Keyspace, shard.Name)
+			}
+
+			randomServingTablet := shardTablets[rand.Intn(len(shardTablets))]
+			tabletsToQuery = append(tabletsToQuery, randomServingTablet)
+		}
+	} else {
+		keyspaceTablets := filterTablets(func(tablet *vtadminpb.Tablet) bool {
+			return tablet.Tablet.Keyspace == keyspace && tablet.State == vtadminpb.Tablet_SERVING
+		})
+
+		if len(keyspaceTablets) == 0 {
+			// consider how to include info about the tablets we looked at, but
+			// that's also potentially a very long list .... maybe we should
+			// just log it (yes, do that).
+			return nil, fmt.Errorf("no serving tablet for keyspace %s", keyspace)
+		}
+
+		randomServingTablet := keyspaceTablets[rand.Intn(len(keyspaceTablets))]
+		tabletsToQuery = append(tabletsToQuery, randomServingTablet)
+	}
+
+	var (
+		m      sync.Mutex
+		wg     sync.WaitGroup
+		rec    concurrency.AllErrorRecorder
+		schema = &vtadminpb.Schema{
+			Cluster:    c.ToProto(),
+			Keyspace:   keyspace,
+			TableSizes: map[string]*vtadminpb.Schema_TableSize{},
+		}
+		// Instead of starting at false, we start with whatever the base request
+		// specified. If we have exactly one tablet to query(i.e. we're no
+		// doing multi-shard aggregation), it's possible the request was to
+		// literally just get the table sizes; we shouldn't assume. If we have
+		// more than one tablet to query, then we are doing size aggregation,
+		// and we'll flip this to true after spawning the first GetSchema rpc.
+		sizesOnly = opts.BaseRequest.TableSizesOnly
+	)
+
+	for _, tablet := range tabletsToQuery {
+		wg.Add(1)
+
+		go func(tablet *vtadminpb.Tablet, sizesOnly bool) {
+			defer wg.Done()
+
+			req := *opts.BaseRequest
+			req.TableSizesOnly = sizesOnly
+			req.TabletAlias = tablet.Tablet.Alias
+
+			resp, err := c.Vtctld.GetSchema(ctx, &req)
+			if err != nil {
+				rec.RecordError(err) // TODO: more context
+
+				return
+			}
+
+			m.Lock()
+			defer m.Unlock()
+
+			if !sizesOnly {
+				schema.TableDefinitions = resp.Schema.TableDefinitions
+			}
+
+			for _, td := range resp.Schema.TableDefinitions {
+				tableSize, ok := schema.TableSizes[td.Name]
+				if !ok {
+					tableSize = &vtadminpb.Schema_TableSize{
+						ByShard: map[string]*vtadminpb.Schema_ShardTableSize{},
+					}
+					schema.TableSizes[td.Name] = tableSize
+				}
+
+				if _, ok = tableSize.ByShard[tablet.Tablet.Shard]; ok {
+					// We managed to query for the same shard twice, that's ...
+					// weird. but do we care? maybe just log? idk!
+					log.Warningf("log message goes here")
+
+					return
+				}
+
+				tableSize.RowCount += int64(td.RowCount)     // TODO: change proto to uint64
+				tableSize.DataLength += int64(td.DataLength) // TODO: cahnge proto to uint64
+
+				tableSize.ByShard[tablet.Tablet.Shard] = &vtadminpb.Schema_ShardTableSize{
+					// TODO: same thing about uint64 here
+					RowCount:   int64(td.RowCount),
+					DataLength: int64(td.DataLength),
+				}
+			}
+		}(tablet, sizesOnly)
+
+		// If we have more than one tablet to query, we definitely don't want to
+		// get more than the sizes twice, so invariably set this to true for
+		// subsequent iterations
+		sizesOnly = true
+	}
+
+	wg.Wait()
+
+	if rec.HasErrors() {
+		return nil, rec.Error()
+	}
+
+	return schema, nil
 }
 
 // GetVSchema returns the vschema for a given keyspace in this cluster. The
