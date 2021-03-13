@@ -1576,7 +1576,7 @@ $root.vtadmin = (function() {
              * @memberof vtadmin.Schema.ShardTableSize
              * @instance
              */
-            ShardTableSize.prototype.row_count = $util.Long ? $util.Long.fromBits(0,0,false) : 0;
+            ShardTableSize.prototype.row_count = $util.Long ? $util.Long.fromBits(0,0,true) : 0;
 
             /**
              * ShardTableSize data_length.
@@ -1584,7 +1584,7 @@ $root.vtadmin = (function() {
              * @memberof vtadmin.Schema.ShardTableSize
              * @instance
              */
-            ShardTableSize.prototype.data_length = $util.Long ? $util.Long.fromBits(0,0,false) : 0;
+            ShardTableSize.prototype.data_length = $util.Long ? $util.Long.fromBits(0,0,true) : 0;
 
             /**
              * Creates a new ShardTableSize instance using the specified properties.
@@ -1611,9 +1611,9 @@ $root.vtadmin = (function() {
                 if (!writer)
                     writer = $Writer.create();
                 if (message.row_count != null && Object.hasOwnProperty.call(message, "row_count"))
-                    writer.uint32(/* id 1, wireType 0 =*/8).int64(message.row_count);
+                    writer.uint32(/* id 1, wireType 0 =*/8).uint64(message.row_count);
                 if (message.data_length != null && Object.hasOwnProperty.call(message, "data_length"))
-                    writer.uint32(/* id 2, wireType 0 =*/16).int64(message.data_length);
+                    writer.uint32(/* id 2, wireType 0 =*/16).uint64(message.data_length);
                 return writer;
             };
 
@@ -1649,10 +1649,10 @@ $root.vtadmin = (function() {
                     var tag = reader.uint32();
                     switch (tag >>> 3) {
                     case 1:
-                        message.row_count = reader.int64();
+                        message.row_count = reader.uint64();
                         break;
                     case 2:
-                        message.data_length = reader.int64();
+                        message.data_length = reader.uint64();
                         break;
                     default:
                         reader.skipType(tag & 7);
@@ -1712,22 +1712,22 @@ $root.vtadmin = (function() {
                 var message = new $root.vtadmin.Schema.ShardTableSize();
                 if (object.row_count != null)
                     if ($util.Long)
-                        (message.row_count = $util.Long.fromValue(object.row_count)).unsigned = false;
+                        (message.row_count = $util.Long.fromValue(object.row_count)).unsigned = true;
                     else if (typeof object.row_count === "string")
                         message.row_count = parseInt(object.row_count, 10);
                     else if (typeof object.row_count === "number")
                         message.row_count = object.row_count;
                     else if (typeof object.row_count === "object")
-                        message.row_count = new $util.LongBits(object.row_count.low >>> 0, object.row_count.high >>> 0).toNumber();
+                        message.row_count = new $util.LongBits(object.row_count.low >>> 0, object.row_count.high >>> 0).toNumber(true);
                 if (object.data_length != null)
                     if ($util.Long)
-                        (message.data_length = $util.Long.fromValue(object.data_length)).unsigned = false;
+                        (message.data_length = $util.Long.fromValue(object.data_length)).unsigned = true;
                     else if (typeof object.data_length === "string")
                         message.data_length = parseInt(object.data_length, 10);
                     else if (typeof object.data_length === "number")
                         message.data_length = object.data_length;
                     else if (typeof object.data_length === "object")
-                        message.data_length = new $util.LongBits(object.data_length.low >>> 0, object.data_length.high >>> 0).toNumber();
+                        message.data_length = new $util.LongBits(object.data_length.low >>> 0, object.data_length.high >>> 0).toNumber(true);
                 return message;
             };
 
@@ -1746,12 +1746,12 @@ $root.vtadmin = (function() {
                 var object = {};
                 if (options.defaults) {
                     if ($util.Long) {
-                        var long = new $util.Long(0, 0, false);
+                        var long = new $util.Long(0, 0, true);
                         object.row_count = options.longs === String ? long.toString() : options.longs === Number ? long.toNumber() : long;
                     } else
                         object.row_count = options.longs === String ? "0" : 0;
                     if ($util.Long) {
-                        var long = new $util.Long(0, 0, false);
+                        var long = new $util.Long(0, 0, true);
                         object.data_length = options.longs === String ? long.toString() : options.longs === Number ? long.toNumber() : long;
                     } else
                         object.data_length = options.longs === String ? "0" : 0;
@@ -1760,12 +1760,12 @@ $root.vtadmin = (function() {
                     if (typeof message.row_count === "number")
                         object.row_count = options.longs === String ? String(message.row_count) : message.row_count;
                     else
-                        object.row_count = options.longs === String ? $util.Long.prototype.toString.call(message.row_count) : options.longs === Number ? new $util.LongBits(message.row_count.low >>> 0, message.row_count.high >>> 0).toNumber() : message.row_count;
+                        object.row_count = options.longs === String ? $util.Long.prototype.toString.call(message.row_count) : options.longs === Number ? new $util.LongBits(message.row_count.low >>> 0, message.row_count.high >>> 0).toNumber(true) : message.row_count;
                 if (message.data_length != null && message.hasOwnProperty("data_length"))
                     if (typeof message.data_length === "number")
                         object.data_length = options.longs === String ? String(message.data_length) : message.data_length;
                     else
-                        object.data_length = options.longs === String ? $util.Long.prototype.toString.call(message.data_length) : options.longs === Number ? new $util.LongBits(message.data_length.low >>> 0, message.data_length.high >>> 0).toNumber() : message.data_length;
+                        object.data_length = options.longs === String ? $util.Long.prototype.toString.call(message.data_length) : options.longs === Number ? new $util.LongBits(message.data_length.low >>> 0, message.data_length.high >>> 0).toNumber(true) : message.data_length;
                 return object;
             };
 
@@ -1816,7 +1816,7 @@ $root.vtadmin = (function() {
              * @memberof vtadmin.Schema.TableSize
              * @instance
              */
-            TableSize.prototype.row_count = $util.Long ? $util.Long.fromBits(0,0,false) : 0;
+            TableSize.prototype.row_count = $util.Long ? $util.Long.fromBits(0,0,true) : 0;
 
             /**
              * TableSize data_length.
@@ -1824,7 +1824,7 @@ $root.vtadmin = (function() {
              * @memberof vtadmin.Schema.TableSize
              * @instance
              */
-            TableSize.prototype.data_length = $util.Long ? $util.Long.fromBits(0,0,false) : 0;
+            TableSize.prototype.data_length = $util.Long ? $util.Long.fromBits(0,0,true) : 0;
 
             /**
              * TableSize by_shard.
@@ -1859,9 +1859,9 @@ $root.vtadmin = (function() {
                 if (!writer)
                     writer = $Writer.create();
                 if (message.row_count != null && Object.hasOwnProperty.call(message, "row_count"))
-                    writer.uint32(/* id 1, wireType 0 =*/8).int64(message.row_count);
+                    writer.uint32(/* id 1, wireType 0 =*/8).uint64(message.row_count);
                 if (message.data_length != null && Object.hasOwnProperty.call(message, "data_length"))
-                    writer.uint32(/* id 2, wireType 0 =*/16).int64(message.data_length);
+                    writer.uint32(/* id 2, wireType 0 =*/16).uint64(message.data_length);
                 if (message.by_shard != null && Object.hasOwnProperty.call(message, "by_shard"))
                     for (var keys = Object.keys(message.by_shard), i = 0; i < keys.length; ++i) {
                         writer.uint32(/* id 3, wireType 2 =*/26).fork().uint32(/* id 1, wireType 2 =*/10).string(keys[i]);
@@ -1902,10 +1902,10 @@ $root.vtadmin = (function() {
                     var tag = reader.uint32();
                     switch (tag >>> 3) {
                     case 1:
-                        message.row_count = reader.int64();
+                        message.row_count = reader.uint64();
                         break;
                     case 2:
-                        message.data_length = reader.int64();
+                        message.data_length = reader.uint64();
                         break;
                     case 3:
                         if (message.by_shard === $util.emptyObject)
@@ -1997,22 +1997,22 @@ $root.vtadmin = (function() {
                 var message = new $root.vtadmin.Schema.TableSize();
                 if (object.row_count != null)
                     if ($util.Long)
-                        (message.row_count = $util.Long.fromValue(object.row_count)).unsigned = false;
+                        (message.row_count = $util.Long.fromValue(object.row_count)).unsigned = true;
                     else if (typeof object.row_count === "string")
                         message.row_count = parseInt(object.row_count, 10);
                     else if (typeof object.row_count === "number")
                         message.row_count = object.row_count;
                     else if (typeof object.row_count === "object")
-                        message.row_count = new $util.LongBits(object.row_count.low >>> 0, object.row_count.high >>> 0).toNumber();
+                        message.row_count = new $util.LongBits(object.row_count.low >>> 0, object.row_count.high >>> 0).toNumber(true);
                 if (object.data_length != null)
                     if ($util.Long)
-                        (message.data_length = $util.Long.fromValue(object.data_length)).unsigned = false;
+                        (message.data_length = $util.Long.fromValue(object.data_length)).unsigned = true;
                     else if (typeof object.data_length === "string")
                         message.data_length = parseInt(object.data_length, 10);
                     else if (typeof object.data_length === "number")
                         message.data_length = object.data_length;
                     else if (typeof object.data_length === "object")
-                        message.data_length = new $util.LongBits(object.data_length.low >>> 0, object.data_length.high >>> 0).toNumber();
+                        message.data_length = new $util.LongBits(object.data_length.low >>> 0, object.data_length.high >>> 0).toNumber(true);
                 if (object.by_shard) {
                     if (typeof object.by_shard !== "object")
                         throw TypeError(".vtadmin.Schema.TableSize.by_shard: object expected");
@@ -2043,12 +2043,12 @@ $root.vtadmin = (function() {
                     object.by_shard = {};
                 if (options.defaults) {
                     if ($util.Long) {
-                        var long = new $util.Long(0, 0, false);
+                        var long = new $util.Long(0, 0, true);
                         object.row_count = options.longs === String ? long.toString() : options.longs === Number ? long.toNumber() : long;
                     } else
                         object.row_count = options.longs === String ? "0" : 0;
                     if ($util.Long) {
-                        var long = new $util.Long(0, 0, false);
+                        var long = new $util.Long(0, 0, true);
                         object.data_length = options.longs === String ? long.toString() : options.longs === Number ? long.toNumber() : long;
                     } else
                         object.data_length = options.longs === String ? "0" : 0;
@@ -2057,12 +2057,12 @@ $root.vtadmin = (function() {
                     if (typeof message.row_count === "number")
                         object.row_count = options.longs === String ? String(message.row_count) : message.row_count;
                     else
-                        object.row_count = options.longs === String ? $util.Long.prototype.toString.call(message.row_count) : options.longs === Number ? new $util.LongBits(message.row_count.low >>> 0, message.row_count.high >>> 0).toNumber() : message.row_count;
+                        object.row_count = options.longs === String ? $util.Long.prototype.toString.call(message.row_count) : options.longs === Number ? new $util.LongBits(message.row_count.low >>> 0, message.row_count.high >>> 0).toNumber(true) : message.row_count;
                 if (message.data_length != null && message.hasOwnProperty("data_length"))
                     if (typeof message.data_length === "number")
                         object.data_length = options.longs === String ? String(message.data_length) : message.data_length;
                     else
-                        object.data_length = options.longs === String ? $util.Long.prototype.toString.call(message.data_length) : options.longs === Number ? new $util.LongBits(message.data_length.low >>> 0, message.data_length.high >>> 0).toNumber() : message.data_length;
+                        object.data_length = options.longs === String ? $util.Long.prototype.toString.call(message.data_length) : options.longs === Number ? new $util.LongBits(message.data_length.low >>> 0, message.data_length.high >>> 0).toNumber(true) : message.data_length;
                 var keys2;
                 if (message.by_shard && (keys2 = Object.keys(message.by_shard)).length) {
                     object.by_shard = {};
