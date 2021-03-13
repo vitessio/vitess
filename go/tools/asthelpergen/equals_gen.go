@@ -62,7 +62,7 @@ func (c *cloneGen) makeInterfaceEqualsMethod(t types.Type, iface *types.Interfac
 	typeString := types.TypeString(t, noQualifier)
 	funcName := equalsName + printableTypeName(t)
 	funcDecl := jen.Func().Id(funcName).Call(jen.List(jen.Id("inA"), jen.Id("inB")).Id(typeString)).Bool().Block(stmts...)
-	c.addFunc(funcName, funcDecl)
+	c.addFunc(funcName, equals, funcDecl)
 
 	return nil
 }
@@ -97,7 +97,7 @@ func (c *cloneGen) makeStructEqualsMethod(t types.Type, strct *types.Struct) err
 	funcName := equalsName + printableTypeName(t)
 	funcDecl := jen.Func().Id(funcName).Call(jen.List(jen.Id("a"), jen.Id("b")).Id(typeString)).Bool().
 		Block(jen.Return(c.compareAllStructFields(strct)))
-	c.addFunc(funcName, funcDecl)
+	c.addFunc(funcName, equals, funcDecl)
 
 	return nil
 }
@@ -156,7 +156,7 @@ func (c *cloneGen) makePtrToStructEqualsMethod(t types.Type, strct *types.Struct
 		jen.Return(c.compareAllStructFields(strct)),
 	}
 
-	c.addFunc(funcName, funcDeclaration.Block(stmts...))
+	c.addFunc(funcName, equals, funcDeclaration.Block(stmts...))
 }
 func (c *cloneGen) makePtrToBasicEqualsMethod(t types.Type) {
 	/*
@@ -180,7 +180,7 @@ func (c *cloneGen) makePtrToBasicEqualsMethod(t types.Type) {
 		jen.If(jen.Id("a == nil").Op("||").Id("b == nil")).Block(jen.Return(jen.False())),
 		jen.Return(jen.Id("*a == *b")),
 	}
-	c.addFunc(funcName, funcDeclaration.Block(stmts...))
+	c.addFunc(funcName, equals, funcDeclaration.Block(stmts...))
 }
 
 func (c *cloneGen) makeSliceEqualsMethod(t types.Type, slice *types.Slice) error {
@@ -207,6 +207,6 @@ func (c *cloneGen) makeSliceEqualsMethod(t types.Type, slice *types.Slice) error
 	typeString := types.TypeString(t, noQualifier)
 	funcName := equalsName + printableTypeName(t)
 	funcDecl := jen.Func().Id(funcName).Call(jen.List(jen.Id("a"), jen.Id("b")).Id(typeString)).Bool().Block(stmts...)
-	c.addFunc(funcName, funcDecl)
+	c.addFunc(funcName, equals, funcDecl)
 	return nil
 }

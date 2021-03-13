@@ -53,7 +53,7 @@ func CloneAST(in AST) AST {
 	}
 }
 
-// EqualsAST creates a deep clone of the input.
+// EqualsAST does deep equals between the two objects.
 func EqualsAST(inA, inB AST) bool {
 	if inA == nil && inB == nil {
 		return true
@@ -154,7 +154,7 @@ func CloneSubIface(in SubIface) SubIface {
 	}
 }
 
-// EqualsSubIface creates a deep clone of the input.
+// EqualsSubIface does deep equals between the two objects.
 func EqualsSubIface(inA, inB SubIface) bool {
 	if inA == nil && inB == nil {
 		return true
@@ -182,7 +182,7 @@ func CloneBytes(n Bytes) Bytes {
 	return res
 }
 
-// EqualsBytes creates a deep clone of the input.
+// EqualsBytes does deep equals between the two objects.
 func EqualsBytes(a, b Bytes) bool {
 	if len(a) != len(b) {
 		return false
@@ -200,7 +200,7 @@ func CloneInterfaceContainer(n InterfaceContainer) InterfaceContainer {
 	return *CloneRefOfInterfaceContainer(&n)
 }
 
-// EqualsInterfaceContainer creates a deep clone of the input.
+// EqualsInterfaceContainer does deep equals between the two objects.
 func EqualsInterfaceContainer(a, b InterfaceContainer) bool {
 	return true
 }
@@ -214,7 +214,7 @@ func CloneInterfaceSlice(n InterfaceSlice) InterfaceSlice {
 	return res
 }
 
-// EqualsInterfaceSlice creates a deep clone of the input.
+// EqualsInterfaceSlice does deep equals between the two objects.
 func EqualsInterfaceSlice(a, b InterfaceSlice) bool {
 	if len(a) != len(b) {
 		return false
@@ -236,7 +236,7 @@ func CloneRefOfLeaf(n *Leaf) *Leaf {
 	return &out
 }
 
-// EqualsRefOfLeaf creates a deep clone of the input.
+// EqualsRefOfLeaf does deep equals between the two objects.
 func EqualsRefOfLeaf(a, b *Leaf) bool {
 	if a == b {
 		return true
@@ -256,7 +256,7 @@ func CloneLeafSlice(n LeafSlice) LeafSlice {
 	return res
 }
 
-// EqualsLeafSlice creates a deep clone of the input.
+// EqualsLeafSlice does deep equals between the two objects.
 func EqualsLeafSlice(a, b LeafSlice) bool {
 	if len(a) != len(b) {
 		return false
@@ -274,7 +274,7 @@ func CloneRefOfNoCloneType(n *NoCloneType) *NoCloneType {
 	return n
 }
 
-// EqualsRefOfNoCloneType creates a deep clone of the input.
+// EqualsRefOfNoCloneType does deep equals between the two objects.
 func EqualsRefOfNoCloneType(a, b *NoCloneType) bool {
 	if a == b {
 		return true
@@ -296,7 +296,7 @@ func CloneRefOfRefContainer(n *RefContainer) *RefContainer {
 	return &out
 }
 
-// EqualsRefOfRefContainer creates a deep clone of the input.
+// EqualsRefOfRefContainer does deep equals between the two objects.
 func EqualsRefOfRefContainer(a, b *RefContainer) bool {
 	if a == b {
 		return true
@@ -321,7 +321,7 @@ func CloneRefOfRefSliceContainer(n *RefSliceContainer) *RefSliceContainer {
 	return &out
 }
 
-// EqualsRefOfRefSliceContainer creates a deep clone of the input.
+// EqualsRefOfRefSliceContainer does deep equals between the two objects.
 func EqualsRefOfRefSliceContainer(a, b *RefSliceContainer) bool {
 	if a == b {
 		return true
@@ -345,7 +345,7 @@ func CloneRefOfSubImpl(n *SubImpl) *SubImpl {
 	return &out
 }
 
-// EqualsRefOfSubImpl creates a deep clone of the input.
+// EqualsRefOfSubImpl does deep equals between the two objects.
 func EqualsRefOfSubImpl(a, b *SubImpl) bool {
 	if a == b {
 		return true
@@ -362,7 +362,7 @@ func CloneValueContainer(n ValueContainer) ValueContainer {
 	return *CloneRefOfValueContainer(&n)
 }
 
-// EqualsValueContainer creates a deep clone of the input.
+// EqualsValueContainer does deep equals between the two objects.
 func EqualsValueContainer(a, b ValueContainer) bool {
 	return a.NotASTType == b.NotASTType &&
 		EqualsAST(a.ASTType, b.ASTType) &&
@@ -374,7 +374,7 @@ func CloneValueSliceContainer(n ValueSliceContainer) ValueSliceContainer {
 	return *CloneRefOfValueSliceContainer(&n)
 }
 
-// EqualsValueSliceContainer creates a deep clone of the input.
+// EqualsValueSliceContainer does deep equals between the two objects.
 func EqualsValueSliceContainer(a, b ValueSliceContainer) bool {
 	return EqualsSliceOfAST(a.ASTElements, b.ASTElements) &&
 		EqualsSliceOfInt(a.NotASTElements, b.NotASTElements) &&
@@ -391,7 +391,7 @@ func CloneRefOfInterfaceContainer(n *InterfaceContainer) *InterfaceContainer {
 	return &out
 }
 
-// EqualsRefOfInterfaceContainer creates a deep clone of the input.
+// EqualsRefOfInterfaceContainer does deep equals between the two objects.
 func EqualsRefOfInterfaceContainer(a, b *InterfaceContainer) bool {
 	if a == b {
 		return true
@@ -411,7 +411,7 @@ func CloneSliceOfAST(n []AST) []AST {
 	return res
 }
 
-// EqualsSliceOfAST creates a deep clone of the input.
+// EqualsSliceOfAST does deep equals between the two objects.
 func EqualsSliceOfAST(a, b []AST) bool {
 	if len(a) != len(b) {
 		return false
@@ -431,7 +431,7 @@ func CloneSliceOfInt(n []int) []int {
 	return res
 }
 
-// EqualsSliceOfInt creates a deep clone of the input.
+// EqualsSliceOfInt does deep equals between the two objects.
 func EqualsSliceOfInt(a, b []int) bool {
 	if len(a) != len(b) {
 		return false
@@ -453,7 +453,7 @@ func CloneSliceOfRefOfLeaf(n []*Leaf) []*Leaf {
 	return res
 }
 
-// EqualsSliceOfRefOfLeaf creates a deep clone of the input.
+// EqualsSliceOfRefOfLeaf does deep equals between the two objects.
 func EqualsSliceOfRefOfLeaf(a, b []*Leaf) bool {
 	if len(a) != len(b) {
 		return false
@@ -466,7 +466,7 @@ func EqualsSliceOfRefOfLeaf(a, b []*Leaf) bool {
 	return true
 }
 
-// EqualsRefOfBool creates a deep clone of the input.
+// EqualsRefOfBool does deep equals between the two objects.
 func EqualsRefOfBool(a, b *bool) bool {
 	if a == b {
 		return true
@@ -497,7 +497,7 @@ func CloneRefOfValueContainer(n *ValueContainer) *ValueContainer {
 	return &out
 }
 
-// EqualsRefOfValueContainer creates a deep clone of the input.
+// EqualsRefOfValueContainer does deep equals between the two objects.
 func EqualsRefOfValueContainer(a, b *ValueContainer) bool {
 	if a == b {
 		return true
@@ -522,7 +522,7 @@ func CloneRefOfValueSliceContainer(n *ValueSliceContainer) *ValueSliceContainer 
 	return &out
 }
 
-// EqualsRefOfValueSliceContainer creates a deep clone of the input.
+// EqualsRefOfValueSliceContainer does deep equals between the two objects.
 func EqualsRefOfValueSliceContainer(a, b *ValueSliceContainer) bool {
 	if a == b {
 		return true
