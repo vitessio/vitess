@@ -437,7 +437,7 @@ func (c *Cluster) GetSchemaForKeyspace(ctx context.Context, keyspace string, opt
 			return tablet.Tablet.Keyspace == keyspace
 		}, -1)
 		if err != nil {
-			return nil, err // TODO: wrap this
+			return nil, fmt.Errorf("%w for keyspace %s", errors.ErrNoTablet, keyspace)
 		}
 	}
 
@@ -463,7 +463,7 @@ func (c *Cluster) GetSchemaForKeyspace(ctx context.Context, keyspace string, opt
 			Keyspace: keyspace,
 		})
 		if err != nil {
-			return nil, err
+			return nil, err // TODO: wrap this
 		}
 
 		for _, shard := range resp.Shards {
@@ -479,7 +479,7 @@ func (c *Cluster) GetSchemaForKeyspace(ctx context.Context, keyspace string, opt
 			}, opts.Tablets, len(opts.Tablets))
 
 			if len(shardTablets) == 0 {
-				return nil, fmt.Errorf("no serving tablet for shard %s/%s", shard.Keyspace, shard.Name)
+				return nil, fmt.Errorf("%w for shard %s/%s", errors.ErrNoServingTablet, shard.Keyspace, shard.Name)
 			}
 
 			randomServingTablet := shardTablets[rand.Intn(len(shardTablets))]
@@ -494,7 +494,7 @@ func (c *Cluster) GetSchemaForKeyspace(ctx context.Context, keyspace string, opt
 			// consider how to include info about the tablets we looked at, but
 			// that's also potentially a very long list .... maybe we should
 			// just log it (yes, do that).
-			return nil, fmt.Errorf("no serving tablet for keyspace %s", keyspace)
+			return nil, fmt.Errorf("%w for keyspace %s", errors.ErrNoServingTablet, keyspace)
 		}
 
 		randomServingTablet := keyspaceTablets[rand.Intn(len(keyspaceTablets))]
