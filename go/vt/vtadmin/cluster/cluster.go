@@ -429,6 +429,7 @@ type GetSchemaOptions struct {
 
 // GetSchemaForKeyspace blah blah TODO: unify this with GetSchema.
 func (c *Cluster) GetSchemaForKeyspace(ctx context.Context, keyspace string, opts GetSchemaOptions) (*vtadminpb.Schema, error) {
+	// TODO: spans
 	if len(opts.Tablets) == 0 {
 		// Fetch all tablets for the keyspace.
 		var err error

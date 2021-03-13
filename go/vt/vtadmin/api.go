@@ -19,6 +19,7 @@ package vtadmin
 import (
 	"context"
 	"encoding/json"
+	stderrors "errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -395,29 +396,45 @@ func (api *API) GetSchema(ctx context.Context, req *vtadminpb.GetSchemaRequest) 
 	span.Annotate("keyspace", req.Keyspace)
 	span.Annotate("table", req.Table)
 
-	clusters, _ := api.getClustersForRequest([]string{req.ClusterId})
-	if len(clusters) == 0 {
+	c, ok := api.clusterMap[req.ClusterId]
+	if !ok {
 		return nil, fmt.Errorf("%w: no cluster with id %s", errors.ErrUnsupportedCluster, req.ClusterId)
 	}
 
-	cluster := clusters[0]
-
-	tablet, err := cluster.FindTablet(ctx, func(t *vtadminpb.Tablet) bool {
-		return t.Tablet.Keyspace == req.Keyspace && t.State == vtadminpb.Tablet_SERVING
+	return c.GetSchemaForKeyspace(ctx, req.Keyspace, cluster.GetSchemaOptions{
+		BaseRequest: &vtctldatapb.GetSchemaRequest{
+			Tables: []string{req.Table},
+		},
+		SizeOpts: &vtadminpb.GetSchemaTableSizeOptions{
+			AggregateSizes: true,
+		},
 	})
-	if err != nil {
-		return nil, fmt.Errorf("%w: no serving tablet found for keyspace %s", err, req.Keyspace)
-	}
 
-	span.Annotate("tablet_alias", topoproto.TabletAliasString(tablet.Tablet.Alias))
+	/*
+		clusters, _ := api.getClustersForRequest([]string{req.ClusterId})
+		if len(clusters) == 0 {
+			return nil, fmt.Errorf("%w: no cluster with id %s", errors.ErrUnsupportedCluster, req.ClusterId)
+		}
 
-	if err := cluster.Vtctld.Dial(ctx); err != nil {
-		return nil, err
-	}
+		cluster := clusters[0]
 
-	return cluster.GetSchema(ctx, &vtctldatapb.GetSchemaRequest{
-		Tables: []string{req.Table},
-	}, tablet)
+		tablet, err := cluster.FindTablet(ctx, func(t *vtadminpb.Tablet) bool {
+			return t.Tablet.Keyspace == req.Keyspace && t.State == vtadminpb.Tablet_SERVING
+		})
+		if err != nil {
+			return nil, fmt.Errorf("%w: no serving tablet found for keyspace %s", err, req.Keyspace)
+		}
+
+		span.Annotate("tablet_alias", topoproto.TabletAliasString(tablet.Tablet.Alias))
+
+		if err := cluster.Vtctld.Dial(ctx); err != nil {
+			return nil, err
+		}
+
+		return cluster.GetSchema(ctx, &vtctldatapb.GetSchemaRequest{
+			Tables: []string{req.Table},
+		}, tablet)
+	*/
 }
 
 // GetSchemas is part of the vtadminpb.VTAdminServer interface.
@@ -503,14 +520,34 @@ func (api *API) getSchemas(ctx context.Context, c *cluster.Cluster, tablets []*v
 		go func(c *cluster.Cluster, ks *vtctldatapb.Keyspace) {
 			defer wg.Done()
 
-			ss, err := api.getSchemasForKeyspace(ctx, c, ks, tablets)
+			ss, err := c.GetSchemaForKeyspace(ctx, ks.Name, cluster.GetSchemaOptions{
+				Tablets: tablets,
+				SizeOpts: &vtadminpb.GetSchemaTableSizeOptions{
+					AggregateSizes: false,
+				},
+			})
 			if err != nil {
+				// Ignore keyspaces without any serving tablets.
+				if stderrors.Is(err, errors.ErrNoServingTablet) {
+					log.Infof(err.Error())
+
+					return
+				}
+
 				er.RecordError(err)
 				return
 			}
 
 			// Ignore keyspaces without schemas
 			if ss == nil {
+				log.Infof("No schemas for %s", ks.Name)
+
+				return
+			}
+
+			if len(ss.TableDefinitions) == 0 {
+				log.Infof("No tables in schema for %s", ks.Name)
+
 				return
 			}
 
@@ -527,41 +564,6 @@ func (api *API) getSchemas(ctx context.Context, c *cluster.Cluster, tablets []*v
 	}
 
 	return schemas, nil
-}
-
-func (api *API) getSchemasForKeyspace(ctx context.Context, c *cluster.Cluster, ks *vtctldatapb.Keyspace, tablets []*vtadminpb.Tablet) (*vtadminpb.Schema, error) {
-	// Choose the first serving tablet.
-	var kt *vtadminpb.Tablet
-	for _, t := range tablets {
-		if t.Tablet.Keyspace != ks.Name || t.State != vtadminpb.Tablet_SERVING {
-			continue
-		}
-
-		kt = t
-	}
-
-	// Skip schema lookup on this keyspace if there are no serving tablets.
-	if kt == nil {
-		return nil, nil
-	}
-
-	if err := c.Vtctld.Dial(ctx); err != nil {
-		return nil, err
-	}
-
-	s, err := c.GetSchema(ctx, &vtctldatapb.GetSchemaRequest{}, kt)
-	if err != nil {
-		return nil, err
-	}
-
-	// Ignore any schemas without table definitions; otherwise we return
-	// a vtadminpb.Schema object with only Cluster and Keyspace defined,
-	// which is not particularly useful.
-	if s == nil || len(s.TableDefinitions) == 0 {
-		return nil, nil
-	}
-
-	return s, nil
 }
 
 // GetTablet is part of the vtadminpb.VTAdminServer interface.
