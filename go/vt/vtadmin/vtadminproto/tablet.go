@@ -18,6 +18,30 @@ package vtadminproto
 
 import vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 
+// FilterTablets returns a subset of tablets (not exceeding maxResults) that
+// satisfy the given condition.
+//
+// If maxResults is negative, len(tablets) is used instead.
+func FilterTablets(condition func(tablet *vtadminpb.Tablet) bool, tablets []*vtadminpb.Tablet, maxResults int) []*vtadminpb.Tablet {
+	if maxResults < 0 {
+		maxResults = len(tablets)
+	}
+
+	results := make([]*vtadminpb.Tablet, 0, maxResults)
+
+	for _, tablet := range tablets {
+		if len(results) >= maxResults {
+			break
+		}
+
+		if condition(tablet) {
+			results = append(results, tablet)
+		}
+	}
+
+	return results
+}
+
 // ParseTabletServingState returns a ServingState value from the given string.
 // If the string does not map to a valid value, this function returns UNKNOWN.
 func ParseTabletServingState(state string) vtadminpb.Tablet_ServingState {

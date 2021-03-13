@@ -452,19 +452,6 @@ func (c *Cluster) GetSchemaForKeyspace(ctx context.Context, keyspace string, opt
 		opts.BaseRequest = &vtctldatapb.GetSchemaRequest{}
 	}
 
-	// TODO: move this to vtadminproto and export
-	filterTablets := func(cond func(tablet *vtadminpb.Tablet) bool) []*vtadminpb.Tablet {
-		tablets := make([]*vtadminpb.Tablet, 0, len(opts.Tablets))
-
-		for _, tablet := range opts.Tablets {
-			if cond(tablet) {
-				tablets = append(tablets, tablet)
-			}
-		}
-
-		return tablets
-	}
-
 	var tabletsToQuery []*vtadminpb.Tablet
 
 	if opts.SizeOpts.AggregateSizes {
@@ -483,9 +470,9 @@ func (c *Cluster) GetSchemaForKeyspace(ctx context.Context, keyspace string, opt
 				}
 			}
 
-			shardTablets := filterTablets(func(tablet *vtadminpb.Tablet) bool {
+			shardTablets := vtadminproto.FilterTablets(func(tablet *vtadminpb.Tablet) bool {
 				return tablet.Tablet.Shard == shard.Name && tablet.State == vtadminpb.Tablet_SERVING
-			})
+			}, opts.Tablets, len(opts.Tablets))
 
 			if len(shardTablets) == 0 {
 				return nil, fmt.Errorf("no serving tablet for shard %s/%s", shard.Keyspace, shard.Name)
@@ -495,9 +482,9 @@ func (c *Cluster) GetSchemaForKeyspace(ctx context.Context, keyspace string, opt
 			tabletsToQuery = append(tabletsToQuery, randomServingTablet)
 		}
 	} else {
-		keyspaceTablets := filterTablets(func(tablet *vtadminpb.Tablet) bool {
+		keyspaceTablets := vtadminproto.FilterTablets(func(tablet *vtadminpb.Tablet) bool {
 			return tablet.Tablet.Keyspace == keyspace && tablet.State == vtadminpb.Tablet_SERVING
-		})
+		}, opts.Tablets, len(opts.Tablets))
 
 		if len(keyspaceTablets) == 0 {
 			// consider how to include info about the tablets we looked at, but
@@ -744,16 +731,5 @@ func (c *Cluster) findTablets(ctx context.Context, filter func(*vtadminpb.Tablet
 		span.Annotate("max_result_length", n) // this is a bad name; I didn't want just "n", but it's more like, "requested result length".
 	}
 
-	results := make([]*vtadminpb.Tablet, 0, n)
-	for _, t := range tablets {
-		if len(results) >= n {
-			break
-		}
-
-		if filter(t) {
-			results = append(results, t)
-		}
-	}
-
-	return results, nil
+	return vtadminproto.FilterTablets(filter, tablets, n), nil
 }
