@@ -61,8 +61,22 @@ func (c *cloneGen) visitInterface(t types.Type, _ *types.Interface) error {
 
 const cloneName = "Clone"
 
-func (c *cloneGen) addFunc(name string, code jen.Code) {
-	c.methods = append(c.methods, jen.Comment(name+" creates a deep clone of the input."), code)
+type methodType int
+
+const (
+	clone methodType = iota
+	equals
+)
+
+func (c *cloneGen) addFunc(name string, typ methodType, code jen.Code) {
+	var comment string
+	switch typ {
+	case clone:
+		comment = " creates a deep clone of the input."
+	case equals:
+		comment = " does deep equals between the two objects."
+	}
+	c.methods = append(c.methods, jen.Comment(name+comment), code)
 }
 
 // readValueOfType produces code to read the expression of type `t`, and adds the type to the todo-list
@@ -83,7 +97,7 @@ func (c *cloneGen) readValueOfType(t types.Type, expr jen.Code) jen.Code {
 func (c *cloneGen) makeStructCloneMethod(t types.Type) error {
 	typeString := types.TypeString(t, noQualifier)
 	funcName := cloneName + printableTypeName(t)
-	c.addFunc(funcName,
+	c.addFunc(funcName, clone,
 		jen.Func().Id(funcName).Call(jen.Id("n").Id(typeString)).Id(typeString).Block(
 			jen.Return(jen.Op("*").Add(c.readValueOfType(types.NewPointer(t), jen.Op("&").Id("n")))),
 		))
@@ -95,7 +109,7 @@ func (c *cloneGen) makeSliceCloneMethod(t types.Type, slice *types.Slice) error 
 	name := printableTypeName(t)
 	funcName := cloneName + name
 
-	c.addFunc(funcName,
+	c.addFunc(funcName, clone,
 		//func (n Bytes) Clone() Bytes {
 		jen.Func().Id(funcName).Call(jen.Id("n").Id(typeString)).Id(typeString).Block(
 			//	res := make(Bytes, len(n))
@@ -180,7 +194,7 @@ func (c *cloneGen) makeInterfaceCloneMethod(t types.Type, iface *types.Interface
 
 	funcName := cloneName + typeName
 	funcDecl := jen.Func().Id(funcName).Call(jen.Id("in").Id(typeString)).Id(typeString).Block(stmts...)
-	c.addFunc(funcName, funcDecl)
+	c.addFunc(funcName, clone, funcDecl)
 	return nil
 }
 
@@ -188,7 +202,7 @@ func (c *cloneGen) makePtrCloneMethod(t types.Type, ptr *types.Pointer) {
 	receiveType := types.TypeString(t, noQualifier)
 
 	funcName := "Clone" + printableTypeName(t)
-	c.addFunc(funcName,
+	c.addFunc(funcName, clone,
 		jen.Func().Id(funcName).Call(jen.Id("n").Id(receiveType)).Id(receiveType).Block(
 			ifNilReturnNil("n"),
 			jen.Id("out").Op(":=").Add(c.readValueOfType(ptr.Elem(), jen.Op("*").Id("n"))),
@@ -284,7 +298,7 @@ func (c *cloneGen) makePtrToStructCloneMethod(t types.Type, strct *types.Struct)
 	funcDeclaration := jen.Func().Id(funcName).Call(jen.Id("n").Id(receiveType)).Id(receiveType)
 
 	if receiveType == c.exceptType {
-		c.addFunc(funcName, funcDeclaration.Block(
+		c.addFunc(funcName, clone, funcDeclaration.Block(
 			jen.Return(jen.Id("n")),
 		))
 		return
@@ -316,7 +330,7 @@ func (c *cloneGen) makePtrToStructCloneMethod(t types.Type, strct *types.Struct)
 		jen.Return(jen.Op("&").Id("out")),
 	)
 
-	c.addFunc(funcName,
+	c.addFunc(funcName, clone,
 		funcDeclaration.Block(stmts...),
 	)
 }

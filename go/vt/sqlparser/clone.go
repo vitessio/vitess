@@ -67,7 +67,7 @@ func CloneAlterOption(in AlterOption) AlterOption {
 	}
 }
 
-// EqualsAlterOption creates a deep clone of the input.
+// EqualsAlterOption does deep equals between the two objects.
 func EqualsAlterOption(inA, inB AlterOption) bool {
 	if inA == nil && inB == nil {
 		return true
@@ -212,7 +212,7 @@ func CloneCharacteristic(in Characteristic) Characteristic {
 	}
 }
 
-// EqualsCharacteristic creates a deep clone of the input.
+// EqualsCharacteristic does deep equals between the two objects.
 func EqualsCharacteristic(inA, inB Characteristic) bool {
 	if inA == nil && inB == nil {
 		return true
@@ -257,7 +257,7 @@ func CloneColTuple(in ColTuple) ColTuple {
 	}
 }
 
-// EqualsColTuple creates a deep clone of the input.
+// EqualsColTuple does deep equals between the two objects.
 func EqualsColTuple(inA, inB ColTuple) bool {
 	if inA == nil && inB == nil {
 		return true
@@ -306,7 +306,7 @@ func CloneConstraintInfo(in ConstraintInfo) ConstraintInfo {
 	}
 }
 
-// EqualsConstraintInfo creates a deep clone of the input.
+// EqualsConstraintInfo does deep equals between the two objects.
 func EqualsConstraintInfo(inA, inB ConstraintInfo) bool {
 	if inA == nil && inB == nil {
 		return true
@@ -351,7 +351,7 @@ func CloneDBDDLStatement(in DBDDLStatement) DBDDLStatement {
 	}
 }
 
-// EqualsDBDDLStatement creates a deep clone of the input.
+// EqualsDBDDLStatement does deep equals between the two objects.
 func EqualsDBDDLStatement(inA, inB DBDDLStatement) bool {
 	if inA == nil && inB == nil {
 		return true
@@ -412,7 +412,7 @@ func CloneDDLStatement(in DDLStatement) DDLStatement {
 	}
 }
 
-// EqualsDDLStatement creates a deep clone of the input.
+// EqualsDDLStatement does deep equals between the two objects.
 func EqualsDDLStatement(inA, inB DDLStatement) bool {
 	if inA == nil && inB == nil {
 		return true
@@ -491,7 +491,7 @@ func CloneExplain(in Explain) Explain {
 	}
 }
 
-// EqualsExplain creates a deep clone of the input.
+// EqualsExplain does deep equals between the two objects.
 func EqualsExplain(inA, inB Explain) bool {
 	if inA == nil && inB == nil {
 		return true
@@ -592,7 +592,7 @@ func CloneExpr(in Expr) Expr {
 	}
 }
 
-// EqualsExpr creates a deep clone of the input.
+// EqualsExpr does deep equals between the two objects.
 func EqualsExpr(inA, inB Expr) bool {
 	if inA == nil && inB == nil {
 		return true
@@ -813,7 +813,7 @@ func CloneInsertRows(in InsertRows) InsertRows {
 	}
 }
 
-// EqualsInsertRows creates a deep clone of the input.
+// EqualsInsertRows does deep equals between the two objects.
 func EqualsInsertRows(inA, inB InsertRows) bool {
 	if inA == nil && inB == nil {
 		return true
@@ -1152,7 +1152,7 @@ func CloneSQLNode(in SQLNode) SQLNode {
 	}
 }
 
-// EqualsSQLNode creates a deep clone of the input.
+// EqualsSQLNode does deep equals between the two objects.
 func EqualsSQLNode(inA, inB SQLNode) bool {
 	if inA == nil && inB == nil {
 		return true
@@ -2049,7 +2049,7 @@ func CloneSelectExpr(in SelectExpr) SelectExpr {
 	}
 }
 
-// EqualsSelectExpr creates a deep clone of the input.
+// EqualsSelectExpr does deep equals between the two objects.
 func EqualsSelectExpr(inA, inB SelectExpr) bool {
 	if inA == nil && inB == nil {
 		return true
@@ -2100,7 +2100,7 @@ func CloneSelectStatement(in SelectStatement) SelectStatement {
 	}
 }
 
-// EqualsSelectStatement creates a deep clone of the input.
+// EqualsSelectStatement does deep equals between the two objects.
 func EqualsSelectStatement(inA, inB SelectStatement) bool {
 	if inA == nil && inB == nil {
 		return true
@@ -2151,7 +2151,7 @@ func CloneShowInternal(in ShowInternal) ShowInternal {
 	}
 }
 
-// EqualsShowInternal creates a deep clone of the input.
+// EqualsShowInternal does deep equals between the two objects.
 func EqualsShowInternal(inA, inB ShowInternal) bool {
 	if inA == nil && inB == nil {
 		return true
@@ -2200,7 +2200,7 @@ func CloneSimpleTableExpr(in SimpleTableExpr) SimpleTableExpr {
 	}
 }
 
-// EqualsSimpleTableExpr creates a deep clone of the input.
+// EqualsSimpleTableExpr does deep equals between the two objects.
 func EqualsSimpleTableExpr(inA, inB SimpleTableExpr) bool {
 	if inA == nil && inB == nil {
 		return true
@@ -2317,7 +2317,7 @@ func CloneStatement(in Statement) Statement {
 	}
 }
 
-// EqualsStatement creates a deep clone of the input.
+// EqualsStatement does deep equals between the two objects.
 func EqualsStatement(inA, inB Statement) bool {
 	if inA == nil && inB == nil {
 		return true
@@ -2584,7 +2584,7 @@ func CloneTableExpr(in TableExpr) TableExpr {
 	}
 }
 
-// EqualsTableExpr creates a deep clone of the input.
+// EqualsTableExpr does deep equals between the two objects.
 func EqualsTableExpr(inA, inB TableExpr) bool {
 	if inA == nil && inB == nil {
 		return true
@@ -2629,7 +2629,7 @@ func CloneRefOfAddColumns(n *AddColumns) *AddColumns {
 	return &out
 }
 
-// EqualsRefOfAddColumns creates a deep clone of the input.
+// EqualsRefOfAddColumns does deep equals between the two objects.
 func EqualsRefOfAddColumns(a, b *AddColumns) bool {
 	if a == b {
 		return true
@@ -2652,7 +2652,7 @@ func CloneRefOfAddConstraintDefinition(n *AddConstraintDefinition) *AddConstrain
 	return &out
 }
 
-// EqualsRefOfAddConstraintDefinition creates a deep clone of the input.
+// EqualsRefOfAddConstraintDefinition does deep equals between the two objects.
 func EqualsRefOfAddConstraintDefinition(a, b *AddConstraintDefinition) bool {
 	if a == b {
 		return true
@@ -2673,7 +2673,7 @@ func CloneRefOfAddIndexDefinition(n *AddIndexDefinition) *AddIndexDefinition {
 	return &out
 }
 
-// EqualsRefOfAddIndexDefinition creates a deep clone of the input.
+// EqualsRefOfAddIndexDefinition does deep equals between the two objects.
 func EqualsRefOfAddIndexDefinition(a, b *AddIndexDefinition) bool {
 	if a == b {
 		return true
@@ -2693,7 +2693,7 @@ func CloneRefOfAlterCharset(n *AlterCharset) *AlterCharset {
 	return &out
 }
 
-// EqualsRefOfAlterCharset creates a deep clone of the input.
+// EqualsRefOfAlterCharset does deep equals between the two objects.
 func EqualsRefOfAlterCharset(a, b *AlterCharset) bool {
 	if a == b {
 		return true
@@ -2716,7 +2716,7 @@ func CloneRefOfAlterColumn(n *AlterColumn) *AlterColumn {
 	return &out
 }
 
-// EqualsRefOfAlterColumn creates a deep clone of the input.
+// EqualsRefOfAlterColumn does deep equals between the two objects.
 func EqualsRefOfAlterColumn(a, b *AlterColumn) bool {
 	if a == b {
 		return true
@@ -2742,7 +2742,7 @@ func CloneRefOfChangeColumn(n *ChangeColumn) *ChangeColumn {
 	return &out
 }
 
-// EqualsRefOfChangeColumn creates a deep clone of the input.
+// EqualsRefOfChangeColumn does deep equals between the two objects.
 func EqualsRefOfChangeColumn(a, b *ChangeColumn) bool {
 	if a == b {
 		return true
@@ -2766,7 +2766,7 @@ func CloneRefOfDropColumn(n *DropColumn) *DropColumn {
 	return &out
 }
 
-// EqualsRefOfDropColumn creates a deep clone of the input.
+// EqualsRefOfDropColumn does deep equals between the two objects.
 func EqualsRefOfDropColumn(a, b *DropColumn) bool {
 	if a == b {
 		return true
@@ -2786,7 +2786,7 @@ func CloneRefOfDropKey(n *DropKey) *DropKey {
 	return &out
 }
 
-// EqualsRefOfDropKey creates a deep clone of the input.
+// EqualsRefOfDropKey does deep equals between the two objects.
 func EqualsRefOfDropKey(a, b *DropKey) bool {
 	if a == b {
 		return true
@@ -2807,7 +2807,7 @@ func CloneRefOfForce(n *Force) *Force {
 	return &out
 }
 
-// EqualsRefOfForce creates a deep clone of the input.
+// EqualsRefOfForce does deep equals between the two objects.
 func EqualsRefOfForce(a, b *Force) bool {
 	if a == b {
 		return true
@@ -2827,7 +2827,7 @@ func CloneRefOfKeyState(n *KeyState) *KeyState {
 	return &out
 }
 
-// EqualsRefOfKeyState creates a deep clone of the input.
+// EqualsRefOfKeyState does deep equals between the two objects.
 func EqualsRefOfKeyState(a, b *KeyState) bool {
 	if a == b {
 		return true
@@ -2847,7 +2847,7 @@ func CloneRefOfLockOption(n *LockOption) *LockOption {
 	return &out
 }
 
-// EqualsRefOfLockOption creates a deep clone of the input.
+// EqualsRefOfLockOption does deep equals between the two objects.
 func EqualsRefOfLockOption(a, b *LockOption) bool {
 	if a == b {
 		return true
@@ -2870,7 +2870,7 @@ func CloneRefOfModifyColumn(n *ModifyColumn) *ModifyColumn {
 	return &out
 }
 
-// EqualsRefOfModifyColumn creates a deep clone of the input.
+// EqualsRefOfModifyColumn does deep equals between the two objects.
 func EqualsRefOfModifyColumn(a, b *ModifyColumn) bool {
 	if a == b {
 		return true
@@ -2893,7 +2893,7 @@ func CloneRefOfOrderByOption(n *OrderByOption) *OrderByOption {
 	return &out
 }
 
-// EqualsRefOfOrderByOption creates a deep clone of the input.
+// EqualsRefOfOrderByOption does deep equals between the two objects.
 func EqualsRefOfOrderByOption(a, b *OrderByOption) bool {
 	if a == b {
 		return true
@@ -2913,7 +2913,7 @@ func CloneRefOfRenameIndex(n *RenameIndex) *RenameIndex {
 	return &out
 }
 
-// EqualsRefOfRenameIndex creates a deep clone of the input.
+// EqualsRefOfRenameIndex does deep equals between the two objects.
 func EqualsRefOfRenameIndex(a, b *RenameIndex) bool {
 	if a == b {
 		return true
@@ -2935,7 +2935,7 @@ func CloneRefOfRenameTableName(n *RenameTableName) *RenameTableName {
 	return &out
 }
 
-// EqualsRefOfRenameTableName creates a deep clone of the input.
+// EqualsRefOfRenameTableName does deep equals between the two objects.
 func EqualsRefOfRenameTableName(a, b *RenameTableName) bool {
 	if a == b {
 		return true
@@ -2955,7 +2955,7 @@ func CloneTableOptions(n TableOptions) TableOptions {
 	return res
 }
 
-// EqualsTableOptions creates a deep clone of the input.
+// EqualsTableOptions does deep equals between the two objects.
 func EqualsTableOptions(a, b TableOptions) bool {
 	if len(a) != len(b) {
 		return false
@@ -2977,7 +2977,7 @@ func CloneRefOfTablespaceOperation(n *TablespaceOperation) *TablespaceOperation 
 	return &out
 }
 
-// EqualsRefOfTablespaceOperation creates a deep clone of the input.
+// EqualsRefOfTablespaceOperation does deep equals between the two objects.
 func EqualsRefOfTablespaceOperation(a, b *TablespaceOperation) bool {
 	if a == b {
 		return true
@@ -2997,7 +2997,7 @@ func CloneRefOfValidation(n *Validation) *Validation {
 	return &out
 }
 
-// EqualsRefOfValidation creates a deep clone of the input.
+// EqualsRefOfValidation does deep equals between the two objects.
 func EqualsRefOfValidation(a, b *Validation) bool {
 	if a == b {
 		return true
@@ -3015,7 +3015,7 @@ func CloneListArg(n ListArg) ListArg {
 	return res
 }
 
-// EqualsListArg creates a deep clone of the input.
+// EqualsListArg does deep equals between the two objects.
 func EqualsListArg(a, b ListArg) bool {
 	if len(a) != len(b) {
 		return false
@@ -3038,7 +3038,7 @@ func CloneRefOfSubquery(n *Subquery) *Subquery {
 	return &out
 }
 
-// EqualsRefOfSubquery creates a deep clone of the input.
+// EqualsRefOfSubquery does deep equals between the two objects.
 func EqualsRefOfSubquery(a, b *Subquery) bool {
 	if a == b {
 		return true
@@ -3058,7 +3058,7 @@ func CloneValTuple(n ValTuple) ValTuple {
 	return res
 }
 
-// EqualsValTuple creates a deep clone of the input.
+// EqualsValTuple does deep equals between the two objects.
 func EqualsValTuple(a, b ValTuple) bool {
 	if len(a) != len(b) {
 		return false
@@ -3081,7 +3081,7 @@ func CloneRefOfCheckConstraintDefinition(n *CheckConstraintDefinition) *CheckCon
 	return &out
 }
 
-// EqualsRefOfCheckConstraintDefinition creates a deep clone of the input.
+// EqualsRefOfCheckConstraintDefinition does deep equals between the two objects.
 func EqualsRefOfCheckConstraintDefinition(a, b *CheckConstraintDefinition) bool {
 	if a == b {
 		return true
@@ -3105,7 +3105,7 @@ func CloneRefOfForeignKeyDefinition(n *ForeignKeyDefinition) *ForeignKeyDefiniti
 	return &out
 }
 
-// EqualsRefOfForeignKeyDefinition creates a deep clone of the input.
+// EqualsRefOfForeignKeyDefinition does deep equals between the two objects.
 func EqualsRefOfForeignKeyDefinition(a, b *ForeignKeyDefinition) bool {
 	if a == b {
 		return true
@@ -3130,7 +3130,7 @@ func CloneRefOfAlterDatabase(n *AlterDatabase) *AlterDatabase {
 	return &out
 }
 
-// EqualsRefOfAlterDatabase creates a deep clone of the input.
+// EqualsRefOfAlterDatabase does deep equals between the two objects.
 func EqualsRefOfAlterDatabase(a, b *AlterDatabase) bool {
 	if a == b {
 		return true
@@ -3155,7 +3155,7 @@ func CloneRefOfCreateDatabase(n *CreateDatabase) *CreateDatabase {
 	return &out
 }
 
-// EqualsRefOfCreateDatabase creates a deep clone of the input.
+// EqualsRefOfCreateDatabase does deep equals between the two objects.
 func EqualsRefOfCreateDatabase(a, b *CreateDatabase) bool {
 	if a == b {
 		return true
@@ -3180,7 +3180,7 @@ func CloneRefOfDropDatabase(n *DropDatabase) *DropDatabase {
 	return &out
 }
 
-// EqualsRefOfDropDatabase creates a deep clone of the input.
+// EqualsRefOfDropDatabase does deep equals between the two objects.
 func EqualsRefOfDropDatabase(a, b *DropDatabase) bool {
 	if a == b {
 		return true
@@ -3205,7 +3205,7 @@ func CloneRefOfAlterTable(n *AlterTable) *AlterTable {
 	return &out
 }
 
-// EqualsRefOfAlterTable creates a deep clone of the input.
+// EqualsRefOfAlterTable does deep equals between the two objects.
 func EqualsRefOfAlterTable(a, b *AlterTable) bool {
 	if a == b {
 		return true
@@ -3231,7 +3231,7 @@ func CloneRefOfAlterView(n *AlterView) *AlterView {
 	return &out
 }
 
-// EqualsRefOfAlterView creates a deep clone of the input.
+// EqualsRefOfAlterView does deep equals between the two objects.
 func EqualsRefOfAlterView(a, b *AlterView) bool {
 	if a == b {
 		return true
@@ -3260,7 +3260,7 @@ func CloneRefOfCreateTable(n *CreateTable) *CreateTable {
 	return &out
 }
 
-// EqualsRefOfCreateTable creates a deep clone of the input.
+// EqualsRefOfCreateTable does deep equals between the two objects.
 func EqualsRefOfCreateTable(a, b *CreateTable) bool {
 	if a == b {
 		return true
@@ -3288,7 +3288,7 @@ func CloneRefOfCreateView(n *CreateView) *CreateView {
 	return &out
 }
 
-// EqualsRefOfCreateView creates a deep clone of the input.
+// EqualsRefOfCreateView does deep equals between the two objects.
 func EqualsRefOfCreateView(a, b *CreateView) bool {
 	if a == b {
 		return true
@@ -3316,7 +3316,7 @@ func CloneRefOfDropTable(n *DropTable) *DropTable {
 	return &out
 }
 
-// EqualsRefOfDropTable creates a deep clone of the input.
+// EqualsRefOfDropTable does deep equals between the two objects.
 func EqualsRefOfDropTable(a, b *DropTable) bool {
 	if a == b {
 		return true
@@ -3339,7 +3339,7 @@ func CloneRefOfDropView(n *DropView) *DropView {
 	return &out
 }
 
-// EqualsRefOfDropView creates a deep clone of the input.
+// EqualsRefOfDropView does deep equals between the two objects.
 func EqualsRefOfDropView(a, b *DropView) bool {
 	if a == b {
 		return true
@@ -3361,7 +3361,7 @@ func CloneRefOfRenameTable(n *RenameTable) *RenameTable {
 	return &out
 }
 
-// EqualsRefOfRenameTable creates a deep clone of the input.
+// EqualsRefOfRenameTable does deep equals between the two objects.
 func EqualsRefOfRenameTable(a, b *RenameTable) bool {
 	if a == b {
 		return true
@@ -3382,7 +3382,7 @@ func CloneRefOfTruncateTable(n *TruncateTable) *TruncateTable {
 	return &out
 }
 
-// EqualsRefOfTruncateTable creates a deep clone of the input.
+// EqualsRefOfTruncateTable does deep equals between the two objects.
 func EqualsRefOfTruncateTable(a, b *TruncateTable) bool {
 	if a == b {
 		return true
@@ -3403,7 +3403,7 @@ func CloneRefOfExplainStmt(n *ExplainStmt) *ExplainStmt {
 	return &out
 }
 
-// EqualsRefOfExplainStmt creates a deep clone of the input.
+// EqualsRefOfExplainStmt does deep equals between the two objects.
 func EqualsRefOfExplainStmt(a, b *ExplainStmt) bool {
 	if a == b {
 		return true
@@ -3425,7 +3425,7 @@ func CloneRefOfExplainTab(n *ExplainTab) *ExplainTab {
 	return &out
 }
 
-// EqualsRefOfExplainTab creates a deep clone of the input.
+// EqualsRefOfExplainTab does deep equals between the two objects.
 func EqualsRefOfExplainTab(a, b *ExplainTab) bool {
 	if a == b {
 		return true
@@ -3448,7 +3448,7 @@ func CloneRefOfAndExpr(n *AndExpr) *AndExpr {
 	return &out
 }
 
-// EqualsRefOfAndExpr creates a deep clone of the input.
+// EqualsRefOfAndExpr does deep equals between the two objects.
 func EqualsRefOfAndExpr(a, b *AndExpr) bool {
 	if a == b {
 		return true
@@ -3471,7 +3471,7 @@ func CloneRefOfBinaryExpr(n *BinaryExpr) *BinaryExpr {
 	return &out
 }
 
-// EqualsRefOfBinaryExpr creates a deep clone of the input.
+// EqualsRefOfBinaryExpr does deep equals between the two objects.
 func EqualsRefOfBinaryExpr(a, b *BinaryExpr) bool {
 	if a == b {
 		return true
@@ -3496,7 +3496,7 @@ func CloneRefOfCaseExpr(n *CaseExpr) *CaseExpr {
 	return &out
 }
 
-// EqualsRefOfCaseExpr creates a deep clone of the input.
+// EqualsRefOfCaseExpr does deep equals between the two objects.
 func EqualsRefOfCaseExpr(a, b *CaseExpr) bool {
 	if a == b {
 		return true
@@ -3514,7 +3514,7 @@ func CloneRefOfColName(n *ColName) *ColName {
 	return n
 }
 
-// EqualsRefOfColName creates a deep clone of the input.
+// EqualsRefOfColName does deep equals between the two objects.
 func EqualsRefOfColName(a, b *ColName) bool {
 	if a == b {
 		return true
@@ -3536,7 +3536,7 @@ func CloneRefOfCollateExpr(n *CollateExpr) *CollateExpr {
 	return &out
 }
 
-// EqualsRefOfCollateExpr creates a deep clone of the input.
+// EqualsRefOfCollateExpr does deep equals between the two objects.
 func EqualsRefOfCollateExpr(a, b *CollateExpr) bool {
 	if a == b {
 		return true
@@ -3560,7 +3560,7 @@ func CloneRefOfComparisonExpr(n *ComparisonExpr) *ComparisonExpr {
 	return &out
 }
 
-// EqualsRefOfComparisonExpr creates a deep clone of the input.
+// EqualsRefOfComparisonExpr does deep equals between the two objects.
 func EqualsRefOfComparisonExpr(a, b *ComparisonExpr) bool {
 	if a == b {
 		return true
@@ -3585,7 +3585,7 @@ func CloneRefOfConvertExpr(n *ConvertExpr) *ConvertExpr {
 	return &out
 }
 
-// EqualsRefOfConvertExpr creates a deep clone of the input.
+// EqualsRefOfConvertExpr does deep equals between the two objects.
 func EqualsRefOfConvertExpr(a, b *ConvertExpr) bool {
 	if a == b {
 		return true
@@ -3607,7 +3607,7 @@ func CloneRefOfConvertUsingExpr(n *ConvertUsingExpr) *ConvertUsingExpr {
 	return &out
 }
 
-// EqualsRefOfConvertUsingExpr creates a deep clone of the input.
+// EqualsRefOfConvertUsingExpr does deep equals between the two objects.
 func EqualsRefOfConvertUsingExpr(a, b *ConvertUsingExpr) bool {
 	if a == b {
 		return true
@@ -3630,7 +3630,7 @@ func CloneRefOfCurTimeFuncExpr(n *CurTimeFuncExpr) *CurTimeFuncExpr {
 	return &out
 }
 
-// EqualsRefOfCurTimeFuncExpr creates a deep clone of the input.
+// EqualsRefOfCurTimeFuncExpr does deep equals between the two objects.
 func EqualsRefOfCurTimeFuncExpr(a, b *CurTimeFuncExpr) bool {
 	if a == b {
 		return true
@@ -3651,7 +3651,7 @@ func CloneRefOfDefault(n *Default) *Default {
 	return &out
 }
 
-// EqualsRefOfDefault creates a deep clone of the input.
+// EqualsRefOfDefault does deep equals between the two objects.
 func EqualsRefOfDefault(a, b *Default) bool {
 	if a == b {
 		return true
@@ -3672,7 +3672,7 @@ func CloneRefOfExistsExpr(n *ExistsExpr) *ExistsExpr {
 	return &out
 }
 
-// EqualsRefOfExistsExpr creates a deep clone of the input.
+// EqualsRefOfExistsExpr does deep equals between the two objects.
 func EqualsRefOfExistsExpr(a, b *ExistsExpr) bool {
 	if a == b {
 		return true
@@ -3695,7 +3695,7 @@ func CloneRefOfFuncExpr(n *FuncExpr) *FuncExpr {
 	return &out
 }
 
-// EqualsRefOfFuncExpr creates a deep clone of the input.
+// EqualsRefOfFuncExpr does deep equals between the two objects.
 func EqualsRefOfFuncExpr(a, b *FuncExpr) bool {
 	if a == b {
 		return true
@@ -3721,7 +3721,7 @@ func CloneRefOfGroupConcatExpr(n *GroupConcatExpr) *GroupConcatExpr {
 	return &out
 }
 
-// EqualsRefOfGroupConcatExpr creates a deep clone of the input.
+// EqualsRefOfGroupConcatExpr does deep equals between the two objects.
 func EqualsRefOfGroupConcatExpr(a, b *GroupConcatExpr) bool {
 	if a == b {
 		return true
@@ -3746,7 +3746,7 @@ func CloneRefOfIntervalExpr(n *IntervalExpr) *IntervalExpr {
 	return &out
 }
 
-// EqualsRefOfIntervalExpr creates a deep clone of the input.
+// EqualsRefOfIntervalExpr does deep equals between the two objects.
 func EqualsRefOfIntervalExpr(a, b *IntervalExpr) bool {
 	if a == b {
 		return true
@@ -3768,7 +3768,7 @@ func CloneRefOfIsExpr(n *IsExpr) *IsExpr {
 	return &out
 }
 
-// EqualsRefOfIsExpr creates a deep clone of the input.
+// EqualsRefOfIsExpr does deep equals between the two objects.
 func EqualsRefOfIsExpr(a, b *IsExpr) bool {
 	if a == b {
 		return true
@@ -3789,7 +3789,7 @@ func CloneRefOfLiteral(n *Literal) *Literal {
 	return &out
 }
 
-// EqualsRefOfLiteral creates a deep clone of the input.
+// EqualsRefOfLiteral does deep equals between the two objects.
 func EqualsRefOfLiteral(a, b *Literal) bool {
 	if a == b {
 		return true
@@ -3812,7 +3812,7 @@ func CloneRefOfMatchExpr(n *MatchExpr) *MatchExpr {
 	return &out
 }
 
-// EqualsRefOfMatchExpr creates a deep clone of the input.
+// EqualsRefOfMatchExpr does deep equals between the two objects.
 func EqualsRefOfMatchExpr(a, b *MatchExpr) bool {
 	if a == b {
 		return true
@@ -3835,7 +3835,7 @@ func CloneRefOfNotExpr(n *NotExpr) *NotExpr {
 	return &out
 }
 
-// EqualsRefOfNotExpr creates a deep clone of the input.
+// EqualsRefOfNotExpr does deep equals between the two objects.
 func EqualsRefOfNotExpr(a, b *NotExpr) bool {
 	if a == b {
 		return true
@@ -3855,7 +3855,7 @@ func CloneRefOfNullVal(n *NullVal) *NullVal {
 	return &out
 }
 
-// EqualsRefOfNullVal creates a deep clone of the input.
+// EqualsRefOfNullVal does deep equals between the two objects.
 func EqualsRefOfNullVal(a, b *NullVal) bool {
 	if a == b {
 		return true
@@ -3877,7 +3877,7 @@ func CloneRefOfOrExpr(n *OrExpr) *OrExpr {
 	return &out
 }
 
-// EqualsRefOfOrExpr creates a deep clone of the input.
+// EqualsRefOfOrExpr does deep equals between the two objects.
 func EqualsRefOfOrExpr(a, b *OrExpr) bool {
 	if a == b {
 		return true
@@ -3901,7 +3901,7 @@ func CloneRefOfRangeCond(n *RangeCond) *RangeCond {
 	return &out
 }
 
-// EqualsRefOfRangeCond creates a deep clone of the input.
+// EqualsRefOfRangeCond does deep equals between the two objects.
 func EqualsRefOfRangeCond(a, b *RangeCond) bool {
 	if a == b {
 		return true
@@ -3928,7 +3928,7 @@ func CloneRefOfSubstrExpr(n *SubstrExpr) *SubstrExpr {
 	return &out
 }
 
-// EqualsRefOfSubstrExpr creates a deep clone of the input.
+// EqualsRefOfSubstrExpr does deep equals between the two objects.
 func EqualsRefOfSubstrExpr(a, b *SubstrExpr) bool {
 	if a == b {
 		return true
@@ -3953,7 +3953,7 @@ func CloneRefOfTimestampFuncExpr(n *TimestampFuncExpr) *TimestampFuncExpr {
 	return &out
 }
 
-// EqualsRefOfTimestampFuncExpr creates a deep clone of the input.
+// EqualsRefOfTimestampFuncExpr does deep equals between the two objects.
 func EqualsRefOfTimestampFuncExpr(a, b *TimestampFuncExpr) bool {
 	if a == b {
 		return true
@@ -3977,7 +3977,7 @@ func CloneRefOfUnaryExpr(n *UnaryExpr) *UnaryExpr {
 	return &out
 }
 
-// EqualsRefOfUnaryExpr creates a deep clone of the input.
+// EqualsRefOfUnaryExpr does deep equals between the two objects.
 func EqualsRefOfUnaryExpr(a, b *UnaryExpr) bool {
 	if a == b {
 		return true
@@ -3999,7 +3999,7 @@ func CloneRefOfValuesFuncExpr(n *ValuesFuncExpr) *ValuesFuncExpr {
 	return &out
 }
 
-// EqualsRefOfValuesFuncExpr creates a deep clone of the input.
+// EqualsRefOfValuesFuncExpr does deep equals between the two objects.
 func EqualsRefOfValuesFuncExpr(a, b *ValuesFuncExpr) bool {
 	if a == b {
 		return true
@@ -4021,7 +4021,7 @@ func CloneRefOfXorExpr(n *XorExpr) *XorExpr {
 	return &out
 }
 
-// EqualsRefOfXorExpr creates a deep clone of the input.
+// EqualsRefOfXorExpr does deep equals between the two objects.
 func EqualsRefOfXorExpr(a, b *XorExpr) bool {
 	if a == b {
 		return true
@@ -4043,7 +4043,7 @@ func CloneRefOfParenSelect(n *ParenSelect) *ParenSelect {
 	return &out
 }
 
-// EqualsRefOfParenSelect creates a deep clone of the input.
+// EqualsRefOfParenSelect does deep equals between the two objects.
 func EqualsRefOfParenSelect(a, b *ParenSelect) bool {
 	if a == b {
 		return true
@@ -4073,7 +4073,7 @@ func CloneRefOfSelect(n *Select) *Select {
 	return &out
 }
 
-// EqualsRefOfSelect creates a deep clone of the input.
+// EqualsRefOfSelect does deep equals between the two objects.
 func EqualsRefOfSelect(a, b *Select) bool {
 	if a == b {
 		return true
@@ -4110,7 +4110,7 @@ func CloneRefOfUnion(n *Union) *Union {
 	return &out
 }
 
-// EqualsRefOfUnion creates a deep clone of the input.
+// EqualsRefOfUnion does deep equals between the two objects.
 func EqualsRefOfUnion(a, b *Union) bool {
 	if a == b {
 		return true
@@ -4134,7 +4134,7 @@ func CloneValues(n Values) Values {
 	return res
 }
 
-// EqualsValues creates a deep clone of the input.
+// EqualsValues does deep equals between the two objects.
 func EqualsValues(a, b Values) bool {
 	if len(a) != len(b) {
 		return false
@@ -4158,7 +4158,7 @@ func CloneRefOfAliasedExpr(n *AliasedExpr) *AliasedExpr {
 	return &out
 }
 
-// EqualsRefOfAliasedExpr creates a deep clone of the input.
+// EqualsRefOfAliasedExpr does deep equals between the two objects.
 func EqualsRefOfAliasedExpr(a, b *AliasedExpr) bool {
 	if a == b {
 		return true
@@ -4183,7 +4183,7 @@ func CloneRefOfAliasedTableExpr(n *AliasedTableExpr) *AliasedTableExpr {
 	return &out
 }
 
-// EqualsRefOfAliasedTableExpr creates a deep clone of the input.
+// EqualsRefOfAliasedTableExpr does deep equals between the two objects.
 func EqualsRefOfAliasedTableExpr(a, b *AliasedTableExpr) bool {
 	if a == b {
 		return true
@@ -4210,7 +4210,7 @@ func CloneRefOfAlterVschema(n *AlterVschema) *AlterVschema {
 	return &out
 }
 
-// EqualsRefOfAlterVschema creates a deep clone of the input.
+// EqualsRefOfAlterVschema does deep equals between the two objects.
 func EqualsRefOfAlterVschema(a, b *AlterVschema) bool {
 	if a == b {
 		return true
@@ -4236,7 +4236,7 @@ func CloneRefOfAutoIncSpec(n *AutoIncSpec) *AutoIncSpec {
 	return &out
 }
 
-// EqualsRefOfAutoIncSpec creates a deep clone of the input.
+// EqualsRefOfAutoIncSpec does deep equals between the two objects.
 func EqualsRefOfAutoIncSpec(a, b *AutoIncSpec) bool {
 	if a == b {
 		return true
@@ -4257,7 +4257,7 @@ func CloneRefOfBegin(n *Begin) *Begin {
 	return &out
 }
 
-// EqualsRefOfBegin creates a deep clone of the input.
+// EqualsRefOfBegin does deep equals between the two objects.
 func EqualsRefOfBegin(a, b *Begin) bool {
 	if a == b {
 		return true
@@ -4279,7 +4279,7 @@ func CloneRefOfCallProc(n *CallProc) *CallProc {
 	return &out
 }
 
-// EqualsRefOfCallProc creates a deep clone of the input.
+// EqualsRefOfCallProc does deep equals between the two objects.
 func EqualsRefOfCallProc(a, b *CallProc) bool {
 	if a == b {
 		return true
@@ -4296,7 +4296,7 @@ func CloneColIdent(n ColIdent) ColIdent {
 	return *CloneRefOfColIdent(&n)
 }
 
-// EqualsColIdent creates a deep clone of the input.
+// EqualsColIdent does deep equals between the two objects.
 func EqualsColIdent(a, b ColIdent) bool {
 	return a.val == b.val &&
 		a.lowered == b.lowered &&
@@ -4314,7 +4314,7 @@ func CloneRefOfColumnDefinition(n *ColumnDefinition) *ColumnDefinition {
 	return &out
 }
 
-// EqualsRefOfColumnDefinition creates a deep clone of the input.
+// EqualsRefOfColumnDefinition does deep equals between the two objects.
 func EqualsRefOfColumnDefinition(a, b *ColumnDefinition) bool {
 	if a == b {
 		return true
@@ -4339,7 +4339,7 @@ func CloneRefOfColumnType(n *ColumnType) *ColumnType {
 	return &out
 }
 
-// EqualsRefOfColumnType creates a deep clone of the input.
+// EqualsRefOfColumnType does deep equals between the two objects.
 func EqualsRefOfColumnType(a, b *ColumnType) bool {
 	if a == b {
 		return true
@@ -4367,7 +4367,7 @@ func CloneColumns(n Columns) Columns {
 	return res
 }
 
-// EqualsColumns creates a deep clone of the input.
+// EqualsColumns does deep equals between the two objects.
 func EqualsColumns(a, b Columns) bool {
 	if len(a) != len(b) {
 		return false
@@ -4387,7 +4387,7 @@ func CloneComments(n Comments) Comments {
 	return res
 }
 
-// EqualsComments creates a deep clone of the input.
+// EqualsComments does deep equals between the two objects.
 func EqualsComments(a, b Comments) bool {
 	if len(a) != len(b) {
 		return false
@@ -4409,7 +4409,7 @@ func CloneRefOfCommit(n *Commit) *Commit {
 	return &out
 }
 
-// EqualsRefOfCommit creates a deep clone of the input.
+// EqualsRefOfCommit does deep equals between the two objects.
 func EqualsRefOfCommit(a, b *Commit) bool {
 	if a == b {
 		return true
@@ -4430,7 +4430,7 @@ func CloneRefOfConstraintDefinition(n *ConstraintDefinition) *ConstraintDefiniti
 	return &out
 }
 
-// EqualsRefOfConstraintDefinition creates a deep clone of the input.
+// EqualsRefOfConstraintDefinition does deep equals between the two objects.
 func EqualsRefOfConstraintDefinition(a, b *ConstraintDefinition) bool {
 	if a == b {
 		return true
@@ -4453,7 +4453,7 @@ func CloneRefOfConvertType(n *ConvertType) *ConvertType {
 	return &out
 }
 
-// EqualsRefOfConvertType creates a deep clone of the input.
+// EqualsRefOfConvertType does deep equals between the two objects.
 func EqualsRefOfConvertType(a, b *ConvertType) bool {
 	if a == b {
 		return true
@@ -4484,7 +4484,7 @@ func CloneRefOfDelete(n *Delete) *Delete {
 	return &out
 }
 
-// EqualsRefOfDelete creates a deep clone of the input.
+// EqualsRefOfDelete does deep equals between the two objects.
 func EqualsRefOfDelete(a, b *Delete) bool {
 	if a == b {
 		return true
@@ -4512,7 +4512,7 @@ func CloneRefOfDerivedTable(n *DerivedTable) *DerivedTable {
 	return &out
 }
 
-// EqualsRefOfDerivedTable creates a deep clone of the input.
+// EqualsRefOfDerivedTable does deep equals between the two objects.
 func EqualsRefOfDerivedTable(a, b *DerivedTable) bool {
 	if a == b {
 		return true
@@ -4532,7 +4532,7 @@ func CloneExprs(n Exprs) Exprs {
 	return res
 }
 
-// EqualsExprs creates a deep clone of the input.
+// EqualsExprs does deep equals between the two objects.
 func EqualsExprs(a, b Exprs) bool {
 	if len(a) != len(b) {
 		return false
@@ -4556,7 +4556,7 @@ func CloneRefOfFlush(n *Flush) *Flush {
 	return &out
 }
 
-// EqualsRefOfFlush creates a deep clone of the input.
+// EqualsRefOfFlush does deep equals between the two objects.
 func EqualsRefOfFlush(a, b *Flush) bool {
 	if a == b {
 		return true
@@ -4580,7 +4580,7 @@ func CloneGroupBy(n GroupBy) GroupBy {
 	return res
 }
 
-// EqualsGroupBy creates a deep clone of the input.
+// EqualsGroupBy does deep equals between the two objects.
 func EqualsGroupBy(a, b GroupBy) bool {
 	if len(a) != len(b) {
 		return false
@@ -4605,7 +4605,7 @@ func CloneRefOfIndexDefinition(n *IndexDefinition) *IndexDefinition {
 	return &out
 }
 
-// EqualsRefOfIndexDefinition creates a deep clone of the input.
+// EqualsRefOfIndexDefinition does deep equals between the two objects.
 func EqualsRefOfIndexDefinition(a, b *IndexDefinition) bool {
 	if a == b {
 		return true
@@ -4628,7 +4628,7 @@ func CloneRefOfIndexHints(n *IndexHints) *IndexHints {
 	return &out
 }
 
-// EqualsRefOfIndexHints creates a deep clone of the input.
+// EqualsRefOfIndexHints does deep equals between the two objects.
 func EqualsRefOfIndexHints(a, b *IndexHints) bool {
 	if a == b {
 		return true
@@ -4651,7 +4651,7 @@ func CloneRefOfIndexInfo(n *IndexInfo) *IndexInfo {
 	return &out
 }
 
-// EqualsRefOfIndexInfo creates a deep clone of the input.
+// EqualsRefOfIndexInfo does deep equals between the two objects.
 func EqualsRefOfIndexInfo(a, b *IndexInfo) bool {
 	if a == b {
 		return true
@@ -4683,7 +4683,7 @@ func CloneRefOfInsert(n *Insert) *Insert {
 	return &out
 }
 
-// EqualsRefOfInsert creates a deep clone of the input.
+// EqualsRefOfInsert does deep equals between the two objects.
 func EqualsRefOfInsert(a, b *Insert) bool {
 	if a == b {
 		return true
@@ -4706,7 +4706,7 @@ func CloneJoinCondition(n JoinCondition) JoinCondition {
 	return *CloneRefOfJoinCondition(&n)
 }
 
-// EqualsJoinCondition creates a deep clone of the input.
+// EqualsJoinCondition does deep equals between the two objects.
 func EqualsJoinCondition(a, b JoinCondition) bool {
 	return EqualsExpr(a.On, b.On) &&
 		EqualsColumns(a.Using, b.Using)
@@ -4724,7 +4724,7 @@ func CloneRefOfJoinTableExpr(n *JoinTableExpr) *JoinTableExpr {
 	return &out
 }
 
-// EqualsRefOfJoinTableExpr creates a deep clone of the input.
+// EqualsRefOfJoinTableExpr does deep equals between the two objects.
 func EqualsRefOfJoinTableExpr(a, b *JoinTableExpr) bool {
 	if a == b {
 		return true
@@ -4749,7 +4749,7 @@ func CloneRefOfLimit(n *Limit) *Limit {
 	return &out
 }
 
-// EqualsRefOfLimit creates a deep clone of the input.
+// EqualsRefOfLimit does deep equals between the two objects.
 func EqualsRefOfLimit(a, b *Limit) bool {
 	if a == b {
 		return true
@@ -4770,7 +4770,7 @@ func CloneRefOfLoad(n *Load) *Load {
 	return &out
 }
 
-// EqualsRefOfLoad creates a deep clone of the input.
+// EqualsRefOfLoad does deep equals between the two objects.
 func EqualsRefOfLoad(a, b *Load) bool {
 	if a == b {
 		return true
@@ -4791,7 +4791,7 @@ func CloneRefOfLockTables(n *LockTables) *LockTables {
 	return &out
 }
 
-// EqualsRefOfLockTables creates a deep clone of the input.
+// EqualsRefOfLockTables does deep equals between the two objects.
 func EqualsRefOfLockTables(a, b *LockTables) bool {
 	if a == b {
 		return true
@@ -4812,7 +4812,7 @@ func CloneRefOfNextval(n *Nextval) *Nextval {
 	return &out
 }
 
-// EqualsRefOfNextval creates a deep clone of the input.
+// EqualsRefOfNextval does deep equals between the two objects.
 func EqualsRefOfNextval(a, b *Nextval) bool {
 	if a == b {
 		return true
@@ -4832,7 +4832,7 @@ func CloneOnDup(n OnDup) OnDup {
 	return res
 }
 
-// EqualsOnDup creates a deep clone of the input.
+// EqualsOnDup does deep equals between the two objects.
 func EqualsOnDup(a, b OnDup) bool {
 	if len(a) != len(b) {
 		return false
@@ -4855,7 +4855,7 @@ func CloneRefOfOptLike(n *OptLike) *OptLike {
 	return &out
 }
 
-// EqualsRefOfOptLike creates a deep clone of the input.
+// EqualsRefOfOptLike does deep equals between the two objects.
 func EqualsRefOfOptLike(a, b *OptLike) bool {
 	if a == b {
 		return true
@@ -4876,7 +4876,7 @@ func CloneRefOfOrder(n *Order) *Order {
 	return &out
 }
 
-// EqualsRefOfOrder creates a deep clone of the input.
+// EqualsRefOfOrder does deep equals between the two objects.
 func EqualsRefOfOrder(a, b *Order) bool {
 	if a == b {
 		return true
@@ -4897,7 +4897,7 @@ func CloneOrderBy(n OrderBy) OrderBy {
 	return res
 }
 
-// EqualsOrderBy creates a deep clone of the input.
+// EqualsOrderBy does deep equals between the two objects.
 func EqualsOrderBy(a, b OrderBy) bool {
 	if len(a) != len(b) {
 		return false
@@ -4919,7 +4919,7 @@ func CloneRefOfOtherAdmin(n *OtherAdmin) *OtherAdmin {
 	return &out
 }
 
-// EqualsRefOfOtherAdmin creates a deep clone of the input.
+// EqualsRefOfOtherAdmin does deep equals between the two objects.
 func EqualsRefOfOtherAdmin(a, b *OtherAdmin) bool {
 	if a == b {
 		return true
@@ -4939,7 +4939,7 @@ func CloneRefOfOtherRead(n *OtherRead) *OtherRead {
 	return &out
 }
 
-// EqualsRefOfOtherRead creates a deep clone of the input.
+// EqualsRefOfOtherRead does deep equals between the two objects.
 func EqualsRefOfOtherRead(a, b *OtherRead) bool {
 	if a == b {
 		return true
@@ -4960,7 +4960,7 @@ func CloneRefOfParenTableExpr(n *ParenTableExpr) *ParenTableExpr {
 	return &out
 }
 
-// EqualsRefOfParenTableExpr creates a deep clone of the input.
+// EqualsRefOfParenTableExpr does deep equals between the two objects.
 func EqualsRefOfParenTableExpr(a, b *ParenTableExpr) bool {
 	if a == b {
 		return true
@@ -4982,7 +4982,7 @@ func CloneRefOfPartitionDefinition(n *PartitionDefinition) *PartitionDefinition 
 	return &out
 }
 
-// EqualsRefOfPartitionDefinition creates a deep clone of the input.
+// EqualsRefOfPartitionDefinition does deep equals between the two objects.
 func EqualsRefOfPartitionDefinition(a, b *PartitionDefinition) bool {
 	if a == b {
 		return true
@@ -5008,7 +5008,7 @@ func CloneRefOfPartitionSpec(n *PartitionSpec) *PartitionSpec {
 	return &out
 }
 
-// EqualsRefOfPartitionSpec creates a deep clone of the input.
+// EqualsRefOfPartitionSpec does deep equals between the two objects.
 func EqualsRefOfPartitionSpec(a, b *PartitionSpec) bool {
 	if a == b {
 		return true
@@ -5034,7 +5034,7 @@ func ClonePartitions(n Partitions) Partitions {
 	return res
 }
 
-// EqualsPartitions creates a deep clone of the input.
+// EqualsPartitions does deep equals between the two objects.
 func EqualsPartitions(a, b Partitions) bool {
 	if len(a) != len(b) {
 		return false
@@ -5057,7 +5057,7 @@ func CloneRefOfRelease(n *Release) *Release {
 	return &out
 }
 
-// EqualsRefOfRelease creates a deep clone of the input.
+// EqualsRefOfRelease does deep equals between the two objects.
 func EqualsRefOfRelease(a, b *Release) bool {
 	if a == b {
 		return true
@@ -5077,7 +5077,7 @@ func CloneRefOfRollback(n *Rollback) *Rollback {
 	return &out
 }
 
-// EqualsRefOfRollback creates a deep clone of the input.
+// EqualsRefOfRollback does deep equals between the two objects.
 func EqualsRefOfRollback(a, b *Rollback) bool {
 	if a == b {
 		return true
@@ -5098,7 +5098,7 @@ func CloneRefOfSRollback(n *SRollback) *SRollback {
 	return &out
 }
 
-// EqualsRefOfSRollback creates a deep clone of the input.
+// EqualsRefOfSRollback does deep equals between the two objects.
 func EqualsRefOfSRollback(a, b *SRollback) bool {
 	if a == b {
 		return true
@@ -5119,7 +5119,7 @@ func CloneRefOfSavepoint(n *Savepoint) *Savepoint {
 	return &out
 }
 
-// EqualsRefOfSavepoint creates a deep clone of the input.
+// EqualsRefOfSavepoint does deep equals between the two objects.
 func EqualsRefOfSavepoint(a, b *Savepoint) bool {
 	if a == b {
 		return true
@@ -5139,7 +5139,7 @@ func CloneSelectExprs(n SelectExprs) SelectExprs {
 	return res
 }
 
-// EqualsSelectExprs creates a deep clone of the input.
+// EqualsSelectExprs does deep equals between the two objects.
 func EqualsSelectExprs(a, b SelectExprs) bool {
 	if len(a) != len(b) {
 		return false
@@ -5161,7 +5161,7 @@ func CloneRefOfSelectInto(n *SelectInto) *SelectInto {
 	return &out
 }
 
-// EqualsRefOfSelectInto creates a deep clone of the input.
+// EqualsRefOfSelectInto does deep equals between the two objects.
 func EqualsRefOfSelectInto(a, b *SelectInto) bool {
 	if a == b {
 		return true
@@ -5189,7 +5189,7 @@ func CloneRefOfSet(n *Set) *Set {
 	return &out
 }
 
-// EqualsRefOfSet creates a deep clone of the input.
+// EqualsRefOfSet does deep equals between the two objects.
 func EqualsRefOfSet(a, b *Set) bool {
 	if a == b {
 		return true
@@ -5212,7 +5212,7 @@ func CloneRefOfSetExpr(n *SetExpr) *SetExpr {
 	return &out
 }
 
-// EqualsRefOfSetExpr creates a deep clone of the input.
+// EqualsRefOfSetExpr does deep equals between the two objects.
 func EqualsRefOfSetExpr(a, b *SetExpr) bool {
 	if a == b {
 		return true
@@ -5234,7 +5234,7 @@ func CloneSetExprs(n SetExprs) SetExprs {
 	return res
 }
 
-// EqualsSetExprs creates a deep clone of the input.
+// EqualsSetExprs does deep equals between the two objects.
 func EqualsSetExprs(a, b SetExprs) bool {
 	if len(a) != len(b) {
 		return false
@@ -5259,7 +5259,7 @@ func CloneRefOfSetTransaction(n *SetTransaction) *SetTransaction {
 	return &out
 }
 
-// EqualsRefOfSetTransaction creates a deep clone of the input.
+// EqualsRefOfSetTransaction does deep equals between the two objects.
 func EqualsRefOfSetTransaction(a, b *SetTransaction) bool {
 	if a == b {
 		return true
@@ -5283,7 +5283,7 @@ func CloneRefOfShow(n *Show) *Show {
 	return &out
 }
 
-// EqualsRefOfShow creates a deep clone of the input.
+// EqualsRefOfShow does deep equals between the two objects.
 func EqualsRefOfShow(a, b *Show) bool {
 	if a == b {
 		return true
@@ -5305,7 +5305,7 @@ func CloneRefOfShowBasic(n *ShowBasic) *ShowBasic {
 	return &out
 }
 
-// EqualsRefOfShowBasic creates a deep clone of the input.
+// EqualsRefOfShowBasic does deep equals between the two objects.
 func EqualsRefOfShowBasic(a, b *ShowBasic) bool {
 	if a == b {
 		return true
@@ -5330,7 +5330,7 @@ func CloneRefOfShowCreate(n *ShowCreate) *ShowCreate {
 	return &out
 }
 
-// EqualsRefOfShowCreate creates a deep clone of the input.
+// EqualsRefOfShowCreate does deep equals between the two objects.
 func EqualsRefOfShowCreate(a, b *ShowCreate) bool {
 	if a == b {
 		return true
@@ -5352,7 +5352,7 @@ func CloneRefOfShowFilter(n *ShowFilter) *ShowFilter {
 	return &out
 }
 
-// EqualsRefOfShowFilter creates a deep clone of the input.
+// EqualsRefOfShowFilter does deep equals between the two objects.
 func EqualsRefOfShowFilter(a, b *ShowFilter) bool {
 	if a == b {
 		return true
@@ -5377,7 +5377,7 @@ func CloneRefOfShowLegacy(n *ShowLegacy) *ShowLegacy {
 	return &out
 }
 
-// EqualsRefOfShowLegacy creates a deep clone of the input.
+// EqualsRefOfShowLegacy does deep equals between the two objects.
 func EqualsRefOfShowLegacy(a, b *ShowLegacy) bool {
 	if a == b {
 		return true
@@ -5404,7 +5404,7 @@ func CloneRefOfStarExpr(n *StarExpr) *StarExpr {
 	return &out
 }
 
-// EqualsRefOfStarExpr creates a deep clone of the input.
+// EqualsRefOfStarExpr does deep equals between the two objects.
 func EqualsRefOfStarExpr(a, b *StarExpr) bool {
 	if a == b {
 		return true
@@ -5427,7 +5427,7 @@ func CloneRefOfStream(n *Stream) *Stream {
 	return &out
 }
 
-// EqualsRefOfStream creates a deep clone of the input.
+// EqualsRefOfStream does deep equals between the two objects.
 func EqualsRefOfStream(a, b *Stream) bool {
 	if a == b {
 		return true
@@ -5449,7 +5449,7 @@ func CloneTableExprs(n TableExprs) TableExprs {
 	return res
 }
 
-// EqualsTableExprs creates a deep clone of the input.
+// EqualsTableExprs does deep equals between the two objects.
 func EqualsTableExprs(a, b TableExprs) bool {
 	if len(a) != len(b) {
 		return false
@@ -5467,7 +5467,7 @@ func CloneTableIdent(n TableIdent) TableIdent {
 	return *CloneRefOfTableIdent(&n)
 }
 
-// EqualsTableIdent creates a deep clone of the input.
+// EqualsTableIdent does deep equals between the two objects.
 func EqualsTableIdent(a, b TableIdent) bool {
 	return a.v == b.v
 }
@@ -5477,7 +5477,7 @@ func CloneTableName(n TableName) TableName {
 	return *CloneRefOfTableName(&n)
 }
 
-// EqualsTableName creates a deep clone of the input.
+// EqualsTableName does deep equals between the two objects.
 func EqualsTableName(a, b TableName) bool {
 	return EqualsTableIdent(a.Name, b.Name) &&
 		EqualsTableIdent(a.Qualifier, b.Qualifier)
@@ -5492,7 +5492,7 @@ func CloneTableNames(n TableNames) TableNames {
 	return res
 }
 
-// EqualsTableNames creates a deep clone of the input.
+// EqualsTableNames does deep equals between the two objects.
 func EqualsTableNames(a, b TableNames) bool {
 	if len(a) != len(b) {
 		return false
@@ -5518,7 +5518,7 @@ func CloneRefOfTableSpec(n *TableSpec) *TableSpec {
 	return &out
 }
 
-// EqualsRefOfTableSpec creates a deep clone of the input.
+// EqualsRefOfTableSpec does deep equals between the two objects.
 func EqualsRefOfTableSpec(a, b *TableSpec) bool {
 	if a == b {
 		return true
@@ -5542,7 +5542,7 @@ func CloneRefOfUnionSelect(n *UnionSelect) *UnionSelect {
 	return &out
 }
 
-// EqualsRefOfUnionSelect creates a deep clone of the input.
+// EqualsRefOfUnionSelect does deep equals between the two objects.
 func EqualsRefOfUnionSelect(a, b *UnionSelect) bool {
 	if a == b {
 		return true
@@ -5563,7 +5563,7 @@ func CloneRefOfUnlockTables(n *UnlockTables) *UnlockTables {
 	return &out
 }
 
-// EqualsRefOfUnlockTables creates a deep clone of the input.
+// EqualsRefOfUnlockTables does deep equals between the two objects.
 func EqualsRefOfUnlockTables(a, b *UnlockTables) bool {
 	if a == b {
 		return true
@@ -5589,7 +5589,7 @@ func CloneRefOfUpdate(n *Update) *Update {
 	return &out
 }
 
-// EqualsRefOfUpdate creates a deep clone of the input.
+// EqualsRefOfUpdate does deep equals between the two objects.
 func EqualsRefOfUpdate(a, b *Update) bool {
 	if a == b {
 		return true
@@ -5617,7 +5617,7 @@ func CloneRefOfUpdateExpr(n *UpdateExpr) *UpdateExpr {
 	return &out
 }
 
-// EqualsRefOfUpdateExpr creates a deep clone of the input.
+// EqualsRefOfUpdateExpr does deep equals between the two objects.
 func EqualsRefOfUpdateExpr(a, b *UpdateExpr) bool {
 	if a == b {
 		return true
@@ -5638,7 +5638,7 @@ func CloneUpdateExprs(n UpdateExprs) UpdateExprs {
 	return res
 }
 
-// EqualsUpdateExprs creates a deep clone of the input.
+// EqualsUpdateExprs does deep equals between the two objects.
 func EqualsUpdateExprs(a, b UpdateExprs) bool {
 	if len(a) != len(b) {
 		return false
@@ -5661,7 +5661,7 @@ func CloneRefOfUse(n *Use) *Use {
 	return &out
 }
 
-// EqualsRefOfUse creates a deep clone of the input.
+// EqualsRefOfUse does deep equals between the two objects.
 func EqualsRefOfUse(a, b *Use) bool {
 	if a == b {
 		return true
@@ -5686,7 +5686,7 @@ func CloneRefOfVStream(n *VStream) *VStream {
 	return &out
 }
 
-// EqualsRefOfVStream creates a deep clone of the input.
+// EqualsRefOfVStream does deep equals between the two objects.
 func EqualsRefOfVStream(a, b *VStream) bool {
 	if a == b {
 		return true
@@ -5706,7 +5706,7 @@ func CloneVindexParam(n VindexParam) VindexParam {
 	return *CloneRefOfVindexParam(&n)
 }
 
-// EqualsVindexParam creates a deep clone of the input.
+// EqualsVindexParam does deep equals between the two objects.
 func EqualsVindexParam(a, b VindexParam) bool {
 	return a.Val == b.Val &&
 		EqualsColIdent(a.Key, b.Key)
@@ -5724,7 +5724,7 @@ func CloneRefOfVindexSpec(n *VindexSpec) *VindexSpec {
 	return &out
 }
 
-// EqualsRefOfVindexSpec creates a deep clone of the input.
+// EqualsRefOfVindexSpec does deep equals between the two objects.
 func EqualsRefOfVindexSpec(a, b *VindexSpec) bool {
 	if a == b {
 		return true
@@ -5748,7 +5748,7 @@ func CloneRefOfWhen(n *When) *When {
 	return &out
 }
 
-// EqualsRefOfWhen creates a deep clone of the input.
+// EqualsRefOfWhen does deep equals between the two objects.
 func EqualsRefOfWhen(a, b *When) bool {
 	if a == b {
 		return true
@@ -5770,7 +5770,7 @@ func CloneRefOfWhere(n *Where) *Where {
 	return &out
 }
 
-// EqualsRefOfWhere creates a deep clone of the input.
+// EqualsRefOfWhere does deep equals between the two objects.
 func EqualsRefOfWhere(a, b *Where) bool {
 	if a == b {
 		return true
@@ -5791,7 +5791,7 @@ func CloneSliceOfRefOfColumnDefinition(n []*ColumnDefinition) []*ColumnDefinitio
 	return res
 }
 
-// EqualsSliceOfRefOfColumnDefinition creates a deep clone of the input.
+// EqualsSliceOfRefOfColumnDefinition does deep equals between the two objects.
 func EqualsSliceOfRefOfColumnDefinition(a, b []*ColumnDefinition) bool {
 	if len(a) != len(b) {
 		return false
@@ -5815,7 +5815,7 @@ func CloneRefOfTableOption(n *TableOption) *TableOption {
 	return &out
 }
 
-// EqualsRefOfTableOption creates a deep clone of the input.
+// EqualsRefOfTableOption does deep equals between the two objects.
 func EqualsRefOfTableOption(a, b *TableOption) bool {
 	if a == b {
 		return true
@@ -5838,7 +5838,7 @@ func CloneSliceOfCollateAndCharset(n []CollateAndCharset) []CollateAndCharset {
 	return res
 }
 
-// EqualsSliceOfCollateAndCharset creates a deep clone of the input.
+// EqualsSliceOfCollateAndCharset does deep equals between the two objects.
 func EqualsSliceOfCollateAndCharset(a, b []CollateAndCharset) bool {
 	if len(a) != len(b) {
 		return false
@@ -5860,7 +5860,7 @@ func CloneSliceOfAlterOption(n []AlterOption) []AlterOption {
 	return res
 }
 
-// EqualsSliceOfAlterOption creates a deep clone of the input.
+// EqualsSliceOfAlterOption does deep equals between the two objects.
 func EqualsSliceOfAlterOption(a, b []AlterOption) bool {
 	if len(a) != len(b) {
 		return false
@@ -5882,7 +5882,7 @@ func CloneSliceOfRefOfRenameTablePair(n []*RenameTablePair) []*RenameTablePair {
 	return res
 }
 
-// EqualsSliceOfRefOfRenameTablePair creates a deep clone of the input.
+// EqualsSliceOfRefOfRenameTablePair does deep equals between the two objects.
 func EqualsSliceOfRefOfRenameTablePair(a, b []*RenameTablePair) bool {
 	if len(a) != len(b) {
 		return false
@@ -5904,7 +5904,7 @@ func CloneSliceOfRefOfWhen(n []*When) []*When {
 	return res
 }
 
-// EqualsSliceOfRefOfWhen creates a deep clone of the input.
+// EqualsSliceOfRefOfWhen does deep equals between the two objects.
 func EqualsSliceOfRefOfWhen(a, b []*When) bool {
 	if len(a) != len(b) {
 		return false
@@ -5917,7 +5917,7 @@ func EqualsSliceOfRefOfWhen(a, b []*When) bool {
 	return true
 }
 
-// EqualsRefOfBool creates a deep clone of the input.
+// EqualsRefOfBool does deep equals between the two objects.
 func EqualsRefOfBool(a, b *bool) bool {
 	if a == b {
 		return true
@@ -5946,7 +5946,7 @@ func CloneSliceOfRefOfUnionSelect(n []*UnionSelect) []*UnionSelect {
 	return res
 }
 
-// EqualsSliceOfRefOfUnionSelect creates a deep clone of the input.
+// EqualsSliceOfRefOfUnionSelect does deep equals between the two objects.
 func EqualsSliceOfRefOfUnionSelect(a, b []*UnionSelect) bool {
 	if len(a) != len(b) {
 		return false
@@ -5968,7 +5968,7 @@ func CloneSliceOfColIdent(n []ColIdent) []ColIdent {
 	return res
 }
 
-// EqualsSliceOfColIdent creates a deep clone of the input.
+// EqualsSliceOfColIdent does deep equals between the two objects.
 func EqualsSliceOfColIdent(a, b []ColIdent) bool {
 	if len(a) != len(b) {
 		return false
@@ -5990,7 +5990,7 @@ func CloneRefOfColIdent(n *ColIdent) *ColIdent {
 	return &out
 }
 
-// EqualsRefOfColIdent creates a deep clone of the input.
+// EqualsRefOfColIdent does deep equals between the two objects.
 func EqualsRefOfColIdent(a, b *ColIdent) bool {
 	if a == b {
 		return true
@@ -6008,7 +6008,7 @@ func CloneColumnType(n ColumnType) ColumnType {
 	return *CloneRefOfColumnType(&n)
 }
 
-// EqualsColumnType creates a deep clone of the input.
+// EqualsColumnType does deep equals between the two objects.
 func EqualsColumnType(a, b ColumnType) bool {
 	return a.Type == b.Type &&
 		a.Unsigned == b.Unsigned &&
@@ -6033,7 +6033,7 @@ func CloneRefOfColumnTypeOptions(n *ColumnTypeOptions) *ColumnTypeOptions {
 	return &out
 }
 
-// EqualsRefOfColumnTypeOptions creates a deep clone of the input.
+// EqualsRefOfColumnTypeOptions does deep equals between the two objects.
 func EqualsRefOfColumnTypeOptions(a, b *ColumnTypeOptions) bool {
 	if a == b {
 		return true
@@ -6056,7 +6056,7 @@ func CloneSliceOfString(n []string) []string {
 	return res
 }
 
-// EqualsSliceOfString creates a deep clone of the input.
+// EqualsSliceOfString does deep equals between the two objects.
 func EqualsSliceOfString(a, b []string) bool {
 	if len(a) != len(b) {
 		return false
@@ -6078,7 +6078,7 @@ func CloneSliceOfRefOfIndexColumn(n []*IndexColumn) []*IndexColumn {
 	return res
 }
 
-// EqualsSliceOfRefOfIndexColumn creates a deep clone of the input.
+// EqualsSliceOfRefOfIndexColumn does deep equals between the two objects.
 func EqualsSliceOfRefOfIndexColumn(a, b []*IndexColumn) bool {
 	if len(a) != len(b) {
 		return false
@@ -6100,7 +6100,7 @@ func CloneSliceOfRefOfIndexOption(n []*IndexOption) []*IndexOption {
 	return res
 }
 
-// EqualsSliceOfRefOfIndexOption creates a deep clone of the input.
+// EqualsSliceOfRefOfIndexOption does deep equals between the two objects.
 func EqualsSliceOfRefOfIndexOption(a, b []*IndexOption) bool {
 	if len(a) != len(b) {
 		return false
@@ -6124,7 +6124,7 @@ func CloneRefOfJoinCondition(n *JoinCondition) *JoinCondition {
 	return &out
 }
 
-// EqualsRefOfJoinCondition creates a deep clone of the input.
+// EqualsRefOfJoinCondition does deep equals between the two objects.
 func EqualsRefOfJoinCondition(a, b *JoinCondition) bool {
 	if a == b {
 		return true
@@ -6145,7 +6145,7 @@ func CloneTableAndLockTypes(n TableAndLockTypes) TableAndLockTypes {
 	return res
 }
 
-// EqualsTableAndLockTypes creates a deep clone of the input.
+// EqualsTableAndLockTypes does deep equals between the two objects.
 func EqualsTableAndLockTypes(a, b TableAndLockTypes) bool {
 	if len(a) != len(b) {
 		return false
@@ -6167,7 +6167,7 @@ func CloneSliceOfRefOfPartitionDefinition(n []*PartitionDefinition) []*Partition
 	return res
 }
 
-// EqualsSliceOfRefOfPartitionDefinition creates a deep clone of the input.
+// EqualsSliceOfRefOfPartitionDefinition does deep equals between the two objects.
 func EqualsSliceOfRefOfPartitionDefinition(a, b []*PartitionDefinition) bool {
 	if len(a) != len(b) {
 		return false
@@ -6189,7 +6189,7 @@ func CloneSliceOfCharacteristic(n []Characteristic) []Characteristic {
 	return res
 }
 
-// EqualsSliceOfCharacteristic creates a deep clone of the input.
+// EqualsSliceOfCharacteristic does deep equals between the two objects.
 func EqualsSliceOfCharacteristic(a, b []Characteristic) bool {
 	if len(a) != len(b) {
 		return false
@@ -6212,7 +6212,7 @@ func CloneRefOfShowTablesOpt(n *ShowTablesOpt) *ShowTablesOpt {
 	return &out
 }
 
-// EqualsRefOfShowTablesOpt creates a deep clone of the input.
+// EqualsRefOfShowTablesOpt does deep equals between the two objects.
 func EqualsRefOfShowTablesOpt(a, b *ShowTablesOpt) bool {
 	if a == b {
 		return true
@@ -6234,7 +6234,7 @@ func CloneRefOfTableIdent(n *TableIdent) *TableIdent {
 	return &out
 }
 
-// EqualsRefOfTableIdent creates a deep clone of the input.
+// EqualsRefOfTableIdent does deep equals between the two objects.
 func EqualsRefOfTableIdent(a, b *TableIdent) bool {
 	if a == b {
 		return true
@@ -6256,7 +6256,7 @@ func CloneRefOfTableName(n *TableName) *TableName {
 	return &out
 }
 
-// EqualsRefOfTableName creates a deep clone of the input.
+// EqualsRefOfTableName does deep equals between the two objects.
 func EqualsRefOfTableName(a, b *TableName) bool {
 	if a == b {
 		return true
@@ -6277,7 +6277,7 @@ func CloneSliceOfRefOfIndexDefinition(n []*IndexDefinition) []*IndexDefinition {
 	return res
 }
 
-// EqualsSliceOfRefOfIndexDefinition creates a deep clone of the input.
+// EqualsSliceOfRefOfIndexDefinition does deep equals between the two objects.
 func EqualsSliceOfRefOfIndexDefinition(a, b []*IndexDefinition) bool {
 	if len(a) != len(b) {
 		return false
@@ -6299,7 +6299,7 @@ func CloneSliceOfRefOfConstraintDefinition(n []*ConstraintDefinition) []*Constra
 	return res
 }
 
-// EqualsSliceOfRefOfConstraintDefinition creates a deep clone of the input.
+// EqualsSliceOfRefOfConstraintDefinition does deep equals between the two objects.
 func EqualsSliceOfRefOfConstraintDefinition(a, b []*ConstraintDefinition) bool {
 	if len(a) != len(b) {
 		return false
@@ -6322,7 +6322,7 @@ func CloneRefOfVindexParam(n *VindexParam) *VindexParam {
 	return &out
 }
 
-// EqualsRefOfVindexParam creates a deep clone of the input.
+// EqualsRefOfVindexParam does deep equals between the two objects.
 func EqualsRefOfVindexParam(a, b *VindexParam) bool {
 	if a == b {
 		return true
@@ -6343,7 +6343,7 @@ func CloneSliceOfVindexParam(n []VindexParam) []VindexParam {
 	return res
 }
 
-// EqualsSliceOfVindexParam creates a deep clone of the input.
+// EqualsSliceOfVindexParam does deep equals between the two objects.
 func EqualsSliceOfVindexParam(a, b []VindexParam) bool {
 	if len(a) != len(b) {
 		return false
@@ -6361,7 +6361,7 @@ func CloneCollateAndCharset(n CollateAndCharset) CollateAndCharset {
 	return *CloneRefOfCollateAndCharset(&n)
 }
 
-// EqualsCollateAndCharset creates a deep clone of the input.
+// EqualsCollateAndCharset does deep equals between the two objects.
 func EqualsCollateAndCharset(a, b CollateAndCharset) bool {
 	return a.IsDefault == b.IsDefault &&
 		a.Value == b.Value &&
@@ -6379,7 +6379,7 @@ func CloneRefOfRenameTablePair(n *RenameTablePair) *RenameTablePair {
 	return &out
 }
 
-// EqualsRefOfRenameTablePair creates a deep clone of the input.
+// EqualsRefOfRenameTablePair does deep equals between the two objects.
 func EqualsRefOfRenameTablePair(a, b *RenameTablePair) bool {
 	if a == b {
 		return true
@@ -6402,7 +6402,7 @@ func CloneRefOfIndexColumn(n *IndexColumn) *IndexColumn {
 	return &out
 }
 
-// EqualsRefOfIndexColumn creates a deep clone of the input.
+// EqualsRefOfIndexColumn does deep equals between the two objects.
 func EqualsRefOfIndexColumn(a, b *IndexColumn) bool {
 	if a == b {
 		return true
@@ -6425,7 +6425,7 @@ func CloneRefOfIndexOption(n *IndexOption) *IndexOption {
 	return &out
 }
 
-// EqualsRefOfIndexOption creates a deep clone of the input.
+// EqualsRefOfIndexOption does deep equals between the two objects.
 func EqualsRefOfIndexOption(a, b *IndexOption) bool {
 	if a == b {
 		return true
@@ -6448,7 +6448,7 @@ func CloneRefOfTableAndLockType(n *TableAndLockType) *TableAndLockType {
 	return &out
 }
 
-// EqualsRefOfTableAndLockType creates a deep clone of the input.
+// EqualsRefOfTableAndLockType does deep equals between the two objects.
 func EqualsRefOfTableAndLockType(a, b *TableAndLockType) bool {
 	if a == b {
 		return true
@@ -6469,7 +6469,7 @@ func CloneRefOfCollateAndCharset(n *CollateAndCharset) *CollateAndCharset {
 	return &out
 }
 
-// EqualsRefOfCollateAndCharset creates a deep clone of the input.
+// EqualsRefOfCollateAndCharset does deep equals between the two objects.
 func EqualsRefOfCollateAndCharset(a, b *CollateAndCharset) bool {
 	if a == b {
 		return true
