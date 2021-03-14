@@ -429,18 +429,8 @@ type GetSchemaOptions struct {
 
 // GetSchemaForKeyspace blah blah TODO: unify this with GetSchema.
 func (c *Cluster) GetSchemaForKeyspace(ctx context.Context, keyspace string, opts GetSchemaOptions) (*vtadminpb.Schema, error) {
-	// TODO: spans
-	if len(opts.Tablets) == 0 {
-		// Fetch all tablets for the keyspace.
-		var err error
-
-		opts.Tablets, err = c.FindTablets(ctx, func(tablet *vtadminpb.Tablet) bool {
-			return tablet.Tablet.Keyspace == keyspace
-		}, -1)
-		if err != nil {
-			return nil, fmt.Errorf("%w for keyspace %s", errors.ErrNoTablet, keyspace)
-		}
-	}
+	span, ctx := trace.NewSpan(ctx, "Cluster.GetSchema")
+	defer span.Finish()
 
 	if opts.SizeOpts == nil {
 		opts.SizeOpts = &vtadminpb.GetSchemaTableSizeOptions{
@@ -453,18 +443,43 @@ func (c *Cluster) GetSchemaForKeyspace(ctx context.Context, keyspace string, opt
 		opts.BaseRequest = &vtctldatapb.GetSchemaRequest{}
 	}
 
+	AnnotateSpan(c, span)
+	span.Annotate("keyspace", keyspace)
+	annotateGetSchemaRequest(opts.BaseRequest, span)
+	vtadminproto.AnnotateSpanWithGetSchemaTableSizeOptions(opts.SizeOpts, span)
+
+	if len(opts.Tablets) == 0 {
+		// Fetch all tablets for the keyspace.
+		var err error
+
+		opts.Tablets, err = c.FindTablets(ctx, func(tablet *vtadminpb.Tablet) bool {
+			return tablet.Tablet.Keyspace == keyspace
+		}, -1)
+		if err != nil {
+			return nil, fmt.Errorf("%w for keyspace %s", errors.ErrNoTablet, keyspace)
+		}
+	}
+
 	if err := c.Vtctld.Dial(ctx); err != nil {
-		return nil, err // TODO: wrap this
+		return nil, fmt.Errorf("failed to Dial vtctld for cluster = %s for GetSchema: %w", c.ID, err)
 	}
 
 	var tabletsToQuery []*vtadminpb.Tablet
 
 	if opts.SizeOpts.AggregateSizes {
+		span, ctx := trace.NewSpan(ctx, "Cluster.FindAllShardsInKeyspace")
+
+		AnnotateSpan(c, span)
+		span.Annotate("keyspace", keyspace)
+
 		resp, err := c.Vtctld.FindAllShardsInKeyspace(ctx, &vtctldatapb.FindAllShardsInKeyspaceRequest{
 			Keyspace: keyspace,
 		})
+
+		span.Finish()
+
 		if err != nil {
-			return nil, err // TODO: wrap this
+			return nil, fmt.Errorf("FindAllShardsInKeyspace(cluster = %s, keyspace = %s) failed: %w", c.ID, keyspace, err)
 		}
 
 		for _, shard := range resp.Shards {
@@ -512,7 +527,7 @@ func (c *Cluster) GetSchemaForKeyspace(ctx context.Context, keyspace string, opt
 			TableSizes: map[string]*vtadminpb.Schema_TableSize{},
 		}
 		// Instead of starting at false, we start with whatever the base request
-		// specified. If we have exactly one tablet to query(i.e. we're no
+		// specified. If we have exactly one tablet to query (i.e. we're not
 		// doing multi-shard aggregation), it's possible the request was to
 		// literally just get the table sizes; we shouldn't assume. If we have
 		// more than one tablet to query, then we are doing size aggregation,
@@ -526,13 +541,22 @@ func (c *Cluster) GetSchemaForKeyspace(ctx context.Context, keyspace string, opt
 		go func(tablet *vtadminpb.Tablet, sizesOnly bool) {
 			defer wg.Done()
 
+			span, ctx := trace.NewSpan(ctx, "Vtctld.GetSchema")
+			defer span.Finish()
+
 			req := *opts.BaseRequest
 			req.TableSizesOnly = sizesOnly
 			req.TabletAlias = tablet.Tablet.Alias
 
+			AnnotateSpan(c, span)
+			annotateGetSchemaRequest(&req, span)
+			span.Annotate("keyspace", keyspace)
+			span.Annotate("shard", tablet.Tablet.Shard)
+
 			resp, err := c.Vtctld.GetSchema(ctx, &req)
 			if err != nil {
-				rec.RecordError(err) // TODO: more context
+				err = fmt.Errorf("GetSchema(cluster = %s, keyspace = %s, tablet = %s) failed: %w", c.ID, keyspace, tablet.Tablet.Alias, err)
+				rec.RecordError(err)
 
 				return
 			}
