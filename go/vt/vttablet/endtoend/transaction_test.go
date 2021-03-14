@@ -18,7 +18,6 @@ package endtoend
 
 import (
 	"fmt"
-	"strings"
 	"testing"
 	"time"
 
@@ -230,10 +229,7 @@ func TestForUpdate(t *testing.T) {
 		client := framework.NewClient()
 		query := fmt.Sprintf("select * from vitess_test where intval=2 %s", mode)
 		_, err := client.Execute(query, nil)
-		want := "SelectLock disallowed outside transaction"
-		if err == nil || !strings.HasPrefix(err.Error(), want) {
-			t.Errorf("%v, must have prefix %s", err, want)
-		}
+		require.NoError(t, err)
 
 		// We should not get errors here
 		err = client.Begin(false)

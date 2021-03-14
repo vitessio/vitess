@@ -29,6 +29,7 @@ const (
 	DataOutOfRange
 	EmptyQuery
 	ForbidSchemaChange
+	IncorrectGlobalLocalVar
 	NonUniqTable
 	SyntaxError
 	WrongGroupField

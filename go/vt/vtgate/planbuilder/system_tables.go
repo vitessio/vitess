@@ -102,7 +102,7 @@ func extractInfoSchemaRoutingPredicate(in sqlparser.Expr) (bool, evalengine.Expr
 				} else {
 					name += engine.BvTableName
 				}
-				replaceOther(sqlparser.NewArgument([]byte(name)))
+				replaceOther(sqlparser.NewArgument(name))
 				return isSchemaName, evalExpr, nil
 			}
 		}
