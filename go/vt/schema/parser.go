@@ -48,7 +48,16 @@ var (
 		// ALTER TABLE tbl something
 		regexp.MustCompile(alterTableBasicPattern + `([\S]+)\s+(.*$)`),
 	}
+	createTableBodyRegexp = regexp.MustCompile(`(?s)(?i)CREATE TABLE .*? ([(].*$)`)
 )
+
+// ParseCreateTableBody parses out the `(...) clause of CREATE TABLE statement, omitting the `CREATE TABLE [<schema>.]<tbl>` prefix`
+func ParseCreateTableBody(createStatement string) (body string) {
+	if submatch := createTableBodyRegexp.FindStringSubmatch(createStatement); len(submatch) > 0 {
+		return submatch[1]
+	}
+	return createStatement
+}
 
 // ParseAlterTableOptions parses a ALTER ... TABLE... statement into:
 // - explicit schema and table, if available
