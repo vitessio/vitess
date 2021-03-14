@@ -1659,8 +1659,12 @@ func (e *Executor) executeMigration(ctx context.Context, onlineDDL *schema.Onlin
 				ddlAction = sqlparser.AlterDDLAction
 				onlineDDL.SQL = fmt.Sprintf("ALTER TABLE `%s` %s", onlineDDL.Table, alterClause)
 				_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, alterClause)
+			} else {
+				{
+					// table does not exist, so this declarative CREATE turns out to really be an actual CREATE. No further action is needed here.
+					// the statement is empty, but I want to keep the 'else' clause here just for sake of this comment.
+				}
 			}
-			// else: table does not exist, so this declarative CREATE turns out to really be an actual CREATE. No further action is needed here
 		}
 	} // endif onlineDDL.IsDeclarative()
 	// Noting that if the migration is declarative, then it may have been modified in the above block, to meet the next operations.
