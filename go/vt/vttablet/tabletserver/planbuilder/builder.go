@@ -33,9 +33,6 @@ func analyzeSelect(sel *sqlparser.Select, tables map[string]*schema.Table) (plan
 		FieldQuery: GenerateFieldQuery(sel),
 		FullQuery:  GenerateLimitQuery(sel),
 	}
-	if sel.Lock != sqlparser.NoLock {
-		plan.PlanID = PlanSelectLock
-	}
 
 	if sel.Where != nil {
 		comp, ok := sel.Where.Expr.(*sqlparser.ComparisonExpr)

@@ -43,7 +43,6 @@ type PlanType int
 // The following are PlanType values.
 const (
 	PlanSelect PlanType = iota
-	PlanSelectLock
 	PlanNextval
 	PlanSelectImpossible
 	PlanInsert
@@ -79,7 +78,6 @@ const (
 // Must exactly match order of plan constants.
 var planName = []string{
 	"Select",
-	"SelectLock",
 	"Nextval",
 	"SelectImpossible",
 	"Insert",
@@ -125,7 +123,7 @@ func PlanByName(s string) (pt PlanType, ok bool) {
 
 // IsSelect returns true if PlanType is about a select query.
 func (pt PlanType) IsSelect() bool {
-	return pt == PlanSelect || pt == PlanSelectLock || pt == PlanSelectImpossible
+	return pt == PlanSelect || pt == PlanSelectImpossible
 }
 
 // MarshalJSON returns a json string for PlanType.
