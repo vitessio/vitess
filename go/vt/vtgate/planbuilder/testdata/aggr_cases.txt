@@ -125,6 +125,34 @@ Gen4 plan same as above
   }
 }
 
+# scatter group by a integer column. Do not add weight strings for this.
+"select count(*), intcol from user group by intcol"
+{
+  "QueryType": "SELECT",
+  "Original": "select count(*), intcol from user group by intcol",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "Aggregates": "count(0)",
+    "Distinct": "false",
+    "GroupBy": "1",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select count(*), intcol from `user` where 1 != 1 group by intcol",
+        "OrderBy": "1 ASC",
+        "Query": "select count(*), intcol from `user` group by intcol order by intcol asc",
+        "Table": "`user`"
+      }
+    ]
+  }
+}
+
 # scatter group by a text column, reuse existing weight_string
 "select count(*) k, a, textcol1, b from user group by a, textcol1, b order by k, textcol1"
 {

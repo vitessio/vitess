@@ -112,6 +112,10 @@
               "type": "VARCHAR"
             },
             {
+              "name": "intcol",
+              "type": "INT16"
+            },
+            {
               "name": "textcol2",
               "type": "VARCHAR"
             }
