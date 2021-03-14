@@ -40,3 +40,15 @@ func TestAggregateTypes(t *testing.T) {
 	assertMatches(t, conn, "select val1, count(distinct val2) k, count(*) from aggr_test group by val1 order by k desc, val1 limit 4", `[[VARCHAR("c") INT64(2) INT64(2)] [VARCHAR("a") INT64(1) INT64(2)] [VARCHAR("b") INT64(1) INT64(1)] [VARCHAR("e") INT64(1) INT64(2)]]`)
 	exec(t, conn, "delete from aggr_test")
 }
+
+func TestOrderByVarcharColumn(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.Nil(t, err)
+	defer conn.Close()
+	exec(t, conn, "insert into t4(id1, id2) values(1,'a'), (2,'A'), (3,'b'), (4,'c'), (5,'test')")
+	exec(t, conn, "insert into t4(id1, id2) values(6,'d'), (7,'e'), (8,'E')")
+	assertMatches(t, conn, "select id1, id2 from t4 order by id2 desc", `[[INT64(5) VARCHAR("test")] [INT64(8) VARCHAR("E")] [INT64(7) VARCHAR("e")] [INT64(6) VARCHAR("d")] [INT64(4) VARCHAR("c")] [INT64(3) VARCHAR("b")] [INT64(2) VARCHAR("A")] [INT64(1) VARCHAR("a")]]`)
+	exec(t, conn, "delete from t4")
+}
