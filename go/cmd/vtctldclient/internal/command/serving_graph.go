@@ -27,27 +27,27 @@ import (
 )
 
 var (
-	// GetVSchema makes a GetVSchema gRPC call to a vtctld.
-	GetVSchema = &cobra.Command{
-		Use:  "GetVSchema keyspace",
+	// GetSrvVSchema makes a GetSrvVSchema gRPC call to a vtctld.
+	GetSrvVSchema = &cobra.Command{
+		Use:  "GetSrvVSchema cell",
 		Args: cobra.ExactArgs(1),
-		RunE: commandGetVSchema,
+		RunE: commandGetSrvVSchema,
 	}
 )
 
-func commandGetVSchema(cmd *cobra.Command, args []string) error {
+func commandGetSrvVSchema(cmd *cobra.Command, args []string) error {
 	cli.FinishedParsing(cmd)
 
-	keyspace := cmd.Flags().Arg(0)
+	cell := cmd.Flags().Arg(0)
 
-	resp, err := client.GetVSchema(commandCtx, &vtctldatapb.GetVSchemaRequest{
-		Keyspace: keyspace,
+	resp, err := client.GetSrvVSchema(commandCtx, &vtctldatapb.GetSrvVSchemaRequest{
+		Cell: cell,
 	})
 	if err != nil {
 		return err
 	}
 
-	data, err := cli.MarshalJSON(resp.VSchema)
+	data, err := cli.MarshalJSON(resp.SrvVSchema)
 	if err != nil {
 		return err
 	}
@@ -58,5 +58,5 @@ func commandGetVSchema(cmd *cobra.Command, args []string) error {
 }
 
 func init() {
-	Root.AddCommand(GetVSchema)
+	Root.AddCommand(GetSrvVSchema)
 }
