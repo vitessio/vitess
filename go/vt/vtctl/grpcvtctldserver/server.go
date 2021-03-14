@@ -556,6 +556,11 @@ func (s *VtctldServer) GetShard(ctx context.Context, req *vtctldatapb.GetShardRe
 	}, nil
 }
 
+// GetSrvKeyspaces is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) GetSrvKeyspaces(ctx context.Context, req *vtctldatapb.GetSrvKeyspacesRequest) (*vtctldatapb.GetSrvKeyspacesResponse, error) {
+	panic("unimplemented!")
+}
+
 // GetSrvVSchema is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) GetSrvVSchema(ctx context.Context, req *vtctldatapb.GetSrvVSchemaRequest) (*vtctldatapb.GetSrvVSchemaResponse, error) {
 	vschema, err := s.ts.GetSrvVSchema(ctx, req.Cell)
