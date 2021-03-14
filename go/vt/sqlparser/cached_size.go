@@ -617,7 +617,14 @@ func (cached *CreateDatabase) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(49)
+		size += int64(73)
+	}
+	// field Comments vitess.io/vitess/go/vt/sqlparser.Comments
+	{
+		size += int64(cap(cached.Comments)) * int64(16)
+		for _, elem := range cached.Comments {
+			size += int64(len(elem))
+		}
 	}
 	// field DBName string
 	size += int64(len(cached.DBName))
@@ -788,7 +795,14 @@ func (cached *DropDatabase) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(17)
+		size += int64(41)
+	}
+	// field Comments vitess.io/vitess/go/vt/sqlparser.Comments
+	{
+		size += int64(cap(cached.Comments)) * int64(16)
+		for _, elem := range cached.Comments {
+			size += int64(len(elem))
+		}
 	}
 	// field DBName string
 	size += int64(len(cached.DBName))
