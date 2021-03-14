@@ -27,6 +27,12 @@ import (
 )
 
 var (
+	// GetSrvKeyspaces makes a GetSrvKeyspaces gRPC call to a vtctld.
+	GetSrvKeyspaces = &cobra.Command{
+		Use:  "GetSrvKeyspaces <keyspace> [<cell> ...]",
+		Args: cobra.MinimumNArgs(1),
+		RunE: commandGetSrvKeyspaces,
+	}
 	// GetSrvVSchema makes a GetSrvVSchema gRPC call to a vtctld.
 	GetSrvVSchema = &cobra.Command{
 		Use:  "GetSrvVSchema cell",
@@ -34,6 +40,30 @@ var (
 		RunE: commandGetSrvVSchema,
 	}
 )
+
+func commandGetSrvKeyspaces(cmd *cobra.Command, args []string) error {
+	cli.FinishedParsing(cmd)
+
+	keyspace := cmd.Flags().Arg(0)
+	cells := cmd.Flags().Args()[1:]
+
+	resp, err := client.GetSrvKeyspaces(commandCtx, &vtctldatapb.GetSrvKeyspacesRequest{
+		Keyspace: keyspace,
+		Cells:    cells,
+	})
+	if err != nil {
+		return err
+	}
+
+	data, err := cli.MarshalJSON(resp.SrvKeyspaces)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("%s\n", data)
+
+	return nil
+}
 
 func commandGetSrvVSchema(cmd *cobra.Command, args []string) error {
 	cli.FinishedParsing(cmd)
@@ -58,5 +88,6 @@ func commandGetSrvVSchema(cmd *cobra.Command, args []string) error {
 }
 
 func init() {
+	Root.AddCommand(GetSrvKeyspaces)
 	Root.AddCommand(GetSrvVSchema)
 }
