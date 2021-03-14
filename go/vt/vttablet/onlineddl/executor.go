@@ -58,7 +58,10 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 	"vitess.io/vitess/go/vt/vttablet/vexec"
 
+	mysqldriver "github.com/go-sql-driver/mysql"
 	"github.com/golang/protobuf/proto"
+	"github.com/jmoiron/sqlx"
+	"github.com/skeema/tengo"
 )
 
 var (
@@ -161,6 +164,11 @@ func PTOSCFileName() (fileName string, isOverride bool) {
 		return *ptOSCOverridePath, true
 	}
 	return "/usr/bin/pt-online-schema-change", false
+}
+
+// newGCTableRetainTime returns the time until which a new GC table is to be retained
+func newGCTableRetainTime() time.Time {
+	return time.Now().UTC().Add(*retainOnlineDDLTables)
 }
 
 // NewExecutor creates a new gh-ost executor.
@@ -1469,6 +1477,121 @@ func (e *Executor) executeRevert(ctx context.Context, onlineDDL *schema.OnlineDD
 	return nil
 }
 
+// evaluateDeclarativeDiff is called for -declarative CREATE statements, where the table already exists. The function generates a SQL diff, which can be:
+// - empty, in which case the migration is noop and implicitly successful, or
+// - non-empty, in which case the migration turns to be an ALTER
+func (e *Executor) evaluateDeclarativeDiff(ctx context.Context, onlineDDL *schema.OnlineDDL) (alterClause string, err error) {
+
+	// Modify the CREATE TABLE statement to indicate a different, made up table name, known as the "comparison table"
+	ddlStmt, _, err := schema.ParseOnlineDDLStatement(onlineDDL.SQL)
+	if err != nil {
+		return "", err
+	}
+	comparisonTableName, err := schema.GenerateGCTableName(schema.HoldTableGCState, newGCTableRetainTime())
+	if err != nil {
+		return "", err
+	}
+
+	conn, err := dbconnpool.NewDBConnection(ctx, e.env.Config().DB.DbaWithDB())
+	if err != nil {
+		return "", err
+	}
+	defer conn.Close()
+
+	{
+		// Create the comparison table
+		ddlStmt.SetTable("", comparisonTableName)
+		modifiedCreateSQL := sqlparser.String(ddlStmt)
+
+		if _, err := conn.ExecuteFetch(modifiedCreateSQL, 0, false); err != nil {
+			return "", err
+		}
+	}
+
+	// Compare the existing (to be potentially migrated) table with the declared (newly created) table:
+	if err := func() error {
+		mysqlHost, mysqlPort, _, err := e.readMySQLVariables(ctx)
+		if err != nil {
+			return err
+		}
+
+		// Create a temporary account for tengo to use
+		onlineDDLPassword, err := e.createOnlineDDLUser(ctx)
+		if err != nil {
+			return err
+		}
+		defer e.dropOnlineDDLUser(ctx)
+
+		// tengo requires sqlx.DB
+		cfg := mysqldriver.NewConfig()
+		cfg.User = onlineDDLUser
+		cfg.Passwd = onlineDDLPassword
+		cfg.Net = "tcp"
+		cfg.Addr = fmt.Sprintf("%s:%d", mysqlHost, mysqlPort)
+		cfg.DBName = e.dbName
+		cfg.ParseTime = true
+		cfg.InterpolateParams = true
+		cfg.Timeout = 1 * time.Second
+		mysqlDSN := cfg.FormatDSN()
+
+		db, err := sqlx.Open("mysql", mysqlDSN)
+		if err != nil {
+			return err
+		}
+		defer db.Close()
+
+		// Read existing table
+		existingTable, err := tengo.QuerySchemaTable(ctx, db, e.dbName, onlineDDL.Table, tengo.FlavorUnknown)
+		if err != nil {
+			return err
+		}
+		// Read comparison table
+		comparisonTable, err := tengo.QuerySchemaTable(ctx, db, e.dbName, comparisonTableName, tengo.FlavorUnknown)
+		if err != nil {
+			return err
+		}
+		// We created the comparison tablein same schema as original table, but under different name (because obviously we can't have
+		// two tables with identical name in same schema). It is our preference to create the table in the same schema.
+		// unfortunately, tengo does not allow comparing tables with different names. After asking tengo to read table info, we cheat
+		// and override the name of the table:
+		comparisonTable.Name = existingTable.Name
+		// We also override `.CreateStatement` (output of SHOW CREATE TABLE), because tengo has a validation, where if it doesn't
+		// find any ALTER changes, then the CreateStatement-s must be identical (or else it errors with UnsupportedDiffError)
+		comparisonTable.CreateStatement = schema.ParseCreateTableBody(comparisonTable.CreateStatement)
+		existingTable.CreateStatement = schema.ParseCreateTableBody(existingTable.CreateStatement)
+		// Diff the two tables
+		diff := tengo.NewAlterTable(existingTable, comparisonTable)
+		if diff != nil {
+			mods := tengo.StatementModifiers{
+				AllowUnsafe: true,
+				NextAutoInc: tengo.NextAutoIncIfIncreased,
+			}
+			alterClause, err = diff.Clauses(mods)
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	}(); err != nil {
+		return "", err
+	}
+
+	{
+		// Drop the comparison table
+		parsed := sqlparser.BuildParsedQuery(sqlDropTable, comparisonTableName)
+		if _, err := conn.ExecuteFetch(parsed.Query, 0, false); err != nil {
+			return "", err
+		}
+	}
+	return alterClause, nil
+}
+
+// executeMigration executes a single migration. It analyzes the migration type:
+// - is it declarative?
+// - is it CREATE / DROP / ALTER?
+// - it is a Revert request?
+// - what's the migration strategy?
+// The function invokes th eappropriate handlers for each of those cases.
 func (e *Executor) executeMigration(ctx context.Context, onlineDDL *schema.OnlineDDL) error {
 	failMigration := func(err error) error {
 		_ = e.updateMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusFailed)
@@ -1486,27 +1609,62 @@ func (e *Executor) executeMigration(ctx context.Context, onlineDDL *schema.Onlin
 
 	if onlineDDL.IsDeclarative() {
 		switch ddlAction {
+		case sqlparser.RevertDDLAction:
+			// No special action. Declarative Revert migrations are handled like any normal Revert migration.
 		case sqlparser.AlterDDLAction:
 			return failMigration(vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "strategy is declarative. ALTER cannot run in declarative mode for migration %v", onlineDDL.UUID))
+		case sqlparser.DropDDLAction:
+			// This DROP is declarative, meaning it may:
+			// - actually DROP a table, if that table exists, or
+			// - Implicitly do nothing, if the table does not exist
+
+			exists, err := e.tableExists(ctx, onlineDDL.Table)
+			if err != nil {
+				return failMigration(err)
+			}
+			if exists {
+				// table does exists, so this declarative DROP turns out to really be an actual DROP. No further action is needed here
+			} else {
+				// table does not exist. We mark this CREATE as implicitly sucessful
+				_ = e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusComplete, false, progressPctFull, etaSecondsNow)
+				_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, "no change")
+				return nil
+			}
 		case sqlparser.CreateDDLAction:
 			// This CREATE is declarative, meaning it may:
 			// - actually CREATE a table, if that table does not exist, or
 			// - ALTER the table, if it exists and is different, or
 			// - Implicitly do nothing, if the table exists and is identical to CREATE statement
-			func() error {
-				exists, err := e.tableExists(ctx, onlineDDL.Table)
+
+			exists, err := e.tableExists(ctx, onlineDDL.Table)
+			if err != nil {
+				return failMigration(err)
+			}
+			if exists {
+				fmt.Printf("exists: %v\n", exists)
+				alterClause, err := e.evaluateDeclarativeDiff(ctx, onlineDDL)
 				if err != nil {
 					return failMigration(err)
 				}
-				if exists {
-					// TODO(shlomi): table exists, evaluate a diff. The diff is empty or non empty. If empty, mark this migration as successful and we're done. If non-empty, evaluate ALTER statement using tengo
-					// tengo.QuerySchemaTable()
-					fmt.Printf("exists: %v", exists)
+				if alterClause == "" {
+					// No diff! We mark this CREATE as implicitly sucessful
+					_ = e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusComplete, false, progressPctFull, etaSecondsNow)
+					_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, "no change")
+					return nil
 				}
-				return nil
-			}()
+				// alterClause is non empty. We convert this migration into an ALTER
+				if err := e.updateDDLAction(ctx, onlineDDL.UUID, sqlparser.AlterStr); err != nil {
+					return failMigration(err)
+				}
+				ddlAction = sqlparser.AlterDDLAction
+				onlineDDL.SQL = fmt.Sprintf("ALTER TABLE `%s` %s", onlineDDL.Table, alterClause)
+				_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, alterClause)
+			}
+			// else: table does not exist, so this declarative CREATE turns out to really be an actual CREATE. No further action is needed here
 		}
-	}
+	} // endif onlineDDL.IsDeclarative()
+	// Noting that if the migration is declarative, then it may have been modified in the above block, to meet the next operations.
+
 	switch ddlAction {
 	case sqlparser.DropDDLAction:
 		go func() error {
@@ -1532,7 +1690,7 @@ func (e *Executor) executeMigration(ctx context.Context, onlineDDL *schema.Onlin
 			}
 
 			var toTableName string
-			onlineDDL.SQL, toTableName, err = schema.GenerateRenameStatementWithUUID(onlineDDL.Table, schema.HoldTableGCState, onlineDDL.GetGCUUID(), time.Now().UTC().Add(*retainOnlineDDLTables))
+			onlineDDL.SQL, toTableName, err = schema.GenerateRenameStatementWithUUID(onlineDDL.Table, schema.HoldTableGCState, onlineDDL.GetGCUUID(), newGCTableRetainTime())
 			if err != nil {
 				return failMigration(err)
 			}
@@ -1541,7 +1699,7 @@ func (e *Executor) executeMigration(ctx context.Context, onlineDDL *schema.Onlin
 			}
 
 			acceptableErrorCodes := []int{}
-			if ddlStmt.GetIfExists() || onlineDDL.IsDeclarative() {
+			if ddlStmt.GetIfExists() {
 				acceptableErrorCodes = acceptableDropTableIfExistsErrorCodes
 			}
 			acceptableErrCodeFound, err := e.executeDirectly(ctx, onlineDDL, acceptableErrorCodes...)
@@ -1562,7 +1720,7 @@ func (e *Executor) executeMigration(ctx context.Context, onlineDDL *schema.Onlin
 			e.migrationMutex.Lock()
 			defer e.migrationMutex.Unlock()
 
-			sentryArtifactTableName, err := schema.GenerateGCTableName(schema.HoldTableGCState, time.Now().UTC().Add(*retainOnlineDDLTables))
+			sentryArtifactTableName, err := schema.GenerateGCTableName(schema.HoldTableGCState, newGCTableRetainTime())
 			if err != nil {
 				return failMigration(err)
 			}
