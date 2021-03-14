@@ -1,5 +1,13 @@
-import { useQuery } from 'react-query';
-import { fetchClusters, fetchGates, fetchKeyspaces, fetchSchemas, fetchTablets } from '../api/http';
+import { useQuery, useQueryClient } from 'react-query';
+import {
+    fetchClusters,
+    fetchGates,
+    fetchKeyspaces,
+    fetchSchema,
+    FetchSchemaParams,
+    fetchSchemas,
+    fetchTablets,
+} from '../api/http';
 import { vtadmin as pb } from '../proto/vtadmin';
 
 export const useClusters = () => useQuery<pb.Cluster[], Error>(['clusters'], fetchClusters);
@@ -42,4 +50,19 @@ export const useTableDefinitions = () => {
     }, []);
 
     return { ...query, data: tds };
+};
+
+export const useSchema = (params: FetchSchemaParams) => {
+    const queryClient = useQueryClient();
+    return useQuery<pb.Schema, Error>(['schema', params], () => fetchSchema(params), {
+        initialData: () => {
+            const schemas = queryClient.getQueryData<pb.Schema[]>('schemas');
+            return (schemas || []).find(
+                (s: pb.Schema) =>
+                    s.cluster?.id === params.clusterID &&
+                    s.keyspace === params.keyspace &&
+                    s.table_definitions.find((td) => td.name === params.table)
+            );
+        },
+    });
 };

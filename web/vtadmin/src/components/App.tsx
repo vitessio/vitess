@@ -25,6 +25,7 @@ import { Clusters } from './routes/Clusters';
 import { Gates } from './routes/Gates';
 import { Keyspaces } from './routes/Keyspaces';
 import { Schemas } from './routes/Schemas';
+import { Schema } from './routes/Schema';
 
 export const App = () => {
     return (
@@ -50,6 +51,10 @@ export const App = () => {
 
                         <Route path="/schemas">
                             <Schemas />
+                        </Route>
+
+                        <Route path="/schema/:clusterID/:keyspace/:table">
+                            <Schema />
                         </Route>
 
                         <Route path="/tablets">

@@ -313,11 +313,17 @@ func (api *API) GetKeyspaces(ctx context.Context, req *vtadminpb.GetKeyspacesReq
 				return
 			}
 
-			resp, err := c.Vtctld.GetKeyspaces(ctx, &vtctldatapb.GetKeyspacesRequest{})
+			getKeyspacesSpan, getKeyspacesCtx := trace.NewSpan(ctx, "Cluster.GetKeyspaces")
+			cluster.AnnotateSpan(c, getKeyspacesSpan)
+
+			resp, err := c.Vtctld.GetKeyspaces(getKeyspacesCtx, &vtctldatapb.GetKeyspacesRequest{})
 			if err != nil {
 				er.RecordError(fmt.Errorf("GetKeyspaces(cluster = %s): %w", c.ID, err))
+				getKeyspacesSpan.Finish()
 				return
 			}
+
+			getKeyspacesSpan.Finish()
 
 			kss := make([]*vtadminpb.Keyspace, 0, len(resp.Keyspaces))
 
@@ -332,6 +338,13 @@ func (api *API) GetKeyspaces(ctx context.Context, req *vtadminpb.GetKeyspacesReq
 				// Find all shards for each keyspace in the cluster, in parallel
 				go func(c *cluster.Cluster, ks *vtctldatapb.Keyspace) {
 					defer kwg.Done()
+
+					span, ctx := trace.NewSpan(ctx, "Cluster.FindAllShardsInKeyspace")
+					defer span.Finish()
+
+					cluster.AnnotateSpan(c, span)
+					span.Annotate("keyspace", ks.Name)
+
 					sr, err := c.Vtctld.FindAllShardsInKeyspace(ctx, &vtctldatapb.FindAllShardsInKeyspaceRequest{
 						Keyspace: ks.Name,
 					})
@@ -462,10 +475,16 @@ func (api *API) getSchemas(ctx context.Context, c *cluster.Cluster, tablets []*v
 		return nil, err
 	}
 
-	resp, err := c.Vtctld.GetKeyspaces(ctx, &vtctldatapb.GetKeyspacesRequest{})
+	getKeyspacesSpan, getKeyspacesCtx := trace.NewSpan(ctx, "Cluster.GetKeyspaces")
+	cluster.AnnotateSpan(c, getKeyspacesSpan)
+
+	resp, err := c.Vtctld.GetKeyspaces(getKeyspacesCtx, &vtctldatapb.GetKeyspacesRequest{})
 	if err != nil {
+		getKeyspacesSpan.Finish()
 		return nil, err
 	}
+
+	getKeyspacesSpan.Finish()
 
 	var (
 		schemas []*vtadminpb.Schema
@@ -712,7 +731,7 @@ func (api *API) GetVSchemas(ctx context.Context, req *vtadminpb.GetVSchemasReque
 		go func(c *cluster.Cluster) {
 			defer wg.Done()
 
-			span, ctx := trace.NewSpan(ctx, "API.getVSchemasForCluster")
+			span, ctx := trace.NewSpan(ctx, "Cluster.GetVSchemas")
 			defer span.Finish()
 
 			cluster.AnnotateSpan(c, span)
@@ -722,11 +741,17 @@ func (api *API) GetVSchemas(ctx context.Context, req *vtadminpb.GetVSchemasReque
 				return
 			}
 
-			keyspaces, err := c.Vtctld.GetKeyspaces(ctx, &vtctldatapb.GetKeyspacesRequest{})
+			getKeyspacesSpan, getKeyspacesCtx := trace.NewSpan(ctx, "Cluster.GetKeyspaces")
+			cluster.AnnotateSpan(c, getKeyspacesSpan)
+
+			keyspaces, err := c.Vtctld.GetKeyspaces(getKeyspacesCtx, &vtctldatapb.GetKeyspacesRequest{})
 			if err != nil {
 				rec.RecordError(fmt.Errorf("GetKeyspaces(cluster = %s): %w", c.ID, err))
+				getKeyspacesSpan.Finish()
 				return
 			}
+
+			getKeyspacesSpan.Finish()
 
 			var (
 				clusterM        sync.Mutex
@@ -740,7 +765,6 @@ func (api *API) GetVSchemas(ctx context.Context, req *vtadminpb.GetVSchemasReque
 
 				go func(keyspace *vtctldatapb.Keyspace) {
 					defer clusterWG.Done()
-
 					vschema, err := c.GetVSchema(ctx, keyspace.Name)
 					if err != nil {
 						clusterRec.RecordError(fmt.Errorf("GetVSchema(keyspace = %s): %w", keyspace.Name, err))
@@ -799,12 +823,17 @@ func (api *API) VTExplain(ctx context.Context, req *vtadminpb.VTExplainRequest) 
 		return nil, fmt.Errorf("%w: %s", errors.ErrUnsupportedCluster, req.Cluster)
 	}
 
+	span.Annotate("keyspace", req.Keyspace)
+	cluster.AnnotateSpan(c, span)
+
 	tablet, err := c.FindTablet(ctx, func(t *vtadminpb.Tablet) bool {
 		return t.Tablet.Keyspace == req.Keyspace && topo.IsInServingGraph(t.Tablet.Type) && t.Tablet.Type != topodatapb.TabletType_MASTER && t.State == vtadminpb.Tablet_SERVING
 	})
 	if err != nil {
 		return nil, fmt.Errorf("cannot find serving, non-primary tablet in keyspace=%s: %w", req.Keyspace, err)
 	}
+
+	span.Annotate("tablet_alias", topoproto.TabletAliasString(tablet.Tablet.Alias))
 
 	if err := c.Vtctld.Dial(ctx); err != nil {
 		return nil, err
@@ -848,6 +877,12 @@ func (api *API) VTExplain(ctx context.Context, req *vtadminpb.VTExplainRequest) 
 	go func(c *cluster.Cluster) {
 		defer wg.Done()
 
+		span, ctx := trace.NewSpan(ctx, "Cluster.GetSrvVSchema")
+		defer span.Finish()
+
+		span.Annotate("cell", tablet.Tablet.Alias.Cell)
+		cluster.AnnotateSpan(c, span)
+
 		res, err := c.Vtctld.GetSrvVSchema(ctx, &vtctldatapb.GetSrvVSchemaRequest{
 			Cell: tablet.Tablet.Alias.Cell,
 		})
@@ -875,6 +910,12 @@ func (api *API) VTExplain(ctx context.Context, req *vtadminpb.VTExplainRequest) 
 	// FindAllShardsInKeyspace
 	go func(c *cluster.Cluster) {
 		defer wg.Done()
+
+		span, ctx := trace.NewSpan(ctx, "Cluster.FindAllShardsInKeyspace")
+		defer span.Finish()
+
+		span.Annotate("keyspace", req.Keyspace)
+		cluster.AnnotateSpan(c, span)
 
 		ksm, err := c.Vtctld.FindAllShardsInKeyspace(ctx, &vtctldatapb.FindAllShardsInKeyspaceRequest{
 			Keyspace: req.Keyspace,

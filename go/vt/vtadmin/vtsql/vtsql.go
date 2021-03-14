@@ -28,6 +28,7 @@ import (
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/vitessdriver"
 	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery"
+	"vitess.io/vitess/go/vt/vtadmin/vtadminproto"
 
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 )
@@ -131,6 +132,8 @@ func (vtgate *VTGateProxy) Dial(ctx context.Context, target string, opts ...grpc
 	vtgate.annotateSpan(span)
 
 	if vtgate.conn != nil {
+		span.Annotate("is_noop", true)
+
 		// (TODO:@amason): consider a quick Ping() check in this case, and get a
 		// new connection if that fails.
 		return nil
@@ -187,11 +190,20 @@ func (vtgate *VTGateProxy) ShowTablets(ctx context.Context) (*sql.Rows, error) {
 
 // Ping is part of the DB interface.
 func (vtgate *VTGateProxy) Ping() error {
-	return vtgate.PingContext(context.Background())
+	return vtgate.pingContext(context.Background())
 }
 
 // PingContext is part of the DB interface.
 func (vtgate *VTGateProxy) PingContext(ctx context.Context) error {
+	span, ctx := trace.NewSpan(ctx, "VTGateProxy.PingContext")
+	defer span.Finish()
+
+	vtgate.annotateSpan(span)
+
+	return vtgate.pingContext(ctx)
+}
+
+func (vtgate *VTGateProxy) pingContext(ctx context.Context) error {
 	if vtgate.conn == nil {
 		return ErrConnClosed
 	}
@@ -219,8 +231,7 @@ func (vtgate *VTGateProxy) Hostname() string {
 }
 
 func (vtgate *VTGateProxy) annotateSpan(span trace.Span) {
-	span.Annotate("cluster_id", vtgate.cluster.Id)
-	span.Annotate("cluster_name", vtgate.cluster.Name)
+	vtadminproto.AnnotateClusterSpan(vtgate.cluster, span)
 
 	if vtgate.host != "" {
 		span.Annotate("vtgate_host", vtgate.host)
