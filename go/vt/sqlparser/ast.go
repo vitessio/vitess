@@ -17,7 +17,6 @@ limitations under the License.
 package sqlparser
 
 import (
-	"fmt"
 	"strings"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -343,6 +342,7 @@ type (
 
 	// DropDatabase represents a DROP database statement.
 	DropDatabase struct {
+		Comments Comments
 		DBName   string
 		IfExists bool
 	}
@@ -359,6 +359,7 @@ type (
 
 	// CreateDatabase represents a CREATE database statement.
 	CreateDatabase struct {
+		Comments      Comments
 		DBName        string
 		IfNotExists   bool
 		CreateOptions []CollateAndCharset
@@ -2055,9 +2056,9 @@ func (node *SetTransaction) Format(buf *TrackedBuffer) {
 func (node *DropDatabase) Format(buf *TrackedBuffer) {
 	exists := ""
 	if node.IfExists {
-		exists = " if exists"
+		exists = "if exists "
 	}
-	buf.WriteString(fmt.Sprintf("%s database%s %v", DropStr, exists, node.DBName))
+	buf.astPrintf(node, "%s database %v%s%s", DropStr, node.Comments, exists, node.DBName)
 }
 
 // Format formats the node.
@@ -3245,11 +3246,11 @@ func (node *SelectInto) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *CreateDatabase) Format(buf *TrackedBuffer) {
-	buf.WriteString("create database")
+	buf.astPrintf(node, "create database %v", node.Comments)
 	if node.IfNotExists {
-		buf.WriteString(" if not exists")
+		buf.WriteString("if not exists ")
 	}
-	buf.astPrintf(node, " %s", node.DBName)
+	buf.astPrintf(node, "%s", node.DBName)
 	if node.CreateOptions != nil {
 		for _, createOption := range node.CreateOptions {
 			if createOption.IsDefault {
