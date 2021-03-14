@@ -89,3 +89,45 @@ func TestNormalizeOnlineDDL(t *testing.T) {
 		})
 	}
 }
+
+func TestParseCreateTableBody(t *testing.T) {
+	tt := []struct {
+		stmt   string
+		expect string
+	}{
+		{
+			stmt:   "CREATE TABLE tbl (id int)",
+			expect: "(id int)",
+		},
+		{
+			stmt:   "CREATE TABLE `tbl` (id int)",
+			expect: "(id int)",
+		},
+		{
+			stmt:   "CREATE TABLE `schema`.`tbl` (id int)",
+			expect: "(id int)",
+		},
+		{
+			stmt:   "create table `schema`.`tbl` (id int)",
+			expect: "(id int)",
+		},
+		{
+			stmt: `CREATE TABLE t (
+	id int
+)`,
+			expect: `(
+	id int
+)`,
+		},
+		{
+			stmt:   "CREATE TABLE tbl (id int, primary key(id))",
+			expect: "(id int, primary key(id))",
+		},
+	}
+	for _, ts := range tt {
+		t.Run(ts.stmt, func(*testing.T) {
+			body := ParseCreateTableBody(ts.stmt)
+			assert.Equal(t, ts.expect, body)
+		})
+	}
+}
