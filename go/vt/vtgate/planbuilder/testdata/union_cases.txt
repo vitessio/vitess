@@ -206,9 +206,9 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select id from `user` where 1 != 1",
-            "OrderBy": "0 DESC",
-            "Query": "select id from `user` order by id desc limit :__upper_limit",
+            "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1",
+            "OrderBy": "1 DESC",
+            "Query": "select id, weight_string(id) from `user` order by id desc limit :__upper_limit",
             "Table": "`user`"
           }
         ]
@@ -224,9 +224,9 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select id from music where 1 != 1",
-            "OrderBy": "0 DESC",
-            "Query": "select id from music order by id desc limit :__upper_limit",
+            "FieldQuery": "select id, weight_string(id) from music where 1 != 1",
+            "OrderBy": "1 DESC",
+            "Query": "select id, weight_string(id) from music order by id desc limit :__upper_limit",
             "Table": "music"
           }
         ]
@@ -251,9 +251,9 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select id from `user` where 1 != 1",
-            "OrderBy": "0 DESC",
-            "Query": "select id from `user` order by id desc limit :__upper_limit",
+            "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1",
+            "OrderBy": "1 DESC",
+            "Query": "select id, weight_string(id) from `user` order by id desc limit :__upper_limit",
             "Table": "`user`"
           }
         ]
@@ -269,9 +269,9 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select id from music where 1 != 1",
-            "OrderBy": "0 DESC",
-            "Query": "select id from music order by id desc limit :__upper_limit",
+            "FieldQuery": "select id, weight_string(id) from music where 1 != 1",
+            "OrderBy": "1 DESC",
+            "Query": "select id, weight_string(id) from music order by id desc limit :__upper_limit",
             "Table": "music"
           }
         ]
@@ -350,9 +350,9 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select id from `user` where 1 != 1",
-            "OrderBy": "0 ASC",
-            "Query": "select id from `user` order by id asc limit :__upper_limit",
+            "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1",
+            "OrderBy": "1 ASC",
+            "Query": "select id, weight_string(id) from `user` order by id asc limit :__upper_limit",
             "Table": "`user`"
           }
         ]
@@ -368,9 +368,9 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select id from music where 1 != 1",
-            "OrderBy": "0 DESC",
-            "Query": "select id from music order by id desc limit :__upper_limit",
+            "FieldQuery": "select id, weight_string(id) from music where 1 != 1",
+            "OrderBy": "1 DESC",
+            "Query": "select id, weight_string(id) from music order by id desc limit :__upper_limit",
             "Table": "music"
           }
         ]
@@ -395,9 +395,9 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select id from `user` where 1 != 1",
-            "OrderBy": "0 ASC",
-            "Query": "select id from `user` order by id asc limit :__upper_limit",
+            "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1",
+            "OrderBy": "1 ASC",
+            "Query": "select id, weight_string(id) from `user` order by id asc limit :__upper_limit",
             "Table": "`user`"
           }
         ]
@@ -413,9 +413,9 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select id from music where 1 != 1",
-            "OrderBy": "0 DESC",
-            "Query": "select id from music order by id desc limit :__upper_limit",
+            "FieldQuery": "select id, weight_string(id) from music where 1 != 1",
+            "OrderBy": "1 DESC",
+            "Query": "select id, weight_string(id) from music order by id desc limit :__upper_limit",
             "Table": "music"
           }
         ]
@@ -1073,9 +1073,9 @@ Gen4 plan same as above
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select 1 from `user` where 1 != 1",
-            "OrderBy": "0 DESC",
-            "Query": "select 1 from `user` order by 1 desc",
+            "FieldQuery": "select 1, weight_string(1) from `user` where 1 != 1",
+            "OrderBy": "1 DESC",
+            "Query": "select 1, weight_string(1) from `user` order by 1 desc",
             "Table": "`user`"
           },
           {
@@ -1085,9 +1085,9 @@ Gen4 plan same as above
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select 1 from `user` where 1 != 1",
-            "OrderBy": "0 ASC",
-            "Query": "select 1 from `user` order by 1 asc",
+            "FieldQuery": "select 1, weight_string(1) from `user` where 1 != 1",
+            "OrderBy": "1 ASC",
+            "Query": "select 1, weight_string(1) from `user` order by 1 asc",
             "Table": "`user`"
           }
         ]
@@ -1111,9 +1111,9 @@ Gen4 plan same as above
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select 1 from `user` where 1 != 1",
-            "OrderBy": "0 DESC",
-            "Query": "select 1 from `user` order by 1 desc",
+            "FieldQuery": "select 1, weight_string(1) from `user` where 1 != 1",
+            "OrderBy": "1 DESC",
+            "Query": "select 1, weight_string(1) from `user` order by 1 desc",
             "Table": "`user`"
           },
           {
@@ -1123,9 +1123,9 @@ Gen4 plan same as above
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select 1 from `user` where 1 != 1",
-            "OrderBy": "0 ASC",
-            "Query": "select 1 from `user` order by 1 asc",
+            "FieldQuery": "select 1, weight_string(1) from `user` where 1 != 1",
+            "OrderBy": "1 ASC",
+            "Query": "select 1, weight_string(1) from `user` order by 1 asc",
             "Table": "`user`"
           }
         ]

@@ -23,9 +23,9 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select a, b, count(*) from `user` where 1 != 1 group by a",
-            "OrderBy": "0 ASC",
-            "Query": "select a, b, count(*) from `user` group by a order by a asc",
+            "FieldQuery": "select a, b, count(*), weight_string(a) from `user` where 1 != 1 group by a",
+            "OrderBy": "3 ASC",
+            "Query": "select a, b, count(*), weight_string(a) from `user` group by a order by a asc",
             "Table": "`user`"
           }
         ]
@@ -58,9 +58,9 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select a, b, count(*) as k from `user` where 1 != 1 group by a",
-            "OrderBy": "0 ASC",
-            "Query": "select a, b, count(*) as k from `user` group by a order by a asc",
+            "FieldQuery": "select a, b, count(*) as k, weight_string(a) from `user` where 1 != 1 group by a",
+            "OrderBy": "3 ASC",
+            "Query": "select a, b, count(*) as k, weight_string(a) from `user` group by a order by a asc",
             "Table": "`user`"
           }
         ]
@@ -93,9 +93,9 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select a, b, count(*) as k from `user` where 1 != 1 group by a",
-            "OrderBy": "0 ASC",
-            "Query": "select a, b, count(*) as k from `user` group by a order by a asc",
+            "FieldQuery": "select a, b, count(*) as k, weight_string(a) from `user` where 1 != 1 group by a",
+            "OrderBy": "3 ASC",
+            "Query": "select a, b, count(*) as k, weight_string(a) from `user` group by a order by a asc",
             "Table": "`user`"
           }
         ]
@@ -132,9 +132,9 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select a, b, count(*) as k from `user` where 1 != 1 group by a",
-                "OrderBy": "0 ASC",
-                "Query": "select a, b, count(*) as k from `user` group by a order by a asc",
+                "FieldQuery": "select a, b, count(*) as k, weight_string(a) from `user` where 1 != 1 group by a",
+                "OrderBy": "3 ASC",
+                "Query": "select a, b, count(*) as k, weight_string(a) from `user` group by a order by a asc",
                 "Table": "`user`"
               }
             ]
@@ -169,9 +169,9 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select a, b, count(*) as k from `user` where 1 != 1 group by a",
-            "OrderBy": "0 ASC",
-            "Query": "select a, b, count(*) as k from `user` group by a order by 1 asc",
+            "FieldQuery": "select a, b, count(*) as k, weight_string(a) from `user` where 1 != 1 group by a",
+            "OrderBy": "3 ASC",
+            "Query": "select a, b, count(*) as k, weight_string(a) from `user` group by a order by 1 asc",
             "Table": "`user`"
           }
         ]
@@ -504,9 +504,9 @@
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select a from `user` where 1 != 1",
-    "OrderBy": "0 DESC",
-    "Query": "select a from `user` order by binary a desc",
+    "FieldQuery": "select a, weight_string(a) from `user` where 1 != 1",
+    "OrderBy": "1 DESC",
+    "Query": "select a, weight_string(a) from `user` order by binary a desc",
     "Table": "`user`"
   }
 }
@@ -529,9 +529,9 @@
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select u.a from `user` as u where 1 != 1",
-        "OrderBy": "0 DESC",
-        "Query": "select u.a from `user` as u order by binary a desc",
+        "FieldQuery": "select u.a, weight_string(u.a) from `user` as u where 1 != 1",
+        "OrderBy": "1 DESC",
+        "Query": "select u.a, weight_string(u.a) from `user` as u order by binary a desc",
         "Table": "`user`"
       },
       {
