@@ -27056,6 +27056,9 @@ export namespace vtctldata {
 
         /** GetTabletsRequest cells */
         cells?: (string[]|null);
+
+        /** GetTabletsRequest strict */
+        strict?: (boolean|null);
     }
 
     /** Represents a GetTabletsRequest. */
@@ -27075,6 +27078,9 @@ export namespace vtctldata {
 
         /** GetTabletsRequest cells. */
         public cells: string[];
+
+        /** GetTabletsRequest strict. */
+        public strict: boolean;
 
         /**
          * Creates a new GetTabletsRequest instance using the specified properties.
