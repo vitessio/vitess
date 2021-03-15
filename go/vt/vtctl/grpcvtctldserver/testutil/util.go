@@ -62,6 +62,43 @@ func WithTestServer(
 	test(t, client)
 }
 
+// WithTestServers creates N gRPC servers listening locally with the given RPC
+// implementations, and then runs the test func with N clients created, where
+// clients[i] points at servers[i].
+func WithTestServers(
+	t *testing.T,
+	test func(t *testing.T, clients ...vtctldclient.VtctldClient),
+	servers ...vtctlservicepb.VtctldServer,
+) {
+	// Declare our recursive helper function so it can refer to itself.
+	var withTestServers func(t *testing.T, servers ...vtctlservicepb.VtctldServer)
+
+	// Preallocate a slice of clients we're eventually going to call the test
+	// function with.
+	clients := make([]vtctldclient.VtctldClient, 0, len(servers))
+
+	withTestServers = func(t *testing.T, servers ...vtctlservicepb.VtctldServer) {
+		if len(servers) == 0 {
+			// We've started up all the test servers and accumulated clients for
+			// each of them (or there were no test servers to start, and we've
+			// accumulated no clients), so finally we run the test and stop
+			// recursing.
+			test(t, clients...)
+
+			return
+		}
+
+		// Start up a test server for the head of our server slice, accumulate
+		// the resulting client, and recurse on the tail of our server slice.
+		WithTestServer(t, servers[0], func(t *testing.T, client vtctldclient.VtctldClient) {
+			clients = append(clients, client)
+			withTestServers(t, servers[1:]...)
+		})
+	}
+
+	withTestServers(t, servers...)
+}
+
 // AddKeyspace adds a keyspace to a topology, failing a test if that keyspace
 // could not be added. It shallow copies the proto struct to prevent XXX_ fields
 // from changing in the marshalling.

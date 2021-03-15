@@ -22,6 +22,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
@@ -372,4 +373,25 @@ func TestSystemVariableType(t *testing.T) {
 
 	checkedExec(t, conn, "set autocommit = true")
 	assertResponseMatch(t, conn, query1, query2)
+}
+
+func TestSysvarSocket(t *testing.T) {
+	vtParams := mysql.ConnParams{
+		Host: "localhost",
+		Port: clusterInstance.VtgateMySQLPort,
+	}
+	conn, err := mysql.Connect(context.Background(), &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	qr := checkedExec(t, conn, "select @@socket")
+	assert.Contains(t, fmt.Sprintf("%v", qr.Rows), "mysql.sock")
+
+	_, err = exec(t, conn, "set socket = '/any/path'")
+	require.Error(t, err)
+	sqlErr, ok := err.(*mysql.SQLError)
+	require.True(t, ok, "not a mysql error: %T", err)
+	assert.Equal(t, mysql.ERIncorrectGlobalLocalVar, sqlErr.Number())
+	assert.Equal(t, mysql.SSUnknownSQLState, sqlErr.SQLState())
+	assert.Equal(t, "Variable 'socket' is a read only variable (errno 1238) (sqlstate HY000) during query: set socket = '/any/path'", sqlErr.Error())
 }

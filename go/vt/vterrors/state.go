@@ -27,7 +27,9 @@ const (
 	BadFieldError
 	CantUseOptionHere
 	DataOutOfRange
+	EmptyQuery
 	ForbidSchemaChange
+	IncorrectGlobalLocalVar
 	NonUniqTable
 	SyntaxError
 	WrongGroupField

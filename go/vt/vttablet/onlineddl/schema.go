@@ -54,6 +54,8 @@ const (
 	alterSchemaMigrationsTableContext            = "ALTER TABLE _vt.schema_migrations add column migration_context varchar(1024) NOT NULL DEFAULT ''"
 	alterSchemaMigrationsTableDDLAction          = "ALTER TABLE _vt.schema_migrations add column ddl_action varchar(16) NOT NULL DEFAULT ''"
 	alterSchemaMigrationsTableMessage            = "ALTER TABLE _vt.schema_migrations add column message TEXT NOT NULL"
+	alterSchemaMigrationsTableTableCompleteIndex = "ALTER TABLE _vt.schema_migrations add KEY table_complete_idx (migration_status, keyspace(64), mysql_table(64), completed_timestamp)"
+	alterSchemaMigrationsTableETASeconds         = "ALTER TABLE _vt.schema_migrations add column eta_seconds bigint NOT NULL DEFAULT -1"
 
 	sqlScheduleSingleMigration = `UPDATE _vt.schema_migrations
 		SET
@@ -65,6 +67,11 @@ const (
 			requested_timestamp ASC
 		LIMIT 1
 	`
+	sqlUpdateMySQLTable = `UPDATE _vt.schema_migrations
+			SET mysql_table=%a
+		WHERE
+			migration_uuid=%a
+	`
 	sqlUpdateMigrationStatus = `UPDATE _vt.schema_migrations
 			SET migration_status=%a
 		WHERE
@@ -72,6 +79,11 @@ const (
 	`
 	sqlUpdateMigrationProgress = `UPDATE _vt.schema_migrations
 			SET progress=%a
+		WHERE
+			migration_uuid=%a
+	`
+	sqlUpdateMigrationETASeconds = `UPDATE _vt.schema_migrations
+			SET eta_seconds=%a
 		WHERE
 			migration_uuid=%a
 	`
@@ -95,8 +107,18 @@ const (
 		WHERE
 			migration_uuid=%a
 	`
+	sqlClearArtifacts = `UPDATE _vt.schema_migrations
+			SET artifacts=''
+		WHERE
+			migration_uuid=%a
+	`
 	sqlUpdateTabletFailure = `UPDATE _vt.schema_migrations
 			SET tablet_failure=1
+		WHERE
+			migration_uuid=%a
+	`
+	sqlUpdateDDLAction = `UPDATE _vt.schema_migrations
+			SET ddl_action=%a
 		WHERE
 			migration_uuid=%a
 	`
@@ -133,6 +155,18 @@ const (
 		WHERE
 			migration_status='running'
 	`
+	sqlSelectCompleteMigrationsOnTable = `SELECT
+			migration_uuid,
+			strategy
+		FROM _vt.schema_migrations
+		WHERE
+			migration_status='complete'
+			AND keyspace=%a
+			AND mysql_table=%a
+		ORDER BY
+			completed_timestamp DESC
+		LIMIT 1
+	`
 	sqlSelectCountReadyMigrations = `SELECT
 			count(*) as count_ready
 		FROM _vt.schema_migrations
@@ -159,6 +193,7 @@ const (
 		WHERE
 			migration_status IN ('complete', 'failed')
 			AND cleanup_timestamp IS NULL
+			AND completed_timestamp <= NOW() - INTERVAL %a SECOND
 	`
 	sqlSelectMigration = `SELECT
 			id,
@@ -178,6 +213,8 @@ const (
 			migration_status,
 			log_path,
 			retries,
+			ddl_action,
+			artifacts,
 			tablet
 		FROM _vt.schema_migrations
 		WHERE
@@ -201,6 +238,8 @@ const (
 			migration_status,
 			log_path,
 			retries,
+			ddl_action,
+			artifacts,
 			tablet
 		FROM _vt.schema_migrations
 		WHERE
@@ -245,7 +284,8 @@ const (
 			_vt.copy_state
 		WHERE vrepl_id=%a
 		`
-	sqlSwapTables = "RENAME TABLE `%a` TO `%a`, `%a` TO `%a`, `%a` TO `%a`"
+	sqlSwapTables  = "RENAME TABLE `%a` TO `%a`, `%a` TO `%a`, `%a` TO `%a`"
+	sqlRenameTable = "RENAME TABLE `%a` TO `%a`"
 )
 
 const (
@@ -278,4 +318,6 @@ var applyDDL = []string{
 	alterSchemaMigrationsTableContext,
 	alterSchemaMigrationsTableDDLAction,
 	alterSchemaMigrationsTableMessage,
+	alterSchemaMigrationsTableTableCompleteIndex,
+	alterSchemaMigrationsTableETASeconds,
 }

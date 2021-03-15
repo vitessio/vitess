@@ -165,6 +165,7 @@ func TestMain(m *testing.M) {
 			SchemaSQL: SchemaSQL,
 			VSchema:   VSchema,
 		}
+		clusterInstance.VtTabletExtraArgs = []string{"-queryserver-config-transaction-timeout", "3"}
 		if err := clusterInstance.StartUnshardedKeyspace(*Keyspace, 0, false); err != nil {
 			log.Fatal(err.Error())
 			return 1
@@ -234,8 +235,9 @@ func TestEmptyStatement(t *testing.T) {
 	require.Nil(t, err)
 	defer conn.Close()
 	defer exec(t, conn, `delete from t1`)
-	execAssertError(t, conn, " \t;", "Query was empty")
-	execMulti(t, conn, `insert into t1(c1, c2, c3, c4) values (300,100,300,'abc'); ;; insert into t1(c1, c2, c3, c4) values (301,101,301,'abcd');;`)
+	execAssertError(t, conn, " \t; \n;", "Query was empty")
+	execMulti(t, conn, `insert into t1(c1, c2, c3, c4) values (300,100,300,'abc');         ;; insert into t1(c1, c2, c3, c4) values (301,101,301,'abcd');;`)
+
 	assertMatches(t, conn, `select c1,c2,c3 from t1`, `[[INT64(300) INT64(100) INT64(300)] [INT64(301) INT64(101) INT64(301)]]`)
 }
 
@@ -364,6 +366,29 @@ func TestTempTable(t *testing.T) {
 
 	assertMatches(t, conn2, `select count(table_id) from information_schema.innodb_temp_table_info`, `[[INT64(1)]]`)
 	execAssertError(t, conn2, `show create table temp_t`, `Table 'vt_customer.temp_t' doesn't exist (errno 1146) (sqlstate 42S02)`)
+}
+
+func TestReservedConnDML(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	vtParams := mysql.ConnParams{
+		Host: "localhost",
+		Port: clusterInstance.VtgateMySQLPort,
+	}
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	exec(t, conn, `set default_week_format = 1`)
+	exec(t, conn, `begin`)
+	exec(t, conn, `insert into allDefaults () values ()`)
+	exec(t, conn, `commit`)
+
+	time.Sleep(6 * time.Second)
+
+	exec(t, conn, `begin`)
+	exec(t, conn, `insert into allDefaults () values ()`)
+	exec(t, conn, `commit`)
 }
 
 func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {

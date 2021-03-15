@@ -18,9 +18,11 @@ package vtctldclient
 
 import (
 	"context"
+	"fmt"
 
 	"google.golang.org/grpc"
 
+	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldclient"
@@ -85,24 +87,35 @@ func New(cfg *Config) *ClientProxy {
 
 // Dial is part of the Proxy interface.
 func (vtctld *ClientProxy) Dial(ctx context.Context) error {
+	span, ctx := trace.NewSpan(ctx, "VtctldClientProxy.Dial")
+	defer span.Finish()
+
 	if vtctld.VtctldClient != nil {
 		if !vtctld.closed {
+			span.Annotate("is_noop", true)
+
 			return nil
 		}
 
+		span.Annotate("is_stale", true)
+
 		// close before reopen. this is safe to call on an already-closed client.
 		if err := vtctld.Close(); err != nil {
-			return err
+			return fmt.Errorf("error closing possibly-stale connection before re-dialing: %w", err)
 		}
 	}
 
 	addr, err := vtctld.discovery.DiscoverVtctldAddr(ctx, nil)
 	if err != nil {
-		return err
+		return fmt.Errorf("error discovering vtctld to dial: %w", err)
 	}
+
+	span.Annotate("vtctld_host", addr)
 
 	opts := []grpc.DialOption{}
 	if vtctld.creds != nil {
+		span.Annotate("is_using_credentials", true)
+
 		opts = append(opts, grpc.WithPerRPCCredentials(vtctld.creds),
 			// TODO: make configurable. right now, omitting this and attempting
 			// to not use TLS results in:

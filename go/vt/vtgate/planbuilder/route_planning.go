@@ -467,7 +467,7 @@ func breakPredicateInLHSandRHS(expr sqlparser.Expr, semTable *semantics.SemTable
 			}
 			if deps.IsSolvedBy(lhs) {
 				columns = append(columns, node)
-				arg := sqlparser.NewArgument([]byte(":" + node.CompliantName("")))
+				arg := sqlparser.NewArgument(":" + node.CompliantName(""))
 				cursor.Replace(arg)
 			}
 		}

@@ -366,6 +366,13 @@ func initTabletEnvironment(ddls []sqlparser.DDLStatement, opts *Options) error {
 			}},
 			Rows: [][]sqltypes.Value{},
 		},
+		mysql.ShowRowsRead: sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields(
+				"Variable_name|value",
+				"varchar|uint64",
+			),
+			"Innodb_rows|0",
+		),
 	}
 
 	showTableRows := make([][]sqltypes.Value, 0, 4)
@@ -523,7 +530,7 @@ func (t *explainTablet) HandleQuery(c *mysql.Conn, query string, callback func(*
 							for _, val := range values {
 								switch v := val.(type) {
 								case *sqlparser.Literal:
-									inVal = append(inVal, v.Val)
+									inVal = append(inVal, v.Bytes())
 								}
 							}
 							rowCount = len(inVal)

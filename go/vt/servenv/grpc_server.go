@@ -64,6 +64,9 @@ var (
 	// GRPCCA is the CA to use if TLS is enabled
 	GRPCCA = flag.String("grpc_ca", "", "server CA to use for gRPC connections, requires TLS, and enforces client certificate check")
 
+	// GRPCServerCA if specified will combine server cert and server CA
+	GRPCServerCA = flag.String("grpc_server_ca", "", "path to server CA in PEM format, which will be combine with server cert, return full certificate chain to clients")
+
 	// GRPCAuth which auth plugin to use (at the moment now only static is supported)
 	GRPCAuth = flag.String("grpc_auth_mode", "", "Which auth plugin implementation to use (eg: static)")
 
@@ -125,7 +128,7 @@ func createGRPCServer() {
 
 	var opts []grpc.ServerOption
 	if GRPCPort != nil && *GRPCCert != "" && *GRPCKey != "" {
-		config, err := vttls.ServerConfig(*GRPCCert, *GRPCKey, *GRPCCA)
+		config, err := vttls.ServerConfig(*GRPCCert, *GRPCKey, *GRPCCA, *GRPCServerCA)
 		if err != nil {
 			log.Exitf("Failed to log gRPC cert/key/ca: %v", err)
 		}

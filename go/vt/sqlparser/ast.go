@@ -17,7 +17,6 @@ limitations under the License.
 package sqlparser
 
 import (
-	"fmt"
 	"strings"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -63,6 +62,7 @@ type (
 		GetAction() DDLAction
 		GetOptLike() *OptLike
 		GetIfExists() bool
+		GetIfNotExists() bool
 		GetTableSpec() *TableSpec
 		GetFromTables() TableNames
 		GetToTables() TableNames
@@ -342,6 +342,7 @@ type (
 
 	// DropDatabase represents a DROP database statement.
 	DropDatabase struct {
+		Comments Comments
 		DBName   string
 		IfExists bool
 	}
@@ -358,6 +359,7 @@ type (
 
 	// CreateDatabase represents a CREATE database statement.
 	CreateDatabase struct {
+		Comments      Comments
 		DBName        string
 		IfNotExists   bool
 		CreateOptions []CollateAndCharset
@@ -880,6 +882,46 @@ func (node *DropView) GetIfExists() bool {
 	return node.IfExists
 }
 
+// GetIfNotExists implements the DDLStatement interface
+func (node *RenameTable) GetIfNotExists() bool {
+	return false
+}
+
+// GetIfNotExists implements the DDLStatement interface
+func (node *CreateTable) GetIfNotExists() bool {
+	return node.IfNotExists
+}
+
+// GetIfNotExists implements the DDLStatement interface
+func (node *TruncateTable) GetIfNotExists() bool {
+	return false
+}
+
+// GetIfNotExists implements the DDLStatement interface
+func (node *AlterTable) GetIfNotExists() bool {
+	return false
+}
+
+// GetIfNotExists implements the DDLStatement interface
+func (node *CreateView) GetIfNotExists() bool {
+	return false
+}
+
+// GetIfNotExists implements the DDLStatement interface
+func (node *AlterView) GetIfNotExists() bool {
+	return false
+}
+
+// GetIfNotExists implements the DDLStatement interface
+func (node *DropTable) GetIfNotExists() bool {
+	return false
+}
+
+// GetIfNotExists implements the DDLStatement interface
+func (node *DropView) GetIfNotExists() bool {
+	return false
+}
+
 // GetTableSpec implements the DDLStatement interface
 func (node *CreateTable) GetTableSpec() *TableSpec {
 	return node.TableSpec
@@ -1394,7 +1436,7 @@ type ShowFilter struct {
 }
 
 // Comments represents a list of comments.
-type Comments [][]byte
+type Comments []string
 
 // SelectExprs represents SELECT expressions.
 type SelectExprs []SelectExpr
@@ -1597,11 +1639,11 @@ type (
 	// Literal represents a fixed value.
 	Literal struct {
 		Type ValType
-		Val  []byte
+		Val  string
 	}
 
 	// Argument represents bindvariable expression
-	Argument []byte
+	Argument string
 
 	// NullVal represents a NULL value.
 	NullVal struct{}
@@ -1998,9 +2040,9 @@ func (node *SetTransaction) Format(buf *TrackedBuffer) {
 func (node *DropDatabase) Format(buf *TrackedBuffer) {
 	exists := ""
 	if node.IfExists {
-		exists = " if exists"
+		exists = "if exists "
 	}
-	buf.WriteString(fmt.Sprintf("%s database%s %v", DropStr, exists, node.DBName))
+	buf.astPrintf(node, "%s database %v%s%s", DropStr, node.Comments, exists, node.DBName)
 }
 
 // Format formats the node.
@@ -2767,7 +2809,7 @@ func (node *ExistsExpr) Format(buf *TrackedBuffer) {
 func (node *Literal) Format(buf *TrackedBuffer) {
 	switch node.Type {
 	case StrVal:
-		sqltypes.MakeTrusted(sqltypes.VarBinary, node.Val).EncodeSQL(buf)
+		sqltypes.MakeTrusted(sqltypes.VarBinary, node.Bytes()).EncodeSQL(buf)
 	case IntVal, FloatVal, HexNum:
 		buf.astPrintf(node, "%s", node.Val)
 	case HexVal:
@@ -3163,11 +3205,11 @@ func (node *SelectInto) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *CreateDatabase) Format(buf *TrackedBuffer) {
-	buf.WriteString("create database")
+	buf.astPrintf(node, "create database %v", node.Comments)
 	if node.IfNotExists {
-		buf.WriteString(" if not exists")
+		buf.WriteString("if not exists ")
 	}
-	buf.astPrintf(node, " %s", node.DBName)
+	buf.astPrintf(node, "%s", node.DBName)
 	if node.CreateOptions != nil {
 		for _, createOption := range node.CreateOptions {
 			if createOption.IsDefault {
