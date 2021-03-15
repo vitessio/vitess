@@ -2751,6 +2751,184 @@ func TestGetShard(t *testing.T) {
 	}
 }
 
+func TestGetSrvKeyspaces(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name         string
+		cells        []string
+		srvKeyspaces []*testutil.SrvKeyspace
+		topoErr      error
+		req          *vtctldatapb.GetSrvKeyspacesRequest
+		expected     *vtctldatapb.GetSrvKeyspacesResponse
+		shouldErr    bool
+	}{
+		{
+			name:  "success",
+			cells: []string{"zone1", "zone2"},
+			srvKeyspaces: []*testutil.SrvKeyspace{
+				{
+					Cell:     "zone1",
+					Keyspace: "testkeyspace",
+					SrvKeyspace: &topodatapb.SrvKeyspace{
+						ShardingColumnName: "zone1-sharding-col",
+					},
+				},
+				{
+					Cell:     "zone2",
+					Keyspace: "testkeyspace",
+					SrvKeyspace: &topodatapb.SrvKeyspace{
+						ShardingColumnName: "zone2-sharding-col",
+					},
+				},
+			},
+			req: &vtctldatapb.GetSrvKeyspacesRequest{
+				Keyspace: "testkeyspace",
+			},
+			expected: &vtctldatapb.GetSrvKeyspacesResponse{
+				SrvKeyspaces: map[string]*topodatapb.SrvKeyspace{
+					"zone1": {
+						ShardingColumnName: "zone1-sharding-col",
+					},
+					"zone2": {
+						ShardingColumnName: "zone2-sharding-col",
+					},
+				},
+			},
+			shouldErr: false,
+		},
+		{
+			name:  "filtering by cell",
+			cells: []string{"zone1", "zone2"},
+			srvKeyspaces: []*testutil.SrvKeyspace{
+				{
+					Cell:     "zone1",
+					Keyspace: "testkeyspace",
+					SrvKeyspace: &topodatapb.SrvKeyspace{
+						ShardingColumnName: "zone1-sharding-col",
+					},
+				},
+				{
+					Cell:     "zone2",
+					Keyspace: "testkeyspace",
+					SrvKeyspace: &topodatapb.SrvKeyspace{
+						ShardingColumnName: "zone2-sharding-col",
+					},
+				},
+			},
+			req: &vtctldatapb.GetSrvKeyspacesRequest{
+				Keyspace: "testkeyspace",
+				Cells:    []string{"zone1"},
+			},
+			expected: &vtctldatapb.GetSrvKeyspacesResponse{
+				SrvKeyspaces: map[string]*topodatapb.SrvKeyspace{
+					"zone1": {
+						ShardingColumnName: "zone1-sharding-col",
+					},
+				},
+			},
+			shouldErr: false,
+		},
+		{
+			name:  "no srvkeyspace for single cell",
+			cells: []string{"zone1", "zone2"},
+			srvKeyspaces: []*testutil.SrvKeyspace{
+				{
+					Cell:     "zone1",
+					Keyspace: "testkeyspace",
+					SrvKeyspace: &topodatapb.SrvKeyspace{
+						ShardingColumnName: "zone1-sharding-col",
+					},
+				},
+			},
+			req: &vtctldatapb.GetSrvKeyspacesRequest{
+				Keyspace: "testkeyspace",
+			},
+			expected: &vtctldatapb.GetSrvKeyspacesResponse{
+				SrvKeyspaces: map[string]*topodatapb.SrvKeyspace{
+					"zone1": {
+						ShardingColumnName: "zone1-sharding-col",
+					},
+					"zone2": nil,
+				},
+			},
+			shouldErr: false,
+		},
+		{
+			name:  "error getting cell names",
+			cells: []string{"zone1"},
+			srvKeyspaces: []*testutil.SrvKeyspace{
+				{
+					Cell:     "zone1",
+					Keyspace: "testkeyspace",
+					SrvKeyspace: &topodatapb.SrvKeyspace{
+						ShardingColumnName: "zone1-sharding-col",
+					},
+				},
+			},
+			topoErr: assert.AnError,
+			req: &vtctldatapb.GetSrvKeyspacesRequest{
+				Keyspace: "testkeyspace",
+			},
+			shouldErr: true,
+		},
+		{
+			name:  "error getting srvkeyspace",
+			cells: []string{"zone1"},
+			srvKeyspaces: []*testutil.SrvKeyspace{
+				{
+					Cell:     "zone1",
+					Keyspace: "testkeyspace",
+					SrvKeyspace: &topodatapb.SrvKeyspace{
+						ShardingColumnName: "zone1-sharding-col",
+					},
+				},
+			},
+			topoErr: assert.AnError,
+			req: &vtctldatapb.GetSrvKeyspacesRequest{
+				Keyspace: "testkeyspace",
+				Cells:    []string{"zone1"},
+			},
+			shouldErr: true,
+		},
+	}
+
+	ctx := context.Background()
+
+	for _, tt := range tests {
+		tt := tt
+
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			if tt.req == nil {
+				t.SkipNow()
+			}
+
+			ts, topofactory := memorytopo.NewServerAndFactory(tt.cells...)
+
+			testutil.AddSrvKeyspaces(t, ts, tt.srvKeyspaces...)
+			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+				return NewVtctldServer(ts)
+			})
+
+			if tt.topoErr != nil {
+				topofactory.SetError(tt.topoErr)
+			}
+
+			resp, err := vtctld.GetSrvKeyspaces(ctx, tt.req)
+			if tt.shouldErr {
+				assert.Error(t, err)
+
+				return
+			}
+
+			assert.NoError(t, err)
+			assert.Equal(t, tt.expected, resp)
+		})
+	}
+}
+
 func TestGetSrvVSchema(t *testing.T) {
 	t.Parallel()
 
