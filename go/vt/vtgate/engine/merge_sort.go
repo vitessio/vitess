@@ -96,9 +96,12 @@ func (ms *MergeSort) StreamExecute(vcursor VCursor, bindVars map[string]*querypb
 		return err
 	}
 
+	orderBy, weightStrings, desc := extractSlices(ms.OrderBy)
 	sh := &scatterHeap{
-		rows:    make([]streamRow, 0, len(handles)),
-		orderBy: ms.OrderBy,
+		rows:          make([]streamRow, 0, len(handles)),
+		orderBy:       orderBy,
+		weightStrings: weightStrings,
+		desc:          desc,
 	}
 
 	// Prime the heap. One element must be pulled from
@@ -236,9 +239,11 @@ type streamRow struct {
 // yielded an error, err is set. This must be checked
 // after every heap operation.
 type scatterHeap struct {
-	rows    []streamRow
-	orderBy []OrderbyParams
-	err     error
+	rows          []streamRow
+	orderBy       []int
+	weightStrings []int
+	desc          []bool
+	err           error
 }
 
 // Len satisfies sort.Interface and heap.Interface.
@@ -248,19 +253,29 @@ func (sh *scatterHeap) Len() int {
 
 // Less satisfies sort.Interface and heap.Interface.
 func (sh *scatterHeap) Less(i, j int) bool {
-	for _, order := range sh.orderBy {
+	for k := range sh.orderBy {
 		if sh.err != nil {
 			return true
 		}
-		cmp, err := evalengine.NullsafeCompare(sh.rows[i].row[order.Col], sh.rows[j].row[order.Col])
+		cmp, err := evalengine.NullsafeCompare(sh.rows[i].row[sh.orderBy[k]], sh.rows[j].row[sh.orderBy[k]])
 		if err != nil {
-			sh.err = err
-			return true
+			_, isComparisonErr := err.(evalengine.UnsupportedComparisonError)
+			if !(isComparisonErr && sh.weightStrings[k] != -1) {
+				sh.err = err
+				return true
+			}
+			sh.orderBy[k] = sh.weightStrings[k]
+			sh.weightStrings[k] = -1
+			cmp, err = evalengine.NullsafeCompare(sh.rows[i].row[sh.orderBy[k]], sh.rows[j].row[sh.orderBy[k]])
+			if err != nil {
+				sh.err = err
+				return true
+			}
 		}
 		if cmp == 0 {
 			continue
 		}
-		if order.Desc {
+		if sh.desc[k] {
 			cmp = -cmp
 		}
 		return cmp < 0

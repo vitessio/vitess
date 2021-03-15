@@ -492,7 +492,7 @@ func newMergeSorter(participants map[string]*shardStreamer, comparePKs []int) *e
 	}
 	ob := make([]engine.OrderbyParams, 0, len(comparePKs))
 	for _, cpk := range comparePKs {
-		ob = append(ob, engine.OrderbyParams{Col: cpk})
+		ob = append(ob, engine.OrderbyParams{Col: cpk, WeightStringCol: -1})
 	}
 	return &engine.MergeSort{
 		Primitives: prims,
