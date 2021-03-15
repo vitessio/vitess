@@ -1108,18 +1108,19 @@ func (s *VtctldServer) ReparentTablet(ctx context.Context, req *vtctldatapb.Repa
 
 // ShardReplicationPositions is part of the vtctldservicepb.VtctldServer interface.
 func (s *VtctldServer) ShardReplicationPositions(ctx context.Context, req *vtctldatapb.ShardReplicationPositionsRequest) (*vtctldatapb.ShardReplicationPositionsResponse, error) {
-	tabletMap, err := s.ts.GetTabletMapForShard(ctx, req.Keyspace, req.Shard)
+	tabletInfoMap, err := s.ts.GetTabletMapForShard(ctx, req.Keyspace, req.Shard)
 	if err != nil {
 		return nil, fmt.Errorf("GetTabletMapForShard(%s, %s) failed: %w", req.Keyspace, req.Shard, err)
 	}
 
-	log.Infof("Gathering tablet replication status for: %v", tabletMap)
+	log.Infof("Gathering tablet replication status for: %v", tabletInfoMap)
 
 	var (
-		m       sync.Mutex
-		wg      sync.WaitGroup
-		rec     concurrency.AllErrorRecorder
-		results = make(map[string]*replicationdatapb.Status, len(tabletMap))
+		m         sync.Mutex
+		wg        sync.WaitGroup
+		rec       concurrency.AllErrorRecorder
+		results   = make(map[string]*replicationdatapb.Status, len(tabletInfoMap))
+		tabletMap = make(map[string]*topodatapb.Tablet, len(tabletInfoMap))
 	)
 
 	// For each tablet, we're going to create an individual context, using
@@ -1130,7 +1131,7 @@ func (s *VtctldServer) ShardReplicationPositions(ctx context.Context, req *vtctl
 	// result map; that way, the caller can tell the difference between a tablet
 	// that timed out vs a tablet that didn't get queried at all.
 
-	for alias, tabletInfo := range tabletMap {
+	for alias, tabletInfo := range tabletInfoMap {
 		switch {
 		case tabletInfo.Type == topodatapb.TabletType_MASTER:
 			wg.Add(1)
@@ -1168,6 +1169,7 @@ func (s *VtctldServer) ShardReplicationPositions(ctx context.Context, req *vtctl
 				defer m.Unlock()
 
 				results[alias] = status
+				tabletMap[alias] = tablet
 			}(ctx, alias, tabletInfo.Tablet)
 		case tabletInfo.IsReplicaType():
 			wg.Add(1)
@@ -1200,6 +1202,7 @@ func (s *VtctldServer) ShardReplicationPositions(ctx context.Context, req *vtctl
 				defer m.Unlock()
 
 				results[alias] = status
+				tabletMap[alias] = tablet
 			}(ctx, alias, tabletInfo.Tablet)
 		}
 	}
@@ -1212,6 +1215,7 @@ func (s *VtctldServer) ShardReplicationPositions(ctx context.Context, req *vtctl
 
 	return &vtctldatapb.ShardReplicationPositionsResponse{
 		ReplicationStatuses: results,
+		TabletMap:           tabletMap,
 	}, nil
 }
 
