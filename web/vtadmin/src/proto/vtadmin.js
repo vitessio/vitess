@@ -67133,6 +67133,7 @@ $root.vtctldata = (function() {
          * @memberof vtctldata
          * @interface IShardReplicationPositionsResponse
          * @property {Object.<string,replicationdata.IStatus>|null} [replication_statuses] ShardReplicationPositionsResponse replication_statuses
+         * @property {Object.<string,topodata.ITablet>|null} [tablet_map] ShardReplicationPositionsResponse tablet_map
          */
 
         /**
@@ -67145,6 +67146,7 @@ $root.vtctldata = (function() {
          */
         function ShardReplicationPositionsResponse(properties) {
             this.replication_statuses = {};
+            this.tablet_map = {};
             if (properties)
                 for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
                     if (properties[keys[i]] != null)
@@ -67158,6 +67160,14 @@ $root.vtctldata = (function() {
          * @instance
          */
         ShardReplicationPositionsResponse.prototype.replication_statuses = $util.emptyObject;
+
+        /**
+         * ShardReplicationPositionsResponse tablet_map.
+         * @member {Object.<string,topodata.ITablet>} tablet_map
+         * @memberof vtctldata.ShardReplicationPositionsResponse
+         * @instance
+         */
+        ShardReplicationPositionsResponse.prototype.tablet_map = $util.emptyObject;
 
         /**
          * Creates a new ShardReplicationPositionsResponse instance using the specified properties.
@@ -67187,6 +67197,11 @@ $root.vtctldata = (function() {
                 for (var keys = Object.keys(message.replication_statuses), i = 0; i < keys.length; ++i) {
                     writer.uint32(/* id 1, wireType 2 =*/10).fork().uint32(/* id 1, wireType 2 =*/10).string(keys[i]);
                     $root.replicationdata.Status.encode(message.replication_statuses[keys[i]], writer.uint32(/* id 2, wireType 2 =*/18).fork()).ldelim().ldelim();
+                }
+            if (message.tablet_map != null && Object.hasOwnProperty.call(message, "tablet_map"))
+                for (var keys = Object.keys(message.tablet_map), i = 0; i < keys.length; ++i) {
+                    writer.uint32(/* id 2, wireType 2 =*/18).fork().uint32(/* id 1, wireType 2 =*/10).string(keys[i]);
+                    $root.topodata.Tablet.encode(message.tablet_map[keys[i]], writer.uint32(/* id 2, wireType 2 =*/18).fork()).ldelim().ldelim();
                 }
             return writer;
         };
@@ -67244,6 +67259,28 @@ $root.vtctldata = (function() {
                     }
                     message.replication_statuses[key] = value;
                     break;
+                case 2:
+                    if (message.tablet_map === $util.emptyObject)
+                        message.tablet_map = {};
+                    var end2 = reader.uint32() + reader.pos;
+                    key = "";
+                    value = null;
+                    while (reader.pos < end2) {
+                        var tag2 = reader.uint32();
+                        switch (tag2 >>> 3) {
+                        case 1:
+                            key = reader.string();
+                            break;
+                        case 2:
+                            value = $root.topodata.Tablet.decode(reader, reader.uint32());
+                            break;
+                        default:
+                            reader.skipType(tag2 & 7);
+                            break;
+                        }
+                    }
+                    message.tablet_map[key] = value;
+                    break;
                 default:
                     reader.skipType(tag & 7);
                     break;
@@ -67289,6 +67326,16 @@ $root.vtctldata = (function() {
                         return "replication_statuses." + error;
                 }
             }
+            if (message.tablet_map != null && message.hasOwnProperty("tablet_map")) {
+                if (!$util.isObject(message.tablet_map))
+                    return "tablet_map: object expected";
+                var key = Object.keys(message.tablet_map);
+                for (var i = 0; i < key.length; ++i) {
+                    var error = $root.topodata.Tablet.verify(message.tablet_map[key[i]]);
+                    if (error)
+                        return "tablet_map." + error;
+                }
+            }
             return null;
         };
 
@@ -67314,6 +67361,16 @@ $root.vtctldata = (function() {
                     message.replication_statuses[keys[i]] = $root.replicationdata.Status.fromObject(object.replication_statuses[keys[i]]);
                 }
             }
+            if (object.tablet_map) {
+                if (typeof object.tablet_map !== "object")
+                    throw TypeError(".vtctldata.ShardReplicationPositionsResponse.tablet_map: object expected");
+                message.tablet_map = {};
+                for (var keys = Object.keys(object.tablet_map), i = 0; i < keys.length; ++i) {
+                    if (typeof object.tablet_map[keys[i]] !== "object")
+                        throw TypeError(".vtctldata.ShardReplicationPositionsResponse.tablet_map: object expected");
+                    message.tablet_map[keys[i]] = $root.topodata.Tablet.fromObject(object.tablet_map[keys[i]]);
+                }
+            }
             return message;
         };
 
@@ -67330,13 +67387,20 @@ $root.vtctldata = (function() {
             if (!options)
                 options = {};
             var object = {};
-            if (options.objects || options.defaults)
+            if (options.objects || options.defaults) {
                 object.replication_statuses = {};
+                object.tablet_map = {};
+            }
             var keys2;
             if (message.replication_statuses && (keys2 = Object.keys(message.replication_statuses)).length) {
                 object.replication_statuses = {};
                 for (var j = 0; j < keys2.length; ++j)
                     object.replication_statuses[keys2[j]] = $root.replicationdata.Status.toObject(message.replication_statuses[keys2[j]], options);
+            }
+            if (message.tablet_map && (keys2 = Object.keys(message.tablet_map)).length) {
+                object.tablet_map = {};
+                for (var j = 0; j < keys2.length; ++j)
+                    object.tablet_map[keys2[j]] = $root.topodata.Tablet.toObject(message.tablet_map[keys2[j]], options);
             }
             return object;
         };
