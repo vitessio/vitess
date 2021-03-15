@@ -334,17 +334,43 @@ func TestRewriteToCNF(in *testing.T) {
 	}, {
 		in:       "C or (A and B)",
 		expected: "(C or A) and (C or B)",
+	}, {
+		in:       "A and A",
+		expected: "A",
+	}, {
+		in:       "A OR A",
+		expected: "A",
+	}, {
+		in:       "A OR (A AND B)",
+		expected: "A",
+	}, {
+		in:       "A OR (B AND A)",
+		expected: "A",
+	}, {
+		in:       "(A AND B) OR A",
+		expected: "A",
+	}, {
+		in:       "(B AND A) OR A",
+		expected: "A",
+	}, {
+		in:       "(A and B) and (B and A)",
+		expected: "A and B",
+	}, {
+		in:       "(A or B) and A",
+		expected: "A",
+	}, {
+		in:       "A and (A or B)",
+		expected: "A",
 	}}
 
 	for _, tc := range tests {
 		in.Run(tc.in, func(t *testing.T) {
-			require := require.New(t)
 			stmt, err := Parse("SELECT * FROM T WHERE " + tc.in)
-			require.NoError(err)
+			require.NoError(t, err)
 
 			expr := stmt.(*Select).Where.Expr
-			expr, didNotRewrite := rewriteToCNF(expr)
-			require.False(didNotRewrite)
+			expr, didRewrite := rewriteToCNF(expr)
+			assert.True(t, didRewrite)
 			assert.Equal(t, tc.expected, String(expr))
 		})
 	}
@@ -358,8 +384,14 @@ func TestFixedPointRewriteToCNF(in *testing.T) {
 		in:       "A xor B",
 		expected: "(A or B) and (not A or not B)",
 	}, {
-		in:       "((A AND B) OR (A AND C) OR (A AND D)) AND E AND F",
-		expected: "(A or A or A) and (A or C or A) and ((B or A or A) and (B or C or A)) and ((A or A or D) and (A or C or D) and ((B or A or D) and (B or C or D))) and E and F",
+		in:       "(A and B) and (B and A) and (B and A) and (A and B)",
+		expected: "A and B",
+	}, {
+		in:       "((A and B) OR (A and C) OR (A and D)) and E and F",
+		expected: "A and ((A or B) and (B or C or A)) and ((A or D) and ((B or A or D) and (B or C or D))) and E and F",
+	}, {
+		in:       "(A and B) OR (A and C)",
+		expected: "A and ((B or A) and (B or C))",
 	}}
 
 	for _, tc := range tests {
@@ -369,9 +401,9 @@ func TestFixedPointRewriteToCNF(in *testing.T) {
 			require.NoError(err)
 
 			expr := stmt.(*Select).Where.Expr
-			expr, err = fixedPointRewriteToCNF(expr)
+			output, err := fixedPointRewriteToCNF(expr)
 			require.NoError(err)
-			assert.Equal(t, tc.expected, String(expr))
+			assert.Equal(t, tc.expected, String(output))
 		})
 	}
 }

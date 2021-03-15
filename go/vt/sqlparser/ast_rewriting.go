@@ -52,12 +52,16 @@ func RewriteAST(in Statement, keyspace string) (*RewriteASTResult, error) {
 	if err != nil {
 		return nil, err
 	}
+	if setRewriter.err != nil {
+		return nil, setRewriter.err
+	}
+	result, err = fixedPointRewriteToCNF(result)
+	if err != nil {
+		return nil, err
+	}
 	out, ok := result.(Statement)
 	if !ok {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "statement rewriting returned a non statement: %s", String(out))
-	}
-	if setRewriter.err != nil {
-		return nil, setRewriter.err
 	}
 
 	r := &RewriteASTResult{
@@ -343,16 +347,14 @@ func SystemSchema(schema string) bool {
 		strings.EqualFold(schema, "mysql")
 }
 
-func fixedPointRewriteToCNF(expr Expr) (Expr, error) {
-	var finishedRewrite bool
-	var isExpr bool
-	for !finishedRewrite {
-		finishedRewrite = true
-		sqlNode, err := Rewrite(expr, func(cursor *Cursor) bool {
-			e, isExpr := cursor.node.(Expr)
-			if isExpr {
-				rewritten, didNotRewrite := rewriteToCNF(e)
-				if !didNotRewrite {
+func fixedPointRewriteToCNF(ast SQLNode) (SQLNode, error) {
+	var err error
+	for {
+		finishedRewrite := true
+		ast, err = Rewrite(ast, func(cursor *Cursor) bool {
+			if e, isExpr := cursor.node.(Expr); isExpr {
+				rewritten, didRewrite := rewriteToCNF(e)
+				if didRewrite {
 					finishedRewrite = false
 					cursor.Replace(rewritten)
 				}
@@ -362,12 +364,100 @@ func fixedPointRewriteToCNF(expr Expr) (Expr, error) {
 		if err != nil {
 			return nil, err
 		}
-		expr, isExpr = sqlNode.(Expr)
-		if !isExpr {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] Rewriting an expression must return an expression")
+
+		if finishedRewrite {
+			return ast, nil
 		}
 	}
-	return expr, nil
+}
+
+func distinctOr(in *OrExpr) (Expr, bool) {
+	todo := []*OrExpr{in}
+	var leaves []Expr
+	for len(todo) > 0 {
+		curr := todo[0]
+		todo = todo[1:]
+		addAnd := func(in Expr) {
+			and, ok := in.(*OrExpr)
+			if ok {
+				todo = append(todo, and)
+			} else {
+				leaves = append(leaves, in)
+			}
+		}
+		addAnd(curr.Left)
+		addAnd(curr.Right)
+	}
+	original := len(leaves)
+	var predicates []Expr
+
+outer1:
+	for len(leaves) > 0 {
+		curr := leaves[0]
+		leaves = leaves[1:]
+		for _, alreadyIn := range predicates {
+			if EqualsExpr(alreadyIn, curr) {
+				continue outer1
+			}
+		}
+		predicates = append(predicates, curr)
+	}
+	if original == len(predicates) {
+		return in, false
+	}
+	var result Expr
+	for i, curr := range predicates {
+		if i == 0 {
+			result = curr
+			continue
+		}
+		result = &OrExpr{Left: result, Right: curr}
+	}
+	return result, true
+}
+func distinctAnd(in *AndExpr) (Expr, bool) {
+	todo := []*AndExpr{in}
+	var leaves []Expr
+	for len(todo) > 0 {
+		curr := todo[0]
+		todo = todo[1:]
+		addAnd := func(in Expr) {
+			and, ok := in.(*AndExpr)
+			if ok {
+				todo = append(todo, and)
+			} else {
+				leaves = append(leaves, in)
+			}
+		}
+		addAnd(curr.Left)
+		addAnd(curr.Right)
+	}
+	original := len(leaves)
+	var predicates []Expr
+
+outer1:
+	for len(leaves) > 0 {
+		curr := leaves[0]
+		leaves = leaves[1:]
+		for _, alreadyIn := range predicates {
+			if EqualsExpr(alreadyIn, curr) {
+				continue outer1
+			}
+		}
+		predicates = append(predicates, curr)
+	}
+	if original == len(predicates) {
+		return in, false
+	}
+	var result Expr
+	for i, curr := range predicates {
+		if i == 0 {
+			result = curr
+			continue
+		}
+		result = &AndExpr{Left: result, Right: curr}
+	}
+	return result, true
 }
 
 func rewriteToCNF(expr Expr) (Expr, bool) {
@@ -376,33 +466,66 @@ func rewriteToCNF(expr Expr) (Expr, bool) {
 		switch child := expr.Expr.(type) {
 		case *NotExpr:
 			// NOT NOT A => A
-			return child.Expr, false
+			return child.Expr, true
 		case *OrExpr:
 			// DeMorgan Rewriter
 			// NOT (A OR B) => NOT A AND NOT B
-			return &AndExpr{Right: &NotExpr{Expr: child.Right}, Left: &NotExpr{Expr: child.Left}}, false
+			return &AndExpr{Right: &NotExpr{Expr: child.Right}, Left: &NotExpr{Expr: child.Left}}, true
 		case *AndExpr:
 			// DeMorgan Rewriter
 			// NOT (A AND B) => NOT A OR NOT B
-			return &OrExpr{Right: &NotExpr{Expr: child.Right}, Left: &NotExpr{Expr: child.Left}}, false
+			return &OrExpr{Right: &NotExpr{Expr: child.Right}, Left: &NotExpr{Expr: child.Left}}, true
 		}
 	case *OrExpr:
-		switch lchild := expr.Left.(type) {
-		case *AndExpr:
+		or := expr
+		if and, ok := or.Left.(*AndExpr); ok {
+			// Simplification
+			// (A AND B) OR A => A
+			if EqualsExpr(or.Right, and.Left) || EqualsExpr(or.Right, and.Right) {
+				return or.Right, true
+			}
 			// Distribution Law
 			// (A AND B) OR C => (A OR C) AND (B OR C)
-			return &AndExpr{Left: &OrExpr{Left: lchild.Left, Right: expr.Right}, Right: &OrExpr{Left: lchild.Right, Right: expr.Right}}, false
+			return &AndExpr{Left: &OrExpr{Left: and.Left, Right: or.Right}, Right: &OrExpr{Left: and.Right, Right: or.Right}}, true
 		}
-		switch rchild := expr.Right.(type) {
-		case *AndExpr:
+		if and, ok := or.Right.(*AndExpr); ok {
+			// Simplification
+			// A OR (A AND B) => A
+			if EqualsExpr(or.Left, and.Left) || EqualsExpr(or.Left, and.Right) {
+				return or.Left, true
+			}
 			// Distribution Law
 			// C OR (A AND B) => (C OR A) AND (C OR B)
-			return &AndExpr{Left: &OrExpr{Left: expr.Left, Right: rchild.Left}, Right: &OrExpr{Left: expr.Left, Right: rchild.Right}}, false
+			return &AndExpr{Left: &OrExpr{Left: or.Left, Right: and.Left}, Right: &OrExpr{Left: or.Left, Right: and.Right}}, true
 		}
+		// Try to make distinct
+		return distinctOr(expr)
+
 	case *XorExpr:
 		// DeMorgan Rewriter
 		// (A XOR B) => (A OR B) AND NOT (A AND B)
-		return &AndExpr{Left: &OrExpr{Left: expr.Left, Right: expr.Right}, Right: &NotExpr{Expr: &AndExpr{Left: expr.Left, Right: expr.Right}}}, false
+		return &AndExpr{Left: &OrExpr{Left: expr.Left, Right: expr.Right}, Right: &NotExpr{Expr: &AndExpr{Left: expr.Left, Right: expr.Right}}}, true
+	case *AndExpr:
+		res, rewritten := distinctAnd(expr)
+		if rewritten {
+			return res, rewritten
+		}
+		and := expr
+		if or, ok := and.Left.(*OrExpr); ok {
+			// Simplification
+			// (A OR B) AND A => A
+			if EqualsExpr(or.Left, and.Right) || EqualsExpr(or.Right, and.Right) {
+				return and.Right, true
+			}
+		}
+		if or, ok := and.Right.(*OrExpr); ok {
+			// Simplification
+			// A OR (A AND B) => A
+			if EqualsExpr(or.Left, and.Left) || EqualsExpr(or.Right, and.Left) {
+				return or.Left, true
+			}
+		}
+
 	}
-	return expr, true
+	return expr, false
 }

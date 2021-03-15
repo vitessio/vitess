@@ -1725,7 +1725,7 @@ Gen4 plan same as above
           "Sharded": false
         },
         "FieldQuery": "select KCU.DELETE_RULE from INFORMATION_SCHEMA.KEY_COLUMN_USAGE as KCU join INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS as RC on KCU.CONSTRAINT_NAME = RC.CONSTRAINT_NAME where 1 != 1",
-        "Query": "select KCU.DELETE_RULE from INFORMATION_SCHEMA.KEY_COLUMN_USAGE as KCU join INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS as RC on KCU.CONSTRAINT_NAME = RC.CONSTRAINT_NAME where KCU.TABLE_SCHEMA = :__vtschemaname and KCU.TABLE_NAME = :__vttablename and KCU.TABLE_NAME = :__vttablename order by KCU.CONSTRAINT_NAME asc, KCU.COLUMN_NAME asc",
+        "Query": "select KCU.DELETE_RULE from INFORMATION_SCHEMA.KEY_COLUMN_USAGE as KCU join INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS as RC on KCU.CONSTRAINT_NAME = RC.CONSTRAINT_NAME where KCU.TABLE_NAME = :__vttablename and KCU.TABLE_SCHEMA = :__vtschemaname order by KCU.CONSTRAINT_NAME asc, KCU.COLUMN_NAME asc",
         "SysTableTableName": "VARBINARY(\"data_type_table\")",
         "SysTableTableSchema": "VARBINARY(\"test\")"
       },
@@ -1737,7 +1737,7 @@ Gen4 plan same as above
           "Sharded": false
         },
         "FieldQuery": "select S.UPDATE_RULE from INFORMATION_SCHEMA.K as S where 1 != 1",
-        "Query": "select S.UPDATE_RULE from INFORMATION_SCHEMA.K as S where S.TABLE_SCHEMA = :__vtschemaname and S.TABLE_NAME = :__vttablename",
+        "Query": "select S.UPDATE_RULE from INFORMATION_SCHEMA.K as S where S.TABLE_NAME = :__vttablename and S.TABLE_SCHEMA = :__vtschemaname",
         "SysTableTableName": "VARBINARY(\"sc\")",
         "SysTableTableSchema": "VARBINARY(\"test\")"
       }
