@@ -4750,3 +4750,5 @@
 2021-03-15T17:22:09Z,check_make_sizegen,https://github.com/vitessio/vitess/actions/runs/655002350
 2021-03-15T17:22:09Z,check_make_visitor,https://github.com/vitessio/vitess/actions/runs/655002325
 2021-03-15T17:22:09Z,unit_race,https://github.com/vitessio/vitess/actions/runs/655002346
+2021-03-15T18:05:21Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/655123179
+2021-03-15T18:05:21Z,unit_race,https://github.com/vitessio/vitess/actions/runs/655123165
