@@ -1105,6 +1105,11 @@ func (s *VtctldServer) ReparentTablet(ctx context.Context, req *vtctldatapb.Repa
 	}, nil
 }
 
+// ShardReplicationPositions is part of the vtctldservicepb.VtctldServer interface.
+func (s *VtctldServer) ShardReplicationPositions(ctx context.Context, req *vtctldatapb.ShardReplicationPositionsRequest) (*vtctldatapb.ShardReplicationPositionsResponse, error) {
+	panic("unimplemented!")
+}
+
 // TabletExternallyReparented is part of the vtctldservicepb.VtctldServer interface.
 func (s *VtctldServer) TabletExternallyReparented(ctx context.Context, req *vtctldatapb.TabletExternallyReparentedRequest) (*vtctldatapb.TabletExternallyReparentedResponse, error) {
 	if req.Tablet == nil {
