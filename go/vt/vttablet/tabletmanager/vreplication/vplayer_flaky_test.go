@@ -38,6 +38,40 @@ import (
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
 
+func TestHeartbeatFrequencyFlag(t *testing.T) {
+	origVReplicationHeartbeatUpdateInterval := *vreplicationHeartbeatUpdateInterval
+	defer func() {
+		*vreplicationHeartbeatUpdateInterval = origVReplicationHeartbeatUpdateInterval
+	}()
+
+	stats := binlogplayer.NewStats()
+	vp := &vplayer{vr: &vreplicator{dbClient: newVDBClient(realDBClientFactory(), stats), stats: stats}}
+
+	type testcount struct {
+		count      int
+		mustUpdate bool
+	}
+	type testcase struct {
+		name     string
+		interval int
+		counts   []testcount
+	}
+	testcases := []*testcase{
+		{"default frequency", 1, []testcount{{count: 0, mustUpdate: false}, {1, true}}},
+		{"custom frequency", 4, []testcount{{count: 0, mustUpdate: false}, {count: 3, mustUpdate: false}, {4, true}}},
+		{"minumum frequency", 61, []testcount{{count: 59, mustUpdate: false}, {count: 60, mustUpdate: true}, {61, true}}},
+	}
+	for _, tcase := range testcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			*vreplicationHeartbeatUpdateInterval = tcase.interval
+			for _, tcount := range tcase.counts {
+				vp.numAccumulatedHeartbeats = tcount.count
+				require.Equal(t, tcount.mustUpdate, vp.mustUpdateCurrentTime())
+			}
+		})
+	}
+}
+
 func TestVReplicationTimeUpdated(t *testing.T) {
 	ctx := context.Background()
 	defer deleteTablet(addTablet(100))

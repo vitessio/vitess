@@ -53,6 +53,93 @@ func CloneAST(in AST) AST {
 	}
 }
 
+// EqualsAST does deep equals between the two objects.
+func EqualsAST(inA, inB AST) bool {
+	if inA == nil && inB == nil {
+		return true
+	}
+	if inA == nil || inB == nil {
+		return false
+	}
+	switch a := inA.(type) {
+	case BasicType:
+		b, ok := inB.(BasicType)
+		if !ok {
+			return false
+		}
+		return a == b
+	case Bytes:
+		b, ok := inB.(Bytes)
+		if !ok {
+			return false
+		}
+		return EqualsBytes(a, b)
+	case InterfaceContainer:
+		b, ok := inB.(InterfaceContainer)
+		if !ok {
+			return false
+		}
+		return EqualsInterfaceContainer(a, b)
+	case InterfaceSlice:
+		b, ok := inB.(InterfaceSlice)
+		if !ok {
+			return false
+		}
+		return EqualsInterfaceSlice(a, b)
+	case *Leaf:
+		b, ok := inB.(*Leaf)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfLeaf(a, b)
+	case LeafSlice:
+		b, ok := inB.(LeafSlice)
+		if !ok {
+			return false
+		}
+		return EqualsLeafSlice(a, b)
+	case *NoCloneType:
+		b, ok := inB.(*NoCloneType)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfNoCloneType(a, b)
+	case *RefContainer:
+		b, ok := inB.(*RefContainer)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfRefContainer(a, b)
+	case *RefSliceContainer:
+		b, ok := inB.(*RefSliceContainer)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfRefSliceContainer(a, b)
+	case *SubImpl:
+		b, ok := inB.(*SubImpl)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfSubImpl(a, b)
+	case ValueContainer:
+		b, ok := inB.(ValueContainer)
+		if !ok {
+			return false
+		}
+		return EqualsValueContainer(a, b)
+	case ValueSliceContainer:
+		b, ok := inB.(ValueSliceContainer)
+		if !ok {
+			return false
+		}
+		return EqualsValueSliceContainer(a, b)
+	default:
+		// this should never happen
+		return false
+	}
+}
+
 // CloneSubIface creates a deep clone of the input.
 func CloneSubIface(in SubIface) SubIface {
 	if in == nil {
@@ -67,6 +154,27 @@ func CloneSubIface(in SubIface) SubIface {
 	}
 }
 
+// EqualsSubIface does deep equals between the two objects.
+func EqualsSubIface(inA, inB SubIface) bool {
+	if inA == nil && inB == nil {
+		return true
+	}
+	if inA == nil || inB == nil {
+		return false
+	}
+	switch a := inA.(type) {
+	case *SubImpl:
+		b, ok := inB.(*SubImpl)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfSubImpl(a, b)
+	default:
+		// this should never happen
+		return false
+	}
+}
+
 // CloneBytes creates a deep clone of the input.
 func CloneBytes(n Bytes) Bytes {
 	res := make(Bytes, 0, len(n))
@@ -74,9 +182,27 @@ func CloneBytes(n Bytes) Bytes {
 	return res
 }
 
+// EqualsBytes does deep equals between the two objects.
+func EqualsBytes(a, b Bytes) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
 // CloneInterfaceContainer creates a deep clone of the input.
 func CloneInterfaceContainer(n InterfaceContainer) InterfaceContainer {
 	return *CloneRefOfInterfaceContainer(&n)
+}
+
+// EqualsInterfaceContainer does deep equals between the two objects.
+func EqualsInterfaceContainer(a, b InterfaceContainer) bool {
+	return true
 }
 
 // CloneInterfaceSlice creates a deep clone of the input.
@@ -88,6 +214,19 @@ func CloneInterfaceSlice(n InterfaceSlice) InterfaceSlice {
 	return res
 }
 
+// EqualsInterfaceSlice does deep equals between the two objects.
+func EqualsInterfaceSlice(a, b InterfaceSlice) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		if !EqualsAST(a[i], b[i]) {
+			return false
+		}
+	}
+	return true
+}
+
 // CloneRefOfLeaf creates a deep clone of the input.
 func CloneRefOfLeaf(n *Leaf) *Leaf {
 	if n == nil {
@@ -95,6 +234,17 @@ func CloneRefOfLeaf(n *Leaf) *Leaf {
 	}
 	out := *n
 	return &out
+}
+
+// EqualsRefOfLeaf does deep equals between the two objects.
+func EqualsRefOfLeaf(a, b *Leaf) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.v == b.v
 }
 
 // CloneLeafSlice creates a deep clone of the input.
@@ -106,9 +256,33 @@ func CloneLeafSlice(n LeafSlice) LeafSlice {
 	return res
 }
 
+// EqualsLeafSlice does deep equals between the two objects.
+func EqualsLeafSlice(a, b LeafSlice) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		if !EqualsRefOfLeaf(a[i], b[i]) {
+			return false
+		}
+	}
+	return true
+}
+
 // CloneRefOfNoCloneType creates a deep clone of the input.
 func CloneRefOfNoCloneType(n *NoCloneType) *NoCloneType {
 	return n
+}
+
+// EqualsRefOfNoCloneType does deep equals between the two objects.
+func EqualsRefOfNoCloneType(a, b *NoCloneType) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.v == b.v
 }
 
 // CloneRefOfRefContainer creates a deep clone of the input.
@@ -122,6 +296,19 @@ func CloneRefOfRefContainer(n *RefContainer) *RefContainer {
 	return &out
 }
 
+// EqualsRefOfRefContainer does deep equals between the two objects.
+func EqualsRefOfRefContainer(a, b *RefContainer) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.NotASTType == b.NotASTType &&
+		EqualsAST(a.ASTType, b.ASTType) &&
+		EqualsRefOfLeaf(a.ASTImplementationType, b.ASTImplementationType)
+}
+
 // CloneRefOfRefSliceContainer creates a deep clone of the input.
 func CloneRefOfRefSliceContainer(n *RefSliceContainer) *RefSliceContainer {
 	if n == nil {
@@ -129,9 +316,22 @@ func CloneRefOfRefSliceContainer(n *RefSliceContainer) *RefSliceContainer {
 	}
 	out := *n
 	out.ASTElements = CloneSliceOfAST(n.ASTElements)
-	out.NotASTElements = CloneSliceOfint(n.NotASTElements)
+	out.NotASTElements = CloneSliceOfInt(n.NotASTElements)
 	out.ASTImplementationElements = CloneSliceOfRefOfLeaf(n.ASTImplementationElements)
 	return &out
+}
+
+// EqualsRefOfRefSliceContainer does deep equals between the two objects.
+func EqualsRefOfRefSliceContainer(a, b *RefSliceContainer) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsSliceOfAST(a.ASTElements, b.ASTElements) &&
+		EqualsSliceOfInt(a.NotASTElements, b.NotASTElements) &&
+		EqualsSliceOfRefOfLeaf(a.ASTImplementationElements, b.ASTImplementationElements)
 }
 
 // CloneRefOfSubImpl creates a deep clone of the input.
@@ -141,7 +341,20 @@ func CloneRefOfSubImpl(n *SubImpl) *SubImpl {
 	}
 	out := *n
 	out.inner = CloneSubIface(n.inner)
+	out.field = CloneRefOfBool(n.field)
 	return &out
+}
+
+// EqualsRefOfSubImpl does deep equals between the two objects.
+func EqualsRefOfSubImpl(a, b *SubImpl) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsSubIface(a.inner, b.inner) &&
+		EqualsRefOfBool(a.field, b.field)
 }
 
 // CloneValueContainer creates a deep clone of the input.
@@ -149,9 +362,23 @@ func CloneValueContainer(n ValueContainer) ValueContainer {
 	return *CloneRefOfValueContainer(&n)
 }
 
+// EqualsValueContainer does deep equals between the two objects.
+func EqualsValueContainer(a, b ValueContainer) bool {
+	return a.NotASTType == b.NotASTType &&
+		EqualsAST(a.ASTType, b.ASTType) &&
+		EqualsRefOfLeaf(a.ASTImplementationType, b.ASTImplementationType)
+}
+
 // CloneValueSliceContainer creates a deep clone of the input.
 func CloneValueSliceContainer(n ValueSliceContainer) ValueSliceContainer {
 	return *CloneRefOfValueSliceContainer(&n)
+}
+
+// EqualsValueSliceContainer does deep equals between the two objects.
+func EqualsValueSliceContainer(a, b ValueSliceContainer) bool {
+	return EqualsSliceOfAST(a.ASTElements, b.ASTElements) &&
+		EqualsSliceOfInt(a.NotASTElements, b.NotASTElements) &&
+		EqualsSliceOfRefOfLeaf(a.ASTImplementationElements, b.ASTImplementationElements)
 }
 
 // CloneRefOfInterfaceContainer creates a deep clone of the input.
@@ -164,6 +391,17 @@ func CloneRefOfInterfaceContainer(n *InterfaceContainer) *InterfaceContainer {
 	return &out
 }
 
+// EqualsRefOfInterfaceContainer does deep equals between the two objects.
+func EqualsRefOfInterfaceContainer(a, b *InterfaceContainer) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return true
+}
+
 // CloneSliceOfAST creates a deep clone of the input.
 func CloneSliceOfAST(n []AST) []AST {
 	res := make([]AST, 0, len(n))
@@ -173,11 +411,37 @@ func CloneSliceOfAST(n []AST) []AST {
 	return res
 }
 
-// CloneSliceOfint creates a deep clone of the input.
-func CloneSliceOfint(n []int) []int {
+// EqualsSliceOfAST does deep equals between the two objects.
+func EqualsSliceOfAST(a, b []AST) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		if !EqualsAST(a[i], b[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+// CloneSliceOfInt creates a deep clone of the input.
+func CloneSliceOfInt(n []int) []int {
 	res := make([]int, 0, len(n))
 	copy(res, n)
 	return res
+}
+
+// EqualsSliceOfInt does deep equals between the two objects.
+func EqualsSliceOfInt(a, b []int) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
 
 // CloneSliceOfRefOfLeaf creates a deep clone of the input.
@@ -187,6 +451,39 @@ func CloneSliceOfRefOfLeaf(n []*Leaf) []*Leaf {
 		res = append(res, CloneRefOfLeaf(x))
 	}
 	return res
+}
+
+// EqualsSliceOfRefOfLeaf does deep equals between the two objects.
+func EqualsSliceOfRefOfLeaf(a, b []*Leaf) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		if !EqualsRefOfLeaf(a[i], b[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+// EqualsRefOfBool does deep equals between the two objects.
+func EqualsRefOfBool(a, b *bool) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return *a == *b
+}
+
+// CloneRefOfBool creates a deep clone of the input.
+func CloneRefOfBool(n *bool) *bool {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	return &out
 }
 
 // CloneRefOfValueContainer creates a deep clone of the input.
@@ -200,6 +497,19 @@ func CloneRefOfValueContainer(n *ValueContainer) *ValueContainer {
 	return &out
 }
 
+// EqualsRefOfValueContainer does deep equals between the two objects.
+func EqualsRefOfValueContainer(a, b *ValueContainer) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.NotASTType == b.NotASTType &&
+		EqualsAST(a.ASTType, b.ASTType) &&
+		EqualsRefOfLeaf(a.ASTImplementationType, b.ASTImplementationType)
+}
+
 // CloneRefOfValueSliceContainer creates a deep clone of the input.
 func CloneRefOfValueSliceContainer(n *ValueSliceContainer) *ValueSliceContainer {
 	if n == nil {
@@ -207,7 +517,20 @@ func CloneRefOfValueSliceContainer(n *ValueSliceContainer) *ValueSliceContainer 
 	}
 	out := *n
 	out.ASTElements = CloneSliceOfAST(n.ASTElements)
-	out.NotASTElements = CloneSliceOfint(n.NotASTElements)
+	out.NotASTElements = CloneSliceOfInt(n.NotASTElements)
 	out.ASTImplementationElements = CloneSliceOfRefOfLeaf(n.ASTImplementationElements)
 	return &out
+}
+
+// EqualsRefOfValueSliceContainer does deep equals between the two objects.
+func EqualsRefOfValueSliceContainer(a, b *ValueSliceContainer) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsSliceOfAST(a.ASTElements, b.ASTElements) &&
+		EqualsSliceOfInt(a.NotASTElements, b.NotASTElements) &&
+		EqualsSliceOfRefOfLeaf(a.ASTImplementationElements, b.ASTImplementationElements)
 }
