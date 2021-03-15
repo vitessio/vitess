@@ -49,7 +49,7 @@ var (
 	}
 	// GetTablets makes a GetTablets gRPC call to a vtctld.
 	GetTablets = &cobra.Command{
-		Use:  "GetTablets [--cell $c1, ...] [--keyspace $ks [--shard $shard]]",
+		Use:  "GetTablets [--strict] [--cell $c1, ...] [--keyspace $ks [--shard $shard]]",
 		Args: cobra.NoArgs,
 		RunE: commandGetTablets,
 	}
@@ -150,6 +150,7 @@ var getTabletsOptions = struct {
 	Shard    string
 
 	Format string
+	Strict bool
 }{}
 
 func commandGetTablets(cmd *cobra.Command, args []string) error {
@@ -171,6 +172,7 @@ func commandGetTablets(cmd *cobra.Command, args []string) error {
 		Cells:    getTabletsOptions.Cells,
 		Keyspace: getTabletsOptions.Keyspace,
 		Shard:    getTabletsOptions.Shard,
+		Strict:   getTabletsOptions.Strict,
 	})
 	if err != nil {
 		return err
@@ -206,5 +208,6 @@ func init() {
 	GetTablets.Flags().StringVarP(&getTabletsOptions.Keyspace, "keyspace", "k", "", "keyspace to filter tablets by")
 	GetTablets.Flags().StringVarP(&getTabletsOptions.Shard, "shard", "s", "", "shard to filter tablets by")
 	GetTablets.Flags().StringVar(&getTabletsOptions.Format, "format", "awk", "Output format to use; valid choices are (json, awk)")
+	GetTablets.Flags().BoolVar(&getTabletsOptions.Strict, "strict", false, "Require all cells to return successful tablet data. Without --strict, tablet listings may be partial.")
 	Root.AddCommand(GetTablets)
 }
