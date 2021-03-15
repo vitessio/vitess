@@ -932,7 +932,7 @@ Gen4 plan same as above
       "Sharded": true
     },
     "FieldQuery": "select id from `user` where 1 != 1",
-    "Query": "select id from `user` where `user`.id = 1 or `user`.`name` = 'aa' and `user`.id in (1, 2)",
+    "Query": "select id from `user` where (`user`.id = 1 or `user`.`name` = 'aa') and (`user`.id = 1 or `user`.id in (1, 2))",
     "Table": "`user`"
   }
 }
@@ -1840,6 +1840,24 @@ Gen4 plan same as above
     },
     "FieldQuery": "select * from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
     "Query": "select * from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = :__vtschemaname and other_column = 42",
+    "SysTableTableSchema": "VARBINARY(\"ks\")"
+  }
+}
+
+# able to isolate table_schema value even when hidden inside of ORs
+"SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE (TABLE_SCHEMA = 'ks' and other_column = 42) OR (TABLE_SCHEMA = 'ks' and foobar = 'value')"
+{
+  "QueryType": "SELECT",
+  "Original": "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE (TABLE_SCHEMA = 'ks' and other_column = 42) OR (TABLE_SCHEMA = 'ks' and foobar = 'value')",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectDBA",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select * from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
+    "Query": "select * from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = :__vtschemaname and (other_column = 42 or TABLE_SCHEMA = 'ks') and (other_column = 42 or foobar = 'value')",
     "SysTableTableSchema": "VARBINARY(\"ks\")"
   }
 }
