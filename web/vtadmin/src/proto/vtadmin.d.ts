@@ -28166,6 +28166,9 @@ export namespace vtctldata {
 
         /** ShardReplicationPositionsResponse replication_statuses */
         replication_statuses?: ({ [k: string]: replicationdata.IStatus }|null);
+
+        /** ShardReplicationPositionsResponse tablet_map */
+        tablet_map?: ({ [k: string]: topodata.ITablet }|null);
     }
 
     /** Represents a ShardReplicationPositionsResponse. */
@@ -28179,6 +28182,9 @@ export namespace vtctldata {
 
         /** ShardReplicationPositionsResponse replication_statuses. */
         public replication_statuses: { [k: string]: replicationdata.IStatus };
+
+        /** ShardReplicationPositionsResponse tablet_map. */
+        public tablet_map: { [k: string]: topodata.ITablet };
 
         /**
          * Creates a new ShardReplicationPositionsResponse instance using the specified properties.

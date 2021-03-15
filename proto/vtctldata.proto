@@ -521,6 +521,9 @@ message ShardReplicationPositionsResponse {
   // ReplicationStatuses is a mapping of tablet alias string to replication
   // status for that tablet.
   map<string, replicationdata.Status> replication_statuses = 1;
+  // TabletMap is the set of tablets whose replication statuses were queried,
+  // keyed by tablet alias.
+  map<string, topodata.Tablet> tablet_map = 2;
 }
 
 message TabletExternallyReparentedRequest {
