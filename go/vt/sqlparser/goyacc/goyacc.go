@@ -165,6 +165,7 @@ var vflag string  // -v [y.output]	- y.output file
 var lflag bool    // -l			- disable line directives
 var prefix string // name prefix for identifiers, default yy
 var allowFastAppend bool
+var tokenPositions bool
 
 func init() {
 	flag.StringVar(&oflag, "o", "y.go", "parser output")
@@ -172,6 +173,7 @@ func init() {
 	flag.StringVar(&vflag, "v", "y.output", "create parsing tables")
 	flag.BoolVar(&lflag, "l", false, "disable line directives")
 	flag.BoolVar(&allowFastAppend, "fast-append", false, "enable fast-append optimization")
+	flag.BoolVar(&tokenPositions, "token-pos", false, "keep track of token positions")
 }
 
 var initialstacksize = 16
@@ -639,6 +641,10 @@ outer:
 			if unionType != "" {
 				fmt.Fprintf(fcode, "\n\t\t%sVAL.union = %sLOCAL", prefix, prefix)
 			}
+			if tokenPositions && mem > 1 {
+				fmt.Fprintf(fcode, "\n\t\t%sVAL.yytok1 = %sDollar[1].yytok1", prefix, prefix)
+				fmt.Fprintf(fcode, "\n\t\t%sVAL.yytok2 = %sDollar[%d].yytok2", prefix, prefix, mem-1)
+			}
 
 			// action within rule...
 			t = gettok()
@@ -1094,6 +1100,9 @@ func typeinfo() {
 	}
 	ftable.Write(ftypes.Bytes())
 	fmt.Fprintf(ftable, "\n\tyys int")
+	if tokenPositions {
+		fmt.Fprintf(ftable, "\n\tyytok1, yytok2 int32")
+	}
 	fmt.Fprintf(ftable, "\n}\n\n")
 
 	var sortedTypes []string
@@ -1536,10 +1545,7 @@ loop:
 					tok, _ = fdtype(curprod[j])
 				}
 				ti, ok := gotypes[typeset[tok]]
-				if !ok {
-					errorf("missing Go type information for %s", typeset[tok])
-				}
-				if ti.union {
+				if ok && ti.union {
 					fmt.Fprintf(fcode, ".%sUnion()", typeset[tok])
 				} else {
 					fmt.Fprintf(fcode, ".%s", typeset[tok])

@@ -43,8 +43,9 @@ type Tokenizer struct {
 	multi               bool
 	specialComment      *Tokenizer
 
-	Pos int
-	buf string
+	StartPos int
+	Pos      int
+	buf      string
 }
 
 // NewStringTokenizer creates a new Tokenizer for the
@@ -77,6 +78,8 @@ func (tkn *Tokenizer) Lex(lval *yySymType) int {
 		tkn.partialDDL = nil
 	}
 	lval.str = val
+	lval.yytok1 = int32(tkn.StartPos)
+	lval.yytok2 = int32(tkn.Pos)
 	tkn.lastToken = val
 	return typ
 }
@@ -120,6 +123,8 @@ func (tkn *Tokenizer) Scan() (int, string) {
 	}
 
 	tkn.skipBlank()
+	tkn.StartPos = tkn.Pos
+
 	switch ch := tkn.cur(); {
 	case ch == '@':
 		tokenID := AT_ID

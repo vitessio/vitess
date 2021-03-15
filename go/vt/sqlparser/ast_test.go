@@ -823,3 +823,32 @@ func TestShowTableStatus(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, tree)
 }
+
+func TestSelectOriginalAlias(t *testing.T) {
+	var cases = []struct {
+		query string
+		cols  []string
+	}{
+		{"select 1+1, 1 + 1 from foo", []string{"1+1", "1 + 1"}},
+		{"select 1+1    , 1 + 1 from foo", []string{"1+1", "1 + 1"}},
+		{"select 1+1    ,    1+   1 from foo", []string{"1+1", "1+   1"}},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.query, func(t *testing.T) {
+			stmt, err := Parse(tc.query)
+			require.NoError(t, err)
+
+			var cols []string
+			err = Walk(func(node SQLNode) (kontinue bool, err error) {
+				if alias, ok := node.(*AliasedExpr); ok {
+					cols = append(cols, alias.Source)
+				}
+				return true, nil
+			}, stmt)
+
+			require.NoError(t, err)
+			require.Equal(t, tc.cols, cols)
+		})
+	}
+}

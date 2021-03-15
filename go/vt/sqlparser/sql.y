@@ -41,6 +41,10 @@ func decNesting(yylex interface{}) {
   yylex.(*Tokenizer).nesting--
 }
 
+func sourceString(yylex interface{}, start, end int32) string {
+  return yylex.(*Tokenizer).buf[int(start):int(end)]
+}
+
 // skipToEnd forces the lexer to end prematurely. Not all SQL statements
 // are supported by the Parser, thus calling skipToEnd will make the lexer
 // return EOF early.
@@ -3040,7 +3044,7 @@ select_expression:
   }
 | expression as_ci_opt
   {
-    $$ = &AliasedExpr{Expr: $1, As: $2}
+    $$ = &AliasedExpr{Expr: $1, As: $2, Source: sourceString(yylex, $<yytok1>1, $<yytok2>1)}
   }
 | table_id '.' '*'
   {

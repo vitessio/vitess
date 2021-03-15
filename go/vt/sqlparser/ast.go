@@ -1455,8 +1455,9 @@ type (
 
 	// AliasedExpr defines an aliased SELECT expression.
 	AliasedExpr struct {
-		Expr Expr
-		As   ColIdent
+		Expr   Expr
+		As     ColIdent
+		Source string
 	}
 
 	// Nextval defines the NEXT VALUE expression.
