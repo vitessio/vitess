@@ -19,6 +19,7 @@ package sqlparser
 // String constants to be used in ast.
 const (
 	// Select.Distinct
+	AllStr              = "all "
 	DistinctStr         = "distinct "
 	StraightJoinHint    = "straight_join "
 	SQLCalcFoundRowsStr = "sql_calc_found_rows "
@@ -210,32 +211,33 @@ const (
 	LowPriorityWriteStr = "low_priority write"
 
 	// ShowCommand Types
-	CharsetStr         = " charset"
-	CollationStr       = " collation"
-	ColumnStr          = " columns"
-	CreateDbStr        = " create database"
-	CreateEStr         = " create event"
-	CreateFStr         = " create function"
-	CreateProcStr      = " create procedure"
-	CreateTblStr       = " create table"
-	CreateTrStr        = " create trigger"
-	CreateVStr         = " create view"
-	DatabaseStr        = " databases"
-	FunctionCStr       = " function code"
-	FunctionStr        = " function status"
-	IndexStr           = " indexes"
-	OpenTableStr       = " open tables"
-	PrivilegeStr       = " privileges"
-	ProcedureCStr      = " procedure code"
-	ProcedureStr       = " procedure status"
-	StatusGlobalStr    = " global status"
-	StatusSessionStr   = " status"
-	TableStr           = " tables"
-	TableStatusStr     = " table status"
-	TriggerStr         = " triggers"
-	VariableGlobalStr  = " global variables"
-	VariableSessionStr = " variables"
-	KeyspaceStr        = " keyspaces"
+	CharsetStr          = " charset"
+	CollationStr        = " collation"
+	ColumnStr           = " columns"
+	CreateDbStr         = " create database"
+	CreateEStr          = " create event"
+	CreateFStr          = " create function"
+	CreateProcStr       = " create procedure"
+	CreateTblStr        = " create table"
+	CreateTrStr         = " create trigger"
+	CreateVStr          = " create view"
+	DatabaseStr         = " databases"
+	FunctionCStr        = " function code"
+	FunctionStr         = " function status"
+	IndexStr            = " indexes"
+	OpenTableStr        = " open tables"
+	PrivilegeStr        = " privileges"
+	ProcedureCStr       = " procedure code"
+	ProcedureStr        = " procedure status"
+	StatusGlobalStr     = " global status"
+	StatusSessionStr    = " status"
+	TableStr            = " tables"
+	TableStatusStr      = " table status"
+	TriggerStr          = " triggers"
+	VariableGlobalStr   = " global variables"
+	VariableSessionStr  = " variables"
+	KeyspaceStr         = " keyspaces"
+	VitessMigrationsStr = " vitess_migrations"
 
 	// DropKeyType strings
 	PrimaryKeyTypeStr = "primary key"
@@ -284,6 +286,7 @@ const (
 	DropColVindexDDLAction
 	AddSequenceDDLAction
 	AddAutoIncDDLAction
+	RevertDDLAction
 )
 
 // Constants for Enum Type - Scope
@@ -490,6 +493,7 @@ const (
 	Trigger
 	VariableGlobal
 	VariableSession
+	VitessMigrations
 	Keyspace
 )
 

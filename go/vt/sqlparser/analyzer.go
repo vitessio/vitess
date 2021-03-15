@@ -409,9 +409,9 @@ func NewPlanValue(node Expr) (sqltypes.PlanValue, error) {
 			}
 			return sqltypes.PlanValue{Value: n}, nil
 		case FloatVal:
-			return sqltypes.PlanValue{Value: sqltypes.MakeTrusted(sqltypes.Float64, node.Val)}, nil
+			return sqltypes.PlanValue{Value: sqltypes.MakeTrusted(sqltypes.Float64, node.Bytes())}, nil
 		case StrVal:
-			return sqltypes.PlanValue{Value: sqltypes.MakeTrusted(sqltypes.VarBinary, node.Val)}, nil
+			return sqltypes.PlanValue{Value: sqltypes.MakeTrusted(sqltypes.VarBinary, node.Bytes())}, nil
 		case HexVal:
 			v, err := node.HexDecode()
 			if err != nil {

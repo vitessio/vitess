@@ -27,6 +27,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/log"
@@ -429,11 +430,33 @@ func (collector *TableGC) purge(ctx context.Context) (tableName string, err erro
 	// This saves a lot of load from the replication stream, avoiding excessive lags. It also
 	// avoids excessive IO on the replicas.
 	// (note that the user may skip the PURGE step if they want, but the step is on by default)
-	if _, err := conn.ExecuteFetch("SET sql_log_bin = OFF", 0, false); err != nil {
+
+	// However, disabling SQL_LOG_BIN requires SUPER privileges, and we don't know that we have that.
+	// Any externally managed database might not give SUPER privileges to the vitess accounts, and this is known to be the case for Amazon Aurora.
+	// We therefore disable log bin on best-effort basis. The logic is still fine and sound if binary logging
+	// is left enabled. We just lose some optimization.
+	disableLogBin := func() (bool, error) {
+		_, err := conn.ExecuteFetch("SET sql_log_bin = OFF", 0, false)
+		if err == nil {
+			return true, nil
+		}
+		if merr, ok := err.(*mysql.SQLError); ok {
+			if merr.Num == mysql.ERSpecifiedAccessDenied {
+				// We do not have privileges to disable binary logging. That's fine, we're on best effort,
+				// so we're going to silently ignore this error.
+				return false, nil
+			}
+		}
+		// We do not tolerate other errors, though.
+		return false, err
+	}
+	sqlLogBinDisabled, err := disableLogBin()
+	if err != nil {
 		return tableName, err
 	}
+
 	defer func() {
-		if !conn.IsClosed() {
+		if sqlLogBinDisabled && !conn.IsClosed() {
 			if _, err := conn.ExecuteFetch("SET sql_log_bin = ON", 0, false); err != nil {
 				log.Errorf("TableGC: error setting sql_log_bin = ON: %+v", err)
 				// a followup defer() will run conn.Close() at any case.

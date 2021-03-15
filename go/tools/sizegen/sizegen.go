@@ -501,7 +501,6 @@ func VerifyFilesOnDisk(result map[string]*jen.File) (errors []error) {
 func GenerateSizeHelpers(packagePatterns []string, typePatterns []string) (map[string]*jen.File, error) {
 	loaded, err := packages.Load(&packages.Config{
 		Mode: packages.NeedName | packages.NeedTypes | packages.NeedTypesSizes | packages.NeedTypesInfo | packages.NeedDeps | packages.NeedImports | packages.NeedModule,
-		Logf: log.Printf,
 	}, packagePatterns...)
 
 	if err != nil {

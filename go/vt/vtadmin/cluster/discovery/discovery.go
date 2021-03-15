@@ -109,5 +109,5 @@ func New(impl string, cluster *vtadminpb.Cluster, args []string) (Discovery, err
 
 func init() { // nolint:gochecknoinits
 	Register("consul", NewConsul)
-	Register("staticFile", NewStaticFile)
+	Register("staticfile", NewStaticFile)
 }
