@@ -64667,6 +64667,7 @@ $root.vtctldata = (function() {
          * @property {string|null} [keyspace] GetTabletsRequest keyspace
          * @property {string|null} [shard] GetTabletsRequest shard
          * @property {Array.<string>|null} [cells] GetTabletsRequest cells
+         * @property {boolean|null} [strict] GetTabletsRequest strict
          */
 
         /**
@@ -64710,6 +64711,14 @@ $root.vtctldata = (function() {
         GetTabletsRequest.prototype.cells = $util.emptyArray;
 
         /**
+         * GetTabletsRequest strict.
+         * @member {boolean} strict
+         * @memberof vtctldata.GetTabletsRequest
+         * @instance
+         */
+        GetTabletsRequest.prototype.strict = false;
+
+        /**
          * Creates a new GetTabletsRequest instance using the specified properties.
          * @function create
          * @memberof vtctldata.GetTabletsRequest
@@ -64740,6 +64749,8 @@ $root.vtctldata = (function() {
             if (message.cells != null && message.cells.length)
                 for (var i = 0; i < message.cells.length; ++i)
                     writer.uint32(/* id 3, wireType 2 =*/26).string(message.cells[i]);
+            if (message.strict != null && Object.hasOwnProperty.call(message, "strict"))
+                writer.uint32(/* id 4, wireType 0 =*/32).bool(message.strict);
             return writer;
         };
 
@@ -64784,6 +64795,9 @@ $root.vtctldata = (function() {
                     if (!(message.cells && message.cells.length))
                         message.cells = [];
                     message.cells.push(reader.string());
+                    break;
+                case 4:
+                    message.strict = reader.bool();
                     break;
                 default:
                     reader.skipType(tag & 7);
@@ -64833,6 +64847,9 @@ $root.vtctldata = (function() {
                     if (!$util.isString(message.cells[i]))
                         return "cells: string[] expected";
             }
+            if (message.strict != null && message.hasOwnProperty("strict"))
+                if (typeof message.strict !== "boolean")
+                    return "strict: boolean expected";
             return null;
         };
 
@@ -64859,6 +64876,8 @@ $root.vtctldata = (function() {
                 for (var i = 0; i < object.cells.length; ++i)
                     message.cells[i] = String(object.cells[i]);
             }
+            if (object.strict != null)
+                message.strict = Boolean(object.strict);
             return message;
         };
 
@@ -64880,6 +64899,7 @@ $root.vtctldata = (function() {
             if (options.defaults) {
                 object.keyspace = "";
                 object.shard = "";
+                object.strict = false;
             }
             if (message.keyspace != null && message.hasOwnProperty("keyspace"))
                 object.keyspace = message.keyspace;
@@ -64890,6 +64910,8 @@ $root.vtctldata = (function() {
                 for (var j = 0; j < message.cells.length; ++j)
                     object.cells[j] = message.cells[j];
             }
+            if (message.strict != null && message.hasOwnProperty("strict"))
+                object.strict = message.strict;
             return object;
         };
 
