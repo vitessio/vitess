@@ -4539,6 +4539,7 @@
 2021-03-15T10:09:16Z,check_make_sizegen,https://github.com/vitessio/vitess/actions/runs/653763427
 2021-03-15T10:09:16Z,unit_race,https://github.com/vitessio/vitess/actions/runs/653763430
 2021-03-15T10:32:53Z,Unit Test (mariadb101),https://github.com/vitessio/vitess/actions/runs/653829846
+2021-03-15T10:32:53Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/653829861
 2021-03-15T10:32:53Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/653829843
 2021-03-15T10:32:53Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/653829839
 2021-03-15T10:32:53Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/653829857
