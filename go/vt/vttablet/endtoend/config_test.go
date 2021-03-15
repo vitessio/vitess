@@ -191,7 +191,7 @@ func testQueryPlanCache(t *testing.T, cachedPlanSize, cachePlanSize2 int) {
 	t.Helper()
 
 	//sleep to avoid race between SchemaChanged event clearing out the plans cache which breaks this test
-	time.Sleep(1 * time.Second)
+	framework.Server.WaitForSchemaReset(2 * time.Second)
 
 	defer framework.Server.SetQueryPlanCacheCap(framework.Server.QueryPlanCacheCap())
 	framework.Server.SetQueryPlanCacheCap(cachedPlanSize)
