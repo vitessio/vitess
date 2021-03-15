@@ -556,6 +556,42 @@ func (s *VtctldServer) GetShard(ctx context.Context, req *vtctldatapb.GetShardRe
 	}, nil
 }
 
+// GetSrvKeyspaces is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) GetSrvKeyspaces(ctx context.Context, req *vtctldatapb.GetSrvKeyspacesRequest) (*vtctldatapb.GetSrvKeyspacesResponse, error) {
+	cells := req.Cells
+
+	if len(cells) == 0 {
+		var err error
+
+		cells, err = s.ts.GetCellInfoNames(ctx)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	srvKeyspaces := make(map[string]*topodatapb.SrvKeyspace, len(cells))
+
+	for _, cell := range cells {
+		srvKeyspace, err := s.ts.GetSrvKeyspace(ctx, cell, req.Keyspace)
+
+		if err != nil {
+			if !topo.IsErrType(err, topo.NoNode) {
+				return nil, err
+			}
+
+			log.Infof("no srvkeyspace for keyspace %s in cell %s", req.Keyspace, cell)
+
+			srvKeyspace = nil
+		}
+
+		srvKeyspaces[cell] = srvKeyspace
+	}
+
+	return &vtctldatapb.GetSrvKeyspacesResponse{
+		SrvKeyspaces: srvKeyspaces,
+	}, nil
+}
+
 // GetSrvVSchema is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) GetSrvVSchema(ctx context.Context, req *vtctldatapb.GetSrvVSchemaRequest) (*vtctldatapb.GetSrvVSchemaResponse, error) {
 	vschema, err := s.ts.GetSrvVSchema(ctx, req.Cell)
