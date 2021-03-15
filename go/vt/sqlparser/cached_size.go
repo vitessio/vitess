@@ -979,10 +979,10 @@ func (cached *Literal) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(32)
+		size += int64(24)
 	}
-	// field Val []byte
-	size += int64(cap(cached.Val))
+	// field Val string
+	size += int64(len(cached.Val))
 	return size
 }
 func (cached *LockOption) CachedSize(alloc bool) int64 {
@@ -1307,9 +1307,9 @@ func (cached *Select) CachedSize(alloc bool) int64 {
 	size += int64(1)
 	// field Comments vitess.io/vitess/go/vt/sqlparser.Comments
 	{
-		size += int64(cap(cached.Comments)) * int64(24)
+		size += int64(cap(cached.Comments)) * int64(16)
 		for _, elem := range cached.Comments {
-			size += int64(cap(elem))
+			size += int64(len(elem))
 		}
 	}
 	// field SelectExprs vitess.io/vitess/go/vt/sqlparser.SelectExprs

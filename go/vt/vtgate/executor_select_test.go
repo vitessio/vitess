@@ -318,7 +318,7 @@ func TestSelectSystemVariables(t *testing.T) {
 
 	sql := "select @@autocommit, @@client_found_rows, @@skip_query_plan_cache, @@enable_system_settings, " +
 		"@@sql_select_limit, @@transaction_mode, @@workload, @@read_after_write_gtid, " +
-		"@@read_after_write_timeout, @@session_track_gtids, @@ddl_strategy"
+		"@@read_after_write_timeout, @@session_track_gtids, @@ddl_strategy, @@socket"
 
 	result, err := executorExec(executor, sql, map[string]*querypb.BindVariable{})
 	wantResult := &sqltypes.Result{
@@ -334,6 +334,7 @@ func TestSelectSystemVariables(t *testing.T) {
 			{Name: "@@read_after_write_timeout", Type: sqltypes.Float64},
 			{Name: "@@session_track_gtids", Type: sqltypes.VarBinary},
 			{Name: "@@ddl_strategy", Type: sqltypes.VarBinary},
+			{Name: "@@socket", Type: sqltypes.VarBinary},
 		},
 		Rows: [][]sqltypes.Value{{
 			// the following are the uninitialised session values
@@ -348,6 +349,7 @@ func TestSelectSystemVariables(t *testing.T) {
 			sqltypes.NewVarBinary("a fine gtid"),
 			sqltypes.NewFloat64(13),
 			sqltypes.NewVarBinary("own_gtid"),
+			sqltypes.NewVarBinary(""),
 			sqltypes.NewVarBinary(""),
 		}},
 	}

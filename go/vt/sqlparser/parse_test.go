@@ -19,7 +19,9 @@ package sqlparser
 import (
 	"bufio"
 	"bytes"
+	"compress/gzip"
 	"fmt"
+	"io"
 	"math/rand"
 	"os"
 	"path"
@@ -1523,6 +1525,16 @@ var (
 	}, {
 		input: "show vschema vindexes on t",
 	}, {
+		input: "show vitess_migrations",
+	}, {
+		input: "show vitess_migrations from ks",
+	}, {
+		input: "show vitess_migrations from ks where col = 42",
+	}, {
+		input: `show vitess_migrations from ks like '%pattern'`,
+	}, {
+		input: "show vitess_migrations like '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90'",
+	}, {
 		input:  "show warnings",
 		output: "show warnings",
 	}, {
@@ -1752,12 +1764,12 @@ var (
 	}, {
 		input: "rollback",
 	}, {
-		input: "create database test_db",
+		input: "create database /* simple */ test_db",
 	}, {
 		input:  "create schema test_db",
 		output: "create database test_db",
 	}, {
-		input: "create database if not exists test_db",
+		input: "create database /* simple */ if not exists test_db",
 	}, {
 		input:  "create schema if not exists test_db",
 		output: "create database if not exists test_db",
@@ -1773,12 +1785,12 @@ var (
 		input:  "CREATE DATABASE /*!32312 IF NOT EXISTS*/ `mysql` /*!40100 DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci */ /*!80016 DEFAULT ENCRYPTION='N' */;",
 		output: "create database if not exists mysql default character set utf8mb4 collate utf8mb4_0900_ai_ci",
 	}, {
-		input: "drop database test_db",
+		input: "drop database /* simple */ test_db",
 	}, {
 		input:  "drop schema test_db",
 		output: "drop database test_db",
 	}, {
-		input: "drop database if exists test_db",
+		input: "drop database /* simple */ if exists test_db",
 	}, {
 		input:  "delete a.*, b.* from tbl_a a, tbl_b b where a.id = b.id and b.name = 'test'",
 		output: "delete a, b from tbl_a as a, tbl_b as b where a.id = b.id and b.`name` = 'test'",
@@ -2339,28 +2351,28 @@ func TestPositionedErr(t *testing.T) {
 		output PositionedErr
 	}{{
 		input:  "select convert('abc' as date) from t",
-		output: PositionedErr{"syntax error", 24, []byte("as")},
+		output: PositionedErr{"syntax error", 24, "as"},
 	}, {
 		input:  "select convert from t",
-		output: PositionedErr{"syntax error", 20, []byte("from")},
+		output: PositionedErr{"syntax error", 20, "from"},
 	}, {
 		input:  "select cast('foo', decimal) from t",
-		output: PositionedErr{"syntax error", 19, nil},
+		output: PositionedErr{"syntax error", 19, ""},
 	}, {
 		input:  "select convert('abc', datetime(4+9)) from t",
-		output: PositionedErr{"syntax error", 34, nil},
+		output: PositionedErr{"syntax error", 34, ""},
 	}, {
 		input:  "select convert('abc', decimal(4+9)) from t",
-		output: PositionedErr{"syntax error", 33, nil},
+		output: PositionedErr{"syntax error", 33, ""},
 	}, {
 		input:  "set transaction isolation level 12345",
-		output: PositionedErr{"syntax error", 38, []byte("12345")},
+		output: PositionedErr{"syntax error", 38, "12345"},
 	}, {
 		input:  "select * from a left join b",
-		output: PositionedErr{"syntax error", 28, nil},
+		output: PositionedErr{"syntax error", 28, ""},
 	}, {
 		input:  "select a from (select * from tbl)",
-		output: PositionedErr{"syntax error", 34, nil},
+		output: PositionedErr{"syntax error", 34, ""},
 	}}
 
 	for _, tcase := range invalidSQL {
@@ -2369,7 +2381,7 @@ func TestPositionedErr(t *testing.T) {
 
 		if posErr, ok := err.(PositionedErr); !ok {
 			t.Errorf("%s: %v expected PositionedErr, got (%T) %v", tcase.input, err, err, tcase.output)
-		} else if posErr.Pos != tcase.output.Pos || !bytes.Equal(posErr.Near, tcase.output.Near) || err.Error() != tcase.output.Error() {
+		} else if posErr.Pos != tcase.output.Pos || posErr.Near != tcase.output.Near || err.Error() != tcase.output.Error() {
 			t.Errorf("%s: %v, want: %v", tcase.input, err, tcase.output)
 		}
 	}
@@ -3097,7 +3109,19 @@ func loadQueries(t testing.TB, filename string) (queries []string) {
 	require.NoError(t, err)
 	defer file.Close()
 
-	scanner := bufio.NewScanner(file)
+	var read io.Reader
+	if strings.HasSuffix(filename, ".gz") {
+		gzread, err := gzip.NewReader(file)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer gzread.Close()
+		read = gzread
+	} else {
+		read = file
+	}
+
+	scanner := bufio.NewScanner(read)
 	for scanner.Scan() {
 		queries = append(queries, scanner.Text())
 	}
@@ -3113,108 +3137,104 @@ func TestParseDjangoQueries(t *testing.T) {
 	}
 }
 
-// Benchmark run on 6/23/17, prior to improvements:
-// BenchmarkParse1-4         100000             16334 ns/op
-// BenchmarkParse2-4          30000             44121 ns/op
-
-// Benchmark run on 9/3/18, comparing pooled parser performance.
-//
-// benchmark                     old ns/op     new ns/op     delta
-// BenchmarkNormalize-4          2540          2533          -0.28%
-// BenchmarkParse1-4             18269         13330         -27.03%
-// BenchmarkParse2-4             46703         41255         -11.67%
-// BenchmarkParse2Parallel-4     22246         20707         -6.92%
-// BenchmarkParse3-4             4064743       4083135       +0.45%
-//
-// benchmark                     old allocs     new allocs     delta
-// BenchmarkNormalize-4          27             27             +0.00%
-// BenchmarkParse1-4             75             74             -1.33%
-// BenchmarkParse2-4             264            263            -0.38%
-// BenchmarkParse2Parallel-4     176            175            -0.57%
-// BenchmarkParse3-4             360            361            +0.28%
-//
-// benchmark                     old bytes     new bytes     delta
-// BenchmarkNormalize-4          821           821           +0.00%
-// BenchmarkParse1-4             22776         2307          -89.87%
-// BenchmarkParse2-4             28352         7881          -72.20%
-// BenchmarkParse2Parallel-4     25712         5235          -79.64%
-// BenchmarkParse3-4             6352082       6336307       -0.25%
-
-const (
-	sql1 = "select 'abcd', 20, 30.0, eid from a where 1=eid and name='3'"
-	sql2 = "select aaaa, bbb, ccc, ddd, eeee, ffff, gggg, hhhh, iiii from tttt, ttt1, ttt3 where aaaa = bbbb and bbbb = cccc and dddd+1 = eeee group by fff, gggg having hhhh = iiii and iiii = jjjj order by kkkk, llll limit 3, 4"
-)
-
-func BenchmarkParseDjango(b *testing.B) {
-	queries := loadQueries(b, "django_queries.txt")
-	b.ResetTimer()
-
-	for i := 0; i < b.N; i++ {
-		_, err := Parse(queries[rand.Intn(len(queries))])
+func TestParseLobstersQueries(t *testing.T) {
+	for _, query := range loadQueries(t, "lobsters.sql.gz") {
+		_, err := Parse(query)
 		if err != nil {
-			b.Fatal(err)
+			t.Errorf("failed to parse %q: %v", query, err)
 		}
 	}
 }
 
-func BenchmarkParse1(b *testing.B) {
-	sql := sql1
-	for i := 0; i < b.N; i++ {
-		_, err := Parse(sql)
-		if err != nil {
-			b.Fatal(err)
-		}
-	}
-}
-
-func BenchmarkParse2(b *testing.B) {
-	sql := sql2
-	for i := 0; i < b.N; i++ {
-		_, err := Parse(sql)
-		if err != nil {
-			b.Fatal(err)
-		}
-	}
-}
-
-func BenchmarkParse2Parallel(b *testing.B) {
-	sql := sql2
-	b.RunParallel(func(pb *testing.PB) {
-		for pb.Next() {
-			ast, err := Parse(sql)
-			if err != nil {
-				b.Fatal(err)
+func BenchmarkParseTraces(b *testing.B) {
+	for _, trace := range []string{"django_queries.txt", "lobsters.sql.gz"} {
+		b.Run(trace, func(b *testing.B) {
+			queries := loadQueries(b, trace)
+			if len(queries) > 10000 {
+				queries = queries[:10000]
 			}
-			_ = ast
-		}
-	})
+			b.ResetTimer()
+			b.ReportAllocs()
+
+			for i := 0; i < b.N; i++ {
+				for _, query := range queries {
+					_, err := Parse(query)
+					if err != nil {
+						b.Fatal(err)
+					}
+				}
+			}
+		})
+	}
+
+}
+
+func BenchmarkParseStress(b *testing.B) {
+	const (
+		sql1 = "select 'abcd', 20, 30.0, eid from a where 1=eid and name='3'"
+		sql2 = "select aaaa, bbb, ccc, ddd, eeee, ffff, gggg, hhhh, iiii from tttt, ttt1, ttt3 where aaaa = bbbb and bbbb = cccc and dddd+1 = eeee group by fff, gggg having hhhh = iiii and iiii = jjjj order by kkkk, llll limit 3, 4"
+	)
+
+	for i, sql := range []string{sql1, sql2} {
+		b.Run(fmt.Sprintf("sql%d", i), func(b *testing.B) {
+			var buf bytes.Buffer
+			buf.WriteString(sql)
+			querySQL := buf.String()
+			b.ReportAllocs()
+			b.ResetTimer()
+
+			for i := 0; i < b.N; i++ {
+				_, err := Parse(querySQL)
+				if err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
+	}
 }
 
 func BenchmarkParse3(b *testing.B) {
-	// benchQuerySize is the approximate size of the query.
-	benchQuerySize := 1000000
+	largeQueryBenchmark := func(b *testing.B, escape bool) {
+		b.Helper()
 
-	// Size of value is 1/10 size of query. Then we add
-	// 10 such values to the where clause.
-	var baseval bytes.Buffer
-	for i := 0; i < benchQuerySize/100; i++ {
-		// Add an escape character: This will force the upcoming
-		// tokenizer improvement to still create a copy of the string.
-		// Then we can see if avoiding the copy will be worth it.
-		baseval.WriteString("\\'123456789")
-	}
+		// benchQuerySize is the approximate size of the query.
+		benchQuerySize := 1000000
 
-	var buf bytes.Buffer
-	buf.WriteString("select a from t1 where v = 1")
-	for i := 0; i < 10; i++ {
-		fmt.Fprintf(&buf, " and v%d = \"%d%s\"", i, i, baseval.String())
-	}
-	benchQuery := buf.String()
-	b.ResetTimer()
+		// Size of value is 1/10 size of query. Then we add
+		// 10 such values to the where clause.
+		var baseval bytes.Buffer
+		for i := 0; i < benchQuerySize/100; i++ {
+			// Add an escape character: This will force the upcoming
+			// tokenizer improvement to still create a copy of the string.
+			// Then we can see if avoiding the copy will be worth it.
+			if escape {
+				baseval.WriteString("\\'123456789")
+			} else {
+				baseval.WriteString("123456789")
+			}
+		}
 
-	for i := 0; i < b.N; i++ {
-		if _, err := Parse(benchQuery); err != nil {
-			b.Fatal(err)
+		var buf bytes.Buffer
+		buf.WriteString("select a from t1 where v = 1")
+		for i := 0; i < 10; i++ {
+			fmt.Fprintf(&buf, " and v%d = \"%d%s\"", i, i, baseval.String())
+		}
+		benchQuery := buf.String()
+		b.ResetTimer()
+		b.ReportAllocs()
+
+		for i := 0; i < b.N; i++ {
+			if _, err := Parse(benchQuery); err != nil {
+				b.Fatal(err)
+			}
 		}
 	}
+
+	b.Run("normal", func(b *testing.B) {
+		largeQueryBenchmark(b, false)
+	})
+
+	b.Run("escaped", func(b *testing.B) {
+		largeQueryBenchmark(b, true)
+	})
 }
