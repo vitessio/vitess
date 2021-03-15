@@ -4741,3 +4741,11 @@
 2021-03-15T15:00:18Z,region_example,https://github.com/vitessio/vitess/actions/runs/654573008
 2021-03-15T15:00:18Z,unit_race,https://github.com/vitessio/vitess/actions/runs/654573037
 2021-03-15T15:58:00Z,unit_race,https://github.com/vitessio/vitess/actions/runs/654754759
+2021-03-15T17:22:09Z,Unit Test (mariadb101),https://github.com/vitessio/vitess/actions/runs/655002332
+2021-03-15T17:22:09Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/655002334
+2021-03-15T17:22:09Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/655002336
+2021-03-15T17:22:09Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/655002319
+2021-03-15T17:22:09Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/655002352
+2021-03-15T17:22:09Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/655002363
+2021-03-15T17:22:09Z,check_make_sizegen,https://github.com/vitessio/vitess/actions/runs/655002350
+2021-03-15T17:22:09Z,check_make_visitor,https://github.com/vitessio/vitess/actions/runs/655002325
