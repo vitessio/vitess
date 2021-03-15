@@ -1758,7 +1758,8 @@ Gen4 plan same as above
       "Sharded": false
     },
     "FieldQuery": "select routine_name as `name`, routine_definition as definition from information_schema.routines where 1 != 1",
-    "Query": "select routine_name as `name`, routine_definition as definition from information_schema.routines where ROUTINE_SCHEMA = :v1 and ROUTINE_TYPE = 'PROCEDURE'"
+    "Query": "select routine_name as `name`, routine_definition as definition from information_schema.routines where ROUTINE_SCHEMA = :__vtschemaname and ROUTINE_TYPE = 'PROCEDURE'",
+    "SysTableTableSchema": ":v1"
   }
 }
 
