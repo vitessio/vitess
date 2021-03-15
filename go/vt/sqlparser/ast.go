@@ -2536,7 +2536,7 @@ func (node *ShowFilter) Format(buf *TrackedBuffer) {
 		return
 	}
 	if node.Like != "" {
-		buf.astPrintf(node, " like '%s'", node.Like)
+		buf.astPrintf(node, " like %s", encodeSQLString(node.Like))
 	} else {
 		buf.astPrintf(node, " where %v", node.Filter)
 	}
@@ -3207,7 +3207,7 @@ func (node *SelectInto) Format(buf *TrackedBuffer) {
 	if node == nil {
 		return
 	}
-	buf.astPrintf(node, "%s'%s'", node.Type.ToString(), node.FileName)
+	buf.astPrintf(node, "%s%s", node.Type.ToString(), node.FileName)
 	if node.Charset != "" {
 		buf.astPrintf(node, " character set %s", node.Charset)
 	}

@@ -399,6 +399,22 @@ func encodeBytesSQL(val []byte, b BinWriter) {
 	b.Write(buf.Bytes())
 }
 
+// EncodeStringSQL encodes the string as a SQL string.
+func EncodeStringSQL(val string) string {
+	buf := &bytes2.Buffer{}
+	buf.WriteByte('\'')
+	for _, ch := range val {
+		if encodedChar := SQLEncodeMap[ch]; encodedChar == DontEscape {
+			buf.WriteByte(byte(ch))
+		} else {
+			buf.WriteByte('\\')
+			buf.WriteByte(encodedChar)
+		}
+	}
+	buf.WriteByte('\'')
+	return buf.String()
+}
+
 func encodeBytesSQLBits(val []byte, b BinWriter) {
 	fmt.Fprint(b, "b'")
 	for _, ch := range val {
