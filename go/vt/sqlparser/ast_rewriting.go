@@ -55,10 +55,7 @@ func RewriteAST(in Statement, keyspace string) (*RewriteASTResult, error) {
 	if setRewriter.err != nil {
 		return nil, setRewriter.err
 	}
-	result, err = fixedPointRewriteToCNF(result)
-	if err != nil {
-		return nil, err
-	}
+
 	out, ok := result.(Statement)
 	if !ok {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "statement rewriting returned a non statement: %s", String(out))
@@ -347,17 +344,23 @@ func SystemSchema(schema string) bool {
 		strings.EqualFold(schema, "mysql")
 }
 
-func fixedPointRewriteToCNF(ast SQLNode) (SQLNode, error) {
+// RewriteToCNF walks the input AST and rewrites any boolean logic into CNF
+// Note: In order to re-plan, we need to empty the accumulated metadata in the AST,
+// so ColName.Metadata will be nil:ed out as part of this rewrite
+func RewriteToCNF(ast SQLNode) (SQLNode, error) {
 	var err error
 	for {
 		finishedRewrite := true
 		ast, err = Rewrite(ast, func(cursor *Cursor) bool {
 			if e, isExpr := cursor.node.(Expr); isExpr {
-				rewritten, didRewrite := rewriteToCNF(e)
+				rewritten, didRewrite := rewriteToCNFExpr(e)
 				if didRewrite {
 					finishedRewrite = false
 					cursor.Replace(rewritten)
 				}
+			}
+			if col, isCol := cursor.node.(*ColName); isCol {
+				col.Metadata = nil
 			}
 			return true
 		}, nil)
@@ -460,7 +463,7 @@ outer1:
 	return result, true
 }
 
-func rewriteToCNF(expr Expr) (Expr, bool) {
+func rewriteToCNFExpr(expr Expr) (Expr, bool) {
 	switch expr := expr.(type) {
 	case *NotExpr:
 		switch child := expr.Expr.(type) {

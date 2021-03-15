@@ -369,7 +369,7 @@ func TestRewriteToCNF(in *testing.T) {
 			require.NoError(t, err)
 
 			expr := stmt.(*Select).Where.Expr
-			expr, didRewrite := rewriteToCNF(expr)
+			expr, didRewrite := rewriteToCNFExpr(expr)
 			assert.True(t, didRewrite)
 			assert.Equal(t, tc.expected, String(expr))
 		})
@@ -401,7 +401,7 @@ func TestFixedPointRewriteToCNF(in *testing.T) {
 			require.NoError(err)
 
 			expr := stmt.(*Select).Where.Expr
-			output, err := fixedPointRewriteToCNF(expr)
+			output, err := RewriteToCNF(expr)
 			require.NoError(err)
 			assert.Equal(t, tc.expected, String(output))
 		})
