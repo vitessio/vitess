@@ -22,6 +22,7 @@ import (
 	"sort"
 	"strings"
 
+	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -49,6 +50,7 @@ type ReplicatorPlan struct {
 	TargetTables  map[string]*TablePlan
 	TablePlans    map[string]*TablePlan
 	PKInfoMap     map[string][]*PrimaryKeyInfo
+	stats         *binlogplayer.Stats
 }
 
 // buildExecution plan uses the field info as input and the partially built
@@ -91,6 +93,7 @@ func (rp *ReplicatorPlan) buildFromFields(tableName string, lastpk *sqltypes.Res
 		name:    sqlparser.NewTableIdent(tableName),
 		lastpk:  lastpk,
 		pkInfos: rp.PKInfoMap[tableName],
+		stats:   rp.stats,
 	}
 	for _, field := range fields {
 		colName := sqlparser.NewColIdent(field.Name)
@@ -175,6 +178,8 @@ type TablePlan struct {
 	// PKReferences is used to check if an event changed
 	// a primary key column (row move).
 	PKReferences []string
+
+	Stats *binlogplayer.Stats
 }
 
 // MarshalJSON performs a custom JSON Marshalling.
@@ -236,13 +241,17 @@ func (tp *TablePlan) applyBulkInsert(rows *binlogdatapb.VStreamRowsResponse, exe
 // much lower copy bandwidth (or needing to provision much higher configuration servers).
 // isOutsidePKRange currently checks for rows with single primary keys which are currently comparable in Vitess:
 // (see NullsafeCompare() for types supported)
-func (tp *TablePlan) isOutsidePKRange(bindvars map[string]*querypb.BindVariable) bool {
+func (tp *TablePlan) isOutsidePKRange(bindvar *querypb.BindVariable, before, after bool, stmtType string) bool {
 	// Ensure there is one and only one value in lastpk and pkrefs.
 	if tp.Lastpk != nil && len(tp.Lastpk.Fields) == 1 && len(tp.Lastpk.Rows) == 1 && len(tp.Lastpk.Rows[0]) == 1 && len(tp.PKReferences) == 1 {
-		rowVal, _ := sqltypes.BindVariableToValue(bindvars["a_"+tp.PKReferences[0]])
+		if bindvar == nil {
+			return false
+		}
+		rowVal, _ := sqltypes.BindVariableToValue(bindvar)
 		result, err := evalengine.NullsafeCompare(rowVal, tp.Lastpk.Rows[0][0])
 		// If rowVal is > last pk, transaction will be a noop
 		if err == nil && result > 0 {
+			tp.Stats.NoopQueryCount.Add(stmtType, 1)
 			return true
 		}
 	}
@@ -267,19 +276,29 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 			bindvars["a_"+field.Name] = sqltypes.ValueBindVariable(vals[i])
 		}
 	}
-	if tp.isOutsidePKRange(bindvars) {
-		return nil, nil
-	}
+	var bindvar *querypb.BindVariable
 	switch {
 	case !before && after:
+		bindvar = bindvars["a_"+tp.PKReferences[0]]
+		if tp.isOutsidePKRange(bindvar, before, after, "insert") {
+			return nil, nil
+		}
 		return execParsedQuery(tp.Insert, bindvars, executor)
 	case before && !after:
 		if tp.Delete == nil {
 			return nil, nil
 		}
+		bindvar = bindvars["b_"+tp.PKReferences[0]]
+		if tp.isOutsidePKRange(bindvar, before, after, "delete") {
+			return nil, nil
+		}
 		return execParsedQuery(tp.Delete, bindvars, executor)
 	case before && after:
 		if !tp.pkChanged(bindvars) {
+			bindvar = bindvars["a_"+tp.PKReferences[0]]
+			if tp.isOutsidePKRange(bindvar, before, after, "update") {
+				return nil, nil
+			}
 			return execParsedQuery(tp.Update, bindvars, executor)
 		}
 		if tp.Delete != nil {

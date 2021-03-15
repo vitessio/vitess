@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -21,12 +22,14 @@ import (
 )
 
 var (
-	debug = false // set to true to always use local env vtdataroot for local debugging
+	debug = true // set to true to always use local env vtdataroot for local debugging
 
 	originalVtdataroot    string
 	vtdataroot            string
 	mainClusterConfig     *ClusterConfig
 	externalClusterConfig *ClusterConfig
+
+	packetSize int = 100
 )
 
 // ClusterConfig defines the parameters like ports, tmpDir, tablet types which uniquely define a vitess cluster
@@ -44,6 +47,7 @@ type ClusterConfig struct {
 	tabletPortBase      int
 	tabletGrpcPortBase  int
 	tabletMysqlPortBase int
+	packetSize          int
 }
 
 // VitessCluster represents all components within the test cluster
@@ -110,7 +114,6 @@ func getClusterConfig(idx int, dataRootDir string) *ClusterConfig {
 	if _, err := os.Stat(dataRootDir); os.IsNotExist(err) {
 		os.Mkdir(dataRootDir, 0700)
 	}
-
 	return &ClusterConfig{
 		hostname:            "localhost",
 		topoPort:            etcdPort,
@@ -125,6 +128,7 @@ func getClusterConfig(idx int, dataRootDir string) *ClusterConfig {
 		tabletPortBase:      basePort + 1000,
 		tabletGrpcPortBase:  basePort + 1991,
 		tabletMysqlPortBase: basePort + 1306,
+		packetSize:          packetSize,
 	}
 }
 
@@ -240,6 +244,7 @@ func (vc *VitessCluster) AddTablet(t *testing.T, cell *Cell, keyspace *Keyspace,
 			"-enable-lag-throttler",
 			"-heartbeat_enable",
 			"-heartbeat_interval", "250ms",
+			"-vstream_packet_size", strconv.Itoa(vc.ClusterConfig.packetSize),
 		}, //FIXME: for multi-cell initial schema doesn't seem to load without "-queryserver-config-schema-reload-time"
 		false)
 

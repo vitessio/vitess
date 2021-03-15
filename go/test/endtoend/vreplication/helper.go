@@ -2,13 +2,17 @@ package vreplication
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
 	"testing"
+
+	"vitess.io/vitess/go/vt/log"
 
 	"github.com/buger/jsonparser"
 	"github.com/stretchr/testify/require"
@@ -258,4 +262,31 @@ func printRoutingRules(t *testing.T, vc *VitessCluster, msg string) error {
 	}
 	fmt.Printf("Routing Rules::%s:\n%s\n", msg, output)
 	return nil
+}
+
+func getExpVars(t *testing.T, url string) {
+	resp, err := http.Get(url)
+	require.NoError(t, err)
+	require.Equal(t, 200, resp.StatusCode, "no response from url %s", url)
+
+	resultMap := make(map[string]interface{})
+	respByte, _ := ioutil.ReadAll(resp.Body)
+	err = json.Unmarshal(respByte, &resultMap)
+	require.NoError(t, err)
+	for k := range resultMap {
+		log.Infof("key: %v", k)
+	}
+	//log.Infof("%+v", resultMap)
+}
+
+func getMapFromJSON(JSON map[string]interface{}, key string) map[string]interface{} {
+	result := make(map[string]interface{})
+	object := reflect.ValueOf(JSON[key])
+	if object.Kind() == reflect.Map {
+		for _, key := range object.MapKeys() {
+			value := object.MapIndex(key)
+			result[key.String()] = value
+		}
+	}
+	return result
 }

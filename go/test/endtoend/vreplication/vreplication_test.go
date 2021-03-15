@@ -88,8 +88,8 @@ func TestBasicVreplicationWorkflow(t *testing.T) {
 	allCells := []string{"zone1"}
 	allCellNames = "zone1"
 	vc = NewVitessCluster(t, "TestBasicVreplicationWorkflow", allCells, mainClusterConfig)
-
 	require.NotNil(t, vc)
+
 	defaultReplicas = 0 // because of CI resource constraints we can only run this test with master tablets
 	defer func() { defaultReplicas = 1 }()
 
@@ -103,12 +103,14 @@ func TestBasicVreplicationWorkflow(t *testing.T) {
 
 	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	defer vtgateConn.Close()
+
+	//getExpVars(t, vc.Cells["zone1"].Keyspaces["product"].Shards["0"].Tablets["zone1-100"].Vttablet.VerifyURL)
+
 	verifyClusterHealth(t, vc)
 	insertInitialData(t)
 	materializeRollup(t)
 
 	shardCustomer(t, true, []*Cell{defaultCell}, defaultCellName)
-
 	validateRollupReplicates(t)
 	shardOrders(t)
 	shardMerchant(t)
