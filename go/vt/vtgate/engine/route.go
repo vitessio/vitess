@@ -125,8 +125,9 @@ func NewRoute(opcode RouteOpcode, keyspace *vindexes.Keyspace, query, fieldQuery
 // OrderbyParams specifies the parameters for ordering.
 // This is used for merge-sorting scatter queries.
 type OrderbyParams struct {
-	Col  int
-	Desc bool
+	Col             int
+	WeightStringCol int
+	Desc            bool
 }
 
 func (obp OrderbyParams) String() string {
@@ -135,6 +136,14 @@ func (obp OrderbyParams) String() string {
 		val += " DESC"
 	} else {
 		val += " ASC"
+	}
+	if obp.WeightStringCol != -1 {
+		val += " " + strconv.Itoa(obp.WeightStringCol)
+		if obp.Desc {
+			val += " DESC"
+		} else {
+			val += " ASC"
+		}
 	}
 	return val
 }
@@ -584,25 +593,36 @@ func (route *Route) sort(in *sqltypes.Result) (*sqltypes.Result, error) {
 		InsertID:     in.InsertID,
 	}
 
+	orderBy, weightStrings, desc := extractSlices(route.OrderBy)
+
 	sort.Slice(out.Rows, func(i, j int) bool {
 		// If there are any errors below, the function sets
 		// the external err and returns true. Once err is set,
 		// all subsequent calls return true. This will make
 		// Slice think that all elements are in the correct
 		// order and return more quickly.
-		for _, order := range route.OrderBy {
+		for k := range orderBy {
 			if err != nil {
 				return true
 			}
 			var cmp int
-			cmp, err = evalengine.NullsafeCompare(out.Rows[i][order.Col], out.Rows[j][order.Col])
+			cmp, err = evalengine.NullsafeCompare(out.Rows[i][orderBy[k]], out.Rows[j][orderBy[k]])
 			if err != nil {
-				return true
+				_, isComparisonErr := err.(evalengine.UnsupportedComparisonError)
+				if !(isComparisonErr && weightStrings[k] != -1) {
+					return true
+				}
+				orderBy[k] = weightStrings[k]
+				weightStrings[k] = -1
+				cmp, err = evalengine.NullsafeCompare(out.Rows[i][orderBy[k]], out.Rows[j][orderBy[k]])
+				if err != nil {
+					return true
+				}
 			}
 			if cmp == 0 {
 				continue
 			}
-			if order.Desc {
+			if desc[k] {
 				cmp = -cmp
 			}
 			return cmp < 0

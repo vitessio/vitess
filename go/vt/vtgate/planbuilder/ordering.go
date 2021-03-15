@@ -290,8 +290,9 @@ func planRouteOrdering(orderBy sqlparser.OrderBy, node *route) (logicalPlan, err
 			return nil, fmt.Errorf("unsupported: in scatter query: order by must reference a column in the select list: %s", sqlparser.String(order))
 		}
 		ob := engine.OrderbyParams{
-			Col:  colNumber,
-			Desc: order.Direction == sqlparser.DescOrder,
+			Col:             colNumber,
+			WeightStringCol: -1,
+			Desc:            order.Direction == sqlparser.DescOrder,
 		}
 		node.eroute.OrderBy = append(node.eroute.OrderBy, ob)
 
