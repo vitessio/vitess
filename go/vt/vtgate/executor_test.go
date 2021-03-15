@@ -903,6 +903,16 @@ func TestExecutorShow(t *testing.T) {
 	_, err = executor.Execute(ctx, "TestExecute", session, query, nil)
 	want = "Unknown database 'no_such_keyspace' in vschema"
 	assert.EqualError(t, err, want, query)
+
+	query = "show vitess_migrations"
+	_, err = executor.Execute(ctx, "TestExecute", session, query, nil)
+	want = "Unknown database 'no_such_keyspace' in vschema"
+	assert.EqualError(t, err, want, query)
+
+	query = "show vitess_migrations from ks like '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90'"
+	_, err = executor.Execute(ctx, "TestExecute", session, query, nil)
+	want = "Unknown database 'ks' in vschema"
+	assert.EqualError(t, err, want, query)
 }
 
 func TestExecutorUse(t *testing.T) {
@@ -2283,6 +2293,17 @@ func TestExecutorTempTable(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, before, executor.plans.Len())
+}
+
+func TestExecutorShowVitessMigrations(t *testing.T) {
+	executor, sbc1, sbc2, _ := createExecutorEnv()
+	showQuery := "show vitess_migrations"
+	session := NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"})
+	ctx := context.Background()
+	_, err := executor.Execute(ctx, "", session, showQuery, nil)
+	require.NoError(t, err)
+	assert.Contains(t, sbc1.StringQueries(), "SELECT * FROM _vt.schema_migrations")
+	assert.Contains(t, sbc2.StringQueries(), "SELECT * FROM _vt.schema_migrations")
 }
 
 func exec(executor *Executor, session *SafeSession, sql string) (*sqltypes.Result, error) {

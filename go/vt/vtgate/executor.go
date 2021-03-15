@@ -325,6 +325,8 @@ func (e *Executor) addNeededBindVars(bindVarNeeds *sqlparser.BindVarNeeds, bindV
 			bindVars[key] = sqltypes.StringBindVariable(servenv.AppVersion.MySQLVersion())
 		case sysvars.VersionComment.Name:
 			bindVars[key] = sqltypes.StringBindVariable(servenv.AppVersion.String())
+		case sysvars.Socket.Name:
+			bindVars[key] = sqltypes.StringBindVariable(mysqlSocketPath())
 		}
 	}
 
