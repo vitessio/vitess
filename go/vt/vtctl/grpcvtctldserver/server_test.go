@@ -4696,6 +4696,26 @@ func TestShardReplicationPositions(t *testing.T) {
 						Position: "replica_tablet_position",
 					},
 				},
+				TabletMap: map[string]*topodatapb.Tablet{
+					"zone1-0000000100": {
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+						Keyspace: "testkeyspace",
+						Shard:    "-",
+						Type:     topodatapb.TabletType_MASTER,
+					},
+					"zone1-0000000101": {
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+						Keyspace: "testkeyspace",
+						Shard:    "-",
+						Type:     topodatapb.TabletType_REPLICA,
+					},
+				},
 			},
 			shouldErr: false,
 		},
@@ -4757,6 +4777,26 @@ func TestShardReplicationPositions(t *testing.T) {
 				ReplicationStatuses: map[string]*replicationdatapb.Status{
 					"zone1-0000000100": nil,
 					"zone1-0000000101": nil,
+				},
+				TabletMap: map[string]*topodatapb.Tablet{
+					"zone1-0000000100": {
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+						Keyspace: "testkeyspace",
+						Shard:    "-",
+						Type:     topodatapb.TabletType_MASTER,
+					},
+					"zone1-0000000101": {
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+						Keyspace: "testkeyspace",
+						Shard:    "-",
+						Type:     topodatapb.TabletType_REPLICA,
+					},
 				},
 			},
 			shouldErr: false,
