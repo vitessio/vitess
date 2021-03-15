@@ -67,6 +67,135 @@ func CloneAlterOption(in AlterOption) AlterOption {
 	}
 }
 
+// EqualsAlterOption does deep equals between the two objects.
+func EqualsAlterOption(inA, inB AlterOption) bool {
+	if inA == nil && inB == nil {
+		return true
+	}
+	if inA == nil || inB == nil {
+		return false
+	}
+	switch a := inA.(type) {
+	case *AddColumns:
+		b, ok := inB.(*AddColumns)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfAddColumns(a, b)
+	case *AddConstraintDefinition:
+		b, ok := inB.(*AddConstraintDefinition)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfAddConstraintDefinition(a, b)
+	case *AddIndexDefinition:
+		b, ok := inB.(*AddIndexDefinition)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfAddIndexDefinition(a, b)
+	case AlgorithmValue:
+		b, ok := inB.(AlgorithmValue)
+		if !ok {
+			return false
+		}
+		return a == b
+	case *AlterCharset:
+		b, ok := inB.(*AlterCharset)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfAlterCharset(a, b)
+	case *AlterColumn:
+		b, ok := inB.(*AlterColumn)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfAlterColumn(a, b)
+	case *ChangeColumn:
+		b, ok := inB.(*ChangeColumn)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfChangeColumn(a, b)
+	case *DropColumn:
+		b, ok := inB.(*DropColumn)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfDropColumn(a, b)
+	case *DropKey:
+		b, ok := inB.(*DropKey)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfDropKey(a, b)
+	case *Force:
+		b, ok := inB.(*Force)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfForce(a, b)
+	case *KeyState:
+		b, ok := inB.(*KeyState)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfKeyState(a, b)
+	case *LockOption:
+		b, ok := inB.(*LockOption)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfLockOption(a, b)
+	case *ModifyColumn:
+		b, ok := inB.(*ModifyColumn)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfModifyColumn(a, b)
+	case *OrderByOption:
+		b, ok := inB.(*OrderByOption)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfOrderByOption(a, b)
+	case *RenameIndex:
+		b, ok := inB.(*RenameIndex)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfRenameIndex(a, b)
+	case *RenameTableName:
+		b, ok := inB.(*RenameTableName)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfRenameTableName(a, b)
+	case TableOptions:
+		b, ok := inB.(TableOptions)
+		if !ok {
+			return false
+		}
+		return EqualsTableOptions(a, b)
+	case *TablespaceOperation:
+		b, ok := inB.(*TablespaceOperation)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfTablespaceOperation(a, b)
+	case *Validation:
+		b, ok := inB.(*Validation)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfValidation(a, b)
+	default:
+		// this should never happen
+		return false
+	}
+}
+
 // CloneCharacteristic creates a deep clone of the input.
 func CloneCharacteristic(in Characteristic) Characteristic {
 	if in == nil {
@@ -80,6 +209,33 @@ func CloneCharacteristic(in Characteristic) Characteristic {
 	default:
 		// this should never happen
 		return nil
+	}
+}
+
+// EqualsCharacteristic does deep equals between the two objects.
+func EqualsCharacteristic(inA, inB Characteristic) bool {
+	if inA == nil && inB == nil {
+		return true
+	}
+	if inA == nil || inB == nil {
+		return false
+	}
+	switch a := inA.(type) {
+	case AccessMode:
+		b, ok := inB.(AccessMode)
+		if !ok {
+			return false
+		}
+		return a == b
+	case IsolationLevel:
+		b, ok := inB.(IsolationLevel)
+		if !ok {
+			return false
+		}
+		return a == b
+	default:
+		// this should never happen
+		return false
 	}
 }
 
@@ -101,6 +257,39 @@ func CloneColTuple(in ColTuple) ColTuple {
 	}
 }
 
+// EqualsColTuple does deep equals between the two objects.
+func EqualsColTuple(inA, inB ColTuple) bool {
+	if inA == nil && inB == nil {
+		return true
+	}
+	if inA == nil || inB == nil {
+		return false
+	}
+	switch a := inA.(type) {
+	case ListArg:
+		b, ok := inB.(ListArg)
+		if !ok {
+			return false
+		}
+		return EqualsListArg(a, b)
+	case *Subquery:
+		b, ok := inB.(*Subquery)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfSubquery(a, b)
+	case ValTuple:
+		b, ok := inB.(ValTuple)
+		if !ok {
+			return false
+		}
+		return EqualsValTuple(a, b)
+	default:
+		// this should never happen
+		return false
+	}
+}
+
 // CloneConstraintInfo creates a deep clone of the input.
 func CloneConstraintInfo(in ConstraintInfo) ConstraintInfo {
 	if in == nil {
@@ -114,6 +303,33 @@ func CloneConstraintInfo(in ConstraintInfo) ConstraintInfo {
 	default:
 		// this should never happen
 		return nil
+	}
+}
+
+// EqualsConstraintInfo does deep equals between the two objects.
+func EqualsConstraintInfo(inA, inB ConstraintInfo) bool {
+	if inA == nil && inB == nil {
+		return true
+	}
+	if inA == nil || inB == nil {
+		return false
+	}
+	switch a := inA.(type) {
+	case *CheckConstraintDefinition:
+		b, ok := inB.(*CheckConstraintDefinition)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfCheckConstraintDefinition(a, b)
+	case *ForeignKeyDefinition:
+		b, ok := inB.(*ForeignKeyDefinition)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfForeignKeyDefinition(a, b)
+	default:
+		// this should never happen
+		return false
 	}
 }
 
@@ -132,6 +348,39 @@ func CloneDBDDLStatement(in DBDDLStatement) DBDDLStatement {
 	default:
 		// this should never happen
 		return nil
+	}
+}
+
+// EqualsDBDDLStatement does deep equals between the two objects.
+func EqualsDBDDLStatement(inA, inB DBDDLStatement) bool {
+	if inA == nil && inB == nil {
+		return true
+	}
+	if inA == nil || inB == nil {
+		return false
+	}
+	switch a := inA.(type) {
+	case *AlterDatabase:
+		b, ok := inB.(*AlterDatabase)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfAlterDatabase(a, b)
+	case *CreateDatabase:
+		b, ok := inB.(*CreateDatabase)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfCreateDatabase(a, b)
+	case *DropDatabase:
+		b, ok := inB.(*DropDatabase)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfDropDatabase(a, b)
+	default:
+		// this should never happen
+		return false
 	}
 }
 
@@ -163,6 +412,69 @@ func CloneDDLStatement(in DDLStatement) DDLStatement {
 	}
 }
 
+// EqualsDDLStatement does deep equals between the two objects.
+func EqualsDDLStatement(inA, inB DDLStatement) bool {
+	if inA == nil && inB == nil {
+		return true
+	}
+	if inA == nil || inB == nil {
+		return false
+	}
+	switch a := inA.(type) {
+	case *AlterTable:
+		b, ok := inB.(*AlterTable)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfAlterTable(a, b)
+	case *AlterView:
+		b, ok := inB.(*AlterView)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfAlterView(a, b)
+	case *CreateTable:
+		b, ok := inB.(*CreateTable)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfCreateTable(a, b)
+	case *CreateView:
+		b, ok := inB.(*CreateView)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfCreateView(a, b)
+	case *DropTable:
+		b, ok := inB.(*DropTable)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfDropTable(a, b)
+	case *DropView:
+		b, ok := inB.(*DropView)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfDropView(a, b)
+	case *RenameTable:
+		b, ok := inB.(*RenameTable)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfRenameTable(a, b)
+	case *TruncateTable:
+		b, ok := inB.(*TruncateTable)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfTruncateTable(a, b)
+	default:
+		// this should never happen
+		return false
+	}
+}
+
 // CloneExplain creates a deep clone of the input.
 func CloneExplain(in Explain) Explain {
 	if in == nil {
@@ -176,6 +488,33 @@ func CloneExplain(in Explain) Explain {
 	default:
 		// this should never happen
 		return nil
+	}
+}
+
+// EqualsExplain does deep equals between the two objects.
+func EqualsExplain(inA, inB Explain) bool {
+	if inA == nil && inB == nil {
+		return true
+	}
+	if inA == nil || inB == nil {
+		return false
+	}
+	switch a := inA.(type) {
+	case *ExplainStmt:
+		b, ok := inB.(*ExplainStmt)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfExplainStmt(a, b)
+	case *ExplainTab:
+		b, ok := inB.(*ExplainTab)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfExplainTab(a, b)
+	default:
+		// this should never happen
+		return false
 	}
 }
 
@@ -253,6 +592,207 @@ func CloneExpr(in Expr) Expr {
 	}
 }
 
+// EqualsExpr does deep equals between the two objects.
+func EqualsExpr(inA, inB Expr) bool {
+	if inA == nil && inB == nil {
+		return true
+	}
+	if inA == nil || inB == nil {
+		return false
+	}
+	switch a := inA.(type) {
+	case *AndExpr:
+		b, ok := inB.(*AndExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfAndExpr(a, b)
+	case Argument:
+		b, ok := inB.(Argument)
+		if !ok {
+			return false
+		}
+		return a == b
+	case *BinaryExpr:
+		b, ok := inB.(*BinaryExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfBinaryExpr(a, b)
+	case BoolVal:
+		b, ok := inB.(BoolVal)
+		if !ok {
+			return false
+		}
+		return a == b
+	case *CaseExpr:
+		b, ok := inB.(*CaseExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfCaseExpr(a, b)
+	case *ColName:
+		b, ok := inB.(*ColName)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfColName(a, b)
+	case *CollateExpr:
+		b, ok := inB.(*CollateExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfCollateExpr(a, b)
+	case *ComparisonExpr:
+		b, ok := inB.(*ComparisonExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfComparisonExpr(a, b)
+	case *ConvertExpr:
+		b, ok := inB.(*ConvertExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfConvertExpr(a, b)
+	case *ConvertUsingExpr:
+		b, ok := inB.(*ConvertUsingExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfConvertUsingExpr(a, b)
+	case *CurTimeFuncExpr:
+		b, ok := inB.(*CurTimeFuncExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfCurTimeFuncExpr(a, b)
+	case *Default:
+		b, ok := inB.(*Default)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfDefault(a, b)
+	case *ExistsExpr:
+		b, ok := inB.(*ExistsExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfExistsExpr(a, b)
+	case *FuncExpr:
+		b, ok := inB.(*FuncExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfFuncExpr(a, b)
+	case *GroupConcatExpr:
+		b, ok := inB.(*GroupConcatExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfGroupConcatExpr(a, b)
+	case *IntervalExpr:
+		b, ok := inB.(*IntervalExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfIntervalExpr(a, b)
+	case *IsExpr:
+		b, ok := inB.(*IsExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfIsExpr(a, b)
+	case ListArg:
+		b, ok := inB.(ListArg)
+		if !ok {
+			return false
+		}
+		return EqualsListArg(a, b)
+	case *Literal:
+		b, ok := inB.(*Literal)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfLiteral(a, b)
+	case *MatchExpr:
+		b, ok := inB.(*MatchExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfMatchExpr(a, b)
+	case *NotExpr:
+		b, ok := inB.(*NotExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfNotExpr(a, b)
+	case *NullVal:
+		b, ok := inB.(*NullVal)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfNullVal(a, b)
+	case *OrExpr:
+		b, ok := inB.(*OrExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfOrExpr(a, b)
+	case *RangeCond:
+		b, ok := inB.(*RangeCond)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfRangeCond(a, b)
+	case *Subquery:
+		b, ok := inB.(*Subquery)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfSubquery(a, b)
+	case *SubstrExpr:
+		b, ok := inB.(*SubstrExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfSubstrExpr(a, b)
+	case *TimestampFuncExpr:
+		b, ok := inB.(*TimestampFuncExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfTimestampFuncExpr(a, b)
+	case *UnaryExpr:
+		b, ok := inB.(*UnaryExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfUnaryExpr(a, b)
+	case ValTuple:
+		b, ok := inB.(ValTuple)
+		if !ok {
+			return false
+		}
+		return EqualsValTuple(a, b)
+	case *ValuesFuncExpr:
+		b, ok := inB.(*ValuesFuncExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfValuesFuncExpr(a, b)
+	case *XorExpr:
+		b, ok := inB.(*XorExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfXorExpr(a, b)
+	default:
+		// this should never happen
+		return false
+	}
+}
+
 // CloneInsertRows creates a deep clone of the input.
 func CloneInsertRows(in InsertRows) InsertRows {
 	if in == nil {
@@ -270,6 +810,45 @@ func CloneInsertRows(in InsertRows) InsertRows {
 	default:
 		// this should never happen
 		return nil
+	}
+}
+
+// EqualsInsertRows does deep equals between the two objects.
+func EqualsInsertRows(inA, inB InsertRows) bool {
+	if inA == nil && inB == nil {
+		return true
+	}
+	if inA == nil || inB == nil {
+		return false
+	}
+	switch a := inA.(type) {
+	case *ParenSelect:
+		b, ok := inB.(*ParenSelect)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfParenSelect(a, b)
+	case *Select:
+		b, ok := inB.(*Select)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfSelect(a, b)
+	case *Union:
+		b, ok := inB.(*Union)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfUnion(a, b)
+	case Values:
+		b, ok := inB.(Values)
+		if !ok {
+			return false
+		}
+		return EqualsValues(a, b)
+	default:
+		// this should never happen
+		return false
 	}
 }
 
@@ -577,6 +1156,897 @@ func CloneSQLNode(in SQLNode) SQLNode {
 	}
 }
 
+// EqualsSQLNode does deep equals between the two objects.
+func EqualsSQLNode(inA, inB SQLNode) bool {
+	if inA == nil && inB == nil {
+		return true
+	}
+	if inA == nil || inB == nil {
+		return false
+	}
+	switch a := inA.(type) {
+	case AccessMode:
+		b, ok := inB.(AccessMode)
+		if !ok {
+			return false
+		}
+		return a == b
+	case *AddColumns:
+		b, ok := inB.(*AddColumns)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfAddColumns(a, b)
+	case *AddConstraintDefinition:
+		b, ok := inB.(*AddConstraintDefinition)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfAddConstraintDefinition(a, b)
+	case *AddIndexDefinition:
+		b, ok := inB.(*AddIndexDefinition)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfAddIndexDefinition(a, b)
+	case AlgorithmValue:
+		b, ok := inB.(AlgorithmValue)
+		if !ok {
+			return false
+		}
+		return a == b
+	case *AliasedExpr:
+		b, ok := inB.(*AliasedExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfAliasedExpr(a, b)
+	case *AliasedTableExpr:
+		b, ok := inB.(*AliasedTableExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfAliasedTableExpr(a, b)
+	case *AlterCharset:
+		b, ok := inB.(*AlterCharset)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfAlterCharset(a, b)
+	case *AlterColumn:
+		b, ok := inB.(*AlterColumn)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfAlterColumn(a, b)
+	case *AlterDatabase:
+		b, ok := inB.(*AlterDatabase)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfAlterDatabase(a, b)
+	case *AlterMigration:
+		b, ok := inB.(*AlterMigration)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfAlterMigration(a, b)
+	case *AlterTable:
+		b, ok := inB.(*AlterTable)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfAlterTable(a, b)
+	case *AlterView:
+		b, ok := inB.(*AlterView)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfAlterView(a, b)
+	case *AlterVschema:
+		b, ok := inB.(*AlterVschema)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfAlterVschema(a, b)
+	case *AndExpr:
+		b, ok := inB.(*AndExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfAndExpr(a, b)
+	case Argument:
+		b, ok := inB.(Argument)
+		if !ok {
+			return false
+		}
+		return a == b
+	case *AutoIncSpec:
+		b, ok := inB.(*AutoIncSpec)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfAutoIncSpec(a, b)
+	case *Begin:
+		b, ok := inB.(*Begin)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfBegin(a, b)
+	case *BinaryExpr:
+		b, ok := inB.(*BinaryExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfBinaryExpr(a, b)
+	case BoolVal:
+		b, ok := inB.(BoolVal)
+		if !ok {
+			return false
+		}
+		return a == b
+	case *CallProc:
+		b, ok := inB.(*CallProc)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfCallProc(a, b)
+	case *CaseExpr:
+		b, ok := inB.(*CaseExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfCaseExpr(a, b)
+	case *ChangeColumn:
+		b, ok := inB.(*ChangeColumn)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfChangeColumn(a, b)
+	case *CheckConstraintDefinition:
+		b, ok := inB.(*CheckConstraintDefinition)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfCheckConstraintDefinition(a, b)
+	case ColIdent:
+		b, ok := inB.(ColIdent)
+		if !ok {
+			return false
+		}
+		return EqualsColIdent(a, b)
+	case *ColName:
+		b, ok := inB.(*ColName)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfColName(a, b)
+	case *CollateExpr:
+		b, ok := inB.(*CollateExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfCollateExpr(a, b)
+	case *ColumnDefinition:
+		b, ok := inB.(*ColumnDefinition)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfColumnDefinition(a, b)
+	case *ColumnType:
+		b, ok := inB.(*ColumnType)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfColumnType(a, b)
+	case Columns:
+		b, ok := inB.(Columns)
+		if !ok {
+			return false
+		}
+		return EqualsColumns(a, b)
+	case Comments:
+		b, ok := inB.(Comments)
+		if !ok {
+			return false
+		}
+		return EqualsComments(a, b)
+	case *Commit:
+		b, ok := inB.(*Commit)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfCommit(a, b)
+	case *ComparisonExpr:
+		b, ok := inB.(*ComparisonExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfComparisonExpr(a, b)
+	case *ConstraintDefinition:
+		b, ok := inB.(*ConstraintDefinition)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfConstraintDefinition(a, b)
+	case *ConvertExpr:
+		b, ok := inB.(*ConvertExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfConvertExpr(a, b)
+	case *ConvertType:
+		b, ok := inB.(*ConvertType)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfConvertType(a, b)
+	case *ConvertUsingExpr:
+		b, ok := inB.(*ConvertUsingExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfConvertUsingExpr(a, b)
+	case *CreateDatabase:
+		b, ok := inB.(*CreateDatabase)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfCreateDatabase(a, b)
+	case *CreateTable:
+		b, ok := inB.(*CreateTable)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfCreateTable(a, b)
+	case *CreateView:
+		b, ok := inB.(*CreateView)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfCreateView(a, b)
+	case *CurTimeFuncExpr:
+		b, ok := inB.(*CurTimeFuncExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfCurTimeFuncExpr(a, b)
+	case *Default:
+		b, ok := inB.(*Default)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfDefault(a, b)
+	case *Delete:
+		b, ok := inB.(*Delete)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfDelete(a, b)
+	case *DerivedTable:
+		b, ok := inB.(*DerivedTable)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfDerivedTable(a, b)
+	case *DropColumn:
+		b, ok := inB.(*DropColumn)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfDropColumn(a, b)
+	case *DropDatabase:
+		b, ok := inB.(*DropDatabase)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfDropDatabase(a, b)
+	case *DropKey:
+		b, ok := inB.(*DropKey)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfDropKey(a, b)
+	case *DropTable:
+		b, ok := inB.(*DropTable)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfDropTable(a, b)
+	case *DropView:
+		b, ok := inB.(*DropView)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfDropView(a, b)
+	case *ExistsExpr:
+		b, ok := inB.(*ExistsExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfExistsExpr(a, b)
+	case *ExplainStmt:
+		b, ok := inB.(*ExplainStmt)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfExplainStmt(a, b)
+	case *ExplainTab:
+		b, ok := inB.(*ExplainTab)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfExplainTab(a, b)
+	case Exprs:
+		b, ok := inB.(Exprs)
+		if !ok {
+			return false
+		}
+		return EqualsExprs(a, b)
+	case *Flush:
+		b, ok := inB.(*Flush)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfFlush(a, b)
+	case *Force:
+		b, ok := inB.(*Force)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfForce(a, b)
+	case *ForeignKeyDefinition:
+		b, ok := inB.(*ForeignKeyDefinition)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfForeignKeyDefinition(a, b)
+	case *FuncExpr:
+		b, ok := inB.(*FuncExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfFuncExpr(a, b)
+	case GroupBy:
+		b, ok := inB.(GroupBy)
+		if !ok {
+			return false
+		}
+		return EqualsGroupBy(a, b)
+	case *GroupConcatExpr:
+		b, ok := inB.(*GroupConcatExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfGroupConcatExpr(a, b)
+	case *IndexDefinition:
+		b, ok := inB.(*IndexDefinition)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfIndexDefinition(a, b)
+	case *IndexHints:
+		b, ok := inB.(*IndexHints)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfIndexHints(a, b)
+	case *IndexInfo:
+		b, ok := inB.(*IndexInfo)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfIndexInfo(a, b)
+	case *Insert:
+		b, ok := inB.(*Insert)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfInsert(a, b)
+	case *IntervalExpr:
+		b, ok := inB.(*IntervalExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfIntervalExpr(a, b)
+	case *IsExpr:
+		b, ok := inB.(*IsExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfIsExpr(a, b)
+	case IsolationLevel:
+		b, ok := inB.(IsolationLevel)
+		if !ok {
+			return false
+		}
+		return a == b
+	case JoinCondition:
+		b, ok := inB.(JoinCondition)
+		if !ok {
+			return false
+		}
+		return EqualsJoinCondition(a, b)
+	case *JoinTableExpr:
+		b, ok := inB.(*JoinTableExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJoinTableExpr(a, b)
+	case *KeyState:
+		b, ok := inB.(*KeyState)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfKeyState(a, b)
+	case *Limit:
+		b, ok := inB.(*Limit)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfLimit(a, b)
+	case ListArg:
+		b, ok := inB.(ListArg)
+		if !ok {
+			return false
+		}
+		return EqualsListArg(a, b)
+	case *Literal:
+		b, ok := inB.(*Literal)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfLiteral(a, b)
+	case *Load:
+		b, ok := inB.(*Load)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfLoad(a, b)
+	case *LockOption:
+		b, ok := inB.(*LockOption)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfLockOption(a, b)
+	case *LockTables:
+		b, ok := inB.(*LockTables)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfLockTables(a, b)
+	case *MatchExpr:
+		b, ok := inB.(*MatchExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfMatchExpr(a, b)
+	case *ModifyColumn:
+		b, ok := inB.(*ModifyColumn)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfModifyColumn(a, b)
+	case *Nextval:
+		b, ok := inB.(*Nextval)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfNextval(a, b)
+	case *NotExpr:
+		b, ok := inB.(*NotExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfNotExpr(a, b)
+	case *NullVal:
+		b, ok := inB.(*NullVal)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfNullVal(a, b)
+	case OnDup:
+		b, ok := inB.(OnDup)
+		if !ok {
+			return false
+		}
+		return EqualsOnDup(a, b)
+	case *OptLike:
+		b, ok := inB.(*OptLike)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfOptLike(a, b)
+	case *OrExpr:
+		b, ok := inB.(*OrExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfOrExpr(a, b)
+	case *Order:
+		b, ok := inB.(*Order)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfOrder(a, b)
+	case OrderBy:
+		b, ok := inB.(OrderBy)
+		if !ok {
+			return false
+		}
+		return EqualsOrderBy(a, b)
+	case *OrderByOption:
+		b, ok := inB.(*OrderByOption)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfOrderByOption(a, b)
+	case *OtherAdmin:
+		b, ok := inB.(*OtherAdmin)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfOtherAdmin(a, b)
+	case *OtherRead:
+		b, ok := inB.(*OtherRead)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfOtherRead(a, b)
+	case *ParenSelect:
+		b, ok := inB.(*ParenSelect)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfParenSelect(a, b)
+	case *ParenTableExpr:
+		b, ok := inB.(*ParenTableExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfParenTableExpr(a, b)
+	case *PartitionDefinition:
+		b, ok := inB.(*PartitionDefinition)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfPartitionDefinition(a, b)
+	case *PartitionSpec:
+		b, ok := inB.(*PartitionSpec)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfPartitionSpec(a, b)
+	case Partitions:
+		b, ok := inB.(Partitions)
+		if !ok {
+			return false
+		}
+		return EqualsPartitions(a, b)
+	case *RangeCond:
+		b, ok := inB.(*RangeCond)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfRangeCond(a, b)
+	case ReferenceAction:
+		b, ok := inB.(ReferenceAction)
+		if !ok {
+			return false
+		}
+		return a == b
+	case *Release:
+		b, ok := inB.(*Release)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfRelease(a, b)
+	case *RenameIndex:
+		b, ok := inB.(*RenameIndex)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfRenameIndex(a, b)
+	case *RenameTable:
+		b, ok := inB.(*RenameTable)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfRenameTable(a, b)
+	case *RenameTableName:
+		b, ok := inB.(*RenameTableName)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfRenameTableName(a, b)
+	case *RevertMigration:
+		b, ok := inB.(*RevertMigration)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfRevertMigration(a, b)
+	case *Rollback:
+		b, ok := inB.(*Rollback)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfRollback(a, b)
+	case *SRollback:
+		b, ok := inB.(*SRollback)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfSRollback(a, b)
+	case *Savepoint:
+		b, ok := inB.(*Savepoint)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfSavepoint(a, b)
+	case *Select:
+		b, ok := inB.(*Select)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfSelect(a, b)
+	case SelectExprs:
+		b, ok := inB.(SelectExprs)
+		if !ok {
+			return false
+		}
+		return EqualsSelectExprs(a, b)
+	case *SelectInto:
+		b, ok := inB.(*SelectInto)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfSelectInto(a, b)
+	case *Set:
+		b, ok := inB.(*Set)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfSet(a, b)
+	case *SetExpr:
+		b, ok := inB.(*SetExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfSetExpr(a, b)
+	case SetExprs:
+		b, ok := inB.(SetExprs)
+		if !ok {
+			return false
+		}
+		return EqualsSetExprs(a, b)
+	case *SetTransaction:
+		b, ok := inB.(*SetTransaction)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfSetTransaction(a, b)
+	case *Show:
+		b, ok := inB.(*Show)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfShow(a, b)
+	case *ShowBasic:
+		b, ok := inB.(*ShowBasic)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfShowBasic(a, b)
+	case *ShowCreate:
+		b, ok := inB.(*ShowCreate)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfShowCreate(a, b)
+	case *ShowFilter:
+		b, ok := inB.(*ShowFilter)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfShowFilter(a, b)
+	case *ShowLegacy:
+		b, ok := inB.(*ShowLegacy)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfShowLegacy(a, b)
+	case *StarExpr:
+		b, ok := inB.(*StarExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfStarExpr(a, b)
+	case *Stream:
+		b, ok := inB.(*Stream)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfStream(a, b)
+	case *Subquery:
+		b, ok := inB.(*Subquery)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfSubquery(a, b)
+	case *SubstrExpr:
+		b, ok := inB.(*SubstrExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfSubstrExpr(a, b)
+	case TableExprs:
+		b, ok := inB.(TableExprs)
+		if !ok {
+			return false
+		}
+		return EqualsTableExprs(a, b)
+	case TableIdent:
+		b, ok := inB.(TableIdent)
+		if !ok {
+			return false
+		}
+		return EqualsTableIdent(a, b)
+	case TableName:
+		b, ok := inB.(TableName)
+		if !ok {
+			return false
+		}
+		return EqualsTableName(a, b)
+	case TableNames:
+		b, ok := inB.(TableNames)
+		if !ok {
+			return false
+		}
+		return EqualsTableNames(a, b)
+	case TableOptions:
+		b, ok := inB.(TableOptions)
+		if !ok {
+			return false
+		}
+		return EqualsTableOptions(a, b)
+	case *TableSpec:
+		b, ok := inB.(*TableSpec)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfTableSpec(a, b)
+	case *TablespaceOperation:
+		b, ok := inB.(*TablespaceOperation)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfTablespaceOperation(a, b)
+	case *TimestampFuncExpr:
+		b, ok := inB.(*TimestampFuncExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfTimestampFuncExpr(a, b)
+	case *TruncateTable:
+		b, ok := inB.(*TruncateTable)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfTruncateTable(a, b)
+	case *UnaryExpr:
+		b, ok := inB.(*UnaryExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfUnaryExpr(a, b)
+	case *Union:
+		b, ok := inB.(*Union)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfUnion(a, b)
+	case *UnionSelect:
+		b, ok := inB.(*UnionSelect)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfUnionSelect(a, b)
+	case *UnlockTables:
+		b, ok := inB.(*UnlockTables)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfUnlockTables(a, b)
+	case *Update:
+		b, ok := inB.(*Update)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfUpdate(a, b)
+	case *UpdateExpr:
+		b, ok := inB.(*UpdateExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfUpdateExpr(a, b)
+	case UpdateExprs:
+		b, ok := inB.(UpdateExprs)
+		if !ok {
+			return false
+		}
+		return EqualsUpdateExprs(a, b)
+	case *Use:
+		b, ok := inB.(*Use)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfUse(a, b)
+	case *VStream:
+		b, ok := inB.(*VStream)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfVStream(a, b)
+	case ValTuple:
+		b, ok := inB.(ValTuple)
+		if !ok {
+			return false
+		}
+		return EqualsValTuple(a, b)
+	case *Validation:
+		b, ok := inB.(*Validation)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfValidation(a, b)
+	case Values:
+		b, ok := inB.(Values)
+		if !ok {
+			return false
+		}
+		return EqualsValues(a, b)
+	case *ValuesFuncExpr:
+		b, ok := inB.(*ValuesFuncExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfValuesFuncExpr(a, b)
+	case VindexParam:
+		b, ok := inB.(VindexParam)
+		if !ok {
+			return false
+		}
+		return EqualsVindexParam(a, b)
+	case *VindexSpec:
+		b, ok := inB.(*VindexSpec)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfVindexSpec(a, b)
+	case *When:
+		b, ok := inB.(*When)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfWhen(a, b)
+	case *Where:
+		b, ok := inB.(*Where)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfWhere(a, b)
+	case *XorExpr:
+		b, ok := inB.(*XorExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfXorExpr(a, b)
+	default:
+		// this should never happen
+		return false
+	}
+}
+
 // CloneSelectExpr creates a deep clone of the input.
 func CloneSelectExpr(in SelectExpr) SelectExpr {
 	if in == nil {
@@ -592,6 +2062,39 @@ func CloneSelectExpr(in SelectExpr) SelectExpr {
 	default:
 		// this should never happen
 		return nil
+	}
+}
+
+// EqualsSelectExpr does deep equals between the two objects.
+func EqualsSelectExpr(inA, inB SelectExpr) bool {
+	if inA == nil && inB == nil {
+		return true
+	}
+	if inA == nil || inB == nil {
+		return false
+	}
+	switch a := inA.(type) {
+	case *AliasedExpr:
+		b, ok := inB.(*AliasedExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfAliasedExpr(a, b)
+	case *Nextval:
+		b, ok := inB.(*Nextval)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfNextval(a, b)
+	case *StarExpr:
+		b, ok := inB.(*StarExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfStarExpr(a, b)
+	default:
+		// this should never happen
+		return false
 	}
 }
 
@@ -613,6 +2116,39 @@ func CloneSelectStatement(in SelectStatement) SelectStatement {
 	}
 }
 
+// EqualsSelectStatement does deep equals between the two objects.
+func EqualsSelectStatement(inA, inB SelectStatement) bool {
+	if inA == nil && inB == nil {
+		return true
+	}
+	if inA == nil || inB == nil {
+		return false
+	}
+	switch a := inA.(type) {
+	case *ParenSelect:
+		b, ok := inB.(*ParenSelect)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfParenSelect(a, b)
+	case *Select:
+		b, ok := inB.(*Select)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfSelect(a, b)
+	case *Union:
+		b, ok := inB.(*Union)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfUnion(a, b)
+	default:
+		// this should never happen
+		return false
+	}
+}
+
 // CloneShowInternal creates a deep clone of the input.
 func CloneShowInternal(in ShowInternal) ShowInternal {
 	if in == nil {
@@ -631,6 +2167,39 @@ func CloneShowInternal(in ShowInternal) ShowInternal {
 	}
 }
 
+// EqualsShowInternal does deep equals between the two objects.
+func EqualsShowInternal(inA, inB ShowInternal) bool {
+	if inA == nil && inB == nil {
+		return true
+	}
+	if inA == nil || inB == nil {
+		return false
+	}
+	switch a := inA.(type) {
+	case *ShowBasic:
+		b, ok := inB.(*ShowBasic)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfShowBasic(a, b)
+	case *ShowCreate:
+		b, ok := inB.(*ShowCreate)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfShowCreate(a, b)
+	case *ShowLegacy:
+		b, ok := inB.(*ShowLegacy)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfShowLegacy(a, b)
+	default:
+		// this should never happen
+		return false
+	}
+}
+
 // CloneSimpleTableExpr creates a deep clone of the input.
 func CloneSimpleTableExpr(in SimpleTableExpr) SimpleTableExpr {
 	if in == nil {
@@ -644,6 +2213,33 @@ func CloneSimpleTableExpr(in SimpleTableExpr) SimpleTableExpr {
 	default:
 		// this should never happen
 		return nil
+	}
+}
+
+// EqualsSimpleTableExpr does deep equals between the two objects.
+func EqualsSimpleTableExpr(inA, inB SimpleTableExpr) bool {
+	if inA == nil && inB == nil {
+		return true
+	}
+	if inA == nil || inB == nil {
+		return false
+	}
+	switch a := inA.(type) {
+	case *DerivedTable:
+		b, ok := inB.(*DerivedTable)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfDerivedTable(a, b)
+	case TableName:
+		b, ok := inB.(TableName)
+		if !ok {
+			return false
+		}
+		return EqualsTableName(a, b)
+	default:
+		// this should never happen
+		return false
 	}
 }
 
@@ -741,6 +2337,267 @@ func CloneStatement(in Statement) Statement {
 	}
 }
 
+// EqualsStatement does deep equals between the two objects.
+func EqualsStatement(inA, inB Statement) bool {
+	if inA == nil && inB == nil {
+		return true
+	}
+	if inA == nil || inB == nil {
+		return false
+	}
+	switch a := inA.(type) {
+	case *AlterDatabase:
+		b, ok := inB.(*AlterDatabase)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfAlterDatabase(a, b)
+	case *AlterMigration:
+		b, ok := inB.(*AlterMigration)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfAlterMigration(a, b)
+	case *AlterTable:
+		b, ok := inB.(*AlterTable)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfAlterTable(a, b)
+	case *AlterView:
+		b, ok := inB.(*AlterView)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfAlterView(a, b)
+	case *AlterVschema:
+		b, ok := inB.(*AlterVschema)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfAlterVschema(a, b)
+	case *Begin:
+		b, ok := inB.(*Begin)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfBegin(a, b)
+	case *CallProc:
+		b, ok := inB.(*CallProc)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfCallProc(a, b)
+	case *Commit:
+		b, ok := inB.(*Commit)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfCommit(a, b)
+	case *CreateDatabase:
+		b, ok := inB.(*CreateDatabase)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfCreateDatabase(a, b)
+	case *CreateTable:
+		b, ok := inB.(*CreateTable)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfCreateTable(a, b)
+	case *CreateView:
+		b, ok := inB.(*CreateView)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfCreateView(a, b)
+	case *Delete:
+		b, ok := inB.(*Delete)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfDelete(a, b)
+	case *DropDatabase:
+		b, ok := inB.(*DropDatabase)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfDropDatabase(a, b)
+	case *DropTable:
+		b, ok := inB.(*DropTable)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfDropTable(a, b)
+	case *DropView:
+		b, ok := inB.(*DropView)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfDropView(a, b)
+	case *ExplainStmt:
+		b, ok := inB.(*ExplainStmt)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfExplainStmt(a, b)
+	case *ExplainTab:
+		b, ok := inB.(*ExplainTab)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfExplainTab(a, b)
+	case *Flush:
+		b, ok := inB.(*Flush)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfFlush(a, b)
+	case *Insert:
+		b, ok := inB.(*Insert)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfInsert(a, b)
+	case *Load:
+		b, ok := inB.(*Load)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfLoad(a, b)
+	case *LockTables:
+		b, ok := inB.(*LockTables)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfLockTables(a, b)
+	case *OtherAdmin:
+		b, ok := inB.(*OtherAdmin)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfOtherAdmin(a, b)
+	case *OtherRead:
+		b, ok := inB.(*OtherRead)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfOtherRead(a, b)
+	case *ParenSelect:
+		b, ok := inB.(*ParenSelect)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfParenSelect(a, b)
+	case *Release:
+		b, ok := inB.(*Release)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfRelease(a, b)
+	case *RenameTable:
+		b, ok := inB.(*RenameTable)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfRenameTable(a, b)
+	case *RevertMigration:
+		b, ok := inB.(*RevertMigration)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfRevertMigration(a, b)
+	case *Rollback:
+		b, ok := inB.(*Rollback)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfRollback(a, b)
+	case *SRollback:
+		b, ok := inB.(*SRollback)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfSRollback(a, b)
+	case *Savepoint:
+		b, ok := inB.(*Savepoint)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfSavepoint(a, b)
+	case *Select:
+		b, ok := inB.(*Select)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfSelect(a, b)
+	case *Set:
+		b, ok := inB.(*Set)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfSet(a, b)
+	case *SetTransaction:
+		b, ok := inB.(*SetTransaction)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfSetTransaction(a, b)
+	case *Show:
+		b, ok := inB.(*Show)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfShow(a, b)
+	case *Stream:
+		b, ok := inB.(*Stream)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfStream(a, b)
+	case *TruncateTable:
+		b, ok := inB.(*TruncateTable)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfTruncateTable(a, b)
+	case *Union:
+		b, ok := inB.(*Union)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfUnion(a, b)
+	case *UnlockTables:
+		b, ok := inB.(*UnlockTables)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfUnlockTables(a, b)
+	case *Update:
+		b, ok := inB.(*Update)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfUpdate(a, b)
+	case *Use:
+		b, ok := inB.(*Use)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfUse(a, b)
+	case *VStream:
+		b, ok := inB.(*VStream)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfVStream(a, b)
+	default:
+		// this should never happen
+		return false
+	}
+}
+
 // CloneTableExpr creates a deep clone of the input.
 func CloneTableExpr(in TableExpr) TableExpr {
 	if in == nil {
@@ -759,6 +2616,39 @@ func CloneTableExpr(in TableExpr) TableExpr {
 	}
 }
 
+// EqualsTableExpr does deep equals between the two objects.
+func EqualsTableExpr(inA, inB TableExpr) bool {
+	if inA == nil && inB == nil {
+		return true
+	}
+	if inA == nil || inB == nil {
+		return false
+	}
+	switch a := inA.(type) {
+	case *AliasedTableExpr:
+		b, ok := inB.(*AliasedTableExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfAliasedTableExpr(a, b)
+	case *JoinTableExpr:
+		b, ok := inB.(*JoinTableExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfJoinTableExpr(a, b)
+	case *ParenTableExpr:
+		b, ok := inB.(*ParenTableExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfParenTableExpr(a, b)
+	default:
+		// this should never happen
+		return false
+	}
+}
+
 // CloneRefOfAddColumns creates a deep clone of the input.
 func CloneRefOfAddColumns(n *AddColumns) *AddColumns {
 	if n == nil {
@@ -771,6 +2661,19 @@ func CloneRefOfAddColumns(n *AddColumns) *AddColumns {
 	return &out
 }
 
+// EqualsRefOfAddColumns does deep equals between the two objects.
+func EqualsRefOfAddColumns(a, b *AddColumns) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsSliceOfRefOfColumnDefinition(a.Columns, b.Columns) &&
+		EqualsRefOfColName(a.First, b.First) &&
+		EqualsRefOfColName(a.After, b.After)
+}
+
 // CloneRefOfAddConstraintDefinition creates a deep clone of the input.
 func CloneRefOfAddConstraintDefinition(n *AddConstraintDefinition) *AddConstraintDefinition {
 	if n == nil {
@@ -779,6 +2682,17 @@ func CloneRefOfAddConstraintDefinition(n *AddConstraintDefinition) *AddConstrain
 	out := *n
 	out.ConstraintDefinition = CloneRefOfConstraintDefinition(n.ConstraintDefinition)
 	return &out
+}
+
+// EqualsRefOfAddConstraintDefinition does deep equals between the two objects.
+func EqualsRefOfAddConstraintDefinition(a, b *AddConstraintDefinition) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsRefOfConstraintDefinition(a.ConstraintDefinition, b.ConstraintDefinition)
 }
 
 // CloneRefOfAddIndexDefinition creates a deep clone of the input.
@@ -791,6 +2705,17 @@ func CloneRefOfAddIndexDefinition(n *AddIndexDefinition) *AddIndexDefinition {
 	return &out
 }
 
+// EqualsRefOfAddIndexDefinition does deep equals between the two objects.
+func EqualsRefOfAddIndexDefinition(a, b *AddIndexDefinition) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsRefOfIndexDefinition(a.IndexDefinition, b.IndexDefinition)
+}
+
 // CloneRefOfAlterCharset creates a deep clone of the input.
 func CloneRefOfAlterCharset(n *AlterCharset) *AlterCharset {
 	if n == nil {
@@ -798,6 +2723,18 @@ func CloneRefOfAlterCharset(n *AlterCharset) *AlterCharset {
 	}
 	out := *n
 	return &out
+}
+
+// EqualsRefOfAlterCharset does deep equals between the two objects.
+func EqualsRefOfAlterCharset(a, b *AlterCharset) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.CharacterSet == b.CharacterSet &&
+		a.Collate == b.Collate
 }
 
 // CloneRefOfAlterColumn creates a deep clone of the input.
@@ -809,6 +2746,19 @@ func CloneRefOfAlterColumn(n *AlterColumn) *AlterColumn {
 	out.Column = CloneRefOfColName(n.Column)
 	out.DefaultVal = CloneExpr(n.DefaultVal)
 	return &out
+}
+
+// EqualsRefOfAlterColumn does deep equals between the two objects.
+func EqualsRefOfAlterColumn(a, b *AlterColumn) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.DropDefault == b.DropDefault &&
+		EqualsRefOfColName(a.Column, b.Column) &&
+		EqualsExpr(a.DefaultVal, b.DefaultVal)
 }
 
 // CloneRefOfChangeColumn creates a deep clone of the input.
@@ -824,6 +2774,20 @@ func CloneRefOfChangeColumn(n *ChangeColumn) *ChangeColumn {
 	return &out
 }
 
+// EqualsRefOfChangeColumn does deep equals between the two objects.
+func EqualsRefOfChangeColumn(a, b *ChangeColumn) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsRefOfColName(a.OldColumn, b.OldColumn) &&
+		EqualsRefOfColumnDefinition(a.NewColDefinition, b.NewColDefinition) &&
+		EqualsRefOfColName(a.First, b.First) &&
+		EqualsRefOfColName(a.After, b.After)
+}
+
 // CloneRefOfDropColumn creates a deep clone of the input.
 func CloneRefOfDropColumn(n *DropColumn) *DropColumn {
 	if n == nil {
@@ -832,6 +2796,17 @@ func CloneRefOfDropColumn(n *DropColumn) *DropColumn {
 	out := *n
 	out.Name = CloneRefOfColName(n.Name)
 	return &out
+}
+
+// EqualsRefOfDropColumn does deep equals between the two objects.
+func EqualsRefOfDropColumn(a, b *DropColumn) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsRefOfColName(a.Name, b.Name)
 }
 
 // CloneRefOfDropKey creates a deep clone of the input.
@@ -843,6 +2818,18 @@ func CloneRefOfDropKey(n *DropKey) *DropKey {
 	return &out
 }
 
+// EqualsRefOfDropKey does deep equals between the two objects.
+func EqualsRefOfDropKey(a, b *DropKey) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Name == b.Name &&
+		a.Type == b.Type
+}
+
 // CloneRefOfForce creates a deep clone of the input.
 func CloneRefOfForce(n *Force) *Force {
 	if n == nil {
@@ -850,6 +2837,17 @@ func CloneRefOfForce(n *Force) *Force {
 	}
 	out := *n
 	return &out
+}
+
+// EqualsRefOfForce does deep equals between the two objects.
+func EqualsRefOfForce(a, b *Force) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return true
 }
 
 // CloneRefOfKeyState creates a deep clone of the input.
@@ -861,6 +2859,17 @@ func CloneRefOfKeyState(n *KeyState) *KeyState {
 	return &out
 }
 
+// EqualsRefOfKeyState does deep equals between the two objects.
+func EqualsRefOfKeyState(a, b *KeyState) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Enable == b.Enable
+}
+
 // CloneRefOfLockOption creates a deep clone of the input.
 func CloneRefOfLockOption(n *LockOption) *LockOption {
 	if n == nil {
@@ -868,6 +2877,17 @@ func CloneRefOfLockOption(n *LockOption) *LockOption {
 	}
 	out := *n
 	return &out
+}
+
+// EqualsRefOfLockOption does deep equals between the two objects.
+func EqualsRefOfLockOption(a, b *LockOption) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Type == b.Type
 }
 
 // CloneRefOfModifyColumn creates a deep clone of the input.
@@ -882,6 +2902,19 @@ func CloneRefOfModifyColumn(n *ModifyColumn) *ModifyColumn {
 	return &out
 }
 
+// EqualsRefOfModifyColumn does deep equals between the two objects.
+func EqualsRefOfModifyColumn(a, b *ModifyColumn) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsRefOfColumnDefinition(a.NewColDefinition, b.NewColDefinition) &&
+		EqualsRefOfColName(a.First, b.First) &&
+		EqualsRefOfColName(a.After, b.After)
+}
+
 // CloneRefOfOrderByOption creates a deep clone of the input.
 func CloneRefOfOrderByOption(n *OrderByOption) *OrderByOption {
 	if n == nil {
@@ -892,6 +2925,17 @@ func CloneRefOfOrderByOption(n *OrderByOption) *OrderByOption {
 	return &out
 }
 
+// EqualsRefOfOrderByOption does deep equals between the two objects.
+func EqualsRefOfOrderByOption(a, b *OrderByOption) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsColumns(a.Cols, b.Cols)
+}
+
 // CloneRefOfRenameIndex creates a deep clone of the input.
 func CloneRefOfRenameIndex(n *RenameIndex) *RenameIndex {
 	if n == nil {
@@ -899,6 +2943,18 @@ func CloneRefOfRenameIndex(n *RenameIndex) *RenameIndex {
 	}
 	out := *n
 	return &out
+}
+
+// EqualsRefOfRenameIndex does deep equals between the two objects.
+func EqualsRefOfRenameIndex(a, b *RenameIndex) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.OldName == b.OldName &&
+		a.NewName == b.NewName
 }
 
 // CloneRefOfRenameTableName creates a deep clone of the input.
@@ -911,6 +2967,17 @@ func CloneRefOfRenameTableName(n *RenameTableName) *RenameTableName {
 	return &out
 }
 
+// EqualsRefOfRenameTableName does deep equals between the two objects.
+func EqualsRefOfRenameTableName(a, b *RenameTableName) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsTableName(a.Table, b.Table)
+}
+
 // CloneTableOptions creates a deep clone of the input.
 func CloneTableOptions(n TableOptions) TableOptions {
 	res := make(TableOptions, 0, len(n))
@@ -918,6 +2985,19 @@ func CloneTableOptions(n TableOptions) TableOptions {
 		res = append(res, CloneRefOfTableOption(x))
 	}
 	return res
+}
+
+// EqualsTableOptions does deep equals between the two objects.
+func EqualsTableOptions(a, b TableOptions) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		if !EqualsRefOfTableOption(a[i], b[i]) {
+			return false
+		}
+	}
+	return true
 }
 
 // CloneRefOfTablespaceOperation creates a deep clone of the input.
@@ -929,6 +3009,17 @@ func CloneRefOfTablespaceOperation(n *TablespaceOperation) *TablespaceOperation 
 	return &out
 }
 
+// EqualsRefOfTablespaceOperation does deep equals between the two objects.
+func EqualsRefOfTablespaceOperation(a, b *TablespaceOperation) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Import == b.Import
+}
+
 // CloneRefOfValidation creates a deep clone of the input.
 func CloneRefOfValidation(n *Validation) *Validation {
 	if n == nil {
@@ -938,11 +3029,35 @@ func CloneRefOfValidation(n *Validation) *Validation {
 	return &out
 }
 
+// EqualsRefOfValidation does deep equals between the two objects.
+func EqualsRefOfValidation(a, b *Validation) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.With == b.With
+}
+
 // CloneListArg creates a deep clone of the input.
 func CloneListArg(n ListArg) ListArg {
 	res := make(ListArg, 0, len(n))
 	copy(res, n)
 	return res
+}
+
+// EqualsListArg does deep equals between the two objects.
+func EqualsListArg(a, b ListArg) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
 
 // CloneRefOfSubquery creates a deep clone of the input.
@@ -955,6 +3070,17 @@ func CloneRefOfSubquery(n *Subquery) *Subquery {
 	return &out
 }
 
+// EqualsRefOfSubquery does deep equals between the two objects.
+func EqualsRefOfSubquery(a, b *Subquery) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsSelectStatement(a.Select, b.Select)
+}
+
 // CloneValTuple creates a deep clone of the input.
 func CloneValTuple(n ValTuple) ValTuple {
 	res := make(ValTuple, 0, len(n))
@@ -962,6 +3088,19 @@ func CloneValTuple(n ValTuple) ValTuple {
 		res = append(res, CloneExpr(x))
 	}
 	return res
+}
+
+// EqualsValTuple does deep equals between the two objects.
+func EqualsValTuple(a, b ValTuple) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		if !EqualsExpr(a[i], b[i]) {
+			return false
+		}
+	}
+	return true
 }
 
 // CloneRefOfCheckConstraintDefinition creates a deep clone of the input.
@@ -972,6 +3111,18 @@ func CloneRefOfCheckConstraintDefinition(n *CheckConstraintDefinition) *CheckCon
 	out := *n
 	out.Expr = CloneExpr(n.Expr)
 	return &out
+}
+
+// EqualsRefOfCheckConstraintDefinition does deep equals between the two objects.
+func EqualsRefOfCheckConstraintDefinition(a, b *CheckConstraintDefinition) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Enforced == b.Enforced &&
+		EqualsExpr(a.Expr, b.Expr)
 }
 
 // CloneRefOfForeignKeyDefinition creates a deep clone of the input.
@@ -986,6 +3137,21 @@ func CloneRefOfForeignKeyDefinition(n *ForeignKeyDefinition) *ForeignKeyDefiniti
 	return &out
 }
 
+// EqualsRefOfForeignKeyDefinition does deep equals between the two objects.
+func EqualsRefOfForeignKeyDefinition(a, b *ForeignKeyDefinition) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsColumns(a.Source, b.Source) &&
+		EqualsTableName(a.ReferencedTable, b.ReferencedTable) &&
+		EqualsColumns(a.ReferencedColumns, b.ReferencedColumns) &&
+		a.OnDelete == b.OnDelete &&
+		a.OnUpdate == b.OnUpdate
+}
+
 // CloneRefOfAlterDatabase creates a deep clone of the input.
 func CloneRefOfAlterDatabase(n *AlterDatabase) *AlterDatabase {
 	if n == nil {
@@ -994,6 +3160,20 @@ func CloneRefOfAlterDatabase(n *AlterDatabase) *AlterDatabase {
 	out := *n
 	out.AlterOptions = CloneSliceOfCollateAndCharset(n.AlterOptions)
 	return &out
+}
+
+// EqualsRefOfAlterDatabase does deep equals between the two objects.
+func EqualsRefOfAlterDatabase(a, b *AlterDatabase) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.DBName == b.DBName &&
+		a.UpdateDataDirectory == b.UpdateDataDirectory &&
+		a.FullyParsed == b.FullyParsed &&
+		EqualsSliceOfCollateAndCharset(a.AlterOptions, b.AlterOptions)
 }
 
 // CloneRefOfCreateDatabase creates a deep clone of the input.
@@ -1007,6 +3187,21 @@ func CloneRefOfCreateDatabase(n *CreateDatabase) *CreateDatabase {
 	return &out
 }
 
+// EqualsRefOfCreateDatabase does deep equals between the two objects.
+func EqualsRefOfCreateDatabase(a, b *CreateDatabase) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.DBName == b.DBName &&
+		a.IfNotExists == b.IfNotExists &&
+		a.FullyParsed == b.FullyParsed &&
+		EqualsComments(a.Comments, b.Comments) &&
+		EqualsSliceOfCollateAndCharset(a.CreateOptions, b.CreateOptions)
+}
+
 // CloneRefOfDropDatabase creates a deep clone of the input.
 func CloneRefOfDropDatabase(n *DropDatabase) *DropDatabase {
 	if n == nil {
@@ -1015,6 +3210,19 @@ func CloneRefOfDropDatabase(n *DropDatabase) *DropDatabase {
 	out := *n
 	out.Comments = CloneComments(n.Comments)
 	return &out
+}
+
+// EqualsRefOfDropDatabase does deep equals between the two objects.
+func EqualsRefOfDropDatabase(a, b *DropDatabase) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.DBName == b.DBName &&
+		a.IfExists == b.IfExists &&
+		EqualsComments(a.Comments, b.Comments)
 }
 
 // CloneRefOfAlterTable creates a deep clone of the input.
@@ -1029,6 +3237,20 @@ func CloneRefOfAlterTable(n *AlterTable) *AlterTable {
 	return &out
 }
 
+// EqualsRefOfAlterTable does deep equals between the two objects.
+func EqualsRefOfAlterTable(a, b *AlterTable) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.FullyParsed == b.FullyParsed &&
+		EqualsTableName(a.Table, b.Table) &&
+		EqualsSliceOfAlterOption(a.AlterOptions, b.AlterOptions) &&
+		EqualsRefOfPartitionSpec(a.PartitionSpec, b.PartitionSpec)
+}
+
 // CloneRefOfAlterView creates a deep clone of the input.
 func CloneRefOfAlterView(n *AlterView) *AlterView {
 	if n == nil {
@@ -1039,6 +3261,23 @@ func CloneRefOfAlterView(n *AlterView) *AlterView {
 	out.Columns = CloneColumns(n.Columns)
 	out.Select = CloneSelectStatement(n.Select)
 	return &out
+}
+
+// EqualsRefOfAlterView does deep equals between the two objects.
+func EqualsRefOfAlterView(a, b *AlterView) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Algorithm == b.Algorithm &&
+		a.Definer == b.Definer &&
+		a.Security == b.Security &&
+		a.CheckOption == b.CheckOption &&
+		EqualsTableName(a.ViewName, b.ViewName) &&
+		EqualsColumns(a.Columns, b.Columns) &&
+		EqualsSelectStatement(a.Select, b.Select)
 }
 
 // CloneRefOfCreateTable creates a deep clone of the input.
@@ -1053,6 +3292,22 @@ func CloneRefOfCreateTable(n *CreateTable) *CreateTable {
 	return &out
 }
 
+// EqualsRefOfCreateTable does deep equals between the two objects.
+func EqualsRefOfCreateTable(a, b *CreateTable) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Temp == b.Temp &&
+		a.IfNotExists == b.IfNotExists &&
+		a.FullyParsed == b.FullyParsed &&
+		EqualsTableName(a.Table, b.Table) &&
+		EqualsRefOfTableSpec(a.TableSpec, b.TableSpec) &&
+		EqualsRefOfOptLike(a.OptLike, b.OptLike)
+}
+
 // CloneRefOfCreateView creates a deep clone of the input.
 func CloneRefOfCreateView(n *CreateView) *CreateView {
 	if n == nil {
@@ -1065,6 +3320,24 @@ func CloneRefOfCreateView(n *CreateView) *CreateView {
 	return &out
 }
 
+// EqualsRefOfCreateView does deep equals between the two objects.
+func EqualsRefOfCreateView(a, b *CreateView) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Algorithm == b.Algorithm &&
+		a.Definer == b.Definer &&
+		a.Security == b.Security &&
+		a.CheckOption == b.CheckOption &&
+		a.IsReplace == b.IsReplace &&
+		EqualsTableName(a.ViewName, b.ViewName) &&
+		EqualsColumns(a.Columns, b.Columns) &&
+		EqualsSelectStatement(a.Select, b.Select)
+}
+
 // CloneRefOfDropTable creates a deep clone of the input.
 func CloneRefOfDropTable(n *DropTable) *DropTable {
 	if n == nil {
@@ -1073,6 +3346,19 @@ func CloneRefOfDropTable(n *DropTable) *DropTable {
 	out := *n
 	out.FromTables = CloneTableNames(n.FromTables)
 	return &out
+}
+
+// EqualsRefOfDropTable does deep equals between the two objects.
+func EqualsRefOfDropTable(a, b *DropTable) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Temp == b.Temp &&
+		a.IfExists == b.IfExists &&
+		EqualsTableNames(a.FromTables, b.FromTables)
 }
 
 // CloneRefOfDropView creates a deep clone of the input.
@@ -1085,6 +3371,18 @@ func CloneRefOfDropView(n *DropView) *DropView {
 	return &out
 }
 
+// EqualsRefOfDropView does deep equals between the two objects.
+func EqualsRefOfDropView(a, b *DropView) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.IfExists == b.IfExists &&
+		EqualsTableNames(a.FromTables, b.FromTables)
+}
+
 // CloneRefOfRenameTable creates a deep clone of the input.
 func CloneRefOfRenameTable(n *RenameTable) *RenameTable {
 	if n == nil {
@@ -1093,6 +3391,17 @@ func CloneRefOfRenameTable(n *RenameTable) *RenameTable {
 	out := *n
 	out.TablePairs = CloneSliceOfRefOfRenameTablePair(n.TablePairs)
 	return &out
+}
+
+// EqualsRefOfRenameTable does deep equals between the two objects.
+func EqualsRefOfRenameTable(a, b *RenameTable) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsSliceOfRefOfRenameTablePair(a.TablePairs, b.TablePairs)
 }
 
 // CloneRefOfTruncateTable creates a deep clone of the input.
@@ -1105,6 +3414,17 @@ func CloneRefOfTruncateTable(n *TruncateTable) *TruncateTable {
 	return &out
 }
 
+// EqualsRefOfTruncateTable does deep equals between the two objects.
+func EqualsRefOfTruncateTable(a, b *TruncateTable) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsTableName(a.Table, b.Table)
+}
+
 // CloneRefOfExplainStmt creates a deep clone of the input.
 func CloneRefOfExplainStmt(n *ExplainStmt) *ExplainStmt {
 	if n == nil {
@@ -1115,6 +3435,18 @@ func CloneRefOfExplainStmt(n *ExplainStmt) *ExplainStmt {
 	return &out
 }
 
+// EqualsRefOfExplainStmt does deep equals between the two objects.
+func EqualsRefOfExplainStmt(a, b *ExplainStmt) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Type == b.Type &&
+		EqualsStatement(a.Statement, b.Statement)
+}
+
 // CloneRefOfExplainTab creates a deep clone of the input.
 func CloneRefOfExplainTab(n *ExplainTab) *ExplainTab {
 	if n == nil {
@@ -1123,6 +3455,18 @@ func CloneRefOfExplainTab(n *ExplainTab) *ExplainTab {
 	out := *n
 	out.Table = CloneTableName(n.Table)
 	return &out
+}
+
+// EqualsRefOfExplainTab does deep equals between the two objects.
+func EqualsRefOfExplainTab(a, b *ExplainTab) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Wild == b.Wild &&
+		EqualsTableName(a.Table, b.Table)
 }
 
 // CloneRefOfAndExpr creates a deep clone of the input.
@@ -1136,6 +3480,18 @@ func CloneRefOfAndExpr(n *AndExpr) *AndExpr {
 	return &out
 }
 
+// EqualsRefOfAndExpr does deep equals between the two objects.
+func EqualsRefOfAndExpr(a, b *AndExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsExpr(a.Left, b.Left) &&
+		EqualsExpr(a.Right, b.Right)
+}
+
 // CloneRefOfBinaryExpr creates a deep clone of the input.
 func CloneRefOfBinaryExpr(n *BinaryExpr) *BinaryExpr {
 	if n == nil {
@@ -1145,6 +3501,19 @@ func CloneRefOfBinaryExpr(n *BinaryExpr) *BinaryExpr {
 	out.Left = CloneExpr(n.Left)
 	out.Right = CloneExpr(n.Right)
 	return &out
+}
+
+// EqualsRefOfBinaryExpr does deep equals between the two objects.
+func EqualsRefOfBinaryExpr(a, b *BinaryExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Operator == b.Operator &&
+		EqualsExpr(a.Left, b.Left) &&
+		EqualsExpr(a.Right, b.Right)
 }
 
 // CloneRefOfCaseExpr creates a deep clone of the input.
@@ -1159,9 +3528,34 @@ func CloneRefOfCaseExpr(n *CaseExpr) *CaseExpr {
 	return &out
 }
 
+// EqualsRefOfCaseExpr does deep equals between the two objects.
+func EqualsRefOfCaseExpr(a, b *CaseExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsExpr(a.Expr, b.Expr) &&
+		EqualsSliceOfRefOfWhen(a.Whens, b.Whens) &&
+		EqualsExpr(a.Else, b.Else)
+}
+
 // CloneRefOfColName creates a deep clone of the input.
 func CloneRefOfColName(n *ColName) *ColName {
 	return n
+}
+
+// EqualsRefOfColName does deep equals between the two objects.
+func EqualsRefOfColName(a, b *ColName) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsColIdent(a.Name, b.Name) &&
+		EqualsTableName(a.Qualifier, b.Qualifier)
 }
 
 // CloneRefOfCollateExpr creates a deep clone of the input.
@@ -1172,6 +3566,18 @@ func CloneRefOfCollateExpr(n *CollateExpr) *CollateExpr {
 	out := *n
 	out.Expr = CloneExpr(n.Expr)
 	return &out
+}
+
+// EqualsRefOfCollateExpr does deep equals between the two objects.
+func EqualsRefOfCollateExpr(a, b *CollateExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Charset == b.Charset &&
+		EqualsExpr(a.Expr, b.Expr)
 }
 
 // CloneRefOfComparisonExpr creates a deep clone of the input.
@@ -1186,6 +3592,20 @@ func CloneRefOfComparisonExpr(n *ComparisonExpr) *ComparisonExpr {
 	return &out
 }
 
+// EqualsRefOfComparisonExpr does deep equals between the two objects.
+func EqualsRefOfComparisonExpr(a, b *ComparisonExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Operator == b.Operator &&
+		EqualsExpr(a.Left, b.Left) &&
+		EqualsExpr(a.Right, b.Right) &&
+		EqualsExpr(a.Escape, b.Escape)
+}
+
 // CloneRefOfConvertExpr creates a deep clone of the input.
 func CloneRefOfConvertExpr(n *ConvertExpr) *ConvertExpr {
 	if n == nil {
@@ -1197,6 +3617,18 @@ func CloneRefOfConvertExpr(n *ConvertExpr) *ConvertExpr {
 	return &out
 }
 
+// EqualsRefOfConvertExpr does deep equals between the two objects.
+func EqualsRefOfConvertExpr(a, b *ConvertExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsExpr(a.Expr, b.Expr) &&
+		EqualsRefOfConvertType(a.Type, b.Type)
+}
+
 // CloneRefOfConvertUsingExpr creates a deep clone of the input.
 func CloneRefOfConvertUsingExpr(n *ConvertUsingExpr) *ConvertUsingExpr {
 	if n == nil {
@@ -1205,6 +3637,18 @@ func CloneRefOfConvertUsingExpr(n *ConvertUsingExpr) *ConvertUsingExpr {
 	out := *n
 	out.Expr = CloneExpr(n.Expr)
 	return &out
+}
+
+// EqualsRefOfConvertUsingExpr does deep equals between the two objects.
+func EqualsRefOfConvertUsingExpr(a, b *ConvertUsingExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Type == b.Type &&
+		EqualsExpr(a.Expr, b.Expr)
 }
 
 // CloneRefOfCurTimeFuncExpr creates a deep clone of the input.
@@ -1218,6 +3662,18 @@ func CloneRefOfCurTimeFuncExpr(n *CurTimeFuncExpr) *CurTimeFuncExpr {
 	return &out
 }
 
+// EqualsRefOfCurTimeFuncExpr does deep equals between the two objects.
+func EqualsRefOfCurTimeFuncExpr(a, b *CurTimeFuncExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsColIdent(a.Name, b.Name) &&
+		EqualsExpr(a.Fsp, b.Fsp)
+}
+
 // CloneRefOfDefault creates a deep clone of the input.
 func CloneRefOfDefault(n *Default) *Default {
 	if n == nil {
@@ -1225,6 +3681,17 @@ func CloneRefOfDefault(n *Default) *Default {
 	}
 	out := *n
 	return &out
+}
+
+// EqualsRefOfDefault does deep equals between the two objects.
+func EqualsRefOfDefault(a, b *Default) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.ColName == b.ColName
 }
 
 // CloneRefOfExistsExpr creates a deep clone of the input.
@@ -1235,6 +3702,17 @@ func CloneRefOfExistsExpr(n *ExistsExpr) *ExistsExpr {
 	out := *n
 	out.Subquery = CloneRefOfSubquery(n.Subquery)
 	return &out
+}
+
+// EqualsRefOfExistsExpr does deep equals between the two objects.
+func EqualsRefOfExistsExpr(a, b *ExistsExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsRefOfSubquery(a.Subquery, b.Subquery)
 }
 
 // CloneRefOfFuncExpr creates a deep clone of the input.
@@ -1249,6 +3727,20 @@ func CloneRefOfFuncExpr(n *FuncExpr) *FuncExpr {
 	return &out
 }
 
+// EqualsRefOfFuncExpr does deep equals between the two objects.
+func EqualsRefOfFuncExpr(a, b *FuncExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Distinct == b.Distinct &&
+		EqualsTableIdent(a.Qualifier, b.Qualifier) &&
+		EqualsColIdent(a.Name, b.Name) &&
+		EqualsSelectExprs(a.Exprs, b.Exprs)
+}
+
 // CloneRefOfGroupConcatExpr creates a deep clone of the input.
 func CloneRefOfGroupConcatExpr(n *GroupConcatExpr) *GroupConcatExpr {
 	if n == nil {
@@ -1261,6 +3753,21 @@ func CloneRefOfGroupConcatExpr(n *GroupConcatExpr) *GroupConcatExpr {
 	return &out
 }
 
+// EqualsRefOfGroupConcatExpr does deep equals between the two objects.
+func EqualsRefOfGroupConcatExpr(a, b *GroupConcatExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Distinct == b.Distinct &&
+		a.Separator == b.Separator &&
+		EqualsSelectExprs(a.Exprs, b.Exprs) &&
+		EqualsOrderBy(a.OrderBy, b.OrderBy) &&
+		EqualsRefOfLimit(a.Limit, b.Limit)
+}
+
 // CloneRefOfIntervalExpr creates a deep clone of the input.
 func CloneRefOfIntervalExpr(n *IntervalExpr) *IntervalExpr {
 	if n == nil {
@@ -1269,6 +3776,18 @@ func CloneRefOfIntervalExpr(n *IntervalExpr) *IntervalExpr {
 	out := *n
 	out.Expr = CloneExpr(n.Expr)
 	return &out
+}
+
+// EqualsRefOfIntervalExpr does deep equals between the two objects.
+func EqualsRefOfIntervalExpr(a, b *IntervalExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Unit == b.Unit &&
+		EqualsExpr(a.Expr, b.Expr)
 }
 
 // CloneRefOfIsExpr creates a deep clone of the input.
@@ -1281,6 +3800,18 @@ func CloneRefOfIsExpr(n *IsExpr) *IsExpr {
 	return &out
 }
 
+// EqualsRefOfIsExpr does deep equals between the two objects.
+func EqualsRefOfIsExpr(a, b *IsExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Operator == b.Operator &&
+		EqualsExpr(a.Expr, b.Expr)
+}
+
 // CloneRefOfLiteral creates a deep clone of the input.
 func CloneRefOfLiteral(n *Literal) *Literal {
 	if n == nil {
@@ -1288,6 +3819,18 @@ func CloneRefOfLiteral(n *Literal) *Literal {
 	}
 	out := *n
 	return &out
+}
+
+// EqualsRefOfLiteral does deep equals between the two objects.
+func EqualsRefOfLiteral(a, b *Literal) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Val == b.Val &&
+		a.Type == b.Type
 }
 
 // CloneRefOfMatchExpr creates a deep clone of the input.
@@ -1301,6 +3844,19 @@ func CloneRefOfMatchExpr(n *MatchExpr) *MatchExpr {
 	return &out
 }
 
+// EqualsRefOfMatchExpr does deep equals between the two objects.
+func EqualsRefOfMatchExpr(a, b *MatchExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsSelectExprs(a.Columns, b.Columns) &&
+		EqualsExpr(a.Expr, b.Expr) &&
+		a.Option == b.Option
+}
+
 // CloneRefOfNotExpr creates a deep clone of the input.
 func CloneRefOfNotExpr(n *NotExpr) *NotExpr {
 	if n == nil {
@@ -1311,6 +3867,17 @@ func CloneRefOfNotExpr(n *NotExpr) *NotExpr {
 	return &out
 }
 
+// EqualsRefOfNotExpr does deep equals between the two objects.
+func EqualsRefOfNotExpr(a, b *NotExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsExpr(a.Expr, b.Expr)
+}
+
 // CloneRefOfNullVal creates a deep clone of the input.
 func CloneRefOfNullVal(n *NullVal) *NullVal {
 	if n == nil {
@@ -1318,6 +3885,17 @@ func CloneRefOfNullVal(n *NullVal) *NullVal {
 	}
 	out := *n
 	return &out
+}
+
+// EqualsRefOfNullVal does deep equals between the two objects.
+func EqualsRefOfNullVal(a, b *NullVal) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return true
 }
 
 // CloneRefOfOrExpr creates a deep clone of the input.
@@ -1331,6 +3909,18 @@ func CloneRefOfOrExpr(n *OrExpr) *OrExpr {
 	return &out
 }
 
+// EqualsRefOfOrExpr does deep equals between the two objects.
+func EqualsRefOfOrExpr(a, b *OrExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsExpr(a.Left, b.Left) &&
+		EqualsExpr(a.Right, b.Right)
+}
+
 // CloneRefOfRangeCond creates a deep clone of the input.
 func CloneRefOfRangeCond(n *RangeCond) *RangeCond {
 	if n == nil {
@@ -1341,6 +3931,20 @@ func CloneRefOfRangeCond(n *RangeCond) *RangeCond {
 	out.From = CloneExpr(n.From)
 	out.To = CloneExpr(n.To)
 	return &out
+}
+
+// EqualsRefOfRangeCond does deep equals between the two objects.
+func EqualsRefOfRangeCond(a, b *RangeCond) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Operator == b.Operator &&
+		EqualsExpr(a.Left, b.Left) &&
+		EqualsExpr(a.From, b.From) &&
+		EqualsExpr(a.To, b.To)
 }
 
 // CloneRefOfSubstrExpr creates a deep clone of the input.
@@ -1356,6 +3960,20 @@ func CloneRefOfSubstrExpr(n *SubstrExpr) *SubstrExpr {
 	return &out
 }
 
+// EqualsRefOfSubstrExpr does deep equals between the two objects.
+func EqualsRefOfSubstrExpr(a, b *SubstrExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsRefOfColName(a.Name, b.Name) &&
+		EqualsRefOfLiteral(a.StrVal, b.StrVal) &&
+		EqualsExpr(a.From, b.From) &&
+		EqualsExpr(a.To, b.To)
+}
+
 // CloneRefOfTimestampFuncExpr creates a deep clone of the input.
 func CloneRefOfTimestampFuncExpr(n *TimestampFuncExpr) *TimestampFuncExpr {
 	if n == nil {
@@ -1365,6 +3983,20 @@ func CloneRefOfTimestampFuncExpr(n *TimestampFuncExpr) *TimestampFuncExpr {
 	out.Expr1 = CloneExpr(n.Expr1)
 	out.Expr2 = CloneExpr(n.Expr2)
 	return &out
+}
+
+// EqualsRefOfTimestampFuncExpr does deep equals between the two objects.
+func EqualsRefOfTimestampFuncExpr(a, b *TimestampFuncExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Name == b.Name &&
+		a.Unit == b.Unit &&
+		EqualsExpr(a.Expr1, b.Expr1) &&
+		EqualsExpr(a.Expr2, b.Expr2)
 }
 
 // CloneRefOfUnaryExpr creates a deep clone of the input.
@@ -1377,6 +4009,18 @@ func CloneRefOfUnaryExpr(n *UnaryExpr) *UnaryExpr {
 	return &out
 }
 
+// EqualsRefOfUnaryExpr does deep equals between the two objects.
+func EqualsRefOfUnaryExpr(a, b *UnaryExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Operator == b.Operator &&
+		EqualsExpr(a.Expr, b.Expr)
+}
+
 // CloneRefOfValuesFuncExpr creates a deep clone of the input.
 func CloneRefOfValuesFuncExpr(n *ValuesFuncExpr) *ValuesFuncExpr {
 	if n == nil {
@@ -1385,6 +4029,17 @@ func CloneRefOfValuesFuncExpr(n *ValuesFuncExpr) *ValuesFuncExpr {
 	out := *n
 	out.Name = CloneRefOfColName(n.Name)
 	return &out
+}
+
+// EqualsRefOfValuesFuncExpr does deep equals between the two objects.
+func EqualsRefOfValuesFuncExpr(a, b *ValuesFuncExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsRefOfColName(a.Name, b.Name)
 }
 
 // CloneRefOfXorExpr creates a deep clone of the input.
@@ -1398,6 +4053,18 @@ func CloneRefOfXorExpr(n *XorExpr) *XorExpr {
 	return &out
 }
 
+// EqualsRefOfXorExpr does deep equals between the two objects.
+func EqualsRefOfXorExpr(a, b *XorExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsExpr(a.Left, b.Left) &&
+		EqualsExpr(a.Right, b.Right)
+}
+
 // CloneRefOfParenSelect creates a deep clone of the input.
 func CloneRefOfParenSelect(n *ParenSelect) *ParenSelect {
 	if n == nil {
@@ -1408,13 +4075,24 @@ func CloneRefOfParenSelect(n *ParenSelect) *ParenSelect {
 	return &out
 }
 
+// EqualsRefOfParenSelect does deep equals between the two objects.
+func EqualsRefOfParenSelect(a, b *ParenSelect) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsSelectStatement(a.Select, b.Select)
+}
+
 // CloneRefOfSelect creates a deep clone of the input.
 func CloneRefOfSelect(n *Select) *Select {
 	if n == nil {
 		return nil
 	}
 	out := *n
-	out.Cache = CloneRefOfbool(n.Cache)
+	out.Cache = CloneRefOfBool(n.Cache)
 	out.Comments = CloneComments(n.Comments)
 	out.SelectExprs = CloneSelectExprs(n.SelectExprs)
 	out.From = CloneTableExprs(n.From)
@@ -1425,6 +4103,30 @@ func CloneRefOfSelect(n *Select) *Select {
 	out.Limit = CloneRefOfLimit(n.Limit)
 	out.Into = CloneRefOfSelectInto(n.Into)
 	return &out
+}
+
+// EqualsRefOfSelect does deep equals between the two objects.
+func EqualsRefOfSelect(a, b *Select) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Distinct == b.Distinct &&
+		a.StraightJoinHint == b.StraightJoinHint &&
+		a.SQLCalcFoundRows == b.SQLCalcFoundRows &&
+		EqualsRefOfBool(a.Cache, b.Cache) &&
+		EqualsComments(a.Comments, b.Comments) &&
+		EqualsSelectExprs(a.SelectExprs, b.SelectExprs) &&
+		EqualsTableExprs(a.From, b.From) &&
+		EqualsRefOfWhere(a.Where, b.Where) &&
+		EqualsGroupBy(a.GroupBy, b.GroupBy) &&
+		EqualsRefOfWhere(a.Having, b.Having) &&
+		EqualsOrderBy(a.OrderBy, b.OrderBy) &&
+		EqualsRefOfLimit(a.Limit, b.Limit) &&
+		a.Lock == b.Lock &&
+		EqualsRefOfSelectInto(a.Into, b.Into)
 }
 
 // CloneRefOfUnion creates a deep clone of the input.
@@ -1440,6 +4142,21 @@ func CloneRefOfUnion(n *Union) *Union {
 	return &out
 }
 
+// EqualsRefOfUnion does deep equals between the two objects.
+func EqualsRefOfUnion(a, b *Union) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsSelectStatement(a.FirstStatement, b.FirstStatement) &&
+		EqualsSliceOfRefOfUnionSelect(a.UnionSelects, b.UnionSelects) &&
+		EqualsOrderBy(a.OrderBy, b.OrderBy) &&
+		EqualsRefOfLimit(a.Limit, b.Limit) &&
+		a.Lock == b.Lock
+}
+
 // CloneValues creates a deep clone of the input.
 func CloneValues(n Values) Values {
 	res := make(Values, 0, len(n))
@@ -1447,6 +4164,19 @@ func CloneValues(n Values) Values {
 		res = append(res, CloneValTuple(x))
 	}
 	return res
+}
+
+// EqualsValues does deep equals between the two objects.
+func EqualsValues(a, b Values) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		if !EqualsValTuple(a[i], b[i]) {
+			return false
+		}
+	}
+	return true
 }
 
 // CloneRefOfAliasedExpr creates a deep clone of the input.
@@ -1458,6 +4188,18 @@ func CloneRefOfAliasedExpr(n *AliasedExpr) *AliasedExpr {
 	out.Expr = CloneExpr(n.Expr)
 	out.As = CloneColIdent(n.As)
 	return &out
+}
+
+// EqualsRefOfAliasedExpr does deep equals between the two objects.
+func EqualsRefOfAliasedExpr(a, b *AliasedExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsExpr(a.Expr, b.Expr) &&
+		EqualsColIdent(a.As, b.As)
 }
 
 // CloneRefOfAliasedTableExpr creates a deep clone of the input.
@@ -1473,6 +4215,20 @@ func CloneRefOfAliasedTableExpr(n *AliasedTableExpr) *AliasedTableExpr {
 	return &out
 }
 
+// EqualsRefOfAliasedTableExpr does deep equals between the two objects.
+func EqualsRefOfAliasedTableExpr(a, b *AliasedTableExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsSimpleTableExpr(a.Expr, b.Expr) &&
+		EqualsPartitions(a.Partitions, b.Partitions) &&
+		EqualsTableIdent(a.As, b.As) &&
+		EqualsRefOfIndexHints(a.Hints, b.Hints)
+}
+
 // CloneRefOfAlterMigration creates a deep clone of the input.
 func CloneRefOfAlterMigration(n *AlterMigration) *AlterMigration {
 	if n == nil {
@@ -1480,6 +4236,18 @@ func CloneRefOfAlterMigration(n *AlterMigration) *AlterMigration {
 	}
 	out := *n
 	return &out
+}
+
+// EqualsRefOfAlterMigration does deep equals between the two objects.
+func EqualsRefOfAlterMigration(a, b *AlterMigration) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.UUID == b.UUID &&
+		a.Type == b.Type
 }
 
 // CloneRefOfAlterVschema creates a deep clone of the input.
@@ -1495,6 +4263,21 @@ func CloneRefOfAlterVschema(n *AlterVschema) *AlterVschema {
 	return &out
 }
 
+// EqualsRefOfAlterVschema does deep equals between the two objects.
+func EqualsRefOfAlterVschema(a, b *AlterVschema) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Action == b.Action &&
+		EqualsTableName(a.Table, b.Table) &&
+		EqualsRefOfVindexSpec(a.VindexSpec, b.VindexSpec) &&
+		EqualsSliceOfColIdent(a.VindexCols, b.VindexCols) &&
+		EqualsRefOfAutoIncSpec(a.AutoIncSpec, b.AutoIncSpec)
+}
+
 // CloneRefOfAutoIncSpec creates a deep clone of the input.
 func CloneRefOfAutoIncSpec(n *AutoIncSpec) *AutoIncSpec {
 	if n == nil {
@@ -1506,6 +4289,18 @@ func CloneRefOfAutoIncSpec(n *AutoIncSpec) *AutoIncSpec {
 	return &out
 }
 
+// EqualsRefOfAutoIncSpec does deep equals between the two objects.
+func EqualsRefOfAutoIncSpec(a, b *AutoIncSpec) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsColIdent(a.Column, b.Column) &&
+		EqualsTableName(a.Sequence, b.Sequence)
+}
+
 // CloneRefOfBegin creates a deep clone of the input.
 func CloneRefOfBegin(n *Begin) *Begin {
 	if n == nil {
@@ -1513,6 +4308,17 @@ func CloneRefOfBegin(n *Begin) *Begin {
 	}
 	out := *n
 	return &out
+}
+
+// EqualsRefOfBegin does deep equals between the two objects.
+func EqualsRefOfBegin(a, b *Begin) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return true
 }
 
 // CloneRefOfCallProc creates a deep clone of the input.
@@ -1526,9 +4332,28 @@ func CloneRefOfCallProc(n *CallProc) *CallProc {
 	return &out
 }
 
+// EqualsRefOfCallProc does deep equals between the two objects.
+func EqualsRefOfCallProc(a, b *CallProc) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsTableName(a.Name, b.Name) &&
+		EqualsExprs(a.Params, b.Params)
+}
+
 // CloneColIdent creates a deep clone of the input.
 func CloneColIdent(n ColIdent) ColIdent {
 	return *CloneRefOfColIdent(&n)
+}
+
+// EqualsColIdent does deep equals between the two objects.
+func EqualsColIdent(a, b ColIdent) bool {
+	return a.val == b.val &&
+		a.lowered == b.lowered &&
+		a.at == b.at
 }
 
 // CloneRefOfColumnDefinition creates a deep clone of the input.
@@ -1542,6 +4367,18 @@ func CloneRefOfColumnDefinition(n *ColumnDefinition) *ColumnDefinition {
 	return &out
 }
 
+// EqualsRefOfColumnDefinition does deep equals between the two objects.
+func EqualsRefOfColumnDefinition(a, b *ColumnDefinition) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsColIdent(a.Name, b.Name) &&
+		EqualsColumnType(a.Type, b.Type)
+}
+
 // CloneRefOfColumnType creates a deep clone of the input.
 func CloneRefOfColumnType(n *ColumnType) *ColumnType {
 	if n == nil {
@@ -1551,8 +4388,27 @@ func CloneRefOfColumnType(n *ColumnType) *ColumnType {
 	out.Options = CloneRefOfColumnTypeOptions(n.Options)
 	out.Length = CloneRefOfLiteral(n.Length)
 	out.Scale = CloneRefOfLiteral(n.Scale)
-	out.EnumValues = CloneSliceOfstring(n.EnumValues)
+	out.EnumValues = CloneSliceOfString(n.EnumValues)
 	return &out
+}
+
+// EqualsRefOfColumnType does deep equals between the two objects.
+func EqualsRefOfColumnType(a, b *ColumnType) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Type == b.Type &&
+		a.Unsigned == b.Unsigned &&
+		a.Zerofill == b.Zerofill &&
+		a.Charset == b.Charset &&
+		a.Collate == b.Collate &&
+		EqualsRefOfColumnTypeOptions(a.Options, b.Options) &&
+		EqualsRefOfLiteral(a.Length, b.Length) &&
+		EqualsRefOfLiteral(a.Scale, b.Scale) &&
+		EqualsSliceOfString(a.EnumValues, b.EnumValues)
 }
 
 // CloneColumns creates a deep clone of the input.
@@ -1564,11 +4420,37 @@ func CloneColumns(n Columns) Columns {
 	return res
 }
 
+// EqualsColumns does deep equals between the two objects.
+func EqualsColumns(a, b Columns) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		if !EqualsColIdent(a[i], b[i]) {
+			return false
+		}
+	}
+	return true
+}
+
 // CloneComments creates a deep clone of the input.
 func CloneComments(n Comments) Comments {
 	res := make(Comments, 0, len(n))
 	copy(res, n)
 	return res
+}
+
+// EqualsComments does deep equals between the two objects.
+func EqualsComments(a, b Comments) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
 
 // CloneRefOfCommit creates a deep clone of the input.
@@ -1578,6 +4460,17 @@ func CloneRefOfCommit(n *Commit) *Commit {
 	}
 	out := *n
 	return &out
+}
+
+// EqualsRefOfCommit does deep equals between the two objects.
+func EqualsRefOfCommit(a, b *Commit) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return true
 }
 
 // CloneRefOfConstraintDefinition creates a deep clone of the input.
@@ -1590,6 +4483,18 @@ func CloneRefOfConstraintDefinition(n *ConstraintDefinition) *ConstraintDefiniti
 	return &out
 }
 
+// EqualsRefOfConstraintDefinition does deep equals between the two objects.
+func EqualsRefOfConstraintDefinition(a, b *ConstraintDefinition) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Name == b.Name &&
+		EqualsConstraintInfo(a.Details, b.Details)
+}
+
 // CloneRefOfConvertType creates a deep clone of the input.
 func CloneRefOfConvertType(n *ConvertType) *ConvertType {
 	if n == nil {
@@ -1599,6 +4504,21 @@ func CloneRefOfConvertType(n *ConvertType) *ConvertType {
 	out.Length = CloneRefOfLiteral(n.Length)
 	out.Scale = CloneRefOfLiteral(n.Scale)
 	return &out
+}
+
+// EqualsRefOfConvertType does deep equals between the two objects.
+func EqualsRefOfConvertType(a, b *ConvertType) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Type == b.Type &&
+		a.Charset == b.Charset &&
+		EqualsRefOfLiteral(a.Length, b.Length) &&
+		EqualsRefOfLiteral(a.Scale, b.Scale) &&
+		a.Operator == b.Operator
 }
 
 // CloneRefOfDelete creates a deep clone of the input.
@@ -1617,6 +4537,24 @@ func CloneRefOfDelete(n *Delete) *Delete {
 	return &out
 }
 
+// EqualsRefOfDelete does deep equals between the two objects.
+func EqualsRefOfDelete(a, b *Delete) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Ignore == b.Ignore &&
+		EqualsComments(a.Comments, b.Comments) &&
+		EqualsTableNames(a.Targets, b.Targets) &&
+		EqualsTableExprs(a.TableExprs, b.TableExprs) &&
+		EqualsPartitions(a.Partitions, b.Partitions) &&
+		EqualsRefOfWhere(a.Where, b.Where) &&
+		EqualsOrderBy(a.OrderBy, b.OrderBy) &&
+		EqualsRefOfLimit(a.Limit, b.Limit)
+}
+
 // CloneRefOfDerivedTable creates a deep clone of the input.
 func CloneRefOfDerivedTable(n *DerivedTable) *DerivedTable {
 	if n == nil {
@@ -1625,6 +4563,17 @@ func CloneRefOfDerivedTable(n *DerivedTable) *DerivedTable {
 	out := *n
 	out.Select = CloneSelectStatement(n.Select)
 	return &out
+}
+
+// EqualsRefOfDerivedTable does deep equals between the two objects.
+func EqualsRefOfDerivedTable(a, b *DerivedTable) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsSelectStatement(a.Select, b.Select)
 }
 
 // CloneExprs creates a deep clone of the input.
@@ -1636,15 +4585,43 @@ func CloneExprs(n Exprs) Exprs {
 	return res
 }
 
+// EqualsExprs does deep equals between the two objects.
+func EqualsExprs(a, b Exprs) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		if !EqualsExpr(a[i], b[i]) {
+			return false
+		}
+	}
+	return true
+}
+
 // CloneRefOfFlush creates a deep clone of the input.
 func CloneRefOfFlush(n *Flush) *Flush {
 	if n == nil {
 		return nil
 	}
 	out := *n
-	out.FlushOptions = CloneSliceOfstring(n.FlushOptions)
+	out.FlushOptions = CloneSliceOfString(n.FlushOptions)
 	out.TableNames = CloneTableNames(n.TableNames)
 	return &out
+}
+
+// EqualsRefOfFlush does deep equals between the two objects.
+func EqualsRefOfFlush(a, b *Flush) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.IsLocal == b.IsLocal &&
+		a.WithLock == b.WithLock &&
+		a.ForExport == b.ForExport &&
+		EqualsSliceOfString(a.FlushOptions, b.FlushOptions) &&
+		EqualsTableNames(a.TableNames, b.TableNames)
 }
 
 // CloneGroupBy creates a deep clone of the input.
@@ -1654,6 +4631,19 @@ func CloneGroupBy(n GroupBy) GroupBy {
 		res = append(res, CloneExpr(x))
 	}
 	return res
+}
+
+// EqualsGroupBy does deep equals between the two objects.
+func EqualsGroupBy(a, b GroupBy) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		if !EqualsExpr(a[i], b[i]) {
+			return false
+		}
+	}
+	return true
 }
 
 // CloneRefOfIndexDefinition creates a deep clone of the input.
@@ -1668,6 +4658,19 @@ func CloneRefOfIndexDefinition(n *IndexDefinition) *IndexDefinition {
 	return &out
 }
 
+// EqualsRefOfIndexDefinition does deep equals between the two objects.
+func EqualsRefOfIndexDefinition(a, b *IndexDefinition) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsRefOfIndexInfo(a.Info, b.Info) &&
+		EqualsSliceOfRefOfIndexColumn(a.Columns, b.Columns) &&
+		EqualsSliceOfRefOfIndexOption(a.Options, b.Options)
+}
+
 // CloneRefOfIndexHints creates a deep clone of the input.
 func CloneRefOfIndexHints(n *IndexHints) *IndexHints {
 	if n == nil {
@@ -1676,6 +4679,18 @@ func CloneRefOfIndexHints(n *IndexHints) *IndexHints {
 	out := *n
 	out.Indexes = CloneSliceOfColIdent(n.Indexes)
 	return &out
+}
+
+// EqualsRefOfIndexHints does deep equals between the two objects.
+func EqualsRefOfIndexHints(a, b *IndexHints) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Type == b.Type &&
+		EqualsSliceOfColIdent(a.Indexes, b.Indexes)
 }
 
 // CloneRefOfIndexInfo creates a deep clone of the input.
@@ -1687,6 +4702,23 @@ func CloneRefOfIndexInfo(n *IndexInfo) *IndexInfo {
 	out.Name = CloneColIdent(n.Name)
 	out.ConstraintName = CloneColIdent(n.ConstraintName)
 	return &out
+}
+
+// EqualsRefOfIndexInfo does deep equals between the two objects.
+func EqualsRefOfIndexInfo(a, b *IndexInfo) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Type == b.Type &&
+		a.Primary == b.Primary &&
+		a.Spatial == b.Spatial &&
+		a.Fulltext == b.Fulltext &&
+		a.Unique == b.Unique &&
+		EqualsColIdent(a.Name, b.Name) &&
+		EqualsColIdent(a.ConstraintName, b.ConstraintName)
 }
 
 // CloneRefOfInsert creates a deep clone of the input.
@@ -1704,9 +4736,33 @@ func CloneRefOfInsert(n *Insert) *Insert {
 	return &out
 }
 
+// EqualsRefOfInsert does deep equals between the two objects.
+func EqualsRefOfInsert(a, b *Insert) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Action == b.Action &&
+		EqualsComments(a.Comments, b.Comments) &&
+		a.Ignore == b.Ignore &&
+		EqualsTableName(a.Table, b.Table) &&
+		EqualsPartitions(a.Partitions, b.Partitions) &&
+		EqualsColumns(a.Columns, b.Columns) &&
+		EqualsInsertRows(a.Rows, b.Rows) &&
+		EqualsOnDup(a.OnDup, b.OnDup)
+}
+
 // CloneJoinCondition creates a deep clone of the input.
 func CloneJoinCondition(n JoinCondition) JoinCondition {
 	return *CloneRefOfJoinCondition(&n)
+}
+
+// EqualsJoinCondition does deep equals between the two objects.
+func EqualsJoinCondition(a, b JoinCondition) bool {
+	return EqualsExpr(a.On, b.On) &&
+		EqualsColumns(a.Using, b.Using)
 }
 
 // CloneRefOfJoinTableExpr creates a deep clone of the input.
@@ -1721,6 +4777,20 @@ func CloneRefOfJoinTableExpr(n *JoinTableExpr) *JoinTableExpr {
 	return &out
 }
 
+// EqualsRefOfJoinTableExpr does deep equals between the two objects.
+func EqualsRefOfJoinTableExpr(a, b *JoinTableExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsTableExpr(a.LeftExpr, b.LeftExpr) &&
+		a.Join == b.Join &&
+		EqualsTableExpr(a.RightExpr, b.RightExpr) &&
+		EqualsJoinCondition(a.Condition, b.Condition)
+}
+
 // CloneRefOfLimit creates a deep clone of the input.
 func CloneRefOfLimit(n *Limit) *Limit {
 	if n == nil {
@@ -1732,6 +4802,18 @@ func CloneRefOfLimit(n *Limit) *Limit {
 	return &out
 }
 
+// EqualsRefOfLimit does deep equals between the two objects.
+func EqualsRefOfLimit(a, b *Limit) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsExpr(a.Offset, b.Offset) &&
+		EqualsExpr(a.Rowcount, b.Rowcount)
+}
+
 // CloneRefOfLoad creates a deep clone of the input.
 func CloneRefOfLoad(n *Load) *Load {
 	if n == nil {
@@ -1739,6 +4821,17 @@ func CloneRefOfLoad(n *Load) *Load {
 	}
 	out := *n
 	return &out
+}
+
+// EqualsRefOfLoad does deep equals between the two objects.
+func EqualsRefOfLoad(a, b *Load) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return true
 }
 
 // CloneRefOfLockTables creates a deep clone of the input.
@@ -1751,6 +4844,17 @@ func CloneRefOfLockTables(n *LockTables) *LockTables {
 	return &out
 }
 
+// EqualsRefOfLockTables does deep equals between the two objects.
+func EqualsRefOfLockTables(a, b *LockTables) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsTableAndLockTypes(a.Tables, b.Tables)
+}
+
 // CloneRefOfNextval creates a deep clone of the input.
 func CloneRefOfNextval(n *Nextval) *Nextval {
 	if n == nil {
@@ -1761,6 +4865,17 @@ func CloneRefOfNextval(n *Nextval) *Nextval {
 	return &out
 }
 
+// EqualsRefOfNextval does deep equals between the two objects.
+func EqualsRefOfNextval(a, b *Nextval) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsExpr(a.Expr, b.Expr)
+}
+
 // CloneOnDup creates a deep clone of the input.
 func CloneOnDup(n OnDup) OnDup {
 	res := make(OnDup, 0, len(n))
@@ -1768,6 +4883,19 @@ func CloneOnDup(n OnDup) OnDup {
 		res = append(res, CloneRefOfUpdateExpr(x))
 	}
 	return res
+}
+
+// EqualsOnDup does deep equals between the two objects.
+func EqualsOnDup(a, b OnDup) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		if !EqualsRefOfUpdateExpr(a[i], b[i]) {
+			return false
+		}
+	}
+	return true
 }
 
 // CloneRefOfOptLike creates a deep clone of the input.
@@ -1780,6 +4908,17 @@ func CloneRefOfOptLike(n *OptLike) *OptLike {
 	return &out
 }
 
+// EqualsRefOfOptLike does deep equals between the two objects.
+func EqualsRefOfOptLike(a, b *OptLike) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsTableName(a.LikeTable, b.LikeTable)
+}
+
 // CloneRefOfOrder creates a deep clone of the input.
 func CloneRefOfOrder(n *Order) *Order {
 	if n == nil {
@@ -1788,6 +4927,18 @@ func CloneRefOfOrder(n *Order) *Order {
 	out := *n
 	out.Expr = CloneExpr(n.Expr)
 	return &out
+}
+
+// EqualsRefOfOrder does deep equals between the two objects.
+func EqualsRefOfOrder(a, b *Order) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsExpr(a.Expr, b.Expr) &&
+		a.Direction == b.Direction
 }
 
 // CloneOrderBy creates a deep clone of the input.
@@ -1799,6 +4950,19 @@ func CloneOrderBy(n OrderBy) OrderBy {
 	return res
 }
 
+// EqualsOrderBy does deep equals between the two objects.
+func EqualsOrderBy(a, b OrderBy) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		if !EqualsRefOfOrder(a[i], b[i]) {
+			return false
+		}
+	}
+	return true
+}
+
 // CloneRefOfOtherAdmin creates a deep clone of the input.
 func CloneRefOfOtherAdmin(n *OtherAdmin) *OtherAdmin {
 	if n == nil {
@@ -1808,6 +4972,17 @@ func CloneRefOfOtherAdmin(n *OtherAdmin) *OtherAdmin {
 	return &out
 }
 
+// EqualsRefOfOtherAdmin does deep equals between the two objects.
+func EqualsRefOfOtherAdmin(a, b *OtherAdmin) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return true
+}
+
 // CloneRefOfOtherRead creates a deep clone of the input.
 func CloneRefOfOtherRead(n *OtherRead) *OtherRead {
 	if n == nil {
@@ -1815,6 +4990,17 @@ func CloneRefOfOtherRead(n *OtherRead) *OtherRead {
 	}
 	out := *n
 	return &out
+}
+
+// EqualsRefOfOtherRead does deep equals between the two objects.
+func EqualsRefOfOtherRead(a, b *OtherRead) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return true
 }
 
 // CloneRefOfParenTableExpr creates a deep clone of the input.
@@ -1827,6 +5013,17 @@ func CloneRefOfParenTableExpr(n *ParenTableExpr) *ParenTableExpr {
 	return &out
 }
 
+// EqualsRefOfParenTableExpr does deep equals between the two objects.
+func EqualsRefOfParenTableExpr(a, b *ParenTableExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsTableExprs(a.Exprs, b.Exprs)
+}
+
 // CloneRefOfPartitionDefinition creates a deep clone of the input.
 func CloneRefOfPartitionDefinition(n *PartitionDefinition) *PartitionDefinition {
 	if n == nil {
@@ -1836,6 +5033,19 @@ func CloneRefOfPartitionDefinition(n *PartitionDefinition) *PartitionDefinition 
 	out.Name = CloneColIdent(n.Name)
 	out.Limit = CloneExpr(n.Limit)
 	return &out
+}
+
+// EqualsRefOfPartitionDefinition does deep equals between the two objects.
+func EqualsRefOfPartitionDefinition(a, b *PartitionDefinition) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Maxvalue == b.Maxvalue &&
+		EqualsColIdent(a.Name, b.Name) &&
+		EqualsExpr(a.Limit, b.Limit)
 }
 
 // CloneRefOfPartitionSpec creates a deep clone of the input.
@@ -1851,6 +5061,23 @@ func CloneRefOfPartitionSpec(n *PartitionSpec) *PartitionSpec {
 	return &out
 }
 
+// EqualsRefOfPartitionSpec does deep equals between the two objects.
+func EqualsRefOfPartitionSpec(a, b *PartitionSpec) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.IsAll == b.IsAll &&
+		a.WithoutValidation == b.WithoutValidation &&
+		a.Action == b.Action &&
+		EqualsPartitions(a.Names, b.Names) &&
+		EqualsRefOfLiteral(a.Number, b.Number) &&
+		EqualsTableName(a.TableName, b.TableName) &&
+		EqualsSliceOfRefOfPartitionDefinition(a.Definitions, b.Definitions)
+}
+
 // ClonePartitions creates a deep clone of the input.
 func ClonePartitions(n Partitions) Partitions {
 	res := make(Partitions, 0, len(n))
@@ -1858,6 +5085,19 @@ func ClonePartitions(n Partitions) Partitions {
 		res = append(res, CloneColIdent(x))
 	}
 	return res
+}
+
+// EqualsPartitions does deep equals between the two objects.
+func EqualsPartitions(a, b Partitions) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		if !EqualsColIdent(a[i], b[i]) {
+			return false
+		}
+	}
+	return true
 }
 
 // CloneRefOfRelease creates a deep clone of the input.
@@ -1870,6 +5110,17 @@ func CloneRefOfRelease(n *Release) *Release {
 	return &out
 }
 
+// EqualsRefOfRelease does deep equals between the two objects.
+func EqualsRefOfRelease(a, b *Release) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsColIdent(a.Name, b.Name)
+}
+
 // CloneRefOfRevertMigration creates a deep clone of the input.
 func CloneRefOfRevertMigration(n *RevertMigration) *RevertMigration {
 	if n == nil {
@@ -1879,6 +5130,17 @@ func CloneRefOfRevertMigration(n *RevertMigration) *RevertMigration {
 	return &out
 }
 
+// EqualsRefOfRevertMigration does deep equals between the two objects.
+func EqualsRefOfRevertMigration(a, b *RevertMigration) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.UUID == b.UUID
+}
+
 // CloneRefOfRollback creates a deep clone of the input.
 func CloneRefOfRollback(n *Rollback) *Rollback {
 	if n == nil {
@@ -1886,6 +5148,17 @@ func CloneRefOfRollback(n *Rollback) *Rollback {
 	}
 	out := *n
 	return &out
+}
+
+// EqualsRefOfRollback does deep equals between the two objects.
+func EqualsRefOfRollback(a, b *Rollback) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return true
 }
 
 // CloneRefOfSRollback creates a deep clone of the input.
@@ -1898,6 +5171,17 @@ func CloneRefOfSRollback(n *SRollback) *SRollback {
 	return &out
 }
 
+// EqualsRefOfSRollback does deep equals between the two objects.
+func EqualsRefOfSRollback(a, b *SRollback) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsColIdent(a.Name, b.Name)
+}
+
 // CloneRefOfSavepoint creates a deep clone of the input.
 func CloneRefOfSavepoint(n *Savepoint) *Savepoint {
 	if n == nil {
@@ -1906,6 +5190,17 @@ func CloneRefOfSavepoint(n *Savepoint) *Savepoint {
 	out := *n
 	out.Name = CloneColIdent(n.Name)
 	return &out
+}
+
+// EqualsRefOfSavepoint does deep equals between the two objects.
+func EqualsRefOfSavepoint(a, b *Savepoint) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsColIdent(a.Name, b.Name)
 }
 
 // CloneSelectExprs creates a deep clone of the input.
@@ -1917,6 +5212,19 @@ func CloneSelectExprs(n SelectExprs) SelectExprs {
 	return res
 }
 
+// EqualsSelectExprs does deep equals between the two objects.
+func EqualsSelectExprs(a, b SelectExprs) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		if !EqualsSelectExpr(a[i], b[i]) {
+			return false
+		}
+	}
+	return true
+}
+
 // CloneRefOfSelectInto creates a deep clone of the input.
 func CloneRefOfSelectInto(n *SelectInto) *SelectInto {
 	if n == nil {
@@ -1924,6 +5232,23 @@ func CloneRefOfSelectInto(n *SelectInto) *SelectInto {
 	}
 	out := *n
 	return &out
+}
+
+// EqualsRefOfSelectInto does deep equals between the two objects.
+func EqualsRefOfSelectInto(a, b *SelectInto) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.FileName == b.FileName &&
+		a.Charset == b.Charset &&
+		a.FormatOption == b.FormatOption &&
+		a.ExportOption == b.ExportOption &&
+		a.Manifest == b.Manifest &&
+		a.Overwrite == b.Overwrite &&
+		a.Type == b.Type
 }
 
 // CloneRefOfSet creates a deep clone of the input.
@@ -1937,6 +5262,18 @@ func CloneRefOfSet(n *Set) *Set {
 	return &out
 }
 
+// EqualsRefOfSet does deep equals between the two objects.
+func EqualsRefOfSet(a, b *Set) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsComments(a.Comments, b.Comments) &&
+		EqualsSetExprs(a.Exprs, b.Exprs)
+}
+
 // CloneRefOfSetExpr creates a deep clone of the input.
 func CloneRefOfSetExpr(n *SetExpr) *SetExpr {
 	if n == nil {
@@ -1948,6 +5285,19 @@ func CloneRefOfSetExpr(n *SetExpr) *SetExpr {
 	return &out
 }
 
+// EqualsRefOfSetExpr does deep equals between the two objects.
+func EqualsRefOfSetExpr(a, b *SetExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Scope == b.Scope &&
+		EqualsColIdent(a.Name, b.Name) &&
+		EqualsExpr(a.Expr, b.Expr)
+}
+
 // CloneSetExprs creates a deep clone of the input.
 func CloneSetExprs(n SetExprs) SetExprs {
 	res := make(SetExprs, 0, len(n))
@@ -1955,6 +5305,19 @@ func CloneSetExprs(n SetExprs) SetExprs {
 		res = append(res, CloneRefOfSetExpr(x))
 	}
 	return res
+}
+
+// EqualsSetExprs does deep equals between the two objects.
+func EqualsSetExprs(a, b SetExprs) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		if !EqualsRefOfSetExpr(a[i], b[i]) {
+			return false
+		}
+	}
+	return true
 }
 
 // CloneRefOfSetTransaction creates a deep clone of the input.
@@ -1969,6 +5332,20 @@ func CloneRefOfSetTransaction(n *SetTransaction) *SetTransaction {
 	return &out
 }
 
+// EqualsRefOfSetTransaction does deep equals between the two objects.
+func EqualsRefOfSetTransaction(a, b *SetTransaction) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsSQLNode(a.SQLNode, b.SQLNode) &&
+		EqualsComments(a.Comments, b.Comments) &&
+		a.Scope == b.Scope &&
+		EqualsSliceOfCharacteristic(a.Characteristics, b.Characteristics)
+}
+
 // CloneRefOfShow creates a deep clone of the input.
 func CloneRefOfShow(n *Show) *Show {
 	if n == nil {
@@ -1977,6 +5354,17 @@ func CloneRefOfShow(n *Show) *Show {
 	out := *n
 	out.Internal = CloneShowInternal(n.Internal)
 	return &out
+}
+
+// EqualsRefOfShow does deep equals between the two objects.
+func EqualsRefOfShow(a, b *Show) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsShowInternal(a.Internal, b.Internal)
 }
 
 // CloneRefOfShowBasic creates a deep clone of the input.
@@ -1990,6 +5378,21 @@ func CloneRefOfShowBasic(n *ShowBasic) *ShowBasic {
 	return &out
 }
 
+// EqualsRefOfShowBasic does deep equals between the two objects.
+func EqualsRefOfShowBasic(a, b *ShowBasic) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Full == b.Full &&
+		a.DbName == b.DbName &&
+		a.Command == b.Command &&
+		EqualsTableName(a.Tbl, b.Tbl) &&
+		EqualsRefOfShowFilter(a.Filter, b.Filter)
+}
+
 // CloneRefOfShowCreate creates a deep clone of the input.
 func CloneRefOfShowCreate(n *ShowCreate) *ShowCreate {
 	if n == nil {
@@ -2000,6 +5403,18 @@ func CloneRefOfShowCreate(n *ShowCreate) *ShowCreate {
 	return &out
 }
 
+// EqualsRefOfShowCreate does deep equals between the two objects.
+func EqualsRefOfShowCreate(a, b *ShowCreate) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Command == b.Command &&
+		EqualsTableName(a.Op, b.Op)
+}
+
 // CloneRefOfShowFilter creates a deep clone of the input.
 func CloneRefOfShowFilter(n *ShowFilter) *ShowFilter {
 	if n == nil {
@@ -2008,6 +5423,18 @@ func CloneRefOfShowFilter(n *ShowFilter) *ShowFilter {
 	out := *n
 	out.Filter = CloneExpr(n.Filter)
 	return &out
+}
+
+// EqualsRefOfShowFilter does deep equals between the two objects.
+func EqualsRefOfShowFilter(a, b *ShowFilter) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Like == b.Like &&
+		EqualsExpr(a.Filter, b.Filter)
 }
 
 // CloneRefOfShowLegacy creates a deep clone of the input.
@@ -2023,6 +5450,23 @@ func CloneRefOfShowLegacy(n *ShowLegacy) *ShowLegacy {
 	return &out
 }
 
+// EqualsRefOfShowLegacy does deep equals between the two objects.
+func EqualsRefOfShowLegacy(a, b *ShowLegacy) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Extended == b.Extended &&
+		a.Type == b.Type &&
+		EqualsTableName(a.OnTable, b.OnTable) &&
+		EqualsTableName(a.Table, b.Table) &&
+		EqualsRefOfShowTablesOpt(a.ShowTablesOpt, b.ShowTablesOpt) &&
+		a.Scope == b.Scope &&
+		EqualsExpr(a.ShowCollationFilterOpt, b.ShowCollationFilterOpt)
+}
+
 // CloneRefOfStarExpr creates a deep clone of the input.
 func CloneRefOfStarExpr(n *StarExpr) *StarExpr {
 	if n == nil {
@@ -2031,6 +5475,17 @@ func CloneRefOfStarExpr(n *StarExpr) *StarExpr {
 	out := *n
 	out.TableName = CloneTableName(n.TableName)
 	return &out
+}
+
+// EqualsRefOfStarExpr does deep equals between the two objects.
+func EqualsRefOfStarExpr(a, b *StarExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsTableName(a.TableName, b.TableName)
 }
 
 // CloneRefOfStream creates a deep clone of the input.
@@ -2045,6 +5500,19 @@ func CloneRefOfStream(n *Stream) *Stream {
 	return &out
 }
 
+// EqualsRefOfStream does deep equals between the two objects.
+func EqualsRefOfStream(a, b *Stream) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsComments(a.Comments, b.Comments) &&
+		EqualsSelectExpr(a.SelectExpr, b.SelectExpr) &&
+		EqualsTableName(a.Table, b.Table)
+}
+
 // CloneTableExprs creates a deep clone of the input.
 func CloneTableExprs(n TableExprs) TableExprs {
 	res := make(TableExprs, 0, len(n))
@@ -2054,14 +5522,38 @@ func CloneTableExprs(n TableExprs) TableExprs {
 	return res
 }
 
+// EqualsTableExprs does deep equals between the two objects.
+func EqualsTableExprs(a, b TableExprs) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		if !EqualsTableExpr(a[i], b[i]) {
+			return false
+		}
+	}
+	return true
+}
+
 // CloneTableIdent creates a deep clone of the input.
 func CloneTableIdent(n TableIdent) TableIdent {
 	return *CloneRefOfTableIdent(&n)
 }
 
+// EqualsTableIdent does deep equals between the two objects.
+func EqualsTableIdent(a, b TableIdent) bool {
+	return a.v == b.v
+}
+
 // CloneTableName creates a deep clone of the input.
 func CloneTableName(n TableName) TableName {
 	return *CloneRefOfTableName(&n)
+}
+
+// EqualsTableName does deep equals between the two objects.
+func EqualsTableName(a, b TableName) bool {
+	return EqualsTableIdent(a.Name, b.Name) &&
+		EqualsTableIdent(a.Qualifier, b.Qualifier)
 }
 
 // CloneTableNames creates a deep clone of the input.
@@ -2071,6 +5563,19 @@ func CloneTableNames(n TableNames) TableNames {
 		res = append(res, CloneTableName(x))
 	}
 	return res
+}
+
+// EqualsTableNames does deep equals between the two objects.
+func EqualsTableNames(a, b TableNames) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		if !EqualsTableName(a[i], b[i]) {
+			return false
+		}
+	}
+	return true
 }
 
 // CloneRefOfTableSpec creates a deep clone of the input.
@@ -2086,6 +5591,20 @@ func CloneRefOfTableSpec(n *TableSpec) *TableSpec {
 	return &out
 }
 
+// EqualsRefOfTableSpec does deep equals between the two objects.
+func EqualsRefOfTableSpec(a, b *TableSpec) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsSliceOfRefOfColumnDefinition(a.Columns, b.Columns) &&
+		EqualsSliceOfRefOfIndexDefinition(a.Indexes, b.Indexes) &&
+		EqualsSliceOfRefOfConstraintDefinition(a.Constraints, b.Constraints) &&
+		EqualsTableOptions(a.Options, b.Options)
+}
+
 // CloneRefOfUnionSelect creates a deep clone of the input.
 func CloneRefOfUnionSelect(n *UnionSelect) *UnionSelect {
 	if n == nil {
@@ -2096,6 +5615,18 @@ func CloneRefOfUnionSelect(n *UnionSelect) *UnionSelect {
 	return &out
 }
 
+// EqualsRefOfUnionSelect does deep equals between the two objects.
+func EqualsRefOfUnionSelect(a, b *UnionSelect) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Distinct == b.Distinct &&
+		EqualsSelectStatement(a.Statement, b.Statement)
+}
+
 // CloneRefOfUnlockTables creates a deep clone of the input.
 func CloneRefOfUnlockTables(n *UnlockTables) *UnlockTables {
 	if n == nil {
@@ -2103,6 +5634,17 @@ func CloneRefOfUnlockTables(n *UnlockTables) *UnlockTables {
 	}
 	out := *n
 	return &out
+}
+
+// EqualsRefOfUnlockTables does deep equals between the two objects.
+func EqualsRefOfUnlockTables(a, b *UnlockTables) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return true
 }
 
 // CloneRefOfUpdate creates a deep clone of the input.
@@ -2120,6 +5662,23 @@ func CloneRefOfUpdate(n *Update) *Update {
 	return &out
 }
 
+// EqualsRefOfUpdate does deep equals between the two objects.
+func EqualsRefOfUpdate(a, b *Update) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsComments(a.Comments, b.Comments) &&
+		a.Ignore == b.Ignore &&
+		EqualsTableExprs(a.TableExprs, b.TableExprs) &&
+		EqualsUpdateExprs(a.Exprs, b.Exprs) &&
+		EqualsRefOfWhere(a.Where, b.Where) &&
+		EqualsOrderBy(a.OrderBy, b.OrderBy) &&
+		EqualsRefOfLimit(a.Limit, b.Limit)
+}
+
 // CloneRefOfUpdateExpr creates a deep clone of the input.
 func CloneRefOfUpdateExpr(n *UpdateExpr) *UpdateExpr {
 	if n == nil {
@@ -2131,6 +5690,18 @@ func CloneRefOfUpdateExpr(n *UpdateExpr) *UpdateExpr {
 	return &out
 }
 
+// EqualsRefOfUpdateExpr does deep equals between the two objects.
+func EqualsRefOfUpdateExpr(a, b *UpdateExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsRefOfColName(a.Name, b.Name) &&
+		EqualsExpr(a.Expr, b.Expr)
+}
+
 // CloneUpdateExprs creates a deep clone of the input.
 func CloneUpdateExprs(n UpdateExprs) UpdateExprs {
 	res := make(UpdateExprs, 0, len(n))
@@ -2138,6 +5709,19 @@ func CloneUpdateExprs(n UpdateExprs) UpdateExprs {
 		res = append(res, CloneRefOfUpdateExpr(x))
 	}
 	return res
+}
+
+// EqualsUpdateExprs does deep equals between the two objects.
+func EqualsUpdateExprs(a, b UpdateExprs) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		if !EqualsRefOfUpdateExpr(a[i], b[i]) {
+			return false
+		}
+	}
+	return true
 }
 
 // CloneRefOfUse creates a deep clone of the input.
@@ -2148,6 +5732,17 @@ func CloneRefOfUse(n *Use) *Use {
 	out := *n
 	out.DBName = CloneTableIdent(n.DBName)
 	return &out
+}
+
+// EqualsRefOfUse does deep equals between the two objects.
+func EqualsRefOfUse(a, b *Use) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsTableIdent(a.DBName, b.DBName)
 }
 
 // CloneRefOfVStream creates a deep clone of the input.
@@ -2164,9 +5759,30 @@ func CloneRefOfVStream(n *VStream) *VStream {
 	return &out
 }
 
+// EqualsRefOfVStream does deep equals between the two objects.
+func EqualsRefOfVStream(a, b *VStream) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsComments(a.Comments, b.Comments) &&
+		EqualsSelectExpr(a.SelectExpr, b.SelectExpr) &&
+		EqualsTableName(a.Table, b.Table) &&
+		EqualsRefOfWhere(a.Where, b.Where) &&
+		EqualsRefOfLimit(a.Limit, b.Limit)
+}
+
 // CloneVindexParam creates a deep clone of the input.
 func CloneVindexParam(n VindexParam) VindexParam {
 	return *CloneRefOfVindexParam(&n)
+}
+
+// EqualsVindexParam does deep equals between the two objects.
+func EqualsVindexParam(a, b VindexParam) bool {
+	return a.Val == b.Val &&
+		EqualsColIdent(a.Key, b.Key)
 }
 
 // CloneRefOfVindexSpec creates a deep clone of the input.
@@ -2181,6 +5797,19 @@ func CloneRefOfVindexSpec(n *VindexSpec) *VindexSpec {
 	return &out
 }
 
+// EqualsRefOfVindexSpec does deep equals between the two objects.
+func EqualsRefOfVindexSpec(a, b *VindexSpec) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsColIdent(a.Name, b.Name) &&
+		EqualsColIdent(a.Type, b.Type) &&
+		EqualsSliceOfVindexParam(a.Params, b.Params)
+}
+
 // CloneRefOfWhen creates a deep clone of the input.
 func CloneRefOfWhen(n *When) *When {
 	if n == nil {
@@ -2190,6 +5819,18 @@ func CloneRefOfWhen(n *When) *When {
 	out.Cond = CloneExpr(n.Cond)
 	out.Val = CloneExpr(n.Val)
 	return &out
+}
+
+// EqualsRefOfWhen does deep equals between the two objects.
+func EqualsRefOfWhen(a, b *When) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsExpr(a.Cond, b.Cond) &&
+		EqualsExpr(a.Val, b.Val)
 }
 
 // CloneRefOfWhere creates a deep clone of the input.
@@ -2202,6 +5843,18 @@ func CloneRefOfWhere(n *Where) *Where {
 	return &out
 }
 
+// EqualsRefOfWhere does deep equals between the two objects.
+func EqualsRefOfWhere(a, b *Where) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Type == b.Type &&
+		EqualsExpr(a.Expr, b.Expr)
+}
+
 // CloneSliceOfRefOfColumnDefinition creates a deep clone of the input.
 func CloneSliceOfRefOfColumnDefinition(n []*ColumnDefinition) []*ColumnDefinition {
 	res := make([]*ColumnDefinition, 0, len(n))
@@ -2209,6 +5862,19 @@ func CloneSliceOfRefOfColumnDefinition(n []*ColumnDefinition) []*ColumnDefinitio
 		res = append(res, CloneRefOfColumnDefinition(x))
 	}
 	return res
+}
+
+// EqualsSliceOfRefOfColumnDefinition does deep equals between the two objects.
+func EqualsSliceOfRefOfColumnDefinition(a, b []*ColumnDefinition) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		if !EqualsRefOfColumnDefinition(a[i], b[i]) {
+			return false
+		}
+	}
+	return true
 }
 
 // CloneRefOfTableOption creates a deep clone of the input.
@@ -2222,6 +5888,20 @@ func CloneRefOfTableOption(n *TableOption) *TableOption {
 	return &out
 }
 
+// EqualsRefOfTableOption does deep equals between the two objects.
+func EqualsRefOfTableOption(a, b *TableOption) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Name == b.Name &&
+		a.String == b.String &&
+		EqualsRefOfLiteral(a.Value, b.Value) &&
+		EqualsTableNames(a.Tables, b.Tables)
+}
+
 // CloneSliceOfCollateAndCharset creates a deep clone of the input.
 func CloneSliceOfCollateAndCharset(n []CollateAndCharset) []CollateAndCharset {
 	res := make([]CollateAndCharset, 0, len(n))
@@ -2229,6 +5909,19 @@ func CloneSliceOfCollateAndCharset(n []CollateAndCharset) []CollateAndCharset {
 		res = append(res, CloneCollateAndCharset(x))
 	}
 	return res
+}
+
+// EqualsSliceOfCollateAndCharset does deep equals between the two objects.
+func EqualsSliceOfCollateAndCharset(a, b []CollateAndCharset) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		if !EqualsCollateAndCharset(a[i], b[i]) {
+			return false
+		}
+	}
+	return true
 }
 
 // CloneSliceOfAlterOption creates a deep clone of the input.
@@ -2240,6 +5933,19 @@ func CloneSliceOfAlterOption(n []AlterOption) []AlterOption {
 	return res
 }
 
+// EqualsSliceOfAlterOption does deep equals between the two objects.
+func EqualsSliceOfAlterOption(a, b []AlterOption) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		if !EqualsAlterOption(a[i], b[i]) {
+			return false
+		}
+	}
+	return true
+}
+
 // CloneSliceOfRefOfRenameTablePair creates a deep clone of the input.
 func CloneSliceOfRefOfRenameTablePair(n []*RenameTablePair) []*RenameTablePair {
 	res := make([]*RenameTablePair, 0, len(n))
@@ -2247,6 +5953,19 @@ func CloneSliceOfRefOfRenameTablePair(n []*RenameTablePair) []*RenameTablePair {
 		res = append(res, CloneRefOfRenameTablePair(x))
 	}
 	return res
+}
+
+// EqualsSliceOfRefOfRenameTablePair does deep equals between the two objects.
+func EqualsSliceOfRefOfRenameTablePair(a, b []*RenameTablePair) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		if !EqualsRefOfRenameTablePair(a[i], b[i]) {
+			return false
+		}
+	}
+	return true
 }
 
 // CloneSliceOfRefOfWhen creates a deep clone of the input.
@@ -2258,8 +5977,32 @@ func CloneSliceOfRefOfWhen(n []*When) []*When {
 	return res
 }
 
-// CloneRefOfbool creates a deep clone of the input.
-func CloneRefOfbool(n *bool) *bool {
+// EqualsSliceOfRefOfWhen does deep equals between the two objects.
+func EqualsSliceOfRefOfWhen(a, b []*When) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		if !EqualsRefOfWhen(a[i], b[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+// EqualsRefOfBool does deep equals between the two objects.
+func EqualsRefOfBool(a, b *bool) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return *a == *b
+}
+
+// CloneRefOfBool creates a deep clone of the input.
+func CloneRefOfBool(n *bool) *bool {
 	if n == nil {
 		return nil
 	}
@@ -2276,6 +6019,19 @@ func CloneSliceOfRefOfUnionSelect(n []*UnionSelect) []*UnionSelect {
 	return res
 }
 
+// EqualsSliceOfRefOfUnionSelect does deep equals between the two objects.
+func EqualsSliceOfRefOfUnionSelect(a, b []*UnionSelect) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		if !EqualsRefOfUnionSelect(a[i], b[i]) {
+			return false
+		}
+	}
+	return true
+}
+
 // CloneSliceOfColIdent creates a deep clone of the input.
 func CloneSliceOfColIdent(n []ColIdent) []ColIdent {
 	res := make([]ColIdent, 0, len(n))
@@ -2283,6 +6039,19 @@ func CloneSliceOfColIdent(n []ColIdent) []ColIdent {
 		res = append(res, CloneColIdent(x))
 	}
 	return res
+}
+
+// EqualsSliceOfColIdent does deep equals between the two objects.
+func EqualsSliceOfColIdent(a, b []ColIdent) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		if !EqualsColIdent(a[i], b[i]) {
+			return false
+		}
+	}
+	return true
 }
 
 // CloneRefOfColIdent creates a deep clone of the input.
@@ -2294,9 +6063,35 @@ func CloneRefOfColIdent(n *ColIdent) *ColIdent {
 	return &out
 }
 
+// EqualsRefOfColIdent does deep equals between the two objects.
+func EqualsRefOfColIdent(a, b *ColIdent) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.val == b.val &&
+		a.lowered == b.lowered &&
+		a.at == b.at
+}
+
 // CloneColumnType creates a deep clone of the input.
 func CloneColumnType(n ColumnType) ColumnType {
 	return *CloneRefOfColumnType(&n)
+}
+
+// EqualsColumnType does deep equals between the two objects.
+func EqualsColumnType(a, b ColumnType) bool {
+	return a.Type == b.Type &&
+		a.Unsigned == b.Unsigned &&
+		a.Zerofill == b.Zerofill &&
+		a.Charset == b.Charset &&
+		a.Collate == b.Collate &&
+		EqualsRefOfColumnTypeOptions(a.Options, b.Options) &&
+		EqualsRefOfLiteral(a.Length, b.Length) &&
+		EqualsRefOfLiteral(a.Scale, b.Scale) &&
+		EqualsSliceOfString(a.EnumValues, b.EnumValues)
 }
 
 // CloneRefOfColumnTypeOptions creates a deep clone of the input.
@@ -2311,11 +6106,40 @@ func CloneRefOfColumnTypeOptions(n *ColumnTypeOptions) *ColumnTypeOptions {
 	return &out
 }
 
-// CloneSliceOfstring creates a deep clone of the input.
-func CloneSliceOfstring(n []string) []string {
+// EqualsRefOfColumnTypeOptions does deep equals between the two objects.
+func EqualsRefOfColumnTypeOptions(a, b *ColumnTypeOptions) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.NotNull == b.NotNull &&
+		a.Autoincrement == b.Autoincrement &&
+		EqualsExpr(a.Default, b.Default) &&
+		EqualsExpr(a.OnUpdate, b.OnUpdate) &&
+		EqualsRefOfLiteral(a.Comment, b.Comment) &&
+		a.KeyOpt == b.KeyOpt
+}
+
+// CloneSliceOfString creates a deep clone of the input.
+func CloneSliceOfString(n []string) []string {
 	res := make([]string, 0, len(n))
 	copy(res, n)
 	return res
+}
+
+// EqualsSliceOfString does deep equals between the two objects.
+func EqualsSliceOfString(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
 
 // CloneSliceOfRefOfIndexColumn creates a deep clone of the input.
@@ -2327,6 +6151,19 @@ func CloneSliceOfRefOfIndexColumn(n []*IndexColumn) []*IndexColumn {
 	return res
 }
 
+// EqualsSliceOfRefOfIndexColumn does deep equals between the two objects.
+func EqualsSliceOfRefOfIndexColumn(a, b []*IndexColumn) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		if !EqualsRefOfIndexColumn(a[i], b[i]) {
+			return false
+		}
+	}
+	return true
+}
+
 // CloneSliceOfRefOfIndexOption creates a deep clone of the input.
 func CloneSliceOfRefOfIndexOption(n []*IndexOption) []*IndexOption {
 	res := make([]*IndexOption, 0, len(n))
@@ -2334,6 +6171,19 @@ func CloneSliceOfRefOfIndexOption(n []*IndexOption) []*IndexOption {
 		res = append(res, CloneRefOfIndexOption(x))
 	}
 	return res
+}
+
+// EqualsSliceOfRefOfIndexOption does deep equals between the two objects.
+func EqualsSliceOfRefOfIndexOption(a, b []*IndexOption) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		if !EqualsRefOfIndexOption(a[i], b[i]) {
+			return false
+		}
+	}
+	return true
 }
 
 // CloneRefOfJoinCondition creates a deep clone of the input.
@@ -2347,6 +6197,18 @@ func CloneRefOfJoinCondition(n *JoinCondition) *JoinCondition {
 	return &out
 }
 
+// EqualsRefOfJoinCondition does deep equals between the two objects.
+func EqualsRefOfJoinCondition(a, b *JoinCondition) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsExpr(a.On, b.On) &&
+		EqualsColumns(a.Using, b.Using)
+}
+
 // CloneTableAndLockTypes creates a deep clone of the input.
 func CloneTableAndLockTypes(n TableAndLockTypes) TableAndLockTypes {
 	res := make(TableAndLockTypes, 0, len(n))
@@ -2354,6 +6216,19 @@ func CloneTableAndLockTypes(n TableAndLockTypes) TableAndLockTypes {
 		res = append(res, CloneRefOfTableAndLockType(x))
 	}
 	return res
+}
+
+// EqualsTableAndLockTypes does deep equals between the two objects.
+func EqualsTableAndLockTypes(a, b TableAndLockTypes) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		if !EqualsRefOfTableAndLockType(a[i], b[i]) {
+			return false
+		}
+	}
+	return true
 }
 
 // CloneSliceOfRefOfPartitionDefinition creates a deep clone of the input.
@@ -2365,6 +6240,19 @@ func CloneSliceOfRefOfPartitionDefinition(n []*PartitionDefinition) []*Partition
 	return res
 }
 
+// EqualsSliceOfRefOfPartitionDefinition does deep equals between the two objects.
+func EqualsSliceOfRefOfPartitionDefinition(a, b []*PartitionDefinition) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		if !EqualsRefOfPartitionDefinition(a[i], b[i]) {
+			return false
+		}
+	}
+	return true
+}
+
 // CloneSliceOfCharacteristic creates a deep clone of the input.
 func CloneSliceOfCharacteristic(n []Characteristic) []Characteristic {
 	res := make([]Characteristic, 0, len(n))
@@ -2372,6 +6260,19 @@ func CloneSliceOfCharacteristic(n []Characteristic) []Characteristic {
 		res = append(res, CloneCharacteristic(x))
 	}
 	return res
+}
+
+// EqualsSliceOfCharacteristic does deep equals between the two objects.
+func EqualsSliceOfCharacteristic(a, b []Characteristic) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		if !EqualsCharacteristic(a[i], b[i]) {
+			return false
+		}
+	}
+	return true
 }
 
 // CloneRefOfShowTablesOpt creates a deep clone of the input.
@@ -2384,6 +6285,19 @@ func CloneRefOfShowTablesOpt(n *ShowTablesOpt) *ShowTablesOpt {
 	return &out
 }
 
+// EqualsRefOfShowTablesOpt does deep equals between the two objects.
+func EqualsRefOfShowTablesOpt(a, b *ShowTablesOpt) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Full == b.Full &&
+		a.DbName == b.DbName &&
+		EqualsRefOfShowFilter(a.Filter, b.Filter)
+}
+
 // CloneRefOfTableIdent creates a deep clone of the input.
 func CloneRefOfTableIdent(n *TableIdent) *TableIdent {
 	if n == nil {
@@ -2391,6 +6305,17 @@ func CloneRefOfTableIdent(n *TableIdent) *TableIdent {
 	}
 	out := *n
 	return &out
+}
+
+// EqualsRefOfTableIdent does deep equals between the two objects.
+func EqualsRefOfTableIdent(a, b *TableIdent) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.v == b.v
 }
 
 // CloneRefOfTableName creates a deep clone of the input.
@@ -2404,6 +6329,18 @@ func CloneRefOfTableName(n *TableName) *TableName {
 	return &out
 }
 
+// EqualsRefOfTableName does deep equals between the two objects.
+func EqualsRefOfTableName(a, b *TableName) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsTableIdent(a.Name, b.Name) &&
+		EqualsTableIdent(a.Qualifier, b.Qualifier)
+}
+
 // CloneSliceOfRefOfIndexDefinition creates a deep clone of the input.
 func CloneSliceOfRefOfIndexDefinition(n []*IndexDefinition) []*IndexDefinition {
 	res := make([]*IndexDefinition, 0, len(n))
@@ -2413,6 +6350,19 @@ func CloneSliceOfRefOfIndexDefinition(n []*IndexDefinition) []*IndexDefinition {
 	return res
 }
 
+// EqualsSliceOfRefOfIndexDefinition does deep equals between the two objects.
+func EqualsSliceOfRefOfIndexDefinition(a, b []*IndexDefinition) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		if !EqualsRefOfIndexDefinition(a[i], b[i]) {
+			return false
+		}
+	}
+	return true
+}
+
 // CloneSliceOfRefOfConstraintDefinition creates a deep clone of the input.
 func CloneSliceOfRefOfConstraintDefinition(n []*ConstraintDefinition) []*ConstraintDefinition {
 	res := make([]*ConstraintDefinition, 0, len(n))
@@ -2420,6 +6370,19 @@ func CloneSliceOfRefOfConstraintDefinition(n []*ConstraintDefinition) []*Constra
 		res = append(res, CloneRefOfConstraintDefinition(x))
 	}
 	return res
+}
+
+// EqualsSliceOfRefOfConstraintDefinition does deep equals between the two objects.
+func EqualsSliceOfRefOfConstraintDefinition(a, b []*ConstraintDefinition) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		if !EqualsRefOfConstraintDefinition(a[i], b[i]) {
+			return false
+		}
+	}
+	return true
 }
 
 // CloneRefOfVindexParam creates a deep clone of the input.
@@ -2432,6 +6395,18 @@ func CloneRefOfVindexParam(n *VindexParam) *VindexParam {
 	return &out
 }
 
+// EqualsRefOfVindexParam does deep equals between the two objects.
+func EqualsRefOfVindexParam(a, b *VindexParam) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Val == b.Val &&
+		EqualsColIdent(a.Key, b.Key)
+}
+
 // CloneSliceOfVindexParam creates a deep clone of the input.
 func CloneSliceOfVindexParam(n []VindexParam) []VindexParam {
 	res := make([]VindexParam, 0, len(n))
@@ -2441,9 +6416,29 @@ func CloneSliceOfVindexParam(n []VindexParam) []VindexParam {
 	return res
 }
 
+// EqualsSliceOfVindexParam does deep equals between the two objects.
+func EqualsSliceOfVindexParam(a, b []VindexParam) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		if !EqualsVindexParam(a[i], b[i]) {
+			return false
+		}
+	}
+	return true
+}
+
 // CloneCollateAndCharset creates a deep clone of the input.
 func CloneCollateAndCharset(n CollateAndCharset) CollateAndCharset {
 	return *CloneRefOfCollateAndCharset(&n)
+}
+
+// EqualsCollateAndCharset does deep equals between the two objects.
+func EqualsCollateAndCharset(a, b CollateAndCharset) bool {
+	return a.IsDefault == b.IsDefault &&
+		a.Value == b.Value &&
+		a.Type == b.Type
 }
 
 // CloneRefOfRenameTablePair creates a deep clone of the input.
@@ -2457,6 +6452,18 @@ func CloneRefOfRenameTablePair(n *RenameTablePair) *RenameTablePair {
 	return &out
 }
 
+// EqualsRefOfRenameTablePair does deep equals between the two objects.
+func EqualsRefOfRenameTablePair(a, b *RenameTablePair) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsTableName(a.FromTable, b.FromTable) &&
+		EqualsTableName(a.ToTable, b.ToTable)
+}
+
 // CloneRefOfIndexColumn creates a deep clone of the input.
 func CloneRefOfIndexColumn(n *IndexColumn) *IndexColumn {
 	if n == nil {
@@ -2466,6 +6473,19 @@ func CloneRefOfIndexColumn(n *IndexColumn) *IndexColumn {
 	out.Column = CloneColIdent(n.Column)
 	out.Length = CloneRefOfLiteral(n.Length)
 	return &out
+}
+
+// EqualsRefOfIndexColumn does deep equals between the two objects.
+func EqualsRefOfIndexColumn(a, b *IndexColumn) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsColIdent(a.Column, b.Column) &&
+		EqualsRefOfLiteral(a.Length, b.Length) &&
+		a.Direction == b.Direction
 }
 
 // CloneRefOfIndexOption creates a deep clone of the input.
@@ -2478,6 +6498,19 @@ func CloneRefOfIndexOption(n *IndexOption) *IndexOption {
 	return &out
 }
 
+// EqualsRefOfIndexOption does deep equals between the two objects.
+func EqualsRefOfIndexOption(a, b *IndexOption) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Name == b.Name &&
+		a.String == b.String &&
+		EqualsRefOfLiteral(a.Value, b.Value)
+}
+
 // CloneRefOfTableAndLockType creates a deep clone of the input.
 func CloneRefOfTableAndLockType(n *TableAndLockType) *TableAndLockType {
 	if n == nil {
@@ -2488,6 +6521,18 @@ func CloneRefOfTableAndLockType(n *TableAndLockType) *TableAndLockType {
 	return &out
 }
 
+// EqualsRefOfTableAndLockType does deep equals between the two objects.
+func EqualsRefOfTableAndLockType(a, b *TableAndLockType) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsTableExpr(a.Table, b.Table) &&
+		a.Lock == b.Lock
+}
+
 // CloneRefOfCollateAndCharset creates a deep clone of the input.
 func CloneRefOfCollateAndCharset(n *CollateAndCharset) *CollateAndCharset {
 	if n == nil {
@@ -2495,4 +6540,17 @@ func CloneRefOfCollateAndCharset(n *CollateAndCharset) *CollateAndCharset {
 	}
 	out := *n
 	return &out
+}
+
+// EqualsRefOfCollateAndCharset does deep equals between the two objects.
+func EqualsRefOfCollateAndCharset(a, b *CollateAndCharset) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.IsDefault == b.IsDefault &&
+		a.Value == b.Value &&
+		a.Type == b.Type
 }
