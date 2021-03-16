@@ -4800,3 +4800,5 @@
 2021-03-16T00:51:09Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/655941537
 2021-03-16T00:51:09Z,endtoend,https://github.com/vitessio/vitess/actions/runs/655941526
 2021-03-16T00:51:09Z,unit_race,https://github.com/vitessio/vitess/actions/runs/655941512
+2021-03-16T07:29:37Z,check_make_sizegen,https://github.com/vitessio/vitess/actions/runs/656759954
+2021-03-16T07:29:37Z,endtoend,https://github.com/vitessio/vitess/actions/runs/656759953
