@@ -4856,3 +4856,5 @@
 2021-03-16T19:48:02Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/658788891
 2021-03-16T19:48:02Z,endtoend,https://github.com/vitessio/vitess/actions/runs/658788903
 2021-03-16T19:48:02Z,local_example,https://github.com/vitessio/vitess/actions/runs/658788896
+2021-03-16T23:39:28Z,Unit Test (mariadb101),https://github.com/vitessio/vitess/actions/runs/659323010
+2021-03-16T23:39:28Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/659323006
