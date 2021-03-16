@@ -25,7 +25,6 @@ trap cleanup INT QUIT TERM
 
 echo "vtadmin-api is up! Logs are in ${log_dir}/vtadmin-api.out, and its PID is ${vtadmin_pid}"
 
-
 (
   cd ../../web/vtadmin &&
   npm install &&
