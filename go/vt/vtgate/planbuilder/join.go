@@ -212,28 +212,22 @@ func (jb *join) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colNumber i
 }
 
 // SupplyWeightString implements the logicalPlan interface
-func (jb *join) SupplyWeightString(colNumber int) (weightcolNumber int, err error) {
+func (jb *join) SupplyWeightString(colNumber int) (weightcolNumber int) {
 	rc := jb.resultColumns[colNumber]
 	if weightcolNumber, ok := jb.weightStrings[rc]; ok {
-		return weightcolNumber, nil
+		return weightcolNumber
 	}
 	routeNumber := rc.column.Origin().Order()
 	if jb.isOnLeft(routeNumber) {
-		sourceCol, err := jb.Left.SupplyWeightString(-jb.ejoin.Cols[colNumber] - 1)
-		if err != nil {
-			return 0, err
-		}
+		sourceCol := jb.Left.SupplyWeightString(-jb.ejoin.Cols[colNumber] - 1)
 		jb.ejoin.Cols = append(jb.ejoin.Cols, -sourceCol-1)
 	} else {
-		sourceCol, err := jb.Right.SupplyWeightString(jb.ejoin.Cols[colNumber] - 1)
-		if err != nil {
-			return 0, err
-		}
+		sourceCol := jb.Right.SupplyWeightString(jb.ejoin.Cols[colNumber] - 1)
 		jb.ejoin.Cols = append(jb.ejoin.Cols, sourceCol+1)
 	}
 	jb.resultColumns = append(jb.resultColumns, rc)
 	jb.weightStrings[rc] = len(jb.ejoin.Cols) - 1
-	return len(jb.ejoin.Cols) - 1, nil
+	return len(jb.ejoin.Cols) - 1
 }
 
 // Rewrite implements the logicalPlan interface
