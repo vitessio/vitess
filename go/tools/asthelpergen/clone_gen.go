@@ -253,15 +253,12 @@ func isBasic(t types.Type) bool {
 }
 
 func (c *cloneGen) tryStruct(underlying, t types.Type) bool {
-	strct, ok := underlying.(*types.Struct)
+	_, ok := underlying.(*types.Struct)
 	if !ok {
 		return false
 	}
 
 	if err := c.makeStructCloneMethod(t); err != nil {
-		log.Fatalf("%v", err)
-	}
-	if err := c.makeStructEqualsMethod(t, strct); err != nil {
 		log.Fatalf("%v", err)
 	}
 	return true
@@ -277,10 +274,8 @@ func (c *cloneGen) tryPtr(underlying, t types.Type) bool {
 	switch ptrToType := ptrToType.(type) {
 	case *types.Struct:
 		c.makePtrToStructCloneMethod(t, ptrToType)
-		c.makePtrToStructEqualsMethod(t, ptrToType)
 		return true
 	case *types.Basic:
-		c.makePtrToBasicEqualsMethod(t)
 		c.makePtrCloneMethod(t, ptr)
 		return true
 	default:
@@ -345,9 +340,6 @@ func (c *cloneGen) tryInterface(underlying, t types.Type) bool {
 		log.Fatalf("%v", err)
 	}
 
-	if err := c.makeInterfaceEqualsMethod(t, iface); err != nil {
-		log.Fatalf("%v", err)
-	}
 	return true
 }
 
@@ -358,9 +350,6 @@ func (c *cloneGen) trySlice(underlying, t types.Type) bool {
 	}
 
 	if err := c.makeSliceCloneMethod(t, slice); err != nil {
-		log.Fatalf("%v", err)
-	}
-	if err := c.makeSliceEqualsMethod(t, slice); err != nil {
 		log.Fatalf("%v", err)
 	}
 	return true
