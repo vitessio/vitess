@@ -80,6 +80,9 @@ service Vtctld {
   rpc GetSchema(vtctldata.GetSchemaRequest) returns (vtctldata.GetSchemaResponse) {};
   // GetShard returns information about a shard in the topology.
   rpc GetShard(vtctldata.GetShardRequest) returns (vtctldata.GetShardResponse) {};
+  // GetSrvKeyspaces returns the SrvKeyspaces for a keyspace in one or more
+  // cells.
+  rpc GetSrvKeyspaces (vtctldata.GetSrvKeyspacesRequest) returns (vtctldata.GetSrvKeyspacesResponse) {};
   // GetSrvVSchema returns a the SrvVSchema for a cell.
   rpc GetSrvVSchema(vtctldata.GetSrvVSchemaRequest) returns (vtctldata.GetSrvVSchemaResponse) {};
   // GetTablet returns information about a tablet.
