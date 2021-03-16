@@ -399,6 +399,32 @@ func (tsv *TabletServer) ReloadSchema(ctx context.Context) error {
 	return tsv.se.Reload(ctx)
 }
 
+// WaitForSchemaReset blocks the TabletServer until there's been at least `timeout` duration without
+// any schema changes. This is useful for tests that need to wait for all the currently existing schema
+// changes to finish being applied.
+func (tsv *TabletServer) WaitForSchemaReset(timeout time.Duration) {
+	onSchemaChange := make(chan struct{}, 1)
+	tsv.se.RegisterNotifier("_tsv_wait", func(_ map[string]*schema.Table, _, _, _ []string) {
+		onSchemaChange <- struct{}{}
+	})
+	defer tsv.se.UnregisterNotifier("_tsv_wait")
+
+	after := time.NewTimer(timeout)
+	defer after.Stop()
+
+	for {
+		select {
+		case <-after.C:
+			return
+		case <-onSchemaChange:
+			if !after.Stop() {
+				<-after.C
+			}
+			after.Reset(timeout)
+		}
+	}
+}
+
 // ClearQueryPlanCache clears internal query plan cache
 func (tsv *TabletServer) ClearQueryPlanCache() {
 	// We should ideally bracket this with start & endErequest,
