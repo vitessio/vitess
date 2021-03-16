@@ -62,6 +62,7 @@ type generator2 interface {
 	structMethod(t types.Type, strct *types.Struct, spi generatorSPI) error
 	ptrToStructMethod(t types.Type, strct *types.Struct, spi generatorSPI) error
 	ptrToBasicMethod(t types.Type, basic *types.Basic, spi generatorSPI) error
+	ptrToOtherMethod(t types.Type, ptr *types.Pointer, spi generatorSPI) error
 	sliceMethod(t types.Type, slice *types.Slice, spi generatorSPI) error
 }
 
@@ -299,10 +300,9 @@ func GenerateASTHelpers(packagePatterns []string, rootIface, exceptCloneType str
 		return types.Implements(t, iface)
 	}
 	rewriter := newRewriterGen(interestingType, nt.Obj().Name())
-	clone := newCloneGen(iface, scope, exceptCloneType)
-
-	generator := newGenerator(loaded[0].Module, loaded[0].TypesSizes, nt, rewriter, clone)
+	generator := newGenerator(loaded[0].Module, loaded[0].TypesSizes, nt, rewriter)
 	generator.gens2 = append(generator.gens2, &equalsGen{})
+	generator.gens2 = append(generator.gens2, newCloneGen(exceptCloneType))
 	it, err := generator.GenerateCode()
 	if err != nil {
 		return nil, err
@@ -320,6 +320,13 @@ func (gen *astHelperGen) scope() *types.Scope {
 func (gen *astHelperGen) addType(t types.Type) {
 	gen.todo = append(gen.todo, t)
 }
+
+type methodType int
+
+const (
+	clone methodType = iota
+	equals
+)
 
 func (gen *astHelperGen) addFunc(name string, typ methodType, code jen.Code) {
 	var comment string
@@ -398,5 +405,23 @@ func (gen *astHelperGen) allGenerators(f func(g generator2) error) {
 		if err != nil {
 			log.Fatalf("%v", err)
 		}
+	}
+}
+
+// printableTypeName returns a string that can be used as a valid golang identifier
+func printableTypeName(t types.Type) string {
+	switch t := t.(type) {
+	case *types.Pointer:
+		return "RefOf" + printableTypeName(t.Elem())
+	case *types.Slice:
+		return "SliceOf" + printableTypeName(t.Elem())
+	case *types.Named:
+		return t.Obj().Name()
+	case *types.Basic:
+		return strings.Title(t.Name())
+	case *types.Interface:
+		return t.String()
+	default:
+		panic(fmt.Sprintf("unknown type %T %v", t, t))
 	}
 }

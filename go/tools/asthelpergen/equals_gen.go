@@ -231,3 +231,7 @@ func (e equalsGen) sliceMethod(t types.Type, slice *types.Slice, spi generatorSP
 	spi.addFunc(funcName, equals, funcDecl)
 	return nil
 }
+
+func (e equalsGen) ptrToOtherMethod(types.Type, *types.Pointer, generatorSPI) error {
+	return nil
+}
