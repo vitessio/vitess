@@ -2291,6 +2291,16 @@ func (node *Show) Format(buf *TrackedBuffer) {
 		}
 		return
 	}
+	if strings.ToLower(node.Type) == "table status" {
+		buf.Myprintf("show table status")
+		if node.Database != "" {
+			buf.Myprintf(" from %s", node.Database)
+		}
+		if node.Filter != nil {
+			buf.Myprintf("%v", node.Filter)
+		}
+		return
+	}
 	if node.Database != "" {
 		notExistsOpt := ""
 		if node.IfNotExists {
