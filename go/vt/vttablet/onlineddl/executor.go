@@ -1506,6 +1506,15 @@ func (e *Executor) evaluateDeclarativeDiff(ctx context.Context, onlineDDL *schem
 		if _, err := conn.ExecuteFetch(modifiedCreateSQL, 0, false); err != nil {
 			return "", err
 		}
+
+		defer func() {
+			// Drop the comparison table
+			parsed := sqlparser.BuildParsedQuery(sqlDropTable, comparisonTableName)
+			_, _ = conn.ExecuteFetch(parsed.Query, 0, false)
+			// Nothing bad happens for not checking the error code. The table is GC/HOLD. If we
+			// can't drop it now, it still gets collected later by tablegc mechanism
+		}()
+
 	}
 
 	// Compare the existing (to be potentially migrated) table with the declared (newly created) table:
@@ -1576,13 +1585,6 @@ func (e *Executor) evaluateDeclarativeDiff(ctx context.Context, onlineDDL *schem
 		return "", err
 	}
 
-	{
-		// Drop the comparison table
-		parsed := sqlparser.BuildParsedQuery(sqlDropTable, comparisonTableName)
-		if _, err := conn.ExecuteFetch(parsed.Query, 0, false); err != nil {
-			return "", err
-		}
-	}
 	return alterClause, nil
 }
 
@@ -1641,7 +1643,6 @@ func (e *Executor) executeMigration(ctx context.Context, onlineDDL *schema.Onlin
 				return failMigration(err)
 			}
 			if exists {
-				fmt.Printf("exists: %v\n", exists)
 				alterClause, err := e.evaluateDeclarativeDiff(ctx, onlineDDL)
 				if err != nil {
 					return failMigration(err)
