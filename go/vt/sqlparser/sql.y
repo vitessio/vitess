@@ -50,78 +50,95 @@ func skipToEnd(yylex interface{}) {
 
 %}
 
-%union {
+%struct {
   empty         struct{}
-  statement     Statement
-  selStmt       SelectStatement
-  ins           *Insert
-  byt           byte
+  LengthScaleOption LengthScaleOption
+  tableName     TableName
+  tableIdent    TableIdent
   str           string
   strs          []string
-  selectExprs   SelectExprs
-  selectExpr    SelectExpr
-  columns       Columns
-  partitions    Partitions
-  colName       *ColName
-  tableExprs    TableExprs
-  tableExpr     TableExpr
+  vindexParam   VindexParam
+  colIdent      ColIdent
   joinCondition JoinCondition
-  tableName     TableName
-  tableNames    TableNames
-  indexHints    *IndexHints
+  collateAndCharset CollateAndCharset
+  columnType    ColumnType
+}
+
+%union {
+  statement     Statement
+  selStmt       SelectStatement
+  tableExpr     TableExpr
   expr          Expr
-  exprs         Exprs
-  boolVal       BoolVal
-  boolean	bool
-  literal        *Literal
   colTuple      ColTuple
-  values        Values
-  valTuple      ValTuple
+  optVal        Expr
+  constraintInfo ConstraintInfo
+  alterOption      AlterOption
+  characteristic Characteristic
+
+  ins           *Insert
+  colName       *ColName
+  indexHints    *IndexHints
+  literal        *Literal
   subquery      *Subquery
   derivedTable  *DerivedTable
-  whens         []*When
   when          *When
-  orderBy       OrderBy
   order         *Order
   limit         *Limit
-  updateExprs   UpdateExprs
-  setExprs      SetExprs
   updateExpr    *UpdateExpr
   setExpr       *SetExpr
-  characteristic Characteristic
-  characteristics []Characteristic
-  colIdent      ColIdent
-  tableIdent    TableIdent
   convertType   *ConvertType
   aliasedTableName *AliasedTableExpr
-  TableSpec  *TableSpec
-  columnType    ColumnType
-  colKeyOpt     ColumnKeyOption
-  optVal        Expr
-  LengthScaleOption LengthScaleOption
+  tableSpec  *TableSpec
   columnDefinition *ColumnDefinition
-  columnDefinitions []*ColumnDefinition
   indexDefinition *IndexDefinition
   indexInfo     *IndexInfo
   indexOption   *IndexOption
-  indexOptions  []*IndexOption
   indexColumn   *IndexColumn
-  indexColumns  []*IndexColumn
-  constraintDefinition *ConstraintDefinition
-  constraintInfo ConstraintInfo
-  ReferenceAction ReferenceAction
-  partDefs      []*PartitionDefinition
   partDef       *PartitionDefinition
   partSpec      *PartitionSpec
-  partSpecs     []*PartitionSpec
-  vindexParam   VindexParam
-  vindexParams  []VindexParam
   showFilter    *ShowFilter
   optLike       *OptLike
+  selectInto	  *SelectInto
+  createDatabase  *CreateDatabase
+  alterDatabase  *AlterDatabase
+  createTable      *CreateTable
+  tableAndLockType *TableAndLockType
+  alterTable       *AlterTable
+  tableOption      *TableOption
+  columnTypeOptions *ColumnTypeOptions
+  constraintDefinition *ConstraintDefinition
+
+  whens         []*When
+  columnDefinitions []*ColumnDefinition
+  indexOptions  []*IndexOption
+  indexColumns  []*IndexColumn
+  collateAndCharsets []CollateAndCharset
+  tableAndLockTypes TableAndLockTypes
+  renameTablePairs []*RenameTablePair
+  alterOptions	   []AlterOption
+  vindexParams  []VindexParam
+  partDefs      []*PartitionDefinition
+  partSpecs     []*PartitionSpec
+  characteristics []Characteristic
+  selectExpr    SelectExpr
+  columns       Columns
+  partitions    Partitions
+  tableExprs    TableExprs
+  tableNames    TableNames
+  exprs         Exprs
+  values        Values
+  valTuple      ValTuple
+  orderBy       OrderBy
+  updateExprs   UpdateExprs
+  setExprs      SetExprs
+  selectExprs   SelectExprs
+  tableOptions     TableOptions
+
+  colKeyOpt     ColumnKeyOption
+  ReferenceAction ReferenceAction
   isolationLevel IsolationLevel
   insertAction InsertAction
   scope 	Scope
-  ignore 	Ignore
   lock 		Lock
   joinType  	JoinType
   comparisonExprOperator ComparisonExprOperator
@@ -129,22 +146,11 @@ func skipToEnd(yylex interface{}) {
   matchExprOption MatchExprOption
   orderDirection  OrderDirection
   explainType 	  ExplainType
-  selectInto	  *SelectInto
-  createDatabase  *CreateDatabase
-  alterDatabase  *AlterDatabase
-  collateAndCharset CollateAndCharset
-  collateAndCharsets []CollateAndCharset
-  createTable      *CreateTable
-  tableAndLockTypes []*TableAndLockType
-  tableAndLockType *TableAndLockType
   lockType LockType
-  alterTable       *AlterTable
-  alterOption      AlterOption
-  alterOptions	   []AlterOption
-  tableOption      *TableOption
-  tableOptions     TableOptions
-  renameTablePairs []*RenameTablePair
-  columnTypeOptions *ColumnTypeOptions
+
+  boolean bool
+  boolVal BoolVal
+  ignore Ignore
 }
 
 %token LEX_ERROR
@@ -372,7 +378,7 @@ func skipToEnd(yylex interface{}) {
 %type <str> index_or_key index_symbols from_or_in index_or_key_opt
 %type <str> name_opt constraint_name_opt
 %type <str> equal_opt
-%type <TableSpec> table_spec table_column_list
+%type <tableSpec> table_spec table_column_list
 %type <optLike> create_like
 %type <str> table_opt_value
 %type <tableOption> table_option
