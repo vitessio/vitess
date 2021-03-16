@@ -351,6 +351,18 @@ message GetShardResponse {
   Shard shard = 1;
 }
 
+message GetSrvKeyspacesRequest {
+  string keyspace = 1;
+  // Cells is a list of cells to lookup a SrvKeyspace for. Leaving this empty is
+  // equivalent to specifying all cells in the topo.
+  repeated string cells = 2;
+}
+
+message GetSrvKeyspacesResponse {
+  // SrvKeyspaces is a mapping of cell name to SrvKeyspace.
+  map<string, topodata.SrvKeyspace> srv_keyspaces = 1;
+}
+
 message GetSrvVSchemaRequest {
   string cell = 1;
 }

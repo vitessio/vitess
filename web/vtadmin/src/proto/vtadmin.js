@@ -62099,6 +62099,461 @@ $root.vtctldata = (function() {
         return GetShardResponse;
     })();
 
+    vtctldata.GetSrvKeyspacesRequest = (function() {
+
+        /**
+         * Properties of a GetSrvKeyspacesRequest.
+         * @memberof vtctldata
+         * @interface IGetSrvKeyspacesRequest
+         * @property {string|null} [keyspace] GetSrvKeyspacesRequest keyspace
+         * @property {Array.<string>|null} [cells] GetSrvKeyspacesRequest cells
+         */
+
+        /**
+         * Constructs a new GetSrvKeyspacesRequest.
+         * @memberof vtctldata
+         * @classdesc Represents a GetSrvKeyspacesRequest.
+         * @implements IGetSrvKeyspacesRequest
+         * @constructor
+         * @param {vtctldata.IGetSrvKeyspacesRequest=} [properties] Properties to set
+         */
+        function GetSrvKeyspacesRequest(properties) {
+            this.cells = [];
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * GetSrvKeyspacesRequest keyspace.
+         * @member {string} keyspace
+         * @memberof vtctldata.GetSrvKeyspacesRequest
+         * @instance
+         */
+        GetSrvKeyspacesRequest.prototype.keyspace = "";
+
+        /**
+         * GetSrvKeyspacesRequest cells.
+         * @member {Array.<string>} cells
+         * @memberof vtctldata.GetSrvKeyspacesRequest
+         * @instance
+         */
+        GetSrvKeyspacesRequest.prototype.cells = $util.emptyArray;
+
+        /**
+         * Creates a new GetSrvKeyspacesRequest instance using the specified properties.
+         * @function create
+         * @memberof vtctldata.GetSrvKeyspacesRequest
+         * @static
+         * @param {vtctldata.IGetSrvKeyspacesRequest=} [properties] Properties to set
+         * @returns {vtctldata.GetSrvKeyspacesRequest} GetSrvKeyspacesRequest instance
+         */
+        GetSrvKeyspacesRequest.create = function create(properties) {
+            return new GetSrvKeyspacesRequest(properties);
+        };
+
+        /**
+         * Encodes the specified GetSrvKeyspacesRequest message. Does not implicitly {@link vtctldata.GetSrvKeyspacesRequest.verify|verify} messages.
+         * @function encode
+         * @memberof vtctldata.GetSrvKeyspacesRequest
+         * @static
+         * @param {vtctldata.IGetSrvKeyspacesRequest} message GetSrvKeyspacesRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        GetSrvKeyspacesRequest.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.keyspace != null && Object.hasOwnProperty.call(message, "keyspace"))
+                writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
+            if (message.cells != null && message.cells.length)
+                for (var i = 0; i < message.cells.length; ++i)
+                    writer.uint32(/* id 2, wireType 2 =*/18).string(message.cells[i]);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified GetSrvKeyspacesRequest message, length delimited. Does not implicitly {@link vtctldata.GetSrvKeyspacesRequest.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtctldata.GetSrvKeyspacesRequest
+         * @static
+         * @param {vtctldata.IGetSrvKeyspacesRequest} message GetSrvKeyspacesRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        GetSrvKeyspacesRequest.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a GetSrvKeyspacesRequest message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtctldata.GetSrvKeyspacesRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtctldata.GetSrvKeyspacesRequest} GetSrvKeyspacesRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        GetSrvKeyspacesRequest.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.GetSrvKeyspacesRequest();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.keyspace = reader.string();
+                    break;
+                case 2:
+                    if (!(message.cells && message.cells.length))
+                        message.cells = [];
+                    message.cells.push(reader.string());
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a GetSrvKeyspacesRequest message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtctldata.GetSrvKeyspacesRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtctldata.GetSrvKeyspacesRequest} GetSrvKeyspacesRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        GetSrvKeyspacesRequest.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a GetSrvKeyspacesRequest message.
+         * @function verify
+         * @memberof vtctldata.GetSrvKeyspacesRequest
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        GetSrvKeyspacesRequest.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.keyspace != null && message.hasOwnProperty("keyspace"))
+                if (!$util.isString(message.keyspace))
+                    return "keyspace: string expected";
+            if (message.cells != null && message.hasOwnProperty("cells")) {
+                if (!Array.isArray(message.cells))
+                    return "cells: array expected";
+                for (var i = 0; i < message.cells.length; ++i)
+                    if (!$util.isString(message.cells[i]))
+                        return "cells: string[] expected";
+            }
+            return null;
+        };
+
+        /**
+         * Creates a GetSrvKeyspacesRequest message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtctldata.GetSrvKeyspacesRequest
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtctldata.GetSrvKeyspacesRequest} GetSrvKeyspacesRequest
+         */
+        GetSrvKeyspacesRequest.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtctldata.GetSrvKeyspacesRequest)
+                return object;
+            var message = new $root.vtctldata.GetSrvKeyspacesRequest();
+            if (object.keyspace != null)
+                message.keyspace = String(object.keyspace);
+            if (object.cells) {
+                if (!Array.isArray(object.cells))
+                    throw TypeError(".vtctldata.GetSrvKeyspacesRequest.cells: array expected");
+                message.cells = [];
+                for (var i = 0; i < object.cells.length; ++i)
+                    message.cells[i] = String(object.cells[i]);
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a GetSrvKeyspacesRequest message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtctldata.GetSrvKeyspacesRequest
+         * @static
+         * @param {vtctldata.GetSrvKeyspacesRequest} message GetSrvKeyspacesRequest
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        GetSrvKeyspacesRequest.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.arrays || options.defaults)
+                object.cells = [];
+            if (options.defaults)
+                object.keyspace = "";
+            if (message.keyspace != null && message.hasOwnProperty("keyspace"))
+                object.keyspace = message.keyspace;
+            if (message.cells && message.cells.length) {
+                object.cells = [];
+                for (var j = 0; j < message.cells.length; ++j)
+                    object.cells[j] = message.cells[j];
+            }
+            return object;
+        };
+
+        /**
+         * Converts this GetSrvKeyspacesRequest to JSON.
+         * @function toJSON
+         * @memberof vtctldata.GetSrvKeyspacesRequest
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        GetSrvKeyspacesRequest.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return GetSrvKeyspacesRequest;
+    })();
+
+    vtctldata.GetSrvKeyspacesResponse = (function() {
+
+        /**
+         * Properties of a GetSrvKeyspacesResponse.
+         * @memberof vtctldata
+         * @interface IGetSrvKeyspacesResponse
+         * @property {Object.<string,topodata.ISrvKeyspace>|null} [srv_keyspaces] GetSrvKeyspacesResponse srv_keyspaces
+         */
+
+        /**
+         * Constructs a new GetSrvKeyspacesResponse.
+         * @memberof vtctldata
+         * @classdesc Represents a GetSrvKeyspacesResponse.
+         * @implements IGetSrvKeyspacesResponse
+         * @constructor
+         * @param {vtctldata.IGetSrvKeyspacesResponse=} [properties] Properties to set
+         */
+        function GetSrvKeyspacesResponse(properties) {
+            this.srv_keyspaces = {};
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * GetSrvKeyspacesResponse srv_keyspaces.
+         * @member {Object.<string,topodata.ISrvKeyspace>} srv_keyspaces
+         * @memberof vtctldata.GetSrvKeyspacesResponse
+         * @instance
+         */
+        GetSrvKeyspacesResponse.prototype.srv_keyspaces = $util.emptyObject;
+
+        /**
+         * Creates a new GetSrvKeyspacesResponse instance using the specified properties.
+         * @function create
+         * @memberof vtctldata.GetSrvKeyspacesResponse
+         * @static
+         * @param {vtctldata.IGetSrvKeyspacesResponse=} [properties] Properties to set
+         * @returns {vtctldata.GetSrvKeyspacesResponse} GetSrvKeyspacesResponse instance
+         */
+        GetSrvKeyspacesResponse.create = function create(properties) {
+            return new GetSrvKeyspacesResponse(properties);
+        };
+
+        /**
+         * Encodes the specified GetSrvKeyspacesResponse message. Does not implicitly {@link vtctldata.GetSrvKeyspacesResponse.verify|verify} messages.
+         * @function encode
+         * @memberof vtctldata.GetSrvKeyspacesResponse
+         * @static
+         * @param {vtctldata.IGetSrvKeyspacesResponse} message GetSrvKeyspacesResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        GetSrvKeyspacesResponse.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.srv_keyspaces != null && Object.hasOwnProperty.call(message, "srv_keyspaces"))
+                for (var keys = Object.keys(message.srv_keyspaces), i = 0; i < keys.length; ++i) {
+                    writer.uint32(/* id 1, wireType 2 =*/10).fork().uint32(/* id 1, wireType 2 =*/10).string(keys[i]);
+                    $root.topodata.SrvKeyspace.encode(message.srv_keyspaces[keys[i]], writer.uint32(/* id 2, wireType 2 =*/18).fork()).ldelim().ldelim();
+                }
+            return writer;
+        };
+
+        /**
+         * Encodes the specified GetSrvKeyspacesResponse message, length delimited. Does not implicitly {@link vtctldata.GetSrvKeyspacesResponse.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtctldata.GetSrvKeyspacesResponse
+         * @static
+         * @param {vtctldata.IGetSrvKeyspacesResponse} message GetSrvKeyspacesResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        GetSrvKeyspacesResponse.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a GetSrvKeyspacesResponse message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtctldata.GetSrvKeyspacesResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtctldata.GetSrvKeyspacesResponse} GetSrvKeyspacesResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        GetSrvKeyspacesResponse.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.GetSrvKeyspacesResponse(), key, value;
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    if (message.srv_keyspaces === $util.emptyObject)
+                        message.srv_keyspaces = {};
+                    var end2 = reader.uint32() + reader.pos;
+                    key = "";
+                    value = null;
+                    while (reader.pos < end2) {
+                        var tag2 = reader.uint32();
+                        switch (tag2 >>> 3) {
+                        case 1:
+                            key = reader.string();
+                            break;
+                        case 2:
+                            value = $root.topodata.SrvKeyspace.decode(reader, reader.uint32());
+                            break;
+                        default:
+                            reader.skipType(tag2 & 7);
+                            break;
+                        }
+                    }
+                    message.srv_keyspaces[key] = value;
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a GetSrvKeyspacesResponse message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtctldata.GetSrvKeyspacesResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtctldata.GetSrvKeyspacesResponse} GetSrvKeyspacesResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        GetSrvKeyspacesResponse.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a GetSrvKeyspacesResponse message.
+         * @function verify
+         * @memberof vtctldata.GetSrvKeyspacesResponse
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        GetSrvKeyspacesResponse.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.srv_keyspaces != null && message.hasOwnProperty("srv_keyspaces")) {
+                if (!$util.isObject(message.srv_keyspaces))
+                    return "srv_keyspaces: object expected";
+                var key = Object.keys(message.srv_keyspaces);
+                for (var i = 0; i < key.length; ++i) {
+                    var error = $root.topodata.SrvKeyspace.verify(message.srv_keyspaces[key[i]]);
+                    if (error)
+                        return "srv_keyspaces." + error;
+                }
+            }
+            return null;
+        };
+
+        /**
+         * Creates a GetSrvKeyspacesResponse message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtctldata.GetSrvKeyspacesResponse
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtctldata.GetSrvKeyspacesResponse} GetSrvKeyspacesResponse
+         */
+        GetSrvKeyspacesResponse.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtctldata.GetSrvKeyspacesResponse)
+                return object;
+            var message = new $root.vtctldata.GetSrvKeyspacesResponse();
+            if (object.srv_keyspaces) {
+                if (typeof object.srv_keyspaces !== "object")
+                    throw TypeError(".vtctldata.GetSrvKeyspacesResponse.srv_keyspaces: object expected");
+                message.srv_keyspaces = {};
+                for (var keys = Object.keys(object.srv_keyspaces), i = 0; i < keys.length; ++i) {
+                    if (typeof object.srv_keyspaces[keys[i]] !== "object")
+                        throw TypeError(".vtctldata.GetSrvKeyspacesResponse.srv_keyspaces: object expected");
+                    message.srv_keyspaces[keys[i]] = $root.topodata.SrvKeyspace.fromObject(object.srv_keyspaces[keys[i]]);
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a GetSrvKeyspacesResponse message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtctldata.GetSrvKeyspacesResponse
+         * @static
+         * @param {vtctldata.GetSrvKeyspacesResponse} message GetSrvKeyspacesResponse
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        GetSrvKeyspacesResponse.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.objects || options.defaults)
+                object.srv_keyspaces = {};
+            var keys2;
+            if (message.srv_keyspaces && (keys2 = Object.keys(message.srv_keyspaces)).length) {
+                object.srv_keyspaces = {};
+                for (var j = 0; j < keys2.length; ++j)
+                    object.srv_keyspaces[keys2[j]] = $root.topodata.SrvKeyspace.toObject(message.srv_keyspaces[keys2[j]], options);
+            }
+            return object;
+        };
+
+        /**
+         * Converts this GetSrvKeyspacesResponse to JSON.
+         * @function toJSON
+         * @memberof vtctldata.GetSrvKeyspacesResponse
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        GetSrvKeyspacesResponse.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return GetSrvKeyspacesResponse;
+    })();
+
     vtctldata.GetSrvVSchemaRequest = (function() {
 
         /**
