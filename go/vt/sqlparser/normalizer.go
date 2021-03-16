@@ -24,6 +24,7 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
+// BindVars is a set of reserved bind variables from a SQL statement
 type BindVars map[string]struct{}
 
 // Normalize changes the statement to use bind values, and
@@ -228,8 +229,6 @@ func (nz *normalizer) newName() string {
 }
 
 // GetBindvars returns a map of the bind vars referenced in the statement.
-// TODO(sougou); This function gets called again from vtgate/planbuilder.
-// Ideally, this should be done only once.
 func GetBindvars(stmt Statement) map[string]struct{} {
 	bindvars := make(map[string]struct{})
 	_ = Walk(func(node SQLNode) (kontinue bool, err error) {
