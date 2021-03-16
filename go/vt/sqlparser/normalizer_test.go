@@ -278,3 +278,32 @@ func BenchmarkNormalize(b *testing.B) {
 			Normalize(ast, map[string]*querypb.BindVariable{}, ""))
 	}
 }
+
+func BenchmarkNormalizeTraces(b *testing.B) {
+	for _, trace := range []string{"django_queries.txt", "lobsters.sql.gz"} {
+		b.Run(trace, func(b *testing.B) {
+			queries := loadQueries(b, trace)
+			if len(queries) > 10000 {
+				queries = queries[:10000]
+			}
+
+			parsed := make([]Statement, 0, len(queries))
+			for _, q := range queries {
+				pp, err := Parse(q)
+				if err != nil {
+					b.Fatal(err)
+				}
+				parsed = append(parsed, pp)
+			}
+
+			b.ResetTimer()
+			b.ReportAllocs()
+
+			for i := 0; i < b.N; i++ {
+				for _, query := range parsed {
+					_ = Normalize(query, map[string]*querypb.BindVariable{}, "")
+				}
+			}
+		})
+	}
+}
