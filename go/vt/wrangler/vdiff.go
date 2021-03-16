@@ -17,6 +17,7 @@ limitations under the License.
 package wrangler
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -24,6 +25,10 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
+	"vitess.io/vitess/go/vt/log"
 
 	"github.com/golang/protobuf/proto"
 
@@ -33,14 +38,12 @@ import (
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/key"
-	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl/workflow"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 
@@ -960,11 +963,27 @@ func (td *tableDiffer) diff(ctx context.Context, wr *Wrangler, rowsToCompare *in
 }
 
 func (td *tableDiffer) compare(sourceRow, targetRow []sqltypes.Value, cols []int) (int, error) {
-	for _, col := range cols {
+	for i, col := range cols {
 		if col == -1 {
 			continue
 		}
-		c, err := evalengine.NullsafeCompare(sourceRow[col], targetRow[col])
+
+		// This detects if we are using weight_string() to compare this (text) column.
+		// If either source or target weight_string is null we fallback to a byte compare
+		if sourceRow[col].IsNull() && sourceRow[i].IsText() && col > i {
+			col = i
+		}
+		if targetRow[col].IsNull() && targetRow[i].IsText() && col > i {
+			col = i
+		}
+
+		var c int
+		var err error
+		if sourceRow[col].IsText() && targetRow[col].IsText() {
+			c = bytes.Compare(sourceRow[col].ToBytes(), targetRow[col].ToBytes())
+		} else {
+			c, err = evalengine.NullsafeCompare(sourceRow[col], targetRow[col])
+		}
 		if err != nil {
 			return 0, err
 		}

@@ -1048,3 +1048,90 @@ func TestVDiffPlanInclude(t *testing.T) {
 	err = df.buildVDiffPlan(context.Background(), filter, schm, []string{"t1", "t2", "t3", "t5"})
 	require.Error(t, err)
 }
+
+// TestVDiffNullWeightString tests for situations where the server returns a null value for either source or target
+// columns. One reason this can happen is if the string is too large due to a small max_allowed_packet setting
+func TestVDiffNullWeightString(t *testing.T) {
+	env := newTestVDiffEnv([]string{"0"}, []string{"0"}, "", nil)
+	defer env.close()
+
+	schm := &tabletmanagerdatapb.SchemaDefinition{
+		TableDefinitions: []*tabletmanagerdatapb.TableDefinition{{
+			Name:              "t1",
+			Columns:           []string{"c1", "c2"},
+			PrimaryKeyColumns: []string{"c1"},
+			Fields:            sqltypes.MakeTestFields("c1|c2", "int64|varchar"),
+		}},
+	}
+	env.tmc.schema = schm
+
+	fields := sqltypes.MakeTestFields(
+		"c1|c2|c2ws",
+		"int64|varchar|varbinary",
+	)
+	testcases := []struct {
+		name   string
+		id     string
+		source []*sqltypes.Result
+		target []*sqltypes.Result
+		dr     *DiffReport
+	}{{
+		name: "must match",
+		id:   "1",
+		source: sqltypes.MakeTestStreamingResults(fields,
+			"1|abc|null",
+			"2|abc|abc",
+			"3|abc|abc",
+		),
+		target: sqltypes.MakeTestStreamingResults(fields,
+			"1|abc|null",
+			"2|abc|abc",
+			"3|abc|null",
+		),
+		dr: &DiffReport{
+			ProcessedRows: 3,
+			MatchingRows:  3,
+		},
+	}, {
+		name: "must not match",
+		id:   "2",
+		source: sqltypes.MakeTestStreamingResults(fields,
+			"1|abd|null",
+			"1|abd|abd",
+			"1|abd|null",
+		),
+		target: sqltypes.MakeTestStreamingResults(fields,
+			"1|abc|null",
+			"1|abc|abc",
+			"1|abc|null",
+		),
+		dr: &DiffReport{
+			ProcessedRows:  3,
+			MismatchedRows: 3,
+		},
+	}, {
+		//this explicitly tests for a bug that existed with a small max_allowed_packet setting
+		name: "both weight strings are null, but no match",
+		id:   "3",
+		source: sqltypes.MakeTestStreamingResults(fields,
+			"1|abd|null",
+		),
+		target: sqltypes.MakeTestStreamingResults(fields,
+			"1|abc|null",
+		),
+		dr: &DiffReport{
+			ProcessedRows:  1,
+			MismatchedRows: 1,
+		},
+	}}
+	for _, tcase := range testcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			env.tablets[101].setResults("select c1, c2, weight_string(c2) from t1 order by c1 asc", vdiffSourceGtid, tcase.source)
+			env.tablets[201].setResults("select c1, c2, weight_string(c2) from t1 order by c1 asc", vdiffTargetMasterPosition, tcase.target)
+
+			dr, err := env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, env.cell, "replica", 30*time.Second, "", 100, "")
+			require.NoError(t, err)
+			require.Equal(t, tcase.dr, dr["t1"], tcase.id)
+		})
+	}
+}
