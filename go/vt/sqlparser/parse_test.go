@@ -1361,7 +1361,19 @@ var (
 			output: "show session status",
 		}, {
 			input:  "show table status",
-			output: "show table",
+			output: "show table status",
+		}, {
+			input:  "show table status from mydb",
+			output: "show table status from mydb",
+		}, {
+			input:  "show table status from mydb LIKE 't1'",
+			output: "show table status from mydb like 't1'",
+		}, {
+			input:  "show table status LIKE 't1'",
+			output: "show table status like 't1'",
+		}, {
+			input:  "show table status where name='t1'",
+			output: "show table status where name = 't1'",
 		}, {
 			input: "show tables",
 		}, {

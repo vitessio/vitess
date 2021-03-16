@@ -2217,9 +2217,9 @@ show_statement:
   {
     $$ = &Show{Scope: $2, Type: string($3)}
   }
-| SHOW TABLE ddl_skip_to_end
+| SHOW TABLE STATUS from_database_opt like_or_where_opt
   {
-    $$ = &Show{Type: string($2)}
+    $$ = &Show{Type: string($2) + " " + string($3), Database: $4, Filter:$5}
   }
 | SHOW full_opt columns_or_fields FROM table_name from_database_opt like_or_where_opt
   {
