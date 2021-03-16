@@ -146,12 +146,12 @@ func TestParseCommonTags(t *testing.T) {
 	if len(res) != 0 {
 		t.Errorf("expected empty result, got %v", res)
 	}
-	res = ParseCommonTags("s,a:b")
+	res = ParseCommonTags("s,a:b ")
 	expected1 := map[string]string{"a": "b"}
 	if !reflect.DeepEqual(expected1, res) {
 		t.Errorf("expected %v, got %v", expected1, res)
 	}
-	res = ParseCommonTags("a:b,c:d")
+	res = ParseCommonTags("a:b,  c:d")
 	expected2 := map[string]string{"a": "b", "c": "d"}
 	if !reflect.DeepEqual(expected2, res) {
 		t.Errorf("expected %v, got %v", expected2, res)

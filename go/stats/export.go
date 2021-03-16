@@ -330,7 +330,7 @@ func ParseCommonTags(s string) map[string]string {
 	for _, input := range inputs {
 		if strings.Contains(input, ":") {
 			tag := strings.Split(input, ":")
-			tags[tag[0]] = tag[1]
+			tags[strings.TrimSpace(tag[0])] = strings.TrimSpace(tag[1])
 		}
 	}
 	return tags

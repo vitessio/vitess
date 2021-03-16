@@ -3,14 +3,13 @@ package statsd
 import (
 	"expvar"
 	"net"
-	"reflect"
 	"sort"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/DataDog/datadog-go/statsd"
-	"gotest.tools/assert"
+	"github.com/stretchr/testify/assert"
 
 	"vitess.io/vitess/go/stats"
 )
@@ -453,5 +452,5 @@ func TestMakeCommonTags(t *testing.T) {
 	assert.Equal(t, 0, len(res1))
 	expected2 := []string{"a:b", "c:d"}
 	res2 := makeCommonTags(map[string]string{"a": "b", "c": "d"})
-	assert.Assert(t, reflect.DeepEqual(expected2, res2))
+	assert.EqualValues(t, expected2, res2)
 }
