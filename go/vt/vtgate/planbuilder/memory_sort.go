@@ -117,10 +117,7 @@ func (ms *memorySort) Wireup(plan logicalPlan, jt *jointab) error {
 				ms.eMemorySort.OrderBy[i].WeightStringCol = weightcolNumber
 				continue
 			}
-			weightcolNumber, err := ms.input.SupplyWeightString(orderby.Col)
-			if err != nil {
-				return err
-			}
+			weightcolNumber := ms.input.SupplyWeightString(orderby.Col)
 			ms.weightStrings[rc] = weightcolNumber
 			ms.eMemorySort.OrderBy[i].WeightStringCol = weightcolNumber
 			ms.eMemorySort.TruncateColumnCount = len(ms.resultColumns)

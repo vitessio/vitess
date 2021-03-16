@@ -17,8 +17,6 @@ limitations under the License.
 package planbuilder
 
 import (
-	"errors"
-
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -132,8 +130,8 @@ func (vf *vindexFunc) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colNu
 }
 
 // SupplyWeightString implements the logicalPlan interface
-func (vf *vindexFunc) SupplyWeightString(colNumber int) (weightcolNumber int, err error) {
-	return 0, errors.New("cannot do collation on vindex function")
+func (vf *vindexFunc) SupplyWeightString(colNumber int) (weightcolNumber int) {
+	return -1
 }
 
 // Rewrite implements the logicalPlan interface
