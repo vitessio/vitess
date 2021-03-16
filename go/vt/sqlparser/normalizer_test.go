@@ -230,9 +230,10 @@ func TestNormalize(t *testing.T) {
 			t.Error(err)
 			continue
 		}
+		known := GetBindvars(stmt)
 		bv := make(map[string]*querypb.BindVariable)
 		require.NoError(t,
-			Normalize(stmt, bv, prefix))
+			Normalize(stmt, known, bv, prefix))
 		outstmt := String(stmt)
 		if outstmt != tc.outstmt {
 			t.Errorf("Query:\n%s:\n%s, want\n%s", tc.in, outstmt, tc.outstmt)
@@ -269,13 +270,13 @@ BenchmarkNormalize-8      500000              3620 ns/op            1461 B/op   
 */
 func BenchmarkNormalize(b *testing.B) {
 	sql := "select 'abcd', 20, 30.0, eid from a where 1=eid and name='3'"
-	ast, err := Parse(sql)
+	ast, reservedVars, err := Parse2(sql)
 	if err != nil {
 		b.Fatal(err)
 	}
 	for i := 0; i < b.N; i++ {
 		require.NoError(b,
-			Normalize(ast, map[string]*querypb.BindVariable{}, ""))
+			Normalize(ast, reservedVars, map[string]*querypb.BindVariable{}, ""))
 	}
 }
 
@@ -288,20 +289,22 @@ func BenchmarkNormalizeTraces(b *testing.B) {
 			}
 
 			parsed := make([]Statement, 0, len(queries))
+			reservedVars := make([]BindVars, 0, len(queries))
 			for _, q := range queries {
-				pp, err := Parse(q)
+				pp, kb, err := Parse2(q)
 				if err != nil {
 					b.Fatal(err)
 				}
 				parsed = append(parsed, pp)
+				reservedVars = append(reservedVars, kb)
 			}
 
 			b.ResetTimer()
 			b.ReportAllocs()
 
 			for i := 0; i < b.N; i++ {
-				for _, query := range parsed {
-					_ = Normalize(query, map[string]*querypb.BindVariable{}, "")
+				for i, query := range parsed {
+					_ = Normalize(query, reservedVars[i], map[string]*querypb.BindVariable{}, "")
 				}
 			}
 		})
