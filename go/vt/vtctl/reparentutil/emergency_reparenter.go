@@ -379,11 +379,11 @@ func (erp *EmergencyReparenter) waitForAllRelayLogsToApply(
 			continue
 		}
 
-		go func(alias string) {
+		go func(alias string, status *replicationdatapb.StopReplicationStatus) {
 			var err error
 			defer func() { errCh <- err }()
 			err = WaitForRelayLogsToApply(groupCtx, erp.tmc, tabletMap[alias], status)
-		}(candidate)
+		}(candidate, status)
 
 		waiterCount++
 	}
