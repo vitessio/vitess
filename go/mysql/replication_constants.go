@@ -207,6 +207,9 @@ const (
 	//eViewChangeEvent         = 37
 	//eXAPrepareLogEvent       = 38
 
+	// Transaction_payload_event when binlog compression is turned on
+	eCompressedEvent = 40
+
 	// MariaDB specific values. They start at 160.
 	//eMariaAnnotateRowsEvent = 160
 	// Unused
