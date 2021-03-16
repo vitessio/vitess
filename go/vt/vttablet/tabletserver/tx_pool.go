@@ -231,6 +231,9 @@ func (tp *TxPool) Begin(ctx context.Context, options *querypb.ExecuteOptions, re
 	var err error
 	if reservedID != 0 {
 		conn, err = tp.scp.GetAndLock(reservedID, "start transaction on reserve conn")
+		if err != nil {
+			return nil, "", vterrors.Errorf(vtrpcpb.Code_ABORTED, "transaction %d: %v", reservedID, err)
+		}
 	} else {
 		immediateCaller := callerid.ImmediateCallerIDFromContext(ctx)
 		effectiveCaller := callerid.EffectiveCallerIDFromContext(ctx)
