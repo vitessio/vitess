@@ -77,7 +77,7 @@ type truncater interface {
 // TestBuilder builds a plan for a query based on the specified vschema.
 // This method is only used from tests
 func TestBuilder(query string, vschema ContextVSchema) (*engine.Plan, error) {
-	stmt, err := sqlparser.Parse(query)
+	stmt, reservedVars, err := sqlparser.Parse2(query)
 	if err != nil {
 		return nil, err
 	}
@@ -86,16 +86,15 @@ func TestBuilder(query string, vschema ContextVSchema) (*engine.Plan, error) {
 		return nil, err
 	}
 
-	return BuildFromStmt(query, result.AST, vschema, result.BindVarNeeds)
+	return BuildFromStmt(query, result.AST, reservedVars, vschema, result.BindVarNeeds)
 }
 
 // ErrPlanNotSupported is an error for plan building not supported
 var ErrPlanNotSupported = errors.New("plan building not supported")
 
 // BuildFromStmt builds a plan based on the AST provided.
-func BuildFromStmt(query string, stmt sqlparser.Statement, vschema ContextVSchema, bindVarNeeds *sqlparser.BindVarNeeds) (*engine.Plan, error) {
-
-	instruction, err := createInstructionFor(query, stmt, vschema)
+func BuildFromStmt(query string, stmt sqlparser.Statement, reservedVars sqlparser.BindVars, vschema ContextVSchema, bindVarNeeds *sqlparser.BindVarNeeds) (*engine.Plan, error) {
+	instruction, err := createInstructionFor(query, stmt, reservedVars, vschema)
 	if err != nil {
 		return nil, err
 	}
@@ -124,39 +123,39 @@ func getConfiguredPlanner(vschema ContextVSchema) (selectPlanner, error) {
 	}
 }
 
-func buildRoutePlan(stmt sqlparser.Statement, vschema ContextVSchema, f func(statement sqlparser.Statement, schema ContextVSchema) (engine.Primitive, error)) (engine.Primitive, error) {
+func buildRoutePlan(stmt sqlparser.Statement, reservedVars sqlparser.BindVars, vschema ContextVSchema, f func(statement sqlparser.Statement, reservedVars sqlparser.BindVars, schema ContextVSchema) (engine.Primitive, error)) (engine.Primitive, error) {
 	if vschema.Destination() != nil {
-		return buildPlanForBypass(stmt, vschema)
+		return buildPlanForBypass(stmt, reservedVars, vschema)
 	}
-	return f(stmt, vschema)
+	return f(stmt, reservedVars, vschema)
 }
 
-type selectPlanner func(query string) func(sqlparser.Statement, ContextVSchema) (engine.Primitive, error)
+type selectPlanner func(query string) func(sqlparser.Statement, sqlparser.BindVars, ContextVSchema) (engine.Primitive, error)
 
-func createInstructionFor(query string, stmt sqlparser.Statement, vschema ContextVSchema) (engine.Primitive, error) {
+func createInstructionFor(query string, stmt sqlparser.Statement, reservedVars sqlparser.BindVars, vschema ContextVSchema) (engine.Primitive, error) {
 	switch stmt := stmt.(type) {
 	case *sqlparser.Select:
 		configuredPlanner, err := getConfiguredPlanner(vschema)
 		if err != nil {
 			return nil, err
 		}
-		return buildRoutePlan(stmt, vschema, configuredPlanner(query))
+		return buildRoutePlan(stmt, reservedVars, vschema, configuredPlanner(query))
 	case *sqlparser.Insert:
-		return buildRoutePlan(stmt, vschema, buildInsertPlan)
+		return buildRoutePlan(stmt, reservedVars, vschema, buildInsertPlan)
 	case *sqlparser.Update:
-		return buildRoutePlan(stmt, vschema, buildUpdatePlan)
+		return buildRoutePlan(stmt, reservedVars, vschema, buildUpdatePlan)
 	case *sqlparser.Delete:
-		return buildRoutePlan(stmt, vschema, buildDeletePlan)
+		return buildRoutePlan(stmt, reservedVars, vschema, buildDeletePlan)
 	case *sqlparser.Union:
-		return buildRoutePlan(stmt, vschema, buildUnionPlan)
+		return buildRoutePlan(stmt, reservedVars, vschema, buildUnionPlan)
 	case sqlparser.DDLStatement:
-		return buildGeneralDDLPlan(query, stmt, vschema)
+		return buildGeneralDDLPlan(query, stmt, reservedVars, vschema)
 	case *sqlparser.AlterVschema:
 		return buildVSchemaDDLPlan(stmt, vschema)
 	case *sqlparser.Use:
 		return buildUsePlan(stmt, vschema)
 	case sqlparser.Explain:
-		return buildExplainPlan(stmt, vschema)
+		return buildExplainPlan(stmt, reservedVars, vschema)
 	case *sqlparser.OtherRead, *sqlparser.OtherAdmin:
 		return buildOtherReadAndAdmin(query, vschema)
 	case *sqlparser.Set:
@@ -164,7 +163,7 @@ func createInstructionFor(query string, stmt sqlparser.Statement, vschema Contex
 	case *sqlparser.Load:
 		return buildLoadPlan(query, vschema)
 	case sqlparser.DBDDLStatement:
-		return buildRoutePlan(stmt, vschema, buildDBDDLPlan)
+		return buildRoutePlan(stmt, reservedVars, vschema, buildDBDDLPlan)
 	case *sqlparser.SetTransaction:
 		return nil, ErrPlanNotSupported
 	case *sqlparser.Begin, *sqlparser.Commit, *sqlparser.Rollback, *sqlparser.Savepoint, *sqlparser.SRollback, *sqlparser.Release:
@@ -173,9 +172,9 @@ func createInstructionFor(query string, stmt sqlparser.Statement, vschema Contex
 	case *sqlparser.Show:
 		return buildShowPlan(stmt, vschema)
 	case *sqlparser.LockTables:
-		return buildRoutePlan(stmt, vschema, buildLockPlan)
+		return buildRoutePlan(stmt, reservedVars, vschema, buildLockPlan)
 	case *sqlparser.UnlockTables:
-		return buildRoutePlan(stmt, vschema, buildUnlockPlan)
+		return buildRoutePlan(stmt, reservedVars, vschema, buildUnlockPlan)
 	case *sqlparser.Flush:
 		return buildFlushPlan(stmt, vschema)
 	case *sqlparser.CallProc:
@@ -185,7 +184,7 @@ func createInstructionFor(query string, stmt sqlparser.Statement, vschema Contex
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: unexpected statement type: %T", stmt)
 }
 
-func buildDBDDLPlan(stmt sqlparser.Statement, vschema ContextVSchema) (engine.Primitive, error) {
+func buildDBDDLPlan(stmt sqlparser.Statement, reservedVars sqlparser.BindVars, vschema ContextVSchema) (engine.Primitive, error) {
 	dbDDLstmt := stmt.(sqlparser.DBDDLStatement)
 	ksName := dbDDLstmt.GetDatabaseName()
 	if ksName == "" {
