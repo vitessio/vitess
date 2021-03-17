@@ -247,7 +247,8 @@ func (tp *TablePlan) applyBulkInsert(rows *binlogdatapb.VStreamRowsResponse, exe
 // unit test reliably and without flakiness with our current test framework. So as a pragmatic decision we support Insert
 // now and punt on the others.
 func (tp *TablePlan) isOutsidePKRange(bindvars map[string]*querypb.BindVariable, before, after bool, stmtType string) bool {
-	if *vreplicationExperimentalFlags&vreplicationExperimentalOptimizeInserts == 0 {
+	// added empty comments below, otherwise gofmt removes the spaces between the bitwise & and obfuscates this check!
+	if *vreplicationExperimentalFlags /**/ & /**/ vreplicationExperimentalOptimizeInserts == 0 {
 		return false
 	}
 	// Ensure there is one and only one value in lastpk and pkrefs.
