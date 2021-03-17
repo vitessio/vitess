@@ -566,8 +566,37 @@ func newResultColumn(expr *sqlparser.AliasedExpr, origin logicalPlan) *resultCol
 		// Just to be safe, generate an anonymous column for the expression.
 		rc.column = &column{
 			origin: origin,
-			typ:    sqlparser.GetReturnType(expr),
+			typ:    GetReturnType(expr),
 		}
 	}
 	return rc
+}
+
+// GetReturnType returns the type of the select expression that MySQL will return
+func GetReturnType(input sqlparser.SQLNode) querypb.Type {
+	switch node := input.(type) {
+	case *sqlparser.Nextval:
+		return querypb.Type_INT64
+	case *sqlparser.AliasedExpr:
+		return GetReturnType(node.Expr)
+	case *sqlparser.FuncExpr:
+		functionName := strings.ToUpper(node.Name.String())
+		switch functionName {
+		case "ABS":
+			// Returned value depends on the return type of the input
+			if len(node.Exprs) == 1 {
+				expr := node.Exprs[0]
+				return GetReturnType(expr)
+			}
+		case "COUNT":
+			return querypb.Type_INT64
+		}
+	case *sqlparser.ColName:
+		col := node.Metadata.(*column)
+		return col.typ
+	case *sqlparser.StarExpr:
+		// return null type when we do not know the type
+		return querypb.Type_NULL_TYPE
+	}
+	return querypb.Type_NULL_TYPE
 }

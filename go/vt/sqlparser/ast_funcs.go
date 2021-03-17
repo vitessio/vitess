@@ -1360,29 +1360,3 @@ func handleUnaryMinus(expr Expr) Expr {
 func encodeSQLString(val string) string {
 	return sqltypes.EncodeStringSQL(val)
 }
-
-// GetReturnType returns the type of the select expression that MySQL will return
-func GetReturnType(input SQLNode) querypb.Type {
-	switch node := input.(type) {
-	case *Nextval:
-		return querypb.Type_INT64
-	case *AliasedExpr:
-		return GetReturnType(node.Expr)
-	case *FuncExpr:
-		functionName := strings.ToUpper(node.Name.String())
-		switch functionName {
-		case "ABS":
-			// Returned value depends on the return type of the input
-			if len(node.Exprs) == 1 {
-				expr := node.Exprs[0]
-				return GetReturnType(expr)
-			}
-		case "COUNT":
-			return querypb.Type_INT64
-		}
-	case *StarExpr:
-		// return null type when we do not know the type
-		return querypb.Type_NULL_TYPE
-	}
-	return querypb.Type_NULL_TYPE
-}
