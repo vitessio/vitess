@@ -221,13 +221,16 @@ func TestStreamLimitOffset(t *testing.T) {
 		Fields: []*querypb.Field{
 			{Name: "id", Type: sqltypes.Int32},
 			{Name: "textcol", Type: sqltypes.VarChar},
+			{Name: "weight_string(id)", Type: sqltypes.VarBinary},
 		},
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewInt32(1),
 			sqltypes.NewVarChar("1234"),
+			sqltypes.NULL,
 		}, {
 			sqltypes.NewInt32(4),
 			sqltypes.NewVarChar("4567"),
+			sqltypes.NULL,
 		}},
 	}})
 
@@ -235,10 +238,12 @@ func TestStreamLimitOffset(t *testing.T) {
 		Fields: []*querypb.Field{
 			{Name: "id", Type: sqltypes.Int32},
 			{Name: "textcol", Type: sqltypes.VarChar},
+			{Name: "weight_string(id)", Type: sqltypes.VarBinary},
 		},
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewInt32(2),
 			sqltypes.NewVarChar("2345"),
+			sqltypes.NULL,
 		}},
 	}})
 
