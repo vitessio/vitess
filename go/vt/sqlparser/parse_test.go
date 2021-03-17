@@ -2080,6 +2080,9 @@ func TestKeywords(t *testing.T) {
 	}, {
 		input:  "select Variables from t",
 		output: "select `Variables` from t",
+	}, {
+		input:  "select current_user, current_user() from dual",
+		output: "select current_user(), current_user() from dual",
 	}}
 
 	for _, tcase := range validSQL {
