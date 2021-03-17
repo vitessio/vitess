@@ -1054,6 +1054,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfRenameTable(in)
 	case *RenameTableName:
 		return CloneRefOfRenameTableName(in)
+	case *RevertMigration:
+		return CloneRefOfRevertMigration(in)
 	case *Rollback:
 		return CloneRefOfRollback(in)
 	case *SRollback:
@@ -1749,6 +1751,12 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfRenameTableName(a, b)
+	case *RevertMigration:
+		b, ok := inB.(*RevertMigration)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfRevertMigration(a, b)
 	case *Rollback:
 		b, ok := inB.(*Rollback)
 		if !ok {
@@ -2283,6 +2291,8 @@ func CloneStatement(in Statement) Statement {
 		return CloneRefOfRelease(in)
 	case *RenameTable:
 		return CloneRefOfRenameTable(in)
+	case *RevertMigration:
+		return CloneRefOfRevertMigration(in)
 	case *Rollback:
 		return CloneRefOfRollback(in)
 	case *SRollback:
@@ -2476,6 +2486,12 @@ func EqualsStatement(inA, inB Statement) bool {
 			return false
 		}
 		return EqualsRefOfRenameTable(a, b)
+	case *RevertMigration:
+		b, ok := inB.(*RevertMigration)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfRevertMigration(a, b)
 	case *Rollback:
 		b, ok := inB.(*Rollback)
 		if !ok {
@@ -5066,6 +5082,26 @@ func EqualsRefOfRelease(a, b *Release) bool {
 		return false
 	}
 	return EqualsColIdent(a.Name, b.Name)
+}
+
+// CloneRefOfRevertMigration creates a deep clone of the input.
+func CloneRefOfRevertMigration(n *RevertMigration) *RevertMigration {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	return &out
+}
+
+// EqualsRefOfRevertMigration does deep equals between the two objects.
+func EqualsRefOfRevertMigration(a, b *RevertMigration) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.UUID == b.UUID
 }
 
 // CloneRefOfRollback creates a deep clone of the input.
