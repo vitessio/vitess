@@ -152,7 +152,7 @@ func createInstructionFor(query string, stmt sqlparser.Statement, vschema Contex
 	case sqlparser.DDLStatement:
 		return buildGeneralDDLPlan(query, stmt, vschema)
 	case *sqlparser.AlterMigration:
-		return buildAlterMigrationPlan(query, stmt, vschema)
+		return buildAlterMigrationPlan(query, vschema)
 	case *sqlparser.RevertMigration:
 		return buildRevertMigrationPlan(query, stmt, vschema)
 	case *sqlparser.AlterVschema:

@@ -25,7 +25,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
-func buildAlterMigrationPlan(query string, stmt *sqlparser.AlterMigration, vschema ContextVSchema) (engine.Primitive, error) {
+func buildAlterMigrationPlan(query string, vschema ContextVSchema) (engine.Primitive, error) {
 	dest, ks, tabletType, err := vschema.TargetDestination("")
 	if err != nil {
 		return nil, err
