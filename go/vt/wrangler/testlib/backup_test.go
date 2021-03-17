@@ -344,24 +344,22 @@ func TestBackupRestoreLagged(t *testing.T) {
 		InnodbLogGroupHomeDir: sourceInnodbLogDir,
 	}
 
-	timer := time.NewTicker(1 * time.Second)
-	go func(tablet *FakeTablet) {
-		<-timer.C
-		tablet.FakeMysqlDaemon.CurrentMasterPosition = mysql.Position{
-			GTIDSet: mysql.MariadbGTIDSet{
-				2: mysql.MariadbGTID{
-					Domain:   2,
-					Server:   123,
-					Sequence: 457,
-				},
-			},
-		}
-	}(sourceTablet)
-
 	errCh := make(chan error, 1)
 	go func(ctx context.Context, tablet *FakeTablet) {
 		errCh <- vp.Run([]string{"Backup", topoproto.TabletAliasString(tablet.Tablet.Alias)})
 	}(ctx, sourceTablet)
+
+	timer := time.NewTicker(1 * time.Second)
+	<-timer.C
+	sourceTablet.FakeMysqlDaemon.CurrentMasterPositionLocked(mysql.Position{
+		GTIDSet: mysql.MariadbGTIDSet{
+			2: mysql.MariadbGTID{
+				Domain:   2,
+				Server:   123,
+				Sequence: 457,
+			},
+		},
+	})
 
 	timer2 := time.NewTicker(5 * time.Second)
 	select {
@@ -416,24 +414,22 @@ func TestBackupRestoreLagged(t *testing.T) {
 		RelayLogInfoPath:      path.Join(root, "relay-log.info"),
 	}
 
-	timer = time.NewTicker(1 * time.Second)
-	go func(tablet *FakeTablet) {
-		<-timer.C
-		tablet.FakeMysqlDaemon.CurrentMasterPosition = mysql.Position{
-			GTIDSet: mysql.MariadbGTIDSet{
-				2: mysql.MariadbGTID{
-					Domain:   2,
-					Server:   123,
-					Sequence: 457,
-				},
-			},
-		}
-	}(destTablet)
-
 	errCh = make(chan error, 1)
 	go func(ctx context.Context, tablet *FakeTablet) {
 		errCh <- tablet.TM.RestoreData(ctx, logutil.NewConsoleLogger(), 0 /* waitForBackupInterval */, false /* deleteBeforeRestore */)
 	}(ctx, destTablet)
+
+	timer = time.NewTicker(1 * time.Second)
+	<-timer.C
+	destTablet.FakeMysqlDaemon.CurrentMasterPositionLocked(mysql.Position{
+		GTIDSet: mysql.MariadbGTIDSet{
+			2: mysql.MariadbGTID{
+				Domain:   2,
+				Server:   123,
+				Sequence: 457,
+			},
+		},
+	})
 
 	timer2 = time.NewTicker(5 * time.Second)
 	select {
