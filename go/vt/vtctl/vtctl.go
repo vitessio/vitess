@@ -3350,11 +3350,18 @@ func commandGetSrvKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 		return fmt.Errorf("the <cell> and <keyspace> arguments are required for the GetSrvKeyspace command")
 	}
 
-	srvKeyspace, err := wr.TopoServer().GetSrvKeyspace(ctx, subFlags.Arg(0), subFlags.Arg(1))
+	cell := subFlags.Arg(0)
+	keyspace := subFlags.Arg(1)
+
+	resp, err := wr.VtctldServer().GetSrvKeyspaces(ctx, &vtctldatapb.GetSrvKeyspacesRequest{
+		Keyspace: keyspace,
+		Cells:    []string{cell},
+	})
 	if err != nil {
 		return err
 	}
-	return printJSON(wr.Logger(), srvKeyspace)
+
+	return printJSON(wr.Logger(), resp.SrvKeyspaces[cell])
 }
 
 func commandGetSrvVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
