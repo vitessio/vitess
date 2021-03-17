@@ -1155,7 +1155,6 @@ func (s *VtctldServer) ShardReplicationPositions(ctx context.Context, req *vtctl
 						// The RPC was not timed out or canceled. We treat this
 						// as a fatal error for the overall request.
 						rec.RecordError(fmt.Errorf("MasterPosition(%s) failed: %w", alias, err))
-
 						return
 					}
 				} else {
@@ -1191,7 +1190,6 @@ func (s *VtctldServer) ShardReplicationPositions(ctx context.Context, req *vtctl
 						// The RPC was not timed out or canceled. We treat this
 						// as a fatal error for the overall request.
 						rec.RecordError(fmt.Errorf("ReplicationStatus(%s) failed: %s", alias, err))
-
 						return
 					}
 

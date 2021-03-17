@@ -50,8 +50,8 @@ func ParseKeyspaceShards(args []string) ([]*vtctldatapb.Shard, error) {
 // ReplicatingTablet is a struct to group a Tablet together with its replication
 // Status.
 type ReplicatingTablet struct {
-	Status *replicationdatapb.Status
-	Tablet *topodatapb.Tablet
+	*replicationdatapb.Status
+	*topodatapb.Tablet
 }
 
 type rTablets []*ReplicatingTablet
@@ -96,14 +96,14 @@ func (rts rTablets) Less(i, j int) bool {
 	return !lpos.AtLeast(rpos)
 }
 
-// SortReplicatingTablets returns a sorted list of replicating tablets (which is
-// a struct grouping a Tablet together with its replication Status).
+// SortedReplicatingTablets returns a sorted list of replicating tablets (which
+// is a struct grouping a Tablet together with its replication Status).
 //
 // The sorting order is:
 // 1. Tablets that do not have a replication Status.
 // 2. Any tablets of type MASTER.
 // 3. Remaining tablets sorted by comparing replication positions.
-func SortReplicatingTablets(tabletMap map[string]*topodatapb.Tablet, replicationStatuses map[string]*replicationdatapb.Status) []*ReplicatingTablet {
+func SortedReplicatingTablets(tabletMap map[string]*topodatapb.Tablet, replicationStatuses map[string]*replicationdatapb.Status) []*ReplicatingTablet {
 	rtablets := make([]*ReplicatingTablet, 0, len(tabletMap))
 
 	for alias, tablet := range tabletMap {
