@@ -497,7 +497,7 @@ func (tm *TabletManager) startReplication(ctx context.Context, pos mysql.Positio
 
 	// If active reparents are disabled, we don't restart replication. So it makes no sense to wait for an update on the replica.
 	// Return immediately.
-	if !*mysqlctl.DisableActiveReparents {
+	if *mysqlctl.DisableActiveReparents {
 		return nil
 	}
 	// wait for reliable seconds behind master
