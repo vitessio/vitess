@@ -257,6 +257,7 @@ func (sh *scatterHeap) Less(i, j int) bool {
 		if sh.err != nil {
 			return true
 		}
+		// First try to compare the columns that we want to order
 		cmp, err := evalengine.NullsafeCompare(sh.rows[i].row[sh.orderBy[k]], sh.rows[j].row[sh.orderBy[k]])
 		if err != nil {
 			_, isComparisonErr := err.(evalengine.UnsupportedComparisonError)
@@ -264,6 +265,7 @@ func (sh *scatterHeap) Less(i, j int) bool {
 				sh.err = err
 				return true
 			}
+			// in case of a comparison error switch to using the weight string column for ordering
 			sh.orderBy[k] = sh.weightStrings[k]
 			sh.weightStrings[k] = -1
 			cmp, err = evalengine.NullsafeCompare(sh.rows[i].row[sh.orderBy[k]], sh.rows[j].row[sh.orderBy[k]])

@@ -1372,6 +1372,7 @@ func GetReturnType(input SQLNode) querypb.Type {
 		functionName := strings.ToUpper(node.Name.String())
 		switch functionName {
 		case "ABS":
+			// Returned value depends on the return type of the input
 			if len(node.Exprs) == 1 {
 				expr := node.Exprs[0]
 				return GetReturnType(expr)
@@ -1380,6 +1381,7 @@ func GetReturnType(input SQLNode) querypb.Type {
 			return querypb.Type_INT64
 		}
 	case *StarExpr:
+		// return null type when we do not know the type
 		return querypb.Type_NULL_TYPE
 	}
 	return querypb.Type_NULL_TYPE

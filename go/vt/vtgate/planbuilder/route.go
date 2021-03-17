@@ -340,12 +340,12 @@ func (rb *route) SupplyWeightString(colNumber int) (weightcolNumber int) {
 	}
 	s, ok := rb.Select.(*sqlparser.Select)
 	if !ok {
-		return 0
+		return -1
 	}
 
 	aliasExpr, ok := s.SelectExprs[colNumber].(*sqlparser.AliasedExpr)
 	if !ok {
-		return 0
+		return -1
 	}
 	expr := &sqlparser.AliasedExpr{
 		Expr: &sqlparser.FuncExpr{
@@ -362,7 +362,7 @@ func (rb *route) SupplyWeightString(colNumber int) (weightcolNumber int) {
 	var err error
 	_, _, weightcolNumber, err = planProjection(nil, rb, expr, nil)
 	if err != nil {
-		return 0
+		return -1
 	}
 	rb.weightStrings[rc] = weightcolNumber
 	return weightcolNumber
