@@ -1295,6 +1295,18 @@ func (cached *RenameTablePair) CachedSize(alloc bool) int64 {
 	size += cached.ToTable.CachedSize(false)
 	return size
 }
+func (cached *RevertMigration) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(16)
+	}
+	// field UUID string
+	size += int64(len(cached.UUID))
+	return size
+}
 func (cached *Select) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
