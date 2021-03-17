@@ -4914,6 +4914,8 @@
 2021-03-17T12:32:20Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/661039130
 2021-03-17T12:32:20Z,check_make_parser,https://github.com/vitessio/vitess/actions/runs/661039108
 2021-03-17T12:32:20Z,cluster_initial_sharding_multi,https://github.com/vitessio/vitess/actions/runs/661039128
+2021-03-17T12:32:20Z,docker_test_1,https://github.com/vitessio/vitess/actions/runs/661039089
+2021-03-17T12:32:20Z,docker_test_2,https://github.com/vitessio/vitess/actions/runs/661039117
 2021-03-17T12:32:20Z,docker_test_3,https://github.com/vitessio/vitess/actions/runs/661039094
 2021-03-17T12:32:20Z,e2e_race,https://github.com/vitessio/vitess/actions/runs/661039124
 2021-03-17T12:32:20Z,endtoend,https://github.com/vitessio/vitess/actions/runs/661039143
