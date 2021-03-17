@@ -553,18 +553,18 @@ type LoadStatement interface {
 
 // Load represents a LOAD statement
 type Load struct {
-	Local BoolVal
-	Infile string
-	Table TableName
+	Local     BoolVal
+	Infile    string
+	Table     TableName
 	Partition Partitions
-	Charset string
+	Charset   string
 	*Fields
 	*Lines
 	IgnoreNum *SQLVal
 	Columns
 }
 
-func (*Load) iLoadStatement()      {}
+func (*Load) iLoadStatement() {}
 
 func (node *Load) Format(buf *TrackedBuffer) {
 	local := ""
@@ -610,7 +610,7 @@ func (node *Load) walkSubtree(visit Visit) error {
 type Fields struct {
 	TerminatedBy *SQLVal
 	*EnclosedBy
-	EscapedBy    *SQLVal
+	EscapedBy *SQLVal
 	SQLNode
 }
 
@@ -641,7 +641,7 @@ func (node *Fields) walkSubtree(visit Visit) error {
 
 type EnclosedBy struct {
 	Optionally BoolVal
-	Delim *SQLVal
+	Delim      *SQLVal
 	SQLNode
 }
 
@@ -661,7 +661,7 @@ func (node *EnclosedBy) Format(buf *TrackedBuffer) {
 }
 
 type Lines struct {
-	StartingBy *SQLVal
+	StartingBy   *SQLVal
 	TerminatedBy *SQLVal
 	SQLNode
 }
@@ -1057,9 +1057,9 @@ type Set struct {
 
 // Set.Scope or Show.Scope
 const (
-	SessionStr        = "session"
-	GlobalStr         = "global"
-	ImplicitStr       = ""
+	SessionStr  = "session"
+	GlobalStr   = "global"
+	ImplicitStr = ""
 )
 
 // Format formats the node.
@@ -1250,27 +1250,27 @@ type ColumnOrder struct {
 
 // DDL strings.
 const (
-	CreateStr           = "create"
-	AlterStr            = "alter"
-	AddStr              = "add"
-	DropStr             = "drop"
-	RenameStr           = "rename"
-	ModifyStr           = "modify"
-	ChangeStr           = "change"
-	TruncateStr         = "truncate"
-	FlushStr            = "flush"
-	IndexStr            = "index"
-	BeforeStr           = "before"
-	AfterStr            = "after"
-	InsertStr           = "insert"
-	UpdateStr           = "update"
-	DeleteStr           = "delete"
-	FollowsStr          = "follows"
-	PrecedesStr         = "precedes"
-	AddAutoIncStr       = "add auto_increment"
-	UniqueStr           = "unique"
-	SpatialStr          = "spatial"
-	FulltextStr         = "fulltext"
+	CreateStr     = "create"
+	AlterStr      = "alter"
+	AddStr        = "add"
+	DropStr       = "drop"
+	RenameStr     = "rename"
+	ModifyStr     = "modify"
+	ChangeStr     = "change"
+	TruncateStr   = "truncate"
+	FlushStr      = "flush"
+	IndexStr      = "index"
+	BeforeStr     = "before"
+	AfterStr      = "after"
+	InsertStr     = "insert"
+	UpdateStr     = "update"
+	DeleteStr     = "delete"
+	FollowsStr    = "follows"
+	PrecedesStr   = "precedes"
+	AddAutoIncStr = "add auto_increment"
+	UniqueStr     = "unique"
+	SpatialStr    = "spatial"
+	FulltextStr   = "fulltext"
 )
 
 // Format formats the node.
@@ -1382,17 +1382,19 @@ func (node *DDL) Format(buf *TrackedBuffer) {
 		} else if node.IndexSpec != nil {
 			buf.Myprintf("%s table %v %v", node.Action, node.Table, node.IndexSpec)
 		} else if node.ConstraintAction == AddStr && node.TableSpec != nil && len(node.TableSpec.Constraints) == 1 {
-			fkDef, ok := node.TableSpec.Constraints[0].Details.(*ForeignKeyDefinition)
-			if ok {
-				buf.Myprintf("%s table %v add %v", node.Action, node.Table, fkDef)
-			} else {
+			switch node.TableSpec.Constraints[0].Details.(type) {
+			case *ForeignKeyDefinition, *CheckConstraintDefinition:
+				buf.Myprintf("%s table %v add %v", node.Action, node.Table, node.TableSpec.Constraints[0])
+			default:
 				buf.Myprintf("%s table %v", node.Action, node.Table)
 			}
 		} else if node.ConstraintAction == DropStr && node.TableSpec != nil && len(node.TableSpec.Constraints) == 1 {
-			_, ok := node.TableSpec.Constraints[0].Details.(*ForeignKeyDefinition)
-			if ok {
+			switch node.TableSpec.Constraints[0].Details.(type) {
+			case *ForeignKeyDefinition:
 				buf.Myprintf("%s table %v drop foreign key %s", node.Action, node.Table, node.TableSpec.Constraints[0].Name)
-			} else {
+			case *CheckConstraintDefinition:
+				buf.Myprintf("%s table %v drop check %s", node.Action, node.Table, node.TableSpec.Constraints[0].Name)
+			default:
 				buf.Myprintf("%s table %v drop constraint %s", node.Action, node.Table, node.TableSpec.Constraints[0].Name)
 			}
 		} else {
@@ -2174,6 +2176,27 @@ func (f *ForeignKeyDefinition) walkSubtree(visit Visit) error {
 	return Walk(visit, f.ReferencedColumns)
 }
 
+type CheckConstraintDefinition struct {
+	Expr     Expr
+	Enforced bool
+}
+
+var _ ConstraintInfo = &CheckConstraintDefinition{}
+
+// Format formats the node.
+func (c *CheckConstraintDefinition) Format(buf *TrackedBuffer) {
+	buf.Myprintf("check (%v)", c.Expr)
+	if !c.Enforced {
+		buf.Myprintf(" not enforced")
+	}
+}
+
+func (f *CheckConstraintDefinition) walkSubtree(visit Visit) error {
+	return Walk(visit, f.Expr)
+}
+
+func (f *CheckConstraintDefinition) constraintInfo() {}
+
 // Format strings for explain statements
 const (
 	TraditionalStr = "traditional"
@@ -2516,10 +2539,10 @@ func (node *StarExpr) walkSubtree(visit Visit) error {
 
 // AliasedExpr defines an aliased SELECT expression.
 type AliasedExpr struct {
-	Expr Expr
-	As   ColIdent
-	StartParsePos int
-	EndParsePos int
+	Expr            Expr
+	As              ColIdent
+	StartParsePos   int
+	EndParsePos     int
 	InputExpression string
 }
 

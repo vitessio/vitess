@@ -721,7 +721,7 @@ func (c *Conn) writeErrorPacketFromError(err error) error {
 }
 
 func (c *Conn) writeLoadInfilePacket(fileName string) error {
-	length :=  1 + len(fileName)
+	length := 1 + len(fileName)
 	data := c.startEphemeralPacket(length)
 	pos := 0
 	pos = writeByte(data, pos, LocalInfilePacket)
@@ -751,7 +751,7 @@ func (c *Conn) HandleLoadDataLocalQuery(tmpdir string, tmpfileName string, file 
 
 	defer f.Close()
 
-	fileData, err := c.readEphemeralPacket();
+	fileData, err := c.readEphemeralPacket()
 	if err != nil {
 		return err
 	}
@@ -764,7 +764,7 @@ func (c *Conn) HandleLoadDataLocalQuery(tmpdir string, tmpfileName string, file 
 
 		c.recycleReadPacket()
 
-		fileData, err = c.readEphemeralPacket();
+		fileData, err = c.readEphemeralPacket()
 	}
 
 	c.recycleReadPacket()

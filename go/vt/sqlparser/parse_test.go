@@ -32,8 +32,8 @@ import (
 )
 
 type parseTest struct {
-	input  string
-	output string
+	input                string
+	output               string
 	serializeSelectExprs bool
 }
 
@@ -49,11 +49,11 @@ var (
 			input: "select a, b from t",
 		},
 		{
-			input: "select a,  b from t",
+			input:  "select a,  b from t",
 			output: "select a, b from t",
 		},
 		{
-			input: "select a,b from t",
+			input:  "select a,b from t",
 			output: "select a, b from t",
 		},
 		{
@@ -78,8 +78,8 @@ var (
 			input:  "select -   -1 from t",
 			output: "select -   -1 from t",
 		}, {
-			input:  "select - -1 from t",
-			output: "select 1 from t",
+			input:                "select - -1 from t",
+			output:               "select 1 from t",
 			serializeSelectExprs: true, // not a bug, we are testing that - -1 becomes 1
 		}, {
 			input:  "select 1 from t // aa\n",
@@ -91,12 +91,12 @@ var (
 			input:  "select 1 from t # aa\n",
 			output: "select 1 from t",
 		}, {
-			input:  "select 1 --aa\nfrom t",
-			output: "select 1 from t",
+			input:                "select 1 --aa\nfrom t",
+			output:               "select 1 from t",
 			serializeSelectExprs: true,
 		}, {
-			input:  "select 1 #aa\nfrom t",
-			output: "select 1 from t",
+			input:                "select 1 #aa\nfrom t",
+			output:               "select 1 from t",
 			serializeSelectExprs: true,
 		}, {
 			input: "select /* simplest */ 1 from t",
@@ -123,8 +123,8 @@ var (
 		}, {
 			input: "select /* \\0 */ '\\0' from a",
 		}, {
-			input:  "select 1 /* drop this comment */ from t",
-			output: "select 1 from t",
+			input:                "select 1 /* drop this comment */ from t",
+			output:               "select 1 from t",
 			serializeSelectExprs: true,
 		}, {
 			input: "select /* union */ 1 from t union select 1 from t",
@@ -167,7 +167,7 @@ var (
 			input:  "select all col from t",
 			output: "select col from t",
 		}, {
-			input: "select /* straight_join */ straight_join 1 from t",
+			input:                "select /* straight_join */ straight_join 1 from t",
 			serializeSelectExprs: true,
 		}, {
 			input: "select /* for update */ 1 from t for update",
@@ -185,8 +185,8 @@ var (
 			input:  "select /* column alias */ a as b from t",
 			output: "select /* column alias */ a as b from t",
 		}, {
-			input:  "select /* column alias */ a b from t",
-			output: "select /* column alias */ a as b from t",
+			input:                "select /* column alias */ a b from t",
+			output:               "select /* column alias */ a as b from t",
 			serializeSelectExprs: true,
 		}, {
 			input:  "select t.Date as Date from t",
@@ -202,8 +202,8 @@ var (
 			input:  "select /* column alias as string */ a as \"b\" from t",
 			output: "select /* column alias as string */ a as b from t",
 		}, {
-			input:  "select /* column alias as string without as */ a \"b\" from t",
-			output: "select /* column alias as string without as */ a as b from t",
+			input:                "select /* column alias as string without as */ a \"b\" from t",
+			output:               "select /* column alias as string without as */ a as b from t",
 			serializeSelectExprs: true,
 		}, {
 			input: "select /* a.* */ a.* from t",
@@ -572,23 +572,23 @@ var (
 		}, {
 			input: "select /* string */ 'a' from t",
 		}, {
-			input:  "select /* double quoted string */ \"a\" from t",
-			output: "select /* double quoted string */ 'a' from t",
+			input:                "select /* double quoted string */ \"a\" from t",
+			output:               "select /* double quoted string */ 'a' from t",
 			serializeSelectExprs: true,
 		}, {
 			input:  "select /* double quoted string */ \"a\" from t",
 			output: "select /* double quoted string */ \"a\" from t",
 		}, {
-			input:  "select /* quote quote in string */ 'a''a' from t",
-			output: "select /* quote quote in string */ 'a\\'a' from t",
+			input:                "select /* quote quote in string */ 'a''a' from t",
+			output:               "select /* quote quote in string */ 'a\\'a' from t",
 			serializeSelectExprs: true,
 		}, {
-			input:  "select /* double quote quote in string */ \"a\"\"a\" from t",
-			output: "select /* double quote quote in string */ 'a\\\"a' from t",
+			input:                "select /* double quote quote in string */ \"a\"\"a\" from t",
+			output:               "select /* double quote quote in string */ 'a\\\"a' from t",
 			serializeSelectExprs: true,
 		}, {
-			input:  "select /* quote in double quoted string */ \"a'a\" from t",
-			output: "select /* quote in double quoted string */ 'a\\'a' from t",
+			input:                "select /* quote in double quoted string */ \"a'a\" from t",
+			output:               "select /* quote in double quoted string */ 'a\\'a' from t",
 			serializeSelectExprs: true,
 		}, {
 			input:  "select /* quote in double quoted string */ \"a'a\" from t",
@@ -600,8 +600,8 @@ var (
 		}, {
 			input: "select /* all escapes */ '\\0\\'\\\"\\b\\n\\r\\t\\Z\\\\' from t",
 		}, {
-			input:  "select /* non-escape */ '\\x' from t",
-			output: "select /* non-escape */ 'x' from t",
+			input:                "select /* non-escape */ '\\x' from t",
+			output:               "select /* non-escape */ 'x' from t",
 			serializeSelectExprs: true,
 		}, {
 			input:  "select /* non-escape */ '\\x' from t",
@@ -615,14 +615,14 @@ var (
 		}, {
 			input: "select /* value argument with dot */ :a.b from t",
 		}, {
-			input:  "select /* positional argument */ ? from t",
-			output: "select /* positional argument */ :v1 from t",
+			input:                "select /* positional argument */ ? from t",
+			output:               "select /* positional argument */ :v1 from t",
 			serializeSelectExprs: true,
 		}, {
-			input:  "select /* positional argument */ ? from t",
+			input: "select /* positional argument */ ? from t",
 		}, {
-			input:  "select /* multiple positional arguments */ ?, ? from t",
-			output: "select /* multiple positional arguments */ :v1, :v2 from t",
+			input:                "select /* multiple positional arguments */ ?, ? from t",
+			output:               "select /* multiple positional arguments */ :v1, :v2 from t",
 			serializeSelectExprs: true,
 		}, {
 			input: "select /* list arg */ * from t where a in ::list",
@@ -633,19 +633,19 @@ var (
 		}, {
 			input: "select /* octal */ 010 from t",
 		}, {
-			input:  "select /* hex */ x'f0A1' from t",
-			output: "select /* hex */ X'f0A1' from t",
+			input:                "select /* hex */ x'f0A1' from t",
+			output:               "select /* hex */ X'f0A1' from t",
 			serializeSelectExprs: true,
 		}, {
-			input:  "select /* hex */ x'f0A1' from t",
+			input: "select /* hex */ x'f0A1' from t",
 		}, {
 			input: "select /* hex caps */ X'F0a1' from t",
 		}, {
-			input:  "select /* bit literal */ b'0101' from t",
-			output: "select /* bit literal */ B'0101' from t",
+			input:                "select /* bit literal */ b'0101' from t",
+			output:               "select /* bit literal */ B'0101' from t",
 			serializeSelectExprs: true,
 		}, {
-			input:  "select /* bit literal */ b'0101' from t",
+			input: "select /* bit literal */ b'0101' from t",
 		}, {
 			input: "select /* bit literal caps */ B'010011011010' from t",
 		}, {
@@ -670,11 +670,11 @@ var (
 		}, {
 			input: "select /* limit a,b */ 1 from t limit a, b",
 		}, {
-			input:  "select /* binary unary */ a- -b from t",
-			output: "select /* binary unary */ a - -b from t",
+			input:                "select /* binary unary */ a- -b from t",
+			output:               "select /* binary unary */ a - -b from t",
 			serializeSelectExprs: true,
 		}, {
-			input:  "select /* binary unary */ a- -b from t",
+			input: "select /* binary unary */ a- -b from t",
 		}, {
 			input: "select /* - - */ - -b from t",
 		}, {
@@ -688,9 +688,9 @@ var (
 		}, {
 			input: "select /* interval keyword */ adddate('2008-01-02', interval 1 year) from t",
 		}, {
-			input:  "select /* TIMESTAMPADD */ TIMESTAMPADD(MINUTE, 1, '2008-01-04') from t",
+			input: "select /* TIMESTAMPADD */ TIMESTAMPADD(MINUTE, 1, '2008-01-04') from t",
 		}, {
-			input:  "select /* TIMESTAMPDIFF */ TIMESTAMPDIFF(MINUTE, '2008-01-02', '2008-01-04') from t",
+			input: "select /* TIMESTAMPDIFF */ TIMESTAMPDIFF(MINUTE, '2008-01-02', '2008-01-04') from t",
 		}, {
 			input: "select /* dual */ 1 from dual",
 		}, {
@@ -1038,21 +1038,15 @@ var (
 			output: "alter table a add column (\n\tid int\n)",
 		}, {
 			input:  "alter table a add index idx (id)",
-			output: "alter table a add index idx (id)",
 		}, {
 			input:  "alter table a add fulltext index idx (id)",
-			output: "alter table a add fulltext index idx (id)",
 		}, {
 			input:  "alter table a add spatial index idx (id)",
-			output: "alter table a add spatial index idx (id)",
 		}, {
 			input:  "alter table a add foreign key (x) references y(z)",
 			output: "alter table a add foreign key (x) references y (z)",
 		}, {
 			input:  "alter table a add primary key",
-			output: "alter table a",
-		}, {
-			input:  "alter table a add constraint",
 			output: "alter table a",
 		}, {
 			input: "alter table a drop column id",
@@ -1061,22 +1055,33 @@ var (
 			output: "alter table a",
 		}, {
 			input:  "alter table a drop index idx",
-			output: "alter table a drop index idx",
 		}, {
-			input:  "alter table a add check ch_1",
-			output: "alter table a",
+			input:  "alter table a add constraint check (b > 0)",
+			output: "alter table a add check (b > 0)",
+		}, {
+			input:  "alter table a add constraint check (b > 0) enforced",
+			output: "alter table a add check (b > 0)",
+		}, {
+			input:  "alter table a add constraint check (b > 0) not enforced",
+			output: "alter table a add check (b > 0) not enforced",
+		}, {
+			input:  "alter table a add constraint ch_1 check (b > 0)",
+		}, {
+			input:  "alter table a add constraint ch_1 check (b > 0) enforced",
+			output: "alter table a add constraint ch_1 check (b > 0)",
+		}, {
+			input:  "alter table a add constraint ch_1 check (b > 0) not enforced",
+		}, {
+			input:  "alter table a add check (b > 0)",
 		}, {
 			input:  "alter table a drop check ch_1",
-			output: "alter table a",
 		}, {
 			input:  "alter table a drop foreign key fk_something",
-			output: "alter table a drop foreign key fk_something",
 		}, {
 			input:  "alter table a drop primary key",
 			output: "alter table a",
 		}, {
 			input:  "alter table a drop constraint b",
-			output: "alter table a drop constraint b",
 		}, {
 			input:  "alter table a drop id",
 			output: "alter table a drop column id",
@@ -1098,7 +1103,6 @@ var (
 			output: "create table a",
 		}, {
 			input:  "alter table a rename column a to b",
-			output: "alter table a rename column a to b",
 		}, {
 			input:  "alter table a rename column a as b",
 			output: "alter table a rename column a to b",
@@ -1446,8 +1450,8 @@ var (
 			input:  "show warnings",
 			output: "show warnings",
 		}, {
-			input:  "select warnings from t",
-			output: "select `warnings` from t",
+			input:                "select warnings from t",
+			output:               "select `warnings` from t",
 			serializeSelectExprs: true,
 		}, {
 			input:  "show foobar",
@@ -1528,7 +1532,7 @@ var (
 			input:  "select * from t order by a collate utf8_general_ci",
 			output: "select * from t order by a collate utf8_general_ci asc",
 		}, {
-			input: "select k collate latin1_german2_ci as k1 from t1 order by k1 asc",
+			input:                "select k collate latin1_german2_ci as k1 from t1 order by k1 asc",
 			serializeSelectExprs: true,
 		}, {
 			input: "select * from t group by a collate utf8_general_ci",
@@ -1557,8 +1561,8 @@ var (
 		}, {
 			input: "select k from t1 join t2 order by a collate latin1_german2_ci asc, b collate latin1_german2_ci asc",
 		}, {
-			input:  "select k collate 'latin1_german2_ci' as k1 from t1 order by k1 asc",
-			output: "select k collate latin1_german2_ci as k1 from t1 order by k1 asc",
+			input:                "select k collate 'latin1_german2_ci' as k1 from t1 order by k1 asc",
+			output:               "select k collate latin1_german2_ci as k1 from t1 order by k1 asc",
 			serializeSelectExprs: true,
 		}, {
 			input:  "select /* drop trailing semicolon */ 1 from dual;",
@@ -1908,7 +1912,7 @@ func TestBrokenCommentSelection(t *testing.T) {
 		output: "select 1 from t",
 	}, {
 		input:  "select 1, 2 /* drop this comment */, 3 from t",
-		output:  "select 1, 2, 3 from t",
+		output: "select 1, 2, 3 from t",
 	},
 	}
 
@@ -2210,94 +2214,94 @@ func TestInvalid(t *testing.T) {
 
 func TestCaseSensitivity(t *testing.T) {
 	validSQL := []parseTest{
-	{
-		input:  "create table A (\n\t`B` int\n)",
-		output: "create table A (\n\tB int\n)",
-	}, {
-		input:  "create index b on A (ID)",
-		output: "alter table A add index b (ID)",
-	}, {
-		input:  "alter table A foo",
-		output: "alter table A",
-	}, {
-		input:  "alter table A convert",
-		output: "alter table A",
-	}, {
-		// View names get lower-cased.
-		input:  "alter view A foo",
-		output: "alter table a",
-	}, {
-		input:  "alter table A rename to B",
-		output: "rename table A to B",
-	}, {
-		input: "rename table A to B",
-	}, {
-		input:  "drop table B",
-		output: "drop table B",
-	}, {
-		input:  "drop table if exists B",
-		output: "drop table if exists B",
-	}, {
-		input:  "drop index b on A",
-		output: "alter table A drop index b",
-	}, {
-		input: "select a from B",
-	}, {
-		input: "select A as B from C",
-	}, {
-		input: "select B.* from c",
-	}, {
-		input: "select B.A from c",
-	}, {
-		input: "select * from B as C",
-	}, {
-		input: "select * from A.B",
-	}, {
-		input: "update A set b = 1",
-	}, {
-		input: "update A.B set b = 1",
-	}, {
-		input: "update A.B set foo.b = 1, c = 2, baz.foo.c = baz.b",
-	}, {
-		input: "select A() from b",
-	}, {
-		input: "select A(B, C) from b",
-	}, {
-		input: "select A(distinct B, C) from b",
-	}, {
-		input:  "select A(ALL B, C) from b",
-		output: "select A(B, C) from b",
-		serializeSelectExprs: true,
-	}, {
-		input:  "select A(ALL B, C) from b",
-		output: "select A(ALL B, C) from b",
-	}, {
-		input:  "select IF(B, C) from b",
-	}, {
-		input: "select * from b use index (A)",
-	}, {
-		input: "insert into A(A, B) values (1, 2)",
-	}, {
-		input:  "create view A as select current_timestamp()",
-		output: "create view a as select current_timestamp() from dual",
-	}, {
-		input:  "alter view A",
-		output: "alter table a",
-	}, {
-		input:  "drop view A",
-		output: "drop view a",
-	}, {
-		input:  "drop view if exists A",
-		output: "drop view if exists a",
-	}, {
-		input:  "select /* lock in SHARE MODE */ 1 from t lock in SHARE MODE",
-		output: "select /* lock in SHARE MODE */ 1 from t lock in share mode",
-	}, {
-		input:  "select next VALUE from t",
-		output: "select next 1 values from t",
-	}, {
-		input: "select /* use */ 1 from t1 use index (A) where b = 1",
-	}}
+		{
+			input:  "create table A (\n\t`B` int\n)",
+			output: "create table A (\n\tB int\n)",
+		}, {
+			input:  "create index b on A (ID)",
+			output: "alter table A add index b (ID)",
+		}, {
+			input:  "alter table A foo",
+			output: "alter table A",
+		}, {
+			input:  "alter table A convert",
+			output: "alter table A",
+		}, {
+			// View names get lower-cased.
+			input:  "alter view A foo",
+			output: "alter table a",
+		}, {
+			input:  "alter table A rename to B",
+			output: "rename table A to B",
+		}, {
+			input: "rename table A to B",
+		}, {
+			input:  "drop table B",
+			output: "drop table B",
+		}, {
+			input:  "drop table if exists B",
+			output: "drop table if exists B",
+		}, {
+			input:  "drop index b on A",
+			output: "alter table A drop index b",
+		}, {
+			input: "select a from B",
+		}, {
+			input: "select A as B from C",
+		}, {
+			input: "select B.* from c",
+		}, {
+			input: "select B.A from c",
+		}, {
+			input: "select * from B as C",
+		}, {
+			input: "select * from A.B",
+		}, {
+			input: "update A set b = 1",
+		}, {
+			input: "update A.B set b = 1",
+		}, {
+			input: "update A.B set foo.b = 1, c = 2, baz.foo.c = baz.b",
+		}, {
+			input: "select A() from b",
+		}, {
+			input: "select A(B, C) from b",
+		}, {
+			input: "select A(distinct B, C) from b",
+		}, {
+			input:                "select A(ALL B, C) from b",
+			output:               "select A(B, C) from b",
+			serializeSelectExprs: true,
+		}, {
+			input:  "select A(ALL B, C) from b",
+			output: "select A(ALL B, C) from b",
+		}, {
+			input: "select IF(B, C) from b",
+		}, {
+			input: "select * from b use index (A)",
+		}, {
+			input: "insert into A(A, B) values (1, 2)",
+		}, {
+			input:  "create view A as select current_timestamp()",
+			output: "create view a as select current_timestamp() from dual",
+		}, {
+			input:  "alter view A",
+			output: "alter table a",
+		}, {
+			input:  "drop view A",
+			output: "drop view a",
+		}, {
+			input:  "drop view if exists A",
+			output: "drop view if exists a",
+		}, {
+			input:  "select /* lock in SHARE MODE */ 1 from t lock in SHARE MODE",
+			output: "select /* lock in SHARE MODE */ 1 from t lock in share mode",
+		}, {
+			input:  "select next VALUE from t",
+			output: "select next 1 values from t",
+		}, {
+			input: "select /* use */ 1 from t1 use index (A) where b = 1",
+		}}
 
 	for _, tcase := range validSQL {
 		runParseTestCase(t, tcase)
@@ -2305,112 +2309,112 @@ func TestCaseSensitivity(t *testing.T) {
 }
 
 func TestKeywords(t *testing.T) {
-	validSQL := []parseTest {
-	{
-		input:  "select current_timestamp",
-		output: "select current_timestamp() from dual",
-		serializeSelectExprs: true,
-	}, {
-		input:  "select current_TIMESTAMP",
-		output: "select current_TIMESTAMP from dual",
-	}, {
-		input: "update t set a = current_timestamp()",
-	}, {
-		input: "update t set a = current_timestamp(5)",
-	}, {
-		input:  "select a, current_date from t",
-		output: "select a, current_date() from t",
-		serializeSelectExprs: true,
-	}, {
-		input:  "select a, current_DATE from t",
-		output: "select a, current_DATE from t",
-	}, {
-		input:  "select a, current_user from t",
-		output: "select a, current_user() from t",
-		serializeSelectExprs: true,
-	}, {
-		input:  "select a, current_USER from t",
-	}, {
-		input:  "select a, Current_USER(     ) from t",
-	}, {
-		input:  "insert into t(a, b) values (current_date, current_date())",
-		output: "insert into t(a, b) values (current_date(), current_date())",
-	}, {
-		input: "select * from t where a > utc_timestmp()",
-	}, {
-		input: "select * from t where a > utc_timestamp(4)",
-	}, {
-		input:  "update t set b = utc_timestamp + 5",
-		output: "update t set b = utc_timestamp() + 5",
-	}, {
-		input:  "select utc_time, utc_date, utc_time(6)",
-		output: "select utc_time(), utc_date(), utc_time(6) from dual",
-		serializeSelectExprs: true,
-	}, {
-		input:  "select utc_TIME, UTC_date, utc_time(6)",
-		output: "select utc_TIME, UTC_date, utc_time(6) from dual",
-	}, {
-		input:  "select 1 from dual where localtime > utc_time",
-		output: "select 1 from dual where localtime() > utc_time()",
-	}, {
-		input:  "select 1 from dual where localtime(2) > utc_time(1)",
-		output: "select 1 from dual where localtime(2) > utc_time(1)",
-	}, {
-		input:  "update t set a = localtimestamp(), b = utc_timestamp",
-		output: "update t set a = localtimestamp(), b = utc_timestamp()",
-	}, {
-		input:  "update t set a = localtimestamp(10), b = utc_timestamp(13)",
-		output: "update t set a = localtimestamp(10), b = utc_timestamp(13)",
-	}, {
-		input: "insert into t(a) values (unix_timestamp)",
-	}, {
-		input: "select replace(a, 'foo', 'bar') from t",
-	}, {
-		input: "update t set a = replace('1234', '2', '1')",
-	}, {
-		input: "insert into t(a, b) values ('foo', 'bar') on duplicate key update a = replace(hex('foo'), 'f', 'b')",
-	}, {
-		input: "update t set a = left('1234', 3)",
-	}, {
-		input: "select left(a, 5) from t",
-	}, {
-		input: "update t set d = adddate(date('2003-12-31 01:02:03'), interval 5 days)",
-	}, {
-		input: "insert into t(a, b) values (left('foo', 1), 'b')",
-	}, {
-		input: "insert /* qualified function */ into t(a, b) values (test.PI(), 'b')",
-	}, {
-		input:  "select /* keyword in qualified id */ * from t join z on t.key = z.key",
-		output: "select /* keyword in qualified id */ * from t join z on t.`key` = z.`key`",
-	}, {
-		input:  "select /* non-reserved keywords as unqualified cols */ date, view, offset from t",
-		output: "select /* non-reserved keywords as unqualified cols */ `date`, `view`, `offset` from t",
-		serializeSelectExprs: true,
-	}, {
-		input:  "select /* non-reserved keywords as unqualified cols */ date, view, offset from t",
-	}, {
-		input:  "select /* share and mode as cols */ share, mode from t where share = 'foo'",
-		output: "select /* share and mode as cols */ `share`, `mode` from t where `share` = 'foo'",
-		serializeSelectExprs: true,
-	}, {
-		input:  "select /* share and mode as cols */ share, mode from t where share = 'foo'",
-		output:  "select /* share and mode as cols */ share, mode from t where `share` = 'foo'",
-	}, {
-		input:  "select /* unused keywords as cols */ write, virtual from t where trailing = 'foo'",
-		output: "select /* unused keywords as cols */ `write`, `virtual` from t where `trailing` = 'foo'",
-		serializeSelectExprs: true,
-	}, {
-		input:  "select /* unused keywords as cols */ write, virtual from t where trailing = 'foo'",
-		output: "select /* unused keywords as cols */ write, virtual from t where `trailing` = 'foo'",
-	}, {
-		input:  "select status from t",
-		output: "select `status` from t",
-		serializeSelectExprs: true,
-	}, {
-		input:  "select variables from t",
-		output: "select `variables` from t",
-		serializeSelectExprs: true,
-	}}
+	validSQL := []parseTest{
+		{
+			input:                "select current_timestamp",
+			output:               "select current_timestamp() from dual",
+			serializeSelectExprs: true,
+		}, {
+			input:  "select current_TIMESTAMP",
+			output: "select current_TIMESTAMP from dual",
+		}, {
+			input: "update t set a = current_timestamp()",
+		}, {
+			input: "update t set a = current_timestamp(5)",
+		}, {
+			input:                "select a, current_date from t",
+			output:               "select a, current_date() from t",
+			serializeSelectExprs: true,
+		}, {
+			input:  "select a, current_DATE from t",
+			output: "select a, current_DATE from t",
+		}, {
+			input:                "select a, current_user from t",
+			output:               "select a, current_user() from t",
+			serializeSelectExprs: true,
+		}, {
+			input: "select a, current_USER from t",
+		}, {
+			input: "select a, Current_USER(     ) from t",
+		}, {
+			input:  "insert into t(a, b) values (current_date, current_date())",
+			output: "insert into t(a, b) values (current_date(), current_date())",
+		}, {
+			input: "select * from t where a > utc_timestmp()",
+		}, {
+			input: "select * from t where a > utc_timestamp(4)",
+		}, {
+			input:  "update t set b = utc_timestamp + 5",
+			output: "update t set b = utc_timestamp() + 5",
+		}, {
+			input:                "select utc_time, utc_date, utc_time(6)",
+			output:               "select utc_time(), utc_date(), utc_time(6) from dual",
+			serializeSelectExprs: true,
+		}, {
+			input:  "select utc_TIME, UTC_date, utc_time(6)",
+			output: "select utc_TIME, UTC_date, utc_time(6) from dual",
+		}, {
+			input:  "select 1 from dual where localtime > utc_time",
+			output: "select 1 from dual where localtime() > utc_time()",
+		}, {
+			input:  "select 1 from dual where localtime(2) > utc_time(1)",
+			output: "select 1 from dual where localtime(2) > utc_time(1)",
+		}, {
+			input:  "update t set a = localtimestamp(), b = utc_timestamp",
+			output: "update t set a = localtimestamp(), b = utc_timestamp()",
+		}, {
+			input:  "update t set a = localtimestamp(10), b = utc_timestamp(13)",
+			output: "update t set a = localtimestamp(10), b = utc_timestamp(13)",
+		}, {
+			input: "insert into t(a) values (unix_timestamp)",
+		}, {
+			input: "select replace(a, 'foo', 'bar') from t",
+		}, {
+			input: "update t set a = replace('1234', '2', '1')",
+		}, {
+			input: "insert into t(a, b) values ('foo', 'bar') on duplicate key update a = replace(hex('foo'), 'f', 'b')",
+		}, {
+			input: "update t set a = left('1234', 3)",
+		}, {
+			input: "select left(a, 5) from t",
+		}, {
+			input: "update t set d = adddate(date('2003-12-31 01:02:03'), interval 5 days)",
+		}, {
+			input: "insert into t(a, b) values (left('foo', 1), 'b')",
+		}, {
+			input: "insert /* qualified function */ into t(a, b) values (test.PI(), 'b')",
+		}, {
+			input:  "select /* keyword in qualified id */ * from t join z on t.key = z.key",
+			output: "select /* keyword in qualified id */ * from t join z on t.`key` = z.`key`",
+		}, {
+			input:                "select /* non-reserved keywords as unqualified cols */ date, view, offset from t",
+			output:               "select /* non-reserved keywords as unqualified cols */ `date`, `view`, `offset` from t",
+			serializeSelectExprs: true,
+		}, {
+			input: "select /* non-reserved keywords as unqualified cols */ date, view, offset from t",
+		}, {
+			input:                "select /* share and mode as cols */ share, mode from t where share = 'foo'",
+			output:               "select /* share and mode as cols */ `share`, `mode` from t where `share` = 'foo'",
+			serializeSelectExprs: true,
+		}, {
+			input:  "select /* share and mode as cols */ share, mode from t where share = 'foo'",
+			output: "select /* share and mode as cols */ share, mode from t where `share` = 'foo'",
+		}, {
+			input:                "select /* unused keywords as cols */ write, virtual from t where trailing = 'foo'",
+			output:               "select /* unused keywords as cols */ `write`, `virtual` from t where `trailing` = 'foo'",
+			serializeSelectExprs: true,
+		}, {
+			input:  "select /* unused keywords as cols */ write, virtual from t where trailing = 'foo'",
+			output: "select /* unused keywords as cols */ write, virtual from t where `trailing` = 'foo'",
+		}, {
+			input:                "select status from t",
+			output:               "select `status` from t",
+			serializeSelectExprs: true,
+		}, {
+			input:                "select variables from t",
+			output:               "select `variables` from t",
+			serializeSelectExprs: true,
+		}}
 
 	for _, tcase := range validSQL {
 		runParseTestCase(t, tcase)
@@ -2439,69 +2443,69 @@ func runParseTestCase(t *testing.T, tcase parseTest) bool {
 
 func TestConvert(t *testing.T) {
 	validSQL := []parseTest{
-	{
-		input:  "select cast('abc' as date) from t",
-		output: "select convert('abc', date) from t",
-		serializeSelectExprs: true,
-	}, {
-		input:  "select cast('abc' as date) from t",
-	}, {
-		input: "select convert('abc', binary(4)) from t",
-	}, {
-		input: "select convert('abc', binary) from t",
-	}, {
-		input: "select convert('abc', char character set binary) from t",
-	}, {
-		input: "select convert('abc', char(4) ascii) from t",
-	}, {
-		input: "select convert('abc', char unicode) from t",
-	}, {
-		input: "select convert('abc', char(4)) from t",
-	}, {
-		input: "select convert('abc', char) from t",
-	}, {
-		input: "select convert('abc', nchar(4)) from t",
-	}, {
-		input: "select convert('abc', nchar) from t",
-	}, {
-		input: "select convert('abc', signed) from t",
-	}, {
-		input:  "select convert('abc', signed integer) from t",
-		output: "select convert('abc', signed) from t",
-		serializeSelectExprs: true,
-	}, {
-		input:  "select convert('abc', signed) from t",
-		output: "select convert('abc', signed) from t",
-	}, {
-		input: "select convert('abc', unsigned) from t",
-	}, {
-		input:  "select convert('abc', unsigned integer) from t",
-		output: "select convert('abc', unsigned) from t",
-		serializeSelectExprs: true,
-	}, {
-		input:  "select convert('abc', unsigned) from t",
-		output: "select convert('abc', unsigned) from t",
-	}, {
-		input: "select convert('abc', decimal(3, 4)) from t",
-	}, {
-		input: "select convert('abc', decimal(4)) from t",
-	}, {
-		input: "select convert('abc', decimal) from t",
-	}, {
-		input: "select convert('abc', date) from t",
-	}, {
-		input: "select convert('abc', time(4)) from t",
-	}, {
-		input: "select convert('abc', time) from t",
-	}, {
-		input: "select convert('abc', datetime(9)) from t",
-	}, {
-		input: "select convert('abc', datetime) from t",
-	}, {
-		input: "select convert('abc', json) from t",
-	}, {
-		input: "select convert('abc' using ascii) from t",
-	}}
+		{
+			input:                "select cast('abc' as date) from t",
+			output:               "select convert('abc', date) from t",
+			serializeSelectExprs: true,
+		}, {
+			input: "select cast('abc' as date) from t",
+		}, {
+			input: "select convert('abc', binary(4)) from t",
+		}, {
+			input: "select convert('abc', binary) from t",
+		}, {
+			input: "select convert('abc', char character set binary) from t",
+		}, {
+			input: "select convert('abc', char(4) ascii) from t",
+		}, {
+			input: "select convert('abc', char unicode) from t",
+		}, {
+			input: "select convert('abc', char(4)) from t",
+		}, {
+			input: "select convert('abc', char) from t",
+		}, {
+			input: "select convert('abc', nchar(4)) from t",
+		}, {
+			input: "select convert('abc', nchar) from t",
+		}, {
+			input: "select convert('abc', signed) from t",
+		}, {
+			input:                "select convert('abc', signed integer) from t",
+			output:               "select convert('abc', signed) from t",
+			serializeSelectExprs: true,
+		}, {
+			input:  "select convert('abc', signed) from t",
+			output: "select convert('abc', signed) from t",
+		}, {
+			input: "select convert('abc', unsigned) from t",
+		}, {
+			input:                "select convert('abc', unsigned integer) from t",
+			output:               "select convert('abc', unsigned) from t",
+			serializeSelectExprs: true,
+		}, {
+			input:  "select convert('abc', unsigned) from t",
+			output: "select convert('abc', unsigned) from t",
+		}, {
+			input: "select convert('abc', decimal(3, 4)) from t",
+		}, {
+			input: "select convert('abc', decimal(4)) from t",
+		}, {
+			input: "select convert('abc', decimal) from t",
+		}, {
+			input: "select convert('abc', date) from t",
+		}, {
+			input: "select convert('abc', time(4)) from t",
+		}, {
+			input: "select convert('abc', time) from t",
+		}, {
+			input: "select convert('abc', datetime(9)) from t",
+		}, {
+			input: "select convert('abc', datetime) from t",
+		}, {
+			input: "select convert('abc', json) from t",
+		}, {
+			input: "select convert('abc' using ascii) from t",
+		}}
 
 	for _, tcase := range validSQL {
 		runParseTestCase(t, tcase)
@@ -2555,40 +2559,40 @@ func TestSubStr(t *testing.T) {
 		input:  "select substring(a, 1, 6) from t",
 		output: "select substring(a, 1, 6) from t",
 	}, {
-		input:  "select substring(a from 1 for 6) from t",
-		output: "select substr(a, 1, 6) from t",
+		input:                "select substring(a from 1 for 6) from t",
+		output:               "select substr(a, 1, 6) from t",
 		serializeSelectExprs: true,
 	}, {
-		input:  "select substring(a from 1 for 6) from t",
+		input: "select substring(a from 1 for 6) from t",
 	}, {
-		input:  "select substring(a from 1 for 6) from t",
-		output: "select substr(a, 1, 6) from t",
+		input:                "select substring(a from 1 for 6) from t",
+		output:               "select substr(a, 1, 6) from t",
 		serializeSelectExprs: true,
 	}, {
-		input:  "select substring(a from 1 for 6) from t",
+		input: "select substring(a from 1 for 6) from t",
 	}, {
-		input:  "select substring(a from 1  for   6) from t",
+		input: "select substring(a from 1  for   6) from t",
 	}, {
-		input:  `select substr("foo" from 1 for 2) from t`,
-		output: `select substr('foo', 1, 2) from t`,
+		input:                `select substr("foo" from 1 for 2) from t`,
+		output:               `select substr('foo', 1, 2) from t`,
 		serializeSelectExprs: true,
 	}, {
-		input:  `select substring("foo", 1, 2) from t`,
-		output: `select substring('foo', 1, 2) from t`,
+		input:                `select substring("foo", 1, 2) from t`,
+		output:               `select substring('foo', 1, 2) from t`,
 		serializeSelectExprs: true,
 	}, {
-		input:  `select substr(substr("foo" from 1 for 2), 1, 2) from t`,
-		output: `select substr(substr('foo', 1, 2), 1, 2) from t`,
+		input:                `select substr(substr("foo" from 1 for 2), 1, 2) from t`,
+		output:               `select substr(substr('foo', 1, 2), 1, 2) from t`,
 		serializeSelectExprs: true,
 	}, {
-		input:  `select substr(substr("foo" from 1 for 2), 1, 2) from t`,
+		input: `select substr(substr("foo" from 1 for 2), 1, 2) from t`,
 	}, {
-		input:  `select substr(substring("foo", 1, 2), 3, 4) from t`,
-		output: `select substr(substring('foo', 1, 2), 3, 4) from t`,
+		input:                `select substr(substring("foo", 1, 2), 3, 4) from t`,
+		output:               `select substr(substring('foo', 1, 2), 3, 4) from t`,
 		serializeSelectExprs: true,
 	}, {
-		input:  `select substr(substr("foo", 1), 2) from t`,
-		output: `select substr(substr('foo', 1), 2) from t`,
+		input:                `select substr(substr("foo", 1), 2) from t`,
+		output:               `select substr(substr('foo', 1), 2) from t`,
 		serializeSelectExprs: true,
 	}}
 
@@ -2781,6 +2785,17 @@ func TestCreateTable(t *testing.T) {
 			"	constraint second_ibfk_1 foreign key (k, j) references simple (a, b) on update cascade\n" +
 			")",
 
+		// check constraint
+		"create table t (\n" +
+			"	id int auto_increment,\n" +
+			"	username varchar,\n" +
+			"	a int,\n" +
+			"	b int,\n" +
+			"	check (b in (0, 1)),\n" +
+			"	constraint a_positive check (a > 0),\n" +
+			"	check (a > b)\n" +
+			")",
+
 		// table options
 		"create table t (\n" +
 			"	id int auto_increment\n" +
@@ -2952,6 +2967,29 @@ func TestCreateTable(t *testing.T) {
 			"	time5 timestamp(5) default utc_time(5) on update utc_time(5)\n" +
 			")",
 	}, {
+		// test inline check constraint
+		input: "create table t (\n" +
+			"	a int,\n" +
+			"	b int constraint b_positive check (b > 0)\n" +
+			")",
+		output: "create table t (\n" +
+			"	a int,\n" +
+			"	b int,\n" +
+			"	constraint b_positive check (b > 0)\n" +
+			")",
+	}, {
+		// test initial table constraint
+		input: "create table t (\n" +
+			"	check (a <> b),\n" +
+			"	a int,\n" +
+			"	b int\n" +
+			")",
+		output: "create table t (\n" +
+			"	a int,\n" +
+			"	b int,\n" +
+			"	check (a != b)\n" +
+			")",
+	}, {
 		// test utc_date with and without ()
 		input: "create table t (\n" +
 			"	time1 timestamp default utc_date,\n" +
@@ -3083,7 +3121,8 @@ func TestCreateTable(t *testing.T) {
 	}
 
 	for key := range keywords {
-		input := fmt.Sprintf("create table t (%s bigint)", key)
+		//input := fmt.Sprintf("create table t {key} bigint)")
+		input := fmt.Sprintf("create table t (\n\t`%s` bigint\n)", key)
 		output := fmt.Sprintf("create table t (\n\t`%s` bigint\n)", key)
 		t.Run(input, func(t *testing.T) {
 			if _, ok := nonsupported[key]; ok {
@@ -3107,52 +3146,52 @@ func TestLoadData(t *testing.T) {
 		output string
 	}{{
 		// test with simple file
-		input: "LOAD DATA INFILE 'x.txt' INTO TABLE c",
+		input:  "LOAD DATA INFILE 'x.txt' INTO TABLE c",
 		output: "load data infile 'x.txt' into table c",
-	},{
-		input: "LOAD DATA INFILE '~/Desktop/x.txt' INTO TABLE c",
+	}, {
+		input:  "LOAD DATA INFILE '~/Desktop/x.txt' INTO TABLE c",
 		output: "load data infile '~/Desktop/x.txt' into table c",
-	},{
-		input: "LOAD DATA LOCAL INFILE ':SOURCE:9fa1415b62a44b53b86cffbccb210b51' INTO TABLE test",
+	}, {
+		input:  "LOAD DATA LOCAL INFILE ':SOURCE:9fa1415b62a44b53b86cffbccb210b51' INTO TABLE test",
 		output: "load data local infile ':SOURCE:9fa1415b62a44b53b86cffbccb210b51' into table test",
-	},{
-		input: "LOAD DATA LOCAL INFILE ':SOURCE:9fa1415b62a44b53b86cffbccb210b51' INTO TABLE test PARTITION (id)",
+	}, {
+		input:  "LOAD DATA LOCAL INFILE ':SOURCE:9fa1415b62a44b53b86cffbccb210b51' INTO TABLE test PARTITION (id)",
 		output: "load data local infile ':SOURCE:9fa1415b62a44b53b86cffbccb210b51' into table test partition (id)",
-	},{
-		input: "LOAD DATA LOCAL INFILE ':SOURCE:9fa1415b62a44b53b86cffbccb210b51' INTO TABLE test PARTITION (id) CHARACTER SET UTF8MB4",
+	}, {
+		input:  "LOAD DATA LOCAL INFILE ':SOURCE:9fa1415b62a44b53b86cffbccb210b51' INTO TABLE test PARTITION (id) CHARACTER SET UTF8MB4",
 		output: "load data local infile ':SOURCE:9fa1415b62a44b53b86cffbccb210b51' into table test partition (id) character set UTF8MB4",
-	},{
-		input: "LOAD DATA LOCAL INFILE ':SOURCE:9fa1415b62a44b53b86cffbccb210b51' INTO TABLE test FIELDS TERMINATED BY ''",
+	}, {
+		input:  "LOAD DATA LOCAL INFILE ':SOURCE:9fa1415b62a44b53b86cffbccb210b51' INTO TABLE test FIELDS TERMINATED BY ''",
 		output: "load data local infile ':SOURCE:9fa1415b62a44b53b86cffbccb210b51' into table test fields terminated by ''",
-	},{
-		input: "LOAD DATA LOCAL INFILE ':SOURCE:9fa1415b62a44b53b86cffbccb210b51' INTO TABLE test PARTITION (id) CHARACTER SET UTF8MB4 FIELDS TERMINATED BY '' ESCAPED BY ''",
+	}, {
+		input:  "LOAD DATA LOCAL INFILE ':SOURCE:9fa1415b62a44b53b86cffbccb210b51' INTO TABLE test PARTITION (id) CHARACTER SET UTF8MB4 FIELDS TERMINATED BY '' ESCAPED BY ''",
 		output: "load data local infile ':SOURCE:9fa1415b62a44b53b86cffbccb210b51' into table test partition (id) character set UTF8MB4 fields terminated by '' escaped by ''",
-	},{
-		input: "LOAD DATA LOCAL INFILE ':SOURCE:9fa1415b62a44b53b86cffbccb210b51' INTO TABLE test PARTITION (id) FIELDS TERMINATED BY '' ENCLOSED BY '' ESCAPED BY ''",
+	}, {
+		input:  "LOAD DATA LOCAL INFILE ':SOURCE:9fa1415b62a44b53b86cffbccb210b51' INTO TABLE test PARTITION (id) FIELDS TERMINATED BY '' ENCLOSED BY '' ESCAPED BY ''",
 		output: "load data local infile ':SOURCE:9fa1415b62a44b53b86cffbccb210b51' into table test partition (id) fields terminated by '' enclosed by '' escaped by ''",
-	},{
-		input: "LOAD DATA LOCAL INFILE 'y.txt' INTO TABLE test PARTITION (id) CHARACTER SET UTF8MB4 FIELDS TERMINATED BY '' OPTIONALLY ENCLOSED BY '' ESCAPED BY '' LINES TERMINATED BY ''",
+	}, {
+		input:  "LOAD DATA LOCAL INFILE 'y.txt' INTO TABLE test PARTITION (id) CHARACTER SET UTF8MB4 FIELDS TERMINATED BY '' OPTIONALLY ENCLOSED BY '' ESCAPED BY '' LINES TERMINATED BY ''",
 		output: "load data local infile 'y.txt' into table test partition (id) character set UTF8MB4 fields terminated by '' optionally enclosed by '' escaped by '' lines terminated by ''",
-	},{
-		input: "LOAD DATA LOCAL INFILE 'l.csv' INTO TABLE test PARTITION (id) CHARACTER SET UTF8MB4 FIELDS TERMINATED BY '' ESCAPED BY '' LINES TERMINATED BY '' IGNORE 0 LINES (`pk`)",
+	}, {
+		input:  "LOAD DATA LOCAL INFILE 'l.csv' INTO TABLE test PARTITION (id) CHARACTER SET UTF8MB4 FIELDS TERMINATED BY '' ESCAPED BY '' LINES TERMINATED BY '' IGNORE 0 LINES (`pk`)",
 		output: "load data local infile 'l.csv' into table test partition (id) character set UTF8MB4 fields terminated by '' escaped by '' lines terminated by '' ignore 0 lines (pk)",
-	},{
-		input: "LOAD DATA LOCAL INFILE 'l.csv' INTO TABLE test PARTITION (id) CHARACTER SET UTF8MB4 FIELDS TERMINATED BY '' ESCAPED BY '' LINES STARTING BY 'xxx' IGNORE 0 LINES (`pk`)",
+	}, {
+		input:  "LOAD DATA LOCAL INFILE 'l.csv' INTO TABLE test PARTITION (id) CHARACTER SET UTF8MB4 FIELDS TERMINATED BY '' ESCAPED BY '' LINES STARTING BY 'xxx' IGNORE 0 LINES (`pk`)",
 		output: "load data local infile 'l.csv' into table test partition (id) character set UTF8MB4 fields terminated by '' escaped by '' lines starting by 'xxx' ignore 0 lines (pk)",
-	},{
-		input: "LOAD DATA LOCAL INFILE 'g.xlsx' INTO TABLE test PARTITION (id) CHARACTER SET UTF8MB4 FIELDS TERMINATED BY '' ESCAPED BY '' LINES TERMINATED BY '' (`id`)",
+	}, {
+		input:  "LOAD DATA LOCAL INFILE 'g.xlsx' INTO TABLE test PARTITION (id) CHARACTER SET UTF8MB4 FIELDS TERMINATED BY '' ESCAPED BY '' LINES TERMINATED BY '' (`id`)",
 		output: "load data local infile 'g.xlsx' into table test partition (id) character set UTF8MB4 fields terminated by '' escaped by '' lines terminated by '' (id)",
-	},{
-		input: "LOAD DATA INFILE '/tmp/jokes.txt' INTO TABLE jokes FIELDS TERMINATED BY '' LINES TERMINATED BY '\n%%\n' (joke)",
+	}, {
+		input:  "LOAD DATA INFILE '/tmp/jokes.txt' INTO TABLE jokes FIELDS TERMINATED BY '' LINES TERMINATED BY '\n%%\n' (joke)",
 		output: "load data infile '/tmp/jokes.txt' into table jokes fields terminated by '' lines terminated by '\n%%\n' (joke)",
-	},{
-		input: "LOAD DATA INFILE 'data.txt' INTO TABLE db2.my_table",
+	}, {
+		input:  "LOAD DATA INFILE 'data.txt' INTO TABLE db2.my_table",
 		output: "load data infile 'data.txt' into table db2.my_table",
-	},{
-		input: "LOAD DATA INFILE 'data.txt' INTO TABLE db2.my_table (c1, c2, c3)",
+	}, {
+		input:  "LOAD DATA INFILE 'data.txt' INTO TABLE db2.my_table (c1, c2, c3)",
 		output: "load data infile 'data.txt' into table db2.my_table (c1, c2, c3)",
-	},{
-		input: "LOAD DATA INFILE '/tmp/test.txt' INTO TABLE test IGNORE 1 LINES",
+	}, {
+		input:  "LOAD DATA INFILE '/tmp/test.txt' INTO TABLE test IGNORE 1 LINES",
 		output: "load data infile '/tmp/test.txt' into table test ignore 1 lines",
 	}}
 	for _, tcase := range testCases {
@@ -3370,7 +3409,7 @@ var (
 		output:       "syntax error at position 13 near '/* aa'",
 		excludeMulti: true,
 	}, {
-		input: "INSERT INTO TABLE a VALUES (1)",
+		input:  "INSERT INTO TABLE a VALUES (1)",
 		output: "syntax error at position 18 near 'TABLE'",
 	}}
 )
@@ -3378,7 +3417,7 @@ var (
 func TestErrors(t *testing.T) {
 	for _, tcase := range invalidSQL {
 		t.Run(tcase.input, func(t *testing.T) {
-			_, err := Parse(tcase.input)
+			_, err := ParseStrictDDL(tcase.input)
 			assert.Equal(t, tcase.output, err.Error())
 		})
 	}

@@ -712,7 +712,7 @@ func TestColIdentSize(t *testing.T) {
 	size := unsafe.Sizeof(NewColIdent(""))
 	want := 2 * unsafe.Sizeof("")
 	if size != want {
-		t.Errorf("Size of ColIdent: %d, want 32", want)
+		t.Errorf("Size of ColIdent: %d, want %d", want, size)
 	}
 }
 

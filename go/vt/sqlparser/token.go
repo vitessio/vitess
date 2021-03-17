@@ -55,7 +55,7 @@ type Tokenizer struct {
 	bufPos  int
 	bufSize int
 
-	queryBuf    []byte
+	queryBuf []byte
 }
 
 // NewStringTokenizer creates a new Tokenizer for the
@@ -187,6 +187,7 @@ var keywords = map[string]int{
 	"elseif":              ELSEIF,
 	"enclosed":            ENCLOSED,
 	"end":                 END,
+	"enforced":            ENFORCED,
 	"engines":             ENGINES,
 	"enum":                ENUM,
 	"escape":              ESCAPE,
@@ -277,7 +278,7 @@ var keywords = map[string]int{
 	"lines":               LINES,
 	"linestring":          LINESTRING,
 	"load":                LOAD,
-	"local":			   LOCAL,
+	"local":               LOCAL,
 	"localtime":           LOCALTIME,
 	"localtimestamp":      LOCALTIMESTAMP,
 	"lock":                LOCK,
