@@ -89,6 +89,9 @@ func (tm *TabletManager) RestoreData(ctx context.Context, logger logutil.Logger,
 		}
 	}()
 	err := tm.restoreDataLocked(ctx, logger, waitForBackupInterval, deleteBeforeRestore)
+	if err != nil {
+		return err
+	}
 	// Tell Orchestrator we're no longer stopped on purpose.
 	// Do this in the background, as it's best-effort.
 	go func() {
@@ -99,7 +102,7 @@ func (tm *TabletManager) RestoreData(ctx context.Context, logger logutil.Logger,
 			log.Warningf("Orchestrator EndMaintenance failed: %v", err)
 		}
 	}()
-	return err
+	return nil
 }
 
 func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.Logger, waitForBackupInterval time.Duration, deleteBeforeRestore bool) error {
