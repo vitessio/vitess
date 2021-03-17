@@ -997,7 +997,7 @@ func TestPlayerCopyWildcardTableContinuation(t *testing.T) {
 		{"4", "new"},
 	})
 	for _, ct := range playerEngine.controllers {
-		require.Equal(t, 1, ct.blpStats.NoopQueryCount.Counts()["insert"])
+		require.Equal(t, int64(1), ct.blpStats.NoopQueryCount.Counts()["insert"])
 		break
 	}
 
