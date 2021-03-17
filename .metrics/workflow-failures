@@ -4871,3 +4871,6 @@
 2021-03-17T09:56:53Z,Cluster (upgrade),https://github.com/vitessio/vitess/actions/runs/660635094
 2021-03-17T10:05:23Z,Cluster (upgrade),https://github.com/vitessio/vitess/actions/runs/660656150
 2021-03-17T10:34:21Z,check_make_sizegen,https://github.com/vitessio/vitess/actions/runs/660735666
+2021-03-17T11:08:58Z,Cluster (onlineddl_revert),https://github.com/vitessio/vitess/actions/runs/660826150
+2021-03-17T11:08:58Z,Cluster (upgrade),https://github.com/vitessio/vitess/actions/runs/660826145
+2021-03-17T11:08:58Z,endtoend,https://github.com/vitessio/vitess/actions/runs/660826136
