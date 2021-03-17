@@ -61,6 +61,7 @@ const (
 	StmtUnlockTables
 	StmtFlush
 	StmtCallProc
+	StmtRevert
 )
 
 //ASTToStatementType returns a StatementType from an AST stmt
@@ -80,6 +81,8 @@ func ASTToStatementType(stmt Statement) StatementType {
 		return StmtShow
 	case DDLStatement, DBDDLStatement, *AlterVschema:
 		return StmtDDL
+	case *RevertMigration:
+		return StmtRevert
 	case *Use:
 		return StmtUse
 	case *OtherRead, *OtherAdmin, *Load:
@@ -169,6 +172,8 @@ func Preview(sql string) StatementType {
 		return StmtStream
 	case "vstream":
 		return StmtVStream
+	case "revert":
+		return StmtRevert
 	case "insert":
 		return StmtInsert
 	case "replace":
@@ -231,6 +236,8 @@ func (s StatementType) String() string {
 		return "STREAM"
 	case StmtVStream:
 		return "VSTREAM"
+	case StmtRevert:
+		return "REVERT"
 	case StmtInsert:
 		return "INSERT"
 	case StmtReplace:
