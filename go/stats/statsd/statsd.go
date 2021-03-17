@@ -201,8 +201,6 @@ func (sb StatsBackend) addExpVar(kv expvar.KeyValue) {
 		}
 	case *stats.Rates, *stats.RatesFunc, *stats.String, *stats.StringFunc, *stats.StringMapFunc:
 		// Silently ignore metrics that does not make sense to be exported to statsd
-	default:
-		log.Warningf("Silently ignore metrics with key %v [%T]", k, kv.Value)
 	}
 }
 
