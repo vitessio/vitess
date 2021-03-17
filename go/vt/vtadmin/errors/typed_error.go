@@ -30,6 +30,17 @@ type TypedError interface {
 	HTTPStatus() int
 }
 
+// BadRequest is returned when some request parameter is invalid.
+type BadRequest struct {
+	Err        error
+	ErrDetails interface{}
+}
+
+func (e *BadRequest) Error() string        { return e.Err.Error() }
+func (e *BadRequest) Code() string         { return "bad request" }
+func (e *BadRequest) Details() interface{} { return e.ErrDetails }
+func (e *BadRequest) HTTPStatus() int      { return 400 }
+
 // Unknown is the generic error, used when a more specific error is either
 // unspecified or inappropriate.
 type Unknown struct {
