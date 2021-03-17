@@ -21,11 +21,13 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"time"
 
 	"google.golang.org/grpc"
 
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/callerid"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vitessdriver"
 	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery"
 	"vitess.io/vitess/go/vt/vtadmin/vtadminproto"
@@ -132,12 +134,27 @@ func (vtgate *VTGateProxy) Dial(ctx context.Context, target string, opts ...grpc
 	vtgate.annotateSpan(span)
 
 	if vtgate.conn != nil {
-		span.Annotate("is_noop", true)
+		// (TODO:@ajm188) This should be configurable on a per-cluster basis.
+		ctx, cancel := context.WithTimeout(ctx, time.Millisecond*500)
+		defer cancel()
 
-		// (TODO:@amason): consider a quick Ping() check in this case, and get a
-		// new connection if that fails.
-		return nil
+		err := vtgate.PingContext(ctx)
+		switch err {
+		case nil:
+			log.Infof("Have valid connection to %s, reusing it.", vtgate.host)
+			span.Annotate("is_noop", true)
+
+			return nil
+		default:
+			log.Warningf("Ping failed on host %s: %s; Rediscovering a vtgate to get new connection", vtgate.host, err)
+
+			if err := vtgate.Close(); err != nil {
+				log.Warningf("Error when closing connection to vtgate %s: %s; Continuing anyway ...", vtgate.host, err)
+			}
+		}
 	}
+
+	span.Annotate("is_noop", false)
 
 	if vtgate.host == "" {
 		gate, err := vtgate.discovery.DiscoverVTGateAddr(ctx, vtgate.discoveryTags)
@@ -149,6 +166,8 @@ func (vtgate *VTGateProxy) Dial(ctx context.Context, target string, opts ...grpc
 		// re-annotate the hostname
 		span.Annotate("vtgate_host", gate)
 	}
+
+	log.Infof("Dialing %s ...", vtgate.host)
 
 	conf := vitessdriver.Configuration{
 		Protocol:        fmt.Sprintf("grpc_%s", vtgate.cluster.Id),
