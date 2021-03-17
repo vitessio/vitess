@@ -464,7 +464,16 @@ func (tm *TabletManager) UndoDemoteMaster(ctx context.Context) error {
 	if err := tm.QueryServiceControl.SetServingType(tablet.Type, logutil.ProtoToTime(tablet.MasterTermStartTime), true, ""); err != nil {
 		return vterrors.Wrap(err, "SetServingType(serving=true) failed")
 	}
-
+	// Tell Orchestrator we're no longer stopped on purpose.
+	// Do this in the background, as it's best-effort.
+	go func() {
+		if tm.orc == nil {
+			return
+		}
+		if err := tm.orc.EndMaintenance(tm.Tablet()); err != nil {
+			log.Warningf("Orchestrator EndMaintenance failed: %v", err)
+		}
+	}()
 	return nil
 }
 
