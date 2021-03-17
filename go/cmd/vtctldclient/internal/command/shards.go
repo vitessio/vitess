@@ -199,7 +199,7 @@ func commandShardReplicationPositions(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	for _, rt := range cli.SortReplicatingTablets(resp.TabletMap, resp.ReplicationStatuses) {
+	for _, rt := range cli.SortedReplicatingTablets(resp.TabletMap, resp.ReplicationStatuses) {
 		var line string
 
 		switch rt.Status {

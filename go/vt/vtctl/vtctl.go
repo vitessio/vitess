@@ -1322,7 +1322,7 @@ func commandShardReplicationPositions(ctx context.Context, wr *wrangler.Wrangler
 	}
 
 	lines := make([]string, 0, 24)
-	for _, rt := range cli.SortReplicatingTablets(resp.TabletMap, resp.ReplicationStatuses) {
+	for _, rt := range cli.SortedReplicatingTablets(resp.TabletMap, resp.ReplicationStatuses) {
 		status := rt.Status
 		tablet := rt.Tablet
 		if status == nil {
