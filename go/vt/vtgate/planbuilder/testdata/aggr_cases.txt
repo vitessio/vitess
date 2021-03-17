@@ -161,14 +161,14 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Sort",
     "Variant": "Memory",
-    "OrderBy": "0 ASC 4 ASC, 2 ASC 5 ASC",
+    "OrderBy": "0 ASC, 2 ASC 4 ASC",
     "Inputs": [
       {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
         "Aggregates": "count(0)",
         "Distinct": "false",
-        "GroupBy": "1, 5, 3",
+        "GroupBy": "1, 4, 3",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -177,9 +177,9 @@ Gen4 plan same as above
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select count(*) as k, a, textcol1, b, weight_string(count(*)), weight_string(textcol1), weight_string(a), weight_string(b) from `user` where 1 != 1 group by a, textcol1, b",
-            "OrderBy": "2 ASC 5 ASC, 1 ASC 6 ASC, 3 ASC 7 ASC",
-            "Query": "select count(*) as k, a, textcol1, b, weight_string(count(*)), weight_string(textcol1), weight_string(a), weight_string(b) from `user` group by a, textcol1, b order by textcol1 asc, a asc, b asc",
+            "FieldQuery": "select count(*) as k, a, textcol1, b, weight_string(textcol1), weight_string(a), weight_string(b) from `user` where 1 != 1 group by a, textcol1, b",
+            "OrderBy": "2 ASC 4 ASC, 1 ASC 5 ASC, 3 ASC 6 ASC",
+            "Query": "select count(*) as k, a, textcol1, b, weight_string(textcol1), weight_string(a), weight_string(b) from `user` group by a, textcol1, b order by textcol1 asc, a asc, b asc",
             "Table": "`user`"
           }
         ]
@@ -853,7 +853,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Sort",
     "Variant": "Memory",
-    "OrderBy": "1 ASC 2 ASC",
+    "OrderBy": "1 ASC",
     "Inputs": [
       {
         "OperatorType": "Aggregate",
@@ -869,9 +869,9 @@ Gen4 plan same as above
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select col1, col2, weight_string(col2), weight_string(col1) from `user` where 1 != 1 group by col1, col2",
-            "OrderBy": "0 ASC 3 ASC, 1 ASC 2 ASC",
-            "Query": "select col1, col2, weight_string(col2), weight_string(col1) from `user` group by col1, col2 order by col1 asc, col2 asc",
+            "FieldQuery": "select col1, col2, weight_string(col1), weight_string(col2) from `user` where 1 != 1 group by col1, col2",
+            "OrderBy": "0 ASC 2 ASC, 1 ASC 3 ASC",
+            "Query": "select col1, col2, weight_string(col1), weight_string(col2) from `user` group by col1, col2 order by col1 asc, col2 asc",
             "Table": "`user`"
           }
         ]
