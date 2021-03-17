@@ -73,7 +73,8 @@ type VTGateProxy struct {
 	// DialFunc is called to open a new database connection. In production this
 	// should always be vitessdriver.OpenWithConfiguration, but it is exported
 	// for testing purposes.
-	DialFunc func(cfg vitessdriver.Configuration) (*sql.DB, error)
+	DialFunc        func(cfg vitessdriver.Configuration) (*sql.DB, error)
+	dialPingTimeout time.Duration
 
 	host string
 	conn *sql.DB
@@ -98,11 +99,12 @@ func New(cfg *Config) *VTGateProxy {
 	}
 
 	return &VTGateProxy{
-		cluster:       cfg.Cluster,
-		discovery:     cfg.Discovery,
-		discoveryTags: discoveryTags,
-		creds:         cfg.Credentials,
-		DialFunc:      vitessdriver.OpenWithConfiguration,
+		cluster:         cfg.Cluster,
+		discovery:       cfg.Discovery,
+		discoveryTags:   discoveryTags,
+		creds:           cfg.Credentials,
+		DialFunc:        vitessdriver.OpenWithConfiguration,
+		dialPingTimeout: cfg.DialPingTimeout,
 	}
 }
 
@@ -134,8 +136,7 @@ func (vtgate *VTGateProxy) Dial(ctx context.Context, target string, opts ...grpc
 	vtgate.annotateSpan(span)
 
 	if vtgate.conn != nil {
-		// (TODO:@ajm188) This should be configurable on a per-cluster basis.
-		ctx, cancel := context.WithTimeout(ctx, time.Millisecond*500)
+		ctx, cancel := context.WithTimeout(ctx, vtgate.dialPingTimeout)
 		defer cancel()
 
 		err := vtgate.PingContext(ctx)
