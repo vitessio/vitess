@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+	"sync"
 	"time"
 
 	"context"
@@ -39,6 +40,7 @@ import (
 // FakeMysqlDaemon implements MysqlDaemon and allows the user to fake
 // everything.
 type FakeMysqlDaemon struct {
+	mu sync.Mutex
 	// db is the fake SQL DB we may use for some queries.
 	db *fakesqldb.DB
 
@@ -248,11 +250,20 @@ func (fmd *FakeMysqlDaemon) GetMysqlPort() (int32, error) {
 	return fmd.MysqlPort.Get(), nil
 }
 
+// CurrentMasterPositionLocked is thread-safe
+func (fmd *FakeMysqlDaemon) CurrentMasterPositionLocked(pos mysql.Position) {
+	fmd.mu.Lock()
+	defer fmd.mu.Unlock()
+	fmd.CurrentMasterPosition = pos
+}
+
 // ReplicationStatus is part of the MysqlDaemon interface
 func (fmd *FakeMysqlDaemon) ReplicationStatus() (mysql.ReplicationStatus, error) {
 	if fmd.ReplicationStatusError != nil {
 		return mysql.ReplicationStatus{}, fmd.ReplicationStatusError
 	}
+	fmd.mu.Lock()
+	defer fmd.mu.Unlock()
 	return mysql.ReplicationStatus{
 		Position:             fmd.CurrentMasterPosition,
 		FilePosition:         fmd.CurrentMasterFilePosition,
