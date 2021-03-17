@@ -566,6 +566,7 @@ func newResultColumn(expr *sqlparser.AliasedExpr, origin logicalPlan) *resultCol
 		// Just to be safe, generate an anonymous column for the expression.
 		rc.column = &column{
 			origin: origin,
+			typ:    sqlparser.GetReturnType(expr),
 		}
 	}
 	return rc
