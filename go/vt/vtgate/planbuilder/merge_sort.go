@@ -66,6 +66,7 @@ func (ms *mergeSort) Wireup(plan logicalPlan, jt *jointab) error {
 	rb := ms.input.(*route)
 	for i, orderby := range rb.eroute.OrderBy {
 		rc := ms.resultColumns[orderby.Col]
+		// Add a weight_string column if we know that the column is a textual column or if its type is unknown
 		if sqltypes.IsText(rc.column.typ) || rc.column.typ == sqltypes.Null {
 			// If a weight string was previously requested, reuse it.
 			if colNumber, ok := ms.weightStrings[rc]; ok {

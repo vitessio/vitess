@@ -121,6 +121,8 @@ func (ms *MemorySort) StreamExecute(vcursor VCursor, bindVars map[string]*queryp
 		}
 		for _, row := range qr.Rows {
 			heap.Push(sh, row)
+			// Remove the highest element from the heap if the size is more than the count
+			// This optimization means that the maximum size of the heap is going to be (count + 1)
 			for len(sh.rows) > count {
 				_ = heap.Pop(sh)
 			}
@@ -146,6 +148,7 @@ func (ms *MemorySort) StreamExecute(vcursor VCursor, bindVars map[string]*queryp
 	return cb(&sqltypes.Result{Rows: sh.rows})
 }
 
+// extractSlices extracts the three fields of OrderbyParams into 3 slices
 func extractSlices(input []OrderbyParams) (orderBy []int, weightString []int, desc []bool) {
 	for _, order := range input {
 		orderBy = append(orderBy, order.Col)
@@ -249,6 +252,7 @@ func (sh *sortHeap) Less(i, j int) bool {
 		if sh.err != nil {
 			return true
 		}
+		// First try to compare the columns that we want to order
 		cmp, err := evalengine.NullsafeCompare(sh.rows[i][sh.orderBy[k]], sh.rows[j][sh.orderBy[k]])
 		if err != nil {
 			_, isComparisonErr := err.(evalengine.UnsupportedComparisonError)
@@ -256,6 +260,7 @@ func (sh *sortHeap) Less(i, j int) bool {
 				sh.err = err
 				return true
 			}
+			// in case of a comparison error switch to using the weight string column for ordering
 			sh.orderBy[k] = sh.weightStrings[k]
 			sh.weightStrings[k] = -1
 			cmp, err = evalengine.NullsafeCompare(sh.rows[i][sh.orderBy[k]], sh.rows[j][sh.orderBy[k]])

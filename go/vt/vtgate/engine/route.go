@@ -125,7 +125,9 @@ func NewRoute(opcode RouteOpcode, keyspace *vindexes.Keyspace, query, fieldQuery
 // OrderbyParams specifies the parameters for ordering.
 // This is used for merge-sorting scatter queries.
 type OrderbyParams struct {
-	Col             int
+	Col int
+	// WeightStringCol is the weight_string column that will be used for sorting.
+	// It is set to -1 if such a column is not added to the query
 	WeightStringCol int
 	Desc            bool
 }
@@ -606,12 +608,14 @@ func (route *Route) sort(in *sqltypes.Result) (*sqltypes.Result, error) {
 				return true
 			}
 			var cmp int
+			// First try to compare the columns that we want to order
 			cmp, err = evalengine.NullsafeCompare(out.Rows[i][orderBy[k]], out.Rows[j][orderBy[k]])
 			if err != nil {
 				_, isComparisonErr := err.(evalengine.UnsupportedComparisonError)
 				if !(isComparisonErr && weightStrings[k] != -1) {
 					return true
 				}
+				// in case of a comparison error switch to using the weight string column for ordering
 				orderBy[k] = weightStrings[k]
 				weightStrings[k] = -1
 				cmp, err = evalengine.NullsafeCompare(out.Rows[i][orderBy[k]], out.Rows[j][orderBy[k]])
