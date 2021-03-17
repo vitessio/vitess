@@ -414,6 +414,11 @@ type (
 		AutoIncSpec *AutoIncSpec
 	}
 
+	// RevertMigration represents a REVERT VITESS_MIGRATION statement
+	RevertMigration struct {
+		UUID string
+	}
+
 	// AlterTable represents a ALTER TABLE statement.
 	AlterTable struct {
 		Table         TableName
@@ -602,6 +607,7 @@ func (*LockTables) iStatement()        {}
 func (*UnlockTables) iStatement()      {}
 func (*AlterTable) iStatement()        {}
 func (*AlterVschema) iStatement()      {}
+func (*RevertMigration) iStatement()   {}
 func (*DropTable) iStatement()         {}
 func (*DropView) iStatement()          {}
 func (*TruncateTable) iStatement()     {}
@@ -2104,6 +2110,11 @@ func (node *AlterVschema) Format(buf *TrackedBuffer) {
 	default:
 		buf.astPrintf(node, "%s table %v", node.Action.ToString(), node.Table)
 	}
+}
+
+// Format formats the node.
+func (node *RevertMigration) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "revert vitess_migration '%s'", node.UUID)
 }
 
 // Format formats the node.

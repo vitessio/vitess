@@ -1,0 +1,14 @@
+# revert migration
+"revert vitess_migration 'abc'"
+{
+  "QueryType": "REVERT",
+  "Original": "revert vitess_migration 'abc'",
+  "Instructions": {
+    "OperatorType": "RevertMigration",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "query": "revert vitess_migration 'abc'"
+  }
+}
