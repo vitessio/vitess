@@ -47,6 +47,17 @@ var (
 	relayLogMaxItems    = flag.Int("relay_log_max_items", 5000, "Maximum number of rows for VReplication target buffering.")
 	copyTimeout         = 1 * time.Hour
 	replicaLagTolerance = 10 * time.Second
+
+	// vreplicationHeartbeatUpdateInterval determines how often the time_updated column is updated if there are no real events on the source and the source
+	// vstream is only sending heartbeats for this long. Keep this low if you expect high QPS and are monitoring this column to alert about potential
+	// outages. Keep this high if
+	// 		you have too many streams the extra write qps or cpu load due to these updates are unacceptable
+	//		you have too many streams and/or a large source field (lot of participating tables) which generates unacceptable increase in your binlog size
+	// vreplicationMinimumHeartbeatUpdateInterval overrides vreplicationHeartbeatUpdateInterval if the latter is higher than this
+	// to ensure that it satisfies liveness criteria implicitly expected by internal processes like Online DDL
+
+	vreplicationExperimentalFlags                 = flag.Int64("vreplication_experimental_flags", 0, "Experimental features in vreplication to enable")
+	vreplicationExperimentalOptimizeInserts int64 = 1
 )
 
 // vreplicator provides the core logic to start vreplication streams
