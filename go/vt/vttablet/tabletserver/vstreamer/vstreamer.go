@@ -567,6 +567,9 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 		if err != nil {
 			return nil, err
 		}
+	case ev.IsCompressed():
+		log.Errorf("VReplication does not handle binlog compression")
+		return nil, fmt.Errorf("VReplication does not handle binlog compression")
 	}
 	for _, vevent := range vevents {
 		vevent.Timestamp = int64(ev.Timestamp())

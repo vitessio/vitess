@@ -1356,6 +1356,11 @@ func handleUnaryMinus(expr Expr) Expr {
 	return &UnaryExpr{Operator: UMinusOp, Expr: expr}
 }
 
+// encodeSQLString encodes the string as a SQL string.
+func encodeSQLString(val string) string {
+	return sqltypes.EncodeStringSQL(val)
+}
+
 // GetReturnType returns the type of the select expression that MySQL will return
 func GetReturnType(input SQLNode) querypb.Type {
 	switch node := input.(type) {

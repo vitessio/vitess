@@ -50,78 +50,95 @@ func skipToEnd(yylex interface{}) {
 
 %}
 
-%union {
+%struct {
   empty         struct{}
-  statement     Statement
-  selStmt       SelectStatement
-  ins           *Insert
-  byt           byte
+  LengthScaleOption LengthScaleOption
+  tableName     TableName
+  tableIdent    TableIdent
   str           string
   strs          []string
-  selectExprs   SelectExprs
-  selectExpr    SelectExpr
-  columns       Columns
-  partitions    Partitions
-  colName       *ColName
-  tableExprs    TableExprs
-  tableExpr     TableExpr
+  vindexParam   VindexParam
+  colIdent      ColIdent
   joinCondition JoinCondition
-  tableName     TableName
-  tableNames    TableNames
-  indexHints    *IndexHints
+  collateAndCharset CollateAndCharset
+  columnType    ColumnType
+}
+
+%union {
+  statement     Statement
+  selStmt       SelectStatement
+  tableExpr     TableExpr
   expr          Expr
-  exprs         Exprs
-  boolVal       BoolVal
-  boolean	bool
-  literal        *Literal
   colTuple      ColTuple
-  values        Values
-  valTuple      ValTuple
+  optVal        Expr
+  constraintInfo ConstraintInfo
+  alterOption      AlterOption
+  characteristic Characteristic
+
+  ins           *Insert
+  colName       *ColName
+  indexHints    *IndexHints
+  literal        *Literal
   subquery      *Subquery
   derivedTable  *DerivedTable
-  whens         []*When
   when          *When
-  orderBy       OrderBy
   order         *Order
   limit         *Limit
-  updateExprs   UpdateExprs
-  setExprs      SetExprs
   updateExpr    *UpdateExpr
   setExpr       *SetExpr
-  characteristic Characteristic
-  characteristics []Characteristic
-  colIdent      ColIdent
-  tableIdent    TableIdent
   convertType   *ConvertType
   aliasedTableName *AliasedTableExpr
-  TableSpec  *TableSpec
-  columnType    ColumnType
-  colKeyOpt     ColumnKeyOption
-  optVal        Expr
-  LengthScaleOption LengthScaleOption
+  tableSpec  *TableSpec
   columnDefinition *ColumnDefinition
-  columnDefinitions []*ColumnDefinition
   indexDefinition *IndexDefinition
   indexInfo     *IndexInfo
   indexOption   *IndexOption
-  indexOptions  []*IndexOption
   indexColumn   *IndexColumn
-  indexColumns  []*IndexColumn
-  constraintDefinition *ConstraintDefinition
-  constraintInfo ConstraintInfo
-  ReferenceAction ReferenceAction
-  partDefs      []*PartitionDefinition
   partDef       *PartitionDefinition
   partSpec      *PartitionSpec
-  partSpecs     []*PartitionSpec
-  vindexParam   VindexParam
-  vindexParams  []VindexParam
   showFilter    *ShowFilter
   optLike       *OptLike
+  selectInto	  *SelectInto
+  createDatabase  *CreateDatabase
+  alterDatabase  *AlterDatabase
+  createTable      *CreateTable
+  tableAndLockType *TableAndLockType
+  alterTable       *AlterTable
+  tableOption      *TableOption
+  columnTypeOptions *ColumnTypeOptions
+  constraintDefinition *ConstraintDefinition
+
+  whens         []*When
+  columnDefinitions []*ColumnDefinition
+  indexOptions  []*IndexOption
+  indexColumns  []*IndexColumn
+  collateAndCharsets []CollateAndCharset
+  tableAndLockTypes TableAndLockTypes
+  renameTablePairs []*RenameTablePair
+  alterOptions	   []AlterOption
+  vindexParams  []VindexParam
+  partDefs      []*PartitionDefinition
+  partSpecs     []*PartitionSpec
+  characteristics []Characteristic
+  selectExpr    SelectExpr
+  columns       Columns
+  partitions    Partitions
+  tableExprs    TableExprs
+  tableNames    TableNames
+  exprs         Exprs
+  values        Values
+  valTuple      ValTuple
+  orderBy       OrderBy
+  updateExprs   UpdateExprs
+  setExprs      SetExprs
+  selectExprs   SelectExprs
+  tableOptions     TableOptions
+
+  colKeyOpt     ColumnKeyOption
+  ReferenceAction ReferenceAction
   isolationLevel IsolationLevel
   insertAction InsertAction
   scope 	Scope
-  ignore 	Ignore
   lock 		Lock
   joinType  	JoinType
   comparisonExprOperator ComparisonExprOperator
@@ -129,22 +146,11 @@ func skipToEnd(yylex interface{}) {
   matchExprOption MatchExprOption
   orderDirection  OrderDirection
   explainType 	  ExplainType
-  selectInto	  *SelectInto
-  createDatabase  *CreateDatabase
-  alterDatabase  *AlterDatabase
-  collateAndCharset CollateAndCharset
-  collateAndCharsets []CollateAndCharset
-  createTable      *CreateTable
-  tableAndLockTypes []*TableAndLockType
-  tableAndLockType *TableAndLockType
   lockType LockType
-  alterTable       *AlterTable
-  alterOption      AlterOption
-  alterOptions	   []AlterOption
-  tableOption      *TableOption
-  tableOptions     TableOptions
-  renameTablePairs []*RenameTablePair
-  columnTypeOptions *ColumnTypeOptions
+
+  boolean bool
+  boolVal BoolVal
+  ignore Ignore
 }
 
 %token LEX_ERROR
@@ -329,7 +335,7 @@ func skipToEnd(yylex interface{}) {
 %type <selectInto> into_option
 %type <columnTypeOptions> column_type_options
 %type <str> header_opt export_options manifest_opt overwrite_opt format_opt optionally_opt
-%type <str> fields_opt lines_opt terminated_by_opt starting_by_opt enclosed_by_opt escaped_by_opt
+%type <str> fields_opts fields_opt_list fields_opt lines_opts lines_opt lines_opt_list
 %type <lock> lock_opt
 %type <columns> ins_column_list column_list column_list_opt
 %type <partitions> opt_partition_clause partition_list
@@ -372,7 +378,7 @@ func skipToEnd(yylex interface{}) {
 %type <str> index_or_key index_symbols from_or_in index_or_key_opt
 %type <str> name_opt constraint_name_opt
 %type <str> equal_opt
-%type <TableSpec> table_spec table_column_list
+%type <tableSpec> table_spec table_column_list
 %type <optLike> create_like
 %type <str> table_opt_value
 %type <tableOption> table_option
@@ -928,7 +934,7 @@ character_set:
   }
 | default_optional charset_or_character_set equal_opt STRING
   {
-    $$ = CollateAndCharset{Type:CharacterSetType, Value:("'" + string($4) + "'"), IsDefault:$1}
+    $$ = CollateAndCharset{Type:CharacterSetType, Value:(encodeSQLString($4)), IsDefault:$1}
   }
 
 collate:
@@ -938,7 +944,7 @@ collate:
   }
 | default_optional COLLATE equal_opt STRING
   {
-    $$ = CollateAndCharset{Type:CollateType, Value:("'" + string($4) + "'"), IsDefault:$1}
+    $$ = CollateAndCharset{Type:CollateType, Value:(encodeSQLString($4)), IsDefault:$1}
   }
 
 
@@ -1276,11 +1282,11 @@ enum_values:
   STRING
   {
     $$ = make([]string, 0, 4)
-    $$ = append($$, "'" + string($1) + "'")
+    $$ = append($$, encodeSQLString($1))
   }
 | enum_values ',' STRING
   {
-    $$ = append($1, "'" + string($3) + "'")
+    $$ = append($1, encodeSQLString($3))
   }
 
 length_opt:
@@ -1348,6 +1354,10 @@ charset_opt:
   {
     $$ = string($2.String())
   }
+| charset_or_character_set STRING
+  {
+    $$ = encodeSQLString($2)
+  }
 | charset_or_character_set BINARY
   {
     $$ = string($2)
@@ -1363,7 +1373,7 @@ collate_opt:
   }
 | COLLATE STRING
   {
-    $$ = string($2)
+    $$ = encodeSQLString($2)
   }
 
 
@@ -1809,7 +1819,7 @@ table_opt_value:
   }
 | STRING
   {
-    $$ = "'" + string($1) + "'"
+    $$ = encodeSQLString($1)
   }
 | INTEGRAL
   {
@@ -2717,7 +2727,7 @@ wild_opt:
   }
 | STRING
   {
-    $$ = "'" + string($1) + "'"
+    $$ = encodeSQLString($1)
   }
 
 explain_statement:
@@ -3951,7 +3961,7 @@ separator_opt:
   }
 | SEPARATOR STRING
   {
-    $$ = " separator '"+string($2)+"'"
+    $$ = " separator "+encodeSQLString($2)
   }
 
 when_expression_list:
@@ -4251,7 +4261,7 @@ CURRENT_USER
   }
 | STRING AT_ID
   {
-    $$ = "'" + string($1) + "'@" + string($2)
+    $$ = encodeSQLString($1) + "@" + string($2)
   }
 | ID
   {
@@ -4277,15 +4287,15 @@ into_option:
   }
 | INTO OUTFILE S3 STRING charset_opt format_opt export_options manifest_opt overwrite_opt
   {
-    $$ = &SelectInto{Type:IntoOutfileS3, FileName:string($4), Charset:$5, FormatOption:$6, ExportOption:$7, Manifest:$8, Overwrite:$9}
+    $$ = &SelectInto{Type:IntoOutfileS3, FileName:encodeSQLString($4), Charset:$5, FormatOption:$6, ExportOption:$7, Manifest:$8, Overwrite:$9}
   }
 | INTO DUMPFILE STRING
   {
-    $$ = &SelectInto{Type:IntoDumpfile, FileName:string($3), Charset:"", FormatOption:"", ExportOption:"", Manifest:"", Overwrite:""}
+    $$ = &SelectInto{Type:IntoDumpfile, FileName:encodeSQLString($3), Charset:"", FormatOption:"", ExportOption:"", Manifest:"", Overwrite:""}
   }
 | INTO OUTFILE STRING charset_opt export_options
   {
-    $$ = &SelectInto{Type:IntoOutfile, FileName:string($3), Charset:$4, FormatOption:"", ExportOption:$5, Manifest:"", Overwrite:""}
+    $$ = &SelectInto{Type:IntoOutfile, FileName:encodeSQLString($3), Charset:$4, FormatOption:"", ExportOption:$5, Manifest:"", Overwrite:""}
   }
 
 format_opt:
@@ -4337,63 +4347,71 @@ overwrite_opt:
   }
 
 export_options:
-  fields_opt lines_opt
+  fields_opts lines_opts
+  {
+    $$ = $1 + $2
+  }
+
+lines_opts:
+  {
+    $$ = ""
+  }
+| LINES lines_opt_list
+  {
+    $$ = " lines" + $2
+  }
+
+lines_opt_list:
+  lines_opt
+  {
+    $$ = $1
+  }
+| lines_opt_list lines_opt
   {
     $$ = $1 + $2
   }
 
 lines_opt:
+  STARTING BY STRING
   {
-    $$ = ""
-  }
-| LINES starting_by_opt terminated_by_opt
-  {
-    $$ = " lines" + $2 + $3
-  }
-
-starting_by_opt:
-  {
-    $$ = ""
-  }
-| STARTING BY STRING
-  {
-    $$ = " starting by '" + string($3) + "'"
-  }
-
-terminated_by_opt:
-  {
-    $$ = ""
+    $$ = " starting by " + encodeSQLString($3)
   }
 | TERMINATED BY STRING
   {
-    $$ = " terminated by '" + string($3)  + "'"
+    $$ = " terminated by " + encodeSQLString($3)
+  }
+
+fields_opts:
+  {
+    $$ = ""
+  }
+| columns_or_fields fields_opt_list
+  {
+    $$ = " " + $1 + $2
+  }
+
+fields_opt_list:
+  fields_opt
+  {
+    $$ = $1
+  }
+| fields_opt_list fields_opt
+  {
+    $$ = $1 + $2
   }
 
 fields_opt:
+  TERMINATED BY STRING
   {
-    $$ = ""
-  }
-| columns_or_fields terminated_by_opt enclosed_by_opt escaped_by_opt
-  {
-    $$ = " " + $1 + $2 + $3 + $4
-  }
-
-escaped_by_opt:
-  {
-    $$ = ""
-  }
-| ESCAPED BY STRING
-  {
-    $$ = " escaped by '" + string($3) + "'"
-  }
-
-enclosed_by_opt:
-  {
-    $$ = ""
+    $$ = " terminated by " + encodeSQLString($3)
   }
 | optionally_opt ENCLOSED BY STRING
   {
-    $$ = $1 + " enclosed by '" + string($4) + "'"
+    $$ = $1 + " enclosed by " + encodeSQLString($4)
+  }
+| ESCAPED BY STRING
+  {
+    $$ = " escaped by " + encodeSQLString($3)
   }
 
 optionally_opt:
