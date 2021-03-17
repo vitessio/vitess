@@ -1038,13 +1038,10 @@ var (
 			output: "alter table a add column (\n\tid int\n)",
 		}, {
 			input:  "alter table a add index idx (id)",
-			output: "alter table a add index idx (id)",
 		}, {
 			input:  "alter table a add fulltext index idx (id)",
-			output: "alter table a add fulltext index idx (id)",
 		}, {
 			input:  "alter table a add spatial index idx (id)",
-			output: "alter table a add spatial index idx (id)",
 		}, {
 			input:  "alter table a add foreign key (x) references y(z)",
 			output: "alter table a add foreign key (x) references y (z)",
@@ -1058,31 +1055,33 @@ var (
 			output: "alter table a",
 		}, {
 			input:  "alter table a drop index idx",
-			output: "alter table a drop index idx",
 		}, {
-			input:  "alter table a add constraint ch_1 check (b > 0)",
+			input:  "alter table a add constraint check (b > 0)",
 			output: "alter table a add check (b > 0)",
 		}, {
-			input:  "alter table a add constraint ch_1 check (b > 0) enforced",
+			input:  "alter table a add constraint check (b > 0) enforced",
 			output: "alter table a add check (b > 0)",
 		}, {
-			input:  "alter table a add constraint ch_1 check (b > 0) not enforced",
+			input:  "alter table a add constraint check (b > 0) not enforced",
 			output: "alter table a add check (b > 0) not enforced",
 		}, {
+			input:  "alter table a add constraint ch_1 check (b > 0)",
+		}, {
+			input:  "alter table a add constraint ch_1 check (b > 0) enforced",
+			output: "alter table a add constraint ch_1 check (b > 0)",
+		}, {
+			input:  "alter table a add constraint ch_1 check (b > 0) not enforced",
+		}, {
 			input:  "alter table a add check (b > 0)",
-			output: "alter table a add check (b > 0)",
 		}, {
 			input:  "alter table a drop check ch_1",
-			output: "alter table a drop check ch_1",
 		}, {
 			input:  "alter table a drop foreign key fk_something",
-			output: "alter table a drop foreign key fk_something",
 		}, {
 			input:  "alter table a drop primary key",
 			output: "alter table a",
 		}, {
 			input:  "alter table a drop constraint b",
-			output: "alter table a drop constraint b",
 		}, {
 			input:  "alter table a drop id",
 			output: "alter table a drop column id",
@@ -1104,7 +1103,6 @@ var (
 			output: "create table a",
 		}, {
 			input:  "alter table a rename column a to b",
-			output: "alter table a rename column a to b",
 		}, {
 			input:  "alter table a rename column a as b",
 			output: "alter table a rename column a to b",
@@ -3413,10 +3411,6 @@ var (
 	}, {
 		input:  "INSERT INTO TABLE a VALUES (1)",
 		output: "syntax error at position 18 near 'TABLE'",
-	}, {
-		input:        "create table t (id int constraint fk foreign key id references t2 (a))",
-		output:       "syntax error at position 45 near 'foreign'",
-		excludeMulti: true,
 	}}
 )
 

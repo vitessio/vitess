@@ -1382,9 +1382,9 @@ func (node *DDL) Format(buf *TrackedBuffer) {
 		} else if node.IndexSpec != nil {
 			buf.Myprintf("%s table %v %v", node.Action, node.Table, node.IndexSpec)
 		} else if node.ConstraintAction == AddStr && node.TableSpec != nil && len(node.TableSpec.Constraints) == 1 {
-			switch def := node.TableSpec.Constraints[0].Details.(type) {
+			switch node.TableSpec.Constraints[0].Details.(type) {
 			case *ForeignKeyDefinition, *CheckConstraintDefinition:
-				buf.Myprintf("%s table %v add %v", node.Action, node.Table, def)
+				buf.Myprintf("%s table %v add %v", node.Action, node.Table, node.TableSpec.Constraints[0])
 			default:
 				buf.Myprintf("%s table %v", node.Action, node.Table)
 			}

@@ -1812,6 +1812,10 @@ check_constraint_definition:
   {
     $$ = &ConstraintDefinition{Name: string($2), Details: $3}
   }
+| CONSTRAINT check_constraint_info
+  {
+    $$ = &ConstraintDefinition{Details: $2}
+  }
 |  check_constraint_info
   {
     $$ = &ConstraintDefinition{Details: $1}
