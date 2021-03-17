@@ -7,7 +7,7 @@
   "Instructions": {
     "OperatorType": "Sort",
     "Variant": "Memory",
-    "OrderBy": "1 ASC 3 ASC",
+    "OrderBy": "1 ASC",
     "Inputs": [
       {
         "OperatorType": "Aggregate",
@@ -24,7 +24,7 @@
               "Sharded": true
             },
             "FieldQuery": "select a, b, count(*), weight_string(b), weight_string(a) from `user` where 1 != 1 group by a",
-            "OrderBy": "0 ASC 4 ASC",
+            "OrderBy": "0 ASC",
             "Query": "select a, b, count(*), weight_string(b), weight_string(a) from `user` group by a order by a asc",
             "Table": "`user`"
           }
@@ -59,7 +59,7 @@
               "Sharded": true
             },
             "FieldQuery": "select a, b, count(*) as k, weight_string(a) from `user` where 1 != 1 group by a",
-            "OrderBy": "0 ASC 3 ASC",
+            "OrderBy": "0 ASC",
             "Query": "select a, b, count(*) as k, weight_string(a) from `user` group by a order by a asc",
             "Table": "`user`"
           }
@@ -77,7 +77,7 @@
   "Instructions": {
     "OperatorType": "Sort",
     "Variant": "Memory",
-    "OrderBy": "1 ASC 3 ASC, 0 ASC 4 ASC, 2 ASC",
+    "OrderBy": "1 ASC, 0 ASC, 2 ASC",
     "Inputs": [
       {
         "OperatorType": "Aggregate",
@@ -94,7 +94,7 @@
               "Sharded": true
             },
             "FieldQuery": "select a, b, count(*) as k, weight_string(b), weight_string(a) from `user` where 1 != 1 group by a",
-            "OrderBy": "0 ASC 4 ASC",
+            "OrderBy": "0 ASC",
             "Query": "select a, b, count(*) as k, weight_string(b), weight_string(a) from `user` group by a order by a asc",
             "Table": "`user`"
           }
@@ -133,7 +133,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select a, b, count(*) as k, weight_string(a) from `user` where 1 != 1 group by a",
-                "OrderBy": "0 ASC 3 ASC",
+                "OrderBy": "0 ASC",
                 "Query": "select a, b, count(*) as k, weight_string(a) from `user` group by a order by a asc",
                 "Table": "`user`"
               }
@@ -153,7 +153,7 @@
   "Instructions": {
     "OperatorType": "Sort",
     "Variant": "Memory",
-    "OrderBy": "0 ASC 3 ASC, 2 ASC",
+    "OrderBy": "0 ASC, 2 ASC",
     "Inputs": [
       {
         "OperatorType": "Aggregate",
@@ -170,7 +170,7 @@
               "Sharded": true
             },
             "FieldQuery": "select a, b, count(*) as k, weight_string(a) from `user` where 1 != 1 group by a",
-            "OrderBy": "0 ASC 3 ASC",
+            "OrderBy": "0 ASC",
             "Query": "select a, b, count(*) as k, weight_string(a) from `user` group by a order by 1 asc",
             "Table": "`user`"
           }
@@ -189,7 +189,7 @@
   "Instructions": {
     "OperatorType": "Sort",
     "Variant": "Memory",
-    "OrderBy": "0 ASC 2 ASC, 1 ASC, 0 ASC 2 ASC",
+    "OrderBy": "0 ASC, 1 ASC, 0 ASC",
     "Inputs": [
       {
         "OperatorType": "Aggregate",
@@ -206,7 +206,7 @@
               "Sharded": true
             },
             "FieldQuery": "select textcol1 as t, count(*) as k, weight_string(textcol1) from `user` where 1 != 1 group by textcol1",
-            "OrderBy": "0 ASC 2 ASC, 0 ASC 2 ASC",
+            "OrderBy": "0 ASC, 0 ASC",
             "Query": "select textcol1 as t, count(*) as k, weight_string(textcol1) from `user` group by textcol1 order by textcol1 asc, textcol1 asc",
             "Table": "`user`"
           }
@@ -224,7 +224,7 @@
   "Instructions": {
     "OperatorType": "Sort",
     "Variant": "Memory",
-    "OrderBy": "0 ASC 2 ASC",
+    "OrderBy": "0 ASC",
     "Inputs": [
       {
         "OperatorType": "Subquery",
@@ -276,7 +276,7 @@
   "Instructions": {
     "OperatorType": "Sort",
     "Variant": "Memory",
-    "OrderBy": "2 ASC 3 ASC",
+    "OrderBy": "2 ASC",
     "Inputs": [
       {
         "OperatorType": "Join",
@@ -328,7 +328,7 @@
   "Instructions": {
     "OperatorType": "Sort",
     "Variant": "Memory",
-    "OrderBy": "0 ASC 3 ASC, 2 DESC 4 DESC, 1 ASC 5 ASC",
+    "OrderBy": "0 ASC, 2 DESC, 1 ASC",
     "Inputs": [
       {
         "OperatorType": "Join",
@@ -380,7 +380,7 @@
   "Instructions": {
     "OperatorType": "Sort",
     "Variant": "Memory",
-    "OrderBy": "1 ASC 3 ASC, 2 ASC 4 ASC",
+    "OrderBy": "1 ASC, 2 ASC",
     "Inputs": [
       {
         "OperatorType": "Join",
@@ -424,7 +424,7 @@
   "Instructions": {
     "OperatorType": "Sort",
     "Variant": "Memory",
-    "OrderBy": "1 ASC 3 ASC, 2 ASC 4 ASC",
+    "OrderBy": "1 ASC, 2 ASC",
     "Inputs": [
       {
         "OperatorType": "Join",
@@ -505,7 +505,7 @@
       "Sharded": true
     },
     "FieldQuery": "select a, weight_string(a) from `user` where 1 != 1",
-    "OrderBy": "0 DESC 1 DESC",
+    "OrderBy": "0 DESC",
     "Query": "select a, weight_string(a) from `user` order by binary a desc",
     "Table": "`user`"
   }
@@ -530,7 +530,7 @@
           "Sharded": true
         },
         "FieldQuery": "select u.a, weight_string(u.a) from `user` as u where 1 != 1",
-        "OrderBy": "0 DESC 1 DESC",
+        "OrderBy": "0 DESC",
         "Query": "select u.a, weight_string(u.a) from `user` as u order by binary a desc",
         "Table": "`user`"
       },

@@ -139,14 +139,6 @@ func (obp OrderbyParams) String() string {
 	} else {
 		val += " ASC"
 	}
-	if obp.WeightStringCol != -1 {
-		val += " " + strconv.Itoa(obp.WeightStringCol)
-		if obp.Desc {
-			val += " DESC"
-		} else {
-			val += " ASC"
-		}
-	}
 	return val
 }
 
