@@ -99,9 +99,9 @@ import (
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
 
+	"vitess.io/vitess/go/cmd/vtctldclient/cli"
 	"vitess.io/vitess/go/flagutil"
 	"vitess.io/vitess/go/json2"
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/sync2"
 	hk "vitess.io/vitess/go/vt/hook"
@@ -117,7 +117,6 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/wrangler"
 
-	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
@@ -1313,19 +1312,23 @@ func commandShardReplicationPositions(ctx context.Context, wr *wrangler.Wrangler
 	if err != nil {
 		return err
 	}
-	tablets, stats, err := wr.ShardReplicationStatuses(ctx, keyspace, shard)
-	if tablets == nil {
+
+	resp, err := wr.VtctldServer().ShardReplicationPositions(ctx, &vtctldatapb.ShardReplicationPositionsRequest{
+		Keyspace: keyspace,
+		Shard:    shard,
+	})
+	if err != nil {
 		return err
 	}
 
 	lines := make([]string, 0, 24)
-	for _, rt := range sortReplicatingTablets(tablets, stats) {
+	for _, rt := range cli.SortedReplicatingTablets(resp.TabletMap, resp.ReplicationStatuses) {
 		status := rt.Status
-		ti := rt.TabletInfo
+		tablet := rt.Tablet
 		if status == nil {
-			lines = append(lines, fmtTabletAwkable(ti)+" <err> <err> <err>")
+			lines = append(lines, cli.MarshalTabletAWK(tablet)+" <err> <err> <err>")
 		} else {
-			lines = append(lines, fmtTabletAwkable(ti)+fmt.Sprintf(" %v %v", status.Position, status.SecondsBehindMaster))
+			lines = append(lines, cli.MarshalTabletAWK(tablet)+fmt.Sprintf(" %v %v", status.Position, status.SecondsBehindMaster))
 		}
 	}
 	for _, l := range lines {
@@ -3350,11 +3353,18 @@ func commandGetSrvKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 		return fmt.Errorf("the <cell> and <keyspace> arguments are required for the GetSrvKeyspace command")
 	}
 
-	srvKeyspace, err := wr.TopoServer().GetSrvKeyspace(ctx, subFlags.Arg(0), subFlags.Arg(1))
+	cell := subFlags.Arg(0)
+	keyspace := subFlags.Arg(1)
+
+	resp, err := wr.VtctldServer().GetSrvKeyspaces(ctx, &vtctldatapb.GetSrvKeyspacesRequest{
+		Keyspace: keyspace,
+		Cells:    []string{cell},
+	})
 	if err != nil {
 		return err
 	}
-	return printJSON(wr.Logger(), srvKeyspace)
+
+	return printJSON(wr.Logger(), resp.SrvKeyspaces[cell])
 }
 
 func commandGetSrvVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -3643,62 +3653,6 @@ func generateShardRanges(shards int) ([]string, error) {
 
 func commandPanic(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	panic(fmt.Errorf("this command panics on purpose"))
-}
-
-type rTablet struct {
-	*topo.TabletInfo
-	*replicationdatapb.Status
-}
-
-type rTablets []*rTablet
-
-func (rts rTablets) Len() int { return len(rts) }
-
-func (rts rTablets) Swap(i, j int) { rts[i], rts[j] = rts[j], rts[i] }
-
-// Sort for tablet replication.
-// Tablet type first (with master first), then replication positions.
-func (rts rTablets) Less(i, j int) bool {
-	l, r := rts[i], rts[j]
-	// l or r ReplicationStatus would be nil if we failed to get
-	// the position (put them at the beginning of the list)
-	if l.Status == nil {
-		return r.Status != nil
-	}
-	if r.Status == nil {
-		return false
-	}
-	// the type proto has MASTER first, so sort by that. Will show
-	// the MASTER first, then each replica type sorted by
-	// replication position.
-	if l.Type < r.Type {
-		return true
-	}
-	if l.Type > r.Type {
-		return false
-	}
-	// then compare replication positions
-	lpos, err := mysql.DecodePosition(l.Position)
-	if err != nil {
-		return true
-	}
-	rpos, err := mysql.DecodePosition(r.Position)
-	if err != nil {
-		return false
-	}
-	return !lpos.AtLeast(rpos)
-}
-
-func sortReplicatingTablets(tablets []*topo.TabletInfo, stats []*replicationdatapb.Status) []*rTablet {
-	rtablets := make([]*rTablet, len(tablets))
-	for i, status := range stats {
-		rtablets[i] = &rTablet{
-			TabletInfo: tablets[i],
-			Status:     status,
-		}
-	}
-	sort.Sort(rTablets(rtablets))
-	return rtablets
 }
 
 // printJSON will print the JSON version of the structure to the logger.

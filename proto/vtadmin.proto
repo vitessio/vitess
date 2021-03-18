@@ -59,6 +59,11 @@ service VTAdmin {
     rpc GetVSchema(GetVSchemaRequest) returns (VSchema) {};
     // GetVSchemas returns the VSchemas for all specified clusters.
     rpc GetVSchemas(GetVSchemasRequest) returns (GetVSchemasResponse) {};
+    // GetWorkflow returns a single Workflow for a given cluster, keyspace, and
+    // workflow name.
+    rpc GetWorkflow(GetWorkflowRequest) returns (Workflow) {};
+    // GetWorkflows returns the Workflows for all specified clusters.
+    rpc GetWorkflows(GetWorkflowsRequest) returns (GetWorkflowsResponse) {};
     // VTExplain provides information on how Vitess plans to execute a particular query.
     rpc VTExplain(VTExplainRequest) returns (VTExplainResponse) {};
 }
@@ -69,6 +74,13 @@ service VTAdmin {
 message Cluster {
     string id = 1;
     string name = 2;
+}
+
+message ClusterWorkflows {
+    repeated Workflow workflows = 1;
+    // Warnings is a list of non-fatal errors encountered when fetching
+    // workflows for a particular cluster.
+    repeated string warnings = 2;
 }
 
 // Keyspace represents information about a keyspace in a particular Vitess
@@ -129,6 +141,12 @@ message VTGate {
     Cluster cluster = 4;
     // Keyspaces is the list of keyspaces-to-watch for the VTGate.
     repeated string keyspaces = 5;
+}
+
+message Workflow {
+    Cluster cluster = 1;
+    string keyspace = 2;
+    vtctldata.Workflow workflow = 3;
 }
 
 /* Request/Response types */
@@ -201,6 +219,39 @@ message GetVSchemasRequest {
 
 message GetVSchemasResponse {
     repeated VSchema v_schemas = 1;
+}
+
+message GetWorkflowRequest {
+    string cluster_id = 1;
+    string keyspace = 2;
+    string name = 3;
+    bool active_only = 4;
+}
+
+message GetWorkflowsRequest {
+    repeated string cluster_ids = 1;
+    // ActiveOnly specifies whether to return workflows that are currently
+    // active (running or paused) instead of all workflows.
+    bool active_only = 2;
+    // Keyspaces is a list of keyspaces to restrict the workflow search to. Note
+    // that the keyspaces list applies across all cluster IDs in the request.
+    //
+    // If, for example, you have two clusters, each with a keyspace called "foo"
+    // and want the workflows from "foo" in cluster1 but not from cluster2, you
+    // must make two requests.
+    //
+    // Keyspaces and IgnoreKeyspaces are mutually-exclusive, and Keyspaces takes
+    // precedence; if Keyspaces is a non-empty list, then IgnoreKeyspaces is
+    // ignored completely.
+    repeated string keyspaces = 3;
+    // IgnoreKeyspaces is a list of keyspaces to skip during the workflow
+    // search. It has the same semantics as the Keyspaces parameter, so refer to
+    // that documentation for more details.
+    repeated string ignore_keyspaces = 4;
+}
+
+message GetWorkflowsResponse {
+    map <string, ClusterWorkflows> workflows_by_cluster = 1;
 }
 
 message VTExplainRequest {
