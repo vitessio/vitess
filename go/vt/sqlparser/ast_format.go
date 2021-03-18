@@ -219,6 +219,26 @@ func (node *AlterVschema) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
+func (node *AlterMigration) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "alter vitess_migration")
+	if node.UUID != "" {
+		buf.astPrintf(node, " '%s'", node.UUID)
+	}
+	var alterType string
+	switch node.Type {
+	case RetryMigrationType:
+		alterType = "retry"
+	case CompleteMigrationType:
+		alterType = "complete"
+	case CancelMigrationType:
+		alterType = "cancel"
+	case CancelAllMigrationType:
+		alterType = "cancel all"
+	}
+	buf.astPrintf(node, " %s", alterType)
+}
+
+// Format formats the node.
 func (node *RevertMigration) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "revert vitess_migration '%s'", node.UUID)
 }
@@ -640,7 +660,8 @@ func (node *ShowFilter) Format(buf *TrackedBuffer) {
 		return
 	}
 	if node.Like != "" {
-		buf.astPrintf(node, " like %s", encodeSQLString(node.Like))
+		buf.astPrintf(node, " like ")
+		sqltypes.BufEncodeStringSQL(buf.Builder, node.Like)
 	} else {
 		buf.astPrintf(node, " where %v", node.Filter)
 	}
