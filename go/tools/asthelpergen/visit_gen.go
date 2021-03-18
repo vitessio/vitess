@@ -220,13 +220,19 @@ func visitAllStructFields(strct *types.Struct, spi generatorSPI) []jen.Code {
 	}
 	for i := 0; i < strct.NumFields(); i++ {
 		field := strct.Field(i)
-		if !types.Implements(field.Type(), spi.iface()) {
+		if types.Implements(field.Type(), spi.iface()) {
+			spi.addType(field.Type())
+			visitField := visitChild(field.Type(), jen.Id("in").Dot(field.Name()))
+			output = append(output, visitField)
 			continue
 		}
-		spi.addType(field.Type())
-		visitField := visitChild(field.Type(), jen.Id("in").Dot(field.Name()))
-
-		output = append(output, visitField)
+		slice, isSlice := field.Type().(*types.Slice)
+		if isSlice && types.Implements(slice.Elem(), spi.iface()) {
+			spi.addType(slice.Elem())
+			output = append(output, jen.For(jen.Id("_, el := range in."+field.Name())).Block(
+				visitChild(slice.Elem(), jen.Id("el")),
+			))
+		}
 	}
 	output = append(output, returnNil())
 	return output
