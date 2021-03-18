@@ -88,6 +88,14 @@ type Config struct {
 	// not be started.
 	OnlyMySQL bool
 
+	// PersistentMode can be set so that MySQL data directory is not cleaned up
+	// when LocalCluster.TearDown() is called. This is useful for running
+	// vttestserver as a database container in local developer environments. Note
+	// that db and vschema migration files (-schema_dir option) and seeding of
+	// random data (-initialize_with_random_data option) will only run during
+	// cluster startup if the data directory does not already exist.
+	PersistentMode bool
+
 	// MySQL protocol bind address.
 	// vtcombo will bind to this address when exposing the mysql protocol socket
 	MySQLBindHost string
@@ -226,22 +234,37 @@ func (db *LocalCluster) Setup() error {
 		return err
 	}
 
-	log.Infof("Initializing MySQL Manager (%T)...", db.mysql)
+	initializing := true
+	if db.PersistentMode && dirExist(db.mysql.TabletDir()) {
+		initializing = false
+	}
 
-	if err := db.mysql.Setup(); err != nil {
-		log.Errorf("Mysqlctl failed to start: %s", err)
-		if err, ok := err.(*exec.ExitError); ok {
-			log.Errorf("stderr: %s", err.Stderr)
+	if initializing {
+		log.Infof("Initializing MySQL Manager (%T)...", db.mysql)
+		if err := db.mysql.Setup(); err != nil {
+			log.Errorf("Mysqlctl failed to start: %s", err)
+			if err, ok := err.(*exec.ExitError); ok {
+				log.Errorf("stderr: %s", err.Stderr)
+			}
+			return err
 		}
-		return err
+
+		if err := db.createDatabases(); err != nil {
+			return err
+		}
+	} else {
+		log.Infof("Starting MySQL Manager (%T)...", db.mysql)
+		if err := db.mysql.Start(); err != nil {
+			log.Errorf("Mysqlctl failed to start: %s", err)
+			if err, ok := err.(*exec.ExitError); ok {
+				log.Errorf("stderr: %s", err.Stderr)
+			}
+			return err
+		}
 	}
 
 	mycfg, _ := json.Marshal(db.mysql.Params(""))
 	log.Infof("MySQL up: %s", mycfg)
-
-	if err := db.createDatabases(); err != nil {
-		return err
-	}
 
 	if !db.OnlyMySQL {
 		log.Infof("Starting vtcombo...")
@@ -252,13 +275,22 @@ func (db *LocalCluster) Setup() error {
 		log.Infof("vtcombo up: %s", db.vt.Address())
 	}
 
-	// Load schema will apply db and vschema migrations. Running after vtcombo starts to be able to apply vschema migrations
-	if err := db.loadSchema(); err != nil {
-		return err
-	}
+	if initializing {
+		log.Info("Mysql data directory does not exist. Initializing cluster with database and vschema migrations...")
+		// Load schema will apply db and vschema migrations. Running after vtcombo starts to be able to apply vschema migrations
+		if err := db.loadSchema(true); err != nil {
+			return err
+		}
 
-	if db.Seed != nil {
-		if err := db.populateWithRandomData(); err != nil {
+		if db.Seed != nil {
+			log.Info("Populating database with random data...")
+			if err := db.populateWithRandomData(); err != nil {
+				return err
+			}
+		}
+	} else {
+		log.Info("Mysql data directory exists in persistent mode. Will only execute vschema migrations during startup")
+		if err := db.loadSchema(false); err != nil {
 			return err
 		}
 	}
@@ -288,8 +320,10 @@ func (db *LocalCluster) TearDown() error {
 		}
 	}
 
-	if err := db.Env.TearDown(); err != nil {
-		errors = append(errors, fmt.Sprintf("environment: %s", err))
+	if !db.PersistentMode {
+		if err := db.Env.TearDown(); err != nil {
+			errors = append(errors, fmt.Sprintf("environment: %s", err))
+		}
 	}
 
 	if len(errors) > 0 {
@@ -317,7 +351,7 @@ func isDir(path string) bool {
 }
 
 // loadSchema applies sql and vschema migrations respectively for each keyspace in the topology
-func (db *LocalCluster) loadSchema() error {
+func (db *LocalCluster) loadSchema(shouldRunDatabaseMigrations bool) error {
 	if db.SchemaDir == "" {
 		return nil
 	}
@@ -357,6 +391,10 @@ func (db *LocalCluster) loadSchema() error {
 				if err = db.applyVschema(keyspace, cmds[0]); err != nil {
 					return err
 				}
+				continue
+			}
+
+			if !shouldRunDatabaseMigrations {
 				continue
 			}
 
@@ -482,6 +520,14 @@ func (db *LocalCluster) reloadSchemaKeyspace(keyspace string) error {
 	})
 
 	return err
+}
+
+func dirExist(dir string) bool {
+	exist := true
+	if _, err := os.Stat(dir); os.IsNotExist(err) {
+		exist = false
+	}
+	return exist
 }
 
 // LoadSQLFile loads a parses a .sql file from disk, removing all the
