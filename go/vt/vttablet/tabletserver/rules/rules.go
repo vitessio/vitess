@@ -72,6 +72,16 @@ func (qrs *Rules) Copy() (newqrs *Rules) {
 	return newqrs
 }
 
+// CopyUnderlying makes a copy of the underlying rule array and returns it to
+// the caller.
+func (qrs *Rules) CopyUnderlying() []*Rule {
+	cpy := make([]*Rule, 0, len(qrs.rules))
+	for _, r := range qrs.rules {
+		cpy = append(cpy, r.Copy())
+	}
+	return cpy
+}
+
 // Append merges the rules from another Rules into the receiver
 func (qrs *Rules) Append(otherqrs *Rules) {
 	qrs.rules = append(qrs.rules, otherqrs.rules...)
