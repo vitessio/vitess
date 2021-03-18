@@ -46,6 +46,7 @@ import (
 
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 	mysqlctlpb "vitess.io/vitess/go/vt/proto/mysqlctl"
+	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
@@ -553,6 +554,42 @@ func (s *VtctldServer) GetShard(ctx context.Context, req *vtctldatapb.GetShardRe
 			Name:     req.ShardName,
 			Shard:    shard.Shard,
 		},
+	}, nil
+}
+
+// GetSrvKeyspaces is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) GetSrvKeyspaces(ctx context.Context, req *vtctldatapb.GetSrvKeyspacesRequest) (*vtctldatapb.GetSrvKeyspacesResponse, error) {
+	cells := req.Cells
+
+	if len(cells) == 0 {
+		var err error
+
+		cells, err = s.ts.GetCellInfoNames(ctx)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	srvKeyspaces := make(map[string]*topodatapb.SrvKeyspace, len(cells))
+
+	for _, cell := range cells {
+		srvKeyspace, err := s.ts.GetSrvKeyspace(ctx, cell, req.Keyspace)
+
+		if err != nil {
+			if !topo.IsErrType(err, topo.NoNode) {
+				return nil, err
+			}
+
+			log.Infof("no srvkeyspace for keyspace %s in cell %s", req.Keyspace, cell)
+
+			srvKeyspace = nil
+		}
+
+		srvKeyspaces[cell] = srvKeyspace
+	}
+
+	return &vtctldatapb.GetSrvKeyspacesResponse{
+		SrvKeyspaces: srvKeyspaces,
 	}, nil
 }
 
@@ -1066,6 +1103,117 @@ func (s *VtctldServer) ReparentTablet(ctx context.Context, req *vtctldatapb.Repa
 		Keyspace: tablet.Keyspace,
 		Shard:    tablet.Shard,
 		Primary:  shard.MasterAlias,
+	}, nil
+}
+
+// ShardReplicationPositions is part of the vtctldservicepb.VtctldServer interface.
+func (s *VtctldServer) ShardReplicationPositions(ctx context.Context, req *vtctldatapb.ShardReplicationPositionsRequest) (*vtctldatapb.ShardReplicationPositionsResponse, error) {
+	tabletInfoMap, err := s.ts.GetTabletMapForShard(ctx, req.Keyspace, req.Shard)
+	if err != nil {
+		return nil, fmt.Errorf("GetTabletMapForShard(%s, %s) failed: %w", req.Keyspace, req.Shard, err)
+	}
+
+	log.Infof("Gathering tablet replication status for: %v", tabletInfoMap)
+
+	var (
+		m         sync.Mutex
+		wg        sync.WaitGroup
+		rec       concurrency.AllErrorRecorder
+		results   = make(map[string]*replicationdatapb.Status, len(tabletInfoMap))
+		tabletMap = make(map[string]*topodatapb.Tablet, len(tabletInfoMap))
+	)
+
+	// For each tablet, we're going to create an individual context, using
+	// *topo.RemoteOperationTimeout as the maximum timeout (but we'll respect
+	// any stricter timeout in the parent context). If an individual tablet
+	// times out fetching its replication position, we won't fail the overall
+	// request. Instead, we'll log a warning and record a nil entry in the
+	// result map; that way, the caller can tell the difference between a tablet
+	// that timed out vs a tablet that didn't get queried at all.
+
+	for alias, tabletInfo := range tabletInfoMap {
+		switch {
+		case tabletInfo.Type == topodatapb.TabletType_MASTER:
+			wg.Add(1)
+
+			go func(ctx context.Context, alias string, tablet *topodatapb.Tablet) {
+				defer wg.Done()
+
+				ctx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+				defer cancel()
+
+				var status *replicationdatapb.Status
+
+				pos, err := s.tmc.MasterPosition(ctx, tablet)
+				if err != nil {
+					switch ctx.Err() {
+					case context.Canceled:
+						log.Warningf("context canceled before obtaining master position from %s: %s", alias, err)
+					case context.DeadlineExceeded:
+						log.Warningf("context deadline exceeded before obtaining master position from %s: %s", alias, err)
+					default:
+						// The RPC was not timed out or canceled. We treat this
+						// as a fatal error for the overall request.
+						rec.RecordError(fmt.Errorf("MasterPosition(%s) failed: %w", alias, err))
+						return
+					}
+				} else {
+					// No error, record a valid status for this tablet.
+					status = &replicationdatapb.Status{
+						Position: pos,
+					}
+				}
+
+				m.Lock()
+				defer m.Unlock()
+
+				results[alias] = status
+				tabletMap[alias] = tablet
+			}(ctx, alias, tabletInfo.Tablet)
+		case tabletInfo.IsReplicaType():
+			wg.Add(1)
+
+			go func(ctx context.Context, alias string, tablet *topodatapb.Tablet) {
+				defer wg.Done()
+
+				ctx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+				defer cancel()
+
+				status, err := s.tmc.ReplicationStatus(ctx, tablet)
+				if err != nil {
+					switch ctx.Err() {
+					case context.Canceled:
+						log.Warningf("context canceled before obtaining replication position from %s: %s", alias, err)
+					case context.DeadlineExceeded:
+						log.Warningf("context deadline exceeded before obtaining replication position from %s: %s", alias, err)
+					default:
+						// The RPC was not timed out or canceled. We treat this
+						// as a fatal error for the overall request.
+						rec.RecordError(fmt.Errorf("ReplicationStatus(%s) failed: %s", alias, err))
+						return
+					}
+
+					status = nil // Don't record any position for this tablet.
+				}
+
+				m.Lock()
+				defer m.Unlock()
+
+				results[alias] = status
+				tabletMap[alias] = tablet
+			}(ctx, alias, tabletInfo.Tablet)
+		}
+	}
+
+	wg.Wait()
+
+	if rec.HasErrors() {
+		return nil, rec.Error()
+	}
+
+	return &vtctldatapb.ShardReplicationPositionsResponse{
+		ReplicationStatuses: results,
+		TabletMap:           tabletMap,
 	}, nil
 }
 

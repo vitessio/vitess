@@ -69,7 +69,7 @@ type subqueryInfo struct {
 //
 // If an expression has no references to the current query, then the left-most
 // origin is chosen as the default.
-func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr) (pullouts []*pulloutSubquery, origin logicalPlan, pushExpr sqlparser.Expr, err error) {
+func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr, reservedVars sqlparser.BindVars) (pullouts []*pulloutSubquery, origin logicalPlan, pushExpr sqlparser.Expr, err error) {
 	// highestOrigin tracks the highest origin referenced by the expression.
 	// Default is the First.
 	highestOrigin := First(pb.plan)
@@ -104,11 +104,11 @@ func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr) (pullouts []*pullout
 			spb := newPrimitiveBuilder(pb.vschema, pb.jt)
 			switch stmt := node.Select.(type) {
 			case *sqlparser.Select:
-				if err := spb.processSelect(stmt, pb.st, ""); err != nil {
+				if err := spb.processSelect(stmt, reservedVars, pb.st, ""); err != nil {
 					return false, err
 				}
 			case *sqlparser.Union:
-				if err := spb.processUnion(stmt, pb.st); err != nil {
+				if err := spb.processUnion(stmt, reservedVars, pb.st); err != nil {
 					return false, err
 				}
 			default:
@@ -221,7 +221,7 @@ func hasSubquery(node sqlparser.SQLNode) bool {
 	return has
 }
 
-func (pb *primitiveBuilder) finalizeUnshardedDMLSubqueries(nodes ...sqlparser.SQLNode) bool {
+func (pb *primitiveBuilder) finalizeUnshardedDMLSubqueries(reservedVars sqlparser.BindVars, nodes ...sqlparser.SQLNode) bool {
 	var keyspace string
 	if rb, ok := pb.plan.(*route); ok {
 		keyspace = rb.eroute.Keyspace.Name
@@ -243,7 +243,7 @@ func (pb *primitiveBuilder) finalizeUnshardedDMLSubqueries(nodes ...sqlparser.SQ
 					return true, nil
 				}
 				spb := newPrimitiveBuilder(pb.vschema, pb.jt)
-				if err := spb.processSelect(nodeType, pb.st, ""); err != nil {
+				if err := spb.processSelect(nodeType, reservedVars, pb.st, ""); err != nil {
 					samePlan = false
 					return false, err
 				}
@@ -264,7 +264,7 @@ func (pb *primitiveBuilder) finalizeUnshardedDMLSubqueries(nodes ...sqlparser.SQ
 					return true, nil
 				}
 				spb := newPrimitiveBuilder(pb.vschema, pb.jt)
-				if err := spb.processUnion(nodeType, pb.st); err != nil {
+				if err := spb.processUnion(nodeType, reservedVars, pb.st); err != nil {
 					samePlan = false
 					return false, err
 				}
