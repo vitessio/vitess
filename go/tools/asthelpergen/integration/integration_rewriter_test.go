@@ -24,13 +24,13 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestVisitRefContainer(t *testing.T) {
+func TestRewriteVisitRefContainer(t *testing.T) {
 	leaf1 := &Leaf{1}
 	leaf2 := &Leaf{2}
 	container := &RefContainer{ASTType: leaf1, ASTImplementationType: leaf2}
 	containerContainer := &RefContainer{ASTType: container}
 
-	tv := &testVisitor{}
+	tv := &rewriteTestVisitor{}
 
 	Rewrite(containerContainer, tv.pre, tv.post)
 
@@ -47,13 +47,13 @@ func TestVisitRefContainer(t *testing.T) {
 	tv.assertEquals(t, expected)
 }
 
-func TestVisitValueContainer(t *testing.T) {
+func TestRewriteVisitValueContainer(t *testing.T) {
 	leaf1 := &Leaf{1}
 	leaf2 := &Leaf{2}
 	container := ValueContainer{ASTType: leaf1, ASTImplementationType: leaf2}
 	containerContainer := ValueContainer{ASTType: container}
 
-	tv := &testVisitor{}
+	tv := &rewriteTestVisitor{}
 
 	Rewrite(containerContainer, tv.pre, tv.post)
 
@@ -70,7 +70,7 @@ func TestVisitValueContainer(t *testing.T) {
 	tv.assertEquals(t, expected)
 }
 
-func TestVisitRefSliceContainer(t *testing.T) {
+func TestRewriteVisitRefSliceContainer(t *testing.T) {
 	leaf1 := &Leaf{1}
 	leaf2 := &Leaf{2}
 	leaf3 := &Leaf{3}
@@ -78,7 +78,7 @@ func TestVisitRefSliceContainer(t *testing.T) {
 	container := &RefSliceContainer{ASTElements: []AST{leaf1, leaf2}, ASTImplementationElements: []*Leaf{leaf3, leaf4}}
 	containerContainer := &RefSliceContainer{ASTElements: []AST{container}}
 
-	tv := &testVisitor{}
+	tv := &rewriteTestVisitor{}
 
 	Rewrite(containerContainer, tv.pre, tv.post)
 
@@ -98,7 +98,7 @@ func TestVisitRefSliceContainer(t *testing.T) {
 	})
 }
 
-func TestVisitValueSliceContainer(t *testing.T) {
+func TestRewriteVisitValueSliceContainer(t *testing.T) {
 	leaf1 := &Leaf{1}
 	leaf2 := &Leaf{2}
 	leaf3 := &Leaf{3}
@@ -106,7 +106,7 @@ func TestVisitValueSliceContainer(t *testing.T) {
 	container := ValueSliceContainer{ASTElements: []AST{leaf1, leaf2}, ASTImplementationElements: []*Leaf{leaf3, leaf4}}
 	containerContainer := ValueSliceContainer{ASTElements: []AST{container}}
 
-	tv := &testVisitor{}
+	tv := &rewriteTestVisitor{}
 
 	Rewrite(containerContainer, tv.pre, tv.post)
 
@@ -126,7 +126,7 @@ func TestVisitValueSliceContainer(t *testing.T) {
 	})
 }
 
-func TestVisitInterfaceSlice(t *testing.T) {
+func TestRewriteVisitInterfaceSlice(t *testing.T) {
 	leaf1 := &Leaf{2}
 	astType := &RefContainer{NotASTType: 12}
 	implementationType := &Leaf{2}
@@ -142,7 +142,7 @@ func TestVisitInterfaceSlice(t *testing.T) {
 		leaf2,
 	}
 
-	tv := &testVisitor{}
+	tv := &rewriteTestVisitor{}
 
 	Rewrite(ast, tv.pre, tv.post)
 
@@ -162,7 +162,7 @@ func TestVisitInterfaceSlice(t *testing.T) {
 	})
 }
 
-func TestVisitRefContainerReplace(t *testing.T) {
+func TestRewriteVisitRefContainerReplace(t *testing.T) {
 	ast := &RefContainer{
 		ASTType:               &RefContainer{NotASTType: 12},
 		ASTImplementationType: &Leaf{2},
@@ -190,7 +190,7 @@ func TestVisitRefContainerReplace(t *testing.T) {
 	}, ast)
 }
 
-func TestVisitValueContainerReplace(t *testing.T) {
+func TestRewriteVisitValueContainerReplace(t *testing.T) {
 	ast := ValueContainer{
 		ASTType:               ValueContainer{NotASTType: 12},
 		ASTImplementationType: &Leaf{2},
@@ -213,7 +213,7 @@ func TestVisitValueContainerReplace(t *testing.T) {
 	t.Fatalf("should not get here")
 }
 
-func TestVisitValueContainerReplace2(t *testing.T) {
+func TestRewriteVisitValueContainerReplace2(t *testing.T) {
 	ast := ValueContainer{
 		ASTType:               ValueContainer{NotASTType: 12},
 		ASTImplementationType: &Leaf{2},
@@ -279,19 +279,19 @@ type Post struct {
 	el AST
 }
 
-type testVisitor struct {
+type rewriteTestVisitor struct {
 	walk []step
 }
 
-func (tv *testVisitor) pre(cursor *Cursor) bool {
+func (tv *rewriteTestVisitor) pre(cursor *Cursor) bool {
 	tv.walk = append(tv.walk, Pre{el: cursor.Node()})
 	return true
 }
-func (tv *testVisitor) post(cursor *Cursor) bool {
+func (tv *rewriteTestVisitor) post(cursor *Cursor) bool {
 	tv.walk = append(tv.walk, Post{el: cursor.Node()})
 	return true
 }
-func (tv *testVisitor) assertEquals(t *testing.T, expected []step) {
+func (tv *rewriteTestVisitor) assertEquals(t *testing.T, expected []step) {
 	t.Helper()
 	var lines []string
 	error := false
