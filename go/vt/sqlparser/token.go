@@ -34,14 +34,16 @@ type Tokenizer struct {
 	AllowComments       bool
 	SkipSpecialComments bool
 	SkipToEnd           bool
-	lastToken           string
 	LastError           error
-	posVarIndex         int
 	ParseTree           Statement
-	partialDDL          Statement
-	nesting             int
-	multi               bool
-	specialComment      *Tokenizer
+	BindVars            map[string]struct{}
+
+	lastToken      string
+	posVarIndex    int
+	partialDDL     Statement
+	nesting        int
+	multi          bool
+	specialComment *Tokenizer
 
 	Pos int
 	buf string
@@ -51,7 +53,8 @@ type Tokenizer struct {
 // sql string.
 func NewStringTokenizer(sql string) *Tokenizer {
 	return &Tokenizer{
-		buf: sql,
+		buf:      sql,
+		BindVars: make(map[string]struct{}),
 	}
 }
 

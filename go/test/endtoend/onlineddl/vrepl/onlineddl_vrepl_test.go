@@ -17,21 +17,18 @@ limitations under the License.
 package vrepl
 
 import (
-	"context"
 	"flag"
 	"fmt"
 	"io/ioutil"
 	"net/http"
 	"os"
 	"path"
-	"regexp"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/schema"
 	throttlebase "vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
 
@@ -149,10 +146,6 @@ var (
 	`
 )
 
-func fullWordRegexp(searchWord string) *regexp.Regexp {
-	return regexp.MustCompile(`.*?\b` + searchWord + `\b`)
-}
-
 func TestMain(m *testing.M) {
 	defer cluster.PanicHandler(nil)
 	flag.Parse()
@@ -242,7 +235,8 @@ func unthrottleApp(tablet *cluster.Vttablet, app string) (*http.Response, string
 
 func TestSchemaChange(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	assert.Equal(t, 2, len(clusterInstance.Keyspaces[0].Shards))
+	shards := clusterInstance.Keyspaces[0].Shards
+	assert.Equal(t, 2, len(shards))
 	testWithInitialSchema(t)
 	t.Run("alter non_online", func(t *testing.T) {
 		_ = testOnlineDDLStatement(t, alterTableNormalStatement, string(schema.DDLStrategyDirect), "vtctl", "non_online")
@@ -252,18 +246,18 @@ func TestSchemaChange(t *testing.T) {
 	t.Run("successful online alter, vtgate", func(t *testing.T) {
 		insertRows(t, 2)
 		uuid := testOnlineDDLStatement(t, alterTableSuccessfulStatement, "online", "vtgate", "vrepl_col")
-		checkRecentMigrations(t, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 		testRows(t)
-		checkCancelMigration(t, uuid, false)
-		checkRetryMigration(t, uuid, false)
+		onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, false)
+		onlineddl.CheckRetryMigration(t, &vtParams, shards, uuid, false)
 	})
 	t.Run("successful online alter, vtctl", func(t *testing.T) {
 		insertRows(t, 2)
 		uuid := testOnlineDDLStatement(t, alterTableTrivialStatement, "online", "vtctl", "vrepl_col")
-		checkRecentMigrations(t, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 		testRows(t)
-		checkCancelMigration(t, uuid, false)
-		checkRetryMigration(t, uuid, false)
+		onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, false)
+		onlineddl.CheckRetryMigration(t, &vtParams, shards, uuid, false)
 	})
 	t.Run("throttled migration", func(t *testing.T) {
 		insertRows(t, 2)
@@ -272,30 +266,30 @@ func TestSchemaChange(t *testing.T) {
 			defer unthrottleApp(clusterInstance.Keyspaces[0].Shards[i].Vttablets[0], throttlerAppName)
 		}
 		uuid := testOnlineDDLStatement(t, alterTableThrottlingStatement, "online", "vtgate", "vrepl_col")
-		checkRecentMigrations(t, uuid, schema.OnlineDDLStatusRunning)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusRunning)
 		testRows(t)
-		checkCancelMigration(t, uuid, true)
+		onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, true)
 		time.Sleep(2 * time.Second)
-		checkRecentMigrations(t, uuid, schema.OnlineDDLStatusFailed)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusFailed)
 	})
 	t.Run("failed migration", func(t *testing.T) {
 		insertRows(t, 2)
 		uuid := testOnlineDDLStatement(t, alterTableFailedStatement, "online", "vtgate", "vrepl_col")
-		checkRecentMigrations(t, uuid, schema.OnlineDDLStatusFailed)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusFailed)
 		testRows(t)
-		checkCancelMigration(t, uuid, false)
-		checkRetryMigration(t, uuid, true)
+		onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, false)
+		onlineddl.CheckRetryMigration(t, &vtParams, shards, uuid, true)
 		// migration will fail again
 	})
 	t.Run("cancel all migrations: nothing to cancel", func(t *testing.T) {
 		// no migrations pending at this time
 		time.Sleep(10 * time.Second)
-		checkCancelAllMigrations(t, 0)
+		onlineddl.CheckCancelAllMigrations(t, &vtParams, 0)
 	})
 	t.Run("cancel all migrations: some migrations to cancel", func(t *testing.T) {
-		for i := range clusterInstance.Keyspaces[0].Shards {
-			throttleApp(clusterInstance.Keyspaces[0].Shards[i].Vttablets[0], throttlerAppName)
-			defer unthrottleApp(clusterInstance.Keyspaces[0].Shards[i].Vttablets[0], throttlerAppName)
+		for i := range shards {
+			throttleApp(shards[i].Vttablets[0], throttlerAppName)
+			defer unthrottleApp(shards[i].Vttablets[0], throttlerAppName)
 		}
 		// spawn n migrations; cancel them via cancel-all
 		var wg sync.WaitGroup
@@ -308,41 +302,41 @@ func TestSchemaChange(t *testing.T) {
 			}()
 		}
 		wg.Wait()
-		checkCancelAllMigrations(t, count)
+		onlineddl.CheckCancelAllMigrations(t, &vtParams, len(shards)*count)
 	})
 	t.Run("Online DROP, vtctl", func(t *testing.T) {
 		uuid := testOnlineDDLStatement(t, onlineDDLDropTableStatement, "online", "vtctl", "")
-		checkRecentMigrations(t, uuid, schema.OnlineDDLStatusComplete)
-		checkCancelMigration(t, uuid, false)
-		checkRetryMigration(t, uuid, false)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, false)
+		onlineddl.CheckRetryMigration(t, &vtParams, shards, uuid, false)
 	})
 	t.Run("Online CREATE, vtctl", func(t *testing.T) {
 		uuid := testOnlineDDLStatement(t, onlineDDLCreateTableStatement, "online", "vtctl", "online_ddl_create_col")
-		checkRecentMigrations(t, uuid, schema.OnlineDDLStatusComplete)
-		checkCancelMigration(t, uuid, false)
-		checkRetryMigration(t, uuid, false)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, false)
+		onlineddl.CheckRetryMigration(t, &vtParams, shards, uuid, false)
 	})
 	t.Run("Online DROP TABLE IF EXISTS, vtgate", func(t *testing.T) {
 		uuid := testOnlineDDLStatement(t, onlineDDLDropTableIfExistsStatement, "online", "vtgate", "")
-		checkRecentMigrations(t, uuid, schema.OnlineDDLStatusComplete)
-		checkCancelMigration(t, uuid, false)
-		checkRetryMigration(t, uuid, false)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, false)
+		onlineddl.CheckRetryMigration(t, &vtParams, shards, uuid, false)
 		// this table existed
 		checkTables(t, schema.OnlineDDLToGCUUID(uuid), 1)
 	})
 	t.Run("Online DROP TABLE IF EXISTS for nonexistent table, vtgate", func(t *testing.T) {
 		uuid := testOnlineDDLStatement(t, onlineDDLDropTableIfExistsStatement, "online", "vtgate", "")
-		checkRecentMigrations(t, uuid, schema.OnlineDDLStatusComplete)
-		checkCancelMigration(t, uuid, false)
-		checkRetryMigration(t, uuid, false)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, false)
+		onlineddl.CheckRetryMigration(t, &vtParams, shards, uuid, false)
 		// this table did not exist
 		checkTables(t, schema.OnlineDDLToGCUUID(uuid), 0)
 	})
 	t.Run("Online DROP TABLE for nonexistent table, expect error, vtgate", func(t *testing.T) {
 		uuid := testOnlineDDLStatement(t, onlineDDLDropTableStatement, "online", "vtgate", "")
-		checkRecentMigrations(t, uuid, schema.OnlineDDLStatusFailed)
-		checkCancelMigration(t, uuid, false)
-		checkRetryMigration(t, uuid, true)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusFailed)
+		onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, false)
+		onlineddl.CheckRetryMigration(t, &vtParams, shards, uuid, true)
 	})
 }
 
@@ -394,7 +388,7 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 	tableName := fmt.Sprintf("vt_onlineddl_test_%02d", 3)
 	sqlQuery := fmt.Sprintf(alterStatement, tableName)
 	if executeStrategy == "vtgate" {
-		row := vtgateExec(t, ddlStrategy, sqlQuery, "").Named().Row()
+		row := onlineddl.VtgateExecDDL(t, &vtParams, ddlStrategy, sqlQuery, "").Named().Row()
 		if row != nil {
 			uuid = row.AsString("uuid", "")
 		}
@@ -435,75 +429,6 @@ func checkTablesCount(t *testing.T, tablet *cluster.Vttablet, showTableName stri
 	assert.Equal(t, expectCount, len(queryResult.Rows))
 }
 
-// checkRecentMigrations checks 'OnlineDDL <keyspace> show recent' output. Example to such output:
-// +------------------+-------+--------------+----------------------+--------------------------------------+----------+---------------------+---------------------+------------------+
-// |      Tablet      | shard | mysql_schema |     mysql_table      |            migration_uuid            | strategy |  started_timestamp  | completed_timestamp | migration_status |
-// +------------------+-------+--------------+----------------------+--------------------------------------+----------+---------------------+---------------------+------------------+
-// | zone1-0000003880 |     0 | vt_ks        | vt_onlineddl_test_03 | a0638f6b_ec7b_11ea_9bf8_000d3a9b8a9a | online   | 2020-09-01 17:50:40 | 2020-09-01 17:50:41 | complete         |
-// | zone1-0000003884 |     1 | vt_ks        | vt_onlineddl_test_03 | a0638f6b_ec7b_11ea_9bf8_000d3a9b8a9a | online   | 2020-09-01 17:50:40 | 2020-09-01 17:50:41 | complete         |
-// +------------------+-------+--------------+----------------------+--------------------------------------+----------+---------------------+---------------------+------------------+
-
-func checkRecentMigrations(t *testing.T, uuid string, expectStatus schema.OnlineDDLStatus) {
-	showQuery := fmt.Sprintf("show vitess_migrations like '%s'", uuid)
-	r := onlineddl.VtgateExecQuery(t, &vtParams, showQuery, "")
-	fmt.Printf("# output for `%s`:\n", showQuery)
-	onlineddl.PrintQueryResult(os.Stdout, r)
-
-	count := 0
-	for _, row := range r.Named().Rows {
-		if row["migration_uuid"].ToString() == uuid && row["migration_status"].ToString() == string(expectStatus) {
-			count++
-		}
-	}
-	assert.Equal(t, len(clusterInstance.Keyspaces[0].Shards), count)
-}
-
-// checkCancelMigration attempts to cancel a migration, and expects rejection
-func checkCancelMigration(t *testing.T, uuid string, expectCancelPossible bool) {
-	result, err := clusterInstance.VtctlclientProcess.OnlineDDLCancelMigration(keyspaceName, uuid)
-	fmt.Println("# 'vtctlclient OnlineDDL cancel <uuid>' output (for debug purposes):")
-	fmt.Println(result)
-	assert.NoError(t, err)
-
-	var r *regexp.Regexp
-	if expectCancelPossible {
-		r = fullWordRegexp("1")
-	} else {
-		r = fullWordRegexp("0")
-	}
-	m := r.FindAllString(result, -1)
-	assert.Equal(t, len(clusterInstance.Keyspaces[0].Shards), len(m))
-}
-
-// checkCancelAllMigrations all pending migrations
-func checkCancelAllMigrations(t *testing.T, expectCount int) {
-	result, err := clusterInstance.VtctlclientProcess.OnlineDDLCancelAllMigrations(keyspaceName)
-	fmt.Println("# 'vtctlclient OnlineDDL cancel-all' output (for debug purposes):")
-	fmt.Println(result)
-	assert.NoError(t, err)
-
-	r := fullWordRegexp(fmt.Sprintf("%d", expectCount))
-	m := r.FindAllString(result, -1)
-	assert.Equal(t, len(clusterInstance.Keyspaces[0].Shards), len(m))
-}
-
-// checkRetryMigration attempts to retry a migration, and expects rejection
-func checkRetryMigration(t *testing.T, uuid string, expectRetryPossible bool) {
-	result, err := clusterInstance.VtctlclientProcess.OnlineDDLRetryMigration(keyspaceName, uuid)
-	fmt.Println("# 'vtctlclient OnlineDDL retry <uuid>' output (for debug purposes):")
-	fmt.Println(result)
-	assert.NoError(t, err)
-
-	var r *regexp.Regexp
-	if expectRetryPossible {
-		r = fullWordRegexp("1")
-	} else {
-		r = fullWordRegexp("0")
-	}
-	m := r.FindAllString(result, -1)
-	assert.Equal(t, len(clusterInstance.Keyspaces[0].Shards), len(m))
-}
-
 // checkMigratedTables checks the CREATE STATEMENT of a table after migration
 func checkMigratedTable(t *testing.T, tableName, expectColumn string) {
 	for i := range clusterInstance.Keyspaces[0].Shards {
@@ -521,26 +446,4 @@ func getCreateTableStatement(t *testing.T, tablet *cluster.Vttablet, tableName s
 	assert.Equal(t, len(queryResult.Rows[0]), 2) // table name, create statement
 	statement = queryResult.Rows[0][1].ToString()
 	return statement
-}
-
-func vtgateExec(t *testing.T, ddlStrategy string, query string, expectError string) *sqltypes.Result {
-	t.Helper()
-
-	ctx := context.Background()
-	conn, err := mysql.Connect(ctx, &vtParams)
-	require.Nil(t, err)
-	defer conn.Close()
-
-	setSession := fmt.Sprintf("set @@ddl_strategy='%s'", ddlStrategy)
-	_, err = conn.ExecuteFetch(setSession, 1000, true)
-	assert.NoError(t, err)
-
-	qr, err := conn.ExecuteFetch(query, 1000, true)
-	if expectError == "" {
-		require.NoError(t, err)
-	} else {
-		require.Error(t, err, "error should not be nil")
-		assert.Contains(t, err.Error(), expectError, "Unexpected error")
-	}
-	return qr
 }
