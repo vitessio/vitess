@@ -21,12 +21,14 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"math/rand"
 	"os"
 	"path"
 	"strings"
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/tlstest"
 
 	"github.com/stretchr/testify/assert"
@@ -65,6 +67,61 @@ func TestRunsVschemaMigrations(t *testing.T) {
 	err = addColumnVindex(cluster, "test_keyspace", "alter vschema on test_table1 add vindex my_vdx (id)")
 	assert.NoError(t, err)
 	assertColumnVindex(t, cluster, columnVindex{keyspace: "test_keyspace", table: "test_table1", vindex: "my_vdx", vindexType: "hash", column: "id"})
+}
+
+func TestPersistentMode(t *testing.T) {
+	dir, err := ioutil.TempDir("/tmp", "vttestserver_persistent_mode_")
+	assert.NoError(t, err)
+	defer os.RemoveAll(dir)
+
+	cluster, err := startPersistentCluster(dir)
+	args := os.Args
+	defer resetFlags(args)
+	assert.NoError(t, err)
+
+	// basic sanity checks similar to TestRunsVschemaMigrations
+	assertColumnVindex(t, cluster, columnVindex{keyspace: "test_keyspace", table: "test_table", vindex: "my_vdx", vindexType: "hash", column: "id"})
+	assertColumnVindex(t, cluster, columnVindex{keyspace: "app_customer", table: "customers", vindex: "hash", vindexType: "hash", column: "id"})
+
+	// insert some data to ensure persistence across teardowns
+	err = execOnCluster(cluster, "app_customer", func(conn *mysql.Conn) error {
+		_, err := conn.ExecuteFetch("insert into customers (id, name) values (1, 'gopherson')", 1, false)
+		return err
+	})
+	assert.NoError(t, err)
+
+	expectedRows := [][]sqltypes.Value{
+		{sqltypes.NewInt64(1), sqltypes.NewVarChar("gopherson"), sqltypes.NULL},
+	}
+
+	// ensure data was actually inserted
+	var res *sqltypes.Result
+	err = execOnCluster(cluster, "app_customer", func(conn *mysql.Conn) (err error) {
+		res, err = conn.ExecuteFetch("SELECT * FROM customers", 1, false)
+		return err
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, expectedRows, res.Rows)
+
+	// reboot the persistent cluster
+	cluster.TearDown()
+	cluster, err = startPersistentCluster(dir)
+	defer cluster.TearDown()
+	args = os.Args
+	defer resetFlags(args)
+	assert.NoError(t, err)
+
+	// rerun our sanity checks to make sure vschema migrations are run during every startup
+	assertColumnVindex(t, cluster, columnVindex{keyspace: "test_keyspace", table: "test_table", vindex: "my_vdx", vindexType: "hash", column: "id"})
+	assertColumnVindex(t, cluster, columnVindex{keyspace: "app_customer", table: "customers", vindex: "hash", vindexType: "hash", column: "id"})
+
+	// ensure previous data was successfully persisted
+	err = execOnCluster(cluster, "app_customer", func(conn *mysql.Conn) (err error) {
+		res, err = conn.ExecuteFetch("SELECT * FROM customers", 1, false)
+		return err
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, expectedRows, res.Rows)
 }
 
 func TestCanVtGateExecute(t *testing.T) {
@@ -189,6 +246,16 @@ func TestMtlsAuthUnauthorizedFails(t *testing.T) {
 	assert.Contains(t, err.Error(), "code = Unauthenticated desc = client certificate not authorized")
 }
 
+func startPersistentCluster(dir string, flags ...string) (vttest.LocalCluster, error) {
+	flags = append(flags, []string{
+		"-persistent_mode",
+		// FIXME: if port is not provided, data_dir is not respected
+		fmt.Sprintf("-port=%d", randomPort()),
+		fmt.Sprintf("-data_dir=%s", dir),
+	}...)
+	return startCluster(flags...)
+}
+
 func startCluster(flags ...string) (vttest.LocalCluster, error) {
 	schemaDirArg := "-schema_dir=data/schema"
 	tabletHostname := "-tablet_hostname=localhost"
@@ -201,6 +268,13 @@ func startCluster(flags ...string) (vttest.LocalCluster, error) {
 }
 
 func addColumnVindex(cluster vttest.LocalCluster, keyspace string, vschemaMigration string) error {
+	return execOnCluster(cluster, keyspace, func(conn *mysql.Conn) error {
+		_, err := conn.ExecuteFetch(vschemaMigration, 1, false)
+		return err
+	})
+}
+
+func execOnCluster(cluster vttest.LocalCluster, keyspace string, f func(*mysql.Conn) error) error {
 	ctx := context.Background()
 	vtParams := mysql.ConnParams{
 		Host:   "localhost",
@@ -213,8 +287,7 @@ func addColumnVindex(cluster vttest.LocalCluster, keyspace string, vschemaMigrat
 		return err
 	}
 	defer conn.Close()
-	_, err = conn.ExecuteFetch(vschemaMigration, 1, false)
-	return err
+	return f(conn)
 }
 
 func assertColumnVindex(t *testing.T, cluster vttest.LocalCluster, expected columnVindex) {
@@ -245,4 +318,9 @@ func assertEqual(t *testing.T, actual string, expected string, message string) {
 
 func resetFlags(args []string) {
 	os.Args = args
+}
+
+func randomPort() int {
+	v := rand.Int31n(20000)
+	return int(v + 10000)
 }
