@@ -266,11 +266,11 @@ func (node *Flush) formatFast(buf *TrackedBuffer) {
 		buf.WriteString(" local")
 	}
 	if len(node.FlushOptions) != 0 {
-		for i, option := range node.FlushOptions {
-			if i != 0 {
-				buf.WriteString(", ")
-			}
+		prefix := " "
+		for _, option := range node.FlushOptions {
+			buf.WriteString(prefix)
 			buf.WriteString(option)
+			prefix = ", "
 		}
 	} else {
 		buf.WriteString(" tables")
