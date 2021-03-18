@@ -1071,7 +1071,15 @@ func (c *Conn) handleComStmtExecute(handler Handler, data []byte) (kontinue bool
 	return true
 }
 
-func (c *Conn) handleComPrepare(handler Handler, data []byte) bool {
+func (c *Conn) handleComPrepare(handler Handler, data []byte) (kontinue bool) {
+	c.startWriterBuffering()
+	defer func() {
+		if err := c.endWriterBuffering(); err != nil {
+			log.Errorf("conn %v: flush() failed: %v", c.ID(), err)
+			kontinue = false
+		}
+	}()
+
 	query := c.parseComPrepare(data)
 	c.recycleReadPacket()
 
