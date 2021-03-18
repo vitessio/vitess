@@ -68,27 +68,34 @@ func yyParsePooled(yylex yyLexer) int {
 // a set of types, define the function as iTypeName.
 // This will help avoid name collisions.
 
-// Parse parses the SQL in full and returns a Statement, which
-// is the AST representation of the query. If a DDL statement
+// Parse2 parses the SQL in full and returns a Statement, which
+// is the AST representation of the query, and a set of BindVars, which are all the
+// bind variables that were found in the original SQL query. If a DDL statement
 // is partially parsed but still contains a syntax error, the
 // error is ignored and the DDL is returned anyway.
-func Parse(sql string) (Statement, error) {
+func Parse2(sql string) (Statement, BindVars, error) {
 	tokenizer := NewStringTokenizer(sql)
 	if yyParsePooled(tokenizer) != 0 {
 		if tokenizer.partialDDL != nil {
 			if typ, val := tokenizer.Scan(); typ != 0 {
-				return nil, fmt.Errorf("extra characters encountered after end of DDL: '%s'", string(val))
+				return nil, nil, fmt.Errorf("extra characters encountered after end of DDL: '%s'", string(val))
 			}
 			log.Warningf("ignoring error parsing DDL '%s': %v", sql, tokenizer.LastError)
 			tokenizer.ParseTree = tokenizer.partialDDL
-			return tokenizer.ParseTree, nil
+			return tokenizer.ParseTree, tokenizer.BindVars, nil
 		}
-		return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, tokenizer.LastError.Error())
+		return nil, nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, tokenizer.LastError.Error())
 	}
 	if tokenizer.ParseTree == nil {
-		return nil, ErrEmpty
+		return nil, nil, ErrEmpty
 	}
-	return tokenizer.ParseTree, nil
+	return tokenizer.ParseTree, tokenizer.BindVars, nil
+}
+
+// Parse behaves like Parse2 but does not return a set of bind variables
+func Parse(sql string) (Statement, error) {
+	stmt, _, err := Parse2(sql)
+	return stmt, err
 }
 
 // ParseStrictDDL is the same as Parse except it errors on
