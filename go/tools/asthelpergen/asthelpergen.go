@@ -55,6 +55,7 @@ type generatorSPI interface {
 	addFunc(name string, t methodType, code jen.Code)
 	scope() *types.Scope
 	findImplementations(iff *types.Interface, impl func(types.Type) error) error
+	iface() *types.Interface
 }
 
 type generator2 interface {
@@ -64,6 +65,7 @@ type generator2 interface {
 	ptrToBasicMethod(t types.Type, basic *types.Basic, spi generatorSPI) error
 	ptrToOtherMethod(t types.Type, ptr *types.Pointer, spi generatorSPI) error
 	sliceMethod(t types.Type, slice *types.Slice, spi generatorSPI) error
+	basicMethod(t types.Type, basic *types.Basic, spi generatorSPI) error
 }
 
 // astHelperGen finds implementations of the given interface,
@@ -73,7 +75,7 @@ type astHelperGen struct {
 	mod        *packages.Module
 	sizes      types.Sizes
 	namedIface *types.Named
-	iface      *types.Interface
+	_iface     *types.Interface
 	gens       []generator
 	gens2      []generator2
 
@@ -82,13 +84,17 @@ type astHelperGen struct {
 	todo    []types.Type
 }
 
+func (gen *astHelperGen) iface() *types.Interface {
+	return gen._iface
+}
+
 func newGenerator(mod *packages.Module, sizes types.Sizes, named *types.Named, generators ...generator) *astHelperGen {
 	return &astHelperGen{
 		DebugTypes: true,
 		mod:        mod,
 		sizes:      sizes,
 		namedIface: named,
-		iface:      named.Underlying().(*types.Interface),
+		_iface:     named.Underlying().(*types.Interface),
 		gens:       generators,
 	}
 }
@@ -177,7 +183,7 @@ func (gen *astHelperGen) visitInterface(t types.Type, iface *types.Interface) er
 // GenerateCode is the main loop where we build up the code per file.
 func (gen *astHelperGen) GenerateCode() (map[string]*jen.File, error) {
 	pkg := gen.namedIface.Obj().Pkg()
-	iface, ok := gen.iface.Underlying().(*types.Interface)
+	iface, ok := gen._iface.Underlying().(*types.Interface)
 	if !ok {
 		return nil, fmt.Errorf("expected interface, but got %T", gen.iface)
 	}
@@ -303,6 +309,8 @@ func GenerateASTHelpers(packagePatterns []string, rootIface, exceptCloneType str
 	generator := newGenerator(loaded[0].Module, loaded[0].TypesSizes, nt, rewriter)
 	generator.gens2 = append(generator.gens2, &equalsGen{})
 	generator.gens2 = append(generator.gens2, newCloneGen(exceptCloneType))
+	generator.gens2 = append(generator.gens2, &visitGen{})
+
 	it, err := generator.GenerateCode()
 	if err != nil {
 		return nil, err
@@ -326,6 +334,7 @@ type methodType int
 const (
 	clone methodType = iota
 	equals
+	visit
 )
 
 func (gen *astHelperGen) addFunc(name string, typ methodType, code jen.Code) {
@@ -335,6 +344,8 @@ func (gen *astHelperGen) addFunc(name string, typ methodType, code jen.Code) {
 		comment = " creates a deep clone of the input."
 	case equals:
 		comment = " does deep equals between the two objects."
+	case visit:
+		comment = " will visit all parts of the AST"
 	}
 	gen.methods = append(gen.methods, jen.Comment(name+comment), code)
 }
@@ -383,6 +394,10 @@ func (gen *astHelperGen) createFile(pkgName string) (string, *jen.File) {
 				panic(fmt.Sprintf("%T", ptrToType))
 				//c.makePtrCloneMethod(t, ptr)
 			}
+		case *types.Basic:
+			gen.allGenerators(func(g generator2) error {
+				return g.basicMethod(t, underlying, gen)
+			})
 
 		default:
 			log.Fatalf("don't know how to handle %s %T", typeName, underlying)

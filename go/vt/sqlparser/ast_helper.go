@@ -1196,6 +1196,306 @@ func CloneSQLNode(in SQLNode) SQLNode {
 	}
 }
 
+// VisitSQLNode will visit all parts of the AST
+func VisitSQLNode(in SQLNode, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	switch in := in.(type) {
+	case AccessMode:
+		return VisitAccessMode(in, f)
+	case *AddColumns:
+		return VisitRefOfAddColumns(in, f)
+	case *AddConstraintDefinition:
+		return VisitRefOfAddConstraintDefinition(in, f)
+	case *AddIndexDefinition:
+		return VisitRefOfAddIndexDefinition(in, f)
+	case AlgorithmValue:
+		return VisitAlgorithmValue(in, f)
+	case *AliasedExpr:
+		return VisitRefOfAliasedExpr(in, f)
+	case *AliasedTableExpr:
+		return VisitRefOfAliasedTableExpr(in, f)
+	case *AlterCharset:
+		return VisitRefOfAlterCharset(in, f)
+	case *AlterColumn:
+		return VisitRefOfAlterColumn(in, f)
+	case *AlterDatabase:
+		return VisitRefOfAlterDatabase(in, f)
+	case *AlterTable:
+		return VisitRefOfAlterTable(in, f)
+	case *AlterView:
+		return VisitRefOfAlterView(in, f)
+	case *AlterVschema:
+		return VisitRefOfAlterVschema(in, f)
+	case *AndExpr:
+		return VisitRefOfAndExpr(in, f)
+	case Argument:
+		return VisitArgument(in, f)
+	case *AutoIncSpec:
+		return VisitRefOfAutoIncSpec(in, f)
+	case *Begin:
+		return VisitRefOfBegin(in, f)
+	case *BinaryExpr:
+		return VisitRefOfBinaryExpr(in, f)
+	case BoolVal:
+		return VisitBoolVal(in, f)
+	case *CallProc:
+		return VisitRefOfCallProc(in, f)
+	case *CaseExpr:
+		return VisitRefOfCaseExpr(in, f)
+	case *ChangeColumn:
+		return VisitRefOfChangeColumn(in, f)
+	case *CheckConstraintDefinition:
+		return VisitRefOfCheckConstraintDefinition(in, f)
+	case ColIdent:
+		return VisitColIdent(in, f)
+	case *ColName:
+		return VisitRefOfColName(in, f)
+	case *CollateExpr:
+		return VisitRefOfCollateExpr(in, f)
+	case *ColumnDefinition:
+		return VisitRefOfColumnDefinition(in, f)
+	case *ColumnType:
+		return VisitRefOfColumnType(in, f)
+	case Columns:
+		return VisitColumns(in, f)
+	case Comments:
+		return VisitComments(in, f)
+	case *Commit:
+		return VisitRefOfCommit(in, f)
+	case *ComparisonExpr:
+		return VisitRefOfComparisonExpr(in, f)
+	case *ConstraintDefinition:
+		return VisitRefOfConstraintDefinition(in, f)
+	case *ConvertExpr:
+		return VisitRefOfConvertExpr(in, f)
+	case *ConvertType:
+		return VisitRefOfConvertType(in, f)
+	case *ConvertUsingExpr:
+		return VisitRefOfConvertUsingExpr(in, f)
+	case *CreateDatabase:
+		return VisitRefOfCreateDatabase(in, f)
+	case *CreateTable:
+		return VisitRefOfCreateTable(in, f)
+	case *CreateView:
+		return VisitRefOfCreateView(in, f)
+	case *CurTimeFuncExpr:
+		return VisitRefOfCurTimeFuncExpr(in, f)
+	case *Default:
+		return VisitRefOfDefault(in, f)
+	case *Delete:
+		return VisitRefOfDelete(in, f)
+	case *DerivedTable:
+		return VisitRefOfDerivedTable(in, f)
+	case *DropColumn:
+		return VisitRefOfDropColumn(in, f)
+	case *DropDatabase:
+		return VisitRefOfDropDatabase(in, f)
+	case *DropKey:
+		return VisitRefOfDropKey(in, f)
+	case *DropTable:
+		return VisitRefOfDropTable(in, f)
+	case *DropView:
+		return VisitRefOfDropView(in, f)
+	case *ExistsExpr:
+		return VisitRefOfExistsExpr(in, f)
+	case *ExplainStmt:
+		return VisitRefOfExplainStmt(in, f)
+	case *ExplainTab:
+		return VisitRefOfExplainTab(in, f)
+	case Exprs:
+		return VisitExprs(in, f)
+	case *Flush:
+		return VisitRefOfFlush(in, f)
+	case *Force:
+		return VisitRefOfForce(in, f)
+	case *ForeignKeyDefinition:
+		return VisitRefOfForeignKeyDefinition(in, f)
+	case *FuncExpr:
+		return VisitRefOfFuncExpr(in, f)
+	case GroupBy:
+		return VisitGroupBy(in, f)
+	case *GroupConcatExpr:
+		return VisitRefOfGroupConcatExpr(in, f)
+	case *IndexDefinition:
+		return VisitRefOfIndexDefinition(in, f)
+	case *IndexHints:
+		return VisitRefOfIndexHints(in, f)
+	case *IndexInfo:
+		return VisitRefOfIndexInfo(in, f)
+	case *Insert:
+		return VisitRefOfInsert(in, f)
+	case *IntervalExpr:
+		return VisitRefOfIntervalExpr(in, f)
+	case *IsExpr:
+		return VisitRefOfIsExpr(in, f)
+	case IsolationLevel:
+		return VisitIsolationLevel(in, f)
+	case JoinCondition:
+		return VisitJoinCondition(in, f)
+	case *JoinTableExpr:
+		return VisitRefOfJoinTableExpr(in, f)
+	case *KeyState:
+		return VisitRefOfKeyState(in, f)
+	case *Limit:
+		return VisitRefOfLimit(in, f)
+	case ListArg:
+		return VisitListArg(in, f)
+	case *Literal:
+		return VisitRefOfLiteral(in, f)
+	case *Load:
+		return VisitRefOfLoad(in, f)
+	case *LockOption:
+		return VisitRefOfLockOption(in, f)
+	case *LockTables:
+		return VisitRefOfLockTables(in, f)
+	case *MatchExpr:
+		return VisitRefOfMatchExpr(in, f)
+	case *ModifyColumn:
+		return VisitRefOfModifyColumn(in, f)
+	case *Nextval:
+		return VisitRefOfNextval(in, f)
+	case *NotExpr:
+		return VisitRefOfNotExpr(in, f)
+	case *NullVal:
+		return VisitRefOfNullVal(in, f)
+	case OnDup:
+		return VisitOnDup(in, f)
+	case *OptLike:
+		return VisitRefOfOptLike(in, f)
+	case *OrExpr:
+		return VisitRefOfOrExpr(in, f)
+	case *Order:
+		return VisitRefOfOrder(in, f)
+	case OrderBy:
+		return VisitOrderBy(in, f)
+	case *OrderByOption:
+		return VisitRefOfOrderByOption(in, f)
+	case *OtherAdmin:
+		return VisitRefOfOtherAdmin(in, f)
+	case *OtherRead:
+		return VisitRefOfOtherRead(in, f)
+	case *ParenSelect:
+		return VisitRefOfParenSelect(in, f)
+	case *ParenTableExpr:
+		return VisitRefOfParenTableExpr(in, f)
+	case *PartitionDefinition:
+		return VisitRefOfPartitionDefinition(in, f)
+	case *PartitionSpec:
+		return VisitRefOfPartitionSpec(in, f)
+	case Partitions:
+		return VisitPartitions(in, f)
+	case *RangeCond:
+		return VisitRefOfRangeCond(in, f)
+	case ReferenceAction:
+		return VisitReferenceAction(in, f)
+	case *Release:
+		return VisitRefOfRelease(in, f)
+	case *RenameIndex:
+		return VisitRefOfRenameIndex(in, f)
+	case *RenameTable:
+		return VisitRefOfRenameTable(in, f)
+	case *RenameTableName:
+		return VisitRefOfRenameTableName(in, f)
+	case *Rollback:
+		return VisitRefOfRollback(in, f)
+	case *SRollback:
+		return VisitRefOfSRollback(in, f)
+	case *Savepoint:
+		return VisitRefOfSavepoint(in, f)
+	case *Select:
+		return VisitRefOfSelect(in, f)
+	case SelectExprs:
+		return VisitSelectExprs(in, f)
+	case *SelectInto:
+		return VisitRefOfSelectInto(in, f)
+	case *Set:
+		return VisitRefOfSet(in, f)
+	case *SetExpr:
+		return VisitRefOfSetExpr(in, f)
+	case SetExprs:
+		return VisitSetExprs(in, f)
+	case *SetTransaction:
+		return VisitRefOfSetTransaction(in, f)
+	case *Show:
+		return VisitRefOfShow(in, f)
+	case *ShowBasic:
+		return VisitRefOfShowBasic(in, f)
+	case *ShowCreate:
+		return VisitRefOfShowCreate(in, f)
+	case *ShowFilter:
+		return VisitRefOfShowFilter(in, f)
+	case *ShowLegacy:
+		return VisitRefOfShowLegacy(in, f)
+	case *StarExpr:
+		return VisitRefOfStarExpr(in, f)
+	case *Stream:
+		return VisitRefOfStream(in, f)
+	case *Subquery:
+		return VisitRefOfSubquery(in, f)
+	case *SubstrExpr:
+		return VisitRefOfSubstrExpr(in, f)
+	case TableExprs:
+		return VisitTableExprs(in, f)
+	case TableIdent:
+		return VisitTableIdent(in, f)
+	case TableName:
+		return VisitTableName(in, f)
+	case TableNames:
+		return VisitTableNames(in, f)
+	case TableOptions:
+		return VisitTableOptions(in, f)
+	case *TableSpec:
+		return VisitRefOfTableSpec(in, f)
+	case *TablespaceOperation:
+		return VisitRefOfTablespaceOperation(in, f)
+	case *TimestampFuncExpr:
+		return VisitRefOfTimestampFuncExpr(in, f)
+	case *TruncateTable:
+		return VisitRefOfTruncateTable(in, f)
+	case *UnaryExpr:
+		return VisitRefOfUnaryExpr(in, f)
+	case *Union:
+		return VisitRefOfUnion(in, f)
+	case *UnionSelect:
+		return VisitRefOfUnionSelect(in, f)
+	case *UnlockTables:
+		return VisitRefOfUnlockTables(in, f)
+	case *Update:
+		return VisitRefOfUpdate(in, f)
+	case *UpdateExpr:
+		return VisitRefOfUpdateExpr(in, f)
+	case UpdateExprs:
+		return VisitUpdateExprs(in, f)
+	case *Use:
+		return VisitRefOfUse(in, f)
+	case *VStream:
+		return VisitRefOfVStream(in, f)
+	case ValTuple:
+		return VisitValTuple(in, f)
+	case *Validation:
+		return VisitRefOfValidation(in, f)
+	case Values:
+		return VisitValues(in, f)
+	case *ValuesFuncExpr:
+		return VisitRefOfValuesFuncExpr(in, f)
+	case VindexParam:
+		return VisitVindexParam(in, f)
+	case *VindexSpec:
+		return VisitRefOfVindexSpec(in, f)
+	case *When:
+		return VisitRefOfWhen(in, f)
+	case *Where:
+		return VisitRefOfWhere(in, f)
+	case *XorExpr:
+		return VisitRefOfXorExpr(in, f)
+	default:
+		// this should never happen
+		return nil
+	}
+}
+
 // EqualsRefOfAddColumns does deep equals between the two objects.
 func EqualsRefOfAddColumns(a, b *AddColumns) bool {
 	if a == b {
@@ -1221,6 +1521,23 @@ func CloneRefOfAddColumns(n *AddColumns) *AddColumns {
 	return &out
 }
 
+// VisitRefOfAddColumns will visit all parts of the AST
+func VisitRefOfAddColumns(in *AddColumns, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitRefOfColName(in.First, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfColName(in.After, f); err != nil {
+		return err
+	}
+	return nil
+}
+
 // EqualsRefOfAddConstraintDefinition does deep equals between the two objects.
 func EqualsRefOfAddConstraintDefinition(a, b *AddConstraintDefinition) bool {
 	if a == b {
@@ -1240,6 +1557,20 @@ func CloneRefOfAddConstraintDefinition(n *AddConstraintDefinition) *AddConstrain
 	out := *n
 	out.ConstraintDefinition = CloneRefOfConstraintDefinition(n.ConstraintDefinition)
 	return &out
+}
+
+// VisitRefOfAddConstraintDefinition will visit all parts of the AST
+func VisitRefOfAddConstraintDefinition(in *AddConstraintDefinition, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitRefOfConstraintDefinition(in.ConstraintDefinition, f); err != nil {
+		return err
+	}
+	return nil
 }
 
 // EqualsRefOfAddIndexDefinition does deep equals between the two objects.
@@ -1263,6 +1594,20 @@ func CloneRefOfAddIndexDefinition(n *AddIndexDefinition) *AddIndexDefinition {
 	return &out
 }
 
+// VisitRefOfAddIndexDefinition will visit all parts of the AST
+func VisitRefOfAddIndexDefinition(in *AddIndexDefinition, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitRefOfIndexDefinition(in.IndexDefinition, f); err != nil {
+		return err
+	}
+	return nil
+}
+
 // EqualsRefOfAliasedExpr does deep equals between the two objects.
 func EqualsRefOfAliasedExpr(a, b *AliasedExpr) bool {
 	if a == b {
@@ -1284,6 +1629,23 @@ func CloneRefOfAliasedExpr(n *AliasedExpr) *AliasedExpr {
 	out.Expr = CloneExpr(n.Expr)
 	out.As = CloneColIdent(n.As)
 	return &out
+}
+
+// VisitRefOfAliasedExpr will visit all parts of the AST
+func VisitRefOfAliasedExpr(in *AliasedExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Expr, f); err != nil {
+		return err
+	}
+	if err := VisitColIdent(in.As, f); err != nil {
+		return err
+	}
+	return nil
 }
 
 // EqualsRefOfAliasedTableExpr does deep equals between the two objects.
@@ -1313,6 +1675,29 @@ func CloneRefOfAliasedTableExpr(n *AliasedTableExpr) *AliasedTableExpr {
 	return &out
 }
 
+// VisitRefOfAliasedTableExpr will visit all parts of the AST
+func VisitRefOfAliasedTableExpr(in *AliasedTableExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitSimpleTableExpr(in.Expr, f); err != nil {
+		return err
+	}
+	if err := VisitPartitions(in.Partitions, f); err != nil {
+		return err
+	}
+	if err := VisitTableIdent(in.As, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfIndexHints(in.Hints, f); err != nil {
+		return err
+	}
+	return nil
+}
+
 // EqualsRefOfAlterCharset does deep equals between the two objects.
 func EqualsRefOfAlterCharset(a, b *AlterCharset) bool {
 	if a == b {
@@ -1332,6 +1717,17 @@ func CloneRefOfAlterCharset(n *AlterCharset) *AlterCharset {
 	}
 	out := *n
 	return &out
+}
+
+// VisitRefOfAlterCharset will visit all parts of the AST
+func VisitRefOfAlterCharset(in *AlterCharset, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	return nil
 }
 
 // EqualsRefOfAlterColumn does deep equals between the two objects.
@@ -1358,6 +1754,23 @@ func CloneRefOfAlterColumn(n *AlterColumn) *AlterColumn {
 	return &out
 }
 
+// VisitRefOfAlterColumn will visit all parts of the AST
+func VisitRefOfAlterColumn(in *AlterColumn, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitRefOfColName(in.Column, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.DefaultVal, f); err != nil {
+		return err
+	}
+	return nil
+}
+
 // EqualsRefOfAlterDatabase does deep equals between the two objects.
 func EqualsRefOfAlterDatabase(a, b *AlterDatabase) bool {
 	if a == b {
@@ -1380,6 +1793,17 @@ func CloneRefOfAlterDatabase(n *AlterDatabase) *AlterDatabase {
 	out := *n
 	out.AlterOptions = CloneSliceOfCollateAndCharset(n.AlterOptions)
 	return &out
+}
+
+// VisitRefOfAlterDatabase will visit all parts of the AST
+func VisitRefOfAlterDatabase(in *AlterDatabase, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	return nil
 }
 
 // EqualsRefOfAlterTable does deep equals between the two objects.
@@ -1406,6 +1830,23 @@ func CloneRefOfAlterTable(n *AlterTable) *AlterTable {
 	out.AlterOptions = CloneSliceOfAlterOption(n.AlterOptions)
 	out.PartitionSpec = CloneRefOfPartitionSpec(n.PartitionSpec)
 	return &out
+}
+
+// VisitRefOfAlterTable will visit all parts of the AST
+func VisitRefOfAlterTable(in *AlterTable, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitTableName(in.Table, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfPartitionSpec(in.PartitionSpec, f); err != nil {
+		return err
+	}
+	return nil
 }
 
 // EqualsRefOfAlterView does deep equals between the two objects.
@@ -1437,6 +1878,26 @@ func CloneRefOfAlterView(n *AlterView) *AlterView {
 	return &out
 }
 
+// VisitRefOfAlterView will visit all parts of the AST
+func VisitRefOfAlterView(in *AlterView, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitTableName(in.ViewName, f); err != nil {
+		return err
+	}
+	if err := VisitColumns(in.Columns, f); err != nil {
+		return err
+	}
+	if err := VisitSelectStatement(in.Select, f); err != nil {
+		return err
+	}
+	return nil
+}
+
 // EqualsRefOfAlterVschema does deep equals between the two objects.
 func EqualsRefOfAlterVschema(a, b *AlterVschema) bool {
 	if a == b {
@@ -1465,6 +1926,26 @@ func CloneRefOfAlterVschema(n *AlterVschema) *AlterVschema {
 	return &out
 }
 
+// VisitRefOfAlterVschema will visit all parts of the AST
+func VisitRefOfAlterVschema(in *AlterVschema, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitTableName(in.Table, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfVindexSpec(in.VindexSpec, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfAutoIncSpec(in.AutoIncSpec, f); err != nil {
+		return err
+	}
+	return nil
+}
+
 // EqualsRefOfAndExpr does deep equals between the two objects.
 func EqualsRefOfAndExpr(a, b *AndExpr) bool {
 	if a == b {
@@ -1486,6 +1967,23 @@ func CloneRefOfAndExpr(n *AndExpr) *AndExpr {
 	out.Left = CloneExpr(n.Left)
 	out.Right = CloneExpr(n.Right)
 	return &out
+}
+
+// VisitRefOfAndExpr will visit all parts of the AST
+func VisitRefOfAndExpr(in *AndExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Left, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.Right, f); err != nil {
+		return err
+	}
+	return nil
 }
 
 // EqualsRefOfAutoIncSpec does deep equals between the two objects.
@@ -1511,6 +2009,23 @@ func CloneRefOfAutoIncSpec(n *AutoIncSpec) *AutoIncSpec {
 	return &out
 }
 
+// VisitRefOfAutoIncSpec will visit all parts of the AST
+func VisitRefOfAutoIncSpec(in *AutoIncSpec, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitColIdent(in.Column, f); err != nil {
+		return err
+	}
+	if err := VisitTableName(in.Sequence, f); err != nil {
+		return err
+	}
+	return nil
+}
+
 // EqualsRefOfBegin does deep equals between the two objects.
 func EqualsRefOfBegin(a, b *Begin) bool {
 	if a == b {
@@ -1529,6 +2044,17 @@ func CloneRefOfBegin(n *Begin) *Begin {
 	}
 	out := *n
 	return &out
+}
+
+// VisitRefOfBegin will visit all parts of the AST
+func VisitRefOfBegin(in *Begin, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	return nil
 }
 
 // EqualsRefOfBinaryExpr does deep equals between the two objects.
@@ -1555,6 +2081,23 @@ func CloneRefOfBinaryExpr(n *BinaryExpr) *BinaryExpr {
 	return &out
 }
 
+// VisitRefOfBinaryExpr will visit all parts of the AST
+func VisitRefOfBinaryExpr(in *BinaryExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Left, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.Right, f); err != nil {
+		return err
+	}
+	return nil
+}
+
 // EqualsRefOfCallProc does deep equals between the two objects.
 func EqualsRefOfCallProc(a, b *CallProc) bool {
 	if a == b {
@@ -1576,6 +2119,23 @@ func CloneRefOfCallProc(n *CallProc) *CallProc {
 	out.Name = CloneTableName(n.Name)
 	out.Params = CloneExprs(n.Params)
 	return &out
+}
+
+// VisitRefOfCallProc will visit all parts of the AST
+func VisitRefOfCallProc(in *CallProc, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitTableName(in.Name, f); err != nil {
+		return err
+	}
+	if err := VisitExprs(in.Params, f); err != nil {
+		return err
+	}
+	return nil
 }
 
 // EqualsRefOfCaseExpr does deep equals between the two objects.
@@ -1601,6 +2161,23 @@ func CloneRefOfCaseExpr(n *CaseExpr) *CaseExpr {
 	out.Whens = CloneSliceOfRefOfWhen(n.Whens)
 	out.Else = CloneExpr(n.Else)
 	return &out
+}
+
+// VisitRefOfCaseExpr will visit all parts of the AST
+func VisitRefOfCaseExpr(in *CaseExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Expr, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.Else, f); err != nil {
+		return err
+	}
+	return nil
 }
 
 // EqualsRefOfChangeColumn does deep equals between the two objects.
@@ -1630,6 +2207,29 @@ func CloneRefOfChangeColumn(n *ChangeColumn) *ChangeColumn {
 	return &out
 }
 
+// VisitRefOfChangeColumn will visit all parts of the AST
+func VisitRefOfChangeColumn(in *ChangeColumn, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitRefOfColName(in.OldColumn, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfColumnDefinition(in.NewColDefinition, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfColName(in.First, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfColName(in.After, f); err != nil {
+		return err
+	}
+	return nil
+}
+
 // EqualsRefOfCheckConstraintDefinition does deep equals between the two objects.
 func EqualsRefOfCheckConstraintDefinition(a, b *CheckConstraintDefinition) bool {
 	if a == b {
@@ -1652,6 +2252,20 @@ func CloneRefOfCheckConstraintDefinition(n *CheckConstraintDefinition) *CheckCon
 	return &out
 }
 
+// VisitRefOfCheckConstraintDefinition will visit all parts of the AST
+func VisitRefOfCheckConstraintDefinition(in *CheckConstraintDefinition, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Expr, f); err != nil {
+		return err
+	}
+	return nil
+}
+
 // EqualsColIdent does deep equals between the two objects.
 func EqualsColIdent(a, b ColIdent) bool {
 	return a.val == b.val &&
@@ -1662,6 +2276,14 @@ func EqualsColIdent(a, b ColIdent) bool {
 // CloneColIdent creates a deep clone of the input.
 func CloneColIdent(n ColIdent) ColIdent {
 	return *CloneRefOfColIdent(&n)
+}
+
+// VisitColIdent will visit all parts of the AST
+func VisitColIdent(in ColIdent, f Visit) error {
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	return nil
 }
 
 // EqualsRefOfColName does deep equals between the two objects.
@@ -1679,6 +2301,23 @@ func EqualsRefOfColName(a, b *ColName) bool {
 // CloneRefOfColName creates a deep clone of the input.
 func CloneRefOfColName(n *ColName) *ColName {
 	return n
+}
+
+// VisitRefOfColName will visit all parts of the AST
+func VisitRefOfColName(in *ColName, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitColIdent(in.Name, f); err != nil {
+		return err
+	}
+	if err := VisitTableName(in.Qualifier, f); err != nil {
+		return err
+	}
+	return nil
 }
 
 // EqualsRefOfCollateExpr does deep equals between the two objects.
@@ -1703,6 +2342,20 @@ func CloneRefOfCollateExpr(n *CollateExpr) *CollateExpr {
 	return &out
 }
 
+// VisitRefOfCollateExpr will visit all parts of the AST
+func VisitRefOfCollateExpr(in *CollateExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Expr, f); err != nil {
+		return err
+	}
+	return nil
+}
+
 // EqualsRefOfColumnDefinition does deep equals between the two objects.
 func EqualsRefOfColumnDefinition(a, b *ColumnDefinition) bool {
 	if a == b {
@@ -1724,6 +2377,20 @@ func CloneRefOfColumnDefinition(n *ColumnDefinition) *ColumnDefinition {
 	out.Name = CloneColIdent(n.Name)
 	out.Type = CloneColumnType(n.Type)
 	return &out
+}
+
+// VisitRefOfColumnDefinition will visit all parts of the AST
+func VisitRefOfColumnDefinition(in *ColumnDefinition, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitColIdent(in.Name, f); err != nil {
+		return err
+	}
+	return nil
 }
 
 // EqualsRefOfColumnType does deep equals between the two objects.
@@ -1758,6 +2425,23 @@ func CloneRefOfColumnType(n *ColumnType) *ColumnType {
 	return &out
 }
 
+// VisitRefOfColumnType will visit all parts of the AST
+func VisitRefOfColumnType(in *ColumnType, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitRefOfLiteral(in.Length, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfLiteral(in.Scale, f); err != nil {
+		return err
+	}
+	return nil
+}
+
 // EqualsColumns does deep equals between the two objects.
 func EqualsColumns(a, b Columns) bool {
 	if len(a) != len(b) {
@@ -1780,6 +2464,22 @@ func CloneColumns(n Columns) Columns {
 	return res
 }
 
+// VisitColumns will visit all parts of the AST
+func VisitColumns(in Columns, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	for _, el := range in {
+		if err := VisitColIdent(el, f); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // EqualsComments does deep equals between the two objects.
 func EqualsComments(a, b Comments) bool {
 	if len(a) != len(b) {
@@ -1800,6 +2500,12 @@ func CloneComments(n Comments) Comments {
 	return res
 }
 
+// VisitComments will visit all parts of the AST
+func VisitComments(in Comments, f Visit) error {
+	_, err := f(in)
+	return err
+}
+
 // EqualsRefOfCommit does deep equals between the two objects.
 func EqualsRefOfCommit(a, b *Commit) bool {
 	if a == b {
@@ -1818,6 +2524,17 @@ func CloneRefOfCommit(n *Commit) *Commit {
 	}
 	out := *n
 	return &out
+}
+
+// VisitRefOfCommit will visit all parts of the AST
+func VisitRefOfCommit(in *Commit, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	return nil
 }
 
 // EqualsRefOfComparisonExpr does deep equals between the two objects.
@@ -1846,6 +2563,26 @@ func CloneRefOfComparisonExpr(n *ComparisonExpr) *ComparisonExpr {
 	return &out
 }
 
+// VisitRefOfComparisonExpr will visit all parts of the AST
+func VisitRefOfComparisonExpr(in *ComparisonExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Left, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.Right, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.Escape, f); err != nil {
+		return err
+	}
+	return nil
+}
+
 // EqualsRefOfConstraintDefinition does deep equals between the two objects.
 func EqualsRefOfConstraintDefinition(a, b *ConstraintDefinition) bool {
 	if a == b {
@@ -1866,6 +2603,20 @@ func CloneRefOfConstraintDefinition(n *ConstraintDefinition) *ConstraintDefiniti
 	out := *n
 	out.Details = CloneConstraintInfo(n.Details)
 	return &out
+}
+
+// VisitRefOfConstraintDefinition will visit all parts of the AST
+func VisitRefOfConstraintDefinition(in *ConstraintDefinition, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitConstraintInfo(in.Details, f); err != nil {
+		return err
+	}
+	return nil
 }
 
 // EqualsRefOfConvertExpr does deep equals between the two objects.
@@ -1889,6 +2640,23 @@ func CloneRefOfConvertExpr(n *ConvertExpr) *ConvertExpr {
 	out.Expr = CloneExpr(n.Expr)
 	out.Type = CloneRefOfConvertType(n.Type)
 	return &out
+}
+
+// VisitRefOfConvertExpr will visit all parts of the AST
+func VisitRefOfConvertExpr(in *ConvertExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Expr, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfConvertType(in.Type, f); err != nil {
+		return err
+	}
+	return nil
 }
 
 // EqualsRefOfConvertType does deep equals between the two objects.
@@ -1917,6 +2685,23 @@ func CloneRefOfConvertType(n *ConvertType) *ConvertType {
 	return &out
 }
 
+// VisitRefOfConvertType will visit all parts of the AST
+func VisitRefOfConvertType(in *ConvertType, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitRefOfLiteral(in.Length, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfLiteral(in.Scale, f); err != nil {
+		return err
+	}
+	return nil
+}
+
 // EqualsRefOfConvertUsingExpr does deep equals between the two objects.
 func EqualsRefOfConvertUsingExpr(a, b *ConvertUsingExpr) bool {
 	if a == b {
@@ -1937,6 +2722,20 @@ func CloneRefOfConvertUsingExpr(n *ConvertUsingExpr) *ConvertUsingExpr {
 	out := *n
 	out.Expr = CloneExpr(n.Expr)
 	return &out
+}
+
+// VisitRefOfConvertUsingExpr will visit all parts of the AST
+func VisitRefOfConvertUsingExpr(in *ConvertUsingExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Expr, f); err != nil {
+		return err
+	}
+	return nil
 }
 
 // EqualsRefOfCreateDatabase does deep equals between the two objects.
@@ -1965,6 +2764,20 @@ func CloneRefOfCreateDatabase(n *CreateDatabase) *CreateDatabase {
 	return &out
 }
 
+// VisitRefOfCreateDatabase will visit all parts of the AST
+func VisitRefOfCreateDatabase(in *CreateDatabase, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitComments(in.Comments, f); err != nil {
+		return err
+	}
+	return nil
+}
+
 // EqualsRefOfCreateTable does deep equals between the two objects.
 func EqualsRefOfCreateTable(a, b *CreateTable) bool {
 	if a == b {
@@ -1991,6 +2804,26 @@ func CloneRefOfCreateTable(n *CreateTable) *CreateTable {
 	out.TableSpec = CloneRefOfTableSpec(n.TableSpec)
 	out.OptLike = CloneRefOfOptLike(n.OptLike)
 	return &out
+}
+
+// VisitRefOfCreateTable will visit all parts of the AST
+func VisitRefOfCreateTable(in *CreateTable, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitTableName(in.Table, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfTableSpec(in.TableSpec, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfOptLike(in.OptLike, f); err != nil {
+		return err
+	}
+	return nil
 }
 
 // EqualsRefOfCreateView does deep equals between the two objects.
@@ -2023,6 +2856,26 @@ func CloneRefOfCreateView(n *CreateView) *CreateView {
 	return &out
 }
 
+// VisitRefOfCreateView will visit all parts of the AST
+func VisitRefOfCreateView(in *CreateView, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitTableName(in.ViewName, f); err != nil {
+		return err
+	}
+	if err := VisitColumns(in.Columns, f); err != nil {
+		return err
+	}
+	if err := VisitSelectStatement(in.Select, f); err != nil {
+		return err
+	}
+	return nil
+}
+
 // EqualsRefOfCurTimeFuncExpr does deep equals between the two objects.
 func EqualsRefOfCurTimeFuncExpr(a, b *CurTimeFuncExpr) bool {
 	if a == b {
@@ -2046,6 +2899,23 @@ func CloneRefOfCurTimeFuncExpr(n *CurTimeFuncExpr) *CurTimeFuncExpr {
 	return &out
 }
 
+// VisitRefOfCurTimeFuncExpr will visit all parts of the AST
+func VisitRefOfCurTimeFuncExpr(in *CurTimeFuncExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitColIdent(in.Name, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.Fsp, f); err != nil {
+		return err
+	}
+	return nil
+}
+
 // EqualsRefOfDefault does deep equals between the two objects.
 func EqualsRefOfDefault(a, b *Default) bool {
 	if a == b {
@@ -2064,6 +2934,17 @@ func CloneRefOfDefault(n *Default) *Default {
 	}
 	out := *n
 	return &out
+}
+
+// VisitRefOfDefault will visit all parts of the AST
+func VisitRefOfDefault(in *Default, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	return nil
 }
 
 // EqualsRefOfDelete does deep equals between the two objects.
@@ -2100,6 +2981,38 @@ func CloneRefOfDelete(n *Delete) *Delete {
 	return &out
 }
 
+// VisitRefOfDelete will visit all parts of the AST
+func VisitRefOfDelete(in *Delete, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitComments(in.Comments, f); err != nil {
+		return err
+	}
+	if err := VisitTableNames(in.Targets, f); err != nil {
+		return err
+	}
+	if err := VisitTableExprs(in.TableExprs, f); err != nil {
+		return err
+	}
+	if err := VisitPartitions(in.Partitions, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfWhere(in.Where, f); err != nil {
+		return err
+	}
+	if err := VisitOrderBy(in.OrderBy, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfLimit(in.Limit, f); err != nil {
+		return err
+	}
+	return nil
+}
+
 // EqualsRefOfDerivedTable does deep equals between the two objects.
 func EqualsRefOfDerivedTable(a, b *DerivedTable) bool {
 	if a == b {
@@ -2121,6 +3034,20 @@ func CloneRefOfDerivedTable(n *DerivedTable) *DerivedTable {
 	return &out
 }
 
+// VisitRefOfDerivedTable will visit all parts of the AST
+func VisitRefOfDerivedTable(in *DerivedTable, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitSelectStatement(in.Select, f); err != nil {
+		return err
+	}
+	return nil
+}
+
 // EqualsRefOfDropColumn does deep equals between the two objects.
 func EqualsRefOfDropColumn(a, b *DropColumn) bool {
 	if a == b {
@@ -2140,6 +3067,20 @@ func CloneRefOfDropColumn(n *DropColumn) *DropColumn {
 	out := *n
 	out.Name = CloneRefOfColName(n.Name)
 	return &out
+}
+
+// VisitRefOfDropColumn will visit all parts of the AST
+func VisitRefOfDropColumn(in *DropColumn, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitRefOfColName(in.Name, f); err != nil {
+		return err
+	}
+	return nil
 }
 
 // EqualsRefOfDropDatabase does deep equals between the two objects.
@@ -2165,6 +3106,20 @@ func CloneRefOfDropDatabase(n *DropDatabase) *DropDatabase {
 	return &out
 }
 
+// VisitRefOfDropDatabase will visit all parts of the AST
+func VisitRefOfDropDatabase(in *DropDatabase, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitComments(in.Comments, f); err != nil {
+		return err
+	}
+	return nil
+}
+
 // EqualsRefOfDropKey does deep equals between the two objects.
 func EqualsRefOfDropKey(a, b *DropKey) bool {
 	if a == b {
@@ -2184,6 +3139,17 @@ func CloneRefOfDropKey(n *DropKey) *DropKey {
 	}
 	out := *n
 	return &out
+}
+
+// VisitRefOfDropKey will visit all parts of the AST
+func VisitRefOfDropKey(in *DropKey, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	return nil
 }
 
 // EqualsRefOfDropTable does deep equals between the two objects.
@@ -2209,6 +3175,20 @@ func CloneRefOfDropTable(n *DropTable) *DropTable {
 	return &out
 }
 
+// VisitRefOfDropTable will visit all parts of the AST
+func VisitRefOfDropTable(in *DropTable, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitTableNames(in.FromTables, f); err != nil {
+		return err
+	}
+	return nil
+}
+
 // EqualsRefOfDropView does deep equals between the two objects.
 func EqualsRefOfDropView(a, b *DropView) bool {
 	if a == b {
@@ -2231,6 +3211,20 @@ func CloneRefOfDropView(n *DropView) *DropView {
 	return &out
 }
 
+// VisitRefOfDropView will visit all parts of the AST
+func VisitRefOfDropView(in *DropView, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitTableNames(in.FromTables, f); err != nil {
+		return err
+	}
+	return nil
+}
+
 // EqualsRefOfExistsExpr does deep equals between the two objects.
 func EqualsRefOfExistsExpr(a, b *ExistsExpr) bool {
 	if a == b {
@@ -2250,6 +3244,20 @@ func CloneRefOfExistsExpr(n *ExistsExpr) *ExistsExpr {
 	out := *n
 	out.Subquery = CloneRefOfSubquery(n.Subquery)
 	return &out
+}
+
+// VisitRefOfExistsExpr will visit all parts of the AST
+func VisitRefOfExistsExpr(in *ExistsExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitRefOfSubquery(in.Subquery, f); err != nil {
+		return err
+	}
+	return nil
 }
 
 // EqualsRefOfExplainStmt does deep equals between the two objects.
@@ -2274,6 +3282,20 @@ func CloneRefOfExplainStmt(n *ExplainStmt) *ExplainStmt {
 	return &out
 }
 
+// VisitRefOfExplainStmt will visit all parts of the AST
+func VisitRefOfExplainStmt(in *ExplainStmt, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitStatement(in.Statement, f); err != nil {
+		return err
+	}
+	return nil
+}
+
 // EqualsRefOfExplainTab does deep equals between the two objects.
 func EqualsRefOfExplainTab(a, b *ExplainTab) bool {
 	if a == b {
@@ -2296,6 +3318,20 @@ func CloneRefOfExplainTab(n *ExplainTab) *ExplainTab {
 	return &out
 }
 
+// VisitRefOfExplainTab will visit all parts of the AST
+func VisitRefOfExplainTab(in *ExplainTab, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitTableName(in.Table, f); err != nil {
+		return err
+	}
+	return nil
+}
+
 // EqualsExprs does deep equals between the two objects.
 func EqualsExprs(a, b Exprs) bool {
 	if len(a) != len(b) {
@@ -2316,6 +3352,22 @@ func CloneExprs(n Exprs) Exprs {
 		res = append(res, CloneExpr(x))
 	}
 	return res
+}
+
+// VisitExprs will visit all parts of the AST
+func VisitExprs(in Exprs, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	for _, el := range in {
+		if err := VisitExpr(el, f); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // EqualsRefOfFlush does deep equals between the two objects.
@@ -2344,6 +3396,20 @@ func CloneRefOfFlush(n *Flush) *Flush {
 	return &out
 }
 
+// VisitRefOfFlush will visit all parts of the AST
+func VisitRefOfFlush(in *Flush, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitTableNames(in.TableNames, f); err != nil {
+		return err
+	}
+	return nil
+}
+
 // EqualsRefOfForce does deep equals between the two objects.
 func EqualsRefOfForce(a, b *Force) bool {
 	if a == b {
@@ -2362,6 +3428,17 @@ func CloneRefOfForce(n *Force) *Force {
 	}
 	out := *n
 	return &out
+}
+
+// VisitRefOfForce will visit all parts of the AST
+func VisitRefOfForce(in *Force, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	return nil
 }
 
 // EqualsRefOfForeignKeyDefinition does deep equals between the two objects.
@@ -2391,6 +3468,32 @@ func CloneRefOfForeignKeyDefinition(n *ForeignKeyDefinition) *ForeignKeyDefiniti
 	return &out
 }
 
+// VisitRefOfForeignKeyDefinition will visit all parts of the AST
+func VisitRefOfForeignKeyDefinition(in *ForeignKeyDefinition, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitColumns(in.Source, f); err != nil {
+		return err
+	}
+	if err := VisitTableName(in.ReferencedTable, f); err != nil {
+		return err
+	}
+	if err := VisitColumns(in.ReferencedColumns, f); err != nil {
+		return err
+	}
+	if err := VisitReferenceAction(in.OnDelete, f); err != nil {
+		return err
+	}
+	if err := VisitReferenceAction(in.OnUpdate, f); err != nil {
+		return err
+	}
+	return nil
+}
+
 // EqualsRefOfFuncExpr does deep equals between the two objects.
 func EqualsRefOfFuncExpr(a, b *FuncExpr) bool {
 	if a == b {
@@ -2417,6 +3520,26 @@ func CloneRefOfFuncExpr(n *FuncExpr) *FuncExpr {
 	return &out
 }
 
+// VisitRefOfFuncExpr will visit all parts of the AST
+func VisitRefOfFuncExpr(in *FuncExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitTableIdent(in.Qualifier, f); err != nil {
+		return err
+	}
+	if err := VisitColIdent(in.Name, f); err != nil {
+		return err
+	}
+	if err := VisitSelectExprs(in.Exprs, f); err != nil {
+		return err
+	}
+	return nil
+}
+
 // EqualsGroupBy does deep equals between the two objects.
 func EqualsGroupBy(a, b GroupBy) bool {
 	if len(a) != len(b) {
@@ -2437,6 +3560,22 @@ func CloneGroupBy(n GroupBy) GroupBy {
 		res = append(res, CloneExpr(x))
 	}
 	return res
+}
+
+// VisitGroupBy will visit all parts of the AST
+func VisitGroupBy(in GroupBy, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	for _, el := range in {
+		if err := VisitExpr(el, f); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // EqualsRefOfGroupConcatExpr does deep equals between the two objects.
@@ -2466,6 +3605,26 @@ func CloneRefOfGroupConcatExpr(n *GroupConcatExpr) *GroupConcatExpr {
 	return &out
 }
 
+// VisitRefOfGroupConcatExpr will visit all parts of the AST
+func VisitRefOfGroupConcatExpr(in *GroupConcatExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitSelectExprs(in.Exprs, f); err != nil {
+		return err
+	}
+	if err := VisitOrderBy(in.OrderBy, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfLimit(in.Limit, f); err != nil {
+		return err
+	}
+	return nil
+}
+
 // EqualsRefOfIndexDefinition does deep equals between the two objects.
 func EqualsRefOfIndexDefinition(a, b *IndexDefinition) bool {
 	if a == b {
@@ -2491,6 +3650,20 @@ func CloneRefOfIndexDefinition(n *IndexDefinition) *IndexDefinition {
 	return &out
 }
 
+// VisitRefOfIndexDefinition will visit all parts of the AST
+func VisitRefOfIndexDefinition(in *IndexDefinition, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitRefOfIndexInfo(in.Info, f); err != nil {
+		return err
+	}
+	return nil
+}
+
 // EqualsRefOfIndexHints does deep equals between the two objects.
 func EqualsRefOfIndexHints(a, b *IndexHints) bool {
 	if a == b {
@@ -2511,6 +3684,17 @@ func CloneRefOfIndexHints(n *IndexHints) *IndexHints {
 	out := *n
 	out.Indexes = CloneSliceOfColIdent(n.Indexes)
 	return &out
+}
+
+// VisitRefOfIndexHints will visit all parts of the AST
+func VisitRefOfIndexHints(in *IndexHints, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	return nil
 }
 
 // EqualsRefOfIndexInfo does deep equals between the two objects.
@@ -2539,6 +3723,23 @@ func CloneRefOfIndexInfo(n *IndexInfo) *IndexInfo {
 	out.Name = CloneColIdent(n.Name)
 	out.ConstraintName = CloneColIdent(n.ConstraintName)
 	return &out
+}
+
+// VisitRefOfIndexInfo will visit all parts of the AST
+func VisitRefOfIndexInfo(in *IndexInfo, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitColIdent(in.Name, f); err != nil {
+		return err
+	}
+	if err := VisitColIdent(in.ConstraintName, f); err != nil {
+		return err
+	}
+	return nil
 }
 
 // EqualsRefOfInsert does deep equals between the two objects.
@@ -2574,6 +3775,35 @@ func CloneRefOfInsert(n *Insert) *Insert {
 	return &out
 }
 
+// VisitRefOfInsert will visit all parts of the AST
+func VisitRefOfInsert(in *Insert, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitComments(in.Comments, f); err != nil {
+		return err
+	}
+	if err := VisitTableName(in.Table, f); err != nil {
+		return err
+	}
+	if err := VisitPartitions(in.Partitions, f); err != nil {
+		return err
+	}
+	if err := VisitColumns(in.Columns, f); err != nil {
+		return err
+	}
+	if err := VisitInsertRows(in.Rows, f); err != nil {
+		return err
+	}
+	if err := VisitOnDup(in.OnDup, f); err != nil {
+		return err
+	}
+	return nil
+}
+
 // EqualsRefOfIntervalExpr does deep equals between the two objects.
 func EqualsRefOfIntervalExpr(a, b *IntervalExpr) bool {
 	if a == b {
@@ -2594,6 +3824,20 @@ func CloneRefOfIntervalExpr(n *IntervalExpr) *IntervalExpr {
 	out := *n
 	out.Expr = CloneExpr(n.Expr)
 	return &out
+}
+
+// VisitRefOfIntervalExpr will visit all parts of the AST
+func VisitRefOfIntervalExpr(in *IntervalExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Expr, f); err != nil {
+		return err
+	}
+	return nil
 }
 
 // EqualsRefOfIsExpr does deep equals between the two objects.
@@ -2618,6 +3862,20 @@ func CloneRefOfIsExpr(n *IsExpr) *IsExpr {
 	return &out
 }
 
+// VisitRefOfIsExpr will visit all parts of the AST
+func VisitRefOfIsExpr(in *IsExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Expr, f); err != nil {
+		return err
+	}
+	return nil
+}
+
 // EqualsJoinCondition does deep equals between the two objects.
 func EqualsJoinCondition(a, b JoinCondition) bool {
 	return EqualsExpr(a.On, b.On) &&
@@ -2627,6 +3885,20 @@ func EqualsJoinCondition(a, b JoinCondition) bool {
 // CloneJoinCondition creates a deep clone of the input.
 func CloneJoinCondition(n JoinCondition) JoinCondition {
 	return *CloneRefOfJoinCondition(&n)
+}
+
+// VisitJoinCondition will visit all parts of the AST
+func VisitJoinCondition(in JoinCondition, f Visit) error {
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.On, f); err != nil {
+		return err
+	}
+	if err := VisitColumns(in.Using, f); err != nil {
+		return err
+	}
+	return nil
 }
 
 // EqualsRefOfJoinTableExpr does deep equals between the two objects.
@@ -2655,6 +3927,26 @@ func CloneRefOfJoinTableExpr(n *JoinTableExpr) *JoinTableExpr {
 	return &out
 }
 
+// VisitRefOfJoinTableExpr will visit all parts of the AST
+func VisitRefOfJoinTableExpr(in *JoinTableExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitTableExpr(in.LeftExpr, f); err != nil {
+		return err
+	}
+	if err := VisitTableExpr(in.RightExpr, f); err != nil {
+		return err
+	}
+	if err := VisitJoinCondition(in.Condition, f); err != nil {
+		return err
+	}
+	return nil
+}
+
 // EqualsRefOfKeyState does deep equals between the two objects.
 func EqualsRefOfKeyState(a, b *KeyState) bool {
 	if a == b {
@@ -2673,6 +3965,17 @@ func CloneRefOfKeyState(n *KeyState) *KeyState {
 	}
 	out := *n
 	return &out
+}
+
+// VisitRefOfKeyState will visit all parts of the AST
+func VisitRefOfKeyState(in *KeyState, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	return nil
 }
 
 // EqualsRefOfLimit does deep equals between the two objects.
@@ -2698,6 +4001,23 @@ func CloneRefOfLimit(n *Limit) *Limit {
 	return &out
 }
 
+// VisitRefOfLimit will visit all parts of the AST
+func VisitRefOfLimit(in *Limit, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Offset, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.Rowcount, f); err != nil {
+		return err
+	}
+	return nil
+}
+
 // EqualsListArg does deep equals between the two objects.
 func EqualsListArg(a, b ListArg) bool {
 	if len(a) != len(b) {
@@ -2716,6 +4036,12 @@ func CloneListArg(n ListArg) ListArg {
 	res := make(ListArg, 0, len(n))
 	copy(res, n)
 	return res
+}
+
+// VisitListArg will visit all parts of the AST
+func VisitListArg(in ListArg, f Visit) error {
+	_, err := f(in)
+	return err
 }
 
 // EqualsRefOfLiteral does deep equals between the two objects.
@@ -2739,6 +4065,17 @@ func CloneRefOfLiteral(n *Literal) *Literal {
 	return &out
 }
 
+// VisitRefOfLiteral will visit all parts of the AST
+func VisitRefOfLiteral(in *Literal, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	return nil
+}
+
 // EqualsRefOfLoad does deep equals between the two objects.
 func EqualsRefOfLoad(a, b *Load) bool {
 	if a == b {
@@ -2757,6 +4094,17 @@ func CloneRefOfLoad(n *Load) *Load {
 	}
 	out := *n
 	return &out
+}
+
+// VisitRefOfLoad will visit all parts of the AST
+func VisitRefOfLoad(in *Load, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	return nil
 }
 
 // EqualsRefOfLockOption does deep equals between the two objects.
@@ -2779,6 +4127,17 @@ func CloneRefOfLockOption(n *LockOption) *LockOption {
 	return &out
 }
 
+// VisitRefOfLockOption will visit all parts of the AST
+func VisitRefOfLockOption(in *LockOption, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	return nil
+}
+
 // EqualsRefOfLockTables does deep equals between the two objects.
 func EqualsRefOfLockTables(a, b *LockTables) bool {
 	if a == b {
@@ -2798,6 +4157,17 @@ func CloneRefOfLockTables(n *LockTables) *LockTables {
 	out := *n
 	out.Tables = CloneTableAndLockTypes(n.Tables)
 	return &out
+}
+
+// VisitRefOfLockTables will visit all parts of the AST
+func VisitRefOfLockTables(in *LockTables, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	return nil
 }
 
 // EqualsRefOfMatchExpr does deep equals between the two objects.
@@ -2822,6 +4192,23 @@ func CloneRefOfMatchExpr(n *MatchExpr) *MatchExpr {
 	out.Columns = CloneSelectExprs(n.Columns)
 	out.Expr = CloneExpr(n.Expr)
 	return &out
+}
+
+// VisitRefOfMatchExpr will visit all parts of the AST
+func VisitRefOfMatchExpr(in *MatchExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitSelectExprs(in.Columns, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.Expr, f); err != nil {
+		return err
+	}
+	return nil
 }
 
 // EqualsRefOfModifyColumn does deep equals between the two objects.
@@ -2849,6 +4236,26 @@ func CloneRefOfModifyColumn(n *ModifyColumn) *ModifyColumn {
 	return &out
 }
 
+// VisitRefOfModifyColumn will visit all parts of the AST
+func VisitRefOfModifyColumn(in *ModifyColumn, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitRefOfColumnDefinition(in.NewColDefinition, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfColName(in.First, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfColName(in.After, f); err != nil {
+		return err
+	}
+	return nil
+}
+
 // EqualsRefOfNextval does deep equals between the two objects.
 func EqualsRefOfNextval(a, b *Nextval) bool {
 	if a == b {
@@ -2868,6 +4275,20 @@ func CloneRefOfNextval(n *Nextval) *Nextval {
 	out := *n
 	out.Expr = CloneExpr(n.Expr)
 	return &out
+}
+
+// VisitRefOfNextval will visit all parts of the AST
+func VisitRefOfNextval(in *Nextval, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Expr, f); err != nil {
+		return err
+	}
+	return nil
 }
 
 // EqualsRefOfNotExpr does deep equals between the two objects.
@@ -2891,6 +4312,20 @@ func CloneRefOfNotExpr(n *NotExpr) *NotExpr {
 	return &out
 }
 
+// VisitRefOfNotExpr will visit all parts of the AST
+func VisitRefOfNotExpr(in *NotExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Expr, f); err != nil {
+		return err
+	}
+	return nil
+}
+
 // EqualsRefOfNullVal does deep equals between the two objects.
 func EqualsRefOfNullVal(a, b *NullVal) bool {
 	if a == b {
@@ -2909,6 +4344,17 @@ func CloneRefOfNullVal(n *NullVal) *NullVal {
 	}
 	out := *n
 	return &out
+}
+
+// VisitRefOfNullVal will visit all parts of the AST
+func VisitRefOfNullVal(in *NullVal, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	return nil
 }
 
 // EqualsOnDup does deep equals between the two objects.
@@ -2933,6 +4379,22 @@ func CloneOnDup(n OnDup) OnDup {
 	return res
 }
 
+// VisitOnDup will visit all parts of the AST
+func VisitOnDup(in OnDup, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	for _, el := range in {
+		if err := VisitRefOfUpdateExpr(el, f); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // EqualsRefOfOptLike does deep equals between the two objects.
 func EqualsRefOfOptLike(a, b *OptLike) bool {
 	if a == b {
@@ -2952,6 +4414,20 @@ func CloneRefOfOptLike(n *OptLike) *OptLike {
 	out := *n
 	out.LikeTable = CloneTableName(n.LikeTable)
 	return &out
+}
+
+// VisitRefOfOptLike will visit all parts of the AST
+func VisitRefOfOptLike(in *OptLike, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitTableName(in.LikeTable, f); err != nil {
+		return err
+	}
+	return nil
 }
 
 // EqualsRefOfOrExpr does deep equals between the two objects.
@@ -2977,6 +4453,23 @@ func CloneRefOfOrExpr(n *OrExpr) *OrExpr {
 	return &out
 }
 
+// VisitRefOfOrExpr will visit all parts of the AST
+func VisitRefOfOrExpr(in *OrExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Left, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.Right, f); err != nil {
+		return err
+	}
+	return nil
+}
+
 // EqualsRefOfOrder does deep equals between the two objects.
 func EqualsRefOfOrder(a, b *Order) bool {
 	if a == b {
@@ -2997,6 +4490,20 @@ func CloneRefOfOrder(n *Order) *Order {
 	out := *n
 	out.Expr = CloneExpr(n.Expr)
 	return &out
+}
+
+// VisitRefOfOrder will visit all parts of the AST
+func VisitRefOfOrder(in *Order, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Expr, f); err != nil {
+		return err
+	}
+	return nil
 }
 
 // EqualsOrderBy does deep equals between the two objects.
@@ -3021,6 +4528,22 @@ func CloneOrderBy(n OrderBy) OrderBy {
 	return res
 }
 
+// VisitOrderBy will visit all parts of the AST
+func VisitOrderBy(in OrderBy, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	for _, el := range in {
+		if err := VisitRefOfOrder(el, f); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // EqualsRefOfOrderByOption does deep equals between the two objects.
 func EqualsRefOfOrderByOption(a, b *OrderByOption) bool {
 	if a == b {
@@ -3040,6 +4563,20 @@ func CloneRefOfOrderByOption(n *OrderByOption) *OrderByOption {
 	out := *n
 	out.Cols = CloneColumns(n.Cols)
 	return &out
+}
+
+// VisitRefOfOrderByOption will visit all parts of the AST
+func VisitRefOfOrderByOption(in *OrderByOption, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitColumns(in.Cols, f); err != nil {
+		return err
+	}
+	return nil
 }
 
 // EqualsRefOfOtherAdmin does deep equals between the two objects.
@@ -3062,6 +4599,17 @@ func CloneRefOfOtherAdmin(n *OtherAdmin) *OtherAdmin {
 	return &out
 }
 
+// VisitRefOfOtherAdmin will visit all parts of the AST
+func VisitRefOfOtherAdmin(in *OtherAdmin, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	return nil
+}
+
 // EqualsRefOfOtherRead does deep equals between the two objects.
 func EqualsRefOfOtherRead(a, b *OtherRead) bool {
 	if a == b {
@@ -3080,6 +4628,17 @@ func CloneRefOfOtherRead(n *OtherRead) *OtherRead {
 	}
 	out := *n
 	return &out
+}
+
+// VisitRefOfOtherRead will visit all parts of the AST
+func VisitRefOfOtherRead(in *OtherRead, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	return nil
 }
 
 // EqualsRefOfParenSelect does deep equals between the two objects.
@@ -3103,6 +4662,20 @@ func CloneRefOfParenSelect(n *ParenSelect) *ParenSelect {
 	return &out
 }
 
+// VisitRefOfParenSelect will visit all parts of the AST
+func VisitRefOfParenSelect(in *ParenSelect, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitSelectStatement(in.Select, f); err != nil {
+		return err
+	}
+	return nil
+}
+
 // EqualsRefOfParenTableExpr does deep equals between the two objects.
 func EqualsRefOfParenTableExpr(a, b *ParenTableExpr) bool {
 	if a == b {
@@ -3122,6 +4695,20 @@ func CloneRefOfParenTableExpr(n *ParenTableExpr) *ParenTableExpr {
 	out := *n
 	out.Exprs = CloneTableExprs(n.Exprs)
 	return &out
+}
+
+// VisitRefOfParenTableExpr will visit all parts of the AST
+func VisitRefOfParenTableExpr(in *ParenTableExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitTableExprs(in.Exprs, f); err != nil {
+		return err
+	}
+	return nil
 }
 
 // EqualsRefOfPartitionDefinition does deep equals between the two objects.
@@ -3146,6 +4733,23 @@ func CloneRefOfPartitionDefinition(n *PartitionDefinition) *PartitionDefinition 
 	out.Name = CloneColIdent(n.Name)
 	out.Limit = CloneExpr(n.Limit)
 	return &out
+}
+
+// VisitRefOfPartitionDefinition will visit all parts of the AST
+func VisitRefOfPartitionDefinition(in *PartitionDefinition, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitColIdent(in.Name, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.Limit, f); err != nil {
+		return err
+	}
+	return nil
 }
 
 // EqualsRefOfPartitionSpec does deep equals between the two objects.
@@ -3178,6 +4782,26 @@ func CloneRefOfPartitionSpec(n *PartitionSpec) *PartitionSpec {
 	return &out
 }
 
+// VisitRefOfPartitionSpec will visit all parts of the AST
+func VisitRefOfPartitionSpec(in *PartitionSpec, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitPartitions(in.Names, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfLiteral(in.Number, f); err != nil {
+		return err
+	}
+	if err := VisitTableName(in.TableName, f); err != nil {
+		return err
+	}
+	return nil
+}
+
 // EqualsPartitions does deep equals between the two objects.
 func EqualsPartitions(a, b Partitions) bool {
 	if len(a) != len(b) {
@@ -3198,6 +4822,22 @@ func ClonePartitions(n Partitions) Partitions {
 		res = append(res, CloneColIdent(x))
 	}
 	return res
+}
+
+// VisitPartitions will visit all parts of the AST
+func VisitPartitions(in Partitions, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	for _, el := range in {
+		if err := VisitColIdent(el, f); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // EqualsRefOfRangeCond does deep equals between the two objects.
@@ -3226,6 +4866,26 @@ func CloneRefOfRangeCond(n *RangeCond) *RangeCond {
 	return &out
 }
 
+// VisitRefOfRangeCond will visit all parts of the AST
+func VisitRefOfRangeCond(in *RangeCond, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Left, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.From, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.To, f); err != nil {
+		return err
+	}
+	return nil
+}
+
 // EqualsRefOfRelease does deep equals between the two objects.
 func EqualsRefOfRelease(a, b *Release) bool {
 	if a == b {
@@ -3245,6 +4905,20 @@ func CloneRefOfRelease(n *Release) *Release {
 	out := *n
 	out.Name = CloneColIdent(n.Name)
 	return &out
+}
+
+// VisitRefOfRelease will visit all parts of the AST
+func VisitRefOfRelease(in *Release, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitColIdent(in.Name, f); err != nil {
+		return err
+	}
+	return nil
 }
 
 // EqualsRefOfRenameIndex does deep equals between the two objects.
@@ -3268,6 +4942,17 @@ func CloneRefOfRenameIndex(n *RenameIndex) *RenameIndex {
 	return &out
 }
 
+// VisitRefOfRenameIndex will visit all parts of the AST
+func VisitRefOfRenameIndex(in *RenameIndex, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	return nil
+}
+
 // EqualsRefOfRenameTable does deep equals between the two objects.
 func EqualsRefOfRenameTable(a, b *RenameTable) bool {
 	if a == b {
@@ -3287,6 +4972,17 @@ func CloneRefOfRenameTable(n *RenameTable) *RenameTable {
 	out := *n
 	out.TablePairs = CloneSliceOfRefOfRenameTablePair(n.TablePairs)
 	return &out
+}
+
+// VisitRefOfRenameTable will visit all parts of the AST
+func VisitRefOfRenameTable(in *RenameTable, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	return nil
 }
 
 // EqualsRefOfRenameTableName does deep equals between the two objects.
@@ -3310,6 +5006,20 @@ func CloneRefOfRenameTableName(n *RenameTableName) *RenameTableName {
 	return &out
 }
 
+// VisitRefOfRenameTableName will visit all parts of the AST
+func VisitRefOfRenameTableName(in *RenameTableName, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitTableName(in.Table, f); err != nil {
+		return err
+	}
+	return nil
+}
+
 // EqualsRefOfRollback does deep equals between the two objects.
 func EqualsRefOfRollback(a, b *Rollback) bool {
 	if a == b {
@@ -3328,6 +5038,17 @@ func CloneRefOfRollback(n *Rollback) *Rollback {
 	}
 	out := *n
 	return &out
+}
+
+// VisitRefOfRollback will visit all parts of the AST
+func VisitRefOfRollback(in *Rollback, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	return nil
 }
 
 // EqualsRefOfSRollback does deep equals between the two objects.
@@ -3351,6 +5072,20 @@ func CloneRefOfSRollback(n *SRollback) *SRollback {
 	return &out
 }
 
+// VisitRefOfSRollback will visit all parts of the AST
+func VisitRefOfSRollback(in *SRollback, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitColIdent(in.Name, f); err != nil {
+		return err
+	}
+	return nil
+}
+
 // EqualsRefOfSavepoint does deep equals between the two objects.
 func EqualsRefOfSavepoint(a, b *Savepoint) bool {
 	if a == b {
@@ -3370,6 +5105,20 @@ func CloneRefOfSavepoint(n *Savepoint) *Savepoint {
 	out := *n
 	out.Name = CloneColIdent(n.Name)
 	return &out
+}
+
+// VisitRefOfSavepoint will visit all parts of the AST
+func VisitRefOfSavepoint(in *Savepoint, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitColIdent(in.Name, f); err != nil {
+		return err
+	}
+	return nil
 }
 
 // EqualsRefOfSelect does deep equals between the two objects.
@@ -3415,6 +5164,44 @@ func CloneRefOfSelect(n *Select) *Select {
 	return &out
 }
 
+// VisitRefOfSelect will visit all parts of the AST
+func VisitRefOfSelect(in *Select, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitComments(in.Comments, f); err != nil {
+		return err
+	}
+	if err := VisitSelectExprs(in.SelectExprs, f); err != nil {
+		return err
+	}
+	if err := VisitTableExprs(in.From, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfWhere(in.Where, f); err != nil {
+		return err
+	}
+	if err := VisitGroupBy(in.GroupBy, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfWhere(in.Having, f); err != nil {
+		return err
+	}
+	if err := VisitOrderBy(in.OrderBy, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfLimit(in.Limit, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfSelectInto(in.Into, f); err != nil {
+		return err
+	}
+	return nil
+}
+
 // EqualsSelectExprs does deep equals between the two objects.
 func EqualsSelectExprs(a, b SelectExprs) bool {
 	if len(a) != len(b) {
@@ -3435,6 +5222,22 @@ func CloneSelectExprs(n SelectExprs) SelectExprs {
 		res = append(res, CloneSelectExpr(x))
 	}
 	return res
+}
+
+// VisitSelectExprs will visit all parts of the AST
+func VisitSelectExprs(in SelectExprs, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	for _, el := range in {
+		if err := VisitSelectExpr(el, f); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // EqualsRefOfSelectInto does deep equals between the two objects.
@@ -3463,6 +5266,17 @@ func CloneRefOfSelectInto(n *SelectInto) *SelectInto {
 	return &out
 }
 
+// VisitRefOfSelectInto will visit all parts of the AST
+func VisitRefOfSelectInto(in *SelectInto, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	return nil
+}
+
 // EqualsRefOfSet does deep equals between the two objects.
 func EqualsRefOfSet(a, b *Set) bool {
 	if a == b {
@@ -3484,6 +5298,23 @@ func CloneRefOfSet(n *Set) *Set {
 	out.Comments = CloneComments(n.Comments)
 	out.Exprs = CloneSetExprs(n.Exprs)
 	return &out
+}
+
+// VisitRefOfSet will visit all parts of the AST
+func VisitRefOfSet(in *Set, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitComments(in.Comments, f); err != nil {
+		return err
+	}
+	if err := VisitSetExprs(in.Exprs, f); err != nil {
+		return err
+	}
+	return nil
 }
 
 // EqualsRefOfSetExpr does deep equals between the two objects.
@@ -3510,6 +5341,23 @@ func CloneRefOfSetExpr(n *SetExpr) *SetExpr {
 	return &out
 }
 
+// VisitRefOfSetExpr will visit all parts of the AST
+func VisitRefOfSetExpr(in *SetExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitColIdent(in.Name, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.Expr, f); err != nil {
+		return err
+	}
+	return nil
+}
+
 // EqualsSetExprs does deep equals between the two objects.
 func EqualsSetExprs(a, b SetExprs) bool {
 	if len(a) != len(b) {
@@ -3530,6 +5378,22 @@ func CloneSetExprs(n SetExprs) SetExprs {
 		res = append(res, CloneRefOfSetExpr(x))
 	}
 	return res
+}
+
+// VisitSetExprs will visit all parts of the AST
+func VisitSetExprs(in SetExprs, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	for _, el := range in {
+		if err := VisitRefOfSetExpr(el, f); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // EqualsRefOfSetTransaction does deep equals between the two objects.
@@ -3558,6 +5422,23 @@ func CloneRefOfSetTransaction(n *SetTransaction) *SetTransaction {
 	return &out
 }
 
+// VisitRefOfSetTransaction will visit all parts of the AST
+func VisitRefOfSetTransaction(in *SetTransaction, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitSQLNode(in.SQLNode, f); err != nil {
+		return err
+	}
+	if err := VisitComments(in.Comments, f); err != nil {
+		return err
+	}
+	return nil
+}
+
 // EqualsRefOfShow does deep equals between the two objects.
 func EqualsRefOfShow(a, b *Show) bool {
 	if a == b {
@@ -3577,6 +5458,20 @@ func CloneRefOfShow(n *Show) *Show {
 	out := *n
 	out.Internal = CloneShowInternal(n.Internal)
 	return &out
+}
+
+// VisitRefOfShow will visit all parts of the AST
+func VisitRefOfShow(in *Show, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitShowInternal(in.Internal, f); err != nil {
+		return err
+	}
+	return nil
 }
 
 // EqualsRefOfShowBasic does deep equals between the two objects.
@@ -3605,6 +5500,23 @@ func CloneRefOfShowBasic(n *ShowBasic) *ShowBasic {
 	return &out
 }
 
+// VisitRefOfShowBasic will visit all parts of the AST
+func VisitRefOfShowBasic(in *ShowBasic, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitTableName(in.Tbl, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfShowFilter(in.Filter, f); err != nil {
+		return err
+	}
+	return nil
+}
+
 // EqualsRefOfShowCreate does deep equals between the two objects.
 func EqualsRefOfShowCreate(a, b *ShowCreate) bool {
 	if a == b {
@@ -3627,6 +5539,20 @@ func CloneRefOfShowCreate(n *ShowCreate) *ShowCreate {
 	return &out
 }
 
+// VisitRefOfShowCreate will visit all parts of the AST
+func VisitRefOfShowCreate(in *ShowCreate, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitTableName(in.Op, f); err != nil {
+		return err
+	}
+	return nil
+}
+
 // EqualsRefOfShowFilter does deep equals between the two objects.
 func EqualsRefOfShowFilter(a, b *ShowFilter) bool {
 	if a == b {
@@ -3647,6 +5573,20 @@ func CloneRefOfShowFilter(n *ShowFilter) *ShowFilter {
 	out := *n
 	out.Filter = CloneExpr(n.Filter)
 	return &out
+}
+
+// VisitRefOfShowFilter will visit all parts of the AST
+func VisitRefOfShowFilter(in *ShowFilter, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Filter, f); err != nil {
+		return err
+	}
+	return nil
 }
 
 // EqualsRefOfShowLegacy does deep equals between the two objects.
@@ -3679,6 +5619,26 @@ func CloneRefOfShowLegacy(n *ShowLegacy) *ShowLegacy {
 	return &out
 }
 
+// VisitRefOfShowLegacy will visit all parts of the AST
+func VisitRefOfShowLegacy(in *ShowLegacy, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitTableName(in.OnTable, f); err != nil {
+		return err
+	}
+	if err := VisitTableName(in.Table, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.ShowCollationFilterOpt, f); err != nil {
+		return err
+	}
+	return nil
+}
+
 // EqualsRefOfStarExpr does deep equals between the two objects.
 func EqualsRefOfStarExpr(a, b *StarExpr) bool {
 	if a == b {
@@ -3698,6 +5658,20 @@ func CloneRefOfStarExpr(n *StarExpr) *StarExpr {
 	out := *n
 	out.TableName = CloneTableName(n.TableName)
 	return &out
+}
+
+// VisitRefOfStarExpr will visit all parts of the AST
+func VisitRefOfStarExpr(in *StarExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitTableName(in.TableName, f); err != nil {
+		return err
+	}
+	return nil
 }
 
 // EqualsRefOfStream does deep equals between the two objects.
@@ -3725,6 +5699,26 @@ func CloneRefOfStream(n *Stream) *Stream {
 	return &out
 }
 
+// VisitRefOfStream will visit all parts of the AST
+func VisitRefOfStream(in *Stream, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitComments(in.Comments, f); err != nil {
+		return err
+	}
+	if err := VisitSelectExpr(in.SelectExpr, f); err != nil {
+		return err
+	}
+	if err := VisitTableName(in.Table, f); err != nil {
+		return err
+	}
+	return nil
+}
+
 // EqualsRefOfSubquery does deep equals between the two objects.
 func EqualsRefOfSubquery(a, b *Subquery) bool {
 	if a == b {
@@ -3744,6 +5738,20 @@ func CloneRefOfSubquery(n *Subquery) *Subquery {
 	out := *n
 	out.Select = CloneSelectStatement(n.Select)
 	return &out
+}
+
+// VisitRefOfSubquery will visit all parts of the AST
+func VisitRefOfSubquery(in *Subquery, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitSelectStatement(in.Select, f); err != nil {
+		return err
+	}
+	return nil
 }
 
 // EqualsRefOfSubstrExpr does deep equals between the two objects.
@@ -3773,6 +5781,29 @@ func CloneRefOfSubstrExpr(n *SubstrExpr) *SubstrExpr {
 	return &out
 }
 
+// VisitRefOfSubstrExpr will visit all parts of the AST
+func VisitRefOfSubstrExpr(in *SubstrExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitRefOfColName(in.Name, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfLiteral(in.StrVal, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.From, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.To, f); err != nil {
+		return err
+	}
+	return nil
+}
+
 // EqualsTableExprs does deep equals between the two objects.
 func EqualsTableExprs(a, b TableExprs) bool {
 	if len(a) != len(b) {
@@ -3795,6 +5826,22 @@ func CloneTableExprs(n TableExprs) TableExprs {
 	return res
 }
 
+// VisitTableExprs will visit all parts of the AST
+func VisitTableExprs(in TableExprs, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	for _, el := range in {
+		if err := VisitTableExpr(el, f); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // EqualsTableIdent does deep equals between the two objects.
 func EqualsTableIdent(a, b TableIdent) bool {
 	return a.v == b.v
@@ -3803,6 +5850,14 @@ func EqualsTableIdent(a, b TableIdent) bool {
 // CloneTableIdent creates a deep clone of the input.
 func CloneTableIdent(n TableIdent) TableIdent {
 	return *CloneRefOfTableIdent(&n)
+}
+
+// VisitTableIdent will visit all parts of the AST
+func VisitTableIdent(in TableIdent, f Visit) error {
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	return nil
 }
 
 // EqualsTableName does deep equals between the two objects.
@@ -3814,6 +5869,20 @@ func EqualsTableName(a, b TableName) bool {
 // CloneTableName creates a deep clone of the input.
 func CloneTableName(n TableName) TableName {
 	return *CloneRefOfTableName(&n)
+}
+
+// VisitTableName will visit all parts of the AST
+func VisitTableName(in TableName, f Visit) error {
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitTableIdent(in.Name, f); err != nil {
+		return err
+	}
+	if err := VisitTableIdent(in.Qualifier, f); err != nil {
+		return err
+	}
+	return nil
 }
 
 // EqualsTableNames does deep equals between the two objects.
@@ -3838,6 +5907,22 @@ func CloneTableNames(n TableNames) TableNames {
 	return res
 }
 
+// VisitTableNames will visit all parts of the AST
+func VisitTableNames(in TableNames, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	for _, el := range in {
+		if err := VisitTableName(el, f); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // EqualsTableOptions does deep equals between the two objects.
 func EqualsTableOptions(a, b TableOptions) bool {
 	if len(a) != len(b) {
@@ -3858,6 +5943,12 @@ func CloneTableOptions(n TableOptions) TableOptions {
 		res = append(res, CloneRefOfTableOption(x))
 	}
 	return res
+}
+
+// VisitTableOptions will visit all parts of the AST
+func VisitTableOptions(in TableOptions, f Visit) error {
+	_, err := f(in)
+	return err
 }
 
 // EqualsRefOfTableSpec does deep equals between the two objects.
@@ -3887,6 +5978,20 @@ func CloneRefOfTableSpec(n *TableSpec) *TableSpec {
 	return &out
 }
 
+// VisitRefOfTableSpec will visit all parts of the AST
+func VisitRefOfTableSpec(in *TableSpec, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitTableOptions(in.Options, f); err != nil {
+		return err
+	}
+	return nil
+}
+
 // EqualsRefOfTablespaceOperation does deep equals between the two objects.
 func EqualsRefOfTablespaceOperation(a, b *TablespaceOperation) bool {
 	if a == b {
@@ -3905,6 +6010,17 @@ func CloneRefOfTablespaceOperation(n *TablespaceOperation) *TablespaceOperation 
 	}
 	out := *n
 	return &out
+}
+
+// VisitRefOfTablespaceOperation will visit all parts of the AST
+func VisitRefOfTablespaceOperation(in *TablespaceOperation, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	return nil
 }
 
 // EqualsRefOfTimestampFuncExpr does deep equals between the two objects.
@@ -3932,6 +6048,23 @@ func CloneRefOfTimestampFuncExpr(n *TimestampFuncExpr) *TimestampFuncExpr {
 	return &out
 }
 
+// VisitRefOfTimestampFuncExpr will visit all parts of the AST
+func VisitRefOfTimestampFuncExpr(in *TimestampFuncExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Expr1, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.Expr2, f); err != nil {
+		return err
+	}
+	return nil
+}
+
 // EqualsRefOfTruncateTable does deep equals between the two objects.
 func EqualsRefOfTruncateTable(a, b *TruncateTable) bool {
 	if a == b {
@@ -3951,6 +6084,20 @@ func CloneRefOfTruncateTable(n *TruncateTable) *TruncateTable {
 	out := *n
 	out.Table = CloneTableName(n.Table)
 	return &out
+}
+
+// VisitRefOfTruncateTable will visit all parts of the AST
+func VisitRefOfTruncateTable(in *TruncateTable, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitTableName(in.Table, f); err != nil {
+		return err
+	}
+	return nil
 }
 
 // EqualsRefOfUnaryExpr does deep equals between the two objects.
@@ -3973,6 +6120,20 @@ func CloneRefOfUnaryExpr(n *UnaryExpr) *UnaryExpr {
 	out := *n
 	out.Expr = CloneExpr(n.Expr)
 	return &out
+}
+
+// VisitRefOfUnaryExpr will visit all parts of the AST
+func VisitRefOfUnaryExpr(in *UnaryExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Expr, f); err != nil {
+		return err
+	}
+	return nil
 }
 
 // EqualsRefOfUnion does deep equals between the two objects.
@@ -4003,6 +6164,26 @@ func CloneRefOfUnion(n *Union) *Union {
 	return &out
 }
 
+// VisitRefOfUnion will visit all parts of the AST
+func VisitRefOfUnion(in *Union, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitSelectStatement(in.FirstStatement, f); err != nil {
+		return err
+	}
+	if err := VisitOrderBy(in.OrderBy, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfLimit(in.Limit, f); err != nil {
+		return err
+	}
+	return nil
+}
+
 // EqualsRefOfUnionSelect does deep equals between the two objects.
 func EqualsRefOfUnionSelect(a, b *UnionSelect) bool {
 	if a == b {
@@ -4025,6 +6206,20 @@ func CloneRefOfUnionSelect(n *UnionSelect) *UnionSelect {
 	return &out
 }
 
+// VisitRefOfUnionSelect will visit all parts of the AST
+func VisitRefOfUnionSelect(in *UnionSelect, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitSelectStatement(in.Statement, f); err != nil {
+		return err
+	}
+	return nil
+}
+
 // EqualsRefOfUnlockTables does deep equals between the two objects.
 func EqualsRefOfUnlockTables(a, b *UnlockTables) bool {
 	if a == b {
@@ -4043,6 +6238,17 @@ func CloneRefOfUnlockTables(n *UnlockTables) *UnlockTables {
 	}
 	out := *n
 	return &out
+}
+
+// VisitRefOfUnlockTables will visit all parts of the AST
+func VisitRefOfUnlockTables(in *UnlockTables, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	return nil
 }
 
 // EqualsRefOfUpdate does deep equals between the two objects.
@@ -4077,6 +6283,35 @@ func CloneRefOfUpdate(n *Update) *Update {
 	return &out
 }
 
+// VisitRefOfUpdate will visit all parts of the AST
+func VisitRefOfUpdate(in *Update, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitComments(in.Comments, f); err != nil {
+		return err
+	}
+	if err := VisitTableExprs(in.TableExprs, f); err != nil {
+		return err
+	}
+	if err := VisitUpdateExprs(in.Exprs, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfWhere(in.Where, f); err != nil {
+		return err
+	}
+	if err := VisitOrderBy(in.OrderBy, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfLimit(in.Limit, f); err != nil {
+		return err
+	}
+	return nil
+}
+
 // EqualsRefOfUpdateExpr does deep equals between the two objects.
 func EqualsRefOfUpdateExpr(a, b *UpdateExpr) bool {
 	if a == b {
@@ -4098,6 +6333,23 @@ func CloneRefOfUpdateExpr(n *UpdateExpr) *UpdateExpr {
 	out.Name = CloneRefOfColName(n.Name)
 	out.Expr = CloneExpr(n.Expr)
 	return &out
+}
+
+// VisitRefOfUpdateExpr will visit all parts of the AST
+func VisitRefOfUpdateExpr(in *UpdateExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitRefOfColName(in.Name, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.Expr, f); err != nil {
+		return err
+	}
+	return nil
 }
 
 // EqualsUpdateExprs does deep equals between the two objects.
@@ -4122,6 +6374,22 @@ func CloneUpdateExprs(n UpdateExprs) UpdateExprs {
 	return res
 }
 
+// VisitUpdateExprs will visit all parts of the AST
+func VisitUpdateExprs(in UpdateExprs, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	for _, el := range in {
+		if err := VisitRefOfUpdateExpr(el, f); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // EqualsRefOfUse does deep equals between the two objects.
 func EqualsRefOfUse(a, b *Use) bool {
 	if a == b {
@@ -4141,6 +6409,20 @@ func CloneRefOfUse(n *Use) *Use {
 	out := *n
 	out.DBName = CloneTableIdent(n.DBName)
 	return &out
+}
+
+// VisitRefOfUse will visit all parts of the AST
+func VisitRefOfUse(in *Use, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitTableIdent(in.DBName, f); err != nil {
+		return err
+	}
+	return nil
 }
 
 // EqualsRefOfVStream does deep equals between the two objects.
@@ -4172,6 +6454,32 @@ func CloneRefOfVStream(n *VStream) *VStream {
 	return &out
 }
 
+// VisitRefOfVStream will visit all parts of the AST
+func VisitRefOfVStream(in *VStream, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitComments(in.Comments, f); err != nil {
+		return err
+	}
+	if err := VisitSelectExpr(in.SelectExpr, f); err != nil {
+		return err
+	}
+	if err := VisitTableName(in.Table, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfWhere(in.Where, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfLimit(in.Limit, f); err != nil {
+		return err
+	}
+	return nil
+}
+
 // EqualsValTuple does deep equals between the two objects.
 func EqualsValTuple(a, b ValTuple) bool {
 	if len(a) != len(b) {
@@ -4194,6 +6502,22 @@ func CloneValTuple(n ValTuple) ValTuple {
 	return res
 }
 
+// VisitValTuple will visit all parts of the AST
+func VisitValTuple(in ValTuple, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	for _, el := range in {
+		if err := VisitExpr(el, f); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // EqualsRefOfValidation does deep equals between the two objects.
 func EqualsRefOfValidation(a, b *Validation) bool {
 	if a == b {
@@ -4212,6 +6536,17 @@ func CloneRefOfValidation(n *Validation) *Validation {
 	}
 	out := *n
 	return &out
+}
+
+// VisitRefOfValidation will visit all parts of the AST
+func VisitRefOfValidation(in *Validation, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	return nil
 }
 
 // EqualsValues does deep equals between the two objects.
@@ -4236,6 +6571,22 @@ func CloneValues(n Values) Values {
 	return res
 }
 
+// VisitValues will visit all parts of the AST
+func VisitValues(in Values, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	for _, el := range in {
+		if err := VisitValTuple(el, f); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // EqualsRefOfValuesFuncExpr does deep equals between the two objects.
 func EqualsRefOfValuesFuncExpr(a, b *ValuesFuncExpr) bool {
 	if a == b {
@@ -4257,6 +6608,20 @@ func CloneRefOfValuesFuncExpr(n *ValuesFuncExpr) *ValuesFuncExpr {
 	return &out
 }
 
+// VisitRefOfValuesFuncExpr will visit all parts of the AST
+func VisitRefOfValuesFuncExpr(in *ValuesFuncExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitRefOfColName(in.Name, f); err != nil {
+		return err
+	}
+	return nil
+}
+
 // EqualsVindexParam does deep equals between the two objects.
 func EqualsVindexParam(a, b VindexParam) bool {
 	return a.Val == b.Val &&
@@ -4266,6 +6631,17 @@ func EqualsVindexParam(a, b VindexParam) bool {
 // CloneVindexParam creates a deep clone of the input.
 func CloneVindexParam(n VindexParam) VindexParam {
 	return *CloneRefOfVindexParam(&n)
+}
+
+// VisitVindexParam will visit all parts of the AST
+func VisitVindexParam(in VindexParam, f Visit) error {
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitColIdent(in.Key, f); err != nil {
+		return err
+	}
+	return nil
 }
 
 // EqualsRefOfVindexSpec does deep equals between the two objects.
@@ -4293,6 +6669,23 @@ func CloneRefOfVindexSpec(n *VindexSpec) *VindexSpec {
 	return &out
 }
 
+// VisitRefOfVindexSpec will visit all parts of the AST
+func VisitRefOfVindexSpec(in *VindexSpec, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitColIdent(in.Name, f); err != nil {
+		return err
+	}
+	if err := VisitColIdent(in.Type, f); err != nil {
+		return err
+	}
+	return nil
+}
+
 // EqualsRefOfWhen does deep equals between the two objects.
 func EqualsRefOfWhen(a, b *When) bool {
 	if a == b {
@@ -4314,6 +6707,23 @@ func CloneRefOfWhen(n *When) *When {
 	out.Cond = CloneExpr(n.Cond)
 	out.Val = CloneExpr(n.Val)
 	return &out
+}
+
+// VisitRefOfWhen will visit all parts of the AST
+func VisitRefOfWhen(in *When, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Cond, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.Val, f); err != nil {
+		return err
+	}
+	return nil
 }
 
 // EqualsRefOfWhere does deep equals between the two objects.
@@ -4338,6 +6748,20 @@ func CloneRefOfWhere(n *Where) *Where {
 	return &out
 }
 
+// VisitRefOfWhere will visit all parts of the AST
+func VisitRefOfWhere(in *Where, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Expr, f); err != nil {
+		return err
+	}
+	return nil
+}
+
 // EqualsRefOfXorExpr does deep equals between the two objects.
 func EqualsRefOfXorExpr(a, b *XorExpr) bool {
 	if a == b {
@@ -4359,6 +6783,23 @@ func CloneRefOfXorExpr(n *XorExpr) *XorExpr {
 	out.Left = CloneExpr(n.Left)
 	out.Right = CloneExpr(n.Right)
 	return &out
+}
+
+// VisitRefOfXorExpr will visit all parts of the AST
+func VisitRefOfXorExpr(in *XorExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Left, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.Right, f); err != nil {
+		return err
+	}
+	return nil
 }
 
 // EqualsAlterOption does deep equals between the two objects.
@@ -4540,6 +6981,56 @@ func CloneAlterOption(in AlterOption) AlterOption {
 	}
 }
 
+// VisitAlterOption will visit all parts of the AST
+func VisitAlterOption(in AlterOption, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	switch in := in.(type) {
+	case *AddColumns:
+		return VisitRefOfAddColumns(in, f)
+	case *AddConstraintDefinition:
+		return VisitRefOfAddConstraintDefinition(in, f)
+	case *AddIndexDefinition:
+		return VisitRefOfAddIndexDefinition(in, f)
+	case AlgorithmValue:
+		return VisitAlgorithmValue(in, f)
+	case *AlterCharset:
+		return VisitRefOfAlterCharset(in, f)
+	case *AlterColumn:
+		return VisitRefOfAlterColumn(in, f)
+	case *ChangeColumn:
+		return VisitRefOfChangeColumn(in, f)
+	case *DropColumn:
+		return VisitRefOfDropColumn(in, f)
+	case *DropKey:
+		return VisitRefOfDropKey(in, f)
+	case *Force:
+		return VisitRefOfForce(in, f)
+	case *KeyState:
+		return VisitRefOfKeyState(in, f)
+	case *LockOption:
+		return VisitRefOfLockOption(in, f)
+	case *ModifyColumn:
+		return VisitRefOfModifyColumn(in, f)
+	case *OrderByOption:
+		return VisitRefOfOrderByOption(in, f)
+	case *RenameIndex:
+		return VisitRefOfRenameIndex(in, f)
+	case *RenameTableName:
+		return VisitRefOfRenameTableName(in, f)
+	case TableOptions:
+		return VisitTableOptions(in, f)
+	case *TablespaceOperation:
+		return VisitRefOfTablespaceOperation(in, f)
+	case *Validation:
+		return VisitRefOfValidation(in, f)
+	default:
+		// this should never happen
+		return nil
+	}
+}
+
 // EqualsCharacteristic does deep equals between the two objects.
 func EqualsCharacteristic(inA, inB Characteristic) bool {
 	if inA == nil && inB == nil {
@@ -4577,6 +7068,22 @@ func CloneCharacteristic(in Characteristic) Characteristic {
 		return in
 	case IsolationLevel:
 		return in
+	default:
+		// this should never happen
+		return nil
+	}
+}
+
+// VisitCharacteristic will visit all parts of the AST
+func VisitCharacteristic(in Characteristic, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	switch in := in.(type) {
+	case AccessMode:
+		return VisitAccessMode(in, f)
+	case IsolationLevel:
+		return VisitIsolationLevel(in, f)
 	default:
 		// this should never happen
 		return nil
@@ -4634,6 +7141,24 @@ func CloneColTuple(in ColTuple) ColTuple {
 	}
 }
 
+// VisitColTuple will visit all parts of the AST
+func VisitColTuple(in ColTuple, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	switch in := in.(type) {
+	case ListArg:
+		return VisitListArg(in, f)
+	case *Subquery:
+		return VisitRefOfSubquery(in, f)
+	case ValTuple:
+		return VisitValTuple(in, f)
+	default:
+		// this should never happen
+		return nil
+	}
+}
+
 // EqualsConstraintInfo does deep equals between the two objects.
 func EqualsConstraintInfo(inA, inB ConstraintInfo) bool {
 	if inA == nil && inB == nil {
@@ -4671,6 +7196,22 @@ func CloneConstraintInfo(in ConstraintInfo) ConstraintInfo {
 		return CloneRefOfCheckConstraintDefinition(in)
 	case *ForeignKeyDefinition:
 		return CloneRefOfForeignKeyDefinition(in)
+	default:
+		// this should never happen
+		return nil
+	}
+}
+
+// VisitConstraintInfo will visit all parts of the AST
+func VisitConstraintInfo(in ConstraintInfo, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	switch in := in.(type) {
+	case *CheckConstraintDefinition:
+		return VisitRefOfCheckConstraintDefinition(in, f)
+	case *ForeignKeyDefinition:
+		return VisitRefOfForeignKeyDefinition(in, f)
 	default:
 		// this should never happen
 		return nil
@@ -4722,6 +7263,24 @@ func CloneDBDDLStatement(in DBDDLStatement) DBDDLStatement {
 		return CloneRefOfCreateDatabase(in)
 	case *DropDatabase:
 		return CloneRefOfDropDatabase(in)
+	default:
+		// this should never happen
+		return nil
+	}
+}
+
+// VisitDBDDLStatement will visit all parts of the AST
+func VisitDBDDLStatement(in DBDDLStatement, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	switch in := in.(type) {
+	case *AlterDatabase:
+		return VisitRefOfAlterDatabase(in, f)
+	case *CreateDatabase:
+		return VisitRefOfCreateDatabase(in, f)
+	case *DropDatabase:
+		return VisitRefOfDropDatabase(in, f)
 	default:
 		// this should never happen
 		return nil
@@ -4819,6 +7378,34 @@ func CloneDDLStatement(in DDLStatement) DDLStatement {
 	}
 }
 
+// VisitDDLStatement will visit all parts of the AST
+func VisitDDLStatement(in DDLStatement, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	switch in := in.(type) {
+	case *AlterTable:
+		return VisitRefOfAlterTable(in, f)
+	case *AlterView:
+		return VisitRefOfAlterView(in, f)
+	case *CreateTable:
+		return VisitRefOfCreateTable(in, f)
+	case *CreateView:
+		return VisitRefOfCreateView(in, f)
+	case *DropTable:
+		return VisitRefOfDropTable(in, f)
+	case *DropView:
+		return VisitRefOfDropView(in, f)
+	case *RenameTable:
+		return VisitRefOfRenameTable(in, f)
+	case *TruncateTable:
+		return VisitRefOfTruncateTable(in, f)
+	default:
+		// this should never happen
+		return nil
+	}
+}
+
 // EqualsExplain does deep equals between the two objects.
 func EqualsExplain(inA, inB Explain) bool {
 	if inA == nil && inB == nil {
@@ -4856,6 +7443,22 @@ func CloneExplain(in Explain) Explain {
 		return CloneRefOfExplainStmt(in)
 	case *ExplainTab:
 		return CloneRefOfExplainTab(in)
+	default:
+		// this should never happen
+		return nil
+	}
+}
+
+// VisitExplain will visit all parts of the AST
+func VisitExplain(in Explain, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	switch in := in.(type) {
+	case *ExplainStmt:
+		return VisitRefOfExplainStmt(in, f)
+	case *ExplainTab:
+		return VisitRefOfExplainTab(in, f)
 	default:
 		// this should never happen
 		return nil
@@ -5137,6 +7740,80 @@ func CloneExpr(in Expr) Expr {
 	}
 }
 
+// VisitExpr will visit all parts of the AST
+func VisitExpr(in Expr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	switch in := in.(type) {
+	case *AndExpr:
+		return VisitRefOfAndExpr(in, f)
+	case Argument:
+		return VisitArgument(in, f)
+	case *BinaryExpr:
+		return VisitRefOfBinaryExpr(in, f)
+	case BoolVal:
+		return VisitBoolVal(in, f)
+	case *CaseExpr:
+		return VisitRefOfCaseExpr(in, f)
+	case *ColName:
+		return VisitRefOfColName(in, f)
+	case *CollateExpr:
+		return VisitRefOfCollateExpr(in, f)
+	case *ComparisonExpr:
+		return VisitRefOfComparisonExpr(in, f)
+	case *ConvertExpr:
+		return VisitRefOfConvertExpr(in, f)
+	case *ConvertUsingExpr:
+		return VisitRefOfConvertUsingExpr(in, f)
+	case *CurTimeFuncExpr:
+		return VisitRefOfCurTimeFuncExpr(in, f)
+	case *Default:
+		return VisitRefOfDefault(in, f)
+	case *ExistsExpr:
+		return VisitRefOfExistsExpr(in, f)
+	case *FuncExpr:
+		return VisitRefOfFuncExpr(in, f)
+	case *GroupConcatExpr:
+		return VisitRefOfGroupConcatExpr(in, f)
+	case *IntervalExpr:
+		return VisitRefOfIntervalExpr(in, f)
+	case *IsExpr:
+		return VisitRefOfIsExpr(in, f)
+	case ListArg:
+		return VisitListArg(in, f)
+	case *Literal:
+		return VisitRefOfLiteral(in, f)
+	case *MatchExpr:
+		return VisitRefOfMatchExpr(in, f)
+	case *NotExpr:
+		return VisitRefOfNotExpr(in, f)
+	case *NullVal:
+		return VisitRefOfNullVal(in, f)
+	case *OrExpr:
+		return VisitRefOfOrExpr(in, f)
+	case *RangeCond:
+		return VisitRefOfRangeCond(in, f)
+	case *Subquery:
+		return VisitRefOfSubquery(in, f)
+	case *SubstrExpr:
+		return VisitRefOfSubstrExpr(in, f)
+	case *TimestampFuncExpr:
+		return VisitRefOfTimestampFuncExpr(in, f)
+	case *UnaryExpr:
+		return VisitRefOfUnaryExpr(in, f)
+	case ValTuple:
+		return VisitValTuple(in, f)
+	case *ValuesFuncExpr:
+		return VisitRefOfValuesFuncExpr(in, f)
+	case *XorExpr:
+		return VisitRefOfXorExpr(in, f)
+	default:
+		// this should never happen
+		return nil
+	}
+}
+
 // EqualsInsertRows does deep equals between the two objects.
 func EqualsInsertRows(inA, inB InsertRows) bool {
 	if inA == nil && inB == nil {
@@ -5196,6 +7873,26 @@ func CloneInsertRows(in InsertRows) InsertRows {
 	}
 }
 
+// VisitInsertRows will visit all parts of the AST
+func VisitInsertRows(in InsertRows, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	switch in := in.(type) {
+	case *ParenSelect:
+		return VisitRefOfParenSelect(in, f)
+	case *Select:
+		return VisitRefOfSelect(in, f)
+	case *Union:
+		return VisitRefOfUnion(in, f)
+	case Values:
+		return VisitValues(in, f)
+	default:
+		// this should never happen
+		return nil
+	}
+}
+
 // EqualsSelectExpr does deep equals between the two objects.
 func EqualsSelectExpr(inA, inB SelectExpr) bool {
 	if inA == nil && inB == nil {
@@ -5241,6 +7938,24 @@ func CloneSelectExpr(in SelectExpr) SelectExpr {
 		return CloneRefOfNextval(in)
 	case *StarExpr:
 		return CloneRefOfStarExpr(in)
+	default:
+		// this should never happen
+		return nil
+	}
+}
+
+// VisitSelectExpr will visit all parts of the AST
+func VisitSelectExpr(in SelectExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	switch in := in.(type) {
+	case *AliasedExpr:
+		return VisitRefOfAliasedExpr(in, f)
+	case *Nextval:
+		return VisitRefOfNextval(in, f)
+	case *StarExpr:
+		return VisitRefOfStarExpr(in, f)
 	default:
 		// this should never happen
 		return nil
@@ -5298,6 +8013,24 @@ func CloneSelectStatement(in SelectStatement) SelectStatement {
 	}
 }
 
+// VisitSelectStatement will visit all parts of the AST
+func VisitSelectStatement(in SelectStatement, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	switch in := in.(type) {
+	case *ParenSelect:
+		return VisitRefOfParenSelect(in, f)
+	case *Select:
+		return VisitRefOfSelect(in, f)
+	case *Union:
+		return VisitRefOfUnion(in, f)
+	default:
+		// this should never happen
+		return nil
+	}
+}
+
 // EqualsShowInternal does deep equals between the two objects.
 func EqualsShowInternal(inA, inB ShowInternal) bool {
 	if inA == nil && inB == nil {
@@ -5349,6 +8082,24 @@ func CloneShowInternal(in ShowInternal) ShowInternal {
 	}
 }
 
+// VisitShowInternal will visit all parts of the AST
+func VisitShowInternal(in ShowInternal, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	switch in := in.(type) {
+	case *ShowBasic:
+		return VisitRefOfShowBasic(in, f)
+	case *ShowCreate:
+		return VisitRefOfShowCreate(in, f)
+	case *ShowLegacy:
+		return VisitRefOfShowLegacy(in, f)
+	default:
+		// this should never happen
+		return nil
+	}
+}
+
 // EqualsSimpleTableExpr does deep equals between the two objects.
 func EqualsSimpleTableExpr(inA, inB SimpleTableExpr) bool {
 	if inA == nil && inB == nil {
@@ -5386,6 +8137,22 @@ func CloneSimpleTableExpr(in SimpleTableExpr) SimpleTableExpr {
 		return CloneRefOfDerivedTable(in)
 	case TableName:
 		return CloneTableName(in)
+	default:
+		// this should never happen
+		return nil
+	}
+}
+
+// VisitSimpleTableExpr will visit all parts of the AST
+func VisitSimpleTableExpr(in SimpleTableExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	switch in := in.(type) {
+	case *DerivedTable:
+		return VisitRefOfDerivedTable(in, f)
+	case TableName:
+		return VisitTableName(in, f)
 	default:
 		// this should never happen
 		return nil
@@ -5731,6 +8498,96 @@ func CloneStatement(in Statement) Statement {
 	}
 }
 
+// VisitStatement will visit all parts of the AST
+func VisitStatement(in Statement, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	switch in := in.(type) {
+	case *AlterDatabase:
+		return VisitRefOfAlterDatabase(in, f)
+	case *AlterTable:
+		return VisitRefOfAlterTable(in, f)
+	case *AlterView:
+		return VisitRefOfAlterView(in, f)
+	case *AlterVschema:
+		return VisitRefOfAlterVschema(in, f)
+	case *Begin:
+		return VisitRefOfBegin(in, f)
+	case *CallProc:
+		return VisitRefOfCallProc(in, f)
+	case *Commit:
+		return VisitRefOfCommit(in, f)
+	case *CreateDatabase:
+		return VisitRefOfCreateDatabase(in, f)
+	case *CreateTable:
+		return VisitRefOfCreateTable(in, f)
+	case *CreateView:
+		return VisitRefOfCreateView(in, f)
+	case *Delete:
+		return VisitRefOfDelete(in, f)
+	case *DropDatabase:
+		return VisitRefOfDropDatabase(in, f)
+	case *DropTable:
+		return VisitRefOfDropTable(in, f)
+	case *DropView:
+		return VisitRefOfDropView(in, f)
+	case *ExplainStmt:
+		return VisitRefOfExplainStmt(in, f)
+	case *ExplainTab:
+		return VisitRefOfExplainTab(in, f)
+	case *Flush:
+		return VisitRefOfFlush(in, f)
+	case *Insert:
+		return VisitRefOfInsert(in, f)
+	case *Load:
+		return VisitRefOfLoad(in, f)
+	case *LockTables:
+		return VisitRefOfLockTables(in, f)
+	case *OtherAdmin:
+		return VisitRefOfOtherAdmin(in, f)
+	case *OtherRead:
+		return VisitRefOfOtherRead(in, f)
+	case *ParenSelect:
+		return VisitRefOfParenSelect(in, f)
+	case *Release:
+		return VisitRefOfRelease(in, f)
+	case *RenameTable:
+		return VisitRefOfRenameTable(in, f)
+	case *Rollback:
+		return VisitRefOfRollback(in, f)
+	case *SRollback:
+		return VisitRefOfSRollback(in, f)
+	case *Savepoint:
+		return VisitRefOfSavepoint(in, f)
+	case *Select:
+		return VisitRefOfSelect(in, f)
+	case *Set:
+		return VisitRefOfSet(in, f)
+	case *SetTransaction:
+		return VisitRefOfSetTransaction(in, f)
+	case *Show:
+		return VisitRefOfShow(in, f)
+	case *Stream:
+		return VisitRefOfStream(in, f)
+	case *TruncateTable:
+		return VisitRefOfTruncateTable(in, f)
+	case *Union:
+		return VisitRefOfUnion(in, f)
+	case *UnlockTables:
+		return VisitRefOfUnlockTables(in, f)
+	case *Update:
+		return VisitRefOfUpdate(in, f)
+	case *Use:
+		return VisitRefOfUse(in, f)
+	case *VStream:
+		return VisitRefOfVStream(in, f)
+	default:
+		// this should never happen
+		return nil
+	}
+}
+
 // EqualsTableExpr does deep equals between the two objects.
 func EqualsTableExpr(inA, inB TableExpr) bool {
 	if inA == nil && inB == nil {
@@ -5780,6 +8637,60 @@ func CloneTableExpr(in TableExpr) TableExpr {
 		// this should never happen
 		return nil
 	}
+}
+
+// VisitTableExpr will visit all parts of the AST
+func VisitTableExpr(in TableExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	switch in := in.(type) {
+	case *AliasedTableExpr:
+		return VisitRefOfAliasedTableExpr(in, f)
+	case *JoinTableExpr:
+		return VisitRefOfJoinTableExpr(in, f)
+	case *ParenTableExpr:
+		return VisitRefOfParenTableExpr(in, f)
+	default:
+		// this should never happen
+		return nil
+	}
+}
+
+// VisitAccessMode will visit all parts of the AST
+func VisitAccessMode(in AccessMode, f Visit) error {
+	_, err := f(in)
+	return err
+}
+
+// VisitAlgorithmValue will visit all parts of the AST
+func VisitAlgorithmValue(in AlgorithmValue, f Visit) error {
+	_, err := f(in)
+	return err
+}
+
+// VisitArgument will visit all parts of the AST
+func VisitArgument(in Argument, f Visit) error {
+	_, err := f(in)
+	return err
+}
+
+// VisitBoolVal will visit all parts of the AST
+func VisitBoolVal(in BoolVal, f Visit) error {
+	_, err := f(in)
+	return err
+}
+
+// VisitIsolationLevel will visit all parts of the AST
+func VisitIsolationLevel(in IsolationLevel, f Visit) error {
+	_, err := f(in)
+	return err
+}
+
+// VisitReferenceAction will visit all parts of the AST
+func VisitReferenceAction(in ReferenceAction, f Visit) error {
+	_, err := f(in)
+	return err
 }
 
 // EqualsSliceOfRefOfColumnDefinition does deep equals between the two objects.
@@ -5914,6 +8825,17 @@ func CloneRefOfColIdent(n *ColIdent) *ColIdent {
 	return &out
 }
 
+// VisitRefOfColIdent will visit all parts of the AST
+func VisitRefOfColIdent(in *ColIdent, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	return nil
+}
+
 // EqualsColumnType does deep equals between the two objects.
 func EqualsColumnType(a, b ColumnType) bool {
 	return a.Type == b.Type &&
@@ -6045,6 +8967,23 @@ func CloneRefOfJoinCondition(n *JoinCondition) *JoinCondition {
 	out.On = CloneExpr(n.On)
 	out.Using = CloneColumns(n.Using)
 	return &out
+}
+
+// VisitRefOfJoinCondition will visit all parts of the AST
+func VisitRefOfJoinCondition(in *JoinCondition, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.On, f); err != nil {
+		return err
+	}
+	if err := VisitColumns(in.Using, f); err != nil {
+		return err
+	}
+	return nil
 }
 
 // EqualsTableAndLockTypes does deep equals between the two objects.
@@ -6198,6 +9137,17 @@ func CloneRefOfTableIdent(n *TableIdent) *TableIdent {
 	return &out
 }
 
+// VisitRefOfTableIdent will visit all parts of the AST
+func VisitRefOfTableIdent(in *TableIdent, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	return nil
+}
+
 // EqualsRefOfTableName does deep equals between the two objects.
 func EqualsRefOfTableName(a, b *TableName) bool {
 	if a == b {
@@ -6219,6 +9169,23 @@ func CloneRefOfTableName(n *TableName) *TableName {
 	out.Name = CloneTableIdent(n.Name)
 	out.Qualifier = CloneTableIdent(n.Qualifier)
 	return &out
+}
+
+// VisitRefOfTableName will visit all parts of the AST
+func VisitRefOfTableName(in *TableName, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitTableIdent(in.Name, f); err != nil {
+		return err
+	}
+	if err := VisitTableIdent(in.Qualifier, f); err != nil {
+		return err
+	}
+	return nil
 }
 
 // EqualsRefOfTableOption does deep equals between the two objects.
@@ -6332,6 +9299,20 @@ func CloneRefOfVindexParam(n *VindexParam) *VindexParam {
 	out := *n
 	out.Key = CloneColIdent(n.Key)
 	return &out
+}
+
+// VisitRefOfVindexParam will visit all parts of the AST
+func VisitRefOfVindexParam(in *VindexParam, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitColIdent(in.Key, f); err != nil {
+		return err
+	}
+	return nil
 }
 
 // EqualsSliceOfVindexParam does deep equals between the two objects.
