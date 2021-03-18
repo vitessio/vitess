@@ -2453,6 +2453,9 @@ func (e *Executor) retryMigrationWhere(ctx context.Context, whereExpr string) (r
 		"tablet": sqltypes.StringBindVariable(e.TabletAliasString()),
 	}
 	bound, err := parsed.GenerateQuery(bindVars, nil)
+	if err != nil {
+		return nil, err
+	}
 	result, err = e.execQuery(ctx, bound)
 	return result, err
 }

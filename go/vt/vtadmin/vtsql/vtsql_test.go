@@ -20,6 +20,7 @@ import (
 	"context"
 	"database/sql"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -100,8 +101,9 @@ func TestDial(t *testing.T) {
 		{
 			name: "existing conn",
 			proxy: &VTGateProxy{
-				cluster: &vtadminpb.Cluster{},
-				conn:    sql.OpenDB(&fakevtsql.Connector{}),
+				cluster:         &vtadminpb.Cluster{},
+				conn:            sql.OpenDB(&fakevtsql.Connector{}),
+				dialPingTimeout: time.Millisecond * 10,
 			},
 			shouldErr: false,
 		},

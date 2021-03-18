@@ -28,13 +28,13 @@ func FuzzIsDML(data []byte) int {
 }
 
 func FuzzNormalizer(data []byte) int {
-	stmt, err := sqlparser.Parse(string(data))
+	stmt, reservedVars, err := sqlparser.Parse2(string(data))
 	if err != nil {
 		return -1
 	}
 	prefix := "bv"
 	bv := make(map[string]*querypb.BindVariable)
-	sqlparser.Normalize(stmt, bv, prefix)
+	sqlparser.Normalize(stmt, reservedVars, bv, prefix)
 	return 1
 }
 
