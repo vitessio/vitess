@@ -28611,6 +28611,198 @@ export namespace vtctldata {
         public toJSON(): { [k: string]: any };
     }
 
+    /** Properties of a ShardReplicationPositionsRequest. */
+    interface IShardReplicationPositionsRequest {
+
+        /** ShardReplicationPositionsRequest keyspace */
+        keyspace?: (string|null);
+
+        /** ShardReplicationPositionsRequest shard */
+        shard?: (string|null);
+    }
+
+    /** Represents a ShardReplicationPositionsRequest. */
+    class ShardReplicationPositionsRequest implements IShardReplicationPositionsRequest {
+
+        /**
+         * Constructs a new ShardReplicationPositionsRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IShardReplicationPositionsRequest);
+
+        /** ShardReplicationPositionsRequest keyspace. */
+        public keyspace: string;
+
+        /** ShardReplicationPositionsRequest shard. */
+        public shard: string;
+
+        /**
+         * Creates a new ShardReplicationPositionsRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ShardReplicationPositionsRequest instance
+         */
+        public static create(properties?: vtctldata.IShardReplicationPositionsRequest): vtctldata.ShardReplicationPositionsRequest;
+
+        /**
+         * Encodes the specified ShardReplicationPositionsRequest message. Does not implicitly {@link vtctldata.ShardReplicationPositionsRequest.verify|verify} messages.
+         * @param message ShardReplicationPositionsRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IShardReplicationPositionsRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ShardReplicationPositionsRequest message, length delimited. Does not implicitly {@link vtctldata.ShardReplicationPositionsRequest.verify|verify} messages.
+         * @param message ShardReplicationPositionsRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IShardReplicationPositionsRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ShardReplicationPositionsRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ShardReplicationPositionsRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.ShardReplicationPositionsRequest;
+
+        /**
+         * Decodes a ShardReplicationPositionsRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ShardReplicationPositionsRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.ShardReplicationPositionsRequest;
+
+        /**
+         * Verifies a ShardReplicationPositionsRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ShardReplicationPositionsRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ShardReplicationPositionsRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.ShardReplicationPositionsRequest;
+
+        /**
+         * Creates a plain object from a ShardReplicationPositionsRequest message. Also converts values to other types if specified.
+         * @param message ShardReplicationPositionsRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.ShardReplicationPositionsRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ShardReplicationPositionsRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a ShardReplicationPositionsResponse. */
+    interface IShardReplicationPositionsResponse {
+
+        /** ShardReplicationPositionsResponse replication_statuses */
+        replication_statuses?: ({ [k: string]: replicationdata.IStatus }|null);
+
+        /** ShardReplicationPositionsResponse tablet_map */
+        tablet_map?: ({ [k: string]: topodata.ITablet }|null);
+    }
+
+    /** Represents a ShardReplicationPositionsResponse. */
+    class ShardReplicationPositionsResponse implements IShardReplicationPositionsResponse {
+
+        /**
+         * Constructs a new ShardReplicationPositionsResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IShardReplicationPositionsResponse);
+
+        /** ShardReplicationPositionsResponse replication_statuses. */
+        public replication_statuses: { [k: string]: replicationdata.IStatus };
+
+        /** ShardReplicationPositionsResponse tablet_map. */
+        public tablet_map: { [k: string]: topodata.ITablet };
+
+        /**
+         * Creates a new ShardReplicationPositionsResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ShardReplicationPositionsResponse instance
+         */
+        public static create(properties?: vtctldata.IShardReplicationPositionsResponse): vtctldata.ShardReplicationPositionsResponse;
+
+        /**
+         * Encodes the specified ShardReplicationPositionsResponse message. Does not implicitly {@link vtctldata.ShardReplicationPositionsResponse.verify|verify} messages.
+         * @param message ShardReplicationPositionsResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IShardReplicationPositionsResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ShardReplicationPositionsResponse message, length delimited. Does not implicitly {@link vtctldata.ShardReplicationPositionsResponse.verify|verify} messages.
+         * @param message ShardReplicationPositionsResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IShardReplicationPositionsResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ShardReplicationPositionsResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ShardReplicationPositionsResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.ShardReplicationPositionsResponse;
+
+        /**
+         * Decodes a ShardReplicationPositionsResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ShardReplicationPositionsResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.ShardReplicationPositionsResponse;
+
+        /**
+         * Verifies a ShardReplicationPositionsResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ShardReplicationPositionsResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ShardReplicationPositionsResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.ShardReplicationPositionsResponse;
+
+        /**
+         * Creates a plain object from a ShardReplicationPositionsResponse message. Also converts values to other types if specified.
+         * @param message ShardReplicationPositionsResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.ShardReplicationPositionsResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ShardReplicationPositionsResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
     /** Properties of a TabletExternallyReparentedRequest. */
     interface ITabletExternallyReparentedRequest {
 
