@@ -120,7 +120,7 @@ func PlanByName(s string) (pt PlanType, ok bool) {
 // PlanByNameIC finds a plan type by its string name without case sensitivity
 func PlanByNameIC(s string) (pt PlanType, ok bool) {
 	for i, v := range planName {
-		if strings.ToLower(v) == strings.ToLower(s) {
+		if strings.EqualFold(v, s) {
 			return PlanType(i), true
 		}
 	}
