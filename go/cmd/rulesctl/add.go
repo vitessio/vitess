@@ -2,12 +2,13 @@ package main
 
 import (
 	"log"
+	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
 
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
+	vtrules "vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
 )
 
 var (
@@ -25,7 +26,7 @@ func runAdd(cmd *cobra.Command, args []string) {
 	rulePlans := mkPlanSlice()
 	ruleAction := mkAction()
 
-	rule := rules.NewQueryRule(addOptDescription, addOptName, ruleAction)
+	rule := vtrules.NewQueryRule(addOptDescription, addOptName, ruleAction)
 	for _, pt := range rulePlans {
 		rule.AddPlanCond(pt)
 	}
@@ -38,7 +39,13 @@ func runAdd(cmd *cobra.Command, args []string) {
 		log.Fatalf("Query condition invalid '%v': %v", addOptQueryRE, err)
 	}
 
-	rules := getRules()
+	var rules *vtrules.Rules
+	_, err := os.Stat(configFile)
+	if os.IsNotExist(err) {
+		rules = vtrules.New()
+	} else {
+		rules = getRules()
+	}
 	existingRule := rules.Find(rule.Name)
 	if existingRule != nil {
 		log.Fatalf("Rule by name %q already exists", rule.Name)
@@ -75,14 +82,14 @@ func mkPlanSlice() []planbuilder.PlanType {
 	return plans
 }
 
-func mkAction() rules.Action {
+func mkAction() vtrules.Action {
 	switch strings.ToLower(addOptAction) {
 	case "fail":
-		return rules.QRFail
+		return vtrules.QRFail
 	case "fail_retry":
-		return rules.QRFailRetry
+		return vtrules.QRFailRetry
 	case "continue":
-		return rules.QRContinue
+		return vtrules.QRContinue
 	default:
 		log.Fatalf("Unknown action '%v'", addOptAction)
 	}
