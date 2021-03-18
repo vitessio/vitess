@@ -24,7 +24,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
-func buildPlanForBypass(stmt sqlparser.Statement, vschema ContextVSchema) (engine.Primitive, error) {
+func buildPlanForBypass(stmt sqlparser.Statement, _ sqlparser.BindVars, vschema ContextVSchema) (engine.Primitive, error) {
 	switch vschema.Destination().(type) {
 	case key.DestinationExactKeyRange:
 		if _, ok := stmt.(*sqlparser.Insert); ok {
