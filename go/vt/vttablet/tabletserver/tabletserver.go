@@ -743,13 +743,14 @@ func (tsv *TabletServer) Execute(ctx context.Context, target *querypb.Target, sq
 			result = result.StripMetadata(sqltypes.IncludeFieldsOrDefault(options))
 
 			// Change database name in mysql output to the keyspace name
-			if sqltypes.IncludeFieldsOrDefault(options) == querypb.ExecuteOptions_ALL {
-				for _, f := range result.Fields {
-					if f.Database != "" {
-						if qre.plan.PlanID == planbuilder.PlanShow {
-							f.Database = "information_schema"
-						} else {
-							f.Database = tsv.sm.target.Keyspace
+			if tsv.sm.target.Keyspace != tsv.config.DB.DBName && sqltypes.IncludeFieldsOrDefault(options) == querypb.ExecuteOptions_ALL {
+				switch qre.plan.PlanID {
+				case planbuilder.PlanSelect, planbuilder.PlanSelectImpossible:
+					dbName := tsv.config.DB.DBName
+					ksName := tsv.sm.target.Keyspace
+					for _, f := range result.Fields {
+						if f.Database == dbName {
+							f.Database = ksName
 						}
 					}
 				}
