@@ -163,11 +163,10 @@ func (node *Flush) Format(buf *TrackedBuffer) {
 		buf.WriteString(" local")
 	}
 	if len(node.FlushOptions) != 0 {
-		for i, option := range node.FlushOptions {
-			if i != 0 {
-				buf.WriteString(", ")
-			}
-			buf.astPrintf(node, "%s", option)
+		prefix := " "
+		for _, option := range node.FlushOptions {
+			buf.astPrintf(node, "%s%s", prefix, option)
+			prefix = ", "
 		}
 	} else {
 		buf.WriteString(" tables")
