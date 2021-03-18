@@ -614,6 +614,12 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfRenameTableName(a, b)
+	case *RevertMigration:
+		b, ok := inB.(*RevertMigration)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfRevertMigration(a, b)
 	case *Rollback:
 		b, ok := inB.(*Rollback)
 		if !ok {
@@ -1098,6 +1104,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfRenameTable(in)
 	case *RenameTableName:
 		return CloneRefOfRenameTableName(in)
+	case *RevertMigration:
+		return CloneRefOfRevertMigration(in)
 	case *Rollback:
 		return CloneRefOfRollback(in)
 	case *SRollback:
@@ -1398,6 +1406,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfRenameTable(in, f)
 	case *RenameTableName:
 		return VisitRefOfRenameTableName(in, f)
+	case *RevertMigration:
+		return VisitRefOfRevertMigration(in, f)
 	case *Rollback:
 		return VisitRefOfRollback(in, f)
 	case *SRollback:
@@ -5020,6 +5030,37 @@ func VisitRefOfRenameTableName(in *RenameTableName, f Visit) error {
 	return nil
 }
 
+// EqualsRefOfRevertMigration does deep equals between the two objects.
+func EqualsRefOfRevertMigration(a, b *RevertMigration) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.UUID == b.UUID
+}
+
+// CloneRefOfRevertMigration creates a deep clone of the input.
+func CloneRefOfRevertMigration(n *RevertMigration) *RevertMigration {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	return &out
+}
+
+// VisitRefOfRevertMigration will visit all parts of the AST
+func VisitRefOfRevertMigration(in *RevertMigration, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	return nil
+}
+
 // EqualsRefOfRollback does deep equals between the two objects.
 func EqualsRefOfRollback(a, b *Rollback) bool {
 	if a == b {
@@ -8318,6 +8359,12 @@ func EqualsStatement(inA, inB Statement) bool {
 			return false
 		}
 		return EqualsRefOfRenameTable(a, b)
+	case *RevertMigration:
+		b, ok := inB.(*RevertMigration)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfRevertMigration(a, b)
 	case *Rollback:
 		b, ok := inB.(*Rollback)
 		if !ok {
@@ -8464,6 +8511,8 @@ func CloneStatement(in Statement) Statement {
 		return CloneRefOfRelease(in)
 	case *RenameTable:
 		return CloneRefOfRenameTable(in)
+	case *RevertMigration:
+		return CloneRefOfRevertMigration(in)
 	case *Rollback:
 		return CloneRefOfRollback(in)
 	case *SRollback:
@@ -8554,6 +8603,8 @@ func VisitStatement(in Statement, f Visit) error {
 		return VisitRefOfRelease(in, f)
 	case *RenameTable:
 		return VisitRefOfRenameTable(in, f)
+	case *RevertMigration:
+		return VisitRefOfRevertMigration(in, f)
 	case *Rollback:
 		return VisitRefOfRollback(in, f)
 	case *SRollback:
