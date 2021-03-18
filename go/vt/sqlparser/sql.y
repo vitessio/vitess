@@ -17,19 +17,19 @@ limitations under the License.
 %{
 package sqlparser
 
-func setParseTree(yylex interface{}, stmt Statement) {
+func setParseTree(yylex yyLexer, stmt Statement) {
   yylex.(*Tokenizer).ParseTree = stmt
 }
 
-func setAllowComments(yylex interface{}, allow bool) {
+func setAllowComments(yylex yyLexer, allow bool) {
   yylex.(*Tokenizer).AllowComments = allow
 }
 
-func setDDL(yylex interface{}, node Statement) {
+func setDDL(yylex yyLexer, node Statement) {
   yylex.(*Tokenizer).partialDDL = node
 }
 
-func incNesting(yylex interface{}) bool {
+func incNesting(yylex yyLexer) bool {
   yylex.(*Tokenizer).nesting++
   if yylex.(*Tokenizer).nesting == 200 {
     return true
@@ -37,15 +37,19 @@ func incNesting(yylex interface{}) bool {
   return false
 }
 
-func decNesting(yylex interface{}) {
+func decNesting(yylex yyLexer) {
   yylex.(*Tokenizer).nesting--
 }
 
 // skipToEnd forces the lexer to end prematurely. Not all SQL statements
 // are supported by the Parser, thus calling skipToEnd will make the lexer
 // return EOF early.
-func skipToEnd(yylex interface{}) {
+func skipToEnd(yylex yyLexer) {
   yylex.(*Tokenizer).SkipToEnd = true
+}
+
+func bindVariable(yylex yyLexer, bvar string) {
+  yylex.(*Tokenizer).BindVars[bvar] = struct{}{}
 }
 
 %}
@@ -3515,6 +3519,7 @@ col_tuple:
 | LIST_ARG
   {
     $$ = ListArg($1)
+    bindVariable(yylex, $1[2:])
   }
 
 subquery:
@@ -4048,6 +4053,7 @@ value:
 | VALUE_ARG
   {
     $$ = NewArgument($1)
+    bindVariable(yylex, $1[1:])
   }
 | NULL
   {
@@ -4071,6 +4077,7 @@ num_val:
 | VALUE_ARG VALUES
   {
     $$ = NewArgument($1)
+    bindVariable(yylex, $1[1:])
   }
 
 group_by_opt:
