@@ -85,6 +85,7 @@ func main() {
 	rootCmd.Flags().BoolVar(&httpOpts.EnableTracing, "http-tracing", false, "whether to enable tracing on the HTTP server")
 	rootCmd.Flags().BoolVar(&httpOpts.DisableCompression, "http-no-compress", false, "whether to disable compression of HTTP API responses")
 	rootCmd.Flags().StringSliceVar(&httpOpts.CORSOrigins, "http-origin", []string{}, "repeated, comma-separated flag of allowed CORS origins. omit to disable CORS")
+	rootCmd.Flags().StringVar(&httpOpts.ExperimentalOptions.TabletFQDNTmpl, "http-tablet-fqdn-tmpl", "{{ .Tablet.Hostname }}:80", "(TODO) write some help text")
 
 	// glog flags, no better way to do this
 	rootCmd.Flags().AddGoFlag(flag.Lookup("v"))
