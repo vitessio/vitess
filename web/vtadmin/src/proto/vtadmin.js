@@ -68257,6 +68257,509 @@ $root.vtctldata = (function() {
         return ReparentTabletResponse;
     })();
 
+    vtctldata.ShardReplicationPositionsRequest = (function() {
+
+        /**
+         * Properties of a ShardReplicationPositionsRequest.
+         * @memberof vtctldata
+         * @interface IShardReplicationPositionsRequest
+         * @property {string|null} [keyspace] ShardReplicationPositionsRequest keyspace
+         * @property {string|null} [shard] ShardReplicationPositionsRequest shard
+         */
+
+        /**
+         * Constructs a new ShardReplicationPositionsRequest.
+         * @memberof vtctldata
+         * @classdesc Represents a ShardReplicationPositionsRequest.
+         * @implements IShardReplicationPositionsRequest
+         * @constructor
+         * @param {vtctldata.IShardReplicationPositionsRequest=} [properties] Properties to set
+         */
+        function ShardReplicationPositionsRequest(properties) {
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * ShardReplicationPositionsRequest keyspace.
+         * @member {string} keyspace
+         * @memberof vtctldata.ShardReplicationPositionsRequest
+         * @instance
+         */
+        ShardReplicationPositionsRequest.prototype.keyspace = "";
+
+        /**
+         * ShardReplicationPositionsRequest shard.
+         * @member {string} shard
+         * @memberof vtctldata.ShardReplicationPositionsRequest
+         * @instance
+         */
+        ShardReplicationPositionsRequest.prototype.shard = "";
+
+        /**
+         * Creates a new ShardReplicationPositionsRequest instance using the specified properties.
+         * @function create
+         * @memberof vtctldata.ShardReplicationPositionsRequest
+         * @static
+         * @param {vtctldata.IShardReplicationPositionsRequest=} [properties] Properties to set
+         * @returns {vtctldata.ShardReplicationPositionsRequest} ShardReplicationPositionsRequest instance
+         */
+        ShardReplicationPositionsRequest.create = function create(properties) {
+            return new ShardReplicationPositionsRequest(properties);
+        };
+
+        /**
+         * Encodes the specified ShardReplicationPositionsRequest message. Does not implicitly {@link vtctldata.ShardReplicationPositionsRequest.verify|verify} messages.
+         * @function encode
+         * @memberof vtctldata.ShardReplicationPositionsRequest
+         * @static
+         * @param {vtctldata.IShardReplicationPositionsRequest} message ShardReplicationPositionsRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        ShardReplicationPositionsRequest.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.keyspace != null && Object.hasOwnProperty.call(message, "keyspace"))
+                writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
+            if (message.shard != null && Object.hasOwnProperty.call(message, "shard"))
+                writer.uint32(/* id 2, wireType 2 =*/18).string(message.shard);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified ShardReplicationPositionsRequest message, length delimited. Does not implicitly {@link vtctldata.ShardReplicationPositionsRequest.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtctldata.ShardReplicationPositionsRequest
+         * @static
+         * @param {vtctldata.IShardReplicationPositionsRequest} message ShardReplicationPositionsRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        ShardReplicationPositionsRequest.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a ShardReplicationPositionsRequest message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtctldata.ShardReplicationPositionsRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtctldata.ShardReplicationPositionsRequest} ShardReplicationPositionsRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        ShardReplicationPositionsRequest.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.ShardReplicationPositionsRequest();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.keyspace = reader.string();
+                    break;
+                case 2:
+                    message.shard = reader.string();
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a ShardReplicationPositionsRequest message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtctldata.ShardReplicationPositionsRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtctldata.ShardReplicationPositionsRequest} ShardReplicationPositionsRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        ShardReplicationPositionsRequest.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a ShardReplicationPositionsRequest message.
+         * @function verify
+         * @memberof vtctldata.ShardReplicationPositionsRequest
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        ShardReplicationPositionsRequest.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.keyspace != null && message.hasOwnProperty("keyspace"))
+                if (!$util.isString(message.keyspace))
+                    return "keyspace: string expected";
+            if (message.shard != null && message.hasOwnProperty("shard"))
+                if (!$util.isString(message.shard))
+                    return "shard: string expected";
+            return null;
+        };
+
+        /**
+         * Creates a ShardReplicationPositionsRequest message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtctldata.ShardReplicationPositionsRequest
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtctldata.ShardReplicationPositionsRequest} ShardReplicationPositionsRequest
+         */
+        ShardReplicationPositionsRequest.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtctldata.ShardReplicationPositionsRequest)
+                return object;
+            var message = new $root.vtctldata.ShardReplicationPositionsRequest();
+            if (object.keyspace != null)
+                message.keyspace = String(object.keyspace);
+            if (object.shard != null)
+                message.shard = String(object.shard);
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a ShardReplicationPositionsRequest message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtctldata.ShardReplicationPositionsRequest
+         * @static
+         * @param {vtctldata.ShardReplicationPositionsRequest} message ShardReplicationPositionsRequest
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        ShardReplicationPositionsRequest.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.defaults) {
+                object.keyspace = "";
+                object.shard = "";
+            }
+            if (message.keyspace != null && message.hasOwnProperty("keyspace"))
+                object.keyspace = message.keyspace;
+            if (message.shard != null && message.hasOwnProperty("shard"))
+                object.shard = message.shard;
+            return object;
+        };
+
+        /**
+         * Converts this ShardReplicationPositionsRequest to JSON.
+         * @function toJSON
+         * @memberof vtctldata.ShardReplicationPositionsRequest
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        ShardReplicationPositionsRequest.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return ShardReplicationPositionsRequest;
+    })();
+
+    vtctldata.ShardReplicationPositionsResponse = (function() {
+
+        /**
+         * Properties of a ShardReplicationPositionsResponse.
+         * @memberof vtctldata
+         * @interface IShardReplicationPositionsResponse
+         * @property {Object.<string,replicationdata.IStatus>|null} [replication_statuses] ShardReplicationPositionsResponse replication_statuses
+         * @property {Object.<string,topodata.ITablet>|null} [tablet_map] ShardReplicationPositionsResponse tablet_map
+         */
+
+        /**
+         * Constructs a new ShardReplicationPositionsResponse.
+         * @memberof vtctldata
+         * @classdesc Represents a ShardReplicationPositionsResponse.
+         * @implements IShardReplicationPositionsResponse
+         * @constructor
+         * @param {vtctldata.IShardReplicationPositionsResponse=} [properties] Properties to set
+         */
+        function ShardReplicationPositionsResponse(properties) {
+            this.replication_statuses = {};
+            this.tablet_map = {};
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * ShardReplicationPositionsResponse replication_statuses.
+         * @member {Object.<string,replicationdata.IStatus>} replication_statuses
+         * @memberof vtctldata.ShardReplicationPositionsResponse
+         * @instance
+         */
+        ShardReplicationPositionsResponse.prototype.replication_statuses = $util.emptyObject;
+
+        /**
+         * ShardReplicationPositionsResponse tablet_map.
+         * @member {Object.<string,topodata.ITablet>} tablet_map
+         * @memberof vtctldata.ShardReplicationPositionsResponse
+         * @instance
+         */
+        ShardReplicationPositionsResponse.prototype.tablet_map = $util.emptyObject;
+
+        /**
+         * Creates a new ShardReplicationPositionsResponse instance using the specified properties.
+         * @function create
+         * @memberof vtctldata.ShardReplicationPositionsResponse
+         * @static
+         * @param {vtctldata.IShardReplicationPositionsResponse=} [properties] Properties to set
+         * @returns {vtctldata.ShardReplicationPositionsResponse} ShardReplicationPositionsResponse instance
+         */
+        ShardReplicationPositionsResponse.create = function create(properties) {
+            return new ShardReplicationPositionsResponse(properties);
+        };
+
+        /**
+         * Encodes the specified ShardReplicationPositionsResponse message. Does not implicitly {@link vtctldata.ShardReplicationPositionsResponse.verify|verify} messages.
+         * @function encode
+         * @memberof vtctldata.ShardReplicationPositionsResponse
+         * @static
+         * @param {vtctldata.IShardReplicationPositionsResponse} message ShardReplicationPositionsResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        ShardReplicationPositionsResponse.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.replication_statuses != null && Object.hasOwnProperty.call(message, "replication_statuses"))
+                for (var keys = Object.keys(message.replication_statuses), i = 0; i < keys.length; ++i) {
+                    writer.uint32(/* id 1, wireType 2 =*/10).fork().uint32(/* id 1, wireType 2 =*/10).string(keys[i]);
+                    $root.replicationdata.Status.encode(message.replication_statuses[keys[i]], writer.uint32(/* id 2, wireType 2 =*/18).fork()).ldelim().ldelim();
+                }
+            if (message.tablet_map != null && Object.hasOwnProperty.call(message, "tablet_map"))
+                for (var keys = Object.keys(message.tablet_map), i = 0; i < keys.length; ++i) {
+                    writer.uint32(/* id 2, wireType 2 =*/18).fork().uint32(/* id 1, wireType 2 =*/10).string(keys[i]);
+                    $root.topodata.Tablet.encode(message.tablet_map[keys[i]], writer.uint32(/* id 2, wireType 2 =*/18).fork()).ldelim().ldelim();
+                }
+            return writer;
+        };
+
+        /**
+         * Encodes the specified ShardReplicationPositionsResponse message, length delimited. Does not implicitly {@link vtctldata.ShardReplicationPositionsResponse.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtctldata.ShardReplicationPositionsResponse
+         * @static
+         * @param {vtctldata.IShardReplicationPositionsResponse} message ShardReplicationPositionsResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        ShardReplicationPositionsResponse.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a ShardReplicationPositionsResponse message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtctldata.ShardReplicationPositionsResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtctldata.ShardReplicationPositionsResponse} ShardReplicationPositionsResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        ShardReplicationPositionsResponse.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.ShardReplicationPositionsResponse(), key, value;
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    if (message.replication_statuses === $util.emptyObject)
+                        message.replication_statuses = {};
+                    var end2 = reader.uint32() + reader.pos;
+                    key = "";
+                    value = null;
+                    while (reader.pos < end2) {
+                        var tag2 = reader.uint32();
+                        switch (tag2 >>> 3) {
+                        case 1:
+                            key = reader.string();
+                            break;
+                        case 2:
+                            value = $root.replicationdata.Status.decode(reader, reader.uint32());
+                            break;
+                        default:
+                            reader.skipType(tag2 & 7);
+                            break;
+                        }
+                    }
+                    message.replication_statuses[key] = value;
+                    break;
+                case 2:
+                    if (message.tablet_map === $util.emptyObject)
+                        message.tablet_map = {};
+                    var end2 = reader.uint32() + reader.pos;
+                    key = "";
+                    value = null;
+                    while (reader.pos < end2) {
+                        var tag2 = reader.uint32();
+                        switch (tag2 >>> 3) {
+                        case 1:
+                            key = reader.string();
+                            break;
+                        case 2:
+                            value = $root.topodata.Tablet.decode(reader, reader.uint32());
+                            break;
+                        default:
+                            reader.skipType(tag2 & 7);
+                            break;
+                        }
+                    }
+                    message.tablet_map[key] = value;
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a ShardReplicationPositionsResponse message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtctldata.ShardReplicationPositionsResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtctldata.ShardReplicationPositionsResponse} ShardReplicationPositionsResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        ShardReplicationPositionsResponse.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a ShardReplicationPositionsResponse message.
+         * @function verify
+         * @memberof vtctldata.ShardReplicationPositionsResponse
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        ShardReplicationPositionsResponse.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.replication_statuses != null && message.hasOwnProperty("replication_statuses")) {
+                if (!$util.isObject(message.replication_statuses))
+                    return "replication_statuses: object expected";
+                var key = Object.keys(message.replication_statuses);
+                for (var i = 0; i < key.length; ++i) {
+                    var error = $root.replicationdata.Status.verify(message.replication_statuses[key[i]]);
+                    if (error)
+                        return "replication_statuses." + error;
+                }
+            }
+            if (message.tablet_map != null && message.hasOwnProperty("tablet_map")) {
+                if (!$util.isObject(message.tablet_map))
+                    return "tablet_map: object expected";
+                var key = Object.keys(message.tablet_map);
+                for (var i = 0; i < key.length; ++i) {
+                    var error = $root.topodata.Tablet.verify(message.tablet_map[key[i]]);
+                    if (error)
+                        return "tablet_map." + error;
+                }
+            }
+            return null;
+        };
+
+        /**
+         * Creates a ShardReplicationPositionsResponse message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtctldata.ShardReplicationPositionsResponse
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtctldata.ShardReplicationPositionsResponse} ShardReplicationPositionsResponse
+         */
+        ShardReplicationPositionsResponse.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtctldata.ShardReplicationPositionsResponse)
+                return object;
+            var message = new $root.vtctldata.ShardReplicationPositionsResponse();
+            if (object.replication_statuses) {
+                if (typeof object.replication_statuses !== "object")
+                    throw TypeError(".vtctldata.ShardReplicationPositionsResponse.replication_statuses: object expected");
+                message.replication_statuses = {};
+                for (var keys = Object.keys(object.replication_statuses), i = 0; i < keys.length; ++i) {
+                    if (typeof object.replication_statuses[keys[i]] !== "object")
+                        throw TypeError(".vtctldata.ShardReplicationPositionsResponse.replication_statuses: object expected");
+                    message.replication_statuses[keys[i]] = $root.replicationdata.Status.fromObject(object.replication_statuses[keys[i]]);
+                }
+            }
+            if (object.tablet_map) {
+                if (typeof object.tablet_map !== "object")
+                    throw TypeError(".vtctldata.ShardReplicationPositionsResponse.tablet_map: object expected");
+                message.tablet_map = {};
+                for (var keys = Object.keys(object.tablet_map), i = 0; i < keys.length; ++i) {
+                    if (typeof object.tablet_map[keys[i]] !== "object")
+                        throw TypeError(".vtctldata.ShardReplicationPositionsResponse.tablet_map: object expected");
+                    message.tablet_map[keys[i]] = $root.topodata.Tablet.fromObject(object.tablet_map[keys[i]]);
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a ShardReplicationPositionsResponse message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtctldata.ShardReplicationPositionsResponse
+         * @static
+         * @param {vtctldata.ShardReplicationPositionsResponse} message ShardReplicationPositionsResponse
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        ShardReplicationPositionsResponse.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.objects || options.defaults) {
+                object.replication_statuses = {};
+                object.tablet_map = {};
+            }
+            var keys2;
+            if (message.replication_statuses && (keys2 = Object.keys(message.replication_statuses)).length) {
+                object.replication_statuses = {};
+                for (var j = 0; j < keys2.length; ++j)
+                    object.replication_statuses[keys2[j]] = $root.replicationdata.Status.toObject(message.replication_statuses[keys2[j]], options);
+            }
+            if (message.tablet_map && (keys2 = Object.keys(message.tablet_map)).length) {
+                object.tablet_map = {};
+                for (var j = 0; j < keys2.length; ++j)
+                    object.tablet_map[keys2[j]] = $root.topodata.Tablet.toObject(message.tablet_map[keys2[j]], options);
+            }
+            return object;
+        };
+
+        /**
+         * Converts this ShardReplicationPositionsResponse to JSON.
+         * @function toJSON
+         * @memberof vtctldata.ShardReplicationPositionsResponse
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        ShardReplicationPositionsResponse.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return ShardReplicationPositionsResponse;
+    })();
+
     vtctldata.TabletExternallyReparentedRequest = (function() {
 
         /**

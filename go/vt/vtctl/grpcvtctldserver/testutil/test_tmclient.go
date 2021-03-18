@@ -162,6 +162,7 @@ type TabletManagerClient struct {
 		Result string
 		Error  error
 	}
+	ReplicationStatusDelays  map[string]time.Duration
 	ReplicationStatusResults map[string]struct {
 		Position *replicationdatapb.Status
 		Error    error
@@ -372,6 +373,17 @@ func (fake *TabletManagerClient) ReplicationStatus(ctx context.Context, tablet *
 	}
 
 	key := topoproto.TabletAliasString(tablet.Alias)
+
+	if fake.ReplicationStatusDelays != nil {
+		if delay, ok := fake.ReplicationStatusDelays[key]; ok {
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(delay):
+				// proceed to results
+			}
+		}
+	}
 
 	if result, ok := fake.ReplicationStatusResults[key]; ok {
 		return result.Position, result.Error
