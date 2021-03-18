@@ -124,6 +124,14 @@ var (
 	onlineDDLGrant       = fmt.Sprintf("'%s'@'%s'", onlineDDLUser, "%")
 )
 
+type mysqlVariables struct {
+	host           string
+	port           int
+	readOnly       bool
+	version        string
+	versionComment string
+}
+
 // Executor wraps and manages the execution of a gh-ost migration.
 type Executor struct {
 	env            tabletenv.Env
@@ -311,33 +319,44 @@ func (e *Executor) ptPidFileName(uuid string) string {
 }
 
 // readMySQLVariables contacts the backend MySQL server to read some of its configuration
-func (e *Executor) readMySQLVariables(ctx context.Context) (host string, port int, readOnly bool, err error) {
+func (e *Executor) readMySQLVariables(ctx context.Context) (variables *mysqlVariables, err error) {
 	conn, err := e.pool.Get(ctx)
 	if err != nil {
-		return host, port, readOnly, err
+		return nil, err
 	}
 	defer conn.Recycle()
 
-	tm, err := conn.Exec(ctx, "select @@global.hostname as hostname, @@global.port as port, @@global.read_only as read_only from dual", 1, true)
+	tm, err := conn.Exec(ctx, `select
+			@@global.hostname as hostname,
+			@@global.port as port,
+			@@global.read_only as read_only,
+			@@global.version AS version,
+			@@global.version_comment AS version_comment
+		from dual`, 1, true)
 	if err != nil {
-		return host, port, readOnly, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "could not read MySQL variables: %v", err)
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "could not read MySQL variables: %v", err)
 	}
 	row := tm.Named().Row()
 	if row == nil {
-		return host, port, readOnly, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "unexpected result for MySQL variables: %+v", tm.Rows)
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "unexpected result for MySQL variables: %+v", tm.Rows)
 	}
-	host = row["hostname"].ToString()
+	variables = &mysqlVariables{}
 
-	p, err := row.ToInt64("port")
-	if err != nil {
-		return host, port, readOnly, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "could not parse @@global.port %v: %v", tm, err)
-	}
-	port = int(p)
+	variables.host = row["hostname"].ToString()
 
-	if readOnly, err = row.ToBool("read_only"); err != nil {
-		return host, port, readOnly, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "could not parse @@global.read_only %v: %v", tm, err)
+	if port, err := row.ToInt64("port"); err != nil {
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "could not parse @@global.port %v: %v", tm, err)
+	} else {
+		variables.port = int(port)
 	}
-	return host, port, readOnly, nil
+	if variables.readOnly, err = row.ToBool("read_only"); err != nil {
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "could not parse @@global.read_only %v: %v", tm, err)
+	}
+
+	variables.version = row["version"].ToString()
+	variables.versionComment = row["version_comment"].ToString()
+
+	return variables, nil
 }
 
 // createOnlineDDLUser creates a gh-ost user account with all neccessary privileges and with a random password
@@ -722,12 +741,12 @@ func (e *Executor) ExecuteWithGhost(ctx context.Context, onlineDDL *schema.Onlin
 	if e.tabletTypeFunc() != topodatapb.TabletType_MASTER {
 		return ErrExecutorNotWritableTablet
 	}
-	mysqlHost, mysqlPort, readOnly, err := e.readMySQLVariables(ctx)
+	variables, err := e.readMySQLVariables(ctx)
 	if err != nil {
 		log.Errorf("Error before running gh-ost: %+v", err)
 		return err
 	}
-	if readOnly {
+	if variables.readOnly {
 		err := fmt.Errorf("Error before running gh-ost: MySQL server is read_only")
 		log.Errorf(err.Error())
 		return err
@@ -814,7 +833,7 @@ curl -s 'http://localhost:%d/schema-migration/report-status?uuid=%s&status=%s&dr
 	}
 	log.Infof("+ OK")
 
-	if err := e.updateMigrationLogPath(ctx, onlineDDL.UUID, mysqlHost, tempDir); err != nil {
+	if err := e.updateMigrationLogPath(ctx, onlineDDL.UUID, variables.host, tempDir); err != nil {
 		return err
 	}
 
@@ -833,8 +852,8 @@ curl -s 'http://localhost:%d/schema-migration/report-status?uuid=%s&status=%s&dr
 		os.Setenv("ONLINE_DDL_PASSWORD", onlineDDLPassword)
 		args := []string{
 			wrapperScriptFileName,
-			fmt.Sprintf(`--host=%s`, mysqlHost),
-			fmt.Sprintf(`--port=%d`, mysqlPort),
+			fmt.Sprintf(`--host=%s`, variables.host),
+			fmt.Sprintf(`--port=%d`, variables.port),
 			fmt.Sprintf(`--conf=%s`, credentialsConfigFileName), // user & password found here
 			`--allow-on-master`,
 			`--max-load=Threads_running=900`,
@@ -868,7 +887,7 @@ curl -s 'http://localhost:%d/schema-migration/report-status?uuid=%s&status=%s&dr
 		defer e.dropOnlineDDLUser(ctx)
 		defer e.gcArtifacts(ctx)
 
-		log.Infof("Will now dry-run gh-ost on: %s:%d", mysqlHost, mysqlPort)
+		log.Infof("Will now dry-run gh-ost on: %s:%d", variables.host, variables.port)
 		if err := runGhost(false); err != nil {
 			// perhaps gh-ost was interrupted midway and didn't have the chance to send a "failes" status
 			_ = e.updateMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusFailed)
@@ -879,7 +898,7 @@ curl -s 'http://localhost:%d/schema-migration/report-status?uuid=%s&status=%s&dr
 		}
 		log.Infof("+ OK")
 
-		log.Infof("Will now run gh-ost on: %s:%d", mysqlHost, mysqlPort)
+		log.Infof("Will now run gh-ost on: %s:%d", variables.host, variables.port)
 		startedMigrations.Add(1)
 		if err := runGhost(true); err != nil {
 			// perhaps gh-ost was interrupted midway and didn't have the chance to send a "failes" status
@@ -909,12 +928,12 @@ func (e *Executor) ExecuteWithPTOSC(ctx context.Context, onlineDDL *schema.Onlin
 	if e.tabletTypeFunc() != topodatapb.TabletType_MASTER {
 		return ErrExecutorNotWritableTablet
 	}
-	mysqlHost, mysqlPort, readOnly, err := e.readMySQLVariables(ctx)
+	variables, err := e.readMySQLVariables(ctx)
 	if err != nil {
 		log.Errorf("Error before running pt-online-schema-change: %+v", err)
 		return err
 	}
-	if readOnly {
+	if variables.readOnly {
 		err := fmt.Errorf("Error before running pt-online-schema-change: MySQL server is read_only")
 		log.Errorf(err.Error())
 		return err
@@ -1019,7 +1038,7 @@ export MYSQL_PWD
 	}
 	log.Infof("+ OK")
 
-	if err := e.updateMigrationLogPath(ctx, onlineDDL.UUID, mysqlHost, tempDir); err != nil {
+	if err := e.updateMigrationLogPath(ctx, onlineDDL.UUID, variables.host, tempDir); err != nil {
 		return err
 	}
 
@@ -1066,9 +1085,9 @@ export MYSQL_PWD
 			`--alter`,
 			alterOptions,
 			`--check-slave-lag`, // We use primary's identity so that pt-online-schema-change calls our lag plugin for exactly 1 server
-			fmt.Sprintf(`h=%s,P=%d,D=%s,t=%s,u=%s`, mysqlHost, mysqlPort, e.dbName, onlineDDL.Table, onlineDDLUser),
+			fmt.Sprintf(`h=%s,P=%d,D=%s,t=%s,u=%s`, variables.host, variables.port, e.dbName, onlineDDL.Table, onlineDDLUser),
 			executeFlag,
-			fmt.Sprintf(`h=%s,P=%d,D=%s,t=%s,u=%s`, mysqlHost, mysqlPort, e.dbName, onlineDDL.Table, onlineDDLUser),
+			fmt.Sprintf(`h=%s,P=%d,D=%s,t=%s,u=%s`, variables.host, variables.port, e.dbName, onlineDDL.Table, onlineDDLUser),
 		}
 
 		if execute {
@@ -1090,7 +1109,7 @@ export MYSQL_PWD
 		defer e.dropOnlineDDLUser(ctx)
 		defer e.gcArtifacts(ctx)
 
-		log.Infof("Will now dry-run pt-online-schema-change on: %s:%d", mysqlHost, mysqlPort)
+		log.Infof("Will now dry-run pt-online-schema-change on: %s:%d", variables.host, variables.port)
 		if err := runPTOSC(false); err != nil {
 			// perhaps pt-osc was interrupted midway and didn't have the chance to send a "failes" status
 			_ = e.updateMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusFailed)
@@ -1101,7 +1120,7 @@ export MYSQL_PWD
 		}
 		log.Infof("+ OK")
 
-		log.Infof("Will now run pt-online-schema-change on: %s:%d", mysqlHost, mysqlPort)
+		log.Infof("Will now run pt-online-schema-change on: %s:%d", variables.host, variables.port)
 		startedMigrations.Add(1)
 		if err := runPTOSC(true); err != nil {
 			// perhaps pt-osc was interrupted midway and didn't have the chance to send a "failes" status
@@ -1518,11 +1537,13 @@ func (e *Executor) evaluateDeclarativeDiff(ctx context.Context, onlineDDL *schem
 	}
 
 	// Compare the existing (to be potentially migrated) table with the declared (newly created) table:
+	// all things are tengo related
 	if err := func() error {
-		mysqlHost, mysqlPort, _, err := e.readMySQLVariables(ctx)
+		variables, err := e.readMySQLVariables(ctx)
 		if err != nil {
 			return err
 		}
+		flavor := tengo.ParseFlavor(variables.version, variables.versionComment)
 
 		// Create a temporary account for tengo to use
 		onlineDDLPassword, err := e.createOnlineDDLUser(ctx)
@@ -1536,7 +1557,7 @@ func (e *Executor) evaluateDeclarativeDiff(ctx context.Context, onlineDDL *schem
 		cfg.User = onlineDDLUser
 		cfg.Passwd = onlineDDLPassword
 		cfg.Net = "tcp"
-		cfg.Addr = fmt.Sprintf("%s:%d", mysqlHost, mysqlPort)
+		cfg.Addr = fmt.Sprintf("%s:%d", variables.host, variables.port)
 		cfg.DBName = e.dbName
 		cfg.ParseTime = true
 		cfg.InterpolateParams = true
@@ -1550,12 +1571,12 @@ func (e *Executor) evaluateDeclarativeDiff(ctx context.Context, onlineDDL *schem
 		defer db.Close()
 
 		// Read existing table
-		existingTable, err := tengo.QuerySchemaTable(ctx, db, e.dbName, onlineDDL.Table, tengo.FlavorUnknown)
+		existingTable, err := tengo.QuerySchemaTable(ctx, db, e.dbName, onlineDDL.Table, flavor)
 		if err != nil {
 			return err
 		}
 		// Read comparison table
-		comparisonTable, err := tengo.QuerySchemaTable(ctx, db, e.dbName, comparisonTableName, tengo.FlavorUnknown)
+		comparisonTable, err := tengo.QuerySchemaTable(ctx, db, e.dbName, comparisonTableName, flavor)
 		if err != nil {
 			return err
 		}
@@ -1566,19 +1587,23 @@ func (e *Executor) evaluateDeclarativeDiff(ctx context.Context, onlineDDL *schem
 		comparisonTable.Name = existingTable.Name
 		// We also override `.CreateStatement` (output of SHOW CREATE TABLE), because tengo has a validation, where if it doesn't
 		// find any ALTER changes, then the CreateStatement-s must be identical (or else it errors with UnsupportedDiffError)
-		comparisonTable.CreateStatement = schema.ParseCreateTableBody(comparisonTable.CreateStatement)
-		existingTable.CreateStatement = schema.ParseCreateTableBody(existingTable.CreateStatement)
+		comparisonTable.CreateStatement, err = schema.ReplaceTableNameInCreateTableStatement(comparisonTable.CreateStatement, existingTable.Name)
+		if err != nil {
+			return err
+		}
 		// Diff the two tables
 		diff := tengo.NewAlterTable(existingTable, comparisonTable)
-		if diff != nil {
-			mods := tengo.StatementModifiers{
-				AllowUnsafe: true,
-				NextAutoInc: tengo.NextAutoIncIfIncreased,
-			}
-			alterClause, err = diff.Clauses(mods)
-			if err != nil {
-				return err
-			}
+		if diff == nil {
+			// No change. alterClause remains empty
+			return nil
+		}
+		mods := tengo.StatementModifiers{
+			AllowUnsafe: true,
+			NextAutoInc: tengo.NextAutoIncIfIncreased,
+		}
+		alterClause, err = diff.Clauses(mods)
+		if err != nil {
+			return err
 		}
 		return nil
 	}(); err != nil {
