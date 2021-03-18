@@ -344,6 +344,29 @@ func (node *AlterVschema) formatFast(buf *TrackedBuffer) {
 }
 
 // formatFast formats the node.
+func (node *AlterMigration) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("alter vitess_migration")
+	if node.UUID != "" {
+		buf.WriteString(" '")
+		buf.WriteString(node.UUID)
+		buf.WriteByte('\'')
+	}
+	var alterType string
+	switch node.Type {
+	case RetryMigrationType:
+		alterType = "retry"
+	case CompleteMigrationType:
+		alterType = "complete"
+	case CancelMigrationType:
+		alterType = "cancel"
+	case CancelAllMigrationType:
+		alterType = "cancel all"
+	}
+	buf.WriteByte(' ')
+	buf.WriteString(alterType)
+}
+
+// formatFast formats the node.
 func (node *RevertMigration) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("revert vitess_migration '")
 	buf.WriteString(node.UUID)
@@ -900,7 +923,7 @@ func (node *ShowFilter) formatFast(buf *TrackedBuffer) {
 	}
 	if node.Like != "" {
 		buf.WriteString(" like ")
-		buf.WriteString(encodeSQLString(node.Like))
+		sqltypes.BufEncodeStringSQL(buf.Builder, node.Like)
 	} else {
 		buf.WriteString(" where ")
 		node.Filter.formatFast(buf)
