@@ -174,13 +174,12 @@ func (vtgate *VTGateProxy) Dial(ctx context.Context, target string, opts ...grpc
 		Protocol:        fmt.Sprintf("grpc_%s", vtgate.cluster.Id),
 		Address:         vtgate.host,
 		Target:          target,
-		GRPCDialOptions: opts,
+		GRPCDialOptions: append(opts, grpc.WithInsecure()),
 	}
 
 	if vtgate.creds != nil {
 		conf.GRPCDialOptions = append([]grpc.DialOption{
 			grpc.WithPerRPCCredentials(vtgate.creds),
-			grpc.WithInsecure(),
 		}, conf.GRPCDialOptions...)
 	}
 
