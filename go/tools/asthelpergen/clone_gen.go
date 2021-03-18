@@ -82,6 +82,10 @@ func (c *cloneGen) sliceMethod(t types.Type, slice *types.Slice, spi generatorSP
 	return nil
 }
 
+func (c *cloneGen) basicMethod(t types.Type, basic *types.Basic, spi generatorSPI) error {
+	return nil
+}
+
 func (c *cloneGen) copySliceElement(elType types.Type, spi generatorSPI) jen.Code {
 	if isBasic(elType) {
 		//	copy(res, n)
