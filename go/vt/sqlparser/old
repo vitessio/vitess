@@ -1,5 +1,0 @@
-goos: darwin
-goarch: amd64
-pkg: vitess.io/vitess/go/vt/sqlparser
-BenchmarkWalkLargeExpression/0-16  	  870069	      1329 ns/op
-BenchmarkWalkLargeExpression/1-16  	
