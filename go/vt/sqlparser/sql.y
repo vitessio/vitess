@@ -17,19 +17,19 @@ limitations under the License.
 %{
 package sqlparser
 
-func setParseTree(yylex interface{}, stmt Statement) {
+func setParseTree(yylex yyLexer, stmt Statement) {
   yylex.(*Tokenizer).ParseTree = stmt
 }
 
-func setAllowComments(yylex interface{}, allow bool) {
+func setAllowComments(yylex yyLexer, allow bool) {
   yylex.(*Tokenizer).AllowComments = allow
 }
 
-func setDDL(yylex interface{}, node Statement) {
+func setDDL(yylex yyLexer, node Statement) {
   yylex.(*Tokenizer).partialDDL = node
 }
 
-func incNesting(yylex interface{}) bool {
+func incNesting(yylex yyLexer) bool {
   yylex.(*Tokenizer).nesting++
   if yylex.(*Tokenizer).nesting == 200 {
     return true
@@ -37,91 +37,114 @@ func incNesting(yylex interface{}) bool {
   return false
 }
 
-func decNesting(yylex interface{}) {
+func decNesting(yylex yyLexer) {
   yylex.(*Tokenizer).nesting--
 }
 
 // skipToEnd forces the lexer to end prematurely. Not all SQL statements
 // are supported by the Parser, thus calling skipToEnd will make the lexer
 // return EOF early.
-func skipToEnd(yylex interface{}) {
+func skipToEnd(yylex yyLexer) {
   yylex.(*Tokenizer).SkipToEnd = true
+}
+
+func bindVariable(yylex yyLexer, bvar string) {
+  yylex.(*Tokenizer).BindVars[bvar] = struct{}{}
 }
 
 %}
 
-%union {
+%struct {
   empty         struct{}
-  statement     Statement
-  selStmt       SelectStatement
-  ins           *Insert
-  byt           byte
+  LengthScaleOption LengthScaleOption
+  tableName     TableName
+  tableIdent    TableIdent
   str           string
   strs          []string
-  selectExprs   SelectExprs
-  selectExpr    SelectExpr
-  columns       Columns
-  partitions    Partitions
-  colName       *ColName
-  tableExprs    TableExprs
-  tableExpr     TableExpr
+  vindexParam   VindexParam
+  colIdent      ColIdent
   joinCondition JoinCondition
-  tableName     TableName
-  tableNames    TableNames
-  indexHints    *IndexHints
+  collateAndCharset CollateAndCharset
+  columnType    ColumnType
+}
+
+%union {
+  statement     Statement
+  selStmt       SelectStatement
+  tableExpr     TableExpr
   expr          Expr
-  exprs         Exprs
-  boolVal       BoolVal
-  boolean	bool
-  literal        *Literal
   colTuple      ColTuple
-  values        Values
-  valTuple      ValTuple
+  optVal        Expr
+  constraintInfo ConstraintInfo
+  alterOption      AlterOption
+  characteristic Characteristic
+
+  ins           *Insert
+  colName       *ColName
+  indexHints    *IndexHints
+  literal        *Literal
   subquery      *Subquery
   derivedTable  *DerivedTable
-  whens         []*When
   when          *When
-  orderBy       OrderBy
   order         *Order
   limit         *Limit
-  updateExprs   UpdateExprs
-  setExprs      SetExprs
   updateExpr    *UpdateExpr
   setExpr       *SetExpr
-  characteristic Characteristic
-  characteristics []Characteristic
-  colIdent      ColIdent
-  tableIdent    TableIdent
   convertType   *ConvertType
   aliasedTableName *AliasedTableExpr
-  TableSpec  *TableSpec
-  columnType    ColumnType
-  colKeyOpt     ColumnKeyOption
-  optVal        Expr
-  LengthScaleOption LengthScaleOption
+  tableSpec  *TableSpec
   columnDefinition *ColumnDefinition
-  columnDefinitions []*ColumnDefinition
   indexDefinition *IndexDefinition
   indexInfo     *IndexInfo
   indexOption   *IndexOption
-  indexOptions  []*IndexOption
   indexColumn   *IndexColumn
-  indexColumns  []*IndexColumn
-  constraintDefinition *ConstraintDefinition
-  constraintInfo ConstraintInfo
-  ReferenceAction ReferenceAction
-  partDefs      []*PartitionDefinition
   partDef       *PartitionDefinition
   partSpec      *PartitionSpec
-  partSpecs     []*PartitionSpec
-  vindexParam   VindexParam
-  vindexParams  []VindexParam
   showFilter    *ShowFilter
   optLike       *OptLike
+  selectInto	  *SelectInto
+  createDatabase  *CreateDatabase
+  alterDatabase  *AlterDatabase
+  createTable      *CreateTable
+  tableAndLockType *TableAndLockType
+  alterTable       *AlterTable
+  tableOption      *TableOption
+  columnTypeOptions *ColumnTypeOptions
+  constraintDefinition *ConstraintDefinition
+  revertMigration *RevertMigration
+  alterMigration  *AlterMigration
+
+  whens         []*When
+  columnDefinitions []*ColumnDefinition
+  indexOptions  []*IndexOption
+  indexColumns  []*IndexColumn
+  collateAndCharsets []CollateAndCharset
+  tableAndLockTypes TableAndLockTypes
+  renameTablePairs []*RenameTablePair
+  alterOptions	   []AlterOption
+  vindexParams  []VindexParam
+  partDefs      []*PartitionDefinition
+  partSpecs     []*PartitionSpec
+  characteristics []Characteristic
+  selectExpr    SelectExpr
+  columns       Columns
+  partitions    Partitions
+  tableExprs    TableExprs
+  tableNames    TableNames
+  exprs         Exprs
+  values        Values
+  valTuple      ValTuple
+  orderBy       OrderBy
+  updateExprs   UpdateExprs
+  setExprs      SetExprs
+  selectExprs   SelectExprs
+  tableOptions     TableOptions
+
+  colKeyOpt     ColumnKeyOption
+  ReferenceAction ReferenceAction
   isolationLevel IsolationLevel
   insertAction InsertAction
   scope 	Scope
-  ignore 	Ignore
   lock 		Lock
   joinType  	JoinType
   comparisonExprOperator ComparisonExprOperator
@@ -129,24 +152,11 @@ func skipToEnd(yylex interface{}) {
   matchExprOption MatchExprOption
   orderDirection  OrderDirection
   explainType 	  ExplainType
-  selectInto	  *SelectInto
-  createDatabase  *CreateDatabase
-  alterDatabase  *AlterDatabase
-  collateAndCharset CollateAndCharset
-  collateAndCharsets []CollateAndCharset
-  createTable      *CreateTable
-  tableAndLockTypes []*TableAndLockType
-  tableAndLockType *TableAndLockType
   lockType LockType
-  alterTable       *AlterTable
-  alterOption      AlterOption
-  alterOptions	   []AlterOption
-  tableOption      *TableOption
-  tableOptions     TableOptions
-  renameTablePairs []*RenameTablePair
-  columnTypeOptions *ColumnTypeOptions
-  revertMigration *RevertMigration
-  alterMigration  *AlterMigration
+
+  boolean bool
+  boolVal BoolVal
+  ignore Ignore
 }
 
 %token LEX_ERROR
@@ -379,7 +389,7 @@ func skipToEnd(yylex interface{}) {
 %type <str> index_or_key index_symbols from_or_in index_or_key_opt
 %type <str> name_opt constraint_name_opt
 %type <str> equal_opt
-%type <TableSpec> table_spec table_column_list
+%type <tableSpec> table_spec table_column_list
 %type <optLike> create_like
 %type <str> table_opt_value
 %type <tableOption> table_option
@@ -3537,6 +3547,7 @@ col_tuple:
 | LIST_ARG
   {
     $$ = ListArg($1)
+    bindVariable(yylex, $1[2:])
   }
 
 subquery:
@@ -3764,47 +3775,51 @@ function_call_keyword:
   {
     $$ = &ValuesFuncExpr{Name: $3}
   }
+| CURRENT_USER func_paren_opt
+  {
+    $$ =  &FuncExpr{Name: NewColIdent($1)}
+  }
 
 /*
   Function calls using non reserved keywords but with special syntax forms.
   Dedicated grammar rules are needed because of the special syntax
 */
 function_call_nonkeyword:
-  CURRENT_TIMESTAMP func_datetime_opt
+  CURRENT_TIMESTAMP func_paren_opt
   {
     $$ = &FuncExpr{Name:NewColIdent("current_timestamp")}
   }
-| UTC_TIMESTAMP func_datetime_opt
+| UTC_TIMESTAMP func_paren_opt
   {
     $$ = &FuncExpr{Name:NewColIdent("utc_timestamp")}
   }
-| UTC_TIME func_datetime_opt
+| UTC_TIME func_paren_opt
   {
     $$ = &FuncExpr{Name:NewColIdent("utc_time")}
   }
 /* doesn't support fsp */
-| UTC_DATE func_datetime_opt
+| UTC_DATE func_paren_opt
   {
     $$ = &FuncExpr{Name:NewColIdent("utc_date")}
   }
   // now
-| LOCALTIME func_datetime_opt
+| LOCALTIME func_paren_opt
   {
     $$ = &FuncExpr{Name:NewColIdent("localtime")}
   }
   // now
-| LOCALTIMESTAMP func_datetime_opt
+| LOCALTIMESTAMP func_paren_opt
   {
     $$ = &FuncExpr{Name:NewColIdent("localtimestamp")}
   }
   // curdate
 /* doesn't support fsp */
-| CURRENT_DATE func_datetime_opt
+| CURRENT_DATE func_paren_opt
   {
     $$ = &FuncExpr{Name:NewColIdent("current_date")}
   }
   // curtime
-| CURRENT_TIME func_datetime_opt
+| CURRENT_TIME func_paren_opt
   {
     $$ = &FuncExpr{Name:NewColIdent("current_time")}
   }
@@ -3845,7 +3860,7 @@ function_call_nonkeyword:
     $$ = &TimestampFuncExpr{Name:string("timestampdiff"), Unit:$3.String(), Expr1:$5, Expr2:$7}
   }
 
-func_datetime_opt:
+func_paren_opt:
   /* empty */
 | openb closeb
 
@@ -4066,6 +4081,7 @@ value:
 | VALUE_ARG
   {
     $$ = NewArgument($1)
+    bindVariable(yylex, $1[1:])
   }
 | NULL
   {
@@ -4089,6 +4105,7 @@ num_val:
 | VALUE_ARG VALUES
   {
     $$ = NewArgument($1)
+    bindVariable(yylex, $1[1:])
   }
 
 group_by_opt:
