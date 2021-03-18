@@ -5010,3 +5010,5 @@
 2021-03-18T17:34:05Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/665392023
 2021-03-18T17:35:25Z,endtoend,https://github.com/vitessio/vitess/actions/runs/665395992
 2021-03-18T18:31:05Z,golangci-lint,https://github.com/vitessio/vitess/actions/runs/665547869
+2021-03-18T18:44:50Z,golangci-lint,https://github.com/vitessio/vitess/actions/runs/665582315
+2021-03-18T18:48:15Z,endtoend,https://github.com/vitessio/vitess/actions/runs/665591294
