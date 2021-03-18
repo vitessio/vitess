@@ -121,3 +121,15 @@ func CheckMigrationStatus(t *testing.T, vtParams *mysql.ConnParams, shards []clu
 	}
 	assert.Equal(t, len(shards), count)
 }
+
+// CheckMigrationArtifacts verifies given migration exists, and checks if it has artifacts
+func CheckMigrationArtifacts(t *testing.T, vtParams *mysql.ConnParams, shards []cluster.Shard, uuid string, expectArtifacts bool) {
+	showQuery := fmt.Sprintf("show vitess_migrations like '%s'", uuid)
+	r := VtgateExecQuery(t, vtParams, showQuery, "")
+
+	assert.Equal(t, len(shards), len(r.Named().Rows))
+	for _, row := range r.Named().Rows {
+		hasArtifacts := (row["artifacts"].ToString() != "")
+		assert.Equal(t, expectArtifacts, hasArtifacts)
+	}
+}
