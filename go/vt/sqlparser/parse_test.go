@@ -1535,6 +1535,16 @@ var (
 	}, {
 		input: "show vitess_migrations like '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90'",
 	}, {
+		input: "revert vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90'",
+	}, {
+		input: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' retry",
+	}, {
+		input: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' complete",
+	}, {
+		input: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' cancel",
+	}, {
+		input: "alter vitess_migration cancel all",
+	}, {
 		input:  "show warnings",
 		output: "show warnings",
 	}, {
@@ -2166,6 +2176,9 @@ func TestKeywords(t *testing.T) {
 	}, {
 		input:  "select Variables from t",
 		output: "select `Variables` from t",
+	}, {
+		input:  "select current_user, current_user() from dual",
+		output: "select current_user(), current_user() from dual",
 	}}
 
 	for _, tcase := range validSQL {

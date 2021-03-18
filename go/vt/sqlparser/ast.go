@@ -414,6 +414,20 @@ type (
 		AutoIncSpec *AutoIncSpec
 	}
 
+	// RevertMigration represents a REVERT VITESS_MIGRATION statement
+	RevertMigration struct {
+		UUID string
+	}
+
+	// AlterMigrationType represents the type of operation in an ALTER VITESS_MIGRATION statement
+	AlterMigrationType int8
+
+	// AlterMigration represents a ALTER VITESS_MIGRATION statement
+	AlterMigration struct {
+		Type AlterMigrationType
+		UUID string
+	}
+
 	// AlterTable represents a ALTER TABLE statement.
 	AlterTable struct {
 		Table         TableName
@@ -602,6 +616,8 @@ func (*LockTables) iStatement()        {}
 func (*UnlockTables) iStatement()      {}
 func (*AlterTable) iStatement()        {}
 func (*AlterVschema) iStatement()      {}
+func (*AlterMigration) iStatement()    {}
+func (*RevertMigration) iStatement()   {}
 func (*DropTable) iStatement()         {}
 func (*DropView) iStatement()          {}
 func (*TruncateTable) iStatement()     {}
@@ -2104,6 +2120,31 @@ func (node *AlterVschema) Format(buf *TrackedBuffer) {
 	default:
 		buf.astPrintf(node, "%s table %v", node.Action.ToString(), node.Table)
 	}
+}
+
+// Format formats the node.
+func (node *AlterMigration) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "alter vitess_migration")
+	if node.UUID != "" {
+		buf.astPrintf(node, " '%s'", node.UUID)
+	}
+	var alterType string
+	switch node.Type {
+	case RetryMigrationType:
+		alterType = "retry"
+	case CompleteMigrationType:
+		alterType = "complete"
+	case CancelMigrationType:
+		alterType = "cancel"
+	case CancelAllMigrationType:
+		alterType = "cancel all"
+	}
+	buf.astPrintf(node, " %s", alterType)
+}
+
+// Format formats the node.
+func (node *RevertMigration) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "revert vitess_migration '%s'", node.UUID)
 }
 
 // Format formats the node.
