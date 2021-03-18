@@ -428,6 +428,16 @@ func VisitRefOfRefSliceContainer(in *RefSliceContainer, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
+	for _, el := range in.ASTElements {
+		if err := VisitAST(el, f); err != nil {
+			return err
+		}
+	}
+	for _, el := range in.ASTImplementationElements {
+		if err := VisitRefOfLeaf(el, f); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -510,6 +520,16 @@ func CloneValueSliceContainer(n ValueSliceContainer) ValueSliceContainer {
 func VisitValueSliceContainer(in ValueSliceContainer, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
+	}
+	for _, el := range in.ASTElements {
+		if err := VisitAST(el, f); err != nil {
+			return err
+		}
+	}
+	for _, el := range in.ASTImplementationElements {
+		if err := VisitRefOfLeaf(el, f); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -758,6 +778,16 @@ func VisitRefOfValueSliceContainer(in *ValueSliceContainer, f Visit) error {
 	}
 	if cont, err := f(in); err != nil || !cont {
 		return err
+	}
+	for _, el := range in.ASTElements {
+		if err := VisitAST(el, f); err != nil {
+			return err
+		}
+	}
+	for _, el := range in.ASTImplementationElements {
+		if err := VisitRefOfLeaf(el, f); err != nil {
+			return err
+		}
 	}
 	return nil
 }
