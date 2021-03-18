@@ -112,6 +112,7 @@ func bindVariable(yylex yyLexer, bvar string) {
   columnTypeOptions *ColumnTypeOptions
   constraintDefinition *ConstraintDefinition
   revertMigration *RevertMigration
+  alterMigration  *AlterMigration
 
   whens         []*When
   columnDefinitions []*ColumnDefinition
@@ -214,8 +215,8 @@ func bindVariable(yylex yyLexer, bvar string) {
 %token <str> STATUS VARIABLES WARNINGS CASCADED DEFINER OPTION SQL UNDEFINED
 %token <str> SEQUENCE MERGE TEMPORARY TEMPTABLE INVOKER SECURITY FIRST AFTER LAST
 
-// Revert tokens
-%token <str> VITESS_MIGRATION
+// Migration tokens
+%token <str> VITESS_MIGRATION CANCEL RETRY COMPLETE
 
 // Transaction Tokens
 %token <str> BEGIN START TRANSACTION COMMIT ROLLBACK SAVEPOINT RELEASE WORK
@@ -2149,6 +2150,33 @@ alter_statement:
             Column: $7,
             Sequence: $9,
         },
+    }
+  }
+| ALTER VITESS_MIGRATION STRING RETRY
+  {
+    $$ = &AlterMigration{
+      Type: RetryMigrationType,
+      UUID: string($3),
+    }
+  }
+| ALTER VITESS_MIGRATION STRING COMPLETE
+  {
+    $$ = &AlterMigration{
+      Type: CompleteMigrationType,
+      UUID: string($3),
+    }
+  }
+| ALTER VITESS_MIGRATION STRING CANCEL
+  {
+    $$ = &AlterMigration{
+      Type: CancelMigrationType,
+      UUID: string($3),
+    }
+  }
+| ALTER VITESS_MIGRATION CANCEL ALL
+  {
+    $$ = &AlterMigration{
+      Type: CancelAllMigrationType,
     }
   }
 
@@ -4873,6 +4901,7 @@ non_reserved_keyword:
 | BOOL
 | BOOLEAN
 | BUCKETS
+| CANCEL
 | CASCADE
 | CASCADED
 | CHANNEL
@@ -4889,6 +4918,7 @@ non_reserved_keyword:
 | COMMIT
 | COMMITTED
 | COMPACT
+| COMPLETE
 | COMPONENT
 | COMPRESSED
 | COMPRESSION
@@ -5046,6 +5076,7 @@ non_reserved_keyword:
 | RESPECT
 | RESTART
 | RETAIN
+| RETRY
 | REUSE
 | ROLE
 | ROLLBACK
