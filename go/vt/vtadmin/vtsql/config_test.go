@@ -23,6 +23,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -143,6 +144,7 @@ func TestConfigParse(t *testing.T) {
 				Id:   "cid",
 				Name: "testcluster",
 			},
+			DialPingTimeout: time.Millisecond * 500,
 			DiscoveryTags:   expectedTags,
 			Credentials:     expectedCreds,
 			CredentialsPath: path,
