@@ -1198,8 +1198,8 @@ func (e *Executor) terminateMigration(ctx context.Context, onlineDDL *schema.Onl
 	return foundRunning, nil
 }
 
-// cancelMigration attempts to abort a scheduled or a running migration
-func (e *Executor) cancelMigration(ctx context.Context, uuid string, terminateRunningMigration bool, message string) (result *sqltypes.Result, err error) {
+// CancelMigration attempts to abort a scheduled or a running migration
+func (e *Executor) CancelMigration(ctx context.Context, uuid string, terminateRunningMigration bool, message string) (result *sqltypes.Result, err error) {
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
 
@@ -1243,16 +1243,16 @@ func (e *Executor) cancelMigration(ctx context.Context, uuid string, terminateRu
 func (e *Executor) cancelMigrations(ctx context.Context, uuids []string, message string) (err error) {
 	for _, uuid := range uuids {
 		log.Infof("cancelMigrations: cancelling %s", uuid)
-		if _, err := e.cancelMigration(ctx, uuid, true, message); err != nil {
+		if _, err := e.CancelMigration(ctx, uuid, true, message); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-// cancelPendingMigrations cancels all pending migrations (that are expected to run or are running)
+// CancelPendingMigrations cancels all pending migrations (that are expected to run or are running)
 // for this keyspace
-func (e *Executor) cancelPendingMigrations(ctx context.Context, message string) (result *sqltypes.Result, err error) {
+func (e *Executor) CancelPendingMigrations(ctx context.Context, message string) (result *sqltypes.Result, err error) {
 	r, err := e.execQuery(ctx, sqlSelectPendingMigrations)
 	if err != nil {
 		return result, err
@@ -1265,8 +1265,8 @@ func (e *Executor) cancelPendingMigrations(ctx context.Context, message string) 
 
 	result = &sqltypes.Result{}
 	for _, uuid := range uuids {
-		log.Infof("cancelPendingMigrations: cancelling %s", uuid)
-		res, err := e.cancelMigration(ctx, uuid, true, message)
+		log.Infof("CancelPendingMigrations: cancelling %s", uuid)
+		res, err := e.CancelMigration(ctx, uuid, true, message)
 		if err != nil {
 			return result, err
 		}
@@ -1960,7 +1960,7 @@ func (e *Executor) reviewStaleMigrations(ctx context.Context) error {
 // retryTabletFailureMigrations looks for migrations failed by tablet failure (e.g. by failover)
 // and retry them (put them back in the queue)
 func (e *Executor) retryTabletFailureMigrations(ctx context.Context) error {
-	_, err := e.retryMigration(ctx, sqlWhereTabletFailure)
+	_, err := e.retryMigrationWhere(ctx, sqlWhereTabletFailure)
 	return err
 }
 
@@ -2236,16 +2236,38 @@ func (e *Executor) updateMigrationProgress(ctx context.Context, uuid string, pro
 	return err
 }
 
-func (e *Executor) retryMigration(ctx context.Context, whereExpr string) (result *sqltypes.Result, err error) {
+// retryMigrationWhere retries a migration based on a given WHERE clause
+func (e *Executor) retryMigrationWhere(ctx context.Context, whereExpr string) (result *sqltypes.Result, err error) {
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
-	parsed := sqlparser.BuildParsedQuery(sqlRetryMigration, ":tablet", whereExpr)
+	parsed := sqlparser.BuildParsedQuery(sqlRetryMigrationWhere, ":tablet", whereExpr)
 	bindVars := map[string]*querypb.BindVariable{
 		"tablet": sqltypes.StringBindVariable(e.TabletAliasString()),
 	}
 	bound, err := parsed.GenerateQuery(bindVars, nil)
+	if err != nil {
+		return nil, err
+	}
 	result, err = e.execQuery(ctx, bound)
 	return result, err
+}
+
+// RetryMigration marks given migration for retry
+func (e *Executor) RetryMigration(ctx context.Context, uuid string) (result *sqltypes.Result, err error) {
+	if !schema.IsOnlineDDLUUID(uuid) {
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "Not a valid migration ID in RETRY: %s", uuid)
+	}
+	e.migrationMutex.Lock()
+	defer e.migrationMutex.Unlock()
+
+	query, err := sqlparser.ParseAndBind(sqlRetryMigration,
+		sqltypes.StringBindVariable(e.TabletAliasString()),
+		sqltypes.StringBindVariable(uuid),
+	)
+	if err != nil {
+		return nil, err
+	}
+	return e.execQuery(ctx, query)
 }
 
 // onSchemaMigrationStatus is called when a status is set/changed for a running migration
@@ -2371,7 +2393,7 @@ func (e *Executor) VExec(ctx context.Context, vx *vexec.TabletVExec) (qr *queryp
 		}
 		switch statusVal {
 		case retryMigrationHint:
-			return response(e.retryMigration(ctx, sqlparser.String(stmt.Where.Expr)))
+			return response(e.retryMigrationWhere(ctx, sqlparser.String(stmt.Where.Expr)))
 		case cancelMigrationHint:
 			uuid, err := vx.ColumnStringVal(vx.WhereCols, "migration_uuid")
 			if err != nil {
@@ -2380,13 +2402,13 @@ func (e *Executor) VExec(ctx context.Context, vx *vexec.TabletVExec) (qr *queryp
 			if !schema.IsOnlineDDLUUID(uuid) {
 				return nil, fmt.Errorf("Not an Online DDL UUID: %s", uuid)
 			}
-			return response(e.cancelMigration(ctx, uuid, true, "cancel by user"))
+			return response(e.CancelMigration(ctx, uuid, true, "cancel by user"))
 		case cancelAllMigrationHint:
 			uuid, _ := vx.ColumnStringVal(vx.WhereCols, "migration_uuid")
 			if uuid != "" {
 				return nil, fmt.Errorf("Unexpetced UUID: %s", uuid)
 			}
-			return response(e.cancelPendingMigrations(ctx, "cancel-all by user"))
+			return response(e.CancelPendingMigrations(ctx, "cancel-all by user"))
 		default:
 			return nil, fmt.Errorf("Unexpected value for migration_status: %v. Supported values are: %s, %s",
 				statusVal, retryMigrationHint, cancelMigrationHint)
