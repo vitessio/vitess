@@ -86,6 +86,12 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfAlterDatabase(a, b)
+	case *AlterMigration:
+		b, ok := inB.(*AlterMigration)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfAlterMigration(a, b)
 	case *AlterTable:
 		b, ok := inB.(*AlterTable)
 		if !ok {
@@ -928,6 +934,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfAlterColumn(in)
 	case *AlterDatabase:
 		return CloneRefOfAlterDatabase(in)
+	case *AlterMigration:
+		return CloneRefOfAlterMigration(in)
 	case *AlterTable:
 		return CloneRefOfAlterTable(in)
 	case *AlterView:
@@ -1230,6 +1238,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfAlterColumn(in, f)
 	case *AlterDatabase:
 		return VisitRefOfAlterDatabase(in, f)
+	case *AlterMigration:
+		return VisitRefOfAlterMigration(in, f)
 	case *AlterTable:
 		return VisitRefOfAlterTable(in, f)
 	case *AlterView:
@@ -1812,6 +1822,38 @@ func CloneRefOfAlterDatabase(n *AlterDatabase) *AlterDatabase {
 
 // VisitRefOfAlterDatabase will visit all parts of the AST
 func VisitRefOfAlterDatabase(in *AlterDatabase, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	return nil
+}
+
+// EqualsRefOfAlterMigration does deep equals between the two objects.
+func EqualsRefOfAlterMigration(a, b *AlterMigration) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.UUID == b.UUID &&
+		a.Type == b.Type
+}
+
+// CloneRefOfAlterMigration creates a deep clone of the input.
+func CloneRefOfAlterMigration(n *AlterMigration) *AlterMigration {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	return &out
+}
+
+// VisitRefOfAlterMigration will visit all parts of the AST
+func VisitRefOfAlterMigration(in *AlterMigration, f Visit) error {
 	if in == nil {
 		return nil
 	}
@@ -8275,6 +8317,12 @@ func EqualsStatement(inA, inB Statement) bool {
 			return false
 		}
 		return EqualsRefOfAlterDatabase(a, b)
+	case *AlterMigration:
+		b, ok := inB.(*AlterMigration)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfAlterMigration(a, b)
 	case *AlterTable:
 		b, ok := inB.(*AlterTable)
 		if !ok {
@@ -8523,6 +8571,8 @@ func CloneStatement(in Statement) Statement {
 	switch in := in.(type) {
 	case *AlterDatabase:
 		return CloneRefOfAlterDatabase(in)
+	case *AlterMigration:
+		return CloneRefOfAlterMigration(in)
 	case *AlterTable:
 		return CloneRefOfAlterTable(in)
 	case *AlterView:
@@ -8615,6 +8665,8 @@ func VisitStatement(in Statement, f Visit) error {
 	switch in := in.(type) {
 	case *AlterDatabase:
 		return VisitRefOfAlterDatabase(in, f)
+	case *AlterMigration:
+		return VisitRefOfAlterMigration(in, f)
 	case *AlterTable:
 		return VisitRefOfAlterTable(in, f)
 	case *AlterView:
