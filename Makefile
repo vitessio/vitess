@@ -258,6 +258,9 @@ docker_local:
 docker_mini:
 	${call build_docker_image,docker/mini/Dockerfile,vitess/mini}
 
+docker_vttestserver:
+	${call build_docker_image,docker/vttestserver/Dockerfile.mysql57,vitess/vttestserver}
+
 # This rule loads the working copy of the code into a bootstrap image,
 # and then runs the tests inside Docker.
 # Example: $ make docker_test flavor=mariadb
