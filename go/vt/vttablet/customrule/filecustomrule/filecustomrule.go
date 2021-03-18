@@ -53,6 +53,9 @@ func NewFileCustomRule() (fcr *FileCustomRule) {
 	return fcr
 }
 
+// ParseRules will construct a Rules object based on a file path. On any error
+// nil and that error will be returned. A log will be printed to capture the
+// stage at which parsing failed.
 func ParseRules(path string) (*rules.Rules, error) {
 	data, err := ioutil.ReadFile(path)
 	if err != nil {
