@@ -201,14 +201,14 @@ func (e rewriteGen) basicMethod(t types.Type, basic *types.Basic, spi generatorS
 		return nil
 	}
 
-	/*
-	 */
-
 	stmts := []jen.Code{
-		jen.Comment("ptrToStructMethod"),
+		createCursor(),
+		jen.If(jen.Id("!pre(&cur)")).Block(returnNil()),
+		jen.If(jen.Id("!post").Call(jen.Id("&cur"))).Block(jen.Return(jen.Id("abortE"))),
+		returnNil(),
 	}
-	rewriteFunc(t, stmts, spi)
 
+	rewriteFunc(t, stmts, spi)
 	return nil
 }
 

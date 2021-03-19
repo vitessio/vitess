@@ -869,7 +869,18 @@ func VisitBasicType(in BasicType, f Visit) error {
 
 // rewriteBasicType is part of the Rewrite implementation
 func rewriteBasicType(parent AST, node BasicType, replacer replacerFunc, pre, post ApplyFunc) error {
-	// ptrToStructMethod
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if !post(&cur) {
+		return abortE
+	}
+	return nil
 }
 
 // EqualsRefOfInterfaceContainer does deep equals between the two objects.
