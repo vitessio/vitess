@@ -501,6 +501,22 @@ func (cached *ReplaceVariables) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *RevertMigration) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(32)
+	}
+	// field Keyspace *vitess.io/vitess/go/vt/vtgate/vindexes.Keyspace
+	size += cached.Keyspace.CachedSize(true)
+	// field Stmt *vitess.io/vitess/go/vt/sqlparser.RevertMigration
+	size += cached.Stmt.CachedSize(true)
+	// field Query string
+	size += int64(len(cached.Query))
+	return size
+}
 func (cached *Route) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)

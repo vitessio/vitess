@@ -33,9 +33,9 @@ type RewriteASTResult struct {
 }
 
 // PrepareAST will normalize the query
-func PrepareAST(in Statement, bindVars map[string]*querypb.BindVariable, prefix string, parameterize bool, keyspace string) (*RewriteASTResult, error) {
+func PrepareAST(in Statement, reservedVars BindVars, bindVars map[string]*querypb.BindVariable, prefix string, parameterize bool, keyspace string) (*RewriteASTResult, error) {
 	if parameterize {
-		err := Normalize(in, bindVars, prefix)
+		err := Normalize(in, reservedVars, bindVars, prefix)
 		if err != nil {
 			return nil, err
 		}
