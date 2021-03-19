@@ -344,6 +344,7 @@ type SelectStatement interface {
 func (*Select) iSelectStatement()      {}
 func (*Union) iSelectStatement()       {}
 func (*ParenSelect) iSelectStatement() {}
+func (*ValuesStatement) iSelectStatement() {}
 
 // Select represents a SELECT statement.
 type Select struct {
@@ -504,6 +505,20 @@ func (node *ParenSelect) walkSubtree(visit Visit) error {
 		visit,
 		node.Select,
 	)
+}
+
+// ValuesStatement is a VALUES ROW('1', '2'), ROW(3, 4) expression, which can be a table factor or a stand-alone
+// statement
+type ValuesStatement struct {
+	Rows Values
+}
+
+func (s *ValuesStatement) Format(buf *TrackedBuffer) {
+	panic("implement me")
+}
+
+func (s *ValuesStatement) walkSubtree(visit Visit) error {
+	panic("implement me")
 }
 
 // Union represents a UNION statement.
@@ -2715,6 +2730,7 @@ func (*AliasedTableExpr) iTableExpr() {}
 func (*ParenTableExpr) iTableExpr()   {}
 func (*JoinTableExpr) iTableExpr()    {}
 func (*CommonTableExpr) iTableExpr()  {}
+func (*ValuesStatement) iTableExpr()  {}
 
 // AliasedTableExpr represents a table expression
 // coupled with an optional alias, AS OF expression, and index hints.
@@ -2817,6 +2833,7 @@ type SimpleTableExpr interface {
 
 func (TableName) iSimpleTableExpr() {}
 func (*Subquery) iSimpleTableExpr() {}
+func (*ValuesStatement) iSimpleTableExpr() {}
 
 // TableNames is a list of TableName.
 type TableNames []TableName
