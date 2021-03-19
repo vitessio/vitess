@@ -2931,7 +2931,7 @@ type GetTabletsRequest struct {
 	Strict bool `protobuf:"varint,4,opt,name=strict,proto3" json:"strict,omitempty"`
 	// TabletAliases is an optional list of tablet aliases to fetch Tablet objects
 	// for. If specified, Keyspace, Shard, and Cells are ignored, and tablets are
-	// looked up by their respective aliase's Cells directly.
+	// looked up by their respective aliases' Cells directly.
 	TabletAliases        []*topodata.TabletAlias `protobuf:"bytes,5,rep,name=tablet_aliases,json=tabletAliases,proto3" json:"tablet_aliases,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}                `json:"-"`
 	XXX_unrecognized     []byte                  `json:"-"`
