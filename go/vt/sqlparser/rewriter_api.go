@@ -17,6 +17,7 @@ limitations under the License.
 package sqlparser
 
 import (
+	"fmt"
 	"reflect"
 	"runtime"
 )
@@ -84,6 +85,8 @@ type ApplyFunc func(*Cursor) bool
 type abortT int
 
 var abort = abortT(0) // singleton, to signal termination of Apply
+
+var abortE = fmt.Errorf("this error is to abort the rewriter, it is not an actual error")
 
 // A Cursor describes a node encountered during Apply.
 // Information about the node and its parent is available

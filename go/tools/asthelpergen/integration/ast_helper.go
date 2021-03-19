@@ -176,6 +176,42 @@ func VisitAST(in AST, f Visit) error {
 	}
 }
 
+// rewriteAST is part of the Rewrite implementation
+func rewriteAST(parent AST, node AST, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return true
+	}
+	switch node := node.(type) {
+	case BasicType:
+		return rewriteBasicType(parent, node, replacer, pre, post)
+	case Bytes:
+		return rewriteBytes(parent, node, replacer, pre, post)
+	case InterfaceContainer:
+		return rewriteInterfaceContainer(parent, node, replacer, pre, post)
+	case InterfaceSlice:
+		return rewriteInterfaceSlice(parent, node, replacer, pre, post)
+	case *Leaf:
+		return rewriteRefOfLeaf(parent, node, replacer, pre, post)
+	case LeafSlice:
+		return rewriteLeafSlice(parent, node, replacer, pre, post)
+	case *NoCloneType:
+		return rewriteRefOfNoCloneType(parent, node, replacer, pre, post)
+	case *RefContainer:
+		return rewriteRefOfRefContainer(parent, node, replacer, pre, post)
+	case *RefSliceContainer:
+		return rewriteRefOfRefSliceContainer(parent, node, replacer, pre, post)
+	case *SubImpl:
+		return rewriteRefOfSubImpl(parent, node, replacer, pre, post)
+	case ValueContainer:
+		return rewriteValueContainer(parent, node, replacer, pre, post)
+	case ValueSliceContainer:
+		return rewriteValueSliceContainer(parent, node, replacer, pre, post)
+	default:
+		// this should never happen
+		return true
+	}
+}
+
 // EqualsBytes does deep equals between the two objects.
 func EqualsBytes(a, b Bytes) bool {
 	if len(a) != len(b) {
@@ -202,6 +238,11 @@ func VisitBytes(in Bytes, f Visit) error {
 	return err
 }
 
+// rewriteBytes is part of the Rewrite implementation
+func rewriteBytes(parent AST, node Bytes, replacer replacerFunc, pre, post ApplyFunc) error {
+	// ptrToStructMethod
+}
+
 // EqualsInterfaceContainer does deep equals between the two objects.
 func EqualsInterfaceContainer(a, b InterfaceContainer) bool {
 	return true
@@ -218,6 +259,10 @@ func VisitInterfaceContainer(in InterfaceContainer, f Visit) error {
 		return err
 	}
 	return nil
+}
+
+// rewriteInterfaceContainer is part of the Rewrite implementation
+func rewriteInterfaceContainer(parent AST, node InterfaceContainer, replacer replacerFunc, pre, post ApplyFunc) error {
 }
 
 // EqualsInterfaceSlice does deep equals between the two objects.
@@ -258,6 +303,11 @@ func VisitInterfaceSlice(in InterfaceSlice, f Visit) error {
 	return nil
 }
 
+// rewriteInterfaceSlice is part of the Rewrite implementation
+func rewriteInterfaceSlice(parent AST, node InterfaceSlice, replacer replacerFunc, pre, post ApplyFunc) error {
+	// ptrToStructMethod
+}
+
 // EqualsRefOfLeaf does deep equals between the two objects.
 func EqualsRefOfLeaf(a, b *Leaf) bool {
 	if a == b {
@@ -287,6 +337,22 @@ func VisitRefOfLeaf(in *Leaf, f Visit) error {
 		return err
 	}
 	return nil
+}
+
+// rewriteRefOfLeaf is part of the Rewrite implementation
+func rewriteRefOfLeaf(parent AST, node *Leaf, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return true
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return true
+	}
+	return post(&cur)
 }
 
 // EqualsLeafSlice does deep equals between the two objects.
@@ -327,6 +393,11 @@ func VisitLeafSlice(in LeafSlice, f Visit) error {
 	return nil
 }
 
+// rewriteLeafSlice is part of the Rewrite implementation
+func rewriteLeafSlice(parent AST, node LeafSlice, replacer replacerFunc, pre, post ApplyFunc) error {
+	// ptrToStructMethod
+}
+
 // EqualsRefOfNoCloneType does deep equals between the two objects.
 func EqualsRefOfNoCloneType(a, b *NoCloneType) bool {
 	if a == b {
@@ -352,6 +423,22 @@ func VisitRefOfNoCloneType(in *NoCloneType, f Visit) error {
 		return err
 	}
 	return nil
+}
+
+// rewriteRefOfNoCloneType is part of the Rewrite implementation
+func rewriteRefOfNoCloneType(parent AST, node *NoCloneType, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return true
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return true
+	}
+	return post(&cur)
 }
 
 // EqualsRefOfRefContainer does deep equals between the two objects.
@@ -393,6 +480,32 @@ func VisitRefOfRefContainer(in *RefContainer, f Visit) error {
 		return err
 	}
 	return nil
+}
+
+// rewriteRefOfRefContainer is part of the Rewrite implementation
+func rewriteRefOfRefContainer(parent AST, node *RefContainer, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return true
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return true
+	}
+	if cont := rewriteAST(node, node.ASTType, func(newNode, parent AST) {
+		parent.(*RefContainer).ASTType = newNode.(AST)
+	}, pre, post); !cont {
+		return false
+	}
+	if cont := rewriteRefOfLeaf(node, node.ASTImplementationType, func(newNode, parent AST) {
+		parent.(*RefContainer).ASTImplementationType = newNode.(*Leaf)
+	}, pre, post); !cont {
+		return false
+	}
+	return post(&cur)
 }
 
 // EqualsRefOfRefSliceContainer does deep equals between the two objects.
@@ -441,6 +554,36 @@ func VisitRefOfRefSliceContainer(in *RefSliceContainer, f Visit) error {
 	return nil
 }
 
+// rewriteRefOfRefSliceContainer is part of the Rewrite implementation
+func rewriteRefOfRefSliceContainer(parent AST, node *RefSliceContainer, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return true
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return true
+	}
+	for i, el := range node.ASTElements {
+		if cont := rewriteAST(node, el, func(newNode, parent AST) {
+			parent.(*RefSliceContainer).ASTElements[i] = newNode.(AST)
+		}, pre, post); !cont {
+			return false
+		}
+	}
+	for i, el := range node.ASTImplementationElements {
+		if cont := rewriteRefOfLeaf(node, el, func(newNode, parent AST) {
+			parent.(*RefSliceContainer).ASTImplementationElements[i] = newNode.(*Leaf)
+		}, pre, post); !cont {
+			return false
+		}
+	}
+	return post(&cur)
+}
+
 // EqualsRefOfSubImpl does deep equals between the two objects.
 func EqualsRefOfSubImpl(a, b *SubImpl) bool {
 	if a == b {
@@ -478,6 +621,27 @@ func VisitRefOfSubImpl(in *SubImpl, f Visit) error {
 	return nil
 }
 
+// rewriteRefOfSubImpl is part of the Rewrite implementation
+func rewriteRefOfSubImpl(parent AST, node *SubImpl, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return true
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return true
+	}
+	if cont := rewriteSubIface(node, node.inner, func(newNode, parent AST) {
+		parent.(*SubImpl).inner = newNode.(SubIface)
+	}, pre, post); !cont {
+		return false
+	}
+	return post(&cur)
+}
+
 // EqualsValueContainer does deep equals between the two objects.
 func EqualsValueContainer(a, b ValueContainer) bool {
 	return a.NotASTType == b.NotASTType &&
@@ -502,6 +666,20 @@ func VisitValueContainer(in ValueContainer, f Visit) error {
 		return err
 	}
 	return nil
+}
+
+// rewriteValueContainer is part of the Rewrite implementation
+func rewriteValueContainer(parent AST, node ValueContainer, replacer replacerFunc, pre, post ApplyFunc) error {
+	if cont := rewriteAST(node, node.ASTType, func(newNode, parent AST) {
+		parent.(ValueContainer).ASTType = newNode.(AST)
+	}, pre, post); !cont {
+		return false
+	}
+	if cont := rewriteRefOfLeaf(node, node.ASTImplementationType, func(newNode, parent AST) {
+		parent.(ValueContainer).ASTImplementationType = newNode.(*Leaf)
+	}, pre, post); !cont {
+		return false
+	}
 }
 
 // EqualsValueSliceContainer does deep equals between the two objects.
@@ -532,6 +710,24 @@ func VisitValueSliceContainer(in ValueSliceContainer, f Visit) error {
 		}
 	}
 	return nil
+}
+
+// rewriteValueSliceContainer is part of the Rewrite implementation
+func rewriteValueSliceContainer(parent AST, node ValueSliceContainer, replacer replacerFunc, pre, post ApplyFunc) error {
+	for i, el := range node.ASTElements {
+		if cont := rewriteAST(node, el, func(newNode, parent AST) {
+			parent.(ValueSliceContainer).ASTElements[i] = newNode.(AST)
+		}, pre, post); !cont {
+			return false
+		}
+	}
+	for i, el := range node.ASTImplementationElements {
+		if cont := rewriteRefOfLeaf(node, el, func(newNode, parent AST) {
+			parent.(ValueSliceContainer).ASTImplementationElements[i] = newNode.(*Leaf)
+		}, pre, post); !cont {
+			return false
+		}
+	}
 }
 
 // EqualsSubIface does deep equals between the two objects.
@@ -583,10 +779,29 @@ func VisitSubIface(in SubIface, f Visit) error {
 	}
 }
 
+// rewriteSubIface is part of the Rewrite implementation
+func rewriteSubIface(parent AST, node SubIface, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return true
+	}
+	switch node := node.(type) {
+	case *SubImpl:
+		return rewriteRefOfSubImpl(parent, node, replacer, pre, post)
+	default:
+		// this should never happen
+		return true
+	}
+}
+
 // VisitBasicType will visit all parts of the AST
 func VisitBasicType(in BasicType, f Visit) error {
 	_, err := f(in)
 	return err
+}
+
+// rewriteBasicType is part of the Rewrite implementation
+func rewriteBasicType(parent AST, node BasicType, replacer replacerFunc, pre, post ApplyFunc) error {
+	// ptrToStructMethod
 }
 
 // EqualsRefOfInterfaceContainer does deep equals between the two objects.
@@ -619,6 +834,22 @@ func VisitRefOfInterfaceContainer(in *InterfaceContainer, f Visit) error {
 		return err
 	}
 	return nil
+}
+
+// rewriteRefOfInterfaceContainer is part of the Rewrite implementation
+func rewriteRefOfInterfaceContainer(parent AST, node *InterfaceContainer, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return true
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return true
+	}
+	return post(&cur)
 }
 
 // EqualsSliceOfAST does deep equals between the two objects.
@@ -746,6 +977,32 @@ func VisitRefOfValueContainer(in *ValueContainer, f Visit) error {
 	return nil
 }
 
+// rewriteRefOfValueContainer is part of the Rewrite implementation
+func rewriteRefOfValueContainer(parent AST, node *ValueContainer, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return true
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return true
+	}
+	if cont := rewriteAST(node, node.ASTType, func(newNode, parent AST) {
+		parent.(*ValueContainer).ASTType = newNode.(AST)
+	}, pre, post); !cont {
+		return false
+	}
+	if cont := rewriteRefOfLeaf(node, node.ASTImplementationType, func(newNode, parent AST) {
+		parent.(*ValueContainer).ASTImplementationType = newNode.(*Leaf)
+	}, pre, post); !cont {
+		return false
+	}
+	return post(&cur)
+}
+
 // EqualsRefOfValueSliceContainer does deep equals between the two objects.
 func EqualsRefOfValueSliceContainer(a, b *ValueSliceContainer) bool {
 	if a == b {
@@ -790,4 +1047,34 @@ func VisitRefOfValueSliceContainer(in *ValueSliceContainer, f Visit) error {
 		}
 	}
 	return nil
+}
+
+// rewriteRefOfValueSliceContainer is part of the Rewrite implementation
+func rewriteRefOfValueSliceContainer(parent AST, node *ValueSliceContainer, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return true
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return true
+	}
+	for i, el := range node.ASTElements {
+		if cont := rewriteAST(node, el, func(newNode, parent AST) {
+			parent.(*ValueSliceContainer).ASTElements[i] = newNode.(AST)
+		}, pre, post); !cont {
+			return false
+		}
+	}
+	for i, el := range node.ASTImplementationElements {
+		if cont := rewriteRefOfLeaf(node, el, func(newNode, parent AST) {
+			parent.(*ValueSliceContainer).ASTImplementationElements[i] = newNode.(*Leaf)
+		}, pre, post); !cont {
+			return false
+		}
+	}
+	return post(&cur)
 }

@@ -310,6 +310,7 @@ func GenerateASTHelpers(packagePatterns []string, rootIface, exceptCloneType str
 	generator.gens2 = append(generator.gens2, &equalsGen{})
 	generator.gens2 = append(generator.gens2, newCloneGen(exceptCloneType))
 	generator.gens2 = append(generator.gens2, &visitGen{})
+	generator.gens2 = append(generator.gens2, &rewriteGen{})
 
 	it, err := generator.GenerateCode()
 	if err != nil {
@@ -335,6 +336,7 @@ const (
 	clone methodType = iota
 	equals
 	visit
+	rewrite
 )
 
 func (gen *astHelperGen) addFunc(name string, typ methodType, code jen.Code) {
@@ -346,6 +348,8 @@ func (gen *astHelperGen) addFunc(name string, typ methodType, code jen.Code) {
 		comment = " does deep equals between the two objects."
 	case visit:
 		comment = " will visit all parts of the AST"
+	case rewrite:
+		comment = " is part of the Rewrite implementation"
 	}
 	gen.methods = append(gen.methods, jen.Comment(name+comment), code)
 }
