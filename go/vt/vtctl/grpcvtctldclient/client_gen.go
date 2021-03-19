@@ -271,6 +271,15 @@ func (client *gRPCVtctldClient) ReparentTablet(ctx context.Context, in *vtctldat
 	return client.c.ReparentTablet(ctx, in, opts...)
 }
 
+// ShardReplicationPositions is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) ShardReplicationPositions(ctx context.Context, in *vtctldatapb.ShardReplicationPositionsRequest, opts ...grpc.CallOption) (*vtctldatapb.ShardReplicationPositionsResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.ShardReplicationPositions(ctx, in, opts...)
+}
+
 // TabletExternallyReparented is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) TabletExternallyReparented(ctx context.Context, in *vtctldatapb.TabletExternallyReparentedRequest, opts ...grpc.CallOption) (*vtctldatapb.TabletExternallyReparentedResponse, error) {
 	if client.c == nil {

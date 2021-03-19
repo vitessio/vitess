@@ -17,6 +17,20 @@ import (
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/sqlutils"
 )
 
+// MetricsQueryType indicates the type of metrics query on MySQL backend. See following.
+type MetricsQueryType int
+
+const (
+	// MetricsQueryTypeDefault indictes the default, internal implementation. Specifically, our throttler runs a replication lag query
+	MetricsQueryTypeDefault MetricsQueryType = iota
+	// MetricsQueryTypeShowGlobal indicatesa SHOW GLOBAL (STATUS|VARIABLES) query
+	MetricsQueryTypeShowGlobal
+	// MetricsQueryTypeSelect indicates a custom SELECT query
+	MetricsQueryTypeSelect
+	// MetricsQueryTypeUnknown is an unknown query type, which we cannot run. This is an error
+	MetricsQueryTypeUnknown
+)
+
 var mysqlMetricCache = cache.New(cache.NoExpiration, 10*time.Millisecond)
 
 func getMySQLMetricCacheKey(probe *Probe) string {
@@ -42,6 +56,20 @@ func getCachedMySQLThrottleMetric(probe *Probe) *MySQLThrottleMetric {
 		return mySQLThrottleMetric
 	}
 	return nil
+}
+
+// GetMetricsQueryType analyzes the type of a metrics query
+func GetMetricsQueryType(query string) MetricsQueryType {
+	if query == "" {
+		return MetricsQueryTypeDefault
+	}
+	if strings.HasPrefix(strings.ToLower(query), "select") {
+		return MetricsQueryTypeSelect
+	}
+	if strings.HasPrefix(strings.ToLower(query), "show global") {
+		return MetricsQueryTypeShowGlobal
+	}
+	return MetricsQueryTypeUnknown
 }
 
 // MySQLThrottleMetric has the probed metric for a mysql instance
@@ -106,33 +134,28 @@ func ReadThrottleMetric(probe *Probe, clusterName string, overrideGetMetricFunc 
 		db.SetMaxOpenConns(maxPoolConnections)
 		db.SetMaxIdleConns(maxIdleConnections)
 	}
-	if strings.HasPrefix(strings.ToLower(probe.MetricQuery), "select") {
+	metricsQueryType := GetMetricsQueryType(probe.MetricQuery)
+	switch metricsQueryType {
+	case MetricsQueryTypeSelect:
 		mySQLThrottleMetric.Err = db.QueryRow(probe.MetricQuery).Scan(&mySQLThrottleMetric.Value)
 		return cacheMySQLThrottleMetric(probe, mySQLThrottleMetric)
-	}
-
-	if strings.HasPrefix(strings.ToLower(probe.MetricQuery), "show global") {
+	case MetricsQueryTypeShowGlobal:
 		var variableName string // just a placeholder
 		mySQLThrottleMetric.Err = db.QueryRow(probe.MetricQuery).Scan(&variableName, &mySQLThrottleMetric.Value)
 		return cacheMySQLThrottleMetric(probe, mySQLThrottleMetric)
+	case MetricsQueryTypeDefault:
+		mySQLThrottleMetric.Err = sqlutils.QueryRowsMap(db, `show slave status`, func(m sqlutils.RowMap) error {
+			slaveIORunning := m.GetString("Slave_IO_Running")
+			slaveSQLRunning := m.GetString("Slave_SQL_Running")
+			secondsBehindMaster := m.GetNullInt64("Seconds_Behind_Master")
+			if !secondsBehindMaster.Valid {
+				return fmt.Errorf("replication not running; Slave_IO_Running=%+v, Slave_SQL_Running=%+v", slaveIORunning, slaveSQLRunning)
+			}
+			mySQLThrottleMetric.Value = float64(secondsBehindMaster.Int64)
+			return nil
+		})
+		return cacheMySQLThrottleMetric(probe, mySQLThrottleMetric)
 	}
-
-	if probe.MetricQuery != "" {
-		mySQLThrottleMetric.Err = fmt.Errorf("Unsupported metrics query type: %s", probe.MetricQuery)
-		return mySQLThrottleMetric
-	}
-
-	// No metric query? By default we look at replication lag as output of SHOW SLAVE STATUS
-
-	mySQLThrottleMetric.Err = sqlutils.QueryRowsMap(db, `show slave status`, func(m sqlutils.RowMap) error {
-		slaveIORunning := m.GetString("Slave_IO_Running")
-		slaveSQLRunning := m.GetString("Slave_SQL_Running")
-		secondsBehindMaster := m.GetNullInt64("Seconds_Behind_Master")
-		if !secondsBehindMaster.Valid {
-			return fmt.Errorf("replication not running; Slave_IO_Running=%+v, Slave_SQL_Running=%+v", slaveIORunning, slaveSQLRunning)
-		}
-		mySQLThrottleMetric.Value = float64(secondsBehindMaster.Int64)
-		return nil
-	})
-	return cacheMySQLThrottleMetric(probe, mySQLThrottleMetric)
+	mySQLThrottleMetric.Err = fmt.Errorf("Unsupported metrics query type: %s", probe.MetricQuery)
+	return mySQLThrottleMetric
 }

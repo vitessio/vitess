@@ -95,7 +95,7 @@ func TestPlan(t *testing.T) {
 					bout, _ := json.MarshalIndent(plan, "", "  ")
 					out = string(bout)
 				}
-				fmt.Printf("\"%s\"\n%s\n\n", tcase.input, out)
+				fmt.Printf("\"in> %s\"\nout>%s\nexpected: %s\n\n", tcase.input, out, tcase.output)
 			}
 		})
 	}

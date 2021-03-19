@@ -145,6 +145,8 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 		return qre.execAsTransaction(qre.txConnExec)
 	case p.PlanCallProc:
 		return qre.execCallProc()
+	case p.PlanAlterMigration:
+		return qre.execAlterMigration()
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "%s unexpected plan type", qre.plan.PlanID.String())
 }
@@ -739,6 +741,24 @@ func (qre *QueryExecutor) execProc(conn *StatefulConnection) (*sqltypes.Result, 
 		return nil, err
 	}
 	return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "Multi-Resultset not supported in stored procedure")
+}
+
+func (qre *QueryExecutor) execAlterMigration() (*sqltypes.Result, error) {
+	alterMigration, ok := qre.plan.FullStmt.(*sqlparser.AlterMigration)
+	if !ok {
+		return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "Expecting ALTER VITESS_MIGRATION plan")
+	}
+	switch alterMigration.Type {
+	case sqlparser.RetryMigrationType:
+		return qre.tsv.onlineDDLExecutor.RetryMigration(qre.ctx, alterMigration.UUID)
+	case sqlparser.CompleteMigrationType:
+		return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "ALTER VITESS_MIGRATION COMPLETE is not implemented yet")
+	case sqlparser.CancelMigrationType:
+		return qre.tsv.onlineDDLExecutor.CancelMigration(qre.ctx, alterMigration.UUID, true, "CANCEL issued by user")
+	case sqlparser.CancelAllMigrationType:
+		return qre.tsv.onlineDDLExecutor.CancelPendingMigrations(qre.ctx, "CANCEL ALL issued by user")
+	}
+	return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "ALTER VITESS_MIGRATION not implemented")
 }
 
 func (qre *QueryExecutor) drainResultSetOnConn(conn *connpool.DBConn) error {
