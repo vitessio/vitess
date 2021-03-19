@@ -514,11 +514,17 @@ type ValuesStatement struct {
 }
 
 func (s *ValuesStatement) Format(buf *TrackedBuffer) {
-	panic("implement me")
+	buf.Myprintf("values ")
+	for i, row := range s.Rows {
+		if i > 0 {
+			buf.Myprintf(", ")
+		}
+		buf.Myprintf("row%v", row)
+	}
 }
 
 func (s *ValuesStatement) walkSubtree(visit Visit) error {
-	panic("implement me")
+	return Walk(visit, s.Rows)
 }
 
 // Union represents a UNION statement.
@@ -2760,7 +2766,12 @@ func (node *AsOf) walkSubtree(visit Visit) error {
 
 // Format formats the node.
 func (node *AliasedTableExpr) Format(buf *TrackedBuffer) {
-	buf.Myprintf("%v%v", node.Expr, node.Partitions)
+	switch node.Expr.(type) {
+	case *ValuesStatement:
+		buf.Myprintf("(%v)", node.Expr)
+	default:
+		buf.Myprintf("%v%v", node.Expr, node.Partitions)
+	}
 	if node.AsOf != nil {
 		buf.Myprintf(" %v", node.AsOf)
 	}

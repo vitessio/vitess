@@ -350,7 +350,7 @@ func skipToEnd(yylex interface{}) {
 %type <strs> enum_values
 %type <columnDefinition> column_definition column_definition_for_create
 %type <indexDefinition> index_definition
-%type <constraintDefinition> constraint_definition, check_constraint_definition
+%type <constraintDefinition> constraint_definition check_constraint_definition
 %type <str> index_or_key indexes_or_keys index_or_key_opt
 %type <str> from_or_in show_database_opt
 %type <str> name_opt
@@ -362,7 +362,7 @@ func skipToEnd(yylex interface{}) {
 %type <indexColumns> index_column_list
 %type <indexOption> index_option
 %type <indexOptions> index_option_list index_option_list_opt
-%type <constraintInfo> constraint_info, check_constraint_info
+%type <constraintInfo> constraint_info check_constraint_info
 %type <partDefs> partition_definitions
 %type <partDef> partition_definition
 %type <partSpec> partition_operation
