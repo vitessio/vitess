@@ -84,10 +84,17 @@ func (e rewriteGen) structMethod(t types.Type, strct *types.Struct, spi generato
 		return nil
 	}
 
-	/*
-	 */
-
-	stmts := rewriteAllStructFields(t, strct, spi, true)
+	stmts := []jen.Code{
+		jen.Var().Id("err").Error(),
+		createCursor(),
+		jen.If(jen.Id("!pre(&cur)")).Block(returnNil()),
+	}
+	stmts = append(stmts, rewriteAllStructFields(t, strct, spi, true)...)
+	stmts = append(stmts,
+		jen.If(jen.Id("err != nil")).Block(jen.Return(jen.Err())),
+		jen.If(jen.Id("!post").Call(jen.Id("&cur"))).Block(jen.Return(jen.Id("abortE"))),
+		returnNil(),
+	)
 	rewriteFunc(t, stmts, spi)
 
 	return nil
@@ -111,12 +118,7 @@ func (e rewriteGen) ptrToStructMethod(t types.Type, strct *types.Struct, spi gen
 				node:     node,
 			}
 		*/
-		jen.Id("cur := Cursor").Values(
-			jen.Dict{
-				jen.Id("parent"):   jen.Id("parent"),
-				jen.Id("replacer"): jen.Id("replacer"),
-				jen.Id("node"):     jen.Id("node"),
-			}),
+		createCursor(),
 
 		/*
 			if !pre(&cur) {
@@ -135,6 +137,15 @@ func (e rewriteGen) ptrToStructMethod(t types.Type, strct *types.Struct, spi gen
 	rewriteFunc(t, stmts, spi)
 
 	return nil
+}
+
+func createCursor() *jen.Statement {
+	return jen.Id("cur := Cursor").Values(
+		jen.Dict{
+			jen.Id("parent"):   jen.Id("parent"),
+			jen.Id("replacer"): jen.Id("replacer"),
+			jen.Id("node"):     jen.Id("node"),
+		})
 }
 
 func (e rewriteGen) ptrToBasicMethod(t types.Type, _ *types.Basic, spi generatorSPI) error {
@@ -249,26 +260,35 @@ func rewriteAllStructFields(t types.Type, strct *types.Struct, spi generatorSPI,
 		field := strct.Field(i)
 		if types.Implements(field.Type(), spi.iface()) {
 			spi.addType(field.Type())
-			output = append(output, rewriteChild(t, field.Type(), jen.Id("node").Dot(field.Name()), jen.Dot(field.Name())))
+			output = append(output, rewriteChild(t, field.Type(), field.Name(), jen.Id("node").Dot(field.Name()), jen.Dot(field.Name()), fail))
 			continue
 		}
 		slice, isSlice := field.Type().(*types.Slice)
 		if isSlice && types.Implements(slice.Elem(), spi.iface()) {
-			elem := slice.Elem()
-			spi.addType(elem)
+			spi.addType(slice.Elem())
+			id := jen.Id("i")
+			if fail {
+				id = jen.Id("_")
+			}
 			output = append(output,
-				jen.For(jen.Id("i, el := range node."+field.Name())).
-					Block(rewriteChild(t, elem, jen.Id("el"), jen.Dot(field.Name()).Index(jen.Id("i")))))
+				jen.For(jen.List(id, jen.Id("el")).Op(":=").Id("range node."+field.Name())).
+					Block(rewriteChild(t, slice.Elem(), field.Name(), jen.Id("el"), jen.Dot(field.Name()).Index(id), fail)))
 		}
 	}
 	return output
 }
 
-func failReplacer(t types.Type, f *types.Var) jen.Code {
+func failReplacer(t types.Type, f string) *jen.Statement {
+	//err = vterrors.New(vtrpcpb.Code_INTERNAL, "[BUG] tried to replace '%s' on '%s'")
 
+	typeString := types.TypeString(t, noQualifier)
+	return jen.Err().Op("=").Qual("vitess.io/vitess/go/vt/vterrors", "New").Call(
+		jen.Qual("vitess.io/vitess/go/vt/proto/vtrpc", "Code_INTERNAL"),
+		jen.Lit(fmt.Sprintf("[BUG] tried to replace '%s' on '%s'", f, typeString)),
+	)
 }
 
-func rewriteChild(t, field types.Type, param jen.Code, replace jen.Code) jen.Code {
+func rewriteChild(t, field types.Type, fieldName string, param jen.Code, replace jen.Code, fail bool) jen.Code {
 	/*
 		    if errF := rewriteAST(node, node.ASTType, func(newNode, parent AST) {
 				parent.(*RefContainer).ASTType = newNode.(AST)
@@ -284,12 +304,19 @@ func rewriteChild(t, field types.Type, param jen.Code, replace jen.Code) jen.Cod
 
 	*/
 	funcName := rewriteName + printableTypeName(field)
-	funcBlock := jen.Func().Call(jen.Id("newNode, parent AST")).
-		Block(jen.Id("parent").
+	var replaceOrFail *jen.Statement
+	if fail {
+		replaceOrFail = failReplacer(t, fieldName)
+	} else {
+		replaceOrFail = jen.Id("parent").
 			Assert(jen.Id(types.TypeString(t, noQualifier))).
 			Add(replace).
 			Op("=").
-			Id("newNode").Assert(jen.Id(types.TypeString(field, noQualifier))))
+			Id("newNode").Assert(jen.Id(types.TypeString(field, noQualifier)))
+
+	}
+	funcBlock := jen.Func().Call(jen.Id("newNode, parent AST")).
+		Block(replaceOrFail)
 
 	rewriteField := jen.If(
 		jen.Id("errF := ").Id(funcName).Call(

@@ -17,7 +17,10 @@ limitations under the License.
 
 package integration
 
-import "fmt"
+import (
+	vtrpc "vitess.io/vitess/go/vt/proto/vtrpc"
+	vterrors "vitess.io/vitess/go/vt/vterrors"
+)
 
 // EqualsAST does deep equals between the two objects.
 func EqualsAST(inA, inB AST) bool {
@@ -265,6 +268,22 @@ func VisitInterfaceContainer(in InterfaceContainer, f Visit) error {
 
 // rewriteInterfaceContainer is part of the Rewrite implementation
 func rewriteInterfaceContainer(parent AST, node InterfaceContainer, replacer replacerFunc, pre, post ApplyFunc) error {
+	var err error
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if !post(&cur) {
+		return abortE
+	}
+	return nil
 }
 
 // EqualsInterfaceSlice does deep equals between the two objects.
@@ -685,33 +704,27 @@ func VisitValueContainer(in ValueContainer, f Visit) error {
 	return nil
 }
 
-//
-//
-//ueContainer is part of the Rewrite implementation
+// rewriteValueContainer is part of the Rewrite implementation
 func rewriteValueContainer(parent AST, node ValueContainer, replacer replacerFunc, pre, post ApplyFunc) error {
 	var err error
-
 	cur := Cursor{
 		node:     node,
 		parent:   parent,
 		replacer: replacer,
 	}
-
 	if !pre(&cur) {
 		return nil
 	}
-
 	if errF := rewriteAST(node, node.ASTType, func(newNode, parent AST) {
-		err = fmt.Errorf("oh noes")
+		err = vterrors.New(vtrpc.Code_INTERNAL, "[BUG] tried to replace 'ASTType' on 'ValueContainer'")
 	}, pre, post); errF != nil {
 		return errF
 	}
 	if errF := rewriteRefOfLeaf(node, node.ASTImplementationType, func(newNode, parent AST) {
-		err = fmt.Errorf("oh noes")
+		err = vterrors.New(vtrpc.Code_INTERNAL, "[BUG] tried to replace 'ASTImplementationType' on 'ValueContainer'")
 	}, pre, post); errF != nil {
 		return errF
 	}
-
 	if err != nil {
 		return err
 	}
@@ -753,20 +766,36 @@ func VisitValueSliceContainer(in ValueSliceContainer, f Visit) error {
 
 // rewriteValueSliceContainer is part of the Rewrite implementation
 func rewriteValueSliceContainer(parent AST, node ValueSliceContainer, replacer replacerFunc, pre, post ApplyFunc) error {
-	for i, el := range node.ASTElements {
+	var err error
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	for _, el := range node.ASTElements {
 		if errF := rewriteAST(node, el, func(newNode, parent AST) {
-			parent.(ValueSliceContainer).ASTElements[i] = newNode.(AST)
+			err = vterrors.New(vtrpc.Code_INTERNAL, "[BUG] tried to replace 'ASTElements' on 'ValueSliceContainer'")
 		}, pre, post); errF != nil {
 			return errF
 		}
 	}
-	for i, el := range node.ASTImplementationElements {
+	for _, el := range node.ASTImplementationElements {
 		if errF := rewriteRefOfLeaf(node, el, func(newNode, parent AST) {
-			parent.(ValueSliceContainer).ASTImplementationElements[i] = newNode.(*Leaf)
+			err = vterrors.New(vtrpc.Code_INTERNAL, "[BUG] tried to replace 'ASTImplementationElements' on 'ValueSliceContainer'")
 		}, pre, post); errF != nil {
 			return errF
 		}
 	}
+	if err != nil {
+		return err
+	}
+	if !post(&cur) {
+		return abortE
+	}
+	return nil
 }
 
 // EqualsSubIface does deep equals between the two objects.
