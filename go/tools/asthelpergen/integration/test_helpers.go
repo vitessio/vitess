@@ -65,18 +65,6 @@ type replacerFunc func(newNode, parent AST)
 func Rewrite(node AST, pre, post ApplyFunc) (AST, error) {
 	outer := &struct{ AST }{node}
 
-	if pre == nil {
-		pre = func(cursor *Cursor) bool {
-			return true
-		}
-	}
-
-	if post == nil {
-		post = func(cursor *Cursor) bool {
-			return true
-		}
-	}
-
 	err := rewriteAST(outer, node, func(newNode, parent AST) {
 		outer.AST = newNode
 	}, pre, post)

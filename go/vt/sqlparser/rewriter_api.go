@@ -46,17 +46,6 @@ func Rewrite(node SQLNode, pre, post ApplyFunc) (result SQLNode, err error) {
 		parent.SQLNode = newNode
 	}
 
-	if pre == nil {
-		pre = func(*Cursor) bool {
-			return true
-		}
-	}
-	if post == nil {
-		post = func(*Cursor) bool {
-			return true
-		}
-	}
-
 	err = rewriteSQLNode(parent, node, replacer, pre, post)
 	if err != nil && err != errAbort {
 		return nil, err
