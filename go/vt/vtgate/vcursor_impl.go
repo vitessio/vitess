@@ -727,12 +727,7 @@ func (vc *vcursorImpl) ErrorIfShardedF(ks *vindexes.Keyspace, warn, errFormat st
 	if ks.Sharded {
 		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, errFormat, params...)
 	}
-	if vc.warnShardedOnly {
-		vc.warnings = append(vc.warnings, &querypb.QueryWarning{
-			Code:    mysql.ERNotSupportedYet,
-			Message: fmt.Sprintf("use of feature that is only supported in unsharded mode: %s", warn),
-		})
-	}
+	vc.WarnUnshardedOnly("'%s' not supported in sharded mode", warn)
 
 	return nil
 }
