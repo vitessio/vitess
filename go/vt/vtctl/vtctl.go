@@ -551,22 +551,6 @@ func fmtTabletAwkable(ti *topo.TabletInfo) string {
 	return fmt.Sprintf("%v %v %v %v %v %v %v %v", topoproto.TabletAliasString(ti.Alias), keyspace, shard, topoproto.TabletTypeLString(ti.Type), ti.Addr(), ti.MysqlAddr(), fmtMapAwkable(ti.Tags), mtst)
 }
 
-func dumpTablets(ctx context.Context, wr *wrangler.Wrangler, tabletAliases []*topodatapb.TabletAlias) error {
-	tabletMap, err := wr.TopoServer().GetTabletMap(ctx, tabletAliases)
-	if err != nil {
-		return err
-	}
-	for _, tabletAlias := range tabletAliases {
-		ti, ok := tabletMap[topoproto.TabletAliasString(tabletAlias)]
-		if !ok {
-			wr.Logger().Warningf("failed to load tablet %v", tabletAlias)
-		} else {
-			wr.Logger().Printf("%v\n", fmtTabletAwkable(ti))
-		}
-	}
-	return nil
-}
-
 // getFileParam returns a string containing either flag is not "",
 // or the content of the file named flagFile
 func getFileParam(flag, flagFile, name string) (string, error) {
@@ -2672,7 +2656,20 @@ func commandListTablets(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 			return err
 		}
 	}
-	return dumpTablets(ctx, wr, aliases)
+
+	resp, err := wr.VtctldServer().GetTablets(ctx, &vtctldatapb.GetTabletsRequest{
+		TabletAliases: aliases,
+		Strict:        false,
+	})
+	if err != nil {
+		return err
+	}
+
+	for _, tablet := range resp.Tablets {
+		wr.Logger().Printf("%v\n", cli.MarshalTabletAWK(tablet))
+	}
+
+	return nil
 }
 
 func commandGetSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
