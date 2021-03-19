@@ -396,6 +396,10 @@ message GetTabletsRequest {
   // return successfully, but will fail the request if all cells fail. When
   // true, any individual cell can fail the full request.
   bool strict = 4;
+  // TabletAliases is an optional list of tablet aliases to fetch Tablet objects
+  // for. If specified, Keyspace, Shard, and Cells are ignored, and tablets are
+  // looked up by their respective aliase's Cells directly.
+  repeated topodata.TabletAlias tablet_aliases = 5;
 }
 
 message GetTabletsResponse {
