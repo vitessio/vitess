@@ -27,6 +27,9 @@ var errNoResultYet = errors.New("Metric not collected yet")
 // ErrNoSuchMetric is for when a user requests a metric by an unknown metric name
 var ErrNoSuchMetric = errors.New("No such metric")
 
+// ErrInvalidCheckType is an internal error indicating an unknown check type
+var ErrInvalidCheckType = errors.New("Unknown throttler check type")
+
 // IsDialTCPError sees if th egiven error indicates a TCP issue
 func IsDialTCPError(e error) bool {
 	if e == nil {

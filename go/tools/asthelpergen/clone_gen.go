@@ -17,10 +17,8 @@ limitations under the License.
 package asthelpergen
 
 import (
-	"fmt"
 	"go/types"
 	"log"
-	"strings"
 
 	"github.com/dave/jennifer/jen"
 )
@@ -29,58 +27,21 @@ import (
 // starting from a root interface type. While creating the clone method for this root interface, more types that need
 // to be cloned are discovered. This continues type by type until all necessary types have been traversed.
 type cloneGen struct {
-	methods    []jen.Code
-	iface      *types.Interface
-	scope      *types.Scope
-	todo       []types.Type
 	exceptType string
 }
 
-var _ generator = (*cloneGen)(nil)
+var _ generator2 = (*cloneGen)(nil)
 
-func newCloneGen(iface *types.Interface, scope *types.Scope, exceptType string) *cloneGen {
+func newCloneGen(exceptType string) *cloneGen {
 	return &cloneGen{
-		iface:      iface,
-		scope:      scope,
 		exceptType: exceptType,
 	}
 }
 
-func (c *cloneGen) visitStruct(types.Type, *types.Struct) error {
-	return nil
-}
-
-func (c *cloneGen) visitSlice(types.Type, *types.Slice) error {
-	return nil
-}
-
-func (c *cloneGen) visitInterface(t types.Type, _ *types.Interface) error {
-	c.todo = append(c.todo, t)
-	return nil
-}
-
 const cloneName = "Clone"
 
-type methodType int
-
-const (
-	clone methodType = iota
-	equals
-)
-
-func (c *cloneGen) addFunc(name string, typ methodType, code jen.Code) {
-	var comment string
-	switch typ {
-	case clone:
-		comment = " creates a deep clone of the input."
-	case equals:
-		comment = " does deep equals between the two objects."
-	}
-	c.methods = append(c.methods, jen.Comment(name+comment), code)
-}
-
 // readValueOfType produces code to read the expression of type `t`, and adds the type to the todo-list
-func (c *cloneGen) readValueOfType(t types.Type, expr jen.Code) jen.Code {
+func (c *cloneGen) readValueOfType(t types.Type, expr jen.Code, spi generatorSPI) jen.Code {
 	switch t.Underlying().(type) {
 	case *types.Basic:
 		return expr
@@ -90,38 +51,42 @@ func (c *cloneGen) readValueOfType(t types.Type, expr jen.Code) jen.Code {
 			return expr
 		}
 	}
-	c.todo = append(c.todo, t)
+	spi.addType(t)
 	return jen.Id(cloneName + printableTypeName(t)).Call(expr)
 }
 
-func (c *cloneGen) makeStructCloneMethod(t types.Type) error {
+func (c *cloneGen) structMethod(t types.Type, _ *types.Struct, spi generatorSPI) error {
 	typeString := types.TypeString(t, noQualifier)
 	funcName := cloneName + printableTypeName(t)
-	c.addFunc(funcName, clone,
+	spi.addFunc(funcName, clone,
 		jen.Func().Id(funcName).Call(jen.Id("n").Id(typeString)).Id(typeString).Block(
-			jen.Return(jen.Op("*").Add(c.readValueOfType(types.NewPointer(t), jen.Op("&").Id("n")))),
+			jen.Return(jen.Op("*").Add(c.readValueOfType(types.NewPointer(t), jen.Op("&").Id("n"), spi))),
 		))
 	return nil
 }
 
-func (c *cloneGen) makeSliceCloneMethod(t types.Type, slice *types.Slice) error {
+func (c *cloneGen) sliceMethod(t types.Type, slice *types.Slice, spi generatorSPI) error {
 	typeString := types.TypeString(t, noQualifier)
 	name := printableTypeName(t)
 	funcName := cloneName + name
 
-	c.addFunc(funcName, clone,
+	spi.addFunc(funcName, clone,
 		//func (n Bytes) Clone() Bytes {
 		jen.Func().Id(funcName).Call(jen.Id("n").Id(typeString)).Id(typeString).Block(
 			//	res := make(Bytes, len(n))
 			jen.Id("res").Op(":=").Id("make").Call(jen.Id(typeString), jen.Lit(0), jen.Id("len").Call(jen.Id("n"))),
-			c.copySliceElement(slice.Elem()),
+			c.copySliceElement(slice.Elem(), spi),
 			//	return res
 			jen.Return(jen.Id("res")),
 		))
 	return nil
 }
 
-func (c *cloneGen) copySliceElement(elType types.Type) jen.Code {
+func (c *cloneGen) basicMethod(t types.Type, basic *types.Basic, spi generatorSPI) error {
+	return nil
+}
+
+func (c *cloneGen) copySliceElement(elType types.Type, spi generatorSPI) jen.Code {
 	if isBasic(elType) {
 		//	copy(res, n)
 		return jen.Id("copy").Call(jen.Id("res"), jen.Id("n"))
@@ -130,13 +95,14 @@ func (c *cloneGen) copySliceElement(elType types.Type) jen.Code {
 	//for _, x := range n {
 	//  res = append(res, CloneAST(x))
 	//}
-	c.todo = append(c.todo, elType)
+	spi.addType(elType)
+
 	return jen.For(jen.List(jen.Op("_"), jen.Id("x"))).Op(":=").Range().Id("n").Block(
-		jen.Id("res").Op("=").Id("append").Call(jen.Id("res"), c.readValueOfType(elType, jen.Id("x"))),
+		jen.Id("res").Op("=").Id("append").Call(jen.Id("res"), c.readValueOfType(elType, jen.Id("x"), spi)),
 	)
 }
 
-func (c *cloneGen) makeInterfaceCloneMethod(t types.Type, iface *types.Interface) error {
+func (c *cloneGen) interfaceMethod(t types.Type, iface *types.Interface, spi generatorSPI) error {
 
 	//func CloneAST(in AST) AST {
 	//	if in == nil {
@@ -156,11 +122,11 @@ func (c *cloneGen) makeInterfaceCloneMethod(t types.Type, iface *types.Interface
 	stmts := []jen.Code{ifNilReturnNil("in")}
 
 	var cases []jen.Code
-	_ = findImplementations(c.scope, iface, func(t types.Type) error {
+	_ = findImplementations(spi.scope(), iface, func(t types.Type) error {
 		typeString := types.TypeString(t, noQualifier)
 
 		// case Type: return CloneType(in)
-		block := jen.Case(jen.Id(typeString)).Block(jen.Return(c.readValueOfType(t, jen.Id("in"))))
+		block := jen.Case(jen.Id(typeString)).Block(jen.Return(c.readValueOfType(t, jen.Id("in"), spi)))
 		switch t := t.(type) {
 		case *types.Pointer:
 			_, isIface := t.Elem().(*types.Interface)
@@ -194,53 +160,26 @@ func (c *cloneGen) makeInterfaceCloneMethod(t types.Type, iface *types.Interface
 
 	funcName := cloneName + typeName
 	funcDecl := jen.Func().Id(funcName).Call(jen.Id("in").Id(typeString)).Id(typeString).Block(stmts...)
-	c.addFunc(funcName, clone, funcDecl)
+	spi.addFunc(funcName, clone, funcDecl)
 	return nil
 }
 
-func (c *cloneGen) makePtrCloneMethod(t types.Type, ptr *types.Pointer) {
+func (c *cloneGen) ptrToBasicMethod(t types.Type, _ *types.Basic, spi generatorSPI) error {
+	ptr := t.Underlying().(*types.Pointer)
+	return c.ptrToOtherMethod(t, ptr, spi)
+}
+
+func (c *cloneGen) ptrToOtherMethod(t types.Type, ptr *types.Pointer, spi generatorSPI) error {
 	receiveType := types.TypeString(t, noQualifier)
 
 	funcName := "Clone" + printableTypeName(t)
-	c.addFunc(funcName, clone,
+	spi.addFunc(funcName, clone,
 		jen.Func().Id(funcName).Call(jen.Id("n").Id(receiveType)).Id(receiveType).Block(
 			ifNilReturnNil("n"),
-			jen.Id("out").Op(":=").Add(c.readValueOfType(ptr.Elem(), jen.Op("*").Id("n"))),
+			jen.Id("out").Op(":=").Add(c.readValueOfType(ptr.Elem(), jen.Op("*").Id("n"), spi)),
 			jen.Return(jen.Op("&").Id("out")),
 		))
-}
-
-func (c *cloneGen) createFile(pkgName string) (string, *jen.File) {
-	out := jen.NewFile(pkgName)
-	out.HeaderComment(licenseFileHeader)
-	out.HeaderComment("Code generated by ASTHelperGen. DO NOT EDIT.")
-	alreadyDone := map[string]bool{}
-	for len(c.todo) > 0 {
-		t := c.todo[0]
-		underlying := t.Underlying()
-		typeName := printableTypeName(t)
-		c.todo = c.todo[1:]
-
-		if alreadyDone[typeName] {
-			continue
-		}
-
-		if c.tryInterface(underlying, t) ||
-			c.trySlice(underlying, t) ||
-			c.tryStruct(underlying, t) ||
-			c.tryPtr(underlying, t) {
-			alreadyDone[typeName] = true
-			continue
-		}
-
-		log.Fatalf("don't know how to handle %s %T", typeName, underlying)
-	}
-
-	for _, method := range c.methods {
-		out.Add(method)
-	}
-
-	return "clone.go", out
+	return nil
 }
 
 func ifNilReturnNil(id string) *jen.Statement {
@@ -252,45 +191,7 @@ func isBasic(t types.Type) bool {
 	return x
 }
 
-func (c *cloneGen) tryStruct(underlying, t types.Type) bool {
-	strct, ok := underlying.(*types.Struct)
-	if !ok {
-		return false
-	}
-
-	if err := c.makeStructCloneMethod(t); err != nil {
-		log.Fatalf("%v", err)
-	}
-	if err := c.makeStructEqualsMethod(t, strct); err != nil {
-		log.Fatalf("%v", err)
-	}
-	return true
-}
-func (c *cloneGen) tryPtr(underlying, t types.Type) bool {
-	ptr, ok := underlying.(*types.Pointer)
-	if !ok {
-		return false
-	}
-
-	ptrToType := ptr.Elem().Underlying()
-
-	switch ptrToType := ptrToType.(type) {
-	case *types.Struct:
-		c.makePtrToStructCloneMethod(t, ptrToType)
-		c.makePtrToStructEqualsMethod(t, ptrToType)
-		return true
-	case *types.Basic:
-		c.makePtrToBasicEqualsMethod(t)
-		c.makePtrCloneMethod(t, ptr)
-		return true
-	default:
-		c.makePtrCloneMethod(t, ptr)
-	}
-
-	return true
-}
-
-func (c *cloneGen) makePtrToStructCloneMethod(t types.Type, strct *types.Struct) {
+func (c *cloneGen) ptrToStructMethod(t types.Type, strct *types.Struct, spi generatorSPI) error {
 	receiveType := types.TypeString(t, noQualifier)
 	funcName := cloneName + printableTypeName(t)
 
@@ -298,10 +199,10 @@ func (c *cloneGen) makePtrToStructCloneMethod(t types.Type, strct *types.Struct)
 	funcDeclaration := jen.Func().Id(funcName).Call(jen.Id("n").Id(receiveType)).Id(receiveType)
 
 	if receiveType == c.exceptType {
-		c.addFunc(funcName, clone, funcDeclaration.Block(
+		spi.addFunc(funcName, clone, funcDeclaration.Block(
 			jen.Return(jen.Id("n")),
 		))
-		return
+		return nil
 	}
 
 	var fields []jen.Code
@@ -312,7 +213,7 @@ func (c *cloneGen) makePtrToStructCloneMethod(t types.Type, strct *types.Struct)
 		}
 		// out.Field = CloneType(n.Field)
 		fields = append(fields,
-			jen.Id("out").Dot(field.Name()).Op("=").Add(c.readValueOfType(field.Type(), jen.Id("n").Dot(field.Name()))))
+			jen.Id("out").Dot(field.Name()).Op("=").Add(c.readValueOfType(field.Type(), jen.Id("n").Dot(field.Name()), spi)))
 	}
 
 	stmts := []jen.Code{
@@ -330,56 +231,8 @@ func (c *cloneGen) makePtrToStructCloneMethod(t types.Type, strct *types.Struct)
 		jen.Return(jen.Op("&").Id("out")),
 	)
 
-	c.addFunc(funcName, clone,
+	spi.addFunc(funcName, clone,
 		funcDeclaration.Block(stmts...),
 	)
-}
-
-func (c *cloneGen) tryInterface(underlying, t types.Type) bool {
-	iface, ok := underlying.(*types.Interface)
-	if !ok {
-		return false
-	}
-
-	if err := c.makeInterfaceCloneMethod(t, iface); err != nil {
-		log.Fatalf("%v", err)
-	}
-
-	if err := c.makeInterfaceEqualsMethod(t, iface); err != nil {
-		log.Fatalf("%v", err)
-	}
-	return true
-}
-
-func (c *cloneGen) trySlice(underlying, t types.Type) bool {
-	slice, ok := underlying.(*types.Slice)
-	if !ok {
-		return false
-	}
-
-	if err := c.makeSliceCloneMethod(t, slice); err != nil {
-		log.Fatalf("%v", err)
-	}
-	if err := c.makeSliceEqualsMethod(t, slice); err != nil {
-		log.Fatalf("%v", err)
-	}
-	return true
-}
-
-// printableTypeName returns a string that can be used as a valid golang identifier
-func printableTypeName(t types.Type) string {
-	switch t := t.(type) {
-	case *types.Pointer:
-		return "RefOf" + printableTypeName(t.Elem())
-	case *types.Slice:
-		return "SliceOf" + printableTypeName(t.Elem())
-	case *types.Named:
-		return t.Obj().Name()
-	case *types.Basic:
-		return strings.Title(t.Name())
-	case *types.Interface:
-		return t.String()
-	default:
-		panic(fmt.Sprintf("unknown type %T %v", t, t))
-	}
+	return nil
 }

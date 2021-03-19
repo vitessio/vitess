@@ -111,16 +111,17 @@ func (vtctld *ClientProxy) Dial(ctx context.Context) error {
 	}
 
 	span.Annotate("vtctld_host", addr)
+	span.Annotate("is_using_credentials", vtctld.creds != nil)
 
-	opts := []grpc.DialOption{}
+	opts := []grpc.DialOption{
+		// TODO: make configurable. right now, omitting this and attempting
+		// to not use TLS results in:
+		//		grpc: no transport security set (use grpc.WithInsecure() explicitly or set credentials)
+		grpc.WithInsecure(),
+	}
+
 	if vtctld.creds != nil {
-		span.Annotate("is_using_credentials", true)
-
-		opts = append(opts, grpc.WithPerRPCCredentials(vtctld.creds),
-			// TODO: make configurable. right now, omitting this and attempting
-			// to not use TLS results in:
-			//		grpc: no transport security set (use grpc.WithInsecure() explicitly or set credentials)
-			grpc.WithInsecure())
+		opts = append(opts, grpc.WithPerRPCCredentials(vtctld.creds))
 	}
 
 	client, err := vtctld.DialFunc(addr, grpcclient.FailFast(false), opts...)
