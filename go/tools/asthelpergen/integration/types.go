@@ -174,4 +174,4 @@ func (r *NoCloneType) String() string {
 
 type Visit func(node AST) (bool, error)
 
-var abortE = fmt.Errorf("this error is to abort the rewriter, it is not an actual error")
+var errAbort = fmt.Errorf("this error is to abort the rewriter, it is not an actual error")

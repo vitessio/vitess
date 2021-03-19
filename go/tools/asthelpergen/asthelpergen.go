@@ -43,13 +43,6 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.`
 
-type generator interface {
-	visitStruct(t types.Type, stroct *types.Struct) error
-	visitInterface(t types.Type, iface *types.Interface) error
-	visitSlice(t types.Type, slice *types.Slice) error
-	createFile(pkgName string) (string, *jen.File)
-}
-
 type generatorSPI interface {
 	addType(t types.Type)
 	addFunc(name string, t methodType, code jen.Code)
@@ -75,8 +68,7 @@ type astHelperGen struct {
 	sizes      types.Sizes
 	namedIface *types.Named
 	_iface     *types.Interface
-	gens       []generator
-	gens2      []generator2
+	gens       []generator2
 
 	methods []jen.Code
 	_scope  *types.Scope
@@ -87,7 +79,7 @@ func (gen *astHelperGen) iface() *types.Interface {
 	return gen._iface
 }
 
-func newGenerator(mod *packages.Module, sizes types.Sizes, named *types.Named, generators ...generator) *astHelperGen {
+func newGenerator(mod *packages.Module, sizes types.Sizes, named *types.Named, generators ...generator2) *astHelperGen {
 	return &astHelperGen{
 		DebugTypes: true,
 		mod:        mod,
@@ -149,73 +141,11 @@ func (gen *astHelperGen) findImplementations(iff *types.Interface, impl func(typ
 	return nil
 }
 
-func (gen *astHelperGen) visitStruct(t types.Type, stroct *types.Struct) error {
-	for _, g := range gen.gens {
-		err := g.visitStruct(t, stroct)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (gen *astHelperGen) visitSlice(t types.Type, slice *types.Slice) error {
-	for _, g := range gen.gens {
-		err := g.visitSlice(t, slice)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (gen *astHelperGen) visitInterface(t types.Type, iface *types.Interface) error {
-	for _, g := range gen.gens {
-		err := g.visitInterface(t, iface)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 // GenerateCode is the main loop where we build up the code per file.
 func (gen *astHelperGen) GenerateCode() (map[string]*jen.File, error) {
 	pkg := gen.namedIface.Obj().Pkg()
-	iface, ok := gen._iface.Underlying().(*types.Interface)
-	if !ok {
-		return nil, fmt.Errorf("expected interface, but got %T", gen.iface)
-	}
-
-	err := findImplementations(pkg.Scope(), iface, func(t types.Type) error {
-		switch n := t.Underlying().(type) {
-		case *types.Struct:
-			return gen.visitStruct(t, n)
-		case *types.Slice:
-			return gen.visitSlice(t, n)
-		case *types.Pointer:
-			strct, isStrct := n.Elem().Underlying().(*types.Struct)
-			if isStrct {
-				return gen.visitStruct(t, strct)
-			}
-		case *types.Interface:
-			return gen.visitInterface(t, n)
-		default:
-			// do nothing
-		}
-		return nil
-	})
-
-	if err != nil {
-		return nil, err
-	}
 
 	result := map[string]*jen.File{}
-	for _, g := range gen.gens {
-		file, code := g.createFile(pkg.Name())
-		fullPath := path.Join(gen.mod.Dir, strings.TrimPrefix(pkg.Path(), gen.mod.Path), file)
-		result[fullPath] = code
-	}
 
 	gen._scope = pkg.Scope()
 	gen.todo = append(gen.todo, gen.namedIface)
@@ -299,17 +229,12 @@ func GenerateASTHelpers(packagePatterns []string, rootIface, exceptCloneType str
 
 	nt := tt.Type().(*types.Named)
 
-	iface := nt.Underlying().(*types.Interface)
-
-	interestingType := func(t types.Type) bool {
-		return types.Implements(t, iface)
-	}
-	rewriter := newRewriterGen(interestingType, nt.Obj().Name())
-	generator := newGenerator(loaded[0].Module, loaded[0].TypesSizes, nt, rewriter)
-	generator.gens2 = append(generator.gens2, &equalsGen{})
-	generator.gens2 = append(generator.gens2, newCloneGen(exceptCloneType))
-	generator.gens2 = append(generator.gens2, &visitGen{})
-	generator.gens2 = append(generator.gens2, &rewriteGen{})
+	generator := newGenerator(loaded[0].Module, loaded[0].TypesSizes, nt,
+		&equalsGen{},
+		newCloneGen(exceptCloneType),
+		&visitGen{},
+		&rewriteGen{types.TypeString(nt, noQualifier)},
+	)
 
 	it, err := generator.GenerateCode()
 	if err != nil {
@@ -417,7 +342,7 @@ func (gen *astHelperGen) createFile(pkgName string) (string, *jen.File) {
 }
 
 func (gen *astHelperGen) allGenerators(f func(g generator2) error) {
-	for _, g := range gen.gens2 {
+	for _, g := range gen.gens {
 		err := f(g)
 
 		if err != nil {
