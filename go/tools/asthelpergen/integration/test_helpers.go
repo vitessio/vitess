@@ -19,6 +19,8 @@ package integration
 import (
 	"reflect"
 	"strings"
+
+	"vitess.io/vitess/go/vt/log"
 )
 
 // ast type helpers
@@ -78,16 +80,28 @@ func isNilValue(i interface{}) bool {
 var abort = new(int) // singleton, to signal termination of Apply
 
 func Rewrite(node AST, pre, post ApplyFunc) (result AST) {
-	parent := &struct{ AST }{node}
+	outer := &struct{ AST }{node}
 
-	a := &application{
-		pre:    pre,
-		post:   post,
-		cursor: Cursor{},
+	if pre == nil {
+		pre = func(cursor *Cursor) bool {
+			return true
+		}
 	}
 
-	a.apply(parent.AST, node, nil)
-	return parent.AST
+	if post == nil {
+		post = func(cursor *Cursor) bool {
+			return true
+		}
+	}
+
+	err := rewriteAST(outer, node, func(newNode, parent AST) {
+		outer.AST = newNode
+	}, pre, post)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+	return outer.AST
 }
 
 func replacePanic(msg string) func(newNode, parent AST) {

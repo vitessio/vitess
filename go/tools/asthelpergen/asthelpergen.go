@@ -63,7 +63,6 @@ type generator2 interface {
 	structMethod(t types.Type, strct *types.Struct, spi generatorSPI) error
 	ptrToStructMethod(t types.Type, strct *types.Struct, spi generatorSPI) error
 	ptrToBasicMethod(t types.Type, basic *types.Basic, spi generatorSPI) error
-	ptrToOtherMethod(t types.Type, ptr *types.Pointer, spi generatorSPI) error
 	sliceMethod(t types.Type, slice *types.Slice, spi generatorSPI) error
 	basicMethod(t types.Type, basic *types.Basic, spi generatorSPI) error
 }

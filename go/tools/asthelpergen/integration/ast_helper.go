@@ -245,7 +245,21 @@ func VisitBytes(in Bytes, f Visit) error {
 
 // rewriteBytes is part of the Rewrite implementation
 func rewriteBytes(parent AST, node Bytes, replacer replacerFunc, pre, post ApplyFunc) error {
-	// ptrToStructMethod
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if !post(&cur) {
+		return abortE
+	}
+	return nil
 }
 
 // EqualsInterfaceContainer does deep equals between the two objects.
@@ -326,7 +340,28 @@ func VisitInterfaceSlice(in InterfaceSlice, f Visit) error {
 
 // rewriteInterfaceSlice is part of the Rewrite implementation
 func rewriteInterfaceSlice(parent AST, node InterfaceSlice, replacer replacerFunc, pre, post ApplyFunc) error {
-	// ptrToStructMethod
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	for i, el := range node {
+		if errF := rewriteAST(node, el, func(newNode, parent AST) {
+			parent.(InterfaceSlice)[i] = newNode.(AST)
+		}, pre, post); errF != nil {
+			return errF
+		}
+	}
+	if !post(&cur) {
+		return abortE
+	}
+	return nil
 }
 
 // EqualsRefOfLeaf does deep equals between the two objects.
@@ -419,7 +454,28 @@ func VisitLeafSlice(in LeafSlice, f Visit) error {
 
 // rewriteLeafSlice is part of the Rewrite implementation
 func rewriteLeafSlice(parent AST, node LeafSlice, replacer replacerFunc, pre, post ApplyFunc) error {
-	// ptrToStructMethod
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	for i, el := range node {
+		if errF := rewriteRefOfLeaf(node, el, func(newNode, parent AST) {
+			parent.(LeafSlice)[i] = newNode.(*Leaf)
+		}, pre, post); errF != nil {
+			return errF
+		}
+	}
+	if !post(&cur) {
+		return abortE
+	}
+	return nil
 }
 
 // EqualsRefOfNoCloneType does deep equals between the two objects.
