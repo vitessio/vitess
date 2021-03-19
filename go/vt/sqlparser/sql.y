@@ -276,7 +276,7 @@ func skipToEnd(yylex interface{}) {
 %type <expr> expression naked_like group_by
 %type <tableExprs> table_references with_clause cte_list
 %type <tableExpr> table_reference table_factor join_table common_table_expression
-%type <simpleTableExpr> values_stmt subquery_or_values
+%type <simpleTableExpr> values_statement subquery_or_values
 %type <subquery> subquery
 %type <joinCondition> join_condition join_condition_opt on_expression_opt
 %type <tableNames> table_name_list delete_table_list view_name_list
@@ -2758,7 +2758,7 @@ table_factor:
     $$ = &ParenTableExpr{Exprs: $2}
   }
 
-values_stmt:
+values_statement:
   VALUES row_list
   {
     $$ = &ValuesStatement{Rows: $2}
@@ -3207,7 +3207,7 @@ subquery_or_values:
   {
     $$ = $1
   }
-| openb values_stmt closeb
+| openb values_statement closeb
   {
     $$ = $2
   }

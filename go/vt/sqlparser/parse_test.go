@@ -157,6 +157,11 @@ var (
 		}, {
 			input: "select a from (values row(1, 2), row('a', 'b')) as t1 join (values row(3, 4), row('c', 'd')) as t2",
 		}, {
+		// TODO: These forms are not yet supported due to a grammar conflict
+		// 	input: "values row(1, 2), row('a', 'b')",
+		// }, {
+		// 	input: "values row(1, 2), row('a', 'b') union values row(3, 4), row('c', 'd')",
+		// }, {
 			input: "select * from t1 join (select * from t2 union select * from t3) as t",
 		}, {
 			// Ensure this doesn't generate: ""select * from t1 join t2 on a = b join t3 on a = b".
