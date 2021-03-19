@@ -636,12 +636,41 @@ func (s *VtctldServer) GetTablets(ctx context.Context, req *vtctldatapb.GetTable
 	ctx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
 	defer cancel()
 
-	if req.Keyspace != "" && req.Shard != "" {
-		tabletMap, err := s.ts.GetTabletMapForShard(ctx, req.Keyspace, req.Shard)
+	var (
+		tabletMap map[string]*topo.TabletInfo
+		err       error
+	)
+
+	switch {
+	case len(req.TabletAliases) > 0:
+		tabletMap, err = s.ts.GetTabletMap(ctx, req.TabletAliases)
 		if err != nil {
+			err = fmt.Errorf("GetTabletMap(%v) failed: %w", req.TabletAliases, err)
+		}
+	case req.Keyspace != "" && req.Shard != "":
+		tabletMap, err = s.ts.GetTabletMapForShard(ctx, req.Keyspace, req.Shard)
+		if err != nil {
+			err = fmt.Errorf("GetTabletMapForShard(%s, %s) failed: %w", req.Keyspace, req.Shard, err)
+		}
+	default:
+		// goto the req.Cells branch
+		tabletMap = nil
+	}
+
+	if err != nil {
+		switch {
+		case topo.IsErrType(err, topo.PartialResult):
+			if req.Strict {
+				return nil, err
+			}
+
+			log.Warningf("GetTablets encountered non-fatal error %s; continuing because Strict=false", err)
+		default:
 			return nil, err
 		}
+	}
 
+	if tabletMap != nil {
 		var trueMasterTimestamp time.Time
 		for _, ti := range tabletMap {
 			if ti.Type == topodatapb.TabletType_MASTER {
