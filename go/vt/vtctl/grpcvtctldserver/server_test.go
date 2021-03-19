@@ -3391,6 +3391,63 @@ func TestGetTablets(t *testing.T) {
 			},
 			shouldErr: true,
 		},
+		{
+			name:  "tablet alias filtering",
+			cells: []string{"zone1"},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+			},
+			req: &vtctldatapb.GetTabletsRequest{
+				TabletAliases: []*topodatapb.TabletAlias{
+					{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					{
+						// This tablet doesn't exist, but doesn't cause a failure.
+						Cell: "zone404",
+						Uid:  404,
+					},
+				},
+				// The below filters are ignored, because TabletAliases always
+				// takes precedence.
+				Keyspace: "another_keyspace",
+				Shard:    "-80",
+				Cells:    []string{"zone404"},
+			},
+			expected: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+			},
+			shouldErr: false,
+		},
+		{
+			name:    "tablet alias filter with none found",
+			tablets: []*topodatapb.Tablet{},
+			req: &vtctldatapb.GetTabletsRequest{
+				TabletAliases: []*topodatapb.TabletAlias{
+					{
+						Cell: "zone1",
+						Uid:  101,
+					},
+				},
+			},
+			expected:  []*topodatapb.Tablet{},
+			shouldErr: false,
+		},
 	}
 
 	for _, tt := range tests {
