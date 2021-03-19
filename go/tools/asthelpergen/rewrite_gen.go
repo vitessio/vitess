@@ -157,7 +157,7 @@ func (e rewriteGen) ptrToBasicMethod(t types.Type, _ *types.Basic, spi generator
 	 */
 
 	stmts := []jen.Code{
-		jen.Comment("ptrToStructMethod"),
+		jen.Comment("ptrToBasicMethod"),
 	}
 	rewriteFunc(t, stmts, spi)
 
@@ -170,29 +170,51 @@ func (e rewriteGen) sliceMethod(t types.Type, slice *types.Slice, spi generatorS
 	}
 
 	/*
-	 */
-
+		if node == nil {
+				return nil
+			}
+			cur := Cursor{
+				node:     node,
+				parent:   parent,
+				replacer: replacer,
+			}
+			if !pre(&cur) {
+				return nil
+			}
+	*/
 	stmts := []jen.Code{
-		jen.Comment("ptrToStructMethod"),
+		jen.If(jen.Id("node == nil").Block(returnNil())),
+		createCursor(),
+		jen.If(jen.Id("!pre(&cur)")).Block(returnNil()),
 	}
+
+	if shouldAdd(slice.Elem(), spi.iface()) {
+		/*
+			for i, el := range node {
+						if err := rewriteRefOfLeaf(node, el, func(newNode, parent AST) {
+							parent.(LeafSlice)[i] = newNode.(*Leaf)
+						}, pre, post); err != nil {
+							return err
+						}
+					}
+		*/
+		stmts = append(stmts,
+			jen.For(jen.Id("i, el").Op(":=").Id("range node")).
+				Block(rewriteChild(t, slice.Elem(), "notUsed", jen.Id("el"), jen.Index(jen.Id("i")), false)))
+	}
+
+	stmts = append(stmts,
+		/*
+			if !post(&cur) {
+				return abortE
+			}
+			return nil
+
+		*/
+		jen.If(jen.Id("!post").Call(jen.Id("&cur"))).Block(jen.Return(jen.Id("abortE"))),
+		returnNil(),
+	)
 	rewriteFunc(t, stmts, spi)
-
-	return nil
-}
-
-func (e rewriteGen) ptrToOtherMethod(t types.Type, _ *types.Pointer, spi generatorSPI) error {
-	if !shouldAdd(t, spi.iface()) {
-		return nil
-	}
-
-	/*
-	 */
-
-	stmts := []jen.Code{
-		jen.Comment("ptrToStructMethod"),
-	}
-	rewriteFunc(t, stmts, spi)
-
 	return nil
 }
 

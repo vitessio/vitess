@@ -181,20 +181,6 @@ func (e visitGen) sliceMethod(t types.Type, slice *types.Slice, spi generatorSPI
 	return nil
 }
 
-func (e visitGen) ptrToOtherMethod(t types.Type, _ *types.Pointer, spi generatorSPI) error {
-	if !shouldAdd(t, spi.iface()) {
-		return nil
-	}
-
-	stmts := []jen.Code{
-		jen.Comment("ptrToOtherMethod "),
-	}
-
-	visitFunc(t, stmts, spi)
-
-	return nil
-}
-
 func (e visitGen) basicMethod(t types.Type, basic *types.Basic, spi generatorSPI) error {
 	if !shouldAdd(t, spi.iface()) {
 		return nil
