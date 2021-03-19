@@ -348,6 +348,7 @@ func (*ParenSelect) iSelectStatement() {}
 // Select represents a SELECT statement.
 type Select struct {
 	Cache            string
+	CalcFoundRows    bool
 	Comments         Comments
 	Distinct         string
 	Hints            string
@@ -403,8 +404,12 @@ func (node *Select) Format(buf *TrackedBuffer) {
 		buf.Myprintf(" ")
 	}
 
-	buf.Myprintf("select %v%s%s%s%v from %v%v%v%v%v%v%s",
-		node.Comments, node.Cache, node.Distinct, node.Hints, node.SelectExprs,
+	calcFoundRows := ""
+	if node.CalcFoundRows {
+		calcFoundRows = "sql_calc_found_rows "
+	}
+	buf.Myprintf("select %v%s%s%s%s%v from %v%v%v%v%v%v%s",
+		node.Comments, node.Cache, calcFoundRows, node.Distinct, node.Hints, node.SelectExprs,
 		node.From, node.Where,
 		node.GroupBy, node.Having, node.OrderBy,
 		node.Limit, node.Lock)

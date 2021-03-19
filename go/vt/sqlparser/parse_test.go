@@ -1570,6 +1570,10 @@ var (
 		}, {
 			input: "select /* cache directive */ sql_no_cache 'foo' from t",
 		}, {
+			input: "select /* sql_calc_rows directive */ sql_calc_found_rows 'foo' from t",
+		}, {
+			input: "select /* cache and sql_calc_rows directive */ sql_no_cache sql_calc_found_rows 'foo' from t",
+		}, {
 			input: "select binary 'a' = 'A' from t",
 		}, {
 			input: "select 1 from t where foo = _binary 'bar'",
