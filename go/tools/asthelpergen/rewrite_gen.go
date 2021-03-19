@@ -47,7 +47,7 @@ func (e rewriteGen) interfaceMethod(t types.Type, iface *types.Interface, spi ge
 		}
 	*/
 	stmts := []jen.Code{
-		jen.If(jen.Id("node == nil").Block(returnTrue())),
+		jen.If(jen.Id("node == nil").Block(returnNil())),
 	}
 
 	var cases []jen.Code
@@ -68,7 +68,7 @@ func (e rewriteGen) interfaceMethod(t types.Type, iface *types.Interface, spi ge
 	cases = append(cases,
 		jen.Default().Block(
 			jen.Comment("this should never happen"),
-			returnTrue(),
+			returnNil(),
 		))
 
 	stmts = append(stmts, jen.Switch(jen.Id("node := node.(type)").Block(
@@ -87,43 +87,22 @@ func (e rewriteGen) structMethod(t types.Type, strct *types.Struct, spi generato
 	/*
 	 */
 
-	stmts := rewriteAllStructFields(t, strct, spi)
+	stmts := rewriteAllStructFields(t, strct, spi, true)
 	rewriteFunc(t, stmts, spi)
 
 	return nil
 }
 
 func (e rewriteGen) ptrToStructMethod(t types.Type, strct *types.Struct, spi generatorSPI) error {
-
-	/*
-			if cont := rewriteAST(node, node.ASTType, func(newNode, parent AST) {
-				parent.(*RefContainer).ASTType = newNode.(AST)
-			}, pre, post); !cont {
-				return false
-			}
-			if cont := rewriteAST(node, node.ASTImplementationType, func(newNode, parent AST) {
-				parent.(*RefContainer).ASTImplementationType = newNode.(AST)
-			}, pre, post); !cont {
-				return false
-			}
-
-			return post(&cur)
-		}
-
-	*/
-
 	if !shouldAdd(t, spi.iface()) {
 		return nil
 	}
 
-	/*
-	 */
-
 	stmts := []jen.Code{
 		/*
-			if node == nil { return true }
+			if node == nil { return nil }
 		*/
-		jen.If(jen.Id("node == nil").Block(returnTrue())),
+		jen.If(jen.Id("node == nil").Block(returnNil())),
 
 		/*
 			cur := Cursor{
@@ -141,15 +120,18 @@ func (e rewriteGen) ptrToStructMethod(t types.Type, strct *types.Struct, spi gen
 
 		/*
 			if !pre(&cur) {
-				return true
+				return nil
 			}
 		*/
-		jen.If(jen.Id("!pre(&cur)")).Block(returnTrue()),
+		jen.If(jen.Id("!pre(&cur)")).Block(returnNil()),
 	}
 
-	stmts = append(stmts, rewriteAllStructFields(t, strct, spi)...)
+	stmts = append(stmts, rewriteAllStructFields(t, strct, spi, false)...)
 
-	stmts = append(stmts, jen.Return(jen.Id("post").Call(jen.Id("&cur"))))
+	stmts = append(stmts,
+		jen.If(jen.Id("!post").Call(jen.Id("&cur"))).Block(jen.Return(jen.Id("abortE"))),
+		returnNil(),
+	)
 	rewriteFunc(t, stmts, spi)
 
 	return nil
@@ -245,13 +227,23 @@ func rewriteFunc(t types.Type, stmts []jen.Code, spi generatorSPI) {
 	funcName := fmt.Sprintf("%s%s", rewriteName, printableTypeName(t))
 	code := jen.Func().Id(funcName).Params(
 		jen.Id(fmt.Sprintf("parent AST, node %s, replacer replacerFunc, pre, post ApplyFunc", typeString)),
-	).Bool().
+	).Error().
 		Block(stmts...)
 
 	spi.addFunc(funcName, rewrite, code)
 }
 
-func rewriteAllStructFields(t types.Type, strct *types.Struct, spi generatorSPI) []jen.Code {
+func rewriteAllStructFields(t types.Type, strct *types.Struct, spi generatorSPI, fail bool) []jen.Code {
+	//	_, ok := t.Underlying().(*types.Pointer)
+
+	/*
+		if errF := rewriteAST(node, node.ASTType, func(newNode, parent AST) {
+			err = vterrors.New(vtrpcpb.Code_INTERNAL, "[BUG] tried to replace '%s' on '%s'")
+		}, pre, post); errF != nil {
+			return errF
+		}
+
+	*/
 	var output []jen.Code
 	for i := 0; i < strct.NumFields(); i++ {
 		field := strct.Field(i)
@@ -272,18 +264,22 @@ func rewriteAllStructFields(t types.Type, strct *types.Struct, spi generatorSPI)
 	return output
 }
 
+func failReplacer(t types.Type, f *types.Var) jen.Code {
+
+}
+
 func rewriteChild(t, field types.Type, param jen.Code, replace jen.Code) jen.Code {
 	/*
-		    if cont := rewriteAST(node, node.ASTType, func(newNode, parent AST) {
+		    if errF := rewriteAST(node, node.ASTType, func(newNode, parent AST) {
 				parent.(*RefContainer).ASTType = newNode.(AST)
-			}, pre, post); !cont {
-				return false
+			}, pre, post); errF != nil {
+				return errF
 			}
 
-				if cont := rewriteAST(node, el, func(newNode, parent AST) {
+				if errF := rewriteAST(node, el, func(newNode, parent AST) {
 					parent.(*RefSliceContainer).ASTElements[i] = newNode.(AST)
-				}, pre, post); !cont {
-					return false
+				}, pre, post); errF != nil {
+					return errF
 				}
 
 	*/
@@ -296,17 +292,13 @@ func rewriteChild(t, field types.Type, param jen.Code, replace jen.Code) jen.Cod
 			Id("newNode").Assert(jen.Id(types.TypeString(field, noQualifier))))
 
 	rewriteField := jen.If(
-		jen.Id("cont := ").Id(funcName).Call(
+		jen.Id("errF := ").Id(funcName).Call(
 			jen.Id("node"),
 			param,
 			funcBlock,
 			jen.Id("pre"),
 			jen.Id("post")),
-		jen.Id("!cont").Block(jen.Return(jen.False())))
+		jen.Id("errF != nil").Block(jen.Return(jen.Id("errF"))))
 
 	return rewriteField
-}
-
-func returnTrue() jen.Code {
-	return jen.Return(jen.True())
 }
