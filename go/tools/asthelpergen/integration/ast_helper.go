@@ -257,7 +257,7 @@ func rewriteBytes(parent AST, node Bytes, replacer replacerFunc, pre, post Apply
 		return nil
 	}
 	if !post(&cur) {
-		return abortE
+		return errAbort
 	}
 	return nil
 }
@@ -295,7 +295,7 @@ func rewriteInterfaceContainer(parent AST, node InterfaceContainer, replacer rep
 		return err
 	}
 	if !post(&cur) {
-		return abortE
+		return errAbort
 	}
 	return nil
 }
@@ -359,7 +359,7 @@ func rewriteInterfaceSlice(parent AST, node InterfaceSlice, replacer replacerFun
 		}
 	}
 	if !post(&cur) {
-		return abortE
+		return errAbort
 	}
 	return nil
 }
@@ -409,7 +409,7 @@ func rewriteRefOfLeaf(parent AST, node *Leaf, replacer replacerFunc, pre, post A
 		return nil
 	}
 	if !post(&cur) {
-		return abortE
+		return errAbort
 	}
 	return nil
 }
@@ -473,7 +473,7 @@ func rewriteLeafSlice(parent AST, node LeafSlice, replacer replacerFunc, pre, po
 		}
 	}
 	if !post(&cur) {
-		return abortE
+		return errAbort
 	}
 	return nil
 }
@@ -519,7 +519,7 @@ func rewriteRefOfNoCloneType(parent AST, node *NoCloneType, replacer replacerFun
 		return nil
 	}
 	if !post(&cur) {
-		return abortE
+		return errAbort
 	}
 	return nil
 }
@@ -589,7 +589,7 @@ func rewriteRefOfRefContainer(parent AST, node *RefContainer, replacer replacerF
 		return errF
 	}
 	if !post(&cur) {
-		return abortE
+		return errAbort
 	}
 	return nil
 }
@@ -668,7 +668,7 @@ func rewriteRefOfRefSliceContainer(parent AST, node *RefSliceContainer, replacer
 		}
 	}
 	if !post(&cur) {
-		return abortE
+		return errAbort
 	}
 	return nil
 }
@@ -729,7 +729,7 @@ func rewriteRefOfSubImpl(parent AST, node *SubImpl, replacer replacerFunc, pre, 
 		return errF
 	}
 	if !post(&cur) {
-		return abortE
+		return errAbort
 	}
 	return nil
 }
@@ -785,7 +785,7 @@ func rewriteValueContainer(parent AST, node ValueContainer, replacer replacerFun
 		return err
 	}
 	if !post(&cur) {
-		return abortE
+		return errAbort
 	}
 	return nil
 }
@@ -849,7 +849,7 @@ func rewriteValueSliceContainer(parent AST, node ValueSliceContainer, replacer r
 		return err
 	}
 	if !post(&cur) {
-		return abortE
+		return errAbort
 	}
 	return nil
 }
@@ -934,7 +934,7 @@ func rewriteBasicType(parent AST, node BasicType, replacer replacerFunc, pre, po
 		return nil
 	}
 	if !post(&cur) {
-		return abortE
+		return errAbort
 	}
 	return nil
 }
@@ -985,7 +985,7 @@ func rewriteRefOfInterfaceContainer(parent AST, node *InterfaceContainer, replac
 		return nil
 	}
 	if !post(&cur) {
-		return abortE
+		return errAbort
 	}
 	return nil
 }
@@ -1139,7 +1139,7 @@ func rewriteRefOfValueContainer(parent AST, node *ValueContainer, replacer repla
 		return errF
 	}
 	if !post(&cur) {
-		return abortE
+		return errAbort
 	}
 	return nil
 }
@@ -1218,7 +1218,7 @@ func rewriteRefOfValueSliceContainer(parent AST, node *ValueSliceContainer, repl
 		}
 	}
 	if !post(&cur) {
-		return abortE
+		return errAbort
 	}
 	return nil
 }

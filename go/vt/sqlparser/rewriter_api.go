@@ -18,8 +18,6 @@ package sqlparser
 
 import (
 	"fmt"
-	"reflect"
-	"runtime"
 )
 
 // The rewriter was heavily inspired by https://github.com/golang/tools/blob/master/go/ast/astutil/rewrite.go
@@ -42,34 +40,27 @@ import (
 //
 func Rewrite(node SQLNode, pre, post ApplyFunc) (result SQLNode, err error) {
 	parent := &struct{ SQLNode }{node}
-	defer func() {
-		if r := recover(); r != nil {
-			switch r := r.(type) {
-			case abortT: // nothing to do
-
-			case *runtime.TypeAssertionError:
-				err = r
-			case *valueTypeFieldCantChangeErr:
-				err = r
-			default:
-				panic(r)
-			}
-		}
-		result = parent.SQLNode
-	}()
-
-	a := &application{
-		pre:    pre,
-		post:   post,
-		cursor: Cursor{},
-	}
 
 	// this is the root-replacer, used when the user replaces the root of the ast
 	replacer := func(newNode SQLNode, _ SQLNode) {
 		parent.SQLNode = newNode
 	}
 
-	a.apply(parent, node, replacer)
+	if pre == nil {
+		pre = func(*Cursor) bool {
+			return true
+		}
+	}
+	if post == nil {
+		post = func(*Cursor) bool {
+			return true
+		}
+	}
+
+	err = rewriteSQLNode(parent, node, replacer, pre, post)
+	if err != nil && err != errAbort {
+		return nil, err
+	}
 
 	return parent.SQLNode, nil
 }
@@ -82,11 +73,7 @@ func Rewrite(node SQLNode, pre, post ApplyFunc) (result SQLNode, err error) {
 // See Rewrite for details.
 type ApplyFunc func(*Cursor) bool
 
-type abortT int
-
-var abort = abortT(0) // singleton, to signal termination of Apply
-
-var abortE = fmt.Errorf("this error is to abort the rewriter, it is not an actual error")
+var errAbort = fmt.Errorf("this error is to abort the rewriter, it is not an actual error")
 
 // A Cursor describes a node encountered during Apply.
 // Information about the node and its parent is available
@@ -111,32 +98,3 @@ func (c *Cursor) Replace(newNode SQLNode) {
 }
 
 type replacerFunc func(newNode, parent SQLNode)
-
-// application carries all the shared data so we can pass it around cheaply.
-type application struct {
-	pre, post ApplyFunc
-	cursor    Cursor
-}
-
-func isNilValue(i interface{}) bool {
-	valueOf := reflect.ValueOf(i)
-	kind := valueOf.Kind()
-	isNullable := kind == reflect.Ptr || kind == reflect.Array || kind == reflect.Slice
-	return isNullable && valueOf.IsNil()
-}
-
-// this type is here so we can catch it in the Rewrite method above
-type valueTypeFieldCantChangeErr struct {
-	msg string
-}
-
-// Error implements the error interface
-func (e *valueTypeFieldCantChangeErr) Error() string {
-	return "Tried replacing a field of a value type. This is not supported. " + e.msg
-}
-
-func replacePanic(msg string) func(newNode, parent SQLNode) {
-	return func(newNode, parent SQLNode) {
-		panic(&valueTypeFieldCantChangeErr{msg: msg})
-	}
-}

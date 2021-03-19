@@ -17,10 +17,7 @@ limitations under the License.
 package integration
 
 import (
-	"reflect"
 	"strings"
-
-	"vitess.io/vitess/go/vt/log"
 )
 
 // ast type helpers
@@ -41,11 +38,6 @@ func sliceStringLeaf(els ...*Leaf) string {
 }
 
 // the methods below are what the generated code expected to be there in the package
-
-type application struct {
-	pre, post ApplyFunc
-	cursor    Cursor
-}
 
 type ApplyFunc func(*Cursor) bool
 
@@ -70,16 +62,7 @@ func (c *Cursor) Replace(newNode AST) {
 
 type replacerFunc func(newNode, parent AST)
 
-func isNilValue(i interface{}) bool {
-	valueOf := reflect.ValueOf(i)
-	kind := valueOf.Kind()
-	isNullable := kind == reflect.Ptr || kind == reflect.Array || kind == reflect.Slice
-	return isNullable && valueOf.IsNil()
-}
-
-var abort = new(int) // singleton, to signal termination of Apply
-
-func Rewrite(node AST, pre, post ApplyFunc) (result AST) {
+func Rewrite(node AST, pre, post ApplyFunc) (AST, error) {
 	outer := &struct{ AST }{node}
 
 	if pre == nil {
@@ -99,13 +82,7 @@ func Rewrite(node AST, pre, post ApplyFunc) (result AST) {
 	}, pre, post)
 
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
-	return outer.AST
-}
-
-func replacePanic(msg string) func(newNode, parent AST) {
-	return func(newNode, parent AST) {
-		panic("Tried replacing a field of a value type. This is not supported. " + msg)
-	}
+	return outer.AST, nil
 }

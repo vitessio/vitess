@@ -17,6 +17,11 @@ limitations under the License.
 
 package sqlparser
 
+import (
+	vtrpc "vitess.io/vitess/go/vt/proto/vtrpc"
+	vterrors "vitess.io/vitess/go/vt/vterrors"
+)
+
 // EqualsSQLNode does deep equals between the two objects.
 func EqualsSQLNode(inA, inB SQLNode) bool {
 	if inA == nil && inB == nil {
@@ -1516,6 +1521,310 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 	}
 }
 
+// rewriteSQLNode is part of the Rewrite implementation
+func rewriteSQLNode(parent SQLNode, node SQLNode, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	switch node := node.(type) {
+	case AccessMode:
+		return rewriteAccessMode(parent, node, replacer, pre, post)
+	case *AddColumns:
+		return rewriteRefOfAddColumns(parent, node, replacer, pre, post)
+	case *AddConstraintDefinition:
+		return rewriteRefOfAddConstraintDefinition(parent, node, replacer, pre, post)
+	case *AddIndexDefinition:
+		return rewriteRefOfAddIndexDefinition(parent, node, replacer, pre, post)
+	case AlgorithmValue:
+		return rewriteAlgorithmValue(parent, node, replacer, pre, post)
+	case *AliasedExpr:
+		return rewriteRefOfAliasedExpr(parent, node, replacer, pre, post)
+	case *AliasedTableExpr:
+		return rewriteRefOfAliasedTableExpr(parent, node, replacer, pre, post)
+	case *AlterCharset:
+		return rewriteRefOfAlterCharset(parent, node, replacer, pre, post)
+	case *AlterColumn:
+		return rewriteRefOfAlterColumn(parent, node, replacer, pre, post)
+	case *AlterDatabase:
+		return rewriteRefOfAlterDatabase(parent, node, replacer, pre, post)
+	case *AlterMigration:
+		return rewriteRefOfAlterMigration(parent, node, replacer, pre, post)
+	case *AlterTable:
+		return rewriteRefOfAlterTable(parent, node, replacer, pre, post)
+	case *AlterView:
+		return rewriteRefOfAlterView(parent, node, replacer, pre, post)
+	case *AlterVschema:
+		return rewriteRefOfAlterVschema(parent, node, replacer, pre, post)
+	case *AndExpr:
+		return rewriteRefOfAndExpr(parent, node, replacer, pre, post)
+	case Argument:
+		return rewriteArgument(parent, node, replacer, pre, post)
+	case *AutoIncSpec:
+		return rewriteRefOfAutoIncSpec(parent, node, replacer, pre, post)
+	case *Begin:
+		return rewriteRefOfBegin(parent, node, replacer, pre, post)
+	case *BinaryExpr:
+		return rewriteRefOfBinaryExpr(parent, node, replacer, pre, post)
+	case BoolVal:
+		return rewriteBoolVal(parent, node, replacer, pre, post)
+	case *CallProc:
+		return rewriteRefOfCallProc(parent, node, replacer, pre, post)
+	case *CaseExpr:
+		return rewriteRefOfCaseExpr(parent, node, replacer, pre, post)
+	case *ChangeColumn:
+		return rewriteRefOfChangeColumn(parent, node, replacer, pre, post)
+	case *CheckConstraintDefinition:
+		return rewriteRefOfCheckConstraintDefinition(parent, node, replacer, pre, post)
+	case ColIdent:
+		return rewriteColIdent(parent, node, replacer, pre, post)
+	case *ColName:
+		return rewriteRefOfColName(parent, node, replacer, pre, post)
+	case *CollateExpr:
+		return rewriteRefOfCollateExpr(parent, node, replacer, pre, post)
+	case *ColumnDefinition:
+		return rewriteRefOfColumnDefinition(parent, node, replacer, pre, post)
+	case *ColumnType:
+		return rewriteRefOfColumnType(parent, node, replacer, pre, post)
+	case Columns:
+		return rewriteColumns(parent, node, replacer, pre, post)
+	case Comments:
+		return rewriteComments(parent, node, replacer, pre, post)
+	case *Commit:
+		return rewriteRefOfCommit(parent, node, replacer, pre, post)
+	case *ComparisonExpr:
+		return rewriteRefOfComparisonExpr(parent, node, replacer, pre, post)
+	case *ConstraintDefinition:
+		return rewriteRefOfConstraintDefinition(parent, node, replacer, pre, post)
+	case *ConvertExpr:
+		return rewriteRefOfConvertExpr(parent, node, replacer, pre, post)
+	case *ConvertType:
+		return rewriteRefOfConvertType(parent, node, replacer, pre, post)
+	case *ConvertUsingExpr:
+		return rewriteRefOfConvertUsingExpr(parent, node, replacer, pre, post)
+	case *CreateDatabase:
+		return rewriteRefOfCreateDatabase(parent, node, replacer, pre, post)
+	case *CreateTable:
+		return rewriteRefOfCreateTable(parent, node, replacer, pre, post)
+	case *CreateView:
+		return rewriteRefOfCreateView(parent, node, replacer, pre, post)
+	case *CurTimeFuncExpr:
+		return rewriteRefOfCurTimeFuncExpr(parent, node, replacer, pre, post)
+	case *Default:
+		return rewriteRefOfDefault(parent, node, replacer, pre, post)
+	case *Delete:
+		return rewriteRefOfDelete(parent, node, replacer, pre, post)
+	case *DerivedTable:
+		return rewriteRefOfDerivedTable(parent, node, replacer, pre, post)
+	case *DropColumn:
+		return rewriteRefOfDropColumn(parent, node, replacer, pre, post)
+	case *DropDatabase:
+		return rewriteRefOfDropDatabase(parent, node, replacer, pre, post)
+	case *DropKey:
+		return rewriteRefOfDropKey(parent, node, replacer, pre, post)
+	case *DropTable:
+		return rewriteRefOfDropTable(parent, node, replacer, pre, post)
+	case *DropView:
+		return rewriteRefOfDropView(parent, node, replacer, pre, post)
+	case *ExistsExpr:
+		return rewriteRefOfExistsExpr(parent, node, replacer, pre, post)
+	case *ExplainStmt:
+		return rewriteRefOfExplainStmt(parent, node, replacer, pre, post)
+	case *ExplainTab:
+		return rewriteRefOfExplainTab(parent, node, replacer, pre, post)
+	case Exprs:
+		return rewriteExprs(parent, node, replacer, pre, post)
+	case *Flush:
+		return rewriteRefOfFlush(parent, node, replacer, pre, post)
+	case *Force:
+		return rewriteRefOfForce(parent, node, replacer, pre, post)
+	case *ForeignKeyDefinition:
+		return rewriteRefOfForeignKeyDefinition(parent, node, replacer, pre, post)
+	case *FuncExpr:
+		return rewriteRefOfFuncExpr(parent, node, replacer, pre, post)
+	case GroupBy:
+		return rewriteGroupBy(parent, node, replacer, pre, post)
+	case *GroupConcatExpr:
+		return rewriteRefOfGroupConcatExpr(parent, node, replacer, pre, post)
+	case *IndexDefinition:
+		return rewriteRefOfIndexDefinition(parent, node, replacer, pre, post)
+	case *IndexHints:
+		return rewriteRefOfIndexHints(parent, node, replacer, pre, post)
+	case *IndexInfo:
+		return rewriteRefOfIndexInfo(parent, node, replacer, pre, post)
+	case *Insert:
+		return rewriteRefOfInsert(parent, node, replacer, pre, post)
+	case *IntervalExpr:
+		return rewriteRefOfIntervalExpr(parent, node, replacer, pre, post)
+	case *IsExpr:
+		return rewriteRefOfIsExpr(parent, node, replacer, pre, post)
+	case IsolationLevel:
+		return rewriteIsolationLevel(parent, node, replacer, pre, post)
+	case JoinCondition:
+		return rewriteJoinCondition(parent, node, replacer, pre, post)
+	case *JoinTableExpr:
+		return rewriteRefOfJoinTableExpr(parent, node, replacer, pre, post)
+	case *KeyState:
+		return rewriteRefOfKeyState(parent, node, replacer, pre, post)
+	case *Limit:
+		return rewriteRefOfLimit(parent, node, replacer, pre, post)
+	case ListArg:
+		return rewriteListArg(parent, node, replacer, pre, post)
+	case *Literal:
+		return rewriteRefOfLiteral(parent, node, replacer, pre, post)
+	case *Load:
+		return rewriteRefOfLoad(parent, node, replacer, pre, post)
+	case *LockOption:
+		return rewriteRefOfLockOption(parent, node, replacer, pre, post)
+	case *LockTables:
+		return rewriteRefOfLockTables(parent, node, replacer, pre, post)
+	case *MatchExpr:
+		return rewriteRefOfMatchExpr(parent, node, replacer, pre, post)
+	case *ModifyColumn:
+		return rewriteRefOfModifyColumn(parent, node, replacer, pre, post)
+	case *Nextval:
+		return rewriteRefOfNextval(parent, node, replacer, pre, post)
+	case *NotExpr:
+		return rewriteRefOfNotExpr(parent, node, replacer, pre, post)
+	case *NullVal:
+		return rewriteRefOfNullVal(parent, node, replacer, pre, post)
+	case OnDup:
+		return rewriteOnDup(parent, node, replacer, pre, post)
+	case *OptLike:
+		return rewriteRefOfOptLike(parent, node, replacer, pre, post)
+	case *OrExpr:
+		return rewriteRefOfOrExpr(parent, node, replacer, pre, post)
+	case *Order:
+		return rewriteRefOfOrder(parent, node, replacer, pre, post)
+	case OrderBy:
+		return rewriteOrderBy(parent, node, replacer, pre, post)
+	case *OrderByOption:
+		return rewriteRefOfOrderByOption(parent, node, replacer, pre, post)
+	case *OtherAdmin:
+		return rewriteRefOfOtherAdmin(parent, node, replacer, pre, post)
+	case *OtherRead:
+		return rewriteRefOfOtherRead(parent, node, replacer, pre, post)
+	case *ParenSelect:
+		return rewriteRefOfParenSelect(parent, node, replacer, pre, post)
+	case *ParenTableExpr:
+		return rewriteRefOfParenTableExpr(parent, node, replacer, pre, post)
+	case *PartitionDefinition:
+		return rewriteRefOfPartitionDefinition(parent, node, replacer, pre, post)
+	case *PartitionSpec:
+		return rewriteRefOfPartitionSpec(parent, node, replacer, pre, post)
+	case Partitions:
+		return rewritePartitions(parent, node, replacer, pre, post)
+	case *RangeCond:
+		return rewriteRefOfRangeCond(parent, node, replacer, pre, post)
+	case ReferenceAction:
+		return rewriteReferenceAction(parent, node, replacer, pre, post)
+	case *Release:
+		return rewriteRefOfRelease(parent, node, replacer, pre, post)
+	case *RenameIndex:
+		return rewriteRefOfRenameIndex(parent, node, replacer, pre, post)
+	case *RenameTable:
+		return rewriteRefOfRenameTable(parent, node, replacer, pre, post)
+	case *RenameTableName:
+		return rewriteRefOfRenameTableName(parent, node, replacer, pre, post)
+	case *RevertMigration:
+		return rewriteRefOfRevertMigration(parent, node, replacer, pre, post)
+	case *Rollback:
+		return rewriteRefOfRollback(parent, node, replacer, pre, post)
+	case *SRollback:
+		return rewriteRefOfSRollback(parent, node, replacer, pre, post)
+	case *Savepoint:
+		return rewriteRefOfSavepoint(parent, node, replacer, pre, post)
+	case *Select:
+		return rewriteRefOfSelect(parent, node, replacer, pre, post)
+	case SelectExprs:
+		return rewriteSelectExprs(parent, node, replacer, pre, post)
+	case *SelectInto:
+		return rewriteRefOfSelectInto(parent, node, replacer, pre, post)
+	case *Set:
+		return rewriteRefOfSet(parent, node, replacer, pre, post)
+	case *SetExpr:
+		return rewriteRefOfSetExpr(parent, node, replacer, pre, post)
+	case SetExprs:
+		return rewriteSetExprs(parent, node, replacer, pre, post)
+	case *SetTransaction:
+		return rewriteRefOfSetTransaction(parent, node, replacer, pre, post)
+	case *Show:
+		return rewriteRefOfShow(parent, node, replacer, pre, post)
+	case *ShowBasic:
+		return rewriteRefOfShowBasic(parent, node, replacer, pre, post)
+	case *ShowCreate:
+		return rewriteRefOfShowCreate(parent, node, replacer, pre, post)
+	case *ShowFilter:
+		return rewriteRefOfShowFilter(parent, node, replacer, pre, post)
+	case *ShowLegacy:
+		return rewriteRefOfShowLegacy(parent, node, replacer, pre, post)
+	case *StarExpr:
+		return rewriteRefOfStarExpr(parent, node, replacer, pre, post)
+	case *Stream:
+		return rewriteRefOfStream(parent, node, replacer, pre, post)
+	case *Subquery:
+		return rewriteRefOfSubquery(parent, node, replacer, pre, post)
+	case *SubstrExpr:
+		return rewriteRefOfSubstrExpr(parent, node, replacer, pre, post)
+	case TableExprs:
+		return rewriteTableExprs(parent, node, replacer, pre, post)
+	case TableIdent:
+		return rewriteTableIdent(parent, node, replacer, pre, post)
+	case TableName:
+		return rewriteTableName(parent, node, replacer, pre, post)
+	case TableNames:
+		return rewriteTableNames(parent, node, replacer, pre, post)
+	case TableOptions:
+		return rewriteTableOptions(parent, node, replacer, pre, post)
+	case *TableSpec:
+		return rewriteRefOfTableSpec(parent, node, replacer, pre, post)
+	case *TablespaceOperation:
+		return rewriteRefOfTablespaceOperation(parent, node, replacer, pre, post)
+	case *TimestampFuncExpr:
+		return rewriteRefOfTimestampFuncExpr(parent, node, replacer, pre, post)
+	case *TruncateTable:
+		return rewriteRefOfTruncateTable(parent, node, replacer, pre, post)
+	case *UnaryExpr:
+		return rewriteRefOfUnaryExpr(parent, node, replacer, pre, post)
+	case *Union:
+		return rewriteRefOfUnion(parent, node, replacer, pre, post)
+	case *UnionSelect:
+		return rewriteRefOfUnionSelect(parent, node, replacer, pre, post)
+	case *UnlockTables:
+		return rewriteRefOfUnlockTables(parent, node, replacer, pre, post)
+	case *Update:
+		return rewriteRefOfUpdate(parent, node, replacer, pre, post)
+	case *UpdateExpr:
+		return rewriteRefOfUpdateExpr(parent, node, replacer, pre, post)
+	case UpdateExprs:
+		return rewriteUpdateExprs(parent, node, replacer, pre, post)
+	case *Use:
+		return rewriteRefOfUse(parent, node, replacer, pre, post)
+	case *VStream:
+		return rewriteRefOfVStream(parent, node, replacer, pre, post)
+	case ValTuple:
+		return rewriteValTuple(parent, node, replacer, pre, post)
+	case *Validation:
+		return rewriteRefOfValidation(parent, node, replacer, pre, post)
+	case Values:
+		return rewriteValues(parent, node, replacer, pre, post)
+	case *ValuesFuncExpr:
+		return rewriteRefOfValuesFuncExpr(parent, node, replacer, pre, post)
+	case VindexParam:
+		return rewriteVindexParam(parent, node, replacer, pre, post)
+	case *VindexSpec:
+		return rewriteRefOfVindexSpec(parent, node, replacer, pre, post)
+	case *When:
+		return rewriteRefOfWhen(parent, node, replacer, pre, post)
+	case *Where:
+		return rewriteRefOfWhere(parent, node, replacer, pre, post)
+	case *XorExpr:
+		return rewriteRefOfXorExpr(parent, node, replacer, pre, post)
+	default:
+		// this should never happen
+		return nil
+	}
+}
+
 // EqualsRefOfAddColumns does deep equals between the two objects.
 func EqualsRefOfAddColumns(a, b *AddColumns) bool {
 	if a == b {
@@ -1563,6 +1872,42 @@ func VisitRefOfAddColumns(in *AddColumns, f Visit) error {
 	return nil
 }
 
+// rewriteRefOfAddColumns is part of the Rewrite implementation
+func rewriteRefOfAddColumns(parent SQLNode, node *AddColumns, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	for i, el := range node.Columns {
+		if errF := rewriteRefOfColumnDefinition(node, el, func(newNode, parent SQLNode) {
+			parent.(*AddColumns).Columns[i] = newNode.(*ColumnDefinition)
+		}, pre, post); errF != nil {
+			return errF
+		}
+	}
+	if errF := rewriteRefOfColName(node, node.First, func(newNode, parent SQLNode) {
+		parent.(*AddColumns).First = newNode.(*ColName)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if errF := rewriteRefOfColName(node, node.After, func(newNode, parent SQLNode) {
+		parent.(*AddColumns).After = newNode.(*ColName)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if !post(&cur) {
+		return errAbort
+	}
+	return nil
+}
+
 // EqualsRefOfAddConstraintDefinition does deep equals between the two objects.
 func EqualsRefOfAddConstraintDefinition(a, b *AddConstraintDefinition) bool {
 	if a == b {
@@ -1598,6 +1943,30 @@ func VisitRefOfAddConstraintDefinition(in *AddConstraintDefinition, f Visit) err
 	return nil
 }
 
+// rewriteRefOfAddConstraintDefinition is part of the Rewrite implementation
+func rewriteRefOfAddConstraintDefinition(parent SQLNode, node *AddConstraintDefinition, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewriteRefOfConstraintDefinition(node, node.ConstraintDefinition, func(newNode, parent SQLNode) {
+		parent.(*AddConstraintDefinition).ConstraintDefinition = newNode.(*ConstraintDefinition)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if !post(&cur) {
+		return errAbort
+	}
+	return nil
+}
+
 // EqualsRefOfAddIndexDefinition does deep equals between the two objects.
 func EqualsRefOfAddIndexDefinition(a, b *AddIndexDefinition) bool {
 	if a == b {
@@ -1629,6 +1998,30 @@ func VisitRefOfAddIndexDefinition(in *AddIndexDefinition, f Visit) error {
 	}
 	if err := VisitRefOfIndexDefinition(in.IndexDefinition, f); err != nil {
 		return err
+	}
+	return nil
+}
+
+// rewriteRefOfAddIndexDefinition is part of the Rewrite implementation
+func rewriteRefOfAddIndexDefinition(parent SQLNode, node *AddIndexDefinition, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewriteRefOfIndexDefinition(node, node.IndexDefinition, func(newNode, parent SQLNode) {
+		parent.(*AddIndexDefinition).IndexDefinition = newNode.(*IndexDefinition)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if !post(&cur) {
+		return errAbort
 	}
 	return nil
 }
@@ -1669,6 +2062,35 @@ func VisitRefOfAliasedExpr(in *AliasedExpr, f Visit) error {
 	}
 	if err := VisitColIdent(in.As, f); err != nil {
 		return err
+	}
+	return nil
+}
+
+// rewriteRefOfAliasedExpr is part of the Rewrite implementation
+func rewriteRefOfAliasedExpr(parent SQLNode, node *AliasedExpr, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
+		parent.(*AliasedExpr).Expr = newNode.(Expr)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if errF := rewriteColIdent(node, node.As, func(newNode, parent SQLNode) {
+		parent.(*AliasedExpr).As = newNode.(ColIdent)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if !post(&cur) {
+		return errAbort
 	}
 	return nil
 }
@@ -1723,6 +2145,45 @@ func VisitRefOfAliasedTableExpr(in *AliasedTableExpr, f Visit) error {
 	return nil
 }
 
+// rewriteRefOfAliasedTableExpr is part of the Rewrite implementation
+func rewriteRefOfAliasedTableExpr(parent SQLNode, node *AliasedTableExpr, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewriteSimpleTableExpr(node, node.Expr, func(newNode, parent SQLNode) {
+		parent.(*AliasedTableExpr).Expr = newNode.(SimpleTableExpr)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if errF := rewritePartitions(node, node.Partitions, func(newNode, parent SQLNode) {
+		parent.(*AliasedTableExpr).Partitions = newNode.(Partitions)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if errF := rewriteTableIdent(node, node.As, func(newNode, parent SQLNode) {
+		parent.(*AliasedTableExpr).As = newNode.(TableIdent)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if errF := rewriteRefOfIndexHints(node, node.Hints, func(newNode, parent SQLNode) {
+		parent.(*AliasedTableExpr).Hints = newNode.(*IndexHints)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if !post(&cur) {
+		return errAbort
+	}
+	return nil
+}
+
 // EqualsRefOfAlterCharset does deep equals between the two objects.
 func EqualsRefOfAlterCharset(a, b *AlterCharset) bool {
 	if a == b {
@@ -1751,6 +2212,25 @@ func VisitRefOfAlterCharset(in *AlterCharset, f Visit) error {
 	}
 	if cont, err := f(in); err != nil || !cont {
 		return err
+	}
+	return nil
+}
+
+// rewriteRefOfAlterCharset is part of the Rewrite implementation
+func rewriteRefOfAlterCharset(parent SQLNode, node *AlterCharset, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if !post(&cur) {
+		return errAbort
 	}
 	return nil
 }
@@ -1796,6 +2276,35 @@ func VisitRefOfAlterColumn(in *AlterColumn, f Visit) error {
 	return nil
 }
 
+// rewriteRefOfAlterColumn is part of the Rewrite implementation
+func rewriteRefOfAlterColumn(parent SQLNode, node *AlterColumn, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewriteRefOfColName(node, node.Column, func(newNode, parent SQLNode) {
+		parent.(*AlterColumn).Column = newNode.(*ColName)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if errF := rewriteExpr(node, node.DefaultVal, func(newNode, parent SQLNode) {
+		parent.(*AlterColumn).DefaultVal = newNode.(Expr)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if !post(&cur) {
+		return errAbort
+	}
+	return nil
+}
+
 // EqualsRefOfAlterDatabase does deep equals between the two objects.
 func EqualsRefOfAlterDatabase(a, b *AlterDatabase) bool {
 	if a == b {
@@ -1831,6 +2340,25 @@ func VisitRefOfAlterDatabase(in *AlterDatabase, f Visit) error {
 	return nil
 }
 
+// rewriteRefOfAlterDatabase is part of the Rewrite implementation
+func rewriteRefOfAlterDatabase(parent SQLNode, node *AlterDatabase, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if !post(&cur) {
+		return errAbort
+	}
+	return nil
+}
+
 // EqualsRefOfAlterMigration does deep equals between the two objects.
 func EqualsRefOfAlterMigration(a, b *AlterMigration) bool {
 	if a == b {
@@ -1859,6 +2387,25 @@ func VisitRefOfAlterMigration(in *AlterMigration, f Visit) error {
 	}
 	if cont, err := f(in); err != nil || !cont {
 		return err
+	}
+	return nil
+}
+
+// rewriteRefOfAlterMigration is part of the Rewrite implementation
+func rewriteRefOfAlterMigration(parent SQLNode, node *AlterMigration, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if !post(&cur) {
+		return errAbort
 	}
 	return nil
 }
@@ -1911,6 +2458,42 @@ func VisitRefOfAlterTable(in *AlterTable, f Visit) error {
 	return nil
 }
 
+// rewriteRefOfAlterTable is part of the Rewrite implementation
+func rewriteRefOfAlterTable(parent SQLNode, node *AlterTable, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewriteTableName(node, node.Table, func(newNode, parent SQLNode) {
+		parent.(*AlterTable).Table = newNode.(TableName)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	for i, el := range node.AlterOptions {
+		if errF := rewriteAlterOption(node, el, func(newNode, parent SQLNode) {
+			parent.(*AlterTable).AlterOptions[i] = newNode.(AlterOption)
+		}, pre, post); errF != nil {
+			return errF
+		}
+	}
+	if errF := rewriteRefOfPartitionSpec(node, node.PartitionSpec, func(newNode, parent SQLNode) {
+		parent.(*AlterTable).PartitionSpec = newNode.(*PartitionSpec)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if !post(&cur) {
+		return errAbort
+	}
+	return nil
+}
+
 // EqualsRefOfAlterView does deep equals between the two objects.
 func EqualsRefOfAlterView(a, b *AlterView) bool {
 	if a == b {
@@ -1956,6 +2539,40 @@ func VisitRefOfAlterView(in *AlterView, f Visit) error {
 	}
 	if err := VisitSelectStatement(in.Select, f); err != nil {
 		return err
+	}
+	return nil
+}
+
+// rewriteRefOfAlterView is part of the Rewrite implementation
+func rewriteRefOfAlterView(parent SQLNode, node *AlterView, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewriteTableName(node, node.ViewName, func(newNode, parent SQLNode) {
+		parent.(*AlterView).ViewName = newNode.(TableName)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if errF := rewriteColumns(node, node.Columns, func(newNode, parent SQLNode) {
+		parent.(*AlterView).Columns = newNode.(Columns)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if errF := rewriteSelectStatement(node, node.Select, func(newNode, parent SQLNode) {
+		parent.(*AlterView).Select = newNode.(SelectStatement)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if !post(&cur) {
+		return errAbort
 	}
 	return nil
 }
@@ -2013,6 +2630,47 @@ func VisitRefOfAlterVschema(in *AlterVschema, f Visit) error {
 	return nil
 }
 
+// rewriteRefOfAlterVschema is part of the Rewrite implementation
+func rewriteRefOfAlterVschema(parent SQLNode, node *AlterVschema, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewriteTableName(node, node.Table, func(newNode, parent SQLNode) {
+		parent.(*AlterVschema).Table = newNode.(TableName)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if errF := rewriteRefOfVindexSpec(node, node.VindexSpec, func(newNode, parent SQLNode) {
+		parent.(*AlterVschema).VindexSpec = newNode.(*VindexSpec)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	for i, el := range node.VindexCols {
+		if errF := rewriteColIdent(node, el, func(newNode, parent SQLNode) {
+			parent.(*AlterVschema).VindexCols[i] = newNode.(ColIdent)
+		}, pre, post); errF != nil {
+			return errF
+		}
+	}
+	if errF := rewriteRefOfAutoIncSpec(node, node.AutoIncSpec, func(newNode, parent SQLNode) {
+		parent.(*AlterVschema).AutoIncSpec = newNode.(*AutoIncSpec)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if !post(&cur) {
+		return errAbort
+	}
+	return nil
+}
+
 // EqualsRefOfAndExpr does deep equals between the two objects.
 func EqualsRefOfAndExpr(a, b *AndExpr) bool {
 	if a == b {
@@ -2049,6 +2707,35 @@ func VisitRefOfAndExpr(in *AndExpr, f Visit) error {
 	}
 	if err := VisitExpr(in.Right, f); err != nil {
 		return err
+	}
+	return nil
+}
+
+// rewriteRefOfAndExpr is part of the Rewrite implementation
+func rewriteRefOfAndExpr(parent SQLNode, node *AndExpr, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewriteExpr(node, node.Left, func(newNode, parent SQLNode) {
+		parent.(*AndExpr).Left = newNode.(Expr)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if errF := rewriteExpr(node, node.Right, func(newNode, parent SQLNode) {
+		parent.(*AndExpr).Right = newNode.(Expr)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if !post(&cur) {
+		return errAbort
 	}
 	return nil
 }
@@ -2093,6 +2780,35 @@ func VisitRefOfAutoIncSpec(in *AutoIncSpec, f Visit) error {
 	return nil
 }
 
+// rewriteRefOfAutoIncSpec is part of the Rewrite implementation
+func rewriteRefOfAutoIncSpec(parent SQLNode, node *AutoIncSpec, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewriteColIdent(node, node.Column, func(newNode, parent SQLNode) {
+		parent.(*AutoIncSpec).Column = newNode.(ColIdent)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if errF := rewriteTableName(node, node.Sequence, func(newNode, parent SQLNode) {
+		parent.(*AutoIncSpec).Sequence = newNode.(TableName)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if !post(&cur) {
+		return errAbort
+	}
+	return nil
+}
+
 // EqualsRefOfBegin does deep equals between the two objects.
 func EqualsRefOfBegin(a, b *Begin) bool {
 	if a == b {
@@ -2120,6 +2836,25 @@ func VisitRefOfBegin(in *Begin, f Visit) error {
 	}
 	if cont, err := f(in); err != nil || !cont {
 		return err
+	}
+	return nil
+}
+
+// rewriteRefOfBegin is part of the Rewrite implementation
+func rewriteRefOfBegin(parent SQLNode, node *Begin, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if !post(&cur) {
+		return errAbort
 	}
 	return nil
 }
@@ -2165,6 +2900,35 @@ func VisitRefOfBinaryExpr(in *BinaryExpr, f Visit) error {
 	return nil
 }
 
+// rewriteRefOfBinaryExpr is part of the Rewrite implementation
+func rewriteRefOfBinaryExpr(parent SQLNode, node *BinaryExpr, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewriteExpr(node, node.Left, func(newNode, parent SQLNode) {
+		parent.(*BinaryExpr).Left = newNode.(Expr)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if errF := rewriteExpr(node, node.Right, func(newNode, parent SQLNode) {
+		parent.(*BinaryExpr).Right = newNode.(Expr)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if !post(&cur) {
+		return errAbort
+	}
+	return nil
+}
+
 // EqualsRefOfCallProc does deep equals between the two objects.
 func EqualsRefOfCallProc(a, b *CallProc) bool {
 	if a == b {
@@ -2201,6 +2965,35 @@ func VisitRefOfCallProc(in *CallProc, f Visit) error {
 	}
 	if err := VisitExprs(in.Params, f); err != nil {
 		return err
+	}
+	return nil
+}
+
+// rewriteRefOfCallProc is part of the Rewrite implementation
+func rewriteRefOfCallProc(parent SQLNode, node *CallProc, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewriteTableName(node, node.Name, func(newNode, parent SQLNode) {
+		parent.(*CallProc).Name = newNode.(TableName)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if errF := rewriteExprs(node, node.Params, func(newNode, parent SQLNode) {
+		parent.(*CallProc).Params = newNode.(Exprs)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if !post(&cur) {
+		return errAbort
 	}
 	return nil
 }
@@ -2248,6 +3041,42 @@ func VisitRefOfCaseExpr(in *CaseExpr, f Visit) error {
 	}
 	if err := VisitExpr(in.Else, f); err != nil {
 		return err
+	}
+	return nil
+}
+
+// rewriteRefOfCaseExpr is part of the Rewrite implementation
+func rewriteRefOfCaseExpr(parent SQLNode, node *CaseExpr, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
+		parent.(*CaseExpr).Expr = newNode.(Expr)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	for i, el := range node.Whens {
+		if errF := rewriteRefOfWhen(node, el, func(newNode, parent SQLNode) {
+			parent.(*CaseExpr).Whens[i] = newNode.(*When)
+		}, pre, post); errF != nil {
+			return errF
+		}
+	}
+	if errF := rewriteExpr(node, node.Else, func(newNode, parent SQLNode) {
+		parent.(*CaseExpr).Else = newNode.(Expr)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if !post(&cur) {
+		return errAbort
 	}
 	return nil
 }
@@ -2302,6 +3131,45 @@ func VisitRefOfChangeColumn(in *ChangeColumn, f Visit) error {
 	return nil
 }
 
+// rewriteRefOfChangeColumn is part of the Rewrite implementation
+func rewriteRefOfChangeColumn(parent SQLNode, node *ChangeColumn, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewriteRefOfColName(node, node.OldColumn, func(newNode, parent SQLNode) {
+		parent.(*ChangeColumn).OldColumn = newNode.(*ColName)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if errF := rewriteRefOfColumnDefinition(node, node.NewColDefinition, func(newNode, parent SQLNode) {
+		parent.(*ChangeColumn).NewColDefinition = newNode.(*ColumnDefinition)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if errF := rewriteRefOfColName(node, node.First, func(newNode, parent SQLNode) {
+		parent.(*ChangeColumn).First = newNode.(*ColName)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if errF := rewriteRefOfColName(node, node.After, func(newNode, parent SQLNode) {
+		parent.(*ChangeColumn).After = newNode.(*ColName)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if !post(&cur) {
+		return errAbort
+	}
+	return nil
+}
+
 // EqualsRefOfCheckConstraintDefinition does deep equals between the two objects.
 func EqualsRefOfCheckConstraintDefinition(a, b *CheckConstraintDefinition) bool {
 	if a == b {
@@ -2338,6 +3206,30 @@ func VisitRefOfCheckConstraintDefinition(in *CheckConstraintDefinition, f Visit)
 	return nil
 }
 
+// rewriteRefOfCheckConstraintDefinition is part of the Rewrite implementation
+func rewriteRefOfCheckConstraintDefinition(parent SQLNode, node *CheckConstraintDefinition, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
+		parent.(*CheckConstraintDefinition).Expr = newNode.(Expr)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if !post(&cur) {
+		return errAbort
+	}
+	return nil
+}
+
 // EqualsColIdent does deep equals between the two objects.
 func EqualsColIdent(a, b ColIdent) bool {
 	return a.val == b.val &&
@@ -2354,6 +3246,26 @@ func CloneColIdent(n ColIdent) ColIdent {
 func VisitColIdent(in ColIdent, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
+	}
+	return nil
+}
+
+// rewriteColIdent is part of the Rewrite implementation
+func rewriteColIdent(parent SQLNode, node ColIdent, replacer replacerFunc, pre, post ApplyFunc) error {
+	var err error
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if !post(&cur) {
+		return errAbort
 	}
 	return nil
 }
@@ -2388,6 +3300,35 @@ func VisitRefOfColName(in *ColName, f Visit) error {
 	}
 	if err := VisitTableName(in.Qualifier, f); err != nil {
 		return err
+	}
+	return nil
+}
+
+// rewriteRefOfColName is part of the Rewrite implementation
+func rewriteRefOfColName(parent SQLNode, node *ColName, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
+		parent.(*ColName).Name = newNode.(ColIdent)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if errF := rewriteTableName(node, node.Qualifier, func(newNode, parent SQLNode) {
+		parent.(*ColName).Qualifier = newNode.(TableName)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if !post(&cur) {
+		return errAbort
 	}
 	return nil
 }
@@ -2428,6 +3369,30 @@ func VisitRefOfCollateExpr(in *CollateExpr, f Visit) error {
 	return nil
 }
 
+// rewriteRefOfCollateExpr is part of the Rewrite implementation
+func rewriteRefOfCollateExpr(parent SQLNode, node *CollateExpr, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
+		parent.(*CollateExpr).Expr = newNode.(Expr)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if !post(&cur) {
+		return errAbort
+	}
+	return nil
+}
+
 // EqualsRefOfColumnDefinition does deep equals between the two objects.
 func EqualsRefOfColumnDefinition(a, b *ColumnDefinition) bool {
 	if a == b {
@@ -2461,6 +3426,30 @@ func VisitRefOfColumnDefinition(in *ColumnDefinition, f Visit) error {
 	}
 	if err := VisitColIdent(in.Name, f); err != nil {
 		return err
+	}
+	return nil
+}
+
+// rewriteRefOfColumnDefinition is part of the Rewrite implementation
+func rewriteRefOfColumnDefinition(parent SQLNode, node *ColumnDefinition, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
+		parent.(*ColumnDefinition).Name = newNode.(ColIdent)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if !post(&cur) {
+		return errAbort
 	}
 	return nil
 }
@@ -2514,6 +3503,35 @@ func VisitRefOfColumnType(in *ColumnType, f Visit) error {
 	return nil
 }
 
+// rewriteRefOfColumnType is part of the Rewrite implementation
+func rewriteRefOfColumnType(parent SQLNode, node *ColumnType, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewriteRefOfLiteral(node, node.Length, func(newNode, parent SQLNode) {
+		parent.(*ColumnType).Length = newNode.(*Literal)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if errF := rewriteRefOfLiteral(node, node.Scale, func(newNode, parent SQLNode) {
+		parent.(*ColumnType).Scale = newNode.(*Literal)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if !post(&cur) {
+		return errAbort
+	}
+	return nil
+}
+
 // EqualsColumns does deep equals between the two objects.
 func EqualsColumns(a, b Columns) bool {
 	if len(a) != len(b) {
@@ -2552,6 +3570,32 @@ func VisitColumns(in Columns, f Visit) error {
 	return nil
 }
 
+// rewriteColumns is part of the Rewrite implementation
+func rewriteColumns(parent SQLNode, node Columns, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	for i, el := range node {
+		if errF := rewriteColIdent(node, el, func(newNode, parent SQLNode) {
+			parent.(Columns)[i] = newNode.(ColIdent)
+		}, pre, post); errF != nil {
+			return errF
+		}
+	}
+	if !post(&cur) {
+		return errAbort
+	}
+	return nil
+}
+
 // EqualsComments does deep equals between the two objects.
 func EqualsComments(a, b Comments) bool {
 	if len(a) != len(b) {
@@ -2576,6 +3620,25 @@ func CloneComments(n Comments) Comments {
 func VisitComments(in Comments, f Visit) error {
 	_, err := f(in)
 	return err
+}
+
+// rewriteComments is part of the Rewrite implementation
+func rewriteComments(parent SQLNode, node Comments, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if !post(&cur) {
+		return errAbort
+	}
+	return nil
 }
 
 // EqualsRefOfCommit does deep equals between the two objects.
@@ -2605,6 +3668,25 @@ func VisitRefOfCommit(in *Commit, f Visit) error {
 	}
 	if cont, err := f(in); err != nil || !cont {
 		return err
+	}
+	return nil
+}
+
+// rewriteRefOfCommit is part of the Rewrite implementation
+func rewriteRefOfCommit(parent SQLNode, node *Commit, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if !post(&cur) {
+		return errAbort
 	}
 	return nil
 }
@@ -2655,6 +3737,40 @@ func VisitRefOfComparisonExpr(in *ComparisonExpr, f Visit) error {
 	return nil
 }
 
+// rewriteRefOfComparisonExpr is part of the Rewrite implementation
+func rewriteRefOfComparisonExpr(parent SQLNode, node *ComparisonExpr, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewriteExpr(node, node.Left, func(newNode, parent SQLNode) {
+		parent.(*ComparisonExpr).Left = newNode.(Expr)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if errF := rewriteExpr(node, node.Right, func(newNode, parent SQLNode) {
+		parent.(*ComparisonExpr).Right = newNode.(Expr)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if errF := rewriteExpr(node, node.Escape, func(newNode, parent SQLNode) {
+		parent.(*ComparisonExpr).Escape = newNode.(Expr)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if !post(&cur) {
+		return errAbort
+	}
+	return nil
+}
+
 // EqualsRefOfConstraintDefinition does deep equals between the two objects.
 func EqualsRefOfConstraintDefinition(a, b *ConstraintDefinition) bool {
 	if a == b {
@@ -2687,6 +3803,30 @@ func VisitRefOfConstraintDefinition(in *ConstraintDefinition, f Visit) error {
 	}
 	if err := VisitConstraintInfo(in.Details, f); err != nil {
 		return err
+	}
+	return nil
+}
+
+// rewriteRefOfConstraintDefinition is part of the Rewrite implementation
+func rewriteRefOfConstraintDefinition(parent SQLNode, node *ConstraintDefinition, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewriteConstraintInfo(node, node.Details, func(newNode, parent SQLNode) {
+		parent.(*ConstraintDefinition).Details = newNode.(ConstraintInfo)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if !post(&cur) {
+		return errAbort
 	}
 	return nil
 }
@@ -2727,6 +3867,35 @@ func VisitRefOfConvertExpr(in *ConvertExpr, f Visit) error {
 	}
 	if err := VisitRefOfConvertType(in.Type, f); err != nil {
 		return err
+	}
+	return nil
+}
+
+// rewriteRefOfConvertExpr is part of the Rewrite implementation
+func rewriteRefOfConvertExpr(parent SQLNode, node *ConvertExpr, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
+		parent.(*ConvertExpr).Expr = newNode.(Expr)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if errF := rewriteRefOfConvertType(node, node.Type, func(newNode, parent SQLNode) {
+		parent.(*ConvertExpr).Type = newNode.(*ConvertType)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if !post(&cur) {
+		return errAbort
 	}
 	return nil
 }
@@ -2774,6 +3943,35 @@ func VisitRefOfConvertType(in *ConvertType, f Visit) error {
 	return nil
 }
 
+// rewriteRefOfConvertType is part of the Rewrite implementation
+func rewriteRefOfConvertType(parent SQLNode, node *ConvertType, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewriteRefOfLiteral(node, node.Length, func(newNode, parent SQLNode) {
+		parent.(*ConvertType).Length = newNode.(*Literal)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if errF := rewriteRefOfLiteral(node, node.Scale, func(newNode, parent SQLNode) {
+		parent.(*ConvertType).Scale = newNode.(*Literal)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if !post(&cur) {
+		return errAbort
+	}
+	return nil
+}
+
 // EqualsRefOfConvertUsingExpr does deep equals between the two objects.
 func EqualsRefOfConvertUsingExpr(a, b *ConvertUsingExpr) bool {
 	if a == b {
@@ -2806,6 +4004,30 @@ func VisitRefOfConvertUsingExpr(in *ConvertUsingExpr, f Visit) error {
 	}
 	if err := VisitExpr(in.Expr, f); err != nil {
 		return err
+	}
+	return nil
+}
+
+// rewriteRefOfConvertUsingExpr is part of the Rewrite implementation
+func rewriteRefOfConvertUsingExpr(parent SQLNode, node *ConvertUsingExpr, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
+		parent.(*ConvertUsingExpr).Expr = newNode.(Expr)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if !post(&cur) {
+		return errAbort
 	}
 	return nil
 }
@@ -2846,6 +4068,30 @@ func VisitRefOfCreateDatabase(in *CreateDatabase, f Visit) error {
 	}
 	if err := VisitComments(in.Comments, f); err != nil {
 		return err
+	}
+	return nil
+}
+
+// rewriteRefOfCreateDatabase is part of the Rewrite implementation
+func rewriteRefOfCreateDatabase(parent SQLNode, node *CreateDatabase, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
+		parent.(*CreateDatabase).Comments = newNode.(Comments)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if !post(&cur) {
+		return errAbort
 	}
 	return nil
 }
@@ -2894,6 +4140,40 @@ func VisitRefOfCreateTable(in *CreateTable, f Visit) error {
 	}
 	if err := VisitRefOfOptLike(in.OptLike, f); err != nil {
 		return err
+	}
+	return nil
+}
+
+// rewriteRefOfCreateTable is part of the Rewrite implementation
+func rewriteRefOfCreateTable(parent SQLNode, node *CreateTable, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewriteTableName(node, node.Table, func(newNode, parent SQLNode) {
+		parent.(*CreateTable).Table = newNode.(TableName)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if errF := rewriteRefOfTableSpec(node, node.TableSpec, func(newNode, parent SQLNode) {
+		parent.(*CreateTable).TableSpec = newNode.(*TableSpec)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if errF := rewriteRefOfOptLike(node, node.OptLike, func(newNode, parent SQLNode) {
+		parent.(*CreateTable).OptLike = newNode.(*OptLike)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if !post(&cur) {
+		return errAbort
 	}
 	return nil
 }
@@ -2948,6 +4228,40 @@ func VisitRefOfCreateView(in *CreateView, f Visit) error {
 	return nil
 }
 
+// rewriteRefOfCreateView is part of the Rewrite implementation
+func rewriteRefOfCreateView(parent SQLNode, node *CreateView, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewriteTableName(node, node.ViewName, func(newNode, parent SQLNode) {
+		parent.(*CreateView).ViewName = newNode.(TableName)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if errF := rewriteColumns(node, node.Columns, func(newNode, parent SQLNode) {
+		parent.(*CreateView).Columns = newNode.(Columns)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if errF := rewriteSelectStatement(node, node.Select, func(newNode, parent SQLNode) {
+		parent.(*CreateView).Select = newNode.(SelectStatement)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if !post(&cur) {
+		return errAbort
+	}
+	return nil
+}
+
 // EqualsRefOfCurTimeFuncExpr does deep equals between the two objects.
 func EqualsRefOfCurTimeFuncExpr(a, b *CurTimeFuncExpr) bool {
 	if a == b {
@@ -2988,6 +4302,35 @@ func VisitRefOfCurTimeFuncExpr(in *CurTimeFuncExpr, f Visit) error {
 	return nil
 }
 
+// rewriteRefOfCurTimeFuncExpr is part of the Rewrite implementation
+func rewriteRefOfCurTimeFuncExpr(parent SQLNode, node *CurTimeFuncExpr, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
+		parent.(*CurTimeFuncExpr).Name = newNode.(ColIdent)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if errF := rewriteExpr(node, node.Fsp, func(newNode, parent SQLNode) {
+		parent.(*CurTimeFuncExpr).Fsp = newNode.(Expr)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if !post(&cur) {
+		return errAbort
+	}
+	return nil
+}
+
 // EqualsRefOfDefault does deep equals between the two objects.
 func EqualsRefOfDefault(a, b *Default) bool {
 	if a == b {
@@ -3015,6 +4358,25 @@ func VisitRefOfDefault(in *Default, f Visit) error {
 	}
 	if cont, err := f(in); err != nil || !cont {
 		return err
+	}
+	return nil
+}
+
+// rewriteRefOfDefault is part of the Rewrite implementation
+func rewriteRefOfDefault(parent SQLNode, node *Default, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if !post(&cur) {
+		return errAbort
 	}
 	return nil
 }
@@ -3085,6 +4447,60 @@ func VisitRefOfDelete(in *Delete, f Visit) error {
 	return nil
 }
 
+// rewriteRefOfDelete is part of the Rewrite implementation
+func rewriteRefOfDelete(parent SQLNode, node *Delete, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
+		parent.(*Delete).Comments = newNode.(Comments)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if errF := rewriteTableNames(node, node.Targets, func(newNode, parent SQLNode) {
+		parent.(*Delete).Targets = newNode.(TableNames)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if errF := rewriteTableExprs(node, node.TableExprs, func(newNode, parent SQLNode) {
+		parent.(*Delete).TableExprs = newNode.(TableExprs)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if errF := rewritePartitions(node, node.Partitions, func(newNode, parent SQLNode) {
+		parent.(*Delete).Partitions = newNode.(Partitions)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if errF := rewriteRefOfWhere(node, node.Where, func(newNode, parent SQLNode) {
+		parent.(*Delete).Where = newNode.(*Where)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if errF := rewriteOrderBy(node, node.OrderBy, func(newNode, parent SQLNode) {
+		parent.(*Delete).OrderBy = newNode.(OrderBy)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if errF := rewriteRefOfLimit(node, node.Limit, func(newNode, parent SQLNode) {
+		parent.(*Delete).Limit = newNode.(*Limit)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if !post(&cur) {
+		return errAbort
+	}
+	return nil
+}
+
 // EqualsRefOfDerivedTable does deep equals between the two objects.
 func EqualsRefOfDerivedTable(a, b *DerivedTable) bool {
 	if a == b {
@@ -3120,6 +4536,30 @@ func VisitRefOfDerivedTable(in *DerivedTable, f Visit) error {
 	return nil
 }
 
+// rewriteRefOfDerivedTable is part of the Rewrite implementation
+func rewriteRefOfDerivedTable(parent SQLNode, node *DerivedTable, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewriteSelectStatement(node, node.Select, func(newNode, parent SQLNode) {
+		parent.(*DerivedTable).Select = newNode.(SelectStatement)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if !post(&cur) {
+		return errAbort
+	}
+	return nil
+}
+
 // EqualsRefOfDropColumn does deep equals between the two objects.
 func EqualsRefOfDropColumn(a, b *DropColumn) bool {
 	if a == b {
@@ -3151,6 +4591,30 @@ func VisitRefOfDropColumn(in *DropColumn, f Visit) error {
 	}
 	if err := VisitRefOfColName(in.Name, f); err != nil {
 		return err
+	}
+	return nil
+}
+
+// rewriteRefOfDropColumn is part of the Rewrite implementation
+func rewriteRefOfDropColumn(parent SQLNode, node *DropColumn, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewriteRefOfColName(node, node.Name, func(newNode, parent SQLNode) {
+		parent.(*DropColumn).Name = newNode.(*ColName)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if !post(&cur) {
+		return errAbort
 	}
 	return nil
 }
@@ -3192,6 +4656,30 @@ func VisitRefOfDropDatabase(in *DropDatabase, f Visit) error {
 	return nil
 }
 
+// rewriteRefOfDropDatabase is part of the Rewrite implementation
+func rewriteRefOfDropDatabase(parent SQLNode, node *DropDatabase, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
+		parent.(*DropDatabase).Comments = newNode.(Comments)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if !post(&cur) {
+		return errAbort
+	}
+	return nil
+}
+
 // EqualsRefOfDropKey does deep equals between the two objects.
 func EqualsRefOfDropKey(a, b *DropKey) bool {
 	if a == b {
@@ -3220,6 +4708,25 @@ func VisitRefOfDropKey(in *DropKey, f Visit) error {
 	}
 	if cont, err := f(in); err != nil || !cont {
 		return err
+	}
+	return nil
+}
+
+// rewriteRefOfDropKey is part of the Rewrite implementation
+func rewriteRefOfDropKey(parent SQLNode, node *DropKey, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if !post(&cur) {
+		return errAbort
 	}
 	return nil
 }
@@ -3261,6 +4768,30 @@ func VisitRefOfDropTable(in *DropTable, f Visit) error {
 	return nil
 }
 
+// rewriteRefOfDropTable is part of the Rewrite implementation
+func rewriteRefOfDropTable(parent SQLNode, node *DropTable, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewriteTableNames(node, node.FromTables, func(newNode, parent SQLNode) {
+		parent.(*DropTable).FromTables = newNode.(TableNames)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if !post(&cur) {
+		return errAbort
+	}
+	return nil
+}
+
 // EqualsRefOfDropView does deep equals between the two objects.
 func EqualsRefOfDropView(a, b *DropView) bool {
 	if a == b {
@@ -3297,6 +4828,30 @@ func VisitRefOfDropView(in *DropView, f Visit) error {
 	return nil
 }
 
+// rewriteRefOfDropView is part of the Rewrite implementation
+func rewriteRefOfDropView(parent SQLNode, node *DropView, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewriteTableNames(node, node.FromTables, func(newNode, parent SQLNode) {
+		parent.(*DropView).FromTables = newNode.(TableNames)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if !post(&cur) {
+		return errAbort
+	}
+	return nil
+}
+
 // EqualsRefOfExistsExpr does deep equals between the two objects.
 func EqualsRefOfExistsExpr(a, b *ExistsExpr) bool {
 	if a == b {
@@ -3328,6 +4883,30 @@ func VisitRefOfExistsExpr(in *ExistsExpr, f Visit) error {
 	}
 	if err := VisitRefOfSubquery(in.Subquery, f); err != nil {
 		return err
+	}
+	return nil
+}
+
+// rewriteRefOfExistsExpr is part of the Rewrite implementation
+func rewriteRefOfExistsExpr(parent SQLNode, node *ExistsExpr, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewriteRefOfSubquery(node, node.Subquery, func(newNode, parent SQLNode) {
+		parent.(*ExistsExpr).Subquery = newNode.(*Subquery)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if !post(&cur) {
+		return errAbort
 	}
 	return nil
 }
@@ -3368,6 +4947,30 @@ func VisitRefOfExplainStmt(in *ExplainStmt, f Visit) error {
 	return nil
 }
 
+// rewriteRefOfExplainStmt is part of the Rewrite implementation
+func rewriteRefOfExplainStmt(parent SQLNode, node *ExplainStmt, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewriteStatement(node, node.Statement, func(newNode, parent SQLNode) {
+		parent.(*ExplainStmt).Statement = newNode.(Statement)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if !post(&cur) {
+		return errAbort
+	}
+	return nil
+}
+
 // EqualsRefOfExplainTab does deep equals between the two objects.
 func EqualsRefOfExplainTab(a, b *ExplainTab) bool {
 	if a == b {
@@ -3400,6 +5003,30 @@ func VisitRefOfExplainTab(in *ExplainTab, f Visit) error {
 	}
 	if err := VisitTableName(in.Table, f); err != nil {
 		return err
+	}
+	return nil
+}
+
+// rewriteRefOfExplainTab is part of the Rewrite implementation
+func rewriteRefOfExplainTab(parent SQLNode, node *ExplainTab, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewriteTableName(node, node.Table, func(newNode, parent SQLNode) {
+		parent.(*ExplainTab).Table = newNode.(TableName)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if !post(&cur) {
+		return errAbort
 	}
 	return nil
 }
@@ -3438,6 +5065,32 @@ func VisitExprs(in Exprs, f Visit) error {
 		if err := VisitExpr(el, f); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+// rewriteExprs is part of the Rewrite implementation
+func rewriteExprs(parent SQLNode, node Exprs, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	for i, el := range node {
+		if errF := rewriteExpr(node, el, func(newNode, parent SQLNode) {
+			parent.(Exprs)[i] = newNode.(Expr)
+		}, pre, post); errF != nil {
+			return errF
+		}
+	}
+	if !post(&cur) {
+		return errAbort
 	}
 	return nil
 }
@@ -3482,6 +5135,30 @@ func VisitRefOfFlush(in *Flush, f Visit) error {
 	return nil
 }
 
+// rewriteRefOfFlush is part of the Rewrite implementation
+func rewriteRefOfFlush(parent SQLNode, node *Flush, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewriteTableNames(node, node.TableNames, func(newNode, parent SQLNode) {
+		parent.(*Flush).TableNames = newNode.(TableNames)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if !post(&cur) {
+		return errAbort
+	}
+	return nil
+}
+
 // EqualsRefOfForce does deep equals between the two objects.
 func EqualsRefOfForce(a, b *Force) bool {
 	if a == b {
@@ -3509,6 +5186,25 @@ func VisitRefOfForce(in *Force, f Visit) error {
 	}
 	if cont, err := f(in); err != nil || !cont {
 		return err
+	}
+	return nil
+}
+
+// rewriteRefOfForce is part of the Rewrite implementation
+func rewriteRefOfForce(parent SQLNode, node *Force, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if !post(&cur) {
+		return errAbort
 	}
 	return nil
 }
@@ -3566,6 +5262,50 @@ func VisitRefOfForeignKeyDefinition(in *ForeignKeyDefinition, f Visit) error {
 	return nil
 }
 
+// rewriteRefOfForeignKeyDefinition is part of the Rewrite implementation
+func rewriteRefOfForeignKeyDefinition(parent SQLNode, node *ForeignKeyDefinition, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewriteColumns(node, node.Source, func(newNode, parent SQLNode) {
+		parent.(*ForeignKeyDefinition).Source = newNode.(Columns)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if errF := rewriteTableName(node, node.ReferencedTable, func(newNode, parent SQLNode) {
+		parent.(*ForeignKeyDefinition).ReferencedTable = newNode.(TableName)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if errF := rewriteColumns(node, node.ReferencedColumns, func(newNode, parent SQLNode) {
+		parent.(*ForeignKeyDefinition).ReferencedColumns = newNode.(Columns)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if errF := rewriteReferenceAction(node, node.OnDelete, func(newNode, parent SQLNode) {
+		parent.(*ForeignKeyDefinition).OnDelete = newNode.(ReferenceAction)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if errF := rewriteReferenceAction(node, node.OnUpdate, func(newNode, parent SQLNode) {
+		parent.(*ForeignKeyDefinition).OnUpdate = newNode.(ReferenceAction)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if !post(&cur) {
+		return errAbort
+	}
+	return nil
+}
+
 // EqualsRefOfFuncExpr does deep equals between the two objects.
 func EqualsRefOfFuncExpr(a, b *FuncExpr) bool {
 	if a == b {
@@ -3612,6 +5352,40 @@ func VisitRefOfFuncExpr(in *FuncExpr, f Visit) error {
 	return nil
 }
 
+// rewriteRefOfFuncExpr is part of the Rewrite implementation
+func rewriteRefOfFuncExpr(parent SQLNode, node *FuncExpr, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewriteTableIdent(node, node.Qualifier, func(newNode, parent SQLNode) {
+		parent.(*FuncExpr).Qualifier = newNode.(TableIdent)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if errF := rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
+		parent.(*FuncExpr).Name = newNode.(ColIdent)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if errF := rewriteSelectExprs(node, node.Exprs, func(newNode, parent SQLNode) {
+		parent.(*FuncExpr).Exprs = newNode.(SelectExprs)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if !post(&cur) {
+		return errAbort
+	}
+	return nil
+}
+
 // EqualsGroupBy does deep equals between the two objects.
 func EqualsGroupBy(a, b GroupBy) bool {
 	if len(a) != len(b) {
@@ -3646,6 +5420,32 @@ func VisitGroupBy(in GroupBy, f Visit) error {
 		if err := VisitExpr(el, f); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+// rewriteGroupBy is part of the Rewrite implementation
+func rewriteGroupBy(parent SQLNode, node GroupBy, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	for i, el := range node {
+		if errF := rewriteExpr(node, el, func(newNode, parent SQLNode) {
+			parent.(GroupBy)[i] = newNode.(Expr)
+		}, pre, post); errF != nil {
+			return errF
+		}
+	}
+	if !post(&cur) {
+		return errAbort
 	}
 	return nil
 }
@@ -3697,6 +5497,40 @@ func VisitRefOfGroupConcatExpr(in *GroupConcatExpr, f Visit) error {
 	return nil
 }
 
+// rewriteRefOfGroupConcatExpr is part of the Rewrite implementation
+func rewriteRefOfGroupConcatExpr(parent SQLNode, node *GroupConcatExpr, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewriteSelectExprs(node, node.Exprs, func(newNode, parent SQLNode) {
+		parent.(*GroupConcatExpr).Exprs = newNode.(SelectExprs)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if errF := rewriteOrderBy(node, node.OrderBy, func(newNode, parent SQLNode) {
+		parent.(*GroupConcatExpr).OrderBy = newNode.(OrderBy)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if errF := rewriteRefOfLimit(node, node.Limit, func(newNode, parent SQLNode) {
+		parent.(*GroupConcatExpr).Limit = newNode.(*Limit)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if !post(&cur) {
+		return errAbort
+	}
+	return nil
+}
+
 // EqualsRefOfIndexDefinition does deep equals between the two objects.
 func EqualsRefOfIndexDefinition(a, b *IndexDefinition) bool {
 	if a == b {
@@ -3736,6 +5570,30 @@ func VisitRefOfIndexDefinition(in *IndexDefinition, f Visit) error {
 	return nil
 }
 
+// rewriteRefOfIndexDefinition is part of the Rewrite implementation
+func rewriteRefOfIndexDefinition(parent SQLNode, node *IndexDefinition, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewriteRefOfIndexInfo(node, node.Info, func(newNode, parent SQLNode) {
+		parent.(*IndexDefinition).Info = newNode.(*IndexInfo)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if !post(&cur) {
+		return errAbort
+	}
+	return nil
+}
+
 // EqualsRefOfIndexHints does deep equals between the two objects.
 func EqualsRefOfIndexHints(a, b *IndexHints) bool {
 	if a == b {
@@ -3770,6 +5628,32 @@ func VisitRefOfIndexHints(in *IndexHints, f Visit) error {
 		if err := VisitColIdent(el, f); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+// rewriteRefOfIndexHints is part of the Rewrite implementation
+func rewriteRefOfIndexHints(parent SQLNode, node *IndexHints, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	for i, el := range node.Indexes {
+		if errF := rewriteColIdent(node, el, func(newNode, parent SQLNode) {
+			parent.(*IndexHints).Indexes[i] = newNode.(ColIdent)
+		}, pre, post); errF != nil {
+			return errF
+		}
+	}
+	if !post(&cur) {
+		return errAbort
 	}
 	return nil
 }
@@ -3815,6 +5699,35 @@ func VisitRefOfIndexInfo(in *IndexInfo, f Visit) error {
 	}
 	if err := VisitColIdent(in.ConstraintName, f); err != nil {
 		return err
+	}
+	return nil
+}
+
+// rewriteRefOfIndexInfo is part of the Rewrite implementation
+func rewriteRefOfIndexInfo(parent SQLNode, node *IndexInfo, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
+		parent.(*IndexInfo).Name = newNode.(ColIdent)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if errF := rewriteColIdent(node, node.ConstraintName, func(newNode, parent SQLNode) {
+		parent.(*IndexInfo).ConstraintName = newNode.(ColIdent)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if !post(&cur) {
+		return errAbort
 	}
 	return nil
 }
@@ -3881,6 +5794,55 @@ func VisitRefOfInsert(in *Insert, f Visit) error {
 	return nil
 }
 
+// rewriteRefOfInsert is part of the Rewrite implementation
+func rewriteRefOfInsert(parent SQLNode, node *Insert, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
+		parent.(*Insert).Comments = newNode.(Comments)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if errF := rewriteTableName(node, node.Table, func(newNode, parent SQLNode) {
+		parent.(*Insert).Table = newNode.(TableName)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if errF := rewritePartitions(node, node.Partitions, func(newNode, parent SQLNode) {
+		parent.(*Insert).Partitions = newNode.(Partitions)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if errF := rewriteColumns(node, node.Columns, func(newNode, parent SQLNode) {
+		parent.(*Insert).Columns = newNode.(Columns)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if errF := rewriteInsertRows(node, node.Rows, func(newNode, parent SQLNode) {
+		parent.(*Insert).Rows = newNode.(InsertRows)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if errF := rewriteOnDup(node, node.OnDup, func(newNode, parent SQLNode) {
+		parent.(*Insert).OnDup = newNode.(OnDup)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if !post(&cur) {
+		return errAbort
+	}
+	return nil
+}
+
 // EqualsRefOfIntervalExpr does deep equals between the two objects.
 func EqualsRefOfIntervalExpr(a, b *IntervalExpr) bool {
 	if a == b {
@@ -3913,6 +5875,30 @@ func VisitRefOfIntervalExpr(in *IntervalExpr, f Visit) error {
 	}
 	if err := VisitExpr(in.Expr, f); err != nil {
 		return err
+	}
+	return nil
+}
+
+// rewriteRefOfIntervalExpr is part of the Rewrite implementation
+func rewriteRefOfIntervalExpr(parent SQLNode, node *IntervalExpr, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
+		parent.(*IntervalExpr).Expr = newNode.(Expr)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if !post(&cur) {
+		return errAbort
 	}
 	return nil
 }
@@ -3953,6 +5939,30 @@ func VisitRefOfIsExpr(in *IsExpr, f Visit) error {
 	return nil
 }
 
+// rewriteRefOfIsExpr is part of the Rewrite implementation
+func rewriteRefOfIsExpr(parent SQLNode, node *IsExpr, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
+		parent.(*IsExpr).Expr = newNode.(Expr)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if !post(&cur) {
+		return errAbort
+	}
+	return nil
+}
+
 // EqualsJoinCondition does deep equals between the two objects.
 func EqualsJoinCondition(a, b JoinCondition) bool {
 	return EqualsExpr(a.On, b.On) &&
@@ -3974,6 +5984,36 @@ func VisitJoinCondition(in JoinCondition, f Visit) error {
 	}
 	if err := VisitColumns(in.Using, f); err != nil {
 		return err
+	}
+	return nil
+}
+
+// rewriteJoinCondition is part of the Rewrite implementation
+func rewriteJoinCondition(parent SQLNode, node JoinCondition, replacer replacerFunc, pre, post ApplyFunc) error {
+	var err error
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewriteExpr(node, node.On, func(newNode, parent SQLNode) {
+		err = vterrors.New(vtrpc.Code_INTERNAL, "[BUG] tried to replace 'On' on 'JoinCondition'")
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if errF := rewriteColumns(node, node.Using, func(newNode, parent SQLNode) {
+		err = vterrors.New(vtrpc.Code_INTERNAL, "[BUG] tried to replace 'Using' on 'JoinCondition'")
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if err != nil {
+		return err
+	}
+	if !post(&cur) {
+		return errAbort
 	}
 	return nil
 }
@@ -4024,6 +6064,40 @@ func VisitRefOfJoinTableExpr(in *JoinTableExpr, f Visit) error {
 	return nil
 }
 
+// rewriteRefOfJoinTableExpr is part of the Rewrite implementation
+func rewriteRefOfJoinTableExpr(parent SQLNode, node *JoinTableExpr, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewriteTableExpr(node, node.LeftExpr, func(newNode, parent SQLNode) {
+		parent.(*JoinTableExpr).LeftExpr = newNode.(TableExpr)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if errF := rewriteTableExpr(node, node.RightExpr, func(newNode, parent SQLNode) {
+		parent.(*JoinTableExpr).RightExpr = newNode.(TableExpr)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if errF := rewriteJoinCondition(node, node.Condition, func(newNode, parent SQLNode) {
+		parent.(*JoinTableExpr).Condition = newNode.(JoinCondition)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if !post(&cur) {
+		return errAbort
+	}
+	return nil
+}
+
 // EqualsRefOfKeyState does deep equals between the two objects.
 func EqualsRefOfKeyState(a, b *KeyState) bool {
 	if a == b {
@@ -4051,6 +6125,25 @@ func VisitRefOfKeyState(in *KeyState, f Visit) error {
 	}
 	if cont, err := f(in); err != nil || !cont {
 		return err
+	}
+	return nil
+}
+
+// rewriteRefOfKeyState is part of the Rewrite implementation
+func rewriteRefOfKeyState(parent SQLNode, node *KeyState, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if !post(&cur) {
+		return errAbort
 	}
 	return nil
 }
@@ -4095,6 +6188,35 @@ func VisitRefOfLimit(in *Limit, f Visit) error {
 	return nil
 }
 
+// rewriteRefOfLimit is part of the Rewrite implementation
+func rewriteRefOfLimit(parent SQLNode, node *Limit, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewriteExpr(node, node.Offset, func(newNode, parent SQLNode) {
+		parent.(*Limit).Offset = newNode.(Expr)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if errF := rewriteExpr(node, node.Rowcount, func(newNode, parent SQLNode) {
+		parent.(*Limit).Rowcount = newNode.(Expr)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if !post(&cur) {
+		return errAbort
+	}
+	return nil
+}
+
 // EqualsListArg does deep equals between the two objects.
 func EqualsListArg(a, b ListArg) bool {
 	if len(a) != len(b) {
@@ -4119,6 +6241,25 @@ func CloneListArg(n ListArg) ListArg {
 func VisitListArg(in ListArg, f Visit) error {
 	_, err := f(in)
 	return err
+}
+
+// rewriteListArg is part of the Rewrite implementation
+func rewriteListArg(parent SQLNode, node ListArg, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if !post(&cur) {
+		return errAbort
+	}
+	return nil
 }
 
 // EqualsRefOfLiteral does deep equals between the two objects.
@@ -4149,6 +6290,25 @@ func VisitRefOfLiteral(in *Literal, f Visit) error {
 	}
 	if cont, err := f(in); err != nil || !cont {
 		return err
+	}
+	return nil
+}
+
+// rewriteRefOfLiteral is part of the Rewrite implementation
+func rewriteRefOfLiteral(parent SQLNode, node *Literal, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if !post(&cur) {
+		return errAbort
 	}
 	return nil
 }
@@ -4184,6 +6344,25 @@ func VisitRefOfLoad(in *Load, f Visit) error {
 	return nil
 }
 
+// rewriteRefOfLoad is part of the Rewrite implementation
+func rewriteRefOfLoad(parent SQLNode, node *Load, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if !post(&cur) {
+		return errAbort
+	}
+	return nil
+}
+
 // EqualsRefOfLockOption does deep equals between the two objects.
 func EqualsRefOfLockOption(a, b *LockOption) bool {
 	if a == b {
@@ -4211,6 +6390,25 @@ func VisitRefOfLockOption(in *LockOption, f Visit) error {
 	}
 	if cont, err := f(in); err != nil || !cont {
 		return err
+	}
+	return nil
+}
+
+// rewriteRefOfLockOption is part of the Rewrite implementation
+func rewriteRefOfLockOption(parent SQLNode, node *LockOption, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if !post(&cur) {
+		return errAbort
 	}
 	return nil
 }
@@ -4243,6 +6441,25 @@ func VisitRefOfLockTables(in *LockTables, f Visit) error {
 	}
 	if cont, err := f(in); err != nil || !cont {
 		return err
+	}
+	return nil
+}
+
+// rewriteRefOfLockTables is part of the Rewrite implementation
+func rewriteRefOfLockTables(parent SQLNode, node *LockTables, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if !post(&cur) {
+		return errAbort
 	}
 	return nil
 }
@@ -4284,6 +6501,35 @@ func VisitRefOfMatchExpr(in *MatchExpr, f Visit) error {
 	}
 	if err := VisitExpr(in.Expr, f); err != nil {
 		return err
+	}
+	return nil
+}
+
+// rewriteRefOfMatchExpr is part of the Rewrite implementation
+func rewriteRefOfMatchExpr(parent SQLNode, node *MatchExpr, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewriteSelectExprs(node, node.Columns, func(newNode, parent SQLNode) {
+		parent.(*MatchExpr).Columns = newNode.(SelectExprs)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if errF := rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
+		parent.(*MatchExpr).Expr = newNode.(Expr)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if !post(&cur) {
+		return errAbort
 	}
 	return nil
 }
@@ -4333,6 +6579,40 @@ func VisitRefOfModifyColumn(in *ModifyColumn, f Visit) error {
 	return nil
 }
 
+// rewriteRefOfModifyColumn is part of the Rewrite implementation
+func rewriteRefOfModifyColumn(parent SQLNode, node *ModifyColumn, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewriteRefOfColumnDefinition(node, node.NewColDefinition, func(newNode, parent SQLNode) {
+		parent.(*ModifyColumn).NewColDefinition = newNode.(*ColumnDefinition)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if errF := rewriteRefOfColName(node, node.First, func(newNode, parent SQLNode) {
+		parent.(*ModifyColumn).First = newNode.(*ColName)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if errF := rewriteRefOfColName(node, node.After, func(newNode, parent SQLNode) {
+		parent.(*ModifyColumn).After = newNode.(*ColName)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if !post(&cur) {
+		return errAbort
+	}
+	return nil
+}
+
 // EqualsRefOfNextval does deep equals between the two objects.
 func EqualsRefOfNextval(a, b *Nextval) bool {
 	if a == b {
@@ -4364,6 +6644,30 @@ func VisitRefOfNextval(in *Nextval, f Visit) error {
 	}
 	if err := VisitExpr(in.Expr, f); err != nil {
 		return err
+	}
+	return nil
+}
+
+// rewriteRefOfNextval is part of the Rewrite implementation
+func rewriteRefOfNextval(parent SQLNode, node *Nextval, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
+		parent.(*Nextval).Expr = newNode.(Expr)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if !post(&cur) {
+		return errAbort
 	}
 	return nil
 }
@@ -4403,6 +6707,30 @@ func VisitRefOfNotExpr(in *NotExpr, f Visit) error {
 	return nil
 }
 
+// rewriteRefOfNotExpr is part of the Rewrite implementation
+func rewriteRefOfNotExpr(parent SQLNode, node *NotExpr, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
+		parent.(*NotExpr).Expr = newNode.(Expr)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if !post(&cur) {
+		return errAbort
+	}
+	return nil
+}
+
 // EqualsRefOfNullVal does deep equals between the two objects.
 func EqualsRefOfNullVal(a, b *NullVal) bool {
 	if a == b {
@@ -4430,6 +6758,25 @@ func VisitRefOfNullVal(in *NullVal, f Visit) error {
 	}
 	if cont, err := f(in); err != nil || !cont {
 		return err
+	}
+	return nil
+}
+
+// rewriteRefOfNullVal is part of the Rewrite implementation
+func rewriteRefOfNullVal(parent SQLNode, node *NullVal, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if !post(&cur) {
+		return errAbort
 	}
 	return nil
 }
@@ -4472,6 +6819,32 @@ func VisitOnDup(in OnDup, f Visit) error {
 	return nil
 }
 
+// rewriteOnDup is part of the Rewrite implementation
+func rewriteOnDup(parent SQLNode, node OnDup, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	for i, el := range node {
+		if errF := rewriteRefOfUpdateExpr(node, el, func(newNode, parent SQLNode) {
+			parent.(OnDup)[i] = newNode.(*UpdateExpr)
+		}, pre, post); errF != nil {
+			return errF
+		}
+	}
+	if !post(&cur) {
+		return errAbort
+	}
+	return nil
+}
+
 // EqualsRefOfOptLike does deep equals between the two objects.
 func EqualsRefOfOptLike(a, b *OptLike) bool {
 	if a == b {
@@ -4503,6 +6876,30 @@ func VisitRefOfOptLike(in *OptLike, f Visit) error {
 	}
 	if err := VisitTableName(in.LikeTable, f); err != nil {
 		return err
+	}
+	return nil
+}
+
+// rewriteRefOfOptLike is part of the Rewrite implementation
+func rewriteRefOfOptLike(parent SQLNode, node *OptLike, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewriteTableName(node, node.LikeTable, func(newNode, parent SQLNode) {
+		parent.(*OptLike).LikeTable = newNode.(TableName)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if !post(&cur) {
+		return errAbort
 	}
 	return nil
 }
@@ -4547,6 +6944,35 @@ func VisitRefOfOrExpr(in *OrExpr, f Visit) error {
 	return nil
 }
 
+// rewriteRefOfOrExpr is part of the Rewrite implementation
+func rewriteRefOfOrExpr(parent SQLNode, node *OrExpr, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewriteExpr(node, node.Left, func(newNode, parent SQLNode) {
+		parent.(*OrExpr).Left = newNode.(Expr)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if errF := rewriteExpr(node, node.Right, func(newNode, parent SQLNode) {
+		parent.(*OrExpr).Right = newNode.(Expr)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if !post(&cur) {
+		return errAbort
+	}
+	return nil
+}
+
 // EqualsRefOfOrder does deep equals between the two objects.
 func EqualsRefOfOrder(a, b *Order) bool {
 	if a == b {
@@ -4579,6 +7005,30 @@ func VisitRefOfOrder(in *Order, f Visit) error {
 	}
 	if err := VisitExpr(in.Expr, f); err != nil {
 		return err
+	}
+	return nil
+}
+
+// rewriteRefOfOrder is part of the Rewrite implementation
+func rewriteRefOfOrder(parent SQLNode, node *Order, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
+		parent.(*Order).Expr = newNode.(Expr)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if !post(&cur) {
+		return errAbort
 	}
 	return nil
 }
@@ -4621,6 +7071,32 @@ func VisitOrderBy(in OrderBy, f Visit) error {
 	return nil
 }
 
+// rewriteOrderBy is part of the Rewrite implementation
+func rewriteOrderBy(parent SQLNode, node OrderBy, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	for i, el := range node {
+		if errF := rewriteRefOfOrder(node, el, func(newNode, parent SQLNode) {
+			parent.(OrderBy)[i] = newNode.(*Order)
+		}, pre, post); errF != nil {
+			return errF
+		}
+	}
+	if !post(&cur) {
+		return errAbort
+	}
+	return nil
+}
+
 // EqualsRefOfOrderByOption does deep equals between the two objects.
 func EqualsRefOfOrderByOption(a, b *OrderByOption) bool {
 	if a == b {
@@ -4656,6 +7132,30 @@ func VisitRefOfOrderByOption(in *OrderByOption, f Visit) error {
 	return nil
 }
 
+// rewriteRefOfOrderByOption is part of the Rewrite implementation
+func rewriteRefOfOrderByOption(parent SQLNode, node *OrderByOption, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewriteColumns(node, node.Cols, func(newNode, parent SQLNode) {
+		parent.(*OrderByOption).Cols = newNode.(Columns)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if !post(&cur) {
+		return errAbort
+	}
+	return nil
+}
+
 // EqualsRefOfOtherAdmin does deep equals between the two objects.
 func EqualsRefOfOtherAdmin(a, b *OtherAdmin) bool {
 	if a == b {
@@ -4687,6 +7187,25 @@ func VisitRefOfOtherAdmin(in *OtherAdmin, f Visit) error {
 	return nil
 }
 
+// rewriteRefOfOtherAdmin is part of the Rewrite implementation
+func rewriteRefOfOtherAdmin(parent SQLNode, node *OtherAdmin, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if !post(&cur) {
+		return errAbort
+	}
+	return nil
+}
+
 // EqualsRefOfOtherRead does deep equals between the two objects.
 func EqualsRefOfOtherRead(a, b *OtherRead) bool {
 	if a == b {
@@ -4714,6 +7233,25 @@ func VisitRefOfOtherRead(in *OtherRead, f Visit) error {
 	}
 	if cont, err := f(in); err != nil || !cont {
 		return err
+	}
+	return nil
+}
+
+// rewriteRefOfOtherRead is part of the Rewrite implementation
+func rewriteRefOfOtherRead(parent SQLNode, node *OtherRead, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if !post(&cur) {
+		return errAbort
 	}
 	return nil
 }
@@ -4753,6 +7291,30 @@ func VisitRefOfParenSelect(in *ParenSelect, f Visit) error {
 	return nil
 }
 
+// rewriteRefOfParenSelect is part of the Rewrite implementation
+func rewriteRefOfParenSelect(parent SQLNode, node *ParenSelect, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewriteSelectStatement(node, node.Select, func(newNode, parent SQLNode) {
+		parent.(*ParenSelect).Select = newNode.(SelectStatement)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if !post(&cur) {
+		return errAbort
+	}
+	return nil
+}
+
 // EqualsRefOfParenTableExpr does deep equals between the two objects.
 func EqualsRefOfParenTableExpr(a, b *ParenTableExpr) bool {
 	if a == b {
@@ -4784,6 +7346,30 @@ func VisitRefOfParenTableExpr(in *ParenTableExpr, f Visit) error {
 	}
 	if err := VisitTableExprs(in.Exprs, f); err != nil {
 		return err
+	}
+	return nil
+}
+
+// rewriteRefOfParenTableExpr is part of the Rewrite implementation
+func rewriteRefOfParenTableExpr(parent SQLNode, node *ParenTableExpr, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewriteTableExprs(node, node.Exprs, func(newNode, parent SQLNode) {
+		parent.(*ParenTableExpr).Exprs = newNode.(TableExprs)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if !post(&cur) {
+		return errAbort
 	}
 	return nil
 }
@@ -4825,6 +7411,35 @@ func VisitRefOfPartitionDefinition(in *PartitionDefinition, f Visit) error {
 	}
 	if err := VisitExpr(in.Limit, f); err != nil {
 		return err
+	}
+	return nil
+}
+
+// rewriteRefOfPartitionDefinition is part of the Rewrite implementation
+func rewriteRefOfPartitionDefinition(parent SQLNode, node *PartitionDefinition, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
+		parent.(*PartitionDefinition).Name = newNode.(ColIdent)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if errF := rewriteExpr(node, node.Limit, func(newNode, parent SQLNode) {
+		parent.(*PartitionDefinition).Limit = newNode.(Expr)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if !post(&cur) {
+		return errAbort
 	}
 	return nil
 }
@@ -4884,6 +7499,47 @@ func VisitRefOfPartitionSpec(in *PartitionSpec, f Visit) error {
 	return nil
 }
 
+// rewriteRefOfPartitionSpec is part of the Rewrite implementation
+func rewriteRefOfPartitionSpec(parent SQLNode, node *PartitionSpec, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewritePartitions(node, node.Names, func(newNode, parent SQLNode) {
+		parent.(*PartitionSpec).Names = newNode.(Partitions)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if errF := rewriteRefOfLiteral(node, node.Number, func(newNode, parent SQLNode) {
+		parent.(*PartitionSpec).Number = newNode.(*Literal)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if errF := rewriteTableName(node, node.TableName, func(newNode, parent SQLNode) {
+		parent.(*PartitionSpec).TableName = newNode.(TableName)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	for i, el := range node.Definitions {
+		if errF := rewriteRefOfPartitionDefinition(node, el, func(newNode, parent SQLNode) {
+			parent.(*PartitionSpec).Definitions[i] = newNode.(*PartitionDefinition)
+		}, pre, post); errF != nil {
+			return errF
+		}
+	}
+	if !post(&cur) {
+		return errAbort
+	}
+	return nil
+}
+
 // EqualsPartitions does deep equals between the two objects.
 func EqualsPartitions(a, b Partitions) bool {
 	if len(a) != len(b) {
@@ -4918,6 +7574,32 @@ func VisitPartitions(in Partitions, f Visit) error {
 		if err := VisitColIdent(el, f); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+// rewritePartitions is part of the Rewrite implementation
+func rewritePartitions(parent SQLNode, node Partitions, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	for i, el := range node {
+		if errF := rewriteColIdent(node, el, func(newNode, parent SQLNode) {
+			parent.(Partitions)[i] = newNode.(ColIdent)
+		}, pre, post); errF != nil {
+			return errF
+		}
+	}
+	if !post(&cur) {
+		return errAbort
 	}
 	return nil
 }
@@ -4968,6 +7650,40 @@ func VisitRefOfRangeCond(in *RangeCond, f Visit) error {
 	return nil
 }
 
+// rewriteRefOfRangeCond is part of the Rewrite implementation
+func rewriteRefOfRangeCond(parent SQLNode, node *RangeCond, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewriteExpr(node, node.Left, func(newNode, parent SQLNode) {
+		parent.(*RangeCond).Left = newNode.(Expr)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if errF := rewriteExpr(node, node.From, func(newNode, parent SQLNode) {
+		parent.(*RangeCond).From = newNode.(Expr)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if errF := rewriteExpr(node, node.To, func(newNode, parent SQLNode) {
+		parent.(*RangeCond).To = newNode.(Expr)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if !post(&cur) {
+		return errAbort
+	}
+	return nil
+}
+
 // EqualsRefOfRelease does deep equals between the two objects.
 func EqualsRefOfRelease(a, b *Release) bool {
 	if a == b {
@@ -4999,6 +7715,30 @@ func VisitRefOfRelease(in *Release, f Visit) error {
 	}
 	if err := VisitColIdent(in.Name, f); err != nil {
 		return err
+	}
+	return nil
+}
+
+// rewriteRefOfRelease is part of the Rewrite implementation
+func rewriteRefOfRelease(parent SQLNode, node *Release, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
+		parent.(*Release).Name = newNode.(ColIdent)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if !post(&cur) {
+		return errAbort
 	}
 	return nil
 }
@@ -5035,6 +7775,25 @@ func VisitRefOfRenameIndex(in *RenameIndex, f Visit) error {
 	return nil
 }
 
+// rewriteRefOfRenameIndex is part of the Rewrite implementation
+func rewriteRefOfRenameIndex(parent SQLNode, node *RenameIndex, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if !post(&cur) {
+		return errAbort
+	}
+	return nil
+}
+
 // EqualsRefOfRenameTable does deep equals between the two objects.
 func EqualsRefOfRenameTable(a, b *RenameTable) bool {
 	if a == b {
@@ -5063,6 +7822,25 @@ func VisitRefOfRenameTable(in *RenameTable, f Visit) error {
 	}
 	if cont, err := f(in); err != nil || !cont {
 		return err
+	}
+	return nil
+}
+
+// rewriteRefOfRenameTable is part of the Rewrite implementation
+func rewriteRefOfRenameTable(parent SQLNode, node *RenameTable, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if !post(&cur) {
+		return errAbort
 	}
 	return nil
 }
@@ -5102,6 +7880,30 @@ func VisitRefOfRenameTableName(in *RenameTableName, f Visit) error {
 	return nil
 }
 
+// rewriteRefOfRenameTableName is part of the Rewrite implementation
+func rewriteRefOfRenameTableName(parent SQLNode, node *RenameTableName, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewriteTableName(node, node.Table, func(newNode, parent SQLNode) {
+		parent.(*RenameTableName).Table = newNode.(TableName)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if !post(&cur) {
+		return errAbort
+	}
+	return nil
+}
+
 // EqualsRefOfRevertMigration does deep equals between the two objects.
 func EqualsRefOfRevertMigration(a, b *RevertMigration) bool {
 	if a == b {
@@ -5133,6 +7935,25 @@ func VisitRefOfRevertMigration(in *RevertMigration, f Visit) error {
 	return nil
 }
 
+// rewriteRefOfRevertMigration is part of the Rewrite implementation
+func rewriteRefOfRevertMigration(parent SQLNode, node *RevertMigration, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if !post(&cur) {
+		return errAbort
+	}
+	return nil
+}
+
 // EqualsRefOfRollback does deep equals between the two objects.
 func EqualsRefOfRollback(a, b *Rollback) bool {
 	if a == b {
@@ -5160,6 +7981,25 @@ func VisitRefOfRollback(in *Rollback, f Visit) error {
 	}
 	if cont, err := f(in); err != nil || !cont {
 		return err
+	}
+	return nil
+}
+
+// rewriteRefOfRollback is part of the Rewrite implementation
+func rewriteRefOfRollback(parent SQLNode, node *Rollback, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if !post(&cur) {
+		return errAbort
 	}
 	return nil
 }
@@ -5199,6 +8039,30 @@ func VisitRefOfSRollback(in *SRollback, f Visit) error {
 	return nil
 }
 
+// rewriteRefOfSRollback is part of the Rewrite implementation
+func rewriteRefOfSRollback(parent SQLNode, node *SRollback, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
+		parent.(*SRollback).Name = newNode.(ColIdent)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if !post(&cur) {
+		return errAbort
+	}
+	return nil
+}
+
 // EqualsRefOfSavepoint does deep equals between the two objects.
 func EqualsRefOfSavepoint(a, b *Savepoint) bool {
 	if a == b {
@@ -5230,6 +8094,30 @@ func VisitRefOfSavepoint(in *Savepoint, f Visit) error {
 	}
 	if err := VisitColIdent(in.Name, f); err != nil {
 		return err
+	}
+	return nil
+}
+
+// rewriteRefOfSavepoint is part of the Rewrite implementation
+func rewriteRefOfSavepoint(parent SQLNode, node *Savepoint, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
+		parent.(*Savepoint).Name = newNode.(ColIdent)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if !post(&cur) {
+		return errAbort
 	}
 	return nil
 }
@@ -5315,6 +8203,70 @@ func VisitRefOfSelect(in *Select, f Visit) error {
 	return nil
 }
 
+// rewriteRefOfSelect is part of the Rewrite implementation
+func rewriteRefOfSelect(parent SQLNode, node *Select, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
+		parent.(*Select).Comments = newNode.(Comments)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if errF := rewriteSelectExprs(node, node.SelectExprs, func(newNode, parent SQLNode) {
+		parent.(*Select).SelectExprs = newNode.(SelectExprs)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if errF := rewriteTableExprs(node, node.From, func(newNode, parent SQLNode) {
+		parent.(*Select).From = newNode.(TableExprs)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if errF := rewriteRefOfWhere(node, node.Where, func(newNode, parent SQLNode) {
+		parent.(*Select).Where = newNode.(*Where)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if errF := rewriteGroupBy(node, node.GroupBy, func(newNode, parent SQLNode) {
+		parent.(*Select).GroupBy = newNode.(GroupBy)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if errF := rewriteRefOfWhere(node, node.Having, func(newNode, parent SQLNode) {
+		parent.(*Select).Having = newNode.(*Where)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if errF := rewriteOrderBy(node, node.OrderBy, func(newNode, parent SQLNode) {
+		parent.(*Select).OrderBy = newNode.(OrderBy)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if errF := rewriteRefOfLimit(node, node.Limit, func(newNode, parent SQLNode) {
+		parent.(*Select).Limit = newNode.(*Limit)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if errF := rewriteRefOfSelectInto(node, node.Into, func(newNode, parent SQLNode) {
+		parent.(*Select).Into = newNode.(*SelectInto)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if !post(&cur) {
+		return errAbort
+	}
+	return nil
+}
+
 // EqualsSelectExprs does deep equals between the two objects.
 func EqualsSelectExprs(a, b SelectExprs) bool {
 	if len(a) != len(b) {
@@ -5349,6 +8301,32 @@ func VisitSelectExprs(in SelectExprs, f Visit) error {
 		if err := VisitSelectExpr(el, f); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+// rewriteSelectExprs is part of the Rewrite implementation
+func rewriteSelectExprs(parent SQLNode, node SelectExprs, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	for i, el := range node {
+		if errF := rewriteSelectExpr(node, el, func(newNode, parent SQLNode) {
+			parent.(SelectExprs)[i] = newNode.(SelectExpr)
+		}, pre, post); errF != nil {
+			return errF
+		}
+	}
+	if !post(&cur) {
+		return errAbort
 	}
 	return nil
 }
@@ -5390,6 +8368,25 @@ func VisitRefOfSelectInto(in *SelectInto, f Visit) error {
 	return nil
 }
 
+// rewriteRefOfSelectInto is part of the Rewrite implementation
+func rewriteRefOfSelectInto(parent SQLNode, node *SelectInto, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if !post(&cur) {
+		return errAbort
+	}
+	return nil
+}
+
 // EqualsRefOfSet does deep equals between the two objects.
 func EqualsRefOfSet(a, b *Set) bool {
 	if a == b {
@@ -5426,6 +8423,35 @@ func VisitRefOfSet(in *Set, f Visit) error {
 	}
 	if err := VisitSetExprs(in.Exprs, f); err != nil {
 		return err
+	}
+	return nil
+}
+
+// rewriteRefOfSet is part of the Rewrite implementation
+func rewriteRefOfSet(parent SQLNode, node *Set, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
+		parent.(*Set).Comments = newNode.(Comments)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if errF := rewriteSetExprs(node, node.Exprs, func(newNode, parent SQLNode) {
+		parent.(*Set).Exprs = newNode.(SetExprs)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if !post(&cur) {
+		return errAbort
 	}
 	return nil
 }
@@ -5471,6 +8497,35 @@ func VisitRefOfSetExpr(in *SetExpr, f Visit) error {
 	return nil
 }
 
+// rewriteRefOfSetExpr is part of the Rewrite implementation
+func rewriteRefOfSetExpr(parent SQLNode, node *SetExpr, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
+		parent.(*SetExpr).Name = newNode.(ColIdent)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if errF := rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
+		parent.(*SetExpr).Expr = newNode.(Expr)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if !post(&cur) {
+		return errAbort
+	}
+	return nil
+}
+
 // EqualsSetExprs does deep equals between the two objects.
 func EqualsSetExprs(a, b SetExprs) bool {
 	if len(a) != len(b) {
@@ -5505,6 +8560,32 @@ func VisitSetExprs(in SetExprs, f Visit) error {
 		if err := VisitRefOfSetExpr(el, f); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+// rewriteSetExprs is part of the Rewrite implementation
+func rewriteSetExprs(parent SQLNode, node SetExprs, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	for i, el := range node {
+		if errF := rewriteRefOfSetExpr(node, el, func(newNode, parent SQLNode) {
+			parent.(SetExprs)[i] = newNode.(*SetExpr)
+		}, pre, post); errF != nil {
+			return errF
+		}
+	}
+	if !post(&cur) {
+		return errAbort
 	}
 	return nil
 }
@@ -5557,6 +8638,42 @@ func VisitRefOfSetTransaction(in *SetTransaction, f Visit) error {
 	return nil
 }
 
+// rewriteRefOfSetTransaction is part of the Rewrite implementation
+func rewriteRefOfSetTransaction(parent SQLNode, node *SetTransaction, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewriteSQLNode(node, node.SQLNode, func(newNode, parent SQLNode) {
+		parent.(*SetTransaction).SQLNode = newNode.(SQLNode)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if errF := rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
+		parent.(*SetTransaction).Comments = newNode.(Comments)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	for i, el := range node.Characteristics {
+		if errF := rewriteCharacteristic(node, el, func(newNode, parent SQLNode) {
+			parent.(*SetTransaction).Characteristics[i] = newNode.(Characteristic)
+		}, pre, post); errF != nil {
+			return errF
+		}
+	}
+	if !post(&cur) {
+		return errAbort
+	}
+	return nil
+}
+
 // EqualsRefOfShow does deep equals between the two objects.
 func EqualsRefOfShow(a, b *Show) bool {
 	if a == b {
@@ -5588,6 +8705,30 @@ func VisitRefOfShow(in *Show, f Visit) error {
 	}
 	if err := VisitShowInternal(in.Internal, f); err != nil {
 		return err
+	}
+	return nil
+}
+
+// rewriteRefOfShow is part of the Rewrite implementation
+func rewriteRefOfShow(parent SQLNode, node *Show, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewriteShowInternal(node, node.Internal, func(newNode, parent SQLNode) {
+		parent.(*Show).Internal = newNode.(ShowInternal)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if !post(&cur) {
+		return errAbort
 	}
 	return nil
 }
@@ -5635,6 +8776,35 @@ func VisitRefOfShowBasic(in *ShowBasic, f Visit) error {
 	return nil
 }
 
+// rewriteRefOfShowBasic is part of the Rewrite implementation
+func rewriteRefOfShowBasic(parent SQLNode, node *ShowBasic, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewriteTableName(node, node.Tbl, func(newNode, parent SQLNode) {
+		parent.(*ShowBasic).Tbl = newNode.(TableName)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if errF := rewriteRefOfShowFilter(node, node.Filter, func(newNode, parent SQLNode) {
+		parent.(*ShowBasic).Filter = newNode.(*ShowFilter)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if !post(&cur) {
+		return errAbort
+	}
+	return nil
+}
+
 // EqualsRefOfShowCreate does deep equals between the two objects.
 func EqualsRefOfShowCreate(a, b *ShowCreate) bool {
 	if a == b {
@@ -5671,6 +8841,30 @@ func VisitRefOfShowCreate(in *ShowCreate, f Visit) error {
 	return nil
 }
 
+// rewriteRefOfShowCreate is part of the Rewrite implementation
+func rewriteRefOfShowCreate(parent SQLNode, node *ShowCreate, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewriteTableName(node, node.Op, func(newNode, parent SQLNode) {
+		parent.(*ShowCreate).Op = newNode.(TableName)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if !post(&cur) {
+		return errAbort
+	}
+	return nil
+}
+
 // EqualsRefOfShowFilter does deep equals between the two objects.
 func EqualsRefOfShowFilter(a, b *ShowFilter) bool {
 	if a == b {
@@ -5703,6 +8897,30 @@ func VisitRefOfShowFilter(in *ShowFilter, f Visit) error {
 	}
 	if err := VisitExpr(in.Filter, f); err != nil {
 		return err
+	}
+	return nil
+}
+
+// rewriteRefOfShowFilter is part of the Rewrite implementation
+func rewriteRefOfShowFilter(parent SQLNode, node *ShowFilter, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewriteExpr(node, node.Filter, func(newNode, parent SQLNode) {
+		parent.(*ShowFilter).Filter = newNode.(Expr)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if !post(&cur) {
+		return errAbort
 	}
 	return nil
 }
@@ -5757,6 +8975,40 @@ func VisitRefOfShowLegacy(in *ShowLegacy, f Visit) error {
 	return nil
 }
 
+// rewriteRefOfShowLegacy is part of the Rewrite implementation
+func rewriteRefOfShowLegacy(parent SQLNode, node *ShowLegacy, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewriteTableName(node, node.OnTable, func(newNode, parent SQLNode) {
+		parent.(*ShowLegacy).OnTable = newNode.(TableName)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if errF := rewriteTableName(node, node.Table, func(newNode, parent SQLNode) {
+		parent.(*ShowLegacy).Table = newNode.(TableName)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if errF := rewriteExpr(node, node.ShowCollationFilterOpt, func(newNode, parent SQLNode) {
+		parent.(*ShowLegacy).ShowCollationFilterOpt = newNode.(Expr)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if !post(&cur) {
+		return errAbort
+	}
+	return nil
+}
+
 // EqualsRefOfStarExpr does deep equals between the two objects.
 func EqualsRefOfStarExpr(a, b *StarExpr) bool {
 	if a == b {
@@ -5788,6 +9040,30 @@ func VisitRefOfStarExpr(in *StarExpr, f Visit) error {
 	}
 	if err := VisitTableName(in.TableName, f); err != nil {
 		return err
+	}
+	return nil
+}
+
+// rewriteRefOfStarExpr is part of the Rewrite implementation
+func rewriteRefOfStarExpr(parent SQLNode, node *StarExpr, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewriteTableName(node, node.TableName, func(newNode, parent SQLNode) {
+		parent.(*StarExpr).TableName = newNode.(TableName)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if !post(&cur) {
+		return errAbort
 	}
 	return nil
 }
@@ -5837,6 +9113,40 @@ func VisitRefOfStream(in *Stream, f Visit) error {
 	return nil
 }
 
+// rewriteRefOfStream is part of the Rewrite implementation
+func rewriteRefOfStream(parent SQLNode, node *Stream, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
+		parent.(*Stream).Comments = newNode.(Comments)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if errF := rewriteSelectExpr(node, node.SelectExpr, func(newNode, parent SQLNode) {
+		parent.(*Stream).SelectExpr = newNode.(SelectExpr)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if errF := rewriteTableName(node, node.Table, func(newNode, parent SQLNode) {
+		parent.(*Stream).Table = newNode.(TableName)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if !post(&cur) {
+		return errAbort
+	}
+	return nil
+}
+
 // EqualsRefOfSubquery does deep equals between the two objects.
 func EqualsRefOfSubquery(a, b *Subquery) bool {
 	if a == b {
@@ -5868,6 +9178,30 @@ func VisitRefOfSubquery(in *Subquery, f Visit) error {
 	}
 	if err := VisitSelectStatement(in.Select, f); err != nil {
 		return err
+	}
+	return nil
+}
+
+// rewriteRefOfSubquery is part of the Rewrite implementation
+func rewriteRefOfSubquery(parent SQLNode, node *Subquery, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewriteSelectStatement(node, node.Select, func(newNode, parent SQLNode) {
+		parent.(*Subquery).Select = newNode.(SelectStatement)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if !post(&cur) {
+		return errAbort
 	}
 	return nil
 }
@@ -5922,6 +9256,45 @@ func VisitRefOfSubstrExpr(in *SubstrExpr, f Visit) error {
 	return nil
 }
 
+// rewriteRefOfSubstrExpr is part of the Rewrite implementation
+func rewriteRefOfSubstrExpr(parent SQLNode, node *SubstrExpr, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewriteRefOfColName(node, node.Name, func(newNode, parent SQLNode) {
+		parent.(*SubstrExpr).Name = newNode.(*ColName)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if errF := rewriteRefOfLiteral(node, node.StrVal, func(newNode, parent SQLNode) {
+		parent.(*SubstrExpr).StrVal = newNode.(*Literal)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if errF := rewriteExpr(node, node.From, func(newNode, parent SQLNode) {
+		parent.(*SubstrExpr).From = newNode.(Expr)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if errF := rewriteExpr(node, node.To, func(newNode, parent SQLNode) {
+		parent.(*SubstrExpr).To = newNode.(Expr)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if !post(&cur) {
+		return errAbort
+	}
+	return nil
+}
+
 // EqualsTableExprs does deep equals between the two objects.
 func EqualsTableExprs(a, b TableExprs) bool {
 	if len(a) != len(b) {
@@ -5960,6 +9333,32 @@ func VisitTableExprs(in TableExprs, f Visit) error {
 	return nil
 }
 
+// rewriteTableExprs is part of the Rewrite implementation
+func rewriteTableExprs(parent SQLNode, node TableExprs, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	for i, el := range node {
+		if errF := rewriteTableExpr(node, el, func(newNode, parent SQLNode) {
+			parent.(TableExprs)[i] = newNode.(TableExpr)
+		}, pre, post); errF != nil {
+			return errF
+		}
+	}
+	if !post(&cur) {
+		return errAbort
+	}
+	return nil
+}
+
 // EqualsTableIdent does deep equals between the two objects.
 func EqualsTableIdent(a, b TableIdent) bool {
 	return a.v == b.v
@@ -5974,6 +9373,26 @@ func CloneTableIdent(n TableIdent) TableIdent {
 func VisitTableIdent(in TableIdent, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
+	}
+	return nil
+}
+
+// rewriteTableIdent is part of the Rewrite implementation
+func rewriteTableIdent(parent SQLNode, node TableIdent, replacer replacerFunc, pre, post ApplyFunc) error {
+	var err error
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if !post(&cur) {
+		return errAbort
 	}
 	return nil
 }
@@ -5999,6 +9418,36 @@ func VisitTableName(in TableName, f Visit) error {
 	}
 	if err := VisitTableIdent(in.Qualifier, f); err != nil {
 		return err
+	}
+	return nil
+}
+
+// rewriteTableName is part of the Rewrite implementation
+func rewriteTableName(parent SQLNode, node TableName, replacer replacerFunc, pre, post ApplyFunc) error {
+	var err error
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewriteTableIdent(node, node.Name, func(newNode, parent SQLNode) {
+		err = vterrors.New(vtrpc.Code_INTERNAL, "[BUG] tried to replace 'Name' on 'TableName'")
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if errF := rewriteTableIdent(node, node.Qualifier, func(newNode, parent SQLNode) {
+		err = vterrors.New(vtrpc.Code_INTERNAL, "[BUG] tried to replace 'Qualifier' on 'TableName'")
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if err != nil {
+		return err
+	}
+	if !post(&cur) {
+		return errAbort
 	}
 	return nil
 }
@@ -6041,6 +9490,32 @@ func VisitTableNames(in TableNames, f Visit) error {
 	return nil
 }
 
+// rewriteTableNames is part of the Rewrite implementation
+func rewriteTableNames(parent SQLNode, node TableNames, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	for i, el := range node {
+		if errF := rewriteTableName(node, el, func(newNode, parent SQLNode) {
+			parent.(TableNames)[i] = newNode.(TableName)
+		}, pre, post); errF != nil {
+			return errF
+		}
+	}
+	if !post(&cur) {
+		return errAbort
+	}
+	return nil
+}
+
 // EqualsTableOptions does deep equals between the two objects.
 func EqualsTableOptions(a, b TableOptions) bool {
 	if len(a) != len(b) {
@@ -6067,6 +9542,25 @@ func CloneTableOptions(n TableOptions) TableOptions {
 func VisitTableOptions(in TableOptions, f Visit) error {
 	_, err := f(in)
 	return err
+}
+
+// rewriteTableOptions is part of the Rewrite implementation
+func rewriteTableOptions(parent SQLNode, node TableOptions, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if !post(&cur) {
+		return errAbort
+	}
+	return nil
 }
 
 // EqualsRefOfTableSpec does deep equals between the two objects.
@@ -6125,6 +9619,51 @@ func VisitRefOfTableSpec(in *TableSpec, f Visit) error {
 	return nil
 }
 
+// rewriteRefOfTableSpec is part of the Rewrite implementation
+func rewriteRefOfTableSpec(parent SQLNode, node *TableSpec, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	for i, el := range node.Columns {
+		if errF := rewriteRefOfColumnDefinition(node, el, func(newNode, parent SQLNode) {
+			parent.(*TableSpec).Columns[i] = newNode.(*ColumnDefinition)
+		}, pre, post); errF != nil {
+			return errF
+		}
+	}
+	for i, el := range node.Indexes {
+		if errF := rewriteRefOfIndexDefinition(node, el, func(newNode, parent SQLNode) {
+			parent.(*TableSpec).Indexes[i] = newNode.(*IndexDefinition)
+		}, pre, post); errF != nil {
+			return errF
+		}
+	}
+	for i, el := range node.Constraints {
+		if errF := rewriteRefOfConstraintDefinition(node, el, func(newNode, parent SQLNode) {
+			parent.(*TableSpec).Constraints[i] = newNode.(*ConstraintDefinition)
+		}, pre, post); errF != nil {
+			return errF
+		}
+	}
+	if errF := rewriteTableOptions(node, node.Options, func(newNode, parent SQLNode) {
+		parent.(*TableSpec).Options = newNode.(TableOptions)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if !post(&cur) {
+		return errAbort
+	}
+	return nil
+}
+
 // EqualsRefOfTablespaceOperation does deep equals between the two objects.
 func EqualsRefOfTablespaceOperation(a, b *TablespaceOperation) bool {
 	if a == b {
@@ -6152,6 +9691,25 @@ func VisitRefOfTablespaceOperation(in *TablespaceOperation, f Visit) error {
 	}
 	if cont, err := f(in); err != nil || !cont {
 		return err
+	}
+	return nil
+}
+
+// rewriteRefOfTablespaceOperation is part of the Rewrite implementation
+func rewriteRefOfTablespaceOperation(parent SQLNode, node *TablespaceOperation, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if !post(&cur) {
+		return errAbort
 	}
 	return nil
 }
@@ -6198,6 +9756,35 @@ func VisitRefOfTimestampFuncExpr(in *TimestampFuncExpr, f Visit) error {
 	return nil
 }
 
+// rewriteRefOfTimestampFuncExpr is part of the Rewrite implementation
+func rewriteRefOfTimestampFuncExpr(parent SQLNode, node *TimestampFuncExpr, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewriteExpr(node, node.Expr1, func(newNode, parent SQLNode) {
+		parent.(*TimestampFuncExpr).Expr1 = newNode.(Expr)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if errF := rewriteExpr(node, node.Expr2, func(newNode, parent SQLNode) {
+		parent.(*TimestampFuncExpr).Expr2 = newNode.(Expr)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if !post(&cur) {
+		return errAbort
+	}
+	return nil
+}
+
 // EqualsRefOfTruncateTable does deep equals between the two objects.
 func EqualsRefOfTruncateTable(a, b *TruncateTable) bool {
 	if a == b {
@@ -6229,6 +9816,30 @@ func VisitRefOfTruncateTable(in *TruncateTable, f Visit) error {
 	}
 	if err := VisitTableName(in.Table, f); err != nil {
 		return err
+	}
+	return nil
+}
+
+// rewriteRefOfTruncateTable is part of the Rewrite implementation
+func rewriteRefOfTruncateTable(parent SQLNode, node *TruncateTable, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewriteTableName(node, node.Table, func(newNode, parent SQLNode) {
+		parent.(*TruncateTable).Table = newNode.(TableName)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if !post(&cur) {
+		return errAbort
 	}
 	return nil
 }
@@ -6265,6 +9876,30 @@ func VisitRefOfUnaryExpr(in *UnaryExpr, f Visit) error {
 	}
 	if err := VisitExpr(in.Expr, f); err != nil {
 		return err
+	}
+	return nil
+}
+
+// rewriteRefOfUnaryExpr is part of the Rewrite implementation
+func rewriteRefOfUnaryExpr(parent SQLNode, node *UnaryExpr, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
+		parent.(*UnaryExpr).Expr = newNode.(Expr)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if !post(&cur) {
+		return errAbort
 	}
 	return nil
 }
@@ -6322,6 +9957,47 @@ func VisitRefOfUnion(in *Union, f Visit) error {
 	return nil
 }
 
+// rewriteRefOfUnion is part of the Rewrite implementation
+func rewriteRefOfUnion(parent SQLNode, node *Union, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewriteSelectStatement(node, node.FirstStatement, func(newNode, parent SQLNode) {
+		parent.(*Union).FirstStatement = newNode.(SelectStatement)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	for i, el := range node.UnionSelects {
+		if errF := rewriteRefOfUnionSelect(node, el, func(newNode, parent SQLNode) {
+			parent.(*Union).UnionSelects[i] = newNode.(*UnionSelect)
+		}, pre, post); errF != nil {
+			return errF
+		}
+	}
+	if errF := rewriteOrderBy(node, node.OrderBy, func(newNode, parent SQLNode) {
+		parent.(*Union).OrderBy = newNode.(OrderBy)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if errF := rewriteRefOfLimit(node, node.Limit, func(newNode, parent SQLNode) {
+		parent.(*Union).Limit = newNode.(*Limit)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if !post(&cur) {
+		return errAbort
+	}
+	return nil
+}
+
 // EqualsRefOfUnionSelect does deep equals between the two objects.
 func EqualsRefOfUnionSelect(a, b *UnionSelect) bool {
 	if a == b {
@@ -6358,6 +10034,30 @@ func VisitRefOfUnionSelect(in *UnionSelect, f Visit) error {
 	return nil
 }
 
+// rewriteRefOfUnionSelect is part of the Rewrite implementation
+func rewriteRefOfUnionSelect(parent SQLNode, node *UnionSelect, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewriteSelectStatement(node, node.Statement, func(newNode, parent SQLNode) {
+		parent.(*UnionSelect).Statement = newNode.(SelectStatement)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if !post(&cur) {
+		return errAbort
+	}
+	return nil
+}
+
 // EqualsRefOfUnlockTables does deep equals between the two objects.
 func EqualsRefOfUnlockTables(a, b *UnlockTables) bool {
 	if a == b {
@@ -6385,6 +10085,25 @@ func VisitRefOfUnlockTables(in *UnlockTables, f Visit) error {
 	}
 	if cont, err := f(in); err != nil || !cont {
 		return err
+	}
+	return nil
+}
+
+// rewriteRefOfUnlockTables is part of the Rewrite implementation
+func rewriteRefOfUnlockTables(parent SQLNode, node *UnlockTables, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if !post(&cur) {
+		return errAbort
 	}
 	return nil
 }
@@ -6450,6 +10169,55 @@ func VisitRefOfUpdate(in *Update, f Visit) error {
 	return nil
 }
 
+// rewriteRefOfUpdate is part of the Rewrite implementation
+func rewriteRefOfUpdate(parent SQLNode, node *Update, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
+		parent.(*Update).Comments = newNode.(Comments)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if errF := rewriteTableExprs(node, node.TableExprs, func(newNode, parent SQLNode) {
+		parent.(*Update).TableExprs = newNode.(TableExprs)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if errF := rewriteUpdateExprs(node, node.Exprs, func(newNode, parent SQLNode) {
+		parent.(*Update).Exprs = newNode.(UpdateExprs)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if errF := rewriteRefOfWhere(node, node.Where, func(newNode, parent SQLNode) {
+		parent.(*Update).Where = newNode.(*Where)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if errF := rewriteOrderBy(node, node.OrderBy, func(newNode, parent SQLNode) {
+		parent.(*Update).OrderBy = newNode.(OrderBy)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if errF := rewriteRefOfLimit(node, node.Limit, func(newNode, parent SQLNode) {
+		parent.(*Update).Limit = newNode.(*Limit)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if !post(&cur) {
+		return errAbort
+	}
+	return nil
+}
+
 // EqualsRefOfUpdateExpr does deep equals between the two objects.
 func EqualsRefOfUpdateExpr(a, b *UpdateExpr) bool {
 	if a == b {
@@ -6486,6 +10254,35 @@ func VisitRefOfUpdateExpr(in *UpdateExpr, f Visit) error {
 	}
 	if err := VisitExpr(in.Expr, f); err != nil {
 		return err
+	}
+	return nil
+}
+
+// rewriteRefOfUpdateExpr is part of the Rewrite implementation
+func rewriteRefOfUpdateExpr(parent SQLNode, node *UpdateExpr, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewriteRefOfColName(node, node.Name, func(newNode, parent SQLNode) {
+		parent.(*UpdateExpr).Name = newNode.(*ColName)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if errF := rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
+		parent.(*UpdateExpr).Expr = newNode.(Expr)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if !post(&cur) {
+		return errAbort
 	}
 	return nil
 }
@@ -6528,6 +10325,32 @@ func VisitUpdateExprs(in UpdateExprs, f Visit) error {
 	return nil
 }
 
+// rewriteUpdateExprs is part of the Rewrite implementation
+func rewriteUpdateExprs(parent SQLNode, node UpdateExprs, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	for i, el := range node {
+		if errF := rewriteRefOfUpdateExpr(node, el, func(newNode, parent SQLNode) {
+			parent.(UpdateExprs)[i] = newNode.(*UpdateExpr)
+		}, pre, post); errF != nil {
+			return errF
+		}
+	}
+	if !post(&cur) {
+		return errAbort
+	}
+	return nil
+}
+
 // EqualsRefOfUse does deep equals between the two objects.
 func EqualsRefOfUse(a, b *Use) bool {
 	if a == b {
@@ -6559,6 +10382,30 @@ func VisitRefOfUse(in *Use, f Visit) error {
 	}
 	if err := VisitTableIdent(in.DBName, f); err != nil {
 		return err
+	}
+	return nil
+}
+
+// rewriteRefOfUse is part of the Rewrite implementation
+func rewriteRefOfUse(parent SQLNode, node *Use, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewriteTableIdent(node, node.DBName, func(newNode, parent SQLNode) {
+		parent.(*Use).DBName = newNode.(TableIdent)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if !post(&cur) {
+		return errAbort
 	}
 	return nil
 }
@@ -6618,6 +10465,50 @@ func VisitRefOfVStream(in *VStream, f Visit) error {
 	return nil
 }
 
+// rewriteRefOfVStream is part of the Rewrite implementation
+func rewriteRefOfVStream(parent SQLNode, node *VStream, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
+		parent.(*VStream).Comments = newNode.(Comments)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if errF := rewriteSelectExpr(node, node.SelectExpr, func(newNode, parent SQLNode) {
+		parent.(*VStream).SelectExpr = newNode.(SelectExpr)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if errF := rewriteTableName(node, node.Table, func(newNode, parent SQLNode) {
+		parent.(*VStream).Table = newNode.(TableName)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if errF := rewriteRefOfWhere(node, node.Where, func(newNode, parent SQLNode) {
+		parent.(*VStream).Where = newNode.(*Where)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if errF := rewriteRefOfLimit(node, node.Limit, func(newNode, parent SQLNode) {
+		parent.(*VStream).Limit = newNode.(*Limit)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if !post(&cur) {
+		return errAbort
+	}
+	return nil
+}
+
 // EqualsValTuple does deep equals between the two objects.
 func EqualsValTuple(a, b ValTuple) bool {
 	if len(a) != len(b) {
@@ -6656,6 +10547,32 @@ func VisitValTuple(in ValTuple, f Visit) error {
 	return nil
 }
 
+// rewriteValTuple is part of the Rewrite implementation
+func rewriteValTuple(parent SQLNode, node ValTuple, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	for i, el := range node {
+		if errF := rewriteExpr(node, el, func(newNode, parent SQLNode) {
+			parent.(ValTuple)[i] = newNode.(Expr)
+		}, pre, post); errF != nil {
+			return errF
+		}
+	}
+	if !post(&cur) {
+		return errAbort
+	}
+	return nil
+}
+
 // EqualsRefOfValidation does deep equals between the two objects.
 func EqualsRefOfValidation(a, b *Validation) bool {
 	if a == b {
@@ -6683,6 +10600,25 @@ func VisitRefOfValidation(in *Validation, f Visit) error {
 	}
 	if cont, err := f(in); err != nil || !cont {
 		return err
+	}
+	return nil
+}
+
+// rewriteRefOfValidation is part of the Rewrite implementation
+func rewriteRefOfValidation(parent SQLNode, node *Validation, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if !post(&cur) {
+		return errAbort
 	}
 	return nil
 }
@@ -6725,6 +10661,32 @@ func VisitValues(in Values, f Visit) error {
 	return nil
 }
 
+// rewriteValues is part of the Rewrite implementation
+func rewriteValues(parent SQLNode, node Values, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	for i, el := range node {
+		if errF := rewriteValTuple(node, el, func(newNode, parent SQLNode) {
+			parent.(Values)[i] = newNode.(ValTuple)
+		}, pre, post); errF != nil {
+			return errF
+		}
+	}
+	if !post(&cur) {
+		return errAbort
+	}
+	return nil
+}
+
 // EqualsRefOfValuesFuncExpr does deep equals between the two objects.
 func EqualsRefOfValuesFuncExpr(a, b *ValuesFuncExpr) bool {
 	if a == b {
@@ -6760,6 +10722,30 @@ func VisitRefOfValuesFuncExpr(in *ValuesFuncExpr, f Visit) error {
 	return nil
 }
 
+// rewriteRefOfValuesFuncExpr is part of the Rewrite implementation
+func rewriteRefOfValuesFuncExpr(parent SQLNode, node *ValuesFuncExpr, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewriteRefOfColName(node, node.Name, func(newNode, parent SQLNode) {
+		parent.(*ValuesFuncExpr).Name = newNode.(*ColName)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if !post(&cur) {
+		return errAbort
+	}
+	return nil
+}
+
 // EqualsVindexParam does deep equals between the two objects.
 func EqualsVindexParam(a, b VindexParam) bool {
 	return a.Val == b.Val &&
@@ -6778,6 +10764,31 @@ func VisitVindexParam(in VindexParam, f Visit) error {
 	}
 	if err := VisitColIdent(in.Key, f); err != nil {
 		return err
+	}
+	return nil
+}
+
+// rewriteVindexParam is part of the Rewrite implementation
+func rewriteVindexParam(parent SQLNode, node VindexParam, replacer replacerFunc, pre, post ApplyFunc) error {
+	var err error
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewriteColIdent(node, node.Key, func(newNode, parent SQLNode) {
+		err = vterrors.New(vtrpc.Code_INTERNAL, "[BUG] tried to replace 'Key' on 'VindexParam'")
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if err != nil {
+		return err
+	}
+	if !post(&cur) {
+		return errAbort
 	}
 	return nil
 }
@@ -6829,6 +10840,42 @@ func VisitRefOfVindexSpec(in *VindexSpec, f Visit) error {
 	return nil
 }
 
+// rewriteRefOfVindexSpec is part of the Rewrite implementation
+func rewriteRefOfVindexSpec(parent SQLNode, node *VindexSpec, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
+		parent.(*VindexSpec).Name = newNode.(ColIdent)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if errF := rewriteColIdent(node, node.Type, func(newNode, parent SQLNode) {
+		parent.(*VindexSpec).Type = newNode.(ColIdent)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	for i, el := range node.Params {
+		if errF := rewriteVindexParam(node, el, func(newNode, parent SQLNode) {
+			parent.(*VindexSpec).Params[i] = newNode.(VindexParam)
+		}, pre, post); errF != nil {
+			return errF
+		}
+	}
+	if !post(&cur) {
+		return errAbort
+	}
+	return nil
+}
+
 // EqualsRefOfWhen does deep equals between the two objects.
 func EqualsRefOfWhen(a, b *When) bool {
 	if a == b {
@@ -6869,6 +10916,35 @@ func VisitRefOfWhen(in *When, f Visit) error {
 	return nil
 }
 
+// rewriteRefOfWhen is part of the Rewrite implementation
+func rewriteRefOfWhen(parent SQLNode, node *When, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewriteExpr(node, node.Cond, func(newNode, parent SQLNode) {
+		parent.(*When).Cond = newNode.(Expr)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if errF := rewriteExpr(node, node.Val, func(newNode, parent SQLNode) {
+		parent.(*When).Val = newNode.(Expr)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if !post(&cur) {
+		return errAbort
+	}
+	return nil
+}
+
 // EqualsRefOfWhere does deep equals between the two objects.
 func EqualsRefOfWhere(a, b *Where) bool {
 	if a == b {
@@ -6901,6 +10977,30 @@ func VisitRefOfWhere(in *Where, f Visit) error {
 	}
 	if err := VisitExpr(in.Expr, f); err != nil {
 		return err
+	}
+	return nil
+}
+
+// rewriteRefOfWhere is part of the Rewrite implementation
+func rewriteRefOfWhere(parent SQLNode, node *Where, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
+		parent.(*Where).Expr = newNode.(Expr)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if !post(&cur) {
+		return errAbort
 	}
 	return nil
 }
@@ -6941,6 +11041,35 @@ func VisitRefOfXorExpr(in *XorExpr, f Visit) error {
 	}
 	if err := VisitExpr(in.Right, f); err != nil {
 		return err
+	}
+	return nil
+}
+
+// rewriteRefOfXorExpr is part of the Rewrite implementation
+func rewriteRefOfXorExpr(parent SQLNode, node *XorExpr, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewriteExpr(node, node.Left, func(newNode, parent SQLNode) {
+		parent.(*XorExpr).Left = newNode.(Expr)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if errF := rewriteExpr(node, node.Right, func(newNode, parent SQLNode) {
+		parent.(*XorExpr).Right = newNode.(Expr)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if !post(&cur) {
+		return errAbort
 	}
 	return nil
 }
@@ -7174,6 +11303,56 @@ func VisitAlterOption(in AlterOption, f Visit) error {
 	}
 }
 
+// rewriteAlterOption is part of the Rewrite implementation
+func rewriteAlterOption(parent SQLNode, node AlterOption, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	switch node := node.(type) {
+	case *AddColumns:
+		return rewriteRefOfAddColumns(parent, node, replacer, pre, post)
+	case *AddConstraintDefinition:
+		return rewriteRefOfAddConstraintDefinition(parent, node, replacer, pre, post)
+	case *AddIndexDefinition:
+		return rewriteRefOfAddIndexDefinition(parent, node, replacer, pre, post)
+	case AlgorithmValue:
+		return rewriteAlgorithmValue(parent, node, replacer, pre, post)
+	case *AlterCharset:
+		return rewriteRefOfAlterCharset(parent, node, replacer, pre, post)
+	case *AlterColumn:
+		return rewriteRefOfAlterColumn(parent, node, replacer, pre, post)
+	case *ChangeColumn:
+		return rewriteRefOfChangeColumn(parent, node, replacer, pre, post)
+	case *DropColumn:
+		return rewriteRefOfDropColumn(parent, node, replacer, pre, post)
+	case *DropKey:
+		return rewriteRefOfDropKey(parent, node, replacer, pre, post)
+	case *Force:
+		return rewriteRefOfForce(parent, node, replacer, pre, post)
+	case *KeyState:
+		return rewriteRefOfKeyState(parent, node, replacer, pre, post)
+	case *LockOption:
+		return rewriteRefOfLockOption(parent, node, replacer, pre, post)
+	case *ModifyColumn:
+		return rewriteRefOfModifyColumn(parent, node, replacer, pre, post)
+	case *OrderByOption:
+		return rewriteRefOfOrderByOption(parent, node, replacer, pre, post)
+	case *RenameIndex:
+		return rewriteRefOfRenameIndex(parent, node, replacer, pre, post)
+	case *RenameTableName:
+		return rewriteRefOfRenameTableName(parent, node, replacer, pre, post)
+	case TableOptions:
+		return rewriteTableOptions(parent, node, replacer, pre, post)
+	case *TablespaceOperation:
+		return rewriteRefOfTablespaceOperation(parent, node, replacer, pre, post)
+	case *Validation:
+		return rewriteRefOfValidation(parent, node, replacer, pre, post)
+	default:
+		// this should never happen
+		return nil
+	}
+}
+
 // EqualsCharacteristic does deep equals between the two objects.
 func EqualsCharacteristic(inA, inB Characteristic) bool {
 	if inA == nil && inB == nil {
@@ -7227,6 +11406,22 @@ func VisitCharacteristic(in Characteristic, f Visit) error {
 		return VisitAccessMode(in, f)
 	case IsolationLevel:
 		return VisitIsolationLevel(in, f)
+	default:
+		// this should never happen
+		return nil
+	}
+}
+
+// rewriteCharacteristic is part of the Rewrite implementation
+func rewriteCharacteristic(parent SQLNode, node Characteristic, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	switch node := node.(type) {
+	case AccessMode:
+		return rewriteAccessMode(parent, node, replacer, pre, post)
+	case IsolationLevel:
+		return rewriteIsolationLevel(parent, node, replacer, pre, post)
 	default:
 		// this should never happen
 		return nil
@@ -7302,6 +11497,24 @@ func VisitColTuple(in ColTuple, f Visit) error {
 	}
 }
 
+// rewriteColTuple is part of the Rewrite implementation
+func rewriteColTuple(parent SQLNode, node ColTuple, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	switch node := node.(type) {
+	case ListArg:
+		return rewriteListArg(parent, node, replacer, pre, post)
+	case *Subquery:
+		return rewriteRefOfSubquery(parent, node, replacer, pre, post)
+	case ValTuple:
+		return rewriteValTuple(parent, node, replacer, pre, post)
+	default:
+		// this should never happen
+		return nil
+	}
+}
+
 // EqualsConstraintInfo does deep equals between the two objects.
 func EqualsConstraintInfo(inA, inB ConstraintInfo) bool {
 	if inA == nil && inB == nil {
@@ -7355,6 +11568,22 @@ func VisitConstraintInfo(in ConstraintInfo, f Visit) error {
 		return VisitRefOfCheckConstraintDefinition(in, f)
 	case *ForeignKeyDefinition:
 		return VisitRefOfForeignKeyDefinition(in, f)
+	default:
+		// this should never happen
+		return nil
+	}
+}
+
+// rewriteConstraintInfo is part of the Rewrite implementation
+func rewriteConstraintInfo(parent SQLNode, node ConstraintInfo, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	switch node := node.(type) {
+	case *CheckConstraintDefinition:
+		return rewriteRefOfCheckConstraintDefinition(parent, node, replacer, pre, post)
+	case *ForeignKeyDefinition:
+		return rewriteRefOfForeignKeyDefinition(parent, node, replacer, pre, post)
 	default:
 		// this should never happen
 		return nil
@@ -7424,6 +11653,24 @@ func VisitDBDDLStatement(in DBDDLStatement, f Visit) error {
 		return VisitRefOfCreateDatabase(in, f)
 	case *DropDatabase:
 		return VisitRefOfDropDatabase(in, f)
+	default:
+		// this should never happen
+		return nil
+	}
+}
+
+// rewriteDBDDLStatement is part of the Rewrite implementation
+func rewriteDBDDLStatement(parent SQLNode, node DBDDLStatement, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	switch node := node.(type) {
+	case *AlterDatabase:
+		return rewriteRefOfAlterDatabase(parent, node, replacer, pre, post)
+	case *CreateDatabase:
+		return rewriteRefOfCreateDatabase(parent, node, replacer, pre, post)
+	case *DropDatabase:
+		return rewriteRefOfDropDatabase(parent, node, replacer, pre, post)
 	default:
 		// this should never happen
 		return nil
@@ -7549,6 +11796,34 @@ func VisitDDLStatement(in DDLStatement, f Visit) error {
 	}
 }
 
+// rewriteDDLStatement is part of the Rewrite implementation
+func rewriteDDLStatement(parent SQLNode, node DDLStatement, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	switch node := node.(type) {
+	case *AlterTable:
+		return rewriteRefOfAlterTable(parent, node, replacer, pre, post)
+	case *AlterView:
+		return rewriteRefOfAlterView(parent, node, replacer, pre, post)
+	case *CreateTable:
+		return rewriteRefOfCreateTable(parent, node, replacer, pre, post)
+	case *CreateView:
+		return rewriteRefOfCreateView(parent, node, replacer, pre, post)
+	case *DropTable:
+		return rewriteRefOfDropTable(parent, node, replacer, pre, post)
+	case *DropView:
+		return rewriteRefOfDropView(parent, node, replacer, pre, post)
+	case *RenameTable:
+		return rewriteRefOfRenameTable(parent, node, replacer, pre, post)
+	case *TruncateTable:
+		return rewriteRefOfTruncateTable(parent, node, replacer, pre, post)
+	default:
+		// this should never happen
+		return nil
+	}
+}
+
 // EqualsExplain does deep equals between the two objects.
 func EqualsExplain(inA, inB Explain) bool {
 	if inA == nil && inB == nil {
@@ -7602,6 +11877,22 @@ func VisitExplain(in Explain, f Visit) error {
 		return VisitRefOfExplainStmt(in, f)
 	case *ExplainTab:
 		return VisitRefOfExplainTab(in, f)
+	default:
+		// this should never happen
+		return nil
+	}
+}
+
+// rewriteExplain is part of the Rewrite implementation
+func rewriteExplain(parent SQLNode, node Explain, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	switch node := node.(type) {
+	case *ExplainStmt:
+		return rewriteRefOfExplainStmt(parent, node, replacer, pre, post)
+	case *ExplainTab:
+		return rewriteRefOfExplainTab(parent, node, replacer, pre, post)
 	default:
 		// this should never happen
 		return nil
@@ -7957,6 +12248,80 @@ func VisitExpr(in Expr, f Visit) error {
 	}
 }
 
+// rewriteExpr is part of the Rewrite implementation
+func rewriteExpr(parent SQLNode, node Expr, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	switch node := node.(type) {
+	case *AndExpr:
+		return rewriteRefOfAndExpr(parent, node, replacer, pre, post)
+	case Argument:
+		return rewriteArgument(parent, node, replacer, pre, post)
+	case *BinaryExpr:
+		return rewriteRefOfBinaryExpr(parent, node, replacer, pre, post)
+	case BoolVal:
+		return rewriteBoolVal(parent, node, replacer, pre, post)
+	case *CaseExpr:
+		return rewriteRefOfCaseExpr(parent, node, replacer, pre, post)
+	case *ColName:
+		return rewriteRefOfColName(parent, node, replacer, pre, post)
+	case *CollateExpr:
+		return rewriteRefOfCollateExpr(parent, node, replacer, pre, post)
+	case *ComparisonExpr:
+		return rewriteRefOfComparisonExpr(parent, node, replacer, pre, post)
+	case *ConvertExpr:
+		return rewriteRefOfConvertExpr(parent, node, replacer, pre, post)
+	case *ConvertUsingExpr:
+		return rewriteRefOfConvertUsingExpr(parent, node, replacer, pre, post)
+	case *CurTimeFuncExpr:
+		return rewriteRefOfCurTimeFuncExpr(parent, node, replacer, pre, post)
+	case *Default:
+		return rewriteRefOfDefault(parent, node, replacer, pre, post)
+	case *ExistsExpr:
+		return rewriteRefOfExistsExpr(parent, node, replacer, pre, post)
+	case *FuncExpr:
+		return rewriteRefOfFuncExpr(parent, node, replacer, pre, post)
+	case *GroupConcatExpr:
+		return rewriteRefOfGroupConcatExpr(parent, node, replacer, pre, post)
+	case *IntervalExpr:
+		return rewriteRefOfIntervalExpr(parent, node, replacer, pre, post)
+	case *IsExpr:
+		return rewriteRefOfIsExpr(parent, node, replacer, pre, post)
+	case ListArg:
+		return rewriteListArg(parent, node, replacer, pre, post)
+	case *Literal:
+		return rewriteRefOfLiteral(parent, node, replacer, pre, post)
+	case *MatchExpr:
+		return rewriteRefOfMatchExpr(parent, node, replacer, pre, post)
+	case *NotExpr:
+		return rewriteRefOfNotExpr(parent, node, replacer, pre, post)
+	case *NullVal:
+		return rewriteRefOfNullVal(parent, node, replacer, pre, post)
+	case *OrExpr:
+		return rewriteRefOfOrExpr(parent, node, replacer, pre, post)
+	case *RangeCond:
+		return rewriteRefOfRangeCond(parent, node, replacer, pre, post)
+	case *Subquery:
+		return rewriteRefOfSubquery(parent, node, replacer, pre, post)
+	case *SubstrExpr:
+		return rewriteRefOfSubstrExpr(parent, node, replacer, pre, post)
+	case *TimestampFuncExpr:
+		return rewriteRefOfTimestampFuncExpr(parent, node, replacer, pre, post)
+	case *UnaryExpr:
+		return rewriteRefOfUnaryExpr(parent, node, replacer, pre, post)
+	case ValTuple:
+		return rewriteValTuple(parent, node, replacer, pre, post)
+	case *ValuesFuncExpr:
+		return rewriteRefOfValuesFuncExpr(parent, node, replacer, pre, post)
+	case *XorExpr:
+		return rewriteRefOfXorExpr(parent, node, replacer, pre, post)
+	default:
+		// this should never happen
+		return nil
+	}
+}
+
 // EqualsInsertRows does deep equals between the two objects.
 func EqualsInsertRows(inA, inB InsertRows) bool {
 	if inA == nil && inB == nil {
@@ -8036,6 +12401,26 @@ func VisitInsertRows(in InsertRows, f Visit) error {
 	}
 }
 
+// rewriteInsertRows is part of the Rewrite implementation
+func rewriteInsertRows(parent SQLNode, node InsertRows, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	switch node := node.(type) {
+	case *ParenSelect:
+		return rewriteRefOfParenSelect(parent, node, replacer, pre, post)
+	case *Select:
+		return rewriteRefOfSelect(parent, node, replacer, pre, post)
+	case *Union:
+		return rewriteRefOfUnion(parent, node, replacer, pre, post)
+	case Values:
+		return rewriteValues(parent, node, replacer, pre, post)
+	default:
+		// this should never happen
+		return nil
+	}
+}
+
 // EqualsSelectExpr does deep equals between the two objects.
 func EqualsSelectExpr(inA, inB SelectExpr) bool {
 	if inA == nil && inB == nil {
@@ -8099,6 +12484,24 @@ func VisitSelectExpr(in SelectExpr, f Visit) error {
 		return VisitRefOfNextval(in, f)
 	case *StarExpr:
 		return VisitRefOfStarExpr(in, f)
+	default:
+		// this should never happen
+		return nil
+	}
+}
+
+// rewriteSelectExpr is part of the Rewrite implementation
+func rewriteSelectExpr(parent SQLNode, node SelectExpr, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	switch node := node.(type) {
+	case *AliasedExpr:
+		return rewriteRefOfAliasedExpr(parent, node, replacer, pre, post)
+	case *Nextval:
+		return rewriteRefOfNextval(parent, node, replacer, pre, post)
+	case *StarExpr:
+		return rewriteRefOfStarExpr(parent, node, replacer, pre, post)
 	default:
 		// this should never happen
 		return nil
@@ -8174,6 +12577,24 @@ func VisitSelectStatement(in SelectStatement, f Visit) error {
 	}
 }
 
+// rewriteSelectStatement is part of the Rewrite implementation
+func rewriteSelectStatement(parent SQLNode, node SelectStatement, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	switch node := node.(type) {
+	case *ParenSelect:
+		return rewriteRefOfParenSelect(parent, node, replacer, pre, post)
+	case *Select:
+		return rewriteRefOfSelect(parent, node, replacer, pre, post)
+	case *Union:
+		return rewriteRefOfUnion(parent, node, replacer, pre, post)
+	default:
+		// this should never happen
+		return nil
+	}
+}
+
 // EqualsShowInternal does deep equals between the two objects.
 func EqualsShowInternal(inA, inB ShowInternal) bool {
 	if inA == nil && inB == nil {
@@ -8243,6 +12664,24 @@ func VisitShowInternal(in ShowInternal, f Visit) error {
 	}
 }
 
+// rewriteShowInternal is part of the Rewrite implementation
+func rewriteShowInternal(parent SQLNode, node ShowInternal, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	switch node := node.(type) {
+	case *ShowBasic:
+		return rewriteRefOfShowBasic(parent, node, replacer, pre, post)
+	case *ShowCreate:
+		return rewriteRefOfShowCreate(parent, node, replacer, pre, post)
+	case *ShowLegacy:
+		return rewriteRefOfShowLegacy(parent, node, replacer, pre, post)
+	default:
+		// this should never happen
+		return nil
+	}
+}
+
 // EqualsSimpleTableExpr does deep equals between the two objects.
 func EqualsSimpleTableExpr(inA, inB SimpleTableExpr) bool {
 	if inA == nil && inB == nil {
@@ -8296,6 +12735,22 @@ func VisitSimpleTableExpr(in SimpleTableExpr, f Visit) error {
 		return VisitRefOfDerivedTable(in, f)
 	case TableName:
 		return VisitTableName(in, f)
+	default:
+		// this should never happen
+		return nil
+	}
+}
+
+// rewriteSimpleTableExpr is part of the Rewrite implementation
+func rewriteSimpleTableExpr(parent SQLNode, node SimpleTableExpr, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	switch node := node.(type) {
+	case *DerivedTable:
+		return rewriteRefOfDerivedTable(parent, node, replacer, pre, post)
+	case TableName:
+		return rewriteTableName(parent, node, replacer, pre, post)
 	default:
 		// this should never happen
 		return nil
@@ -8751,6 +13206,100 @@ func VisitStatement(in Statement, f Visit) error {
 	}
 }
 
+// rewriteStatement is part of the Rewrite implementation
+func rewriteStatement(parent SQLNode, node Statement, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	switch node := node.(type) {
+	case *AlterDatabase:
+		return rewriteRefOfAlterDatabase(parent, node, replacer, pre, post)
+	case *AlterMigration:
+		return rewriteRefOfAlterMigration(parent, node, replacer, pre, post)
+	case *AlterTable:
+		return rewriteRefOfAlterTable(parent, node, replacer, pre, post)
+	case *AlterView:
+		return rewriteRefOfAlterView(parent, node, replacer, pre, post)
+	case *AlterVschema:
+		return rewriteRefOfAlterVschema(parent, node, replacer, pre, post)
+	case *Begin:
+		return rewriteRefOfBegin(parent, node, replacer, pre, post)
+	case *CallProc:
+		return rewriteRefOfCallProc(parent, node, replacer, pre, post)
+	case *Commit:
+		return rewriteRefOfCommit(parent, node, replacer, pre, post)
+	case *CreateDatabase:
+		return rewriteRefOfCreateDatabase(parent, node, replacer, pre, post)
+	case *CreateTable:
+		return rewriteRefOfCreateTable(parent, node, replacer, pre, post)
+	case *CreateView:
+		return rewriteRefOfCreateView(parent, node, replacer, pre, post)
+	case *Delete:
+		return rewriteRefOfDelete(parent, node, replacer, pre, post)
+	case *DropDatabase:
+		return rewriteRefOfDropDatabase(parent, node, replacer, pre, post)
+	case *DropTable:
+		return rewriteRefOfDropTable(parent, node, replacer, pre, post)
+	case *DropView:
+		return rewriteRefOfDropView(parent, node, replacer, pre, post)
+	case *ExplainStmt:
+		return rewriteRefOfExplainStmt(parent, node, replacer, pre, post)
+	case *ExplainTab:
+		return rewriteRefOfExplainTab(parent, node, replacer, pre, post)
+	case *Flush:
+		return rewriteRefOfFlush(parent, node, replacer, pre, post)
+	case *Insert:
+		return rewriteRefOfInsert(parent, node, replacer, pre, post)
+	case *Load:
+		return rewriteRefOfLoad(parent, node, replacer, pre, post)
+	case *LockTables:
+		return rewriteRefOfLockTables(parent, node, replacer, pre, post)
+	case *OtherAdmin:
+		return rewriteRefOfOtherAdmin(parent, node, replacer, pre, post)
+	case *OtherRead:
+		return rewriteRefOfOtherRead(parent, node, replacer, pre, post)
+	case *ParenSelect:
+		return rewriteRefOfParenSelect(parent, node, replacer, pre, post)
+	case *Release:
+		return rewriteRefOfRelease(parent, node, replacer, pre, post)
+	case *RenameTable:
+		return rewriteRefOfRenameTable(parent, node, replacer, pre, post)
+	case *RevertMigration:
+		return rewriteRefOfRevertMigration(parent, node, replacer, pre, post)
+	case *Rollback:
+		return rewriteRefOfRollback(parent, node, replacer, pre, post)
+	case *SRollback:
+		return rewriteRefOfSRollback(parent, node, replacer, pre, post)
+	case *Savepoint:
+		return rewriteRefOfSavepoint(parent, node, replacer, pre, post)
+	case *Select:
+		return rewriteRefOfSelect(parent, node, replacer, pre, post)
+	case *Set:
+		return rewriteRefOfSet(parent, node, replacer, pre, post)
+	case *SetTransaction:
+		return rewriteRefOfSetTransaction(parent, node, replacer, pre, post)
+	case *Show:
+		return rewriteRefOfShow(parent, node, replacer, pre, post)
+	case *Stream:
+		return rewriteRefOfStream(parent, node, replacer, pre, post)
+	case *TruncateTable:
+		return rewriteRefOfTruncateTable(parent, node, replacer, pre, post)
+	case *Union:
+		return rewriteRefOfUnion(parent, node, replacer, pre, post)
+	case *UnlockTables:
+		return rewriteRefOfUnlockTables(parent, node, replacer, pre, post)
+	case *Update:
+		return rewriteRefOfUpdate(parent, node, replacer, pre, post)
+	case *Use:
+		return rewriteRefOfUse(parent, node, replacer, pre, post)
+	case *VStream:
+		return rewriteRefOfVStream(parent, node, replacer, pre, post)
+	default:
+		// this should never happen
+		return nil
+	}
+}
+
 // EqualsTableExpr does deep equals between the two objects.
 func EqualsTableExpr(inA, inB TableExpr) bool {
 	if inA == nil && inB == nil {
@@ -8820,10 +13369,44 @@ func VisitTableExpr(in TableExpr, f Visit) error {
 	}
 }
 
+// rewriteTableExpr is part of the Rewrite implementation
+func rewriteTableExpr(parent SQLNode, node TableExpr, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	switch node := node.(type) {
+	case *AliasedTableExpr:
+		return rewriteRefOfAliasedTableExpr(parent, node, replacer, pre, post)
+	case *JoinTableExpr:
+		return rewriteRefOfJoinTableExpr(parent, node, replacer, pre, post)
+	case *ParenTableExpr:
+		return rewriteRefOfParenTableExpr(parent, node, replacer, pre, post)
+	default:
+		// this should never happen
+		return nil
+	}
+}
+
 // VisitAccessMode will visit all parts of the AST
 func VisitAccessMode(in AccessMode, f Visit) error {
 	_, err := f(in)
 	return err
+}
+
+// rewriteAccessMode is part of the Rewrite implementation
+func rewriteAccessMode(parent SQLNode, node AccessMode, replacer replacerFunc, pre, post ApplyFunc) error {
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if !post(&cur) {
+		return errAbort
+	}
+	return nil
 }
 
 // VisitAlgorithmValue will visit all parts of the AST
@@ -8832,10 +13415,42 @@ func VisitAlgorithmValue(in AlgorithmValue, f Visit) error {
 	return err
 }
 
+// rewriteAlgorithmValue is part of the Rewrite implementation
+func rewriteAlgorithmValue(parent SQLNode, node AlgorithmValue, replacer replacerFunc, pre, post ApplyFunc) error {
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if !post(&cur) {
+		return errAbort
+	}
+	return nil
+}
+
 // VisitArgument will visit all parts of the AST
 func VisitArgument(in Argument, f Visit) error {
 	_, err := f(in)
 	return err
+}
+
+// rewriteArgument is part of the Rewrite implementation
+func rewriteArgument(parent SQLNode, node Argument, replacer replacerFunc, pre, post ApplyFunc) error {
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if !post(&cur) {
+		return errAbort
+	}
+	return nil
 }
 
 // VisitBoolVal will visit all parts of the AST
@@ -8844,16 +13459,64 @@ func VisitBoolVal(in BoolVal, f Visit) error {
 	return err
 }
 
+// rewriteBoolVal is part of the Rewrite implementation
+func rewriteBoolVal(parent SQLNode, node BoolVal, replacer replacerFunc, pre, post ApplyFunc) error {
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if !post(&cur) {
+		return errAbort
+	}
+	return nil
+}
+
 // VisitIsolationLevel will visit all parts of the AST
 func VisitIsolationLevel(in IsolationLevel, f Visit) error {
 	_, err := f(in)
 	return err
 }
 
+// rewriteIsolationLevel is part of the Rewrite implementation
+func rewriteIsolationLevel(parent SQLNode, node IsolationLevel, replacer replacerFunc, pre, post ApplyFunc) error {
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if !post(&cur) {
+		return errAbort
+	}
+	return nil
+}
+
 // VisitReferenceAction will visit all parts of the AST
 func VisitReferenceAction(in ReferenceAction, f Visit) error {
 	_, err := f(in)
 	return err
+}
+
+// rewriteReferenceAction is part of the Rewrite implementation
+func rewriteReferenceAction(parent SQLNode, node ReferenceAction, replacer replacerFunc, pre, post ApplyFunc) error {
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if !post(&cur) {
+		return errAbort
+	}
+	return nil
 }
 
 // EqualsSliceOfRefOfColumnDefinition does deep equals between the two objects.
@@ -8995,6 +13658,25 @@ func VisitRefOfColIdent(in *ColIdent, f Visit) error {
 	}
 	if cont, err := f(in); err != nil || !cont {
 		return err
+	}
+	return nil
+}
+
+// rewriteRefOfColIdent is part of the Rewrite implementation
+func rewriteRefOfColIdent(parent SQLNode, node *ColIdent, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if !post(&cur) {
+		return errAbort
 	}
 	return nil
 }
@@ -9145,6 +13827,35 @@ func VisitRefOfJoinCondition(in *JoinCondition, f Visit) error {
 	}
 	if err := VisitColumns(in.Using, f); err != nil {
 		return err
+	}
+	return nil
+}
+
+// rewriteRefOfJoinCondition is part of the Rewrite implementation
+func rewriteRefOfJoinCondition(parent SQLNode, node *JoinCondition, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewriteExpr(node, node.On, func(newNode, parent SQLNode) {
+		parent.(*JoinCondition).On = newNode.(Expr)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if errF := rewriteColumns(node, node.Using, func(newNode, parent SQLNode) {
+		parent.(*JoinCondition).Using = newNode.(Columns)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if !post(&cur) {
+		return errAbort
 	}
 	return nil
 }
@@ -9311,6 +14022,25 @@ func VisitRefOfTableIdent(in *TableIdent, f Visit) error {
 	return nil
 }
 
+// rewriteRefOfTableIdent is part of the Rewrite implementation
+func rewriteRefOfTableIdent(parent SQLNode, node *TableIdent, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if !post(&cur) {
+		return errAbort
+	}
+	return nil
+}
+
 // EqualsRefOfTableName does deep equals between the two objects.
 func EqualsRefOfTableName(a, b *TableName) bool {
 	if a == b {
@@ -9347,6 +14077,35 @@ func VisitRefOfTableName(in *TableName, f Visit) error {
 	}
 	if err := VisitTableIdent(in.Qualifier, f); err != nil {
 		return err
+	}
+	return nil
+}
+
+// rewriteRefOfTableName is part of the Rewrite implementation
+func rewriteRefOfTableName(parent SQLNode, node *TableName, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewriteTableIdent(node, node.Name, func(newNode, parent SQLNode) {
+		parent.(*TableName).Name = newNode.(TableIdent)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if errF := rewriteTableIdent(node, node.Qualifier, func(newNode, parent SQLNode) {
+		parent.(*TableName).Qualifier = newNode.(TableIdent)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if !post(&cur) {
+		return errAbort
 	}
 	return nil
 }
@@ -9474,6 +14233,30 @@ func VisitRefOfVindexParam(in *VindexParam, f Visit) error {
 	}
 	if err := VisitColIdent(in.Key, f); err != nil {
 		return err
+	}
+	return nil
+}
+
+// rewriteRefOfVindexParam is part of the Rewrite implementation
+func rewriteRefOfVindexParam(parent SQLNode, node *VindexParam, replacer replacerFunc, pre, post ApplyFunc) error {
+	if node == nil {
+		return nil
+	}
+	cur := Cursor{
+		node:     node,
+		parent:   parent,
+		replacer: replacer,
+	}
+	if !pre(&cur) {
+		return nil
+	}
+	if errF := rewriteColIdent(node, node.Key, func(newNode, parent SQLNode) {
+		parent.(*VindexParam).Key = newNode.(ColIdent)
+	}, pre, post); errF != nil {
+		return errF
+	}
+	if !post(&cur) {
+		return errAbort
 	}
 	return nil
 }
