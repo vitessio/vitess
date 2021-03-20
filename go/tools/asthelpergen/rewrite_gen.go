@@ -88,12 +88,13 @@ func (e rewriteGen) structMethod(t types.Type, strct *types.Struct, spi generato
 	if !shouldAdd(t, spi.iface()) {
 		return nil
 	}
+	fields := e.rewriteAllStructFields(t, strct, spi, true)
 
 	stmts := []jen.Code{jen.Var().Id("err").Error()}
-	stmts = append(stmts, executePre()...)
-	stmts = append(stmts, e.rewriteAllStructFields(t, strct, spi, true)...)
+	stmts = append(stmts, executePre())
+	stmts = append(stmts, fields...)
 	stmts = append(stmts, jen.If(jen.Id("err != nil")).Block(jen.Return(jen.Err())))
-	stmts = append(stmts, executePost()...)
+	stmts = append(stmts, executePost(len(fields) > 0))
 	stmts = append(stmts, returnNil())
 
 	e.rewriteFunc(t, stmts, spi)
@@ -116,9 +117,10 @@ func (e rewriteGen) ptrToStructMethod(t types.Type, strct *types.Struct, spi gen
 			return nil
 		}
 	*/
-	stmts = append(stmts, executePre()...)
-	stmts = append(stmts, e.rewriteAllStructFields(t, strct, spi, false)...)
-	stmts = append(stmts, executePost()...)
+	stmts = append(stmts, executePre())
+	fields := e.rewriteAllStructFields(t, strct, spi, false)
+	stmts = append(stmts, fields...)
+	stmts = append(stmts, executePost(len(fields) > 0))
 	stmts = append(stmts, returnNil())
 
 	e.rewriteFunc(t, stmts, spi)
@@ -163,8 +165,9 @@ func (e rewriteGen) sliceMethod(t types.Type, slice *types.Slice, spi generatorS
 	stmts := []jen.Code{
 		jen.If(jen.Id("node == nil").Block(returnNil())),
 	}
-	stmts = append(stmts, executePre()...)
+	stmts = append(stmts, executePre())
 
+	addCur := false
 	if shouldAdd(slice.Elem(), spi.iface()) {
 		/*
 			for i, el := range node {
@@ -175,34 +178,40 @@ func (e rewriteGen) sliceMethod(t types.Type, slice *types.Slice, spi generatorS
 						}
 					}
 		*/
+		addCur = true
 		stmts = append(stmts,
 			jen.For(jen.Id("i, el").Op(":=").Id("range node")).
 				Block(e.rewriteChild(t, slice.Elem(), "notUsed", jen.Id("el"), jen.Index(jen.Id("i")), false)))
 	}
 
-	stmts = append(stmts, executePost()...)
+	stmts = append(stmts, executePost(addCur))
 	stmts = append(stmts, returnNil())
 
 	e.rewriteFunc(t, stmts, spi)
 	return nil
 }
 
-func executePre() []jen.Code {
+func setupCursor() []jen.Code {
 	return []jen.Code{
 		jen.Id("a.cur.replacer = replacer"),
 		jen.Id("a.cur.parent = parent"),
 		jen.Id("a.cur.node = node"),
-		jen.If(jen.Id("a.pre!= nil && !a.pre(&a.cur)")).Block(returnNil()),
 	}
 }
+func executePre() jen.Code {
+	curStmts := setupCursor()
+	curStmts = append(curStmts, jen.If(jen.Id("!a.pre(&a.cur)")).Block(returnNil()))
+	return jen.If(jen.Id("a.pre!= nil").Block(curStmts...))
+}
 
-func executePost() []jen.Code {
-	return []jen.Code{
-		jen.Id("a.cur.replacer = replacer"),
-		jen.Id("a.cur.parent = parent"),
-		jen.Id("a.cur.node = node"),
-		jen.If(jen.Id("a.post != nil && !a.post(&a.cur)")).Block(jen.Return(jen.Id(abort))),
+func executePost(addCur bool) jen.Code {
+	if addCur {
+		curStmts := setupCursor()
+		curStmts = append(curStmts, jen.If(jen.Id("!a.post(&a.cur)")).Block(returnNil()))
+		return jen.If(jen.Id("a.post!= nil").Block(curStmts...))
 	}
+
+	return jen.If(jen.Id("a.post != nil && !a.post(&a.cur)")).Block(jen.Return(jen.Id(abort)))
 }
 
 func (e rewriteGen) basicMethod(t types.Type, _ *types.Basic, spi generatorSPI) error {
@@ -210,10 +219,7 @@ func (e rewriteGen) basicMethod(t types.Type, _ *types.Basic, spi generatorSPI) 
 		return nil
 	}
 
-	stmts := executePre()
-	stmts = append(stmts, executePost()...)
-	stmts = append(stmts, returnNil())
-
+	stmts := []jen.Code{executePre(), executePost(false), returnNil()}
 	e.rewriteFunc(t, stmts, spi)
 	return nil
 }

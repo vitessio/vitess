@@ -40,7 +40,7 @@ func BenchmarkWalkLargeExpression(b *testing.B) {
 }
 
 func BenchmarkRewriteLargeExpression(b *testing.B) {
-	for i := 0; i < 2; i++ {
+	for i := 0; i < 10; i++ {
 		b.Run(fmt.Sprintf("%d", i), func(b *testing.B) {
 			exp := newGenerator(int64(i*100), 5).expression()
 			count := 0
