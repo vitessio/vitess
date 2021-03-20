@@ -96,5 +96,5 @@ type replacerFunc func(newNode, parent SQLNode)
 // application carries all the shared data so we can pass it around cheaply.
 type application struct {
 	pre, post ApplyFunc
-	cursor    Cursor
+	cur       Cursor
 }
