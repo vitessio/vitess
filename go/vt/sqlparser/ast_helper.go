@@ -1522,303 +1522,303 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 }
 
 // rewriteSQLNode is part of the Rewrite implementation
-func rewriteSQLNode(parent SQLNode, node SQLNode, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
 	switch node := node.(type) {
 	case AccessMode:
-		return rewriteAccessMode(parent, node, replacer, pre, post)
+		return a.rewriteAccessMode(parent, node, replacer)
 	case *AddColumns:
-		return rewriteRefOfAddColumns(parent, node, replacer, pre, post)
+		return a.rewriteRefOfAddColumns(parent, node, replacer)
 	case *AddConstraintDefinition:
-		return rewriteRefOfAddConstraintDefinition(parent, node, replacer, pre, post)
+		return a.rewriteRefOfAddConstraintDefinition(parent, node, replacer)
 	case *AddIndexDefinition:
-		return rewriteRefOfAddIndexDefinition(parent, node, replacer, pre, post)
+		return a.rewriteRefOfAddIndexDefinition(parent, node, replacer)
 	case AlgorithmValue:
-		return rewriteAlgorithmValue(parent, node, replacer, pre, post)
+		return a.rewriteAlgorithmValue(parent, node, replacer)
 	case *AliasedExpr:
-		return rewriteRefOfAliasedExpr(parent, node, replacer, pre, post)
+		return a.rewriteRefOfAliasedExpr(parent, node, replacer)
 	case *AliasedTableExpr:
-		return rewriteRefOfAliasedTableExpr(parent, node, replacer, pre, post)
+		return a.rewriteRefOfAliasedTableExpr(parent, node, replacer)
 	case *AlterCharset:
-		return rewriteRefOfAlterCharset(parent, node, replacer, pre, post)
+		return a.rewriteRefOfAlterCharset(parent, node, replacer)
 	case *AlterColumn:
-		return rewriteRefOfAlterColumn(parent, node, replacer, pre, post)
+		return a.rewriteRefOfAlterColumn(parent, node, replacer)
 	case *AlterDatabase:
-		return rewriteRefOfAlterDatabase(parent, node, replacer, pre, post)
+		return a.rewriteRefOfAlterDatabase(parent, node, replacer)
 	case *AlterMigration:
-		return rewriteRefOfAlterMigration(parent, node, replacer, pre, post)
+		return a.rewriteRefOfAlterMigration(parent, node, replacer)
 	case *AlterTable:
-		return rewriteRefOfAlterTable(parent, node, replacer, pre, post)
+		return a.rewriteRefOfAlterTable(parent, node, replacer)
 	case *AlterView:
-		return rewriteRefOfAlterView(parent, node, replacer, pre, post)
+		return a.rewriteRefOfAlterView(parent, node, replacer)
 	case *AlterVschema:
-		return rewriteRefOfAlterVschema(parent, node, replacer, pre, post)
+		return a.rewriteRefOfAlterVschema(parent, node, replacer)
 	case *AndExpr:
-		return rewriteRefOfAndExpr(parent, node, replacer, pre, post)
+		return a.rewriteRefOfAndExpr(parent, node, replacer)
 	case Argument:
-		return rewriteArgument(parent, node, replacer, pre, post)
+		return a.rewriteArgument(parent, node, replacer)
 	case *AutoIncSpec:
-		return rewriteRefOfAutoIncSpec(parent, node, replacer, pre, post)
+		return a.rewriteRefOfAutoIncSpec(parent, node, replacer)
 	case *Begin:
-		return rewriteRefOfBegin(parent, node, replacer, pre, post)
+		return a.rewriteRefOfBegin(parent, node, replacer)
 	case *BinaryExpr:
-		return rewriteRefOfBinaryExpr(parent, node, replacer, pre, post)
+		return a.rewriteRefOfBinaryExpr(parent, node, replacer)
 	case BoolVal:
-		return rewriteBoolVal(parent, node, replacer, pre, post)
+		return a.rewriteBoolVal(parent, node, replacer)
 	case *CallProc:
-		return rewriteRefOfCallProc(parent, node, replacer, pre, post)
+		return a.rewriteRefOfCallProc(parent, node, replacer)
 	case *CaseExpr:
-		return rewriteRefOfCaseExpr(parent, node, replacer, pre, post)
+		return a.rewriteRefOfCaseExpr(parent, node, replacer)
 	case *ChangeColumn:
-		return rewriteRefOfChangeColumn(parent, node, replacer, pre, post)
+		return a.rewriteRefOfChangeColumn(parent, node, replacer)
 	case *CheckConstraintDefinition:
-		return rewriteRefOfCheckConstraintDefinition(parent, node, replacer, pre, post)
+		return a.rewriteRefOfCheckConstraintDefinition(parent, node, replacer)
 	case ColIdent:
-		return rewriteColIdent(parent, node, replacer, pre, post)
+		return a.rewriteColIdent(parent, node, replacer)
 	case *ColName:
-		return rewriteRefOfColName(parent, node, replacer, pre, post)
+		return a.rewriteRefOfColName(parent, node, replacer)
 	case *CollateExpr:
-		return rewriteRefOfCollateExpr(parent, node, replacer, pre, post)
+		return a.rewriteRefOfCollateExpr(parent, node, replacer)
 	case *ColumnDefinition:
-		return rewriteRefOfColumnDefinition(parent, node, replacer, pre, post)
+		return a.rewriteRefOfColumnDefinition(parent, node, replacer)
 	case *ColumnType:
-		return rewriteRefOfColumnType(parent, node, replacer, pre, post)
+		return a.rewriteRefOfColumnType(parent, node, replacer)
 	case Columns:
-		return rewriteColumns(parent, node, replacer, pre, post)
+		return a.rewriteColumns(parent, node, replacer)
 	case Comments:
-		return rewriteComments(parent, node, replacer, pre, post)
+		return a.rewriteComments(parent, node, replacer)
 	case *Commit:
-		return rewriteRefOfCommit(parent, node, replacer, pre, post)
+		return a.rewriteRefOfCommit(parent, node, replacer)
 	case *ComparisonExpr:
-		return rewriteRefOfComparisonExpr(parent, node, replacer, pre, post)
+		return a.rewriteRefOfComparisonExpr(parent, node, replacer)
 	case *ConstraintDefinition:
-		return rewriteRefOfConstraintDefinition(parent, node, replacer, pre, post)
+		return a.rewriteRefOfConstraintDefinition(parent, node, replacer)
 	case *ConvertExpr:
-		return rewriteRefOfConvertExpr(parent, node, replacer, pre, post)
+		return a.rewriteRefOfConvertExpr(parent, node, replacer)
 	case *ConvertType:
-		return rewriteRefOfConvertType(parent, node, replacer, pre, post)
+		return a.rewriteRefOfConvertType(parent, node, replacer)
 	case *ConvertUsingExpr:
-		return rewriteRefOfConvertUsingExpr(parent, node, replacer, pre, post)
+		return a.rewriteRefOfConvertUsingExpr(parent, node, replacer)
 	case *CreateDatabase:
-		return rewriteRefOfCreateDatabase(parent, node, replacer, pre, post)
+		return a.rewriteRefOfCreateDatabase(parent, node, replacer)
 	case *CreateTable:
-		return rewriteRefOfCreateTable(parent, node, replacer, pre, post)
+		return a.rewriteRefOfCreateTable(parent, node, replacer)
 	case *CreateView:
-		return rewriteRefOfCreateView(parent, node, replacer, pre, post)
+		return a.rewriteRefOfCreateView(parent, node, replacer)
 	case *CurTimeFuncExpr:
-		return rewriteRefOfCurTimeFuncExpr(parent, node, replacer, pre, post)
+		return a.rewriteRefOfCurTimeFuncExpr(parent, node, replacer)
 	case *Default:
-		return rewriteRefOfDefault(parent, node, replacer, pre, post)
+		return a.rewriteRefOfDefault(parent, node, replacer)
 	case *Delete:
-		return rewriteRefOfDelete(parent, node, replacer, pre, post)
+		return a.rewriteRefOfDelete(parent, node, replacer)
 	case *DerivedTable:
-		return rewriteRefOfDerivedTable(parent, node, replacer, pre, post)
+		return a.rewriteRefOfDerivedTable(parent, node, replacer)
 	case *DropColumn:
-		return rewriteRefOfDropColumn(parent, node, replacer, pre, post)
+		return a.rewriteRefOfDropColumn(parent, node, replacer)
 	case *DropDatabase:
-		return rewriteRefOfDropDatabase(parent, node, replacer, pre, post)
+		return a.rewriteRefOfDropDatabase(parent, node, replacer)
 	case *DropKey:
-		return rewriteRefOfDropKey(parent, node, replacer, pre, post)
+		return a.rewriteRefOfDropKey(parent, node, replacer)
 	case *DropTable:
-		return rewriteRefOfDropTable(parent, node, replacer, pre, post)
+		return a.rewriteRefOfDropTable(parent, node, replacer)
 	case *DropView:
-		return rewriteRefOfDropView(parent, node, replacer, pre, post)
+		return a.rewriteRefOfDropView(parent, node, replacer)
 	case *ExistsExpr:
-		return rewriteRefOfExistsExpr(parent, node, replacer, pre, post)
+		return a.rewriteRefOfExistsExpr(parent, node, replacer)
 	case *ExplainStmt:
-		return rewriteRefOfExplainStmt(parent, node, replacer, pre, post)
+		return a.rewriteRefOfExplainStmt(parent, node, replacer)
 	case *ExplainTab:
-		return rewriteRefOfExplainTab(parent, node, replacer, pre, post)
+		return a.rewriteRefOfExplainTab(parent, node, replacer)
 	case Exprs:
-		return rewriteExprs(parent, node, replacer, pre, post)
+		return a.rewriteExprs(parent, node, replacer)
 	case *Flush:
-		return rewriteRefOfFlush(parent, node, replacer, pre, post)
+		return a.rewriteRefOfFlush(parent, node, replacer)
 	case *Force:
-		return rewriteRefOfForce(parent, node, replacer, pre, post)
+		return a.rewriteRefOfForce(parent, node, replacer)
 	case *ForeignKeyDefinition:
-		return rewriteRefOfForeignKeyDefinition(parent, node, replacer, pre, post)
+		return a.rewriteRefOfForeignKeyDefinition(parent, node, replacer)
 	case *FuncExpr:
-		return rewriteRefOfFuncExpr(parent, node, replacer, pre, post)
+		return a.rewriteRefOfFuncExpr(parent, node, replacer)
 	case GroupBy:
-		return rewriteGroupBy(parent, node, replacer, pre, post)
+		return a.rewriteGroupBy(parent, node, replacer)
 	case *GroupConcatExpr:
-		return rewriteRefOfGroupConcatExpr(parent, node, replacer, pre, post)
+		return a.rewriteRefOfGroupConcatExpr(parent, node, replacer)
 	case *IndexDefinition:
-		return rewriteRefOfIndexDefinition(parent, node, replacer, pre, post)
+		return a.rewriteRefOfIndexDefinition(parent, node, replacer)
 	case *IndexHints:
-		return rewriteRefOfIndexHints(parent, node, replacer, pre, post)
+		return a.rewriteRefOfIndexHints(parent, node, replacer)
 	case *IndexInfo:
-		return rewriteRefOfIndexInfo(parent, node, replacer, pre, post)
+		return a.rewriteRefOfIndexInfo(parent, node, replacer)
 	case *Insert:
-		return rewriteRefOfInsert(parent, node, replacer, pre, post)
+		return a.rewriteRefOfInsert(parent, node, replacer)
 	case *IntervalExpr:
-		return rewriteRefOfIntervalExpr(parent, node, replacer, pre, post)
+		return a.rewriteRefOfIntervalExpr(parent, node, replacer)
 	case *IsExpr:
-		return rewriteRefOfIsExpr(parent, node, replacer, pre, post)
+		return a.rewriteRefOfIsExpr(parent, node, replacer)
 	case IsolationLevel:
-		return rewriteIsolationLevel(parent, node, replacer, pre, post)
+		return a.rewriteIsolationLevel(parent, node, replacer)
 	case JoinCondition:
-		return rewriteJoinCondition(parent, node, replacer, pre, post)
+		return a.rewriteJoinCondition(parent, node, replacer)
 	case *JoinTableExpr:
-		return rewriteRefOfJoinTableExpr(parent, node, replacer, pre, post)
+		return a.rewriteRefOfJoinTableExpr(parent, node, replacer)
 	case *KeyState:
-		return rewriteRefOfKeyState(parent, node, replacer, pre, post)
+		return a.rewriteRefOfKeyState(parent, node, replacer)
 	case *Limit:
-		return rewriteRefOfLimit(parent, node, replacer, pre, post)
+		return a.rewriteRefOfLimit(parent, node, replacer)
 	case ListArg:
-		return rewriteListArg(parent, node, replacer, pre, post)
+		return a.rewriteListArg(parent, node, replacer)
 	case *Literal:
-		return rewriteRefOfLiteral(parent, node, replacer, pre, post)
+		return a.rewriteRefOfLiteral(parent, node, replacer)
 	case *Load:
-		return rewriteRefOfLoad(parent, node, replacer, pre, post)
+		return a.rewriteRefOfLoad(parent, node, replacer)
 	case *LockOption:
-		return rewriteRefOfLockOption(parent, node, replacer, pre, post)
+		return a.rewriteRefOfLockOption(parent, node, replacer)
 	case *LockTables:
-		return rewriteRefOfLockTables(parent, node, replacer, pre, post)
+		return a.rewriteRefOfLockTables(parent, node, replacer)
 	case *MatchExpr:
-		return rewriteRefOfMatchExpr(parent, node, replacer, pre, post)
+		return a.rewriteRefOfMatchExpr(parent, node, replacer)
 	case *ModifyColumn:
-		return rewriteRefOfModifyColumn(parent, node, replacer, pre, post)
+		return a.rewriteRefOfModifyColumn(parent, node, replacer)
 	case *Nextval:
-		return rewriteRefOfNextval(parent, node, replacer, pre, post)
+		return a.rewriteRefOfNextval(parent, node, replacer)
 	case *NotExpr:
-		return rewriteRefOfNotExpr(parent, node, replacer, pre, post)
+		return a.rewriteRefOfNotExpr(parent, node, replacer)
 	case *NullVal:
-		return rewriteRefOfNullVal(parent, node, replacer, pre, post)
+		return a.rewriteRefOfNullVal(parent, node, replacer)
 	case OnDup:
-		return rewriteOnDup(parent, node, replacer, pre, post)
+		return a.rewriteOnDup(parent, node, replacer)
 	case *OptLike:
-		return rewriteRefOfOptLike(parent, node, replacer, pre, post)
+		return a.rewriteRefOfOptLike(parent, node, replacer)
 	case *OrExpr:
-		return rewriteRefOfOrExpr(parent, node, replacer, pre, post)
+		return a.rewriteRefOfOrExpr(parent, node, replacer)
 	case *Order:
-		return rewriteRefOfOrder(parent, node, replacer, pre, post)
+		return a.rewriteRefOfOrder(parent, node, replacer)
 	case OrderBy:
-		return rewriteOrderBy(parent, node, replacer, pre, post)
+		return a.rewriteOrderBy(parent, node, replacer)
 	case *OrderByOption:
-		return rewriteRefOfOrderByOption(parent, node, replacer, pre, post)
+		return a.rewriteRefOfOrderByOption(parent, node, replacer)
 	case *OtherAdmin:
-		return rewriteRefOfOtherAdmin(parent, node, replacer, pre, post)
+		return a.rewriteRefOfOtherAdmin(parent, node, replacer)
 	case *OtherRead:
-		return rewriteRefOfOtherRead(parent, node, replacer, pre, post)
+		return a.rewriteRefOfOtherRead(parent, node, replacer)
 	case *ParenSelect:
-		return rewriteRefOfParenSelect(parent, node, replacer, pre, post)
+		return a.rewriteRefOfParenSelect(parent, node, replacer)
 	case *ParenTableExpr:
-		return rewriteRefOfParenTableExpr(parent, node, replacer, pre, post)
+		return a.rewriteRefOfParenTableExpr(parent, node, replacer)
 	case *PartitionDefinition:
-		return rewriteRefOfPartitionDefinition(parent, node, replacer, pre, post)
+		return a.rewriteRefOfPartitionDefinition(parent, node, replacer)
 	case *PartitionSpec:
-		return rewriteRefOfPartitionSpec(parent, node, replacer, pre, post)
+		return a.rewriteRefOfPartitionSpec(parent, node, replacer)
 	case Partitions:
-		return rewritePartitions(parent, node, replacer, pre, post)
+		return a.rewritePartitions(parent, node, replacer)
 	case *RangeCond:
-		return rewriteRefOfRangeCond(parent, node, replacer, pre, post)
+		return a.rewriteRefOfRangeCond(parent, node, replacer)
 	case ReferenceAction:
-		return rewriteReferenceAction(parent, node, replacer, pre, post)
+		return a.rewriteReferenceAction(parent, node, replacer)
 	case *Release:
-		return rewriteRefOfRelease(parent, node, replacer, pre, post)
+		return a.rewriteRefOfRelease(parent, node, replacer)
 	case *RenameIndex:
-		return rewriteRefOfRenameIndex(parent, node, replacer, pre, post)
+		return a.rewriteRefOfRenameIndex(parent, node, replacer)
 	case *RenameTable:
-		return rewriteRefOfRenameTable(parent, node, replacer, pre, post)
+		return a.rewriteRefOfRenameTable(parent, node, replacer)
 	case *RenameTableName:
-		return rewriteRefOfRenameTableName(parent, node, replacer, pre, post)
+		return a.rewriteRefOfRenameTableName(parent, node, replacer)
 	case *RevertMigration:
-		return rewriteRefOfRevertMigration(parent, node, replacer, pre, post)
+		return a.rewriteRefOfRevertMigration(parent, node, replacer)
 	case *Rollback:
-		return rewriteRefOfRollback(parent, node, replacer, pre, post)
+		return a.rewriteRefOfRollback(parent, node, replacer)
 	case *SRollback:
-		return rewriteRefOfSRollback(parent, node, replacer, pre, post)
+		return a.rewriteRefOfSRollback(parent, node, replacer)
 	case *Savepoint:
-		return rewriteRefOfSavepoint(parent, node, replacer, pre, post)
+		return a.rewriteRefOfSavepoint(parent, node, replacer)
 	case *Select:
-		return rewriteRefOfSelect(parent, node, replacer, pre, post)
+		return a.rewriteRefOfSelect(parent, node, replacer)
 	case SelectExprs:
-		return rewriteSelectExprs(parent, node, replacer, pre, post)
+		return a.rewriteSelectExprs(parent, node, replacer)
 	case *SelectInto:
-		return rewriteRefOfSelectInto(parent, node, replacer, pre, post)
+		return a.rewriteRefOfSelectInto(parent, node, replacer)
 	case *Set:
-		return rewriteRefOfSet(parent, node, replacer, pre, post)
+		return a.rewriteRefOfSet(parent, node, replacer)
 	case *SetExpr:
-		return rewriteRefOfSetExpr(parent, node, replacer, pre, post)
+		return a.rewriteRefOfSetExpr(parent, node, replacer)
 	case SetExprs:
-		return rewriteSetExprs(parent, node, replacer, pre, post)
+		return a.rewriteSetExprs(parent, node, replacer)
 	case *SetTransaction:
-		return rewriteRefOfSetTransaction(parent, node, replacer, pre, post)
+		return a.rewriteRefOfSetTransaction(parent, node, replacer)
 	case *Show:
-		return rewriteRefOfShow(parent, node, replacer, pre, post)
+		return a.rewriteRefOfShow(parent, node, replacer)
 	case *ShowBasic:
-		return rewriteRefOfShowBasic(parent, node, replacer, pre, post)
+		return a.rewriteRefOfShowBasic(parent, node, replacer)
 	case *ShowCreate:
-		return rewriteRefOfShowCreate(parent, node, replacer, pre, post)
+		return a.rewriteRefOfShowCreate(parent, node, replacer)
 	case *ShowFilter:
-		return rewriteRefOfShowFilter(parent, node, replacer, pre, post)
+		return a.rewriteRefOfShowFilter(parent, node, replacer)
 	case *ShowLegacy:
-		return rewriteRefOfShowLegacy(parent, node, replacer, pre, post)
+		return a.rewriteRefOfShowLegacy(parent, node, replacer)
 	case *StarExpr:
-		return rewriteRefOfStarExpr(parent, node, replacer, pre, post)
+		return a.rewriteRefOfStarExpr(parent, node, replacer)
 	case *Stream:
-		return rewriteRefOfStream(parent, node, replacer, pre, post)
+		return a.rewriteRefOfStream(parent, node, replacer)
 	case *Subquery:
-		return rewriteRefOfSubquery(parent, node, replacer, pre, post)
+		return a.rewriteRefOfSubquery(parent, node, replacer)
 	case *SubstrExpr:
-		return rewriteRefOfSubstrExpr(parent, node, replacer, pre, post)
+		return a.rewriteRefOfSubstrExpr(parent, node, replacer)
 	case TableExprs:
-		return rewriteTableExprs(parent, node, replacer, pre, post)
+		return a.rewriteTableExprs(parent, node, replacer)
 	case TableIdent:
-		return rewriteTableIdent(parent, node, replacer, pre, post)
+		return a.rewriteTableIdent(parent, node, replacer)
 	case TableName:
-		return rewriteTableName(parent, node, replacer, pre, post)
+		return a.rewriteTableName(parent, node, replacer)
 	case TableNames:
-		return rewriteTableNames(parent, node, replacer, pre, post)
+		return a.rewriteTableNames(parent, node, replacer)
 	case TableOptions:
-		return rewriteTableOptions(parent, node, replacer, pre, post)
+		return a.rewriteTableOptions(parent, node, replacer)
 	case *TableSpec:
-		return rewriteRefOfTableSpec(parent, node, replacer, pre, post)
+		return a.rewriteRefOfTableSpec(parent, node, replacer)
 	case *TablespaceOperation:
-		return rewriteRefOfTablespaceOperation(parent, node, replacer, pre, post)
+		return a.rewriteRefOfTablespaceOperation(parent, node, replacer)
 	case *TimestampFuncExpr:
-		return rewriteRefOfTimestampFuncExpr(parent, node, replacer, pre, post)
+		return a.rewriteRefOfTimestampFuncExpr(parent, node, replacer)
 	case *TruncateTable:
-		return rewriteRefOfTruncateTable(parent, node, replacer, pre, post)
+		return a.rewriteRefOfTruncateTable(parent, node, replacer)
 	case *UnaryExpr:
-		return rewriteRefOfUnaryExpr(parent, node, replacer, pre, post)
+		return a.rewriteRefOfUnaryExpr(parent, node, replacer)
 	case *Union:
-		return rewriteRefOfUnion(parent, node, replacer, pre, post)
+		return a.rewriteRefOfUnion(parent, node, replacer)
 	case *UnionSelect:
-		return rewriteRefOfUnionSelect(parent, node, replacer, pre, post)
+		return a.rewriteRefOfUnionSelect(parent, node, replacer)
 	case *UnlockTables:
-		return rewriteRefOfUnlockTables(parent, node, replacer, pre, post)
+		return a.rewriteRefOfUnlockTables(parent, node, replacer)
 	case *Update:
-		return rewriteRefOfUpdate(parent, node, replacer, pre, post)
+		return a.rewriteRefOfUpdate(parent, node, replacer)
 	case *UpdateExpr:
-		return rewriteRefOfUpdateExpr(parent, node, replacer, pre, post)
+		return a.rewriteRefOfUpdateExpr(parent, node, replacer)
 	case UpdateExprs:
-		return rewriteUpdateExprs(parent, node, replacer, pre, post)
+		return a.rewriteUpdateExprs(parent, node, replacer)
 	case *Use:
-		return rewriteRefOfUse(parent, node, replacer, pre, post)
+		return a.rewriteRefOfUse(parent, node, replacer)
 	case *VStream:
-		return rewriteRefOfVStream(parent, node, replacer, pre, post)
+		return a.rewriteRefOfVStream(parent, node, replacer)
 	case ValTuple:
-		return rewriteValTuple(parent, node, replacer, pre, post)
+		return a.rewriteValTuple(parent, node, replacer)
 	case *Validation:
-		return rewriteRefOfValidation(parent, node, replacer, pre, post)
+		return a.rewriteRefOfValidation(parent, node, replacer)
 	case Values:
-		return rewriteValues(parent, node, replacer, pre, post)
+		return a.rewriteValues(parent, node, replacer)
 	case *ValuesFuncExpr:
-		return rewriteRefOfValuesFuncExpr(parent, node, replacer, pre, post)
+		return a.rewriteRefOfValuesFuncExpr(parent, node, replacer)
 	case VindexParam:
-		return rewriteVindexParam(parent, node, replacer, pre, post)
+		return a.rewriteVindexParam(parent, node, replacer)
 	case *VindexSpec:
-		return rewriteRefOfVindexSpec(parent, node, replacer, pre, post)
+		return a.rewriteRefOfVindexSpec(parent, node, replacer)
 	case *When:
-		return rewriteRefOfWhen(parent, node, replacer, pre, post)
+		return a.rewriteRefOfWhen(parent, node, replacer)
 	case *Where:
-		return rewriteRefOfWhere(parent, node, replacer, pre, post)
+		return a.rewriteRefOfWhere(parent, node, replacer)
 	case *XorExpr:
-		return rewriteRefOfXorExpr(parent, node, replacer, pre, post)
+		return a.rewriteRefOfXorExpr(parent, node, replacer)
 	default:
 		// this should never happen
 		return nil
@@ -1873,7 +1873,7 @@ func VisitRefOfAddColumns(in *AddColumns, f Visit) error {
 }
 
 // rewriteRefOfAddColumns is part of the Rewrite implementation
-func rewriteRefOfAddColumns(parent SQLNode, node *AddColumns, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfAddColumns(parent SQLNode, node *AddColumns, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -1882,27 +1882,27 @@ func rewriteRefOfAddColumns(parent SQLNode, node *AddColumns, replacer replacerF
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
 	for i, el := range node.Columns {
-		if errF := rewriteRefOfColumnDefinition(node, el, func(newNode, parent SQLNode) {
+		if errF := a.rewriteRefOfColumnDefinition(node, el, func(newNode, parent SQLNode) {
 			parent.(*AddColumns).Columns[i] = newNode.(*ColumnDefinition)
-		}, pre, post); errF != nil {
+		}); errF != nil {
 			return errF
 		}
 	}
-	if errF := rewriteRefOfColName(node, node.First, func(newNode, parent SQLNode) {
+	if errF := a.rewriteRefOfColName(node, node.First, func(newNode, parent SQLNode) {
 		parent.(*AddColumns).First = newNode.(*ColName)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewriteRefOfColName(node, node.After, func(newNode, parent SQLNode) {
+	if errF := a.rewriteRefOfColName(node, node.After, func(newNode, parent SQLNode) {
 		parent.(*AddColumns).After = newNode.(*ColName)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -1944,7 +1944,7 @@ func VisitRefOfAddConstraintDefinition(in *AddConstraintDefinition, f Visit) err
 }
 
 // rewriteRefOfAddConstraintDefinition is part of the Rewrite implementation
-func rewriteRefOfAddConstraintDefinition(parent SQLNode, node *AddConstraintDefinition, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfAddConstraintDefinition(parent SQLNode, node *AddConstraintDefinition, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -1953,15 +1953,15 @@ func rewriteRefOfAddConstraintDefinition(parent SQLNode, node *AddConstraintDefi
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteRefOfConstraintDefinition(node, node.ConstraintDefinition, func(newNode, parent SQLNode) {
+	if errF := a.rewriteRefOfConstraintDefinition(node, node.ConstraintDefinition, func(newNode, parent SQLNode) {
 		parent.(*AddConstraintDefinition).ConstraintDefinition = newNode.(*ConstraintDefinition)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -2003,7 +2003,7 @@ func VisitRefOfAddIndexDefinition(in *AddIndexDefinition, f Visit) error {
 }
 
 // rewriteRefOfAddIndexDefinition is part of the Rewrite implementation
-func rewriteRefOfAddIndexDefinition(parent SQLNode, node *AddIndexDefinition, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfAddIndexDefinition(parent SQLNode, node *AddIndexDefinition, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -2012,15 +2012,15 @@ func rewriteRefOfAddIndexDefinition(parent SQLNode, node *AddIndexDefinition, re
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteRefOfIndexDefinition(node, node.IndexDefinition, func(newNode, parent SQLNode) {
+	if errF := a.rewriteRefOfIndexDefinition(node, node.IndexDefinition, func(newNode, parent SQLNode) {
 		parent.(*AddIndexDefinition).IndexDefinition = newNode.(*IndexDefinition)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -2067,7 +2067,7 @@ func VisitRefOfAliasedExpr(in *AliasedExpr, f Visit) error {
 }
 
 // rewriteRefOfAliasedExpr is part of the Rewrite implementation
-func rewriteRefOfAliasedExpr(parent SQLNode, node *AliasedExpr, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfAliasedExpr(parent SQLNode, node *AliasedExpr, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -2076,20 +2076,20 @@ func rewriteRefOfAliasedExpr(parent SQLNode, node *AliasedExpr, replacer replace
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
+	if errF := a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
 		parent.(*AliasedExpr).Expr = newNode.(Expr)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewriteColIdent(node, node.As, func(newNode, parent SQLNode) {
+	if errF := a.rewriteColIdent(node, node.As, func(newNode, parent SQLNode) {
 		parent.(*AliasedExpr).As = newNode.(ColIdent)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -2146,7 +2146,7 @@ func VisitRefOfAliasedTableExpr(in *AliasedTableExpr, f Visit) error {
 }
 
 // rewriteRefOfAliasedTableExpr is part of the Rewrite implementation
-func rewriteRefOfAliasedTableExpr(parent SQLNode, node *AliasedTableExpr, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfAliasedTableExpr(parent SQLNode, node *AliasedTableExpr, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -2155,30 +2155,30 @@ func rewriteRefOfAliasedTableExpr(parent SQLNode, node *AliasedTableExpr, replac
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteSimpleTableExpr(node, node.Expr, func(newNode, parent SQLNode) {
+	if errF := a.rewriteSimpleTableExpr(node, node.Expr, func(newNode, parent SQLNode) {
 		parent.(*AliasedTableExpr).Expr = newNode.(SimpleTableExpr)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewritePartitions(node, node.Partitions, func(newNode, parent SQLNode) {
+	if errF := a.rewritePartitions(node, node.Partitions, func(newNode, parent SQLNode) {
 		parent.(*AliasedTableExpr).Partitions = newNode.(Partitions)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewriteTableIdent(node, node.As, func(newNode, parent SQLNode) {
+	if errF := a.rewriteTableIdent(node, node.As, func(newNode, parent SQLNode) {
 		parent.(*AliasedTableExpr).As = newNode.(TableIdent)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewriteRefOfIndexHints(node, node.Hints, func(newNode, parent SQLNode) {
+	if errF := a.rewriteRefOfIndexHints(node, node.Hints, func(newNode, parent SQLNode) {
 		parent.(*AliasedTableExpr).Hints = newNode.(*IndexHints)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -2217,7 +2217,7 @@ func VisitRefOfAlterCharset(in *AlterCharset, f Visit) error {
 }
 
 // rewriteRefOfAlterCharset is part of the Rewrite implementation
-func rewriteRefOfAlterCharset(parent SQLNode, node *AlterCharset, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfAlterCharset(parent SQLNode, node *AlterCharset, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -2226,10 +2226,10 @@ func rewriteRefOfAlterCharset(parent SQLNode, node *AlterCharset, replacer repla
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -2277,7 +2277,7 @@ func VisitRefOfAlterColumn(in *AlterColumn, f Visit) error {
 }
 
 // rewriteRefOfAlterColumn is part of the Rewrite implementation
-func rewriteRefOfAlterColumn(parent SQLNode, node *AlterColumn, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfAlterColumn(parent SQLNode, node *AlterColumn, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -2286,20 +2286,20 @@ func rewriteRefOfAlterColumn(parent SQLNode, node *AlterColumn, replacer replace
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteRefOfColName(node, node.Column, func(newNode, parent SQLNode) {
+	if errF := a.rewriteRefOfColName(node, node.Column, func(newNode, parent SQLNode) {
 		parent.(*AlterColumn).Column = newNode.(*ColName)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewriteExpr(node, node.DefaultVal, func(newNode, parent SQLNode) {
+	if errF := a.rewriteExpr(node, node.DefaultVal, func(newNode, parent SQLNode) {
 		parent.(*AlterColumn).DefaultVal = newNode.(Expr)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -2341,7 +2341,7 @@ func VisitRefOfAlterDatabase(in *AlterDatabase, f Visit) error {
 }
 
 // rewriteRefOfAlterDatabase is part of the Rewrite implementation
-func rewriteRefOfAlterDatabase(parent SQLNode, node *AlterDatabase, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfAlterDatabase(parent SQLNode, node *AlterDatabase, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -2350,10 +2350,10 @@ func rewriteRefOfAlterDatabase(parent SQLNode, node *AlterDatabase, replacer rep
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -2392,7 +2392,7 @@ func VisitRefOfAlterMigration(in *AlterMigration, f Visit) error {
 }
 
 // rewriteRefOfAlterMigration is part of the Rewrite implementation
-func rewriteRefOfAlterMigration(parent SQLNode, node *AlterMigration, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfAlterMigration(parent SQLNode, node *AlterMigration, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -2401,10 +2401,10 @@ func rewriteRefOfAlterMigration(parent SQLNode, node *AlterMigration, replacer r
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -2459,7 +2459,7 @@ func VisitRefOfAlterTable(in *AlterTable, f Visit) error {
 }
 
 // rewriteRefOfAlterTable is part of the Rewrite implementation
-func rewriteRefOfAlterTable(parent SQLNode, node *AlterTable, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfAlterTable(parent SQLNode, node *AlterTable, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -2468,27 +2468,27 @@ func rewriteRefOfAlterTable(parent SQLNode, node *AlterTable, replacer replacerF
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteTableName(node, node.Table, func(newNode, parent SQLNode) {
+	if errF := a.rewriteTableName(node, node.Table, func(newNode, parent SQLNode) {
 		parent.(*AlterTable).Table = newNode.(TableName)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
 	for i, el := range node.AlterOptions {
-		if errF := rewriteAlterOption(node, el, func(newNode, parent SQLNode) {
+		if errF := a.rewriteAlterOption(node, el, func(newNode, parent SQLNode) {
 			parent.(*AlterTable).AlterOptions[i] = newNode.(AlterOption)
-		}, pre, post); errF != nil {
+		}); errF != nil {
 			return errF
 		}
 	}
-	if errF := rewriteRefOfPartitionSpec(node, node.PartitionSpec, func(newNode, parent SQLNode) {
+	if errF := a.rewriteRefOfPartitionSpec(node, node.PartitionSpec, func(newNode, parent SQLNode) {
 		parent.(*AlterTable).PartitionSpec = newNode.(*PartitionSpec)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -2544,7 +2544,7 @@ func VisitRefOfAlterView(in *AlterView, f Visit) error {
 }
 
 // rewriteRefOfAlterView is part of the Rewrite implementation
-func rewriteRefOfAlterView(parent SQLNode, node *AlterView, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfAlterView(parent SQLNode, node *AlterView, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -2553,25 +2553,25 @@ func rewriteRefOfAlterView(parent SQLNode, node *AlterView, replacer replacerFun
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteTableName(node, node.ViewName, func(newNode, parent SQLNode) {
+	if errF := a.rewriteTableName(node, node.ViewName, func(newNode, parent SQLNode) {
 		parent.(*AlterView).ViewName = newNode.(TableName)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewriteColumns(node, node.Columns, func(newNode, parent SQLNode) {
+	if errF := a.rewriteColumns(node, node.Columns, func(newNode, parent SQLNode) {
 		parent.(*AlterView).Columns = newNode.(Columns)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewriteSelectStatement(node, node.Select, func(newNode, parent SQLNode) {
+	if errF := a.rewriteSelectStatement(node, node.Select, func(newNode, parent SQLNode) {
 		parent.(*AlterView).Select = newNode.(SelectStatement)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -2631,7 +2631,7 @@ func VisitRefOfAlterVschema(in *AlterVschema, f Visit) error {
 }
 
 // rewriteRefOfAlterVschema is part of the Rewrite implementation
-func rewriteRefOfAlterVschema(parent SQLNode, node *AlterVschema, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfAlterVschema(parent SQLNode, node *AlterVschema, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -2640,32 +2640,32 @@ func rewriteRefOfAlterVschema(parent SQLNode, node *AlterVschema, replacer repla
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteTableName(node, node.Table, func(newNode, parent SQLNode) {
+	if errF := a.rewriteTableName(node, node.Table, func(newNode, parent SQLNode) {
 		parent.(*AlterVschema).Table = newNode.(TableName)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewriteRefOfVindexSpec(node, node.VindexSpec, func(newNode, parent SQLNode) {
+	if errF := a.rewriteRefOfVindexSpec(node, node.VindexSpec, func(newNode, parent SQLNode) {
 		parent.(*AlterVschema).VindexSpec = newNode.(*VindexSpec)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
 	for i, el := range node.VindexCols {
-		if errF := rewriteColIdent(node, el, func(newNode, parent SQLNode) {
+		if errF := a.rewriteColIdent(node, el, func(newNode, parent SQLNode) {
 			parent.(*AlterVschema).VindexCols[i] = newNode.(ColIdent)
-		}, pre, post); errF != nil {
+		}); errF != nil {
 			return errF
 		}
 	}
-	if errF := rewriteRefOfAutoIncSpec(node, node.AutoIncSpec, func(newNode, parent SQLNode) {
+	if errF := a.rewriteRefOfAutoIncSpec(node, node.AutoIncSpec, func(newNode, parent SQLNode) {
 		parent.(*AlterVschema).AutoIncSpec = newNode.(*AutoIncSpec)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -2712,7 +2712,7 @@ func VisitRefOfAndExpr(in *AndExpr, f Visit) error {
 }
 
 // rewriteRefOfAndExpr is part of the Rewrite implementation
-func rewriteRefOfAndExpr(parent SQLNode, node *AndExpr, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfAndExpr(parent SQLNode, node *AndExpr, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -2721,20 +2721,20 @@ func rewriteRefOfAndExpr(parent SQLNode, node *AndExpr, replacer replacerFunc, p
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteExpr(node, node.Left, func(newNode, parent SQLNode) {
+	if errF := a.rewriteExpr(node, node.Left, func(newNode, parent SQLNode) {
 		parent.(*AndExpr).Left = newNode.(Expr)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewriteExpr(node, node.Right, func(newNode, parent SQLNode) {
+	if errF := a.rewriteExpr(node, node.Right, func(newNode, parent SQLNode) {
 		parent.(*AndExpr).Right = newNode.(Expr)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -2781,7 +2781,7 @@ func VisitRefOfAutoIncSpec(in *AutoIncSpec, f Visit) error {
 }
 
 // rewriteRefOfAutoIncSpec is part of the Rewrite implementation
-func rewriteRefOfAutoIncSpec(parent SQLNode, node *AutoIncSpec, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfAutoIncSpec(parent SQLNode, node *AutoIncSpec, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -2790,20 +2790,20 @@ func rewriteRefOfAutoIncSpec(parent SQLNode, node *AutoIncSpec, replacer replace
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteColIdent(node, node.Column, func(newNode, parent SQLNode) {
+	if errF := a.rewriteColIdent(node, node.Column, func(newNode, parent SQLNode) {
 		parent.(*AutoIncSpec).Column = newNode.(ColIdent)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewriteTableName(node, node.Sequence, func(newNode, parent SQLNode) {
+	if errF := a.rewriteTableName(node, node.Sequence, func(newNode, parent SQLNode) {
 		parent.(*AutoIncSpec).Sequence = newNode.(TableName)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -2841,7 +2841,7 @@ func VisitRefOfBegin(in *Begin, f Visit) error {
 }
 
 // rewriteRefOfBegin is part of the Rewrite implementation
-func rewriteRefOfBegin(parent SQLNode, node *Begin, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfBegin(parent SQLNode, node *Begin, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -2850,10 +2850,10 @@ func rewriteRefOfBegin(parent SQLNode, node *Begin, replacer replacerFunc, pre, 
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -2901,7 +2901,7 @@ func VisitRefOfBinaryExpr(in *BinaryExpr, f Visit) error {
 }
 
 // rewriteRefOfBinaryExpr is part of the Rewrite implementation
-func rewriteRefOfBinaryExpr(parent SQLNode, node *BinaryExpr, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfBinaryExpr(parent SQLNode, node *BinaryExpr, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -2910,20 +2910,20 @@ func rewriteRefOfBinaryExpr(parent SQLNode, node *BinaryExpr, replacer replacerF
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteExpr(node, node.Left, func(newNode, parent SQLNode) {
+	if errF := a.rewriteExpr(node, node.Left, func(newNode, parent SQLNode) {
 		parent.(*BinaryExpr).Left = newNode.(Expr)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewriteExpr(node, node.Right, func(newNode, parent SQLNode) {
+	if errF := a.rewriteExpr(node, node.Right, func(newNode, parent SQLNode) {
 		parent.(*BinaryExpr).Right = newNode.(Expr)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -2970,7 +2970,7 @@ func VisitRefOfCallProc(in *CallProc, f Visit) error {
 }
 
 // rewriteRefOfCallProc is part of the Rewrite implementation
-func rewriteRefOfCallProc(parent SQLNode, node *CallProc, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfCallProc(parent SQLNode, node *CallProc, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -2979,20 +2979,20 @@ func rewriteRefOfCallProc(parent SQLNode, node *CallProc, replacer replacerFunc,
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteTableName(node, node.Name, func(newNode, parent SQLNode) {
+	if errF := a.rewriteTableName(node, node.Name, func(newNode, parent SQLNode) {
 		parent.(*CallProc).Name = newNode.(TableName)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewriteExprs(node, node.Params, func(newNode, parent SQLNode) {
+	if errF := a.rewriteExprs(node, node.Params, func(newNode, parent SQLNode) {
 		parent.(*CallProc).Params = newNode.(Exprs)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -3046,7 +3046,7 @@ func VisitRefOfCaseExpr(in *CaseExpr, f Visit) error {
 }
 
 // rewriteRefOfCaseExpr is part of the Rewrite implementation
-func rewriteRefOfCaseExpr(parent SQLNode, node *CaseExpr, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfCaseExpr(parent SQLNode, node *CaseExpr, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -3055,27 +3055,27 @@ func rewriteRefOfCaseExpr(parent SQLNode, node *CaseExpr, replacer replacerFunc,
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
+	if errF := a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
 		parent.(*CaseExpr).Expr = newNode.(Expr)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
 	for i, el := range node.Whens {
-		if errF := rewriteRefOfWhen(node, el, func(newNode, parent SQLNode) {
+		if errF := a.rewriteRefOfWhen(node, el, func(newNode, parent SQLNode) {
 			parent.(*CaseExpr).Whens[i] = newNode.(*When)
-		}, pre, post); errF != nil {
+		}); errF != nil {
 			return errF
 		}
 	}
-	if errF := rewriteExpr(node, node.Else, func(newNode, parent SQLNode) {
+	if errF := a.rewriteExpr(node, node.Else, func(newNode, parent SQLNode) {
 		parent.(*CaseExpr).Else = newNode.(Expr)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -3132,7 +3132,7 @@ func VisitRefOfChangeColumn(in *ChangeColumn, f Visit) error {
 }
 
 // rewriteRefOfChangeColumn is part of the Rewrite implementation
-func rewriteRefOfChangeColumn(parent SQLNode, node *ChangeColumn, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfChangeColumn(parent SQLNode, node *ChangeColumn, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -3141,30 +3141,30 @@ func rewriteRefOfChangeColumn(parent SQLNode, node *ChangeColumn, replacer repla
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteRefOfColName(node, node.OldColumn, func(newNode, parent SQLNode) {
+	if errF := a.rewriteRefOfColName(node, node.OldColumn, func(newNode, parent SQLNode) {
 		parent.(*ChangeColumn).OldColumn = newNode.(*ColName)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewriteRefOfColumnDefinition(node, node.NewColDefinition, func(newNode, parent SQLNode) {
+	if errF := a.rewriteRefOfColumnDefinition(node, node.NewColDefinition, func(newNode, parent SQLNode) {
 		parent.(*ChangeColumn).NewColDefinition = newNode.(*ColumnDefinition)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewriteRefOfColName(node, node.First, func(newNode, parent SQLNode) {
+	if errF := a.rewriteRefOfColName(node, node.First, func(newNode, parent SQLNode) {
 		parent.(*ChangeColumn).First = newNode.(*ColName)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewriteRefOfColName(node, node.After, func(newNode, parent SQLNode) {
+	if errF := a.rewriteRefOfColName(node, node.After, func(newNode, parent SQLNode) {
 		parent.(*ChangeColumn).After = newNode.(*ColName)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -3207,7 +3207,7 @@ func VisitRefOfCheckConstraintDefinition(in *CheckConstraintDefinition, f Visit)
 }
 
 // rewriteRefOfCheckConstraintDefinition is part of the Rewrite implementation
-func rewriteRefOfCheckConstraintDefinition(parent SQLNode, node *CheckConstraintDefinition, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfCheckConstraintDefinition(parent SQLNode, node *CheckConstraintDefinition, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -3216,15 +3216,15 @@ func rewriteRefOfCheckConstraintDefinition(parent SQLNode, node *CheckConstraint
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
+	if errF := a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
 		parent.(*CheckConstraintDefinition).Expr = newNode.(Expr)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -3251,20 +3251,20 @@ func VisitColIdent(in ColIdent, f Visit) error {
 }
 
 // rewriteColIdent is part of the Rewrite implementation
-func rewriteColIdent(parent SQLNode, node ColIdent, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteColIdent(parent SQLNode, node ColIdent, replacer replacerFunc) error {
 	var err error
 	cur := Cursor{
 		node:     node,
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
 	if err != nil {
 		return err
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -3305,7 +3305,7 @@ func VisitRefOfColName(in *ColName, f Visit) error {
 }
 
 // rewriteRefOfColName is part of the Rewrite implementation
-func rewriteRefOfColName(parent SQLNode, node *ColName, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfColName(parent SQLNode, node *ColName, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -3314,20 +3314,20 @@ func rewriteRefOfColName(parent SQLNode, node *ColName, replacer replacerFunc, p
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
+	if errF := a.rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
 		parent.(*ColName).Name = newNode.(ColIdent)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewriteTableName(node, node.Qualifier, func(newNode, parent SQLNode) {
+	if errF := a.rewriteTableName(node, node.Qualifier, func(newNode, parent SQLNode) {
 		parent.(*ColName).Qualifier = newNode.(TableName)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -3370,7 +3370,7 @@ func VisitRefOfCollateExpr(in *CollateExpr, f Visit) error {
 }
 
 // rewriteRefOfCollateExpr is part of the Rewrite implementation
-func rewriteRefOfCollateExpr(parent SQLNode, node *CollateExpr, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfCollateExpr(parent SQLNode, node *CollateExpr, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -3379,15 +3379,15 @@ func rewriteRefOfCollateExpr(parent SQLNode, node *CollateExpr, replacer replace
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
+	if errF := a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
 		parent.(*CollateExpr).Expr = newNode.(Expr)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -3431,7 +3431,7 @@ func VisitRefOfColumnDefinition(in *ColumnDefinition, f Visit) error {
 }
 
 // rewriteRefOfColumnDefinition is part of the Rewrite implementation
-func rewriteRefOfColumnDefinition(parent SQLNode, node *ColumnDefinition, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfColumnDefinition(parent SQLNode, node *ColumnDefinition, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -3440,15 +3440,15 @@ func rewriteRefOfColumnDefinition(parent SQLNode, node *ColumnDefinition, replac
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
+	if errF := a.rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
 		parent.(*ColumnDefinition).Name = newNode.(ColIdent)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -3504,7 +3504,7 @@ func VisitRefOfColumnType(in *ColumnType, f Visit) error {
 }
 
 // rewriteRefOfColumnType is part of the Rewrite implementation
-func rewriteRefOfColumnType(parent SQLNode, node *ColumnType, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfColumnType(parent SQLNode, node *ColumnType, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -3513,20 +3513,20 @@ func rewriteRefOfColumnType(parent SQLNode, node *ColumnType, replacer replacerF
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteRefOfLiteral(node, node.Length, func(newNode, parent SQLNode) {
+	if errF := a.rewriteRefOfLiteral(node, node.Length, func(newNode, parent SQLNode) {
 		parent.(*ColumnType).Length = newNode.(*Literal)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewriteRefOfLiteral(node, node.Scale, func(newNode, parent SQLNode) {
+	if errF := a.rewriteRefOfLiteral(node, node.Scale, func(newNode, parent SQLNode) {
 		parent.(*ColumnType).Scale = newNode.(*Literal)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -3571,7 +3571,7 @@ func VisitColumns(in Columns, f Visit) error {
 }
 
 // rewriteColumns is part of the Rewrite implementation
-func rewriteColumns(parent SQLNode, node Columns, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteColumns(parent SQLNode, node Columns, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -3580,17 +3580,17 @@ func rewriteColumns(parent SQLNode, node Columns, replacer replacerFunc, pre, po
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
 	for i, el := range node {
-		if errF := rewriteColIdent(node, el, func(newNode, parent SQLNode) {
+		if errF := a.rewriteColIdent(node, el, func(newNode, parent SQLNode) {
 			parent.(Columns)[i] = newNode.(ColIdent)
-		}, pre, post); errF != nil {
+		}); errF != nil {
 			return errF
 		}
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -3623,7 +3623,7 @@ func VisitComments(in Comments, f Visit) error {
 }
 
 // rewriteComments is part of the Rewrite implementation
-func rewriteComments(parent SQLNode, node Comments, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteComments(parent SQLNode, node Comments, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -3632,10 +3632,10 @@ func rewriteComments(parent SQLNode, node Comments, replacer replacerFunc, pre, 
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -3673,7 +3673,7 @@ func VisitRefOfCommit(in *Commit, f Visit) error {
 }
 
 // rewriteRefOfCommit is part of the Rewrite implementation
-func rewriteRefOfCommit(parent SQLNode, node *Commit, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfCommit(parent SQLNode, node *Commit, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -3682,10 +3682,10 @@ func rewriteRefOfCommit(parent SQLNode, node *Commit, replacer replacerFunc, pre
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -3738,7 +3738,7 @@ func VisitRefOfComparisonExpr(in *ComparisonExpr, f Visit) error {
 }
 
 // rewriteRefOfComparisonExpr is part of the Rewrite implementation
-func rewriteRefOfComparisonExpr(parent SQLNode, node *ComparisonExpr, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfComparisonExpr(parent SQLNode, node *ComparisonExpr, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -3747,25 +3747,25 @@ func rewriteRefOfComparisonExpr(parent SQLNode, node *ComparisonExpr, replacer r
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteExpr(node, node.Left, func(newNode, parent SQLNode) {
+	if errF := a.rewriteExpr(node, node.Left, func(newNode, parent SQLNode) {
 		parent.(*ComparisonExpr).Left = newNode.(Expr)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewriteExpr(node, node.Right, func(newNode, parent SQLNode) {
+	if errF := a.rewriteExpr(node, node.Right, func(newNode, parent SQLNode) {
 		parent.(*ComparisonExpr).Right = newNode.(Expr)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewriteExpr(node, node.Escape, func(newNode, parent SQLNode) {
+	if errF := a.rewriteExpr(node, node.Escape, func(newNode, parent SQLNode) {
 		parent.(*ComparisonExpr).Escape = newNode.(Expr)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -3808,7 +3808,7 @@ func VisitRefOfConstraintDefinition(in *ConstraintDefinition, f Visit) error {
 }
 
 // rewriteRefOfConstraintDefinition is part of the Rewrite implementation
-func rewriteRefOfConstraintDefinition(parent SQLNode, node *ConstraintDefinition, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfConstraintDefinition(parent SQLNode, node *ConstraintDefinition, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -3817,15 +3817,15 @@ func rewriteRefOfConstraintDefinition(parent SQLNode, node *ConstraintDefinition
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteConstraintInfo(node, node.Details, func(newNode, parent SQLNode) {
+	if errF := a.rewriteConstraintInfo(node, node.Details, func(newNode, parent SQLNode) {
 		parent.(*ConstraintDefinition).Details = newNode.(ConstraintInfo)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -3872,7 +3872,7 @@ func VisitRefOfConvertExpr(in *ConvertExpr, f Visit) error {
 }
 
 // rewriteRefOfConvertExpr is part of the Rewrite implementation
-func rewriteRefOfConvertExpr(parent SQLNode, node *ConvertExpr, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfConvertExpr(parent SQLNode, node *ConvertExpr, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -3881,20 +3881,20 @@ func rewriteRefOfConvertExpr(parent SQLNode, node *ConvertExpr, replacer replace
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
+	if errF := a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
 		parent.(*ConvertExpr).Expr = newNode.(Expr)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewriteRefOfConvertType(node, node.Type, func(newNode, parent SQLNode) {
+	if errF := a.rewriteRefOfConvertType(node, node.Type, func(newNode, parent SQLNode) {
 		parent.(*ConvertExpr).Type = newNode.(*ConvertType)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -3944,7 +3944,7 @@ func VisitRefOfConvertType(in *ConvertType, f Visit) error {
 }
 
 // rewriteRefOfConvertType is part of the Rewrite implementation
-func rewriteRefOfConvertType(parent SQLNode, node *ConvertType, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfConvertType(parent SQLNode, node *ConvertType, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -3953,20 +3953,20 @@ func rewriteRefOfConvertType(parent SQLNode, node *ConvertType, replacer replace
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteRefOfLiteral(node, node.Length, func(newNode, parent SQLNode) {
+	if errF := a.rewriteRefOfLiteral(node, node.Length, func(newNode, parent SQLNode) {
 		parent.(*ConvertType).Length = newNode.(*Literal)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewriteRefOfLiteral(node, node.Scale, func(newNode, parent SQLNode) {
+	if errF := a.rewriteRefOfLiteral(node, node.Scale, func(newNode, parent SQLNode) {
 		parent.(*ConvertType).Scale = newNode.(*Literal)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -4009,7 +4009,7 @@ func VisitRefOfConvertUsingExpr(in *ConvertUsingExpr, f Visit) error {
 }
 
 // rewriteRefOfConvertUsingExpr is part of the Rewrite implementation
-func rewriteRefOfConvertUsingExpr(parent SQLNode, node *ConvertUsingExpr, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfConvertUsingExpr(parent SQLNode, node *ConvertUsingExpr, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -4018,15 +4018,15 @@ func rewriteRefOfConvertUsingExpr(parent SQLNode, node *ConvertUsingExpr, replac
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
+	if errF := a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
 		parent.(*ConvertUsingExpr).Expr = newNode.(Expr)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -4073,7 +4073,7 @@ func VisitRefOfCreateDatabase(in *CreateDatabase, f Visit) error {
 }
 
 // rewriteRefOfCreateDatabase is part of the Rewrite implementation
-func rewriteRefOfCreateDatabase(parent SQLNode, node *CreateDatabase, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfCreateDatabase(parent SQLNode, node *CreateDatabase, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -4082,15 +4082,15 @@ func rewriteRefOfCreateDatabase(parent SQLNode, node *CreateDatabase, replacer r
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
+	if errF := a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
 		parent.(*CreateDatabase).Comments = newNode.(Comments)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -4145,7 +4145,7 @@ func VisitRefOfCreateTable(in *CreateTable, f Visit) error {
 }
 
 // rewriteRefOfCreateTable is part of the Rewrite implementation
-func rewriteRefOfCreateTable(parent SQLNode, node *CreateTable, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfCreateTable(parent SQLNode, node *CreateTable, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -4154,25 +4154,25 @@ func rewriteRefOfCreateTable(parent SQLNode, node *CreateTable, replacer replace
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteTableName(node, node.Table, func(newNode, parent SQLNode) {
+	if errF := a.rewriteTableName(node, node.Table, func(newNode, parent SQLNode) {
 		parent.(*CreateTable).Table = newNode.(TableName)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewriteRefOfTableSpec(node, node.TableSpec, func(newNode, parent SQLNode) {
+	if errF := a.rewriteRefOfTableSpec(node, node.TableSpec, func(newNode, parent SQLNode) {
 		parent.(*CreateTable).TableSpec = newNode.(*TableSpec)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewriteRefOfOptLike(node, node.OptLike, func(newNode, parent SQLNode) {
+	if errF := a.rewriteRefOfOptLike(node, node.OptLike, func(newNode, parent SQLNode) {
 		parent.(*CreateTable).OptLike = newNode.(*OptLike)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -4229,7 +4229,7 @@ func VisitRefOfCreateView(in *CreateView, f Visit) error {
 }
 
 // rewriteRefOfCreateView is part of the Rewrite implementation
-func rewriteRefOfCreateView(parent SQLNode, node *CreateView, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfCreateView(parent SQLNode, node *CreateView, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -4238,25 +4238,25 @@ func rewriteRefOfCreateView(parent SQLNode, node *CreateView, replacer replacerF
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteTableName(node, node.ViewName, func(newNode, parent SQLNode) {
+	if errF := a.rewriteTableName(node, node.ViewName, func(newNode, parent SQLNode) {
 		parent.(*CreateView).ViewName = newNode.(TableName)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewriteColumns(node, node.Columns, func(newNode, parent SQLNode) {
+	if errF := a.rewriteColumns(node, node.Columns, func(newNode, parent SQLNode) {
 		parent.(*CreateView).Columns = newNode.(Columns)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewriteSelectStatement(node, node.Select, func(newNode, parent SQLNode) {
+	if errF := a.rewriteSelectStatement(node, node.Select, func(newNode, parent SQLNode) {
 		parent.(*CreateView).Select = newNode.(SelectStatement)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -4303,7 +4303,7 @@ func VisitRefOfCurTimeFuncExpr(in *CurTimeFuncExpr, f Visit) error {
 }
 
 // rewriteRefOfCurTimeFuncExpr is part of the Rewrite implementation
-func rewriteRefOfCurTimeFuncExpr(parent SQLNode, node *CurTimeFuncExpr, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfCurTimeFuncExpr(parent SQLNode, node *CurTimeFuncExpr, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -4312,20 +4312,20 @@ func rewriteRefOfCurTimeFuncExpr(parent SQLNode, node *CurTimeFuncExpr, replacer
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
+	if errF := a.rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
 		parent.(*CurTimeFuncExpr).Name = newNode.(ColIdent)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewriteExpr(node, node.Fsp, func(newNode, parent SQLNode) {
+	if errF := a.rewriteExpr(node, node.Fsp, func(newNode, parent SQLNode) {
 		parent.(*CurTimeFuncExpr).Fsp = newNode.(Expr)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -4363,7 +4363,7 @@ func VisitRefOfDefault(in *Default, f Visit) error {
 }
 
 // rewriteRefOfDefault is part of the Rewrite implementation
-func rewriteRefOfDefault(parent SQLNode, node *Default, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfDefault(parent SQLNode, node *Default, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -4372,10 +4372,10 @@ func rewriteRefOfDefault(parent SQLNode, node *Default, replacer replacerFunc, p
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -4448,7 +4448,7 @@ func VisitRefOfDelete(in *Delete, f Visit) error {
 }
 
 // rewriteRefOfDelete is part of the Rewrite implementation
-func rewriteRefOfDelete(parent SQLNode, node *Delete, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfDelete(parent SQLNode, node *Delete, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -4457,45 +4457,45 @@ func rewriteRefOfDelete(parent SQLNode, node *Delete, replacer replacerFunc, pre
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
+	if errF := a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
 		parent.(*Delete).Comments = newNode.(Comments)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewriteTableNames(node, node.Targets, func(newNode, parent SQLNode) {
+	if errF := a.rewriteTableNames(node, node.Targets, func(newNode, parent SQLNode) {
 		parent.(*Delete).Targets = newNode.(TableNames)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewriteTableExprs(node, node.TableExprs, func(newNode, parent SQLNode) {
+	if errF := a.rewriteTableExprs(node, node.TableExprs, func(newNode, parent SQLNode) {
 		parent.(*Delete).TableExprs = newNode.(TableExprs)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewritePartitions(node, node.Partitions, func(newNode, parent SQLNode) {
+	if errF := a.rewritePartitions(node, node.Partitions, func(newNode, parent SQLNode) {
 		parent.(*Delete).Partitions = newNode.(Partitions)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewriteRefOfWhere(node, node.Where, func(newNode, parent SQLNode) {
+	if errF := a.rewriteRefOfWhere(node, node.Where, func(newNode, parent SQLNode) {
 		parent.(*Delete).Where = newNode.(*Where)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewriteOrderBy(node, node.OrderBy, func(newNode, parent SQLNode) {
+	if errF := a.rewriteOrderBy(node, node.OrderBy, func(newNode, parent SQLNode) {
 		parent.(*Delete).OrderBy = newNode.(OrderBy)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewriteRefOfLimit(node, node.Limit, func(newNode, parent SQLNode) {
+	if errF := a.rewriteRefOfLimit(node, node.Limit, func(newNode, parent SQLNode) {
 		parent.(*Delete).Limit = newNode.(*Limit)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -4537,7 +4537,7 @@ func VisitRefOfDerivedTable(in *DerivedTable, f Visit) error {
 }
 
 // rewriteRefOfDerivedTable is part of the Rewrite implementation
-func rewriteRefOfDerivedTable(parent SQLNode, node *DerivedTable, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfDerivedTable(parent SQLNode, node *DerivedTable, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -4546,15 +4546,15 @@ func rewriteRefOfDerivedTable(parent SQLNode, node *DerivedTable, replacer repla
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteSelectStatement(node, node.Select, func(newNode, parent SQLNode) {
+	if errF := a.rewriteSelectStatement(node, node.Select, func(newNode, parent SQLNode) {
 		parent.(*DerivedTable).Select = newNode.(SelectStatement)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -4596,7 +4596,7 @@ func VisitRefOfDropColumn(in *DropColumn, f Visit) error {
 }
 
 // rewriteRefOfDropColumn is part of the Rewrite implementation
-func rewriteRefOfDropColumn(parent SQLNode, node *DropColumn, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfDropColumn(parent SQLNode, node *DropColumn, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -4605,15 +4605,15 @@ func rewriteRefOfDropColumn(parent SQLNode, node *DropColumn, replacer replacerF
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteRefOfColName(node, node.Name, func(newNode, parent SQLNode) {
+	if errF := a.rewriteRefOfColName(node, node.Name, func(newNode, parent SQLNode) {
 		parent.(*DropColumn).Name = newNode.(*ColName)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -4657,7 +4657,7 @@ func VisitRefOfDropDatabase(in *DropDatabase, f Visit) error {
 }
 
 // rewriteRefOfDropDatabase is part of the Rewrite implementation
-func rewriteRefOfDropDatabase(parent SQLNode, node *DropDatabase, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfDropDatabase(parent SQLNode, node *DropDatabase, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -4666,15 +4666,15 @@ func rewriteRefOfDropDatabase(parent SQLNode, node *DropDatabase, replacer repla
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
+	if errF := a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
 		parent.(*DropDatabase).Comments = newNode.(Comments)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -4713,7 +4713,7 @@ func VisitRefOfDropKey(in *DropKey, f Visit) error {
 }
 
 // rewriteRefOfDropKey is part of the Rewrite implementation
-func rewriteRefOfDropKey(parent SQLNode, node *DropKey, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfDropKey(parent SQLNode, node *DropKey, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -4722,10 +4722,10 @@ func rewriteRefOfDropKey(parent SQLNode, node *DropKey, replacer replacerFunc, p
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -4769,7 +4769,7 @@ func VisitRefOfDropTable(in *DropTable, f Visit) error {
 }
 
 // rewriteRefOfDropTable is part of the Rewrite implementation
-func rewriteRefOfDropTable(parent SQLNode, node *DropTable, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfDropTable(parent SQLNode, node *DropTable, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -4778,15 +4778,15 @@ func rewriteRefOfDropTable(parent SQLNode, node *DropTable, replacer replacerFun
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteTableNames(node, node.FromTables, func(newNode, parent SQLNode) {
+	if errF := a.rewriteTableNames(node, node.FromTables, func(newNode, parent SQLNode) {
 		parent.(*DropTable).FromTables = newNode.(TableNames)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -4829,7 +4829,7 @@ func VisitRefOfDropView(in *DropView, f Visit) error {
 }
 
 // rewriteRefOfDropView is part of the Rewrite implementation
-func rewriteRefOfDropView(parent SQLNode, node *DropView, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfDropView(parent SQLNode, node *DropView, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -4838,15 +4838,15 @@ func rewriteRefOfDropView(parent SQLNode, node *DropView, replacer replacerFunc,
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteTableNames(node, node.FromTables, func(newNode, parent SQLNode) {
+	if errF := a.rewriteTableNames(node, node.FromTables, func(newNode, parent SQLNode) {
 		parent.(*DropView).FromTables = newNode.(TableNames)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -4888,7 +4888,7 @@ func VisitRefOfExistsExpr(in *ExistsExpr, f Visit) error {
 }
 
 // rewriteRefOfExistsExpr is part of the Rewrite implementation
-func rewriteRefOfExistsExpr(parent SQLNode, node *ExistsExpr, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfExistsExpr(parent SQLNode, node *ExistsExpr, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -4897,15 +4897,15 @@ func rewriteRefOfExistsExpr(parent SQLNode, node *ExistsExpr, replacer replacerF
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteRefOfSubquery(node, node.Subquery, func(newNode, parent SQLNode) {
+	if errF := a.rewriteRefOfSubquery(node, node.Subquery, func(newNode, parent SQLNode) {
 		parent.(*ExistsExpr).Subquery = newNode.(*Subquery)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -4948,7 +4948,7 @@ func VisitRefOfExplainStmt(in *ExplainStmt, f Visit) error {
 }
 
 // rewriteRefOfExplainStmt is part of the Rewrite implementation
-func rewriteRefOfExplainStmt(parent SQLNode, node *ExplainStmt, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfExplainStmt(parent SQLNode, node *ExplainStmt, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -4957,15 +4957,15 @@ func rewriteRefOfExplainStmt(parent SQLNode, node *ExplainStmt, replacer replace
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteStatement(node, node.Statement, func(newNode, parent SQLNode) {
+	if errF := a.rewriteStatement(node, node.Statement, func(newNode, parent SQLNode) {
 		parent.(*ExplainStmt).Statement = newNode.(Statement)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -5008,7 +5008,7 @@ func VisitRefOfExplainTab(in *ExplainTab, f Visit) error {
 }
 
 // rewriteRefOfExplainTab is part of the Rewrite implementation
-func rewriteRefOfExplainTab(parent SQLNode, node *ExplainTab, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfExplainTab(parent SQLNode, node *ExplainTab, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -5017,15 +5017,15 @@ func rewriteRefOfExplainTab(parent SQLNode, node *ExplainTab, replacer replacerF
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteTableName(node, node.Table, func(newNode, parent SQLNode) {
+	if errF := a.rewriteTableName(node, node.Table, func(newNode, parent SQLNode) {
 		parent.(*ExplainTab).Table = newNode.(TableName)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -5070,7 +5070,7 @@ func VisitExprs(in Exprs, f Visit) error {
 }
 
 // rewriteExprs is part of the Rewrite implementation
-func rewriteExprs(parent SQLNode, node Exprs, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteExprs(parent SQLNode, node Exprs, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -5079,17 +5079,17 @@ func rewriteExprs(parent SQLNode, node Exprs, replacer replacerFunc, pre, post A
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
 	for i, el := range node {
-		if errF := rewriteExpr(node, el, func(newNode, parent SQLNode) {
+		if errF := a.rewriteExpr(node, el, func(newNode, parent SQLNode) {
 			parent.(Exprs)[i] = newNode.(Expr)
-		}, pre, post); errF != nil {
+		}); errF != nil {
 			return errF
 		}
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -5136,7 +5136,7 @@ func VisitRefOfFlush(in *Flush, f Visit) error {
 }
 
 // rewriteRefOfFlush is part of the Rewrite implementation
-func rewriteRefOfFlush(parent SQLNode, node *Flush, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfFlush(parent SQLNode, node *Flush, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -5145,15 +5145,15 @@ func rewriteRefOfFlush(parent SQLNode, node *Flush, replacer replacerFunc, pre, 
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteTableNames(node, node.TableNames, func(newNode, parent SQLNode) {
+	if errF := a.rewriteTableNames(node, node.TableNames, func(newNode, parent SQLNode) {
 		parent.(*Flush).TableNames = newNode.(TableNames)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -5191,7 +5191,7 @@ func VisitRefOfForce(in *Force, f Visit) error {
 }
 
 // rewriteRefOfForce is part of the Rewrite implementation
-func rewriteRefOfForce(parent SQLNode, node *Force, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfForce(parent SQLNode, node *Force, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -5200,10 +5200,10 @@ func rewriteRefOfForce(parent SQLNode, node *Force, replacer replacerFunc, pre, 
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -5263,7 +5263,7 @@ func VisitRefOfForeignKeyDefinition(in *ForeignKeyDefinition, f Visit) error {
 }
 
 // rewriteRefOfForeignKeyDefinition is part of the Rewrite implementation
-func rewriteRefOfForeignKeyDefinition(parent SQLNode, node *ForeignKeyDefinition, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfForeignKeyDefinition(parent SQLNode, node *ForeignKeyDefinition, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -5272,35 +5272,35 @@ func rewriteRefOfForeignKeyDefinition(parent SQLNode, node *ForeignKeyDefinition
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteColumns(node, node.Source, func(newNode, parent SQLNode) {
+	if errF := a.rewriteColumns(node, node.Source, func(newNode, parent SQLNode) {
 		parent.(*ForeignKeyDefinition).Source = newNode.(Columns)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewriteTableName(node, node.ReferencedTable, func(newNode, parent SQLNode) {
+	if errF := a.rewriteTableName(node, node.ReferencedTable, func(newNode, parent SQLNode) {
 		parent.(*ForeignKeyDefinition).ReferencedTable = newNode.(TableName)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewriteColumns(node, node.ReferencedColumns, func(newNode, parent SQLNode) {
+	if errF := a.rewriteColumns(node, node.ReferencedColumns, func(newNode, parent SQLNode) {
 		parent.(*ForeignKeyDefinition).ReferencedColumns = newNode.(Columns)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewriteReferenceAction(node, node.OnDelete, func(newNode, parent SQLNode) {
+	if errF := a.rewriteReferenceAction(node, node.OnDelete, func(newNode, parent SQLNode) {
 		parent.(*ForeignKeyDefinition).OnDelete = newNode.(ReferenceAction)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewriteReferenceAction(node, node.OnUpdate, func(newNode, parent SQLNode) {
+	if errF := a.rewriteReferenceAction(node, node.OnUpdate, func(newNode, parent SQLNode) {
 		parent.(*ForeignKeyDefinition).OnUpdate = newNode.(ReferenceAction)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -5353,7 +5353,7 @@ func VisitRefOfFuncExpr(in *FuncExpr, f Visit) error {
 }
 
 // rewriteRefOfFuncExpr is part of the Rewrite implementation
-func rewriteRefOfFuncExpr(parent SQLNode, node *FuncExpr, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfFuncExpr(parent SQLNode, node *FuncExpr, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -5362,25 +5362,25 @@ func rewriteRefOfFuncExpr(parent SQLNode, node *FuncExpr, replacer replacerFunc,
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteTableIdent(node, node.Qualifier, func(newNode, parent SQLNode) {
+	if errF := a.rewriteTableIdent(node, node.Qualifier, func(newNode, parent SQLNode) {
 		parent.(*FuncExpr).Qualifier = newNode.(TableIdent)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
+	if errF := a.rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
 		parent.(*FuncExpr).Name = newNode.(ColIdent)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewriteSelectExprs(node, node.Exprs, func(newNode, parent SQLNode) {
+	if errF := a.rewriteSelectExprs(node, node.Exprs, func(newNode, parent SQLNode) {
 		parent.(*FuncExpr).Exprs = newNode.(SelectExprs)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -5425,7 +5425,7 @@ func VisitGroupBy(in GroupBy, f Visit) error {
 }
 
 // rewriteGroupBy is part of the Rewrite implementation
-func rewriteGroupBy(parent SQLNode, node GroupBy, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteGroupBy(parent SQLNode, node GroupBy, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -5434,17 +5434,17 @@ func rewriteGroupBy(parent SQLNode, node GroupBy, replacer replacerFunc, pre, po
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
 	for i, el := range node {
-		if errF := rewriteExpr(node, el, func(newNode, parent SQLNode) {
+		if errF := a.rewriteExpr(node, el, func(newNode, parent SQLNode) {
 			parent.(GroupBy)[i] = newNode.(Expr)
-		}, pre, post); errF != nil {
+		}); errF != nil {
 			return errF
 		}
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -5498,7 +5498,7 @@ func VisitRefOfGroupConcatExpr(in *GroupConcatExpr, f Visit) error {
 }
 
 // rewriteRefOfGroupConcatExpr is part of the Rewrite implementation
-func rewriteRefOfGroupConcatExpr(parent SQLNode, node *GroupConcatExpr, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfGroupConcatExpr(parent SQLNode, node *GroupConcatExpr, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -5507,25 +5507,25 @@ func rewriteRefOfGroupConcatExpr(parent SQLNode, node *GroupConcatExpr, replacer
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteSelectExprs(node, node.Exprs, func(newNode, parent SQLNode) {
+	if errF := a.rewriteSelectExprs(node, node.Exprs, func(newNode, parent SQLNode) {
 		parent.(*GroupConcatExpr).Exprs = newNode.(SelectExprs)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewriteOrderBy(node, node.OrderBy, func(newNode, parent SQLNode) {
+	if errF := a.rewriteOrderBy(node, node.OrderBy, func(newNode, parent SQLNode) {
 		parent.(*GroupConcatExpr).OrderBy = newNode.(OrderBy)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewriteRefOfLimit(node, node.Limit, func(newNode, parent SQLNode) {
+	if errF := a.rewriteRefOfLimit(node, node.Limit, func(newNode, parent SQLNode) {
 		parent.(*GroupConcatExpr).Limit = newNode.(*Limit)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -5571,7 +5571,7 @@ func VisitRefOfIndexDefinition(in *IndexDefinition, f Visit) error {
 }
 
 // rewriteRefOfIndexDefinition is part of the Rewrite implementation
-func rewriteRefOfIndexDefinition(parent SQLNode, node *IndexDefinition, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfIndexDefinition(parent SQLNode, node *IndexDefinition, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -5580,15 +5580,15 @@ func rewriteRefOfIndexDefinition(parent SQLNode, node *IndexDefinition, replacer
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteRefOfIndexInfo(node, node.Info, func(newNode, parent SQLNode) {
+	if errF := a.rewriteRefOfIndexInfo(node, node.Info, func(newNode, parent SQLNode) {
 		parent.(*IndexDefinition).Info = newNode.(*IndexInfo)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -5633,7 +5633,7 @@ func VisitRefOfIndexHints(in *IndexHints, f Visit) error {
 }
 
 // rewriteRefOfIndexHints is part of the Rewrite implementation
-func rewriteRefOfIndexHints(parent SQLNode, node *IndexHints, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfIndexHints(parent SQLNode, node *IndexHints, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -5642,17 +5642,17 @@ func rewriteRefOfIndexHints(parent SQLNode, node *IndexHints, replacer replacerF
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
 	for i, el := range node.Indexes {
-		if errF := rewriteColIdent(node, el, func(newNode, parent SQLNode) {
+		if errF := a.rewriteColIdent(node, el, func(newNode, parent SQLNode) {
 			parent.(*IndexHints).Indexes[i] = newNode.(ColIdent)
-		}, pre, post); errF != nil {
+		}); errF != nil {
 			return errF
 		}
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -5704,7 +5704,7 @@ func VisitRefOfIndexInfo(in *IndexInfo, f Visit) error {
 }
 
 // rewriteRefOfIndexInfo is part of the Rewrite implementation
-func rewriteRefOfIndexInfo(parent SQLNode, node *IndexInfo, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfIndexInfo(parent SQLNode, node *IndexInfo, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -5713,20 +5713,20 @@ func rewriteRefOfIndexInfo(parent SQLNode, node *IndexInfo, replacer replacerFun
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
+	if errF := a.rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
 		parent.(*IndexInfo).Name = newNode.(ColIdent)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewriteColIdent(node, node.ConstraintName, func(newNode, parent SQLNode) {
+	if errF := a.rewriteColIdent(node, node.ConstraintName, func(newNode, parent SQLNode) {
 		parent.(*IndexInfo).ConstraintName = newNode.(ColIdent)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -5795,7 +5795,7 @@ func VisitRefOfInsert(in *Insert, f Visit) error {
 }
 
 // rewriteRefOfInsert is part of the Rewrite implementation
-func rewriteRefOfInsert(parent SQLNode, node *Insert, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfInsert(parent SQLNode, node *Insert, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -5804,40 +5804,40 @@ func rewriteRefOfInsert(parent SQLNode, node *Insert, replacer replacerFunc, pre
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
+	if errF := a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
 		parent.(*Insert).Comments = newNode.(Comments)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewriteTableName(node, node.Table, func(newNode, parent SQLNode) {
+	if errF := a.rewriteTableName(node, node.Table, func(newNode, parent SQLNode) {
 		parent.(*Insert).Table = newNode.(TableName)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewritePartitions(node, node.Partitions, func(newNode, parent SQLNode) {
+	if errF := a.rewritePartitions(node, node.Partitions, func(newNode, parent SQLNode) {
 		parent.(*Insert).Partitions = newNode.(Partitions)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewriteColumns(node, node.Columns, func(newNode, parent SQLNode) {
+	if errF := a.rewriteColumns(node, node.Columns, func(newNode, parent SQLNode) {
 		parent.(*Insert).Columns = newNode.(Columns)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewriteInsertRows(node, node.Rows, func(newNode, parent SQLNode) {
+	if errF := a.rewriteInsertRows(node, node.Rows, func(newNode, parent SQLNode) {
 		parent.(*Insert).Rows = newNode.(InsertRows)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewriteOnDup(node, node.OnDup, func(newNode, parent SQLNode) {
+	if errF := a.rewriteOnDup(node, node.OnDup, func(newNode, parent SQLNode) {
 		parent.(*Insert).OnDup = newNode.(OnDup)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -5880,7 +5880,7 @@ func VisitRefOfIntervalExpr(in *IntervalExpr, f Visit) error {
 }
 
 // rewriteRefOfIntervalExpr is part of the Rewrite implementation
-func rewriteRefOfIntervalExpr(parent SQLNode, node *IntervalExpr, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfIntervalExpr(parent SQLNode, node *IntervalExpr, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -5889,15 +5889,15 @@ func rewriteRefOfIntervalExpr(parent SQLNode, node *IntervalExpr, replacer repla
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
+	if errF := a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
 		parent.(*IntervalExpr).Expr = newNode.(Expr)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -5940,7 +5940,7 @@ func VisitRefOfIsExpr(in *IsExpr, f Visit) error {
 }
 
 // rewriteRefOfIsExpr is part of the Rewrite implementation
-func rewriteRefOfIsExpr(parent SQLNode, node *IsExpr, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfIsExpr(parent SQLNode, node *IsExpr, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -5949,15 +5949,15 @@ func rewriteRefOfIsExpr(parent SQLNode, node *IsExpr, replacer replacerFunc, pre
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
+	if errF := a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
 		parent.(*IsExpr).Expr = newNode.(Expr)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -5989,30 +5989,30 @@ func VisitJoinCondition(in JoinCondition, f Visit) error {
 }
 
 // rewriteJoinCondition is part of the Rewrite implementation
-func rewriteJoinCondition(parent SQLNode, node JoinCondition, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteJoinCondition(parent SQLNode, node JoinCondition, replacer replacerFunc) error {
 	var err error
 	cur := Cursor{
 		node:     node,
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteExpr(node, node.On, func(newNode, parent SQLNode) {
+	if errF := a.rewriteExpr(node, node.On, func(newNode, parent SQLNode) {
 		err = vterrors.New(vtrpc.Code_INTERNAL, "[BUG] tried to replace 'On' on 'JoinCondition'")
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewriteColumns(node, node.Using, func(newNode, parent SQLNode) {
+	if errF := a.rewriteColumns(node, node.Using, func(newNode, parent SQLNode) {
 		err = vterrors.New(vtrpc.Code_INTERNAL, "[BUG] tried to replace 'Using' on 'JoinCondition'")
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
 	if err != nil {
 		return err
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -6065,7 +6065,7 @@ func VisitRefOfJoinTableExpr(in *JoinTableExpr, f Visit) error {
 }
 
 // rewriteRefOfJoinTableExpr is part of the Rewrite implementation
-func rewriteRefOfJoinTableExpr(parent SQLNode, node *JoinTableExpr, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfJoinTableExpr(parent SQLNode, node *JoinTableExpr, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -6074,25 +6074,25 @@ func rewriteRefOfJoinTableExpr(parent SQLNode, node *JoinTableExpr, replacer rep
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteTableExpr(node, node.LeftExpr, func(newNode, parent SQLNode) {
+	if errF := a.rewriteTableExpr(node, node.LeftExpr, func(newNode, parent SQLNode) {
 		parent.(*JoinTableExpr).LeftExpr = newNode.(TableExpr)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewriteTableExpr(node, node.RightExpr, func(newNode, parent SQLNode) {
+	if errF := a.rewriteTableExpr(node, node.RightExpr, func(newNode, parent SQLNode) {
 		parent.(*JoinTableExpr).RightExpr = newNode.(TableExpr)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewriteJoinCondition(node, node.Condition, func(newNode, parent SQLNode) {
+	if errF := a.rewriteJoinCondition(node, node.Condition, func(newNode, parent SQLNode) {
 		parent.(*JoinTableExpr).Condition = newNode.(JoinCondition)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -6130,7 +6130,7 @@ func VisitRefOfKeyState(in *KeyState, f Visit) error {
 }
 
 // rewriteRefOfKeyState is part of the Rewrite implementation
-func rewriteRefOfKeyState(parent SQLNode, node *KeyState, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfKeyState(parent SQLNode, node *KeyState, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -6139,10 +6139,10 @@ func rewriteRefOfKeyState(parent SQLNode, node *KeyState, replacer replacerFunc,
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -6189,7 +6189,7 @@ func VisitRefOfLimit(in *Limit, f Visit) error {
 }
 
 // rewriteRefOfLimit is part of the Rewrite implementation
-func rewriteRefOfLimit(parent SQLNode, node *Limit, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfLimit(parent SQLNode, node *Limit, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -6198,20 +6198,20 @@ func rewriteRefOfLimit(parent SQLNode, node *Limit, replacer replacerFunc, pre, 
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteExpr(node, node.Offset, func(newNode, parent SQLNode) {
+	if errF := a.rewriteExpr(node, node.Offset, func(newNode, parent SQLNode) {
 		parent.(*Limit).Offset = newNode.(Expr)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewriteExpr(node, node.Rowcount, func(newNode, parent SQLNode) {
+	if errF := a.rewriteExpr(node, node.Rowcount, func(newNode, parent SQLNode) {
 		parent.(*Limit).Rowcount = newNode.(Expr)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -6244,7 +6244,7 @@ func VisitListArg(in ListArg, f Visit) error {
 }
 
 // rewriteListArg is part of the Rewrite implementation
-func rewriteListArg(parent SQLNode, node ListArg, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteListArg(parent SQLNode, node ListArg, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -6253,10 +6253,10 @@ func rewriteListArg(parent SQLNode, node ListArg, replacer replacerFunc, pre, po
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -6295,7 +6295,7 @@ func VisitRefOfLiteral(in *Literal, f Visit) error {
 }
 
 // rewriteRefOfLiteral is part of the Rewrite implementation
-func rewriteRefOfLiteral(parent SQLNode, node *Literal, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfLiteral(parent SQLNode, node *Literal, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -6304,10 +6304,10 @@ func rewriteRefOfLiteral(parent SQLNode, node *Literal, replacer replacerFunc, p
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -6345,7 +6345,7 @@ func VisitRefOfLoad(in *Load, f Visit) error {
 }
 
 // rewriteRefOfLoad is part of the Rewrite implementation
-func rewriteRefOfLoad(parent SQLNode, node *Load, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfLoad(parent SQLNode, node *Load, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -6354,10 +6354,10 @@ func rewriteRefOfLoad(parent SQLNode, node *Load, replacer replacerFunc, pre, po
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -6395,7 +6395,7 @@ func VisitRefOfLockOption(in *LockOption, f Visit) error {
 }
 
 // rewriteRefOfLockOption is part of the Rewrite implementation
-func rewriteRefOfLockOption(parent SQLNode, node *LockOption, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfLockOption(parent SQLNode, node *LockOption, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -6404,10 +6404,10 @@ func rewriteRefOfLockOption(parent SQLNode, node *LockOption, replacer replacerF
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -6446,7 +6446,7 @@ func VisitRefOfLockTables(in *LockTables, f Visit) error {
 }
 
 // rewriteRefOfLockTables is part of the Rewrite implementation
-func rewriteRefOfLockTables(parent SQLNode, node *LockTables, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfLockTables(parent SQLNode, node *LockTables, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -6455,10 +6455,10 @@ func rewriteRefOfLockTables(parent SQLNode, node *LockTables, replacer replacerF
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -6506,7 +6506,7 @@ func VisitRefOfMatchExpr(in *MatchExpr, f Visit) error {
 }
 
 // rewriteRefOfMatchExpr is part of the Rewrite implementation
-func rewriteRefOfMatchExpr(parent SQLNode, node *MatchExpr, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfMatchExpr(parent SQLNode, node *MatchExpr, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -6515,20 +6515,20 @@ func rewriteRefOfMatchExpr(parent SQLNode, node *MatchExpr, replacer replacerFun
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteSelectExprs(node, node.Columns, func(newNode, parent SQLNode) {
+	if errF := a.rewriteSelectExprs(node, node.Columns, func(newNode, parent SQLNode) {
 		parent.(*MatchExpr).Columns = newNode.(SelectExprs)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
+	if errF := a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
 		parent.(*MatchExpr).Expr = newNode.(Expr)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -6580,7 +6580,7 @@ func VisitRefOfModifyColumn(in *ModifyColumn, f Visit) error {
 }
 
 // rewriteRefOfModifyColumn is part of the Rewrite implementation
-func rewriteRefOfModifyColumn(parent SQLNode, node *ModifyColumn, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfModifyColumn(parent SQLNode, node *ModifyColumn, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -6589,25 +6589,25 @@ func rewriteRefOfModifyColumn(parent SQLNode, node *ModifyColumn, replacer repla
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteRefOfColumnDefinition(node, node.NewColDefinition, func(newNode, parent SQLNode) {
+	if errF := a.rewriteRefOfColumnDefinition(node, node.NewColDefinition, func(newNode, parent SQLNode) {
 		parent.(*ModifyColumn).NewColDefinition = newNode.(*ColumnDefinition)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewriteRefOfColName(node, node.First, func(newNode, parent SQLNode) {
+	if errF := a.rewriteRefOfColName(node, node.First, func(newNode, parent SQLNode) {
 		parent.(*ModifyColumn).First = newNode.(*ColName)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewriteRefOfColName(node, node.After, func(newNode, parent SQLNode) {
+	if errF := a.rewriteRefOfColName(node, node.After, func(newNode, parent SQLNode) {
 		parent.(*ModifyColumn).After = newNode.(*ColName)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -6649,7 +6649,7 @@ func VisitRefOfNextval(in *Nextval, f Visit) error {
 }
 
 // rewriteRefOfNextval is part of the Rewrite implementation
-func rewriteRefOfNextval(parent SQLNode, node *Nextval, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfNextval(parent SQLNode, node *Nextval, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -6658,15 +6658,15 @@ func rewriteRefOfNextval(parent SQLNode, node *Nextval, replacer replacerFunc, p
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
+	if errF := a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
 		parent.(*Nextval).Expr = newNode.(Expr)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -6708,7 +6708,7 @@ func VisitRefOfNotExpr(in *NotExpr, f Visit) error {
 }
 
 // rewriteRefOfNotExpr is part of the Rewrite implementation
-func rewriteRefOfNotExpr(parent SQLNode, node *NotExpr, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfNotExpr(parent SQLNode, node *NotExpr, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -6717,15 +6717,15 @@ func rewriteRefOfNotExpr(parent SQLNode, node *NotExpr, replacer replacerFunc, p
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
+	if errF := a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
 		parent.(*NotExpr).Expr = newNode.(Expr)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -6763,7 +6763,7 @@ func VisitRefOfNullVal(in *NullVal, f Visit) error {
 }
 
 // rewriteRefOfNullVal is part of the Rewrite implementation
-func rewriteRefOfNullVal(parent SQLNode, node *NullVal, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfNullVal(parent SQLNode, node *NullVal, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -6772,10 +6772,10 @@ func rewriteRefOfNullVal(parent SQLNode, node *NullVal, replacer replacerFunc, p
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -6820,7 +6820,7 @@ func VisitOnDup(in OnDup, f Visit) error {
 }
 
 // rewriteOnDup is part of the Rewrite implementation
-func rewriteOnDup(parent SQLNode, node OnDup, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteOnDup(parent SQLNode, node OnDup, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -6829,17 +6829,17 @@ func rewriteOnDup(parent SQLNode, node OnDup, replacer replacerFunc, pre, post A
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
 	for i, el := range node {
-		if errF := rewriteRefOfUpdateExpr(node, el, func(newNode, parent SQLNode) {
+		if errF := a.rewriteRefOfUpdateExpr(node, el, func(newNode, parent SQLNode) {
 			parent.(OnDup)[i] = newNode.(*UpdateExpr)
-		}, pre, post); errF != nil {
+		}); errF != nil {
 			return errF
 		}
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -6881,7 +6881,7 @@ func VisitRefOfOptLike(in *OptLike, f Visit) error {
 }
 
 // rewriteRefOfOptLike is part of the Rewrite implementation
-func rewriteRefOfOptLike(parent SQLNode, node *OptLike, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfOptLike(parent SQLNode, node *OptLike, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -6890,15 +6890,15 @@ func rewriteRefOfOptLike(parent SQLNode, node *OptLike, replacer replacerFunc, p
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteTableName(node, node.LikeTable, func(newNode, parent SQLNode) {
+	if errF := a.rewriteTableName(node, node.LikeTable, func(newNode, parent SQLNode) {
 		parent.(*OptLike).LikeTable = newNode.(TableName)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -6945,7 +6945,7 @@ func VisitRefOfOrExpr(in *OrExpr, f Visit) error {
 }
 
 // rewriteRefOfOrExpr is part of the Rewrite implementation
-func rewriteRefOfOrExpr(parent SQLNode, node *OrExpr, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfOrExpr(parent SQLNode, node *OrExpr, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -6954,20 +6954,20 @@ func rewriteRefOfOrExpr(parent SQLNode, node *OrExpr, replacer replacerFunc, pre
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteExpr(node, node.Left, func(newNode, parent SQLNode) {
+	if errF := a.rewriteExpr(node, node.Left, func(newNode, parent SQLNode) {
 		parent.(*OrExpr).Left = newNode.(Expr)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewriteExpr(node, node.Right, func(newNode, parent SQLNode) {
+	if errF := a.rewriteExpr(node, node.Right, func(newNode, parent SQLNode) {
 		parent.(*OrExpr).Right = newNode.(Expr)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -7010,7 +7010,7 @@ func VisitRefOfOrder(in *Order, f Visit) error {
 }
 
 // rewriteRefOfOrder is part of the Rewrite implementation
-func rewriteRefOfOrder(parent SQLNode, node *Order, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfOrder(parent SQLNode, node *Order, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -7019,15 +7019,15 @@ func rewriteRefOfOrder(parent SQLNode, node *Order, replacer replacerFunc, pre, 
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
+	if errF := a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
 		parent.(*Order).Expr = newNode.(Expr)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -7072,7 +7072,7 @@ func VisitOrderBy(in OrderBy, f Visit) error {
 }
 
 // rewriteOrderBy is part of the Rewrite implementation
-func rewriteOrderBy(parent SQLNode, node OrderBy, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteOrderBy(parent SQLNode, node OrderBy, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -7081,17 +7081,17 @@ func rewriteOrderBy(parent SQLNode, node OrderBy, replacer replacerFunc, pre, po
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
 	for i, el := range node {
-		if errF := rewriteRefOfOrder(node, el, func(newNode, parent SQLNode) {
+		if errF := a.rewriteRefOfOrder(node, el, func(newNode, parent SQLNode) {
 			parent.(OrderBy)[i] = newNode.(*Order)
-		}, pre, post); errF != nil {
+		}); errF != nil {
 			return errF
 		}
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -7133,7 +7133,7 @@ func VisitRefOfOrderByOption(in *OrderByOption, f Visit) error {
 }
 
 // rewriteRefOfOrderByOption is part of the Rewrite implementation
-func rewriteRefOfOrderByOption(parent SQLNode, node *OrderByOption, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfOrderByOption(parent SQLNode, node *OrderByOption, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -7142,15 +7142,15 @@ func rewriteRefOfOrderByOption(parent SQLNode, node *OrderByOption, replacer rep
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteColumns(node, node.Cols, func(newNode, parent SQLNode) {
+	if errF := a.rewriteColumns(node, node.Cols, func(newNode, parent SQLNode) {
 		parent.(*OrderByOption).Cols = newNode.(Columns)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -7188,7 +7188,7 @@ func VisitRefOfOtherAdmin(in *OtherAdmin, f Visit) error {
 }
 
 // rewriteRefOfOtherAdmin is part of the Rewrite implementation
-func rewriteRefOfOtherAdmin(parent SQLNode, node *OtherAdmin, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfOtherAdmin(parent SQLNode, node *OtherAdmin, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -7197,10 +7197,10 @@ func rewriteRefOfOtherAdmin(parent SQLNode, node *OtherAdmin, replacer replacerF
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -7238,7 +7238,7 @@ func VisitRefOfOtherRead(in *OtherRead, f Visit) error {
 }
 
 // rewriteRefOfOtherRead is part of the Rewrite implementation
-func rewriteRefOfOtherRead(parent SQLNode, node *OtherRead, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfOtherRead(parent SQLNode, node *OtherRead, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -7247,10 +7247,10 @@ func rewriteRefOfOtherRead(parent SQLNode, node *OtherRead, replacer replacerFun
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -7292,7 +7292,7 @@ func VisitRefOfParenSelect(in *ParenSelect, f Visit) error {
 }
 
 // rewriteRefOfParenSelect is part of the Rewrite implementation
-func rewriteRefOfParenSelect(parent SQLNode, node *ParenSelect, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfParenSelect(parent SQLNode, node *ParenSelect, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -7301,15 +7301,15 @@ func rewriteRefOfParenSelect(parent SQLNode, node *ParenSelect, replacer replace
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteSelectStatement(node, node.Select, func(newNode, parent SQLNode) {
+	if errF := a.rewriteSelectStatement(node, node.Select, func(newNode, parent SQLNode) {
 		parent.(*ParenSelect).Select = newNode.(SelectStatement)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -7351,7 +7351,7 @@ func VisitRefOfParenTableExpr(in *ParenTableExpr, f Visit) error {
 }
 
 // rewriteRefOfParenTableExpr is part of the Rewrite implementation
-func rewriteRefOfParenTableExpr(parent SQLNode, node *ParenTableExpr, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfParenTableExpr(parent SQLNode, node *ParenTableExpr, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -7360,15 +7360,15 @@ func rewriteRefOfParenTableExpr(parent SQLNode, node *ParenTableExpr, replacer r
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteTableExprs(node, node.Exprs, func(newNode, parent SQLNode) {
+	if errF := a.rewriteTableExprs(node, node.Exprs, func(newNode, parent SQLNode) {
 		parent.(*ParenTableExpr).Exprs = newNode.(TableExprs)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -7416,7 +7416,7 @@ func VisitRefOfPartitionDefinition(in *PartitionDefinition, f Visit) error {
 }
 
 // rewriteRefOfPartitionDefinition is part of the Rewrite implementation
-func rewriteRefOfPartitionDefinition(parent SQLNode, node *PartitionDefinition, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfPartitionDefinition(parent SQLNode, node *PartitionDefinition, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -7425,20 +7425,20 @@ func rewriteRefOfPartitionDefinition(parent SQLNode, node *PartitionDefinition, 
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
+	if errF := a.rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
 		parent.(*PartitionDefinition).Name = newNode.(ColIdent)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewriteExpr(node, node.Limit, func(newNode, parent SQLNode) {
+	if errF := a.rewriteExpr(node, node.Limit, func(newNode, parent SQLNode) {
 		parent.(*PartitionDefinition).Limit = newNode.(Expr)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -7500,7 +7500,7 @@ func VisitRefOfPartitionSpec(in *PartitionSpec, f Visit) error {
 }
 
 // rewriteRefOfPartitionSpec is part of the Rewrite implementation
-func rewriteRefOfPartitionSpec(parent SQLNode, node *PartitionSpec, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfPartitionSpec(parent SQLNode, node *PartitionSpec, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -7509,32 +7509,32 @@ func rewriteRefOfPartitionSpec(parent SQLNode, node *PartitionSpec, replacer rep
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewritePartitions(node, node.Names, func(newNode, parent SQLNode) {
+	if errF := a.rewritePartitions(node, node.Names, func(newNode, parent SQLNode) {
 		parent.(*PartitionSpec).Names = newNode.(Partitions)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewriteRefOfLiteral(node, node.Number, func(newNode, parent SQLNode) {
+	if errF := a.rewriteRefOfLiteral(node, node.Number, func(newNode, parent SQLNode) {
 		parent.(*PartitionSpec).Number = newNode.(*Literal)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewriteTableName(node, node.TableName, func(newNode, parent SQLNode) {
+	if errF := a.rewriteTableName(node, node.TableName, func(newNode, parent SQLNode) {
 		parent.(*PartitionSpec).TableName = newNode.(TableName)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
 	for i, el := range node.Definitions {
-		if errF := rewriteRefOfPartitionDefinition(node, el, func(newNode, parent SQLNode) {
+		if errF := a.rewriteRefOfPartitionDefinition(node, el, func(newNode, parent SQLNode) {
 			parent.(*PartitionSpec).Definitions[i] = newNode.(*PartitionDefinition)
-		}, pre, post); errF != nil {
+		}); errF != nil {
 			return errF
 		}
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -7579,7 +7579,7 @@ func VisitPartitions(in Partitions, f Visit) error {
 }
 
 // rewritePartitions is part of the Rewrite implementation
-func rewritePartitions(parent SQLNode, node Partitions, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewritePartitions(parent SQLNode, node Partitions, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -7588,17 +7588,17 @@ func rewritePartitions(parent SQLNode, node Partitions, replacer replacerFunc, p
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
 	for i, el := range node {
-		if errF := rewriteColIdent(node, el, func(newNode, parent SQLNode) {
+		if errF := a.rewriteColIdent(node, el, func(newNode, parent SQLNode) {
 			parent.(Partitions)[i] = newNode.(ColIdent)
-		}, pre, post); errF != nil {
+		}); errF != nil {
 			return errF
 		}
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -7651,7 +7651,7 @@ func VisitRefOfRangeCond(in *RangeCond, f Visit) error {
 }
 
 // rewriteRefOfRangeCond is part of the Rewrite implementation
-func rewriteRefOfRangeCond(parent SQLNode, node *RangeCond, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfRangeCond(parent SQLNode, node *RangeCond, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -7660,25 +7660,25 @@ func rewriteRefOfRangeCond(parent SQLNode, node *RangeCond, replacer replacerFun
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteExpr(node, node.Left, func(newNode, parent SQLNode) {
+	if errF := a.rewriteExpr(node, node.Left, func(newNode, parent SQLNode) {
 		parent.(*RangeCond).Left = newNode.(Expr)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewriteExpr(node, node.From, func(newNode, parent SQLNode) {
+	if errF := a.rewriteExpr(node, node.From, func(newNode, parent SQLNode) {
 		parent.(*RangeCond).From = newNode.(Expr)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewriteExpr(node, node.To, func(newNode, parent SQLNode) {
+	if errF := a.rewriteExpr(node, node.To, func(newNode, parent SQLNode) {
 		parent.(*RangeCond).To = newNode.(Expr)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -7720,7 +7720,7 @@ func VisitRefOfRelease(in *Release, f Visit) error {
 }
 
 // rewriteRefOfRelease is part of the Rewrite implementation
-func rewriteRefOfRelease(parent SQLNode, node *Release, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfRelease(parent SQLNode, node *Release, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -7729,15 +7729,15 @@ func rewriteRefOfRelease(parent SQLNode, node *Release, replacer replacerFunc, p
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
+	if errF := a.rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
 		parent.(*Release).Name = newNode.(ColIdent)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -7776,7 +7776,7 @@ func VisitRefOfRenameIndex(in *RenameIndex, f Visit) error {
 }
 
 // rewriteRefOfRenameIndex is part of the Rewrite implementation
-func rewriteRefOfRenameIndex(parent SQLNode, node *RenameIndex, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfRenameIndex(parent SQLNode, node *RenameIndex, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -7785,10 +7785,10 @@ func rewriteRefOfRenameIndex(parent SQLNode, node *RenameIndex, replacer replace
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -7827,7 +7827,7 @@ func VisitRefOfRenameTable(in *RenameTable, f Visit) error {
 }
 
 // rewriteRefOfRenameTable is part of the Rewrite implementation
-func rewriteRefOfRenameTable(parent SQLNode, node *RenameTable, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfRenameTable(parent SQLNode, node *RenameTable, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -7836,10 +7836,10 @@ func rewriteRefOfRenameTable(parent SQLNode, node *RenameTable, replacer replace
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -7881,7 +7881,7 @@ func VisitRefOfRenameTableName(in *RenameTableName, f Visit) error {
 }
 
 // rewriteRefOfRenameTableName is part of the Rewrite implementation
-func rewriteRefOfRenameTableName(parent SQLNode, node *RenameTableName, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfRenameTableName(parent SQLNode, node *RenameTableName, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -7890,15 +7890,15 @@ func rewriteRefOfRenameTableName(parent SQLNode, node *RenameTableName, replacer
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteTableName(node, node.Table, func(newNode, parent SQLNode) {
+	if errF := a.rewriteTableName(node, node.Table, func(newNode, parent SQLNode) {
 		parent.(*RenameTableName).Table = newNode.(TableName)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -7936,7 +7936,7 @@ func VisitRefOfRevertMigration(in *RevertMigration, f Visit) error {
 }
 
 // rewriteRefOfRevertMigration is part of the Rewrite implementation
-func rewriteRefOfRevertMigration(parent SQLNode, node *RevertMigration, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfRevertMigration(parent SQLNode, node *RevertMigration, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -7945,10 +7945,10 @@ func rewriteRefOfRevertMigration(parent SQLNode, node *RevertMigration, replacer
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -7986,7 +7986,7 @@ func VisitRefOfRollback(in *Rollback, f Visit) error {
 }
 
 // rewriteRefOfRollback is part of the Rewrite implementation
-func rewriteRefOfRollback(parent SQLNode, node *Rollback, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfRollback(parent SQLNode, node *Rollback, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -7995,10 +7995,10 @@ func rewriteRefOfRollback(parent SQLNode, node *Rollback, replacer replacerFunc,
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -8040,7 +8040,7 @@ func VisitRefOfSRollback(in *SRollback, f Visit) error {
 }
 
 // rewriteRefOfSRollback is part of the Rewrite implementation
-func rewriteRefOfSRollback(parent SQLNode, node *SRollback, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfSRollback(parent SQLNode, node *SRollback, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -8049,15 +8049,15 @@ func rewriteRefOfSRollback(parent SQLNode, node *SRollback, replacer replacerFun
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
+	if errF := a.rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
 		parent.(*SRollback).Name = newNode.(ColIdent)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -8099,7 +8099,7 @@ func VisitRefOfSavepoint(in *Savepoint, f Visit) error {
 }
 
 // rewriteRefOfSavepoint is part of the Rewrite implementation
-func rewriteRefOfSavepoint(parent SQLNode, node *Savepoint, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfSavepoint(parent SQLNode, node *Savepoint, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -8108,15 +8108,15 @@ func rewriteRefOfSavepoint(parent SQLNode, node *Savepoint, replacer replacerFun
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
+	if errF := a.rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
 		parent.(*Savepoint).Name = newNode.(ColIdent)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -8204,7 +8204,7 @@ func VisitRefOfSelect(in *Select, f Visit) error {
 }
 
 // rewriteRefOfSelect is part of the Rewrite implementation
-func rewriteRefOfSelect(parent SQLNode, node *Select, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfSelect(parent SQLNode, node *Select, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -8213,55 +8213,55 @@ func rewriteRefOfSelect(parent SQLNode, node *Select, replacer replacerFunc, pre
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
+	if errF := a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
 		parent.(*Select).Comments = newNode.(Comments)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewriteSelectExprs(node, node.SelectExprs, func(newNode, parent SQLNode) {
+	if errF := a.rewriteSelectExprs(node, node.SelectExprs, func(newNode, parent SQLNode) {
 		parent.(*Select).SelectExprs = newNode.(SelectExprs)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewriteTableExprs(node, node.From, func(newNode, parent SQLNode) {
+	if errF := a.rewriteTableExprs(node, node.From, func(newNode, parent SQLNode) {
 		parent.(*Select).From = newNode.(TableExprs)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewriteRefOfWhere(node, node.Where, func(newNode, parent SQLNode) {
+	if errF := a.rewriteRefOfWhere(node, node.Where, func(newNode, parent SQLNode) {
 		parent.(*Select).Where = newNode.(*Where)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewriteGroupBy(node, node.GroupBy, func(newNode, parent SQLNode) {
+	if errF := a.rewriteGroupBy(node, node.GroupBy, func(newNode, parent SQLNode) {
 		parent.(*Select).GroupBy = newNode.(GroupBy)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewriteRefOfWhere(node, node.Having, func(newNode, parent SQLNode) {
+	if errF := a.rewriteRefOfWhere(node, node.Having, func(newNode, parent SQLNode) {
 		parent.(*Select).Having = newNode.(*Where)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewriteOrderBy(node, node.OrderBy, func(newNode, parent SQLNode) {
+	if errF := a.rewriteOrderBy(node, node.OrderBy, func(newNode, parent SQLNode) {
 		parent.(*Select).OrderBy = newNode.(OrderBy)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewriteRefOfLimit(node, node.Limit, func(newNode, parent SQLNode) {
+	if errF := a.rewriteRefOfLimit(node, node.Limit, func(newNode, parent SQLNode) {
 		parent.(*Select).Limit = newNode.(*Limit)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewriteRefOfSelectInto(node, node.Into, func(newNode, parent SQLNode) {
+	if errF := a.rewriteRefOfSelectInto(node, node.Into, func(newNode, parent SQLNode) {
 		parent.(*Select).Into = newNode.(*SelectInto)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -8306,7 +8306,7 @@ func VisitSelectExprs(in SelectExprs, f Visit) error {
 }
 
 // rewriteSelectExprs is part of the Rewrite implementation
-func rewriteSelectExprs(parent SQLNode, node SelectExprs, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteSelectExprs(parent SQLNode, node SelectExprs, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -8315,17 +8315,17 @@ func rewriteSelectExprs(parent SQLNode, node SelectExprs, replacer replacerFunc,
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
 	for i, el := range node {
-		if errF := rewriteSelectExpr(node, el, func(newNode, parent SQLNode) {
+		if errF := a.rewriteSelectExpr(node, el, func(newNode, parent SQLNode) {
 			parent.(SelectExprs)[i] = newNode.(SelectExpr)
-		}, pre, post); errF != nil {
+		}); errF != nil {
 			return errF
 		}
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -8369,7 +8369,7 @@ func VisitRefOfSelectInto(in *SelectInto, f Visit) error {
 }
 
 // rewriteRefOfSelectInto is part of the Rewrite implementation
-func rewriteRefOfSelectInto(parent SQLNode, node *SelectInto, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfSelectInto(parent SQLNode, node *SelectInto, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -8378,10 +8378,10 @@ func rewriteRefOfSelectInto(parent SQLNode, node *SelectInto, replacer replacerF
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -8428,7 +8428,7 @@ func VisitRefOfSet(in *Set, f Visit) error {
 }
 
 // rewriteRefOfSet is part of the Rewrite implementation
-func rewriteRefOfSet(parent SQLNode, node *Set, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfSet(parent SQLNode, node *Set, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -8437,20 +8437,20 @@ func rewriteRefOfSet(parent SQLNode, node *Set, replacer replacerFunc, pre, post
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
+	if errF := a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
 		parent.(*Set).Comments = newNode.(Comments)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewriteSetExprs(node, node.Exprs, func(newNode, parent SQLNode) {
+	if errF := a.rewriteSetExprs(node, node.Exprs, func(newNode, parent SQLNode) {
 		parent.(*Set).Exprs = newNode.(SetExprs)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -8498,7 +8498,7 @@ func VisitRefOfSetExpr(in *SetExpr, f Visit) error {
 }
 
 // rewriteRefOfSetExpr is part of the Rewrite implementation
-func rewriteRefOfSetExpr(parent SQLNode, node *SetExpr, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfSetExpr(parent SQLNode, node *SetExpr, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -8507,20 +8507,20 @@ func rewriteRefOfSetExpr(parent SQLNode, node *SetExpr, replacer replacerFunc, p
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
+	if errF := a.rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
 		parent.(*SetExpr).Name = newNode.(ColIdent)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
+	if errF := a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
 		parent.(*SetExpr).Expr = newNode.(Expr)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -8565,7 +8565,7 @@ func VisitSetExprs(in SetExprs, f Visit) error {
 }
 
 // rewriteSetExprs is part of the Rewrite implementation
-func rewriteSetExprs(parent SQLNode, node SetExprs, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteSetExprs(parent SQLNode, node SetExprs, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -8574,17 +8574,17 @@ func rewriteSetExprs(parent SQLNode, node SetExprs, replacer replacerFunc, pre, 
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
 	for i, el := range node {
-		if errF := rewriteRefOfSetExpr(node, el, func(newNode, parent SQLNode) {
+		if errF := a.rewriteRefOfSetExpr(node, el, func(newNode, parent SQLNode) {
 			parent.(SetExprs)[i] = newNode.(*SetExpr)
-		}, pre, post); errF != nil {
+		}); errF != nil {
 			return errF
 		}
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -8639,7 +8639,7 @@ func VisitRefOfSetTransaction(in *SetTransaction, f Visit) error {
 }
 
 // rewriteRefOfSetTransaction is part of the Rewrite implementation
-func rewriteRefOfSetTransaction(parent SQLNode, node *SetTransaction, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfSetTransaction(parent SQLNode, node *SetTransaction, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -8648,27 +8648,27 @@ func rewriteRefOfSetTransaction(parent SQLNode, node *SetTransaction, replacer r
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteSQLNode(node, node.SQLNode, func(newNode, parent SQLNode) {
+	if errF := a.rewriteSQLNode(node, node.SQLNode, func(newNode, parent SQLNode) {
 		parent.(*SetTransaction).SQLNode = newNode.(SQLNode)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
+	if errF := a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
 		parent.(*SetTransaction).Comments = newNode.(Comments)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
 	for i, el := range node.Characteristics {
-		if errF := rewriteCharacteristic(node, el, func(newNode, parent SQLNode) {
+		if errF := a.rewriteCharacteristic(node, el, func(newNode, parent SQLNode) {
 			parent.(*SetTransaction).Characteristics[i] = newNode.(Characteristic)
-		}, pre, post); errF != nil {
+		}); errF != nil {
 			return errF
 		}
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -8710,7 +8710,7 @@ func VisitRefOfShow(in *Show, f Visit) error {
 }
 
 // rewriteRefOfShow is part of the Rewrite implementation
-func rewriteRefOfShow(parent SQLNode, node *Show, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfShow(parent SQLNode, node *Show, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -8719,15 +8719,15 @@ func rewriteRefOfShow(parent SQLNode, node *Show, replacer replacerFunc, pre, po
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteShowInternal(node, node.Internal, func(newNode, parent SQLNode) {
+	if errF := a.rewriteShowInternal(node, node.Internal, func(newNode, parent SQLNode) {
 		parent.(*Show).Internal = newNode.(ShowInternal)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -8777,7 +8777,7 @@ func VisitRefOfShowBasic(in *ShowBasic, f Visit) error {
 }
 
 // rewriteRefOfShowBasic is part of the Rewrite implementation
-func rewriteRefOfShowBasic(parent SQLNode, node *ShowBasic, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfShowBasic(parent SQLNode, node *ShowBasic, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -8786,20 +8786,20 @@ func rewriteRefOfShowBasic(parent SQLNode, node *ShowBasic, replacer replacerFun
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteTableName(node, node.Tbl, func(newNode, parent SQLNode) {
+	if errF := a.rewriteTableName(node, node.Tbl, func(newNode, parent SQLNode) {
 		parent.(*ShowBasic).Tbl = newNode.(TableName)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewriteRefOfShowFilter(node, node.Filter, func(newNode, parent SQLNode) {
+	if errF := a.rewriteRefOfShowFilter(node, node.Filter, func(newNode, parent SQLNode) {
 		parent.(*ShowBasic).Filter = newNode.(*ShowFilter)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -8842,7 +8842,7 @@ func VisitRefOfShowCreate(in *ShowCreate, f Visit) error {
 }
 
 // rewriteRefOfShowCreate is part of the Rewrite implementation
-func rewriteRefOfShowCreate(parent SQLNode, node *ShowCreate, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfShowCreate(parent SQLNode, node *ShowCreate, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -8851,15 +8851,15 @@ func rewriteRefOfShowCreate(parent SQLNode, node *ShowCreate, replacer replacerF
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteTableName(node, node.Op, func(newNode, parent SQLNode) {
+	if errF := a.rewriteTableName(node, node.Op, func(newNode, parent SQLNode) {
 		parent.(*ShowCreate).Op = newNode.(TableName)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -8902,7 +8902,7 @@ func VisitRefOfShowFilter(in *ShowFilter, f Visit) error {
 }
 
 // rewriteRefOfShowFilter is part of the Rewrite implementation
-func rewriteRefOfShowFilter(parent SQLNode, node *ShowFilter, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfShowFilter(parent SQLNode, node *ShowFilter, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -8911,15 +8911,15 @@ func rewriteRefOfShowFilter(parent SQLNode, node *ShowFilter, replacer replacerF
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteExpr(node, node.Filter, func(newNode, parent SQLNode) {
+	if errF := a.rewriteExpr(node, node.Filter, func(newNode, parent SQLNode) {
 		parent.(*ShowFilter).Filter = newNode.(Expr)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -8976,7 +8976,7 @@ func VisitRefOfShowLegacy(in *ShowLegacy, f Visit) error {
 }
 
 // rewriteRefOfShowLegacy is part of the Rewrite implementation
-func rewriteRefOfShowLegacy(parent SQLNode, node *ShowLegacy, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfShowLegacy(parent SQLNode, node *ShowLegacy, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -8985,25 +8985,25 @@ func rewriteRefOfShowLegacy(parent SQLNode, node *ShowLegacy, replacer replacerF
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteTableName(node, node.OnTable, func(newNode, parent SQLNode) {
+	if errF := a.rewriteTableName(node, node.OnTable, func(newNode, parent SQLNode) {
 		parent.(*ShowLegacy).OnTable = newNode.(TableName)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewriteTableName(node, node.Table, func(newNode, parent SQLNode) {
+	if errF := a.rewriteTableName(node, node.Table, func(newNode, parent SQLNode) {
 		parent.(*ShowLegacy).Table = newNode.(TableName)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewriteExpr(node, node.ShowCollationFilterOpt, func(newNode, parent SQLNode) {
+	if errF := a.rewriteExpr(node, node.ShowCollationFilterOpt, func(newNode, parent SQLNode) {
 		parent.(*ShowLegacy).ShowCollationFilterOpt = newNode.(Expr)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -9045,7 +9045,7 @@ func VisitRefOfStarExpr(in *StarExpr, f Visit) error {
 }
 
 // rewriteRefOfStarExpr is part of the Rewrite implementation
-func rewriteRefOfStarExpr(parent SQLNode, node *StarExpr, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfStarExpr(parent SQLNode, node *StarExpr, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -9054,15 +9054,15 @@ func rewriteRefOfStarExpr(parent SQLNode, node *StarExpr, replacer replacerFunc,
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteTableName(node, node.TableName, func(newNode, parent SQLNode) {
+	if errF := a.rewriteTableName(node, node.TableName, func(newNode, parent SQLNode) {
 		parent.(*StarExpr).TableName = newNode.(TableName)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -9114,7 +9114,7 @@ func VisitRefOfStream(in *Stream, f Visit) error {
 }
 
 // rewriteRefOfStream is part of the Rewrite implementation
-func rewriteRefOfStream(parent SQLNode, node *Stream, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfStream(parent SQLNode, node *Stream, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -9123,25 +9123,25 @@ func rewriteRefOfStream(parent SQLNode, node *Stream, replacer replacerFunc, pre
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
+	if errF := a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
 		parent.(*Stream).Comments = newNode.(Comments)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewriteSelectExpr(node, node.SelectExpr, func(newNode, parent SQLNode) {
+	if errF := a.rewriteSelectExpr(node, node.SelectExpr, func(newNode, parent SQLNode) {
 		parent.(*Stream).SelectExpr = newNode.(SelectExpr)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewriteTableName(node, node.Table, func(newNode, parent SQLNode) {
+	if errF := a.rewriteTableName(node, node.Table, func(newNode, parent SQLNode) {
 		parent.(*Stream).Table = newNode.(TableName)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -9183,7 +9183,7 @@ func VisitRefOfSubquery(in *Subquery, f Visit) error {
 }
 
 // rewriteRefOfSubquery is part of the Rewrite implementation
-func rewriteRefOfSubquery(parent SQLNode, node *Subquery, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfSubquery(parent SQLNode, node *Subquery, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -9192,15 +9192,15 @@ func rewriteRefOfSubquery(parent SQLNode, node *Subquery, replacer replacerFunc,
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteSelectStatement(node, node.Select, func(newNode, parent SQLNode) {
+	if errF := a.rewriteSelectStatement(node, node.Select, func(newNode, parent SQLNode) {
 		parent.(*Subquery).Select = newNode.(SelectStatement)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -9257,7 +9257,7 @@ func VisitRefOfSubstrExpr(in *SubstrExpr, f Visit) error {
 }
 
 // rewriteRefOfSubstrExpr is part of the Rewrite implementation
-func rewriteRefOfSubstrExpr(parent SQLNode, node *SubstrExpr, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfSubstrExpr(parent SQLNode, node *SubstrExpr, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -9266,30 +9266,30 @@ func rewriteRefOfSubstrExpr(parent SQLNode, node *SubstrExpr, replacer replacerF
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteRefOfColName(node, node.Name, func(newNode, parent SQLNode) {
+	if errF := a.rewriteRefOfColName(node, node.Name, func(newNode, parent SQLNode) {
 		parent.(*SubstrExpr).Name = newNode.(*ColName)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewriteRefOfLiteral(node, node.StrVal, func(newNode, parent SQLNode) {
+	if errF := a.rewriteRefOfLiteral(node, node.StrVal, func(newNode, parent SQLNode) {
 		parent.(*SubstrExpr).StrVal = newNode.(*Literal)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewriteExpr(node, node.From, func(newNode, parent SQLNode) {
+	if errF := a.rewriteExpr(node, node.From, func(newNode, parent SQLNode) {
 		parent.(*SubstrExpr).From = newNode.(Expr)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewriteExpr(node, node.To, func(newNode, parent SQLNode) {
+	if errF := a.rewriteExpr(node, node.To, func(newNode, parent SQLNode) {
 		parent.(*SubstrExpr).To = newNode.(Expr)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -9334,7 +9334,7 @@ func VisitTableExprs(in TableExprs, f Visit) error {
 }
 
 // rewriteTableExprs is part of the Rewrite implementation
-func rewriteTableExprs(parent SQLNode, node TableExprs, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteTableExprs(parent SQLNode, node TableExprs, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -9343,17 +9343,17 @@ func rewriteTableExprs(parent SQLNode, node TableExprs, replacer replacerFunc, p
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
 	for i, el := range node {
-		if errF := rewriteTableExpr(node, el, func(newNode, parent SQLNode) {
+		if errF := a.rewriteTableExpr(node, el, func(newNode, parent SQLNode) {
 			parent.(TableExprs)[i] = newNode.(TableExpr)
-		}, pre, post); errF != nil {
+		}); errF != nil {
 			return errF
 		}
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -9378,20 +9378,20 @@ func VisitTableIdent(in TableIdent, f Visit) error {
 }
 
 // rewriteTableIdent is part of the Rewrite implementation
-func rewriteTableIdent(parent SQLNode, node TableIdent, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteTableIdent(parent SQLNode, node TableIdent, replacer replacerFunc) error {
 	var err error
 	cur := Cursor{
 		node:     node,
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
 	if err != nil {
 		return err
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -9423,30 +9423,30 @@ func VisitTableName(in TableName, f Visit) error {
 }
 
 // rewriteTableName is part of the Rewrite implementation
-func rewriteTableName(parent SQLNode, node TableName, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteTableName(parent SQLNode, node TableName, replacer replacerFunc) error {
 	var err error
 	cur := Cursor{
 		node:     node,
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteTableIdent(node, node.Name, func(newNode, parent SQLNode) {
+	if errF := a.rewriteTableIdent(node, node.Name, func(newNode, parent SQLNode) {
 		err = vterrors.New(vtrpc.Code_INTERNAL, "[BUG] tried to replace 'Name' on 'TableName'")
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewriteTableIdent(node, node.Qualifier, func(newNode, parent SQLNode) {
+	if errF := a.rewriteTableIdent(node, node.Qualifier, func(newNode, parent SQLNode) {
 		err = vterrors.New(vtrpc.Code_INTERNAL, "[BUG] tried to replace 'Qualifier' on 'TableName'")
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
 	if err != nil {
 		return err
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -9491,7 +9491,7 @@ func VisitTableNames(in TableNames, f Visit) error {
 }
 
 // rewriteTableNames is part of the Rewrite implementation
-func rewriteTableNames(parent SQLNode, node TableNames, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteTableNames(parent SQLNode, node TableNames, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -9500,17 +9500,17 @@ func rewriteTableNames(parent SQLNode, node TableNames, replacer replacerFunc, p
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
 	for i, el := range node {
-		if errF := rewriteTableName(node, el, func(newNode, parent SQLNode) {
+		if errF := a.rewriteTableName(node, el, func(newNode, parent SQLNode) {
 			parent.(TableNames)[i] = newNode.(TableName)
-		}, pre, post); errF != nil {
+		}); errF != nil {
 			return errF
 		}
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -9545,7 +9545,7 @@ func VisitTableOptions(in TableOptions, f Visit) error {
 }
 
 // rewriteTableOptions is part of the Rewrite implementation
-func rewriteTableOptions(parent SQLNode, node TableOptions, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteTableOptions(parent SQLNode, node TableOptions, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -9554,10 +9554,10 @@ func rewriteTableOptions(parent SQLNode, node TableOptions, replacer replacerFun
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -9620,7 +9620,7 @@ func VisitRefOfTableSpec(in *TableSpec, f Visit) error {
 }
 
 // rewriteRefOfTableSpec is part of the Rewrite implementation
-func rewriteRefOfTableSpec(parent SQLNode, node *TableSpec, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfTableSpec(parent SQLNode, node *TableSpec, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -9629,36 +9629,36 @@ func rewriteRefOfTableSpec(parent SQLNode, node *TableSpec, replacer replacerFun
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
 	for i, el := range node.Columns {
-		if errF := rewriteRefOfColumnDefinition(node, el, func(newNode, parent SQLNode) {
+		if errF := a.rewriteRefOfColumnDefinition(node, el, func(newNode, parent SQLNode) {
 			parent.(*TableSpec).Columns[i] = newNode.(*ColumnDefinition)
-		}, pre, post); errF != nil {
+		}); errF != nil {
 			return errF
 		}
 	}
 	for i, el := range node.Indexes {
-		if errF := rewriteRefOfIndexDefinition(node, el, func(newNode, parent SQLNode) {
+		if errF := a.rewriteRefOfIndexDefinition(node, el, func(newNode, parent SQLNode) {
 			parent.(*TableSpec).Indexes[i] = newNode.(*IndexDefinition)
-		}, pre, post); errF != nil {
+		}); errF != nil {
 			return errF
 		}
 	}
 	for i, el := range node.Constraints {
-		if errF := rewriteRefOfConstraintDefinition(node, el, func(newNode, parent SQLNode) {
+		if errF := a.rewriteRefOfConstraintDefinition(node, el, func(newNode, parent SQLNode) {
 			parent.(*TableSpec).Constraints[i] = newNode.(*ConstraintDefinition)
-		}, pre, post); errF != nil {
+		}); errF != nil {
 			return errF
 		}
 	}
-	if errF := rewriteTableOptions(node, node.Options, func(newNode, parent SQLNode) {
+	if errF := a.rewriteTableOptions(node, node.Options, func(newNode, parent SQLNode) {
 		parent.(*TableSpec).Options = newNode.(TableOptions)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -9696,7 +9696,7 @@ func VisitRefOfTablespaceOperation(in *TablespaceOperation, f Visit) error {
 }
 
 // rewriteRefOfTablespaceOperation is part of the Rewrite implementation
-func rewriteRefOfTablespaceOperation(parent SQLNode, node *TablespaceOperation, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfTablespaceOperation(parent SQLNode, node *TablespaceOperation, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -9705,10 +9705,10 @@ func rewriteRefOfTablespaceOperation(parent SQLNode, node *TablespaceOperation, 
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -9757,7 +9757,7 @@ func VisitRefOfTimestampFuncExpr(in *TimestampFuncExpr, f Visit) error {
 }
 
 // rewriteRefOfTimestampFuncExpr is part of the Rewrite implementation
-func rewriteRefOfTimestampFuncExpr(parent SQLNode, node *TimestampFuncExpr, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfTimestampFuncExpr(parent SQLNode, node *TimestampFuncExpr, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -9766,20 +9766,20 @@ func rewriteRefOfTimestampFuncExpr(parent SQLNode, node *TimestampFuncExpr, repl
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteExpr(node, node.Expr1, func(newNode, parent SQLNode) {
+	if errF := a.rewriteExpr(node, node.Expr1, func(newNode, parent SQLNode) {
 		parent.(*TimestampFuncExpr).Expr1 = newNode.(Expr)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewriteExpr(node, node.Expr2, func(newNode, parent SQLNode) {
+	if errF := a.rewriteExpr(node, node.Expr2, func(newNode, parent SQLNode) {
 		parent.(*TimestampFuncExpr).Expr2 = newNode.(Expr)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -9821,7 +9821,7 @@ func VisitRefOfTruncateTable(in *TruncateTable, f Visit) error {
 }
 
 // rewriteRefOfTruncateTable is part of the Rewrite implementation
-func rewriteRefOfTruncateTable(parent SQLNode, node *TruncateTable, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfTruncateTable(parent SQLNode, node *TruncateTable, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -9830,15 +9830,15 @@ func rewriteRefOfTruncateTable(parent SQLNode, node *TruncateTable, replacer rep
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteTableName(node, node.Table, func(newNode, parent SQLNode) {
+	if errF := a.rewriteTableName(node, node.Table, func(newNode, parent SQLNode) {
 		parent.(*TruncateTable).Table = newNode.(TableName)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -9881,7 +9881,7 @@ func VisitRefOfUnaryExpr(in *UnaryExpr, f Visit) error {
 }
 
 // rewriteRefOfUnaryExpr is part of the Rewrite implementation
-func rewriteRefOfUnaryExpr(parent SQLNode, node *UnaryExpr, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfUnaryExpr(parent SQLNode, node *UnaryExpr, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -9890,15 +9890,15 @@ func rewriteRefOfUnaryExpr(parent SQLNode, node *UnaryExpr, replacer replacerFun
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
+	if errF := a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
 		parent.(*UnaryExpr).Expr = newNode.(Expr)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -9958,7 +9958,7 @@ func VisitRefOfUnion(in *Union, f Visit) error {
 }
 
 // rewriteRefOfUnion is part of the Rewrite implementation
-func rewriteRefOfUnion(parent SQLNode, node *Union, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfUnion(parent SQLNode, node *Union, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -9967,32 +9967,32 @@ func rewriteRefOfUnion(parent SQLNode, node *Union, replacer replacerFunc, pre, 
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteSelectStatement(node, node.FirstStatement, func(newNode, parent SQLNode) {
+	if errF := a.rewriteSelectStatement(node, node.FirstStatement, func(newNode, parent SQLNode) {
 		parent.(*Union).FirstStatement = newNode.(SelectStatement)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
 	for i, el := range node.UnionSelects {
-		if errF := rewriteRefOfUnionSelect(node, el, func(newNode, parent SQLNode) {
+		if errF := a.rewriteRefOfUnionSelect(node, el, func(newNode, parent SQLNode) {
 			parent.(*Union).UnionSelects[i] = newNode.(*UnionSelect)
-		}, pre, post); errF != nil {
+		}); errF != nil {
 			return errF
 		}
 	}
-	if errF := rewriteOrderBy(node, node.OrderBy, func(newNode, parent SQLNode) {
+	if errF := a.rewriteOrderBy(node, node.OrderBy, func(newNode, parent SQLNode) {
 		parent.(*Union).OrderBy = newNode.(OrderBy)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewriteRefOfLimit(node, node.Limit, func(newNode, parent SQLNode) {
+	if errF := a.rewriteRefOfLimit(node, node.Limit, func(newNode, parent SQLNode) {
 		parent.(*Union).Limit = newNode.(*Limit)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -10035,7 +10035,7 @@ func VisitRefOfUnionSelect(in *UnionSelect, f Visit) error {
 }
 
 // rewriteRefOfUnionSelect is part of the Rewrite implementation
-func rewriteRefOfUnionSelect(parent SQLNode, node *UnionSelect, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfUnionSelect(parent SQLNode, node *UnionSelect, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -10044,15 +10044,15 @@ func rewriteRefOfUnionSelect(parent SQLNode, node *UnionSelect, replacer replace
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteSelectStatement(node, node.Statement, func(newNode, parent SQLNode) {
+	if errF := a.rewriteSelectStatement(node, node.Statement, func(newNode, parent SQLNode) {
 		parent.(*UnionSelect).Statement = newNode.(SelectStatement)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -10090,7 +10090,7 @@ func VisitRefOfUnlockTables(in *UnlockTables, f Visit) error {
 }
 
 // rewriteRefOfUnlockTables is part of the Rewrite implementation
-func rewriteRefOfUnlockTables(parent SQLNode, node *UnlockTables, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfUnlockTables(parent SQLNode, node *UnlockTables, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -10099,10 +10099,10 @@ func rewriteRefOfUnlockTables(parent SQLNode, node *UnlockTables, replacer repla
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -10170,7 +10170,7 @@ func VisitRefOfUpdate(in *Update, f Visit) error {
 }
 
 // rewriteRefOfUpdate is part of the Rewrite implementation
-func rewriteRefOfUpdate(parent SQLNode, node *Update, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfUpdate(parent SQLNode, node *Update, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -10179,40 +10179,40 @@ func rewriteRefOfUpdate(parent SQLNode, node *Update, replacer replacerFunc, pre
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
+	if errF := a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
 		parent.(*Update).Comments = newNode.(Comments)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewriteTableExprs(node, node.TableExprs, func(newNode, parent SQLNode) {
+	if errF := a.rewriteTableExprs(node, node.TableExprs, func(newNode, parent SQLNode) {
 		parent.(*Update).TableExprs = newNode.(TableExprs)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewriteUpdateExprs(node, node.Exprs, func(newNode, parent SQLNode) {
+	if errF := a.rewriteUpdateExprs(node, node.Exprs, func(newNode, parent SQLNode) {
 		parent.(*Update).Exprs = newNode.(UpdateExprs)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewriteRefOfWhere(node, node.Where, func(newNode, parent SQLNode) {
+	if errF := a.rewriteRefOfWhere(node, node.Where, func(newNode, parent SQLNode) {
 		parent.(*Update).Where = newNode.(*Where)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewriteOrderBy(node, node.OrderBy, func(newNode, parent SQLNode) {
+	if errF := a.rewriteOrderBy(node, node.OrderBy, func(newNode, parent SQLNode) {
 		parent.(*Update).OrderBy = newNode.(OrderBy)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewriteRefOfLimit(node, node.Limit, func(newNode, parent SQLNode) {
+	if errF := a.rewriteRefOfLimit(node, node.Limit, func(newNode, parent SQLNode) {
 		parent.(*Update).Limit = newNode.(*Limit)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -10259,7 +10259,7 @@ func VisitRefOfUpdateExpr(in *UpdateExpr, f Visit) error {
 }
 
 // rewriteRefOfUpdateExpr is part of the Rewrite implementation
-func rewriteRefOfUpdateExpr(parent SQLNode, node *UpdateExpr, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfUpdateExpr(parent SQLNode, node *UpdateExpr, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -10268,20 +10268,20 @@ func rewriteRefOfUpdateExpr(parent SQLNode, node *UpdateExpr, replacer replacerF
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteRefOfColName(node, node.Name, func(newNode, parent SQLNode) {
+	if errF := a.rewriteRefOfColName(node, node.Name, func(newNode, parent SQLNode) {
 		parent.(*UpdateExpr).Name = newNode.(*ColName)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
+	if errF := a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
 		parent.(*UpdateExpr).Expr = newNode.(Expr)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -10326,7 +10326,7 @@ func VisitUpdateExprs(in UpdateExprs, f Visit) error {
 }
 
 // rewriteUpdateExprs is part of the Rewrite implementation
-func rewriteUpdateExprs(parent SQLNode, node UpdateExprs, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteUpdateExprs(parent SQLNode, node UpdateExprs, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -10335,17 +10335,17 @@ func rewriteUpdateExprs(parent SQLNode, node UpdateExprs, replacer replacerFunc,
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
 	for i, el := range node {
-		if errF := rewriteRefOfUpdateExpr(node, el, func(newNode, parent SQLNode) {
+		if errF := a.rewriteRefOfUpdateExpr(node, el, func(newNode, parent SQLNode) {
 			parent.(UpdateExprs)[i] = newNode.(*UpdateExpr)
-		}, pre, post); errF != nil {
+		}); errF != nil {
 			return errF
 		}
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -10387,7 +10387,7 @@ func VisitRefOfUse(in *Use, f Visit) error {
 }
 
 // rewriteRefOfUse is part of the Rewrite implementation
-func rewriteRefOfUse(parent SQLNode, node *Use, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfUse(parent SQLNode, node *Use, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -10396,15 +10396,15 @@ func rewriteRefOfUse(parent SQLNode, node *Use, replacer replacerFunc, pre, post
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteTableIdent(node, node.DBName, func(newNode, parent SQLNode) {
+	if errF := a.rewriteTableIdent(node, node.DBName, func(newNode, parent SQLNode) {
 		parent.(*Use).DBName = newNode.(TableIdent)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -10466,7 +10466,7 @@ func VisitRefOfVStream(in *VStream, f Visit) error {
 }
 
 // rewriteRefOfVStream is part of the Rewrite implementation
-func rewriteRefOfVStream(parent SQLNode, node *VStream, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfVStream(parent SQLNode, node *VStream, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -10475,35 +10475,35 @@ func rewriteRefOfVStream(parent SQLNode, node *VStream, replacer replacerFunc, p
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
+	if errF := a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
 		parent.(*VStream).Comments = newNode.(Comments)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewriteSelectExpr(node, node.SelectExpr, func(newNode, parent SQLNode) {
+	if errF := a.rewriteSelectExpr(node, node.SelectExpr, func(newNode, parent SQLNode) {
 		parent.(*VStream).SelectExpr = newNode.(SelectExpr)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewriteTableName(node, node.Table, func(newNode, parent SQLNode) {
+	if errF := a.rewriteTableName(node, node.Table, func(newNode, parent SQLNode) {
 		parent.(*VStream).Table = newNode.(TableName)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewriteRefOfWhere(node, node.Where, func(newNode, parent SQLNode) {
+	if errF := a.rewriteRefOfWhere(node, node.Where, func(newNode, parent SQLNode) {
 		parent.(*VStream).Where = newNode.(*Where)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewriteRefOfLimit(node, node.Limit, func(newNode, parent SQLNode) {
+	if errF := a.rewriteRefOfLimit(node, node.Limit, func(newNode, parent SQLNode) {
 		parent.(*VStream).Limit = newNode.(*Limit)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -10548,7 +10548,7 @@ func VisitValTuple(in ValTuple, f Visit) error {
 }
 
 // rewriteValTuple is part of the Rewrite implementation
-func rewriteValTuple(parent SQLNode, node ValTuple, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteValTuple(parent SQLNode, node ValTuple, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -10557,17 +10557,17 @@ func rewriteValTuple(parent SQLNode, node ValTuple, replacer replacerFunc, pre, 
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
 	for i, el := range node {
-		if errF := rewriteExpr(node, el, func(newNode, parent SQLNode) {
+		if errF := a.rewriteExpr(node, el, func(newNode, parent SQLNode) {
 			parent.(ValTuple)[i] = newNode.(Expr)
-		}, pre, post); errF != nil {
+		}); errF != nil {
 			return errF
 		}
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -10605,7 +10605,7 @@ func VisitRefOfValidation(in *Validation, f Visit) error {
 }
 
 // rewriteRefOfValidation is part of the Rewrite implementation
-func rewriteRefOfValidation(parent SQLNode, node *Validation, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfValidation(parent SQLNode, node *Validation, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -10614,10 +10614,10 @@ func rewriteRefOfValidation(parent SQLNode, node *Validation, replacer replacerF
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -10662,7 +10662,7 @@ func VisitValues(in Values, f Visit) error {
 }
 
 // rewriteValues is part of the Rewrite implementation
-func rewriteValues(parent SQLNode, node Values, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteValues(parent SQLNode, node Values, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -10671,17 +10671,17 @@ func rewriteValues(parent SQLNode, node Values, replacer replacerFunc, pre, post
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
 	for i, el := range node {
-		if errF := rewriteValTuple(node, el, func(newNode, parent SQLNode) {
+		if errF := a.rewriteValTuple(node, el, func(newNode, parent SQLNode) {
 			parent.(Values)[i] = newNode.(ValTuple)
-		}, pre, post); errF != nil {
+		}); errF != nil {
 			return errF
 		}
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -10723,7 +10723,7 @@ func VisitRefOfValuesFuncExpr(in *ValuesFuncExpr, f Visit) error {
 }
 
 // rewriteRefOfValuesFuncExpr is part of the Rewrite implementation
-func rewriteRefOfValuesFuncExpr(parent SQLNode, node *ValuesFuncExpr, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfValuesFuncExpr(parent SQLNode, node *ValuesFuncExpr, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -10732,15 +10732,15 @@ func rewriteRefOfValuesFuncExpr(parent SQLNode, node *ValuesFuncExpr, replacer r
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteRefOfColName(node, node.Name, func(newNode, parent SQLNode) {
+	if errF := a.rewriteRefOfColName(node, node.Name, func(newNode, parent SQLNode) {
 		parent.(*ValuesFuncExpr).Name = newNode.(*ColName)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -10769,25 +10769,25 @@ func VisitVindexParam(in VindexParam, f Visit) error {
 }
 
 // rewriteVindexParam is part of the Rewrite implementation
-func rewriteVindexParam(parent SQLNode, node VindexParam, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteVindexParam(parent SQLNode, node VindexParam, replacer replacerFunc) error {
 	var err error
 	cur := Cursor{
 		node:     node,
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteColIdent(node, node.Key, func(newNode, parent SQLNode) {
+	if errF := a.rewriteColIdent(node, node.Key, func(newNode, parent SQLNode) {
 		err = vterrors.New(vtrpc.Code_INTERNAL, "[BUG] tried to replace 'Key' on 'VindexParam'")
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
 	if err != nil {
 		return err
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -10841,7 +10841,7 @@ func VisitRefOfVindexSpec(in *VindexSpec, f Visit) error {
 }
 
 // rewriteRefOfVindexSpec is part of the Rewrite implementation
-func rewriteRefOfVindexSpec(parent SQLNode, node *VindexSpec, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfVindexSpec(parent SQLNode, node *VindexSpec, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -10850,27 +10850,27 @@ func rewriteRefOfVindexSpec(parent SQLNode, node *VindexSpec, replacer replacerF
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
+	if errF := a.rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
 		parent.(*VindexSpec).Name = newNode.(ColIdent)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewriteColIdent(node, node.Type, func(newNode, parent SQLNode) {
+	if errF := a.rewriteColIdent(node, node.Type, func(newNode, parent SQLNode) {
 		parent.(*VindexSpec).Type = newNode.(ColIdent)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
 	for i, el := range node.Params {
-		if errF := rewriteVindexParam(node, el, func(newNode, parent SQLNode) {
+		if errF := a.rewriteVindexParam(node, el, func(newNode, parent SQLNode) {
 			parent.(*VindexSpec).Params[i] = newNode.(VindexParam)
-		}, pre, post); errF != nil {
+		}); errF != nil {
 			return errF
 		}
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -10917,7 +10917,7 @@ func VisitRefOfWhen(in *When, f Visit) error {
 }
 
 // rewriteRefOfWhen is part of the Rewrite implementation
-func rewriteRefOfWhen(parent SQLNode, node *When, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfWhen(parent SQLNode, node *When, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -10926,20 +10926,20 @@ func rewriteRefOfWhen(parent SQLNode, node *When, replacer replacerFunc, pre, po
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteExpr(node, node.Cond, func(newNode, parent SQLNode) {
+	if errF := a.rewriteExpr(node, node.Cond, func(newNode, parent SQLNode) {
 		parent.(*When).Cond = newNode.(Expr)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewriteExpr(node, node.Val, func(newNode, parent SQLNode) {
+	if errF := a.rewriteExpr(node, node.Val, func(newNode, parent SQLNode) {
 		parent.(*When).Val = newNode.(Expr)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -10982,7 +10982,7 @@ func VisitRefOfWhere(in *Where, f Visit) error {
 }
 
 // rewriteRefOfWhere is part of the Rewrite implementation
-func rewriteRefOfWhere(parent SQLNode, node *Where, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfWhere(parent SQLNode, node *Where, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -10991,15 +10991,15 @@ func rewriteRefOfWhere(parent SQLNode, node *Where, replacer replacerFunc, pre, 
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
+	if errF := a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
 		parent.(*Where).Expr = newNode.(Expr)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -11046,7 +11046,7 @@ func VisitRefOfXorExpr(in *XorExpr, f Visit) error {
 }
 
 // rewriteRefOfXorExpr is part of the Rewrite implementation
-func rewriteRefOfXorExpr(parent SQLNode, node *XorExpr, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfXorExpr(parent SQLNode, node *XorExpr, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -11055,20 +11055,20 @@ func rewriteRefOfXorExpr(parent SQLNode, node *XorExpr, replacer replacerFunc, p
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteExpr(node, node.Left, func(newNode, parent SQLNode) {
+	if errF := a.rewriteExpr(node, node.Left, func(newNode, parent SQLNode) {
 		parent.(*XorExpr).Left = newNode.(Expr)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewriteExpr(node, node.Right, func(newNode, parent SQLNode) {
+	if errF := a.rewriteExpr(node, node.Right, func(newNode, parent SQLNode) {
 		parent.(*XorExpr).Right = newNode.(Expr)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -11304,49 +11304,49 @@ func VisitAlterOption(in AlterOption, f Visit) error {
 }
 
 // rewriteAlterOption is part of the Rewrite implementation
-func rewriteAlterOption(parent SQLNode, node AlterOption, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteAlterOption(parent SQLNode, node AlterOption, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
 	switch node := node.(type) {
 	case *AddColumns:
-		return rewriteRefOfAddColumns(parent, node, replacer, pre, post)
+		return a.rewriteRefOfAddColumns(parent, node, replacer)
 	case *AddConstraintDefinition:
-		return rewriteRefOfAddConstraintDefinition(parent, node, replacer, pre, post)
+		return a.rewriteRefOfAddConstraintDefinition(parent, node, replacer)
 	case *AddIndexDefinition:
-		return rewriteRefOfAddIndexDefinition(parent, node, replacer, pre, post)
+		return a.rewriteRefOfAddIndexDefinition(parent, node, replacer)
 	case AlgorithmValue:
-		return rewriteAlgorithmValue(parent, node, replacer, pre, post)
+		return a.rewriteAlgorithmValue(parent, node, replacer)
 	case *AlterCharset:
-		return rewriteRefOfAlterCharset(parent, node, replacer, pre, post)
+		return a.rewriteRefOfAlterCharset(parent, node, replacer)
 	case *AlterColumn:
-		return rewriteRefOfAlterColumn(parent, node, replacer, pre, post)
+		return a.rewriteRefOfAlterColumn(parent, node, replacer)
 	case *ChangeColumn:
-		return rewriteRefOfChangeColumn(parent, node, replacer, pre, post)
+		return a.rewriteRefOfChangeColumn(parent, node, replacer)
 	case *DropColumn:
-		return rewriteRefOfDropColumn(parent, node, replacer, pre, post)
+		return a.rewriteRefOfDropColumn(parent, node, replacer)
 	case *DropKey:
-		return rewriteRefOfDropKey(parent, node, replacer, pre, post)
+		return a.rewriteRefOfDropKey(parent, node, replacer)
 	case *Force:
-		return rewriteRefOfForce(parent, node, replacer, pre, post)
+		return a.rewriteRefOfForce(parent, node, replacer)
 	case *KeyState:
-		return rewriteRefOfKeyState(parent, node, replacer, pre, post)
+		return a.rewriteRefOfKeyState(parent, node, replacer)
 	case *LockOption:
-		return rewriteRefOfLockOption(parent, node, replacer, pre, post)
+		return a.rewriteRefOfLockOption(parent, node, replacer)
 	case *ModifyColumn:
-		return rewriteRefOfModifyColumn(parent, node, replacer, pre, post)
+		return a.rewriteRefOfModifyColumn(parent, node, replacer)
 	case *OrderByOption:
-		return rewriteRefOfOrderByOption(parent, node, replacer, pre, post)
+		return a.rewriteRefOfOrderByOption(parent, node, replacer)
 	case *RenameIndex:
-		return rewriteRefOfRenameIndex(parent, node, replacer, pre, post)
+		return a.rewriteRefOfRenameIndex(parent, node, replacer)
 	case *RenameTableName:
-		return rewriteRefOfRenameTableName(parent, node, replacer, pre, post)
+		return a.rewriteRefOfRenameTableName(parent, node, replacer)
 	case TableOptions:
-		return rewriteTableOptions(parent, node, replacer, pre, post)
+		return a.rewriteTableOptions(parent, node, replacer)
 	case *TablespaceOperation:
-		return rewriteRefOfTablespaceOperation(parent, node, replacer, pre, post)
+		return a.rewriteRefOfTablespaceOperation(parent, node, replacer)
 	case *Validation:
-		return rewriteRefOfValidation(parent, node, replacer, pre, post)
+		return a.rewriteRefOfValidation(parent, node, replacer)
 	default:
 		// this should never happen
 		return nil
@@ -11413,15 +11413,15 @@ func VisitCharacteristic(in Characteristic, f Visit) error {
 }
 
 // rewriteCharacteristic is part of the Rewrite implementation
-func rewriteCharacteristic(parent SQLNode, node Characteristic, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteCharacteristic(parent SQLNode, node Characteristic, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
 	switch node := node.(type) {
 	case AccessMode:
-		return rewriteAccessMode(parent, node, replacer, pre, post)
+		return a.rewriteAccessMode(parent, node, replacer)
 	case IsolationLevel:
-		return rewriteIsolationLevel(parent, node, replacer, pre, post)
+		return a.rewriteIsolationLevel(parent, node, replacer)
 	default:
 		// this should never happen
 		return nil
@@ -11498,17 +11498,17 @@ func VisitColTuple(in ColTuple, f Visit) error {
 }
 
 // rewriteColTuple is part of the Rewrite implementation
-func rewriteColTuple(parent SQLNode, node ColTuple, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteColTuple(parent SQLNode, node ColTuple, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
 	switch node := node.(type) {
 	case ListArg:
-		return rewriteListArg(parent, node, replacer, pre, post)
+		return a.rewriteListArg(parent, node, replacer)
 	case *Subquery:
-		return rewriteRefOfSubquery(parent, node, replacer, pre, post)
+		return a.rewriteRefOfSubquery(parent, node, replacer)
 	case ValTuple:
-		return rewriteValTuple(parent, node, replacer, pre, post)
+		return a.rewriteValTuple(parent, node, replacer)
 	default:
 		// this should never happen
 		return nil
@@ -11575,15 +11575,15 @@ func VisitConstraintInfo(in ConstraintInfo, f Visit) error {
 }
 
 // rewriteConstraintInfo is part of the Rewrite implementation
-func rewriteConstraintInfo(parent SQLNode, node ConstraintInfo, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteConstraintInfo(parent SQLNode, node ConstraintInfo, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
 	switch node := node.(type) {
 	case *CheckConstraintDefinition:
-		return rewriteRefOfCheckConstraintDefinition(parent, node, replacer, pre, post)
+		return a.rewriteRefOfCheckConstraintDefinition(parent, node, replacer)
 	case *ForeignKeyDefinition:
-		return rewriteRefOfForeignKeyDefinition(parent, node, replacer, pre, post)
+		return a.rewriteRefOfForeignKeyDefinition(parent, node, replacer)
 	default:
 		// this should never happen
 		return nil
@@ -11660,17 +11660,17 @@ func VisitDBDDLStatement(in DBDDLStatement, f Visit) error {
 }
 
 // rewriteDBDDLStatement is part of the Rewrite implementation
-func rewriteDBDDLStatement(parent SQLNode, node DBDDLStatement, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteDBDDLStatement(parent SQLNode, node DBDDLStatement, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
 	switch node := node.(type) {
 	case *AlterDatabase:
-		return rewriteRefOfAlterDatabase(parent, node, replacer, pre, post)
+		return a.rewriteRefOfAlterDatabase(parent, node, replacer)
 	case *CreateDatabase:
-		return rewriteRefOfCreateDatabase(parent, node, replacer, pre, post)
+		return a.rewriteRefOfCreateDatabase(parent, node, replacer)
 	case *DropDatabase:
-		return rewriteRefOfDropDatabase(parent, node, replacer, pre, post)
+		return a.rewriteRefOfDropDatabase(parent, node, replacer)
 	default:
 		// this should never happen
 		return nil
@@ -11797,27 +11797,27 @@ func VisitDDLStatement(in DDLStatement, f Visit) error {
 }
 
 // rewriteDDLStatement is part of the Rewrite implementation
-func rewriteDDLStatement(parent SQLNode, node DDLStatement, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteDDLStatement(parent SQLNode, node DDLStatement, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
 	switch node := node.(type) {
 	case *AlterTable:
-		return rewriteRefOfAlterTable(parent, node, replacer, pre, post)
+		return a.rewriteRefOfAlterTable(parent, node, replacer)
 	case *AlterView:
-		return rewriteRefOfAlterView(parent, node, replacer, pre, post)
+		return a.rewriteRefOfAlterView(parent, node, replacer)
 	case *CreateTable:
-		return rewriteRefOfCreateTable(parent, node, replacer, pre, post)
+		return a.rewriteRefOfCreateTable(parent, node, replacer)
 	case *CreateView:
-		return rewriteRefOfCreateView(parent, node, replacer, pre, post)
+		return a.rewriteRefOfCreateView(parent, node, replacer)
 	case *DropTable:
-		return rewriteRefOfDropTable(parent, node, replacer, pre, post)
+		return a.rewriteRefOfDropTable(parent, node, replacer)
 	case *DropView:
-		return rewriteRefOfDropView(parent, node, replacer, pre, post)
+		return a.rewriteRefOfDropView(parent, node, replacer)
 	case *RenameTable:
-		return rewriteRefOfRenameTable(parent, node, replacer, pre, post)
+		return a.rewriteRefOfRenameTable(parent, node, replacer)
 	case *TruncateTable:
-		return rewriteRefOfTruncateTable(parent, node, replacer, pre, post)
+		return a.rewriteRefOfTruncateTable(parent, node, replacer)
 	default:
 		// this should never happen
 		return nil
@@ -11884,15 +11884,15 @@ func VisitExplain(in Explain, f Visit) error {
 }
 
 // rewriteExplain is part of the Rewrite implementation
-func rewriteExplain(parent SQLNode, node Explain, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteExplain(parent SQLNode, node Explain, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
 	switch node := node.(type) {
 	case *ExplainStmt:
-		return rewriteRefOfExplainStmt(parent, node, replacer, pre, post)
+		return a.rewriteRefOfExplainStmt(parent, node, replacer)
 	case *ExplainTab:
-		return rewriteRefOfExplainTab(parent, node, replacer, pre, post)
+		return a.rewriteRefOfExplainTab(parent, node, replacer)
 	default:
 		// this should never happen
 		return nil
@@ -12249,73 +12249,73 @@ func VisitExpr(in Expr, f Visit) error {
 }
 
 // rewriteExpr is part of the Rewrite implementation
-func rewriteExpr(parent SQLNode, node Expr, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
 	switch node := node.(type) {
 	case *AndExpr:
-		return rewriteRefOfAndExpr(parent, node, replacer, pre, post)
+		return a.rewriteRefOfAndExpr(parent, node, replacer)
 	case Argument:
-		return rewriteArgument(parent, node, replacer, pre, post)
+		return a.rewriteArgument(parent, node, replacer)
 	case *BinaryExpr:
-		return rewriteRefOfBinaryExpr(parent, node, replacer, pre, post)
+		return a.rewriteRefOfBinaryExpr(parent, node, replacer)
 	case BoolVal:
-		return rewriteBoolVal(parent, node, replacer, pre, post)
+		return a.rewriteBoolVal(parent, node, replacer)
 	case *CaseExpr:
-		return rewriteRefOfCaseExpr(parent, node, replacer, pre, post)
+		return a.rewriteRefOfCaseExpr(parent, node, replacer)
 	case *ColName:
-		return rewriteRefOfColName(parent, node, replacer, pre, post)
+		return a.rewriteRefOfColName(parent, node, replacer)
 	case *CollateExpr:
-		return rewriteRefOfCollateExpr(parent, node, replacer, pre, post)
+		return a.rewriteRefOfCollateExpr(parent, node, replacer)
 	case *ComparisonExpr:
-		return rewriteRefOfComparisonExpr(parent, node, replacer, pre, post)
+		return a.rewriteRefOfComparisonExpr(parent, node, replacer)
 	case *ConvertExpr:
-		return rewriteRefOfConvertExpr(parent, node, replacer, pre, post)
+		return a.rewriteRefOfConvertExpr(parent, node, replacer)
 	case *ConvertUsingExpr:
-		return rewriteRefOfConvertUsingExpr(parent, node, replacer, pre, post)
+		return a.rewriteRefOfConvertUsingExpr(parent, node, replacer)
 	case *CurTimeFuncExpr:
-		return rewriteRefOfCurTimeFuncExpr(parent, node, replacer, pre, post)
+		return a.rewriteRefOfCurTimeFuncExpr(parent, node, replacer)
 	case *Default:
-		return rewriteRefOfDefault(parent, node, replacer, pre, post)
+		return a.rewriteRefOfDefault(parent, node, replacer)
 	case *ExistsExpr:
-		return rewriteRefOfExistsExpr(parent, node, replacer, pre, post)
+		return a.rewriteRefOfExistsExpr(parent, node, replacer)
 	case *FuncExpr:
-		return rewriteRefOfFuncExpr(parent, node, replacer, pre, post)
+		return a.rewriteRefOfFuncExpr(parent, node, replacer)
 	case *GroupConcatExpr:
-		return rewriteRefOfGroupConcatExpr(parent, node, replacer, pre, post)
+		return a.rewriteRefOfGroupConcatExpr(parent, node, replacer)
 	case *IntervalExpr:
-		return rewriteRefOfIntervalExpr(parent, node, replacer, pre, post)
+		return a.rewriteRefOfIntervalExpr(parent, node, replacer)
 	case *IsExpr:
-		return rewriteRefOfIsExpr(parent, node, replacer, pre, post)
+		return a.rewriteRefOfIsExpr(parent, node, replacer)
 	case ListArg:
-		return rewriteListArg(parent, node, replacer, pre, post)
+		return a.rewriteListArg(parent, node, replacer)
 	case *Literal:
-		return rewriteRefOfLiteral(parent, node, replacer, pre, post)
+		return a.rewriteRefOfLiteral(parent, node, replacer)
 	case *MatchExpr:
-		return rewriteRefOfMatchExpr(parent, node, replacer, pre, post)
+		return a.rewriteRefOfMatchExpr(parent, node, replacer)
 	case *NotExpr:
-		return rewriteRefOfNotExpr(parent, node, replacer, pre, post)
+		return a.rewriteRefOfNotExpr(parent, node, replacer)
 	case *NullVal:
-		return rewriteRefOfNullVal(parent, node, replacer, pre, post)
+		return a.rewriteRefOfNullVal(parent, node, replacer)
 	case *OrExpr:
-		return rewriteRefOfOrExpr(parent, node, replacer, pre, post)
+		return a.rewriteRefOfOrExpr(parent, node, replacer)
 	case *RangeCond:
-		return rewriteRefOfRangeCond(parent, node, replacer, pre, post)
+		return a.rewriteRefOfRangeCond(parent, node, replacer)
 	case *Subquery:
-		return rewriteRefOfSubquery(parent, node, replacer, pre, post)
+		return a.rewriteRefOfSubquery(parent, node, replacer)
 	case *SubstrExpr:
-		return rewriteRefOfSubstrExpr(parent, node, replacer, pre, post)
+		return a.rewriteRefOfSubstrExpr(parent, node, replacer)
 	case *TimestampFuncExpr:
-		return rewriteRefOfTimestampFuncExpr(parent, node, replacer, pre, post)
+		return a.rewriteRefOfTimestampFuncExpr(parent, node, replacer)
 	case *UnaryExpr:
-		return rewriteRefOfUnaryExpr(parent, node, replacer, pre, post)
+		return a.rewriteRefOfUnaryExpr(parent, node, replacer)
 	case ValTuple:
-		return rewriteValTuple(parent, node, replacer, pre, post)
+		return a.rewriteValTuple(parent, node, replacer)
 	case *ValuesFuncExpr:
-		return rewriteRefOfValuesFuncExpr(parent, node, replacer, pre, post)
+		return a.rewriteRefOfValuesFuncExpr(parent, node, replacer)
 	case *XorExpr:
-		return rewriteRefOfXorExpr(parent, node, replacer, pre, post)
+		return a.rewriteRefOfXorExpr(parent, node, replacer)
 	default:
 		// this should never happen
 		return nil
@@ -12402,19 +12402,19 @@ func VisitInsertRows(in InsertRows, f Visit) error {
 }
 
 // rewriteInsertRows is part of the Rewrite implementation
-func rewriteInsertRows(parent SQLNode, node InsertRows, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteInsertRows(parent SQLNode, node InsertRows, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
 	switch node := node.(type) {
 	case *ParenSelect:
-		return rewriteRefOfParenSelect(parent, node, replacer, pre, post)
+		return a.rewriteRefOfParenSelect(parent, node, replacer)
 	case *Select:
-		return rewriteRefOfSelect(parent, node, replacer, pre, post)
+		return a.rewriteRefOfSelect(parent, node, replacer)
 	case *Union:
-		return rewriteRefOfUnion(parent, node, replacer, pre, post)
+		return a.rewriteRefOfUnion(parent, node, replacer)
 	case Values:
-		return rewriteValues(parent, node, replacer, pre, post)
+		return a.rewriteValues(parent, node, replacer)
 	default:
 		// this should never happen
 		return nil
@@ -12491,17 +12491,17 @@ func VisitSelectExpr(in SelectExpr, f Visit) error {
 }
 
 // rewriteSelectExpr is part of the Rewrite implementation
-func rewriteSelectExpr(parent SQLNode, node SelectExpr, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteSelectExpr(parent SQLNode, node SelectExpr, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
 	switch node := node.(type) {
 	case *AliasedExpr:
-		return rewriteRefOfAliasedExpr(parent, node, replacer, pre, post)
+		return a.rewriteRefOfAliasedExpr(parent, node, replacer)
 	case *Nextval:
-		return rewriteRefOfNextval(parent, node, replacer, pre, post)
+		return a.rewriteRefOfNextval(parent, node, replacer)
 	case *StarExpr:
-		return rewriteRefOfStarExpr(parent, node, replacer, pre, post)
+		return a.rewriteRefOfStarExpr(parent, node, replacer)
 	default:
 		// this should never happen
 		return nil
@@ -12578,17 +12578,17 @@ func VisitSelectStatement(in SelectStatement, f Visit) error {
 }
 
 // rewriteSelectStatement is part of the Rewrite implementation
-func rewriteSelectStatement(parent SQLNode, node SelectStatement, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteSelectStatement(parent SQLNode, node SelectStatement, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
 	switch node := node.(type) {
 	case *ParenSelect:
-		return rewriteRefOfParenSelect(parent, node, replacer, pre, post)
+		return a.rewriteRefOfParenSelect(parent, node, replacer)
 	case *Select:
-		return rewriteRefOfSelect(parent, node, replacer, pre, post)
+		return a.rewriteRefOfSelect(parent, node, replacer)
 	case *Union:
-		return rewriteRefOfUnion(parent, node, replacer, pre, post)
+		return a.rewriteRefOfUnion(parent, node, replacer)
 	default:
 		// this should never happen
 		return nil
@@ -12665,17 +12665,17 @@ func VisitShowInternal(in ShowInternal, f Visit) error {
 }
 
 // rewriteShowInternal is part of the Rewrite implementation
-func rewriteShowInternal(parent SQLNode, node ShowInternal, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteShowInternal(parent SQLNode, node ShowInternal, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
 	switch node := node.(type) {
 	case *ShowBasic:
-		return rewriteRefOfShowBasic(parent, node, replacer, pre, post)
+		return a.rewriteRefOfShowBasic(parent, node, replacer)
 	case *ShowCreate:
-		return rewriteRefOfShowCreate(parent, node, replacer, pre, post)
+		return a.rewriteRefOfShowCreate(parent, node, replacer)
 	case *ShowLegacy:
-		return rewriteRefOfShowLegacy(parent, node, replacer, pre, post)
+		return a.rewriteRefOfShowLegacy(parent, node, replacer)
 	default:
 		// this should never happen
 		return nil
@@ -12742,15 +12742,15 @@ func VisitSimpleTableExpr(in SimpleTableExpr, f Visit) error {
 }
 
 // rewriteSimpleTableExpr is part of the Rewrite implementation
-func rewriteSimpleTableExpr(parent SQLNode, node SimpleTableExpr, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteSimpleTableExpr(parent SQLNode, node SimpleTableExpr, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
 	switch node := node.(type) {
 	case *DerivedTable:
-		return rewriteRefOfDerivedTable(parent, node, replacer, pre, post)
+		return a.rewriteRefOfDerivedTable(parent, node, replacer)
 	case TableName:
-		return rewriteTableName(parent, node, replacer, pre, post)
+		return a.rewriteTableName(parent, node, replacer)
 	default:
 		// this should never happen
 		return nil
@@ -13207,93 +13207,93 @@ func VisitStatement(in Statement, f Visit) error {
 }
 
 // rewriteStatement is part of the Rewrite implementation
-func rewriteStatement(parent SQLNode, node Statement, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteStatement(parent SQLNode, node Statement, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
 	switch node := node.(type) {
 	case *AlterDatabase:
-		return rewriteRefOfAlterDatabase(parent, node, replacer, pre, post)
+		return a.rewriteRefOfAlterDatabase(parent, node, replacer)
 	case *AlterMigration:
-		return rewriteRefOfAlterMigration(parent, node, replacer, pre, post)
+		return a.rewriteRefOfAlterMigration(parent, node, replacer)
 	case *AlterTable:
-		return rewriteRefOfAlterTable(parent, node, replacer, pre, post)
+		return a.rewriteRefOfAlterTable(parent, node, replacer)
 	case *AlterView:
-		return rewriteRefOfAlterView(parent, node, replacer, pre, post)
+		return a.rewriteRefOfAlterView(parent, node, replacer)
 	case *AlterVschema:
-		return rewriteRefOfAlterVschema(parent, node, replacer, pre, post)
+		return a.rewriteRefOfAlterVschema(parent, node, replacer)
 	case *Begin:
-		return rewriteRefOfBegin(parent, node, replacer, pre, post)
+		return a.rewriteRefOfBegin(parent, node, replacer)
 	case *CallProc:
-		return rewriteRefOfCallProc(parent, node, replacer, pre, post)
+		return a.rewriteRefOfCallProc(parent, node, replacer)
 	case *Commit:
-		return rewriteRefOfCommit(parent, node, replacer, pre, post)
+		return a.rewriteRefOfCommit(parent, node, replacer)
 	case *CreateDatabase:
-		return rewriteRefOfCreateDatabase(parent, node, replacer, pre, post)
+		return a.rewriteRefOfCreateDatabase(parent, node, replacer)
 	case *CreateTable:
-		return rewriteRefOfCreateTable(parent, node, replacer, pre, post)
+		return a.rewriteRefOfCreateTable(parent, node, replacer)
 	case *CreateView:
-		return rewriteRefOfCreateView(parent, node, replacer, pre, post)
+		return a.rewriteRefOfCreateView(parent, node, replacer)
 	case *Delete:
-		return rewriteRefOfDelete(parent, node, replacer, pre, post)
+		return a.rewriteRefOfDelete(parent, node, replacer)
 	case *DropDatabase:
-		return rewriteRefOfDropDatabase(parent, node, replacer, pre, post)
+		return a.rewriteRefOfDropDatabase(parent, node, replacer)
 	case *DropTable:
-		return rewriteRefOfDropTable(parent, node, replacer, pre, post)
+		return a.rewriteRefOfDropTable(parent, node, replacer)
 	case *DropView:
-		return rewriteRefOfDropView(parent, node, replacer, pre, post)
+		return a.rewriteRefOfDropView(parent, node, replacer)
 	case *ExplainStmt:
-		return rewriteRefOfExplainStmt(parent, node, replacer, pre, post)
+		return a.rewriteRefOfExplainStmt(parent, node, replacer)
 	case *ExplainTab:
-		return rewriteRefOfExplainTab(parent, node, replacer, pre, post)
+		return a.rewriteRefOfExplainTab(parent, node, replacer)
 	case *Flush:
-		return rewriteRefOfFlush(parent, node, replacer, pre, post)
+		return a.rewriteRefOfFlush(parent, node, replacer)
 	case *Insert:
-		return rewriteRefOfInsert(parent, node, replacer, pre, post)
+		return a.rewriteRefOfInsert(parent, node, replacer)
 	case *Load:
-		return rewriteRefOfLoad(parent, node, replacer, pre, post)
+		return a.rewriteRefOfLoad(parent, node, replacer)
 	case *LockTables:
-		return rewriteRefOfLockTables(parent, node, replacer, pre, post)
+		return a.rewriteRefOfLockTables(parent, node, replacer)
 	case *OtherAdmin:
-		return rewriteRefOfOtherAdmin(parent, node, replacer, pre, post)
+		return a.rewriteRefOfOtherAdmin(parent, node, replacer)
 	case *OtherRead:
-		return rewriteRefOfOtherRead(parent, node, replacer, pre, post)
+		return a.rewriteRefOfOtherRead(parent, node, replacer)
 	case *ParenSelect:
-		return rewriteRefOfParenSelect(parent, node, replacer, pre, post)
+		return a.rewriteRefOfParenSelect(parent, node, replacer)
 	case *Release:
-		return rewriteRefOfRelease(parent, node, replacer, pre, post)
+		return a.rewriteRefOfRelease(parent, node, replacer)
 	case *RenameTable:
-		return rewriteRefOfRenameTable(parent, node, replacer, pre, post)
+		return a.rewriteRefOfRenameTable(parent, node, replacer)
 	case *RevertMigration:
-		return rewriteRefOfRevertMigration(parent, node, replacer, pre, post)
+		return a.rewriteRefOfRevertMigration(parent, node, replacer)
 	case *Rollback:
-		return rewriteRefOfRollback(parent, node, replacer, pre, post)
+		return a.rewriteRefOfRollback(parent, node, replacer)
 	case *SRollback:
-		return rewriteRefOfSRollback(parent, node, replacer, pre, post)
+		return a.rewriteRefOfSRollback(parent, node, replacer)
 	case *Savepoint:
-		return rewriteRefOfSavepoint(parent, node, replacer, pre, post)
+		return a.rewriteRefOfSavepoint(parent, node, replacer)
 	case *Select:
-		return rewriteRefOfSelect(parent, node, replacer, pre, post)
+		return a.rewriteRefOfSelect(parent, node, replacer)
 	case *Set:
-		return rewriteRefOfSet(parent, node, replacer, pre, post)
+		return a.rewriteRefOfSet(parent, node, replacer)
 	case *SetTransaction:
-		return rewriteRefOfSetTransaction(parent, node, replacer, pre, post)
+		return a.rewriteRefOfSetTransaction(parent, node, replacer)
 	case *Show:
-		return rewriteRefOfShow(parent, node, replacer, pre, post)
+		return a.rewriteRefOfShow(parent, node, replacer)
 	case *Stream:
-		return rewriteRefOfStream(parent, node, replacer, pre, post)
+		return a.rewriteRefOfStream(parent, node, replacer)
 	case *TruncateTable:
-		return rewriteRefOfTruncateTable(parent, node, replacer, pre, post)
+		return a.rewriteRefOfTruncateTable(parent, node, replacer)
 	case *Union:
-		return rewriteRefOfUnion(parent, node, replacer, pre, post)
+		return a.rewriteRefOfUnion(parent, node, replacer)
 	case *UnlockTables:
-		return rewriteRefOfUnlockTables(parent, node, replacer, pre, post)
+		return a.rewriteRefOfUnlockTables(parent, node, replacer)
 	case *Update:
-		return rewriteRefOfUpdate(parent, node, replacer, pre, post)
+		return a.rewriteRefOfUpdate(parent, node, replacer)
 	case *Use:
-		return rewriteRefOfUse(parent, node, replacer, pre, post)
+		return a.rewriteRefOfUse(parent, node, replacer)
 	case *VStream:
-		return rewriteRefOfVStream(parent, node, replacer, pre, post)
+		return a.rewriteRefOfVStream(parent, node, replacer)
 	default:
 		// this should never happen
 		return nil
@@ -13370,17 +13370,17 @@ func VisitTableExpr(in TableExpr, f Visit) error {
 }
 
 // rewriteTableExpr is part of the Rewrite implementation
-func rewriteTableExpr(parent SQLNode, node TableExpr, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteTableExpr(parent SQLNode, node TableExpr, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
 	switch node := node.(type) {
 	case *AliasedTableExpr:
-		return rewriteRefOfAliasedTableExpr(parent, node, replacer, pre, post)
+		return a.rewriteRefOfAliasedTableExpr(parent, node, replacer)
 	case *JoinTableExpr:
-		return rewriteRefOfJoinTableExpr(parent, node, replacer, pre, post)
+		return a.rewriteRefOfJoinTableExpr(parent, node, replacer)
 	case *ParenTableExpr:
-		return rewriteRefOfParenTableExpr(parent, node, replacer, pre, post)
+		return a.rewriteRefOfParenTableExpr(parent, node, replacer)
 	default:
 		// this should never happen
 		return nil
@@ -13394,16 +13394,16 @@ func VisitAccessMode(in AccessMode, f Visit) error {
 }
 
 // rewriteAccessMode is part of the Rewrite implementation
-func rewriteAccessMode(parent SQLNode, node AccessMode, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteAccessMode(parent SQLNode, node AccessMode, replacer replacerFunc) error {
 	cur := Cursor{
 		node:     node,
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -13416,16 +13416,16 @@ func VisitAlgorithmValue(in AlgorithmValue, f Visit) error {
 }
 
 // rewriteAlgorithmValue is part of the Rewrite implementation
-func rewriteAlgorithmValue(parent SQLNode, node AlgorithmValue, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteAlgorithmValue(parent SQLNode, node AlgorithmValue, replacer replacerFunc) error {
 	cur := Cursor{
 		node:     node,
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -13438,16 +13438,16 @@ func VisitArgument(in Argument, f Visit) error {
 }
 
 // rewriteArgument is part of the Rewrite implementation
-func rewriteArgument(parent SQLNode, node Argument, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteArgument(parent SQLNode, node Argument, replacer replacerFunc) error {
 	cur := Cursor{
 		node:     node,
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -13460,16 +13460,16 @@ func VisitBoolVal(in BoolVal, f Visit) error {
 }
 
 // rewriteBoolVal is part of the Rewrite implementation
-func rewriteBoolVal(parent SQLNode, node BoolVal, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteBoolVal(parent SQLNode, node BoolVal, replacer replacerFunc) error {
 	cur := Cursor{
 		node:     node,
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -13482,16 +13482,16 @@ func VisitIsolationLevel(in IsolationLevel, f Visit) error {
 }
 
 // rewriteIsolationLevel is part of the Rewrite implementation
-func rewriteIsolationLevel(parent SQLNode, node IsolationLevel, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteIsolationLevel(parent SQLNode, node IsolationLevel, replacer replacerFunc) error {
 	cur := Cursor{
 		node:     node,
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -13504,16 +13504,16 @@ func VisitReferenceAction(in ReferenceAction, f Visit) error {
 }
 
 // rewriteReferenceAction is part of the Rewrite implementation
-func rewriteReferenceAction(parent SQLNode, node ReferenceAction, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteReferenceAction(parent SQLNode, node ReferenceAction, replacer replacerFunc) error {
 	cur := Cursor{
 		node:     node,
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -13663,7 +13663,7 @@ func VisitRefOfColIdent(in *ColIdent, f Visit) error {
 }
 
 // rewriteRefOfColIdent is part of the Rewrite implementation
-func rewriteRefOfColIdent(parent SQLNode, node *ColIdent, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfColIdent(parent SQLNode, node *ColIdent, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -13672,10 +13672,10 @@ func rewriteRefOfColIdent(parent SQLNode, node *ColIdent, replacer replacerFunc,
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -13832,7 +13832,7 @@ func VisitRefOfJoinCondition(in *JoinCondition, f Visit) error {
 }
 
 // rewriteRefOfJoinCondition is part of the Rewrite implementation
-func rewriteRefOfJoinCondition(parent SQLNode, node *JoinCondition, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfJoinCondition(parent SQLNode, node *JoinCondition, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -13841,20 +13841,20 @@ func rewriteRefOfJoinCondition(parent SQLNode, node *JoinCondition, replacer rep
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteExpr(node, node.On, func(newNode, parent SQLNode) {
+	if errF := a.rewriteExpr(node, node.On, func(newNode, parent SQLNode) {
 		parent.(*JoinCondition).On = newNode.(Expr)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewriteColumns(node, node.Using, func(newNode, parent SQLNode) {
+	if errF := a.rewriteColumns(node, node.Using, func(newNode, parent SQLNode) {
 		parent.(*JoinCondition).Using = newNode.(Columns)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -14023,7 +14023,7 @@ func VisitRefOfTableIdent(in *TableIdent, f Visit) error {
 }
 
 // rewriteRefOfTableIdent is part of the Rewrite implementation
-func rewriteRefOfTableIdent(parent SQLNode, node *TableIdent, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfTableIdent(parent SQLNode, node *TableIdent, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -14032,10 +14032,10 @@ func rewriteRefOfTableIdent(parent SQLNode, node *TableIdent, replacer replacerF
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -14082,7 +14082,7 @@ func VisitRefOfTableName(in *TableName, f Visit) error {
 }
 
 // rewriteRefOfTableName is part of the Rewrite implementation
-func rewriteRefOfTableName(parent SQLNode, node *TableName, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfTableName(parent SQLNode, node *TableName, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -14091,20 +14091,20 @@ func rewriteRefOfTableName(parent SQLNode, node *TableName, replacer replacerFun
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteTableIdent(node, node.Name, func(newNode, parent SQLNode) {
+	if errF := a.rewriteTableIdent(node, node.Name, func(newNode, parent SQLNode) {
 		parent.(*TableName).Name = newNode.(TableIdent)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewriteTableIdent(node, node.Qualifier, func(newNode, parent SQLNode) {
+	if errF := a.rewriteTableIdent(node, node.Qualifier, func(newNode, parent SQLNode) {
 		parent.(*TableName).Qualifier = newNode.(TableIdent)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -14238,7 +14238,7 @@ func VisitRefOfVindexParam(in *VindexParam, f Visit) error {
 }
 
 // rewriteRefOfVindexParam is part of the Rewrite implementation
-func rewriteRefOfVindexParam(parent SQLNode, node *VindexParam, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfVindexParam(parent SQLNode, node *VindexParam, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -14247,15 +14247,15 @@ func rewriteRefOfVindexParam(parent SQLNode, node *VindexParam, replacer replace
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteColIdent(node, node.Key, func(newNode, parent SQLNode) {
+	if errF := a.rewriteColIdent(node, node.Key, func(newNode, parent SQLNode) {
 		parent.(*VindexParam).Key = newNode.(ColIdent)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil

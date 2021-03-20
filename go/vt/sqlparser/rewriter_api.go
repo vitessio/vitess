@@ -46,7 +46,12 @@ func Rewrite(node SQLNode, pre, post ApplyFunc) (result SQLNode, err error) {
 		parent.SQLNode = newNode
 	}
 
-	err = rewriteSQLNode(parent, node, replacer, pre, post)
+	a := &application{
+		pre:  pre,
+		post: post,
+	}
+
+	err = a.rewriteSQLNode(parent, node, replacer)
 	if err != nil && err != errAbort {
 		return nil, err
 	}
@@ -87,3 +92,9 @@ func (c *Cursor) Replace(newNode SQLNode) {
 }
 
 type replacerFunc func(newNode, parent SQLNode)
+
+// application carries all the shared data so we can pass it around cheaply.
+type application struct {
+	pre, post ApplyFunc
+	cursor    Cursor
+}

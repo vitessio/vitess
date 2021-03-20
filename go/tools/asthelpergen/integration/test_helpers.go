@@ -65,9 +65,14 @@ type replacerFunc func(newNode, parent AST)
 func Rewrite(node AST, pre, post ApplyFunc) (AST, error) {
 	outer := &struct{ AST }{node}
 
-	err := rewriteAST(outer, node, func(newNode, parent AST) {
+	a := &application{
+		pre:  pre,
+		post: post,
+	}
+
+	err := a.rewriteAST(outer, node, func(newNode, parent AST) {
 		outer.AST = newNode
-	}, pre, post)
+	})
 
 	if err != nil {
 		return nil, err
