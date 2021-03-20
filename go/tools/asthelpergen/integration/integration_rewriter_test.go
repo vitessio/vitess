@@ -226,6 +226,34 @@ func TestRewriteVisitValueContainerReplace2(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestRewriteVisitRefContainerPreOrPostOnly(t *testing.T) {
+	leaf1 := &Leaf{1}
+	leaf2 := &Leaf{2}
+	container := &RefContainer{ASTType: leaf1, ASTImplementationType: leaf2}
+	containerContainer := &RefContainer{ASTType: container}
+
+	tv := &rewriteTestVisitor{}
+
+	_, err := Rewrite(containerContainer, tv.pre, nil)
+	require.NoError(t, err)
+	tv.assertEquals(t, []step{
+		Pre{containerContainer},
+		Pre{container},
+		Pre{leaf1},
+		Pre{leaf2},
+	})
+
+	tv = &rewriteTestVisitor{}
+	_, err = Rewrite(containerContainer, nil, tv.post)
+	require.NoError(t, err)
+	tv.assertEquals(t, []step{
+		Post{leaf1},
+		Post{leaf2},
+		Post{container},
+		Post{containerContainer},
+	})
+}
+
 func rewriteLeaf(from, to int) func(*Cursor) bool {
 	return func(cursor *Cursor) bool {
 		leaf, ok := cursor.node.(*Leaf)
@@ -270,7 +298,7 @@ func (r Pre) String() string {
 	return fmt.Sprintf("Pre(%s)", r.el.String())
 }
 func (r Post) String() string {
-	return fmt.Sprintf("Pre(%s)", r.el.String())
+	return fmt.Sprintf("Post(%s)", r.el.String())
 }
 
 type Post struct {

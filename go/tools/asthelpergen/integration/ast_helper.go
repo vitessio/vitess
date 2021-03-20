@@ -805,8 +805,15 @@ func (a *application) rewriteBasicType(parent AST, node BasicType, replacer repl
 			return nil
 		}
 	}
-	if a.post != nil && !a.post(&a.cur) {
-		return errAbort
+	if a.post != nil {
+		if a.pre == nil {
+			a.cur.replacer = replacer
+			a.cur.parent = parent
+			a.cur.node = node
+		}
+		if !a.post(&a.cur) {
+			return errAbort
+		}
 	}
 	return nil
 }
@@ -822,8 +829,15 @@ func (a *application) rewriteBytes(parent AST, node Bytes, replacer replacerFunc
 			return nil
 		}
 	}
-	if a.post != nil && !a.post(&a.cur) {
-		return errAbort
+	if a.post != nil {
+		if a.pre == nil {
+			a.cur.replacer = replacer
+			a.cur.parent = parent
+			a.cur.node = node
+		}
+		if !a.post(&a.cur) {
+			return errAbort
+		}
 	}
 	return nil
 }
@@ -840,8 +854,15 @@ func (a *application) rewriteInterfaceContainer(parent AST, node InterfaceContai
 	if err != nil {
 		return err
 	}
-	if a.post != nil && !a.post(&a.cur) {
-		return errAbort
+	if a.post != nil {
+		if a.pre == nil {
+			a.cur.replacer = replacer
+			a.cur.parent = parent
+			a.cur.node = node
+		}
+		if !a.post(&a.cur) {
+			return errAbort
+		}
 	}
 	return nil
 }
@@ -869,7 +890,7 @@ func (a *application) rewriteInterfaceSlice(parent AST, node InterfaceSlice, rep
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return nil
+			return errAbort
 		}
 	}
 	return nil
@@ -898,7 +919,7 @@ func (a *application) rewriteLeafSlice(parent AST, node LeafSlice, replacer repl
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return nil
+			return errAbort
 		}
 	}
 	return nil
@@ -915,8 +936,15 @@ func (a *application) rewriteRefOfInterfaceContainer(parent AST, node *Interface
 			return nil
 		}
 	}
-	if a.post != nil && !a.post(&a.cur) {
-		return errAbort
+	if a.post != nil {
+		if a.pre == nil {
+			a.cur.replacer = replacer
+			a.cur.parent = parent
+			a.cur.node = node
+		}
+		if !a.post(&a.cur) {
+			return errAbort
+		}
 	}
 	return nil
 }
@@ -932,8 +960,15 @@ func (a *application) rewriteRefOfLeaf(parent AST, node *Leaf, replacer replacer
 			return nil
 		}
 	}
-	if a.post != nil && !a.post(&a.cur) {
-		return errAbort
+	if a.post != nil {
+		if a.pre == nil {
+			a.cur.replacer = replacer
+			a.cur.parent = parent
+			a.cur.node = node
+		}
+		if !a.post(&a.cur) {
+			return errAbort
+		}
 	}
 	return nil
 }
@@ -949,8 +984,15 @@ func (a *application) rewriteRefOfNoCloneType(parent AST, node *NoCloneType, rep
 			return nil
 		}
 	}
-	if a.post != nil && !a.post(&a.cur) {
-		return errAbort
+	if a.post != nil {
+		if a.pre == nil {
+			a.cur.replacer = replacer
+			a.cur.parent = parent
+			a.cur.node = node
+		}
+		if !a.post(&a.cur) {
+			return errAbort
+		}
 	}
 	return nil
 }
@@ -981,7 +1023,7 @@ func (a *application) rewriteRefOfRefContainer(parent AST, node *RefContainer, r
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return nil
+			return errAbort
 		}
 	}
 	return nil
@@ -1017,7 +1059,7 @@ func (a *application) rewriteRefOfRefSliceContainer(parent AST, node *RefSliceCo
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return nil
+			return errAbort
 		}
 	}
 	return nil
@@ -1044,7 +1086,7 @@ func (a *application) rewriteRefOfSubImpl(parent AST, node *SubImpl, replacer re
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return nil
+			return errAbort
 		}
 	}
 	return nil
@@ -1076,7 +1118,7 @@ func (a *application) rewriteRefOfValueContainer(parent AST, node *ValueContaine
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return nil
+			return errAbort
 		}
 	}
 	return nil
@@ -1112,7 +1154,7 @@ func (a *application) rewriteRefOfValueSliceContainer(parent AST, node *ValueSli
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return nil
+			return errAbort
 		}
 	}
 	return nil
@@ -1157,7 +1199,7 @@ func (a *application) rewriteValueContainer(parent AST, node ValueContainer, rep
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return nil
+			return errAbort
 		}
 	}
 	return nil
@@ -1194,7 +1236,7 @@ func (a *application) rewriteValueSliceContainer(parent AST, node ValueSliceCont
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return nil
+			return errAbort
 		}
 	}
 	return nil

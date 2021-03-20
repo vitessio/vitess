@@ -167,7 +167,7 @@ func (e rewriteGen) sliceMethod(t types.Type, slice *types.Slice, spi generatorS
 	}
 	stmts = append(stmts, executePre())
 
-	addCur := false
+	haveChildren := false
 	if shouldAdd(slice.Elem(), spi.iface()) {
 		/*
 			for i, el := range node {
@@ -178,13 +178,13 @@ func (e rewriteGen) sliceMethod(t types.Type, slice *types.Slice, spi generatorS
 						}
 					}
 		*/
-		addCur = true
+		haveChildren = true
 		stmts = append(stmts,
 			jen.For(jen.Id("i, el").Op(":=").Id("range node")).
 				Block(e.rewriteChild(t, slice.Elem(), "notUsed", jen.Id("el"), jen.Index(jen.Id("i")), false)))
 	}
 
-	stmts = append(stmts, executePost(addCur))
+	stmts = append(stmts, executePost(haveChildren))
 	stmts = append(stmts, returnNil())
 
 	e.rewriteFunc(t, stmts, spi)
@@ -204,14 +204,19 @@ func executePre() jen.Code {
 	return jen.If(jen.Id("a.pre!= nil").Block(curStmts...))
 }
 
-func executePost(addCur bool) jen.Code {
-	if addCur {
-		curStmts := setupCursor()
-		curStmts = append(curStmts, jen.If(jen.Id("!a.post(&a.cur)")).Block(returnNil()))
-		return jen.If(jen.Id("a.post!= nil").Block(curStmts...))
+func executePost(seenChildren bool) jen.Code {
+	var curStmts []jen.Code
+	if seenChildren {
+		// if we have visited children, we have to write to the cursor fields
+		curStmts = setupCursor()
+	} else {
+		curStmts = append(curStmts,
+			jen.If(jen.Id("a.pre == nil")).Block(setupCursor()...))
 	}
 
-	return jen.If(jen.Id("a.post != nil && !a.post(&a.cur)")).Block(jen.Return(jen.Id(abort)))
+	curStmts = append(curStmts, jen.If(jen.Id("!a.post(&a.cur)")).Block(jen.Return(jen.Id(abort))))
+
+	return jen.If(jen.Id("a.post != nil")).Block(curStmts...)
 }
 
 func (e rewriteGen) basicMethod(t types.Type, _ *types.Basic, spi generatorSPI) error {
