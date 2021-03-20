@@ -734,11 +734,7 @@ func (s *VtctldServer) GetTablets(ctx context.Context, req *vtctldatapb.GetTable
 	wg.Wait()
 
 	if rec.HasErrors() {
-		if req.Strict {
-			return nil, rec.Error()
-		}
-
-		if len(rec.Errors) == len(cells) {
+		if req.Strict || len(rec.Errors) == len(cells) {
 			return nil, rec.Error()
 		}
 	}
