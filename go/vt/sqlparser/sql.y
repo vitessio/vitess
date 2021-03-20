@@ -78,6 +78,8 @@ func skipToEnd(yylex interface{}) {
   colName       *ColName
   tableExprs    TableExprs
   tableExpr     TableExpr
+  subquery      *Subquery
+  simpleTableExpr  SimpleTableExpr
   joinCondition JoinCondition
   tableName     TableName
   tableNames    TableNames
@@ -91,7 +93,6 @@ func skipToEnd(yylex interface{}) {
   colTuple      ColTuple
   values        Values
   valTuple      ValTuple
-  subquery      *Subquery
   whens         []*When
   when          *When
   orderBy       OrderBy
@@ -275,6 +276,8 @@ func skipToEnd(yylex interface{}) {
 %type <expr> expression naked_like group_by
 %type <tableExprs> table_references with_clause cte_list
 %type <tableExpr> table_reference table_factor join_table common_table_expression
+%type <simpleTableExpr> values_statement subquery_or_values
+%type <subquery> subquery
 %type <joinCondition> join_condition join_condition_opt on_expression_opt
 %type <tableNames> table_name_list delete_table_list view_name_list
 %type <str> inner_join outer_join straight_join natural_join
@@ -293,10 +296,9 @@ func skipToEnd(yylex interface{}) {
 %type <str> is_suffix
 %type <colTuple> col_tuple
 %type <exprs> expression_list group_by_list
-%type <values> tuple_list
+%type <values> tuple_list row_list
 %type <valTuple> row_tuple tuple_or_empty
 %type <expr> tuple_expression
-%type <subquery> subquery
 %type <colName> column_name
 %type <whens> when_expression_list
 %type <when> when_expression
@@ -348,7 +350,7 @@ func skipToEnd(yylex interface{}) {
 %type <strs> enum_values
 %type <columnDefinition> column_definition column_definition_for_create
 %type <indexDefinition> index_definition
-%type <constraintDefinition> constraint_definition, check_constraint_definition
+%type <constraintDefinition> constraint_definition check_constraint_definition
 %type <str> index_or_key indexes_or_keys index_or_key_opt
 %type <str> from_or_in show_database_opt
 %type <str> name_opt
@@ -360,7 +362,7 @@ func skipToEnd(yylex interface{}) {
 %type <indexColumns> index_column_list
 %type <indexOption> index_option
 %type <indexOptions> index_option_list index_option_list_opt
-%type <constraintInfo> constraint_info, check_constraint_info
+%type <constraintInfo> constraint_info check_constraint_info
 %type <partDefs> partition_definitions
 %type <partDef> partition_definition
 %type <partSpec> partition_operation
@@ -495,11 +497,11 @@ cte_list:
   }
 
 common_table_expression:
-  table_alias AS subquery
+  table_alias AS subquery_or_values
   {
     $$ = &CommonTableExpr{&AliasedTableExpr{Expr:$3, As: $1}, nil}
   }
-| table_alias openb ins_column_list closeb AS subquery
+| table_alias openb ins_column_list closeb AS subquery_or_values
   {
     $$ = &CommonTableExpr{&AliasedTableExpr{Expr:$6, As: $1}, $3}
   }
@@ -2741,11 +2743,11 @@ table_factor:
   {
     $$ = $1
   }
-| subquery as_opt table_alias
+| subquery_or_values as_opt table_alias
   {
     $$ = &AliasedTableExpr{Expr:$1, As: $3}
   }
-| subquery
+| subquery_or_values
   {
     // missed alias for subquery
     yylex.Error("Every derived table must have its own alias")
@@ -2754,6 +2756,22 @@ table_factor:
 | openb table_references closeb
   {
     $$ = &ParenTableExpr{Exprs: $2}
+  }
+
+values_statement:
+  VALUES row_list
+  {
+    $$ = &ValuesStatement{Rows: $2}
+  }
+
+row_list:
+  ROW row_tuple
+  {
+    $$ = Values{$2}
+  }
+| row_list ',' ROW row_tuple
+  {
+    $$ = append($$, $4)
   }
 
 aliased_table_name:
@@ -3183,6 +3201,17 @@ subquery:
   {
     $$ = &Subquery{$2}
   }
+
+subquery_or_values:
+  subquery
+  {
+    $$ = $1
+  }
+| openb values_statement closeb
+  {
+    $$ = $2
+  }
+
 
 argument_expression_list_opt:
   {
