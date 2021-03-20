@@ -167,6 +167,9 @@ var _ net.Addr = (*fuzzmockAddress)(nil)
 
 // Fuzzers begin here:
 func FuzzWritePacket(data []byte) int {
+	if len(data) < 10 {
+		return -1
+	}
 	listener, sConn, cConn := createFuzzingSocketPair()
 	defer func() {
 		listener.Close()
@@ -186,6 +189,9 @@ func FuzzWritePacket(data []byte) int {
 }
 
 func FuzzHandleNextCommand(data []byte) int {
+	if len(data) < 10 {
+		return -1
+	}
 	sConn := newConn(fuzztestConn{
 		writeToPass: []bool{false},
 		pos:         -1,
