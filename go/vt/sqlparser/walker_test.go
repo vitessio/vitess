@@ -52,7 +52,9 @@ func BenchmarkRewriteLargeExpression(b *testing.B) {
 					count--
 					return true
 				})
-				require.NoError(b, err)
+				if err != nil {
+					b.Fatal(err)
+				}
 			}
 		})
 	}
