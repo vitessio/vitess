@@ -797,15 +797,14 @@ func (a *application) rewriteAST(parent AST, node AST, replacer replacerFunc) er
 	}
 }
 func (a *application) rewriteBasicType(parent AST, node BasicType, replacer replacerFunc) error {
-	a.cur.replacer = replacer
-	a.cur.parent = parent
-	a.cur.node = node
-	if a.pre != nil && !a.pre(&a.cur) {
-		return nil
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return nil
+		}
 	}
-	a.cur.replacer = replacer
-	a.cur.parent = parent
-	a.cur.node = node
 	if a.post != nil && !a.post(&a.cur) {
 		return errAbort
 	}
@@ -815,15 +814,14 @@ func (a *application) rewriteBytes(parent AST, node Bytes, replacer replacerFunc
 	if node == nil {
 		return nil
 	}
-	a.cur.replacer = replacer
-	a.cur.parent = parent
-	a.cur.node = node
-	if a.pre != nil && !a.pre(&a.cur) {
-		return nil
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return nil
+		}
 	}
-	a.cur.replacer = replacer
-	a.cur.parent = parent
-	a.cur.node = node
 	if a.post != nil && !a.post(&a.cur) {
 		return errAbort
 	}
@@ -831,18 +829,17 @@ func (a *application) rewriteBytes(parent AST, node Bytes, replacer replacerFunc
 }
 func (a *application) rewriteInterfaceContainer(parent AST, node InterfaceContainer, replacer replacerFunc) error {
 	var err error
-	a.cur.replacer = replacer
-	a.cur.parent = parent
-	a.cur.node = node
-	if a.pre != nil && !a.pre(&a.cur) {
-		return nil
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return nil
+		}
 	}
 	if err != nil {
 		return err
 	}
-	a.cur.replacer = replacer
-	a.cur.parent = parent
-	a.cur.node = node
 	if a.post != nil && !a.post(&a.cur) {
 		return errAbort
 	}
@@ -852,11 +849,13 @@ func (a *application) rewriteInterfaceSlice(parent AST, node InterfaceSlice, rep
 	if node == nil {
 		return nil
 	}
-	a.cur.replacer = replacer
-	a.cur.parent = parent
-	a.cur.node = node
-	if a.pre != nil && !a.pre(&a.cur) {
-		return nil
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return nil
+		}
 	}
 	for i, el := range node {
 		if errF := a.rewriteAST(node, el, func(newNode, parent AST) {
@@ -865,11 +864,13 @@ func (a *application) rewriteInterfaceSlice(parent AST, node InterfaceSlice, rep
 			return errF
 		}
 	}
-	a.cur.replacer = replacer
-	a.cur.parent = parent
-	a.cur.node = node
-	if a.post != nil && !a.post(&a.cur) {
-		return errAbort
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return nil
+		}
 	}
 	return nil
 }
@@ -877,11 +878,13 @@ func (a *application) rewriteLeafSlice(parent AST, node LeafSlice, replacer repl
 	if node == nil {
 		return nil
 	}
-	a.cur.replacer = replacer
-	a.cur.parent = parent
-	a.cur.node = node
-	if a.pre != nil && !a.pre(&a.cur) {
-		return nil
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return nil
+		}
 	}
 	for i, el := range node {
 		if errF := a.rewriteRefOfLeaf(node, el, func(newNode, parent AST) {
@@ -890,11 +893,13 @@ func (a *application) rewriteLeafSlice(parent AST, node LeafSlice, replacer repl
 			return errF
 		}
 	}
-	a.cur.replacer = replacer
-	a.cur.parent = parent
-	a.cur.node = node
-	if a.post != nil && !a.post(&a.cur) {
-		return errAbort
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return nil
+		}
 	}
 	return nil
 }
@@ -902,15 +907,14 @@ func (a *application) rewriteRefOfInterfaceContainer(parent AST, node *Interface
 	if node == nil {
 		return nil
 	}
-	a.cur.replacer = replacer
-	a.cur.parent = parent
-	a.cur.node = node
-	if a.pre != nil && !a.pre(&a.cur) {
-		return nil
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return nil
+		}
 	}
-	a.cur.replacer = replacer
-	a.cur.parent = parent
-	a.cur.node = node
 	if a.post != nil && !a.post(&a.cur) {
 		return errAbort
 	}
@@ -920,15 +924,14 @@ func (a *application) rewriteRefOfLeaf(parent AST, node *Leaf, replacer replacer
 	if node == nil {
 		return nil
 	}
-	a.cur.replacer = replacer
-	a.cur.parent = parent
-	a.cur.node = node
-	if a.pre != nil && !a.pre(&a.cur) {
-		return nil
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return nil
+		}
 	}
-	a.cur.replacer = replacer
-	a.cur.parent = parent
-	a.cur.node = node
 	if a.post != nil && !a.post(&a.cur) {
 		return errAbort
 	}
@@ -938,15 +941,14 @@ func (a *application) rewriteRefOfNoCloneType(parent AST, node *NoCloneType, rep
 	if node == nil {
 		return nil
 	}
-	a.cur.replacer = replacer
-	a.cur.parent = parent
-	a.cur.node = node
-	if a.pre != nil && !a.pre(&a.cur) {
-		return nil
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return nil
+		}
 	}
-	a.cur.replacer = replacer
-	a.cur.parent = parent
-	a.cur.node = node
 	if a.post != nil && !a.post(&a.cur) {
 		return errAbort
 	}
@@ -956,11 +958,13 @@ func (a *application) rewriteRefOfRefContainer(parent AST, node *RefContainer, r
 	if node == nil {
 		return nil
 	}
-	a.cur.replacer = replacer
-	a.cur.parent = parent
-	a.cur.node = node
-	if a.pre != nil && !a.pre(&a.cur) {
-		return nil
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return nil
+		}
 	}
 	if errF := a.rewriteAST(node, node.ASTType, func(newNode, parent AST) {
 		parent.(*RefContainer).ASTType = newNode.(AST)
@@ -972,11 +976,13 @@ func (a *application) rewriteRefOfRefContainer(parent AST, node *RefContainer, r
 	}); errF != nil {
 		return errF
 	}
-	a.cur.replacer = replacer
-	a.cur.parent = parent
-	a.cur.node = node
-	if a.post != nil && !a.post(&a.cur) {
-		return errAbort
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return nil
+		}
 	}
 	return nil
 }
@@ -984,11 +990,13 @@ func (a *application) rewriteRefOfRefSliceContainer(parent AST, node *RefSliceCo
 	if node == nil {
 		return nil
 	}
-	a.cur.replacer = replacer
-	a.cur.parent = parent
-	a.cur.node = node
-	if a.pre != nil && !a.pre(&a.cur) {
-		return nil
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return nil
+		}
 	}
 	for i, el := range node.ASTElements {
 		if errF := a.rewriteAST(node, el, func(newNode, parent AST) {
@@ -1004,11 +1012,13 @@ func (a *application) rewriteRefOfRefSliceContainer(parent AST, node *RefSliceCo
 			return errF
 		}
 	}
-	a.cur.replacer = replacer
-	a.cur.parent = parent
-	a.cur.node = node
-	if a.post != nil && !a.post(&a.cur) {
-		return errAbort
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return nil
+		}
 	}
 	return nil
 }
@@ -1016,22 +1026,26 @@ func (a *application) rewriteRefOfSubImpl(parent AST, node *SubImpl, replacer re
 	if node == nil {
 		return nil
 	}
-	a.cur.replacer = replacer
-	a.cur.parent = parent
-	a.cur.node = node
-	if a.pre != nil && !a.pre(&a.cur) {
-		return nil
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return nil
+		}
 	}
 	if errF := a.rewriteSubIface(node, node.inner, func(newNode, parent AST) {
 		parent.(*SubImpl).inner = newNode.(SubIface)
 	}); errF != nil {
 		return errF
 	}
-	a.cur.replacer = replacer
-	a.cur.parent = parent
-	a.cur.node = node
-	if a.post != nil && !a.post(&a.cur) {
-		return errAbort
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return nil
+		}
 	}
 	return nil
 }
@@ -1039,11 +1053,13 @@ func (a *application) rewriteRefOfValueContainer(parent AST, node *ValueContaine
 	if node == nil {
 		return nil
 	}
-	a.cur.replacer = replacer
-	a.cur.parent = parent
-	a.cur.node = node
-	if a.pre != nil && !a.pre(&a.cur) {
-		return nil
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return nil
+		}
 	}
 	if errF := a.rewriteAST(node, node.ASTType, func(newNode, parent AST) {
 		parent.(*ValueContainer).ASTType = newNode.(AST)
@@ -1055,11 +1071,13 @@ func (a *application) rewriteRefOfValueContainer(parent AST, node *ValueContaine
 	}); errF != nil {
 		return errF
 	}
-	a.cur.replacer = replacer
-	a.cur.parent = parent
-	a.cur.node = node
-	if a.post != nil && !a.post(&a.cur) {
-		return errAbort
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return nil
+		}
 	}
 	return nil
 }
@@ -1067,11 +1085,13 @@ func (a *application) rewriteRefOfValueSliceContainer(parent AST, node *ValueSli
 	if node == nil {
 		return nil
 	}
-	a.cur.replacer = replacer
-	a.cur.parent = parent
-	a.cur.node = node
-	if a.pre != nil && !a.pre(&a.cur) {
-		return nil
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return nil
+		}
 	}
 	for i, el := range node.ASTElements {
 		if errF := a.rewriteAST(node, el, func(newNode, parent AST) {
@@ -1087,11 +1107,13 @@ func (a *application) rewriteRefOfValueSliceContainer(parent AST, node *ValueSli
 			return errF
 		}
 	}
-	a.cur.replacer = replacer
-	a.cur.parent = parent
-	a.cur.node = node
-	if a.post != nil && !a.post(&a.cur) {
-		return errAbort
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return nil
+		}
 	}
 	return nil
 }
@@ -1109,11 +1131,13 @@ func (a *application) rewriteSubIface(parent AST, node SubIface, replacer replac
 }
 func (a *application) rewriteValueContainer(parent AST, node ValueContainer, replacer replacerFunc) error {
 	var err error
-	a.cur.replacer = replacer
-	a.cur.parent = parent
-	a.cur.node = node
-	if a.pre != nil && !a.pre(&a.cur) {
-		return nil
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return nil
+		}
 	}
 	if errF := a.rewriteAST(node, node.ASTType, func(newNode, parent AST) {
 		err = vterrors.New(vtrpc.Code_INTERNAL, "[BUG] tried to replace 'ASTType' on 'ValueContainer'")
@@ -1128,21 +1152,25 @@ func (a *application) rewriteValueContainer(parent AST, node ValueContainer, rep
 	if err != nil {
 		return err
 	}
-	a.cur.replacer = replacer
-	a.cur.parent = parent
-	a.cur.node = node
-	if a.post != nil && !a.post(&a.cur) {
-		return errAbort
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return nil
+		}
 	}
 	return nil
 }
 func (a *application) rewriteValueSliceContainer(parent AST, node ValueSliceContainer, replacer replacerFunc) error {
 	var err error
-	a.cur.replacer = replacer
-	a.cur.parent = parent
-	a.cur.node = node
-	if a.pre != nil && !a.pre(&a.cur) {
-		return nil
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return nil
+		}
 	}
 	for _, el := range node.ASTElements {
 		if errF := a.rewriteAST(node, el, func(newNode, parent AST) {
@@ -1161,11 +1189,13 @@ func (a *application) rewriteValueSliceContainer(parent AST, node ValueSliceCont
 	if err != nil {
 		return err
 	}
-	a.cur.replacer = replacer
-	a.cur.parent = parent
-	a.cur.node = node
-	if a.post != nil && !a.post(&a.cur) {
-		return errAbort
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return nil
+		}
 	}
 	return nil
 }
