@@ -64,7 +64,7 @@ func (e rewriteGen) interfaceMethod(t types.Type, iface *types.Interface, spi ge
 		funcName := rewriteName + printableTypeName(t)
 		spi.addType(t)
 		caseBlock := jen.Case(jen.Id(typeString)).Block(
-			jen.Return(jen.Id(funcName).Call(jen.Id("parent, node, replacer, pre, post"))),
+			jen.Return(jen.Id("a").Dot(funcName).Call(jen.Id("parent, node, replacer"))),
 		)
 		cases = append(cases, caseBlock)
 		return nil
@@ -224,11 +224,11 @@ func (e rewriteGen) sliceMethod(t types.Type, slice *types.Slice, spi generatorS
 }
 
 func executePre() *jen.Statement {
-	return jen.If(jen.Id("pre!= nil && !pre(&cur)")).Block(returnNil())
+	return jen.If(jen.Id("a.pre!= nil && !a.pre(&cur)")).Block(returnNil())
 }
 
 func executePost() *jen.Statement {
-	return jen.If(jen.Id("post != nil && !post(&cur)")).Block(jen.Return(jen.Id(abort)))
+	return jen.If(jen.Id("a.post != nil && !a.post(&cur)")).Block(jen.Return(jen.Id(abort)))
 }
 
 func (e rewriteGen) basicMethod(t types.Type, _ *types.Basic, spi generatorSPI) error {
@@ -255,10 +255,11 @@ func (e rewriteGen) rewriteFunc(t types.Type, stmts []jen.Code, spi generatorSPI
 
 	typeString := types.TypeString(t, noQualifier)
 	funcName := fmt.Sprintf("%s%s", rewriteName, printableTypeName(t))
-	code := jen.Func().Id(funcName).Params(
-		jen.Id(fmt.Sprintf("parent %s, node %s, replacer replacerFunc, pre, post ApplyFunc", e.ifaceName, typeString)),
-	).Error().
-		Block(stmts...)
+	code := jen.Func().Params(
+		jen.Id("a").Op("*").Id("application"),
+	).Id(funcName).Params(
+		jen.Id(fmt.Sprintf("parent %s, node %s, replacer replacerFunc", e.ifaceName, typeString)),
+	).Error().Block(stmts...)
 
 	spi.addFunc(funcName, rewrite, code)
 }
@@ -334,12 +335,10 @@ func (e rewriteGen) rewriteChild(t, field types.Type, fieldName string, param je
 		Block(replaceOrFail)
 
 	rewriteField := jen.If(
-		jen.Id("errF := ").Id(funcName).Call(
+		jen.Id("errF := ").Id("a").Dot(funcName).Call(
 			jen.Id("node"),
 			param,
-			funcBlock,
-			jen.Id("pre"),
-			jen.Id("post")),
+			funcBlock),
 		jen.Id("errF != nil").Block(jen.Return(jen.Id("errF"))))
 
 	return rewriteField

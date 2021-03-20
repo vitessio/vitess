@@ -182,35 +182,35 @@ func VisitAST(in AST, f Visit) error {
 }
 
 // rewriteAST is part of the Rewrite implementation
-func rewriteAST(parent AST, node AST, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteAST(parent AST, node AST, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
 	switch node := node.(type) {
 	case BasicType:
-		return rewriteBasicType(parent, node, replacer, pre, post)
+		return a.rewriteBasicType(parent, node, replacer)
 	case Bytes:
-		return rewriteBytes(parent, node, replacer, pre, post)
+		return a.rewriteBytes(parent, node, replacer)
 	case InterfaceContainer:
-		return rewriteInterfaceContainer(parent, node, replacer, pre, post)
+		return a.rewriteInterfaceContainer(parent, node, replacer)
 	case InterfaceSlice:
-		return rewriteInterfaceSlice(parent, node, replacer, pre, post)
+		return a.rewriteInterfaceSlice(parent, node, replacer)
 	case *Leaf:
-		return rewriteRefOfLeaf(parent, node, replacer, pre, post)
+		return a.rewriteRefOfLeaf(parent, node, replacer)
 	case LeafSlice:
-		return rewriteLeafSlice(parent, node, replacer, pre, post)
+		return a.rewriteLeafSlice(parent, node, replacer)
 	case *NoCloneType:
-		return rewriteRefOfNoCloneType(parent, node, replacer, pre, post)
+		return a.rewriteRefOfNoCloneType(parent, node, replacer)
 	case *RefContainer:
-		return rewriteRefOfRefContainer(parent, node, replacer, pre, post)
+		return a.rewriteRefOfRefContainer(parent, node, replacer)
 	case *RefSliceContainer:
-		return rewriteRefOfRefSliceContainer(parent, node, replacer, pre, post)
+		return a.rewriteRefOfRefSliceContainer(parent, node, replacer)
 	case *SubImpl:
-		return rewriteRefOfSubImpl(parent, node, replacer, pre, post)
+		return a.rewriteRefOfSubImpl(parent, node, replacer)
 	case ValueContainer:
-		return rewriteValueContainer(parent, node, replacer, pre, post)
+		return a.rewriteValueContainer(parent, node, replacer)
 	case ValueSliceContainer:
-		return rewriteValueSliceContainer(parent, node, replacer, pre, post)
+		return a.rewriteValueSliceContainer(parent, node, replacer)
 	default:
 		// this should never happen
 		return nil
@@ -244,7 +244,7 @@ func VisitBytes(in Bytes, f Visit) error {
 }
 
 // rewriteBytes is part of the Rewrite implementation
-func rewriteBytes(parent AST, node Bytes, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteBytes(parent AST, node Bytes, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -253,10 +253,10 @@ func rewriteBytes(parent AST, node Bytes, replacer replacerFunc, pre, post Apply
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -281,20 +281,20 @@ func VisitInterfaceContainer(in InterfaceContainer, f Visit) error {
 }
 
 // rewriteInterfaceContainer is part of the Rewrite implementation
-func rewriteInterfaceContainer(parent AST, node InterfaceContainer, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteInterfaceContainer(parent AST, node InterfaceContainer, replacer replacerFunc) error {
 	var err error
 	cur := Cursor{
 		node:     node,
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
 	if err != nil {
 		return err
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -339,7 +339,7 @@ func VisitInterfaceSlice(in InterfaceSlice, f Visit) error {
 }
 
 // rewriteInterfaceSlice is part of the Rewrite implementation
-func rewriteInterfaceSlice(parent AST, node InterfaceSlice, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteInterfaceSlice(parent AST, node InterfaceSlice, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -348,17 +348,17 @@ func rewriteInterfaceSlice(parent AST, node InterfaceSlice, replacer replacerFun
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
 	for i, el := range node {
-		if errF := rewriteAST(node, el, func(newNode, parent AST) {
+		if errF := a.rewriteAST(node, el, func(newNode, parent AST) {
 			parent.(InterfaceSlice)[i] = newNode.(AST)
-		}, pre, post); errF != nil {
+		}); errF != nil {
 			return errF
 		}
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -396,7 +396,7 @@ func VisitRefOfLeaf(in *Leaf, f Visit) error {
 }
 
 // rewriteRefOfLeaf is part of the Rewrite implementation
-func rewriteRefOfLeaf(parent AST, node *Leaf, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfLeaf(parent AST, node *Leaf, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -405,10 +405,10 @@ func rewriteRefOfLeaf(parent AST, node *Leaf, replacer replacerFunc, pre, post A
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -453,7 +453,7 @@ func VisitLeafSlice(in LeafSlice, f Visit) error {
 }
 
 // rewriteLeafSlice is part of the Rewrite implementation
-func rewriteLeafSlice(parent AST, node LeafSlice, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteLeafSlice(parent AST, node LeafSlice, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -462,17 +462,17 @@ func rewriteLeafSlice(parent AST, node LeafSlice, replacer replacerFunc, pre, po
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
 	for i, el := range node {
-		if errF := rewriteRefOfLeaf(node, el, func(newNode, parent AST) {
+		if errF := a.rewriteRefOfLeaf(node, el, func(newNode, parent AST) {
 			parent.(LeafSlice)[i] = newNode.(*Leaf)
-		}, pre, post); errF != nil {
+		}); errF != nil {
 			return errF
 		}
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -506,7 +506,7 @@ func VisitRefOfNoCloneType(in *NoCloneType, f Visit) error {
 }
 
 // rewriteRefOfNoCloneType is part of the Rewrite implementation
-func rewriteRefOfNoCloneType(parent AST, node *NoCloneType, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfNoCloneType(parent AST, node *NoCloneType, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -515,10 +515,10 @@ func rewriteRefOfNoCloneType(parent AST, node *NoCloneType, replacer replacerFun
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -566,7 +566,7 @@ func VisitRefOfRefContainer(in *RefContainer, f Visit) error {
 }
 
 // rewriteRefOfRefContainer is part of the Rewrite implementation
-func rewriteRefOfRefContainer(parent AST, node *RefContainer, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfRefContainer(parent AST, node *RefContainer, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -575,20 +575,20 @@ func rewriteRefOfRefContainer(parent AST, node *RefContainer, replacer replacerF
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteAST(node, node.ASTType, func(newNode, parent AST) {
+	if errF := a.rewriteAST(node, node.ASTType, func(newNode, parent AST) {
 		parent.(*RefContainer).ASTType = newNode.(AST)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewriteRefOfLeaf(node, node.ASTImplementationType, func(newNode, parent AST) {
+	if errF := a.rewriteRefOfLeaf(node, node.ASTImplementationType, func(newNode, parent AST) {
 		parent.(*RefContainer).ASTImplementationType = newNode.(*Leaf)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -641,7 +641,7 @@ func VisitRefOfRefSliceContainer(in *RefSliceContainer, f Visit) error {
 }
 
 // rewriteRefOfRefSliceContainer is part of the Rewrite implementation
-func rewriteRefOfRefSliceContainer(parent AST, node *RefSliceContainer, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfRefSliceContainer(parent AST, node *RefSliceContainer, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -650,24 +650,24 @@ func rewriteRefOfRefSliceContainer(parent AST, node *RefSliceContainer, replacer
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
 	for i, el := range node.ASTElements {
-		if errF := rewriteAST(node, el, func(newNode, parent AST) {
+		if errF := a.rewriteAST(node, el, func(newNode, parent AST) {
 			parent.(*RefSliceContainer).ASTElements[i] = newNode.(AST)
-		}, pre, post); errF != nil {
+		}); errF != nil {
 			return errF
 		}
 	}
 	for i, el := range node.ASTImplementationElements {
-		if errF := rewriteRefOfLeaf(node, el, func(newNode, parent AST) {
+		if errF := a.rewriteRefOfLeaf(node, el, func(newNode, parent AST) {
 			parent.(*RefSliceContainer).ASTImplementationElements[i] = newNode.(*Leaf)
-		}, pre, post); errF != nil {
+		}); errF != nil {
 			return errF
 		}
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -711,7 +711,7 @@ func VisitRefOfSubImpl(in *SubImpl, f Visit) error {
 }
 
 // rewriteRefOfSubImpl is part of the Rewrite implementation
-func rewriteRefOfSubImpl(parent AST, node *SubImpl, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfSubImpl(parent AST, node *SubImpl, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -720,15 +720,15 @@ func rewriteRefOfSubImpl(parent AST, node *SubImpl, replacer replacerFunc, pre, 
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteSubIface(node, node.inner, func(newNode, parent AST) {
+	if errF := a.rewriteSubIface(node, node.inner, func(newNode, parent AST) {
 		parent.(*SubImpl).inner = newNode.(SubIface)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -761,30 +761,30 @@ func VisitValueContainer(in ValueContainer, f Visit) error {
 }
 
 // rewriteValueContainer is part of the Rewrite implementation
-func rewriteValueContainer(parent AST, node ValueContainer, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteValueContainer(parent AST, node ValueContainer, replacer replacerFunc) error {
 	var err error
 	cur := Cursor{
 		node:     node,
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteAST(node, node.ASTType, func(newNode, parent AST) {
+	if errF := a.rewriteAST(node, node.ASTType, func(newNode, parent AST) {
 		err = vterrors.New(vtrpc.Code_INTERNAL, "[BUG] tried to replace 'ASTType' on 'ValueContainer'")
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewriteRefOfLeaf(node, node.ASTImplementationType, func(newNode, parent AST) {
+	if errF := a.rewriteRefOfLeaf(node, node.ASTImplementationType, func(newNode, parent AST) {
 		err = vterrors.New(vtrpc.Code_INTERNAL, "[BUG] tried to replace 'ASTImplementationType' on 'ValueContainer'")
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
 	if err != nil {
 		return err
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -821,34 +821,34 @@ func VisitValueSliceContainer(in ValueSliceContainer, f Visit) error {
 }
 
 // rewriteValueSliceContainer is part of the Rewrite implementation
-func rewriteValueSliceContainer(parent AST, node ValueSliceContainer, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteValueSliceContainer(parent AST, node ValueSliceContainer, replacer replacerFunc) error {
 	var err error
 	cur := Cursor{
 		node:     node,
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
 	for _, el := range node.ASTElements {
-		if errF := rewriteAST(node, el, func(newNode, parent AST) {
+		if errF := a.rewriteAST(node, el, func(newNode, parent AST) {
 			err = vterrors.New(vtrpc.Code_INTERNAL, "[BUG] tried to replace 'ASTElements' on 'ValueSliceContainer'")
-		}, pre, post); errF != nil {
+		}); errF != nil {
 			return errF
 		}
 	}
 	for _, el := range node.ASTImplementationElements {
-		if errF := rewriteRefOfLeaf(node, el, func(newNode, parent AST) {
+		if errF := a.rewriteRefOfLeaf(node, el, func(newNode, parent AST) {
 			err = vterrors.New(vtrpc.Code_INTERNAL, "[BUG] tried to replace 'ASTImplementationElements' on 'ValueSliceContainer'")
-		}, pre, post); errF != nil {
+		}); errF != nil {
 			return errF
 		}
 	}
 	if err != nil {
 		return err
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -904,13 +904,13 @@ func VisitSubIface(in SubIface, f Visit) error {
 }
 
 // rewriteSubIface is part of the Rewrite implementation
-func rewriteSubIface(parent AST, node SubIface, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteSubIface(parent AST, node SubIface, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
 	switch node := node.(type) {
 	case *SubImpl:
-		return rewriteRefOfSubImpl(parent, node, replacer, pre, post)
+		return a.rewriteRefOfSubImpl(parent, node, replacer)
 	default:
 		// this should never happen
 		return nil
@@ -924,16 +924,16 @@ func VisitBasicType(in BasicType, f Visit) error {
 }
 
 // rewriteBasicType is part of the Rewrite implementation
-func rewriteBasicType(parent AST, node BasicType, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteBasicType(parent AST, node BasicType, replacer replacerFunc) error {
 	cur := Cursor{
 		node:     node,
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -972,7 +972,7 @@ func VisitRefOfInterfaceContainer(in *InterfaceContainer, f Visit) error {
 }
 
 // rewriteRefOfInterfaceContainer is part of the Rewrite implementation
-func rewriteRefOfInterfaceContainer(parent AST, node *InterfaceContainer, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfInterfaceContainer(parent AST, node *InterfaceContainer, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -981,10 +981,10 @@ func rewriteRefOfInterfaceContainer(parent AST, node *InterfaceContainer, replac
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -1116,7 +1116,7 @@ func VisitRefOfValueContainer(in *ValueContainer, f Visit) error {
 }
 
 // rewriteRefOfValueContainer is part of the Rewrite implementation
-func rewriteRefOfValueContainer(parent AST, node *ValueContainer, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfValueContainer(parent AST, node *ValueContainer, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -1125,20 +1125,20 @@ func rewriteRefOfValueContainer(parent AST, node *ValueContainer, replacer repla
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
-	if errF := rewriteAST(node, node.ASTType, func(newNode, parent AST) {
+	if errF := a.rewriteAST(node, node.ASTType, func(newNode, parent AST) {
 		parent.(*ValueContainer).ASTType = newNode.(AST)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if errF := rewriteRefOfLeaf(node, node.ASTImplementationType, func(newNode, parent AST) {
+	if errF := a.rewriteRefOfLeaf(node, node.ASTImplementationType, func(newNode, parent AST) {
 		parent.(*ValueContainer).ASTImplementationType = newNode.(*Leaf)
-	}, pre, post); errF != nil {
+	}); errF != nil {
 		return errF
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
@@ -1191,7 +1191,7 @@ func VisitRefOfValueSliceContainer(in *ValueSliceContainer, f Visit) error {
 }
 
 // rewriteRefOfValueSliceContainer is part of the Rewrite implementation
-func rewriteRefOfValueSliceContainer(parent AST, node *ValueSliceContainer, replacer replacerFunc, pre, post ApplyFunc) error {
+func (a *application) rewriteRefOfValueSliceContainer(parent AST, node *ValueSliceContainer, replacer replacerFunc) error {
 	if node == nil {
 		return nil
 	}
@@ -1200,24 +1200,24 @@ func rewriteRefOfValueSliceContainer(parent AST, node *ValueSliceContainer, repl
 		parent:   parent,
 		replacer: replacer,
 	}
-	if pre != nil && !pre(&cur) {
+	if a.pre != nil && !a.pre(&cur) {
 		return nil
 	}
 	for i, el := range node.ASTElements {
-		if errF := rewriteAST(node, el, func(newNode, parent AST) {
+		if errF := a.rewriteAST(node, el, func(newNode, parent AST) {
 			parent.(*ValueSliceContainer).ASTElements[i] = newNode.(AST)
-		}, pre, post); errF != nil {
+		}); errF != nil {
 			return errF
 		}
 	}
 	for i, el := range node.ASTImplementationElements {
-		if errF := rewriteRefOfLeaf(node, el, func(newNode, parent AST) {
+		if errF := a.rewriteRefOfLeaf(node, el, func(newNode, parent AST) {
 			parent.(*ValueSliceContainer).ASTImplementationElements[i] = newNode.(*Leaf)
-		}, pre, post); errF != nil {
+		}); errF != nil {
 			return errF
 		}
 	}
-	if post != nil && !post(&cur) {
+	if a.post != nil && !a.post(&cur) {
 		return errAbort
 	}
 	return nil
