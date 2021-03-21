@@ -44,3 +44,5 @@ func NewErrorCheckResult(statusCode int, err error) *CheckResult {
 var NoSuchMetricCheckResult = NewErrorCheckResult(http.StatusNotFound, base.ErrNoSuchMetric)
 
 var okMetricCheckResult = NewCheckResult(http.StatusOK, 0, 0, nil)
+
+var invalidCheckTypeCheckResult = NewErrorCheckResult(http.StatusInternalServerError, base.ErrInvalidCheckType)
