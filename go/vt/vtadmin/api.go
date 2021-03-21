@@ -57,6 +57,7 @@ type API struct {
 	serv       *grpcserver.Server
 	router     *mux.Router
 
+	// See https://github.com/vitessio/vitess/issues/7723 for why this exists.
 	vtexplainLock sync.Mutex
 }
 
