@@ -315,7 +315,7 @@ func TestCallProcedure(t *testing.T) {
 	qr := exec(t, conn, `CALL sp_insert()`)
 	require.EqualValues(t, 1, qr.RowsAffected)
 
-	assertMatches(t, conn, "show warnings", `[[VARCHAR("Warning") UINT16(1235) VARCHAR("use of feature that is only supported in unsharded mode: CALL")]]`)
+	assertMatches(t, conn, "show warnings", `[[VARCHAR("Warning") UINT16(1235) VARCHAR("'CALL' not supported in sharded mode")]]`)
 
 	_, err = conn.ExecuteFetch(`CALL sp_select()`, 1000, true)
 	require.Error(t, err)
@@ -360,7 +360,7 @@ func TestTempTable(t *testing.T) {
 	defer conn1.Close()
 
 	_ = exec(t, conn1, `create temporary table temp_t(id bigint primary key)`)
-	assertMatches(t, conn1, "show warnings", `[[VARCHAR("Warning") UINT16(1235) VARCHAR("use of feature that is only supported in unsharded mode: temporary table")]]`)
+	assertMatches(t, conn1, "show warnings", `[[VARCHAR("Warning") UINT16(1235) VARCHAR("'temporary table' not supported in sharded mode")]]`)
 	_ = exec(t, conn1, `insert into temp_t(id) values (1),(2),(3)`)
 	assertMatches(t, conn1, `select id from temp_t order by id`, `[[INT64(1)] [INT64(2)] [INT64(3)]]`)
 	assertMatches(t, conn1, `select count(table_id) from information_schema.innodb_temp_table_info`, `[[INT64(1)]]`)
