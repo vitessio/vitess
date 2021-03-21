@@ -1013,6 +1013,8 @@ func (api *API) VTExplain(ctx context.Context, req *vtadminpb.VTExplainRequest) 
 		return nil, fmt.Errorf("error initilaizing vtexplain: %w", err)
 	}
 
+	defer vtexplain.Stop()
+
 	plans, err := vtexplain.Run(req.Sql)
 	if err != nil {
 		return nil, fmt.Errorf("error running vtexplain: %w", err)
