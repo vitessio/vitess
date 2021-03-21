@@ -1650,7 +1650,7 @@ func (e *Executor) executeMigration(ctx context.Context, onlineDDL *schema.Onlin
 				return failMigration(err)
 			}
 			if exists {
-				// table does exists, so this declarative DROP turns out to really be an actual DROP. No further action is needed here
+				// table does exist, so this declarative DROP turns out to really be an actual DROP. No further action is needed here
 			} else {
 				// table does not exist. We mark this CREATE as implicitly sucessful
 				_ = e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusComplete, false, progressPctFull, etaSecondsNow)
