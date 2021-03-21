@@ -132,6 +132,7 @@ func TestParens(t *testing.T) {
 		{in: "(a & b) | c", expected: "a & b | c"},
 		{in: "not (a=b and c=d)", expected: "not (a = b and c = d)"},
 		{in: "not (a=b) and c=d", expected: "not a = b and c = d"},
+		{in: "(not (a=b)) and c=d", expected: "not a = b and c = d"},
 		{in: "-(12)", expected: "-12"},
 		{in: "-(12 + 12)", expected: "-(12 + 12)"},
 		{in: "(1 > 2) and (1 = b)", expected: "1 > 2 and 1 = b"},
