@@ -338,7 +338,14 @@ func (oa *orderedAggregate) Wireup(plan logicalPlan, jt *jointab) error {
 				oa.eaggr.Keys[i] = weightcolNumber
 				continue
 			}
-			weightcolNumber := oa.input.SupplyWeightString(colNumber)
+			weightcolNumber, err := oa.input.SupplyWeightString(colNumber)
+			if err != nil {
+				_, isUnsupportedErr := err.(UnsupportedSupplyWeightString)
+				if isUnsupportedErr {
+					continue
+				}
+				return err
+			}
 			oa.weightStrings[rc] = weightcolNumber
 			oa.eaggr.Keys[i] = weightcolNumber
 			oa.eaggr.TruncateColumnCount = len(oa.resultColumns)

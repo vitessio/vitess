@@ -110,7 +110,7 @@ func (ps *pulloutSubquery) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, 
 }
 
 // SupplyWeightString implements the logicalPlan interface
-func (ps *pulloutSubquery) SupplyWeightString(colNumber int) (weightcolNumber int) {
+func (ps *pulloutSubquery) SupplyWeightString(colNumber int) (weightcolNumber int, err error) {
 	return ps.underlying.SupplyWeightString(colNumber)
 }
 

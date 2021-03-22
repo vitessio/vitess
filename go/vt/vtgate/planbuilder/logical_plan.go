@@ -69,8 +69,8 @@ type logicalPlan interface {
 	SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colNumber int)
 
 	// SupplyWeightString must supply a weight_string expression of the
-	// specified column. It returns -1 if we cannot supply a weight column for it.
-	SupplyWeightString(colNumber int) (weightcolNumber int)
+	// specified column. It returns an error if we cannot supply a weight column for it.
+	SupplyWeightString(colNumber int) (weightcolNumber int, err error)
 
 	// Primitive returns the underlying primitive.
 	// This function should only be called after Wireup is finished.
@@ -170,7 +170,7 @@ func (bc *logicalPlanCommon) SupplyCol(col *sqlparser.ColName) (rc *resultColumn
 	return bc.input.SupplyCol(col)
 }
 
-func (bc *logicalPlanCommon) SupplyWeightString(colNumber int) (weightcolNumber int) {
+func (bc *logicalPlanCommon) SupplyWeightString(colNumber int) (weightcolNumber int, err error) {
 	return bc.input.SupplyWeightString(colNumber)
 }
 
@@ -239,22 +239,25 @@ func (rsb *resultsBuilder) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, 
 	return rc, colNumber
 }
 
-func (rsb *resultsBuilder) SupplyWeightString(colNumber int) (weightcolNumber int) {
+func (rsb *resultsBuilder) SupplyWeightString(colNumber int) (weightcolNumber int, err error) {
 	rc := rsb.resultColumns[colNumber]
 	if weightcolNumber, ok := rsb.weightStrings[rc]; ok {
-		return weightcolNumber
+		return weightcolNumber, nil
 	}
-	weightcolNumber = rsb.input.SupplyWeightString(colNumber)
+	weightcolNumber, err = rsb.input.SupplyWeightString(colNumber)
+	if err != nil {
+		return 0, nil
+	}
 	rsb.weightStrings[rc] = weightcolNumber
 	if weightcolNumber < len(rsb.resultColumns) {
-		return weightcolNumber
+		return weightcolNumber, nil
 	}
 	// Add result columns from input until weightcolNumber is reached.
 	for weightcolNumber >= len(rsb.resultColumns) {
 		rsb.resultColumns = append(rsb.resultColumns, rsb.input.ResultColumns()[len(rsb.resultColumns)])
 	}
 	rsb.truncater.SetTruncateColumnCount(len(rsb.resultColumns))
-	return weightcolNumber
+	return weightcolNumber, nil
 }
 
 //-------------------------------------------------------------------------

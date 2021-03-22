@@ -17,6 +17,8 @@ limitations under the License.
 package planbuilder
 
 import (
+	"fmt"
+
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -129,9 +131,19 @@ func (vf *vindexFunc) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colNu
 	return rc, len(vf.resultColumns) - 1
 }
 
+// UnsupportedSupplyWeightString represents the error where the supplying a weight string is not supported
+type UnsupportedSupplyWeightString struct {
+	Type string
+}
+
+// Error function implements the error interface
+func (err UnsupportedSupplyWeightString) Error() string {
+	return fmt.Sprintf("cannot do collation on %s", err.Type)
+}
+
 // SupplyWeightString implements the logicalPlan interface
-func (vf *vindexFunc) SupplyWeightString(colNumber int) (weightcolNumber int) {
-	return -1
+func (vf *vindexFunc) SupplyWeightString(colNumber int) (weightcolNumber int, err error) {
+	return 0, UnsupportedSupplyWeightString{Type: "vindex function"}
 }
 
 // Rewrite implements the logicalPlan interface

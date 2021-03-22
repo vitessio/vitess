@@ -333,19 +333,19 @@ func (rb *route) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colNumber 
 }
 
 // SupplyWeightString implements the logicalPlan interface
-func (rb *route) SupplyWeightString(colNumber int) (weightcolNumber int) {
+func (rb *route) SupplyWeightString(colNumber int) (weightcolNumber int, err error) {
 	rc := rb.resultColumns[colNumber]
 	if weightcolNumber, ok := rb.weightStrings[rc]; ok {
-		return weightcolNumber
+		return weightcolNumber, nil
 	}
 	s, ok := rb.Select.(*sqlparser.Select)
 	if !ok {
-		return -1
+		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected AST struct for query")
 	}
 
 	aliasExpr, ok := s.SelectExprs[colNumber].(*sqlparser.AliasedExpr)
 	if !ok {
-		return -1
+		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected AST struct for query %T", s.SelectExprs[colNumber])
 	}
 	expr := &sqlparser.AliasedExpr{
 		Expr: &sqlparser.FuncExpr{
@@ -359,13 +359,12 @@ func (rb *route) SupplyWeightString(colNumber int) (weightcolNumber int) {
 	}
 	// It's ok to pass nil for pb and logicalPlan because PushSelect doesn't use them.
 	// TODO: we are ignoring a potential error here. need to clean this up
-	var err error
 	_, _, weightcolNumber, err = planProjection(nil, rb, expr, nil)
 	if err != nil {
-		return -1
+		return 0, err
 	}
 	rb.weightStrings[rc] = weightcolNumber
-	return weightcolNumber
+	return weightcolNumber, nil
 }
 
 // Rewrite implements the logicalPlan interface
