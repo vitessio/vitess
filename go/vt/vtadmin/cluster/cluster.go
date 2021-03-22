@@ -561,11 +561,19 @@ func (c *Cluster) GetSchemaForKeyspace(ctx context.Context, keyspace string, opt
 				return
 			}
 
+			if resp == nil || resp.Schema == nil {
+				return
+			}
+
 			m.Lock()
 			defer m.Unlock()
 
 			if !sizesOnly {
 				schema.TableDefinitions = resp.Schema.TableDefinitions
+			}
+
+			if !opts.SizeOpts.AggregateSizes {
+				return
 			}
 
 			for _, td := range resp.Schema.TableDefinitions {

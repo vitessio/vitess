@@ -404,6 +404,7 @@ func TestGetSchema(t *testing.T) {
 			},
 			req: &vtctldatapb.GetSchemaRequest{},
 			tablet: &vtadminpb.Tablet{
+				State: vtadminpb.Tablet_SERVING,
 				Tablet: &topodatapb.Tablet{
 					Alias: &topodatapb.TabletAlias{
 						Cell: "zone1",
@@ -423,6 +424,7 @@ func TestGetSchema(t *testing.T) {
 						Name: "some_table",
 					},
 				},
+				TableSizes: map[string]*vtadminpb.Schema_TableSize{},
 			},
 			shouldErr: false,
 		},
@@ -440,6 +442,7 @@ func TestGetSchema(t *testing.T) {
 			},
 			req: &vtctldatapb.GetSchemaRequest{},
 			tablet: &vtadminpb.Tablet{
+				State: vtadminpb.Tablet_SERVING,
 				Tablet: &topodatapb.Tablet{
 					Alias: &topodatapb.TabletAlias{
 						Cell: "zone1",
@@ -468,6 +471,7 @@ func TestGetSchema(t *testing.T) {
 			},
 			req: &vtctldatapb.GetSchemaRequest{},
 			tablet: &vtadminpb.Tablet{
+				State: vtadminpb.Tablet_SERVING,
 				Tablet: &topodatapb.Tablet{
 					Alias: &topodatapb.TabletAlias{
 						Cell: "zone1",
@@ -476,7 +480,15 @@ func TestGetSchema(t *testing.T) {
 					Keyspace: "testkeyspace",
 				},
 			},
-			expected:  nil,
+			expected: &vtadminpb.Schema{
+				Cluster: &vtadminpb.Cluster{
+					Id:   "c2",
+					Name: "cluster2",
+				},
+				Keyspace:         "testkeyspace",
+				TableDefinitions: nil,
+				TableSizes:       map[string]*vtadminpb.Schema_TableSize{},
+			},
 			shouldErr: false,
 		},
 	}
@@ -490,7 +502,7 @@ func TestGetSchema(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			cluster := testutil.BuildCluster(testutil.TestClusterConfig{
+			c := testutil.BuildCluster(testutil.TestClusterConfig{
 				Cluster: &vtadminpb.Cluster{
 					Id:   fmt.Sprintf("c%d", i),
 					Name: fmt.Sprintf("cluster%d", i),
@@ -500,10 +512,13 @@ func TestGetSchema(t *testing.T) {
 				DBConfig:     testutil.Dbcfg{},
 			})
 
-			err := cluster.Vtctld.Dial(ctx)
+			err := c.Vtctld.Dial(ctx)
 			require.NoError(t, err, "could not dial test vtctld")
 
-			schema, err := cluster.GetSchema(ctx, tt.req, tt.tablet)
+			schema, err := c.GetSchemaForKeyspace(ctx, "testkeyspace", cluster.GetSchemaOptions{
+				Tablets:     []*vtadminpb.Tablet{tt.tablet},
+				BaseRequest: tt.req,
+			})
 			if tt.shouldErr {
 				assert.Error(t, err)
 
@@ -544,7 +559,7 @@ func TestGetSchema(t *testing.T) {
 			},
 		}
 
-		cluster := testutil.BuildCluster(testutil.TestClusterConfig{
+		c := testutil.BuildCluster(testutil.TestClusterConfig{
 			Cluster: &vtadminpb.Cluster{
 				Id:   "c0",
 				Name: "cluster0",
@@ -552,10 +567,13 @@ func TestGetSchema(t *testing.T) {
 			VtctldClient: vtctld,
 		})
 
-		err := cluster.Vtctld.Dial(ctx)
+		err := c.Vtctld.Dial(ctx)
 		require.NoError(t, err, "could not dial test vtctld")
 
-		cluster.GetSchema(ctx, req, tablet)
+		c.GetSchemaForKeyspace(ctx, "testkeyspace", cluster.GetSchemaOptions{
+			BaseRequest: req,
+			Tablets:     []*vtadminpb.Tablet{tablet},
+		})
 
 		assert.NotEqual(t, req.TabletAlias, tablet.Tablet.Alias, "expected GetSchema to not modify original request object")
 	})
