@@ -17,6 +17,216 @@ limitations under the License.
 
 package integration
 
+import (
+	vtrpc "vitess.io/vitess/go/vt/proto/vtrpc"
+	vterrors "vitess.io/vitess/go/vt/vterrors"
+)
+
+// CloneAST creates a deep clone of the input.
+func CloneAST(in AST) AST {
+	if in == nil {
+		return nil
+	}
+	switch in := in.(type) {
+	case BasicType:
+		return in
+	case Bytes:
+		return CloneBytes(in)
+	case InterfaceContainer:
+		return CloneInterfaceContainer(in)
+	case InterfaceSlice:
+		return CloneInterfaceSlice(in)
+	case *Leaf:
+		return CloneRefOfLeaf(in)
+	case LeafSlice:
+		return CloneLeafSlice(in)
+	case *NoCloneType:
+		return CloneRefOfNoCloneType(in)
+	case *RefContainer:
+		return CloneRefOfRefContainer(in)
+	case *RefSliceContainer:
+		return CloneRefOfRefSliceContainer(in)
+	case *SubImpl:
+		return CloneRefOfSubImpl(in)
+	case ValueContainer:
+		return CloneValueContainer(in)
+	case ValueSliceContainer:
+		return CloneValueSliceContainer(in)
+	default:
+		// this should never happen
+		return nil
+	}
+}
+
+// CloneBytes creates a deep clone of the input.
+func CloneBytes(n Bytes) Bytes {
+	res := make(Bytes, 0, len(n))
+	copy(res, n)
+	return res
+}
+
+// CloneInterfaceContainer creates a deep clone of the input.
+func CloneInterfaceContainer(n InterfaceContainer) InterfaceContainer {
+	return *CloneRefOfInterfaceContainer(&n)
+}
+
+// CloneInterfaceSlice creates a deep clone of the input.
+func CloneInterfaceSlice(n InterfaceSlice) InterfaceSlice {
+	res := make(InterfaceSlice, 0, len(n))
+	for _, x := range n {
+		res = append(res, CloneAST(x))
+	}
+	return res
+}
+
+// CloneLeafSlice creates a deep clone of the input.
+func CloneLeafSlice(n LeafSlice) LeafSlice {
+	res := make(LeafSlice, 0, len(n))
+	for _, x := range n {
+		res = append(res, CloneRefOfLeaf(x))
+	}
+	return res
+}
+
+// CloneRefOfBool creates a deep clone of the input.
+func CloneRefOfBool(n *bool) *bool {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	return &out
+}
+
+// CloneRefOfInterfaceContainer creates a deep clone of the input.
+func CloneRefOfInterfaceContainer(n *InterfaceContainer) *InterfaceContainer {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.v = n.v
+	return &out
+}
+
+// CloneRefOfLeaf creates a deep clone of the input.
+func CloneRefOfLeaf(n *Leaf) *Leaf {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	return &out
+}
+
+// CloneRefOfNoCloneType creates a deep clone of the input.
+func CloneRefOfNoCloneType(n *NoCloneType) *NoCloneType {
+	return n
+}
+
+// CloneRefOfRefContainer creates a deep clone of the input.
+func CloneRefOfRefContainer(n *RefContainer) *RefContainer {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.ASTType = CloneAST(n.ASTType)
+	out.ASTImplementationType = CloneRefOfLeaf(n.ASTImplementationType)
+	return &out
+}
+
+// CloneRefOfRefSliceContainer creates a deep clone of the input.
+func CloneRefOfRefSliceContainer(n *RefSliceContainer) *RefSliceContainer {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.ASTElements = CloneSliceOfAST(n.ASTElements)
+	out.NotASTElements = CloneSliceOfInt(n.NotASTElements)
+	out.ASTImplementationElements = CloneSliceOfRefOfLeaf(n.ASTImplementationElements)
+	return &out
+}
+
+// CloneRefOfSubImpl creates a deep clone of the input.
+func CloneRefOfSubImpl(n *SubImpl) *SubImpl {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.inner = CloneSubIface(n.inner)
+	out.field = CloneRefOfBool(n.field)
+	return &out
+}
+
+// CloneRefOfValueContainer creates a deep clone of the input.
+func CloneRefOfValueContainer(n *ValueContainer) *ValueContainer {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.ASTType = CloneAST(n.ASTType)
+	out.ASTImplementationType = CloneRefOfLeaf(n.ASTImplementationType)
+	return &out
+}
+
+// CloneRefOfValueSliceContainer creates a deep clone of the input.
+func CloneRefOfValueSliceContainer(n *ValueSliceContainer) *ValueSliceContainer {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.ASTElements = CloneSliceOfAST(n.ASTElements)
+	out.NotASTElements = CloneSliceOfInt(n.NotASTElements)
+	out.ASTImplementationElements = CloneSliceOfRefOfLeaf(n.ASTImplementationElements)
+	return &out
+}
+
+// CloneSliceOfAST creates a deep clone of the input.
+func CloneSliceOfAST(n []AST) []AST {
+	res := make([]AST, 0, len(n))
+	for _, x := range n {
+		res = append(res, CloneAST(x))
+	}
+	return res
+}
+
+// CloneSliceOfInt creates a deep clone of the input.
+func CloneSliceOfInt(n []int) []int {
+	res := make([]int, 0, len(n))
+	copy(res, n)
+	return res
+}
+
+// CloneSliceOfRefOfLeaf creates a deep clone of the input.
+func CloneSliceOfRefOfLeaf(n []*Leaf) []*Leaf {
+	res := make([]*Leaf, 0, len(n))
+	for _, x := range n {
+		res = append(res, CloneRefOfLeaf(x))
+	}
+	return res
+}
+
+// CloneSubIface creates a deep clone of the input.
+func CloneSubIface(in SubIface) SubIface {
+	if in == nil {
+		return nil
+	}
+	switch in := in.(type) {
+	case *SubImpl:
+		return CloneRefOfSubImpl(in)
+	default:
+		// this should never happen
+		return nil
+	}
+}
+
+// CloneValueContainer creates a deep clone of the input.
+func CloneValueContainer(n ValueContainer) ValueContainer {
+	return *CloneRefOfValueContainer(&n)
+}
+
+// CloneValueSliceContainer creates a deep clone of the input.
+func CloneValueSliceContainer(n ValueSliceContainer) ValueSliceContainer {
+	return *CloneRefOfValueSliceContainer(&n)
+}
+
 // EqualsAST does deep equals between the two objects.
 func EqualsAST(inA, inB AST) bool {
 	if inA == nil && inB == nil {
@@ -104,43 +314,231 @@ func EqualsAST(inA, inB AST) bool {
 	}
 }
 
-// CloneAST creates a deep clone of the input.
-func CloneAST(in AST) AST {
-	if in == nil {
-		return nil
+// EqualsBytes does deep equals between the two objects.
+func EqualsBytes(a, b Bytes) bool {
+	if len(a) != len(b) {
+		return false
 	}
-	switch in := in.(type) {
-	case BasicType:
-		return in
-	case Bytes:
-		return CloneBytes(in)
-	case InterfaceContainer:
-		return CloneInterfaceContainer(in)
-	case InterfaceSlice:
-		return CloneInterfaceSlice(in)
-	case *Leaf:
-		return CloneRefOfLeaf(in)
-	case LeafSlice:
-		return CloneLeafSlice(in)
-	case *NoCloneType:
-		return CloneRefOfNoCloneType(in)
-	case *RefContainer:
-		return CloneRefOfRefContainer(in)
-	case *RefSliceContainer:
-		return CloneRefOfRefSliceContainer(in)
+	for i := 0; i < len(a); i++ {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// EqualsInterfaceContainer does deep equals between the two objects.
+func EqualsInterfaceContainer(a, b InterfaceContainer) bool {
+	return true
+}
+
+// EqualsInterfaceSlice does deep equals between the two objects.
+func EqualsInterfaceSlice(a, b InterfaceSlice) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		if !EqualsAST(a[i], b[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+// EqualsLeafSlice does deep equals between the two objects.
+func EqualsLeafSlice(a, b LeafSlice) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		if !EqualsRefOfLeaf(a[i], b[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+// EqualsRefOfBool does deep equals between the two objects.
+func EqualsRefOfBool(a, b *bool) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return *a == *b
+}
+
+// EqualsRefOfInterfaceContainer does deep equals between the two objects.
+func EqualsRefOfInterfaceContainer(a, b *InterfaceContainer) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return true
+}
+
+// EqualsRefOfLeaf does deep equals between the two objects.
+func EqualsRefOfLeaf(a, b *Leaf) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.v == b.v
+}
+
+// EqualsRefOfNoCloneType does deep equals between the two objects.
+func EqualsRefOfNoCloneType(a, b *NoCloneType) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.v == b.v
+}
+
+// EqualsRefOfRefContainer does deep equals between the two objects.
+func EqualsRefOfRefContainer(a, b *RefContainer) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.NotASTType == b.NotASTType &&
+		EqualsAST(a.ASTType, b.ASTType) &&
+		EqualsRefOfLeaf(a.ASTImplementationType, b.ASTImplementationType)
+}
+
+// EqualsRefOfRefSliceContainer does deep equals between the two objects.
+func EqualsRefOfRefSliceContainer(a, b *RefSliceContainer) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsSliceOfAST(a.ASTElements, b.ASTElements) &&
+		EqualsSliceOfInt(a.NotASTElements, b.NotASTElements) &&
+		EqualsSliceOfRefOfLeaf(a.ASTImplementationElements, b.ASTImplementationElements)
+}
+
+// EqualsRefOfSubImpl does deep equals between the two objects.
+func EqualsRefOfSubImpl(a, b *SubImpl) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsSubIface(a.inner, b.inner) &&
+		EqualsRefOfBool(a.field, b.field)
+}
+
+// EqualsRefOfValueContainer does deep equals between the two objects.
+func EqualsRefOfValueContainer(a, b *ValueContainer) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.NotASTType == b.NotASTType &&
+		EqualsAST(a.ASTType, b.ASTType) &&
+		EqualsRefOfLeaf(a.ASTImplementationType, b.ASTImplementationType)
+}
+
+// EqualsRefOfValueSliceContainer does deep equals between the two objects.
+func EqualsRefOfValueSliceContainer(a, b *ValueSliceContainer) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsSliceOfAST(a.ASTElements, b.ASTElements) &&
+		EqualsSliceOfInt(a.NotASTElements, b.NotASTElements) &&
+		EqualsSliceOfRefOfLeaf(a.ASTImplementationElements, b.ASTImplementationElements)
+}
+
+// EqualsSliceOfAST does deep equals between the two objects.
+func EqualsSliceOfAST(a, b []AST) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		if !EqualsAST(a[i], b[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+// EqualsSliceOfInt does deep equals between the two objects.
+func EqualsSliceOfInt(a, b []int) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// EqualsSliceOfRefOfLeaf does deep equals between the two objects.
+func EqualsSliceOfRefOfLeaf(a, b []*Leaf) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		if !EqualsRefOfLeaf(a[i], b[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+// EqualsSubIface does deep equals between the two objects.
+func EqualsSubIface(inA, inB SubIface) bool {
+	if inA == nil && inB == nil {
+		return true
+	}
+	if inA == nil || inB == nil {
+		return false
+	}
+	switch a := inA.(type) {
 	case *SubImpl:
-		return CloneRefOfSubImpl(in)
-	case ValueContainer:
-		return CloneValueContainer(in)
-	case ValueSliceContainer:
-		return CloneValueSliceContainer(in)
+		b, ok := inB.(*SubImpl)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfSubImpl(a, b)
 	default:
 		// this should never happen
-		return nil
+		return false
 	}
 }
 
-// VisitAST will visit all parts of the AST
+// EqualsValueContainer does deep equals between the two objects.
+func EqualsValueContainer(a, b ValueContainer) bool {
+	return a.NotASTType == b.NotASTType &&
+		EqualsAST(a.ASTType, b.ASTType) &&
+		EqualsRefOfLeaf(a.ASTImplementationType, b.ASTImplementationType)
+}
+
+// EqualsValueSliceContainer does deep equals between the two objects.
+func EqualsValueSliceContainer(a, b ValueSliceContainer) bool {
+	return EqualsSliceOfAST(a.ASTElements, b.ASTElements) &&
+		EqualsSliceOfInt(a.NotASTElements, b.NotASTElements) &&
+		EqualsSliceOfRefOfLeaf(a.ASTImplementationElements, b.ASTImplementationElements)
+}
 func VisitAST(in AST, f Visit) error {
 	if in == nil {
 		return nil
@@ -175,74 +573,20 @@ func VisitAST(in AST, f Visit) error {
 		return nil
 	}
 }
-
-// EqualsBytes does deep equals between the two objects.
-func EqualsBytes(a, b Bytes) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := 0; i < len(a); i++ {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
+func VisitBasicType(in BasicType, f Visit) error {
+	_, err := f(in)
+	return err
 }
-
-// CloneBytes creates a deep clone of the input.
-func CloneBytes(n Bytes) Bytes {
-	res := make(Bytes, 0, len(n))
-	copy(res, n)
-	return res
-}
-
-// VisitBytes will visit all parts of the AST
 func VisitBytes(in Bytes, f Visit) error {
 	_, err := f(in)
 	return err
 }
-
-// EqualsInterfaceContainer does deep equals between the two objects.
-func EqualsInterfaceContainer(a, b InterfaceContainer) bool {
-	return true
-}
-
-// CloneInterfaceContainer creates a deep clone of the input.
-func CloneInterfaceContainer(n InterfaceContainer) InterfaceContainer {
-	return *CloneRefOfInterfaceContainer(&n)
-}
-
-// VisitInterfaceContainer will visit all parts of the AST
 func VisitInterfaceContainer(in InterfaceContainer, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
 	return nil
 }
-
-// EqualsInterfaceSlice does deep equals between the two objects.
-func EqualsInterfaceSlice(a, b InterfaceSlice) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := 0; i < len(a); i++ {
-		if !EqualsAST(a[i], b[i]) {
-			return false
-		}
-	}
-	return true
-}
-
-// CloneInterfaceSlice creates a deep clone of the input.
-func CloneInterfaceSlice(n InterfaceSlice) InterfaceSlice {
-	res := make(InterfaceSlice, 0, len(n))
-	for _, x := range n {
-		res = append(res, CloneAST(x))
-	}
-	return res
-}
-
-// VisitInterfaceSlice will visit all parts of the AST
 func VisitInterfaceSlice(in InterfaceSlice, f Visit) error {
 	if in == nil {
 		return nil
@@ -257,61 +601,6 @@ func VisitInterfaceSlice(in InterfaceSlice, f Visit) error {
 	}
 	return nil
 }
-
-// EqualsRefOfLeaf does deep equals between the two objects.
-func EqualsRefOfLeaf(a, b *Leaf) bool {
-	if a == b {
-		return true
-	}
-	if a == nil || b == nil {
-		return false
-	}
-	return a.v == b.v
-}
-
-// CloneRefOfLeaf creates a deep clone of the input.
-func CloneRefOfLeaf(n *Leaf) *Leaf {
-	if n == nil {
-		return nil
-	}
-	out := *n
-	return &out
-}
-
-// VisitRefOfLeaf will visit all parts of the AST
-func VisitRefOfLeaf(in *Leaf, f Visit) error {
-	if in == nil {
-		return nil
-	}
-	if cont, err := f(in); err != nil || !cont {
-		return err
-	}
-	return nil
-}
-
-// EqualsLeafSlice does deep equals between the two objects.
-func EqualsLeafSlice(a, b LeafSlice) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := 0; i < len(a); i++ {
-		if !EqualsRefOfLeaf(a[i], b[i]) {
-			return false
-		}
-	}
-	return true
-}
-
-// CloneLeafSlice creates a deep clone of the input.
-func CloneLeafSlice(n LeafSlice) LeafSlice {
-	res := make(LeafSlice, 0, len(n))
-	for _, x := range n {
-		res = append(res, CloneRefOfLeaf(x))
-	}
-	return res
-}
-
-// VisitLeafSlice will visit all parts of the AST
 func VisitLeafSlice(in LeafSlice, f Visit) error {
 	if in == nil {
 		return nil
@@ -326,24 +615,24 @@ func VisitLeafSlice(in LeafSlice, f Visit) error {
 	}
 	return nil
 }
-
-// EqualsRefOfNoCloneType does deep equals between the two objects.
-func EqualsRefOfNoCloneType(a, b *NoCloneType) bool {
-	if a == b {
-		return true
+func VisitRefOfInterfaceContainer(in *InterfaceContainer, f Visit) error {
+	if in == nil {
+		return nil
 	}
-	if a == nil || b == nil {
-		return false
+	if cont, err := f(in); err != nil || !cont {
+		return err
 	}
-	return a.v == b.v
+	return nil
 }
-
-// CloneRefOfNoCloneType creates a deep clone of the input.
-func CloneRefOfNoCloneType(n *NoCloneType) *NoCloneType {
-	return n
+func VisitRefOfLeaf(in *Leaf, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	return nil
 }
-
-// VisitRefOfNoCloneType will visit all parts of the AST
 func VisitRefOfNoCloneType(in *NoCloneType, f Visit) error {
 	if in == nil {
 		return nil
@@ -353,32 +642,6 @@ func VisitRefOfNoCloneType(in *NoCloneType, f Visit) error {
 	}
 	return nil
 }
-
-// EqualsRefOfRefContainer does deep equals between the two objects.
-func EqualsRefOfRefContainer(a, b *RefContainer) bool {
-	if a == b {
-		return true
-	}
-	if a == nil || b == nil {
-		return false
-	}
-	return a.NotASTType == b.NotASTType &&
-		EqualsAST(a.ASTType, b.ASTType) &&
-		EqualsRefOfLeaf(a.ASTImplementationType, b.ASTImplementationType)
-}
-
-// CloneRefOfRefContainer creates a deep clone of the input.
-func CloneRefOfRefContainer(n *RefContainer) *RefContainer {
-	if n == nil {
-		return nil
-	}
-	out := *n
-	out.ASTType = CloneAST(n.ASTType)
-	out.ASTImplementationType = CloneRefOfLeaf(n.ASTImplementationType)
-	return &out
-}
-
-// VisitRefOfRefContainer will visit all parts of the AST
 func VisitRefOfRefContainer(in *RefContainer, f Visit) error {
 	if in == nil {
 		return nil
@@ -394,33 +657,6 @@ func VisitRefOfRefContainer(in *RefContainer, f Visit) error {
 	}
 	return nil
 }
-
-// EqualsRefOfRefSliceContainer does deep equals between the two objects.
-func EqualsRefOfRefSliceContainer(a, b *RefSliceContainer) bool {
-	if a == b {
-		return true
-	}
-	if a == nil || b == nil {
-		return false
-	}
-	return EqualsSliceOfAST(a.ASTElements, b.ASTElements) &&
-		EqualsSliceOfInt(a.NotASTElements, b.NotASTElements) &&
-		EqualsSliceOfRefOfLeaf(a.ASTImplementationElements, b.ASTImplementationElements)
-}
-
-// CloneRefOfRefSliceContainer creates a deep clone of the input.
-func CloneRefOfRefSliceContainer(n *RefSliceContainer) *RefSliceContainer {
-	if n == nil {
-		return nil
-	}
-	out := *n
-	out.ASTElements = CloneSliceOfAST(n.ASTElements)
-	out.NotASTElements = CloneSliceOfInt(n.NotASTElements)
-	out.ASTImplementationElements = CloneSliceOfRefOfLeaf(n.ASTImplementationElements)
-	return &out
-}
-
-// VisitRefOfRefSliceContainer will visit all parts of the AST
 func VisitRefOfRefSliceContainer(in *RefSliceContainer, f Visit) error {
 	if in == nil {
 		return nil
@@ -440,31 +676,6 @@ func VisitRefOfRefSliceContainer(in *RefSliceContainer, f Visit) error {
 	}
 	return nil
 }
-
-// EqualsRefOfSubImpl does deep equals between the two objects.
-func EqualsRefOfSubImpl(a, b *SubImpl) bool {
-	if a == b {
-		return true
-	}
-	if a == nil || b == nil {
-		return false
-	}
-	return EqualsSubIface(a.inner, b.inner) &&
-		EqualsRefOfBool(a.field, b.field)
-}
-
-// CloneRefOfSubImpl creates a deep clone of the input.
-func CloneRefOfSubImpl(n *SubImpl) *SubImpl {
-	if n == nil {
-		return nil
-	}
-	out := *n
-	out.inner = CloneSubIface(n.inner)
-	out.field = CloneRefOfBool(n.field)
-	return &out
-}
-
-// VisitRefOfSubImpl will visit all parts of the AST
 func VisitRefOfSubImpl(in *SubImpl, f Visit) error {
 	if in == nil {
 		return nil
@@ -477,20 +688,52 @@ func VisitRefOfSubImpl(in *SubImpl, f Visit) error {
 	}
 	return nil
 }
-
-// EqualsValueContainer does deep equals between the two objects.
-func EqualsValueContainer(a, b ValueContainer) bool {
-	return a.NotASTType == b.NotASTType &&
-		EqualsAST(a.ASTType, b.ASTType) &&
-		EqualsRefOfLeaf(a.ASTImplementationType, b.ASTImplementationType)
+func VisitRefOfValueContainer(in *ValueContainer, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitAST(in.ASTType, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfLeaf(in.ASTImplementationType, f); err != nil {
+		return err
+	}
+	return nil
 }
-
-// CloneValueContainer creates a deep clone of the input.
-func CloneValueContainer(n ValueContainer) ValueContainer {
-	return *CloneRefOfValueContainer(&n)
+func VisitRefOfValueSliceContainer(in *ValueSliceContainer, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	for _, el := range in.ASTElements {
+		if err := VisitAST(el, f); err != nil {
+			return err
+		}
+	}
+	for _, el := range in.ASTImplementationElements {
+		if err := VisitRefOfLeaf(el, f); err != nil {
+			return err
+		}
+	}
+	return nil
 }
-
-// VisitValueContainer will visit all parts of the AST
+func VisitSubIface(in SubIface, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	switch in := in.(type) {
+	case *SubImpl:
+		return VisitRefOfSubImpl(in, f)
+	default:
+		// this should never happen
+		return nil
+	}
+}
 func VisitValueContainer(in ValueContainer, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
@@ -503,20 +746,6 @@ func VisitValueContainer(in ValueContainer, f Visit) error {
 	}
 	return nil
 }
-
-// EqualsValueSliceContainer does deep equals between the two objects.
-func EqualsValueSliceContainer(a, b ValueSliceContainer) bool {
-	return EqualsSliceOfAST(a.ASTElements, b.ASTElements) &&
-		EqualsSliceOfInt(a.NotASTElements, b.NotASTElements) &&
-		EqualsSliceOfRefOfLeaf(a.ASTImplementationElements, b.ASTImplementationElements)
-}
-
-// CloneValueSliceContainer creates a deep clone of the input.
-func CloneValueSliceContainer(n ValueSliceContainer) ValueSliceContainer {
-	return *CloneRefOfValueSliceContainer(&n)
-}
-
-// VisitValueSliceContainer will visit all parts of the AST
 func VisitValueSliceContainer(in ValueSliceContainer, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
@@ -533,260 +762,481 @@ func VisitValueSliceContainer(in ValueSliceContainer, f Visit) error {
 	}
 	return nil
 }
-
-// EqualsSubIface does deep equals between the two objects.
-func EqualsSubIface(inA, inB SubIface) bool {
-	if inA == nil && inB == nil {
-		return true
+func (a *application) rewriteAST(parent AST, node AST, replacer replacerFunc) error {
+	if node == nil {
+		return nil
 	}
-	if inA == nil || inB == nil {
-		return false
-	}
-	switch a := inA.(type) {
+	switch node := node.(type) {
+	case BasicType:
+		return a.rewriteBasicType(parent, node, replacer)
+	case Bytes:
+		return a.rewriteBytes(parent, node, replacer)
+	case InterfaceContainer:
+		return a.rewriteInterfaceContainer(parent, node, replacer)
+	case InterfaceSlice:
+		return a.rewriteInterfaceSlice(parent, node, replacer)
+	case *Leaf:
+		return a.rewriteRefOfLeaf(parent, node, replacer)
+	case LeafSlice:
+		return a.rewriteLeafSlice(parent, node, replacer)
+	case *NoCloneType:
+		return a.rewriteRefOfNoCloneType(parent, node, replacer)
+	case *RefContainer:
+		return a.rewriteRefOfRefContainer(parent, node, replacer)
+	case *RefSliceContainer:
+		return a.rewriteRefOfRefSliceContainer(parent, node, replacer)
 	case *SubImpl:
-		b, ok := inB.(*SubImpl)
-		if !ok {
-			return false
+		return a.rewriteRefOfSubImpl(parent, node, replacer)
+	case ValueContainer:
+		return a.rewriteValueContainer(parent, node, replacer)
+	case ValueSliceContainer:
+		return a.rewriteValueSliceContainer(parent, node, replacer)
+	default:
+		// this should never happen
+		return nil
+	}
+}
+func (a *application) rewriteBasicType(parent AST, node BasicType, replacer replacerFunc) error {
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return nil
 		}
-		return EqualsRefOfSubImpl(a, b)
-	default:
-		// this should never happen
-		return false
 	}
-}
-
-// CloneSubIface creates a deep clone of the input.
-func CloneSubIface(in SubIface) SubIface {
-	if in == nil {
-		return nil
-	}
-	switch in := in.(type) {
-	case *SubImpl:
-		return CloneRefOfSubImpl(in)
-	default:
-		// this should never happen
-		return nil
-	}
-}
-
-// VisitSubIface will visit all parts of the AST
-func VisitSubIface(in SubIface, f Visit) error {
-	if in == nil {
-		return nil
-	}
-	switch in := in.(type) {
-	case *SubImpl:
-		return VisitRefOfSubImpl(in, f)
-	default:
-		// this should never happen
-		return nil
-	}
-}
-
-// VisitBasicType will visit all parts of the AST
-func VisitBasicType(in BasicType, f Visit) error {
-	_, err := f(in)
-	return err
-}
-
-// EqualsRefOfInterfaceContainer does deep equals between the two objects.
-func EqualsRefOfInterfaceContainer(a, b *InterfaceContainer) bool {
-	if a == b {
-		return true
-	}
-	if a == nil || b == nil {
-		return false
-	}
-	return true
-}
-
-// CloneRefOfInterfaceContainer creates a deep clone of the input.
-func CloneRefOfInterfaceContainer(n *InterfaceContainer) *InterfaceContainer {
-	if n == nil {
-		return nil
-	}
-	out := *n
-	out.v = n.v
-	return &out
-}
-
-// VisitRefOfInterfaceContainer will visit all parts of the AST
-func VisitRefOfInterfaceContainer(in *InterfaceContainer, f Visit) error {
-	if in == nil {
-		return nil
-	}
-	if cont, err := f(in); err != nil || !cont {
-		return err
+	if a.post != nil {
+		if a.pre == nil {
+			a.cur.replacer = replacer
+			a.cur.parent = parent
+			a.cur.node = node
+		}
+		if !a.post(&a.cur) {
+			return errAbort
+		}
 	}
 	return nil
 }
-
-// EqualsSliceOfAST does deep equals between the two objects.
-func EqualsSliceOfAST(a, b []AST) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := 0; i < len(a); i++ {
-		if !EqualsAST(a[i], b[i]) {
-			return false
-		}
-	}
-	return true
-}
-
-// CloneSliceOfAST creates a deep clone of the input.
-func CloneSliceOfAST(n []AST) []AST {
-	res := make([]AST, 0, len(n))
-	for _, x := range n {
-		res = append(res, CloneAST(x))
-	}
-	return res
-}
-
-// EqualsSliceOfInt does deep equals between the two objects.
-func EqualsSliceOfInt(a, b []int) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := 0; i < len(a); i++ {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
-}
-
-// CloneSliceOfInt creates a deep clone of the input.
-func CloneSliceOfInt(n []int) []int {
-	res := make([]int, 0, len(n))
-	copy(res, n)
-	return res
-}
-
-// EqualsSliceOfRefOfLeaf does deep equals between the two objects.
-func EqualsSliceOfRefOfLeaf(a, b []*Leaf) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := 0; i < len(a); i++ {
-		if !EqualsRefOfLeaf(a[i], b[i]) {
-			return false
-		}
-	}
-	return true
-}
-
-// CloneSliceOfRefOfLeaf creates a deep clone of the input.
-func CloneSliceOfRefOfLeaf(n []*Leaf) []*Leaf {
-	res := make([]*Leaf, 0, len(n))
-	for _, x := range n {
-		res = append(res, CloneRefOfLeaf(x))
-	}
-	return res
-}
-
-// EqualsRefOfBool does deep equals between the two objects.
-func EqualsRefOfBool(a, b *bool) bool {
-	if a == b {
-		return true
-	}
-	if a == nil || b == nil {
-		return false
-	}
-	return *a == *b
-}
-
-// CloneRefOfBool creates a deep clone of the input.
-func CloneRefOfBool(n *bool) *bool {
-	if n == nil {
+func (a *application) rewriteBytes(parent AST, node Bytes, replacer replacerFunc) error {
+	if node == nil {
 		return nil
 	}
-	out := *n
-	return &out
-}
-
-// EqualsRefOfValueContainer does deep equals between the two objects.
-func EqualsRefOfValueContainer(a, b *ValueContainer) bool {
-	if a == b {
-		return true
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return nil
+		}
 	}
-	if a == nil || b == nil {
-		return false
-	}
-	return a.NotASTType == b.NotASTType &&
-		EqualsAST(a.ASTType, b.ASTType) &&
-		EqualsRefOfLeaf(a.ASTImplementationType, b.ASTImplementationType)
-}
-
-// CloneRefOfValueContainer creates a deep clone of the input.
-func CloneRefOfValueContainer(n *ValueContainer) *ValueContainer {
-	if n == nil {
-		return nil
-	}
-	out := *n
-	out.ASTType = CloneAST(n.ASTType)
-	out.ASTImplementationType = CloneRefOfLeaf(n.ASTImplementationType)
-	return &out
-}
-
-// VisitRefOfValueContainer will visit all parts of the AST
-func VisitRefOfValueContainer(in *ValueContainer, f Visit) error {
-	if in == nil {
-		return nil
-	}
-	if cont, err := f(in); err != nil || !cont {
-		return err
-	}
-	if err := VisitAST(in.ASTType, f); err != nil {
-		return err
-	}
-	if err := VisitRefOfLeaf(in.ASTImplementationType, f); err != nil {
-		return err
+	if a.post != nil {
+		if a.pre == nil {
+			a.cur.replacer = replacer
+			a.cur.parent = parent
+			a.cur.node = node
+		}
+		if !a.post(&a.cur) {
+			return errAbort
+		}
 	}
 	return nil
 }
-
-// EqualsRefOfValueSliceContainer does deep equals between the two objects.
-func EqualsRefOfValueSliceContainer(a, b *ValueSliceContainer) bool {
-	if a == b {
-		return true
-	}
-	if a == nil || b == nil {
-		return false
-	}
-	return EqualsSliceOfAST(a.ASTElements, b.ASTElements) &&
-		EqualsSliceOfInt(a.NotASTElements, b.NotASTElements) &&
-		EqualsSliceOfRefOfLeaf(a.ASTImplementationElements, b.ASTImplementationElements)
-}
-
-// CloneRefOfValueSliceContainer creates a deep clone of the input.
-func CloneRefOfValueSliceContainer(n *ValueSliceContainer) *ValueSliceContainer {
-	if n == nil {
-		return nil
-	}
-	out := *n
-	out.ASTElements = CloneSliceOfAST(n.ASTElements)
-	out.NotASTElements = CloneSliceOfInt(n.NotASTElements)
-	out.ASTImplementationElements = CloneSliceOfRefOfLeaf(n.ASTImplementationElements)
-	return &out
-}
-
-// VisitRefOfValueSliceContainer will visit all parts of the AST
-func VisitRefOfValueSliceContainer(in *ValueSliceContainer, f Visit) error {
-	if in == nil {
-		return nil
-	}
-	if cont, err := f(in); err != nil || !cont {
-		return err
-	}
-	for _, el := range in.ASTElements {
-		if err := VisitAST(el, f); err != nil {
-			return err
+func (a *application) rewriteInterfaceContainer(parent AST, node InterfaceContainer, replacer replacerFunc) error {
+	var err error
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return nil
 		}
 	}
-	for _, el := range in.ASTImplementationElements {
-		if err := VisitRefOfLeaf(el, f); err != nil {
-			return err
+	if err != nil {
+		return err
+	}
+	if a.post != nil {
+		if a.pre == nil {
+			a.cur.replacer = replacer
+			a.cur.parent = parent
+			a.cur.node = node
+		}
+		if !a.post(&a.cur) {
+			return errAbort
+		}
+	}
+	return nil
+}
+func (a *application) rewriteInterfaceSlice(parent AST, node InterfaceSlice, replacer replacerFunc) error {
+	if node == nil {
+		return nil
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return nil
+		}
+	}
+	for i, el := range node {
+		if errF := a.rewriteAST(node, el, func(newNode, parent AST) {
+			parent.(InterfaceSlice)[i] = newNode.(AST)
+		}); errF != nil {
+			return errF
+		}
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return errAbort
+		}
+	}
+	return nil
+}
+func (a *application) rewriteLeafSlice(parent AST, node LeafSlice, replacer replacerFunc) error {
+	if node == nil {
+		return nil
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return nil
+		}
+	}
+	for i, el := range node {
+		if errF := a.rewriteRefOfLeaf(node, el, func(newNode, parent AST) {
+			parent.(LeafSlice)[i] = newNode.(*Leaf)
+		}); errF != nil {
+			return errF
+		}
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return errAbort
+		}
+	}
+	return nil
+}
+func (a *application) rewriteRefOfInterfaceContainer(parent AST, node *InterfaceContainer, replacer replacerFunc) error {
+	if node == nil {
+		return nil
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return nil
+		}
+	}
+	if a.post != nil {
+		if a.pre == nil {
+			a.cur.replacer = replacer
+			a.cur.parent = parent
+			a.cur.node = node
+		}
+		if !a.post(&a.cur) {
+			return errAbort
+		}
+	}
+	return nil
+}
+func (a *application) rewriteRefOfLeaf(parent AST, node *Leaf, replacer replacerFunc) error {
+	if node == nil {
+		return nil
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return nil
+		}
+	}
+	if a.post != nil {
+		if a.pre == nil {
+			a.cur.replacer = replacer
+			a.cur.parent = parent
+			a.cur.node = node
+		}
+		if !a.post(&a.cur) {
+			return errAbort
+		}
+	}
+	return nil
+}
+func (a *application) rewriteRefOfNoCloneType(parent AST, node *NoCloneType, replacer replacerFunc) error {
+	if node == nil {
+		return nil
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return nil
+		}
+	}
+	if a.post != nil {
+		if a.pre == nil {
+			a.cur.replacer = replacer
+			a.cur.parent = parent
+			a.cur.node = node
+		}
+		if !a.post(&a.cur) {
+			return errAbort
+		}
+	}
+	return nil
+}
+func (a *application) rewriteRefOfRefContainer(parent AST, node *RefContainer, replacer replacerFunc) error {
+	if node == nil {
+		return nil
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return nil
+		}
+	}
+	if errF := a.rewriteAST(node, node.ASTType, func(newNode, parent AST) {
+		parent.(*RefContainer).ASTType = newNode.(AST)
+	}); errF != nil {
+		return errF
+	}
+	if errF := a.rewriteRefOfLeaf(node, node.ASTImplementationType, func(newNode, parent AST) {
+		parent.(*RefContainer).ASTImplementationType = newNode.(*Leaf)
+	}); errF != nil {
+		return errF
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return errAbort
+		}
+	}
+	return nil
+}
+func (a *application) rewriteRefOfRefSliceContainer(parent AST, node *RefSliceContainer, replacer replacerFunc) error {
+	if node == nil {
+		return nil
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return nil
+		}
+	}
+	for i, el := range node.ASTElements {
+		if errF := a.rewriteAST(node, el, func(newNode, parent AST) {
+			parent.(*RefSliceContainer).ASTElements[i] = newNode.(AST)
+		}); errF != nil {
+			return errF
+		}
+	}
+	for i, el := range node.ASTImplementationElements {
+		if errF := a.rewriteRefOfLeaf(node, el, func(newNode, parent AST) {
+			parent.(*RefSliceContainer).ASTImplementationElements[i] = newNode.(*Leaf)
+		}); errF != nil {
+			return errF
+		}
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return errAbort
+		}
+	}
+	return nil
+}
+func (a *application) rewriteRefOfSubImpl(parent AST, node *SubImpl, replacer replacerFunc) error {
+	if node == nil {
+		return nil
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return nil
+		}
+	}
+	if errF := a.rewriteSubIface(node, node.inner, func(newNode, parent AST) {
+		parent.(*SubImpl).inner = newNode.(SubIface)
+	}); errF != nil {
+		return errF
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return errAbort
+		}
+	}
+	return nil
+}
+func (a *application) rewriteRefOfValueContainer(parent AST, node *ValueContainer, replacer replacerFunc) error {
+	if node == nil {
+		return nil
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return nil
+		}
+	}
+	if errF := a.rewriteAST(node, node.ASTType, func(newNode, parent AST) {
+		parent.(*ValueContainer).ASTType = newNode.(AST)
+	}); errF != nil {
+		return errF
+	}
+	if errF := a.rewriteRefOfLeaf(node, node.ASTImplementationType, func(newNode, parent AST) {
+		parent.(*ValueContainer).ASTImplementationType = newNode.(*Leaf)
+	}); errF != nil {
+		return errF
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return errAbort
+		}
+	}
+	return nil
+}
+func (a *application) rewriteRefOfValueSliceContainer(parent AST, node *ValueSliceContainer, replacer replacerFunc) error {
+	if node == nil {
+		return nil
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return nil
+		}
+	}
+	for i, el := range node.ASTElements {
+		if errF := a.rewriteAST(node, el, func(newNode, parent AST) {
+			parent.(*ValueSliceContainer).ASTElements[i] = newNode.(AST)
+		}); errF != nil {
+			return errF
+		}
+	}
+	for i, el := range node.ASTImplementationElements {
+		if errF := a.rewriteRefOfLeaf(node, el, func(newNode, parent AST) {
+			parent.(*ValueSliceContainer).ASTImplementationElements[i] = newNode.(*Leaf)
+		}); errF != nil {
+			return errF
+		}
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return errAbort
+		}
+	}
+	return nil
+}
+func (a *application) rewriteSubIface(parent AST, node SubIface, replacer replacerFunc) error {
+	if node == nil {
+		return nil
+	}
+	switch node := node.(type) {
+	case *SubImpl:
+		return a.rewriteRefOfSubImpl(parent, node, replacer)
+	default:
+		// this should never happen
+		return nil
+	}
+}
+func (a *application) rewriteValueContainer(parent AST, node ValueContainer, replacer replacerFunc) error {
+	var err error
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return nil
+		}
+	}
+	if errF := a.rewriteAST(node, node.ASTType, func(newNode, parent AST) {
+		err = vterrors.New(vtrpc.Code_INTERNAL, "[BUG] tried to replace 'ASTType' on 'ValueContainer'")
+	}); errF != nil {
+		return errF
+	}
+	if errF := a.rewriteRefOfLeaf(node, node.ASTImplementationType, func(newNode, parent AST) {
+		err = vterrors.New(vtrpc.Code_INTERNAL, "[BUG] tried to replace 'ASTImplementationType' on 'ValueContainer'")
+	}); errF != nil {
+		return errF
+	}
+	if err != nil {
+		return err
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return errAbort
+		}
+	}
+	return nil
+}
+func (a *application) rewriteValueSliceContainer(parent AST, node ValueSliceContainer, replacer replacerFunc) error {
+	var err error
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return nil
+		}
+	}
+	for _, el := range node.ASTElements {
+		if errF := a.rewriteAST(node, el, func(newNode, parent AST) {
+			err = vterrors.New(vtrpc.Code_INTERNAL, "[BUG] tried to replace 'ASTElements' on 'ValueSliceContainer'")
+		}); errF != nil {
+			return errF
+		}
+	}
+	for _, el := range node.ASTImplementationElements {
+		if errF := a.rewriteRefOfLeaf(node, el, func(newNode, parent AST) {
+			err = vterrors.New(vtrpc.Code_INTERNAL, "[BUG] tried to replace 'ASTImplementationElements' on 'ValueSliceContainer'")
+		}); errF != nil {
+			return errF
+		}
+	}
+	if err != nil {
+		return err
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return errAbort
 		}
 	}
 	return nil
