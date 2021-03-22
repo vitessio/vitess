@@ -42,13 +42,18 @@ func BenchmarkVisitLargeExpression(b *testing.B) {
 func TestChangeValueTypeGivesError(t *testing.T) {
 	parse, err := Parse("select * from a join b on a.id = b.id")
 	require.NoError(t, err)
-	_, err = Rewrite(parse, func(cursor *Cursor) bool {
+
+	defer func() {
+		if r := recover(); r != nil {
+			require.Equal(t, "[BUG] tried to replace 'On' on 'JoinCondition'", r)
+		}
+	}()
+	_, _ = Rewrite(parse, func(cursor *Cursor) bool {
 		_, ok := cursor.Node().(*ComparisonExpr)
 		if ok {
 			cursor.Replace(&NullVal{}) // this is not a valid replacement because the container is a value type
 		}
 		return true
 	}, nil)
-	require.Error(t, err)
 
 }

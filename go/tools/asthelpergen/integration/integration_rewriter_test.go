@@ -206,7 +206,12 @@ func TestRewriteVisitValueContainerReplace(t *testing.T) {
 		ASTImplementationType: &Leaf{2},
 	}
 
-	_, err := Rewrite(ast, func(cursor *Cursor) bool {
+	defer func() {
+		if r := recover(); r != nil {
+			require.Equal(t, "[BUG] tried to replace 'ASTType' on 'ValueContainer'", r)
+		}
+	}()
+	_, _ = Rewrite(ast, func(cursor *Cursor) bool {
 		leaf, ok := cursor.node.(ValueContainer)
 		if ok && leaf.NotASTType == 12 {
 			cursor.Replace(&Leaf{99})
@@ -214,7 +219,6 @@ func TestRewriteVisitValueContainerReplace(t *testing.T) {
 		return true
 	}, nil)
 
-	require.Error(t, err)
 }
 
 func TestRewriteVisitValueContainerReplace2(t *testing.T) {
