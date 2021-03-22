@@ -69,7 +69,7 @@ func initVtgateExecutor(vSchemaStr, ksShardMapStr string, opts *Options) error {
 	vtgateSession.TargetString = opts.Target
 
 	streamSize := 10
-	vtgateExecutor = vtgate.NewExecutor(context.Background(), explainTopo, vtexplainCell, resolver, opts.Normalize, streamSize, cache.DefaultConfig)
+	vtgateExecutor = vtgate.NewExecutor(context.Background(), explainTopo, vtexplainCell, resolver, opts.Normalize, false /*do not warn for sharded only*/, streamSize, cache.DefaultConfig)
 
 	return nil
 }

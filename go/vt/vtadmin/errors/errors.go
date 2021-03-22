@@ -25,6 +25,10 @@ var (
 	// ErrAmbiguousTablet occurs when more than one tablet is found for a given
 	// set of filter criteria.
 	ErrAmbiguousTablet = errors.New("multiple tablets found")
+	// ErrAmbiguousWorkflow occurs when more than one workflow is found for a
+	// set of filter criteria that should ordinarily never return more than one
+	// workflow.
+	ErrAmbiguousWorkflow = errors.New("multiple workflows found")
 	// ErrInvalidRequest occurs when a request is invalid for any reason.
 	// For example, if mandatory parameters are undefined.
 	ErrInvalidRequest = errors.New("Invalid request")
@@ -36,6 +40,9 @@ var (
 	// ErrNoTablet occurs when a tablet cannot be found for a given set of
 	// filter criteria.
 	ErrNoTablet = errors.New("no such tablet")
+	// ErrNoWorkflow occurs when a workflow cannot be found for a given set of
+	// filter criteria.
+	ErrNoWorkflow = errors.New("no such workflow")
 	// ErrUnsupportedCluster occurs when a cluster parameter is invalid.
 	ErrUnsupportedCluster = errors.New("unsupported cluster(s)")
 )

@@ -2569,6 +2569,584 @@ func TestGetVSchemas(t *testing.T) {
 	}
 }
 
+func TestGetWorkflow(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		cfgs      []vtadmintestutil.TestClusterConfig
+		req       *vtadminpb.GetWorkflowRequest
+		expected  *vtadminpb.Workflow
+		shouldErr bool
+	}{
+		{
+			name: "success",
+			cfgs: []vtadmintestutil.TestClusterConfig{
+				{
+					Cluster: &vtadminpb.Cluster{
+						Id:   "c1",
+						Name: "cluster1",
+					},
+					VtctldClient: &vtadmintestutil.VtctldClient{
+						GetWorkflowsResults: map[string]struct {
+							Response *vtctldatapb.GetWorkflowsResponse
+							Error    error
+						}{
+							"testkeyspace": {
+								Response: &vtctldatapb.GetWorkflowsResponse{
+									Workflows: []*vtctldatapb.Workflow{
+										{
+											Name: "workflow1",
+										},
+										{
+											Name: "workflow2",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			req: &vtadminpb.GetWorkflowRequest{
+				ClusterId: "c1",
+				Keyspace:  "testkeyspace",
+				Name:      "workflow1",
+			},
+			expected: &vtadminpb.Workflow{
+				Cluster: &vtadminpb.Cluster{
+					Id:   "c1",
+					Name: "cluster1",
+				},
+				Keyspace: "testkeyspace",
+				Workflow: &vtctldatapb.Workflow{
+					Name: "workflow1",
+				},
+			},
+			shouldErr: false,
+		},
+		{
+			name: "no such workflow",
+			cfgs: []vtadmintestutil.TestClusterConfig{
+				{
+					Cluster: &vtadminpb.Cluster{
+						Id:   "c1",
+						Name: "cluster1",
+					},
+					VtctldClient: &vtadmintestutil.VtctldClient{
+						GetWorkflowsResults: map[string]struct {
+							Response *vtctldatapb.GetWorkflowsResponse
+							Error    error
+						}{
+							"testkeyspace": {
+								Response: &vtctldatapb.GetWorkflowsResponse{
+									Workflows: []*vtctldatapb.Workflow{
+										{
+											Name: "workflow1",
+										},
+										{
+											Name: "workflow2",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			req: &vtadminpb.GetWorkflowRequest{
+				ClusterId: "c1",
+				Keyspace:  "testkeyspace",
+				Name:      "workflow3",
+			},
+			expected:  nil,
+			shouldErr: true,
+		},
+		{
+			name: "no such cluster",
+			cfgs: []vtadmintestutil.TestClusterConfig{},
+			req: &vtadminpb.GetWorkflowRequest{
+				ClusterId: "c1",
+				Keyspace:  "testkeyspace",
+				Name:      "workflow1",
+			},
+			expected:  nil,
+			shouldErr: true,
+		},
+	}
+
+	ctx := context.Background()
+
+	for _, tt := range tests {
+		tt := tt
+
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			api := NewAPI(
+				vtadmintestutil.BuildClusters(tt.cfgs...),
+				grpcserver.Options{},
+				http.Options{},
+			)
+
+			resp, err := api.GetWorkflow(ctx, tt.req)
+			if tt.shouldErr {
+				assert.Error(t, err)
+
+				return
+			}
+
+			assert.NoError(t, err)
+			assert.Equal(t, tt.expected, resp)
+		})
+	}
+}
+
+func TestGetWorkflows(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		cfgs      []vtadmintestutil.TestClusterConfig
+		req       *vtadminpb.GetWorkflowsRequest
+		expected  *vtadminpb.GetWorkflowsResponse
+		shouldErr bool
+	}{
+		{
+			name: "success",
+			cfgs: []vtadmintestutil.TestClusterConfig{
+				{
+					Cluster: &vtadminpb.Cluster{
+						Id:   "c1",
+						Name: "cluster1",
+					},
+					VtctldClient: &vtadmintestutil.VtctldClient{
+						GetKeyspacesResults: struct {
+							Keyspaces []*vtctldatapb.Keyspace
+							Error     error
+						}{
+							Keyspaces: []*vtctldatapb.Keyspace{
+								{
+									Name: "testkeyspace",
+								},
+							},
+						},
+						GetWorkflowsResults: map[string]struct {
+							Response *vtctldatapb.GetWorkflowsResponse
+							Error    error
+						}{
+							"testkeyspace": {
+								Response: &vtctldatapb.GetWorkflowsResponse{
+									Workflows: []*vtctldatapb.Workflow{
+										{
+											Name: "workflow1",
+										},
+										{
+											Name: "workflow2",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				{
+					Cluster: &vtadminpb.Cluster{
+						Id:   "c2",
+						Name: "cluster2",
+					},
+					VtctldClient: &vtadmintestutil.VtctldClient{
+						GetKeyspacesResults: struct {
+							Keyspaces []*vtctldatapb.Keyspace
+							Error     error
+						}{
+							Keyspaces: []*vtctldatapb.Keyspace{
+								{
+									Name: "otherkeyspace",
+								},
+							},
+						},
+						GetWorkflowsResults: map[string]struct {
+							Response *vtctldatapb.GetWorkflowsResponse
+							Error    error
+						}{
+							"otherkeyspace": {
+								Response: &vtctldatapb.GetWorkflowsResponse{
+									Workflows: []*vtctldatapb.Workflow{
+										{
+											Name: "workflow1",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			req: &vtadminpb.GetWorkflowsRequest{},
+			expected: &vtadminpb.GetWorkflowsResponse{
+				WorkflowsByCluster: map[string]*vtadminpb.ClusterWorkflows{
+					"c1": {
+						Workflows: []*vtadminpb.Workflow{
+							{
+								Cluster: &vtadminpb.Cluster{
+									Id:   "c1",
+									Name: "cluster1",
+								},
+								Keyspace: "testkeyspace",
+								Workflow: &vtctldatapb.Workflow{
+									Name: "workflow1",
+								},
+							},
+							{
+								Cluster: &vtadminpb.Cluster{
+									Id:   "c1",
+									Name: "cluster1",
+								},
+								Keyspace: "testkeyspace",
+								Workflow: &vtctldatapb.Workflow{
+									Name: "workflow2",
+								},
+							},
+						},
+					},
+					"c2": {
+						Workflows: []*vtadminpb.Workflow{
+							{
+								Cluster: &vtadminpb.Cluster{
+									Id:   "c2",
+									Name: "cluster2",
+								},
+								Keyspace: "otherkeyspace",
+								Workflow: &vtctldatapb.Workflow{
+									Name: "workflow1",
+								},
+							},
+						},
+					},
+				},
+			},
+			shouldErr: false,
+		},
+		{
+			name: "one cluster has partial error then request succeeds",
+			cfgs: []vtadmintestutil.TestClusterConfig{
+				{
+					Cluster: &vtadminpb.Cluster{
+						Id:   "c1",
+						Name: "cluster1",
+					},
+					VtctldClient: &vtadmintestutil.VtctldClient{
+						GetKeyspacesResults: struct {
+							Keyspaces []*vtctldatapb.Keyspace
+							Error     error
+						}{
+							Keyspaces: []*vtctldatapb.Keyspace{
+								{
+									Name: "testkeyspace",
+								},
+							},
+						},
+						GetWorkflowsResults: map[string]struct {
+							Response *vtctldatapb.GetWorkflowsResponse
+							Error    error
+						}{
+							"testkeyspace": {
+								Response: &vtctldatapb.GetWorkflowsResponse{
+									Workflows: []*vtctldatapb.Workflow{
+										{
+											Name: "workflow1",
+										},
+										{
+											Name: "workflow2",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				{
+					Cluster: &vtadminpb.Cluster{
+						Id:   "c2",
+						Name: "cluster2",
+					},
+					VtctldClient: &vtadmintestutil.VtctldClient{
+						GetKeyspacesResults: struct {
+							Keyspaces []*vtctldatapb.Keyspace
+							Error     error
+						}{
+							Keyspaces: []*vtctldatapb.Keyspace{
+								{
+									Name: "otherkeyspace",
+								},
+								{
+									Name: "badkeyspace",
+								},
+							},
+						},
+						GetWorkflowsResults: map[string]struct {
+							Response *vtctldatapb.GetWorkflowsResponse
+							Error    error
+						}{
+							"otherkeyspace": {
+								Response: &vtctldatapb.GetWorkflowsResponse{
+									Workflows: []*vtctldatapb.Workflow{
+										{
+											Name: "workflow1",
+										},
+									},
+								},
+							},
+							"badkeyspace": {
+								Error: assert.AnError,
+							},
+						},
+					},
+				},
+			},
+			req: &vtadminpb.GetWorkflowsRequest{},
+			expected: &vtadminpb.GetWorkflowsResponse{
+				WorkflowsByCluster: map[string]*vtadminpb.ClusterWorkflows{
+					"c1": {
+						Workflows: []*vtadminpb.Workflow{
+							{
+								Cluster: &vtadminpb.Cluster{
+									Id:   "c1",
+									Name: "cluster1",
+								},
+								Keyspace: "testkeyspace",
+								Workflow: &vtctldatapb.Workflow{
+									Name: "workflow1",
+								},
+							},
+							{
+								Cluster: &vtadminpb.Cluster{
+									Id:   "c1",
+									Name: "cluster1",
+								},
+								Keyspace: "testkeyspace",
+								Workflow: &vtctldatapb.Workflow{
+									Name: "workflow2",
+								},
+							},
+						},
+						Warnings: []string{},
+					},
+					"c2": {
+						Workflows: []*vtadminpb.Workflow{
+							{
+								Cluster: &vtadminpb.Cluster{
+									Id:   "c2",
+									Name: "cluster2",
+								},
+								Keyspace: "otherkeyspace",
+								Workflow: &vtctldatapb.Workflow{
+									Name: "workflow1",
+								},
+							},
+						},
+						Warnings: []string{"some warning about badkeyspace"},
+					},
+				},
+			},
+			shouldErr: false,
+		},
+		{
+			name: "IgnoreKeyspaces applies across clusters",
+			cfgs: []vtadmintestutil.TestClusterConfig{
+				{
+					Cluster: &vtadminpb.Cluster{
+						Id:   "c1",
+						Name: "cluster1",
+					},
+					VtctldClient: &vtadmintestutil.VtctldClient{
+						GetKeyspacesResults: struct {
+							Keyspaces []*vtctldatapb.Keyspace
+							Error     error
+						}{
+							Keyspaces: []*vtctldatapb.Keyspace{
+								{
+									Name: "testkeyspace",
+								},
+							},
+						},
+						GetWorkflowsResults: map[string]struct {
+							Response *vtctldatapb.GetWorkflowsResponse
+							Error    error
+						}{
+							"testkeyspace": {
+								Response: &vtctldatapb.GetWorkflowsResponse{
+									Workflows: []*vtctldatapb.Workflow{
+										{
+											Name: "workflow1",
+										},
+										{
+											Name: "workflow2",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				{
+					Cluster: &vtadminpb.Cluster{
+						Id:   "c2",
+						Name: "cluster2",
+					},
+					VtctldClient: &vtadmintestutil.VtctldClient{
+						GetKeyspacesResults: struct {
+							Keyspaces []*vtctldatapb.Keyspace
+							Error     error
+						}{
+							Keyspaces: []*vtctldatapb.Keyspace{
+								{
+									Name: "testkeyspace",
+								},
+								{
+									Name: "otherkeyspace",
+								},
+							},
+						},
+						GetWorkflowsResults: map[string]struct {
+							Response *vtctldatapb.GetWorkflowsResponse
+							Error    error
+						}{
+							"testkeyspace": {
+								Response: &vtctldatapb.GetWorkflowsResponse{
+									Workflows: []*vtctldatapb.Workflow{
+										{
+											Name: "workflow1",
+										},
+									},
+								},
+							},
+							"otherkeyspace": {
+								Response: &vtctldatapb.GetWorkflowsResponse{
+									Workflows: []*vtctldatapb.Workflow{
+										{
+											Name: "workflow1",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			req: &vtadminpb.GetWorkflowsRequest{
+				IgnoreKeyspaces: []string{"testkeyspace"},
+			},
+			expected: &vtadminpb.GetWorkflowsResponse{
+				WorkflowsByCluster: map[string]*vtadminpb.ClusterWorkflows{
+					"c1": {},
+					"c2": {
+						Workflows: []*vtadminpb.Workflow{
+							{
+								Cluster: &vtadminpb.Cluster{
+									Id:   "c2",
+									Name: "cluster2",
+								},
+								Keyspace: "otherkeyspace",
+								Workflow: &vtctldatapb.Workflow{
+									Name: "workflow1",
+								},
+							},
+						},
+					},
+				},
+			},
+			shouldErr: false,
+		},
+		{
+			name: "one cluster has fatal error, request fails",
+			cfgs: []vtadmintestutil.TestClusterConfig{
+				{
+					Cluster: &vtadminpb.Cluster{
+						Id:   "c1",
+						Name: "cluster1",
+					},
+					VtctldClient: &vtadmintestutil.VtctldClient{
+						GetKeyspacesResults: struct {
+							Keyspaces []*vtctldatapb.Keyspace
+							Error     error
+						}{
+							Keyspaces: []*vtctldatapb.Keyspace{
+								{
+									Name: "testkeyspace",
+								},
+							},
+						},
+						GetWorkflowsResults: map[string]struct {
+							Response *vtctldatapb.GetWorkflowsResponse
+							Error    error
+						}{
+							"testkeyspace": {
+								Response: &vtctldatapb.GetWorkflowsResponse{
+									Workflows: []*vtctldatapb.Workflow{
+										{
+											Name: "workflow1",
+										},
+										{
+											Name: "workflow2",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				{
+					Cluster: &vtadminpb.Cluster{
+						Id:   "c2",
+						Name: "cluster2",
+					},
+					VtctldClient: &vtadmintestutil.VtctldClient{
+						GetKeyspacesResults: struct {
+							Keyspaces []*vtctldatapb.Keyspace
+							Error     error
+						}{
+							Error: assert.AnError, // GetKeyspaces is a fatal error
+						},
+					},
+				},
+			},
+			req:       &vtadminpb.GetWorkflowsRequest{},
+			expected:  nil,
+			shouldErr: true,
+		},
+	}
+
+	ctx := context.Background()
+
+	for _, tt := range tests {
+		tt := tt
+
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			api := NewAPI(
+				vtadmintestutil.BuildClusters(tt.cfgs...),
+				grpcserver.Options{},
+				http.Options{},
+			)
+
+			resp, err := api.GetWorkflows(ctx, tt.req)
+			if tt.shouldErr {
+				assert.Error(t, err)
+
+				return
+			}
+
+			assert.NoError(t, err)
+			require.NotNil(t, resp)
+
+			vtadmintestutil.AssertGetWorkflowsResponsesEqual(t, tt.expected, resp)
+		})
+	}
+}
+
 func TestVTExplain(t *testing.T) {
 	t.Parallel()
 

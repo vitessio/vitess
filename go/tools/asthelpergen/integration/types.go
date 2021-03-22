@@ -26,7 +26,7 @@ import (
 These types are used to test the rewriter generator against these types.
 To recreate them, just run:
 
-go run go/tools/asthelpergen -in ./go/tools/asthelpergen/integration -iface vitess.io/vitess/go/tools/asthelpergen/integration.AST
+go run go/tools/asthelpergen -in ./go/tools/asthelpergen/integration -iface vitess.io/vitess/go/tools/asthelpergen/integration.AST -except "*NoCloneType"
 */
 // AST is the interface all interface types implement
 type AST interface {
@@ -148,6 +148,7 @@ type SubIface interface {
 
 type SubImpl struct {
 	inner SubIface
+	field *bool
 }
 
 func (r *SubImpl) String() string {
@@ -169,4 +170,13 @@ type NoCloneType struct {
 
 func (r *NoCloneType) String() string {
 	return fmt.Sprintf("NoClone(%d)", r.v)
+}
+
+type Visit func(node AST) (bool, error)
+
+var errAbort = fmt.Errorf("this error is to abort the rewriter, it is not an actual error")
+
+type application struct {
+	pre, post ApplyFunc
+	cur       Cursor
 }

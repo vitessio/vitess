@@ -1535,6 +1535,16 @@ var (
 	}, {
 		input: "show vitess_migrations like '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90'",
 	}, {
+		input: "revert vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90'",
+	}, {
+		input: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' retry",
+	}, {
+		input: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' complete",
+	}, {
+		input: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' cancel",
+	}, {
+		input: "alter vitess_migration cancel all",
+	}, {
 		input:  "show warnings",
 		output: "show warnings",
 	}, {
@@ -2166,6 +2176,9 @@ func TestKeywords(t *testing.T) {
 	}, {
 		input:  "select Variables from t",
 		output: "select `Variables` from t",
+	}, {
+		input:  "select current_user, current_user() from dual",
+		output: "select current_user(), current_user() from dual",
 	}}
 
 	for _, tcase := range validSQL {
@@ -2298,11 +2311,15 @@ func TestSelectInto(t *testing.T) {
 		input:  "select * from t order by name limit 100 into outfile s3 'out_file_name'",
 		output: "select * from t order by `name` asc limit 100 into outfile s3 'out_file_name'",
 	}, {
+		input: `select * from TestPerson into outfile s3 's3://test-bucket/export_import/export/users.csv' fields terminated by ',' enclosed by '\"' escaped by '\\' overwrite on`,
+	}, {
 		input: "select * from t into dumpfile 'out_file_name'",
 	}, {
-		input: "select * from t into outfile 'out_file_name' character set binary fields terminated by 'term' optionally enclosed by 'c' escaped by 'e' lines starting by 'a' terminated by '\n'",
+		input: "select * from t into outfile 'out_file_name' character set binary fields terminated by 'term' optionally enclosed by 'c' escaped by 'e' lines starting by 'a' terminated by '\\n'",
 	}, {
-		input: "select * from t into outfile s3 'out_file_name' character set binary format csv header fields terminated by 'term' optionally enclosed by 'c' escaped by 'e' lines starting by 'a' terminated by '\n' manifest on overwrite off",
+		input: "select * from t into outfile s3 'out_file_name' character set binary format csv header fields terminated by 'term' optionally enclosed by 'c' escaped by 'e' lines starting by 'a' terminated by '\\n' manifest on overwrite off",
+	}, {
+		input: "select * from t into outfile s3 'out_file_name' character set binary lines terminated by '\\n' starting by 'a' manifest on overwrite off",
 	}, {
 		input:  "select * from (select * from t union select * from t2) as t3 where t3.name in (select col from t4) into outfile s3 'out_file_name'",
 		output: "select * from (select * from t union select * from t2) as t3 where t3.`name` in (select col from t4) into outfile s3 'out_file_name'",
@@ -2311,6 +2328,12 @@ func TestSelectInto(t *testing.T) {
 		input: "select * from t limit 100 into outfile s3 'out_file_name' union select * from t2",
 	}, {
 		input: "select * from (select * from t into outfile s3 'inner_outfile') as t2 into outfile s3 'out_file_name'",
+	}, {
+		input: `select * from TestPerson into outfile s3 's3://test-bucket/export_import/export/users.csv' character set 'utf8' overwrite on`,
+	}, {
+		input: `select * from t1 into outfile '/tmp/foo.csv' fields escaped by '\\' terminated by '\n'`,
+	}, {
+		input: `select * from t1 into outfile '/tmp/foo.csv' fields escaped by 'c' terminated by '\n' enclosed by '\t'`,
 	}}
 
 	for _, tcase := range validSQL {

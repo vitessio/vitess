@@ -81,6 +81,7 @@ var (
 
 	// lockHeartbeatTime is used to set the next heartbeat time.
 	lockHeartbeatTime = flag.Duration("lock_heartbeat_time", 5*time.Second, "If there is lock function used. This will keep the lock connection active by using this heartbeat")
+	warnShardedOnly   = flag.Bool("warn_sharded_only", false, "If any features that are only available in unsharded mode are used, query execution warnings will be added to the session")
 )
 
 func getTxMode() vtgatepb.TransactionMode {
@@ -189,7 +190,7 @@ func Init(ctx context.Context, serv srvtopo.Server, cell string, tabletTypesToWa
 	}
 
 	rpcVTGate = &VTGate{
-		executor: NewExecutor(ctx, serv, cell, resolver, *normalizeQueries, *streamBufferSize, cacheCfg),
+		executor: NewExecutor(ctx, serv, cell, resolver, *normalizeQueries, *warnShardedOnly, *streamBufferSize, cacheCfg),
 		resolver: resolver,
 		vsm:      vsm,
 		txConn:   tc,
@@ -519,7 +520,7 @@ func LegacyInit(ctx context.Context, hc discovery.LegacyHealthCheck, serv srvtop
 	}
 
 	rpcVTGate = &VTGate{
-		executor: NewExecutor(ctx, serv, cell, resolver, *normalizeQueries, *streamBufferSize, cacheCfg),
+		executor: NewExecutor(ctx, serv, cell, resolver, *normalizeQueries, *warnShardedOnly, *streamBufferSize, cacheCfg),
 		resolver: resolver,
 		vsm:      vsm,
 		txConn:   tc,

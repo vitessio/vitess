@@ -36,30 +36,7 @@ import (
 // is interrupted, and the error is returned.
 func Walk(visit Visit, nodes ...SQLNode) error {
 	for _, node := range nodes {
-		if node == nil {
-			continue
-		}
-		var err error
-		var kontinue bool
-		pre := func(cursor *Cursor) bool {
-			// If we already have found an error, don't visit these nodes, just exit early
-			if err != nil {
-				return false
-			}
-			kontinue, err = visit(cursor.Node())
-			if err != nil {
-				return true // we have to return true here so that post gets called
-			}
-			return kontinue
-		}
-		post := func(cursor *Cursor) bool {
-			return err == nil // now we can abort the traversal if an error was found
-		}
-
-		_, rewriterErr := Rewrite(node, pre, post)
-		if rewriterErr != nil {
-			return rewriterErr
-		}
+		err := VisitSQLNode(node, visit)
 		if err != nil {
 			return err
 		}
@@ -69,6 +46,8 @@ func Walk(visit Visit, nodes ...SQLNode) error {
 
 // Visit defines the signature of a function that
 // can be used to visit all nodes of a parse tree.
+// returning false on kontinue means that children will not be visited
+// returning an error will abort the visitation and return the error
 type Visit func(node SQLNode) (kontinue bool, err error)
 
 // Append appends the SQLNode to the buffer.
@@ -1354,4 +1333,9 @@ func handleUnaryMinus(expr Expr) Expr {
 		return unaryExpr.Expr
 	}
 	return &UnaryExpr{Operator: UMinusOp, Expr: expr}
+}
+
+// encodeSQLString encodes the string as a SQL string.
+func encodeSQLString(val string) string {
+	return sqltypes.EncodeStringSQL(val)
 }

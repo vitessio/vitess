@@ -167,6 +167,11 @@ func (ev binlogEvent) IsPseudo() bool {
 	return false
 }
 
+// IsCompressed returns true if a compressed event is found (binlog_transaction_compression=ON)
+func (ev binlogEvent) IsCompressed() bool {
+	return ev.Type() == eCompressedEvent
+}
+
 // Format implements BinlogEvent.Format().
 //
 // Expected format (L = total length of event data):

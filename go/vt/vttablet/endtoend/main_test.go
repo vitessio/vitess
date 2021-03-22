@@ -300,6 +300,13 @@ var tableACLConfig = `{
       "readers": ["dev"],
       "writers": ["dev"],
       "admins": ["dev"]
+    },
+    {
+      "name": "sys_table",
+      "table_names_or_prefixes": ["tables", "user", "processlist", "mutex_instances"],
+      "readers": ["dev"],
+      "writers": ["dev"],
+      "admins": ["dev"]
     }
   ]
 }`

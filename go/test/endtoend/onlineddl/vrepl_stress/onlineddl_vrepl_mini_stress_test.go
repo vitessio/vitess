@@ -30,7 +30,6 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/schema"
 
@@ -203,6 +202,9 @@ func TestMain(m *testing.M) {
 func TestSchemaChange(t *testing.T) {
 	defer cluster.PanicHandler(t)
 
+	shards := clusterInstance.Keyspaces[0].Shards
+	require.Equal(t, 1, len(shards))
+
 	t.Run("create schema", func(t *testing.T) {
 		assert.Equal(t, 1, len(clusterInstance.Keyspaces[0].Shards))
 		testWithInitialSchema(t)
@@ -242,7 +244,7 @@ func TestSchemaChange(t *testing.T) {
 		initTable(t)
 		hint := "hint-alter-without-workload"
 		uuid := testOnlineDDLStatement(t, fmt.Sprintf(alterHintStatement, hint), "online", "vtgate", hint)
-		checkRecentMigrations(t, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 		testSelectTableMetrics(t)
 	})
 
@@ -265,7 +267,7 @@ func TestSchemaChange(t *testing.T) {
 			}()
 			hint := fmt.Sprintf("hint-alter-with-workload-%d", i)
 			uuid := testOnlineDDLStatement(t, fmt.Sprintf(alterHintStatement, hint), "online", "vtgate", hint)
-			checkRecentMigrations(t, uuid, schema.OnlineDDLStatusComplete)
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 			cancel() // will cause runMultipleConnections() to terminate
 			wg.Wait()
 			testSelectTableMetrics(t)
@@ -285,7 +287,7 @@ func testWithInitialSchema(t *testing.T) {
 // testOnlineDDLStatement runs an online DDL, ALTER statement
 func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy string, executeStrategy string, expectHint string) (uuid string) {
 	if executeStrategy == "vtgate" {
-		row := vtgateExec(t, ddlStrategy, alterStatement, "").Named().Row()
+		row := onlineddl.VtgateExecDDL(t, &vtParams, ddlStrategy, alterStatement, "").Named().Row()
 		if row != nil {
 			uuid = row.AsString("uuid", "")
 		}
@@ -324,29 +326,6 @@ func checkTablesCount(t *testing.T, tablet *cluster.Vttablet, showTableName stri
 	queryResult, err := tablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
 	require.Nil(t, err)
 	assert.Equal(t, expectCount, len(queryResult.Rows))
-}
-
-// checkRecentMigrations checks 'OnlineDDL <keyspace> show recent' output. Example to such output:
-// +------------------+-------+--------------+-------------+--------------------------------------+----------+---------------------+---------------------+------------------+
-// |      Tablet      | shard | mysql_schema | mysql_table |            migration_uuid            | strategy |  started_timestamp  | completed_timestamp | migration_status |
-// +------------------+-------+--------------+-------------+--------------------------------------+----------+---------------------+---------------------+------------------+
-// | zone1-0000003880 |     0 | vt_ks        | stress_test | a0638f6b_ec7b_11ea_9bf8_000d3a9b8a9a | online   | 2020-09-01 17:50:40 | 2020-09-01 17:50:41 | complete         |
-// | zone1-0000003884 |     1 | vt_ks        | stress_test | a0638f6b_ec7b_11ea_9bf8_000d3a9b8a9a | online   | 2020-09-01 17:50:40 | 2020-09-01 17:50:41 | complete         |
-// +------------------+-------+--------------+-------------+--------------------------------------+----------+---------------------+---------------------+------------------+
-
-func checkRecentMigrations(t *testing.T, uuid string, expectStatus schema.OnlineDDLStatus) {
-	showQuery := fmt.Sprintf("show vitess_migrations like '%s'", uuid)
-	r := onlineddl.VtgateExecQuery(t, &vtParams, showQuery, "")
-	fmt.Printf("# output for `%s`:\n", showQuery)
-	onlineddl.PrintQueryResult(os.Stdout, r)
-
-	count := 0
-	for _, row := range r.Named().Rows {
-		if row["migration_uuid"].ToString() == uuid && row["migration_status"].ToString() == string(expectStatus) {
-			count++
-		}
-	}
-	assert.Equal(t, len(clusterInstance.Keyspaces[0].Shards), count)
 }
 
 // checkMigratedTables checks the CREATE STATEMENT of a table after migration
@@ -543,26 +522,4 @@ func testSelectTableMetrics(t *testing.T) {
 	assert.NotZero(t, writeMetrics.updates)
 	assert.Equal(t, writeMetrics.inserts-writeMetrics.deletes, numRows)
 	assert.Equal(t, writeMetrics.updates-writeMetrics.deletes, sumUpdates) // because we DELETE WHERE updates=1
-}
-
-func vtgateExec(t *testing.T, ddlStrategy string, query string, expectError string) *sqltypes.Result {
-	t.Helper()
-
-	ctx := context.Background()
-	conn, err := mysql.Connect(ctx, &vtParams)
-	require.Nil(t, err)
-	defer conn.Close()
-
-	setSession := fmt.Sprintf("set @@ddl_strategy='%s'", ddlStrategy)
-	_, err = conn.ExecuteFetch(setSession, 1000, true)
-	assert.NoError(t, err)
-
-	qr, err := conn.ExecuteFetch(query, 1000, true)
-	if expectError == "" {
-		require.NoError(t, err)
-	} else {
-		require.Error(t, err, "error should not be nil")
-		assert.Contains(t, err.Error(), expectError, "Unexpected error")
-	}
-	return qr
 }

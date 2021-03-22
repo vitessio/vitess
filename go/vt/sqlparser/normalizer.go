@@ -24,6 +24,9 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
+// BindVars is a set of reserved bind variables from a SQL statement
+type BindVars map[string]struct{}
+
 // Normalize changes the statement to use bind values, and
 // updates the bind vars to those values. The supplied prefix
 // is used to generate the bind var names. The function ensures
@@ -31,8 +34,8 @@ import (
 // Within Select constructs, bind vars are deduped. This allows
 // us to identify vindex equality. Otherwise, every value is
 // treated as distinct.
-func Normalize(stmt Statement, bindVars map[string]*querypb.BindVariable, prefix string) error {
-	nz := newNormalizer(stmt, bindVars, prefix)
+func Normalize(stmt Statement, known BindVars, bindVars map[string]*querypb.BindVariable, prefix string) error {
+	nz := newNormalizer(known, bindVars, prefix)
 	_, err := Rewrite(stmt, nz.WalkStatement, nil)
 	if err != nil {
 		return err
@@ -49,11 +52,11 @@ type normalizer struct {
 	err      error
 }
 
-func newNormalizer(stmt Statement, bindVars map[string]*querypb.BindVariable, prefix string) *normalizer {
+func newNormalizer(reserved map[string]struct{}, bindVars map[string]*querypb.BindVariable, prefix string) *normalizer {
 	return &normalizer{
 		bindVars: bindVars,
 		prefix:   prefix,
-		reserved: GetBindvars(stmt),
+		reserved: reserved,
 		counter:  1,
 		vals:     make(map[string]string),
 	}
@@ -226,8 +229,6 @@ func (nz *normalizer) newName() string {
 }
 
 // GetBindvars returns a map of the bind vars referenced in the statement.
-// TODO(sougou); This function gets called again from vtgate/planbuilder.
-// Ideally, this should be done only once.
 func GetBindvars(stmt Statement) map[string]struct{} {
 	bindvars := make(map[string]struct{})
 	_ = Walk(func(node SQLNode) (kontinue bool, err error) {

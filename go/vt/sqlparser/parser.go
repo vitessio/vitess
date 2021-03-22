@@ -28,36 +28,27 @@ import (
 )
 
 // parserPool is a pool for parser objects.
-var parserPool = sync.Pool{}
+var parserPool = sync.Pool{
+	New: func() interface{} {
+		return &yyParserImpl{}
+	},
+}
 
 // zeroParser is a zero-initialized parser to help reinitialize the parser for pooling.
-var zeroParser = *(yyNewParser().(*yyParserImpl))
+var zeroParser yyParserImpl
 
 // MySQLVersion is the version of MySQL that the parser would emulate
 var MySQLVersion string = "50709"
 
 // yyParsePooled is a wrapper around yyParse that pools the parser objects. There isn't a
-// particularly good reason to use yyParse directly, since it immediately discards its parser.  What
-// would be ideal down the line is to actually pool the stacks themselves rather than the parser
-// objects, as per https://github.com/cznic/goyacc/blob/master/main.go. However, absent an upstream
-// change to goyacc, this is the next best option.
+// particularly good reason to use yyParse directly, since it immediately discards its parser.
 //
 // N.B: Parser pooling means that you CANNOT take references directly to parse stack variables (e.g.
 // $$ = &$4) in sql.y rules. You must instead add an intermediate reference like so:
 //    showCollationFilterOpt := $4
 //    $$ = &Show{Type: string($2), ShowCollationFilterOpt: &showCollationFilterOpt}
 func yyParsePooled(yylex yyLexer) int {
-	// Being very particular about using the base type and not an interface type b/c we depend on
-	// the implementation to know how to reinitialize the parser.
-	var parser *yyParserImpl
-
-	i := parserPool.Get()
-	if i != nil {
-		parser = i.(*yyParserImpl)
-	} else {
-		parser = yyNewParser().(*yyParserImpl)
-	}
-
+	parser := parserPool.Get().(*yyParserImpl)
 	defer func() {
 		*parser = zeroParser
 		parserPool.Put(parser)
@@ -77,27 +68,34 @@ func yyParsePooled(yylex yyLexer) int {
 // a set of types, define the function as iTypeName.
 // This will help avoid name collisions.
 
-// Parse parses the SQL in full and returns a Statement, which
-// is the AST representation of the query. If a DDL statement
+// Parse2 parses the SQL in full and returns a Statement, which
+// is the AST representation of the query, and a set of BindVars, which are all the
+// bind variables that were found in the original SQL query. If a DDL statement
 // is partially parsed but still contains a syntax error, the
 // error is ignored and the DDL is returned anyway.
-func Parse(sql string) (Statement, error) {
+func Parse2(sql string) (Statement, BindVars, error) {
 	tokenizer := NewStringTokenizer(sql)
 	if yyParsePooled(tokenizer) != 0 {
 		if tokenizer.partialDDL != nil {
 			if typ, val := tokenizer.Scan(); typ != 0 {
-				return nil, fmt.Errorf("extra characters encountered after end of DDL: '%s'", string(val))
+				return nil, nil, fmt.Errorf("extra characters encountered after end of DDL: '%s'", string(val))
 			}
 			log.Warningf("ignoring error parsing DDL '%s': %v", sql, tokenizer.LastError)
 			tokenizer.ParseTree = tokenizer.partialDDL
-			return tokenizer.ParseTree, nil
+			return tokenizer.ParseTree, tokenizer.BindVars, nil
 		}
-		return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, tokenizer.LastError.Error())
+		return nil, nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, tokenizer.LastError.Error())
 	}
 	if tokenizer.ParseTree == nil {
-		return nil, ErrEmpty
+		return nil, nil, ErrEmpty
 	}
-	return tokenizer.ParseTree, nil
+	return tokenizer.ParseTree, tokenizer.BindVars, nil
+}
+
+// Parse behaves like Parse2 but does not return a set of bind variables
+func Parse(sql string) (Statement, error) {
+	stmt, _, err := Parse2(sql)
+	return stmt, err
 }
 
 // ParseStrictDDL is the same as Parse except it errors on
