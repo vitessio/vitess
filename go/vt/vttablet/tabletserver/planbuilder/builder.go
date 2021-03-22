@@ -156,7 +156,7 @@ func analyzeShow(show *sqlparser.Show, dbName string) (plan *Plan, err error) {
 func showTableRewrite(show *sqlparser.ShowBasic, dbName string) error {
 	filter := show.Filter.Filter
 	if filter != nil {
-		_, err := sqlparser.Rewrite(filter, func(cursor *sqlparser.Cursor) bool {
+		_ = sqlparser.Rewrite(filter, func(cursor *sqlparser.Cursor) bool {
 			switch n := cursor.Node().(type) {
 			case *sqlparser.ColName:
 				if n.Qualifier.IsEmpty() && strings.HasPrefix(n.Name.Lowered(), "tables_in_") {
@@ -165,9 +165,6 @@ func showTableRewrite(show *sqlparser.ShowBasic, dbName string) error {
 			}
 			return true
 		}, nil)
-		if err != nil {
-			return err
-		}
 	}
 	return nil
 }

@@ -990,10 +990,7 @@ func stripTableConstraints(ddl string) (string, error) {
 		return true
 	}
 
-	noConstraintAST, err := sqlparser.Rewrite(ast, stripConstraints, nil)
-	if err != nil {
-		return "", err
-	}
+	noConstraintAST := sqlparser.Rewrite(ast, stripConstraints, nil)
 	newDDL := sqlparser.String(noConstraintAST)
 
 	return newDDL, nil

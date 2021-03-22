@@ -28,14 +28,13 @@ func BenchmarkVisitLargeExpression(b *testing.B) {
 
 	depth := 0
 	for i := 0; i < b.N; i++ {
-		_, err := Rewrite(exp, func(cursor *Cursor) bool {
+		_ = Rewrite(exp, func(cursor *Cursor) bool {
 			depth++
 			return true
 		}, func(cursor *Cursor) bool {
 			depth--
 			return true
 		})
-		require.NoError(b, err)
 	}
 }
 
@@ -48,7 +47,7 @@ func TestChangeValueTypeGivesError(t *testing.T) {
 			require.Equal(t, "[BUG] tried to replace 'On' on 'JoinCondition'", r)
 		}
 	}()
-	_, _ = Rewrite(parse, func(cursor *Cursor) bool {
+	_ = Rewrite(parse, func(cursor *Cursor) bool {
 		_, ok := cursor.Node().(*ComparisonExpr)
 		if ok {
 			cursor.Replace(&NullVal{}) // this is not a valid replacement because the container is a value type

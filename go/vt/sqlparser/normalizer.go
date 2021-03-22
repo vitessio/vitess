@@ -36,10 +36,7 @@ type BindVars map[string]struct{}
 // treated as distinct.
 func Normalize(stmt Statement, known BindVars, bindVars map[string]*querypb.BindVariable, prefix string) error {
 	nz := newNormalizer(known, bindVars, prefix)
-	_, err := Rewrite(stmt, nz.WalkStatement, nil)
-	if err != nil {
-		return err
-	}
+	_ = Rewrite(stmt, nz.WalkStatement, nil)
 	return nz.err
 }
 
@@ -71,8 +68,7 @@ func (nz *normalizer) WalkStatement(cursor *Cursor) bool {
 	case *Set, *Show, *Begin, *Commit, *Rollback, *Savepoint, *SetTransaction, DDLStatement, *SRollback, *Release, *OtherAdmin, *OtherRead:
 		return false
 	case *Select:
-		_, err := Rewrite(node, nz.WalkSelect, nil)
-		nz.err = err
+		_ = Rewrite(node, nz.WalkSelect, nil)
 		// Don't continue
 		return false
 	case *Literal:
