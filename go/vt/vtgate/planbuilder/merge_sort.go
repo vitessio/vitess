@@ -74,8 +74,12 @@ func (ms *mergeSort) Wireup(plan logicalPlan, jt *jointab) error {
 				continue
 			}
 			var err error
-			rb.eroute.OrderBy[i].WeightStringCol = rb.SupplyWeightString(orderby.Col)
+			rb.eroute.OrderBy[i].WeightStringCol, err = rb.SupplyWeightString(orderby.Col)
 			if err != nil {
+				_, isUnsupportedErr := err.(UnsupportedSupplyWeightString)
+				if isUnsupportedErr {
+					continue
+				}
 				return err
 			}
 			ms.truncateColumnCount = len(ms.resultColumns)
