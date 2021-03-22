@@ -17,11 +17,6 @@ limitations under the License.
 
 package sqlparser
 
-import (
-	vtrpc "vitess.io/vitess/go/vt/proto/vtrpc"
-	vterrors "vitess.io/vitess/go/vt/vterrors"
-)
-
 // CloneAlterOption creates a deep clone of the input.
 func CloneAlterOption(in AlterOption) AlterOption {
 	if in == nil {
@@ -9443,7 +9438,6 @@ func (a *application) rewriteCharacteristic(parent SQLNode, node Characteristic,
 	}
 }
 func (a *application) rewriteColIdent(parent SQLNode, node ColIdent, replacer replacerFunc) error {
-	var err error
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -9451,9 +9445,6 @@ func (a *application) rewriteColIdent(parent SQLNode, node ColIdent, replacer re
 		if !a.pre(&a.cur) {
 			return nil
 		}
-	}
-	if err != nil {
-		return err
 	}
 	if a.post != nil {
 		if a.pre == nil {
@@ -9495,10 +9486,12 @@ func (a *application) rewriteColumns(parent SQLNode, node Columns, replacer repl
 			return nil
 		}
 	}
-	for i, el := range node {
-		if errF := a.rewriteColIdent(node, el, func(newNode, parent SQLNode) {
-			parent.(Columns)[i] = newNode.(ColIdent)
-		}); errF != nil {
+	for x, el := range node {
+		if errF := a.rewriteColIdent(node, el, func(idx int) replacerFunc {
+			return func(newNode, parent SQLNode) {
+				parent.(Columns)[idx] = newNode.(ColIdent)
+			}
+		}(x)); errF != nil {
 			return errF
 		}
 	}
@@ -9690,10 +9683,12 @@ func (a *application) rewriteExprs(parent SQLNode, node Exprs, replacer replacer
 			return nil
 		}
 	}
-	for i, el := range node {
-		if errF := a.rewriteExpr(node, el, func(newNode, parent SQLNode) {
-			parent.(Exprs)[i] = newNode.(Expr)
-		}); errF != nil {
+	for x, el := range node {
+		if errF := a.rewriteExpr(node, el, func(idx int) replacerFunc {
+			return func(newNode, parent SQLNode) {
+				parent.(Exprs)[idx] = newNode.(Expr)
+			}
+		}(x)); errF != nil {
 			return errF
 		}
 	}
@@ -9719,10 +9714,12 @@ func (a *application) rewriteGroupBy(parent SQLNode, node GroupBy, replacer repl
 			return nil
 		}
 	}
-	for i, el := range node {
-		if errF := a.rewriteExpr(node, el, func(newNode, parent SQLNode) {
-			parent.(GroupBy)[i] = newNode.(Expr)
-		}); errF != nil {
+	for x, el := range node {
+		if errF := a.rewriteExpr(node, el, func(idx int) replacerFunc {
+			return func(newNode, parent SQLNode) {
+				parent.(GroupBy)[idx] = newNode.(Expr)
+			}
+		}(x)); errF != nil {
 			return errF
 		}
 	}
@@ -9776,7 +9773,6 @@ func (a *application) rewriteIsolationLevel(parent SQLNode, node IsolationLevel,
 	return nil
 }
 func (a *application) rewriteJoinCondition(parent SQLNode, node JoinCondition, replacer replacerFunc) error {
-	var err error
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -9786,17 +9782,14 @@ func (a *application) rewriteJoinCondition(parent SQLNode, node JoinCondition, r
 		}
 	}
 	if errF := a.rewriteExpr(node, node.On, func(newNode, parent SQLNode) {
-		err = vterrors.New(vtrpc.Code_INTERNAL, "[BUG] tried to replace 'On' on 'JoinCondition'")
+		panic("[BUG] tried to replace 'On' on 'JoinCondition'")
 	}); errF != nil {
 		return errF
 	}
 	if errF := a.rewriteColumns(node, node.Using, func(newNode, parent SQLNode) {
-		err = vterrors.New(vtrpc.Code_INTERNAL, "[BUG] tried to replace 'Using' on 'JoinCondition'")
+		panic("[BUG] tried to replace 'Using' on 'JoinCondition'")
 	}); errF != nil {
 		return errF
-	}
-	if err != nil {
-		return err
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -9844,10 +9837,12 @@ func (a *application) rewriteOnDup(parent SQLNode, node OnDup, replacer replacer
 			return nil
 		}
 	}
-	for i, el := range node {
-		if errF := a.rewriteRefOfUpdateExpr(node, el, func(newNode, parent SQLNode) {
-			parent.(OnDup)[i] = newNode.(*UpdateExpr)
-		}); errF != nil {
+	for x, el := range node {
+		if errF := a.rewriteRefOfUpdateExpr(node, el, func(idx int) replacerFunc {
+			return func(newNode, parent SQLNode) {
+				parent.(OnDup)[idx] = newNode.(*UpdateExpr)
+			}
+		}(x)); errF != nil {
 			return errF
 		}
 	}
@@ -9873,10 +9868,12 @@ func (a *application) rewriteOrderBy(parent SQLNode, node OrderBy, replacer repl
 			return nil
 		}
 	}
-	for i, el := range node {
-		if errF := a.rewriteRefOfOrder(node, el, func(newNode, parent SQLNode) {
-			parent.(OrderBy)[i] = newNode.(*Order)
-		}); errF != nil {
+	for x, el := range node {
+		if errF := a.rewriteRefOfOrder(node, el, func(idx int) replacerFunc {
+			return func(newNode, parent SQLNode) {
+				parent.(OrderBy)[idx] = newNode.(*Order)
+			}
+		}(x)); errF != nil {
 			return errF
 		}
 	}
@@ -9902,10 +9899,12 @@ func (a *application) rewritePartitions(parent SQLNode, node Partitions, replace
 			return nil
 		}
 	}
-	for i, el := range node {
-		if errF := a.rewriteColIdent(node, el, func(newNode, parent SQLNode) {
-			parent.(Partitions)[i] = newNode.(ColIdent)
-		}); errF != nil {
+	for x, el := range node {
+		if errF := a.rewriteColIdent(node, el, func(idx int) replacerFunc {
+			return func(newNode, parent SQLNode) {
+				parent.(Partitions)[idx] = newNode.(ColIdent)
+			}
+		}(x)); errF != nil {
 			return errF
 		}
 	}
@@ -9931,10 +9930,12 @@ func (a *application) rewriteRefOfAddColumns(parent SQLNode, node *AddColumns, r
 			return nil
 		}
 	}
-	for i, el := range node.Columns {
-		if errF := a.rewriteRefOfColumnDefinition(node, el, func(newNode, parent SQLNode) {
-			parent.(*AddColumns).Columns[i] = newNode.(*ColumnDefinition)
-		}); errF != nil {
+	for x, el := range node.Columns {
+		if errF := a.rewriteRefOfColumnDefinition(node, el, func(idx int) replacerFunc {
+			return func(newNode, parent SQLNode) {
+				parent.(*AddColumns).Columns[idx] = newNode.(*ColumnDefinition)
+			}
+		}(x)); errF != nil {
 			return errF
 		}
 	}
@@ -10207,10 +10208,12 @@ func (a *application) rewriteRefOfAlterTable(parent SQLNode, node *AlterTable, r
 	}); errF != nil {
 		return errF
 	}
-	for i, el := range node.AlterOptions {
-		if errF := a.rewriteAlterOption(node, el, func(newNode, parent SQLNode) {
-			parent.(*AlterTable).AlterOptions[i] = newNode.(AlterOption)
-		}); errF != nil {
+	for x, el := range node.AlterOptions {
+		if errF := a.rewriteAlterOption(node, el, func(idx int) replacerFunc {
+			return func(newNode, parent SQLNode) {
+				parent.(*AlterTable).AlterOptions[idx] = newNode.(AlterOption)
+			}
+		}(x)); errF != nil {
 			return errF
 		}
 	}
@@ -10288,10 +10291,12 @@ func (a *application) rewriteRefOfAlterVschema(parent SQLNode, node *AlterVschem
 	}); errF != nil {
 		return errF
 	}
-	for i, el := range node.VindexCols {
-		if errF := a.rewriteColIdent(node, el, func(newNode, parent SQLNode) {
-			parent.(*AlterVschema).VindexCols[i] = newNode.(ColIdent)
-		}); errF != nil {
+	for x, el := range node.VindexCols {
+		if errF := a.rewriteColIdent(node, el, func(idx int) replacerFunc {
+			return func(newNode, parent SQLNode) {
+				parent.(*AlterVschema).VindexCols[idx] = newNode.(ColIdent)
+			}
+		}(x)); errF != nil {
 			return errF
 		}
 	}
@@ -10479,10 +10484,12 @@ func (a *application) rewriteRefOfCaseExpr(parent SQLNode, node *CaseExpr, repla
 	}); errF != nil {
 		return errF
 	}
-	for i, el := range node.Whens {
-		if errF := a.rewriteRefOfWhen(node, el, func(newNode, parent SQLNode) {
-			parent.(*CaseExpr).Whens[i] = newNode.(*When)
-		}); errF != nil {
+	for x, el := range node.Whens {
+		if errF := a.rewriteRefOfWhen(node, el, func(idx int) replacerFunc {
+			return func(newNode, parent SQLNode) {
+				parent.(*CaseExpr).Whens[idx] = newNode.(*When)
+			}
+		}(x)); errF != nil {
 			return errF
 		}
 	}
@@ -11556,10 +11563,12 @@ func (a *application) rewriteRefOfIndexHints(parent SQLNode, node *IndexHints, r
 			return nil
 		}
 	}
-	for i, el := range node.Indexes {
-		if errF := a.rewriteColIdent(node, el, func(newNode, parent SQLNode) {
-			parent.(*IndexHints).Indexes[i] = newNode.(ColIdent)
-		}); errF != nil {
+	for x, el := range node.Indexes {
+		if errF := a.rewriteColIdent(node, el, func(idx int) replacerFunc {
+			return func(newNode, parent SQLNode) {
+				parent.(*IndexHints).Indexes[idx] = newNode.(ColIdent)
+			}
+		}(x)); errF != nil {
 			return errF
 		}
 	}
@@ -12353,10 +12362,12 @@ func (a *application) rewriteRefOfPartitionSpec(parent SQLNode, node *PartitionS
 	}); errF != nil {
 		return errF
 	}
-	for i, el := range node.Definitions {
-		if errF := a.rewriteRefOfPartitionDefinition(node, el, func(newNode, parent SQLNode) {
-			parent.(*PartitionSpec).Definitions[i] = newNode.(*PartitionDefinition)
-		}); errF != nil {
+	for x, el := range node.Definitions {
+		if errF := a.rewriteRefOfPartitionDefinition(node, el, func(idx int) replacerFunc {
+			return func(newNode, parent SQLNode) {
+				parent.(*PartitionSpec).Definitions[idx] = newNode.(*PartitionDefinition)
+			}
+		}(x)); errF != nil {
 			return errF
 		}
 	}
@@ -12788,10 +12799,12 @@ func (a *application) rewriteRefOfSetTransaction(parent SQLNode, node *SetTransa
 	}); errF != nil {
 		return errF
 	}
-	for i, el := range node.Characteristics {
-		if errF := a.rewriteCharacteristic(node, el, func(newNode, parent SQLNode) {
-			parent.(*SetTransaction).Characteristics[i] = newNode.(Characteristic)
-		}); errF != nil {
+	for x, el := range node.Characteristics {
+		if errF := a.rewriteCharacteristic(node, el, func(idx int) replacerFunc {
+			return func(newNode, parent SQLNode) {
+				parent.(*SetTransaction).Characteristics[idx] = newNode.(Characteristic)
+			}
+		}(x)); errF != nil {
 			return errF
 		}
 	}
@@ -13156,24 +13169,30 @@ func (a *application) rewriteRefOfTableSpec(parent SQLNode, node *TableSpec, rep
 			return nil
 		}
 	}
-	for i, el := range node.Columns {
-		if errF := a.rewriteRefOfColumnDefinition(node, el, func(newNode, parent SQLNode) {
-			parent.(*TableSpec).Columns[i] = newNode.(*ColumnDefinition)
-		}); errF != nil {
+	for x, el := range node.Columns {
+		if errF := a.rewriteRefOfColumnDefinition(node, el, func(idx int) replacerFunc {
+			return func(newNode, parent SQLNode) {
+				parent.(*TableSpec).Columns[idx] = newNode.(*ColumnDefinition)
+			}
+		}(x)); errF != nil {
 			return errF
 		}
 	}
-	for i, el := range node.Indexes {
-		if errF := a.rewriteRefOfIndexDefinition(node, el, func(newNode, parent SQLNode) {
-			parent.(*TableSpec).Indexes[i] = newNode.(*IndexDefinition)
-		}); errF != nil {
+	for x, el := range node.Indexes {
+		if errF := a.rewriteRefOfIndexDefinition(node, el, func(idx int) replacerFunc {
+			return func(newNode, parent SQLNode) {
+				parent.(*TableSpec).Indexes[idx] = newNode.(*IndexDefinition)
+			}
+		}(x)); errF != nil {
 			return errF
 		}
 	}
-	for i, el := range node.Constraints {
-		if errF := a.rewriteRefOfConstraintDefinition(node, el, func(newNode, parent SQLNode) {
-			parent.(*TableSpec).Constraints[i] = newNode.(*ConstraintDefinition)
-		}); errF != nil {
+	for x, el := range node.Constraints {
+		if errF := a.rewriteRefOfConstraintDefinition(node, el, func(idx int) replacerFunc {
+			return func(newNode, parent SQLNode) {
+				parent.(*TableSpec).Constraints[idx] = newNode.(*ConstraintDefinition)
+			}
+		}(x)); errF != nil {
 			return errF
 		}
 	}
@@ -13319,10 +13338,12 @@ func (a *application) rewriteRefOfUnion(parent SQLNode, node *Union, replacer re
 	}); errF != nil {
 		return errF
 	}
-	for i, el := range node.UnionSelects {
-		if errF := a.rewriteRefOfUnionSelect(node, el, func(newNode, parent SQLNode) {
-			parent.(*Union).UnionSelects[i] = newNode.(*UnionSelect)
-		}); errF != nil {
+	for x, el := range node.UnionSelects {
+		if errF := a.rewriteRefOfUnionSelect(node, el, func(idx int) replacerFunc {
+			return func(newNode, parent SQLNode) {
+				parent.(*Union).UnionSelects[idx] = newNode.(*UnionSelect)
+			}
+		}(x)); errF != nil {
 			return errF
 		}
 	}
@@ -13655,10 +13676,12 @@ func (a *application) rewriteRefOfVindexSpec(parent SQLNode, node *VindexSpec, r
 	}); errF != nil {
 		return errF
 	}
-	for i, el := range node.Params {
-		if errF := a.rewriteVindexParam(node, el, func(newNode, parent SQLNode) {
-			parent.(*VindexSpec).Params[i] = newNode.(VindexParam)
-		}); errF != nil {
+	for x, el := range node.Params {
+		if errF := a.rewriteVindexParam(node, el, func(idx int) replacerFunc {
+			return func(newNode, parent SQLNode) {
+				parent.(*VindexSpec).Params[idx] = newNode.(VindexParam)
+			}
+		}(x)); errF != nil {
 			return errF
 		}
 	}
@@ -14114,10 +14137,12 @@ func (a *application) rewriteSelectExprs(parent SQLNode, node SelectExprs, repla
 			return nil
 		}
 	}
-	for i, el := range node {
-		if errF := a.rewriteSelectExpr(node, el, func(newNode, parent SQLNode) {
-			parent.(SelectExprs)[i] = newNode.(SelectExpr)
-		}); errF != nil {
+	for x, el := range node {
+		if errF := a.rewriteSelectExpr(node, el, func(idx int) replacerFunc {
+			return func(newNode, parent SQLNode) {
+				parent.(SelectExprs)[idx] = newNode.(SelectExpr)
+			}
+		}(x)); errF != nil {
 			return errF
 		}
 	}
@@ -14159,10 +14184,12 @@ func (a *application) rewriteSetExprs(parent SQLNode, node SetExprs, replacer re
 			return nil
 		}
 	}
-	for i, el := range node {
-		if errF := a.rewriteRefOfSetExpr(node, el, func(newNode, parent SQLNode) {
-			parent.(SetExprs)[i] = newNode.(*SetExpr)
-		}); errF != nil {
+	for x, el := range node {
+		if errF := a.rewriteRefOfSetExpr(node, el, func(idx int) replacerFunc {
+			return func(newNode, parent SQLNode) {
+				parent.(SetExprs)[idx] = newNode.(*SetExpr)
+			}
+		}(x)); errF != nil {
 			return errF
 		}
 	}
@@ -14326,10 +14353,12 @@ func (a *application) rewriteTableExprs(parent SQLNode, node TableExprs, replace
 			return nil
 		}
 	}
-	for i, el := range node {
-		if errF := a.rewriteTableExpr(node, el, func(newNode, parent SQLNode) {
-			parent.(TableExprs)[i] = newNode.(TableExpr)
-		}); errF != nil {
+	for x, el := range node {
+		if errF := a.rewriteTableExpr(node, el, func(idx int) replacerFunc {
+			return func(newNode, parent SQLNode) {
+				parent.(TableExprs)[idx] = newNode.(TableExpr)
+			}
+		}(x)); errF != nil {
 			return errF
 		}
 	}
@@ -14344,7 +14373,6 @@ func (a *application) rewriteTableExprs(parent SQLNode, node TableExprs, replace
 	return nil
 }
 func (a *application) rewriteTableIdent(parent SQLNode, node TableIdent, replacer replacerFunc) error {
-	var err error
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -14352,9 +14380,6 @@ func (a *application) rewriteTableIdent(parent SQLNode, node TableIdent, replace
 		if !a.pre(&a.cur) {
 			return nil
 		}
-	}
-	if err != nil {
-		return err
 	}
 	if a.post != nil {
 		if a.pre == nil {
@@ -14369,7 +14394,6 @@ func (a *application) rewriteTableIdent(parent SQLNode, node TableIdent, replace
 	return nil
 }
 func (a *application) rewriteTableName(parent SQLNode, node TableName, replacer replacerFunc) error {
-	var err error
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -14379,17 +14403,14 @@ func (a *application) rewriteTableName(parent SQLNode, node TableName, replacer 
 		}
 	}
 	if errF := a.rewriteTableIdent(node, node.Name, func(newNode, parent SQLNode) {
-		err = vterrors.New(vtrpc.Code_INTERNAL, "[BUG] tried to replace 'Name' on 'TableName'")
+		panic("[BUG] tried to replace 'Name' on 'TableName'")
 	}); errF != nil {
 		return errF
 	}
 	if errF := a.rewriteTableIdent(node, node.Qualifier, func(newNode, parent SQLNode) {
-		err = vterrors.New(vtrpc.Code_INTERNAL, "[BUG] tried to replace 'Qualifier' on 'TableName'")
+		panic("[BUG] tried to replace 'Qualifier' on 'TableName'")
 	}); errF != nil {
 		return errF
-	}
-	if err != nil {
-		return err
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -14413,10 +14434,12 @@ func (a *application) rewriteTableNames(parent SQLNode, node TableNames, replace
 			return nil
 		}
 	}
-	for i, el := range node {
-		if errF := a.rewriteTableName(node, el, func(newNode, parent SQLNode) {
-			parent.(TableNames)[i] = newNode.(TableName)
-		}); errF != nil {
+	for x, el := range node {
+		if errF := a.rewriteTableName(node, el, func(idx int) replacerFunc {
+			return func(newNode, parent SQLNode) {
+				parent.(TableNames)[idx] = newNode.(TableName)
+			}
+		}(x)); errF != nil {
 			return errF
 		}
 	}
@@ -14466,10 +14489,12 @@ func (a *application) rewriteUpdateExprs(parent SQLNode, node UpdateExprs, repla
 			return nil
 		}
 	}
-	for i, el := range node {
-		if errF := a.rewriteRefOfUpdateExpr(node, el, func(newNode, parent SQLNode) {
-			parent.(UpdateExprs)[i] = newNode.(*UpdateExpr)
-		}); errF != nil {
+	for x, el := range node {
+		if errF := a.rewriteRefOfUpdateExpr(node, el, func(idx int) replacerFunc {
+			return func(newNode, parent SQLNode) {
+				parent.(UpdateExprs)[idx] = newNode.(*UpdateExpr)
+			}
+		}(x)); errF != nil {
 			return errF
 		}
 	}
@@ -14495,10 +14520,12 @@ func (a *application) rewriteValTuple(parent SQLNode, node ValTuple, replacer re
 			return nil
 		}
 	}
-	for i, el := range node {
-		if errF := a.rewriteExpr(node, el, func(newNode, parent SQLNode) {
-			parent.(ValTuple)[i] = newNode.(Expr)
-		}); errF != nil {
+	for x, el := range node {
+		if errF := a.rewriteExpr(node, el, func(idx int) replacerFunc {
+			return func(newNode, parent SQLNode) {
+				parent.(ValTuple)[idx] = newNode.(Expr)
+			}
+		}(x)); errF != nil {
 			return errF
 		}
 	}
@@ -14524,10 +14551,12 @@ func (a *application) rewriteValues(parent SQLNode, node Values, replacer replac
 			return nil
 		}
 	}
-	for i, el := range node {
-		if errF := a.rewriteValTuple(node, el, func(newNode, parent SQLNode) {
-			parent.(Values)[i] = newNode.(ValTuple)
-		}); errF != nil {
+	for x, el := range node {
+		if errF := a.rewriteValTuple(node, el, func(idx int) replacerFunc {
+			return func(newNode, parent SQLNode) {
+				parent.(Values)[idx] = newNode.(ValTuple)
+			}
+		}(x)); errF != nil {
 			return errF
 		}
 	}
@@ -14542,7 +14571,6 @@ func (a *application) rewriteValues(parent SQLNode, node Values, replacer replac
 	return nil
 }
 func (a *application) rewriteVindexParam(parent SQLNode, node VindexParam, replacer replacerFunc) error {
-	var err error
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -14552,12 +14580,9 @@ func (a *application) rewriteVindexParam(parent SQLNode, node VindexParam, repla
 		}
 	}
 	if errF := a.rewriteColIdent(node, node.Key, func(newNode, parent SQLNode) {
-		err = vterrors.New(vtrpc.Code_INTERNAL, "[BUG] tried to replace 'Key' on 'VindexParam'")
+		panic("[BUG] tried to replace 'Key' on 'VindexParam'")
 	}); errF != nil {
 		return errF
-	}
-	if err != nil {
-		return err
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
