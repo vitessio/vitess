@@ -113,6 +113,12 @@ var (
 			key updates_idx(updates)
 		) ENGINE=InnoDB
 	`
+	createIfNotExistsStatement = `
+		CREATE TABLE IF NOT EXISTS stress_test (
+			id bigint(20) not null,
+			PRIMARY KEY (id)
+		) ENGINE=InnoDB
+	`
 	dropStatement = `
 		DROP TABLE stress_test
 	`
@@ -218,6 +224,7 @@ func TestSchemaChange(t *testing.T) {
 
 	declarativeStrategy := "online -declarative"
 	var uuids []string
+
 	// CREATE1
 	t.Run("declarative CREATE TABLE where table does not exist", func(t *testing.T) {
 		// The table does not exist
@@ -359,7 +366,7 @@ func TestSchemaChange(t *testing.T) {
 		testSelectTableMetrics(t)
 	})
 	t.Run("revert CREATE TABLE expecting previous schema", func(t *testing.T) {
-		// Reverting back to 1st version
+		// Reverting back to previous version
 		uuid := testRevertMigration(t, uuids[len(uuids)-1])
 		uuids = append(uuids, uuid)
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
@@ -372,6 +379,27 @@ func TestSchemaChange(t *testing.T) {
 		uuid := testOnlineDDLStatement(t, alterStatement, declarativeStrategy, "vtgate", "")
 		uuids = append(uuids, uuid)
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusFailed)
+		checkMigratedTable(t, tableName, "create2")
+		checkTable(t, tableName, true)
+		testSelectTableMetrics(t)
+	})
+	t.Run("CREATE TABLE IF NOT EXISTS expecting failure", func(t *testing.T) {
+		// IF NOT EXISTS is not supported in -declarative
+		uuid := testOnlineDDLStatement(t, createIfNotExistsStatement, declarativeStrategy, "vtgate", "")
+		uuids = append(uuids, uuid)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusFailed)
+		checkMigratedTable(t, tableName, "create2")
+		checkTable(t, tableName, true)
+		testSelectTableMetrics(t)
+	})
+	t.Run("CREATE TABLE IF NOT EXISTS non-declarative is successful", func(t *testing.T) {
+		// IF NOT EXISTS is supported in non-declarative mode. Just verifying that the statement itself is good,
+		// so that the failure we tested for, above, actually tests the "declarative" logic, rather than some
+		// unrelated error.
+		uuid := testOnlineDDLStatement(t, createIfNotExistsStatement, "online", "vtgate", "")
+		uuids = append(uuids, uuid)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		// the table existed, so we expect no changes in this non-declarative DDL
 		checkMigratedTable(t, tableName, "create2")
 		checkTable(t, tableName, true)
 		testSelectTableMetrics(t)
