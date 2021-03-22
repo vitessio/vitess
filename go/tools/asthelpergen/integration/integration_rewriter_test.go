@@ -200,6 +200,7 @@ func TestRewriteVisitRefContainerReplace(t *testing.T) {
 }
 
 func TestRewriteVisitValueContainerReplace(t *testing.T) {
+
 	ast := ValueContainer{
 		ASTType:               ValueContainer{NotASTType: 12},
 		ASTImplementationType: &Leaf{2},

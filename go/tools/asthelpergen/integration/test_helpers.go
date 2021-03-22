@@ -39,8 +39,10 @@ func sliceStringLeaf(els ...*Leaf) string {
 
 // the methods below are what the generated code expected to be there in the package
 
+// ApplyFunc is apply function
 type ApplyFunc func(*Cursor) bool
 
+// Cursor is cursor
 type Cursor struct {
 	parent   AST
 	replacer replacerFunc
@@ -62,6 +64,7 @@ func (c *Cursor) Replace(newNode AST) {
 
 type replacerFunc func(newNode, parent AST)
 
+// Rewrite is the api.
 func Rewrite(node AST, pre, post ApplyFunc) (AST, error) {
 	outer := &struct{ AST }{node}
 
@@ -70,12 +73,9 @@ func Rewrite(node AST, pre, post ApplyFunc) (AST, error) {
 		post: post,
 	}
 
-	err := a.rewriteAST(outer, node, func(newNode, parent AST) {
+	a.rewriteAST(outer, node, func(newNode, parent AST) {
 		outer.AST = newNode
 	})
 
-	if err != nil {
-		return nil, err
-	}
 	return outer.AST, nil
 }
