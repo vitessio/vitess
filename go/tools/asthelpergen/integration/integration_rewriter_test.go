@@ -34,8 +34,7 @@ func TestRewriteVisitRefContainer(t *testing.T) {
 
 	tv := &rewriteTestVisitor{}
 
-	_, err := Rewrite(containerContainer, tv.pre, tv.post)
-	require.NoError(t, err)
+	_ = Rewrite(containerContainer, tv.pre, tv.post)
 
 	expected := []step{
 		Pre{containerContainer},
@@ -58,8 +57,7 @@ func TestRewriteVisitValueContainer(t *testing.T) {
 
 	tv := &rewriteTestVisitor{}
 
-	_, err := Rewrite(containerContainer, tv.pre, tv.post)
-	require.NoError(t, err)
+	_ = Rewrite(containerContainer, tv.pre, tv.post)
 
 	expected := []step{
 		Pre{containerContainer},
@@ -84,8 +82,7 @@ func TestRewriteVisitRefSliceContainer(t *testing.T) {
 
 	tv := &rewriteTestVisitor{}
 
-	_, err := Rewrite(containerContainer, tv.pre, tv.post)
-	require.NoError(t, err)
+	_ = Rewrite(containerContainer, tv.pre, tv.post)
 
 	tv.assertEquals(t, []step{
 		Pre{containerContainer},
@@ -113,8 +110,7 @@ func TestRewriteVisitValueSliceContainer(t *testing.T) {
 
 	tv := &rewriteTestVisitor{}
 
-	_, err := Rewrite(containerContainer, tv.pre, tv.post)
-	require.NoError(t, err)
+	_ = Rewrite(containerContainer, tv.pre, tv.post)
 
 	tv.assertEquals(t, []step{
 		Pre{containerContainer},
@@ -150,8 +146,7 @@ func TestRewriteVisitInterfaceSlice(t *testing.T) {
 
 	tv := &rewriteTestVisitor{}
 
-	_, err := Rewrite(ast, tv.pre, tv.post)
-	require.NoError(t, err)
+	_ = Rewrite(ast, tv.pre, tv.post)
 
 	tv.assertEquals(t, []step{
 		Pre{ast},
@@ -176,22 +171,20 @@ func TestRewriteVisitRefContainerReplace(t *testing.T) {
 	}
 
 	// rewrite field of type AST
-	_, err := Rewrite(ast, func(cursor *Cursor) bool {
+	_ = Rewrite(ast, func(cursor *Cursor) bool {
 		leaf, ok := cursor.node.(*RefContainer)
 		if ok && leaf.NotASTType == 12 {
 			cursor.Replace(&Leaf{99})
 		}
 		return true
 	}, nil)
-	require.NoError(t, err)
 
 	assert.Equal(t, &RefContainer{
 		ASTType:               &Leaf{99},
 		ASTImplementationType: &Leaf{2},
 	}, ast)
 
-	_, err = Rewrite(ast, rewriteLeaf(2, 55), nil)
-	require.NoError(t, err)
+	_ = Rewrite(ast, rewriteLeaf(2, 55), nil)
 
 	assert.Equal(t, &RefContainer{
 		ASTType:               &Leaf{99},
@@ -211,7 +204,7 @@ func TestRewriteVisitValueContainerReplace(t *testing.T) {
 			require.Equal(t, "[BUG] tried to replace 'ASTType' on 'ValueContainer'", r)
 		}
 	}()
-	_, _ = Rewrite(ast, func(cursor *Cursor) bool {
+	_ = Rewrite(ast, func(cursor *Cursor) bool {
 		leaf, ok := cursor.node.(ValueContainer)
 		if ok && leaf.NotASTType == 12 {
 			cursor.Replace(&Leaf{99})
@@ -227,8 +220,12 @@ func TestRewriteVisitValueContainerReplace2(t *testing.T) {
 		ASTImplementationType: &Leaf{2},
 	}
 
-	_, err := Rewrite(ast, rewriteLeaf(2, 10), nil)
-	require.Error(t, err)
+	defer func() {
+		if r := recover(); r != nil {
+			require.Equal(t, "[BUG] tried to replace 'ASTImplementationType' on 'ValueContainer'", r)
+		}
+	}()
+	_ = Rewrite(ast, rewriteLeaf(2, 10), nil)
 }
 
 func TestRewriteVisitRefContainerPreOrPostOnly(t *testing.T) {
@@ -239,8 +236,7 @@ func TestRewriteVisitRefContainerPreOrPostOnly(t *testing.T) {
 
 	tv := &rewriteTestVisitor{}
 
-	_, err := Rewrite(containerContainer, tv.pre, nil)
-	require.NoError(t, err)
+	_ = Rewrite(containerContainer, tv.pre, nil)
 	tv.assertEquals(t, []step{
 		Pre{containerContainer},
 		Pre{container},
@@ -249,8 +245,7 @@ func TestRewriteVisitRefContainerPreOrPostOnly(t *testing.T) {
 	})
 
 	tv = &rewriteTestVisitor{}
-	_, err = Rewrite(containerContainer, nil, tv.post)
-	require.NoError(t, err)
+	_ = Rewrite(containerContainer, nil, tv.post)
 	tv.assertEquals(t, []step{
 		Post{leaf1},
 		Post{leaf2},
@@ -275,16 +270,14 @@ func TestRefSliceContainerReplace(t *testing.T) {
 		ASTImplementationElements: []*Leaf{{3}, {4}},
 	}
 
-	_, err := Rewrite(ast, rewriteLeaf(2, 42), nil)
-	require.NoError(t, err)
+	_ = Rewrite(ast, rewriteLeaf(2, 42), nil)
 
 	assert.Equal(t, &RefSliceContainer{
 		ASTElements:               []AST{&Leaf{1}, &Leaf{42}},
 		ASTImplementationElements: []*Leaf{{3}, {4}},
 	}, ast)
 
-	_, err = Rewrite(ast, rewriteLeaf(3, 88), nil)
-	require.NoError(t, err)
+	_ = Rewrite(ast, rewriteLeaf(3, 88), nil)
 
 	assert.Equal(t, &RefSliceContainer{
 		ASTElements:               []AST{&Leaf{1}, &Leaf{42}},
