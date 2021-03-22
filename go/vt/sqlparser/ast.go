@@ -323,6 +323,8 @@ func (*BeginEndBlock) iStatement() {}
 func (*CaseStatement) iStatement() {}
 func (*IfStatement) iStatement()   {}
 func (*Signal) iStatement()        {}
+func (*Resignal) iStatement()      {}
+func (*Declare) iStatement()       {}
 func (*Call) iStatement()          {}
 func (*Load) iStatement()          {}
 
@@ -864,34 +866,215 @@ func (i *IfStatement) walkSubtree(visit Visit) error {
 	return nil
 }
 
+// Declare represents the DECLARE statement
+type Declare struct {
+	Condition *DeclareCondition
+	Cursor    *DeclareCursor
+	Handler   *DeclareHandler
+	Variables *DeclareVariables
+}
+
+// DeclareHandlerAction represents the action for the handler
+type DeclareHandlerAction string
+const (
+	DeclareHandlerAction_Continue DeclareHandlerAction = "continue"
+	DeclareHandlerAction_Exit     DeclareHandlerAction = "exit"
+	DeclareHandlerAction_Undo     DeclareHandlerAction = "undo"
+)
+
+// DeclareHandlerConditionValue represents the condition values for a handler
+type DeclareHandlerConditionValue string
+const (
+	DeclareHandlerCondition_MysqlErrorCode DeclareHandlerConditionValue = "mysql_err_code"
+	DeclareHandlerCondition_SqlState       DeclareHandlerConditionValue = "sqlstate"
+	DeclareHandlerCondition_ConditionName  DeclareHandlerConditionValue = "condition_name"
+	DeclareHandlerCondition_SqlWarning     DeclareHandlerConditionValue = "sqlwarning"
+	DeclareHandlerCondition_NotFound       DeclareHandlerConditionValue = "not_found"
+	DeclareHandlerCondition_SqlException   DeclareHandlerConditionValue = "sqlexception"
+)
+// DeclareHandlerCondition represents the conditions for a handler
+type DeclareHandlerCondition struct {
+	ValueType      DeclareHandlerConditionValue
+	MysqlErrorCode *SQLVal
+	String         string // May hold either the SqlState or condition name
+}
+
+// DeclareCondition represents the DECLARE CONDITION statement
+type DeclareCondition struct {
+	Name           string
+	SqlStateValue  string
+	MysqlErrorCode *SQLVal
+}
+// DeclareCursor represents the DECLARE CURSOR statement
+type DeclareCursor struct {
+	Name       string
+	SelectStmt SelectStatement
+}
+// DeclareHandler represents the DECLARE HANDLER statement
+type DeclareHandler struct {
+	Action          DeclareHandlerAction
+	ConditionValues []DeclareHandlerCondition
+	Statement       Statement
+}
+// DeclareVariables represents the DECLARE statement for declaring variables
+type DeclareVariables struct {
+	Names   []ColIdent
+	VarType ColumnType
+}
+
+func (d *Declare) Format(buf *TrackedBuffer) {
+	if d.Condition != nil {
+		buf.Myprintf("declare %s condition for ", d.Condition.Name)
+		if d.Condition.SqlStateValue != "" {
+			buf.Myprintf("sqlstate value '%s'", d.Condition.SqlStateValue)
+		} else {
+			buf.Myprintf("%v", d.Condition.MysqlErrorCode)
+		}
+	} else if d.Cursor != nil {
+		buf.Myprintf("declare %s cursor for %v", d.Cursor.Name, d.Cursor.SelectStmt)
+	} else if d.Handler != nil {
+		buf.Myprintf("declare %s handler for", string(d.Handler.Action))
+		for i, condition := range d.Handler.ConditionValues {
+			if i > 0 {
+				buf.Myprintf(",")
+			}
+			switch condition.ValueType {
+			case DeclareHandlerCondition_MysqlErrorCode:
+				buf.Myprintf(" %v", condition.MysqlErrorCode)
+			case DeclareHandlerCondition_SqlState:
+				buf.Myprintf(" sqlstate value '%s'", condition.String)
+			case DeclareHandlerCondition_ConditionName:
+				buf.Myprintf(" %s", condition.String)
+			case DeclareHandlerCondition_SqlWarning:
+				buf.Myprintf(" sqlwarning")
+			case DeclareHandlerCondition_NotFound:
+				buf.Myprintf(" not found")
+			case DeclareHandlerCondition_SqlException:
+				buf.Myprintf(" sqlexception")
+			default:
+				panic(fmt.Errorf("unknown DECLARE HANDLER condition: %s", string(condition.ValueType)))
+			}
+		}
+		buf.Myprintf(" %v", d.Handler.Statement)
+	} else if d.Variables != nil {
+		buf.Myprintf("declare")
+		for i, varName := range d.Variables.Names {
+			if i > 0 {
+				buf.Myprintf(",")
+			}
+			buf.Myprintf(" %s", varName.val)
+		}
+		buf.Myprintf(" %v", &d.Variables.VarType)
+	}
+}
+
+func (d *Declare) walkSubtree(visit Visit) error {
+	if d == nil {
+		return nil
+	}
+	if d.Cursor != nil {
+		if err := Walk(visit, d.Cursor.SelectStmt); err != nil {
+			return err
+		}
+	}
+	if d.Handler != nil {
+		if err := Walk(visit, d.Handler.Statement); err != nil {
+			return err
+		}
+	}
+	if d.Variables != nil {
+		for _, colIdent := range d.Variables.Names {
+			if err := Walk(visit, colIdent); err != nil {
+				return err
+			}
+		}
+		if err := Walk(visit, &d.Variables.VarType); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // Signal represents the SIGNAL statement
-// TODO: right now we only support SQLSTATE VALUE with a string value, not the named_condition construct
 type Signal struct {
+	ConditionName string       // Previously declared condition name
 	SqlStateValue string       // Always a 5-character string
 	Info          []SignalInfo // The list of name-value pairs of signal information provided
 }
 
 // SignalInfo represents a piece of information for a SIGNAL statement
 type SignalInfo struct {
-	Name  string
-	Value *SQLVal
+	ConditionItemName SignalConditionItemName
+	Value             *SQLVal
 }
 
+// SignalConditionItemName represents the item name for the set conditions of a SIGNAL statement.
+type SignalConditionItemName string
+const (
+	SignalConditionItemName_ClassOrigin       SignalConditionItemName = "class_origin"
+	SignalConditionItemName_SubclassOrigin    SignalConditionItemName = "subclass_origin"
+	SignalConditionItemName_MessageText       SignalConditionItemName = "message_text"
+	SignalConditionItemName_MysqlErrno        SignalConditionItemName = "mysql_errno"
+	SignalConditionItemName_ConstraintCatalog SignalConditionItemName = "constraint_catalog"
+	SignalConditionItemName_ConstraintSchema  SignalConditionItemName = "constraint_schema"
+	SignalConditionItemName_ConstraintName    SignalConditionItemName = "constraint_name"
+	SignalConditionItemName_CatalogName       SignalConditionItemName = "catalog_name"
+	SignalConditionItemName_SchemaName        SignalConditionItemName = "schema_name"
+	SignalConditionItemName_TableName         SignalConditionItemName = "table_name"
+	SignalConditionItemName_ColumnName        SignalConditionItemName = "column_name"
+	SignalConditionItemName_CursorName        SignalConditionItemName = "cursor_name"
+)
+
 func (s *Signal) Format(buf *TrackedBuffer) {
-	buf.Myprintf("signal sqlstate value '%s'", s.SqlStateValue)
+	if s.ConditionName != "" {
+		buf.Myprintf("signal %s", s.ConditionName)
+	} else {
+		buf.Myprintf("signal sqlstate value '%s'", s.SqlStateValue)
+	}
 	if len(s.Info) > 0 {
 		buf.Myprintf(" set ")
 		for i, info := range s.Info {
 			if i > 0 {
 				buf.Myprintf(", ")
 			}
-			buf.Myprintf("%s = %v", info.Name, info.Value)
+			buf.Myprintf("%s = %v", string(info.ConditionItemName), info.Value)
 		}
 	}
 }
 
 func (s *Signal) walkSubtree(visit Visit) error {
+	if s == nil {
+		return nil
+	}
+	for _, info := range s.Info {
+		if err := Walk(visit, info.Value); err != nil {
+			return err
+		}
+	}
 	return nil
+}
+
+// Resignal represents the RESIGNAL statement
+type Resignal struct {
+	Signal
+}
+
+func (s *Resignal) Format(buf *TrackedBuffer) {
+	buf.Myprintf("resignal")
+	if s.ConditionName != "" {
+		buf.Myprintf(" %s", s.ConditionName)
+	} else if s.SqlStateValue != "" {
+		buf.Myprintf(" sqlstate value '%s'", s.SqlStateValue)
+	}
+	if len(s.Info) > 0 {
+		buf.Myprintf(" set ")
+		for i, info := range s.Info {
+			if i > 0 {
+				buf.Myprintf(", ")
+			}
+			buf.Myprintf("%s = %v", string(info.ConditionItemName), info.Value)
+		}
+	}
 }
 
 // Call represents the CALL statement

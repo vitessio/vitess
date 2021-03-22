@@ -948,6 +948,8 @@ var (
 		}, {
 			input: "set sql_safe_updates = 1",
 		}, {
+			input: "signal some_condition_name",
+		}, {
 			input: "signal sqlstate value '45000'",
 		}, {
 			input:  "signal sqlstate '45000'",
@@ -956,6 +958,39 @@ var (
 			input: "signal sqlstate value '45000' set message_text = 'ouch!'",
 		}, {
 			input: "signal sqlstate value '45000' set class_origin = 'abc', subclass_origin = 'def', message_text = 'ghi', " +
+				"mysql_errno = 123, constraint_catalog = 'jkl', constraint_schema = 'mno', constraint_name = 'pqr', " +
+				"catalog_name = 'stu', schema_name = 'vwx', table_name = 'yz0', column_name = '123', cursor_name = '456'",
+		}, {
+			input: "signal some_condition_name set message_text = 'the text of the best'",
+		}, {
+			input: "signal some_condition_name set class_origin = 'abc', subclass_origin = 'def', message_text = 'ghi', " +
+				"mysql_errno = 123, constraint_catalog = 'jkl', constraint_schema = 'mno', constraint_name = 'pqr', " +
+				"catalog_name = 'stu', schema_name = 'vwx', table_name = 'yz0', column_name = '123', cursor_name = '456'",
+		}, {
+			input: "resignal",
+		}, {
+			input: "resignal some_condition_name",
+		}, {
+			input: "resignal sqlstate value '45000'",
+		}, {
+			input:  "resignal sqlstate '45000'",
+			output: "resignal sqlstate value '45000'",
+		}, {
+			input: "resignal sqlstate value '45000' set message_text = 'ouch!'",
+		}, {
+			input: "resignal sqlstate value '45000' set class_origin = 'abc', subclass_origin = 'def', message_text = 'ghi', " +
+				"mysql_errno = 123, constraint_catalog = 'jkl', constraint_schema = 'mno', constraint_name = 'pqr', " +
+				"catalog_name = 'stu', schema_name = 'vwx', table_name = 'yz0', column_name = '123', cursor_name = '456'",
+		}, {
+			input: "resignal some_condition_name set message_text = 'the text of the best'",
+		}, {
+			input: "resignal some_condition_name set class_origin = 'abc', subclass_origin = 'def', message_text = 'ghi', " +
+				"mysql_errno = 123, constraint_catalog = 'jkl', constraint_schema = 'mno', constraint_name = 'pqr', " +
+				"catalog_name = 'stu', schema_name = 'vwx', table_name = 'yz0', column_name = '123', cursor_name = '456'",
+		}, {
+			input: "resignal set message_text = 'the text of the best'",
+		}, {
+			input: "resignal set class_origin = 'abc', subclass_origin = 'def', message_text = 'ghi', " +
 				"mysql_errno = 123, constraint_catalog = 'jkl', constraint_schema = 'mno', constraint_name = 'pqr', " +
 				"catalog_name = 'stu', schema_name = 'vwx', table_name = 'yz0', column_name = '123', cursor_name = '456'",
 		}, {
@@ -1895,6 +1930,56 @@ begin
 	select @s;
 end`,
 			output: "create procedure p1 (in n double, in m double) begin\nset @s = '';\nif n = m then set @s = 'equals';\nelse if n > m then set @s = 'greater';\nelse set @s = 'less';\nend if; set @s = concat('is ', @s, ' than');\nend if;\nset @s = concat(n, ' ', @s, ' ', m, '.');\nselect @s from dual;\nend",
+		}, { // DECLARE statements are only allowed inside of BEGIN/END blocks
+			input: `create procedure p1 () begin
+declare cond_name condition for 1002;
+end`,
+		}, {
+			input:  `create procedure p1 () begin
+declare cond_name condition for sqlstate '45000';
+end`,
+			output: `create procedure p1 () begin
+declare cond_name condition for sqlstate value '45000';
+end`,
+		}, {
+			input: `create procedure p1 () begin
+declare cond_name condition for sqlstate value '45000';
+end`,
+		}, {
+			input: `create procedure p1 () begin
+declare cur_name cursor for select id, vals from test.t1;
+end`,
+		}, {
+			input: `create procedure p1 () begin
+declare cur_name cursor for select i from test.t2;
+end`,
+		}, {
+			input:  `create procedure p1 () begin
+declare continue handler for sqlstate '45000', sqlstate value '45000' insert into test.t1 values (1, 1);
+end`,
+			output: `create procedure p1 () begin
+declare continue handler for sqlstate value '45000', sqlstate value '45000' insert into test.t1 values (1, 1);
+end`,
+		}, {
+			input: `create procedure p1 () begin
+declare exit handler for sqlwarning, not found, sqlexception select i from test.t2;
+end`,
+		}, {
+			input: `create procedure p1 () begin
+declare undo handler for 1004, cond_name select i from test.t2;
+end`,
+		}, {
+			input: `create procedure p1 () begin
+declare x int;
+end`,
+		}, {
+			input: `create procedure p1 () begin
+declare y datetime default now();
+end`,
+		},{
+			input: `create procedure p1 () begin
+declare x, y, z varchar(200) character set uft8mb4 default 'hi';
+end`,
 		},
 	}
 )

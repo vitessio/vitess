@@ -101,6 +101,7 @@ func skipToEnd(yylex interface{}) {
   setExprs      SetExprs
   setExpr       *SetExpr
   colIdent      ColIdent
+  colIdents     []ColIdent
   tableIdent    TableIdent
   convertType   *ConvertType
   aliasedTableName *AliasedTableExpr
@@ -132,6 +133,10 @@ func skipToEnd(yylex interface{}) {
   ifStatementCondition IfStatementCondition
   signalInfo SignalInfo
   signalInfos []SignalInfo
+  signalConditionItemName SignalConditionItemName
+  declareHandlerAction DeclareHandlerAction
+  declareHandlerCondition DeclareHandlerCondition
+  declareHandlerConditions []DeclareHandlerCondition
   procedureParam ProcedureParam
   procedureParams []ProcedureParam
   characteristic Characteristic
@@ -197,7 +202,10 @@ func skipToEnd(yylex interface{}) {
 
 // SIGNAL Tokens
 %token <bytes> CLASS_ORIGIN SUBCLASS_ORIGIN MESSAGE_TEXT MYSQL_ERRNO CONSTRAINT_CATALOG CONSTRAINT_SCHEMA
-%token <bytes> CONSTRAINT_NAME CATALOG_NAME SCHEMA_NAME TABLE_NAME COLUMN_NAME CURSOR_NAME SIGNAL SQLSTATE
+%token <bytes> CONSTRAINT_NAME CATALOG_NAME SCHEMA_NAME TABLE_NAME COLUMN_NAME CURSOR_NAME SIGNAL RESIGNAL SQLSTATE
+
+// DECLARE Tokens
+%token <bytes> DECLARE CONDITION CURSOR CONTINUE EXIT UNDO HANDLER FOUND SQLWARNING SQLEXCEPTION
 
 // Transaction Tokens
 %token <bytes> BEGIN START TRANSACTION COMMIT ROLLBACK
@@ -252,7 +260,7 @@ func skipToEnd(yylex interface{}) {
 %type <statement> stream_statement insert_statement update_statement delete_statement set_statement trigger_body
 %type <statement> create_statement rename_statement drop_statement truncate_statement flush_statement call_statement
 %type <statement> trigger_begin_end_block statement_list_statement case_statement if_statement signal_statement
-%type <statement> begin_end_block
+%type <statement> begin_end_block declare_statement resignal_statement
 %type <statements> statement_list
 %type <caseStatementCases> case_statement_case_list
 %type <caseStatementCase> case_statement_case
@@ -260,7 +268,11 @@ func skipToEnd(yylex interface{}) {
 %type <ifStatementCondition> elseif_list_item
 %type <signalInfo> signal_information_item
 %type <signalInfos> signal_information_item_list
-%type <bytes> signal_information_name signal_condition_value
+%type <signalConditionItemName> signal_information_name
+%type <declareHandlerCondition> declare_handler_condition
+%type <declareHandlerConditions> declare_handler_condition_list
+%type <declareHandlerAction> declare_handler_action
+%type <bytes> signal_condition_value
 %type <str> trigger_time trigger_event
 %type <statement> alter_statement alter_table_statement alter_view_statement
 %type <ddl> create_table_prefix rename_list
@@ -333,6 +345,7 @@ func skipToEnd(yylex interface{}) {
 %type <empty> skip_to_end ddl_skip_to_end
 %type <bytes> reserved_keyword non_reserved_keyword column_name_safe_reserved_keyword
 %type <colIdent> sql_id reserved_sql_id col_alias as_ci_opt using_opt
+%type <colIdents> reserved_sql_id_list
 %type <expr> charset_value
 %type <tableIdent> table_id reserved_table_id table_alias
 %type <str> charset
@@ -419,6 +432,7 @@ command:
 | other_statement
 | flush_statement
 | signal_statement
+| resignal_statement
 | call_statement
 | load_statement
 | /*empty*/
@@ -991,6 +1005,83 @@ elseif_list_item:
     $$ = IfStatementCondition{Expr: $2, Statements: $4}
   }
 
+declare_statement:
+  DECLARE ID CONDITION FOR signal_condition_value
+  {
+    $$ = &Declare{Condition: &DeclareCondition{Name: string($2), SqlStateValue: string($5)}}
+  }
+| DECLARE ID CONDITION FOR INTEGRAL
+  {
+    $$ = &Declare{Condition: &DeclareCondition{Name: string($2), MysqlErrorCode: NewIntVal($5)}}
+  }
+| DECLARE ID CURSOR FOR select_statement
+  {
+    $$ = &Declare{Cursor: &DeclareCursor{Name: string($2), SelectStmt: $5}}
+  }
+| DECLARE declare_handler_action HANDLER FOR declare_handler_condition_list statement_list_statement
+  {
+    $$ = &Declare{Handler: &DeclareHandler{Action: $2, ConditionValues: $5, Statement: $6}}
+  }
+| DECLARE reserved_sql_id_list column_type
+  {
+    $$ = &Declare{Variables: &DeclareVariables{Names: $2, VarType: $3}}
+  }
+| DECLARE reserved_sql_id_list column_type DEFAULT value_expression
+  {
+    $3.Default = $5
+    $$ = &Declare{Variables: &DeclareVariables{Names: $2, VarType: $3}}
+  }
+
+declare_handler_action:
+  CONTINUE
+  {
+    $$ = DeclareHandlerAction_Continue
+  }
+| EXIT
+  {
+    $$ = DeclareHandlerAction_Exit
+  }
+| UNDO
+  {
+    $$ = DeclareHandlerAction_Undo
+  }
+
+declare_handler_condition_list:
+  declare_handler_condition
+  {
+    $$ = []DeclareHandlerCondition{$1}
+  }
+| declare_handler_condition_list ',' declare_handler_condition
+  {
+    $$ = append($$, $3)
+  }
+
+declare_handler_condition:
+  INTEGRAL
+  {
+    $$ = DeclareHandlerCondition{ValueType: DeclareHandlerCondition_MysqlErrorCode, MysqlErrorCode: NewIntVal($1)}
+  }
+| signal_condition_value
+  {
+    $$ = DeclareHandlerCondition{ValueType: DeclareHandlerCondition_SqlState, String: string($1)}
+  }
+| SQLWARNING
+  {
+    $$ = DeclareHandlerCondition{ValueType: DeclareHandlerCondition_SqlWarning}
+  }
+| NOT FOUND
+  {
+    $$ = DeclareHandlerCondition{ValueType: DeclareHandlerCondition_NotFound}
+  }
+| SQLEXCEPTION
+  {
+    $$ = DeclareHandlerCondition{ValueType: DeclareHandlerCondition_SqlException}
+  }
+| ID
+  {
+    $$ = DeclareHandlerCondition{ValueType: DeclareHandlerCondition_ConditionName, String: string($1)}
+  }
+
 signal_statement:
   SIGNAL signal_condition_value
   {
@@ -999,6 +1090,14 @@ signal_statement:
 | SIGNAL signal_condition_value SET signal_information_item_list
   {
     $$ = &Signal{SqlStateValue: string($2), Info: $4}
+  }
+| SIGNAL ID
+  {
+    $$ = &Signal{ConditionName: string($2)}
+  }
+| SIGNAL ID SET signal_information_item_list
+  {
+    $$ = &Signal{ConditionName: string($2), Info: $4}
   }
 
 signal_condition_value:
@@ -1024,25 +1123,84 @@ signal_information_item_list:
 signal_information_item:
   signal_information_name '=' value
   {
-    $$ = SignalInfo{Name: string($1), Value: $3.(*SQLVal)}
+    $$ = SignalInfo{ConditionItemName: $1, Value: $3.(*SQLVal)}
   }
 
 signal_information_name:
   CLASS_ORIGIN
   {
-    $$ = $1
+    $$ = SignalConditionItemName_ClassOrigin
   }
 | SUBCLASS_ORIGIN
+  {
+    $$ = SignalConditionItemName_SubclassOrigin
+  }
 | MESSAGE_TEXT
+  {
+    $$ = SignalConditionItemName_MessageText
+  }
 | MYSQL_ERRNO
+  {
+    $$ = SignalConditionItemName_MysqlErrno
+  }
 | CONSTRAINT_CATALOG
+  {
+    $$ = SignalConditionItemName_ConstraintCatalog
+  }
 | CONSTRAINT_SCHEMA
+  {
+    $$ = SignalConditionItemName_ConstraintSchema
+  }
 | CONSTRAINT_NAME
+  {
+    $$ = SignalConditionItemName_ConstraintName
+  }
 | CATALOG_NAME
+  {
+    $$ = SignalConditionItemName_CatalogName
+  }
 | SCHEMA_NAME
+  {
+    $$ = SignalConditionItemName_SchemaName
+  }
 | TABLE_NAME
+  {
+    $$ = SignalConditionItemName_TableName
+  }
 | COLUMN_NAME
+  {
+    $$ = SignalConditionItemName_ColumnName
+  }
 | CURSOR_NAME
+  {
+    $$ = SignalConditionItemName_CursorName
+  }
+
+resignal_statement:
+  RESIGNAL
+  {
+    $$ = &Resignal{}
+  }
+| RESIGNAL signal_condition_value
+  {
+    $$ = &Resignal{Signal{SqlStateValue: string($2)}}
+  }
+| RESIGNAL signal_condition_value SET signal_information_item_list
+  {
+    $$ = &Resignal{Signal{SqlStateValue: string($2), Info: $4}}
+  }
+| RESIGNAL SET signal_information_item_list
+  {
+    $$ = &Resignal{Signal{Info: $3}}
+  }
+| RESIGNAL ID
+  {
+    $$ = &Resignal{Signal{ConditionName: string($2)}}
+  }
+| RESIGNAL ID SET signal_information_item_list
+  {
+    $$ = &Resignal{Signal{ConditionName: string($2), Info: $4}}
+  }
 
 call_statement:
   CALL ID call_param_list_opt
@@ -1096,7 +1254,9 @@ statement_list_statement:
 | rollback_statement
 | explain_statement
 | describe_statement
+| declare_statement
 | signal_statement
+| resignal_statement
 | call_statement
 | begin_end_block
 
@@ -4252,6 +4412,16 @@ sql_id:
     $$ = NewColIdent(string($1))
   }
 
+reserved_sql_id_list:
+  reserved_sql_id
+  {
+    $$ = []ColIdent{$1}
+  }
+| reserved_sql_id_list ',' reserved_sql_id
+  {
+    $$ = append($$, $3)
+  }
+
 reserved_sql_id:
   sql_id
 | reserved_keyword
@@ -4541,6 +4711,7 @@ non_reserved_keyword:
 | DATE
 | DATETIME
 | DECIMAL
+| DECLARE
 | DEFINER
 | DEFINITION
 | DESCRIPTION
@@ -4645,6 +4816,7 @@ non_reserved_keyword:
 | REPAIR
 | REPEATABLE
 | REQUIRE_ROW_FORMAT
+| RESIGNAL
 | RESOURCE
 | RESPECT
 | RESTART
