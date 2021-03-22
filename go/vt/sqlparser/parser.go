@@ -225,6 +225,6 @@ func String(node SQLNode) string {
 	}
 
 	buf := NewTrackedBuffer(nil)
-	buf.Myprintf("%v", node)
+	node.formatFast(buf)
 	return buf.String()
 }

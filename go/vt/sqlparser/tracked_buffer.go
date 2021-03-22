@@ -67,6 +67,21 @@ func (buf *TrackedBuffer) Myprintf(format string, values ...interface{}) {
 	buf.astPrintf(nil, format, values...)
 }
 
+func (buf *TrackedBuffer) printExpr(currentExpr Expr, expr Expr, left bool) {
+	if precedenceFor(currentExpr) == Syntactic {
+		expr.formatFast(buf)
+	} else {
+		needParens := needParens(currentExpr, expr, left)
+		if needParens {
+			buf.WriteByte('(')
+		}
+		expr.formatFast(buf)
+		if needParens {
+			buf.WriteByte(')')
+		}
+	}
+}
+
 // astPrintf is for internal use by the ast structs
 func (buf *TrackedBuffer) astPrintf(currentNode SQLNode, format string, values ...interface{}) {
 	currentExpr, checkParens := currentNode.(Expr)
@@ -118,9 +133,13 @@ func (buf *TrackedBuffer) astPrintf(currentNode SQLNode, format string, values .
 				buf.formatter(value.(SQLNode))
 			} else {
 				needParens := needParens(currentExpr, expr, left)
-				buf.printIf(needParens, "(")
+				if needParens {
+					buf.WriteByte('(')
+				}
 				buf.formatter(expr)
-				buf.printIf(needParens, ")")
+				if needParens {
+					buf.WriteByte(')')
+				}
 			}
 		case 'a':
 			buf.WriteArg(values[fieldnum].(string))
@@ -142,15 +161,9 @@ func getExpressionForParensEval(checkParens bool, value interface{}) Expr {
 	return nil
 }
 
-func (buf *TrackedBuffer) printIf(condition bool, text string) {
-	if condition {
-		buf.WriteString(text)
-	}
-}
-
 func (buf *TrackedBuffer) formatter(node SQLNode) {
 	if buf.nodeFormatter == nil {
-		node.Format(buf)
+		node.formatFast(buf)
 	} else {
 		buf.nodeFormatter(buf, node)
 	}

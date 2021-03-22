@@ -679,11 +679,12 @@ func (node *TableIdent) UnmarshalJSON(b []byte) error {
 func containEscapableChars(s string, at AtCount) bool {
 	isDbSystemVariable := at != NoAt
 
-	for i, c := range s {
-		letter := isLetter(uint16(c))
-		systemVarChar := isDbSystemVariable && isCarat(uint16(c))
+	for i := range s {
+		c := uint16(s[i])
+		letter := isLetter(c)
+		systemVarChar := isDbSystemVariable && isCarat(c)
 		if !(letter || systemVarChar) {
-			if i == 0 || !isDigit(uint16(c)) {
+			if i == 0 || !isDigit(c) {
 				return true
 			}
 		}
@@ -692,16 +693,12 @@ func containEscapableChars(s string, at AtCount) bool {
 	return false
 }
 
-func isKeyword(s string) bool {
-	_, isKeyword := keywordLookupTable.LookupString(s)
-	return isKeyword
-}
-
-func formatID(buf *TrackedBuffer, original, lowered string, at AtCount) {
-	if containEscapableChars(original, at) || isKeyword(lowered) {
+func formatID(buf *TrackedBuffer, original string, at AtCount) {
+	_, isKeyword := keywordLookupTable.LookupString(original)
+	if isKeyword || containEscapableChars(original, at) {
 		writeEscapedString(buf, original)
 	} else {
-		buf.Myprintf("%s", original)
+		buf.WriteString(original)
 	}
 }
 
