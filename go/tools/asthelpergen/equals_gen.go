@@ -235,7 +235,3 @@ func (e equalsGen) sliceMethod(t types.Type, slice *types.Slice, spi generatorSP
 func (e equalsGen) basicMethod(t types.Type, basic *types.Basic, spi generatorSPI) error {
 	return nil
 }
-
-func (e equalsGen) ptrToOtherMethod(types.Type, *types.Pointer, generatorSPI) error {
-	return nil
-}

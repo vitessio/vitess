@@ -61,6 +61,8 @@ var (
 		"onlineddl_vrepl_stress",
 		"vreplication_migrate",
 		"onlineddl_revert",
+		"tabletmanager_throttler",
+		"tabletmanager_throttler_custom_config",
 	}
 	// TODO: currently some percona tools including xtrabackup are installed on all clusters, we can possibly optimize
 	// this by only installing them in the required clusters
