@@ -20,6 +20,8 @@ import (
 	"errors"
 	"fmt"
 
+	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
+
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 
 	"vitess.io/vitess/go/vt/key"
@@ -45,15 +47,59 @@ func buildSelectPlan(query string) func(sqlparser.Statement, sqlparser.BindVars,
 			return p, nil
 		}
 
-		pb := newPrimitiveBuilder(vschema, newJointab(reservedVars))
-		if err := pb.processSelect(sel, reservedVars, nil, query); err != nil {
+		getPlan := func(sel *sqlparser.Select) (logicalPlan, error) {
+			pb := newPrimitiveBuilder(vschema, newJointab(reservedVars))
+			if err := pb.processSelect(sel, reservedVars, nil, query); err != nil {
+				return nil, err
+			}
+			if err := pb.plan.Wireup(pb.plan, pb.jt); err != nil {
+				return nil, err
+			}
+			return pb.plan, nil
+		}
+
+		plan, err := getPlan(sel)
+		if err != nil {
 			return nil, err
 		}
-		if err := pb.plan.Wireup(pb.plan, pb.jt); err != nil {
-			return nil, err
+
+		if shouldRetryWithCNFRewriting(plan) {
+			// by transforming the predicates to CNF, the planner will sometimes find better plans
+			primitive := rewriteToCNFAndReplan(stmt, getPlan)
+			if primitive != nil {
+				return primitive, nil
+			}
 		}
-		return pb.plan.Primitive(), nil
+		return plan.Primitive(), nil
 	}
+}
+
+func rewriteToCNFAndReplan(stmt sqlparser.Statement, getPlan func(sel *sqlparser.Select) (logicalPlan, error)) engine.Primitive {
+	rewritten, err := sqlparser.RewriteToCNF(stmt)
+	if err == nil {
+		sel2, isSelect := rewritten.(*sqlparser.Select)
+		if isSelect {
+			log.Infof("retrying plan after cnf: %s", sqlparser.String(sel2))
+			plan2, err := getPlan(sel2)
+			if err == nil && !shouldRetryWithCNFRewriting(plan2) {
+				// we only use this new plan if it's better than the old one we got
+				return plan2.Primitive()
+			}
+		}
+	}
+	return nil
+}
+
+func shouldRetryWithCNFRewriting(plan logicalPlan) bool {
+	routePlan, isRoute := plan.(*route)
+	if !isRoute {
+		return false
+	}
+	// if we have a I_S query, but have not found table_schema or table_name, let's try CNF
+	return routePlan.eroute.Opcode == engine.SelectDBA &&
+		routePlan.eroute.SysTableTableName == nil &&
+		routePlan.eroute.SysTableTableSchema == nil
+
 }
 
 func pushProjection(expr *sqlparser.AliasedExpr, plan logicalPlan, semTable *semantics.SemTable) (firstOffset int, err error) {

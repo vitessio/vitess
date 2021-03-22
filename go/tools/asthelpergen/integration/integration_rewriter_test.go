@@ -21,6 +21,8 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/stretchr/testify/assert"
 )
 
@@ -32,7 +34,8 @@ func TestRewriteVisitRefContainer(t *testing.T) {
 
 	tv := &rewriteTestVisitor{}
 
-	Rewrite(containerContainer, tv.pre, tv.post)
+	_, err := Rewrite(containerContainer, tv.pre, tv.post)
+	require.NoError(t, err)
 
 	expected := []step{
 		Pre{containerContainer},
@@ -55,7 +58,8 @@ func TestRewriteVisitValueContainer(t *testing.T) {
 
 	tv := &rewriteTestVisitor{}
 
-	Rewrite(containerContainer, tv.pre, tv.post)
+	_, err := Rewrite(containerContainer, tv.pre, tv.post)
+	require.NoError(t, err)
 
 	expected := []step{
 		Pre{containerContainer},
@@ -80,7 +84,8 @@ func TestRewriteVisitRefSliceContainer(t *testing.T) {
 
 	tv := &rewriteTestVisitor{}
 
-	Rewrite(containerContainer, tv.pre, tv.post)
+	_, err := Rewrite(containerContainer, tv.pre, tv.post)
+	require.NoError(t, err)
 
 	tv.assertEquals(t, []step{
 		Pre{containerContainer},
@@ -108,7 +113,8 @@ func TestRewriteVisitValueSliceContainer(t *testing.T) {
 
 	tv := &rewriteTestVisitor{}
 
-	Rewrite(containerContainer, tv.pre, tv.post)
+	_, err := Rewrite(containerContainer, tv.pre, tv.post)
+	require.NoError(t, err)
 
 	tv.assertEquals(t, []step{
 		Pre{containerContainer},
@@ -144,7 +150,8 @@ func TestRewriteVisitInterfaceSlice(t *testing.T) {
 
 	tv := &rewriteTestVisitor{}
 
-	Rewrite(ast, tv.pre, tv.post)
+	_, err := Rewrite(ast, tv.pre, tv.post)
+	require.NoError(t, err)
 
 	tv.assertEquals(t, []step{
 		Pre{ast},
@@ -169,20 +176,22 @@ func TestRewriteVisitRefContainerReplace(t *testing.T) {
 	}
 
 	// rewrite field of type AST
-	Rewrite(ast, func(cursor *Cursor) bool {
+	_, err := Rewrite(ast, func(cursor *Cursor) bool {
 		leaf, ok := cursor.node.(*RefContainer)
 		if ok && leaf.NotASTType == 12 {
 			cursor.Replace(&Leaf{99})
 		}
 		return true
 	}, nil)
+	require.NoError(t, err)
 
 	assert.Equal(t, &RefContainer{
 		ASTType:               &Leaf{99},
 		ASTImplementationType: &Leaf{2},
 	}, ast)
 
-	Rewrite(ast, rewriteLeaf(2, 55), nil)
+	_, err = Rewrite(ast, rewriteLeaf(2, 55), nil)
+	require.NoError(t, err)
 
 	assert.Equal(t, &RefContainer{
 		ASTType:               &Leaf{99},
@@ -196,13 +205,7 @@ func TestRewriteVisitValueContainerReplace(t *testing.T) {
 		ASTImplementationType: &Leaf{2},
 	}
 
-	defer func() {
-		if r := recover(); r != nil {
-			assert.Contains(t, r, "ValueContainer ASTType")
-		}
-	}()
-
-	Rewrite(ast, func(cursor *Cursor) bool {
+	_, err := Rewrite(ast, func(cursor *Cursor) bool {
 		leaf, ok := cursor.node.(ValueContainer)
 		if ok && leaf.NotASTType == 12 {
 			cursor.Replace(&Leaf{99})
@@ -210,7 +213,7 @@ func TestRewriteVisitValueContainerReplace(t *testing.T) {
 		return true
 	}, nil)
 
-	t.Fatalf("should not get here")
+	require.Error(t, err)
 }
 
 func TestRewriteVisitValueContainerReplace2(t *testing.T) {
@@ -219,15 +222,36 @@ func TestRewriteVisitValueContainerReplace2(t *testing.T) {
 		ASTImplementationType: &Leaf{2},
 	}
 
-	defer func() {
-		if r := recover(); r != nil {
-			assert.Contains(t, r, "ValueContainer ASTImplementationType")
-		}
-	}()
+	_, err := Rewrite(ast, rewriteLeaf(2, 10), nil)
+	require.Error(t, err)
+}
 
-	Rewrite(ast, rewriteLeaf(2, 10), nil)
+func TestRewriteVisitRefContainerPreOrPostOnly(t *testing.T) {
+	leaf1 := &Leaf{1}
+	leaf2 := &Leaf{2}
+	container := &RefContainer{ASTType: leaf1, ASTImplementationType: leaf2}
+	containerContainer := &RefContainer{ASTType: container}
 
-	t.Fatalf("should not get here")
+	tv := &rewriteTestVisitor{}
+
+	_, err := Rewrite(containerContainer, tv.pre, nil)
+	require.NoError(t, err)
+	tv.assertEquals(t, []step{
+		Pre{containerContainer},
+		Pre{container},
+		Pre{leaf1},
+		Pre{leaf2},
+	})
+
+	tv = &rewriteTestVisitor{}
+	_, err = Rewrite(containerContainer, nil, tv.post)
+	require.NoError(t, err)
+	tv.assertEquals(t, []step{
+		Post{leaf1},
+		Post{leaf2},
+		Post{container},
+		Post{containerContainer},
+	})
 }
 
 func rewriteLeaf(from, to int) func(*Cursor) bool {
@@ -246,14 +270,16 @@ func TestRefSliceContainerReplace(t *testing.T) {
 		ASTImplementationElements: []*Leaf{{3}, {4}},
 	}
 
-	Rewrite(ast, rewriteLeaf(2, 42), nil)
+	_, err := Rewrite(ast, rewriteLeaf(2, 42), nil)
+	require.NoError(t, err)
 
 	assert.Equal(t, &RefSliceContainer{
 		ASTElements:               []AST{&Leaf{1}, &Leaf{42}},
 		ASTImplementationElements: []*Leaf{{3}, {4}},
 	}, ast)
 
-	Rewrite(ast, rewriteLeaf(3, 88), nil)
+	_, err = Rewrite(ast, rewriteLeaf(3, 88), nil)
+	require.NoError(t, err)
 
 	assert.Equal(t, &RefSliceContainer{
 		ASTElements:               []AST{&Leaf{1}, &Leaf{42}},
@@ -272,7 +298,7 @@ func (r Pre) String() string {
 	return fmt.Sprintf("Pre(%s)", r.el.String())
 }
 func (r Post) String() string {
-	return fmt.Sprintf("Pre(%s)", r.el.String())
+	return fmt.Sprintf("Post(%s)", r.el.String())
 }
 
 type Post struct {
@@ -326,64 +352,4 @@ func (tv *rewriteTestVisitor) assertEquals(t *testing.T, expected []step) {
 		t.Errorf("❌️ - Expected more elements %v", expected[walkSize:])
 	}
 
-}
-
-// below follows two different ways of creating the replacement method for slices, and benchmark
-// between them. Diff seems to be very small, so I'll use the most readable form
-type replaceA int
-
-func (r *replaceA) replace(newNode, container AST) {
-	container.(InterfaceSlice)[int(*r)] = newNode.(AST)
-}
-
-func (r *replaceA) inc() {
-	*r++
-}
-
-func replaceB(idx int) func(AST, AST) {
-	return func(newNode, container AST) {
-		container.(InterfaceSlice)[idx] = newNode.(AST)
-	}
-}
-
-func BenchmarkSliceReplacerA(b *testing.B) {
-	islice := make(InterfaceSlice, 20)
-	for i := range islice {
-		islice[i] = &Leaf{i}
-	}
-	a := &application{
-		pre: func(c *Cursor) bool {
-			return true
-		},
-		post:   nil,
-		cursor: Cursor{},
-	}
-
-	for i := 0; i < b.N; i++ {
-		replacer := replaceA(0)
-		for _, el := range islice {
-			a.apply(islice, el, replacer.replace)
-			replacer.inc()
-		}
-	}
-}
-
-func BenchmarkSliceReplacerB(b *testing.B) {
-	islice := make(InterfaceSlice, 20)
-	for i := range islice {
-		islice[i] = &Leaf{i}
-	}
-	a := &application{
-		pre: func(c *Cursor) bool {
-			return true
-		},
-		post:   nil,
-		cursor: Cursor{},
-	}
-
-	for i := 0; i < b.N; i++ {
-		for x, el := range islice {
-			a.apply(islice, el, replaceB(x))
-		}
-	}
 }

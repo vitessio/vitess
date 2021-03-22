@@ -113,7 +113,9 @@ func buildDMLPlan(vschema ContextVSchema, dmlType string, stmt sqlparser.Stateme
 		var subqueryArgs []sqlparser.SQLNode
 		subqueryArgs = append(subqueryArgs, nodes...)
 		subqueryArgs = append(subqueryArgs, where, orderBy, limit)
-		if !pb.finalizeUnshardedDMLSubqueries(reservedVars, subqueryArgs...) {
+		if pb.finalizeUnshardedDMLSubqueries(reservedVars, subqueryArgs...) {
+			vschema.WarnUnshardedOnly("subqueries can't be sharded in DML")
+		} else {
 			return nil, nil, "", vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: sharded subqueries in DML")
 		}
 		edml.Opcode = engine.Unsharded

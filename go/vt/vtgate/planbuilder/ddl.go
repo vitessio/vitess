@@ -31,8 +31,9 @@ func buildGeneralDDLPlan(sql string, ddlStatement sqlparser.DDLStatement, reserv
 	}
 
 	if ddlStatement.IsTemporary() {
-		if normalDDLPlan.Keyspace.Sharded {
-			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Temporary table not supported in sharded database %s", normalDDLPlan.Keyspace.Name)
+		err := vschema.ErrorIfShardedF(normalDDLPlan.Keyspace, "temporary table", "Temporary table not supported in sharded database %s", normalDDLPlan.Keyspace.Name)
+		if err != nil {
+			return nil, err
 		}
 		onlineDDLPlan = nil // emptying this so it does not accidentally gets used somewhere
 	}

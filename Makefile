@@ -103,6 +103,10 @@ parser:
 	make -C go/vt/sqlparser
 
 visitor:
+	>&2 echo "make visitor has been replaced by make asthelpers"
+	exit 1
+
+asthelpers:
 	go run ./go/tools/asthelpergen/main -in ./go/vt/sqlparser -iface vitess.io/vitess/go/vt/sqlparser.SQLNode -except "*ColName"
 
 sizegen:
@@ -126,7 +130,6 @@ clean:
 	go clean -i ./go/...
 	rm -rf third_party/acolyte
 	rm -rf go/vt/.proto.tmp
-	rm -rf ./visitorgen
 
 # Remove everything including stuff pulled down by bootstrap.sh
 cleanall: clean
