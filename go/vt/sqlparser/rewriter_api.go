@@ -34,7 +34,7 @@ package sqlparser
 // Only fields that refer to AST nodes are considered children;
 // i.e., fields of basic types (strings, []byte, etc.) are ignored.
 //
-func Rewrite(node SQLNode, pre, post ApplyFunc) (result SQLNode, err error) {
+func Rewrite(node SQLNode, pre, post ApplyFunc) (result SQLNode) {
 	parent := &struct{ SQLNode }{node}
 
 	// this is the root-replacer, used when the user replaces the root of the ast
@@ -49,7 +49,7 @@ func Rewrite(node SQLNode, pre, post ApplyFunc) (result SQLNode, err error) {
 
 	a.rewriteSQLNode(parent, node, replacer)
 
-	return parent.SQLNode, nil
+	return parent.SQLNode
 }
 
 // An ApplyFunc is invoked by Rewrite for each node n, even if n is nil,
