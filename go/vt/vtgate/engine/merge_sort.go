@@ -260,9 +260,6 @@ func (sh *scatterHeap) Less(i, j int) bool {
 		if cmp == 0 {
 			continue
 		}
-		if c.desc {
-			cmp = -cmp
-		}
 		return cmp < 0
 	}
 	return true
