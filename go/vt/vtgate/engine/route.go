@@ -587,38 +587,27 @@ func (route *Route) sort(in *sqltypes.Result) (*sqltypes.Result, error) {
 		InsertID:     in.InsertID,
 	}
 
-	orderBy, weightStrings, desc := extractSlices(route.OrderBy)
+	comparers := extractSlices(route.OrderBy)
 
 	sort.Slice(out.Rows, func(i, j int) bool {
+		var cmp int
+		if err != nil {
+			return true
+		}
 		// If there are any errors below, the function sets
 		// the external err and returns true. Once err is set,
 		// all subsequent calls return true. This will make
 		// Slice think that all elements are in the correct
 		// order and return more quickly.
-		for k := range orderBy {
+		for _, c := range comparers {
+			cmp, err = c.compare(out.Rows[i], out.Rows[j])
 			if err != nil {
 				return true
-			}
-			var cmp int
-			// First try to compare the columns that we want to order
-			cmp, err = evalengine.NullsafeCompare(out.Rows[i][orderBy[k]], out.Rows[j][orderBy[k]])
-			if err != nil {
-				_, isComparisonErr := err.(evalengine.UnsupportedComparisonError)
-				if !(isComparisonErr && weightStrings[k] != -1) {
-					return true
-				}
-				// in case of a comparison error switch to using the weight string column for ordering
-				orderBy[k] = weightStrings[k]
-				weightStrings[k] = -1
-				cmp, err = evalengine.NullsafeCompare(out.Rows[i][orderBy[k]], out.Rows[j][orderBy[k]])
-				if err != nil {
-					return true
-				}
 			}
 			if cmp == 0 {
 				continue
 			}
-			if desc[k] {
+			if c.desc {
 				cmp = -cmp
 			}
 			return cmp < 0

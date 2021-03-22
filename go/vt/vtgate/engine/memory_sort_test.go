@@ -91,7 +91,7 @@ func TestMemorySortStreamExecuteWeightString(t *testing.T) {
 	fp := &fakePrimitive{
 		results: []*sqltypes.Result{sqltypes.MakeTestResult(
 			fields,
-			"v|x",
+			"null|x",
 			"g|d",
 			"a|a",
 			"c|t",
@@ -118,11 +118,11 @@ func TestMemorySortStreamExecuteWeightString(t *testing.T) {
 
 		wantResults := sqltypes.MakeTestStreamingResults(
 			fields,
+			"null|x",
 			"a|a",
 			"c|t",
 			"f|p",
 			"g|d",
-			"v|x",
 		)
 		utils.MustMatch(t, wantResults, results)
 	})
@@ -143,9 +143,9 @@ func TestMemorySortStreamExecuteWeightString(t *testing.T) {
 
 		wantResults := sqltypes.MakeTestStreamingResults(
 			fields,
+			"null|x",
 			"a|a",
 			"c|t",
-			"f|p",
 		)
 		utils.MustMatch(t, wantResults, results)
 	})
