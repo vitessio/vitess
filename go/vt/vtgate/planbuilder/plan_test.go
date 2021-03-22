@@ -393,6 +393,17 @@ func (vw *vschemaWrapper) TargetString() string {
 	return "targetString"
 }
 
+func (vw *vschemaWrapper) WarnUnshardedOnly(_ string, _ ...interface{}) {
+
+}
+
+func (vw *vschemaWrapper) ErrorIfShardedF(keyspace *vindexes.Keyspace, _, errFmt string, params ...interface{}) error {
+	if keyspace.Sharded {
+		return fmt.Errorf(errFmt, params...)
+	}
+	return nil
+}
+
 func escapeNewLines(in string) string {
 	return strings.ReplaceAll(in, "\n", "\\n")
 }

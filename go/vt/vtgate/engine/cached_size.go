@@ -391,7 +391,7 @@ func (cached *Plan) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(96)
+		size += int64(120)
 	}
 	// field Original string
 	size += int64(len(cached.Original))
@@ -401,6 +401,13 @@ func (cached *Plan) CachedSize(alloc bool) int64 {
 	}
 	// field BindVarNeeds *vitess.io/vitess/go/vt/sqlparser.BindVarNeeds
 	size += cached.BindVarNeeds.CachedSize(true)
+	// field Warnings []*vitess.io/vitess/go/vt/proto/query.QueryWarning
+	{
+		size += int64(cap(cached.Warnings)) * int64(8)
+		for _, elem := range cached.Warnings {
+			size += elem.CachedSize(true)
+		}
+	}
 	return size
 }
 func (cached *Projection) CachedSize(alloc bool) int64 {
