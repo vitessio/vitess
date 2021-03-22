@@ -75,16 +75,14 @@ func buildSelectPlan(query string) func(sqlparser.Statement, sqlparser.BindVars,
 }
 
 func rewriteToCNFAndReplan(stmt sqlparser.Statement, getPlan func(sel *sqlparser.Select) (logicalPlan, error)) engine.Primitive {
-	rewritten, err := sqlparser.RewriteToCNF(stmt)
-	if err == nil {
-		sel2, isSelect := rewritten.(*sqlparser.Select)
-		if isSelect {
-			log.Infof("retrying plan after cnf: %s", sqlparser.String(sel2))
-			plan2, err := getPlan(sel2)
-			if err == nil && !shouldRetryWithCNFRewriting(plan2) {
-				// we only use this new plan if it's better than the old one we got
-				return plan2.Primitive()
-			}
+	rewritten := sqlparser.RewriteToCNF(stmt)
+	sel2, isSelect := rewritten.(*sqlparser.Select)
+	if isSelect {
+		log.Infof("retrying plan after cnf: %s", sqlparser.String(sel2))
+		plan2, err := getPlan(sel2)
+		if err == nil && !shouldRetryWithCNFRewriting(plan2) {
+			// we only use this new plan if it's better than the old one we got
+			return plan2.Primitive()
 		}
 	}
 	return nil

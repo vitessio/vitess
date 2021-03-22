@@ -401,8 +401,7 @@ func TestFixedPointRewriteToCNF(in *testing.T) {
 			require.NoError(err)
 
 			expr := stmt.(*Select).Where.Expr
-			output, err := RewriteToCNF(expr)
-			require.NoError(err)
+			output := RewriteToCNF(expr)
 			assert.Equal(t, tc.expected, String(output))
 		})
 	}
