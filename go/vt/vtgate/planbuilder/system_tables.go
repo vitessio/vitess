@@ -74,7 +74,7 @@ func isTableSchemaOrName(e sqlparser.Expr) (isTableSchema bool, isTableName bool
 }
 
 func isDbNameCol(col *sqlparser.ColName) bool {
-	return col.Name.EqualString("table_schema") || col.Name.EqualString("constraint_schema") || col.Name.EqualString("schema_name")
+	return col.Name.EqualString("table_schema") || col.Name.EqualString("constraint_schema") || col.Name.EqualString("schema_name") || col.Name.EqualString("routine_schema")
 }
 
 func isTableNameCol(col *sqlparser.ColName) bool {
