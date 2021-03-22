@@ -9291,13 +9291,13 @@ func VisitVindexParam(in VindexParam, f Visit) error {
 	}
 	return nil
 }
-func (a *application) rewriteAccessMode(parent SQLNode, node AccessMode, replacer replacerFunc) error {
+func (a *application) rewriteAccessMode(parent SQLNode, node AccessMode, replacer replacerFunc) bool {
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
 	if a.post != nil {
@@ -9307,18 +9307,18 @@ func (a *application) rewriteAccessMode(parent SQLNode, node AccessMode, replace
 			a.cur.node = node
 		}
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteAlgorithmValue(parent SQLNode, node AlgorithmValue, replacer replacerFunc) error {
+func (a *application) rewriteAlgorithmValue(parent SQLNode, node AlgorithmValue, replacer replacerFunc) bool {
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
 	if a.post != nil {
@@ -9328,14 +9328,14 @@ func (a *application) rewriteAlgorithmValue(parent SQLNode, node AlgorithmValue,
 			a.cur.node = node
 		}
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteAlterOption(parent SQLNode, node AlterOption, replacer replacerFunc) error {
+func (a *application) rewriteAlterOption(parent SQLNode, node AlterOption, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	switch node := node.(type) {
 	case *AddColumns:
@@ -9378,16 +9378,16 @@ func (a *application) rewriteAlterOption(parent SQLNode, node AlterOption, repla
 		return a.rewriteRefOfValidation(parent, node, replacer)
 	default:
 		// this should never happen
-		return nil
+		return true
 	}
 }
-func (a *application) rewriteArgument(parent SQLNode, node Argument, replacer replacerFunc) error {
+func (a *application) rewriteArgument(parent SQLNode, node Argument, replacer replacerFunc) bool {
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
 	if a.post != nil {
@@ -9397,18 +9397,18 @@ func (a *application) rewriteArgument(parent SQLNode, node Argument, replacer re
 			a.cur.node = node
 		}
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteBoolVal(parent SQLNode, node BoolVal, replacer replacerFunc) error {
+func (a *application) rewriteBoolVal(parent SQLNode, node BoolVal, replacer replacerFunc) bool {
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
 	if a.post != nil {
@@ -9418,14 +9418,14 @@ func (a *application) rewriteBoolVal(parent SQLNode, node BoolVal, replacer repl
 			a.cur.node = node
 		}
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteCharacteristic(parent SQLNode, node Characteristic, replacer replacerFunc) error {
+func (a *application) rewriteCharacteristic(parent SQLNode, node Characteristic, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	switch node := node.(type) {
 	case AccessMode:
@@ -9434,16 +9434,16 @@ func (a *application) rewriteCharacteristic(parent SQLNode, node Characteristic,
 		return a.rewriteIsolationLevel(parent, node, replacer)
 	default:
 		// this should never happen
-		return nil
+		return true
 	}
 }
-func (a *application) rewriteColIdent(parent SQLNode, node ColIdent, replacer replacerFunc) error {
+func (a *application) rewriteColIdent(parent SQLNode, node ColIdent, replacer replacerFunc) bool {
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
 	if a.post != nil {
@@ -9453,14 +9453,14 @@ func (a *application) rewriteColIdent(parent SQLNode, node ColIdent, replacer re
 			a.cur.node = node
 		}
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteColTuple(parent SQLNode, node ColTuple, replacer replacerFunc) error {
+func (a *application) rewriteColTuple(parent SQLNode, node ColTuple, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	switch node := node.(type) {
 	case ListArg:
@@ -9471,28 +9471,28 @@ func (a *application) rewriteColTuple(parent SQLNode, node ColTuple, replacer re
 		return a.rewriteValTuple(parent, node, replacer)
 	default:
 		// this should never happen
-		return nil
+		return true
 	}
 }
-func (a *application) rewriteColumns(parent SQLNode, node Columns, replacer replacerFunc) error {
+func (a *application) rewriteColumns(parent SQLNode, node Columns, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
 	for x, el := range node {
-		if errF := a.rewriteColIdent(node, el, func(idx int) replacerFunc {
+		if !a.rewriteColIdent(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
 				parent.(Columns)[idx] = newNode.(ColIdent)
 			}
-		}(x)); errF != nil {
-			return errF
+		}(x)) {
+			return false
 		}
 	}
 	if a.post != nil {
@@ -9500,21 +9500,21 @@ func (a *application) rewriteColumns(parent SQLNode, node Columns, replacer repl
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteComments(parent SQLNode, node Comments, replacer replacerFunc) error {
+func (a *application) rewriteComments(parent SQLNode, node Comments, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
 	if a.post != nil {
@@ -9524,14 +9524,14 @@ func (a *application) rewriteComments(parent SQLNode, node Comments, replacer re
 			a.cur.node = node
 		}
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteConstraintInfo(parent SQLNode, node ConstraintInfo, replacer replacerFunc) error {
+func (a *application) rewriteConstraintInfo(parent SQLNode, node ConstraintInfo, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	switch node := node.(type) {
 	case *CheckConstraintDefinition:
@@ -9540,12 +9540,12 @@ func (a *application) rewriteConstraintInfo(parent SQLNode, node ConstraintInfo,
 		return a.rewriteRefOfForeignKeyDefinition(parent, node, replacer)
 	default:
 		// this should never happen
-		return nil
+		return true
 	}
 }
-func (a *application) rewriteDBDDLStatement(parent SQLNode, node DBDDLStatement, replacer replacerFunc) error {
+func (a *application) rewriteDBDDLStatement(parent SQLNode, node DBDDLStatement, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	switch node := node.(type) {
 	case *AlterDatabase:
@@ -9556,12 +9556,12 @@ func (a *application) rewriteDBDDLStatement(parent SQLNode, node DBDDLStatement,
 		return a.rewriteRefOfDropDatabase(parent, node, replacer)
 	default:
 		// this should never happen
-		return nil
+		return true
 	}
 }
-func (a *application) rewriteDDLStatement(parent SQLNode, node DDLStatement, replacer replacerFunc) error {
+func (a *application) rewriteDDLStatement(parent SQLNode, node DDLStatement, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	switch node := node.(type) {
 	case *AlterTable:
@@ -9582,12 +9582,12 @@ func (a *application) rewriteDDLStatement(parent SQLNode, node DDLStatement, rep
 		return a.rewriteRefOfTruncateTable(parent, node, replacer)
 	default:
 		// this should never happen
-		return nil
+		return true
 	}
 }
-func (a *application) rewriteExplain(parent SQLNode, node Explain, replacer replacerFunc) error {
+func (a *application) rewriteExplain(parent SQLNode, node Explain, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	switch node := node.(type) {
 	case *ExplainStmt:
@@ -9596,12 +9596,12 @@ func (a *application) rewriteExplain(parent SQLNode, node Explain, replacer repl
 		return a.rewriteRefOfExplainTab(parent, node, replacer)
 	default:
 		// this should never happen
-		return nil
+		return true
 	}
 }
-func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFunc) error {
+func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	switch node := node.(type) {
 	case *AndExpr:
@@ -9668,28 +9668,28 @@ func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFu
 		return a.rewriteRefOfXorExpr(parent, node, replacer)
 	default:
 		// this should never happen
-		return nil
+		return true
 	}
 }
-func (a *application) rewriteExprs(parent SQLNode, node Exprs, replacer replacerFunc) error {
+func (a *application) rewriteExprs(parent SQLNode, node Exprs, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
 	for x, el := range node {
-		if errF := a.rewriteExpr(node, el, func(idx int) replacerFunc {
+		if !a.rewriteExpr(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
 				parent.(Exprs)[idx] = newNode.(Expr)
 			}
-		}(x)); errF != nil {
-			return errF
+		}(x)) {
+			return false
 		}
 	}
 	if a.post != nil {
@@ -9697,30 +9697,30 @@ func (a *application) rewriteExprs(parent SQLNode, node Exprs, replacer replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteGroupBy(parent SQLNode, node GroupBy, replacer replacerFunc) error {
+func (a *application) rewriteGroupBy(parent SQLNode, node GroupBy, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
 	for x, el := range node {
-		if errF := a.rewriteExpr(node, el, func(idx int) replacerFunc {
+		if !a.rewriteExpr(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
 				parent.(GroupBy)[idx] = newNode.(Expr)
 			}
-		}(x)); errF != nil {
-			return errF
+		}(x)) {
+			return false
 		}
 	}
 	if a.post != nil {
@@ -9728,14 +9728,14 @@ func (a *application) rewriteGroupBy(parent SQLNode, node GroupBy, replacer repl
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteInsertRows(parent SQLNode, node InsertRows, replacer replacerFunc) error {
+func (a *application) rewriteInsertRows(parent SQLNode, node InsertRows, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	switch node := node.(type) {
 	case *ParenSelect:
@@ -9748,16 +9748,16 @@ func (a *application) rewriteInsertRows(parent SQLNode, node InsertRows, replace
 		return a.rewriteValues(parent, node, replacer)
 	default:
 		// this should never happen
-		return nil
+		return true
 	}
 }
-func (a *application) rewriteIsolationLevel(parent SQLNode, node IsolationLevel, replacer replacerFunc) error {
+func (a *application) rewriteIsolationLevel(parent SQLNode, node IsolationLevel, replacer replacerFunc) bool {
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
 	if a.post != nil {
@@ -9767,50 +9767,50 @@ func (a *application) rewriteIsolationLevel(parent SQLNode, node IsolationLevel,
 			a.cur.node = node
 		}
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteJoinCondition(parent SQLNode, node JoinCondition, replacer replacerFunc) error {
+func (a *application) rewriteJoinCondition(parent SQLNode, node JoinCondition, replacer replacerFunc) bool {
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewriteExpr(node, node.On, func(newNode, parent SQLNode) {
+	if !a.rewriteExpr(node, node.On, func(newNode, parent SQLNode) {
 		panic("[BUG] tried to replace 'On' on 'JoinCondition'")
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
-	if errF := a.rewriteColumns(node, node.Using, func(newNode, parent SQLNode) {
+	if !a.rewriteColumns(node, node.Using, func(newNode, parent SQLNode) {
 		panic("[BUG] tried to replace 'Using' on 'JoinCondition'")
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteListArg(parent SQLNode, node ListArg, replacer replacerFunc) error {
+func (a *application) rewriteListArg(parent SQLNode, node ListArg, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
 	if a.post != nil {
@@ -9820,30 +9820,30 @@ func (a *application) rewriteListArg(parent SQLNode, node ListArg, replacer repl
 			a.cur.node = node
 		}
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteOnDup(parent SQLNode, node OnDup, replacer replacerFunc) error {
+func (a *application) rewriteOnDup(parent SQLNode, node OnDup, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
 	for x, el := range node {
-		if errF := a.rewriteRefOfUpdateExpr(node, el, func(idx int) replacerFunc {
+		if !a.rewriteRefOfUpdateExpr(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
 				parent.(OnDup)[idx] = newNode.(*UpdateExpr)
 			}
-		}(x)); errF != nil {
-			return errF
+		}(x)) {
+			return false
 		}
 	}
 	if a.post != nil {
@@ -9851,30 +9851,30 @@ func (a *application) rewriteOnDup(parent SQLNode, node OnDup, replacer replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteOrderBy(parent SQLNode, node OrderBy, replacer replacerFunc) error {
+func (a *application) rewriteOrderBy(parent SQLNode, node OrderBy, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
 	for x, el := range node {
-		if errF := a.rewriteRefOfOrder(node, el, func(idx int) replacerFunc {
+		if !a.rewriteRefOfOrder(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
 				parent.(OrderBy)[idx] = newNode.(*Order)
 			}
-		}(x)); errF != nil {
-			return errF
+		}(x)) {
+			return false
 		}
 	}
 	if a.post != nil {
@@ -9882,30 +9882,30 @@ func (a *application) rewriteOrderBy(parent SQLNode, node OrderBy, replacer repl
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewritePartitions(parent SQLNode, node Partitions, replacer replacerFunc) error {
+func (a *application) rewritePartitions(parent SQLNode, node Partitions, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
 	for x, el := range node {
-		if errF := a.rewriteColIdent(node, el, func(idx int) replacerFunc {
+		if !a.rewriteColIdent(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
 				parent.(Partitions)[idx] = newNode.(ColIdent)
 			}
-		}(x)); errF != nil {
-			return errF
+		}(x)) {
+			return false
 		}
 	}
 	if a.post != nil {
@@ -9913,190 +9913,190 @@ func (a *application) rewritePartitions(parent SQLNode, node Partitions, replace
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfAddColumns(parent SQLNode, node *AddColumns, replacer replacerFunc) error {
+func (a *application) rewriteRefOfAddColumns(parent SQLNode, node *AddColumns, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
 	for x, el := range node.Columns {
-		if errF := a.rewriteRefOfColumnDefinition(node, el, func(idx int) replacerFunc {
+		if !a.rewriteRefOfColumnDefinition(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
 				parent.(*AddColumns).Columns[idx] = newNode.(*ColumnDefinition)
 			}
-		}(x)); errF != nil {
-			return errF
+		}(x)) {
+			return false
 		}
 	}
-	if errF := a.rewriteRefOfColName(node, node.First, func(newNode, parent SQLNode) {
+	if !a.rewriteRefOfColName(node, node.First, func(newNode, parent SQLNode) {
 		parent.(*AddColumns).First = newNode.(*ColName)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
-	if errF := a.rewriteRefOfColName(node, node.After, func(newNode, parent SQLNode) {
+	if !a.rewriteRefOfColName(node, node.After, func(newNode, parent SQLNode) {
 		parent.(*AddColumns).After = newNode.(*ColName)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfAddConstraintDefinition(parent SQLNode, node *AddConstraintDefinition, replacer replacerFunc) error {
+func (a *application) rewriteRefOfAddConstraintDefinition(parent SQLNode, node *AddConstraintDefinition, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewriteRefOfConstraintDefinition(node, node.ConstraintDefinition, func(newNode, parent SQLNode) {
+	if !a.rewriteRefOfConstraintDefinition(node, node.ConstraintDefinition, func(newNode, parent SQLNode) {
 		parent.(*AddConstraintDefinition).ConstraintDefinition = newNode.(*ConstraintDefinition)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfAddIndexDefinition(parent SQLNode, node *AddIndexDefinition, replacer replacerFunc) error {
+func (a *application) rewriteRefOfAddIndexDefinition(parent SQLNode, node *AddIndexDefinition, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewriteRefOfIndexDefinition(node, node.IndexDefinition, func(newNode, parent SQLNode) {
+	if !a.rewriteRefOfIndexDefinition(node, node.IndexDefinition, func(newNode, parent SQLNode) {
 		parent.(*AddIndexDefinition).IndexDefinition = newNode.(*IndexDefinition)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfAliasedExpr(parent SQLNode, node *AliasedExpr, replacer replacerFunc) error {
+func (a *application) rewriteRefOfAliasedExpr(parent SQLNode, node *AliasedExpr, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
+	if !a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
 		parent.(*AliasedExpr).Expr = newNode.(Expr)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
-	if errF := a.rewriteColIdent(node, node.As, func(newNode, parent SQLNode) {
+	if !a.rewriteColIdent(node, node.As, func(newNode, parent SQLNode) {
 		parent.(*AliasedExpr).As = newNode.(ColIdent)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfAliasedTableExpr(parent SQLNode, node *AliasedTableExpr, replacer replacerFunc) error {
+func (a *application) rewriteRefOfAliasedTableExpr(parent SQLNode, node *AliasedTableExpr, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewriteSimpleTableExpr(node, node.Expr, func(newNode, parent SQLNode) {
+	if !a.rewriteSimpleTableExpr(node, node.Expr, func(newNode, parent SQLNode) {
 		parent.(*AliasedTableExpr).Expr = newNode.(SimpleTableExpr)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
-	if errF := a.rewritePartitions(node, node.Partitions, func(newNode, parent SQLNode) {
+	if !a.rewritePartitions(node, node.Partitions, func(newNode, parent SQLNode) {
 		parent.(*AliasedTableExpr).Partitions = newNode.(Partitions)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
-	if errF := a.rewriteTableIdent(node, node.As, func(newNode, parent SQLNode) {
+	if !a.rewriteTableIdent(node, node.As, func(newNode, parent SQLNode) {
 		parent.(*AliasedTableExpr).As = newNode.(TableIdent)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
-	if errF := a.rewriteRefOfIndexHints(node, node.Hints, func(newNode, parent SQLNode) {
+	if !a.rewriteRefOfIndexHints(node, node.Hints, func(newNode, parent SQLNode) {
 		parent.(*AliasedTableExpr).Hints = newNode.(*IndexHints)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfAlterCharset(parent SQLNode, node *AlterCharset, replacer replacerFunc) error {
+func (a *application) rewriteRefOfAlterCharset(parent SQLNode, node *AlterCharset, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
 	if a.post != nil {
@@ -10106,77 +10106,53 @@ func (a *application) rewriteRefOfAlterCharset(parent SQLNode, node *AlterCharse
 			a.cur.node = node
 		}
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfAlterColumn(parent SQLNode, node *AlterColumn, replacer replacerFunc) error {
+func (a *application) rewriteRefOfAlterColumn(parent SQLNode, node *AlterColumn, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewriteRefOfColName(node, node.Column, func(newNode, parent SQLNode) {
+	if !a.rewriteRefOfColName(node, node.Column, func(newNode, parent SQLNode) {
 		parent.(*AlterColumn).Column = newNode.(*ColName)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
-	if errF := a.rewriteExpr(node, node.DefaultVal, func(newNode, parent SQLNode) {
+	if !a.rewriteExpr(node, node.DefaultVal, func(newNode, parent SQLNode) {
 		parent.(*AlterColumn).DefaultVal = newNode.(Expr)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfAlterDatabase(parent SQLNode, node *AlterDatabase, replacer replacerFunc) error {
+func (a *application) rewriteRefOfAlterDatabase(parent SQLNode, node *AlterDatabase, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
-		}
-	}
-	if a.post != nil {
-		if a.pre == nil {
-			a.cur.replacer = replacer
-			a.cur.parent = parent
-			a.cur.node = node
-		}
-		if !a.post(&a.cur) {
-			return errAbort
-		}
-	}
-	return nil
-}
-func (a *application) rewriteRefOfAlterMigration(parent SQLNode, node *AlterMigration, replacer replacerFunc) error {
-	if node == nil {
-		return nil
-	}
-	if a.pre != nil {
-		a.cur.replacer = replacer
-		a.cur.parent = parent
-		a.cur.node = node
-		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
 	if a.post != nil {
@@ -10186,209 +10162,233 @@ func (a *application) rewriteRefOfAlterMigration(parent SQLNode, node *AlterMigr
 			a.cur.node = node
 		}
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfAlterTable(parent SQLNode, node *AlterTable, replacer replacerFunc) error {
+func (a *application) rewriteRefOfAlterMigration(parent SQLNode, node *AlterMigration, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewriteTableName(node, node.Table, func(newNode, parent SQLNode) {
+	if a.post != nil {
+		if a.pre == nil {
+			a.cur.replacer = replacer
+			a.cur.parent = parent
+			a.cur.node = node
+		}
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfAlterTable(parent SQLNode, node *AlterTable, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteTableName(node, node.Table, func(newNode, parent SQLNode) {
 		parent.(*AlterTable).Table = newNode.(TableName)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	for x, el := range node.AlterOptions {
-		if errF := a.rewriteAlterOption(node, el, func(idx int) replacerFunc {
+		if !a.rewriteAlterOption(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
 				parent.(*AlterTable).AlterOptions[idx] = newNode.(AlterOption)
 			}
-		}(x)); errF != nil {
-			return errF
+		}(x)) {
+			return false
 		}
 	}
-	if errF := a.rewriteRefOfPartitionSpec(node, node.PartitionSpec, func(newNode, parent SQLNode) {
+	if !a.rewriteRefOfPartitionSpec(node, node.PartitionSpec, func(newNode, parent SQLNode) {
 		parent.(*AlterTable).PartitionSpec = newNode.(*PartitionSpec)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfAlterView(parent SQLNode, node *AlterView, replacer replacerFunc) error {
+func (a *application) rewriteRefOfAlterView(parent SQLNode, node *AlterView, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewriteTableName(node, node.ViewName, func(newNode, parent SQLNode) {
+	if !a.rewriteTableName(node, node.ViewName, func(newNode, parent SQLNode) {
 		parent.(*AlterView).ViewName = newNode.(TableName)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
-	if errF := a.rewriteColumns(node, node.Columns, func(newNode, parent SQLNode) {
+	if !a.rewriteColumns(node, node.Columns, func(newNode, parent SQLNode) {
 		parent.(*AlterView).Columns = newNode.(Columns)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
-	if errF := a.rewriteSelectStatement(node, node.Select, func(newNode, parent SQLNode) {
+	if !a.rewriteSelectStatement(node, node.Select, func(newNode, parent SQLNode) {
 		parent.(*AlterView).Select = newNode.(SelectStatement)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfAlterVschema(parent SQLNode, node *AlterVschema, replacer replacerFunc) error {
+func (a *application) rewriteRefOfAlterVschema(parent SQLNode, node *AlterVschema, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewriteTableName(node, node.Table, func(newNode, parent SQLNode) {
+	if !a.rewriteTableName(node, node.Table, func(newNode, parent SQLNode) {
 		parent.(*AlterVschema).Table = newNode.(TableName)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
-	if errF := a.rewriteRefOfVindexSpec(node, node.VindexSpec, func(newNode, parent SQLNode) {
+	if !a.rewriteRefOfVindexSpec(node, node.VindexSpec, func(newNode, parent SQLNode) {
 		parent.(*AlterVschema).VindexSpec = newNode.(*VindexSpec)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	for x, el := range node.VindexCols {
-		if errF := a.rewriteColIdent(node, el, func(idx int) replacerFunc {
+		if !a.rewriteColIdent(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
 				parent.(*AlterVschema).VindexCols[idx] = newNode.(ColIdent)
 			}
-		}(x)); errF != nil {
-			return errF
+		}(x)) {
+			return false
 		}
 	}
-	if errF := a.rewriteRefOfAutoIncSpec(node, node.AutoIncSpec, func(newNode, parent SQLNode) {
+	if !a.rewriteRefOfAutoIncSpec(node, node.AutoIncSpec, func(newNode, parent SQLNode) {
 		parent.(*AlterVschema).AutoIncSpec = newNode.(*AutoIncSpec)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfAndExpr(parent SQLNode, node *AndExpr, replacer replacerFunc) error {
+func (a *application) rewriteRefOfAndExpr(parent SQLNode, node *AndExpr, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewriteExpr(node, node.Left, func(newNode, parent SQLNode) {
+	if !a.rewriteExpr(node, node.Left, func(newNode, parent SQLNode) {
 		parent.(*AndExpr).Left = newNode.(Expr)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
-	if errF := a.rewriteExpr(node, node.Right, func(newNode, parent SQLNode) {
+	if !a.rewriteExpr(node, node.Right, func(newNode, parent SQLNode) {
 		parent.(*AndExpr).Right = newNode.(Expr)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfAutoIncSpec(parent SQLNode, node *AutoIncSpec, replacer replacerFunc) error {
+func (a *application) rewriteRefOfAutoIncSpec(parent SQLNode, node *AutoIncSpec, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewriteColIdent(node, node.Column, func(newNode, parent SQLNode) {
+	if !a.rewriteColIdent(node, node.Column, func(newNode, parent SQLNode) {
 		parent.(*AutoIncSpec).Column = newNode.(ColIdent)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
-	if errF := a.rewriteTableName(node, node.Sequence, func(newNode, parent SQLNode) {
+	if !a.rewriteTableName(node, node.Sequence, func(newNode, parent SQLNode) {
 		parent.(*AutoIncSpec).Sequence = newNode.(TableName)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfBegin(parent SQLNode, node *Begin, replacer replacerFunc) error {
+func (a *application) rewriteRefOfBegin(parent SQLNode, node *Begin, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
 	if a.post != nil {
@@ -10398,195 +10398,195 @@ func (a *application) rewriteRefOfBegin(parent SQLNode, node *Begin, replacer re
 			a.cur.node = node
 		}
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfBinaryExpr(parent SQLNode, node *BinaryExpr, replacer replacerFunc) error {
+func (a *application) rewriteRefOfBinaryExpr(parent SQLNode, node *BinaryExpr, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewriteExpr(node, node.Left, func(newNode, parent SQLNode) {
+	if !a.rewriteExpr(node, node.Left, func(newNode, parent SQLNode) {
 		parent.(*BinaryExpr).Left = newNode.(Expr)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
-	if errF := a.rewriteExpr(node, node.Right, func(newNode, parent SQLNode) {
+	if !a.rewriteExpr(node, node.Right, func(newNode, parent SQLNode) {
 		parent.(*BinaryExpr).Right = newNode.(Expr)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfCallProc(parent SQLNode, node *CallProc, replacer replacerFunc) error {
+func (a *application) rewriteRefOfCallProc(parent SQLNode, node *CallProc, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewriteTableName(node, node.Name, func(newNode, parent SQLNode) {
+	if !a.rewriteTableName(node, node.Name, func(newNode, parent SQLNode) {
 		parent.(*CallProc).Name = newNode.(TableName)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
-	if errF := a.rewriteExprs(node, node.Params, func(newNode, parent SQLNode) {
+	if !a.rewriteExprs(node, node.Params, func(newNode, parent SQLNode) {
 		parent.(*CallProc).Params = newNode.(Exprs)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfCaseExpr(parent SQLNode, node *CaseExpr, replacer replacerFunc) error {
+func (a *application) rewriteRefOfCaseExpr(parent SQLNode, node *CaseExpr, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
+	if !a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
 		parent.(*CaseExpr).Expr = newNode.(Expr)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	for x, el := range node.Whens {
-		if errF := a.rewriteRefOfWhen(node, el, func(idx int) replacerFunc {
+		if !a.rewriteRefOfWhen(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
 				parent.(*CaseExpr).Whens[idx] = newNode.(*When)
 			}
-		}(x)); errF != nil {
-			return errF
+		}(x)) {
+			return false
 		}
 	}
-	if errF := a.rewriteExpr(node, node.Else, func(newNode, parent SQLNode) {
+	if !a.rewriteExpr(node, node.Else, func(newNode, parent SQLNode) {
 		parent.(*CaseExpr).Else = newNode.(Expr)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfChangeColumn(parent SQLNode, node *ChangeColumn, replacer replacerFunc) error {
+func (a *application) rewriteRefOfChangeColumn(parent SQLNode, node *ChangeColumn, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewriteRefOfColName(node, node.OldColumn, func(newNode, parent SQLNode) {
+	if !a.rewriteRefOfColName(node, node.OldColumn, func(newNode, parent SQLNode) {
 		parent.(*ChangeColumn).OldColumn = newNode.(*ColName)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
-	if errF := a.rewriteRefOfColumnDefinition(node, node.NewColDefinition, func(newNode, parent SQLNode) {
+	if !a.rewriteRefOfColumnDefinition(node, node.NewColDefinition, func(newNode, parent SQLNode) {
 		parent.(*ChangeColumn).NewColDefinition = newNode.(*ColumnDefinition)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
-	if errF := a.rewriteRefOfColName(node, node.First, func(newNode, parent SQLNode) {
+	if !a.rewriteRefOfColName(node, node.First, func(newNode, parent SQLNode) {
 		parent.(*ChangeColumn).First = newNode.(*ColName)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
-	if errF := a.rewriteRefOfColName(node, node.After, func(newNode, parent SQLNode) {
+	if !a.rewriteRefOfColName(node, node.After, func(newNode, parent SQLNode) {
 		parent.(*ChangeColumn).After = newNode.(*ColName)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfCheckConstraintDefinition(parent SQLNode, node *CheckConstraintDefinition, replacer replacerFunc) error {
+func (a *application) rewriteRefOfCheckConstraintDefinition(parent SQLNode, node *CheckConstraintDefinition, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
+	if !a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
 		parent.(*CheckConstraintDefinition).Expr = newNode.(Expr)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfColIdent(parent SQLNode, node *ColIdent, replacer replacerFunc) error {
+func (a *application) rewriteRefOfColIdent(parent SQLNode, node *ColIdent, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
 	if a.post != nil {
@@ -10596,139 +10596,139 @@ func (a *application) rewriteRefOfColIdent(parent SQLNode, node *ColIdent, repla
 			a.cur.node = node
 		}
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfColName(parent SQLNode, node *ColName, replacer replacerFunc) error {
+func (a *application) rewriteRefOfColName(parent SQLNode, node *ColName, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
+	if !a.rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
 		parent.(*ColName).Name = newNode.(ColIdent)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
-	if errF := a.rewriteTableName(node, node.Qualifier, func(newNode, parent SQLNode) {
+	if !a.rewriteTableName(node, node.Qualifier, func(newNode, parent SQLNode) {
 		parent.(*ColName).Qualifier = newNode.(TableName)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfCollateExpr(parent SQLNode, node *CollateExpr, replacer replacerFunc) error {
+func (a *application) rewriteRefOfCollateExpr(parent SQLNode, node *CollateExpr, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
+	if !a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
 		parent.(*CollateExpr).Expr = newNode.(Expr)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfColumnDefinition(parent SQLNode, node *ColumnDefinition, replacer replacerFunc) error {
+func (a *application) rewriteRefOfColumnDefinition(parent SQLNode, node *ColumnDefinition, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
+	if !a.rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
 		parent.(*ColumnDefinition).Name = newNode.(ColIdent)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfColumnType(parent SQLNode, node *ColumnType, replacer replacerFunc) error {
+func (a *application) rewriteRefOfColumnType(parent SQLNode, node *ColumnType, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewriteRefOfLiteral(node, node.Length, func(newNode, parent SQLNode) {
+	if !a.rewriteRefOfLiteral(node, node.Length, func(newNode, parent SQLNode) {
 		parent.(*ColumnType).Length = newNode.(*Literal)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
-	if errF := a.rewriteRefOfLiteral(node, node.Scale, func(newNode, parent SQLNode) {
+	if !a.rewriteRefOfLiteral(node, node.Scale, func(newNode, parent SQLNode) {
 		parent.(*ColumnType).Scale = newNode.(*Literal)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfCommit(parent SQLNode, node *Commit, replacer replacerFunc) error {
+func (a *application) rewriteRefOfCommit(parent SQLNode, node *Commit, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
 	if a.post != nil {
@@ -10738,309 +10738,309 @@ func (a *application) rewriteRefOfCommit(parent SQLNode, node *Commit, replacer 
 			a.cur.node = node
 		}
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfComparisonExpr(parent SQLNode, node *ComparisonExpr, replacer replacerFunc) error {
+func (a *application) rewriteRefOfComparisonExpr(parent SQLNode, node *ComparisonExpr, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewriteExpr(node, node.Left, func(newNode, parent SQLNode) {
+	if !a.rewriteExpr(node, node.Left, func(newNode, parent SQLNode) {
 		parent.(*ComparisonExpr).Left = newNode.(Expr)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
-	if errF := a.rewriteExpr(node, node.Right, func(newNode, parent SQLNode) {
+	if !a.rewriteExpr(node, node.Right, func(newNode, parent SQLNode) {
 		parent.(*ComparisonExpr).Right = newNode.(Expr)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
-	if errF := a.rewriteExpr(node, node.Escape, func(newNode, parent SQLNode) {
+	if !a.rewriteExpr(node, node.Escape, func(newNode, parent SQLNode) {
 		parent.(*ComparisonExpr).Escape = newNode.(Expr)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfConstraintDefinition(parent SQLNode, node *ConstraintDefinition, replacer replacerFunc) error {
+func (a *application) rewriteRefOfConstraintDefinition(parent SQLNode, node *ConstraintDefinition, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewriteConstraintInfo(node, node.Details, func(newNode, parent SQLNode) {
+	if !a.rewriteConstraintInfo(node, node.Details, func(newNode, parent SQLNode) {
 		parent.(*ConstraintDefinition).Details = newNode.(ConstraintInfo)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfConvertExpr(parent SQLNode, node *ConvertExpr, replacer replacerFunc) error {
+func (a *application) rewriteRefOfConvertExpr(parent SQLNode, node *ConvertExpr, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
+	if !a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
 		parent.(*ConvertExpr).Expr = newNode.(Expr)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
-	if errF := a.rewriteRefOfConvertType(node, node.Type, func(newNode, parent SQLNode) {
+	if !a.rewriteRefOfConvertType(node, node.Type, func(newNode, parent SQLNode) {
 		parent.(*ConvertExpr).Type = newNode.(*ConvertType)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfConvertType(parent SQLNode, node *ConvertType, replacer replacerFunc) error {
+func (a *application) rewriteRefOfConvertType(parent SQLNode, node *ConvertType, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewriteRefOfLiteral(node, node.Length, func(newNode, parent SQLNode) {
+	if !a.rewriteRefOfLiteral(node, node.Length, func(newNode, parent SQLNode) {
 		parent.(*ConvertType).Length = newNode.(*Literal)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
-	if errF := a.rewriteRefOfLiteral(node, node.Scale, func(newNode, parent SQLNode) {
+	if !a.rewriteRefOfLiteral(node, node.Scale, func(newNode, parent SQLNode) {
 		parent.(*ConvertType).Scale = newNode.(*Literal)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfConvertUsingExpr(parent SQLNode, node *ConvertUsingExpr, replacer replacerFunc) error {
+func (a *application) rewriteRefOfConvertUsingExpr(parent SQLNode, node *ConvertUsingExpr, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
+	if !a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
 		parent.(*ConvertUsingExpr).Expr = newNode.(Expr)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfCreateDatabase(parent SQLNode, node *CreateDatabase, replacer replacerFunc) error {
+func (a *application) rewriteRefOfCreateDatabase(parent SQLNode, node *CreateDatabase, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
+	if !a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
 		parent.(*CreateDatabase).Comments = newNode.(Comments)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfCreateTable(parent SQLNode, node *CreateTable, replacer replacerFunc) error {
+func (a *application) rewriteRefOfCreateTable(parent SQLNode, node *CreateTable, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewriteTableName(node, node.Table, func(newNode, parent SQLNode) {
+	if !a.rewriteTableName(node, node.Table, func(newNode, parent SQLNode) {
 		parent.(*CreateTable).Table = newNode.(TableName)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
-	if errF := a.rewriteRefOfTableSpec(node, node.TableSpec, func(newNode, parent SQLNode) {
+	if !a.rewriteRefOfTableSpec(node, node.TableSpec, func(newNode, parent SQLNode) {
 		parent.(*CreateTable).TableSpec = newNode.(*TableSpec)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
-	if errF := a.rewriteRefOfOptLike(node, node.OptLike, func(newNode, parent SQLNode) {
+	if !a.rewriteRefOfOptLike(node, node.OptLike, func(newNode, parent SQLNode) {
 		parent.(*CreateTable).OptLike = newNode.(*OptLike)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfCreateView(parent SQLNode, node *CreateView, replacer replacerFunc) error {
+func (a *application) rewriteRefOfCreateView(parent SQLNode, node *CreateView, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewriteTableName(node, node.ViewName, func(newNode, parent SQLNode) {
+	if !a.rewriteTableName(node, node.ViewName, func(newNode, parent SQLNode) {
 		parent.(*CreateView).ViewName = newNode.(TableName)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
-	if errF := a.rewriteColumns(node, node.Columns, func(newNode, parent SQLNode) {
+	if !a.rewriteColumns(node, node.Columns, func(newNode, parent SQLNode) {
 		parent.(*CreateView).Columns = newNode.(Columns)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
-	if errF := a.rewriteSelectStatement(node, node.Select, func(newNode, parent SQLNode) {
+	if !a.rewriteSelectStatement(node, node.Select, func(newNode, parent SQLNode) {
 		parent.(*CreateView).Select = newNode.(SelectStatement)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfCurTimeFuncExpr(parent SQLNode, node *CurTimeFuncExpr, replacer replacerFunc) error {
+func (a *application) rewriteRefOfCurTimeFuncExpr(parent SQLNode, node *CurTimeFuncExpr, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
+	if !a.rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
 		parent.(*CurTimeFuncExpr).Name = newNode.(ColIdent)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
-	if errF := a.rewriteExpr(node, node.Fsp, func(newNode, parent SQLNode) {
+	if !a.rewriteExpr(node, node.Fsp, func(newNode, parent SQLNode) {
 		parent.(*CurTimeFuncExpr).Fsp = newNode.(Expr)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfDefault(parent SQLNode, node *Default, replacer replacerFunc) error {
+func (a *application) rewriteRefOfDefault(parent SQLNode, node *Default, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
 	if a.post != nil {
@@ -11050,159 +11050,159 @@ func (a *application) rewriteRefOfDefault(parent SQLNode, node *Default, replace
 			a.cur.node = node
 		}
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfDelete(parent SQLNode, node *Delete, replacer replacerFunc) error {
+func (a *application) rewriteRefOfDelete(parent SQLNode, node *Delete, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
+	if !a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
 		parent.(*Delete).Comments = newNode.(Comments)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
-	if errF := a.rewriteTableNames(node, node.Targets, func(newNode, parent SQLNode) {
+	if !a.rewriteTableNames(node, node.Targets, func(newNode, parent SQLNode) {
 		parent.(*Delete).Targets = newNode.(TableNames)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
-	if errF := a.rewriteTableExprs(node, node.TableExprs, func(newNode, parent SQLNode) {
+	if !a.rewriteTableExprs(node, node.TableExprs, func(newNode, parent SQLNode) {
 		parent.(*Delete).TableExprs = newNode.(TableExprs)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
-	if errF := a.rewritePartitions(node, node.Partitions, func(newNode, parent SQLNode) {
+	if !a.rewritePartitions(node, node.Partitions, func(newNode, parent SQLNode) {
 		parent.(*Delete).Partitions = newNode.(Partitions)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
-	if errF := a.rewriteRefOfWhere(node, node.Where, func(newNode, parent SQLNode) {
+	if !a.rewriteRefOfWhere(node, node.Where, func(newNode, parent SQLNode) {
 		parent.(*Delete).Where = newNode.(*Where)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
-	if errF := a.rewriteOrderBy(node, node.OrderBy, func(newNode, parent SQLNode) {
+	if !a.rewriteOrderBy(node, node.OrderBy, func(newNode, parent SQLNode) {
 		parent.(*Delete).OrderBy = newNode.(OrderBy)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
-	if errF := a.rewriteRefOfLimit(node, node.Limit, func(newNode, parent SQLNode) {
+	if !a.rewriteRefOfLimit(node, node.Limit, func(newNode, parent SQLNode) {
 		parent.(*Delete).Limit = newNode.(*Limit)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfDerivedTable(parent SQLNode, node *DerivedTable, replacer replacerFunc) error {
+func (a *application) rewriteRefOfDerivedTable(parent SQLNode, node *DerivedTable, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewriteSelectStatement(node, node.Select, func(newNode, parent SQLNode) {
+	if !a.rewriteSelectStatement(node, node.Select, func(newNode, parent SQLNode) {
 		parent.(*DerivedTable).Select = newNode.(SelectStatement)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfDropColumn(parent SQLNode, node *DropColumn, replacer replacerFunc) error {
+func (a *application) rewriteRefOfDropColumn(parent SQLNode, node *DropColumn, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewriteRefOfColName(node, node.Name, func(newNode, parent SQLNode) {
+	if !a.rewriteRefOfColName(node, node.Name, func(newNode, parent SQLNode) {
 		parent.(*DropColumn).Name = newNode.(*ColName)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfDropDatabase(parent SQLNode, node *DropDatabase, replacer replacerFunc) error {
+func (a *application) rewriteRefOfDropDatabase(parent SQLNode, node *DropDatabase, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
+	if !a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
 		parent.(*DropDatabase).Comments = newNode.(Comments)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfDropKey(parent SQLNode, node *DropKey, replacer replacerFunc) error {
+func (a *application) rewriteRefOfDropKey(parent SQLNode, node *DropKey, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
 	if a.post != nil {
@@ -11212,183 +11212,183 @@ func (a *application) rewriteRefOfDropKey(parent SQLNode, node *DropKey, replace
 			a.cur.node = node
 		}
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfDropTable(parent SQLNode, node *DropTable, replacer replacerFunc) error {
+func (a *application) rewriteRefOfDropTable(parent SQLNode, node *DropTable, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewriteTableNames(node, node.FromTables, func(newNode, parent SQLNode) {
+	if !a.rewriteTableNames(node, node.FromTables, func(newNode, parent SQLNode) {
 		parent.(*DropTable).FromTables = newNode.(TableNames)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfDropView(parent SQLNode, node *DropView, replacer replacerFunc) error {
+func (a *application) rewriteRefOfDropView(parent SQLNode, node *DropView, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewriteTableNames(node, node.FromTables, func(newNode, parent SQLNode) {
+	if !a.rewriteTableNames(node, node.FromTables, func(newNode, parent SQLNode) {
 		parent.(*DropView).FromTables = newNode.(TableNames)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfExistsExpr(parent SQLNode, node *ExistsExpr, replacer replacerFunc) error {
+func (a *application) rewriteRefOfExistsExpr(parent SQLNode, node *ExistsExpr, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewriteRefOfSubquery(node, node.Subquery, func(newNode, parent SQLNode) {
+	if !a.rewriteRefOfSubquery(node, node.Subquery, func(newNode, parent SQLNode) {
 		parent.(*ExistsExpr).Subquery = newNode.(*Subquery)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfExplainStmt(parent SQLNode, node *ExplainStmt, replacer replacerFunc) error {
+func (a *application) rewriteRefOfExplainStmt(parent SQLNode, node *ExplainStmt, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewriteStatement(node, node.Statement, func(newNode, parent SQLNode) {
+	if !a.rewriteStatement(node, node.Statement, func(newNode, parent SQLNode) {
 		parent.(*ExplainStmt).Statement = newNode.(Statement)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfExplainTab(parent SQLNode, node *ExplainTab, replacer replacerFunc) error {
+func (a *application) rewriteRefOfExplainTab(parent SQLNode, node *ExplainTab, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewriteTableName(node, node.Table, func(newNode, parent SQLNode) {
+	if !a.rewriteTableName(node, node.Table, func(newNode, parent SQLNode) {
 		parent.(*ExplainTab).Table = newNode.(TableName)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfFlush(parent SQLNode, node *Flush, replacer replacerFunc) error {
+func (a *application) rewriteRefOfFlush(parent SQLNode, node *Flush, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewriteTableNames(node, node.TableNames, func(newNode, parent SQLNode) {
+	if !a.rewriteTableNames(node, node.TableNames, func(newNode, parent SQLNode) {
 		parent.(*Flush).TableNames = newNode.(TableNames)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfForce(parent SQLNode, node *Force, replacer replacerFunc) error {
+func (a *application) rewriteRefOfForce(parent SQLNode, node *Force, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
 	if a.post != nil {
@@ -11398,178 +11398,178 @@ func (a *application) rewriteRefOfForce(parent SQLNode, node *Force, replacer re
 			a.cur.node = node
 		}
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfForeignKeyDefinition(parent SQLNode, node *ForeignKeyDefinition, replacer replacerFunc) error {
+func (a *application) rewriteRefOfForeignKeyDefinition(parent SQLNode, node *ForeignKeyDefinition, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewriteColumns(node, node.Source, func(newNode, parent SQLNode) {
+	if !a.rewriteColumns(node, node.Source, func(newNode, parent SQLNode) {
 		parent.(*ForeignKeyDefinition).Source = newNode.(Columns)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
-	if errF := a.rewriteTableName(node, node.ReferencedTable, func(newNode, parent SQLNode) {
+	if !a.rewriteTableName(node, node.ReferencedTable, func(newNode, parent SQLNode) {
 		parent.(*ForeignKeyDefinition).ReferencedTable = newNode.(TableName)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
-	if errF := a.rewriteColumns(node, node.ReferencedColumns, func(newNode, parent SQLNode) {
+	if !a.rewriteColumns(node, node.ReferencedColumns, func(newNode, parent SQLNode) {
 		parent.(*ForeignKeyDefinition).ReferencedColumns = newNode.(Columns)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
-	if errF := a.rewriteReferenceAction(node, node.OnDelete, func(newNode, parent SQLNode) {
+	if !a.rewriteReferenceAction(node, node.OnDelete, func(newNode, parent SQLNode) {
 		parent.(*ForeignKeyDefinition).OnDelete = newNode.(ReferenceAction)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
-	if errF := a.rewriteReferenceAction(node, node.OnUpdate, func(newNode, parent SQLNode) {
+	if !a.rewriteReferenceAction(node, node.OnUpdate, func(newNode, parent SQLNode) {
 		parent.(*ForeignKeyDefinition).OnUpdate = newNode.(ReferenceAction)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfFuncExpr(parent SQLNode, node *FuncExpr, replacer replacerFunc) error {
+func (a *application) rewriteRefOfFuncExpr(parent SQLNode, node *FuncExpr, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewriteTableIdent(node, node.Qualifier, func(newNode, parent SQLNode) {
+	if !a.rewriteTableIdent(node, node.Qualifier, func(newNode, parent SQLNode) {
 		parent.(*FuncExpr).Qualifier = newNode.(TableIdent)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
-	if errF := a.rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
+	if !a.rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
 		parent.(*FuncExpr).Name = newNode.(ColIdent)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
-	if errF := a.rewriteSelectExprs(node, node.Exprs, func(newNode, parent SQLNode) {
+	if !a.rewriteSelectExprs(node, node.Exprs, func(newNode, parent SQLNode) {
 		parent.(*FuncExpr).Exprs = newNode.(SelectExprs)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfGroupConcatExpr(parent SQLNode, node *GroupConcatExpr, replacer replacerFunc) error {
+func (a *application) rewriteRefOfGroupConcatExpr(parent SQLNode, node *GroupConcatExpr, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewriteSelectExprs(node, node.Exprs, func(newNode, parent SQLNode) {
+	if !a.rewriteSelectExprs(node, node.Exprs, func(newNode, parent SQLNode) {
 		parent.(*GroupConcatExpr).Exprs = newNode.(SelectExprs)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
-	if errF := a.rewriteOrderBy(node, node.OrderBy, func(newNode, parent SQLNode) {
+	if !a.rewriteOrderBy(node, node.OrderBy, func(newNode, parent SQLNode) {
 		parent.(*GroupConcatExpr).OrderBy = newNode.(OrderBy)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
-	if errF := a.rewriteRefOfLimit(node, node.Limit, func(newNode, parent SQLNode) {
+	if !a.rewriteRefOfLimit(node, node.Limit, func(newNode, parent SQLNode) {
 		parent.(*GroupConcatExpr).Limit = newNode.(*Limit)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfIndexDefinition(parent SQLNode, node *IndexDefinition, replacer replacerFunc) error {
+func (a *application) rewriteRefOfIndexDefinition(parent SQLNode, node *IndexDefinition, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewriteRefOfIndexInfo(node, node.Info, func(newNode, parent SQLNode) {
+	if !a.rewriteRefOfIndexInfo(node, node.Info, func(newNode, parent SQLNode) {
 		parent.(*IndexDefinition).Info = newNode.(*IndexInfo)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfIndexHints(parent SQLNode, node *IndexHints, replacer replacerFunc) error {
+func (a *application) rewriteRefOfIndexHints(parent SQLNode, node *IndexHints, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
 	for x, el := range node.Indexes {
-		if errF := a.rewriteColIdent(node, el, func(idx int) replacerFunc {
+		if !a.rewriteColIdent(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
 				parent.(*IndexHints).Indexes[idx] = newNode.(ColIdent)
 			}
-		}(x)); errF != nil {
-			return errF
+		}(x)) {
+			return false
 		}
 	}
 	if a.post != nil {
@@ -11577,228 +11577,228 @@ func (a *application) rewriteRefOfIndexHints(parent SQLNode, node *IndexHints, r
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfIndexInfo(parent SQLNode, node *IndexInfo, replacer replacerFunc) error {
+func (a *application) rewriteRefOfIndexInfo(parent SQLNode, node *IndexInfo, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
+	if !a.rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
 		parent.(*IndexInfo).Name = newNode.(ColIdent)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
-	if errF := a.rewriteColIdent(node, node.ConstraintName, func(newNode, parent SQLNode) {
+	if !a.rewriteColIdent(node, node.ConstraintName, func(newNode, parent SQLNode) {
 		parent.(*IndexInfo).ConstraintName = newNode.(ColIdent)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfInsert(parent SQLNode, node *Insert, replacer replacerFunc) error {
+func (a *application) rewriteRefOfInsert(parent SQLNode, node *Insert, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
+	if !a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
 		parent.(*Insert).Comments = newNode.(Comments)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
-	if errF := a.rewriteTableName(node, node.Table, func(newNode, parent SQLNode) {
+	if !a.rewriteTableName(node, node.Table, func(newNode, parent SQLNode) {
 		parent.(*Insert).Table = newNode.(TableName)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
-	if errF := a.rewritePartitions(node, node.Partitions, func(newNode, parent SQLNode) {
+	if !a.rewritePartitions(node, node.Partitions, func(newNode, parent SQLNode) {
 		parent.(*Insert).Partitions = newNode.(Partitions)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
-	if errF := a.rewriteColumns(node, node.Columns, func(newNode, parent SQLNode) {
+	if !a.rewriteColumns(node, node.Columns, func(newNode, parent SQLNode) {
 		parent.(*Insert).Columns = newNode.(Columns)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
-	if errF := a.rewriteInsertRows(node, node.Rows, func(newNode, parent SQLNode) {
+	if !a.rewriteInsertRows(node, node.Rows, func(newNode, parent SQLNode) {
 		parent.(*Insert).Rows = newNode.(InsertRows)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
-	if errF := a.rewriteOnDup(node, node.OnDup, func(newNode, parent SQLNode) {
+	if !a.rewriteOnDup(node, node.OnDup, func(newNode, parent SQLNode) {
 		parent.(*Insert).OnDup = newNode.(OnDup)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfIntervalExpr(parent SQLNode, node *IntervalExpr, replacer replacerFunc) error {
+func (a *application) rewriteRefOfIntervalExpr(parent SQLNode, node *IntervalExpr, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
+	if !a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
 		parent.(*IntervalExpr).Expr = newNode.(Expr)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfIsExpr(parent SQLNode, node *IsExpr, replacer replacerFunc) error {
+func (a *application) rewriteRefOfIsExpr(parent SQLNode, node *IsExpr, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
+	if !a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
 		parent.(*IsExpr).Expr = newNode.(Expr)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfJoinCondition(parent SQLNode, node *JoinCondition, replacer replacerFunc) error {
+func (a *application) rewriteRefOfJoinCondition(parent SQLNode, node *JoinCondition, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewriteExpr(node, node.On, func(newNode, parent SQLNode) {
+	if !a.rewriteExpr(node, node.On, func(newNode, parent SQLNode) {
 		parent.(*JoinCondition).On = newNode.(Expr)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
-	if errF := a.rewriteColumns(node, node.Using, func(newNode, parent SQLNode) {
+	if !a.rewriteColumns(node, node.Using, func(newNode, parent SQLNode) {
 		parent.(*JoinCondition).Using = newNode.(Columns)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfJoinTableExpr(parent SQLNode, node *JoinTableExpr, replacer replacerFunc) error {
+func (a *application) rewriteRefOfJoinTableExpr(parent SQLNode, node *JoinTableExpr, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewriteTableExpr(node, node.LeftExpr, func(newNode, parent SQLNode) {
+	if !a.rewriteTableExpr(node, node.LeftExpr, func(newNode, parent SQLNode) {
 		parent.(*JoinTableExpr).LeftExpr = newNode.(TableExpr)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
-	if errF := a.rewriteTableExpr(node, node.RightExpr, func(newNode, parent SQLNode) {
+	if !a.rewriteTableExpr(node, node.RightExpr, func(newNode, parent SQLNode) {
 		parent.(*JoinTableExpr).RightExpr = newNode.(TableExpr)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
-	if errF := a.rewriteJoinCondition(node, node.Condition, func(newNode, parent SQLNode) {
+	if !a.rewriteJoinCondition(node, node.Condition, func(newNode, parent SQLNode) {
 		parent.(*JoinTableExpr).Condition = newNode.(JoinCondition)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfKeyState(parent SQLNode, node *KeyState, replacer replacerFunc) error {
+func (a *application) rewriteRefOfKeyState(parent SQLNode, node *KeyState, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
 	if a.post != nil {
@@ -11808,77 +11808,53 @@ func (a *application) rewriteRefOfKeyState(parent SQLNode, node *KeyState, repla
 			a.cur.node = node
 		}
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfLimit(parent SQLNode, node *Limit, replacer replacerFunc) error {
+func (a *application) rewriteRefOfLimit(parent SQLNode, node *Limit, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewriteExpr(node, node.Offset, func(newNode, parent SQLNode) {
+	if !a.rewriteExpr(node, node.Offset, func(newNode, parent SQLNode) {
 		parent.(*Limit).Offset = newNode.(Expr)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
-	if errF := a.rewriteExpr(node, node.Rowcount, func(newNode, parent SQLNode) {
+	if !a.rewriteExpr(node, node.Rowcount, func(newNode, parent SQLNode) {
 		parent.(*Limit).Rowcount = newNode.(Expr)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfLiteral(parent SQLNode, node *Literal, replacer replacerFunc) error {
+func (a *application) rewriteRefOfLiteral(parent SQLNode, node *Literal, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
-		}
-	}
-	if a.post != nil {
-		if a.pre == nil {
-			a.cur.replacer = replacer
-			a.cur.parent = parent
-			a.cur.node = node
-		}
-		if !a.post(&a.cur) {
-			return errAbort
-		}
-	}
-	return nil
-}
-func (a *application) rewriteRefOfLoad(parent SQLNode, node *Load, replacer replacerFunc) error {
-	if node == nil {
-		return nil
-	}
-	if a.pre != nil {
-		a.cur.replacer = replacer
-		a.cur.parent = parent
-		a.cur.node = node
-		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
 	if a.post != nil {
@@ -11888,21 +11864,21 @@ func (a *application) rewriteRefOfLoad(parent SQLNode, node *Load, replacer repl
 			a.cur.node = node
 		}
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfLockOption(parent SQLNode, node *LockOption, replacer replacerFunc) error {
+func (a *application) rewriteRefOfLoad(parent SQLNode, node *Load, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
 	if a.post != nil {
@@ -11912,21 +11888,21 @@ func (a *application) rewriteRefOfLockOption(parent SQLNode, node *LockOption, r
 			a.cur.node = node
 		}
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfLockTables(parent SQLNode, node *LockTables, replacer replacerFunc) error {
+func (a *application) rewriteRefOfLockOption(parent SQLNode, node *LockOption, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
 	if a.post != nil {
@@ -11936,144 +11912,168 @@ func (a *application) rewriteRefOfLockTables(parent SQLNode, node *LockTables, r
 			a.cur.node = node
 		}
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfMatchExpr(parent SQLNode, node *MatchExpr, replacer replacerFunc) error {
+func (a *application) rewriteRefOfLockTables(parent SQLNode, node *LockTables, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewriteSelectExprs(node, node.Columns, func(newNode, parent SQLNode) {
+	if a.post != nil {
+		if a.pre == nil {
+			a.cur.replacer = replacer
+			a.cur.parent = parent
+			a.cur.node = node
+		}
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfMatchExpr(parent SQLNode, node *MatchExpr, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteSelectExprs(node, node.Columns, func(newNode, parent SQLNode) {
 		parent.(*MatchExpr).Columns = newNode.(SelectExprs)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
-	if errF := a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
+	if !a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
 		parent.(*MatchExpr).Expr = newNode.(Expr)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfModifyColumn(parent SQLNode, node *ModifyColumn, replacer replacerFunc) error {
+func (a *application) rewriteRefOfModifyColumn(parent SQLNode, node *ModifyColumn, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewriteRefOfColumnDefinition(node, node.NewColDefinition, func(newNode, parent SQLNode) {
+	if !a.rewriteRefOfColumnDefinition(node, node.NewColDefinition, func(newNode, parent SQLNode) {
 		parent.(*ModifyColumn).NewColDefinition = newNode.(*ColumnDefinition)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
-	if errF := a.rewriteRefOfColName(node, node.First, func(newNode, parent SQLNode) {
+	if !a.rewriteRefOfColName(node, node.First, func(newNode, parent SQLNode) {
 		parent.(*ModifyColumn).First = newNode.(*ColName)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
-	if errF := a.rewriteRefOfColName(node, node.After, func(newNode, parent SQLNode) {
+	if !a.rewriteRefOfColName(node, node.After, func(newNode, parent SQLNode) {
 		parent.(*ModifyColumn).After = newNode.(*ColName)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfNextval(parent SQLNode, node *Nextval, replacer replacerFunc) error {
+func (a *application) rewriteRefOfNextval(parent SQLNode, node *Nextval, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
+	if !a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
 		parent.(*Nextval).Expr = newNode.(Expr)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfNotExpr(parent SQLNode, node *NotExpr, replacer replacerFunc) error {
+func (a *application) rewriteRefOfNotExpr(parent SQLNode, node *NotExpr, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
+	if !a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
 		parent.(*NotExpr).Expr = newNode.(Expr)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfNullVal(parent SQLNode, node *NullVal, replacer replacerFunc) error {
+func (a *application) rewriteRefOfNullVal(parent SQLNode, node *NullVal, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
 	if a.post != nil {
@@ -12083,158 +12083,134 @@ func (a *application) rewriteRefOfNullVal(parent SQLNode, node *NullVal, replace
 			a.cur.node = node
 		}
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfOptLike(parent SQLNode, node *OptLike, replacer replacerFunc) error {
+func (a *application) rewriteRefOfOptLike(parent SQLNode, node *OptLike, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewriteTableName(node, node.LikeTable, func(newNode, parent SQLNode) {
+	if !a.rewriteTableName(node, node.LikeTable, func(newNode, parent SQLNode) {
 		parent.(*OptLike).LikeTable = newNode.(TableName)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfOrExpr(parent SQLNode, node *OrExpr, replacer replacerFunc) error {
+func (a *application) rewriteRefOfOrExpr(parent SQLNode, node *OrExpr, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewriteExpr(node, node.Left, func(newNode, parent SQLNode) {
+	if !a.rewriteExpr(node, node.Left, func(newNode, parent SQLNode) {
 		parent.(*OrExpr).Left = newNode.(Expr)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
-	if errF := a.rewriteExpr(node, node.Right, func(newNode, parent SQLNode) {
+	if !a.rewriteExpr(node, node.Right, func(newNode, parent SQLNode) {
 		parent.(*OrExpr).Right = newNode.(Expr)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfOrder(parent SQLNode, node *Order, replacer replacerFunc) error {
+func (a *application) rewriteRefOfOrder(parent SQLNode, node *Order, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
+	if !a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
 		parent.(*Order).Expr = newNode.(Expr)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfOrderByOption(parent SQLNode, node *OrderByOption, replacer replacerFunc) error {
+func (a *application) rewriteRefOfOrderByOption(parent SQLNode, node *OrderByOption, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewriteColumns(node, node.Cols, func(newNode, parent SQLNode) {
+	if !a.rewriteColumns(node, node.Cols, func(newNode, parent SQLNode) {
 		parent.(*OrderByOption).Cols = newNode.(Columns)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfOtherAdmin(parent SQLNode, node *OtherAdmin, replacer replacerFunc) error {
+func (a *application) rewriteRefOfOtherAdmin(parent SQLNode, node *OtherAdmin, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
-		}
-	}
-	if a.post != nil {
-		if a.pre == nil {
-			a.cur.replacer = replacer
-			a.cur.parent = parent
-			a.cur.node = node
-		}
-		if !a.post(&a.cur) {
-			return errAbort
-		}
-	}
-	return nil
-}
-func (a *application) rewriteRefOfOtherRead(parent SQLNode, node *OtherRead, replacer replacerFunc) error {
-	if node == nil {
-		return nil
-	}
-	if a.pre != nil {
-		a.cur.replacer = replacer
-		a.cur.parent = parent
-		a.cur.node = node
-		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
 	if a.post != nil {
@@ -12244,131 +12220,155 @@ func (a *application) rewriteRefOfOtherRead(parent SQLNode, node *OtherRead, rep
 			a.cur.node = node
 		}
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfParenSelect(parent SQLNode, node *ParenSelect, replacer replacerFunc) error {
+func (a *application) rewriteRefOfOtherRead(parent SQLNode, node *OtherRead, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewriteSelectStatement(node, node.Select, func(newNode, parent SQLNode) {
+	if a.post != nil {
+		if a.pre == nil {
+			a.cur.replacer = replacer
+			a.cur.parent = parent
+			a.cur.node = node
+		}
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfParenSelect(parent SQLNode, node *ParenSelect, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteSelectStatement(node, node.Select, func(newNode, parent SQLNode) {
 		parent.(*ParenSelect).Select = newNode.(SelectStatement)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfParenTableExpr(parent SQLNode, node *ParenTableExpr, replacer replacerFunc) error {
+func (a *application) rewriteRefOfParenTableExpr(parent SQLNode, node *ParenTableExpr, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewriteTableExprs(node, node.Exprs, func(newNode, parent SQLNode) {
+	if !a.rewriteTableExprs(node, node.Exprs, func(newNode, parent SQLNode) {
 		parent.(*ParenTableExpr).Exprs = newNode.(TableExprs)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfPartitionDefinition(parent SQLNode, node *PartitionDefinition, replacer replacerFunc) error {
+func (a *application) rewriteRefOfPartitionDefinition(parent SQLNode, node *PartitionDefinition, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
+	if !a.rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
 		parent.(*PartitionDefinition).Name = newNode.(ColIdent)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
-	if errF := a.rewriteExpr(node, node.Limit, func(newNode, parent SQLNode) {
+	if !a.rewriteExpr(node, node.Limit, func(newNode, parent SQLNode) {
 		parent.(*PartitionDefinition).Limit = newNode.(Expr)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfPartitionSpec(parent SQLNode, node *PartitionSpec, replacer replacerFunc) error {
+func (a *application) rewriteRefOfPartitionSpec(parent SQLNode, node *PartitionSpec, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewritePartitions(node, node.Names, func(newNode, parent SQLNode) {
+	if !a.rewritePartitions(node, node.Names, func(newNode, parent SQLNode) {
 		parent.(*PartitionSpec).Names = newNode.(Partitions)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
-	if errF := a.rewriteRefOfLiteral(node, node.Number, func(newNode, parent SQLNode) {
+	if !a.rewriteRefOfLiteral(node, node.Number, func(newNode, parent SQLNode) {
 		parent.(*PartitionSpec).Number = newNode.(*Literal)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
-	if errF := a.rewriteTableName(node, node.TableName, func(newNode, parent SQLNode) {
+	if !a.rewriteTableName(node, node.TableName, func(newNode, parent SQLNode) {
 		parent.(*PartitionSpec).TableName = newNode.(TableName)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	for x, el := range node.Definitions {
-		if errF := a.rewriteRefOfPartitionDefinition(node, el, func(idx int) replacerFunc {
+		if !a.rewriteRefOfPartitionDefinition(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
 				parent.(*PartitionSpec).Definitions[idx] = newNode.(*PartitionDefinition)
 			}
-		}(x)); errF != nil {
-			return errF
+		}(x)) {
+			return false
 		}
 	}
 	if a.post != nil {
@@ -12376,109 +12376,85 @@ func (a *application) rewriteRefOfPartitionSpec(parent SQLNode, node *PartitionS
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfRangeCond(parent SQLNode, node *RangeCond, replacer replacerFunc) error {
+func (a *application) rewriteRefOfRangeCond(parent SQLNode, node *RangeCond, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewriteExpr(node, node.Left, func(newNode, parent SQLNode) {
+	if !a.rewriteExpr(node, node.Left, func(newNode, parent SQLNode) {
 		parent.(*RangeCond).Left = newNode.(Expr)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
-	if errF := a.rewriteExpr(node, node.From, func(newNode, parent SQLNode) {
+	if !a.rewriteExpr(node, node.From, func(newNode, parent SQLNode) {
 		parent.(*RangeCond).From = newNode.(Expr)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
-	if errF := a.rewriteExpr(node, node.To, func(newNode, parent SQLNode) {
+	if !a.rewriteExpr(node, node.To, func(newNode, parent SQLNode) {
 		parent.(*RangeCond).To = newNode.(Expr)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfRelease(parent SQLNode, node *Release, replacer replacerFunc) error {
+func (a *application) rewriteRefOfRelease(parent SQLNode, node *Release, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
+	if !a.rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
 		parent.(*Release).Name = newNode.(ColIdent)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfRenameIndex(parent SQLNode, node *RenameIndex, replacer replacerFunc) error {
+func (a *application) rewriteRefOfRenameIndex(parent SQLNode, node *RenameIndex, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
-		}
-	}
-	if a.post != nil {
-		if a.pre == nil {
-			a.cur.replacer = replacer
-			a.cur.parent = parent
-			a.cur.node = node
-		}
-		if !a.post(&a.cur) {
-			return errAbort
-		}
-	}
-	return nil
-}
-func (a *application) rewriteRefOfRenameTable(parent SQLNode, node *RenameTable, replacer replacerFunc) error {
-	if node == nil {
-		return nil
-	}
-	if a.pre != nil {
-		a.cur.replacer = replacer
-		a.cur.parent = parent
-		a.cur.node = node
-		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
 	if a.post != nil {
@@ -12488,72 +12464,72 @@ func (a *application) rewriteRefOfRenameTable(parent SQLNode, node *RenameTable,
 			a.cur.node = node
 		}
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfRenameTableName(parent SQLNode, node *RenameTableName, replacer replacerFunc) error {
+func (a *application) rewriteRefOfRenameTable(parent SQLNode, node *RenameTable, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewriteTableName(node, node.Table, func(newNode, parent SQLNode) {
+	if a.post != nil {
+		if a.pre == nil {
+			a.cur.replacer = replacer
+			a.cur.parent = parent
+			a.cur.node = node
+		}
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfRenameTableName(parent SQLNode, node *RenameTableName, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteTableName(node, node.Table, func(newNode, parent SQLNode) {
 		parent.(*RenameTableName).Table = newNode.(TableName)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfRevertMigration(parent SQLNode, node *RevertMigration, replacer replacerFunc) error {
+func (a *application) rewriteRefOfRevertMigration(parent SQLNode, node *RevertMigration, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
-		}
-	}
-	if a.post != nil {
-		if a.pre == nil {
-			a.cur.replacer = replacer
-			a.cur.parent = parent
-			a.cur.node = node
-		}
-		if !a.post(&a.cur) {
-			return errAbort
-		}
-	}
-	return nil
-}
-func (a *application) rewriteRefOfRollback(parent SQLNode, node *Rollback, replacer replacerFunc) error {
-	if node == nil {
-		return nil
-	}
-	if a.pre != nil {
-		a.cur.replacer = replacer
-		a.cur.parent = parent
-		a.cur.node = node
-		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
 	if a.post != nil {
@@ -12563,142 +12539,166 @@ func (a *application) rewriteRefOfRollback(parent SQLNode, node *Rollback, repla
 			a.cur.node = node
 		}
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfSRollback(parent SQLNode, node *SRollback, replacer replacerFunc) error {
+func (a *application) rewriteRefOfRollback(parent SQLNode, node *Rollback, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
+	if a.post != nil {
+		if a.pre == nil {
+			a.cur.replacer = replacer
+			a.cur.parent = parent
+			a.cur.node = node
+		}
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfSRollback(parent SQLNode, node *SRollback, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
 		parent.(*SRollback).Name = newNode.(ColIdent)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfSavepoint(parent SQLNode, node *Savepoint, replacer replacerFunc) error {
+func (a *application) rewriteRefOfSavepoint(parent SQLNode, node *Savepoint, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
+	if !a.rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
 		parent.(*Savepoint).Name = newNode.(ColIdent)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfSelect(parent SQLNode, node *Select, replacer replacerFunc) error {
+func (a *application) rewriteRefOfSelect(parent SQLNode, node *Select, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
+	if !a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
 		parent.(*Select).Comments = newNode.(Comments)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
-	if errF := a.rewriteSelectExprs(node, node.SelectExprs, func(newNode, parent SQLNode) {
+	if !a.rewriteSelectExprs(node, node.SelectExprs, func(newNode, parent SQLNode) {
 		parent.(*Select).SelectExprs = newNode.(SelectExprs)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
-	if errF := a.rewriteTableExprs(node, node.From, func(newNode, parent SQLNode) {
+	if !a.rewriteTableExprs(node, node.From, func(newNode, parent SQLNode) {
 		parent.(*Select).From = newNode.(TableExprs)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
-	if errF := a.rewriteRefOfWhere(node, node.Where, func(newNode, parent SQLNode) {
+	if !a.rewriteRefOfWhere(node, node.Where, func(newNode, parent SQLNode) {
 		parent.(*Select).Where = newNode.(*Where)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
-	if errF := a.rewriteGroupBy(node, node.GroupBy, func(newNode, parent SQLNode) {
+	if !a.rewriteGroupBy(node, node.GroupBy, func(newNode, parent SQLNode) {
 		parent.(*Select).GroupBy = newNode.(GroupBy)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
-	if errF := a.rewriteRefOfWhere(node, node.Having, func(newNode, parent SQLNode) {
+	if !a.rewriteRefOfWhere(node, node.Having, func(newNode, parent SQLNode) {
 		parent.(*Select).Having = newNode.(*Where)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
-	if errF := a.rewriteOrderBy(node, node.OrderBy, func(newNode, parent SQLNode) {
+	if !a.rewriteOrderBy(node, node.OrderBy, func(newNode, parent SQLNode) {
 		parent.(*Select).OrderBy = newNode.(OrderBy)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
-	if errF := a.rewriteRefOfLimit(node, node.Limit, func(newNode, parent SQLNode) {
+	if !a.rewriteRefOfLimit(node, node.Limit, func(newNode, parent SQLNode) {
 		parent.(*Select).Limit = newNode.(*Limit)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
-	if errF := a.rewriteRefOfSelectInto(node, node.Into, func(newNode, parent SQLNode) {
+	if !a.rewriteRefOfSelectInto(node, node.Into, func(newNode, parent SQLNode) {
 		parent.(*Select).Into = newNode.(*SelectInto)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfSelectInto(parent SQLNode, node *SelectInto, replacer replacerFunc) error {
+func (a *application) rewriteRefOfSelectInto(parent SQLNode, node *SelectInto, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
 	if a.post != nil {
@@ -12708,104 +12708,104 @@ func (a *application) rewriteRefOfSelectInto(parent SQLNode, node *SelectInto, r
 			a.cur.node = node
 		}
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfSet(parent SQLNode, node *Set, replacer replacerFunc) error {
+func (a *application) rewriteRefOfSet(parent SQLNode, node *Set, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
+	if !a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
 		parent.(*Set).Comments = newNode.(Comments)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
-	if errF := a.rewriteSetExprs(node, node.Exprs, func(newNode, parent SQLNode) {
+	if !a.rewriteSetExprs(node, node.Exprs, func(newNode, parent SQLNode) {
 		parent.(*Set).Exprs = newNode.(SetExprs)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfSetExpr(parent SQLNode, node *SetExpr, replacer replacerFunc) error {
+func (a *application) rewriteRefOfSetExpr(parent SQLNode, node *SetExpr, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
+	if !a.rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
 		parent.(*SetExpr).Name = newNode.(ColIdent)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
-	if errF := a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
+	if !a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
 		parent.(*SetExpr).Expr = newNode.(Expr)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfSetTransaction(parent SQLNode, node *SetTransaction, replacer replacerFunc) error {
+func (a *application) rewriteRefOfSetTransaction(parent SQLNode, node *SetTransaction, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewriteSQLNode(node, node.SQLNode, func(newNode, parent SQLNode) {
+	if !a.rewriteSQLNode(node, node.SQLNode, func(newNode, parent SQLNode) {
 		parent.(*SetTransaction).SQLNode = newNode.(SQLNode)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
-	if errF := a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
+	if !a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
 		parent.(*SetTransaction).Comments = newNode.(Comments)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	for x, el := range node.Characteristics {
-		if errF := a.rewriteCharacteristic(node, el, func(idx int) replacerFunc {
+		if !a.rewriteCharacteristic(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
 				parent.(*SetTransaction).Characteristics[idx] = newNode.(Characteristic)
 			}
-		}(x)); errF != nil {
-			return errF
+		}(x)) {
+			return false
 		}
 	}
 	if a.post != nil {
@@ -12813,304 +12813,304 @@ func (a *application) rewriteRefOfSetTransaction(parent SQLNode, node *SetTransa
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfShow(parent SQLNode, node *Show, replacer replacerFunc) error {
+func (a *application) rewriteRefOfShow(parent SQLNode, node *Show, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewriteShowInternal(node, node.Internal, func(newNode, parent SQLNode) {
+	if !a.rewriteShowInternal(node, node.Internal, func(newNode, parent SQLNode) {
 		parent.(*Show).Internal = newNode.(ShowInternal)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfShowBasic(parent SQLNode, node *ShowBasic, replacer replacerFunc) error {
+func (a *application) rewriteRefOfShowBasic(parent SQLNode, node *ShowBasic, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewriteTableName(node, node.Tbl, func(newNode, parent SQLNode) {
+	if !a.rewriteTableName(node, node.Tbl, func(newNode, parent SQLNode) {
 		parent.(*ShowBasic).Tbl = newNode.(TableName)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
-	if errF := a.rewriteRefOfShowFilter(node, node.Filter, func(newNode, parent SQLNode) {
+	if !a.rewriteRefOfShowFilter(node, node.Filter, func(newNode, parent SQLNode) {
 		parent.(*ShowBasic).Filter = newNode.(*ShowFilter)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfShowCreate(parent SQLNode, node *ShowCreate, replacer replacerFunc) error {
+func (a *application) rewriteRefOfShowCreate(parent SQLNode, node *ShowCreate, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewriteTableName(node, node.Op, func(newNode, parent SQLNode) {
+	if !a.rewriteTableName(node, node.Op, func(newNode, parent SQLNode) {
 		parent.(*ShowCreate).Op = newNode.(TableName)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfShowFilter(parent SQLNode, node *ShowFilter, replacer replacerFunc) error {
+func (a *application) rewriteRefOfShowFilter(parent SQLNode, node *ShowFilter, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewriteExpr(node, node.Filter, func(newNode, parent SQLNode) {
+	if !a.rewriteExpr(node, node.Filter, func(newNode, parent SQLNode) {
 		parent.(*ShowFilter).Filter = newNode.(Expr)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfShowLegacy(parent SQLNode, node *ShowLegacy, replacer replacerFunc) error {
+func (a *application) rewriteRefOfShowLegacy(parent SQLNode, node *ShowLegacy, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewriteTableName(node, node.OnTable, func(newNode, parent SQLNode) {
+	if !a.rewriteTableName(node, node.OnTable, func(newNode, parent SQLNode) {
 		parent.(*ShowLegacy).OnTable = newNode.(TableName)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
-	if errF := a.rewriteTableName(node, node.Table, func(newNode, parent SQLNode) {
+	if !a.rewriteTableName(node, node.Table, func(newNode, parent SQLNode) {
 		parent.(*ShowLegacy).Table = newNode.(TableName)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
-	if errF := a.rewriteExpr(node, node.ShowCollationFilterOpt, func(newNode, parent SQLNode) {
+	if !a.rewriteExpr(node, node.ShowCollationFilterOpt, func(newNode, parent SQLNode) {
 		parent.(*ShowLegacy).ShowCollationFilterOpt = newNode.(Expr)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfStarExpr(parent SQLNode, node *StarExpr, replacer replacerFunc) error {
+func (a *application) rewriteRefOfStarExpr(parent SQLNode, node *StarExpr, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewriteTableName(node, node.TableName, func(newNode, parent SQLNode) {
+	if !a.rewriteTableName(node, node.TableName, func(newNode, parent SQLNode) {
 		parent.(*StarExpr).TableName = newNode.(TableName)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfStream(parent SQLNode, node *Stream, replacer replacerFunc) error {
+func (a *application) rewriteRefOfStream(parent SQLNode, node *Stream, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
+	if !a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
 		parent.(*Stream).Comments = newNode.(Comments)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
-	if errF := a.rewriteSelectExpr(node, node.SelectExpr, func(newNode, parent SQLNode) {
+	if !a.rewriteSelectExpr(node, node.SelectExpr, func(newNode, parent SQLNode) {
 		parent.(*Stream).SelectExpr = newNode.(SelectExpr)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
-	if errF := a.rewriteTableName(node, node.Table, func(newNode, parent SQLNode) {
+	if !a.rewriteTableName(node, node.Table, func(newNode, parent SQLNode) {
 		parent.(*Stream).Table = newNode.(TableName)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfSubquery(parent SQLNode, node *Subquery, replacer replacerFunc) error {
+func (a *application) rewriteRefOfSubquery(parent SQLNode, node *Subquery, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewriteSelectStatement(node, node.Select, func(newNode, parent SQLNode) {
+	if !a.rewriteSelectStatement(node, node.Select, func(newNode, parent SQLNode) {
 		parent.(*Subquery).Select = newNode.(SelectStatement)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfSubstrExpr(parent SQLNode, node *SubstrExpr, replacer replacerFunc) error {
+func (a *application) rewriteRefOfSubstrExpr(parent SQLNode, node *SubstrExpr, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewriteRefOfColName(node, node.Name, func(newNode, parent SQLNode) {
+	if !a.rewriteRefOfColName(node, node.Name, func(newNode, parent SQLNode) {
 		parent.(*SubstrExpr).Name = newNode.(*ColName)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
-	if errF := a.rewriteRefOfLiteral(node, node.StrVal, func(newNode, parent SQLNode) {
+	if !a.rewriteRefOfLiteral(node, node.StrVal, func(newNode, parent SQLNode) {
 		parent.(*SubstrExpr).StrVal = newNode.(*Literal)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
-	if errF := a.rewriteExpr(node, node.From, func(newNode, parent SQLNode) {
+	if !a.rewriteExpr(node, node.From, func(newNode, parent SQLNode) {
 		parent.(*SubstrExpr).From = newNode.(Expr)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
-	if errF := a.rewriteExpr(node, node.To, func(newNode, parent SQLNode) {
+	if !a.rewriteExpr(node, node.To, func(newNode, parent SQLNode) {
 		parent.(*SubstrExpr).To = newNode.(Expr)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfTableIdent(parent SQLNode, node *TableIdent, replacer replacerFunc) error {
+func (a *application) rewriteRefOfTableIdent(parent SQLNode, node *TableIdent, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
 	if a.post != nil {
@@ -13120,107 +13120,107 @@ func (a *application) rewriteRefOfTableIdent(parent SQLNode, node *TableIdent, r
 			a.cur.node = node
 		}
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfTableName(parent SQLNode, node *TableName, replacer replacerFunc) error {
+func (a *application) rewriteRefOfTableName(parent SQLNode, node *TableName, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewriteTableIdent(node, node.Name, func(newNode, parent SQLNode) {
+	if !a.rewriteTableIdent(node, node.Name, func(newNode, parent SQLNode) {
 		parent.(*TableName).Name = newNode.(TableIdent)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
-	if errF := a.rewriteTableIdent(node, node.Qualifier, func(newNode, parent SQLNode) {
+	if !a.rewriteTableIdent(node, node.Qualifier, func(newNode, parent SQLNode) {
 		parent.(*TableName).Qualifier = newNode.(TableIdent)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfTableSpec(parent SQLNode, node *TableSpec, replacer replacerFunc) error {
+func (a *application) rewriteRefOfTableSpec(parent SQLNode, node *TableSpec, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
 	for x, el := range node.Columns {
-		if errF := a.rewriteRefOfColumnDefinition(node, el, func(idx int) replacerFunc {
+		if !a.rewriteRefOfColumnDefinition(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
 				parent.(*TableSpec).Columns[idx] = newNode.(*ColumnDefinition)
 			}
-		}(x)); errF != nil {
-			return errF
+		}(x)) {
+			return false
 		}
 	}
 	for x, el := range node.Indexes {
-		if errF := a.rewriteRefOfIndexDefinition(node, el, func(idx int) replacerFunc {
+		if !a.rewriteRefOfIndexDefinition(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
 				parent.(*TableSpec).Indexes[idx] = newNode.(*IndexDefinition)
 			}
-		}(x)); errF != nil {
-			return errF
+		}(x)) {
+			return false
 		}
 	}
 	for x, el := range node.Constraints {
-		if errF := a.rewriteRefOfConstraintDefinition(node, el, func(idx int) replacerFunc {
+		if !a.rewriteRefOfConstraintDefinition(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
 				parent.(*TableSpec).Constraints[idx] = newNode.(*ConstraintDefinition)
 			}
-		}(x)); errF != nil {
-			return errF
+		}(x)) {
+			return false
 		}
 	}
-	if errF := a.rewriteTableOptions(node, node.Options, func(newNode, parent SQLNode) {
+	if !a.rewriteTableOptions(node, node.Options, func(newNode, parent SQLNode) {
 		parent.(*TableSpec).Options = newNode.(TableOptions)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfTablespaceOperation(parent SQLNode, node *TablespaceOperation, replacer replacerFunc) error {
+func (a *application) rewriteRefOfTablespaceOperation(parent SQLNode, node *TablespaceOperation, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
 	if a.post != nil {
@@ -13230,180 +13230,180 @@ func (a *application) rewriteRefOfTablespaceOperation(parent SQLNode, node *Tabl
 			a.cur.node = node
 		}
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfTimestampFuncExpr(parent SQLNode, node *TimestampFuncExpr, replacer replacerFunc) error {
+func (a *application) rewriteRefOfTimestampFuncExpr(parent SQLNode, node *TimestampFuncExpr, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewriteExpr(node, node.Expr1, func(newNode, parent SQLNode) {
+	if !a.rewriteExpr(node, node.Expr1, func(newNode, parent SQLNode) {
 		parent.(*TimestampFuncExpr).Expr1 = newNode.(Expr)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
-	if errF := a.rewriteExpr(node, node.Expr2, func(newNode, parent SQLNode) {
+	if !a.rewriteExpr(node, node.Expr2, func(newNode, parent SQLNode) {
 		parent.(*TimestampFuncExpr).Expr2 = newNode.(Expr)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfTruncateTable(parent SQLNode, node *TruncateTable, replacer replacerFunc) error {
+func (a *application) rewriteRefOfTruncateTable(parent SQLNode, node *TruncateTable, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewriteTableName(node, node.Table, func(newNode, parent SQLNode) {
+	if !a.rewriteTableName(node, node.Table, func(newNode, parent SQLNode) {
 		parent.(*TruncateTable).Table = newNode.(TableName)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfUnaryExpr(parent SQLNode, node *UnaryExpr, replacer replacerFunc) error {
+func (a *application) rewriteRefOfUnaryExpr(parent SQLNode, node *UnaryExpr, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
+	if !a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
 		parent.(*UnaryExpr).Expr = newNode.(Expr)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfUnion(parent SQLNode, node *Union, replacer replacerFunc) error {
+func (a *application) rewriteRefOfUnion(parent SQLNode, node *Union, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewriteSelectStatement(node, node.FirstStatement, func(newNode, parent SQLNode) {
+	if !a.rewriteSelectStatement(node, node.FirstStatement, func(newNode, parent SQLNode) {
 		parent.(*Union).FirstStatement = newNode.(SelectStatement)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	for x, el := range node.UnionSelects {
-		if errF := a.rewriteRefOfUnionSelect(node, el, func(idx int) replacerFunc {
+		if !a.rewriteRefOfUnionSelect(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
 				parent.(*Union).UnionSelects[idx] = newNode.(*UnionSelect)
 			}
-		}(x)); errF != nil {
-			return errF
+		}(x)) {
+			return false
 		}
 	}
-	if errF := a.rewriteOrderBy(node, node.OrderBy, func(newNode, parent SQLNode) {
+	if !a.rewriteOrderBy(node, node.OrderBy, func(newNode, parent SQLNode) {
 		parent.(*Union).OrderBy = newNode.(OrderBy)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
-	if errF := a.rewriteRefOfLimit(node, node.Limit, func(newNode, parent SQLNode) {
+	if !a.rewriteRefOfLimit(node, node.Limit, func(newNode, parent SQLNode) {
 		parent.(*Union).Limit = newNode.(*Limit)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfUnionSelect(parent SQLNode, node *UnionSelect, replacer replacerFunc) error {
+func (a *application) rewriteRefOfUnionSelect(parent SQLNode, node *UnionSelect, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewriteSelectStatement(node, node.Statement, func(newNode, parent SQLNode) {
+	if !a.rewriteSelectStatement(node, node.Statement, func(newNode, parent SQLNode) {
 		parent.(*UnionSelect).Statement = newNode.(SelectStatement)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfUnlockTables(parent SQLNode, node *UnlockTables, replacer replacerFunc) error {
+func (a *application) rewriteRefOfUnlockTables(parent SQLNode, node *UnlockTables, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
 	if a.post != nil {
@@ -13413,179 +13413,179 @@ func (a *application) rewriteRefOfUnlockTables(parent SQLNode, node *UnlockTable
 			a.cur.node = node
 		}
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfUpdate(parent SQLNode, node *Update, replacer replacerFunc) error {
+func (a *application) rewriteRefOfUpdate(parent SQLNode, node *Update, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
+	if !a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
 		parent.(*Update).Comments = newNode.(Comments)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
-	if errF := a.rewriteTableExprs(node, node.TableExprs, func(newNode, parent SQLNode) {
+	if !a.rewriteTableExprs(node, node.TableExprs, func(newNode, parent SQLNode) {
 		parent.(*Update).TableExprs = newNode.(TableExprs)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
-	if errF := a.rewriteUpdateExprs(node, node.Exprs, func(newNode, parent SQLNode) {
+	if !a.rewriteUpdateExprs(node, node.Exprs, func(newNode, parent SQLNode) {
 		parent.(*Update).Exprs = newNode.(UpdateExprs)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
-	if errF := a.rewriteRefOfWhere(node, node.Where, func(newNode, parent SQLNode) {
+	if !a.rewriteRefOfWhere(node, node.Where, func(newNode, parent SQLNode) {
 		parent.(*Update).Where = newNode.(*Where)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
-	if errF := a.rewriteOrderBy(node, node.OrderBy, func(newNode, parent SQLNode) {
+	if !a.rewriteOrderBy(node, node.OrderBy, func(newNode, parent SQLNode) {
 		parent.(*Update).OrderBy = newNode.(OrderBy)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
-	if errF := a.rewriteRefOfLimit(node, node.Limit, func(newNode, parent SQLNode) {
+	if !a.rewriteRefOfLimit(node, node.Limit, func(newNode, parent SQLNode) {
 		parent.(*Update).Limit = newNode.(*Limit)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfUpdateExpr(parent SQLNode, node *UpdateExpr, replacer replacerFunc) error {
+func (a *application) rewriteRefOfUpdateExpr(parent SQLNode, node *UpdateExpr, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewriteRefOfColName(node, node.Name, func(newNode, parent SQLNode) {
+	if !a.rewriteRefOfColName(node, node.Name, func(newNode, parent SQLNode) {
 		parent.(*UpdateExpr).Name = newNode.(*ColName)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
-	if errF := a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
+	if !a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
 		parent.(*UpdateExpr).Expr = newNode.(Expr)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfUse(parent SQLNode, node *Use, replacer replacerFunc) error {
+func (a *application) rewriteRefOfUse(parent SQLNode, node *Use, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewriteTableIdent(node, node.DBName, func(newNode, parent SQLNode) {
+	if !a.rewriteTableIdent(node, node.DBName, func(newNode, parent SQLNode) {
 		parent.(*Use).DBName = newNode.(TableIdent)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfVStream(parent SQLNode, node *VStream, replacer replacerFunc) error {
+func (a *application) rewriteRefOfVStream(parent SQLNode, node *VStream, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
+	if !a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
 		parent.(*VStream).Comments = newNode.(Comments)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
-	if errF := a.rewriteSelectExpr(node, node.SelectExpr, func(newNode, parent SQLNode) {
+	if !a.rewriteSelectExpr(node, node.SelectExpr, func(newNode, parent SQLNode) {
 		parent.(*VStream).SelectExpr = newNode.(SelectExpr)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
-	if errF := a.rewriteTableName(node, node.Table, func(newNode, parent SQLNode) {
+	if !a.rewriteTableName(node, node.Table, func(newNode, parent SQLNode) {
 		parent.(*VStream).Table = newNode.(TableName)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
-	if errF := a.rewriteRefOfWhere(node, node.Where, func(newNode, parent SQLNode) {
+	if !a.rewriteRefOfWhere(node, node.Where, func(newNode, parent SQLNode) {
 		parent.(*VStream).Where = newNode.(*Where)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
-	if errF := a.rewriteRefOfLimit(node, node.Limit, func(newNode, parent SQLNode) {
+	if !a.rewriteRefOfLimit(node, node.Limit, func(newNode, parent SQLNode) {
 		parent.(*VStream).Limit = newNode.(*Limit)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfValidation(parent SQLNode, node *Validation, replacer replacerFunc) error {
+func (a *application) rewriteRefOfValidation(parent SQLNode, node *Validation, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
 	if a.post != nil {
@@ -13595,94 +13595,94 @@ func (a *application) rewriteRefOfValidation(parent SQLNode, node *Validation, r
 			a.cur.node = node
 		}
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfValuesFuncExpr(parent SQLNode, node *ValuesFuncExpr, replacer replacerFunc) error {
+func (a *application) rewriteRefOfValuesFuncExpr(parent SQLNode, node *ValuesFuncExpr, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewriteRefOfColName(node, node.Name, func(newNode, parent SQLNode) {
+	if !a.rewriteRefOfColName(node, node.Name, func(newNode, parent SQLNode) {
 		parent.(*ValuesFuncExpr).Name = newNode.(*ColName)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfVindexParam(parent SQLNode, node *VindexParam, replacer replacerFunc) error {
+func (a *application) rewriteRefOfVindexParam(parent SQLNode, node *VindexParam, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewriteColIdent(node, node.Key, func(newNode, parent SQLNode) {
+	if !a.rewriteColIdent(node, node.Key, func(newNode, parent SQLNode) {
 		parent.(*VindexParam).Key = newNode.(ColIdent)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfVindexSpec(parent SQLNode, node *VindexSpec, replacer replacerFunc) error {
+func (a *application) rewriteRefOfVindexSpec(parent SQLNode, node *VindexSpec, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
+	if !a.rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
 		parent.(*VindexSpec).Name = newNode.(ColIdent)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
-	if errF := a.rewriteColIdent(node, node.Type, func(newNode, parent SQLNode) {
+	if !a.rewriteColIdent(node, node.Type, func(newNode, parent SQLNode) {
 		parent.(*VindexSpec).Type = newNode.(ColIdent)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	for x, el := range node.Params {
-		if errF := a.rewriteVindexParam(node, el, func(idx int) replacerFunc {
+		if !a.rewriteVindexParam(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
 				parent.(*VindexSpec).Params[idx] = newNode.(VindexParam)
 			}
-		}(x)); errF != nil {
-			return errF
+		}(x)) {
+			return false
 		}
 	}
 	if a.post != nil {
@@ -13690,109 +13690,109 @@ func (a *application) rewriteRefOfVindexSpec(parent SQLNode, node *VindexSpec, r
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfWhen(parent SQLNode, node *When, replacer replacerFunc) error {
+func (a *application) rewriteRefOfWhen(parent SQLNode, node *When, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewriteExpr(node, node.Cond, func(newNode, parent SQLNode) {
+	if !a.rewriteExpr(node, node.Cond, func(newNode, parent SQLNode) {
 		parent.(*When).Cond = newNode.(Expr)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
-	if errF := a.rewriteExpr(node, node.Val, func(newNode, parent SQLNode) {
+	if !a.rewriteExpr(node, node.Val, func(newNode, parent SQLNode) {
 		parent.(*When).Val = newNode.(Expr)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfWhere(parent SQLNode, node *Where, replacer replacerFunc) error {
+func (a *application) rewriteRefOfWhere(parent SQLNode, node *Where, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
+	if !a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
 		parent.(*Where).Expr = newNode.(Expr)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteRefOfXorExpr(parent SQLNode, node *XorExpr, replacer replacerFunc) error {
+func (a *application) rewriteRefOfXorExpr(parent SQLNode, node *XorExpr, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewriteExpr(node, node.Left, func(newNode, parent SQLNode) {
+	if !a.rewriteExpr(node, node.Left, func(newNode, parent SQLNode) {
 		parent.(*XorExpr).Left = newNode.(Expr)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
-	if errF := a.rewriteExpr(node, node.Right, func(newNode, parent SQLNode) {
+	if !a.rewriteExpr(node, node.Right, func(newNode, parent SQLNode) {
 		parent.(*XorExpr).Right = newNode.(Expr)
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteReferenceAction(parent SQLNode, node ReferenceAction, replacer replacerFunc) error {
+func (a *application) rewriteReferenceAction(parent SQLNode, node ReferenceAction, replacer replacerFunc) bool {
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
 	if a.post != nil {
@@ -13802,14 +13802,14 @@ func (a *application) rewriteReferenceAction(parent SQLNode, node ReferenceActio
 			a.cur.node = node
 		}
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer replacerFunc) error {
+func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	switch node := node.(type) {
 	case AccessMode:
@@ -14106,12 +14106,12 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfXorExpr(parent, node, replacer)
 	default:
 		// this should never happen
-		return nil
+		return true
 	}
 }
-func (a *application) rewriteSelectExpr(parent SQLNode, node SelectExpr, replacer replacerFunc) error {
+func (a *application) rewriteSelectExpr(parent SQLNode, node SelectExpr, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	switch node := node.(type) {
 	case *AliasedExpr:
@@ -14122,28 +14122,28 @@ func (a *application) rewriteSelectExpr(parent SQLNode, node SelectExpr, replace
 		return a.rewriteRefOfStarExpr(parent, node, replacer)
 	default:
 		// this should never happen
-		return nil
+		return true
 	}
 }
-func (a *application) rewriteSelectExprs(parent SQLNode, node SelectExprs, replacer replacerFunc) error {
+func (a *application) rewriteSelectExprs(parent SQLNode, node SelectExprs, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
 	for x, el := range node {
-		if errF := a.rewriteSelectExpr(node, el, func(idx int) replacerFunc {
+		if !a.rewriteSelectExpr(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
 				parent.(SelectExprs)[idx] = newNode.(SelectExpr)
 			}
-		}(x)); errF != nil {
-			return errF
+		}(x)) {
+			return false
 		}
 	}
 	if a.post != nil {
@@ -14151,14 +14151,14 @@ func (a *application) rewriteSelectExprs(parent SQLNode, node SelectExprs, repla
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteSelectStatement(parent SQLNode, node SelectStatement, replacer replacerFunc) error {
+func (a *application) rewriteSelectStatement(parent SQLNode, node SelectStatement, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	switch node := node.(type) {
 	case *ParenSelect:
@@ -14169,28 +14169,28 @@ func (a *application) rewriteSelectStatement(parent SQLNode, node SelectStatemen
 		return a.rewriteRefOfUnion(parent, node, replacer)
 	default:
 		// this should never happen
-		return nil
+		return true
 	}
 }
-func (a *application) rewriteSetExprs(parent SQLNode, node SetExprs, replacer replacerFunc) error {
+func (a *application) rewriteSetExprs(parent SQLNode, node SetExprs, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
 	for x, el := range node {
-		if errF := a.rewriteRefOfSetExpr(node, el, func(idx int) replacerFunc {
+		if !a.rewriteRefOfSetExpr(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
 				parent.(SetExprs)[idx] = newNode.(*SetExpr)
 			}
-		}(x)); errF != nil {
-			return errF
+		}(x)) {
+			return false
 		}
 	}
 	if a.post != nil {
@@ -14198,14 +14198,14 @@ func (a *application) rewriteSetExprs(parent SQLNode, node SetExprs, replacer re
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteShowInternal(parent SQLNode, node ShowInternal, replacer replacerFunc) error {
+func (a *application) rewriteShowInternal(parent SQLNode, node ShowInternal, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	switch node := node.(type) {
 	case *ShowBasic:
@@ -14216,12 +14216,12 @@ func (a *application) rewriteShowInternal(parent SQLNode, node ShowInternal, rep
 		return a.rewriteRefOfShowLegacy(parent, node, replacer)
 	default:
 		// this should never happen
-		return nil
+		return true
 	}
 }
-func (a *application) rewriteSimpleTableExpr(parent SQLNode, node SimpleTableExpr, replacer replacerFunc) error {
+func (a *application) rewriteSimpleTableExpr(parent SQLNode, node SimpleTableExpr, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	switch node := node.(type) {
 	case *DerivedTable:
@@ -14230,12 +14230,12 @@ func (a *application) rewriteSimpleTableExpr(parent SQLNode, node SimpleTableExp
 		return a.rewriteTableName(parent, node, replacer)
 	default:
 		// this should never happen
-		return nil
+		return true
 	}
 }
-func (a *application) rewriteStatement(parent SQLNode, node Statement, replacer replacerFunc) error {
+func (a *application) rewriteStatement(parent SQLNode, node Statement, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	switch node := node.(type) {
 	case *AlterDatabase:
@@ -14322,12 +14322,12 @@ func (a *application) rewriteStatement(parent SQLNode, node Statement, replacer 
 		return a.rewriteRefOfVStream(parent, node, replacer)
 	default:
 		// this should never happen
-		return nil
+		return true
 	}
 }
-func (a *application) rewriteTableExpr(parent SQLNode, node TableExpr, replacer replacerFunc) error {
+func (a *application) rewriteTableExpr(parent SQLNode, node TableExpr, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	switch node := node.(type) {
 	case *AliasedTableExpr:
@@ -14338,28 +14338,28 @@ func (a *application) rewriteTableExpr(parent SQLNode, node TableExpr, replacer 
 		return a.rewriteRefOfParenTableExpr(parent, node, replacer)
 	default:
 		// this should never happen
-		return nil
+		return true
 	}
 }
-func (a *application) rewriteTableExprs(parent SQLNode, node TableExprs, replacer replacerFunc) error {
+func (a *application) rewriteTableExprs(parent SQLNode, node TableExprs, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
 	for x, el := range node {
-		if errF := a.rewriteTableExpr(node, el, func(idx int) replacerFunc {
+		if !a.rewriteTableExpr(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
 				parent.(TableExprs)[idx] = newNode.(TableExpr)
 			}
-		}(x)); errF != nil {
-			return errF
+		}(x)) {
+			return false
 		}
 	}
 	if a.post != nil {
@@ -14367,18 +14367,18 @@ func (a *application) rewriteTableExprs(parent SQLNode, node TableExprs, replace
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteTableIdent(parent SQLNode, node TableIdent, replacer replacerFunc) error {
+func (a *application) rewriteTableIdent(parent SQLNode, node TableIdent, replacer replacerFunc) bool {
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
 	if a.post != nil {
@@ -14388,59 +14388,59 @@ func (a *application) rewriteTableIdent(parent SQLNode, node TableIdent, replace
 			a.cur.node = node
 		}
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteTableName(parent SQLNode, node TableName, replacer replacerFunc) error {
+func (a *application) rewriteTableName(parent SQLNode, node TableName, replacer replacerFunc) bool {
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewriteTableIdent(node, node.Name, func(newNode, parent SQLNode) {
+	if !a.rewriteTableIdent(node, node.Name, func(newNode, parent SQLNode) {
 		panic("[BUG] tried to replace 'Name' on 'TableName'")
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
-	if errF := a.rewriteTableIdent(node, node.Qualifier, func(newNode, parent SQLNode) {
+	if !a.rewriteTableIdent(node, node.Qualifier, func(newNode, parent SQLNode) {
 		panic("[BUG] tried to replace 'Qualifier' on 'TableName'")
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteTableNames(parent SQLNode, node TableNames, replacer replacerFunc) error {
+func (a *application) rewriteTableNames(parent SQLNode, node TableNames, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
 	for x, el := range node {
-		if errF := a.rewriteTableName(node, el, func(idx int) replacerFunc {
+		if !a.rewriteTableName(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
 				parent.(TableNames)[idx] = newNode.(TableName)
 			}
-		}(x)); errF != nil {
-			return errF
+		}(x)) {
+			return false
 		}
 	}
 	if a.post != nil {
@@ -14448,21 +14448,21 @@ func (a *application) rewriteTableNames(parent SQLNode, node TableNames, replace
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteTableOptions(parent SQLNode, node TableOptions, replacer replacerFunc) error {
+func (a *application) rewriteTableOptions(parent SQLNode, node TableOptions, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
 	if a.post != nil {
@@ -14472,30 +14472,30 @@ func (a *application) rewriteTableOptions(parent SQLNode, node TableOptions, rep
 			a.cur.node = node
 		}
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteUpdateExprs(parent SQLNode, node UpdateExprs, replacer replacerFunc) error {
+func (a *application) rewriteUpdateExprs(parent SQLNode, node UpdateExprs, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
 	for x, el := range node {
-		if errF := a.rewriteRefOfUpdateExpr(node, el, func(idx int) replacerFunc {
+		if !a.rewriteRefOfUpdateExpr(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
 				parent.(UpdateExprs)[idx] = newNode.(*UpdateExpr)
 			}
-		}(x)); errF != nil {
-			return errF
+		}(x)) {
+			return false
 		}
 	}
 	if a.post != nil {
@@ -14503,30 +14503,30 @@ func (a *application) rewriteUpdateExprs(parent SQLNode, node UpdateExprs, repla
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteValTuple(parent SQLNode, node ValTuple, replacer replacerFunc) error {
+func (a *application) rewriteValTuple(parent SQLNode, node ValTuple, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
 	for x, el := range node {
-		if errF := a.rewriteExpr(node, el, func(idx int) replacerFunc {
+		if !a.rewriteExpr(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
 				parent.(ValTuple)[idx] = newNode.(Expr)
 			}
-		}(x)); errF != nil {
-			return errF
+		}(x)) {
+			return false
 		}
 	}
 	if a.post != nil {
@@ -14534,30 +14534,30 @@ func (a *application) rewriteValTuple(parent SQLNode, node ValTuple, replacer re
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteValues(parent SQLNode, node Values, replacer replacerFunc) error {
+func (a *application) rewriteValues(parent SQLNode, node Values, replacer replacerFunc) bool {
 	if node == nil {
-		return nil
+		return true
 	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
 	for x, el := range node {
-		if errF := a.rewriteValTuple(node, el, func(idx int) replacerFunc {
+		if !a.rewriteValTuple(node, el, func(idx int) replacerFunc {
 			return func(newNode, parent SQLNode) {
 				parent.(Values)[idx] = newNode.(ValTuple)
 			}
-		}(x)); errF != nil {
-			return errF
+		}(x)) {
+			return false
 		}
 	}
 	if a.post != nil {
@@ -14565,32 +14565,32 @@ func (a *application) rewriteValues(parent SQLNode, node Values, replacer replac
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
-func (a *application) rewriteVindexParam(parent SQLNode, node VindexParam, replacer replacerFunc) error {
+func (a *application) rewriteVindexParam(parent SQLNode, node VindexParam, replacer replacerFunc) bool {
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.pre(&a.cur) {
-			return nil
+			return true
 		}
 	}
-	if errF := a.rewriteColIdent(node, node.Key, func(newNode, parent SQLNode) {
+	if !a.rewriteColIdent(node, node.Key, func(newNode, parent SQLNode) {
 		panic("[BUG] tried to replace 'Key' on 'VindexParam'")
-	}); errF != nil {
-		return errF
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
 		if !a.post(&a.cur) {
-			return errAbort
+			return false
 		}
 	}
-	return nil
+	return true
 }
