@@ -21,6 +21,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/vttablet/endtoend/framework"
@@ -699,4 +702,45 @@ func TestJSONType(t *testing.T) {
 		mustMatch(t, want2, qr)
 	}
 
+}
+
+func TestDBName(t *testing.T) {
+	client := framework.NewClient()
+	qr, err := client.Execute("select * from information_schema.tables where null", nil)
+	require.NoError(t, err)
+	for _, field := range qr.Fields {
+		t.Run("i_s:"+field.Name, func(t *testing.T) {
+			if field.Database != "" {
+				assert.Equal(t, "information_schema", field.Database, "field : %s", field.Name)
+			}
+		})
+	}
+
+	qr, err = client.Execute("select * from mysql.user where null", nil)
+	require.NoError(t, err)
+	for _, field := range qr.Fields {
+		t.Run("mysql:"+field.Name, func(t *testing.T) {
+			if field.Database != "" {
+				assert.Equal(t, "mysql", field.Database, "field : %s", field.Name)
+			}
+		})
+	}
+
+	qr, err = client.Execute("select * from sys.processlist where null", nil)
+	require.NoError(t, err)
+	for _, field := range qr.Fields {
+		t.Run("sys:"+field.Name, func(t *testing.T) {
+			assert.NotEqual(t, "vttest", field.Database, "field : %s", field.Name)
+		})
+	}
+
+	qr, err = client.Execute("select * from performance_schema.mutex_instances where null", nil)
+	require.NoError(t, err)
+	for _, field := range qr.Fields {
+		t.Run("performance_schema:"+field.Name, func(t *testing.T) {
+			if field.Database != "" {
+				assert.Equal(t, "performance_schema", field.Database, "field : %s", field.Name)
+			}
+		})
+	}
 }

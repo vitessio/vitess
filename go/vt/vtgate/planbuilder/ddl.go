@@ -24,15 +24,16 @@ const (
 // a session context. It's only when we Execute() the primitive that we have that context.
 // This is why we return a compound primitive (DDL) which contains fully populated primitives (Send & OnlineDDL),
 // and which chooses which of the two to invoke at runtime.
-func buildGeneralDDLPlan(sql string, ddlStatement sqlparser.DDLStatement, vschema ContextVSchema) (engine.Primitive, error) {
-	normalDDLPlan, onlineDDLPlan, err := buildDDLPlans(sql, ddlStatement, vschema)
+func buildGeneralDDLPlan(sql string, ddlStatement sqlparser.DDLStatement, reservedVars sqlparser.BindVars, vschema ContextVSchema) (engine.Primitive, error) {
+	normalDDLPlan, onlineDDLPlan, err := buildDDLPlans(sql, ddlStatement, reservedVars, vschema)
 	if err != nil {
 		return nil, err
 	}
 
 	if ddlStatement.IsTemporary() {
-		if normalDDLPlan.Keyspace.Sharded {
-			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Temporary table not supported in sharded database %s", normalDDLPlan.Keyspace.Name)
+		err := vschema.ErrorIfShardedF(normalDDLPlan.Keyspace, "temporary table", "Temporary table not supported in sharded database %s", normalDDLPlan.Keyspace.Name)
+		if err != nil {
+			return nil, err
 		}
 		onlineDDLPlan = nil // emptying this so it does not accidentally gets used somewhere
 	}
@@ -47,7 +48,7 @@ func buildGeneralDDLPlan(sql string, ddlStatement sqlparser.DDLStatement, vschem
 	}, nil
 }
 
-func buildDDLPlans(sql string, ddlStatement sqlparser.DDLStatement, vschema ContextVSchema) (*engine.Send, *engine.OnlineDDL, error) {
+func buildDDLPlans(sql string, ddlStatement sqlparser.DDLStatement, reservedVars sqlparser.BindVars, vschema ContextVSchema) (*engine.Send, *engine.OnlineDDL, error) {
 	var destination key.Destination
 	var keyspace *vindexes.Keyspace
 	var err error
@@ -61,12 +62,12 @@ func buildDDLPlans(sql string, ddlStatement sqlparser.DDLStatement, vschema Cont
 			return nil, nil, err
 		}
 	case *sqlparser.CreateView:
-		destination, keyspace, err = buildCreateView(vschema, ddl)
+		destination, keyspace, err = buildCreateView(vschema, ddl, reservedVars)
 		if err != nil {
 			return nil, nil, err
 		}
 	case *sqlparser.AlterView:
-		destination, keyspace, err = buildAlterView(vschema, ddl)
+		destination, keyspace, err = buildAlterView(vschema, ddl, reservedVars)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -140,7 +141,7 @@ func findTableDestinationAndKeyspace(vschema ContextVSchema, ddlStatement sqlpar
 	return destination, keyspace, nil
 }
 
-func buildAlterView(vschema ContextVSchema, ddl *sqlparser.AlterView) (key.Destination, *vindexes.Keyspace, error) {
+func buildAlterView(vschema ContextVSchema, ddl *sqlparser.AlterView, reservedVars sqlparser.BindVars) (key.Destination, *vindexes.Keyspace, error) {
 	// For Alter View, we require that the view exist and the select query can be satisfied within the keyspace itself
 	// We should remove the keyspace name from the table name, as the database name in MySQL might be different than the keyspace name
 	destination, keyspace, err := findTableDestinationAndKeyspace(vschema, ddl)
@@ -149,7 +150,7 @@ func buildAlterView(vschema ContextVSchema, ddl *sqlparser.AlterView) (key.Desti
 	}
 
 	var selectPlan engine.Primitive
-	selectPlan, err = createInstructionFor(sqlparser.String(ddl.Select), ddl.Select, vschema)
+	selectPlan, err = createInstructionFor(sqlparser.String(ddl.Select), ddl.Select, reservedVars, vschema)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -178,7 +179,7 @@ func buildAlterView(vschema ContextVSchema, ddl *sqlparser.AlterView) (key.Desti
 	return destination, keyspace, nil
 }
 
-func buildCreateView(vschema ContextVSchema, ddl *sqlparser.CreateView) (key.Destination, *vindexes.Keyspace, error) {
+func buildCreateView(vschema ContextVSchema, ddl *sqlparser.CreateView, reservedVars sqlparser.BindVars) (key.Destination, *vindexes.Keyspace, error) {
 	// For Create View, we require that the keyspace exist and the select query can be satisfied within the keyspace itself
 	// We should remove the keyspace name from the table name, as the database name in MySQL might be different than the keyspace name
 	destination, keyspace, _, err := vschema.TargetDestination(ddl.ViewName.Qualifier.String())
@@ -188,7 +189,7 @@ func buildCreateView(vschema ContextVSchema, ddl *sqlparser.CreateView) (key.Des
 	ddl.ViewName.Qualifier = sqlparser.NewTableIdent("")
 
 	var selectPlan engine.Primitive
-	selectPlan, err = createInstructionFor(sqlparser.String(ddl.Select), ddl.Select, vschema)
+	selectPlan, err = createInstructionFor(sqlparser.String(ddl.Select), ddl.Select, reservedVars, vschema)
 	if err != nil {
 		return nil, nil, err
 	}

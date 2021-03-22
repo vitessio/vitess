@@ -1601,10 +1601,10 @@ Gen4 plan same as above
 }
 
 # select from unsharded keyspace into outfile
-"select * from main.unsharded into outfile 'x.txt' character set binary fields terminated by 'term' optionally enclosed by 'c' escaped by 'e' lines starting by 'a' terminated by '\n'"
+"select * from main.unsharded into outfile 'x.txt' character set binary fields terminated by 'term' optionally enclosed by 'c' escaped by 'e' lines starting by 'a' terminated by '\\n'"
 {
   "QueryType": "SELECT",
-  "Original": "select * from main.unsharded into outfile 'x.txt' character set binary fields terminated by 'term' optionally enclosed by 'c' escaped by 'e' lines starting by 'a' terminated by '\n'",
+  "Original": "select * from main.unsharded into outfile 'x.txt' character set binary fields terminated by 'term' optionally enclosed by 'c' escaped by 'e' lines starting by 'a' terminated by '\\n'",
   "Instructions": {
     "OperatorType": "Route",
     "Variant": "SelectUnsharded",
@@ -1613,16 +1613,16 @@ Gen4 plan same as above
       "Sharded": false
     },
     "FieldQuery": "select * from unsharded where 1 != 1",
-    "Query": "select * from unsharded into outfile 'x.txt' character set binary fields terminated by 'term' optionally enclosed by 'c' escaped by 'e' lines starting by 'a' terminated by '\n'",
+    "Query": "select * from unsharded into outfile 'x.txt' character set binary fields terminated by 'term' optionally enclosed by 'c' escaped by 'e' lines starting by 'a' terminated by '\\n'",
     "Table": "unsharded"
   }
 }
 
 # select from unsharded keyspace into outfile s3
-"select * from main.unsharded into outfile s3 'out_file_name' character set binary format csv header fields terminated by 'term' optionally enclosed by 'c' escaped by 'e' lines starting by 'a' terminated by '\n' manifest on overwrite off"
+"select * from main.unsharded into outfile s3 'out_file_name' character set binary format csv header fields terminated by 'term' optionally enclosed by 'c' escaped by 'e' lines starting by 'a' terminated by '\\n' manifest on overwrite off"
 {
   "QueryType": "SELECT",
-  "Original": "select * from main.unsharded into outfile s3 'out_file_name' character set binary format csv header fields terminated by 'term' optionally enclosed by 'c' escaped by 'e' lines starting by 'a' terminated by '\n' manifest on overwrite off",
+  "Original": "select * from main.unsharded into outfile s3 'out_file_name' character set binary format csv header fields terminated by 'term' optionally enclosed by 'c' escaped by 'e' lines starting by 'a' terminated by '\\n' manifest on overwrite off",
   "Instructions": {
     "OperatorType": "Route",
     "Variant": "SelectUnsharded",
@@ -1631,7 +1631,7 @@ Gen4 plan same as above
       "Sharded": false
     },
     "FieldQuery": "select * from unsharded where 1 != 1",
-    "Query": "select * from unsharded into outfile s3 'out_file_name' character set binary format csv header fields terminated by 'term' optionally enclosed by 'c' escaped by 'e' lines starting by 'a' terminated by '\n' manifest on overwrite off",
+    "Query": "select * from unsharded into outfile s3 'out_file_name' character set binary format csv header fields terminated by 'term' optionally enclosed by 'c' escaped by 'e' lines starting by 'a' terminated by '\\n' manifest on overwrite off",
     "Table": "unsharded"
   }
 }
@@ -1744,3 +1744,77 @@ Gen4 plan same as above
     ]
   }
 }
+
+#information_schema.routines
+"SELECT routine_name AS name, routine_definition AS definition FROM information_schema.routines WHERE ROUTINE_SCHEMA = ? AND ROUTINE_TYPE = 'PROCEDURE'"
+{
+  "QueryType": "SELECT",
+  "Original": "SELECT routine_name AS name, routine_definition AS definition FROM information_schema.routines WHERE ROUTINE_SCHEMA = ? AND ROUTINE_TYPE = 'PROCEDURE'",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectDBA",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select routine_name as `name`, routine_definition as definition from information_schema.routines where 1 != 1",
+    "Query": "select routine_name as `name`, routine_definition as definition from information_schema.routines where ROUTINE_SCHEMA = :__vtschemaname and ROUTINE_TYPE = 'PROCEDURE'",
+    "SysTableTableSchema": ":v1"
+  }
+}
+
+#information_schema table sizes
+"SELECT SUM(data_length + index_length) as size FROM information_schema.TABLES WHERE table_schema = ?"
+{
+  "QueryType": "SELECT",
+  "Original": "SELECT SUM(data_length + index_length) as size FROM information_schema.TABLES WHERE table_schema = ?",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectDBA",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select SUM(data_length + index_length) as size from information_schema.`TABLES` where 1 != 1",
+    "Query": "select SUM(data_length + index_length) as size from information_schema.`TABLES` where table_schema = :__vtschemaname",
+    "SysTableTableSchema": ":v1"
+  }
+}
+
+#information_schema referential contraints
+"SELECT kcu.constraint_name constraint_name, kcu.column_name column_name, kcu.referenced_table_name referenced_table_name, kcu.referenced_column_name referenced_column_name, kcu.ordinal_position ordinal_position, kcu.table_name table_name, rc.delete_rule delete_rule, rc.update_rule update_rule FROM information_schema.key_column_usage AS kcu INNER JOIN information_schema.referential_constraints AS rc ON kcu.constraint_name = rc.constraint_name WHERE kcu.table_schema = ? AND rc.constraint_schema = ? AND kcu.referenced_column_name IS NOT NULL ORDER BY ordinal_position"
+{
+  "QueryType": "SELECT",
+  "Original": "SELECT kcu.constraint_name constraint_name, kcu.column_name column_name, kcu.referenced_table_name referenced_table_name, kcu.referenced_column_name referenced_column_name, kcu.ordinal_position ordinal_position, kcu.table_name table_name, rc.delete_rule delete_rule, rc.update_rule update_rule FROM information_schema.key_column_usage AS kcu INNER JOIN information_schema.referential_constraints AS rc ON kcu.constraint_name = rc.constraint_name WHERE kcu.table_schema = ? AND rc.constraint_schema = ? AND kcu.referenced_column_name IS NOT NULL ORDER BY ordinal_position",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "-1,-2,-3,-4,-5,-6,1,2",
+    "TableName": "_",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectDBA",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select kcu.constraint_name as constraint_name, kcu.column_name as column_name, kcu.referenced_table_name as referenced_table_name, kcu.referenced_column_name as referenced_column_name, kcu.ordinal_position as ordinal_position, kcu.table_name as table_name from information_schema.key_column_usage as kcu where 1 != 1",
+        "Query": "select kcu.constraint_name as constraint_name, kcu.column_name as column_name, kcu.referenced_table_name as referenced_table_name, kcu.referenced_column_name as referenced_column_name, kcu.ordinal_position as ordinal_position, kcu.table_name as table_name from information_schema.key_column_usage as kcu where kcu.table_schema = :__vtschemaname and kcu.referenced_column_name is not null order by ordinal_position asc",
+        "SysTableTableSchema": ":v1"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectDBA",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select rc.delete_rule as delete_rule, rc.update_rule as update_rule from information_schema.referential_constraints as rc where 1 != 1",
+        "Query": "select rc.delete_rule as delete_rule, rc.update_rule as update_rule from information_schema.referential_constraints as rc where rc.constraint_name = :kcu_constraint_name and rc.constraint_schema = :__vtschemaname",
+        "SysTableTableSchema": ":v2"
+      }
+    ]
+  }
+}
+

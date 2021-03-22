@@ -18,6 +18,7 @@ package vtsql
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/spf13/pflag"
 
@@ -33,6 +34,8 @@ type Config struct {
 	Discovery     discovery.Discovery
 	DiscoveryTags []string
 	Credentials   Credentials
+
+	DialPingTimeout time.Duration
 
 	// CredentialsPath is used only to power vtadmin debug endpoints; there may
 	// be a better way where we don't need to put this in the config, because
@@ -65,6 +68,8 @@ func Parse(cluster *vtadminpb.Cluster, disco discovery.Discovery, args []string)
 func (c *Config) Parse(args []string) error {
 	fs := pflag.NewFlagSet("", pflag.ContinueOnError)
 
+	fs.DurationVar(&c.DialPingTimeout, "dial-ping-timeout", time.Millisecond*500,
+		"Timeout to use when pinging an existing connection during calls to Dial.")
 	fs.StringSliceVar(&c.DiscoveryTags, "discovery-tags", []string{},
 		"repeated, comma-separated list of tags to use when discovering a vtgate to connect to. "+
 			"the semantics of the tags may depend on the specific discovery implementation used")

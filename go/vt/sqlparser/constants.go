@@ -511,3 +511,10 @@ const (
 	SharedType
 	ExclusiveType
 )
+
+const (
+	RetryMigrationType AlterMigrationType = iota
+	CompleteMigrationType
+	CancelMigrationType
+	CancelAllMigrationType
+)

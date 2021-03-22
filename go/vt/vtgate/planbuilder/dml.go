@@ -100,10 +100,10 @@ func nameMatch(node sqlparser.Expr, col sqlparser.ColIdent) bool {
 	return ok && colname.Name.Equal(col)
 }
 
-func buildDMLPlan(vschema ContextVSchema, dmlType string, stmt sqlparser.Statement, tableExprs sqlparser.TableExprs, where *sqlparser.Where, orderBy sqlparser.OrderBy, limit *sqlparser.Limit, comments sqlparser.Comments, nodes ...sqlparser.SQLNode) (*engine.DML, vindexes.SingleColumn, string, error) {
+func buildDMLPlan(vschema ContextVSchema, dmlType string, stmt sqlparser.Statement, reservedVars sqlparser.BindVars, tableExprs sqlparser.TableExprs, where *sqlparser.Where, orderBy sqlparser.OrderBy, limit *sqlparser.Limit, comments sqlparser.Comments, nodes ...sqlparser.SQLNode) (*engine.DML, vindexes.SingleColumn, string, error) {
 	edml := &engine.DML{}
-	pb := newPrimitiveBuilder(vschema, newJointab(sqlparser.GetBindvars(stmt)))
-	rb, err := pb.processDMLTable(tableExprs, nil)
+	pb := newPrimitiveBuilder(vschema, newJointab(reservedVars))
+	rb, err := pb.processDMLTable(tableExprs, reservedVars, nil)
 	if err != nil {
 		return nil, nil, "", err
 	}
@@ -113,7 +113,9 @@ func buildDMLPlan(vschema ContextVSchema, dmlType string, stmt sqlparser.Stateme
 		var subqueryArgs []sqlparser.SQLNode
 		subqueryArgs = append(subqueryArgs, nodes...)
 		subqueryArgs = append(subqueryArgs, where, orderBy, limit)
-		if !pb.finalizeUnshardedDMLSubqueries(subqueryArgs...) {
+		if pb.finalizeUnshardedDMLSubqueries(reservedVars, subqueryArgs...) {
+			vschema.WarnUnshardedOnly("subqueries can't be sharded in DML")
+		} else {
 			return nil, nil, "", vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: sharded subqueries in DML")
 		}
 		edml.Opcode = engine.Unsharded

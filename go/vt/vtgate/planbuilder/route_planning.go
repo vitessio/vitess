@@ -35,8 +35,8 @@ import (
 
 var _ selectPlanner = gen4Planner
 
-func gen4Planner(_ string) func(sqlparser.Statement, ContextVSchema) (engine.Primitive, error) {
-	return func(stmt sqlparser.Statement, vschema ContextVSchema) (engine.Primitive, error) {
+func gen4Planner(_ string) func(sqlparser.Statement, sqlparser.BindVars, ContextVSchema) (engine.Primitive, error) {
+	return func(stmt sqlparser.Statement, reservedVars sqlparser.BindVars, vschema ContextVSchema) (engine.Primitive, error) {
 		sel, ok := stmt.(*sqlparser.Select)
 		if !ok {
 			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%T not yet supported", stmt)

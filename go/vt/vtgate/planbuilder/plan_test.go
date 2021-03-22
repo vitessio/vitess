@@ -246,6 +246,7 @@ func TestWithDefaultKeyspaceFromFile(t *testing.T) {
 
 	testFile(t, "alterVschema_cases.txt", testOutputTempDir, vschema, false)
 	testFile(t, "ddl_cases.txt", testOutputTempDir, vschema, false)
+	testFile(t, "migration_cases.txt", testOutputTempDir, vschema, false)
 	testFile(t, "flush_cases.txt", testOutputTempDir, vschema, false)
 	testFile(t, "show_cases.txt", testOutputTempDir, vschema, false)
 	testFile(t, "call_cases.txt", testOutputTempDir, vschema, false)
@@ -390,6 +391,17 @@ func (vw *vschemaWrapper) FirstSortedKeyspace() (*vindexes.Keyspace, error) {
 
 func (vw *vschemaWrapper) TargetString() string {
 	return "targetString"
+}
+
+func (vw *vschemaWrapper) WarnUnshardedOnly(_ string, _ ...interface{}) {
+
+}
+
+func (vw *vschemaWrapper) ErrorIfShardedF(keyspace *vindexes.Keyspace, _, errFmt string, params ...interface{}) error {
+	if keyspace.Sharded {
+		return fmt.Errorf(errFmt, params...)
+	}
+	return nil
 }
 
 func escapeNewLines(in string) string {
@@ -598,7 +610,7 @@ func locateFile(name string) string {
 }
 
 func BenchmarkPlanner(b *testing.B) {
-	filenames := []string{"from_cases.txt", "filter_cases.txt", "large_cases.txt", "aggr_cases.txt", "memory_sort_cases.txt", "select_cases.txt", "union_cases.txt", "wireup_cases.txt"}
+	filenames := []string{"from_cases.txt", "filter_cases.txt", "large_cases.txt", "aggr_cases.txt", "select_cases.txt", "union_cases.txt"}
 	vschema := &vschemaWrapper{
 		v:             loadSchema(b, "schema_test.json"),
 		sysVarEnabled: true,

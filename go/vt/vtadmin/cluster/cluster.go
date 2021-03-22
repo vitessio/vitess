@@ -21,9 +21,13 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
+	"k8s.io/apimachinery/pkg/util/sets"
+
 	"vitess.io/vitess/go/trace"
+	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -200,6 +204,152 @@ func (c *Cluster) parseTablet(rows *sql.Rows) (*vtadminpb.Tablet, error) {
 	return tablet, nil
 }
 
+// FindWorkflowsOptions is the set of options for FindWorkflows requests.
+type FindWorkflowsOptions struct {
+	ActiveOnly      bool
+	IgnoreKeyspaces sets.String
+	Filter          func(workflow *vtadminpb.Workflow) bool
+}
+
+// FindWorkflows returns a list of Workflows in this cluster, across the given
+// keyspaces and filtering according to the options passed in.
+//
+// If the list of keyspaces to check is empty, then FindWorkflows will use the
+// result of GetKeyspaces to search all keyspaces in the cluster. In this case,
+// opts.IgnoreKeyspaces is respected.
+//
+// Callers should use this function when they want more fine-grained filtering,
+// and GetWorkflows when they just want to filter on keyspace name.
+//
+// Note that if only a subset of keyspaces error on their vtctld GetWorkflows
+// rpc, this is treated as a partial success, and the ClusterWorkflows response
+// will include any errors in the Warnings slice. If all keyspaces fail, or if
+// non-(Vtctld.GetWorkflows) calls fail, this is treated as an error by this
+// function.
+func (c *Cluster) FindWorkflows(ctx context.Context, keyspaces []string, opts FindWorkflowsOptions) (*vtadminpb.ClusterWorkflows, error) {
+	span, ctx := trace.NewSpan(ctx, "Cluster.FindWorkflows")
+	defer span.Finish()
+
+	AnnotateSpan(c, span)
+	span.Annotate("active_only", opts.ActiveOnly)
+
+	if err := c.Vtctld.Dial(ctx); err != nil {
+		return nil, fmt.Errorf("FindWorkflows(cluster = %v, keyspaces = %v, opts = %v) dial failed: %w", c.ID, keyspaces, opts, err)
+	}
+
+	return c.findWorkflows(ctx, keyspaces, opts)
+}
+
+func (c *Cluster) findWorkflows(ctx context.Context, keyspaces []string, opts FindWorkflowsOptions) (*vtadminpb.ClusterWorkflows, error) {
+	if opts.Filter == nil {
+		opts.Filter = func(_ *vtadminpb.Workflow) bool { return true }
+	}
+
+	if opts.IgnoreKeyspaces == nil {
+		opts.IgnoreKeyspaces = sets.NewString()
+	}
+
+	if len(keyspaces) == 0 {
+		span, ctx := trace.NewSpan(ctx, "Cluster.GetKeyspaces")
+		AnnotateSpan(c, span)
+
+		resp, err := c.Vtctld.GetKeyspaces(ctx, &vtctldatapb.GetKeyspacesRequest{})
+		if err != nil {
+			span.Finish()
+			return nil, fmt.Errorf("GetKeyspaces(cluster = %s) failed: %w", c.ID, err)
+		}
+
+		for _, ks := range resp.Keyspaces {
+			keyspaces = append(keyspaces, ks.Name)
+		}
+
+		span.Finish()
+	} else if opts.IgnoreKeyspaces.Len() > 0 {
+		log.Warningf("Cluster.findWorkflows: IgnoreKeyspaces was set, but Keyspaces was not empty; ignoring IgnoreKeyspaces in favor of explicitly checking everything in Keyspaces: (%s)", strings.Join(keyspaces, ", "))
+		opts.IgnoreKeyspaces = sets.NewString()
+	}
+
+	// Annotate the parent span with some additional information about the call.
+	if span, _ := trace.FromContext(ctx); span != nil {
+		span.Annotate("num_keyspaces", len(keyspaces))
+		span.Annotate("keyspaces", strings.Join(keyspaces, ","))
+		span.Annotate("num_ignore_keyspaces", opts.IgnoreKeyspaces.Len())
+		span.Annotate("ignore_keyspaces", strings.Join(opts.IgnoreKeyspaces.List(), ","))
+	}
+
+	clusterpb := c.ToProto()
+
+	var (
+		m       sync.Mutex
+		wg      sync.WaitGroup
+		rec     concurrency.AllErrorRecorder
+		results []*vtadminpb.Workflow
+	)
+
+	for _, ks := range keyspaces {
+		if opts.IgnoreKeyspaces.Has(ks) {
+			log.Infof("Cluster.findWorkflows: ignoring keyspace %s", ks)
+
+			continue
+		}
+
+		wg.Add(1)
+
+		go func(ks string) {
+			defer wg.Done()
+
+			span, ctx := trace.NewSpan(ctx, "Cluster.GetWorkflowsForKeyspace")
+			defer span.Finish()
+
+			AnnotateSpan(c, span)
+			span.Annotate("keyspace", ks)
+			span.Annotate("active_only", opts.ActiveOnly)
+
+			resp, err := c.Vtctld.GetWorkflows(ctx, &vtctldatapb.GetWorkflowsRequest{
+				Keyspace:   ks,
+				ActiveOnly: opts.ActiveOnly,
+			})
+			if err != nil {
+				err = fmt.Errorf("GetWorkflows(cluster = %s, keyspace = %s, active_only = %v) failed: %w", c.ID, ks, opts.ActiveOnly, err)
+				rec.RecordError(err)
+
+				return
+			}
+
+			workflows := make([]*vtadminpb.Workflow, 0, len(resp.Workflows))
+			for _, wf := range resp.Workflows {
+				workflow := &vtadminpb.Workflow{
+					Cluster:  clusterpb,
+					Keyspace: ks,
+					Workflow: wf,
+				}
+
+				if opts.Filter(workflow) {
+					workflows = append(workflows, workflow)
+				}
+			}
+
+			m.Lock()
+			results = append(results, workflows...)
+			m.Unlock()
+		}(ks)
+	}
+
+	wg.Wait()
+
+	// If every keyspace failed, treat this as an error.
+	if rec.HasErrors() && len(rec.Errors) == len(keyspaces) {
+		return nil, rec.Error()
+	}
+
+	// Otherwise, append any failures into the warnings slice, and return what
+	// results we have.
+	return &vtadminpb.ClusterWorkflows{
+		Workflows: results,
+		Warnings:  rec.ErrorStrings(),
+	}, nil
+}
+
 // GetTablets returns all tablets in the cluster.
 func (c *Cluster) GetTablets(ctx context.Context) ([]*vtadminpb.Tablet, error) {
 	span, ctx := trace.NewSpan(ctx, "Cluster.GetTablets")
@@ -292,6 +442,83 @@ func (c *Cluster) GetVSchema(ctx context.Context, keyspace string) (*vtadminpb.V
 		Name:    keyspace,
 		VSchema: vschema.VSchema,
 	}, nil
+}
+
+// GetWorkflowOptions is the set of filtering options for GetWorkflow requests.
+type GetWorkflowOptions struct {
+	ActiveOnly bool
+}
+
+// GetWorkflow returns the single Workflow in this cluster for the given
+// keyspace and workflow name. It returns an error if either no workflows or
+// multiple workflows are found.
+func (c *Cluster) GetWorkflow(ctx context.Context, keyspace string, name string, opts GetWorkflowOptions) (*vtadminpb.Workflow, error) {
+	span, ctx := trace.NewSpan(ctx, "Cluster.GetWorkflow")
+	defer span.Finish()
+
+	AnnotateSpan(c, span)
+	span.Annotate("active_only", opts.ActiveOnly)
+	span.Annotate("keyspace", keyspace)
+	span.Annotate("workflow_name", name)
+
+	if err := c.Vtctld.Dial(ctx); err != nil {
+		return nil, fmt.Errorf("GetWorkflow(cluster = %v, keyspace = %v, workflow = %v, opts = %+v) dial failed: %w", c.ID, keyspace, name, opts, err)
+	}
+
+	workflows, err := c.findWorkflows(ctx, []string{keyspace}, FindWorkflowsOptions{
+		ActiveOnly: opts.ActiveOnly,
+		Filter: func(workflow *vtadminpb.Workflow) bool {
+			return workflow.Workflow.Name == name
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	switch len(workflows.Workflows) {
+	case 0:
+		msg := "%w for keyspace %s and name %s (active_only = %v)"
+		if len(workflows.Warnings) > 0 {
+			return nil, fmt.Errorf(msg+"; warnings: %v", errors.ErrNoWorkflow, keyspace, name, opts.ActiveOnly, workflows.Warnings)
+		}
+
+		return nil, fmt.Errorf(msg, errors.ErrNoWorkflow, keyspace, name, opts.ActiveOnly)
+	case 1:
+		return workflows.Workflows[0], nil
+	default:
+		return nil, fmt.Errorf("%w: found %d workflows in keyspace %s with name %s (active_only = %v); this should be impossible", errors.ErrAmbiguousWorkflow, len(workflows.Workflows), keyspace, name, opts.ActiveOnly)
+	}
+}
+
+// GetWorkflowsOptions is the set of filtering options for GetWorkflows
+// requests.
+type GetWorkflowsOptions struct {
+	ActiveOnly      bool
+	IgnoreKeyspaces sets.String
+}
+
+// GetWorkflows returns a list of Workflows in this cluster, across the given
+// keyspaces and filtering according to the options passed in.
+//
+// If the list of keyspaces to check is empty, then GetWorkflows will use the
+// result of GetKeyspaces to search all keyspaces in the cluster. In this case,
+// opts.IgnoreKeyspaces is respected.
+func (c *Cluster) GetWorkflows(ctx context.Context, keyspaces []string, opts GetWorkflowsOptions) (*vtadminpb.ClusterWorkflows, error) {
+	span, ctx := trace.NewSpan(ctx, "Cluster.GetWorkflows")
+	defer span.Finish()
+
+	AnnotateSpan(c, span)
+	span.Annotate("active_only", opts.ActiveOnly)
+
+	if err := c.Vtctld.Dial(ctx); err != nil {
+		return nil, fmt.Errorf("GetWorkflows(cluster = %v, keyspaces = %v, opts = %v) dial failed: %w", c.ID, keyspaces, opts, err)
+	}
+
+	return c.findWorkflows(ctx, keyspaces, FindWorkflowsOptions{
+		ActiveOnly:      opts.ActiveOnly,
+		IgnoreKeyspaces: opts.IgnoreKeyspaces,
+		Filter:          func(_ *vtadminpb.Workflow) bool { return true },
+	})
 }
 
 // FindTablet returns the first tablet in a given cluster that satisfies the filter function.

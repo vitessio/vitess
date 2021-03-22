@@ -381,6 +381,72 @@ $root.vtadmin = (function() {
          */
 
         /**
+         * Callback as used by {@link vtadmin.VTAdmin#getWorkflow}.
+         * @memberof vtadmin.VTAdmin
+         * @typedef GetWorkflowCallback
+         * @type {function}
+         * @param {Error|null} error Error, if any
+         * @param {vtadmin.Workflow} [response] Workflow
+         */
+
+        /**
+         * Calls GetWorkflow.
+         * @function getWorkflow
+         * @memberof vtadmin.VTAdmin
+         * @instance
+         * @param {vtadmin.IGetWorkflowRequest} request GetWorkflowRequest message or plain object
+         * @param {vtadmin.VTAdmin.GetWorkflowCallback} callback Node-style callback called with the error, if any, and Workflow
+         * @returns {undefined}
+         * @variation 1
+         */
+        Object.defineProperty(VTAdmin.prototype.getWorkflow = function getWorkflow(request, callback) {
+            return this.rpcCall(getWorkflow, $root.vtadmin.GetWorkflowRequest, $root.vtadmin.Workflow, request, callback);
+        }, "name", { value: "GetWorkflow" });
+
+        /**
+         * Calls GetWorkflow.
+         * @function getWorkflow
+         * @memberof vtadmin.VTAdmin
+         * @instance
+         * @param {vtadmin.IGetWorkflowRequest} request GetWorkflowRequest message or plain object
+         * @returns {Promise<vtadmin.Workflow>} Promise
+         * @variation 2
+         */
+
+        /**
+         * Callback as used by {@link vtadmin.VTAdmin#getWorkflows}.
+         * @memberof vtadmin.VTAdmin
+         * @typedef GetWorkflowsCallback
+         * @type {function}
+         * @param {Error|null} error Error, if any
+         * @param {vtadmin.GetWorkflowsResponse} [response] GetWorkflowsResponse
+         */
+
+        /**
+         * Calls GetWorkflows.
+         * @function getWorkflows
+         * @memberof vtadmin.VTAdmin
+         * @instance
+         * @param {vtadmin.IGetWorkflowsRequest} request GetWorkflowsRequest message or plain object
+         * @param {vtadmin.VTAdmin.GetWorkflowsCallback} callback Node-style callback called with the error, if any, and GetWorkflowsResponse
+         * @returns {undefined}
+         * @variation 1
+         */
+        Object.defineProperty(VTAdmin.prototype.getWorkflows = function getWorkflows(request, callback) {
+            return this.rpcCall(getWorkflows, $root.vtadmin.GetWorkflowsRequest, $root.vtadmin.GetWorkflowsResponse, request, callback);
+        }, "name", { value: "GetWorkflows" });
+
+        /**
+         * Calls GetWorkflows.
+         * @function getWorkflows
+         * @memberof vtadmin.VTAdmin
+         * @instance
+         * @param {vtadmin.IGetWorkflowsRequest} request GetWorkflowsRequest message or plain object
+         * @returns {Promise<vtadmin.GetWorkflowsResponse>} Promise
+         * @variation 2
+         */
+
+        /**
          * Callback as used by {@link vtadmin.VTAdmin#vTExplain}.
          * @memberof vtadmin.VTAdmin
          * @typedef VTExplainCallback
@@ -624,6 +690,253 @@ $root.vtadmin = (function() {
         };
 
         return Cluster;
+    })();
+
+    vtadmin.ClusterWorkflows = (function() {
+
+        /**
+         * Properties of a ClusterWorkflows.
+         * @memberof vtadmin
+         * @interface IClusterWorkflows
+         * @property {Array.<vtadmin.IWorkflow>|null} [workflows] ClusterWorkflows workflows
+         * @property {Array.<string>|null} [warnings] ClusterWorkflows warnings
+         */
+
+        /**
+         * Constructs a new ClusterWorkflows.
+         * @memberof vtadmin
+         * @classdesc Represents a ClusterWorkflows.
+         * @implements IClusterWorkflows
+         * @constructor
+         * @param {vtadmin.IClusterWorkflows=} [properties] Properties to set
+         */
+        function ClusterWorkflows(properties) {
+            this.workflows = [];
+            this.warnings = [];
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * ClusterWorkflows workflows.
+         * @member {Array.<vtadmin.IWorkflow>} workflows
+         * @memberof vtadmin.ClusterWorkflows
+         * @instance
+         */
+        ClusterWorkflows.prototype.workflows = $util.emptyArray;
+
+        /**
+         * ClusterWorkflows warnings.
+         * @member {Array.<string>} warnings
+         * @memberof vtadmin.ClusterWorkflows
+         * @instance
+         */
+        ClusterWorkflows.prototype.warnings = $util.emptyArray;
+
+        /**
+         * Creates a new ClusterWorkflows instance using the specified properties.
+         * @function create
+         * @memberof vtadmin.ClusterWorkflows
+         * @static
+         * @param {vtadmin.IClusterWorkflows=} [properties] Properties to set
+         * @returns {vtadmin.ClusterWorkflows} ClusterWorkflows instance
+         */
+        ClusterWorkflows.create = function create(properties) {
+            return new ClusterWorkflows(properties);
+        };
+
+        /**
+         * Encodes the specified ClusterWorkflows message. Does not implicitly {@link vtadmin.ClusterWorkflows.verify|verify} messages.
+         * @function encode
+         * @memberof vtadmin.ClusterWorkflows
+         * @static
+         * @param {vtadmin.IClusterWorkflows} message ClusterWorkflows message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        ClusterWorkflows.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.workflows != null && message.workflows.length)
+                for (var i = 0; i < message.workflows.length; ++i)
+                    $root.vtadmin.Workflow.encode(message.workflows[i], writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
+            if (message.warnings != null && message.warnings.length)
+                for (var i = 0; i < message.warnings.length; ++i)
+                    writer.uint32(/* id 2, wireType 2 =*/18).string(message.warnings[i]);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified ClusterWorkflows message, length delimited. Does not implicitly {@link vtadmin.ClusterWorkflows.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtadmin.ClusterWorkflows
+         * @static
+         * @param {vtadmin.IClusterWorkflows} message ClusterWorkflows message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        ClusterWorkflows.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a ClusterWorkflows message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtadmin.ClusterWorkflows
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtadmin.ClusterWorkflows} ClusterWorkflows
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        ClusterWorkflows.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.ClusterWorkflows();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    if (!(message.workflows && message.workflows.length))
+                        message.workflows = [];
+                    message.workflows.push($root.vtadmin.Workflow.decode(reader, reader.uint32()));
+                    break;
+                case 2:
+                    if (!(message.warnings && message.warnings.length))
+                        message.warnings = [];
+                    message.warnings.push(reader.string());
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a ClusterWorkflows message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtadmin.ClusterWorkflows
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtadmin.ClusterWorkflows} ClusterWorkflows
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        ClusterWorkflows.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a ClusterWorkflows message.
+         * @function verify
+         * @memberof vtadmin.ClusterWorkflows
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        ClusterWorkflows.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.workflows != null && message.hasOwnProperty("workflows")) {
+                if (!Array.isArray(message.workflows))
+                    return "workflows: array expected";
+                for (var i = 0; i < message.workflows.length; ++i) {
+                    var error = $root.vtadmin.Workflow.verify(message.workflows[i]);
+                    if (error)
+                        return "workflows." + error;
+                }
+            }
+            if (message.warnings != null && message.hasOwnProperty("warnings")) {
+                if (!Array.isArray(message.warnings))
+                    return "warnings: array expected";
+                for (var i = 0; i < message.warnings.length; ++i)
+                    if (!$util.isString(message.warnings[i]))
+                        return "warnings: string[] expected";
+            }
+            return null;
+        };
+
+        /**
+         * Creates a ClusterWorkflows message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtadmin.ClusterWorkflows
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtadmin.ClusterWorkflows} ClusterWorkflows
+         */
+        ClusterWorkflows.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtadmin.ClusterWorkflows)
+                return object;
+            var message = new $root.vtadmin.ClusterWorkflows();
+            if (object.workflows) {
+                if (!Array.isArray(object.workflows))
+                    throw TypeError(".vtadmin.ClusterWorkflows.workflows: array expected");
+                message.workflows = [];
+                for (var i = 0; i < object.workflows.length; ++i) {
+                    if (typeof object.workflows[i] !== "object")
+                        throw TypeError(".vtadmin.ClusterWorkflows.workflows: object expected");
+                    message.workflows[i] = $root.vtadmin.Workflow.fromObject(object.workflows[i]);
+                }
+            }
+            if (object.warnings) {
+                if (!Array.isArray(object.warnings))
+                    throw TypeError(".vtadmin.ClusterWorkflows.warnings: array expected");
+                message.warnings = [];
+                for (var i = 0; i < object.warnings.length; ++i)
+                    message.warnings[i] = String(object.warnings[i]);
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a ClusterWorkflows message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtadmin.ClusterWorkflows
+         * @static
+         * @param {vtadmin.ClusterWorkflows} message ClusterWorkflows
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        ClusterWorkflows.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.arrays || options.defaults) {
+                object.workflows = [];
+                object.warnings = [];
+            }
+            if (message.workflows && message.workflows.length) {
+                object.workflows = [];
+                for (var j = 0; j < message.workflows.length; ++j)
+                    object.workflows[j] = $root.vtadmin.Workflow.toObject(message.workflows[j], options);
+            }
+            if (message.warnings && message.warnings.length) {
+                object.warnings = [];
+                for (var j = 0; j < message.warnings.length; ++j)
+                    object.warnings[j] = message.warnings[j];
+            }
+            return object;
+        };
+
+        /**
+         * Converts this ClusterWorkflows to JSON.
+         * @function toJSON
+         * @memberof vtadmin.ClusterWorkflows
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        ClusterWorkflows.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return ClusterWorkflows;
     })();
 
     vtadmin.Keyspace = (function() {
@@ -2199,6 +2512,248 @@ $root.vtadmin = (function() {
         };
 
         return VTGate;
+    })();
+
+    vtadmin.Workflow = (function() {
+
+        /**
+         * Properties of a Workflow.
+         * @memberof vtadmin
+         * @interface IWorkflow
+         * @property {vtadmin.ICluster|null} [cluster] Workflow cluster
+         * @property {string|null} [keyspace] Workflow keyspace
+         * @property {vtctldata.IWorkflow|null} [workflow] Workflow workflow
+         */
+
+        /**
+         * Constructs a new Workflow.
+         * @memberof vtadmin
+         * @classdesc Represents a Workflow.
+         * @implements IWorkflow
+         * @constructor
+         * @param {vtadmin.IWorkflow=} [properties] Properties to set
+         */
+        function Workflow(properties) {
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * Workflow cluster.
+         * @member {vtadmin.ICluster|null|undefined} cluster
+         * @memberof vtadmin.Workflow
+         * @instance
+         */
+        Workflow.prototype.cluster = null;
+
+        /**
+         * Workflow keyspace.
+         * @member {string} keyspace
+         * @memberof vtadmin.Workflow
+         * @instance
+         */
+        Workflow.prototype.keyspace = "";
+
+        /**
+         * Workflow workflow.
+         * @member {vtctldata.IWorkflow|null|undefined} workflow
+         * @memberof vtadmin.Workflow
+         * @instance
+         */
+        Workflow.prototype.workflow = null;
+
+        /**
+         * Creates a new Workflow instance using the specified properties.
+         * @function create
+         * @memberof vtadmin.Workflow
+         * @static
+         * @param {vtadmin.IWorkflow=} [properties] Properties to set
+         * @returns {vtadmin.Workflow} Workflow instance
+         */
+        Workflow.create = function create(properties) {
+            return new Workflow(properties);
+        };
+
+        /**
+         * Encodes the specified Workflow message. Does not implicitly {@link vtadmin.Workflow.verify|verify} messages.
+         * @function encode
+         * @memberof vtadmin.Workflow
+         * @static
+         * @param {vtadmin.IWorkflow} message Workflow message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        Workflow.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.cluster != null && Object.hasOwnProperty.call(message, "cluster"))
+                $root.vtadmin.Cluster.encode(message.cluster, writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
+            if (message.keyspace != null && Object.hasOwnProperty.call(message, "keyspace"))
+                writer.uint32(/* id 2, wireType 2 =*/18).string(message.keyspace);
+            if (message.workflow != null && Object.hasOwnProperty.call(message, "workflow"))
+                $root.vtctldata.Workflow.encode(message.workflow, writer.uint32(/* id 3, wireType 2 =*/26).fork()).ldelim();
+            return writer;
+        };
+
+        /**
+         * Encodes the specified Workflow message, length delimited. Does not implicitly {@link vtadmin.Workflow.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtadmin.Workflow
+         * @static
+         * @param {vtadmin.IWorkflow} message Workflow message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        Workflow.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a Workflow message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtadmin.Workflow
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtadmin.Workflow} Workflow
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        Workflow.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.Workflow();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.cluster = $root.vtadmin.Cluster.decode(reader, reader.uint32());
+                    break;
+                case 2:
+                    message.keyspace = reader.string();
+                    break;
+                case 3:
+                    message.workflow = $root.vtctldata.Workflow.decode(reader, reader.uint32());
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a Workflow message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtadmin.Workflow
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtadmin.Workflow} Workflow
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        Workflow.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a Workflow message.
+         * @function verify
+         * @memberof vtadmin.Workflow
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        Workflow.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.cluster != null && message.hasOwnProperty("cluster")) {
+                var error = $root.vtadmin.Cluster.verify(message.cluster);
+                if (error)
+                    return "cluster." + error;
+            }
+            if (message.keyspace != null && message.hasOwnProperty("keyspace"))
+                if (!$util.isString(message.keyspace))
+                    return "keyspace: string expected";
+            if (message.workflow != null && message.hasOwnProperty("workflow")) {
+                var error = $root.vtctldata.Workflow.verify(message.workflow);
+                if (error)
+                    return "workflow." + error;
+            }
+            return null;
+        };
+
+        /**
+         * Creates a Workflow message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtadmin.Workflow
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtadmin.Workflow} Workflow
+         */
+        Workflow.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtadmin.Workflow)
+                return object;
+            var message = new $root.vtadmin.Workflow();
+            if (object.cluster != null) {
+                if (typeof object.cluster !== "object")
+                    throw TypeError(".vtadmin.Workflow.cluster: object expected");
+                message.cluster = $root.vtadmin.Cluster.fromObject(object.cluster);
+            }
+            if (object.keyspace != null)
+                message.keyspace = String(object.keyspace);
+            if (object.workflow != null) {
+                if (typeof object.workflow !== "object")
+                    throw TypeError(".vtadmin.Workflow.workflow: object expected");
+                message.workflow = $root.vtctldata.Workflow.fromObject(object.workflow);
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a Workflow message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtadmin.Workflow
+         * @static
+         * @param {vtadmin.Workflow} message Workflow
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        Workflow.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.defaults) {
+                object.cluster = null;
+                object.keyspace = "";
+                object.workflow = null;
+            }
+            if (message.cluster != null && message.hasOwnProperty("cluster"))
+                object.cluster = $root.vtadmin.Cluster.toObject(message.cluster, options);
+            if (message.keyspace != null && message.hasOwnProperty("keyspace"))
+                object.keyspace = message.keyspace;
+            if (message.workflow != null && message.hasOwnProperty("workflow"))
+                object.workflow = $root.vtctldata.Workflow.toObject(message.workflow, options);
+            return object;
+        };
+
+        /**
+         * Converts this Workflow to JSON.
+         * @function toJSON
+         * @memberof vtadmin.Workflow
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        Workflow.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return Workflow;
     })();
 
     vtadmin.FindSchemaRequest = (function() {
@@ -5516,6 +6071,792 @@ $root.vtadmin = (function() {
         };
 
         return GetVSchemasResponse;
+    })();
+
+    vtadmin.GetWorkflowRequest = (function() {
+
+        /**
+         * Properties of a GetWorkflowRequest.
+         * @memberof vtadmin
+         * @interface IGetWorkflowRequest
+         * @property {string|null} [cluster_id] GetWorkflowRequest cluster_id
+         * @property {string|null} [keyspace] GetWorkflowRequest keyspace
+         * @property {string|null} [name] GetWorkflowRequest name
+         * @property {boolean|null} [active_only] GetWorkflowRequest active_only
+         */
+
+        /**
+         * Constructs a new GetWorkflowRequest.
+         * @memberof vtadmin
+         * @classdesc Represents a GetWorkflowRequest.
+         * @implements IGetWorkflowRequest
+         * @constructor
+         * @param {vtadmin.IGetWorkflowRequest=} [properties] Properties to set
+         */
+        function GetWorkflowRequest(properties) {
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * GetWorkflowRequest cluster_id.
+         * @member {string} cluster_id
+         * @memberof vtadmin.GetWorkflowRequest
+         * @instance
+         */
+        GetWorkflowRequest.prototype.cluster_id = "";
+
+        /**
+         * GetWorkflowRequest keyspace.
+         * @member {string} keyspace
+         * @memberof vtadmin.GetWorkflowRequest
+         * @instance
+         */
+        GetWorkflowRequest.prototype.keyspace = "";
+
+        /**
+         * GetWorkflowRequest name.
+         * @member {string} name
+         * @memberof vtadmin.GetWorkflowRequest
+         * @instance
+         */
+        GetWorkflowRequest.prototype.name = "";
+
+        /**
+         * GetWorkflowRequest active_only.
+         * @member {boolean} active_only
+         * @memberof vtadmin.GetWorkflowRequest
+         * @instance
+         */
+        GetWorkflowRequest.prototype.active_only = false;
+
+        /**
+         * Creates a new GetWorkflowRequest instance using the specified properties.
+         * @function create
+         * @memberof vtadmin.GetWorkflowRequest
+         * @static
+         * @param {vtadmin.IGetWorkflowRequest=} [properties] Properties to set
+         * @returns {vtadmin.GetWorkflowRequest} GetWorkflowRequest instance
+         */
+        GetWorkflowRequest.create = function create(properties) {
+            return new GetWorkflowRequest(properties);
+        };
+
+        /**
+         * Encodes the specified GetWorkflowRequest message. Does not implicitly {@link vtadmin.GetWorkflowRequest.verify|verify} messages.
+         * @function encode
+         * @memberof vtadmin.GetWorkflowRequest
+         * @static
+         * @param {vtadmin.IGetWorkflowRequest} message GetWorkflowRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        GetWorkflowRequest.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.cluster_id != null && Object.hasOwnProperty.call(message, "cluster_id"))
+                writer.uint32(/* id 1, wireType 2 =*/10).string(message.cluster_id);
+            if (message.keyspace != null && Object.hasOwnProperty.call(message, "keyspace"))
+                writer.uint32(/* id 2, wireType 2 =*/18).string(message.keyspace);
+            if (message.name != null && Object.hasOwnProperty.call(message, "name"))
+                writer.uint32(/* id 3, wireType 2 =*/26).string(message.name);
+            if (message.active_only != null && Object.hasOwnProperty.call(message, "active_only"))
+                writer.uint32(/* id 4, wireType 0 =*/32).bool(message.active_only);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified GetWorkflowRequest message, length delimited. Does not implicitly {@link vtadmin.GetWorkflowRequest.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtadmin.GetWorkflowRequest
+         * @static
+         * @param {vtadmin.IGetWorkflowRequest} message GetWorkflowRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        GetWorkflowRequest.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a GetWorkflowRequest message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtadmin.GetWorkflowRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtadmin.GetWorkflowRequest} GetWorkflowRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        GetWorkflowRequest.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.GetWorkflowRequest();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.cluster_id = reader.string();
+                    break;
+                case 2:
+                    message.keyspace = reader.string();
+                    break;
+                case 3:
+                    message.name = reader.string();
+                    break;
+                case 4:
+                    message.active_only = reader.bool();
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a GetWorkflowRequest message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtadmin.GetWorkflowRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtadmin.GetWorkflowRequest} GetWorkflowRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        GetWorkflowRequest.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a GetWorkflowRequest message.
+         * @function verify
+         * @memberof vtadmin.GetWorkflowRequest
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        GetWorkflowRequest.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.cluster_id != null && message.hasOwnProperty("cluster_id"))
+                if (!$util.isString(message.cluster_id))
+                    return "cluster_id: string expected";
+            if (message.keyspace != null && message.hasOwnProperty("keyspace"))
+                if (!$util.isString(message.keyspace))
+                    return "keyspace: string expected";
+            if (message.name != null && message.hasOwnProperty("name"))
+                if (!$util.isString(message.name))
+                    return "name: string expected";
+            if (message.active_only != null && message.hasOwnProperty("active_only"))
+                if (typeof message.active_only !== "boolean")
+                    return "active_only: boolean expected";
+            return null;
+        };
+
+        /**
+         * Creates a GetWorkflowRequest message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtadmin.GetWorkflowRequest
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtadmin.GetWorkflowRequest} GetWorkflowRequest
+         */
+        GetWorkflowRequest.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtadmin.GetWorkflowRequest)
+                return object;
+            var message = new $root.vtadmin.GetWorkflowRequest();
+            if (object.cluster_id != null)
+                message.cluster_id = String(object.cluster_id);
+            if (object.keyspace != null)
+                message.keyspace = String(object.keyspace);
+            if (object.name != null)
+                message.name = String(object.name);
+            if (object.active_only != null)
+                message.active_only = Boolean(object.active_only);
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a GetWorkflowRequest message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtadmin.GetWorkflowRequest
+         * @static
+         * @param {vtadmin.GetWorkflowRequest} message GetWorkflowRequest
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        GetWorkflowRequest.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.defaults) {
+                object.cluster_id = "";
+                object.keyspace = "";
+                object.name = "";
+                object.active_only = false;
+            }
+            if (message.cluster_id != null && message.hasOwnProperty("cluster_id"))
+                object.cluster_id = message.cluster_id;
+            if (message.keyspace != null && message.hasOwnProperty("keyspace"))
+                object.keyspace = message.keyspace;
+            if (message.name != null && message.hasOwnProperty("name"))
+                object.name = message.name;
+            if (message.active_only != null && message.hasOwnProperty("active_only"))
+                object.active_only = message.active_only;
+            return object;
+        };
+
+        /**
+         * Converts this GetWorkflowRequest to JSON.
+         * @function toJSON
+         * @memberof vtadmin.GetWorkflowRequest
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        GetWorkflowRequest.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return GetWorkflowRequest;
+    })();
+
+    vtadmin.GetWorkflowsRequest = (function() {
+
+        /**
+         * Properties of a GetWorkflowsRequest.
+         * @memberof vtadmin
+         * @interface IGetWorkflowsRequest
+         * @property {Array.<string>|null} [cluster_ids] GetWorkflowsRequest cluster_ids
+         * @property {boolean|null} [active_only] GetWorkflowsRequest active_only
+         * @property {Array.<string>|null} [keyspaces] GetWorkflowsRequest keyspaces
+         * @property {Array.<string>|null} [ignore_keyspaces] GetWorkflowsRequest ignore_keyspaces
+         */
+
+        /**
+         * Constructs a new GetWorkflowsRequest.
+         * @memberof vtadmin
+         * @classdesc Represents a GetWorkflowsRequest.
+         * @implements IGetWorkflowsRequest
+         * @constructor
+         * @param {vtadmin.IGetWorkflowsRequest=} [properties] Properties to set
+         */
+        function GetWorkflowsRequest(properties) {
+            this.cluster_ids = [];
+            this.keyspaces = [];
+            this.ignore_keyspaces = [];
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * GetWorkflowsRequest cluster_ids.
+         * @member {Array.<string>} cluster_ids
+         * @memberof vtadmin.GetWorkflowsRequest
+         * @instance
+         */
+        GetWorkflowsRequest.prototype.cluster_ids = $util.emptyArray;
+
+        /**
+         * GetWorkflowsRequest active_only.
+         * @member {boolean} active_only
+         * @memberof vtadmin.GetWorkflowsRequest
+         * @instance
+         */
+        GetWorkflowsRequest.prototype.active_only = false;
+
+        /**
+         * GetWorkflowsRequest keyspaces.
+         * @member {Array.<string>} keyspaces
+         * @memberof vtadmin.GetWorkflowsRequest
+         * @instance
+         */
+        GetWorkflowsRequest.prototype.keyspaces = $util.emptyArray;
+
+        /**
+         * GetWorkflowsRequest ignore_keyspaces.
+         * @member {Array.<string>} ignore_keyspaces
+         * @memberof vtadmin.GetWorkflowsRequest
+         * @instance
+         */
+        GetWorkflowsRequest.prototype.ignore_keyspaces = $util.emptyArray;
+
+        /**
+         * Creates a new GetWorkflowsRequest instance using the specified properties.
+         * @function create
+         * @memberof vtadmin.GetWorkflowsRequest
+         * @static
+         * @param {vtadmin.IGetWorkflowsRequest=} [properties] Properties to set
+         * @returns {vtadmin.GetWorkflowsRequest} GetWorkflowsRequest instance
+         */
+        GetWorkflowsRequest.create = function create(properties) {
+            return new GetWorkflowsRequest(properties);
+        };
+
+        /**
+         * Encodes the specified GetWorkflowsRequest message. Does not implicitly {@link vtadmin.GetWorkflowsRequest.verify|verify} messages.
+         * @function encode
+         * @memberof vtadmin.GetWorkflowsRequest
+         * @static
+         * @param {vtadmin.IGetWorkflowsRequest} message GetWorkflowsRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        GetWorkflowsRequest.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.cluster_ids != null && message.cluster_ids.length)
+                for (var i = 0; i < message.cluster_ids.length; ++i)
+                    writer.uint32(/* id 1, wireType 2 =*/10).string(message.cluster_ids[i]);
+            if (message.active_only != null && Object.hasOwnProperty.call(message, "active_only"))
+                writer.uint32(/* id 2, wireType 0 =*/16).bool(message.active_only);
+            if (message.keyspaces != null && message.keyspaces.length)
+                for (var i = 0; i < message.keyspaces.length; ++i)
+                    writer.uint32(/* id 3, wireType 2 =*/26).string(message.keyspaces[i]);
+            if (message.ignore_keyspaces != null && message.ignore_keyspaces.length)
+                for (var i = 0; i < message.ignore_keyspaces.length; ++i)
+                    writer.uint32(/* id 4, wireType 2 =*/34).string(message.ignore_keyspaces[i]);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified GetWorkflowsRequest message, length delimited. Does not implicitly {@link vtadmin.GetWorkflowsRequest.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtadmin.GetWorkflowsRequest
+         * @static
+         * @param {vtadmin.IGetWorkflowsRequest} message GetWorkflowsRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        GetWorkflowsRequest.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a GetWorkflowsRequest message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtadmin.GetWorkflowsRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtadmin.GetWorkflowsRequest} GetWorkflowsRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        GetWorkflowsRequest.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.GetWorkflowsRequest();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    if (!(message.cluster_ids && message.cluster_ids.length))
+                        message.cluster_ids = [];
+                    message.cluster_ids.push(reader.string());
+                    break;
+                case 2:
+                    message.active_only = reader.bool();
+                    break;
+                case 3:
+                    if (!(message.keyspaces && message.keyspaces.length))
+                        message.keyspaces = [];
+                    message.keyspaces.push(reader.string());
+                    break;
+                case 4:
+                    if (!(message.ignore_keyspaces && message.ignore_keyspaces.length))
+                        message.ignore_keyspaces = [];
+                    message.ignore_keyspaces.push(reader.string());
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a GetWorkflowsRequest message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtadmin.GetWorkflowsRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtadmin.GetWorkflowsRequest} GetWorkflowsRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        GetWorkflowsRequest.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a GetWorkflowsRequest message.
+         * @function verify
+         * @memberof vtadmin.GetWorkflowsRequest
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        GetWorkflowsRequest.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.cluster_ids != null && message.hasOwnProperty("cluster_ids")) {
+                if (!Array.isArray(message.cluster_ids))
+                    return "cluster_ids: array expected";
+                for (var i = 0; i < message.cluster_ids.length; ++i)
+                    if (!$util.isString(message.cluster_ids[i]))
+                        return "cluster_ids: string[] expected";
+            }
+            if (message.active_only != null && message.hasOwnProperty("active_only"))
+                if (typeof message.active_only !== "boolean")
+                    return "active_only: boolean expected";
+            if (message.keyspaces != null && message.hasOwnProperty("keyspaces")) {
+                if (!Array.isArray(message.keyspaces))
+                    return "keyspaces: array expected";
+                for (var i = 0; i < message.keyspaces.length; ++i)
+                    if (!$util.isString(message.keyspaces[i]))
+                        return "keyspaces: string[] expected";
+            }
+            if (message.ignore_keyspaces != null && message.hasOwnProperty("ignore_keyspaces")) {
+                if (!Array.isArray(message.ignore_keyspaces))
+                    return "ignore_keyspaces: array expected";
+                for (var i = 0; i < message.ignore_keyspaces.length; ++i)
+                    if (!$util.isString(message.ignore_keyspaces[i]))
+                        return "ignore_keyspaces: string[] expected";
+            }
+            return null;
+        };
+
+        /**
+         * Creates a GetWorkflowsRequest message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtadmin.GetWorkflowsRequest
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtadmin.GetWorkflowsRequest} GetWorkflowsRequest
+         */
+        GetWorkflowsRequest.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtadmin.GetWorkflowsRequest)
+                return object;
+            var message = new $root.vtadmin.GetWorkflowsRequest();
+            if (object.cluster_ids) {
+                if (!Array.isArray(object.cluster_ids))
+                    throw TypeError(".vtadmin.GetWorkflowsRequest.cluster_ids: array expected");
+                message.cluster_ids = [];
+                for (var i = 0; i < object.cluster_ids.length; ++i)
+                    message.cluster_ids[i] = String(object.cluster_ids[i]);
+            }
+            if (object.active_only != null)
+                message.active_only = Boolean(object.active_only);
+            if (object.keyspaces) {
+                if (!Array.isArray(object.keyspaces))
+                    throw TypeError(".vtadmin.GetWorkflowsRequest.keyspaces: array expected");
+                message.keyspaces = [];
+                for (var i = 0; i < object.keyspaces.length; ++i)
+                    message.keyspaces[i] = String(object.keyspaces[i]);
+            }
+            if (object.ignore_keyspaces) {
+                if (!Array.isArray(object.ignore_keyspaces))
+                    throw TypeError(".vtadmin.GetWorkflowsRequest.ignore_keyspaces: array expected");
+                message.ignore_keyspaces = [];
+                for (var i = 0; i < object.ignore_keyspaces.length; ++i)
+                    message.ignore_keyspaces[i] = String(object.ignore_keyspaces[i]);
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a GetWorkflowsRequest message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtadmin.GetWorkflowsRequest
+         * @static
+         * @param {vtadmin.GetWorkflowsRequest} message GetWorkflowsRequest
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        GetWorkflowsRequest.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.arrays || options.defaults) {
+                object.cluster_ids = [];
+                object.keyspaces = [];
+                object.ignore_keyspaces = [];
+            }
+            if (options.defaults)
+                object.active_only = false;
+            if (message.cluster_ids && message.cluster_ids.length) {
+                object.cluster_ids = [];
+                for (var j = 0; j < message.cluster_ids.length; ++j)
+                    object.cluster_ids[j] = message.cluster_ids[j];
+            }
+            if (message.active_only != null && message.hasOwnProperty("active_only"))
+                object.active_only = message.active_only;
+            if (message.keyspaces && message.keyspaces.length) {
+                object.keyspaces = [];
+                for (var j = 0; j < message.keyspaces.length; ++j)
+                    object.keyspaces[j] = message.keyspaces[j];
+            }
+            if (message.ignore_keyspaces && message.ignore_keyspaces.length) {
+                object.ignore_keyspaces = [];
+                for (var j = 0; j < message.ignore_keyspaces.length; ++j)
+                    object.ignore_keyspaces[j] = message.ignore_keyspaces[j];
+            }
+            return object;
+        };
+
+        /**
+         * Converts this GetWorkflowsRequest to JSON.
+         * @function toJSON
+         * @memberof vtadmin.GetWorkflowsRequest
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        GetWorkflowsRequest.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return GetWorkflowsRequest;
+    })();
+
+    vtadmin.GetWorkflowsResponse = (function() {
+
+        /**
+         * Properties of a GetWorkflowsResponse.
+         * @memberof vtadmin
+         * @interface IGetWorkflowsResponse
+         * @property {Object.<string,vtadmin.IClusterWorkflows>|null} [workflows_by_cluster] GetWorkflowsResponse workflows_by_cluster
+         */
+
+        /**
+         * Constructs a new GetWorkflowsResponse.
+         * @memberof vtadmin
+         * @classdesc Represents a GetWorkflowsResponse.
+         * @implements IGetWorkflowsResponse
+         * @constructor
+         * @param {vtadmin.IGetWorkflowsResponse=} [properties] Properties to set
+         */
+        function GetWorkflowsResponse(properties) {
+            this.workflows_by_cluster = {};
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * GetWorkflowsResponse workflows_by_cluster.
+         * @member {Object.<string,vtadmin.IClusterWorkflows>} workflows_by_cluster
+         * @memberof vtadmin.GetWorkflowsResponse
+         * @instance
+         */
+        GetWorkflowsResponse.prototype.workflows_by_cluster = $util.emptyObject;
+
+        /**
+         * Creates a new GetWorkflowsResponse instance using the specified properties.
+         * @function create
+         * @memberof vtadmin.GetWorkflowsResponse
+         * @static
+         * @param {vtadmin.IGetWorkflowsResponse=} [properties] Properties to set
+         * @returns {vtadmin.GetWorkflowsResponse} GetWorkflowsResponse instance
+         */
+        GetWorkflowsResponse.create = function create(properties) {
+            return new GetWorkflowsResponse(properties);
+        };
+
+        /**
+         * Encodes the specified GetWorkflowsResponse message. Does not implicitly {@link vtadmin.GetWorkflowsResponse.verify|verify} messages.
+         * @function encode
+         * @memberof vtadmin.GetWorkflowsResponse
+         * @static
+         * @param {vtadmin.IGetWorkflowsResponse} message GetWorkflowsResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        GetWorkflowsResponse.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.workflows_by_cluster != null && Object.hasOwnProperty.call(message, "workflows_by_cluster"))
+                for (var keys = Object.keys(message.workflows_by_cluster), i = 0; i < keys.length; ++i) {
+                    writer.uint32(/* id 1, wireType 2 =*/10).fork().uint32(/* id 1, wireType 2 =*/10).string(keys[i]);
+                    $root.vtadmin.ClusterWorkflows.encode(message.workflows_by_cluster[keys[i]], writer.uint32(/* id 2, wireType 2 =*/18).fork()).ldelim().ldelim();
+                }
+            return writer;
+        };
+
+        /**
+         * Encodes the specified GetWorkflowsResponse message, length delimited. Does not implicitly {@link vtadmin.GetWorkflowsResponse.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtadmin.GetWorkflowsResponse
+         * @static
+         * @param {vtadmin.IGetWorkflowsResponse} message GetWorkflowsResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        GetWorkflowsResponse.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a GetWorkflowsResponse message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtadmin.GetWorkflowsResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtadmin.GetWorkflowsResponse} GetWorkflowsResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        GetWorkflowsResponse.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.GetWorkflowsResponse(), key, value;
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    if (message.workflows_by_cluster === $util.emptyObject)
+                        message.workflows_by_cluster = {};
+                    var end2 = reader.uint32() + reader.pos;
+                    key = "";
+                    value = null;
+                    while (reader.pos < end2) {
+                        var tag2 = reader.uint32();
+                        switch (tag2 >>> 3) {
+                        case 1:
+                            key = reader.string();
+                            break;
+                        case 2:
+                            value = $root.vtadmin.ClusterWorkflows.decode(reader, reader.uint32());
+                            break;
+                        default:
+                            reader.skipType(tag2 & 7);
+                            break;
+                        }
+                    }
+                    message.workflows_by_cluster[key] = value;
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a GetWorkflowsResponse message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtadmin.GetWorkflowsResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtadmin.GetWorkflowsResponse} GetWorkflowsResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        GetWorkflowsResponse.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a GetWorkflowsResponse message.
+         * @function verify
+         * @memberof vtadmin.GetWorkflowsResponse
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        GetWorkflowsResponse.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.workflows_by_cluster != null && message.hasOwnProperty("workflows_by_cluster")) {
+                if (!$util.isObject(message.workflows_by_cluster))
+                    return "workflows_by_cluster: object expected";
+                var key = Object.keys(message.workflows_by_cluster);
+                for (var i = 0; i < key.length; ++i) {
+                    var error = $root.vtadmin.ClusterWorkflows.verify(message.workflows_by_cluster[key[i]]);
+                    if (error)
+                        return "workflows_by_cluster." + error;
+                }
+            }
+            return null;
+        };
+
+        /**
+         * Creates a GetWorkflowsResponse message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtadmin.GetWorkflowsResponse
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtadmin.GetWorkflowsResponse} GetWorkflowsResponse
+         */
+        GetWorkflowsResponse.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtadmin.GetWorkflowsResponse)
+                return object;
+            var message = new $root.vtadmin.GetWorkflowsResponse();
+            if (object.workflows_by_cluster) {
+                if (typeof object.workflows_by_cluster !== "object")
+                    throw TypeError(".vtadmin.GetWorkflowsResponse.workflows_by_cluster: object expected");
+                message.workflows_by_cluster = {};
+                for (var keys = Object.keys(object.workflows_by_cluster), i = 0; i < keys.length; ++i) {
+                    if (typeof object.workflows_by_cluster[keys[i]] !== "object")
+                        throw TypeError(".vtadmin.GetWorkflowsResponse.workflows_by_cluster: object expected");
+                    message.workflows_by_cluster[keys[i]] = $root.vtadmin.ClusterWorkflows.fromObject(object.workflows_by_cluster[keys[i]]);
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a GetWorkflowsResponse message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtadmin.GetWorkflowsResponse
+         * @static
+         * @param {vtadmin.GetWorkflowsResponse} message GetWorkflowsResponse
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        GetWorkflowsResponse.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.objects || options.defaults)
+                object.workflows_by_cluster = {};
+            var keys2;
+            if (message.workflows_by_cluster && (keys2 = Object.keys(message.workflows_by_cluster)).length) {
+                object.workflows_by_cluster = {};
+                for (var j = 0; j < keys2.length; ++j)
+                    object.workflows_by_cluster[keys2[j]] = $root.vtadmin.ClusterWorkflows.toObject(message.workflows_by_cluster[keys2[j]], options);
+            }
+            return object;
+        };
+
+        /**
+         * Converts this GetWorkflowsResponse to JSON.
+         * @function toJSON
+         * @memberof vtadmin.GetWorkflowsResponse
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        GetWorkflowsResponse.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return GetWorkflowsResponse;
     })();
 
     vtadmin.VTExplainRequest = (function() {
@@ -62099,6 +63440,461 @@ $root.vtctldata = (function() {
         return GetShardResponse;
     })();
 
+    vtctldata.GetSrvKeyspacesRequest = (function() {
+
+        /**
+         * Properties of a GetSrvKeyspacesRequest.
+         * @memberof vtctldata
+         * @interface IGetSrvKeyspacesRequest
+         * @property {string|null} [keyspace] GetSrvKeyspacesRequest keyspace
+         * @property {Array.<string>|null} [cells] GetSrvKeyspacesRequest cells
+         */
+
+        /**
+         * Constructs a new GetSrvKeyspacesRequest.
+         * @memberof vtctldata
+         * @classdesc Represents a GetSrvKeyspacesRequest.
+         * @implements IGetSrvKeyspacesRequest
+         * @constructor
+         * @param {vtctldata.IGetSrvKeyspacesRequest=} [properties] Properties to set
+         */
+        function GetSrvKeyspacesRequest(properties) {
+            this.cells = [];
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * GetSrvKeyspacesRequest keyspace.
+         * @member {string} keyspace
+         * @memberof vtctldata.GetSrvKeyspacesRequest
+         * @instance
+         */
+        GetSrvKeyspacesRequest.prototype.keyspace = "";
+
+        /**
+         * GetSrvKeyspacesRequest cells.
+         * @member {Array.<string>} cells
+         * @memberof vtctldata.GetSrvKeyspacesRequest
+         * @instance
+         */
+        GetSrvKeyspacesRequest.prototype.cells = $util.emptyArray;
+
+        /**
+         * Creates a new GetSrvKeyspacesRequest instance using the specified properties.
+         * @function create
+         * @memberof vtctldata.GetSrvKeyspacesRequest
+         * @static
+         * @param {vtctldata.IGetSrvKeyspacesRequest=} [properties] Properties to set
+         * @returns {vtctldata.GetSrvKeyspacesRequest} GetSrvKeyspacesRequest instance
+         */
+        GetSrvKeyspacesRequest.create = function create(properties) {
+            return new GetSrvKeyspacesRequest(properties);
+        };
+
+        /**
+         * Encodes the specified GetSrvKeyspacesRequest message. Does not implicitly {@link vtctldata.GetSrvKeyspacesRequest.verify|verify} messages.
+         * @function encode
+         * @memberof vtctldata.GetSrvKeyspacesRequest
+         * @static
+         * @param {vtctldata.IGetSrvKeyspacesRequest} message GetSrvKeyspacesRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        GetSrvKeyspacesRequest.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.keyspace != null && Object.hasOwnProperty.call(message, "keyspace"))
+                writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
+            if (message.cells != null && message.cells.length)
+                for (var i = 0; i < message.cells.length; ++i)
+                    writer.uint32(/* id 2, wireType 2 =*/18).string(message.cells[i]);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified GetSrvKeyspacesRequest message, length delimited. Does not implicitly {@link vtctldata.GetSrvKeyspacesRequest.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtctldata.GetSrvKeyspacesRequest
+         * @static
+         * @param {vtctldata.IGetSrvKeyspacesRequest} message GetSrvKeyspacesRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        GetSrvKeyspacesRequest.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a GetSrvKeyspacesRequest message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtctldata.GetSrvKeyspacesRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtctldata.GetSrvKeyspacesRequest} GetSrvKeyspacesRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        GetSrvKeyspacesRequest.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.GetSrvKeyspacesRequest();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.keyspace = reader.string();
+                    break;
+                case 2:
+                    if (!(message.cells && message.cells.length))
+                        message.cells = [];
+                    message.cells.push(reader.string());
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a GetSrvKeyspacesRequest message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtctldata.GetSrvKeyspacesRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtctldata.GetSrvKeyspacesRequest} GetSrvKeyspacesRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        GetSrvKeyspacesRequest.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a GetSrvKeyspacesRequest message.
+         * @function verify
+         * @memberof vtctldata.GetSrvKeyspacesRequest
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        GetSrvKeyspacesRequest.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.keyspace != null && message.hasOwnProperty("keyspace"))
+                if (!$util.isString(message.keyspace))
+                    return "keyspace: string expected";
+            if (message.cells != null && message.hasOwnProperty("cells")) {
+                if (!Array.isArray(message.cells))
+                    return "cells: array expected";
+                for (var i = 0; i < message.cells.length; ++i)
+                    if (!$util.isString(message.cells[i]))
+                        return "cells: string[] expected";
+            }
+            return null;
+        };
+
+        /**
+         * Creates a GetSrvKeyspacesRequest message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtctldata.GetSrvKeyspacesRequest
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtctldata.GetSrvKeyspacesRequest} GetSrvKeyspacesRequest
+         */
+        GetSrvKeyspacesRequest.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtctldata.GetSrvKeyspacesRequest)
+                return object;
+            var message = new $root.vtctldata.GetSrvKeyspacesRequest();
+            if (object.keyspace != null)
+                message.keyspace = String(object.keyspace);
+            if (object.cells) {
+                if (!Array.isArray(object.cells))
+                    throw TypeError(".vtctldata.GetSrvKeyspacesRequest.cells: array expected");
+                message.cells = [];
+                for (var i = 0; i < object.cells.length; ++i)
+                    message.cells[i] = String(object.cells[i]);
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a GetSrvKeyspacesRequest message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtctldata.GetSrvKeyspacesRequest
+         * @static
+         * @param {vtctldata.GetSrvKeyspacesRequest} message GetSrvKeyspacesRequest
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        GetSrvKeyspacesRequest.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.arrays || options.defaults)
+                object.cells = [];
+            if (options.defaults)
+                object.keyspace = "";
+            if (message.keyspace != null && message.hasOwnProperty("keyspace"))
+                object.keyspace = message.keyspace;
+            if (message.cells && message.cells.length) {
+                object.cells = [];
+                for (var j = 0; j < message.cells.length; ++j)
+                    object.cells[j] = message.cells[j];
+            }
+            return object;
+        };
+
+        /**
+         * Converts this GetSrvKeyspacesRequest to JSON.
+         * @function toJSON
+         * @memberof vtctldata.GetSrvKeyspacesRequest
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        GetSrvKeyspacesRequest.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return GetSrvKeyspacesRequest;
+    })();
+
+    vtctldata.GetSrvKeyspacesResponse = (function() {
+
+        /**
+         * Properties of a GetSrvKeyspacesResponse.
+         * @memberof vtctldata
+         * @interface IGetSrvKeyspacesResponse
+         * @property {Object.<string,topodata.ISrvKeyspace>|null} [srv_keyspaces] GetSrvKeyspacesResponse srv_keyspaces
+         */
+
+        /**
+         * Constructs a new GetSrvKeyspacesResponse.
+         * @memberof vtctldata
+         * @classdesc Represents a GetSrvKeyspacesResponse.
+         * @implements IGetSrvKeyspacesResponse
+         * @constructor
+         * @param {vtctldata.IGetSrvKeyspacesResponse=} [properties] Properties to set
+         */
+        function GetSrvKeyspacesResponse(properties) {
+            this.srv_keyspaces = {};
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * GetSrvKeyspacesResponse srv_keyspaces.
+         * @member {Object.<string,topodata.ISrvKeyspace>} srv_keyspaces
+         * @memberof vtctldata.GetSrvKeyspacesResponse
+         * @instance
+         */
+        GetSrvKeyspacesResponse.prototype.srv_keyspaces = $util.emptyObject;
+
+        /**
+         * Creates a new GetSrvKeyspacesResponse instance using the specified properties.
+         * @function create
+         * @memberof vtctldata.GetSrvKeyspacesResponse
+         * @static
+         * @param {vtctldata.IGetSrvKeyspacesResponse=} [properties] Properties to set
+         * @returns {vtctldata.GetSrvKeyspacesResponse} GetSrvKeyspacesResponse instance
+         */
+        GetSrvKeyspacesResponse.create = function create(properties) {
+            return new GetSrvKeyspacesResponse(properties);
+        };
+
+        /**
+         * Encodes the specified GetSrvKeyspacesResponse message. Does not implicitly {@link vtctldata.GetSrvKeyspacesResponse.verify|verify} messages.
+         * @function encode
+         * @memberof vtctldata.GetSrvKeyspacesResponse
+         * @static
+         * @param {vtctldata.IGetSrvKeyspacesResponse} message GetSrvKeyspacesResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        GetSrvKeyspacesResponse.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.srv_keyspaces != null && Object.hasOwnProperty.call(message, "srv_keyspaces"))
+                for (var keys = Object.keys(message.srv_keyspaces), i = 0; i < keys.length; ++i) {
+                    writer.uint32(/* id 1, wireType 2 =*/10).fork().uint32(/* id 1, wireType 2 =*/10).string(keys[i]);
+                    $root.topodata.SrvKeyspace.encode(message.srv_keyspaces[keys[i]], writer.uint32(/* id 2, wireType 2 =*/18).fork()).ldelim().ldelim();
+                }
+            return writer;
+        };
+
+        /**
+         * Encodes the specified GetSrvKeyspacesResponse message, length delimited. Does not implicitly {@link vtctldata.GetSrvKeyspacesResponse.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtctldata.GetSrvKeyspacesResponse
+         * @static
+         * @param {vtctldata.IGetSrvKeyspacesResponse} message GetSrvKeyspacesResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        GetSrvKeyspacesResponse.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a GetSrvKeyspacesResponse message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtctldata.GetSrvKeyspacesResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtctldata.GetSrvKeyspacesResponse} GetSrvKeyspacesResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        GetSrvKeyspacesResponse.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.GetSrvKeyspacesResponse(), key, value;
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    if (message.srv_keyspaces === $util.emptyObject)
+                        message.srv_keyspaces = {};
+                    var end2 = reader.uint32() + reader.pos;
+                    key = "";
+                    value = null;
+                    while (reader.pos < end2) {
+                        var tag2 = reader.uint32();
+                        switch (tag2 >>> 3) {
+                        case 1:
+                            key = reader.string();
+                            break;
+                        case 2:
+                            value = $root.topodata.SrvKeyspace.decode(reader, reader.uint32());
+                            break;
+                        default:
+                            reader.skipType(tag2 & 7);
+                            break;
+                        }
+                    }
+                    message.srv_keyspaces[key] = value;
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a GetSrvKeyspacesResponse message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtctldata.GetSrvKeyspacesResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtctldata.GetSrvKeyspacesResponse} GetSrvKeyspacesResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        GetSrvKeyspacesResponse.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a GetSrvKeyspacesResponse message.
+         * @function verify
+         * @memberof vtctldata.GetSrvKeyspacesResponse
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        GetSrvKeyspacesResponse.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.srv_keyspaces != null && message.hasOwnProperty("srv_keyspaces")) {
+                if (!$util.isObject(message.srv_keyspaces))
+                    return "srv_keyspaces: object expected";
+                var key = Object.keys(message.srv_keyspaces);
+                for (var i = 0; i < key.length; ++i) {
+                    var error = $root.topodata.SrvKeyspace.verify(message.srv_keyspaces[key[i]]);
+                    if (error)
+                        return "srv_keyspaces." + error;
+                }
+            }
+            return null;
+        };
+
+        /**
+         * Creates a GetSrvKeyspacesResponse message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtctldata.GetSrvKeyspacesResponse
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtctldata.GetSrvKeyspacesResponse} GetSrvKeyspacesResponse
+         */
+        GetSrvKeyspacesResponse.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtctldata.GetSrvKeyspacesResponse)
+                return object;
+            var message = new $root.vtctldata.GetSrvKeyspacesResponse();
+            if (object.srv_keyspaces) {
+                if (typeof object.srv_keyspaces !== "object")
+                    throw TypeError(".vtctldata.GetSrvKeyspacesResponse.srv_keyspaces: object expected");
+                message.srv_keyspaces = {};
+                for (var keys = Object.keys(object.srv_keyspaces), i = 0; i < keys.length; ++i) {
+                    if (typeof object.srv_keyspaces[keys[i]] !== "object")
+                        throw TypeError(".vtctldata.GetSrvKeyspacesResponse.srv_keyspaces: object expected");
+                    message.srv_keyspaces[keys[i]] = $root.topodata.SrvKeyspace.fromObject(object.srv_keyspaces[keys[i]]);
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a GetSrvKeyspacesResponse message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtctldata.GetSrvKeyspacesResponse
+         * @static
+         * @param {vtctldata.GetSrvKeyspacesResponse} message GetSrvKeyspacesResponse
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        GetSrvKeyspacesResponse.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.objects || options.defaults)
+                object.srv_keyspaces = {};
+            var keys2;
+            if (message.srv_keyspaces && (keys2 = Object.keys(message.srv_keyspaces)).length) {
+                object.srv_keyspaces = {};
+                for (var j = 0; j < keys2.length; ++j)
+                    object.srv_keyspaces[keys2[j]] = $root.topodata.SrvKeyspace.toObject(message.srv_keyspaces[keys2[j]], options);
+            }
+            return object;
+        };
+
+        /**
+         * Converts this GetSrvKeyspacesResponse to JSON.
+         * @function toJSON
+         * @memberof vtctldata.GetSrvKeyspacesResponse
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        GetSrvKeyspacesResponse.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return GetSrvKeyspacesResponse;
+    })();
+
     vtctldata.GetSrvVSchemaRequest = (function() {
 
         /**
@@ -66459,6 +68255,509 @@ $root.vtctldata = (function() {
         };
 
         return ReparentTabletResponse;
+    })();
+
+    vtctldata.ShardReplicationPositionsRequest = (function() {
+
+        /**
+         * Properties of a ShardReplicationPositionsRequest.
+         * @memberof vtctldata
+         * @interface IShardReplicationPositionsRequest
+         * @property {string|null} [keyspace] ShardReplicationPositionsRequest keyspace
+         * @property {string|null} [shard] ShardReplicationPositionsRequest shard
+         */
+
+        /**
+         * Constructs a new ShardReplicationPositionsRequest.
+         * @memberof vtctldata
+         * @classdesc Represents a ShardReplicationPositionsRequest.
+         * @implements IShardReplicationPositionsRequest
+         * @constructor
+         * @param {vtctldata.IShardReplicationPositionsRequest=} [properties] Properties to set
+         */
+        function ShardReplicationPositionsRequest(properties) {
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * ShardReplicationPositionsRequest keyspace.
+         * @member {string} keyspace
+         * @memberof vtctldata.ShardReplicationPositionsRequest
+         * @instance
+         */
+        ShardReplicationPositionsRequest.prototype.keyspace = "";
+
+        /**
+         * ShardReplicationPositionsRequest shard.
+         * @member {string} shard
+         * @memberof vtctldata.ShardReplicationPositionsRequest
+         * @instance
+         */
+        ShardReplicationPositionsRequest.prototype.shard = "";
+
+        /**
+         * Creates a new ShardReplicationPositionsRequest instance using the specified properties.
+         * @function create
+         * @memberof vtctldata.ShardReplicationPositionsRequest
+         * @static
+         * @param {vtctldata.IShardReplicationPositionsRequest=} [properties] Properties to set
+         * @returns {vtctldata.ShardReplicationPositionsRequest} ShardReplicationPositionsRequest instance
+         */
+        ShardReplicationPositionsRequest.create = function create(properties) {
+            return new ShardReplicationPositionsRequest(properties);
+        };
+
+        /**
+         * Encodes the specified ShardReplicationPositionsRequest message. Does not implicitly {@link vtctldata.ShardReplicationPositionsRequest.verify|verify} messages.
+         * @function encode
+         * @memberof vtctldata.ShardReplicationPositionsRequest
+         * @static
+         * @param {vtctldata.IShardReplicationPositionsRequest} message ShardReplicationPositionsRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        ShardReplicationPositionsRequest.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.keyspace != null && Object.hasOwnProperty.call(message, "keyspace"))
+                writer.uint32(/* id 1, wireType 2 =*/10).string(message.keyspace);
+            if (message.shard != null && Object.hasOwnProperty.call(message, "shard"))
+                writer.uint32(/* id 2, wireType 2 =*/18).string(message.shard);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified ShardReplicationPositionsRequest message, length delimited. Does not implicitly {@link vtctldata.ShardReplicationPositionsRequest.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtctldata.ShardReplicationPositionsRequest
+         * @static
+         * @param {vtctldata.IShardReplicationPositionsRequest} message ShardReplicationPositionsRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        ShardReplicationPositionsRequest.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a ShardReplicationPositionsRequest message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtctldata.ShardReplicationPositionsRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtctldata.ShardReplicationPositionsRequest} ShardReplicationPositionsRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        ShardReplicationPositionsRequest.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.ShardReplicationPositionsRequest();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.keyspace = reader.string();
+                    break;
+                case 2:
+                    message.shard = reader.string();
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a ShardReplicationPositionsRequest message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtctldata.ShardReplicationPositionsRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtctldata.ShardReplicationPositionsRequest} ShardReplicationPositionsRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        ShardReplicationPositionsRequest.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a ShardReplicationPositionsRequest message.
+         * @function verify
+         * @memberof vtctldata.ShardReplicationPositionsRequest
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        ShardReplicationPositionsRequest.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.keyspace != null && message.hasOwnProperty("keyspace"))
+                if (!$util.isString(message.keyspace))
+                    return "keyspace: string expected";
+            if (message.shard != null && message.hasOwnProperty("shard"))
+                if (!$util.isString(message.shard))
+                    return "shard: string expected";
+            return null;
+        };
+
+        /**
+         * Creates a ShardReplicationPositionsRequest message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtctldata.ShardReplicationPositionsRequest
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtctldata.ShardReplicationPositionsRequest} ShardReplicationPositionsRequest
+         */
+        ShardReplicationPositionsRequest.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtctldata.ShardReplicationPositionsRequest)
+                return object;
+            var message = new $root.vtctldata.ShardReplicationPositionsRequest();
+            if (object.keyspace != null)
+                message.keyspace = String(object.keyspace);
+            if (object.shard != null)
+                message.shard = String(object.shard);
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a ShardReplicationPositionsRequest message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtctldata.ShardReplicationPositionsRequest
+         * @static
+         * @param {vtctldata.ShardReplicationPositionsRequest} message ShardReplicationPositionsRequest
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        ShardReplicationPositionsRequest.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.defaults) {
+                object.keyspace = "";
+                object.shard = "";
+            }
+            if (message.keyspace != null && message.hasOwnProperty("keyspace"))
+                object.keyspace = message.keyspace;
+            if (message.shard != null && message.hasOwnProperty("shard"))
+                object.shard = message.shard;
+            return object;
+        };
+
+        /**
+         * Converts this ShardReplicationPositionsRequest to JSON.
+         * @function toJSON
+         * @memberof vtctldata.ShardReplicationPositionsRequest
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        ShardReplicationPositionsRequest.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return ShardReplicationPositionsRequest;
+    })();
+
+    vtctldata.ShardReplicationPositionsResponse = (function() {
+
+        /**
+         * Properties of a ShardReplicationPositionsResponse.
+         * @memberof vtctldata
+         * @interface IShardReplicationPositionsResponse
+         * @property {Object.<string,replicationdata.IStatus>|null} [replication_statuses] ShardReplicationPositionsResponse replication_statuses
+         * @property {Object.<string,topodata.ITablet>|null} [tablet_map] ShardReplicationPositionsResponse tablet_map
+         */
+
+        /**
+         * Constructs a new ShardReplicationPositionsResponse.
+         * @memberof vtctldata
+         * @classdesc Represents a ShardReplicationPositionsResponse.
+         * @implements IShardReplicationPositionsResponse
+         * @constructor
+         * @param {vtctldata.IShardReplicationPositionsResponse=} [properties] Properties to set
+         */
+        function ShardReplicationPositionsResponse(properties) {
+            this.replication_statuses = {};
+            this.tablet_map = {};
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * ShardReplicationPositionsResponse replication_statuses.
+         * @member {Object.<string,replicationdata.IStatus>} replication_statuses
+         * @memberof vtctldata.ShardReplicationPositionsResponse
+         * @instance
+         */
+        ShardReplicationPositionsResponse.prototype.replication_statuses = $util.emptyObject;
+
+        /**
+         * ShardReplicationPositionsResponse tablet_map.
+         * @member {Object.<string,topodata.ITablet>} tablet_map
+         * @memberof vtctldata.ShardReplicationPositionsResponse
+         * @instance
+         */
+        ShardReplicationPositionsResponse.prototype.tablet_map = $util.emptyObject;
+
+        /**
+         * Creates a new ShardReplicationPositionsResponse instance using the specified properties.
+         * @function create
+         * @memberof vtctldata.ShardReplicationPositionsResponse
+         * @static
+         * @param {vtctldata.IShardReplicationPositionsResponse=} [properties] Properties to set
+         * @returns {vtctldata.ShardReplicationPositionsResponse} ShardReplicationPositionsResponse instance
+         */
+        ShardReplicationPositionsResponse.create = function create(properties) {
+            return new ShardReplicationPositionsResponse(properties);
+        };
+
+        /**
+         * Encodes the specified ShardReplicationPositionsResponse message. Does not implicitly {@link vtctldata.ShardReplicationPositionsResponse.verify|verify} messages.
+         * @function encode
+         * @memberof vtctldata.ShardReplicationPositionsResponse
+         * @static
+         * @param {vtctldata.IShardReplicationPositionsResponse} message ShardReplicationPositionsResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        ShardReplicationPositionsResponse.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.replication_statuses != null && Object.hasOwnProperty.call(message, "replication_statuses"))
+                for (var keys = Object.keys(message.replication_statuses), i = 0; i < keys.length; ++i) {
+                    writer.uint32(/* id 1, wireType 2 =*/10).fork().uint32(/* id 1, wireType 2 =*/10).string(keys[i]);
+                    $root.replicationdata.Status.encode(message.replication_statuses[keys[i]], writer.uint32(/* id 2, wireType 2 =*/18).fork()).ldelim().ldelim();
+                }
+            if (message.tablet_map != null && Object.hasOwnProperty.call(message, "tablet_map"))
+                for (var keys = Object.keys(message.tablet_map), i = 0; i < keys.length; ++i) {
+                    writer.uint32(/* id 2, wireType 2 =*/18).fork().uint32(/* id 1, wireType 2 =*/10).string(keys[i]);
+                    $root.topodata.Tablet.encode(message.tablet_map[keys[i]], writer.uint32(/* id 2, wireType 2 =*/18).fork()).ldelim().ldelim();
+                }
+            return writer;
+        };
+
+        /**
+         * Encodes the specified ShardReplicationPositionsResponse message, length delimited. Does not implicitly {@link vtctldata.ShardReplicationPositionsResponse.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtctldata.ShardReplicationPositionsResponse
+         * @static
+         * @param {vtctldata.IShardReplicationPositionsResponse} message ShardReplicationPositionsResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        ShardReplicationPositionsResponse.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a ShardReplicationPositionsResponse message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtctldata.ShardReplicationPositionsResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtctldata.ShardReplicationPositionsResponse} ShardReplicationPositionsResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        ShardReplicationPositionsResponse.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.ShardReplicationPositionsResponse(), key, value;
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    if (message.replication_statuses === $util.emptyObject)
+                        message.replication_statuses = {};
+                    var end2 = reader.uint32() + reader.pos;
+                    key = "";
+                    value = null;
+                    while (reader.pos < end2) {
+                        var tag2 = reader.uint32();
+                        switch (tag2 >>> 3) {
+                        case 1:
+                            key = reader.string();
+                            break;
+                        case 2:
+                            value = $root.replicationdata.Status.decode(reader, reader.uint32());
+                            break;
+                        default:
+                            reader.skipType(tag2 & 7);
+                            break;
+                        }
+                    }
+                    message.replication_statuses[key] = value;
+                    break;
+                case 2:
+                    if (message.tablet_map === $util.emptyObject)
+                        message.tablet_map = {};
+                    var end2 = reader.uint32() + reader.pos;
+                    key = "";
+                    value = null;
+                    while (reader.pos < end2) {
+                        var tag2 = reader.uint32();
+                        switch (tag2 >>> 3) {
+                        case 1:
+                            key = reader.string();
+                            break;
+                        case 2:
+                            value = $root.topodata.Tablet.decode(reader, reader.uint32());
+                            break;
+                        default:
+                            reader.skipType(tag2 & 7);
+                            break;
+                        }
+                    }
+                    message.tablet_map[key] = value;
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a ShardReplicationPositionsResponse message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtctldata.ShardReplicationPositionsResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtctldata.ShardReplicationPositionsResponse} ShardReplicationPositionsResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        ShardReplicationPositionsResponse.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a ShardReplicationPositionsResponse message.
+         * @function verify
+         * @memberof vtctldata.ShardReplicationPositionsResponse
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        ShardReplicationPositionsResponse.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.replication_statuses != null && message.hasOwnProperty("replication_statuses")) {
+                if (!$util.isObject(message.replication_statuses))
+                    return "replication_statuses: object expected";
+                var key = Object.keys(message.replication_statuses);
+                for (var i = 0; i < key.length; ++i) {
+                    var error = $root.replicationdata.Status.verify(message.replication_statuses[key[i]]);
+                    if (error)
+                        return "replication_statuses." + error;
+                }
+            }
+            if (message.tablet_map != null && message.hasOwnProperty("tablet_map")) {
+                if (!$util.isObject(message.tablet_map))
+                    return "tablet_map: object expected";
+                var key = Object.keys(message.tablet_map);
+                for (var i = 0; i < key.length; ++i) {
+                    var error = $root.topodata.Tablet.verify(message.tablet_map[key[i]]);
+                    if (error)
+                        return "tablet_map." + error;
+                }
+            }
+            return null;
+        };
+
+        /**
+         * Creates a ShardReplicationPositionsResponse message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtctldata.ShardReplicationPositionsResponse
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtctldata.ShardReplicationPositionsResponse} ShardReplicationPositionsResponse
+         */
+        ShardReplicationPositionsResponse.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtctldata.ShardReplicationPositionsResponse)
+                return object;
+            var message = new $root.vtctldata.ShardReplicationPositionsResponse();
+            if (object.replication_statuses) {
+                if (typeof object.replication_statuses !== "object")
+                    throw TypeError(".vtctldata.ShardReplicationPositionsResponse.replication_statuses: object expected");
+                message.replication_statuses = {};
+                for (var keys = Object.keys(object.replication_statuses), i = 0; i < keys.length; ++i) {
+                    if (typeof object.replication_statuses[keys[i]] !== "object")
+                        throw TypeError(".vtctldata.ShardReplicationPositionsResponse.replication_statuses: object expected");
+                    message.replication_statuses[keys[i]] = $root.replicationdata.Status.fromObject(object.replication_statuses[keys[i]]);
+                }
+            }
+            if (object.tablet_map) {
+                if (typeof object.tablet_map !== "object")
+                    throw TypeError(".vtctldata.ShardReplicationPositionsResponse.tablet_map: object expected");
+                message.tablet_map = {};
+                for (var keys = Object.keys(object.tablet_map), i = 0; i < keys.length; ++i) {
+                    if (typeof object.tablet_map[keys[i]] !== "object")
+                        throw TypeError(".vtctldata.ShardReplicationPositionsResponse.tablet_map: object expected");
+                    message.tablet_map[keys[i]] = $root.topodata.Tablet.fromObject(object.tablet_map[keys[i]]);
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a ShardReplicationPositionsResponse message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtctldata.ShardReplicationPositionsResponse
+         * @static
+         * @param {vtctldata.ShardReplicationPositionsResponse} message ShardReplicationPositionsResponse
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        ShardReplicationPositionsResponse.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.objects || options.defaults) {
+                object.replication_statuses = {};
+                object.tablet_map = {};
+            }
+            var keys2;
+            if (message.replication_statuses && (keys2 = Object.keys(message.replication_statuses)).length) {
+                object.replication_statuses = {};
+                for (var j = 0; j < keys2.length; ++j)
+                    object.replication_statuses[keys2[j]] = $root.replicationdata.Status.toObject(message.replication_statuses[keys2[j]], options);
+            }
+            if (message.tablet_map && (keys2 = Object.keys(message.tablet_map)).length) {
+                object.tablet_map = {};
+                for (var j = 0; j < keys2.length; ++j)
+                    object.tablet_map[keys2[j]] = $root.topodata.Tablet.toObject(message.tablet_map[keys2[j]], options);
+            }
+            return object;
+        };
+
+        /**
+         * Converts this ShardReplicationPositionsResponse to JSON.
+         * @function toJSON
+         * @memberof vtctldata.ShardReplicationPositionsResponse
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        ShardReplicationPositionsResponse.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return ShardReplicationPositionsResponse;
     })();
 
     vtctldata.TabletExternallyReparentedRequest = (function() {

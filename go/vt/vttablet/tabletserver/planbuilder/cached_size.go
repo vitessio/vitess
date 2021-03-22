@@ -17,6 +17,10 @@ limitations under the License.
 
 package planbuilder
 
+type cachedObject interface {
+	CachedSize(alloc bool) int64
+}
+
 func (cached *Permission) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -35,7 +39,7 @@ func (cached *Plan) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(152)
+		size += int64(168)
 	}
 	// field Table *vitess.io/vitess/go/vt/vttablet/tabletserver/schema.Table
 	size += cached.Table.CachedSize(true)
@@ -54,5 +58,9 @@ func (cached *Plan) CachedSize(alloc bool) int64 {
 	size += cached.NextCount.CachedSize(false)
 	// field WhereClause *vitess.io/vitess/go/vt/sqlparser.ParsedQuery
 	size += cached.WhereClause.CachedSize(true)
+	// field FullStmt vitess.io/vitess/go/vt/sqlparser.Statement
+	if cc, ok := cached.FullStmt.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
 	return size
 }

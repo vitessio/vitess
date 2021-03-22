@@ -172,6 +172,15 @@ func (client *gRPCVtctldClient) GetShard(ctx context.Context, in *vtctldatapb.Ge
 	return client.c.GetShard(ctx, in, opts...)
 }
 
+// GetSrvKeyspaces is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) GetSrvKeyspaces(ctx context.Context, in *vtctldatapb.GetSrvKeyspacesRequest, opts ...grpc.CallOption) (*vtctldatapb.GetSrvKeyspacesResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.GetSrvKeyspaces(ctx, in, opts...)
+}
+
 // GetSrvVSchema is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) GetSrvVSchema(ctx context.Context, in *vtctldatapb.GetSrvVSchemaRequest, opts ...grpc.CallOption) (*vtctldatapb.GetSrvVSchemaResponse, error) {
 	if client.c == nil {
@@ -260,6 +269,15 @@ func (client *gRPCVtctldClient) ReparentTablet(ctx context.Context, in *vtctldat
 	}
 
 	return client.c.ReparentTablet(ctx, in, opts...)
+}
+
+// ShardReplicationPositions is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) ShardReplicationPositions(ctx context.Context, in *vtctldatapb.ShardReplicationPositionsRequest, opts ...grpc.CallOption) (*vtctldatapb.ShardReplicationPositionsResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.ShardReplicationPositions(ctx, in, opts...)
 }
 
 // TabletExternallyReparented is part of the vtctlservicepb.VtctldClient interface.

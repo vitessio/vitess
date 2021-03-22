@@ -74,7 +74,7 @@ type join struct {
 // newJoin makes a new join using the two planBuilder. ajoin can be nil
 // if the join is on a ',' operator. lpb will contain the resulting join.
 // rpb will be discarded.
-func newJoin(lpb, rpb *primitiveBuilder, ajoin *sqlparser.JoinTableExpr) error {
+func newJoin(lpb, rpb *primitiveBuilder, ajoin *sqlparser.JoinTableExpr, reservedVars sqlparser.BindVars) error {
 	// This function converts ON clauses to WHERE clauses. The WHERE clause
 	// scope can see all tables, whereas the ON clause can only see the
 	// participants of the JOIN. However, since the ON clause doesn't allow
@@ -96,7 +96,7 @@ func newJoin(lpb, rpb *primitiveBuilder, ajoin *sqlparser.JoinTableExpr) error {
 			// At this point, the LHS symtab also contains symbols of the RHS.
 			// But the RHS will hide those, as intended.
 			rpb.st.Outer = lpb.st
-			if err := rpb.pushFilter(ajoin.Condition.On, sqlparser.WhereStr); err != nil {
+			if err := rpb.pushFilter(ajoin.Condition.On, sqlparser.WhereStr, reservedVars); err != nil {
 				return err
 			}
 		case ajoin.Condition.Using != nil:
@@ -116,7 +116,7 @@ func newJoin(lpb, rpb *primitiveBuilder, ajoin *sqlparser.JoinTableExpr) error {
 	if ajoin == nil || opcode == engine.LeftJoin {
 		return nil
 	}
-	return lpb.pushFilter(ajoin.Condition.On, sqlparser.WhereStr)
+	return lpb.pushFilter(ajoin.Condition.On, sqlparser.WhereStr, reservedVars)
 }
 
 // Order implements the logicalPlan interface
