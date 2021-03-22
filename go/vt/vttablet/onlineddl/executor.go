@@ -1663,6 +1663,16 @@ func (e *Executor) executeMigration(ctx context.Context, onlineDDL *schema.Onlin
 			// - ALTER the table, if it exists and is different, or
 			// - Implicitly do nothing, if the table exists and is identical to CREATE statement
 
+			{
+				// Sanity: reject IF NOT EXISTS statements, because they don't make sense (or are ambiguous) in declarative mode
+				ddlStmt, _, err := schema.ParseOnlineDDLStatement(onlineDDL.SQL)
+				if err != nil {
+					return failMigration(err)
+				}
+				if ddlStmt.GetIfNotExists() {
+					return failMigration(vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "strategy is declarative. IF NOT EXISTS does not work in declarative mode for migration %v", onlineDDL.UUID))
+				}
+			}
 			exists, err := e.tableExists(ctx, onlineDDL.Table)
 			if err != nil {
 				return failMigration(err)
