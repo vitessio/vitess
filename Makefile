@@ -110,10 +110,13 @@ asthelpers:
 	go run ./go/tools/asthelpergen/main -in ./go/vt/sqlparser -iface vitess.io/vitess/go/vt/sqlparser.SQLNode -except "*ColName"
 
 sizegen:
-	go run go/tools/sizegen/sizegen.go \
+	go run ./go/tools/sizegen/sizegen.go \
 		-in ./go/vt/... \
 	  	-gen vitess.io/vitess/go/vt/vtgate/engine.Plan \
 	  	-gen vitess.io/vitess/go/vt/vttablet/tabletserver.TabletPlan
+
+astfmtgen:
+	go run ./go/tools/astfmtgen/main.go vitess.io/vitess/go/vt/sqlparser/...
 
 # To pass extra flags, run test.go manually.
 # For example: go run test.go -docker=false -- --extra-flag
