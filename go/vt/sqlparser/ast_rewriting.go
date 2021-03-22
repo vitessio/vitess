@@ -337,7 +337,7 @@ func SystemSchema(schema string) bool {
 // RewriteToCNF walks the input AST and rewrites any boolean logic into CNF
 // Note: In order to re-plan, we need to empty the accumulated metadata in the AST,
 // so ColName.Metadata will be nil:ed out as part of this rewrite
-func RewriteToCNF(ast SQLNode) (SQLNode, error) {
+func RewriteToCNF(ast SQLNode) SQLNode {
 	for {
 		finishedRewrite := true
 		ast = Rewrite(ast, func(cursor *Cursor) bool {
@@ -355,7 +355,7 @@ func RewriteToCNF(ast SQLNode) (SQLNode, error) {
 		}, nil)
 
 		if finishedRewrite {
-			return ast, nil
+			return ast
 		}
 	}
 }
