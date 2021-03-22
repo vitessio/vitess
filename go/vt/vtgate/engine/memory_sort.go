@@ -75,12 +75,9 @@ func (ms *MemorySort) Execute(vcursor VCursor, bindVars map[string]*querypb.Bind
 	if err != nil {
 		return nil, err
 	}
-	orderBy, weightStrings, desc := extractSlices(ms.OrderBy)
 	sh := &sortHeap{
-		rows:          result.Rows,
-		orderBy:       orderBy,
-		weightStrings: weightStrings,
-		desc:          desc,
+		rows:      result.Rows,
+		comparers: extractSlices(ms.OrderBy),
 	}
 	sort.Sort(sh)
 	if sh.err != nil {
@@ -106,12 +103,9 @@ func (ms *MemorySort) StreamExecute(vcursor VCursor, bindVars map[string]*queryp
 
 	// You have to reverse the ordering because the highest values
 	// must be dropped once the upper limit is reached.
-	orderBy, weightStrings, desc := extractSlices(ms.OrderBy)
 	sh := &sortHeap{
-		orderBy:       orderBy,
-		weightStrings: weightStrings,
-		desc:          desc,
-		reverse:       true,
+		comparers: extractSlices(ms.OrderBy),
+		reverse:   true,
 	}
 	err = ms.Input.StreamExecute(vcursor, bindVars, wantfields, func(qr *sqltypes.Result) error {
 		if len(qr.Fields) != 0 {
@@ -148,14 +142,40 @@ func (ms *MemorySort) StreamExecute(vcursor VCursor, bindVars map[string]*queryp
 	return cb(&sqltypes.Result{Rows: sh.rows})
 }
 
-// extractSlices extracts the three fields of OrderbyParams into 3 slices
-func extractSlices(input []OrderbyParams) (orderBy []int, weightString []int, desc []bool) {
-	for _, order := range input {
-		orderBy = append(orderBy, order.Col)
-		weightString = append(weightString, order.WeightStringCol)
-		desc = append(desc, order.Desc)
+type comparer struct {
+	orderBy, weightString int
+	desc                  bool
+}
+
+func (c *comparer) compare(r1, r2 []sqltypes.Value) (int, error) {
+	cmp, err := evalengine.NullsafeCompare(r1[c.orderBy], r2[c.orderBy])
+	if err != nil {
+		_, isComparisonErr := err.(evalengine.UnsupportedComparisonError)
+		if !(isComparisonErr && c.weightString != -1) {
+			return 0, err
+		}
+		// in case of a comparison error switch to using the weight string column for ordering
+		c.orderBy = c.weightString
+		c.weightString = -1
+		cmp, err = evalengine.NullsafeCompare(r1[c.orderBy], r2[c.orderBy])
+		if err != nil {
+			return 0, err
+		}
 	}
-	return
+	return cmp, nil
+}
+
+// extractSlices extracts the three fields of OrderbyParams into 3 slices
+func extractSlices(input []OrderbyParams) []*comparer {
+	var result []*comparer
+	for _, order := range input {
+		result = append(result, &comparer{
+			orderBy:      order.Col,
+			weightString: order.WeightStringCol,
+			desc:         order.Desc,
+		})
+	}
+	return result
 }
 
 // GetFields satisfies the Primitive interface.
@@ -233,12 +253,10 @@ func GenericJoin(input interface{}, f func(interface{}) string) string {
 // sortHeap is sorted based on the orderBy params.
 // Implementation is similar to scatterHeap
 type sortHeap struct {
-	rows          [][]sqltypes.Value
-	orderBy       []int
-	weightStrings []int
-	desc          []bool
-	reverse       bool
-	err           error
+	rows      [][]sqltypes.Value
+	comparers []*comparer
+	reverse   bool
+	err       error
 }
 
 // Len satisfies sort.Interface and heap.Interface.
@@ -248,26 +266,14 @@ func (sh *sortHeap) Len() int {
 
 // Less satisfies sort.Interface and heap.Interface.
 func (sh *sortHeap) Less(i, j int) bool {
-	for k := range sh.orderBy {
+	for _, c := range sh.comparers {
 		if sh.err != nil {
 			return true
 		}
-		// First try to compare the columns that we want to order
-		cmp, err := evalengine.NullsafeCompare(sh.rows[i][sh.orderBy[k]], sh.rows[j][sh.orderBy[k]])
+		cmp, err := c.compare(sh.rows[i], sh.rows[j])
 		if err != nil {
-			_, isComparisonErr := err.(evalengine.UnsupportedComparisonError)
-			if !(isComparisonErr && sh.weightStrings[k] != -1) {
-				sh.err = err
-				return true
-			}
-			// in case of a comparison error switch to using the weight string column for ordering
-			sh.orderBy[k] = sh.weightStrings[k]
-			sh.weightStrings[k] = -1
-			cmp, err = evalengine.NullsafeCompare(sh.rows[i][sh.orderBy[k]], sh.rows[j][sh.orderBy[k]])
-			if err != nil {
-				sh.err = err
-				return true
-			}
+			sh.err = err
+			return true
 		}
 		if cmp == 0 {
 			continue
@@ -282,7 +288,7 @@ func (sh *sortHeap) Less(i, j int) bool {
 		//		cmp = -cmp
 		//	}
 		//}
-		if sh.reverse != sh.desc[k] {
+		if sh.reverse != c.desc {
 			cmp = -cmp
 		}
 		return cmp < 0
