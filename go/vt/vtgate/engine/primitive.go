@@ -162,6 +162,7 @@ type (
 		Original     string                  // Original is the original query.
 		Instructions Primitive               // Instructions contains the instructions needed to fulfil the query.
 		BindVarNeeds *sqlparser.BindVarNeeds // Stores BindVars needed to be provided as part of expression rewriting
+		Warnings     []*querypb.QueryWarning // Warnings that need to be yielded every time this query runs
 
 		ExecCount    uint64 // Count of times this plan was executed
 		ExecTime     uint64 // Total execution time
