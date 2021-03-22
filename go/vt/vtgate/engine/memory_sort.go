@@ -142,42 +142,6 @@ func (ms *MemorySort) StreamExecute(vcursor VCursor, bindVars map[string]*queryp
 	return cb(&sqltypes.Result{Rows: sh.rows})
 }
 
-type comparer struct {
-	orderBy, weightString int
-	desc                  bool
-}
-
-func (c *comparer) compare(r1, r2 []sqltypes.Value) (int, error) {
-	cmp, err := evalengine.NullsafeCompare(r1[c.orderBy], r2[c.orderBy])
-	if err != nil {
-		_, isComparisonErr := err.(evalengine.UnsupportedComparisonError)
-		if !(isComparisonErr && c.weightString != -1) {
-			return 0, err
-		}
-		// in case of a comparison error switch to using the weight string column for ordering
-		c.orderBy = c.weightString
-		c.weightString = -1
-		cmp, err = evalengine.NullsafeCompare(r1[c.orderBy], r2[c.orderBy])
-		if err != nil {
-			return 0, err
-		}
-	}
-	return cmp, nil
-}
-
-// extractSlices extracts the three fields of OrderbyParams into 3 slices
-func extractSlices(input []OrderbyParams) []*comparer {
-	var result []*comparer
-	for _, order := range input {
-		result = append(result, &comparer{
-			orderBy:      order.Col,
-			weightString: order.WeightStringCol,
-			desc:         order.Desc,
-		})
-	}
-	return result
-}
-
 // GetFields satisfies the Primitive interface.
 func (ms *MemorySort) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	return ms.Input.GetFields(vcursor, bindVars)
@@ -278,17 +242,7 @@ func (sh *sortHeap) Less(i, j int) bool {
 		if cmp == 0 {
 			continue
 		}
-		// This is equivalent to:
-		//if !sh.reverse {
-		//	if order.Desc {
-		//		cmp = -cmp
-		//	}
-		//} else {
-		//	if !order.Desc {
-		//		cmp = -cmp
-		//	}
-		//}
-		if sh.reverse != c.desc {
+		if sh.reverse {
 			cmp = -cmp
 		}
 		return cmp < 0
