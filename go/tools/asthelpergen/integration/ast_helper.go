@@ -17,11 +17,6 @@ limitations under the License.
 
 package integration
 
-import (
-	vtrpc "vitess.io/vitess/go/vt/proto/vtrpc"
-	vterrors "vitess.io/vitess/go/vt/vterrors"
-)
-
 // CloneAST creates a deep clone of the input.
 func CloneAST(in AST) AST {
 	if in == nil {
@@ -842,7 +837,6 @@ func (a *application) rewriteBytes(parent AST, node Bytes, replacer replacerFunc
 	return nil
 }
 func (a *application) rewriteInterfaceContainer(parent AST, node InterfaceContainer, replacer replacerFunc) error {
-	var err error
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -850,9 +844,6 @@ func (a *application) rewriteInterfaceContainer(parent AST, node InterfaceContai
 		if !a.pre(&a.cur) {
 			return nil
 		}
-	}
-	if err != nil {
-		return err
 	}
 	if a.post != nil {
 		if a.pre == nil {
@@ -878,10 +869,12 @@ func (a *application) rewriteInterfaceSlice(parent AST, node InterfaceSlice, rep
 			return nil
 		}
 	}
-	for i, el := range node {
-		if errF := a.rewriteAST(node, el, func(newNode, parent AST) {
-			parent.(InterfaceSlice)[i] = newNode.(AST)
-		}); errF != nil {
+	for x, el := range node {
+		if errF := a.rewriteAST(node, el, func(idx int) replacerFunc {
+			return func(newNode, parent AST) {
+				parent.(InterfaceSlice)[idx] = newNode.(AST)
+			}
+		}(x)); errF != nil {
 			return errF
 		}
 	}
@@ -907,10 +900,12 @@ func (a *application) rewriteLeafSlice(parent AST, node LeafSlice, replacer repl
 			return nil
 		}
 	}
-	for i, el := range node {
-		if errF := a.rewriteRefOfLeaf(node, el, func(newNode, parent AST) {
-			parent.(LeafSlice)[i] = newNode.(*Leaf)
-		}); errF != nil {
+	for x, el := range node {
+		if errF := a.rewriteRefOfLeaf(node, el, func(idx int) replacerFunc {
+			return func(newNode, parent AST) {
+				parent.(LeafSlice)[idx] = newNode.(*Leaf)
+			}
+		}(x)); errF != nil {
 			return errF
 		}
 	}
@@ -1040,17 +1035,21 @@ func (a *application) rewriteRefOfRefSliceContainer(parent AST, node *RefSliceCo
 			return nil
 		}
 	}
-	for i, el := range node.ASTElements {
-		if errF := a.rewriteAST(node, el, func(newNode, parent AST) {
-			parent.(*RefSliceContainer).ASTElements[i] = newNode.(AST)
-		}); errF != nil {
+	for x, el := range node.ASTElements {
+		if errF := a.rewriteAST(node, el, func(idx int) replacerFunc {
+			return func(newNode, parent AST) {
+				parent.(*RefSliceContainer).ASTElements[idx] = newNode.(AST)
+			}
+		}(x)); errF != nil {
 			return errF
 		}
 	}
-	for i, el := range node.ASTImplementationElements {
-		if errF := a.rewriteRefOfLeaf(node, el, func(newNode, parent AST) {
-			parent.(*RefSliceContainer).ASTImplementationElements[i] = newNode.(*Leaf)
-		}); errF != nil {
+	for x, el := range node.ASTImplementationElements {
+		if errF := a.rewriteRefOfLeaf(node, el, func(idx int) replacerFunc {
+			return func(newNode, parent AST) {
+				parent.(*RefSliceContainer).ASTImplementationElements[idx] = newNode.(*Leaf)
+			}
+		}(x)); errF != nil {
 			return errF
 		}
 	}
@@ -1135,17 +1134,21 @@ func (a *application) rewriteRefOfValueSliceContainer(parent AST, node *ValueSli
 			return nil
 		}
 	}
-	for i, el := range node.ASTElements {
-		if errF := a.rewriteAST(node, el, func(newNode, parent AST) {
-			parent.(*ValueSliceContainer).ASTElements[i] = newNode.(AST)
-		}); errF != nil {
+	for x, el := range node.ASTElements {
+		if errF := a.rewriteAST(node, el, func(idx int) replacerFunc {
+			return func(newNode, parent AST) {
+				parent.(*ValueSliceContainer).ASTElements[idx] = newNode.(AST)
+			}
+		}(x)); errF != nil {
 			return errF
 		}
 	}
-	for i, el := range node.ASTImplementationElements {
-		if errF := a.rewriteRefOfLeaf(node, el, func(newNode, parent AST) {
-			parent.(*ValueSliceContainer).ASTImplementationElements[i] = newNode.(*Leaf)
-		}); errF != nil {
+	for x, el := range node.ASTImplementationElements {
+		if errF := a.rewriteRefOfLeaf(node, el, func(idx int) replacerFunc {
+			return func(newNode, parent AST) {
+				parent.(*ValueSliceContainer).ASTImplementationElements[idx] = newNode.(*Leaf)
+			}
+		}(x)); errF != nil {
 			return errF
 		}
 	}
@@ -1172,7 +1175,6 @@ func (a *application) rewriteSubIface(parent AST, node SubIface, replacer replac
 	}
 }
 func (a *application) rewriteValueContainer(parent AST, node ValueContainer, replacer replacerFunc) error {
-	var err error
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -1182,17 +1184,14 @@ func (a *application) rewriteValueContainer(parent AST, node ValueContainer, rep
 		}
 	}
 	if errF := a.rewriteAST(node, node.ASTType, func(newNode, parent AST) {
-		err = vterrors.New(vtrpc.Code_INTERNAL, "[BUG] tried to replace 'ASTType' on 'ValueContainer'")
+		panic("[BUG] tried to replace 'ASTType' on 'ValueContainer'")
 	}); errF != nil {
 		return errF
 	}
 	if errF := a.rewriteRefOfLeaf(node, node.ASTImplementationType, func(newNode, parent AST) {
-		err = vterrors.New(vtrpc.Code_INTERNAL, "[BUG] tried to replace 'ASTImplementationType' on 'ValueContainer'")
+		panic("[BUG] tried to replace 'ASTImplementationType' on 'ValueContainer'")
 	}); errF != nil {
 		return errF
-	}
-	if err != nil {
-		return err
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -1205,7 +1204,6 @@ func (a *application) rewriteValueContainer(parent AST, node ValueContainer, rep
 	return nil
 }
 func (a *application) rewriteValueSliceContainer(parent AST, node ValueSliceContainer, replacer replacerFunc) error {
-	var err error
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -1216,20 +1214,17 @@ func (a *application) rewriteValueSliceContainer(parent AST, node ValueSliceCont
 	}
 	for _, el := range node.ASTElements {
 		if errF := a.rewriteAST(node, el, func(newNode, parent AST) {
-			err = vterrors.New(vtrpc.Code_INTERNAL, "[BUG] tried to replace 'ASTElements' on 'ValueSliceContainer'")
+			panic("[BUG] tried to replace 'ASTElements' on 'ValueSliceContainer'")
 		}); errF != nil {
 			return errF
 		}
 	}
 	for _, el := range node.ASTImplementationElements {
 		if errF := a.rewriteRefOfLeaf(node, el, func(newNode, parent AST) {
-			err = vterrors.New(vtrpc.Code_INTERNAL, "[BUG] tried to replace 'ASTImplementationElements' on 'ValueSliceContainer'")
+			panic("[BUG] tried to replace 'ASTImplementationElements' on 'ValueSliceContainer'")
 		}); errF != nil {
 			return errF
 		}
-	}
-	if err != nil {
-		return err
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer

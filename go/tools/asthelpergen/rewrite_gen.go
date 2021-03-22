@@ -90,10 +90,8 @@ func (e rewriteGen) structMethod(t types.Type, strct *types.Struct, spi generato
 	}
 	fields := e.rewriteAllStructFields(t, strct, spi, true)
 
-	stmts := []jen.Code{jen.Var().Id("err").Error()}
-	stmts = append(stmts, executePre())
+	stmts := []jen.Code{executePre()}
 	stmts = append(stmts, fields...)
-	stmts = append(stmts, jen.If(jen.Id("err != nil")).Block(jen.Return(jen.Err())))
 	stmts = append(stmts, executePost(len(fields) > 0))
 	stmts = append(stmts, returnNil())
 
@@ -180,8 +178,8 @@ func (e rewriteGen) sliceMethod(t types.Type, slice *types.Slice, spi generatorS
 		*/
 		haveChildren = true
 		stmts = append(stmts,
-			jen.For(jen.Id("i, el").Op(":=").Id("range node")).
-				Block(e.rewriteChild(t, slice.Elem(), "notUsed", jen.Id("el"), jen.Index(jen.Id("i")), false)))
+			jen.For(jen.Id("x, el").Op(":=").Id("range node")).
+				Block(e.rewriteChildSlice(t, slice.Elem(), "notUsed", jen.Id("el"), jen.Index(jen.Id("idx")), false)))
 	}
 
 	stmts = append(stmts, executePost(haveChildren))
@@ -266,13 +264,13 @@ func (e rewriteGen) rewriteAllStructFields(t types.Type, strct *types.Struct, sp
 		slice, isSlice := field.Type().(*types.Slice)
 		if isSlice && types.Implements(slice.Elem(), spi.iface()) {
 			spi.addType(slice.Elem())
-			id := jen.Id("i")
+			id := jen.Id("x")
 			if fail {
 				id = jen.Id("_")
 			}
 			output = append(output,
 				jen.For(jen.List(id, jen.Id("el")).Op(":=").Id("range node."+field.Name())).
-					Block(e.rewriteChild(t, slice.Elem(), field.Name(), jen.Id("el"), jen.Dot(field.Name()).Index(id), fail)))
+					Block(e.rewriteChildSlice(t, slice.Elem(), field.Name(), jen.Id("el"), jen.Dot(field.Name()).Index(jen.Id("idx")), fail)))
 		}
 	}
 	return output
@@ -280,10 +278,7 @@ func (e rewriteGen) rewriteAllStructFields(t types.Type, strct *types.Struct, sp
 
 func failReplacer(t types.Type, f string) *jen.Statement {
 	typeString := types.TypeString(t, noQualifier)
-	return jen.Err().Op("=").Qual("vitess.io/vitess/go/vt/vterrors", "New").Call(
-		jen.Qual("vitess.io/vitess/go/vt/proto/vtrpc", "Code_INTERNAL"),
-		jen.Lit(fmt.Sprintf("[BUG] tried to replace '%s' on '%s'", f, typeString)),
-	)
+	return jen.Panic(jen.Lit(fmt.Sprintf("[BUG] tried to replace '%s' on '%s'", f, typeString)))
 }
 
 func (e rewriteGen) rewriteChild(t, field types.Type, fieldName string, param jen.Code, replace jen.Code, fail bool) jen.Code {
@@ -315,6 +310,46 @@ func (e rewriteGen) rewriteChild(t, field types.Type, fieldName string, param je
 	}
 	funcBlock := jen.Func().Call(jen.Id("newNode, parent").Id(e.ifaceName)).
 		Block(replaceOrFail)
+
+	rewriteField := jen.If(
+		jen.Id("errF := ").Id("a").Dot(funcName).Call(
+			jen.Id("node"),
+			param,
+			funcBlock),
+		jen.Id("errF != nil").Block(jen.Return(jen.Id("errF"))))
+
+	return rewriteField
+}
+
+func (e rewriteGen) rewriteChildSlice(t, field types.Type, fieldName string, param jen.Code, replace jen.Code, fail bool) jen.Code {
+	/*
+				if errF := a.rewriteAST(node, el, func(idx int) replacerFunc {
+				return func(newNode, parent AST) {
+					parent.(InterfaceSlice)[idx] = newNode.(AST)
+				}
+			}(i)); errF != nil {
+				return errF
+			}
+
+			if errF := a.rewriteAST(node, el, func(newNode, parent AST) {
+		return errr...
+		}); errF != nil {
+				return errF
+			}
+
+	*/
+
+	funcName := rewriteName + printableTypeName(field)
+	var funcBlock jen.Code
+	replacerFuncDef := jen.Func().Call(jen.Id("newNode, parent").Id(e.ifaceName))
+	if fail {
+		funcBlock = replacerFuncDef.Block(failReplacer(t, fieldName))
+	} else {
+		funcBlock = jen.Func().Call(jen.Id("idx int")).Id("replacerFunc").
+			Block(jen.Return(replacerFuncDef.Block(
+				jen.Id("parent").Assert(jen.Id(types.TypeString(t, noQualifier))).Add(replace).Op("=").Id("newNode").Assert(jen.Id(types.TypeString(field, noQualifier)))),
+			)).Call(jen.Id("x"))
+	}
 
 	rewriteField := jen.If(
 		jen.Id("errF := ").Id("a").Dot(funcName).Call(
