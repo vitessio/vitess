@@ -55,3 +55,15 @@ func TestOrderBy(t *testing.T) {
 	assertMatches(t, conn, "select id1, id2 from t4 order by id1 desc", `[[INT64(8) VARCHAR("E")] [INT64(7) VARCHAR("e")] [INT64(6) VARCHAR("d")] [INT64(5) VARCHAR("test")] [INT64(4) VARCHAR("c")] [INT64(3) VARCHAR("b")] [INT64(2) VARCHAR("A")] [INT64(1) VARCHAR("a")]]`)
 	exec(t, conn, "delete from t4")
 }
+
+func TestGroupBy(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.Nil(t, err)
+	defer conn.Close()
+	exec(t, conn, "insert into t3(id5, id6, id7) values(1,1,2), (2,2,4), (3,2,4), (4,1,2), (5,1,2), (6,3,6)")
+	// test ordering and group by int column
+	assertMatches(t, conn, "select id6, id7, count(*) k from t3 group by id6, id7 order by k", `[[INT64(3) INT64(6) INT64(1)] [INT64(2) INT64(4) INT64(2)] [INT64(1) INT64(2) INT64(3)]]`)
+	exec(t, conn, "delete from t3")
+}
