@@ -65,7 +65,7 @@ func (c *Cursor) Replace(newNode AST) {
 type replacerFunc func(newNode, parent AST)
 
 // Rewrite is the api.
-func Rewrite(node AST, pre, post ApplyFunc) (AST, error) {
+func Rewrite(node AST, pre, post ApplyFunc) AST {
 	outer := &struct{ AST }{node}
 
 	a := &application{
@@ -77,5 +77,5 @@ func Rewrite(node AST, pre, post ApplyFunc) (AST, error) {
 		outer.AST = newNode
 	})
 
-	return outer.AST, nil
+	return outer.AST
 }
