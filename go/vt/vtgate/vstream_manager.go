@@ -239,7 +239,7 @@ func (vs *vstream) computeSkew(streamID string, event *binlogdatapb.VEvent) bool
 	vs.skewMu.Lock()
 	defer vs.skewMu.Unlock()
 	// account for skew between this vtgate and the source mysql server
-	secondsInThePast := event.CurrentTime - event.Timestamp
+	secondsInThePast := event.CurrentTime/1e9 - event.Timestamp
 	vs.timestamps[streamID] = time.Now().Unix() - secondsInThePast
 
 	var minTs, maxTs int64
