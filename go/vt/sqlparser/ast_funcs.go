@@ -373,11 +373,7 @@ func NewWhere(typ WhereType, expr Expr) *Where {
 // and replaces it with to. If from matches root,
 // then to is returned.
 func ReplaceExpr(root, from, to Expr) Expr {
-	tmp, err := Rewrite(root, replaceExpr(from, to), nil)
-	if err != nil {
-		log.Errorf("Failed to rewrite expression. Rewriter returned an error: %s", err.Error())
-		return from
-	}
+	tmp := Rewrite(root, replaceExpr(from, to), nil)
 
 	expr, success := tmp.(Expr)
 	if !success {
@@ -463,6 +459,7 @@ func NewArgument(in string) Argument {
 	return Argument(in)
 }
 
+// Bytes return the []byte
 func (node *Literal) Bytes() []byte {
 	return []byte(node.Val)
 }
