@@ -917,7 +917,7 @@ func TestPlayerCopyTableContinuation(t *testing.T) {
 }
 
 // TestPlayerCopyWildcardTableContinuation tests the copy workflow where tables have been partially copied.
-func TestPlayerCopyWildcardTableContinuationX(t *testing.T) {
+func TestPlayerCopyWildcardTableContinuation(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
 	execStatements(t, []string{
@@ -998,10 +998,11 @@ func TestPlayerCopyWildcardTableContinuationX(t *testing.T) {
 	})
 }
 
-// TestPlayerCopyWildcardTableContinuation tests the copy workflow where tables have been partially copied.
+// TestPlayerCopyWildcardTableContinuationWithOptimizeInserts tests the copy workflow where tables have been partially copied
+// enabling the optimize inserts functionality
 func TestPlayerCopyWildcardTableContinuationWithOptimizeInserts(t *testing.T) {
 	oldVreplicationExperimentalFlags := *vreplicationExperimentalFlags
-	*vreplicationExperimentalFlags = vreplicationExperimentalOptimizeInserts
+	*vreplicationExperimentalFlags = vreplicationExperimentalFlagOptimizeInserts
 	defer func() {
 		*vreplicationExperimentalFlags = oldVreplicationExperimentalFlags
 	}()
@@ -1009,8 +1010,6 @@ func TestPlayerCopyWildcardTableContinuationWithOptimizeInserts(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
 	execStatements(t, []string{
-		// src is initialized as partially copied.
-		// lastpk will be initialized at (6,6) later below.
 		"create table src(id int, val varbinary(128), primary key(id))",
 		"insert into src values(2,'copied'), (3,'uncopied')",
 		fmt.Sprintf("create table %s.dst(id int, val varbinary(128), primary key(id))", vrepldb),
@@ -1044,7 +1043,6 @@ func TestPlayerCopyWildcardTableContinuationWithOptimizeInserts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// As mentioned above. lastpk cut-off is set at (6,6)
 	lastpk := sqltypes.ResultToProto3(sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 		"id",
 		"int32"),
