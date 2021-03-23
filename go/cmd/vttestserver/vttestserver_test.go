@@ -54,10 +54,12 @@ type columnVindex struct {
 }
 
 func TestRunsVschemaMigrations(t *testing.T) {
+	args := os.Args
+	conf := config
+	defer resetFlags(args, conf)
+
 	cluster, err := startCluster()
 	defer cluster.TearDown()
-	args := os.Args
-	defer resetFlags(args)
 
 	assert.NoError(t, err)
 	assertColumnVindex(t, cluster, columnVindex{keyspace: "test_keyspace", table: "test_table", vindex: "my_vdx", vindexType: "hash", column: "id"})
@@ -70,13 +72,15 @@ func TestRunsVschemaMigrations(t *testing.T) {
 }
 
 func TestPersistentMode(t *testing.T) {
+	args := os.Args
+	conf := config
+	defer resetFlags(args, conf)
+
 	dir, err := ioutil.TempDir("/tmp", "vttestserver_persistent_mode_")
 	assert.NoError(t, err)
 	defer os.RemoveAll(dir)
 
 	cluster, err := startPersistentCluster(dir)
-	args := os.Args
-	defer resetFlags(args)
 	assert.NoError(t, err)
 
 	// basic sanity checks similar to TestRunsVschemaMigrations
@@ -107,8 +111,6 @@ func TestPersistentMode(t *testing.T) {
 	cluster.TearDown()
 	cluster, err = startPersistentCluster(dir)
 	defer cluster.TearDown()
-	args = os.Args
-	defer resetFlags(args)
 	assert.NoError(t, err)
 
 	// rerun our sanity checks to make sure vschema migrations are run during every startup
@@ -125,11 +127,13 @@ func TestPersistentMode(t *testing.T) {
 }
 
 func TestCanVtGateExecute(t *testing.T) {
+	args := os.Args
+	conf := config
+	defer resetFlags(args, conf)
+
 	cluster, err := startCluster()
 	assert.NoError(t, err)
 	defer cluster.TearDown()
-	args := os.Args
-	defer resetFlags(args)
 
 	client, err := vtctlclient.New(fmt.Sprintf("localhost:%v", cluster.GrpcPort()))
 	assert.NoError(t, err)
@@ -166,6 +170,10 @@ Out:
 }
 
 func TestMtlsAuth(t *testing.T) {
+	args := os.Args
+	conf := config
+	defer resetFlags(args, conf)
+
 	// Our test root.
 	root, err := ioutil.TempDir("", "tlstest")
 	if err != nil {
@@ -198,8 +206,6 @@ func TestMtlsAuth(t *testing.T) {
 		fmt.Sprintf("-grpc_auth_mtls_allowed_substrings=%s", "CN=ClientApp"))
 	assert.NoError(t, err)
 	defer cluster.TearDown()
-	args := os.Args
-	defer resetFlags(args)
 
 	// startCluster will apply vschema migrations using vtctl grpc and the clientCert.
 	assertColumnVindex(t, cluster, columnVindex{keyspace: "test_keyspace", table: "test_table", vindex: "my_vdx", vindexType: "hash", column: "id"})
@@ -207,6 +213,10 @@ func TestMtlsAuth(t *testing.T) {
 }
 
 func TestMtlsAuthUnauthorizedFails(t *testing.T) {
+	args := os.Args
+	conf := config
+	defer resetFlags(args, conf)
+
 	// Our test root.
 	root, err := ioutil.TempDir("", "tlstest")
 	if err != nil {
@@ -239,8 +249,6 @@ func TestMtlsAuthUnauthorizedFails(t *testing.T) {
 		fmt.Sprintf("-vtctld_grpc_ca=%s", caCert),
 		fmt.Sprintf("-grpc_auth_mtls_allowed_substrings=%s", "CN=ClientApp"))
 	defer cluster.TearDown()
-	args := os.Args
-	defer resetFlags(args)
 
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "code = Unauthenticated desc = client certificate not authorized")
@@ -316,8 +324,9 @@ func assertEqual(t *testing.T, actual string, expected string, message string) {
 	}
 }
 
-func resetFlags(args []string) {
+func resetFlags(args []string, conf vttest.Config) {
 	os.Args = args
+	config = conf
 }
 
 func randomPort() int {
