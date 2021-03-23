@@ -5931,3 +5931,5 @@
 2021-03-23T12:14:52Z,endtoend,https://github.com/vitessio/vitess/actions/runs/679510564
 2021-03-23T12:14:52Z,region_example,https://github.com/vitessio/vitess/actions/runs/679510570
 2021-03-23T12:14:52Z,unit_race,https://github.com/vitessio/vitess/actions/runs/679510588
+2021-03-23T13:42:22Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/679753245
+2021-03-23T13:42:22Z,endtoend,https://github.com/vitessio/vitess/actions/runs/679753203
