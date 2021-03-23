@@ -403,7 +403,7 @@ func (api *API) GetSchema(ctx context.Context, req *vtadminpb.GetSchemaRequest) 
 		return nil, fmt.Errorf("%w: no cluster with id %s", errors.ErrUnsupportedCluster, req.ClusterId)
 	}
 
-	return c.GetSchemaForKeyspace(ctx, req.Keyspace, cluster.GetSchemaOptions{
+	return c.GetSchema(ctx, req.Keyspace, cluster.GetSchemaOptions{
 		BaseRequest: &vtctldatapb.GetSchemaRequest{
 			Tables: []string{req.Table},
 		},
@@ -520,7 +520,7 @@ func (api *API) getSchemas(ctx context.Context, c *cluster.Cluster, tablets []*v
 		go func(c *cluster.Cluster, ks *vtctldatapb.Keyspace) {
 			defer wg.Done()
 
-			ss, err := c.GetSchemaForKeyspace(ctx, ks.Name, cluster.GetSchemaOptions{
+			ss, err := c.GetSchema(ctx, ks.Name, cluster.GetSchemaOptions{
 				Tablets: tablets,
 				SizeOpts: &vtadminpb.GetSchemaTableSizeOptions{
 					AggregateSizes: false,
@@ -909,7 +909,7 @@ func (api *API) VTExplain(ctx context.Context, req *vtadminpb.VTExplainRequest) 
 	go func(c *cluster.Cluster) {
 		defer wg.Done()
 
-		res, err := c.GetSchemaForKeyspace(ctx, req.Keyspace, cluster.GetSchemaOptions{
+		res, err := c.GetSchema(ctx, req.Keyspace, cluster.GetSchemaOptions{
 			Tablets: []*vtadminpb.Tablet{tablet},
 		})
 		if err != nil {
