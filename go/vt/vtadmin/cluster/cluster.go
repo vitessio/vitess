@@ -374,61 +374,78 @@ func (c *Cluster) getTablets(ctx context.Context) ([]*vtadminpb.Tablet, error) {
 	return c.parseTablets(rows)
 }
 
-// GetSchema returns the schema for a GetSchemaRequest on the given tablet. The
-// caller is responsible for making at least one call to c.Vtctld.Dial prior to
-// calling this function.
-//
-// Note that the request's TabletAlias field will be ignored, using the provided
-// tablet's Alias instead. This override is done on a copy of the request, so it
-// is transparent to the caller.
-//
-// This function takes both the request argument and tablet argument to
-// (a) set the Keyspace field on the resulting Schema object, which comes from
-// the provided tablet; and, (b) allow a caller, like vtadmin.API to collect a
-// bunch of tablets once and make a series of GetSchema calls without Cluster
-// refetching the tablet list each time.
-func (c *Cluster) GetSchema(ctx context.Context, req *vtctldatapb.GetSchemaRequest, tablet *vtadminpb.Tablet) (*vtadminpb.Schema, error) {
-	span, ctx := trace.NewSpan(ctx, "Cluster.GetSchema")
-	defer span.Finish()
-
-	AnnotateSpan(c, span)
-
-	// Copy the request to not mutate the caller's request object.
-	r := *req
-	r.TabletAlias = tablet.Tablet.Alias
-
-	span.Annotate("tablet_alias", topoproto.TabletAliasString(r.TabletAlias))
-	span.Annotate("exclude_tables", strings.Join(r.ExcludeTables, ","))
-	span.Annotate("tables", strings.Join(r.Tables, ","))
-	span.Annotate("include_views", r.IncludeViews)
-	span.Annotate("table_names_only", r.TableNamesOnly)
-	span.Annotate("table_sizes_only", r.TableSizesOnly)
-
-	schema, err := c.Vtctld.GetSchema(ctx, &r)
-	if err != nil {
-		return nil, err
-	}
-
-	if schema == nil || schema.Schema == nil {
-		return nil, nil
-	}
-
-	return &vtadminpb.Schema{
-		Cluster:          c.ToProto(),
-		Keyspace:         tablet.Tablet.Keyspace,
-		TableDefinitions: schema.Schema.TableDefinitions,
-	}, nil
-}
-
-// GetSchemaOptions blah blah TODO document this.
+// GetSchemaOptions contains the options that modify the behavior of the
+// (*Cluster).GetSchema method.
 type GetSchemaOptions struct {
-	Tablets     []*vtadminpb.Tablet
+	// Tablets is the starting set of tablets that GetSchema will filter to find
+	// suitable tablet(s) to make GetSchema RPC(s) to.
+	//
+	// If empty, GetSchema will first call (*Cluster).FindTablets() to fetch all
+	// tablets for the keyspace.
+	Tablets []*vtadminpb.Tablet
+	// BaseRequest is used to share some common parameters to use for the
+	// individual tablet GetSchema RPCs made by (*Cluster).GetSchema, which
+	// takes a copy of this request in order to makeb certain overrides as
+	// needed, so these mutations are transparent to the caller.
+	//
+	// The TabletAlias field is ignored completely by (*Cluster).GetSchema, as
+	// it is overwritten for each tablet RPC that method makes.
+	//
+	// The TableSizesOnly field is overwritten only in certain tablet RPCs when
+	// SizeOpts.AggregateSizes is true. In order to move minimal bytes over the
+	// wire, we assume that schema definitions match across all shards, so we
+	// can get the full schema from just one tablet, and then just the table
+	// size information from the other N-1 tablets.
+	//
+	// The TableNamesOnly field is untouched by (*Cluster).GetSchema when not
+	// doing size aggregation. However, when doing size aggregation, if
+	// TableNamesOnly is true, we log a warning and override it. This is because
+	// TableNamesOnly is mutually exclusive with TableSizesOnly, and size
+	// aggregation requires setting TableSizesOnly in the cases described above.
 	BaseRequest *vtctldatapb.GetSchemaRequest
-	SizeOpts    *vtadminpb.GetSchemaTableSizeOptions
+	// SizeOpts control whether the (*Cluster).GetSchema method performs
+	// cross-shard table size aggregation (via the AggregateSizes field), and
+	// the behavior of that size aggregation (via the IncludeNonServingShards
+	// field).
+	//
+	// If the AggregateSizes field is false, the rest of this struct is ignored,
+	// no size aggregation is done, and (*Cluster).GetSchema will make exactly
+	// one GetSchema RPC to a SERVING tablet in the keyspace.
+	//
+	// If the AggregateSizes field is true, (*Cluster).GetSchema will make a
+	// FindAllShardsInKeyspace vtctld RPC, and then filter the given Tablets
+	// (described above) to find one SERVING tablet for each shard in the
+	// keyspace. If IncludeNonServingShards is false, then we will skip any
+	// shards for which IsMasterServing is false.
+	SizeOpts *vtadminpb.GetSchemaTableSizeOptions
 }
 
-// GetSchemaForKeyspace blah blah TODO: unify this with GetSchema.
-func (c *Cluster) GetSchemaForKeyspace(ctx context.Context, keyspace string, opts GetSchemaOptions) (*vtadminpb.Schema, error) {
+// GetSchema returns the schema for a given keyspace. GetSchema has a few
+// different behaviors depending on the GetSchemaOptions provided, as follows:
+//
+// (1) If opts.Tablets is empty, we will first use FindTablets to fetch all
+// tablets for the keyspace, regardless of their serving state. Additional
+// filtering of either this set, or the provided Tablets, will happen later.
+//
+// (2) If opts.SizeOpts.AggregateSizes is true, we will also make a call to
+// FindAllShardsInKeyspace, in order to fan out GetSchema RPCs to a tablet in
+// each shard. If this option is false, we make exactly one GetSchema request to
+// a single, randomly-chosen, tablet in the keyspace.
+//
+// (2.1) If, in size aggregation mode, opts.SizeOpts.IncludeNonServingShards is
+// false (the default), then we will filter out any shards for which
+// IsMasterServing is false in the topo, and make GetSchema RPCs to one tablet
+// in every _serving_ shard. Otherwise we will make a GetSchema RPC to one
+// tablet in _every_ shard.
+//
+// (3) Irrespective of whether we're including nonserving shards, or whether
+// we're doing size aggregation at all, we will only make GetSchema RPCs to
+// tablets that are in SERVING state; we don't want to use a tablet that might
+// be in a bad state as the source of truth for a schema. Therefore if we can't
+// find a SERVING tablet for the keyspace (in non-aggregation mode) or for a
+// shard in that keyspace (in aggregation mode), then we will return an error
+// back to the caller.
+func (c *Cluster) GetSchema(ctx context.Context, keyspace string, opts GetSchemaOptions) (*vtadminpb.Schema, error) {
 	span, ctx := trace.NewSpan(ctx, "Cluster.GetSchema")
 	defer span.Finish()
 
@@ -441,6 +458,11 @@ func (c *Cluster) GetSchemaForKeyspace(ctx context.Context, keyspace string, opt
 
 	if opts.BaseRequest == nil {
 		opts.BaseRequest = &vtctldatapb.GetSchemaRequest{}
+	}
+
+	if opts.SizeOpts.AggregateSizes && opts.BaseRequest.TableNamesOnly {
+		log.Warningf("GetSchema(cluster = %s) size aggregation is incompatible with TableNamesOnly, ignoring the latter in favor of aggregating sizes", c.ID)
+		opts.BaseRequest.TableNamesOnly = false
 	}
 
 	AnnotateSpan(c, span)

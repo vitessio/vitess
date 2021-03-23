@@ -515,7 +515,7 @@ func TestGetSchema(t *testing.T) {
 			err := c.Vtctld.Dial(ctx)
 			require.NoError(t, err, "could not dial test vtctld")
 
-			schema, err := c.GetSchemaForKeyspace(ctx, "testkeyspace", cluster.GetSchemaOptions{
+			schema, err := c.GetSchema(ctx, "testkeyspace", cluster.GetSchemaOptions{
 				Tablets:     []*vtadminpb.Tablet{tt.tablet},
 				BaseRequest: tt.req,
 			})
@@ -570,7 +570,7 @@ func TestGetSchema(t *testing.T) {
 		err := c.Vtctld.Dial(ctx)
 		require.NoError(t, err, "could not dial test vtctld")
 
-		c.GetSchemaForKeyspace(ctx, "testkeyspace", cluster.GetSchemaOptions{
+		c.GetSchema(ctx, "testkeyspace", cluster.GetSchemaOptions{
 			BaseRequest: req,
 			Tablets:     []*vtadminpb.Tablet{tablet},
 		})
