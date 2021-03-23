@@ -102,11 +102,12 @@ grpcvtctldclient: go/vt/proto/vtctlservice/vtctlservice.pb.go
 parser:
 	make -C go/vt/sqlparser
 
-visitor:
-	>&2 echo "make visitor has been replaced by make asthelpers"
-	exit 1
+codegen: asthelpergen sizegen parser
 
-asthelpers:
+visitor: asthelpergen
+	echo "make visitor has been replaced by make asthelpergen"
+
+asthelpergen:
 	go run ./go/tools/asthelpergen/main -in ./go/vt/sqlparser -iface vitess.io/vitess/go/vt/sqlparser.SQLNode -except "*ColName"
 
 sizegen:
