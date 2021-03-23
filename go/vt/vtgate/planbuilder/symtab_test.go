@@ -190,7 +190,7 @@ func TestSymtabAddVSchemaTable(t *testing.T) {
 
 func TestGetReturnType(t *testing.T) {
 	tests := []struct {
-		input  sqlparser.SQLNode
+		input  sqlparser.Expr
 		output querypb.Type
 	}{{
 		input: &sqlparser.FuncExpr{Name: sqlparser.NewColIdent("Abs"), Exprs: sqlparser.SelectExprs{
@@ -205,9 +205,6 @@ func TestGetReturnType(t *testing.T) {
 		}},
 		output: querypb.Type_DECIMAL,
 	}, {
-		input:  &sqlparser.StarExpr{},
-		output: querypb.Type_NULL_TYPE,
-	}, {
 		input: &sqlparser.FuncExpr{Name: sqlparser.NewColIdent("Count"), Exprs: sqlparser.SelectExprs{
 			&sqlparser.StarExpr{},
 		}},
@@ -217,18 +214,12 @@ func TestGetReturnType(t *testing.T) {
 			&sqlparser.StarExpr{},
 		}},
 		output: querypb.Type_INT64,
-	}, {
-		input: &sqlparser.Nextval{
-			Expr: &sqlparser.ColName{
-				Name: sqlparser.NewColIdent("A"),
-			},
-		},
-		output: querypb.Type_INT64,
 	}}
 
 	for _, test := range tests {
 		t.Run(sqlparser.String(test.input), func(t *testing.T) {
-			got := GetReturnType(test.input)
+			got, err := GetReturnType(test.input)
+			require.NoError(t, err)
 			require.Equal(t, test.output, got)
 		})
 	}
