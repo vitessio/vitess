@@ -22,6 +22,9 @@ import (
 	"strconv"
 	"strings"
 
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
@@ -596,5 +599,5 @@ func GetReturnType(input sqlparser.Expr) (querypb.Type, error) {
 		col := node.Metadata.(*column)
 		return col.typ, nil
 	}
-	return 0, fmt.Errorf("cannot evaluate return type for %T", input)
+	return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "cannot evaluate return type for %T", input)
 }
