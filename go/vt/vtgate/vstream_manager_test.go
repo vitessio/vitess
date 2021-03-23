@@ -56,13 +56,13 @@ func getVEvents(shard string, count, idx int64) []*binlogdatapb.VEvent {
 		vevents = append(vevents, &binlogdatapb.VEvent{
 			Type: binlogdatapb.VEventType_GTID, Gtid: fmt.Sprintf("gtid-%s-%d", shard, j),
 			Timestamp:   currentTime - j,
-			CurrentTime: currentTime,
+			CurrentTime: currentTime * 1e9,
 		})
 
 		vevents = append(vevents, &binlogdatapb.VEvent{
 			Type:        binlogdatapb.VEventType_COMMIT,
 			Timestamp:   currentTime - j,
-			CurrentTime: currentTime,
+			CurrentTime: currentTime * 1e9,
 		})
 	}
 	return vevents
