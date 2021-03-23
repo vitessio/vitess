@@ -230,25 +230,25 @@ func (tp *TablePlan) applyBulkInsert(rows *binlogdatapb.VStreamRowsResponse, exe
 	return executor(buf.String())
 }
 
-// During the copy phase we run catchup and fastforward, which stream binlogs. During this we should only process
+// During the copy phase we run catchup and fastforward, which stream binlogs. While streaming we should only process
 // rows whose PK has already been copied. Ideally we should compare the PKs before applying the change and never send
 // such rows to the target mysql server. However reliably comparing primary keys in a manner compatible to MySQL will require a lot of
-// coding: consider composite PKs, character sets ... So we send these rows to the mysql server which then does the comparison
+// coding: consider composite PKs, character sets, collations ... So we send these rows to the mysql server which then does the comparison
 // in sql, through where clauses like "pk_val <= last_seen_pk".
 //
-// But this does generate a lot of unnecessary load of, effectively no-ops, since the where
+// But this does generate a lot of unnecessary load of, effectively, no-ops since the where
 // clauses are always false. This can create a significant cpu load on the target for high qps servers resulting in a
 // much lower copy bandwidth (or provisioning more powerful servers).
 // isOutsidePKRange currently checks for rows with single primary keys which are currently comparable in Vitess:
-// (see NullsafeCompare() for types supported)
+// (see NullsafeCompare() for types supported). It returns true if pk is not to be applied
 //
-// Currently we have decided to only do this optimization for Insert statements. Insert statements form a significant majority of
+// At this time we have decided to only perform this for Insert statements. Insert statements form a significant majority of
 // the generated noop load during catchup and are easier to test for. Update and Delete statements are very difficult to
 // unit test reliably and without flakiness with our current test framework. So as a pragmatic decision we support Insert
 // now and punt on the others.
 func (tp *TablePlan) isOutsidePKRange(bindvars map[string]*querypb.BindVariable, before, after bool, stmtType string) bool {
 	// added empty comments below, otherwise gofmt removes the spaces between the bitwise & and obfuscates this check!
-	if *vreplicationExperimentalFlags /**/ & /**/ vreplicationExperimentalOptimizeInserts == 0 {
+	if *vreplicationExperimentalFlags /**/ & /**/ vreplicationExperimentalFlagOptimizeInserts == 0 {
 		return false
 	}
 	// Ensure there is one and only one value in lastpk and pkrefs.
@@ -259,7 +259,7 @@ func (tp *TablePlan) isOutsidePKRange(bindvars map[string]*querypb.BindVariable,
 		case !before && after:
 			bindvar = bindvars["a_"+tp.PKReferences[0]]
 		}
-		if bindvar == nil {
+		if bindvar == nil { //should never happen
 			return false
 		}
 
@@ -294,7 +294,7 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 	}
 	switch {
 	case !before && after:
-		// only apply inserts for rows whose primary keys
+		// only apply inserts for rows whose primary keys are within the range of rows already copied
 		if tp.isOutsidePKRange(bindvars, before, after, "insert") {
 			return nil, nil
 		}
