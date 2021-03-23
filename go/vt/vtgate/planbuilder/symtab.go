@@ -564,39 +564,37 @@ func newResultColumn(expr *sqlparser.AliasedExpr, origin logicalPlan) *resultCol
 	} else {
 		// We don't generate an alias if the expression is non-trivial.
 		// Just to be safe, generate an anonymous column for the expression.
+		typ, err := GetReturnType(expr.Expr)
 		rc.column = &column{
 			origin: origin,
-			typ:    GetReturnType(expr),
+		}
+		if err == nil {
+			rc.column.typ = typ
 		}
 	}
 	return rc
 }
 
 // GetReturnType returns the type of the select expression that MySQL will return
-func GetReturnType(input sqlparser.SQLNode) querypb.Type {
+func GetReturnType(input sqlparser.Expr) (querypb.Type, error) {
 	switch node := input.(type) {
-	case *sqlparser.Nextval:
-		return querypb.Type_INT64
-	case *sqlparser.AliasedExpr:
-		return GetReturnType(node.Expr)
 	case *sqlparser.FuncExpr:
 		functionName := strings.ToUpper(node.Name.String())
 		switch functionName {
 		case "ABS":
 			// Returned value depends on the return type of the input
 			if len(node.Exprs) == 1 {
-				expr := node.Exprs[0]
-				return GetReturnType(expr)
+				expr, isAliasedExpr := node.Exprs[0].(*sqlparser.AliasedExpr)
+				if isAliasedExpr {
+					return GetReturnType(expr.Expr)
+				}
 			}
 		case "COUNT":
-			return querypb.Type_INT64
+			return querypb.Type_INT64, nil
 		}
 	case *sqlparser.ColName:
 		col := node.Metadata.(*column)
-		return col.typ
-	case *sqlparser.StarExpr:
-		// return null type when we do not know the type
-		return querypb.Type_NULL_TYPE
+		return col.typ, nil
 	}
-	return querypb.Type_NULL_TYPE
+	return 0, fmt.Errorf("cannot evaluate return type for %T", input)
 }
