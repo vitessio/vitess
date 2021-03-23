@@ -23,6 +23,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
@@ -55,6 +56,9 @@ type API struct {
 	clusterMap map[string]*cluster.Cluster
 	serv       *grpcserver.Server
 	router     *mux.Router
+
+	// See https://github.com/vitessio/vitess/issues/7723 for why this exists.
+	vtexplainLock sync.Mutex
 }
 
 // NewAPI returns a new API, configured to service the given set of clusters,
@@ -996,9 +1000,21 @@ func (api *API) VTExplain(ctx context.Context, req *vtadminpb.VTExplainRequest) 
 
 	opts := &vtexplain.Options{ReplicationMode: "ROW"}
 
+	lockWaitStart := time.Now()
+
+	api.vtexplainLock.Lock()
+	defer api.vtexplainLock.Unlock()
+
+	lockWaitTime := time.Since(lockWaitStart)
+	log.Infof("vtexplain lock wait time: %s", lockWaitTime)
+
+	span.Annotate("vtexplain_lock_wait_time", lockWaitTime.String())
+
 	if err := vtexplain.Init(srvVSchema, schema, shardMap, opts); err != nil {
 		return nil, fmt.Errorf("error initilaizing vtexplain: %w", err)
 	}
+
+	defer vtexplain.Stop()
 
 	plans, err := vtexplain.Run(req.Sql)
 	if err != nil {
