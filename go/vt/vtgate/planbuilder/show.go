@@ -115,26 +115,40 @@ func buildVariablePlan(show *sqlparser.ShowBasic, vschema ContextVSchema) (engin
 func buildShowTblPlan(show *sqlparser.ShowBasic, vschema ContextVSchema) (engine.Primitive, error) {
 	if show.DbName != "" {
 		show.Tbl.Qualifier = sqlparser.NewTableIdent(show.DbName)
-	}
-	table, _, _, _, destination, err := vschema.FindTableOrVindex(show.Tbl)
-	if err != nil {
-		return nil, err
-	}
-	if table == nil {
-		return nil, vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.UnknownTable, "Table '%s' doesn't exist", show.Tbl.Name.String())
-	}
-	if destination == nil {
-		destination = key.DestinationAnyShard{}
+		// Remove Database Name from the query.
+		show.DbName = ""
 	}
 
-	// Remove Database Name from the query.
-	show.DbName = ""
-	show.Tbl.Qualifier = sqlparser.NewTableIdent("")
-	show.Tbl.Name = table.Name
+	dest := key.Destination(key.DestinationAnyShard{})
+	var ks *vindexes.Keyspace
+	var err error
+
+	if !show.Tbl.Qualifier.IsEmpty() && sqlparser.SystemSchema(show.Tbl.Qualifier.String()) {
+		ks, err = vschema.AnyKeyspace()
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		table, _, _, _, destination, err := vschema.FindTableOrVindex(show.Tbl)
+		if err != nil {
+			return nil, err
+		}
+		if table == nil {
+			return nil, vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.UnknownTable, "Table '%s' doesn't exist", show.Tbl.Name.String())
+		}
+		// Update the table.
+		show.Tbl.Qualifier = sqlparser.NewTableIdent("")
+		show.Tbl.Name = table.Name
+
+		if destination != nil {
+			dest = destination
+		}
+		ks = table.Keyspace
+	}
 
 	return &engine.Send{
-		Keyspace:          table.Keyspace,
-		TargetDestination: destination,
+		Keyspace:          ks,
+		TargetDestination: dest,
 		Query:             sqlparser.String(show),
 		IsDML:             false,
 		SingleShardOnly:   true,
