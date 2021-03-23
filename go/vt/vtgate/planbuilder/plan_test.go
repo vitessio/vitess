@@ -413,6 +413,7 @@ func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper, c
 	t.Run(filename, func(t *testing.T) {
 		expected := &strings.Builder{}
 		fail := checkAllTests
+		var outFirstPlanner string
 		for tcase := range iterateExecFile(filename) {
 			t.Run(fmt.Sprintf("%d V3: %s", tcase.lineno, tcase.comments), func(t *testing.T) {
 				vschema.version = V3
@@ -426,6 +427,7 @@ func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper, c
 				if err != nil {
 					out = `"` + out + `"`
 				}
+				outFirstPlanner = out
 
 				expected.WriteString(fmt.Sprintf("%s\"%s\"\n%s\n", tcase.comments, escapeNewLines(tcase.input), out))
 			})
@@ -457,7 +459,7 @@ func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper, c
 						out = `"` + out + `"`
 					}
 
-					if tcase.output == out {
+					if outFirstPlanner == out {
 						expected.WriteString(samePlanMarker)
 					} else {
 						expected.WriteString(fmt.Sprintf("%s\n", out))
