@@ -252,6 +252,20 @@ func TestWithDefaultKeyspaceFromFile(t *testing.T) {
 	testFile(t, "call_cases.txt", testOutputTempDir, vschema, false)
 }
 
+func TestWithSystemSchemaAsDefaultKeyspace(t *testing.T) {
+	// We are testing this separately so we can set a default keyspace
+	testOutputTempDir, err := ioutil.TempDir("", "plan_test")
+	require.NoError(t, err)
+	defer os.RemoveAll(testOutputTempDir)
+	vschema := &vschemaWrapper{
+		v:          loadSchema(t, "schema_test.json"),
+		keyspace:   &vindexes.Keyspace{Name: "mysql"},
+		tabletType: topodatapb.TabletType_MASTER,
+	}
+
+	testFile(t, "sysschema_default.txt", testOutputTempDir, vschema, false)
+}
+
 func TestOtherPlanningFromFile(t *testing.T) {
 	// We are testing this separately so we can set a default keyspace
 	testOutputTempDir, err := ioutil.TempDir("", "plan_test")
