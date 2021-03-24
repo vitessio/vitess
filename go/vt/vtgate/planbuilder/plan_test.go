@@ -381,14 +381,28 @@ func (vw *vschemaWrapper) FindTableOrVindex(tab sqlparser.TableName) (*vindexes.
 	if err != nil {
 		return nil, nil, destKeyspace, destTabletType, destTarget, err
 	}
-	if destKeyspace == "" && vw.keyspace != nil {
-		destKeyspace = vw.keyspace.Name
+	if destKeyspace == "" {
+		destKeyspace = vw.getActualKeyspace()
 	}
 	table, vindex, err := vw.v.FindTableOrVindex(destKeyspace, tab.Name.String(), topodatapb.TabletType_MASTER)
 	if err != nil {
 		return nil, nil, destKeyspace, destTabletType, destTarget, err
 	}
 	return table, vindex, destKeyspace, destTabletType, destTarget, nil
+}
+
+func (vw *vschemaWrapper) getActualKeyspace() string {
+	if vw.keyspace == nil {
+		return ""
+	}
+	if !sqlparser.SystemSchema(vw.keyspace.Name) {
+		return vw.keyspace.Name
+	}
+	ks, err := vw.AnyKeyspace()
+	if err != nil {
+		return ""
+	}
+	return ks.Name
 }
 
 func (vw *vschemaWrapper) DefaultKeyspace() (*vindexes.Keyspace, error) {
