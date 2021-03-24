@@ -577,6 +577,788 @@ func TestGetSchema(t *testing.T) {
 
 		assert.NotEqual(t, req.TabletAlias, tablet.Tablet.Alias, "expected GetSchema to not modify original request object")
 	})
+
+	t.Run("size aggregation", func(t *testing.T) {
+		t.Parallel()
+
+		tests := []struct {
+			name      string
+			cfg       testutil.TestClusterConfig
+			keyspace  string
+			opts      cluster.GetSchemaOptions
+			expected  *vtadminpb.Schema
+			shouldErr bool
+		}{
+			{
+				name: "success",
+				cfg: testutil.TestClusterConfig{
+					Cluster: &vtadminpb.Cluster{
+						Id:   "c0",
+						Name: "cluster0",
+					},
+					Tablets: []*vtadminpb.Tablet{
+						{
+							Tablet: &topodatapb.Tablet{
+								Alias: &topodatapb.TabletAlias{
+									Cell: "zone1",
+									Uid:  100,
+								},
+								Keyspace: "testkeyspace",
+								Shard:    "-80",
+							},
+							State: vtadminpb.Tablet_SERVING,
+						},
+						{
+							Tablet: &topodatapb.Tablet{
+								Alias: &topodatapb.TabletAlias{
+									Cell: "zone1",
+									Uid:  200,
+								},
+								Keyspace: "testkeyspace",
+								Shard:    "80-",
+							},
+							State: vtadminpb.Tablet_SERVING,
+						},
+					},
+					VtctldClient: &testutil.VtctldClient{
+						FindAllShardsInKeyspaceResults: map[string]struct {
+							Response *vtctldatapb.FindAllShardsInKeyspaceResponse
+							Error    error
+						}{
+							"testkeyspace": {
+								Response: &vtctldatapb.FindAllShardsInKeyspaceResponse{
+									Shards: map[string]*vtctldatapb.Shard{
+										"-80": {
+											Name: "-80",
+											Shard: &topodatapb.Shard{
+												IsMasterServing: true,
+											},
+										},
+										"80-": {
+											Name: "80-",
+											Shard: &topodatapb.Shard{
+												IsMasterServing: true,
+											},
+										},
+										"-": {
+											Name: "-",
+											Shard: &topodatapb.Shard{
+												IsMasterServing: false,
+											},
+										},
+									},
+								},
+							},
+						},
+						GetSchemaResults: map[string]struct {
+							Response *vtctldatapb.GetSchemaResponse
+							Error    error
+						}{
+							"zone1-0000000100": {
+								Response: &vtctldatapb.GetSchemaResponse{
+									Schema: &tabletmanagerdatapb.SchemaDefinition{
+										DatabaseSchema: "CREATE DATABASE vt_testkeyspcae",
+										TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+											{
+												Name:       "foo",
+												Schema:     "CREATE TABLE foo (\n\tid INT(11) NOT NULL\n) ENGINE=InnoDB",
+												DataLength: 100,
+												RowCount:   5,
+											},
+										},
+									},
+								},
+							},
+							"zone1-0000000200": {
+								Response: &vtctldatapb.GetSchemaResponse{
+									Schema: &tabletmanagerdatapb.SchemaDefinition{
+										DatabaseSchema: "CREATE DATABASE vt_testkeyspcae",
+										TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+											{
+												Name:       "foo",
+												Schema:     "CREATE TABLE foo (\n\tid INT(11) NOT NULL\n) ENGINE=InnoDB",
+												DataLength: 200,
+												RowCount:   420,
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				keyspace: "testkeyspace",
+				opts: cluster.GetSchemaOptions{
+					SizeOpts: &vtadminpb.GetSchemaTableSizeOptions{
+						AggregateSizes: true,
+					},
+				},
+				expected: &vtadminpb.Schema{
+					Cluster: &vtadminpb.Cluster{
+						Id:   "c0",
+						Name: "cluster0",
+					},
+					Keyspace: "testkeyspace",
+					TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+						{
+							Name:       "foo",
+							Schema:     "CREATE TABLE foo (\n\tid INT(11) NOT NULL\n) ENGINE=InnoDB",
+							DataLength: 0,
+							RowCount:   0,
+						},
+					},
+					TableSizes: map[string]*vtadminpb.Schema_TableSize{
+						"foo": {
+							DataLength: 100 + 200,
+							RowCount:   5 + 420,
+							ByShard: map[string]*vtadminpb.Schema_ShardTableSize{
+								"-80": {
+									DataLength: 100,
+									RowCount:   5,
+								},
+								"80-": {
+									DataLength: 200,
+									RowCount:   420,
+								},
+							},
+						},
+					},
+				},
+				shouldErr: false,
+			},
+			{
+				name: "include nonserving shards",
+				cfg: testutil.TestClusterConfig{
+					Cluster: &vtadminpb.Cluster{
+						Id:   "c0",
+						Name: "cluster0",
+					},
+					Tablets: []*vtadminpb.Tablet{
+						{
+							Tablet: &topodatapb.Tablet{
+								Alias: &topodatapb.TabletAlias{
+									Cell: "zone1",
+									Uid:  100,
+								},
+								Keyspace: "testkeyspace",
+								Shard:    "-80",
+							},
+							State: vtadminpb.Tablet_SERVING,
+						},
+						{
+							Tablet: &topodatapb.Tablet{
+								Alias: &topodatapb.TabletAlias{
+									Cell: "zone1",
+									Uid:  200,
+								},
+								Keyspace: "testkeyspace",
+								Shard:    "80-",
+							},
+							State: vtadminpb.Tablet_SERVING,
+						},
+						{
+							Tablet: &topodatapb.Tablet{
+								Alias: &topodatapb.TabletAlias{
+									Cell: "zone1",
+									Uid:  300,
+								},
+								Keyspace: "testkeyspace",
+								Shard:    "-",
+							},
+							State: vtadminpb.Tablet_SERVING,
+						},
+					},
+					VtctldClient: &testutil.VtctldClient{
+						FindAllShardsInKeyspaceResults: map[string]struct {
+							Response *vtctldatapb.FindAllShardsInKeyspaceResponse
+							Error    error
+						}{
+							"testkeyspace": {
+								Response: &vtctldatapb.FindAllShardsInKeyspaceResponse{
+									Shards: map[string]*vtctldatapb.Shard{
+										"-80": {
+											Name: "-80",
+											Shard: &topodatapb.Shard{
+												IsMasterServing: true,
+											},
+										},
+										"80-": {
+											Name: "80-",
+											Shard: &topodatapb.Shard{
+												IsMasterServing: true,
+											},
+										},
+										"-": {
+											Name: "-",
+											Shard: &topodatapb.Shard{
+												IsMasterServing: false,
+											},
+										},
+									},
+								},
+							},
+						},
+						GetSchemaResults: map[string]struct {
+							Response *vtctldatapb.GetSchemaResponse
+							Error    error
+						}{
+							"zone1-0000000100": {
+								Response: &vtctldatapb.GetSchemaResponse{
+									Schema: &tabletmanagerdatapb.SchemaDefinition{
+										DatabaseSchema: "CREATE DATABASE vt_testkeyspcae",
+										TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+											{
+												Name:       "foo",
+												Schema:     "CREATE TABLE foo (\n\tid INT(11) NOT NULL\n) ENGINE=InnoDB",
+												DataLength: 100,
+												RowCount:   5,
+											},
+										},
+									},
+								},
+							},
+							"zone1-0000000200": {
+								Response: &vtctldatapb.GetSchemaResponse{
+									Schema: &tabletmanagerdatapb.SchemaDefinition{
+										DatabaseSchema: "CREATE DATABASE vt_testkeyspcae",
+										TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+											{
+												Name:       "foo",
+												Schema:     "CREATE TABLE foo (\n\tid INT(11) NOT NULL\n) ENGINE=InnoDB",
+												DataLength: 200,
+												RowCount:   420,
+											},
+										},
+									},
+								},
+							},
+							"zone1-0000000300": {
+								Response: &vtctldatapb.GetSchemaResponse{
+									Schema: &tabletmanagerdatapb.SchemaDefinition{
+										DatabaseSchema: "CREATE DATABASE vt_testkeyspcae",
+										TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+											{
+												Name:       "foo",
+												Schema:     "CREATE TABLE foo (\n\tid INT(11) NOT NULL\n) ENGINE=InnoDB",
+												DataLength: 1000,
+												RowCount:   200,
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				keyspace: "testkeyspace",
+				opts: cluster.GetSchemaOptions{
+					SizeOpts: &vtadminpb.GetSchemaTableSizeOptions{
+						AggregateSizes:          true,
+						IncludeNonServingShards: true,
+					},
+				},
+				expected: &vtadminpb.Schema{
+					Cluster: &vtadminpb.Cluster{
+						Id:   "c0",
+						Name: "cluster0",
+					},
+					Keyspace: "testkeyspace",
+					TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+						{
+							Name:       "foo",
+							Schema:     "CREATE TABLE foo (\n\tid INT(11) NOT NULL\n) ENGINE=InnoDB",
+							DataLength: 0,
+							RowCount:   0,
+						},
+					},
+					TableSizes: map[string]*vtadminpb.Schema_TableSize{
+						"foo": {
+							DataLength: 100 + 200 + 1000,
+							RowCount:   5 + 420 + 200,
+							ByShard: map[string]*vtadminpb.Schema_ShardTableSize{
+								"-80": {
+									DataLength: 100,
+									RowCount:   5,
+								},
+								"80-": {
+									DataLength: 200,
+									RowCount:   420,
+								},
+								"-": {
+									DataLength: 1000,
+									RowCount:   200,
+								},
+							},
+						},
+					},
+				},
+				shouldErr: false,
+			},
+			{
+				name: "no serving tablets found for shard",
+				cfg: testutil.TestClusterConfig{
+					Cluster: &vtadminpb.Cluster{
+						Id:   "c0",
+						Name: "cluster0",
+					},
+					Tablets: []*vtadminpb.Tablet{
+						{
+							Tablet: &topodatapb.Tablet{
+								Alias: &topodatapb.TabletAlias{
+									Cell: "zone1",
+									Uid:  100,
+								},
+								Keyspace: "testkeyspace",
+								Shard:    "-80",
+							},
+							State: vtadminpb.Tablet_NOT_SERVING,
+						},
+						{
+							Tablet: &topodatapb.Tablet{
+								Alias: &topodatapb.TabletAlias{
+									Cell: "zone1",
+									Uid:  200,
+								},
+								Keyspace: "testkeyspace",
+								Shard:    "80-",
+							},
+							State: vtadminpb.Tablet_SERVING,
+						},
+					},
+					VtctldClient: &testutil.VtctldClient{
+						FindAllShardsInKeyspaceResults: map[string]struct {
+							Response *vtctldatapb.FindAllShardsInKeyspaceResponse
+							Error    error
+						}{
+							"testkeyspace": {
+								Response: &vtctldatapb.FindAllShardsInKeyspaceResponse{
+									Shards: map[string]*vtctldatapb.Shard{
+										"-80": {
+											Name: "-80",
+											Shard: &topodatapb.Shard{
+												IsMasterServing: true,
+											},
+										},
+										"80-": {
+											Name: "80-",
+											Shard: &topodatapb.Shard{
+												IsMasterServing: true,
+											},
+										},
+										"-": {
+											Name: "-",
+											Shard: &topodatapb.Shard{
+												IsMasterServing: false,
+											},
+										},
+									},
+								},
+							},
+						},
+						GetSchemaResults: map[string]struct {
+							Response *vtctldatapb.GetSchemaResponse
+							Error    error
+						}{
+							"zone1-0000000100": {
+								Response: &vtctldatapb.GetSchemaResponse{
+									Schema: &tabletmanagerdatapb.SchemaDefinition{
+										DatabaseSchema: "CREATE DATABASE vt_testkeyspcae",
+										TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+											{
+												Name:       "foo",
+												Schema:     "CREATE TABLE foo (\n\tid INT(11) NOT NULL\n) ENGINE=InnoDB",
+												DataLength: 100,
+												RowCount:   5,
+											},
+										},
+									},
+								},
+							},
+							"zone1-0000000200": {
+								Response: &vtctldatapb.GetSchemaResponse{
+									Schema: &tabletmanagerdatapb.SchemaDefinition{
+										DatabaseSchema: "CREATE DATABASE vt_testkeyspcae",
+										TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+											{
+												Name:       "foo",
+												Schema:     "CREATE TABLE foo (\n\tid INT(11) NOT NULL\n) ENGINE=InnoDB",
+												DataLength: 200,
+												RowCount:   420,
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				keyspace: "testkeyspace",
+				opts: cluster.GetSchemaOptions{
+					SizeOpts: &vtadminpb.GetSchemaTableSizeOptions{
+						AggregateSizes: true,
+					},
+				},
+				expected:  nil,
+				shouldErr: true,
+			},
+			{
+				name: "ignore TableNamesOnly",
+				cfg: testutil.TestClusterConfig{
+					Cluster: &vtadminpb.Cluster{
+						Id:   "c0",
+						Name: "cluster0",
+					},
+					Tablets: []*vtadminpb.Tablet{
+						{
+							Tablet: &topodatapb.Tablet{
+								Alias: &topodatapb.TabletAlias{
+									Cell: "zone1",
+									Uid:  100,
+								},
+								Keyspace: "testkeyspace",
+								Shard:    "-80",
+							},
+							State: vtadminpb.Tablet_SERVING,
+						},
+						{
+							Tablet: &topodatapb.Tablet{
+								Alias: &topodatapb.TabletAlias{
+									Cell: "zone1",
+									Uid:  200,
+								},
+								Keyspace: "testkeyspace",
+								Shard:    "80-",
+							},
+							State: vtadminpb.Tablet_SERVING,
+						},
+					},
+					VtctldClient: &testutil.VtctldClient{
+						FindAllShardsInKeyspaceResults: map[string]struct {
+							Response *vtctldatapb.FindAllShardsInKeyspaceResponse
+							Error    error
+						}{
+							"testkeyspace": {
+								Response: &vtctldatapb.FindAllShardsInKeyspaceResponse{
+									Shards: map[string]*vtctldatapb.Shard{
+										"-80": {
+											Name: "-80",
+											Shard: &topodatapb.Shard{
+												IsMasterServing: true,
+											},
+										},
+										"80-": {
+											Name: "80-",
+											Shard: &topodatapb.Shard{
+												IsMasterServing: true,
+											},
+										},
+										"-": {
+											Name: "-",
+											Shard: &topodatapb.Shard{
+												IsMasterServing: false,
+											},
+										},
+									},
+								},
+							},
+						},
+						GetSchemaResults: map[string]struct {
+							Response *vtctldatapb.GetSchemaResponse
+							Error    error
+						}{
+							"zone1-0000000100": {
+								Response: &vtctldatapb.GetSchemaResponse{
+									Schema: &tabletmanagerdatapb.SchemaDefinition{
+										DatabaseSchema: "CREATE DATABASE vt_testkeyspcae",
+										TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+											{
+												Name:       "foo",
+												Schema:     "CREATE TABLE foo (\n\tid INT(11) NOT NULL\n) ENGINE=InnoDB",
+												DataLength: 100,
+												RowCount:   5,
+											},
+										},
+									},
+								},
+							},
+							"zone1-0000000200": {
+								Response: &vtctldatapb.GetSchemaResponse{
+									Schema: &tabletmanagerdatapb.SchemaDefinition{
+										DatabaseSchema: "CREATE DATABASE vt_testkeyspcae",
+										TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+											{
+												Name:       "foo",
+												Schema:     "CREATE TABLE foo (\n\tid INT(11) NOT NULL\n) ENGINE=InnoDB",
+												DataLength: 200,
+												RowCount:   420,
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				keyspace: "testkeyspace",
+				opts: cluster.GetSchemaOptions{
+					BaseRequest: &vtctldatapb.GetSchemaRequest{
+						TableNamesOnly: true, // Just checking things to blow up if this gets set.
+					},
+					SizeOpts: &vtadminpb.GetSchemaTableSizeOptions{
+						AggregateSizes: true,
+					},
+				},
+				expected: &vtadminpb.Schema{
+					Cluster: &vtadminpb.Cluster{
+						Id:   "c0",
+						Name: "cluster0",
+					},
+					Keyspace: "testkeyspace",
+					TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+						{
+							Name:       "foo",
+							Schema:     "CREATE TABLE foo (\n\tid INT(11) NOT NULL\n) ENGINE=InnoDB",
+							DataLength: 0,
+							RowCount:   0,
+						},
+					},
+					TableSizes: map[string]*vtadminpb.Schema_TableSize{
+						"foo": {
+							DataLength: 100 + 200,
+							RowCount:   5 + 420,
+							ByShard: map[string]*vtadminpb.Schema_ShardTableSize{
+								"-80": {
+									DataLength: 100,
+									RowCount:   5,
+								},
+								"80-": {
+									DataLength: 200,
+									RowCount:   420,
+								},
+							},
+						},
+					},
+				},
+				shouldErr: false,
+			},
+			{
+				name: "single GetSchema error fails the request",
+				cfg: testutil.TestClusterConfig{
+					Cluster: &vtadminpb.Cluster{
+						Id:   "c0",
+						Name: "cluster0",
+					},
+					Tablets: []*vtadminpb.Tablet{
+						{
+							Tablet: &topodatapb.Tablet{
+								Alias: &topodatapb.TabletAlias{
+									Cell: "zone1",
+									Uid:  100,
+								},
+								Keyspace: "testkeyspace",
+								Shard:    "-80",
+							},
+							State: vtadminpb.Tablet_SERVING,
+						},
+						{
+							Tablet: &topodatapb.Tablet{
+								Alias: &topodatapb.TabletAlias{
+									Cell: "zone1",
+									Uid:  200,
+								},
+								Keyspace: "testkeyspace",
+								Shard:    "80-",
+							},
+							State: vtadminpb.Tablet_SERVING,
+						},
+					},
+					VtctldClient: &testutil.VtctldClient{
+						FindAllShardsInKeyspaceResults: map[string]struct {
+							Response *vtctldatapb.FindAllShardsInKeyspaceResponse
+							Error    error
+						}{
+							"testkeyspace": {
+								Response: &vtctldatapb.FindAllShardsInKeyspaceResponse{
+									Shards: map[string]*vtctldatapb.Shard{
+										"-80": {
+											Name: "-80",
+											Shard: &topodatapb.Shard{
+												IsMasterServing: true,
+											},
+										},
+										"80-": {
+											Name: "80-",
+											Shard: &topodatapb.Shard{
+												IsMasterServing: true,
+											},
+										},
+										"-": {
+											Name: "-",
+											Shard: &topodatapb.Shard{
+												IsMasterServing: false,
+											},
+										},
+									},
+								},
+							},
+						},
+						GetSchemaResults: map[string]struct {
+							Response *vtctldatapb.GetSchemaResponse
+							Error    error
+						}{
+							"zone1-0000000100": {
+								Response: &vtctldatapb.GetSchemaResponse{
+									Schema: &tabletmanagerdatapb.SchemaDefinition{
+										DatabaseSchema: "CREATE DATABASE vt_testkeyspcae",
+										TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+											{
+												Name:       "foo",
+												Schema:     "CREATE TABLE foo (\n\tid INT(11) NOT NULL\n) ENGINE=InnoDB",
+												DataLength: 100,
+												RowCount:   5,
+											},
+										},
+									},
+								},
+							},
+							"zone1-0000000200": {
+								Error: assert.AnError,
+							},
+						},
+					},
+				},
+				keyspace: "testkeyspace",
+				opts: cluster.GetSchemaOptions{
+					SizeOpts: &vtadminpb.GetSchemaTableSizeOptions{
+						AggregateSizes: true,
+					},
+				},
+				expected:  nil,
+				shouldErr: true,
+			},
+			{
+				name: "FindAllShardsInKeyspace error",
+				cfg: testutil.TestClusterConfig{
+					Cluster: &vtadminpb.Cluster{
+						Id:   "c0",
+						Name: "cluster0",
+					},
+					Tablets: []*vtadminpb.Tablet{
+						{
+							Tablet: &topodatapb.Tablet{
+								Alias: &topodatapb.TabletAlias{
+									Cell: "zone1",
+									Uid:  100,
+								},
+								Keyspace: "testkeyspace",
+								Shard:    "-80",
+							},
+							State: vtadminpb.Tablet_SERVING,
+						},
+						{
+							Tablet: &topodatapb.Tablet{
+								Alias: &topodatapb.TabletAlias{
+									Cell: "zone1",
+									Uid:  200,
+								},
+								Keyspace: "testkeyspace",
+								Shard:    "80-",
+							},
+							State: vtadminpb.Tablet_SERVING,
+						},
+					},
+					VtctldClient: &testutil.VtctldClient{
+						FindAllShardsInKeyspaceResults: map[string]struct {
+							Response *vtctldatapb.FindAllShardsInKeyspaceResponse
+							Error    error
+						}{
+							"testkeyspace": {
+								Error: assert.AnError,
+							},
+						},
+						GetSchemaResults: map[string]struct {
+							Response *vtctldatapb.GetSchemaResponse
+							Error    error
+						}{
+							"zone1-0000000100": {
+								Response: &vtctldatapb.GetSchemaResponse{
+									Schema: &tabletmanagerdatapb.SchemaDefinition{
+										DatabaseSchema: "CREATE DATABASE vt_testkeyspcae",
+										TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+											{
+												Name:       "foo",
+												Schema:     "CREATE TABLE foo (\n\tid INT(11) NOT NULL\n) ENGINE=InnoDB",
+												DataLength: 100,
+												RowCount:   5,
+											},
+										},
+									},
+								},
+							},
+							"zone1-0000000200": {
+								Response: &vtctldatapb.GetSchemaResponse{
+									Schema: &tabletmanagerdatapb.SchemaDefinition{
+										DatabaseSchema: "CREATE DATABASE vt_testkeyspcae",
+										TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+											{
+												Name:       "foo",
+												Schema:     "CREATE TABLE foo (\n\tid INT(11) NOT NULL\n) ENGINE=InnoDB",
+												DataLength: 200,
+												RowCount:   420,
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				keyspace: "testkeyspace",
+				opts: cluster.GetSchemaOptions{
+					SizeOpts: &vtadminpb.GetSchemaTableSizeOptions{
+						AggregateSizes: true,
+					},
+				},
+				expected:  nil,
+				shouldErr: true,
+			},
+		}
+
+		for _, tt := range tests {
+			tt := tt
+
+			t.Run(tt.name, func(t *testing.T) {
+				t.Parallel()
+
+				if tt.keyspace == "" {
+					t.SkipNow()
+				}
+
+				c := testutil.BuildCluster(tt.cfg)
+				schema, err := c.GetSchema(ctx, tt.keyspace, tt.opts)
+				if tt.shouldErr {
+					assert.Error(t, err)
+
+					return
+				}
+
+				if schema.TableDefinitions != nil {
+					// For simplicity, we're going to assert only on the state
+					// of the aggregated sizes (in schema.TableSizes), since the
+					// TableDefinitions size values depends on tablet iteration
+					// order, and that's not something we're interested in
+					// coupling the implementation to.
+					for _, td := range schema.TableDefinitions {
+						td.DataLength = 0
+						td.RowCount = 0
+					}
+				}
+
+				assert.NoError(t, err)
+				testutil.AssertSchemaSlicesEqual(t, []*vtadminpb.Schema{tt.expected}, []*vtadminpb.Schema{schema})
+			})
+		}
+	})
 }
 
 func TestFindWorkflows(t *testing.T) {
