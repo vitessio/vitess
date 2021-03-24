@@ -395,8 +395,10 @@ func (api *API) GetSchema(ctx context.Context, req *vtadminpb.GetSchemaRequest) 
 	span.Annotate("cluster_id", req.ClusterId)
 	span.Annotate("keyspace", req.Keyspace)
 	span.Annotate("table", req.Table)
-	span.Annotate("aggregate_schema_sizes", req.TableSizeOptions.AggregateSizes)
-	span.Annotate("include_non_serving_shards", req.TableSizeOptions.IncludeNonServingShards)
+	if req.TableSizeOptions != nil {
+		span.Annotate("aggregate_schema_sizes", req.TableSizeOptions.AggregateSizes)
+		span.Annotate("include_non_serving_shards", req.TableSizeOptions.IncludeNonServingShards)
+	}
 
 	c, ok := api.clusterMap[req.ClusterId]
 	if !ok {
@@ -409,32 +411,6 @@ func (api *API) GetSchema(ctx context.Context, req *vtadminpb.GetSchemaRequest) 
 		},
 		SizeOpts: req.TableSizeOptions,
 	})
-
-	/*
-		clusters, _ := api.getClustersForRequest([]string{req.ClusterId})
-		if len(clusters) == 0 {
-			return nil, fmt.Errorf("%w: no cluster with id %s", errors.ErrUnsupportedCluster, req.ClusterId)
-		}
-
-		cluster := clusters[0]
-
-		tablet, err := cluster.FindTablet(ctx, func(t *vtadminpb.Tablet) bool {
-			return t.Tablet.Keyspace == req.Keyspace && t.State == vtadminpb.Tablet_SERVING
-		})
-		if err != nil {
-			return nil, fmt.Errorf("%w: no serving tablet found for keyspace %s", err, req.Keyspace)
-		}
-
-		span.Annotate("tablet_alias", topoproto.TabletAliasString(tablet.Tablet.Alias))
-
-		if err := cluster.Vtctld.Dial(ctx); err != nil {
-			return nil, err
-		}
-
-		return cluster.GetSchema(ctx, &vtctldatapb.GetSchemaRequest{
-			Tables: []string{req.Table},
-		}, tablet)
-	*/
 }
 
 // GetSchemas is part of the vtadminpb.VTAdminServer interface.
