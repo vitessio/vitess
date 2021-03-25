@@ -5984,3 +5984,6 @@
 2021-03-25T10:10:05Z,unit_race,https://github.com/vitessio/vitess/actions/runs/686125808
 2021-03-25T11:26:56Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/686330655
 2021-03-25T11:26:57Z,Unit Test (mariadb101),https://github.com/vitessio/vitess/actions/runs/686330688
+2021-03-25T12:01:40Z,Cluster (12),https://github.com/vitessio/vitess/actions/runs/686419524
+2021-03-25T12:01:40Z,endtoend,https://github.com/vitessio/vitess/actions/runs/686419531
+2021-03-25T12:11:34Z,endtoend,https://github.com/vitessio/vitess/actions/runs/686446799
