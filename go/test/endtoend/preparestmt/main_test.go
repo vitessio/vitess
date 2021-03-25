@@ -190,7 +190,11 @@ func TestMain(m *testing.M) {
 			Name:      keyspaceName,
 			SchemaSQL: sqlSchema,
 		}
+		uks := &cluster.Keyspace{Name: "uks"}
 		if err := clusterInstance.StartUnshardedKeyspace(*keyspace, 1, false); err != nil {
+			return 1, err
+		}
+		if err := clusterInstance.StartUnshardedKeyspace(*uks, 0, false); err != nil {
 			return 1, err
 		}
 
@@ -214,6 +218,7 @@ func TestMain(m *testing.M) {
 
 		dbInfo.Host = clusterInstance.Hostname
 		dbInfo.Port = uint(clusterInstance.VtgateMySQLPort)
+		fmt.Println(dbInfo.ConnectionString())
 
 		return m.Run(), nil
 	}()
