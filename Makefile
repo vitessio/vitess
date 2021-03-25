@@ -194,7 +194,8 @@ endif
 
 $(PROTO_GO_OUTS): minimaltools install_protoc-gen-go proto/*.proto
 	for name in $(PROTO_SRC_NAMES); do \
-		$(VTROOT)/bin/protoc --gofast_out=plugins=grpc:. -I${PWD}/dist/vt-protoc-3.6.1/include:proto proto/$${name}.proto && \
+		$(VTROOT)/bin/protoc --gofast_out=plugins=grpc:. --plugin protoc-gen-gofast="${GOBIN}/protoc-gen-gofast" \
+		-I${PWD}/dist/vt-protoc-3.6.1/include:proto proto/$${name}.proto && \
 		goimports -w vitess.io/vitess/go/vt/proto/$${name}/$${name}.pb.go; \
 	done
 	cp -Rf vitess.io/vitess/go/vt/proto/* go/vt/proto
