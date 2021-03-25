@@ -17,6 +17,7 @@ limitations under the License.
 package preparestmt
 
 import (
+	"bytes"
 	"database/sql"
 	"fmt"
 	"strconv"
@@ -270,4 +271,120 @@ func TestWrongTableName(t *testing.T) {
 	dbo := Connect(t)
 	defer dbo.Close()
 	execWithError(t, dbo, []uint16{1146}, "select * from teseting_table;")
+}
+
+type columns struct {
+	columnName             string
+	dataType               string
+	fullDataType           string
+	characterMaximumLength sql.NullInt64
+	numericPrecision       sql.NullInt64
+	numericScale           sql.NullInt64
+	datetimePrecision      sql.NullInt64
+	columnDefault          sql.NullString
+	isNullable             string
+	extra                  string
+	tableName              string
+}
+
+func (c *columns) ToString() string {
+	buf := bytes.Buffer{}
+	buf.WriteString(fmt.Sprintf("|%s| \t |%s| \t |%s| \t |%s| \t |%s| \t |%s| \t |%s| \t |%s| \t |%s| \t |%s| \t |%s|",
+		c.columnName,
+		c.dataType,
+		c.fullDataType,
+		getIntToString(c.characterMaximumLength),
+		getIntToString(c.numericPrecision),
+		getIntToString(c.numericScale),
+		getIntToString(c.datetimePrecision),
+		getStringToString(c.columnDefault),
+		c.isNullable,
+		c.extra,
+		c.tableName))
+	return buf.String()
+}
+
+func getIntToString(x sql.NullInt64) string {
+	if x.Valid {
+		return fmt.Sprintf("%d", x.Int64)
+	}
+	return "NULL"
+}
+
+func getStringToString(x sql.NullString) string {
+	if x.Valid {
+		return x.String
+	}
+	return "NULL"
+}
+
+func TestSelectDBA(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	dbo := Connect(t)
+	defer dbo.Close()
+
+	_, err := dbo.Exec("use uks")
+	require.NoError(t, err)
+
+	_, err = dbo.Exec("CREATE TABLE `a` (`one` int NOT NULL,`two` int NOT NULL,PRIMARY KEY(`one`, `two`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4")
+	require.NoError(t, err)
+
+	prepare, err := dbo.Prepare(`SELECT
+										column_name column_name,
+										data_type data_type,
+										column_type full_data_type,
+										character_maximum_length character_maximum_length,
+										numeric_precision numeric_precision,
+										numeric_scale numeric_scale,
+										datetime_precision datetime_precision,
+										column_default column_default,
+										is_nullable is_nullable,
+										extra extra,
+										table_name table_name
+									   FROM information_schema.columns
+									   WHERE table_schema = ?
+									   ORDER BY ordinal_position`)
+	require.NoError(t, err)
+	rows, err := prepare.Query("uks")
+	require.NoError(t, err)
+	defer rows.Close()
+	cols, err := rows.Columns()
+	require.NoError(t, err)
+	colTypes, err := rows.ColumnTypes()
+	require.NoError(t, err)
+	for i := 0; i < len(cols); i++ {
+		fmt.Printf("(%s,%s) ", cols[i], colTypes[i].DatabaseTypeName())
+	}
+	fmt.Println()
+	var rec columns
+	rowCount := 0
+	for rows.Next() {
+		err := rows.Scan(
+			&rec.columnName,
+			&rec.dataType,
+			&rec.fullDataType,
+			&rec.characterMaximumLength,
+			&rec.numericPrecision,
+			&rec.numericScale,
+			&rec.datetimePrecision,
+			&rec.columnDefault,
+			&rec.isNullable,
+			&rec.extra,
+			&rec.tableName)
+		require.NoError(t, err)
+		fmt.Printf("%s\n", rec.ToString())
+		assert.True(t, rec.columnName == "one" || rec.columnName == "two")
+		assert.Equal(t, "int", rec.dataType)
+		assert.Equal(t, "int", rec.fullDataType)
+		assert.False(t, rec.characterMaximumLength.Valid)
+		assert.EqualValues(t, 10, rec.numericPrecision.Int64)
+		assert.EqualValues(t, 0, rec.numericScale.Int64)
+		assert.False(t, rec.datetimePrecision.Valid)
+		assert.False(t, rec.columnDefault.Valid)
+		assert.Equal(t, "NO", rec.isNullable)
+		assert.Equal(t, "", rec.extra)
+		assert.Equal(t, "a", rec.tableName)
+		rowCount++
+	}
+	require.Equal(t, 2, rowCount)
 }
