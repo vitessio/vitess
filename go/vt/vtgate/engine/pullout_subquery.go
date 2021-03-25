@@ -111,7 +111,11 @@ var (
 )
 
 func (ps *PulloutSubquery) execSubquery(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (map[string]*querypb.BindVariable, error) {
-	result, err := ps.Subquery.Execute(vcursor, bindVars, false)
+	subqueryBindVars := make(map[string]*querypb.BindVariable, len(bindVars))
+	for k, v := range bindVars {
+		subqueryBindVars[k] = v
+	}
+	result, err := ps.Subquery.Execute(vcursor, subqueryBindVars, false)
 	if err != nil {
 		return nil, err
 	}
