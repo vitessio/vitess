@@ -1365,6 +1365,7 @@ type ColumnType struct {
 // ColumnTypeOptions are generic field options for a column type
 type ColumnTypeOptions struct {
 	NotNull       bool
+	Null          bool
 	Autoincrement bool
 	Default       Expr
 	OnUpdate      Expr

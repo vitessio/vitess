@@ -456,6 +456,9 @@ func (ct *ColumnType) Format(buf *TrackedBuffer) {
 	if ct.Collate != "" {
 		buf.astPrintf(ct, " %s %s", keywordStrings[COLLATE], ct.Collate)
 	}
+	if ct.Options.Null {
+		buf.astPrintf(ct, " %s", keywordStrings[NULL])
+	}
 	if ct.Options.NotNull {
 		buf.astPrintf(ct, " %s %s", keywordStrings[NOT], keywordStrings[NULL])
 	}

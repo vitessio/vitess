@@ -1031,11 +1031,13 @@ column_type_options:
 | column_type_options NULL
   {
     $1.NotNull = false
+    $1.Null = true
     $$ = $1
   }
 | column_type_options NOT NULL
   {
     $1.NotNull = true
+    $1.Null = false
     $$ = $1
   }
 | column_type_options DEFAULT value_expression
