@@ -177,7 +177,7 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 	case p.PlanAlterMigration:
 		return qre.execAlterMigration()
 	}
-	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "%s unexpected plan type", qre.plan.PlanID.String())
+	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] %s unexpected plan type", qre.plan.PlanID.String())
 }
 
 func (qre *QueryExecutor) execAutocommit(f func(conn *StatefulConnection) (*sqltypes.Result, error)) (reply *sqltypes.Result, err error) {
@@ -258,7 +258,7 @@ func (qre *QueryExecutor) txConnExec(conn *StatefulConnection) (*sqltypes.Result
 	case p.PlanCallProc:
 		return qre.execProc(conn)
 	}
-	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "%s unexpected plan type", qre.plan.PlanID.String())
+	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] %s unexpected plan type", qre.plan.PlanID.String())
 }
 
 // Stream performs a streaming query execution.
