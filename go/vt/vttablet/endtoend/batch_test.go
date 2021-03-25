@@ -185,7 +185,7 @@ func TestBatchTransaction(t *testing.T) {
 		require.NoError(t, err)
 		defer client.Rollback()
 		qrl, err = client.ExecuteBatch(queries, true)
-		want := "cannot start a new transaction in the scope of an existing one"
+		want := "You are not allowed to execute this command in a transaction (errno 1179) (sqlstate 25000)"
 		require.EqualError(t, err, want)
 	}()
 }
