@@ -2556,6 +2556,14 @@ func TestCreateTable(t *testing.T) {
 			"	col_multipolygon2 multipolygon not null\n" +
 			")",
 
+		// test null columns
+		"create table foo (\n" +
+			"	id int primary key,\n" +
+			"	a varchar(255) null,\n" +
+			"	b varchar(255) null default 'foo',\n" +
+			"	c timestamp null default current_timestamp()\n" +
+			")",
+
 		// test defining indexes separately
 		"create table t (\n" +
 			"	id int auto_increment,\n" +

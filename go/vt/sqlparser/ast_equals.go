@@ -3770,6 +3770,7 @@ func EqualsRefOfColumnTypeOptions(a, b *ColumnTypeOptions) bool {
 		return false
 	}
 	return a.NotNull == b.NotNull &&
+		a.Null == b.Null &&
 		a.Autoincrement == b.Autoincrement &&
 		EqualsExpr(a.Default, b.Default) &&
 		EqualsExpr(a.OnUpdate, b.OnUpdate) &&
