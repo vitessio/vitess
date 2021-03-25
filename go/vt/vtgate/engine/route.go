@@ -128,8 +128,9 @@ type OrderbyParams struct {
 	Col int
 	// WeightStringCol is the weight_string column that will be used for sorting.
 	// It is set to -1 if such a column is not added to the query
-	WeightStringCol int
-	Desc            bool
+	WeightStringCol   int
+	Desc              bool
+	StarColFixedIndex int
 }
 
 func (obp OrderbyParams) String() string {
