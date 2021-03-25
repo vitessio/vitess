@@ -1364,6 +1364,13 @@ type ColumnType struct {
 
 // ColumnTypeOptions are generic field options for a column type
 type ColumnTypeOptions struct {
+	/* We need both Null and NotNull to distinguish 3 cases -
+	1. When Not Null is specified (NotNull = true, Null = false)
+	2. When Null is specified (NotNull = false, Null = true)
+	3. When nothing is specified (NotNull = false, Null = false)
+	The complexity arises from the fact that we do not know whether the column will be nullable or not if nothing is specified.
+	Therefore we do not know whether the column is nullable or not in case 3.
+	*/
 	NotNull       bool
 	Null          bool
 	Autoincrement bool
