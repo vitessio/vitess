@@ -1147,6 +1147,9 @@ var (
 		input:  "CREATE TABLE aipk (id INT AUTO_INCREMENT PRIMARY KEY)",
 		output: "create table aipk (\n\tid INT auto_increment primary key\n)",
 	}, {
+		input:  "create table foo (f timestamp null not null , g timestamp not null null)",
+		output: "create table foo (\n\tf timestamp not null,\n\tg timestamp null\n)",
+	}, {
 		input: "alter vschema create vindex hash_vdx using hash",
 	}, {
 		input: "alter vschema create vindex keyspace.hash_vdx using hash",
