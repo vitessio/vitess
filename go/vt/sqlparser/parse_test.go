@@ -74,6 +74,9 @@ var (
 		output:     "alter database",
 		partialDDL: true,
 	}, {
+		input:  "alter database charset charset = 'utf16'",
+		output: "alter database `charset` character set 'utf16'",
+	}, {
 		input: "select a.b as a$b from $test$",
 	}, {
 		input:  "select 1 from t // aa\n",
