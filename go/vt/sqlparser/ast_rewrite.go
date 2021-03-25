@@ -556,12 +556,15 @@ func (a *application) rewriteRefOfAlterDatabase(parent SQLNode, node *AlterDatab
 			return true
 		}
 	}
+	if !a.rewriteTableIdent(node, node.DBName, func(newNode, parent SQLNode) {
+		parent.(*AlterDatabase).DBName = newNode.(TableIdent)
+	}) {
+		return false
+	}
 	if a.post != nil {
-		if a.pre == nil {
-			a.cur.replacer = replacer
-			a.cur.parent = parent
-			a.cur.node = node
-		}
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
 		if !a.post(&a.cur) {
 			return false
 		}
@@ -1245,6 +1248,11 @@ func (a *application) rewriteRefOfConstraintDefinition(parent SQLNode, node *Con
 			return true
 		}
 	}
+	if !a.rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
+		parent.(*ConstraintDefinition).Name = newNode.(ColIdent)
+	}) {
+		return false
+	}
 	if !a.rewriteConstraintInfo(node, node.Details, func(newNode, parent SQLNode) {
 		parent.(*ConstraintDefinition).Details = newNode.(ConstraintInfo)
 	}) {
@@ -1365,6 +1373,11 @@ func (a *application) rewriteRefOfCreateDatabase(parent SQLNode, node *CreateDat
 	}
 	if !a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
 		parent.(*CreateDatabase).Comments = newNode.(Comments)
+	}) {
+		return false
+	}
+	if !a.rewriteTableIdent(node, node.DBName, func(newNode, parent SQLNode) {
+		parent.(*CreateDatabase).DBName = newNode.(TableIdent)
 	}) {
 		return false
 	}
@@ -1636,6 +1649,11 @@ func (a *application) rewriteRefOfDropDatabase(parent SQLNode, node *DropDatabas
 	}) {
 		return false
 	}
+	if !a.rewriteTableIdent(node, node.DBName, func(newNode, parent SQLNode) {
+		parent.(*DropDatabase).DBName = newNode.(TableIdent)
+	}) {
+		return false
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -1658,12 +1676,15 @@ func (a *application) rewriteRefOfDropKey(parent SQLNode, node *DropKey, replace
 			return true
 		}
 	}
+	if !a.rewriteColIdent(node, node.Name, func(newNode, parent SQLNode) {
+		parent.(*DropKey).Name = newNode.(ColIdent)
+	}) {
+		return false
+	}
 	if a.post != nil {
-		if a.pre == nil {
-			a.cur.replacer = replacer
-			a.cur.parent = parent
-			a.cur.node = node
-		}
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
 		if !a.post(&a.cur) {
 			return false
 		}
@@ -3086,12 +3107,20 @@ func (a *application) rewriteRefOfRenameIndex(parent SQLNode, node *RenameIndex,
 			return true
 		}
 	}
+	if !a.rewriteColIdent(node, node.OldName, func(newNode, parent SQLNode) {
+		parent.(*RenameIndex).OldName = newNode.(ColIdent)
+	}) {
+		return false
+	}
+	if !a.rewriteColIdent(node, node.NewName, func(newNode, parent SQLNode) {
+		parent.(*RenameIndex).NewName = newNode.(ColIdent)
+	}) {
+		return false
+	}
 	if a.post != nil {
-		if a.pre == nil {
-			a.cur.replacer = replacer
-			a.cur.parent = parent
-			a.cur.node = node
-		}
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
 		if !a.post(&a.cur) {
 			return false
 		}
@@ -3550,6 +3579,11 @@ func (a *application) rewriteRefOfShowBasic(parent SQLNode, node *ShowBasic, rep
 	}
 	if !a.rewriteTableName(node, node.Tbl, func(newNode, parent SQLNode) {
 		parent.(*ShowBasic).Tbl = newNode.(TableName)
+	}) {
+		return false
+	}
+	if !a.rewriteTableIdent(node, node.DbName, func(newNode, parent SQLNode) {
+		parent.(*ShowBasic).DbName = newNode.(TableIdent)
 	}) {
 		return false
 	}

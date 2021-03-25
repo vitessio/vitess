@@ -69,6 +69,11 @@ var (
 	}, {
 		input: "select $ from t",
 	}, {
+		// shift/reduce conflict on CHARSET, should throw an error on shifting which will be ignored as it is a DDL
+		input:      "alter database charset = 'utf16';",
+		output:     "alter database",
+		partialDDL: true,
+	}, {
 		input: "select a.b as a$b from $test$",
 	}, {
 		input:  "select 1 from t // aa\n",
@@ -1010,6 +1015,8 @@ var (
 	}, {
 		input:  "alter table a partition by range (id) (partition p0 values less than (10), partition p1 values less than (maxvalue))",
 		output: "alter table a",
+	}, {
+		input: "alter table `Post With Space` drop foreign key `Post With Space_ibfk_1`",
 	}, {
 		input: "alter table a add column (id int, id2 char(23))",
 	}, {
@@ -2018,6 +2025,9 @@ func TestCaseSensitivity(t *testing.T) {
 		input:  "alter table A rename to B",
 		output: "alter table A rename B",
 	}, {
+		input:  "alter table `A r` rename to `B r`",
+		output: "alter table `A r` rename `B r`",
+	}, {
 		input: "rename table A to B",
 	}, {
 		input:  "drop table B",
@@ -2632,6 +2642,15 @@ func TestCreateTable(t *testing.T) {
 			"	constraint second_ibfk_1 foreign key (k, j) references simple (a, b) on update cascade\n" +
 			")",
 
+		// constraint name with spaces
+		"create table `Post With Space` (\n" +
+			"	id int(11) not null auto_increment,\n" +
+			"	user_id int(11) not null,\n" +
+			"	primary key (id),\n" +
+			"	unique key post_user_unique (user_id),\n" +
+			"	constraint `Post With Space_ibfk_1` foreign key (user_id) references `User` (id)\n" +
+			") ENGINE Innodb",
+
 		// table options
 		"create table t (\n" +
 			"	id int auto_increment\n" +
@@ -3074,11 +3093,6 @@ var (
 	}, {
 		input:        "select /* aa",
 		output:       "syntax error at position 13 near '/* aa'",
-		excludeMulti: true,
-	}, {
-		// non_reserved keywords are currently not permitted everywhere
-		input:        "create database repair",
-		output:       "syntax error at position 23 near 'repair'",
 		excludeMulti: true,
 	}}
 )
