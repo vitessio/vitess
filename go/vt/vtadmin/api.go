@@ -177,7 +177,10 @@ func (api *API) FindSchema(ctx context.Context, req *vtadminpb.FindSchemaRequest
 				return
 			}
 
-			schemas, err := api.getSchemas(ctx, c, tablets)
+			schemas, err := api.getSchemas(ctx, c, cluster.GetSchemaOptions{
+				Tablets:  tablets,
+				SizeOpts: req.TableSizeOptions,
+			})
 			if err != nil {
 				err := fmt.Errorf("%w: while collecting schemas for cluster %s", err, c.ID)
 				rec.RecordError(err)
@@ -442,7 +445,10 @@ func (api *API) GetSchemas(ctx context.Context, req *vtadminpb.GetSchemasRequest
 				return
 			}
 
-			ss, err := api.getSchemas(ctx, c, tablets)
+			ss, err := api.getSchemas(ctx, c, cluster.GetSchemaOptions{
+				Tablets:  tablets,
+				SizeOpts: req.TableSizeOptions,
+			})
 			if err != nil {
 				er.RecordError(err)
 				return
@@ -466,7 +472,7 @@ func (api *API) GetSchemas(ctx context.Context, req *vtadminpb.GetSchemasRequest
 }
 
 // getSchemas returns all of the schemas across all keyspaces in the given cluster.
-func (api *API) getSchemas(ctx context.Context, c *cluster.Cluster, tablets []*vtadminpb.Tablet) ([]*vtadminpb.Schema, error) {
+func (api *API) getSchemas(ctx context.Context, c *cluster.Cluster, opts cluster.GetSchemaOptions) ([]*vtadminpb.Schema, error) {
 	if err := c.Vtctld.Dial(ctx); err != nil {
 		return nil, err
 	}
@@ -496,12 +502,7 @@ func (api *API) getSchemas(ctx context.Context, c *cluster.Cluster, tablets []*v
 		go func(c *cluster.Cluster, ks *vtctldatapb.Keyspace) {
 			defer wg.Done()
 
-			ss, err := c.GetSchema(ctx, ks.Name, cluster.GetSchemaOptions{
-				Tablets: tablets,
-				SizeOpts: &vtadminpb.GetSchemaTableSizeOptions{
-					AggregateSizes: false,
-				},
-			})
+			ss, err := c.GetSchema(ctx, ks.Name, opts)
 			if err != nil {
 				// Ignore keyspaces without any serving tablets.
 				if stderrors.Is(err, errors.ErrNoServingTablet) {
