@@ -5971,6 +5971,8 @@
 2021-03-24T19:43:35Z,unit_race,https://github.com/vitessio/vitess/actions/runs/684241456
 2021-03-25T09:27:04Z,endtoend,https://github.com/vitessio/vitess/actions/runs/686008136
 2021-03-25T09:27:04Z,unit_race,https://github.com/vitessio/vitess/actions/runs/686008132
+2021-03-25T10:10:05Z,Cluster (17),https://github.com/vitessio/vitess/actions/runs/686125780
+2021-03-25T10:10:05Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/686125789
 2021-03-25T10:10:05Z,Unit Test (mariadb101),https://github.com/vitessio/vitess/actions/runs/686125811
 2021-03-25T10:10:05Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/686125775
 2021-03-25T10:10:05Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/686125777
