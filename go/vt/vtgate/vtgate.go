@@ -112,6 +112,8 @@ var (
 	errorCounts *stats.CountersWithMultiLabels
 
 	warnings *stats.CountersWithSingleLabel
+
+	vstreamSkewDelayCount *stats.Counter
 )
 
 // VTGate is the rpc interface to vtgate. Only one instance
@@ -152,6 +154,9 @@ func Init(ctx context.Context, serv srvtopo.Server, cell string, tabletTypesToWa
 	// vschemaCounters needs to be initialized before planner to
 	// catch the initial load stats.
 	vschemaCounters = stats.NewCountersWithSingleLabel("VtgateVSchemaCounts", "Vtgate vschema counts", "changes")
+
+	vstreamSkewDelayCount = stats.NewCounter("VStreamEventsDelayedBySkewAlignment",
+		"Number of events that had to wait because the skew across shards was too high")
 
 	// Build objects from low to high level.
 	// Start with the gateway. If we can't reach the topology service,
@@ -405,8 +410,8 @@ handleError:
 }
 
 // VStream streams binlog events.
-func (vtg *VTGate) VStream(ctx context.Context, tabletType topodatapb.TabletType, vgtid *binlogdatapb.VGtid, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
-	return vtg.vsm.VStream(ctx, tabletType, vgtid, filter, send)
+func (vtg *VTGate) VStream(ctx context.Context, tabletType topodatapb.TabletType, vgtid *binlogdatapb.VGtid, filter *binlogdatapb.Filter, flags *vtgatepb.VStreamFlags, send func([]*binlogdatapb.VEvent) error) error {
+	return vtg.vsm.VStream(ctx, tabletType, vgtid, filter, flags, send)
 }
 
 // GetGatewayCacheStatus returns a displayable version of the Gateway cache.
