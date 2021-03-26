@@ -507,7 +507,7 @@ func (c *Cluster) GetSchema(ctx context.Context, keyspace string, opts GetSchema
 		for _, shard := range resp.Shards {
 			if !shard.Shard.IsMasterServing {
 				if !opts.SizeOpts.IncludeNonServingShards {
-					log.Infof("log thing about skipping this shard")
+					log.Infof("%s/%s is not serving; ignoring because IncludeNonServingShards=false", keyspace, shard.Name)
 					continue
 				}
 			}
@@ -610,9 +610,8 @@ func (c *Cluster) GetSchema(ctx context.Context, keyspace string, opts GetSchema
 				if _, ok = tableSize.ByShard[tablet.Tablet.Shard]; ok {
 					// We managed to query for the same shard twice, that's ...
 					// weird. but do we care? maybe just log? idk!
-					log.Warningf("log message goes here")
-
-					return
+					log.Warningf("Duplicate shard queries for table %s on shard %s/%s; skipping subsequent size infos to avoid double-counting", td.Name, keyspace, tablet.Tablet.Shard)
+					continue
 				}
 
 				tableSize.RowCount += td.RowCount
