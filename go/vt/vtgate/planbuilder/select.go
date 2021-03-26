@@ -154,6 +154,27 @@ func planAggregations(qp *queryProjection, plan logicalPlan, semTable *semantics
 	return oa, nil
 }
 
+func planOrderBy(qp *queryProjection, plan logicalPlan, semTable *semantics.SemTable) (logicalPlan, error) {
+	switch plan := plan.(type) {
+	case *route:
+		for _, order := range qp.orderExprs {
+			offset, exists := qp.orderExprColMap[order]
+			if !exists {
+				return nil, semantics.Gen4NotSupportedF("order by column not exists in select list")
+			}
+			plan.eroute.OrderBy = append(plan.eroute.OrderBy, engine.OrderbyParams{
+				Col:             offset,
+				WeightStringCol: -1,
+				Desc:            order.Direction == sqlparser.DescOrder,
+			})
+			plan.Select.AddOrder(order)
+		}
+	default:
+		return nil, semantics.Gen4NotSupportedF("ordering on complex query")
+	}
+	return plan, nil
+}
+
 var errSQLCalcFoundRows = vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.CantUseOptionHere, "Incorrect usage/placement of 'SQL_CALC_FOUND_ROWS'")
 var errInto = vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.CantUseOptionHere, "Incorrect usage/placement of 'INTO'")
 

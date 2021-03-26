@@ -438,6 +438,7 @@ Gen4 plan same as above
 # create view with sharded limit
 "create view user.view_a as select id from user order by id limit 10"
 "Complex select queries are not supported in create or alter view statements"
+Gen4 plan same as above
 
 # create view with top level subquery in select
 "create view user.view_a as select a, (select col from user) from unsharded"

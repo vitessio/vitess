@@ -548,3 +548,23 @@
     ]
   }
 }
+
+# intcol order by
+"select id, intcol from user order by intcol"
+{
+  "QueryType": "SELECT",
+  "Original": "select id, intcol from user order by intcol",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select id, intcol from `user` where 1 != 1",
+    "OrderBy": "1 ASC",
+    "Query": "select id, intcol from `user` order by intcol asc",
+    "Table": "`user`"
+  }
+}
+Gen4 plan same as above
