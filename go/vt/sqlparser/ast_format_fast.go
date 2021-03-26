@@ -256,7 +256,7 @@ func (node *DropDatabase) formatFast(buf *TrackedBuffer) {
 	buf.WriteString(" database ")
 	node.Comments.formatFast(buf)
 	buf.WriteString(exists)
-	buf.WriteString(node.DBName)
+	node.DBName.formatFast(buf)
 }
 
 // formatFast formats the node.
@@ -803,9 +803,9 @@ func (node VindexParam) formatFast(buf *TrackedBuffer) {
 
 // formatFast formats the node.
 func (c *ConstraintDefinition) formatFast(buf *TrackedBuffer) {
-	if c.Name != "" {
+	if !c.Name.IsEmpty() {
 		buf.WriteString("constraint ")
-		buf.WriteString(c.Name)
+		c.Name.formatFast(buf)
 		buf.WriteByte(' ')
 	}
 	c.Details.Format(buf)
@@ -1735,9 +1735,9 @@ func (node *ShowBasic) formatFast(buf *TrackedBuffer) {
 		buf.WriteString(" from ")
 		node.Tbl.formatFast(buf)
 	}
-	if node.DbName != "" {
+	if !node.DbName.IsEmpty() {
 		buf.WriteString(" from ")
-		buf.WriteString(node.DbName)
+		node.DbName.formatFast(buf)
 	}
 	node.Filter.formatFast(buf)
 }
@@ -1774,7 +1774,7 @@ func (node *CreateDatabase) formatFast(buf *TrackedBuffer) {
 	if node.IfNotExists {
 		buf.WriteString("if not exists ")
 	}
-	buf.WriteString(node.DBName)
+	node.DBName.formatFast(buf)
 	if node.CreateOptions != nil {
 		for _, createOption := range node.CreateOptions {
 			if createOption.IsDefault {
@@ -1789,9 +1789,9 @@ func (node *CreateDatabase) formatFast(buf *TrackedBuffer) {
 // formatFast formats the node.
 func (node *AlterDatabase) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("alter database")
-	if node.DBName != "" {
+	if !node.DBName.IsEmpty() {
 		buf.WriteByte(' ')
-		buf.WriteString(node.DBName)
+		node.DBName.formatFast(buf)
 	}
 	if node.UpdateDataDirectory {
 		buf.WriteString(" upgrade data directory name")
@@ -2088,9 +2088,9 @@ func (node *DropColumn) formatFast(buf *TrackedBuffer) {
 func (node *DropKey) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("drop ")
 	buf.WriteString(node.Type.ToString())
-	if node.Name != "" {
+	if !node.Name.IsEmpty() {
 		buf.WriteByte(' ')
-		buf.WriteString(node.Name)
+		node.Name.formatFast(buf)
 	}
 }
 
@@ -2125,9 +2125,9 @@ func (node *RenameTableName) formatFast(buf *TrackedBuffer) {
 // formatFast formats the node
 func (node *RenameIndex) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("rename index ")
-	buf.WriteString(node.OldName)
+	node.OldName.formatFast(buf)
 	buf.WriteString(" to ")
-	buf.WriteString(node.NewName)
+	node.NewName.formatFast(buf)
 }
 
 // formatFast formats the node
