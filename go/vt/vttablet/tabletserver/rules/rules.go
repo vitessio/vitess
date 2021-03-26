@@ -24,10 +24,11 @@ import (
 	"regexp"
 	"strconv"
 
-	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
 
@@ -167,9 +168,14 @@ func (qrs *Rules) FilterByPlan(query string, planid planbuilder.PlanType, tableN
 }
 
 // GetAction runs the input against the rules engine and returns the action to be performed.
-func (qrs *Rules) GetAction(ip, user string, bindVars map[string]*querypb.BindVariable) (action Action, desc string) {
+func (qrs *Rules) GetAction(
+	ip,
+	user string,
+	bindVars map[string]*querypb.BindVariable,
+	marginComments sqlparser.MarginComments,
+) (action Action, desc string) {
 	for _, qr := range qrs.rules {
-		if act := qr.GetAction(ip, user, bindVars); act != QRContinue {
+		if act := qr.GetAction(ip, user, bindVars, marginComments); act != QRContinue {
 			return act, qr.Description
 		}
 	}
@@ -242,6 +248,8 @@ func (qr *Rule) Equal(other *Rule) bool {
 		qr.requestIP.Equal(other.requestIP) &&
 		qr.user.Equal(other.user) &&
 		qr.query.Equal(other.query) &&
+		qr.leadingComment.Equal(other.leadingComment) &&
+		qr.trailingComment.Equal(other.trailingComment) &&
 		reflect.DeepEqual(qr.plans, other.plans) &&
 		reflect.DeepEqual(qr.tableNames, other.tableNames) &&
 		reflect.DeepEqual(qr.bindVarConds, other.bindVarConds) &&
@@ -251,12 +259,14 @@ func (qr *Rule) Equal(other *Rule) bool {
 // Copy performs a deep copy of a Rule.
 func (qr *Rule) Copy() (newqr *Rule) {
 	newqr = &Rule{
-		Description: qr.Description,
-		Name:        qr.Name,
-		requestIP:   qr.requestIP,
-		user:        qr.user,
-		query:       qr.query,
-		act:         qr.act,
+		Description:     qr.Description,
+		Name:            qr.Name,
+		requestIP:       qr.requestIP,
+		user:            qr.user,
+		query:           qr.query,
+		leadingComment:  qr.leadingComment,
+		trailingComment: qr.trailingComment,
+		act:             qr.act,
 	}
 	if qr.plans != nil {
 		newqr.plans = make([]planbuilder.PlanType, len(qr.plans))
@@ -428,34 +438,46 @@ Error:
 // than the plan and query. If the plan and query don't match the Rule,
 // then it returns nil.
 func (qr *Rule) FilterByPlan(query string, planid planbuilder.PlanType, tableName string) (newqr *Rule) {
+	log.Infof("Running FilterByPlan on %v / %v", qr.Name, qr.Description)
+	log.Infof("  query: %q", query)
 	if !reMatch(qr.query.Regexp, query) {
+		log.Infof("bail: query")
 		return nil
 	}
 	if !planMatch(qr.plans, planid) {
+		log.Infof("bail: plan")
 		return nil
 	}
 	if !tableMatch(qr.tableNames, tableName) {
+		log.Infof("bail: plan")
 		return nil
-	}
-	// check to see if we need to extract margin comments
-	if qr.leadingComment.Regexp != nil || qr.trailingComment.Regexp != nil {
-		_, comments := sqlparser.SplitMarginComments(query)
-		if !reMatch(qr.leadingComment.Regexp, comments.Leading) {
-			return nil
-		}
-		if !reMatch(qr.trailingComment.Regexp, comments.Trailing) {
-			return nil
-		}
 	}
 	newqr = qr.Copy()
 	newqr.query = namedRegexp{}
+	// Note we explicitly don't remove the leading/trailing comments as they
+	// must be evaluated at execution time.
 	newqr.plans = nil
 	newqr.tableNames = nil
+	log.Infof("Passed FilterByPlan")
 	return newqr
 }
 
 // GetAction returns the action for a single rule.
-func (qr *Rule) GetAction(ip, user string, bindVars map[string]*querypb.BindVariable) Action {
+func (qr *Rule) GetAction(
+	ip,
+	user string,
+	bindVars map[string]*querypb.BindVariable,
+	marginComments sqlparser.MarginComments,
+) Action {
+	// check to see if we need to extract margin comments
+	if qr.leadingComment.Regexp != nil || qr.trailingComment.Regexp != nil {
+		if !reMatch(qr.leadingComment.Regexp, marginComments.Leading) {
+			return QRContinue
+		}
+		if !reMatch(qr.trailingComment.Regexp, marginComments.Trailing) {
+			return QRContinue
+		}
+	}
 	if !reMatch(qr.requestIP.Regexp, ip) {
 		return QRContinue
 	}
