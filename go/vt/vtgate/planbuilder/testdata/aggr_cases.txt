@@ -213,6 +213,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4 plan same as above
 
 # sum aggregate
 "select sum(col) from user"
@@ -239,6 +240,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4 plan same as above
 
 # min aggregate
 "select min(col) from user"
@@ -265,6 +267,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4 plan same as above
 
 # max aggregate
 "select max(col) from user"
@@ -291,6 +294,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4 plan same as above
 
 # distinct and group by together for scatter route
 "select distinct col1, col2 from user group by col1"
@@ -605,6 +609,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4 plan same as above
 
 # scatter aggregate using distinct
 "select distinct col from user"
