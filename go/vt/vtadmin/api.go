@@ -507,7 +507,6 @@ func (api *API) getSchemas(ctx context.Context, c *cluster.Cluster, opts cluster
 				// Ignore keyspaces without any serving tablets.
 				if stderrors.Is(err, errors.ErrNoServingTablet) {
 					log.Infof(err.Error())
-
 					return
 				}
 
@@ -518,13 +517,11 @@ func (api *API) getSchemas(ctx context.Context, c *cluster.Cluster, opts cluster
 			// Ignore keyspaces without schemas
 			if ss == nil {
 				log.Infof("No schemas for %s", ks.Name)
-
 				return
 			}
 
 			if len(ss.TableDefinitions) == 0 {
 				log.Infof("No tables in schema for %s", ks.Name)
-
 				return
 			}
 
