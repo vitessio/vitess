@@ -33,7 +33,7 @@ type comparer struct {
 // 0 if both the rows have equal ordering
 func (c *comparer) compare(r1, r2 []sqltypes.Value) (int, error) {
 	var colIndex int
-	if c.starColFixedIndex < len(r1) {
+	if c.starColFixedIndex > c.orderBy && c.starColFixedIndex < len(r1) {
 		colIndex = c.starColFixedIndex
 	} else {
 		colIndex = c.orderBy
