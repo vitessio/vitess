@@ -375,7 +375,7 @@ func TestSelectDBA(t *testing.T) {
 		fmt.Printf("%s\n", rec.ToString())
 		assert.True(t, rec.columnName == "one" || rec.columnName == "two")
 		assert.Equal(t, "int", rec.dataType)
-		assert.Equal(t, "int", rec.fullDataType)
+		assert.True(t, rec.fullDataType == "int" || rec.fullDataType == "int(11)")
 		assert.False(t, rec.characterMaximumLength.Valid)
 		assert.EqualValues(t, 10, rec.numericPrecision.Int64)
 		assert.EqualValues(t, 0, rec.numericScale.Int64)
