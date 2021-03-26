@@ -245,6 +245,8 @@ type TabletConfig struct {
 	Consolidator                string  `json:"consolidator,omitempty"`
 	PassthroughDML              bool    `json:"passthroughDML,omitempty"`
 	StreamBufferSize            int     `json:"streamBufferSize,omitempty"`
+	ConsolidatorStreamTotalSize int64   `json:"consolidatorStreamTotalSize,omitempty"`
+	ConsolidatorStreamQuerySize int64   `json:"consolidatorStreamQuerySize,omitempty"`
 	QueryCacheSize              int     `json:"queryCacheSize,omitempty"`
 	QueryCacheMemory            int64   `json:"queryCacheMemory,omitempty"`
 	QueryCacheLFU               bool    `json:"queryCacheLFU,omitempty"`
@@ -444,7 +446,9 @@ var defaultConfig = TabletConfig{
 		// of them ready in MySQL and profit from a pipelining effect.
 		MaxConcurrency: 5,
 	},
-	Consolidator: Enable,
+	Consolidator:                Enable,
+	ConsolidatorStreamTotalSize: 128 * 1024 * 1024,
+	ConsolidatorStreamQuerySize: 2 * 1024 * 1024,
 	// The value for StreamBufferSize was chosen after trying out a few of
 	// them. Too small buffers force too many packets to be sent. Too big
 	// buffers force the clients to read them in multiple chunks and make
