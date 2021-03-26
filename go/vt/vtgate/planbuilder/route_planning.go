@@ -129,6 +129,9 @@ func planProjections(sel *sqlparser.Select, plan logicalPlan, semTable *semantic
 		if sel.GroupBy != nil {
 			return semantics.Gen4NotSupportedF("GROUP BY")
 		}
+		if sel.OrderBy != nil {
+			return semantics.Gen4NotSupportedF("ORDER BY")
+		}
 		for _, expr := range sel.SelectExprs {
 			switch e := expr.(type) {
 			case *sqlparser.AliasedExpr:
