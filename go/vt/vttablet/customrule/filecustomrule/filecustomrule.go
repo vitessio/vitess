@@ -104,10 +104,9 @@ func (fcr *FileCustomRule) GetRules() (qrs *rules.Rules, version int64, err erro
 // ActivateFileCustomRules activates this static file based custom rule mechanism
 func ActivateFileCustomRules(qsc tabletserver.Controller) {
 	if *fileRulePath != "" {
-		if *fileRulePollInterval <= time.Duration(0) {
-			qsc.RegisterQueryRuleSource(FileCustomRuleSource)
-			fileCustomRule.Open(qsc, *fileRulePath)
-		} else {
+		qsc.RegisterQueryRuleSource(FileCustomRuleSource)
+		fileCustomRule.Open(qsc, *fileRulePath)
+		if *fileRulePollInterval > time.Duration(0) {
 			w := watch.File(*fileRulePath)
 			// this returns a cancelFn that for cleanliness we would register to run on server shut down
 			ch, _ := w.OnInterval(*fileRulePollInterval)
@@ -115,6 +114,8 @@ func ActivateFileCustomRules(qsc tabletserver.Controller) {
 				for range ch {
 					if err := fileCustomRule.Open(tsc, *fileRulePath); err != nil {
 						log.Infof("Failed to load fileCustomRule %q: %v", *fileRulePath, err)
+					} else {
+						log.Infof("Opened %q", *fileRulePath)
 					}
 				}
 			}(qsc)
