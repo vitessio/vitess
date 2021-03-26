@@ -1151,6 +1151,160 @@ func TestGetSchema(t *testing.T) {
 			})
 		})
 	}
+
+	t.Run("size aggregation", func(t *testing.T) {
+		t.Parallel()
+
+		c1pb := &vtadminpb.Cluster{
+			Id:   "c1",
+			Name: "cluster1",
+		}
+		c1 := vtadmintestutil.BuildCluster(
+			vtadmintestutil.TestClusterConfig{
+				Cluster: c1pb,
+				VtctldClient: &vtadmintestutil.VtctldClient{
+					FindAllShardsInKeyspaceResults: map[string]struct {
+						Response *vtctldatapb.FindAllShardsInKeyspaceResponse
+						Error    error
+					}{
+						"testkeyspace": {
+							Response: &vtctldatapb.FindAllShardsInKeyspaceResponse{
+								Shards: map[string]*vtctldatapb.Shard{
+									"-80": {
+										Keyspace: "testkeyspace",
+										Name:     "-80",
+										Shard: &topodatapb.Shard{
+											IsMasterServing: true,
+										},
+									},
+									"80-": {
+										Keyspace: "testkeyspace",
+										Name:     "80-",
+										Shard: &topodatapb.Shard{
+											IsMasterServing: true,
+										},
+									},
+								},
+							},
+						},
+					},
+					GetSchemaResults: map[string]struct {
+						Response *vtctldatapb.GetSchemaResponse
+						Error    error
+					}{
+						"c1zone1-0000000100": {
+							Response: &vtctldatapb.GetSchemaResponse{
+								Schema: &tabletmanagerdatapb.SchemaDefinition{
+									TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+										{
+											Name:       "testtable",
+											RowCount:   10,
+											DataLength: 100,
+										},
+									},
+								},
+							},
+						},
+						"c1zone1-0000000200": {
+							Response: &vtctldatapb.GetSchemaResponse{
+								Schema: &tabletmanagerdatapb.SchemaDefinition{
+									TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+										{
+											Name:       "testtable",
+											RowCount:   20,
+											DataLength: 200,
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				Tablets: []*vtadminpb.Tablet{
+					{
+						Cluster: c1pb,
+						Tablet: &topodatapb.Tablet{
+							Alias: &topodatapb.TabletAlias{
+								Cell: "c1zone1",
+								Uid:  100,
+							},
+							Keyspace: "testkeyspace",
+							Shard:    "-80",
+						},
+						State: vtadminpb.Tablet_SERVING,
+					},
+					{
+						Cluster: c1pb,
+						Tablet: &topodatapb.Tablet{
+							Alias: &topodatapb.TabletAlias{
+								Cell: "c1zone1",
+								Uid:  200,
+							},
+							Keyspace: "testkeyspace",
+							Shard:    "80-",
+						},
+						State: vtadminpb.Tablet_SERVING,
+					},
+				},
+			},
+		)
+		c2 := vtadmintestutil.BuildCluster(
+			vtadmintestutil.TestClusterConfig{
+				Cluster: &vtadminpb.Cluster{
+					Id:   "c2",
+					Name: "cluster2",
+				},
+			},
+		)
+
+		api := NewAPI([]*cluster.Cluster{c1, c2}, grpcserver.Options{}, http.Options{})
+		schema, err := api.GetSchema(ctx, &vtadminpb.GetSchemaRequest{
+			ClusterId: c1.ID,
+			Keyspace:  "testkeyspace",
+			Table:     "testtable",
+			TableSizeOptions: &vtadminpb.GetSchemaTableSizeOptions{
+				AggregateSizes: true,
+			},
+		})
+
+		expected := &vtadminpb.Schema{
+			Cluster:  c1pb,
+			Keyspace: "testkeyspace",
+			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+				{
+					Name: "testtable",
+				},
+			},
+			TableSizes: map[string]*vtadminpb.Schema_TableSize{
+				"testtable": {
+					RowCount:   10 + 20,
+					DataLength: 100 + 200,
+					ByShard: map[string]*vtadminpb.Schema_ShardTableSize{
+						"-80": {
+							RowCount:   10,
+							DataLength: 100,
+						},
+						"80-": {
+							RowCount:   20,
+							DataLength: 200,
+						},
+					},
+				},
+			},
+		}
+
+		if schema != nil {
+			for _, td := range schema.TableDefinitions {
+				// Zero these out because they're non-deterministic and also not
+				// relevant to the final result.
+				td.RowCount = 0
+				td.DataLength = 0
+			}
+		}
+
+		assert.NoError(t, err)
+		assert.Equal(t, expected, schema)
+	})
 }
 
 func TestGetSchemas(t *testing.T) {
