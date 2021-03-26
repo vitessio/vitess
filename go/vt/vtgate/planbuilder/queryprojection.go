@@ -37,13 +37,17 @@ type queryProjection struct {
 	selectExprs             []*sqlparser.AliasedExpr
 	aggrExprs               []*sqlparser.AliasedExpr
 	groupOrderingCommonExpr map[sqlparser.Expr]*sqlparser.Order
+
 	//groupExprs  sqlparser.GroupBy
-	//orderExprs  sqlparser.OrderBy
+
+	orderExprs      sqlparser.OrderBy
+	orderExprColMap map[*sqlparser.Order]int
 }
 
 func newQueryProjection() *queryProjection {
 	return &queryProjection{
 		groupOrderingCommonExpr: map[sqlparser.Expr]*sqlparser.Order{},
+		orderExprColMap:         map[*sqlparser.Order]int{},
 	}
 }
 
@@ -69,16 +73,31 @@ func createQPFromSelect(sel *sqlparser.Select) (*queryProjection, error) {
 		qp.selectExprs = append(qp.selectExprs, exp)
 	}
 
+	qp.orderExprs = sel.OrderBy
+
+	allExpr := append(qp.selectExprs, qp.aggrExprs...)
+	for _, order := range sel.OrderBy {
+		for offset, expr := range allExpr {
+			if sqlparser.EqualsExpr(order.Expr, expr.Expr) {
+				qp.orderExprColMap[order] = offset
+				break
+			}
+			// TODO: handle alias and column offset
+		}
+	}
+
 	if sel.GroupBy == nil || sel.OrderBy == nil {
 		return qp, nil
 	}
-	for _, exp := range sel.GroupBy {
-		for _, order := range sel.OrderBy {
-			if sqlparser.EqualsExpr(exp, order.Expr) {
-				qp.groupOrderingCommonExpr[exp] = order
-			}
-		}
-	}
+
+	//for _, exp := range sel.GroupBy {
+	//	for _, order := range sel.OrderBy {
+	//		if sqlparser.EqualsExpr(exp, order.Expr) {
+	//			qp.groupOrderingCommonExpr[exp] = order
+	//			break
+	//		}
+	//	}
+	//}
 
 	return qp, nil
 }

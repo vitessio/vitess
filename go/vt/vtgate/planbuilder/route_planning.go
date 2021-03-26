@@ -74,7 +74,7 @@ func newBuildSelectPlan(sel *sqlparser.Select, vschema ContextVSchema) (engine.P
 		return nil, err
 	}
 
-	plan, err = planProjections(sel, plan, semTable)
+	plan, err = planHorizon(sel, plan, semTable)
 	if err != nil {
 		return nil, err
 	}
@@ -113,7 +113,7 @@ func planLimit(limit *sqlparser.Limit, plan logicalPlan) (logicalPlan, error) {
 	return lPlan, nil
 }
 
-func planProjections(sel *sqlparser.Select, plan logicalPlan, semTable *semantics.SemTable) (logicalPlan, error) {
+func planHorizon(sel *sqlparser.Select, plan logicalPlan, semTable *semantics.SemTable) (logicalPlan, error) {
 	rb, ok := plan.(*route)
 	if ok && rb.isSingleShard() {
 		ast := rb.Select.(*sqlparser.Select)
@@ -132,9 +132,6 @@ func planProjections(sel *sqlparser.Select, plan logicalPlan, semTable *semantic
 	if sel.GroupBy != nil {
 		return nil, semantics.Gen4NotSupportedF("GROUP BY")
 	}
-	if sel.OrderBy != nil {
-		return nil, semantics.Gen4NotSupportedF("ORDER BY")
-	}
 	qp, err := createQPFromSelect(sel)
 	if err != nil {
 		return nil, err
@@ -145,13 +142,19 @@ func planProjections(sel *sqlparser.Select, plan logicalPlan, semTable *semantic
 		}
 	}
 
-	if len(qp.aggrExprs) == 0 {
-		return plan, nil
+	if len(qp.aggrExprs) > 0 {
+		plan, err = planAggregations(qp, plan, semTable)
+		if err != nil {
+			return nil, err
+		}
 	}
-	plan, err = planAggregations(qp, plan, semTable)
-	if err != nil {
-		return nil, err
+	if len(sel.OrderBy) > 0 {
+		plan, err = planOrderBy(qp, plan, semTable)
+		if err != nil {
+			return nil, err
+		}
 	}
+
 	return plan, nil
 }
 
