@@ -18,11 +18,15 @@ package endtoend
 
 import (
 	"errors"
+	"fmt"
 	"reflect"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 
 	"github.com/stretchr/testify/assert"
 
@@ -39,6 +43,62 @@ func TestStreamUnion(t *testing.T) {
 		return
 	}
 	assert.Equal(t, 1, len(qr.Rows))
+}
+
+func TestStreamLongTail(t *testing.T) {
+	const RowCount = 1100
+	const RowContent = "abcdefghijklmnopqrstuvwxyz"
+
+	populate := func(client *framework.QueryClient) error {
+		err := client.Begin(false)
+		if err != nil {
+			return err
+		}
+		defer client.Rollback()
+
+		for i := 0; i < RowCount; i++ {
+			query := fmt.Sprintf("insert into vitess_stress values (%d, '%s')", i, strings.Repeat(RowContent, 2048/len(RowContent)))
+			_, err := client.Execute(query, nil)
+			if err != nil {
+				return err
+			}
+		}
+		return client.Commit()
+	}
+
+	client := framework.NewClient()
+	err := populate(client)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Execute("delete from vitess_stress", nil)
+
+	framework.Server.SetStreamPoolSize(4)
+
+	var start = make(chan struct{})
+	var finish sync.WaitGroup
+
+	for i := 0; i < 1000; i++ {
+		finish.Add(1)
+		go func() {
+			defer finish.Done()
+			<-start
+
+			var rowCount int
+			err := client.Stream("select * from vitess_stress", nil, func(result *sqltypes.Result) error {
+				for _, r := range result.Rows {
+					rowCount += len(r)
+				}
+				return nil
+			})
+			require.NoError(t, err)
+			require.Equal(t, 2200, rowCount)
+		}()
+	}
+
+	time.Sleep(500 * time.Millisecond)
+	close(start)
+	finish.Wait()
 }
 
 func TestStreamBigData(t *testing.T) {

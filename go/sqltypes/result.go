@@ -50,6 +50,7 @@ const (
 	ServerPsOutParams              = 0x1000
 	ServerStatusInTransReadonly    = 0x2000
 	ServerSessionStateChanged      = 0x4000
+	ServerConsolidatedQuery        = 0x8000
 )
 
 // ResultStream is an interface for receiving Result. It is used for
@@ -69,6 +70,17 @@ func (result *Result) Repair(fields []*querypb.Field) {
 			if r[j].typ != Null {
 				r[j].typ = f.Type
 			}
+		}
+	}
+}
+
+// ReplaceKeyspace replaces all the non-empty Database identifiers in the result
+// set with the given keyspace name
+func (result *Result) ReplaceKeyspace(keyspace string) {
+	// Change database name in mysql output to the keyspace name
+	for _, f := range result.Fields {
+		if f.Database != "" {
+			f.Database = keyspace
 		}
 	}
 }

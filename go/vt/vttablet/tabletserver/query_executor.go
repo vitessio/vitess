@@ -66,6 +66,11 @@ var sequenceFields = []*querypb.Field{
 	},
 }
 
+func (qre *QueryExecutor) shouldConsolidate() bool {
+	cm := qre.tsv.qe.consolidatorMode.Get()
+	return cm == tabletenv.Enable || (cm == tabletenv.NotOnMaster && qre.tabletType != topodatapb.TabletType_MASTER)
+}
+
 // Execute performs a non-streaming query execution.
 func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 	planName := qre.plan.PlanID.String()
@@ -233,7 +238,7 @@ func (qre *QueryExecutor) txConnExec(conn *StatefulConnection) (*sqltypes.Result
 }
 
 // Stream performs a streaming query execution.
-func (qre *QueryExecutor) Stream(callback func(*sqltypes.Result) error) error {
+func (qre *QueryExecutor) Stream(callback StreamCallback) error {
 	qre.logStats.PlanType = qre.plan.PlanID.String()
 
 	defer func(start time.Time) {
@@ -243,6 +248,35 @@ func (qre *QueryExecutor) Stream(callback func(*sqltypes.Result) error) error {
 
 	if err := qre.checkPermissions(); err != nil {
 		return err
+	}
+
+	sql, sqlWithoutComments, err := qre.generateFinalSQL(qre.plan.FullQuery, qre.bindVars)
+	if err != nil {
+		return err
+	}
+
+	var replaceKeyspace string
+	if sqltypes.IncludeFieldsOrDefault(qre.options) == querypb.ExecuteOptions_ALL {
+		replaceKeyspace = qre.tsv.sm.target.Keyspace
+	}
+
+	if consolidator := qre.tsv.qe.streamConsolidator; consolidator != nil {
+		if qre.connID == 0 && qre.plan.PlanID == p.PlanSelectStream && qre.shouldConsolidate() {
+			return consolidator.Consolidate(qre.logStats, sqlWithoutComments, callback,
+				func(callback StreamCallback) error {
+					dbConn, err := qre.getStreamConn()
+					if err != nil {
+						return err
+					}
+					defer dbConn.Recycle()
+					return qre.execStreamSQL(dbConn, sql, func(result *sqltypes.Result) error {
+						if replaceKeyspace != "" {
+							result.ReplaceKeyspace(replaceKeyspace)
+						}
+						return callback(result)
+					})
+				})
+		}
 	}
 
 	// if we have a transaction id, let's use the txPool for this query
@@ -263,15 +297,16 @@ func (qre *QueryExecutor) Stream(callback func(*sqltypes.Result) error) error {
 		conn = dbConn
 	}
 
-	sql, _, err := qre.generateFinalSQL(qre.plan.FullQuery, qre.bindVars)
-	if err != nil {
-		return err
-	}
-	return qre.execStreamSQL(conn, sql, callback)
+	return qre.execStreamSQL(conn, sql, func(result *sqltypes.Result) error {
+		if replaceKeyspace != "" {
+			result.ReplaceKeyspace(replaceKeyspace)
+		}
+		return callback(result)
+	})
 }
 
 // MessageStream streams messages from a message table.
-func (qre *QueryExecutor) MessageStream(callback func(*sqltypes.Result) error) error {
+func (qre *QueryExecutor) MessageStream(callback StreamCallback) error {
 	qre.logStats.OriginalSQL = qre.query
 	qre.logStats.PlanType = qre.plan.PlanID.String()
 
@@ -611,7 +646,7 @@ func (qre *QueryExecutor) qFetch(logStats *tabletenv.LogStats, parsedQuery *sqlp
 		return nil, err
 	}
 	// Check tablet type.
-	if cm := qre.tsv.qe.consolidatorMode.Get(); cm == tabletenv.Enable || (cm == tabletenv.NotOnMaster && qre.tabletType != topodatapb.TabletType_MASTER) {
+	if qre.shouldConsolidate() {
 		q, original := qre.tsv.qe.consolidator.Create(sqlWithoutComments)
 		if original {
 			defer q.Broadcast()
@@ -664,18 +699,20 @@ func (qre *QueryExecutor) txFetch(conn *StatefulConnection, record bool) (*sqlty
 }
 
 func (qre *QueryExecutor) generateFinalSQL(parsedQuery *sqlparser.ParsedQuery, bindVars map[string]*querypb.BindVariable) (string, string, error) {
-	var buf strings.Builder
-	buf.WriteString(qre.marginComments.Leading)
-
 	query, err := parsedQuery.GenerateQuery(bindVars, nil)
 	if err != nil {
 		return "", "", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%s", err)
 	}
-	withoutComments := query
+
+	if qre.marginComments.Leading == "" && qre.marginComments.Trailing == "" {
+		return query, query, nil
+	}
+
+	var buf strings.Builder
+	buf.WriteString(qre.marginComments.Leading)
 	buf.WriteString(query)
 	buf.WriteString(qre.marginComments.Trailing)
-	fullSQL := buf.String()
-	return fullSQL, withoutComments, nil
+	return buf.String(), query, nil
 }
 
 func rewriteOUTParamError(err error) error {
