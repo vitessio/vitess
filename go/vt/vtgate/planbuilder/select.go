@@ -100,7 +100,7 @@ func shouldRetryWithCNFRewriting(plan logicalPlan) bool {
 
 }
 
-func pushProjection(expr *sqlparser.AliasedExpr, plan logicalPlan, semTable *semantics.SemTable) (firstOffset int, err error) {
+func pushProjection(expr *sqlparser.AliasedExpr, plan logicalPlan, semTable *semantics.SemTable) (int, error) {
 	switch node := plan.(type) {
 	case *route:
 		sel := node.Select.(*sqlparser.Select)
@@ -133,77 +133,25 @@ func pushProjection(expr *sqlparser.AliasedExpr, plan logicalPlan, semTable *sem
 	}
 }
 
-func pushPredicate(exprs []sqlparser.Expr, plan logicalPlan, semTable *semantics.SemTable) (err error) {
-	if len(exprs) == 0 {
-		return nil
+func planAggregations(qp *queryProjection, plan logicalPlan, semTable *semantics.SemTable) (logicalPlan, error) {
+	eaggr := &engine.OrderedAggregate{}
+	oa := &orderedAggregate{
+		resultsBuilder: newResultsBuilder(plan, eaggr),
+		eaggr:          eaggr,
 	}
-	switch node := plan.(type) {
-	case *route:
-		sel := node.Select.(*sqlparser.Select)
-		finalExpr := reorderExpression(exprs[0], node.tables, semTable)
-		for i, expr := range exprs {
-			if i == 0 {
-				continue
-			}
-			finalExpr = &sqlparser.AndExpr{
-				Left:  finalExpr,
-				Right: reorderExpression(expr, node.tables, semTable),
-			}
-		}
-		if sel.Where != nil {
-			finalExpr = &sqlparser.AndExpr{
-				Left:  sel.Where.Expr,
-				Right: finalExpr,
-			}
-		}
-		sel.Where = &sqlparser.Where{
-			Type: sqlparser.WhereClause,
-			Expr: finalExpr,
-		}
-		return nil
-	case *joinV4:
-		var lhs, rhs []sqlparser.Expr
-		lhsSolves := node.Left.ContainsTables()
-		rhsSolves := node.Right.ContainsTables()
-		for _, expr := range exprs {
-			deps := semTable.Dependencies(expr)
-			switch {
-			case deps.IsSolvedBy(lhsSolves):
-				lhs = append(lhs, expr)
-			case deps.IsSolvedBy(rhsSolves):
-				rhs = append(rhs, expr)
-			default:
-				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unknown dependencies for %s", sqlparser.String(expr))
-			}
-		}
-		err := pushPredicate(lhs, node.Left, semTable)
+	for _, e := range qp.aggrExprs {
+		offset, err := pushProjection(e, plan, semTable)
 		if err != nil {
-			return err
+			return nil, err
 		}
-		err = pushPredicate(rhs, node.Right, semTable)
-		return err
-	default:
-		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%T not yet supported", node)
+		fExpr := e.Expr.(*sqlparser.FuncExpr)
+		opcode := engine.SupportedAggregates[fExpr.Name.Lowered()]
+		oa.eaggr.Aggregates = append(oa.eaggr.Aggregates, engine.AggregateParams{
+			Opcode: opcode,
+			Col:    offset,
+		})
 	}
-}
-
-func reorderExpression(expr sqlparser.Expr, solves semantics.TableSet, semTable *semantics.SemTable) sqlparser.Expr {
-	switch compExpr := expr.(type) {
-	case *sqlparser.ComparisonExpr:
-		if compExpr.Operator == sqlparser.EqualOp {
-			if !dependsOnRoute(solves, compExpr.Left, semTable) && dependsOnRoute(solves, compExpr.Right, semTable) {
-				compExpr.Left, compExpr.Right = compExpr.Right, compExpr.Left
-			}
-		}
-	}
-	return expr
-}
-
-func dependsOnRoute(solves semantics.TableSet, expr sqlparser.Expr, semTable *semantics.SemTable) bool {
-	if node, ok := expr.(*sqlparser.ColName); ok {
-		return semTable.Dependencies(node).IsSolvedBy(solves)
-	}
-	return !sqlparser.IsValue(expr)
+	return oa, nil
 }
 
 var errSQLCalcFoundRows = vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.CantUseOptionHere, "Incorrect usage/placement of 'SQL_CALC_FOUND_ROWS'")
