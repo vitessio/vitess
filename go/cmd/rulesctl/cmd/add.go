@@ -1,4 +1,4 @@
-package main
+package cmd
 
 import (
 	"log"
@@ -7,6 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"vitess.io/vitess/go/cmd/rulesctl/common"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
 	vtrules "vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
 )
@@ -44,7 +45,7 @@ func runAdd(cmd *cobra.Command, args []string) {
 	if os.IsNotExist(err) {
 		rules = vtrules.New()
 	} else {
-		rules = getRules()
+		rules = common.GetRules(configFile)
 	}
 	existingRule := rules.Find(rule.Name)
 	if existingRule != nil {
@@ -53,9 +54,9 @@ func runAdd(cmd *cobra.Command, args []string) {
 	rules.Add(rule)
 
 	if addOptDryrun {
-		mustPrintJSON(rules)
+		common.MustPrintJSON(rules)
 	} else {
-		mustWriteJSON(rules, configFile)
+		common.MustWriteJSON(rules, configFile)
 	}
 }
 
@@ -97,7 +98,7 @@ func mkAction() vtrules.Action {
 	panic("Nope")
 }
 
-func getAddCmd() *cobra.Command {
+func Add() *cobra.Command {
 	addCmd := &cobra.Command{
 		Use:   "add-rule",
 		Short: "Adds a rule to the config file",
