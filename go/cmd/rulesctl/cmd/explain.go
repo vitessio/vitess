@@ -1,4 +1,4 @@
-package main
+package cmd
 
 import (
 	"fmt"
@@ -8,7 +8,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
 )
 
-func getExplainCmd() *cobra.Command {
+func Explain() *cobra.Command {
 	explain := &cobra.Command{
 		Use:   "explain [concept]",
 		Short: "Explains a concept, valid options are: query-plans",
@@ -35,7 +35,7 @@ func helpQueryPlans() {
 
 A query plan is the type of work the Tablet is about to do. When used in a rule
 it can be used to limit the class of queries that a rule can impact. In other
-words it will allow you to say "This rule only fails inserts" or "this rule only
+words it will allow you to say "this rule only fails inserts" or "this rule only
 fails selects."
 
 The list of valid plan types that can be used follows:
