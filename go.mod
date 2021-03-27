@@ -96,6 +96,7 @@ require (
 	github.com/uber/jaeger-client-go v2.16.0+incompatible
 	github.com/uber/jaeger-lib v2.0.0+incompatible // indirect
 	github.com/z-division/go-zookeeper v0.0.0-20190128072838-6d7457066b9b
+	go.uber.org/atomic v1.4.0
 	golang.org/x/crypto v0.0.0-20200622213623-75b288015ac9
 	golang.org/x/lint v0.0.0-20190930215403-16217165b5de
 	golang.org/x/net v0.0.0-20201021035429-f5854403a974

@@ -27,6 +27,8 @@ import (
 
 	"github.com/golang/protobuf/proto"
 
+	"go.uber.org/atomic"
+
 	"vitess.io/vitess/go/history"
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -51,7 +53,7 @@ var (
 type healthStreamer struct {
 	stats              *tabletenv.Stats
 	degradedThreshold  time.Duration
-	unhealthyThreshold time.Duration
+	unhealthyThreshold *atomic.Duration
 
 	mu      sync.Mutex
 	ctx     context.Context
@@ -66,7 +68,7 @@ func newHealthStreamer(env tabletenv.Env, alias topodatapb.TabletAlias) *healthS
 	return &healthStreamer{
 		stats:              env.Stats(),
 		degradedThreshold:  env.Config().Healthcheck.DegradedThresholdSeconds.Get(),
-		unhealthyThreshold: env.Config().Healthcheck.UnhealthyThresholdSeconds.Get(),
+		unhealthyThreshold: atomic.NewDuration(env.Config().Healthcheck.UnhealthyThresholdSeconds.Get()),
 		clients:            make(map[chan *querypb.StreamHealthResponse]struct{}),
 
 		state: &querypb.StreamHealthResponse{
@@ -220,7 +222,7 @@ func (hs *healthStreamer) AppendDetails(details []*kv) []*kv {
 	sbm := time.Duration(hs.state.RealtimeStats.SecondsBehindMaster) * time.Second
 	class := healthyClass
 	switch {
-	case sbm > hs.unhealthyThreshold:
+	case sbm > hs.unhealthyThreshold.Load():
 		class = unhealthyClass
 	case sbm > hs.degradedThreshold:
 		class = unhappyClass
@@ -239,4 +241,18 @@ func (hs *healthStreamer) AppendDetails(details []*kv) []*kv {
 	}
 
 	return details
+}
+
+func (hs *healthStreamer) SetUnhealthyThreshold(v time.Duration) {
+	hs.unhealthyThreshold.Store(v)
+	shr := proto.Clone(hs.state).(*querypb.StreamHealthResponse)
+	for ch := range hs.clients {
+		select {
+		case ch <- shr:
+		default:
+			log.Info("Resetting health streamer clients due to unhealthy threshold change")
+			close(ch)
+			delete(hs.clients, ch)
+		}
+	}
 }
