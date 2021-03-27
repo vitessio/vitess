@@ -205,6 +205,42 @@ func (c *Cluster) parseTablet(rows *sql.Rows) (*vtadminpb.Tablet, error) {
 	return tablet, nil
 }
 
+// FindAllShardsInKeyspaceOptions modify the behavior of a cluster's
+// FindAllShardsInKeyspace method.
+type FindAllShardsInKeyspaceOptions struct {
+	// SkipDial indicates that the cluster can assume the vtctldclient has
+	// already dialed up a connection to a vtctld.
+	SkipDial bool
+}
+
+// FindAllShardsInKeyspace proxies a FindAllShardsInKeyspace RPC to a cluster's
+// vtctld, unpacking the response struct.
+//
+// It can also optionally ensure the vtctldclient has a valid connection before
+// making the RPC call.
+func (c *Cluster) FindAllShardsInKeyspace(ctx context.Context, keyspace string, opts FindAllShardsInKeyspaceOptions) (map[string]*vtctldatapb.Shard, error) {
+	span, ctx := trace.NewSpan(ctx, "Cluster.FindAllShardsInKeyspace")
+	defer span.Finish()
+
+	AnnotateSpan(c, span)
+	span.Annotate("keyspace", keyspace)
+
+	if !opts.SkipDial {
+		if err := c.Vtctld.Dial(ctx); err != nil {
+			return nil, fmt.Errorf("failed to Dial vtctld for cluster = %s for FindAllShardsInKeyspace: %w", c.ID, err)
+		}
+	}
+
+	resp, err := c.Vtctld.FindAllShardsInKeyspace(ctx, &vtctldatapb.FindAllShardsInKeyspaceRequest{
+		Keyspace: keyspace,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("FindAllShardsInKeyspace(cluster = %s, keyspace = %s) failed: %w", c.ID, keyspace, err)
+	}
+
+	return resp.Shards, nil
+}
+
 // FindWorkflowsOptions is the set of options for FindWorkflows requests.
 type FindWorkflowsOptions struct {
 	ActiveOnly      bool
@@ -489,22 +525,12 @@ func (c *Cluster) GetSchema(ctx context.Context, keyspace string, opts GetSchema
 	var tabletsToQuery []*vtadminpb.Tablet
 
 	if opts.SizeOpts.AggregateSizes {
-		span, ctx := trace.NewSpan(ctx, "Cluster.FindAllShardsInKeyspace")
-
-		AnnotateSpan(c, span)
-		span.Annotate("keyspace", keyspace)
-
-		resp, err := c.Vtctld.FindAllShardsInKeyspace(ctx, &vtctldatapb.FindAllShardsInKeyspaceRequest{
-			Keyspace: keyspace,
-		})
-
-		span.Finish()
-
+		shards, err := c.FindAllShardsInKeyspace(ctx, keyspace, FindAllShardsInKeyspaceOptions{SkipDial: true})
 		if err != nil {
-			return nil, fmt.Errorf("FindAllShardsInKeyspace(cluster = %s, keyspace = %s) failed: %w", c.ID, keyspace, err)
+			return nil, err
 		}
 
-		for _, shard := range resp.Shards {
+		for _, shard := range shards {
 			if !shard.Shard.IsMasterServing {
 				if !opts.SizeOpts.IncludeNonServingShards {
 					log.Infof("%s/%s is not serving; ignoring because IncludeNonServingShards=false", keyspace, shard.Name)
