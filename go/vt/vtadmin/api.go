@@ -346,18 +346,12 @@ func (api *API) GetKeyspaces(ctx context.Context, req *vtadminpb.GetKeyspacesReq
 				go func(c *cluster.Cluster, ks *vtctldatapb.Keyspace) {
 					defer kwg.Done()
 
-					span, ctx := trace.NewSpan(ctx, "Cluster.FindAllShardsInKeyspace")
-					defer span.Finish()
-
-					cluster.AnnotateSpan(c, span)
-					span.Annotate("keyspace", ks.Name)
-
-					sr, err := c.Vtctld.FindAllShardsInKeyspace(ctx, &vtctldatapb.FindAllShardsInKeyspaceRequest{
-						Keyspace: ks.Name,
+					shards, err := c.FindAllShardsInKeyspace(ctx, ks.Name, cluster.FindAllShardsInKeyspaceOptions{
+						SkipDial: true,
 					})
 
 					if err != nil {
-						er.RecordError(fmt.Errorf("FindAllShardsInKeyspace(%s): %w", ks.Name, err))
+						er.RecordError(err)
 						return
 					}
 
@@ -365,7 +359,7 @@ func (api *API) GetKeyspaces(ctx context.Context, req *vtadminpb.GetKeyspacesReq
 					kss = append(kss, &vtadminpb.Keyspace{
 						Cluster:  c.ToProto(),
 						Keyspace: ks,
-						Shards:   sr.Shards,
+						Shards:   shards,
 					})
 					km.Unlock()
 				}(c, ks)
@@ -937,23 +931,16 @@ func (api *API) VTExplain(ctx context.Context, req *vtadminpb.VTExplainRequest) 
 	go func(c *cluster.Cluster) {
 		defer wg.Done()
 
-		span, ctx := trace.NewSpan(ctx, "Cluster.FindAllShardsInKeyspace")
-		defer span.Finish()
-
-		span.Annotate("keyspace", req.Keyspace)
-		cluster.AnnotateSpan(c, span)
-
-		ksm, err := c.Vtctld.FindAllShardsInKeyspace(ctx, &vtctldatapb.FindAllShardsInKeyspaceRequest{
-			Keyspace: req.Keyspace,
+		shards, err := c.FindAllShardsInKeyspace(ctx, req.Keyspace, cluster.FindAllShardsInKeyspaceOptions{
+			SkipDial: true,
 		})
-
 		if err != nil {
-			er.RecordError(fmt.Errorf("FindAllShardsInKeyspace(%s): %w", req.Keyspace, err))
+			er.RecordError(err)
 			return
 		}
 
 		vtsm := make(map[string]*topodatapb.Shard)
-		for _, s := range ksm.Shards {
+		for _, s := range shards {
 			vtsm[s.Name] = s.Shard
 		}
 
