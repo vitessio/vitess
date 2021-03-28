@@ -39,6 +39,7 @@ import (
 	"vitess.io/vitess/go/vt/vtadmin/vtsql"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/proto/vtadmin"
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
@@ -522,47 +523,9 @@ func (c *Cluster) GetSchema(ctx context.Context, keyspace string, opts GetSchema
 		return nil, fmt.Errorf("failed to Dial vtctld for cluster = %s for GetSchema: %w", c.ID, err)
 	}
 
-	var tabletsToQuery []*vtadminpb.Tablet
-
-	if opts.SizeOpts.AggregateSizes {
-		shards, err := c.FindAllShardsInKeyspace(ctx, keyspace, FindAllShardsInKeyspaceOptions{SkipDial: true})
-		if err != nil {
-			return nil, err
-		}
-
-		for _, shard := range shards {
-			if !shard.Shard.IsMasterServing {
-				if !opts.SizeOpts.IncludeNonServingShards {
-					log.Infof("%s/%s is not serving; ignoring because IncludeNonServingShards=false", keyspace, shard.Name)
-					continue
-				}
-			}
-
-			shardTablets := vtadminproto.FilterTablets(func(tablet *vtadminpb.Tablet) bool {
-				return tablet.Tablet.Shard == shard.Name && tablet.State == vtadminpb.Tablet_SERVING
-			}, opts.Tablets, len(opts.Tablets))
-
-			if len(shardTablets) == 0 {
-				return nil, fmt.Errorf("%w for shard %s/%s", errors.ErrNoServingTablet, shard.Keyspace, shard.Name)
-			}
-
-			randomServingTablet := shardTablets[rand.Intn(len(shardTablets))]
-			tabletsToQuery = append(tabletsToQuery, randomServingTablet)
-		}
-	} else {
-		keyspaceTablets := vtadminproto.FilterTablets(func(tablet *vtadminpb.Tablet) bool {
-			return tablet.Tablet.Keyspace == keyspace && tablet.State == vtadminpb.Tablet_SERVING
-		}, opts.Tablets, len(opts.Tablets))
-
-		if len(keyspaceTablets) == 0 {
-			// consider how to include info about the tablets we looked at, but
-			// that's also potentially a very long list .... maybe we should
-			// just log it (yes, do that).
-			return nil, fmt.Errorf("%w for keyspace %s", errors.ErrNoServingTablet, keyspace)
-		}
-
-		randomServingTablet := keyspaceTablets[rand.Intn(len(keyspaceTablets))]
-		tabletsToQuery = append(tabletsToQuery, randomServingTablet)
+	tabletsToQuery, err := c.getTabletsToQueryForSchemas(ctx, keyspace, opts)
+	if err != nil {
+		return nil, err
 	}
 
 	var (
@@ -663,6 +626,53 @@ func (c *Cluster) GetSchema(ctx context.Context, keyspace string, opts GetSchema
 	}
 
 	return schema, nil
+}
+
+func (c *Cluster) getTabletsToQueryForSchemas(ctx context.Context, keyspace string, opts GetSchemaOptions) ([]*vtadminpb.Tablet, error) {
+	if opts.SizeOpts.AggregateSizes {
+		shards, err := c.FindAllShardsInKeyspace(ctx, keyspace, FindAllShardsInKeyspaceOptions{SkipDial: true})
+		if err != nil {
+			return nil, err
+		}
+
+		tabletsToQuery := make([]*vtadminpb.Tablet, 0, len(shards))
+
+		for _, shard := range shards {
+			if !shard.Shard.IsMasterServing {
+				if !opts.SizeOpts.IncludeNonServingShards {
+					log.Infof("%s/%s is not serving; ignoring because IncludeNonServingShards=false", keyspace, shard.Name)
+					continue
+				}
+			}
+
+			shardTablets := vtadminproto.FilterTablets(func(tablet *vtadminpb.Tablet) bool {
+				return tablet.Tablet.Shard == shard.Name && tablet.State == vtadminpb.Tablet_SERVING
+			}, opts.Tablets, len(opts.Tablets))
+
+			if len(shardTablets) == 0 {
+				return nil, fmt.Errorf("%w for shard %s/%s", errors.ErrNoServingTablet, shard.Keyspace, shard.Name)
+			}
+
+			randomServingTablet := shardTablets[rand.Intn(len(shardTablets))]
+			tabletsToQuery = append(tabletsToQuery, randomServingTablet)
+		}
+
+		return tabletsToQuery, nil
+	}
+
+	keyspaceTablets := vtadminproto.FilterTablets(func(tablet *vtadminpb.Tablet) bool {
+		return tablet.Tablet.Keyspace == keyspace && tablet.State == vtadminpb.Tablet_SERVING
+	}, opts.Tablets, len(opts.Tablets))
+
+	if len(keyspaceTablets) == 0 {
+		// consider how to include info about the tablets we looked at, but
+		// that's also potentially a very long list .... maybe we should
+		// just log it (yes, do that).
+		return nil, fmt.Errorf("%w for keyspace %s", errors.ErrNoServingTablet, keyspace)
+	}
+
+	randomServingTablet := keyspaceTablets[rand.Intn(len(keyspaceTablets))]
+	return []*vtadmin.Tablet{randomServingTablet}, nil
 }
 
 // GetVSchema returns the vschema for a given keyspace in this cluster. The
