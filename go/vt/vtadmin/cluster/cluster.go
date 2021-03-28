@@ -440,7 +440,7 @@ type GetSchemaOptions struct {
 	// TableNamesOnly is mutually exclusive with TableSizesOnly, and size
 	// aggregation requires setting TableSizesOnly in the cases described above.
 	BaseRequest *vtctldatapb.GetSchemaRequest
-	// SizeOpts control whether the (*Cluster).GetSchema method performs
+	// TableSizeOptions control whether the (*Cluster).GetSchema method performs
 	// cross-shard table size aggregation (via the AggregateSizes field).
 	//
 	// If the AggregateSizes field is false, the rest of this struct is ignored,
@@ -451,7 +451,7 @@ type GetSchemaOptions struct {
 	// FindAllShardsInKeyspace vtctld RPC, and then filter the given Tablets
 	// (described above) to find one SERVING tablet for each shard in the
 	// keyspace, skipping any non-serving shards in the keyspace.
-	SizeOpts *vtadminpb.GetSchemaTableSizeOptions
+	TableSizeOptions *vtadminpb.GetSchemaTableSizeOptions
 }
 
 // GetSchema returns the schema for a given keyspace. GetSchema has a few
@@ -475,8 +475,8 @@ func (c *Cluster) GetSchema(ctx context.Context, keyspace string, opts GetSchema
 	span, ctx := trace.NewSpan(ctx, "Cluster.GetSchema")
 	defer span.Finish()
 
-	if opts.SizeOpts == nil {
-		opts.SizeOpts = &vtadminpb.GetSchemaTableSizeOptions{
+	if opts.TableSizeOptions == nil {
+		opts.TableSizeOptions = &vtadminpb.GetSchemaTableSizeOptions{
 			AggregateSizes: false,
 		}
 	}
@@ -485,7 +485,7 @@ func (c *Cluster) GetSchema(ctx context.Context, keyspace string, opts GetSchema
 		opts.BaseRequest = &vtctldatapb.GetSchemaRequest{}
 	}
 
-	if opts.SizeOpts.AggregateSizes && opts.BaseRequest.TableNamesOnly {
+	if opts.TableSizeOptions.AggregateSizes && opts.BaseRequest.TableNamesOnly {
 		log.Warningf("GetSchema(cluster = %s) size aggregation is incompatible with TableNamesOnly, ignoring the latter in favor of aggregating sizes", c.ID)
 		opts.BaseRequest.TableNamesOnly = false
 	}
@@ -493,7 +493,7 @@ func (c *Cluster) GetSchema(ctx context.Context, keyspace string, opts GetSchema
 	AnnotateSpan(c, span)
 	span.Annotate("keyspace", keyspace)
 	annotateGetSchemaRequest(opts.BaseRequest, span)
-	vtadminproto.AnnotateSpanWithGetSchemaTableSizeOptions(opts.SizeOpts, span)
+	vtadminproto.AnnotateSpanWithGetSchemaTableSizeOptions(opts.TableSizeOptions, span)
 
 	if len(opts.Tablets) == 0 {
 		// Fetch all tablets for the keyspace.
@@ -577,7 +577,7 @@ func (c *Cluster) getSchemaFromTablets(ctx context.Context, keyspace string, tab
 				schema.TableDefinitions = resp.Schema.TableDefinitions
 			}
 
-			if !opts.SizeOpts.AggregateSizes {
+			if !opts.TableSizeOptions.AggregateSizes {
 				return
 			}
 
@@ -591,10 +591,11 @@ func (c *Cluster) getSchemaFromTablets(ctx context.Context, keyspace string, tab
 				}
 
 				if _, ok = tableSize.ByShard[tablet.Tablet.Shard]; ok {
-					// We managed to query for the same shard twice, that's ...
-					// weird. but do we care? maybe just log? idk!
-					log.Warningf("Duplicate shard queries for table %s on shard %s/%s; skipping subsequent size infos to avoid double-counting", td.Name, keyspace, tablet.Tablet.Shard)
-					continue
+					err := fmt.Errorf("duplicate shard queries for table %s on shard %s/%s", td.Name, keyspace, tablet.Tablet.Shard)
+					log.Warningf("Impossible: %s", err)
+					rec.RecordError(err)
+
+					return
 				}
 
 				tableSize.RowCount += td.RowCount
@@ -623,7 +624,7 @@ func (c *Cluster) getSchemaFromTablets(ctx context.Context, keyspace string, tab
 }
 
 func (c *Cluster) getTabletsToQueryForSchemas(ctx context.Context, keyspace string, opts GetSchemaOptions) ([]*vtadminpb.Tablet, error) {
-	if opts.SizeOpts.AggregateSizes {
+	if opts.TableSizeOptions.AggregateSizes {
 		shards, err := c.FindAllShardsInKeyspace(ctx, keyspace, FindAllShardsInKeyspaceOptions{SkipDial: true})
 		if err != nil {
 			return nil, err
@@ -657,10 +658,9 @@ func (c *Cluster) getTabletsToQueryForSchemas(ctx context.Context, keyspace stri
 	}, opts.Tablets, len(opts.Tablets))
 
 	if len(keyspaceTablets) == 0 {
-		// consider how to include info about the tablets we looked at, but
-		// that's also potentially a very long list .... maybe we should
-		// just log it (yes, do that).
-		return nil, fmt.Errorf("%w for keyspace %s", errors.ErrNoServingTablet, keyspace)
+		err := fmt.Errorf("%w for keyspace %s", errors.ErrNoServingTablet, keyspace)
+		log.Warningf("%s. Searched tablets: %v", err, vtadminproto.Tablets(opts.Tablets).AliasStringList())
+		return nil, err
 	}
 
 	randomServingTablet := keyspaceTablets[rand.Intn(len(keyspaceTablets))]

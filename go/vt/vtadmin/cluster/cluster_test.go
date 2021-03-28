@@ -689,7 +689,7 @@ func TestGetSchema(t *testing.T) {
 				},
 				keyspace: "testkeyspace",
 				opts: cluster.GetSchemaOptions{
-					SizeOpts: &vtadminpb.GetSchemaTableSizeOptions{
+					TableSizeOptions: &vtadminpb.GetSchemaTableSizeOptions{
 						AggregateSizes: true,
 					},
 				},
@@ -826,7 +826,7 @@ func TestGetSchema(t *testing.T) {
 				},
 				keyspace: "testkeyspace",
 				opts: cluster.GetSchemaOptions{
-					SizeOpts: &vtadminpb.GetSchemaTableSizeOptions{
+					TableSizeOptions: &vtadminpb.GetSchemaTableSizeOptions{
 						AggregateSizes: true,
 					},
 				},
@@ -936,7 +936,7 @@ func TestGetSchema(t *testing.T) {
 					BaseRequest: &vtctldatapb.GetSchemaRequest{
 						TableNamesOnly: true, // Just checking things to blow up if this gets set.
 					},
-					SizeOpts: &vtadminpb.GetSchemaTableSizeOptions{
+					TableSizeOptions: &vtadminpb.GetSchemaTableSizeOptions{
 						AggregateSizes: true,
 					},
 				},
@@ -1061,7 +1061,7 @@ func TestGetSchema(t *testing.T) {
 				},
 				keyspace: "testkeyspace",
 				opts: cluster.GetSchemaOptions{
-					SizeOpts: &vtadminpb.GetSchemaTableSizeOptions{
+					TableSizeOptions: &vtadminpb.GetSchemaTableSizeOptions{
 						AggregateSizes: true,
 					},
 				},
@@ -1147,7 +1147,7 @@ func TestGetSchema(t *testing.T) {
 				},
 				keyspace: "testkeyspace",
 				opts: cluster.GetSchemaOptions{
-					SizeOpts: &vtadminpb.GetSchemaTableSizeOptions{
+					TableSizeOptions: &vtadminpb.GetSchemaTableSizeOptions{
 						AggregateSizes: true,
 					},
 				},

@@ -179,8 +179,8 @@ func (api *API) FindSchema(ctx context.Context, req *vtadminpb.FindSchemaRequest
 			}
 
 			schemas, err := api.getSchemas(ctx, c, cluster.GetSchemaOptions{
-				Tablets:  tablets,
-				SizeOpts: req.TableSizeOptions,
+				Tablets:          tablets,
+				TableSizeOptions: req.TableSizeOptions,
 			})
 			if err != nil {
 				err := fmt.Errorf("%w: while collecting schemas for cluster %s", err, c.ID)
@@ -404,7 +404,7 @@ func (api *API) GetSchema(ctx context.Context, req *vtadminpb.GetSchemaRequest) 
 		BaseRequest: &vtctldatapb.GetSchemaRequest{
 			Tables: []string{req.Table},
 		},
-		SizeOpts: req.TableSizeOptions,
+		TableSizeOptions: req.TableSizeOptions,
 	})
 }
 
@@ -438,8 +438,8 @@ func (api *API) GetSchemas(ctx context.Context, req *vtadminpb.GetSchemasRequest
 			}
 
 			ss, err := api.getSchemas(ctx, c, cluster.GetSchemaOptions{
-				Tablets:  tablets,
-				SizeOpts: req.TableSizeOptions,
+				Tablets:          tablets,
+				TableSizeOptions: req.TableSizeOptions,
 			})
 			if err != nil {
 				er.RecordError(err)
