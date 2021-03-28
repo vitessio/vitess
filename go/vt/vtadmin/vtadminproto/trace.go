@@ -28,14 +28,12 @@ func AnnotateClusterSpan(c *vtadminpb.Cluster, span trace.Span) {
 	span.Annotate("cluster_name", c.Name)
 }
 
-// AnnotateSpanWithGetSchemaTableSizeOptions adds the aggregate_table_sizes and
-// include_non_serving_shards_in_table_sizes to a span. It is a noop if the
-// size options object is nil.
+// AnnotateSpanWithGetSchemaTableSizeOptions adds the aggregate_table_sizes to a
+// span. It is a noop if the size options object is nil.
 func AnnotateSpanWithGetSchemaTableSizeOptions(opts *vtadminpb.GetSchemaTableSizeOptions, span trace.Span) {
 	if opts == nil {
-		return
+		opts = &vtadminpb.GetSchemaTableSizeOptions{}
 	}
 
 	span.Annotate("aggregate_table_sizes", opts.AggregateSizes)
-	span.Annotate("include_non_serving_shards_in_table_sizes", opts.IncludeNonServingShards)
 }

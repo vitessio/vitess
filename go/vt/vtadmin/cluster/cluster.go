@@ -441,9 +441,7 @@ type GetSchemaOptions struct {
 	// aggregation requires setting TableSizesOnly in the cases described above.
 	BaseRequest *vtctldatapb.GetSchemaRequest
 	// SizeOpts control whether the (*Cluster).GetSchema method performs
-	// cross-shard table size aggregation (via the AggregateSizes field), and
-	// the behavior of that size aggregation (via the IncludeNonServingShards
-	// field).
+	// cross-shard table size aggregation (via the AggregateSizes field).
 	//
 	// If the AggregateSizes field is false, the rest of this struct is ignored,
 	// no size aggregation is done, and (*Cluster).GetSchema will make exactly
@@ -452,8 +450,7 @@ type GetSchemaOptions struct {
 	// If the AggregateSizes field is true, (*Cluster).GetSchema will make a
 	// FindAllShardsInKeyspace vtctld RPC, and then filter the given Tablets
 	// (described above) to find one SERVING tablet for each shard in the
-	// keyspace. If IncludeNonServingShards is false, then we will skip any
-	// shards for which IsMasterServing is false.
+	// keyspace, skipping any non-serving shards in the keyspace.
 	SizeOpts *vtadminpb.GetSchemaTableSizeOptions
 }
 
@@ -469,27 +466,18 @@ type GetSchemaOptions struct {
 // each shard. If this option is false, we make exactly one GetSchema request to
 // a single, randomly-chosen, tablet in the keyspace.
 //
-// (2.1) If, in size aggregation mode, opts.SizeOpts.IncludeNonServingShards is
-// false (the default), then we will filter out any shards for which
-// IsMasterServing is false in the topo, and make GetSchema RPCs to one tablet
-// in every _serving_ shard. Otherwise we will make a GetSchema RPC to one
-// tablet in _every_ shard.
-//
-// (3) Irrespective of whether we're including nonserving shards, or whether
-// we're doing size aggregation at all, we will only make GetSchema RPCs to
-// tablets that are in SERVING state; we don't want to use a tablet that might
-// be in a bad state as the source of truth for a schema. Therefore if we can't
-// find a SERVING tablet for the keyspace (in non-aggregation mode) or for a
-// shard in that keyspace (in aggregation mode), then we will return an error
-// back to the caller.
+// (3) We will only make GetSchema RPCs to tablets that are in SERVING state; we
+// don't want to use a tablet that might be in a bad state as the source of
+// truth for a schema. Therefore if we can't find a SERVING tablet for the
+// keyspace (in non-aggregation mode) or for a shard in that keyspace (in
+// aggregation mode), then we will return an error back to the caller.
 func (c *Cluster) GetSchema(ctx context.Context, keyspace string, opts GetSchemaOptions) (*vtadminpb.Schema, error) {
 	span, ctx := trace.NewSpan(ctx, "Cluster.GetSchema")
 	defer span.Finish()
 
 	if opts.SizeOpts == nil {
 		opts.SizeOpts = &vtadminpb.GetSchemaTableSizeOptions{
-			AggregateSizes:          false,
-			IncludeNonServingShards: false,
+			AggregateSizes: false,
 		}
 	}
 
@@ -645,10 +633,8 @@ func (c *Cluster) getTabletsToQueryForSchemas(ctx context.Context, keyspace stri
 
 		for _, shard := range shards {
 			if !shard.Shard.IsMasterServing {
-				if !opts.SizeOpts.IncludeNonServingShards {
-					log.Infof("%s/%s is not serving; ignoring because IncludeNonServingShards=false", keyspace, shard.Name)
-					continue
-				}
+				log.Infof("%s/%s is not serving; ignoring because IncludeNonServingShards=false", keyspace, shard.Name)
+				continue
 			}
 
 			shardTablets := vtadminproto.FilterTablets(func(tablet *vtadminpb.Tablet) bool {

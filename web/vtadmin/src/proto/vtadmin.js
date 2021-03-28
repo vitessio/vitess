@@ -5511,7 +5511,6 @@ $root.vtadmin = (function() {
          * @memberof vtadmin
          * @interface IGetSchemaTableSizeOptions
          * @property {boolean|null} [aggregate_sizes] GetSchemaTableSizeOptions aggregate_sizes
-         * @property {boolean|null} [include_non_serving_shards] GetSchemaTableSizeOptions include_non_serving_shards
          */
 
         /**
@@ -5536,14 +5535,6 @@ $root.vtadmin = (function() {
          * @instance
          */
         GetSchemaTableSizeOptions.prototype.aggregate_sizes = false;
-
-        /**
-         * GetSchemaTableSizeOptions include_non_serving_shards.
-         * @member {boolean} include_non_serving_shards
-         * @memberof vtadmin.GetSchemaTableSizeOptions
-         * @instance
-         */
-        GetSchemaTableSizeOptions.prototype.include_non_serving_shards = false;
 
         /**
          * Creates a new GetSchemaTableSizeOptions instance using the specified properties.
@@ -5571,8 +5562,6 @@ $root.vtadmin = (function() {
                 writer = $Writer.create();
             if (message.aggregate_sizes != null && Object.hasOwnProperty.call(message, "aggregate_sizes"))
                 writer.uint32(/* id 1, wireType 0 =*/8).bool(message.aggregate_sizes);
-            if (message.include_non_serving_shards != null && Object.hasOwnProperty.call(message, "include_non_serving_shards"))
-                writer.uint32(/* id 2, wireType 0 =*/16).bool(message.include_non_serving_shards);
             return writer;
         };
 
@@ -5609,9 +5598,6 @@ $root.vtadmin = (function() {
                 switch (tag >>> 3) {
                 case 1:
                     message.aggregate_sizes = reader.bool();
-                    break;
-                case 2:
-                    message.include_non_serving_shards = reader.bool();
                     break;
                 default:
                     reader.skipType(tag & 7);
@@ -5651,9 +5637,6 @@ $root.vtadmin = (function() {
             if (message.aggregate_sizes != null && message.hasOwnProperty("aggregate_sizes"))
                 if (typeof message.aggregate_sizes !== "boolean")
                     return "aggregate_sizes: boolean expected";
-            if (message.include_non_serving_shards != null && message.hasOwnProperty("include_non_serving_shards"))
-                if (typeof message.include_non_serving_shards !== "boolean")
-                    return "include_non_serving_shards: boolean expected";
             return null;
         };
 
@@ -5671,8 +5654,6 @@ $root.vtadmin = (function() {
             var message = new $root.vtadmin.GetSchemaTableSizeOptions();
             if (object.aggregate_sizes != null)
                 message.aggregate_sizes = Boolean(object.aggregate_sizes);
-            if (object.include_non_serving_shards != null)
-                message.include_non_serving_shards = Boolean(object.include_non_serving_shards);
             return message;
         };
 
@@ -5689,14 +5670,10 @@ $root.vtadmin = (function() {
             if (!options)
                 options = {};
             var object = {};
-            if (options.defaults) {
+            if (options.defaults)
                 object.aggregate_sizes = false;
-                object.include_non_serving_shards = false;
-            }
             if (message.aggregate_sizes != null && message.hasOwnProperty("aggregate_sizes"))
                 object.aggregate_sizes = message.aggregate_sizes;
-            if (message.include_non_serving_shards != null && message.hasOwnProperty("include_non_serving_shards"))
-                object.include_non_serving_shards = message.include_non_serving_shards;
             return object;
         };
 
