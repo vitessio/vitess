@@ -528,6 +528,12 @@ func (c *Cluster) GetSchema(ctx context.Context, keyspace string, opts GetSchema
 		return nil, err
 	}
 
+	return c.getSchemaFromTablets(ctx, keyspace, tabletsToQuery, opts)
+}
+
+// Note that for this function we use the tablets parameter, ignoring the
+// opts.Tablets value completely.
+func (c *Cluster) getSchemaFromTablets(ctx context.Context, keyspace string, tablets []*vtadminpb.Tablet, opts GetSchemaOptions) (*vtadminpb.Schema, error) {
 	var (
 		m      sync.Mutex
 		wg     sync.WaitGroup
@@ -546,7 +552,7 @@ func (c *Cluster) GetSchema(ctx context.Context, keyspace string, opts GetSchema
 		sizesOnly = opts.BaseRequest.TableSizesOnly
 	)
 
-	for _, tablet := range tabletsToQuery {
+	for _, tablet := range tablets {
 		wg.Add(1)
 
 		go func(tablet *vtadminpb.Tablet, sizesOnly bool) {
