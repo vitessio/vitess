@@ -40,6 +40,7 @@ import (
 	vtadminhttp "vitess.io/vitess/go/vt/vtadmin/http"
 	vthandlers "vitess.io/vitess/go/vt/vtadmin/http/handlers"
 	"vitess.io/vitess/go/vt/vtadmin/sort"
+	"vitess.io/vitess/go/vt/vtadmin/vtadminproto"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtexplain"
 
@@ -392,10 +393,7 @@ func (api *API) GetSchema(ctx context.Context, req *vtadminpb.GetSchemaRequest) 
 	span.Annotate("cluster_id", req.ClusterId)
 	span.Annotate("keyspace", req.Keyspace)
 	span.Annotate("table", req.Table)
-	if req.TableSizeOptions != nil {
-		span.Annotate("aggregate_schema_sizes", req.TableSizeOptions.AggregateSizes)
-		span.Annotate("include_non_serving_shards", req.TableSizeOptions.IncludeNonServingShards)
-	}
+	vtadminproto.AnnotateSpanWithGetSchemaTableSizeOptions(req.TableSizeOptions, span)
 
 	c, ok := api.clusterMap[req.ClusterId]
 	if !ok {
