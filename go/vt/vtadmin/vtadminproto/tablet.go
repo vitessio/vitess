@@ -16,7 +16,26 @@ limitations under the License.
 
 package vtadminproto
 
-import vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
+import (
+	"vitess.io/vitess/go/vt/topo/topoproto"
+
+	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
+)
+
+// Tablets is a list of Tablet protobuf objects.
+type Tablets []*vtadminpb.Tablet
+
+// AliasStringList returns a list of TabletAlias strings for each tablet in the
+// list.
+func (tablets Tablets) AliasStringList() []string {
+	aliases := make([]string, len(tablets))
+
+	for i, tablet := range tablets {
+		aliases[i] = topoproto.TabletAliasString(tablet.Tablet.Alias)
+	}
+
+	return aliases
+}
 
 // FilterTablets returns a subset of tablets (not exceeding maxResults) that
 // satisfy the given condition.
