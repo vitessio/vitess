@@ -44,7 +44,7 @@ export const Schemas = () => {
         });
 
     return (
-        <div>
+        <div className="max-width-content">
             <h1>Schemas</h1>
             <DataTable columns={['Cluster', 'Keyspace', 'Table']} data={rows} renderRows={renderRows} />
         </div>

@@ -37,7 +37,7 @@ export const Keyspaces = () => {
         ));
 
     return (
-        <div>
+        <div className="max-width-content">
             <h1>Keyspaces</h1>
             <DataTable columns={['Cluster', 'Keyspace']} data={rows} renderRows={renderRows} />
         </div>
