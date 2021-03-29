@@ -204,12 +204,12 @@ Create the `settings.xml` in the `$HOME/.m2/` directory as described in their [i
 
 * All PRs are tagged and added to the milestone. 
   - Search git repo with (is:pr is:open is:closed closed:>=2021-01-06)
-* Build a Release Notes Document (Example: (Release Notes)[https://docs.google.com/document/d/1-krYwWQa8ZHsGHnXaA5Ye-3SGM8ryOLUsAwYnrEvj5U/edit) 
+* Build a Release Notes Document (Example: [Release Notes](https://docs.google.com/document/d/1-krYwWQa8ZHsGHnXaA5Ye-3SGM8ryOLUsAwYnrEvj5U/edit) 
 * Add "Release Notes" to new branch "vitess/doc/releasenotes" 
   - ex:9_0_0_release_notes.md
-* Update (version.go)[https://github.com/vitessio/vitess/blob/master/go/vt/servenv/version.go] and merge PR before the GA release.
+* Update [version.go](https://github.com/vitessio/vitess/blob/master/go/vt/servenv/version.go) and merge PR before the GA release.
 * Announce dates on vitess slack #release-planning
-* Tag (vitess-operator)[https://github.com/planetscale/vitess-operator/blob/master/docs/release-process.md] along with RC1
+* Tag [vitess-operator](https://github.com/planetscale/vitess-operator/blob/master/docs/release-process.md) along with RC1
 
 ### Creating Release (or Candidate)
 
@@ -223,7 +223,7 @@ Note: If this is a pre-release select the pre-release checkbox.
 
 ### Post Release Steps
 * Announce new release in Vitess Slack #general channel. 
-* Create a new (PR)[https://github.com/vitessio/website/pull/670] for Vitess Blog.
+* Create a new [PR](https://github.com/vitessio/website/pull/670) for Vitess Blog.
  - Netlify -> Sites →vitess.io → Deploy
 * Coordinate CNCF cross-posting Vitess Blog. 
 * Schedule and publish HubSpot Tweet on Vitess account. 
