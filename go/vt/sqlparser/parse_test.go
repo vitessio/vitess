@@ -57,6 +57,14 @@ var (
 			output: "select a, b from t",
 		},
 		{
+			input:  "select `a`, `'b'` from t",
+			output: "select a, 'b' from t",
+		},
+		{
+			input:  `select "'ain't'", '"hello"' from t`,
+			output: `select 'ain't', "hello" from t`,
+		},
+		{
 			input:  "select * from information_schema.columns",
 			output: "select * from information_schema.`columns`",
 		}, {
@@ -106,12 +114,28 @@ var (
 			input: "select /* double */ /* comment */ 1 from t",
 		}, {
 			input: "select /* back-quote keyword */ `By` from t",
+			serializeSelectExprs: true,
+		}, {
+			input: "select /* back-quote keyword */ `By` from t",
+			output: "select /* back-quote keyword */ By from t",
 		}, {
 			input: "select /* back-quote num */ `2a` from t",
+			serializeSelectExprs: true,
+		}, {
+			input: "select /* back-quote num */ `2a` from t",
+			output: "select /* back-quote num */ 2a from t",
 		}, {
 			input: "select /* back-quote . */ `a.b` from t",
+			serializeSelectExprs: true,
+		}, {
+			input: "select /* back-quote . */ `a.b` from t",
+			output: "select /* back-quote . */ a.b from t",
 		}, {
 			input: "select /* back-quote back-quote */ `a``b` from t",
+			serializeSelectExprs: true,
+		}, {
+			input: "select /* back-quote back-quote */ `a``b` from t",
+			output: "select /* back-quote back-quote */ a``b from t",
 		}, {
 			input:  "select /* back-quote unnecessary */ 1 from `t`",
 			output: "select /* back-quote unnecessary */ 1 from t",
@@ -122,6 +146,10 @@ var (
 			input: "select /* @ */ @@a from b",
 		}, {
 			input: "select /* \\0 */ '\\0' from a",
+			serializeSelectExprs: true,
+		}, {
+			input: "select /* \\0 */ '\\0' from a",
+			output: "select /* \\0 */ \\0 from a",
 		}, {
 			input:                "select 1 /* drop this comment */ from t",
 			output:               "select 1 from t",
@@ -199,10 +227,14 @@ var (
 			serializeSelectExprs: true,
 		}, {
 			input:  "select t.Date as Date from t",
-			output: "select t.Date as `Date` from t",
+			output: "select t.`Date` as `Date` from t",
+			serializeSelectExprs: true,
+		}, {
+			input:  "select t.Date as Date from t",
+			output: "select Date `Date` from t",
 		}, {
 			input:  "select t.col as YeAr from t",
-			output: "select t.col as `YeAr` from t",
+			output: "select col `YeAr` from t",
 		}, {
 			input: "select /* column alias with as */ a as b from t",
 		}, {
@@ -226,6 +258,9 @@ var (
 			input: "select next 10 values from t",
 		}, {
 			input: "select next :a values from t",
+		}, {
+			input: "select /* `By`.* */ `By`.* from t",
+			serializeSelectExprs: true,
 		}, {
 			input: "select /* `By`.* */ `By`.* from t",
 		}, {
@@ -574,19 +609,35 @@ var (
 			input: "select /* a */ a from t",
 		}, {
 			input: "select /* a.b */ a.b from t",
+			serializeSelectExprs: true,
+		}, {
+			input: "select /* a.b */ a.b from t",
+			output: "select /* a.b */ b from t",
+		}, {
+			input: "select /* a.b */ `a`.`b` from t",
+			output: "select /* a.b */ b from t",
 		}, {
 			input: "select /* a.b.c */ a.b.c from t",
+			serializeSelectExprs: true,
+		}, {
+			input: "select /* a.b.c */ a.b.c from t",
+			output: "select /* a.b.c */ c from t",
 		}, {
 			input: "select /* keyword a.b */ `By`.`bY` from t",
+			serializeSelectExprs: true,
+		}, {
+			input: "select /* keyword a.b */ `By`.`bY` from t",
+			output: "select /* keyword a.b */ bY from t",
 		}, {
 			input: "select /* string */ 'a' from t",
+			output: "select /* string */ a from t",
 		}, {
 			input:                "select /* double quoted string */ \"a\" from t",
 			output:               "select /* double quoted string */ 'a' from t",
 			serializeSelectExprs: true,
 		}, {
 			input:  "select /* double quoted string */ \"a\" from t",
-			output: "select /* double quoted string */ \"a\" from t",
+			output: "select /* double quoted string */ a from t",
 		}, {
 			input:                "select /* quote quote in string */ 'a''a' from t",
 			output:               "select /* quote quote in string */ 'a\\'a' from t",
@@ -601,22 +652,29 @@ var (
 			serializeSelectExprs: true,
 		}, {
 			input:  "select /* quote in double quoted string */ \"a'a\" from t",
-			output: "select /* quote in double quoted string */ \"a'a\" from t",
+			output: "select /* quote in double quoted string */ a'a from t",
 		}, {
 			input: "select /* backslash quote in string */ 'a\\'a' from t",
+			output: "select /* backslash quote in string */ a\\'a from t",
 		}, {
 			input: "select /* literal backslash in string */ 'a\\\\na' from t",
+			output: "select /* literal backslash in string */ a\\\\na from t",
 		}, {
 			input: "select /* all escapes */ '\\0\\'\\\"\\b\\n\\r\\t\\Z\\\\' from t",
+			output: "select /* all escapes */ \\0\\'\\\"\\b\\n\\r\\t\\Z\\\\ from t",
 		}, {
 			input:                "select /* non-escape */ '\\x' from t",
 			output:               "select /* non-escape */ 'x' from t",
 			serializeSelectExprs: true,
 		}, {
 			input:  "select /* non-escape */ '\\x' from t",
-			output: "select /* non-escape */ '\\x' from t",
+			output: "select /* non-escape */ \\x from t",
 		}, {
-			input: "select /* unescaped backslash */ '\\n' from t",
+			input: "select /* unescaped backslash */ '\n' from t",
+			output: "select /* unescaped backslash */ \n from t",
+		}, {
+			input: "select /* escaped backslash */ '\\n' from t",
+			output: "select /* escaped backslash */ \\n from t",
 		}, {
 			input: "select /* value argument */ :a from t",
 		}, {
@@ -744,6 +802,10 @@ var (
 		}, {
 			input:  "select * from (select 'tables') tables",
 			output: "select * from (select 'tables' from dual) as `tables`",
+			serializeSelectExprs: true,
+		}, {
+			input:  "select * from (select 'tables') tables",
+			output: "select * from (select tables from dual) as `tables`",
 		}, {
 			input: "insert /* simple */ into a values (1)",
 		}, {
@@ -1613,10 +1675,13 @@ var (
 			output: "select /* drop trailing semicolon */ 1 from dual",
 		}, {
 			input: "select /* cache directive */ sql_no_cache 'foo' from t",
+			output: "select /* cache directive */ sql_no_cache foo from t",
 		}, {
 			input: "select /* sql_calc_rows directive */ sql_calc_found_rows 'foo' from t",
+			output: "select /* sql_calc_rows directive */ sql_calc_found_rows foo from t",
 		}, {
 			input: "select /* cache and sql_calc_rows directive */ sql_no_cache sql_calc_found_rows 'foo' from t",
+			output: "select /* cache and sql_calc_rows directive */ sql_no_cache sql_calc_found_rows foo from t",
 		}, {
 			input: "select binary 'a' = 'A' from t",
 		}, {
@@ -1647,6 +1712,7 @@ var (
 			input: "select * from t partition (p0, p1)",
 		}, {
 			input: "select e.id, s.city from employees as e join stores partition (p1) as s on e.store_id = s.id",
+			output: "select id, city from employees as e join stores partition (p1) as s on e.store_id = s.id",
 		}, {
 			input: "select truncate(120.3333, 2) from dual",
 		}, {
@@ -2350,6 +2416,10 @@ func TestCaseSensitivity(t *testing.T) {
 			input: "select B.* from c",
 		}, {
 			input: "select B.A from c",
+			serializeSelectExprs: true,
+		}, {
+			input: "select B.A from c",
+			output: "select A from c",
 		}, {
 			input: "select * from B as C",
 		}, {

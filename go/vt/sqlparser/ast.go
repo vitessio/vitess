@@ -116,11 +116,30 @@ func captureSelectExpressions(sql string, tokenizer *Tokenizer) {
 	if s, ok := tokenizer.ParseTree.(SelectStatement); ok {
 		s.walkSubtree(func(node SQLNode) (kontinue bool, err error) {
 			if node, ok := node.(*AliasedExpr); ok && node.EndParsePos > node.StartParsePos {
-				node.InputExpression = strings.TrimLeft(sql[node.StartParsePos:node.EndParsePos], " \n\t")
+				colName, ok := node.Expr.(*ColName)
+				if ok && !colName.Qualifier.IsEmpty() {
+					// For qualified column names, the input expression (and therefore the output schema) should be
+					// the simple unquoted column name
+					node.InputExpression = colName.Name.String()
+				} else {
+					node.InputExpression = trimQuotes(strings.TrimLeft(sql[node.StartParsePos:node.EndParsePos], " \n\t"))
+				}
 			}
 			return true, nil
 		})
 	}
+}
+
+func trimQuotes(s string) string {
+	firstChar := s[0]
+	lastChar := s[len(s)-1]
+	if firstChar == lastChar {
+		if firstChar == '`' || firstChar == '"' || firstChar == '\'' {
+			return s[1:len(s)-1]
+		}
+	}
+
+	return s
 }
 
 // ParseStrictDDL is the same as Parse except it errors on
