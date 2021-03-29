@@ -228,7 +228,7 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 // to complete the creation of TabletServer.
 func (tsv *TabletServer) InitDBConfig(target querypb.Target, dbcfgs *dbconfigs.DBConfigs, mysqld mysqlctl.MysqlDaemon) error {
 	if tsv.sm.State() != StateNotConnected {
-		return mysql.NewSQLError(mysql.ERServerIsntAvailable, mysql.SSUnknownSQLState, "Server isn't available")
+		return vterrors.NewErrorf(vtrpcpb.Code_UNAVAILABLE, vterrors.ServerNotAvailable, "Server isn't available")
 	}
 	tsv.sm.Init(tsv, target)
 	tsv.sm.target = target
@@ -820,10 +820,10 @@ func (tsv *TabletServer) ExecuteBatch(ctx context.Context, target *querypb.Targe
 	defer span.Finish()
 
 	if len(queries) == 0 {
-		return nil, mysql.NewSQLError(mysql.EREmptyQuery, mysql.SSClientError, "Query was empty")
+		return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.EmptyQuery, "Query was empty")
 	}
 	if asTransaction && transactionID != 0 {
-		return nil, mysql.NewSQLError(mysql.ERCantDoThisDuringAnTransaction, mysql.SSCantDoThisDuringAnTransaction, "You are not allowed to execute this command in a transaction")
+		return nil, vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, mysql.ERCantDoThisDuringAnTransaction, "You are not allowed to execute this command in a transaction")
 	}
 
 	if tsv.enableHotRowProtection && asTransaction {
@@ -1200,7 +1200,7 @@ func (tsv *TabletServer) ReserveExecute(ctx context.Context, target *querypb.Tar
 //Release implements the QueryService interface
 func (tsv *TabletServer) Release(ctx context.Context, target *querypb.Target, transactionID, reservedID int64) error {
 	if reservedID == 0 && transactionID == 0 {
-		return mysql.NewSQLError(mysql.ERUnknownComError, mysql.SSNetError, "connection ID and transaction ID do not exist")
+		return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.NoSuchSession, "connection ID and transaction ID do not exist")
 	}
 	return tsv.execRequest(
 		ctx, tsv.QueryTimeout.Get(),
