@@ -15,18 +15,36 @@ entries during the initial copy phase.
 
 `rowlog` uses the vstream API to stream events for the specified table from both the source and target keyspaces.
 
-Here is an example of how to invoke it:
+Here is an example of how to invoke it, after the resharding step in the Vitess local example:
 
 ```
 go build
-./rowlog -ids 1,3,4 -table customer -pk customer_id -source_keyspace commerce -target_keyspace customer 
-        -source_shard=0 -target_shard=0 -vtctld localhost:15999 
+./rowlog -ids 1,3,4 -table customer -pk customer_id -source_keyspace customer -target_keyspace customer 
+        -source_shard=0 -target_shard=-80 -vtctld localhost:15999 
         -vtgate localhost:15991 -cells zone1 -topo_implementation etcd2 -topo_global_server_address localhost:2379 
         -topo_global_root /vitess/global
 ```
 
 The resulting binlog entries are output to two tab-separated files which can be inspected to validate if data being
 copied is consistent.
+
+```text
+::::::::::::::
+customer_0.log
+::::::::::::::
+customer_id	email	op	timestamp	gtid
+1	alice@domain.com	insert	2021-03-29T09:46:59+02:00	MySQL56/cfd39ffd-9062-11eb-9bc1-04ed332e05c2:1-37
+2	bob@domain.com	insert	2021-03-29T09:46:59+02:00	MySQL56/cfd39ffd-9062-11eb-9bc1-04ed332e05c2:1-37
+3	charlie@domain.com	insert	2021-03-29T09:46:59+02:00	MySQL56/cfd39ffd-9062-11eb-9bc1-04ed332e05c2:1-37
+::::::::::::::
+customer_-80.log
+::::::::::::::
+customer_id	email	op	timestamp	gtid
+1	alice@domain.com	insert	2021-03-29T09:47:59+02:00	MySQL56/f34f9bef-9062-11eb-84b0-04ed332e05c2:1-38
+2	bob@domain.com	insert	2021-03-29T09:47:59+02:00	MySQL56/f34f9bef-9062-11eb-84b0-04ed332e05c2:1-38
+3	charlie@domain.com	insert	2021-03-29T09:47:59+02:00	MySQL56/f34f9bef-9062-11eb-84b0-04ed332e05c2:1-38
+
+```
 
 Events are streamed from one source shard and one target shard. The rows for the ids specified should be on both the
 source and target shards.
