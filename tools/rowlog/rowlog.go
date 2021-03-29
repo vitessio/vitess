@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
@@ -35,18 +36,25 @@ import (
 type RowLogConfig struct {
 	ids, cells []string
 
-	sourceKeyspace, targetKeyspace, table, vtgate, vtctld, pk string
+	sourceKeyspace, targetKeyspace string
+	sourceShard, targetShard       string
+	table                          string
+	vtgate, vtctld                 string
+	pk                             string
 }
 
 func (rlc *RowLogConfig) String() string {
-	s := fmt.Sprintf("\tsource:%s, target:%s, table:%s, ids:%s, pk:%s\n",
-		rlc.sourceKeyspace, rlc.targetKeyspace, rlc.table, strings.Join(rlc.ids, ","), rlc.pk)
+	s := fmt.Sprintf("\tsource:%s/%s, target:%s/%s, table:%s, ids:%s, pk:%s\n",
+		rlc.sourceKeyspace, rlc.sourceShard, rlc.targetKeyspace, rlc.targetShard,
+		rlc.table, strings.Join(rlc.ids, ","), rlc.pk)
 	s += fmt.Sprintf("\tvtgate:%s, vtctld:%s, cells:%s", rlc.vtgate, rlc.vtctld, strings.Join(rlc.cells, ","))
 	return s
 }
 
 func (rlc *RowLogConfig) Validate() bool {
-	if rlc.table == "" || len(rlc.cells) == 0 || rlc.vtctld == "" || rlc.vtgate == "" || len(rlc.ids) == 0 || rlc.targetKeyspace == "" || rlc.sourceKeyspace == "" || rlc.pk == "" {
+	if rlc.table == "" || len(rlc.cells) == 0 || rlc.vtctld == "" || rlc.vtgate == "" ||
+		len(rlc.ids) == 0 || rlc.targetKeyspace == "" || rlc.sourceKeyspace == "" || rlc.pk == "" ||
+		rlc.sourceShard == "" || rlc.targetShard == "" {
 		return false
 	}
 	return true
@@ -76,12 +84,12 @@ func main() {
 	log.Infof("Starting rowlogger with config: %s", config)
 	fmt.Printf("Starting rowlogger with\n%v\n", config)
 	ts := topo.Open()
-	sourceTablet := getTablet(ctx, ts, config.cells, config.sourceKeyspace)
-	targetTablet := getTablet(ctx, ts, config.cells, config.targetKeyspace)
+	sourceTablet := getTablet(ctx, ts, config.cells, config.sourceKeyspace, config.sourceShard)
+	targetTablet := getTablet(ctx, ts, config.cells, config.targetKeyspace, config.targetShard)
 	log.Infof("Using tablets %s and %s to get positions", sourceTablet, targetTablet)
 
 	var wg sync.WaitGroup
-	var stream = func(keyspace, tablet string) {
+	var stream = func(keyspace, shard, tablet string) {
 		defer wg.Done()
 		var startPos, stopPos string
 		var i int
@@ -94,7 +102,8 @@ func main() {
 				return
 			}
 			log.Infof("%s Iteration:%d", keyspace, i)
-			startPos, stopPos, done, fieldsPrinted, err = startStreaming(ctx, config.vtgate, config.vtctld, keyspace, tablet, config.table, config.pk, config.ids, startPos, stopPos, fieldsPrinted)
+			startPos, stopPos, done, fieldsPrinted, err = startStreaming(ctx, config.vtgate, config.vtctld, keyspace, shard,
+				tablet, config.table, config.pk, config.ids, startPos, stopPos, fieldsPrinted)
 			if done {
 				log.Infof("Finished streaming all events for keyspace %s", keyspace)
 				fmt.Printf("Finished streaming all events for keyspace %s\n", keyspace)
@@ -110,10 +119,10 @@ func main() {
 	}
 
 	wg.Add(1)
-	go stream(config.sourceKeyspace, sourceTablet)
+	go stream(config.sourceKeyspace, config.sourceShard, sourceTablet)
 
 	wg.Add(1)
-	go stream(config.targetKeyspace, targetTablet)
+	go stream(config.targetKeyspace, config.targetShard, targetTablet)
 
 	wg.Wait()
 
@@ -122,7 +131,8 @@ func main() {
 		config.sourceKeyspace, config.targetKeyspace)
 }
 
-func startStreaming(ctx context.Context, vtgate, vtctld, keyspace, tablet, table, pk string, ids []string, startPos, stopPos string, fieldsPrinted bool) (string, string, bool, bool, error) {
+func startStreaming(ctx context.Context, vtgate, vtctld, keyspace, shard, tablet, table, pk string, ids []string,
+	startPos, stopPos string, fieldsPrinted bool) (string, string, bool, bool, error) {
 	var err error
 	if startPos == "" {
 		flavor := getFlavor(ctx, vtctld, keyspace)
@@ -139,7 +149,7 @@ func startStreaming(ctx context.Context, vtgate, vtctld, keyspace, tablet, table
 	vgtid := &binlogdatapb.VGtid{
 		ShardGtids: []*binlogdatapb.ShardGtid{{
 			Keyspace: keyspace,
-			Shard:    "0",
+			Shard:    shard,
 			Gtid:     startPos,
 		}},
 	}
@@ -155,7 +165,7 @@ func startStreaming(ctx context.Context, vtgate, vtctld, keyspace, tablet, table
 		log.Fatal(err)
 	}
 	defer conn.Close()
-	reader, err := conn.VStream(ctx, topodatapb.TabletType_MASTER, vgtid, filter)
+	reader, err := conn.VStream(ctx, topodatapb.TabletType_MASTER, vgtid, filter, &vtgatepb.VStreamFlags{})
 	var fields []*query.Field
 	var gtid string
 	var plan *TablePlan
@@ -181,7 +191,7 @@ func startStreaming(ctx context.Context, vtgate, vtctld, keyspace, tablet, table
 				case binlogdatapb.VEventType_FIELD:
 					fields = ev.FieldEvent.Fields
 					//fmt.Printf("field %s\n", fields)
-					plan = getTablePlan(keyspace, fields, ev.FieldEvent.TableName, pk, ids)
+					plan = getTablePlan(keyspace, shard, fields, ev.FieldEvent.TableName, pk, ids)
 					if !fieldsPrinted {
 						outputHeader(plan)
 						fieldsPrinted = true
@@ -239,9 +249,13 @@ func output(filename, s string) {
 	log.Infof("Writing to %s.log: %s", filename, s)
 }
 
+func getOutputFileName(plan *TablePlan) string {
+	return fmt.Sprintf("%s_%s", plan.keyspace, plan.shard)
+}
+
 func outputHeader(plan *TablePlan) {
 	s := getHeader(plan)
-	output(plan.keyspace, s)
+	output(getOutputFileName(plan), s)
 }
 
 func getHeader(plan *TablePlan) string {
@@ -260,7 +274,7 @@ func outputRows(plan *TablePlan, rows []*RowLog) {
 			s += val + "\t"
 		}
 		s += fmt.Sprintf("%s\t%s\t%s", row.op, row.when, row.gtid)
-		output(plan.keyspace, s)
+		output(getOutputFileName(plan), s)
 	}
 }
 
@@ -325,7 +339,7 @@ func processRowEvent(plan *TablePlan, gtid string, ev *binlogdatapb.VEvent) []*R
 	return rowLogs
 }
 
-func getTablePlan(keyspace string, fields []*query.Field, table, pk string, ids []string) *TablePlan {
+func getTablePlan(keyspace, shard string, fields []*query.Field, table, pk string, ids []string) *TablePlan {
 	allowedIds := make(map[string]bool)
 	for _, id := range ids {
 		allowedIds[id] = true
@@ -344,6 +358,7 @@ func getTablePlan(keyspace string, fields []*query.Field, table, pk string, ids 
 		pkIndex:    pkIndex,
 		fields:     fields,
 		keyspace:   keyspace,
+		shard:      shard,
 	}
 }
 
@@ -353,6 +368,7 @@ type TablePlan struct {
 	pkIndex    int64
 	fields     []*query.Field
 	keyspace   string
+	shard      string
 }
 
 func getFlavor(ctx context.Context, server, keyspace string) string {
@@ -368,8 +384,8 @@ func getFlavor(ctx context.Context, server, keyspace string) string {
 	return flavor
 }
 
-func getTablet(ctx context.Context, ts *topo.Server, cells []string, keyspace string) string {
-	picker, err := discovery.NewTabletPicker(ts, cells, keyspace, "0", "master")
+func getTablet(ctx context.Context, ts *topo.Server, cells []string, keyspace, shard string) string {
+	picker, err := discovery.NewTabletPicker(ts, cells, keyspace, shard, "master")
 	if err != nil {
 		return ""
 	}
@@ -381,9 +397,12 @@ func getTablet(ctx context.Context, ts *topo.Server, cells []string, keyspace st
 	return tabletId
 
 }
+
 func parseCommandLine() *RowLogConfig {
-	sourceKeyspace := flag.String("source", "", "")
-	targetKeyspace := flag.String("target", "", "")
+	sourceKeyspace := flag.String("source_keyspace", "", "")
+	targetKeyspace := flag.String("target_keyspace", "", "")
+	sourceShard := flag.String("source_shard", "", "")
+	targetShard := flag.String("target_shard", "", "")
 	ids := flag.String("ids", "", "")
 	pk := flag.String("pk", "", "")
 	table := flag.String("table", "", "")
@@ -395,7 +414,9 @@ func parseCommandLine() *RowLogConfig {
 
 	return &RowLogConfig{
 		sourceKeyspace: *sourceKeyspace,
+		sourceShard:    *sourceShard,
 		targetKeyspace: *targetKeyspace,
+		targetShard:    *targetShard,
 		table:          *table,
 		pk:             *pk,
 		ids:            strings.Split(*ids, ","),
