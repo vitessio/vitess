@@ -198,6 +198,44 @@ Install `gpg-agent` (needed below) e.g. on Ubuntu via: `sudo apt-get install gnu
 
 Create the `settings.xml` in the `$HOME/.m2/` directory as described in their [instructions](https://central.sonatype.org/pages/apache-maven.html).
 
+## Release Cutover 
+
+### Pre-Requisites
+
+* All PRs are tagged and added to the milestone. 
+  - Search git repo with (is:pr is:open is:closed closed:>=2021-01-06)
+* Build a Release Notes Document (Example: (Release Notes)[https://docs.google.com/document/d/1-krYwWQa8ZHsGHnXaA5Ye-3SGM8ryOLUsAwYnrEvj5U/edit) 
+* Add "Release Notes" to new branch "vitess/doc/releasenotes" 
+  - ex:9_0_0_release_notes.md
+* Update (version.go)[https://github.com/vitessio/vitess/blob/master/go/vt/servenv/version.go] and merge PR before the GA release.
+* Announce dates on vitess slack #release-planning
+* Tag (vitess-operator)[https://github.com/planetscale/vitess-operator/blob/master/docs/release-process.md] along with RC1
+
+### Creating Release (or Candidate)
+
+1. Create a new branch (if needed) with the following existing naming convention e.g. release-9.0. We usually do this while creating RC1 and re-use it for GA release.
+2. Click on Code -> Releases
+3. Draft a new release. The naming convention for release candidates is to append “-rc1” to the expected release version.
+4. Tag a new release against the branch.
+5. Copy/paste previously built Release Notes into the description.
+
+Note: If this is a pre-release select the pre-release checkbox. 
+
+### Post Release Steps
+* Announce new release in Vitess Slack #general channel. 
+* Create a new (PR)[https://github.com/vitessio/website/pull/670] for Vitess Blog.
+ - Netlify -> Sites →vitess.io → Deploy
+* Coordinate CNCF cross-posting Vitess Blog. 
+* Schedule and publish HubSpot Tweet on Vitess account. 
+* Update “.github/workflows/cluster_endtoend_upgrade.yml” workflow file on the main(master) branch with the new release.
+* Make a v0.9.0 tag for godoc / go modules (https://pkg.go.dev/vitess.io/vitess/?tab=versions). Find the tag of v9.0.0 release and use that to create a v0.9.0 tag. From your vitess.io/vitess checkout, do the following
+  - git checkout release-9.0
+  - git pull
+  - git tag -a v0.9.0 daa6085 -m "Tagging v9.0.0 also as v0.9.0 for godoc/go modules"
+  - git push upstream v0.9.0
+* Add Java version and release by following Java Packages below. 
+
+
 ### Deploy & Release
 
 1.  Make sure you are in the release branch.
