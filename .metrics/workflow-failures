@@ -6030,3 +6030,5 @@
 2021-03-29T14:51:09Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/698240422
 2021-03-29T21:32:06Z,Unit Test (mariadb101),https://github.com/vitessio/vitess/actions/runs/699314425
 2021-03-29T22:54:01Z,endtoend,https://github.com/vitessio/vitess/actions/runs/699498402
+2021-03-29T23:05:36Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/699523230
+2021-03-29T23:05:36Z,endtoend,https://github.com/vitessio/vitess/actions/runs/699523228
