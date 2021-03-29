@@ -51,7 +51,7 @@ export const Tablets = () => {
     }, []);
 
     return (
-        <div>
+        <div className="max-width-content">
             <h1>Tablets</h1>
             <div className={style.controls}>
                 <TextInput
