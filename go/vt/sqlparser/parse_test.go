@@ -54,7 +54,7 @@ var (
 			output: "select a, b from t",
 		}, {
 			input:  "select `a`, `'b'` from t",
-			output: "select a, 'b' from t",
+			output: "select a, `'b'` from t",
 		}, {
 			input:  `select "'ain't'", '"hello"' from t`,
 			output: `select 'ain't', "hello" from t`,
@@ -112,28 +112,12 @@ var (
 			input: "select /* double */ /* comment */ 1 from t",
 		}, {
 			input: "select /* back-quote keyword */ `By` from t",
-			serializeSelectExprs: true,
-		}, {
-			input: "select /* back-quote keyword */ `By` from t",
-			output: "select /* back-quote keyword */ By from t",
 		}, {
 			input: "select /* back-quote num */ `2a` from t",
-			serializeSelectExprs: true,
-		}, {
-			input: "select /* back-quote num */ `2a` from t",
-			output: "select /* back-quote num */ 2a from t",
 		}, {
 			input: "select /* back-quote . */ `a.b` from t",
-			serializeSelectExprs: true,
-		}, {
-			input: "select /* back-quote . */ `a.b` from t",
-			output: "select /* back-quote . */ a.b from t",
 		}, {
 			input: "select /* back-quote back-quote */ `a``b` from t",
-			serializeSelectExprs: true,
-		}, {
-			input: "select /* back-quote back-quote */ `a``b` from t",
-			output: "select /* back-quote back-quote */ a``b from t",
 		}, {
 			input:  "select /* back-quote unnecessary */ 1 from `t`",
 			output: "select /* back-quote unnecessary */ 1 from t",
@@ -226,13 +210,9 @@ var (
 		}, {
 			input:  "select t.Date as Date from t",
 			output: "select t.`Date` as `Date` from t",
-			serializeSelectExprs: true,
-		}, {
-			input:  "select t.Date as Date from t",
-			output: "select Date `Date` from t",
 		}, {
 			input:  "select t.col as YeAr from t",
-			output: "select col `YeAr` from t",
+			output: "select t.col as `YeAr` from t",
 		}, {
 			input: "select /* column alias with as */ a as b from t",
 		}, {
@@ -607,25 +587,13 @@ var (
 			input: "select /* a */ a from t",
 		}, {
 			input: "select /* a.b */ a.b from t",
-			serializeSelectExprs: true,
-		}, {
-			input: "select /* a.b */ a.b from t",
-			output: "select /* a.b */ b from t",
 		}, {
 			input: "select /* a.b */ `a`.`b` from t",
-			output: "select /* a.b */ b from t",
+			output: "select /* a.b */ a.b from t",
 		}, {
 			input: "select /* a.b.c */ a.b.c from t",
-			serializeSelectExprs: true,
-		}, {
-			input: "select /* a.b.c */ a.b.c from t",
-			output: "select /* a.b.c */ c from t",
 		}, {
 			input: "select /* keyword a.b */ `By`.`bY` from t",
-			serializeSelectExprs: true,
-		}, {
-			input: "select /* keyword a.b */ `By`.`bY` from t",
-			output: "select /* keyword a.b */ bY from t",
 		}, {
 			input: "select /* string */ 'a' from t",
 			output: "select /* string */ a from t",
@@ -1710,7 +1678,6 @@ var (
 			input: "select * from t partition (p0, p1)",
 		}, {
 			input: "select e.id, s.city from employees as e join stores partition (p1) as s on e.store_id = s.id",
-			output: "select id, city from employees as e join stores partition (p1) as s on e.store_id = s.id",
 		}, {
 			input: "select truncate(120.3333, 2) from dual",
 		}, {
@@ -2417,7 +2384,6 @@ func TestCaseSensitivity(t *testing.T) {
 			serializeSelectExprs: true,
 		}, {
 			input: "select B.A from c",
-			output: "select A from c",
 		}, {
 			input: "select * from B as C",
 		}, {
@@ -2555,23 +2521,12 @@ func TestKeywords(t *testing.T) {
 		}, {
 			input:                "select /* non-reserved keywords as unqualified cols */ date, view, offset from t",
 			output:               "select /* non-reserved keywords as unqualified cols */ `date`, `view`, `offset` from t",
-			serializeSelectExprs: true,
-		}, {
-			input: "select /* non-reserved keywords as unqualified cols */ date, view, offset from t",
 		}, {
 			input:                "select /* share and mode as cols */ share, mode from t where share = 'foo'",
 			output:               "select /* share and mode as cols */ `share`, `mode` from t where `share` = 'foo'",
-			serializeSelectExprs: true,
-		}, {
-			input:  "select /* share and mode as cols */ share, mode from t where share = 'foo'",
-			output: "select /* share and mode as cols */ share, mode from t where `share` = 'foo'",
 		}, {
 			input:                "select /* unused keywords as cols */ write, virtual from t where trailing = 'foo'",
 			output:               "select /* unused keywords as cols */ `write`, `virtual` from t where `trailing` = 'foo'",
-			serializeSelectExprs: true,
-		}, {
-			input:  "select /* unused keywords as cols */ write, virtual from t where trailing = 'foo'",
-			output: "select /* unused keywords as cols */ write, virtual from t where `trailing` = 'foo'",
 		}, {
 			input:                "select status from t",
 			output:               "select `status` from t",
