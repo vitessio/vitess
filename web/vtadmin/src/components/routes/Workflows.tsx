@@ -35,8 +35,8 @@ export const Workflows = () => {
                 <tr key={idx}>
                     <td>{workflow?.name}</td>
                     <td>{cluster?.name}</td>
-                    <td>{workflow?.source?.keyspace || '-'}</td>
-                    <td>{workflow?.target?.keyspace || '-'}</td>
+                    <td>{workflow?.source?.keyspace || <span className="text-color-secondary">n/a</span>}</td>
+                    <td>{workflow?.target?.keyspace || <span className="text-color-secondary">n/a</span>}</td>
                 </tr>
             );
         });
