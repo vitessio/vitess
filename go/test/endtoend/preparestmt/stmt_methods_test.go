@@ -123,7 +123,7 @@ func TestInsertUpdateDelete(t *testing.T) {
 func testReplica(t *testing.T) {
 	replicaConn := Connect(t, "")
 	require.NotNil(t, replicaConn, "unable to connect")
-	_, err := replicaConn.Exec("use @replica")
+	_, err := replicaConn.Exec(fmt.Sprintf("use %s@replica", dbInfo.KeyspaceName))
 	require.NoError(t, err)
 	tx, err := replicaConn.Begin()
 	require.NoError(t, err, "error creating replica transaction")
