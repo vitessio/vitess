@@ -44,19 +44,25 @@ var (
 			output: "select 1 from dual",
 		}, {
 			input: "select 1 from t",
-		},
-		{
+		}, {
 			input: "select a, b from t",
-		},
-		{
+		}, {
 			input:  "select a,  b from t",
 			output: "select a, b from t",
-		},
-		{
+		}, {
 			input:  "select a,b from t",
 			output: "select a, b from t",
-		},
-		{
+		}, {
+			input:  "select `a`, `'b'` from t",
+			output: "select a, `'b'` from t",
+		}, {
+			input:  `select "'ain't'", '"hello"' from t`,
+			output: `select 'ain't', "hello" from t`,
+		}, {
+			input:  `select "1" + "2" from t`,
+		}, {
+			input:  `select '1' + "2" from t`,
+		}, {
 			input:  "select * from information_schema.columns",
 			output: "select * from information_schema.`columns`",
 		}, {
@@ -122,6 +128,10 @@ var (
 			input: "select /* @ */ @@a from b",
 		}, {
 			input: "select /* \\0 */ '\\0' from a",
+			serializeSelectExprs: true,
+		}, {
+			input: "select /* \\0 */ '\\0' from a",
+			output: "select /* \\0 */ \\0 from a",
 		}, {
 			input:                "select 1 /* drop this comment */ from t",
 			output:               "select 1 from t",
@@ -199,7 +209,7 @@ var (
 			serializeSelectExprs: true,
 		}, {
 			input:  "select t.Date as Date from t",
-			output: "select t.Date as `Date` from t",
+			output: "select t.`Date` as `Date` from t",
 		}, {
 			input:  "select t.col as YeAr from t",
 			output: "select t.col as `YeAr` from t",
@@ -226,6 +236,9 @@ var (
 			input: "select next 10 values from t",
 		}, {
 			input: "select next :a values from t",
+		}, {
+			input: "select /* `By`.* */ `By`.* from t",
+			serializeSelectExprs: true,
 		}, {
 			input: "select /* `By`.* */ `By`.* from t",
 		}, {
@@ -575,18 +588,22 @@ var (
 		}, {
 			input: "select /* a.b */ a.b from t",
 		}, {
+			input: "select /* a.b */ `a`.`b` from t",
+			output: "select /* a.b */ a.b from t",
+		}, {
 			input: "select /* a.b.c */ a.b.c from t",
 		}, {
 			input: "select /* keyword a.b */ `By`.`bY` from t",
 		}, {
 			input: "select /* string */ 'a' from t",
+			output: "select /* string */ a from t",
 		}, {
 			input:                "select /* double quoted string */ \"a\" from t",
 			output:               "select /* double quoted string */ 'a' from t",
 			serializeSelectExprs: true,
 		}, {
 			input:  "select /* double quoted string */ \"a\" from t",
-			output: "select /* double quoted string */ \"a\" from t",
+			output: "select /* double quoted string */ a from t",
 		}, {
 			input:                "select /* quote quote in string */ 'a''a' from t",
 			output:               "select /* quote quote in string */ 'a\\'a' from t",
@@ -601,22 +618,29 @@ var (
 			serializeSelectExprs: true,
 		}, {
 			input:  "select /* quote in double quoted string */ \"a'a\" from t",
-			output: "select /* quote in double quoted string */ \"a'a\" from t",
+			output: "select /* quote in double quoted string */ a'a from t",
 		}, {
 			input: "select /* backslash quote in string */ 'a\\'a' from t",
+			output: "select /* backslash quote in string */ a\\'a from t",
 		}, {
 			input: "select /* literal backslash in string */ 'a\\\\na' from t",
+			output: "select /* literal backslash in string */ a\\\\na from t",
 		}, {
 			input: "select /* all escapes */ '\\0\\'\\\"\\b\\n\\r\\t\\Z\\\\' from t",
+			output: "select /* all escapes */ \\0\\'\\\"\\b\\n\\r\\t\\Z\\\\ from t",
 		}, {
 			input:                "select /* non-escape */ '\\x' from t",
 			output:               "select /* non-escape */ 'x' from t",
 			serializeSelectExprs: true,
 		}, {
 			input:  "select /* non-escape */ '\\x' from t",
-			output: "select /* non-escape */ '\\x' from t",
+			output: "select /* non-escape */ \\x from t",
 		}, {
-			input: "select /* unescaped backslash */ '\\n' from t",
+			input: "select /* unescaped backslash */ '\n' from t",
+			output: "select /* unescaped backslash */ \n from t",
+		}, {
+			input: "select /* escaped backslash */ '\\n' from t",
+			output: "select /* escaped backslash */ \\n from t",
 		}, {
 			input: "select /* value argument */ :a from t",
 		}, {
@@ -744,6 +768,10 @@ var (
 		}, {
 			input:  "select * from (select 'tables') tables",
 			output: "select * from (select 'tables' from dual) as `tables`",
+			serializeSelectExprs: true,
+		}, {
+			input:  "select * from (select 'tables') tables",
+			output: "select * from (select tables from dual) as `tables`",
 		}, {
 			input: "insert /* simple */ into a values (1)",
 		}, {
@@ -1613,10 +1641,13 @@ var (
 			output: "select /* drop trailing semicolon */ 1 from dual",
 		}, {
 			input: "select /* cache directive */ sql_no_cache 'foo' from t",
+			output: "select /* cache directive */ sql_no_cache foo from t",
 		}, {
 			input: "select /* sql_calc_rows directive */ sql_calc_found_rows 'foo' from t",
+			output: "select /* sql_calc_rows directive */ sql_calc_found_rows foo from t",
 		}, {
 			input: "select /* cache and sql_calc_rows directive */ sql_no_cache sql_calc_found_rows 'foo' from t",
+			output: "select /* cache and sql_calc_rows directive */ sql_no_cache sql_calc_found_rows foo from t",
 		}, {
 			input: "select binary 'a' = 'A' from t",
 		}, {
@@ -2350,6 +2381,9 @@ func TestCaseSensitivity(t *testing.T) {
 			input: "select B.* from c",
 		}, {
 			input: "select B.A from c",
+			serializeSelectExprs: true,
+		}, {
+			input: "select B.A from c",
 		}, {
 			input: "select * from B as C",
 		}, {
@@ -2487,23 +2521,12 @@ func TestKeywords(t *testing.T) {
 		}, {
 			input:                "select /* non-reserved keywords as unqualified cols */ date, view, offset from t",
 			output:               "select /* non-reserved keywords as unqualified cols */ `date`, `view`, `offset` from t",
-			serializeSelectExprs: true,
-		}, {
-			input: "select /* non-reserved keywords as unqualified cols */ date, view, offset from t",
 		}, {
 			input:                "select /* share and mode as cols */ share, mode from t where share = 'foo'",
 			output:               "select /* share and mode as cols */ `share`, `mode` from t where `share` = 'foo'",
-			serializeSelectExprs: true,
-		}, {
-			input:  "select /* share and mode as cols */ share, mode from t where share = 'foo'",
-			output: "select /* share and mode as cols */ share, mode from t where `share` = 'foo'",
 		}, {
 			input:                "select /* unused keywords as cols */ write, virtual from t where trailing = 'foo'",
 			output:               "select /* unused keywords as cols */ `write`, `virtual` from t where `trailing` = 'foo'",
-			serializeSelectExprs: true,
-		}, {
-			input:  "select /* unused keywords as cols */ write, virtual from t where trailing = 'foo'",
-			output: "select /* unused keywords as cols */ write, virtual from t where `trailing` = 'foo'",
 		}, {
 			input:                "select status from t",
 			output:               "select `status` from t",

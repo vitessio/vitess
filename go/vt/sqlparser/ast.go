@@ -116,11 +116,54 @@ func captureSelectExpressions(sql string, tokenizer *Tokenizer) {
 	if s, ok := tokenizer.ParseTree.(SelectStatement); ok {
 		s.walkSubtree(func(node SQLNode) (kontinue bool, err error) {
 			if node, ok := node.(*AliasedExpr); ok && node.EndParsePos > node.StartParsePos {
-				node.InputExpression = strings.TrimLeft(sql[node.StartParsePos:node.EndParsePos], " \n\t")
+				_, ok := node.Expr.(*ColName)
+				if ok {
+					// column names don't need any special handling to capture the input expression
+					return false, nil
+				} else {
+					node.InputExpression = trimQuotes(strings.TrimLeft(sql[node.StartParsePos:node.EndParsePos], " \n\t"))
+				}
 			}
 			return true, nil
 		})
 	}
+}
+
+func trimQuotes(s string) string {
+	firstChar := s[0]
+	lastChar := s[len(s)-1]
+	if firstChar == lastChar {
+		if firstChar == '`' || firstChar == '"' || firstChar == '\'' {
+			// Some edge cases here: we have to be careful to not strip expressions like `"1" + "2"`
+			if stringIsUnbrokenQuote(s, firstChar) {
+				return s[1 : len(s)-1]
+			}
+		}
+	}
+
+	return s
+}
+
+func stringIsUnbrokenQuote(s string, quoteChar byte) bool {
+	numConsecutiveQuotes := 0
+	numConsecutiveEscapes := 0
+	for _, c := range ([]byte)(s[1 : len(s)-1]) {
+		if c == quoteChar && numConsecutiveEscapes % 2 == 0 {
+			numConsecutiveQuotes++
+		} else {
+			if numConsecutiveQuotes % 2 != 0 {
+				return false
+			}
+			numConsecutiveQuotes = 0
+		}
+
+		if c == '\\' {
+			numConsecutiveEscapes++
+		} else {
+			numConsecutiveEscapes = 0
+		}
+	}
+	return true
 }
 
 // ParseStrictDDL is the same as Parse except it errors on
