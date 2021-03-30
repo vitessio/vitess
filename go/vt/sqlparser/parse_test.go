@@ -1157,6 +1157,9 @@ var (
 		input:  "CREATE TABLE aipk (id INT AUTO_INCREMENT PRIMARY KEY)",
 		output: "create table aipk (\n\tid INT auto_increment primary key\n)",
 	}, {
+		// This test case is added because MySQL supports this behaviour.
+		// It allows the user to specify null and not null multiple times.
+		// The last value specified is used.
 		input:  "create table foo (f timestamp null not null , g timestamp not null null)",
 		output: "create table foo (\n\tf timestamp not null,\n\tg timestamp null\n)",
 	}, {

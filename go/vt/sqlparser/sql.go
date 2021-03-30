@@ -6625,7 +6625,7 @@ yydefault:
 		var yyLOCAL *ColumnTypeOptions
 //line sql.y:1028
 		{
-			yyLOCAL = &ColumnTypeOptions{NotNull: false, Default: nil, OnUpdate: nil, Autoincrement: false, KeyOpt: colKeyNone, Comment: nil}
+			yyLOCAL = &ColumnTypeOptions{Null: nil, Default: nil, OnUpdate: nil, Autoincrement: false, KeyOpt: colKeyNone, Comment: nil}
 		}
 		yyVAL.union = yyLOCAL
 	case 137:
@@ -6633,8 +6633,8 @@ yydefault:
 		var yyLOCAL *ColumnTypeOptions
 //line sql.y:1032
 		{
-			yyDollar[1].columnTypeOptionsUnion().NotNull = false
-			yyDollar[1].columnTypeOptionsUnion().Null = true
+			val := true
+			yyDollar[1].columnTypeOptionsUnion().Null = &val
 			yyLOCAL = yyDollar[1].columnTypeOptionsUnion()
 		}
 		yyVAL.union = yyLOCAL
@@ -6643,8 +6643,8 @@ yydefault:
 		var yyLOCAL *ColumnTypeOptions
 //line sql.y:1038
 		{
-			yyDollar[1].columnTypeOptionsUnion().NotNull = true
-			yyDollar[1].columnTypeOptionsUnion().Null = false
+			val := false
+			yyDollar[1].columnTypeOptionsUnion().Null = &val
 			yyLOCAL = yyDollar[1].columnTypeOptionsUnion()
 		}
 		yyVAL.union = yyLOCAL
