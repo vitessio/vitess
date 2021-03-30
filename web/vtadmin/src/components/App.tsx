@@ -26,6 +26,7 @@ import { Gates } from './routes/Gates';
 import { Keyspaces } from './routes/Keyspaces';
 import { Schemas } from './routes/Schemas';
 import { Schema } from './routes/Schema';
+import { Workflows } from './routes/Workflows';
 
 export const App = () => {
     return (
@@ -59,6 +60,10 @@ export const App = () => {
 
                         <Route path="/tablets">
                             <Tablets />
+                        </Route>
+
+                        <Route path="/workflows">
+                            <Workflows />
                         </Route>
 
                         <Route path="/debug">
