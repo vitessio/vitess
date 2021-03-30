@@ -214,16 +214,15 @@ Create the `settings.xml` in the `$HOME/.m2/` directory as described in their [i
 ### Creating Release (or Candidate)
 
 1. Create a new branch (if needed) with the following existing naming convention e.g. release-9.0. We usually do this while creating RC1 and re-use it for GA release.
-![GitHub Release01](/doc/internal/.images/release-01.png)
-<img align="left" width="50" height="50" src="/doc/internal/.images/release-01.png">
+<img align="left" width="150" height="150" src="/doc/internal/.images/release-01.png">
 2. Click on Code -> Releases
-![GitHub Release02](/doc/internal/.images/release-02.png)
+<img align="left" width="150" height="150" src="/doc/internal/.images/release-02.png">
 3. Draft a new release. The naming convention for release candidates is to append “-rc1” to the expected release version.
-![GitHub Release03](/doc/internal/.images/release-03.png)
+<img align="left" width="150" height="150" src="/doc/internal/.images/release-03.png">
 4. Tag a new release against the branch.
-![GitHub Release04](/doc/internal/.images/release-04.png)
+<img align="left" width="150" height="150" src="/doc/internal/.images/release-04.png">
 5. Copy/paste previously built Release Notes into the description.
-![GitHub Release05](/doc/internal/.images/release-05.png)
+<img align="left" width="150" height="150" src="/doc/internal/.images/release-05.png">
 Note: If this is a pre-release select the pre-release checkbox. 
 
 ### Post Release Steps
