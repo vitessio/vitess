@@ -214,15 +214,21 @@ Create the `settings.xml` in the `$HOME/.m2/` directory as described in their [i
 ### Creating Release (or Candidate)
 
 1. Create a new branch (if needed) with the following existing naming convention e.g. release-9.0. We usually do this while creating RC1 and re-use it for GA release.
-![GitHub Release01](/doc/internal/.images/release-01.png)
+
+![GitHub Release01](/doc/internal/.images/release-01.png){:height="50%" width="50%"}
 2. Click on Code -> Releases
-![GitHub Release02](/doc/internal/.images/release-02.png)
+
+![GitHub Release02](/doc/internal/.images/release-02.png){:height="50%" width="50%"}
 3. Draft a new release. The naming convention for release candidates is to append “-rc1” to the expected release version.
-![GitHub Release03](/doc/internal/.images/release-03.png)
+
+![GitHub Release03](/doc/internal/.images/release-03.png){:height="50%" width="50%"}
 4. Tag a new release against the branch.
-![GitHub Release04](/doc/internal/.images/release-04.png)
+
+![GitHub Release04](/doc/internal/.images/release-04.png){:height="50%" width="50%"}
+
 5. Copy/paste previously built Release Notes into the description.
-![GitHub Release05](/doc/internal/.images/release-05.png)
+
+![GitHub Release05](/doc/internal/.images/release-05.png){:height="50%" width="50%"}
 
 Note: If this is a pre-release select the pre-release checkbox. 
 
@@ -230,7 +236,7 @@ Note: If this is a pre-release select the pre-release checkbox.
 * Announce new release in Vitess Slack #general channel. 
 * Create a new [PR](https://github.com/vitessio/website/pull/670) for Vitess Blog.
  - Netlify -> Sites →vitess.io → Deploy
-![GitHub Post Release01](/doc/internal/.images/post-release-01.png)
+![GitHub Post Release01](/doc/internal/.images/post-release-01.png){:height="50%" width="50%"}
 * Coordinate CNCF cross-posting Vitess Blog. 
 * Schedule and publish HubSpot Tweet on Vitess account. 
 * Update “.github/workflows/cluster_endtoend_upgrade.yml” workflow file on the main(master) branch with the new release.
