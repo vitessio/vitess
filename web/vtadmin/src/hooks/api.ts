@@ -1,3 +1,18 @@
+/**
+ * Copyright 2021 The Vitess Authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 import { useQuery, useQueryClient, UseQueryOptions } from 'react-query';
 import {
     fetchClusters,
@@ -7,6 +22,7 @@ import {
     FetchSchemaParams,
     fetchSchemas,
     fetchTablets,
+    fetchWorkflows,
 } from '../api/http';
 import { vtadmin as pb } from '../proto/vtadmin';
 
@@ -39,6 +55,35 @@ export const useSchemas = (options?: UseQueryOptions<pb.Schema[], Error> | undef
  */
 export const useTablets = (options?: UseQueryOptions<pb.Tablet[], Error> | undefined) =>
     useQuery(['tablets'], fetchTablets, options);
+
+/**
+ * useWorkflowsResponse is a query hook that fetches all workflows (by cluster) across every cluster.
+ */
+export const useWorkflowsResponse = (options?: UseQueryOptions<pb.GetWorkflowsResponse, Error> | undefined) =>
+    useQuery(['workflows'], fetchWorkflows, options);
+
+/**
+ * useWorkflows is a helper hook for when a flattened list of workflows
+ * (across all clusters) is required. Under the hood, this call uses the
+ * useWorkflowsResponse hook and therefore uses the same query cache.
+ */
+export const useWorkflows = (...args: Parameters<typeof useWorkflowsResponse>) => {
+    const { data, ...query } = useWorkflowsResponse(...args);
+
+    if (!data?.workflows_by_cluster) {
+        return { data: undefined, ...query };
+    }
+
+    const workflows = Object.entries(data.workflows_by_cluster).reduce(
+        (acc: pb.Workflow[], [clusterID, { workflows }]) => {
+            (workflows || []).forEach((w) => acc.push(pb.Workflow.create(w)));
+            return acc;
+        },
+        []
+    );
+
+    return { data: workflows, ...query };
+};
 
 export interface TableDefinition {
     cluster?: pb.Schema['cluster'];
