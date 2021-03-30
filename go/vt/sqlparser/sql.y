@@ -1026,18 +1026,18 @@ column_definition:
 // was specific (as stated in the MySQL guide) and did not accept arbitrary order options. For example NOT NULL DEFAULT 1 and not DEFAULT 1 NOT NULL
 column_type_options:
   {
-    $$ = &ColumnTypeOptions{NotNull: false, Default: nil, OnUpdate: nil, Autoincrement: false, KeyOpt: colKeyNone, Comment: nil}
+    $$ = &ColumnTypeOptions{Null: nil, Default: nil, OnUpdate: nil, Autoincrement: false, KeyOpt: colKeyNone, Comment: nil}
   }
 | column_type_options NULL
   {
-    $1.NotNull = false
-    $1.Null = true
+    val := true
+    $1.Null = &val
     $$ = $1
   }
 | column_type_options NOT NULL
   {
-    $1.NotNull = true
-    $1.Null = false
+    val := false
+    $1.Null = &val
     $$ = $1
   }
 | column_type_options DEFAULT value_expression

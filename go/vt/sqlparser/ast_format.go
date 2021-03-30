@@ -456,11 +456,12 @@ func (ct *ColumnType) Format(buf *TrackedBuffer) {
 	if ct.Collate != "" {
 		buf.astPrintf(ct, " %s %s", keywordStrings[COLLATE], ct.Collate)
 	}
-	if ct.Options.Null {
-		buf.astPrintf(ct, " %s", keywordStrings[NULL])
-	}
-	if ct.Options.NotNull {
-		buf.astPrintf(ct, " %s %s", keywordStrings[NOT], keywordStrings[NULL])
+	if ct.Options.Null != nil {
+		if *ct.Options.Null {
+			buf.astPrintf(ct, " %s", keywordStrings[NULL])
+		} else {
+			buf.astPrintf(ct, " %s %s", keywordStrings[NOT], keywordStrings[NULL])
+		}
 	}
 	if ct.Options.Default != nil {
 		buf.astPrintf(ct, " %s %v", keywordStrings[DEFAULT], ct.Options.Default)
