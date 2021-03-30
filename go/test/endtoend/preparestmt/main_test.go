@@ -218,7 +218,6 @@ func TestMain(m *testing.M) {
 
 		dbInfo.Host = clusterInstance.Hostname
 		dbInfo.Port = uint(clusterInstance.VtgateMySQLPort)
-		fmt.Println(dbInfo.ConnectionString())
 
 		return m.Run(), nil
 	}()
