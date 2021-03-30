@@ -44,27 +44,25 @@ var (
 			output: "select 1 from dual",
 		}, {
 			input: "select 1 from t",
-		},
-		{
+		}, {
 			input: "select a, b from t",
-		},
-		{
+		}, {
 			input:  "select a,  b from t",
 			output: "select a, b from t",
-		},
-		{
+		}, {
 			input:  "select a,b from t",
 			output: "select a, b from t",
-		},
-		{
+		}, {
 			input:  "select `a`, `'b'` from t",
 			output: "select a, 'b' from t",
-		},
-		{
+		}, {
 			input:  `select "'ain't'", '"hello"' from t`,
 			output: `select 'ain't', "hello" from t`,
-		},
-		{
+		}, {
+			input:  `select "1" + "2" from t`,
+		}, {
+			input:  `select '1' + "2" from t`,
+		}, {
 			input:  "select * from information_schema.columns",
 			output: "select * from information_schema.`columns`",
 		}, {
