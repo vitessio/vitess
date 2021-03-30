@@ -199,7 +199,7 @@ Install `gpg-agent` (needed below) e.g. on Ubuntu via: `sudo apt-get install gnu
 Create the `settings.xml` in the `$HOME/.m2/` directory as described in their [instructions](https://central.sonatype.org/pages/apache-maven.html).
 
 ## Release Cutover 
-
+*Please note we'll be using v9.0 as an example below. Numbers need to change in each release*
 ### Pre-Requisites
 
 * All PRs are tagged and added to the milestone. 
@@ -214,10 +214,15 @@ Create the `settings.xml` in the `$HOME/.m2/` directory as described in their [i
 ### Creating Release (or Candidate)
 
 1. Create a new branch (if needed) with the following existing naming convention e.g. release-9.0. We usually do this while creating RC1 and re-use it for GA release.
+![GitHub Release01](/.images/release-01.png)
 2. Click on Code -> Releases
+![GitHub Release02](/.images/release-02.png)
 3. Draft a new release. The naming convention for release candidates is to append “-rc1” to the expected release version.
+![GitHub Release03](/.images/release-03.png)
 4. Tag a new release against the branch.
+![GitHub Release04](/.images/release-04.png)
 5. Copy/paste previously built Release Notes into the description.
+![GitHub Release05](/.images/release-05.png)
 
 Note: If this is a pre-release select the pre-release checkbox. 
 
@@ -225,6 +230,7 @@ Note: If this is a pre-release select the pre-release checkbox.
 * Announce new release in Vitess Slack #general channel. 
 * Create a new [PR](https://github.com/vitessio/website/pull/670) for Vitess Blog.
  - Netlify -> Sites →vitess.io → Deploy
+![GitHub Post Release01](/.images/post-release-01.png)
 * Coordinate CNCF cross-posting Vitess Blog. 
 * Schedule and publish HubSpot Tweet on Vitess account. 
 * Update “.github/workflows/cluster_endtoend_upgrade.yml” workflow file on the main(master) branch with the new release.
