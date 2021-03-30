@@ -1157,6 +1157,12 @@ var (
 		input:  "CREATE TABLE aipk (id INT AUTO_INCREMENT PRIMARY KEY)",
 		output: "create table aipk (\n\tid INT auto_increment primary key\n)",
 	}, {
+		// This test case is added because MySQL supports this behaviour.
+		// It allows the user to specify null and not null multiple times.
+		// The last value specified is used.
+		input:  "create table foo (f timestamp null not null , g timestamp not null null)",
+		output: "create table foo (\n\tf timestamp not null,\n\tg timestamp null\n)",
+	}, {
 		input: "alter vschema create vindex hash_vdx using hash",
 	}, {
 		input: "alter vschema create vindex keyspace.hash_vdx using hash",
@@ -2567,6 +2573,14 @@ func TestCreateTable(t *testing.T) {
 			"	col_multilinestring2 multilinestring not null,\n" +
 			"	col_multipolygon1 multipolygon,\n" +
 			"	col_multipolygon2 multipolygon not null\n" +
+			")",
+
+		// test null columns
+		"create table foo (\n" +
+			"	id int primary key,\n" +
+			"	a varchar(255) null,\n" +
+			"	b varchar(255) null default 'foo',\n" +
+			"	c timestamp null default current_timestamp()\n" +
 			")",
 
 		// test defining indexes separately
