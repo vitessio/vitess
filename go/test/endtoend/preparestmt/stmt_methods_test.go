@@ -348,14 +348,6 @@ func TestSelectDBA(t *testing.T) {
 	rows, err := prepare.Query("uks")
 	require.NoError(t, err)
 	defer rows.Close()
-	cols, err := rows.Columns()
-	require.NoError(t, err)
-	colTypes, err := rows.ColumnTypes()
-	require.NoError(t, err)
-	for i := 0; i < len(cols); i++ {
-		fmt.Printf("(%s,%s) ", cols[i], colTypes[i].DatabaseTypeName())
-	}
-	fmt.Println()
 	var rec columns
 	rowCount := 0
 	for rows.Next() {
@@ -372,7 +364,6 @@ func TestSelectDBA(t *testing.T) {
 			&rec.extra,
 			&rec.tableName)
 		require.NoError(t, err)
-		fmt.Printf("%s\n", rec.ToString())
 		assert.True(t, rec.columnName == "one" || rec.columnName == "two")
 		assert.Equal(t, "int", rec.dataType)
 		assert.True(t, rec.fullDataType == "int" || rec.fullDataType == "int(11)")
