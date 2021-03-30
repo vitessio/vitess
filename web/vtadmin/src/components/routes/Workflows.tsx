@@ -24,7 +24,10 @@ export const Workflows = () => {
     useDocumentTitle('Workflows');
     const { data } = useWorkflows();
 
-    const sortedData = React.useMemo(() => orderBy(data, ['cluster.name', 'keyspace.name']), [data]);
+    const sortedData = React.useMemo(
+        () => orderBy(data, ['workflow.name', 'cluster.name', 'workflow.source.keyspace', 'workflow.target.keyspace']),
+        [data]
+    );
 
     const renderRows = (rows: typeof sortedData) =>
         rows.map(({ cluster, workflow }, idx) => {
