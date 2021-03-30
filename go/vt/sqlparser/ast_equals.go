@@ -3769,8 +3769,8 @@ func EqualsRefOfColumnTypeOptions(a, b *ColumnTypeOptions) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return a.NotNull == b.NotNull &&
-		a.Autoincrement == b.Autoincrement &&
+	return a.Autoincrement == b.Autoincrement &&
+		EqualsRefOfBool(a.Null, b.Null) &&
 		EqualsExpr(a.Default, b.Default) &&
 		EqualsExpr(a.OnUpdate, b.OnUpdate) &&
 		EqualsRefOfLiteral(a.Comment, b.Comment) &&
