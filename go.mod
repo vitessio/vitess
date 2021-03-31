@@ -4,6 +4,7 @@ go 1.15
 
 require (
 	cloud.google.com/go/storage v1.0.0
+	github.com/AdaLogics/go-fuzz-headers v0.0.0-20210330150358-dbd898e17899
 	github.com/Azure/azure-pipeline-go v0.2.2
 	github.com/Azure/azure-storage-blob-go v0.10.0
 	github.com/Azure/go-autorest/autorest v0.10.0 // indirect
