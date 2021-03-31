@@ -79,3 +79,149 @@ describe('useWorkflows', () => {
         }
     );
 });
+
+describe('useWorkflow', () => {
+    it('fetches data if no cached data exists', async () => {
+        const queryClient = new QueryClient();
+        const wrapper: React.FunctionComponent = ({ children }) => (
+            <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+        );
+
+        const fetchWorkflowResponse = pb.Workflow.create({
+            cluster: { name: 'cluster1', id: 'cluster1' },
+            keyspace: 'dogs',
+            workflow: {
+                name: 'one-goes-west',
+                max_v_replication_lag: 0,
+            },
+        });
+
+        (httpAPI.fetchWorkflow as any).mockResolvedValueOnce(fetchWorkflowResponse);
+
+        const { result, waitFor } = renderHook(
+            () =>
+                api.useWorkflow({
+                    clusterID: 'cluster1',
+                    keyspace: 'dogs',
+                    name: 'one-goes-west',
+                }),
+            { wrapper }
+        );
+
+        expect(result.current.data).toBeUndefined();
+
+        await waitFor(() => result.current.isSuccess);
+        expect(result.current.data).toEqual(fetchWorkflowResponse);
+    });
+
+    // This test corresponds to a common UI flow from a component that fetches all the workflows
+    // to a component that fetches a single workflow.
+    it('uses cached data as initialData', async () => {
+        const queryClient = new QueryClient();
+        const wrapper: React.FunctionComponent = ({ children }) => (
+            <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+        );
+
+        (httpAPI.fetchWorkflows as any).mockResolvedValueOnce(
+            pb.GetWorkflowsResponse.create({
+                workflows_by_cluster: {
+                    cluster1: {
+                        workflows: [
+                            {
+                                cluster: { name: 'cluster1', id: 'cluster1' },
+                                keyspace: 'dogs',
+                                workflow: {
+                                    name: 'one-goes-east',
+                                    max_v_replication_lag: 0,
+                                },
+                            },
+                            {
+                                cluster: { name: 'cluster1', id: 'cluster1' },
+                                keyspace: 'dogs',
+                                workflow: {
+                                    name: 'one-goes-west',
+                                    max_v_replication_lag: 0,
+                                },
+                            },
+                        ],
+                    },
+                    cluster2: {
+                        workflows: [
+                            {
+                                cluster: { name: 'cluster2', id: 'cluster2' },
+                                keyspace: 'dogs',
+                                workflow: {
+                                    name: 'one-goes-west',
+                                    max_v_replication_lag: 0,
+                                },
+                            },
+                        ],
+                    },
+                },
+            })
+        );
+
+        (httpAPI.fetchWorkflow as any).mockResolvedValueOnce(
+            pb.Workflow.create({
+                cluster: { name: 'cluster1', id: 'cluster1' },
+                keyspace: 'dogs',
+                workflow: {
+                    name: 'one-goes-west',
+                    max_v_replication_lag: 420,
+                },
+            })
+        );
+
+        // Execute a useWorkflows query to populate the query cache.
+        const useWorkflowsCall = renderHook(() => api.useWorkflows(), { wrapper });
+        await useWorkflowsCall.waitFor(() => useWorkflowsCall.result.current.isSuccess);
+
+        // Next, execute the useWorkflow query we *actually* want to inspect.
+        const { result, waitFor } = renderHook(
+            () =>
+                api.useWorkflow(
+                    {
+                        clusterID: 'cluster1',
+                        keyspace: 'dogs',
+                        name: 'one-goes-west',
+                    },
+                    // Force the query to refetch
+                    { staleTime: 0 }
+                ),
+            { wrapper }
+        );
+
+        // We expect the result to be successful, even though we've yet to resolve the /workflow API call,
+        // since the workflow we want exists in the cache.
+        expect(result.current.isSuccess).toBe(true);
+
+        expect(result.current.data).toEqual(
+            pb.Workflow.create({
+                cluster: { name: 'cluster1', id: 'cluster1' },
+                keyspace: 'dogs',
+                workflow: {
+                    name: 'one-goes-west',
+                    max_v_replication_lag: 0,
+                },
+            })
+        );
+
+        // We _also_ check that a fetch request is in-flight to fetch updated data.
+        expect(result.current.isFetching).toBe(true);
+        expect(httpAPI.fetchWorkflow).toHaveBeenCalledTimes(1);
+
+        // Then, we resolve the API call, with updated data (in this case max_v_replication_lag)
+        // so we can check that the cache is updated.
+        await waitFor(() => !result.current.isFetching && result.current.isSuccess);
+        expect(result.current.data).toEqual(
+            pb.Workflow.create({
+                cluster: { name: 'cluster1', id: 'cluster1' },
+                keyspace: 'dogs',
+                workflow: {
+                    name: 'one-goes-west',
+                    max_v_replication_lag: 420,
+                },
+            })
+        );
+    });
+});
