@@ -271,7 +271,9 @@ func SplitStatementToPieces(blob string) (pieces []string, err error) {
 
 			if stmtBegin < blobTail {
 				stmt = blob[stmtBegin : blobTail+1]
-				pieces = append(pieces, stmt)
+				if strings.TrimSpace(stmt) != "" {
+					pieces = append(pieces, stmt)
+				}
 			}
 			break
 		}
