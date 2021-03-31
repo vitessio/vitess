@@ -426,12 +426,14 @@ func TestNumericPrecisionScale(t *testing.T) {
 		But, the field query from mysql returns field at UINT32 and row types as UINT64.
 		Our conversion on VTGate on receiving data from VTTablet the Rows are converted to Field Types.
 		So, we see UINT32 for both fields and rows.
+
+		This issue is only with MySQL 8.0. In CI we use 5.7 as well. So asserting with both the values.
 	*/
 
-	require.Equal(t, querypb.Type_UINT32, qr.Fields[0].Type)
-	require.Equal(t, querypb.Type_UINT32, qr.Fields[1].Type)
-	require.Equal(t, sqltypes.Uint32, qr.Rows[0][0].Type())
-	require.Equal(t, sqltypes.Uint32, qr.Rows[0][1].Type())
+	assert.True(t, qr.Fields[0].Type == querypb.Type_UINT64 || qr.Fields[0].Type == querypb.Type_UINT32)
+	assert.True(t, qr.Fields[1].Type == querypb.Type_UINT64 || qr.Fields[1].Type == querypb.Type_UINT32)
+	assert.True(t, qr.Rows[0][0].Type() == sqltypes.Uint64 || qr.Rows[0][0].Type() == sqltypes.Uint32)
+	assert.True(t, qr.Rows[0][1].Type() == sqltypes.Uint64 || qr.Rows[0][1].Type() == sqltypes.Uint32)
 }
 
 func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {

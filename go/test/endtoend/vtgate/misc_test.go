@@ -592,7 +592,7 @@ func TestSubQueryOnTopOfSubQuery(t *testing.T) {
 	exec(t, conn, `insert into t1(id1, id2) values (1, 1), (2, 2), (3, 3), (4, 4), (5, 5)`)
 	exec(t, conn, `insert into t2(id3, id4) values (1, 3), (2, 4)`)
 
-	assertMatches(t, conn, "select id1 from t1 where id1 not in (select id3 from t2) and id2 in (select id4 from t2)", `[[INT64(3)] [INT64(4)]]`)
+	assertMatches(t, conn, "select id1 from t1 where id1 not in (select id3 from t2) and id2 in (select id4 from t2) order by id1", `[[INT64(3)] [INT64(4)]]`)
 }
 
 func assertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {
