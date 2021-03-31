@@ -6070,3 +6070,5 @@
 2021-03-31T11:17:51Z,Cluster (17),https://github.com/vitessio/vitess/actions/runs/704769718
 2021-03-31T14:09:31Z,Cluster (15),https://github.com/vitessio/vitess/actions/runs/705241790
 2021-03-31T14:10:30Z,endtoend,https://github.com/vitessio/vitess/actions/runs/705244676
+2021-03-31T14:56:28Z,golangci-lint,https://github.com/vitessio/vitess/actions/runs/705376907
+2021-03-31T14:56:28Z,gomod-tidy,https://github.com/vitessio/vitess/actions/runs/705376954
