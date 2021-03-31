@@ -27,6 +27,7 @@ import { Keyspaces } from './routes/Keyspaces';
 import { Schemas } from './routes/Schemas';
 import { Schema } from './routes/Schema';
 import { Workflows } from './routes/Workflows';
+import { Workflow } from './routes/Workflow';
 
 export const App = () => {
     return (
@@ -64,6 +65,10 @@ export const App = () => {
 
                         <Route path="/workflows">
                             <Workflows />
+                        </Route>
+
+                        <Route path="/workflow/:clusterID/:keyspace/:name">
+                            <Workflow />
                         </Route>
 
                         <Route path="/debug">
