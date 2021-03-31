@@ -558,6 +558,7 @@ func (node *ParenSelect) walkSubtree(visit Visit) error {
 // statement
 type ValuesStatement struct {
 	Rows Values
+	Columns Columns
 }
 
 func (s *ValuesStatement) Format(buf *TrackedBuffer) {
@@ -3006,6 +3007,16 @@ func (node *AliasedTableExpr) Format(buf *TrackedBuffer) {
 	if !node.As.IsEmpty() {
 		buf.Myprintf(" as %v", node.As)
 	}
+	switch node := node.Expr.(type) {
+	case *ValuesStatement:
+		if len(node.Columns) > 0 {
+			buf.Myprintf(" %v", node.Columns)
+		}
+	case *Subquery:
+		if len(node.Columns) > 0 {
+			buf.Myprintf(" %v", node.Columns)
+		}
+	}
 	if node.Hints != nil {
 		// Hint node provides the space padding.
 		buf.Myprintf("%v", node.Hints)
@@ -3919,6 +3930,7 @@ func (node ValTuple) replace(from, to Expr) bool {
 // Subquery represents a subquery.
 type Subquery struct {
 	Select SelectStatement
+	Columns Columns
 }
 
 // Format formats the node.
