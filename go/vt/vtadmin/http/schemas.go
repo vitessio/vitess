@@ -28,9 +28,15 @@ func FindSchema(ctx context.Context, r Request, api *API) *JSONResponse {
 	vars := r.Vars()
 	query := r.URL.Query()
 
+	sizeOpts, err := getTableSizeOpts(r)
+	if err != nil {
+		return NewJSONResponse(nil, err)
+	}
+
 	schema, err := api.server.FindSchema(ctx, &vtadminpb.FindSchemaRequest{
-		Table:      vars["table"],
-		ClusterIds: query["cluster"],
+		Table:            vars["table"],
+		ClusterIds:       query["cluster"],
+		TableSizeOptions: sizeOpts,
 	})
 
 	return NewJSONResponse(schema, err)
@@ -41,10 +47,16 @@ func FindSchema(ctx context.Context, r Request, api *API) *JSONResponse {
 func GetSchema(ctx context.Context, r Request, api *API) *JSONResponse {
 	vars := r.Vars()
 
+	sizeOpts, err := getTableSizeOpts(r)
+	if err != nil {
+		return NewJSONResponse(nil, err)
+	}
+
 	schema, err := api.server.GetSchema(ctx, &vtadminpb.GetSchemaRequest{
-		ClusterId: vars["cluster_id"],
-		Keyspace:  vars["keyspace"],
-		Table:     vars["table"],
+		ClusterId:        vars["cluster_id"],
+		Keyspace:         vars["keyspace"],
+		Table:            vars["table"],
+		TableSizeOptions: sizeOpts,
 	})
 
 	return NewJSONResponse(schema, err)
@@ -53,9 +65,26 @@ func GetSchema(ctx context.Context, r Request, api *API) *JSONResponse {
 // GetSchemas implements the http wrapper for the /schemas[?cluster=[&cluster=]
 // route.
 func GetSchemas(ctx context.Context, r Request, api *API) *JSONResponse {
+	sizeOpts, err := getTableSizeOpts(r)
+	if err != nil {
+		return NewJSONResponse(nil, err)
+	}
+
 	schemas, err := api.server.GetSchemas(ctx, &vtadminpb.GetSchemasRequest{
-		ClusterIds: r.URL.Query()["cluster"],
+		ClusterIds:       r.URL.Query()["cluster"],
+		TableSizeOptions: sizeOpts,
 	})
 
 	return NewJSONResponse(schemas, err)
+}
+
+func getTableSizeOpts(r Request) (*vtadminpb.GetSchemaTableSizeOptions, error) {
+	aggregateSizes, err := r.ParseQueryParamAsBool("aggregate_sizes", true)
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtadminpb.GetSchemaTableSizeOptions{
+		AggregateSizes: aggregateSizes,
+	}, nil
 }
