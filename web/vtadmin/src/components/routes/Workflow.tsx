@@ -27,6 +27,7 @@ export const Workflow = () => {
     const { clusterID, keyspace, name } = useParams<RouteParams>();
     const { data } = useWorkflow({ clusterID, keyspace, name });
 
+    // Placeholder
     return (
         <div>
             <h1>{name}</h1>
