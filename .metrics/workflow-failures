@@ -6073,3 +6073,4 @@
 2021-03-31T14:56:28Z,golangci-lint,https://github.com/vitessio/vitess/actions/runs/705376907
 2021-03-31T14:56:28Z,gomod-tidy,https://github.com/vitessio/vitess/actions/runs/705376954
 2021-03-31T15:10:01Z,golangci-lint,https://github.com/vitessio/vitess/actions/runs/705415217
+2021-03-31T15:10:01Z,unit_race,https://github.com/vitessio/vitess/actions/runs/705415227
