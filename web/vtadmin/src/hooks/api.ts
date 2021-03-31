@@ -22,6 +22,7 @@ import {
     FetchSchemaParams,
     fetchSchemas,
     fetchTablets,
+    fetchWorkflow,
     fetchWorkflows,
 } from '../api/http';
 import { vtadmin as pb } from '../proto/vtadmin';
@@ -138,6 +139,19 @@ export const useSchema = (params: FetchSchemaParams, options?: UseQueryOptions<p
                     s.table_definitions.find((td) => td.name === params.table)
             );
         },
+        ...options,
+    });
+};
+
+/**
+ * useSchema is a query hook that fetches a single schema for the given parameters.
+ */
+export const useWorkflow = (
+    params: Parameters<typeof fetchWorkflow>[0],
+    options?: UseQueryOptions<pb.Workflow, Error> | undefined
+) => {
+    return useQuery(['workflow', params], () => fetchWorkflow(params), {
+        // TODO: initialData
         ...options,
     });
 };
