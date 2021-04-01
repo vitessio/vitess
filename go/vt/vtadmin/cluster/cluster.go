@@ -634,12 +634,12 @@ func (c *Cluster) getTabletsToQueryForSchemas(ctx context.Context, keyspace stri
 
 		for _, shard := range shards {
 			if !shard.Shard.IsMasterServing {
-				log.Infof("%s/%s is not serving; ignoring because IncludeNonServingShards=false", keyspace, shard.Name)
+				log.Infof("%s/%s is not serving; ignoring ...", keyspace, shard.Name)
 				continue
 			}
 
 			shardTablets := vtadminproto.FilterTablets(func(tablet *vtadminpb.Tablet) bool {
-				return tablet.Tablet.Shard == shard.Name && tablet.State == vtadminpb.Tablet_SERVING
+				return tablet.Tablet.Keyspace == keyspace && tablet.Tablet.Shard == shard.Name && tablet.State == vtadminpb.Tablet_SERVING
 			}, opts.Tablets, len(opts.Tablets))
 
 			if len(shardTablets) == 0 {
