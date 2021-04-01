@@ -81,7 +81,6 @@ func ReplicationStatusToProto(s ReplicationStatus) *replicationdatapb.Status {
 		FilePosition:         EncodePosition(s.FilePosition),
 		FileRelayLogPosition: EncodePosition(s.FileRelayLogPosition),
 		MasterServerId:       uint32(s.MasterServerID),
-		IoThreadRunning:      s.IOThreadRunning(),
 		SqlThreadRunning:     s.SQLThreadRunning,
 		SecondsBehindMaster:  uint32(s.SecondsBehindMaster),
 		MasterHost:           s.MasterHost,
