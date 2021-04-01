@@ -6112,3 +6112,5 @@
 2021-04-01T03:31:54Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/707190055
 2021-04-01T03:31:54Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/707190094
 2021-04-01T03:31:54Z,unit_race,https://github.com/vitessio/vitess/actions/runs/707190093
+2021-04-01T06:23:38Z,gomod-tidy,https://github.com/vitessio/vitess/actions/runs/707553122
+2021-04-01T06:24:42Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/707555808
