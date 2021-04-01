@@ -939,6 +939,8 @@ var (
 	}, {
 		input: "alter table a add unique key foo (column1)",
 	}, {
+		input: "alter /*vt+ strategy=online */ table a add unique key foo (column1)",
+	}, {
 		input: "alter table a change column s foo int default 1 after x",
 	}, {
 		input: "alter table a modify column foo int default 1 first x",
@@ -1124,6 +1126,8 @@ var (
 	}, {
 		input: "create table a (\n\ta int not null\n)",
 	}, {
+		input: "create /*vt+ strategy=online */ table a (\n\ta int not null\n)",
+	}, {
 		input: "create table a (\n\ta int not null default 0\n)",
 	}, {
 		input:  "create table a (a int not null default 0, primary key(a))",
@@ -1287,8 +1291,11 @@ var (
 		input:  "drop view a,B,c",
 		output: "drop view a, b, c",
 	}, {
-		input:  "drop table a",
-		output: "drop table a",
+		input: "drop table a",
+	}, {
+		input: "drop /*vt+ strategy=online */ table if exists a",
+	}, {
+		input: "drop /*vt+ strategy=online */ table a",
 	}, {
 		input:  "drop table a, b",
 		output: "drop table a, b",

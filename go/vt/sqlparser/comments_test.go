@@ -323,9 +323,9 @@ func TestExtractCommentDirectives(t *testing.T) {
 				"select " + testCase.input + " 1 from dual",
 				"update " + testCase.input + " t set i=i+1",
 				"delete " + testCase.input + " from t where id>1",
-				"drop table " + testCase.input + " t",
-				"create table " + testCase.input + " if not exists t (id int primary key)",
-				"alter table " + testCase.input + " t add column c int not null",
+				"drop " + testCase.input + " table t",
+				"create " + testCase.input + " table if not exists t (id int primary key)",
+				"alter " + testCase.input + " table t add column c int not null",
 			}
 			for _, sql := range sqls {
 				t.Run(sql, func(t *testing.T) {

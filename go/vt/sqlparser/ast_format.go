@@ -1374,7 +1374,7 @@ func (node *AlterDatabase) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *CreateTable) Format(buf *TrackedBuffer) {
-	buf.WriteString("create ")
+	buf.astPrintf(node, "create %v", node.Comments)
 	if node.Temp {
 		buf.WriteString("temporary ")
 	}
@@ -1451,13 +1451,13 @@ func (node *AlterView) Format(buf *TrackedBuffer) {
 func (node *DropTable) Format(buf *TrackedBuffer) {
 	temp := ""
 	if node.Temp {
-		temp = " temporary"
+		temp = "temporary "
 	}
 	exists := ""
 	if node.IfExists {
 		exists = " if exists"
 	}
-	buf.astPrintf(node, "drop%s table%s %v", temp, exists, node.FromTables)
+	buf.astPrintf(node, "drop %v%stable%s %v", node.Comments, temp, exists, node.FromTables)
 }
 
 // Format formats the node.
@@ -1471,7 +1471,7 @@ func (node *DropView) Format(buf *TrackedBuffer) {
 
 // Format formats the AlterTable node.
 func (node *AlterTable) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "alter table %v", node.Table)
+	buf.astPrintf(node, "alter %vtable %v", node.Comments, node.Table)
 	prefix := ""
 	for i, option := range node.AlterOptions {
 		if i != 0 {
