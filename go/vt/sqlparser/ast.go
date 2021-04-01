@@ -428,6 +428,7 @@ type (
 		Table         TableName
 		AlterOptions  []AlterOption
 		PartitionSpec *PartitionSpec
+		Comments      Comments
 		FullyParsed   bool
 	}
 
@@ -437,6 +438,7 @@ type (
 		FromTables TableNames
 		// The following fields are set if a DDL was fully analyzed.
 		IfExists bool
+		Comments Comments
 	}
 
 	// DropView represents a DROP VIEW statement.
@@ -452,6 +454,7 @@ type (
 		IfNotExists bool
 		TableSpec   *TableSpec
 		OptLike     *OptLike
+		Comments    Comments
 		FullyParsed bool
 	}
 

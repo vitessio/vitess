@@ -626,6 +626,11 @@ func (a *application) rewriteRefOfAlterTable(parent SQLNode, node *AlterTable, r
 	}) {
 		return false
 	}
+	if !a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
+		parent.(*AlterTable).Comments = newNode.(Comments)
+	}) {
+		return false
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -1418,6 +1423,11 @@ func (a *application) rewriteRefOfCreateTable(parent SQLNode, node *CreateTable,
 	}) {
 		return false
 	}
+	if !a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
+		parent.(*CreateTable).Comments = newNode.(Comments)
+	}) {
+		return false
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -1705,6 +1715,11 @@ func (a *application) rewriteRefOfDropTable(parent SQLNode, node *DropTable, rep
 	}
 	if !a.rewriteTableNames(node, node.FromTables, func(newNode, parent SQLNode) {
 		parent.(*DropTable).FromTables = newNode.(TableNames)
+	}) {
+		return false
+	}
+	if !a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
+		parent.(*DropTable).Comments = newNode.(Comments)
 	}) {
 		return false
 	}

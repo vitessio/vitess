@@ -843,16 +843,16 @@ vindex_param:
   }
 
 create_table_prefix:
-  CREATE temp_opt TABLE not_exists_opt table_name
+  CREATE temp_opt TABLE comment_opt not_exists_opt table_name
   {
-    $$ = &CreateTable{Table: $5, IfNotExists: $4, Temp: $2}
+    $$ = &CreateTable{Comments: Comments($4), Table: $6, IfNotExists: $5, Temp: $2}
     setDDL(yylex, $$)
   }
 
 alter_table_prefix:
-  ALTER TABLE table_name
+  ALTER TABLE comment_opt table_name
   {
-    $$ = &AlterTable{Table: $3}
+    $$ = &AlterTable{Comments: Comments($3), Table: $4}
     setDDL(yylex, $$)
   }
 
@@ -2323,9 +2323,9 @@ rename_list:
   }
 
 drop_statement:
-  DROP temp_opt TABLE exists_opt table_name_list restrict_or_cascade_opt
+  DROP temp_opt TABLE comment_opt exists_opt table_name_list restrict_or_cascade_opt
   {
-    $$ = &DropTable{FromTables: $5, IfExists: $4, Temp: $2}
+    $$ = &DropTable{Comments: Comments($4), FromTables: $6, IfExists: $5, Temp: $2}
   }
 | DROP INDEX id_or_var ON table_name algorithm_lock_opt
   {
