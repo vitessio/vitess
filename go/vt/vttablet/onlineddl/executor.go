@@ -1618,7 +1618,7 @@ func (e *Executor) evaluateDeclarativeDiff(ctx context.Context, onlineDDL *schem
 // - is it CREATE / DROP / ALTER?
 // - it is a Revert request?
 // - what's the migration strategy?
-// The function invokes th eappropriate handlers for each of those cases.
+// The function invokes the appropriate handlers for each of those cases.
 func (e *Executor) executeMigration(ctx context.Context, onlineDDL *schema.OnlineDDL) error {
 	failMigration := func(err error) error {
 		_ = e.updateMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusFailed)
@@ -1652,7 +1652,7 @@ func (e *Executor) executeMigration(ctx context.Context, onlineDDL *schema.Onlin
 			if exists {
 				// table does exist, so this declarative DROP turns out to really be an actual DROP. No further action is needed here
 			} else {
-				// table does not exist. We mark this CREATE as implicitly sucessful
+				// table does not exist. We mark this DROP as implicitly sucessful
 				_ = e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusComplete, false, progressPctFull, etaSecondsNow)
 				_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, "no change")
 				return nil
