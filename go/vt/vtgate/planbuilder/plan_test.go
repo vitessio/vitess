@@ -312,6 +312,10 @@ type vschemaWrapper struct {
 	version       PlannerVersion
 }
 
+func (vw *vschemaWrapper) ForeignKey() string {
+	return "allow"
+}
+
 func (vw *vschemaWrapper) AllKeyspace() ([]*vindexes.Keyspace, error) {
 	if vw.keyspace == nil {
 		return nil, errors.New("keyspace not available")
