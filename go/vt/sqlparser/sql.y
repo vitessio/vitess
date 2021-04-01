@@ -2903,8 +2903,14 @@ table_factor:
   {
     $$ = $1
   }
-| subquery_or_values as_opt table_alias
+| subquery_or_values as_opt table_alias column_list_opt
   {
+    switch n := $1.(type) {
+    case *Subquery:
+        n.Columns = $4
+    case *ValuesStatement:
+        n.Columns = $4
+    }
     $$ = &AliasedTableExpr{Expr:$1, As: $3}
   }
 | subquery_or_values
@@ -3359,7 +3365,7 @@ col_tuple:
 subquery:
   openb select_statement closeb
   {
-    $$ = &Subquery{$2}
+    $$ = &Subquery{Select: $2}
   }
 
 subquery_or_values:
