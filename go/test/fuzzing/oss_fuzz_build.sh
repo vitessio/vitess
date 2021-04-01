@@ -14,15 +14,24 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+if [ "$SANITIZER" = "coverage" ]
+then
+        # As of now Vitess cannot be compiled with coverage sanitizer
+        exit 0
+fi
+
 compile_go_fuzzer ./go/test/fuzzing Fuzz vtctl_fuzzer
 compile_go_fuzzer ./go/test/fuzzing FuzzIsDML is_dml_fuzzer
 compile_go_fuzzer ./go/test/fuzzing FuzzNormalizer normalizer_fuzzer
 compile_go_fuzzer ./go/test/fuzzing FuzzParser parser_fuzzer
 
-#cp ./go/test/fuzzing/mysql/mysql_fuzzer.go ./go/mysql/
 compile_go_fuzzer ./go/mysql FuzzWritePacket write_packet_fuzzer
 compile_go_fuzzer ./go/mysql FuzzHandleNextCommand handle_next_command_fuzzer
 compile_go_fuzzer ./go/mysql FuzzReadQueryResults read_query_results_fuzzer
+
+
+compile_go_fuzzer ./go/mysql FuzzTLSServer fuzz_tls
+compile_go_fuzzer ./go/vt/vtgate/grpcvtgateconn Fuzz grpc_vtgate_fuzzer
 
 # Build dictionaries
 cp $SRC/vitess/go/test/fuzzing/vtctl_fuzzer.dict $OUT/
