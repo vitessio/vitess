@@ -108,8 +108,8 @@ func ActivateFileCustomRules(qsc tabletserver.Controller) {
 		fileCustomRule.Open(qsc, *fileRulePath)
 		if *fileRulePollInterval > time.Duration(0) {
 			w := watch.File(*fileRulePath)
-			// this returns a cancelFn that for cleanliness we would register to run on server shut down
-			ch, _ := w.OnInterval(*fileRulePollInterval)
+			ch, cancelFn := w.OnInterval(*fileRulePollInterval)
+			servenv.OnTerm(cancelFn)
 			go func(tsc tabletserver.Controller) {
 				for range ch {
 					if err := fileCustomRule.Open(tsc, *fileRulePath); err != nil {
