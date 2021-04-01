@@ -22,6 +22,7 @@ import {
     FetchSchemaParams,
     fetchSchemas,
     fetchTablets,
+    fetchWorkflow,
     fetchWorkflows,
 } from '../api/http';
 import { vtadmin as pb } from '../proto/vtadmin';
@@ -137,6 +138,46 @@ export const useSchema = (params: FetchSchemaParams, options?: UseQueryOptions<p
                     s.keyspace === params.keyspace &&
                     s.table_definitions.find((td) => td.name === params.table)
             );
+        },
+        ...options,
+    });
+};
+
+/**
+ * useWorkflow is a query hook that fetches a single workflow for the given parameters.
+ */
+export const useWorkflow = (
+    params: Parameters<typeof fetchWorkflow>[0],
+    options?: UseQueryOptions<pb.Workflow, Error> | undefined
+) => {
+    const queryClient = useQueryClient();
+    return useQuery(['workflow', params], () => fetchWorkflow(params), {
+        // If the workflow already exists in the cache from a previous fetchWorkflows call,
+        // then use that for the initial data.
+        //
+        // Important note: `initialData` is persisted to the query cache. If the shapes of the GetWorkflowsResponse
+        // and Workflow protobuf types ever change such that Workflow is not a subset of GetWorkflowsResponse
+        // (e.g., the /api/workflow/... route provides different information than the /api/workflows route)
+        // then instead we will want to use `placeholderData`. (Unfortunately, the HTTP request boundary
+        // is one area where we have to assume typesafety... until we can, perhaps, one day switch to using
+        // gRPC on the client. Or, we could investigate code generating a TypeScript HTTP client. Possibilities!)
+        //
+        // See https://react-query.tanstack.com/guides/initial-query-data for more context on how initialData works.
+        initialData: () => {
+            const workflows = queryClient.getQueryData<pb.GetWorkflowsResponse>('workflows');
+            const cw = workflows?.workflows_by_cluster[params.clusterID];
+            if (!cw) return undefined;
+
+            const workflow = (cw.workflows || []).find(
+                (w) =>
+                    w.cluster?.id === params.clusterID &&
+                    w.keyspace === params.keyspace &&
+                    w.workflow?.name === params.name
+            );
+
+            if (!workflow) return undefined;
+
+            return pb.Workflow.create(workflow);
         },
         ...options,
     });

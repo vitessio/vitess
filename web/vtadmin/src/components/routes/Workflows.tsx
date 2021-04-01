@@ -15,6 +15,7 @@
  */
 import { orderBy } from 'lodash-es';
 import * as React from 'react';
+import { Link } from 'react-router-dom';
 
 import { useWorkflows } from '../../hooks/api';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
@@ -30,10 +31,15 @@ export const Workflows = () => {
     );
 
     const renderRows = (rows: typeof sortedData) =>
-        rows.map(({ cluster, workflow }, idx) => {
+        rows.map(({ cluster, keyspace, workflow }, idx) => {
+            const href =
+                cluster?.id && keyspace && workflow?.name
+                    ? `/workflow/${cluster.id}/${keyspace}/${workflow.name}`
+                    : null;
+
             return (
                 <tr key={idx}>
-                    <td>{workflow?.name}</td>
+                    <td>{href ? <Link to={href}>{workflow?.name}</Link> : workflow?.name}</td>
                     <td>{cluster?.name}</td>
                     <td>{workflow?.source?.keyspace || <span className="text-color-secondary">n/a</span>}</td>
                     <td>{workflow?.target?.keyspace || <span className="text-color-secondary">n/a</span>}</td>
