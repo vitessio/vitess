@@ -64,7 +64,12 @@ func planFilter(pb *primitiveBuilder, input logicalPlan, filter sqlparser.Expr, 
 		node.UpdatePlan(pb, filter)
 		return node, nil
 	case *pulloutSubquery:
-		return planFilter(pb, node.underlying, filter, whereType, origin)
+		plan, err := planFilter(pb, node.underlying, filter, whereType, origin)
+		if err != nil {
+			return nil, err
+		}
+		node.underlying = plan
+		return node, nil
 	case *vindexFunc:
 		return filterVindexFunc(node, filter)
 	case *subquery:
