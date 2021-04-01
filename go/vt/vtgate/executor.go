@@ -99,10 +99,12 @@ type Executor struct {
 
 	mu           sync.Mutex
 	vschema      *vindexes.VSchema
-	normalize    bool
 	streamSize   int
 	plans        cache.Cache
 	vschemaStats *VSchemaStats
+
+	normalize       bool
+	warnShardedOnly bool
 
 	vm *VSchemaManager
 }
@@ -114,16 +116,17 @@ const pathScatterStats = "/debug/scatter_stats"
 const pathVSchema = "/debug/vschema"
 
 // NewExecutor creates a new Executor.
-func NewExecutor(ctx context.Context, serv srvtopo.Server, cell string, resolver *Resolver, normalize bool, streamSize int, cacheCfg *cache.Config) *Executor {
+func NewExecutor(ctx context.Context, serv srvtopo.Server, cell string, resolver *Resolver, normalize, warnOnShardedOnly bool, streamSize int, cacheCfg *cache.Config) *Executor {
 	e := &Executor{
-		serv:        serv,
-		cell:        cell,
-		resolver:    resolver,
-		scatterConn: resolver.scatterConn,
-		txConn:      resolver.scatterConn.txConn,
-		plans:       cache.NewDefaultCacheImpl(cacheCfg),
-		normalize:   normalize,
-		streamSize:  streamSize,
+		serv:            serv,
+		cell:            cell,
+		resolver:        resolver,
+		scatterConn:     resolver.scatterConn,
+		txConn:          resolver.scatterConn.txConn,
+		plans:           cache.NewDefaultCacheImpl(cacheCfg),
+		normalize:       normalize,
+		warnShardedOnly: warnOnShardedOnly,
+		streamSize:      streamSize,
 	}
 
 	vschemaacl.Init()
@@ -1035,7 +1038,7 @@ func (e *Executor) StreamExecute(ctx context.Context, method string, safeSession
 		bindVars = make(map[string]*querypb.BindVariable)
 	}
 	query, comments := sqlparser.SplitMarginComments(sql)
-	vcursor, _ := newVCursorImpl(ctx, safeSession, comments, e, logStats, e.vm, e.VSchema(), e.resolver.resolver, e.serv)
+	vcursor, _ := newVCursorImpl(ctx, safeSession, comments, e, logStats, e.vm, e.VSchema(), e.resolver.resolver, e.serv, e.warnShardedOnly)
 	vcursor.SetIgnoreMaxMemoryRows(true)
 	switch stmtType {
 	case sqlparser.StmtStream:
@@ -1070,6 +1073,11 @@ func (e *Executor) StreamExecute(ctx context.Context, method string, safeSession
 	err = e.addNeededBindVars(plan.BindVarNeeds, bindVars, safeSession)
 	if err != nil {
 		return err
+	}
+
+	// add any warnings that the planner wants to add
+	for _, warning := range plan.Warnings {
+		safeSession.RecordWarning(warning)
 	}
 
 	execStart := time.Now()
@@ -1264,6 +1272,10 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 	if err != nil {
 		return nil, err
 	}
+
+	plan.Warnings = vcursor.warnings
+	vcursor.warnings = nil
+
 	if !skipQueryPlanCache && !sqlparser.SkipQueryPlanCacheDirective(statement) && sqlparser.CachePlan(statement) {
 		e.plans.Set(planKey, plan)
 	}
@@ -1548,7 +1560,7 @@ func (e *Executor) prepare(ctx context.Context, safeSession *SafeSession, sql st
 func (e *Executor) handlePrepare(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, logStats *LogStats) ([]*querypb.Field, error) {
 	// V3 mode.
 	query, comments := sqlparser.SplitMarginComments(sql)
-	vcursor, _ := newVCursorImpl(ctx, safeSession, comments, e, logStats, e.vm, e.VSchema(), e.resolver.resolver, e.serv)
+	vcursor, _ := newVCursorImpl(ctx, safeSession, comments, e, logStats, e.vm, e.VSchema(), e.resolver.resolver, e.serv, e.warnShardedOnly)
 	plan, err := e.getPlan(
 		vcursor,
 		query,

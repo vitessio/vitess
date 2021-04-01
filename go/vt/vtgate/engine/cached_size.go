@@ -307,7 +307,7 @@ func (cached *MemorySort) CachedSize(alloc bool) int64 {
 	size += cached.UpperLimit.CachedSize(false)
 	// field OrderBy []vitess.io/vitess/go/vt/vtgate/engine.OrderbyParams
 	{
-		size += int64(cap(cached.OrderBy)) * int64(9)
+		size += int64(cap(cached.OrderBy)) * int64(17)
 	}
 	// field Input vitess.io/vitess/go/vt/vtgate/engine.Primitive
 	if cc, ok := cached.Input.(cachedObject); ok {
@@ -334,7 +334,7 @@ func (cached *MergeSort) CachedSize(alloc bool) int64 {
 	}
 	// field OrderBy []vitess.io/vitess/go/vt/vtgate/engine.OrderbyParams
 	{
-		size += int64(cap(cached.OrderBy)) * int64(9)
+		size += int64(cap(cached.OrderBy)) * int64(17)
 	}
 	return size
 }
@@ -391,7 +391,7 @@ func (cached *Plan) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(96)
+		size += int64(120)
 	}
 	// field Original string
 	size += int64(len(cached.Original))
@@ -401,6 +401,13 @@ func (cached *Plan) CachedSize(alloc bool) int64 {
 	}
 	// field BindVarNeeds *vitess.io/vitess/go/vt/sqlparser.BindVarNeeds
 	size += cached.BindVarNeeds.CachedSize(true)
+	// field Warnings []*vitess.io/vitess/go/vt/proto/query.QueryWarning
+	{
+		size += int64(cap(cached.Warnings)) * int64(8)
+		for _, elem := range cached.Warnings {
+			size += elem.CachedSize(true)
+		}
+	}
 	return size
 }
 func (cached *Projection) CachedSize(alloc bool) int64 {
@@ -543,7 +550,7 @@ func (cached *Route) CachedSize(alloc bool) int64 {
 	}
 	// field OrderBy []vitess.io/vitess/go/vt/vtgate/engine.OrderbyParams
 	{
-		size += int64(cap(cached.OrderBy)) * int64(9)
+		size += int64(cap(cached.OrderBy)) * int64(17)
 	}
 	// field SysTableTableSchema vitess.io/vitess/go/vt/vtgate/evalengine.Expr
 	if cc, ok := cached.SysTableTableSchema.(cachedObject); ok {

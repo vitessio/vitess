@@ -16,7 +16,10 @@ limitations under the License.
 
 package errors
 
-import "errors"
+import (
+	"errors"
+	"fmt"
+)
 
 var (
 	// ErrAmbiguousSchema occurs when more than one schema is found for a given
@@ -35,6 +38,10 @@ var (
 	// ErrNoSchema occurs when a schema definition cannot be found for a given
 	// set of filter criteria.
 	ErrNoSchema = errors.New("no such schema")
+	// ErrNoServingTablet occurs when a tablet with state SERVING cannot be
+	// found for a given set of filter criteria. It is a more specific form of
+	// ErrNoTablet
+	ErrNoServingTablet = fmt.Errorf("%w with state=SERVING", ErrNoTablet)
 	// ErrNoSrvVSchema occurs when no SrvVSchema is found for a given keyspace.
 	ErrNoSrvVSchema = errors.New("SrvVSchema not found")
 	// ErrNoTablet occurs when a tablet cannot be found for a given set of

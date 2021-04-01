@@ -25,6 +25,7 @@ import (
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
@@ -49,7 +50,7 @@ var (
 	}
 	// GetTablets makes a GetTablets gRPC call to a vtctld.
 	GetTablets = &cobra.Command{
-		Use:  "GetTablets [--cell $c1, ...] [--keyspace $ks [--shard $shard]]",
+		Use:  "GetTablets [--strict] [{--cell $c1 [--cell $c2 ...], --keyspace $ks [--shard $shard], --tablet-alias $alias}]",
 		Args: cobra.NoArgs,
 		RunE: commandGetTablets,
 	}
@@ -149,7 +150,10 @@ var getTabletsOptions = struct {
 	Keyspace string
 	Shard    string
 
+	TabletAliasStrings []string
+
 	Format string
+	Strict bool
 }{}
 
 func commandGetTablets(cmd *cobra.Command, args []string) error {
@@ -161,6 +165,25 @@ func commandGetTablets(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("invalid output format, got %s", getTabletsOptions.Format)
 	}
 
+	var aliases []*topodatapb.TabletAlias
+
+	if len(getTabletsOptions.TabletAliasStrings) > 0 {
+		switch {
+		case getTabletsOptions.Keyspace != "":
+			return fmt.Errorf("--keyspace (= %s) cannot be passed when using --tablet-alias (= %v)", getTabletsOptions.Keyspace, getTabletsOptions.TabletAliasStrings)
+		case getTabletsOptions.Shard != "":
+			return fmt.Errorf("--shard (= %s) cannot be passed when using --tablet-alias (= %v)", getTabletsOptions.Shard, getTabletsOptions.TabletAliasStrings)
+		case len(getTabletsOptions.Cells) > 0:
+			return fmt.Errorf("--cell (= %v) cannot be passed when using --tablet-alias (= %v)", getTabletsOptions.Cells, getTabletsOptions.TabletAliasStrings)
+		}
+
+		var err error
+		aliases, err = cli.TabletAliasesFromPosArgs(getTabletsOptions.TabletAliasStrings)
+		if err != nil {
+			return err
+		}
+	}
+
 	if getTabletsOptions.Keyspace == "" && getTabletsOptions.Shard != "" {
 		return fmt.Errorf("--shard (= %s) cannot be passed without also passing --keyspace", getTabletsOptions.Shard)
 	}
@@ -168,9 +191,11 @@ func commandGetTablets(cmd *cobra.Command, args []string) error {
 	cli.FinishedParsing(cmd)
 
 	resp, err := client.GetTablets(commandCtx, &vtctldatapb.GetTabletsRequest{
-		Cells:    getTabletsOptions.Cells,
-		Keyspace: getTabletsOptions.Keyspace,
-		Shard:    getTabletsOptions.Shard,
+		TabletAliases: aliases,
+		Cells:         getTabletsOptions.Cells,
+		Keyspace:      getTabletsOptions.Keyspace,
+		Shard:         getTabletsOptions.Shard,
+		Strict:        getTabletsOptions.Strict,
 	})
 	if err != nil {
 		return err
@@ -202,9 +227,11 @@ func init() {
 
 	Root.AddCommand(GetTablet)
 
-	GetTablets.Flags().StringSliceVarP(&getTabletsOptions.Cells, "cell", "c", nil, "list of cells to filter tablets by")
-	GetTablets.Flags().StringVarP(&getTabletsOptions.Keyspace, "keyspace", "k", "", "keyspace to filter tablets by")
-	GetTablets.Flags().StringVarP(&getTabletsOptions.Shard, "shard", "s", "", "shard to filter tablets by")
+	GetTablets.Flags().StringSliceVarP(&getTabletsOptions.TabletAliasStrings, "tablet-alias", "t", nil, "List of tablet aliases to filter by")
+	GetTablets.Flags().StringSliceVarP(&getTabletsOptions.Cells, "cell", "c", nil, "List of cells to filter tablets by")
+	GetTablets.Flags().StringVarP(&getTabletsOptions.Keyspace, "keyspace", "k", "", "Keyspace to filter tablets by")
+	GetTablets.Flags().StringVarP(&getTabletsOptions.Shard, "shard", "s", "", "Shard to filter tablets by")
 	GetTablets.Flags().StringVar(&getTabletsOptions.Format, "format", "awk", "Output format to use; valid choices are (json, awk)")
+	GetTablets.Flags().BoolVar(&getTabletsOptions.Strict, "strict", false, "Require all cells to return successful tablet data. Without --strict, tablet listings may be partial.")
 	Root.AddCommand(GetTablets)
 }

@@ -221,13 +221,16 @@ func TestStreamLimitOffset(t *testing.T) {
 		Fields: []*querypb.Field{
 			{Name: "id", Type: sqltypes.Int32},
 			{Name: "textcol", Type: sqltypes.VarChar},
+			{Name: "weight_string(id)", Type: sqltypes.VarBinary},
 		},
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewInt32(1),
 			sqltypes.NewVarChar("1234"),
+			sqltypes.NULL,
 		}, {
 			sqltypes.NewInt32(4),
 			sqltypes.NewVarChar("4567"),
+			sqltypes.NULL,
 		}},
 	}})
 
@@ -235,10 +238,12 @@ func TestStreamLimitOffset(t *testing.T) {
 		Fields: []*querypb.Field{
 			{Name: "id", Type: sqltypes.Int32},
 			{Name: "textcol", Type: sqltypes.VarChar},
+			{Name: "weight_string(id)", Type: sqltypes.VarBinary},
 		},
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewInt32(2),
 			sqltypes.NewVarChar("2345"),
+			sqltypes.NULL,
 		}},
 	}})
 
@@ -1028,7 +1033,7 @@ func TestSelectScatter(t *testing.T) {
 		sbc := hc.AddTestTablet(cell, shard, 1, "TestExecutor", shard, topodatapb.TabletType_MASTER, true, 1, nil)
 		conns = append(conns, sbc)
 	}
-	executor := NewExecutor(context.Background(), serv, cell, resolver, false, testBufferSize, cache.DefaultConfig)
+	executor := NewExecutor(context.Background(), serv, cell, resolver, false, false, testBufferSize, cache.DefaultConfig)
 	logChan := QueryLogger.Subscribe("Test")
 	defer QueryLogger.Unsubscribe(logChan)
 
@@ -1061,7 +1066,7 @@ func TestSelectScatterPartial(t *testing.T) {
 		conns = append(conns, sbc)
 	}
 
-	executor := NewExecutor(context.Background(), serv, cell, resolver, false, testBufferSize, cache.DefaultConfig)
+	executor := NewExecutor(context.Background(), serv, cell, resolver, false, false, testBufferSize, cache.DefaultConfig)
 	logChan := QueryLogger.Subscribe("Test")
 	defer QueryLogger.Unsubscribe(logChan)
 
@@ -1118,7 +1123,7 @@ func TestStreamSelectScatter(t *testing.T) {
 	for _, shard := range shards {
 		_ = hc.AddTestTablet(cell, shard, 1, "TestExecutor", shard, topodatapb.TabletType_MASTER, true, 1, nil)
 	}
-	executor := NewExecutor(context.Background(), serv, cell, resolver, false, testBufferSize, cache.DefaultConfig)
+	executor := NewExecutor(context.Background(), serv, cell, resolver, false, false, testBufferSize, cache.DefaultConfig)
 
 	sql := "select id from user"
 	result, err := executorStream(executor, sql)
@@ -1159,6 +1164,7 @@ func TestSelectScatterOrderBy(t *testing.T) {
 			Fields: []*querypb.Field{
 				{Name: "col1", Type: sqltypes.Int32},
 				{Name: "col2", Type: sqltypes.Int32},
+				{Name: "weight_string(col2)", Type: sqltypes.VarBinary},
 			},
 			InsertID: 0,
 			Rows: [][]sqltypes.Value{{
@@ -1167,18 +1173,19 @@ func TestSelectScatterOrderBy(t *testing.T) {
 				// This will allow us to test that cross-shard ordering
 				// still works correctly.
 				sqltypes.NewInt32(int32(i % 4)),
+				sqltypes.NULL,
 			}},
 		}})
 		conns = append(conns, sbc)
 	}
-	executor := NewExecutor(context.Background(), serv, cell, resolver, false, testBufferSize, cache.DefaultConfig)
+	executor := NewExecutor(context.Background(), serv, cell, resolver, false, false, testBufferSize, cache.DefaultConfig)
 
 	query := "select col1, col2 from user order by col2 desc"
 	gotResult, err := executorExec(executor, query, nil)
 	require.NoError(t, err)
 
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select col1, col2 from `user` order by col2 desc",
+		Sql:           "select col1, col2, weight_string(col2) from `user` order by col2 desc",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	for _, conn := range conns {
@@ -1236,7 +1243,7 @@ func TestSelectScatterOrderByVarChar(t *testing.T) {
 		}})
 		conns = append(conns, sbc)
 	}
-	executor := NewExecutor(context.Background(), serv, cell, resolver, false, testBufferSize, cache.DefaultConfig)
+	executor := NewExecutor(context.Background(), serv, cell, resolver, false, false, testBufferSize, cache.DefaultConfig)
 
 	query := "select col1, textcol from user order by textcol desc"
 	gotResult, err := executorExec(executor, query, nil)
@@ -1287,23 +1294,25 @@ func TestStreamSelectScatterOrderBy(t *testing.T) {
 			Fields: []*querypb.Field{
 				{Name: "id", Type: sqltypes.Int32},
 				{Name: "col", Type: sqltypes.Int32},
+				{Name: "weight_string(col)", Type: sqltypes.VarBinary},
 			},
 			InsertID: 0,
 			Rows: [][]sqltypes.Value{{
 				sqltypes.NewInt32(1),
 				sqltypes.NewInt32(int32(i % 4)),
+				sqltypes.NULL,
 			}},
 		}})
 		conns = append(conns, sbc)
 	}
-	executor := NewExecutor(context.Background(), serv, cell, resolver, false, testBufferSize, cache.DefaultConfig)
+	executor := NewExecutor(context.Background(), serv, cell, resolver, false, false, testBufferSize, cache.DefaultConfig)
 
 	query := "select id, col from user order by col desc"
 	gotResult, err := executorStream(executor, query)
 	require.NoError(t, err)
 
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select id, col from `user` order by col desc",
+		Sql:           "select id, col, weight_string(col) from `user` order by col desc",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	for _, conn := range conns {
@@ -1353,7 +1362,7 @@ func TestStreamSelectScatterOrderByVarChar(t *testing.T) {
 		}})
 		conns = append(conns, sbc)
 	}
-	executor := NewExecutor(context.Background(), serv, cell, resolver, false, testBufferSize, cache.DefaultConfig)
+	executor := NewExecutor(context.Background(), serv, cell, resolver, false, false, testBufferSize, cache.DefaultConfig)
 
 	query := "select id, textcol from user order by textcol desc"
 	gotResult, err := executorStream(executor, query)
@@ -1401,23 +1410,25 @@ func TestSelectScatterAggregate(t *testing.T) {
 			Fields: []*querypb.Field{
 				{Name: "col", Type: sqltypes.Int32},
 				{Name: "sum(foo)", Type: sqltypes.Int32},
+				{Name: "weight_string(col)", Type: sqltypes.VarBinary},
 			},
 			InsertID: 0,
 			Rows: [][]sqltypes.Value{{
 				sqltypes.NewInt32(int32(i % 4)),
 				sqltypes.NewInt32(int32(i)),
+				sqltypes.NULL,
 			}},
 		}})
 		conns = append(conns, sbc)
 	}
-	executor := NewExecutor(context.Background(), serv, cell, resolver, false, testBufferSize, cache.DefaultConfig)
+	executor := NewExecutor(context.Background(), serv, cell, resolver, false, false, testBufferSize, cache.DefaultConfig)
 
 	query := "select col, sum(foo) from user group by col"
 	gotResult, err := executorExec(executor, query, nil)
 	require.NoError(t, err)
 
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select col, sum(foo) from `user` group by col order by col asc",
+		Sql:           "select col, sum(foo), weight_string(col) from `user` group by col order by col asc",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	for _, conn := range conns {
@@ -1458,23 +1469,25 @@ func TestStreamSelectScatterAggregate(t *testing.T) {
 			Fields: []*querypb.Field{
 				{Name: "col", Type: sqltypes.Int32},
 				{Name: "sum(foo)", Type: sqltypes.Int32},
+				{Name: "weight_string(col)", Type: sqltypes.VarBinary},
 			},
 			InsertID: 0,
 			Rows: [][]sqltypes.Value{{
 				sqltypes.NewInt32(int32(i % 4)),
 				sqltypes.NewInt32(int32(i)),
+				sqltypes.NULL,
 			}},
 		}})
 		conns = append(conns, sbc)
 	}
-	executor := NewExecutor(context.Background(), serv, cell, resolver, false, testBufferSize, cache.DefaultConfig)
+	executor := NewExecutor(context.Background(), serv, cell, resolver, false, false, testBufferSize, cache.DefaultConfig)
 
 	query := "select col, sum(foo) from user group by col"
 	gotResult, err := executorStream(executor, query)
 	require.NoError(t, err)
 
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select col, sum(foo) from `user` group by col order by col asc",
+		Sql:           "select col, sum(foo), weight_string(col) from `user` group by col order by col asc",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	for _, conn := range conns {
@@ -1516,23 +1529,25 @@ func TestSelectScatterLimit(t *testing.T) {
 			Fields: []*querypb.Field{
 				{Name: "col1", Type: sqltypes.Int32},
 				{Name: "col2", Type: sqltypes.Int32},
+				{Name: "weight_string(col2)", Type: sqltypes.VarBinary},
 			},
 			InsertID: 0,
 			Rows: [][]sqltypes.Value{{
 				sqltypes.NewInt32(1),
 				sqltypes.NewInt32(int32(i % 4)),
+				sqltypes.NULL,
 			}},
 		}})
 		conns = append(conns, sbc)
 	}
-	executor := NewExecutor(context.Background(), serv, cell, resolver, false, testBufferSize, cache.DefaultConfig)
+	executor := NewExecutor(context.Background(), serv, cell, resolver, false, false, testBufferSize, cache.DefaultConfig)
 
 	query := "select col1, col2 from user order by col2 desc limit 3"
 	gotResult, err := executorExec(executor, query, nil)
 	require.NoError(t, err)
 
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select col1, col2 from `user` order by col2 desc limit :__upper_limit",
+		Sql:           "select col1, col2, weight_string(col2) from `user` order by col2 desc limit :__upper_limit",
 		BindVariables: map[string]*querypb.BindVariable{"__upper_limit": sqltypes.Int64BindVariable(3)},
 	}}
 	for _, conn := range conns {
@@ -1582,23 +1597,25 @@ func TestStreamSelectScatterLimit(t *testing.T) {
 			Fields: []*querypb.Field{
 				{Name: "col1", Type: sqltypes.Int32},
 				{Name: "col2", Type: sqltypes.Int32},
+				{Name: "weight_string(col2)", Type: sqltypes.VarBinary},
 			},
 			InsertID: 0,
 			Rows: [][]sqltypes.Value{{
 				sqltypes.NewInt32(1),
 				sqltypes.NewInt32(int32(i % 4)),
+				sqltypes.NULL,
 			}},
 		}})
 		conns = append(conns, sbc)
 	}
-	executor := NewExecutor(context.Background(), serv, cell, resolver, false, testBufferSize, cache.DefaultConfig)
+	executor := NewExecutor(context.Background(), serv, cell, resolver, false, false, testBufferSize, cache.DefaultConfig)
 
 	query := "select col1, col2 from user order by col2 desc limit 3"
 	gotResult, err := executorStream(executor, query)
 	require.NoError(t, err)
 
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select col1, col2 from `user` order by col2 desc limit :__upper_limit",
+		Sql:           "select col1, col2, weight_string(col2) from `user` order by col2 desc limit :__upper_limit",
 		BindVariables: map[string]*querypb.BindVariable{"__upper_limit": sqltypes.Int64BindVariable(3)},
 	}}
 	for _, conn := range conns {

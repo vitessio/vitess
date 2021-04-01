@@ -17,7 +17,6 @@ limitations under the License.
 package integration
 
 import (
-	"reflect"
 	"strings"
 )
 
@@ -40,13 +39,10 @@ func sliceStringLeaf(els ...*Leaf) string {
 
 // the methods below are what the generated code expected to be there in the package
 
-type application struct {
-	pre, post ApplyFunc
-	cursor    Cursor
-}
-
+// ApplyFunc is apply function
 type ApplyFunc func(*Cursor) bool
 
+// Cursor is cursor
 type Cursor struct {
 	parent   AST
 	replacer replacerFunc
@@ -68,30 +64,18 @@ func (c *Cursor) Replace(newNode AST) {
 
 type replacerFunc func(newNode, parent AST)
 
-func isNilValue(i interface{}) bool {
-	valueOf := reflect.ValueOf(i)
-	kind := valueOf.Kind()
-	isNullable := kind == reflect.Ptr || kind == reflect.Array || kind == reflect.Slice
-	return isNullable && valueOf.IsNil()
-}
-
-var abort = new(int) // singleton, to signal termination of Apply
-
-func Rewrite(node AST, pre, post ApplyFunc) (result AST) {
-	parent := &struct{ AST }{node}
+// Rewrite is the api.
+func Rewrite(node AST, pre, post ApplyFunc) AST {
+	outer := &struct{ AST }{node}
 
 	a := &application{
-		pre:    pre,
-		post:   post,
-		cursor: Cursor{},
+		pre:  pre,
+		post: post,
 	}
 
-	a.apply(parent.AST, node, nil)
-	return parent.AST
-}
+	a.rewriteAST(outer, node, func(newNode, parent AST) {
+		outer.AST = newNode
+	})
 
-func replacePanic(msg string) func(newNode, parent AST) {
-	return func(newNode, parent AST) {
-		panic("Tried replacing a field of a value type. This is not supported. " + msg)
-	}
+	return outer.AST
 }
