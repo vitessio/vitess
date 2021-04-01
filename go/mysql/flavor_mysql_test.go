@@ -39,7 +39,7 @@ func TestMysql56SetMasterCommands(t *testing.T) {
   MASTER_CONNECT_RETRY = 1234,
   MASTER_AUTO_POSITION = 1`
 
-	conn := &Conn{flavor: mysqlFlavor{}}
+	conn := &Conn{flavor: mysqlFlavor57{}}
 	got := conn.SetMasterCommand(params, masterHost, masterPort, masterConnectRetry)
 	if got != want {
 		t.Errorf("mysqlFlavor.SetMasterCommand(%#v, %#v, %#v, %#v) = %#v, want %#v", params, masterHost, masterPort, masterConnectRetry, got, want)
@@ -72,7 +72,7 @@ func TestMysql56SetMasterCommandsSSL(t *testing.T) {
   MASTER_SSL_KEY = 'ssl-key',
   MASTER_AUTO_POSITION = 1`
 
-	conn := &Conn{flavor: mysqlFlavor{}}
+	conn := &Conn{flavor: mysqlFlavor57{}}
 	got := conn.SetMasterCommand(params, masterHost, masterPort, masterConnectRetry)
 	if got != want {
 		t.Errorf("mysqlFlavor.SetMasterCommands(%#v, %#v, %#v, %#v) = %#v, want %#v", params, masterHost, masterPort, masterConnectRetry, got, want)

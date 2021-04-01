@@ -4,15 +4,12 @@
   "QueryType": "DDL",
   "Original": "create table t1(id bigint, primary key(id))",
   "Instructions": {
-    "OperatorType": "Send",
+    "OperatorType": "DDL",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
-    "TargetDestination": "AllShards()",
-    "IsDML": false,
-    "Query": "create table t1(id bigint, primary key(id))",
-    "SingleShardOnly": false
+    "Query": "create table t1 (\n\tid bigint,\n\tprimary key (id)\n)"
   }
 }
 
@@ -22,15 +19,12 @@
   "QueryType": "DDL",
   "Original": "create table user.t1(id bigint, primary key(id))",
   "Instructions": {
-    "OperatorType": "Send",
+    "OperatorType": "DDL",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
-    "TargetDestination": "AllShards()",
-    "IsDML": false,
-    "Query": "create table user.t1(id bigint, primary key(id))",
-    "SingleShardOnly": false
+    "Query": "create table t1 (\n\tid bigint,\n\tprimary key (id)\n)"
   }
 }
 
@@ -40,21 +34,18 @@
   "QueryType": "DDL",
   "Original": "create table a(id int)",
   "Instructions": {
-    "OperatorType": "Send",
+    "OperatorType": "DDL",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
-    "TargetDestination": "AllShards()",
-    "IsDML": false,
-    "Query": "create table a(id int)",
-    "SingleShardOnly": false
+    "Query": "create table a (\n\tid int\n)"
   }
 }
 
 # simple create table with table qualifier that does not exists
 "create table a.b(id int)"
-"no keyspace with name [a] found"
+"Unknown database 'a' in vschema"
 
 #Alter table
 "alter table a ADD id int"
@@ -62,36 +53,335 @@
   "QueryType": "DDL",
   "Original": "alter table a ADD id int",
   "Instructions": {
-    "OperatorType": "Send",
+    "OperatorType": "DDL",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
-    "TargetDestination": "AllShards()",
-    "IsDML": false,
-    "Query": "alter table a ADD id int",
-    "SingleShardOnly": false
+    "Query": "alter table a add column id int"
   }
 }
 
 #Alter table with qualifier
-"alter table user.b ADD id int"
+"alter table user.user ADD id int"
 {
   "QueryType": "DDL",
-  "Original": "alter table user.b ADD id int",
+  "Original": "alter table user.user ADD id int",
   "Instructions": {
-    "OperatorType": "Send",
+    "OperatorType": "DDL",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
-    "TargetDestination": "AllShards()",
-    "IsDML": false,
-    "Query": "alter table user.b ADD id int",
-    "SingleShardOnly": false
+    "Query": "alter table `user` add column id int"
+  }
+}
+
+#Alter table with qualifier and table not in vschema
+"alter table user.a ADD id int"
+{
+  "QueryType": "DDL",
+  "Original": "alter table user.a ADD id int",
+  "Instructions": {
+    "OperatorType": "DDL",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "alter table a add column id int"
   }
 }
 
 #Alter table with unknown qualifier
 "alter table a.b ADD id int"
-"no keyspace with name [a] found"
+"keyspace a not found in vschema"
+
+# create db foo
+"create database foo"
+{
+  "QueryType": "DDL",
+  "Original": "create database foo",
+  "Instructions": {
+    "OperatorType": "CREATEDB",
+    "Keyspace": {
+      "Name": "foo",
+      "Sharded": false
+    }
+  }
+}
+
+# create db main
+"create database main"
+"Can't create database 'main'; database exists"
+
+# create db if not exists main
+"create database if not exists main"
+{
+  "QueryType": "DDL",
+  "Original": "create database if not exists main",
+  "Instructions": {
+    "OperatorType": "Rows"
+  }
+}
+
+# alter db foo
+"alter database foo collate utf8"
+"Can't alter database 'foo'; unknown database"
+
+# alter db main
+"alter database main collate utf8"
+"alter database is not supported"
+
+# drop db foo
+"drop database foo"
+"Can't drop database 'foo'; database doesn't exists"
+
+# drop db main
+"drop database main"
+{
+  "QueryType": "DDL",
+  "Original": "drop database main",
+  "Instructions": {
+    "OperatorType": "DROPDB",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    }
+  }
+}
+
+# drop db if exists main
+"drop database if exists main"
+{
+  "QueryType": "DDL",
+  "Original": "drop database if exists main",
+  "Instructions": {
+    "OperatorType": "DROPDB",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    }
+  }
+}
+
+# drop db if exists foo
+"drop schema if exists foo"
+{
+  "QueryType": "DDL",
+  "Original": "drop schema if exists foo",
+  "Instructions": {
+    "OperatorType": "Rows"
+  }
+}
+
+# DDL with qualifier
+"create index a on user.user(id)"
+{
+  "QueryType": "DDL",
+  "Original": "create index a on user.user(id)",
+  "Instructions": {
+    "OperatorType": "DDL",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "alter table `user` add index a (id)"
+  }
+}
+
+# DDL with qualifier for a table not in vschema of an unsharded keyspace
+"create index a on main.unknown(id)"
+{
+  "QueryType": "DDL",
+  "Original": "create index a on main.unknown(id)",
+  "Instructions": {
+    "OperatorType": "DDL",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "alter table unknown add index a (id)"
+  }
+}
+
+# create view with subquery in unsharded keyspace
+"create view view_a as select * from (select col1, col2 from unsharded where id = 1 union select col1, col2 from unsharded where id = 3) a"
+{
+  "QueryType": "DDL",
+  "Original": "create view view_a as select * from (select col1, col2 from unsharded where id = 1 union select col1, col2 from unsharded where id = 3) a",
+  "Instructions": {
+    "OperatorType": "DDL",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "create view view_a as select * from (select col1, col2 from unsharded where id = 1 union select col1, col2 from unsharded where id = 3) as a"
+  }
+}
+
+# create view with subquery in unsharded keyspace with IN clause
+"create view view_a as select id, name from unsharded where id in (select id from unsharded where id = 1 union select id from unsharded where id = 3)"
+{
+  "QueryType": "DDL",
+  "Original": "create view view_a as select id, name from unsharded where id in (select id from unsharded where id = 1 union select id from unsharded where id = 3)",
+  "Instructions": {
+    "OperatorType": "DDL",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "create view view_a as select id, `name` from unsharded where id in (select id from unsharded where id = 1 union select id from unsharded where id = 3)"
+  }
+}
+
+# create view with subquery in unsharded keyspace with UNION clause
+"create view view_a as (select id from unsharded) union (select id from unsharded_auto) order by id limit 5"
+{
+  "QueryType": "DDL",
+  "Original": "create view view_a as (select id from unsharded) union (select id from unsharded_auto) order by id limit 5",
+  "Instructions": {
+    "OperatorType": "DDL",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "create view view_a as (select id from unsharded) union (select id from unsharded_auto) order by id asc limit 5"
+  }
+}
+
+# create view with subquery in unsharded keyspace with multiple UNION clauses
+"create view view_a as select id from unsharded union select id from unsharded_auto union select id from unsharded_auto where id in (132)"
+{
+  "QueryType": "DDL",
+  "Original": "create view view_a as select id from unsharded union select id from unsharded_auto union select id from unsharded_auto where id in (132)",
+  "Instructions": {
+    "OperatorType": "DDL",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "create view view_a as select id from unsharded union select id from unsharded_auto union select id from unsharded_auto where id in (132)"
+  }
+}
+
+# create view with subquery in unsharded keyspace with UNION clauses in subqueries
+"create view view_a as (select id from unsharded union select id from unsharded_auto) union (select id from unsharded_auto union select name from unsharded)"
+{
+  "QueryType": "DDL",
+  "Original": "create view view_a as (select id from unsharded union select id from unsharded_auto) union (select id from unsharded_auto union select name from unsharded)",
+  "Instructions": {
+    "OperatorType": "DDL",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "create view view_a as (select id from unsharded union select id from unsharded_auto) union (select id from unsharded_auto union select `name` from unsharded)"
+  }
+}
+
+# Alter View
+"alter view user.user_extra as select* from user.user"
+{
+  "QueryType": "DDL",
+  "Original": "alter view user.user_extra as select* from user.user",
+  "Instructions": {
+    "OperatorType": "DDL",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "alter view user_extra as select * from `user`"
+  }
+}
+
+# drop table without qualifier
+"drop table unsharded_a"
+{
+  "QueryType": "DDL",
+  "Original": "drop table unsharded_a",
+  "Instructions": {
+    "OperatorType": "DDL",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "drop table unsharded_a"
+  }
+}
+
+# Drop view
+"drop view main.a"
+{
+  "QueryType": "DDL",
+  "Original": "drop view main.a",
+  "Instructions": {
+    "OperatorType": "DDL",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "drop view a"
+  }
+}
+
+# Truncate table with qualifier
+"truncate user.user_extra"
+{
+  "QueryType": "DDL",
+  "Original": "truncate user.user_extra",
+  "Instructions": {
+    "OperatorType": "DDL",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "truncate table user_extra"
+  }
+}
+
+# Rename table
+"rename table a to main.b"
+{
+  "QueryType": "DDL",
+  "Original": "rename table a to main.b",
+  "Instructions": {
+    "OperatorType": "DDL",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "rename table a to b"
+  }
+}
+
+# CREATE temp TABLE
+"create temporary table a(id int)"
+{
+  "QueryType": "DDL",
+  "Original": "create temporary table a(id int)",
+  "Instructions": {
+    "OperatorType": "DDL",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "create temporary table a (\n\tid int\n)",
+    "TempTable": true
+  }
+}
+
+# DROP temp TABLE
+"drop temporary table a"
+{
+  "QueryType": "DDL",
+  "Original": "drop temporary table a",
+  "Instructions": {
+    "OperatorType": "DDL",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "drop temporary table a",
+    "TempTable": true
+  }
+}

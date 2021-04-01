@@ -45,7 +45,8 @@ import (
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/vterrors"
 
-	"golang.org/x/net/context"
+	"context"
+
 	"vitess.io/vitess/go/vt/dbconnpool"
 
 	"vitess.io/vitess/go/netutil"
@@ -511,7 +512,11 @@ func (tm *TabletManager) checkMastership(ctx context.Context, si *topo.ShardInfo
 }
 
 func (tm *TabletManager) checkMysql(ctx context.Context) error {
-	if appConfig, _ := tm.DBConfigs.AppWithDB().MysqlParams(); appConfig.Host != "" {
+	appConfig, err := tm.DBConfigs.AppWithDB().MysqlParams()
+	if err != nil {
+		return err
+	}
+	if appConfig.Host != "" {
 		tm.tmState.UpdateTablet(func(tablet *topodatapb.Tablet) {
 			tablet.MysqlHostname = appConfig.Host
 			tablet.MysqlPort = int32(appConfig.Port)
@@ -592,10 +597,7 @@ func (tm *TabletManager) handleRestore(ctx context.Context) (bool, error) {
 		return false, fmt.Errorf("you cannot enable -restore_from_backup without a my.cnf file")
 	}
 
-	// two cases then:
-	// - restoreFromBackup is set: we restore, then initHealthCheck, all
-	//   in the background
-	// - restoreFromBackup is not set: we initHealthCheck right away
+	// Restore in the background
 	if *restoreFromBackup {
 		go func() {
 			// Open the state manager after restore is done.
@@ -631,6 +633,8 @@ func (tm *TabletManager) exportStats() {
 	tablet := tm.Tablet()
 	statsKeyspace.Set(tablet.Keyspace)
 	statsShard.Set(tablet.Shard)
+	statsTabletType.Set(topoproto.TabletTypeLString(tm.tmState.tablet.Type))
+	statsTabletTypeCount.Add(topoproto.TabletTypeLString(tm.tmState.tablet.Type), 1)
 	if key.KeyRangeIsPartial(tablet.KeyRange) {
 		statsKeyRangeStart.Set(hex.EncodeToString(tablet.KeyRange.Start))
 		statsKeyRangeEnd.Set(hex.EncodeToString(tablet.KeyRange.End))

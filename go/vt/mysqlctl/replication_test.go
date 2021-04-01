@@ -21,8 +21,8 @@ import (
 )
 
 func testRedacted(t *testing.T, source, expected string) {
-	if r := redactMasterPassword(source); r != expected {
-		t.Errorf("redactMasterPassword bad result: %v\nWas expecting:%v", r, expected)
+	if r := redactPassword(source); r != expected {
+		t.Errorf("redactPassword bad result: %v\nWas expecting:%v", r, expected)
 	}
 }
 
@@ -34,7 +34,7 @@ func TestRedactMasterPassword(t *testing.T) {
   MASTER_CONNECT_RETRY = 1
 `,
 		`CHANGE MASTER TO
-  MASTER_PASSWORD = '***',
+  MASTER_PASSWORD = '****',
   MASTER_CONNECT_RETRY = 1
 `)
 
@@ -44,7 +44,7 @@ func TestRedactMasterPassword(t *testing.T) {
   MASTER_CONNECT_RETRY = 1
 `,
 		`CHANGE MASTER TO
-  MASTER_PASSWORD = '',
+  MASTER_PASSWORD = '****',
   MASTER_CONNECT_RETRY = 1
 `)
 
@@ -55,4 +55,28 @@ func TestRedactMasterPassword(t *testing.T) {
 	testRedacted(t, `CHANGE MASTER TO
   MASTER_PASSWORD = 'AAA`, `CHANGE MASTER TO
   MASTER_PASSWORD = 'AAA`)
+}
+
+func TestRedactPassword(t *testing.T) {
+	// regular case
+	testRedacted(t, `START xxx USER = 'vt_repl', PASSWORD = 'AAA'`,
+		`START xxx USER = 'vt_repl', PASSWORD = '****'`)
+
+	// empty password
+	testRedacted(t, `START xxx USER = 'vt_repl', PASSWORD = ''`,
+		`START xxx USER = 'vt_repl', PASSWORD = '****'`)
+
+	// no end match
+	testRedacted(t, `START xxx USER = 'vt_repl', PASSWORD = 'AAA`,
+		`START xxx USER = 'vt_repl', PASSWORD = 'AAA`)
+
+	// both master password and password
+	testRedacted(t, `START xxx
+  MASTER_PASSWORD = 'AAA',
+  PASSWORD = 'BBB'
+`,
+		`START xxx
+  MASTER_PASSWORD = '****',
+  PASSWORD = '****'
+`)
 }

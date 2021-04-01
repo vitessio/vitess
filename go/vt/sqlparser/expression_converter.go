@@ -33,11 +33,11 @@ func Convert(e Expr) (evalengine.Expr, error) {
 	case *Literal:
 		switch node.Type {
 		case IntVal:
-			return evalengine.NewLiteralIntFromBytes(node.Val)
+			return evalengine.NewLiteralIntFromBytes(node.Bytes())
 		case FloatVal:
-			return evalengine.NewLiteralFloat(node.Val)
+			return evalengine.NewLiteralFloat(node.Bytes())
 		case StrVal:
-			return evalengine.NewLiteralString(node.Val), nil
+			return evalengine.NewLiteralString(node.Bytes()), nil
 		}
 	case BoolVal:
 		if node {

@@ -9,7 +9,7 @@
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1,1",
-    "TableName": "user_unsharded",
+    "TableName": "`user`_unsharded",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -18,9 +18,9 @@
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select predef2 from user where 1 != 1",
-        "Query": "select predef2 from user",
-        "Table": "user"
+        "FieldQuery": "select predef2 from `user` where 1 != 1",
+        "Query": "select predef2 from `user`",
+        "Table": "`user`"
       },
       {
         "OperatorType": "Route",

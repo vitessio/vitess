@@ -163,33 +163,6 @@ service TabletManager {
   // RestoreFromBackup deletes all local data and restores it from the latest backup.
   rpc RestoreFromBackup(tabletmanagerdata.RestoreFromBackupRequest) returns (stream tabletmanagerdata.RestoreFromBackupResponse) {};
 
-  // Deprecated - remove after 7.0
-  rpc SlaveStatus(tabletmanagerdata.SlaveStatusRequest) returns (tabletmanagerdata.SlaveStatusResponse) {};
-
-  // Deprecated
-  rpc StopSlave(tabletmanagerdata.StopSlaveRequest) returns (tabletmanagerdata.StopSlaveResponse) {};
-
-  // Deprecated
-  rpc StopSlaveMinimum(tabletmanagerdata.StopSlaveMinimumRequest) returns (tabletmanagerdata.StopSlaveMinimumResponse) {};
-
-  // Deprecated
-  rpc StartSlave(tabletmanagerdata.StartSlaveRequest) returns (tabletmanagerdata.StartSlaveResponse) {};
-
-  // Deprecated
-  rpc StartSlaveUntilAfter(tabletmanagerdata.StartSlaveUntilAfterRequest) returns (tabletmanagerdata.StartSlaveUntilAfterResponse) {};
-
-  // Deprecated
-  rpc GetSlaves(tabletmanagerdata.GetSlavesRequest) returns (tabletmanagerdata.GetSlavesResponse) {};
-
-  // Deprecated
-  rpc InitSlave(tabletmanagerdata.InitSlaveRequest) returns (tabletmanagerdata.InitSlaveResponse) {};
-
-  // Deprecated
-  rpc SlaveWasPromoted(tabletmanagerdata.SlaveWasPromotedRequest) returns (tabletmanagerdata.SlaveWasPromotedResponse) {};
-
-  // Deprecated
-  rpc SlaveWasRestarted(tabletmanagerdata.SlaveWasRestartedRequest) returns (tabletmanagerdata.SlaveWasRestartedResponse) {};
-
   // Generic VExec request. Can be used for various purposes
   rpc VExec(tabletmanagerdata.VExecRequest) returns(tabletmanagerdata.VExecResponse) {};
 }

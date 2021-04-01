@@ -22,6 +22,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 )
@@ -82,10 +83,7 @@ func TestReverseBitsVerify(t *testing.T) {
 
 	// Failure test
 	_, err = reverseBits.Verify(nil, []sqltypes.Value{sqltypes.NewVarBinary("aa")}, [][]byte{nil})
-	wantErr := "reverseBits.Verify: could not parse value: 'aa'"
-	if err == nil || err.Error() != wantErr {
-		t.Errorf("reverseBits.Verify err: %v, want %s", err, wantErr)
-	}
+	require.EqualError(t, err, "could not parse value: 'aa'")
 }
 
 func TestReverseBitsReverseMap(t *testing.T) {

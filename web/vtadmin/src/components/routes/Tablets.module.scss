@@ -1,0 +1,6 @@
+.controls {
+  display: grid;
+  grid-gap: 8px;
+  grid-template-columns: 1fr min-content;
+  margin-bottom: 24px;
+}

@@ -31,7 +31,7 @@ var _ Primitive = (*AlterVSchema)(nil)
 type AlterVSchema struct {
 	Keyspace *vindexes.Keyspace
 
-	DDL *sqlparser.DDL
+	AlterVschemaDDL *sqlparser.AlterVschema
 
 	noTxNeeded
 
@@ -43,7 +43,7 @@ func (v *AlterVSchema) description() PrimitiveDescription {
 		OperatorType: "AlterVSchema",
 		Keyspace:     v.Keyspace,
 		Other: map[string]interface{}{
-			"query": sqlparser.String(v.DDL),
+			"query": sqlparser.String(v.AlterVschemaDDL),
 		},
 	}
 }
@@ -60,12 +60,12 @@ func (v *AlterVSchema) GetKeyspaceName() string {
 
 //GetTableName implements the Primitive interface
 func (v *AlterVSchema) GetTableName() string {
-	return v.DDL.Table.Name.String()
+	return v.AlterVschemaDDL.Table.Name.String()
 }
 
 //Execute implements the Primitive interface
 func (v *AlterVSchema) Execute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	err := vcursor.ExecuteVSchema(v.Keyspace.Name, v.DDL)
+	err := vcursor.ExecuteVSchema(v.Keyspace.Name, v.AlterVschemaDDL)
 	if err != nil {
 		return nil, err
 	}
@@ -74,10 +74,10 @@ func (v *AlterVSchema) Execute(vcursor VCursor, bindVars map[string]*query.BindV
 
 //StreamExecute implements the Primitive interface
 func (v *AlterVSchema) StreamExecute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantields bool, callback func(*sqltypes.Result) error) error {
-	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "not reachable") // TODO: systay - this should work
+	return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Alter vschema not supported in streaming")
 }
 
 //GetFields implements the Primitive interface
 func (v *AlterVSchema) GetFields(vcursor VCursor, bindVars map[string]*query.BindVariable) (*sqltypes.Result, error) {
-	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "not reachable") // TODO: systay - this should work
+	return nil, vterrors.NewErrorf(vtrpcpb.Code_UNIMPLEMENTED, vterrors.UnsupportedPS, "This command is not supported in the prepared statement protocol yet")
 }

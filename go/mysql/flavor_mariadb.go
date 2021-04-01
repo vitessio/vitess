@@ -22,7 +22,7 @@ import (
 	"io"
 	"time"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -30,6 +30,15 @@ import (
 
 // mariadbFlavor implements the Flavor interface for MariaDB.
 type mariadbFlavor struct{}
+type mariadbFlavor101 struct {
+	mariadbFlavor
+}
+type mariadbFlavor102 struct {
+	mariadbFlavor
+}
+
+var _ flavor = (*mariadbFlavor101)(nil)
+var _ flavor = (*mariadbFlavor102)(nil)
 
 // masterGTIDSet is part of the Flavor interface.
 func (mariadbFlavor) masterGTIDSet(c *Conn) (GTIDSet, error) {

@@ -1,0 +1,134 @@
+# Create vindex
+"alter vschema create vindex hash_vdx using hash"
+{
+  "QueryType": "DDL",
+  "Original": "alter vschema create vindex hash_vdx using hash",
+  "Instructions": {
+    "OperatorType": "AlterVSchema",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "query": "alter vschema create vindex hash_vdx using hash"
+  }
+}
+
+# Create vindex with qualifier
+"alter vschema create vindex user.hash_vdx using hash"
+{
+  "QueryType": "DDL",
+  "Original": "alter vschema create vindex user.hash_vdx using hash",
+  "Instructions": {
+    "OperatorType": "AlterVSchema",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "query": "alter vschema create vindex `user`.hash_vdx using hash"
+  }
+}
+
+# Drop vindex
+"alter vschema drop vindex hash_vdx"
+{
+  "QueryType": "DDL",
+  "Original": "alter vschema drop vindex hash_vdx",
+  "Instructions": {
+    "OperatorType": "AlterVSchema",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "query": "alter vschema drop vindex hash_vdx"
+  }
+}
+
+# Add table
+"alter vschema add table a"
+{
+  "QueryType": "DDL",
+  "Original": "alter vschema add table a",
+  "Instructions": {
+    "OperatorType": "AlterVSchema",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "query": "alter vschema add table a"
+  }
+}
+
+# Add sequence
+"alter vschema add sequence a_seq"
+{
+  "QueryType": "DDL",
+  "Original": "alter vschema add sequence a_seq",
+  "Instructions": {
+    "OperatorType": "AlterVSchema",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "query": "alter vschema add sequence a_seq"
+  }
+}
+
+# Add auto_increment with qualifier
+"alter vschema on user.a add auto_increment id using a_seq"
+{
+  "QueryType": "DDL",
+  "Original": "alter vschema on user.a add auto_increment id using a_seq",
+  "Instructions": {
+    "OperatorType": "AlterVSchema",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "query": "alter vschema on `user`.a add auto_increment id using a_seq"
+  }
+}
+
+# Drop table
+"alter vschema drop table a"
+{
+  "QueryType": "DDL",
+  "Original": "alter vschema drop table a",
+  "Instructions": {
+    "OperatorType": "AlterVSchema",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "query": "alter vschema drop table a"
+  }
+}
+
+# Add Vindex
+"alter vschema on a add vindex hash (id)"
+{
+  "QueryType": "DDL",
+  "Original": "alter vschema on a add vindex hash (id)",
+  "Instructions": {
+    "OperatorType": "AlterVSchema",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "query": "alter vschema on a add vindex hash (id)"
+  }
+}
+
+# Drop Vindex
+"alter vschema on a drop vindex hash"
+{
+  "QueryType": "DDL",
+  "Original": "alter vschema on a drop vindex hash",
+  "Instructions": {
+    "OperatorType": "AlterVSchema",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "query": "alter vschema on a drop vindex hash"
+  }
+}

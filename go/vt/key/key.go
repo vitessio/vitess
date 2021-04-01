@@ -62,6 +62,16 @@ func ParseKeyspaceIDType(param string) (topodatapb.KeyspaceIdType, error) {
 	return topodatapb.KeyspaceIdType(value), nil
 }
 
+// KeyspaceIDTypeString returns the string representation of a keyspace id type.
+func KeyspaceIDTypeString(id topodatapb.KeyspaceIdType) string {
+	s, ok := topodatapb.KeyspaceIdType_name[int32(id)]
+	if !ok {
+		return KeyspaceIDTypeString(topodatapb.KeyspaceIdType_UNSET)
+	}
+
+	return s
+}
+
 //
 // KeyRange helper methods
 //
@@ -185,7 +195,7 @@ func KeyRangeEqual(left, right *topodatapb.KeyRange) bool {
 		bytes.Equal(left.End, right.End)
 }
 
-// KeyRangeStartEqual returns true if right's keyrange start is _after_ left's start
+// KeyRangeStartSmaller returns true if right's keyrange start is _after_ left's start
 func KeyRangeStartSmaller(left, right *topodatapb.KeyRange) bool {
 	if left == nil {
 		return right != nil
@@ -289,10 +299,16 @@ func KeyRangeIncludes(big, small *topodatapb.KeyRange) bool {
 // specification. a-b-c-d will be parsed as a-b, b-c, c-d. The empty
 // string may serve both as the start and end of the keyspace: -a-b-
 // will be parsed as start-a, a-b, b-end.
+// "0" is treated as "-", to allow us to not have to special-case
+// client code.
 func ParseShardingSpec(spec string) ([]*topodatapb.KeyRange, error) {
 	parts := strings.Split(spec, "-")
 	if len(parts) == 1 {
-		return nil, fmt.Errorf("malformed spec: doesn't define a range: %q", spec)
+		if spec == "0" {
+			parts = []string{"", ""}
+		} else {
+			return nil, fmt.Errorf("malformed spec: doesn't define a range: %q", spec)
+		}
 	}
 	old := parts[0]
 	ranges := make([]*topodatapb.KeyRange, len(parts)-1)

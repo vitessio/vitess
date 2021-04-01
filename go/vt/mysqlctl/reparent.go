@@ -29,7 +29,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/log"
 
-	"golang.org/x/net/context"
+	"context"
 )
 
 // CreateReparentJournal returns the commands to execute to create

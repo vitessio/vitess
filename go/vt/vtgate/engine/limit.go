@@ -73,18 +73,15 @@ func (l *Limit) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariab
 	// There are more rows in the response than limit + offset
 	if count+offset <= len(result.Rows) {
 		result.Rows = result.Rows[offset : count+offset]
-		result.RowsAffected = uint64(count)
 		return result, nil
 	}
 	// Remove extra rows from response
 	if offset <= len(result.Rows) {
 		result.Rows = result.Rows[offset:]
-		result.RowsAffected = uint64(len(result.Rows))
 		return result, nil
 	}
 	// offset is beyond the result set
 	result.Rows = nil
-	result.RowsAffected = 0
 	return result, nil
 }
 

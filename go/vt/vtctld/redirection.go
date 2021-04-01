@@ -22,6 +22,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/http/httputil"
+	"strconv"
 	"strings"
 
 	"vitess.io/vitess/go/netutil"
@@ -70,7 +71,7 @@ func initVTTabletRedirection(ts *topo.Server) {
 			b = bytes.ReplaceAll(b, []byte(`href="/`), []byte(fmt.Sprintf(`href="%s`, prefixPath)))
 			b = bytes.ReplaceAll(b, []byte(`href=/`), []byte(fmt.Sprintf(`href=%s`, prefixPath)))
 			r.Body = ioutil.NopCloser(bytes.NewBuffer(b))
-			r.Header["Content-Length"] = []string{fmt.Sprint(len(b))}
+			r.Header["Content-Length"] = []string{strconv.FormatInt(int64(len(b)), 10)}
 
 			// Don't forget redirects
 			loc := r.Header["Location"]

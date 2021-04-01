@@ -19,10 +19,13 @@ package main
 import (
 	"errors"
 	"flag"
+	"fmt"
 	"os"
+	"strings"
 	"time"
 
-	"golang.org/x/net/context"
+	"context"
+
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/log"
@@ -33,7 +36,7 @@ import (
 )
 
 // The default values used by these flags cannot be taken from wrangler and
-// actionnode modules, as we do't want to depend on them at all.
+// actionnode modules, as we don't want to depend on them at all.
 var (
 	actionTimeout = flag.Duration("action_timeout", time.Hour, "timeout for the total command")
 	server        = flag.String("server", "", "server to use for connection")
@@ -64,6 +67,8 @@ func main() {
 			logutil.LogEvent(logger, e)
 		})
 	if err != nil {
+		errStr := strings.Replace(err.Error(), "remote error: ", "", -1)
+		fmt.Printf("%s Error: %s\n", flag.Arg(0), errStr)
 		log.Error(err)
 		os.Exit(1)
 	}

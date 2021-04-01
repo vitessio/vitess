@@ -21,7 +21,7 @@ import (
 	"sort"
 	"testing"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 

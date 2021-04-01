@@ -20,7 +20,8 @@ import (
 	"flag"
 	"time"
 
-	"golang.org/x/net/context"
+	"context"
+
 	"vitess.io/vitess/go/trace"
 
 	"vitess.io/vitess/go/flagutil"

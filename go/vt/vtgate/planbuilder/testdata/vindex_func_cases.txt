@@ -1,8 +1,8 @@
 # vindex func read all cols
-"select id, keyspace_id, range_start, range_end from user_index where id = :id"
+"select id, keyspace_id, range_start, range_end, hex_keyspace_id, shard from user_index where id = :id"
 {
   "QueryType": "SELECT",
-  "Original": "select id, keyspace_id, range_start, range_end from user_index where id = :id",
+  "Original": "select id, keyspace_id, range_start, range_end, hex_keyspace_id, shard from user_index where id = :id",
   "Instructions": {
     "OperatorType": "VindexFunc",
     "Variant": "VindexMap",
@@ -10,13 +10,17 @@
       0,
       1,
       2,
-      3
+      3,
+      4,
+      5
     ],
     "Fields": {
+      "hex_keyspace_id": "VARBINARY",
       "id": "VARBINARY",
       "keyspace_id": "VARBINARY",
       "range_end": "VARBINARY",
-      "range_start": "VARBINARY"
+      "range_start": "VARBINARY",
+      "shard": "VARBINARY"
     },
     "Value": ":id",
     "Vindex": "user_index"
@@ -35,13 +39,17 @@
       0,
       1,
       2,
-      3
+      3,
+      4,
+      5
     ],
     "Fields": {
+      "hex_keyspace_id": "VARBINARY",
       "id": "VARBINARY",
       "keyspace_id": "VARBINARY",
       "range_end": "VARBINARY",
-      "range_start": "VARBINARY"
+      "range_start": "VARBINARY",
+      "shard": "VARBINARY"
     },
     "Value": ":id",
     "Vindex": "user_index"
@@ -73,6 +81,7 @@
 # ambiguous vindex reference
 "select id, keyspace_id, id from hash_dup where id = :id"
 "ambiguous vindex reference: hash_dup"
+Gen4 plan same as above
 
 # disambiguated vindex reference
 "select id, keyspace_id, id from second_user.hash_dup where id = :id"
@@ -293,7 +302,7 @@
 }
 
 "select none from user_index where id = :id"
-"symbol none not found in table or subquery"
+"symbol `none` not found in table or subquery"
 
 "select * from samecolvin where col = :col"
 {

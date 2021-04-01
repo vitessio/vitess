@@ -20,10 +20,12 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
 	"vitess.io/vitess/go/test/utils"
 
+	"context"
+
 	"github.com/stretchr/testify/require"
-	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/key"
@@ -467,7 +469,7 @@ func TestTxConnCommitOrderFailure3(t *testing.T) {
 	// The last failed commit must generate a warning.
 	wantSession := vtgatepb.Session{
 		Warnings: []*querypb.QueryWarning{{
-			Message: "post-operation transaction had an error: Code: INVALID_ARGUMENT\nINVALID_ARGUMENT error\n\ntarget: TestTxConn.1.master, used tablet: aa-0 (1)",
+			Message: "post-operation transaction had an error: Code: INVALID_ARGUMENT\nINVALID_ARGUMENT error\n\ntarget: TestTxConn.1.master",
 		}},
 	}
 	utils.MustMatch(t, &wantSession, session.Session, "Session")

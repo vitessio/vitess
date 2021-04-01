@@ -200,6 +200,10 @@ message BinlogSource {
   // StopAfterCopy specifies if vreplication should be stopped
   // after copying is done.
   bool stop_after_copy = 9;
+
+  // ExternalCluster is the name of the mounted cluster which has the source keyspace/db for this workflow
+  // it is of the type <cluster_type.cluster_name>
+  string external_cluster = 10;
 }
 
 // VEventType enumerates the event types. Many of these types

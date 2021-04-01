@@ -21,6 +21,7 @@ import (
 	"sync"
 
 	"google.golang.org/grpc"
+
 	"vitess.io/vitess/go/stats"
 )
 

@@ -1,0 +1,94 @@
+# show columns from user keyspace
+"show full columns from user_extra"
+{
+  "QueryType": "SHOW",
+  "Original": "show full columns from user_extra",
+  "Instructions": {
+    "OperatorType": "Send",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetDestination": "AnyShard()",
+    "IsDML": false,
+    "Query": "show full columns from user_extra",
+    "SingleShardOnly": true
+  }
+}
+
+# show columns from routed table
+"show full fields from `route1`"
+{
+  "QueryType": "SHOW",
+  "Original": "show full fields from `route1`",
+  "Instructions": {
+    "OperatorType": "Send",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetDestination": "AnyShard()",
+    "IsDML": false,
+    "Query": "show full columns from `user`",
+    "SingleShardOnly": true
+  }
+}
+
+# show variables
+"show variables"
+{
+  "QueryType": "SHOW",
+  "Original": "show variables",
+  "Instructions": {
+    "OperatorType": "ReplaceVariables",
+    "Inputs": [
+      {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "AnyShard()",
+        "IsDML": false,
+        "Query": "show variables",
+        "SingleShardOnly": true
+      }
+    ]
+  }
+}
+
+# show full columns from system schema
+"show full columns from sys.sys_config"
+{
+  "QueryType": "SHOW",
+  "Original": "show full columns from sys.sys_config",
+  "Instructions": {
+    "OperatorType": "Send",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetDestination": "AnyShard()",
+    "IsDML": false,
+    "Query": "show full columns from sys.sys_config",
+    "SingleShardOnly": true
+  }
+}
+
+# show full columns from system schema replacing qualifier
+"show full columns from x.sys_config from sys"
+{
+  "QueryType": "SHOW",
+  "Original": "show full columns from x.sys_config from sys",
+  "Instructions": {
+    "OperatorType": "Send",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetDestination": "AnyShard()",
+    "IsDML": false,
+    "Query": "show full columns from sys.sys_config",
+    "SingleShardOnly": true
+  }
+}

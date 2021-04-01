@@ -244,7 +244,7 @@ func (a *AuthServerStatic) ValidateHash(salt []byte, user string, authResponse [
 				return &StaticUserData{entry.UserData, entry.Groups}, nil
 			}
 		} else {
-			computedAuthResponse := ScramblePassword(salt, []byte(entry.Password))
+			computedAuthResponse := ScrambleMysqlNativePassword(salt, []byte(entry.Password))
 			// Validate the password.
 			if matchSourceHost(remoteAddr, entry.SourceHost) && bytes.Equal(authResponse, computedAuthResponse) {
 				return &StaticUserData{entry.UserData, entry.Groups}, nil

@@ -45,7 +45,7 @@ all_except_flaky_and_cluster_tests=$(echo "$packages_with_tests" | grep -vE ".+ 
 flaky_tests=$(echo "$packages_with_tests" | grep -E ".+ .+_flaky_test\.go" | grep -vE "go/test/endtoend" | cut -d" " -f1)
 
 # Run non-flaky tests.
-echo "$all_except_flaky_and_cluster_tests" | xargs go test $VT_GO_PARALLEL
+echo "$all_except_flaky_and_cluster_tests" | xargs go test -count=1 $VT_GO_PARALLEL
 if [ $? -ne 0 ]; then
   echo "ERROR: Go unit tests failed. See above for errors."
   echo

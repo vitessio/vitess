@@ -21,8 +21,9 @@ import (
 	"testing"
 	"time"
 
+	context "context"
+
 	"github.com/golang/protobuf/proto"
-	context "golang.org/x/net/context"
 
 	automationpb "vitess.io/vitess/go/vt/proto/automation"
 )

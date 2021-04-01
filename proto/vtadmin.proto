@@ -1,0 +1,287 @@
+/*
+Copyright 2020 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+// This package contains the types used by VTAdmin (and later an RPC service).
+
+syntax = "proto3";
+option go_package = "vitess.io/vitess/go/vt/proto/vtadmin";
+
+package vtadmin;
+
+import "tabletmanagerdata.proto";
+import "topodata.proto";
+import "vschema.proto";
+import "vtctldata.proto";
+
+/* Services */
+
+// VTAdmin is the Vitess Admin API service. It provides RPCs that operate on
+// across a range of Vitess clusters.
+service VTAdmin {
+    // FindSchema returns a single Schema that matches the provided table name
+    // across all specified clusters IDs. Not specifying a set of cluster IDs
+    // causes the search to span all configured clusters.
+    //
+    // An error occurs if either no table exists across any of the clusters with
+    // the specified table name, or if multiple tables exist with that name.
+    rpc FindSchema(FindSchemaRequest) returns (Schema) {};
+    // GetClusters returns all configured clusters.
+    rpc GetClusters(GetClustersRequest) returns (GetClustersResponse) {};
+    // GetGates returns all gates across all the specified clusters.
+    rpc GetGates(GetGatesRequest) returns (GetGatesResponse) {};
+    // GetKeyspaces returns all keyspaces across the specified clusters.
+    rpc GetKeyspaces(GetKeyspacesRequest) returns (GetKeyspacesResponse) {};
+    // GetSchema returns the schema for the specified (cluster, keyspace, table)
+    // tuple.
+    rpc GetSchema(GetSchemaRequest) returns (Schema) {};
+    // GetSchemas returns all schemas across the specified clusters.
+    rpc GetSchemas(GetSchemasRequest) returns (GetSchemasResponse) {};
+    // GetTablet looks up a tablet by hostname across all clusters and returns
+    // the result.
+    rpc GetTablet(GetTabletRequest) returns (Tablet) {};
+    // GetTablets returns all tablets across all the specified clusters.
+    rpc GetTablets(GetTabletsRequest) returns (GetTabletsResponse) {};
+    // GetVSchema returns a VSchema for the specified keyspace in the specified
+    // cluster.
+    rpc GetVSchema(GetVSchemaRequest) returns (VSchema) {};
+    // GetVSchemas returns the VSchemas for all specified clusters.
+    rpc GetVSchemas(GetVSchemasRequest) returns (GetVSchemasResponse) {};
+    // GetWorkflow returns a single Workflow for a given cluster, keyspace, and
+    // workflow name.
+    rpc GetWorkflow(GetWorkflowRequest) returns (Workflow) {};
+    // GetWorkflows returns the Workflows for all specified clusters.
+    rpc GetWorkflows(GetWorkflowsRequest) returns (GetWorkflowsResponse) {};
+    // VTExplain provides information on how Vitess plans to execute a particular query.
+    rpc VTExplain(VTExplainRequest) returns (VTExplainResponse) {};
+}
+
+/* Data types */
+
+// Cluster represents information about a Vitess cluster.
+message Cluster {
+    string id = 1;
+    string name = 2;
+}
+
+message ClusterWorkflows {
+    repeated Workflow workflows = 1;
+    // Warnings is a list of non-fatal errors encountered when fetching
+    // workflows for a particular cluster.
+    repeated string warnings = 2;
+}
+
+// Keyspace represents information about a keyspace in a particular Vitess
+// cluster.
+message Keyspace {
+    Cluster cluster = 1;
+    vtctldata.Keyspace keyspace = 2;
+    map<string, vtctldata.Shard> shards = 3;
+}
+
+message Schema {
+    Cluster cluster = 1;
+    string keyspace = 2;
+
+    repeated tabletmanagerdata.TableDefinition table_definitions = 3;
+    // TableSizes is a mapping of table name to TableSize information.
+    map<string, TableSize> table_sizes = 4;
+
+    message ShardTableSize {
+        uint64 row_count = 1;
+        uint64 data_length = 2;
+    }
+
+    // TableSize aggregates table size information across all shards containing
+    // in the given keyspace and cluster, as well as per-shard size information.
+    message TableSize {
+        uint64 row_count = 1;
+        uint64 data_length = 2;
+        map<string, ShardTableSize> by_shard = 3;
+    }
+}
+
+// Tablet groups the topo information of a tablet together with the Vitess
+// cluster it belongs to.
+message Tablet {
+    Cluster cluster = 1;
+    topodata.Tablet tablet = 2;
+
+    enum ServingState {
+        UNKNOWN = 0;
+        SERVING = 1;
+        NOT_SERVING = 2;
+    }
+
+    ServingState state = 3;
+}
+
+// VSchema represents the vschema for a keyspace in the cluster it belongs to.
+message VSchema {
+    Cluster cluster = 1;
+    // Name is the name of the keyspace this VSchema is for.
+    string name = 2;
+    vschema.Keyspace v_schema = 3;
+}
+
+// Vtctld represents information about a single Vtctld host.
+message Vtctld {
+    string hostname = 1;
+    Cluster cluster = 2;
+}
+
+// VTGate represents information about a single VTGate host.
+message VTGate {
+    // Hostname is the shortname of the VTGate.
+    string hostname = 1;
+    // Pool is group the VTGate serves queries for. Some deployments segment
+    // VTGates into groups or pools, based on the workloads they serve queries
+    // for. Use of this field is optional.
+    string pool = 2;
+    // Cell is the topology cell the VTGate is in.
+    string cell = 3;
+    // Cluster is the cluster the VTGate serves.
+    Cluster cluster = 4;
+    // Keyspaces is the list of keyspaces-to-watch for the VTGate.
+    repeated string keyspaces = 5;
+}
+
+message Workflow {
+    Cluster cluster = 1;
+    string keyspace = 2;
+    vtctldata.Workflow workflow = 3;
+}
+
+/* Request/Response types */
+
+message FindSchemaRequest {
+    string table = 1;
+    repeated string cluster_ids = 2;
+    GetSchemaTableSizeOptions table_size_options = 3;
+}
+
+message GetClustersRequest {}
+
+message GetClustersResponse {
+    repeated Cluster clusters = 1;
+}
+
+message GetGatesRequest {
+    repeated string cluster_ids = 1;
+}
+
+message GetGatesResponse {
+    repeated VTGate gates = 1;
+}
+
+message GetKeyspacesRequest {
+    repeated string cluster_ids = 1;
+}
+
+message GetKeyspacesResponse {
+    repeated Keyspace keyspaces = 1;
+}
+
+message GetSchemaRequest {
+    string cluster_id = 1;
+    string keyspace = 2;
+    string table = 3;
+    GetSchemaTableSizeOptions table_size_options = 4;
+}
+
+message GetSchemasRequest {
+    repeated string cluster_ids = 1;
+    GetSchemaTableSizeOptions table_size_options = 2;
+}
+
+message GetSchemasResponse {
+    repeated Schema schemas = 1;
+}
+
+message GetSchemaTableSizeOptions {
+    bool aggregate_sizes = 1;
+}
+
+message GetTabletRequest {
+    string hostname = 1;
+    // ClusterIDs is an optional parameter to narrow the scope of the search, if
+    // the caller knows which cluster the tablet may be in, or, to disamiguate if
+    // multiple clusters have a tablet with the same hostname.
+    repeated string cluster_ids = 2;
+}
+
+message GetTabletsRequest {
+    repeated string cluster_ids = 1;
+}
+
+message GetTabletsResponse {
+    repeated Tablet tablets = 1;
+}
+
+message GetVSchemaRequest {
+    string cluster_id = 1;
+    string keyspace = 2;
+}
+
+message GetVSchemasRequest {
+    repeated string cluster_ids = 1;
+}
+
+message GetVSchemasResponse {
+    repeated VSchema v_schemas = 1;
+}
+
+message GetWorkflowRequest {
+    string cluster_id = 1;
+    string keyspace = 2;
+    string name = 3;
+    bool active_only = 4;
+}
+
+message GetWorkflowsRequest {
+    repeated string cluster_ids = 1;
+    // ActiveOnly specifies whether to return workflows that are currently
+    // active (running or paused) instead of all workflows.
+    bool active_only = 2;
+    // Keyspaces is a list of keyspaces to restrict the workflow search to. Note
+    // that the keyspaces list applies across all cluster IDs in the request.
+    //
+    // If, for example, you have two clusters, each with a keyspace called "foo"
+    // and want the workflows from "foo" in cluster1 but not from cluster2, you
+    // must make two requests.
+    //
+    // Keyspaces and IgnoreKeyspaces are mutually-exclusive, and Keyspaces takes
+    // precedence; if Keyspaces is a non-empty list, then IgnoreKeyspaces is
+    // ignored completely.
+    repeated string keyspaces = 3;
+    // IgnoreKeyspaces is a list of keyspaces to skip during the workflow
+    // search. It has the same semantics as the Keyspaces parameter, so refer to
+    // that documentation for more details.
+    repeated string ignore_keyspaces = 4;
+}
+
+message GetWorkflowsResponse {
+    map <string, ClusterWorkflows> workflows_by_cluster = 1;
+}
+
+message VTExplainRequest {
+    string cluster = 1;
+    string keyspace = 2;
+    string sql = 3;
+}
+
+message VTExplainResponse {
+    string response = 1;
+}

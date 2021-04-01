@@ -20,7 +20,7 @@ FROM debian:buster-slim
 
 RUN apt-get update && \
    apt-get upgrade -qq && \
-   apt-get install jq -qq --no-install-recommends && \
+   apt-get install jq curl -qq --no-install-recommends && \
    apt-get autoremove && \
    apt-get clean && \
    rm -rf /var/lib/apt/lists/*

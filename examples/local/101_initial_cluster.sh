@@ -38,7 +38,7 @@ for i in 100 101 102; do
 done
 
 # set one of the replicas to master
-vtctlclient InitShardMaster -force commerce/0 zone1-100
+vtctldclient InitShardPrimary --force commerce/0 zone1-100
 
 # create the schema
 vtctlclient ApplySchema -sql-file create_commerce_schema.sql commerce

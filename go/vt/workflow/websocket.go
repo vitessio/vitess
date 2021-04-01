@@ -21,8 +21,9 @@ import (
 	"fmt"
 	"net/http"
 
+	"context"
+
 	"github.com/gorilla/websocket"
-	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/vt/log"

@@ -24,11 +24,14 @@ import (
 	"sync"
 	"time"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/trace"
+	"vitess.io/vitess/go/vt/vterrors"
+
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 var (
@@ -36,10 +39,10 @@ var (
 	ErrClosed = errors.New("resource pool is closed")
 
 	// ErrTimeout is returned if a resource get times out.
-	ErrTimeout = errors.New("resource pool timed out")
+	ErrTimeout = vterrors.New(vtrpcpb.Code_DEADLINE_EXCEEDED, "resource pool timed out")
 
 	// ErrCtxTimeout is returned if a ctx is already expired by the time the resource pool is used
-	ErrCtxTimeout = errors.New("resource pool context already expired")
+	ErrCtxTimeout = vterrors.New(vtrpcpb.Code_DEADLINE_EXCEEDED, "resource pool context already expired")
 
 	prefillTimeout = 30 * time.Second
 )

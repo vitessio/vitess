@@ -32,6 +32,7 @@ import (
 // a test case.
 type Testable interface {
 	Test(name string, client *QueryClient) error
+	Benchmark(client *QueryClient) error
 }
 
 var (
@@ -59,6 +60,12 @@ func (tq TestQuery) Test(name string, client *QueryClient) error {
 	return nil
 }
 
+// Benchmark executes the query and discards the results
+func (tq TestQuery) Benchmark(client *QueryClient) error {
+	_, err := exec(client, string(tq), nil)
+	return err
+}
+
 // TestCase represents one test case. It will execute the
 // query and verify its results and effects against what
 // must be expected. Expected fields are optional.
@@ -77,8 +84,11 @@ type TestCase struct {
 	// query. The check is skipped if Result is nil.
 	Result [][]string
 
-	// Rows affected can be nil or an int.
+	// RowsAffected affected can be nil or an int.
 	RowsAffected interface{}
+
+	// 	RowsReturned affected can be nil or an int.
+	RowsReturned interface{}
 
 	// Rewritten specifies how the query should have be rewritten.
 	Rewritten []string
@@ -97,6 +107,12 @@ type TestCase struct {
 	Invalidations interface{}
 }
 
+// Benchmark executes the test case and discards the results without verifying them
+func (tc *TestCase) Benchmark(client *QueryClient) error {
+	_, err := exec(client, tc.Query, tc.BindVars)
+	return err
+}
+
 // Test executes the test case and returns an error if it failed.
 // The name parameter is used if the test case doesn't have a name.
 func (tc *TestCase) Test(name string, client *QueryClient) error {
@@ -104,6 +120,9 @@ func (tc *TestCase) Test(name string, client *QueryClient) error {
 	if tc.Name != "" {
 		name = tc.Name
 	}
+
+	// wait for all previous test cases to have been settled in cache
+	client.server.QueryPlanCacheWait()
 
 	catcher := NewQueryCatcher()
 	defer catcher.Close()
@@ -124,6 +143,13 @@ func (tc *TestCase) Test(name string, client *QueryClient) error {
 		want := tc.RowsAffected.(int)
 		if int(qr.RowsAffected) != want {
 			errs = append(errs, fmt.Sprintf("RowsAffected mismatch: %d, want %d", int(qr.RowsAffected), want))
+		}
+	}
+
+	if tc.RowsReturned != nil {
+		want := tc.RowsReturned.(int)
+		if len(qr.Rows) != want {
+			errs = append(errs, fmt.Sprintf("RowsReturned mismatch: %d, want %d", len(qr.Rows), want))
 		}
 	}
 
@@ -202,6 +228,18 @@ func (mc *MultiCase) Test(name string, client *QueryClient) error {
 	}
 	for _, tcase := range mc.Cases {
 		if err := tcase.Test(name, client); err != nil {
+			client.Rollback()
+			return err
+		}
+	}
+	return nil
+}
+
+// Benchmark executes the test cases in MultiCase and discards the
+// results without validating them.
+func (mc *MultiCase) Benchmark(client *QueryClient) error {
+	for _, tcase := range mc.Cases {
+		if err := tcase.Benchmark(client); err != nil {
 			client.Rollback()
 			return err
 		}

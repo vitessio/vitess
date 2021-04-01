@@ -57,6 +57,11 @@ const (
 	StmtSRollback
 	StmtRelease
 	StmtVStream
+	StmtLockTables
+	StmtUnlockTables
+	StmtFlush
+	StmtCallProc
+	StmtRevert
 )
 
 //ASTToStatementType returns a StatementType from an AST stmt
@@ -74,13 +79,15 @@ func ASTToStatementType(stmt Statement) StatementType {
 		return StmtSet
 	case *Show:
 		return StmtShow
-	case *DDL, *DBDDL:
+	case DDLStatement, DBDDLStatement, *AlterVschema:
 		return StmtDDL
+	case *RevertMigration:
+		return StmtRevert
 	case *Use:
 		return StmtUse
 	case *OtherRead, *OtherAdmin, *Load:
 		return StmtOther
-	case *Explain:
+	case Explain:
 		return StmtExplain
 	case *Begin:
 		return StmtBegin
@@ -94,6 +101,14 @@ func ASTToStatementType(stmt Statement) StatementType {
 		return StmtSRollback
 	case *Release:
 		return StmtRelease
+	case *LockTables:
+		return StmtLockTables
+	case *UnlockTables:
+		return StmtUnlockTables
+	case *Flush:
+		return StmtFlush
+	case *CallProc:
+		return StmtCallProc
 	default:
 		return StmtUnknown
 	}
@@ -102,17 +117,33 @@ func ASTToStatementType(stmt Statement) StatementType {
 //CanNormalize takes Statement and returns if the statement can be normalized.
 func CanNormalize(stmt Statement) bool {
 	switch stmt.(type) {
-	case *Select, *Union, *Insert, *Update, *Delete, *Set:
+	case *Select, *Union, *Insert, *Update, *Delete, *Set, *CallProc: // TODO: we could merge this logic into ASTrewriter
 		return true
 	}
 	return false
 }
 
-//IsSetStatement takes Statement and returns if the statement is set statement.
-func IsSetStatement(stmt Statement) bool {
+// CachePlan takes Statement and returns true if the query plan should be cached
+func CachePlan(stmt Statement) bool {
 	switch stmt.(type) {
+	case *Select, *Union, *ParenSelect,
+		*Insert, *Update, *Delete:
+		return true
+	}
+	return false
+}
+
+//MustRewriteAST takes Statement and returns true if RewriteAST must run on it for correct execution irrespective of user flags.
+func MustRewriteAST(stmt Statement) bool {
+	switch node := stmt.(type) {
 	case *Set:
 		return true
+	case *Show:
+		switch node.Internal.(type) {
+		case *ShowBasic:
+			return true
+		}
+		return false
 	}
 	return false
 }
@@ -141,6 +172,8 @@ func Preview(sql string) StatementType {
 		return StmtStream
 	case "vstream":
 		return StmtVStream
+	case "revert":
+		return StmtRevert
 	case "insert":
 		return StmtInsert
 	case "replace":
@@ -151,6 +184,10 @@ func Preview(sql string) StatementType {
 		return StmtDelete
 	case "savepoint":
 		return StmtSavepoint
+	case "lock":
+		return StmtLockTables
+	case "unlock":
+		return StmtUnlockTables
 	}
 	// For the following statements it is not sufficient to rely
 	// on loweredFirstWord. This is because they are not statements
@@ -167,8 +204,10 @@ func Preview(sql string) StatementType {
 		return StmtRollback
 	}
 	switch loweredFirstWord {
-	case "create", "alter", "rename", "drop", "truncate", "flush":
+	case "create", "alter", "rename", "drop", "truncate":
 		return StmtDDL
+	case "flush":
+		return StmtFlush
 	case "set":
 		return StmtSet
 	case "show":
@@ -197,6 +236,8 @@ func (s StatementType) String() string {
 		return "STREAM"
 	case StmtVStream:
 		return "VSTREAM"
+	case StmtRevert:
+		return "REVERT"
 	case StmtInsert:
 		return "INSERT"
 	case StmtReplace:
@@ -231,6 +272,14 @@ func (s StatementType) String() string {
 		return "SAVEPOINT_ROLLBACK"
 	case StmtRelease:
 		return "RELEASE"
+	case StmtLockTables:
+		return "LOCK_TABLES"
+	case StmtUnlockTables:
+		return "UNLOCK_TABLES"
+	case StmtFlush:
+		return "FLUSH"
+	case StmtCallProc:
+		return "CALL_PROC"
 	default:
 		return "UNKNOWN"
 	}
@@ -252,26 +301,6 @@ func IsDMLStatement(stmt Statement) bool {
 		return true
 	}
 
-	return false
-}
-
-//IsVschemaDDL returns true if the query is an Vschema alter ddl.
-func IsVschemaDDL(ddl *DDL) bool {
-	switch ddl.Action {
-	case CreateVindexDDLAction, DropVindexDDLAction, AddVschemaTableDDLAction, DropVschemaTableDDLAction, AddColVindexDDLAction, DropColVindexDDLAction, AddSequenceDDLAction, AddAutoIncDDLAction:
-		return true
-	}
-	return false
-}
-
-// IsOnlineSchemaDDL returns true if the query is an online schema change DDL
-func IsOnlineSchemaDDL(ddl *DDL, sql string) bool {
-	switch ddl.Action {
-	case AlterDDLAction:
-		if ddl.OnlineHint != nil {
-			return ddl.OnlineHint.Strategy != ""
-		}
-	}
 	return false
 }
 
@@ -387,9 +416,9 @@ func NewPlanValue(node Expr) (sqltypes.PlanValue, error) {
 			}
 			return sqltypes.PlanValue{Value: n}, nil
 		case FloatVal:
-			return sqltypes.PlanValue{Value: sqltypes.MakeTrusted(sqltypes.Float64, node.Val)}, nil
+			return sqltypes.PlanValue{Value: sqltypes.MakeTrusted(sqltypes.Float64, node.Bytes())}, nil
 		case StrVal:
-			return sqltypes.PlanValue{Value: sqltypes.MakeTrusted(sqltypes.VarBinary, node.Val)}, nil
+			return sqltypes.PlanValue{Value: sqltypes.MakeTrusted(sqltypes.VarBinary, node.Bytes())}, nil
 		case HexVal:
 			v, err := node.HexDecode()
 			if err != nil {

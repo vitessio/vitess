@@ -23,9 +23,12 @@ import (
 	"testing"
 	"time"
 
-	"golang.org/x/net/context"
+	"github.com/stretchr/testify/require"
+
+	"context"
 
 	"github.com/golang/protobuf/proto"
+
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/topo"
@@ -1168,4 +1171,72 @@ func TestMasterMigrateServedType(t *testing.T) {
 	if string(got) != string(want) {
 		t.Errorf("MigrateServedType() failure. Got %v, want: %v", string(got), string(want))
 	}
+}
+
+func TestValidateSrvKeyspace(t *testing.T) {
+	cell := "cell1"
+	cell2 := "cell2"
+	keyspace := "ks1"
+	ctx := context.Background()
+	ts := memorytopo.NewServer(cell, cell2)
+
+	leftKeyRange, err := key.ParseShardingSpec("-80")
+	if err != nil || len(leftKeyRange) != 1 {
+		t.Fatalf("ParseShardingSpec failed. Expected non error and only one element. Got err: %v, len(%v)", err, len(leftKeyRange))
+	}
+
+	rightKeyRange, err := key.ParseShardingSpec("80-")
+	if err != nil || len(rightKeyRange) != 1 {
+		t.Fatalf("ParseShardingSpec failed. Expected non error and only one element. Got err: %v, len(%v)", err, len(rightKeyRange))
+	}
+
+	correct := &topodatapb.SrvKeyspace{
+		Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
+			{
+				ServedType: topodatapb.TabletType_MASTER,
+				ShardReferences: []*topodatapb.ShardReference{
+					{
+						Name:     "-80",
+						KeyRange: leftKeyRange[0],
+					},
+					{
+						Name:     "80-",
+						KeyRange: rightKeyRange[0],
+					},
+				},
+			},
+		},
+	}
+
+	incorrect := &topodatapb.SrvKeyspace{
+		Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
+			{
+				ServedType: topodatapb.TabletType_MASTER,
+				ShardReferences: []*topodatapb.ShardReference{
+					{
+						Name:     "80-",
+						KeyRange: rightKeyRange[0],
+					},
+				},
+			},
+		},
+	}
+
+	if err := ts.UpdateSrvKeyspace(ctx, cell, keyspace, correct); err != nil {
+		t.Fatalf("UpdateSrvKeyspace() failed: %v", err)
+	}
+
+	if err := ts.UpdateSrvKeyspace(ctx, cell2, keyspace, incorrect); err != nil {
+		t.Fatalf("UpdateSrvKeyspace() failed: %v", err)
+	}
+	errMsg := "keyspace partition for MASTER in cell cell2 does not start with min key"
+	err = ts.ValidateSrvKeyspace(ctx, keyspace, "cell1,cell2")
+	require.EqualError(t, err, errMsg)
+
+	err = ts.ValidateSrvKeyspace(ctx, keyspace, "cell1")
+	require.NoError(t, err)
+	err = ts.ValidateSrvKeyspace(ctx, keyspace, "cell2")
+	require.EqualError(t, err, errMsg)
+	err = ts.ValidateSrvKeyspace(ctx, keyspace, "")
+	require.EqualError(t, err, errMsg)
 }

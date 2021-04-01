@@ -10,7 +10,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v1
       with:
-        go-version: 1.13
+        go-version: 1.15
 
     - name: Check out code
       uses: actions/checkout@v2
@@ -31,5 +31,5 @@ jobs:
 
     - name: check_make_visitor
       run: |
-        misc/git/hooks/visitorgen
+        misc/git/hooks/asthelpers
 

@@ -25,8 +25,9 @@ import (
 
 	"github.com/golang/protobuf/jsonpb"
 
+	"context"
+
 	"github.com/golang/protobuf/proto"
-	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/wrangler"
@@ -59,7 +60,7 @@ func init() {
 // the right object, then echoes it as a string.
 func DecodeContent(filename string, data []byte, json bool) (string, error) {
 	name := path.Base(filename)
-
+	dir := path.Dir(filename)
 	var p proto.Message
 	switch name {
 	case topo.CellInfoFile:
@@ -81,9 +82,15 @@ func DecodeContent(filename string, data []byte, json bool) (string, error) {
 	case topo.RoutingRulesFile:
 		p = new(vschemapb.RoutingRules)
 	default:
-		if json {
-			return "", fmt.Errorf("unknown topo protobuf type for %v", name)
-		} else {
+		switch dir {
+		case "/" + topo.GetExternalVitessClusterDir():
+			p = new(topodatapb.ExternalVitessCluster)
+		default:
+		}
+		if p == nil {
+			if json {
+				return "", fmt.Errorf("unknown topo protobuf type for %v", name)
+			}
 			return string(data), nil
 		}
 	}
@@ -94,15 +101,14 @@ func DecodeContent(filename string, data []byte, json bool) (string, error) {
 
 	if json {
 		return new(jsonpb.Marshaler).MarshalToString(p)
-	} else {
-		return proto.MarshalTextString(p), nil
 	}
+	return proto.MarshalTextString(p), nil
 }
 
 func commandTopoCat(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	cell := subFlags.String("cell", topo.GlobalCell, "topology cell to cat the file from. Defaults to global cell.")
 	long := subFlags.Bool("long", false, "long listing.")
-	decodeProtoJson := subFlags.Bool("decode_proto_json", false, "decode proto files and display them as json")
+	decodeProtoJSON := subFlags.Bool("decode_proto_json", false, "decode proto files and display them as json")
 	decodeProto := subFlags.Bool("decode_proto", false, "decode proto files and display them as text")
 	subFlags.Parse(args)
 	if subFlags.NArg() == 0 {
@@ -124,15 +130,15 @@ func commandTopoCat(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.F
 
 	var topologyDecoder TopologyDecoder
 	switch {
-	case *decodeProtoJson:
-		topologyDecoder = JsonTopologyDecoder{}
+	case *decodeProtoJSON:
+		topologyDecoder = JSONTopologyDecoder{}
 	case *decodeProto:
 		topologyDecoder = ProtoTopologyDecoder{}
 	default:
 		topologyDecoder = PlainTopologyDecoder{}
 	}
 
-	return topologyDecoder.decode(resolved, conn, ctx, wr, *long)
+	return topologyDecoder.decode(ctx, resolved, conn, wr, *long)
 }
 
 func commandTopoCp(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -175,15 +181,21 @@ func copyFileToTopo(ctx context.Context, ts *topo.Server, cell, from, to string)
 	return err
 }
 
+// TopologyDecoder interface for exporting out a leaf node in a readable form
 type TopologyDecoder interface {
-	decode([]string, topo.Conn, context.Context, *wrangler.Wrangler, bool) error
+	decode(context.Context, []string, topo.Conn, *wrangler.Wrangler, bool) error
 }
 
+// ProtoTopologyDecoder exports topo node as a proto
 type ProtoTopologyDecoder struct{}
-type PlainTopologyDecoder struct{}
-type JsonTopologyDecoder struct{}
 
-func (d ProtoTopologyDecoder) decode(topoPaths []string, conn topo.Conn, ctx context.Context, wr *wrangler.Wrangler, long bool) error {
+// PlainTopologyDecoder exports topo node as plain text
+type PlainTopologyDecoder struct{}
+
+// JSONTopologyDecoder exports topo node as JSON
+type JSONTopologyDecoder struct{}
+
+func (d ProtoTopologyDecoder) decode(ctx context.Context, topoPaths []string, conn topo.Conn, wr *wrangler.Wrangler, long bool) error {
 	hasError := false
 	for _, topoPath := range topoPaths {
 		data, version, err := conn.Get(ctx, topoPath)
@@ -215,7 +227,7 @@ func (d ProtoTopologyDecoder) decode(topoPaths []string, conn topo.Conn, ctx con
 	return nil
 }
 
-func (d PlainTopologyDecoder) decode(topoPaths []string, conn topo.Conn, ctx context.Context, wr *wrangler.Wrangler, long bool) error {
+func (d PlainTopologyDecoder) decode(ctx context.Context, topoPaths []string, conn topo.Conn, wr *wrangler.Wrangler, long bool) error {
 	hasError := false
 	for _, topoPath := range topoPaths {
 		data, version, err := conn.Get(ctx, topoPath)
@@ -241,7 +253,7 @@ func (d PlainTopologyDecoder) decode(topoPaths []string, conn topo.Conn, ctx con
 	return nil
 }
 
-func (d JsonTopologyDecoder) decode(topoPaths []string, conn topo.Conn, ctx context.Context, wr *wrangler.Wrangler, long bool) error {
+func (d JSONTopologyDecoder) decode(ctx context.Context, topoPaths []string, conn topo.Conn, wr *wrangler.Wrangler, long bool) error {
 	hasError := false
 	var jsonData []interface{}
 	for _, topoPath := range topoPaths {

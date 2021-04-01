@@ -22,7 +22,8 @@ import (
 	"fmt"
 	"html/template"
 
-	"golang.org/x/net/context"
+	"context"
+
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/peer"
 )

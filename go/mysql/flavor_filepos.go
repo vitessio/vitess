@@ -24,7 +24,7 @@ import (
 	"strings"
 	"time"
 
-	"golang.org/x/net/context"
+	"context"
 )
 
 type filePosFlavor struct {
@@ -270,4 +270,9 @@ func (*filePosFlavor) enableBinlogPlaybackCommand() string {
 // disableBinlogPlaybackCommand is part of the Flavor interface.
 func (*filePosFlavor) disableBinlogPlaybackCommand() string {
 	return ""
+}
+
+// baseShowTablesWithSizes is part of the Flavor interface.
+func (*filePosFlavor) baseShowTablesWithSizes() string {
+	return TablesWithSize56
 }

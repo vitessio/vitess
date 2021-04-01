@@ -17,13 +17,13 @@ limitations under the License.
 package planbuilder
 
 // primitiveBuilder is the top level type for building plans.
-// It contains the current builder tree, the symtab and
+// It contains the current logicalPlan tree, the symtab and
 // the jointab. It can create transient planBuilders due
 // to the recursive nature of SQL.
 type primitiveBuilder struct {
 	vschema ContextVSchema
 	jt      *jointab
-	bldr    builder
+	plan    logicalPlan
 	st      *symtab
 }
 

@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/sqltypes"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -109,7 +110,7 @@ func TestPulloutSubqueryValueBadColumns(t *testing.T) {
 	}
 
 	_, err := ps.Execute(nil, make(map[string]*querypb.BindVariable), false)
-	expectError(t, "ps.Execute", err, "subquery returned more than one column")
+	require.EqualError(t, err, "subquery returned more than one column")
 }
 
 func TestPulloutSubqueryValueBadRows(t *testing.T) {
@@ -131,7 +132,7 @@ func TestPulloutSubqueryValueBadRows(t *testing.T) {
 	}
 
 	_, err := ps.Execute(nil, make(map[string]*querypb.BindVariable), false)
-	expectError(t, "ps.Execute", err, "subquery returned more than one row")
+	require.EqualError(t, err, "subquery returned more than one row")
 }
 
 func TestPulloutSubqueryInNotinGood(t *testing.T) {
@@ -216,7 +217,7 @@ func TestPulloutSubqueryInBadColumns(t *testing.T) {
 	}
 
 	_, err := ps.Execute(nil, make(map[string]*querypb.BindVariable), false)
-	expectError(t, "ps.Execute", err, "subquery returned more than one column")
+	require.EqualError(t, err, "subquery returned more than one column")
 }
 
 func TestPulloutSubqueryExists(t *testing.T) {
@@ -281,7 +282,7 @@ func TestPulloutSubqueryError(t *testing.T) {
 	}
 
 	_, err := ps.Execute(nil, make(map[string]*querypb.BindVariable), false)
-	expectError(t, "ps.Execute", err, "err")
+	require.EqualError(t, err, "err")
 }
 
 func TestPulloutSubqueryStream(t *testing.T) {

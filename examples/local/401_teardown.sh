@@ -22,7 +22,7 @@ source ./env.sh
 ./scripts/vtgate-down.sh
 
 for tablet in 100 200 300 400; do
-	if vtctlclient -server localhost:15999 GetTablet zone1-$tablet >/dev/null 2>&1; then
+	if vtctlclient -action_timeout 1s -server localhost:15999 GetTablet zone1-$tablet >/dev/null 2>&1; then
 		# The zero tablet is up. Try to shutdown 0-2 tablet + mysqlctl
 		for i in 0 1 2; do
 			uid=$(($tablet + $i))

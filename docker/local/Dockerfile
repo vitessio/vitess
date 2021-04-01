@@ -1,7 +1,14 @@
-FROM vitess/bootstrap:common
+ARG bootstrap_version=1
+ARG image="vitess/bootstrap:${bootstrap_version}-common"
+
+FROM "${image}"
 
 RUN apt-get update
-RUN apt-get install -y sudo curl vim jq mysql-server
+RUN apt-get install -y sudo curl vim jq
+
+# Install dependencies
+COPY docker/lite/install_dependencies.sh /vt/dist/install_dependencies.sh
+RUN /vt/dist/install_dependencies.sh mysql57
 
 COPY docker/local/install_local_dependencies.sh /vt/dist/install_local_dependencies.sh
 RUN /vt/dist/install_local_dependencies.sh
@@ -26,5 +33,8 @@ ENV PATH="/var/opt/etcd:${PATH}"
 
 RUN mkdir /vt/local
 COPY examples/local /vt/local
+
+RUN mkdir /vt/common
+COPY examples/common /vt/common
 
 CMD cd /vt/local && ./101_initial_cluster.sh && /bin/bash

@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"google.golang.org/grpc"
+
 	"vitess.io/vitess/go/vt/vttablet/grpctmclient"
 	"vitess.io/vitess/go/vt/vttablet/tmrpctest"
 

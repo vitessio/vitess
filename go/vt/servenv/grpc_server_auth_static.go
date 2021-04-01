@@ -22,7 +22,8 @@ import (
 	"fmt"
 	"io/ioutil"
 
-	"golang.org/x/net/context"
+	"context"
+
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"

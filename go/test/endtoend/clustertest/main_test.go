@@ -101,7 +101,7 @@ func TestMain(m *testing.M) {
 func testURL(t *testing.T, url string, testCaseName string) {
 	statusCode := getStatusForURL(url)
 	if got, want := statusCode, 200; got != want {
-		t.Errorf("select:\n%v want\n%v for %s", got, want, testCaseName)
+		t.Errorf("\nurl: %v\nstatus code: %v \nwant %v for %s", url, got, want, testCaseName)
 	}
 }
 

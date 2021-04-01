@@ -30,6 +30,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/tableacl"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
@@ -94,7 +95,7 @@ func TestPlan(t *testing.T) {
 					bout, _ := json.MarshalIndent(plan, "", "  ")
 					out = string(bout)
 				}
-				fmt.Printf("\"%s\"\n%s\n\n", tcase.input, out)
+				fmt.Printf("\"in> %s\"\nout>%s\nexpected: %s\n\n", tcase.input, out, tcase.output)
 			}
 		})
 	}

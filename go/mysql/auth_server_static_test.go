@@ -92,7 +92,7 @@ func TestValidateHashGetter(t *testing.T) {
 		t.Fatalf("error generating salt: %v", err)
 	}
 
-	scrambled := ScramblePassword(salt, []byte("password"))
+	scrambled := ScrambleMysqlNativePassword(salt, []byte("password"))
 	getter, err := auth.ValidateHash(salt, "mysql_user", scrambled, addr)
 	if err != nil {
 		t.Fatalf("error validating password: %v", err)
@@ -270,7 +270,7 @@ func TestStaticPasswords(t *testing.T) {
 				t.Fatalf("error generating salt: %v", err)
 			}
 
-			scrambled := ScramblePassword(salt, []byte(c.password))
+			scrambled := ScrambleMysqlNativePassword(salt, []byte(c.password))
 			_, err = auth.ValidateHash(salt, c.user, scrambled, addr)
 
 			if c.success {

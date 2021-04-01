@@ -4,13 +4,13 @@ jobs:
 
   build:
     name: Unit Test (Race)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-18.04
     steps:
 
     - name: Set up Go
       uses: actions/setup-go@v1
       with:
-        go-version: 1.13
+        go-version: 1.15
 
     - name: Check out code
       uses: actions/checkout@v2

@@ -18,16 +18,17 @@ package vtgate
 
 import (
 	"fmt"
-	"reflect"
 	"strings"
 	"testing"
 
+	"vitess.io/vitess/go/cache"
 	"vitess.io/vitess/go/test/utils"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"golang.org/x/net/context"
+	"context"
+
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -53,30 +54,35 @@ func TestSelectNext(t *testing.T) {
 		BindVariables: map[string]*querypb.BindVariable{"n": sqltypes.Int64BindVariable(2)},
 	}}
 
-	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
-		t.Errorf("sbclookup.Queries:\n%v, want\n%v\n", sbclookup.Queries, wantQueries)
-	}
+	utils.MustMatch(t, wantQueries, sbclookup.Queries)
 }
 
 func TestSelectDBA(t *testing.T) {
 	executor, sbc1, _, _ := createLegacyExecutorEnv()
 
 	query := "select * from INFORMATION_SCHEMA.foo"
-	_, err := executor.Execute(
-		context.Background(),
-		"TestSelectDBA",
+	_, err := executor.Execute(context.Background(), "TestSelectDBA",
 		NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"}),
-		query,
-		map[string]*querypb.BindVariable{},
+		query, map[string]*querypb.BindVariable{},
 	)
 	require.NoError(t, err)
-	wantQueries := []*querypb.BoundQuery{{
-		Sql:           query,
-		BindVariables: map[string]*querypb.BindVariable{},
-	}}
-	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
-		t.Errorf("sbclookup.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
-	}
+	wantQueries := []*querypb.BoundQuery{{Sql: query, BindVariables: map[string]*querypb.BindVariable{}}}
+	utils.MustMatch(t, wantQueries, sbc1.Queries)
+	sbc1.Queries = nil
+
+	query = "SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE table_schema = 'performance_schema' AND table_name = 'foo'"
+	_, err = executor.Execute(context.Background(), "TestSelectDBA",
+		NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"}),
+		query, map[string]*querypb.BindVariable{},
+	)
+	require.NoError(t, err)
+	wantQueries = []*querypb.BoundQuery{{Sql: "select COUNT(*) from INFORMATION_SCHEMA.`TABLES` where table_schema = :__vtschemaname and table_name = :__vttablename",
+		BindVariables: map[string]*querypb.BindVariable{
+			"__vtschemaname": sqltypes.StringBindVariable("performance_schema"),
+			"__vttablename":  sqltypes.StringBindVariable("foo"),
+		}}}
+	utils.MustMatch(t, wantQueries, sbc1.Queries)
+
 }
 
 func TestUnsharded(t *testing.T) {
@@ -88,9 +94,7 @@ func TestUnsharded(t *testing.T) {
 		Sql:           "select id from music_user_map where id = 1",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
-	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
-		t.Errorf("sbclookup.Queries: %+v, want %+v\n", sbclookup.Queries, wantQueries)
-	}
+	utils.MustMatch(t, wantQueries, sbclookup.Queries)
 }
 
 func TestUnshardedComments(t *testing.T) {
@@ -102,9 +106,7 @@ func TestUnshardedComments(t *testing.T) {
 		Sql:           "/* leading */ select id from music_user_map where id = 1 /* trailing */",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
-	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
-		t.Errorf("sbclookup.Queries: %+v, want %+v\n", sbclookup.Queries, wantQueries)
-	}
+	utils.MustMatch(t, wantQueries, sbclookup.Queries)
 
 	_, err = executorExec(executor, "update music_user_map set id = 1 /* trailing */", nil)
 	require.NoError(t, err)
@@ -115,9 +117,7 @@ func TestUnshardedComments(t *testing.T) {
 		Sql:           "update music_user_map set id = 1 /* trailing */",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
-	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
-		t.Errorf("sbclookup.Queries: %+v, want %+v\n", sbclookup.Queries, wantQueries)
-	}
+	utils.MustMatch(t, wantQueries, sbclookup.Queries)
 
 	sbclookup.Queries = nil
 	_, err = executorExec(executor, "delete from music_user_map /* trailing */", nil)
@@ -126,9 +126,7 @@ func TestUnshardedComments(t *testing.T) {
 		Sql:           "delete from music_user_map /* trailing */",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
-	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
-		t.Errorf("sbclookup.Queries: %+v, want %+v\n", sbclookup.Queries, wantQueries)
-	}
+	utils.MustMatch(t, wantQueries, sbclookup.Queries)
 
 	sbclookup.Queries = nil
 	_, err = executorExec(executor, "insert into music_user_map values (1) /* trailing */", nil)
@@ -137,9 +135,7 @@ func TestUnshardedComments(t *testing.T) {
 		Sql:           "insert into music_user_map values (1) /* trailing */",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
-	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
-		t.Errorf("sbclookup.Queries: %+v, want %+v\n", sbclookup.Queries, wantQueries)
-	}
+	utils.MustMatch(t, wantQueries, sbclookup.Queries)
 }
 
 func TestStreamUnsharded(t *testing.T) {
@@ -213,12 +209,7 @@ func TestStreamBuffering(t *testing.T) {
 	for r := range results {
 		gotResults = append(gotResults, r)
 	}
-	if !reflect.DeepEqual(gotResults, wantResults) {
-		t.Logf("len: %d", len(gotResults))
-		for i := range gotResults {
-			t.Errorf("Buffered streaming:\n%v, want\n%v", gotResults[i], wantResults[i])
-		}
-	}
+	utils.MustMatch(t, wantResults, gotResults)
 }
 
 func TestStreamLimitOffset(t *testing.T) {
@@ -230,13 +221,16 @@ func TestStreamLimitOffset(t *testing.T) {
 		Fields: []*querypb.Field{
 			{Name: "id", Type: sqltypes.Int32},
 			{Name: "textcol", Type: sqltypes.VarChar},
+			{Name: "weight_string(id)", Type: sqltypes.VarBinary},
 		},
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewInt32(1),
 			sqltypes.NewVarChar("1234"),
+			sqltypes.NULL,
 		}, {
 			sqltypes.NewInt32(4),
 			sqltypes.NewVarChar("4567"),
+			sqltypes.NULL,
 		}},
 	}})
 
@@ -244,10 +238,12 @@ func TestStreamLimitOffset(t *testing.T) {
 		Fields: []*querypb.Field{
 			{Name: "id", Type: sqltypes.Int32},
 			{Name: "textcol", Type: sqltypes.VarChar},
+			{Name: "weight_string(id)", Type: sqltypes.VarBinary},
 		},
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewInt32(2),
 			sqltypes.NewVarChar("2345"),
+			sqltypes.NULL,
 		}},
 	}})
 
@@ -303,7 +299,6 @@ func TestSelectLastInsertId(t *testing.T) {
 	sql := "select last_insert_id()"
 	result, err := executorExec(executor, sql, map[string]*querypb.BindVariable{})
 	wantResult := &sqltypes.Result{
-		RowsAffected: 1,
 		Fields: []*querypb.Field{
 			{Name: "last_insert_id()", Type: sqltypes.Uint64},
 		},
@@ -312,7 +307,7 @@ func TestSelectLastInsertId(t *testing.T) {
 		}},
 	}
 	require.NoError(t, err)
-	utils.MustMatch(t, result, wantResult, "Mismatch")
+	utils.MustMatch(t, wantResult, result, "Mismatch")
 }
 
 func TestSelectSystemVariables(t *testing.T) {
@@ -326,28 +321,32 @@ func TestSelectSystemVariables(t *testing.T) {
 	logChan := QueryLogger.Subscribe("Test")
 	defer QueryLogger.Unsubscribe(logChan)
 
-	sql := "select @@autocommit, @@client_found_rows, @@skip_query_plan_cache, " +
+	sql := "select @@autocommit, @@client_found_rows, @@skip_query_plan_cache, @@enable_system_settings, " +
 		"@@sql_select_limit, @@transaction_mode, @@workload, @@read_after_write_gtid, " +
-		"@@read_after_write_timeout, @@session_track_gtids"
+		"@@read_after_write_timeout, @@session_track_gtids, @@ddl_strategy, @@socket"
+
 	result, err := executorExec(executor, sql, map[string]*querypb.BindVariable{})
 	wantResult := &sqltypes.Result{
 		Fields: []*querypb.Field{
-			{Name: "@@autocommit", Type: sqltypes.Int32},
-			{Name: "@@client_found_rows", Type: sqltypes.Int32},
-			{Name: "@@skip_query_plan_cache", Type: sqltypes.Int32},
+			{Name: "@@autocommit", Type: sqltypes.Int64},
+			{Name: "@@client_found_rows", Type: sqltypes.Int64},
+			{Name: "@@skip_query_plan_cache", Type: sqltypes.Int64},
+			{Name: "@@enable_system_settings", Type: sqltypes.Int64},
 			{Name: "@@sql_select_limit", Type: sqltypes.Int64},
 			{Name: "@@transaction_mode", Type: sqltypes.VarBinary},
 			{Name: "@@workload", Type: sqltypes.VarBinary},
 			{Name: "@@read_after_write_gtid", Type: sqltypes.VarBinary},
 			{Name: "@@read_after_write_timeout", Type: sqltypes.Float64},
 			{Name: "@@session_track_gtids", Type: sqltypes.VarBinary},
+			{Name: "@@ddl_strategy", Type: sqltypes.VarBinary},
+			{Name: "@@socket", Type: sqltypes.VarBinary},
 		},
-		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{{
 			// the following are the uninitialised session values
-			sqltypes.NULL,
-			sqltypes.NULL,
-			sqltypes.NULL,
+			sqltypes.NewInt64(0),
+			sqltypes.NewInt64(0),
+			sqltypes.NewInt64(0),
+			sqltypes.NewInt64(0),
 			sqltypes.NewInt64(0),
 			sqltypes.NewVarBinary("UNSPECIFIED"),
 			sqltypes.NewVarBinary(""),
@@ -355,10 +354,43 @@ func TestSelectSystemVariables(t *testing.T) {
 			sqltypes.NewVarBinary("a fine gtid"),
 			sqltypes.NewFloat64(13),
 			sqltypes.NewVarBinary("own_gtid"),
+			sqltypes.NewVarBinary(""),
+			sqltypes.NewVarBinary(""),
 		}},
 	}
 	require.NoError(t, err)
-	utils.MustMatch(t, result, wantResult, "Mismatch")
+	utils.MustMatch(t, wantResult, result, "Mismatch")
+}
+
+func TestSelectInitializedVitessAwareVariable(t *testing.T) {
+	executor, _, _, _ := createLegacyExecutorEnv()
+	executor.normalize = true
+	logChan := QueryLogger.Subscribe("Test")
+	defer QueryLogger.Unsubscribe(logChan)
+
+	masterSession.Autocommit = true
+	masterSession.EnableSystemSettings = true
+
+	defer func() {
+		masterSession.Autocommit = false
+		masterSession.EnableSystemSettings = false
+	}()
+
+	sql := "select @@autocommit, @@enable_system_settings"
+
+	result, err := executorExec(executor, sql, nil)
+	wantResult := &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Name: "@@autocommit", Type: sqltypes.Int64},
+			{Name: "@@enable_system_settings", Type: sqltypes.Int64},
+		},
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NewInt64(1),
+			sqltypes.NewInt64(1),
+		}},
+	}
+	require.NoError(t, err)
+	utils.MustMatch(t, wantResult, result, "Mismatch")
 }
 
 func TestSelectUserDefindVariable(t *testing.T) {
@@ -371,7 +403,6 @@ func TestSelectUserDefindVariable(t *testing.T) {
 	result, err := executorExec(executor, sql, map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
 	wantResult := &sqltypes.Result{
-		RowsAffected: 1,
 		Fields: []*querypb.Field{
 			{Name: "@foo", Type: sqltypes.Null},
 		},
@@ -379,13 +410,12 @@ func TestSelectUserDefindVariable(t *testing.T) {
 			sqltypes.NULL,
 		}},
 	}
-	utils.MustMatch(t, result, wantResult, "Mismatch")
+	utils.MustMatch(t, wantResult, result, "Mismatch")
 
 	masterSession = &vtgatepb.Session{UserDefinedVariables: createMap([]string{"foo"}, []interface{}{"bar"})}
 	result, err = executorExec(executor, sql, map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
 	wantResult = &sqltypes.Result{
-		RowsAffected: 1,
 		Fields: []*querypb.Field{
 			{Name: "@foo", Type: sqltypes.VarBinary},
 		},
@@ -393,7 +423,7 @@ func TestSelectUserDefindVariable(t *testing.T) {
 			sqltypes.NewVarBinary("bar"),
 		}},
 	}
-	utils.MustMatch(t, result, wantResult, "Mismatch")
+	utils.MustMatch(t, wantResult, result, "Mismatch")
 }
 
 func TestFoundRows(t *testing.T) {
@@ -409,7 +439,6 @@ func TestFoundRows(t *testing.T) {
 	sql := "select found_rows()"
 	result, err := executorExec(executor, sql, map[string]*querypb.BindVariable{})
 	wantResult := &sqltypes.Result{
-		RowsAffected: 1,
 		Fields: []*querypb.Field{
 			{Name: "found_rows()", Type: sqltypes.Uint64},
 		},
@@ -418,7 +447,7 @@ func TestFoundRows(t *testing.T) {
 		}},
 	}
 	require.NoError(t, err)
-	utils.MustMatch(t, result, wantResult, "Mismatch")
+	utils.MustMatch(t, wantResult, result, "Mismatch")
 }
 
 func TestRowCount(t *testing.T) {
@@ -437,9 +466,9 @@ func TestRowCount(t *testing.T) {
 }
 
 func testRowCount(t *testing.T, executor *Executor, wantRowCount int64) {
+	t.Helper()
 	result, err := executorExec(executor, "select row_count()", map[string]*querypb.BindVariable{})
 	wantResult := &sqltypes.Result{
-		RowsAffected: 1,
 		Fields: []*querypb.Field{
 			{Name: "row_count()", Type: sqltypes.Int64},
 		},
@@ -448,7 +477,7 @@ func testRowCount(t *testing.T, executor *Executor, wantRowCount int64) {
 		}},
 	}
 	require.NoError(t, err)
-	utils.MustMatch(t, result, wantResult, "Mismatch")
+	utils.MustMatch(t, wantResult, result, "Mismatch")
 }
 
 func TestSelectLastInsertIdInUnion(t *testing.T) {
@@ -457,7 +486,7 @@ func TestSelectLastInsertIdInUnion(t *testing.T) {
 	sql := "select last_insert_id() as id union select id from user"
 	_, err := executorExec(executor, sql, map[string]*querypb.BindVariable{})
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "unsupported: UNION cannot be executed as a single route")
+	assert.Contains(t, err.Error(), "types does not support hashcode yet: VARCHAR")
 }
 
 func TestSelectLastInsertIdInWhere(t *testing.T) {
@@ -485,8 +514,7 @@ func TestLastInsertIDInVirtualTable(t *testing.T) {
 			{Name: "id", Type: sqltypes.Int32},
 			{Name: "col", Type: sqltypes.Int32},
 		},
-		RowsAffected: 1,
-		InsertID:     0,
+		InsertID: 0,
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewInt32(1),
 			sqltypes.NewInt32(3),
@@ -514,7 +542,6 @@ func TestLastInsertIDInSubQueryExpression(t *testing.T) {
 	rs, err := executorExec(executor, "select (select last_insert_id()) as x", nil)
 	require.NoError(t, err)
 	wantResult := &sqltypes.Result{
-		RowsAffected: 1,
 		Fields: []*querypb.Field{
 			{Name: "x", Type: sqltypes.Uint64},
 		},
@@ -543,7 +570,6 @@ func TestSelectDatabase(t *testing.T) {
 		sql,
 		map[string]*querypb.BindVariable{})
 	wantResult := &sqltypes.Result{
-		RowsAffected: 1,
 		Fields: []*querypb.Field{
 			{Name: "database()", Type: sqltypes.VarBinary},
 		},
@@ -552,7 +578,7 @@ func TestSelectDatabase(t *testing.T) {
 		}},
 	}
 	require.NoError(t, err)
-	utils.MustMatch(t, result, wantResult, "Mismatch")
+	utils.MustMatch(t, wantResult, result, "Mismatch")
 
 }
 
@@ -564,10 +590,8 @@ func TestSelectBindvars(t *testing.T) {
 	lookup.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("b|a", "varbinary|varbinary"),
 		"foo1|1",
-		"foo2|1",
 	), sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("b|a", "varbinary|varbinary"),
-		"foo1|1",
 		"foo2|1",
 	)})
 
@@ -577,15 +601,11 @@ func TestSelectBindvars(t *testing.T) {
 	})
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select id from user where id = :id",
+		Sql:           "select id from `user` where id = :id",
 		BindVariables: map[string]*querypb.BindVariable{"id": sqltypes.Int64BindVariable(1)},
 	}}
-	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
-		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
-	}
-	if sbc2.Queries != nil {
-		t.Errorf("sbc2.Queries: %+v, want nil\n", sbc2.Queries)
-	}
+	utils.MustMatch(t, sbc1.Queries, wantQueries)
+	assert.Empty(t, sbc2.Queries)
 	sbc1.Queries = nil
 	testQueryLog(t, logChan, "TestExecute", "SELECT", sql, 1)
 
@@ -597,17 +617,16 @@ func TestSelectBindvars(t *testing.T) {
 	})
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql: "select id from user where name in ::__vals",
+		Sql: "select id from `user` where `name` in ::__vals",
 		BindVariables: map[string]*querypb.BindVariable{
 			"name1":  sqltypes.BytesBindVariable([]byte("foo1")),
 			"name2":  sqltypes.BytesBindVariable([]byte("foo2")),
 			"__vals": sqltypes.TestBindVariable([]interface{}{"foo1", "foo2"}),
 		},
 	}}
-	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
-		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
-	}
+	utils.MustMatch(t, wantQueries, sbc1.Queries)
 	sbc1.Queries = nil
+	testQueryLog(t, logChan, "VindexLookup", "SELECT", "select name, user_id from name_user_map where name in ::name", 1)
 	testQueryLog(t, logChan, "VindexLookup", "SELECT", "select name, user_id from name_user_map where name in ::name", 1)
 	testQueryLog(t, logChan, "TestExecute", "SELECT", sql, 1)
 
@@ -619,17 +638,14 @@ func TestSelectBindvars(t *testing.T) {
 	})
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql: "select id from user where name in ::__vals",
+		Sql: "select id from `user` where 1 != 1",
 		BindVariables: map[string]*querypb.BindVariable{
-			"name1":  sqltypes.BytesBindVariable([]byte("foo1")),
-			"name2":  sqltypes.BytesBindVariable([]byte("foo2")),
-			"__vals": sqltypes.TestBindVariable([]interface{}{[]byte("foo1"), []byte("foo2")}),
+			"name1": sqltypes.BytesBindVariable([]byte("foo1")),
+			"name2": sqltypes.BytesBindVariable([]byte("foo2")),
 		},
 	}}
-	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
-		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
-	}
-
+	utils.MustMatch(t, wantQueries, sbc1.Queries)
+	testQueryLog(t, logChan, "VindexLookup", "SELECT", "select name, user_id from name_user_map where name in ::name", 1)
 	testQueryLog(t, logChan, "VindexLookup", "SELECT", "select name, user_id from name_user_map where name in ::name", 1)
 	testQueryLog(t, logChan, "TestExecute", "SELECT", sql, 1)
 
@@ -653,26 +669,23 @@ func TestSelectBindvars(t *testing.T) {
 
 	// When there are no matching rows in the vindex, vtgate still needs the field info
 	wantQueries = []*querypb.BoundQuery{{
-		Sql: "select id from user where 1 != 1",
+		Sql: "select id from `user` where 1 != 1",
 		BindVariables: map[string]*querypb.BindVariable{
 			"name": sqltypes.StringBindVariable("nonexistent"),
 		},
 	}}
-	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
-		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
-	}
+	utils.MustMatch(t, wantQueries, sbc1.Queries)
 
 	vars, err := sqltypes.BuildBindVariable([]interface{}{sqltypes.NewVarBinary("nonexistent")})
 	require.NoError(t, err)
 	wantLookupQueries := []*querypb.BoundQuery{{
-		Sql: "select name, user_id from name_user_map where name in ::name",
+		Sql: "select `name`, user_id from name_user_map where `name` in ::name",
 		BindVariables: map[string]*querypb.BindVariable{
 			"name": vars,
 		},
 	}}
-	if !reflect.DeepEqual(lookup.Queries, wantLookupQueries) {
-		t.Errorf("lookup.Queries: %+v, want %+v\n", lookup.Queries, wantLookupQueries)
-	}
+
+	utils.MustMatch(t, wantLookupQueries, lookup.Queries)
 
 	testQueryLog(t, logChan, "VindexLookup", "SELECT", "select name, user_id from name_user_map where name in ::name", 1)
 	testQueryLog(t, logChan, "TestExecute", "SELECT", sql, 1)
@@ -685,12 +698,10 @@ func TestSelectEqual(t *testing.T) {
 	_, err := executorExec(executor, "select id from user where id = 1", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select id from user where id = 1",
+		Sql:           "select id from `user` where id = 1",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
-	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
-		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
-	}
+	utils.MustMatch(t, wantQueries, sbc1.Queries)
 	if sbc2.Queries != nil {
 		t.Errorf("sbc2.Queries: %+v, want nil\n", sbc2.Queries)
 	}
@@ -699,12 +710,10 @@ func TestSelectEqual(t *testing.T) {
 	_, err = executorExec(executor, "select id from user where id = 3", nil)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql:           "select id from user where id = 3",
+		Sql:           "select id from `user` where id = 3",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
-	if !reflect.DeepEqual(sbc2.Queries, wantQueries) {
-		t.Errorf("sbc2.Queries: %+v, want %+v\n", sbc2.Queries, wantQueries)
-	}
+	utils.MustMatch(t, wantQueries, sbc2.Queries)
 	if execCount := sbc1.ExecCount.Get(); execCount != 1 {
 		t.Errorf("sbc1.ExecCount: %v, want 1\n", execCount)
 	}
@@ -716,12 +725,10 @@ func TestSelectEqual(t *testing.T) {
 	_, err = executorExec(executor, "select id from user where id = '3'", nil)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql:           "select id from user where id = '3'",
+		Sql:           "select id from `user` where id = '3'",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
-	if !reflect.DeepEqual(sbc2.Queries, wantQueries) {
-		t.Errorf("sbc2.Queries: %+v, want %+v\n", sbc2.Queries, wantQueries)
-	}
+	utils.MustMatch(t, wantQueries, sbc2.Queries)
 	if execCount := sbc1.ExecCount.Get(); execCount != 1 {
 		t.Errorf("sbc1.ExecCount: %v, want 1\n", execCount)
 	}
@@ -737,23 +744,19 @@ func TestSelectEqual(t *testing.T) {
 	_, err = executorExec(executor, "select id from user where name = 'foo'", nil)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql:           "select id from user where name = 'foo'",
+		Sql:           "select id from `user` where `name` = 'foo'",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
-	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
-		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
-	}
+	utils.MustMatch(t, wantQueries, sbc1.Queries)
 	vars, err := sqltypes.BuildBindVariable([]interface{}{sqltypes.NewVarBinary("foo")})
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql: "select name, user_id from name_user_map where name in ::name",
+		Sql: "select `name`, user_id from name_user_map where `name` in ::name",
 		BindVariables: map[string]*querypb.BindVariable{
 			"name": vars,
 		},
 	}}
-	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
-		t.Errorf("sbclookup.Queries: %+v, want %+v\n", sbclookup.Queries, wantQueries)
-	}
+	utils.MustMatch(t, wantQueries, sbclookup.Queries)
 }
 
 func TestSelectDual(t *testing.T) {
@@ -765,15 +768,11 @@ func TestSelectDual(t *testing.T) {
 		Sql:           "select @@aa.bb from dual",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
-	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
-		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
-	}
+	utils.MustMatch(t, wantQueries, sbc1.Queries)
 
 	_, err = executorExec(executor, "select @@aa.bb from TestUnsharded.dual", nil)
 	require.NoError(t, err)
-	if !reflect.DeepEqual(lookup.Queries, wantQueries) {
-		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
-	}
+	utils.MustMatch(t, wantQueries, lookup.Queries)
 }
 
 func TestSelectComments(t *testing.T) {
@@ -782,12 +781,10 @@ func TestSelectComments(t *testing.T) {
 	_, err := executorExec(executor, "/* leading */ select id from user where id = 1 /* trailing */", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "/* leading */ select id from user where id = 1 /* trailing */",
+		Sql:           "/* leading */ select id from `user` where id = 1 /* trailing */",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
-	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
-		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
-	}
+	utils.MustMatch(t, wantQueries, sbc1.Queries)
 	if sbc2.Queries != nil {
 		t.Errorf("sbc2.Queries: %+v, want nil\n", sbc2.Queries)
 	}
@@ -801,14 +798,12 @@ func TestSelectNormalize(t *testing.T) {
 	_, err := executorExec(executor, "/* leading */ select id from user where id = 1 /* trailing */", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql: "/* leading */ select id from user where id = :vtg1 /* trailing */",
+		Sql: "/* leading */ select id from `user` where id = :vtg1 /* trailing */",
 		BindVariables: map[string]*querypb.BindVariable{
 			"vtg1": sqltypes.TestBindVariable(int64(1)),
 		},
 	}}
-	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
-		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
-	}
+	utils.MustMatch(t, wantQueries, sbc1.Queries)
 	if sbc2.Queries != nil {
 		t.Errorf("sbc2.Queries: %+v, want nil\n", sbc2.Queries)
 	}
@@ -819,13 +814,13 @@ func TestSelectNormalize(t *testing.T) {
 	_, err = executorExec(executor, "/* leading */ select id from user where id = 1 /* trailing */", nil)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql: "/* leading */ select id from user where id = :vtg1 /* trailing */",
+		Sql: "/* leading */ select id from `user` where id = :vtg1 /* trailing */",
 		BindVariables: map[string]*querypb.BindVariable{
 			"vtg1": sqltypes.TestBindVariable(int64(1)),
 		},
 	}}
 	require.Empty(t, sbc1.Queries)
-	utils.MustMatch(t, sbc2.Queries, wantQueries, "sbc2.Queries")
+	utils.MustMatch(t, wantQueries, sbc2.Queries, "sbc2.Queries")
 	sbc2.Queries = nil
 	masterSession.TargetString = ""
 }
@@ -836,12 +831,10 @@ func TestSelectCaseSensitivity(t *testing.T) {
 	_, err := executorExec(executor, "select Id from user where iD = 1", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select Id from user where iD = 1",
+		Sql:           "select Id from `user` where iD = 1",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
-	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
-		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
-	}
+	utils.MustMatch(t, wantQueries, sbc1.Queries)
 	if sbc2.Queries != nil {
 		t.Errorf("sbc2.Queries: %+v, want nil\n", sbc2.Queries)
 	}
@@ -869,9 +862,7 @@ func TestSelectKeyRange(t *testing.T) {
 		Sql:           "select krcol_unique, krcol from keyrange_table where krcol = 1",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
-	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
-		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
-	}
+	utils.MustMatch(t, wantQueries, sbc1.Queries)
 	if sbc2.Queries != nil {
 		t.Errorf("sbc2.Queries: %+v, want nil\n", sbc2.Queries)
 	}
@@ -887,9 +878,7 @@ func TestSelectKeyRangeUnique(t *testing.T) {
 		Sql:           "select krcol_unique, krcol from keyrange_table where krcol_unique = 1",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
-	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
-		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
-	}
+	utils.MustMatch(t, wantQueries, sbc1.Queries)
 	if sbc2.Queries != nil {
 		t.Errorf("sbc2.Queries: %+v, want nil\n", sbc2.Queries)
 	}
@@ -903,14 +892,12 @@ func TestSelectIN(t *testing.T) {
 	_, err := executorExec(executor, "select id from user where id in (1)", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql: "select id from user where id in ::__vals",
+		Sql: "select id from `user` where id in ::__vals",
 		BindVariables: map[string]*querypb.BindVariable{
 			"__vals": sqltypes.TestBindVariable([]interface{}{int64(1)}),
 		},
 	}}
-	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
-		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
-	}
+	utils.MustMatch(t, wantQueries, sbc1.Queries)
 	if sbc2.Queries != nil {
 		t.Errorf("sbc2.Queries: %+v, want nil\n", sbc2.Queries)
 	}
@@ -922,23 +909,19 @@ func TestSelectIN(t *testing.T) {
 	_, err = executorExec(executor, "select id from user where id in (1, 3)", nil)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql: "select id from user where id in ::__vals",
+		Sql: "select id from `user` where id in ::__vals",
 		BindVariables: map[string]*querypb.BindVariable{
 			"__vals": sqltypes.TestBindVariable([]interface{}{int64(1)}),
 		},
 	}}
-	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
-		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
-	}
+	utils.MustMatch(t, wantQueries, sbc1.Queries)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql: "select id from user where id in ::__vals",
+		Sql: "select id from `user` where id in ::__vals",
 		BindVariables: map[string]*querypb.BindVariable{
 			"__vals": sqltypes.TestBindVariable([]interface{}{int64(3)}),
 		},
 	}}
-	if !reflect.DeepEqual(sbc2.Queries, wantQueries) {
-		t.Errorf("sbc2.Queries: %+v, want %+v\n", sbc2.Queries, wantQueries)
-	}
+	utils.MustMatch(t, wantQueries, sbc2.Queries)
 
 	// In is a bind variable list, that will end up on two shards.
 	// This is using an []interface{} for the bind variable list.
@@ -949,25 +932,21 @@ func TestSelectIN(t *testing.T) {
 	})
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql: "select id from user where id in ::__vals",
+		Sql: "select id from `user` where id in ::__vals",
 		BindVariables: map[string]*querypb.BindVariable{
 			"__vals": sqltypes.TestBindVariable([]interface{}{int64(1)}),
 			"vals":   sqltypes.TestBindVariable([]interface{}{int64(1), int64(3)}),
 		},
 	}}
-	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
-		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
-	}
+	utils.MustMatch(t, wantQueries, sbc1.Queries)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql: "select id from user where id in ::__vals",
+		Sql: "select id from `user` where id in ::__vals",
 		BindVariables: map[string]*querypb.BindVariable{
 			"__vals": sqltypes.TestBindVariable([]interface{}{int64(3)}),
 			"vals":   sqltypes.TestBindVariable([]interface{}{int64(1), int64(3)}),
 		},
 	}}
-	if !reflect.DeepEqual(sbc2.Queries, wantQueries) {
-		t.Errorf("sbc2.Queries: %+v, want %+v\n", sbc2.Queries, wantQueries)
-	}
+	utils.MustMatch(t, wantQueries, sbc2.Queries)
 
 	// Convert a non-list bind variable.
 	sbc1.Queries = nil
@@ -979,23 +958,19 @@ func TestSelectIN(t *testing.T) {
 	_, err = executorExec(executor, "select id from user where name = 'foo'", nil)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql:           "select id from user where name = 'foo'",
+		Sql:           "select id from `user` where `name` = 'foo'",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
-	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
-		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
-	}
+	utils.MustMatch(t, wantQueries, sbc1.Queries)
 	vars, err := sqltypes.BuildBindVariable([]interface{}{sqltypes.NewVarBinary("foo")})
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql: "select name, user_id from name_user_map where name in ::name",
+		Sql: "select `name`, user_id from name_user_map where `name` in ::name",
 		BindVariables: map[string]*querypb.BindVariable{
 			"name": vars,
 		},
 	}}
-	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
-		t.Errorf("sbclookup.Queries: %+v, want %+v\n", sbclookup.Queries, wantQueries)
-	}
+	utils.MustMatch(t, wantQueries, sbclookup.Queries)
 }
 
 func TestStreamSelectIN(t *testing.T) {
@@ -1035,14 +1010,12 @@ func TestStreamSelectIN(t *testing.T) {
 	vars, err := sqltypes.BuildBindVariable([]interface{}{sqltypes.NewVarBinary("foo")})
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql: "select name, user_id from name_user_map where name in ::name",
+		Sql: "select `name`, user_id from name_user_map where `name` in ::name",
 		BindVariables: map[string]*querypb.BindVariable{
 			"name": vars,
 		},
 	}}
-	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
-		t.Errorf("sbclookup.Queries: %+v, want %+v\n", sbclookup.Queries, wantQueries)
-	}
+	utils.MustMatch(t, wantQueries, sbclookup.Queries)
 }
 
 func TestSelectScatter(t *testing.T) {
@@ -1060,22 +1033,21 @@ func TestSelectScatter(t *testing.T) {
 		sbc := hc.AddTestTablet(cell, shard, 1, "TestExecutor", shard, topodatapb.TabletType_MASTER, true, 1, nil)
 		conns = append(conns, sbc)
 	}
-	executor := NewExecutor(context.Background(), serv, cell, resolver, false, testBufferSize, testCacheSize)
+	executor := NewExecutor(context.Background(), serv, cell, resolver, false, false, testBufferSize, cache.DefaultConfig)
 	logChan := QueryLogger.Subscribe("Test")
 	defer QueryLogger.Unsubscribe(logChan)
 
-	_, err := executorExec(executor, "select id from user", nil)
+	sql := "select id from user"
+	_, err := executorExec(executor, sql, nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select id from user",
+		Sql:           "select id from `user`",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	for _, conn := range conns {
-		if !reflect.DeepEqual(conn.Queries, wantQueries) {
-			t.Errorf("conn.Queries = %#v, want %#v", conn.Queries, wantQueries)
-		}
+		utils.MustMatch(t, wantQueries, conn.Queries)
 	}
-	testQueryLog(t, logChan, "TestExecute", "SELECT", wantQueries[0].Sql, 8)
+	testQueryLog(t, logChan, "TestExecute", "SELECT", sql, 8)
 }
 
 func TestSelectScatterPartial(t *testing.T) {
@@ -1094,14 +1066,14 @@ func TestSelectScatterPartial(t *testing.T) {
 		conns = append(conns, sbc)
 	}
 
-	executor := NewExecutor(context.Background(), serv, cell, resolver, false, testBufferSize, testCacheSize)
+	executor := NewExecutor(context.Background(), serv, cell, resolver, false, false, testBufferSize, cache.DefaultConfig)
 	logChan := QueryLogger.Subscribe("Test")
 	defer QueryLogger.Unsubscribe(logChan)
 
 	// Fail 1 of N without the directive fails the whole operation
 	conns[2].MustFailCodes[vtrpcpb.Code_RESOURCE_EXHAUSTED] = 1000
 	results, err := executorExec(executor, "select id from user", nil)
-	wantErr := "TestExecutor.40-60.master, used tablet: aa-0 (40-60)"
+	wantErr := "TestExecutor.40-60.master"
 	if err == nil || !strings.Contains(err.Error(), wantErr) {
 		t.Errorf("want error %v, got %v", wantErr, err)
 	}
@@ -1151,7 +1123,7 @@ func TestStreamSelectScatter(t *testing.T) {
 	for _, shard := range shards {
 		_ = hc.AddTestTablet(cell, shard, 1, "TestExecutor", shard, topodatapb.TabletType_MASTER, true, 1, nil)
 	}
-	executor := NewExecutor(context.Background(), serv, cell, resolver, false, testBufferSize, testCacheSize)
+	executor := NewExecutor(context.Background(), serv, cell, resolver, false, false, testBufferSize, cache.DefaultConfig)
 
 	sql := "select id from user"
 	result, err := executorStream(executor, sql)
@@ -1192,33 +1164,32 @@ func TestSelectScatterOrderBy(t *testing.T) {
 			Fields: []*querypb.Field{
 				{Name: "col1", Type: sqltypes.Int32},
 				{Name: "col2", Type: sqltypes.Int32},
+				{Name: "weight_string(col2)", Type: sqltypes.VarBinary},
 			},
-			RowsAffected: 1,
-			InsertID:     0,
+			InsertID: 0,
 			Rows: [][]sqltypes.Value{{
 				sqltypes.NewInt32(1),
 				// i%4 ensures that there are duplicates across shards.
 				// This will allow us to test that cross-shard ordering
 				// still works correctly.
 				sqltypes.NewInt32(int32(i % 4)),
+				sqltypes.NULL,
 			}},
 		}})
 		conns = append(conns, sbc)
 	}
-	executor := NewExecutor(context.Background(), serv, cell, resolver, false, testBufferSize, testCacheSize)
+	executor := NewExecutor(context.Background(), serv, cell, resolver, false, false, testBufferSize, cache.DefaultConfig)
 
 	query := "select col1, col2 from user order by col2 desc"
 	gotResult, err := executorExec(executor, query, nil)
 	require.NoError(t, err)
 
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           query,
+		Sql:           "select col1, col2, weight_string(col2) from `user` order by col2 desc",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	for _, conn := range conns {
-		if !reflect.DeepEqual(conn.Queries, wantQueries) {
-			t.Errorf("conn.Queries = %#v, want %#v", conn.Queries, wantQueries)
-		}
+		utils.MustMatch(t, wantQueries, conn.Queries)
 	}
 
 	wantResult := &sqltypes.Result{
@@ -1226,8 +1197,7 @@ func TestSelectScatterOrderBy(t *testing.T) {
 			{Name: "col1", Type: sqltypes.Int32},
 			{Name: "col2", Type: sqltypes.Int32},
 		},
-		RowsAffected: 8,
-		InsertID:     0,
+		InsertID: 0,
 	}
 	for i := 0; i < 4; i++ {
 		// There should be a duplicate for each row returned.
@@ -1239,9 +1209,7 @@ func TestSelectScatterOrderBy(t *testing.T) {
 			wantResult.Rows = append(wantResult.Rows, row)
 		}
 	}
-	if !reflect.DeepEqual(gotResult, wantResult) {
-		t.Errorf("scatter order by:\n%v, want\n%v", gotResult, wantResult)
-	}
+	utils.MustMatch(t, wantResult, gotResult)
 }
 
 // TestSelectScatterOrderByVarChar will run an ORDER BY query that will scatter out to 8 shards and return the 8 rows (one per shard) sorted.
@@ -1263,8 +1231,7 @@ func TestSelectScatterOrderByVarChar(t *testing.T) {
 				{Name: "col1", Type: sqltypes.Int32},
 				{Name: "textcol", Type: sqltypes.VarChar},
 			},
-			RowsAffected: 1,
-			InsertID:     0,
+			InsertID: 0,
 			Rows: [][]sqltypes.Value{{
 				sqltypes.NewInt32(1),
 				// i%4 ensures that there are duplicates across shards.
@@ -1276,20 +1243,18 @@ func TestSelectScatterOrderByVarChar(t *testing.T) {
 		}})
 		conns = append(conns, sbc)
 	}
-	executor := NewExecutor(context.Background(), serv, cell, resolver, false, testBufferSize, testCacheSize)
+	executor := NewExecutor(context.Background(), serv, cell, resolver, false, false, testBufferSize, cache.DefaultConfig)
 
 	query := "select col1, textcol from user order by textcol desc"
 	gotResult, err := executorExec(executor, query, nil)
 	require.NoError(t, err)
 
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select col1, textcol, weight_string(textcol) from user order by textcol desc",
+		Sql:           "select col1, textcol, weight_string(textcol) from `user` order by textcol desc",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	for _, conn := range conns {
-		if !reflect.DeepEqual(conn.Queries, wantQueries) {
-			t.Errorf("conn.Queries = %#v, want %#v", conn.Queries, wantQueries)
-		}
+		utils.MustMatch(t, wantQueries, conn.Queries)
 	}
 
 	wantResult := &sqltypes.Result{
@@ -1297,8 +1262,7 @@ func TestSelectScatterOrderByVarChar(t *testing.T) {
 			{Name: "col1", Type: sqltypes.Int32},
 			{Name: "textcol", Type: sqltypes.VarChar},
 		},
-		RowsAffected: 8,
-		InsertID:     0,
+		InsertID: 0,
 	}
 	for i := 0; i < 4; i++ {
 		// There should be a duplicate for each row returned.
@@ -1310,9 +1274,7 @@ func TestSelectScatterOrderByVarChar(t *testing.T) {
 			wantResult.Rows = append(wantResult.Rows, row)
 		}
 	}
-	if !reflect.DeepEqual(gotResult, wantResult) {
-		t.Errorf("scatter order by:\n%v, want\n%v", gotResult, wantResult)
-	}
+	utils.MustMatch(t, wantResult, gotResult)
 }
 
 func TestStreamSelectScatterOrderBy(t *testing.T) {
@@ -1332,30 +1294,29 @@ func TestStreamSelectScatterOrderBy(t *testing.T) {
 			Fields: []*querypb.Field{
 				{Name: "id", Type: sqltypes.Int32},
 				{Name: "col", Type: sqltypes.Int32},
+				{Name: "weight_string(col)", Type: sqltypes.VarBinary},
 			},
-			RowsAffected: 1,
-			InsertID:     0,
+			InsertID: 0,
 			Rows: [][]sqltypes.Value{{
 				sqltypes.NewInt32(1),
 				sqltypes.NewInt32(int32(i % 4)),
+				sqltypes.NULL,
 			}},
 		}})
 		conns = append(conns, sbc)
 	}
-	executor := NewExecutor(context.Background(), serv, cell, resolver, false, testBufferSize, testCacheSize)
+	executor := NewExecutor(context.Background(), serv, cell, resolver, false, false, testBufferSize, cache.DefaultConfig)
 
 	query := "select id, col from user order by col desc"
 	gotResult, err := executorStream(executor, query)
 	require.NoError(t, err)
 
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           query,
+		Sql:           "select id, col, weight_string(col) from `user` order by col desc",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	for _, conn := range conns {
-		if !reflect.DeepEqual(conn.Queries, wantQueries) {
-			t.Errorf("conn.Queries = %#v, want %#v", conn.Queries, wantQueries)
-		}
+		utils.MustMatch(t, wantQueries, conn.Queries)
 	}
 
 	wantResult := &sqltypes.Result{
@@ -1371,9 +1332,7 @@ func TestStreamSelectScatterOrderBy(t *testing.T) {
 		}
 		wantResult.Rows = append(wantResult.Rows, row, row)
 	}
-	if !reflect.DeepEqual(gotResult, wantResult) {
-		t.Errorf("scatter order by:\n%v, want\n%v", gotResult, wantResult)
-	}
+	utils.MustMatch(t, wantResult, gotResult)
 }
 
 func TestStreamSelectScatterOrderByVarChar(t *testing.T) {
@@ -1394,8 +1353,7 @@ func TestStreamSelectScatterOrderByVarChar(t *testing.T) {
 				{Name: "id", Type: sqltypes.Int32},
 				{Name: "textcol", Type: sqltypes.VarChar},
 			},
-			RowsAffected: 1,
-			InsertID:     0,
+			InsertID: 0,
 			Rows: [][]sqltypes.Value{{
 				sqltypes.NewInt32(1),
 				sqltypes.NewVarChar(fmt.Sprintf("%d", i%4)),
@@ -1404,20 +1362,18 @@ func TestStreamSelectScatterOrderByVarChar(t *testing.T) {
 		}})
 		conns = append(conns, sbc)
 	}
-	executor := NewExecutor(context.Background(), serv, cell, resolver, false, testBufferSize, testCacheSize)
+	executor := NewExecutor(context.Background(), serv, cell, resolver, false, false, testBufferSize, cache.DefaultConfig)
 
 	query := "select id, textcol from user order by textcol desc"
 	gotResult, err := executorStream(executor, query)
 	require.NoError(t, err)
 
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select id, textcol, weight_string(textcol) from user order by textcol desc",
+		Sql:           "select id, textcol, weight_string(textcol) from `user` order by textcol desc",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	for _, conn := range conns {
-		if !reflect.DeepEqual(conn.Queries, wantQueries) {
-			t.Errorf("conn.Queries = %#v, want %#v", conn.Queries, wantQueries)
-		}
+		utils.MustMatch(t, wantQueries, conn.Queries)
 	}
 
 	wantResult := &sqltypes.Result{
@@ -1433,9 +1389,7 @@ func TestStreamSelectScatterOrderByVarChar(t *testing.T) {
 		}
 		wantResult.Rows = append(wantResult.Rows, row, row)
 	}
-	if !reflect.DeepEqual(gotResult, wantResult) {
-		t.Errorf("scatter order by:\n%v, want\n%v", gotResult, wantResult)
-	}
+	utils.MustMatch(t, wantResult, gotResult)
 }
 
 // TestSelectScatterAggregate will run an aggregate query that will scatter out to 8 shards and return 4 aggregated rows.
@@ -1456,30 +1410,29 @@ func TestSelectScatterAggregate(t *testing.T) {
 			Fields: []*querypb.Field{
 				{Name: "col", Type: sqltypes.Int32},
 				{Name: "sum(foo)", Type: sqltypes.Int32},
+				{Name: "weight_string(col)", Type: sqltypes.VarBinary},
 			},
-			RowsAffected: 1,
-			InsertID:     0,
+			InsertID: 0,
 			Rows: [][]sqltypes.Value{{
 				sqltypes.NewInt32(int32(i % 4)),
 				sqltypes.NewInt32(int32(i)),
+				sqltypes.NULL,
 			}},
 		}})
 		conns = append(conns, sbc)
 	}
-	executor := NewExecutor(context.Background(), serv, cell, resolver, false, testBufferSize, testCacheSize)
+	executor := NewExecutor(context.Background(), serv, cell, resolver, false, false, testBufferSize, cache.DefaultConfig)
 
 	query := "select col, sum(foo) from user group by col"
 	gotResult, err := executorExec(executor, query, nil)
 	require.NoError(t, err)
 
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           query + " order by col asc",
+		Sql:           "select col, sum(foo), weight_string(col) from `user` group by col order by col asc",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	for _, conn := range conns {
-		if !reflect.DeepEqual(conn.Queries, wantQueries) {
-			t.Errorf("conn.Queries = %#v, want %#v", conn.Queries, wantQueries)
-		}
+		utils.MustMatch(t, wantQueries, conn.Queries)
 	}
 
 	wantResult := &sqltypes.Result{
@@ -1487,8 +1440,7 @@ func TestSelectScatterAggregate(t *testing.T) {
 			{Name: "col", Type: sqltypes.Int32},
 			{Name: "sum(foo)", Type: sqltypes.Int32},
 		},
-		RowsAffected: 4,
-		InsertID:     0,
+		InsertID: 0,
 	}
 	for i := 0; i < 4; i++ {
 		row := []sqltypes.Value{
@@ -1497,9 +1449,7 @@ func TestSelectScatterAggregate(t *testing.T) {
 		}
 		wantResult.Rows = append(wantResult.Rows, row)
 	}
-	if !reflect.DeepEqual(gotResult, wantResult) {
-		t.Errorf("scatter order by:\n%v, want\n%v", gotResult, wantResult)
-	}
+	utils.MustMatch(t, wantResult, gotResult)
 }
 
 func TestStreamSelectScatterAggregate(t *testing.T) {
@@ -1519,30 +1469,29 @@ func TestStreamSelectScatterAggregate(t *testing.T) {
 			Fields: []*querypb.Field{
 				{Name: "col", Type: sqltypes.Int32},
 				{Name: "sum(foo)", Type: sqltypes.Int32},
+				{Name: "weight_string(col)", Type: sqltypes.VarBinary},
 			},
-			RowsAffected: 1,
-			InsertID:     0,
+			InsertID: 0,
 			Rows: [][]sqltypes.Value{{
 				sqltypes.NewInt32(int32(i % 4)),
 				sqltypes.NewInt32(int32(i)),
+				sqltypes.NULL,
 			}},
 		}})
 		conns = append(conns, sbc)
 	}
-	executor := NewExecutor(context.Background(), serv, cell, resolver, false, testBufferSize, testCacheSize)
+	executor := NewExecutor(context.Background(), serv, cell, resolver, false, false, testBufferSize, cache.DefaultConfig)
 
 	query := "select col, sum(foo) from user group by col"
 	gotResult, err := executorStream(executor, query)
 	require.NoError(t, err)
 
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           query + " order by col asc",
+		Sql:           "select col, sum(foo), weight_string(col) from `user` group by col order by col asc",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	for _, conn := range conns {
-		if !reflect.DeepEqual(conn.Queries, wantQueries) {
-			t.Errorf("conn.Queries = %#v, want %#v", conn.Queries, wantQueries)
-		}
+		utils.MustMatch(t, wantQueries, conn.Queries)
 	}
 
 	wantResult := &sqltypes.Result{
@@ -1558,9 +1507,7 @@ func TestStreamSelectScatterAggregate(t *testing.T) {
 		}
 		wantResult.Rows = append(wantResult.Rows, row)
 	}
-	if !reflect.DeepEqual(gotResult, wantResult) {
-		t.Errorf("scatter order by:\n%v, want\n%v", gotResult, wantResult)
-	}
+	utils.MustMatch(t, wantResult, gotResult)
 }
 
 // TestSelectScatterLimit will run a limit query (ordered for consistency) against
@@ -1582,30 +1529,29 @@ func TestSelectScatterLimit(t *testing.T) {
 			Fields: []*querypb.Field{
 				{Name: "col1", Type: sqltypes.Int32},
 				{Name: "col2", Type: sqltypes.Int32},
+				{Name: "weight_string(col2)", Type: sqltypes.VarBinary},
 			},
-			RowsAffected: 1,
-			InsertID:     0,
+			InsertID: 0,
 			Rows: [][]sqltypes.Value{{
 				sqltypes.NewInt32(1),
 				sqltypes.NewInt32(int32(i % 4)),
+				sqltypes.NULL,
 			}},
 		}})
 		conns = append(conns, sbc)
 	}
-	executor := NewExecutor(context.Background(), serv, cell, resolver, false, testBufferSize, testCacheSize)
+	executor := NewExecutor(context.Background(), serv, cell, resolver, false, false, testBufferSize, cache.DefaultConfig)
 
 	query := "select col1, col2 from user order by col2 desc limit 3"
 	gotResult, err := executorExec(executor, query, nil)
 	require.NoError(t, err)
 
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select col1, col2 from user order by col2 desc limit :__upper_limit",
+		Sql:           "select col1, col2, weight_string(col2) from `user` order by col2 desc limit :__upper_limit",
 		BindVariables: map[string]*querypb.BindVariable{"__upper_limit": sqltypes.Int64BindVariable(3)},
 	}}
 	for _, conn := range conns {
-		if !reflect.DeepEqual(conn.Queries, wantQueries) {
-			t.Errorf("got: conn.Queries = %v, want: %v", conn.Queries, wantQueries)
-		}
+		utils.MustMatch(t, wantQueries, conn.Queries)
 	}
 
 	wantResult := &sqltypes.Result{
@@ -1613,8 +1559,7 @@ func TestSelectScatterLimit(t *testing.T) {
 			{Name: "col1", Type: sqltypes.Int32},
 			{Name: "col2", Type: sqltypes.Int32},
 		},
-		RowsAffected: 3,
-		InsertID:     0,
+		InsertID: 0,
 	}
 	wantResult.Rows = append(wantResult.Rows,
 		[]sqltypes.Value{
@@ -1630,9 +1575,7 @@ func TestSelectScatterLimit(t *testing.T) {
 			sqltypes.NewInt32(2),
 		})
 
-	if !reflect.DeepEqual(gotResult, wantResult) {
-		t.Errorf("scatter order by:\n%v, want\n%v", gotResult, wantResult)
-	}
+	utils.MustMatch(t, wantResult, gotResult)
 }
 
 // TestStreamSelectScatterLimit will run a streaming limit query (ordered for consistency) against
@@ -1654,30 +1597,29 @@ func TestStreamSelectScatterLimit(t *testing.T) {
 			Fields: []*querypb.Field{
 				{Name: "col1", Type: sqltypes.Int32},
 				{Name: "col2", Type: sqltypes.Int32},
+				{Name: "weight_string(col2)", Type: sqltypes.VarBinary},
 			},
-			RowsAffected: 1,
-			InsertID:     0,
+			InsertID: 0,
 			Rows: [][]sqltypes.Value{{
 				sqltypes.NewInt32(1),
 				sqltypes.NewInt32(int32(i % 4)),
+				sqltypes.NULL,
 			}},
 		}})
 		conns = append(conns, sbc)
 	}
-	executor := NewExecutor(context.Background(), serv, cell, resolver, false, testBufferSize, testCacheSize)
+	executor := NewExecutor(context.Background(), serv, cell, resolver, false, false, testBufferSize, cache.DefaultConfig)
 
 	query := "select col1, col2 from user order by col2 desc limit 3"
 	gotResult, err := executorStream(executor, query)
 	require.NoError(t, err)
 
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select col1, col2 from user order by col2 desc limit :__upper_limit",
+		Sql:           "select col1, col2, weight_string(col2) from `user` order by col2 desc limit :__upper_limit",
 		BindVariables: map[string]*querypb.BindVariable{"__upper_limit": sqltypes.Int64BindVariable(3)},
 	}}
 	for _, conn := range conns {
-		if !reflect.DeepEqual(conn.Queries, wantQueries) {
-			t.Errorf("got: conn.Queries = %v, want: %v", conn.Queries, wantQueries)
-		}
+		utils.MustMatch(t, wantQueries, conn.Queries)
 	}
 
 	wantResult := &sqltypes.Result{
@@ -1700,9 +1642,7 @@ func TestStreamSelectScatterLimit(t *testing.T) {
 			sqltypes.NewInt32(2),
 		})
 
-	if !reflect.DeepEqual(gotResult, wantResult) {
-		t.Errorf("scatter order by:\n%v, want\n%v", gotResult, wantResult)
-	}
+	utils.MustMatch(t, wantResult, gotResult)
 }
 
 // TODO(sougou): stream and non-stream testing are very similar.
@@ -1716,19 +1656,15 @@ func TestSimpleJoin(t *testing.T) {
 	result, err := executorExec(executor, sql, nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select u1.id from user as u1 where u1.id = 1",
+		Sql:           "select u1.id from `user` as u1 where u1.id = 1",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
-	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
-		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
-	}
+	utils.MustMatch(t, wantQueries, sbc1.Queries)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql:           "select u2.id from user as u2 where u2.id = 3",
+		Sql:           "select u2.id from `user` as u2 where u2.id = 3",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
-	if !reflect.DeepEqual(sbc2.Queries, wantQueries) {
-		t.Errorf("sbc2.Queries: %+v, want %+v\n", sbc2.Queries, wantQueries)
-	}
+	utils.MustMatch(t, wantQueries, sbc2.Queries)
 	wantResult := &sqltypes.Result{
 		Fields: []*querypb.Field{
 			sandboxconn.SingleRowResult.Fields[0],
@@ -1740,7 +1676,6 @@ func TestSimpleJoin(t *testing.T) {
 				sandboxconn.SingleRowResult.Rows[0][0],
 			},
 		},
-		RowsAffected: 1,
 	}
 	if !result.Equal(wantResult) {
 		t.Errorf("result: %+v, want %+v", result, wantResult)
@@ -1758,19 +1693,15 @@ func TestJoinComments(t *testing.T) {
 	_, err := executorExec(executor, sql, nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select u1.id from user as u1 where u1.id = 1 /* trailing */",
+		Sql:           "select u1.id from `user` as u1 where u1.id = 1 /* trailing */",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
-	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
-		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
-	}
+	utils.MustMatch(t, wantQueries, sbc1.Queries)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql:           "select u2.id from user as u2 where u2.id = 3 /* trailing */",
+		Sql:           "select u2.id from `user` as u2 where u2.id = 3 /* trailing */",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
-	if !reflect.DeepEqual(sbc2.Queries, wantQueries) {
-		t.Errorf("sbc2.Queries: %+v, want %+v\n", sbc2.Queries, wantQueries)
-	}
+	utils.MustMatch(t, wantQueries, sbc2.Queries)
 
 	testQueryLog(t, logChan, "TestExecute", "SELECT", sql, 2)
 }
@@ -1784,19 +1715,15 @@ func TestSimpleJoinStream(t *testing.T) {
 	result, err := executorStream(executor, sql)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select u1.id from user as u1 where u1.id = 1",
+		Sql:           "select u1.id from `user` as u1 where u1.id = 1",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
-	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
-		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
-	}
+	utils.MustMatch(t, wantQueries, sbc1.Queries)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql:           "select u2.id from user as u2 where u2.id = 3",
+		Sql:           "select u2.id from `user` as u2 where u2.id = 3",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
-	if !reflect.DeepEqual(sbc2.Queries, wantQueries) {
-		t.Errorf("sbc2.Queries: %+v, want %+v\n", sbc2.Queries, wantQueries)
-	}
+	utils.MustMatch(t, wantQueries, sbc2.Queries)
 	wantResult := &sqltypes.Result{
 		Fields: []*querypb.Field{
 			sandboxconn.SingleRowResult.Fields[0],
@@ -1827,8 +1754,7 @@ func TestVarJoin(t *testing.T) {
 			{Name: "id", Type: sqltypes.Int32},
 			{Name: "col", Type: sqltypes.Int32},
 		},
-		RowsAffected: 1,
-		InsertID:     0,
+		InsertID: 0,
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewInt32(1),
 			sqltypes.NewInt32(3),
@@ -1839,15 +1765,13 @@ func TestVarJoin(t *testing.T) {
 	_, err := executorExec(executor, sql, nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select u1.id, u1.col from user as u1 where u1.id = 1",
+		Sql:           "select u1.id, u1.col from `user` as u1 where u1.id = 1",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
-	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
-		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
-	}
+	utils.MustMatch(t, wantQueries, sbc1.Queries)
 	// We have to use string representation because bindvars type is too complex.
 	got := fmt.Sprintf("%+v", sbc2.Queries)
-	want := `[sql:"select u2.id from user as u2 where u2.id = :u1_col" bind_variables:<key:"u1_col" value:<type:INT32 value:"3" > > ]`
+	want := `[sql:"select u2.id from ` + "`user`" + ` as u2 where u2.id = :u1_col" bind_variables:<key:"u1_col" value:<type:INT32 value:"3" > > ]`
 	if got != want {
 		t.Errorf("sbc2.Queries: %s, want %s\n", got, want)
 	}
@@ -1865,8 +1789,7 @@ func TestVarJoinStream(t *testing.T) {
 			{Name: "id", Type: sqltypes.Int32},
 			{Name: "col", Type: sqltypes.Int32},
 		},
-		RowsAffected: 1,
-		InsertID:     0,
+		InsertID: 0,
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewInt32(1),
 			sqltypes.NewInt32(3),
@@ -1877,15 +1800,13 @@ func TestVarJoinStream(t *testing.T) {
 	_, err := executorStream(executor, sql)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select u1.id, u1.col from user as u1 where u1.id = 1",
+		Sql:           "select u1.id, u1.col from `user` as u1 where u1.id = 1",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
-	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
-		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
-	}
+	utils.MustMatch(t, wantQueries, sbc1.Queries)
 	// We have to use string representation because bindvars type is too complex.
 	got := fmt.Sprintf("%+v", sbc2.Queries)
-	want := `[sql:"select u2.id from user as u2 where u2.id = :u1_col" bind_variables:<key:"u1_col" value:<type:INT32 value:"3" > > ]`
+	want := `[sql:"select u2.id from ` + "`user`" + ` as u2 where u2.id = :u1_col" bind_variables:<key:"u1_col" value:<type:INT32 value:"3" > > ]`
 	if got != want {
 		t.Errorf("sbc2.Queries: %s, want %s\n", got, want)
 	}
@@ -1902,8 +1823,7 @@ func TestLeftJoin(t *testing.T) {
 			{Name: "id", Type: sqltypes.Int32},
 			{Name: "col", Type: sqltypes.Int32},
 		},
-		RowsAffected: 1,
-		InsertID:     0,
+		InsertID: 0,
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewInt32(1),
 			sqltypes.NewInt32(3),
@@ -1930,14 +1850,11 @@ func TestLeftJoin(t *testing.T) {
 				{},
 			},
 		},
-		RowsAffected: 1,
 	}
 	if !result.Equal(wantResult) {
 		t.Errorf("result: %+v, want %+v", result, wantResult)
 	}
-
 	testQueryLog(t, logChan, "TestExecute", "SELECT", sql, 2)
-
 }
 
 func TestLeftJoinStream(t *testing.T) {
@@ -1947,8 +1864,7 @@ func TestLeftJoinStream(t *testing.T) {
 			{Name: "id", Type: sqltypes.Int32},
 			{Name: "col", Type: sqltypes.Int32},
 		},
-		RowsAffected: 1,
-		InsertID:     0,
+		InsertID: 0,
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewInt32(1),
 			sqltypes.NewInt32(3),
@@ -1997,17 +1913,15 @@ func TestEmptyJoin(t *testing.T) {
 	result, err := executorExec(executor, "select u1.id, u2.id from user u1 join user u2 on u2.id = u1.col where u1.id = 1", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select u1.id, u1.col from user as u1 where u1.id = 1",
+		Sql:           "select u1.id, u1.col from `user` as u1 where u1.id = 1",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}, {
-		Sql: "select u2.id from user as u2 where 1 != 1",
+		Sql: "select u2.id from `user` as u2 where 1 != 1",
 		BindVariables: map[string]*querypb.BindVariable{
 			"u1_col": sqltypes.NullBindVariable,
 		},
 	}}
-	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
-		t.Errorf("sbc1.Queries:\n%v, want\n%v\n", sbc1.Queries, wantQueries)
-	}
+	utils.MustMatch(t, wantQueries, sbc1.Queries)
 	wantResult := &sqltypes.Result{
 		Fields: []*querypb.Field{
 			{Name: "id", Type: sqltypes.Int32},
@@ -2035,17 +1949,15 @@ func TestEmptyJoinStream(t *testing.T) {
 	result, err := executorStream(executor, "select u1.id, u2.id from user u1 join user u2 on u2.id = u1.col where u1.id = 1")
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select u1.id, u1.col from user as u1 where u1.id = 1",
+		Sql:           "select u1.id, u1.col from `user` as u1 where u1.id = 1",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}, {
-		Sql: "select u2.id from user as u2 where 1 != 1",
+		Sql: "select u2.id from `user` as u2 where 1 != 1",
 		BindVariables: map[string]*querypb.BindVariable{
 			"u1_col": sqltypes.NullBindVariable,
 		},
 	}}
-	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
-		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
-	}
+	utils.MustMatch(t, wantQueries, sbc1.Queries)
 	wantResult := &sqltypes.Result{
 		Fields: []*querypb.Field{
 			{Name: "id", Type: sqltypes.Int32},
@@ -2077,20 +1989,18 @@ func TestEmptyJoinRecursive(t *testing.T) {
 	result, err := executorExec(executor, "select u1.id, u2.id, u3.id from user u1 join (user u2 join user u3 on u3.id = u2.col) where u1.id = 1", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select u1.id from user as u1 where u1.id = 1",
+		Sql:           "select u1.id from `user` as u1 where u1.id = 1",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}, {
-		Sql:           "select u2.id, u2.col from user as u2 where 1 != 1",
+		Sql:           "select u2.id, u2.col from `user` as u2 where 1 != 1",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}, {
-		Sql: "select u3.id from user as u3 where 1 != 1",
+		Sql: "select u3.id from `user` as u3 where 1 != 1",
 		BindVariables: map[string]*querypb.BindVariable{
 			"u2_col": sqltypes.NullBindVariable,
 		},
 	}}
-	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
-		t.Errorf("sbc1.Queries:\n%+v, want\n%+v\n", sbc1.Queries, wantQueries)
-	}
+	utils.MustMatch(t, wantQueries, sbc1.Queries)
 	wantResult := &sqltypes.Result{
 		Fields: []*querypb.Field{
 			{Name: "id", Type: sqltypes.Int32},
@@ -2123,20 +2033,18 @@ func TestEmptyJoinRecursiveStream(t *testing.T) {
 	result, err := executorStream(executor, "select u1.id, u2.id, u3.id from user u1 join (user u2 join user u3 on u3.id = u2.col) where u1.id = 1")
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select u1.id from user as u1 where u1.id = 1",
+		Sql:           "select u1.id from `user` as u1 where u1.id = 1",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}, {
-		Sql:           "select u2.id, u2.col from user as u2 where 1 != 1",
+		Sql:           "select u2.id, u2.col from `user` as u2 where 1 != 1",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}, {
-		Sql: "select u3.id from user as u3 where 1 != 1",
+		Sql: "select u3.id from `user` as u3 where 1 != 1",
 		BindVariables: map[string]*querypb.BindVariable{
 			"u2_col": sqltypes.NullBindVariable,
 		},
 	}}
-	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
-		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
-	}
+	utils.MustMatch(t, wantQueries, sbc1.Queries)
 	wantResult := &sqltypes.Result{
 		Fields: []*querypb.Field{
 			{Name: "id", Type: sqltypes.Int32},
@@ -2156,8 +2064,7 @@ func TestCrossShardSubquery(t *testing.T) {
 			{Name: "id", Type: sqltypes.Int32},
 			{Name: "col", Type: sqltypes.Int32},
 		},
-		RowsAffected: 1,
-		InsertID:     0,
+		InsertID: 0,
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewInt32(1),
 			sqltypes.NewInt32(3),
@@ -2167,15 +2074,13 @@ func TestCrossShardSubquery(t *testing.T) {
 	result, err := executorExec(executor, "select id1 from (select u1.id id1, u2.id from user u1 join user u2 on u2.id = u1.col where u1.id = 1) as t", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select u1.id as id1, u1.col from user as u1 where u1.id = 1",
+		Sql:           "select u1.id as id1, u1.col from `user` as u1 where u1.id = 1",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
-	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
-		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
-	}
+	utils.MustMatch(t, wantQueries, sbc1.Queries)
 	// We have to use string representation because bindvars type is too complex.
 	got := fmt.Sprintf("%+v", sbc2.Queries)
-	want := `[sql:"select u2.id from user as u2 where u2.id = :u1_col" bind_variables:<key:"u1_col" value:<type:INT32 value:"3" > > ]`
+	want := `[sql:"select u2.id from ` + "`user`" + ` as u2 where u2.id = :u1_col" bind_variables:<key:"u1_col" value:<type:INT32 value:"3" > > ]`
 	if got != want {
 		t.Errorf("sbc2.Queries: %s, want %s\n", got, want)
 	}
@@ -2184,7 +2089,6 @@ func TestCrossShardSubquery(t *testing.T) {
 		Fields: []*querypb.Field{
 			{Name: "id", Type: sqltypes.Int32},
 		},
-		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewInt32(1),
 		}},
@@ -2201,8 +2105,7 @@ func TestCrossShardSubqueryStream(t *testing.T) {
 			{Name: "id", Type: sqltypes.Int32},
 			{Name: "col", Type: sqltypes.Int32},
 		},
-		RowsAffected: 1,
-		InsertID:     0,
+		InsertID: 0,
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewInt32(1),
 			sqltypes.NewInt32(3),
@@ -2212,15 +2115,13 @@ func TestCrossShardSubqueryStream(t *testing.T) {
 	result, err := executorStream(executor, "select id1 from (select u1.id id1, u2.id from user u1 join user u2 on u2.id = u1.col where u1.id = 1) as t")
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select u1.id as id1, u1.col from user as u1 where u1.id = 1",
+		Sql:           "select u1.id as id1, u1.col from `user` as u1 where u1.id = 1",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
-	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
-		t.Errorf("sbc1.Queries:\n%+v, want\n%+v\n", sbc1.Queries, wantQueries)
-	}
+	utils.MustMatch(t, wantQueries, sbc1.Queries)
 	// We have to use string representation because bindvars type is too complex.
 	got := fmt.Sprintf("%+v", sbc2.Queries)
-	want := `[sql:"select u2.id from user as u2 where u2.id = :u1_col" bind_variables:<key:"u1_col" value:<type:INT32 value:"3" > > ]`
+	want := `[sql:"select u2.id from ` + "`user`" + ` as u2 where u2.id = :u1_col" bind_variables:<key:"u1_col" value:<type:INT32 value:"3" > > ]`
 	if got != want {
 		t.Errorf("sbc2.Queries:\n%s, want\n%s\n", got, want)
 	}
@@ -2255,17 +2156,15 @@ func TestCrossShardSubqueryGetFields(t *testing.T) {
 	result, err := executorExec(executor, "select main1.col, t.id1 from main1 join (select u1.id id1, u2.id from user u1 join user u2 on u2.id = u1.col where u1.id = 1) as t", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select u1.id as id1, u1.col from user as u1 where 1 != 1",
+		Sql:           "select u1.id as id1, u1.col from `user` as u1 where 1 != 1",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}, {
-		Sql: "select u2.id from user as u2 where 1 != 1",
+		Sql: "select u2.id from `user` as u2 where 1 != 1",
 		BindVariables: map[string]*querypb.BindVariable{
 			"u1_col": sqltypes.NullBindVariable,
 		},
 	}}
-	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
-		t.Errorf("sbc1.Queries:\n%+v, want\n%+v\n", sbc1.Queries, wantQueries)
-	}
+	utils.MustMatch(t, wantQueries, sbc1.Queries)
 
 	wantResult := &sqltypes.Result{
 		Fields: []*querypb.Field{
@@ -2290,15 +2189,24 @@ func TestSelectBindvarswithPrepare(t *testing.T) {
 	require.NoError(t, err)
 
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select id from user where 1 != 1",
+		Sql:           "select id from `user` where 1 != 1",
 		BindVariables: map[string]*querypb.BindVariable{"id": sqltypes.Int64BindVariable(1)},
 	}}
-	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
-		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
-	}
+	utils.MustMatch(t, wantQueries, sbc1.Queries)
 	if sbc2.Queries != nil {
 		t.Errorf("sbc2.Queries: %+v, want nil\n", sbc2.Queries)
 	}
+}
+
+func TestSelectDatabasePrepare(t *testing.T) {
+	executor, _, _, _ := createExecutorEnv()
+	executor.normalize = true
+	logChan := QueryLogger.Subscribe("Test")
+	defer QueryLogger.Unsubscribe(logChan)
+
+	sql := "select database()"
+	_, err := executorPrepare(executor, sql, map[string]*querypb.BindVariable{})
+	require.NoError(t, err)
 }
 
 func TestSelectWithUnionAll(t *testing.T) {
@@ -2309,14 +2217,14 @@ func TestSelectWithUnionAll(t *testing.T) {
 	bv1, _ := sqltypes.BuildBindVariable([]int64{1, 2})
 	bv2, _ := sqltypes.BuildBindVariable([]int64{3})
 	sbc1WantQueries := []*querypb.BoundQuery{{
-		Sql: "select id from user where id in ::__vals",
+		Sql: "select id from `user` where id in ::__vals",
 		BindVariables: map[string]*querypb.BindVariable{
 			"__vals": bv1,
 			"vtg1":   bv,
 			"vtg2":   bv,
 		},
 	}, {
-		Sql: "select id from user where id in ::__vals",
+		Sql: "select id from `user` where id in ::__vals",
 		BindVariables: map[string]*querypb.BindVariable{
 			"__vals": bv1,
 			"vtg1":   bv,
@@ -2324,14 +2232,14 @@ func TestSelectWithUnionAll(t *testing.T) {
 		},
 	}}
 	sbc2WantQueries := []*querypb.BoundQuery{{
-		Sql: "select id from user where id in ::__vals",
+		Sql: "select id from `user` where id in ::__vals",
 		BindVariables: map[string]*querypb.BindVariable{
 			"__vals": bv2,
 			"vtg1":   bv,
 			"vtg2":   bv,
 		},
 	}, {
-		Sql: "select id from user where id in ::__vals",
+		Sql: "select id from `user` where id in ::__vals",
 		BindVariables: map[string]*querypb.BindVariable{
 			"__vals": bv2,
 			"vtg1":   bv,
@@ -2383,7 +2291,6 @@ func TestSelectLock(t *testing.T) {
 			TabletAlias:   sbc1.Tablet().Alias,
 		}},
 		LockSession: &vtgatepb.Session_ShardSession{
-
 			Target:      &querypb.Target{Keyspace: "TestExecutor", Shard: "-20", TabletType: topodatapb.TabletType_MASTER},
 			TabletAlias: sbc1.Tablet().Alias,
 			ReservedId:  1,
@@ -2414,7 +2321,7 @@ func TestSelectFromInformationSchema(t *testing.T) {
 	// check failure when trying to query two keyspaces
 	_, err := exec(executor, session, "SELECT B.TABLE_NAME FROM INFORMATION_SCHEMA.TABLES AS A, INFORMATION_SCHEMA.COLUMNS AS B WHERE A.TABLE_SCHEMA = 'TestExecutor' AND A.TABLE_SCHEMA = 'TestXBadSharding'")
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "two predicates for table_schema not supported")
+	require.Contains(t, err.Error(), "two predicates for specifying the database are not supported")
 
 	// we pick a keyspace and query for table_schema = database(). should be routed to the picked keyspace
 	session.TargetString = "TestExecutor"

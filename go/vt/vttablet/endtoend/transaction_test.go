@@ -18,15 +18,16 @@ package endtoend
 
 import (
 	"fmt"
-	"strings"
 	"testing"
 	"time"
 
 	"vitess.io/vitess/go/test/utils"
 
+	"context"
+
 	"github.com/golang/protobuf/proto"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/vttablet/endtoend/framework"
@@ -55,14 +56,14 @@ func TestCommit(t *testing.T) {
 
 	qr, err := client.Execute("select * from vitess_test", nil)
 	require.NoError(t, err)
-	require.Equal(t, uint64(4), qr.RowsAffected, "rows affected")
+	require.Equal(t, 4, len(qr.Rows), "rows affected")
 
 	_, err = client.Execute("delete from vitess_test where intval=4", nil)
 	require.NoError(t, err)
 
 	qr, err = client.Execute("select * from vitess_test", nil)
 	require.NoError(t, err)
-	require.Equal(t, uint64(3), qr.RowsAffected, "rows affected")
+	require.Equal(t, 3, len(qr.Rows), "rows affected")
 
 	expectedDiffs := []struct {
 		tag  string
@@ -113,9 +114,7 @@ func TestRollback(t *testing.T) {
 
 	qr, err := client.Execute("select * from vitess_test", nil)
 	require.NoError(t, err)
-	if qr.RowsAffected != 3 {
-		t.Errorf("rows affected: %d, want 3", qr.RowsAffected)
-	}
+	assert.Equal(t, 3, len(qr.Rows))
 
 	expectedDiffs := []struct {
 		tag  string
@@ -154,18 +153,14 @@ func TestAutoCommit(t *testing.T) {
 
 	qr, err := client.Execute("select * from vitess_test", nil)
 	require.NoError(t, err)
-	if qr.RowsAffected != 4 {
-		t.Errorf("rows affected: %d, want 4", qr.RowsAffected)
-	}
+	assert.Equal(t, 4, len(qr.Rows))
 
 	_, err = client.Execute("delete from vitess_test where intval=4", nil)
 	require.NoError(t, err)
 
 	qr, err = client.Execute("select * from vitess_test", nil)
 	require.NoError(t, err)
-	if qr.RowsAffected != 3 {
-		t.Errorf("rows affected: %d, want 4", qr.RowsAffected)
-	}
+	assert.Equal(t, 3, len(qr.Rows))
 
 	expectedDiffs := []struct {
 		tag  string
@@ -216,8 +211,8 @@ func TestTxPoolSize(t *testing.T) {
 	defer client1.Rollback()
 	verifyIntValue(t, framework.DebugVars(), "TransactionPoolAvailable", tabletenv.NewCurrentConfig().TxPool.Size-1)
 
-	defer framework.Server.SetTxPoolSize(framework.Server.TxPoolSize())
-	framework.Server.SetTxPoolSize(1)
+	revert := changeVar(t, "TxPoolSize", "1")
+	defer revert()
 	vend := framework.DebugVars()
 	verifyIntValue(t, vend, "TransactionPoolAvailable", 0)
 	verifyIntValue(t, vend, "TransactionPoolCapacity", 1)
@@ -234,10 +229,7 @@ func TestForUpdate(t *testing.T) {
 		client := framework.NewClient()
 		query := fmt.Sprintf("select * from vitess_test where intval=2 %s", mode)
 		_, err := client.Execute(query, nil)
-		want := "SelectLock disallowed outside transaction"
-		if err == nil || !strings.HasPrefix(err.Error(), want) {
-			t.Errorf("%v, must have prefix %s", err, want)
-		}
+		require.NoError(t, err)
 
 		// We should not get errors here
 		err = client.Begin(false)
@@ -268,9 +260,7 @@ func TestPrepareRollback(t *testing.T) {
 	require.NoError(t, err)
 	qr, err := client.Execute("select * from vitess_test", nil)
 	require.NoError(t, err)
-	if qr.RowsAffected != 3 {
-		t.Errorf("rows affected: %d, want 3", qr.RowsAffected)
-	}
+	assert.Equal(t, 3, len(qr.Rows))
 }
 
 func TestPrepareCommit(t *testing.T) {
@@ -292,9 +282,7 @@ func TestPrepareCommit(t *testing.T) {
 	require.NoError(t, err)
 	qr, err := client.Execute("select * from vitess_test", nil)
 	require.NoError(t, err)
-	if qr.RowsAffected != 4 {
-		t.Errorf("rows affected: %d, want 4", qr.RowsAffected)
-	}
+	assert.Equal(t, 4, len(qr.Rows))
 }
 
 func TestPrepareReparentCommit(t *testing.T) {
@@ -322,9 +310,73 @@ func TestPrepareReparentCommit(t *testing.T) {
 	require.NoError(t, err)
 	qr, err := client.Execute("select * from vitess_test", nil)
 	require.NoError(t, err)
-	if qr.RowsAffected != 4 {
-		t.Errorf("rows affected: %d, want 4", qr.RowsAffected)
+	assert.Equal(t, 4, len(qr.Rows))
+}
+
+func TestShutdownGracePeriod(t *testing.T) {
+	client := framework.NewClient()
+
+	err := client.Begin(false)
+	require.NoError(t, err)
+	go func() {
+		_, err = client.Execute("select sleep(10) from dual", nil)
+		assert.Error(t, err)
+	}()
+
+	started := false
+	for i := 0; i < 10; i++ {
+		queries := framework.LiveQueryz()
+		if len(queries) == 1 {
+			started = true
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
+	assert.True(t, started)
+
+	start := time.Now()
+	err = client.SetServingType(topodatapb.TabletType_REPLICA)
+	require.NoError(t, err)
+	assert.True(t, time.Since(start) < 5*time.Second, time.Since(start))
+	client.Rollback()
+
+	client = framework.NewClientWithTabletType(topodatapb.TabletType_REPLICA)
+	err = client.Begin(false)
+	require.NoError(t, err)
+	go func() {
+		_, err = client.Execute("select sleep(11) from dual", nil)
+		assert.Error(t, err)
+	}()
+
+	started = false
+	for i := 0; i < 10; i++ {
+		queries := framework.LiveQueryz()
+		if len(queries) == 1 {
+			started = true
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	assert.True(t, started)
+	start = time.Now()
+	err = client.SetServingType(topodatapb.TabletType_MASTER)
+	require.NoError(t, err)
+	assert.True(t, time.Since(start) < 1*time.Second, time.Since(start))
+	client.Rollback()
+}
+
+func TestShortTxTimeout(t *testing.T) {
+	client := framework.NewClient()
+	defer framework.Server.SetTxTimeout(framework.Server.TxTimeout())
+	framework.Server.SetTxTimeout(10 * time.Millisecond)
+
+	err := client.Begin(false)
+	require.NoError(t, err)
+	start := time.Now()
+	_, err = client.Execute("select sleep(10) from dual", nil)
+	assert.Error(t, err)
+	assert.True(t, time.Since(start) < 5*time.Second, time.Since(start))
+	client.Rollback()
 }
 
 func TestMMCommitFlow(t *testing.T) {

@@ -35,9 +35,14 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+)
+
+const (
+	throttlerAppName = "vstreamer"
 )
 
 // Engine is the engine for handling vreplication streaming requests.
@@ -84,17 +89,20 @@ type Engine struct {
 	errorCounts               *stats.CountersWithSingleLabel
 	vstreamersCreated         *stats.Counter
 	vstreamersEndedWithErrors *stats.Counter
+
+	throttlerClient *throttle.Client
 }
 
 // NewEngine creates a new Engine.
 // Initialization sequence is: NewEngine->InitDBConfig->Open.
 // Open and Close can be called multiple times and are idempotent.
-func NewEngine(env tabletenv.Env, ts srvtopo.Server, se *schema.Engine, cell string) *Engine {
+func NewEngine(env tabletenv.Env, ts srvtopo.Server, se *schema.Engine, lagThrottler *throttle.Throttler, cell string) *Engine {
 	vse := &Engine{
-		env:  env,
-		ts:   ts,
-		se:   se,
-		cell: cell,
+		env:             env,
+		ts:              ts,
+		se:              se,
+		cell:            cell,
+		throttlerClient: throttle.NewBackgroundClient(lagThrottler, throttlerAppName, throttle.ThrottleCheckSelf),
 
 		streamers:       make(map[int]*uvstreamer),
 		rowStreamers:    make(map[int]*rowStreamer),
@@ -178,6 +186,7 @@ func (vse *Engine) vschema() *vindexes.VSchema {
 }
 
 // Stream starts a new stream.
+// This streams events from the binary logs
 func (vse *Engine) Stream(ctx context.Context, startPos string, tablePKs []*binlogdatapb.TableLastPK, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
 	// Ensure vschema is initialized and the watcher is started.
 	// Starting of the watcher has to be delayed till the first call to Stream
@@ -217,6 +226,7 @@ func (vse *Engine) Stream(ctx context.Context, startPos string, tablePKs []*binl
 }
 
 // StreamRows streams rows.
+// This streams the table data rows (so we can copy the table data snapshot)
 func (vse *Engine) StreamRows(ctx context.Context, query string, lastpk []sqltypes.Value, send func(*binlogdatapb.VStreamRowsResponse) error) error {
 	// Ensure vschema is initialized and the watcher is started.
 	// Starting of the watcher has to be delayed till the first call to Stream
@@ -231,6 +241,7 @@ func (vse *Engine) StreamRows(ctx context.Context, query string, lastpk []sqltyp
 		if !vse.isOpen {
 			return nil, 0, errors.New("VStreamer is not open")
 		}
+
 		rowStreamer := newRowStreamer(ctx, vse.env.Config().DB.AppWithDB(), vse.se, query, lastpk, vse.lvschema, send, vse)
 		idx := vse.streamIdx
 		vse.rowStreamers[idx] = rowStreamer

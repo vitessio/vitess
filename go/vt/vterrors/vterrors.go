@@ -90,7 +90,8 @@ import (
 	"fmt"
 	"io"
 
-	"golang.org/x/net/context"
+	"context"
+
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
@@ -112,16 +113,6 @@ func New(code vtrpcpb.Code, message string) error {
 	}
 }
 
-// NewWithoutCode returns an error when no applicable error code is available
-// It will record the stack trace when creating the error
-func NewWithoutCode(message string) error {
-	return &fundamental{
-		msg:   message,
-		code:  vtrpcpb.Code_UNKNOWN,
-		stack: callers(),
-	}
-}
-
 // Errorf formats according to a format specifier and returns the string
 // as a value that satisfies error.
 // Errorf also records the stack trace at the point it was called.
@@ -133,10 +124,23 @@ func Errorf(code vtrpcpb.Code, format string, args ...interface{}) error {
 	}
 }
 
+// NewErrorf formats according to a format specifier and returns the string
+// as a value that satisfies error.
+// NewErrorf also records the stack trace at the point it was called.
+func NewErrorf(code vtrpcpb.Code, state State, format string, args ...interface{}) error {
+	return &fundamental{
+		msg:   fmt.Sprintf(format, args...),
+		code:  code,
+		state: state,
+		stack: callers(),
+	}
+}
+
 // fundamental is an error that has a message and a stack, but no caller.
 type fundamental struct {
-	msg  string
-	code vtrpcpb.Code
+	msg   string
+	code  vtrpcpb.Code
+	state State
 	*stack
 }
 
@@ -182,6 +186,24 @@ func Code(err error) vtrpcpb.Code {
 		return vtrpcpb.Code_DEADLINE_EXCEEDED
 	}
 	return vtrpcpb.Code_UNKNOWN
+}
+
+// ErrState returns the error state if it's a vtError.
+// If err is nil, it returns Undefined.
+func ErrState(err error) State {
+	if err == nil {
+		return Undefined
+	}
+	if err, ok := err.(*fundamental); ok {
+		return err.state
+	}
+
+	cause := Cause(err)
+	if cause != err && cause != nil {
+		// If we did not find an error state at the outer level, let's find the cause and check it's state
+		return ErrState(cause)
+	}
+	return Undefined
 }
 
 // Wrap returns an error annotating err with a stack trace

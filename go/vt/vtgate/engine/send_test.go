@@ -137,7 +137,7 @@ func TestSendTable(t *testing.T) {
 			// Failure cases
 			vc = &loggingVCursor{shardErr: errors.New("shard_error")}
 			_, err = send.Execute(vc, map[string]*querypb.BindVariable{}, false)
-			require.EqualError(t, err, "sendExecute: shard_error")
+			require.EqualError(t, err, "shard_error")
 
 			if !tc.sharded {
 				vc = &loggingVCursor{}
@@ -256,7 +256,7 @@ func TestSendTable_StreamExecute(t *testing.T) {
 			// Failure cases
 			vc = &loggingVCursor{shardErr: errors.New("shard_error")}
 			_, err = wrapStreamExecute(send, vc, map[string]*querypb.BindVariable{}, false)
-			require.EqualError(t, err, "sendStreamExecute: shard_error")
+			require.EqualError(t, err, "shard_error")
 
 			if !tc.sharded {
 				vc = &loggingVCursor{}

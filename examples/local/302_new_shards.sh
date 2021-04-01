@@ -29,5 +29,5 @@ for i in 400 401 402; do
 	SHARD=80- CELL=zone1 KEYSPACE=customer TABLET_UID=$i ./scripts/vttablet-up.sh
 done
 
-vtctlclient InitShardMaster -force customer/-80 zone1-300
-vtctlclient InitShardMaster -force customer/80- zone1-400
+vtctldclient InitShardPrimary --force customer/-80 zone1-300
+vtctldclient InitShardPrimary --force customer/80- zone1-400

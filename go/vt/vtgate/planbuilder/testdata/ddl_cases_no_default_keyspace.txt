@@ -1,0 +1,571 @@
+# Create View with qualifier
+"create view user.a as select* from user"
+{
+  "QueryType": "DDL",
+  "Original": "create view user.a as select* from user",
+  "Instructions": {
+    "OperatorType": "DDL",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "create view a as select * from `user`"
+  }
+}
+
+# create view with qualifier in select as well
+"create view user.a as select* from user.user"
+{
+  "QueryType": "DDL",
+  "Original": "create view user.a as select* from user.user",
+  "Instructions": {
+    "OperatorType": "DDL",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "create view a as select * from `user`"
+  }
+}
+
+# create view with No column referenced
+"create view user.view_a as select 1 from user"
+{
+  "QueryType": "DDL",
+  "Original": "create view user.view_a as select 1 from user",
+  "Instructions": {
+    "OperatorType": "DDL",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "create view view_a as select 1 from `user`"
+  }
+}
+
+# create view with '*' expression for simple route
+"create view user.view_a as select user.* from user"
+{
+  "QueryType": "DDL",
+  "Original": "create view user.view_a as select user.* from user",
+  "Instructions": {
+    "OperatorType": "DDL",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "create view view_a as select `user`.* from `user`"
+  }
+}
+
+# create view with unqualified '*' expression for simple route
+"create view user.view_a as select * from user"
+{
+  "QueryType": "DDL",
+  "Original": "create view user.view_a as select * from user",
+  "Instructions": {
+    "OperatorType": "DDL",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "create view view_a as select * from `user`"
+  }
+}
+
+# create view with fully qualified '*' expression for simple route
+"create view user.view_a as select user.user.* from user.user"
+{
+  "QueryType": "DDL",
+  "Original": "create view user.view_a as select user.user.* from user.user",
+  "Instructions": {
+    "OperatorType": "DDL",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "create view view_a as select `user`.* from `user`"
+  }
+}
+
+# create view with select * from authoritative table
+"create view user.view_a as select * from authoritative"
+{
+  "QueryType": "DDL",
+  "Original": "create view user.view_a as select * from authoritative",
+  "Instructions": {
+    "OperatorType": "DDL",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "create view view_a as select * from authoritative"
+  }
+}
+
+# create view with select * from join of authoritative tables
+"create view user.view_a as select * from authoritative a join authoritative b on a.user_id=b.user_id"
+{
+  "QueryType": "DDL",
+  "Original": "create view user.view_a as select * from authoritative a join authoritative b on a.user_id=b.user_id",
+  "Instructions": {
+    "OperatorType": "DDL",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "create view view_a as select * from authoritative as a join authoritative as b on a.user_id = b.user_id"
+  }
+}
+
+# create view with select * from qualified authoritative table
+"create view user.view_a as select a.* from authoritative a"
+{
+  "QueryType": "DDL",
+  "Original": "create view user.view_a as select a.* from authoritative a",
+  "Instructions": {
+    "OperatorType": "DDL",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "create view view_a as select a.* from authoritative as a"
+  }
+}
+
+# create view with select * from intermixing of authoritative table with non-authoritative results in no expansion
+"create view user.view_a as select * from authoritative join user on authoritative.user_id=user.id"
+{
+  "QueryType": "DDL",
+  "Original": "create view user.view_a as select * from authoritative join user on authoritative.user_id=user.id",
+  "Instructions": {
+    "OperatorType": "DDL",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "create view view_a as select * from authoritative join `user` on authoritative.user_id = `user`.id"
+  }
+}
+
+# create view with select authoritative.* with intermixing still expands
+"create view user.view_a as select user.id, a.*, user.col1 from authoritative a join user on a.user_id=user.id"
+{
+  "QueryType": "DDL",
+  "Original": "create view user.view_a as select user.id, a.*, user.col1 from authoritative a join user on a.user_id=user.id",
+  "Instructions": {
+    "OperatorType": "DDL",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "create view view_a as select `user`.id, a.*, `user`.col1 from authoritative as a join `user` on a.user_id = `user`.id"
+  }
+}
+
+# create view with auto-resolve anonymous columns for simple route
+"create view user.view_a as select col from user join user_extra on user.id = user_extra.user_id"
+{
+  "QueryType": "DDL",
+  "Original": "create view user.view_a as select col from user join user_extra on user.id = user_extra.user_id",
+  "Instructions": {
+    "OperatorType": "DDL",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "create view view_a as select col from `user` join user_extra on `user`.id = user_extra.user_id"
+  }
+}
+
+# create view with join that can be solved in each shard separately
+"create view user.view_a as select user.id from user join user_extra on user.id = user_extra.user_id"
+{
+  "QueryType": "DDL",
+  "Original": "create view user.view_a as select user.id from user join user_extra on user.id = user_extra.user_id",
+  "Instructions": {
+    "OperatorType": "DDL",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "create view view_a as select `user`.id from `user` join user_extra on `user`.id = user_extra.user_id"
+  }
+}
+
+# create view with last_insert_id for unsharded route
+"create view main.view_a as select last_insert_id() as x from main.unsharded"
+{
+  "QueryType": "DDL",
+  "Original": "create view main.view_a as select last_insert_id() as x from main.unsharded",
+  "Instructions": {
+    "OperatorType": "DDL",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "create view view_a as select :__lastInsertId as x from unsharded"
+  }
+}
+
+# create view with select from pinned table
+"create view user.view_a as select * from pin_test"
+{
+  "QueryType": "DDL",
+  "Original": "create view user.view_a as select * from pin_test",
+  "Instructions": {
+    "OperatorType": "DDL",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "create view view_a as select * from pin_test"
+  }
+}
+
+# create view with Expression with single-route reference
+"create view user.view_a as select user.col, user_extra.id + user_extra.col from user join user_extra on user.id = user_extra.user_id"
+{
+  "QueryType": "DDL",
+  "Original": "create view user.view_a as select user.col, user_extra.id + user_extra.col from user join user_extra on user.id = user_extra.user_id",
+  "Instructions": {
+    "OperatorType": "DDL",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "create view view_a as select `user`.col, user_extra.id + user_extra.col from `user` join user_extra on `user`.id = user_extra.user_id"
+  }
+}
+
+# create view with Comments
+"create view user.view_a as select /* comment */ user.col from user join user_extra on user.id = user_extra.user_id"
+{
+  "QueryType": "DDL",
+  "Original": "create view user.view_a as select /* comment */ user.col from user join user_extra on user.id = user_extra.user_id",
+  "Instructions": {
+    "OperatorType": "DDL",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "create view view_a as select /* comment */ `user`.col from `user` join user_extra on `user`.id = user_extra.user_id"
+  }
+}
+
+# create view with for update
+"create view user.view_a as select user.col from user join user_extra on user.id = user_extra.user_id for update"
+{
+  "QueryType": "DDL",
+  "Original": "create view user.view_a as select user.col from user join user_extra on user.id = user_extra.user_id for update",
+  "Instructions": {
+    "OperatorType": "DDL",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "create view view_a as select `user`.col from `user` join user_extra on `user`.id = user_extra.user_id for update"
+  }
+}
+
+# create view with Case preservation
+"create view user.view_a as select user.Col, user_extra.Id from user join user_extra on user.id = user_extra.user_id"
+{
+  "QueryType": "DDL",
+  "Original": "create view user.view_a as select user.Col, user_extra.Id from user join user_extra on user.id = user_extra.user_id",
+  "Instructions": {
+    "OperatorType": "DDL",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "create view view_a as select `user`.Col, user_extra.Id from `user` join user_extra on `user`.id = user_extra.user_id"
+  }
+}
+
+# create view with syntax error
+"create view user.view_a as the quick brown fox"
+"syntax error at position 31 near 'the'"
+
+# create view with Hex number is not treated as a simple value
+"create view user.view_a as select * from user where id = 0x04"
+{
+  "QueryType": "DDL",
+  "Original": "create view user.view_a as select * from user where id = 0x04",
+  "Instructions": {
+    "OperatorType": "DDL",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "create view view_a as select * from `user` where id = 0x04"
+  }
+}
+
+# create view with limit works if it can be dropped
+"create view user.view_a as select * from user where name ='abc' AND (id = 4) limit 5"
+{
+  "QueryType": "DDL",
+  "Original": "create view user.view_a as select * from user where name ='abc' AND (id = 4) limit 5",
+  "Instructions": {
+    "OperatorType": "DDL",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "create view view_a as select * from `user` where `name` = 'abc' and id = 4 limit 5"
+  }
+}
+
+# create view with Multiple parenthesized expressions
+"create view user.view_a as select * from user where (id = 4) AND (name ='abc') limit 5"
+{
+  "QueryType": "DDL",
+  "Original": "create view user.view_a as select * from user where (id = 4) AND (name ='abc') limit 5",
+  "Instructions": {
+    "OperatorType": "DDL",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "create view view_a as select * from `user` where id = 4 and `name` = 'abc' limit 5"
+  }
+}
+
+# create view with Multiple parenthesized expressions
+"create view user.view_a as select * from user where (id = 4 and name ='abc') limit 5"
+{
+  "QueryType": "DDL",
+  "Original": "create view user.view_a as select * from user where (id = 4 and name ='abc') limit 5",
+  "Instructions": {
+    "OperatorType": "DDL",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "create view view_a as select * from `user` where id = 4 and `name` = 'abc' limit 5"
+  }
+}
+
+# create view with Column Aliasing with Table.Column
+"create view user.view_a as select user0_.col as col0_ from user user0_ where id = 1 order by user0_.col"
+{
+  "QueryType": "DDL",
+  "Original": "create view user.view_a as select user0_.col as col0_ from user user0_ where id = 1 order by user0_.col",
+  "Instructions": {
+    "OperatorType": "DDL",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "create view view_a as select user0_.col as col0_ from `user` as user0_ where id = 1 order by user0_.col asc"
+  }
+}
+
+# create view with Column Aliasing with Column
+"create view user.view_a as select user0_.col as col0_ from user user0_ where id = 1 order by col0_ desc"
+{
+  "QueryType": "DDL",
+  "Original": "create view user.view_a as select user0_.col as col0_ from user user0_ where id = 1 order by col0_ desc",
+  "Instructions": {
+    "OperatorType": "DDL",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "create view view_a as select user0_.col as col0_ from `user` as user0_ where id = 1 order by col0_ desc"
+  }
+}
+
+# create view with Booleans and parenthesis
+"create view user.view_a as select * from user where (id = 1) AND name = true"
+{
+  "QueryType": "DDL",
+  "Original": "create view user.view_a as select * from user where (id = 1) AND name = true",
+  "Instructions": {
+    "OperatorType": "DDL",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "create view view_a as select * from `user` where id = 1 and `name` = true"
+  }
+}
+
+# create view with union with the same target shard
+"create view user.view_a as select * from music where user_id = 1 union select * from user where id = 1"
+{
+  "QueryType": "DDL",
+  "Original": "create view user.view_a as select * from music where user_id = 1 union select * from user where id = 1",
+  "Instructions": {
+    "OperatorType": "DDL",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "create view view_a as select * from music where user_id = 1 union select * from `user` where id = 1"
+  }
+}
+
+# create view with testing SingleRow Projection
+"create view user.view_a as select 42 from user"
+{
+  "QueryType": "DDL",
+  "Original": "create view user.view_a as select 42 from user",
+  "Instructions": {
+    "OperatorType": "DDL",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "create view view_a as select 42 from `user`"
+  }
+}
+
+# create view with sql_calc_found_rows without limit
+"create view user.view_a as select sql_calc_found_rows * from music where user_id = 1"
+{
+  "QueryType": "DDL",
+  "Original": "create view user.view_a as select sql_calc_found_rows * from music where user_id = 1",
+  "Instructions": {
+    "OperatorType": "DDL",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "create view view_a as select * from music where user_id = 1"
+  }
+}
+
+# DDL
+"create index a on user(id)"
+{
+  "QueryType": "DDL",
+  "Original": "create index a on user(id)",
+  "Instructions": {
+    "OperatorType": "DDL",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "alter table `user` add index a (id)"
+  }
+}
+
+#Alter table with qualifier
+"alter table user ADD id int"
+{
+  "QueryType": "DDL",
+  "Original": "alter table user ADD id int",
+  "Instructions": {
+    "OperatorType": "DDL",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "alter table `user` add column id int"
+  }
+}
+
+# Alter View
+"alter view user_extra as select* from user"
+{
+  "QueryType": "DDL",
+  "Original": "alter view user_extra as select* from user",
+  "Instructions": {
+    "OperatorType": "DDL",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "alter view user_extra as select * from `user`"
+  }
+}
+
+# Alter View with unknown view
+"alter view unknown as select* from user"
+"keyspace not specified"
+
+# drop table with qualifier in one
+"drop table user.user, user_extra"
+{
+  "QueryType": "DDL",
+  "Original": "drop table user.user, user_extra",
+  "Instructions": {
+    "OperatorType": "DDL",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "drop table `user`, user_extra"
+  }
+}
+
+# drop table with incompatible tables
+"drop table user, unsharded_a"
+"Tables or Views specified in the query do not belong to the same destination"
+
+# drop table with unknown table
+"drop table unknown"
+"keyspace not specified"
+
+# drop view with 1 view without qualifier
+"drop view user.user, user_extra"
+{
+  "QueryType": "DDL",
+  "Original": "drop view user.user, user_extra",
+  "Instructions": {
+    "OperatorType": "DDL",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "drop view `user`, user_extra"
+  }
+}
+
+# drop view with incompatible views
+"drop view user, unsharded_a"
+"Tables or Views specified in the query do not belong to the same destination"
+
+# drop view with unknown view
+"drop view unknown"
+"keyspace not specified"
+
+# Truncate table without qualifier
+"truncate user_extra"
+{
+  "QueryType": "DDL",
+  "Original": "truncate user_extra",
+  "Instructions": {
+    "OperatorType": "DDL",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "truncate table user_extra"
+  }
+}
+
+# Rename table
+"rename table user_extra to b"
+{
+  "QueryType": "DDL",
+  "Original": "rename table user_extra to b",
+  "Instructions": {
+    "OperatorType": "DDL",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "rename table user_extra to b"
+  }
+}
+
+# Rename table with different keyspace tables
+"rename table user_extra to b, main.a to b"
+"Tables or Views specified in the query do not belong to the same destination"
+
+# Rename table with change in keyspace name
+"rename table user_extra to main.b"
+"Changing schema from 'user' to 'main' is not allowed"

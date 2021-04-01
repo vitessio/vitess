@@ -17,16 +17,16 @@ limitations under the License.
 package planbuilder
 
 import (
-	"vitess.io/vitess/go/vt/proto/vtrpc"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
 // buildDeletePlan builds the instructions for a DELETE statement.
-func buildDeletePlan(stmt sqlparser.Statement, vschema ContextVSchema) (engine.Primitive, error) {
+func buildDeletePlan(stmt sqlparser.Statement, reservedVars sqlparser.BindVars, vschema ContextVSchema) (engine.Primitive, error) {
 	del := stmt.(*sqlparser.Delete)
-	dml, ksidVindex, ksidCol, err := buildDMLPlan(vschema, "delete", del, del.TableExprs, del.Where, del.OrderBy, del.Limit, del.Comments, del.Targets)
+	dml, ksidVindex, ksidCol, err := buildDMLPlan(vschema, "delete", del, reservedVars, del.TableExprs, del.Where, del.OrderBy, del.Limit, del.Comments, del.Targets)
 	if err != nil {
 		return nil, err
 	}
@@ -39,11 +39,11 @@ func buildDeletePlan(stmt sqlparser.Statement, vschema ContextVSchema) (engine.P
 	}
 
 	if len(del.Targets) > 1 {
-		return nil, vterrors.New(vtrpc.Code_UNIMPLEMENTED, "unsupported: multi-table delete statement in sharded keyspace")
+		return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "multi-table delete statement in not supported in sharded database")
 	}
 
 	if len(del.Targets) == 1 && del.Targets[0].Name != edel.Table.Name {
-		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "Unknown table '%s' in MULTI DELETE", del.Targets[0].Name.String())
+		return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.UnknownTable, "Unknown table '%s' in MULTI DELETE", del.Targets[0].Name.String())
 	}
 
 	if len(edel.Table.Owned) > 0 {

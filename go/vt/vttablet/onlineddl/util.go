@@ -25,6 +25,7 @@ import (
 	"io/ioutil"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"vitess.io/vitess/go/vt/log"
@@ -55,7 +56,7 @@ func execCmd(name string, args, env []string, dir string, input io.Reader, outpu
 	}
 	err = cmd.Run()
 	if err != nil {
-		err = fmt.Errorf("execCmd failed: %v, %v", name, err)
+		err = fmt.Errorf("failed running command: %v %s; error=%v", name, strings.Join(args, " "), err)
 		log.Errorf(err.Error())
 	}
 	log.Infof("execCmd success: %v", name)

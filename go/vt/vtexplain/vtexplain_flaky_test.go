@@ -26,6 +26,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
@@ -223,7 +224,7 @@ func TestJSONOutput(t *testing.T) {
     "ks_sharded/-40": {
         "MysqlQueries": [
             {
-                "SQL": "select 1 from user where id = 1 limit 10001",
+                "SQL": "select 1 from ` + "`user`" + ` where id = 1 limit 10001",
                 "Time": 1
             }
         ],
@@ -233,7 +234,7 @@ func TestJSONOutput(t *testing.T) {
                     "#maxLimit": "10001",
                     "vtg1": "1"
                 },
-                "SQL": "select :vtg1 from user where id = :vtg1",
+                "SQL": "select :vtg1 from ` + "`user`" + ` where id = :vtg1",
                 "Time": 1
             }
         ]

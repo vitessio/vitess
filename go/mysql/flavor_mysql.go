@@ -21,7 +21,7 @@ import (
 	"io"
 	"time"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -29,6 +29,19 @@ import (
 
 // mysqlFlavor implements the Flavor interface for Mysql.
 type mysqlFlavor struct{}
+type mysqlFlavor56 struct {
+	mysqlFlavor
+}
+type mysqlFlavor57 struct {
+	mysqlFlavor
+}
+type mysqlFlavor80 struct {
+	mysqlFlavor
+}
+
+var _ flavor = (*mysqlFlavor56)(nil)
+var _ flavor = (*mysqlFlavor57)(nil)
+var _ flavor = (*mysqlFlavor80)(nil)
 
 // masterGTIDSet is part of the Flavor interface.
 func (mysqlFlavor) masterGTIDSet(c *Conn) (GTIDSet, error) {
@@ -230,4 +243,41 @@ func (mysqlFlavor) enableBinlogPlaybackCommand() string {
 // disableBinlogPlaybackCommand is part of the Flavor interface.
 func (mysqlFlavor) disableBinlogPlaybackCommand() string {
 	return ""
+}
+
+// TablesWithSize56 is a query to select table along with size for mysql 5.6
+const TablesWithSize56 = `SELECT table_name, table_type, unix_timestamp(create_time), table_comment, SUM( data_length + index_length), SUM( data_length + index_length) 
+		FROM information_schema.tables WHERE table_schema = database() group by table_name`
+
+// TablesWithSize57 is a query to select table along with size for mysql 5.7.
+// It's a little weird, because the JOIN predicate only works if the table and databases do not contain weird characters.
+// As a fallback, we use the mysql 5.6 query, which is not always up to date, but works for all table/db names.
+const TablesWithSize57 = `SELECT t.table_name, t.table_type, unix_timestamp(t.create_time), t.table_comment, i.file_size, i.allocated_size 
+	FROM information_schema.tables t, information_schema.innodb_sys_tablespaces i 
+	WHERE t.table_schema = database() and i.name = concat(t.table_schema,'/',t.table_name)
+UNION ALL
+	SELECT table_name, table_type, unix_timestamp(create_time), table_comment, SUM( data_length + index_length), SUM( data_length + index_length)
+	FROM information_schema.tables t
+	WHERE table_schema = database() AND NOT EXISTS(SELECT * FROM information_schema.innodb_sys_tablespaces i WHERE i.name = concat(t.table_schema,'/',t.table_name)) 
+	group by table_name, table_type, unix_timestamp(create_time), table_comment
+`
+
+// TablesWithSize80 is a query to select table along with size for mysql 8.0
+const TablesWithSize80 = `SELECT t.table_name, t.table_type, unix_timestamp(t.create_time), t.table_comment, i.file_size, i.allocated_size 
+		FROM information_schema.tables t, information_schema.innodb_tablespaces i 
+		WHERE t.table_schema = database() and i.name = concat(t.table_schema,'/',t.table_name)`
+
+// baseShowTablesWithSizes is part of the Flavor interface.
+func (mysqlFlavor56) baseShowTablesWithSizes() string {
+	return TablesWithSize56
+}
+
+// baseShowTablesWithSizes is part of the Flavor interface.
+func (mysqlFlavor57) baseShowTablesWithSizes() string {
+	return TablesWithSize57
+}
+
+// baseShowTablesWithSizes is part of the Flavor interface.
+func (mysqlFlavor80) baseShowTablesWithSizes() string {
+	return TablesWithSize80
 }

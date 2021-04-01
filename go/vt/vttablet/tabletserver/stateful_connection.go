@@ -32,7 +32,7 @@ import (
 
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
 
-	"golang.org/x/net/context"
+	"context"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -53,7 +53,7 @@ type StatefulConnection struct {
 	enforceTimeout bool
 }
 
-//Properties contains meta information about the connection
+// Properties contains meta information about the connection
 type Properties struct {
 	EffectiveCaller *vtrpcpb.CallerID
 	ImmediateCaller *querypb.VTGateCallerID
@@ -68,12 +68,12 @@ func (sc *StatefulConnection) Close() {
 	}
 }
 
-//IsClosed returns true when the connection is still operational
+// IsClosed returns true when the connection is still operational
 func (sc *StatefulConnection) IsClosed() bool {
 	return sc.dbConn == nil || sc.dbConn.IsClosed()
 }
 
-//IsInTransaction returns true when the connection has tx state
+// IsInTransaction returns true when the connection has tx state
 func (sc *StatefulConnection) IsInTransaction() bool {
 	return sc.txProps != nil
 }
@@ -113,6 +113,14 @@ func (sc *StatefulConnection) execWithRetry(ctx context.Context, query string, m
 	return nil
 }
 
+// FetchNext returns the next result set.
+func (sc *StatefulConnection) FetchNext(ctx context.Context, maxrows int, wantfields bool) (*sqltypes.Result, error) {
+	if sc.IsClosed() {
+		return nil, vterrors.New(vtrpcpb.Code_CANCELED, "connection is closed")
+	}
+	return sc.dbConn.FetchNext(ctx, maxrows, wantfields)
+}
+
 // Unlock returns the connection to the pool. The connection remains active.
 // This method is idempotent and can be called multiple times
 func (sc *StatefulConnection) Unlock() {
@@ -134,18 +142,18 @@ func (sc *StatefulConnection) unlock(updateTime bool) {
 	if sc.dbConn.IsClosed() {
 		sc.Releasef("unlocked closed connection")
 	} else {
-		sc.pool.markAsNotInUse(sc.ConnID, updateTime)
+		sc.pool.markAsNotInUse(sc, updateTime)
 	}
 }
 
-//Release is used when the connection will not be used ever again.
-//The underlying dbConn is removed so that this connection cannot be used by mistake.
+// Release is used when the connection will not be used ever again.
+// The underlying dbConn is removed so that this connection cannot be used by mistake.
 func (sc *StatefulConnection) Release(reason tx.ReleaseReason) {
 	sc.Releasef(reason.String())
 }
 
-//Releasef is used when the connection will not be used ever again.
-//The underlying dbConn is removed so that this connection cannot be used by mistake.
+// Releasef is used when the connection will not be used ever again.
+// The underlying dbConn is removed so that this connection cannot be used by mistake.
 func (sc *StatefulConnection) Releasef(reasonFormat string, a ...interface{}) {
 	if sc.dbConn == nil {
 		return
@@ -156,7 +164,7 @@ func (sc *StatefulConnection) Releasef(reasonFormat string, a ...interface{}) {
 	sc.logReservedConn()
 }
 
-//Renew the existing connection with new connection id.
+// Renew the existing connection with new connection id.
 func (sc *StatefulConnection) Renew() error {
 	err := sc.pool.renewConn(sc)
 	if err != nil {
@@ -175,32 +183,47 @@ func (sc *StatefulConnection) String() string {
 	)
 }
 
-//TxProperties returns the transactional properties of the connection
+// Current returns the currently executing query
+func (sc *StatefulConnection) Current() string {
+	return sc.dbConn.Current()
+}
+
+// ID returns the mysql connection ID
+func (sc *StatefulConnection) ID() int64 {
+	return sc.dbConn.ID()
+}
+
+// Kill kills the currently executing query and connection
+func (sc *StatefulConnection) Kill(reason string, elapsed time.Duration) error {
+	return sc.dbConn.Kill(reason, elapsed)
+}
+
+// TxProperties returns the transactional properties of the connection
 func (sc *StatefulConnection) TxProperties() *tx.Properties {
 	return sc.txProps
 }
 
-//ID returns the identifier for this connection
-func (sc *StatefulConnection) ID() tx.ConnID {
+// ReservedID returns the identifier for this connection
+func (sc *StatefulConnection) ReservedID() tx.ConnID {
 	return sc.ConnID
 }
 
-//UnderlyingDBConn returns the underlying database connection
+// UnderlyingDBConn returns the underlying database connection
 func (sc *StatefulConnection) UnderlyingDBConn() *connpool.DBConn {
 	return sc.dbConn
 }
 
-//CleanTxState cleans out the current transaction state
+// CleanTxState cleans out the current transaction state
 func (sc *StatefulConnection) CleanTxState() {
 	sc.txProps = nil
 }
 
-//Stats implements the tx.IStatefulConnection interface
+// Stats implements the tx.IStatefulConnection interface
 func (sc *StatefulConnection) Stats() *tabletenv.Stats {
 	return sc.env.Stats()
 }
 
-//Taint taints the existing connection.
+// Taint taints the existing connection.
 func (sc *StatefulConnection) Taint(ctx context.Context, stats *servenv.TimingsWrapper) error {
 	if sc.dbConn == nil {
 		return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "connection is closed")
@@ -223,12 +246,12 @@ func (sc *StatefulConnection) Taint(ctx context.Context, stats *servenv.TimingsW
 	return nil
 }
 
-//IsTainted tells us whether this connection is tainted
+// IsTainted tells us whether this connection is tainted
 func (sc *StatefulConnection) IsTainted() bool {
 	return sc.tainted
 }
 
-//LogTransaction logs transaction related stats
+// LogTransaction logs transaction related stats
 func (sc *StatefulConnection) LogTransaction(reason tx.ReleaseReason) {
 	if sc.txProps == nil {
 		return //Nothing to log as no transaction exists on this connection.
@@ -250,7 +273,7 @@ func (sc *StatefulConnection) LogTransaction(reason tx.ReleaseReason) {
 	tabletenv.TxLogger.Send(sc)
 }
 
-//logReservedConn logs reserved connection related stats.
+// logReservedConn logs reserved connection related stats.
 func (sc *StatefulConnection) logReservedConn() {
 	if sc.reservedProps == nil {
 		return //Nothing to log as this connection is not reserved.

@@ -25,8 +25,6 @@ import (
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/vt/topotools"
-
 	"vitess.io/vitess/go/vt/topo/topoproto"
 
 	"vitess.io/vitess/go/vt/discovery"
@@ -219,8 +217,7 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 			retryDone, bufferErr := gw.buffer.WaitForFailoverEnd(ctx, target.Keyspace, target.Shard, err)
 			if bufferErr != nil {
 				// Buffering failed e.g. buffer is already full. Do not retry.
-				err = vterrors.Errorf(
-					vterrors.Code(bufferErr),
+				err = vterrors.Errorf(vterrors.Code(bufferErr),
 					"failed to automatically buffer and retry failed request during failover: %v original err (type=%T): %v",
 					bufferErr, err, err)
 				break
@@ -238,7 +235,7 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 		tablets := gw.hc.GetHealthyTabletStats(target)
 		if len(tablets) == 0 {
 			// fail fast if there is no tablet
-			err = vterrors.New(vtrpcpb.Code_UNAVAILABLE, "no valid tablet")
+			err = vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "no healthy tablet available for '%s'", target.String())
 			break
 		}
 		gw.shuffleTablets(gw.localCell, tablets)
@@ -277,7 +274,7 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 		}
 		break
 	}
-	return NewShardError(err, target, tabletLastUsed)
+	return NewShardError(err, target)
 }
 
 func (gw *TabletGateway) updateStats(target *querypb.Target, startTime time.Time, err error) {
@@ -355,12 +352,9 @@ func (gw *TabletGateway) TabletsCacheStatus() discovery.TabletsCacheStatusList {
 }
 
 // NewShardError returns a new error with the shard info amended.
-func NewShardError(in error, target *querypb.Target, tablet *topodatapb.Tablet) error {
+func NewShardError(in error, target *querypb.Target) error {
 	if in == nil {
 		return nil
-	}
-	if tablet != nil {
-		return vterrors.Wrapf(in, "target: %s.%s.%s, used tablet: %s", target.Keyspace, target.Shard, topoproto.TabletTypeLString(target.TabletType), topotools.TabletIdent(tablet))
 	}
 	if target != nil {
 		return vterrors.Wrapf(in, "target: %s.%s.%s", target.Keyspace, target.Shard, topoproto.TabletTypeLString(target.TabletType))

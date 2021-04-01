@@ -1,12 +1,12 @@
 #!/bin/bash
 # Copyright 2019 The Vitess Authors.
-# 
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -19,17 +19,17 @@
 # it has execute permissions.
 #
 # This script does not handle file names that contain spaces.
-gofiles=$(git diff --cached --name-only --diff-filter=ACM | grep '^go/.*\.go$')
+gofiles=$(git diff --cached --name-only --diff-filter=ACM | grep '^go/.*\.go$' | grep -v '^go/vt/proto/')
 
 [ -z "$gofiles" ] && exit 0
-unformatted=$(goimports -l=true $gofiles 2>&1 | awk -F: '{print $1}')
+unformatted=$(goimports -local vitess.io/vitess -l=true $gofiles 2>&1 | awk -F: '{print $1}')
 [ -z "$unformatted" ] && exit 0
 
 # Some files are not goimports'd. Print message and fail.
 
 echo >&2 "Go files must be formatted with goimports. Please run:"
 echo >&2
-echo -n >&2 "  goimports -w"
+echo -n >&2 "  goimports -local vitess.io/vitess -w"
 for fn in $unformatted; do
     echo -n >&2 " $PWD/$fn"
 done

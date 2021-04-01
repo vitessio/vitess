@@ -19,8 +19,10 @@ package zk2topo
 import (
 	"path"
 
+	"context"
+
 	"github.com/z-division/go-zookeeper/zk"
-	"golang.org/x/net/context"
+
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/vt/log"

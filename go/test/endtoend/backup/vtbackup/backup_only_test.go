@@ -296,9 +296,10 @@ func tearDown(t *testing.T, initMysql bool) {
 		//Tear down Tablet
 		//err := tablet.VttabletProcess.TearDown()
 		//require.Nil(t, err)
-		err := localCluster.VtctlclientProcess.ExecuteCommand("DeleteTablet", "-allow_master", tablet.Alias)
-		require.Nil(t, err)
 
 		resetTabletDirectory(t, tablet, initMysql)
+		// DeleteTablet on a primary will cause tablet to shutdown, so should only call it after tablet is already shut down
+		err := localCluster.VtctlclientProcess.ExecuteCommand("DeleteTablet", "-allow_master", tablet.Alias)
+		require.Nil(t, err)
 	}
 }

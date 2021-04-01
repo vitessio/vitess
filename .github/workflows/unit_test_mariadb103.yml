@@ -1,0 +1,61 @@
+# DO NOT MODIFY: THIS FILE IS GENERATED USING "make generate_ci_workflows"
+
+name: Unit Test (mariadb103)
+on: [push, pull_request]
+jobs:
+
+  test:
+    runs-on: ubuntu-18.04
+
+    steps:
+    - name: Set up Go
+      uses: actions/setup-go@v1
+      with:
+        go-version: 1.15
+
+    - name: Check out code
+      uses: actions/checkout@v2
+
+    - name: Get dependencies
+      run: |
+        export DEBIAN_FRONTEND="noninteractive"
+        sudo apt-get update
+
+        # !mysql57
+
+        # Uninstall any previously installed MySQL first
+        sudo systemctl stop apparmor
+        sudo DEBIAN_FRONTEND="noninteractive" apt-get remove -y --purge mysql-server mysql-client mysql-common
+        sudo apt-get -y autoremove
+        sudo apt-get -y autoclean
+        sudo deluser mysql
+        sudo rm -rf /var/lib/mysql
+        sudo rm -rf /etc/mysql
+
+        # mariadb103
+        sudo apt-get install -y software-properties-common
+        sudo apt-key adv --recv-keys --keyserver hkp://keyserver.ubuntu.com:80 0xF1656F24C74CD1D8
+        sudo add-apt-repository 'deb [arch=amd64,arm64,ppc64el] http://nyc2.mirrors.digitalocean.com/mariadb/repo/10.3/ubuntu bionic main'
+        sudo apt update
+        sudo DEBIAN_FRONTEND="noninteractive" apt install -y mariadb-server
+
+        sudo apt-get install -y make unzip g++ curl git wget ant openjdk-8-jdk eatmydata
+        sudo service mysql stop
+        sudo bash -c "echo '/usr/sbin/mysqld { }' > /etc/apparmor.d/usr.sbin.mysqld" # https://bugs.launchpad.net/ubuntu/+source/mariadb-10.1/+bug/1806263
+        sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
+        sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld || echo "could not remove mysqld profile"
+
+        mkdir -p dist bin
+        curl -L https://github.com/coreos/etcd/releases/download/v3.3.10/etcd-v3.3.10-linux-amd64.tar.gz | tar -zxC dist
+        mv dist/etcd-v3.3.10-linux-amd64/{etcd,etcdctl} bin/
+
+        go mod download
+
+    - name: Run make tools
+      run: |
+        make tools
+
+    - name: Run test
+      timeout-minutes: 30
+      run: |
+        eatmydata -- make unit_test

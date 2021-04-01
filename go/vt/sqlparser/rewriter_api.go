@@ -36,25 +36,18 @@ package sqlparser
 //
 func Rewrite(node SQLNode, pre, post ApplyFunc) (result SQLNode) {
 	parent := &struct{ SQLNode }{node}
-	defer func() {
-		if r := recover(); r != nil && r != abort {
-			panic(r)
-		}
-		result = parent.SQLNode
-	}()
-
-	a := &application{
-		pre:    pre,
-		post:   post,
-		cursor: Cursor{},
-	}
 
 	// this is the root-replacer, used when the user replaces the root of the ast
 	replacer := func(newNode SQLNode, _ SQLNode) {
 		parent.SQLNode = newNode
 	}
 
-	a.apply(parent, node, replacer)
+	a := &application{
+		pre:  pre,
+		post: post,
+	}
+
+	a.rewriteSQLNode(parent, node, replacer)
 
 	return parent.SQLNode
 }
@@ -66,8 +59,6 @@ func Rewrite(node SQLNode, pre, post ApplyFunc) (result SQLNode) {
 // The return value of ApplyFunc controls the syntax tree traversal.
 // See Rewrite for details.
 type ApplyFunc func(*Cursor) bool
-
-var abort = new(int) // singleton, to signal termination of Apply
 
 // A Cursor describes a node encountered during Apply.
 // Information about the node and its parent is available
@@ -89,4 +80,12 @@ func (c *Cursor) Parent() SQLNode { return c.parent }
 func (c *Cursor) Replace(newNode SQLNode) {
 	c.replacer(newNode, c.parent)
 	c.node = newNode
+}
+
+type replacerFunc func(newNode, parent SQLNode)
+
+// application carries all the shared data so we can pass it around cheaply.
+type application struct {
+	pre, post ApplyFunc
+	cur       Cursor
 }

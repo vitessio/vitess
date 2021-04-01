@@ -156,6 +156,7 @@ func TestAnalyzeQueryInsert2(t *testing.T) {
 	newVal := vx.ToStringVal("newval")
 	err = vx.ReplaceInsertColumnVal("no_such_column", newVal)
 	assert.Error(t, err)
+	assert.Equal(t, ErrColumNotFound, err)
 	assert.Equal(t, vx.Query, query)
 
 	err = vx.ReplaceInsertColumnVal("migration_uuid", newVal)
@@ -188,6 +189,73 @@ func TestAnalyzeQueryInsert2(t *testing.T) {
 		assert.Equal(t, "5", val)
 
 		val, err = vx.ColumnStringVal(vx.InsertCols, "liveness_timestamp")
+		assert.NoError(t, err)
+		assert.Equal(t, "newval", val)
+	}
+	testVals()
+	rewrittenQuery := sqlparser.String(vx.Stmt)
+
+	vx = NewTabletVExec(tWorkflow, tKeyspace)
+	err = vx.AnalyzeQuery(context.Background(), rewrittenQuery)
+	assert.NoError(t, err)
+	assert.Equal(t, vx.Query, rewrittenQuery)
+	testVals()
+}
+
+func TestAnalyzeQueryInsert3(t *testing.T) {
+	query := `insert into _vt.schema_migrations
+		(migration_uuid, migration_status, count, liveness_timestamp) values
+		('abc123', 'running', 5, now())
+		`
+	vx := NewTabletVExec(tWorkflow, tKeyspace)
+	err := vx.AnalyzeQuery(context.Background(), query)
+	assert.NoError(t, err)
+
+	assert.Equal(t, vx.Query, query)
+
+	newVal := vx.ToStringVal("newval")
+	err = vx.AddOrReplaceInsertColumnVal("a_new_column", newVal)
+	assert.NoError(t, err)
+	assert.NotEqual(t, vx.Query, query)
+	assert.Contains(t, vx.Query, "a_new_column")
+	assert.Contains(t, vx.Query, "newval")
+
+	err = vx.AddOrReplaceInsertColumnVal("migration_uuid", newVal)
+	assert.NoError(t, err)
+	assert.NotEqual(t, vx.Query, query)
+
+	err = vx.AddOrReplaceInsertColumnVal("liveness_timestamp", newVal)
+	assert.NoError(t, err)
+	assert.NotEqual(t, vx.Query, query)
+
+	assert.Equal(t, vx.TableName, "_vt.schema_migrations")
+
+	testVals := func() {
+		_, ok := vx.InsertCols["migration_uuid"]
+		assert.True(t, ok)
+		_, ok = vx.InsertCols["count"]
+		assert.True(t, ok)
+		_, ok = vx.InsertCols["requested_timestamp"]
+		assert.False(t, ok) // column does not exist
+		_, ok = vx.InsertCols["liveness_timestamp"]
+		assert.True(t, ok) // because it's not a literal
+		_, ok = vx.InsertCols["a_new_column"]
+		assert.True(t, ok)
+
+		var val string
+		val, err = vx.ColumnStringVal(vx.InsertCols, "migration_uuid")
+		assert.NoError(t, err)
+		assert.Equal(t, "newval", val)
+
+		val, err = vx.ColumnStringVal(vx.InsertCols, "count")
+		assert.NoError(t, err)
+		assert.Equal(t, "5", val)
+
+		val, err = vx.ColumnStringVal(vx.InsertCols, "liveness_timestamp")
+		assert.NoError(t, err)
+		assert.Equal(t, "newval", val)
+
+		val, err = vx.ColumnStringVal(vx.InsertCols, "a_new_column")
 		assert.NoError(t, err)
 		assert.Equal(t, "newval", val)
 	}

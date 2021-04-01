@@ -28,6 +28,7 @@ import (
 	"github.com/icrowley/fake"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 
@@ -79,7 +80,7 @@ func TestLargeComment(t *testing.T) {
 
 	qr, err := conn.ExecuteFetch("select * from vt_insert_test where id = 1", 1, false)
 	require.Nilf(t, err, "select error: %v", err)
-	assert.Equal(t, uint64(1), qr.RowsAffected)
+	assert.Equal(t, 1, len(qr.Rows))
 	assert.Equal(t, "BLOB(\"LLL\")", qr.Rows[0][3].String())
 }
 
@@ -147,11 +148,11 @@ func TestWarnings(t *testing.T) {
 	// validate warning with invalid_field error as warning
 	qr, err := conn.ExecuteFetch("SELECT /*vt+ SCATTER_ERRORS_AS_WARNINGS */ invalid_field from vt_insert_test;", 1, false)
 	require.Nilf(t, err, "select error : %v", err)
-	assert.Equalf(t, uint64(0), qr.RowsAffected, "query should return 0 rows, got %v", qr.RowsAffected)
+	assert.Empty(t, qr.Rows, "number of rows")
 
 	qr, err = conn.ExecuteFetch("SHOW WARNINGS;", 1, false)
 	require.Nilf(t, err, "SHOW WARNINGS; execution failed: %v", err)
-	assert.Equalf(t, uint64(1), qr.RowsAffected, "1 warning expected, got %v ", qr.RowsAffected)
+	assert.EqualValues(t, 1, len(qr.Rows), "number of rows")
 	assert.Contains(t, qr.Rows[0][0].String(), "VARCHAR(\"Warning\")", qr.Rows)
 	assert.Contains(t, qr.Rows[0][1].String(), "UINT16(1054)", qr.Rows)
 	assert.Contains(t, qr.Rows[0][2].String(), "Unknown column", qr.Rows)
@@ -159,11 +160,11 @@ func TestWarnings(t *testing.T) {
 	// validate warning with query_timeout error as warning
 	qr, err = conn.ExecuteFetch("SELECT /*vt+ SCATTER_ERRORS_AS_WARNINGS QUERY_TIMEOUT_MS=1 */ sleep(1) from vt_insert_test;", 1, false)
 	require.Nilf(t, err, "insertion error : %v", err)
-	assert.Equalf(t, uint64(0), qr.RowsAffected, "should return 0 rows, got %v", qr.RowsAffected)
+	assert.Empty(t, qr.Rows, "number of rows")
 
 	qr, err = conn.ExecuteFetch("SHOW WARNINGS;", 1, false)
 	require.Nilf(t, err, "SHOW WARNINGS; execution failed: %v", err)
-	assert.Equalf(t, uint64(1), qr.RowsAffected, "1 warning expected, got %v ", qr.RowsAffected)
+	assert.EqualValues(t, 1, len(qr.Rows), "number of rows")
 	assert.Contains(t, qr.Rows[0][0].String(), "VARCHAR(\"Warning\")", qr.Rows)
 	assert.Contains(t, qr.Rows[0][1].String(), "UINT16(1317)", qr.Rows)
 	assert.Contains(t, qr.Rows[0][2].String(), "context deadline exceeded", qr.Rows)
@@ -174,7 +175,7 @@ func TestWarnings(t *testing.T) {
 
 	qr, err = conn.ExecuteFetch("SHOW WARNINGS;", 1, false)
 	require.Nilf(t, err, "SHOW WARNINGS; execution failed: %v", err)
-	assert.Equalf(t, uint64(0), qr.RowsAffected, "0 warning expected, got %v ", qr.RowsAffected)
+	assert.Empty(t, len(qr.Rows), "number of rows")
 }
 
 // TestSelectWithUnauthorizedUser verifies that an unauthorized user

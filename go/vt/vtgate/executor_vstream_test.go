@@ -20,8 +20,12 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/test/utils"
+
+	"context"
+
 	"github.com/stretchr/testify/require"
-	"golang.org/x/net/context"
+
 	"vitess.io/vitess/go/sqltypes"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -91,8 +95,7 @@ func TestVStreamFrom(t *testing.T) {
 			{Name: "id", Type: sqltypes.Int64},
 			{Name: "val", Type: sqltypes.VarChar},
 		},
-		RowsAffected: 3,
-		InsertID:     0,
+		InsertID: 0,
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewVarChar("+"),
 			sqltypes.NewInt64(1),
@@ -107,9 +110,7 @@ func TestVStreamFrom(t *testing.T) {
 			sqltypes.NewVarChar("xyz"),
 		}},
 	}
-	if !result.Equal(want) {
-		t.Errorf("result: %+v, want %+v", result, want)
-	}
+	utils.MustMatch(t, want, result)
 }
 
 func vstreamEvents(executor *Executor, sql string) (qr *sqltypes.Result, err error) {

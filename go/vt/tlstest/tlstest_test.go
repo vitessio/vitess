@@ -30,15 +30,24 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+
 	"vitess.io/vitess/go/vt/vttls"
 )
 
-// TestClientServer generates:
+func TestClientServerWithoutCombineCerts(t *testing.T) {
+	testClientServer(t, false)
+}
+
+func TestClientServerWithCombineCerts(t *testing.T) {
+	testClientServer(t, true)
+}
+
+// testClientServer generates:
 // - a root CA
 // - a server intermediate CA, with a server.
 // - a client intermediate CA, with a client.
 // And then performs a few tests on them.
-func TestClientServer(t *testing.T) {
+func testClientServer(t *testing.T, combineCerts bool) {
 	// Our test root.
 	root, err := ioutil.TempDir("", "tlstest")
 	if err != nil {
@@ -47,11 +56,17 @@ func TestClientServer(t *testing.T) {
 	defer os.RemoveAll(root)
 
 	clientServerKeyPairs := CreateClientServerCertPairs(root)
+	serverCA := ""
+
+	if combineCerts {
+		serverCA = clientServerKeyPairs.ServerCA
+	}
 
 	serverConfig, err := vttls.ServerConfig(
 		clientServerKeyPairs.ServerCert,
 		clientServerKeyPairs.ServerKey,
-		clientServerKeyPairs.ClientCA)
+		clientServerKeyPairs.ClientCA,
+		serverCA)
 	if err != nil {
 		t.Fatalf("TLSServerConfig failed: %v", err)
 	}
@@ -164,10 +179,19 @@ func TestClientServer(t *testing.T) {
 	}
 }
 
-func getServerConfig(keypairs ClientServerKeyPairs) (*tls.Config, error) {
+func getServerConfigWithoutCombinedCerts(keypairs ClientServerKeyPairs) (*tls.Config, error) {
 	return vttls.ServerConfig(
-		keypairs.ClientCert,
-		keypairs.ClientKey,
+		keypairs.ServerCert,
+		keypairs.ServerKey,
+		keypairs.ClientCA,
+		"")
+}
+
+func getServerConfigWithCombinedCerts(keypairs ClientServerKeyPairs) (*tls.Config, error) {
+	return vttls.ServerConfig(
+		keypairs.ServerCert,
+		keypairs.ServerKey,
+		keypairs.ClientCA,
 		keypairs.ServerCA)
 }
 
@@ -179,10 +203,18 @@ func getClientConfig(keypairs ClientServerKeyPairs) (*tls.Config, error) {
 		keypairs.ServerName)
 }
 
-func TestServerTLSConfigCaching(t *testing.T) {
+func testServerTLSConfigCaching(t *testing.T, getServerConfig func(ClientServerKeyPairs) (*tls.Config, error)) {
 	testConfigGeneration(t, "servertlstest", getServerConfig, func(config *tls.Config) *x509.CertPool {
 		return config.ClientCAs
 	})
+}
+
+func TestServerTLSConfigCachingWithoutCombinedCerts(t *testing.T) {
+	testServerTLSConfigCaching(t, getServerConfigWithoutCombinedCerts)
+}
+
+func TestServerTLSConfigCachingWithCombinedCerts(t *testing.T) {
+	testServerTLSConfigCaching(t, getServerConfigWithCombinedCerts)
 }
 
 func TestClientTLSConfigCaching(t *testing.T) {
@@ -236,4 +268,38 @@ func testConfigGeneration(t *testing.T, rootPrefix string, generateConfig func(C
 		}
 	}
 
+}
+
+func testNumberOfCertsWithOrWithoutCombining(t *testing.T, numCertsExpected int, combine bool) {
+	// Our test root.
+	root, err := ioutil.TempDir("", "tlstest")
+	if err != nil {
+		t.Fatalf("TempDir failed: %v", err)
+	}
+	defer os.RemoveAll(root)
+
+	clientServerKeyPairs := CreateClientServerCertPairs(root)
+	serverCA := ""
+	if combine {
+		serverCA = clientServerKeyPairs.ServerCA
+	}
+
+	serverConfig, err := vttls.ServerConfig(
+		clientServerKeyPairs.ServerCert,
+		clientServerKeyPairs.ServerKey,
+		clientServerKeyPairs.ClientCA,
+		serverCA)
+
+	if err != nil {
+		t.Fatalf("TLSServerConfig failed: %v", err)
+	}
+	assert.Equal(t, numCertsExpected, len(serverConfig.Certificates[0].Certificate))
+}
+
+func TestNumberOfCertsWithoutCombining(t *testing.T) {
+	testNumberOfCertsWithOrWithoutCombining(t, 1, false)
+}
+
+func TestNumberOfCertsWithCombining(t *testing.T) {
+	testNumberOfCertsWithOrWithoutCombining(t, 2, true)
 }

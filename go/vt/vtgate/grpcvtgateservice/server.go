@@ -24,7 +24,8 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/peer"
 
-	"golang.org/x/net/context"
+	"context"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/callinfo"
@@ -197,6 +198,7 @@ func (vtg *VTGate) VStream(request *vtgatepb.VStreamRequest, stream vtgateservic
 		request.TabletType,
 		request.Vgtid,
 		request.Filter,
+		request.Flags,
 		func(events []*binlogdatapb.VEvent) error {
 			return stream.Send(&vtgatepb.VStreamResponse{
 				Events: events,

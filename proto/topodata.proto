@@ -406,3 +406,18 @@ message CellsAlias {
   // Cells that map to this alias
   repeated string cells = 2;
 }
+
+message TopoConfig {
+  string topo_type = 1;
+  string server = 2;
+  string root = 3;
+}
+
+message ExternalVitessCluster {
+  TopoConfig topo_config = 1;
+}
+
+// ExternalClusters
+message ExternalClusters {
+  repeated ExternalVitessCluster vitess_cluster = 1;
+}

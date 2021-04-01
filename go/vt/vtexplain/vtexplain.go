@@ -181,8 +181,8 @@ func Stop() {
 	}
 }
 
-func parseSchema(sqlSchema string, opts *Options) ([]*sqlparser.DDL, error) {
-	parsedDDLs := make([]*sqlparser.DDL, 0, 16)
+func parseSchema(sqlSchema string, opts *Options) ([]sqlparser.DDLStatement, error) {
+	parsedDDLs := make([]sqlparser.DDLStatement, 0, 16)
 	for {
 		sql, rem, err := sqlparser.SplitStatement(sqlSchema)
 		sqlSchema = rem
@@ -210,16 +210,16 @@ func parseSchema(sqlSchema string, opts *Options) ([]*sqlparser.DDL, error) {
 				continue
 			}
 		}
-		ddl, ok := stmt.(*sqlparser.DDL)
+		ddl, ok := stmt.(sqlparser.DDLStatement)
 		if !ok {
 			log.Infof("ignoring non-DDL statement: %s", sql)
 			continue
 		}
-		if ddl.Action != sqlparser.CreateDDLAction {
-			log.Infof("ignoring %s table statement", ddl.Action.ToString())
+		if ddl.GetAction() != sqlparser.CreateDDLAction {
+			log.Infof("ignoring %s table statement", ddl.GetAction().ToString())
 			continue
 		}
-		if ddl.TableSpec == nil && ddl.OptLike == nil {
+		if ddl.GetTableSpec() == nil && ddl.GetOptLike() == nil {
 			log.Errorf("invalid create table statement: %s", sql)
 			continue
 		}

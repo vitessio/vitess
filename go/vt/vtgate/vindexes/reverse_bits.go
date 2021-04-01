@@ -27,7 +27,6 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
-	"vitess.io/vitess/go/vt/vterrors"
 )
 
 var (
@@ -86,7 +85,7 @@ func (vind *ReverseBits) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]byte)
 	for i := range ids {
 		num, err := evalengine.ToUint64(ids[i])
 		if err != nil {
-			return nil, vterrors.Wrap(err, "reverseBits.Verify")
+			return nil, err
 		}
 		out[i] = bytes.Equal(reverse(num), ksids[i])
 	}

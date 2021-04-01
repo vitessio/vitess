@@ -23,14 +23,13 @@ import (
 
 	"vitess.io/vitess/go/vt/log"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/srvtopo/srvtopotest"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
-	"vitess.io/vitess/go/vt/topotools"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/proto/topodata"
@@ -171,7 +170,6 @@ func TestDiscoveryGatewayWaitForTablets(t *testing.T) {
 			},
 		},
 	}
-
 	dg := NewDiscoveryGateway(context.Background(), hc, srvTopo, "local", 2)
 
 	// replica should only use local ones
@@ -179,34 +177,40 @@ func TestDiscoveryGatewayWaitForTablets(t *testing.T) {
 	dg.tsc.ResetForTesting()
 	hc.AddTestTablet(cell, "2.2.2.2", 1001, keyspace, shard, topodatapb.TabletType_REPLICA, true, 10, nil)
 	hc.AddTestTablet(cell, "1.1.1.1", 1001, keyspace, shard, topodatapb.TabletType_MASTER, true, 5, nil)
-	ctx, _ := context.WithTimeout(context.Background(), 1*time.Second)
-	err := dg.WaitForTablets(ctx, []topodatapb.TabletType{topodatapb.TabletType_REPLICA, topodatapb.TabletType_MASTER})
-	if err != nil {
-		t.Errorf("want %+v, got %+v", nil, err)
-	}
+	{
+		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second) //nolint
+		defer cancel()
+		err := dg.WaitForTablets(ctx, []topodatapb.TabletType{topodatapb.TabletType_REPLICA, topodatapb.TabletType_MASTER})
+		if err != nil {
+			t.Errorf("want %+v, got %+v", nil, err)
+		}
 
-	// fails if there are no available tablets for the desired TabletType
-	err = dg.WaitForTablets(ctx, []topodatapb.TabletType{topodatapb.TabletType_RDONLY})
-	if err == nil {
-		t.Errorf("expected error, got nil")
+		// fails if there are no available tablets for the desired TabletType
+		err = dg.WaitForTablets(ctx, []topodatapb.TabletType{topodatapb.TabletType_RDONLY})
+		if err == nil {
+			t.Errorf("expected error, got nil")
+		}
 	}
-
-	// errors because there is no primary on  ks2
-	ctx, _ = context.WithTimeout(context.Background(), 1*time.Second)
-	srvTopo.SrvKeyspaceNames = []string{keyspace, "ks2"}
-	err = dg.WaitForTablets(ctx, []topodatapb.TabletType{topodatapb.TabletType_MASTER})
-	if err == nil {
-		t.Errorf("expected error, got nil")
+	{
+		// errors because there is no primary on  ks2
+		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second) //nolint
+		defer cancel()
+		srvTopo.SrvKeyspaceNames = []string{keyspace, "ks2"}
+		err := dg.WaitForTablets(ctx, []topodatapb.TabletType{topodatapb.TabletType_MASTER})
+		if err == nil {
+			t.Errorf("expected error, got nil")
+		}
 	}
-
 	discovery.KeyspacesToWatch = []string{keyspace}
 	// does not wait for ks2 if it's not part of the filter
-	ctx, _ = context.WithTimeout(context.Background(), 1*time.Second)
-	err = dg.WaitForTablets(ctx, []topodatapb.TabletType{topodatapb.TabletType_MASTER})
-	if err != nil {
-		t.Errorf("want %+v, got %+v", nil, err)
+	{
+		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second) //nolint
+		defer cancel()
+		err := dg.WaitForTablets(ctx, []topodatapb.TabletType{topodatapb.TabletType_MASTER})
+		if err != nil {
+			t.Errorf("want %+v, got %+v", nil, err)
+		}
 	}
-
 	discovery.KeyspacesToWatch = []string{}
 }
 
@@ -361,7 +365,7 @@ func testDiscoveryGatewayGeneric(t *testing.T, f func(dg *DiscoveryGateway, targ
 	// no tablet
 	hc.Reset()
 	dg.tsc.ResetForTesting()
-	want := []string{"target: ks.0.replica", "no valid tablet"}
+	want := []string{"target: ks.0.replica", `no healthy tablet available for 'keyspace:"ks" shard:"0" tablet_type:REPLICA`}
 	err := f(dg, target)
 	verifyShardErrors(t, err, want, vtrpcpb.Code_UNAVAILABLE)
 
@@ -386,14 +390,9 @@ func testDiscoveryGatewayGeneric(t *testing.T, f func(dg *DiscoveryGateway, targ
 	sc2 := hc.AddTestTablet("cell", "1.1.1.1", 1002, keyspace, shard, tabletType, true, 10, nil)
 	sc1.MustFailCodes[vtrpcpb.Code_FAILED_PRECONDITION] = 1
 	sc2.MustFailCodes[vtrpcpb.Code_FAILED_PRECONDITION] = 1
-	ep1 := sc1.Tablet()
-	ep2 := sc2.Tablet()
 
 	err = f(dg, target)
 	verifyContainsError(t, err, "target: ks.0.replica", vtrpcpb.Code_FAILED_PRECONDITION)
-	verifyShardErrorEither(t, err,
-		fmt.Sprintf(`used tablet: %s`, topotools.TabletIdent(ep1)),
-		fmt.Sprintf(`used tablet: %s`, topotools.TabletIdent(ep2)))
 
 	// fatal error
 	hc.Reset()
@@ -402,22 +401,16 @@ func testDiscoveryGatewayGeneric(t *testing.T, f func(dg *DiscoveryGateway, targ
 	sc2 = hc.AddTestTablet("cell", "1.1.1.1", 1002, keyspace, shard, tabletType, true, 10, nil)
 	sc1.MustFailCodes[vtrpcpb.Code_FAILED_PRECONDITION] = 1
 	sc2.MustFailCodes[vtrpcpb.Code_FAILED_PRECONDITION] = 1
-	ep1 = sc1.Tablet()
-	ep2 = sc2.Tablet()
 	err = f(dg, target)
 	verifyContainsError(t, err, "target: ks.0.replica", vtrpcpb.Code_FAILED_PRECONDITION)
-	verifyShardErrorEither(t, err,
-		fmt.Sprintf(`used tablet: %s`, topotools.TabletIdent(ep1)),
-		fmt.Sprintf(`used tablet: %s`, topotools.TabletIdent(ep2)))
 
 	// server error - no retry
 	hc.Reset()
 	dg.tsc.ResetForTesting()
 	sc1 = hc.AddTestTablet("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, true, 10, nil)
 	sc1.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
-	ep1 = sc1.Tablet()
 	err = f(dg, target)
-	verifyContainsError(t, err, fmt.Sprintf(`used tablet: %s`, topotools.TabletIdent(ep1)), vtrpcpb.Code_INVALID_ARGUMENT)
+	verifyContainsError(t, err, "target: ks.0.replica", vtrpcpb.Code_INVALID_ARGUMENT)
 
 	// no failure
 	hc.Reset()
@@ -448,23 +441,15 @@ func testDiscoveryGatewayTransact(t *testing.T, f func(dg *DiscoveryGateway, tar
 	sc2 := hc.AddTestTablet("cell", "1.1.1.1", 1002, keyspace, shard, tabletType, true, 10, nil)
 	sc1.MustFailCodes[vtrpcpb.Code_FAILED_PRECONDITION] = 1
 	sc2.MustFailCodes[vtrpcpb.Code_FAILED_PRECONDITION] = 1
-	ep1 := sc1.Tablet()
-	ep2 := sc2.Tablet()
 
 	err := f(dg, target)
 	verifyContainsError(t, err, "target: ks.0.replica", vtrpcpb.Code_FAILED_PRECONDITION)
-	format := `used tablet: %s`
-	verifyShardErrorEither(t, err,
-		fmt.Sprintf(format, topotools.TabletIdent(ep1)),
-		fmt.Sprintf(format, topotools.TabletIdent(ep2)))
 
 	// server error - no retry
 	hc.Reset()
 	dg.tsc.ResetForTesting()
 	sc1 = hc.AddTestTablet("cell", "1.1.1.1", 1001, keyspace, shard, tabletType, true, 10, nil)
 	sc1.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
-	ep1 = sc1.Tablet()
 	err = f(dg, target)
 	verifyContainsError(t, err, "target: ks.0.replica", vtrpcpb.Code_INVALID_ARGUMENT)
-	verifyContainsError(t, err, fmt.Sprintf(format, topotools.TabletIdent(ep1)), vtrpcpb.Code_INVALID_ARGUMENT)
 }

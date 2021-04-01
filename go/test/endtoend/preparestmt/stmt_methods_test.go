@@ -17,14 +17,17 @@ limitations under the License.
 package preparestmt
 
 import (
+	"bytes"
 	"database/sql"
 	"fmt"
+	"strconv"
 	"testing"
 	"time"
 
 	"github.com/icrowley/fake"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/test/endtoend/cluster"
 )
 
@@ -34,6 +37,22 @@ func TestSelect(t *testing.T) {
 	dbo := Connect(t)
 	defer dbo.Close()
 	selectWhere(t, dbo, "")
+}
+
+func TestSelectDatabase(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	dbo := Connect(t)
+	defer dbo.Close()
+	prepare, err := dbo.Prepare("select database()")
+	require.NoError(t, err)
+	rows, err := prepare.Query()
+	require.NoError(t, err)
+	defer rows.Close()
+	var resultBytes sql.RawBytes
+	require.True(t, rows.Next(), "no rows found")
+	err = rows.Scan(&resultBytes)
+	require.NoError(t, err)
+	assert.Equal(t, string(resultBytes), "test_keyspace")
 }
 
 // TestInsertUpdateDelete validates all insert, update and
@@ -55,7 +74,7 @@ func TestInsertUpdateDelete(t *testing.T) {
 	for i := 1; i <= 100; i++ {
 		// preparing value for the insert testing
 		insertValue := []interface{}{
-			i, fmt.Sprint(i) + "21", i * 100,
+			i, strconv.FormatInt(int64(i), 10) + "21", i * 100,
 			127, 1, 32767, 8388607, 2147483647, 2.55, 64.9, 55.5,
 			time.Date(2009, 5, 5, 0, 0, 0, 50000, time.UTC),
 			time.Date(2009, 5, 5, 0, 0, 0, 50000, location),
@@ -104,7 +123,7 @@ func TestInsertUpdateDelete(t *testing.T) {
 func testReplica(t *testing.T) {
 	replicaConn := Connect(t, "")
 	require.NotNil(t, replicaConn, "unable to connect")
-	_, err := replicaConn.Exec("use @replica")
+	_, err := replicaConn.Exec(fmt.Sprintf("use %s@replica", dbInfo.KeyspaceName))
 	require.NoError(t, err)
 	tx, err := replicaConn.Begin()
 	require.NoError(t, err, "error creating replica transaction")
@@ -252,4 +271,111 @@ func TestWrongTableName(t *testing.T) {
 	dbo := Connect(t)
 	defer dbo.Close()
 	execWithError(t, dbo, []uint16{1146}, "select * from teseting_table;")
+}
+
+type columns struct {
+	columnName             string
+	dataType               string
+	fullDataType           string
+	characterMaximumLength sql.NullInt64
+	numericPrecision       sql.NullInt64
+	numericScale           sql.NullInt64
+	datetimePrecision      sql.NullInt64
+	columnDefault          sql.NullString
+	isNullable             string
+	extra                  string
+	tableName              string
+}
+
+func (c *columns) ToString() string {
+	buf := bytes.Buffer{}
+	buf.WriteString(fmt.Sprintf("|%s| \t |%s| \t |%s| \t |%s| \t |%s| \t |%s| \t |%s| \t |%s| \t |%s| \t |%s| \t |%s|",
+		c.columnName,
+		c.dataType,
+		c.fullDataType,
+		getIntToString(c.characterMaximumLength),
+		getIntToString(c.numericPrecision),
+		getIntToString(c.numericScale),
+		getIntToString(c.datetimePrecision),
+		getStringToString(c.columnDefault),
+		c.isNullable,
+		c.extra,
+		c.tableName))
+	return buf.String()
+}
+
+func getIntToString(x sql.NullInt64) string {
+	if x.Valid {
+		return fmt.Sprintf("%d", x.Int64)
+	}
+	return "NULL"
+}
+
+func getStringToString(x sql.NullString) string {
+	if x.Valid {
+		return x.String
+	}
+	return "NULL"
+}
+
+func TestSelectDBA(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	dbo := Connect(t)
+	defer dbo.Close()
+
+	_, err := dbo.Exec("use uks")
+	require.NoError(t, err)
+
+	_, err = dbo.Exec("CREATE TABLE `a` (`one` int NOT NULL,`two` int NOT NULL,PRIMARY KEY(`one`, `two`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4")
+	require.NoError(t, err)
+
+	prepare, err := dbo.Prepare(`SELECT
+										column_name column_name,
+										data_type data_type,
+										column_type full_data_type,
+										character_maximum_length character_maximum_length,
+										numeric_precision numeric_precision,
+										numeric_scale numeric_scale,
+										datetime_precision datetime_precision,
+										column_default column_default,
+										is_nullable is_nullable,
+										extra extra,
+										table_name table_name
+									   FROM information_schema.columns
+									   WHERE table_schema = ?
+									   ORDER BY ordinal_position`)
+	require.NoError(t, err)
+	rows, err := prepare.Query("uks")
+	require.NoError(t, err)
+	defer rows.Close()
+	var rec columns
+	rowCount := 0
+	for rows.Next() {
+		err := rows.Scan(
+			&rec.columnName,
+			&rec.dataType,
+			&rec.fullDataType,
+			&rec.characterMaximumLength,
+			&rec.numericPrecision,
+			&rec.numericScale,
+			&rec.datetimePrecision,
+			&rec.columnDefault,
+			&rec.isNullable,
+			&rec.extra,
+			&rec.tableName)
+		require.NoError(t, err)
+		assert.True(t, rec.columnName == "one" || rec.columnName == "two")
+		assert.Equal(t, "int", rec.dataType)
+		assert.True(t, rec.fullDataType == "int" || rec.fullDataType == "int(11)")
+		assert.False(t, rec.characterMaximumLength.Valid)
+		assert.EqualValues(t, 10, rec.numericPrecision.Int64)
+		assert.EqualValues(t, 0, rec.numericScale.Int64)
+		assert.False(t, rec.datetimePrecision.Valid)
+		assert.False(t, rec.columnDefault.Valid)
+		assert.Equal(t, "NO", rec.isNullable)
+		assert.Equal(t, "", rec.extra)
+		assert.Equal(t, "a", rec.tableName)
+		rowCount++
+	}
+	require.Equal(t, 2, rowCount)
 }

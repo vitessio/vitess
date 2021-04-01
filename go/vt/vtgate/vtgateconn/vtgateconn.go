@@ -20,7 +20,8 @@ import (
 	"flag"
 	"fmt"
 
-	"golang.org/x/net/context"
+	"context"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
 
@@ -73,8 +74,9 @@ type VStreamReader interface {
 }
 
 // VStream streams binlog events.
-func (conn *VTGateConn) VStream(ctx context.Context, tabletType topodatapb.TabletType, vgtid *binlogdatapb.VGtid, filter *binlogdatapb.Filter) (VStreamReader, error) {
-	return conn.impl.VStream(ctx, tabletType, vgtid, filter)
+func (conn *VTGateConn) VStream(ctx context.Context, tabletType topodatapb.TabletType, vgtid *binlogdatapb.VGtid,
+	filter *binlogdatapb.Filter, flags *vtgatepb.VStreamFlags) (VStreamReader, error) {
+	return conn.impl.VStream(ctx, tabletType, vgtid, filter, flags)
 }
 
 // VTGateSession exposes the V3 API to the clients.
@@ -133,7 +135,7 @@ type Impl interface {
 	ResolveTransaction(ctx context.Context, dtid string) error
 
 	// VStream streams binlogevents
-	VStream(ctx context.Context, tabletType topodatapb.TabletType, vgtid *binlogdatapb.VGtid, filter *binlogdatapb.Filter) (VStreamReader, error)
+	VStream(ctx context.Context, tabletType topodatapb.TabletType, vgtid *binlogdatapb.VGtid, filter *binlogdatapb.Filter, flags *vtgatepb.VStreamFlags) (VStreamReader, error)
 
 	// Close must be called for releasing resources.
 	Close()

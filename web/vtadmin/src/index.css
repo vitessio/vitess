@@ -1,0 +1,200 @@
+/**
+ * Copyright 2021 The Vitess Authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+@import "./style/fonts.css";
+
+:root {
+  /* Greyscale */
+  --grey75: #fafafa;
+  --grey200: #edf2f7;
+  --grey400: #cbd5e0;
+  --grey600: #718096;
+  --grey800: #2d3748;
+  --grey900: #1e2531;
+
+  /* Invariant colours common across all themes */
+  --colorSuccess: #00893e;
+  --colorSuccess50: #4cba6a;
+  --colorSuccess200: #005a13;
+  --colorInfo: #ffab40;
+  --colorInfo50: #ffdd71;
+  --colorInfo200: #c77c02;
+  --colorError: #d32f2f;
+  --colorError50: #ff6659;
+  --colorError200: #9a0007;
+
+  /* Fonts */
+  --fontFamilyPrimary:
+    'NotoSans',
+    -apple-system,
+    blinkmacsystemfont,
+    'Segoe UI',
+    'Roboto',
+    'Oxygen',
+    'Ubuntu',
+    'Cantarell',
+    'Fira Sans',
+    'Droid Sans',
+    'Helvetica Neue',
+    sans-serif;
+  --fontFamilyMonospace: 'NotoMono', source-code-pro, menlo, monaco, consolas, 'Courier New', monospace;
+
+  /* Body text */
+  --fontSizeDefault: 1.4rem;
+  --fontSizeLarge: 1.6rem;
+  --fontSizeSmall: 1.2rem;
+  --lineHeightBody: 1.36;
+
+  /* Headings */
+  --fontSizeHeading1: 3.6rem;
+  --fontSizeHeading2: 2.8rem;
+  --fontSizeHeading3: 2rem;
+  --lineHeightHeading: 1.36;
+
+  /* Inputs + other form controls */
+  --inputHeightSmall: 2.4rem;
+  --inputHeightMedium: 3.6rem;
+  --inputHeightLarge: 4.8rem;
+
+  /* Tables */
+  --tableCellPadding: 1.6rem;
+
+  /* Layout variables, set to light theme by default */
+  --backgroundPrimary: #fff;
+  --backgroundPrimaryHighlight: rgba(61, 90, 254, 0.1);
+  --backgroundSecondary: var(--grey75);
+  --backgroundSecondaryHighlight: var(--grey200);
+  --boxShadowHover: 0 3px 3px #cbd5e0;
+  --colorDisabled: var(--grey400);
+  --colorPrimary: #3d5afe;
+  --colorPrimary50: #8187ff;
+  --colorPrimary200: #0031ca;
+  --colorScaffoldingHighlight: var(--grey400);
+  --colorScaffoldingForeground: var(--grey600);
+  --tableBorderColor: var(--grey400);
+  --textColorPrimary: #17171b;
+  --textColorInverted: #fff;
+  --textColorSecondary: #718096;
+  --textColorDisabled: #cbd5e0;
+
+  /* A common bounding width for views that don't require the full viewport. */
+  --contentWidth: 1200px;
+}
+
+/* Dark theme */
+[data-vtadmin-theme="dark"] {
+  --backgroundPrimary: #17171b;
+  --backgroundPrimaryHighlight: rgba(129, 135, 255, 0.2);
+  --backgroundSecondary: var(--grey900);
+  --backgroundSecondaryHighlight: var(--grey800);
+  --boxShadowHover: 0 3px 3px #2d3748;
+  --colorDisabled: var(--grey600);
+  --colorPrimary: #8187ff;
+  --colorPrimary50: #b6b7ff;
+  --colorPrimary200: #4a5acb;
+  --colorScaffoldingHighlight: var(--grey600);
+  --colorScaffoldingForeground: var(--grey400);
+  --tableBorderColor: var(--grey800);
+  --textColorPrimary: #fff;
+  --textColorInverted: #17171b;
+  --textColorSecondary: #cbd5e0;
+  --textColorDisabled: #2d3748;
+}
+
+html {
+  /**
+   * Set a base font size of 1rem == 10px, based on the common browser default of 16px.
+   * This lets us use rem values everywhere for accessibility, while still
+   * "pinning" to reasonable defaults. For a really good article on this,
+   * see https://www.24a11y.com/2019/pixels-vs-relative-units-in-css-why-its-still-a-big-deal/
+   */
+  font-size: 62.5%;
+}
+
+body {
+  background: var(--backgroundPrimary);
+  color: var(--textColorPrimary);
+  font-size: var(--fontSizeDefault);
+  line-height: var(--lineHeightBody);
+  margin: 0;
+  font-family: var(--fontFamilyPrimary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Typography */
+h1 {
+  color: var(--textColorPrimary);
+  font-size: var(--fontSizeHeading1);
+  font-weight: 700;
+  line-height: var(--lineHeightHeading);
+}
+
+h2 {
+  color: var(--textColorPrimary);
+  font-size: var(--fontSizeHeading2);
+  font-weight: 700;
+  line-height: var(--lineHeightHeading);
+}
+
+h3 {
+  color: var(--textColorPrimary);
+  font-size: var(--fontSizeHeading3);
+  font-weight: 700;
+  line-height: var(--lineHeightHeading);
+}
+
+code {
+  display: inline-block;
+  font-family: var(--fontFamilyMonospace);
+  margin: 0 2px;
+}
+
+/* Links */
+a,
+a:visited,
+a:focus,
+a:active {
+  color: var(--colorPrimary);
+  cursor: pointer;
+  text-decoration: none;
+}
+
+/* Tables */
+table {
+  border-collapse: collapse;
+  margin-bottom: var(--tableCellPadding);
+  width: 100%;
+}
+
+table th {
+  font-size: var(--fontSizeSmall);
+  padding: 8px var(--tableCellPadding);
+  text-align: left;
+}
+
+table tbody td {
+  border: solid 1px var(--tableBorderColor);
+  padding: var(--tableCellPadding);
+}
+
+/* One-liner utilities */
+.max-width-content {
+  max-width: var(--contentWidth);
+}
+
+.text-color-secondary {
+  color: var(--textColorSecondary);
+}

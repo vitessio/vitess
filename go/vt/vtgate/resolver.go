@@ -17,7 +17,8 @@ limitations under the License.
 package vtgate
 
 import (
-	"golang.org/x/net/context"
+	"context"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -73,7 +74,7 @@ func (res *Resolver) Execute(
 		return nil, err
 	}
 	if logStats != nil {
-		logStats.ShardQueries = uint32(len(rss))
+		logStats.ShardQueries = uint64(len(rss))
 	}
 
 	autocommit := len(rss) == 1 && canAutocommit && session.AutocommitApproval()

@@ -33,7 +33,10 @@ RUN apt-get update && \
     make -j4 && \
     make install
 
-FROM vitess/bootstrap:common
+ARG bootstrap_version
+ARG image="vitess/bootstrap:${bootstrap_version}-common"
+
+FROM "${image}"
 
 # Install MySQL 5.7
 RUN add-apt-repository 'deb http://ftp.debian.org/debian sid main' && \

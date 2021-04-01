@@ -1,23 +1,27 @@
 name: golangci-lint
-on: [push,pull_request]
+on: [push, pull_request]
 jobs:
-
   build:
-    name: Build
+    name: Lint using golangci-lint
     runs-on: ubuntu-latest
     steps:
+      - name: Set up Go 1.15
+        uses: actions/setup-go@v1
+        with:
+          go-version: 1.15
+        id: go
 
-    - name: Set up Go 1.13
-      uses: actions/setup-go@v1
-      with:
-        go-version: 1.13
-      id: go
+      - name: Check out code into the Go module directory
+        uses: actions/checkout@v2
 
-    - name: Check out code into the Go module directory
-      uses: actions/checkout@v1
+      - name: Install golangci-lint
+        run: curl -sfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh| sh -s -- -b $(go env GOPATH)/bin v1.31.0
 
-    - name: Install golangci-lint
-      run: curl -sfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh| sh -s -- -b $(go env GOPATH)/bin v1.27.0
+      - name: Clean Env
+        run: $(go env GOPATH)/bin/golangci-lint cache clean
 
-    - name: Run golangci-lint
-      run: $(go env GOPATH)/bin/golangci-lint run --disable=errcheck --timeout=10m go/...
+      - name: Print linter version
+        run: $(go env GOPATH)/bin/golangci-lint --version
+
+      - name: Run golangci-lint
+        run: $(go env GOPATH)/bin/golangci-lint run go/...

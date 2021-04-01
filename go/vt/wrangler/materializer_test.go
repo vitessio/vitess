@@ -17,13 +17,15 @@ limitations under the License.
 package wrangler
 
 import (
+	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"testing"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/net/context"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/logutil"
@@ -60,7 +62,7 @@ func TestMigrateTables(t *testing.T) {
 	env.tmc.expectVRQuery(200, mzUpdateQuery, &sqltypes.Result{})
 
 	ctx := context.Background()
-	err := env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "t1", "", "")
+	err := env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "t1", "", "", false, "", true, false, "")
 	require.NoError(t, err)
 	vschema, err := env.wr.ts.GetSrvVSchema(ctx, env.cell)
 	require.NoError(t, err)
@@ -73,6 +75,132 @@ func TestMigrateTables(t *testing.T) {
 	for _, wantstr := range want {
 		require.Contains(t, got, wantstr)
 	}
+}
+
+func TestMissingTables(t *testing.T) {
+	ms := &vtctldatapb.MaterializeSettings{
+		Workflow:       "workflow",
+		SourceKeyspace: "sourceks",
+		TargetKeyspace: "targetks",
+		TableSettings: []*vtctldatapb.TableMaterializeSettings{{
+			TargetTable:      "t1",
+			SourceExpression: "select * from t1",
+		}, {
+			TargetTable:      "t2",
+			SourceExpression: "select * from t2",
+		}, {
+			TargetTable:      "t3",
+			SourceExpression: "select * from t3",
+		}},
+	}
+	env := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"0"})
+	defer env.close()
+
+	env.tmc.expectVRQuery(100, mzCheckJournal, &sqltypes.Result{})
+	env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
+	env.tmc.expectVRQuery(200, insertPrefix, &sqltypes.Result{})
+	env.tmc.expectVRQuery(200, mzSelectIDQuery, &sqltypes.Result{})
+	env.tmc.expectVRQuery(200, mzUpdateQuery, &sqltypes.Result{})
+
+	ctx := context.Background()
+	err := env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "t1,tyt", "", "", false, "", true, false, "")
+	require.EqualError(t, err, "table(s) not found in source keyspace sourceks: tyt")
+	err = env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "t1,tyt,t2,txt", "", "", false, "", true, false, "")
+	require.EqualError(t, err, "table(s) not found in source keyspace sourceks: tyt,txt")
+	err = env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "t1", "", "", false, "", true, false, "")
+	require.NoError(t, err)
+}
+
+func TestMoveTablesAllAndExclude(t *testing.T) {
+	ms := &vtctldatapb.MaterializeSettings{
+		Workflow:       "workflow",
+		SourceKeyspace: "sourceks",
+		TargetKeyspace: "targetks",
+		TableSettings: []*vtctldatapb.TableMaterializeSettings{{
+			TargetTable:      "t1",
+			SourceExpression: "select * from t1",
+		}, {
+			TargetTable:      "t2",
+			SourceExpression: "select * from t2",
+		}, {
+			TargetTable:      "t3",
+			SourceExpression: "select * from t3",
+		}},
+	}
+
+	ctx := context.Background()
+	var err error
+
+	var targetTables = func(env *testMaterializerEnv) []string {
+		vschema, err := env.wr.ts.GetSrvVSchema(ctx, env.cell)
+		require.NoError(t, err)
+		var targetTables []string
+		for table := range vschema.Keyspaces["targetks"].Tables {
+			targetTables = append(targetTables, table)
+		}
+		sort.Strings(targetTables)
+		return targetTables
+	}
+	allTables := []string{"t1", "t2", "t3"}
+	sort.Strings(allTables)
+
+	type testCase struct {
+		allTables     bool
+		excludeTables string
+		want          []string
+	}
+	testCases := []*testCase{
+		{true, "", allTables},
+		{true, "t2,t3", []string{"t1"}},
+		{true, "t1", []string{"t2", "t3"}},
+	}
+	for _, tcase := range testCases {
+		t.Run("", func(t *testing.T) {
+			env := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"0"})
+			defer env.close()
+			env.tmc.expectVRQuery(100, mzCheckJournal, &sqltypes.Result{})
+			env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
+			env.tmc.expectVRQuery(200, insertPrefix, &sqltypes.Result{})
+			env.tmc.expectVRQuery(200, mzSelectIDQuery, &sqltypes.Result{})
+			env.tmc.expectVRQuery(200, mzUpdateQuery, &sqltypes.Result{})
+			err = env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "", "", "", tcase.allTables, tcase.excludeTables, true, false, "")
+			require.NoError(t, err)
+			require.EqualValues(t, tcase.want, targetTables(env))
+		})
+
+	}
+
+}
+
+func TestMoveTablesStopFlags(t *testing.T) {
+	ms := &vtctldatapb.MaterializeSettings{
+		Workflow:       "workflow",
+		SourceKeyspace: "sourceks",
+		TargetKeyspace: "targetks",
+		TableSettings: []*vtctldatapb.TableMaterializeSettings{{
+			TargetTable:      "t1",
+			SourceExpression: "select * from t1",
+		}},
+	}
+
+	ctx := context.Background()
+	var err error
+	t.Run("StopStartedAndStopAfterCopyFlags", func(t *testing.T) {
+		env := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"0"})
+		defer env.close()
+		env.tmc.expectVRQuery(100, mzCheckJournal, &sqltypes.Result{})
+		env.tmc.expectVRQuery(200, mzSelectFrozenQuery, &sqltypes.Result{})
+		// insert expects flag stop_after_copy to be true
+		insert := `/insert into _vt.vreplication\(workflow, source, pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, db_name\) values .*stop_after_copy:true.*`
+
+		env.tmc.expectVRQuery(200, insert, &sqltypes.Result{})
+		env.tmc.expectVRQuery(200, mzSelectIDQuery, &sqltypes.Result{})
+		// -auto_start=false is tested by NOT expecting the update query which sets state to RUNNING
+		err = env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "t1", "",
+			"", false, "", false, true, "")
+		require.NoError(t, err)
+		env.tmc.verifyQueries(t)
+	})
 }
 
 func TestMigrateVSchema(t *testing.T) {
@@ -95,7 +223,7 @@ func TestMigrateVSchema(t *testing.T) {
 	env.tmc.expectVRQuery(200, mzUpdateQuery, &sqltypes.Result{})
 
 	ctx := context.Background()
-	err := env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", `{"t1":{}}`, "", "")
+	err := env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", `{"t1":{}}`, "", "", false, "", true, false, "")
 	require.NoError(t, err)
 	vschema, err := env.wr.ts.GetSrvVSchema(ctx, env.cell)
 	require.NoError(t, err)
@@ -1446,6 +1574,8 @@ func TestMaterializerOneToOne(t *testing.T) {
 				CreateDdl:        "t4ddl",
 			},
 		},
+		Cell:        "zone1",
+		TabletTypes: "master,rdonly",
 	}
 	env := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"0"})
 	defer env.close()
@@ -1462,7 +1592,7 @@ func TestMaterializerOneToOne(t *testing.T) {
 				`rules:<match:\\"t2\\" filter:\\"select.*t3\\" > `+
 				`rules:<match:\\"t4\\" > `+
 				`> ', `)+
-			`'', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_targetks'`+
+			`'', [0-9]*, [0-9]*, 'zone1', 'master,rdonly', [0-9]*, 0, 'Stopped', 'vt_targetks'`+
 			`\)`+eol,
 		&sqltypes.Result{},
 	)
@@ -2260,7 +2390,8 @@ func TestStripConstraints(t *testing.T) {
 				"\tPRIMARY KEY (id),\n" +
 				"\tKEY fk_table1_ref_foreign_id (foreign_id),\n" +
 				"\tKEY fk_table1_ref_user_id (user_id)\n" +
-				") ENGINE=InnoDB DEFAULT CHARSET=latin1",
+				") ENGINE InnoDB,\n" +
+				"  CHARSET latin1",
 
 			hasErr: false,
 		},
@@ -2282,7 +2413,8 @@ func TestStripConstraints(t *testing.T) {
 				"\tPRIMARY KEY (id),\n" +
 				"\tKEY fk_table1_ref_foreign_id (foreign_id),\n" +
 				"\tKEY fk_table1_ref_user_id (user_id)\n" +
-				") ENGINE=InnoDB DEFAULT CHARSET=latin1",
+				") ENGINE InnoDB,\n" +
+				"  CHARSET latin1",
 		},
 		{
 			desc: "bad ddl has error",

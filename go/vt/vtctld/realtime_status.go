@@ -19,7 +19,7 @@ package vtctld
 import (
 	"fmt"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/topo"

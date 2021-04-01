@@ -144,6 +144,7 @@ func (env *LocalTestEnv) MySQLManager(mycnf []string, snapshot string) (MySQLMan
 		Port:      env.PortForProtocol("mysql", ""),
 		MyCnf:     append(env.DefaultMyCnf, mycnf...),
 		Env:       env.EnvVars(),
+		UID:       1,
 	}, nil
 }
 
@@ -184,7 +185,9 @@ func (env *LocalTestEnv) VtcomboArguments() []string {
 	return []string{
 		"-service_map", strings.Join(
 			[]string{"grpc-vtgateservice", "grpc-vtctl"}, ",",
-		)}
+		),
+		"-enable_queries",
+	}
 }
 
 // LogDirectory implements LogDirectory for LocalTestEnv.
@@ -239,9 +242,11 @@ func NewLocalTestEnv(flavor string, basePort int) (*LocalTestEnv, error) {
 // NewLocalTestEnvWithDirectory returns a new instance of the default test
 // environment with a directory explicitly specified.
 func NewLocalTestEnvWithDirectory(flavor string, basePort int, directory string) (*LocalTestEnv, error) {
-	err := os.Mkdir(path.Join(directory, "logs"), 0700)
-	if err != nil {
-		return nil, err
+	if _, err := os.Stat(path.Join(directory, "logs")); os.IsNotExist(err) {
+		err := os.Mkdir(path.Join(directory, "logs"), 0700)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	flavor, mycnf, err := GetMySQLOptions(flavor)

@@ -25,6 +25,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"gotest.tools/assert"
+
 	"vitess.io/vitess/go/sqltypes"
 
 	"vitess.io/vitess/go/mysql"

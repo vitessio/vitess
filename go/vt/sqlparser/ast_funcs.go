@@ -21,6 +21,9 @@ import (
 	"encoding/json"
 	"strings"
 
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"vitess.io/vitess/go/vt/log"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -33,27 +36,7 @@ import (
 // is interrupted, and the error is returned.
 func Walk(visit Visit, nodes ...SQLNode) error {
 	for _, node := range nodes {
-		if node == nil {
-			continue
-		}
-		var err error
-		var kontinue bool
-		pre := func(cursor *Cursor) bool {
-			// If we already have found an error, don't visit these nodes, just exit early
-			if err != nil {
-				return false
-			}
-			kontinue, err = visit(cursor.Node())
-			if err != nil {
-				return true // we have to return true here so that post gets called
-			}
-			return kontinue
-		}
-		post := func(cursor *Cursor) bool {
-			return err == nil // now we can abort the traversal if an error was found
-		}
-
-		Rewrite(node, pre, post)
+		err := VisitSQLNode(node, visit)
 		if err != nil {
 			return err
 		}
@@ -63,6 +46,8 @@ func Walk(visit Visit, nodes ...SQLNode) error {
 
 // Visit defines the signature of a function that
 // can be used to visit all nodes of a parse tree.
+// returning false on kontinue means that children will not be visited
+// returning an error will abort the visitation and return the error
 type Visit func(node SQLNode) (kontinue bool, err error)
 
 // Append appends the SQLNode to the buffer.
@@ -75,8 +60,9 @@ func Append(buf *strings.Builder, node SQLNode) {
 
 // IndexColumn describes a column in an index definition with optional length
 type IndexColumn struct {
-	Column ColIdent
-	Length *Literal
+	Column    ColIdent
+	Length    *Literal
+	Direction OrderDirection
 }
 
 // LengthScaleOption is used for types that have an optional length
@@ -86,11 +72,19 @@ type LengthScaleOption struct {
 	Scale  *Literal
 }
 
-// IndexOption is used for trailing options for indexes: COMMENT, KEY_BLOCK_SIZE, USING
+// IndexOption is used for trailing options for indexes: COMMENT, KEY_BLOCK_SIZE, USING, WITH PARSER
 type IndexOption struct {
-	Name  string
-	Value *Literal
-	Using string
+	Name   string
+	Value  *Literal
+	String string
+}
+
+// TableOption is used for create table options like AUTO_INCREMENT, INSERT_METHOD, etc
+type TableOption struct {
+	Name   string
+	Value  *Literal
+	String string
+	Tables TableNames
 }
 
 // ColumnKeyOption indicates whether or not the given column is defined as an
@@ -101,6 +95,7 @@ const (
 	colKeyNone ColumnKeyOption = iota
 	colKeyPrimary
 	colKeySpatialKey
+	colKeyFulltextKey
 	colKeyUnique
 	colKeyUniqueKey
 	colKey
@@ -145,17 +140,6 @@ const (
 	HexVal
 	BitVal
 )
-
-// AffectedTables returns the list table names affected by the DDL.
-func (node *DDL) AffectedTables() TableNames {
-	if node.Action == RenameDDLAction || node.Action == DropDDLAction {
-		list := make(TableNames, 0, len(node.FromTables)+len(node.ToTables))
-		list = append(list, node.FromTables...)
-		list = append(list, node.ToTables...)
-		return list
-	}
-	return TableNames{node.Table}
-}
 
 // AddColumn appends the given column to the list in the spec
 func (ts *TableSpec) AddColumn(cd *ColumnDefinition) {
@@ -346,6 +330,20 @@ func (node *AliasedTableExpr) RemoveHints() *AliasedTableExpr {
 	return &noHints
 }
 
+//TableName returns a TableName pointing to this table expr
+func (node *AliasedTableExpr) TableName() (TableName, error) {
+	if !node.As.IsEmpty() {
+		return TableName{Name: node.As}, nil
+	}
+
+	tableName, ok := node.Expr.(TableName)
+	if !ok {
+		return TableName{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: the AST has changed. This should not be possible")
+	}
+
+	return tableName, nil
+}
+
 // IsEmpty returns true if TableName is nil or empty.
 func (node TableName) IsEmpty() bool {
 	// If Name is empty, Qualifier is also empty.
@@ -376,9 +374,10 @@ func NewWhere(typ WhereType, expr Expr) *Where {
 // then to is returned.
 func ReplaceExpr(root, from, to Expr) Expr {
 	tmp := Rewrite(root, replaceExpr(from, to), nil)
+
 	expr, success := tmp.(Expr)
 	if !success {
-		log.Errorf("Failed to rewrite expression. Rewriter returned a non-expression: " + String(tmp))
+		log.Errorf("Failed to rewrite expression. Rewriter returned a non-expression:  %s", String(tmp))
 		return from
 	}
 
@@ -426,48 +425,48 @@ func (node *ComparisonExpr) IsImpossible() bool {
 }
 
 // NewStrLiteral builds a new StrVal.
-func NewStrLiteral(in []byte) *Literal {
+func NewStrLiteral(in string) *Literal {
 	return &Literal{Type: StrVal, Val: in}
 }
 
 // NewIntLiteral builds a new IntVal.
-func NewIntLiteral(in []byte) *Literal {
+func NewIntLiteral(in string) *Literal {
 	return &Literal{Type: IntVal, Val: in}
 }
 
 // NewFloatLiteral builds a new FloatVal.
-func NewFloatLiteral(in []byte) *Literal {
+func NewFloatLiteral(in string) *Literal {
 	return &Literal{Type: FloatVal, Val: in}
 }
 
 // NewHexNumLiteral builds a new HexNum.
-func NewHexNumLiteral(in []byte) *Literal {
+func NewHexNumLiteral(in string) *Literal {
 	return &Literal{Type: HexNum, Val: in}
 }
 
 // NewHexLiteral builds a new HexVal.
-func NewHexLiteral(in []byte) *Literal {
+func NewHexLiteral(in string) *Literal {
 	return &Literal{Type: HexVal, Val: in}
 }
 
 // NewBitLiteral builds a new BitVal containing a bit literal.
-func NewBitLiteral(in []byte) *Literal {
+func NewBitLiteral(in string) *Literal {
 	return &Literal{Type: BitVal, Val: in}
 }
 
 // NewArgument builds a new ValArg.
-func NewArgument(in []byte) Argument {
-	return in
+func NewArgument(in string) Argument {
+	return Argument(in)
+}
+
+// Bytes return the []byte
+func (node *Literal) Bytes() []byte {
+	return []byte(node.Val)
 }
 
 // HexDecode decodes the hexval into bytes.
 func (node *Literal) HexDecode() ([]byte, error) {
-	dst := make([]byte, hex.DecodedLen(len([]byte(node.Val))))
-	_, err := hex.Decode(dst, []byte(node.Val))
-	if err != nil {
-		return nil, err
-	}
-	return dst, err
+	return hex.DecodeString(node.Val)
 }
 
 // Equal returns true if the column names match.
@@ -515,6 +514,17 @@ func NewColIdent(str string) ColIdent {
 func NewColName(str string) *ColName {
 	return &ColName{
 		Name: NewColIdent(str),
+	}
+}
+
+// NewColNameWithQualifier makes a new ColName pointing to a specific table
+func NewColNameWithQualifier(identifier string, table TableName) *ColName {
+	return &ColName{
+		Name: NewColIdent(identifier),
+		Qualifier: TableName{
+			Name:      NewTableIdent(table.Name.String()),
+			Qualifier: NewTableIdent(table.Qualifier.String()),
+		},
 	}
 }
 
@@ -666,11 +676,12 @@ func (node *TableIdent) UnmarshalJSON(b []byte) error {
 func containEscapableChars(s string, at AtCount) bool {
 	isDbSystemVariable := at != NoAt
 
-	for i, c := range s {
-		letter := isLetter(uint16(c))
-		systemVarChar := isDbSystemVariable && isCarat(uint16(c))
+	for i := range s {
+		c := uint16(s[i])
+		letter := isLetter(c)
+		systemVarChar := isDbSystemVariable && isCarat(c)
 		if !(letter || systemVarChar) {
-			if i == 0 || !isDigit(uint16(c)) {
+			if i == 0 || !isDigit(c) {
 				return true
 			}
 		}
@@ -679,16 +690,12 @@ func containEscapableChars(s string, at AtCount) bool {
 	return false
 }
 
-func isKeyword(s string) bool {
-	_, isKeyword := keywords[s]
-	return isKeyword
-}
-
-func formatID(buf *TrackedBuffer, original, lowered string, at AtCount) {
-	if containEscapableChars(original, at) || isKeyword(lowered) {
+func formatID(buf *TrackedBuffer, original string, at AtCount) {
+	_, isKeyword := keywordLookupTable.LookupString(original)
+	if isKeyword || containEscapableChars(original, at) {
 		writeEscapedString(buf, original)
 	} else {
-		buf.Myprintf("%s", original)
+		buf.WriteString(original)
 	}
 }
 
@@ -730,6 +737,11 @@ func (node *Select) SetLimit(limit *Limit) {
 // SetLock sets the lock clause
 func (node *Select) SetLock(lock Lock) {
 	node.Lock = lock
+}
+
+// MakeDistinct makes the statement distinct
+func (node *Select) MakeDistinct() {
+	node.Distinct = true
 }
 
 // AddWhere adds the boolean expression to the
@@ -779,6 +791,27 @@ func (node *ParenSelect) SetLock(lock Lock) {
 	node.Select.SetLock(lock)
 }
 
+// MakeDistinct implements the SelectStatement interface
+func (node *ParenSelect) MakeDistinct() {
+	node.Select.MakeDistinct()
+}
+
+// AddWhere adds the boolean expression to the
+// WHERE clause as an AND condition.
+func (node *Update) AddWhere(expr Expr) {
+	if node.Where == nil {
+		node.Where = &Where{
+			Type: WhereClause,
+			Expr: expr,
+		}
+		return
+	}
+	node.Where.Expr = &AndExpr{
+		Left:  node.Where.Expr,
+		Right: expr,
+	}
+}
+
 // AddOrder adds an order by element
 func (node *Union) AddOrder(order *Order) {
 	node.OrderBy = append(node.OrderBy, order)
@@ -794,18 +827,23 @@ func (node *Union) SetLock(lock Lock) {
 	node.Lock = lock
 }
 
+// MakeDistinct implements the SelectStatement interface
+func (node *Union) MakeDistinct() {
+	node.UnionSelects[len(node.UnionSelects)-1].Distinct = true
+}
+
 //Unionize returns a UNION, either creating one or adding SELECT to an existing one
-func Unionize(lhs, rhs SelectStatement, typ UnionType, by OrderBy, limit *Limit, lock Lock) *Union {
+func Unionize(lhs, rhs SelectStatement, distinct bool, by OrderBy, limit *Limit, lock Lock) *Union {
 	union, isUnion := lhs.(*Union)
 	if isUnion {
-		union.UnionSelects = append(union.UnionSelects, &UnionSelect{Type: typ, Statement: rhs})
+		union.UnionSelects = append(union.UnionSelects, &UnionSelect{Distinct: distinct, Statement: rhs})
 		union.OrderBy = by
 		union.Limit = limit
 		union.Lock = lock
 		return union
 	}
 
-	return &Union{FirstStatement: lhs, UnionSelects: []*UnionSelect{{Type: typ, Statement: rhs}}, OrderBy: by, Limit: limit, Lock: lock}
+	return &Union{FirstStatement: lhs, UnionSelects: []*UnionSelect{{Distinct: distinct, Statement: rhs}}, OrderBy: by, Limit: limit, Lock: lock}
 }
 
 // ToString returns the string associated with the DDLAction Enum
@@ -821,8 +859,6 @@ func (action DDLAction) ToString() string {
 		return RenameStr
 	case TruncateDDLAction:
 		return TruncateStr
-	case FlushDDLAction:
-		return FlushStr
 	case CreateVindexDDLAction:
 		return CreateVindexStr
 	case DropVindexDDLAction:
@@ -1122,6 +1158,7 @@ func (ty ExplainType) ToString() string {
 	}
 }
 
+// ToString returns the type as a string
 func (sel SelectIntoType) ToString() string {
 	switch sel {
 	case IntoOutfile:
@@ -1135,6 +1172,135 @@ func (sel SelectIntoType) ToString() string {
 	}
 }
 
+// ToString returns the type as a string
+func (node CollateAndCharsetType) ToString() string {
+	switch node {
+	case CharacterSetType:
+		return CharacterSetStr
+	case CollateType:
+		return CollateStr
+	default:
+		return "Unknown CollateAndCharsetType Type"
+	}
+}
+
+// ToString returns the type as a string
+func (ty LockType) ToString() string {
+	switch ty {
+	case Read:
+		return ReadStr
+	case ReadLocal:
+		return ReadLocalStr
+	case Write:
+		return WriteStr
+	case LowPriorityWrite:
+		return LowPriorityWriteStr
+	default:
+		return "Unknown LockType"
+	}
+}
+
+// ToString returns ShowCommandType as a string
+func (ty ShowCommandType) ToString() string {
+	switch ty {
+	case Charset:
+		return CharsetStr
+	case Collation:
+		return CollationStr
+	case Column:
+		return ColumnStr
+	case CreateDb:
+		return CreateDbStr
+	case CreateE:
+		return CreateEStr
+	case CreateF:
+		return CreateFStr
+	case CreateProc:
+		return CreateProcStr
+	case CreateTbl:
+		return CreateTblStr
+	case CreateTr:
+		return CreateTrStr
+	case CreateV:
+		return CreateVStr
+	case Database:
+		return DatabaseStr
+	case FunctionC:
+		return FunctionCStr
+	case Function:
+		return FunctionStr
+	case Index:
+		return IndexStr
+	case OpenTable:
+		return OpenTableStr
+	case Privilege:
+		return PrivilegeStr
+	case ProcedureC:
+		return ProcedureCStr
+	case Procedure:
+		return ProcedureStr
+	case StatusGlobal:
+		return StatusGlobalStr
+	case StatusSession:
+		return StatusSessionStr
+	case Table:
+		return TableStr
+	case TableStatus:
+		return TableStatusStr
+	case Trigger:
+		return TriggerStr
+	case VariableGlobal:
+		return VariableGlobalStr
+	case VariableSession:
+		return VariableSessionStr
+	case VitessMigrations:
+		return VitessMigrationsStr
+	case Keyspace:
+		return KeyspaceStr
+	default:
+		return "" +
+			"Unknown ShowCommandType"
+	}
+}
+
+// ToString returns the DropKeyType as a string
+func (key DropKeyType) ToString() string {
+	switch key {
+	case PrimaryKeyType:
+		return PrimaryKeyTypeStr
+	case ForeignKeyType:
+		return ForeignKeyTypeStr
+	case NormalKeyType:
+		return NormalKeyTypeStr
+	default:
+		return "Unknown DropKeyType"
+	}
+}
+
+// ToString returns the LockOptionType as a string
+func (lock LockOptionType) ToString() string {
+	switch lock {
+	case NoneType:
+		return NoneTypeStr
+	case DefaultType:
+		return DefaultTypeStr
+	case SharedType:
+		return SharedTypeStr
+	case ExclusiveType:
+		return ExclusiveTypeStr
+	default:
+		return "Unknown type LockOptionType"
+	}
+}
+
+// CompliantName is used to get the name of the bind variable to use for this column name
+func (node *ColName) CompliantName(suffix string) string {
+	if !node.Qualifier.IsEmpty() {
+		return node.Qualifier.Name.CompliantName() + "_" + node.Name.CompliantName() + suffix
+	}
+	return node.Name.CompliantName() + suffix
+}
+
 // AtCount represents the '@' count in ColIdent
 type AtCount int
 
@@ -1146,3 +1312,24 @@ const (
 	// DoubleAt represnts @@
 	DoubleAt
 )
+
+// handleUnaryMinus handles the case when a unary minus operator is seen in the parser. It takes 1 argument which is the expr to which the unary minus has been added to.
+func handleUnaryMinus(expr Expr) Expr {
+	if num, ok := expr.(*Literal); ok && num.Type == IntVal {
+		// Handle double negative
+		if num.Val[0] == '-' {
+			num.Val = num.Val[1:]
+			return num
+		}
+		return NewIntLiteral("-" + num.Val)
+	}
+	if unaryExpr, ok := expr.(*UnaryExpr); ok && unaryExpr.Operator == UMinusOp {
+		return unaryExpr.Expr
+	}
+	return &UnaryExpr{Operator: UMinusOp, Expr: expr}
+}
+
+// encodeSQLString encodes the string as a SQL string.
+func encodeSQLString(val string) string {
+	return sqltypes.EncodeStringSQL(val)
+}

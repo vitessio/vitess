@@ -1,0 +1,53 @@
+# Flush statement
+"flush tables unsharded, music"
+{
+  "QueryType": "FLUSH",
+  "Original": "flush tables unsharded, music",
+  "Instructions": {
+    "OperatorType": "Send",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetDestination": "AllShards()",
+    "IsDML": false,
+    "Query": "flush tables unsharded, music",
+    "SingleShardOnly": false
+  }
+}
+
+# Flush statement with no tables
+"flush local tables with read lock"
+{
+  "QueryType": "FLUSH",
+  "Original": "flush local tables with read lock",
+  "Instructions": {
+    "OperatorType": "Send",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetDestination": "AllShards()",
+    "IsDML": false,
+    "Query": "flush local tables with read lock",
+    "SingleShardOnly": false
+  }
+}
+
+# Flush statement with flush options
+"flush no_write_to_binlog hosts, logs"
+{
+  "QueryType": "FLUSH",
+  "Original": "flush no_write_to_binlog hosts, logs",
+  "Instructions": {
+    "OperatorType": "Send",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetDestination": "AllShards()",
+    "IsDML": false,
+    "Query": "flush local hosts, logs",
+    "SingleShardOnly": false
+  }
+}

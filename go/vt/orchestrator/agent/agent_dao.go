@@ -495,12 +495,12 @@ func ReceiveMySQLSeedData(hostname string, seedId int64) (Agent, error) {
 	return executeAgentCommand(hostname, fmt.Sprintf("receive-mysql-seed-data/%d", seedId), nil)
 }
 
-// ReceiveMySQLSeedData requests an agent to start sending seed data
+// SendMySQLSeedData requests an agent to start sending seed data
 func SendMySQLSeedData(hostname string, targetHostname string, seedId int64) (Agent, error) {
 	return executeAgentCommand(hostname, fmt.Sprintf("send-mysql-seed-data/%s/%d", targetHostname, seedId), nil)
 }
 
-// ReceiveMySQLSeedData requests an agent to abort seed send/receive (depending on the agent's role)
+// AbortSeedCommand requests an agent to abort seed send/receive (depending on the agent's role)
 func AbortSeedCommand(hostname string, seedId int64) (Agent, error) {
 	return executeAgentCommand(hostname, fmt.Sprintf("abort-seed/%d", seedId), nil)
 }

@@ -36,13 +36,13 @@ func (pb *primitiveBuilder) findSysInfoRoutingPredicates(expr sqlparser.Expr, ru
 	}
 
 	if isTableSchema {
-		if rut.eroute.SysTableTableSchema != nil {
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "two predicates for table_schema not supported")
+		if rut.eroute.SysTableTableSchema != nil && !evalengine.AreExprEqual(rut.eroute.SysTableTableSchema, out) {
+			return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "two predicates for specifying the database are not supported")
 		}
 		rut.eroute.SysTableTableSchema = out
 	} else {
-		if rut.eroute.SysTableTableName != nil {
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "two predicates for table_name not supported")
+		if rut.eroute.SysTableTableName != nil && !evalengine.AreExprEqual(rut.eroute.SysTableTableName, out) {
+			return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "two predicates for table_name not supported")
 		}
 		rut.eroute.SysTableTableName = out
 	}
@@ -70,7 +70,15 @@ func isTableSchemaOrName(e sqlparser.Expr) (isTableSchema bool, isTableName bool
 	if !ok {
 		return false, false
 	}
-	return col.Name.EqualString("table_schema"), col.Name.EqualString("table_name")
+	return isDbNameCol(col), isTableNameCol(col)
+}
+
+func isDbNameCol(col *sqlparser.ColName) bool {
+	return col.Name.EqualString("table_schema") || col.Name.EqualString("constraint_schema") || col.Name.EqualString("schema_name") || col.Name.EqualString("routine_schema")
+}
+
+func isTableNameCol(col *sqlparser.ColName) bool {
+	return col.Name.EqualString("table_name")
 }
 
 func extractInfoSchemaRoutingPredicate(in sqlparser.Expr) (bool, evalengine.Expr, error) {
@@ -94,7 +102,7 @@ func extractInfoSchemaRoutingPredicate(in sqlparser.Expr) (bool, evalengine.Expr
 				} else {
 					name += engine.BvTableName
 				}
-				replaceOther(sqlparser.NewArgument([]byte(name)))
+				replaceOther(sqlparser.NewArgument(name))
 				return isSchemaName, evalExpr, nil
 			}
 		}

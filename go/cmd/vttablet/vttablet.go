@@ -22,7 +22,8 @@ import (
 	"flag"
 	"io/ioutil"
 
-	"golang.org/x/net/context"
+	"context"
+
 	"vitess.io/vitess/go/vt/binlog"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
@@ -72,7 +73,7 @@ func main() {
 		log.Exitf("failed to parse -tablet-path: %v", err)
 	}
 
-	// config and mycnf intializations are intertwined.
+	// config and mycnf initializations are intertwined.
 	config, mycnf := initConfig(tabletAlias)
 
 	ts := topo.Open()
@@ -102,10 +103,10 @@ func main() {
 		DBConfigs:           config.DB.Clone(),
 		QueryServiceControl: qsc,
 		UpdateStream:        binlog.NewUpdateStream(ts, tablet.Keyspace, tabletAlias.Cell, qsc.SchemaEngine()),
-		VREngine:            vreplication.NewEngine(config, ts, tabletAlias.Cell, mysqld),
+		VREngine:            vreplication.NewEngine(config, ts, tabletAlias.Cell, mysqld, qsc.LagThrottler()),
 	}
 	if err := tm.Start(tablet, config.Healthcheck.IntervalSeconds.Get()); err != nil {
-		log.Exitf("failed to parse -tablet-path: %v", err)
+		log.Exitf("failed to parse -tablet-path or initialize DB credentials: %v", err)
 	}
 	servenv.OnClose(func() {
 		// Close the tm so that our topo entry gets pruned properly and any

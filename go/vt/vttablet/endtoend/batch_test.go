@@ -20,10 +20,20 @@ import (
 	"reflect"
 	"testing"
 
+	"vitess.io/vitess/go/test/utils"
+
 	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/vttablet/endtoend/framework"
+)
+
+var mustMatch = utils.MustMatchFn(
+	[]interface{}{ // types with unexported fields
+		sqltypes.Value{},
+	},
+	[]string{}, // ignored fields
 )
 
 func TestBatchRead(t *testing.T) {
@@ -76,7 +86,6 @@ func TestBatchRead(t *testing.T) {
 			Charset:      63,
 			Flags:        128,
 		}},
-		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			{
 				sqltypes.NewInt64(1),
@@ -85,6 +94,7 @@ func TestBatchRead(t *testing.T) {
 				sqltypes.NewVarBinary("fghi"),
 			},
 		},
+		StatusFlags: sqltypes.ServerStatusNoIndexUsed | sqltypes.ServerStatusAutocommit,
 	}
 	qr2 := sqltypes.Result{
 		Fields: []*querypb.Field{{
@@ -108,21 +118,19 @@ func TestBatchRead(t *testing.T) {
 			Charset:      63,
 			Flags:        49155,
 		}},
-		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			{
 				sqltypes.NewInt64(1),
 				sqltypes.NewInt32(2),
 			},
 		},
+		StatusFlags: sqltypes.ServerStatusAutocommit,
 	}
 	want := []sqltypes.Result{qr1, qr2}
 
 	qrl, err := client.ExecuteBatch(queries, false)
 	require.NoError(t, err)
-	if !reflect.DeepEqual(qrl, want) {
-		t.Errorf("ExecueBatch: \n%#v, want \n%#v", prettyPrintArr(qrl), prettyPrintArr(want))
-	}
+	mustMatch(t, want, qrl)
 }
 
 func TestBatchTransaction(t *testing.T) {

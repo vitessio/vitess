@@ -25,6 +25,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	vttestpb "vitess.io/vitess/go/vt/proto/vttest"
@@ -185,6 +186,9 @@ func TestExec(t *testing.T) {
 
 				wd := New(test.ddls)
 				qr, err := wd.Exec(ctx, test.query, fun.f)
+				if test.qr != nil {
+					test.qr.StatusFlags = sqltypes.ServerStatusAutocommit
+				}
 				checkResult(t, test.qr, test.err, qr, err)
 
 				for _, query := range test.cleanup {

@@ -1,0 +1,36 @@
+run:
+  timeout: 10m
+  skip-dirs:
+    - go/vt/topo/k8stopo/client
+
+linters-settings:
+  goimports:
+    local-prefixes: vitess.io/vitess
+
+linters:
+  disable-all: true
+  enable:
+    # Defaults
+    - deadcode
+    # - errcheck
+    - gosimple
+    - govet
+    - ineffassign
+    - staticcheck
+    - structcheck
+    - typecheck
+    - varcheck
+
+    # Extras
+    - gofmt
+    - goimports
+
+issues:
+  exclude-rules:
+    - path: '^go/vt/proto/'
+      linters:
+      - goimports
+
+# https://github.com/golangci/golangci/wiki/Configuration
+service:
+  golangci-lint-version: 1.31.0 # use the fixed version to not introduce new linters unexpectedly

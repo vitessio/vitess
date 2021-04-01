@@ -122,19 +122,25 @@ type BinlogEvent interface {
 
 	// IsPseudo is for custom implementations of GTID.
 	IsPseudo() bool
+
+	// IsCompressed returns true if a compressed event is found (binlog_transaction_compression=ON)
+	IsCompressed() bool
 }
 
 // BinlogFormat contains relevant data from the FORMAT_DESCRIPTION_EVENT.
 // This structure is passed to subsequent event types to let them know how to
 // parse themselves.
 type BinlogFormat struct {
-	// FormatVersion is the version number of the binlog file format.
-	// We only support version 4.
-	FormatVersion uint16
+	// HeaderSizes is an array of sizes of the headers for each message.
+	HeaderSizes []byte
 
 	// ServerVersion is the name of the MySQL server version.
 	// It starts with something like 5.6.33-xxxx.
 	ServerVersion string
+
+	// FormatVersion is the version number of the binlog file format.
+	// We only support version 4.
+	FormatVersion uint16
 
 	// HeaderLength is the size in bytes of event headers other
 	// than FORMAT_DESCRIPTION_EVENT. Almost always 19.
@@ -143,9 +149,6 @@ type BinlogFormat struct {
 	// ChecksumAlgorithm is the ID number of the binlog checksum algorithm.
 	// See three possible values below.
 	ChecksumAlgorithm byte
-
-	// HeaderSizes is an array of sizes of the headers for each message.
-	HeaderSizes []byte
 }
 
 // IsZero returns true if the BinlogFormat has not been initialized.

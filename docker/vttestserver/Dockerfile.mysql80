@@ -1,0 +1,61 @@
+# Copyright 2021 The Vitess Authors.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# NOTE: We have to build the Vitess binaries from scratch instead of sharing
+#       a base image because Docker Hub dropped the feature we relied upon to
+#       ensure images contain the right binaries.
+
+# Use a temporary layer for the build stage.
+ARG bootstrap_version=1
+ARG image="vitess/bootstrap:${bootstrap_version}-mysql80"
+
+FROM "${image}" AS builder
+
+# Allows docker builds to set the BUILD_NUMBER
+ARG BUILD_NUMBER
+
+# Re-copy sources from working tree.
+COPY --chown=vitess:vitess . /vt/src/vitess.io/vitess
+
+# Build and install Vitess in a temporary output directory.
+USER vitess
+RUN make install-testing PREFIX=/vt/install
+
+# Start over and build the final image.
+FROM debian:buster-slim
+
+# Install dependencies
+COPY docker/lite/install_dependencies.sh /vt/dist/install_dependencies.sh
+RUN /vt/dist/install_dependencies.sh mysql80
+
+# Set up Vitess user and directory tree.
+RUN groupadd -r vitess && useradd -r -g vitess vitess
+RUN mkdir -p /vt/vtdataroot && chown -R vitess:vitess /vt
+
+# Set up Vitess environment (just enough to run pre-built Go binaries)
+ENV VTROOT /vt
+ENV VTDATAROOT /vt/vtdataroot
+ENV PATH $VTROOT/bin:$PATH
+
+# Copy artifacts from builder layer.
+COPY --from=builder --chown=vitess:vitess /vt/install /vt
+
+# Create mount point for actual data (e.g. MySQL data dir)
+VOLUME /vt/vtdataroot
+USER vitess
+
+COPY docker/vttestserver/setup_vschema_folder.sh /vt/setup_vschema_folder.sh
+COPY docker/vttestserver/run.sh /vt/run.sh
+
+CMD /vt/run.sh "8.0.21-vitess"

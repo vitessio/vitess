@@ -22,7 +22,8 @@ import (
 	"strconv"
 	"strings"
 
-	"golang.org/x/net/context"
+	"context"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -43,6 +44,10 @@ const (
 	mariaDBReplicationHackPrefix = "5.5.5-"
 	// mariaDBVersionString is present in
 	mariaDBVersionString = "MariaDB"
+	// mysql57VersionPrefix is the prefix for 5.7 mysql version, such as 5.7.31-log
+	mysql57VersionPrefix = "5.7."
+	// mysql80VersionPrefix is the prefix for 8.0 mysql version, such as 8.0.19
+	mysql80VersionPrefix = "8.0."
 )
 
 // flavor is the abstract interface for a flavor.
@@ -110,6 +115,8 @@ type flavor interface {
 	// timestamp cannot be set by regular clients.
 	enableBinlogPlaybackCommand() string
 	disableBinlogPlaybackCommand() string
+
+	baseShowTablesWithSizes() string
 }
 
 // flavors maps flavor names to their implementation.
@@ -130,23 +137,27 @@ var flavors = make(map[string]func() flavor)
 // as well (not matching what c.ServerVersion is, but matching after we remove
 // the prefix).
 func (c *Conn) fillFlavor(params *ConnParams) {
-	if flavorFunc := flavors[params.Flavor]; flavorFunc != nil {
+	flavorFunc := flavors[params.Flavor]
+
+	switch {
+	case flavorFunc != nil:
 		c.flavor = flavorFunc()
-		return
-	}
-
-	if strings.HasPrefix(c.ServerVersion, mariaDBReplicationHackPrefix) {
+	case strings.HasPrefix(c.ServerVersion, mariaDBReplicationHackPrefix):
 		c.ServerVersion = c.ServerVersion[len(mariaDBReplicationHackPrefix):]
-		c.flavor = mariadbFlavor{}
-		return
+		c.flavor = mariadbFlavor101{}
+	case strings.Contains(c.ServerVersion, mariaDBVersionString):
+		mariadbVersion, err := strconv.ParseFloat(c.ServerVersion[:4], 64)
+		if err != nil || mariadbVersion < 10.2 {
+			c.flavor = mariadbFlavor101{}
+		}
+		c.flavor = mariadbFlavor102{}
+	case strings.HasPrefix(c.ServerVersion, mysql57VersionPrefix):
+		c.flavor = mysqlFlavor57{}
+	case strings.HasPrefix(c.ServerVersion, mysql80VersionPrefix):
+		c.flavor = mysqlFlavor80{}
+	default:
+		c.flavor = mysqlFlavor56{}
 	}
-
-	if strings.Contains(c.ServerVersion, mariaDBVersionString) {
-		c.flavor = mariadbFlavor{}
-		return
-	}
-
-	c.flavor = mysqlFlavor{}
 }
 
 //
@@ -158,8 +169,11 @@ func (c *Conn) fillFlavor(params *ConnParams) {
 // is identified as MariaDB. Most applications should not care, but
 // this is useful in tests.
 func (c *Conn) IsMariaDB() bool {
-	_, ok := c.flavor.(mariadbFlavor)
-	return ok
+	switch c.flavor.(type) {
+	case mariadbFlavor101, mariadbFlavor102:
+		return true
+	}
+	return false
 }
 
 // MasterPosition returns the current master replication position.
@@ -388,4 +402,9 @@ func (c *Conn) EnableBinlogPlaybackCommand() string {
 // binlog playback.
 func (c *Conn) DisableBinlogPlaybackCommand() string {
 	return c.flavor.disableBinlogPlaybackCommand()
+}
+
+// BaseShowTables returns a query that shows tables and their sizes
+func (c *Conn) BaseShowTables() string {
+	return c.flavor.baseShowTablesWithSizes()
 }

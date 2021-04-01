@@ -19,7 +19,8 @@ limitations under the License.
 package vtgateservice
 
 import (
-	"golang.org/x/net/context"
+	"context"
+
 	"vitess.io/vitess/go/sqltypes"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -40,7 +41,7 @@ type VTGateService interface {
 	ResolveTransaction(ctx context.Context, dtid string) error
 
 	// Update Stream methods
-	VStream(ctx context.Context, tabletType topodatapb.TabletType, vgtid *binlogdatapb.VGtid, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error
+	VStream(ctx context.Context, tabletType topodatapb.TabletType, vgtid *binlogdatapb.VGtid, filter *binlogdatapb.Filter, flags *vtgatepb.VStreamFlags, send func([]*binlogdatapb.VEvent) error) error
 
 	// HandlePanic should be called with defer at the beginning of each
 	// RPC implementation method, before calling any of the previous methods

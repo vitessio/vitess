@@ -1,0 +1,106 @@
+.inputContainer {
+  display: block;
+  position: relative;
+}
+
+$iconSizeMedium: 1.6rem;
+$iconSizeLarge: 2.2rem;
+$iconOffsetHorizontal: 3.2rem;
+$iconOffsetHorizontalLarge: 4.2rem;
+$iconPositionHorizontal: 1.2rem;
+$iconPositionHorizontalLarge: 1.6rem;
+
+.input {
+  background: var(--backgroundPrimary);
+  border: solid 2px var(--colorDisabled);
+  border-radius: 6px;
+  box-sizing: border-box;
+  color: var(--textColorPrimary);
+  display: block;
+  font-family: var(--fontFamilyPrimary);
+  font-size: var(--fontSizeBody);
+  height: var(--inputHeightMedium);
+  line-height: var(--inputHeightMedium);
+  padding: 0 12px;
+  transition: all 0.1s ease-in-out;
+  width: 100%;
+
+  &:disabled {
+    background: var(--backgroundSecondary);
+    border-color: var(--backgroundSecondaryHighlight);
+    cursor: not-allowed;
+  }
+
+  &.large {
+    font-size: var(--fontSizeLarge);
+    height: var(--inputHeightLarge);
+    line-height: var(--inputHeightLarge);
+    padding: 0 16px;
+  }
+
+  &.withIconLeft {
+    padding-left: $iconOffsetHorizontal;
+
+    &.large {
+      padding-left: $iconOffsetHorizontalLarge;
+    }
+  }
+
+  &.withIconRight {
+    padding-right: $iconOffsetHorizontal;
+
+    &.large {
+      padding-right: $iconOffsetHorizontalLarge;
+    }
+  }
+}
+
+.icon {
+  fill: var(--grey600);
+  height: $iconSizeMedium;
+  margin-top: -($iconSizeMedium / 2);
+  position: absolute;
+  top: 50%;
+  width: $iconSizeMedium;
+}
+
+.iconLeft {
+  /* stylelint-disable-next-line */
+  @extend .icon;
+
+  left: $iconPositionHorizontal;
+}
+
+.iconRight {
+  /* stylelint-disable-next-line */
+  @extend .icon;
+
+  right: $iconPositionHorizontal;
+}
+
+.large ~ .icon {
+  height: $iconSizeLarge;
+  margin-top: -($iconSizeLarge / 2);
+  width: $iconSizeLarge;
+}
+
+.large ~ .iconLeft {
+  left: $iconPositionHorizontalLarge;
+}
+
+.large ~ .iconRight {
+  right: $iconPositionHorizontalLarge;
+}
+
+.input:focus {
+  border-color: var(--colorPrimary);
+  outline: none;
+}
+
+.input:focus ~ .icon {
+  fill: var(--colorPrimary);
+}
+
+.input:disabled ~ .icon {
+  fill: var(--colorDisabled);
+}

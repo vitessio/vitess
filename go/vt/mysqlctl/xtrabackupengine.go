@@ -32,6 +32,8 @@ import (
 	"time"
 
 	"github.com/klauspost/pgzip"
+	"github.com/planetscale/pargzip"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
@@ -48,7 +50,7 @@ type XtrabackupEngine struct {
 
 var (
 	// path where backup engine program is located
-	xtrabackupEnginePath = flag.String("xtrabackup_root_path", "", "directory location of the xtrabackup executable, e.g., /usr/bin")
+	xtrabackupEnginePath = flag.String("xtrabackup_root_path", "", "directory location of the xtrabackup and xbstream executables, e.g., /usr/bin")
 	// flags to pass through to backup phase
 	xtrabackupBackupFlags = flag.String("xtrabackup_backup_flags", "", "flags to pass to backup command. These should be space separated and will be added to the end of the command")
 	// flags to pass through to prepare phase of restore
@@ -269,7 +271,7 @@ func (be *XtrabackupEngine) backupFiles(ctx context.Context, params BackupParams
 
 	destWriters := []io.Writer{}
 	destBuffers := []*bufio.Writer{}
-	destCompressors := []*pgzip.Writer{}
+	destCompressors := []io.WriteCloser{}
 	for _, file := range destFiles {
 		buffer := bufio.NewWriterSize(file, writerBufferSize)
 		destBuffers = append(destBuffers, buffer)
@@ -277,11 +279,10 @@ func (be *XtrabackupEngine) backupFiles(ctx context.Context, params BackupParams
 
 		// Create the gzip compression pipe, if necessary.
 		if *backupStorageCompress {
-			compressor, err := pgzip.NewWriterLevel(writer, pgzip.BestSpeed)
-			if err != nil {
-				return replicationPosition, vterrors.Wrap(err, "cannot create gzip compressor")
-			}
-			compressor.SetConcurrency(*backupCompressBlockSize, *backupCompressBlocks)
+			compressor := pargzip.NewWriter(writer)
+			compressor.ChunkSize = *backupCompressBlockSize
+			compressor.Parallel = *backupCompressBlocks
+			compressor.CompressionLevel = pargzip.BestSpeed
 			writer = compressor
 			destCompressors = append(destCompressors, compressor)
 		}
@@ -519,7 +520,7 @@ func (be *XtrabackupEngine) extractFiles(ctx context.Context, logger logutil.Log
 	}()
 
 	srcReaders := []io.Reader{}
-	srcDecompressors := []*pgzip.Reader{}
+	srcDecompressors := []io.ReadCloser{}
 	for _, file := range srcFiles {
 		reader := io.Reader(file)
 
@@ -579,7 +580,7 @@ func (be *XtrabackupEngine) extractFiles(ctx context.Context, logger logutil.Log
 
 	case xbstream:
 		// now extract the files by running xbstream
-		xbstreamProgram := xbstream
+		xbstreamProgram := path.Join(*xtrabackupEnginePath, xbstream)
 		flagsToExec := []string{"-C", tempDir, "-xv"}
 		if *xbstreamRestoreFlags != "" {
 			flagsToExec = append(flagsToExec, strings.Fields(*xbstreamRestoreFlags)...)
@@ -733,7 +734,7 @@ func copyToStripes(writers []io.Writer, reader io.Reader, blockSize int64) (writ
 	}
 
 	// Read blocks from source and round-robin them to destination writers.
-	// Since we put a buffer in front of the destination file, and pgzip has its
+	// Since we put a buffer in front of the destination file, and pargzip has its
 	// own buffer as well, we are writing into a buffer either way (whether a
 	// compressor is in the chain or not). That means these writes should not
 	// block often, so we shouldn't need separate goroutines here.

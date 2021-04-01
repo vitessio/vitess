@@ -23,10 +23,12 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
@@ -82,6 +84,9 @@ var (
 	// backupCompressBlocks is the number of blocks that are processed
 	// once before the writer blocks
 	backupCompressBlocks = flag.Int("backup_storage_number_blocks", 2, "if backup_storage_compress is true, backup_storage_number_blocks sets the number of blocks that can be processed, at once, before the writer blocks, during compression (default is 2). It should be equal to the number of CPUs available for compression")
+
+	backupDuration  = stats.NewGauge("backup_duration_seconds", "How long it took to complete the last backup operation (in seconds)")
+	restoreDuration = stats.NewGauge("restore_duration_seconds", "How long it took to complete the last restore operation (in seconds)")
 )
 
 // Backup is the main entry point for a backup:
@@ -89,7 +94,7 @@ var (
 // - shuts down Mysqld during the backup
 // - remember if we were replicating, restore the exact same state
 func Backup(ctx context.Context, params BackupParams) error {
-
+	startTs := time.Now()
 	backupDir := GetBackupDir(params.Keyspace, params.Shard)
 	name := fmt.Sprintf("%v.%v", params.BackupTime.UTC().Format(BackupTimestampFormat), params.TabletAlias)
 	// Start the backup with the BackupStorage.
@@ -129,6 +134,7 @@ func Backup(ctx context.Context, params BackupParams) error {
 	}
 
 	// The backup worked, so just return the finish error, if any.
+	backupDuration.Set(int64(time.Since(startTs).Seconds()))
 	return finishErr
 }
 
@@ -223,6 +229,7 @@ func ShouldRestore(ctx context.Context, params RestoreParams) (bool, error) {
 // appropriate backup on the BackupStorage, Restore logs an error
 // and returns ErrNoBackup. Any other error is returned.
 func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error) {
+	startTs := time.Now()
 	// find the right backup handle: most recent one, with a MANIFEST
 	params.Logger.Infof("Restore: looking for a suitable backup to restore")
 	bs, err := backupstorage.GetBackupStorage()
@@ -322,5 +329,6 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 		return nil, err
 	}
 
+	restoreDuration.Set(int64(time.Since(startTs).Seconds()))
 	return manifest, nil
 }

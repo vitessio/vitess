@@ -76,7 +76,7 @@ func (s *Send) GetTableName() string {
 func (s *Send) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	rss, _, err := vcursor.ResolveDestinations(s.Keyspace.Name, nil, []key.Destination{s.TargetDestination})
 	if err != nil {
-		return nil, vterrors.Wrap(err, "sendExecute")
+		return nil, err
 	}
 
 	if !s.Keyspace.Sharded && len(rss) != 1 {
@@ -113,7 +113,7 @@ func (s *Send) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariabl
 func (s *Send) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	rss, _, err := vcursor.ResolveDestinations(s.Keyspace.Name, nil, []key.Destination{s.TargetDestination})
 	if err != nil {
-		return vterrors.Wrap(err, "sendStreamExecute")
+		return err
 	}
 
 	if !s.Keyspace.Sharded && len(rss) != 1 {
@@ -143,7 +143,7 @@ func (s *Send) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindV
 func (s *Send) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	qr, err := s.Execute(vcursor, bindVars, false)
 	if err != nil {
-		return nil, vterrors.Wrap(err, "sendGetFields")
+		return nil, err
 	}
 	qr.Rows = nil
 	return qr, nil

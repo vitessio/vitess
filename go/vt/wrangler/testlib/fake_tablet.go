@@ -26,8 +26,9 @@ import (
 	"testing"
 	"time"
 
+	"context"
+
 	"github.com/stretchr/testify/require"
-	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
 	"vitess.io/vitess/go/mysql/fakesqldb"

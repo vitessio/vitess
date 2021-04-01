@@ -1,4 +1,7 @@
-FROM vitess/bootstrap:common
+ARG bootstrap_version
+ARG image="vitess/bootstrap:${bootstrap_version}-common"
+
+FROM "${image}"
 
 # Install MariaDB 10.3
 RUN apt-key adv --no-tty --recv-keys --keyserver keyserver.ubuntu.com 0xF1656F24C74CD1D8 \

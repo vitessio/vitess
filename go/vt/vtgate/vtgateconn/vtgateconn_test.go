@@ -19,7 +19,7 @@ package vtgateconn
 import (
 	"testing"
 
-	"golang.org/x/net/context"
+	"context"
 )
 
 func TestRegisterDialer(t *testing.T) {

@@ -1,0 +1,106 @@
+name: Cluster (upgrade)
+on: [push, pull_request]
+jobs:
+
+  build:
+    if: github.repository == 'vitessio/vitess'
+    name: Run endtoend tests on Cluster (upgrade)
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Set up Go
+      uses: actions/setup-go@v1
+      with:
+        go-version: 1.15
+
+    - name: Check out v8.0.0
+      uses: actions/checkout@v2
+      with:
+        ref: v8.0.0
+
+    - name: Get dependencies
+      run: |
+        # This prepares general purpose binary dependencies
+        # as well as v8.0.0 specific go modules
+        sudo apt-get update
+        sudo apt-get install -y mysql-server mysql-client make unzip g++ etcd curl git wget eatmydata
+        sudo service mysql stop
+        sudo service etcd stop
+        sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
+        sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
+        go mod download
+
+        wget https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb
+        sudo apt-get install -y gnupg2
+        sudo dpkg -i percona-release_latest.$(lsb_release -sc)_all.deb
+        sudo apt-get update
+        sudo apt-get install percona-xtrabackup-24
+
+    - name: Building v8.0.0 binaries
+      timeout-minutes: 10
+      run: |
+        # We build v8.0.0 binaries and save them in a temporary location
+        source build.env
+        make build
+        mkdir -p /tmp/vitess-build-v8.0.0/
+        cp -R bin /tmp/vitess-build-v8.0.0/
+
+    - name: Check out HEAD
+      uses: actions/checkout@v2
+
+    - name: Run cluster endtoend test v8.0.0 (create cluster)
+      timeout-minutes: 5
+      run: |
+        # By checking out we deleted bin/ directory. We now restore our pre-built v8.0.0 binaries
+        cp -R /tmp/vitess-build-v8.0.0/bin .
+        # create the directory where we store test data; ensure it is empty:
+        rm -rf /tmp/vtdataroot
+        mkdir -p /tmp/vtdataroot
+        source build.env
+        # We pass -skip-build so that we use the v8.0.0 binaries, not HEAD binaries
+        eatmydata -- go run test.go -skip-build -keep-data -docker=false -print-log -follow -shard 28
+
+    - name: Check out HEAD
+      uses: actions/checkout@v2
+
+
+    - name: Building HEAD binaries
+      timeout-minutes: 10
+      run: |
+        go mod download
+
+        source build.env
+        make build
+        mkdir -p /tmp/vitess-build-head/
+        cp -R bin /tmp/vitess-build-head/
+
+    - name: Run cluster endtoend test HEAD based on v8.0.0 data (upgrade path)
+      timeout-minutes: 5
+      run: |
+        # /tmp/vtdataroot exists from previous test
+
+        source build.env
+        # We built HEAD binaries manually in previous step and there's no need for the test to build.
+        eatmydata -- go run test.go -skip-build -keep-data -docker=false -print-log -follow -shard 28
+
+    - name: Run cluster endtoend test HEAD (create cluster)
+      timeout-minutes: 5
+      run: |
+        # create the directory where we store test data; ensure it is empty:
+        rm -rf /tmp/vtdataroot
+        mkdir -p /tmp/vtdataroot
+
+        source build.env
+        # We still have the binaries from previous step. No need to build
+        eatmydata -- go run test.go -skip-build -keep-data -docker=false -print-log -follow -shard 28
+
+
+    - name: Run cluster endtoend test v8.0.0 based on HEAD data (downgrade path)
+      timeout-minutes: 5
+      run: |
+        # /tmp/vtdataroot exists from previous test
+        cp -R /tmp/vitess-build-v8.0.0/bin .
+
+        source build.env
+        # We again built manually and there's no need for the test to build.
+        eatmydata -- go run test.go -skip-build -keep-data -docker=false -print-log -follow -shard 28

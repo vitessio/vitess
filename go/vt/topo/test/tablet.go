@@ -19,8 +19,9 @@ package test
 import (
 	"testing"
 
+	"context"
+
 	"github.com/golang/protobuf/proto"
-	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/vt/topo"
 

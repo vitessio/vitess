@@ -20,9 +20,11 @@ import (
 	"testing"
 	"time"
 
+	"context"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/net/context"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/dbconfigs"
@@ -123,6 +125,10 @@ func TestStartCreateKeyspaceShard(t *testing.T) {
 	ts := memorytopo.NewServer(cell)
 	tm := newTestTM(t, ts, 1, "ks", "0")
 	defer tm.Stop()
+
+	assert.Equal(t, "replica", statsTabletType.Get())
+	assert.Equal(t, 1, len(statsTabletTypeCount.Counts()))
+	assert.Equal(t, int64(1), statsTabletTypeCount.Counts()["replica"])
 
 	_, err := ts.GetShard(ctx, "ks", "0")
 	require.NoError(t, err)
@@ -235,6 +241,7 @@ func TestCheckMastership(t *testing.T) {
 	assert.Equal(t, topodatapb.TabletType_MASTER, ti.Type)
 	ter0 := ti.GetMasterTermStartTime()
 	assert.Equal(t, now, ter0)
+	assert.Equal(t, "master", statsTabletType.Get())
 	tm.Stop()
 
 	// 3. Delete the tablet record. The shard record still says that we are the

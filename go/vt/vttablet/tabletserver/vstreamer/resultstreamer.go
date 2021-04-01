@@ -97,6 +97,11 @@ func (rs *resultStreamer) Stream() error {
 		default:
 		}
 
+		// check throttler.
+		if !rs.vse.throttlerClient.ThrottleCheckOKOrWait(rs.ctx) {
+			continue
+		}
+
 		row, err := conn.FetchNext()
 		if err != nil {
 			return err

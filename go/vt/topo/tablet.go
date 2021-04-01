@@ -22,11 +22,13 @@ import (
 	"sync"
 	"time"
 
-	"golang.org/x/net/context"
+	"context"
+
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"github.com/golang/protobuf/proto"
+
 	"vitess.io/vitess/go/event"
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/trace"
@@ -469,4 +471,22 @@ func (ts *Server) GetTabletsByCell(ctx context.Context, cell string) ([]*topodat
 		}
 	}
 	return result, nil
+}
+
+// ParseServingTabletType parses the tablet type into the enum, and makes sure
+// that the enum is of serving type (MASTER, REPLICA, RDONLY/BATCH).
+//
+// Note: This function more closely belongs in topoproto, but that would create
+// a circular import between packages topo and topoproto.
+func ParseServingTabletType(param string) (topodatapb.TabletType, error) {
+	servedType, err := topoproto.ParseTabletType(param)
+	if err != nil {
+		return topodatapb.TabletType_UNKNOWN, err
+	}
+
+	if !IsInServingGraph(servedType) {
+		return topodatapb.TabletType_UNKNOWN, fmt.Errorf("served_type has to be in the serving graph, not %v", param)
+	}
+
+	return servedType, nil
 }

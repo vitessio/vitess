@@ -23,6 +23,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/log"
 )

@@ -23,6 +23,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 )
@@ -48,6 +49,9 @@ func TestBinaryMap(t *testing.T) {
 	}{{
 		in:  sqltypes.NewVarChar("test1"),
 		out: []byte("test1"),
+	}, {
+		in:  sqltypes.NULL,
+		out: []byte(nil),
 	}, {
 		in:  sqltypes.NewVarChar("test2"),
 		out: []byte("test2"),

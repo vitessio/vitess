@@ -23,6 +23,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 

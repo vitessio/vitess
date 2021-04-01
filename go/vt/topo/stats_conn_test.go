@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"testing"
 
-	"golang.org/x/net/context"
+	"context"
 )
 
 // The fakeConn is a wrapper for a Conn that emits stats for every operation

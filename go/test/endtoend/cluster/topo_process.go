@@ -73,6 +73,7 @@ func (topo *TopoProcess) SetupEtcd() (err error) {
 		"--initial-advertise-peer-urls", topo.PeerURL,
 		"--listen-peer-urls", topo.PeerURL,
 		"--initial-cluster", fmt.Sprintf("%s=%s", topo.Name, topo.PeerURL),
+		"--enable-v2=true",
 	)
 
 	err = createDirectory(topo.DataDirectory, 0700)
@@ -88,7 +89,8 @@ func (topo *TopoProcess) SetupEtcd() (err error) {
 
 	topo.proc.Env = append(topo.proc.Env, os.Environ()...)
 
-	log.Infof("Starting etcd with command: %v", strings.Join(topo.proc.Args, " "))
+	log.Errorf("Starting etcd with command: %v", strings.Join(topo.proc.Args, " "))
+
 	err = topo.proc.Start()
 	if err != nil {
 		return
@@ -228,7 +230,7 @@ func (topo *TopoProcess) TearDown(Cell string, originalVtRoot string, currentRoo
 		// Attempt graceful shutdown with SIGTERM first
 		_ = topo.proc.Process.Signal(syscall.SIGTERM)
 
-		if !*keepData {
+		if !(*keepData || keepdata) {
 			_ = os.RemoveAll(topo.DataDirectory)
 			_ = os.RemoveAll(currentRoot)
 		}

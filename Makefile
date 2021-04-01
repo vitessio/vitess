@@ -22,7 +22,7 @@ export REWRITER=go/vt/sqlparser/rewriter.go
 # Since we are not using this Makefile for compilation, limiting parallelism will not increase build time.
 .NOTPARALLEL:
 
-.PHONY: all build install test clean unit_test unit_test_cover unit_test_race integration_test proto proto_banner site_test site_integration_test docker_bootstrap docker_test docker_unit_test java_test reshard_tests e2e_test e2e_test_race minimaltools tools web_bootstrap web_build web_start
+.PHONY: all build install test clean unit_test unit_test_cover unit_test_race integration_test proto proto_banner site_test site_integration_test docker_bootstrap docker_test docker_unit_test java_test reshard_tests e2e_test e2e_test_race minimaltools tools web_bootstrap web_build web_start generate_ci_workflows
 
 all: build
 
@@ -74,14 +74,14 @@ endif
 install: build
 	# binaries
 	mkdir -p "$${PREFIX}/bin"
-	cp "$${VTROOT}/bin/"{mysqlctld,vtorc,vtctld,vtctlclient,vtgate,vttablet,vtworker,vtbackup} "$${PREFIX}/bin/"
+	cp "$${VTROOT}/bin/"{mysqlctl,mysqlctld,vtorc,vtctld,vtctlclient,vtctldclient,vtgate,vttablet,vtworker,vtbackup} "$${PREFIX}/bin/"
 
 # Install local install the binaries needed to run vitess locally
 # Usage: make install-local PREFIX=/path/to/install/root
 install-local: build
 	# binaries
 	mkdir -p "$${PREFIX}/bin"
-	cp "$${VTROOT}/bin/"{mysqlctl,mysqlctld,vtorc,vtctld,vtctlclient,vtgate,vttablet,vtworker,vtbackup} "$${PREFIX}/bin/"
+	cp "$${VTROOT}/bin/"{mysqlctl,mysqlctld,vtorc,vtctl,vtctld,vtctlclient,vtctldclient,vtgate,vttablet,vtworker,vtbackup} "$${PREFIX}/bin/"
 
 
 # install copies the files needed to run test Vitess using vtcombo into the given directory tree.
@@ -96,11 +96,28 @@ install-testing: build
 	mkdir -p "$${PREFIX}/web/vtctld2"
 	cp -R web/vtctld2/app "$${PREFIX}/web/vtctld2"
 
+grpcvtctldclient: go/vt/proto/vtctlservice/vtctlservice.pb.go
+	make -C go/vt/vtctl/grpcvtctldclient
+
 parser:
 	make -C go/vt/sqlparser
 
-visitor:
-	go generate go/vt/sqlparser/rewriter.go
+codegen: asthelpergen sizegen parser
+
+visitor: asthelpergen
+	echo "make visitor has been replaced by make asthelpergen"
+
+asthelpergen:
+	go run ./go/tools/asthelpergen/main -in ./go/vt/sqlparser -iface vitess.io/vitess/go/vt/sqlparser.SQLNode -except "*ColName"
+
+sizegen:
+	go run ./go/tools/sizegen/sizegen.go \
+		-in ./go/vt/... \
+	  	-gen vitess.io/vitess/go/vt/vtgate/engine.Plan \
+	  	-gen vitess.io/vitess/go/vt/vttablet/tabletserver.TabletPlan
+
+astfmtgen:
+	go run ./go/tools/astfmtgen/main.go vitess.io/vitess/go/vt/sqlparser/...
 
 # To pass extra flags, run test.go manually.
 # For example: go run test.go -docker=false -- --extra-flag
@@ -114,7 +131,6 @@ clean:
 	go clean -i ./go/...
 	rm -rf third_party/acolyte
 	rm -rf go/vt/.proto.tmp
-	rm -rf ./visitorgen
 
 # Remove everything including stuff pulled down by bootstrap.sh
 cleanall: clean
@@ -163,7 +179,7 @@ java_test:
 	VTROOT=${PWD} mvn -f java/pom.xml -B clean verify
 
 install_protoc-gen-go:
-	go install github.com/golang/protobuf/protoc-gen-go
+	go install github.com/gogo/protobuf/protoc-gen-gofast
 
 PROTO_SRCS = $(wildcard proto/*.proto)
 PROTO_SRC_NAMES = $(basename $(notdir $(PROTO_SRCS)))
@@ -176,9 +192,10 @@ ifndef NOBANNER
 	echo $$(date): Compiling proto definitions
 endif
 
-$(PROTO_GO_OUTS): install_protoc-gen-go proto/*.proto
+$(PROTO_GO_OUTS): minimaltools install_protoc-gen-go proto/*.proto
 	for name in $(PROTO_SRC_NAMES); do \
-		$(VTROOT)/bin/protoc --go_out=plugins=grpc:. -Iproto proto/$${name}.proto && \
+		$(VTROOT)/bin/protoc --gofast_out=plugins=grpc:. --plugin protoc-gen-gofast="${GOBIN}/protoc-gen-gofast" \
+		-I${PWD}/dist/vt-protoc-3.6.1/include:proto proto/$${name}.proto && \
 		goimports -w vitess.io/vitess/go/vt/proto/$${name}/$${name}.pb.go; \
 	done
 	cp -Rf vitess.io/vitess/go/vt/proto/* go/vt/proto
@@ -190,120 +207,64 @@ $(PROTO_GO_OUTS): install_protoc-gen-go proto/*.proto
 # This rule builds the bootstrap images for all flavors.
 DOCKER_IMAGES_FOR_TEST = mariadb mariadb103 mysql56 mysql57 mysql80 percona percona57 percona80
 DOCKER_IMAGES = common $(DOCKER_IMAGES_FOR_TEST)
+BOOTSTRAP_VERSION=1
+ensure_bootstrap_version:
+	find docker/ -type f -exec sed -i "s/^\(ARG bootstrap_version\)=.*/\1=${BOOTSTRAP_VERSION}/" {} \;
+	sed -i 's/\(^.*flag.String(\"bootstrap-version\",\) *\"[^\"]\+\"/\1 \"${BOOTSTRAP_VERSION}\"/' test.go
+
 docker_bootstrap:
-	for i in $(DOCKER_IMAGES); do echo "building bootstrap image: $$i"; docker/bootstrap/build.sh $$i || exit 1; done
+	for i in $(DOCKER_IMAGES); do echo "building bootstrap image: $$i"; docker/bootstrap/build.sh $$i ${BOOTSTRAP_VERSION} || exit 1; done
 
 docker_bootstrap_test:
-	flavors='$(DOCKER_IMAGES_FOR_TEST)' && ./test.go -pull=false -parallel=2 -flavor=$${flavors// /,}
+	flavors='$(DOCKER_IMAGES_FOR_TEST)' && ./test.go -pull=false -parallel=2 -bootstrap-version=${BOOTSTRAP_VERSION} -flavor=$${flavors// /,}
 
 docker_bootstrap_push:
-	for i in $(DOCKER_IMAGES); do echo "pushing bootstrap image: $$i"; docker push vitess/bootstrap:$$i || exit 1; done
+	for i in $(DOCKER_IMAGES); do echo "pushing bootstrap image: ${BOOTSTRAP_VERSION}-$$i"; docker push vitess/bootstrap:${BOOTSTRAP_VERSION}-$$i || exit 1; done
 
 # Use this target to update the local copy of your images with the one on Dockerhub.
 docker_bootstrap_pull:
-	for i in $(DOCKER_IMAGES); do echo "pulling bootstrap image: $$i"; docker pull vitess/bootstrap:$$i || exit 1; done
+	for i in $(DOCKER_IMAGES); do echo "pulling bootstrap image: $$i"; docker pull vitess/bootstrap:${BOOTSTRAP_VERSION}-$$i || exit 1; done
+
+
+define build_docker_image
+	# Fix permissions before copying files, to avoid AUFS bug.
+	${info Building ${2}}
+	chmod -R o=g *;
+	docker build -f ${1} -t ${2} --build-arg bootstrap_version=${BOOTSTRAP_VERSION} .;
+endef
 
 docker_base:
-	# Fix permissions before copying files, to avoid AUFS bug.
-	chmod -R o=g *
-	docker build -f docker/base/Dockerfile -t vitess/base .
+	${call build_docker_image,docker/base/Dockerfile,vitess/base}
 
-docker_base_mysql56:
-	chmod -R o=g *
-	docker build -f docker/base/Dockerfile.mysql56 -t vitess/base:mysql56 .
+DOCKER_BASE_SUFFIX = mysql56 mysql80 mariadb mariadb103 percona percona57 percona80
+DOCKER_BASE_TARGETS = $(addprefix docker_base_, $(DOCKER_BASE_SUFFIX))
+$(DOCKER_BASE_TARGETS): docker_base_%:
+	${call build_docker_image,docker/base/Dockerfile.$*,vitess/base:$*}
 
-docker_base_mysql80:
-	chmod -R o=g *
-	docker build -f docker/base/Dockerfile.mysql80 -t vitess/base:mysql80 .
-
-docker_base_mariadb:
-	chmod -R o=g *
-	docker build -f docker/base/Dockerfile.mariadb -t vitess/base:mariadb .
-
-docker_base_mariadb103:
-	chmod -R o=g *
-	docker build -f docker/base/Dockerfile.mariadb -t vitess/base:mariadb103 .
-
-docker_base_percona:
-	chmod -R o=g *
-	docker build -f docker/base/Dockerfile.percona -t vitess/base:percona .
-
-docker_base_percona57:
-	chmod -R o=g *
-	docker build -f docker/base/Dockerfile.percona57 -t vitess/base:percona57 .
-
-docker_base_percona80:
-	chmod -R o=g *
-	docker build -f docker/base/Dockerfile.percona80 -t vitess/base:percona80 .
+docker_base_all: docker_base $(DOCKER_BASE_TARGETS)
 
 docker_lite:
-	chmod -R o=g *
-	docker build -f docker/lite/Dockerfile -t vitess/lite .
+	${call build_docker_image,docker/lite/Dockerfile,vitess/lite}
 
-docker_lite_mysql56:
-	chmod -R o=g *
-	docker build -f docker/lite/Dockerfile.mysql56 -t vitess/lite:mysql56 .
+DOCKER_LITE_SUFFIX = mysql56 mysql57 ubi7.mysql57 mysql80 ubi7.mysql80 mariadb mariadb103 percona percona57 ubi7.percona57 percona80 ubi7.percona80 alpine testing
+DOCKER_LITE_TARGETS = $(addprefix docker_lite_,$(DOCKER_LITE_SUFFIX))
+$(DOCKER_LITE_TARGETS): docker_lite_%:
+	${call build_docker_image,docker/lite/Dockerfile.$*,vitess/lite:$*}
 
-docker_lite_mysql57:
-	chmod -R o=g *
-	docker build -f docker/lite/Dockerfile.mysql57 -t vitess/lite:mysql57 .
-
-docker_lite_ubi7.mysql57:
-	chmod -R o=g *
-	docker build -f docker/lite/Dockerfile.ubi7.mysql57 -t vitess/lite:ubi7.mysql57 .
-
-docker_lite_mysql80:
-	chmod -R o=g *
-	docker build -f docker/lite/Dockerfile.mysql80 -t vitess/lite:mysql80 .
-
-docker_lite_ubi7.mysql80:
-	chmod -R o=g *
-	docker build -f docker/lite/Dockerfile.ubi7.mysql80 -t vitess/lite:ubi7.mysql80 .
-
-docker_lite_mariadb:
-	chmod -R o=g *
-	docker build -f docker/lite/Dockerfile.mariadb -t vitess/lite:mariadb .
-
-docker_lite_mariadb103:
-	chmod -R o=g *
-	docker build -f docker/lite/Dockerfile.mariadb103 -t vitess/lite:mariadb103 .
-
-docker_lite_percona:
-	chmod -R o=g *
-	docker build -f docker/lite/Dockerfile.percona -t vitess/lite:percona .
-
-docker_lite_percona57:
-	chmod -R o=g *
-	docker build -f docker/lite/Dockerfile.percona57 -t vitess/lite:percona57 .
-
-docker_lite_ubi7.percona57:
-	chmod -R o=g *
-	docker build -f docker/lite/Dockerfile.ubi7.percona57 -t vitess/lite:ubi7.percona57 .
-
-docker_lite_percona80:
-	chmod -R o=g *
-	docker build -f docker/lite/Dockerfile.percona80 -t vitess/lite:percona80 .
-
-docker_lite_ubi7.percona80:
-	chmod -R o=g *
-	docker build -f docker/lite/Dockerfile.ubi7.percona80 -t vitess/lite:ubi7.percona80 .
-
-docker_lite_alpine:
-	chmod -R o=g *
-	docker build -f docker/lite/Dockerfile.alpine -t vitess/lite:alpine .
-
-docker_lite_testing:
-	chmod -R o=g *
-	docker build -f docker/lite/Dockerfile.testing -t vitess/lite:testing .
+docker_lite_all: docker_lite $(DOCKER_LITE_TARGETS)
 
 docker_local:
-	chmod -R o=g *
-	docker build -f docker/local/Dockerfile -t vitess/local .
+	${call build_docker_image,docker/local/Dockerfile,vitess/local}
 
 docker_mini:
-	chmod -R o=g *
-	docker build -f docker/mini/Dockerfile -t vitess/mini .
+	${call build_docker_image,docker/mini/Dockerfile,vitess/mini}
 
+DOCKER_VTTESTSERVER_SUFFIX = mysql57 mysql80
+DOCKER_VTTESTSERVER_TARGETS = $(addprefix docker_vttestserver_,$(DOCKER_VTTESTSERVER_SUFFIX))
+$(DOCKER_VTTESTSERVER_TARGETS): docker_vttestserver_%:
+	${call build_docker_image,docker/vttestserver/Dockerfile.$*,vitess/vttestserver:$*}
+
+docker_vttestserver: $(DOCKER_VTTESTSERVER_TARGETS)
 # This rule loads the working copy of the code into a bootstrap image,
 # and then runs the tests inside Docker.
 # Example: $ make docker_test flavor=mariadb
@@ -317,7 +278,7 @@ docker_unit_test:
 # This will generate a tar.gz file into the releases folder with the current source
 release: docker_base
 	@if [ -z "$VERSION" ]; then \
-	  echo "Set the env var VERSION with the release version"; exit 1;\
+		echo "Set the env var VERSION with the release version"; exit 1;\
 	fi
 	mkdir -p releases
 	docker build -f docker/Dockerfile.release -t vitess/release .
@@ -326,15 +287,6 @@ release: docker_base
 	echo "A git tag was created, you can push it with:"
 	echo "git push origin v$(VERSION)"
 	echo "Also, don't forget the upload releases/v$(VERSION).tar.gz file to GitHub releases"
-
-packages: docker_base
-	@if [ -z "$VERSION" ]; then \
-	  echo "Set the env var VERSION with the release version"; exit 1;\
-	fi
-	mkdir -p releases
-	docker build -f docker/packaging/Dockerfile -t vitess/packaging .
-	docker run --rm -v ${PWD}/releases:/vt/releases --env VERSION=$(VERSION) vitess/packaging --package /vt/releases -t deb --deb-no-default-config-files
-	docker run --rm -v ${PWD}/releases:/vt/releases --env VERSION=$(VERSION) vitess/packaging --package /vt/releases -t rpm
 
 tools:
 	echo $$(date): Installing dependencies
@@ -347,34 +299,70 @@ minimaltools:
 dependency_check:
 	./tools/dependency_check.sh
 
-GEN_BASE_DIR ?= ./go/vt/topo/k8stopo
+install_k8s-code-generator: tools.go go.mod
+	go install k8s.io/code-generator/cmd/deepcopy-gen
+	go install k8s.io/code-generator/cmd/client-gen
+	go install k8s.io/code-generator/cmd/lister-gen
+	go install k8s.io/code-generator/cmd/informer-gen
 
-client_go_gen:
+DEEPCOPY_GEN=$(GOBIN)/deepcopy-gen
+CLIENT_GEN=$(GOBIN)/client-gen
+LISTER_GEN=$(GOBIN)/lister-gen
+INFORMER_GEN=$(GOBIN)/informer-gen
+
+GEN_BASE_DIR ?= vitess.io/vitess/go/vt/topo/k8stopo
+
+client_go_gen: install_k8s-code-generator
 	echo $$(date): Regenerating client-go code
 	# Delete and re-generate the deepcopy types
-	find $(GEN_BASE_DIR)/apis/topo/v1beta1 -type f -name 'zz_generated*' -exec rm '{}' \;
-	deepcopy-gen -i $(GEN_BASE_DIR)/apis/topo/v1beta1 -O zz_generated.deepcopy -o ./ --bounding-dirs $(GEN_BASE_DIR)/apis --go-header-file $(GEN_BASE_DIR)/boilerplate.go.txt
+	find $(VTROOT)/go/vt/topo/k8stopo/apis/topo/v1beta1 -name "zz_generated.deepcopy.go" -delete
 
-	# Delete, generate, and move the client libraries
+	# We output to ./ and then copy over the generated files to the appropriate path
+	# This is done so we don't have rely on the repository being cloned to `$GOPATH/src/vitess.io/vitess`
+
+	$(DEEPCOPY_GEN) -o ./ \
+	--input-dirs $(GEN_BASE_DIR)/apis/topo/v1beta1 \
+	-O zz_generated.deepcopy \
+	--bounding-dirs $(GEN_BASE_DIR)/apis \
+	--go-header-file ./go/vt/topo/k8stopo/boilerplate.go.txt
+
+	# Delete existing code
 	rm -rf go/vt/topo/k8stopo/client
 
-	# There is no way to get client-gen to automatically put files in the right place and still have the right import path so we generate and move them
+	# Generate clientset
+	$(CLIENT_GEN) -o ./ \
+	--clientset-name versioned \
+	--input-base $(GEN_BASE_DIR)/apis \
+	--input 'topo/v1beta1' \
+	--output-package $(GEN_BASE_DIR)/client/clientset \
+	--fake-clientset=true \
+	--go-header-file ./go/vt/topo/k8stopo/boilerplate.go.txt
 
-	# Generate client, informers, and listers
-	client-gen -o ./ --input 'topo/v1beta1' --clientset-name versioned --input-base 'vitess.io/vitess/go/vt/topo/k8stopo/apis/' -i vitess.io/vitess --output-package vitess.io/vitess/go/vt/topo/k8stopo/client/clientset --go-header-file $(GEN_BASE_DIR)/boilerplate.go.txt
-	lister-gen -o ./ --input-dirs  vitess.io/vitess/go/vt/topo/k8stopo/apis/topo/v1beta1 --output-package vitess.io/vitess/go/vt/topo/k8stopo/client/listers --go-header-file $(GEN_BASE_DIR)/boilerplate.go.txt
-	informer-gen -o ./ --input-dirs  vitess.io/vitess/go/vt/topo/k8stopo/apis/topo/v1beta1 --versioned-clientset-package vitess.io/vitess/go/vt/topo/k8stopo/client/clientset/versioned --listers-package vitess.io/vitess/go/vt/topo/k8stopo/client/listers --output-package vitess.io/vitess/go/vt/topo/k8stopo/client/informers --go-header-file $(GEN_BASE_DIR)/boilerplate.go.txt
+	# Generate listers
+	$(LISTER_GEN) -o ./ \
+	--input-dirs $(GEN_BASE_DIR)/apis/topo/v1beta1 \
+	--output-package $(GEN_BASE_DIR)/client/listers \
+	--go-header-file ./go/vt/topo/k8stopo/boilerplate.go.txt
+
+	# Generate informers
+	$(INFORMER_GEN) -o ./ \
+	--input-dirs $(GEN_BASE_DIR)/apis/topo/v1beta1 \
+	--output-package $(GEN_BASE_DIR)/client/informers \
+	--versioned-clientset-package $(GEN_BASE_DIR)/client/clientset/versioned \
+	--listers-package $(GEN_BASE_DIR)/client/listers \
+	--go-header-file ./go/vt/topo/k8stopo/boilerplate.go.txt
 
 	# Move and cleanup
 	mv vitess.io/vitess/go/vt/topo/k8stopo/client go/vt/topo/k8stopo/
-	rmdir -p vitess.io/vitess/go/vt/topo/k8stopo/
+	mv vitess.io/vitess/go/vt/topo/k8stopo/apis/topo/v1beta1/zz_generated.deepcopy.go go/vt/topo/k8stopo/apis/topo/v1beta1/zz_generated.deepcopy.go
+	rm -rf vitess.io/vitess/go/vt/topo/k8stopo/
 
 # Check prerequisites and install dependencies
 web_bootstrap:
 	./tools/web_bootstrap.sh
 
 # Do a production build of the vtctld UI.
-# This target needs to be manually run every time any file within web/vtctld2/app 
+# This target needs to be manually run every time any file within web/vtctld2/app
 # is modified to regenerate rice-box.go
 web_build: web_bootstrap
 	./tools/web_build.sh
@@ -384,3 +372,18 @@ web_build: web_bootstrap
 # Following the local Docker install guide is recommended: https://vitess.io/docs/get-started/local-docker/
 web_start: web_bootstrap
 	cd web/vtctld2 && npm run start
+
+vtadmin_web_install:
+	cd web/vtadmin && npm install
+
+# Generate JavaScript/TypeScript bindings for vtadmin-web from the Vitess .proto files.
+# Eventually, we'll want to call this target as part of the standard `make proto` target.
+# While vtadmin-web is new and unstable, however, we can keep it out of the critical build path.
+vtadmin_web_proto_types: vtadmin_web_install
+	./web/vtadmin/bin/generate-proto-types.sh
+
+# Generate github CI actions workflow files for unit tests and cluster endtoend tests based on templates in the test/templates directory
+# Needs to be called if the templates change or if a new test "shard" is created. We do not need to rebuild tests if only the test/config.json
+# is changed by adding a new test to an existing shard. Any new or modified files need to be committed into git
+generate_ci_workflows:
+	cd test && go run ci_workflow_gen.go && cd ..
