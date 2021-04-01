@@ -162,7 +162,7 @@ func (e *Executor) Execute(ctx context.Context, method string, safeSession *Safe
 		warnings.Add("ResultsExceeded", 1)
 		piiSafeSQL, err := sqlparser.RedactSQLQuery(sql)
 		if err != nil {
-			piiSafeSQL = sqlparser.Preview(sql).String()
+			piiSafeSQL = logStats.StmtType
 		}
 		log.Warningf("%q exceeds warning threshold of max memory rows: %v", piiSafeSQL, *warnMemoryRows)
 	}
