@@ -1154,6 +1154,147 @@ func TestGetSchema(t *testing.T) {
 				expected:  nil,
 				shouldErr: true,
 			},
+			{
+				name: "tablet filtering checks keyspace field",
+				cfg: testutil.TestClusterConfig{
+					Cluster: &vtadminpb.Cluster{
+						Id:   "c0",
+						Name: "cluster0",
+					},
+					Tablets: []*vtadminpb.Tablet{
+						{
+							Tablet: &topodatapb.Tablet{
+								Alias: &topodatapb.TabletAlias{
+									Cell: "zone1",
+									Uid:  100,
+								},
+								Keyspace: "testkeyspace",
+								Shard:    "-80",
+							},
+							State: vtadminpb.Tablet_SERVING,
+						},
+						{
+							Tablet: &topodatapb.Tablet{
+								Alias: &topodatapb.TabletAlias{
+									Cell: "zone1",
+									Uid:  200,
+								},
+								Keyspace: "testkeyspace",
+								Shard:    "80-",
+							},
+							State: vtadminpb.Tablet_SERVING,
+						},
+					},
+					VtctldClient: &testutil.VtctldClient{
+						FindAllShardsInKeyspaceResults: map[string]struct {
+							Response *vtctldatapb.FindAllShardsInKeyspaceResponse
+							Error    error
+						}{
+							"testkeyspace": {
+								Response: &vtctldatapb.FindAllShardsInKeyspaceResponse{
+									Shards: map[string]*vtctldatapb.Shard{
+										"-80": {
+											Name: "-80",
+											Shard: &topodatapb.Shard{
+												IsMasterServing: true,
+											},
+										},
+										"80-": {
+											Name: "80-",
+											Shard: &topodatapb.Shard{
+												IsMasterServing: true,
+											},
+										},
+									},
+								},
+							},
+						},
+						GetSchemaResults: map[string]struct {
+							Response *vtctldatapb.GetSchemaResponse
+							Error    error
+						}{
+							"zone1-0000000100": {
+								Response: &vtctldatapb.GetSchemaResponse{
+									Schema: &tabletmanagerdatapb.SchemaDefinition{
+										DatabaseSchema: "CREATE DATABASE vt_testkeyspcae",
+										TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+											{
+												Name:       "foo",
+												Schema:     "CREATE TABLE foo (\n\tid INT(11) NOT NULL\n) ENGINE=InnoDB",
+												DataLength: 100,
+												RowCount:   5,
+											},
+										},
+									},
+								},
+							},
+							"zone1-0000000200": {
+								Response: &vtctldatapb.GetSchemaResponse{
+									Schema: &tabletmanagerdatapb.SchemaDefinition{
+										DatabaseSchema: "CREATE DATABASE vt_testkeyspcae",
+										TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+											{
+												Name:       "foo",
+												Schema:     "CREATE TABLE foo (\n\tid INT(11) NOT NULL\n) ENGINE=InnoDB",
+												DataLength: 200,
+												RowCount:   420,
+											},
+										},
+									},
+								},
+							},
+							"zone1-0000000300": {
+								Response: &vtctldatapb.GetSchemaResponse{
+									Schema: &tabletmanagerdatapb.SchemaDefinition{
+										DatabaseSchema: "CREATE DATABASE vt_otherkeyspacekeyspcae",
+										TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+											{
+												Name:       "bar",
+												Schema:     "CREATE TABLE bar (\n\tid INT(11) NOT NULL\n) ENGINE=InnoDB",
+												DataLength: 101,
+												RowCount:   202,
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				keyspace: "testkeyspace",
+				opts: cluster.GetSchemaOptions{
+					TableSizeOptions: &vtadminpb.GetSchemaTableSizeOptions{
+						AggregateSizes: true,
+					},
+					Tablets: []*vtadminpb.Tablet{
+						{
+							Tablet: &topodatapb.Tablet{
+								Alias: &topodatapb.TabletAlias{
+									Cell: "zone1",
+									Uid:  100,
+								},
+								Keyspace: "testkeyspace",
+								Shard:    "-80",
+							},
+							State: vtadminpb.Tablet_SERVING,
+						},
+						{
+							Tablet: &topodatapb.Tablet{
+								Alias: &topodatapb.TabletAlias{
+									Cell: "zone1",
+									Uid:  300,
+								},
+								// Note this is for another keyspace, so we fail to find a tablet for testkeyspace/-80.
+								Keyspace: "otherkeyspace",
+								Shard:    "80-",
+							},
+							State: vtadminpb.Tablet_SERVING,
+						},
+					},
+				},
+				expected:  nil,
+				shouldErr: true,
+			},
 		}
 
 		for _, tt := range tests {
