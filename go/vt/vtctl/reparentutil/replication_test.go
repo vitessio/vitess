@@ -725,8 +725,8 @@ func TestReplicaWasRunning(t *testing.T) {
 			name: "io thread running",
 			in: &replicationdatapb.StopReplicationStatus{
 				Before: &replicationdatapb.Status{
-					IoThreadRunning:  true,
-					SqlThreadRunning: false,
+					IoThreadRunningState: "Yes",
+					SqlThreadRunning:     false,
 				},
 			},
 			expected:  true,
@@ -736,8 +736,8 @@ func TestReplicaWasRunning(t *testing.T) {
 			name: "sql thread running",
 			in: &replicationdatapb.StopReplicationStatus{
 				Before: &replicationdatapb.Status{
-					IoThreadRunning:  false,
-					SqlThreadRunning: true,
+					IoThreadRunningState: "No",
+					SqlThreadRunning:     true,
 				},
 			},
 			expected:  true,
@@ -747,8 +747,8 @@ func TestReplicaWasRunning(t *testing.T) {
 			name: "io and sql threads running",
 			in: &replicationdatapb.StopReplicationStatus{
 				Before: &replicationdatapb.Status{
-					IoThreadRunning:  true,
-					SqlThreadRunning: true,
+					IoThreadRunningState: "Yes",
+					SqlThreadRunning:     true,
 				},
 			},
 			expected:  true,
@@ -758,8 +758,8 @@ func TestReplicaWasRunning(t *testing.T) {
 			name: "no replication threads running",
 			in: &replicationdatapb.StopReplicationStatus{
 				Before: &replicationdatapb.Status{
-					IoThreadRunning:  false,
-					SqlThreadRunning: false,
+					IoThreadRunningState: "No",
+					SqlThreadRunning:     false,
 				},
 			},
 			expected:  false,

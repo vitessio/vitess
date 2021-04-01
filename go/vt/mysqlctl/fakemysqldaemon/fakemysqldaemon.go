@@ -253,6 +253,12 @@ func (fmd *FakeMysqlDaemon) ReplicationStatus() (mysql.ReplicationStatus, error)
 	if fmd.ReplicationStatusError != nil {
 		return mysql.ReplicationStatus{}, fmd.ReplicationStatusError
 	}
+	var ioThreadRunning mysql.IOThreadRunningState
+	if fmd.Replicating && fmd.IOThreadRunning {
+		ioThreadRunning = "Yes"
+	} else {
+		ioThreadRunning = "No"
+	}
 	return mysql.ReplicationStatus{
 		Position:             fmd.CurrentMasterPosition,
 		FilePosition:         fmd.CurrentMasterFilePosition,
@@ -260,10 +266,10 @@ func (fmd *FakeMysqlDaemon) ReplicationStatus() (mysql.ReplicationStatus, error)
 		SecondsBehindMaster:  fmd.SecondsBehindMaster,
 		// implemented as AND to avoid changing all tests that were
 		// previously using Replicating = false
-		IOThreadRunning:  fmd.Replicating && fmd.IOThreadRunning,
-		SQLThreadRunning: fmd.Replicating,
-		MasterHost:       fmd.CurrentMasterHost,
-		MasterPort:       fmd.CurrentMasterPort,
+		IOThreadRunningState: ioThreadRunning,
+		SQLThreadRunning:     fmd.Replicating,
+		MasterHost:           fmd.CurrentMasterHost,
+		MasterPort:           fmd.CurrentMasterPort,
 	}, nil
 }
 

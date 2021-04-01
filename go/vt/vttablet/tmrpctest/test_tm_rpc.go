@@ -17,6 +17,7 @@ limitations under the License.
 package tmrpctest
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"reflect"
@@ -24,8 +25,6 @@ import (
 	"sync"
 	"testing"
 	"time"
-
-	"context"
 
 	"github.com/golang/protobuf/proto"
 
@@ -694,13 +693,13 @@ func tmRPCTestExecuteFetchPanic(ctx context.Context, t *testing.T, client tmclie
 //
 
 var testReplicationStatus = &replicationdatapb.Status{
-	Position:            "MariaDB/1-345-789",
-	IoThreadRunning:     true,
-	SqlThreadRunning:    true,
-	SecondsBehindMaster: 654,
-	MasterHost:          "master.host",
-	MasterPort:          3366,
-	MasterConnectRetry:  12,
+	Position:             "MariaDB/1-345-789",
+	IoThreadRunningState: "Yes",
+	SqlThreadRunning:     true,
+	SecondsBehindMaster:  654,
+	MasterHost:           "master.host",
+	MasterPort:           3366,
+	MasterConnectRetry:   12,
 }
 
 var testMasterStatus = &replicationdatapb.MasterStatus{Position: "MariaDB/1-345-789"}

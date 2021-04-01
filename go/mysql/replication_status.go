@@ -34,33 +34,43 @@ type ReplicationStatus struct {
 	FilePosition         Position
 	FileRelayLogPosition Position
 	MasterServerID       uint
-	IOThreadRunning      bool
 	SQLThreadRunning     bool
 	SecondsBehindMaster  uint
 	MasterHost           string
 	MasterPort           int
 	MasterConnectRetry   int
 	MasterUUID           SID
-	IOThreadState        IOThreadState
+	IOThreadRunningState IOThreadRunningState
 }
 
-// IOThreadState communicates one of the three states returned from SHOW SLAVE STATUS for IO_Thread_Running, of either
+// IOThreadRunningState communicates one of the three states returned from SHOW SLAVE STATUS for IO_Thread_Running, of either
 // "Yes", "Connecting", or "No".
-type IOThreadState string
+type IOThreadRunningState string
 
 var (
 	// IOThreadRunning communicates that the IO thread is running.
-	IOThreadRunning IOThreadState = "Yes"
+	IOThreadRunning IOThreadRunningState = "Yes"
 	// IOThreadNotRunning communicates that the IO thread is not running.
-	IOThreadNotRunning IOThreadState = "No"
+	IOThreadNotRunning IOThreadRunningState = "No"
 	// IOThreadConnecting communicates that the IO thread is currently attempting to re-connect.
-	IOThreadConnecting IOThreadState = "Connecting"
+	IOThreadConnecting IOThreadRunningState = "Connecting"
 )
 
-// ReplicationRunning returns true iff both the IO and SQL threads are
+// ReplicationRunning returns true if both the IO and SQL threads are
 // running.
 func (s *ReplicationStatus) ReplicationRunning() bool {
-	return s.IOThreadRunning && s.SQLThreadRunning
+	return s.IOThreadRunning() && s.SQLThreadRunning
+}
+
+// IOThreadRunning returns true if IO_Thread_Running is either "Yes", or "Connecting".
+func (s *ReplicationStatus) IOThreadRunning() bool {
+	switch s.IOThreadRunningState {
+	case IOThreadNotRunning:
+		return false
+	default:
+		// Return true for either "Connecting" or "Yes"
+		return true
+	}
 }
 
 // ReplicationStatusToProto translates a Status to proto3.
@@ -71,14 +81,14 @@ func ReplicationStatusToProto(s ReplicationStatus) *replicationdatapb.Status {
 		FilePosition:         EncodePosition(s.FilePosition),
 		FileRelayLogPosition: EncodePosition(s.FileRelayLogPosition),
 		MasterServerId:       uint32(s.MasterServerID),
-		IoThreadRunning:      s.IOThreadRunning,
+		IoThreadRunning:      s.IOThreadRunning(),
 		SqlThreadRunning:     s.SQLThreadRunning,
 		SecondsBehindMaster:  uint32(s.SecondsBehindMaster),
 		MasterHost:           s.MasterHost,
 		MasterPort:           int32(s.MasterPort),
 		MasterConnectRetry:   int32(s.MasterConnectRetry),
 		MasterUuid:           s.MasterUUID.String(),
-		IoThreadState:        string(s.IOThreadState),
+		IoThreadRunningState: string(s.IOThreadRunningState),
 	}
 }
 
@@ -113,14 +123,13 @@ func ProtoToReplicationStatus(s *replicationdatapb.Status) ReplicationStatus {
 		FilePosition:         filePos,
 		FileRelayLogPosition: fileRelayPos,
 		MasterServerID:       uint(s.MasterServerId),
-		IOThreadRunning:      s.IoThreadRunning,
 		SQLThreadRunning:     s.SqlThreadRunning,
 		SecondsBehindMaster:  uint(s.SecondsBehindMaster),
 		MasterHost:           s.MasterHost,
 		MasterPort:           int(s.MasterPort),
 		MasterConnectRetry:   int(s.MasterConnectRetry),
 		MasterUUID:           sid,
-		IOThreadState:        IOThreadState(s.IoThreadState),
+		IOThreadRunningState: IOThreadRunningState(s.IoThreadRunningState),
 	}
 }
 

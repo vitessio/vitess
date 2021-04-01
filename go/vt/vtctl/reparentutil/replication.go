@@ -147,7 +147,9 @@ func ReplicaWasRunning(stopStatus *replicationdatapb.StopReplicationStatus) (boo
 		return false, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "could not determine Before state of StopReplicationStatus %v", stopStatus)
 	}
 
-	return stopStatus.Before.IoThreadRunning || stopStatus.Before.SqlThreadRunning, nil
+	ioThreadRunning := stopStatus.Before.IoThreadRunningState == "Yes" || stopStatus.Before.IoThreadRunningState == "Connecting"
+
+	return ioThreadRunning || stopStatus.Before.SqlThreadRunning, nil
 }
 
 // StopReplicationAndBuildStatusMaps stops replication on all replicas, then

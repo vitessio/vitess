@@ -1142,14 +1142,14 @@ func TestEmergencyReparenter_promoteNewPrimary(t *testing.T) {
 			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
 				"zone1-0000000101": { // forceStart = false
 					Before: &replicationdatapb.Status{
-						IoThreadRunning:  false,
-						SqlThreadRunning: false,
+						IoThreadRunningState: "No",
+						SqlThreadRunning:     false,
 					},
 				},
 				"zone1-0000000102": { // forceStart = true
 					Before: &replicationdatapb.Status{
-						IoThreadRunning:  true,
-						SqlThreadRunning: true,
+						IoThreadRunningState: "Connecting",
+						SqlThreadRunning:     true,
 					},
 				},
 			},
