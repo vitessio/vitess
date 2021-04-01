@@ -753,6 +753,11 @@ func (vc *vcursorImpl) WarnUnshardedOnly(format string, params ...interface{}) {
 	}
 }
 
+// ForeignKey implements the VCursor interface
+func (vc *vcursorImpl) ForeignKey() string {
+	return *foreignKey
+}
+
 // ParseDestinationTarget parses destination target string and sets default keyspace if possible.
 func parseDestinationTarget(targetString string, vschema *vindexes.VSchema) (string, topodatapb.TabletType, key.Destination, error) {
 	destKeyspace, destTabletType, dest, err := topoprotopb.ParseDestination(targetString, defaultTabletType)
