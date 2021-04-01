@@ -259,11 +259,11 @@ func (fmd *FakeMysqlDaemon) CurrentMasterPositionLocked(pos mysql.Position) {
 
 // ReplicationStatus is part of the MysqlDaemon interface
 func (fmd *FakeMysqlDaemon) ReplicationStatus() (mysql.ReplicationStatus, error) {
+	fmd.mu.Lock()
+	defer fmd.mu.Unlock()
 	if fmd.ReplicationStatusError != nil {
 		return mysql.ReplicationStatus{}, fmd.ReplicationStatusError
 	}
-	fmd.mu.Lock()
-	defer fmd.mu.Unlock()
 
 	var ioThreadRunning mysql.IOThreadRunningState
 	if fmd.Replicating && fmd.IOThreadRunning {
