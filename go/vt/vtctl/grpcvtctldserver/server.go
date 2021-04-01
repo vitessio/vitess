@@ -628,12 +628,49 @@ func (s *VtctldServer) GetTablets(ctx context.Context, req *vtctldatapb.GetTable
 		}
 	}
 
-	if req.Keyspace != "" && req.Shard != "" {
-		tabletMap, err := s.ts.GetTabletMapForShard(ctx, req.Keyspace, req.Shard)
+	// Create a context for our per-cell RPCs, with a timeout upper-bounded at
+	// the RemoteOperationTimeout.
+	//
+	// Per-cell goroutines may also cancel this context if they fail and the
+	// request specified Strict=true to allow us to fail faster.
+	ctx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+	defer cancel()
+
+	var (
+		tabletMap map[string]*topo.TabletInfo
+		err       error
+	)
+
+	switch {
+	case len(req.TabletAliases) > 0:
+		tabletMap, err = s.ts.GetTabletMap(ctx, req.TabletAliases)
 		if err != nil {
+			err = fmt.Errorf("GetTabletMap(%v) failed: %w", req.TabletAliases, err)
+		}
+	case req.Keyspace != "" && req.Shard != "":
+		tabletMap, err = s.ts.GetTabletMapForShard(ctx, req.Keyspace, req.Shard)
+		if err != nil {
+			err = fmt.Errorf("GetTabletMapForShard(%s, %s) failed: %w", req.Keyspace, req.Shard, err)
+		}
+	default:
+		// goto the req.Cells branch
+		tabletMap = nil
+	}
+
+	if err != nil {
+		switch {
+		case topo.IsErrType(err, topo.PartialResult):
+			if req.Strict {
+				return nil, err
+			}
+
+			log.Warningf("GetTablets encountered non-fatal error %s; continuing because Strict=false", err)
+		default:
 			return nil, err
 		}
+	}
 
+	if tabletMap != nil {
 		var trueMasterTimestamp time.Time
 		for _, ti := range tabletMap {
 			if ti.Type == topodatapb.TabletType_MASTER {
@@ -663,49 +700,81 @@ func (s *VtctldServer) GetTablets(ctx context.Context, req *vtctldatapb.GetTable
 		cells = c
 	}
 
-	var allTablets []*topodatapb.Tablet
+	var (
+		m          sync.Mutex
+		wg         sync.WaitGroup
+		rec        concurrency.AllErrorRecorder
+		allTablets []*topo.TabletInfo
+	)
 
 	for _, cell := range cells {
-		tablets, err := topotools.GetAllTablets(ctx, s.ts, cell)
-		if err != nil {
-			return nil, err
-		}
+		wg.Add(1)
 
-		// Collect true master term start times, and optionally filter out any
-		// tablets by keyspace according to the request.
-		masterTermStartTimes := map[string]time.Time{}
-		filteredTablets := make([]*topo.TabletInfo, 0, len(tablets))
+		go func(cell string) {
+			defer wg.Done()
 
-		for _, tablet := range tablets {
-			if req.Keyspace != "" && tablet.Keyspace != req.Keyspace {
-				continue
-			}
-
-			key := tablet.Keyspace + "." + tablet.Shard
-			if v, ok := masterTermStartTimes[key]; ok {
-				if tablet.GetMasterTermStartTime().After(v) {
-					masterTermStartTimes[key] = tablet.GetMasterTermStartTime()
+			tablets, err := topotools.GetAllTablets(ctx, s.ts, cell)
+			if err != nil {
+				if req.Strict {
+					log.Infof("GetTablets got an error from cell %s: %s. Running in strict mode, so canceling other cell RPCs", cell, err)
+					cancel()
 				}
-			} else {
-				masterTermStartTimes[key] = tablet.GetMasterTermStartTime()
+
+				rec.RecordError(fmt.Errorf("GetAllTablets(cell = %s) failed: %w", cell, err))
+
+				return
 			}
 
-			filteredTablets = append(filteredTablets, tablet)
-		}
+			m.Lock()
+			defer m.Unlock()
+			allTablets = append(allTablets, tablets...)
+		}(cell)
+	}
 
-		// collect the tablets with adjusted master term start times. they've
-		// already been filtered by the above loop, so no keyspace filtering
-		// here.
-		for _, ti := range filteredTablets {
-			key := ti.Keyspace + "." + ti.Shard
-			adjustTypeForStalePrimary(ti, masterTermStartTimes[key])
+	wg.Wait()
 
-			allTablets = append(allTablets, ti.Tablet)
+	if rec.HasErrors() {
+		if req.Strict || len(rec.Errors) == len(cells) {
+			return nil, rec.Error()
 		}
 	}
 
+	// Collect true master term start times, and optionally filter out any
+	// tablets by keyspace according to the request.
+	masterTermStartTimes := map[string]time.Time{}
+	filteredTablets := make([]*topo.TabletInfo, 0, len(allTablets))
+
+	for _, tablet := range allTablets {
+		if req.Keyspace != "" && tablet.Keyspace != req.Keyspace {
+			continue
+		}
+
+		key := tablet.Keyspace + "." + tablet.Shard
+		if v, ok := masterTermStartTimes[key]; ok {
+			if tablet.GetMasterTermStartTime().After(v) {
+				masterTermStartTimes[key] = tablet.GetMasterTermStartTime()
+			}
+		} else {
+			masterTermStartTimes[key] = tablet.GetMasterTermStartTime()
+		}
+
+		filteredTablets = append(filteredTablets, tablet)
+	}
+
+	adjustedTablets := make([]*topodatapb.Tablet, len(filteredTablets))
+
+	// collect the tablets with adjusted master term start times. they've
+	// already been filtered by the above loop, so no keyspace filtering
+	// here.
+	for i, ti := range filteredTablets {
+		key := ti.Keyspace + "." + ti.Shard
+		adjustTypeForStalePrimary(ti, masterTermStartTimes[key])
+
+		adjustedTablets[i] = ti.Tablet
+	}
+
 	return &vtctldatapb.GetTabletsResponse{
-		Tablets: allTablets,
+		Tablets: adjustedTablets,
 	}, nil
 }
 

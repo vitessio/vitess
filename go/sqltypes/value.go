@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"vitess.io/vitess/go/bytes2"
 	"vitess.io/vitess/go/hack"
@@ -399,9 +400,8 @@ func encodeBytesSQL(val []byte, b BinWriter) {
 	b.Write(buf.Bytes())
 }
 
-// EncodeStringSQL encodes the string as a SQL string.
-func EncodeStringSQL(val string) string {
-	buf := &bytes2.Buffer{}
+// BufEncodeStringSQL encodes the string into a strings.Builder
+func BufEncodeStringSQL(buf *strings.Builder, val string) {
 	buf.WriteByte('\'')
 	for _, ch := range val {
 		if encodedChar := SQLEncodeMap[ch]; encodedChar == DontEscape {
@@ -412,6 +412,12 @@ func EncodeStringSQL(val string) string {
 		}
 	}
 	buf.WriteByte('\'')
+}
+
+// EncodeStringSQL encodes the string as a SQL string.
+func EncodeStringSQL(val string) string {
+	var buf strings.Builder
+	BufEncodeStringSQL(&buf, val)
 	return buf.String()
 }
 

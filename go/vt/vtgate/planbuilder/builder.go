@@ -52,6 +52,15 @@ type ContextVSchema interface {
 	AllKeyspace() ([]*vindexes.Keyspace, error)
 	GetSemTable() *semantics.SemTable
 	Planner() PlannerVersion
+
+	// ErrorIfShardedF will return an error if the keyspace is sharded,
+	// and produce a warning if the vtgate if configured to do so
+	ErrorIfShardedF(keyspace *vindexes.Keyspace, warn, errFmt string, params ...interface{}) error
+
+	// WarnUnshardedOnly is used when a feature is only supported in unsharded mode.
+	// This will let the user know that they are using something
+	// that could become a problem if they move to a sharded keyspace
+	WarnUnshardedOnly(format string, params ...interface{})
 }
 
 // PlannerVersion is an alias here to make the code more readable
@@ -234,8 +243,8 @@ func buildLoadPlan(query string, vschema ContextVSchema) (engine.Primitive, erro
 
 	destination := vschema.Destination()
 	if destination == nil {
-		if keyspace.Sharded {
-			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "LOAD is not supported on sharded database")
+		if err := vschema.ErrorIfShardedF(keyspace, "LOAD", "LOAD is not supported on sharded database"); err != nil {
+			return nil, err
 		}
 		destination = key.DestinationAnyShard{}
 	}

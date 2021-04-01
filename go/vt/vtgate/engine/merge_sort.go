@@ -20,8 +20,6 @@ import (
 	"container/heap"
 	"io"
 
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
-
 	"context"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -96,9 +94,10 @@ func (ms *MergeSort) StreamExecute(vcursor VCursor, bindVars map[string]*querypb
 		return err
 	}
 
+	comparers := extractSlices(ms.OrderBy)
 	sh := &scatterHeap{
-		rows:    make([]streamRow, 0, len(handles)),
-		orderBy: ms.OrderBy,
+		rows:      make([]streamRow, 0, len(handles)),
+		comparers: comparers,
 	}
 
 	// Prime the heap. One element must be pulled from
@@ -236,9 +235,9 @@ type streamRow struct {
 // yielded an error, err is set. This must be checked
 // after every heap operation.
 type scatterHeap struct {
-	rows    []streamRow
-	orderBy []OrderbyParams
-	err     error
+	rows      []streamRow
+	err       error
+	comparers []*comparer
 }
 
 // Len satisfies sort.Interface and heap.Interface.
@@ -248,20 +247,18 @@ func (sh *scatterHeap) Len() int {
 
 // Less satisfies sort.Interface and heap.Interface.
 func (sh *scatterHeap) Less(i, j int) bool {
-	for _, order := range sh.orderBy {
+	for _, c := range sh.comparers {
 		if sh.err != nil {
 			return true
 		}
-		cmp, err := evalengine.NullsafeCompare(sh.rows[i].row[order.Col], sh.rows[j].row[order.Col])
+		// First try to compare the columns that we want to order
+		cmp, err := c.compare(sh.rows[i].row, sh.rows[j].row)
 		if err != nil {
 			sh.err = err
 			return true
 		}
 		if cmp == 0 {
 			continue
-		}
-		if order.Desc {
-			cmp = -cmp
 		}
 		return cmp < 0
 	}

@@ -340,6 +340,10 @@ func (oa *orderedAggregate) Wireup(plan logicalPlan, jt *jointab) error {
 			}
 			weightcolNumber, err := oa.input.SupplyWeightString(colNumber)
 			if err != nil {
+				_, isUnsupportedErr := err.(UnsupportedSupplyWeightString)
+				if isUnsupportedErr {
+					continue
+				}
 				return err
 			}
 			oa.weightStrings[rc] = weightcolNumber

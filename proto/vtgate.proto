@@ -21,7 +21,7 @@ option go_package = "vitess.io/vitess/go/vt/proto/vtgate";
 
 package vtgate;
 
-option java_package="io.vitess.proto";
+option java_package = "io.vitess.proto";
 
 import "binlogdata.proto";
 import "query.proto";
@@ -114,7 +114,7 @@ message Session {
 
   // user_defined_variables contains all the @variables defined for this session
   map<string, query.BindVariable> user_defined_variables = 13;
-  
+
   // system_variables keeps track of all session variables set for this connection
   // TODO: systay should we keep this so we can apply it ordered? 
   map<string, string> system_variables = 14;
@@ -270,6 +270,10 @@ message ResolveTransactionRequest {
 message ResolveTransactionResponse {
 }
 
+message VStreamFlags {
+  bool minimize_skew = 1;
+}
+
 // VStreamRequest is the payload for VStream.
 message VStreamRequest {
   vtrpc.CallerID caller_id = 1;
@@ -281,6 +285,7 @@ message VStreamRequest {
   // position is of the form 'ks1:0@MySQL56/<mysql_pos>|ks2:-80@MySQL56/<mysql_pos>'.
   binlogdata.VGtid vgtid = 3;
   binlogdata.Filter filter = 4;
+  VStreamFlags flags = 5;
 }
 
 // VStreamResponse is streamed by VStream.

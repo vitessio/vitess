@@ -173,3 +173,8 @@ func (r *NoCloneType) String() string {
 }
 
 type Visit func(node AST) (bool, error)
+
+type application struct {
+	pre, post ApplyFunc
+	cur       Cursor
+}

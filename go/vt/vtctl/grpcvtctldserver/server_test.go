@@ -3327,7 +3327,7 @@ func TestGetTablets(t *testing.T) {
 			shouldErr: false,
 		},
 		{
-			name:  "cells filter - error",
+			name:  "cells filter with single error is nonfatal",
 			cells: []string{"cell1"},
 			tablets: []*topodatapb.Tablet{
 				{
@@ -3342,12 +3342,117 @@ func TestGetTablets(t *testing.T) {
 			req: &vtctldatapb.GetTabletsRequest{
 				Cells: []string{"cell1", "doesnotexist"},
 			},
-			expected:  []*topodatapb.Tablet{},
+			expected: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "cell1",
+						Uid:  100,
+					},
+					Keyspace: "ks1",
+					Shard:    "-",
+				},
+			},
+			shouldErr: false,
+		},
+		{
+			name:  "cells filter with single error is fatal in strict mode",
+			cells: []string{"cell1"},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "cell1",
+						Uid:  100,
+					},
+					Keyspace: "ks1",
+					Shard:    "-",
+				},
+			},
+			req: &vtctldatapb.GetTabletsRequest{
+				Cells:  []string{"cell1", "doesnotexist"},
+				Strict: true,
+			},
 			shouldErr: true,
+		},
+		{
+			name:  "in nonstrict mode if all cells fail the request fails",
+			cells: []string{"cell1"},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "cell1",
+						Uid:  100,
+					},
+					Keyspace: "ks1",
+					Shard:    "-",
+				},
+			},
+			req: &vtctldatapb.GetTabletsRequest{
+				Cells: []string{"doesnotexist", "alsodoesnotexist"},
+			},
+			shouldErr: true,
+		},
+		{
+			name:  "tablet alias filtering",
+			cells: []string{"zone1"},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+			},
+			req: &vtctldatapb.GetTabletsRequest{
+				TabletAliases: []*topodatapb.TabletAlias{
+					{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					{
+						// This tablet doesn't exist, but doesn't cause a failure.
+						Cell: "zone404",
+						Uid:  404,
+					},
+				},
+				// The below filters are ignored, because TabletAliases always
+				// takes precedence.
+				Keyspace: "another_keyspace",
+				Shard:    "-80",
+				Cells:    []string{"zone404"},
+			},
+			expected: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+			},
+			shouldErr: false,
+		},
+		{
+			name:    "tablet alias filter with none found",
+			tablets: []*topodatapb.Tablet{},
+			req: &vtctldatapb.GetTabletsRequest{
+				TabletAliases: []*topodatapb.TabletAlias{
+					{
+						Cell: "zone1",
+						Uid:  101,
+					},
+				},
+			},
+			expected:  []*topodatapb.Tablet{},
+			shouldErr: false,
 		},
 	}
 
 	for _, tt := range tests {
+		tt := tt
+
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -4989,7 +5094,7 @@ func TestTabletExternallyReparented(t *testing.T) {
 						Cell: "zone2",
 						Uid:  200,
 					},
-					Type:                topodatapb.TabletType_MASTER,
+					Type:                topodatapb.TabletType_UNKNOWN,
 					Keyspace:            "testkeyspace",
 					Shard:               "-",
 					MasterTermStartTime: &vttime.Time{},
@@ -5295,6 +5400,9 @@ func TestTabletExternallyReparented(t *testing.T) {
 				// of the test.
 				defer func() {
 					topofactory.SetError(nil)
+
+					ctx, cancel := context.WithTimeout(ctx, time.Millisecond*10)
+					defer cancel()
 
 					resp, err := vtctld.GetTablets(ctx, &vtctldatapb.GetTabletsRequest{})
 					require.NoError(t, err, "cannot get all tablets in the topo")

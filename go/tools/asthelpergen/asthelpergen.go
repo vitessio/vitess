@@ -43,46 +43,36 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.`
 
-type generator interface {
-	visitStruct(t types.Type, stroct *types.Struct) error
-	visitInterface(t types.Type, iface *types.Interface) error
-	visitSlice(t types.Type, slice *types.Slice) error
-	createFile(pkgName string) (string, *jen.File)
-}
+type (
+	generatorSPI interface {
+		addType(t types.Type)
+		scope() *types.Scope
+		findImplementations(iff *types.Interface, impl func(types.Type) error) error
+		iface() *types.Interface
+	}
+	generator interface {
+		genFile() (string, *jen.File)
+		interfaceMethod(t types.Type, iface *types.Interface, spi generatorSPI) error
+		structMethod(t types.Type, strct *types.Struct, spi generatorSPI) error
+		ptrToStructMethod(t types.Type, strct *types.Struct, spi generatorSPI) error
+		ptrToBasicMethod(t types.Type, basic *types.Basic, spi generatorSPI) error
+		sliceMethod(t types.Type, slice *types.Slice, spi generatorSPI) error
+		basicMethod(t types.Type, basic *types.Basic, spi generatorSPI) error
+	}
+	// astHelperGen finds implementations of the given interface,
+	// and uses the supplied `generator`s to produce the output code
+	astHelperGen struct {
+		DebugTypes bool
+		mod        *packages.Module
+		sizes      types.Sizes
+		namedIface *types.Named
+		_iface     *types.Interface
+		gens       []generator
 
-type generatorSPI interface {
-	addType(t types.Type)
-	addFunc(name string, t methodType, code jen.Code)
-	scope() *types.Scope
-	findImplementations(iff *types.Interface, impl func(types.Type) error) error
-	iface() *types.Interface
-}
-
-type generator2 interface {
-	interfaceMethod(t types.Type, iface *types.Interface, spi generatorSPI) error
-	structMethod(t types.Type, strct *types.Struct, spi generatorSPI) error
-	ptrToStructMethod(t types.Type, strct *types.Struct, spi generatorSPI) error
-	ptrToBasicMethod(t types.Type, basic *types.Basic, spi generatorSPI) error
-	ptrToOtherMethod(t types.Type, ptr *types.Pointer, spi generatorSPI) error
-	sliceMethod(t types.Type, slice *types.Slice, spi generatorSPI) error
-	basicMethod(t types.Type, basic *types.Basic, spi generatorSPI) error
-}
-
-// astHelperGen finds implementations of the given interface,
-// and uses the supplied `generator`s to produce the output code
-type astHelperGen struct {
-	DebugTypes bool
-	mod        *packages.Module
-	sizes      types.Sizes
-	namedIface *types.Named
-	_iface     *types.Interface
-	gens       []generator
-	gens2      []generator2
-
-	methods []jen.Code
-	_scope  *types.Scope
-	todo    []types.Type
-}
+		_scope *types.Scope
+		todo   []types.Type
+	}
+)
 
 func (gen *astHelperGen) iface() *types.Interface {
 	return gen._iface
@@ -150,79 +140,19 @@ func (gen *astHelperGen) findImplementations(iff *types.Interface, impl func(typ
 	return nil
 }
 
-func (gen *astHelperGen) visitStruct(t types.Type, stroct *types.Struct) error {
-	for _, g := range gen.gens {
-		err := g.visitStruct(t, stroct)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (gen *astHelperGen) visitSlice(t types.Type, slice *types.Slice) error {
-	for _, g := range gen.gens {
-		err := g.visitSlice(t, slice)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (gen *astHelperGen) visitInterface(t types.Type, iface *types.Interface) error {
-	for _, g := range gen.gens {
-		err := g.visitInterface(t, iface)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 // GenerateCode is the main loop where we build up the code per file.
 func (gen *astHelperGen) GenerateCode() (map[string]*jen.File, error) {
 	pkg := gen.namedIface.Obj().Pkg()
-	iface, ok := gen._iface.Underlying().(*types.Interface)
-	if !ok {
-		return nil, fmt.Errorf("expected interface, but got %T", gen.iface)
-	}
-
-	err := findImplementations(pkg.Scope(), iface, func(t types.Type) error {
-		switch n := t.Underlying().(type) {
-		case *types.Struct:
-			return gen.visitStruct(t, n)
-		case *types.Slice:
-			return gen.visitSlice(t, n)
-		case *types.Pointer:
-			strct, isStrct := n.Elem().Underlying().(*types.Struct)
-			if isStrct {
-				return gen.visitStruct(t, strct)
-			}
-		case *types.Interface:
-			return gen.visitInterface(t, n)
-		default:
-			// do nothing
-		}
-		return nil
-	})
-
-	if err != nil {
-		return nil, err
-	}
-
-	result := map[string]*jen.File{}
-	for _, g := range gen.gens {
-		file, code := g.createFile(pkg.Name())
-		fullPath := path.Join(gen.mod.Dir, strings.TrimPrefix(pkg.Path(), gen.mod.Path), file)
-		result[fullPath] = code
-	}
 
 	gen._scope = pkg.Scope()
 	gen.todo = append(gen.todo, gen.namedIface)
-	file, code := gen.createFile(pkg.Name())
-	fullPath := path.Join(gen.mod.Dir, strings.TrimPrefix(pkg.Path(), gen.mod.Path), file)
-	result[fullPath] = code
+	jenFiles := gen.createFiles()
+
+	result := map[string]*jen.File{}
+	for fName, genFile := range jenFiles {
+		fullPath := path.Join(gen.mod.Dir, strings.TrimPrefix(pkg.Path(), gen.mod.Path), fName)
+		result[fullPath] = genFile
+	}
 
 	return result, nil
 }
@@ -299,17 +229,13 @@ func GenerateASTHelpers(packagePatterns []string, rootIface, exceptCloneType str
 	}
 
 	nt := tt.Type().(*types.Named)
-
-	iface := nt.Underlying().(*types.Interface)
-
-	interestingType := func(t types.Type) bool {
-		return types.Implements(t, iface)
-	}
-	rewriter := newRewriterGen(interestingType, nt.Obj().Name())
-	generator := newGenerator(loaded[0].Module, loaded[0].TypesSizes, nt, rewriter)
-	generator.gens2 = append(generator.gens2, &equalsGen{})
-	generator.gens2 = append(generator.gens2, newCloneGen(exceptCloneType))
-	generator.gens2 = append(generator.gens2, &visitGen{})
+	pName := nt.Obj().Pkg().Name()
+	generator := newGenerator(loaded[0].Module, loaded[0].TypesSizes, nt,
+		newEqualsGen(pName),
+		newCloneGen(pName, exceptCloneType),
+		newVisitGen(pName),
+		newRewriterGen(pName, types.TypeString(nt, noQualifier)),
+	)
 
 	it, err := generator.GenerateCode()
 	if err != nil {
@@ -329,31 +255,7 @@ func (gen *astHelperGen) addType(t types.Type) {
 	gen.todo = append(gen.todo, t)
 }
 
-type methodType int
-
-const (
-	clone methodType = iota
-	equals
-	visit
-)
-
-func (gen *astHelperGen) addFunc(name string, typ methodType, code jen.Code) {
-	var comment string
-	switch typ {
-	case clone:
-		comment = " creates a deep clone of the input."
-	case equals:
-		comment = " does deep equals between the two objects."
-	case visit:
-		comment = " will visit all parts of the AST"
-	}
-	gen.methods = append(gen.methods, jen.Comment(name+comment), code)
-}
-
-func (gen *astHelperGen) createFile(pkgName string) (string, *jen.File) {
-	out := jen.NewFile(pkgName)
-	out.HeaderComment(licenseFileHeader)
-	out.HeaderComment("Code generated by ASTHelperGen. DO NOT EDIT.")
+func (gen *astHelperGen) createFiles() map[string]*jen.File {
 	alreadyDone := map[string]bool{}
 	for len(gen.todo) > 0 {
 		t := gen.todo[0]
@@ -364,63 +266,43 @@ func (gen *astHelperGen) createFile(pkgName string) (string, *jen.File) {
 		if alreadyDone[typeName] {
 			continue
 		}
-
-		switch underlying := underlying.(type) {
-		case *types.Interface:
-			gen.allGenerators(func(g generator2) error {
-				return g.interfaceMethod(t, underlying, gen)
-			})
-		case *types.Slice:
-			gen.allGenerators(func(g generator2) error {
-				return g.sliceMethod(t, underlying, gen)
-			})
-		case *types.Struct:
-			gen.allGenerators(func(g generator2) error {
-				return g.structMethod(t, underlying, gen)
-			})
-		case *types.Pointer:
-			ptrToType := underlying.Elem().Underlying()
-
-			switch ptrToType := ptrToType.(type) {
+		var err error
+		for _, g := range gen.gens {
+			switch underlying := underlying.(type) {
+			case *types.Interface:
+				err = g.interfaceMethod(t, underlying, gen)
+			case *types.Slice:
+				err = g.sliceMethod(t, underlying, gen)
 			case *types.Struct:
-				gen.allGenerators(func(g generator2) error {
-					return g.ptrToStructMethod(t, ptrToType, gen)
-				})
+				err = g.structMethod(t, underlying, gen)
+			case *types.Pointer:
+				ptrToType := underlying.Elem().Underlying()
+				switch ptrToType := ptrToType.(type) {
+				case *types.Struct:
+					err = g.ptrToStructMethod(t, ptrToType, gen)
+				case *types.Basic:
+					err = g.ptrToBasicMethod(t, ptrToType, gen)
+				default:
+					panic(fmt.Sprintf("%T", ptrToType))
+				}
 			case *types.Basic:
-				gen.allGenerators(func(g generator2) error {
-					return g.ptrToBasicMethod(t, ptrToType, gen)
-				})
+				err = g.basicMethod(t, underlying, gen)
 			default:
-				panic(fmt.Sprintf("%T", ptrToType))
-				//c.makePtrCloneMethod(t, ptr)
+				log.Fatalf("don't know how to handle %s %T", typeName, underlying)
 			}
-		case *types.Basic:
-			gen.allGenerators(func(g generator2) error {
-				return g.basicMethod(t, underlying, gen)
-			})
-
-		default:
-			log.Fatalf("don't know how to handle %s %T", typeName, underlying)
+			if err != nil {
+				log.Fatal(err)
+			}
 		}
-
 		alreadyDone[typeName] = true
 	}
 
-	for _, method := range gen.methods {
-		out.Add(method)
+	result := map[string]*jen.File{}
+	for _, g := range gen.gens {
+		fName, jenFile := g.genFile()
+		result[fName] = jenFile
 	}
-
-	return "ast_helper.go", out
-}
-
-func (gen *astHelperGen) allGenerators(f func(g generator2) error) {
-	for _, g := range gen.gens2 {
-		err := f(g)
-
-		if err != nil {
-			log.Fatalf("%v", err)
-		}
-	}
+	return result
 }
 
 // printableTypeName returns a string that can be used as a valid golang identifier

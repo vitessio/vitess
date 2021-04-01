@@ -25,7 +25,8 @@ require (
 	github.com/dave/jennifer v1.4.1
 	github.com/evanphx/json-patch v4.5.0+incompatible
 	github.com/go-martini/martini v0.0.0-20170121215854-22fa46961aab
-	github.com/go-sql-driver/mysql v1.5.1-0.20210202043019-fe2230a8b20c
+	github.com/go-sql-driver/mysql v1.5.0
+	github.com/gogo/protobuf v1.3.1
 	github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b
 	github.com/golang/groupcache v0.0.0-20190702054246-869f871628b6 // indirect
 	github.com/golang/mock v1.3.1
@@ -115,6 +116,7 @@ require (
 	k8s.io/apiextensions-apiserver v0.17.3
 	k8s.io/apimachinery v0.17.3
 	k8s.io/client-go v0.17.3
+	k8s.io/code-generator v0.17.3
 	sigs.k8s.io/yaml v1.1.0
 )
 

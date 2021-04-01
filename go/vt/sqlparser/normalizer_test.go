@@ -310,3 +310,45 @@ func BenchmarkNormalizeTraces(b *testing.B) {
 		})
 	}
 }
+
+func BenchmarkNormalizeVTGate(b *testing.B) {
+	const keyspace = "main_keyspace"
+
+	queries := loadQueries(b, "lobsters.sql.gz")
+	if len(queries) > 10000 {
+		queries = queries[:10000]
+	}
+
+	b.ResetTimer()
+	b.ReportAllocs()
+
+	for i := 0; i < b.N; i++ {
+		for _, sql := range queries {
+			stmt, reservedVars, err := Parse2(sql)
+			if err != nil {
+				b.Fatal(err)
+			}
+
+			query := sql
+			statement := stmt
+			bindVarNeeds := &BindVarNeeds{}
+			bindVars := make(map[string]*querypb.BindVariable)
+			_ = IgnoreMaxMaxMemoryRowsDirective(stmt)
+
+			// Normalize if possible and retry.
+			if CanNormalize(stmt) || MustRewriteAST(stmt) {
+				result, err := PrepareAST(stmt, reservedVars, bindVars, "vtg", true, keyspace)
+				if err != nil {
+					b.Fatal(err)
+				}
+				statement = result.AST
+				bindVarNeeds = result.BindVarNeeds
+				query = String(statement)
+			}
+
+			_ = query
+			_ = statement
+			_ = bindVarNeeds
+		}
+	}
+}

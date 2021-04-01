@@ -31,5 +31,5 @@ jobs:
 
     - name: check_make_visitor
       run: |
-        misc/git/hooks/visitorgen
+        misc/git/hooks/asthelpers
 
