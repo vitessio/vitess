@@ -1,13 +1,15 @@
 package planbuilder
 
 import (
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/vindexes"
+	"strings"
 
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
+
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // Error messages for CreateView queries
@@ -16,6 +18,33 @@ const (
 	ViewComplex           string = "Complex select queries are not supported in create or alter view statements"
 	DifferentDestinations string = "Tables or Views specified in the query do not belong to the same destination"
 )
+
+type fkStrategy int
+
+const (
+	allow fkStrategy = iota
+	disallow
+)
+
+var fkStrategyMap = map[string]fkStrategy{
+	"allow":    allow,
+	"disallow": disallow,
+}
+
+type fkContraint struct {
+	found bool
+}
+
+func (fk *fkContraint) FkWalk(node sqlparser.SQLNode) (kontinue bool, err error) {
+	switch node.(type) {
+	case *sqlparser.CreateTable, *sqlparser.AlterTable,
+		*sqlparser.TableSpec, *sqlparser.AddConstraintDefinition, *sqlparser.ConstraintDefinition:
+		return true, nil
+	case *sqlparser.ForeignKeyDefinition:
+		fk.found = true
+	}
+	return false, nil
+}
 
 // buildGeneralDDLPlan builds a general DDL plan, which can be either normal DDL or online DDL.
 // The two behave compeltely differently, and have two very different primitives.
@@ -55,42 +84,38 @@ func buildDDLPlans(sql string, ddlStatement sqlparser.DDLStatement, reservedVars
 
 	switch ddl := ddlStatement.(type) {
 	case *sqlparser.AlterTable, *sqlparser.TruncateTable:
+		err = checkFKError(vschema, ddlStatement)
+		if err != nil {
+			return nil, nil, err
+		}
 		// For Alter Table and other statements, the table must already exist
 		// We should find the target of the query from this tables location
 		destination, keyspace, err = findTableDestinationAndKeyspace(vschema, ddlStatement)
-		if err != nil {
-			return nil, nil, err
-		}
 	case *sqlparser.CreateView:
 		destination, keyspace, err = buildCreateView(vschema, ddl, reservedVars)
-		if err != nil {
-			return nil, nil, err
-		}
 	case *sqlparser.AlterView:
 		destination, keyspace, err = buildAlterView(vschema, ddl, reservedVars)
+	case *sqlparser.CreateTable:
+		err = checkFKError(vschema, ddlStatement)
 		if err != nil {
 			return nil, nil, err
 		}
-	case *sqlparser.CreateTable:
 		destination, keyspace, _, err = vschema.TargetDestination(ddlStatement.GetTable().Qualifier.String())
+		if err != nil {
+			return nil, nil, err
+		}
 		// Remove the keyspace name as the database name might be different.
 		ddlStatement.SetTable("", ddlStatement.GetTable().Name.String())
-		if err != nil {
-			return nil, nil, err
-		}
 	case *sqlparser.DropView, *sqlparser.DropTable:
 		destination, keyspace, err = buildDropViewOrTable(vschema, ddlStatement)
-		if err != nil {
-			return nil, nil, err
-		}
 	case *sqlparser.RenameTable:
 		destination, keyspace, err = buildRenameTable(vschema, ddl)
-		if err != nil {
-			return nil, nil, err
-		}
-
 	default:
 		return nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unexpected ddl statement type: %T", ddlStatement)
+	}
+
+	if err != nil {
+		return nil, nil, err
 	}
 
 	if destination == nil {
@@ -114,6 +139,17 @@ func buildDDLPlans(sql string, ddlStatement sqlparser.DDLStatement, reservedVars
 			DDL:      ddlStatement,
 			SQL:      query,
 		}, nil
+}
+
+func checkFKError(vschema ContextVSchema, ddlStatement sqlparser.DDLStatement) error {
+	if fkStrategyMap[strings.ToLower(vschema.ForeignKey())] == disallow {
+		fk := &fkContraint{}
+		_ = sqlparser.Walk(fk.FkWalk, ddlStatement)
+		if fk.found {
+			return vterrors.Errorf(vtrpcpb.Code_ABORTED, "foreign key constraint is not allowed")
+		}
+	}
+	return nil
 }
 
 func findTableDestinationAndKeyspace(vschema ContextVSchema, ddlStatement sqlparser.DDLStatement) (key.Destination, *vindexes.Keyspace, error) {

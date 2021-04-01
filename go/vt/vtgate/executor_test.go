@@ -1186,7 +1186,7 @@ func TestExecutorDDL(t *testing.T) {
 }
 
 func TestExecutorDDLFk(t *testing.T) {
-	executor, _, _, sbc := createLegacyExecutorEnv()
+	executor, _, _, sbc := createExecutorEnv()
 
 	mName := "TestExecutorDDLFk"
 	stmts := []string{
@@ -1204,7 +1204,7 @@ func TestExecutorDDLFk(t *testing.T) {
 					require.NoError(t, err)
 					require.EqualValues(t, 1, sbc.ExecCount.Get())
 				} else {
-					require.EqualError(t, err, "foreign key constraint is blocked")
+					require.EqualError(t, err, "foreign key constraint is not allowed")
 				}
 			})
 		}
