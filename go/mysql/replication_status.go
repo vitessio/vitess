@@ -40,7 +40,7 @@ type ReplicationStatus struct {
 	MasterPort           int
 	MasterConnectRetry   int
 	MasterUUID           SID
-	IOThreadRunningState IOThreadRunningState
+	IOThreadRunning      IOThreadRunningState
 }
 
 // IOThreadRunningState communicates one of the three states returned from SHOW SLAVE STATUS for IO_Thread_Running, of either
@@ -59,12 +59,12 @@ var (
 // ReplicationRunning returns true if both the IO and SQL threads are
 // running.
 func (s *ReplicationStatus) ReplicationRunning() bool {
-	return s.IOThreadRunning() && s.SQLThreadRunning
+	return s.IOThreadIsRunning() && s.SQLThreadRunning
 }
 
-// IOThreadRunning returns true if IO_Thread_Running is either "Yes", or "Connecting".
-func (s *ReplicationStatus) IOThreadRunning() bool {
-	switch s.IOThreadRunningState {
+// IOThreadIsRunning returns true if IO_Thread_Running is either "Yes", or "Connecting".
+func (s *ReplicationStatus) IOThreadIsRunning() bool {
+	switch s.IOThreadRunning {
 	case IOThreadNotRunning:
 		return false
 	default:
@@ -87,7 +87,7 @@ func ReplicationStatusToProto(s ReplicationStatus) *replicationdatapb.Status {
 		MasterPort:           int32(s.MasterPort),
 		MasterConnectRetry:   int32(s.MasterConnectRetry),
 		MasterUuid:           s.MasterUUID.String(),
-		IoThreadRunningState: string(s.IOThreadRunningState),
+		IoThreadRunning:      string(s.IOThreadRunning),
 	}
 }
 
@@ -128,7 +128,7 @@ func ProtoToReplicationStatus(s *replicationdatapb.Status) ReplicationStatus {
 		MasterPort:           int(s.MasterPort),
 		MasterConnectRetry:   int(s.MasterConnectRetry),
 		MasterUUID:           sid,
-		IOThreadRunningState: IOThreadRunningState(s.IoThreadRunningState),
+		IOThreadRunning:      IOThreadRunningState(s.IoThreadRunning),
 	}
 }
 

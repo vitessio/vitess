@@ -279,10 +279,10 @@ func (fmd *FakeMysqlDaemon) ReplicationStatus() (mysql.ReplicationStatus, error)
 		SecondsBehindMaster:  fmd.SecondsBehindMaster,
 		// implemented as AND to avoid changing all tests that were
 		// previously using Replicating = false
-		IOThreadRunningState: ioThreadRunning,
-		SQLThreadRunning:     fmd.Replicating,
-		MasterHost:           fmd.CurrentMasterHost,
-		MasterPort:           fmd.CurrentMasterPort,
+		IOThreadRunning:  ioThreadRunning,
+		SQLThreadRunning: fmd.Replicating,
+		MasterHost:       fmd.CurrentMasterHost,
+		MasterPort:       fmd.CurrentMasterPort,
 	}, nil
 }
 

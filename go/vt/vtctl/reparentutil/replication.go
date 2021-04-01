@@ -147,7 +147,7 @@ func ReplicaWasRunning(stopStatus *replicationdatapb.StopReplicationStatus) (boo
 		return false, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "could not determine Before state of StopReplicationStatus %v", stopStatus)
 	}
 
-	ioThreadRunning := stopStatus.Before.IoThreadRunningState == "Yes" || stopStatus.Before.IoThreadRunningState == "Connecting"
+	ioThreadRunning := stopStatus.Before.IoThreadRunning == "Yes" || stopStatus.Before.IoThreadRunning == "Connecting"
 
 	return ioThreadRunning || stopStatus.Before.SqlThreadRunning, nil
 }

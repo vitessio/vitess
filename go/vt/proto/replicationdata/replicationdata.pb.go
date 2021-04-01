@@ -64,7 +64,7 @@ type Status struct {
 	FileRelayLogPosition string   `protobuf:"bytes,10,opt,name=file_relay_log_position,json=fileRelayLogPosition,proto3" json:"file_relay_log_position,omitempty"`
 	MasterServerId       uint32   `protobuf:"varint,11,opt,name=master_server_id,json=masterServerId,proto3" json:"master_server_id,omitempty"`
 	MasterUuid           string   `protobuf:"bytes,12,opt,name=master_uuid,json=masterUuid,proto3" json:"master_uuid,omitempty"`
-	IoThreadRunningState string   `protobuf:"bytes,13,opt,name=io_thread_running_state,json=ioThreadRunningState,proto3" json:"io_thread_running_state,omitempty"`
+	IoThreadRunning      string   `protobuf:"bytes,13,opt,name=io_thread_running_state,json=ioThreadRunningState,proto3" json:"io_thread_running_state,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -182,7 +182,7 @@ func (m *Status) GetMasterUuid() string {
 
 func (m *Status) GetIoThreadRunningState() string {
 	if m != nil {
-		return m.IoThreadRunningState
+		return m.IoThreadRunning
 	}
 	return ""
 }
@@ -368,10 +368,10 @@ func (m *Status) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 		i -= len(m.XXX_unrecognized)
 		copy(dAtA[i:], m.XXX_unrecognized)
 	}
-	if len(m.IoThreadRunningState) > 0 {
-		i -= len(m.IoThreadRunningState)
-		copy(dAtA[i:], m.IoThreadRunningState)
-		i = encodeVarintReplicationdata(dAtA, i, uint64(len(m.IoThreadRunningState)))
+	if len(m.IoThreadRunning) > 0 {
+		i -= len(m.IoThreadRunning)
+		copy(dAtA[i:], m.IoThreadRunning)
+		i = encodeVarintReplicationdata(dAtA, i, uint64(len(m.IoThreadRunning)))
 		i--
 		dAtA[i] = 0x6a
 	}
@@ -598,7 +598,7 @@ func (m *Status) Size() (n int) {
 	if l > 0 {
 		n += 1 + l + sovReplicationdata(uint64(l))
 	}
-	l = len(m.IoThreadRunningState)
+	l = len(m.IoThreadRunning)
 	if l > 0 {
 		n += 1 + l + sovReplicationdata(uint64(l))
 	}
@@ -1001,7 +1001,7 @@ func (m *Status) Unmarshal(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.IoThreadRunningState = string(dAtA[iNdEx:postIndex])
+			m.IoThreadRunning = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex

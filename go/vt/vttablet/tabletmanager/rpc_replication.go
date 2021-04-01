@@ -553,7 +553,7 @@ func (tm *TabletManager) setMasterLocked(ctx context.Context, parentAlias *topod
 		// Abort on any other non-nil error.
 		return err
 	}
-	if status.IOThreadRunning() || status.SQLThreadRunning {
+	if status.IOThreadIsRunning() || status.SQLThreadRunning {
 		wasReplicating = true
 		shouldbeReplicating = true
 	}
@@ -658,7 +658,7 @@ func (tm *TabletManager) StopReplicationAndGetStatus(ctx context.Context, stopRe
 	before := mysql.ReplicationStatusToProto(rs)
 
 	if stopReplicationMode == replicationdatapb.StopReplicationMode_IOTHREADONLY {
-		if !rs.IOThreadRunning() {
+		if !rs.IOThreadIsRunning() {
 			return StopReplicationAndGetStatusResponse{
 				HybridStatus: before,
 				Status: &replicationdatapb.StopReplicationStatus{
@@ -675,7 +675,7 @@ func (tm *TabletManager) StopReplicationAndGetStatus(ctx context.Context, stopRe
 			}, vterrors.Wrap(err, "stop io thread failed")
 		}
 	} else {
-		if !rs.IOThreadRunning() && !rs.SQLThreadRunning {
+		if !rs.IOThreadIsRunning() && !rs.SQLThreadRunning {
 			// no replication is running, just return what we got
 			return StopReplicationAndGetStatusResponse{
 				HybridStatus: before,
@@ -806,7 +806,7 @@ func (tm *TabletManager) fixSemiSyncAndReplication(tabletType topodatapb.TabletT
 		// Replication is not configured, nothing to do.
 		return nil
 	}
-	if !status.IOThreadRunning() {
+	if !status.IOThreadIsRunning() {
 		// IO thread is not running, nothing to do.
 		return nil
 	}
