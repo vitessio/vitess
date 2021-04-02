@@ -296,7 +296,14 @@ func planRouteOrdering(orderBy sqlparser.OrderBy, node *route) (logicalPlan, err
 					if i < colNumber {
 						tableName := starExpr.TableName
 						tableMap := node.resultColumns[i].column.st.tables
-						tableMeta := tableMap[tableName]
+						var tableMeta *table
+						if tableName.IsEmpty() && len(tableMap) == 1 {
+							for j := range tableMap {
+								tableMeta = tableMap[j]
+							}
+						} else {
+							tableMeta = tableMap[tableName]
+						}
 						if tableMeta == nil {
 							break
 						}
