@@ -2340,9 +2340,9 @@ drop_statement:
   {
     $$ = &DropView{FromTables: $5, IfExists: $4}
   }
-| DROP comment_opt database_or_schema comment_opt exists_opt table_id
+| DROP comment_opt database_or_schema exists_opt table_id
   {
-    $$ = &DropDatabase{Comments: Comments($4), DBName: $6, IfExists: $5}
+    $$ = &DropDatabase{Comments: Comments($2), DBName: $5, IfExists: $4}
   }
 
 truncate_statement:

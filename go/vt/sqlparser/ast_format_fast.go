@@ -253,8 +253,9 @@ func (node *DropDatabase) formatFast(buf *TrackedBuffer) {
 		exists = "if exists "
 	}
 	buf.WriteString(DropStr)
-	buf.WriteString(" database ")
+	buf.WriteByte(' ')
 	node.Comments.formatFast(buf)
+	buf.WriteString("database ")
 	buf.WriteString(exists)
 	node.DBName.formatFast(buf)
 }

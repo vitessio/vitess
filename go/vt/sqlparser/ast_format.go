@@ -153,7 +153,7 @@ func (node *DropDatabase) Format(buf *TrackedBuffer) {
 	if node.IfExists {
 		exists = "if exists "
 	}
-	buf.astPrintf(node, "%s database %v%s%v", DropStr, node.Comments, exists, node.DBName)
+	buf.astPrintf(node, "%s %vdatabase %s%v", DropStr, node.Comments, exists, node.DBName)
 }
 
 // Format formats the node.

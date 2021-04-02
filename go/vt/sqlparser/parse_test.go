@@ -1818,12 +1818,12 @@ var (
 		input:  "CREATE DATABASE /*!32312 IF NOT EXISTS*/ `mysql` /*!40100 DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci */ /*!80016 DEFAULT ENCRYPTION='N' */;",
 		output: "create database if not exists mysql default character set utf8mb4 collate utf8mb4_0900_ai_ci",
 	}, {
-		input: "drop database /* simple */ test_db",
+		input: "drop /* simple */ database test_db",
 	}, {
 		input:  "drop schema test_db",
 		output: "drop database test_db",
 	}, {
-		input: "drop database /* simple */ if exists test_db",
+		input: "drop /* simple */ database if exists test_db",
 	}, {
 		input:  "delete a.*, b.* from tbl_a a, tbl_b b where a.id = b.id and b.name = 'test'",
 		output: "delete a, b from tbl_a as a, tbl_b as b where a.id = b.id and b.`name` = 'test'",
