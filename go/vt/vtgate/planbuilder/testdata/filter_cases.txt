@@ -1869,19 +1869,40 @@ Gen4 plan same as above
         "Vindex": "user_index"
       },
       {
-        "OperatorType": "Route",
-        "Variant": "SelectIN",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select id from `user` where 1 != 1",
-        "Query": "select id from `user` where :__sq_has_values1 = 1 and id in ::__vals and not (:__sq_has_values2 = 1 and id in ::__sq2)",
-        "Table": "`user`",
-        "Values": [
-          "::__sq1"
-        ],
-        "Vindex": "user_index"
+        "OperatorType": "Subquery",
+        "Variant": "PulloutIn",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectEqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select user_extra.col from user_extra where 1 != 1",
+            "Query": "select user_extra.col from user_extra where user_extra.user_id = 411",
+            "Table": "user_extra",
+            "Values": [
+              411
+            ],
+            "Vindex": "user_index"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectIN",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id from `user` where 1 != 1",
+            "Query": "select id from `user` where :__sq_has_values1 = 1 and id in ::__vals and not (:__sq_has_values2 = 1 and id in ::__sq2)",
+            "Table": "`user`",
+            "Values": [
+              "::__sq1"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
       }
     ]
   }

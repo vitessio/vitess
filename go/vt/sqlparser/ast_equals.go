@@ -1002,9 +1002,9 @@ func EqualsRefOfAlterDatabase(a, b *AlterDatabase) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return a.DBName == b.DBName &&
-		a.UpdateDataDirectory == b.UpdateDataDirectory &&
+	return a.UpdateDataDirectory == b.UpdateDataDirectory &&
 		a.FullyParsed == b.FullyParsed &&
+		EqualsTableIdent(a.DBName, b.DBName) &&
 		EqualsSliceOfCollateAndCharset(a.AlterOptions, b.AlterOptions)
 }
 
@@ -1286,7 +1286,7 @@ func EqualsRefOfConstraintDefinition(a, b *ConstraintDefinition) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return a.Name == b.Name &&
+	return EqualsColIdent(a.Name, b.Name) &&
 		EqualsConstraintInfo(a.Details, b.Details)
 }
 
@@ -1337,10 +1337,10 @@ func EqualsRefOfCreateDatabase(a, b *CreateDatabase) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return a.DBName == b.DBName &&
-		a.IfNotExists == b.IfNotExists &&
+	return a.IfNotExists == b.IfNotExists &&
 		a.FullyParsed == b.FullyParsed &&
 		EqualsComments(a.Comments, b.Comments) &&
+		EqualsTableIdent(a.DBName, b.DBName) &&
 		EqualsSliceOfCollateAndCharset(a.CreateOptions, b.CreateOptions)
 }
 
@@ -1449,9 +1449,9 @@ func EqualsRefOfDropDatabase(a, b *DropDatabase) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return a.DBName == b.DBName &&
-		a.IfExists == b.IfExists &&
-		EqualsComments(a.Comments, b.Comments)
+	return a.IfExists == b.IfExists &&
+		EqualsComments(a.Comments, b.Comments) &&
+		EqualsTableIdent(a.DBName, b.DBName)
 }
 
 // EqualsRefOfDropKey does deep equals between the two objects.
@@ -1462,8 +1462,8 @@ func EqualsRefOfDropKey(a, b *DropKey) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return a.Name == b.Name &&
-		a.Type == b.Type
+	return a.Type == b.Type &&
+		EqualsColIdent(a.Name, b.Name)
 }
 
 // EqualsRefOfDropTable does deep equals between the two objects.
@@ -2058,8 +2058,8 @@ func EqualsRefOfRenameIndex(a, b *RenameIndex) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return a.OldName == b.OldName &&
-		a.NewName == b.NewName
+	return EqualsColIdent(a.OldName, b.OldName) &&
+		EqualsColIdent(a.NewName, b.NewName)
 }
 
 // EqualsRefOfRenameTable does deep equals between the two objects.
@@ -2254,9 +2254,9 @@ func EqualsRefOfShowBasic(a, b *ShowBasic) bool {
 		return false
 	}
 	return a.Full == b.Full &&
-		a.DbName == b.DbName &&
 		a.Command == b.Command &&
 		EqualsTableName(a.Tbl, b.Tbl) &&
+		EqualsTableIdent(a.DbName, b.DbName) &&
 		EqualsRefOfShowFilter(a.Filter, b.Filter)
 }
 
@@ -3769,8 +3769,8 @@ func EqualsRefOfColumnTypeOptions(a, b *ColumnTypeOptions) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return a.NotNull == b.NotNull &&
-		a.Autoincrement == b.Autoincrement &&
+	return a.Autoincrement == b.Autoincrement &&
+		EqualsRefOfBool(a.Null, b.Null) &&
 		EqualsExpr(a.Default, b.Default) &&
 		EqualsExpr(a.OnUpdate, b.OnUpdate) &&
 		EqualsRefOfLiteral(a.Comment, b.Comment) &&

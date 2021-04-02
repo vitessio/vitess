@@ -1233,6 +1233,7 @@ $root.vtadmin = (function() {
          * @property {vtadmin.ICluster|null} [cluster] Schema cluster
          * @property {string|null} [keyspace] Schema keyspace
          * @property {Array.<tabletmanagerdata.ITableDefinition>|null} [table_definitions] Schema table_definitions
+         * @property {Object.<string,vtadmin.Schema.ITableSize>|null} [table_sizes] Schema table_sizes
          */
 
         /**
@@ -1245,6 +1246,7 @@ $root.vtadmin = (function() {
          */
         function Schema(properties) {
             this.table_definitions = [];
+            this.table_sizes = {};
             if (properties)
                 for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
                     if (properties[keys[i]] != null)
@@ -1274,6 +1276,14 @@ $root.vtadmin = (function() {
          * @instance
          */
         Schema.prototype.table_definitions = $util.emptyArray;
+
+        /**
+         * Schema table_sizes.
+         * @member {Object.<string,vtadmin.Schema.ITableSize>} table_sizes
+         * @memberof vtadmin.Schema
+         * @instance
+         */
+        Schema.prototype.table_sizes = $util.emptyObject;
 
         /**
          * Creates a new Schema instance using the specified properties.
@@ -1306,6 +1316,11 @@ $root.vtadmin = (function() {
             if (message.table_definitions != null && message.table_definitions.length)
                 for (var i = 0; i < message.table_definitions.length; ++i)
                     $root.tabletmanagerdata.TableDefinition.encode(message.table_definitions[i], writer.uint32(/* id 3, wireType 2 =*/26).fork()).ldelim();
+            if (message.table_sizes != null && Object.hasOwnProperty.call(message, "table_sizes"))
+                for (var keys = Object.keys(message.table_sizes), i = 0; i < keys.length; ++i) {
+                    writer.uint32(/* id 4, wireType 2 =*/34).fork().uint32(/* id 1, wireType 2 =*/10).string(keys[i]);
+                    $root.vtadmin.Schema.TableSize.encode(message.table_sizes[keys[i]], writer.uint32(/* id 2, wireType 2 =*/18).fork()).ldelim().ldelim();
+                }
             return writer;
         };
 
@@ -1336,7 +1351,7 @@ $root.vtadmin = (function() {
         Schema.decode = function decode(reader, length) {
             if (!(reader instanceof $Reader))
                 reader = $Reader.create(reader);
-            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.Schema();
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.Schema(), key, value;
             while (reader.pos < end) {
                 var tag = reader.uint32();
                 switch (tag >>> 3) {
@@ -1350,6 +1365,28 @@ $root.vtadmin = (function() {
                     if (!(message.table_definitions && message.table_definitions.length))
                         message.table_definitions = [];
                     message.table_definitions.push($root.tabletmanagerdata.TableDefinition.decode(reader, reader.uint32()));
+                    break;
+                case 4:
+                    if (message.table_sizes === $util.emptyObject)
+                        message.table_sizes = {};
+                    var end2 = reader.uint32() + reader.pos;
+                    key = "";
+                    value = null;
+                    while (reader.pos < end2) {
+                        var tag2 = reader.uint32();
+                        switch (tag2 >>> 3) {
+                        case 1:
+                            key = reader.string();
+                            break;
+                        case 2:
+                            value = $root.vtadmin.Schema.TableSize.decode(reader, reader.uint32());
+                            break;
+                        default:
+                            reader.skipType(tag2 & 7);
+                            break;
+                        }
+                    }
+                    message.table_sizes[key] = value;
                     break;
                 default:
                     reader.skipType(tag & 7);
@@ -1403,6 +1440,16 @@ $root.vtadmin = (function() {
                         return "table_definitions." + error;
                 }
             }
+            if (message.table_sizes != null && message.hasOwnProperty("table_sizes")) {
+                if (!$util.isObject(message.table_sizes))
+                    return "table_sizes: object expected";
+                var key = Object.keys(message.table_sizes);
+                for (var i = 0; i < key.length; ++i) {
+                    var error = $root.vtadmin.Schema.TableSize.verify(message.table_sizes[key[i]]);
+                    if (error)
+                        return "table_sizes." + error;
+                }
+            }
             return null;
         };
 
@@ -1435,6 +1482,16 @@ $root.vtadmin = (function() {
                     message.table_definitions[i] = $root.tabletmanagerdata.TableDefinition.fromObject(object.table_definitions[i]);
                 }
             }
+            if (object.table_sizes) {
+                if (typeof object.table_sizes !== "object")
+                    throw TypeError(".vtadmin.Schema.table_sizes: object expected");
+                message.table_sizes = {};
+                for (var keys = Object.keys(object.table_sizes), i = 0; i < keys.length; ++i) {
+                    if (typeof object.table_sizes[keys[i]] !== "object")
+                        throw TypeError(".vtadmin.Schema.table_sizes: object expected");
+                    message.table_sizes[keys[i]] = $root.vtadmin.Schema.TableSize.fromObject(object.table_sizes[keys[i]]);
+                }
+            }
             return message;
         };
 
@@ -1453,6 +1510,8 @@ $root.vtadmin = (function() {
             var object = {};
             if (options.arrays || options.defaults)
                 object.table_definitions = [];
+            if (options.objects || options.defaults)
+                object.table_sizes = {};
             if (options.defaults) {
                 object.cluster = null;
                 object.keyspace = "";
@@ -1465,6 +1524,12 @@ $root.vtadmin = (function() {
                 object.table_definitions = [];
                 for (var j = 0; j < message.table_definitions.length; ++j)
                     object.table_definitions[j] = $root.tabletmanagerdata.TableDefinition.toObject(message.table_definitions[j], options);
+            }
+            var keys2;
+            if (message.table_sizes && (keys2 = Object.keys(message.table_sizes)).length) {
+                object.table_sizes = {};
+                for (var j = 0; j < keys2.length; ++j)
+                    object.table_sizes[keys2[j]] = $root.vtadmin.Schema.TableSize.toObject(message.table_sizes[keys2[j]], options);
             }
             return object;
         };
@@ -1479,6 +1544,547 @@ $root.vtadmin = (function() {
         Schema.prototype.toJSON = function toJSON() {
             return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
         };
+
+        Schema.ShardTableSize = (function() {
+
+            /**
+             * Properties of a ShardTableSize.
+             * @memberof vtadmin.Schema
+             * @interface IShardTableSize
+             * @property {number|Long|null} [row_count] ShardTableSize row_count
+             * @property {number|Long|null} [data_length] ShardTableSize data_length
+             */
+
+            /**
+             * Constructs a new ShardTableSize.
+             * @memberof vtadmin.Schema
+             * @classdesc Represents a ShardTableSize.
+             * @implements IShardTableSize
+             * @constructor
+             * @param {vtadmin.Schema.IShardTableSize=} [properties] Properties to set
+             */
+            function ShardTableSize(properties) {
+                if (properties)
+                    for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                        if (properties[keys[i]] != null)
+                            this[keys[i]] = properties[keys[i]];
+            }
+
+            /**
+             * ShardTableSize row_count.
+             * @member {number|Long} row_count
+             * @memberof vtadmin.Schema.ShardTableSize
+             * @instance
+             */
+            ShardTableSize.prototype.row_count = $util.Long ? $util.Long.fromBits(0,0,true) : 0;
+
+            /**
+             * ShardTableSize data_length.
+             * @member {number|Long} data_length
+             * @memberof vtadmin.Schema.ShardTableSize
+             * @instance
+             */
+            ShardTableSize.prototype.data_length = $util.Long ? $util.Long.fromBits(0,0,true) : 0;
+
+            /**
+             * Creates a new ShardTableSize instance using the specified properties.
+             * @function create
+             * @memberof vtadmin.Schema.ShardTableSize
+             * @static
+             * @param {vtadmin.Schema.IShardTableSize=} [properties] Properties to set
+             * @returns {vtadmin.Schema.ShardTableSize} ShardTableSize instance
+             */
+            ShardTableSize.create = function create(properties) {
+                return new ShardTableSize(properties);
+            };
+
+            /**
+             * Encodes the specified ShardTableSize message. Does not implicitly {@link vtadmin.Schema.ShardTableSize.verify|verify} messages.
+             * @function encode
+             * @memberof vtadmin.Schema.ShardTableSize
+             * @static
+             * @param {vtadmin.Schema.IShardTableSize} message ShardTableSize message or plain object to encode
+             * @param {$protobuf.Writer} [writer] Writer to encode to
+             * @returns {$protobuf.Writer} Writer
+             */
+            ShardTableSize.encode = function encode(message, writer) {
+                if (!writer)
+                    writer = $Writer.create();
+                if (message.row_count != null && Object.hasOwnProperty.call(message, "row_count"))
+                    writer.uint32(/* id 1, wireType 0 =*/8).uint64(message.row_count);
+                if (message.data_length != null && Object.hasOwnProperty.call(message, "data_length"))
+                    writer.uint32(/* id 2, wireType 0 =*/16).uint64(message.data_length);
+                return writer;
+            };
+
+            /**
+             * Encodes the specified ShardTableSize message, length delimited. Does not implicitly {@link vtadmin.Schema.ShardTableSize.verify|verify} messages.
+             * @function encodeDelimited
+             * @memberof vtadmin.Schema.ShardTableSize
+             * @static
+             * @param {vtadmin.Schema.IShardTableSize} message ShardTableSize message or plain object to encode
+             * @param {$protobuf.Writer} [writer] Writer to encode to
+             * @returns {$protobuf.Writer} Writer
+             */
+            ShardTableSize.encodeDelimited = function encodeDelimited(message, writer) {
+                return this.encode(message, writer).ldelim();
+            };
+
+            /**
+             * Decodes a ShardTableSize message from the specified reader or buffer.
+             * @function decode
+             * @memberof vtadmin.Schema.ShardTableSize
+             * @static
+             * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+             * @param {number} [length] Message length if known beforehand
+             * @returns {vtadmin.Schema.ShardTableSize} ShardTableSize
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            ShardTableSize.decode = function decode(reader, length) {
+                if (!(reader instanceof $Reader))
+                    reader = $Reader.create(reader);
+                var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.Schema.ShardTableSize();
+                while (reader.pos < end) {
+                    var tag = reader.uint32();
+                    switch (tag >>> 3) {
+                    case 1:
+                        message.row_count = reader.uint64();
+                        break;
+                    case 2:
+                        message.data_length = reader.uint64();
+                        break;
+                    default:
+                        reader.skipType(tag & 7);
+                        break;
+                    }
+                }
+                return message;
+            };
+
+            /**
+             * Decodes a ShardTableSize message from the specified reader or buffer, length delimited.
+             * @function decodeDelimited
+             * @memberof vtadmin.Schema.ShardTableSize
+             * @static
+             * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+             * @returns {vtadmin.Schema.ShardTableSize} ShardTableSize
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            ShardTableSize.decodeDelimited = function decodeDelimited(reader) {
+                if (!(reader instanceof $Reader))
+                    reader = new $Reader(reader);
+                return this.decode(reader, reader.uint32());
+            };
+
+            /**
+             * Verifies a ShardTableSize message.
+             * @function verify
+             * @memberof vtadmin.Schema.ShardTableSize
+             * @static
+             * @param {Object.<string,*>} message Plain object to verify
+             * @returns {string|null} `null` if valid, otherwise the reason why it is not
+             */
+            ShardTableSize.verify = function verify(message) {
+                if (typeof message !== "object" || message === null)
+                    return "object expected";
+                if (message.row_count != null && message.hasOwnProperty("row_count"))
+                    if (!$util.isInteger(message.row_count) && !(message.row_count && $util.isInteger(message.row_count.low) && $util.isInteger(message.row_count.high)))
+                        return "row_count: integer|Long expected";
+                if (message.data_length != null && message.hasOwnProperty("data_length"))
+                    if (!$util.isInteger(message.data_length) && !(message.data_length && $util.isInteger(message.data_length.low) && $util.isInteger(message.data_length.high)))
+                        return "data_length: integer|Long expected";
+                return null;
+            };
+
+            /**
+             * Creates a ShardTableSize message from a plain object. Also converts values to their respective internal types.
+             * @function fromObject
+             * @memberof vtadmin.Schema.ShardTableSize
+             * @static
+             * @param {Object.<string,*>} object Plain object
+             * @returns {vtadmin.Schema.ShardTableSize} ShardTableSize
+             */
+            ShardTableSize.fromObject = function fromObject(object) {
+                if (object instanceof $root.vtadmin.Schema.ShardTableSize)
+                    return object;
+                var message = new $root.vtadmin.Schema.ShardTableSize();
+                if (object.row_count != null)
+                    if ($util.Long)
+                        (message.row_count = $util.Long.fromValue(object.row_count)).unsigned = true;
+                    else if (typeof object.row_count === "string")
+                        message.row_count = parseInt(object.row_count, 10);
+                    else if (typeof object.row_count === "number")
+                        message.row_count = object.row_count;
+                    else if (typeof object.row_count === "object")
+                        message.row_count = new $util.LongBits(object.row_count.low >>> 0, object.row_count.high >>> 0).toNumber(true);
+                if (object.data_length != null)
+                    if ($util.Long)
+                        (message.data_length = $util.Long.fromValue(object.data_length)).unsigned = true;
+                    else if (typeof object.data_length === "string")
+                        message.data_length = parseInt(object.data_length, 10);
+                    else if (typeof object.data_length === "number")
+                        message.data_length = object.data_length;
+                    else if (typeof object.data_length === "object")
+                        message.data_length = new $util.LongBits(object.data_length.low >>> 0, object.data_length.high >>> 0).toNumber(true);
+                return message;
+            };
+
+            /**
+             * Creates a plain object from a ShardTableSize message. Also converts values to other types if specified.
+             * @function toObject
+             * @memberof vtadmin.Schema.ShardTableSize
+             * @static
+             * @param {vtadmin.Schema.ShardTableSize} message ShardTableSize
+             * @param {$protobuf.IConversionOptions} [options] Conversion options
+             * @returns {Object.<string,*>} Plain object
+             */
+            ShardTableSize.toObject = function toObject(message, options) {
+                if (!options)
+                    options = {};
+                var object = {};
+                if (options.defaults) {
+                    if ($util.Long) {
+                        var long = new $util.Long(0, 0, true);
+                        object.row_count = options.longs === String ? long.toString() : options.longs === Number ? long.toNumber() : long;
+                    } else
+                        object.row_count = options.longs === String ? "0" : 0;
+                    if ($util.Long) {
+                        var long = new $util.Long(0, 0, true);
+                        object.data_length = options.longs === String ? long.toString() : options.longs === Number ? long.toNumber() : long;
+                    } else
+                        object.data_length = options.longs === String ? "0" : 0;
+                }
+                if (message.row_count != null && message.hasOwnProperty("row_count"))
+                    if (typeof message.row_count === "number")
+                        object.row_count = options.longs === String ? String(message.row_count) : message.row_count;
+                    else
+                        object.row_count = options.longs === String ? $util.Long.prototype.toString.call(message.row_count) : options.longs === Number ? new $util.LongBits(message.row_count.low >>> 0, message.row_count.high >>> 0).toNumber(true) : message.row_count;
+                if (message.data_length != null && message.hasOwnProperty("data_length"))
+                    if (typeof message.data_length === "number")
+                        object.data_length = options.longs === String ? String(message.data_length) : message.data_length;
+                    else
+                        object.data_length = options.longs === String ? $util.Long.prototype.toString.call(message.data_length) : options.longs === Number ? new $util.LongBits(message.data_length.low >>> 0, message.data_length.high >>> 0).toNumber(true) : message.data_length;
+                return object;
+            };
+
+            /**
+             * Converts this ShardTableSize to JSON.
+             * @function toJSON
+             * @memberof vtadmin.Schema.ShardTableSize
+             * @instance
+             * @returns {Object.<string,*>} JSON object
+             */
+            ShardTableSize.prototype.toJSON = function toJSON() {
+                return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+            };
+
+            return ShardTableSize;
+        })();
+
+        Schema.TableSize = (function() {
+
+            /**
+             * Properties of a TableSize.
+             * @memberof vtadmin.Schema
+             * @interface ITableSize
+             * @property {number|Long|null} [row_count] TableSize row_count
+             * @property {number|Long|null} [data_length] TableSize data_length
+             * @property {Object.<string,vtadmin.Schema.IShardTableSize>|null} [by_shard] TableSize by_shard
+             */
+
+            /**
+             * Constructs a new TableSize.
+             * @memberof vtadmin.Schema
+             * @classdesc Represents a TableSize.
+             * @implements ITableSize
+             * @constructor
+             * @param {vtadmin.Schema.ITableSize=} [properties] Properties to set
+             */
+            function TableSize(properties) {
+                this.by_shard = {};
+                if (properties)
+                    for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                        if (properties[keys[i]] != null)
+                            this[keys[i]] = properties[keys[i]];
+            }
+
+            /**
+             * TableSize row_count.
+             * @member {number|Long} row_count
+             * @memberof vtadmin.Schema.TableSize
+             * @instance
+             */
+            TableSize.prototype.row_count = $util.Long ? $util.Long.fromBits(0,0,true) : 0;
+
+            /**
+             * TableSize data_length.
+             * @member {number|Long} data_length
+             * @memberof vtadmin.Schema.TableSize
+             * @instance
+             */
+            TableSize.prototype.data_length = $util.Long ? $util.Long.fromBits(0,0,true) : 0;
+
+            /**
+             * TableSize by_shard.
+             * @member {Object.<string,vtadmin.Schema.IShardTableSize>} by_shard
+             * @memberof vtadmin.Schema.TableSize
+             * @instance
+             */
+            TableSize.prototype.by_shard = $util.emptyObject;
+
+            /**
+             * Creates a new TableSize instance using the specified properties.
+             * @function create
+             * @memberof vtadmin.Schema.TableSize
+             * @static
+             * @param {vtadmin.Schema.ITableSize=} [properties] Properties to set
+             * @returns {vtadmin.Schema.TableSize} TableSize instance
+             */
+            TableSize.create = function create(properties) {
+                return new TableSize(properties);
+            };
+
+            /**
+             * Encodes the specified TableSize message. Does not implicitly {@link vtadmin.Schema.TableSize.verify|verify} messages.
+             * @function encode
+             * @memberof vtadmin.Schema.TableSize
+             * @static
+             * @param {vtadmin.Schema.ITableSize} message TableSize message or plain object to encode
+             * @param {$protobuf.Writer} [writer] Writer to encode to
+             * @returns {$protobuf.Writer} Writer
+             */
+            TableSize.encode = function encode(message, writer) {
+                if (!writer)
+                    writer = $Writer.create();
+                if (message.row_count != null && Object.hasOwnProperty.call(message, "row_count"))
+                    writer.uint32(/* id 1, wireType 0 =*/8).uint64(message.row_count);
+                if (message.data_length != null && Object.hasOwnProperty.call(message, "data_length"))
+                    writer.uint32(/* id 2, wireType 0 =*/16).uint64(message.data_length);
+                if (message.by_shard != null && Object.hasOwnProperty.call(message, "by_shard"))
+                    for (var keys = Object.keys(message.by_shard), i = 0; i < keys.length; ++i) {
+                        writer.uint32(/* id 3, wireType 2 =*/26).fork().uint32(/* id 1, wireType 2 =*/10).string(keys[i]);
+                        $root.vtadmin.Schema.ShardTableSize.encode(message.by_shard[keys[i]], writer.uint32(/* id 2, wireType 2 =*/18).fork()).ldelim().ldelim();
+                    }
+                return writer;
+            };
+
+            /**
+             * Encodes the specified TableSize message, length delimited. Does not implicitly {@link vtadmin.Schema.TableSize.verify|verify} messages.
+             * @function encodeDelimited
+             * @memberof vtadmin.Schema.TableSize
+             * @static
+             * @param {vtadmin.Schema.ITableSize} message TableSize message or plain object to encode
+             * @param {$protobuf.Writer} [writer] Writer to encode to
+             * @returns {$protobuf.Writer} Writer
+             */
+            TableSize.encodeDelimited = function encodeDelimited(message, writer) {
+                return this.encode(message, writer).ldelim();
+            };
+
+            /**
+             * Decodes a TableSize message from the specified reader or buffer.
+             * @function decode
+             * @memberof vtadmin.Schema.TableSize
+             * @static
+             * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+             * @param {number} [length] Message length if known beforehand
+             * @returns {vtadmin.Schema.TableSize} TableSize
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            TableSize.decode = function decode(reader, length) {
+                if (!(reader instanceof $Reader))
+                    reader = $Reader.create(reader);
+                var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.Schema.TableSize(), key, value;
+                while (reader.pos < end) {
+                    var tag = reader.uint32();
+                    switch (tag >>> 3) {
+                    case 1:
+                        message.row_count = reader.uint64();
+                        break;
+                    case 2:
+                        message.data_length = reader.uint64();
+                        break;
+                    case 3:
+                        if (message.by_shard === $util.emptyObject)
+                            message.by_shard = {};
+                        var end2 = reader.uint32() + reader.pos;
+                        key = "";
+                        value = null;
+                        while (reader.pos < end2) {
+                            var tag2 = reader.uint32();
+                            switch (tag2 >>> 3) {
+                            case 1:
+                                key = reader.string();
+                                break;
+                            case 2:
+                                value = $root.vtadmin.Schema.ShardTableSize.decode(reader, reader.uint32());
+                                break;
+                            default:
+                                reader.skipType(tag2 & 7);
+                                break;
+                            }
+                        }
+                        message.by_shard[key] = value;
+                        break;
+                    default:
+                        reader.skipType(tag & 7);
+                        break;
+                    }
+                }
+                return message;
+            };
+
+            /**
+             * Decodes a TableSize message from the specified reader or buffer, length delimited.
+             * @function decodeDelimited
+             * @memberof vtadmin.Schema.TableSize
+             * @static
+             * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+             * @returns {vtadmin.Schema.TableSize} TableSize
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            TableSize.decodeDelimited = function decodeDelimited(reader) {
+                if (!(reader instanceof $Reader))
+                    reader = new $Reader(reader);
+                return this.decode(reader, reader.uint32());
+            };
+
+            /**
+             * Verifies a TableSize message.
+             * @function verify
+             * @memberof vtadmin.Schema.TableSize
+             * @static
+             * @param {Object.<string,*>} message Plain object to verify
+             * @returns {string|null} `null` if valid, otherwise the reason why it is not
+             */
+            TableSize.verify = function verify(message) {
+                if (typeof message !== "object" || message === null)
+                    return "object expected";
+                if (message.row_count != null && message.hasOwnProperty("row_count"))
+                    if (!$util.isInteger(message.row_count) && !(message.row_count && $util.isInteger(message.row_count.low) && $util.isInteger(message.row_count.high)))
+                        return "row_count: integer|Long expected";
+                if (message.data_length != null && message.hasOwnProperty("data_length"))
+                    if (!$util.isInteger(message.data_length) && !(message.data_length && $util.isInteger(message.data_length.low) && $util.isInteger(message.data_length.high)))
+                        return "data_length: integer|Long expected";
+                if (message.by_shard != null && message.hasOwnProperty("by_shard")) {
+                    if (!$util.isObject(message.by_shard))
+                        return "by_shard: object expected";
+                    var key = Object.keys(message.by_shard);
+                    for (var i = 0; i < key.length; ++i) {
+                        var error = $root.vtadmin.Schema.ShardTableSize.verify(message.by_shard[key[i]]);
+                        if (error)
+                            return "by_shard." + error;
+                    }
+                }
+                return null;
+            };
+
+            /**
+             * Creates a TableSize message from a plain object. Also converts values to their respective internal types.
+             * @function fromObject
+             * @memberof vtadmin.Schema.TableSize
+             * @static
+             * @param {Object.<string,*>} object Plain object
+             * @returns {vtadmin.Schema.TableSize} TableSize
+             */
+            TableSize.fromObject = function fromObject(object) {
+                if (object instanceof $root.vtadmin.Schema.TableSize)
+                    return object;
+                var message = new $root.vtadmin.Schema.TableSize();
+                if (object.row_count != null)
+                    if ($util.Long)
+                        (message.row_count = $util.Long.fromValue(object.row_count)).unsigned = true;
+                    else if (typeof object.row_count === "string")
+                        message.row_count = parseInt(object.row_count, 10);
+                    else if (typeof object.row_count === "number")
+                        message.row_count = object.row_count;
+                    else if (typeof object.row_count === "object")
+                        message.row_count = new $util.LongBits(object.row_count.low >>> 0, object.row_count.high >>> 0).toNumber(true);
+                if (object.data_length != null)
+                    if ($util.Long)
+                        (message.data_length = $util.Long.fromValue(object.data_length)).unsigned = true;
+                    else if (typeof object.data_length === "string")
+                        message.data_length = parseInt(object.data_length, 10);
+                    else if (typeof object.data_length === "number")
+                        message.data_length = object.data_length;
+                    else if (typeof object.data_length === "object")
+                        message.data_length = new $util.LongBits(object.data_length.low >>> 0, object.data_length.high >>> 0).toNumber(true);
+                if (object.by_shard) {
+                    if (typeof object.by_shard !== "object")
+                        throw TypeError(".vtadmin.Schema.TableSize.by_shard: object expected");
+                    message.by_shard = {};
+                    for (var keys = Object.keys(object.by_shard), i = 0; i < keys.length; ++i) {
+                        if (typeof object.by_shard[keys[i]] !== "object")
+                            throw TypeError(".vtadmin.Schema.TableSize.by_shard: object expected");
+                        message.by_shard[keys[i]] = $root.vtadmin.Schema.ShardTableSize.fromObject(object.by_shard[keys[i]]);
+                    }
+                }
+                return message;
+            };
+
+            /**
+             * Creates a plain object from a TableSize message. Also converts values to other types if specified.
+             * @function toObject
+             * @memberof vtadmin.Schema.TableSize
+             * @static
+             * @param {vtadmin.Schema.TableSize} message TableSize
+             * @param {$protobuf.IConversionOptions} [options] Conversion options
+             * @returns {Object.<string,*>} Plain object
+             */
+            TableSize.toObject = function toObject(message, options) {
+                if (!options)
+                    options = {};
+                var object = {};
+                if (options.objects || options.defaults)
+                    object.by_shard = {};
+                if (options.defaults) {
+                    if ($util.Long) {
+                        var long = new $util.Long(0, 0, true);
+                        object.row_count = options.longs === String ? long.toString() : options.longs === Number ? long.toNumber() : long;
+                    } else
+                        object.row_count = options.longs === String ? "0" : 0;
+                    if ($util.Long) {
+                        var long = new $util.Long(0, 0, true);
+                        object.data_length = options.longs === String ? long.toString() : options.longs === Number ? long.toNumber() : long;
+                    } else
+                        object.data_length = options.longs === String ? "0" : 0;
+                }
+                if (message.row_count != null && message.hasOwnProperty("row_count"))
+                    if (typeof message.row_count === "number")
+                        object.row_count = options.longs === String ? String(message.row_count) : message.row_count;
+                    else
+                        object.row_count = options.longs === String ? $util.Long.prototype.toString.call(message.row_count) : options.longs === Number ? new $util.LongBits(message.row_count.low >>> 0, message.row_count.high >>> 0).toNumber(true) : message.row_count;
+                if (message.data_length != null && message.hasOwnProperty("data_length"))
+                    if (typeof message.data_length === "number")
+                        object.data_length = options.longs === String ? String(message.data_length) : message.data_length;
+                    else
+                        object.data_length = options.longs === String ? $util.Long.prototype.toString.call(message.data_length) : options.longs === Number ? new $util.LongBits(message.data_length.low >>> 0, message.data_length.high >>> 0).toNumber(true) : message.data_length;
+                var keys2;
+                if (message.by_shard && (keys2 = Object.keys(message.by_shard)).length) {
+                    object.by_shard = {};
+                    for (var j = 0; j < keys2.length; ++j)
+                        object.by_shard[keys2[j]] = $root.vtadmin.Schema.ShardTableSize.toObject(message.by_shard[keys2[j]], options);
+                }
+                return object;
+            };
+
+            /**
+             * Converts this TableSize to JSON.
+             * @function toJSON
+             * @memberof vtadmin.Schema.TableSize
+             * @instance
+             * @returns {Object.<string,*>} JSON object
+             */
+            TableSize.prototype.toJSON = function toJSON() {
+                return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+            };
+
+            return TableSize;
+        })();
 
         return Schema;
     })();
@@ -2764,6 +3370,7 @@ $root.vtadmin = (function() {
          * @interface IFindSchemaRequest
          * @property {string|null} [table] FindSchemaRequest table
          * @property {Array.<string>|null} [cluster_ids] FindSchemaRequest cluster_ids
+         * @property {vtadmin.IGetSchemaTableSizeOptions|null} [table_size_options] FindSchemaRequest table_size_options
          */
 
         /**
@@ -2799,6 +3406,14 @@ $root.vtadmin = (function() {
         FindSchemaRequest.prototype.cluster_ids = $util.emptyArray;
 
         /**
+         * FindSchemaRequest table_size_options.
+         * @member {vtadmin.IGetSchemaTableSizeOptions|null|undefined} table_size_options
+         * @memberof vtadmin.FindSchemaRequest
+         * @instance
+         */
+        FindSchemaRequest.prototype.table_size_options = null;
+
+        /**
          * Creates a new FindSchemaRequest instance using the specified properties.
          * @function create
          * @memberof vtadmin.FindSchemaRequest
@@ -2827,6 +3442,8 @@ $root.vtadmin = (function() {
             if (message.cluster_ids != null && message.cluster_ids.length)
                 for (var i = 0; i < message.cluster_ids.length; ++i)
                     writer.uint32(/* id 2, wireType 2 =*/18).string(message.cluster_ids[i]);
+            if (message.table_size_options != null && Object.hasOwnProperty.call(message, "table_size_options"))
+                $root.vtadmin.GetSchemaTableSizeOptions.encode(message.table_size_options, writer.uint32(/* id 3, wireType 2 =*/26).fork()).ldelim();
             return writer;
         };
 
@@ -2868,6 +3485,9 @@ $root.vtadmin = (function() {
                     if (!(message.cluster_ids && message.cluster_ids.length))
                         message.cluster_ids = [];
                     message.cluster_ids.push(reader.string());
+                    break;
+                case 3:
+                    message.table_size_options = $root.vtadmin.GetSchemaTableSizeOptions.decode(reader, reader.uint32());
                     break;
                 default:
                     reader.skipType(tag & 7);
@@ -2914,6 +3534,11 @@ $root.vtadmin = (function() {
                     if (!$util.isString(message.cluster_ids[i]))
                         return "cluster_ids: string[] expected";
             }
+            if (message.table_size_options != null && message.hasOwnProperty("table_size_options")) {
+                var error = $root.vtadmin.GetSchemaTableSizeOptions.verify(message.table_size_options);
+                if (error)
+                    return "table_size_options." + error;
+            }
             return null;
         };
 
@@ -2938,6 +3563,11 @@ $root.vtadmin = (function() {
                 for (var i = 0; i < object.cluster_ids.length; ++i)
                     message.cluster_ids[i] = String(object.cluster_ids[i]);
             }
+            if (object.table_size_options != null) {
+                if (typeof object.table_size_options !== "object")
+                    throw TypeError(".vtadmin.FindSchemaRequest.table_size_options: object expected");
+                message.table_size_options = $root.vtadmin.GetSchemaTableSizeOptions.fromObject(object.table_size_options);
+            }
             return message;
         };
 
@@ -2956,8 +3586,10 @@ $root.vtadmin = (function() {
             var object = {};
             if (options.arrays || options.defaults)
                 object.cluster_ids = [];
-            if (options.defaults)
+            if (options.defaults) {
                 object.table = "";
+                object.table_size_options = null;
+            }
             if (message.table != null && message.hasOwnProperty("table"))
                 object.table = message.table;
             if (message.cluster_ids && message.cluster_ids.length) {
@@ -2965,6 +3597,8 @@ $root.vtadmin = (function() {
                 for (var j = 0; j < message.cluster_ids.length; ++j)
                     object.cluster_ids[j] = message.cluster_ids[j];
             }
+            if (message.table_size_options != null && message.hasOwnProperty("table_size_options"))
+                object.table_size_options = $root.vtadmin.GetSchemaTableSizeOptions.toObject(message.table_size_options, options);
             return object;
         };
 
@@ -4181,6 +4815,7 @@ $root.vtadmin = (function() {
          * @property {string|null} [cluster_id] GetSchemaRequest cluster_id
          * @property {string|null} [keyspace] GetSchemaRequest keyspace
          * @property {string|null} [table] GetSchemaRequest table
+         * @property {vtadmin.IGetSchemaTableSizeOptions|null} [table_size_options] GetSchemaRequest table_size_options
          */
 
         /**
@@ -4223,6 +4858,14 @@ $root.vtadmin = (function() {
         GetSchemaRequest.prototype.table = "";
 
         /**
+         * GetSchemaRequest table_size_options.
+         * @member {vtadmin.IGetSchemaTableSizeOptions|null|undefined} table_size_options
+         * @memberof vtadmin.GetSchemaRequest
+         * @instance
+         */
+        GetSchemaRequest.prototype.table_size_options = null;
+
+        /**
          * Creates a new GetSchemaRequest instance using the specified properties.
          * @function create
          * @memberof vtadmin.GetSchemaRequest
@@ -4252,6 +4895,8 @@ $root.vtadmin = (function() {
                 writer.uint32(/* id 2, wireType 2 =*/18).string(message.keyspace);
             if (message.table != null && Object.hasOwnProperty.call(message, "table"))
                 writer.uint32(/* id 3, wireType 2 =*/26).string(message.table);
+            if (message.table_size_options != null && Object.hasOwnProperty.call(message, "table_size_options"))
+                $root.vtadmin.GetSchemaTableSizeOptions.encode(message.table_size_options, writer.uint32(/* id 4, wireType 2 =*/34).fork()).ldelim();
             return writer;
         };
 
@@ -4294,6 +4939,9 @@ $root.vtadmin = (function() {
                     break;
                 case 3:
                     message.table = reader.string();
+                    break;
+                case 4:
+                    message.table_size_options = $root.vtadmin.GetSchemaTableSizeOptions.decode(reader, reader.uint32());
                     break;
                 default:
                     reader.skipType(tag & 7);
@@ -4339,6 +4987,11 @@ $root.vtadmin = (function() {
             if (message.table != null && message.hasOwnProperty("table"))
                 if (!$util.isString(message.table))
                     return "table: string expected";
+            if (message.table_size_options != null && message.hasOwnProperty("table_size_options")) {
+                var error = $root.vtadmin.GetSchemaTableSizeOptions.verify(message.table_size_options);
+                if (error)
+                    return "table_size_options." + error;
+            }
             return null;
         };
 
@@ -4360,6 +5013,11 @@ $root.vtadmin = (function() {
                 message.keyspace = String(object.keyspace);
             if (object.table != null)
                 message.table = String(object.table);
+            if (object.table_size_options != null) {
+                if (typeof object.table_size_options !== "object")
+                    throw TypeError(".vtadmin.GetSchemaRequest.table_size_options: object expected");
+                message.table_size_options = $root.vtadmin.GetSchemaTableSizeOptions.fromObject(object.table_size_options);
+            }
             return message;
         };
 
@@ -4380,6 +5038,7 @@ $root.vtadmin = (function() {
                 object.cluster_id = "";
                 object.keyspace = "";
                 object.table = "";
+                object.table_size_options = null;
             }
             if (message.cluster_id != null && message.hasOwnProperty("cluster_id"))
                 object.cluster_id = message.cluster_id;
@@ -4387,6 +5046,8 @@ $root.vtadmin = (function() {
                 object.keyspace = message.keyspace;
             if (message.table != null && message.hasOwnProperty("table"))
                 object.table = message.table;
+            if (message.table_size_options != null && message.hasOwnProperty("table_size_options"))
+                object.table_size_options = $root.vtadmin.GetSchemaTableSizeOptions.toObject(message.table_size_options, options);
             return object;
         };
 
@@ -4411,6 +5072,7 @@ $root.vtadmin = (function() {
          * @memberof vtadmin
          * @interface IGetSchemasRequest
          * @property {Array.<string>|null} [cluster_ids] GetSchemasRequest cluster_ids
+         * @property {vtadmin.IGetSchemaTableSizeOptions|null} [table_size_options] GetSchemasRequest table_size_options
          */
 
         /**
@@ -4436,6 +5098,14 @@ $root.vtadmin = (function() {
          * @instance
          */
         GetSchemasRequest.prototype.cluster_ids = $util.emptyArray;
+
+        /**
+         * GetSchemasRequest table_size_options.
+         * @member {vtadmin.IGetSchemaTableSizeOptions|null|undefined} table_size_options
+         * @memberof vtadmin.GetSchemasRequest
+         * @instance
+         */
+        GetSchemasRequest.prototype.table_size_options = null;
 
         /**
          * Creates a new GetSchemasRequest instance using the specified properties.
@@ -4464,6 +5134,8 @@ $root.vtadmin = (function() {
             if (message.cluster_ids != null && message.cluster_ids.length)
                 for (var i = 0; i < message.cluster_ids.length; ++i)
                     writer.uint32(/* id 1, wireType 2 =*/10).string(message.cluster_ids[i]);
+            if (message.table_size_options != null && Object.hasOwnProperty.call(message, "table_size_options"))
+                $root.vtadmin.GetSchemaTableSizeOptions.encode(message.table_size_options, writer.uint32(/* id 2, wireType 2 =*/18).fork()).ldelim();
             return writer;
         };
 
@@ -4502,6 +5174,9 @@ $root.vtadmin = (function() {
                     if (!(message.cluster_ids && message.cluster_ids.length))
                         message.cluster_ids = [];
                     message.cluster_ids.push(reader.string());
+                    break;
+                case 2:
+                    message.table_size_options = $root.vtadmin.GetSchemaTableSizeOptions.decode(reader, reader.uint32());
                     break;
                 default:
                     reader.skipType(tag & 7);
@@ -4545,6 +5220,11 @@ $root.vtadmin = (function() {
                     if (!$util.isString(message.cluster_ids[i]))
                         return "cluster_ids: string[] expected";
             }
+            if (message.table_size_options != null && message.hasOwnProperty("table_size_options")) {
+                var error = $root.vtadmin.GetSchemaTableSizeOptions.verify(message.table_size_options);
+                if (error)
+                    return "table_size_options." + error;
+            }
             return null;
         };
 
@@ -4567,6 +5247,11 @@ $root.vtadmin = (function() {
                 for (var i = 0; i < object.cluster_ids.length; ++i)
                     message.cluster_ids[i] = String(object.cluster_ids[i]);
             }
+            if (object.table_size_options != null) {
+                if (typeof object.table_size_options !== "object")
+                    throw TypeError(".vtadmin.GetSchemasRequest.table_size_options: object expected");
+                message.table_size_options = $root.vtadmin.GetSchemaTableSizeOptions.fromObject(object.table_size_options);
+            }
             return message;
         };
 
@@ -4585,11 +5270,15 @@ $root.vtadmin = (function() {
             var object = {};
             if (options.arrays || options.defaults)
                 object.cluster_ids = [];
+            if (options.defaults)
+                object.table_size_options = null;
             if (message.cluster_ids && message.cluster_ids.length) {
                 object.cluster_ids = [];
                 for (var j = 0; j < message.cluster_ids.length; ++j)
                     object.cluster_ids[j] = message.cluster_ids[j];
             }
+            if (message.table_size_options != null && message.hasOwnProperty("table_size_options"))
+                object.table_size_options = $root.vtadmin.GetSchemaTableSizeOptions.toObject(message.table_size_options, options);
             return object;
         };
 
@@ -4813,6 +5502,193 @@ $root.vtadmin = (function() {
         };
 
         return GetSchemasResponse;
+    })();
+
+    vtadmin.GetSchemaTableSizeOptions = (function() {
+
+        /**
+         * Properties of a GetSchemaTableSizeOptions.
+         * @memberof vtadmin
+         * @interface IGetSchemaTableSizeOptions
+         * @property {boolean|null} [aggregate_sizes] GetSchemaTableSizeOptions aggregate_sizes
+         */
+
+        /**
+         * Constructs a new GetSchemaTableSizeOptions.
+         * @memberof vtadmin
+         * @classdesc Represents a GetSchemaTableSizeOptions.
+         * @implements IGetSchemaTableSizeOptions
+         * @constructor
+         * @param {vtadmin.IGetSchemaTableSizeOptions=} [properties] Properties to set
+         */
+        function GetSchemaTableSizeOptions(properties) {
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * GetSchemaTableSizeOptions aggregate_sizes.
+         * @member {boolean} aggregate_sizes
+         * @memberof vtadmin.GetSchemaTableSizeOptions
+         * @instance
+         */
+        GetSchemaTableSizeOptions.prototype.aggregate_sizes = false;
+
+        /**
+         * Creates a new GetSchemaTableSizeOptions instance using the specified properties.
+         * @function create
+         * @memberof vtadmin.GetSchemaTableSizeOptions
+         * @static
+         * @param {vtadmin.IGetSchemaTableSizeOptions=} [properties] Properties to set
+         * @returns {vtadmin.GetSchemaTableSizeOptions} GetSchemaTableSizeOptions instance
+         */
+        GetSchemaTableSizeOptions.create = function create(properties) {
+            return new GetSchemaTableSizeOptions(properties);
+        };
+
+        /**
+         * Encodes the specified GetSchemaTableSizeOptions message. Does not implicitly {@link vtadmin.GetSchemaTableSizeOptions.verify|verify} messages.
+         * @function encode
+         * @memberof vtadmin.GetSchemaTableSizeOptions
+         * @static
+         * @param {vtadmin.IGetSchemaTableSizeOptions} message GetSchemaTableSizeOptions message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        GetSchemaTableSizeOptions.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.aggregate_sizes != null && Object.hasOwnProperty.call(message, "aggregate_sizes"))
+                writer.uint32(/* id 1, wireType 0 =*/8).bool(message.aggregate_sizes);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified GetSchemaTableSizeOptions message, length delimited. Does not implicitly {@link vtadmin.GetSchemaTableSizeOptions.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtadmin.GetSchemaTableSizeOptions
+         * @static
+         * @param {vtadmin.IGetSchemaTableSizeOptions} message GetSchemaTableSizeOptions message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        GetSchemaTableSizeOptions.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a GetSchemaTableSizeOptions message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtadmin.GetSchemaTableSizeOptions
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtadmin.GetSchemaTableSizeOptions} GetSchemaTableSizeOptions
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        GetSchemaTableSizeOptions.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.GetSchemaTableSizeOptions();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.aggregate_sizes = reader.bool();
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a GetSchemaTableSizeOptions message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtadmin.GetSchemaTableSizeOptions
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtadmin.GetSchemaTableSizeOptions} GetSchemaTableSizeOptions
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        GetSchemaTableSizeOptions.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a GetSchemaTableSizeOptions message.
+         * @function verify
+         * @memberof vtadmin.GetSchemaTableSizeOptions
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        GetSchemaTableSizeOptions.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.aggregate_sizes != null && message.hasOwnProperty("aggregate_sizes"))
+                if (typeof message.aggregate_sizes !== "boolean")
+                    return "aggregate_sizes: boolean expected";
+            return null;
+        };
+
+        /**
+         * Creates a GetSchemaTableSizeOptions message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtadmin.GetSchemaTableSizeOptions
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtadmin.GetSchemaTableSizeOptions} GetSchemaTableSizeOptions
+         */
+        GetSchemaTableSizeOptions.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtadmin.GetSchemaTableSizeOptions)
+                return object;
+            var message = new $root.vtadmin.GetSchemaTableSizeOptions();
+            if (object.aggregate_sizes != null)
+                message.aggregate_sizes = Boolean(object.aggregate_sizes);
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a GetSchemaTableSizeOptions message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtadmin.GetSchemaTableSizeOptions
+         * @static
+         * @param {vtadmin.GetSchemaTableSizeOptions} message GetSchemaTableSizeOptions
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        GetSchemaTableSizeOptions.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.defaults)
+                object.aggregate_sizes = false;
+            if (message.aggregate_sizes != null && message.hasOwnProperty("aggregate_sizes"))
+                object.aggregate_sizes = message.aggregate_sizes;
+            return object;
+        };
+
+        /**
+         * Converts this GetSchemaTableSizeOptions to JSON.
+         * @function toJSON
+         * @memberof vtadmin.GetSchemaTableSizeOptions
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        GetSchemaTableSizeOptions.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return GetSchemaTableSizeOptions;
     })();
 
     vtadmin.GetTabletRequest = (function() {

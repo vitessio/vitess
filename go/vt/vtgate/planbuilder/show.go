@@ -113,10 +113,10 @@ func buildVariablePlan(show *sqlparser.ShowBasic, vschema ContextVSchema) (engin
 }
 
 func buildShowTblPlan(show *sqlparser.ShowBasic, vschema ContextVSchema) (engine.Primitive, error) {
-	if show.DbName != "" {
-		show.Tbl.Qualifier = sqlparser.NewTableIdent(show.DbName)
+	if !show.DbName.IsEmpty() {
+		show.Tbl.Qualifier = sqlparser.NewTableIdent(show.DbName.String())
 		// Remove Database Name from the query.
-		show.DbName = ""
+		show.DbName = sqlparser.NewTableIdent("")
 	}
 
 	dest := key.Destination(key.DestinationAnyShard{})
@@ -192,7 +192,7 @@ func buildDBPlan(show *sqlparser.ShowBasic, vschema ContextVSchema) (engine.Prim
 
 // buildShowVMigrationsPlan serves `SHOW VITESS_MIGRATIONS ...` queries. It invokes queries on _vt.schema_migrations on all MASTER tablets on keyspace's shards.
 func buildShowVMigrationsPlan(show *sqlparser.ShowBasic, vschema ContextVSchema) (engine.Primitive, error) {
-	dest, ks, tabletType, err := vschema.TargetDestination(show.DbName)
+	dest, ks, tabletType, err := vschema.TargetDestination(show.DbName.String())
 	if err != nil {
 		return nil, err
 	}
@@ -227,7 +227,7 @@ func buildShowVMigrationsPlan(show *sqlparser.ShowBasic, vschema ContextVSchema)
 
 func buildPlanWithDB(show *sqlparser.ShowBasic, vschema ContextVSchema) (engine.Primitive, error) {
 	dbName := show.DbName
-	dbDestination := show.DbName
+	dbDestination := show.DbName.String()
 	if sqlparser.SystemSchema(dbDestination) {
 		ks, err := vschema.AnyKeyspace()
 		if err != nil {
@@ -236,7 +236,7 @@ func buildPlanWithDB(show *sqlparser.ShowBasic, vschema ContextVSchema) (engine.
 		dbDestination = ks.Name
 	} else {
 		// Remove Database Name from the query.
-		show.DbName = ""
+		show.DbName = sqlparser.NewTableIdent("")
 	}
 	destination, keyspace, _, err := vschema.TargetDestination(dbDestination)
 	if err != nil {
@@ -246,8 +246,8 @@ func buildPlanWithDB(show *sqlparser.ShowBasic, vschema ContextVSchema) (engine.
 		destination = key.DestinationAnyShard{}
 	}
 
-	if dbName == "" {
-		dbName = keyspace.Name
+	if dbName.IsEmpty() {
+		dbName = sqlparser.NewTableIdent(keyspace.Name)
 	}
 
 	query := sqlparser.String(show)
@@ -260,7 +260,7 @@ func buildPlanWithDB(show *sqlparser.ShowBasic, vschema ContextVSchema) (engine.
 		SingleShardOnly:   true,
 	}
 	if show.Command == sqlparser.Table {
-		plan, err = engine.NewRenameField([]string{"Tables_in_" + dbName}, []int{0}, plan)
+		plan, err = engine.NewRenameField([]string{"Tables_in_" + dbName.String()}, []int{0}, plan)
 		if err != nil {
 			return nil, err
 		}
