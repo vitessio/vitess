@@ -24,6 +24,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/shlex"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 )
@@ -40,6 +42,7 @@ var (
 const (
 	SchemaMigrationsTableName = "schema_migrations"
 	RevertActionStr           = "revert"
+	declarativeFlag           = "declarative"
 )
 
 // MigrationBasePath is the root for all schema migration entries
@@ -245,6 +248,47 @@ func (onlineDDL *OnlineDDL) GetRevertUUID() (uuid string, err error) {
 		return submatch[1], nil
 	}
 	return "", fmt.Errorf("Not a Revert DDL: '%s'", onlineDDL.SQL)
+}
+
+// isFlag return true when the given string is a CLI flag of the given name
+func isFlag(s string, name string) bool {
+	if s == fmt.Sprintf("-%s", name) {
+		return true
+	}
+	if s == fmt.Sprintf("--%s", name) {
+		return true
+	}
+	return false
+}
+
+// hasFlag returns true when Options include named flag
+func (onlineDDL *OnlineDDL) hasFlag(name string) bool {
+	opts, _ := shlex.Split(onlineDDL.Options)
+	for _, opt := range opts {
+		if isFlag(opt, name) {
+			return true
+		}
+	}
+	return false
+}
+
+// IsDeclarative checks if strategy options include -declarative
+func (onlineDDL *OnlineDDL) IsDeclarative() bool {
+	return onlineDDL.hasFlag(declarativeFlag)
+}
+
+// RuntimeOptions returns the options used as runtime flags for given strategy, removing any internal hint options
+func (onlineDDL *OnlineDDL) RuntimeOptions() []string {
+	opts, _ := shlex.Split(onlineDDL.Options)
+	validOpts := []string{}
+	for _, opt := range opts {
+		switch {
+		case isFlag(opt, declarativeFlag):
+		default:
+			validOpts = append(validOpts, opt)
+		}
+	}
+	return validOpts
 }
 
 // ToString returns a simple string representation of this instance
