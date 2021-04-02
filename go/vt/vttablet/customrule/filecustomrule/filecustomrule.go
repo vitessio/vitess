@@ -53,6 +53,25 @@ func NewFileCustomRule() (fcr *FileCustomRule) {
 	return fcr
 }
 
+// ParseRules will construct a Rules object based on a file path. In the case
+// of error it returns nil and that error. A log will be printed to capture the
+// stage at which parsing failed.
+func ParseRules(path string) (*rules.Rules, error) {
+	data, err := ioutil.ReadFile(path)
+	if err != nil {
+		log.Warningf("Error reading file %v: %v", path, err)
+		// Don't update any internal cache, just return error
+		return nil, err
+	}
+	qrs := rules.New()
+	err = qrs.UnmarshalJSON(data)
+	if err != nil {
+		log.Warningf("Error unmarshaling query rules %v", err)
+		return nil, err
+	}
+	return qrs, nil
+}
+
 // Open try to build query rules from local file and push the rules to vttablet
 func (fcr *FileCustomRule) Open(qsc tabletserver.Controller, rulePath string) error {
 	fcr.path = rulePath
@@ -60,16 +79,9 @@ func (fcr *FileCustomRule) Open(qsc tabletserver.Controller, rulePath string) er
 		// Don't go further if path is empty
 		return nil
 	}
-	data, err := ioutil.ReadFile(fcr.path)
+
+	qrs, err := ParseRules(rulePath)
 	if err != nil {
-		log.Warningf("Error reading file %v: %v", fcr.path, err)
-		// Don't update any internal cache, just return error
-		return err
-	}
-	qrs := rules.New()
-	err = qrs.UnmarshalJSON(data)
-	if err != nil {
-		log.Warningf("Error unmarshaling query rules %v", err)
 		return err
 	}
 	fcr.currentRuleSetTimestamp = time.Now().Unix()

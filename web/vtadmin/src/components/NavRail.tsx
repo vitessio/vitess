@@ -18,7 +18,7 @@ import { Link, NavLink } from 'react-router-dom';
 
 import style from './NavRail.module.scss';
 import logo from '../img/vitess-icon-color.svg';
-import { useClusters, useGates, useKeyspaces, useTableDefinitions, useTablets } from '../hooks/api';
+import { useClusters, useGates, useKeyspaces, useTableDefinitions, useTablets, useWorkflows } from '../hooks/api';
 import { Icon, Icons } from './Icon';
 
 export const NavRail = () => {
@@ -27,6 +27,7 @@ export const NavRail = () => {
     const { data: gates = [] } = useGates();
     const { data: schemas = [] } = useTableDefinitions();
     const { data: tablets = [] } = useTablets();
+    const { data: workflows = [] } = useWorkflows();
 
     return (
         <div className={style.container}>
@@ -40,7 +41,7 @@ export const NavRail = () => {
                         <NavRailLink icon={Icons.chart} text="Dashboard" to="/dashboard" count={0} />
                     </li>
                     <li>
-                        <NavRailLink icon={Icons.wrench} text="Workflows" to="/workflows" count={0} />
+                        <NavRailLink icon={Icons.wrench} text="Workflows" to="/workflows" count={workflows.length} />
                     </li>
                 </ul>
 

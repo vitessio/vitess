@@ -403,6 +403,7 @@ func CloneRefOfAlterDatabase(n *AlterDatabase) *AlterDatabase {
 		return nil
 	}
 	out := *n
+	out.DBName = CloneTableIdent(n.DBName)
 	out.AlterOptions = CloneSliceOfCollateAndCharset(n.AlterOptions)
 	return &out
 }
@@ -628,6 +629,7 @@ func CloneRefOfConstraintDefinition(n *ConstraintDefinition) *ConstraintDefiniti
 		return nil
 	}
 	out := *n
+	out.Name = CloneColIdent(n.Name)
 	out.Details = CloneConstraintInfo(n.Details)
 	return &out
 }
@@ -671,6 +673,7 @@ func CloneRefOfCreateDatabase(n *CreateDatabase) *CreateDatabase {
 	}
 	out := *n
 	out.Comments = CloneComments(n.Comments)
+	out.DBName = CloneTableIdent(n.DBName)
 	out.CreateOptions = CloneSliceOfCollateAndCharset(n.CreateOptions)
 	return &out
 }
@@ -762,6 +765,7 @@ func CloneRefOfDropDatabase(n *DropDatabase) *DropDatabase {
 	}
 	out := *n
 	out.Comments = CloneComments(n.Comments)
+	out.DBName = CloneTableIdent(n.DBName)
 	return &out
 }
 
@@ -771,6 +775,7 @@ func CloneRefOfDropKey(n *DropKey) *DropKey {
 		return nil
 	}
 	out := *n
+	out.Name = CloneColIdent(n.Name)
 	return &out
 }
 
@@ -1257,6 +1262,8 @@ func CloneRefOfRenameIndex(n *RenameIndex) *RenameIndex {
 		return nil
 	}
 	out := *n
+	out.OldName = CloneColIdent(n.OldName)
+	out.NewName = CloneColIdent(n.NewName)
 	return &out
 }
 
@@ -1415,6 +1422,7 @@ func CloneRefOfShowBasic(n *ShowBasic) *ShowBasic {
 	}
 	out := *n
 	out.Tbl = CloneTableName(n.Tbl)
+	out.DbName = CloneTableIdent(n.DbName)
 	out.Filter = CloneRefOfShowFilter(n.Filter)
 	return &out
 }
@@ -2267,6 +2275,7 @@ func CloneRefOfColumnTypeOptions(n *ColumnTypeOptions) *ColumnTypeOptions {
 		return nil
 	}
 	out := *n
+	out.Null = CloneRefOfBool(n.Null)
 	out.Default = CloneExpr(n.Default)
 	out.OnUpdate = CloneExpr(n.OnUpdate)
 	out.Comment = CloneRefOfLiteral(n.Comment)
