@@ -135,6 +135,9 @@ type OrderbyParams struct {
 
 func (obp OrderbyParams) String() string {
 	val := strconv.Itoa(obp.Col)
+	if obp.StarColFixedIndex > obp.Col {
+		val = strconv.Itoa(obp.StarColFixedIndex)
+	}
 	if obp.Desc {
 		val += " DESC"
 	} else {
