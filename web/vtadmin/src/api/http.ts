@@ -181,3 +181,21 @@ export const fetchTablets = async () =>
             return pb.Tablet.create(e);
         },
     });
+
+export const fetchWorkflows = async () => {
+    const { result } = await vtfetch(`/api/workflows`);
+
+    const err = pb.GetWorkflowsResponse.verify(result);
+    if (err) throw Error(err);
+
+    return pb.GetWorkflowsResponse.create(result);
+};
+
+export const fetchWorkflow = async (params: { clusterID: string; keyspace: string; name: string }) => {
+    const { result } = await vtfetch(`/api/workflow/${params.clusterID}/${params.keyspace}/${params.name}`);
+
+    const err = pb.Workflow.verify(result);
+    if (err) throw Error(err);
+
+    return pb.Workflow.create(result);
+};

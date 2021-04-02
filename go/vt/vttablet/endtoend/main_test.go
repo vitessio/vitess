@@ -303,7 +303,7 @@ var tableACLConfig = `{
     },
     {
       "name": "sys_table",
-      "table_names_or_prefixes": ["tables", "user", "processlist", "mutex_instances"],
+      "table_names_or_prefixes": ["tables", "user", "processlist", "mutex_instances", "columns", "a"],
       "readers": ["dev"],
       "writers": ["dev"],
       "admins": ["dev"]

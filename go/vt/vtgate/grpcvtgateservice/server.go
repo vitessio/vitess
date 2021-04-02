@@ -198,6 +198,7 @@ func (vtg *VTGate) VStream(request *vtgatepb.VStreamRequest, stream vtgateservic
 		request.TabletType,
 		request.Vgtid,
 		request.Filter,
+		request.Flags,
 		func(events []*binlogdatapb.VEvent) error {
 			return stream.Send(&vtgatepb.VStreamResponse{
 				Events: events,

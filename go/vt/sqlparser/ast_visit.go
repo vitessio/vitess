@@ -430,6 +430,9 @@ func VisitRefOfAlterDatabase(in *AlterDatabase, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
+	if err := VisitTableIdent(in.DBName, f); err != nil {
+		return err
+	}
 	return nil
 }
 func VisitRefOfAlterMigration(in *AlterMigration, f Visit) error {
@@ -736,6 +739,9 @@ func VisitRefOfConstraintDefinition(in *ConstraintDefinition, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
+	if err := VisitColIdent(in.Name, f); err != nil {
+		return err
+	}
 	if err := VisitConstraintInfo(in.Details, f); err != nil {
 		return err
 	}
@@ -791,6 +797,9 @@ func VisitRefOfCreateDatabase(in *CreateDatabase, f Visit) error {
 		return err
 	}
 	if err := VisitComments(in.Comments, f); err != nil {
+		return err
+	}
+	if err := VisitTableIdent(in.DBName, f); err != nil {
 		return err
 	}
 	return nil
@@ -919,6 +928,9 @@ func VisitRefOfDropDatabase(in *DropDatabase, f Visit) error {
 	if err := VisitComments(in.Comments, f); err != nil {
 		return err
 	}
+	if err := VisitTableIdent(in.DBName, f); err != nil {
+		return err
+	}
 	return nil
 }
 func VisitRefOfDropKey(in *DropKey, f Visit) error {
@@ -926,6 +938,9 @@ func VisitRefOfDropKey(in *DropKey, f Visit) error {
 		return nil
 	}
 	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitColIdent(in.Name, f); err != nil {
 		return err
 	}
 	return nil
@@ -1561,6 +1576,12 @@ func VisitRefOfRenameIndex(in *RenameIndex, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
+	if err := VisitColIdent(in.OldName, f); err != nil {
+		return err
+	}
+	if err := VisitColIdent(in.NewName, f); err != nil {
+		return err
+	}
 	return nil
 }
 func VisitRefOfRenameTable(in *RenameTable, f Visit) error {
@@ -1769,6 +1790,9 @@ func VisitRefOfShowBasic(in *ShowBasic, f Visit) error {
 		return err
 	}
 	if err := VisitTableName(in.Tbl, f); err != nil {
+		return err
+	}
+	if err := VisitTableIdent(in.DbName, f); err != nil {
 		return err
 	}
 	if err := VisitRefOfShowFilter(in.Filter, f); err != nil {

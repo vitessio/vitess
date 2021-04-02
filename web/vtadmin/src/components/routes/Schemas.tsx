@@ -16,37 +16,67 @@
 import { orderBy } from 'lodash-es';
 import * as React from 'react';
 import { Link } from 'react-router-dom';
-import { TableDefinition, useTableDefinitions } from '../../hooks/api';
+
+import { useTableDefinitions } from '../../hooks/api';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
+import { filterNouns } from '../../util/filterNouns';
+import { Button } from '../Button';
 import { DataTable } from '../dataTable/DataTable';
+import { Icons } from '../Icon';
+import { TextInput } from '../TextInput';
+import style from './Schemas.module.scss';
 
 export const Schemas = () => {
     useDocumentTitle('Schemas');
+
     const { data = [] } = useTableDefinitions();
+    const [filter, setFilter] = React.useState<string>('');
 
-    const rows = React.useMemo(() => {
-        return orderBy(data, ['cluster.name', 'keyspace', 'tableDefinition.name']);
-    }, [data]);
+    const filteredData = React.useMemo(() => {
+        const mapped = data.map((d) => ({
+            cluster: d.cluster?.name,
+            clusterID: d.cluster?.id,
+            keyspace: d.keyspace,
+            table: d.tableDefinition?.name,
+            _raw: d,
+        }));
 
-    const renderRows = (rows: TableDefinition[]) =>
+        const filtered = filterNouns(filter, mapped);
+        return orderBy(filtered, ['cluster', 'keyspace', 'table']);
+    }, [data, filter]);
+
+    const renderRows = (rows: typeof filteredData) =>
         rows.map((row, idx) => {
             const href =
-                row.cluster?.id && row.keyspace && row.tableDefinition?.name
-                    ? `/schema/${row.cluster.id}/${row.keyspace}/${row.tableDefinition.name}`
+                row.clusterID && row.keyspace && row.table
+                    ? `/schema/${row.clusterID}/${row.keyspace}/${row.table}`
                     : null;
             return (
                 <tr key={idx}>
-                    <td>{row.cluster?.name}</td>
+                    <td>{row.cluster}</td>
                     <td>{row.keyspace}</td>
-                    <td>{href ? <Link to={href}>{row.tableDefinition?.name}</Link> : row.tableDefinition?.name}</td>
+                    <td>{href ? <Link to={href}>{row.table}</Link> : row.table}</td>
                 </tr>
             );
         });
 
     return (
-        <div>
+        <div className="max-width-content">
             <h1>Schemas</h1>
-            <DataTable columns={['Cluster', 'Keyspace', 'Table']} data={rows} renderRows={renderRows} />
+            <div className={style.controls}>
+                <TextInput
+                    autoFocus
+                    iconLeft={Icons.search}
+                    onChange={(e) => setFilter(e.target.value)}
+                    placeholder="Filter schemas"
+                    value={filter}
+                />
+                <Button disabled={!filter} onClick={() => setFilter('')} secondary>
+                    Clear filters
+                </Button>
+            </div>
+
+            <DataTable columns={['Cluster', 'Keyspace', 'Table']} data={filteredData} renderRows={renderRows} />
         </div>
     );
 };
