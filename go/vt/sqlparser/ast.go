@@ -156,7 +156,7 @@ type (
 	// DropKey is used to drop a key in an alter table statement
 	DropKey struct {
 		Type DropKeyType
-		Name string
+		Name ColIdent
 	}
 
 	// Force is used to specify force alter option in an alter table statement
@@ -182,8 +182,8 @@ type (
 
 	// RenameIndex clause is used to rename indexes in an alter table statement
 	RenameIndex struct {
-		OldName string
-		NewName string
+		OldName ColIdent
+		NewName ColIdent
 	}
 
 	// Validation clause is used to specify whether to use validation or not
@@ -338,7 +338,7 @@ type (
 	// DropDatabase represents a DROP database statement.
 	DropDatabase struct {
 		Comments Comments
-		DBName   string
+		DBName   TableIdent
 		IfExists bool
 	}
 
@@ -355,7 +355,7 @@ type (
 	// CreateDatabase represents a CREATE database statement.
 	CreateDatabase struct {
 		Comments      Comments
-		DBName        string
+		DBName        TableIdent
 		IfNotExists   bool
 		CreateOptions []CollateAndCharset
 		FullyParsed   bool
@@ -363,7 +363,7 @@ type (
 
 	// AlterDatabase represents a ALTER database statement.
 	AlterDatabase struct {
-		DBName              string
+		DBName              TableIdent
 		UpdateDataDirectory bool
 		AlterOptions        []CollateAndCharset
 		FullyParsed         bool
@@ -1224,17 +1224,17 @@ func (node *AlterDatabase) IsFullyParsed() bool {
 
 // GetDatabaseName implements the DBDDLStatement interface
 func (node *DropDatabase) GetDatabaseName() string {
-	return node.DBName
+	return node.DBName.String()
 }
 
 // GetDatabaseName implements the DBDDLStatement interface
 func (node *CreateDatabase) GetDatabaseName() string {
-	return node.DBName
+	return node.DBName.String()
 }
 
 // GetDatabaseName implements the DBDDLStatement interface
 func (node *AlterDatabase) GetDatabaseName() string {
-	return node.DBName
+	return node.DBName.String()
 }
 
 // ParenSelect can actually not be a top level statement,
@@ -1269,7 +1269,7 @@ type (
 		Command ShowCommandType
 		Full    bool
 		Tbl     TableName
-		DbName  string
+		DbName  TableIdent
 		Filter  *ShowFilter
 	}
 
@@ -1364,7 +1364,14 @@ type ColumnType struct {
 
 // ColumnTypeOptions are generic field options for a column type
 type ColumnTypeOptions struct {
-	NotNull       bool
+	/* We need Null to be *bool to distinguish 3 cases -
+	1. When Not Null is specified (Null = false)
+	2. When Null is specified (Null = true)
+	3. When nothing is specified (Null = nil)
+	The complexity arises from the fact that we do not know whether the column will be nullable or not if nothing is specified.
+	Therefore we do not know whether the column is nullable or not in case 3.
+	*/
+	Null          *bool
 	Autoincrement bool
 	Default       Expr
 	OnUpdate      Expr
@@ -1413,7 +1420,7 @@ type VindexParam struct {
 
 // ConstraintDefinition describes a constraint in a CREATE TABLE statement
 type ConstraintDefinition struct {
-	Name    string
+	Name    ColIdent
 	Details ConstraintInfo
 }
 
