@@ -64,6 +64,7 @@ type (
 		AffectedTables() TableNames
 		SetTable(qualifier string, name string)
 		SetFromTables(tables TableNames)
+		SetComments(comments Comments)
 		Statement
 	}
 
@@ -1062,6 +1063,46 @@ func (node *DropView) SetFromTables(tables TableNames) {
 
 // SetFromTables implements DDLStatement.
 func (node *AlterView) SetFromTables(tables TableNames) {
+	// irrelevant
+}
+
+// SetComments implements DDLStatement.
+func (node *RenameTable) SetComments(comments Comments) {
+	// irrelevant
+}
+
+// SetComments implements DDLStatement.
+func (node *TruncateTable) SetComments(comments Comments) {
+	// irrelevant
+}
+
+// SetComments implements DDLStatement.
+func (node *AlterTable) SetComments(comments Comments) {
+	node.Comments = comments
+}
+
+// SetComments implements DDLStatement.
+func (node *CreateTable) SetComments(comments Comments) {
+	node.Comments = comments
+}
+
+// SetComments implements DDLStatement.
+func (node *CreateView) SetComments(comments Comments) {
+	// irrelevant
+}
+
+// SetComments implements DDLStatement.
+func (node *DropTable) SetComments(comments Comments) {
+	node.Comments = comments
+}
+
+// SetComments implements DDLStatement.
+func (node *DropView) SetComments(comments Comments) {
+	// irrelevant
+}
+
+// SetComments implements DDLStatement.
+func (node *AlterView) SetComments(comments Comments) {
 	// irrelevant
 }
 
