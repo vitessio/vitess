@@ -135,7 +135,7 @@ func startStreaming(ctx context.Context, vtgate, vtctld, keyspace, shard, tablet
 	startPos, stopPos string, fieldsPrinted bool) (string, string, bool, bool, error) {
 	var err error
 	if startPos == "" {
-		flavor := getFlavor(ctx, vtctld, keyspace)
+		flavor := getFlavor(ctx, vtctld, keyspace, shard)
 		if flavor == "" {
 			log.Errorf("Invalid flavor for %s", keyspace)
 			return "", "", false, false, nil
@@ -371,8 +371,8 @@ type TablePlan struct {
 	shard      string
 }
 
-func getFlavor(ctx context.Context, server, keyspace string) string {
-	curPos, err := getPosition(ctx, server, keyspace, "0")
+func getFlavor(ctx context.Context, server, keyspace, shard string) string {
+	curPos, err := getPosition(ctx, server, keyspace, shard)
 	//fmt.Printf("curpos is %s\n", curPos)
 	if err != nil {
 		return ""
