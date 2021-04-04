@@ -61,6 +61,9 @@ type ContextVSchema interface {
 	// This will let the user know that they are using something
 	// that could become a problem if they move to a sharded keyspace
 	WarnUnshardedOnly(format string, params ...interface{})
+
+	// ForeignKeyMode returns the foreign_key flag value
+	ForeignKeyMode() string
 }
 
 // PlannerVersion is an alias here to make the code more readable
