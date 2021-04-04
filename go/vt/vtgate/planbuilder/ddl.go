@@ -1,8 +1,6 @@
 package planbuilder
 
 import (
-	"strings"
-
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -22,13 +20,13 @@ const (
 type fkStrategy int
 
 const (
-	allow fkStrategy = iota
-	disallow
+	fkAllow fkStrategy = iota
+	fkDisallow
 )
 
 var fkStrategyMap = map[string]fkStrategy{
-	"allow":    allow,
-	"disallow": disallow,
+	"allow":    fkAllow,
+	"disallow": fkDisallow,
 }
 
 type fkContraint struct {
@@ -142,7 +140,7 @@ func buildDDLPlans(sql string, ddlStatement sqlparser.DDLStatement, reservedVars
 }
 
 func checkFKError(vschema ContextVSchema, ddlStatement sqlparser.DDLStatement) error {
-	if fkStrategyMap[strings.ToLower(vschema.ForeignKeyMode())] == disallow {
+	if fkStrategyMap[vschema.ForeignKeyMode()] == fkDisallow {
 		fk := &fkContraint{}
 		_ = sqlparser.Walk(fk.FkWalk, ddlStatement)
 		if fk.found {
