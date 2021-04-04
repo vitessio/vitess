@@ -76,8 +76,8 @@ func (ms *MemorySort) Execute(vcursor VCursor, bindVars map[string]*querypb.Bind
 		return nil, err
 	}
 	sh := &sortHeap{
-		rows:    result.Rows,
-		orderBy: ms.OrderBy,
+		rows:      result.Rows,
+		comparers: extractSlices(ms.OrderBy),
 	}
 	sort.Sort(sh)
 	if sh.err != nil {
@@ -104,8 +104,8 @@ func (ms *MemorySort) StreamExecute(vcursor VCursor, bindVars map[string]*queryp
 	// You have to reverse the ordering because the highest values
 	// must be dropped once the upper limit is reached.
 	sh := &sortHeap{
-		orderBy: ms.OrderBy,
-		reverse: true,
+		comparers: extractSlices(ms.OrderBy),
+		reverse:   true,
 	}
 	err = ms.Input.StreamExecute(vcursor, bindVars, wantfields, func(qr *sqltypes.Result) error {
 		if len(qr.Fields) != 0 {
@@ -115,9 +115,11 @@ func (ms *MemorySort) StreamExecute(vcursor VCursor, bindVars map[string]*queryp
 		}
 		for _, row := range qr.Rows {
 			heap.Push(sh, row)
-		}
-		for len(sh.rows) > count {
-			_ = heap.Pop(sh)
+			// Remove the highest element from the heap if the size is more than the count
+			// This optimization means that the maximum size of the heap is going to be (count + 1)
+			for len(sh.rows) > count {
+				_ = heap.Pop(sh)
+			}
 		}
 		if vcursor.ExceedsMaxMemoryRows(len(sh.rows)) {
 			return fmt.Errorf("in-memory row count exceeded allowed limit of %d", vcursor.MaxMemoryRows())
@@ -215,10 +217,10 @@ func GenericJoin(input interface{}, f func(interface{}) string) string {
 // sortHeap is sorted based on the orderBy params.
 // Implementation is similar to scatterHeap
 type sortHeap struct {
-	rows    [][]sqltypes.Value
-	orderBy []OrderbyParams
-	reverse bool
-	err     error
+	rows      [][]sqltypes.Value
+	comparers []*comparer
+	reverse   bool
+	err       error
 }
 
 // Len satisfies sort.Interface and heap.Interface.
@@ -228,11 +230,11 @@ func (sh *sortHeap) Len() int {
 
 // Less satisfies sort.Interface and heap.Interface.
 func (sh *sortHeap) Less(i, j int) bool {
-	for _, order := range sh.orderBy {
+	for _, c := range sh.comparers {
 		if sh.err != nil {
 			return true
 		}
-		cmp, err := evalengine.NullsafeCompare(sh.rows[i][order.Col], sh.rows[j][order.Col])
+		cmp, err := c.compare(sh.rows[i], sh.rows[j])
 		if err != nil {
 			sh.err = err
 			return true
@@ -240,17 +242,7 @@ func (sh *sortHeap) Less(i, j int) bool {
 		if cmp == 0 {
 			continue
 		}
-		// This is equivalent to:
-		//if !sh.reverse {
-		//	if order.Desc {
-		//		cmp = -cmp
-		//	}
-		//} else {
-		//	if !order.Desc {
-		//		cmp = -cmp
-		//	}
-		//}
-		if sh.reverse != order.Desc {
+		if sh.reverse {
 			cmp = -cmp
 		}
 		return cmp < 0

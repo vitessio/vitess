@@ -37,7 +37,7 @@ export const Clusters = () => {
         ));
 
     return (
-        <div>
+        <div className="max-width-content">
             <h1>Clusters</h1>
             <DataTable columns={['Name', 'Id']} data={rows} renderRows={renderRows} />
         </div>

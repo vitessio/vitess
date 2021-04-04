@@ -1,5 +1,7 @@
 run:
   timeout: 10m
+  skip-dirs:
+    - go/vt/topo/k8stopo/client
 
 linters-settings:
   goimports:
