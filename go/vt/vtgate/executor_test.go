@@ -1195,12 +1195,12 @@ func TestExecutorDDLFk(t *testing.T) {
 	}
 
 	for _, stmt := range stmts {
-		for _, fk := range []string{"allow", "disallow"} {
-			t.Run(stmt+fk, func(t *testing.T) {
+		for _, fkMode := range []string{"allow", "disallow"} {
+			t.Run(stmt+fkMode, func(t *testing.T) {
 				sbc.ExecCount.Set(0)
-				*foreignKey = fk
+				*foreignKeyMode = fkMode
 				_, err := executor.Execute(ctx, mName, NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded}), stmt, nil)
-				if fk == "allow" {
+				if fkMode == "allow" {
 					require.NoError(t, err)
 					require.EqualValues(t, 1, sbc.ExecCount.Get())
 				} else {

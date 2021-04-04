@@ -142,7 +142,7 @@ func buildDDLPlans(sql string, ddlStatement sqlparser.DDLStatement, reservedVars
 }
 
 func checkFKError(vschema ContextVSchema, ddlStatement sqlparser.DDLStatement) error {
-	if fkStrategyMap[strings.ToLower(vschema.ForeignKey())] == disallow {
+	if fkStrategyMap[strings.ToLower(vschema.ForeignKeyMode())] == disallow {
 		fk := &fkContraint{}
 		_ = sqlparser.Walk(fk.FkWalk, ddlStatement)
 		if fk.found {
