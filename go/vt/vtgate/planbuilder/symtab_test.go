@@ -16,6 +16,16 @@ limitations under the License.
 
 package planbuilder
 
+import (
+	"fmt"
+	"testing"
+
+	"github.com/stretchr/testify/require"
+
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/sqlparser"
+)
+
 /*
 func TestSymtabAddVSchemaTable(t *testing.T) {
 	tname := sqlparser.TableName{Name: sqlparser.NewTableIdent("t")}
@@ -178,3 +188,53 @@ func TestSymtabAddVSchemaTable(t *testing.T) {
 	}
 }
 */
+
+func TestGetReturnType(t *testing.T) {
+	tests := []struct {
+		input       sqlparser.Expr
+		output      querypb.Type
+		expectedErr error
+	}{{
+		input: &sqlparser.FuncExpr{Name: sqlparser.NewColIdent("Abs"), Exprs: sqlparser.SelectExprs{
+			&sqlparser.AliasedExpr{
+				Expr: &sqlparser.ColName{
+					Name: sqlparser.NewColIdent("A"),
+					Metadata: &column{
+						typ: querypb.Type_DECIMAL,
+					},
+				},
+			},
+		}},
+		output:      querypb.Type_DECIMAL,
+		expectedErr: nil,
+	}, {
+		input: &sqlparser.FuncExpr{Name: sqlparser.NewColIdent("Count"), Exprs: sqlparser.SelectExprs{
+			&sqlparser.StarExpr{},
+		}},
+		output:      querypb.Type_INT64,
+		expectedErr: nil,
+	}, {
+		input: &sqlparser.FuncExpr{Name: sqlparser.NewColIdent("cOunt"), Exprs: sqlparser.SelectExprs{
+			&sqlparser.StarExpr{},
+		}},
+		output:      querypb.Type_INT64,
+		expectedErr: nil,
+	}, {
+		input: &sqlparser.FuncExpr{Name: sqlparser.NewColIdent("Abs"), Exprs: sqlparser.SelectExprs{
+			&sqlparser.StarExpr{},
+		}},
+		expectedErr: fmt.Errorf("cannot evaluate return type for *sqlparser.FuncExpr"),
+	}}
+
+	for _, test := range tests {
+		t.Run(sqlparser.String(test.input), func(t *testing.T) {
+			got, err := GetReturnType(test.input)
+			if test.expectedErr != nil {
+				require.EqualError(t, err, test.expectedErr.Error())
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, test.output, got)
+			}
+		})
+	}
+}

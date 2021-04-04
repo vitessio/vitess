@@ -551,81 +551,6 @@ func fmtTabletAwkable(ti *topo.TabletInfo) string {
 	return fmt.Sprintf("%v %v %v %v %v %v %v %v", topoproto.TabletAliasString(ti.Alias), keyspace, shard, topoproto.TabletTypeLString(ti.Type), ti.Addr(), ti.MysqlAddr(), fmtMapAwkable(ti.Tags), mtst)
 }
 
-func listTabletsByShard(ctx context.Context, wr *wrangler.Wrangler, keyspace, shard string) error {
-	tabletMap, err := wr.TopoServer().GetTabletMapForShard(ctx, keyspace, shard)
-	if err != nil {
-		return err
-	}
-	var trueMasterTimestamp time.Time
-	for _, ti := range tabletMap {
-		if ti.Type == topodatapb.TabletType_MASTER {
-			masterTimestamp := ti.GetMasterTermStartTime()
-			if masterTimestamp.After(trueMasterTimestamp) {
-				trueMasterTimestamp = masterTimestamp
-			}
-		}
-	}
-	for _, ti := range tabletMap {
-		masterTimestamp := ti.GetMasterTermStartTime()
-		if ti.Type == topodatapb.TabletType_MASTER && masterTimestamp.Before(trueMasterTimestamp) {
-			ti.Type = topodatapb.TabletType_UNKNOWN
-		}
-		wr.Logger().Printf("%v\n", fmtTabletAwkable(ti))
-	}
-	return nil
-}
-
-func dumpAllTablets(ctx context.Context, wr *wrangler.Wrangler, cell string) error {
-	tablets, err := topotools.GetAllTablets(ctx, wr.TopoServer(), cell)
-	if err != nil {
-		return err
-	}
-	// It is possible that an old master has not yet updated it's type in the topo
-	// In that case, report its type as UNKNOWN
-	// It used to be MASTER, and it is supposed to be REPLICA/SPARE eventually
-	trueMasterTimestamps := findTrueMasterTimestamps(tablets)
-	for _, ti := range tablets {
-		key := ti.Keyspace + "." + ti.Shard
-		masterTimestamp := ti.GetMasterTermStartTime()
-		if ti.Type == topodatapb.TabletType_MASTER && masterTimestamp.Before(trueMasterTimestamps[key]) {
-			ti.Type = topodatapb.TabletType_UNKNOWN
-		}
-		wr.Logger().Printf("%v\n", fmtTabletAwkable(ti))
-	}
-	return nil
-}
-
-func findTrueMasterTimestamps(tablets []*topo.TabletInfo) map[string]time.Time {
-	result := make(map[string]time.Time)
-	for _, ti := range tablets {
-		key := ti.Keyspace + "." + ti.Shard
-		if v, ok := result[key]; !ok {
-			result[key] = ti.GetMasterTermStartTime()
-		} else {
-			if ti.GetMasterTermStartTime().After(v) {
-				result[key] = ti.GetMasterTermStartTime()
-			}
-		}
-	}
-	return result
-}
-
-func dumpTablets(ctx context.Context, wr *wrangler.Wrangler, tabletAliases []*topodatapb.TabletAlias) error {
-	tabletMap, err := wr.TopoServer().GetTabletMap(ctx, tabletAliases)
-	if err != nil {
-		return err
-	}
-	for _, tabletAlias := range tabletAliases {
-		ti, ok := tabletMap[topoproto.TabletAliasString(tabletAlias)]
-		if !ok {
-			wr.Logger().Warningf("failed to load tablet %v", tabletAlias)
-		} else {
-			wr.Logger().Printf("%v\n", fmtTabletAwkable(ti))
-		}
-	}
-	return nil
-}
-
 // getFileParam returns a string containing either flag is not "",
 // or the content of the file named flagFile
 func getFileParam(flag, flagFile, name string) (string, error) {
@@ -1348,7 +1273,21 @@ func commandListShardTablets(ctx context.Context, wr *wrangler.Wrangler, subFlag
 	if err != nil {
 		return err
 	}
-	return listTabletsByShard(ctx, wr, keyspace, shard)
+
+	resp, err := wr.VtctldServer().GetTablets(ctx, &vtctldatapb.GetTabletsRequest{
+		Keyspace: keyspace,
+		Shard:    shard,
+		Strict:   false,
+	})
+	if err != nil {
+		return err
+	}
+
+	for _, tablet := range resp.Tablets {
+		wr.Logger().Printf("%v\n", cli.MarshalTabletAWK(tablet))
+	}
+
+	return nil
 }
 
 func commandSetShardIsMasterServing(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -2677,23 +2616,26 @@ func commandListAllTablets(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
+
 	var cells []string
-	var err error
+
 	if subFlags.NArg() == 1 {
 		cells = strings.Split(subFlags.Arg(0), ",")
-	} else {
-		cells, err = wr.TopoServer().GetKnownCells(ctx)
-		if err != nil {
-			return err
-		}
 	}
 
-	for _, cell := range cells {
-		err := dumpAllTablets(ctx, wr, cell)
-		if err != nil {
-			return err
-		}
+	resp, err := wr.VtctldServer().GetTablets(ctx, &vtctldatapb.GetTabletsRequest{
+		Cells:  cells,
+		Strict: false,
+	})
+
+	if err != nil {
+		return err
 	}
+
+	for _, tablet := range resp.Tablets {
+		wr.Logger().Printf("%v\n", cli.MarshalTabletAWK(tablet))
+	}
+
 	return nil
 }
 
@@ -2714,7 +2656,20 @@ func commandListTablets(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 			return err
 		}
 	}
-	return dumpTablets(ctx, wr, aliases)
+
+	resp, err := wr.VtctldServer().GetTablets(ctx, &vtctldatapb.GetTabletsRequest{
+		TabletAliases: aliases,
+		Strict:        false,
+	})
+	if err != nil {
+		return err
+	}
+
+	for _, tablet := range resp.Tablets {
+		wr.Logger().Printf("%v\n", cli.MarshalTabletAWK(tablet))
+	}
+
+	return nil
 }
 
 func commandGetSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {

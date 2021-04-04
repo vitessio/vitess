@@ -48,10 +48,7 @@ func RewriteAST(in Statement, keyspace string) (*RewriteASTResult, error) {
 	er := newExpressionRewriter(keyspace)
 	er.shouldRewriteDatabaseFunc = shouldRewriteDatabaseFunc(in)
 	setRewriter := &setNormalizer{}
-	result, err := Rewrite(in, er.rewrite, setRewriter.rewriteSetComingUp)
-	if err != nil {
-		return nil, err
-	}
+	result := Rewrite(in, er.rewrite, setRewriter.rewriteSetComingUp)
 	if setRewriter.err != nil {
 		return nil, setRewriter.err
 	}
@@ -122,10 +119,7 @@ const (
 func (er *expressionRewriter) rewriteAliasedExpr(node *AliasedExpr) (*BindVarNeeds, error) {
 	inner := newExpressionRewriter(er.keyspace)
 	inner.shouldRewriteDatabaseFunc = er.shouldRewriteDatabaseFunc
-	tmp, err := Rewrite(node.Expr, inner.rewrite, nil)
-	if err != nil {
-		return nil, err
-	}
+	tmp := Rewrite(node.Expr, inner.rewrite, nil)
 	newExpr, ok := tmp.(Expr)
 	if !ok {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to rewrite AST. function expected to return Expr returned a %s", String(tmp))
@@ -324,11 +318,7 @@ func (er *expressionRewriter) unnestSubQueries(cursor *Cursor, subquery *Subquer
 	er.bindVars.NoteRewrite()
 	// we need to make sure that the inner expression also gets rewritten,
 	// so we fire off another rewriter traversal here
-	rewrittenExpr, err := Rewrite(expr.Expr, er.rewrite, nil)
-	if err != nil {
-		er.err = err
-		return
-	}
+	rewrittenExpr := Rewrite(expr.Expr, er.rewrite, nil)
 	cursor.Replace(rewrittenExpr)
 }
 
@@ -347,11 +337,10 @@ func SystemSchema(schema string) bool {
 // RewriteToCNF walks the input AST and rewrites any boolean logic into CNF
 // Note: In order to re-plan, we need to empty the accumulated metadata in the AST,
 // so ColName.Metadata will be nil:ed out as part of this rewrite
-func RewriteToCNF(ast SQLNode) (SQLNode, error) {
-	var err error
+func RewriteToCNF(ast SQLNode) SQLNode {
 	for {
 		finishedRewrite := true
-		ast, err = Rewrite(ast, func(cursor *Cursor) bool {
+		ast = Rewrite(ast, func(cursor *Cursor) bool {
 			if e, isExpr := cursor.node.(Expr); isExpr {
 				rewritten, didRewrite := rewriteToCNFExpr(e)
 				if didRewrite {
@@ -364,12 +353,9 @@ func RewriteToCNF(ast SQLNode) (SQLNode, error) {
 			}
 			return true
 		}, nil)
-		if err != nil {
-			return nil, err
-		}
 
 		if finishedRewrite {
-			return ast, nil
+			return ast
 		}
 	}
 }
