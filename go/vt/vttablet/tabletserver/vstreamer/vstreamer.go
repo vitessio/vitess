@@ -80,8 +80,9 @@ type vstreamer struct {
 	pos     mysql.Position
 	stopPos string
 
-	phase string
-	vse   *Engine
+	phase               string
+	vse                 *Engine
+	eventSequenceNumber int64
 }
 
 // CopyState contains the last PK for tables to be copied
@@ -314,6 +315,8 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 				return err
 			}
 			for _, vevent := range vevents {
+				vs.eventSequenceNumber++
+				vevent.SequenceNumber = vs.eventSequenceNumber
 				if err := bufferAndTransmit(vevent); err != nil {
 					if err == io.EOF {
 						return nil
@@ -332,10 +335,12 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 			return nil
 		case <-timer.C:
 			now := time.Now().UnixNano()
+			vs.eventSequenceNumber++
 			if err := bufferAndTransmit(&binlogdatapb.VEvent{
-				Type:        binlogdatapb.VEventType_HEARTBEAT,
-				Timestamp:   now / 1e9,
-				CurrentTime: now,
+				Type:           binlogdatapb.VEventType_HEARTBEAT,
+				Timestamp:      now / 1e9,
+				CurrentTime:    now,
+				SequenceNumber: vs.eventSequenceNumber,
 			}); err != nil {
 				if err == io.EOF {
 					return nil

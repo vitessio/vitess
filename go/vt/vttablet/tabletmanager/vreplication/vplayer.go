@@ -62,6 +62,8 @@ type vplayer struct {
 	canAcceptStmtEvents bool
 
 	phase string
+
+	eventSequenceNumber, relaySequenceNumber int64
 }
 
 // newVPlayer creates a new vplayer. Parameters:
@@ -142,6 +144,19 @@ func (vp *vplayer) fetchAndApply(ctx context.Context) (err error) {
 	streamErr := make(chan error, 1)
 	go func() {
 		streamErr <- vp.vr.sourceVStreamer.VStream(ctx, mysql.EncodePosition(vp.startPos), nil, vp.replicatorPlan.VStreamFilter, func(events []*binlogdatapb.VEvent) error {
+			for _, ev := range events {
+				if ev.SequenceNumber == 1 {
+					vp.eventSequenceNumber = 1 //for each new source vstreamer (i.e. new catchup/fastforward/replicate loop sequence number will be reset)
+				} else {
+					vp.eventSequenceNumber++
+				}
+				if ev.SequenceNumber != vp.eventSequenceNumber {
+					err := fmt.Errorf("@@@ incorrect sequence number, got %d, expected %d, vevent %+v",
+						ev.SequenceNumber, vp.eventSequenceNumber, ev)
+					log.Error(err)
+					vp.vr.setState(binlogplayer.BlpError, err.Error())
+				}
+			}
 			return relay.Send(events)
 		})
 	}()
@@ -349,6 +364,18 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 		}
 		for i, events := range items {
 			for j, event := range events {
+				if event.SequenceNumber == 1 {
+					vp.relaySequenceNumber = 1 //for each new source vstreamer (i.e. new catchup/fastforward/replicate loop sequence number will be reset)
+				} else {
+					vp.relaySequenceNumber++
+				}
+				if event.SequenceNumber != vp.relaySequenceNumber {
+					err := fmt.Errorf("@@@ incorrect relay sequence number, got %d, expected %d, vevent %+v",
+						event.SequenceNumber, vp.relaySequenceNumber, event)
+					log.Error(err)
+					vp.vr.setState(binlogplayer.BlpError, err.Error())
+				}
+
 				if event.Timestamp != 0 {
 					vp.lastTimestampNs = event.Timestamp * 1e9
 					vp.timeOffsetNs = time.Now().UnixNano() - event.CurrentTime

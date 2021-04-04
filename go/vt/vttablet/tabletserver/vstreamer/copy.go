@@ -117,7 +117,7 @@ func (uvs *uvstreamer) sendFieldEvent(ctx context.Context, gtid string, fieldEve
 		FieldEvent: fieldEvent,
 	}}
 	log.V(2).Infof("Sending field event %v, gtid is %s", fieldEvent, gtid)
-	uvs.send(evs)
+	uvs.sendEvents(evs)
 
 	if err := uvs.setPosition(gtid, true); err != nil {
 		log.Infof("setPosition returned error %v", err)
@@ -159,7 +159,7 @@ func (uvs *uvstreamer) sendEventsForRows(ctx context.Context, tableName string, 
 		Type: binlogdatapb.VEventType_COMMIT,
 	})
 
-	if err := uvs.send(evs); err != nil {
+	if err := uvs.sendEvents(evs); err != nil {
 		log.Infof("send returned error %v", err)
 		return err
 	}
