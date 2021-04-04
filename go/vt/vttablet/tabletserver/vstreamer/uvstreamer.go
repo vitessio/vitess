@@ -80,7 +80,8 @@ type uvstreamer struct {
 
 	config *uvstreamerConfig
 
-	vs *vstreamer //last vstreamer created in uvstreamer
+	vs                  *vstreamer //last vstreamer created in uvstreamer
+	eventSequenceNumber int64
 }
 
 type uvstreamerConfig struct {
@@ -113,6 +114,14 @@ func newUVStreamer(ctx context.Context, vse *Engine, cp dbconfigs.Connector, se 
 	}
 
 	return uvs
+}
+
+func (uvs *uvstreamer) sendEvents(evs []*binlogdatapb.VEvent) error {
+	for _, ev := range evs {
+		uvs.eventSequenceNumber++
+		ev.SequenceNumber = uvs.eventSequenceNumber
+	}
+	return uvs.send(evs)
 }
 
 // buildTablePlan identifies the tables for the copy phase and creates the plans which consist of the lastPK seen
@@ -274,7 +283,7 @@ func (uvs *uvstreamer) send2(evs []*binlogdatapb.VEvent) error {
 	if len(uvs.plans) > 0 {
 		evs2 = uvs.filterEvents(evs)
 	}
-	err := uvs.send(evs2)
+	err := uvs.sendEvents(evs2)
 	if err != nil && err != io.EOF {
 		return err
 	}
@@ -300,7 +309,7 @@ func (uvs *uvstreamer) sendEventsForCurrentPos() error {
 	}, {
 		Type: binlogdatapb.VEventType_OTHER,
 	}}
-	if err := uvs.send(evs); err != nil {
+	if err := uvs.sendEvents(evs); err != nil {
 		return wrapError(err, uvs.pos, uvs.vse)
 	}
 	return nil
@@ -421,7 +430,7 @@ func (uvs *uvstreamer) sendTestEvent(msg string) {
 		Gtid: msg,
 	}
 
-	if err := uvs.send([]*binlogdatapb.VEvent{ev}); err != nil {
+	if err := uvs.sendEvents([]*binlogdatapb.VEvent{ev}); err != nil {
 		return
 	}
 }
@@ -441,7 +450,7 @@ func (uvs *uvstreamer) copyComplete(tableName string) error {
 		},
 		{Type: binlogdatapb.VEventType_COMMIT},
 	}
-	if err := uvs.send(evs); err != nil {
+	if err := uvs.sendEvents(evs); err != nil {
 		return err
 	}
 
@@ -474,7 +483,7 @@ func (uvs *uvstreamer) setPosition(gtid string, isInTx bool) error {
 	if !isInTx {
 		evs = append(evs, &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_COMMIT})
 	}
-	if err := uvs.send(evs); err != nil {
+	if err := uvs.sendEvents(evs); err != nil {
 		return err
 	}
 	uvs.pos = pos

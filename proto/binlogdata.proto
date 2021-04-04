@@ -350,6 +350,7 @@ message VEvent {
   int64 current_time = 20;
   // LastPK is the last PK for a table
   LastPKEvent last_p_k_event = 21;
+  int64 sequence_number = 22;
 }
 
 message MinimalTable {
