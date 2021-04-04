@@ -754,8 +754,8 @@ func (vc *vcursorImpl) WarnUnshardedOnly(format string, params ...interface{}) {
 }
 
 // ForeignKey implements the VCursor interface
-func (vc *vcursorImpl) ForeignKey() string {
-	return *foreignKey
+func (vc *vcursorImpl) ForeignKeyMode() string {
+	return *foreignKeyMode
 }
 
 // ParseDestinationTarget parses destination target string and sets default keyspace if possible.
