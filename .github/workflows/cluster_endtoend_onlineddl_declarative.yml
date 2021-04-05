@@ -1,11 +1,11 @@
 # DO NOT MODIFY: THIS FILE IS GENERATED USING "make generate_ci_workflows"
 
-name: Cluster (onlineddl_revert)
+name: Cluster (onlineddl_declarative)
 on: [push, pull_request]
 jobs:
 
   build:
-    name: Run endtoend tests on Cluster (onlineddl_revert)
+    name: Run endtoend tests on Cluster (onlineddl_declarative)
     runs-on: ubuntu-18.04
 
     steps:
@@ -37,4 +37,4 @@ jobs:
       timeout-minutes: 30
       run: |
         source build.env
-        eatmydata -- go run test.go -docker=false -print-log -follow -shard onlineddl_revert
+        eatmydata -- go run test.go -docker=false -print-log -follow -shard onlineddl_declarative
