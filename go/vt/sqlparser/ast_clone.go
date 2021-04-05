@@ -1296,6 +1296,7 @@ func CloneRefOfRevertMigration(n *RevertMigration) *RevertMigration {
 		return nil
 	}
 	out := *n
+	out.Comments = CloneComments(n.Comments)
 	return &out
 }
 

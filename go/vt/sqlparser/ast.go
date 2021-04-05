@@ -412,7 +412,8 @@ type (
 
 	// RevertMigration represents a REVERT VITESS_MIGRATION statement
 	RevertMigration struct {
-		UUID string
+		UUID     string
+		Comments Comments
 	}
 
 	// AlterMigrationType represents the type of operation in an ALTER VITESS_MIGRATION statement

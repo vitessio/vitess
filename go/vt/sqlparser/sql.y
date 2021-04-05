@@ -2838,9 +2838,9 @@ unlock_statement:
   }
 
 revert_statement:
-  REVERT VITESS_MIGRATION STRING
+  REVERT comment_opt VITESS_MIGRATION STRING
   {
-    $$ = &RevertMigration{UUID: string($3)}
+    $$ = &RevertMigration{Comments: Comments($2), UUID: string($4)}
   }
 
 flush_statement:

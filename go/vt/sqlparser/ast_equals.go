@@ -2095,7 +2095,8 @@ func EqualsRefOfRevertMigration(a, b *RevertMigration) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return a.UUID == b.UUID
+	return a.UUID == b.UUID &&
+		EqualsComments(a.Comments, b.Comments)
 }
 
 // EqualsRefOfRollback does deep equals between the two objects.

@@ -1609,10 +1609,17 @@ func (cached *RevertMigration) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(16)
+		size += int64(40)
 	}
 	// field UUID string
 	size += int64(len(cached.UUID))
+	// field Comments vitess.io/vitess/go/vt/sqlparser.Comments
+	{
+		size += int64(cap(cached.Comments)) * int64(16)
+		for _, elem := range cached.Comments {
+			size += int64(len(elem))
+		}
+	}
 	return size
 }
 func (cached *SRollback) CachedSize(alloc bool) int64 {

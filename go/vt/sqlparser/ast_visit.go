@@ -1621,6 +1621,9 @@ func VisitRefOfRevertMigration(in *RevertMigration, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
+	if err := VisitComments(in.Comments, f); err != nil {
+		return err
+	}
 	return nil
 }
 func VisitRefOfRollback(in *Rollback, f Visit) error {

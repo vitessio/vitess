@@ -3205,12 +3205,15 @@ func (a *application) rewriteRefOfRevertMigration(parent SQLNode, node *RevertMi
 			return true
 		}
 	}
+	if !a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
+		parent.(*RevertMigration).Comments = newNode.(Comments)
+	}) {
+		return false
+	}
 	if a.post != nil {
-		if a.pre == nil {
-			a.cur.replacer = replacer
-			a.cur.parent = parent
-			a.cur.node = node
-		}
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
 		if !a.post(&a.cur) {
 			return false
 		}
