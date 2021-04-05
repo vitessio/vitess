@@ -36,17 +36,19 @@ type StreamConsolidator struct {
 	memory                         int64
 	maxMemoryTotal, maxMemoryQuery int64
 	blocking                       bool
+	cleanup                        StreamCallback
 }
 
 // NewStreamConsolidator allocates a stream consolidator. The consolidator will use up to maxMemoryTotal
 // bytes in order to allow simultaneous queries to "catch up" to each other. Each individual stream will
 // only use up to maxMemoryQuery bytes of memory as a history buffer to catch up.
-func NewStreamConsolidator(maxMemoryTotal, maxMemoryQuery int64) *StreamConsolidator {
+func NewStreamConsolidator(maxMemoryTotal, maxMemoryQuery int64, cleanup StreamCallback) *StreamConsolidator {
 	return &StreamConsolidator{
 		inflight:       make(map[string]*streamInFlight),
 		maxMemoryTotal: maxMemoryTotal,
 		maxMemoryQuery: maxMemoryQuery,
 		blocking:       false,
+		cleanup:        cleanup,
 	}
 }
 
@@ -99,7 +101,7 @@ func (sc *StreamConsolidator) Consolidate(logStats *tabletenv.LogStats, sql stri
 	// if we have a followChan, we're following up on a query that is already being served
 	if followChan != nil {
 		defer func() {
-			memchange := inflight.unfollow(followChan)
+			memchange := inflight.unfollow(followChan, sc.cleanup)
 			atomic.AddInt64(&sc.memory, memchange)
 		}()
 
@@ -140,7 +142,7 @@ func (sc *StreamConsolidator) Consolidate(logStats *tabletenv.LogStats, sql stri
 		sc.mu.Unlock()
 
 		// finalize the stream with the error return we got from the leaderCallback
-		memchange := inflight.finishLeader(err)
+		memchange := inflight.finishLeader(err, sc.cleanup)
 		atomic.AddInt64(&sc.memory, memchange)
 	}()
 
@@ -204,12 +206,12 @@ func (s *streamInFlight) follow() ([]*sqltypes.Result, chan *sqltypes.Result) {
 }
 
 // unfollow unsubscribes the given follower from receiving more results from the stream.
-func (s *streamInFlight) unfollow(ch chan *sqltypes.Result) int64 {
+func (s *streamInFlight) unfollow(ch chan *sqltypes.Result, cleanup StreamCallback) int64 {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	delete(s.fanout, ch)
-	return s.checkFollowers()
+	return s.checkFollowers(cleanup)
 }
 
 // result returns the final error for this stream. If the stream finished successfully,
@@ -291,7 +293,7 @@ func (s *streamInFlight) update(result *sqltypes.Result, block bool, maxMemoryQu
 
 // finishLeader terminates this consolidated stream by storing the final error result from
 // MySQL and notifying all the followers that there are no more Results left to be sent
-func (s *streamInFlight) finishLeader(err error) int64 {
+func (s *streamInFlight) finishLeader(err error, cleanup StreamCallback) int64 {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -302,13 +304,13 @@ func (s *streamInFlight) finishLeader(err error) int64 {
 			close(follower)
 		}
 	}
-	return s.checkFollowers()
+	return s.checkFollowers(cleanup)
 }
 
-func (s *streamInFlight) checkFollowers() int64 {
+func (s *streamInFlight) checkFollowers(cleanup StreamCallback) int64 {
 	if s.finished && len(s.fanout) == 0 {
 		for _, result := range s.catchup {
-			returnStreamResult(result)
+			_ = cleanup(result)
 		}
 		s.catchup = nil
 		return -s.memory

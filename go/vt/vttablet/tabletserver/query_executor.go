@@ -66,7 +66,7 @@ var streamResultPool = sync.Pool{New: func() interface{} {
 	}
 }}
 
-func returnStreamResult(result *sqltypes.Result) {
+func returnStreamResult(result *sqltypes.Result) error {
 	// only return large results slices to the pool
 	if cap(result.Rows) >= 256 {
 		rows := result.Rows[:0]
@@ -74,6 +74,7 @@ func returnStreamResult(result *sqltypes.Result) {
 		result.Rows = rows
 		streamResultPool.Put(result)
 	}
+	return nil
 }
 
 func allocStreamResult() *sqltypes.Result {
@@ -291,6 +292,10 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) error {
 					}
 					defer dbConn.Recycle()
 					return qre.execStreamSQL(dbConn, sql, func(result *sqltypes.Result) error {
+						// this stream result is potentially used by more than one client, so
+						// the consolidator will return it to the pool once it knows it's no longer
+						// being shared
+
 						if replaceKeyspace != "" {
 							result.ReplaceKeyspace(replaceKeyspace)
 						}
@@ -319,7 +324,10 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) error {
 	}
 
 	return qre.execStreamSQL(conn, sql, func(result *sqltypes.Result) error {
+		// this stream result is only used by the calling client, so it can be
+		// returned to the pool once the callback has fully returned
 		defer returnStreamResult(result)
+
 		if replaceKeyspace != "" {
 			result.ReplaceKeyspace(replaceKeyspace)
 		}
