@@ -49,7 +49,7 @@ type consolidationTest struct {
 	leaderCallback func(StreamCallback) error
 	leaderCalls    int
 
-	results map[int]*consolidationResult
+	results []*consolidationResult
 }
 
 func generateResultSizes(size, count int) (r []*sqltypes.Result) {
@@ -96,17 +96,16 @@ func (ct *consolidationTest) run(workers int, generateCallback func(int) (string
 	logStats := tabletenv.NewLogStats(context.Background(), "StreamConsolidation")
 
 	if ct.results == nil {
-		ct.results = make(map[int]*consolidationResult)
+		ct.results = make([]*consolidationResult, workers)
+		for i := 0; i < workers; i++ {
+			ct.results[i] = &consolidationResult{}
+		}
 	}
 
 	var wg sync.WaitGroup
 
 	for i := 0; i < workers; i++ {
 		wg.Add(1)
-
-		if ct.results[i] == nil {
-			ct.results[i] = &consolidationResult{}
-		}
 
 		go func(worker int) {
 			defer wg.Done()

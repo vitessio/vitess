@@ -1722,6 +1722,11 @@ func (tsv *TabletServer) SetStreamPoolSize(val int) {
 	tsv.qe.streamConns.SetCapacity(val)
 }
 
+// SetStreamConsolidationBlocking sets whether the stream consolidator should wait for slow clients
+func (tsv *TabletServer) SetStreamConsolidationBlocking(block bool) {
+	tsv.qe.streamConsolidator.SetBlocking(block)
+}
+
 // StreamPoolSize returns the pool size.
 func (tsv *TabletServer) StreamPoolSize() int {
 	return int(tsv.qe.streamConns.Capacity())

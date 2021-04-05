@@ -74,7 +74,15 @@ func TestStreamLongTail(t *testing.T) {
 	}
 	defer client.Execute("delete from vitess_stress", nil)
 
+	defaultPoolSize := framework.Server.StreamPoolSize()
+
 	framework.Server.SetStreamPoolSize(4)
+	framework.Server.SetStreamConsolidationBlocking(true)
+
+	defer func() {
+		framework.Server.SetStreamPoolSize(defaultPoolSize)
+		framework.Server.SetStreamConsolidationBlocking(false)
+	}()
 
 	var start = make(chan struct{})
 	var finish sync.WaitGroup
