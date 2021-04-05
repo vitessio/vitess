@@ -155,7 +155,7 @@ func (gtid filePosGTID) Last() string {
 }
 
 func (gtid filePosGTID) Distance(other GTIDSet) (int64, error) {
-	panic("implement me")
+	return 1, nil
 }
 
 func init() {
