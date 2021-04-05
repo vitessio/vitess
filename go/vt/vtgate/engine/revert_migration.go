@@ -81,7 +81,7 @@ func (v *RevertMigration) Execute(vcursor VCursor, bindVars map[string]*query.Bi
 
 	sql := fmt.Sprintf("revert %s", v.Stmt.UUID)
 	ddlStrategySetting := schema.NewDDLStrategySetting(schema.DDLStrategyOnline, "")
-	onlineDDL, err := schema.NewOnlineDDLBySQL(v.GetKeyspaceName(), "", sql, ddlStrategySetting, fmt.Sprintf("vtgate:%s", vcursor.Session().GetSessionUUID()))
+	onlineDDL, err := schema.NewOnlineDDL(v.GetKeyspaceName(), "", sql, ddlStrategySetting, fmt.Sprintf("vtgate:%s", vcursor.Session().GetSessionUUID()))
 	if err != nil {
 		return result, err
 	}

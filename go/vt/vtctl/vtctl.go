@@ -2931,7 +2931,7 @@ func commandOnlineDDL(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag
 			requestContext := fmt.Sprintf("vtctl:%s", contextUUID)
 
 			ddlStrategySetting := schema.NewDDLStrategySetting(schema.DDLStrategyOnline, "")
-			onlineDDL, err := schema.NewOnlineDDLBySQL(keyspace, "", fmt.Sprintf("revert %s", uuid), ddlStrategySetting, requestContext)
+			onlineDDL, err := schema.NewOnlineDDL(keyspace, "", fmt.Sprintf("revert %s", uuid), ddlStrategySetting, requestContext)
 			if err != nil {
 				return err
 			}
