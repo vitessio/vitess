@@ -87,25 +87,3 @@ func ParseAlterTableOptions(alterStatement string) (explicitSchema, explicitTabl
 	}
 	return explicitSchema, explicitTable, alterOptions
 }
-
-// NormalizeOnlineDDL normalizes a given query for OnlineDDL, possibly exploding it into multiple distinct queries
-func NormalizeOnlineDDL(sql string) (normalized []*NormalizedDDLQuery, err error) {
-	ddlStmt, action, err := ParseOnlineDDLStatement(sql)
-	if err != nil {
-		return normalized, err
-	}
-	switch action {
-	case sqlparser.DropDDLAction:
-		tables := ddlStmt.GetFromTables()
-		for _, table := range tables {
-			ddlStmt.SetFromTables([]sqlparser.TableName{table})
-			normalized = append(normalized, &NormalizedDDLQuery{SQL: sqlparser.String(ddlStmt), TableName: table})
-		}
-		return normalized, nil
-	}
-	if ddlStmt.IsFullyParsed() {
-		sql = sqlparser.String(ddlStmt)
-	}
-	n := &NormalizedDDLQuery{SQL: sql, TableName: ddlStmt.GetTable()}
-	return []*NormalizedDDLQuery{n}, nil
-}

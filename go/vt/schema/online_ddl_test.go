@@ -30,95 +30,18 @@ func TestCreateUUID(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func TestIsDirect(t *testing.T) {
-	assert.True(t, DDLStrategyDirect.IsDirect())
-	assert.False(t, DDLStrategyOnline.IsDirect())
-	assert.False(t, DDLStrategyGhost.IsDirect())
-	assert.False(t, DDLStrategyPTOSC.IsDirect())
-	assert.True(t, DDLStrategy("").IsDirect())
-	assert.False(t, DDLStrategy("gh-ost").IsDirect())
-	assert.False(t, DDLStrategy("pt-osc").IsDirect())
-	assert.True(t, DDLStrategy("something").IsDirect())
-}
-
-func TestParseDDLStrategy(t *testing.T) {
-	tt := []struct {
-		strategyVariable string
-		strategy         DDLStrategy
-		options          string
-		isDeclarative    bool
-		runtimeOptions   string
-		err              error
-	}{
-		{
-			strategyVariable: "direct",
-			strategy:         DDLStrategyDirect,
-		},
-		{
-			strategyVariable: "online",
-			strategy:         DDLStrategyOnline,
-		},
-		{
-			strategyVariable: "gh-ost",
-			strategy:         DDLStrategyGhost,
-		},
-		{
-			strategyVariable: "pt-osc",
-			strategy:         DDLStrategyPTOSC,
-		},
-		{
-			strategy: DDLStrategyDirect,
-		},
-		{
-			strategyVariable: "gh-ost --max-load=Threads_running=100 --allow-master",
-			strategy:         DDLStrategyGhost,
-			options:          "--max-load=Threads_running=100 --allow-master",
-			runtimeOptions:   "--max-load=Threads_running=100 --allow-master",
-		},
-		{
-			strategyVariable: "gh-ost --max-load=Threads_running=100 -declarative",
-			strategy:         DDLStrategyGhost,
-			options:          "--max-load=Threads_running=100 -declarative",
-			runtimeOptions:   "--max-load=Threads_running=100",
-			isDeclarative:    true,
-		},
-		{
-			strategyVariable: "gh-ost --declarative --max-load=Threads_running=100",
-			strategy:         DDLStrategyGhost,
-			options:          "--declarative --max-load=Threads_running=100",
-			runtimeOptions:   "--max-load=Threads_running=100",
-			isDeclarative:    true,
-		},
-	}
-	for _, ts := range tt {
-		strategy, options, err := ParseDDLStrategy(ts.strategyVariable)
-		assert.NoError(t, err)
-		assert.Equal(t, ts.strategy, strategy)
-		assert.Equal(t, ts.options, options)
-		onlineDDL := &OnlineDDL{Options: options}
-		assert.Equal(t, ts.isDeclarative, onlineDDL.IsDeclarative())
-
-		runtimeOptions := strings.Join(onlineDDL.RuntimeOptions(), " ")
-		assert.Equal(t, ts.runtimeOptions, runtimeOptions)
-	}
-	{
-		_, _, err := ParseDDLStrategy("other")
-		assert.Error(t, err)
-	}
-}
-
 func TestIsOnlineDDLUUID(t *testing.T) {
 	for i := 0; i < 20; i++ {
-		uuid, err := createUUID("_")
+		uuid, err := CreateOnlineDDLUUID()
 		assert.NoError(t, err)
 		assert.True(t, IsOnlineDDLUUID(uuid))
 	}
 	tt := []string{
-		"a0638f6b_ec7b_11ea_9bf8_000d3a9b8a9a_",
-		"_a0638f6b_ec7b_11ea_9bf8_000d3a9b8a9a",
-		"a0638f6b_ec7b_11ea_9bf8_000d3a9b8a9z",
-		"a0638f6b-ec7b-11ea-9bf8-000d3a9b8a9a",
-		"a0638f6b_ec7b_11ea_9bf8_000d3a9b8a9",
+		"a0638f6b_ec7b_11ea_9bf8_000d3a9b8a9a_", // suffix invalid
+		"_a0638f6b_ec7b_11ea_9bf8_000d3a9b8a9a", // prefix invalid
+		"a0638f6b_ec7b_11ea_9bf8_000d3a9b8a9z",  // "z" character invalid
+		"a0638f6b-ec7b-11ea-9bf8-000d3a9b8a9a",  // dash invalid
+		"a0638f6b_ec7b_11ea_9bf8_000d3a9b8a9",   // too short
 	}
 	for _, tc := range tt {
 		assert.False(t, IsOnlineDDLUUID(tc))
@@ -129,7 +52,7 @@ func TestGetGCUUID(t *testing.T) {
 	uuids := map[string]bool{}
 	count := 20
 	for i := 0; i < count; i++ {
-		onlineDDL, err := NewOnlineDDL("ks", "tbl", "alter table t drop column c", DDLStrategyDirect, "", "")
+		onlineDDL, err := NewOnlineDDL("ks", "tbl", "alter table t drop column c", NewDDLStrategySetting(DDLStrategyDirect, ""), "")
 		assert.NoError(t, err)
 		gcUUID := onlineDDL.GetGCUUID()
 		assert.True(t, IsGCUUID(gcUUID))
@@ -235,6 +158,103 @@ func TestGetRevertUUID(t *testing.T) {
 				assert.NoError(t, err)
 				assert.Equal(t, uuid, ts.uuid)
 			}
+		})
+	}
+}
+
+func TestNewOnlineDDL(t *testing.T) {
+	migrationContext := "354b-11eb-82cd-f875a4d24e90"
+	tt := []struct {
+		sql     string
+		isError bool
+	}{
+		{
+			sql: "drop table t",
+		},
+		{
+			sql: "create table t (id int primary key)",
+		},
+		{
+			sql: "alter table t engine=innodb",
+		},
+		{
+			sql:     "select id from t",
+			isError: true,
+		},
+	}
+	for _, ts := range tt {
+		t.Run(ts.sql, func(t *testing.T) {
+			onlineDDL, err := NewOnlineDDL("test_ks", "t", ts.sql, NewDDLStrategySetting(DDLStrategyOnline, ""), migrationContext)
+			if ts.isError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				// onlineDDL.SQL enriched with /*vt+ ... */ comment
+				assert.Contains(t, onlineDDL.SQL, onlineDDL.UUID)
+				assert.Contains(t, onlineDDL.SQL, migrationContext)
+				assert.Contains(t, onlineDDL.SQL, string(DDLStrategyOnline))
+			}
+		})
+	}
+}
+
+func TestNewOnlineDDLs(t *testing.T) {
+	type expect struct {
+		sqls       []string
+		notDDL     bool
+		parseError bool
+		isError    bool
+	}
+	tests := map[string]expect{
+		"alter table t add column i int, drop column d": {sqls: []string{"alter table t add column i int, drop column d"}},
+		"create table t (id int primary key)":           {sqls: []string{"create table t (id int primary key)"}},
+		"drop table t":                                  {sqls: []string{"drop table t"}},
+		"drop table if exists t":                        {sqls: []string{"drop table if exists t"}},
+		"drop table t1, t2, t3":                         {sqls: []string{"drop table t1", "drop table t2", "drop table t3"}},
+		"drop table if exists t1, t2, t3":               {sqls: []string{"drop table if exists t1", "drop table if exists t2", "drop table if exists t3"}},
+		"create index i_idx on t(id)":                   {sqls: []string{"alter table t add index i_idx (id)"}},
+		"create index i_idx on t(name(12))":             {sqls: []string{"alter table t add index i_idx (`name`(12))"}},
+		"create index i_idx on t(id, `ts`, name(12))":   {sqls: []string{"alter table t add index i_idx (id, ts, `name`(12))"}},
+		"create unique index i_idx on t(id)":            {sqls: []string{"alter table t add unique index i_idx (id)"}},
+		"create index i_idx using btree on t(id)":       {sqls: []string{"alter table t add index i_idx (id) using btree"}},
+		"create index with syntax error i_idx on t(id)": {parseError: true},
+		"select * from t":                               {notDDL: true},
+		"drop database t":                               {notDDL: true},
+		"truncate table t":                              {isError: true},
+		"drop view t":                                   {isError: true},
+		"rename table t to t1":                          {isError: true},
+	}
+	migrationContext := "354b-11eb-82cd-f875a4d24e90"
+	for query, expect := range tests {
+		t.Run(query, func(t *testing.T) {
+			stmt, err := sqlparser.Parse(query)
+			if expect.parseError {
+				assert.Error(t, err)
+				return
+			}
+			assert.NoError(t, err)
+			ddlStmt, ok := stmt.(sqlparser.DDLStatement)
+			if expect.notDDL {
+				assert.False(t, ok)
+				return
+			}
+			assert.True(t, ok)
+
+			onlineDDLs, err := NewOnlineDDLs("test_ks", ddlStmt, NewDDLStrategySetting(DDLStrategyOnline, ""), migrationContext)
+			if expect.isError {
+				assert.Error(t, err)
+				return
+			}
+			assert.NoError(t, err)
+
+			sqls := []string{}
+			for _, onlineDDL := range onlineDDLs {
+				sql := onlineDDL.SQL
+				sql = strings.ReplaceAll(sql, "\n", "")
+				sql = strings.ReplaceAll(sql, "\t", "")
+				sqls = append(sqls, sql)
+			}
+			assert.Equal(t, expect.sqls, sqls)
 		})
 	}
 }
