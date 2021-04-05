@@ -6359,3 +6359,5 @@
 2021-04-05T11:02:27Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/719009514
 2021-04-05T11:02:27Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/719009540
 2021-04-05T11:19:52Z,Unit Test (mariadb101),https://github.com/vitessio/vitess/actions/runs/719047141
+2021-04-05T11:19:52Z,endtoend,https://github.com/vitessio/vitess/actions/runs/719047106
+2021-04-05T11:19:52Z,unit_race,https://github.com/vitessio/vitess/actions/runs/719047131
