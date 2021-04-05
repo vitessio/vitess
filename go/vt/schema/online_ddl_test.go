@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 )
@@ -52,7 +53,7 @@ func TestGetGCUUID(t *testing.T) {
 	uuids := map[string]bool{}
 	count := 20
 	for i := 0; i < count; i++ {
-		onlineDDL, err := NewOnlineDDL("ks", "tbl", "alter table t drop column c", NewDDLStrategySetting(DDLStrategyDirect, ""), "")
+		onlineDDL, err := NewOnlineDDLBySQL("ks", "tbl", "alter table t drop column c", NewDDLStrategySetting(DDLStrategyDirect, ""), "")
 		assert.NoError(t, err)
 		gcUUID := onlineDDL.GetGCUUID()
 		assert.True(t, IsGCUUID(gcUUID))
@@ -182,17 +183,32 @@ func TestNewOnlineDDL(t *testing.T) {
 			isError: true,
 		},
 	}
+	strategies := []*DDLStrategySetting{
+		NewDDLStrategySetting(DDLStrategyDirect, ""),
+		NewDDLStrategySetting(DDLStrategyOnline, ""),
+		NewDDLStrategySetting(DDLStrategyOnline, "-singleton"),
+	}
+	require.False(t, strategies[0].IsSkipTopo())
+	require.False(t, strategies[1].IsSkipTopo())
+	require.True(t, strategies[2].IsSkipTopo())
+
 	for _, ts := range tt {
 		t.Run(ts.sql, func(t *testing.T) {
-			onlineDDL, err := NewOnlineDDL("test_ks", "t", ts.sql, NewDDLStrategySetting(DDLStrategyOnline, ""), migrationContext)
-			if ts.isError {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-				// onlineDDL.SQL enriched with /*vt+ ... */ comment
-				assert.Contains(t, onlineDDL.SQL, onlineDDL.UUID)
-				assert.Contains(t, onlineDDL.SQL, migrationContext)
-				assert.Contains(t, onlineDDL.SQL, string(DDLStrategyOnline))
+			for _, stgy := range strategies {
+				t.Run(stgy.ToString(), func(t *testing.T) {
+					onlineDDL, err := NewOnlineDDLBySQL("test_ks", "t", ts.sql, stgy, migrationContext)
+					if ts.isError {
+						assert.Error(t, err)
+						return
+					}
+					assert.NoError(t, err)
+					if stgy.IsSkipTopo() {
+						// onlineDDL.SQL enriched with /*vt+ ... */ comment
+						assert.Contains(t, onlineDDL.SQL, onlineDDL.UUID)
+						assert.Contains(t, onlineDDL.SQL, migrationContext)
+						assert.Contains(t, onlineDDL.SQL, string(stgy.Strategy))
+					}
+				})
 			}
 		})
 	}

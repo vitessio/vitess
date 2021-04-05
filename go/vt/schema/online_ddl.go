@@ -135,7 +135,7 @@ func ParseOnlineDDLStatement(sql string) (ddlStmt sqlparser.DDLStatement, action
 // NewOnlineDDLs takes a single DDL statement, normalizes it (potentially break down into multiple statements), and generates one or more OnlineDDL instances, one for each normalized statement
 func NewOnlineDDLs(keyspace string, ddlStmt sqlparser.DDLStatement, ddlStrategySetting *DDLStrategySetting, requestContext string) (onlineDDLs [](*OnlineDDL), err error) {
 	appendOnlineDDL := func(tableName string, ddlStmt sqlparser.DDLStatement) error {
-		onlineDDL, err := NewOnlineDDL(keyspace, tableName, sqlparser.String(ddlStmt), ddlStrategySetting, requestContext)
+		onlineDDL, err := NewOnlineDDL(keyspace, tableName, ddlStmt, ddlStrategySetting, requestContext)
 		if err != nil {
 			return err
 		}
@@ -165,8 +165,20 @@ func NewOnlineDDLs(keyspace string, ddlStmt sqlparser.DDLStatement, ddlStrategyS
 	return onlineDDLs, nil
 }
 
-// NewOnlineDDL creates a schema change request with self generated UUID and RequestTime
-func NewOnlineDDL(keyspace string, table string, sql string, ddlStrategySetting *DDLStrategySetting, requestContext string) (*OnlineDDL, error) {
+// NewOnlineDDLBySQL creates a schema change request with self generated UUID and RequestTime, based on SQL string, which must be a DDLStatement
+func NewOnlineDDLBySQL(keyspace string, table string, sql string, ddlStrategySetting *DDLStrategySetting, requestContext string) (*OnlineDDL, error) {
+	ddlStmt, _, err := ParseOnlineDDLStatement(sql)
+	if err != nil {
+		return nil, err
+	}
+	return NewOnlineDDL(keyspace, table, ddlStmt, ddlStrategySetting, requestContext)
+}
+
+// NewOnlineDDL creates a schema change request with self generated UUID and RequestTime based ona a DDL statement
+func NewOnlineDDL(keyspace string, table string, ddlStmt sqlparser.DDLStatement, ddlStrategySetting *DDLStrategySetting, requestContext string) (*OnlineDDL, error) {
+	if !ddlStmt.IsFullyParsed() {
+		return nil, fmt.Errorf("NewOnlineDDL: cannot fully parse statement %v", ddlStmt)
+	}
 	if ddlStrategySetting == nil {
 		return nil, fmt.Errorf("NewOnlineDDL: found nil DDLStrategySetting")
 	}
@@ -176,22 +188,15 @@ func NewOnlineDDL(keyspace string, table string, sql string, ddlStrategySetting 
 	}
 
 	if ddlStrategySetting.IsSkipTopo() {
-		ddlStmt, _, err := ParseOnlineDDLStatement(sql)
-		if err != nil {
-			return nil, err
-		}
 		var comments = sqlparser.Comments{
 			fmt.Sprintf(`/*vt+ uuid=%s context=%s strategy=%s options=%s */`, strconv.Quote(u), strconv.Quote(requestContext), strconv.Quote(string(ddlStrategySetting.Strategy)), strconv.Quote(ddlStrategySetting.Options)),
 		}
 		ddlStmt.SetComments(comments)
-		if ddlStmt.IsFullyParsed() {
-			sql = sqlparser.String(ddlStmt)
-		}
 	}
 	return &OnlineDDL{
 		Keyspace:       keyspace,
 		Table:          table,
-		SQL:            sql,
+		SQL:            sqlparser.String(ddlStmt),
 		UUID:           u,
 		Strategy:       ddlStrategySetting.Strategy,
 		Options:        ddlStrategySetting.Options,
