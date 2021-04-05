@@ -135,7 +135,7 @@ func ParseOnlineDDLStatement(sql string) (ddlStmt sqlparser.DDLStatement, action
 // NewOnlineDDLs takes a single DDL statement, normalizes it (potentially break down into multiple statements), and generates one or more OnlineDDL instances, one for each normalized statement
 func NewOnlineDDLs(keyspace string, ddlStmt sqlparser.DDLStatement, ddlStrategySetting *DDLStrategySetting, requestContext string) (onlineDDLs [](*OnlineDDL), err error) {
 	appendOnlineDDL := func(tableName string, ddlStmt sqlparser.DDLStatement) error {
-		onlineDDL, err := NewOnlineDDL(keyspace, tableName, ddlStmt, ddlStrategySetting, requestContext)
+		onlineDDL, err := NewOnlineDDL(keyspace, tableName, sqlparser.String(ddlStmt), ddlStrategySetting, requestContext)
 		if err != nil {
 			return err
 		}
@@ -165,20 +165,8 @@ func NewOnlineDDLs(keyspace string, ddlStmt sqlparser.DDLStatement, ddlStrategyS
 	return onlineDDLs, nil
 }
 
-// NewOnlineDDLBySQL creates a schema change request with self generated UUID and RequestTime, based on SQL string, which must be a DDLStatement
-func NewOnlineDDLBySQL(keyspace string, table string, sql string, ddlStrategySetting *DDLStrategySetting, requestContext string) (*OnlineDDL, error) {
-	ddlStmt, _, err := ParseOnlineDDLStatement(sql)
-	if err != nil {
-		return nil, err
-	}
-	return NewOnlineDDL(keyspace, table, ddlStmt, ddlStrategySetting, requestContext)
-}
-
-// NewOnlineDDL creates a schema change request with self generated UUID and RequestTime based ona a DDL statement
-func NewOnlineDDL(keyspace string, table string, ddlStmt sqlparser.DDLStatement, ddlStrategySetting *DDLStrategySetting, requestContext string) (*OnlineDDL, error) {
-	if !ddlStmt.IsFullyParsed() {
-		return nil, fmt.Errorf("NewOnlineDDL: cannot fully parse statement %v", ddlStmt)
-	}
+// NewOnlineDDL creates a schema change request with self generated UUID and RequestTime
+func NewOnlineDDL(keyspace string, table string, sql string, ddlStrategySetting *DDLStrategySetting, requestContext string) (*OnlineDDL, error) {
 	if ddlStrategySetting == nil {
 		return nil, fmt.Errorf("NewOnlineDDL: found nil DDLStrategySetting")
 	}
@@ -187,16 +175,36 @@ func NewOnlineDDL(keyspace string, table string, ddlStmt sqlparser.DDLStatement,
 		return nil, err
 	}
 
-	if ddlStrategySetting.IsSkipTopo() {
-		var comments = sqlparser.Comments{
-			fmt.Sprintf(`/*vt+ uuid=%s context=%s strategy=%s options=%s */`, strconv.Quote(u), strconv.Quote(requestContext), strconv.Quote(string(ddlStrategySetting.Strategy)), strconv.Quote(ddlStrategySetting.Options)),
+	{
+		// query validation and rebuilding
+		var comments sqlparser.Comments
+		if ddlStrategySetting.IsSkipTopo() {
+			comments = sqlparser.Comments{
+				fmt.Sprintf(`/*vt+ uuid=%s context=%s strategy=%s options=%s */`, strconv.Quote(u), strconv.Quote(requestContext), strconv.Quote(string(ddlStrategySetting.Strategy)), strconv.Quote(ddlStrategySetting.Options)),
+			}
 		}
-		ddlStmt.SetComments(comments)
+		stmt, err := sqlparser.Parse(sql)
+		if err != nil {
+			return nil, err
+		}
+		switch stmt := stmt.(type) {
+		case sqlparser.DDLStatement:
+			if !stmt.IsFullyParsed() {
+				return nil, fmt.Errorf("NewOnlineDDL: cannot fully parse statement %v", sqlparser.String(stmt))
+			}
+			stmt.SetComments(comments)
+		case *sqlparser.RevertMigration:
+			stmt.SetComments(comments)
+		default:
+			return nil, fmt.Errorf("Unsupported statement for Online DDL: %v", sqlparser.String(stmt))
+		}
+		sql = sqlparser.String(stmt)
 	}
+
 	return &OnlineDDL{
 		Keyspace:       keyspace,
 		Table:          table,
-		SQL:            sqlparser.String(ddlStmt),
+		SQL:            sql,
 		UUID:           u,
 		Strategy:       ddlStrategySetting.Strategy,
 		Options:        ddlStrategySetting.Options,

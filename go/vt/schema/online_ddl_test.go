@@ -53,7 +53,7 @@ func TestGetGCUUID(t *testing.T) {
 	uuids := map[string]bool{}
 	count := 20
 	for i := 0; i < count; i++ {
-		onlineDDL, err := NewOnlineDDLBySQL("ks", "tbl", "alter table t drop column c", NewDDLStrategySetting(DDLStrategyDirect, ""), "")
+		onlineDDL, err := NewOnlineDDL("ks", "tbl", "alter table t drop column c", NewDDLStrategySetting(DDLStrategyDirect, ""), "")
 		assert.NoError(t, err)
 		gcUUID := onlineDDL.GetGCUUID()
 		assert.True(t, IsGCUUID(gcUUID))
@@ -133,12 +133,12 @@ func TestGetRevertUUID(t *testing.T) {
 		isError   bool
 	}{
 		{
-			statement: "revert 4e5dcf80_354b_11eb_82cd_f875a4d24e90_20201203114014",
-			uuid:      "4e5dcf80_354b_11eb_82cd_f875a4d24e90_20201203114014",
+			statement: "revert 4e5dcf80_354b_11eb_82cd_f875a4d24e90",
+			uuid:      "4e5dcf80_354b_11eb_82cd_f875a4d24e90",
 		},
 		{
-			statement: "REVERT   4e5dcf80_354b_11eb_82cd_f875a4d24e90_20201203114014",
-			uuid:      "4e5dcf80_354b_11eb_82cd_f875a4d24e90_20201203114014",
+			statement: "REVERT   4e5dcf80_354b_11eb_82cd_f875a4d24e90",
+			uuid:      "4e5dcf80_354b_11eb_82cd_f875a4d24e90",
 		},
 		{
 			statement: "REVERT",
@@ -179,6 +179,13 @@ func TestNewOnlineDDL(t *testing.T) {
 			sql: "alter table t engine=innodb",
 		},
 		{
+			sql: "revert vitess_migration '4e5dcf80_354b_11eb_82cd_f875a4d24e90'",
+		},
+		{
+			sql:     "alter vitess_migration '4e5dcf80_354b_11eb_82cd_f875a4d24e90' cancel",
+			isError: true,
+		},
+		{
 			sql:     "select id from t",
 			isError: true,
 		},
@@ -196,7 +203,7 @@ func TestNewOnlineDDL(t *testing.T) {
 		t.Run(ts.sql, func(t *testing.T) {
 			for _, stgy := range strategies {
 				t.Run(stgy.ToString(), func(t *testing.T) {
-					onlineDDL, err := NewOnlineDDLBySQL("test_ks", "t", ts.sql, stgy, migrationContext)
+					onlineDDL, err := NewOnlineDDL("test_ks", "t", ts.sql, stgy, migrationContext)
 					if ts.isError {
 						assert.Error(t, err)
 						return
