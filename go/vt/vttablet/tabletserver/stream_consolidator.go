@@ -20,8 +20,6 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"vitess.io/vitess/go/sync2"
-
 	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -48,8 +46,7 @@ func NewStreamConsolidator(maxMemoryTotal, maxMemoryQuery int64) *StreamConsolid
 		inflight:       make(map[string]*streamInFlight),
 		maxMemoryTotal: maxMemoryTotal,
 		maxMemoryQuery: maxMemoryQuery,
-		// if the race detector is enabled, block while fanning out to the clients
-		blocking: sync2.Race,
+		blocking:       false,
 	}
 }
 
