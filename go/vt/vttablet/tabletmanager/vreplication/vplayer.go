@@ -233,7 +233,9 @@ func (vp *vplayer) applyRowEvent(ctx context.Context, rowEvent *binlogdatapb.Row
 		_, err := tplan.applyChange(change, func(sql string) (*sqltypes.Result, error) {
 			stats := NewVrLogStats("ROWCHANGE")
 			start := time.Now()
+			log.Infof("idbg: applying sql %s at gtid %s for event %+v", sql, vp.pos, rowEvent)
 			qr, err := vp.vr.dbClient.ExecuteWithRetry(ctx, sql)
+
 			vp.vr.stats.QueryCount.Add(vp.phase, 1)
 			vp.vr.stats.QueryTimings.Record(vp.phase, start)
 			stats.Send(sql)
@@ -417,6 +419,7 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 					// also handles the case where the last transaction is partial. In that case,
 					// we only group the transactions with commits we've seen so far.
 					if hasAnotherCommit(items, i, j+1) {
+						log.Infof("idbg: batching this commit gtid %s with a future transaction %+v", vp.pos, event)
 						continue
 					}
 				}
@@ -456,6 +459,9 @@ func hasAnotherCommit(items [][]*binlogdatapb.VEvent, i, j int) bool {
 
 func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, mustSave bool) error {
 	stats := NewVrLogStats(event.Type.String())
+	if event.Type != binlogdatapb.VEventType_HEARTBEAT {
+		log.Infof("idbg: in applyEvent gtid %s with event %+v, mustSave %t", vp.pos, event, mustSave)
+	}
 	switch event.Type {
 	case binlogdatapb.VEventType_GTID:
 		pos, err := mysql.DecodePosition(event.Gtid)
