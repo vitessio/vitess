@@ -404,7 +404,7 @@ func (svss *SysVarSetAware) Execute(vcursor VCursor, env evalengine.ExpressionEn
 		if err != nil {
 			return err
 		}
-		if _, _, err := schema.ParseDDLStrategy(str); err != nil {
+		if _, err := schema.ParseDDLStrategy(str); err != nil {
 			return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValueForVar, "invalid DDL strategy: %s", str)
 		}
 		vcursor.Session().SetDDLStrategy(str)
