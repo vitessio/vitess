@@ -233,6 +233,10 @@ func (gtidSet MariadbGTIDSet) Union(other GTIDSet) GTIDSet {
 	return newSet
 }
 
+func (gtid MariadbGTIDSet) Distance(other GTIDSet) (int64, error) {
+	panic("implement me")
+}
+
 //Last returns the last gtid
 func (gtidSet MariadbGTIDSet) Last() string {
 	// Sort domains so the string format is deterministic.

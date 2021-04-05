@@ -25,6 +25,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/mysql"
+
 	"github.com/spyzhov/ajson"
 	"github.com/stretchr/testify/require"
 
@@ -2454,6 +2456,21 @@ func TestPlayerJSONDocs(t *testing.T) {
 			expectJSON(t, "vitess_json", tcase.data, id, env.Mysqld.FetchSuperQuery)
 		})
 	}
+}
+
+func TestGTIDDiff(t *testing.T) {
+	t.Helper()
+	var err error
+	var pos1, pos2 mysql.Position
+	gtid1 := "MySQL56/81cbdbf8-6969-11ea-aeb1-a6143b021fff:1-100,81cbdbf8-6969-11ea-aeb1-a6143b021f67:1-524793030"
+	gtid2 := "MySQL56/81cbdbf8-6969-11ea-aeb1-a6143b021fff:1-100,81cbdbf8-6969-11ea-aeb1-a6143b021f67:1-524793031"
+	pos1, err = mysql.DecodePosition(gtid1)
+	require.NoError(t, err)
+	pos2, err = mysql.DecodePosition(gtid2)
+	require.NoError(t, err)
+	dist, err := pos1.GTIDSet.Distance(pos2.GTIDSet)
+	require.NoError(t, err)
+	require.Equal(t, int64(1), dist)
 }
 
 func expectJSON(t *testing.T, table string, values [][]string, id int, exec func(ctx context.Context, query string) (*sqltypes.Result, error)) {

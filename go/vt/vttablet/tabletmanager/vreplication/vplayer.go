@@ -67,6 +67,7 @@ type vplayer struct {
 	phase string
 
 	eventSequenceNumber, relaySequenceNumber int64
+	lastGTIDPosition                         mysql.Position
 }
 
 // newVPlayer creates a new vplayer. Parameters:
@@ -461,6 +462,16 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 		if err != nil {
 			return err
 		}
+		if !vp.lastGTIDPosition.IsZero() {
+			distance, err := vp.lastGTIDPosition.GTIDSet.Distance(pos.GTIDSet)
+			if err != nil {
+				return err
+			}
+			if distance > 1 {
+				log.Warningf("edbg: applyEvent: found gtid difference %d > 1, %+v", distance, event)
+			}
+		}
+		vp.lastGTIDPosition = pos
 		vp.pos = pos
 		// A new position should not be saved until a saveable event occurs.
 		vp.unsavedEvent = nil
