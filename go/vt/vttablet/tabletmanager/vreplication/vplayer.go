@@ -451,7 +451,7 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 				return err
 			}
 			if distance > 1 {
-				log.Warningf("edbg: applyEvent: found gtid difference %d > 1, %+v", distance, event)
+				log.Warningf("wdbg: applyEvent: found gtid difference %d > 1, %+v", distance, event)
 			}
 		}
 		vp.lastGTIDPosition = pos

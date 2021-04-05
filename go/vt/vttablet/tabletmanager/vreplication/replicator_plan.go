@@ -22,6 +22,9 @@ import (
 	"sort"
 	"strings"
 
+	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 
@@ -224,6 +227,30 @@ func (tp *TablePlan) applyBulkInsert(rows *binlogdatapb.VStreamRowsResponse, exe
 	return executor(buf.String())
 }
 
+// Added temporarily for debugging. Note: this only works for "comparable" PKs: numeric and binary data types
+func (tp *TablePlan) isOutsidePKRange(bindvars map[string]*querypb.BindVariable, before, after bool) bool {
+	// Ensure there is one and only one value in lastpk and pkrefs.
+	if tp.Lastpk != nil && len(tp.Lastpk.Fields) == 1 && len(tp.Lastpk.Rows) == 1 && len(tp.Lastpk.Rows[0]) == 1 && len(tp.PKReferences) == 1 {
+		// check again that this is an insert
+		var bindvar *querypb.BindVariable
+		switch {
+		case !before && after:
+			bindvar = bindvars["a_"+tp.PKReferences[0]]
+		}
+		if bindvar == nil { //should never happen
+			return false
+		}
+
+		rowVal, _ := sqltypes.BindVariableToValue(bindvar)
+		result, err := evalengine.NullsafeCompare(rowVal, tp.Lastpk.Rows[0][0])
+		// If rowVal is > last pk, transaction will be a noop, so don't apply this statement
+		if err == nil && result > 0 {
+			return true
+		}
+	}
+	return false
+}
+
 func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor func(string) (*sqltypes.Result, error)) (*sqltypes.Result, error) {
 	// MakeRowTrusted is needed here because Proto3ToResult is not convenient.
 	var before, after bool
@@ -244,7 +271,20 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 	}
 	switch {
 	case !before && after:
-		return execParsedQuery(tp.Insert, bindvars, executor)
+		qr, err := execParsedQuery(tp.Insert, bindvars, executor)
+		if err != nil {
+			return nil, err
+		}
+		if tp.isOutsidePKRange(bindvars, before, after) {
+			if qr.RowsAffected != 0 {
+				log.Warningf("wdbg: applied insert outside pk range but got RowsAffected %d for %+v %+v", qr.RowsAffected, tp.Insert, bindvars)
+			}
+		} else {
+			if qr.RowsAffected == 0 {
+				log.Warningf("wdbg: applied insert within pk range but got RowsAffected %d for %+v %+v", qr.RowsAffected, tp.Insert, bindvars)
+			}
+		}
+		return qr, err
 	case before && !after:
 		if tp.Delete == nil {
 			return nil, nil
@@ -252,7 +292,20 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 		return execParsedQuery(tp.Delete, bindvars, executor)
 	case before && after:
 		if !tp.pkChanged(bindvars) {
-			return execParsedQuery(tp.Update, bindvars, executor)
+			qr, err := execParsedQuery(tp.Update, bindvars, executor)
+			if err != nil {
+				return nil, err
+			}
+			if tp.isOutsidePKRange(bindvars, before, after) {
+				if qr.RowsAffected != 0 {
+					log.Warningf("wdbg: applied update outside pk range but got RowsAffected %d for %+v %+v", qr.RowsAffected, tp.Update, bindvars)
+				}
+			} else {
+				if qr.RowsAffected == 0 {
+					log.Warningf("wdbg: applied update within pk range but got RowsAffected %d for %+v %+v", qr.RowsAffected, tp.Update, bindvars)
+				}
+			}
+			return qr, err
 		}
 		if tp.Delete != nil {
 			if _, err := execParsedQuery(tp.Delete, bindvars, executor); err != nil {
