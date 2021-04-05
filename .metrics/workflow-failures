@@ -6325,6 +6325,7 @@
 2021-04-04T17:23:57Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/717084925
 2021-04-05T05:24:49Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/718278933
 2021-04-05T08:33:01Z,Cluster (onlineddl_declarative),https://github.com/vitessio/vitess/actions/runs/718670990
+2021-04-05T08:33:01Z,Cluster (onlineddl_revert),https://github.com/vitessio/vitess/actions/runs/718670971
 2021-04-05T08:33:01Z,Unit Test (mariadb101),https://github.com/vitessio/vitess/actions/runs/718670979
 2021-04-05T08:33:01Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/718670981
 2021-04-05T08:33:01Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/718670952
