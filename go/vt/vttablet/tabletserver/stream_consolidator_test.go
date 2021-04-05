@@ -93,8 +93,6 @@ func (ct *consolidationTest) leader(stream StreamCallback) error {
 }
 
 func (ct *consolidationTest) run(workers int, generateCallback func(int) (string, StreamCallback)) {
-	logStats := tabletenv.NewLogStats(context.Background(), "StreamConsolidation")
-
 	if ct.results == nil {
 		ct.results = make([]*consolidationResult, workers)
 		for i := 0; i < workers; i++ {
@@ -109,6 +107,7 @@ func (ct *consolidationTest) run(workers int, generateCallback func(int) (string
 
 		go func(worker int) {
 			defer wg.Done()
+			logStats := tabletenv.NewLogStats(context.Background(), "StreamConsolidation")
 			query, callback := generateCallback(worker)
 			start := time.Now()
 			err := ct.cc.Consolidate(logStats, query, func(result *sqltypes.Result) error {
