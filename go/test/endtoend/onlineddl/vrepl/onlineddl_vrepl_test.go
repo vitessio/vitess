@@ -401,10 +401,10 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 	fmt.Println("# Generated UUID (for debug purposes):")
 	fmt.Printf("<%s>\n", uuid)
 
-	strategy, _, err := schema.ParseDDLStrategy(ddlStrategy)
+	strategySetting, err := schema.ParseDDLStrategy(ddlStrategy)
 	assert.NoError(t, err)
 
-	if !strategy.IsDirect() {
+	if !strategySetting.Strategy.IsDirect() {
 		time.Sleep(time.Second * 20)
 	}
 
