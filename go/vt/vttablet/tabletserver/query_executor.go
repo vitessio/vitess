@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"sync"
 	"time"
 
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -57,6 +58,26 @@ type QueryExecutor struct {
 	logStats       *tabletenv.LogStats
 	tsv            *TabletServer
 	tabletType     topodatapb.TabletType
+}
+
+var streamResultPool = sync.Pool{New: func() interface{} {
+	return &sqltypes.Result{
+		Rows: make([][]sqltypes.Value, 0, 256),
+	}
+}}
+
+func returnStreamResult(result *sqltypes.Result) {
+	// only return large results slices to the pool
+	if cap(result.Rows) >= 256 {
+		rows := result.Rows[:0]
+		*result = sqltypes.Result{}
+		result.Rows = rows
+		streamResultPool.Put(result)
+	}
+}
+
+func allocStreamResult() *sqltypes.Result {
+	return streamResultPool.Get().(*sqltypes.Result)
 }
 
 var sequenceFields = []*querypb.Field{
@@ -298,6 +319,7 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) error {
 	}
 
 	return qre.execStreamSQL(conn, sql, func(result *sqltypes.Result) error {
+		defer returnStreamResult(result)
 		if replaceKeyspace != "" {
 			result.ReplaceKeyspace(replaceKeyspace)
 		}
@@ -858,7 +880,7 @@ func (qre *QueryExecutor) execStreamSQL(conn *connpool.DBConn, sql string, callb
 	defer qre.tsv.olapql.Remove(qd)
 
 	start := time.Now()
-	err := conn.Stream(ctx, sql, callBackClosingSpan, int(qre.tsv.qe.streamBufferSize.Get()), sqltypes.IncludeFieldsOrDefault(qre.options))
+	err := conn.Stream(ctx, sql, callBackClosingSpan, allocStreamResult, int(qre.tsv.qe.streamBufferSize.Get()), sqltypes.IncludeFieldsOrDefault(qre.options))
 	qre.logStats.AddRewrittenSQL(sql, start)
 	if err != nil {
 		// MySQL error that isn't due to a connection issue

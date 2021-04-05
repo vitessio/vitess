@@ -98,13 +98,17 @@ func (sc *StreamConsolidator) Consolidate(logStats *tabletenv.LogStats, sql stri
 
 	// if we have a followChan, we're following up on a query that is already being served
 	if followChan != nil {
+		defer func() {
+			memchange := inflight.unfollow(followChan)
+			atomic.AddInt64(&sc.memory, memchange)
+		}()
+
 		logStats.QuerySources |= tabletenv.QuerySourceConsolidator
 
 		// first, catch up our client by sending all the Results to the streaming query
 		// that the leader has already sent
 		for _, result := range catchup {
 			if err := callback(result); err != nil {
-				inflight.unfollow(followChan)
 				return err
 			}
 		}
@@ -113,7 +117,6 @@ func (sc *StreamConsolidator) Consolidate(logStats *tabletenv.LogStats, sql stri
 		// our follower channel
 		for result := range followChan {
 			if err := callback(result); err != nil {
-				inflight.unfollow(followChan)
 				return err
 			}
 		}
@@ -136,17 +139,14 @@ func (sc *StreamConsolidator) Consolidate(logStats *tabletenv.LogStats, sql stri
 		}
 		sc.mu.Unlock()
 
-		atomic.AddInt64(&sc.memory, -inflight.memory)
 		// finalize the stream with the error return we got from the leaderCallback
-		inflight.finish(err)
+		memchange := inflight.finishLeader(err)
+		atomic.AddInt64(&sc.memory, memchange)
 	}()
 
 	// leaderCallback will perform the actual streaming query in MySQL; we provide it a custom
 	// results callback so that we can intercept the results as they come in
 	err = leaderCallback(func(result *sqltypes.Result) error {
-		// mark this result as being consolidated to the stream doesn't reuse its memory
-		result.StatusFlags |= sqltypes.ServerConsolidatedQuery
-
 		// update the live consolidated stream; this will fan out the Result to all our active followers
 		// and tell us how much more memory we're using by temporarily storing the result so other followers
 		// in the future can catch up to this stream
@@ -180,6 +180,7 @@ type streamInFlight struct {
 	err            error
 	memory         int64
 	catchupAllowed bool
+	finished       bool
 }
 
 // follow adds a follower to this in-flight stream, returning a slice with all
@@ -203,12 +204,12 @@ func (s *streamInFlight) follow() ([]*sqltypes.Result, chan *sqltypes.Result) {
 }
 
 // unfollow unsubscribes the given follower from receiving more results from the stream.
-// This is only necessary if the follower has crashed for whatever reason (e.g. because
-// its client has disconnected).
-func (s *streamInFlight) unfollow(ch chan *sqltypes.Result) {
+func (s *streamInFlight) unfollow(ch chan *sqltypes.Result) int64 {
 	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	delete(s.fanout, ch)
-	s.mu.Unlock()
+	return s.checkFollowers()
 }
 
 // result returns the final error for this stream. If the stream finished successfully,
@@ -243,24 +244,19 @@ func (s *streamInFlight) shouldContinueStreaming() bool {
 // update fans out the given result to all the active followers for the stream and
 // returns the amount of memory that is being used by the catchup buffer
 func (s *streamInFlight) update(result *sqltypes.Result, block bool, maxMemoryQuery, maxMemoryTotal int64) int64 {
+	var memoryChange int64
 	resultSize := result.CachedSize(true)
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
-
-	var memoryChange int64
 
 	// if this stream can still be catched up with, we need to store the result in
 	// a catch up buffer; otherwise, we can skip this altogether and just fan out the result
 	// to all the followers that are already caught up
 	if s.catchupAllowed {
 		if s.memory+resultSize > maxMemoryQuery || resultSize > maxMemoryTotal {
-			// if the catch up buffer has grown too large, clear it and disable catching
-			// up to this stream.
+			// if the catch up buffer has grown too large, disable catching up to this stream.
 			s.catchupAllowed = false
-			s.catchup = nil
-			memoryChange = -s.memory
-			s.memory = 0
 		} else {
 			// otherwise store the result in our catchup buffer for future clients
 			s.catchup = append(s.catchup, result)
@@ -293,16 +289,29 @@ func (s *streamInFlight) update(result *sqltypes.Result, block bool, maxMemoryQu
 	return memoryChange
 }
 
-// finish terminates this consolidated stream by storing the final error result from
+// finishLeader terminates this consolidated stream by storing the final error result from
 // MySQL and notifying all the followers that there are no more Results left to be sent
-func (s *streamInFlight) finish(err error) {
+func (s *streamInFlight) finishLeader(err error) int64 {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	s.err = err
+	s.finished = true
 	for follower, alive := range s.fanout {
 		if alive {
 			close(follower)
 		}
 	}
+	return s.checkFollowers()
+}
+
+func (s *streamInFlight) checkFollowers() int64 {
+	if s.finished && len(s.fanout) == 0 {
+		for _, result := range s.catchup {
+			returnStreamResult(result)
+		}
+		s.catchup = nil
+		return -s.memory
+	}
+	return 0
 }
