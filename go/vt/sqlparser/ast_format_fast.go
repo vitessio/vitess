@@ -369,7 +369,9 @@ func (node *AlterMigration) formatFast(buf *TrackedBuffer) {
 
 // formatFast formats the node.
 func (node *RevertMigration) formatFast(buf *TrackedBuffer) {
-	buf.WriteString("revert vitess_migration '")
+	buf.WriteString("revert ")
+	node.Comments.formatFast(buf)
+	buf.WriteString("vitess_migration '")
 	buf.WriteString(node.UUID)
 	buf.WriteByte('\'')
 }

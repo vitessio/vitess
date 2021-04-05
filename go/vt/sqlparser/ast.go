@@ -1107,6 +1107,11 @@ func (node *AlterView) SetComments(comments Comments) {
 	// irrelevant
 }
 
+// SetComments for RevertMigration, does not implement DDLStatement
+func (node *RevertMigration) SetComments(comments Comments) {
+	node.Comments = comments
+}
+
 // GetToTables implements the DDLStatement interface
 func (node *RenameTable) GetToTables() TableNames {
 	var toTables TableNames
