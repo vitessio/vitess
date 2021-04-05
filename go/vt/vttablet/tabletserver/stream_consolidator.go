@@ -37,6 +37,7 @@ type StreamConsolidator struct {
 	inflight                       map[string]*streamInFlight
 	memory                         int64
 	maxMemoryTotal, maxMemoryQuery int64
+	blocking                       bool
 }
 
 // NewStreamConsolidator allocates a stream consolidator. The consolidator will use up to maxMemoryTotal
@@ -47,11 +48,20 @@ func NewStreamConsolidator(maxMemoryTotal, maxMemoryQuery int64) *StreamConsolid
 		inflight:       make(map[string]*streamInFlight),
 		maxMemoryTotal: maxMemoryTotal,
 		maxMemoryQuery: maxMemoryQuery,
+		// if the race detector is enabled, block while fanning out to the clients
+		blocking: sync2.Race,
 	}
 }
 
 // StreamCallback is a function that yields every Result object from a streaming query
 type StreamCallback func(result *sqltypes.Result) error
+
+// SetBlocking sets whether fanning out should block to wait for slower clients to
+// catch up, or should immediately disconnect clients that are taking too long to process the
+// consolidated stream. By default, blocking is only enabled when running with the race detector.
+func (sc *StreamConsolidator) SetBlocking(block bool) {
+	sc.blocking = block
+}
 
 // Consolidate wraps the execution of a streaming query so that any other queries being executed
 // simultaneously will wait for the results of the original query, instead of being executed from
@@ -143,7 +153,7 @@ func (sc *StreamConsolidator) Consolidate(logStats *tabletenv.LogStats, sql stri
 		// update the live consolidated stream; this will fan out the Result to all our active followers
 		// and tell us how much more memory we're using by temporarily storing the result so other followers
 		// in the future can catch up to this stream
-		memChange := inflight.update(result, sc.maxMemoryQuery, sc.maxMemoryTotal-atomic.LoadInt64(&sc.memory))
+		memChange := inflight.update(result, sc.blocking, sc.maxMemoryQuery, sc.maxMemoryTotal-atomic.LoadInt64(&sc.memory))
 		atomic.AddInt64(&sc.memory, memChange)
 
 		// yield the result to the very first client that started the query; this client is not listening
@@ -235,7 +245,7 @@ func (s *streamInFlight) shouldContinueStreaming() bool {
 
 // update fans out the given result to all the active followers for the stream and
 // returns the amount of memory that is being used by the catchup buffer
-func (s *streamInFlight) update(result *sqltypes.Result, maxMemoryQuery, maxMemoryTotal int64) int64 {
+func (s *streamInFlight) update(result *sqltypes.Result, block bool, maxMemoryQuery, maxMemoryTotal int64) int64 {
 	resultSize := result.CachedSize(true)
 
 	s.mu.Lock()
@@ -262,22 +272,23 @@ func (s *streamInFlight) update(result *sqltypes.Result, maxMemoryQuery, maxMemo
 		}
 	}
 
-	// fan out the result to all the followers that are currently active
-	for follower, alive := range s.fanout {
-		if alive {
-			select {
-			case follower <- result:
-			default:
-				// if the race detector is enabled, channel writes are going to block often; do not error out
-				if sync2.Race {
-					follower <- result
-					continue
+	if block {
+		for follower := range s.fanout {
+			follower <- result
+		}
+	} else {
+		// fan out the result to all the followers that are currently active
+		for follower, alive := range s.fanout {
+			if alive {
+				select {
+				case follower <- result:
+				default:
+					// if we cannot write to this follower's channel, it means its client is taking
+					// too long to relay the stream; we must drop it from our our consolidation. the
+					// client will receive an error.
+					s.fanout[follower] = false
+					close(follower)
 				}
-				// if we cannot write to this follower's channel, it means its client is taking
-				// too long to relay the stream; we must drop it from our our consolidation. the
-				// client will receive an error.
-				s.fanout[follower] = false
-				close(follower)
 			}
 		}
 	}
