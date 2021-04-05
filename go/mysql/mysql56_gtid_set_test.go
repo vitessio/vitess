@@ -22,6 +22,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/stretchr/testify/assert"
 )
 
@@ -560,5 +562,84 @@ func TestMySQL56GTIDSetLast(t *testing.T) {
 	for want, input := range table {
 		got := strings.ToLower(input.Last())
 		assert.Equal(t, want, got)
+	}
+}
+
+func TestMySQL56GTIDSetDistance(t *testing.T) {
+	sid1 := SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
+	sid2 := SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 16}
+
+	type testCase struct {
+		set1, set2 GTIDSet
+		dist       int64
+		errStr     string
+	}
+	testCases := []*testCase{
+		{
+			set1: Mysql56GTIDSet{
+				sid1: []interval{{20, 30}, {35, 40}},
+				sid2: []interval{{1, 5}, {50, 50}, {60, 70}},
+			},
+			set2: Mysql56GTIDSet{
+				sid1: []interval{{20, 30}, {35, 40}},
+				sid2: []interval{{1, 5}, {50, 50}, {60, 70}},
+			},
+			dist:   0,
+			errStr: "",
+		},
+		{
+			set1: Mysql56GTIDSet{
+				sid1: []interval{{20, 30}, {35, 40}},
+				sid2: []interval{{1, 5}, {50, 50}, {60, 70}},
+			},
+			set2: Mysql56GTIDSet{
+				sid1: []interval{{20, 30}, {35, 40}},
+				sid2: []interval{{1, 5}, {50, 50}, {60, 81}},
+			},
+			dist:   11,
+			errStr: "",
+		},
+		{
+			set1: Mysql56GTIDSet{
+				sid1: []interval{{20, 30}, {35, 40}},
+				sid2: []interval{{1, 5}, {50, 50}, {60, 70}},
+			},
+			set2: Mysql56GTIDSet{
+				sid1: []interval{{20, 30}, {35, 40}},
+				sid2: []interval{{1, 5}, {50, 50}, {60, 1e6 + 60}},
+			},
+			dist:   1e6 - 10,
+			errStr: "",
+		},
+		{
+			set1: Mysql56GTIDSet{
+				sid1: []interval{{20, 30}, {35, 40}},
+				sid2: []interval{{1, 5}, {50, 50}, {60, 70}},
+			},
+			set2: Mysql56GTIDSet{
+				sid1: []interval{{20, 30}, {35, 40}},
+			},
+			dist:   17,
+			errStr: "",
+		},
+		{
+			set1: Mysql56GTIDSet{
+				sid1: []interval{{20, 30}, {35, 40}},
+				sid2: []interval{{1, 5}, {50, 50}, {60, 70}},
+			},
+			set2:   nil,
+			dist:   -1,
+			errStr: "passed GTIDSet is not a MySQL GTIDSet",
+		},
+	}
+	for _, tcase := range testCases {
+		t.Run("", func(t *testing.T) {
+			dist, err := tcase.set1.Distance(tcase.set2)
+			if err != nil {
+				require.Equal(t, err.Error(), tcase.errStr)
+			}
+			require.Equal(t, tcase.dist, dist)
+
+		})
 	}
 }

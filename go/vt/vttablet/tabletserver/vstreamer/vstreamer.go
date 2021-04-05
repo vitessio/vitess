@@ -83,6 +83,7 @@ type vstreamer struct {
 	phase               string
 	vse                 *Engine
 	eventSequenceNumber int64
+	lastGTIDPosition    mysql.Position
 }
 
 // CopyState contains the last PK for tables to be copied
@@ -401,6 +402,16 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 			})
 		}
 		vs.pos = mysql.AppendGTID(vs.pos, gtid) //TODO: #sugu why Append?
+		if !vs.lastGTIDPosition.IsZero() {
+			distance, err := vs.lastGTIDPosition.GTIDSet.Distance(vs.pos.GTIDSet)
+			if err != nil {
+				return nil, err
+			}
+			if distance > 1 {
+				log.Warningf("edbg: applyEvent: found gtid difference %d > 1, %+v", distance, ev)
+			}
+		}
+		vs.lastGTIDPosition = vs.pos
 	case ev.IsXID():
 		vevents = append(vevents, &binlogdatapb.VEvent{
 			Type: binlogdatapb.VEventType_GTID,

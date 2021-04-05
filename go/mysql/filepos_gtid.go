@@ -154,6 +154,10 @@ func (gtid filePosGTID) Last() string {
 	return gtid.String()
 }
 
+func (gtid filePosGTID) Distance(other GTIDSet) (int64, error) {
+	panic("implement me")
+}
+
 func init() {
 	gtidParsers[FilePosFlavorID] = parseFilePosGTID
 	gtidSetParsers[FilePosFlavorID] = ParseFilePosGTIDSet
