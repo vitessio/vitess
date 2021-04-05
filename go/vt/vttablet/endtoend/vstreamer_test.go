@@ -358,6 +358,7 @@ func expectLogs(ctx context.Context, t *testing.T, query string, eventCh chan []
 				t.Fatal("expectLogs: not ok, stream ended early")
 			}
 			for _, ev := range allevs {
+				ev.SequenceNumber = 0
 				// Ignore spurious heartbeats that can happen on slow machines.
 				if ev.Type == binlogdatapb.VEventType_HEARTBEAT {
 					continue
