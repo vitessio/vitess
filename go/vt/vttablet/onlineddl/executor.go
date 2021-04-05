@@ -1865,14 +1865,14 @@ func (e *Executor) runNextMigration(ctx context.Context) error {
 			Options:  row["options"].ToString(),
 			Status:   schema.OnlineDDLStatus(row["migration_status"].ToString()),
 		}
-		// We strip out any VT query comments because our simplified parser doesn't work well with comments
-		ddlStmt, _, err := schema.ParseOnlineDDLStatement(onlineDDL.SQL)
-		if err != nil {
-			return err
+		{
+			// We strip out any VT query comments because our simplified parser doesn't work well with comments
+			ddlStmt, _, err := schema.ParseOnlineDDLStatement(onlineDDL.SQL)
+			if err == nil {
+				ddlStmt.SetComments(sqlparser.Comments{})
+				onlineDDL.SQL = sqlparser.String(ddlStmt)
+			}
 		}
-		ddlStmt.SetComments(sqlparser.Comments{})
-		onlineDDL.SQL = sqlparser.String(ddlStmt)
-
 		e.executeMigration(ctx, onlineDDL)
 		// the query should only ever return a single row at the most
 		// but let's make it also explicit here that we only run a single migration

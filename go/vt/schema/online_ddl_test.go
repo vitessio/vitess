@@ -141,10 +141,6 @@ func TestGetRevertUUID(t *testing.T) {
 			uuid:      "4e5dcf80_354b_11eb_82cd_f875a4d24e90",
 		},
 		{
-			statement: "REVERT",
-			isError:   true,
-		},
-		{
 			statement: "alter table t drop column c",
 			isError:   true,
 		},
@@ -155,10 +151,25 @@ func TestGetRevertUUID(t *testing.T) {
 			uuid, err := onlineDDL.GetRevertUUID()
 			if ts.isError {
 				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-				assert.Equal(t, uuid, ts.uuid)
+				return
 			}
+			assert.NoError(t, err)
+			assert.Equal(t, ts.uuid, uuid)
+		})
+	}
+	migrationContext := "354b-11eb-82cd-f875a4d24e90"
+	for _, ts := range tt {
+		t.Run(ts.statement, func(t *testing.T) {
+			onlineDDL, err := NewOnlineDDL("test_ks", "t", ts.statement, NewDDLStrategySetting(DDLStrategyOnline, ""), migrationContext)
+			assert.NoError(t, err)
+			require.NotNil(t, onlineDDL)
+			uuid, err := onlineDDL.GetRevertUUID()
+			if ts.isError {
+				assert.Error(t, err)
+				return
+			}
+			assert.NoError(t, err)
+			assert.Equal(t, ts.uuid, uuid)
 		})
 	}
 }

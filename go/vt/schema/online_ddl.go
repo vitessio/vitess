@@ -34,7 +34,6 @@ var (
 	onlineDdlUUIDRegexp               = regexp.MustCompile(`^[0-f]{8}_[0-f]{4}_[0-f]{4}_[0-f]{4}_[0-f]{12}$`)
 	onlineDDLGeneratedTableNameRegexp = regexp.MustCompile(`^_[0-f]{8}_[0-f]{4}_[0-f]{4}_[0-f]{4}_[0-f]{12}_([0-9]{14})_(gho|ghc|del|new|vrepl)$`)
 	ptOSCGeneratedTableNameRegexp     = regexp.MustCompile(`^_.*_old$`)
-	revertStatementRegexp             = regexp.MustCompile(`(?i)^revert\s+(.*)$`)
 )
 
 const (
@@ -177,6 +176,10 @@ func NewOnlineDDL(keyspace string, table string, sql string, ddlStrategySetting 
 
 	{
 		// query validation and rebuilding
+		if uuid, err := ParseRevertUUID(sql); err == nil {
+			sql = fmt.Sprintf("revert vitess_migration '%s'", uuid)
+		}
+
 		var comments sqlparser.Comments
 		if ddlStrategySetting.IsSkipTopo() {
 			comments = sqlparser.Comments{
@@ -236,7 +239,7 @@ func (onlineDDL *OnlineDDL) ToJSON() ([]byte, error) {
 
 // GetAction extracts the DDL action type from the online DDL statement
 func (onlineDDL *OnlineDDL) GetAction() (action sqlparser.DDLAction, err error) {
-	if revertStatementRegexp.MatchString(onlineDDL.SQL) {
+	if _, err := onlineDDL.GetRevertUUID(); err == nil {
 		return sqlparser.RevertDDLAction, nil
 	}
 
@@ -267,8 +270,13 @@ func (onlineDDL *OnlineDDL) GetActionStr() (action sqlparser.DDLAction, actionSt
 // fo the reverted migration.
 // The function returns error when this is not a revert migration.
 func (onlineDDL *OnlineDDL) GetRevertUUID() (uuid string, err error) {
-	if submatch := revertStatementRegexp.FindStringSubmatch(onlineDDL.SQL); len(submatch) > 0 {
-		return submatch[1], nil
+	if uuid, err := ParseRevertUUID(onlineDDL.SQL); err == nil {
+		return uuid, nil
+	}
+	if stmt, err := sqlparser.Parse(onlineDDL.SQL); err == nil {
+		if revert, ok := stmt.(*sqlparser.RevertMigration); ok {
+			return revert.UUID, nil
+		}
 	}
 	return "", fmt.Errorf("Not a Revert DDL: '%s'", onlineDDL.SQL)
 }
