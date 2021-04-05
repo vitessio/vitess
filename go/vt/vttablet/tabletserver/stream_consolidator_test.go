@@ -257,6 +257,7 @@ func TestConsolidatorDelayedListener(t *testing.T) {
 			}
 
 		case 3:
+			time.Sleep(10 * time.Millisecond)
 			return "select 1", func(result *sqltypes.Result) error {
 				time.Sleep(100 * time.Millisecond)
 				return nil
