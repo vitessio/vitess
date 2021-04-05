@@ -154,10 +154,11 @@ func (vp *vplayer) fetchAndApply(ctx context.Context) (err error) {
 					vp.eventSequenceNumber++
 				}
 				if ev.SequenceNumber != vp.eventSequenceNumber {
-					err := fmt.Errorf("@@@ incorrect sequence number, got %d, expected %d, vevent %+v",
+					err := fmt.Errorf("Error: edbg: incorrect sequence number, got %d, expected %d, vevent %+v",
 						ev.SequenceNumber, vp.eventSequenceNumber, ev)
 					log.Error(err)
-					vp.vr.setState(binlogplayer.BlpError, err.Error())
+					vp.vr.setState(binlogplayer.BlpStopped, err.Error())
+					return err
 				}
 			}
 			return relay.Send(events)
@@ -387,10 +388,11 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 					vp.relaySequenceNumber++
 				}
 				if event.SequenceNumber != vp.relaySequenceNumber {
-					err := fmt.Errorf("@@@ incorrect relay sequence number, got %d, expected %d, vevent %+v",
+					err := fmt.Errorf("Error: edbg: incorrect relay sequence number, got %d, expected %d, vevent %+v",
 						event.SequenceNumber, vp.relaySequenceNumber, event)
 					log.Error(err)
-					vp.vr.setState(binlogplayer.BlpError, err.Error())
+					vp.vr.setState(binlogplayer.BlpStopped, err.Error())
+					return err
 				}
 
 				if event.Timestamp != 0 {

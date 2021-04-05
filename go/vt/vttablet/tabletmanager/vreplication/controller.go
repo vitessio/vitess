@@ -270,7 +270,7 @@ func (ct *controller) setMessage(dbClient binlogplayer.DBClient, message string)
 		Time:    time.Now(),
 		Message: message,
 	})
-	query := fmt.Sprintf("update _vt.vreplication set message=%v where id=%v", encodeString(binlogplayer.MessageTruncate(message)), ct.id)
+	query := fmt.Sprintf("update _vt.vreplication set message=%v where id=%v and message not like '%%dbg:%%'", encodeString(binlogplayer.MessageTruncate(message)), ct.id)
 	if _, err := dbClient.ExecuteFetch(query, 1); err != nil {
 		return fmt.Errorf("could not set message: %v: %v", query, err)
 	}
