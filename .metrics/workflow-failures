@@ -6370,6 +6370,7 @@
 2021-04-05T15:50:03Z,local_example,https://github.com/vitessio/vitess/actions/runs/719661976
 2021-04-05T16:24:38Z,Cluster (27),https://github.com/vitessio/vitess/actions/runs/719748261
 2021-04-05T16:24:38Z,local_example,https://github.com/vitessio/vitess/actions/runs/719748300
+2021-04-05T16:56:02Z,Cluster (onlineddl_declarative),https://github.com/vitessio/vitess/actions/runs/719827704
 2021-04-05T16:56:02Z,Unit Test (mariadb101),https://github.com/vitessio/vitess/actions/runs/719827709
 2021-04-05T16:56:02Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/719827697
 2021-04-05T16:56:02Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/719827686
