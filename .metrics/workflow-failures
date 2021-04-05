@@ -6333,3 +6333,7 @@
 2021-04-05T08:33:01Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/718670974
 2021-04-05T08:33:01Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/718670980
 2021-04-05T08:33:01Z,unit_race,https://github.com/vitessio/vitess/actions/runs/718670951
+2021-04-05T09:54:44Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/718857471
+2021-04-05T09:54:44Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/718857468
+2021-04-05T09:54:44Z,endtoend,https://github.com/vitessio/vitess/actions/runs/718857457
+2021-04-05T09:54:44Z,unit_race,https://github.com/vitessio/vitess/actions/runs/718857467
