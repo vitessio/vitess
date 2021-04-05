@@ -344,7 +344,7 @@ func (cached *OnlineDDL) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(72)
+		size += int64(64)
 	}
 	// field Keyspace *vitess.io/vitess/go/vt/vtgate/vindexes.Keyspace
 	size += cached.Keyspace.CachedSize(true)
@@ -354,10 +354,12 @@ func (cached *OnlineDDL) CachedSize(alloc bool) int64 {
 	}
 	// field SQL string
 	size += int64(len(cached.SQL))
-	// field Strategy vitess.io/vitess/go/vt/schema.DDLStrategy
-	size += int64(len(cached.Strategy))
-	// field Options string
-	size += int64(len(cached.Options))
+	// field DDLStrategySetting *vitess.io/vitess/go/vt/schema.DDLStrategySetting
+	size += cached.DDLStrategySetting.CachedSize(true)
+	// field TargetDestination vitess.io/vitess/go/vt/key.Destination
+	if cc, ok := cached.TargetDestination.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
 	return size
 }
 func (cached *OrderedAggregate) CachedSize(alloc bool) int64 {
