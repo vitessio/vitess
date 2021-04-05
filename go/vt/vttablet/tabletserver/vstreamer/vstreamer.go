@@ -408,7 +408,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 				return nil, err
 			}
 			if distance > 1 {
-				log.Warningf("edbg: applyEvent: found gtid difference %d > 1, %+v", distance, ev)
+				log.Warningf("wdbg: applyEvent: found gtid difference %d > 1, %+v", distance, ev)
 			}
 		}
 		vs.lastGTIDPosition = vs.pos
