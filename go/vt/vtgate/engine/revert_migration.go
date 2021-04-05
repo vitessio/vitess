@@ -70,7 +70,8 @@ func (v *RevertMigration) GetTableName() string {
 // Execute implements the Primitive interface
 func (v *RevertMigration) Execute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantfields bool) (result *sqltypes.Result, err error) {
 	sql := fmt.Sprintf("revert %s", v.Stmt.UUID)
-	onlineDDL, err := schema.NewOnlineDDL(v.GetKeyspaceName(), "", sql, schema.DDLStrategyOnline, "", fmt.Sprintf("vtgate:%s", vcursor.Session().GetSessionUUID()))
+	ddlStrategySetting := schema.NewDDLStrategySetting(schema.DDLStrategyOnline, "")
+	onlineDDL, err := schema.NewOnlineDDL(v.GetKeyspaceName(), "", sql, ddlStrategySetting, fmt.Sprintf("vtgate:%s", vcursor.Session().GetSessionUUID()))
 	if err != nil {
 		return result, err
 	}
