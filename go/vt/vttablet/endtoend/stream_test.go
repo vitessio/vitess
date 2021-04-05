@@ -46,6 +46,7 @@ func TestStreamUnion(t *testing.T) {
 }
 
 func TestStreamLongTail(t *testing.T) {
+	const Workers = 50
 	const RowCount = 1100
 	const RowContent = "abcdefghijklmnopqrstuvwxyz"
 
@@ -78,7 +79,7 @@ func TestStreamLongTail(t *testing.T) {
 	var start = make(chan struct{})
 	var finish sync.WaitGroup
 
-	for i := 0; i < 1000; i++ {
+	for i := 0; i < Workers; i++ {
 		finish.Add(1)
 		go func() {
 			defer finish.Done()
