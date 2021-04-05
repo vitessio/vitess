@@ -74,7 +74,8 @@ func (ct *consolidationTest) leader(stream StreamCallback) error {
 
 	if ct.streamItems != nil {
 		for _, item := range ct.streamItems {
-			if err := stream(item); err != nil {
+			cpy := *item
+			if err := stream(&cpy); err != nil {
 				return err
 			}
 			time.Sleep(ct.streamItemDelay)

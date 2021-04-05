@@ -50,7 +50,6 @@ const (
 	ServerPsOutParams              = 0x1000
 	ServerStatusInTransReadonly    = 0x2000
 	ServerSessionStateChanged      = 0x4000
-	ServerConsolidatedQuery        = 0x8000
 )
 
 // ResultStream is an interface for receiving Result. It is used for
