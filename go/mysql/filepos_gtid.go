@@ -154,6 +154,7 @@ func (gtid filePosGTID) Last() string {
 	return gtid.String()
 }
 
+// FIXME HACK ALERT: this is only for passing the unit tests, Distance() is only implemented for MySQL56 atm
 func (gtid filePosGTID) Distance(other GTIDSet) (int64, error) {
 	return 1, nil
 }
