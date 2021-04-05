@@ -549,7 +549,7 @@ func TestAction(t *testing.T) {
 	}
 
 	qr5 := NewQueryRule("rule 5", "r4", QRFail)
-	qr5.SetTrailingCommentCond(".*trailing.*")
+	qr5.SetLeadingCommentCond(".*leading.*")
 
 	newQrs = qrs.Copy()
 	newQrs.Add(qr5)
