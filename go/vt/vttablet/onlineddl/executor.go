@@ -874,7 +874,7 @@ curl -s 'http://localhost:%d/schema-migration/report-status?uuid=%s&status=%s&dr
 			fmt.Sprintf(`--panic-flag-file=%s`, e.ghostPanicFlagFileName(onlineDDL.UUID)),
 			fmt.Sprintf(`--execute=%t`, execute),
 		}
-		args = append(args, onlineDDL.RuntimeOptions()...)
+		args = append(args, onlineDDL.StrategySetting().RuntimeOptions()...)
 		_, err := execCmd("bash", args, os.Environ(), "/tmp", nil, nil)
 		return err
 	}
@@ -1096,7 +1096,7 @@ export MYSQL_PWD
 				`--no-drop-old-table`,
 			)
 		}
-		args = append(args, onlineDDL.RuntimeOptions()...)
+		args = append(args, onlineDDL.StrategySetting().RuntimeOptions()...)
 		_, err = execCmd("bash", args, os.Environ(), "/tmp", nil, nil)
 		return err
 	}
@@ -1634,7 +1634,7 @@ func (e *Executor) executeMigration(ctx context.Context, onlineDDL *schema.Onlin
 		return failMigration(err)
 	}
 
-	if onlineDDL.IsDeclarative() {
+	if onlineDDL.StrategySetting().IsDeclarative() {
 		switch ddlAction {
 		case sqlparser.RevertDDLAction:
 			// No special action. Declarative Revert migrations are handled like any normal Revert migration.
@@ -1865,6 +1865,14 @@ func (e *Executor) runNextMigration(ctx context.Context) error {
 			Options:  row["options"].ToString(),
 			Status:   schema.OnlineDDLStatus(row["migration_status"].ToString()),
 		}
+		// We strip out any VT query comments because our simplified parser doesn't work well with comments
+		ddlStmt, _, err := schema.ParseOnlineDDLStatement(onlineDDL.SQL)
+		if err != nil {
+			return err
+		}
+		ddlStmt.SetComments(sqlparser.Comments{})
+		onlineDDL.SQL = sqlparser.String(ddlStmt)
+
 		e.executeMigration(ctx, onlineDDL)
 		// the query should only ever return a single row at the most
 		// but let's make it also explicit here that we only run a single migration
