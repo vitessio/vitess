@@ -280,10 +280,13 @@ func OnlineDDLFromCommentedStatement(stmt sqlparser.Statement) (onlineDDL *Onlin
 	onlineDDL = &OnlineDDL{
 		SQL: sqlparser.String(stmt),
 	}
-	if onlineDDL.Table, err = decodeDirective("table"); err != nil {
+	if onlineDDL.UUID, err = decodeDirective("uuid"); err != nil {
 		return nil, err
 	}
-	if onlineDDL.UUID, err = decodeDirective("uuid"); err != nil {
+	if !IsOnlineDDLUUID(onlineDDL.UUID) {
+		return nil, fmt.Errorf("Invalid UUID read from statement %s", sqlparser.String(stmt))
+	}
+	if onlineDDL.Table, err = decodeDirective("table"); err != nil {
 		return nil, err
 	}
 	if strategy, err := decodeDirective("strategy"); err == nil {
