@@ -105,7 +105,7 @@ var ghostOverridePath = flag.String("gh-ost-path", "", "override default gh-ost 
 var ptOSCOverridePath = flag.String("pt-osc-path", "", "override default pt-online-schema-change binary full path")
 var migrationCheckInterval = flag.Duration("migration_check_interval", 1*time.Minute, "Interval between migration checks")
 var retainOnlineDDLTables = flag.Duration("retain_online_ddl_tables", 24*time.Hour, "How long should vttablet keep an old migrated table before purging it")
-var migrationNextCheckInterval = 5 * time.Second
+var migrationNextCheckIntervals = []time.Duration{1 * time.Second, 5 * time.Second}
 
 const (
 	maxPasswordLength             = 32 // MySQL's *replication* password may not exceed 32 characters
@@ -283,7 +283,9 @@ func (e *Executor) Close() {
 
 // triggerNextCheckInterval the next tick sooner than normal
 func (e *Executor) triggerNextCheckInterval() {
-	e.ticks.TriggerAfter(migrationNextCheckInterval)
+	for _, interval := range migrationNextCheckIntervals {
+		e.ticks.TriggerAfter(interval)
+	}
 }
 
 // isAnyMigrationRunning sees if there's any migration running right now
@@ -2528,6 +2530,7 @@ func (e *Executor) SubmitMigration(
 	if err != nil {
 		return nil, err
 	}
+	defer e.triggerNextCheckInterval()
 
 	return e.execQuery(ctx, query)
 }
