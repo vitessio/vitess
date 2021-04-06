@@ -781,6 +781,12 @@ func (msdw *MultiSplitDiffWorker) waitForDestinationTabletToReach(ctx context.Co
 		}
 
 		if pos == mysqlPos {
+			msdw.wr.Logger().Infof("Destination tablet %v position %v , at expected position %v", tablet, pos, mysqlPos)
+			return nil
+		} else if pos > mysqlPos {
+			// I am considering this a success because there are non-vitess commits that take place so this should mean the tablet is at
+			// least up to date. We probably don't want to upstream this.
+			msdw.wr.Logger().Infof("Destination tablet %v position %v , past expected position %v", tablet, pos, mysqlPos)
 			return nil
 		}
 		time.Sleep(time.Second)
