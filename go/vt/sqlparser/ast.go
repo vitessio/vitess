@@ -65,6 +65,7 @@ type (
 		SetTable(qualifier string, name string)
 		SetFromTables(tables TableNames)
 		SetComments(comments Comments)
+		GetComments() Comments
 		Statement
 	}
 
@@ -1110,6 +1111,51 @@ func (node *AlterView) SetComments(comments Comments) {
 // SetComments for RevertMigration, does not implement DDLStatement
 func (node *RevertMigration) SetComments(comments Comments) {
 	node.Comments = comments
+}
+
+// GetComments implements DDLStatement.
+func (node *RenameTable) GetComments() Comments {
+	// irrelevant
+	return nil
+}
+
+// GetComments implements DDLStatement.
+func (node *TruncateTable) GetComments() Comments {
+	// irrelevant
+	return nil
+}
+
+// GetComments implements DDLStatement.
+func (node *AlterTable) GetComments() Comments {
+	return node.Comments
+}
+
+// GetComments implements DDLStatement.
+func (node *CreateTable) GetComments() Comments {
+	return node.Comments
+}
+
+// GetComments implements DDLStatement.
+func (node *CreateView) GetComments() Comments {
+	// irrelevant
+	return nil
+}
+
+// GetComments implements DDLStatement.
+func (node *DropTable) GetComments() Comments {
+	return node.Comments
+}
+
+// GetComments implements DDLStatement.
+func (node *DropView) GetComments() Comments {
+	// irrelevant
+	return nil
+}
+
+// GetComments implements DDLStatement.
+func (node *AlterView) GetComments() Comments {
+	// irrelevant
+	return nil
 }
 
 // GetToTables implements the DDLStatement interface
