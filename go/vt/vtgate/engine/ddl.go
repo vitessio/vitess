@@ -37,6 +37,8 @@ type DDL struct {
 	NormalDDL *Send
 	OnlineDDL *OnlineDDL
 
+	OnlineDDLEnabled bool
+
 	CreateTempTable bool
 
 	noTxNeeded
@@ -97,6 +99,9 @@ func (ddl *DDL) Execute(vcursor VCursor, bindVars map[string]*query.BindVariable
 	ddl.OnlineDDL.DDLStrategySetting = ddlStrategySetting
 
 	if ddl.isOnlineSchemaDDL() {
+		if !ddl.OnlineDDLEnabled {
+			return nil, schema.ErrOnlineDDLDisabled
+		}
 		return ddl.OnlineDDL.Execute(vcursor, bindVars, wantfields)
 	}
 

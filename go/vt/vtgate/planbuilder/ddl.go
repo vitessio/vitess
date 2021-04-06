@@ -65,11 +65,13 @@ func buildGeneralDDLPlan(sql string, ddlStatement sqlparser.DDLStatement, reserv
 	}
 
 	return &engine.DDL{
-		Keyspace:        normalDDLPlan.Keyspace,
-		SQL:             normalDDLPlan.Query,
-		DDL:             ddlStatement,
-		NormalDDL:       normalDDLPlan,
-		OnlineDDL:       onlineDDLPlan,
+		Keyspace:         normalDDLPlan.Keyspace,
+		SQL:              normalDDLPlan.Query,
+		DDL:              ddlStatement,
+		NormalDDL:        normalDDLPlan,
+		OnlineDDL:        onlineDDLPlan,
+		OnlineDDLEnabled: *enableOnlineDDL,
+
 		CreateTempTable: ddlStatement.IsTemporary(),
 	}, nil
 }
