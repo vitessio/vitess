@@ -53,6 +53,19 @@ embed_config:
 	go run github.com/GeertJohan/go.rice/rice embed-go
 	go build .
 
+# xbuild cross-compiles client binaries (vtexplain, vtctlclient) for use with Mac OSX. 
+xbuild:
+ifndef NOBANNER
+	echo $$(date): Building source tree
+endif
+	bash ./build.env
+		echo "Cross-compiling binaries for MacOS; unsetting GOBIN and skipping rice append"
+		export GOBIN=""
+		export env GOOS=darwin GOARCH=amd64
+		go install $(EXTRA_BUILD_FLAGS) $(VT_GO_PARALLEL) -ldflags "$(shell tools/build_version_flags.sh)" ./go/...
+		mkdir -p "${VTROOT}/bin/darwin_amd64"
+		mv ~/go/bin/darwin_amd64/{vtexplain,vtctlclient}  "${VTROOT}/bin/darwin_amd64/"
+
 build:
 ifndef NOBANNER
 	echo $$(date): Building source tree
