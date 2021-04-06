@@ -6499,3 +6499,5 @@
 2021-04-06T14:26:52Z,Cluster (27),https://github.com/vitessio/vitess/actions/runs/722842973
 2021-04-06T14:26:52Z,Cluster (onlineddl_declarative),https://github.com/vitessio/vitess/actions/runs/722843014
 2021-04-06T14:26:52Z,endtoend,https://github.com/vitessio/vitess/actions/runs/722843004
+2021-04-06T14:52:43Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/722922939
+2021-04-06T14:52:43Z,endtoend,https://github.com/vitessio/vitess/actions/runs/722922958
