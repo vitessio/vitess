@@ -32,6 +32,7 @@ import (
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/callinfo"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/tableacl"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -386,6 +387,16 @@ func (qre *QueryExecutor) checkAccess(authorized *tableacl.ACLResult, tableName 
 }
 
 func (qre *QueryExecutor) execDDL(conn *StatefulConnection) (*sqltypes.Result, error) {
+	// Let's see if this is a normal DDL statement or an Online DDL statement.
+	// An Online DDL statement is identified by /*vt+ .. */ comment with expected directives, like uuid etc.
+	if onlineDDL, err := schema.OnlineDDLFromCommentedStatement(qre.plan.FullStmt); err == nil {
+		// Parsing is successful.
+		if !onlineDDL.Strategy.IsDirect() {
+			// This is an online DDL.
+			return qre.tsv.onlineDDLExecutor.SubmitMigration(qre.ctx, qre.plan.FullStmt)
+		}
+	}
+
 	defer func() {
 		if err := qre.tsv.se.Reload(qre.ctx); err != nil {
 			log.Errorf("failed to reload schema %v", err)
@@ -764,7 +775,10 @@ func (qre *QueryExecutor) execAlterMigration() (*sqltypes.Result, error) {
 }
 
 func (qre *QueryExecutor) execRevertMigration() (*sqltypes.Result, error) {
-	return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "REVERT VITESS_MIGRATION not implemented")
+	if _, ok := qre.plan.FullStmt.(*sqlparser.RevertMigration); !ok {
+		return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "Expecting REVERT VITESS_MIGRATION plan")
+	}
+	return qre.tsv.onlineDDLExecutor.SubmitMigration(qre.ctx, qre.plan.FullStmt)
 }
 
 func (qre *QueryExecutor) drainResultSetOnConn(conn *connpool.DBConn) error {

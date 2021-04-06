@@ -215,7 +215,7 @@ func Build(statement sqlparser.Statement, tables map[string]*schema.Table, isRes
 		if stmt.IsFullyParsed() {
 			fullQuery = GenerateFullQuery(stmt)
 		}
-		plan = &Plan{PlanID: PlanDDL, FullQuery: fullQuery}
+		plan = &Plan{PlanID: PlanDDL, FullQuery: fullQuery, FullStmt: stmt}
 	case *sqlparser.AlterMigration:
 		plan, err = &Plan{PlanID: PlanAlterMigration, FullStmt: stmt}, nil
 	case *sqlparser.RevertMigration:

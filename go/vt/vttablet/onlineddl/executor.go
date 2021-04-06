@@ -2496,6 +2496,42 @@ func (e *Executor) RetryMigration(ctx context.Context, uuid string) (result *sql
 	return e.execQuery(ctx, query)
 }
 
+// SubmitMigration inserts a new migration request
+func (e *Executor) SubmitMigration(
+	ctx context.Context,
+	stmt sqlparser.Statement,
+) (result *sqltypes.Result, err error) {
+
+	onlineDDL, err := schema.OnlineDDLFromCommentedStatement(stmt)
+	if err != nil {
+		return nil, fmt.Errorf("Error submitting migration %s: %v", sqlparser.String(stmt), err)
+	}
+	_, actionStr, err := onlineDDL.GetActionStr()
+	if err != nil {
+		return nil, err
+	}
+
+	query, err := sqlparser.ParseAndBind(sqlInsertMigration,
+		sqltypes.StringBindVariable(onlineDDL.UUID),
+		sqltypes.StringBindVariable(e.keyspace),
+		sqltypes.StringBindVariable(e.shard),
+		sqltypes.StringBindVariable(e.dbName),
+		sqltypes.StringBindVariable(onlineDDL.Table),
+		sqltypes.StringBindVariable(onlineDDL.SQL),
+		sqltypes.StringBindVariable(string(onlineDDL.Strategy)),
+		sqltypes.StringBindVariable(onlineDDL.Options),
+		sqltypes.StringBindVariable(actionStr),
+		sqltypes.StringBindVariable(onlineDDL.RequestContext),
+		sqltypes.StringBindVariable(string(schema.OnlineDDLStatusQueued)),
+		sqltypes.StringBindVariable(e.TabletAliasString()),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return e.execQuery(ctx, query)
+}
+
 // onSchemaMigrationStatus is called when a status is set/changed for a running migration
 func (e *Executor) onSchemaMigrationStatus(ctx context.Context, uuid string, status schema.OnlineDDLStatus, dryRun bool, progressPct float64, etaSeconds int64) (err error) {
 	if dryRun && status != schema.OnlineDDLStatusFailed {

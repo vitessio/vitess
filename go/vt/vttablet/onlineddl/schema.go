@@ -57,6 +57,24 @@ const (
 	alterSchemaMigrationsTableTableCompleteIndex = "ALTER TABLE _vt.schema_migrations add KEY table_complete_idx (migration_status, keyspace(64), mysql_table(64), completed_timestamp)"
 	alterSchemaMigrationsTableETASeconds         = "ALTER TABLE _vt.schema_migrations add column eta_seconds bigint NOT NULL DEFAULT -1"
 
+	sqlInsertMigration = `INSERT IGNORE INTO _vt.schema_migrations (
+		migration_uuid,
+		keyspace,
+		shard,
+		mysql_schema,
+		mysql_table,
+		migration_statement,
+		strategy,
+		options,
+		ddl_action,
+		requested_timestamp,
+		migration_context,
+		migration_status,
+		tablet
+	) VALUES (
+		%a, %a, %a, %a, %a, %a, %a, %a, %a, FROM_UNIXTIME(0), %a, %a, %a
+	)`
+
 	sqlScheduleSingleMigration = `UPDATE _vt.schema_migrations
 		SET
 			migration_status='ready',
