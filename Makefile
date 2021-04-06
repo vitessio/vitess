@@ -53,8 +53,8 @@ embed_config:
 	go run github.com/GeertJohan/go.rice/rice embed-go
 	go build .
 
-# build the vitess binaries with dynamic dependency on libc (not recommenced)
-build-libc:
+# build the vitess binaries with dynamic dependency on libc
+build:
 ifndef NOBANNER
 	echo $$(date): Building source tree
 endif
@@ -63,7 +63,7 @@ endif
 	(cd go/cmd/vttablet && go run github.com/GeertJohan/go.rice/rice append --exec=../../../bin/vttablet)
 
 # build the vitess binaries statically
-build:
+build-static:
 ifndef NOBANNER
 	echo $$(date): Building source tree
 endif
