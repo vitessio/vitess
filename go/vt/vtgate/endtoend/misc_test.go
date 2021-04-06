@@ -21,20 +21,30 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/mysql"
 )
 
 func TestDatabaseFunc(t *testing.T) {
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer conn.Close()
 
 	exec(t, conn, "use ks")
 	qr := exec(t, conn, "select database()")
-	if got, want := fmt.Sprintf("%v", qr.Rows), `[[VARBINARY("ks")]]`; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
-	}
+	require.Equal(t, `[[VARBINARY("ks")]]`, fmt.Sprintf("%v", qr.Rows))
+}
+
+func TestSysNumericPrecisionScale(t *testing.T) {
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	qr := exec(t, conn, "select numeric_precision, numeric_scale from information_schema.columns where table_schema = 'ks' and table_name = 't1'")
+	assert.True(t, qr.Fields[0].Type == qr.Rows[0][0].Type())
+	assert.True(t, qr.Fields[1].Type == qr.Rows[0][1].Type())
 }

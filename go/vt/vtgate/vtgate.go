@@ -82,6 +82,8 @@ var (
 	// lockHeartbeatTime is used to set the next heartbeat time.
 	lockHeartbeatTime = flag.Duration("lock_heartbeat_time", 5*time.Second, "If there is lock function used. This will keep the lock connection active by using this heartbeat")
 	warnShardedOnly   = flag.Bool("warn_sharded_only", false, "If any features that are only available in unsharded mode are used, query execution warnings will be added to the session")
+
+	foreignKeyMode = flag.String("foreign_key_mode", "allow", "This is to provide how to handle foreign key constraint in create/alter table. Valid values are: allow, disallow")
 )
 
 func getTxMode() vtgatepb.TransactionMode {
@@ -112,6 +114,8 @@ var (
 	errorCounts *stats.CountersWithMultiLabels
 
 	warnings *stats.CountersWithSingleLabel
+
+	vstreamSkewDelayCount *stats.Counter
 )
 
 // VTGate is the rpc interface to vtgate. Only one instance
@@ -152,6 +156,9 @@ func Init(ctx context.Context, serv srvtopo.Server, cell string, tabletTypesToWa
 	// vschemaCounters needs to be initialized before planner to
 	// catch the initial load stats.
 	vschemaCounters = stats.NewCountersWithSingleLabel("VtgateVSchemaCounts", "Vtgate vschema counts", "changes")
+
+	vstreamSkewDelayCount = stats.NewCounter("VStreamEventsDelayedBySkewAlignment",
+		"Number of events that had to wait because the skew across shards was too high")
 
 	// Build objects from low to high level.
 	// Start with the gateway. If we can't reach the topology service,
@@ -405,8 +412,8 @@ handleError:
 }
 
 // VStream streams binlog events.
-func (vtg *VTGate) VStream(ctx context.Context, tabletType topodatapb.TabletType, vgtid *binlogdatapb.VGtid, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
-	return vtg.vsm.VStream(ctx, tabletType, vgtid, filter, send)
+func (vtg *VTGate) VStream(ctx context.Context, tabletType topodatapb.TabletType, vgtid *binlogdatapb.VGtid, filter *binlogdatapb.Filter, flags *vtgatepb.VStreamFlags, send func([]*binlogdatapb.VEvent) error) error {
+	return vtg.vsm.VStream(ctx, tabletType, vgtid, filter, flags, send)
 }
 
 // GetGatewayCacheStatus returns a displayable version of the Gateway cache.

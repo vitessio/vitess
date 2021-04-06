@@ -61,6 +61,7 @@ var (
 		"onlineddl_vrepl_stress",
 		"vreplication_migrate",
 		"onlineddl_revert",
+		"onlineddl_declarative",
 		"tabletmanager_throttler",
 		"tabletmanager_throttler_custom_config",
 	}

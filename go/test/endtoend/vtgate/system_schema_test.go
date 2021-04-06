@@ -139,6 +139,7 @@ func TestConnectWithSystemSchema(t *testing.T) {
 		connParams.DbName = dbname
 		conn, err := mysql.Connect(ctx, &connParams)
 		require.NoError(t, err)
+		exec(t, conn, `select @@max_allowed_packet from dual`)
 		conn.Close()
 	}
 }
@@ -146,12 +147,12 @@ func TestConnectWithSystemSchema(t *testing.T) {
 func TestUseSystemSchema(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
 	for _, dbname := range []string{"information_schema", "mysql", "performance_schema", "sys"} {
-		conn, err := mysql.Connect(ctx, &vtParams)
-		require.NoError(t, err)
-
 		exec(t, conn, fmt.Sprintf("use %s", dbname))
-		conn.Close()
+		exec(t, conn, `select @@max_allowed_packet from dual`)
 	}
 }
 
