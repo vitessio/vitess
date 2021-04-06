@@ -6387,3 +6387,6 @@
 2021-04-06T01:54:51Z,gomod-tidy,https://github.com/vitessio/vitess/actions/runs/721020929
 2021-04-06T01:54:51Z,local_example,https://github.com/vitessio/vitess/actions/runs/721020944
 2021-04-06T03:15:15Z,endtoend,https://github.com/vitessio/vitess/actions/runs/721174335
+2021-04-06T03:15:15Z,unit_race,https://github.com/vitessio/vitess/actions/runs/721174328
+2021-04-06T03:19:23Z,Cluster (onlineddl_ghost),https://github.com/vitessio/vitess/actions/runs/721181519
+2021-04-06T03:19:23Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/721181533
