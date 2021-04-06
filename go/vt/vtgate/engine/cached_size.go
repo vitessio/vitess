@@ -509,7 +509,7 @@ func (cached *RevertMigration) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(32)
+		size += int64(56)
 	}
 	// field Keyspace *vitess.io/vitess/go/vt/vtgate/vindexes.Keyspace
 	size += cached.Keyspace.CachedSize(true)
@@ -517,6 +517,12 @@ func (cached *RevertMigration) CachedSize(alloc bool) int64 {
 	size += cached.Stmt.CachedSize(true)
 	// field Query string
 	size += int64(len(cached.Query))
+	// field DDLStrategySetting *vitess.io/vitess/go/vt/schema.DDLStrategySetting
+	size += cached.DDLStrategySetting.CachedSize(true)
+	// field TargetDestination vitess.io/vitess/go/vt/key.Destination
+	if cc, ok := cached.TargetDestination.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
 	return size
 }
 func (cached *Route) CachedSize(alloc bool) int64 {
