@@ -519,6 +519,7 @@ type perfectTable struct {
 	level0Mask int      // len(Level0) - 1
 	level1     []uint32 // power of 2 size >= len(keys)
 	level1Mask int      // len(Level1) - 1
+	min, max   int
 }
 
 const offset64 = uint64(14695981039346656037)
@@ -568,8 +569,17 @@ func buildKeywordTable(keywords []keyword) *perfectTable {
 		level1Mask    = len(level1) - 1
 		sparseBuckets = make([][]int, len(level0))
 		zeroSeed      = offset64
+		min, max      = len(keywords[0].name), len(keywords[0].name)
 	)
 	for i, kw := range keywords {
+		kwlen := len(kw.name)
+		if kwlen > max {
+			max = kwlen
+		}
+		if kwlen < min {
+			min = kwlen
+		}
+
 		n := int(fnv1aIstr(zeroSeed, kw.name)) & level0Mask
 		sparseBuckets[n] = append(sparseBuckets[n], i)
 	}
@@ -611,12 +621,19 @@ func buildKeywordTable(keywords []keyword) *perfectTable {
 		level0Mask: level0Mask,
 		level1:     level1,
 		level1Mask: level1Mask,
+		min:        min,
+		max:        max,
 	}
 }
 
 // Lookup looks up the given keyword on the perfect map for keywords.
 // The provided bytes are not modified and are compared **case insensitively**
 func (t *perfectTable) Lookup(keyword []byte) (int, bool) {
+	kwlen := len(keyword)
+	if kwlen > t.max || kwlen < t.min {
+		return 0, false
+	}
+
 	i0 := int(fnv1aI(offset64, keyword)) & t.level0Mask
 	seed := t.level0[i0]
 	i1 := int(fnv1aI(uint64(seed), keyword)) & t.level1Mask
@@ -630,6 +647,11 @@ func (t *perfectTable) Lookup(keyword []byte) (int, bool) {
 // LookupString looks up the given keyword on the perfect map for keywords.
 // The provided string is compared **case insensitively**
 func (t *perfectTable) LookupString(keyword string) (int, bool) {
+	kwlen := len(keyword)
+	if kwlen > t.max || kwlen < t.min {
+		return 0, false
+	}
+
 	i0 := int(fnv1aIstr(offset64, keyword)) & t.level0Mask
 	seed := t.level0[i0]
 	i1 := int(fnv1aIstr(uint64(seed), keyword)) & t.level1Mask
