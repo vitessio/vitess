@@ -64,6 +64,7 @@ require (
 	github.com/minio/minio-go v0.0.0-20190131015406-c8a261de75c1
 	github.com/mitchellh/go-testing-interface v1.14.0 // indirect
 	github.com/mitchellh/mapstructure v1.2.3 // indirect
+	github.com/moby/term v0.0.0-20201216013528-df9cb8a40635 // indirect
 	github.com/montanaflynn/stats v0.6.3
 	github.com/olekukonko/tablewriter v0.0.5-0.20200416053754-163badb3bac6
 	github.com/onsi/ginkgo v1.10.3 // indirect
