@@ -20,6 +20,8 @@ import (
 	"reflect"
 	"testing"
 
+	"vitess.io/vitess/go/mysql"
+
 	"vitess.io/vitess/go/test/utils"
 
 	"github.com/stretchr/testify/require"
@@ -178,7 +180,6 @@ func TestBatchTransaction(t *testing.T) {
 		require.NoError(t, err)
 		defer client.Rollback()
 		qrl, err = client.ExecuteBatch(queries, true)
-		want := "You are not allowed to execute this command in a transaction (errno 1179) (sqlstate 25000)"
-		require.EqualError(t, err, want)
+		require.EqualError(t, mysql.NewSQLErrorFromError(err), "You are not allowed to execute this command in a transaction (errno 1179) (sqlstate 25000)")
 	}()
 }

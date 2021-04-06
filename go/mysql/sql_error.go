@@ -82,7 +82,7 @@ var errExtract = regexp.MustCompile(`.*\(errno ([0-9]*)\) \(sqlstate ([0-9a-zA-Z
 
 // NewSQLErrorFromError returns a *SQLError from the provided error.
 // If it's not the right type, it still tries to get it from a regexp.
-func NewSQLErrorFromError(err error) error {
+func NewSQLErrorFromError(err error) *SQLError {
 	if err == nil {
 		return nil
 	}
@@ -92,8 +92,8 @@ func NewSQLErrorFromError(err error) error {
 	}
 
 	sErr := convertToMysqlError(err)
-	if _, ok := sErr.(*SQLError); ok {
-		return sErr
+	if serr, ok := sErr.(*SQLError); ok {
+		return serr
 	}
 
 	msg := err.Error()
@@ -105,7 +105,7 @@ func NewSQLErrorFromError(err error) error {
 	return mapToSQLErrorFromErrorCode(err, msg)
 }
 
-func extractSQLErrorFromMessage(match []string, msg string) error {
+func extractSQLErrorFromMessage(match []string, msg string) *SQLError {
 	num, err := strconv.Atoi(match[1])
 	if err != nil {
 		return &SQLError{
@@ -115,15 +115,14 @@ func extractSQLErrorFromMessage(match []string, msg string) error {
 		}
 	}
 
-	serr := &SQLError{
+	return &SQLError{
 		Num:     num,
 		State:   match[2],
 		Message: msg,
 	}
-	return serr
 }
 
-func mapToSQLErrorFromErrorCode(err error, msg string) error {
+func mapToSQLErrorFromErrorCode(err error, msg string) *SQLError {
 	// Map vitess error codes into the mysql equivalent
 	num := ERUnknownError
 	ss := SSUnknownSQLState
