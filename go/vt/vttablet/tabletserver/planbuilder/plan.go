@@ -73,6 +73,7 @@ const (
 	PlanUnlockTables
 	PlanCallProc
 	PlanAlterMigration
+	PlanRevertMigration
 	NumPlans
 )
 
@@ -103,6 +104,7 @@ var planName = []string{
 	"UnlockTables",
 	"CallProcedure",
 	"AlterMigration",
+	"RevertMigration",
 }
 
 func (pt PlanType) String() string {
@@ -216,6 +218,8 @@ func Build(statement sqlparser.Statement, tables map[string]*schema.Table, isRes
 		plan = &Plan{PlanID: PlanDDL, FullQuery: fullQuery}
 	case *sqlparser.AlterMigration:
 		plan, err = &Plan{PlanID: PlanAlterMigration, FullStmt: stmt}, nil
+	case *sqlparser.RevertMigration:
+		plan, err = &Plan{PlanID: PlanRevertMigration, FullStmt: stmt}, nil
 	case *sqlparser.Show:
 		plan, err = analyzeShow(stmt, dbName)
 	case *sqlparser.OtherRead, sqlparser.Explain:

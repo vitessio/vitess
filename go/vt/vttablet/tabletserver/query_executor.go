@@ -147,6 +147,8 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 		return qre.execCallProc()
 	case p.PlanAlterMigration:
 		return qre.execAlterMigration()
+	case p.PlanRevertMigration:
+		return qre.execRevertMigration()
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "%s unexpected plan type", qre.plan.PlanID.String())
 }
@@ -759,6 +761,10 @@ func (qre *QueryExecutor) execAlterMigration() (*sqltypes.Result, error) {
 		return qre.tsv.onlineDDLExecutor.CancelPendingMigrations(qre.ctx, "CANCEL ALL issued by user")
 	}
 	return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "ALTER VITESS_MIGRATION not implemented")
+}
+
+func (qre *QueryExecutor) execRevertMigration() (*sqltypes.Result, error) {
+	return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "REVERT VITESS_MIGRATION not implemented")
 }
 
 func (qre *QueryExecutor) drainResultSetOnConn(conn *connpool.DBConn) error {
