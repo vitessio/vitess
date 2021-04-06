@@ -64,7 +64,7 @@ endif
 		export env GOOS=darwin GOARCH=amd64
 		go install $(EXTRA_BUILD_FLAGS) $(VT_GO_PARALLEL) -ldflags "$(shell tools/build_version_flags.sh)" ./go/...
 		mkdir -p "${VTROOT}/bin/darwin_amd64"
-		mv ~/go/bin/darwin_amd64/{vtexplain,vtctlclient}  "${VTROOT}/bin/darwin_amd64/"
+		mv ${go env GOPATH}/bin/darwin_amd64/{vtexplain,vtctlclient}  "${VTROOT}/bin/darwin_amd64/"
 
 build:
 ifndef NOBANNER
