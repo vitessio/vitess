@@ -6394,4 +6394,10 @@
 2021-04-06T05:35:50Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/721442145
 2021-04-06T05:35:50Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/721442110
 2021-04-06T05:35:50Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/721442116
+2021-04-06T05:35:50Z,local_example,https://github.com/vitessio/vitess/actions/runs/721442118
+2021-04-06T05:35:50Z,region_example,https://github.com/vitessio/vitess/actions/runs/721442134
 2021-04-06T05:35:50Z,unit_race,https://github.com/vitessio/vitess/actions/runs/721442146
+2021-04-06T05:45:32Z,Cluster (27),https://github.com/vitessio/vitess/actions/runs/721462471
+2021-04-06T05:45:32Z,Unit Test (mariadb101),https://github.com/vitessio/vitess/actions/runs/721462473
+2021-04-06T05:45:32Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/721462449
+2021-04-06T05:52:07Z,endtoend,https://github.com/vitessio/vitess/actions/runs/721476303
