@@ -6411,4 +6411,5 @@
 2021-04-06T06:40:03Z,endtoend,https://github.com/vitessio/vitess/actions/runs/721581393
 2021-04-06T06:40:03Z,local_example,https://github.com/vitessio/vitess/actions/runs/721581439
 2021-04-06T06:40:03Z,unit_race,https://github.com/vitessio/vitess/actions/runs/721581398
+2021-04-06T07:24:35Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/721689621
 2021-04-06T07:24:35Z,check_make_sizegen,https://github.com/vitessio/vitess/actions/runs/721689591
