@@ -823,7 +823,7 @@ func (tsv *TabletServer) ExecuteBatch(ctx context.Context, target *querypb.Targe
 		return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.EmptyQuery, "Query was empty")
 	}
 	if asTransaction && transactionID != 0 {
-		return nil, vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, mysql.ERCantDoThisDuringAnTransaction, "You are not allowed to execute this command in a transaction")
+		return nil, vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.CantDoThisInTransaction, "You are not allowed to execute this command in a transaction")
 	}
 
 	if tsv.enableHotRowProtection && asTransaction {

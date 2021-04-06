@@ -287,7 +287,7 @@ func (route *Route) execute(vcursor VCursor, bindVars map[string]*querypb.BindVa
 
 			for _, err := range errs {
 				if err != nil {
-					serr := mysql.NewSQLErrorFromError(err).(*mysql.SQLError)
+					serr := mysql.NewSQLErrorFromError(err)
 					vcursor.Session().RecordWarning(&querypb.QueryWarning{Code: uint32(serr.Num), Message: err.Error()})
 				}
 			}
