@@ -29,6 +29,7 @@ var (
 
 const (
 	declarativeFlag = "declarative"
+	skipTopoFlag    = "skip-topo"
 	singletonFlag   = "singleton"
 )
 
@@ -129,6 +130,7 @@ func (setting *DDLStrategySetting) RuntimeOptions() []string {
 	for _, opt := range opts {
 		switch {
 		case isFlag(opt, declarativeFlag):
+		case isFlag(opt, skipTopoFlag):
 		case isFlag(opt, singletonFlag):
 		default:
 			validOpts = append(validOpts, opt)
@@ -141,6 +143,8 @@ func (setting *DDLStrategySetting) RuntimeOptions() []string {
 func (setting *DDLStrategySetting) IsSkipTopo() bool {
 	switch {
 	case setting.IsSingleton():
+		return true
+	case setting.hasFlag(skipTopoFlag):
 		return true
 	}
 	return false
