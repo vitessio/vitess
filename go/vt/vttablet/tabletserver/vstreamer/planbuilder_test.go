@@ -18,8 +18,13 @@ package vstreamer
 
 import (
 	"fmt"
-	"reflect"
 	"testing"
+
+	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/test/utils"
+
+	"github.com/stretchr/testify/assert"
 
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/mysql"
@@ -169,7 +174,7 @@ func TestMustSendDDL(t *testing.T) {
 	}
 }
 
-func TestPlanbuilder(t *testing.T) {
+func TestPlanBuilder(t *testing.T) {
 	t1 := &Table{
 		Name: "t1",
 		Fields: []*querypb.Field{{
@@ -549,31 +554,34 @@ func TestPlanbuilder(t *testing.T) {
 		outErr:  `unsupported: 1 + 1`,
 	}}
 	for _, tcase := range testcases {
-		plan, err := buildPlan(tcase.inTable, testLocalVSchema, &binlogdatapb.Filter{
-			Rules: []*binlogdatapb.Rule{tcase.inRule},
-		})
-		if plan != nil {
+		t.Run(tcase.inRule.String(), func(t *testing.T) {
+			plan, err := buildPlan(tcase.inTable, testLocalVSchema, &binlogdatapb.Filter{
+				Rules: []*binlogdatapb.Rule{tcase.inRule},
+			})
+
+			if tcase.outErr != "" {
+				assert.Nil(t, plan)
+				assert.EqualError(t, err, tcase.outErr)
+				return
+			}
+
+			require.NoError(t, err)
+			if tcase.outPlan == nil {
+				require.Nil(t, plan)
+				return
+			}
+
+			require.NotNil(t, plan)
 			plan.Table = nil
 			for ind := range plan.Filters {
 				plan.Filters[ind].KeyRange = nil
-				if plan.Filters[ind].
-					Opcode == VindexMatch {
+				if plan.Filters[ind].Opcode == VindexMatch {
 					plan.Filters[ind].Value = sqltypes.NULL
 				}
 				plan.Filters[ind].Vindex = nil
+				plan.Filters[ind].Vindex = nil
 			}
-			if !reflect.DeepEqual(tcase.outPlan, plan) {
-				t.Errorf("Plan(%v, %v):\n%v, want\n%v", tcase.inTable, tcase.inRule, plan, tcase.outPlan)
-			}
-		} else if tcase.outPlan != nil {
-			t.Errorf("Plan(%v, %v):\nnil, want\n%v", tcase.inTable, tcase.inRule, tcase.outPlan)
-		}
-		gotErr := ""
-		if err != nil {
-			gotErr = err.Error()
-		}
-		if gotErr != tcase.outErr {
-			t.Errorf("Plan(%v, %v) err: %v, want %v", tcase.inTable, tcase.inRule, err, tcase.outErr)
-		}
+			utils.MustMatch(t, tcase.outPlan, plan)
+		})
 	}
 }
