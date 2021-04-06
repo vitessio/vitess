@@ -34,11 +34,10 @@ var _ Primitive = (*RevertMigration)(nil)
 
 //RevertMigration represents the instructions to perform an online schema change via vtctld
 type RevertMigration struct {
-	Keyspace           *vindexes.Keyspace
-	Stmt               *sqlparser.RevertMigration
-	Query              string
-	DDLStrategySetting *schema.DDLStrategySetting
-	TargetDestination  key.Destination
+	Keyspace          *vindexes.Keyspace
+	Stmt              *sqlparser.RevertMigration
+	Query             string
+	TargetDestination key.Destination
 
 	noTxNeeded
 
@@ -95,7 +94,6 @@ func (v *RevertMigration) Execute(vcursor VCursor, bindVars map[string]*query.Bi
 	}
 
 	if ddlStrategySetting.IsSkipTopo() {
-		// TODO(shlomi): implement before this branch is merged
 		s := Send{
 			Keyspace:          v.Keyspace,
 			TargetDestination: v.TargetDestination,
