@@ -190,6 +190,9 @@ func TestNewOnlineDDL(t *testing.T) {
 			sql: "alter table t engine=innodb",
 		},
 		{
+			sql: "revert 4e5dcf80_354b_11eb_82cd_f875a4d24e90", // legacy syntax; kept one release version for backwards compatibility. Can remove after v11.0 is released
+		},
+		{
 			sql: "revert vitess_migration '4e5dcf80_354b_11eb_82cd_f875a4d24e90'",
 		},
 		{
@@ -225,6 +228,10 @@ func TestNewOnlineDDL(t *testing.T) {
 						assert.Contains(t, onlineDDL.SQL, onlineDDL.UUID)
 						assert.Contains(t, onlineDDL.SQL, migrationContext)
 						assert.Contains(t, onlineDDL.SQL, string(stgy.Strategy))
+					} else {
+						assert.NotContains(t, onlineDDL.SQL, onlineDDL.UUID)
+						assert.NotContains(t, onlineDDL.SQL, migrationContext)
+						assert.NotContains(t, onlineDDL.SQL, string(stgy.Strategy))
 					}
 				})
 			}

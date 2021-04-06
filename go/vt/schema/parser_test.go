@@ -93,19 +93,19 @@ func TestReplaceTableNameInCreateTableStatement(t *testing.T) {
 	}
 }
 
-func TestParseRevertUUID(t *testing.T) {
+func TestLegacyParseRevertUUID(t *testing.T) {
 
 	{
-		uuid, err := ParseRevertUUID("revert 4e5dcf80_354b_11eb_82cd_f875a4d24e90")
+		uuid, err := legacyParseRevertUUID("revert 4e5dcf80_354b_11eb_82cd_f875a4d24e90")
 		assert.NoError(t, err)
 		assert.Equal(t, "4e5dcf80_354b_11eb_82cd_f875a4d24e90", uuid)
 	}
 	{
-		_, err := ParseRevertUUID("revert 4e5dcf80_354b_11eb_82cd_f875a4")
+		_, err := legacyParseRevertUUID("revert 4e5dcf80_354b_11eb_82cd_f875a4")
 		assert.Error(t, err)
 	}
 	{
-		_, err := ParseRevertUUID("revert vitess_migration '4e5dcf80_354b_11eb_82cd_f875a4d24e90'")
+		_, err := legacyParseRevertUUID("revert vitess_migration '4e5dcf80_354b_11eb_82cd_f875a4d24e90'")
 		assert.Error(t, err)
 	}
 }

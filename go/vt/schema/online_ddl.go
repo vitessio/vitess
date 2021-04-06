@@ -175,33 +175,45 @@ func NewOnlineDDL(keyspace string, table string, sql string, ddlStrategySetting 
 	}
 
 	{
-		// query validation and rebuilding
-		if uuid, err := ParseRevertUUID(sql); err == nil {
-			sql = fmt.Sprintf("revert vitess_migration '%s'", uuid)
-		}
 
 		var comments sqlparser.Comments
 		if ddlStrategySetting.IsSkipTopo() {
 			comments = sqlparser.Comments{
 				fmt.Sprintf(`/*vt+ uuid=%s context=%s strategy=%s options=%s */`, strconv.Quote(u), strconv.Quote(requestContext), strconv.Quote(string(ddlStrategySetting.Strategy)), strconv.Quote(ddlStrategySetting.Options)),
 			}
+			if uuid, err := legacyParseRevertUUID(sql); err == nil {
+				sql = fmt.Sprintf("revert vitess_migration '%s'", uuid)
+			}
 		}
+
 		stmt, err := sqlparser.Parse(sql)
 		if err != nil {
-			return nil, err
-		}
-		switch stmt := stmt.(type) {
-		case sqlparser.DDLStatement:
-			if !stmt.IsFullyParsed() {
-				return nil, fmt.Errorf("NewOnlineDDL: cannot fully parse statement %v", sqlparser.String(stmt))
+			isLegacyRevertStatement := false
+			// query validation and rebuilding
+			if _, err := legacyParseRevertUUID(sql); err == nil {
+				// This is a revert statement of the form "revert <uuid>". We allow this for now. Future work will
+				// make sure the statement is a valid, parseable "revert vitess_migration '<uuid>'", but we must
+				// be backwards compatible for now.
+				isLegacyRevertStatement = true
 			}
-			stmt.SetComments(comments)
-		case *sqlparser.RevertMigration:
-			stmt.SetComments(comments)
-		default:
-			return nil, fmt.Errorf("Unsupported statement for Online DDL: %v", sqlparser.String(stmt))
+			if !isLegacyRevertStatement {
+				// otherwise the statement should have been parseable!
+				return nil, err
+			}
+		} else {
+			switch stmt := stmt.(type) {
+			case sqlparser.DDLStatement:
+				if !stmt.IsFullyParsed() {
+					return nil, fmt.Errorf("NewOnlineDDL: cannot fully parse statement %v", sqlparser.String(stmt))
+				}
+				stmt.SetComments(comments)
+			case *sqlparser.RevertMigration:
+				stmt.SetComments(comments)
+			default:
+				return nil, fmt.Errorf("Unsupported statement for Online DDL: %v", sqlparser.String(stmt))
+			}
+			sql = sqlparser.String(stmt)
 		}
-		sql = sqlparser.String(stmt)
 	}
 
 	return &OnlineDDL{
@@ -270,7 +282,7 @@ func (onlineDDL *OnlineDDL) GetActionStr() (action sqlparser.DDLAction, actionSt
 // fo the reverted migration.
 // The function returns error when this is not a revert migration.
 func (onlineDDL *OnlineDDL) GetRevertUUID() (uuid string, err error) {
-	if uuid, err := ParseRevertUUID(onlineDDL.SQL); err == nil {
+	if uuid, err := legacyParseRevertUUID(onlineDDL.SQL); err == nil {
 		return uuid, nil
 	}
 	if stmt, err := sqlparser.Parse(onlineDDL.SQL); err == nil {

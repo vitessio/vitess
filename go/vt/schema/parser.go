@@ -89,8 +89,8 @@ func ParseAlterTableOptions(alterStatement string) (explicitSchema, explicitTabl
 	return explicitSchema, explicitTable, alterOptions
 }
 
-// ParseRevertUUID expects a query like "revert 4e5dcf80_354b_11eb_82cd_f875a4d24e90" and returns the UUID value.
-func ParseRevertUUID(sql string) (uuid string, err error) {
+// legacyParseRevertUUID expects a query like "revert 4e5dcf80_354b_11eb_82cd_f875a4d24e90" and returns the UUID value.
+func legacyParseRevertUUID(sql string) (uuid string, err error) {
 	submatch := revertStatementRegexp.FindStringSubmatch(sql)
 	if len(submatch) == 0 {
 		return "", fmt.Errorf("Not a Revert DDL: '%s'", sql)
