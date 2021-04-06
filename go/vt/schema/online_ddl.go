@@ -245,14 +245,21 @@ func NewOnlineDDL(keyspace string, table string, sql string, ddlStrategySetting 
 // OnlineDDLFromCommentedStatement creates a schema  instance based on a commented query. The query is expected
 // to be commented as e.g. `CREATE /*vt+ uuid=... context=... table=... strategy=... options=... */ TABLE ...`
 func OnlineDDLFromCommentedStatement(stmt sqlparser.Statement) (onlineDDL *OnlineDDL, err error) {
+	var sql string
 	var comments sqlparser.Comments
 	switch stmt := stmt.(type) {
 	case sqlparser.DDLStatement:
 		comments = stmt.GetComments()
+		// We want sql to be clean of comments, so we temporarily remove, then restore the comments
 		stmt.SetComments(sqlparser.Comments{})
+		sql = sqlparser.String(stmt)
+		stmt.SetComments(comments)
 	case *sqlparser.RevertMigration:
-		comments = stmt.Comments
+		comments = stmt.Comments[:]
+		// We want sql to be clean of comments, so we temporarily remove, then restore the comments
 		stmt.SetComments(sqlparser.Comments{})
+		sql = sqlparser.String(stmt)
+		stmt.SetComments(comments)
 	default:
 		return nil, fmt.Errorf("Unsupported statement for Online DDL: %v", sqlparser.String(stmt))
 	}
@@ -278,7 +285,7 @@ func OnlineDDLFromCommentedStatement(stmt sqlparser.Statement) (onlineDDL *Onlin
 	}
 
 	onlineDDL = &OnlineDDL{
-		SQL: sqlparser.String(stmt),
+		SQL: sql,
 	}
 	if onlineDDL.UUID, err = decodeDirective("uuid"); err != nil {
 		return nil, err
