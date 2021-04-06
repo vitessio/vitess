@@ -6413,3 +6413,8 @@
 2021-04-06T06:40:03Z,unit_race,https://github.com/vitessio/vitess/actions/runs/721581398
 2021-04-06T07:24:35Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/721689621
 2021-04-06T07:24:35Z,check_make_sizegen,https://github.com/vitessio/vitess/actions/runs/721689591
+2021-04-06T07:33:29Z,local_example,https://github.com/vitessio/vitess/actions/runs/721712848
+2021-04-06T07:47:42Z,Cluster (onlineddl_declarative),https://github.com/vitessio/vitess/actions/runs/721750149
+2021-04-06T07:47:42Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/721750161
+2021-04-06T07:47:42Z,endtoend,https://github.com/vitessio/vitess/actions/runs/721750164
+2021-04-06T08:00:14Z,endtoend,https://github.com/vitessio/vitess/actions/runs/721777424
