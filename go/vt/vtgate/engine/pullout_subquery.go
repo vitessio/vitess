@@ -124,6 +124,7 @@ func (ps *PulloutSubquery) execSubquery(vcursor VCursor, bindVars map[string]*qu
 	for k, v := range bindVars {
 		combinedVars[k] = v
 	}
+
 	switch ps.Opcode {
 	case PulloutValue:
 		switch len(result.Rows) {
