@@ -6381,4 +6381,8 @@
 2021-04-05T18:04:23Z,region_example,https://github.com/vitessio/vitess/actions/runs/719998150
 2021-04-05T19:37:36Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/720226910
 2021-04-05T20:06:25Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/720292010
+2021-04-06T01:54:51Z,Cluster (onlineddl_ghost),https://github.com/vitessio/vitess/actions/runs/721020953
+2021-04-06T01:54:51Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/721020914
+2021-04-06T01:54:51Z,endtoend,https://github.com/vitessio/vitess/actions/runs/721020919
 2021-04-06T01:54:51Z,gomod-tidy,https://github.com/vitessio/vitess/actions/runs/721020929
+2021-04-06T01:54:51Z,local_example,https://github.com/vitessio/vitess/actions/runs/721020944
