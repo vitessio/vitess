@@ -147,6 +147,7 @@ func TestPulloutSubqueryInNotinGood(t *testing.T) {
 	sfp := &fakePrimitive{
 		results: []*sqltypes.Result{sqResult},
 	}
+
 	ufp := &fakePrimitive{}
 	ps := &PulloutSubquery{
 		Opcode:         PulloutIn,
