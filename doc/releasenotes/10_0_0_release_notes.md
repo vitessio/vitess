@@ -1,6 +1,5 @@
 This release complies with VEP-3 which removes the upgrade order requirement. Components can be upgraded in any order. It is recommended that the upgrade order should still be followed if possible, except to canary test the new version of VTGate before upgrading the rest of the components.
 
-## Incompatible Changes
 
 The following PRs made changes to behaviors that clients might rely on. They should be reviewed carefully so that client code can be changed in concert with a Vitess release deployment.
 
@@ -9,10 +8,31 @@ The following PRs made changes to behaviors that clients might rely on. They sho
 ### VTGate / MySQL compatibility
 * Remove printing of ENFORCED word so that statements remain compatible with mysql 5.7 #7458
 * Allow any ordering of generic options in column definitions #7459
-* LFU Cache Bug Fixes #7479
 * Corrects the comment handling in vitess #7581
 * Fix regression - should be able to plan subquery on top of subquery #7682
 * Nullable Timestamp Column Fix #7740
+* VTGate: Fix the error messages in drop, create and alter database commands #7397
+* VTGate: Fix information_schema query with system schema in table_schema filter #7430
+* VTGate: Fix Set Statement in Tablet when executed with bindvars #7431
+* VTGate: Fix for Query Serving when Toposerver is Down #7484
+* VTGate: Add necessary bindvars when preparing queries #7493
+* VTGate: Show anywhere plan fix to consider default keyspace #7531
+* VTGate: Fix table parsing on VSchema generation #7511
+* VTGate: Use the emulated MySQL version for special comments #7510
+* VTGate: Reset Session for Reserved Connection when the connection id is not found #7539
+* VTGate: Healthcheck: update healthy tablets correctly when a stream returns an error or timeout #7732
+* VTGate: Fix for reserved connection usage with transaction #7646
+* VTGate: Fix MySQL Workbench failure on login with `select current_user()` #7705
+* VTGate: Constraint names and database names with spaces. #7745
+* VTGate: Fix dual table query when system schema is selected database #7734
+
+### Other
+* VTTablet: Correctly initialize statsTabletTypeCounts during startup #7390
+* Backup/Restore: Respect -disable_active_reparents in backup/restore #7576
+* Backup/Restore: check disable_active_reparents properly before waiting for position update #7703
+
+
+## Functionality Added or Changed
 
 ### VTGate / MySQL compatibility / Query Serving
 
@@ -23,67 +43,44 @@ The following PRs made changes to behaviors that clients might rely on. They sho
 * VTGate: Change @@version and @@version_comment #7337
 * VTGate: Fix VitessAware system variables of type boolean return NULL when MySQL is not involved #7353
 * VTGate: Add stats for RowsAffected similar to RowsReturned #7380
-* VTGate: Cached Size Implementation #7387
-* VTGate: Fix the error messages in drop, create and alter database commands #7397
-* VTGate: Fix information_schema query with system schema in table_schema filter #7430
-* VTGate: Fix Set Statement in Tablet when executed with bindvars #7431
 * VTGate: Added information_schema_stats_expiry to allowed list of set vars #7435
 * VTGate: LFU Cache Implementation #7439
 * VTGate: Describe table to route based on table name and qualifier #7445
 * VTGate: Olap error message fix #7448
 * VTGate: Temporary Table support in unsharded keyspace #7411
 * VTGate: Publish table size on schema #7444
-* VTGate: Plan remove mutexes #7468
 * VTGate: Support for caching_sha2_password plugin in mysql/client #6716
 * VTGate: Moving Show plan from executor to planbuilder #7475
-* VTGate: Fix for Query Serving when Toposerver is Down #7484
-* VTGate: Add necessary bindvars when preparing queries #7493
-* VTGate: [servenv] provide a global flag for profiling #7496
 * VTGate: Adds another case to merge routes for information_schema queries #7504
-* VTGate: Fix table parsing on VSchema generation #7511
 * VTGate: Add innodb_read_rows as vttablet metric #7520
-* VTGate: [9.0] Show anywhere plan fix to consider default keyspace #7530
-* VTGate: Show anywhere plan fix to consider default keyspace #7531
-* VTGate: Use the emulated MySQL version for special comments #7510
-* VTGate: Reset Session for Reserved Connection when the connection id is not found #7539
-* VTGate: vttablet: fix flaky tests #7543
 * VTGate: Adds support for Show variables #7547
 * VTGate: gen4: fail unsupported queries #7409
 * VTGate: Fix Metadata in SHOW queries #7540
 * VTGate: Update AST helper generation #7558
-* VTGate: [vttablet] Benchmarks and two small optimizations #7560
-* VTGate: Remove unused key.Destination.IsUnique() #7565
 * VTGate: Avoiding addition of redundant unary operators #7579
 * VTGate: Optimise AST rewriting #7583
 * VTGate: Add Show Status query to vtexplain and make asthelpergen/sizegen quiet #7590
 * VTGate: Add support for SELECT ALL #7593
 * VTGate: Empty statement error code change in sql parsing #7618
 * VTGate: Socket system variable to return vitess mysql socket #7637
-* VTGate: Fix for reserved connection usage with transaction #7646
 * VTGate: Make DROP/CREATE DATABASE pluggable #7381
 * VTGate: Allow Select with lock to pass through in vttablet #7584
 * VTGate: Fix ordering in SELECT INTO and printing of strings #7655
 * VTGate: AST Equals code generator #7672
 * VTGate:  [tabletserver] More resilient wait for schema changes #7684
 * VTGate: Fix flush statement planner #7695
-* VTGate: Fix MySQL Workbench failure on login with `select current_user()` #7705
 * VTGate: Produce query warnings for using features not supported when sharded #7538
 * VTGate: Support for ALTER VITESS_MIGRATION statements #7663
 * VTGate: Solve I_S queries using CNF rewriting #7677
 * VTGate: System schema queries #7685
 * VTGate: Make the AST visitor faster #7701
 * VTGate: COM_PREPARE - Single TCP response packet with all MySQL Packets #7713
-* VTGate: Replace the database name in result fields only if needed #7714\
-* VTGate: Making fast AST rewriter faster #7726
+* VTGate: Replace the database name in result fields only if needed #7714
 * VTGate: Split ast_helper into individual gen files #7727
 * VTGate: Adds support for ordering on character fields for sharded keyspace queries #7678
 * VTGate: Show columns query on system schema #7729
-* VTGate: Healthcheck: update healthy tablets correctly when a stream returns an error or times out #7732
-* VTGate: Constraint names and database names with spaces. #7745
-* VTGate: Fix dual table query when system schema is selected database #7734
-* VTGate: Add information_schema query on prepare statement #7746
-* VTGate: Tests for numeric_precision and numeric_scale columns in information_schema #7763
 * VTGate: Disallow foreign key constraint on ddl #7780
+* VTGate: VTGate: support -enable_online_ddl flag #7694
 
 ### Testing 
 * Fuzzing: Add vtctl fuzzer #7605
@@ -100,6 +97,16 @@ The following PRs made changes to behaviors that clients might rely on. They sho
 * VTGate: [perf: sqlparser faster formatting #7710
 * VTGate :[perf] Cache reserved bind variables in queries #7698
 * VTGate: [perf] sqlparser yacc codegen #7669
+* VTGate: Making fast AST rewriter faster #7726
+* VTGate: Cached Size Implementation #7387
+* VTGate: Plan remove mutexes #7468
+* LFU Cache Bug Fixes #7479
+* [cache] Handle all possible initialization cases #7556
+* VTGate: [servenv] provide a global flag for profiling #7496
+* VTGate: [vttablet] Benchmarks and two small optimizations #7560
+* [pprof]: allow stopping profiling early with a signal #7594
+* perf: RPC Serialization #7519
+* perf: keyword lookups in the tokenizer #7606
 
 ### Cluster Management
 * [vtctld] Migrate topo management RPCs #7395
@@ -123,21 +130,18 @@ The following PRs made changes to behaviors that clients might rely on. They sho
 * [orchestrator] prevent XSS attack via 'orchestrator-msg' params #7526
 * [vtctld] Add remaining reparent commands to VtctldServer #7536
 * [reparentutil] ERS should not attempt to WaitForRelayLogsToApply on primary tablets that were not running replication #7523
-* [cache] Handle all possible initialization cases #7556
 * Shutdown vttablet gracefully if tablet record disappears #7563
 * ApplySchema: -skip_preflight #7587
 * Table GC: disable binary logging on best effort basis #7588
 * Addition of waitSig pprof argument to start recording on USR1 #7616
-* Respect -disable_active_reparents in backup/restore #7576
 * Add combine TLS certs feature #7609
-* Healthcheck: update healthy tablets correctly when a stream returns an error or times out #7654
 * Check error response before attempting to access InitShardPrimary response #7658
 * [vtctld] Migrate GetSrvKeyspace as GetSrvKeyspaces in VtctldServer #7680
 * [vtctld] Migrate ShardReplicationPositions #7690
 * [reparentutil | ERS] Bind status variable to each goroutine in WaitForRelayLogsToApply #7692
 * [servenv] Fix var shadowing caused by short variable declaration #7702
 * [vtctl|vtctldserver] List/Get Tablets timeouts #7715
-* [mysqlctl] Restore check disable_active_reparents properly before waiting for position update #7703
+* vtctl ApplySchema supports '-request_context' flag #7777
 
 ### VReplication
 
@@ -204,7 +208,6 @@ The following PRs made changes to behaviors that clients might rely on. They sho
 
 ### Other / Tools
 
-* Add 1 to statsTabletTypeCounts during startup #7390
 * [rulesctl] Implements CLI tool for rule management #7712
 
 ## Examples / Tutorials
@@ -228,27 +231,31 @@ The following PRs made changes to behaviors that clients might rely on. They sho
 * Docker builds vitess/vtctlclient to install curl #7466
 * Add VT_BASE_VER to vtexplain/Dockerfile #7467
 * Enable -mysql_server_version in vttestserver, and utilize it in vttestserver container images #7474
-* Removed unused tests for Wordpress installation #7516
 * [vtctld | tests only] testtmclient refactor #7518
 * CI: skip some tests on forked repos #7527
 * Workflow to check make sizegen #7535
-* Fix unit test fail after merge #7550
-* perf: RPC Serialization #7519
-* Add test with NULL input values for vindexes that did not have any. #7552
 * Add mysqlctl docker image #7557
 * Restore CI workflow shard 26, accidentally dropped #7569
 * Update CODEOWNERS #7586
-* [pprof]: allow stopping profiling early with a signal #7594
 * CI: ci-workflow-gen  turn string to array to reduce conflicts #7582
 * Add percona-toolkit (for pt-osc/pt-online-schema-change) to the docker/lite images #7603
 * CI: Use ubuntu-18.04 in tests #7614
 * [vttestserver] Fix to work with sharded keyspaces #7617
-* Disable flaky test until it can be fixed #7623f
-* Tests: reset stat at the beginning of test #7644
-* Cleanup mysql server_test #7645
 * Add tools.go #7517
 * Make vttestserver compatible with persistent data directories #7718
 * Add vtorc binary for rpm,deb builds #7750
 * Fixes bug that prevents creation of logs directory #7761
 * [Java] Guava update to 31.1.1 #7764
+
+## Functionality Neutral Changes
+* VTGate: Remove unused key.Destination.IsUnique() #7565
+* VTGate: Add information_schema query on prepare statement #7746
+* VTGate: Tests for numeric_precision and numeric_scale columns in information_schema #7763
+* Disable flaky test until it can be fixed #7623
+* Tests: reset stat at the beginning of test #7644
+* Cleanup mysql server_test #7645
+* vttablet: fix flaky tests #7543
+* Removed unused tests for Wordpress installation #7516
+* Fix unit test fail after merge #7550
+* Add test with NULL input values for vindexes that did not have any. #7552
 
