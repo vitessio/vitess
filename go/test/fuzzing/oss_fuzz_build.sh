@@ -23,6 +23,7 @@ compile_go_fuzzer ./go/test/fuzzing FuzzParser parser_fuzzer
 compile_go_fuzzer ./go/mysql FuzzWritePacket write_packet_fuzzer
 compile_go_fuzzer ./go/mysql FuzzHandleNextCommand handle_next_command_fuzzer
 compile_go_fuzzer ./go/mysql FuzzReadQueryResults read_query_results_fuzzer
+compile_go_fuzzer vitess.io/vitess/go/mysql FuzzTLSServer fuzz_tls_server
 
 # Build dictionaries
 cp $SRC/vitess/go/test/fuzzing/vtctl_fuzzer.dict $OUT/
