@@ -194,7 +194,8 @@ endif
 
 $(PROTO_GO_OUTS): minimaltools install_protoc-gen-go proto/*.proto
 	for name in $(PROTO_SRC_NAMES); do \
-		$(VTROOT)/bin/protoc --gofast_out=plugins=grpc:. -I${PWD}/dist/vt-protoc-3.6.1/include:proto proto/$${name}.proto && \
+		$(VTROOT)/bin/protoc --gofast_out=plugins=grpc:. --plugin protoc-gen-gofast="${GOBIN}/protoc-gen-gofast" \
+		-I${PWD}/dist/vt-protoc-3.6.1/include:proto proto/$${name}.proto && \
 		goimports -w vitess.io/vitess/go/vt/proto/$${name}/$${name}.pb.go; \
 	done
 	cp -Rf vitess.io/vitess/go/vt/proto/* go/vt/proto
@@ -264,7 +265,6 @@ $(DOCKER_VTTESTSERVER_TARGETS): docker_vttestserver_%:
 	${call build_docker_image,docker/vttestserver/Dockerfile.$*,vitess/vttestserver:$*}
 
 docker_vttestserver: $(DOCKER_VTTESTSERVER_TARGETS)
-
 # This rule loads the working copy of the code into a bootstrap image,
 # and then runs the tests inside Docker.
 # Example: $ make docker_test flavor=mariadb
@@ -278,7 +278,7 @@ docker_unit_test:
 # This will generate a tar.gz file into the releases folder with the current source
 release: docker_base
 	@if [ -z "$VERSION" ]; then \
-	  echo "Set the env var VERSION with the release version"; exit 1;\
+		echo "Set the env var VERSION with the release version"; exit 1;\
 	fi
 	mkdir -p releases
 	docker build -f docker/Dockerfile.release -t vitess/release .
@@ -299,27 +299,63 @@ minimaltools:
 dependency_check:
 	./tools/dependency_check.sh
 
-GEN_BASE_DIR ?= ./go/vt/topo/k8stopo
+install_k8s-code-generator: tools.go go.mod
+	go install k8s.io/code-generator/cmd/deepcopy-gen
+	go install k8s.io/code-generator/cmd/client-gen
+	go install k8s.io/code-generator/cmd/lister-gen
+	go install k8s.io/code-generator/cmd/informer-gen
 
-client_go_gen:
+DEEPCOPY_GEN=$(GOBIN)/deepcopy-gen
+CLIENT_GEN=$(GOBIN)/client-gen
+LISTER_GEN=$(GOBIN)/lister-gen
+INFORMER_GEN=$(GOBIN)/informer-gen
+
+GEN_BASE_DIR ?= vitess.io/vitess/go/vt/topo/k8stopo
+
+client_go_gen: install_k8s-code-generator
 	echo $$(date): Regenerating client-go code
 	# Delete and re-generate the deepcopy types
-	find $(GEN_BASE_DIR)/apis/topo/v1beta1 -type f -name 'zz_generated*' -exec rm '{}' \;
-	deepcopy-gen -i $(GEN_BASE_DIR)/apis/topo/v1beta1 -O zz_generated.deepcopy -o ./ --bounding-dirs $(GEN_BASE_DIR)/apis --go-header-file $(GEN_BASE_DIR)/boilerplate.go.txt
+	find $(VTROOT)/go/vt/topo/k8stopo/apis/topo/v1beta1 -name "zz_generated.deepcopy.go" -delete
 
-	# Delete, generate, and move the client libraries
+	# We output to ./ and then copy over the generated files to the appropriate path
+	# This is done so we don't have rely on the repository being cloned to `$GOPATH/src/vitess.io/vitess`
+
+	$(DEEPCOPY_GEN) -o ./ \
+	--input-dirs $(GEN_BASE_DIR)/apis/topo/v1beta1 \
+	-O zz_generated.deepcopy \
+	--bounding-dirs $(GEN_BASE_DIR)/apis \
+	--go-header-file ./go/vt/topo/k8stopo/boilerplate.go.txt
+
+	# Delete existing code
 	rm -rf go/vt/topo/k8stopo/client
 
-	# There is no way to get client-gen to automatically put files in the right place and still have the right import path so we generate and move them
+	# Generate clientset
+	$(CLIENT_GEN) -o ./ \
+	--clientset-name versioned \
+	--input-base $(GEN_BASE_DIR)/apis \
+	--input 'topo/v1beta1' \
+	--output-package $(GEN_BASE_DIR)/client/clientset \
+	--fake-clientset=true \
+	--go-header-file ./go/vt/topo/k8stopo/boilerplate.go.txt
 
-	# Generate client, informers, and listers
-	client-gen -o ./ --input 'topo/v1beta1' --clientset-name versioned --input-base 'vitess.io/vitess/go/vt/topo/k8stopo/apis/' -i vitess.io/vitess --output-package vitess.io/vitess/go/vt/topo/k8stopo/client/clientset --go-header-file $(GEN_BASE_DIR)/boilerplate.go.txt
-	lister-gen -o ./ --input-dirs  vitess.io/vitess/go/vt/topo/k8stopo/apis/topo/v1beta1 --output-package vitess.io/vitess/go/vt/topo/k8stopo/client/listers --go-header-file $(GEN_BASE_DIR)/boilerplate.go.txt
-	informer-gen -o ./ --input-dirs  vitess.io/vitess/go/vt/topo/k8stopo/apis/topo/v1beta1 --versioned-clientset-package vitess.io/vitess/go/vt/topo/k8stopo/client/clientset/versioned --listers-package vitess.io/vitess/go/vt/topo/k8stopo/client/listers --output-package vitess.io/vitess/go/vt/topo/k8stopo/client/informers --go-header-file $(GEN_BASE_DIR)/boilerplate.go.txt
+	# Generate listers
+	$(LISTER_GEN) -o ./ \
+	--input-dirs $(GEN_BASE_DIR)/apis/topo/v1beta1 \
+	--output-package $(GEN_BASE_DIR)/client/listers \
+	--go-header-file ./go/vt/topo/k8stopo/boilerplate.go.txt
+
+	# Generate informers
+	$(INFORMER_GEN) -o ./ \
+	--input-dirs $(GEN_BASE_DIR)/apis/topo/v1beta1 \
+	--output-package $(GEN_BASE_DIR)/client/informers \
+	--versioned-clientset-package $(GEN_BASE_DIR)/client/clientset/versioned \
+	--listers-package $(GEN_BASE_DIR)/client/listers \
+	--go-header-file ./go/vt/topo/k8stopo/boilerplate.go.txt
 
 	# Move and cleanup
 	mv vitess.io/vitess/go/vt/topo/k8stopo/client go/vt/topo/k8stopo/
-	rmdir -p vitess.io/vitess/go/vt/topo/k8stopo/
+	mv vitess.io/vitess/go/vt/topo/k8stopo/apis/topo/v1beta1/zz_generated.deepcopy.go go/vt/topo/k8stopo/apis/topo/v1beta1/zz_generated.deepcopy.go
+	rm -rf vitess.io/vitess/go/vt/topo/k8stopo/
 
 # Check prerequisites and install dependencies
 web_bootstrap:

@@ -166,3 +166,9 @@ select id, 'abc' as test from user where id = 1 union all select id, 'def' as te
 1 ks_sharded/-40: select id, 'abc' as test from `user` where id = 1 union all select id, 'def' as test from `user` where id = 1 union all select id, 'ghi' as test from `user` where id = 1 limit 10001 /* union all */
 
 ----------------------------------------------------------------------
+select id from user where not id in (select col from music where music.user_id = 42) and id in (select col from music where music.user_id = 411)
+
+1 ks_sharded/40-80: select col from music where music.user_id = 42 limit 10001
+2 ks_sharded/40-80: select col from music where music.user_id = 411 limit 10001
+
+----------------------------------------------------------------------

@@ -145,8 +145,8 @@ func (cached *AlterDatabase) CachedSize(alloc bool) int64 {
 	if alloc {
 		size += int64(49)
 	}
-	// field DBName string
-	size += int64(len(cached.DBName))
+	// field DBName vitess.io/vitess/go/vt/sqlparser.TableIdent
+	size += cached.DBName.CachedSize(false)
 	// field AlterOptions []vitess.io/vitess/go/vt/sqlparser.CollateAndCharset
 	{
 		size += int64(cap(cached.AlterOptions)) * int64(24)
@@ -509,8 +509,10 @@ func (cached *ColumnTypeOptions) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(56)
+		size += int64(64)
 	}
+	// field Null *bool
+	size += int64(1)
 	// field Default vitess.io/vitess/go/vt/sqlparser.Expr
 	if cc, ok := cached.Default.(cachedObject); ok {
 		size += cc.CachedSize(true)
@@ -551,10 +553,10 @@ func (cached *ConstraintDefinition) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(32)
+		size += int64(56)
 	}
-	// field Name string
-	size += int64(len(cached.Name))
+	// field Name vitess.io/vitess/go/vt/sqlparser.ColIdent
+	size += cached.Name.CachedSize(false)
 	// field Details vitess.io/vitess/go/vt/sqlparser.ConstraintInfo
 	if cc, ok := cached.Details.(cachedObject); ok {
 		size += cc.CachedSize(true)
@@ -626,8 +628,8 @@ func (cached *CreateDatabase) CachedSize(alloc bool) int64 {
 			size += int64(len(elem))
 		}
 	}
-	// field DBName string
-	size += int64(len(cached.DBName))
+	// field DBName vitess.io/vitess/go/vt/sqlparser.TableIdent
+	size += cached.DBName.CachedSize(false)
 	// field CreateOptions []vitess.io/vitess/go/vt/sqlparser.CollateAndCharset
 	{
 		size += int64(cap(cached.CreateOptions)) * int64(24)
@@ -804,8 +806,8 @@ func (cached *DropDatabase) CachedSize(alloc bool) int64 {
 			size += int64(len(elem))
 		}
 	}
-	// field DBName string
-	size += int64(len(cached.DBName))
+	// field DBName vitess.io/vitess/go/vt/sqlparser.TableIdent
+	size += cached.DBName.CachedSize(false)
 	return size
 }
 func (cached *DropKey) CachedSize(alloc bool) int64 {
@@ -814,10 +816,10 @@ func (cached *DropKey) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(24)
+		size += int64(48)
 	}
-	// field Name string
-	size += int64(len(cached.Name))
+	// field Name vitess.io/vitess/go/vt/sqlparser.ColIdent
+	size += cached.Name.CachedSize(false)
 	return size
 }
 func (cached *DropTable) CachedSize(alloc bool) int64 {
@@ -1529,12 +1531,12 @@ func (cached *RenameIndex) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(32)
+		size += int64(80)
 	}
-	// field OldName string
-	size += int64(len(cached.OldName))
-	// field NewName string
-	size += int64(len(cached.NewName))
+	// field OldName vitess.io/vitess/go/vt/sqlparser.ColIdent
+	size += cached.OldName.CachedSize(false)
+	// field NewName vitess.io/vitess/go/vt/sqlparser.ColIdent
+	size += cached.NewName.CachedSize(false)
 	return size
 }
 func (cached *RenameTable) CachedSize(alloc bool) int64 {
@@ -1793,8 +1795,8 @@ func (cached *ShowBasic) CachedSize(alloc bool) int64 {
 	}
 	// field Tbl vitess.io/vitess/go/vt/sqlparser.TableName
 	size += cached.Tbl.CachedSize(false)
-	// field DbName string
-	size += int64(len(cached.DbName))
+	// field DbName vitess.io/vitess/go/vt/sqlparser.TableIdent
+	size += cached.DbName.CachedSize(false)
 	// field Filter *vitess.io/vitess/go/vt/sqlparser.ShowFilter
 	size += cached.Filter.CachedSize(true)
 	return size
