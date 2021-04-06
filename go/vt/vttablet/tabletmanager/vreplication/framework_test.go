@@ -118,7 +118,7 @@ func TestMain(m *testing.M) {
 			"exta": env.Dbcfgs,
 			"extb": env.Dbcfgs,
 		}
-		playerEngine = NewTestEngine(env.TopoServ, env.Cells[0], env.Mysqld, realDBClientFactory, vrepldb, externalConfig)
+		playerEngine = NewTestEngine(env.TopoServ, env.Cells[0], env.Mysqld, realDBClientFactory, realDBClientFactory, vrepldb, externalConfig)
 		playerEngine.Open(context.Background())
 		defer playerEngine.Close()
 
