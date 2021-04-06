@@ -2434,6 +2434,7 @@ func TestGTIDDiff(t *testing.T) {
 	require.NoError(t, err)
 	pos2, err = mysql.DecodePosition(gtid2)
 	require.NoError(t, err)
+
 	dist, err := pos1.GTIDSet.Distance(pos2.GTIDSet)
 	require.NoError(t, err)
 	require.Equal(t, int64(1), dist)
