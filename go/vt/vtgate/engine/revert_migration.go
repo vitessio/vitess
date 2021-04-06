@@ -20,6 +20,7 @@ import (
 	"fmt"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/proto/query"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -33,9 +34,11 @@ var _ Primitive = (*RevertMigration)(nil)
 
 //RevertMigration represents the instructions to perform an online schema change via vtctld
 type RevertMigration struct {
-	Keyspace *vindexes.Keyspace
-	Stmt     *sqlparser.RevertMigration
-	Query    string
+	Keyspace           *vindexes.Keyspace
+	Stmt               *sqlparser.RevertMigration
+	Query              string
+	DDLStrategySetting *schema.DDLStrategySetting
+	TargetDestination  key.Destination
 
 	noTxNeeded
 
@@ -80,14 +83,29 @@ func (v *RevertMigration) Execute(vcursor VCursor, bindVars map[string]*query.Bi
 	}
 
 	sql := fmt.Sprintf("revert %s", v.Stmt.UUID)
-	ddlStrategySetting := schema.NewDDLStrategySetting(schema.DDLStrategyOnline, "")
+
+	ddlStrategySetting, err := schema.ParseDDLStrategy(vcursor.Session().GetDDLStrategy())
+	if err != nil {
+		return nil, err
+	}
+	ddlStrategySetting.Strategy = schema.DDLStrategyOnline // and we keep the options as they were
 	onlineDDL, err := schema.NewOnlineDDL(v.GetKeyspaceName(), "", sql, ddlStrategySetting, fmt.Sprintf("vtgate:%s", vcursor.Session().GetSessionUUID()))
 	if err != nil {
 		return result, err
 	}
 
-	if onlineDDL.StrategySetting().IsSkipTopo() {
+	if ddlStrategySetting.IsSkipTopo() {
 		// TODO(shlomi): implement before this branch is merged
+		s := Send{
+			Keyspace:          v.Keyspace,
+			TargetDestination: v.TargetDestination,
+			Query:             onlineDDL.SQL,
+			IsDML:             false,
+			SingleShardOnly:   false,
+		}
+		if _, err := s.Execute(vcursor, bindVars, wantfields); err != nil {
+			return result, err
+		}
 	} else {
 		// Submit a request entry in topo. vtctld will take it from there
 		if err := vcursor.SubmitOnlineDDL(onlineDDL); err != nil {

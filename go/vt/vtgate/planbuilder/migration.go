@@ -50,7 +50,7 @@ func buildAlterMigrationPlan(query string, vschema ContextVSchema) (engine.Primi
 }
 
 func buildRevertMigrationPlan(query string, stmt *sqlparser.RevertMigration, vschema ContextVSchema) (engine.Primitive, error) {
-	_, ks, tabletType, err := vschema.TargetDestination("")
+	dest, ks, tabletType, err := vschema.TargetDestination("")
 	if err != nil {
 		return nil, err
 	}
@@ -62,9 +62,14 @@ func buildRevertMigrationPlan(query string, stmt *sqlparser.RevertMigration, vsc
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "REVERT VITESS_MIGRATION works only on primary tablet")
 	}
 
+	if dest == nil {
+		dest = key.DestinationAllShards{}
+	}
+
 	return &engine.RevertMigration{
-		Keyspace: ks,
-		Stmt:     stmt,
-		Query:    query,
+		Keyspace:          ks,
+		TargetDestination: dest,
+		Stmt:              stmt,
+		Query:             query,
 	}, nil
 }
