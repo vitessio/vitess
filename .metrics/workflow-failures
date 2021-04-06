@@ -6391,3 +6391,7 @@
 2021-04-06T03:19:23Z,Cluster (onlineddl_ghost),https://github.com/vitessio/vitess/actions/runs/721181519
 2021-04-06T03:19:23Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/721181533
 2021-04-06T03:19:23Z,local_example,https://github.com/vitessio/vitess/actions/runs/721181557
+2021-04-06T05:35:50Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/721442145
+2021-04-06T05:35:50Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/721442110
+2021-04-06T05:35:50Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/721442116
+2021-04-06T05:35:50Z,unit_race,https://github.com/vitessio/vitess/actions/runs/721442146
