@@ -6552,3 +6552,5 @@
 2021-04-06T19:57:05Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/723741078
 2021-04-06T19:57:05Z,local_example,https://github.com/vitessio/vitess/actions/runs/723741086
 2021-04-06T19:57:05Z,local_example,https://github.com/vitessio/vitess/actions/runs/723741087
+2021-04-06T22:11:43Z,gomod-tidy,https://github.com/vitessio/vitess/actions/runs/724059773
+2021-04-06T22:13:54Z,endtoend,https://github.com/vitessio/vitess/actions/runs/724065200
