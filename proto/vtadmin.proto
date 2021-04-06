@@ -96,6 +96,21 @@ message Schema {
     string keyspace = 2;
 
     repeated tabletmanagerdata.TableDefinition table_definitions = 3;
+    // TableSizes is a mapping of table name to TableSize information.
+    map<string, TableSize> table_sizes = 4;
+
+    message ShardTableSize {
+        uint64 row_count = 1;
+        uint64 data_length = 2;
+    }
+
+    // TableSize aggregates table size information across all shards containing
+    // in the given keyspace and cluster, as well as per-shard size information.
+    message TableSize {
+        uint64 row_count = 1;
+        uint64 data_length = 2;
+        map<string, ShardTableSize> by_shard = 3;
+    }
 }
 
 // Tablet groups the topo information of a tablet together with the Vitess
@@ -154,6 +169,7 @@ message Workflow {
 message FindSchemaRequest {
     string table = 1;
     repeated string cluster_ids = 2;
+    GetSchemaTableSizeOptions table_size_options = 3;
 }
 
 message GetClustersRequest {}
@@ -182,14 +198,20 @@ message GetSchemaRequest {
     string cluster_id = 1;
     string keyspace = 2;
     string table = 3;
+    GetSchemaTableSizeOptions table_size_options = 4;
 }
 
 message GetSchemasRequest {
     repeated string cluster_ids = 1;
+    GetSchemaTableSizeOptions table_size_options = 2;
 }
 
 message GetSchemasResponse {
     repeated Schema schemas = 1;
+}
+
+message GetSchemaTableSizeOptions {
+    bool aggregate_sizes = 1;
 }
 
 message GetTabletRequest {

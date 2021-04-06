@@ -362,14 +362,14 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <str> for_from
 %type <str> default_opt
 %type <ignore> ignore_opt
-%type <str> from_database_opt columns_or_fields extended_opt storage_opt
+%type <str> columns_or_fields extended_opt storage_opt
 %type <showFilter> like_or_where_opt like_opt
 %type <boolean> exists_opt not_exists_opt enforced_opt temp_opt full_opt
 %type <empty> to_opt
 %type <str> reserved_keyword non_reserved_keyword
 %type <colIdent> sql_id reserved_sql_id col_alias as_ci_opt
 %type <expr> charset_value
-%type <tableIdent> table_id reserved_table_id table_alias as_opt_id
+%type <tableIdent> table_id reserved_table_id table_alias as_opt_id table_id_opt from_database_opt
 %type <empty> as_opt work_opt savepoint_opt
 %type <empty> skip_to_end ddl_skip_to_end
 %type <str> charset
@@ -879,9 +879,9 @@ create_index_prefix:
   }
 
 create_database_prefix:
-  CREATE database_or_schema comment_opt not_exists_opt id_or_var
+  CREATE database_or_schema comment_opt not_exists_opt table_id
   {
-    $$ = &CreateDatabase{Comments: Comments($3), DBName: string($5.String()), IfNotExists: $4}
+    $$ = &CreateDatabase{Comments: Comments($3), DBName: $5, IfNotExists: $4}
     setDDL(yylex,$$)
   }
 
@@ -1026,16 +1026,18 @@ column_definition:
 // was specific (as stated in the MySQL guide) and did not accept arbitrary order options. For example NOT NULL DEFAULT 1 and not DEFAULT 1 NOT NULL
 column_type_options:
   {
-    $$ = &ColumnTypeOptions{NotNull: false, Default: nil, OnUpdate: nil, Autoincrement: false, KeyOpt: colKeyNone, Comment: nil}
+    $$ = &ColumnTypeOptions{Null: nil, Default: nil, OnUpdate: nil, Autoincrement: false, KeyOpt: colKeyNone, Comment: nil}
   }
 | column_type_options NULL
   {
-    $1.NotNull = false
+    val := true
+    $1.Null = &val
     $$ = $1
   }
 | column_type_options NOT NULL
   {
-    $1.NotNull = true
+    val := false
+    $1.Null = &val
     $$ = $1
   }
 | column_type_options DEFAULT value_expression
@@ -1546,7 +1548,7 @@ index_column:
 constraint_definition:
   CONSTRAINT id_or_var_opt constraint_info
   {
-    $$ = &ConstraintDefinition{Name: string($2.String()), Details: $3}
+    $$ = &ConstraintDefinition{Name: $2, Details: $3}
   }
 |  constraint_info
   {
@@ -1556,7 +1558,7 @@ constraint_definition:
 check_constraint_definition:
   CONSTRAINT id_or_var_opt check_constraint_info
   {
-    $$ = &ConstraintDefinition{Name: string($2.String()), Details: $3}
+    $$ = &ConstraintDefinition{Name: $2, Details: $3}
   }
 |  check_constraint_info
   {
@@ -1968,7 +1970,7 @@ alter_option:
   }
 | DROP index_or_key id_or_var
   {
-    $$ = &DropKey{Type:NormalKeyType, Name:$3.String()}
+    $$ = &DropKey{Type:NormalKeyType, Name:$3}
   }
 | DROP PRIMARY KEY
   {
@@ -1976,7 +1978,7 @@ alter_option:
   }
 | DROP FOREIGN KEY id_or_var
   {
-    $$ = &DropKey{Type:ForeignKeyType, Name:$4.String()}
+    $$ = &DropKey{Type:ForeignKeyType, Name:$4}
   }
 | FORCE
   {
@@ -1988,7 +1990,7 @@ alter_option:
   }
 | RENAME index_or_key id_or_var TO id_or_var
   {
-    $$ = &RenameIndex{OldName:$3.String(), NewName:$5.String()}
+    $$ = &RenameIndex{OldName:$3, NewName:$5}
   }
 
 alter_commands_modifier_list:
@@ -2070,17 +2072,17 @@ alter_statement:
   {
     $$ = &AlterView{ViewName: $6.ToViewName(), Algorithm:$2, Definer: $3 ,Security:$4, Columns:$7, Select: $9, CheckOption: $10 }
   }
-| alter_database_prefix id_or_var_opt create_options
+| alter_database_prefix table_id_opt create_options
   {
     $1.FullyParsed = true
-    $1.DBName = $2.String()
+    $1.DBName = $2
     $1.AlterOptions = $3
     $$ = $1
   }
-| alter_database_prefix id_or_var UPGRADE DATA DIRECTORY NAME
+| alter_database_prefix table_id UPGRADE DATA DIRECTORY NAME
   {
     $1.FullyParsed = true
-    $1.DBName = $2.String()
+    $1.DBName = $2
     $1.UpdateDataDirectory = true
     $$ = $1
   }
@@ -2331,16 +2333,16 @@ drop_statement:
     if $3.Lowered() == "primary" {
       $$ = &AlterTable{Table: $5,AlterOptions: append([]AlterOption{&DropKey{Type:PrimaryKeyType}},$6...)}
     } else {
-      $$ = &AlterTable{Table: $5,AlterOptions: append([]AlterOption{&DropKey{Type:NormalKeyType, Name:$3.String()}},$6...)}
+      $$ = &AlterTable{Table: $5,AlterOptions: append([]AlterOption{&DropKey{Type:NormalKeyType, Name:$3}},$6...)}
     }
   }
 | DROP VIEW exists_opt view_name_list restrict_or_cascade_opt
   {
     $$ = &DropView{FromTables: $4, IfExists: $3}
   }
-| DROP database_or_schema comment_opt exists_opt id_or_var
+| DROP database_or_schema comment_opt exists_opt table_id
   {
-    $$ = &DropDatabase{Comments: Comments($3), DBName: string($5.String()), IfExists: $4}
+    $$ = &DropDatabase{Comments: Comments($3), DBName: $5, IfExists: $4}
   }
 
 truncate_statement:
@@ -2591,15 +2593,15 @@ columns_or_fields:
 from_database_opt:
   /* empty */
   {
-    $$ = ""
+    $$ = NewTableIdent("")
   }
 | FROM table_id
   {
-    $$ = $2.v
+    $$ = $2
   }
 | IN table_id
   {
-    $$ = $2.v
+    $$ = $2
   }
 
 like_or_where_opt:
@@ -4725,6 +4727,15 @@ table_id:
     $$ = NewTableIdent(string($1))
   }
 
+table_id_opt:
+  {
+    $$ = NewTableIdent("")
+  }
+| table_id
+  {
+    $$ = $1
+  }
+
 reserved_table_id:
   table_id
 | reserved_keyword
@@ -4752,6 +4763,7 @@ reserved_keyword:
 | CASE
 | CALL
 | CHANGE
+| CHARACTER
 | CHECK
 | COLLATE
 | COLUMN
@@ -4906,7 +4918,6 @@ non_reserved_keyword:
 | CASCADED
 | CHANNEL
 | CHAR
-| CHARACTER
 | CHARSET
 | CHECKSUM
 | CLONE

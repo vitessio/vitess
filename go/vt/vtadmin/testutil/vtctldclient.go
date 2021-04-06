@@ -34,6 +34,10 @@ import (
 type VtctldClient struct {
 	vtctldclient.VtctldClient
 
+	FindAllShardsInKeyspaceResults map[string]struct {
+		Response *vtctldatapb.FindAllShardsInKeyspaceResponse
+		Error    error
+	}
 	GetKeyspacesResults struct {
 		Keyspaces []*vtctldatapb.Keyspace
 		Error     error
@@ -55,6 +59,19 @@ type VtctldClient struct {
 // Compile-time type assertion to make sure we haven't overriden a method
 // incorrectly.
 var _ vtctldclient.VtctldClient = (*VtctldClient)(nil)
+
+// FindAllShardsInKeyspace is part of the vtctldclient.VtctldClient interface.
+func (fake *VtctldClient) FindAllShardsInKeyspace(ctx context.Context, req *vtctldatapb.FindAllShardsInKeyspaceRequest, opts ...grpc.CallOption) (*vtctldatapb.FindAllShardsInKeyspaceResponse, error) {
+	if fake.FindAllShardsInKeyspaceResults == nil {
+		return nil, fmt.Errorf("%w: FindAllShardsInKeyspaceResults not set on fake vtctldclient", assert.AnError)
+	}
+
+	if result, ok := fake.FindAllShardsInKeyspaceResults[req.Keyspace]; ok {
+		return result.Response, result.Error
+	}
+
+	return nil, fmt.Errorf("%w: no result set for keyspace %s", assert.AnError, req.Keyspace)
+}
 
 // GetKeyspaces is part of the vtctldclient.VtctldClient interface.
 func (fake *VtctldClient) GetKeyspaces(ctx context.Context, req *vtctldatapb.GetKeyspacesRequest, opts ...grpc.CallOption) (*vtctldatapb.GetKeyspacesResponse, error) {

@@ -153,7 +153,7 @@ func (node *DropDatabase) Format(buf *TrackedBuffer) {
 	if node.IfExists {
 		exists = "if exists "
 	}
-	buf.astPrintf(node, "%s database %v%s%s", DropStr, node.Comments, exists, node.DBName)
+	buf.astPrintf(node, "%s database %v%s%v", DropStr, node.Comments, exists, node.DBName)
 }
 
 // Format formats the node.
@@ -456,8 +456,12 @@ func (ct *ColumnType) Format(buf *TrackedBuffer) {
 	if ct.Collate != "" {
 		buf.astPrintf(ct, " %s %s", keywordStrings[COLLATE], ct.Collate)
 	}
-	if ct.Options.NotNull {
-		buf.astPrintf(ct, " %s %s", keywordStrings[NOT], keywordStrings[NULL])
+	if ct.Options.Null != nil {
+		if *ct.Options.Null {
+			buf.astPrintf(ct, " %s", keywordStrings[NULL])
+		} else {
+			buf.astPrintf(ct, " %s %s", keywordStrings[NOT], keywordStrings[NULL])
+		}
 	}
 	if ct.Options.Default != nil {
 		buf.astPrintf(ct, " %s %v", keywordStrings[DEFAULT], ct.Options.Default)
@@ -565,8 +569,8 @@ func (node VindexParam) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (c *ConstraintDefinition) Format(buf *TrackedBuffer) {
-	if c.Name != "" {
-		buf.astPrintf(c, "constraint %s ", c.Name)
+	if !c.Name.IsEmpty() {
+		buf.astPrintf(c, "constraint %v ", c.Name)
 	}
 	c.Details.Format(buf)
 }
@@ -1307,8 +1311,8 @@ func (node *ShowBasic) Format(buf *TrackedBuffer) {
 	if !node.Tbl.IsEmpty() {
 		buf.astPrintf(node, " from %v", node.Tbl)
 	}
-	if node.DbName != "" {
-		buf.astPrintf(node, " from %s", node.DbName)
+	if !node.DbName.IsEmpty() {
+		buf.astPrintf(node, " from %v", node.DbName)
 	}
 	buf.astPrintf(node, "%v", node.Filter)
 }
@@ -1336,7 +1340,7 @@ func (node *CreateDatabase) Format(buf *TrackedBuffer) {
 	if node.IfNotExists {
 		buf.WriteString("if not exists ")
 	}
-	buf.astPrintf(node, "%s", node.DBName)
+	buf.astPrintf(node, "%v", node.DBName)
 	if node.CreateOptions != nil {
 		for _, createOption := range node.CreateOptions {
 			if createOption.IsDefault {
@@ -1351,8 +1355,8 @@ func (node *CreateDatabase) Format(buf *TrackedBuffer) {
 // Format formats the node.
 func (node *AlterDatabase) Format(buf *TrackedBuffer) {
 	buf.WriteString("alter database")
-	if node.DBName != "" {
-		buf.astPrintf(node, " %s", node.DBName)
+	if !node.DBName.IsEmpty() {
+		buf.astPrintf(node, " %v", node.DBName)
 	}
 	if node.UpdateDataDirectory {
 		buf.WriteString(" upgrade data directory name")
@@ -1588,8 +1592,8 @@ func (node *DropColumn) Format(buf *TrackedBuffer) {
 // Format formats the node
 func (node *DropKey) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "drop %s", node.Type.ToString())
-	if node.Name != "" {
-		buf.astPrintf(node, " %s", node.Name)
+	if !node.Name.IsEmpty() {
+		buf.astPrintf(node, " %v", node.Name)
 	}
 }
 
@@ -1620,7 +1624,7 @@ func (node *RenameTableName) Format(buf *TrackedBuffer) {
 
 // Format formats the node
 func (node *RenameIndex) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "rename index %s to %s", node.OldName, node.NewName)
+	buf.astPrintf(node, "rename index %v to %v", node.OldName, node.NewName)
 }
 
 // Format formats the node
