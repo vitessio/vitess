@@ -6493,4 +6493,7 @@
 2021-04-06T13:20:45Z,region_example,https://github.com/vitessio/vitess/actions/runs/722645145
 2021-04-06T14:03:43Z,Cluster (onlineddl_ghost),https://github.com/vitessio/vitess/actions/runs/722771361
 2021-04-06T14:03:43Z,Unit Test (mariadb101),https://github.com/vitessio/vitess/actions/runs/722771315
+2021-04-06T14:03:43Z,region_example,https://github.com/vitessio/vitess/actions/runs/722771327
 2021-04-06T14:19:56Z,Cluster (27),https://github.com/vitessio/vitess/actions/runs/722821639
+2021-04-06T14:26:52Z,Cluster (27),https://github.com/vitessio/vitess/actions/runs/722842973
+2021-04-06T14:26:52Z,endtoend,https://github.com/vitessio/vitess/actions/runs/722843004
