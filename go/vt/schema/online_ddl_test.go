@@ -17,6 +17,7 @@ limitations under the License.
 package schema
 
 import (
+	"encoding/hex"
 	"strings"
 	"testing"
 
@@ -225,13 +226,13 @@ func TestNewOnlineDDL(t *testing.T) {
 					assert.NoError(t, err)
 					if stgy.IsSkipTopo() {
 						// onlineDDL.SQL enriched with /*vt+ ... */ comment
-						assert.Contains(t, onlineDDL.SQL, onlineDDL.UUID)
-						assert.Contains(t, onlineDDL.SQL, migrationContext)
-						assert.Contains(t, onlineDDL.SQL, string(stgy.Strategy))
+						assert.Contains(t, onlineDDL.SQL, hex.EncodeToString([]byte(onlineDDL.UUID)))
+						assert.Contains(t, onlineDDL.SQL, hex.EncodeToString([]byte(migrationContext)))
+						assert.Contains(t, onlineDDL.SQL, hex.EncodeToString([]byte(string(stgy.Strategy))))
 					} else {
-						assert.NotContains(t, onlineDDL.SQL, onlineDDL.UUID)
-						assert.NotContains(t, onlineDDL.SQL, migrationContext)
-						assert.NotContains(t, onlineDDL.SQL, string(stgy.Strategy))
+						assert.NotContains(t, onlineDDL.SQL, hex.EncodeToString([]byte(onlineDDL.UUID)))
+						assert.NotContains(t, onlineDDL.SQL, hex.EncodeToString([]byte(migrationContext)))
+						assert.NotContains(t, onlineDDL.SQL, hex.EncodeToString([]byte(string(stgy.Strategy))))
 					}
 				})
 			}
@@ -296,6 +297,35 @@ func TestNewOnlineDDLs(t *testing.T) {
 				sqls = append(sqls, sql)
 			}
 			assert.Equal(t, expect.sqls, sqls)
+		})
+	}
+}
+
+func TestOnlineDDLFromCommentedStatement(t *testing.T) {
+	queries := []string{
+		`create table t (id int primary key)`,
+		`alter table t drop primary key`,
+		`drop table if exists t`,
+		`revert vitess_migration '4e5dcf80_354b_11eb_82cd_f875a4d24e90'`,
+	}
+	strategySetting := NewDDLStrategySetting(DDLStrategyGhost, `-singleton -declarative --max-load="Threads_running=5"`)
+	migrationContext := "354b-11eb-82cd-f875a4d24e90"
+	for _, query := range queries {
+		t.Run(query, func(t *testing.T) {
+			o1, err := NewOnlineDDL("ks", "t", query, strategySetting, migrationContext)
+			require.NoError(t, err)
+
+			stmt, err := sqlparser.Parse(o1.SQL)
+			require.NoError(t, err)
+
+			o2, err := OnlineDDLFromCommentedStatement(stmt)
+			require.NoError(t, err)
+			assert.True(t, IsOnlineDDLUUID(o2.UUID))
+			assert.Equal(t, o1.UUID, o2.UUID)
+			assert.Equal(t, migrationContext, o2.RequestContext)
+			assert.Equal(t, "t", o2.Table)
+			assert.Equal(t, strategySetting.Strategy, o2.Strategy)
+			assert.Equal(t, strategySetting.Options, o2.Options)
 		})
 	}
 }

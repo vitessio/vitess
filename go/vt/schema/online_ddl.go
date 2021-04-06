@@ -18,6 +18,7 @@ package schema
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -180,12 +181,19 @@ func NewOnlineDDL(keyspace string, table string, sql string, ddlStrategySetting 
 	}
 
 	{
-
+		encodeDirective := func(directive string) string {
+			return strconv.Quote(hex.EncodeToString([]byte(directive)))
+		}
 		var comments sqlparser.Comments
 		if ddlStrategySetting.IsSkipTopo() {
 			comments = sqlparser.Comments{
-				fmt.Sprintf(`/*vt+ uuid=%s context=%s strategy=%s options=%s */`, strconv.Quote(u), strconv.Quote(requestContext), strconv.Quote(string(ddlStrategySetting.Strategy)), strconv.Quote(ddlStrategySetting.Options)),
-			}
+				fmt.Sprintf(`/*vt+ uuid=%s context=%s table=%s strategy=%s options=%s */`,
+					encodeDirective(u),
+					encodeDirective(requestContext),
+					encodeDirective(table),
+					encodeDirective(string(ddlStrategySetting.Strategy)),
+					encodeDirective(ddlStrategySetting.Options),
+				)}
 			if uuid, err := legacyParseRevertUUID(sql); err == nil {
 				sql = fmt.Sprintf("revert vitess_migration '%s'", uuid)
 			}
@@ -232,6 +240,66 @@ func NewOnlineDDL(keyspace string, table string, sql string, ddlStrategySetting 
 		RequestContext: requestContext,
 		Status:         OnlineDDLStatusRequested,
 	}, nil
+}
+
+// OnlineDDLFromCommentedStatement creates a schema  instance based on a commented query. The query is expected
+// to be commented as e.g. `CREATE /*vt+ uuid=... context=... table=... strategy=... options=... */ TABLE ...`
+func OnlineDDLFromCommentedStatement(stmt sqlparser.Statement) (onlineDDL *OnlineDDL, err error) {
+	var comments sqlparser.Comments
+	switch stmt := stmt.(type) {
+	case sqlparser.DDLStatement:
+		comments = stmt.GetComments()
+		stmt.SetComments(sqlparser.Comments{})
+	case *sqlparser.RevertMigration:
+		comments = stmt.Comments
+		stmt.SetComments(sqlparser.Comments{})
+	default:
+		return nil, fmt.Errorf("Unsupported statement for Online DDL: %v", sqlparser.String(stmt))
+	}
+	if len(comments) == 0 {
+		return nil, fmt.Errorf("No comments found in statement: %v", sqlparser.String(stmt))
+	}
+	directives := sqlparser.ExtractCommentDirectives(comments)
+
+	decodeDirective := func(name string) (string, error) {
+		value := fmt.Sprintf("%s", directives[name])
+		if value == "" {
+			return "", fmt.Errorf("No value found for comment directive %s", name)
+		}
+		unquoted, err := strconv.Unquote(value)
+		if err != nil {
+			return "", err
+		}
+		b, err := hex.DecodeString(unquoted)
+		if err != nil {
+			return "", err
+		}
+		return string(b), nil
+	}
+
+	onlineDDL = &OnlineDDL{
+		SQL: sqlparser.String(stmt),
+	}
+	if onlineDDL.Table, err = decodeDirective("table"); err != nil {
+		return nil, err
+	}
+	if onlineDDL.UUID, err = decodeDirective("uuid"); err != nil {
+		return nil, err
+	}
+	if strategy, err := decodeDirective("strategy"); err == nil {
+		onlineDDL.Strategy = DDLStrategy(strategy)
+	} else {
+		return nil, err
+	}
+	if options, err := decodeDirective("options"); err == nil {
+		onlineDDL.Options = options
+	} else {
+		return nil, err
+	}
+	if onlineDDL.RequestContext, err = decodeDirective("context"); err != nil {
+		return nil, err
+	}
+	return onlineDDL, nil
 }
 
 // StrategySetting returns the ddl strategy setting associated with this online DDL
