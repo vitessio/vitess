@@ -779,3 +779,68 @@ func TestSelectBooleanSystemVariables(t *testing.T) {
 		require.Equal(t, tc.Type, qr.Fields[0].Type, fmt.Sprintf("invalid type, wants: %+v, but got: %+v\n", tc.Type, qr.Fields[0].Type))
 	}
 }
+
+func TestSysSchema(t *testing.T) {
+	client := framework.NewClient()
+	_, err := client.Execute("drop table if exists `a`", nil)
+	require.NoError(t, err)
+
+	_, err = client.Execute("CREATE TABLE `a` (`one` int NOT NULL,`two` int NOT NULL,PRIMARY KEY (`one`,`two`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4", nil)
+	require.NoError(t, err)
+	defer client.Execute("drop table `a`", nil)
+
+	qr, err := client.Execute(`SELECT
+		column_name column_name,
+		data_type data_type,
+		column_type full_data_type,
+		character_maximum_length character_maximum_length,
+		numeric_precision numeric_precision,
+		numeric_scale numeric_scale,
+		datetime_precision datetime_precision,
+		column_default column_default,
+		is_nullable is_nullable,
+		extra extra,
+		table_name table_name
+	FROM information_schema.columns
+	WHERE 1 != 1
+	ORDER BY ordinal_position`, nil)
+	require.NoError(t, err)
+
+	// This is mysql behaviour that we are receiving Uint32 on field query even though the column is Uint64.
+	// assert.EqualValues(t, sqltypes.Uint64, qr.Fields[4].Type) - ideally this should be received
+	// The issue is only in MySQL 8.0 , As CI is on MySQL 5.7 need to check with Uint64
+	assert.True(t, qr.Fields[4].Type == sqltypes.Uint64 || qr.Fields[4].Type == sqltypes.Uint32)
+
+	qr, err = client.Execute(`SELECT
+		column_name column_name,
+		data_type data_type,
+		column_type full_data_type,
+		character_maximum_length character_maximum_length,
+		numeric_precision numeric_precision,
+		numeric_scale numeric_scale,
+		datetime_precision datetime_precision,
+		column_default column_default,
+		is_nullable is_nullable,
+		extra extra,
+		table_name table_name
+	FROM information_schema.columns
+	WHERE table_schema = 'vttest' and table_name = 'a'
+	ORDER BY ordinal_position`, nil)
+	require.NoError(t, err)
+	require.Equal(t, 2, len(qr.Rows))
+
+	// is_nullable
+	assert.Equal(t, `VARCHAR("NO")`, qr.Rows[0][8].String())
+	assert.Equal(t, `VARCHAR("NO")`, qr.Rows[1][8].String())
+
+	// table_name
+	assert.Equal(t, `VARCHAR("a")`, qr.Rows[0][10].String())
+	assert.Equal(t, `VARCHAR("a")`, qr.Rows[1][10].String())
+
+	// The field Type and the row value type are not matching and because of this wrong packet is send regarding the data of bigint unsigned to the client on vttestserver.
+	// On, Vitess cluster using protobuf we are doing the row conversion to field type and so the final row type send to client is same as field type.
+	// assert.EqualValues(t, sqltypes.Uint64, qr.Fields[4].Type) - We would have received this but because of field caching we are receiving Uint32.
+	// The issue is only in MySQL 8.0 , As CI is on MySQL 5.7 need to check with Uint64
+	assert.True(t, qr.Fields[4].Type == sqltypes.Uint64 || qr.Fields[4].Type == sqltypes.Uint32)
+	assert.Equal(t, querypb.Type_UINT64, qr.Rows[0][4].Type())
+}

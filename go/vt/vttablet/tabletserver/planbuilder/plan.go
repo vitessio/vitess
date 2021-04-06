@@ -18,6 +18,7 @@ package planbuilder
 
 import (
 	"encoding/json"
+	"strings"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -115,6 +116,16 @@ func (pt PlanType) String() string {
 func PlanByName(s string) (pt PlanType, ok bool) {
 	for i, v := range planName {
 		if v == s {
+			return PlanType(i), true
+		}
+	}
+	return NumPlans, false
+}
+
+// PlanByNameIC finds a plan type by its string name without case sensitivity
+func PlanByNameIC(s string) (pt PlanType, ok bool) {
+	for i, v := range planName {
+		if strings.EqualFold(v, s) {
 			return PlanType(i), true
 		}
 	}

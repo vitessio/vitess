@@ -20,12 +20,16 @@ import (
 	"vitess.io/vitess/go/vt/key"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
 func buildAlterMigrationPlan(query string, vschema ContextVSchema) (engine.Primitive, error) {
+	if !*enableOnlineDDL {
+		return nil, schema.ErrOnlineDDLDisabled
+	}
 	dest, ks, tabletType, err := vschema.TargetDestination("")
 	if err != nil {
 		return nil, err
@@ -50,6 +54,9 @@ func buildAlterMigrationPlan(query string, vschema ContextVSchema) (engine.Primi
 }
 
 func buildRevertMigrationPlan(query string, stmt *sqlparser.RevertMigration, vschema ContextVSchema) (engine.Primitive, error) {
+	if !*enableOnlineDDL {
+		return nil, schema.ErrOnlineDDLDisabled
+	}
 	_, ks, tabletType, err := vschema.TargetDestination("")
 	if err != nil {
 		return nil, err

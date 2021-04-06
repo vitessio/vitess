@@ -1185,6 +1185,32 @@ func TestExecutorDDL(t *testing.T) {
 	}
 }
 
+func TestExecutorDDLFk(t *testing.T) {
+	executor, _, _, sbc := createExecutorEnv()
+
+	mName := "TestExecutorDDLFk"
+	stmts := []string{
+		"create table t1(id bigint primary key, foreign key (id) references t2(id))",
+		"alter table t2 add foreign key (id) references t1(id) on delete cascade",
+	}
+
+	for _, stmt := range stmts {
+		for _, fkMode := range []string{"allow", "disallow"} {
+			t.Run(stmt+fkMode, func(t *testing.T) {
+				sbc.ExecCount.Set(0)
+				*foreignKeyMode = fkMode
+				_, err := executor.Execute(ctx, mName, NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded}), stmt, nil)
+				if fkMode == "allow" {
+					require.NoError(t, err)
+					require.EqualValues(t, 1, sbc.ExecCount.Get())
+				} else {
+					require.EqualError(t, err, "foreign key constraint is not allowed")
+				}
+			})
+		}
+	}
+}
+
 func TestExecutorAlterVSchemaKeyspace(t *testing.T) {
 	*vschemaacl.AuthorizedDDLUsers = "%"
 	defer func() {
