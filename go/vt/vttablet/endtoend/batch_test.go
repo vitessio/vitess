@@ -29,13 +29,6 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/endtoend/framework"
 )
 
-var mustMatch = utils.MustMatchFn(
-	[]interface{}{ // types with unexported fields
-		sqltypes.Value{},
-	},
-	[]string{}, // ignored fields
-)
-
 func TestBatchRead(t *testing.T) {
 	client := framework.NewClient()
 	queries := []*querypb.BoundQuery{{
@@ -130,7 +123,7 @@ func TestBatchRead(t *testing.T) {
 
 	qrl, err := client.ExecuteBatch(queries, false)
 	require.NoError(t, err)
-	mustMatch(t, want, qrl)
+	utils.MustMatch(t, want, qrl)
 }
 
 func TestBatchTransaction(t *testing.T) {
