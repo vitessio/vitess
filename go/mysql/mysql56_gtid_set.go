@@ -580,34 +580,21 @@ func (set Mysql56GTIDSet) Difference(other Mysql56GTIDSet) Mysql56GTIDSet {
 	return differenceSet
 }
 
-func (set Mysql56GTIDSet) NumTransactions() (int64, error) {
-	txs := int64(0)
-	for _, intervals := range set {
-		for _, interval := range intervals {
-			txs += interval.end - interval.start + 1
-		}
-	}
-	return txs, nil
-}
-
-func (set Mysql56GTIDSet) Distance(other GTIDSet) (int64, error) {
-	mydbOther, ok := other.(Mysql56GTIDSet)
+// Distance returns the number of GTIDS that the newerSet is ahead of the receiver
+// If receiver is ahead, Distance returned is 0 because of how Difference() is currently implemented
+func (set Mysql56GTIDSet) Distance(newerSet GTIDSet) (int64, error) {
+	other, ok := newerSet.(Mysql56GTIDSet)
 	if !ok {
 		return -1, fmt.Errorf("passed GTIDSet is not a MySQL GTIDSet")
 	}
-	numTransactions1, err := set.NumTransactions()
-	if err != nil {
-		return 0, err
+	diff := other.Difference(set)
+	distance := int64(0)
+	for _, intervals := range diff {
+		for _, interval := range intervals {
+			distance += interval.end - interval.start + 1
+		}
 	}
-	numTransactions2, err := mydbOther.NumTransactions()
-	if err != nil {
-		return 0, err
-	}
-	dist := numTransactions1 - numTransactions2
-	if dist < 0 {
-		return -dist, nil
-	}
-	return dist, nil
+	return distance, nil
 }
 
 // NewMysql56GTIDSetFromSIDBlock builds a Mysql56GTIDSet from parsing a SID Block.

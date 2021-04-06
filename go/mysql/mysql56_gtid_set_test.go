@@ -614,10 +614,10 @@ func TestMySQL56GTIDSetDistance(t *testing.T) {
 		{
 			set1: Mysql56GTIDSet{
 				sid1: []interval{{20, 30}, {35, 40}},
-				sid2: []interval{{1, 5}, {50, 50}, {60, 70}},
 			},
 			set2: Mysql56GTIDSet{
 				sid1: []interval{{20, 30}, {35, 40}},
+				sid2: []interval{{1, 5}, {50, 50}, {60, 70}},
 			},
 			dist:   17,
 			errStr: "",

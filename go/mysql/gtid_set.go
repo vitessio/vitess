@@ -50,7 +50,7 @@ type GTIDSet interface {
 	// Union returns a union of the receiver GTIDSet and the supplied GTIDSet.
 	Union(GTIDSet) GTIDSet
 
-	// Last returns a union of the receiver GTIDSet and the supplied GTIDSet.
+	// Last returns the last gtid as string
 	Last() string
 
 	// Distance returns the absolute difference between the gtid of the receiver GTIDSet and the supplied GTIDSet
