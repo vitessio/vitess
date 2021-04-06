@@ -5,11 +5,11 @@ This document contains the summary of the commands to be run.
 
 
 ```
+# Setup environment and aliases
+source env.sh
+
 # Bring up initial cluster and commerce keyspace
 ./101_initial_cluster.sh
-
-# Setup aliases
-source alias.source
 
 # Insert and verify data
 mysql < ../common/insert_commerce_data.sql
