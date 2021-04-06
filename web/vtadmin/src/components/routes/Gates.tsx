@@ -37,7 +37,7 @@ export const Gates = () => {
         ));
 
     return (
-        <div>
+        <div className="max-width-content">
             <h1>Gates</h1>
             <DataTable columns={['Cluster', 'Hostname']} data={rows} renderRows={renderRows} />
         </div>
