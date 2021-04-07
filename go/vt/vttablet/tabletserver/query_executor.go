@@ -60,15 +60,17 @@ type QueryExecutor struct {
 	tabletType     topodatapb.TabletType
 }
 
+const streamRowsSize = 256
+
 var streamResultPool = sync.Pool{New: func() interface{} {
 	return &sqltypes.Result{
-		Rows: make([][]sqltypes.Value, 0, 256),
+		Rows: make([][]sqltypes.Value, 0, streamRowsSize),
 	}
 }}
 
 func returnStreamResult(result *sqltypes.Result) error {
 	// only return large results slices to the pool
-	if cap(result.Rows) >= 256 {
+	if cap(result.Rows) >= streamRowsSize {
 		rows := result.Rows[:0]
 		*result = sqltypes.Result{}
 		result.Rows = rows

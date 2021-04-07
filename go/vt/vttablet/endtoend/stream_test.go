@@ -45,7 +45,7 @@ func TestStreamUnion(t *testing.T) {
 	assert.Equal(t, 1, len(qr.Rows))
 }
 
-func TestStreamLongTail(t *testing.T) {
+func TestStreamConsolidation(t *testing.T) {
 	const Workers = 50
 	const RowCount = 1100
 	const RowContent = "abcdefghijklmnopqrstuvwxyz"
@@ -69,9 +69,7 @@ func TestStreamLongTail(t *testing.T) {
 
 	client := framework.NewClient()
 	err := populate(client)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer client.Execute("delete from vitess_stress", nil)
 
 	defaultPoolSize := framework.Server.StreamPoolSize()
@@ -87,10 +85,13 @@ func TestStreamLongTail(t *testing.T) {
 	var start = make(chan struct{})
 	var finish sync.WaitGroup
 
+	// Spawn N workers at the same time to stress test the stream consolidator
 	for i := 0; i < Workers; i++ {
 		finish.Add(1)
 		go func() {
 			defer finish.Done()
+
+			// block all the workers so they all perform their queries at the same time
 			<-start
 
 			var rowCount int
@@ -105,6 +106,7 @@ func TestStreamLongTail(t *testing.T) {
 		}()
 	}
 
+	// wait until all the goroutines have spawned and are blocked before we unblock them at once
 	time.Sleep(500 * time.Millisecond)
 	close(start)
 	finish.Wait()
