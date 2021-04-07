@@ -51,6 +51,7 @@ type Send struct {
 	noInputs
 }
 
+// ShardName as key for setting shard name in bind variables map
 const ShardName = "__vt_shard"
 
 //NeedsTransaction implements the Primitive interface
@@ -119,8 +120,8 @@ func (s *Send) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariabl
 	return result, nil
 }
 
-func copyBindVars(in map[string]*querypb.BindVariable) map[string]*querypb.BindVariable{
-	out := make(map[string]*querypb.BindVariable, len(in) + 1)
+func copyBindVars(in map[string]*querypb.BindVariable) map[string]*querypb.BindVariable {
+	out := make(map[string]*querypb.BindVariable, len(in)+1)
 	for k, v := range in {
 		out[k] = v
 	}
@@ -166,10 +167,17 @@ func (s *Send) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVaria
 
 func (s *Send) description() PrimitiveDescription {
 	other := map[string]interface{}{
-		"Query":           s.Query,
-		"Table":           s.GetTableName(),
-		"IsDML":           s.IsDML,
-		"SingleShardOnly": s.SingleShardOnly,
+		"Query": s.Query,
+		"Table": s.GetTableName(),
+	}
+	if s.IsDML {
+		other["IsDML"] = true
+	}
+	if s.SingleShardOnly {
+		other["SingleShardOnly"] = true
+	}
+	if s.ShardNameNeeded {
+		other["ShardNameNeeded"] = true
 	}
 	return PrimitiveDescription{
 		OperatorType:      "Send",
