@@ -24,12 +24,12 @@ import (
 	"context"
 
 	"vitess.io/vitess/go/sync2"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/wrangler"
-
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 // TabletExecutor applies schema changes to all tablets.
@@ -235,22 +235,24 @@ func (exec *TabletExecutor) executeSQL(ctx context.Context, sql string, execResu
 	switch stmt := stmt.(type) {
 	case sqlparser.DDLStatement:
 		if exec.isOnlineSchemaDDL(stmt) {
-
 			onlineDDLs, err := schema.NewOnlineDDLs(exec.keyspace, stmt, exec.ddlStrategySetting, exec.requestContext)
 			if err != nil {
 				execResult.ExecutorErr = err.Error()
 				return err
 			}
-
-			exec.wr.Logger().Infof("Received DDL request. strategy settings=%+v", exec.ddlStrategySetting)
 			for _, onlineDDL := range onlineDDLs {
-				exec.executeOnlineDDL(ctx, execResult, onlineDDL)
+				if exec.ddlStrategySetting.IsSkipTopo() {
+					exec.executeOnAllTablets(ctx, execResult, onlineDDL.SQL, true)
+					exec.wr.Logger().Printf("%s\n", onlineDDL.UUID)
+				} else {
+					exec.executeOnlineDDL(ctx, execResult, onlineDDL)
+				}
 			}
 			return nil
 		}
 	}
 	exec.wr.Logger().Infof("Received DDL request. strategy=%+v", schema.DDLStrategyDirect)
-	exec.executeOnAllTablets(ctx, execResult, sql)
+	exec.executeOnAllTablets(ctx, execResult, sql, false)
 	return nil
 }
 
@@ -323,9 +325,7 @@ func (exec *TabletExecutor) executeOnlineDDL(
 }
 
 // executeOnAllTablets runs a query on all tablets, synchronously. This can be a long running operation.
-func (exec *TabletExecutor) executeOnAllTablets(
-	ctx context.Context, execResult *ExecuteResult, sql string,
-) {
+func (exec *TabletExecutor) executeOnAllTablets(ctx context.Context, execResult *ExecuteResult, sql string, viaQueryService bool) {
 	var wg sync.WaitGroup
 	numOfMasterTablets := len(exec.tablets)
 	wg.Add(numOfMasterTablets)
@@ -334,7 +334,7 @@ func (exec *TabletExecutor) executeOnAllTablets(
 	for _, tablet := range exec.tablets {
 		go func(tablet *topodatapb.Tablet) {
 			defer wg.Done()
-			exec.executeOneTablet(ctx, tablet, sql, errChan, successChan)
+			exec.executeOneTablet(ctx, tablet, sql, viaQueryService, errChan, successChan)
 		}(tablet)
 	}
 	wg.Wait()
@@ -373,9 +373,17 @@ func (exec *TabletExecutor) executeOneTablet(
 	ctx context.Context,
 	tablet *topodatapb.Tablet,
 	sql string,
+	viaQueryService bool,
 	errChan chan ShardWithError,
 	successChan chan ShardResult) {
-	result, err := exec.wr.TabletManagerClient().ExecuteFetchAsDba(ctx, tablet, false, []byte(sql), 10, false, true)
+
+	var result *querypb.QueryResult
+	var err error
+	if viaQueryService {
+		result, err = exec.wr.TabletManagerClient().ExecuteQuery(ctx, tablet, []byte(sql), 10)
+	} else {
+		result, err = exec.wr.TabletManagerClient().ExecuteFetchAsDba(ctx, tablet, false, []byte(sql), 10, false, true)
+	}
 	if err != nil {
 		errChan <- ShardWithError{Shard: tablet.Shard, Err: err.Error()}
 		return
