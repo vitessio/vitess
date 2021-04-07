@@ -21,7 +21,7 @@ import (
 	"net/http"
 	"strings"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/vt/logutil"
@@ -54,11 +54,11 @@ func (ar *ActionResult) error(text string) {
 // some action on a Topology object. It should return a message for
 // the user or an empty string in case there's nothing interesting to
 // be communicated.
-type actionKeyspaceMethod func(ctx context.Context, wr *wrangler.Wrangler, keyspace string, r *http.Request) (output string, err error)
+type actionKeyspaceMethod func(ctx context.Context, wr *wrangler.Wrangler, keyspace string) (output string, err error)
 
-type actionShardMethod func(ctx context.Context, wr *wrangler.Wrangler, keyspace, shard string, r *http.Request) (output string, err error)
+type actionShardMethod func(ctx context.Context, wr *wrangler.Wrangler, keyspace, shard string) (output string, err error)
 
-type actionTabletMethod func(ctx context.Context, wr *wrangler.Wrangler, tabletAlias *topodatapb.TabletAlias, r *http.Request) (output string, err error)
+type actionTabletMethod func(ctx context.Context, wr *wrangler.Wrangler, tabletAlias *topodatapb.TabletAlias) (output string, err error)
 
 type actionTabletRecord struct {
 	role   string
@@ -67,8 +67,6 @@ type actionTabletRecord struct {
 
 // ActionRepository is a repository of actions that can be performed
 // on a {Keyspace,Shard,Tablet}.
-// Note that the registered action methods will be passed an *http.Request
-// on which ParseForm() has already succeeded.
 type ActionRepository struct {
 	keyspaceActions map[string]actionKeyspaceMethod
 	shardActions    map[string]actionShardMethod
@@ -106,7 +104,7 @@ func (ar *ActionRepository) RegisterTabletAction(name, role string, method actio
 }
 
 // ApplyKeyspaceAction applies the provided action to the keyspace.
-func (ar *ActionRepository) ApplyKeyspaceAction(ctx context.Context, actionName, keyspace string, r *http.Request) *ActionResult {
+func (ar *ActionRepository) ApplyKeyspaceAction(ctx context.Context, actionName, keyspace string) *ActionResult {
 	result := &ActionResult{Name: actionName, Parameters: keyspace}
 
 	action, ok := ar.keyspaceActions[actionName]
@@ -117,7 +115,7 @@ func (ar *ActionRepository) ApplyKeyspaceAction(ctx context.Context, actionName,
 
 	ctx, cancel := context.WithTimeout(ctx, *actionTimeout)
 	wr := wrangler.New(logutil.NewConsoleLogger(), ar.ts, tmclient.NewTabletManagerClient())
-	output, err := action(ctx, wr, keyspace, r)
+	output, err := action(ctx, wr, keyspace)
 	cancel()
 	if err != nil {
 		result.error(err.Error())
@@ -128,7 +126,7 @@ func (ar *ActionRepository) ApplyKeyspaceAction(ctx context.Context, actionName,
 }
 
 // ApplyShardAction applies the provided action to the shard.
-func (ar *ActionRepository) ApplyShardAction(ctx context.Context, actionName, keyspace, shard string, r *http.Request) *ActionResult {
+func (ar *ActionRepository) ApplyShardAction(ctx context.Context, actionName, keyspace, shard string) *ActionResult {
 	// if the shard name contains a '-', we assume it's the
 	// name for a ranged based shard, so we lower case it.
 	if strings.Contains(shard, "-") {
@@ -144,7 +142,7 @@ func (ar *ActionRepository) ApplyShardAction(ctx context.Context, actionName, ke
 
 	ctx, cancel := context.WithTimeout(ctx, *actionTimeout)
 	wr := wrangler.New(logutil.NewConsoleLogger(), ar.ts, tmclient.NewTabletManagerClient())
-	output, err := action(ctx, wr, keyspace, shard, r)
+	output, err := action(ctx, wr, keyspace, shard)
 	cancel()
 	if err != nil {
 		result.error(err.Error())
@@ -178,7 +176,7 @@ func (ar *ActionRepository) ApplyTabletAction(ctx context.Context, actionName st
 	// run the action
 	ctx, cancel := context.WithTimeout(ctx, *actionTimeout)
 	wr := wrangler.New(logutil.NewConsoleLogger(), ar.ts, tmclient.NewTabletManagerClient())
-	output, err := action.method(ctx, wr, tabletAlias, r)
+	output, err := action.method(ctx, wr, tabletAlias)
 	cancel()
 	if err != nil {
 		result.error(err.Error())

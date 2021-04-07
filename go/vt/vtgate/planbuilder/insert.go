@@ -34,7 +34,7 @@ func buildInsertPlan(stmt sqlparser.Statement, vschema ContextVSchema) (engine.P
 	ins := stmt.(*sqlparser.Insert)
 	pb := newPrimitiveBuilder(vschema, newJointab(sqlparser.GetBindvars(ins)))
 	exprs := sqlparser.TableExprs{&sqlparser.AliasedTableExpr{Expr: ins.Table}}
-	rb, err := pb.processDMLTable(exprs)
+	rb, err := pb.processDMLTable(exprs, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -127,8 +127,6 @@ func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table) (engin
 	if len(ins.Columns) == 0 {
 		if table.ColumnListAuthoritative {
 			populateInsertColumnlist(ins, table)
-		} else {
-			return nil, errors.New("no column list")
 		}
 	}
 

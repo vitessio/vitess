@@ -19,9 +19,11 @@ package test
 import (
 	"testing"
 
+	"context"
+
 	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/net/context"
+
 	"vitess.io/vitess/go/vt/topo"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"

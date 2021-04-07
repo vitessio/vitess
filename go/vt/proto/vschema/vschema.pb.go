@@ -8,6 +8,7 @@ import (
 	math "math"
 
 	proto "github.com/golang/protobuf/proto"
+
 	query "vitess.io/vitess/go/vt/proto/query"
 )
 
@@ -248,7 +249,13 @@ func (m *Vindex) GetOwner() string {
 // Table is the table info for a Keyspace.
 type Table struct {
 	// If the table is a sequence, type must be
-	// "sequence". Otherwise, it should be empty.
+	// "sequence".
+	//
+	// If the table is a reference, type must be
+	// "reference".
+	// See https://vitess.io/docs/reference/features/vschema/#reference-tables.
+	//
+	// Otherwise, it should be empty.
 	Type string `protobuf:"bytes,1,opt,name=type,proto3" json:"type,omitempty"`
 	// column_vindexes associates columns to vindexes.
 	ColumnVindexes []*ColumnVindex `protobuf:"bytes,2,rep,name=column_vindexes,json=columnVindexes,proto3" json:"column_vindexes,omitempty"`

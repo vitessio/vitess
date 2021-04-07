@@ -17,7 +17,7 @@ limitations under the License.
 package tabletserver
 
 import (
-	"golang.org/x/net/context"
+	"context"
 
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/mysqlctl"

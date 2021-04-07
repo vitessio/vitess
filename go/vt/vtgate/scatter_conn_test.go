@@ -20,12 +20,14 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/key"
 
 	"vitess.io/vitess/go/test/utils"
 
 	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/discovery"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -293,9 +295,64 @@ func TestReservedConnFail(t *testing.T) {
 
 	session := NewSafeSession(&vtgatepb.Session{InTransaction: false, InReservedConn: true})
 	destinations := []key.Destination{key.DestinationShard("0")}
+
 	executeOnShards(t, res, keyspace, sc, session, destinations)
 	assert.Equal(t, 1, len(session.ShardSessions))
-	sbc0.ShardErr = mysql.NewSQLError(mysql.CRServerGone, mysql.SSUnknownSQLState, "lost connection")
+	oldRId := session.Session.ShardSessions[0].ReservedId
+
+	sbc0.EphemeralShardErr = mysql.NewSQLError(mysql.CRServerGone, mysql.SSUnknownSQLState, "lost connection")
 	_ = executeOnShardsReturnsErr(t, res, keyspace, sc, session, destinations)
-	assert.Zero(t, len(session.ShardSessions))
+	assert.Equal(t, 3, len(sbc0.Queries), "1 for the successful run, one for the failed attempt, and one for the retry")
+	require.Equal(t, 1, len(session.ShardSessions))
+	assert.NotEqual(t, oldRId, session.Session.ShardSessions[0].ReservedId, "should have recreated a reserved connection since the last connection was lost")
+	oldRId = session.Session.ShardSessions[0].ReservedId
+
+	sbc0.Queries = nil
+	sbc0.EphemeralShardErr = mysql.NewSQLError(mysql.ERQueryInterrupted, mysql.SSUnknownSQLState, "transaction 123 not found")
+	_ = executeOnShardsReturnsErr(t, res, keyspace, sc, session, destinations)
+	assert.Equal(t, 2, len(sbc0.Queries), "one for the failed attempt, and one for the retry")
+	require.Equal(t, 1, len(session.ShardSessions))
+	assert.NotEqual(t, oldRId, session.Session.ShardSessions[0].ReservedId, "should have recreated a reserved connection since the last connection was lost")
+	oldRId = session.Session.ShardSessions[0].ReservedId
+
+	sbc0.Queries = nil
+	sbc0.EphemeralShardErr = mysql.NewSQLError(mysql.ERQueryInterrupted, mysql.SSUnknownSQLState, "transaction 123 ended at 2020-01-20")
+	_ = executeOnShardsReturnsErr(t, res, keyspace, sc, session, destinations)
+	assert.Equal(t, 2, len(sbc0.Queries), "one for the failed attempt, and one for the retry")
+	require.Equal(t, 1, len(session.ShardSessions))
+	assert.NotEqual(t, oldRId, session.Session.ShardSessions[0].ReservedId, "should have recreated a reserved connection since the last connection was lost")
+}
+
+func TestIsConnClosed(t *testing.T) {
+	var testCases = []struct {
+		name      string
+		err       error
+		conClosed bool
+	}{{
+		"server gone",
+		mysql.NewSQLError(mysql.CRServerGone, mysql.SSServerShutdown, ""),
+		true,
+	}, {
+		"connection lost",
+		mysql.NewSQLError(mysql.CRServerLost, mysql.SSServerShutdown, ""),
+		true,
+	}, {
+		"tx ended",
+		mysql.NewSQLError(mysql.ERQueryInterrupted, mysql.SSUnknownSQLState, "transaction 111 ended at ..."),
+		true,
+	}, {
+		"tx not found",
+		mysql.NewSQLError(mysql.ERQueryInterrupted, mysql.SSUnknownSQLState, "transaction 111 not found ..."),
+		true,
+	}, {
+		"tx not found missing tx id",
+		mysql.NewSQLError(mysql.ERQueryInterrupted, mysql.SSUnknownSQLState, "transaction not found"),
+		false,
+	}}
+
+	for _, tCase := range testCases {
+		t.Run(tCase.name, func(t *testing.T) {
+			assert.Equal(t, tCase.conClosed, wasConnectionClosed(tCase.err))
+		})
+	}
 }

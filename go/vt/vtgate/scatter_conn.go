@@ -33,7 +33,7 @@ import (
 
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
@@ -220,8 +220,15 @@ func (stc *ScatterConn) ExecuteMultiShard(
 			case nothing:
 				innerqr, err = qs.Execute(ctx, rs.Target, queries[i].Sql, queries[i].BindVariables, info.transactionID, info.reservedID, opts)
 				if err != nil {
-					checkAndResetShardSession(info, err, session)
-					return nil, err
+					shouldRetry := checkAndResetShardSession(info, err, session)
+					if shouldRetry {
+						// we seem to have lost our connection. if it was a reserved connection, let's try to recreate it
+						info.actionNeeded = reserve
+						innerqr, reservedID, alias, err = qs.ReserveExecute(ctx, rs.Target, session.SetPreQueries(), queries[i].Sql, queries[i].BindVariables, 0 /*transactionId*/, opts)
+					}
+					if err != nil {
+						return nil, err
+					}
 				}
 			case begin:
 				innerqr, transactionID, alias, err = qs.BeginExecute(ctx, rs.Target, session.Savepoints, queries[i].Sql, queries[i].BindVariables, info.reservedID, opts)
@@ -259,12 +266,14 @@ func (stc *ScatterConn) ExecuteMultiShard(
 	return qr, allErrors.GetErrors()
 }
 
-var errRegx = regexp.MustCompile("transaction ([a-z0-9:]+) ended")
+var errRegx = regexp.MustCompile("transaction ([a-z0-9:]+) (?:ended|not found)")
 
-func checkAndResetShardSession(info *shardActionInfo, err error, session *SafeSession) {
-	if info.reservedID != 0 && info.transactionID == 0 && !isConnectionAlive(err) {
+func checkAndResetShardSession(info *shardActionInfo, err error, session *SafeSession) bool {
+	if info.reservedID != 0 && info.transactionID == 0 && wasConnectionClosed(err) {
 		session.ResetShard(info.alias)
+		return true
 	}
+	return false
 }
 
 func getQueryService(rs *srvtopo.ResolvedShard, info *shardActionInfo) (queryservice.QueryService, error) {
@@ -626,7 +635,7 @@ func (stc *ScatterConn) ExecuteLock(
 			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: reservedID zero not expected %v", reservedID)
 		}
 		qr, err = qs.Execute(ctx, rs.Target, query.Sql, query.BindVariables, 0 /* transactionID */, reservedID, opts)
-		if err != nil && !isConnectionAlive(err) {
+		if err != nil && wasConnectionClosed(err) {
 			session.ResetLock()
 			err = vterrors.Wrap(err, "held locks released")
 		}
@@ -654,12 +663,12 @@ func (stc *ScatterConn) ExecuteLock(
 	return qr, err
 }
 
-func isConnectionAlive(err error) bool {
+func wasConnectionClosed(err error) bool {
 	sqlErr := mysql.NewSQLErrorFromError(err).(*mysql.SQLError)
-	if sqlErr.Number() == mysql.CRServerGone || sqlErr.Number() == mysql.CRServerLost || (sqlErr.Number() == mysql.ERQueryInterrupted && errRegx.Match([]byte(sqlErr.Error()))) {
-		return false
-	}
-	return true
+
+	return sqlErr.Number() == mysql.CRServerGone ||
+		sqlErr.Number() == mysql.CRServerLost ||
+		(sqlErr.Number() == mysql.ERQueryInterrupted && errRegx.MatchString(sqlErr.Error()))
 }
 
 // actionInfo looks at the current session, and returns information about what needs to be done for this tablet

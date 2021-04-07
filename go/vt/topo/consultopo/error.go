@@ -20,7 +20,7 @@ import (
 	"errors"
 	"net/url"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"vitess.io/vitess/go/vt/topo"
 )

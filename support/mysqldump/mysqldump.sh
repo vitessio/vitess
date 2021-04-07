@@ -9,7 +9,7 @@ SOURCE_DATABASE=source_dbname
 TARGET_USER=vtgate-test-user
 TARGET_HOST=vtgate-host
 TARGET_PASSWORD=vtgate-password
-TARGET_DATABASE=source_password
+TARGET_DATABASE=destination_keyspace
 
 SECURE='--ssl-mode=PREFER'
 

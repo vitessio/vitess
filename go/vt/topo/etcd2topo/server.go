@@ -40,6 +40,7 @@ import (
 
 	"github.com/coreos/etcd/clientv3"
 	"github.com/coreos/etcd/pkg/transport"
+
 	"vitess.io/vitess/go/vt/topo"
 )
 

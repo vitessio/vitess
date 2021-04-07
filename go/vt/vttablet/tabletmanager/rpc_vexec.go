@@ -23,7 +23,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/onlineddl"
 	"vitess.io/vitess/go/vt/vttablet/vexec"
 
-	"golang.org/x/net/context"
+	"context"
 )
 
 // VExec executes a generic VExec command.

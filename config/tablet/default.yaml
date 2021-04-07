@@ -84,8 +84,8 @@ healthcheck:
   unhealthyThresholdSeconds: 7200 # unhealthy_threshold
 
 gracePeriods:
-  transactionShutdownSeconds: 0 # transaction_shutdown_grace_period
-  transitionSeconds: 0          # serving_state_grace_period
+  shutdownSeconds:   0 # shutdown_grace_period
+  transitionSeconds: 0 # serving_state_grace_period
 
 replicationTracker:
   mode: disable                    # enable_replication_reporter

@@ -20,6 +20,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io"
 	"os"
@@ -28,6 +29,8 @@ import (
 	"time"
 
 	"github.com/klauspost/pgzip"
+	"github.com/planetscale/pargzip"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/concurrency"
@@ -45,6 +48,13 @@ const (
 	builtinBackupEngineName = "builtin"
 	writerBufferSize        = 2 * 1024 * 1024
 	dataDictionaryFile      = "mysql.ibd"
+)
+
+var (
+	// BuiltinBackupMysqldTimeout is how long ExecuteBackup should wait for response from mysqld.Shutdown.
+	// It can later be extended for other calls to mysqld during backup functions.
+	// Exported for testing.
+	BuiltinBackupMysqldTimeout = flag.Duration("builtinbackup_mysqld_timeout", 10*time.Minute, "how long to wait for mysqld to shutdown at the start of the backup")
 )
 
 // BuiltinBackupEngine encapsulates the logic of the builtin engine
@@ -182,7 +192,9 @@ func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupP
 	params.Logger.Infof("using replication position: %v", replicationPosition)
 
 	// shutdown mysqld
-	err = params.Mysqld.Shutdown(ctx, params.Cnf, true)
+	shutdownCtx, cancel := context.WithTimeout(ctx, *BuiltinBackupMysqldTimeout)
+	err = params.Mysqld.Shutdown(shutdownCtx, params.Cnf, true)
+	defer cancel()
 	if err != nil {
 		return false, vterrors.Wrap(err, "can't shutdown mysqld")
 	}
@@ -397,13 +409,12 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 	}
 
 	// Create the gzip compression pipe, if necessary.
-	var gzip *pgzip.Writer
+	var gzip *pargzip.Writer
 	if *backupStorageCompress {
-		gzip, err = pgzip.NewWriterLevel(writer, pgzip.BestSpeed)
-		if err != nil {
-			return vterrors.Wrap(err, "cannot create gziper")
-		}
-		gzip.SetConcurrency(*backupCompressBlockSize, *backupCompressBlocks)
+		gzip = pargzip.NewWriter(writer)
+		gzip.ChunkSize = *backupCompressBlockSize
+		gzip.Parallel = *backupCompressBlocks
+		gzip.CompressionLevel = pargzip.BestSpeed
 		writer = gzip
 	}
 

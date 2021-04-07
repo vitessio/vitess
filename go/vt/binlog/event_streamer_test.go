@@ -29,14 +29,14 @@ import (
 
 var dmlErrorCases = []string{
 	"query",
-	"query /* _stream 10 (eid id name ) (null 1 'bmFtZQ==' ); */",
-	"query /* _stream _table_ eid id name ) (null 1 'bmFtZQ==' ); */",
-	"query /* _stream _table_ (10 id name ) (null 1 'bmFtZQ==' ); */",
-	"query /* _stream _table_ (eid id name  (null 1 'bmFtZQ==' ); */",
-	"query /* _stream _table_ (eid id name)  (null 'aaa' 'bmFtZQ==' ); */",
-	"query /* _stream _table_ (eid id name)  (null 'bmFtZQ==' ); */",
-	"query /* _stream _table_ (eid id name)  (null 1.1 'bmFtZQ==' ); */",
-	"query /* _stream _table_ (eid id name)  (null a 'bmFtZQ==' ); */",
+	"query /* _stream 10 (eid id `name` ) (null 1 'bmFtZQ==' ); */",
+	"query /* _stream _table_ eid id `name` ) (null 1 'bmFtZQ==' ); */",
+	"query /* _stream _table_ (10 id `name` ) (null 1 'bmFtZQ==' ); */",
+	"query /* _stream _table_ (eid id `name`  (null 1 'bmFtZQ==' ); */",
+	"query /* _stream _table_ (eid id `name`)  (null 'aaa' 'bmFtZQ==' ); */",
+	"query /* _stream _table_ (eid id `name`)  (null 'bmFtZQ==' ); */",
+	"query /* _stream _table_ (eid id `name`)  (null 1.1 'bmFtZQ==' ); */",
+	"query /* _stream _table_ (eid id `name`)  (null a 'bmFtZQ==' ); */",
 }
 
 func TestEventErrors(t *testing.T) {
@@ -115,7 +115,7 @@ func TestDMLEvent(t *testing.T) {
 		{
 			Statement: &binlogdatapb.BinlogTransaction_Statement{
 				Category: binlogdatapb.BinlogTransaction_Statement_BL_INSERT,
-				Sql:      []byte("query /* _stream _table_ (eid id name)  (null 1 'bmFtZQ==' ) (null 18446744073709551615 'bmFtZQ==' ); */"),
+				Sql:      []byte("query /* _stream _table_ (eid id `name`)  (null 1 'bmFtZQ==' ) (null 18446744073709551615 'bmFtZQ==' ); */"),
 			},
 		},
 		{

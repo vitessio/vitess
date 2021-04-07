@@ -441,6 +441,15 @@
 				"site_test"
 			]
 		},
+		"upgrade": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/versionupgrade", "-keep-data", "-force-vtdataroot", "/tmp/vtdataroot/vtroot_10901", "-force-port-start", "11900", "-force-base-tablet-uid", "1190"],
+			"Command": [],
+			"Manual": false,
+			"Shard": 28,
+			"RetryMax": 0,
+			"Tags": []
+		},
 		"vertical_split": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/sharding/verticalsplit"],
@@ -515,9 +524,27 @@
 			"RetryMax": 0,
 			"Tags": []
 		},
+		"vtgate_unsharded": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/unsharded"],
+			"Command": [],
+			"Manual": false,
+			"Shard": 17,
+			"RetryMax": 0,
+			"Tags": []
+		},
 		"vtgate_vschema": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/vschema"],
+			"Command": [],
+			"Manual": false,
+			"Shard": 17,
+			"RetryMax": 0,
+			"Tags": []
+		},
+		"vtgate_readafterwrite": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/readafterwrite"],
 			"Command": [],
 			"Manual": false,
 			"Shard": 17,
@@ -568,7 +595,7 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": 22,
-			"RetryMax": 0,
+			"RetryMax": 3,
 			"Tags": []
 		},
 		"vreplication_cellalias": {
@@ -577,16 +604,16 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": 23,
-			"RetryMax": 0,
+			"RetryMax": 3,
 			"Tags": []
 		},
 		"vreplication_basic": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "Basic"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestBasicVreplicationWorkflow"],
 			"Command": [],
 			"Manual": false,
 			"Shard": 24,
-			"RetryMax": 0,
+			"RetryMax": 3,
 			"Tags": []
 		},
 		"orchestrator": {
@@ -596,6 +623,24 @@
 			"Manual": false,
 			"Shard": 22,
 			"RetryMax": 0,
+			"Tags": []
+		},
+		"vault": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vault"],
+			"Command": [],
+			"Manual": false,
+			"Shard": 23,
+			"RetryMax": 0,
+			"Tags": []
+		},
+		"vreplication_v2": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestBasicV2Workflows"],
+			"Command": [],
+			"Manual": false,
+			"Shard": 21,
+			"RetryMax": 3,
 			"Tags": []
 		}
 	}

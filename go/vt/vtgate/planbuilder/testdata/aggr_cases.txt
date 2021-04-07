@@ -114,6 +114,7 @@
           "Sharded": true
         },
         "FieldQuery": "select count(*), a, textcol1, b, weight_string(textcol1) from user where 1 != 1 group by a, textcol1, b",
+        "OrderBy": "1 ASC, 4 ASC, 3 ASC",
         "Query": "select count(*), a, textcol1, b, weight_string(textcol1) from user group by a, textcol1, b order by a asc, textcol1 asc, b asc",
         "Table": "user"
       }
@@ -146,6 +147,7 @@
               "Sharded": true
             },
             "FieldQuery": "select count(*) as k, a, textcol1, b, weight_string(textcol1) from user where 1 != 1 group by a, textcol1, b",
+            "OrderBy": "4 ASC, 1 ASC, 3 ASC",
             "Query": "select count(*) as k, a, textcol1, b, weight_string(textcol1) from user group by a, textcol1, b order by textcol1 asc, a asc, b asc",
             "Table": "user"
           }
@@ -278,6 +280,7 @@
           "Sharded": true
         },
         "FieldQuery": "select col1, col2 from user where 1 != 1 group by col1",
+        "OrderBy": "0 ASC, 1 ASC, 0 ASC",
         "Query": "select distinct col1, col2 from user group by col1 order by col1 asc, col2 asc, col1 asc",
         "Table": "user"
       }
@@ -378,12 +381,17 @@
           "Sharded": true
         },
         "FieldQuery": "select col, count(*) from user where 1 != 1 group by col",
+        "OrderBy": "0 ASC",
         "Query": "select col, count(*) from user group by col order by col asc",
         "Table": "user"
       }
     ]
   }
 }
+
+# group by must only reference expressions in the select list
+"select col, count(*) from user group by col, baz"
+"unsupported: in scatter query: group by column must reference column in SELECT list"
 
 # group by a non-unique vindex column should use an OrderdAggregate primitive
 "select name, count(*) from user group by name"
@@ -404,8 +412,9 @@
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select name, count(*) from user where 1 != 1 group by name",
-        "Query": "select name, count(*) from user group by name order by name asc",
+        "FieldQuery": "select `name`, count(*) from user where 1 != 1 group by `name`",
+        "OrderBy": "0 ASC",
+        "Query": "select `name`, count(*) from user group by `name` order by `name` asc",
         "Table": "user"
       }
     ]
@@ -585,6 +594,7 @@
           "Sharded": true
         },
         "FieldQuery": "select col from user where 1 != 1",
+        "OrderBy": "0 ASC",
         "Query": "select distinct col from user order by col asc",
         "Table": "user"
       }
@@ -611,6 +621,7 @@
           "Sharded": true
         },
         "FieldQuery": "select col from user where 1 != 1 group by col",
+        "OrderBy": "0 ASC",
         "Query": "select col from user group by col order by col asc",
         "Table": "user"
       }
@@ -656,6 +667,7 @@
           "Sharded": true
         },
         "FieldQuery": "select col, count(distinct id) from user where 1 != 1 group by col",
+        "OrderBy": "0 ASC",
         "Query": "select col, count(distinct id) from user group by col order by col asc",
         "Table": "user"
       }
@@ -683,6 +695,7 @@
           "Sharded": true
         },
         "FieldQuery": "select col1, col2 from user where 1 != 1 group by col1, col2",
+        "OrderBy": "0 ASC, 1 ASC",
         "Query": "select col1, col2 from user group by col1, col2 order by col1 asc, col2 asc",
         "Table": "user"
       }
@@ -709,6 +722,7 @@
           "Sharded": true
         },
         "FieldQuery": "select col2 from user where 1 != 1 group by col2",
+        "OrderBy": "0 ASC",
         "Query": "select col2 from user group by col2 order by col2 asc",
         "Table": "user"
       }
@@ -736,6 +750,7 @@
           "Sharded": true
         },
         "FieldQuery": "select col1, col2 from user where 1 != 1 group by col1, col2",
+        "OrderBy": "0 ASC, 1 ASC",
         "Query": "select col1, col2 from user group by col1, col2 order by col1 asc, col2 asc",
         "Table": "user"
       }
@@ -763,6 +778,7 @@
           "Sharded": true
         },
         "FieldQuery": "select col1, col2 from user where 1 != 1 group by col1, col2",
+        "OrderBy": "0 ASC, 1 ASC",
         "Query": "select col1, col2 from user group by col1, col2 order by col1 asc, col2 asc",
         "Table": "user"
       }
@@ -790,6 +806,7 @@
           "Sharded": true
         },
         "FieldQuery": "select col1, min(distinct col2) from user where 1 != 1 group by col1",
+        "OrderBy": "0 ASC",
         "Query": "select col1, min(distinct col2) from user group by col1 order by col1 asc",
         "Table": "user"
       }
@@ -822,6 +839,7 @@
               "Sharded": true
             },
             "FieldQuery": "select col1, col2 from user where 1 != 1 group by col1, col2",
+            "OrderBy": "0 ASC, 1 ASC",
             "Query": "select col1, col2 from user group by col1, col2 order by col1 asc, col2 asc",
             "Table": "user"
           }
@@ -855,6 +873,7 @@
           "Sharded": true
         },
         "FieldQuery": "select a, b, count(*) from user where 1 != 1 group by b, a",
+        "OrderBy": "1 ASC, 0 ASC",
         "Query": "select a, b, count(*) from user group by b, a order by b asc, a asc",
         "Table": "user"
       }
@@ -882,7 +901,36 @@
           "Sharded": true
         },
         "FieldQuery": "select a, b, count(*) from user where 1 != 1 group by 2, 1",
+        "OrderBy": "1 ASC, 0 ASC",
         "Query": "select a, b, count(*) from user group by 2, 1 order by b asc, a asc",
+        "Table": "user"
+      }
+    ]
+  }
+}
+
+# scatter aggregate multiple group by columns inverse order
+"select a, b, count(*) from user group by b, a"
+{
+  "QueryType": "SELECT",
+  "Original": "select a, b, count(*) from user group by b, a",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "Aggregates": "count(2)",
+    "Distinct": "false",
+    "GroupBy": "1, 0",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select a, b, count(*) from user where 1 != 1 group by b, a",
+        "OrderBy": "1 ASC, 0 ASC",
+        "Query": "select a, b, count(*) from user group by b, a order by b asc, a asc",
         "Table": "user"
       }
     ]
@@ -908,6 +956,7 @@
           "Sharded": true
         },
         "FieldQuery": "select col from user where 1 != 1 group by 1",
+        "OrderBy": "0 ASC",
         "Query": "select col from user group by 1 order by col asc",
         "Table": "user"
       }
@@ -969,6 +1018,7 @@
           "Sharded": true
         },
         "FieldQuery": "select a, b, c, d, count(*) from user where 1 != 1 group by 1, 2, 3",
+        "OrderBy": "0 ASC, 1 ASC, 2 ASC",
         "Query": "select a, b, c, d, count(*) from user group by 1, 2, 3 order by 1 asc, 2 asc, 3 asc",
         "Table": "user"
       }
@@ -996,6 +1046,7 @@
           "Sharded": true
         },
         "FieldQuery": "select a, b, c, d, count(*) from user where 1 != 1 group by 1, 2, 3",
+        "OrderBy": "0 ASC, 1 ASC, 2 ASC",
         "Query": "select a, b, c, d, count(*) from user group by 1, 2, 3 order by a asc, b asc, c asc",
         "Table": "user"
       }
@@ -1023,6 +1074,7 @@
           "Sharded": true
         },
         "FieldQuery": "select a, b, c, d, count(*) from user where 1 != 1 group by 1, 2, 3, 4",
+        "OrderBy": "3 ASC, 1 ASC, 0 ASC, 2 ASC",
         "Query": "select a, b, c, d, count(*) from user group by 1, 2, 3, 4 order by d asc, b asc, a asc, c asc",
         "Table": "user"
       }
@@ -1050,6 +1102,7 @@
           "Sharded": true
         },
         "FieldQuery": "select a, b, c, d, count(*) from user where 1 != 1 group by 3, 2, 1, 4",
+        "OrderBy": "3 ASC, 1 ASC, 0 ASC, 2 ASC",
         "Query": "select a, b, c, d, count(*) from user group by 3, 2, 1, 4 order by d asc, b asc, a asc, c asc",
         "Table": "user"
       }
@@ -1077,6 +1130,7 @@
           "Sharded": true
         },
         "FieldQuery": "select a, b, c, count(*) from user where 1 != 1 group by 3, 2, 1",
+        "OrderBy": "0 DESC, 2 DESC, 1 ASC",
         "Query": "select a, b, c, count(*) from user group by 3, 2, 1 order by 1 desc, 3 desc, b asc",
         "Table": "user"
       }
@@ -1112,6 +1166,7 @@
               "Sharded": true
             },
             "FieldQuery": "select col, count(*) from user where 1 != 1 group by col",
+            "OrderBy": "0 ASC",
             "Query": "select col, count(*) from user group by col order by col asc limit :__upper_limit",
             "Table": "user"
           }
@@ -1176,6 +1231,72 @@
     "FieldQuery": "select col from ref where 1 != 1",
     "Query": "select col from ref order by col asc",
     "Table": "ref"
+  }
+}
+
+# distinct and aggregate functions missing group by
+"select distinct a, count(*) from user"
+{
+  "QueryType": "SELECT",
+  "Original": "select distinct a, count(*) from user",
+  "Instructions": {
+    "OperatorType": "Distinct",
+    "Inputs": [
+      {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "count(1)",
+        "Distinct": "false",
+        "GroupBy": "0",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select a, count(*) from user where 1 != 1",
+            "OrderBy": "0 ASC",
+            "Query": "select a, count(*) from user order by a asc",
+            "Table": "user"
+          }
+        ]
+      }
+    ]
+  }
+}
+
+# distinct and aggregate functions
+"select distinct a, count(*) from user group by a"
+{
+  "QueryType": "SELECT",
+  "Original": "select distinct a, count(*) from user group by a",
+  "Instructions": {
+    "OperatorType": "Distinct",
+    "Inputs": [
+      {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "count(1)",
+        "Distinct": "false",
+        "GroupBy": "0, 0",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select a, count(*) from user where 1 != 1 group by a",
+            "OrderBy": "0 ASC, 0 ASC",
+            "Query": "select a, count(*) from user group by a order by a asc, a asc",
+            "Table": "user"
+          }
+        ]
+      }
+    ]
   }
 }
 

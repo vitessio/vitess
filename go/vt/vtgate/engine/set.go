@@ -36,6 +36,7 @@ import (
 	"vitess.io/vitess/go/vt/key"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
@@ -398,6 +399,15 @@ func (svss *SysVarSetAware) Execute(vcursor VCursor, env evalengine.ExpressionEn
 			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid workload: %s", str)
 		}
 		vcursor.Session().SetWorkload(querypb.ExecuteOptions_Workload(out))
+	case sysvars.DDLStrategy.Name:
+		str, err := svss.evalAsString(env)
+		if err != nil {
+			return err
+		}
+		if _, _, err := schema.ParseDDLStrategy(str); err != nil {
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid DDL strategy: %s", str)
+		}
+		vcursor.Session().SetDDLStrategy(str)
 	case sysvars.Charset.Name, sysvars.Names.Name:
 		str, err := svss.evalAsString(env)
 		if err != nil {
@@ -410,7 +420,31 @@ func (svss *SysVarSetAware) Execute(vcursor VCursor, env evalengine.ExpressionEn
 		default:
 			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value for charset/names: %v", str)
 		}
-
+	case sysvars.ReadAfterWriteGTID.Name:
+		str, err := svss.evalAsString(env)
+		if err != nil {
+			return err
+		}
+		vcursor.Session().SetReadAfterWriteGTID(str)
+	case sysvars.ReadAfterWriteTimeOut.Name:
+		val, err := svss.evalAsFloat(env)
+		if err != nil {
+			return err
+		}
+		vcursor.Session().SetReadAfterWriteTimeout(val)
+	case sysvars.SessionTrackGTIDs.Name:
+		str, err := svss.evalAsString(env)
+		if err != nil {
+			return err
+		}
+		switch strings.ToLower(str) {
+		case "off":
+			vcursor.Session().SetSessionTrackGTIDs(false)
+		case "own_gtid":
+			vcursor.Session().SetSessionTrackGTIDs(true)
+		default:
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%s", str)
+		}
 	default:
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unsupported construct %s", svss.Name)
 	}
@@ -433,6 +467,20 @@ func (svss *SysVarSetAware) evalAsInt64(env evalengine.ExpressionEnv) (int64, er
 		return 0, err
 	}
 	return intValue, nil
+}
+
+func (svss *SysVarSetAware) evalAsFloat(env evalengine.ExpressionEnv) (float64, error) {
+	value, err := svss.Expr.Evaluate(env)
+	if err != nil {
+		return 0, err
+	}
+
+	v := value.Value()
+	floatValue, err := v.ToFloat64()
+	if err != nil {
+		return 0, err
+	}
+	return floatValue, nil
 }
 
 func (svss *SysVarSetAware) evalAsString(env evalengine.ExpressionEnv) (string, error) {

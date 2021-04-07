@@ -35,6 +35,7 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"github.com/google/go-cmp/cmp"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/callerid"
@@ -434,25 +435,12 @@ func TestExecutorShowColumns(t *testing.T) {
 
 func TestExecutorShow(t *testing.T) {
 	executor, _, _, sbclookup := createLegacyExecutorEnv()
-	session := NewSafeSession(&vtgatepb.Session{TargetString: "@master"})
+	session := NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"})
 
-	for _, query := range []string{"show databases", "show vitess_keyspaces", "show keyspaces", "show DATABASES"} {
+	for _, query := range []string{"show databases", "show vitess_keyspaces", "show keyspaces", "show DATABASES", "show schemas", "show SCHEMAS"} {
 		qr, err := executor.Execute(ctx, "TestExecute", session, query, nil)
 		require.NoError(t, err)
-
-		wantqr := &sqltypes.Result{
-			Fields: buildVarCharFields("Databases"),
-			Rows: [][]sqltypes.Value{
-				buildVarCharRow("TestExecutor"),
-				buildVarCharRow(KsTestSharded),
-				buildVarCharRow(KsTestUnsharded),
-				buildVarCharRow("TestXBadSharding"),
-				buildVarCharRow(KsTestBadVSchema),
-			},
-			RowsAffected: 5,
-		}
-
-		utils.MustMatch(t, wantqr, qr, fmt.Sprintf("unexpected results running query: %s", query))
+		require.EqualValues(t, 5, qr.RowsAffected, fmt.Sprintf("unexpected results running query: %s", query))
 	}
 	_, err := executor.Execute(ctx, "TestExecute", session, "show variables", nil)
 	require.NoError(t, err)
@@ -461,6 +449,8 @@ func TestExecutorShow(t *testing.T) {
 	_, err = executor.Execute(ctx, "TestExecute", session, "show collation where `Charset` = 'utf8' and `Collation` = 'utf8_bin'", nil)
 	require.NoError(t, err)
 
+	_, err = executor.Execute(ctx, "TestExecute", session, "use @master", nil)
+	require.NoError(t, err)
 	_, err = executor.Execute(ctx, "TestExecute", session, "show tables", nil)
 	assert.EqualError(t, err, errNoKeyspace.Error(), "'show tables' should fail without a keyspace")
 	assert.Empty(t, sbclookup.Queries, "sbclookup unexpectedly has queries already")
@@ -1138,7 +1128,7 @@ func TestExecutorDDL(t *testing.T) {
 
 	stmts := []string{
 		"create table t1(id bigint primary key)",
-		"alter table t1 add primary key id",
+		"alter table t2 add primary key id",
 		"rename table t1 to t2",
 		"truncate table t2",
 		"drop table t2",
@@ -1177,6 +1167,32 @@ func TestExecutorDDL(t *testing.T) {
 			}
 
 			testQueryLog(t, logChan, "TestExecute", stmtType, stmt, tc.shardQueryCnt)
+		}
+	}
+
+	stmts2 := []struct {
+		input  string
+		hasErr bool
+	}{
+		{input: "drop table t1", hasErr: false},
+		{input: "drop table t2", hasErr: true},
+		{input: "drop view t1", hasErr: false},
+		{input: "drop view t2", hasErr: true},
+		{input: "alter view t1 as select * from t1", hasErr: false},
+		{input: "alter view t2 as select * from t1", hasErr: true},
+	}
+
+	for _, stmt := range stmts2 {
+		sbc1.ExecCount.Set(0)
+		sbc2.ExecCount.Set(0)
+		sbclookup.ExecCount.Set(0)
+		_, err := executor.Execute(ctx, "TestExecute", NewSafeSession(&vtgatepb.Session{TargetString: ""}), stmt.input, nil)
+		if stmt.hasErr {
+			require.EqualError(t, err, "keyspace not specified", "expect query to fail")
+			testQueryLog(t, logChan, "TestExecute", "", stmt.input, 0)
+		} else {
+			require.NoError(t, err)
+			testQueryLog(t, logChan, "TestExecute", "DDL", stmt.input, 8)
 		}
 	}
 }
@@ -1867,8 +1883,8 @@ func TestGenerateCharsetRows(t *testing.T) {
 		t.Run(tc.input, func(t *testing.T) {
 			stmt, err := sqlparser.Parse(tc.input)
 			require.NoError(t, err)
-			match := stmt.(*sqlparser.Show)
-			filter := match.ShowTablesOpt.Filter
+			match := stmt.(*sqlparser.Show).Internal.(*sqlparser.ShowBasic)
+			filter := match.Filter
 			actual, err := generateCharsetRows(filter, charsets)
 			require.NoError(t, err)
 			require.Equal(t, tc.expected, actual)

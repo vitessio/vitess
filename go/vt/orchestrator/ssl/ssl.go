@@ -12,6 +12,7 @@ import (
 
 	"github.com/go-martini/martini"
 	"github.com/howeyc/gopass"
+
 	"vitess.io/vitess/go/vt/orchestrator/config"
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
 )

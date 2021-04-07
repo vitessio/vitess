@@ -27,7 +27,7 @@ import (
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 
-	"golang.org/x/net/context"
+	"context"
 )
 
 var _ iswitcher = (*switcherDryRun)(nil)
@@ -37,7 +37,12 @@ type switcherDryRun struct {
 	ts    *trafficSwitcher
 }
 
-func (dr *switcherDryRun) switchShardReads(ctx context.Context, cells []string, servedType topodatapb.TabletType, direction TrafficSwitchDirection) error {
+func (dr *switcherDryRun) deleteRoutingRules(ctx context.Context) error {
+	dr.drLog.Log("Routing rules for participating tables will be deleted")
+	return nil
+}
+
+func (dr *switcherDryRun) switchShardReads(ctx context.Context, cells []string, servedTypes []topodatapb.TabletType, direction TrafficSwitchDirection) error {
 	sourceShards := make([]string, 0)
 	targetShards := make([]string, 0)
 	for _, source := range dr.ts.sources {
@@ -58,12 +63,19 @@ func (dr *switcherDryRun) switchShardReads(ctx context.Context, cells []string, 
 	return nil
 }
 
-func (dr *switcherDryRun) switchTableReads(ctx context.Context, cells []string, servedType topodatapb.TabletType, direction TrafficSwitchDirection) error {
+func (dr *switcherDryRun) switchTableReads(ctx context.Context, cells []string, servedTypes []topodatapb.TabletType, direction TrafficSwitchDirection) error {
 	ks := dr.ts.targetKeyspace
 	if direction == DirectionBackward {
 		ks = dr.ts.sourceKeyspace
 	}
-	dr.drLog.Log(fmt.Sprintf("Switch reads for tables %s to keyspace %s", strings.Join(dr.ts.tables, ","), ks))
+	var tabletTypes []string
+	for _, servedType := range servedTypes {
+		tabletTypes = append(tabletTypes, servedType.String())
+	}
+	tables := strings.Join(dr.ts.tables, ",")
+	dr.drLog.Log(fmt.Sprintf("Switch reads for tables [%s] to keyspace %s for tablet types [%s]",
+		tables, ks, strings.Join(tabletTypes, ",")))
+	dr.drLog.Log(fmt.Sprintf("Routing rules for tables [%s] will be updated", tables))
 	return nil
 }
 
@@ -77,35 +89,16 @@ func (dr *switcherDryRun) createJournals(ctx context.Context, sourceWorkflows []
 }
 
 func (dr *switcherDryRun) allowTargetWrites(ctx context.Context) error {
-	dr.drLog.Log(fmt.Sprintf("Enable writes on keyspace %s tables %s", dr.ts.targetKeyspace, strings.Join(dr.ts.tables, ",")))
+	dr.drLog.Log(fmt.Sprintf("Enable writes on keyspace %s tables [%s]", dr.ts.targetKeyspace, strings.Join(dr.ts.tables, ",")))
 	return nil
 }
 
 func (dr *switcherDryRun) changeRouting(ctx context.Context) error {
-	rules, err := dr.ts.wr.getRoutingRules(ctx)
-	if err != nil {
-		return err
-	}
 	dr.drLog.Log(fmt.Sprintf("Switch routing from keyspace %s to keyspace %s", dr.ts.sourceKeyspace, dr.ts.targetKeyspace))
-	deleteLogs := make([]string, 0)
-	addLogs := make([]string, 0)
+	var deleteLogs, addLogs []string
 	if dr.ts.migrationType == binlogdatapb.MigrationType_TABLES {
-		for _, table := range dr.ts.tables {
-			for _, tabletType := range []topodatapb.TabletType{topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY} {
-				tt := strings.ToLower(tabletType.String())
-				deleteLogs = append(deleteLogs, fmt.Sprintf("\t%s => %s", table+"@"+tt, strings.Trim(rules[table+"@"+tt][0], "[]")))
-				deleteLogs = append(deleteLogs, fmt.Sprintf("\t%s => %s", dr.ts.targetKeyspace+"."+table+"@"+tt, strings.Trim(rules[dr.ts.targetKeyspace+"."+table+"@"+tt][0], "[]")))
-				deleteLogs = append(deleteLogs, fmt.Sprintf("\t%s => %s", dr.ts.sourceKeyspace+"."+table+"@"+tt, strings.Trim(rules[dr.ts.sourceKeyspace+"."+table+"@"+tt][0], "[]")))
-			}
-			addLogs = append(addLogs, fmt.Sprintf("\t%s => %s", table, dr.ts.targetKeyspace+"."+table))
-			addLogs = append(addLogs, fmt.Sprintf("\t%s => %s", dr.ts.sourceKeyspace+"."+table, dr.ts.targetKeyspace+"."+table))
-		}
-		if len(deleteLogs) > 0 {
-			dr.drLog.Log("Following rules will be deleted:")
-			dr.drLog.LogSlice(deleteLogs)
-			dr.drLog.Log("Following rules will be added:")
-			dr.drLog.LogSlice(addLogs)
-		}
+		tables := strings.Join(dr.ts.tables, ",")
+		dr.drLog.Log(fmt.Sprintf("Routing rules for tables [%s] will be updated", tables))
 		return nil
 	}
 	deleteLogs = nil
@@ -193,7 +186,7 @@ func (dr *switcherDryRun) stopSourceWrites(ctx context.Context) error {
 		logs = append(logs, fmt.Sprintf("\tKeyspace %s, Shard %s at Position %s", dr.ts.sourceKeyspace, source.si.ShardName(), position))
 	}
 	if len(logs) > 0 {
-		dr.drLog.Log(fmt.Sprintf("Stop writes on keyspace %s, tables %s:", dr.ts.sourceKeyspace, strings.Join(dr.ts.tables, ",")))
+		dr.drLog.Log(fmt.Sprintf("Stop writes on keyspace %s, tables [%s]:", dr.ts.sourceKeyspace, strings.Join(dr.ts.tables, ",")))
 		dr.drLog.LogSlice(logs)
 	}
 	return nil
@@ -229,12 +222,17 @@ func (dr *switcherDryRun) removeSourceTables(ctx context.Context, removalType Ta
 	logs := make([]string, 0)
 	for _, source := range dr.ts.sources {
 		for _, tableName := range dr.ts.tables {
-			logs = append(logs, fmt.Sprintf("\tKeyspace %s Shard %s DbName %s Tablet %d Table %s RemovalType %s",
-				source.master.Keyspace, source.master.Shard, source.master.DbName(), source.master.Alias.Uid, tableName, TableRemovalType(removalType)))
+			logs = append(logs, fmt.Sprintf("\tKeyspace %s Shard %s DbName %s Tablet %d Table %s",
+				source.master.Keyspace, source.master.Shard, source.master.DbName(), source.master.Alias.Uid, tableName))
 		}
 	}
+	action := "Dropping"
+	if removalType == RenameTable {
+		action = "Renaming"
+	}
 	if len(logs) > 0 {
-		dr.drLog.Log("Dropping following tables:")
+		dr.drLog.Log(fmt.Sprintf("%s these tables from the database and removing them from the vschema for keyspace %s:",
+			action, dr.ts.sourceKeyspace))
 		dr.drLog.LogSlice(logs)
 	}
 	return nil
@@ -309,7 +307,7 @@ func (dr *switcherDryRun) dropSourceBlacklistedTables(ctx context.Context) error
 		logs = append(logs, fmt.Sprintf("\tKeyspace %s Shard %s Tablet %d", si.Keyspace(), si.ShardName(), si.MasterAlias.Uid))
 	}
 	if len(logs) > 0 {
-		dr.drLog.Log(fmt.Sprintf("Blacklisted tables %s will be removed from:", strings.Join(dr.ts.tables, ",")))
+		dr.drLog.Log(fmt.Sprintf("Blacklisted tables [%s] will be removed from:", strings.Join(dr.ts.tables, ",")))
 		dr.drLog.LogSlice(logs)
 	}
 	return nil
@@ -317,4 +315,44 @@ func (dr *switcherDryRun) dropSourceBlacklistedTables(ctx context.Context) error
 
 func (dr *switcherDryRun) logs() *[]string {
 	return &dr.drLog.logs
+}
+
+func (dr *switcherDryRun) removeTargetTables(ctx context.Context) error {
+	logs := make([]string, 0)
+	for _, target := range dr.ts.targets {
+		for _, tableName := range dr.ts.tables {
+			logs = append(logs, fmt.Sprintf("\tKeyspace %s Shard %s DbName %s Tablet %d Table %s",
+				target.master.Keyspace, target.master.Shard, target.master.DbName(), target.master.Alias.Uid, tableName))
+		}
+	}
+	if len(logs) > 0 {
+		dr.drLog.Log(fmt.Sprintf("Dropping these tables from the database and removing from the vschema for keyspace %s:",
+			dr.ts.targetKeyspace))
+		dr.drLog.LogSlice(logs)
+	}
+	return nil
+}
+
+func (dr *switcherDryRun) dropTargetShards(ctx context.Context) error {
+	logs := make([]string, 0)
+	tabletsList := make(map[string][]string)
+	for _, si := range dr.ts.targetShards() {
+		tabletAliases, err := dr.ts.wr.TopoServer().FindAllTabletAliasesInShard(ctx, si.Keyspace(), si.ShardName())
+		if err != nil {
+			return err
+		}
+		tabletsList[si.ShardName()] = make([]string, 0)
+		for _, t := range tabletAliases {
+			tabletsList[si.ShardName()] = append(tabletsList[si.ShardName()], fmt.Sprintf("\t\t%d", t.Uid))
+		}
+		sort.Strings(tabletsList[si.ShardName()])
+		logs = append(logs, fmt.Sprintf("\tCell %s Keyspace %s Shard\n%s",
+			si.Shard.MasterAlias.Cell, si.Keyspace(), si.ShardName()), strings.Join(tabletsList[si.ShardName()], "\n"))
+	}
+	if len(logs) > 0 {
+		dr.drLog.Log("Deleting following shards (and all related tablets):")
+		dr.drLog.LogSlice(logs)
+	}
+
+	return nil
 }

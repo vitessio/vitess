@@ -22,7 +22,7 @@ option go_package = "vitess.io/vitess/go/vt/proto/query";
 
 package query;
 
-option java_package="io.vitess.proto";
+option java_package = "io.vitess.proto";
 
 import "topodata.proto";
 import "vtrpc.proto";
@@ -70,6 +70,8 @@ message EventToken {
 
 // Flags sent from the MySQL C API
 enum MySqlFlag {
+  option allow_alias = true;
+  
   EMPTY = 0;
   NOT_NULL_FLAG = 1;
   PRI_KEY_FLAG = 2;
@@ -90,8 +92,6 @@ enum MySqlFlag {
   GROUP_FLAG = 32768;
   UNIQUE_FLAG = 65536;
   BINCMP_FLAG = 131072;
-
-  option allow_alias = true;
 }
 
 // Flag allows us to qualify types by their common properties.
@@ -326,6 +326,9 @@ message Field {
 
   // flags is actually a uint16. Only the lower 16 bits are used.
   uint32 flags = 10;
+
+  // column_type is optionally populated from information_schema.columns
+  string column_type = 11;
 }
 
 // Row is a database row.

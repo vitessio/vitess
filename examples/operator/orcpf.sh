@@ -4,7 +4,7 @@ kubectl port-forward --address localhost "$(kubectl get service --selector="plan
 process_id1=$!
 kubectl port-forward --address localhost "$(kubectl get service --selector="planetscale.com/component=vtgate,!planetscale.com/cell" -o name | head -n1)" 15306:3306 &
 process_id2=$!
-kubectl port-forward --address localhost "$(kubectl get service --selector="planetscale.com/component=orchestrator" -o name | head -n1)" 3000 &
+kubectl port-forward --address localhost "$(kubectl get pod --selector="planetscale.com/component=vtorc" -o name | head -n1)" 3000 &
 process_id3=$!
 sleep 2
 echo "You may point your browser to http://localhost:15000 for vtctld, http://localhost:3000 for orchestrator, and use the following aliases as shortcuts:"

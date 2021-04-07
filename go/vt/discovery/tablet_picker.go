@@ -31,7 +31,8 @@ import (
 
 	"vitess.io/vitess/go/vt/log"
 
-	"golang.org/x/net/context"
+	"context"
+
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -112,7 +113,13 @@ func (tp *TabletPicker) PickForStreaming(ctx context.Context) (*topodatapb.Table
 			// if no candidates were found, sleep and try again
 			log.Infof("No tablet found for streaming, shard %s.%s, cells %v, tabletTypes %v, sleeping for %d seconds",
 				tp.keyspace, tp.shard, tp.cells, tp.tabletTypes, int(GetTabletPickerRetryDelay()/1e9))
-			time.Sleep(GetTabletPickerRetryDelay())
+			timer := time.NewTimer(GetTabletPickerRetryDelay())
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				return nil, vterrors.Errorf(vtrpcpb.Code_CANCELED, "context has expired")
+			case <-timer.C:
+			}
 			continue
 		}
 		// try at most len(candidate) times to find a healthy tablet

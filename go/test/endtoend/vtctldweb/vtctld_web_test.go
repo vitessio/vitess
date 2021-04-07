@@ -23,6 +23,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/tebeka/selenium"
+
 	"vitess.io/vitess/go/test/endtoend/cluster"
 )
 

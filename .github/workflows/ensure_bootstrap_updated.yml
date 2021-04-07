@@ -1,0 +1,22 @@
+name: ensure_bootstrap_version
+on: [pull_request]
+jobs:
+
+  build:
+    name: Check Bootstrap Updated
+    runs-on: ubuntu-latest
+    steps:
+
+    - name: Set up Go
+      uses: actions/setup-go@v1
+      with:
+        go-version: 1.13
+
+    - name: Check out code
+      uses: actions/checkout@v2
+
+    - name: run ensure_bootstrap_version
+      run: |
+        make ensure_bootstrap_version
+        git status
+        test -z "$(git diff-index --name-only HEAD --)" || exit 1

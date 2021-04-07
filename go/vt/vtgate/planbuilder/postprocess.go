@@ -18,6 +18,7 @@ package planbuilder
 
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 // This file has functions to analyze postprocessing
@@ -27,15 +28,24 @@ import (
 // and ensures that there are no subqueries.
 func (pb *primitiveBuilder) pushGroupBy(sel *sqlparser.Select) error {
 	if sel.Distinct {
-		if err := pb.bldr.MakeDistinct(); err != nil {
+		newBuilder, err := planDistinct(pb.plan)
+		if err != nil {
 			return err
 		}
+		pb.plan = newBuilder
 	}
 
 	if err := pb.st.ResolveSymbols(sel.GroupBy); err != nil {
 		return err
 	}
-	return pb.bldr.PushGroupBy(sel.GroupBy)
+
+	newInput, err := planGroupBy(pb, pb.plan, sel.GroupBy)
+	if err != nil {
+		return err
+	}
+	pb.plan = newInput
+
+	return nil
 }
 
 // pushOrderBy pushes the order by clause into the primitives.
@@ -44,12 +54,12 @@ func (pb *primitiveBuilder) pushOrderBy(orderBy sqlparser.OrderBy) error {
 	if err := pb.st.ResolveSymbols(orderBy); err != nil {
 		return err
 	}
-	bldr, err := pb.bldr.PushOrderBy(orderBy)
+	plan, err := planOrdering(pb, pb.plan, orderBy)
 	if err != nil {
 		return err
 	}
-	pb.bldr = bldr
-	pb.bldr.Reorder(0)
+	pb.plan = plan
+	pb.plan.Reorder(0)
 	return nil
 }
 
@@ -57,16 +67,82 @@ func (pb *primitiveBuilder) pushLimit(limit *sqlparser.Limit) error {
 	if limit == nil {
 		return nil
 	}
-	rb, ok := pb.bldr.(*route)
+	rb, ok := pb.plan.(*route)
 	if ok && rb.isSingleShard() {
 		rb.SetLimit(limit)
 		return nil
 	}
-	lb := newLimit(pb.bldr)
-	if err := lb.SetLimit(limit); err != nil {
+
+	lb, err := createLimit(pb.plan, limit)
+	if err != nil {
 		return err
 	}
-	pb.bldr = lb
-	pb.bldr.Reorder(0)
+
+	plan, err := visit(lb, setUpperLimit)
+	if err != nil {
+		return err
+	}
+
+	pb.plan = plan
+	pb.plan.Reorder(0)
 	return nil
+}
+
+// make sure we have the right signature for this function
+var _ planVisitor = setUpperLimit
+
+// setUpperLimit is an optimization hint that tells that primitive
+// that it does not need to return more than the specified number of rows.
+// A primitive that cannot perform this can ignore the request.
+func setUpperLimit(plan logicalPlan) (bool, logicalPlan, error) {
+	arg := sqlparser.NewArgument([]byte(":__upper_limit"))
+	switch node := plan.(type) {
+	case *join:
+		return false, node, nil
+	case *memorySort:
+		pv, err := sqlparser.NewPlanValue(arg)
+		if err != nil {
+			return false, nil, err
+		}
+		node.eMemorySort.UpperLimit = pv
+		// we don't want to go down to the rest of the tree
+		return false, node, nil
+	case *pulloutSubquery:
+		// we control the visitation manually here -
+		// we don't want to visit the subQuery side of this plan
+		newUnderlying, err := visit(node.underlying, setUpperLimit)
+		if err != nil {
+			return false, nil, err
+		}
+
+		node.underlying = newUnderlying
+		return false, node, nil
+	case *route:
+		// The route pushes the limit regardless of the plan.
+		// If it's a scatter query, the rows returned will be
+		// more than the upper limit, but enough for the limit
+		node.Select.SetLimit(&sqlparser.Limit{Rowcount: arg})
+	case *concatenate:
+		return false, node, nil
+	}
+	return true, plan, nil
+}
+
+func createLimit(input logicalPlan, limit *sqlparser.Limit) (logicalPlan, error) {
+	plan := newLimit(input)
+	pv, err := sqlparser.NewPlanValue(limit.Rowcount)
+	if err != nil {
+		return nil, vterrors.Wrap(err, "unexpected expression in LIMIT")
+	}
+	plan.elimit.Count = pv
+
+	if limit.Offset != nil {
+		pv, err = sqlparser.NewPlanValue(limit.Offset)
+		if err != nil {
+			return nil, vterrors.Wrap(err, "unexpected expression in OFFSET")
+		}
+		plan.elimit.Offset = pv
+	}
+
+	return plan, nil
 }

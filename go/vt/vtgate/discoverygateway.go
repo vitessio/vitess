@@ -17,6 +17,7 @@ limitations under the License.
 package vtgate
 
 import (
+	"flag"
 	"fmt"
 	"math/rand"
 	"sort"
@@ -24,7 +25,7 @@ import (
 	"sync"
 	"time"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/discovery"
@@ -38,6 +39,10 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+)
+
+var (
+	routeReplicaToRdonly = flag.Bool("gateway_route_replica_to_rdonly", false, "route REPLICA queries to RDONLY tablets as well as REPLICA tablets")
 )
 
 const (
@@ -126,7 +131,7 @@ func NewDiscoveryGateway(ctx context.Context, hc discovery.LegacyHealthCheck, se
 		}
 		var recorder discovery.LegacyTabletRecorder = dg.hc
 		if len(discovery.TabletFilters) > 0 {
-			if len(discovery.KeyspacesToWatch) > 0 {
+			if discovery.FilteringKeyspaces() {
 				log.Exitf("Only one of -keyspaces_to_watch and -tablet_filters may be specified at a time")
 			}
 
@@ -135,7 +140,7 @@ func NewDiscoveryGateway(ctx context.Context, hc discovery.LegacyHealthCheck, se
 				log.Exitf("Cannot parse tablet_filters parameter: %v", err)
 			}
 			recorder = fbs
-		} else if len(discovery.KeyspacesToWatch) > 0 {
+		} else if discovery.FilteringKeyspaces() {
 			recorder = discovery.NewLegacyFilterByKeyspace(recorder, discovery.KeyspacesToWatch)
 		}
 
@@ -286,6 +291,13 @@ func (dg *DiscoveryGateway) withRetry(ctx context.Context, target *querypb.Targe
 		}
 
 		tablets := dg.tsc.GetHealthyTabletStats(target.Keyspace, target.Shard, target.TabletType)
+
+		// temporary hack to enable REPLICA type queries to address both REPLICA tablets and RDONLY tablets
+		// original commit - https://github.com/tinyspeck/vitess/pull/166/commits/2552b4ce25a9fdb41ff07fa69f2ccf485fea83ac
+		if *routeReplicaToRdonly && target.TabletType == topodatapb.TabletType_REPLICA {
+			tablets = append(tablets, dg.tsc.GetHealthyTabletStats(target.Keyspace, target.Shard, topodatapb.TabletType_RDONLY)...)
+		}
+
 		if len(tablets) == 0 {
 			// fail fast if there is no tablet
 			err = vterrors.New(vtrpcpb.Code_UNAVAILABLE, "no valid tablet")

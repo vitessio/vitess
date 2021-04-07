@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"net/url"
 	"strings"
 )
 
@@ -29,6 +30,23 @@ import (
 func FetchJSON(urlPath string) map[string]interface{} {
 	out := map[string]interface{}{}
 	response, err := http.Get(fmt.Sprintf("%s%s", ServerAddress, urlPath))
+	if err != nil {
+		return out
+	}
+	defer response.Body.Close()
+	_ = json.NewDecoder(response.Body).Decode(&out)
+	return out
+}
+
+// PostJSON performs a post and fetches JSON content from the specified URL path and returns it
+// as a map. The function returns an empty map on error.
+func PostJSON(urlPath string, values map[string]string) map[string]interface{} {
+	urlValues := url.Values{}
+	for k, v := range values {
+		urlValues.Add(k, v)
+	}
+	out := map[string]interface{}{}
+	response, err := http.PostForm(fmt.Sprintf("%s%s", ServerAddress, urlPath), urlValues)
 	if err != nil {
 		return out
 	}

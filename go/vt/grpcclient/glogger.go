@@ -20,6 +20,7 @@ import (
 	"fmt"
 
 	"google.golang.org/grpc/grpclog"
+
 	"vitess.io/vitess/go/vt/log"
 )
 

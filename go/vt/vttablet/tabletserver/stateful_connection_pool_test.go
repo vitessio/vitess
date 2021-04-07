@@ -22,6 +22,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -80,6 +81,70 @@ func TestActivePoolForAllTxProps(t *testing.T) {
 	require.True(t, conn1.txProps.LogToFile, "connection missed")
 	require.Nil(t, conn2.txProps)
 	require.True(t, conn3.txProps.LogToFile, "connection missed")
+}
+
+func TestStatefulPoolShutdownNonTx(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	pool := newActivePool()
+	pool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
+
+	// conn1 non-tx, not in use.
+	conn1, err := pool.NewConn(ctx, &querypb.ExecuteOptions{})
+	require.NoError(t, err)
+	conn1.Taint(ctx, nil)
+	conn1.Unlock()
+
+	// conn2 tx, not in use.
+	conn2, err := pool.NewConn(ctx, &querypb.ExecuteOptions{})
+	require.NoError(t, err)
+	conn2.Taint(ctx, nil)
+	conn2.txProps = &tx.Properties{}
+	conn2.Unlock()
+
+	// conn3 non-tx, in use.
+	conn3, err := pool.NewConn(ctx, &querypb.ExecuteOptions{})
+	require.NoError(t, err)
+	conn3.Taint(ctx, nil)
+
+	// After ShutdownNonTx, conn1 should be closed, but not conn3.
+	pool.ShutdownNonTx()
+	assert.Equal(t, int64(2), pool.active.Size())
+	assert.True(t, conn1.IsClosed())
+	assert.False(t, conn3.IsClosed())
+
+	// conn3 should get closed on Unlock.
+	conn3.Unlock()
+	assert.True(t, conn3.IsClosed())
+
+	// conn2 should be unaffected.
+	assert.False(t, conn2.IsClosed())
+}
+
+func TestStatefulPoolShutdownAll(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	pool := newActivePool()
+	pool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
+
+	// conn1 not in use
+	conn1, err := pool.NewConn(ctx, &querypb.ExecuteOptions{})
+	require.NoError(t, err)
+	conn1.txProps = &tx.Properties{}
+	conn1.Unlock()
+
+	// conn2 in use.
+	conn2, err := pool.NewConn(ctx, &querypb.ExecuteOptions{})
+	require.NoError(t, err)
+	conn2.txProps = &tx.Properties{}
+
+	conns := pool.ShutdownAll()
+	wantconns := []*StatefulConnection{conn1}
+	assert.Equal(t, wantconns, conns)
+
+	// conn2 should get closed on Unlock.
+	conn2.Unlock()
+	assert.True(t, conn2.IsClosed())
 }
 
 func TestActivePoolGetConnNonExistentTransaction(t *testing.T) {

@@ -20,7 +20,7 @@ import (
 	"strings"
 	"testing"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
@@ -45,7 +45,7 @@ func TestDeleteShardCleanup(t *testing.T) {
 	remoteReplica := NewFakeTablet(t, wr, "cell2", 2, topodatapb.TabletType_REPLICA, nil)
 
 	// Build keyspace graph
-	err := topotools.RebuildKeyspace(context.Background(), logutil.NewConsoleLogger(), ts, master.Tablet.Keyspace, []string{"cell1", "cell2"})
+	err := topotools.RebuildKeyspace(context.Background(), logutil.NewConsoleLogger(), ts, master.Tablet.Keyspace, []string{"cell1", "cell2"}, false)
 	if err != nil {
 		t.Fatalf("RebuildKeyspaceLocked failed: %v", err)
 	}

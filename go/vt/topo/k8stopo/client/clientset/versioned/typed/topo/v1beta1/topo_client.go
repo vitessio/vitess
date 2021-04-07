@@ -20,6 +20,7 @@ package v1beta1
 
 import (
 	rest "k8s.io/client-go/rest"
+
 	v1beta1 "vitess.io/vitess/go/vt/topo/k8stopo/apis/topo/v1beta1"
 	"vitess.io/vitess/go/vt/topo/k8stopo/client/clientset/versioned/scheme"
 )

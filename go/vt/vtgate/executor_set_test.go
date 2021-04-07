@@ -106,12 +106,6 @@ func TestExecutorSet(t *testing.T) {
 		in:  "set client_found_rows = false",
 		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{}},
 	}, {
-		in:  "set @@global.client_found_rows = 1",
-		err: "unsupported global scope in set: global client_found_rows = 1",
-	}, {
-		in:  "set global client_found_rows = 1",
-		err: "unsupported global scope in set: global client_found_rows = 1",
-	}, {
 		in:  "set global @@session.client_found_rows = 1",
 		err: "cannot use scope and @@",
 	}, {
@@ -269,6 +263,8 @@ func TestExecutorSetOp(t *testing.T) {
 		sqltypes.MakeTestResult(sqltypes.MakeTestFields("character_set_results", "varchar")),
 		sqltypes.MakeTestResult(sqltypes.MakeTestFields("character_set_results", "varchar")),
 		sqltypes.MakeTestResult(sqltypes.MakeTestFields("character_set_results", "varchar")),
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("client_found_rows", "int64")),
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("client_found_rows", "int64")),
 	})
 
 	testcases := []struct {
@@ -312,6 +308,10 @@ func TestExecutorSetOp(t *testing.T) {
 		in: "set character_set_results='latin1'",
 	}, {
 		in: "set character_set_results='abcd'",
+	}, {
+		in: "set @@global.client_found_rows = 1",
+	}, {
+		in: "set global client_found_rows = 1",
 	}}
 	for _, tcase := range testcases {
 		t.Run(tcase.in, func(t *testing.T) {

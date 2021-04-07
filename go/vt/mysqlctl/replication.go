@@ -29,7 +29,7 @@ import (
 
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/netutil"

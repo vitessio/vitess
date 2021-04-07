@@ -20,6 +20,10 @@ import (
 	"errors"
 	"testing"
 
+	"vitess.io/vitess/go/vt/sqlparser"
+
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
@@ -71,6 +75,98 @@ func TestSelectUnsharded(t *testing.T) {
 		`StreamExecuteMulti dummy_select ks.0: {} `,
 	})
 	expectResult(t, "sel.StreamExecute", result, defaultSelectResult)
+}
+
+func TestSelectInformationSchemaWithTableAndSchemaWithRoutedTables(t *testing.T) {
+	stringToExpr := func(in string) evalengine.Expr {
+		var schema evalengine.Expr
+		if in != "" {
+			schema = evalengine.NewLiteralString([]byte(in))
+		}
+		return schema
+	}
+
+	type testCase struct {
+		tableSchema, tableName, testName string
+		expectedLog                      []string
+		routed                           bool
+	}
+	tests := []testCase{{
+		testName:    "both schema and table predicates - routed table",
+		tableSchema: "schema",
+		tableName:   "table",
+		routed:      true,
+		expectedLog: []string{
+			"FindTable(`schema`.`table`)",
+			"ResolveDestinations routedKeyspace [] Destinations:DestinationAnyShard()",
+			"ExecuteMultiShard routedKeyspace.1: dummy_select {__replacevtschemaname: type:INT64 value:\"1\" __vttablename: type:VARBINARY value:\"routedTable\" } false false"},
+	}, {
+		testName:    "both schema and table predicates - not routed",
+		tableSchema: "schema",
+		tableName:   "table",
+		routed:      false,
+		expectedLog: []string{
+			"FindTable(`schema`.`table`)",
+			"ResolveDestinations schema [] Destinations:DestinationAnyShard()",
+			"ExecuteMultiShard schema.1: dummy_select {__replacevtschemaname: type:INT64 value:\"1\" __vttablename: type:VARBINARY value:\"table\" } false false"},
+	}, {
+		testName:  "table name predicate - routed table",
+		tableName: "tableName",
+		routed:    true,
+		expectedLog: []string{
+			"FindTable(tableName)",
+			"ResolveDestinations routedKeyspace [] Destinations:DestinationAnyShard()",
+			"ExecuteMultiShard routedKeyspace.1: dummy_select {__vttablename: type:VARBINARY value:\"routedTable\" } false false"},
+	}, {
+		testName:  "table name predicate - not routed",
+		tableName: "tableName",
+		routed:    false,
+		expectedLog: []string{
+			"FindTable(tableName)",
+			"ResolveDestinations ks [] Destinations:DestinationAnyShard()",
+			"ExecuteMultiShard ks.1: dummy_select {__vttablename: type:VARBINARY value:\"tableName\" } false false"},
+	}, {
+		testName:    "schema predicate",
+		tableSchema: "myKeyspace",
+		expectedLog: []string{
+			"ResolveDestinations myKeyspace [] Destinations:DestinationAnyShard()",
+			"ExecuteMultiShard myKeyspace.1: dummy_select {__replacevtschemaname: type:INT64 value:\"1\" } false false"},
+	}, {
+		testName: "no predicates",
+		expectedLog: []string{
+			"ResolveDestinations ks [] Destinations:DestinationAnyShard()",
+			"ExecuteMultiShard ks.1: dummy_select {} false false"},
+	}}
+
+	for _, tc := range tests {
+		t.Run(tc.testName, func(t *testing.T) {
+			sel := &Route{
+				Opcode: SelectDBA,
+				Keyspace: &vindexes.Keyspace{
+					Name:    "ks",
+					Sharded: false,
+				},
+				Query:               "dummy_select",
+				FieldQuery:          "dummy_select_field",
+				SysTableTableSchema: stringToExpr(tc.tableSchema),
+				SysTableTableName:   stringToExpr(tc.tableName),
+			}
+			vc := &loggingVCursor{
+				shards:  []string{"1"},
+				results: []*sqltypes.Result{defaultSelectResult},
+			}
+			if tc.routed {
+				vc.tableRoutes = tableRoutes{
+					tbl: &vindexes.Table{
+						Name:     sqlparser.NewTableIdent("routedTable"),
+						Keyspace: &vindexes.Keyspace{Name: "routedKeyspace"},
+					}}
+			}
+			_, err := sel.Execute(vc, map[string]*querypb.BindVariable{}, false)
+			require.NoError(t, err)
+			vc.ExpectLog(t, tc.expectedLog)
+		})
+	}
 }
 
 func TestSelectScatter(t *testing.T) {
@@ -174,14 +270,10 @@ func TestSelectNone(t *testing.T) {
 	expectResult(t, "sel.Execute", result, &sqltypes.Result{})
 
 	vc.Rewind()
-
-	result, err = sel.Execute(vc, map[string]*querypb.BindVariable{}, true)
+	result, err = wrapStreamExecute(sel, vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
-	vc.ExpectLog(t, []string{
-		`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
-		`ExecuteMultiShard ks.-20: dummy_select_field {} false false`,
-	})
-	expectResult(t, "sel.Execute", result, &sqltypes.Result{})
+	require.Empty(t, vc.log)
+	expectResult(t, "sel.StreamExecute", result, nil)
 }
 
 func TestSelectEqualUniqueScatter(t *testing.T) {
@@ -447,6 +539,55 @@ func TestSelectINNonUnique(t *testing.T) {
 		`Execute select from, toc from lkp where from in ::from from: type:TUPLE values:<type:INT64 value:"1" > values:<type:INT64 value:"2" > values:<type:INT64 value:"4" >  false`,
 		`ResolveDestinations ks [type:INT64 value:"1"  type:INT64 value:"2"  type:INT64 value:"4" ] Destinations:DestinationKeyspaceIDs(00,80),DestinationKeyspaceIDs(00),DestinationKeyspaceIDs(80)`,
 		`StreamExecuteMulti dummy_select ks.-20: {__vals: type:TUPLE values:<type:INT64 value:"1" > values:<type:INT64 value:"2" > } ks.20-: {__vals: type:TUPLE values:<type:INT64 value:"1" > values:<type:INT64 value:"4" > } `,
+	})
+	expectResult(t, "sel.StreamExecute", result, defaultSelectResult)
+}
+
+func TestSelectMultiEqual(t *testing.T) {
+	vindex, _ := vindexes.NewHash("", nil)
+	sel := NewRoute(
+		SelectMultiEqual,
+		&vindexes.Keyspace{
+			Name:    "ks",
+			Sharded: true,
+		},
+		"dummy_select",
+		"dummy_select_field",
+	)
+	sel.Vindex = vindex.(vindexes.SingleColumn)
+	sel.Values = []sqltypes.PlanValue{{
+		Values: []sqltypes.PlanValue{{
+			Value: sqltypes.NewInt64(1),
+		}, {
+			Value: sqltypes.NewInt64(2),
+		}, {
+			Value: sqltypes.NewInt64(4),
+		}},
+	}}
+
+	vc := &loggingVCursor{
+		shards:       []string{"-20", "20-"},
+		shardForKsid: []string{"-20", "-20", "20-"},
+		results:      []*sqltypes.Result{defaultSelectResult},
+	}
+	result, err := sel.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	vc.ExpectLog(t, []string{
+		`ResolveDestinations ks [type:INT64 value:"1"  type:INT64 value:"2"  type:INT64 value:"4" ] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(06e7ea22ce92708f),DestinationKeyspaceID(d2fd8867d50d2dfe)`,
+		`ExecuteMultiShard ks.-20: dummy_select {} ks.20-: dummy_select {} false false`,
+	})
+	expectResult(t, "sel.Execute", result, defaultSelectResult)
+
+	vc.Rewind()
+	result, err = wrapStreamExecute(sel, vc, map[string]*querypb.BindVariable{}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	vc.ExpectLog(t, []string{
+		`ResolveDestinations ks [type:INT64 value:"1"  type:INT64 value:"2"  type:INT64 value:"4" ] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(06e7ea22ce92708f),DestinationKeyspaceID(d2fd8867d50d2dfe)`,
+		`StreamExecuteMulti dummy_select ks.-20: {} ks.20-: {} `,
 	})
 	expectResult(t, "sel.StreamExecute", result, defaultSelectResult)
 }

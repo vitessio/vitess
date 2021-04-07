@@ -17,13 +17,18 @@ limitations under the License.
 package vstreamer
 
 import (
+	"bytes"
 	"context"
 	"flag"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
+	vtschema "vitess.io/vitess/go/vt/schema"
+
 	"github.com/golang/protobuf/proto"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/sync2"
@@ -38,7 +43,7 @@ import (
 )
 
 // PacketSize is the suggested packet size for VReplication streamer.
-var PacketSize = flag.Int("vstream_packet_size", 30000, "Suggested packet size for VReplication streamer. This is used only as a recommendation. The actual packet size may be more or less than this amount.")
+var PacketSize = flag.Int("vstream_packet_size", 250000, "Suggested packet size for VReplication streamer. This is used only as a recommendation. The actual packet size may be more or less than this amount.")
 
 // HeartbeatTime is set to slightly below 1s, compared to idleTimeout
 // set by VPlayer at slightly above 1s. This minimizes conflicts
@@ -172,7 +177,6 @@ func (vs *vstreamer) replicate(ctx context.Context) error {
 		return wrapError(err, vs.pos, vs.vse)
 	}
 	defer conn.Close()
-
 	events, err := conn.StartBinlogDumpFromPosition(vs.ctx, vs.pos)
 	if err != nil {
 		return wrapError(err, vs.pos, vs.vse)
@@ -462,7 +466,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 					Statement: q.SQL,
 				})
 			}
-		case sqlparser.StmtOther, sqlparser.StmtPriv, sqlparser.StmtSet:
+		case sqlparser.StmtOther, sqlparser.StmtPriv, sqlparser.StmtSet, sqlparser.StmtComment:
 			// These are either:
 			// 1) DBA statements like REPAIR that can be ignored.
 			// 2) Privilege-altering statements like GRANT/REVOKE
@@ -501,6 +505,10 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 			return nil, vs.buildVersionPlan(id, tm)
 		}
 		if tm.Database != "" && tm.Database != params.DbName {
+			vs.plans[id] = nil
+			return nil, nil
+		}
+		if vtschema.IsInternalOperationTableName(tm.Name) { // ignore tables created by onlineddl/gh-ost/pt-osc
 			vs.plans[id] = nil
 			return nil, nil
 		}
@@ -689,7 +697,53 @@ func (vs *vstreamer) buildTableColumns(tm *mysql.TableMap) ([]*querypb.Field, er
 
 	// Columns should be truncated to match those in tm.
 	fields = st.Fields[:len(tm.Types)]
+	extColInfos, err := vs.getExtColInfos(tm.Name, tm.Database)
+	if err != nil {
+		return nil, err
+	}
+	for _, field := range fields {
+		typ := strings.ToLower(field.Type.String())
+		if typ == "enum" || typ == "set" {
+			if extColInfo, ok := extColInfos[field.Name]; ok {
+				field.ColumnType = extColInfo.columnType
+			}
+		}
+	}
 	return fields, nil
+}
+
+// additional column attributes from information_schema.columns. Currently only column_type is used, but
+// we expect to add more in the future
+type extColInfo struct {
+	columnType string
+}
+
+func encodeString(in string) string {
+	buf := bytes.NewBuffer(nil)
+	sqltypes.NewVarChar(in).EncodeSQL(buf)
+	return buf.String()
+}
+
+func (vs *vstreamer) getExtColInfos(table, database string) (map[string]*extColInfo, error) {
+	extColInfos := make(map[string]*extColInfo)
+	conn, err := vs.cp.Connect(vs.ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+	queryTemplate := "select column_name, column_type from information_schema.columns where table_schema=%s and table_name=%s;"
+	query := fmt.Sprintf(queryTemplate, encodeString(database), encodeString(table))
+	qr, err := conn.ExecuteFetch(query, 10000, false)
+	if err != nil {
+		return nil, err
+	}
+	for _, row := range qr.Rows {
+		extColInfo := &extColInfo{
+			columnType: row[1].ToString(),
+		}
+		extColInfos[row[0].ToString()] = extColInfo
+	}
+	return extColInfos, nil
 }
 
 func (vs *vstreamer) processJournalEvent(vevents []*binlogdatapb.VEvent, plan *streamerPlan, rows mysql.Rows) ([]*binlogdatapb.VEvent, error) {

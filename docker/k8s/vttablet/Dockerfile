@@ -21,7 +21,7 @@ FROM debian:buster-slim
 # TODO: remove when https://github.com/vitessio/vitess/issues/3553 is fixed
 RUN apt-get update && \
    apt-get upgrade -qq && \
-   apt-get install wget default-mysql-client jq -qq --no-install-recommends && \
+   apt-get install wget default-mysql-client jq curl -qq --no-install-recommends && \
    apt-get autoremove && \
    apt-get clean && \
    rm -rf /var/lib/apt/lists/*

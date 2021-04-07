@@ -29,12 +29,14 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 
 	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -384,8 +386,8 @@ func checkDBstatus(ctx context.Context, t *testing.T, tablet *cluster.Vttablet, 
 
 func checkReplicaStatus(ctx context.Context, t *testing.T, tablet *cluster.Vttablet) {
 	qr := runSQL(ctx, t, "show slave status", tablet)
-	IOThreadRunning := fmt.Sprintf("%v", qr.Rows[0][10])  // Slave_IO_Running
-	SQLThreadRunning := fmt.Sprintf("%v", qr.Rows[0][10]) // Slave_SQL_Running
+	IOThreadRunning := fmt.Sprintf("%v", qr.Rows[0][10])
+	SQLThreadRunning := fmt.Sprintf("%v", qr.Rows[0][10])
 	assert.Equal(t, IOThreadRunning, "VARCHAR(\"No\")")
 	assert.Equal(t, SQLThreadRunning, "VARCHAR(\"No\")")
 }

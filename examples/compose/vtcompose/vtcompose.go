@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 The Vitess Authors.
+ * Copyright 2020 The Vitess Authors.
 
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -135,7 +135,14 @@ func parseKeyspaceInfo(keyspaceData string) map[string]keyspaceInfo {
 		tokens := strings.Split(v, ":")
 		shards, _ := strconv.Atoi(tokens[1])
 		replicaTablets, _ := strconv.Atoi(tokens[2])
-		schemaFileNames := strings.Split(tokens[3], ",")
+		schemaFileNames := []string{}
+		// Make schemafiles argument optional
+		if len(tokens) > 3 {
+			f := func(c rune) bool {
+				return c == ','
+			}
+			schemaFileNames = strings.FieldsFunc(tokens[3], f)
+		}
 
 		if len(tokens) > 4 {
 			keyspaceInfoMap[tokens[0]] = newKeyspaceInfo(tokens[0], shards, replicaTablets, schemaFileNames, tokens[4])
@@ -434,7 +441,7 @@ func applyKeyspaceDependentPatches(
 	if keyspaceData.shards < 2 {
 		tabAlias = tabAlias + 100
 		dockerComposeFile = applyTabletPatches(dockerComposeFile, tabAlias, shard, keyspaceData, externalDbInfoMap, opts)
-		dockerComposeFile = applyShardPatches(dockerComposeFile, tabAlias, shard, keyspaceData, opts)
+		dockerComposeFile = applyShardPatches(dockerComposeFile, tabAlias, shard, keyspaceData, externalDbInfoMap, opts)
 	} else {
 		// Determine shard range
 		for i := 0; i < keyspaceData.shards; i++ {
@@ -447,7 +454,7 @@ func applyKeyspaceDependentPatches(
 			}
 			tabAlias = tabAlias + 100
 			dockerComposeFile = applyTabletPatches(dockerComposeFile, tabAlias, shard, keyspaceData, externalDbInfoMap, opts)
-			dockerComposeFile = applyShardPatches(dockerComposeFile, tabAlias, shard, keyspaceData, opts)
+			dockerComposeFile = applyShardPatches(dockerComposeFile, tabAlias, shard, keyspaceData, externalDbInfoMap, opts)
 		}
 	}
 
@@ -455,10 +462,26 @@ func applyKeyspaceDependentPatches(
 	return dockerComposeFile
 }
 
-func applyDefaultDockerPatches(dockerComposeFile []byte, opts vtOptions) []byte {
+func applyDefaultDockerPatches(
+	dockerComposeFile []byte,
+	keyspaceInfoMap map[string]keyspaceInfo,
+	externalDbInfoMap map[string]externalDbInfo,
+	opts vtOptions,
+) []byte {
+
+	var dbInfo externalDbInfo
+	// This is a workaround to check if there are any externalDBs defined
+	for _, keyspaceData := range keyspaceInfoMap {
+		if val, ok := externalDbInfoMap[keyspaceData.keyspace]; ok {
+			dbInfo = val
+		}
+	}
+
 	dockerComposeFile = applyInMemoryPatch(dockerComposeFile, generateVtctld(opts))
 	dockerComposeFile = applyInMemoryPatch(dockerComposeFile, generateVtgate(opts))
 	dockerComposeFile = applyInMemoryPatch(dockerComposeFile, generateVtwork(opts))
+	dockerComposeFile = applyInMemoryPatch(dockerComposeFile, generateVreplication(dbInfo, opts))
+	dockerComposeFile = applyInMemoryPatch(dockerComposeFile, generateVtorc(dbInfo, opts))
 	return dockerComposeFile
 }
 
@@ -469,7 +492,7 @@ func applyDockerComposePatches(
 	vtOpts vtOptions,
 ) []byte {
 	// Vtctld, vtgate, vtwork patches.
-	dockerComposeFile = applyDefaultDockerPatches(dockerComposeFile, vtOpts)
+	dockerComposeFile = applyDefaultDockerPatches(dockerComposeFile, keyspaceInfoMap, externalDbInfoMap, vtOpts)
 	for _, keyspaceData := range keyspaceInfoMap {
 		dockerComposeFile = applyKeyspaceDependentPatches(dockerComposeFile, keyspaceData, externalDbInfoMap, vtOpts)
 	}
@@ -482,9 +505,14 @@ func applyShardPatches(
 	tabAlias int,
 	shard string,
 	keyspaceData keyspaceInfo,
+	externalDbInfoMap map[string]externalDbInfo,
 	opts vtOptions,
 ) []byte {
-	dockerComposeFile = applyInMemoryPatch(dockerComposeFile, generateDefaultShard(tabAlias, shard, keyspaceData, opts))
+	var dbInfo externalDbInfo
+	if val, ok := externalDbInfoMap[keyspaceData.keyspace]; ok {
+		dbInfo = val
+	}
+	dockerComposeFile = applyInMemoryPatch(dockerComposeFile, generateExternalmaster(tabAlias, shard, keyspaceData, dbInfo, opts))
 	return dockerComposeFile
 }
 
@@ -504,10 +532,69 @@ func generateDefaultShard(tabAlias int, shard string, keyspaceData keyspaceInfo,
 - op: add
   path: /services/init_shard_master%[2]d
   value:
-    image: vitess/base
-    command: ["sh", "-c", "$$VTROOT/bin/vtctl %[5]s InitShardMaster -force %[4]s/%[3]s %[6]s-%[2]d "]
+    image: vitess/lite:${VITESS_TAG:-latest}
+    command: ["sh", "-c", "/vt/bin/vtctlclient %[5]s InitShardMaster -force %[4]s/%[3]s %[6]s-%[2]d "]
     %[1]s
 `, dependsOn, aliases[0], shard, keyspaceData.keyspace, opts.topologyFlags, opts.cell)
+}
+
+func generateExternalmaster(
+	tabAlias int,
+	shard string,
+	keyspaceData keyspaceInfo,
+	dbInfo externalDbInfo,
+	opts vtOptions,
+) string {
+
+	aliases := []int{tabAlias + 1} // master alias, e.g. 201
+	for i := 0; i < keyspaceData.replicaTablets; i++ {
+		aliases = append(aliases, tabAlias+2+i) // replica aliases, e.g. 202, 203, ...
+	}
+
+	externalmasterTab := tabAlias
+	externalDb := "0"
+
+	if dbInfo.dbName != "" {
+		externalDb = "1"
+	} else {
+		return fmt.Sprintf(``)
+	}
+
+	return fmt.Sprintf(`
+- op: add
+  path: /services/vttablet%[1]d
+  value:
+    image: vitess/lite:${VITESS_TAG:-latest}
+    ports:
+      - "15%[1]d:%[3]d"
+      - "%[4]d"
+      - "3306"
+    volumes:
+      - ".:/script"
+    environment:
+      - TOPOLOGY_FLAGS=%[2]s
+      - WEB_PORT=%[3]d
+      - GRPC_PORT=%[4]d
+      - CELL=%[5]s
+      - SHARD=%[6]s
+      - KEYSPACE=%[7]s
+      - ROLE=master
+      - VTHOST=vttablet%[1]d
+      - EXTERNAL_DB=%[8]s
+      - DB_PORT=%[9]s
+      - DB_HOST=%[10]s
+      - DB_USER=%[11]s
+      - DB_PASS=%[12]s
+      - DB_CHARSET=%[13]s
+    command: ["sh", "-c", "[ $$EXTERNAL_DB -eq 1 ] && /script/vttablet-up.sh %[1]d || exit 0"]
+    depends_on:
+      - vtctld
+    healthcheck:
+        test: ["CMD-SHELL","curl -s --fail --show-error localhost:%[3]d/debug/health"]
+        interval: 30s
+        timeout: 10s
+        retries: 15
+`, externalmasterTab, opts.topologyFlags, opts.webPort, opts.gRpcPort, opts.cell, shard, keyspaceData.keyspace, externalDb, dbInfo.dbPort, dbInfo.dbHost, dbInfo.dbUser, dbInfo.dbPass, dbInfo.dbCharset)
 }
 
 func applyTabletPatches(
@@ -539,7 +626,7 @@ func generateDefaultTablet(tabAlias int, shard, role, keyspace string, dbInfo ex
 - op: add
   path: /services/vttablet%[1]d
   value:
-    image: vitess/base
+    image: vitess/lite:${VITESS_TAG:-latest}
     ports:
     - "15%[1]d:%[4]d"
     - "%[5]d"
@@ -565,7 +652,7 @@ func generateDefaultTablet(tabAlias int, shard, role, keyspace string, dbInfo ex
     depends_on:
       - vtctld
     healthcheck:
-        test: ["CMD-SHELL","curl localhost:%[4]d/debug/health"]
+        test: ["CMD-SHELL","curl -s --fail --show-error localhost:%[4]d/debug/health"]
         interval: 30s
         timeout: 10s
         retries: 15
@@ -577,22 +664,21 @@ func generateVtctld(opts vtOptions) string {
 - op: add
   path: /services/vtctld
   value:
-    image: vitess/base
+    image: vitess/lite:${VITESS_TAG:-latest}
     ports:
       - "15000:%[1]d"
       - "%[2]d"
-    command: ["sh", "-c", " $$VTROOT/bin/vtctld \
+    command: ["sh", "-c", " /vt/bin/vtctld \
         %[3]s \
         -cell %[4]s \
         -workflow_manager_init \
         -workflow_manager_use_election \
         -service_map 'grpc-vtctl' \
         -backup_storage_implementation file \
-        -file_backup_storage_root $$VTDATAROOT/backups \
+        -file_backup_storage_root /vt/vtdataroot/backups \
         -logtostderr=true \
         -port %[1]d \
         -grpc_port %[2]d \
-        -pid_file $$VTDATAROOT/tmp/vtctld.pid
         "]
     volumes:
       - .:/script
@@ -600,6 +686,9 @@ func generateVtctld(opts vtOptions) string {
       - consul1
       - consul2
       - consul3
+    depends_on:
+      external_db_host:
+        condition: service_healthy
 `, opts.webPort, opts.gRpcPort, opts.topologyFlags, opts.cell)
 }
 
@@ -608,12 +697,12 @@ func generateVtgate(opts vtOptions) string {
 - op: add
   path: /services/vtgate
   value:
-    image: vitess/base
+    image: vitess/lite:${VITESS_TAG:-latest}
     ports:
       - "15099:%[1]d"
       - "%[2]d"
       - "15306:%[3]d"
-    command: ["sh", "-c", "/script/run-forever.sh $$VTROOT/bin/vtgate \
+    command: ["sh", "-c", "/script/run-forever.sh /vt/bin/vtgate \
         %[4]s \
         -logtostderr=true \
         -port %[1]d \
@@ -623,9 +712,7 @@ func generateVtgate(opts vtOptions) string {
         -cell %[5]s \
         -cells_to_watch %[5]s \
         -tablet_types_to_wait MASTER,REPLICA,RDONLY \
-        -gateway_implementation discoverygateway \
         -service_map 'grpc-vtgateservice' \
-        -pid_file $$VTDATAROOT/tmp/vtgate.pid \
         -normalize_queries=true \
         "]
     volumes:
@@ -640,11 +727,11 @@ func generateVtwork(opts vtOptions) string {
 - op: add
   path: /services/vtwork
   value:
-    image: vitess/base
+    image: vitess/lite:${VITESS_TAG:-latest}
     ports:
-      - "15100:%[1]d"
+      - "%[1]d"
       - "%[2]d"
-    command: ["sh", "-c", "$$VTROOT/bin/vtworker \
+    command: ["sh", "-c", "/vt/bin/vtworker \
         %[3]s \
         -cell %[4]s \
         -logtostderr=true \
@@ -652,11 +739,56 @@ func generateVtwork(opts vtOptions) string {
         -port %[1]d \
         -grpc_port %[2]d \
         -use_v3_resharding_mode=true \
-        -pid_file $$VTDATAROOT/tmp/vtwork.pid \
         "]
     depends_on:
       - vtctld
 `, opts.webPort, opts.gRpcPort, opts.topologyFlags, opts.cell)
+}
+
+func generateVtorc(dbInfo externalDbInfo, opts vtOptions) string {
+	externalDb := "0"
+	if dbInfo.dbName != "" {
+		externalDb = "1"
+	}
+	return fmt.Sprintf(`
+- op: add
+  path: /services/vtorc
+  value:
+    image: vitess/lite:${VITESS_TAG:-latest}
+    volumes:
+      - ".:/script"
+    environment:
+      - TOPOLOGY_FLAGS=%[1]s
+      - EXTERNAL_DB=%[2]s
+      - DB_USER=%[3]s
+      - DB_PASS=%[4]s
+    ports:
+      - "13000:3000"
+    command: ["sh", "-c", "/script/vtorc-up.sh"]
+    depends_on:
+      - vtctld
+`, opts.topologyFlags, externalDb, dbInfo.dbUser, dbInfo.dbPass)
+}
+
+func generateVreplication(dbInfo externalDbInfo, opts vtOptions) string {
+	externalDb := "0"
+	if dbInfo.dbName != "" {
+		externalDb = "1"
+	}
+	return fmt.Sprintf(`
+- op: add
+  path: /services/vreplication
+  value:
+    image: vitess/lite:${VITESS_TAG:-latest}
+    volumes:
+      - ".:/script"
+    environment:
+      - TOPOLOGY_FLAGS=%[1]s
+      - EXTERNAL_DB=%[2]s
+    command: ["sh", "-c", "[ $$EXTERNAL_DB -eq 1 ] && /script/externaldb_vreplication.sh || exit 0"]
+    depends_on:
+      - vtctld
+`, opts.topologyFlags, externalDb)
 }
 
 func generateSchemaload(
@@ -685,7 +817,7 @@ func generateSchemaload(
 - op: add
   path: /services/schemaload_%[7]s
   value:
-    image: vitess/base
+    image: vitess/lite:${VITESS_TAG:-latest}
     volumes:
       - ".:/script"
     environment:

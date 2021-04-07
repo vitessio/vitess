@@ -539,7 +539,7 @@ func TestQueries(t *testing.T) {
 				&framework.TestCase{
 					Query: "insert /* qualified */ into vitess_a(eid, id, name, foo) values (3, 1, 'aaaa', 'cccc')",
 					Rewritten: []string{
-						"insert /* qualified */ into vitess_a(eid, id, name, foo) values (3, 1, 'aaaa', 'cccc')",
+						"insert /* qualified */ into vitess_a(eid, id, `name`, foo) values (3, 1, 'aaaa', 'cccc')",
 					},
 					RowsAffected: 1,
 				},
@@ -586,7 +586,7 @@ func TestQueries(t *testing.T) {
 				&framework.TestCase{
 					Query: "insert /* auto_increment */ into vitess_e(name, foo) values ('aaaa', 'cccc')",
 					Rewritten: []string{
-						"insert /* auto_increment */ into vitess_e(name, foo) values ('aaaa', 'cccc')",
+						"insert /* auto_increment */ into vitess_e(`name`, foo) values ('aaaa', 'cccc')",
 					},
 					RowsAffected: 1,
 				},
@@ -610,7 +610,7 @@ func TestQueries(t *testing.T) {
 				&framework.TestCase{
 					Query: "insert /* auto_increment */ into vitess_e(eid, name, foo) values (NULL, 'aaaa', 'cccc')",
 					Rewritten: []string{
-						"insert /* auto_increment */ into vitess_e(eid, name, foo) values (null, 'aaaa', 'cccc')",
+						"insert /* auto_increment */ into vitess_e(eid, `name`, foo) values (null, 'aaaa', 'cccc')",
 					},
 					RowsAffected: 1,
 				},
@@ -633,7 +633,7 @@ func TestQueries(t *testing.T) {
 				&framework.TestCase{
 					Query: "insert /* num default */ into vitess_a(eid, name, foo) values (3, 'aaaa', 'cccc')",
 					Rewritten: []string{
-						"insert /* num default */ into vitess_a(eid, name, foo) values (3, 'aaaa', 'cccc')",
+						"insert /* num default */ into vitess_a(eid, `name`, foo) values (3, 'aaaa', 'cccc')",
 					},
 					RowsAffected: 1,
 				},
@@ -685,7 +685,7 @@ func TestQueries(t *testing.T) {
 						"id":   sqltypes.Int64BindVariable(1),
 					},
 					Rewritten: []string{
-						"insert /* bind values */ into vitess_a(eid, id, name, foo) values (4, 1, 'aaaa', 'cccc')",
+						"insert /* bind values */ into vitess_a(eid, id, `name`, foo) values (4, 1, 'aaaa', 'cccc')",
 					},
 					RowsAffected: 1,
 				},
@@ -714,7 +714,7 @@ func TestQueries(t *testing.T) {
 						"v4": sqltypes.StringBindVariable("cccc"),
 					},
 					Rewritten: []string{
-						"insert /* positional values */ into vitess_a(eid, id, name, foo) values (4, 1, 'aaaa', 'cccc')",
+						"insert /* positional values */ into vitess_a(eid, id, `name`, foo) values (4, 1, 'aaaa', 'cccc')",
 					},
 					RowsAffected: 1,
 				},
@@ -737,7 +737,7 @@ func TestQueries(t *testing.T) {
 				&framework.TestCase{
 					Query: "insert into vitess_a(id, eid, foo, name) values (-1, 5, 'aaa', 'bbb')",
 					Rewritten: []string{
-						"insert into vitess_a(id, eid, foo, name) values (-1, 5, 'aaa', 'bbb')",
+						"insert into vitess_a(id, eid, foo, `name`) values (-1, 5, 'aaa', 'bbb')",
 					},
 					RowsAffected: 1,
 				},
@@ -760,7 +760,7 @@ func TestQueries(t *testing.T) {
 				&framework.TestCase{
 					Query: "insert /* subquery */ into vitess_a(eid, name, foo) select eid, name, foo from vitess_c",
 					Rewritten: []string{
-						"insert /* subquery */ into vitess_a(eid, name, foo) select eid, name, foo from vitess_c",
+						"insert /* subquery */ into vitess_a(eid, `name`, foo) select eid, `name`, foo from vitess_c",
 					},
 					RowsAffected: 2,
 				},
@@ -777,7 +777,7 @@ func TestQueries(t *testing.T) {
 				&framework.TestCase{
 					Query: "insert into vitess_e(id, name, foo) select eid, name, foo from vitess_c",
 					Rewritten: []string{
-						"insert into vitess_e(id, name, foo) select eid, name, foo from vitess_c",
+						"insert into vitess_e(id, `name`, foo) select eid, `name`, foo from vitess_c",
 					},
 					RowsAffected: 2,
 				},
@@ -802,7 +802,7 @@ func TestQueries(t *testing.T) {
 				&framework.TestCase{
 					Query: "insert into vitess_a(eid, id, name, foo) values (5, 1, '', ''), (7, 1, '', '')",
 					Rewritten: []string{
-						"insert into vitess_a(eid, id, name, foo) values (5, 1, '', ''), (7, 1, '', '')",
+						"insert into vitess_a(eid, id, `name`, foo) values (5, 1, '', ''), (7, 1, '', '')",
 					},
 					RowsAffected: 2,
 				},

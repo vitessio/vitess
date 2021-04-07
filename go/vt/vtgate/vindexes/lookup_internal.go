@@ -80,30 +80,7 @@ func (lkp *lookupInternal) Lookup(vcursor VCursor, ids []sqltypes.Value, co vtga
 	if vcursor.InTransactionAndIsDML() {
 		sel = sel + " for update"
 	}
-	if !ids[0].IsIntegral() && !ids[0].IsBinary() {
-		// for non integral and binary type, fallback to send query per id
-		for _, id := range ids {
-			vars, err := sqltypes.BuildBindVariable([]interface{}{id})
-			if err != nil {
-				return nil, fmt.Errorf("lookup.Map: %v", err)
-			}
-			bindVars := map[string]*querypb.BindVariable{
-				lkp.FromColumns[0]: vars,
-			}
-			var result *sqltypes.Result
-			result, err = vcursor.Execute("VindexLookup", sel, bindVars, false /* rollbackOnError */, co)
-			if err != nil {
-				return nil, fmt.Errorf("lookup.Map: %v", err)
-			}
-			rows := make([][]sqltypes.Value, 0, len(result.Rows))
-			for _, row := range result.Rows {
-				rows = append(rows, []sqltypes.Value{row[1]})
-			}
-			results = append(results, &sqltypes.Result{
-				Rows: rows,
-			})
-		}
-	} else {
+	if ids[0].IsIntegral() {
 		// for integral or binary type, batch query all ids and then map them back to the input order
 		vars, err := sqltypes.BuildBindVariable(ids)
 		if err != nil {
@@ -124,6 +101,29 @@ func (lkp *lookupInternal) Lookup(vcursor VCursor, ids []sqltypes.Value, co vtga
 		for _, id := range ids {
 			results = append(results, &sqltypes.Result{
 				Rows: resultMap[id.ToString()],
+			})
+		}
+	} else {
+		// for non integral and binary type, fallback to send query per id
+		for _, id := range ids {
+			vars, err := sqltypes.BuildBindVariable([]interface{}{id})
+			if err != nil {
+				return nil, fmt.Errorf("lookup.Map: %v", err)
+			}
+			bindVars := map[string]*querypb.BindVariable{
+				lkp.FromColumns[0]: vars,
+			}
+			var result *sqltypes.Result
+			result, err = vcursor.Execute("VindexLookup", sel, bindVars, false /* rollbackOnError */, co)
+			if err != nil {
+				return nil, fmt.Errorf("lookup.Map: %v", err)
+			}
+			rows := make([][]sqltypes.Value, 0, len(result.Rows))
+			for _, row := range result.Rows {
+				rows = append(rows, []sqltypes.Value{row[1]})
+			}
+			results = append(results, &sqltypes.Result{
+				Rows: rows,
 			})
 		}
 	}

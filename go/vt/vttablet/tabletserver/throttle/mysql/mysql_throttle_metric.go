@@ -13,6 +13,7 @@ import (
 
 	"github.com/patrickmn/go-cache"
 	metrics "github.com/rcrowley/go-metrics"
+
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/sqlutils"
 )
 

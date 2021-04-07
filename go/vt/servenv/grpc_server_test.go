@@ -19,7 +19,7 @@ package servenv
 import (
 	"testing"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"google.golang.org/grpc"
 )

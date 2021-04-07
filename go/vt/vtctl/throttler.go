@@ -23,9 +23,10 @@ import (
 	"strings"
 	"time"
 
+	"context"
+
 	"github.com/golang/protobuf/proto"
 	"github.com/olekukonko/tablewriter"
-	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/throttler"

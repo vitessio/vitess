@@ -22,7 +22,8 @@ import (
 	"fmt"
 	"sync"
 
-	"golang.org/x/net/context"
+	"context"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -105,7 +106,8 @@ type SandboxConn struct {
 	sExecMu sync.Mutex
 	execMu  sync.Mutex
 
-	ShardErr error
+	// this error will only happen once
+	EphemeralShardErr error
 }
 
 var _ queryservice.QueryService = (*SandboxConn)(nil) // compile-time interface check
@@ -127,8 +129,10 @@ func (sbc *SandboxConn) getError() error {
 		sbc.MustFailCodes[code] = count - 1
 		return vterrors.New(code, fmt.Sprintf("%v error", code))
 	}
-	if sbc.ShardErr != nil {
-		return sbc.ShardErr
+	if sbc.EphemeralShardErr != nil {
+		err := sbc.EphemeralShardErr
+		sbc.EphemeralShardErr = nil
+		return err
 	}
 	return nil
 }

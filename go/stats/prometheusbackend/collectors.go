@@ -20,6 +20,7 @@ import (
 	"strings"
 
 	"github.com/prometheus/client_golang/prometheus"
+
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/log"
 )

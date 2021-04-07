@@ -37,6 +37,7 @@ type SystemVariable struct {
 	Name string
 }
 
+// System Settings
 var (
 	on   = "1"
 	off  = "0"
@@ -52,6 +53,14 @@ var (
 	Workload            = SystemVariable{Name: "workload", IdentifierAsString: true}
 	Charset             = SystemVariable{Name: "charset", Default: utf8, IdentifierAsString: true}
 	Names               = SystemVariable{Name: "names", Default: utf8, IdentifierAsString: true}
+	SessionUUID         = SystemVariable{Name: "session_uuid", IdentifierAsString: true}
+	// Online DDL
+	DDLStrategy = SystemVariable{Name: "ddl_strategy", IdentifierAsString: true}
+
+	// Read After Write settings
+	ReadAfterWriteGTID    = SystemVariable{Name: "read_after_write_gtid"}
+	ReadAfterWriteTimeOut = SystemVariable{Name: "read_after_write_timeout"}
+	SessionTrackGTIDs     = SystemVariable{Name: "session_track_gtids", IdentifierAsString: true}
 
 	VitessAware = []SystemVariable{
 		Autocommit,
@@ -61,9 +70,14 @@ var (
 		TransactionReadOnly,
 		SQLSelectLimit,
 		TransactionMode,
+		DDLStrategy,
 		Workload,
 		Charset,
 		Names,
+		SessionUUID,
+		ReadAfterWriteGTID,
+		ReadAfterWriteTimeOut,
+		SessionTrackGTIDs,
 	}
 
 	IgnoreThese = []SystemVariable{
@@ -174,6 +188,7 @@ var (
 		{Name: "sql_quote_show_create", IsBoolean: true},
 		{Name: "sql_safe_updates", IsBoolean: true},
 		{Name: "sql_warnings", IsBoolean: true},
+		{Name: "time_zone"},
 		{Name: "tmp_table_size"},
 		{Name: "transaction_prealloc_size"},
 		{Name: "unique_checks", IsBoolean: true},
@@ -210,13 +225,11 @@ var (
 		{Name: "net_read_timeout"},
 		{Name: "net_retry_count"},
 		{Name: "net_write_timeout"},
-		{Name: "session_track_gtids"},
 		{Name: "session_track_schema", IsBoolean: true},
 		{Name: "session_track_state_change", IsBoolean: true},
 		{Name: "session_track_system_variables"},
 		{Name: "session_track_transaction_info"},
 		{Name: "sql_auto_is_null", IsBoolean: true},
-		{Name: "time_zone"},
 		{Name: "version_tokens_session"},
 	}
 )

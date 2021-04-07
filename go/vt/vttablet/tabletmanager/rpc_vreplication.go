@@ -17,7 +17,7 @@ limitations under the License.
 package tabletmanager
 
 import (
-	"golang.org/x/net/context"
+	"context"
 
 	"vitess.io/vitess/go/sqltypes"
 
@@ -26,7 +26,7 @@ import (
 
 // VReplicationExec executes a vreplication command.
 func (tm *TabletManager) VReplicationExec(ctx context.Context, query string) (*querypb.QueryResult, error) {
-	qr, err := tm.VREngine.Exec(query)
+	qr, err := tm.VREngine.ExecWithDBA(query)
 	if err != nil {
 		return nil, err
 	}

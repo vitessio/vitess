@@ -25,6 +25,7 @@ import (
 	"github.com/go-sql-driver/mysql"
 	"github.com/patrickmn/go-cache"
 	"github.com/rcrowley/go-metrics"
+
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/sqlutils"
 

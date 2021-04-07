@@ -18,6 +18,7 @@ package engine
 
 import (
 	"encoding/json"
+	"fmt"
 
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
@@ -131,10 +132,25 @@ func (vf *VindexFunc) mapVindex(vcursor VCursor, bindVars map[string]*querypb.Bi
 		}
 	case key.DestinationKeyspaceID:
 		if len(d) > 0 {
-			result.Rows = [][]sqltypes.Value{
-				vf.buildRow(vkey, d, nil),
+			if vcursor != nil {
+				resolvedShards, _, err := vcursor.ResolveDestinations(vcursor.GetKeyspace(), nil, []key.Destination{d})
+				if err != nil {
+					return nil, err
+				}
+				kr, err := key.ParseShardingSpec(resolvedShards[0].Target.Shard)
+				if err != nil {
+					return nil, err
+				}
+				result.Rows = [][]sqltypes.Value{
+					vf.buildRow(vkey, d, kr[0]),
+				}
+				result.RowsAffected = 1
+			} else {
+				result.Rows = [][]sqltypes.Value{
+					vf.buildRow(vkey, d, nil),
+				}
+				result.RowsAffected = 1
 			}
-			result.RowsAffected = 1
 		}
 	case key.DestinationKeyspaceIDs:
 		for _, ksid := range d {
@@ -170,6 +186,18 @@ func (vf *VindexFunc) buildRow(id sqltypes.Value, ksid []byte, kr *topodatapb.Ke
 		case 3:
 			if kr != nil {
 				row = append(row, sqltypes.MakeTrusted(sqltypes.VarBinary, kr.End))
+			} else {
+				row = append(row, sqltypes.NULL)
+			}
+		case 4:
+			if ksid != nil {
+				row = append(row, sqltypes.NewVarBinary(fmt.Sprintf("%x", ksid)))
+			} else {
+				row = append(row, sqltypes.NULL)
+			}
+		case 5:
+			if ksid != nil {
+				row = append(row, sqltypes.NewVarBinary(key.KeyRangeString(kr)))
 			} else {
 				row = append(row, sqltypes.NULL)
 			}

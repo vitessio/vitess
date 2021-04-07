@@ -19,6 +19,7 @@ package planbuilder
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -153,7 +154,11 @@ func TestPlan(t *testing.T) {
 
 	testOutputTempDir, err := ioutil.TempDir("", "plan_test")
 	require.NoError(t, err)
-	defer os.RemoveAll(testOutputTempDir)
+	defer func() {
+		if !t.Failed() {
+			os.RemoveAll(testOutputTempDir)
+		}
+	}()
 	// You will notice that some tests expect user.Id instead of user.id.
 	// This is because we now pre-create vindex columns in the symbol
 	// table, which come from vschema. In the test vschema,
@@ -176,6 +181,8 @@ func TestPlan(t *testing.T) {
 	testFile(t, "union_cases.txt", testOutputTempDir, vschemaWrapper)
 	testFile(t, "transaction_cases.txt", testOutputTempDir, vschemaWrapper)
 	testFile(t, "lock_cases.txt", testOutputTempDir, vschemaWrapper)
+	testFile(t, "ddl_cases_no_default_keyspace.txt", testOutputTempDir, vschemaWrapper)
+	testFile(t, "show_cases_no_default_keyspace.txt", testOutputTempDir, vschemaWrapper)
 }
 
 func TestSysVarSetDisabled(t *testing.T) {
@@ -229,6 +236,7 @@ func TestWithDefaultKeyspaceFromFile(t *testing.T) {
 		tabletType: topodatapb.TabletType_MASTER,
 	}
 
+	testFile(t, "alterVschema_cases.txt", testOutputTempDir, vschema)
 	testFile(t, "ddl_cases.txt", testOutputTempDir, vschema)
 	testFile(t, "show_cases.txt", testOutputTempDir, vschema)
 }
@@ -276,6 +284,20 @@ type vschemaWrapper struct {
 	tabletType    topodatapb.TabletType
 	dest          key.Destination
 	sysVarEnabled bool
+}
+
+func (vw *vschemaWrapper) AllKeyspace() ([]*vindexes.Keyspace, error) {
+	if vw.keyspace == nil {
+		return nil, errors.New("keyspace not available")
+	}
+	return []*vindexes.Keyspace{vw.keyspace}, nil
+}
+
+func (vw *vschemaWrapper) KeyspaceExists(keyspace string) bool {
+	if vw.keyspace != nil {
+		return vw.keyspace.Name == keyspace
+	}
+	return false
 }
 
 func (vw *vschemaWrapper) SysVarSetEnabled() bool {
@@ -326,6 +348,9 @@ func (vw *vschemaWrapper) FindTableOrVindex(tab sqlparser.TableName) (*vindexes.
 	if err != nil {
 		return nil, nil, destKeyspace, destTabletType, destTarget, err
 	}
+	if destKeyspace == "" && vw.keyspace != nil {
+		destKeyspace = vw.keyspace.Name
+	}
 	table, vindex, err := vw.v.FindTableOrVindex(destKeyspace, tab.Name.String(), topodatapb.TabletType_MASTER)
 	if err != nil {
 		return nil, nil, destKeyspace, destTabletType, destTarget, err
@@ -355,7 +380,7 @@ func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper) {
 		fail := false
 		for tcase := range iterateExecFile(filename) {
 			t.Run(tcase.comments, func(t *testing.T) {
-				plan, err := Build(tcase.input, vschema)
+				plan, err := TestBuilder(tcase.input, vschema)
 
 				out := getPlanOrErrorOutput(err, plan)
 

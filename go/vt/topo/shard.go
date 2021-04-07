@@ -26,7 +26,8 @@ import (
 	"sync"
 	"time"
 
-	"golang.org/x/net/context"
+	"context"
+
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -42,6 +43,12 @@ import (
 	"vitess.io/vitess/go/vt/topo/topoproto"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+)
+
+const (
+	blTablesAlreadyPresent = "one or more tables are already present in the blacklist"
+	blTablesNotPresent     = "cannot remove tables since one or more do not exist in the blacklist"
+	blNoCellsForMaster     = "you cannot specify cells for a master's tablet control"
 )
 
 // Functions for dealing with shard representations in topology.
@@ -393,8 +400,12 @@ func (si *ShardInfo) UpdateSourceBlacklistedTables(ctx context.Context, tabletTy
 	if err := CheckKeyspaceLocked(ctx, si.keyspace); err != nil {
 		return err
 	}
+	if tabletType == topodatapb.TabletType_MASTER && len(cells) > 0 {
+		return fmt.Errorf(blNoCellsForMaster)
+	}
 	tc := si.GetTabletControl(tabletType)
 	if tc == nil {
+
 		// handle the case where the TabletControl object is new
 		if remove {
 			// we try to remove from something that doesn't exist,
@@ -412,6 +423,13 @@ func (si *ShardInfo) UpdateSourceBlacklistedTables(ctx context.Context, tabletTy
 		return nil
 	}
 
+	if tabletType == topodatapb.TabletType_MASTER {
+		if err := si.updateMasterTabletControl(tc, remove, tables); err != nil {
+			return err
+		}
+		return nil
+	}
+
 	// we have an existing record, check table lists matches and
 	if remove {
 		si.removeCellsFromTabletControl(tc, tabletType, cells)
@@ -425,17 +443,67 @@ func (si *ShardInfo) UpdateSourceBlacklistedTables(ctx context.Context, tabletTy
 	return nil
 }
 
+func (si *ShardInfo) updateMasterTabletControl(tc *topodatapb.Shard_TabletControl, remove bool, tables []string) error {
+	var newTables []string
+	for _, table := range tables {
+		exists := false
+		for _, blt := range tc.BlacklistedTables {
+			if blt == table {
+				exists = true
+				break
+			}
+		}
+		if !exists {
+			newTables = append(newTables, table)
+		}
+	}
+	if remove {
+		if len(newTables) != 0 {
+			return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, blTablesNotPresent)
+		}
+		var newBlacklist []string
+		if len(tables) != 0 { // legacy uses
+			for _, blt := range tc.BlacklistedTables {
+				mustDelete := false
+				for _, table := range tables {
+					if blt == table {
+						mustDelete = true
+						break
+					}
+				}
+				if !mustDelete {
+					newBlacklist = append(newBlacklist, blt)
+				}
+			}
+		}
+		tc.BlacklistedTables = newBlacklist
+		if len(tc.BlacklistedTables) == 0 {
+			si.removeTabletTypeFromTabletControl(topodatapb.TabletType_MASTER)
+		}
+		return nil
+	}
+	if len(newTables) != len(tables) {
+		return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, blTablesAlreadyPresent)
+	}
+	tc.BlacklistedTables = append(tc.BlacklistedTables, tables...)
+	return nil
+}
+
+func (si *ShardInfo) removeTabletTypeFromTabletControl(tabletType topodatapb.TabletType) {
+	var tabletControls []*topodatapb.Shard_TabletControl
+	for _, tc := range si.TabletControls {
+		if tc.TabletType != tabletType {
+			tabletControls = append(tabletControls, tc)
+		}
+	}
+	si.TabletControls = tabletControls
+}
+
 func (si *ShardInfo) removeCellsFromTabletControl(tc *topodatapb.Shard_TabletControl, tabletType topodatapb.TabletType, cells []string) {
 	result := removeCellsFromList(cells, tc.Cells)
 	if len(result) == 0 {
 		// we don't have any cell left, we need to clear this record
-		var tabletControls []*topodatapb.Shard_TabletControl
-		for _, tc := range si.TabletControls {
-			if tc.TabletType != tabletType {
-				tabletControls = append(tabletControls, tc)
-			}
-		}
-		si.TabletControls = tabletControls
+		si.removeTabletTypeFromTabletControl(tabletType)
 	} else {
 		tc.Cells = result
 	}

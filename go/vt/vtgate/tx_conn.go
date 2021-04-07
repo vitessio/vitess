@@ -24,7 +24,7 @@ import (
 
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/dtids"

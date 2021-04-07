@@ -29,7 +29,8 @@ import (
 	"syscall"
 	"time"
 
-	"golang.org/x/net/context"
+	"context"
+
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
@@ -91,11 +92,15 @@ type TabletServer struct {
 	config                 *tabletenv.TabletConfig
 	stats                  *tabletenv.Stats
 	QueryTimeout           sync2.AtomicDuration
+	txTimeout              sync2.AtomicDuration
 	TerseErrors            bool
 	enableHotRowProtection bool
 	topoServer             *topo.Server
 
 	// These are sub-components of TabletServer.
+	statelessql  *QueryList
+	statefulql   *QueryList
+	olapql       *QueryList
 	se           *schema.Engine
 	rt           *repltracker.ReplTracker
 	vstreamer    *vstreamer.Engine
@@ -143,6 +148,7 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 		stats:                  tabletenv.NewStats(exporter),
 		config:                 config,
 		QueryTimeout:           sync2.NewAtomicDuration(config.Oltp.QueryTimeoutSeconds.Get()),
+		txTimeout:              sync2.NewAtomicDuration(config.Oltp.TxTimeoutSeconds.Get()),
 		TerseErrors:            config.TerseErrors,
 		enableHotRowProtection: config.HotRowProtection.Mode != tabletenv.Disable,
 		topoServer:             topoServer,
@@ -151,6 +157,9 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 
 	tsOnce.Do(func() { srvTopoServer = srvtopo.NewResilientServer(topoServer, "TabletSrvTopo") })
 
+	tsv.statelessql = NewQueryList("oltp-stateless")
+	tsv.statefulql = NewQueryList("oltp-stateful")
+	tsv.olapql = NewQueryList("olap")
 	tsv.hs = newHealthStreamer(tsv, alias)
 	tsv.se = schema.NewEngine(tsv)
 	tsv.rt = repltracker.NewReplTracker(tsv, alias)
@@ -168,11 +177,14 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 		}
 		return tsv.sm.Target().TabletType
 	}
-	tsv.onlineDDLExecutor = onlineddl.NewExecutor(tsv, topoServer, tabletTypeFunc)
+	tsv.onlineDDLExecutor = onlineddl.NewExecutor(tsv, alias, topoServer, tabletTypeFunc)
 	tsv.lagThrottler = throttle.NewThrottler(tsv, topoServer, tabletTypeFunc)
 	tsv.tableGC = gc.NewTableGC(tsv, topoServer, tabletTypeFunc, tsv.lagThrottler)
 
 	tsv.sm = &stateManager{
+		statelessql: tsv.statelessql,
+		statefulql:  tsv.statefulql,
+		olapql:      tsv.olapql,
 		hs:          tsv.hs,
 		se:          tsv.se,
 		rt:          tsv.rt,
@@ -201,10 +213,11 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 	tsv.registerHealthzHealthHandler()
 	tsv.registerDebugHealthHandler()
 	tsv.registerQueryzHandler()
-	tsv.registerStreamQueryzHandlers()
+	tsv.registerQueryListHandlers([]*QueryList{tsv.statelessql, tsv.statefulql, tsv.olapql})
 	tsv.registerTwopczHandler()
 	tsv.registerMigrationStatusHandler()
 	tsv.registerThrottlerHandlers()
+	tsv.registerDebugEnvHandler()
 
 	return tsv
 }
@@ -353,8 +366,7 @@ func (tsv *TabletServer) StopService() {
 // connect to the database and serving traffic), or an error explaining
 // the unhealthiness otherwise.
 func (tsv *TabletServer) IsHealthy() error {
-	switch tsv.sm.Target().TabletType {
-	case topodatapb.TabletType_MASTER, topodatapb.TabletType_REPLICA, topodatapb.TabletType_BATCH, topodatapb.TabletType_EXPERIMENTAL:
+	if tsv.IsServingType() {
 		_, err := tsv.Execute(
 			tabletenv.LocalContext(),
 			nil,
@@ -365,8 +377,18 @@ func (tsv *TabletServer) IsHealthy() error {
 			nil,
 		)
 		return err
+	}
+	return nil
+}
+
+// IsServingType returns true if the tablet type is one that should be serving to be healthy, or false if the tablet type
+// should not be serving in it's healthy state.
+func (tsv *TabletServer) IsServingType() bool {
+	switch tsv.sm.Target().TabletType {
+	case topodatapb.TabletType_MASTER, topodatapb.TabletType_REPLICA, topodatapb.TabletType_BATCH, topodatapb.TabletType_EXPERIMENTAL:
+		return true
 	default:
-		return nil
+		return false
 	}
 }
 
@@ -646,9 +668,16 @@ func (tsv *TabletServer) Execute(ctx context.Context, target *querypb.Target, sq
 		return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "transactionID and reserveID must match if both are non-zero")
 	}
 
-	allowOnShutdown := transactionID != 0
+	allowOnShutdown := false
+	timeout := tsv.QueryTimeout.Get()
+	if transactionID != 0 {
+		allowOnShutdown = true
+		// Use the smaller of the two values (0 means infinity).
+		// TODO(sougou): Assign deadlines to each transaction and set query timeout accordingly.
+		timeout = smallerTimeout(timeout, tsv.txTimeout.Get())
+	}
 	err = tsv.execRequest(
-		ctx, tsv.QueryTimeout.Get(),
+		ctx, timeout,
 		"Execute", sql, bindVariables,
 		target, options, allowOnShutdown,
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
@@ -697,6 +726,21 @@ func (tsv *TabletServer) Execute(ctx context.Context, target *querypb.Target, sq
 		},
 	)
 	return result, err
+}
+
+// smallerTimeout returns the smaller of the two timeouts.
+// 0 is treated as infinity.
+func smallerTimeout(t1, t2 time.Duration) time.Duration {
+	if t1 == 0 {
+		return t2
+	}
+	if t2 == 0 {
+		return t1
+	}
+	if t1 < t2 {
+		return t1
+	}
+	return t2
 }
 
 // StreamExecute executes the query and streams the result.
@@ -1458,13 +1502,15 @@ func (tsv *TabletServer) Close(ctx context.Context) error {
 
 var okMessage = []byte("ok\n")
 
+// Health check
+// Returns ok if we are in the desired serving state
 func (tsv *TabletServer) registerHealthzHealthHandler() {
 	tsv.exporter.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		if err := acl.CheckAccessHTTP(r, acl.MONITORING); err != nil {
 			acl.SendError(w, err)
 			return
 		}
-		if !tsv.sm.IsServing() {
+		if tsv.sm.wantState == StateServing && !tsv.sm.IsServing() {
 			http.Error(w, "500 internal server error: vttablet is not serving", http.StatusInternalServerError)
 			return
 		}
@@ -1474,6 +1520,8 @@ func (tsv *TabletServer) registerHealthzHealthHandler() {
 	})
 }
 
+// Query service health check
+// Returns ok if a query can go all the way to database and back
 func (tsv *TabletServer) registerDebugHealthHandler() {
 	tsv.exporter.HandleFunc("/debug/health", func(w http.ResponseWriter, r *http.Request) {
 		if err := acl.CheckAccessHTTP(r, acl.MONITORING); err != nil {
@@ -1495,12 +1543,12 @@ func (tsv *TabletServer) registerQueryzHandler() {
 	})
 }
 
-func (tsv *TabletServer) registerStreamQueryzHandlers() {
-	tsv.exporter.HandleFunc("/streamqueryz", func(w http.ResponseWriter, r *http.Request) {
-		streamQueryzHandler(tsv.qe.streamQList, w, r)
+func (tsv *TabletServer) registerQueryListHandlers(queryLists []*QueryList) {
+	tsv.exporter.HandleFunc("/livequeryz/", func(w http.ResponseWriter, r *http.Request) {
+		livequeryzHandler(queryLists, w, r)
 	})
-	tsv.exporter.HandleFunc("/streamqueryz/terminate", func(w http.ResponseWriter, r *http.Request) {
-		streamQueryzTerminateHandler(tsv.qe.streamQList, w, r)
+	tsv.exporter.HandleFunc("/livequeryz/terminate", func(w http.ResponseWriter, r *http.Request) {
+		livequeryzTerminateHandler(queryLists, w, r)
 	})
 }
 
@@ -1519,7 +1567,8 @@ func (tsv *TabletServer) registerTwopczHandler() {
 func (tsv *TabletServer) registerMigrationStatusHandler() {
 	tsv.exporter.HandleFunc("/schema-migration/report-status", func(w http.ResponseWriter, r *http.Request) {
 		ctx := tabletenv.LocalContext()
-		if err := tsv.onlineDDLExecutor.OnSchemaMigrationStatus(ctx, r.URL.Query().Get("uuid"), r.URL.Query().Get("status"), r.URL.Query().Get("dryrun")); err != nil {
+		query := r.URL.Query()
+		if err := tsv.onlineDDLExecutor.OnSchemaMigrationStatus(ctx, query.Get("uuid"), query.Get("status"), query.Get("dryrun"), query.Get("progress")); err != nil {
 			http.Error(w, fmt.Sprintf("not ok: %v", err), http.StatusInternalServerError)
 			return
 		}
@@ -1574,6 +1623,12 @@ func (tsv *TabletServer) registerThrottlerHandlers() {
 	tsv.registerThrottlerStatusHandler()
 }
 
+func (tsv *TabletServer) registerDebugEnvHandler() {
+	tsv.exporter.HandleFunc("/debug/env", func(w http.ResponseWriter, r *http.Request) {
+		debugEnvHandler(tsv, w, r)
+	})
+}
+
 // EnableHeartbeat forces heartbeat to be on or off.
 // Only to be used for testing.
 func (tsv *TabletServer) EnableHeartbeat(enabled bool) {
@@ -1593,8 +1648,10 @@ func (tsv *TabletServer) EnableHistorian(enabled bool) {
 }
 
 // SetPoolSize changes the pool size to the specified value.
-// This function should only be used for testing.
 func (tsv *TabletServer) SetPoolSize(val int) {
+	if val <= 0 {
+		return
+	}
 	tsv.qe.conns.SetCapacity(val)
 }
 
@@ -1604,7 +1661,6 @@ func (tsv *TabletServer) PoolSize() int {
 }
 
 // SetStreamPoolSize changes the pool size to the specified value.
-// This function should only be used for testing.
 func (tsv *TabletServer) SetStreamPoolSize(val int) {
 	tsv.qe.streamConns.SetCapacity(val)
 }
@@ -1615,7 +1671,6 @@ func (tsv *TabletServer) StreamPoolSize() int {
 }
 
 // SetTxPoolSize changes the tx pool size to the specified value.
-// This function should only be used for testing.
 func (tsv *TabletServer) SetTxPoolSize(val int) {
 	tsv.te.txPool.scp.conns.SetCapacity(val)
 }
@@ -1626,18 +1681,17 @@ func (tsv *TabletServer) TxPoolSize() int {
 }
 
 // SetTxTimeout changes the transaction timeout to the specified value.
-// This function should only be used for testing.
 func (tsv *TabletServer) SetTxTimeout(val time.Duration) {
 	tsv.te.txPool.SetTimeout(val)
+	tsv.txTimeout.Set(val)
 }
 
 // TxTimeout returns the transaction timeout.
 func (tsv *TabletServer) TxTimeout() time.Duration {
-	return tsv.te.txPool.Timeout()
+	return tsv.txTimeout.Get()
 }
 
 // SetQueryPlanCacheCap changes the pool size to the specified value.
-// This function should only be used for testing.
 func (tsv *TabletServer) SetQueryPlanCacheCap(val int) {
 	tsv.qe.SetQueryPlanCacheCap(val)
 }
@@ -1648,7 +1702,6 @@ func (tsv *TabletServer) QueryPlanCacheCap() int {
 }
 
 // SetMaxResultSize changes the max result size to the specified value.
-// This function should only be used for testing.
 func (tsv *TabletServer) SetMaxResultSize(val int) {
 	tsv.qe.maxResultSize.Set(int64(val))
 }
@@ -1659,7 +1712,6 @@ func (tsv *TabletServer) MaxResultSize() int {
 }
 
 // SetWarnResultSize changes the warn result size to the specified value.
-// This function should only be used for testing.
 func (tsv *TabletServer) SetWarnResultSize(val int) {
 	tsv.qe.warnResultSize.Set(int64(val))
 }
@@ -1676,9 +1728,16 @@ func (tsv *TabletServer) SetPassthroughDMLs(val bool) {
 }
 
 // SetConsolidatorMode sets the consolidator mode.
-// This function should only be used for testing.
 func (tsv *TabletServer) SetConsolidatorMode(mode string) {
-	tsv.qe.consolidatorMode = mode
+	switch mode {
+	case tabletenv.NotOnMaster, tabletenv.Enable, tabletenv.Disable:
+		tsv.qe.consolidatorMode.Set(mode)
+	}
+}
+
+// ConsolidatorMode returns the consolidator mode.
+func (tsv *TabletServer) ConsolidatorMode() string {
+	return tsv.qe.consolidatorMode.Get()
 }
 
 // queryAsString returns a readable version of query+bind variables.

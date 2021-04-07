@@ -24,5 +24,5 @@ source ./env.sh
 
 vtctlclient ApplySchema -sql-file create_commerce_seq.sql commerce
 vtctlclient ApplyVSchema -vschema_file vschema_commerce_seq.json commerce
-vtctlclient ApplySchema -sql-file create_customer_sharded.sql customer
 vtctlclient ApplyVSchema -vschema_file vschema_customer_sharded.json customer
+vtctlclient ApplySchema -sql-file create_customer_sharded.sql customer

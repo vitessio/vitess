@@ -26,8 +26,9 @@ import (
 	"strings"
 	"sync"
 
+	"context"
+
 	"cloud.google.com/go/storage"
-	"golang.org/x/net/context"
 	"golang.org/x/oauth2/google"
 	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
@@ -132,7 +133,14 @@ func (bs *GCSBackupStorage) ListBackups(ctx context.Context, dir string) ([]back
 
 	// List prefixes that begin with dir (i.e. list subdirs).
 	var subdirs []string
-	searchPrefix := objName(dir, "" /* include trailing slash */)
+
+	var searchPrefix string
+	if dir == "/" {
+		searchPrefix = ""
+	} else {
+		searchPrefix = objName(dir, "" /* include trailing slash */)
+	}
+
 	query := &storage.Query{
 		Delimiter: "/",
 		Prefix:    searchPrefix,

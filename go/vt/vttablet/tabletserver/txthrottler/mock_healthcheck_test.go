@@ -8,6 +8,7 @@ import (
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
+
 	discovery "vitess.io/vitess/go/vt/discovery"
 	topodata "vitess.io/vitess/go/vt/proto/topodata"
 	queryservice "vitess.io/vitess/go/vt/vttablet/queryservice"

@@ -17,7 +17,10 @@ limitations under the License.
 package schema
 
 import (
+	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestParseAlterTableOptions(t *testing.T) {
@@ -25,64 +28,64 @@ func TestParseAlterTableOptions(t *testing.T) {
 		schema, table, options string
 	}
 	tests := map[string]expect{
-		"add column i int, drop column d":                                                                          {schema: "", table: "", options: "add column i int, drop column d"},
-		"  add column i int, drop column d  ":                                                                      {schema: "", table: "", options: "add column i int, drop column d"},
-		"alter table t add column i int, drop column d":                                                            {schema: "", table: "t", options: "add column i int, drop column d"},
-		"alter    table   t      add column i int, drop column d":                                                  {schema: "", table: "t", options: "add column i int, drop column d"},
-		"alter table `t` add column i int, drop column d":                                                          {schema: "", table: "t", options: "add column i int, drop column d"},
-		"alter table `scm`.`t` add column i int, drop column d":                                                    {schema: "scm", table: "t", options: "add column i int, drop column d"},
-		"alter table `scm`.t add column i int, drop column d":                                                      {schema: "scm", table: "t", options: "add column i int, drop column d"},
-		"alter table scm.`t` add column i int, drop column d":                                                      {schema: "scm", table: "t", options: "add column i int, drop column d"},
-		"alter table scm.t add column i int, drop column d":                                                        {schema: "scm", table: "t", options: "add column i int, drop column d"},
-		"alter with 'gh-ost' table scm.t add column i int, drop column d":                                          {schema: "scm", table: "t", options: "add column i int, drop column d"},
-		"  alter   with    'gh-ost'   table   scm.`t` add column i int, drop column d":                             {schema: "scm", table: "t", options: "add column i int, drop column d"},
-		"alter with 'pt-osc' table scm.t add column i int, drop column d":                                          {schema: "scm", table: "t", options: "add column i int, drop column d"},
-		"alter with 'gh-ost' '--some-option=5 --another-option=false' table scm.t add column i int, drop column d": {schema: "scm", table: "t", options: "add column i int, drop column d"},
-		"alter with 'gh-ost' '--initially-drop-old-table' table scm.t add column i int, drop column d":             {schema: "scm", table: "t", options: "add column i int, drop column d"},
-		"alter with 'gh-ost' '--initially-drop-old-table --execute' table scm.t add column i int, drop column d":   {schema: "scm", table: "t", options: "add column i int, drop column d"},
-		"ALTER WITH 'gh-ost' TABLE scm.t ADD COLUMN i int, DROP COLUMN d":                                          {schema: "scm", table: "t", options: "ADD COLUMN i int, DROP COLUMN d"},
+		"add column i int, drop column d":                               {schema: "", table: "", options: "add column i int, drop column d"},
+		"  add column i int, drop column d  ":                           {schema: "", table: "", options: "add column i int, drop column d"},
+		"alter table t add column i int, drop column d":                 {schema: "", table: "t", options: "add column i int, drop column d"},
+		"alter    table   t      add column i int, drop column d":       {schema: "", table: "t", options: "add column i int, drop column d"},
+		"alter table `t` add column i int, drop column d":               {schema: "", table: "t", options: "add column i int, drop column d"},
+		"alter table `scm`.`t` add column i int, drop column d":         {schema: "scm", table: "t", options: "add column i int, drop column d"},
+		"alter table `scm`.t add column i int, drop column d":           {schema: "scm", table: "t", options: "add column i int, drop column d"},
+		"alter table scm.`t` add column i int, drop column d":           {schema: "scm", table: "t", options: "add column i int, drop column d"},
+		"alter table scm.t add column i int, drop column d":             {schema: "scm", table: "t", options: "add column i int, drop column d"},
+		"  alter       table   scm.`t` add column i int, drop column d": {schema: "scm", table: "t", options: "add column i int, drop column d"},
+		"ALTER  table scm.t ADD COLUMN i int, DROP COLUMN d":            {schema: "scm", table: "t", options: "ADD COLUMN i int, DROP COLUMN d"},
+		"ALTER TABLE scm.t ADD COLUMN i int, DROP COLUMN d":             {schema: "scm", table: "t", options: "ADD COLUMN i int, DROP COLUMN d"},
 	}
 	for query, expect := range tests {
 		schema, table, options := ParseAlterTableOptions(query)
-		if schema != expect.schema {
-			t.Errorf("schema: %+v, want:%+v", schema, expect.schema)
-		}
-		if table != expect.table {
-			t.Errorf("table: %+v, want:%+v", table, expect.table)
-		}
-		if options != expect.options {
-			t.Errorf("options: %+v, want:%+v", options, expect.options)
-		}
+		assert.Equal(t, expect.schema, schema)
+		assert.Equal(t, expect.table, table)
+		assert.Equal(t, expect.options, options)
 	}
 }
 
-func TestRemoveOnlineDDLHints(t *testing.T) {
-	tests := map[string]string{
-		"ALTER TABLE my_table DROP COLUMN i":                                      "ALTER TABLE `my_table` DROP COLUMN i",
-		"   ALTER     TABLE    my_table     DROP COLUMN i":                        "ALTER TABLE `my_table` DROP COLUMN i",
-		"ALTER WITH 'gh-ost' TABLE my_table DROP COLUMN i":                        "ALTER TABLE `my_table` DROP COLUMN i",
-		"ALTER WITH 'pt-osc' TABLE `my_table` DROP COLUMN i":                      "ALTER TABLE `my_table` DROP COLUMN i",
-		"ALTER WITH 'pt-osc' TABLE scm.`my_table` DROP COLUMN i":                  "ALTER TABLE `scm`.`my_table` DROP COLUMN i",
-		"ALTER WITH 'pt-osc' TABLE `scm`.`my_table` DROP COLUMN i":                "ALTER TABLE `scm`.`my_table` DROP COLUMN i",
-		"ALTER    WITH      'gh-ost'   TABLE   `scm`.`my_table`    DROP COLUMN i": "ALTER TABLE `scm`.`my_table` DROP COLUMN i",
-		`
-		ALTER WITH 'gh-ost'
-		TABLE scm.my_table
-		DROP COLUMN i
-		`: "ALTER TABLE `scm`.`my_table` DROP COLUMN i",
-		`
-		ALTER
-		WITH
-		'gh-ost'
-		TABLE scm.my_table DROP COLUMN i,
-		ADD j INT
-		`: "ALTER TABLE `scm`.`my_table` DROP COLUMN i," + `
-		ADD j INT`,
+func TestNormalizeOnlineDDL(t *testing.T) {
+	type expect struct {
+		sqls    []string
+		isError bool
+	}
+	tests := map[string]expect{
+		"alter table t add column i int, drop column d": {sqls: []string{"alter table t add column i int, drop column d"}},
+		"create table t (id int primary key)":           {sqls: []string{"create table t (id int primary key)"}},
+		"drop table t":                                  {sqls: []string{"drop table t"}},
+		"drop table if exists t":                        {sqls: []string{"drop table if exists t"}},
+		"drop table t1, t2, t3":                         {sqls: []string{"drop table t1", "drop table t2", "drop table t3"}},
+		"drop table if exists t1, t2, t3":               {sqls: []string{"drop table if exists t1", "drop table if exists t2", "drop table if exists t3"}},
+		"create index i_idx on t(id)":                   {sqls: []string{"alter table t add index i_idx (id)"}},
+		"create index i_idx on t(name(12))":             {sqls: []string{"alter table t add index i_idx (`name`(12))"}},
+		"create index i_idx on t(id, `ts`, name(12))":   {sqls: []string{"alter table t add index i_idx (id, ts, `name`(12))"}},
+		"create unique index i_idx on t(id)":            {sqls: []string{"alter table t add unique index i_idx (id)"}},
+		"create index i_idx using btree on t(id)":       {sqls: []string{"alter table t add index i_idx (id) using btree"}},
+		"create index with syntax error i_idx on t(id)": {isError: true},
+		"select * from t":                               {isError: true},
+		"drop database t":                               {isError: true},
 	}
 	for query, expect := range tests {
-		normalizedQuery := RemoveOnlineDDLHints(query)
-		if normalizedQuery != expect {
-			t.Errorf("got: %+v, want:%+v", normalizedQuery, expect)
-		}
+		t.Run(query, func(t *testing.T) {
+			normalized, err := NormalizeOnlineDDL(query)
+			if expect.isError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				sqls := []string{}
+				for _, n := range normalized {
+					sql := n.SQL
+					sql = strings.ReplaceAll(sql, "\n", "")
+					sql = strings.ReplaceAll(sql, "\t", "")
+					sqls = append(sqls, sql)
+				}
+				assert.Equal(t, expect.sqls, sqls)
+			}
+		})
 	}
 }

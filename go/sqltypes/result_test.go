@@ -23,6 +23,61 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
+func TestMakeRowTrusted(t *testing.T) {
+	fields := MakeTestFields(
+		"some_int|some_text|another_int",
+		"int8|varchar|int8",
+	)
+
+	values := []byte{}
+	hw := []byte("hello, world")
+	values = append(values, hw...)
+	values = append(values, byte(42))
+
+	row := &querypb.Row{
+		Lengths: []int64{-1, int64(len(hw)), 1},
+		Values:  values,
+	}
+
+	want := []Value{
+		MakeTrusted(querypb.Type_NULL_TYPE, nil),
+		MakeTrusted(querypb.Type_VARCHAR, []byte("hello, world")),
+		MakeTrusted(querypb.Type_INT8, []byte{byte(42)}),
+	}
+
+	result := MakeRowTrusted(fields, row)
+	if !reflect.DeepEqual(result, want) {
+		t.Errorf("MakeRowTrusted:\ngot: %#v\nwant: %#v", result, want)
+	}
+}
+
+func TestMakeRowTrustedDoesNotPanicOnNewColumns(t *testing.T) {
+	fields := MakeTestFields(
+		"some_int|some_text",
+		"int8|varchar",
+	)
+
+	values := []byte{byte(123)}
+	hw := []byte("hello, world")
+	values = append(values, hw...)
+	values = append(values, byte(42))
+
+	row := &querypb.Row{
+		Lengths: []int64{1, int64(len(hw)), 1},
+		Values:  values,
+	}
+
+	want := []Value{
+		MakeTrusted(querypb.Type_INT8, []byte{byte(123)}),
+		MakeTrusted(querypb.Type_VARCHAR, []byte("hello, world")),
+	}
+
+	result := MakeRowTrusted(fields, row)
+	if !reflect.DeepEqual(result, want) {
+		t.Errorf("MakeRowTrusted:\ngot: %#v\nwant: %#v", result, want)
+	}
+}
+
 func TestRepair(t *testing.T) {
 	fields := []*querypb.Field{{
 		Type: Int64,
@@ -294,5 +349,55 @@ func TestStripMetaData(t *testing.T) {
 		if !reflect.DeepEqual(tcase.in, inCopy) {
 			t.Error("StripMetaData modified original result")
 		}
+	}
+}
+
+func TestAppendResult(t *testing.T) {
+	src := &Result{
+		Fields: []*querypb.Field{{
+			Type: Int64,
+		}, {
+			Type: VarChar,
+		}},
+		InsertID:     1,
+		RowsAffected: 2,
+		Rows: [][]Value{
+			{TestValue(Int64, "2"), MakeTrusted(VarChar, nil)},
+			{TestValue(Int64, "3"), TestValue(VarChar, "")},
+		},
+	}
+
+	result := &Result{
+		Fields: []*querypb.Field{{
+			Type: Int64,
+		}, {
+			Type: VarChar,
+		}},
+		InsertID:     3,
+		RowsAffected: 4,
+		Rows: [][]Value{
+			{TestValue(Int64, "1"), MakeTrusted(Null, nil)},
+		},
+	}
+
+	want := &Result{
+		Fields: []*querypb.Field{{
+			Type: Int64,
+		}, {
+			Type: VarChar,
+		}},
+		InsertID:     1,
+		RowsAffected: 6,
+		Rows: [][]Value{
+			{TestValue(Int64, "1"), MakeTrusted(Null, nil)},
+			{TestValue(Int64, "2"), MakeTrusted(VarChar, nil)},
+			{TestValue(Int64, "3"), TestValue(VarChar, "")},
+		},
+	}
+
+	result.AppendResult(src)
+
+	if !reflect.DeepEqual(result, want) {
+		t.Errorf("Got:\n%#v, want:\n%#v", result, want)
 	}
 }

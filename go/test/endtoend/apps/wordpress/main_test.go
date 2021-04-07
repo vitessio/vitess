@@ -34,6 +34,7 @@ import (
 	vtenv "vitess.io/vitess/go/vt/env"
 
 	_ "github.com/go-sql-driver/mysql"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 )

@@ -2,6 +2,7 @@ package vexec
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -10,6 +11,11 @@ import (
 const (
 	// TableQualifier is the standard schema used by VExec commands
 	TableQualifier = "_vt"
+)
+
+var (
+	// ErrColumNotFound is returned when we expect some column to exist and it does not
+	ErrColumNotFound = errors.New("Column not found")
 )
 
 // ValColumns map column name to Literal, for col=Val expressions in a WHERE clause
@@ -122,7 +128,7 @@ func (e *TabletVExec) analyzeInsertColumns(insert *sqlparser.Insert) ValColumns 
 	return cols
 }
 
-// ReplaceInsertColumnVal manipulated the existing INSERT statement to replace a column value
+// ReplaceInsertColumnVal manipulates the existing INSERT statement to replace a column value
 // into a given value
 func (e *TabletVExec) ReplaceInsertColumnVal(colName string, val *sqlparser.Literal) error {
 	insert, ok := e.Stmt.(*sqlparser.Insert)
@@ -144,7 +150,26 @@ func (e *TabletVExec) ReplaceInsertColumnVal(colName string, val *sqlparser.Lite
 			return nil
 		}
 	}
-	return fmt.Errorf("INSERT column not found: %s", colName)
+	return ErrColumNotFound
+}
+
+// ReplaceInsertColumnVal manipulates the existing INSERT statement to replace a column value
+// into a given value
+func (e *TabletVExec) AddOrReplaceInsertColumnVal(colName string, val *sqlparser.Literal) error {
+	if err := e.ReplaceInsertColumnVal(colName, val); err != ErrColumNotFound {
+		return err
+	}
+	// We know the query is a valid single row INSERT
+	// We know column is not found. We need to add it.
+
+	insert, _ := e.Stmt.(*sqlparser.Insert)
+	rows, _ := insert.Rows.(sqlparser.Values)
+	rows[0] = append(rows[0], val)
+	insert.Columns = append(insert.Columns, sqlparser.NewColIdent(colName))
+	e.InsertCols[colName] = val
+	e.Query = sqlparser.String(e.Stmt)
+
+	return nil
 }
 
 // analyzeStatement analyzes a given statement and produces the following ingredients, useful for

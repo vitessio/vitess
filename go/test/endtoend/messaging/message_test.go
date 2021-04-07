@@ -30,6 +30,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -331,6 +332,7 @@ func TestConnection(t *testing.T) {
 	_, err = stream.MessageStream(userKeyspace, "", nil, name)
 	require.Nil(t, err)
 	// validate client count of vttablet
+	time.Sleep(time.Second)
 	assert.Equal(t, 1, getClientCount(shard0Master))
 	assert.Equal(t, 1, getClientCount(shard1Master))
 	// second connection with vtgate, secont connection
@@ -340,6 +342,7 @@ func TestConnection(t *testing.T) {
 	_, err = stream1.MessageStream(userKeyspace, "", nil, name)
 	require.Nil(t, err)
 	// validate client count of vttablet
+	time.Sleep(time.Second)
 	assert.Equal(t, 2, getClientCount(shard0Master))
 	assert.Equal(t, 2, getClientCount(shard1Master))
 

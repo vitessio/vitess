@@ -27,6 +27,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -451,10 +452,7 @@ func TestConsistentLookupUpdateBecauseUncomparableTypes(t *testing.T) {
 		{querypb.Type_VARCHAR, "some string"},
 		{querypb.Type_CHAR, "some string"},
 		{querypb.Type_BIT, "some string"},
-		{querypb.Type_ENUM, "some string"},
-		{querypb.Type_SET, "some string"},
 		{querypb.Type_GEOMETRY, "some string"},
-		{querypb.Type_JSON, "some string"},
 	}
 
 	for _, val := range tests {

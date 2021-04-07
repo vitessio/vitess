@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/proto"
+
 	"vitess.io/vitess/go/vt/vterrors"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -198,8 +199,11 @@ func addOrUpdate(shardSession *vtgatepb.Session_ShardSession, sessions []*vtgate
 			sess.Target.TabletType == shardSession.Target.TabletType &&
 			sess.Target.Shard == shardSession.Target.Shard
 		if targetedAtSameTablet {
-			if sess.TabletAlias.Cell != shardSession.TabletAlias.Cell || sess.TabletAlias.Uid != shardSession.TabletAlias.Uid {
-				return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "got a different alias for the same target")
+			if !proto.Equal(sess.TabletAlias, shardSession.TabletAlias) {
+				errorDetails := fmt.Sprintf("got non-matching aliases (%v vs %v) for the same target (keyspace: %v, tabletType: %v, shard: %v)",
+					sess.TabletAlias, shardSession.TabletAlias,
+					sess.Target.Keyspace, sess.Target.TabletType, sess.Target.Shard)
+				return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, errorDetails)
 			}
 			// replace the old info with the new one
 			sessions[i] = shardSession
@@ -451,6 +455,57 @@ func (session *SafeSession) ResetShard(tabletAlias *topodatapb.TabletAlias) erro
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: SafeSession.ResetShard: unexpected commitOrder")
 	}
 	return nil
+}
+
+// SetDDLStrategy set the DDLStrategy setting.
+func (session *SafeSession) SetDDLStrategy(strategy string) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	session.DDLStrategy = strategy
+}
+
+// GetDDLStrategy returns the DDLStrategy value.
+func (session *SafeSession) GetDDLStrategy() string {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	return session.DDLStrategy
+}
+
+// GetSessionUUID returns the SessionUUID value.
+func (session *SafeSession) GetSessionUUID() string {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	return session.SessionUUID
+}
+
+// SetReadAfterWriteGTID set the ReadAfterWriteGtid setting.
+func (session *SafeSession) SetReadAfterWriteGTID(vtgtid string) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	if session.ReadAfterWrite == nil {
+		session.ReadAfterWrite = &vtgatepb.ReadAfterWrite{}
+	}
+	session.ReadAfterWrite.ReadAfterWriteGtid = vtgtid
+}
+
+// SetReadAfterWriteTimeout set the ReadAfterWriteTimeout setting.
+func (session *SafeSession) SetReadAfterWriteTimeout(timeout float64) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	if session.ReadAfterWrite == nil {
+		session.ReadAfterWrite = &vtgatepb.ReadAfterWrite{}
+	}
+	session.ReadAfterWrite.ReadAfterWriteTimeout = timeout
+}
+
+// SetSessionTrackGtids set the SessionTrackGtids setting.
+func (session *SafeSession) SetSessionTrackGtids(enable bool) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	if session.ReadAfterWrite == nil {
+		session.ReadAfterWrite = &vtgatepb.ReadAfterWrite{}
+	}
+	session.ReadAfterWrite.SessionTrackGtids = enable
 }
 
 func removeShard(tabletAlias *topodatapb.TabletAlias, sessions []*vtgatepb.Session_ShardSession) ([]*vtgatepb.Session_ShardSession, error) {

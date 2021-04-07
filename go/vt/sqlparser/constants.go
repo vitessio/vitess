@@ -71,7 +71,21 @@ const (
 	VindexOwnerStr = "owner"
 
 	// Partition strings
-	ReorganizeStr = "reorganize partition"
+	ReorganizeStr        = "reorganize partition"
+	AddStr               = "add partition"
+	DiscardStr           = "discard partition"
+	DropPartitionStr     = "drop partition"
+	ImportStr            = "import partition"
+	TruncatePartitionStr = "truncate partition"
+	CoalesceStr          = "coalesce partition"
+	ExchangeStr          = "exchange partition"
+	AnalyzePartitionStr  = "analyze partition"
+	CheckStr             = "check partition"
+	OptimizeStr          = "optimize partition"
+	RebuildStr           = "rebuild partition"
+	RepairStr            = "repair partition"
+	RemoveStr            = "remove partitioning"
+	UpgradeStr           = "upgrade partitioning"
 
 	// JoinTableExpr.Join
 	JoinStr             = "join"
@@ -147,7 +161,9 @@ const (
 	// ConvertType.Operator
 	CharacterSetStr = " character set"
 	NoOperatorStr   = ""
-	CharsetStr      = "charset"
+
+	// CollateAndCharset.Type
+	CollateStr = " collate"
 
 	// MatchExpr.Option
 	NoOptionStr                              = ""
@@ -155,6 +171,11 @@ const (
 	NaturalLanguageModeStr                   = " in natural language mode"
 	NaturalLanguageModeWithQueryExpansionStr = " in natural language mode with query expansion"
 	QueryExpansionStr                        = " with query expansion"
+
+	// INTO OUTFILE
+	IntoOutfileStr   = " into outfile "
+	IntoOutfileS3Str = " into outfile s3 "
+	IntoDumpfileStr  = " into dumpfile "
 
 	// Order.Direction
 	AscScr  = "asc"
@@ -180,6 +201,35 @@ const (
 	VitessStr      = "vitess"
 	TraditionalStr = "traditional"
 	AnalyzeStr     = "analyze"
+
+	// Lock Types
+	ReadStr             = "read"
+	ReadLocalStr        = "read local"
+	WriteStr            = "write"
+	LowPriorityWriteStr = "low_priority write"
+
+	// ShowCommand Types
+	CharsetStr         = " charset"
+	CollationStr       = " collation"
+	DatabaseStr        = " databases"
+	FunctionStr        = " function status"
+	PrivilegeStr       = " privileges"
+	ProcedureStr       = " procedure status"
+	StatusGlobalStr    = " global status"
+	StatusSessionStr   = " status"
+	VariableGlobalStr  = " global variables"
+	VariableSessionStr = " variables"
+
+	// DropKeyType strings
+	PrimaryKeyTypeStr = "primary key"
+	ForeignKeyTypeStr = "foreign key"
+	NormalKeyTypeStr  = "key"
+
+	// LockOptionType strings
+	NoneTypeStr      = "none"
+	SharedTypeStr    = "shared"
+	DefaultTypeStr   = "default"
+	ExclusiveTypeStr = "exclusive"
 )
 
 // Constants for Enum type - AccessMode
@@ -196,24 +246,10 @@ const (
 	Serializable
 )
 
-// Constants for Union.Type
-const (
-	UnionBasic UnionType = iota
-	UnionAll
-	UnionDistinct
-)
-
 // Constants for Enum Type - Insert.Action
 const (
 	InsertAct InsertAction = iota
 	ReplaceAct
-)
-
-// Constants for Enum Type - DBDDL.Action
-const (
-	CreateDBDDLAction DBDDLAction = iota
-	AlterDBDDLAction
-	DropDBDDLAction
 )
 
 // Constants for Enum Type - DDL.Action
@@ -362,6 +398,20 @@ const (
 // Constant for Enum Type - PartitionSpecAction
 const (
 	ReorganizeAction PartitionSpecAction = iota
+	AddAction
+	DiscardAction
+	DropAction
+	ImportAction
+	TruncateAction
+	CoalesceAction
+	ExchangeAction
+	AnalyzeAction
+	CheckAction
+	OptimizeAction
+	RebuildAction
+	RepairAction
+	RemoveAction
+	UpgradeAction
 )
 
 // Constant for Enum Type - ExplainType
@@ -372,4 +422,56 @@ const (
 	VitessType
 	TraditionalType
 	AnalyzeType
+)
+
+// Constant for Enum Type - SelectIntoType
+const (
+	IntoOutfile SelectIntoType = iota
+	IntoOutfileS3
+	IntoDumpfile
+)
+
+// Constant for Enum Type - CollateAndCharsetType
+const (
+	CollateType CollateAndCharsetType = iota
+	CharacterSetType
+)
+
+// LockType constants
+const (
+	UnknownLockType LockType = iota
+	Read
+	ReadLocal
+	Write
+	LowPriorityWrite
+)
+
+// ShowCommandType constants
+const (
+	UnknownCommandType ShowCommandType = iota
+	Charset
+	Collation
+	Database
+	Function
+	Privilege
+	Procedure
+	StatusGlobal
+	StatusSession
+	VariableGlobal
+	VariableSession
+)
+
+// DropKeyType constants
+const (
+	PrimaryKeyType DropKeyType = iota
+	ForeignKeyType
+	NormalKeyType
+)
+
+// LockOptionType constants
+const (
+	DefaultType LockOptionType = iota
+	NoneType
+	SharedType
+	ExclusiveType
 )

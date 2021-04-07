@@ -374,8 +374,7 @@ func TestChangeTypeSemiSync(t *testing.T) {
 	master, replica, rdonly1, rdonly2 := tab1, tab2, tab3, tab4
 
 	// Updated rdonly tablet and set tablet type to rdonly
-	// TODO: replace with ChangeTabletType once ChangeSlaveType is removed
-	err := clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeSlaveType", rdonly1.Alias, "rdonly")
+	err := clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", rdonly1.Alias, "rdonly")
 	require.NoError(t, err)
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", rdonly2.Alias, "rdonly")
 	require.NoError(t, err)

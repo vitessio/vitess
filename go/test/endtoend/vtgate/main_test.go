@@ -87,14 +87,14 @@ create table t4(
 	id1 bigint,
 	id2 varchar(10),
 	primary key(id1)
-) Engine=InnoDB;
+) ENGINE=InnoDB DEFAULT charset=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 create table t4_id2_idx(
 	id2 varchar(10),
 	id1 bigint,
 	keyspace_id varbinary(50),
     primary key(id2, id1)
-) Engine=InnoDB;
+) Engine=InnoDB DEFAULT charset=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 create table t5_null_vindex(
 	id bigint not null,
@@ -127,7 +127,16 @@ create table t7_xxhash_idx(
 	phone bigint,
 	keyspace_id varbinary(50),
 	primary key(phone, keyspace_id)
-) Engine=InnoDB;`
+) Engine=InnoDB;
+
+create table t7_fk(
+	id bigint,
+	t7_uid varchar(50),
+    primary key(id),
+    CONSTRAINT t7_fk_ibfk_1 foreign key (t7_uid) references t7_xxhash(uid)
+    on delete set null on update cascade
+) Engine=InnoDB;
+`
 
 	VSchema = `
 {
@@ -353,9 +362,25 @@ create table t7_xxhash_idx(
           "name": "unicode_loose_xxhash"
         }
       ]
+    },
+	"t7_fk": {
+      "column_vindexes": [
+        {
+          "column": "t7_uid",
+          "name": "unicode_loose_xxhash"
+        }
+      ]
     }
   }
 }`
+	routingRules = `
+{"rules": [
+  {
+    "from_table": "ks.t1000",
+	"to_tables": ["ks.t1"]
+  }
+]}
+`
 )
 
 func TestMain(m *testing.M) {
@@ -379,6 +404,16 @@ func TestMain(m *testing.M) {
 			VSchema:   VSchema,
 		}
 		err = clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 1, true)
+		if err != nil {
+			return 1
+		}
+
+		err = clusterInstance.VtctlclientProcess.ApplyRoutingRules(routingRules)
+		if err != nil {
+			return 1
+		}
+
+		err = clusterInstance.VtctlclientProcess.ExecuteCommand("RebuildVSchemaGraph")
 		if err != nil {
 			return 1
 		}

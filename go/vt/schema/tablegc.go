@@ -22,8 +22,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
-
 	"vitess.io/vitess/go/textutil"
 )
 
@@ -44,12 +42,9 @@ const (
 	DropTableGCState TableGCState = "DROP"
 )
 
-const (
-	readableTimeFormat = "20060102150405"
-)
-
 var (
-	gcTableNameRegexp = regexp.MustCompile(`^_vt_(HOLD|PURGE|EVAC|DROP)_[0-f]{32}_([0-9]{14})$`)
+	gcUUIDRegexp      = regexp.MustCompile(`^[0-f]{32}$`)
+	gcTableNameRegexp = regexp.MustCompile(`^_vt_(HOLD|PURGE|EVAC|DROP)_([0-f]{32})_([0-9]{14})$`)
 
 	gcStates = map[string]TableGCState{
 		string(HoldTableGCState):  HoldTableGCState,
@@ -59,43 +54,37 @@ var (
 	}
 )
 
-// CreateUUID creates a globally unique ID, returned as non-delimited string
-// example result: 55d00cdce6ab11eabfe60242ac1c000d
-func createUUID() (string, error) {
-	u, err := uuid.NewUUID()
+// IsGCUUID answers 'true' when the given string is an GC UUID, e.g.:
+// a0638f6bec7b11ea9bf8000d3a9b8a9a
+func IsGCUUID(uuid string) bool {
+	return gcUUIDRegexp.MatchString(uuid)
+}
+
+// generateGCTableName creates a GC table name, based on desired state and time, and with optional preset UUID.
+// If uuid is given, then it must be in GC-UUID format. If empty, the function auto-generates a UUID.
+func generateGCTableName(state TableGCState, uuid string, t time.Time) (tableName string, err error) {
+	if uuid == "" {
+		uuid, err = createUUID("")
+	}
 	if err != nil {
 		return "", err
 	}
-	result := u.String()
-	result = strings.Replace(result, "-", "", -1)
-	return result, nil
-}
-
-// ToReadableTimestamp returns a timestamp, in seconds resolution, that is human readable
-// (as opposed to unix timestamp which is just a number)
-// Example: for Aug 25 2020, 16:04:25 we return "20200825160425"
-func ToReadableTimestamp(t time.Time) string {
-	return t.Format(readableTimeFormat)
-}
-
-func generateGCTableName(state TableGCState, t time.Time) (string, error) {
-	uuid, err := createUUID()
-	if err != nil {
-		return "", err
+	if !IsGCUUID(uuid) {
+		return "", fmt.Errorf("Not a valid GC UUID format: %s", uuid)
 	}
 	timestamp := ToReadableTimestamp(t)
 	return fmt.Sprintf("_vt_%s_%s_%s", state, uuid, timestamp), nil
 }
 
 // AnalyzeGCTableName analyzes a given table name to see if it's a GC table, and if so, parse out
-// its state and timestamp
-func AnalyzeGCTableName(tableName string) (isGCTable bool, state TableGCState, t time.Time, err error) {
+// its state, uuid, and timestamp
+func AnalyzeGCTableName(tableName string) (isGCTable bool, state TableGCState, uuid string, t time.Time, err error) {
 	submatch := gcTableNameRegexp.FindStringSubmatch(tableName)
 	if len(submatch) == 0 {
-		return false, state, t, nil
+		return false, state, uuid, t, nil
 	}
-	t, err = time.Parse(readableTimeFormat, submatch[2])
-	return true, TableGCState(submatch[1]), t, err
+	t, err = time.Parse(readableTimeFormat, submatch[3])
+	return true, TableGCState(submatch[1]), submatch[2], t, err
 }
 
 // IsGCTableName answers 'true' when the given table name stands for a GC table
@@ -103,13 +92,18 @@ func IsGCTableName(tableName string) bool {
 	return gcTableNameRegexp.MatchString(tableName)
 }
 
-// GenerateRenameStatement generates a "RENAME TABLE" statement, where a table is renamed to a GC table.
-func GenerateRenameStatement(fromTableName string, state TableGCState, t time.Time) (statement string, toTableName string, err error) {
-	toTableName, err = generateGCTableName(state, t)
+// GenerateRenameStatementWithUUID generates a "RENAME TABLE" statement, where a table is renamed to a GC table, with preset UUID
+func GenerateRenameStatementWithUUID(fromTableName string, state TableGCState, uuid string, t time.Time) (statement string, toTableName string, err error) {
+	toTableName, err = generateGCTableName(state, uuid, t)
 	if err != nil {
 		return "", "", err
 	}
 	return fmt.Sprintf("RENAME TABLE `%s` TO %s", fromTableName, toTableName), toTableName, nil
+}
+
+// GenerateRenameStatement generates a "RENAME TABLE" statement, where a table is renamed to a GC table.
+func GenerateRenameStatement(fromTableName string, state TableGCState, t time.Time) (statement string, toTableName string, err error) {
+	return GenerateRenameStatementWithUUID(fromTableName, state, "", t)
 }
 
 // ParseGCLifecycle parses a comma separated list of gc states and returns a map of indicated states

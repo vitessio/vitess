@@ -29,3 +29,33 @@
     "Query": "select is_free_lock('xyz') from dual"
   }
 }
+
+# lock tables read
+"lock tables t as x read local"
+{
+  "QueryType": "LOCK_TABLES",
+  "Original": "lock tables t as x read local",
+  "Instructions": {
+    "OperatorType": "Rows"
+  }
+}
+
+# lock tables write
+"lock tables t low_priority write"
+{
+  "QueryType": "LOCK_TABLES",
+  "Original": "lock tables t low_priority write",
+  "Instructions": {
+    "OperatorType": "Rows"
+  }
+}
+
+# unlock tables
+"unlock tables"
+{
+  "QueryType": "UNLOCK_TABLES",
+  "Original": "unlock tables",
+  "Instructions": {
+    "OperatorType": "Rows"
+  }
+}

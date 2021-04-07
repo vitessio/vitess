@@ -19,8 +19,10 @@ package consultopo
 import (
 	"path"
 
+	"context"
+
 	"github.com/hashicorp/consul/api"
-	"golang.org/x/net/context"
+
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 

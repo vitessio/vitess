@@ -48,16 +48,21 @@ func (vtctlclient *VtctlClientProcess) InitShardMaster(Keyspace string, Shard st
 }
 
 // ApplySchemaWithOutput applies SQL schema to the keyspace
-func (vtctlclient *VtctlClientProcess) ApplySchemaWithOutput(Keyspace string, SQL string) (result string, err error) {
-	return vtctlclient.ExecuteCommandWithOutput(
+func (vtctlclient *VtctlClientProcess) ApplySchemaWithOutput(Keyspace string, SQL string, ddlStrategy string) (result string, err error) {
+	args := []string{
 		"ApplySchema",
 		"-sql", SQL,
-		Keyspace)
+	}
+	if ddlStrategy != "" {
+		args = append(args, "-ddl_strategy", ddlStrategy)
+	}
+	args = append(args, Keyspace)
+	return vtctlclient.ExecuteCommandWithOutput(args...)
 }
 
 // ApplySchema applies SQL schema to the keyspace
 func (vtctlclient *VtctlClientProcess) ApplySchema(Keyspace string, SQL string) (err error) {
-	_, err = vtctlclient.ApplySchemaWithOutput(Keyspace, SQL)
+	_, err = vtctlclient.ApplySchemaWithOutput(Keyspace, SQL, "direct")
 	return err
 }
 
@@ -68,6 +73,11 @@ func (vtctlclient *VtctlClientProcess) ApplyVSchema(Keyspace string, JSON string
 		"-vschema", JSON,
 		Keyspace,
 	)
+}
+
+// ApplyRoutingRules does it
+func (vtctlclient *VtctlClientProcess) ApplyRoutingRules(JSON string) (err error) {
+	return vtctlclient.ExecuteCommand("ApplyRoutingRules", "-rules", JSON)
 }
 
 // OnlineDDLShowRecent responds with recent schema migration list
@@ -87,6 +97,15 @@ func (vtctlclient *VtctlClientProcess) OnlineDDLCancelMigration(Keyspace, uuid s
 		Keyspace,
 		"cancel",
 		uuid,
+	)
+}
+
+// OnlineDDLCancelAllMigrations cancels all migrations for a keyspace
+func (vtctlclient *VtctlClientProcess) OnlineDDLCancelAllMigrations(Keyspace string) (result string, err error) {
+	return vtctlclient.ExecuteCommandWithOutput(
+		"OnlineDDL",
+		Keyspace,
+		"cancel-all",
 	)
 }
 

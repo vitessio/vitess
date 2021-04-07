@@ -26,9 +26,10 @@ import (
 
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
 
+	"context"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
@@ -203,12 +204,12 @@ func TestQueryExecutorPlans(t *testing.T) {
 	}, {
 		input: "alter table test_table add zipcode int",
 		dbResponses: []dbResponse{{
-			query:  "alter table test_table add zipcode int",
+			query:  "alter table test_table add column zipcode int",
 			result: dmlResult,
 		}},
 		resultWant: dmlResult,
 		planWant:   "DDL",
-		logWant:    "alter table test_table add zipcode int",
+		logWant:    "alter table test_table add column zipcode int",
 	}, {
 		input: "savepoint a",
 		dbResponses: []dbResponse{{
@@ -219,6 +220,26 @@ func TestQueryExecutorPlans(t *testing.T) {
 		planWant:   "Savepoint",
 		logWant:    "savepoint a",
 		inTxWant:   "savepoint a",
+	}, {
+		input: "create index a on user(id)",
+		dbResponses: []dbResponse{{
+			query:  "alter table user add index a (id)",
+			result: emptyResult,
+		}},
+		resultWant: emptyResult,
+		planWant:   "DDL",
+		logWant:    "alter table user add index a (id)",
+		inTxWant:   "alter table user add index a (id)",
+	}, {
+		input: "create index a on user(id1 + id2)",
+		dbResponses: []dbResponse{{
+			query:  "create index a on user(id1 + id2)",
+			result: emptyResult,
+		}},
+		resultWant: emptyResult,
+		planWant:   "DDL",
+		logWant:    "create index a on user(id1 + id2)",
+		inTxWant:   "create index a on user(id1 + id2)",
 	}, {
 		input: "ROLLBACK work to SAVEPOINT a",
 		dbResponses: []dbResponse{{
@@ -796,9 +817,8 @@ func TestQueryExecutorTableAclDualTableExempt(t *testing.T) {
 	db := setUpQueryExecutorTest(t)
 	defer db.Close()
 
-	username := "Sleve McDichael"
 	callerID := &querypb.VTGateCallerID{
-		Username: username,
+		Username: "basic_username",
 	}
 	ctx := callerid.NewContext(context.Background(), nil, callerID)
 
@@ -828,6 +848,14 @@ func TestQueryExecutorTableAclDualTableExempt(t *testing.T) {
 
 	// table acl should be ignored when querying against dual table
 	query = "select @@version_comment from dual limit 1"
+	ctx = callerid.NewContext(context.Background(), nil, callerID)
+	qre = newTestQueryExecutor(ctx, tsv, query, 0)
+	_, err = qre.Execute()
+	if err != nil {
+		t.Fatalf("qre.Execute: %v, want: nil", err)
+	}
+
+	query = "(select 0 as x from dual where 1 != 1) union (select 1 as y from dual where 1 != 1)"
 	ctx = callerid.NewContext(context.Background(), nil, callerID)
 	qre = newTestQueryExecutor(ctx, tsv, query, 0)
 	_, err = qre.Execute()
@@ -1225,6 +1253,20 @@ func getQueryExecutorSupportedQueries(testTableHasMultipleUniqueKeys bool) map[s
 				{sqltypes.NewVarBinary("fakedb server")},
 			},
 			RowsAffected: 1,
+		},
+		"(select 0 as x from dual where 1 != 1) union (select 1 as y from dual where 1 != 1)": {
+			Fields: []*querypb.Field{{
+				Type: sqltypes.Uint64,
+			}},
+			Rows:         [][]sqltypes.Value{},
+			RowsAffected: 0,
+		},
+		"(select 0 as x from dual where 1 != 1) union (select 1 as y from dual where 1 != 1) limit 10001": {
+			Fields: []*querypb.Field{{
+				Type: sqltypes.Uint64,
+			}},
+			Rows:         [][]sqltypes.Value{},
+			RowsAffected: 0,
 		},
 		mysql.BaseShowTables: {
 			Fields: mysql.BaseShowTablesFields,

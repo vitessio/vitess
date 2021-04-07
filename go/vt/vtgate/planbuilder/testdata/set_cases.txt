@@ -104,10 +104,6 @@
   }
 }
 
-# only allow whitelisted functions
-"set @foo = BAD_FUNC()"
-"expression not supported for SET: BAD_FUNC()"
-
 # single sysvar cases
 "SET sql_mode = 'STRICT_ALL_TABLES,NO_AUTO_VALUE_ON_ZERO'"
 {
@@ -470,6 +466,33 @@
         "Type": "SysVarAware",
         "Name": "autocommit",
         "Expr": "INT64(1)"
+      }
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "SingleRow"
+      }
+    ]
+  }
+}
+
+# set global autocommit to default
+"set global autocommit = off"
+{
+  "QueryType": "SET",
+  "Original": "set global autocommit = off",
+  "Instructions": {
+    "OperatorType": "Set",
+    "Ops": [
+      {
+        "Type": "SysVarCheckAndIgnore",
+        "Name": "autocommit",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": {},
+        "Expr": "0"
       }
     ],
     "Inputs": [

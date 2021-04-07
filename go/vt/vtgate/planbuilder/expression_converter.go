@@ -20,9 +20,7 @@ import (
 	"fmt"
 	"strings"
 
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
@@ -86,11 +84,6 @@ func (ec *expressionConverter) convert(astExpr sqlparser.Expr, boolean, identifi
 	if err != nil {
 		if err != sqlparser.ErrExprNotSupported {
 			return nil, err
-		}
-		// We have an expression that we can't handle at the vtgate level
-		if !expressionOkToDelegateToTablet(astExpr) {
-			// Uh-oh - this expression is not even safe to delegate to the tablet. Give up.
-			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "expression not supported for SET: %s", sqlparser.String(astExpr))
 		}
 		evalExpr = &evalengine.Column{Offset: len(ec.tabletExpressions)}
 		ec.tabletExpressions = append(ec.tabletExpressions, astExpr)

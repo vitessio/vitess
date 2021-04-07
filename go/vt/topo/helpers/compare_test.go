@@ -19,7 +19,7 @@ package helpers
 import (
 	"testing"
 
-	"golang.org/x/net/context"
+	"context"
 )
 
 func TestBasicCompare(t *testing.T) {

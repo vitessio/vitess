@@ -21,7 +21,7 @@ import (
 	"html/template"
 	"net/http"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/vt/log"
