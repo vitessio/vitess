@@ -72,7 +72,7 @@ const (
 		migration_status,
 		tablet
 	) VALUES (
-		%a, %a, %a, %a, %a, %a, %a, %a, %a, FROM_UNIXTIME(0), %a, %a, %a
+		%a, %a, %a, %a, %a, %a, %a, %a, %a, FROM_UNIXTIME(NOW()), %a, %a, %a
 	)`
 
 	sqlScheduleSingleMigration = `UPDATE _vt.schema_migrations
