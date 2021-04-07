@@ -770,6 +770,12 @@ func TestSplitStatementToPieces(t *testing.T) {
 	}, {
 		input: "select * from table",
 	}, {
+		input:  "select * from table;",
+		output: "select * from table",
+	}, {
+		input:  "select * from table;   ",
+		output: "select * from table",
+	}, {
 		input:  "select * from table1; select * from table2;",
 		output: "select * from table1; select * from table2",
 	}, {
