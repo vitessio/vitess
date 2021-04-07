@@ -6589,4 +6589,7 @@
 2021-04-07T18:45:26Z,local_example,https://github.com/vitessio/vitess/actions/runs/727000278
 2021-04-07T19:48:33Z,local_example,https://github.com/vitessio/vitess/actions/runs/727168432
 2021-04-07T19:48:33Z,local_example,https://github.com/vitessio/vitess/actions/runs/727168459
+2021-04-07T21:00:48Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/727343156
+2021-04-07T21:00:48Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/727343147
+2021-04-07T21:00:48Z,unit_race,https://github.com/vitessio/vitess/actions/runs/727343180
 2021-04-07T21:01:13Z,unit_race,https://github.com/vitessio/vitess/actions/runs/727344316
