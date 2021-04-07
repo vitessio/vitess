@@ -52,7 +52,7 @@ func NewStreamConsolidator(maxMemoryTotal, maxMemoryQuery int64, cleanup StreamC
 	}
 }
 
-// StreamCallback is a function that yields every Result object from a streaming query
+// StreamCallback is a function that is called with every Result object from a streaming query
 type StreamCallback func(result *sqltypes.Result) error
 
 // SetBlocking sets whether fanning out should block to wait for slower clients to
