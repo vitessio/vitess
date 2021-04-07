@@ -6595,3 +6595,5 @@
 2021-04-07T21:00:48Z,unit_race,https://github.com/vitessio/vitess/actions/runs/727343180
 2021-04-07T21:01:13Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/727344359
 2021-04-07T21:01:13Z,unit_race,https://github.com/vitessio/vitess/actions/runs/727344316
+2021-04-07T23:27:35Z,Cluster (onlineddl_ghost),https://github.com/vitessio/vitess/actions/runs/727676786
+2021-04-07T23:27:35Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/727676815
