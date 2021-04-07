@@ -3975,7 +3975,7 @@ separator_opt:
   }
 | SEPARATOR STRING
   {
-    $$ = " separator '"+string($2)+"'"
+    $$ = string($2)
   }
 
 when_expression_list:

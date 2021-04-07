@@ -4250,7 +4250,12 @@ type GroupConcatExpr struct {
 
 // Format formats the node
 func (node *GroupConcatExpr) Format(buf *TrackedBuffer) {
-	buf.Myprintf("group_concat(%s%v%v%s)", node.Distinct, node.Exprs, node.OrderBy, node.Separator)
+	sep := node.Separator
+	if sep != "" {
+		sep = " separator " + "'" + sep + "'"
+	}
+
+	buf.Myprintf("group_concat(%s%v%v%s)", node.Distinct, node.Exprs, node.OrderBy, sep)
 }
 
 func (node *GroupConcatExpr) walkSubtree(visit Visit) error {

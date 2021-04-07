@@ -9555,7 +9555,7 @@ yydefault:
 		yyDollar = yyS[yypt-2 : yypt+1]
 //line sql.y:3977
 		{
-			yyVAL.str = " separator '" + string(yyDollar[2].bytes) + "'"
+			yyVAL.str = string(yyDollar[2].bytes)
 		}
 	case 791:
 		yyDollar = yyS[yypt-1 : yypt+1]
