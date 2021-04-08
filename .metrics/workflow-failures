@@ -6652,4 +6652,9 @@
 2021-04-08T09:41:30Z,local_example,https://github.com/vitessio/vitess/actions/runs/729051344
 2021-04-08T09:41:30Z,local_example,https://github.com/vitessio/vitess/actions/runs/729051381
 2021-04-08T09:41:30Z,unit_race,https://github.com/vitessio/vitess/actions/runs/729051384
+2021-04-08T11:09:04Z,Cluster (onlineddl_singleton),https://github.com/vitessio/vitess/actions/runs/729297450
 2021-04-08T11:09:04Z,unit_race,https://github.com/vitessio/vitess/actions/runs/729297442
+2021-04-08T11:12:10Z,Cluster (onlineddl_singleton),https://github.com/vitessio/vitess/actions/runs/729305709
+2021-04-08T11:12:10Z,Cluster (upgrade),https://github.com/vitessio/vitess/actions/runs/729305739
+2021-04-08T11:12:10Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/729305744
+2021-04-08T11:12:10Z,unit_race,https://github.com/vitessio/vitess/actions/runs/729305713
