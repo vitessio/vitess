@@ -6696,6 +6696,7 @@
 2021-04-08T15:11:04Z,local_example,https://github.com/vitessio/vitess/actions/runs/729999994
 2021-04-08T15:11:04Z,region_example,https://github.com/vitessio/vitess/actions/runs/729999981
 2021-04-08T15:13:44Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/730008112
+2021-04-08T15:20:06Z,unit_race,https://github.com/vitessio/vitess/actions/runs/730027375
 2021-04-08T15:25:17Z,Cluster (onlineddl_ghost),https://github.com/vitessio/vitess/actions/runs/730042986
 2021-04-08T15:25:43Z,Cluster (24),https://github.com/vitessio/vitess/actions/runs/730044396
 2021-04-08T15:25:43Z,Cluster (onlineddl_vrepl_stress),https://github.com/vitessio/vitess/actions/runs/730044352
