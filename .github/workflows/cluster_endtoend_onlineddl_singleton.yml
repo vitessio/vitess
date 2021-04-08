@@ -1,11 +1,11 @@
 # DO NOT MODIFY: THIS FILE IS GENERATED USING "make generate_ci_workflows"
 
-name: Cluster (tabletmanager_throttler_custom_config)
+name: Cluster (onlineddl_singleton)
 on: [push, pull_request]
 jobs:
 
   build:
-    name: Run endtoend tests on Cluster (tabletmanager_throttler_custom_config)
+    name: Run endtoend tests on Cluster (onlineddl_singleton)
     runs-on: ubuntu-18.04
 
     steps:
@@ -37,4 +37,4 @@ jobs:
       timeout-minutes: 30
       run: |
         source build.env
-        eatmydata -- go run test.go -docker=false -print-log -follow -shard tabletmanager_throttler_custom_config
+        eatmydata -- go run test.go -docker=false -print-log -follow -shard onlineddl_singleton

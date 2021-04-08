@@ -1,0 +1,350 @@
+/*
+Copyright 2021 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package singleton
+
+import (
+	"flag"
+	"fmt"
+	"os"
+	"path"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+
+	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/vt/schema"
+
+	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/endtoend/onlineddl"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+type WriteMetrics struct {
+	mu                                                      sync.Mutex
+	insertsAttempts, insertsFailures, insertsNoops, inserts int64
+	updatesAttempts, updatesFailures, updatesNoops, updates int64
+	deletesAttempts, deletesFailures, deletesNoops, deletes int64
+}
+
+func (w *WriteMetrics) Clear() {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	w.inserts = 0
+	w.updates = 0
+	w.deletes = 0
+
+	w.insertsAttempts = 0
+	w.insertsFailures = 0
+	w.insertsNoops = 0
+
+	w.updatesAttempts = 0
+	w.updatesFailures = 0
+	w.updatesNoops = 0
+
+	w.deletesAttempts = 0
+	w.deletesFailures = 0
+	w.deletesNoops = 0
+}
+
+func (w *WriteMetrics) String() string {
+	return fmt.Sprintf(`WriteMetrics: inserts-deletes=%d, updates-deletes=%d,
+insertsAttempts=%d, insertsFailures=%d, insertsNoops=%d, inserts=%d,
+updatesAttempts=%d, updatesFailures=%d, updatesNoops=%d, updates=%d,
+deletesAttempts=%d, deletesFailures=%d, deletesNoops=%d, deletes=%d,
+`,
+		w.inserts-w.deletes, w.updates-w.deletes,
+		w.insertsAttempts, w.insertsFailures, w.insertsNoops, w.inserts,
+		w.updatesAttempts, w.updatesFailures, w.updatesNoops, w.updates,
+		w.deletesAttempts, w.deletesFailures, w.deletesNoops, w.deletes,
+	)
+}
+
+var (
+	clusterInstance *cluster.LocalProcessCluster
+	vtParams        mysql.ConnParams
+
+	hostname              = "localhost"
+	keyspaceName          = "ks"
+	cell                  = "zone1"
+	schemaChangeDirectory = ""
+	tableName             = `stress_test`
+	createStatement       = `
+		CREATE TABLE stress_test (
+			id bigint(20) not null,
+			rand_val varchar(32) null default '',
+			hint_col varchar(64) not null default 'just-created',
+			created_timestamp timestamp not null default current_timestamp,
+			updates int unsigned not null default 0,
+			PRIMARY KEY (id),
+			key created_idx(created_timestamp),
+			key updates_idx(updates)
+		) ENGINE=InnoDB
+	`
+	// We will run this query with "gh-ost --max-load=Threads_running=1"
+	alterTableThrottlingStatement = `
+		ALTER TABLE stress_test DROP COLUMN created_timestamp
+	`
+	// A trivial statement which must succeed and does not change the schema
+	alterTableTrivialStatement = `
+		ALTER TABLE stress_test ENGINE=InnoDB
+	`
+)
+
+func TestMain(m *testing.M) {
+	defer cluster.PanicHandler(nil)
+	flag.Parse()
+
+	exitcode, err := func() (int, error) {
+		clusterInstance = cluster.NewCluster(cell, hostname)
+		schemaChangeDirectory = path.Join("/tmp", fmt.Sprintf("schema_change_dir_%d", clusterInstance.GetAndReserveTabletUID()))
+		defer os.RemoveAll(schemaChangeDirectory)
+		defer clusterInstance.Teardown()
+
+		if _, err := os.Stat(schemaChangeDirectory); os.IsNotExist(err) {
+			_ = os.Mkdir(schemaChangeDirectory, 0700)
+		}
+
+		clusterInstance.VtctldExtraArgs = []string{
+			"-schema_change_dir", schemaChangeDirectory,
+			"-schema_change_controller", "local",
+			"-schema_change_check_interval", "1"}
+
+		clusterInstance.VtTabletExtraArgs = []string{
+			"-enable-lag-throttler",
+			"-throttle_threshold", "1s",
+			"-heartbeat_enable",
+			"-heartbeat_interval", "250ms",
+			"-migration_check_interval", "5s",
+		}
+		clusterInstance.VtGateExtraArgs = []string{
+			"-ddl_strategy", "online",
+		}
+
+		if err := clusterInstance.StartTopo(); err != nil {
+			return 1, err
+		}
+
+		// Start keyspace
+		keyspace := &cluster.Keyspace{
+			Name: keyspaceName,
+		}
+
+		// No need for replicas in this stress test
+		if err := clusterInstance.StartKeyspace(*keyspace, []string{"1"}, 0, false); err != nil {
+			return 1, err
+		}
+
+		vtgateInstance := clusterInstance.NewVtgateInstance()
+		// set the gateway we want to use
+		vtgateInstance.GatewayImplementation = "tabletgateway"
+		// Start vtgate
+		if err := vtgateInstance.Setup(); err != nil {
+			return 1, err
+		}
+		// ensure it is torn down during cluster TearDown
+		clusterInstance.VtgateProcess = *vtgateInstance
+		vtParams = mysql.ConnParams{
+			Host: clusterInstance.Hostname,
+			Port: clusterInstance.VtgateMySQLPort,
+		}
+
+		return m.Run(), nil
+	}()
+	if err != nil {
+		fmt.Printf("%v\n", err)
+		os.Exit(1)
+	} else {
+		os.Exit(exitcode)
+	}
+
+}
+
+func TestSchemaChange(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	shards := clusterInstance.Keyspaces[0].Shards
+	require.Equal(t, 1, len(shards))
+
+	var uuids []string
+	// CREATE
+	t.Run("CREATE TABLE", func(t *testing.T) {
+		// The table does not exist
+		uuid := testOnlineDDLStatement(t, createStatement, "online -singleton", "vtgate", "", "", false)
+		uuids = append(uuids, uuid)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		checkTable(t, tableName, true)
+	})
+	t.Run("revert CREATE TABLE", func(t *testing.T) {
+		// The table existed, so it will now be dropped (renamed)
+		uuid := testRevertMigration(t, uuids[len(uuids)-1], "", false)
+		uuids = append(uuids, uuid)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		checkTable(t, tableName, false)
+	})
+	t.Run("revert revert CREATE TABLE", func(t *testing.T) {
+		// Table was dropped (renamed) so it will now be restored
+		uuid := testRevertMigration(t, uuids[len(uuids)-1], "", false)
+		uuids = append(uuids, uuid)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		checkTable(t, tableName, true)
+	})
+
+	var throttledUUID string
+	t.Run("throttled migration", func(t *testing.T) {
+		throttledUUID = testOnlineDDLStatement(t, alterTableThrottlingStatement, "gh-ost -singleton --max-load=Threads_running=1", "vtgate", "hint_col", "", false)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, throttledUUID, schema.OnlineDDLStatusRunning)
+	})
+	t.Run("failed singleton migration, vtgate", func(t *testing.T) {
+		uuid := testOnlineDDLStatement(t, alterTableThrottlingStatement, "gh-ost -singleton --max-load=Threads_running=1", "vtgate", "hint_col", "rejected", true)
+		assert.Empty(t, uuid)
+	})
+	t.Run("failed singleton migration, vtctl", func(t *testing.T) {
+		uuid := testOnlineDDLStatement(t, alterTableThrottlingStatement, "gh-ost -singleton --max-load=Threads_running=1", "vtctl", "hint_col", "rejected", true)
+		assert.Empty(t, uuid)
+	})
+	t.Run("failed revert migration", func(t *testing.T) {
+		uuid := testRevertMigration(t, throttledUUID, "rejected", true)
+		assert.Empty(t, uuid)
+	})
+	t.Run("terminate throttled migration", func(t *testing.T) {
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, throttledUUID, schema.OnlineDDLStatusRunning)
+		onlineddl.CheckCancelMigration(t, &vtParams, shards, throttledUUID, true)
+		time.Sleep(2 * time.Second)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, throttledUUID, schema.OnlineDDLStatusFailed)
+	})
+	t.Run("successful online alter, vtctl", func(t *testing.T) {
+		uuid := testOnlineDDLStatement(t, alterTableTrivialStatement, "gh-ost -singleton", "vtctl", "hint_col", "", false)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, false)
+		onlineddl.CheckRetryMigration(t, &vtParams, shards, uuid, false)
+	})
+	t.Run("successful online alter, vtgate", func(t *testing.T) {
+		uuid := testOnlineDDLStatement(t, alterTableTrivialStatement, "gh-ost -singleton", "vtgate", "hint_col", "", false)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, false)
+		onlineddl.CheckRetryMigration(t, &vtParams, shards, uuid, false)
+	})
+
+	// Last two tests (we run an incomplete migration)
+	t.Run("submit successful migration, no wait, vtgate", func(t *testing.T) {
+		_ = testOnlineDDLStatement(t, alterTableTrivialStatement, "gh-ost -singleton", "vtgate", "hint_col", "", true)
+	})
+	t.Run("fail submit migration, no wait, vtgate", func(t *testing.T) {
+		_ = testOnlineDDLStatement(t, alterTableTrivialStatement, "gh-ost -singleton", "vtgate", "hint_col", "rejected", true)
+	})
+}
+
+// testOnlineDDLStatement runs an online DDL, ALTER statement
+func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy string, executeStrategy string, expectHint string, expectError string, skipWait bool) (uuid string) {
+	strategySetting, err := schema.ParseDDLStrategy(ddlStrategy)
+	require.NoError(t, err)
+
+	if executeStrategy == "vtgate" {
+		result := onlineddl.VtgateExecDDL(t, &vtParams, ddlStrategy, alterStatement, expectError)
+		if result != nil {
+			row := result.Named().Row()
+			if row != nil {
+				uuid = row.AsString("uuid", "")
+			}
+		}
+	} else {
+		output, err := clusterInstance.VtctlclientProcess.ApplySchemaWithOutput(keyspaceName, alterStatement, ddlStrategy)
+		if expectError == "" {
+			assert.NoError(t, err)
+			uuid = output
+		} else {
+			assert.Error(t, err)
+			assert.Contains(t, output, expectError)
+		}
+	}
+	uuid = strings.TrimSpace(uuid)
+	fmt.Println("# Generated UUID (for debug purposes):")
+	fmt.Printf("<%s>\n", uuid)
+
+	if !strategySetting.Strategy.IsDirect() && !skipWait {
+		time.Sleep(time.Second * 20)
+	}
+
+	if expectHint != "" {
+		checkMigratedTable(t, tableName, expectHint)
+	}
+	return uuid
+}
+
+// testRevertMigration reverts a given migration
+func testRevertMigration(t *testing.T, revertUUID string, expectError string, skipWait bool) (uuid string) {
+	revertQuery := fmt.Sprintf("revert vitess_migration '%s'", revertUUID)
+	r := onlineddl.VtgateExecDDL(t, &vtParams, "online -singleton", revertQuery, expectError)
+
+	if expectError == "" {
+		require.NotNil(t, r)
+		row := r.Named().Row()
+		require.NotNil(t, row)
+		uuid = row["uuid"].ToString()
+
+		fmt.Println("# Generated UUID (for debug purposes):")
+		fmt.Printf("<%s>\n", uuid)
+	}
+	if !skipWait {
+		time.Sleep(time.Second * 20)
+	}
+	return uuid
+}
+
+// checkTable checks the number of tables in the first two shards.
+func checkTable(t *testing.T, showTableName string, expectExists bool) bool {
+	expectCount := 0
+	if expectExists {
+		expectCount = 1
+	}
+	for i := range clusterInstance.Keyspaces[0].Shards {
+		if !checkTablesCount(t, clusterInstance.Keyspaces[0].Shards[i].Vttablets[0], showTableName, expectCount) {
+			return false
+		}
+	}
+	return true
+}
+
+// checkTablesCount checks the number of tables in the given tablet
+func checkTablesCount(t *testing.T, tablet *cluster.Vttablet, showTableName string, expectCount int) bool {
+	query := fmt.Sprintf(`show tables like '%%%s%%';`, showTableName)
+	queryResult, err := tablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
+	require.Nil(t, err)
+	return assert.Equal(t, expectCount, len(queryResult.Rows))
+}
+
+// checkMigratedTables checks the CREATE STATEMENT of a table after migration
+func checkMigratedTable(t *testing.T, tableName, expectHint string) {
+	for i := range clusterInstance.Keyspaces[0].Shards {
+		createStatement := getCreateTableStatement(t, clusterInstance.Keyspaces[0].Shards[i].Vttablets[0], tableName)
+		assert.Contains(t, createStatement, expectHint)
+	}
+}
+
+// getCreateTableStatement returns the CREATE TABLE statement for a given table
+func getCreateTableStatement(t *testing.T, tablet *cluster.Vttablet, tableName string) (statement string) {
+	queryResult, err := tablet.VttabletProcess.QueryTablet(fmt.Sprintf("show create table %s;", tableName), keyspaceName, true)
+	require.Nil(t, err)
+
+	assert.Equal(t, len(queryResult.Rows), 1)
+	assert.Equal(t, len(queryResult.Rows[0]), 2) // table name, create statement
+	statement = queryResult.Rows[0][1].ToString()
+	return statement
+}
