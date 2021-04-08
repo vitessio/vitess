@@ -330,8 +330,6 @@ func (throttler *Throttler) createThrottlerUser(ctx context.Context) (password s
 		// any query that writes to the binary log, CREATE USER does not hang.
 		// The simplest such query is FLUSH STATUS. Other options are FLUSH PRIVILEGES or similar.
 		// The bug was found in MySQL 8.0.21, and not found in 5.7.30
-		// at this time, Vitess only supports 5.7 an ddoes not support 8.0,
-		// but please keep this code in anticipation of supporting 8.0
 		// - shlomi
 		simpleBinlogQuery := `FLUSH STATUS`
 		if _, err := conn.ExecuteFetch(simpleBinlogQuery, 0, false); err != nil {
