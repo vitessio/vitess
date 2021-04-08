@@ -73,6 +73,17 @@ func (result *Result) Repair(fields []*querypb.Field) {
 	}
 }
 
+// ReplaceKeyspace replaces all the non-empty Database identifiers in the result
+// set with the given keyspace name
+func (result *Result) ReplaceKeyspace(keyspace string) {
+	// Change database name in mysql output to the keyspace name
+	for _, f := range result.Fields {
+		if f.Database != "" {
+			f.Database = keyspace
+		}
+	}
+}
+
 // Copy creates a deep copy of Result.
 func (result *Result) Copy() *Result {
 	out := &Result{
