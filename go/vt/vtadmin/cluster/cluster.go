@@ -633,7 +633,7 @@ func (c *Cluster) getTabletsToQueryForSchemas(ctx context.Context, keyspace stri
 		tabletsToQuery := make([]*vtadminpb.Tablet, 0, len(shards))
 
 		for _, shard := range shards {
-			if !shard.Shard.IsMasterServing {
+			if !(shard.Shard.IsMasterServing && shard.Shard.MasterAlias != nil) {
 				log.Infof("%s/%s is not serving; ignoring ...", keyspace, shard.Name)
 				continue
 			}
