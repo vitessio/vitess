@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"sync"
 	"time"
 
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -59,11 +60,39 @@ type QueryExecutor struct {
 	tabletType     topodatapb.TabletType
 }
 
+const streamRowsSize = 256
+
+var streamResultPool = sync.Pool{New: func() interface{} {
+	return &sqltypes.Result{
+		Rows: make([][]sqltypes.Value, 0, streamRowsSize),
+	}
+}}
+
+func returnStreamResult(result *sqltypes.Result) error {
+	// only return large results slices to the pool
+	if cap(result.Rows) >= streamRowsSize {
+		rows := result.Rows[:0]
+		*result = sqltypes.Result{}
+		result.Rows = rows
+		streamResultPool.Put(result)
+	}
+	return nil
+}
+
+func allocStreamResult() *sqltypes.Result {
+	return streamResultPool.Get().(*sqltypes.Result)
+}
+
 var sequenceFields = []*querypb.Field{
 	{
 		Name: "nextval",
 		Type: sqltypes.Int64,
 	},
+}
+
+func (qre *QueryExecutor) shouldConsolidate() bool {
+	cm := qre.tsv.qe.consolidatorMode.Get()
+	return cm == tabletenv.Enable || (cm == tabletenv.NotOnMaster && qre.tabletType != topodatapb.TabletType_MASTER)
 }
 
 // Execute performs a non-streaming query execution.
@@ -229,7 +258,7 @@ func (qre *QueryExecutor) txConnExec(conn *StatefulConnection) (*sqltypes.Result
 }
 
 // Stream performs a streaming query execution.
-func (qre *QueryExecutor) Stream(callback func(*sqltypes.Result) error) error {
+func (qre *QueryExecutor) Stream(callback StreamCallback) error {
 	qre.logStats.PlanType = qre.plan.PlanID.String()
 
 	defer func(start time.Time) {
@@ -239,6 +268,39 @@ func (qre *QueryExecutor) Stream(callback func(*sqltypes.Result) error) error {
 
 	if err := qre.checkPermissions(); err != nil {
 		return err
+	}
+
+	sql, sqlWithoutComments, err := qre.generateFinalSQL(qre.plan.FullQuery, qre.bindVars)
+	if err != nil {
+		return err
+	}
+
+	var replaceKeyspace string
+	if sqltypes.IncludeFieldsOrDefault(qre.options) == querypb.ExecuteOptions_ALL {
+		replaceKeyspace = qre.tsv.sm.target.Keyspace
+	}
+
+	if consolidator := qre.tsv.qe.streamConsolidator; consolidator != nil {
+		if qre.connID == 0 && qre.plan.PlanID == planbuilder.PlanSelectStream && qre.shouldConsolidate() {
+			return consolidator.Consolidate(qre.logStats, sqlWithoutComments, callback,
+				func(callback StreamCallback) error {
+					dbConn, err := qre.getStreamConn()
+					if err != nil {
+						return err
+					}
+					defer dbConn.Recycle()
+					return qre.execStreamSQL(dbConn, sql, func(result *sqltypes.Result) error {
+						// this stream result is potentially used by more than one client, so
+						// the consolidator will return it to the pool once it knows it's no longer
+						// being shared
+
+						if replaceKeyspace != "" {
+							result.ReplaceKeyspace(replaceKeyspace)
+						}
+						return callback(result)
+					})
+				})
+		}
 	}
 
 	// if we have a transaction id, let's use the txPool for this query
@@ -259,15 +321,20 @@ func (qre *QueryExecutor) Stream(callback func(*sqltypes.Result) error) error {
 		conn = dbConn
 	}
 
-	sql, _, err := qre.generateFinalSQL(qre.plan.FullQuery, qre.bindVars)
-	if err != nil {
-		return err
-	}
-	return qre.execStreamSQL(conn, sql, callback)
+	return qre.execStreamSQL(conn, sql, func(result *sqltypes.Result) error {
+		// this stream result is only used by the calling client, so it can be
+		// returned to the pool once the callback has fully returned
+		defer returnStreamResult(result)
+
+		if replaceKeyspace != "" {
+			result.ReplaceKeyspace(replaceKeyspace)
+		}
+		return callback(result)
+	})
 }
 
 // MessageStream streams messages from a message table.
-func (qre *QueryExecutor) MessageStream(callback func(*sqltypes.Result) error) error {
+func (qre *QueryExecutor) MessageStream(callback StreamCallback) error {
 	qre.logStats.OriginalSQL = qre.query
 	qre.logStats.PlanType = qre.plan.PlanID.String()
 
@@ -608,8 +675,8 @@ func (qre *QueryExecutor) qFetch(logStats *tabletenv.LogStats, parsedQuery *sqlp
 		return nil, err
 	}
 	// Check tablet type.
-	if cm := qre.tsv.qe.consolidatorMode.Get(); cm == tabletenv.Enable || (cm == tabletenv.NotOnMaster && qre.tabletType != topodatapb.TabletType_MASTER) {
-		q, original := qre.tsv.qe.consolidator.Create(string(sqlWithoutComments))
+	if qre.shouldConsolidate() {
+		q, original := qre.tsv.qe.consolidator.Create(sqlWithoutComments)
 		if original {
 			defer q.Broadcast()
 			conn, err := qre.getConn()
@@ -661,18 +728,20 @@ func (qre *QueryExecutor) txFetch(conn *StatefulConnection, record bool) (*sqlty
 }
 
 func (qre *QueryExecutor) generateFinalSQL(parsedQuery *sqlparser.ParsedQuery, bindVars map[string]*querypb.BindVariable) (string, string, error) {
-	var buf strings.Builder
-	buf.WriteString(qre.marginComments.Leading)
-
 	query, err := parsedQuery.GenerateQuery(bindVars, nil)
 	if err != nil {
 		return "", "", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%s", err)
 	}
-	withoutComments := query
+
+	if qre.marginComments.Leading == "" && qre.marginComments.Trailing == "" {
+		return query, query, nil
+	}
+
+	var buf strings.Builder
+	buf.WriteString(qre.marginComments.Leading)
 	buf.WriteString(query)
 	buf.WriteString(qre.marginComments.Trailing)
-	fullSQL := buf.String()
-	return fullSQL, withoutComments, nil
+	return buf.String(), query, nil
 }
 
 func (qre *QueryExecutor) getSelectLimit() int64 {
@@ -723,7 +792,7 @@ func (qre *QueryExecutor) execStreamSQL(conn *connpool.DBConn, sql string, callb
 	defer qre.tsv.olapql.Remove(qd)
 
 	start := time.Now()
-	err := conn.Stream(ctx, sql, callBackClosingSpan, int(qre.tsv.qe.streamBufferSize.Get()), sqltypes.IncludeFieldsOrDefault(qre.options))
+	err := conn.Stream(ctx, sql, callBackClosingSpan, allocStreamResult, int(qre.tsv.qe.streamBufferSize.Get()), sqltypes.IncludeFieldsOrDefault(qre.options))
 	qre.logStats.AddRewrittenSQL(sql, start)
 	if err != nil {
 		// MySQL error that isn't due to a connection issue
