@@ -6700,6 +6700,7 @@
 2021-04-08T15:25:17Z,Cluster (onlineddl_declarative),https://github.com/vitessio/vitess/actions/runs/730042989
 2021-04-08T15:25:17Z,Cluster (onlineddl_ghost),https://github.com/vitessio/vitess/actions/runs/730042986
 2021-04-08T15:25:17Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/730043023
+2021-04-08T15:25:17Z,local_example,https://github.com/vitessio/vitess/actions/runs/730042992
 2021-04-08T15:25:43Z,Cluster (24),https://github.com/vitessio/vitess/actions/runs/730044396
 2021-04-08T15:25:43Z,Cluster (onlineddl_ghost),https://github.com/vitessio/vitess/actions/runs/730044359
 2021-04-08T15:25:43Z,Cluster (onlineddl_vrepl_stress),https://github.com/vitessio/vitess/actions/runs/730044352
