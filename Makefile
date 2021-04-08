@@ -90,7 +90,6 @@ endif
 	# unset GOOS and embed local resources in the vttablet executable
 	(cd go/cmd/vttablet && unset GOOS && go run github.com/GeertJohan/go.rice/rice --verbose append --exec=$${HOME}/go/bin/${GOOS}_${GOARCH}/vttablet)
 	# Cross-compiling w/ cgo isn't trivial and we don't need vtorc, so we can skip building it 
-	#CGO_ENABLED=1 GOOS=${GOOS} GOARCH=${GOARCH} go install $(EXTRA_BUILD_FLAGS) $(VT_GO_PARALLEL) -ldflags "$(shell tools/build_version_flags.sh)" ./go/cmd/vtorc/...
 
 debug:
 ifndef NOBANNER
