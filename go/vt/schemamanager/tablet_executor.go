@@ -124,7 +124,7 @@ func (exec *TabletExecutor) Validate(ctx context.Context, sqls []string) error {
 
 	// We ignore DATABASE-level DDLs here because detectBigSchemaChanges doesn't
 	// look at them anyway.
-	parsedDDLs, _, err := exec.parseDDLs(sqls)
+	parsedDDLs, _, _, err := exec.parseDDLs(sqls)
 	if err != nil {
 		return err
 	}
@@ -137,42 +137,49 @@ func (exec *TabletExecutor) Validate(ctx context.Context, sqls []string) error {
 	return err
 }
 
-func (exec *TabletExecutor) parseDDLs(sqls []string) ([]sqlparser.DDLStatement, []sqlparser.DBDDLStatement, error) {
+func (exec *TabletExecutor) parseDDLs(sqls []string) ([]sqlparser.DDLStatement, []sqlparser.DBDDLStatement, [](*sqlparser.RevertMigration), error) {
 	parsedDDLs := make([]sqlparser.DDLStatement, 0)
 	parsedDBDDLs := make([]sqlparser.DBDDLStatement, 0)
+	revertStatements := make([](*sqlparser.RevertMigration), 0)
 	for _, sql := range sqls {
-		stat, err := sqlparser.Parse(sql)
+		stmt, err := sqlparser.Parse(sql)
 		if err != nil {
-			return nil, nil, fmt.Errorf("failed to parse sql: %s, got error: %v", sql, err)
+			return nil, nil, nil, fmt.Errorf("failed to parse sql: %s, got error: %v", sql, err)
 		}
-		switch ddl := stat.(type) {
+		switch stmt := stmt.(type) {
 		case sqlparser.DDLStatement:
-			parsedDDLs = append(parsedDDLs, ddl)
+			parsedDDLs = append(parsedDDLs, stmt)
 		case sqlparser.DBDDLStatement:
-			parsedDBDDLs = append(parsedDBDDLs, ddl)
+			parsedDBDDLs = append(parsedDBDDLs, stmt)
+		case *sqlparser.RevertMigration:
+			revertStatements = append(revertStatements, stmt)
 		default:
 			if len(exec.tablets) != 1 {
-				return nil, nil, fmt.Errorf("non-ddl statements can only be executed for single shard keyspaces: %s", sql)
+				return nil, nil, nil, fmt.Errorf("non-ddl statements can only be executed for single shard keyspaces: %s", sql)
 			}
 		}
 	}
-	return parsedDDLs, parsedDBDDLs, nil
+	return parsedDDLs, parsedDBDDLs, revertStatements, nil
 }
 
 // IsOnlineSchemaDDL returns true if we expect to run a online schema change DDL
-func (exec *TabletExecutor) isOnlineSchemaDDL(ddlStmt sqlparser.DDLStatement) (isOnline bool) {
-	switch ddlStmt.GetAction() {
-	case sqlparser.CreateDDLAction, sqlparser.DropDDLAction, sqlparser.AlterDDLAction:
-	default:
-		return false
+func (exec *TabletExecutor) isOnlineSchemaDDL(stmt sqlparser.Statement) (isOnline bool) {
+	switch stmt := stmt.(type) {
+	case sqlparser.DDLStatement:
+		if exec.ddlStrategySetting == nil {
+			return false
+		}
+		if exec.ddlStrategySetting.Strategy.IsDirect() {
+			return false
+		}
+		switch stmt.GetAction() {
+		case sqlparser.CreateDDLAction, sqlparser.DropDDLAction, sqlparser.AlterDDLAction:
+			return true
+		}
+	case *sqlparser.RevertMigration:
+		return true
 	}
-	if exec.ddlStrategySetting == nil {
-		return false
-	}
-	if exec.ddlStrategySetting.Strategy.IsDirect() {
-		return false
-	}
-	return true
+	return false
 }
 
 // a schema change that satisfies any following condition is considered
@@ -250,6 +257,20 @@ func (exec *TabletExecutor) executeSQL(ctx context.Context, sql string, execResu
 			}
 			return nil
 		}
+	case *sqlparser.RevertMigration:
+		strategySetting := schema.NewDDLStrategySetting(schema.DDLStrategyOnline, exec.ddlStrategySetting.Options)
+		onlineDDL, err := schema.NewOnlineDDL(exec.keyspace, "", sqlparser.String(stmt), strategySetting, exec.requestContext)
+		if err != nil {
+			execResult.ExecutorErr = err.Error()
+			return err
+		}
+		if exec.ddlStrategySetting.IsSkipTopo() {
+			exec.executeOnAllTablets(ctx, execResult, onlineDDL.SQL, true)
+			exec.wr.Logger().Printf("%s\n", onlineDDL.UUID)
+		} else {
+			exec.executeOnlineDDL(ctx, execResult, onlineDDL)
+		}
+		return nil
 	}
 	exec.wr.Logger().Infof("Received DDL request. strategy=%+v", schema.DDLStrategyDirect)
 	exec.executeOnAllTablets(ctx, execResult, sql, false)
