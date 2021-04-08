@@ -510,14 +510,14 @@ func buildShowVGtidPlan(show *sqlparser.ShowBasic, vschema ContextVSchema) (engi
 	send := &engine.Send{
 		Keyspace:          ks,
 		TargetDestination: dest,
-		Query:             fmt.Sprintf("select @@global.gtid_executed, :%s", engine.ShardName),
+		Query:             fmt.Sprintf(`select '%s' as 'keyspace', @@global.gtid_executed, :%s`, ks.Name, engine.ShardName),
+		ShardNameNeeded:   true,
 	}
 	return &engine.OrderedAggregate{
-		HasDistinct: true,
 		Aggregates: []engine.AggregateParams{
 			{
-				Opcode: 0,
-				Col:    0,
+				Opcode: engine.AggregateGtid,
+				Col:    1,
 				Alias:  "global vgtid_executed",
 			},
 		},
