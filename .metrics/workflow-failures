@@ -6738,3 +6738,4 @@
 2021-04-08T17:42:25Z,local_example,https://github.com/vitessio/vitess/actions/runs/730426539
 2021-04-08T18:13:41Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/730508084
 2021-04-08T18:13:41Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/730508041
+2021-04-08T18:13:41Z,unit_race,https://github.com/vitessio/vitess/actions/runs/730508054
