@@ -44,6 +44,7 @@ var (
 	cell                  = "zone1"
 	schemaChangeDirectory = ""
 	tableName             = `stress_test`
+	onlineDDLStrategy     = "online -singleton"
 	createStatement       = `
 		CREATE TABLE stress_test (
 			id bigint(20) not null,
@@ -63,6 +64,9 @@ var (
 	// A trivial statement which must succeed and does not change the schema
 	alterTableTrivialStatement = `
 		ALTER TABLE stress_test ENGINE=InnoDB
+	`
+	dropStatement = `
+		DROP TABLE stress_test
 	`
 )
 
@@ -141,21 +145,21 @@ func TestSchemaChange(t *testing.T) {
 	// CREATE
 	t.Run("CREATE TABLE", func(t *testing.T) {
 		// The table does not exist
-		uuid := testOnlineDDLStatement(t, createStatement, "online -singleton", "vtgate", "", "", false)
+		uuid := testOnlineDDLStatement(t, createStatement, onlineDDLStrategy, "vtgate", "", "", false)
 		uuids = append(uuids, uuid)
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 		checkTable(t, tableName, true)
 	})
 	t.Run("revert CREATE TABLE", func(t *testing.T) {
 		// The table existed, so it will now be dropped (renamed)
-		uuid := testRevertMigration(t, uuids[len(uuids)-1], "", false)
+		uuid := testRevertMigration(t, uuids[len(uuids)-1], "vtgate", "", false)
 		uuids = append(uuids, uuid)
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 		checkTable(t, tableName, false)
 	})
 	t.Run("revert revert CREATE TABLE", func(t *testing.T) {
 		// Table was dropped (renamed) so it will now be restored
-		uuid := testRevertMigration(t, uuids[len(uuids)-1], "", false)
+		uuid := testRevertMigration(t, uuids[len(uuids)-1], "vtgate", "", false)
 		uuids = append(uuids, uuid)
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 		checkTable(t, tableName, true)
@@ -175,7 +179,7 @@ func TestSchemaChange(t *testing.T) {
 		assert.Empty(t, uuid)
 	})
 	t.Run("failed revert migration", func(t *testing.T) {
-		uuid := testRevertMigration(t, throttledUUID, "rejected", true)
+		uuid := testRevertMigration(t, throttledUUID, "vtgate", "rejected", true)
 		assert.Empty(t, uuid)
 	})
 	t.Run("terminate throttled migration", func(t *testing.T) {
@@ -184,17 +188,49 @@ func TestSchemaChange(t *testing.T) {
 		time.Sleep(2 * time.Second)
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, throttledUUID, schema.OnlineDDLStatusFailed)
 	})
-	t.Run("successful online alter, vtctl", func(t *testing.T) {
+	t.Run("successful gh-ost alter, vtctl", func(t *testing.T) {
 		uuid := testOnlineDDLStatement(t, alterTableTrivialStatement, "gh-ost -singleton", "vtctl", "hint_col", "", false)
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 		onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, false)
 		onlineddl.CheckRetryMigration(t, &vtParams, shards, uuid, false)
 	})
-	t.Run("successful online alter, vtgate", func(t *testing.T) {
+	t.Run("successful gh-ost alter, vtgate", func(t *testing.T) {
 		uuid := testOnlineDDLStatement(t, alterTableTrivialStatement, "gh-ost -singleton", "vtgate", "hint_col", "", false)
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 		onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, false)
 		onlineddl.CheckRetryMigration(t, &vtParams, shards, uuid, false)
+	})
+
+	t.Run("successful online alter, vtgate", func(t *testing.T) {
+		uuid := testOnlineDDLStatement(t, alterTableTrivialStatement, onlineDDLStrategy, "vtgate", "hint_col", "", false)
+		uuids = append(uuids, uuid)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, false)
+		onlineddl.CheckRetryMigration(t, &vtParams, shards, uuid, false)
+		checkTable(t, tableName, true)
+	})
+	t.Run("revert ALTER TABLE, vttablet", func(t *testing.T) {
+		// The table existed, so it will now be dropped (renamed)
+		uuid := testRevertMigration(t, uuids[len(uuids)-1], "vttablet", "", false)
+		uuids = append(uuids, uuid)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		checkTable(t, tableName, true)
+	})
+
+	//DROP
+
+	t.Run("online DROP TABLE", func(t *testing.T) {
+		uuid := testOnlineDDLStatement(t, dropStatement, onlineDDLStrategy, "vtgate", "hint_col", "", false)
+		uuids = append(uuids, uuid)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		checkTable(t, tableName, false)
+	})
+	t.Run("revert DROP TABLE", func(t *testing.T) {
+		// This will recreate the table (well, actually, rename it back into place)
+		uuid := testRevertMigration(t, uuids[len(uuids)-1], "vttablet", "", false)
+		uuids = append(uuids, uuid)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		checkTable(t, tableName, true)
 	})
 
 	// Last two tests (we run an incomplete migration)
@@ -244,16 +280,29 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 }
 
 // testRevertMigration reverts a given migration
-func testRevertMigration(t *testing.T, revertUUID string, expectError string, skipWait bool) (uuid string) {
+func testRevertMigration(t *testing.T, revertUUID string, executeStrategy string, expectError string, skipWait bool) (uuid string) {
 	revertQuery := fmt.Sprintf("revert vitess_migration '%s'", revertUUID)
-	r := onlineddl.VtgateExecDDL(t, &vtParams, "online -singleton", revertQuery, expectError)
+	if executeStrategy == "vtgate" {
+		result := onlineddl.VtgateExecDDL(t, &vtParams, onlineDDLStrategy, revertQuery, expectError)
+		if result != nil {
+			row := result.Named().Row()
+			if row != nil {
+				uuid = row.AsString("uuid", "")
+			}
+		}
+	} else {
+		output, err := clusterInstance.VtctlclientProcess.ApplySchemaWithOutput(keyspaceName, revertQuery, onlineDDLStrategy)
+		if expectError == "" {
+			assert.NoError(t, err)
+			uuid = output
+		} else {
+			assert.Error(t, err)
+			assert.Contains(t, output, expectError)
+		}
+	}
 
 	if expectError == "" {
-		require.NotNil(t, r)
-		row := r.Named().Row()
-		require.NotNil(t, row)
-		uuid = row["uuid"].ToString()
-
+		uuid = strings.TrimSpace(uuid)
 		fmt.Println("# Generated UUID (for debug purposes):")
 		fmt.Printf("<%s>\n", uuid)
 	}
