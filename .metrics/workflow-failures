@@ -6685,3 +6685,5 @@
 2021-04-08T14:27:46Z,Unit Test (mariadb101),https://github.com/vitessio/vitess/actions/runs/729867164
 2021-04-08T14:27:46Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/729867174
 2021-04-08T14:27:46Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/729867157
+2021-04-08T14:27:46Z,local_example,https://github.com/vitessio/vitess/actions/runs/729867144
+2021-04-08T14:27:46Z,region_example,https://github.com/vitessio/vitess/actions/runs/729867180
