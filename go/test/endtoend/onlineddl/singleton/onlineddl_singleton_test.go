@@ -220,7 +220,7 @@ func TestSchemaChange(t *testing.T) {
 	//DROP
 
 	t.Run("online DROP TABLE", func(t *testing.T) {
-		uuid := testOnlineDDLStatement(t, dropStatement, onlineDDLStrategy, "vtgate", "hint_col", "", false)
+		uuid := testOnlineDDLStatement(t, dropStatement, onlineDDLStrategy, "vtgate", "", "", false)
 		uuids = append(uuids, uuid)
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 		checkTable(t, tableName, false)
@@ -273,7 +273,7 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 		time.Sleep(time.Second * 20)
 	}
 
-	if expectHint != "" {
+	if expectError == "" && expectHint != "" {
 		checkMigratedTable(t, tableName, expectHint)
 	}
 	return uuid
