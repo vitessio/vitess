@@ -22,7 +22,6 @@ import (
 	"os"
 	"path"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -35,47 +34,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-type WriteMetrics struct {
-	mu                                                      sync.Mutex
-	insertsAttempts, insertsFailures, insertsNoops, inserts int64
-	updatesAttempts, updatesFailures, updatesNoops, updates int64
-	deletesAttempts, deletesFailures, deletesNoops, deletes int64
-}
-
-func (w *WriteMetrics) Clear() {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-
-	w.inserts = 0
-	w.updates = 0
-	w.deletes = 0
-
-	w.insertsAttempts = 0
-	w.insertsFailures = 0
-	w.insertsNoops = 0
-
-	w.updatesAttempts = 0
-	w.updatesFailures = 0
-	w.updatesNoops = 0
-
-	w.deletesAttempts = 0
-	w.deletesFailures = 0
-	w.deletesNoops = 0
-}
-
-func (w *WriteMetrics) String() string {
-	return fmt.Sprintf(`WriteMetrics: inserts-deletes=%d, updates-deletes=%d,
-insertsAttempts=%d, insertsFailures=%d, insertsNoops=%d, inserts=%d,
-updatesAttempts=%d, updatesFailures=%d, updatesNoops=%d, updates=%d,
-deletesAttempts=%d, deletesFailures=%d, deletesNoops=%d, deletes=%d,
-`,
-		w.inserts-w.deletes, w.updates-w.deletes,
-		w.insertsAttempts, w.insertsFailures, w.insertsNoops, w.inserts,
-		w.updatesAttempts, w.updatesFailures, w.updatesNoops, w.updates,
-		w.deletesAttempts, w.deletesFailures, w.deletesNoops, w.deletes,
-	)
-}
 
 var (
 	clusterInstance *cluster.LocalProcessCluster
@@ -132,11 +90,8 @@ func TestMain(m *testing.M) {
 			"-throttle_threshold", "1s",
 			"-heartbeat_enable",
 			"-heartbeat_interval", "250ms",
-			"-migration_check_interval", "5s",
 		}
-		clusterInstance.VtGateExtraArgs = []string{
-			"-ddl_strategy", "online",
-		}
+		clusterInstance.VtGateExtraArgs = []string{}
 
 		if err := clusterInstance.StartTopo(); err != nil {
 			return 1, err
