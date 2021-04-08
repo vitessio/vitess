@@ -633,7 +633,12 @@ func (c *Cluster) getTabletsToQueryForSchemas(ctx context.Context, keyspace stri
 		tabletsToQuery := make([]*vtadminpb.Tablet, 0, len(shards))
 
 		for _, shard := range shards {
-			if !shard.Shard.IsMasterServing {
+			// In certain setups, empty but "serving" shards may required to
+			// provide a contiguous keyspace so that certain keyspace-level
+			// operations will work. In our case, we care about whether the
+			// shard is truly serving, which we define as also having a known
+			// primary (via MasterAlias) in addition to the IsMasterServing bit.
+			if !(shard.Shard.IsMasterServing && shard.Shard.MasterAlias != nil) {
 				log.Infof("%s/%s is not serving; ignoring ...", keyspace, shard.Name)
 				continue
 			}
