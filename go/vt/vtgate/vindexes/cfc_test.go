@@ -319,6 +319,13 @@ func TestCFC(t *testing.T) {
 			[][]byte{id})
 		assert.NoError(t, err)
 		assert.EqualValues(t, []bool{false}, out)
+		pcfc := cfc.PrefixVindex()
+		out, err = pcfc.Verify(
+			nil,
+			[]sqltypes.Value{sqltypes.NewVarBinary("foobar")},
+			[][]byte{id})
+		assert.NoError(t, err)
+		assert.EqualValues(t, []bool{false}, out)
 	})
 
 	t.Run("CFC verify with hash", func(t *testing.T) {
@@ -338,6 +345,15 @@ func TestCFC(t *testing.T) {
 			[]sqltypes.Value{sqltypes.NewVarBinary("foo")},
 			[][]byte{expectedHash(id)})
 		assert.Error(t, err)
+
+		pcfc := cfc.PrefixVindex()
+		out, err = pcfc.Verify(
+			nil,
+			[]sqltypes.Value{sqltypes.NewVarBinary(string(flattenKey(id)))},
+			[][]byte{expectedHash(id)})
+		assert.NoError(t, err)
+		assert.EqualValues(t, []bool{true}, out)
+
 	})
 
 	t.Run("CFC map", func(t *testing.T) {
@@ -360,7 +376,7 @@ func TestCFC(t *testing.T) {
 		assert.Equal(t, "cfc", prefixcfc.String())
 		assert.False(t, prefixcfc.IsUnique())
 		assert.False(t, prefixcfc.NeedsVCursor())
-		assert.Equal(t, 1, prefixcfc.Cost())
+		assert.Equal(t, 2, prefixcfc.Cost())
 	})
 
 	t.Run("CFC prefix map", func(t *testing.T) {
@@ -595,4 +611,21 @@ func TestDestinationKeyRangeFromPrefix(t *testing.T) {
 			})
 		}
 	})
+}
+
+func TestCFCHashFunction(t *testing.T) {
+	cases := []struct {
+		src               string
+		outMD5, outXXHash int
+	}{
+		{"asdf", 4, 4},
+		{"abcdefgh", 8, 8},
+		{"abcdefghijkl", 12, 8},
+		{"abcdefghijklmnop", 16, 8},
+		{"abcdefghijklmnopqrst", 16, 8},
+	}
+	for _, c := range cases {
+		assert.Equal(t, c.outMD5, len(md5hash([]byte(c.src))))
+		assert.Equal(t, c.outXXHash, len(xxhash64([]byte(c.src))))
+	}
 }

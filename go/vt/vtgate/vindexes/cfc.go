@@ -145,7 +145,8 @@ func (vind *CFC) String() string {
 	return vind.name
 }
 
-// Cost returns the cost as 1.
+// Cost returns the cost as 1. In regular mode, i.e. not in a LIKE op, CFC has
+// pretty much the same cost as other unique vindexes like 'binary', 'md5' etc.
 func (vind *CFC) Cost() int {
 	return 1
 }
@@ -272,8 +273,11 @@ func (vind *prefixCFC) String() string {
 	return vind.name
 }
 
+// In prefix mode, i.e. within a LIKE op, the cost is higher than regular mode.
+// Ideally the cost should be the number of shards we resolved to but the current
+// framework doesn't do dynamic cost evaluation.
 func (vind *prefixCFC) Cost() int {
-	return 1
+	return 2
 }
 
 func (vind *prefixCFC) IsUnique() bool {
@@ -362,7 +366,7 @@ func md5hash(in []byte) []byte {
 func xxhash64(in []byte) []byte {
 	out := vXXHash(in)
 	n := len(in)
-	if n < 8 {
+	if n < len(out) {
 		return out[:n]
 	}
 	return out
