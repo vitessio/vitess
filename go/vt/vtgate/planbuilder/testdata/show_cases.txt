@@ -516,5 +516,24 @@
 # show vgtid
 "show global vgtid_executed"
 {
-
+  "QueryType": "SHOW",
+  "Original": "show global vgtid_executed",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "Aggregates": "vgtid(1) AS global vgtid_executed",
+    "Distinct": "false",
+    "Inputs": [
+      {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "AllShards()",
+        "Query": "select 'main' as 'keyspace', @@global.gtid_executed, :__vt_shard",
+        "ShardNameNeeded": true
+      }
+    ]
+  }
 }
