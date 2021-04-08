@@ -108,6 +108,8 @@ func TestDefaultConfig(t *testing.T) {
 	require.NoError(t, err)
 	want := `cacheResultFields: true
 consolidator: enable
+consolidatorStreamQuerySize: 2097152
+consolidatorStreamTotalSize: 134217728
 gracePeriods: {}
 healthcheck:
   degradedThresholdSeconds: 30

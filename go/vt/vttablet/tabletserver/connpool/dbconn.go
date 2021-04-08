@@ -173,7 +173,7 @@ func (dbc *DBConn) ExecOnce(ctx context.Context, query string, maxrows int, want
 }
 
 // Stream executes the query and streams the results.
-func (dbc *DBConn) Stream(ctx context.Context, query string, callback func(*sqltypes.Result) error, streamBufferSize int, includedFields querypb.ExecuteOptions_IncludedFields) error {
+func (dbc *DBConn) Stream(ctx context.Context, query string, callback func(*sqltypes.Result) error, alloc func() *sqltypes.Result, streamBufferSize int, includedFields querypb.ExecuteOptions_IncludedFields) error {
 	span, ctx := trace.NewSpan(ctx, "DBConn.Stream")
 	trace.AnnotateSQL(span, query)
 	defer span.Finish()
@@ -190,6 +190,7 @@ func (dbc *DBConn) Stream(ctx context.Context, query string, callback func(*sqlt
 				}
 				return callback(r)
 			},
+			alloc,
 			streamBufferSize,
 		)
 		switch {
@@ -222,14 +223,14 @@ func (dbc *DBConn) Stream(ctx context.Context, query string, callback func(*sqlt
 	panic("unreachable")
 }
 
-func (dbc *DBConn) streamOnce(ctx context.Context, query string, callback func(*sqltypes.Result) error, streamBufferSize int) error {
+func (dbc *DBConn) streamOnce(ctx context.Context, query string, callback func(*sqltypes.Result) error, alloc func() *sqltypes.Result, streamBufferSize int) error {
 	defer dbc.stats.MySQLTimings.Record("ExecStream", time.Now())
 
 	dbc.current.Set(query)
 	defer dbc.current.Set("")
 
 	done, wg := dbc.setDeadline(ctx)
-	err := dbc.conn.ExecuteStreamFetch(query, callback, streamBufferSize)
+	err := dbc.conn.ExecuteStreamFetch(query, callback, alloc, streamBufferSize)
 
 	if done != nil {
 		close(done)
