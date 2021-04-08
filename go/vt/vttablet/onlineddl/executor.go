@@ -1177,6 +1177,19 @@ func (e *Executor) readMigration(ctx context.Context, uuid string) (onlineDDL *s
 	return onlineDDL, row, nil
 }
 
+// readPendingMigrationsUUIDs returns UUIDs for migrations in pending state (queued/ready/running)
+func (e *Executor) readPendingMigrationsUUIDs(ctx context.Context) (uuids []string, err error) {
+	r, err := e.execQuery(ctx, sqlSelectPendingMigrations)
+	if err != nil {
+		return uuids, err
+	}
+	for _, row := range r.Named().Rows {
+		uuid := row["migration_uuid"].ToString()
+		uuids = append(uuids, uuid)
+	}
+	return uuids, err
+}
+
 // terminateMigration attempts to interrupt and hard-stop a running migration
 func (e *Executor) terminateMigration(ctx context.Context, onlineDDL *schema.OnlineDDL, lastMigrationUUID string) (foundRunning bool, err error) {
 	switch onlineDDL.Strategy {
@@ -1278,14 +1291,9 @@ func (e *Executor) cancelMigrations(ctx context.Context, uuids []string, message
 // CancelPendingMigrations cancels all pending migrations (that are expected to run or are running)
 // for this keyspace
 func (e *Executor) CancelPendingMigrations(ctx context.Context, message string) (result *sqltypes.Result, err error) {
-	r, err := e.execQuery(ctx, sqlSelectPendingMigrations)
+	uuids, err := e.readPendingMigrationsUUIDs(ctx)
 	if err != nil {
 		return result, err
-	}
-	var uuids []string
-	for _, row := range r.Named().Rows {
-		uuid := row["migration_uuid"].ToString()
-		uuids = append(uuids, uuid)
 	}
 
 	result = &sqltypes.Result{}
@@ -2530,6 +2538,20 @@ func (e *Executor) SubmitMigration(
 	if err != nil {
 		return nil, err
 	}
+
+	if onlineDDL.StrategySetting().IsSingleton() {
+		e.migrationMutex.Lock()
+		defer e.migrationMutex.Unlock()
+
+		uuids, err := e.readPendingMigrationsUUIDs(ctx)
+		if err != nil {
+			return result, err
+		}
+		if len(uuids) > 0 {
+			return result, fmt.Errorf("singleton migration rejected: found pending migrations [%s]", strings.Join(uuids, ", "))
+		}
+	}
+
 	defer e.triggerNextCheckInterval()
 
 	return e.execQuery(ctx, query)
