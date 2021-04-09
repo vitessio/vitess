@@ -522,7 +522,7 @@ func buildShowVGtidPlan(show *sqlparser.ShowBasic, vschema ContextVSchema) (engi
 				Alias:  "global vgtid_executed",
 			},
 		},
-		TruncateColumnCount: 1,
+		TruncateColumnCount: 2,
 		Input:               send,
 	}, nil
 }
