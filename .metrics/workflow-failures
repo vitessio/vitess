@@ -6764,4 +6764,8 @@
 2021-04-09T15:13:09Z,local_example,https://github.com/vitessio/vitess/actions/runs/733471749
 2021-04-09T15:13:09Z,local_example,https://github.com/vitessio/vitess/actions/runs/733471755
 2021-04-09T17:45:10Z,Cluster (27),https://github.com/vitessio/vitess/actions/runs/733882037
+2021-04-09T17:45:10Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/733882048
 2021-04-09T17:45:10Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/733882059
+2021-04-09T17:45:10Z,local_example,https://github.com/vitessio/vitess/actions/runs/733882038
+2021-04-09T17:45:10Z,local_example,https://github.com/vitessio/vitess/actions/runs/733882069
+2021-04-09T17:45:10Z,region_example,https://github.com/vitessio/vitess/actions/runs/733882035
