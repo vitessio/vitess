@@ -6763,3 +6763,5 @@
 2021-04-09T15:13:09Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/733471719
 2021-04-09T15:13:09Z,local_example,https://github.com/vitessio/vitess/actions/runs/733471749
 2021-04-09T15:13:09Z,local_example,https://github.com/vitessio/vitess/actions/runs/733471755
+2021-04-09T17:45:10Z,Cluster (27),https://github.com/vitessio/vitess/actions/runs/733882037
+2021-04-09T17:45:10Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/733882059
