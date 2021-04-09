@@ -298,10 +298,10 @@ func (qr *Rule) MarshalJSON() ([]byte, error) {
 		safeEncode(b, `,"Query":`, qr.query)
 	}
 	if qr.leadingComment.Regexp != nil {
-		safeEncode(b, `,"LeadingComment":`, qr.query)
+		safeEncode(b, `,"LeadingComment":`, qr.leadingComment)
 	}
 	if qr.trailingComment.Regexp != nil {
-		safeEncode(b, `,"TrailingComment":`, qr.query)
+		safeEncode(b, `,"TrailingComment":`, qr.trailingComment)
 	}
 	if qr.plans != nil {
 		safeEncode(b, `,"Plans":`, qr.plans)

@@ -19,12 +19,16 @@ package filecustomrule
 
 import (
 	"flag"
+	"fmt"
 	"io/ioutil"
+	"os"
+	"path"
 	"time"
 
-	"github.com/falun/watch"
+	"github.com/fsnotify/fsnotify"
 
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
 )
@@ -35,7 +39,7 @@ var (
 	// Commandline flag to specify rule path
 	fileRulePath = flag.String("filecustomrules", "", "file based custom rule path")
 
-	fileRulePollInterval = flag.Duration("filecustomrules_interval", 0, "How often should we poll the rule file <= 0 means we will not poll")
+	fileRuleShouldWatch = flag.Bool("filecustomrules_watch", false, "set up a watch on the target file and reload query rules when it changes")
 )
 
 // FileCustomRule is an implementation of CustomRuleManager, it reads custom query
@@ -106,21 +110,61 @@ func ActivateFileCustomRules(qsc tabletserver.Controller) {
 	if *fileRulePath != "" {
 		qsc.RegisterQueryRuleSource(FileCustomRuleSource)
 		fileCustomRule.Open(qsc, *fileRulePath)
-		if *fileRulePollInterval > time.Duration(0) {
-			w := watch.File(*fileRulePath)
-			ch, cancelFn := w.OnInterval(*fileRulePollInterval)
-			servenv.OnTerm(cancelFn)
+
+		if *fileRuleShouldWatch {
+			baseDir := path.Dir(*fileRulePath)
+			ruleFileName := path.Base(*fileRulePath)
+
+			watcher, err := fsnotify.NewWatcher()
+			if err != nil {
+				log.Fatalf("Unable create new fsnotify watcher: %v", err)
+			}
+			servenv.OnTerm(func() { watcher.Close() })
+
 			go func(tsc tabletserver.Controller) {
-				for range ch {
-					if err := fileCustomRule.Open(tsc, *fileRulePath); err != nil {
-						log.Infof("Failed to load fileCustomRule %q: %v", *fileRulePath, err)
-					} else {
-						log.Infof("Opened %q", *fileRulePath)
+				for {
+					select {
+					case evt, ok := <- watcher.Events:
+						if !ok { return }
+						if path.Base(evt.Name) != ruleFileName { continue }
+						if err := fileCustomRule.Open(tsc, *fileRulePath); err != nil {
+							log.Infof("Failed to load custom rules from %q: %v", *fileRulePath, err)
+						} else {
+							log.Infof("Loaded custom rules from %q", *fileRulePath)
+						}
+					case err, ok := <- watcher.Errors:
+						if !ok { return }
+						log.Errorf("Error watching %v: %v", *fileRulePath, err)
 					}
 				}
 			}(qsc)
+
+			// we can't watch a file that doesn't exist so create a stub to be filled in later
+			if err = maybeCreateEmptyFile(*fileRulePath); err != nil {
+				log.Fatalf("Unable to populate empty rules file at %v: %v", *fileRulePath, err)
+			}
+			if err = watcher.Add(baseDir); err != nil {
+				log.Fatalf("Unable to set up watcher for %v + %v: %v", baseDir, ruleFileName, err)
+			}
 		}
 	}
+}
+
+func maybeCreateEmptyFile(path string) error {
+	_, err := os.Stat(path)
+	if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+
+	// file doesn't exist, create it
+	if os.IsNotExist(err) {
+		err = ioutil.WriteFile(path, []byte("[]"), 0660)
+		if err != nil {
+			return fmt.Errorf("Unable to create stub rules file: %v", err)
+		}
+	}
+
+	return nil
 }
 
 func init() {
