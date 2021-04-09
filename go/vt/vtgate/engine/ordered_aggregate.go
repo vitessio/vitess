@@ -37,8 +37,8 @@ var _ Primitive = (*OrderedAggregate)(nil)
 // is that the underlying primitive is a scatter select with pre-sorted
 // rows.
 type OrderedAggregate struct {
-	// HasDistinct is true if one of the aggregates is distinct.
-	HasDistinct bool `json:",omitempty"`
+	// PreProcess is true if one of the aggregates is distinct.
+	PreProcess bool `json:",omitempty"`
 	// Aggregates specifies the aggregation parameters for each
 	// aggregation function: function opcode and input column number.
 	Aggregates []AggregateParams
@@ -275,6 +275,9 @@ func (oa *OrderedAggregate) StreamExecute(vcursor VCursor, bindVars map[string]*
 }
 
 func (oa *OrderedAggregate) convertFields(fields []*querypb.Field) []*querypb.Field {
+	if !oa.PreProcess {
+		return fields
+	}
 	for _, aggr := range oa.Aggregates {
 		if !aggr.changeField() {
 			continue
@@ -288,6 +291,9 @@ func (oa *OrderedAggregate) convertFields(fields []*querypb.Field) []*querypb.Fi
 }
 
 func (oa *OrderedAggregate) convertRow(row []sqltypes.Value) (newRow []sqltypes.Value, curDistinct sqltypes.Value) {
+	if !oa.PreProcess {
+		return row, sqltypes.NULL
+	}
 	newRow = append(newRow, row...)
 	for _, aggr := range oa.Aggregates {
 		switch aggr.Opcode {
@@ -450,8 +456,11 @@ func (oa *OrderedAggregate) description() PrimitiveDescription {
 	other := map[string]interface{}{
 		"Aggregates": aggregates,
 		"GroupBy":    groupBy,
-		"Distinct":   strconv.FormatBool(oa.HasDistinct),
 	}
+	if oa.PreProcess {
+		other["PreProcess"] = true
+	}
+
 	return PrimitiveDescription{
 		OperatorType: "Aggregate",
 		Variant:      "Ordered",

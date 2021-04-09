@@ -80,7 +80,6 @@ Gen4 plan same as above
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
     "Aggregates": "count(0)",
-    "Distinct": "false",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -148,7 +147,6 @@ Gen4 plan same as above
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
     "Aggregates": "count(0)",
-    "Distinct": "false",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -174,7 +172,6 @@ Gen4 plan same as above
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
     "Aggregates": "count(0)",
-    "Distinct": "false",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -1464,7 +1461,6 @@ Gen4 plan same as above
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
         "Aggregates": "count(0)",
-        "Distinct": "false",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -1555,7 +1551,6 @@ Gen4 plan same as above
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
         "Aggregates": "count(0)",
-        "Distinct": "false",
         "Inputs": [
           {
             "OperatorType": "Route",
