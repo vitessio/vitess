@@ -17,15 +17,20 @@ limitations under the License.
 package semantics
 
 import (
+	"vitess.io/vitess/go/vt/key"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 type (
-	table = *sqlparser.AliasedTableExpr
-
+	tableInfo struct {
+		ate *sqlparser.AliasedTableExpr
+		vt  *vindexes.Table
+	}
 	// TableSet is how a set of tables is expressed.
 	// Tables get unique bits assigned in the order that they are encountered during semantic analysis
 	TableSet uint64 // we can only join 64 tables with this underlying data type
@@ -33,13 +38,18 @@ type (
 
 	// SemTable contains semantic analysis information about the query.
 	SemTable struct {
-		Tables           []table
+		Tables           []*tableInfo
 		exprDependencies map[sqlparser.Expr]TableSet
 	}
 
 	scope struct {
 		parent *scope
-		tables map[string]*sqlparser.AliasedTableExpr
+		tables map[string]*tableInfo
+	}
+
+	// SchemaInformation is used tp provide table information from Vschema.
+	SchemaInformation interface {
+		FindTable(tablename sqlparser.TableName) (*vindexes.Table, string, topodatapb.TabletType, key.Destination, error)
 	}
 )
 
@@ -49,9 +59,9 @@ func NewSemTable() *SemTable {
 }
 
 // TableSetFor returns the bitmask for this particular tableshoe
-func (st *SemTable) TableSetFor(t table) TableSet {
+func (st *SemTable) TableSetFor(t *sqlparser.AliasedTableExpr) TableSet {
 	for idx, t2 := range st.Tables {
-		if t == t2 {
+		if t == t2.ate {
 			return 1 << idx
 		}
 	}
@@ -80,10 +90,10 @@ func (st *SemTable) Dependencies(expr sqlparser.Expr) TableSet {
 }
 
 func newScope(parent *scope) *scope {
-	return &scope{tables: map[string]*sqlparser.AliasedTableExpr{}, parent: parent}
+	return &scope{tables: map[string]*tableInfo{}, parent: parent}
 }
 
-func (s *scope) addTable(name string, table *sqlparser.AliasedTableExpr) error {
+func (s *scope) addTable(name string, table *tableInfo) error {
 	_, found := s.tables[name]
 	if found {
 		return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.NonUniqTable, "Not unique table/alias: '%s'", name)
@@ -93,8 +103,8 @@ func (s *scope) addTable(name string, table *sqlparser.AliasedTableExpr) error {
 }
 
 // Analyse analyzes the parsed query.
-func Analyse(statement sqlparser.Statement) (*SemTable, error) {
-	analyzer := newAnalyzer()
+func Analyse(statement sqlparser.Statement, si SchemaInformation) (*SemTable, error) {
+	analyzer := newAnalyzer(si)
 	// Initial scope
 	err := analyzer.analyze(statement)
 	if err != nil {

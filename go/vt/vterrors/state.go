@@ -30,6 +30,7 @@ const (
 	EmptyQuery
 	ForbidSchemaChange
 	IncorrectGlobalLocalVar
+	NonUniqError
 	NonUniqTable
 	SyntaxError
 	WrongGroupField
