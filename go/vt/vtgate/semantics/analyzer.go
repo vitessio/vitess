@@ -183,9 +183,12 @@ func (a *analyzer) bindTable(alias *sqlparser.AliasedTableExpr, expr sqlparser.S
 		scope := a.currentScope()
 		return scope.addTable(alias.As.String(), &tableInfo{alias, nil})
 	case sqlparser.TableName:
-		tbl, _, _, _, err := a.si.FindTable(t)
+		tbl, vdx, _, _, _, err := a.si.FindTableOrVindex(t)
 		if err != nil {
 			return err
+		}
+		if tbl == nil && vdx != nil {
+			return Gen4NotSupportedF("vindex in FROM")
 		}
 		scope := a.currentScope()
 		table := &tableInfo{alias, tbl}
