@@ -13,7 +13,6 @@
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
         "Aggregates": "count(2)",
-        "Distinct": "false",
         "GroupBy": "0",
         "Inputs": [
           {
@@ -48,7 +47,6 @@
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
         "Aggregates": "count(2)",
-        "Distinct": "false",
         "GroupBy": "0",
         "Inputs": [
           {
@@ -83,7 +81,6 @@
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
         "Aggregates": "count(2)",
-        "Distinct": "false",
         "GroupBy": "0",
         "Inputs": [
           {
@@ -122,7 +119,6 @@
             "OperatorType": "Aggregate",
             "Variant": "Ordered",
             "Aggregates": "count(2)",
-            "Distinct": "false",
             "GroupBy": "0",
             "Inputs": [
               {
@@ -159,7 +155,6 @@
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
         "Aggregates": "count(2)",
-        "Distinct": "false",
         "GroupBy": "0",
         "Inputs": [
           {
@@ -195,7 +190,6 @@
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
         "Aggregates": "count(1)",
-        "Distinct": "false",
         "GroupBy": "2",
         "Inputs": [
           {

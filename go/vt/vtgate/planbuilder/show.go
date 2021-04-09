@@ -514,6 +514,7 @@ func buildShowVGtidPlan(show *sqlparser.ShowBasic, vschema ContextVSchema) (engi
 		ShardNameNeeded:   true,
 	}
 	return &engine.OrderedAggregate{
+		PreProcess: true,
 		Aggregates: []engine.AggregateParams{
 			{
 				Opcode: engine.AggregateGtid,

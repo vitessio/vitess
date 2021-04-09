@@ -106,7 +106,6 @@ Gen4 plan same as above
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
     "Aggregates": "count(0)",
-    "Distinct": "false",
     "GroupBy": "1, 4, 3",
     "Inputs": [
       {
@@ -134,7 +133,6 @@ Gen4 plan same as above
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
     "Aggregates": "count(0)",
-    "Distinct": "false",
     "GroupBy": "1",
     "Inputs": [
       {
@@ -167,7 +165,6 @@ Gen4 plan same as above
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
         "Aggregates": "count(0)",
-        "Distinct": "false",
         "GroupBy": "1, 4, 3",
         "Inputs": [
           {
@@ -197,7 +194,6 @@ Gen4 plan same as above
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
     "Aggregates": "count(0)",
-    "Distinct": "false",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -223,7 +219,6 @@ Gen4 plan same as above
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
     "Aggregates": "sum(0)",
-    "Distinct": "false",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -249,7 +244,6 @@ Gen4 plan same as above
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
     "Aggregates": "min(0)",
-    "Distinct": "false",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -275,7 +269,6 @@ Gen4 plan same as above
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
     "Aggregates": "max(0)",
-    "Distinct": "false",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -300,7 +293,6 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Distinct": "false",
     "GroupBy": "0, 1, 0",
     "Inputs": [
       {
@@ -401,7 +393,6 @@ Gen4 plan same as above
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
     "Aggregates": "count(1)",
-    "Distinct": "false",
     "GroupBy": "0",
     "Inputs": [
       {
@@ -433,7 +424,6 @@ Gen4 plan same as above
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
     "Aggregates": "count(1)",
-    "Distinct": "false",
     "GroupBy": "0",
     "Inputs": [
       {
@@ -561,7 +551,6 @@ Gen4 plan same as above
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
         "Aggregates": "count(0)",
-        "Distinct": "false",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -589,7 +578,6 @@ Gen4 plan same as above
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
     "Aggregates": "count(1)",
-    "Distinct": "false",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -614,7 +602,6 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Distinct": "false",
     "GroupBy": "0",
     "Inputs": [
       {
@@ -641,7 +628,6 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Distinct": "false",
     "GroupBy": "0",
     "Inputs": [
       {
@@ -687,7 +673,6 @@ Gen4 plan same as above
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
     "Aggregates": "count(1)",
-    "Distinct": "false",
     "GroupBy": "0",
     "Inputs": [
       {
@@ -715,8 +700,8 @@ Gen4 plan same as above
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
     "Aggregates": "count_distinct(1) AS count(distinct col2)",
-    "Distinct": "true",
     "GroupBy": "0",
+    "PreProcess": true,
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -743,7 +728,7 @@ Gen4 plan same as above
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
     "Aggregates": "count_distinct(0) AS count(distinct col2)",
-    "Distinct": "true",
+    "PreProcess": true,
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -770,8 +755,8 @@ Gen4 plan same as above
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
     "Aggregates": "count_distinct(1) AS c2",
-    "Distinct": "true",
     "GroupBy": "0",
+    "PreProcess": true,
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -798,8 +783,8 @@ Gen4 plan same as above
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
     "Aggregates": "sum_distinct(1) AS sum(distinct col2)",
-    "Distinct": "true",
     "GroupBy": "0",
+    "PreProcess": true,
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -826,7 +811,6 @@ Gen4 plan same as above
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
     "Aggregates": "min(1)",
-    "Distinct": "false",
     "GroupBy": "0",
     "Inputs": [
       {
@@ -859,8 +843,8 @@ Gen4 plan same as above
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
         "Aggregates": "count_distinct(1) AS k",
-        "Distinct": "true",
         "GroupBy": "0",
+        "PreProcess": true,
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -893,7 +877,6 @@ Gen4 plan same as above
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
     "Aggregates": "count(2)",
-    "Distinct": "false",
     "GroupBy": "1, 0",
     "Inputs": [
       {
@@ -921,7 +904,6 @@ Gen4 plan same as above
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
     "Aggregates": "count(2)",
-    "Distinct": "false",
     "GroupBy": "1, 0",
     "Inputs": [
       {
@@ -949,7 +931,6 @@ Gen4 plan same as above
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
     "Aggregates": "count(2)",
-    "Distinct": "false",
     "GroupBy": "1, 0",
     "Inputs": [
       {
@@ -976,7 +957,6 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Distinct": "false",
     "GroupBy": "0",
     "Inputs": [
       {
@@ -1008,7 +988,6 @@ Gen4 plan same as above
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
     "Aggregates": "count(0)",
-    "Distinct": "false",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -1038,7 +1017,6 @@ Gen4 plan same as above
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
     "Aggregates": "count(4)",
-    "Distinct": "false",
     "GroupBy": "0, 1, 2",
     "Inputs": [
       {
@@ -1066,7 +1044,6 @@ Gen4 plan same as above
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
     "Aggregates": "count(4)",
-    "Distinct": "false",
     "GroupBy": "0, 1, 2",
     "Inputs": [
       {
@@ -1094,7 +1071,6 @@ Gen4 plan same as above
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
     "Aggregates": "count(4)",
-    "Distinct": "false",
     "GroupBy": "0, 1, 2, 3",
     "Inputs": [
       {
@@ -1122,7 +1098,6 @@ Gen4 plan same as above
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
     "Aggregates": "count(4)",
-    "Distinct": "false",
     "GroupBy": "2, 1, 0, 3",
     "Inputs": [
       {
@@ -1150,7 +1125,6 @@ Gen4 plan same as above
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
     "Aggregates": "count(3)",
-    "Distinct": "false",
     "GroupBy": "2, 1, 0",
     "Inputs": [
       {
@@ -1186,7 +1160,6 @@ Gen4 plan same as above
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
         "Aggregates": "count(1)",
-        "Distinct": "false",
         "GroupBy": "0",
         "Inputs": [
           {
@@ -1279,7 +1252,6 @@ Gen4 plan same as above
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
         "Aggregates": "count(1)",
-        "Distinct": "false",
         "GroupBy": "0",
         "Inputs": [
           {
@@ -1312,7 +1284,6 @@ Gen4 plan same as above
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
         "Aggregates": "count(1)",
-        "Distinct": "false",
         "GroupBy": "0, 0",
         "Inputs": [
           {

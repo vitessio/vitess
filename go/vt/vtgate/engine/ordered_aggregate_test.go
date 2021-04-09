@@ -306,7 +306,7 @@ func TestOrderedAggregateExecuteCountDistinct(t *testing.T) {
 	}
 
 	oa := &OrderedAggregate{
-		HasDistinct: true,
+		PreProcess: true,
 		Aggregates: []AggregateParams{{
 			Opcode: AggregateCountDistinct,
 			Col:    1,
@@ -382,7 +382,7 @@ func TestOrderedAggregateStreamCountDistinct(t *testing.T) {
 	}
 
 	oa := &OrderedAggregate{
-		HasDistinct: true,
+		PreProcess: true,
 		Aggregates: []AggregateParams{{
 			Opcode: AggregateCountDistinct,
 			Col:    1,
@@ -470,7 +470,7 @@ func TestOrderedAggregateSumDistinctGood(t *testing.T) {
 	}
 
 	oa := &OrderedAggregate{
-		HasDistinct: true,
+		PreProcess: true,
 		Aggregates: []AggregateParams{{
 			Opcode: AggregateSumDistinct,
 			Col:    1,
@@ -519,7 +519,7 @@ func TestOrderedAggregateSumDistinctTolerateError(t *testing.T) {
 	}
 
 	oa := &OrderedAggregate{
-		HasDistinct: true,
+		PreProcess: true,
 		Aggregates: []AggregateParams{{
 			Opcode: AggregateSumDistinct,
 			Col:    1,
@@ -715,7 +715,7 @@ func TestNoInputAndNoGroupingKeys(outer *testing.T) {
 			}
 
 			oa := &OrderedAggregate{
-				HasDistinct: true,
+				PreProcess: true,
 				Aggregates: []AggregateParams{{
 					Opcode: test.opcode,
 					Col:    0,
@@ -768,6 +768,7 @@ func TestOrderedAggregateExecuteGtid(t *testing.T) {
 	}
 
 	oa := &OrderedAggregate{
+		PreProcess: true,
 		Aggregates: []AggregateParams{{
 			Opcode: AggregateGtid,
 			Col:    1,
