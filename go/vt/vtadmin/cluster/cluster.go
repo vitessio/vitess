@@ -466,18 +466,27 @@ type GetSchemaOptions struct {
 // each shard. If this option is false, we make exactly one GetSchema request to
 // a single, randomly-chosen, tablet in the keyspace.
 //
-// (3) We will only make GetSchema RPCs to tablets that are in SERVING state; we
-// don't want to use a tablet that might be in a bad state as the source of
-// truth for a schema. Therefore if we can't find a SERVING tablet for the
-// keyspace (in non-aggregation mode) or for a shard in that keyspace (in
-// aggregation mode), then we will return an error back to the caller.
+// (2.1) If, in size aggregation mode, opts.SizeOpts.IncludeNonServingShards is
+// false (the default), then we will filter out any shards for which
+// IsMasterServing is false in the topo, and make GetSchema RPCs to one tablet
+// in every _serving_ shard. Otherwise we will make a GetSchema RPC to one
+// tablet in _every_ shard.
+//
+// (3) Irrespective of whether we're including nonserving shards, or whether
+// we're doing size aggregation at all, we will only make GetSchema RPCs to
+// tablets that are in SERVING state; we don't want to use a tablet that might
+// be in a bad state as the source of truth for a schema. Therefore if we can't
+// find a SERVING tablet for the keyspace (in non-aggregation mode) or for a
+// shard in that keyspace (in aggregation mode), then we will return an error
+// back to the caller.
 func (c *Cluster) GetSchema(ctx context.Context, keyspace string, opts GetSchemaOptions) (*vtadminpb.Schema, error) {
 	span, ctx := trace.NewSpan(ctx, "Cluster.GetSchema")
 	defer span.Finish()
 
 	if opts.TableSizeOptions == nil {
 		opts.TableSizeOptions = &vtadminpb.GetSchemaTableSizeOptions{
-			AggregateSizes: false,
+			AggregateSizes:          false,
+			IncludeNonServingShards: false,
 		}
 	}
 
@@ -638,9 +647,11 @@ func (c *Cluster) getTabletsToQueryForSchemas(ctx context.Context, keyspace stri
 			// operations will work. In our case, we care about whether the
 			// shard is truly serving, which we define as also having a known
 			// primary (via MasterAlias) in addition to the IsMasterServing bit.
-			if !(shard.Shard.IsMasterServing && shard.Shard.MasterAlias != nil) {
-				log.Infof("%s/%s is not serving; ignoring ...", keyspace, shard.Name)
-				continue
+			if !shard.Shard.IsMasterServing || shard.Shard.MasterAlias == nil {
+				if !opts.TableSizeOptions.IncludeNonServingShards {
+					log.Infof("%s/%s is not serving; ignoring because IncludeNonServingShards = false", keyspace, shard.Name)
+					continue
+				}
 			}
 
 			shardTablets := vtadminproto.FilterTablets(func(tablet *vtadminpb.Tablet) bool {
