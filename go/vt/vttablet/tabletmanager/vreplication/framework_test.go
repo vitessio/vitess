@@ -122,14 +122,15 @@ func TestMain(m *testing.M) {
 		playerEngine.Open(context.Background())
 		defer playerEngine.Close()
 
-		if err := env.Mysqld.ExecuteSuperQueryList(context.Background(), binlogplayer.CreateVReplicationTable()); err != nil {
-			fmt.Fprintf(os.Stderr, "%v", err)
-			return 1
+		ddlsList := [][]string{
+			binlogplayer.CreateVReplicationTable(),
+			{createCopyState, createVReplicationLog},
 		}
-
-		if err := env.Mysqld.ExecuteSuperQuery(context.Background(), createCopyState); err != nil {
-			fmt.Fprintf(os.Stderr, "%v", err)
-			return 1
+		for _, ddls := range ddlsList {
+			if err := env.Mysqld.ExecuteSuperQueryList(context.Background(), ddls); err != nil {
+				fmt.Fprintf(os.Stderr, "%v", err)
+				return 1
+			}
 		}
 
 		return m.Run()
@@ -552,6 +553,7 @@ func expectNontxQueries(t *testing.T, queries []string) {
 		}
 	}
 }
+
 func expectData(t *testing.T, table string, values [][]string) {
 	t.Helper()
 	customExpectData(t, table, values, env.Mysqld.FetchSuperQuery)

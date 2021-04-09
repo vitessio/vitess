@@ -500,6 +500,7 @@ func TestCreateDBAndTable(t *testing.T) {
 		dbClient.ExpectRequestRE("ALTER TABLE _vt.vreplication ADD KEY.*", &sqltypes.Result{}, nil)
 		dbClient.ExpectRequestRE("create table if not exists _vt.resharding_journal.*", &sqltypes.Result{}, nil)
 		dbClient.ExpectRequestRE("create table if not exists _vt.copy_state.*", &sqltypes.Result{}, nil)
+		dbClient.ExpectRequestRE("CREATE TABLE IF NOT EXISTS _vt.vreplication_log.*", &sqltypes.Result{}, nil)
 	}
 	expectDDLs()
 	dbClient.ExpectRequest("use _vt", &sqltypes.Result{}, nil)

@@ -60,6 +60,17 @@ const (
   table_name varbinary(128),
   lastpk varbinary(2000),
   primary key (vrepl_id, table_name))`
+
+	createVReplicationLog = `CREATE TABLE IF NOT EXISTS _vt.vreplication_log (
+		id BIGINT(20) AUTO_INCREMENT,
+		vrepl_id INT NOT NULL,
+		state VARBINARY(100) NOT NULL,
+		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+		message JSON,
+		UNIQUE KEY vrepl_id_time_entered (vrepl_id, created_at),
+		INDEX vrepl_id_last_updated (vrepl_id, updated_at),
+		PRIMARY KEY (id)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`
 )
 
 var withDDL *withddl.WithDDL
@@ -72,6 +83,7 @@ func init() {
 	allddls := append([]string{}, binlogplayer.CreateVReplicationTable()...)
 	allddls = append(allddls, binlogplayer.AlterVReplicationTable...)
 	allddls = append(allddls, createReshardingJournalTable, createCopyState)
+	allddls = append(allddls, createVReplicationLog)
 	withDDL = withddl.New(allddls)
 }
 
