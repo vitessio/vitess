@@ -243,6 +243,6 @@ type fakeSI struct {
 	tables map[string]*vindexes.Table
 }
 
-func (s *fakeSI) FindTable(tablename sqlparser.TableName) (*vindexes.Table, string, topodatapb.TabletType, key.Destination, error) {
-	return s.tables[sqlparser.String(tablename)], "", 0, nil, nil
+func (s *fakeSI) FindTableOrVindex(tablename sqlparser.TableName) (*vindexes.Table, vindexes.Vindex, string, topodatapb.TabletType, key.Destination, error) {
+	return s.tables[sqlparser.String(tablename)], nil, "", 0, nil, nil
 }

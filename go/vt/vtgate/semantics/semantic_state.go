@@ -49,7 +49,7 @@ type (
 
 	// SchemaInformation is used tp provide table information from Vschema.
 	SchemaInformation interface {
-		FindTable(tablename sqlparser.TableName) (*vindexes.Table, string, topodatapb.TabletType, key.Destination, error)
+		FindTableOrVindex(tablename sqlparser.TableName) (*vindexes.Table, vindexes.Vindex, string, topodatapb.TabletType, key.Destination, error)
 	}
 )
 
