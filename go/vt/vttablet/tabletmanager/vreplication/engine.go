@@ -18,6 +18,7 @@ package vreplication
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -49,28 +50,16 @@ const (
 	copyStateTableName         = "_vt.copy_state"
 
 	createReshardingJournalTable = `create table if not exists _vt.resharding_journal(
-  id bigint,
-  db_name varbinary(255),
-  val blob,
-  primary key (id)
-)`
+	  id bigint,
+	  db_name varbinary(255),
+	  val blob,
+	  primary key (id))`
 
 	createCopyState = `create table if not exists _vt.copy_state (
-  vrepl_id int,
-  table_name varbinary(128),
-  lastpk varbinary(2000),
-  primary key (vrepl_id, table_name))`
-
-	createVReplicationLog = `CREATE TABLE IF NOT EXISTS _vt.vreplication_log (
-		id BIGINT(20) AUTO_INCREMENT,
-		vrepl_id INT NOT NULL,
-		state VARBINARY(100) NOT NULL,
-		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-		message JSON,
-		UNIQUE KEY vrepl_id_time_entered (vrepl_id, created_at),
-		INDEX vrepl_id_last_updated (vrepl_id, updated_at),
-		PRIMARY KEY (id)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`
+	  vrepl_id int,
+	  table_name varbinary(128),
+	  lastpk varbinary(2000),
+	  primary key (vrepl_id, table_name))`
 )
 
 var withDDL *withddl.WithDDL
@@ -369,6 +358,7 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 
 	switch plan.opcode {
 	case insertQuery:
+		dbClient.Begin()
 		qr, err := withDDL.Exec(vre.ctx, plan.query, dbClient.ExecuteFetch)
 		if err != nil {
 			return nil, err
@@ -391,7 +381,12 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 				return nil, err
 			}
 			vre.controllers[id] = ct
+
+			obj, _ := json.Marshal(params)
+			insertLog(newVDBClient(dbClient, binlogplayer.NewStats()), uint32(id), params["state"], string(obj))
+
 		}
+		dbClient.Commit()
 		return qr, nil
 	case updateQuery:
 		ids, bv, err := vre.fetchIDs(dbClient, plan.selector)

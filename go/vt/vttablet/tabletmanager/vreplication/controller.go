@@ -50,7 +50,7 @@ var (
 )
 
 // controller is created by Engine. Members are initialized upfront.
-// There is no mutex within a controller becaust its members are
+// There is no mutex within a controller because its members are
 // either read-only or self-synchronized.
 type controller struct {
 	vre             *Engine

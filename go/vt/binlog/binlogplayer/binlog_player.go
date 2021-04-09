@@ -528,22 +528,22 @@ func CreateVReplicationTable() []string {
 		"CREATE DATABASE IF NOT EXISTS _vt",
 		"DROP TABLE IF EXISTS _vt.blp_checkpoint",
 		`CREATE TABLE IF NOT EXISTS _vt.vreplication (
-  id INT AUTO_INCREMENT,
-  workflow VARBINARY(1000),
-  source VARBINARY(10000) NOT NULL,
-  pos VARBINARY(10000) NOT NULL,
-  stop_pos VARBINARY(10000) DEFAULT NULL,
-  max_tps BIGINT(20) NOT NULL,
-  max_replication_lag BIGINT(20) NOT NULL,
-  cell VARBINARY(1000) DEFAULT NULL,
-  tablet_types VARBINARY(100) DEFAULT NULL,
-  time_updated BIGINT(20) NOT NULL,
-  transaction_timestamp BIGINT(20) NOT NULL,
-  state VARBINARY(100) NOT NULL,
-  message VARBINARY(1000) DEFAULT NULL,
-  db_name VARBINARY(255) NOT NULL,
-  PRIMARY KEY (id)
-) ENGINE=InnoDB`,
+		  id INT AUTO_INCREMENT,
+		  workflow VARBINARY(1000),
+		  source VARBINARY(10000) NOT NULL,
+		  pos VARBINARY(10000) NOT NULL,
+		  stop_pos VARBINARY(10000) DEFAULT NULL,
+		  max_tps BIGINT(20) NOT NULL,
+		  max_replication_lag BIGINT(20) NOT NULL,
+		  cell VARBINARY(1000) DEFAULT NULL,
+		  tablet_types VARBINARY(100) DEFAULT NULL,
+		  time_updated BIGINT(20) NOT NULL,
+		  transaction_timestamp BIGINT(20) NOT NULL,
+		  state VARBINARY(100) NOT NULL,
+		  message VARBINARY(1000) DEFAULT NULL,
+		  db_name VARBINARY(255) NOT NULL,
+		  PRIMARY KEY (id)
+		) ENGINE=InnoDB`,
 	}
 }
 
