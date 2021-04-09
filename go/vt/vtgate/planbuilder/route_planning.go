@@ -46,7 +46,7 @@ func gen4Planner(_ string) func(sqlparser.Statement, sqlparser.BindVars, Context
 }
 
 func newBuildSelectPlan(sel *sqlparser.Select, vschema ContextVSchema) (engine.Primitive, error) {
-	semTable, err := semantics.Analyse(sel) // TODO no nil no
+	semTable, err := semantics.Analyse(sel, vschema)
 	if err != nil {
 		return nil, err
 	}
