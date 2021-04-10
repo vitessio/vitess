@@ -20,6 +20,8 @@ import (
 	"errors"
 	"fmt"
 
+	"vitess.io/vitess/go/sqltypes"
+
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
 
 	"vitess.io/vitess/go/vt/vtgate/semantics"
@@ -162,17 +164,58 @@ func planOrderBy(qp *queryProjection, plan logicalPlan, semTable *semantics.SemT
 			if !exists {
 				return nil, semantics.Gen4NotSupportedF("order by column not exists in select list")
 			}
+			colName, ok := order.Expr.(*sqlparser.ColName)
+			if !ok {
+				return nil, semantics.Gen4NotSupportedF("order by non-column expression")
+			}
+
+			table := semTable.Dependencies(colName)
+			tableInfo, err := semTable.TableInfoFor(table)
+			if err != nil {
+				return nil, err
+			}
+			weightStringNeeded := true
+			for _, c := range tableInfo.Table.Columns {
+				if colName.Name.Equal(c.Name) {
+					if sqltypes.IsNumber(c.Type) {
+						weightStringNeeded = false
+					}
+					break
+				}
+			}
+
+			weightStringOffset := -1
+			if weightStringNeeded {
+				expr := &sqlparser.AliasedExpr{
+					Expr: &sqlparser.FuncExpr{
+						Name: sqlparser.NewColIdent("weight_string"),
+						Exprs: []sqlparser.SelectExpr{
+							&sqlparser.AliasedExpr{
+								Expr: order.Expr,
+							},
+						},
+					},
+				}
+				weightStringOffset, err = pushProjection(expr, plan, semTable)
+				if err != nil {
+					return nil, err
+				}
+			}
+			if weightStringOffset != -1 {
+				plan.eroute.TruncateColumnCount = len(qp.selectExprs) + len(qp.aggrExprs)
+			}
+
 			plan.eroute.OrderBy = append(plan.eroute.OrderBy, engine.OrderbyParams{
 				Col:             offset,
-				WeightStringCol: -1,
+				WeightStringCol: weightStringOffset,
 				Desc:            order.Direction == sqlparser.DescOrder,
 			})
 			plan.Select.AddOrder(order)
 		}
+		return plan, nil
 	default:
 		return nil, semantics.Gen4NotSupportedF("ordering on complex query")
 	}
-	return plan, nil
 }
 
 var errSQLCalcFoundRows = vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.CantUseOptionHere, "Incorrect usage/placement of 'SQL_CALC_FOUND_ROWS'")

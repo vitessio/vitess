@@ -735,6 +735,9 @@ func (route *Route) description() PrimitiveDescription {
 	if orderBy != "" {
 		other["OrderBy"] = orderBy
 	}
+	if route.TruncateColumnCount > 0 {
+		other["ResultColumns"] = route.TruncateColumnCount
+	}
 
 	return PrimitiveDescription{
 		OperatorType:      "Route",

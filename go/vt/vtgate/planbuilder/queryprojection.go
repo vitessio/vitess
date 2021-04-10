@@ -40,7 +40,9 @@ type queryProjection struct {
 
 	//groupExprs  sqlparser.GroupBy
 
-	orderExprs      sqlparser.OrderBy
+	orderExprs sqlparser.OrderBy
+
+	// orderExprColMap keeps a map between the Order object and the offset into the select expressions list
 	orderExprColMap map[*sqlparser.Order]int
 }
 
