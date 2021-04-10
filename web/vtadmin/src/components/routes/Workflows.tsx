@@ -19,6 +19,7 @@ import { Link } from 'react-router-dom';
 
 import { useWorkflows } from '../../hooks/api';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
+import { DataCell } from '../dataTable/DataCell';
 import { DataTable } from '../dataTable/DataTable';
 
 export const Workflows = () => {
@@ -39,10 +40,19 @@ export const Workflows = () => {
 
             return (
                 <tr key={idx}>
-                    <td>{href ? <Link to={href}>{workflow?.name}</Link> : workflow?.name}</td>
-                    <td>{cluster?.name}</td>
-                    <td>{workflow?.source?.keyspace || <span className="text-color-secondary">n/a</span>}</td>
-                    <td>{workflow?.target?.keyspace || <span className="text-color-secondary">n/a</span>}</td>
+                    <DataCell>
+                        <div className="font-weight-bold">
+                            {href ? <Link to={href}>{workflow?.name}</Link> : workflow?.name}
+                        </div>
+                    </DataCell>
+                    <DataCell>
+                        {workflow?.source?.keyspace || <span className="text-color-secondary">n/a</span>}
+                        <div className="font-size-small text-color-secondary">{cluster?.name}</div>
+                    </DataCell>
+                    <DataCell>
+                        {workflow?.target?.keyspace || <span className="text-color-secondary">n/a</span>}
+                        <div className="font-size-small text-color-secondary">{cluster?.name}</div>
+                    </DataCell>
                 </tr>
             );
         });
@@ -50,11 +60,7 @@ export const Workflows = () => {
     return (
         <div className="max-width-content">
             <h1>Workflows</h1>
-            <DataTable
-                columns={['Workflow', 'Cluster', 'Source', 'Target']}
-                data={sortedData}
-                renderRows={renderRows}
-            />
+            <DataTable columns={['Workflow', 'Source', 'Target']} data={sortedData} renderRows={renderRows} />
         </div>
     );
 };

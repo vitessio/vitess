@@ -18,6 +18,7 @@ import * as React from 'react';
 import { useGates } from '../../hooks/api';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import { vtadmin as pb } from '../../proto/vtadmin';
+import { DataCell } from '../dataTable/DataCell';
 import { DataTable } from '../dataTable/DataTable';
 
 export const Gates = () => {
@@ -31,8 +32,8 @@ export const Gates = () => {
     const renderRows = (gates: pb.VTGate[]) =>
         gates.map((gate, idx) => (
             <tr key={idx}>
-                <td>{gate.cluster?.name}</td>
-                <td>{gate.hostname}</td>
+                <DataCell>{gate.cluster?.name}</DataCell>
+                <DataCell>{gate.hostname}</DataCell>
             </tr>
         ));
 
