@@ -44,14 +44,13 @@ export const Workflows = () => {
                         <div className="font-weight-bold">
                             {href ? <Link to={href}>{workflow?.name}</Link> : workflow?.name}
                         </div>
+                        <div className="font-size-small text-color-secondary">{cluster?.name}</div>
                     </DataCell>
                     <DataCell>
                         {workflow?.source?.keyspace || <span className="text-color-secondary">n/a</span>}
-                        <div className="font-size-small text-color-secondary">{cluster?.name}</div>
                     </DataCell>
                     <DataCell>
                         {workflow?.target?.keyspace || <span className="text-color-secondary">n/a</span>}
-                        <div className="font-size-small text-color-secondary">{cluster?.name}</div>
                     </DataCell>
                 </tr>
             );
