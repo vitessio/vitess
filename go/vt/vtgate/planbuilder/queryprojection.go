@@ -24,21 +24,9 @@ import (
 )
 
 type queryProjection struct {
-	/*
-		select id1, id3, count(id2) as iddd from... group by id3, id1 order by id1, id3
-		select id1, id3, count(id2) as iddd from... group by id3, id1 order by id1, id1
-
-		exprs : id1, id3
-		aggr : count(id2)
-		grouping : id3, id1
-		ordering: id1, id3
-	*/
-
 	selectExprs             []*sqlparser.AliasedExpr
 	aggrExprs               []*sqlparser.AliasedExpr
 	groupOrderingCommonExpr map[sqlparser.Expr]*sqlparser.Order
-
-	//groupExprs  sqlparser.GroupBy
 
 	orderExprs sqlparser.OrderBy
 
@@ -91,15 +79,6 @@ func createQPFromSelect(sel *sqlparser.Select) (*queryProjection, error) {
 	if sel.GroupBy == nil || sel.OrderBy == nil {
 		return qp, nil
 	}
-
-	//for _, exp := range sel.GroupBy {
-	//	for _, order := range sel.OrderBy {
-	//		if sqlparser.EqualsExpr(exp, order.Expr) {
-	//			qp.groupOrderingCommonExpr[exp] = order
-	//			break
-	//		}
-	//	}
-	//}
 
 	return qp, nil
 }
