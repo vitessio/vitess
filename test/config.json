@@ -302,6 +302,15 @@
 			"RetryMax": 0,
 			"Tags": []
 		},
+		"onlineddl_declarative": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl/declarative"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "onlineddl_declarative",
+			"RetryMax": 0,
+			"Tags": []
+		},
 		"pitr": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/recovery/pitr"],

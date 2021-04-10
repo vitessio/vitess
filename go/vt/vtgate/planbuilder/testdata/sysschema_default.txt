@@ -1,0 +1,17 @@
+# max_allowed_packet
+"select @@max_allowed_packet from dual"
+{
+  "QueryType": "SELECT",
+  "Original": "select @@max_allowed_packet from dual",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectReference",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select @@max_allowed_packet from dual where 1 != 1",
+    "Query": "select @@max_allowed_packet from dual",
+    "Table": "dual"
+  }
+}

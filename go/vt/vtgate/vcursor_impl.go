@@ -282,13 +282,24 @@ func (vc *vcursorImpl) FindTableOrVindex(name sqlparser.TableName) (*vindexes.Ta
 		return nil, nil, "", destTabletType, nil, err
 	}
 	if destKeyspace == "" {
-		destKeyspace = vc.keyspace
+		destKeyspace = vc.getActualKeyspace()
 	}
 	table, vindex, err := vc.vschema.FindTableOrVindex(destKeyspace, name.Name.String(), vc.tabletType)
 	if err != nil {
 		return nil, nil, "", destTabletType, nil, err
 	}
 	return table, vindex, destKeyspace, destTabletType, dest, nil
+}
+
+func (vc *vcursorImpl) getActualKeyspace() string {
+	if !sqlparser.SystemSchema(vc.keyspace) {
+		return vc.keyspace
+	}
+	ks, err := vc.AnyKeyspace()
+	if err != nil {
+		return ""
+	}
+	return ks.Name
 }
 
 // DefaultKeyspace returns the default keyspace of the current request
@@ -740,6 +751,14 @@ func (vc *vcursorImpl) WarnUnshardedOnly(format string, params ...interface{}) {
 			Message: fmt.Sprintf(format, params...),
 		})
 	}
+}
+
+// ForeignKey implements the VCursor interface
+func (vc *vcursorImpl) ForeignKeyMode() string {
+	if foreignKeyMode == nil {
+		return ""
+	}
+	return strings.ToLower(*foreignKeyMode)
 }
 
 // ParseDestinationTarget parses destination target string and sets default keyspace if possible.

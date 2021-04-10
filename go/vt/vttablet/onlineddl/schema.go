@@ -274,6 +274,7 @@ const (
 	sqlDropTrigger       = "DROP TRIGGER IF EXISTS `%a`.`%a`"
 	sqlShowTablesLike    = "SHOW TABLES LIKE '%a'"
 	sqlCreateTableLike   = "CREATE TABLE `%a` LIKE `%a`"
+	sqlDropTable         = "DROP TABLE `%a`"
 	sqlAlterTableOptions = "ALTER TABLE `%a` %s"
 	sqlShowColumnsFrom   = "SHOW COLUMNS FROM `%a`"
 	sqlStartVReplStream  = "UPDATE _vt.vreplication set state='Running' where db_name=%a and workflow=%a"
