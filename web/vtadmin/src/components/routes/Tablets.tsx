@@ -25,6 +25,7 @@ import { Icons } from '../Icon';
 import { filterNouns } from '../../util/filterNouns';
 import style from './Tablets.module.scss';
 import { Button } from '../Button';
+import { DataCell } from '../dataTable/DataCell';
 
 export const Tablets = () => {
     useDocumentTitle('Tablets');
@@ -39,13 +40,15 @@ export const Tablets = () => {
     const renderRows = React.useCallback((rows: typeof filteredData) => {
         return rows.map((t, tdx) => (
             <tr key={tdx}>
-                <td>{t.cluster}</td>
-                <td>{t.keyspace}</td>
-                <td>{t.shard}</td>
-                <td>{t.type}</td>
-                <td>{t.state}</td>
-                <td>{t.alias}</td>
-                <td>{t.hostname}</td>
+                <DataCell>
+                    <div>{t.keyspace}</div>
+                    <div className="font-size-small text-color-secondary">{t.cluster}</div>
+                </DataCell>
+                <DataCell>{t.shard}</DataCell>
+                <DataCell>{t.type}</DataCell>
+                <DataCell>{t.state}</DataCell>
+                <DataCell>{t.alias}</DataCell>
+                <DataCell>{t.hostname}</DataCell>
             </tr>
         ));
     }, []);
@@ -66,7 +69,7 @@ export const Tablets = () => {
                 </Button>
             </div>
             <DataTable
-                columns={['Cluster', 'Keyspace', 'Shard', 'Type', 'State', 'Alias', 'Hostname']}
+                columns={['Keyspace', 'Shard', 'Type', 'State', 'Alias', 'Hostname']}
                 data={filteredData}
                 renderRows={renderRows}
             />
