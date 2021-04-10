@@ -194,9 +194,11 @@ Gen4 plan same as above
     "FieldQuery": "select col, weight_string(col) from `user` where 1 != 1",
     "OrderBy": "0 ASC",
     "Query": "select col, weight_string(col) from `user` order by col asc",
+    "ResultColumns": 1,
     "Table": "`user`"
   }
 }
+Gen4 plan same as above
 
 # ORDER BY on select t.*
 "select t.*, t.col from user t order by t.col"
@@ -213,6 +215,7 @@ Gen4 plan same as above
     "FieldQuery": "select t.*, t.col, weight_string(t.col) from `user` as t where 1 != 1",
     "OrderBy": "9 ASC",
     "Query": "select t.*, t.col, weight_string(t.col) from `user` as t order by t.col asc",
+    "ResultColumns": 2,
     "Table": "`user`"
   }
 }
@@ -232,6 +235,7 @@ Gen4 plan same as above
     "FieldQuery": "select *, col, weight_string(col) from `user` where 1 != 1",
     "OrderBy": "9 ASC",
     "Query": "select *, col, weight_string(col) from `user` order by col asc",
+    "ResultColumns": 2,
     "Table": "`user`"
   }
 }
@@ -251,6 +255,7 @@ Gen4 plan same as above
     "FieldQuery": "select t.*, t.`name`, t.*, t.col, weight_string(t.col) from `user` as t where 1 != 1",
     "OrderBy": "19 ASC",
     "Query": "select t.*, t.`name`, t.*, t.col, weight_string(t.col) from `user` as t order by t.col asc",
+    "ResultColumns": 4,
     "Table": "`user`"
   }
 }
@@ -270,6 +275,7 @@ Gen4 plan same as above
     "FieldQuery": "select *, `name`, *, col, weight_string(col) from `user` where 1 != 1",
     "OrderBy": "19 ASC",
     "Query": "select *, `name`, *, col, weight_string(col) from `user` order by col asc",
+    "ResultColumns": 4,
     "Table": "`user`"
   }
 }
@@ -289,6 +295,7 @@ Gen4 plan same as above
     "FieldQuery": "select user_id, col1, col2, weight_string(user_id) from authoritative where 1 != 1",
     "OrderBy": "0 ASC",
     "Query": "select user_id, col1, col2, weight_string(user_id) from authoritative order by user_id asc",
+    "ResultColumns": 3,
     "Table": "authoritative"
   }
 }
@@ -308,6 +315,7 @@ Gen4 plan same as above
     "FieldQuery": "select user_id, col1, col2, weight_string(col1) from authoritative where 1 != 1",
     "OrderBy": "1 ASC",
     "Query": "select user_id, col1, col2, weight_string(col1) from authoritative order by col1 asc",
+    "ResultColumns": 3,
     "Table": "authoritative"
   }
 }
@@ -327,9 +335,11 @@ Gen4 plan same as above
     "FieldQuery": "select a, textcol1, b, weight_string(a), weight_string(textcol1), weight_string(b) from `user` where 1 != 1",
     "OrderBy": "0 ASC, 1 ASC, 2 ASC",
     "Query": "select a, textcol1, b, weight_string(a), weight_string(textcol1), weight_string(b) from `user` order by a asc, textcol1 asc, b asc",
+    "ResultColumns": 3,
     "Table": "`user`"
   }
 }
+Gen4 plan same as above
 
 # ORDER BY on scatter with text column, qualified name
 "select a, user.textcol1, b from user order by a, textcol1, b"
@@ -346,6 +356,7 @@ Gen4 plan same as above
     "FieldQuery": "select a, `user`.textcol1, b, weight_string(a), weight_string(`user`.textcol1), weight_string(b) from `user` where 1 != 1",
     "OrderBy": "0 ASC, 1 ASC, 2 ASC",
     "Query": "select a, `user`.textcol1, b, weight_string(a), weight_string(`user`.textcol1), weight_string(b) from `user` order by a asc, textcol1 asc, b asc",
+    "ResultColumns": 3,
     "Table": "`user`"
   }
 }
@@ -365,9 +376,11 @@ Gen4 plan same as above
     "FieldQuery": "select a, textcol1, b, textcol2, weight_string(a), weight_string(textcol1), weight_string(b), weight_string(textcol2) from `user` where 1 != 1",
     "OrderBy": "0 ASC, 1 ASC, 2 ASC, 3 ASC",
     "Query": "select a, textcol1, b, textcol2, weight_string(a), weight_string(textcol1), weight_string(b), weight_string(textcol2) from `user` order by a asc, textcol1 asc, b asc, textcol2 asc",
+    "ResultColumns": 4,
     "Table": "`user`"
   }
 }
+Gen4 plan same as above
 
 # ORDER BY invalid col number on scatter
 "select col from user order by 2"
@@ -421,6 +434,7 @@ Gen4 plan same as above
         "FieldQuery": "select col, weight_string(col) from `user` where 1 != 1",
         "OrderBy": "0 ASC",
         "Query": "select col, weight_string(col) from `user` where :__sq_has_values1 = 1 and col in ::__sq1 order by col asc",
+        "ResultColumns": 1,
         "Table": "`user`"
       }
     ]

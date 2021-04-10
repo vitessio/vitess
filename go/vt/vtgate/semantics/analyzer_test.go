@@ -20,6 +20,11 @@ import (
 	"strings"
 	"testing"
 
+	"vitess.io/vitess/go/vt/key"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
+
 	"github.com/stretchr/testify/assert"
 
 	"github.com/stretchr/testify/require"
@@ -163,7 +168,7 @@ func TestNotUniqueTableName(t *testing.T) {
 				t.Skip("table alias not implemented")
 			}
 			parse, _ := sqlparser.Parse(query)
-			_, err := Analyse(parse)
+			_, err := Analyse(parse, &fakeSI{})
 			require.Error(t, err)
 			require.Contains(t, err.Error(), "Not unique table/alias")
 		})
@@ -178,17 +183,69 @@ func TestMissingTable(t *testing.T) {
 	for _, query := range queries {
 		t.Run(query, func(t *testing.T) {
 			parse, _ := sqlparser.Parse(query)
-			_, err := Analyse(parse)
+			_, err := Analyse(parse, &fakeSI{})
 			require.Error(t, err)
 			require.Contains(t, err.Error(), "Unknown table")
 		})
 	}
 }
 
+func TestUnknownColumnMap(t *testing.T) {
+	vt := map[string]*vindexes.Table{
+		"a": {},
+		"b": {},
+	}
+	si := &fakeSI{tables: vt}
+	query := "select col from a, b"
+
+	parse, _ := sqlparser.Parse(query)
+	_, err := Analyse(parse, si)
+	assert.EqualError(t, err, "Column 'col' in field list is ambiguous")
+
+	vt["a"] = &vindexes.Table{
+		Name: sqlparser.NewTableIdent("b"),
+		Columns: []vindexes.Column{{
+			Name: sqlparser.NewColIdent("col2"),
+			Type: querypb.Type_VARCHAR,
+		}},
+		ColumnListAuthoritative: false,
+	}
+	vt["b"] = &vindexes.Table{
+		Name: sqlparser.NewTableIdent("b"),
+		Columns: []vindexes.Column{{
+			Name: sqlparser.NewColIdent("col"),
+			Type: querypb.Type_VARCHAR,
+		}},
+		ColumnListAuthoritative: true,
+	}
+
+	_, err = Analyse(parse, si)
+	assert.EqualError(t, err, "Column 'col' in field list is ambiguous")
+
+	vt["a"].ColumnListAuthoritative = true
+	_, err = Analyse(parse, si)
+	assert.NoError(t, err, "should have found the column")
+
+}
+
 func parseAndAnalyze(t *testing.T, query string) (sqlparser.Statement, *SemTable) {
 	parse, err := sqlparser.Parse(query)
 	require.NoError(t, err)
-	semTable, err := Analyse(parse)
+	semTable, err := Analyse(parse, &fakeSI{
+		tables: map[string]*vindexes.Table{
+			"t": {Name: sqlparser.NewTableIdent("t")},
+		},
+	})
 	require.NoError(t, err)
 	return parse, semTable
+}
+
+var _ SchemaInformation = (*fakeSI)(nil)
+
+type fakeSI struct {
+	tables map[string]*vindexes.Table
+}
+
+func (s *fakeSI) FindTableOrVindex(tablename sqlparser.TableName) (*vindexes.Table, vindexes.Vindex, string, topodatapb.TabletType, key.Destination, error) {
+	return s.tables[sqlparser.String(tablename)], nil, "", 0, nil, nil
 }

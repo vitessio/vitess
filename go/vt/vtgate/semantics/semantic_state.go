@@ -17,14 +17,21 @@ limitations under the License.
 package semantics
 
 import (
+	"vitess.io/vitess/go/vt/key"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 type (
-	table = *sqlparser.AliasedTableExpr
+	// TableInfo contains the alias table expr and vindex table
+	TableInfo struct {
+		ASTNode *sqlparser.AliasedTableExpr
+		Table   *vindexes.Table
+	}
 
 	// TableSet is how a set of tables is expressed.
 	// Tables get unique bits assigned in the order that they are encountered during semantic analysis
@@ -33,13 +40,18 @@ type (
 
 	// SemTable contains semantic analysis information about the query.
 	SemTable struct {
-		Tables           []table
+		Tables           []*TableInfo
 		exprDependencies map[sqlparser.Expr]TableSet
 	}
 
 	scope struct {
 		parent *scope
-		tables map[string]*sqlparser.AliasedTableExpr
+		tables map[string]*TableInfo
+	}
+
+	// SchemaInformation is used tp provide table information from Vschema.
+	SchemaInformation interface {
+		FindTableOrVindex(tablename sqlparser.TableName) (*vindexes.Table, vindexes.Vindex, string, topodatapb.TabletType, key.Destination, error)
 	}
 )
 
@@ -49,13 +61,21 @@ func NewSemTable() *SemTable {
 }
 
 // TableSetFor returns the bitmask for this particular tableshoe
-func (st *SemTable) TableSetFor(t table) TableSet {
+func (st *SemTable) TableSetFor(t *sqlparser.AliasedTableExpr) TableSet {
 	for idx, t2 := range st.Tables {
-		if t == t2 {
+		if t == t2.ASTNode {
 			return 1 << idx
 		}
 	}
 	return 0
+}
+
+// TableInfoFor returns the table info for the table set. It should contains only single table.
+func (st *SemTable) TableInfoFor(id TableSet) (*TableInfo, error) {
+	if id.NumberOfTables() > 1 {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] should only be used for single tables")
+	}
+	return st.Tables[id.TableOffset()], nil
 }
 
 // Dependencies return the table dependencies of the expression.
@@ -80,10 +100,10 @@ func (st *SemTable) Dependencies(expr sqlparser.Expr) TableSet {
 }
 
 func newScope(parent *scope) *scope {
-	return &scope{tables: map[string]*sqlparser.AliasedTableExpr{}, parent: parent}
+	return &scope{tables: map[string]*TableInfo{}, parent: parent}
 }
 
-func (s *scope) addTable(name string, table *sqlparser.AliasedTableExpr) error {
+func (s *scope) addTable(name string, table *TableInfo) error {
 	_, found := s.tables[name]
 	if found {
 		return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.NonUniqTable, "Not unique table/alias: '%s'", name)
@@ -93,8 +113,8 @@ func (s *scope) addTable(name string, table *sqlparser.AliasedTableExpr) error {
 }
 
 // Analyse analyzes the parsed query.
-func Analyse(statement sqlparser.Statement) (*SemTable, error) {
-	analyzer := newAnalyzer()
+func Analyse(statement sqlparser.Statement, si SchemaInformation) (*SemTable, error) {
+	analyzer := newAnalyzer(si)
 	// Initial scope
 	err := analyzer.analyze(statement)
 	if err != nil {
@@ -118,6 +138,16 @@ func (ts TableSet) NumberOfTables() int {
 		count++
 	}
 	return count
+}
+
+// TableOffset returns the offset in the Tables array from TableSet
+func (ts TableSet) TableOffset() int {
+	offset := 0
+	for ts > 1 {
+		ts = ts >> 1
+		offset++
+	}
+	return offset
 }
 
 // Constituents returns an slice with all the

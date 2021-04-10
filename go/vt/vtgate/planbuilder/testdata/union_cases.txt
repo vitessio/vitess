@@ -122,6 +122,7 @@ Gen4 plan same as above
             "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1",
             "OrderBy": "0 DESC",
             "Query": "select id, weight_string(id) from `user` order by id desc limit :__upper_limit",
+            "ResultColumns": 1,
             "Table": "`user`"
           }
         ]
@@ -140,6 +141,7 @@ Gen4 plan same as above
             "FieldQuery": "select id, weight_string(id) from music where 1 != 1",
             "OrderBy": "0 DESC",
             "Query": "select id, weight_string(id) from music order by id desc limit :__upper_limit",
+            "ResultColumns": 1,
             "Table": "music"
           }
         ]
@@ -208,6 +210,7 @@ Gen4 plan same as above
             "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1",
             "OrderBy": "0 ASC",
             "Query": "select id, weight_string(id) from `user` order by id asc limit :__upper_limit",
+            "ResultColumns": 1,
             "Table": "`user`"
           }
         ]
@@ -226,6 +229,7 @@ Gen4 plan same as above
             "FieldQuery": "select id, weight_string(id) from music where 1 != 1",
             "OrderBy": "0 DESC",
             "Query": "select id, weight_string(id) from music order by id desc limit :__upper_limit",
+            "ResultColumns": 1,
             "Table": "music"
           }
         ]
@@ -647,6 +651,7 @@ Gen4 plan same as above
             "FieldQuery": "select 1, weight_string(1) from `user` where 1 != 1",
             "OrderBy": "0 DESC",
             "Query": "select 1, weight_string(1) from `user` order by 1 desc",
+            "ResultColumns": 1,
             "Table": "`user`"
           },
           {
@@ -659,6 +664,7 @@ Gen4 plan same as above
             "FieldQuery": "select 1, weight_string(1) from `user` where 1 != 1",
             "OrderBy": "0 ASC",
             "Query": "select 1, weight_string(1) from `user` order by 1 asc",
+            "ResultColumns": 1,
             "Table": "`user`"
           }
         ]
