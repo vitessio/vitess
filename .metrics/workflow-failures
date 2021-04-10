@@ -6785,10 +6785,12 @@
 2021-04-10T09:09:44Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/735581976
 2021-04-10T09:09:44Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/735581953
 2021-04-10T09:09:44Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/735581969
+2021-04-10T09:09:44Z,local_example,https://github.com/vitessio/vitess/actions/runs/735581968
 2021-04-10T09:09:44Z,unit_race,https://github.com/vitessio/vitess/actions/runs/735581959
 2021-04-10T09:14:14Z,Unit Test (mariadb101),https://github.com/vitessio/vitess/actions/runs/735589615
 2021-04-10T09:14:14Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/735589582
 2021-04-10T09:14:14Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/735589612
+2021-04-10T09:14:14Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/735589588
 2021-04-10T09:14:14Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/735589591
 2021-04-10T09:14:14Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/735589583
 2021-04-10T09:14:14Z,endtoend,https://github.com/vitessio/vitess/actions/runs/735589599
