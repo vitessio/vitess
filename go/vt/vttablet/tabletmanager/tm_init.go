@@ -41,6 +41,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/golang/protobuf/proto"
+
 	"vitess.io/vitess/go/flagutil"
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -384,8 +386,17 @@ func (tm *TabletManager) createKeyspaceShard(ctx context.Context) (*topo.ShardIn
 	srvKeyspace, err := tm.TopoServer.GetSrvKeyspace(ctx, tm.tabletAlias.Cell, tablet.Keyspace)
 	switch {
 	case err == nil:
-		tm.tmState.RefreshFromTopoInfo(ctx, nil, srvKeyspace)
+		if proto.Equal(srvKeyspace, &topodatapb.SrvKeyspace{}) {
+			// If srvKeyspace exists but is empty we need to rebuild it.
+			// RebuildKeyspace will fail until at least one tablet is up for every shard.
+			// So we call this in a goroutine and retry until it succeeds.
+			go tm.rebuildKeyspace(tablet.Keyspace, rebuildKeyspaceRetryInterval)
+		} else {
+			tm.tmState.RefreshFromTopoInfo(ctx, nil, srvKeyspace)
+		}
 	case topo.IsErrType(err, topo.NoNode):
+		// RebuildKeyspace will fail until at least one tablet is up for every shard.
+		// So we call this in a goroutine and retry until it succeeds.
 		go tm.rebuildKeyspace(tablet.Keyspace, rebuildKeyspaceRetryInterval)
 	default:
 		return nil, vterrors.Wrap(err, "initeKeyspaceShardTopo: failed to read SrvKeyspace")
@@ -403,6 +414,7 @@ func (tm *TabletManager) createKeyspaceShard(ctx context.Context) (*topo.ShardIn
 		}
 	case topo.IsErrType(err, topo.NoNode):
 		// There is no SrvSchema in this cell at all, so we definitely need to rebuild.
+		// No need to call this in a goroutine because it will succeed as soon as the keyspace is present.
 		if err := tm.TopoServer.RebuildSrvVSchema(ctx, []string{tm.tabletAlias.Cell}); err != nil {
 			return nil, vterrors.Wrap(err, "initeKeyspaceShardTopo: failed to RebuildSrvVSchema")
 		}

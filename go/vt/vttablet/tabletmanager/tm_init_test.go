@@ -197,6 +197,13 @@ func TestStartCreateKeyspaceShard(t *testing.T) {
 	defer tm2.Stop()
 	// Now that we've started the tablet for the other shard, srvKeyspace will succeed.
 	ensureSrvKeyspace(t, ts, cell, "ks4")
+
+	// make srvKeyspace empty and start a tablet
+	err = ts.UpdateSrvKeyspace(ctx, cell, "ks4", &topodatapb.SrvKeyspace{})
+	require.NoError(t, err)
+	tm2 = newTestTM(t, ts, 7, "ks4", "80-")
+	defer tm2.Stop()
+	ensureSrvKeyspace(t, ts, cell, "ks4")
 }
 
 func TestCheckMastership(t *testing.T) {
@@ -520,7 +527,7 @@ func newTestTM(t *testing.T, ts *topo.Server, uid int, keyspace, shard string) *
 
 	// Wait for SrvKeyspace to be rebuilt.
 	for i := 0; i < 9; i++ {
-		if _, err := tm.TopoServer.GetSrvKeyspace(ctx, tm.tabletAlias.Cell, "ks"); err != nil {
+		if _, err := tm.TopoServer.GetSrvKeyspace(ctx, tm.tabletAlias.Cell, keyspace); err != nil {
 			if i == 9 {
 				require.NoError(t, err)
 			}
@@ -556,9 +563,11 @@ func ensureSrvKeyspace(t *testing.T, ts *topo.Server, cell, keyspace string) {
 	t.Helper()
 	found := false
 	for i := 0; i < 10; i++ {
-		_, err := ts.GetSrvKeyspace(context.Background(), cell, "ks")
+		ks, err := ts.GetSrvKeyspace(context.Background(), cell, keyspace)
 		if err == nil {
 			found = true
+			// require non-empty
+			require.NotEqual(t, &topodatapb.SrvKeyspace{}, ks, "SrvKeyspace is empty")
 			break
 		}
 		require.True(t, topo.IsErrType(err, topo.NoNode), err)
