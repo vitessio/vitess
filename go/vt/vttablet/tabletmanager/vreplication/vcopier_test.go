@@ -1046,10 +1046,14 @@ func TestPlayerCopyTablesNone(t *testing.T) {
 	}()
 
 	expectDBClientQueries(t, []string{
+		"begin",
 		"/insert into _vt.vreplication",
+		"/insert into _vt.vreplication_log",
+		"commit",
 		"/update _vt.vreplication set message='Picked source tablet.*",
 		"begin",
-		"/update _vt.vreplication set state='Stopped'",
+		"/update _vt.vreplication set state='Error', message='Error: no tables were found to copy'",
+		"/insert into _vt.vreplication_log",
 		"commit",
 	})
 }
@@ -1096,12 +1100,17 @@ func TestPlayerCopyTablesStopAfterCopy(t *testing.T) {
 	}()
 
 	expectDBClientQueries(t, []string{
+		"begin",
 		"/insert into _vt.vreplication",
+		"/insert into _vt.vreplication_log",
+		"commit",
 		"/update _vt.vreplication set message='Picked source tablet.*",
 		// Create the list of tables to copy and transition to Copying state.
 		"begin",
 		"/insert into _vt.copy_state",
 		"/update _vt.vreplication set state='Copying'",
+		"/insert into _vt.vreplication_log",
+		"/insert into _vt.vreplication_log",
 		"commit",
 		// The first fast-forward has no starting point. So, it just saves the current position.
 		"/update _vt.vreplication set pos=",
@@ -1111,8 +1120,10 @@ func TestPlayerCopyTablesStopAfterCopy(t *testing.T) {
 		"commit",
 		// copy of dst1 is done: delete from copy_state.
 		"/delete from _vt.copy_state.*dst1",
+		"/insert into _vt.vreplication_log",
 		// All tables copied. Stop vreplication because we requested it.
 		"/update _vt.vreplication set state='Stopped'",
+		"/insert into _vt.vreplication_log",
 	})
 	expectData(t, "dst1", [][]string{
 		{"1", "aaa"},

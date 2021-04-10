@@ -2502,9 +2502,13 @@ func startVReplication(t *testing.T, bls *binlogdatapb.BinlogSource, pos string)
 		t.Fatal(err)
 	}
 	expectDBClientQueries(t, []string{
+		"begin",
 		"/insert into _vt.vreplication",
+		"/insert into _vt.vreplication_log",
+		"commit",
 		"/update _vt.vreplication set message='Picked source tablet.*",
 		"/update _vt.vreplication set state='Running'",
+		"/insert into _vt.vreplication_log",
 	})
 	var once sync.Once
 	return func() {
