@@ -67,10 +67,12 @@ func TestExternalConnectorCopy(t *testing.T) {
 		"/update _vt.copy_state",
 		"commit",
 		"/delete from _vt.copy_state",
+		"/insert into _vt.vreplication_log",
 		"/update _vt.vreplication set state='Running'",
 	}, "")
 	execStatements(t, []string{"insert into tab1 values(3, 'c')"})
 	expectDBClientQueries(t, []string{
+		"/insert into _vt.vreplication_log",
 		"begin",
 		"insert into tab1(id,val) values (3,'c')",
 		"/update _vt.vreplication set pos=",
@@ -99,6 +101,7 @@ func TestExternalConnectorCopy(t *testing.T) {
 		"/update _vt.copy_state",
 		"commit",
 		"/delete from _vt.copy_state",
+		"/insert into _vt.vreplication_log",
 		"/update _vt.vreplication set state='Running'",
 	}, "")
 	cancel2()
@@ -124,6 +127,7 @@ func TestExternalConnectorCopy(t *testing.T) {
 		"/update _vt.copy_state",
 		"commit",
 		"/delete from _vt.copy_state",
+		"/insert into _vt.vreplication_log",
 		"/update _vt.vreplication set state='Running'",
 	}, "")
 	cancel3()
@@ -179,10 +183,15 @@ func expectDBClientAndVreplicationQueries(t *testing.T, queries []string, pos st
 func getExpectedVreplicationQueries(t *testing.T, pos string) []string {
 	if pos == "" {
 		return []string{
+			"begin",
 			"/insert into _vt.vreplication",
+			"/insert into _vt.vreplication_log",
+			"commit",
 			"begin",
 			"/insert into _vt.copy_state",
 			"/update _vt.vreplication set state='Copying'",
+			"/insert into _vt.vreplication_log",
+			"/insert into _vt.vreplication_log",
 			"commit",
 			"/update _vt.vreplication set pos=",
 		}
