@@ -139,7 +139,7 @@ func (vr *vreplicator) Replicate(ctx context.Context) error {
 	err := vr.replicate(ctx)
 	if err != nil {
 		log.Errorf("Replicate error: %s", err.Error())
-		if err := vr.setMessage(fmt.Sprintf("Error: %s", err.Error())); err != nil {
+		if err := vr.setState(binlogplayer.BlpError, fmt.Sprintf("Error: %s", err.Error())); err != nil {
 			log.Errorf("Failed to set error state: %v", err)
 		}
 	}
@@ -172,7 +172,7 @@ func (vr *vreplicator) replicate(ctx context.Context) error {
 			return err
 		}
 		// If any of the operations below changed state to Stopped, we should return.
-		if settings.State == binlogplayer.BlpStopped {
+		if settings.State == binlogplayer.BlpStopped || settings.State == binlogplayer.BlpError {
 			return nil
 		}
 
@@ -185,6 +185,15 @@ func (vr *vreplicator) replicate(ctx context.Context) error {
 			if err := newVCopier(vr).copyNext(ctx, settings); err != nil {
 				vr.stats.ErrorCounts.Add([]string{"Copy"}, 1)
 				return err
+			}
+			settings, numTablesToCopy, err = vr.readSettings(ctx)
+			if err != nil {
+				return err
+			}
+			if numTablesToCopy == 0 {
+				if err := vr.insertLog(LogCopyEnd, fmt.Sprintf("Copy phase completed at gtid %s", settings.StartPos)); err != nil {
+					return err
+				}
 			}
 		case settings.StartPos.IsZero():
 			if err := newVCopier(vr).initTablesForCopy(ctx); err != nil {
@@ -305,6 +314,8 @@ func (vr *vreplicator) readSettings(ctx context.Context) (settings binlogplayer.
 	return settings, numTablesToCopy, nil
 }
 
+// setMessage updates the message column. It is used by vreplication to log errors in a stream
+// and by vdiff when it stops streams to take snapshots
 func (vr *vreplicator) setMessage(message string) error {
 	vr.stats.History.Add(&binlogplayer.StatsHistoryRecord{
 		Time:    time.Now(),
@@ -314,10 +325,14 @@ func (vr *vreplicator) setMessage(message string) error {
 	if _, err := vr.dbClient.Execute(query); err != nil {
 		return fmt.Errorf("could not set message: %v: %v", query, err)
 	}
-	if err := insertLog(vr.dbClient, vr.id, vr.state, message); err != nil {
+	if err := insertLog(vr.dbClient, LogError, vr.id, vr.state, message); err != nil {
 		return err
 	}
 	return nil
+}
+
+func (vr *vreplicator) insertLog(typ, message string) error {
+	return insertLog(vr.dbClient, typ, vr.id, vr.state, message)
 }
 
 func (vr *vreplicator) setState(state, message string) error {
@@ -333,7 +348,7 @@ func (vr *vreplicator) setState(state, message string) error {
 	if _, err := vr.dbClient.ExecuteFetch(query, 1); err != nil {
 		return fmt.Errorf("could not set state: %v: %v", query, err)
 	}
-	if err := insertLog(vr.dbClient, vr.id, vr.state, message); err != nil {
+	if err := insertLog(vr.dbClient, LogStateChange, vr.id, vr.state, message); err != nil {
 		return err
 	}
 	return nil

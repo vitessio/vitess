@@ -18,7 +18,6 @@ package vreplication
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -343,6 +342,7 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 	}
 
 	dbClient := vre.getDBClient(runAsAdmin)
+	vdbc := newVDBClient(dbClient, binlogplayer.NewStats())
 
 	if err := dbClient.Connect(); err != nil {
 		return nil, err
@@ -382,8 +382,9 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 			}
 			vre.controllers[id] = ct
 
-			obj, _ := json.Marshal(params)
-			insertLog(newVDBClient(dbClient, binlogplayer.NewStats()), uint32(id), params["state"], string(obj))
+			if err := insertLogWithParams(vdbc, LogStreamCreate, uint32(id), params); err != nil {
+				return nil, err
+			}
 
 		}
 		dbClient.Commit()
@@ -424,6 +425,9 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 				return nil, err
 			}
 			vre.controllers[id] = ct
+			if err := insertLogWithParams(vdbc, LogStreamUpdate, uint32(id), params); err != nil {
+				return nil, err
+			}
 		}
 		return qr, nil
 	case deleteQuery:
@@ -439,6 +443,9 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 			if ct := vre.controllers[id]; ct != nil {
 				ct.Stop()
 				delete(vre.controllers, id)
+			}
+			if err := insertLogWithParams(vdbc, LogStreamDelete, uint32(id), nil); err != nil {
+				return nil, err
 			}
 		}
 		if err := dbClient.Begin(); err != nil {
@@ -719,8 +726,8 @@ func (vre *Engine) WaitForPos(ctx context.Context, id int, pos string) error {
 			log.Infof("position: %s reached, wait time: %v", pos, time.Since(start))
 			return nil
 		}
-
-		if qr.Rows[0][1].ToString() == binlogplayer.BlpStopped {
+		state := qr.Rows[0][1].ToString()
+		if state == binlogplayer.BlpStopped || state == binlogplayer.BlpError {
 			return fmt.Errorf("replication has stopped at %v before reaching position %v, message: %s", current, mPos, qr.Rows[0][2].ToString())
 		}
 

@@ -602,7 +602,7 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			switch {
 			case found && notFound:
 				// Some were found and some were not found. We can't handle this.
-				if err := vp.vr.setState(binlogplayer.BlpStopped, "unable to handle journal event: tables were partially matched"); err != nil {
+				if err := vp.vr.setState(binlogplayer.BlpError, "unable to handle journal event: tables were partially matched"); err != nil {
 					return err
 				}
 				return io.EOF
@@ -614,7 +614,7 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 		}
 		log.Infof("Binlog event registering journal event %+v", event.Journal)
 		if err := vp.vr.vre.registerJournal(event.Journal, int(vp.vr.id)); err != nil {
-			if err := vp.vr.setState(binlogplayer.BlpStopped, err.Error()); err != nil {
+			if err := vp.vr.setState(binlogplayer.BlpError, err.Error()); err != nil {
 				return err
 			}
 			return io.EOF

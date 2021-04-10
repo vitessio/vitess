@@ -78,8 +78,11 @@ func (vc *vcopier) initTablesForCopy(ctx context.Context) error {
 		if err := vc.vr.setState(binlogplayer.VReplicationCopying, ""); err != nil {
 			return err
 		}
+		if err := vc.vr.insertLog(LogCopyStart, fmt.Sprintf("Copy phase started for %d tables", len(plan.TargetTables))); err != nil {
+			return err
+		}
 	} else {
-		if err := vc.vr.setState(binlogplayer.BlpStopped, "There is nothing to replicate"); err != nil {
+		if err := vc.vr.setState(binlogplayer.BlpError, "Error: no tables were found to copy"); err != nil {
 			return err
 		}
 	}

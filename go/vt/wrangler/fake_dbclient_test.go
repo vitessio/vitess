@@ -63,13 +63,15 @@ func (dbrs *dbResults) exhausted() bool {
 
 // fakeDBClient fakes a binlog_player.DBClient.
 type fakeDBClient struct {
-	queries    map[string]*dbResults
-	queriesRE  map[string]*dbResults
-	invariants map[string]*sqltypes.Result
+	queries      map[string]*dbResults
+	queriesRE    map[string]*dbResults
+	invariants   map[string]*sqltypes.Result
+	invariantsRE map[string]*sqltypes.Result
+	tablet       string
 }
 
 // NewfakeDBClient returns a new DBClientMock.
-func newFakeDBClient() *fakeDBClient {
+func newFakeDBClient(tablet string) *fakeDBClient {
 	return &fakeDBClient{
 		queries:   make(map[string]*dbResults),
 		queriesRE: make(map[string]*dbResults),
@@ -77,6 +79,11 @@ func newFakeDBClient() *fakeDBClient {
 			"use _vt": {},
 			"select * from _vt.vreplication where db_name='db'": {},
 		},
+		invariantsRE: map[string]*sqltypes.Result{
+			"select id, type, state, message from _vt.vreplication_log.*": {},
+			"insert into _vt.vreplication_log.*":                          {},
+		},
+		tablet: tablet,
 	}
 }
 
@@ -100,6 +107,10 @@ func (dc *fakeDBClient) addQueryRE(query string, result *sqltypes.Result, err er
 
 func (dc *fakeDBClient) addInvariant(query string, result *sqltypes.Result) {
 	dc.invariants[query] = result
+}
+
+func (dc *fakeDBClient) addInvariantRE(query string, result *sqltypes.Result) {
+	dc.invariantsRE[query] = result
 }
 
 // DBName is part of the DBClient interface
@@ -152,9 +163,13 @@ func (dc *fakeDBClient) ExecuteFetch(query string, maxrows int) (qr *sqltypes.Re
 			return result, nil
 		}
 	}
-
-	log.Infof("Missing query: >>>>>>>>>>>>>>>>>>%s<<<<<<<<<<<<<<<", query)
-	return nil, fmt.Errorf("unexpected query: %s", query)
+	for re, result := range dc.invariantsRE {
+		if regexp.MustCompile(re).MatchString(query) {
+			return result, nil
+		}
+	}
+	log.Infof("tablet %s: missing query: >>>>>>>>>>>>>>>>>>%s<<<<<<<<<<<<<<<", dc.tablet, query)
+	return nil, fmt.Errorf("tablet %s: unexpected query: %s", dc.tablet, query)
 }
 
 func (dc *fakeDBClient) verifyQueries(t *testing.T) {
