@@ -6822,3 +6822,5 @@
 2021-04-10T20:03:39Z,Cluster (onlineddl_declarative),https://github.com/vitessio/vitess/actions/runs/736632882
 2021-04-10T20:03:39Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/736632865
 2021-04-10T20:03:39Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/736632863
+2021-04-10T20:03:39Z,local_example,https://github.com/vitessio/vitess/actions/runs/736632892
+2021-04-10T20:03:39Z,region_example,https://github.com/vitessio/vitess/actions/runs/736632887
