@@ -650,11 +650,16 @@ func (ct *ColumnType) formatFast(buf *TrackedBuffer) {
 		buf.WriteByte(' ')
 		buf.WriteString(ct.Collate)
 	}
-	if ct.Options.NotNull {
-		buf.WriteByte(' ')
-		buf.WriteString(keywordStrings[NOT])
-		buf.WriteByte(' ')
-		buf.WriteString(keywordStrings[NULL])
+	if ct.Options.Null != nil {
+		if *ct.Options.Null {
+			buf.WriteByte(' ')
+			buf.WriteString(keywordStrings[NULL])
+		} else {
+			buf.WriteByte(' ')
+			buf.WriteString(keywordStrings[NOT])
+			buf.WriteByte(' ')
+			buf.WriteString(keywordStrings[NULL])
+		}
 	}
 	if ct.Options.Default != nil {
 		buf.WriteByte(' ')

@@ -88,6 +88,9 @@
   --textColorInverted: #fff;
   --textColorSecondary: #718096;
   --textColorDisabled: #cbd5e0;
+
+  /* A common bounding width for views that don't require the full viewport. */
+  --contentWidth: 1200px;
 }
 
 /* Dark theme */
@@ -187,7 +190,11 @@ table tbody td {
   padding: var(--tableCellPadding);
 }
 
-/* Utilities */
+/* One-liner utilities */
+.max-width-content {
+  max-width: var(--contentWidth);
+}
+
 .text-color-secondary {
   color: var(--textColorSecondary);
 }

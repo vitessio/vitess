@@ -509,8 +509,10 @@ func (cached *ColumnTypeOptions) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(56)
+		size += int64(64)
 	}
+	// field Null *bool
+	size += int64(1)
 	// field Default vitess.io/vitess/go/vt/sqlparser.Expr
 	if cc, ok := cached.Default.(cachedObject); ok {
 		size += cc.CachedSize(true)

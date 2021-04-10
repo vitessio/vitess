@@ -106,11 +106,12 @@ type Engine struct {
 	// cancel will cancel the root context, thereby all controllers.
 	cancel context.CancelFunc
 
-	ts              *topo.Server
-	cell            string
-	mysqld          mysqlctl.MysqlDaemon
-	dbClientFactory func() binlogplayer.DBClient
-	dbName          string
+	ts                      *topo.Server
+	cell                    string
+	mysqld                  mysqlctl.MysqlDaemon
+	dbClientFactoryFiltered func() binlogplayer.DBClient
+	dbClientFactoryDba      func() binlogplayer.DBClient
+	dbName                  string
 
 	journaler map[string]*journalEvent
 	ec        *externalConnector
@@ -142,26 +143,30 @@ func NewEngine(config *tabletenv.TabletConfig, ts *topo.Server, cell string, mys
 // InitDBConfig should be invoked after the db name is computed.
 func (vre *Engine) InitDBConfig(dbcfgs *dbconfigs.DBConfigs) {
 	// If we're already initilized, it's a test engine. Ignore the call.
-	if vre.dbClientFactory != nil {
+	if vre.dbClientFactoryFiltered != nil && vre.dbClientFactoryDba != nil {
 		return
 	}
-	vre.dbClientFactory = func() binlogplayer.DBClient {
+	vre.dbClientFactoryFiltered = func() binlogplayer.DBClient {
 		return binlogplayer.NewDBClient(dbcfgs.FilteredWithDB())
+	}
+	vre.dbClientFactoryDba = func() binlogplayer.DBClient {
+		return binlogplayer.NewDBClient(dbcfgs.DbaWithDB())
 	}
 	vre.dbName = dbcfgs.DBName
 }
 
 // NewTestEngine creates a new Engine for testing.
-func NewTestEngine(ts *topo.Server, cell string, mysqld mysqlctl.MysqlDaemon, dbClientFactory func() binlogplayer.DBClient, dbname string, externalConfig map[string]*dbconfigs.DBConfigs) *Engine {
+func NewTestEngine(ts *topo.Server, cell string, mysqld mysqlctl.MysqlDaemon, dbClientFactoryFiltered func() binlogplayer.DBClient, dbClientFactoryDba func() binlogplayer.DBClient, dbname string, externalConfig map[string]*dbconfigs.DBConfigs) *Engine {
 	vre := &Engine{
-		controllers:     make(map[int]*controller),
-		ts:              ts,
-		cell:            cell,
-		mysqld:          mysqld,
-		dbClientFactory: dbClientFactory,
-		dbName:          dbname,
-		journaler:       make(map[string]*journalEvent),
-		ec:              newExternalConnector(externalConfig),
+		controllers:             make(map[int]*controller),
+		ts:                      ts,
+		cell:                    cell,
+		mysqld:                  mysqld,
+		dbClientFactoryFiltered: dbClientFactoryFiltered,
+		dbClientFactoryDba:      dbClientFactoryDba,
+		dbName:                  dbname,
+		journaler:               make(map[string]*journalEvent),
+		ec:                      newExternalConnector(externalConfig),
 	}
 	return vre
 }
@@ -243,7 +248,7 @@ func (vre *Engine) retry(ctx context.Context, err error) {
 
 func (vre *Engine) initControllers(rows []map[string]string) {
 	for _, row := range rows {
-		ct, err := newController(vre.ctx, row, vre.dbClientFactory, vre.mysqld, vre.ts, vre.cell, *tabletTypesStr, nil, vre)
+		ct, err := newController(vre.ctx, row, vre.dbClientFactoryFiltered, vre.mysqld, vre.ts, vre.cell, *tabletTypesStr, nil, vre)
 		if err != nil {
 			log.Errorf("Controller could not be initialized for stream: %v", row)
 			continue
@@ -294,6 +299,23 @@ func (vre *Engine) Close() {
 	log.Infof("VReplication Engine: closed")
 }
 
+func (vre *Engine) getDBClient(isAdmin bool) binlogplayer.DBClient {
+	if isAdmin {
+		return vre.dbClientFactoryDba()
+	}
+	return vre.dbClientFactoryFiltered()
+}
+
+// ExecWithDBA runs the specified query as the DBA user
+func (vre *Engine) ExecWithDBA(query string) (*sqltypes.Result, error) {
+	return vre.exec(query, true /*runAsAdmin*/)
+}
+
+// Exec runs the specified query as the Filtered user
+func (vre *Engine) Exec(query string) (*sqltypes.Result, error) {
+	return vre.exec(query, false /*runAsAdmin*/)
+}
+
 // Exec executes the query and the related actions.
 // Example insert statement:
 // insert into _vt.vreplication
@@ -303,7 +325,7 @@ func (vre *Engine) Close() {
 // update _vt.vreplication set state='Stopped', message='testing stop' where id=1
 // Example delete: delete from _vt.vreplication where id=1
 // Example select: select * from _vt.vreplication
-func (vre *Engine) Exec(query string) (*sqltypes.Result, error) {
+func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error) {
 	vre.mu.Lock()
 	defer vre.mu.Unlock()
 	if !vre.isOpen {
@@ -318,7 +340,9 @@ func (vre *Engine) Exec(query string) (*sqltypes.Result, error) {
 	if err != nil {
 		return nil, err
 	}
-	dbClient := vre.dbClientFactory()
+
+	dbClient := vre.getDBClient(runAsAdmin)
+
 	if err := dbClient.Connect(); err != nil {
 		return nil, err
 	}
@@ -350,7 +374,7 @@ func (vre *Engine) Exec(query string) (*sqltypes.Result, error) {
 			if err != nil {
 				return nil, err
 			}
-			ct, err := newController(vre.ctx, params, vre.dbClientFactory, vre.mysqld, vre.ts, vre.cell, *tabletTypesStr, nil, vre)
+			ct, err := newController(vre.ctx, params, vre.dbClientFactoryFiltered, vre.mysqld, vre.ts, vre.cell, *tabletTypesStr, nil, vre)
 			if err != nil {
 				return nil, err
 			}
@@ -388,7 +412,7 @@ func (vre *Engine) Exec(query string) (*sqltypes.Result, error) {
 			}
 			// Create a new controller in place of the old one.
 			// For continuity, the new controller inherits the previous stats.
-			ct, err := newController(vre.ctx, params, vre.dbClientFactory, vre.mysqld, vre.ts, vre.cell, *tabletTypesStr, blpStats[id], vre)
+			ct, err := newController(vre.ctx, params, vre.dbClientFactoryFiltered, vre.mysqld, vre.ts, vre.cell, *tabletTypesStr, blpStats[id], vre)
 			if err != nil {
 				return nil, err
 			}
@@ -569,7 +593,7 @@ func (vre *Engine) transitionJournal(je *journalEvent) {
 		vre.controllers[refid].Stop()
 	}
 
-	dbClient := vre.dbClientFactory()
+	dbClient := vre.dbClientFactoryFiltered()
 	if err := dbClient.Connect(); err != nil {
 		log.Errorf("transitionJournal: unable to connect to the database: %v", err)
 		return
@@ -628,7 +652,7 @@ func (vre *Engine) transitionJournal(je *journalEvent) {
 			log.Errorf("transitionJournal: %v", err)
 			return
 		}
-		ct, err := newController(vre.ctx, params, vre.dbClientFactory, vre.mysqld, vre.ts, vre.cell, *tabletTypesStr, nil, vre)
+		ct, err := newController(vre.ctx, params, vre.dbClientFactoryFiltered, vre.mysqld, vre.ts, vre.cell, *tabletTypesStr, nil, vre)
 		if err != nil {
 			log.Errorf("transitionJournal: %v", err)
 			return
@@ -661,7 +685,7 @@ func (vre *Engine) WaitForPos(ctx context.Context, id int, pos string) error {
 	}
 	defer vre.wg.Done()
 
-	dbClient := vre.dbClientFactory()
+	dbClient := vre.dbClientFactoryFiltered()
 	if err := dbClient.Connect(); err != nil {
 		return err
 	}
@@ -717,7 +741,7 @@ func (vre *Engine) updateStats() {
 }
 
 func (vre *Engine) readAllRows(ctx context.Context) ([]map[string]string, error) {
-	dbClient := vre.dbClientFactory()
+	dbClient := vre.dbClientFactoryFiltered()
 	if err := dbClient.Connect(); err != nil {
 		return nil, err
 	}
