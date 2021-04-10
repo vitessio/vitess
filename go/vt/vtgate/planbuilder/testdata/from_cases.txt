@@ -2317,10 +2317,12 @@ Gen4 plan same as above
 # non-existent table on left of join
 "select c from t join user"
 "table t not found"
+Gen4 plan same as above
 
 # non-existent table on right of join
 "select c from user join t"
 "table t not found"
+Gen4 plan same as above
 
 # information schema query that uses table_schema
 "select column_name from information_schema.columns where table_schema = (select schema())"

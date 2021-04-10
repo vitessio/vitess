@@ -22,6 +22,10 @@ import (
 	"strings"
 	"testing"
 
+	"vitess.io/vitess/go/vt/key"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
+
 	"github.com/stretchr/testify/assert"
 
 	"vitess.io/vitess/go/test/utils"
@@ -119,7 +123,7 @@ func TestQueryGraph(t *testing.T) {
 		t.Run(fmt.Sprintf("%d %s", i, sql), func(t *testing.T) {
 			tree, err := sqlparser.Parse(sql)
 			require.NoError(t, err)
-			semTable, err := semantics.Analyse(tree)
+			semTable, err := semantics.Analyse(tree, &fakeSI{})
 			require.NoError(t, err)
 			qgraph, err := createQGFromSelect(tree.(*sqlparser.Select), semTable)
 			require.NoError(t, err)
@@ -132,7 +136,7 @@ func TestQueryGraph(t *testing.T) {
 func TestString(t *testing.T) {
 	tree, err := sqlparser.Parse("select * from a,b join c on b.id = c.id where a.id = b.id and b.col IN (select 42) and func() = 'foo'")
 	require.NoError(t, err)
-	semTable, err := semantics.Analyse(tree)
+	semTable, err := semantics.Analyse(tree, &fakeSI{})
 	require.NoError(t, err)
 	qgraph, err := createQGFromSelect(tree.(*sqlparser.Select), semTable)
 	require.NoError(t, err)
@@ -231,4 +235,14 @@ func (qg *queryGraph) noDepsString() string {
 		return ""
 	}
 	return fmt.Sprintf("\nForAll: %s", sqlparser.String(qg.noDeps))
+}
+
+var _ semantics.SchemaInformation = (*fakeSI)(nil)
+
+type fakeSI struct {
+	tables map[string]*vindexes.Table
+}
+
+func (s *fakeSI) FindTableOrVindex(tablename sqlparser.TableName) (*vindexes.Table, vindexes.Vindex, string, topodatapb.TabletType, key.Destination, error) {
+	return s.tables[sqlparser.String(tablename)], nil, "", 0, nil, nil
 }

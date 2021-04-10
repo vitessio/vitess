@@ -20,6 +20,8 @@ import (
 	"errors"
 	"fmt"
 
+	"vitess.io/vitess/go/sqltypes"
+
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
 
 	"vitess.io/vitess/go/vt/vtgate/semantics"
@@ -100,7 +102,7 @@ func shouldRetryWithCNFRewriting(plan logicalPlan) bool {
 
 }
 
-func pushProjection(expr *sqlparser.AliasedExpr, plan logicalPlan, semTable *semantics.SemTable) (firstOffset int, err error) {
+func pushProjection(expr *sqlparser.AliasedExpr, plan logicalPlan, semTable *semantics.SemTable) (int, error) {
 	switch node := plan.(type) {
 	case *route:
 		sel := node.Select.(*sqlparser.Select)
@@ -133,77 +135,87 @@ func pushProjection(expr *sqlparser.AliasedExpr, plan logicalPlan, semTable *sem
 	}
 }
 
-func pushPredicate(exprs []sqlparser.Expr, plan logicalPlan, semTable *semantics.SemTable) (err error) {
-	if len(exprs) == 0 {
-		return nil
+func planAggregations(qp *queryProjection, plan logicalPlan, semTable *semantics.SemTable) (logicalPlan, error) {
+	eaggr := &engine.OrderedAggregate{}
+	oa := &orderedAggregate{
+		resultsBuilder: newResultsBuilder(plan, eaggr),
+		eaggr:          eaggr,
 	}
-	switch node := plan.(type) {
-	case *route:
-		sel := node.Select.(*sqlparser.Select)
-		finalExpr := reorderExpression(exprs[0], node.tables, semTable)
-		for i, expr := range exprs {
-			if i == 0 {
-				continue
-			}
-			finalExpr = &sqlparser.AndExpr{
-				Left:  finalExpr,
-				Right: reorderExpression(expr, node.tables, semTable),
-			}
-		}
-		if sel.Where != nil {
-			finalExpr = &sqlparser.AndExpr{
-				Left:  sel.Where.Expr,
-				Right: finalExpr,
-			}
-		}
-		sel.Where = &sqlparser.Where{
-			Type: sqlparser.WhereClause,
-			Expr: finalExpr,
-		}
-		return nil
-	case *joinV4:
-		var lhs, rhs []sqlparser.Expr
-		lhsSolves := node.Left.ContainsTables()
-		rhsSolves := node.Right.ContainsTables()
-		for _, expr := range exprs {
-			deps := semTable.Dependencies(expr)
-			switch {
-			case deps.IsSolvedBy(lhsSolves):
-				lhs = append(lhs, expr)
-			case deps.IsSolvedBy(rhsSolves):
-				rhs = append(rhs, expr)
-			default:
-				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unknown dependencies for %s", sqlparser.String(expr))
-			}
-		}
-		err := pushPredicate(lhs, node.Left, semTable)
+	for _, e := range qp.aggrExprs {
+		offset, err := pushProjection(e, plan, semTable)
 		if err != nil {
-			return err
+			return nil, err
 		}
-		err = pushPredicate(rhs, node.Right, semTable)
-		return err
-	default:
-		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%T not yet supported", node)
+		fExpr := e.Expr.(*sqlparser.FuncExpr)
+		opcode := engine.SupportedAggregates[fExpr.Name.Lowered()]
+		oa.eaggr.Aggregates = append(oa.eaggr.Aggregates, engine.AggregateParams{
+			Opcode: opcode,
+			Col:    offset,
+		})
 	}
+	return oa, nil
 }
 
-func reorderExpression(expr sqlparser.Expr, solves semantics.TableSet, semTable *semantics.SemTable) sqlparser.Expr {
-	switch compExpr := expr.(type) {
-	case *sqlparser.ComparisonExpr:
-		if compExpr.Operator == sqlparser.EqualOp {
-			if !dependsOnRoute(solves, compExpr.Left, semTable) && dependsOnRoute(solves, compExpr.Right, semTable) {
-				compExpr.Left, compExpr.Right = compExpr.Right, compExpr.Left
+func planOrderBy(qp *queryProjection, plan logicalPlan, semTable *semantics.SemTable) (logicalPlan, error) {
+	switch plan := plan.(type) {
+	case *route:
+		for _, order := range qp.orderExprs {
+			offset, exists := qp.orderExprColMap[order]
+			if !exists {
+				return nil, semantics.Gen4NotSupportedF("order by column not exists in select list")
 			}
-		}
-	}
-	return expr
-}
+			colName, ok := order.Expr.(*sqlparser.ColName)
+			if !ok {
+				return nil, semantics.Gen4NotSupportedF("order by non-column expression")
+			}
 
-func dependsOnRoute(solves semantics.TableSet, expr sqlparser.Expr, semTable *semantics.SemTable) bool {
-	if node, ok := expr.(*sqlparser.ColName); ok {
-		return semTable.Dependencies(node).IsSolvedBy(solves)
+			table := semTable.Dependencies(colName)
+			tableInfo, err := semTable.TableInfoFor(table)
+			if err != nil {
+				return nil, err
+			}
+			weightStringNeeded := true
+			for _, c := range tableInfo.Table.Columns {
+				if colName.Name.Equal(c.Name) {
+					if sqltypes.IsNumber(c.Type) {
+						weightStringNeeded = false
+					}
+					break
+				}
+			}
+
+			weightStringOffset := -1
+			if weightStringNeeded {
+				expr := &sqlparser.AliasedExpr{
+					Expr: &sqlparser.FuncExpr{
+						Name: sqlparser.NewColIdent("weight_string"),
+						Exprs: []sqlparser.SelectExpr{
+							&sqlparser.AliasedExpr{
+								Expr: order.Expr,
+							},
+						},
+					},
+				}
+				weightStringOffset, err = pushProjection(expr, plan, semTable)
+				if err != nil {
+					return nil, err
+				}
+			}
+			if weightStringOffset != -1 {
+				plan.eroute.TruncateColumnCount = len(qp.selectExprs) + len(qp.aggrExprs)
+			}
+
+			plan.eroute.OrderBy = append(plan.eroute.OrderBy, engine.OrderbyParams{
+				Col:             offset,
+				WeightStringCol: weightStringOffset,
+				Desc:            order.Direction == sqlparser.DescOrder,
+			})
+			plan.Select.AddOrder(order)
+		}
+		return plan, nil
+	default:
+		return nil, semantics.Gen4NotSupportedF("ordering on complex query")
 	}
-	return !sqlparser.IsValue(expr)
 }
 
 var errSQLCalcFoundRows = vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.CantUseOptionHere, "Incorrect usage/placement of 'SQL_CALC_FOUND_ROWS'")
