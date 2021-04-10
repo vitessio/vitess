@@ -155,6 +155,7 @@ func TestEngineExec(t *testing.T) {
 	defer vre.Close()
 
 	dbClient.ExpectRequest("use _vt", &sqltypes.Result{}, nil)
+	dbClient.ExpectRequest("begin", &sqltypes.Result{}, nil)
 	dbClient.ExpectRequest("insert into _vt.vreplication values(null)", &sqltypes.Result{InsertID: 1}, nil)
 	dbClient.ExpectRequest("select * from _vt.vreplication where id = 1", sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
@@ -163,6 +164,11 @@ func TestEngineExec(t *testing.T) {
 		),
 		fmt.Sprintf(`1|Running|keyspace:"%s" shard:"0" key_range:<end:"\200" > `, env.KeyspaceName),
 	), nil)
+	dbClient.ExpectRequestRE("select id, type, state, message from _vt.vreplication_log", testDMLResponse, nil)
+	dbClient.ExpectRequestRE("insert into _vt.vreplication_log", testDMLResponse, nil)
+	dbClient.ExpectRequest("commit", &sqltypes.Result{}, nil)
+	//select id, type, state, message from _vt.vreplication_log
+
 	dbClient.ExpectRequestRE("update _vt.vreplication set message='Picked source tablet.*", testDMLResponse, nil)
 	dbClient.ExpectRequest("update _vt.vreplication set state='Running', message='' where id=1", testDMLResponse, nil)
 	dbClient.ExpectRequest("select pos, stop_pos, max_tps, max_replication_lag, state from _vt.vreplication where id=1", testSettingsResponse, nil)
@@ -205,6 +211,8 @@ func TestEngineExec(t *testing.T) {
 		),
 		fmt.Sprintf(`1|Running|keyspace:"%s" shard:"0" key_range:<end:"\200" > `, env.KeyspaceName),
 	), nil)
+	dbClient.ExpectRequestRE("select id, type, state, message from _vt.vreplication_log", testDMLResponse, nil)
+	dbClient.ExpectRequestRE("insert into _vt.vreplication_log", testDMLResponse, nil)
 	dbClient.ExpectRequestRE("update _vt.vreplication set message='Picked source tablet.*", testDMLResponse, nil)
 	dbClient.ExpectRequest("update _vt.vreplication set state='Running', message='' where id=1", testDMLResponse, nil)
 	dbClient.ExpectRequest("select pos, stop_pos, max_tps, max_replication_lag, state from _vt.vreplication where id=1", testSettingsResponse, nil)
@@ -248,6 +256,8 @@ func TestEngineExec(t *testing.T) {
 
 	dbClient.ExpectRequest("use _vt", &sqltypes.Result{}, nil)
 	dbClient.ExpectRequest("select id from _vt.vreplication where id = 1", testSelectorResponse1, nil)
+	dbClient.ExpectRequestRE("select id, type, state, message from _vt.vreplication_log", testDMLResponse, nil)
+	dbClient.ExpectRequestRE("insert into _vt.vreplication_log", testDMLResponse, nil)
 	dbClient.ExpectRequest("begin", nil, nil)
 	dbClient.ExpectRequest("delete from _vt.vreplication where id in (1)", testDMLResponse, nil)
 	dbClient.ExpectRequest("delete from _vt.copy_state where vrepl_id in (1)", nil, nil)
@@ -277,6 +287,10 @@ func TestEngineExec(t *testing.T) {
 
 	dbClient.ExpectRequest("use _vt", &sqltypes.Result{}, nil)
 	dbClient.ExpectRequest("select id from _vt.vreplication where id > 1", testSelectorResponse2, nil)
+	dbClient.ExpectRequestRE("select id, type, state, message from _vt.vreplication_log", testDMLResponse, nil)
+	dbClient.ExpectRequestRE("insert into _vt.vreplication_log", testDMLResponse, nil)
+	dbClient.ExpectRequestRE("select id, type, state, message from _vt.vreplication_log", testDMLResponse, nil)
+	dbClient.ExpectRequestRE("insert into _vt.vreplication_log", testDMLResponse, nil)
 	dbClient.ExpectRequest("begin", nil, nil)
 	dbClient.ExpectRequest("delete from _vt.vreplication where id in (1, 2)", testDMLResponse, nil)
 	dbClient.ExpectRequest("delete from _vt.copy_state where vrepl_id in (1, 2)", nil, nil)

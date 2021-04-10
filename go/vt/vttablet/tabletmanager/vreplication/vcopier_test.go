@@ -32,6 +32,37 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer"
 )
 
+var initialQueries = []string{
+	"begin",
+	"/insert into _vt.vreplication",
+	"/insert into _vt.vreplication_log",
+	"commit",
+	"/update _vt.vreplication set message='Picked source tablet.*",
+	// Create the list of tables to copy and transition to Copying state.
+	"begin",
+	"insert into _vt.copy_state(vrepl_id, table_name) values (1, 'dst1')",
+	"update _vt.vreplication set state='Copying', message='' where id=1",
+	"insert into _vt.vreplication_log(vrepl_id, type, state, message) values(1, 'State Changed', 'Copying', '')",
+	"insert into _vt.vreplication_log(vrepl_id, type, state, message) values(1, 'Started Copy Phase', 'Copying', 'Copy phase started for 1 tables')",
+	"commit",
+}
+
+var initialQueriesWithFK = []string{
+	"begin",
+	"/insert into _vt.vreplication",
+	"/insert into _vt.vreplication_log",
+	"commit",
+	"/update _vt.vreplication set message='Picked source tablet.*",
+	"select @@foreign_key_checks;",
+	// Create the list of tables to copy and transition to Copying state.
+	"begin",
+	"/insert into _vt.copy_state.*",
+	"/update _vt.vreplication set state='Copying', message=''",
+	"insert into _vt.vreplication_log(vrepl_id, type, state, message) values(1, 'State Changed', 'Copying', '')",
+	"/insert into _vt.vreplication_log.*'Started Copy Phase', 'Copying', 'Copy phase started",
+	"commit",
+}
+
 func TestPlayerCopyCharPK(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
@@ -388,15 +419,7 @@ func TestPlayerCopyTablesWithFK(t *testing.T) {
 	qr, err := playerEngine.Exec(query)
 	require.NoError(t, err)
 
-	expectDBClientQueries(t, []string{
-		"/insert into _vt.vreplication",
-		"/update _vt.vreplication set message='Picked source tablet.*",
-		"select @@foreign_key_checks;",
-		// Create the list of tables to copy and transition to Copying state.
-		"begin",
-		"/insert into _vt.copy_state",
-		"/update _vt.vreplication set state='Copying'",
-		"commit",
+	testQueries := []string{
 		"set foreign_key_checks=0;",
 		// The first fast-forward has no starting point. So, it just saves the current position.
 		"/update _vt.vreplication set pos=",
@@ -419,10 +442,12 @@ func TestPlayerCopyTablesWithFK(t *testing.T) {
 		// copy of dst1 is done: delete from copy_state.
 		"/delete from _vt.copy_state.*dst2",
 		// All tables copied. Final catch up followed by Running state.
+		"/insert into _vt.vreplication_log",
 		"set foreign_key_checks=1;",
 		"/update _vt.vreplication set state='Running'",
-	})
-
+	}
+	expectedQueries := append(initialQueriesWithFK, testQueries...)
+	expectDBClientQueries(t, expectedQueries)
 	expectData(t, "dst1", [][]string{
 		{"1", "1"},
 		{"2", "2"},
@@ -438,13 +463,6 @@ func TestPlayerCopyTablesWithFK(t *testing.T) {
 	if _, err := playerEngine.Exec(query); err != nil {
 		t.Fatal(err)
 	}
-	expectDBClientQueries(t, []string{
-		"set foreign_key_checks=1;",
-		"begin",
-		"/delete from _vt.vreplication",
-		"/delete from _vt.copy_state",
-		"commit",
-	})
 }
 
 func TestPlayerCopyTables(t *testing.T) {
@@ -1154,14 +1172,7 @@ func TestPlayerCopyTableCancel(t *testing.T) {
 	}()
 
 	// Make sure rows get copied in spite of the early context cancel.
-	expectDBClientQueries(t, []string{
-		"/insert into _vt.vreplication",
-		"/update _vt.vreplication set message='Picked source tablet.*",
-		// Create the list of tables to copy and transition to Copying state.
-		"begin",
-		"/insert into _vt.copy_state",
-		"/update _vt.vreplication set state='Copying'",
-		"commit",
+	testQueries := []string{
 		// The first copy will do nothing because we set the timeout to be too low.
 		// The next copy should proceed as planned because we've made the timeout high again.
 		// The first fast-forward has no starting point. So, it just saves the current position.
@@ -1173,8 +1184,11 @@ func TestPlayerCopyTableCancel(t *testing.T) {
 		// copy of dst1 is done: delete from copy_state.
 		"/delete from _vt.copy_state.*dst1",
 		// All tables copied. Go into running state.
+		"/insert into _vt.vreplication_log.*'Ended Copy Phase', 'Copying', 'Copy phase completed at gtid",
 		"/update _vt.vreplication set state='Running'",
-	})
+	}
+	expectedQueries := append(initialQueries, testQueries...)
+	expectDBClientQueries(t, expectedQueries)
 	expectData(t, "dst1", [][]string{
 		{"1", "aaa"},
 		{"2", "bbb"},

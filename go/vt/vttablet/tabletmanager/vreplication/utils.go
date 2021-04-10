@@ -67,10 +67,10 @@ func insertLog(dbClient *vdbClient, typ string, vreplID uint32, state, message s
 	if err != nil {
 		return err
 	}
-	if id > 0 && typ != currentType && state == currentState && message == currentMessage {
+	if id > 0 && typ == currentType && state == currentState && message == currentMessage {
 		query = fmt.Sprintf("update _vt.vreplication_log set count = count + 1 where id = %d", id)
 	} else {
-		query = `insert into _vt.vreplication_log(vrepl_id, typ, state, message) values(%d, '%s', '%s', %s)`
+		query = `insert into _vt.vreplication_log(vrepl_id, type, state, message) values(%d, '%s', '%s', %s)`
 		query = fmt.Sprintf(query, vreplID, typ, state, encodeString(message))
 	}
 	if _, err := dbClient.ExecuteFetch(query, 1); err != nil {

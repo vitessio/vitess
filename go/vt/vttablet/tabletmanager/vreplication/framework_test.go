@@ -68,7 +68,7 @@ type LogExpectation struct {
 	Detail string
 }
 
-var heartbeatRe *regexp.Regexp
+var heartbeatRe, logQueryRe *regexp.Regexp
 
 func init() {
 	tabletconn.RegisterDialer("test", func(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
@@ -83,6 +83,7 @@ func init() {
 	flag.Set("binlog_player_protocol", "test")
 
 	heartbeatRe = regexp.MustCompile(`update _vt.vreplication set time_updated=\d+ where id=\d+`)
+	logQueryRe = regexp.MustCompile(`_vt.vreplication_log`)
 }
 
 func TestMain(m *testing.M) {
@@ -463,6 +464,7 @@ func expectLogsAndUnsubscribe(t *testing.T, logs []LogExpectation, logCh chan in
 func expectDBClientQueries(t *testing.T, queries []string) {
 	t.Helper()
 	failed := false
+	passthrough := false //true // for testing
 	for i, query := range queries {
 		if failed {
 			t.Errorf("no query received, expecting %s", query)
@@ -477,9 +479,12 @@ func expectDBClientQueries(t *testing.T, queries []string) {
 			if heartbeatRe.MatchString(got) {
 				goto retry
 			}
-
+			if passthrough {
+				fmt.Printf(">> \"%s\",\n", got)
+			}
 			var match bool
 			if query[0] == '/' {
+				//fmt.Printf("query is %s:%s\n", query, got)
 				result, err := regexp.MatchString(query[1:], got)
 				if err != nil {
 					panic(err)
@@ -488,7 +493,7 @@ func expectDBClientQueries(t *testing.T, queries []string) {
 			} else {
 				match = (got == query)
 			}
-			if !match {
+			if !passthrough && !match {
 				t.Errorf("query:\n%q, does not match query %d:\n%q", got, i, query)
 			}
 		case <-time.After(5 * time.Second):
@@ -521,7 +526,9 @@ func expectNontxQueries(t *testing.T, queries []string) {
 	retry:
 		select {
 		case got = <-globalDBQueries:
-			if got == "begin" || got == "commit" || got == "rollback" || strings.Contains(got, "update _vt.vreplication set pos") || heartbeatRe.MatchString(got) {
+			if got == "begin" || got == "commit" || got == "rollback" ||
+				strings.Contains(got, "update _vt.vreplication set pos") || heartbeatRe.MatchString(got) ||
+				strings.Contains(got, "_vt.vreplication_log") {
 				goto retry
 			}
 
