@@ -190,27 +190,17 @@ func TestMissingTable(t *testing.T) {
 	}
 }
 
-func TestUnknownColumnMap(t *testing.T) {
-	vt := map[string]*vindexes.Table{
-		"a": {},
-		"b": {},
-	}
-	si := &fakeSI{tables: vt}
+func TestUnknownColumnMap2(t *testing.T) {
 	query := "select col from a, b"
-
-	parse, _ := sqlparser.Parse(query)
-	_, err := Analyse(parse, si)
-	assert.EqualError(t, err, "Column 'col' in field list is ambiguous")
-
-	vt["a"] = &vindexes.Table{
-		Name: sqlparser.NewTableIdent("b"),
+	authoritativeTblA := vindexes.Table{
+		Name: sqlparser.NewTableIdent("a"),
 		Columns: []vindexes.Column{{
 			Name: sqlparser.NewColIdent("col2"),
 			Type: querypb.Type_VARCHAR,
 		}},
-		ColumnListAuthoritative: false,
+		ColumnListAuthoritative: true,
 	}
-	vt["b"] = &vindexes.Table{
+	authoritativeTblB := vindexes.Table{
 		Name: sqlparser.NewTableIdent("b"),
 		Columns: []vindexes.Column{{
 			Name: sqlparser.NewColIdent("col"),
@@ -218,14 +208,68 @@ func TestUnknownColumnMap(t *testing.T) {
 		}},
 		ColumnListAuthoritative: true,
 	}
+	nonAuthoritativeTblA := authoritativeTblA
+	nonAuthoritativeTblA.ColumnListAuthoritative = false
+	nonAuthoritativeTblB := authoritativeTblB
+	nonAuthoritativeTblB.ColumnListAuthoritative = false
+	authoritativeTblAWithConflict := vindexes.Table{
+		Name: sqlparser.NewTableIdent("a"),
+		Columns: []vindexes.Column{{
+			Name: sqlparser.NewColIdent("col"),
+			Type: querypb.Type_VARCHAR,
+		}},
+		ColumnListAuthoritative: true,
+	}
 
-	_, err = Analyse(parse, si)
-	assert.EqualError(t, err, "Column 'col' in field list is ambiguous")
+	parse, _ := sqlparser.Parse(query)
 
-	vt["a"].ColumnListAuthoritative = true
-	_, err = Analyse(parse, si)
-	assert.NoError(t, err, "should have found the column")
-
+	tests := []struct {
+		name   string
+		schema map[string]*vindexes.Table
+		err    bool
+	}{
+		{
+			name:   "no info about tables",
+			schema: map[string]*vindexes.Table{"a": {}, "b": {}},
+			err:    true,
+		},
+		{
+			name:   "non authoritative columns",
+			schema: map[string]*vindexes.Table{"a": &nonAuthoritativeTblA, "b": &nonAuthoritativeTblA},
+			err:    true,
+		},
+		{
+			name:   "non authoritative columns - one authoritative and one not",
+			schema: map[string]*vindexes.Table{"a": &nonAuthoritativeTblA, "b": &authoritativeTblB},
+			err:    true,
+		},
+		{
+			name:   "non authoritative columns - one authoritative and one not",
+			schema: map[string]*vindexes.Table{"a": &authoritativeTblA, "b": &nonAuthoritativeTblB},
+			err:    true,
+		},
+		{
+			name:   "authoritative columns",
+			schema: map[string]*vindexes.Table{"a": &authoritativeTblA, "b": &authoritativeTblB},
+			err:    false,
+		},
+		{
+			name:   "authoritative columns with overlap",
+			schema: map[string]*vindexes.Table{"a": &authoritativeTblAWithConflict, "b": &authoritativeTblB},
+			err:    true,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			si := &fakeSI{tables: test.schema}
+			_, err := Analyse(parse, si)
+			if test.err {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
 }
 
 func parseAndAnalyze(t *testing.T, query string) (sqlparser.Statement, *SemTable) {
