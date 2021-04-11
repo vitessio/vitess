@@ -18,6 +18,7 @@ package planbuilder
 
 import (
 	"errors"
+	"flag"
 	"sort"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -33,6 +34,10 @@ import (
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+)
+
+var (
+	enableOnlineDDL = flag.Bool("enable_online_ddl", true, "Allow users to submit, review and control Online DDL")
 )
 
 // ContextVSchema defines the interface for this package to fetch
@@ -61,6 +66,9 @@ type ContextVSchema interface {
 	// This will let the user know that they are using something
 	// that could become a problem if they move to a sharded keyspace
 	WarnUnshardedOnly(format string, params ...interface{})
+
+	// ForeignKeyMode returns the foreign_key flag value
+	ForeignKeyMode() string
 }
 
 // PlannerVersion is an alias here to make the code more readable

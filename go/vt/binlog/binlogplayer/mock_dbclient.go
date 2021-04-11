@@ -24,10 +24,14 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 )
 
+const mockClientUNameFiltered = "Filtered"
+const mockClientUNameDba = "Dba"
+
 // MockDBClient mocks a DBClient.
 // It must be configured to expect requests in a specific order.
 type MockDBClient struct {
 	t             *testing.T
+	UName         string
 	expect        []*mockExpect
 	currentResult int
 	done          chan struct{}
@@ -40,11 +44,20 @@ type mockExpect struct {
 	err    error
 }
 
-// NewMockDBClient returns a new DBClientMock.
+// NewMockDBClient returns a new DBClientMock with the default "Filtered" UName.
 func NewMockDBClient(t *testing.T) *MockDBClient {
 	return &MockDBClient{
-		t:    t,
-		done: make(chan struct{}),
+		t:     t,
+		UName: mockClientUNameFiltered,
+		done:  make(chan struct{}),
+	}
+}
+
+func NewMockDbaClient(t *testing.T) *MockDBClient {
+	return &MockDBClient{
+		t:     t,
+		UName: mockClientUNameDba,
+		done:  make(chan struct{}),
 	}
 }
 

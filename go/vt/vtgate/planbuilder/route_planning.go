@@ -46,7 +46,7 @@ func gen4Planner(_ string) func(sqlparser.Statement, sqlparser.BindVars, Context
 }
 
 func newBuildSelectPlan(sel *sqlparser.Select, vschema ContextVSchema) (engine.Primitive, error) {
-	semTable, err := semantics.Analyse(sel) // TODO no nil no
+	semTable, err := semantics.Analyse(sel, vschema)
 	if err != nil {
 		return nil, err
 	}
@@ -74,7 +74,8 @@ func newBuildSelectPlan(sel *sqlparser.Select, vschema ContextVSchema) (engine.P
 		return nil, err
 	}
 
-	if err := planProjections(sel, plan, semTable); err != nil {
+	plan, err = planHorizon(sel, plan, semTable)
+	if err != nil {
 		return nil, err
 	}
 
@@ -112,7 +113,7 @@ func planLimit(limit *sqlparser.Limit, plan logicalPlan) (logicalPlan, error) {
 	return lPlan, nil
 }
 
-func planProjections(sel *sqlparser.Select, plan logicalPlan, semTable *semantics.SemTable) error {
+func planHorizon(sel *sqlparser.Select, plan logicalPlan, semTable *semantics.SemTable) (logicalPlan, error) {
 	rb, ok := plan.(*route)
 	if ok && rb.isSingleShard() {
 		ast := rb.Select.(*sqlparser.Select)
@@ -121,30 +122,40 @@ func planProjections(sel *sqlparser.Select, plan logicalPlan, semTable *semantic
 		ast.OrderBy = sel.OrderBy
 		ast.SelectExprs = sel.SelectExprs
 		ast.Comments = sel.Comments
-	} else {
-		// TODO real horizon planning to be done
-		if sel.Distinct {
-			return semantics.Gen4NotSupportedF("DISTINCT")
-		}
-		if sel.GroupBy != nil {
-			return semantics.Gen4NotSupportedF("GROUP BY")
-		}
-		for _, expr := range sel.SelectExprs {
-			switch e := expr.(type) {
-			case *sqlparser.AliasedExpr:
-				if nodeHasAggregates(e.Expr) {
-					return semantics.Gen4NotSupportedF("aggregation [%s]", sqlparser.String(e))
-				}
-				if _, err := pushProjection(e, plan, semTable); err != nil {
-					return err
-				}
-			default:
-				return semantics.Gen4NotSupportedF("%T", e)
-			}
-		}
-
+		return plan, nil
 	}
-	return nil
+
+	// TODO real horizon planning to be done
+	if sel.Distinct {
+		return nil, semantics.Gen4NotSupportedF("DISTINCT")
+	}
+	if sel.GroupBy != nil {
+		return nil, semantics.Gen4NotSupportedF("GROUP BY")
+	}
+	qp, err := createQPFromSelect(sel)
+	if err != nil {
+		return nil, err
+	}
+	for _, e := range qp.selectExprs {
+		if _, err := pushProjection(e, plan, semTable); err != nil {
+			return nil, err
+		}
+	}
+
+	if len(qp.aggrExprs) > 0 {
+		plan, err = planAggregations(qp, plan, semTable)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if len(sel.OrderBy) > 0 {
+		plan, err = planOrderBy(qp, plan, semTable)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return plan, nil
 }
 
 type (

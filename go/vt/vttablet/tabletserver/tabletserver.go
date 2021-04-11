@@ -805,18 +805,7 @@ func (tsv *TabletServer) StreamExecute(ctx context.Context, target *querypb.Targ
 				logStats:       logStats,
 				tsv:            tsv,
 			}
-			newCallback := func(result *sqltypes.Result) error {
-				if sqltypes.IncludeFieldsOrDefault(options) == querypb.ExecuteOptions_ALL {
-					// Change database name in mysql output to the keyspace name
-					for _, f := range result.Fields {
-						if f.Database != "" {
-							f.Database = tsv.sm.target.Keyspace
-						}
-					}
-				}
-				return callback(result)
-			}
-			return qre.Stream(newCallback)
+			return qre.Stream(callback)
 		},
 	)
 }
@@ -1731,6 +1720,11 @@ func (tsv *TabletServer) PoolSize() int {
 // SetStreamPoolSize changes the pool size to the specified value.
 func (tsv *TabletServer) SetStreamPoolSize(val int) {
 	tsv.qe.streamConns.SetCapacity(val)
+}
+
+// SetStreamConsolidationBlocking sets whether the stream consolidator should wait for slow clients
+func (tsv *TabletServer) SetStreamConsolidationBlocking(block bool) {
+	tsv.qe.streamConsolidator.SetBlocking(block)
 }
 
 // StreamPoolSize returns the pool size.

@@ -27,8 +27,11 @@ import (
 	"sync"
 	"time"
 
+	gofuzzheaders "github.com/AdaLogics/go-fuzz-headers"
+
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/tlstest"
 	"vitess.io/vitess/go/vt/vttls"
 )
@@ -300,6 +303,26 @@ func (th *fuzzTestHandler) WarningCount(c *Conn) uint16 {
 }
 
 func FuzzTLSServer(data []byte) int {
+	// totalQueries is the number of queries the fuzzer
+	// makes in each fuzz iteration
+	totalQueries := 20
+	var queries []string
+	c := gofuzzheaders.NewConsumer(data)
+	for i := 0; i < totalQueries; i++ {
+		query, err := c.GetString()
+		if err != nil {
+			return -1
+		}
+
+		// We parse each query now to exit if the queries
+		// are invalid
+		_, err = sqlparser.Parse(query)
+		if err != nil {
+			return -1
+		}
+		queries = append(queries, query)
+	}
+
 	th := &fuzzTestHandler{}
 
 	authServer := NewAuthServerStatic("", "", 0)
@@ -354,9 +377,9 @@ func FuzzTLSServer(data []byte) int {
 	if err != nil {
 		return -1
 	}
-	_, err = conn.ExecuteFetch(string(data), 1000, true)
-	if err != nil {
-		return 0
+
+	for i := 0; i < len(queries); i++ {
+		_, _ = conn.ExecuteFetch(queries[i], 1000, true)
 	}
 	return 1
 }

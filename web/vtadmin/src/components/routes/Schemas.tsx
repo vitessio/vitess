@@ -21,6 +21,7 @@ import { useTableDefinitions } from '../../hooks/api';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import { filterNouns } from '../../util/filterNouns';
 import { Button } from '../Button';
+import { DataCell } from '../dataTable/DataCell';
 import { DataTable } from '../dataTable/DataTable';
 import { Icons } from '../Icon';
 import { TextInput } from '../TextInput';
@@ -53,9 +54,13 @@ export const Schemas = () => {
                     : null;
             return (
                 <tr key={idx}>
-                    <td>{row.cluster}</td>
-                    <td>{row.keyspace}</td>
-                    <td>{href ? <Link to={href}>{row.table}</Link> : row.table}</td>
+                    <DataCell>
+                        <div>{row.keyspace}</div>
+                        <div className="font-size-small text-color-secondary">{row.cluster}</div>
+                    </DataCell>
+                    <DataCell className="font-weight-bold">
+                        {href ? <Link to={href}>{row.table}</Link> : row.table}
+                    </DataCell>
                 </tr>
             );
         });
@@ -76,7 +81,7 @@ export const Schemas = () => {
                 </Button>
             </div>
 
-            <DataTable columns={['Cluster', 'Keyspace', 'Table']} data={filteredData} renderRows={renderRows} />
+            <DataTable columns={['Keyspace', 'Table']} data={filteredData} renderRows={renderRows} />
         </div>
     );
 };
