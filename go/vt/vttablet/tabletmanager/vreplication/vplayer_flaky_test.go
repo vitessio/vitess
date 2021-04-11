@@ -2275,7 +2275,6 @@ func TestPlayerRelayLogMaxSize(t *testing.T) {
 }
 
 func TestRestartOnVStreamEnd(t *testing.T) {
-	t.Skip()
 	defer deleteTablet(addTablet(100))
 
 	savedDelay := *retryDelay
@@ -2318,13 +2317,14 @@ func TestRestartOnVStreamEnd(t *testing.T) {
 
 	streamerEngine.Close()
 	expectDBClientQueries(t, []string{
-		"/update _vt.vreplication set state='Stopped', message='Error: vstream ended'",
+		"/update _vt.vreplication set message='Error: vstream ended'",
 		"/insert into _vt.vreplication_log",
 	})
 	streamerEngine.Open()
 	execStatements(t, []string{
 		"insert into t1 values(2, 'aaa')",
 	})
+	time.Sleep(1 * time.Second)
 	expectDBClientQueries(t, []string{
 		"/update _vt.vreplication set message='Picked source tablet.*",
 		"/update _vt.vreplication set state='Running'",

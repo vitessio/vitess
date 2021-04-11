@@ -143,12 +143,14 @@ func (vr *vreplicator) Replicate(ctx context.Context) error {
 		// an error state on the stream. Otherwise we always need an operator to reset such errors
 		// To differentiate between such issues and errors which require user intervention we use a convention
 		// that if the error string contains "error" then we set the state of the stream to BlpError
-		state := binlogplayer.BlpError
 		if strings.Contains(strings.ToLower(err.Error()), "vstream ended") {
-			state = binlogplayer.BlpStopped
-		}
-		if err := vr.setState(state, fmt.Sprintf("Error: %s", err.Error())); err != nil {
-			log.Errorf("Failed to set error state: %v", err)
+			if err := vr.setMessage(fmt.Sprintf("Error: %s", err.Error())); err != nil {
+				log.Errorf("Failed to set error state: %v", err)
+			}
+		} else {
+			if err := vr.setState(binlogplayer.BlpError, fmt.Sprintf("Error: %s", err.Error())); err != nil {
+				log.Errorf("Failed to set error state: %v", err)
+			}
 		}
 	}
 	return err
@@ -181,6 +183,7 @@ func (vr *vreplicator) replicate(ctx context.Context) error {
 		}
 		// If any of the operations below changed state to Stopped, we should return.
 		if settings.State == binlogplayer.BlpStopped || settings.State == binlogplayer.BlpError {
+			log.Infof("replicate returning because state is %s", settings.State)
 			return nil
 		}
 

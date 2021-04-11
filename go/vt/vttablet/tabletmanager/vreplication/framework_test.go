@@ -506,6 +506,9 @@ func expectDBClientQueries(t *testing.T, queries []string) {
 	for {
 		select {
 		case got := <-globalDBQueries:
+			if heartbeatRe.MatchString(got) {
+				continue
+			}
 			t.Errorf("unexpected query: %s", got)
 		default:
 			return
@@ -560,6 +563,9 @@ func expectNontxQueries(t *testing.T, queries []string) {
 		select {
 		case got := <-globalDBQueries:
 			if got == "begin" || got == "commit" || got == "rollback" || strings.Contains(got, "_vt.vreplication") {
+				continue
+			}
+			if heartbeatRe.MatchString(got) {
 				continue
 			}
 			t.Errorf("unexpected query: %s", got)
