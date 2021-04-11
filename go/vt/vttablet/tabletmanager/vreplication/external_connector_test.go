@@ -197,8 +197,12 @@ func getExpectedVreplicationQueries(t *testing.T, pos string) []string {
 		}
 	}
 	return []string{
+		"begin",
 		"/insert into _vt.vreplication",
+		"/insert into _vt.vreplication_log",
+		"commit",
 		"/update _vt.vreplication set state='Running'",
+		"/insert into _vt.vreplication_log",
 	}
 }
 

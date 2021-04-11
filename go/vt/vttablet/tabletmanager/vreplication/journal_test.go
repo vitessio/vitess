@@ -330,7 +330,8 @@ func TestJournalTableMixed(t *testing.T) {
 
 	expectDBClientQueries(t, []string{
 		"/update _vt.vreplication set pos=",
-		"/update _vt.vreplication set state='Stopped', message='unable to handle journal event: tables were partially matched' where id",
+		"/update _vt.vreplication set state='Error', message='unable to handle journal event: tables were partially matched' where id",
+		"/insert into _vt.vreplication_log",
 	})
 
 	// Delete all vreplication streams. There should be only one, but we don't know its id.
