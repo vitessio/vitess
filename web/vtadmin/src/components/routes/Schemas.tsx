@@ -17,9 +17,10 @@ import { orderBy } from 'lodash-es';
 import * as React from 'react';
 import { Link } from 'react-router-dom';
 
-import { useTableDefinitions } from '../../hooks/api';
+import { useSchemas } from '../../hooks/api';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import { filterNouns } from '../../util/filterNouns';
+import { getTableDefinitions } from '../../util/tableDefinitions';
 import { Button } from '../Button';
 import { DataCell } from '../dataTable/DataCell';
 import { DataTable } from '../dataTable/DataTable';
@@ -30,11 +31,13 @@ import style from './Schemas.module.scss';
 export const Schemas = () => {
     useDocumentTitle('Schemas');
 
-    const { data = [] } = useTableDefinitions();
+    const { data = [] } = useSchemas();
     const [filter, setFilter] = React.useState<string>('');
 
     const filteredData = React.useMemo(() => {
-        const mapped = data.map((d) => ({
+        const tableDefinitions = getTableDefinitions(data);
+
+        const mapped = tableDefinitions.map((d) => ({
             cluster: d.cluster?.name,
             clusterID: d.cluster?.id,
             keyspace: d.keyspace,
