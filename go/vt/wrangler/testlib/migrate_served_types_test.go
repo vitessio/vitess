@@ -156,7 +156,7 @@ func TestMigrateServedTypes(t *testing.T) {
 	// Override with a fake VREngine after TM is initialized in action loop.
 	dbClient1 := binlogplayer.NewMockDBClient(t)
 	dbClientFactory1 := func() binlogplayer.DBClient { return dbClient1 }
-	dest1Master.TM.VREngine = vreplication.NewTestEngine(ts, "", dest1Master.FakeMysqlDaemon, dbClientFactory1, dbClient1.DBName(), nil)
+	dest1Master.TM.VREngine = vreplication.NewTestEngine(ts, "", dest1Master.FakeMysqlDaemon, dbClientFactory1, dbClientFactory1, dbClient1.DBName(), nil)
 	// select * from _vt.vreplication during Open
 	dbClient1.ExpectRequest("select * from _vt.vreplication where db_name='db'", &sqltypes.Result{}, nil)
 	dest1Master.TM.VREngine.Open(context.Background())
@@ -182,7 +182,7 @@ func TestMigrateServedTypes(t *testing.T) {
 	// Override with a fake VREngine after TM is initialized in action loop.
 	dbClient2 := binlogplayer.NewMockDBClient(t)
 	dbClientFactory2 := func() binlogplayer.DBClient { return dbClient2 }
-	dest2Master.TM.VREngine = vreplication.NewTestEngine(ts, "", dest2Master.FakeMysqlDaemon, dbClientFactory2, dbClient2.DBName(), nil)
+	dest2Master.TM.VREngine = vreplication.NewTestEngine(ts, "", dest2Master.FakeMysqlDaemon, dbClientFactory2, dbClientFactory2, dbClient2.DBName(), nil)
 	// select * from _vt.vreplication during Open
 	dbClient2.ExpectRequest("select * from _vt.vreplication where db_name='db'", &sqltypes.Result{}, nil)
 	dest2Master.TM.VREngine.Open(context.Background())
@@ -422,7 +422,7 @@ func TestMultiShardMigrateServedTypes(t *testing.T) {
 	// Override with a fake VREngine after TM is initialized in action loop.
 	dbClient1 := binlogplayer.NewMockDBClient(t)
 	dbClientFactory1 := func() binlogplayer.DBClient { return dbClient1 }
-	dest1Master.TM.VREngine = vreplication.NewTestEngine(ts, "", dest1Master.FakeMysqlDaemon, dbClientFactory1, "db", nil)
+	dest1Master.TM.VREngine = vreplication.NewTestEngine(ts, "", dest1Master.FakeMysqlDaemon, dbClientFactory1, dbClientFactory1, "db", nil)
 	// select * from _vt.vreplication during Open
 	dbClient1.ExpectRequest("select * from _vt.vreplication where db_name='db'", &sqltypes.Result{}, nil)
 	dest1Master.TM.VREngine.Open(context.Background())
@@ -437,7 +437,7 @@ func TestMultiShardMigrateServedTypes(t *testing.T) {
 	// Override with a fake VREngine after TM is initialized in action loop.
 	dbClient2 := binlogplayer.NewMockDBClient(t)
 	dbClientFactory2 := func() binlogplayer.DBClient { return dbClient2 }
-	dest2Master.TM.VREngine = vreplication.NewTestEngine(ts, "", dest2Master.FakeMysqlDaemon, dbClientFactory2, "db", nil)
+	dest2Master.TM.VREngine = vreplication.NewTestEngine(ts, "", dest2Master.FakeMysqlDaemon, dbClientFactory2, dbClientFactory2, "db", nil)
 	// select * from _vt.vreplication during Open
 	dbClient2.ExpectRequest("select * from _vt.vreplication where db_name='db'", &sqltypes.Result{}, nil)
 	dest2Master.TM.VREngine.Open(context.Background())
@@ -506,7 +506,7 @@ func TestMultiShardMigrateServedTypes(t *testing.T) {
 	// Override with a fake VREngine after TM is initialized in action loop.
 	dbClient1 = binlogplayer.NewMockDBClient(t)
 	dbClientFactory1 = func() binlogplayer.DBClient { return dbClient1 }
-	dest3Master.TM.VREngine = vreplication.NewTestEngine(ts, "", dest3Master.FakeMysqlDaemon, dbClientFactory1, "db", nil)
+	dest3Master.TM.VREngine = vreplication.NewTestEngine(ts, "", dest3Master.FakeMysqlDaemon, dbClientFactory1, dbClientFactory1, "db", nil)
 	// select * from _vt.vreplication during Open
 	dbClient1.ExpectRequest("select * from _vt.vreplication where db_name='db'", &sqltypes.Result{}, nil)
 	dest3Master.TM.VREngine.Open(context.Background())
@@ -521,7 +521,7 @@ func TestMultiShardMigrateServedTypes(t *testing.T) {
 	// Override with a fake VREngine after TM is initialized in action loop.
 	dbClient2 = binlogplayer.NewMockDBClient(t)
 	dbClientFactory2 = func() binlogplayer.DBClient { return dbClient2 }
-	dest4Master.TM.VREngine = vreplication.NewTestEngine(ts, "", dest4Master.FakeMysqlDaemon, dbClientFactory2, "db", nil)
+	dest4Master.TM.VREngine = vreplication.NewTestEngine(ts, "", dest4Master.FakeMysqlDaemon, dbClientFactory2, dbClientFactory2, "db", nil)
 	// select * from _vt.vreplication during Open
 	dbClient2.ExpectRequest("select * from _vt.vreplication where db_name='db'", &sqltypes.Result{}, nil)
 	dest4Master.TM.VREngine.Open(context.Background())
