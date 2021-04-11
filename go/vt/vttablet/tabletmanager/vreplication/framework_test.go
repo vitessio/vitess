@@ -68,7 +68,7 @@ type LogExpectation struct {
 	Detail string
 }
 
-var heartbeatRe, logQueryRe *regexp.Regexp
+var heartbeatRe *regexp.Regexp
 
 func init() {
 	tabletconn.RegisterDialer("test", func(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
@@ -83,7 +83,6 @@ func init() {
 	flag.Set("binlog_player_protocol", "test")
 
 	heartbeatRe = regexp.MustCompile(`update _vt.vreplication set time_updated=\d+ where id=\d+`)
-	logQueryRe = regexp.MustCompile(`_vt.vreplication_log`)
 }
 
 func TestMain(m *testing.M) {

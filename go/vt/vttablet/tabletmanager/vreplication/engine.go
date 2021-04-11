@@ -409,6 +409,16 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 		if err != nil {
 			return nil, err
 		}
+
+		oldParamMap := make(map[int]map[string]string)
+		for _, id := range ids {
+			params, err := readRow(dbClient, id)
+			if err != nil {
+				return nil, err
+			}
+			oldParamMap[id] = params
+		}
+
 		qr, err := withDDL.Exec(vre.ctx, query, dbClient.ExecuteFetch)
 		if err != nil {
 			return nil, err
@@ -425,8 +435,20 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 				return nil, err
 			}
 			vre.controllers[id] = ct
-			if err := insertLogWithParams(vdbc, LogStreamUpdate, uint32(id), params); err != nil {
-				return nil, err
+
+			oldParams, ok := oldParamMap[id]
+			if ok {
+				if oldParams["source"] != params["source"] || oldParams["cell"] != params["cell"] ||
+					oldParams["tablet_types"] != params["tablet_types"] {
+					if err := insertLogWithParams(vdbc, LogStreamUpdate, uint32(id), params); err != nil {
+						return nil, err
+					}
+				}
+				if oldParams["state"] != params["state"] {
+					if err := insertLog(vdbc, LogStateChange, uint32(id), params["state"], ""); err != nil {
+						return nil, err
+					}
+				}
 			}
 		}
 		return qr, nil

@@ -43,7 +43,7 @@ var initialQueries = []string{
 	"insert into _vt.copy_state(vrepl_id, table_name) values (1, 'dst1')",
 	"update _vt.vreplication set state='Copying', message='' where id=1",
 	"/insert into _vt.vreplication_log\\(vrepl_id, type, state, message\\) values\\(.*, 'State Changed', 'Copying', ''\\)",
-	"/insert into _vt.vreplication_log\\(vrepl_id, type, state, message\\) values\\(.*, 'Started Copy Phase', 'Copying', 'Copy phase started for .* tables'\\)",
+	"/insert into _vt.vreplication_log\\(vrepl_id, type, state, message\\) values\\(.*, 'Started Copy Phase', 'Copying', 'Copy phase started for .* table(s)'\\)",
 	"commit",
 }
 
@@ -468,7 +468,7 @@ func TestPlayerCopyTablesWithFK(t *testing.T) {
 
 }
 
-func TestPlayerCopyTables2(t *testing.T) {
+func TestPlayerCopyTables(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
 	execStatements(t, []string{

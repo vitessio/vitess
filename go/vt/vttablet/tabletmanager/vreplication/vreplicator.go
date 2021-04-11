@@ -139,10 +139,8 @@ func (vr *vreplicator) Replicate(ctx context.Context) error {
 	err := vr.replicate(ctx)
 	if err != nil {
 		log.Errorf("Replicate error: %s", err.Error())
-		// note: the error we receive could be due to a temporary network disconnect, so we don't want to set
-		// an error state on the stream. Otherwise we always need an operator to reset such errors
-		// To differentiate between such issues and errors which require user intervention we use a convention
-		// that if the error string contains "error" then we set the state of the stream to BlpError
+		// a vstreamer connection could break due to a network timeout, reparenting etc which are resumable
+		// so unless we get specific errors we just log the error but keep the stream running
 		if strings.Contains(strings.ToLower(err.Error()), "vstream ended") {
 			if err := vr.setMessage(fmt.Sprintf("Error: %s", err.Error())); err != nil {
 				log.Errorf("Failed to set error state: %v", err)
