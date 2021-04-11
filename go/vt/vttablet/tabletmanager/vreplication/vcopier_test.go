@@ -42,8 +42,8 @@ var initialQueries = []string{
 	"begin",
 	"insert into _vt.copy_state(vrepl_id, table_name) values (1, 'dst1')",
 	"update _vt.vreplication set state='Copying', message='' where id=1",
-	"insert into _vt.vreplication_log(vrepl_id, type, state, message) values(1, 'State Changed', 'Copying', '')",
-	"insert into _vt.vreplication_log(vrepl_id, type, state, message) values(1, 'Started Copy Phase', 'Copying', 'Copy phase started for 1 tables')",
+	"/insert into _vt.vreplication_log\\(vrepl_id, type, state, message\\) values\\(.*, 'State Changed', 'Copying', ''\\)",
+	"/insert into _vt.vreplication_log\\(vrepl_id, type, state, message\\) values\\(.*, 'Started Copy Phase', 'Copying', 'Copy phase started for .* tables'\\)",
 	"commit",
 }
 
@@ -58,7 +58,7 @@ var initialQueriesWithFK = []string{
 	"begin",
 	"/insert into _vt.copy_state.*",
 	"/update _vt.vreplication set state='Copying', message=''",
-	"insert into _vt.vreplication_log(vrepl_id, type, state, message) values(1, 'State Changed', 'Copying', '')",
+	"/insert into _vt.vreplication_log\\(vrepl_id, type, state, message\\) values\\(.*, 'State Changed', 'Copying', ''\\)",
 	"/insert into _vt.vreplication_log.*'Started Copy Phase', 'Copying', 'Copy phase started",
 	"commit",
 }
@@ -379,6 +379,7 @@ func TestPlayerCopyTablesWithFK(t *testing.T) {
 	testForeignKeyQueries = true
 	defer func() {
 		testForeignKeyQueries = false
+
 	}()
 
 	defer deleteTablet(addTablet(100))
@@ -445,6 +446,7 @@ func TestPlayerCopyTablesWithFK(t *testing.T) {
 		"/insert into _vt.vreplication_log",
 		"set foreign_key_checks=1;",
 		"/update _vt.vreplication set state='Running'",
+		"/insert into _vt.vreplication_log",
 	}
 	expectedQueries := append(initialQueriesWithFK, testQueries...)
 	expectDBClientQueries(t, expectedQueries)
@@ -463,9 +465,10 @@ func TestPlayerCopyTablesWithFK(t *testing.T) {
 	if _, err := playerEngine.Exec(query); err != nil {
 		t.Fatal(err)
 	}
+
 }
 
-func TestPlayerCopyTables(t *testing.T) {
+func TestPlayerCopyTables2(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
 	execStatements(t, []string{
@@ -514,12 +517,17 @@ func TestPlayerCopyTables(t *testing.T) {
 	}()
 
 	expectDBClientQueries(t, []string{
+		"begin",
 		"/insert into _vt.vreplication",
+		"/insert into _vt.vreplication_log",
+		"commit",
 		"/update _vt.vreplication set message='Picked source tablet.*",
 		// Create the list of tables to copy and transition to Copying state.
 		"begin",
 		"/insert into _vt.copy_state",
 		"/update _vt.vreplication set state='Copying'",
+		"/insert into _vt.vreplication_log",
+		"/insert into _vt.vreplication_log",
 		"commit",
 		// The first fast-forward has no starting point. So, it just saves the current position.
 		"/update _vt.vreplication set pos=",
@@ -535,6 +543,7 @@ func TestPlayerCopyTables(t *testing.T) {
 		"commit",
 		// Nothing to copy from yes. Delete from copy_state.
 		"/delete from _vt.copy_state.*yes",
+		"/insert into _vt.vreplication_log",
 		// All tables copied. Final catch up followed by Running state.
 		"/update _vt.vreplication set state='Running'",
 	})
@@ -1133,6 +1142,8 @@ func TestPlayerCopyTablesStopAfterCopy(t *testing.T) {
 
 func TestPlayerCopyTableCancel(t *testing.T) {
 	defer deleteTablet(addTablet(100))
+	globalDBQueries = make(chan string, 1000)
+	execStatements(t, []string{"truncate table _vt.vreplication"})
 
 	execStatements(t, []string{
 		"create table src1(id int, val varbinary(128), primary key(id))",

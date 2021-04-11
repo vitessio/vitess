@@ -164,6 +164,7 @@ func execStatements(t *testing.T, queries []string) {
 // Topos and tablets
 
 func addTablet(id int) *topodatapb.Tablet {
+	globalDBQueries = make(chan string, 1000)
 	tablet := &topodatapb.Tablet{
 		Alias: &topodatapb.TabletAlias{
 			Cell: env.Cells[0],
@@ -461,10 +462,11 @@ func expectLogsAndUnsubscribe(t *testing.T, logs []LogExpectation, logCh chan in
 	}
 }
 
+var passthrough = false //true // for testing
+
 func expectDBClientQueries(t *testing.T, queries []string) {
 	t.Helper()
 	failed := false
-	passthrough := false //true // for testing
 	for i, query := range queries {
 		if failed {
 			t.Errorf("no query received, expecting %s", query)
@@ -526,6 +528,10 @@ func expectNontxQueries(t *testing.T, queries []string) {
 	retry:
 		select {
 		case got = <-globalDBQueries:
+			if passthrough {
+				fmt.Printf(">>> \"%s\",\n", got)
+			}
+
 			if got == "begin" || got == "commit" || got == "rollback" ||
 				strings.Contains(got, "update _vt.vreplication set pos") || heartbeatRe.MatchString(got) ||
 				strings.Contains(got, "_vt.vreplication_log") {
@@ -542,7 +548,9 @@ func expectNontxQueries(t *testing.T, queries []string) {
 			} else {
 				match = (got == query)
 			}
-			require.True(t, match, "query %d:: got:%s, want:%s", i, got, query)
+			if !passthrough {
+				require.True(t, match, "query %d:: got:%s, want:%s", i, got, query)
+			}
 		case <-time.After(5 * time.Second):
 			t.Fatalf("no query received, expecting %s", query)
 			failed = true
