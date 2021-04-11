@@ -852,11 +852,13 @@ Gen4 plan same as above
         "FieldQuery": "select user_id, weight_string(user_id) from music where 1 != 1",
         "OrderBy": "0 ASC",
         "Query": "select user_id, weight_string(user_id) from music order by user_id asc limit :__upper_limit",
+        "ResultColumns": 1,
         "Table": "music"
       }
     ]
   }
 }
+Gen4 plan same as above
 
 # Sharding Key Condition in Parenthesis
 "select * from user where name ='abc' AND (id = 4) limit 5"
@@ -1547,6 +1549,7 @@ Gen4 plan same as above
             "FieldQuery": "select user_id, count(id), weight_string(user_id) from music where 1 != 1 group by user_id",
             "OrderBy": "0 ASC",
             "Query": "select user_id, count(id), weight_string(user_id) from music group by user_id having count(user_id) = 1 order by user_id asc limit :__upper_limit",
+            "ResultColumns": 2,
             "Table": "music"
           }
         ]

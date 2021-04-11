@@ -557,6 +557,10 @@ func TestFindSchema(t *testing.T) {
 										Name:     "-80",
 										Shard: &topodatapb.Shard{
 											IsMasterServing: true,
+											MasterAlias: &topodatapb.TabletAlias{
+												Cell: "c1zone1",
+												Uid:  100,
+											},
 										},
 									},
 									"80-": {
@@ -564,6 +568,10 @@ func TestFindSchema(t *testing.T) {
 										Name:     "80-",
 										Shard: &topodatapb.Shard{
 											IsMasterServing: true,
+											MasterAlias: &topodatapb.TabletAlias{
+												Cell: "c1zone1",
+												Uid:  200,
+											},
 										},
 									},
 								},
@@ -577,6 +585,10 @@ func TestFindSchema(t *testing.T) {
 										Name:     "-",
 										Shard: &topodatapb.Shard{
 											IsMasterServing: true,
+											MasterAlias: &topodatapb.TabletAlias{
+												Cell: "c1zone1",
+												Uid:  300,
+											},
 										},
 									},
 								},
@@ -668,6 +680,10 @@ func TestFindSchema(t *testing.T) {
 										Name:     "-",
 										Shard: &topodatapb.Shard{
 											IsMasterServing: true,
+											MasterAlias: &topodatapb.TabletAlias{
+												Cell: "c2z1",
+												Uid:  100,
+											},
 										},
 									},
 								},
@@ -1403,6 +1419,10 @@ func TestGetSchema(t *testing.T) {
 										Name:     "-80",
 										Shard: &topodatapb.Shard{
 											IsMasterServing: true,
+											MasterAlias: &topodatapb.TabletAlias{
+												Cell: "c1zone1",
+												Uid:  100,
+											},
 										},
 									},
 									"80-": {
@@ -1410,6 +1430,10 @@ func TestGetSchema(t *testing.T) {
 										Name:     "80-",
 										Shard: &topodatapb.Shard{
 											IsMasterServing: true,
+											MasterAlias: &topodatapb.TabletAlias{
+												Cell: "c1zone1",
+												Uid:  200,
+											},
 										},
 									},
 								},
@@ -2073,6 +2097,10 @@ func TestGetSchemas(t *testing.T) {
 										Name:     "-80",
 										Shard: &topodatapb.Shard{
 											IsMasterServing: true,
+											MasterAlias: &topodatapb.TabletAlias{
+												Cell: "c1zone1",
+												Uid:  100,
+											},
 										},
 									},
 									"80-": {
@@ -2080,6 +2108,10 @@ func TestGetSchemas(t *testing.T) {
 										Name:     "80-",
 										Shard: &topodatapb.Shard{
 											IsMasterServing: true,
+											MasterAlias: &topodatapb.TabletAlias{
+												Cell: "c1zone1",
+												Uid:  200,
+											},
 										},
 									},
 								},
@@ -2093,6 +2125,10 @@ func TestGetSchemas(t *testing.T) {
 										Name:     "-",
 										Shard: &topodatapb.Shard{
 											IsMasterServing: true,
+											MasterAlias: &topodatapb.TabletAlias{
+												Cell: "c1zone2",
+												Uid:  100,
+											},
 										},
 									},
 								},
@@ -2184,6 +2220,10 @@ func TestGetSchemas(t *testing.T) {
 										Name:     "-",
 										Shard: &topodatapb.Shard{
 											IsMasterServing: true,
+											MasterAlias: &topodatapb.TabletAlias{
+												Cell: "c2z1",
+												Uid:  100,
+											},
 										},
 									},
 								},

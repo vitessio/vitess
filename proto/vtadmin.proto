@@ -212,6 +212,7 @@ message GetSchemasResponse {
 
 message GetSchemaTableSizeOptions {
     bool aggregate_sizes = 1;
+    bool include_non_serving_shards = 2;
 }
 
 message GetTabletRequest {

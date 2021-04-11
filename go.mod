@@ -121,4 +121,4 @@ require (
 	sigs.k8s.io/yaml v1.1.0
 )
 
-replace github.com/skeema/tengo => github.com/planetscale/tengo v0.9.6-ps.v1
+replace github.com/skeema/tengo => github.com/planetscale/tengo v0.9.6-ps.v3
