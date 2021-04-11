@@ -6835,5 +6835,6 @@
 2021-04-11T04:23:49Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/737408810
 2021-04-11T04:23:49Z,local_example,https://github.com/vitessio/vitess/actions/runs/737408807
 2021-04-11T04:23:49Z,unit_race,https://github.com/vitessio/vitess/actions/runs/737408790
+2021-04-11T11:24:20Z,Cluster (onlineddl_declarative),https://github.com/vitessio/vitess/actions/runs/738085315
 2021-04-11T11:24:20Z,Unit Test (mariadb101),https://github.com/vitessio/vitess/actions/runs/738085320
 2021-04-11T11:24:20Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/738085331
