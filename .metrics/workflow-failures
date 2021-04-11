@@ -6862,3 +6862,5 @@
 2021-04-11T21:27:20Z,region_example,https://github.com/vitessio/vitess/actions/runs/739104761
 2021-04-11T21:27:20Z,unit_race,https://github.com/vitessio/vitess/actions/runs/739104754
 2021-04-11T21:56:33Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/739152246
+2021-04-11T21:56:33Z,endtoend,https://github.com/vitessio/vitess/actions/runs/739152217
+2021-04-11T22:13:05Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/739178967
