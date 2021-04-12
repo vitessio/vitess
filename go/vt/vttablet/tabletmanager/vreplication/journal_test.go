@@ -91,7 +91,7 @@ func TestJournalOneToMany(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 	defer deleteTablet(addOtherTablet(101, "other_keyspace", "-80"))
 	defer deleteTablet(addOtherTablet(102, "other_keyspace", "80-"))
-
+	globalDBQueries = make(chan string, 1000)
 	execStatements(t, []string{
 		"create table t(id int, val varbinary(128), primary key(id))",
 		fmt.Sprintf("create table %s.t(id int, val varbinary(128), primary key(id))", vrepldb),
@@ -331,7 +331,6 @@ func TestJournalTableMixed(t *testing.T) {
 	expectDBClientQueries(t, []string{
 		"/update _vt.vreplication set pos=",
 		"/update _vt.vreplication set state='Error', message='unable to handle journal event: tables were partially matched' where id",
-		"/insert into _vt.vreplication_log",
 	})
 
 	// Delete all vreplication streams. There should be only one, but we don't know its id.

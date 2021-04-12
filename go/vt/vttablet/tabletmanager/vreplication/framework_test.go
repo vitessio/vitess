@@ -477,7 +477,7 @@ func expectDBClientQueries(t *testing.T, queries []string) {
 		case got = <-globalDBQueries:
 			// We rule out heartbeat time update queries because otherwise our query list
 			// is indeterminable and varies with each test execution.
-			if heartbeatRe.MatchString(got) {
+			if heartbeatRe.MatchString(got) || strings.Contains(got, "_vt.vreplication_log") {
 				goto retry
 			}
 			if passthrough {

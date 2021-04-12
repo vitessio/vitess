@@ -35,22 +35,18 @@ import (
 var initialQueries = []string{
 	"begin",
 	"/insert into _vt.vreplication",
-	"/insert into _vt.vreplication_log",
 	"commit",
 	"/update _vt.vreplication set message='Picked source tablet.*",
 	// Create the list of tables to copy and transition to Copying state.
 	"begin",
 	"insert into _vt.copy_state(vrepl_id, table_name) values (1, 'dst1')",
 	"update _vt.vreplication set state='Copying', message='' where id=1",
-	"/insert into _vt.vreplication_log\\(vrepl_id, type, state, message\\) values\\(.*, 'State Changed', 'Copying', ''\\)",
-	"/insert into _vt.vreplication_log\\(vrepl_id, type, state, message\\) values\\(.*, 'Started Copy Phase', 'Copying', 'Copy phase started for .* table\\(s\\)'\\)",
 	"commit",
 }
 
 var initialQueriesWithFK = []string{
 	"begin",
 	"/insert into _vt.vreplication",
-	"/insert into _vt.vreplication_log",
 	"commit",
 	"/update _vt.vreplication set message='Picked source tablet.*",
 	"select @@foreign_key_checks;",
@@ -58,8 +54,6 @@ var initialQueriesWithFK = []string{
 	"begin",
 	"/insert into _vt.copy_state.*",
 	"/update _vt.vreplication set state='Copying', message=''",
-	"/insert into _vt.vreplication_log\\(vrepl_id, type, state, message\\) values\\(.*, 'State Changed', 'Copying', ''\\)",
-	"/insert into _vt.vreplication_log.*'Started Copy Phase', 'Copying', 'Copy phase started",
 	"commit",
 }
 
@@ -443,10 +437,8 @@ func TestPlayerCopyTablesWithFK(t *testing.T) {
 		// copy of dst1 is done: delete from copy_state.
 		"/delete from _vt.copy_state.*dst2",
 		// All tables copied. Final catch up followed by Running state.
-		"/insert into _vt.vreplication_log",
 		"set foreign_key_checks=1;",
 		"/update _vt.vreplication set state='Running'",
-		"/insert into _vt.vreplication_log",
 	}
 	expectedQueries := append(initialQueriesWithFK, testQueries...)
 	expectDBClientQueries(t, expectedQueries)
@@ -519,15 +511,12 @@ func TestPlayerCopyTables(t *testing.T) {
 	expectDBClientQueries(t, []string{
 		"begin",
 		"/insert into _vt.vreplication",
-		"/insert into _vt.vreplication_log",
 		"commit",
 		"/update _vt.vreplication set message='Picked source tablet.*",
 		// Create the list of tables to copy and transition to Copying state.
 		"begin",
 		"/insert into _vt.copy_state",
 		"/update _vt.vreplication set state='Copying'",
-		"/insert into _vt.vreplication_log",
-		"/insert into _vt.vreplication_log",
 		"commit",
 		// The first fast-forward has no starting point. So, it just saves the current position.
 		"/update _vt.vreplication set pos=",
@@ -543,7 +532,6 @@ func TestPlayerCopyTables(t *testing.T) {
 		"commit",
 		// Nothing to copy from yes. Delete from copy_state.
 		"/delete from _vt.copy_state.*yes",
-		"/insert into _vt.vreplication_log",
 		// All tables copied. Final catch up followed by Running state.
 		"/update _vt.vreplication set state='Running'",
 	})
@@ -1057,12 +1045,10 @@ func TestPlayerCopyTablesNone(t *testing.T) {
 	expectDBClientQueries(t, []string{
 		"begin",
 		"/insert into _vt.vreplication",
-		"/insert into _vt.vreplication_log",
 		"commit",
 		"/update _vt.vreplication set message='Picked source tablet.*",
 		"begin",
 		"/update _vt.vreplication set state='Error', message='Error: no tables were found to copy'",
-		"/insert into _vt.vreplication_log",
 		"commit",
 	})
 }
@@ -1111,15 +1097,12 @@ func TestPlayerCopyTablesStopAfterCopy(t *testing.T) {
 	expectDBClientQueries(t, []string{
 		"begin",
 		"/insert into _vt.vreplication",
-		"/insert into _vt.vreplication_log",
 		"commit",
 		"/update _vt.vreplication set message='Picked source tablet.*",
 		// Create the list of tables to copy and transition to Copying state.
 		"begin",
 		"/insert into _vt.copy_state",
 		"/update _vt.vreplication set state='Copying'",
-		"/insert into _vt.vreplication_log",
-		"/insert into _vt.vreplication_log",
 		"commit",
 		// The first fast-forward has no starting point. So, it just saves the current position.
 		"/update _vt.vreplication set pos=",
@@ -1129,10 +1112,8 @@ func TestPlayerCopyTablesStopAfterCopy(t *testing.T) {
 		"commit",
 		// copy of dst1 is done: delete from copy_state.
 		"/delete from _vt.copy_state.*dst1",
-		"/insert into _vt.vreplication_log",
 		// All tables copied. Stop vreplication because we requested it.
 		"/update _vt.vreplication set state='Stopped'",
-		"/insert into _vt.vreplication_log",
 	})
 	expectData(t, "dst1", [][]string{
 		{"1", "aaa"},
@@ -1206,7 +1187,6 @@ func TestPlayerCopyTableCancel(t *testing.T) {
 		// copy of dst1 is done: delete from copy_state.
 		"/delete from _vt.copy_state.*dst1",
 		// All tables copied. Go into running state.
-		"/insert into _vt.vreplication_log.*'Ended Copy Phase', 'Copying', 'Copy phase completed at gtid",
 		"/update _vt.vreplication set state='Running'",
 	}
 	expectedQueries := append(initialQueries, testQueries...)
