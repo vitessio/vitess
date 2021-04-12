@@ -26,6 +26,7 @@ import { filterNouns } from '../../util/filterNouns';
 import style from './Tablets.module.scss';
 import { Button } from '../Button';
 import { DataCell } from '../dataTable/DataCell';
+import { TabletServingPip } from '../pips/TabletServingPip';
 
 export const Tablets = () => {
     useDocumentTitle('Tablets');
@@ -45,7 +46,9 @@ export const Tablets = () => {
                     <div className="font-size-small text-color-secondary">{t.cluster}</div>
                 </DataCell>
                 <DataCell>{t.shard}</DataCell>
-                <DataCell>{t.type}</DataCell>
+                <DataCell className="white-space-nowrap">
+                    <TabletServingPip state={t._raw.state} /> {t.type}
+                </DataCell>
                 <DataCell>{t.state}</DataCell>
                 <DataCell>{t.alias}</DataCell>
                 <DataCell>{t.hostname}</DataCell>
@@ -118,6 +121,7 @@ export const formatRows = (tablets: pb.Tablet[] | null, filter: string) => {
         hostname: t.tablet?.hostname,
         type: formatDisplayType(t),
         state: formatState(t),
+        _raw: t,
         _keyspaceShard: `${t.tablet?.keyspace}/${t.tablet?.shard}`,
         // Include the unformatted type so (string) filtering by "master" works
         // even if "primary" is what we display, and what we use for key:value searches.
