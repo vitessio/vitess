@@ -218,3 +218,7 @@ table tbody td[rowSpan] {
 .text-color-secondary {
   color: var(--textColorSecondary);
 }
+
+.white-space-nowrap {
+  white-space: nowrap;
+}
