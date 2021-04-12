@@ -37,7 +37,7 @@ var _ Primitive = (*OrderedAggregate)(nil)
 // is that the underlying primitive is a scatter select with pre-sorted
 // rows.
 type OrderedAggregate struct {
-	// PreProcess is true if one of the aggregates is distinct.
+	// PreProcess is true if one of the aggregates needs preprocessing.
 	PreProcess bool `json:",omitempty"`
 	// Aggregates specifies the aggregation parameters for each
 	// aggregation function: function opcode and input column number.
@@ -69,7 +69,7 @@ func (ap AggregateParams) isDistinct() bool {
 	return ap.Opcode == AggregateCountDistinct || ap.Opcode == AggregateSumDistinct
 }
 
-func (ap AggregateParams) changeField() bool {
+func (ap AggregateParams) preProcess() bool {
 	return ap.Opcode == AggregateCountDistinct || ap.Opcode == AggregateSumDistinct || ap.Opcode == AggregateGtid
 }
 
@@ -279,7 +279,7 @@ func (oa *OrderedAggregate) convertFields(fields []*querypb.Field) []*querypb.Fi
 		return fields
 	}
 	for _, aggr := range oa.Aggregates {
-		if !aggr.changeField() {
+		if !aggr.preProcess() {
 			continue
 		}
 		fields[aggr.Col] = &querypb.Field{
@@ -456,9 +456,6 @@ func (oa *OrderedAggregate) description() PrimitiveDescription {
 	other := map[string]interface{}{
 		"Aggregates": aggregates,
 		"GroupBy":    groupBy,
-	}
-	if oa.PreProcess {
-		other["PreProcess"] = true
 	}
 
 	return PrimitiveDescription{

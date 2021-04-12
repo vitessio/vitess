@@ -701,7 +701,6 @@ Gen4 plan same as above
     "Variant": "Ordered",
     "Aggregates": "count_distinct(1) AS count(distinct col2)",
     "GroupBy": "0",
-    "PreProcess": true,
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -728,7 +727,6 @@ Gen4 plan same as above
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
     "Aggregates": "count_distinct(0) AS count(distinct col2)",
-    "PreProcess": true,
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -756,7 +754,6 @@ Gen4 plan same as above
     "Variant": "Ordered",
     "Aggregates": "count_distinct(1) AS c2",
     "GroupBy": "0",
-    "PreProcess": true,
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -784,7 +781,6 @@ Gen4 plan same as above
     "Variant": "Ordered",
     "Aggregates": "sum_distinct(1) AS sum(distinct col2)",
     "GroupBy": "0",
-    "PreProcess": true,
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -844,7 +840,6 @@ Gen4 plan same as above
         "Variant": "Ordered",
         "Aggregates": "count_distinct(1) AS k",
         "GroupBy": "0",
-        "PreProcess": true,
         "Inputs": [
           {
             "OperatorType": "Route",
