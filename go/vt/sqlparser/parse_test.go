@@ -1066,16 +1066,15 @@ var (
 			output: "alter table a",
 		}, {
 			input:  "alter table a rename b",
-			output: "rename table a to b",
+			output: "alter table a rename to b",
 		}, {
 			input:  "alter table `By` rename `bY`",
-			output: "rename table `By` to `bY`",
+			output: "alter table `By` rename to `bY`",
 		}, {
 			input:  "alter table a rename to b",
-			output: "rename table a to b",
 		}, {
 			input:  "alter table a rename as b",
-			output: "rename table a to b",
+			output: "alter table a rename to b",
 		}, {
 			input:  "alter table a rename index foo to bar",
 			output: "alter table a rename index foo to bar",
@@ -1906,6 +1905,16 @@ var (
 			input:  "alter table a modify foo int unique comment 'a comment here' auto_increment on update current_timestamp() default 0 not null after bar",
 			output: "alter table a modify column foo (\n\tfoo int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique\n) after bar",
 		}, {
+			input:  "alter table t add column c int unique comment 'a comment here' auto_increment on update current_timestamp() default 0 not null," +
+				" change foo bar int not null auto_increment first," +
+				" reorganize partition b into (partition c values less than (:v1), partition d values less than (maxvalue))," +
+				" add spatial index idx (id)",
+			output: `alter table t add column (
+	c int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique
+), change column foo (
+	bar int not null auto_increment
+) first, reorganize partition b into (partition c values less than (:v1), partition d values less than (maxvalue)), add spatial index idx (id)`,
+		}, {
 			input:  "delete a.*, b.* from tbl_a a, tbl_b b where a.id = b.id and b.name = 'test'",
 			output: "delete a, b from tbl_a as a, tbl_b as b where a.id = b.id and b.name = 'test'",
 		}, {
@@ -2365,7 +2374,6 @@ func TestCaseSensitivity(t *testing.T) {
 			output: "alter table a",
 		}, {
 			input:  "alter table A rename to B",
-			output: "rename table A to B",
 		}, {
 			input: "rename table A to B",
 		}, {

@@ -356,6 +356,7 @@ func (*Delete) iStatement()        {}
 func (*Set) iStatement()           {}
 func (*DBDDL) iStatement()         {}
 func (*DDL) iStatement()           {}
+func (*MultiAlterDDL) iStatement() {}
 func (*Explain) iStatement()       {}
 func (*Show) iStatement()          {}
 func (*Use) iStatement()           {}
@@ -1432,6 +1433,36 @@ func (c Characteristic) String() string {
 	return string(c.Type)
 }
 
+// MultiAlterDDL represents multiple ALTER statements on a single table.
+type MultiAlterDDL struct {
+	Table      TableName
+	Statements []*DDL
+}
+
+var _ SQLNode = (*MultiAlterDDL)(nil)
+
+// Format implements SQLNode.
+func (m *MultiAlterDDL) Format(buf *TrackedBuffer) {
+	buf.Myprintf("alter table %v", m.Table)
+	for i, ddl := range m.Statements {
+		if i > 0 {
+			buf.Myprintf(",")
+		}
+		ddl.alterFormat(buf)
+	}
+}
+
+// walkSubtree implements SQLNode.
+func (m *MultiAlterDDL) walkSubtree(visit Visit) error {
+	for _, ddl := range m.Statements {
+		err := ddl.walkSubtree(visit)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // DDL represents a CREATE, ALTER, DROP, RENAME, TRUNCATE or ANALYZE statement.
 type DDL struct {
 	Action string
@@ -1608,53 +1639,8 @@ func (node *DDL) Format(buf *TrackedBuffer) {
 			buf.Myprintf(", %v to %v", node.FromTables[i], node.ToTables[i])
 		}
 	case AlterStr:
-		if node.PartitionSpec != nil {
-			buf.Myprintf("%s table %v %v", node.Action, node.Table, node.PartitionSpec)
-		} else if node.ColumnAction == AddStr {
-			after := ""
-			if node.ColumnOrder != nil {
-				if node.ColumnOrder.First {
-					after = " first"
-				} else {
-					after = " after " + node.ColumnOrder.AfterColumn.String()
-				}
-			}
-			buf.Myprintf("%s table %v %s column %v%s", node.Action, node.Table, node.ColumnAction, node.TableSpec, after)
-		} else if node.ColumnAction == ModifyStr || node.ColumnAction == ChangeStr {
-			after := ""
-			if node.ColumnOrder != nil {
-				if node.ColumnOrder.First {
-					after = " first"
-				} else {
-					after = " after " + node.ColumnOrder.AfterColumn.String()
-				}
-			}
-			buf.Myprintf("%s table %v %s column %v %v%s", node.Action, node.Table, node.ColumnAction, node.Column, node.TableSpec, after)
-		} else if node.ColumnAction == DropStr {
-			buf.Myprintf("%s table %v %s column %v", node.Action, node.Table, node.ColumnAction, node.Column)
-		} else if node.ColumnAction == RenameStr {
-			buf.Myprintf("%s table %v %s column %v to %v", node.Action, node.Table, node.ColumnAction, node.Column, node.ToColumn)
-		} else if node.IndexSpec != nil {
-			buf.Myprintf("%s table %v %v", node.Action, node.Table, node.IndexSpec)
-		} else if node.ConstraintAction == AddStr && node.TableSpec != nil && len(node.TableSpec.Constraints) == 1 {
-			switch node.TableSpec.Constraints[0].Details.(type) {
-			case *ForeignKeyDefinition, *CheckConstraintDefinition:
-				buf.Myprintf("%s table %v add %v", node.Action, node.Table, node.TableSpec.Constraints[0])
-			default:
-				buf.Myprintf("%s table %v", node.Action, node.Table)
-			}
-		} else if node.ConstraintAction == DropStr && node.TableSpec != nil && len(node.TableSpec.Constraints) == 1 {
-			switch node.TableSpec.Constraints[0].Details.(type) {
-			case *ForeignKeyDefinition:
-				buf.Myprintf("%s table %v drop foreign key %s", node.Action, node.Table, node.TableSpec.Constraints[0].Name)
-			case *CheckConstraintDefinition:
-				buf.Myprintf("%s table %v drop check %s", node.Action, node.Table, node.TableSpec.Constraints[0].Name)
-			default:
-				buf.Myprintf("%s table %v drop constraint %s", node.Action, node.Table, node.TableSpec.Constraints[0].Name)
-			}
-		} else {
-			buf.Myprintf("%s table %v", node.Action, node.Table)
-		}
+		buf.Myprintf("%s table %v", node.Action, node.Table)
+		node.alterFormat(buf)
 	case FlushStr:
 		buf.Myprintf("%s", node.Action)
 	case AddAutoIncStr:
@@ -1674,6 +1660,57 @@ func (node *DDL) walkSubtree(visit Visit) error {
 		}
 	}
 	return nil
+}
+
+func (node *DDL) alterFormat(buf *TrackedBuffer) {
+	if node.Action == RenameStr {
+		buf.Myprintf(" %s to %v", node.Action, node.ToTables[0])
+		for i := 1; i < len(node.FromTables); i++ {
+			buf.Myprintf(", %v to %v", node.FromTables[i], node.ToTables[i])
+		}
+	} else if node.PartitionSpec != nil {
+		buf.Myprintf(" %v", node.PartitionSpec)
+	} else if node.ColumnAction == AddStr {
+		after := ""
+		if node.ColumnOrder != nil {
+			if node.ColumnOrder.First {
+				after = " first"
+			} else {
+				after = " after " + node.ColumnOrder.AfterColumn.String()
+			}
+		}
+		buf.Myprintf(" %s column %v%s", node.ColumnAction, node.TableSpec, after)
+	} else if node.ColumnAction == ModifyStr || node.ColumnAction == ChangeStr {
+		after := ""
+		if node.ColumnOrder != nil {
+			if node.ColumnOrder.First {
+				after = " first"
+			} else {
+				after = " after " + node.ColumnOrder.AfterColumn.String()
+			}
+		}
+		buf.Myprintf(" %s column %v %v%s",node.ColumnAction, node.Column, node.TableSpec, after)
+	} else if node.ColumnAction == DropStr {
+		buf.Myprintf(" %s column %v", node.ColumnAction, node.Column)
+	} else if node.ColumnAction == RenameStr {
+		buf.Myprintf(" %s column %v to %v", node.ColumnAction, node.Column, node.ToColumn)
+	} else if node.IndexSpec != nil {
+		buf.Myprintf(" %v", node.IndexSpec)
+	} else if node.ConstraintAction == AddStr && node.TableSpec != nil && len(node.TableSpec.Constraints) == 1 {
+		switch node.TableSpec.Constraints[0].Details.(type) {
+		case *ForeignKeyDefinition, *CheckConstraintDefinition:
+			buf.Myprintf(" add %v", node.TableSpec.Constraints[0])
+		}
+	} else if node.ConstraintAction == DropStr && node.TableSpec != nil && len(node.TableSpec.Constraints) == 1 {
+		switch node.TableSpec.Constraints[0].Details.(type) {
+		case *ForeignKeyDefinition:
+			buf.Myprintf(" drop foreign key %s", node.TableSpec.Constraints[0].Name)
+		case *CheckConstraintDefinition:
+			buf.Myprintf(" drop check %s", node.TableSpec.Constraints[0].Name)
+		default:
+			buf.Myprintf(" drop constraint %s", node.TableSpec.Constraints[0].Name)
+		}
+	}
 }
 
 // AffectedTables returns the list table names affected by the DDL.

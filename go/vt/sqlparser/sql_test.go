@@ -626,7 +626,12 @@ func TestAlterDropConstraint(t *testing.T) {
 			res, err := Parse(test.statement)
 			require.NoError(t, err)
 			ddlRes, ok := res.(*DDL)
-			require.True(t, ok)
+			if !ok {
+				mAlterDDL, ok := res.(*MultiAlterDDL)
+				require.True(t, ok)
+				require.Len(t, mAlterDDL.Statements, 1)
+				ddlRes = mAlterDDL.Statements[0]
+			}
 			require.NotNil(t, ddlRes.TableSpec)
 			require.Equal(t, len(test.res), len(ddlRes.TableSpec.Constraints))
 			require.Equal(t, DropStr, ddlRes.ConstraintAction)
@@ -651,7 +656,12 @@ func testIndex(t *testing.T, tests []testIndexStruct) {
 			res, err := Parse(test.statement)
 			require.NoError(t, err)
 			ddlRes, ok := res.(*DDL)
-			require.True(t, ok)
+			if !ok {
+				mAlterDDL, ok := res.(*MultiAlterDDL)
+				require.True(t, ok)
+				require.Len(t, mAlterDDL.Statements, 1)
+				ddlRes = mAlterDDL.Statements[0]
+			}
 			assert.Equal(t, AlterStr, ddlRes.Action)
 			assert.Equal(t, test.resTable, ddlRes.Table)
 			assert.Equal(t, test.res, ddlRes.IndexSpec)
@@ -670,7 +680,12 @@ func testForeignKey(t *testing.T, tests []testForeignKeyStruct, expectedConstrai
 			res, err := Parse(test.statement)
 			require.NoError(t, err)
 			ddlRes, ok := res.(*DDL)
-			require.True(t, ok)
+			if !ok {
+				mAlterDDL, ok := res.(*MultiAlterDDL)
+				require.True(t, ok)
+				require.Len(t, mAlterDDL.Statements, 1)
+				ddlRes = mAlterDDL.Statements[0]
+			}
 			require.NotNil(t, ddlRes.TableSpec)
 			require.Equal(t, len(test.res), len(ddlRes.TableSpec.Constraints))
 			require.Equal(t, expectedConstraintAction, ddlRes.ConstraintAction)

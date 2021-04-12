@@ -63,6 +63,7 @@ func skipToEnd(yylex interface{}) {
   statement     Statement
   selStmt       SelectStatement
   ddl           *DDL
+  ddls          []*DDL
   ins           *Insert
   byt           byte
   bytes         []byte
@@ -275,7 +276,8 @@ func skipToEnd(yylex interface{}) {
 %type <bytes> signal_condition_value
 %type <str> trigger_time trigger_event
 %type <statement> alter_statement alter_table_statement alter_view_statement
-%type <ddl> create_table_prefix rename_list
+%type <ddl> create_table_prefix rename_list alter_table_statement_part
+%type <ddls> alter_table_statement_list
 %type <statement> analyze_statement show_statement use_statement other_statement
 %type <statement> describe_statement explain_statement explainable_statement
 %type <statement> begin_statement commit_statement rollback_statement start_transaction_statement load_statement
@@ -2125,108 +2127,131 @@ alter_statement:
 | alter_view_statement
 
 alter_table_statement:
-  ALTER ignore_opt TABLE table_name non_add_drop_or_rename_operation skip_to_end
+  ALTER ignore_opt TABLE table_name alter_table_statement_list
   {
-    $$ = &DDL{Action: AlterStr, Table: $4}
+    for i := 0; i < len($5); i++ {
+      if $5[i].Action == RenameStr {
+        $5[i].FromTables = append(TableNames{$4}, $5[i].FromTables...)
+      } else {
+        $5[i].Table = $4
+      }
+    }
+    $$ = &MultiAlterDDL{Table: $4, Statements: $5}
   }
-| ALTER ignore_opt TABLE table_name ADD column_opt '(' column_definition ')' skip_to_end
+
+alter_table_statement_list:
+  alter_table_statement_part
   {
-    ddl := &DDL{Action: AlterStr, ColumnAction: AddStr, Table: $4, TableSpec: &TableSpec{}}
-    ddl.TableSpec.AddColumn($8)
-    ddl.Column = $8.Name
+    $$ = []*DDL{$1}
+  }
+| alter_table_statement_list ',' alter_table_statement_part
+  {
+    $$ = append($$, $3)
+  }
+
+alter_table_statement_part:
+  non_add_drop_or_rename_operation skip_to_end
+  {
+    $$ = &DDL{Action: AlterStr}
+  }
+| ADD column_opt '(' column_definition ')'
+  {
+    ddl := &DDL{Action: AlterStr, ColumnAction: AddStr, TableSpec: &TableSpec{}}
+    ddl.TableSpec.AddColumn($4)
+    ddl.Column = $4.Name
     $$ = ddl
   }
-| ALTER ignore_opt TABLE table_name ADD column_opt column_definition column_order_opt skip_to_end
+| ADD column_opt column_definition column_order_opt
   {
-    ddl := &DDL{Action: AlterStr, ColumnAction: AddStr, Table: $4, TableSpec: &TableSpec{}, ColumnOrder: $8}
-    ddl.TableSpec.AddColumn($7)
-    ddl.Column = $7.Name
+    ddl := &DDL{Action: AlterStr, ColumnAction: AddStr, TableSpec: &TableSpec{}, ColumnOrder: $4}
+    ddl.TableSpec.AddColumn($3)
+    ddl.Column = $3.Name
     $$ = ddl
   }
-| ALTER ignore_opt TABLE table_name ADD ignored_alter_object_type skip_to_end
+| ADD ignored_alter_object_type skip_to_end
   {
-    $$ = &DDL{Action: AlterStr, Table: $4}
+    $$ = &DDL{Action: AlterStr}
   }
-| ALTER ignore_opt TABLE table_name DROP column_opt ID
+| DROP column_opt ID
   {
-    $$ = &DDL{Action: AlterStr, ColumnAction: DropStr, Column: NewColIdent(string($7)), Table: $4}
+    $$ = &DDL{Action: AlterStr, ColumnAction: DropStr, Column: NewColIdent(string($3))}
   }
-| ALTER ignore_opt TABLE table_name DROP ignored_alter_object_type skip_to_end
+| DROP ignored_alter_object_type skip_to_end
   {
-    $$ = &DDL{Action: AlterStr, Table: $4}
+    $$ = &DDL{Action: AlterStr}
   }
-| ALTER ignore_opt TABLE table_name RENAME COLUMN ID to_or_as ID
+| RENAME COLUMN ID to_or_as ID
   {
-    $$ = &DDL{Action: AlterStr, ColumnAction: RenameStr, Table: $4, Column: NewColIdent(string($7)), ToColumn: NewColIdent(string($9))}
+    $$ = &DDL{Action: AlterStr, ColumnAction: RenameStr, Column: NewColIdent(string($3)), ToColumn: NewColIdent(string($5))}
   }
-| ALTER ignore_opt TABLE table_name RENAME to_opt table_name
+| RENAME to_opt table_name
   {
     // Change this to a rename statement
-    $$ = &DDL{Action: RenameStr, FromTables: TableNames{$4}, ToTables: TableNames{$7}}
+    $$ = &DDL{Action: RenameStr, ToTables: TableNames{$3}}
   }
-| ALTER ignore_opt TABLE table_name ADD index_or_key name_opt using_opt '(' index_column_list ')' index_option_list_opt
+| ADD index_or_key name_opt using_opt '(' index_column_list ')' index_option_list_opt
   {
-    $$ = &DDL{Action: AlterStr, Table: $4, IndexSpec: &IndexSpec{Action: CreateStr, ToName: NewColIdent($7),  Using: $8, Columns: $10, Options: $12}}
+    $$ = &DDL{Action: AlterStr, IndexSpec: &IndexSpec{Action: CreateStr, ToName: NewColIdent($3),  Using: $4, Columns: $6, Options: $8}}
   }
-| ALTER ignore_opt TABLE table_name ADD constraint_symbol_opt key_type index_or_key_opt name_opt using_opt '(' index_column_list ')' index_option_list_opt
+| ADD constraint_symbol_opt key_type index_or_key_opt name_opt using_opt '(' index_column_list ')' index_option_list_opt
   {
-    $$ = &DDL{Action: AlterStr, Table: $4, IndexSpec: &IndexSpec{Action: CreateStr, ToName: NewColIdent($9), Type: $7, Using: $10, Columns: $12, Options: $14}}
+    $$ = &DDL{Action: AlterStr, IndexSpec: &IndexSpec{Action: CreateStr, ToName: NewColIdent($5), Type: $3, Using: $6, Columns: $8, Options: $10}}
   }
-| ALTER ignore_opt TABLE table_name DROP CONSTRAINT ID
+| DROP CONSTRAINT ID
   {
-    $$ = &DDL{Action: AlterStr, ConstraintAction: DropStr, Table: $4, TableSpec: &TableSpec{Constraints:
-        []*ConstraintDefinition{&ConstraintDefinition{Name: string($7)}}}}
+    $$ = &DDL{Action: AlterStr, ConstraintAction: DropStr, TableSpec: &TableSpec{Constraints:
+        []*ConstraintDefinition{&ConstraintDefinition{Name: string($3)}}}}
   }
-| ALTER ignore_opt TABLE table_name DROP CHECK ID
+| DROP CHECK ID
   {
-    $$ = &DDL{Action: AlterStr, ConstraintAction: DropStr, Table: $4, TableSpec: &TableSpec{Constraints:
-        []*ConstraintDefinition{&ConstraintDefinition{Name: string($7), Details: &CheckConstraintDefinition{}}}}}
+    $$ = &DDL{Action: AlterStr, ConstraintAction: DropStr, TableSpec: &TableSpec{Constraints:
+        []*ConstraintDefinition{&ConstraintDefinition{Name: string($3), Details: &CheckConstraintDefinition{}}}}}
   }
-| ALTER ignore_opt TABLE table_name DROP index_or_key sql_id
+| DROP index_or_key sql_id
   {
-    $$ = &DDL{Action: AlterStr, Table: $4, IndexSpec: &IndexSpec{Action: DropStr, ToName: $7}}
+    $$ = &DDL{Action: AlterStr, IndexSpec: &IndexSpec{Action: DropStr, ToName: $3}}
   }
-| ALTER ignore_opt TABLE table_name RENAME index_or_key sql_id TO sql_id
+| RENAME index_or_key sql_id TO sql_id
   {
-    $$ = &DDL{Action: AlterStr, Table: $4, IndexSpec: &IndexSpec{Action: RenameStr, FromName: $7, ToName: $9}}
+    $$ = &DDL{Action: AlterStr, IndexSpec: &IndexSpec{Action: RenameStr, FromName: $3, ToName: $5}}
   }
-| ALTER ignore_opt TABLE table_name MODIFY column_opt column_definition column_order_opt skip_to_end
+| MODIFY column_opt column_definition column_order_opt
   {
-    ddl := &DDL{Action: AlterStr, ColumnAction: ModifyStr, Table: $4, TableSpec: &TableSpec{}, ColumnOrder: $8}
-    ddl.TableSpec.AddColumn($7)
-    ddl.Column = $7.Name
+    ddl := &DDL{Action: AlterStr, ColumnAction: ModifyStr, TableSpec: &TableSpec{}, ColumnOrder: $4}
+    ddl.TableSpec.AddColumn($3)
+    ddl.Column = $3.Name
     $$ = ddl
   }
-| ALTER ignore_opt TABLE table_name CHANGE column_opt ID column_definition column_order_opt skip_to_end
+| CHANGE column_opt ID column_definition column_order_opt
   {
-    ddl := &DDL{Action: AlterStr, ColumnAction: ChangeStr, Table: $4, TableSpec: &TableSpec{}, Column: NewColIdent(string($7)), ColumnOrder: $9}
-    ddl.TableSpec.AddColumn($8)
+    ddl := &DDL{Action: AlterStr, ColumnAction: ChangeStr, TableSpec: &TableSpec{}, Column: NewColIdent(string($3)), ColumnOrder: $5}
+    ddl.TableSpec.AddColumn($4)
     $$ = ddl
   }
-| ALTER ignore_opt TABLE table_name partition_operation
+| partition_operation
   {
-    $$ = &DDL{Action: AlterStr, Table: $4, PartitionSpec: $5}
+    $$ = &DDL{Action: AlterStr, PartitionSpec: $1}
   }
-| ALTER ignore_opt TABLE table_name ADD constraint_definition
+| ADD constraint_definition
   {
-    ddl := &DDL{Action: AlterStr, ConstraintAction: AddStr, Table: $4, TableSpec: &TableSpec{}}
-    ddl.TableSpec.AddConstraint($6)
+    ddl := &DDL{Action: AlterStr, ConstraintAction: AddStr, TableSpec: &TableSpec{}}
+    ddl.TableSpec.AddConstraint($2)
     $$ = ddl
   }
-| ALTER ignore_opt TABLE table_name ADD check_constraint_definition
+| ADD check_constraint_definition
   {
-    ddl := &DDL{Action: AlterStr, ConstraintAction: AddStr, Table: $4, TableSpec: &TableSpec{}}
-    ddl.TableSpec.AddConstraint($6)
+    ddl := &DDL{Action: AlterStr, ConstraintAction: AddStr, TableSpec: &TableSpec{}}
+    ddl.TableSpec.AddConstraint($2)
     $$ = ddl
   }
-| ALTER ignore_opt TABLE table_name DROP FOREIGN KEY ID
+| DROP FOREIGN KEY ID
   {
-    $$ = &DDL{Action: AlterStr, ConstraintAction: DropStr, Table: $4, TableSpec: &TableSpec{Constraints:
-        []*ConstraintDefinition{&ConstraintDefinition{Name: string($8), Details: &ForeignKeyDefinition{}}}}}
+    $$ = &DDL{Action: AlterStr, ConstraintAction: DropStr, TableSpec: &TableSpec{Constraints:
+        []*ConstraintDefinition{&ConstraintDefinition{Name: string($4), Details: &ForeignKeyDefinition{}}}}}
   }
-| ALTER ignore_opt TABLE table_name AUTO_INCREMENT equal_opt expression
+| AUTO_INCREMENT equal_opt expression
   {
-    $$ = &DDL{Action: AlterStr, Table: $4, AutoIncSpec: &AutoIncSpec{Value: $7}}
+    $$ = &DDL{Action: AlterStr, AutoIncSpec: &AutoIncSpec{Value: $3}}
   }
 
 column_order_opt:

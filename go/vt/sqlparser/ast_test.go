@@ -194,7 +194,7 @@ func TestSetLimit(t *testing.T) {
 func TestDDL(t *testing.T) {
 	testcases := []struct {
 		query    string
-		output   *DDL
+		output   Statement
 		affected []string
 	}{{
 		query: "create table a",
@@ -250,18 +250,24 @@ func TestDDL(t *testing.T) {
 		affected: []string{"a", "b"},
 	}, {
 		query: "alter table a auto_increment 19",
-		output: &DDL{
-			Action:      AlterStr,
-			Table:       TableName{Name: NewTableIdent("a")},
-			AutoIncSpec: &AutoIncSpec{Value: newIntVal("19")},
+		output: &MultiAlterDDL{
+			Table: TableName{Name: NewTableIdent("a")},
+			Statements: []*DDL{{
+				Action:      AlterStr,
+				Table:       TableName{Name: NewTableIdent("a")},
+				AutoIncSpec: &AutoIncSpec{Value: newIntVal("19")},
+			}},
 		},
 		affected: []string{"a"},
 	}, {
 		query: "alter table a auto_increment 19.9",
-		output: &DDL{
-			Action:      AlterStr,
-			Table:       TableName{Name: NewTableIdent("a")},
-			AutoIncSpec: &AutoIncSpec{Value: newFloatVal("19.9")},
+		output: &MultiAlterDDL{
+			Table: TableName{Name: NewTableIdent("a")},
+			Statements: []*DDL{{
+				Action:      AlterStr,
+				Table:       TableName{Name: NewTableIdent("a")},
+				AutoIncSpec: &AutoIncSpec{Value: newFloatVal("19.9")},
+			}},
 		},
 		affected: []string{"a"},
 	}}
@@ -277,8 +283,10 @@ func TestDDL(t *testing.T) {
 		for _, t := range tcase.affected {
 			want = append(want, TableName{Name: NewTableIdent(t)})
 		}
-		if affected := got.(*DDL).AffectedTables(); !reflect.DeepEqual(affected, want) {
-			t.Errorf("Affected(%s): %v, want %v", tcase.query, affected, want)
+		if ddl, ok := got.(*DDL); ok {
+			if affected := ddl.AffectedTables(); !reflect.DeepEqual(affected, want) {
+				t.Errorf("Affected(%s): %v, want %v", tcase.query, affected, want)
+			}
 		}
 	}
 }
