@@ -209,33 +209,75 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflow, sourceC
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	// TODO(sougou): parallelize
-	rowsToCompare := maxRows
-	diffReports := make(map[string]*DiffReport)
-	jsonOutput := ""
+	var (
+		rowsToCompare = maxRows
+		diffReports   = map[string]*DiffReport{}
+		jsonOutput    = ""
+
+		m   sync.Mutex
+		wg  sync.WaitGroup
+		rec concurrency.FirstErrorRecorder // The first time we encounter an error, we're going to cancel the rest of the RPCs, so they will all be contex.Canceled errors.
+	)
+
 	for table, td := range df.differs {
-		if err := df.diffTable(ctx, wr, table, td, filteredReplicationWaitTime); err != nil {
-			return nil, err
-		}
-		// Perform the diff of source and target streams.
-		dr, err := td.diff(ctx, df.ts.wr, &rowsToCompare)
-		if err != nil {
-			return nil, vterrors.Wrap(err, "diff")
-		}
-		if format == "json" {
-			json, err := json.MarshalIndent(*dr, "", "")
+		wg.Add(1)
+
+		go func(table string, td *tableDiffer) {
+			defer wg.Done()
+
+			if err := df.diffTable(ctx, wr, table, td, filteredReplicationWaitTime); err != nil {
+				rec.RecordError(err)
+				cancel()
+				return
+			}
+
+			// Perform the diff of source and target streams.
+			dr, err := td.diff(ctx, df.ts.wr, &rowsToCompare)
 			if err != nil {
-				wr.Logger().Printf("Error converting report to json: %v", err.Error())
+				rec.RecordError(vterrors.Wrap(err, "diff"))
+				cancel()
+				return
 			}
-			if jsonOutput != "" {
-				jsonOutput += ","
+
+			var data []byte
+
+			if format == "json" {
+				data, err = json.MarshalIndent(*dr, "", "")
+				if err != nil {
+					wr.Logger().Printf("Error converting report to json: %v", err.Error())
+					data = nil
+				}
+			} else {
+				wr.Logger().Printf("Summary for %v: %+v\n", td.targetTable, *dr)
 			}
-			jsonOutput += fmt.Sprintf("%s", json)
-		} else {
-			wr.Logger().Printf("Summary for %v: %+v\n", td.targetTable, *dr)
-		}
-		diffReports[table] = dr
+
+			// Make sure another goroutine hasn't hit an error before bothering
+			// with the output.
+			if ctx.Err() != nil {
+				return
+			}
+
+			m.Lock()
+			defer m.Unlock()
+
+			if len(data) > 0 {
+				if jsonOutput != "" {
+					jsonOutput += ","
+				}
+
+				jsonOutput += fmt.Sprintf("%s", data)
+			}
+
+			diffReports[table] = dr
+		}(table, td)
 	}
+
+	wg.Wait()
+
+	if rec.HasErrors() {
+		return nil, rec.Error()
+	}
+
 	if format == "json" && jsonOutput != "" {
 		wr.logger.Printf(`[ %s ]`, jsonOutput)
 	}
