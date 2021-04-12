@@ -22,6 +22,8 @@ import (
 	"sort"
 	"strings"
 
+	"vitess.io/vitess/go/vt/binlog/binlogplayer"
+
 	querypb "vitess.io/vitess/go/vt/proto/query"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -51,6 +53,7 @@ type tablePlanBuilder struct {
 	pkCols     []*colExpr
 	lastpk     *sqltypes.Result
 	pkInfos    []*PrimaryKeyInfo
+	stats      *binlogplayer.Stats
 }
 
 // colExpr describes the processing to be performed to
@@ -120,12 +123,13 @@ const (
 // The TablePlan built is a partial plan. The full plan for a table is built
 // when we receive field information from events or rows sent by the source.
 // buildExecutionPlan is the function that builds the full plan.
-func buildReplicatorPlan(filter *binlogdatapb.Filter, pkInfoMap map[string][]*PrimaryKeyInfo, copyState map[string]*sqltypes.Result) (*ReplicatorPlan, error) {
+func buildReplicatorPlan(filter *binlogdatapb.Filter, pkInfoMap map[string][]*PrimaryKeyInfo, copyState map[string]*sqltypes.Result, stats *binlogplayer.Stats) (*ReplicatorPlan, error) {
 	plan := &ReplicatorPlan{
 		VStreamFilter: &binlogdatapb.Filter{FieldEventMode: filter.FieldEventMode},
 		TargetTables:  make(map[string]*TablePlan),
 		TablePlans:    make(map[string]*TablePlan),
 		PKInfoMap:     pkInfoMap,
+		stats:         stats,
 	}
 	for tableName := range pkInfoMap {
 		lastpk, ok := copyState[tableName]
@@ -140,7 +144,7 @@ func buildReplicatorPlan(filter *binlogdatapb.Filter, pkInfoMap map[string][]*Pr
 		if rule == nil {
 			continue
 		}
-		tablePlan, err := buildTablePlan(tableName, rule.Filter, pkInfoMap, lastpk)
+		tablePlan, err := buildTablePlan(tableName, rule.Filter, pkInfoMap, lastpk, stats)
 		if err != nil {
 			return nil, err
 		}
@@ -179,7 +183,7 @@ func MatchTable(tableName string, filter *binlogdatapb.Filter) (*binlogdatapb.Ru
 	return nil, nil
 }
 
-func buildTablePlan(tableName, filter string, pkInfoMap map[string][]*PrimaryKeyInfo, lastpk *sqltypes.Result) (*TablePlan, error) {
+func buildTablePlan(tableName, filter string, pkInfoMap map[string][]*PrimaryKeyInfo, lastpk *sqltypes.Result, stats *binlogplayer.Stats) (*TablePlan, error) {
 	query := filter
 	// generate equivalent select statement if filter is empty or a keyrange.
 	switch {
@@ -189,7 +193,7 @@ func buildTablePlan(tableName, filter string, pkInfoMap map[string][]*PrimaryKey
 		query = buf.String()
 	case key.IsKeyRange(filter):
 		buf := sqlparser.NewTrackedBuffer(nil)
-		buf.Myprintf("select * from %v where in_keyrange(%v)", sqlparser.NewTableIdent(tableName), sqlparser.NewStrLiteral([]byte(filter)))
+		buf.Myprintf("select * from %v where in_keyrange(%v)", sqlparser.NewTableIdent(tableName), sqlparser.NewStrLiteral(filter))
 		query = buf.String()
 	case filter == ExcludeStr:
 		return nil, nil
@@ -216,6 +220,7 @@ func buildTablePlan(tableName, filter string, pkInfoMap map[string][]*PrimaryKey
 			TargetName: tableName,
 			SendRule:   sendRule,
 			Lastpk:     lastpk,
+			Stats:      stats,
 		}
 		return tablePlan, nil
 	}
@@ -229,6 +234,7 @@ func buildTablePlan(tableName, filter string, pkInfoMap map[string][]*PrimaryKey
 		selColumns: make(map[string]bool),
 		lastpk:     lastpk,
 		pkInfos:    pkInfoMap[tableName],
+		stats:      stats,
 	}
 
 	if err := tpb.analyzeExprs(sel.SelectExprs); err != nil {
@@ -258,7 +264,7 @@ func buildTablePlan(tableName, filter string, pkInfoMap map[string][]*PrimaryKey
 	if len(tpb.sendSelect.SelectExprs) == 0 {
 		tpb.sendSelect.SelectExprs = sqlparser.SelectExprs([]sqlparser.SelectExpr{
 			&sqlparser.AliasedExpr{
-				Expr: sqlparser.NewIntLiteral([]byte{'1'}),
+				Expr: sqlparser.NewIntLiteral("1"),
 			},
 		})
 	}
@@ -299,6 +305,7 @@ func (tpb *tablePlanBuilder) generate() *TablePlan {
 		Update:           tpb.generateUpdateStatement(),
 		Delete:           tpb.generateDeleteStatement(),
 		PKReferences:     pkrefs,
+		Stats:            tpb.stats,
 	}
 }
 
@@ -626,7 +633,11 @@ func (tpb *tablePlanBuilder) generateUpdateStatement() *sqlparser.ParsedQuery {
 		switch cexpr.operation {
 		case opExpr:
 			bvf.mode = bvAfter
-			buf.Myprintf("%v", cexpr.expr)
+			if cexpr.colType == querypb.Type_JSON {
+				buf.Myprintf("convert(%v using utf8mb4)", cexpr.expr)
+			} else {
+				buf.Myprintf("%v", cexpr.expr)
+			}
 		case opCount:
 			buf.Myprintf("%v", cexpr.colName)
 		case opSum:

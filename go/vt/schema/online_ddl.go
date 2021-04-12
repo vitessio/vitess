@@ -19,10 +19,13 @@ package schema
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/google/shlex"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
@@ -34,10 +37,17 @@ var (
 	strategyParserRegexp              = regexp.MustCompile(`^([\S]+)\s+(.*)$`)
 	onlineDDLGeneratedTableNameRegexp = regexp.MustCompile(`^_[0-f]{8}_[0-f]{4}_[0-f]{4}_[0-f]{4}_[0-f]{12}_([0-9]{14})_(gho|ghc|del|new|vrepl)$`)
 	ptOSCGeneratedTableNameRegexp     = regexp.MustCompile(`^_.*_old$`)
+	revertStatementRegexp             = regexp.MustCompile(`(?i)^revert\s+(.*)$`)
+)
+var (
+	// ErrOnlineDDLDisabled is returned when online DDL is disabled, and a user attempts to run an online DDL operation (submit, review, control)
+	ErrOnlineDDLDisabled = errors.New("online DDL is disabled")
 )
 
 const (
 	SchemaMigrationsTableName = "schema_migrations"
+	RevertActionStr           = "revert"
+	declarativeFlag           = "declarative"
 )
 
 // MigrationBasePath is the root for all schema migration entries
@@ -208,25 +218,82 @@ func (onlineDDL *OnlineDDL) ToJSON() ([]byte, error) {
 
 // GetAction extracts the DDL action type from the online DDL statement
 func (onlineDDL *OnlineDDL) GetAction() (action sqlparser.DDLAction, err error) {
+	if revertStatementRegexp.MatchString(onlineDDL.SQL) {
+		return sqlparser.RevertDDLAction, nil
+	}
+
 	_, action, err = ParseOnlineDDLStatement(onlineDDL.SQL)
 	return action, err
 }
 
 // GetActionStr returns a string representation of the DDL action
-func (onlineDDL *OnlineDDL) GetActionStr() (actionStr string, err error) {
-	action, err := onlineDDL.GetAction()
+func (onlineDDL *OnlineDDL) GetActionStr() (action sqlparser.DDLAction, actionStr string, err error) {
+	action, err = onlineDDL.GetAction()
 	if err != nil {
-		return actionStr, err
+		return action, actionStr, err
 	}
 	switch action {
+	case sqlparser.RevertDDLAction:
+		return action, RevertActionStr, nil
 	case sqlparser.CreateDDLAction:
-		return sqlparser.CreateStr, nil
+		return action, sqlparser.CreateStr, nil
 	case sqlparser.AlterDDLAction:
-		return sqlparser.AlterStr, nil
+		return action, sqlparser.AlterStr, nil
 	case sqlparser.DropDDLAction:
-		return sqlparser.DropStr, nil
+		return action, sqlparser.DropStr, nil
 	}
-	return "", fmt.Errorf("Unsupported online DDL action. SQL=%s", onlineDDL.SQL)
+	return action, "", fmt.Errorf("Unsupported online DDL action. SQL=%s", onlineDDL.SQL)
+}
+
+// GetRevertUUID works when this migration is a revert for another migration. It returns the UUID
+// fo the reverted migration.
+// The function returns error when this is not a revert migration.
+func (onlineDDL *OnlineDDL) GetRevertUUID() (uuid string, err error) {
+	if submatch := revertStatementRegexp.FindStringSubmatch(onlineDDL.SQL); len(submatch) > 0 {
+		return submatch[1], nil
+	}
+	return "", fmt.Errorf("Not a Revert DDL: '%s'", onlineDDL.SQL)
+}
+
+// isFlag return true when the given string is a CLI flag of the given name
+func isFlag(s string, name string) bool {
+	if s == fmt.Sprintf("-%s", name) {
+		return true
+	}
+	if s == fmt.Sprintf("--%s", name) {
+		return true
+	}
+	return false
+}
+
+// hasFlag returns true when Options include named flag
+func (onlineDDL *OnlineDDL) hasFlag(name string) bool {
+	opts, _ := shlex.Split(onlineDDL.Options)
+	for _, opt := range opts {
+		if isFlag(opt, name) {
+			return true
+		}
+	}
+	return false
+}
+
+// IsDeclarative checks if strategy options include -declarative
+func (onlineDDL *OnlineDDL) IsDeclarative() bool {
+	return onlineDDL.hasFlag(declarativeFlag)
+}
+
+// RuntimeOptions returns the options used as runtime flags for given strategy, removing any internal hint options
+func (onlineDDL *OnlineDDL) RuntimeOptions() []string {
+	opts, _ := shlex.Split(onlineDDL.Options)
+	validOpts := []string{}
+	for _, opt := range opts {
+		switch {
+		case isFlag(opt, declarativeFlag):
+		default:
+			validOpts = append(validOpts, opt)
+		}
+	}
+	return validOpts
 }
 
 // ToString returns a simple string representation of this instance

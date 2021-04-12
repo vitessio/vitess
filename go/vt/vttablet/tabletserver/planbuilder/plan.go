@@ -18,6 +18,7 @@ package planbuilder
 
 import (
 	"encoding/json"
+	"strings"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -29,7 +30,7 @@ import (
 )
 
 var (
-	execLimit = &sqlparser.Limit{Rowcount: sqlparser.NewArgument([]byte(":#maxLimit"))}
+	execLimit = &sqlparser.Limit{Rowcount: sqlparser.NewArgument(":#maxLimit")}
 
 	// PassthroughDMLs will return plans that pass-through the DMLs without changing them.
 	PassthroughDMLs = false
@@ -43,7 +44,6 @@ type PlanType int
 // The following are PlanType values.
 const (
 	PlanSelect PlanType = iota
-	PlanSelectLock
 	PlanNextval
 	PlanSelectImpossible
 	PlanInsert
@@ -72,13 +72,13 @@ const (
 	PlanLockTables
 	PlanUnlockTables
 	PlanCallProc
+	PlanAlterMigration
 	NumPlans
 )
 
 // Must exactly match order of plan constants.
 var planName = []string{
 	"Select",
-	"SelectLock",
 	"Nextval",
 	"SelectImpossible",
 	"Insert",
@@ -102,6 +102,7 @@ var planName = []string{
 	"LockTables",
 	"UnlockTables",
 	"CallProcedure",
+	"AlterMigration",
 }
 
 func (pt PlanType) String() string {
@@ -121,9 +122,19 @@ func PlanByName(s string) (pt PlanType, ok bool) {
 	return NumPlans, false
 }
 
+// PlanByNameIC finds a plan type by its string name without case sensitivity
+func PlanByNameIC(s string) (pt PlanType, ok bool) {
+	for i, v := range planName {
+		if strings.EqualFold(v, s) {
+			return PlanType(i), true
+		}
+	}
+	return NumPlans, false
+}
+
 // IsSelect returns true if PlanType is about a select query.
 func (pt PlanType) IsSelect() bool {
-	return pt == PlanSelect || pt == PlanSelectLock || pt == PlanSelectImpossible
+	return pt == PlanSelect || pt == PlanSelectImpossible
 }
 
 // MarshalJSON returns a json string for PlanType.
@@ -153,6 +164,9 @@ type Plan struct {
 	// WhereClause is set for DMLs. It is used by the hot row protection
 	// to serialize e.g. UPDATEs going to the same row.
 	WhereClause *sqlparser.ParsedQuery
+
+	// FullStmt can be used when the query does not operate on tables
+	FullStmt sqlparser.Statement
 }
 
 // TableName returns the table name for the plan.
@@ -200,6 +214,8 @@ func Build(statement sqlparser.Statement, tables map[string]*schema.Table, isRes
 			fullQuery = GenerateFullQuery(stmt)
 		}
 		plan = &Plan{PlanID: PlanDDL, FullQuery: fullQuery}
+	case *sqlparser.AlterMigration:
+		plan, err = &Plan{PlanID: PlanAlterMigration, FullStmt: stmt}, nil
 	case *sqlparser.Show:
 		plan, err = analyzeShow(stmt, dbName)
 	case *sqlparser.OtherRead, sqlparser.Explain:

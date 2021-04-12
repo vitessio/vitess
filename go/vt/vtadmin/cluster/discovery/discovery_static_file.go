@@ -20,11 +20,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"math/rand"
 
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/trace"
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 )
 
@@ -106,7 +108,7 @@ func NewStaticFile(cluster *vtadminpb.Cluster, flags *pflag.FlagSet, args []stri
 
 func (d *StaticFileDiscovery) parseConfig(bytes []byte) error {
 	if err := json.Unmarshal(bytes, &d.config); err != nil {
-		return err
+		return fmt.Errorf("failed to unmarshal staticfile config from json: %w", err)
 	}
 
 	d.gates.byName = make(map[string]*vtadminpb.VTGate, len(d.config.VTGates))
@@ -138,7 +140,14 @@ func (d *StaticFileDiscovery) parseConfig(bytes []byte) error {
 
 // DiscoverVTGate is part of the Discovery interface.
 func (d *StaticFileDiscovery) DiscoverVTGate(ctx context.Context, tags []string) (*vtadminpb.VTGate, error) {
-	gates, err := d.DiscoverVTGates(ctx, tags)
+	span, ctx := trace.NewSpan(ctx, "StaticFileDiscovery.DiscoverVTGate")
+	defer span.Finish()
+
+	return d.discoverVTGate(ctx, tags)
+}
+
+func (d *StaticFileDiscovery) discoverVTGate(ctx context.Context, tags []string) (*vtadminpb.VTGate, error) {
+	gates, err := d.discoverVTGates(ctx, tags)
 	if err != nil {
 		return nil, err
 	}
@@ -154,6 +163,9 @@ func (d *StaticFileDiscovery) DiscoverVTGate(ctx context.Context, tags []string)
 
 // DiscoverVTGateAddr is part of the Discovery interface.
 func (d *StaticFileDiscovery) DiscoverVTGateAddr(ctx context.Context, tags []string) (string, error) {
+	span, ctx := trace.NewSpan(ctx, "StaticFileDiscovery.DiscoverVTGateAddr")
+	defer span.Finish()
+
 	gate, err := d.DiscoverVTGate(ctx, tags)
 	if err != nil {
 		return "", err
@@ -164,6 +176,13 @@ func (d *StaticFileDiscovery) DiscoverVTGateAddr(ctx context.Context, tags []str
 
 // DiscoverVTGates is part of the Discovery interface.
 func (d *StaticFileDiscovery) DiscoverVTGates(ctx context.Context, tags []string) ([]*vtadminpb.VTGate, error) {
+	span, ctx := trace.NewSpan(ctx, "StaticFileDiscovery.DiscoverVTGates")
+	defer span.Finish()
+
+	return d.discoverVTGates(ctx, tags)
+}
+
+func (d *StaticFileDiscovery) discoverVTGates(ctx context.Context, tags []string) ([]*vtadminpb.VTGate, error) {
 	if len(tags) == 0 {
 		results := []*vtadminpb.VTGate{}
 		for _, g := range d.gates.byName {
@@ -203,7 +222,14 @@ func (d *StaticFileDiscovery) DiscoverVTGates(ctx context.Context, tags []string
 
 // DiscoverVtctld is part of the Discovery interface.
 func (d *StaticFileDiscovery) DiscoverVtctld(ctx context.Context, tags []string) (*vtadminpb.Vtctld, error) {
-	vtctlds, err := d.DiscoverVtctlds(ctx, tags)
+	span, ctx := trace.NewSpan(ctx, "StaticFileDiscovery.DiscoverVtctld")
+	defer span.Finish()
+
+	return d.discoverVtctld(ctx, tags)
+}
+
+func (d *StaticFileDiscovery) discoverVtctld(ctx context.Context, tags []string) (*vtadminpb.Vtctld, error) {
+	vtctlds, err := d.discoverVtctlds(ctx, tags)
 	if err != nil {
 		return nil, err
 	}
@@ -219,7 +245,10 @@ func (d *StaticFileDiscovery) DiscoverVtctld(ctx context.Context, tags []string)
 
 // DiscoverVtctldAddr is part of the Discovery interface.
 func (d *StaticFileDiscovery) DiscoverVtctldAddr(ctx context.Context, tags []string) (string, error) {
-	vtctld, err := d.DiscoverVtctld(ctx, tags)
+	span, ctx := trace.NewSpan(ctx, "StaticFileDiscovery.DiscoverVtctldAddr")
+	defer span.Finish()
+
+	vtctld, err := d.discoverVtctld(ctx, tags)
 	if err != nil {
 		return "", err
 	}
@@ -229,6 +258,13 @@ func (d *StaticFileDiscovery) DiscoverVtctldAddr(ctx context.Context, tags []str
 
 // DiscoverVtctlds is part of the Discovery interface.
 func (d *StaticFileDiscovery) DiscoverVtctlds(ctx context.Context, tags []string) ([]*vtadminpb.Vtctld, error) {
+	span, ctx := trace.NewSpan(ctx, "StaticFileDiscovery.DiscoverVtctlds")
+	defer span.Finish()
+
+	return d.discoverVtctlds(ctx, tags)
+}
+
+func (d *StaticFileDiscovery) discoverVtctlds(ctx context.Context, tags []string) ([]*vtadminpb.Vtctld, error) {
 	if len(tags) == 0 {
 		results := []*vtadminpb.Vtctld{}
 		for _, v := range d.vtctlds.byName {

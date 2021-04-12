@@ -38,14 +38,14 @@ best protect our users.
 If a security vulnerability affects master, but not a currently supported branch, then the following process will apply:
 
 * The fix will land in master.
-* A courtesy email will be sent to [vitess@googlegroups.com](https://groups.google.com/forum/#!forum/vitess) along with a posted notice in #developers on Slack.
+* A courtesy notice will be posted in #developers on Vitess Slack.
 
 #### Policy for unsupported releases
 
 If a security vulnerability affects only a stable release which is no longer under active support, then the following process will apply:
 
 * A fix **will not** be issued (exceptions may be made for extreme circumstances)
-* An email will be sent to [vitess-announce@googlegroups.com](https://groups.google.com/forum/#!forum/vitess-announce) identifying the threat, and encouraging users to upgrade.
+* A notice will be posted to Vitess Slack in #general channel identifying the threat, and encouraging users to upgrade.
 
 #### Policy for supported releases 
 
@@ -73,9 +73,7 @@ or mitigation so that a realistic timeline can be communicated to users.
 
 **Disclosure of Forthcoming Fix to Users** (Completed within 1-7 days of Disclosure)
 
-- The Fix Lead will email [vitess-announce@googlegroups.com](https://groups.google.com/forum/#!forum/vitess-announce)
-  informing users that a security vulnerability has been disclosed and that a fix will be made
-  available at YYYY-MM-DD HH:MM UTC in the future via this list. This time is the Release Date.
+- The Fix Lead will update Vitess Slack informing users that a security vulnerability has been disclosed and that a fix will be made available at YYYY-MM-DD HH:MM UTC in the future via this list. This time is the Release Date.
 - The Fix Lead will include any mitigating steps users can take until a fix is available.
 
 The communication to users should be actionable. They should know when to block time to apply
@@ -83,10 +81,8 @@ patches, understand exact mitigation steps, etc.
 
 **Disclosure of Fixed Vulnerability**
 
-- The Fix Lead will email [vitess-announce@googlegroups.com](https://groups.google.com/forum/#!forum/vitess-announce)
-  informing users that there are new releases available to address an identified vulnerability.
-- As much as possible this email should be actionable and include links to CVEs, and how to apply
-  the fix to user's environments; this can include links to external distributor documentation.
+- The Fix Lead will post a notice on Vitess Slack informing users that there are new releases available to address an identified vulnerability.  
+- As much as possible this notice should be actionable and include links to CVEs, and how to apply the fix to user's environments; this can include links to external distributor documentation.
 
 ### Embargo Policy
 

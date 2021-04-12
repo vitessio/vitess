@@ -40,43 +40,78 @@ type Dbcfg struct {
 	ShouldErr bool
 }
 
-// BuildCluster is a shared helper for building a cluster that contains the given tablets and
-// talking to the given vtctld server. dbconfigs contains an optional config
-// for controlling the behavior of the cluster's DB at the package sql level.
-func BuildCluster(i int, vtctldClient vtctldclient.VtctldClient, tablets []*vtadminpb.Tablet, dbconfigs map[string]*Dbcfg) *cluster.Cluster {
+// TestClusterConfig controls the way that a cluster.Cluster object is
+// constructed for testing vtadmin code.
+type TestClusterConfig struct {
+	// Cluster provides the protobuf-based version of the cluster info. It is
+	// to set the ID and Name of the resulting cluster.Cluster, as well as to
+	// name a single, phony, vtgate entry in the cluster's discovery service.
+	Cluster *vtadminpb.Cluster
+	// VtctldClient provides the vtctldclient.VtctldClient implementation the
+	// cluster's vtctld proxy will use. Most unit tests will use an instance of
+	// the VtctldClient type provided by this package in order to mock out the
+	// vtctld layer.
+	VtctldClient vtctldclient.VtctldClient
+	// Tablets provides the set of tablets reachable by this cluster's vtsql.DB.
+	// Tablets are copied, and then mutated to have their Cluster field set to
+	// match the Cluster provided by this TestClusterConfig, so mutations are
+	// transparent to the caller.
+	Tablets []*vtadminpb.Tablet
+	// DBConfig controls the behavior of the cluster's vtsql.DB.
+	DBConfig Dbcfg
+}
+
+// BuildCluster is a shared helper for building a cluster based on the given
+// test configuration.
+func BuildCluster(cfg TestClusterConfig) *cluster.Cluster {
 	disco := fakediscovery.New()
-	disco.AddTaggedGates(nil, &vtadminpb.VTGate{Hostname: fmt.Sprintf("cluster%d-gate", i)})
+	disco.AddTaggedGates(nil, &vtadminpb.VTGate{Hostname: fmt.Sprintf("%s-%s-gate", cfg.Cluster.Name, cfg.Cluster.Id)})
 	disco.AddTaggedVtctlds(nil, &vtadminpb.Vtctld{Hostname: "doesn't matter"})
 
-	cluster := &cluster.Cluster{
-		ID:        fmt.Sprintf("c%d", i),
-		Name:      fmt.Sprintf("cluster%d", i),
-		Discovery: disco,
-	}
+	tablets := make([]*vtadminpb.Tablet, len(cfg.Tablets))
+	for i, t := range cfg.Tablets {
+		tablet := &vtadminpb.Tablet{
+			Cluster: cfg.Cluster,
+			Tablet:  t.Tablet,
+			State:   t.State,
+		}
 
-	dbconfig, ok := dbconfigs[cluster.ID]
-	if !ok {
-		dbconfig = &Dbcfg{ShouldErr: false}
+		tablets[i] = tablet
 	}
 
 	db := vtsql.New(&vtsql.Config{
-		Cluster:   cluster.ToProto(),
+		Cluster:   cfg.Cluster,
 		Discovery: disco,
 	})
-	db.DialFunc = func(cfg vitessdriver.Configuration) (*sql.DB, error) {
-		return sql.OpenDB(&fakevtsql.Connector{Tablets: tablets, ShouldErr: dbconfig.ShouldErr}), nil
+	db.DialFunc = func(_ vitessdriver.Configuration) (*sql.DB, error) {
+		return sql.OpenDB(&fakevtsql.Connector{Tablets: tablets, ShouldErr: cfg.DBConfig.ShouldErr}), nil
 	}
 
 	vtctld := vtadminvtctldclient.New(&vtadminvtctldclient.Config{
-		Cluster:   cluster.ToProto(),
+		Cluster:   cfg.Cluster,
 		Discovery: disco,
 	})
 	vtctld.DialFunc = func(addr string, ff grpcclient.FailFast, opts ...grpc.DialOption) (vtctldclient.VtctldClient, error) {
-		return vtctldClient, nil
+		return cfg.VtctldClient, nil
 	}
 
-	cluster.DB = db
-	cluster.Vtctld = vtctld
+	return &cluster.Cluster{
+		ID:        cfg.Cluster.Id,
+		Name:      cfg.Cluster.Name,
+		Discovery: disco,
+		DB:        db,
+		Vtctld:    vtctld,
+	}
+}
 
-	return cluster
+// BuildClusters is a helper for building multiple clusters from a slice of
+// TestClusterConfigs.
+func BuildClusters(cfgs ...TestClusterConfig) []*cluster.Cluster {
+	clusters := make([]*cluster.Cluster, len(cfgs))
+
+	for i, cfg := range cfgs {
+		clusters[i] = BuildCluster(cfg)
+	}
+
+	return clusters
 }

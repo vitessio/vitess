@@ -25,6 +25,7 @@ package vtctldata;
 import "binlogdata.proto";
 import "logutil.proto";
 import "mysqlctl.proto";
+import "replicationdata.proto";
 import "tabletmanagerdata.proto";
 import "topodata.proto";
 import "vschema.proto";
@@ -351,6 +352,18 @@ message GetShardResponse {
   Shard shard = 1;
 }
 
+message GetSrvKeyspacesRequest {
+  string keyspace = 1;
+  // Cells is a list of cells to lookup a SrvKeyspace for. Leaving this empty is
+  // equivalent to specifying all cells in the topo.
+  repeated string cells = 2;
+}
+
+message GetSrvKeyspacesResponse {
+  // SrvKeyspaces is a mapping of cell name to SrvKeyspace.
+  map<string, topodata.SrvKeyspace> srv_keyspaces = 1;
+}
+
 message GetSrvVSchemaRequest {
   string cell = 1;
 }
@@ -376,6 +389,17 @@ message GetTabletsRequest {
   string shard = 2;
   // Cells is an optional set of cells to return tablets for.
   repeated string cells = 3;
+  // Strict specifies how the server should treat failures from individual
+  // cells.
+  //
+  // When false (the default), GetTablets will return data from any cells that
+  // return successfully, but will fail the request if all cells fail. When
+  // true, any individual cell can fail the full request.
+  bool strict = 4;
+  // TabletAliases is an optional list of tablet aliases to fetch Tablet objects
+  // for. If specified, Keyspace, Shard, and Cells are ignored, and tablets are
+  // looked up by their respective aliases' Cells directly.
+  repeated topodata.TabletAlias tablet_aliases = 5;
 }
 
 message GetTabletsResponse {
@@ -497,6 +521,20 @@ message ReparentTabletResponse {
   string shard = 2;
   // Primary is the alias of the tablet that the tablet was reparented under.
   topodata.TabletAlias primary = 3;
+}
+
+message ShardReplicationPositionsRequest {
+  string keyspace = 1;
+  string shard = 2;
+}
+
+message ShardReplicationPositionsResponse {
+  // ReplicationStatuses is a mapping of tablet alias string to replication
+  // status for that tablet.
+  map<string, replicationdata.Status> replication_statuses = 1;
+  // TabletMap is the set of tablets whose replication statuses were queried,
+  // keyed by tablet alias.
+  map<string, topodata.Tablet> tablet_map = 2;
 }
 
 message TabletExternallyReparentedRequest {

@@ -1,17 +1,17 @@
 {
 	"Tests": {
-        "java": {
-          "File": "",
-          "Args": [],
-          "Command": [
-            "make",
-            "java_test"
-          ],
-          "Manual": false,
-          "Shard": "10",
-          "RetryMax": 0,
-          "Tags": []
-        },
+		"java": {
+			"File": "",
+			"Args": [],
+			"Command": [
+				"make",
+				"java_test"
+			],
+			"Manual": false,
+			"Shard": "10",
+			"RetryMax": 0,
+			"Tags": []
+		},
 		"client_test": {
 			"File": "",
 			"Args": [],
@@ -268,7 +268,7 @@
 		},
 		"onlineddl_ghost": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl_ghost"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl/ghost"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "onlineddl_ghost",
@@ -277,7 +277,7 @@
 		},
 		"onlineddl_vrepl": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl_vrepl"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl/vrepl"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "onlineddl_vrepl",
@@ -286,11 +286,29 @@
 		},
 		"onlineddl_vrepl_stress": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl_vrepl_stress"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl/vrepl_stress"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "onlineddl_vrepl_stress",
-			"RetryMax": 1,
+			"RetryMax": 0,
+			"Tags": []
+		},
+		"onlineddl_revert": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl/revert"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "onlineddl_revert",
+			"RetryMax": 0,
+			"Tags": []
+		},
+		"onlineddl_declarative": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl/declarative"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "onlineddl_declarative",
+			"RetryMax": 0,
 			"Tags": []
 		},
 		"pitr": {
@@ -429,7 +447,18 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/tabletmanager/throttler"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "18",
+			"Shard": "tabletmanager_throttler",
+			"RetryMax": 0,
+			"Tags": [
+				"site_test"
+			]
+		},
+		"tabletmanager_throttler_custom_config": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/tabletmanager/throttler_custom_config"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "tabletmanager_throttler_custom_config",
 			"RetryMax": 0,
 			"Tags": [
 				"site_test"

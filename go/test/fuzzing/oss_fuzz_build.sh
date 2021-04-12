@@ -14,4 +14,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-compile_go_fuzzer ./go/vt/sqlparser Fuzz fuzz
+compile_go_fuzzer ./go/test/fuzzing Fuzz vtctl_fuzzer
+compile_go_fuzzer ./go/test/fuzzing FuzzIsDML is_dml_fuzzer
+compile_go_fuzzer ./go/test/fuzzing FuzzNormalizer normalizer_fuzzer
+compile_go_fuzzer ./go/test/fuzzing FuzzParser parser_fuzzer
+
+#cp ./go/test/fuzzing/mysql/mysql_fuzzer.go ./go/mysql/
+compile_go_fuzzer ./go/mysql FuzzWritePacket write_packet_fuzzer
+compile_go_fuzzer ./go/mysql FuzzHandleNextCommand handle_next_command_fuzzer
+compile_go_fuzzer ./go/mysql FuzzReadQueryResults read_query_results_fuzzer
+
+# Build dictionaries
+cp $SRC/vitess/go/test/fuzzing/vtctl_fuzzer.dict $OUT/

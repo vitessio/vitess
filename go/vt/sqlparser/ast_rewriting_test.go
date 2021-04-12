@@ -31,7 +31,7 @@ type myTestCase struct {
 	liid, db, foundRows, rowCount, rawGTID, rawTimeout, sessTrackGTID  bool
 	ddlStrategy, sessionUUID, sessionEnableSystemSettings              bool
 	udv                                                                int
-	autocommit, clientFoundRows, skipQueryPlanCache                    bool
+	autocommit, clientFoundRows, skipQueryPlanCache, socket            bool
 	sqlSelectLimit, transactionMode, workload, version, versionComment bool
 }
 
@@ -147,6 +147,10 @@ func TestRewrites(in *testing.T) {
 		expected: "SELECT :__vtworkload as `@@workload`",
 		workload: true,
 	}, {
+		in:       "SELECT @@socket",
+		expected: "SELECT :__vtsocket as `@@socket`",
+		socket:   true,
+	}, {
 		in:       "select (select 42) from dual",
 		expected: "select 42 as `(select 42 from dual)` from dual",
 	}, {
@@ -198,6 +202,7 @@ func TestRewrites(in *testing.T) {
 		rawGTID:                     true,
 		rawTimeout:                  true,
 		sessTrackGTID:               true,
+		socket:                      true,
 	}, {
 		in:                          "SHOW GLOBAL VARIABLES",
 		expected:                    "SHOW GLOBAL VARIABLES",
@@ -215,6 +220,7 @@ func TestRewrites(in *testing.T) {
 		rawGTID:                     true,
 		rawTimeout:                  true,
 		sessTrackGTID:               true,
+		socket:                      true,
 	}}
 
 	for _, tc := range tests {
@@ -251,6 +257,7 @@ func TestRewrites(in *testing.T) {
 			assert.Equal(tc.sessTrackGTID, result.NeedsSysVar(sysvars.SessionTrackGTIDs.Name), "should need sessTrackGTID")
 			assert.Equal(tc.version, result.NeedsSysVar(sysvars.Version.Name), "should need Vitess version")
 			assert.Equal(tc.versionComment, result.NeedsSysVar(sysvars.VersionComment.Name), "should need Vitess version")
+			assert.Equal(tc.socket, result.NeedsSysVar(sysvars.Socket.Name), "should need :__vtsocket")
 		})
 	}
 }
@@ -301,6 +308,101 @@ func TestRewritesWithDefaultKeyspace(in *testing.T) {
 			require.NoError(err, "test expectation does not parse [%s]", tc.expected)
 
 			assert.Equal(t, String(expected), String(result.AST))
+		})
+	}
+}
+
+func TestRewriteToCNF(in *testing.T) {
+	tests := []struct {
+		in       string
+		expected string
+	}{{
+		in:       "not (not A = 3)",
+		expected: "A = 3",
+	}, {
+		in:       "not (A = 3 and B = 2)",
+		expected: "not A = 3 or not B = 2",
+	}, {
+		in:       "not (A = 3 or B = 2)",
+		expected: "not A = 3 and not B = 2",
+	}, {
+		in:       "A xor B",
+		expected: "(A or B) and not (A and B)",
+	}, {
+		in:       "(A and B) or C",
+		expected: "(A or C) and (B or C)",
+	}, {
+		in:       "C or (A and B)",
+		expected: "(C or A) and (C or B)",
+	}, {
+		in:       "A and A",
+		expected: "A",
+	}, {
+		in:       "A OR A",
+		expected: "A",
+	}, {
+		in:       "A OR (A AND B)",
+		expected: "A",
+	}, {
+		in:       "A OR (B AND A)",
+		expected: "A",
+	}, {
+		in:       "(A AND B) OR A",
+		expected: "A",
+	}, {
+		in:       "(B AND A) OR A",
+		expected: "A",
+	}, {
+		in:       "(A and B) and (B and A)",
+		expected: "A and B",
+	}, {
+		in:       "(A or B) and A",
+		expected: "A",
+	}, {
+		in:       "A and (A or B)",
+		expected: "A",
+	}}
+
+	for _, tc := range tests {
+		in.Run(tc.in, func(t *testing.T) {
+			stmt, err := Parse("SELECT * FROM T WHERE " + tc.in)
+			require.NoError(t, err)
+
+			expr := stmt.(*Select).Where.Expr
+			expr, didRewrite := rewriteToCNFExpr(expr)
+			assert.True(t, didRewrite)
+			assert.Equal(t, tc.expected, String(expr))
+		})
+	}
+}
+
+func TestFixedPointRewriteToCNF(in *testing.T) {
+	tests := []struct {
+		in       string
+		expected string
+	}{{
+		in:       "A xor B",
+		expected: "(A or B) and (not A or not B)",
+	}, {
+		in:       "(A and B) and (B and A) and (B and A) and (A and B)",
+		expected: "A and B",
+	}, {
+		in:       "((A and B) OR (A and C) OR (A and D)) and E and F",
+		expected: "A and ((A or B) and (B or C or A)) and ((A or D) and ((B or A or D) and (B or C or D))) and E and F",
+	}, {
+		in:       "(A and B) OR (A and C)",
+		expected: "A and ((B or A) and (B or C))",
+	}}
+
+	for _, tc := range tests {
+		in.Run(tc.in, func(t *testing.T) {
+			require := require.New(t)
+			stmt, err := Parse("SELECT * FROM T WHERE " + tc.in)
+			require.NoError(err)
+
+			expr := stmt.(*Select).Where.Expr
+			output := RewriteToCNF(expr)
+			assert.Equal(t, tc.expected, String(output))
 		})
 	}
 }

@@ -17,9 +17,11 @@ limitations under the License.
 package planbuilder
 
 import (
+	"fmt"
 	"regexp"
 	"strings"
 
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	"vitess.io/vitess/go/mysql"
@@ -66,6 +68,8 @@ func buildShowBasicPlan(show *sqlparser.ShowBasic, vschema ContextVSchema) (engi
 		return buildPlanWithDB(show, vschema)
 	case sqlparser.StatusGlobal, sqlparser.StatusSession:
 		return engine.NewRowsPrimitive(make([][]sqltypes.Value, 0, 2), buildVarCharFields("Variable_name", "Value")), nil
+	case sqlparser.VitessMigrations:
+		return buildShowVMigrationsPlan(show, vschema)
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unknown show query type %s", show.Command.ToString())
 
@@ -109,28 +113,42 @@ func buildVariablePlan(show *sqlparser.ShowBasic, vschema ContextVSchema) (engin
 }
 
 func buildShowTblPlan(show *sqlparser.ShowBasic, vschema ContextVSchema) (engine.Primitive, error) {
-	if show.DbName != "" {
-		show.Tbl.Qualifier = sqlparser.NewTableIdent(show.DbName)
-	}
-	table, _, _, _, destination, err := vschema.FindTableOrVindex(show.Tbl)
-	if err != nil {
-		return nil, err
-	}
-	if table == nil {
-		return nil, vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.UnknownTable, "Table '%s' doesn't exist", show.Tbl.Name.String())
-	}
-	if destination == nil {
-		destination = key.DestinationAnyShard{}
+	if !show.DbName.IsEmpty() {
+		show.Tbl.Qualifier = sqlparser.NewTableIdent(show.DbName.String())
+		// Remove Database Name from the query.
+		show.DbName = sqlparser.NewTableIdent("")
 	}
 
-	// Remove Database Name from the query.
-	show.DbName = ""
-	show.Tbl.Qualifier = sqlparser.NewTableIdent("")
-	show.Tbl.Name = table.Name
+	dest := key.Destination(key.DestinationAnyShard{})
+	var ks *vindexes.Keyspace
+	var err error
+
+	if !show.Tbl.Qualifier.IsEmpty() && sqlparser.SystemSchema(show.Tbl.Qualifier.String()) {
+		ks, err = vschema.AnyKeyspace()
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		table, _, _, _, destination, err := vschema.FindTableOrVindex(show.Tbl)
+		if err != nil {
+			return nil, err
+		}
+		if table == nil {
+			return nil, vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.UnknownTable, "Table '%s' doesn't exist", show.Tbl.Name.String())
+		}
+		// Update the table.
+		show.Tbl.Qualifier = sqlparser.NewTableIdent("")
+		show.Tbl.Name = table.Name
+
+		if destination != nil {
+			dest = destination
+		}
+		ks = table.Keyspace
+	}
 
 	return &engine.Send{
-		Keyspace:          table.Keyspace,
-		TargetDestination: destination,
+		Keyspace:          ks,
+		TargetDestination: dest,
 		Query:             sqlparser.String(show),
 		IsDML:             false,
 		SingleShardOnly:   true,
@@ -172,9 +190,44 @@ func buildDBPlan(show *sqlparser.ShowBasic, vschema ContextVSchema) (engine.Prim
 	return engine.NewRowsPrimitive(rows, buildVarCharFields("Database")), nil
 }
 
+// buildShowVMigrationsPlan serves `SHOW VITESS_MIGRATIONS ...` queries. It invokes queries on _vt.schema_migrations on all MASTER tablets on keyspace's shards.
+func buildShowVMigrationsPlan(show *sqlparser.ShowBasic, vschema ContextVSchema) (engine.Primitive, error) {
+	dest, ks, tabletType, err := vschema.TargetDestination(show.DbName.String())
+	if err != nil {
+		return nil, err
+	}
+	if ks == nil {
+		return nil, vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.NoDB, "No database selected: use keyspace<:shard><@type> or keyspace<[range]><@type> (<> are optional)")
+	}
+
+	if tabletType != topodatapb.TabletType_MASTER {
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "show vitess_migrations works only on primary tablet")
+	}
+
+	if dest == nil {
+		dest = key.DestinationAllShards{}
+	}
+
+	sql := "SELECT * FROM _vt.schema_migrations"
+
+	if show.Filter != nil {
+		if show.Filter.Filter != nil {
+			sql += fmt.Sprintf(" where %s", sqlparser.String(show.Filter.Filter))
+		} else if show.Filter.Like != "" {
+			lit := sqlparser.String(sqlparser.NewStrLiteral(show.Filter.Like))
+			sql += fmt.Sprintf(" where migration_uuid LIKE %s OR migration_context LIKE %s OR migration_status LIKE %s", lit, lit, lit)
+		}
+	}
+	return &engine.Send{
+		Keyspace:          ks,
+		TargetDestination: dest,
+		Query:             sql,
+	}, nil
+}
+
 func buildPlanWithDB(show *sqlparser.ShowBasic, vschema ContextVSchema) (engine.Primitive, error) {
 	dbName := show.DbName
-	dbDestination := show.DbName
+	dbDestination := show.DbName.String()
 	if sqlparser.SystemSchema(dbDestination) {
 		ks, err := vschema.AnyKeyspace()
 		if err != nil {
@@ -183,7 +236,7 @@ func buildPlanWithDB(show *sqlparser.ShowBasic, vschema ContextVSchema) (engine.
 		dbDestination = ks.Name
 	} else {
 		// Remove Database Name from the query.
-		show.DbName = ""
+		show.DbName = sqlparser.NewTableIdent("")
 	}
 	destination, keyspace, _, err := vschema.TargetDestination(dbDestination)
 	if err != nil {
@@ -193,8 +246,8 @@ func buildPlanWithDB(show *sqlparser.ShowBasic, vschema ContextVSchema) (engine.
 		destination = key.DestinationAnyShard{}
 	}
 
-	if dbName == "" {
-		dbName = keyspace.Name
+	if dbName.IsEmpty() {
+		dbName = sqlparser.NewTableIdent(keyspace.Name)
 	}
 
 	query := sqlparser.String(show)
@@ -207,7 +260,7 @@ func buildPlanWithDB(show *sqlparser.ShowBasic, vschema ContextVSchema) (engine.
 		SingleShardOnly:   true,
 	}
 	if show.Command == sqlparser.Table {
-		plan, err = engine.NewRenameField([]string{"Tables_in_" + dbName}, []int{0}, plan)
+		plan, err = engine.NewRenameField([]string{"Tables_in_" + dbName.String()}, []int{0}, plan)
 		if err != nil {
 			return nil, err
 		}

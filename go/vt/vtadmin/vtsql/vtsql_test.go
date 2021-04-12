@@ -20,6 +20,7 @@ import (
 	"context"
 	"database/sql"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -36,11 +37,15 @@ import (
 )
 
 func assertImmediateCaller(t *testing.T, im *querypb.VTGateCallerID, expected string) {
+	t.Helper()
+
 	require.NotNil(t, im, "immediate caller cannot be nil")
 	assert.Equal(t, im.Username, expected, "immediate caller username mismatch")
 }
 
 func assertEffectiveCaller(t *testing.T, ef *vtrpcpb.CallerID, principal string, component string, subcomponent string) {
+	t.Helper()
+
 	require.NotNil(t, ef, "effective caller cannot be nil")
 	assert.Equal(t, ef.Principal, principal, "effective caller principal mismatch")
 	assert.Equal(t, ef.Component, component, "effective caller component mismatch")
@@ -48,6 +53,8 @@ func assertEffectiveCaller(t *testing.T, ef *vtrpcpb.CallerID, principal string,
 }
 
 func Test_getQueryContext(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 
 	creds := &StaticAuthCredentials{
@@ -81,6 +88,8 @@ func Test_getQueryContext(t *testing.T) {
 }
 
 func TestDial(t *testing.T) {
+	t.Helper()
+
 	tests := []struct {
 		name      string
 		disco     *fakediscovery.Fake
@@ -92,8 +101,9 @@ func TestDial(t *testing.T) {
 		{
 			name: "existing conn",
 			proxy: &VTGateProxy{
-				cluster: &vtadminpb.Cluster{},
-				conn:    sql.OpenDB(&fakevtsql.Connector{}),
+				cluster:         &vtadminpb.Cluster{},
+				conn:            sql.OpenDB(&fakevtsql.Connector{}),
+				dialPingTimeout: time.Millisecond * 10,
 			},
 			shouldErr: false,
 		},
@@ -144,8 +154,14 @@ func TestDial(t *testing.T) {
 		},
 	}
 
+	ctx := context.Background()
+
 	for _, tt := range tests {
+		tt := tt
+
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			if tt.disco != nil {
 				if len(tt.gates) > 0 {
 					tt.disco.AddTaggedGates(nil, tt.gates...)
@@ -154,7 +170,7 @@ func TestDial(t *testing.T) {
 				tt.proxy.discovery = tt.disco
 			}
 
-			err := tt.proxy.Dial(context.Background(), "")
+			err := tt.proxy.Dial(ctx, "")
 			if tt.shouldErr {
 				assert.Error(t, err)
 				return

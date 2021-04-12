@@ -23,6 +23,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"vitess.io/vitess/go/mysql"
+
 	"vitess.io/vitess/go/test/utils"
 
 	"github.com/stretchr/testify/require"
@@ -1730,4 +1732,55 @@ func TestDeleteLookupOwnedEqual(t *testing.T) {
 	}}
 	utils.MustMatch(t, sbc1.Queries, sbc1wantQueries, "")
 	utils.MustMatch(t, sbc2.Queries, sbc2wantQueries, "")
+}
+
+func TestReservedConnDML(t *testing.T) {
+	executor, _, _, sbc := createExecutorEnv()
+
+	logChan := QueryLogger.Subscribe("TestReservedConnDML")
+	defer QueryLogger.Unsubscribe(logChan)
+
+	ctx := context.Background()
+	session := NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true})
+
+	_, err := executor.Execute(ctx, "TestReservedConnDML", session, "use "+KsTestUnsharded, nil)
+	require.NoError(t, err)
+
+	wantQueries := []*querypb.BoundQuery{
+		{Sql: "select 1 from dual where @@default_week_format != 1", BindVariables: map[string]*querypb.BindVariable{}},
+	}
+	sbc.SetResults([]*sqltypes.Result{
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("id", "int64"), "1"),
+	})
+	_, err = executor.Execute(ctx, "TestReservedConnDML", session, "set default_week_format = 1", nil)
+	require.NoError(t, err)
+	utils.MustMatch(t, wantQueries, sbc.Queries)
+
+	_, err = executor.Execute(ctx, "TestReservedConnDML", session, "begin", nil)
+	require.NoError(t, err)
+
+	wantQueries = append(wantQueries,
+		&querypb.BoundQuery{Sql: "set @@default_week_format = 1", BindVariables: map[string]*querypb.BindVariable{}},
+		&querypb.BoundQuery{Sql: "insert into simple values ()", BindVariables: map[string]*querypb.BindVariable{}})
+	_, err = executor.Execute(ctx, "TestReservedConnDML", session, "insert into simple() values ()", nil)
+	require.NoError(t, err)
+	utils.MustMatch(t, wantQueries, sbc.Queries)
+
+	_, err = executor.Execute(ctx, "TestReservedConnDML", session, "commit", nil)
+	require.NoError(t, err)
+
+	_, err = executor.Execute(ctx, "TestReservedConnDML", session, "begin", nil)
+	require.NoError(t, err)
+
+	sbc.EphemeralShardErr = mysql.NewSQLError(mysql.CRServerGone, mysql.SSNetError, "connection gone")
+	// as the first time the query fails due to connection loss i.e. reserved conn lost. It will be recreated to set statement will be executed again.
+	wantQueries = append(wantQueries,
+		&querypb.BoundQuery{Sql: "set @@default_week_format = 1", BindVariables: map[string]*querypb.BindVariable{}},
+		&querypb.BoundQuery{Sql: "insert into simple values ()", BindVariables: map[string]*querypb.BindVariable{}})
+	_, err = executor.Execute(ctx, "TestReservedConnDML", session, "insert into simple() values ()", nil)
+	require.NoError(t, err)
+	utils.MustMatch(t, wantQueries, sbc.Queries)
+
+	_, err = executor.Execute(ctx, "TestReservedConnDML", session, "commit", nil)
+	require.NoError(t, err)
 }

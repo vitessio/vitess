@@ -17,19 +17,19 @@ limitations under the License.
 %{
 package sqlparser
 
-func setParseTree(yylex interface{}, stmt Statement) {
+func setParseTree(yylex yyLexer, stmt Statement) {
   yylex.(*Tokenizer).ParseTree = stmt
 }
 
-func setAllowComments(yylex interface{}, allow bool) {
+func setAllowComments(yylex yyLexer, allow bool) {
   yylex.(*Tokenizer).AllowComments = allow
 }
 
-func setDDL(yylex interface{}, node Statement) {
+func setDDL(yylex yyLexer, node Statement) {
   yylex.(*Tokenizer).partialDDL = node
 }
 
-func incNesting(yylex interface{}) bool {
+func incNesting(yylex yyLexer) bool {
   yylex.(*Tokenizer).nesting++
   if yylex.(*Tokenizer).nesting == 200 {
     return true
@@ -37,93 +37,114 @@ func incNesting(yylex interface{}) bool {
   return false
 }
 
-func decNesting(yylex interface{}) {
+func decNesting(yylex yyLexer) {
   yylex.(*Tokenizer).nesting--
 }
 
 // skipToEnd forces the lexer to end prematurely. Not all SQL statements
 // are supported by the Parser, thus calling skipToEnd will make the lexer
 // return EOF early.
-func skipToEnd(yylex interface{}) {
+func skipToEnd(yylex yyLexer) {
   yylex.(*Tokenizer).SkipToEnd = true
+}
+
+func bindVariable(yylex yyLexer, bvar string) {
+  yylex.(*Tokenizer).BindVars[bvar] = struct{}{}
 }
 
 %}
 
-%union {
+%struct {
   empty         struct{}
-  statement     Statement
-  selStmt       SelectStatement
-  ins           *Insert
-  byt           byte
-  bytes         []byte
-  bytes2        [][]byte
+  LengthScaleOption LengthScaleOption
+  tableName     TableName
+  tableIdent    TableIdent
   str           string
   strs          []string
-  selectExprs   SelectExprs
-  selectExpr    SelectExpr
-  columns       Columns
-  partitions    Partitions
-  colName       *ColName
-  tableExprs    TableExprs
-  tableExpr     TableExpr
+  vindexParam   VindexParam
+  colIdent      ColIdent
   joinCondition JoinCondition
-  tableName     TableName
-  tableNames    TableNames
-  indexHints    *IndexHints
+  collateAndCharset CollateAndCharset
+  columnType    ColumnType
+}
+
+%union {
+  statement     Statement
+  selStmt       SelectStatement
+  tableExpr     TableExpr
   expr          Expr
-  exprs         Exprs
-  boolVal       BoolVal
-  boolean	bool
-  literal        *Literal
   colTuple      ColTuple
-  values        Values
-  valTuple      ValTuple
+  optVal        Expr
+  constraintInfo ConstraintInfo
+  alterOption      AlterOption
+  characteristic Characteristic
+
+  ins           *Insert
+  colName       *ColName
+  indexHints    *IndexHints
+  literal        *Literal
   subquery      *Subquery
   derivedTable  *DerivedTable
-  whens         []*When
   when          *When
-  orderBy       OrderBy
   order         *Order
   limit         *Limit
-  updateExprs   UpdateExprs
-  setExprs      SetExprs
   updateExpr    *UpdateExpr
   setExpr       *SetExpr
-  characteristic Characteristic
-  characteristics []Characteristic
-  colIdent      ColIdent
-  tableIdent    TableIdent
   convertType   *ConvertType
   aliasedTableName *AliasedTableExpr
-  TableSpec  *TableSpec
-  columnType    ColumnType
-  colKeyOpt     ColumnKeyOption
-  optVal        Expr
-  LengthScaleOption LengthScaleOption
+  tableSpec  *TableSpec
   columnDefinition *ColumnDefinition
-  columnDefinitions []*ColumnDefinition
   indexDefinition *IndexDefinition
   indexInfo     *IndexInfo
   indexOption   *IndexOption
-  indexOptions  []*IndexOption
   indexColumn   *IndexColumn
-  indexColumns  []*IndexColumn
-  constraintDefinition *ConstraintDefinition
-  constraintInfo ConstraintInfo
-  ReferenceAction ReferenceAction
-  partDefs      []*PartitionDefinition
   partDef       *PartitionDefinition
   partSpec      *PartitionSpec
-  partSpecs     []*PartitionSpec
-  vindexParam   VindexParam
-  vindexParams  []VindexParam
   showFilter    *ShowFilter
   optLike       *OptLike
+  selectInto	  *SelectInto
+  createDatabase  *CreateDatabase
+  alterDatabase  *AlterDatabase
+  createTable      *CreateTable
+  tableAndLockType *TableAndLockType
+  alterTable       *AlterTable
+  tableOption      *TableOption
+  columnTypeOptions *ColumnTypeOptions
+  constraintDefinition *ConstraintDefinition
+  revertMigration *RevertMigration
+  alterMigration  *AlterMigration
+
+  whens         []*When
+  columnDefinitions []*ColumnDefinition
+  indexOptions  []*IndexOption
+  indexColumns  []*IndexColumn
+  collateAndCharsets []CollateAndCharset
+  tableAndLockTypes TableAndLockTypes
+  renameTablePairs []*RenameTablePair
+  alterOptions	   []AlterOption
+  vindexParams  []VindexParam
+  partDefs      []*PartitionDefinition
+  partSpecs     []*PartitionSpec
+  characteristics []Characteristic
+  selectExpr    SelectExpr
+  columns       Columns
+  partitions    Partitions
+  tableExprs    TableExprs
+  tableNames    TableNames
+  exprs         Exprs
+  values        Values
+  valTuple      ValTuple
+  orderBy       OrderBy
+  updateExprs   UpdateExprs
+  setExprs      SetExprs
+  selectExprs   SelectExprs
+  tableOptions     TableOptions
+
+  colKeyOpt     ColumnKeyOption
+  ReferenceAction ReferenceAction
   isolationLevel IsolationLevel
   insertAction InsertAction
   scope 	Scope
-  ignore 	Ignore
   lock 		Lock
   joinType  	JoinType
   comparisonExprOperator ComparisonExprOperator
@@ -131,63 +152,52 @@ func skipToEnd(yylex interface{}) {
   matchExprOption MatchExprOption
   orderDirection  OrderDirection
   explainType 	  ExplainType
-  selectInto	  *SelectInto
-  createDatabase  *CreateDatabase
-  alterDatabase  *AlterDatabase
-  collateAndCharset CollateAndCharset
-  collateAndCharsets []CollateAndCharset
-  createTable      *CreateTable
-  tableAndLockTypes []*TableAndLockType
-  tableAndLockType *TableAndLockType
   lockType LockType
-  alterTable       *AlterTable
-  alterOption      AlterOption
-  alterOptions	   []AlterOption
-  tableOption      *TableOption
-  tableOptions     TableOptions
-  renameTablePairs []*RenameTablePair
-  columnTypeOptions *ColumnTypeOptions
+
+  boolean bool
+  boolVal BoolVal
+  ignore Ignore
 }
 
 %token LEX_ERROR
-%left <bytes> UNION
-%token <bytes> SELECT STREAM VSTREAM INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT OFFSET FOR
-%token <bytes> ALL DISTINCT AS EXISTS ASC DESC INTO DUPLICATE KEY DEFAULT SET LOCK UNLOCK KEYS DO CALL
-%token <bytes> DISTINCTROW PARSER
-%token <bytes> OUTFILE S3 DATA LOAD LINES TERMINATED ESCAPED ENCLOSED
-%token <bytes> DUMPFILE CSV HEADER MANIFEST OVERWRITE STARTING OPTIONALLY
-%token <bytes> VALUES LAST_INSERT_ID
-%token <bytes> NEXT VALUE SHARE MODE
-%token <bytes> SQL_NO_CACHE SQL_CACHE SQL_CALC_FOUND_ROWS
-%left <bytes> JOIN STRAIGHT_JOIN LEFT RIGHT INNER OUTER CROSS NATURAL USE FORCE
-%left <bytes> ON USING INPLACE COPY ALGORITHM NONE SHARED EXCLUSIVE
+%left <str> UNION
+%token <str> SELECT STREAM VSTREAM INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT OFFSET FOR
+%token <str> ALL DISTINCT AS EXISTS ASC DESC INTO DUPLICATE KEY DEFAULT SET LOCK UNLOCK KEYS DO CALL
+%token <str> DISTINCTROW PARSER
+%token <str> OUTFILE S3 DATA LOAD LINES TERMINATED ESCAPED ENCLOSED
+%token <str> DUMPFILE CSV HEADER MANIFEST OVERWRITE STARTING OPTIONALLY
+%token <str> VALUES LAST_INSERT_ID
+%token <str> NEXT VALUE SHARE MODE
+%token <str> SQL_NO_CACHE SQL_CACHE SQL_CALC_FOUND_ROWS
+%left <str> JOIN STRAIGHT_JOIN LEFT RIGHT INNER OUTER CROSS NATURAL USE FORCE
+%left <str> ON USING INPLACE COPY ALGORITHM NONE SHARED EXCLUSIVE
 %token <empty> '(' ',' ')'
-%token <bytes> ID AT_ID AT_AT_ID HEX STRING INTEGRAL FLOAT HEXNUM VALUE_ARG LIST_ARG COMMENT COMMENT_KEYWORD BIT_LITERAL COMPRESSION
-%token <bytes> NULL TRUE FALSE OFF
-%token <bytes> DISCARD IMPORT ENABLE DISABLE TABLESPACE
+%token <str> ID AT_ID AT_AT_ID HEX STRING INTEGRAL FLOAT HEXNUM VALUE_ARG LIST_ARG COMMENT COMMENT_KEYWORD BIT_LITERAL COMPRESSION
+%token <str> NULL TRUE FALSE OFF
+%token <str> DISCARD IMPORT ENABLE DISABLE TABLESPACE
 
 // Precedence dictated by mysql. But the vitess grammar is simplified.
 // Some of these operators don't conflict in our situation. Nevertheless,
 // it's better to have these listed in the correct order. Also, we don't
 // support all operators yet.
 // * NOTE: If you change anything here, update precedence.go as well *
-%left <bytes> OR
-%left <bytes> XOR
-%left <bytes> AND
-%right <bytes> NOT '!'
-%left <bytes> BETWEEN CASE WHEN THEN ELSE END
-%left <bytes> '=' '<' '>' LE GE NE NULL_SAFE_EQUAL IS LIKE REGEXP IN
-%left <bytes> '|'
-%left <bytes> '&'
-%left <bytes> SHIFT_LEFT SHIFT_RIGHT
-%left <bytes> '+' '-'
-%left <bytes> '*' '/' DIV '%' MOD
-%left <bytes> '^'
-%right <bytes> '~' UNARY
-%left <bytes> COLLATE
-%right <bytes> BINARY UNDERSCORE_BINARY UNDERSCORE_UTF8MB4 UNDERSCORE_UTF8 UNDERSCORE_LATIN1
-%right <bytes> INTERVAL
-%nonassoc <bytes> '.'
+%left <str> OR
+%left <str> XOR
+%left <str> AND
+%right <str> NOT '!'
+%left <str> BETWEEN CASE WHEN THEN ELSE END
+%left <str> '=' '<' '>' LE GE NE NULL_SAFE_EQUAL IS LIKE REGEXP IN
+%left <str> '|'
+%left <str> '&'
+%left <str> SHIFT_LEFT SHIFT_RIGHT
+%left <str> '+' '-'
+%left <str> '*' '/' DIV '%' MOD
+%left <str> '^'
+%right <str> '~' UNARY
+%left <str> COLLATE
+%right <str> BINARY UNDERSCORE_BINARY UNDERSCORE_UTF8MB4 UNDERSCORE_UTF8 UNDERSCORE_LATIN1
+%right <str> INTERVAL
+%nonassoc <str> '.'
 
 // There is no need to define precedence for the JSON
 // operators because the syntax is restricted enough that
@@ -195,71 +205,75 @@ func skipToEnd(yylex interface{}) {
 %token <empty> JSON_EXTRACT_OP JSON_UNQUOTE_EXTRACT_OP
 
 // DDL Tokens
-%token <bytes> CREATE ALTER DROP RENAME ANALYZE ADD FLUSH CHANGE MODIFY
-%token <bytes> SCHEMA TABLE INDEX VIEW TO IGNORE IF UNIQUE PRIMARY COLUMN SPATIAL FULLTEXT KEY_BLOCK_SIZE CHECK INDEXES
-%token <bytes> ACTION CASCADE CONSTRAINT FOREIGN NO REFERENCES RESTRICT
-%token <bytes> SHOW DESCRIBE EXPLAIN DATE ESCAPE REPAIR OPTIMIZE TRUNCATE COALESCE EXCHANGE REBUILD PARTITIONING REMOVE
-%token <bytes> MAXVALUE PARTITION REORGANIZE LESS THAN PROCEDURE TRIGGER
-%token <bytes> VINDEX VINDEXES DIRECTORY NAME UPGRADE
-%token <bytes> STATUS VARIABLES WARNINGS CASCADED DEFINER OPTION SQL UNDEFINED
-%token <bytes> SEQUENCE MERGE TEMPORARY TEMPTABLE INVOKER SECURITY FIRST AFTER LAST
+%token <str> CREATE ALTER DROP RENAME ANALYZE ADD FLUSH CHANGE MODIFY
+%token <str> REVERT
+%token <str> SCHEMA TABLE INDEX VIEW TO IGNORE IF UNIQUE PRIMARY COLUMN SPATIAL FULLTEXT KEY_BLOCK_SIZE CHECK INDEXES
+%token <str> ACTION CASCADE CONSTRAINT FOREIGN NO REFERENCES RESTRICT
+%token <str> SHOW DESCRIBE EXPLAIN DATE ESCAPE REPAIR OPTIMIZE TRUNCATE COALESCE EXCHANGE REBUILD PARTITIONING REMOVE
+%token <str> MAXVALUE PARTITION REORGANIZE LESS THAN PROCEDURE TRIGGER
+%token <str> VINDEX VINDEXES DIRECTORY NAME UPGRADE
+%token <str> STATUS VARIABLES WARNINGS CASCADED DEFINER OPTION SQL UNDEFINED
+%token <str> SEQUENCE MERGE TEMPORARY TEMPTABLE INVOKER SECURITY FIRST AFTER LAST
+
+// Migration tokens
+%token <str> VITESS_MIGRATION CANCEL RETRY COMPLETE
 
 // Transaction Tokens
-%token <bytes> BEGIN START TRANSACTION COMMIT ROLLBACK SAVEPOINT RELEASE WORK
+%token <str> BEGIN START TRANSACTION COMMIT ROLLBACK SAVEPOINT RELEASE WORK
 
 // Type Tokens
-%token <bytes> BIT TINYINT SMALLINT MEDIUMINT INT INTEGER BIGINT INTNUM
-%token <bytes> REAL DOUBLE FLOAT_TYPE DECIMAL NUMERIC
-%token <bytes> TIME TIMESTAMP DATETIME YEAR
-%token <bytes> CHAR VARCHAR BOOL CHARACTER VARBINARY NCHAR 
-%token <bytes> TEXT TINYTEXT MEDIUMTEXT LONGTEXT
-%token <bytes> BLOB TINYBLOB MEDIUMBLOB LONGBLOB JSON ENUM
-%token <bytes> GEOMETRY POINT LINESTRING POLYGON GEOMETRYCOLLECTION MULTIPOINT MULTILINESTRING MULTIPOLYGON
+%token <str> BIT TINYINT SMALLINT MEDIUMINT INT INTEGER BIGINT INTNUM
+%token <str> REAL DOUBLE FLOAT_TYPE DECIMAL NUMERIC
+%token <str> TIME TIMESTAMP DATETIME YEAR
+%token <str> CHAR VARCHAR BOOL CHARACTER VARBINARY NCHAR
+%token <str> TEXT TINYTEXT MEDIUMTEXT LONGTEXT
+%token <str> BLOB TINYBLOB MEDIUMBLOB LONGBLOB JSON ENUM
+%token <str> GEOMETRY POINT LINESTRING POLYGON GEOMETRYCOLLECTION MULTIPOINT MULTILINESTRING MULTIPOLYGON
 
 // Type Modifiers
-%token <bytes> NULLX AUTO_INCREMENT APPROXNUM SIGNED UNSIGNED ZEROFILL
+%token <str> NULLX AUTO_INCREMENT APPROXNUM SIGNED UNSIGNED ZEROFILL
 
 // SHOW tokens
-%token <bytes> COLLATION DATABASES SCHEMAS TABLES VITESS_METADATA VSCHEMA FULL PROCESSLIST COLUMNS FIELDS ENGINES PLUGINS EXTENDED
-%token <bytes> KEYSPACES VITESS_KEYSPACES VITESS_SHARDS VITESS_TABLETS CODE PRIVILEGES FUNCTION OPEN TRIGGERS EVENT USER
+%token <str> COLLATION DATABASES SCHEMAS TABLES VITESS_METADATA VSCHEMA FULL PROCESSLIST COLUMNS FIELDS ENGINES PLUGINS EXTENDED
+%token <str> KEYSPACES VITESS_KEYSPACES VITESS_SHARDS VITESS_TABLETS VITESS_MIGRATIONS CODE PRIVILEGES FUNCTION OPEN TRIGGERS EVENT USER
 
 // SET tokens
-%token <bytes> NAMES CHARSET GLOBAL SESSION ISOLATION LEVEL READ WRITE ONLY REPEATABLE COMMITTED UNCOMMITTED SERIALIZABLE
+%token <str> NAMES CHARSET GLOBAL SESSION ISOLATION LEVEL READ WRITE ONLY REPEATABLE COMMITTED UNCOMMITTED SERIALIZABLE
 
 // Functions
-%token <bytes> CURRENT_TIMESTAMP DATABASE CURRENT_DATE
-%token <bytes> CURRENT_TIME LOCALTIME LOCALTIMESTAMP CURRENT_USER
-%token <bytes> UTC_DATE UTC_TIME UTC_TIMESTAMP
-%token <bytes> REPLACE
-%token <bytes> CONVERT CAST
-%token <bytes> SUBSTR SUBSTRING
-%token <bytes> GROUP_CONCAT SEPARATOR
-%token <bytes> TIMESTAMPADD TIMESTAMPDIFF
+%token <str> CURRENT_TIMESTAMP DATABASE CURRENT_DATE
+%token <str> CURRENT_TIME LOCALTIME LOCALTIMESTAMP CURRENT_USER
+%token <str> UTC_DATE UTC_TIME UTC_TIMESTAMP
+%token <str> REPLACE
+%token <str> CONVERT CAST
+%token <str> SUBSTR SUBSTRING
+%token <str> GROUP_CONCAT SEPARATOR
+%token <str> TIMESTAMPADD TIMESTAMPDIFF
 
 // Match
-%token <bytes> MATCH AGAINST BOOLEAN LANGUAGE WITH QUERY EXPANSION WITHOUT VALIDATION
+%token <str> MATCH AGAINST BOOLEAN LANGUAGE WITH QUERY EXPANSION WITHOUT VALIDATION
 
 // MySQL reserved words that are unused by this grammar will map to this token.
-%token <bytes> UNUSED ARRAY CUME_DIST DESCRIPTION DENSE_RANK EMPTY EXCEPT FIRST_VALUE GROUPING GROUPS JSON_TABLE LAG LAST_VALUE LATERAL LEAD MEMBER
-%token <bytes> NTH_VALUE NTILE OF OVER PERCENT_RANK RANK RECURSIVE ROW_NUMBER SYSTEM WINDOW
-%token <bytes> ACTIVE ADMIN BUCKETS CLONE COMPONENT DEFINITION ENFORCED EXCLUDE FOLLOWING GEOMCOLLECTION GET_MASTER_PUBLIC_KEY HISTOGRAM HISTORY
-%token <bytes> INACTIVE INVISIBLE LOCKED MASTER_COMPRESSION_ALGORITHMS MASTER_PUBLIC_KEY_PATH MASTER_TLS_CIPHERSUITES MASTER_ZSTD_COMPRESSION_LEVEL
-%token <bytes> NESTED NETWORK_NAMESPACE NOWAIT NULLS OJ OLD OPTIONAL ORDINALITY ORGANIZATION OTHERS PATH PERSIST PERSIST_ONLY PRECEDING PRIVILEGE_CHECKS_USER PROCESS
-%token <bytes> RANDOM REFERENCE REQUIRE_ROW_FORMAT RESOURCE RESPECT RESTART RETAIN REUSE ROLE SECONDARY SECONDARY_ENGINE SECONDARY_LOAD SECONDARY_UNLOAD SKIP SRID
-%token <bytes> THREAD_PRIORITY TIES UNBOUNDED VCPU VISIBLE
+%token <str> UNUSED ARRAY CUME_DIST DESCRIPTION DENSE_RANK EMPTY EXCEPT FIRST_VALUE GROUPING GROUPS JSON_TABLE LAG LAST_VALUE LATERAL LEAD MEMBER
+%token <str> NTH_VALUE NTILE OF OVER PERCENT_RANK RANK RECURSIVE ROW_NUMBER SYSTEM WINDOW
+%token <str> ACTIVE ADMIN BUCKETS CLONE COMPONENT DEFINITION ENFORCED EXCLUDE FOLLOWING GEOMCOLLECTION GET_MASTER_PUBLIC_KEY HISTOGRAM HISTORY
+%token <str> INACTIVE INVISIBLE LOCKED MASTER_COMPRESSION_ALGORITHMS MASTER_PUBLIC_KEY_PATH MASTER_TLS_CIPHERSUITES MASTER_ZSTD_COMPRESSION_LEVEL
+%token <str> NESTED NETWORK_NAMESPACE NOWAIT NULLS OJ OLD OPTIONAL ORDINALITY ORGANIZATION OTHERS PATH PERSIST PERSIST_ONLY PRECEDING PRIVILEGE_CHECKS_USER PROCESS
+%token <str> RANDOM REFERENCE REQUIRE_ROW_FORMAT RESOURCE RESPECT RESTART RETAIN REUSE ROLE SECONDARY SECONDARY_ENGINE SECONDARY_LOAD SECONDARY_UNLOAD SKIP SRID
+%token <str> THREAD_PRIORITY TIES UNBOUNDED VCPU VISIBLE
 
 // Explain tokens
-%token <bytes> FORMAT TREE VITESS TRADITIONAL
+%token <str> FORMAT TREE VITESS TRADITIONAL
 
 // Lock type tokens
-%token <bytes> LOCAL LOW_PRIORITY
+%token <str> LOCAL LOW_PRIORITY
 
 // Flush tokens
-%token <bytes> NO_WRITE_TO_BINLOG LOGS ERROR GENERAL HOSTS OPTIMIZER_COSTS USER_RESOURCES SLOW CHANNEL RELAY EXPORT
+%token <str> NO_WRITE_TO_BINLOG LOGS ERROR GENERAL HOSTS OPTIMIZER_COSTS USER_RESOURCES SLOW CHANNEL RELAY EXPORT
 
 // TableOptions tokens
-%token <bytes> AVG_ROW_LENGTH CONNECTION CHECKSUM DELAY_KEY_WRITE ENCRYPTION ENGINE INSERT_METHOD MAX_ROWS MIN_ROWS PACK_KEYS PASSWORD
-%token <bytes> FIXED DYNAMIC COMPRESSED REDUNDANT COMPACT ROW_FORMAT STATS_AUTO_RECALC STATS_PERSISTENT STATS_SAMPLE_PAGES STORAGE MEMORY DISK
+%token <str> AVG_ROW_LENGTH CONNECTION CHECKSUM DELAY_KEY_WRITE ENCRYPTION ENGINE INSERT_METHOD MAX_ROWS MIN_ROWS PACK_KEYS PASSWORD
+%token <str> FIXED DYNAMIC COMPRESSED REDUNDANT COMPACT ROW_FORMAT STATS_AUTO_RECALC STATS_PERSISTENT STATS_SAMPLE_PAGES STORAGE MEMORY DISK
 
 %type <statement> command
 %type <selStmt> simple_select select_statement base_select union_rhs
@@ -280,11 +294,12 @@ func skipToEnd(yylex interface{}) {
 %type <statement> analyze_statement show_statement use_statement other_statement
 %type <statement> begin_statement commit_statement rollback_statement savepoint_statement release_statement load_statement
 %type <statement> lock_statement unlock_statement call_statement
-%type <bytes2> comment_opt comment_list
+%type <statement> revert_statement
+%type <strs> comment_opt comment_list
 %type <str> wild_opt check_option_opt cascade_or_local_opt restrict_or_cascade_opt
 %type <explainType> explain_format_opt
 %type <insertAction> insert_or_replace
-%type <bytes> explain_synonyms
+%type <str> explain_synonyms
 %type <str> cache_opt separator_opt flush_option for_channel_opt
 %type <matchExprOption> match_option
 %type <boolean> distinct_opt union_op replace_opt local_opt
@@ -331,30 +346,30 @@ func skipToEnd(yylex interface{}) {
 %type <selectInto> into_option
 %type <columnTypeOptions> column_type_options
 %type <str> header_opt export_options manifest_opt overwrite_opt format_opt optionally_opt
-%type <str> fields_opt lines_opt terminated_by_opt starting_by_opt enclosed_by_opt escaped_by_opt
+%type <str> fields_opts fields_opt_list fields_opt lines_opts lines_opt lines_opt_list
 %type <lock> lock_opt
 %type <columns> ins_column_list column_list column_list_opt
 %type <partitions> opt_partition_clause partition_list
 %type <updateExprs> on_dup_opt
 %type <updateExprs> update_list
 %type <setExprs> set_list
-%type <bytes> charset_or_character_set charset_or_character_set_or_names
+%type <str> charset_or_character_set charset_or_character_set_or_names
 %type <updateExpr> update_expression
 %type <setExpr> set_expression
 %type <characteristic> transaction_char
 %type <characteristics> transaction_chars
 %type <isolationLevel> isolation_level
-%type <bytes> for_from
+%type <str> for_from
 %type <str> default_opt
 %type <ignore> ignore_opt
-%type <str> from_database_opt columns_or_fields extended_opt storage_opt
+%type <str> columns_or_fields extended_opt storage_opt
 %type <showFilter> like_or_where_opt like_opt
 %type <boolean> exists_opt not_exists_opt enforced_opt temp_opt full_opt
 %type <empty> to_opt
-%type <bytes> reserved_keyword non_reserved_keyword
+%type <str> reserved_keyword non_reserved_keyword
 %type <colIdent> sql_id reserved_sql_id col_alias as_ci_opt
 %type <expr> charset_value
-%type <tableIdent> table_id reserved_table_id table_alias as_opt_id
+%type <tableIdent> table_id reserved_table_id table_alias as_opt_id table_id_opt from_database_opt
 %type <empty> as_opt work_opt savepoint_opt
 %type <empty> skip_to_end ddl_skip_to_end
 %type <str> charset
@@ -374,7 +389,7 @@ func skipToEnd(yylex interface{}) {
 %type <str> index_or_key index_symbols from_or_in index_or_key_opt
 %type <str> name_opt constraint_name_opt
 %type <str> equal_opt
-%type <TableSpec> table_spec table_column_list
+%type <tableSpec> table_spec table_column_list
 %type <optLike> create_like
 %type <str> table_opt_value
 %type <tableOption> table_option
@@ -391,7 +406,7 @@ func skipToEnd(yylex interface{}) {
 %type <vindexParam> vindex_param
 %type <vindexParams> vindex_param_list vindex_params_opt
 %type <colIdent> id_or_var vindex_type vindex_type_opt id_or_var_opt
-%type <bytes> database_or_schema column_opt insert_method_options row_format_options
+%type <str> database_or_schema column_opt insert_method_options row_format_options
 %type <ReferenceAction> fk_reference_action fk_on_delete fk_on_update
 %type <str> vitess_topo
 %type <tableAndLockTypes> lock_table_list
@@ -447,6 +462,7 @@ command:
 | lock_statement
 | unlock_statement
 | call_statement
+| revert_statement
 | /*empty*/
 {
   setParseTree(yylex, nil)
@@ -863,9 +879,9 @@ create_index_prefix:
   }
 
 create_database_prefix:
-  CREATE database_or_schema not_exists_opt id_or_var
+  CREATE database_or_schema comment_opt not_exists_opt table_id
   {
-    $$ = &CreateDatabase{DBName: string($4.String()), IfNotExists: $3}
+    $$ = &CreateDatabase{Comments: Comments($3), DBName: $5, IfNotExists: $4}
     setDDL(yylex,$$)
   }
 
@@ -930,7 +946,7 @@ character_set:
   }
 | default_optional charset_or_character_set equal_opt STRING
   {
-    $$ = CollateAndCharset{Type:CharacterSetType, Value:("'" + string($4) + "'"), IsDefault:$1}
+    $$ = CollateAndCharset{Type:CharacterSetType, Value:(encodeSQLString($4)), IsDefault:$1}
   }
 
 collate:
@@ -940,7 +956,7 @@ collate:
   }
 | default_optional COLLATE equal_opt STRING
   {
-    $$ = CollateAndCharset{Type:CollateType, Value:("'" + string($4) + "'"), IsDefault:$1}
+    $$ = CollateAndCharset{Type:CollateType, Value:(encodeSQLString($4)), IsDefault:$1}
   }
 
 
@@ -1010,16 +1026,18 @@ column_definition:
 // was specific (as stated in the MySQL guide) and did not accept arbitrary order options. For example NOT NULL DEFAULT 1 and not DEFAULT 1 NOT NULL
 column_type_options:
   {
-    $$ = &ColumnTypeOptions{NotNull: false, Default: nil, OnUpdate: nil, Autoincrement: false, KeyOpt: colKeyNone, Comment: nil}
+    $$ = &ColumnTypeOptions{Null: nil, Default: nil, OnUpdate: nil, Autoincrement: false, KeyOpt: colKeyNone, Comment: nil}
   }
 | column_type_options NULL
   {
-    $1.NotNull = false
+    val := true
+    $1.Null = &val
     $$ = $1
   }
 | column_type_options NOT NULL
   {
-    $1.NotNull = true
+    val := false
+    $1.Null = &val
     $$ = $1
   }
 | column_type_options DEFAULT value_expression
@@ -1278,11 +1296,11 @@ enum_values:
   STRING
   {
     $$ = make([]string, 0, 4)
-    $$ = append($$, "'" + string($1) + "'")
+    $$ = append($$, encodeSQLString($1))
   }
 | enum_values ',' STRING
   {
-    $$ = append($1, "'" + string($3) + "'")
+    $$ = append($1, encodeSQLString($3))
   }
 
 length_opt:
@@ -1350,6 +1368,10 @@ charset_opt:
   {
     $$ = string($2.String())
   }
+| charset_or_character_set STRING
+  {
+    $$ = encodeSQLString($2)
+  }
 | charset_or_character_set BINARY
   {
     $$ = string($2)
@@ -1365,7 +1387,7 @@ collate_opt:
   }
 | COLLATE STRING
   {
-    $$ = string($2)
+    $$ = encodeSQLString($2)
   }
 
 
@@ -1526,7 +1548,7 @@ index_column:
 constraint_definition:
   CONSTRAINT id_or_var_opt constraint_info
   {
-    $$ = &ConstraintDefinition{Name: string($2.String()), Details: $3}
+    $$ = &ConstraintDefinition{Name: $2, Details: $3}
   }
 |  constraint_info
   {
@@ -1536,7 +1558,7 @@ constraint_definition:
 check_constraint_definition:
   CONSTRAINT id_or_var_opt check_constraint_info
   {
-    $$ = &ConstraintDefinition{Name: string($2.String()), Details: $3}
+    $$ = &ConstraintDefinition{Name: $2, Details: $3}
   }
 |  check_constraint_info
   {
@@ -1811,7 +1833,7 @@ table_opt_value:
   }
 | STRING
   {
-    $$ = "'" + string($1) + "'"
+    $$ = encodeSQLString($1)
   }
 | INTEGRAL
   {
@@ -1820,7 +1842,7 @@ table_opt_value:
 
 column_opt:
   {
-    $$ = []byte("")
+    $$ = ""
   }
 | COLUMN
 
@@ -1948,7 +1970,7 @@ alter_option:
   }
 | DROP index_or_key id_or_var
   {
-    $$ = &DropKey{Type:NormalKeyType, Name:$3.String()}
+    $$ = &DropKey{Type:NormalKeyType, Name:$3}
   }
 | DROP PRIMARY KEY
   {
@@ -1956,7 +1978,7 @@ alter_option:
   }
 | DROP FOREIGN KEY id_or_var
   {
-    $$ = &DropKey{Type:ForeignKeyType, Name:$4.String()}
+    $$ = &DropKey{Type:ForeignKeyType, Name:$4}
   }
 | FORCE
   {
@@ -1968,7 +1990,7 @@ alter_option:
   }
 | RENAME index_or_key id_or_var TO id_or_var
   {
-    $$ = &RenameIndex{OldName:$3.String(), NewName:$5.String()}
+    $$ = &RenameIndex{OldName:$3, NewName:$5}
   }
 
 alter_commands_modifier_list:
@@ -2050,17 +2072,17 @@ alter_statement:
   {
     $$ = &AlterView{ViewName: $6.ToViewName(), Algorithm:$2, Definer: $3 ,Security:$4, Columns:$7, Select: $9, CheckOption: $10 }
   }
-| alter_database_prefix id_or_var_opt create_options
+| alter_database_prefix table_id_opt create_options
   {
     $1.FullyParsed = true
-    $1.DBName = $2.String()
+    $1.DBName = $2
     $1.AlterOptions = $3
     $$ = $1
   }
-| alter_database_prefix id_or_var UPGRADE DATA DIRECTORY NAME
+| alter_database_prefix table_id UPGRADE DATA DIRECTORY NAME
   {
     $1.FullyParsed = true
-    $1.DBName = $2.String()
+    $1.DBName = $2
     $1.UpdateDataDirectory = true
     $$ = $1
   }
@@ -2130,6 +2152,33 @@ alter_statement:
             Column: $7,
             Sequence: $9,
         },
+    }
+  }
+| ALTER VITESS_MIGRATION STRING RETRY
+  {
+    $$ = &AlterMigration{
+      Type: RetryMigrationType,
+      UUID: string($3),
+    }
+  }
+| ALTER VITESS_MIGRATION STRING COMPLETE
+  {
+    $$ = &AlterMigration{
+      Type: CompleteMigrationType,
+      UUID: string($3),
+    }
+  }
+| ALTER VITESS_MIGRATION STRING CANCEL
+  {
+    $$ = &AlterMigration{
+      Type: CancelMigrationType,
+      UUID: string($3),
+    }
+  }
+| ALTER VITESS_MIGRATION CANCEL ALL
+  {
+    $$ = &AlterMigration{
+      Type: CancelAllMigrationType,
     }
   }
 
@@ -2284,16 +2333,16 @@ drop_statement:
     if $3.Lowered() == "primary" {
       $$ = &AlterTable{Table: $5,AlterOptions: append([]AlterOption{&DropKey{Type:PrimaryKeyType}},$6...)}
     } else {
-      $$ = &AlterTable{Table: $5,AlterOptions: append([]AlterOption{&DropKey{Type:NormalKeyType, Name:$3.String()}},$6...)}
+      $$ = &AlterTable{Table: $5,AlterOptions: append([]AlterOption{&DropKey{Type:NormalKeyType, Name:$3}},$6...)}
     }
   }
 | DROP VIEW exists_opt view_name_list restrict_or_cascade_opt
   {
     $$ = &DropView{FromTables: $4, IfExists: $3}
   }
-| DROP database_or_schema exists_opt id_or_var
+| DROP database_or_schema comment_opt exists_opt table_id
   {
-    $$ = &DropDatabase{DBName: string($4.String()), IfExists: $3}
+    $$ = &DropDatabase{Comments: Comments($3), DBName: $5, IfExists: $4}
   }
 
 truncate_statement:
@@ -2453,6 +2502,10 @@ show_statement:
     showTablesOpt := &ShowTablesOpt{Filter: $4}
     $$ = &Show{&ShowLegacy{Scope: VitessMetadataScope, Type: string($3), ShowTablesOpt: showTablesOpt}}
   }
+| SHOW VITESS_MIGRATIONS from_database_opt like_or_where_opt
+  {
+    $$ = &Show{&ShowBasic{Command: VitessMigrations, Filter: $4, DbName: $3}}
+  }
 | SHOW VSCHEMA TABLES
   {
     $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3), Scope: ImplicitScope}}
@@ -2540,15 +2593,15 @@ columns_or_fields:
 from_database_opt:
   /* empty */
   {
-    $$ = ""
+    $$ = NewTableIdent("")
   }
 | FROM table_id
   {
-    $$ = $2.v
+    $$ = $2
   }
 | IN table_id
   {
-    $$ = $2.v
+    $$ = $2
   }
 
 like_or_where_opt:
@@ -2680,11 +2733,11 @@ explain_synonyms:
   }
 | DESCRIBE
   {
-    $$ = $1  
+    $$ = $1
   }
 | DESC
   {
-    $$ = $1  
+    $$ = $1
   }
 
 explainable_statement:
@@ -2692,15 +2745,15 @@ explainable_statement:
   {
     $$ = $1
   }
-| update_statement  
+| update_statement
   {
     $$ = $1
   }
-| insert_statement  
+| insert_statement
   {
     $$ = $1
   }
-| delete_statement  
+| delete_statement
   {
     $$ = $1
   }
@@ -2715,7 +2768,7 @@ wild_opt:
   }
 | STRING
   {
-    $$ = "'" + string($1) + "'"
+    $$ = encodeSQLString($1)
   }
 
 explain_statement:
@@ -2782,6 +2835,12 @@ unlock_statement:
   UNLOCK TABLES
   {
     $$ = &UnlockTables{}
+  }
+
+revert_statement:
+  REVERT VITESS_MIGRATION STRING
+  {
+    $$ = &RevertMigration{UUID: string($3)}
   }
 
 flush_statement:
@@ -2968,15 +3027,15 @@ select_options:
   {
     $$ = []string{$1}
   }
-| select_option select_option // TODO: figure out a way to do this recursively instead. 
+| select_option select_option // TODO: figure out a way to do this recursively instead.
   {                           // TODO: This is a hack since I couldn't get it to work in a nicer way. I got 'conflicts: 8 shift/reduce'
     $$ = []string{$1, $2}
   }
-| select_option select_option select_option 
+| select_option select_option select_option
   {
     $$ = []string{$1, $2, $3}
   }
-| select_option select_option select_option select_option 
+| select_option select_option select_option select_option
   {
     $$ = []string{$1, $2, $3, $4}
   }
@@ -3490,6 +3549,7 @@ col_tuple:
 | LIST_ARG
   {
     $$ = ListArg($1)
+    bindVariable(yylex, $1[2:])
   }
 
 subquery:
@@ -3654,7 +3714,7 @@ function_call_generic:
 | sql_id openb DISTINCTROW select_expression_list closeb
   {
     $$ = &FuncExpr{Name: $1, Distinct: true, Exprs: $4}
-  }  
+  }
 | table_id '.' reserved_sql_id openb select_expression_list_opt closeb
   {
     $$ = &FuncExpr{Qualifier: $1, Name: $3, Exprs: $5}
@@ -3717,47 +3777,51 @@ function_call_keyword:
   {
     $$ = &ValuesFuncExpr{Name: $3}
   }
+| CURRENT_USER func_paren_opt
+  {
+    $$ =  &FuncExpr{Name: NewColIdent($1)}
+  }
 
 /*
   Function calls using non reserved keywords but with special syntax forms.
   Dedicated grammar rules are needed because of the special syntax
 */
 function_call_nonkeyword:
-  CURRENT_TIMESTAMP func_datetime_opt
+  CURRENT_TIMESTAMP func_paren_opt
   {
     $$ = &FuncExpr{Name:NewColIdent("current_timestamp")}
   }
-| UTC_TIMESTAMP func_datetime_opt
+| UTC_TIMESTAMP func_paren_opt
   {
     $$ = &FuncExpr{Name:NewColIdent("utc_timestamp")}
   }
-| UTC_TIME func_datetime_opt
+| UTC_TIME func_paren_opt
   {
     $$ = &FuncExpr{Name:NewColIdent("utc_time")}
   }
 /* doesn't support fsp */
-| UTC_DATE func_datetime_opt
+| UTC_DATE func_paren_opt
   {
     $$ = &FuncExpr{Name:NewColIdent("utc_date")}
   }
   // now
-| LOCALTIME func_datetime_opt
+| LOCALTIME func_paren_opt
   {
     $$ = &FuncExpr{Name:NewColIdent("localtime")}
   }
   // now
-| LOCALTIMESTAMP func_datetime_opt
+| LOCALTIMESTAMP func_paren_opt
   {
     $$ = &FuncExpr{Name:NewColIdent("localtimestamp")}
   }
   // curdate
 /* doesn't support fsp */
-| CURRENT_DATE func_datetime_opt
+| CURRENT_DATE func_paren_opt
   {
     $$ = &FuncExpr{Name:NewColIdent("current_date")}
   }
   // curtime
-| CURRENT_TIME func_datetime_opt
+| CURRENT_TIME func_paren_opt
   {
     $$ = &FuncExpr{Name:NewColIdent("current_time")}
   }
@@ -3798,7 +3862,7 @@ function_call_nonkeyword:
     $$ = &TimestampFuncExpr{Name:string("timestampdiff"), Unit:$3.String(), Expr1:$5, Expr2:$7}
   }
 
-func_datetime_opt:
+func_paren_opt:
   /* empty */
 | openb closeb
 
@@ -3949,7 +4013,7 @@ separator_opt:
   }
 | SEPARATOR STRING
   {
-    $$ = " separator '"+string($2)+"'"
+    $$ = " separator "+encodeSQLString($2)
   }
 
 when_expression_list:
@@ -4019,6 +4083,7 @@ value:
 | VALUE_ARG
   {
     $$ = NewArgument($1)
+    bindVariable(yylex, $1[1:])
   }
 | NULL
   {
@@ -4033,7 +4098,7 @@ num_val:
       yylex.Error("expecting value after next")
       return 1
     }
-    $$ = NewIntLiteral([]byte("1"))
+    $$ = NewIntLiteral("1")
   }
 | INTEGRAL VALUES
   {
@@ -4042,6 +4107,7 @@ num_val:
 | VALUE_ARG VALUES
   {
     $$ = NewArgument($1)
+    bindVariable(yylex, $1[1:])
   }
 
 group_by_opt:
@@ -4249,7 +4315,7 @@ CURRENT_USER
   }
 | STRING AT_ID
   {
-    $$ = "'" + string($1) + "'@" + string($2)
+    $$ = encodeSQLString($1) + "@" + string($2)
   }
 | ID
   {
@@ -4275,15 +4341,15 @@ into_option:
   }
 | INTO OUTFILE S3 STRING charset_opt format_opt export_options manifest_opt overwrite_opt
   {
-    $$ = &SelectInto{Type:IntoOutfileS3, FileName:string($4), Charset:$5, FormatOption:$6, ExportOption:$7, Manifest:$8, Overwrite:$9}
+    $$ = &SelectInto{Type:IntoOutfileS3, FileName:encodeSQLString($4), Charset:$5, FormatOption:$6, ExportOption:$7, Manifest:$8, Overwrite:$9}
   }
 | INTO DUMPFILE STRING
   {
-    $$ = &SelectInto{Type:IntoDumpfile, FileName:string($3), Charset:"", FormatOption:"", ExportOption:"", Manifest:"", Overwrite:""}
+    $$ = &SelectInto{Type:IntoDumpfile, FileName:encodeSQLString($3), Charset:"", FormatOption:"", ExportOption:"", Manifest:"", Overwrite:""}
   }
 | INTO OUTFILE STRING charset_opt export_options
   {
-    $$ = &SelectInto{Type:IntoOutfile, FileName:string($3), Charset:$4, FormatOption:"", ExportOption:$5, Manifest:"", Overwrite:""}
+    $$ = &SelectInto{Type:IntoOutfile, FileName:encodeSQLString($3), Charset:$4, FormatOption:"", ExportOption:$5, Manifest:"", Overwrite:""}
   }
 
 format_opt:
@@ -4335,63 +4401,71 @@ overwrite_opt:
   }
 
 export_options:
-  fields_opt lines_opt
+  fields_opts lines_opts
+  {
+    $$ = $1 + $2
+  }
+
+lines_opts:
+  {
+    $$ = ""
+  }
+| LINES lines_opt_list
+  {
+    $$ = " lines" + $2
+  }
+
+lines_opt_list:
+  lines_opt
+  {
+    $$ = $1
+  }
+| lines_opt_list lines_opt
   {
     $$ = $1 + $2
   }
 
 lines_opt:
+  STARTING BY STRING
   {
-    $$ = ""
-  }
-| LINES starting_by_opt terminated_by_opt
-  {
-    $$ = " lines" + $2 + $3
-  }
-
-starting_by_opt:
-  {
-    $$ = ""
-  }
-| STARTING BY STRING
-  {
-    $$ = " starting by '" + string($3) + "'"
-  }
-
-terminated_by_opt:
-  {
-    $$ = ""
+    $$ = " starting by " + encodeSQLString($3)
   }
 | TERMINATED BY STRING
   {
-    $$ = " terminated by '" + string($3)  + "'"
+    $$ = " terminated by " + encodeSQLString($3)
+  }
+
+fields_opts:
+  {
+    $$ = ""
+  }
+| columns_or_fields fields_opt_list
+  {
+    $$ = " " + $1 + $2
+  }
+
+fields_opt_list:
+  fields_opt
+  {
+    $$ = $1
+  }
+| fields_opt_list fields_opt
+  {
+    $$ = $1 + $2
   }
 
 fields_opt:
+  TERMINATED BY STRING
   {
-    $$ = ""
-  }
-| columns_or_fields terminated_by_opt enclosed_by_opt escaped_by_opt
-  {
-    $$ = " " + $1 + $2 + $3 + $4
-  }
-
-escaped_by_opt:
-  {
-    $$ = ""
-  }
-| ESCAPED BY STRING
-  {
-    $$ = " escaped by '" + string($3) + "'"
-  }
-
-enclosed_by_opt:
-  {
-    $$ = ""
+    $$ = " terminated by " + encodeSQLString($3)
   }
 | optionally_opt ENCLOSED BY STRING
   {
-    $$ = $1 + " enclosed by '" + string($4) + "'"
+    $$ = $1 + " enclosed by " + encodeSQLString($4)
+  }
+| ESCAPED BY STRING
+  {
+    $$ = " escaped by " + encodeSQLString($3)
   }
 
 optionally_opt:
@@ -4524,11 +4598,11 @@ set_list:
 set_expression:
   reserved_sql_id '=' ON
   {
-    $$ = &SetExpr{Name: $1, Scope: ImplicitScope, Expr: NewStrLiteral([]byte("on"))}
+    $$ = &SetExpr{Name: $1, Scope: ImplicitScope, Expr: NewStrLiteral("on")}
   }
 | reserved_sql_id '=' OFF
   {
-    $$ = &SetExpr{Name: $1, Scope: ImplicitScope, Expr: NewStrLiteral([]byte("off"))}
+    $$ = &SetExpr{Name: $1, Scope: ImplicitScope, Expr: NewStrLiteral("off")}
   }
 | reserved_sql_id '=' expression
   {
@@ -4548,7 +4622,7 @@ charset_or_character_set:
   CHARSET
 | CHARACTER SET
   {
-    $$ = []byte("charset")
+    $$ = "charset"
   }
 
 charset_or_character_set_or_names:
@@ -4558,7 +4632,7 @@ charset_or_character_set_or_names:
 charset_value:
   sql_id
   {
-    $$ = NewStrLiteral([]byte($1.String()))
+    $$ = NewStrLiteral($1.String())
   }
 | STRING
   {
@@ -4606,7 +4680,7 @@ call_statement:
     $$ = &CallProc{Name: $2, Params: $4}
   }
 
-expression_list_opt:  
+expression_list_opt:
   {
     $$ = nil
   }
@@ -4653,6 +4727,15 @@ table_id:
     $$ = NewTableIdent(string($1))
   }
 
+table_id_opt:
+  {
+    $$ = NewTableIdent("")
+  }
+| table_id
+  {
+    $$ = $1
+  }
+
 reserved_table_id:
   table_id
 | reserved_keyword
@@ -4670,7 +4753,7 @@ reserved_table_id:
 */
 reserved_keyword:
   ADD
-| ARRAY 
+| ARRAY
 | AND
 | AS
 | ASC
@@ -4680,6 +4763,7 @@ reserved_keyword:
 | CASE
 | CALL
 | CHANGE
+| CHARACTER
 | CHECK
 | COLLATE
 | COLUMN
@@ -4829,11 +4913,11 @@ non_reserved_keyword:
 | BOOL
 | BOOLEAN
 | BUCKETS
+| CANCEL
 | CASCADE
 | CASCADED
 | CHANNEL
 | CHAR
-| CHARACTER
 | CHARSET
 | CHECKSUM
 | CLONE
@@ -4845,6 +4929,7 @@ non_reserved_keyword:
 | COMMIT
 | COMMITTED
 | COMPACT
+| COMPLETE
 | COMPONENT
 | COMPRESSED
 | COMPRESSION
@@ -5002,6 +5087,7 @@ non_reserved_keyword:
 | RESPECT
 | RESTART
 | RETAIN
+| RETRY
 | REUSE
 | ROLE
 | ROLLBACK
@@ -5071,6 +5157,8 @@ non_reserved_keyword:
 | VITESS_METADATA
 | VITESS_SHARDS
 | VITESS_TABLETS
+| VITESS_MIGRATION
+| VITESS_MIGRATIONS
 | VSCHEMA
 | WARNINGS
 | WITHOUT

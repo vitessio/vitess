@@ -28,6 +28,8 @@ import (
 )
 
 func Test_loadCredentials(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name      string
 		contents  []byte
@@ -55,7 +57,11 @@ func Test_loadCredentials(t *testing.T) {
 	}
 
 	for _, tt := range tests {
+		tt := tt
+
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			path := ""
 
 			if len(tt.contents) > 0 {

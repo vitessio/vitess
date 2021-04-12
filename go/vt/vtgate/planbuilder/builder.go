@@ -18,6 +18,7 @@ package planbuilder
 
 import (
 	"errors"
+	"flag"
 	"sort"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -33,6 +34,10 @@ import (
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+)
+
+var (
+	enableOnlineDDL = flag.Bool("enable_online_ddl", true, "Allow users to submit, review and control Online DDL")
 )
 
 // ContextVSchema defines the interface for this package to fetch
@@ -52,6 +57,18 @@ type ContextVSchema interface {
 	AllKeyspace() ([]*vindexes.Keyspace, error)
 	GetSemTable() *semantics.SemTable
 	Planner() PlannerVersion
+
+	// ErrorIfShardedF will return an error if the keyspace is sharded,
+	// and produce a warning if the vtgate if configured to do so
+	ErrorIfShardedF(keyspace *vindexes.Keyspace, warn, errFmt string, params ...interface{}) error
+
+	// WarnUnshardedOnly is used when a feature is only supported in unsharded mode.
+	// This will let the user know that they are using something
+	// that could become a problem if they move to a sharded keyspace
+	WarnUnshardedOnly(format string, params ...interface{})
+
+	// ForeignKeyMode returns the foreign_key flag value
+	ForeignKeyMode() string
 }
 
 // PlannerVersion is an alias here to make the code more readable
@@ -77,7 +94,7 @@ type truncater interface {
 // TestBuilder builds a plan for a query based on the specified vschema.
 // This method is only used from tests
 func TestBuilder(query string, vschema ContextVSchema) (*engine.Plan, error) {
-	stmt, err := sqlparser.Parse(query)
+	stmt, reservedVars, err := sqlparser.Parse2(query)
 	if err != nil {
 		return nil, err
 	}
@@ -86,16 +103,15 @@ func TestBuilder(query string, vschema ContextVSchema) (*engine.Plan, error) {
 		return nil, err
 	}
 
-	return BuildFromStmt(query, result.AST, vschema, result.BindVarNeeds)
+	return BuildFromStmt(query, result.AST, reservedVars, vschema, result.BindVarNeeds)
 }
 
 // ErrPlanNotSupported is an error for plan building not supported
 var ErrPlanNotSupported = errors.New("plan building not supported")
 
 // BuildFromStmt builds a plan based on the AST provided.
-func BuildFromStmt(query string, stmt sqlparser.Statement, vschema ContextVSchema, bindVarNeeds *sqlparser.BindVarNeeds) (*engine.Plan, error) {
-
-	instruction, err := createInstructionFor(query, stmt, vschema)
+func BuildFromStmt(query string, stmt sqlparser.Statement, reservedVars sqlparser.BindVars, vschema ContextVSchema, bindVarNeeds *sqlparser.BindVarNeeds) (*engine.Plan, error) {
+	instruction, err := createInstructionFor(query, stmt, reservedVars, vschema)
 	if err != nil {
 		return nil, err
 	}
@@ -124,39 +140,43 @@ func getConfiguredPlanner(vschema ContextVSchema) (selectPlanner, error) {
 	}
 }
 
-func buildRoutePlan(stmt sqlparser.Statement, vschema ContextVSchema, f func(statement sqlparser.Statement, schema ContextVSchema) (engine.Primitive, error)) (engine.Primitive, error) {
+func buildRoutePlan(stmt sqlparser.Statement, reservedVars sqlparser.BindVars, vschema ContextVSchema, f func(statement sqlparser.Statement, reservedVars sqlparser.BindVars, schema ContextVSchema) (engine.Primitive, error)) (engine.Primitive, error) {
 	if vschema.Destination() != nil {
-		return buildPlanForBypass(stmt, vschema)
+		return buildPlanForBypass(stmt, reservedVars, vschema)
 	}
-	return f(stmt, vschema)
+	return f(stmt, reservedVars, vschema)
 }
 
-type selectPlanner func(query string) func(sqlparser.Statement, ContextVSchema) (engine.Primitive, error)
+type selectPlanner func(query string) func(sqlparser.Statement, sqlparser.BindVars, ContextVSchema) (engine.Primitive, error)
 
-func createInstructionFor(query string, stmt sqlparser.Statement, vschema ContextVSchema) (engine.Primitive, error) {
+func createInstructionFor(query string, stmt sqlparser.Statement, reservedVars sqlparser.BindVars, vschema ContextVSchema) (engine.Primitive, error) {
 	switch stmt := stmt.(type) {
 	case *sqlparser.Select:
 		configuredPlanner, err := getConfiguredPlanner(vschema)
 		if err != nil {
 			return nil, err
 		}
-		return buildRoutePlan(stmt, vschema, configuredPlanner(query))
+		return buildRoutePlan(stmt, reservedVars, vschema, configuredPlanner(query))
 	case *sqlparser.Insert:
-		return buildRoutePlan(stmt, vschema, buildInsertPlan)
+		return buildRoutePlan(stmt, reservedVars, vschema, buildInsertPlan)
 	case *sqlparser.Update:
-		return buildRoutePlan(stmt, vschema, buildUpdatePlan)
+		return buildRoutePlan(stmt, reservedVars, vschema, buildUpdatePlan)
 	case *sqlparser.Delete:
-		return buildRoutePlan(stmt, vschema, buildDeletePlan)
+		return buildRoutePlan(stmt, reservedVars, vschema, buildDeletePlan)
 	case *sqlparser.Union:
-		return buildRoutePlan(stmt, vschema, buildUnionPlan)
+		return buildRoutePlan(stmt, reservedVars, vschema, buildUnionPlan)
 	case sqlparser.DDLStatement:
-		return buildGeneralDDLPlan(query, stmt, vschema)
+		return buildGeneralDDLPlan(query, stmt, reservedVars, vschema)
+	case *sqlparser.AlterMigration:
+		return buildAlterMigrationPlan(query, vschema)
+	case *sqlparser.RevertMigration:
+		return buildRevertMigrationPlan(query, stmt, vschema)
 	case *sqlparser.AlterVschema:
 		return buildVSchemaDDLPlan(stmt, vschema)
 	case *sqlparser.Use:
 		return buildUsePlan(stmt, vschema)
 	case sqlparser.Explain:
-		return buildExplainPlan(stmt, vschema)
+		return buildExplainPlan(stmt, reservedVars, vschema)
 	case *sqlparser.OtherRead, *sqlparser.OtherAdmin:
 		return buildOtherReadAndAdmin(query, vschema)
 	case *sqlparser.Set:
@@ -164,7 +184,7 @@ func createInstructionFor(query string, stmt sqlparser.Statement, vschema Contex
 	case *sqlparser.Load:
 		return buildLoadPlan(query, vschema)
 	case sqlparser.DBDDLStatement:
-		return buildRoutePlan(stmt, vschema, buildDBDDLPlan)
+		return buildRoutePlan(stmt, reservedVars, vschema, buildDBDDLPlan)
 	case *sqlparser.SetTransaction:
 		return nil, ErrPlanNotSupported
 	case *sqlparser.Begin, *sqlparser.Commit, *sqlparser.Rollback, *sqlparser.Savepoint, *sqlparser.SRollback, *sqlparser.Release:
@@ -173,9 +193,9 @@ func createInstructionFor(query string, stmt sqlparser.Statement, vschema Contex
 	case *sqlparser.Show:
 		return buildShowPlan(stmt, vschema)
 	case *sqlparser.LockTables:
-		return buildRoutePlan(stmt, vschema, buildLockPlan)
+		return buildRoutePlan(stmt, reservedVars, vschema, buildLockPlan)
 	case *sqlparser.UnlockTables:
-		return buildRoutePlan(stmt, vschema, buildUnlockPlan)
+		return buildRoutePlan(stmt, reservedVars, vschema, buildUnlockPlan)
 	case *sqlparser.Flush:
 		return buildFlushPlan(stmt, vschema)
 	case *sqlparser.CallProc:
@@ -185,7 +205,7 @@ func createInstructionFor(query string, stmt sqlparser.Statement, vschema Contex
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: unexpected statement type: %T", stmt)
 }
 
-func buildDBDDLPlan(stmt sqlparser.Statement, vschema ContextVSchema) (engine.Primitive, error) {
+func buildDBDDLPlan(stmt sqlparser.Statement, reservedVars sqlparser.BindVars, vschema ContextVSchema) (engine.Primitive, error) {
 	dbDDLstmt := stmt.(sqlparser.DBDDLStatement)
 	ksName := dbDDLstmt.GetDatabaseName()
 	if ksName == "" {
@@ -205,7 +225,7 @@ func buildDBDDLPlan(stmt sqlparser.Statement, vschema ContextVSchema) (engine.Pr
 		if !ksExists {
 			return nil, vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.DbDropExists, "Can't drop database '%s'; database doesn't exists", ksName)
 		}
-		return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "drop database is not supported")
+		return engine.NewDBDDL(ksName, false, queryTimeout(sqlparser.ExtractCommentDirectives(dbDDL.Comments))), nil
 	case *sqlparser.AlterDatabase:
 		if !ksExists {
 			return nil, vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.BadDb, "Can't alter database '%s'; unknown database", ksName)
@@ -218,7 +238,7 @@ func buildDBDDLPlan(stmt sqlparser.Statement, vschema ContextVSchema) (engine.Pr
 		if !dbDDL.IfNotExists && ksExists {
 			return nil, vterrors.NewErrorf(vtrpcpb.Code_ALREADY_EXISTS, vterrors.DbCreateExists, "Can't create database '%s'; database exists", ksName)
 		}
-		return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "create database is not supported")
+		return engine.NewDBDDL(ksName, true, queryTimeout(sqlparser.ExtractCommentDirectives(dbDDL.Comments))), nil
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] database ddl not recognized: %s", sqlparser.String(dbDDLstmt))
 }
@@ -231,8 +251,8 @@ func buildLoadPlan(query string, vschema ContextVSchema) (engine.Primitive, erro
 
 	destination := vschema.Destination()
 	if destination == nil {
-		if keyspace.Sharded {
-			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "LOAD is not supported on sharded database")
+		if err := vschema.ErrorIfShardedF(keyspace, "LOAD", "LOAD is not supported on sharded database"); err != nil {
+			return nil, err
 		}
 		destination = key.DestinationAnyShard{}
 	}
@@ -265,13 +285,16 @@ func buildFlushPlan(stmt *sqlparser.Flush, vschema ContextVSchema) (engine.Primi
 }
 
 func buildFlushOptions(stmt *sqlparser.Flush, vschema ContextVSchema) (engine.Primitive, error) {
-	destination, keyspace, _, err := vschema.TargetDestination("")
+	dest, keyspace, _, err := vschema.TargetDestination("")
 	if err != nil {
 		return nil, err
 	}
+	if dest == nil {
+		dest = key.DestinationAllShards{}
+	}
 	return &engine.Send{
 		Keyspace:          keyspace,
-		TargetDestination: destination,
+		TargetDestination: dest,
 		Query:             sqlparser.String(stmt),
 		IsDML:             false,
 		SingleShardOnly:   false,
@@ -284,62 +307,48 @@ func buildFlushTables(stmt *sqlparser.Flush, vschema ContextVSchema) (engine.Pri
 		dest key.Destination
 	}
 
-	flushStatements := map[sendDest]*sqlparser.Flush{}
+	dest := vschema.Destination()
+	if dest == nil {
+		dest = key.DestinationAllShards{}
+	}
+
+	tablesMap := make(map[sendDest]sqlparser.TableNames)
+	var keys []sendDest
 	for i, tab := range stmt.TableNames {
-		var destinationTab key.Destination
-		var keyspaceTab *vindexes.Keyspace
+		var ksTab *vindexes.Keyspace
 		var table *vindexes.Table
 		var err error
-		table, _, _, _, destinationTab, err = vschema.FindTableOrVindex(tab)
 
+		table, _, _, _, _, err = vschema.FindTableOrVindex(tab)
 		if err != nil {
 			return nil, err
 		}
 		if table == nil {
 			return nil, vindexes.NotFoundError{TableName: tab.Name.String()}
 		}
-		keyspaceTab = table.Keyspace
+
+		ksTab = table.Keyspace
 		stmt.TableNames[i] = sqlparser.TableName{
 			Name: table.Name,
 		}
-		if destinationTab == nil {
-			destinationTab = key.DestinationAllShards{}
-		}
 
-		flush, isAvail := flushStatements[sendDest{keyspaceTab, destinationTab}]
-		if isAvail {
-			flush.TableNames = append(flush.TableNames, stmt.TableNames[i])
-		} else {
-			flush = &sqlparser.Flush{
-				IsLocal:      stmt.IsLocal,
-				FlushOptions: nil,
-				TableNames:   sqlparser.TableNames{stmt.TableNames[i]},
-				WithLock:     stmt.WithLock,
-				ForExport:    stmt.ForExport,
-			}
+		key := sendDest{ksTab, dest}
+		tables, isAvail := tablesMap[key]
+		if !isAvail {
+			keys = append(keys, key)
 		}
-		flushStatements[sendDest{keyspaceTab, destinationTab}] = flush
+		tables = append(tables, stmt.TableNames[i]) // = append(tables.TableNames, stmt.TableNames[i])
+		tablesMap[key] = tables
 	}
 
-	if len(flushStatements) == 1 {
-		for sendDest, flush := range flushStatements {
+	if len(tablesMap) == 1 {
+		for sendDest, tables := range tablesMap {
 			return &engine.Send{
 				Keyspace:          sendDest.ks,
 				TargetDestination: sendDest.dest,
-				Query:             sqlparser.String(flush),
-				IsDML:             false,
-				SingleShardOnly:   false,
+				Query:             sqlparser.String(newFlushStmt(stmt, tables)),
 			}, nil
 		}
-	}
-
-	keys := make([]sendDest, len(flushStatements))
-
-	// Collect keys of the map
-	i := 0
-	for k := range flushStatements {
-		keys[i] = k
-		i++
 	}
 
 	sort.Slice(keys, func(i, j int) bool {
@@ -353,12 +362,19 @@ func buildFlushTables(stmt *sqlparser.Flush, vschema ContextVSchema) (engine.Pri
 		plan := &engine.Send{
 			Keyspace:          sendDest.ks,
 			TargetDestination: sendDest.dest,
-			Query:             sqlparser.String(flushStatements[sendDest]),
-			IsDML:             false,
-			SingleShardOnly:   false,
+			Query:             sqlparser.String(newFlushStmt(stmt, tablesMap[sendDest])),
 		}
 		finalPlan.Sources = append(finalPlan.Sources, plan)
 	}
 
 	return finalPlan, nil
+}
+
+func newFlushStmt(stmt *sqlparser.Flush, tables sqlparser.TableNames) *sqlparser.Flush {
+	return &sqlparser.Flush{
+		IsLocal:    stmt.IsLocal,
+		TableNames: tables,
+		WithLock:   stmt.WithLock,
+		ForExport:  stmt.ForExport,
+	}
 }

@@ -10,8 +10,10 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"math"
 	"math/rand"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -58,9 +60,13 @@ const (
 	selfStoreName  = "self"
 )
 
-var throttleThreshold = flag.Duration("throttle_threshold", 1*time.Second, "Replication lag threshold for throttling")
-var throttleTabletTypes = flag.String("throttle_tablet_types", "replica", "Comma separated VTTablet types to be considered by the throttler. default: 'replica'. example: 'replica,rdonly'. 'replica' aways implicitly included")
-
+var (
+	throttleThreshold         = flag.Duration("throttle_threshold", 1*time.Second, "Replication lag threshold for default lag throttling")
+	throttleTabletTypes       = flag.String("throttle_tablet_types", "replica", "Comma separated VTTablet types to be considered by the throttler. default: 'replica'. example: 'replica,rdonly'. 'replica' aways implicitly included")
+	throttleMetricQuery       = flag.String("throttle_metrics_query", "", "Override default heartbeat/lag metric. Use either `SELECT` (must return single row, single value) or `SHOW GLOBAL ... LIKE ...` queries. Set -throttle_metrics_threshold respectively.")
+	throttleMetricThreshold   = flag.Float64("throttle_metrics_threshold", math.MaxFloat64, "Override default throttle threshold, respective to -throttle_metrics_query")
+	throttlerCheckAsCheckSelf = flag.Bool("throttle_check_as_check_self", false, "Should throttler/check return a throttler/check-self result (changes throttler behavior for writes)")
+)
 var (
 	throttlerUser  = "vt_tablet_throttler"
 	throttlerGrant = fmt.Sprintf("'%s'@'%s'", throttlerUser, "%")
@@ -75,10 +81,13 @@ var (
 	replicationLagQuery = `select unix_timestamp(now(6))-max(ts/1000000000) as replication_lag from _vt.heartbeat`
 )
 
+// ThrottleCheckType allows a client to indicate what type of check it wants to issue. See available types below.
 type ThrottleCheckType int
 
 const (
+	// ThrottleCheckPrimaryWrite indicates a check before making a write on a primary server
 	ThrottleCheckPrimaryWrite ThrottleCheckType = iota
+	// ThrottleCheckSelf indicates a check on a specific server health
 	ThrottleCheckSelf
 )
 
@@ -108,6 +117,10 @@ type Throttler struct {
 	mysqlClusterProbesChan  chan *mysql.ClusterProbes
 
 	mysqlInventory *mysql.Inventory
+
+	metricsQuery     string
+	metricsThreshold float64
+	metricsQueryType mysql.MetricsQueryType
 
 	mysqlClusterThresholds *cache.Cache
 	aggregatedMetrics      *cache.Cache
@@ -157,6 +170,9 @@ func NewThrottler(env tabletenv.Env, ts *topo.Server, tabletTypeFunc func() topo
 		mysqlInventoryChan:     make(chan *mysql.Inventory, 1),
 		mysqlClusterProbesChan: make(chan *mysql.ClusterProbes),
 		mysqlInventory:         mysql.NewInventory(),
+
+		metricsQuery:     replicationLagQuery,
+		metricsThreshold: throttleThreshold.Seconds(),
 
 		throttledApps:          cache.New(cache.NoExpiration, 10*time.Second),
 		mysqlClusterThresholds: cache.New(cache.NoExpiration, 0),
@@ -215,19 +231,27 @@ func (throttler *Throttler) initConfig(password string) {
 			},
 		},
 	}
+	if *throttleMetricQuery != "" {
+		throttler.metricsQuery = *throttleMetricQuery
+	}
+	if *throttleMetricThreshold != math.MaxFloat64 {
+		throttler.metricsThreshold = *throttleMetricThreshold
+	}
+	throttler.metricsQueryType = mysql.GetMetricsQueryType(throttler.metricsQuery)
+
 	config.Instance.Stores.MySQL.Clusters[selfStoreName] = &config.MySQLClusterConfigurationSettings{
 		User:              "", // running on local tablet server, will use vttablet DBA user
 		Password:          "", // running on local tablet server, will use vttablet DBA user
-		ThrottleThreshold: throttleThreshold.Seconds(),
-		MetricQuery:       replicationLagQuery,
+		MetricQuery:       throttler.metricsQuery,
+		ThrottleThreshold: throttler.metricsThreshold,
 		IgnoreHostsCount:  0,
 	}
 	if password != "" {
 		config.Instance.Stores.MySQL.Clusters[shardStoreName] = &config.MySQLClusterConfigurationSettings{
 			User:              throttlerUser,
 			Password:          password,
-			ThrottleThreshold: throttleThreshold.Seconds(),
-			MetricQuery:       replicationLagQuery,
+			MetricQuery:       throttler.metricsQuery,
+			ThrottleThreshold: throttler.metricsThreshold,
 			IgnoreHostsCount:  0,
 		}
 	}
@@ -306,8 +330,6 @@ func (throttler *Throttler) createThrottlerUser(ctx context.Context) (password s
 		// any query that writes to the binary log, CREATE USER does not hang.
 		// The simplest such query is FLUSH STATUS. Other options are FLUSH PRIVILEGES or similar.
 		// The bug was found in MySQL 8.0.21, and not found in 5.7.30
-		// at this time, Vitess only supports 5.7 an ddoes not support 8.0,
-		// but please keep this code in anticipation of supporting 8.0
 		// - shlomi
 		simpleBinlogQuery := `FLUSH STATUS`
 		if _, err := conn.ExecuteFetch(simpleBinlogQuery, 0, false); err != nil {
@@ -335,7 +357,7 @@ func (throttler *Throttler) readSelfMySQLThrottleMetric() *mysql.MySQLThrottleMe
 	metric := &mysql.MySQLThrottleMetric{
 		ClusterName: selfStoreName,
 		Key:         *mysql.SelfInstanceKey,
-		Value:       3.14,
+		Value:       0,
 		Err:         nil,
 	}
 	ctx := context.Background()
@@ -346,17 +368,29 @@ func (throttler *Throttler) readSelfMySQLThrottleMetric() *mysql.MySQLThrottleMe
 	}
 	defer conn.Recycle()
 
-	tm, err := conn.Exec(ctx, replicationLagQuery, 1, true)
+	tm, err := conn.Exec(ctx, throttler.metricsQuery, 1, true)
 	if err != nil {
 		metric.Err = err
 		return metric
 	}
 	row := tm.Named().Row()
 	if row == nil {
-		metric.Err = fmt.Errorf("no results for ReadSelfMySQLThrottleMetric")
+		metric.Err = fmt.Errorf("no results for readSelfMySQLThrottleMetric")
 		return metric
 	}
-	metric.Value, metric.Err = row.ToFloat64("replication_lag")
+
+	switch throttler.metricsQueryType {
+	case mysql.MetricsQueryTypeSelect:
+		// We expect a single row, single column result.
+		// The "for" iteration below is just a way to get first result without knowning column name
+		for k := range row {
+			metric.Value, metric.Err = row.ToFloat64(k)
+		}
+	case mysql.MetricsQueryTypeShowGlobal:
+		metric.Value, metric.Err = strconv.ParseFloat(row["Value"].ToString(), 64)
+	default:
+		metric.Err = fmt.Errorf("Unsupported metrics query type for query %s", throttler.metricsQuery)
+	}
 
 	return metric
 }
@@ -786,23 +820,28 @@ func (throttler *Throttler) checkStore(ctx context.Context, appName string, stor
 	return throttler.check.Check(ctx, appName, "mysql", storeName, remoteAddr, flags)
 }
 
-// Check is the main serving function of the throttler, and returns a check result for this cluster's lag; it is only applicable on a Primary tablet.
-func (throttler *Throttler) Check(ctx context.Context, appName string, remoteAddr string, flags *CheckFlags) (checkResult *CheckResult) {
+// checkShard checks the health of the shard, and runs on the primary tablet only
+func (throttler *Throttler) checkShard(ctx context.Context, appName string, remoteAddr string, flags *CheckFlags) (checkResult *CheckResult) {
 	return throttler.checkStore(ctx, appName, shardStoreName, remoteAddr, flags)
 }
 
 // CheckSelf is checks the mysql/self metric, and is available on each tablet
-func (throttler *Throttler) CheckSelf(ctx context.Context, appName string, remoteAddr string, flags *CheckFlags) (checkResult *CheckResult) {
+func (throttler *Throttler) checkSelf(ctx context.Context, appName string, remoteAddr string, flags *CheckFlags) (checkResult *CheckResult) {
 	return throttler.checkStore(ctx, appName, selfStoreName, remoteAddr, flags)
 }
 
-// CheckSelf is checks the mysql/self metric, and is available on each tablet
+// CheckByType runs a check by requested check type
 func (throttler *Throttler) CheckByType(ctx context.Context, appName string, remoteAddr string, flags *CheckFlags, checkType ThrottleCheckType) (checkResult *CheckResult) {
 	switch checkType {
 	case ThrottleCheckSelf:
-		return throttler.CheckSelf(ctx, appName, remoteAddr, flags)
+		return throttler.checkSelf(ctx, appName, remoteAddr, flags)
+	case ThrottleCheckPrimaryWrite:
+		if *throttlerCheckAsCheckSelf {
+			return throttler.checkSelf(ctx, appName, remoteAddr, flags)
+		}
+		return throttler.checkShard(ctx, appName, remoteAddr, flags)
 	default:
-		return throttler.Check(ctx, appName, remoteAddr, flags)
+		return invalidCheckTypeCheckResult
 	}
 }
 

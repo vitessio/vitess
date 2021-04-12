@@ -253,7 +253,7 @@ func (c *Conn) readColumnDefinitionType(field *querypb.Field, index int) error {
 
 // parseRow parses an individual row.
 // Returns a SQLError.
-func (c *Conn) parseRow(data []byte, fields []*querypb.Field) ([]sqltypes.Value, error) {
+func (c *Conn) parseRow(data []byte, fields []*querypb.Field, reader func([]byte, int) ([]byte, int, bool)) ([]sqltypes.Value, error) {
 	colNumber := len(fields)
 	result := make([]sqltypes.Value, colNumber)
 	pos := 0
@@ -264,7 +264,7 @@ func (c *Conn) parseRow(data []byte, fields []*querypb.Field) ([]sqltypes.Value,
 		}
 		var s []byte
 		var ok bool
-		s, pos, ok = readLenEncStringAsBytesCopy(data, pos)
+		s, pos, ok = reader(data, pos)
 		if !ok {
 			return nil, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "decoding string failed")
 		}
@@ -464,7 +464,7 @@ func (c *Conn) ReadQueryResult(maxrows int, wantfields bool) (*sqltypes.Result, 
 		}
 
 		// Regular row.
-		row, err := c.parseRow(data, result.Fields)
+		row, err := c.parseRow(data, result.Fields, readLenEncStringAsBytesCopy)
 		if err != nil {
 			c.recycleReadPacket()
 			return nil, false, 0, err

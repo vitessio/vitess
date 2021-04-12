@@ -52,6 +52,16 @@ var (
 		Args: cobra.ExactArgs(2),
 		RunE: commandRemoveShardCell,
 	}
+	// ShardReplicationPositions makes a ShardReplicationPositions gRPC request
+	// to a vtctld.
+	ShardReplicationPositions = &cobra.Command{
+		Use: "ShardReplicationPositions <keyspace/shard>",
+		Long: `Shows the replication status of each tablet in the shard graph.
+Output is sorted by tablet type, then replication position.
+Use ctrl-C to interrupt the command and see partial results if needed.`,
+		Args: cobra.ExactArgs(1),
+		RunE: commandShardReplicationPositions,
+	}
 )
 
 var createShardOptions = struct {
@@ -173,6 +183,38 @@ func commandRemoveShardCell(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+func commandShardReplicationPositions(cmd *cobra.Command, args []string) error {
+	keyspace, shard, err := topoproto.ParseKeyspaceShard(cmd.Flags().Arg(0))
+	if err != nil {
+		return err
+	}
+
+	cli.FinishedParsing(cmd)
+
+	resp, err := client.ShardReplicationPositions(commandCtx, &vtctldatapb.ShardReplicationPositionsRequest{
+		Keyspace: keyspace,
+		Shard:    shard,
+	})
+	if err != nil {
+		return err
+	}
+
+	for _, rt := range cli.SortedReplicatingTablets(resp.TabletMap, resp.ReplicationStatuses) {
+		var line string
+
+		switch rt.Status {
+		case nil:
+			line = cli.MarshalTabletAWK(rt.Tablet) + "<err> <err> <err>"
+		default:
+			line = cli.MarshalTabletAWK(rt.Tablet) + fmt.Sprintf(" %v %v", rt.Status.Position, rt.Status.SecondsBehindMaster)
+		}
+
+		fmt.Println(line)
+	}
+
+	return nil
+}
+
 func init() {
 	CreateShard.Flags().BoolVarP(&createShardOptions.Force, "force", "f", false, "")
 	CreateShard.Flags().BoolVarP(&createShardOptions.IncludeParent, "include-parent", "p", false, "")
@@ -187,4 +229,6 @@ func init() {
 	RemoveShardCell.Flags().BoolVarP(&removeShardCellOptions.Force, "force", "f", false, "Proceed even if the cell's topology server cannot be reached. The assumption is that you turned down the entire cell, and just need to update the global topo data.")
 	RemoveShardCell.Flags().BoolVarP(&removeShardCellOptions.Recursive, "recursive", "r", false, "Also delete all tablets in that cell beloning to the specified shard.")
 	Root.AddCommand(RemoveShardCell)
+
+	Root.AddCommand(ShardReplicationPositions)
 }

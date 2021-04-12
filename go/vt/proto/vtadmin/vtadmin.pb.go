@@ -16,6 +16,7 @@ import (
 	status "google.golang.org/grpc/status"
 	tabletmanagerdata "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodata "vitess.io/vitess/go/vt/proto/topodata"
+	vschema "vitess.io/vitess/go/vt/proto/vschema"
 	vtctldata "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
@@ -55,7 +56,7 @@ func (x Tablet_ServingState) String() string {
 }
 
 func (Tablet_ServingState) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_609739e22a0a50b3, []int{3, 0}
+	return fileDescriptor_609739e22a0a50b3, []int{4, 0}
 }
 
 // Cluster represents information about a Vitess cluster.
@@ -114,6 +115,63 @@ func (m *Cluster) GetName() string {
 	return ""
 }
 
+type ClusterWorkflows struct {
+	Workflows []*Workflow `protobuf:"bytes,1,rep,name=workflows,proto3" json:"workflows,omitempty"`
+	// Warnings is a list of non-fatal errors encountered when fetching
+	// workflows for a particular cluster.
+	Warnings             []string `protobuf:"bytes,2,rep,name=warnings,proto3" json:"warnings,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *ClusterWorkflows) Reset()         { *m = ClusterWorkflows{} }
+func (m *ClusterWorkflows) String() string { return proto.CompactTextString(m) }
+func (*ClusterWorkflows) ProtoMessage()    {}
+func (*ClusterWorkflows) Descriptor() ([]byte, []int) {
+	return fileDescriptor_609739e22a0a50b3, []int{1}
+}
+func (m *ClusterWorkflows) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *ClusterWorkflows) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_ClusterWorkflows.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *ClusterWorkflows) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ClusterWorkflows.Merge(m, src)
+}
+func (m *ClusterWorkflows) XXX_Size() int {
+	return m.Size()
+}
+func (m *ClusterWorkflows) XXX_DiscardUnknown() {
+	xxx_messageInfo_ClusterWorkflows.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_ClusterWorkflows proto.InternalMessageInfo
+
+func (m *ClusterWorkflows) GetWorkflows() []*Workflow {
+	if m != nil {
+		return m.Workflows
+	}
+	return nil
+}
+
+func (m *ClusterWorkflows) GetWarnings() []string {
+	if m != nil {
+		return m.Warnings
+	}
+	return nil
+}
+
 // Keyspace represents information about a keyspace in a particular Vitess
 // cluster.
 type Keyspace struct {
@@ -129,7 +187,7 @@ func (m *Keyspace) Reset()         { *m = Keyspace{} }
 func (m *Keyspace) String() string { return proto.CompactTextString(m) }
 func (*Keyspace) ProtoMessage()    {}
 func (*Keyspace) Descriptor() ([]byte, []int) {
-	return fileDescriptor_609739e22a0a50b3, []int{1}
+	return fileDescriptor_609739e22a0a50b3, []int{2}
 }
 func (m *Keyspace) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -180,19 +238,21 @@ func (m *Keyspace) GetShards() map[string]*vtctldata.Shard {
 }
 
 type Schema struct {
-	Cluster              *Cluster                             `protobuf:"bytes,1,opt,name=cluster,proto3" json:"cluster,omitempty"`
-	Keyspace             string                               `protobuf:"bytes,2,opt,name=keyspace,proto3" json:"keyspace,omitempty"`
-	TableDefinitions     []*tabletmanagerdata.TableDefinition `protobuf:"bytes,3,rep,name=table_definitions,json=tableDefinitions,proto3" json:"table_definitions,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}                             `json:"-"`
-	XXX_unrecognized     []byte                               `json:"-"`
-	XXX_sizecache        int32                                `json:"-"`
+	Cluster          *Cluster                             `protobuf:"bytes,1,opt,name=cluster,proto3" json:"cluster,omitempty"`
+	Keyspace         string                               `protobuf:"bytes,2,opt,name=keyspace,proto3" json:"keyspace,omitempty"`
+	TableDefinitions []*tabletmanagerdata.TableDefinition `protobuf:"bytes,3,rep,name=table_definitions,json=tableDefinitions,proto3" json:"table_definitions,omitempty"`
+	// TableSizes is a mapping of table name to TableSize information.
+	TableSizes           map[string]*Schema_TableSize `protobuf:"bytes,4,rep,name=table_sizes,json=tableSizes,proto3" json:"table_sizes,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
+	XXX_NoUnkeyedLiteral struct{}                     `json:"-"`
+	XXX_unrecognized     []byte                       `json:"-"`
+	XXX_sizecache        int32                        `json:"-"`
 }
 
 func (m *Schema) Reset()         { *m = Schema{} }
 func (m *Schema) String() string { return proto.CompactTextString(m) }
 func (*Schema) ProtoMessage()    {}
 func (*Schema) Descriptor() ([]byte, []int) {
-	return fileDescriptor_609739e22a0a50b3, []int{2}
+	return fileDescriptor_609739e22a0a50b3, []int{3}
 }
 func (m *Schema) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -242,6 +302,133 @@ func (m *Schema) GetTableDefinitions() []*tabletmanagerdata.TableDefinition {
 	return nil
 }
 
+func (m *Schema) GetTableSizes() map[string]*Schema_TableSize {
+	if m != nil {
+		return m.TableSizes
+	}
+	return nil
+}
+
+type Schema_ShardTableSize struct {
+	RowCount             uint64   `protobuf:"varint,1,opt,name=row_count,json=rowCount,proto3" json:"row_count,omitempty"`
+	DataLength           uint64   `protobuf:"varint,2,opt,name=data_length,json=dataLength,proto3" json:"data_length,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *Schema_ShardTableSize) Reset()         { *m = Schema_ShardTableSize{} }
+func (m *Schema_ShardTableSize) String() string { return proto.CompactTextString(m) }
+func (*Schema_ShardTableSize) ProtoMessage()    {}
+func (*Schema_ShardTableSize) Descriptor() ([]byte, []int) {
+	return fileDescriptor_609739e22a0a50b3, []int{3, 1}
+}
+func (m *Schema_ShardTableSize) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *Schema_ShardTableSize) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_Schema_ShardTableSize.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *Schema_ShardTableSize) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_Schema_ShardTableSize.Merge(m, src)
+}
+func (m *Schema_ShardTableSize) XXX_Size() int {
+	return m.Size()
+}
+func (m *Schema_ShardTableSize) XXX_DiscardUnknown() {
+	xxx_messageInfo_Schema_ShardTableSize.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_Schema_ShardTableSize proto.InternalMessageInfo
+
+func (m *Schema_ShardTableSize) GetRowCount() uint64 {
+	if m != nil {
+		return m.RowCount
+	}
+	return 0
+}
+
+func (m *Schema_ShardTableSize) GetDataLength() uint64 {
+	if m != nil {
+		return m.DataLength
+	}
+	return 0
+}
+
+// TableSize aggregates table size information across all shards containing
+// in the given keyspace and cluster, as well as per-shard size information.
+type Schema_TableSize struct {
+	RowCount             uint64                            `protobuf:"varint,1,opt,name=row_count,json=rowCount,proto3" json:"row_count,omitempty"`
+	DataLength           uint64                            `protobuf:"varint,2,opt,name=data_length,json=dataLength,proto3" json:"data_length,omitempty"`
+	ByShard              map[string]*Schema_ShardTableSize `protobuf:"bytes,3,rep,name=by_shard,json=byShard,proto3" json:"by_shard,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
+	XXX_NoUnkeyedLiteral struct{}                          `json:"-"`
+	XXX_unrecognized     []byte                            `json:"-"`
+	XXX_sizecache        int32                             `json:"-"`
+}
+
+func (m *Schema_TableSize) Reset()         { *m = Schema_TableSize{} }
+func (m *Schema_TableSize) String() string { return proto.CompactTextString(m) }
+func (*Schema_TableSize) ProtoMessage()    {}
+func (*Schema_TableSize) Descriptor() ([]byte, []int) {
+	return fileDescriptor_609739e22a0a50b3, []int{3, 2}
+}
+func (m *Schema_TableSize) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *Schema_TableSize) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_Schema_TableSize.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *Schema_TableSize) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_Schema_TableSize.Merge(m, src)
+}
+func (m *Schema_TableSize) XXX_Size() int {
+	return m.Size()
+}
+func (m *Schema_TableSize) XXX_DiscardUnknown() {
+	xxx_messageInfo_Schema_TableSize.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_Schema_TableSize proto.InternalMessageInfo
+
+func (m *Schema_TableSize) GetRowCount() uint64 {
+	if m != nil {
+		return m.RowCount
+	}
+	return 0
+}
+
+func (m *Schema_TableSize) GetDataLength() uint64 {
+	if m != nil {
+		return m.DataLength
+	}
+	return 0
+}
+
+func (m *Schema_TableSize) GetByShard() map[string]*Schema_ShardTableSize {
+	if m != nil {
+		return m.ByShard
+	}
+	return nil
+}
+
 // Tablet groups the topo information of a tablet together with the Vitess
 // cluster it belongs to.
 type Tablet struct {
@@ -257,7 +444,7 @@ func (m *Tablet) Reset()         { *m = Tablet{} }
 func (m *Tablet) String() string { return proto.CompactTextString(m) }
 func (*Tablet) ProtoMessage()    {}
 func (*Tablet) Descriptor() ([]byte, []int) {
-	return fileDescriptor_609739e22a0a50b3, []int{3}
+	return fileDescriptor_609739e22a0a50b3, []int{4}
 }
 func (m *Tablet) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -307,6 +494,71 @@ func (m *Tablet) GetState() Tablet_ServingState {
 	return Tablet_UNKNOWN
 }
 
+// VSchema represents the vschema for a keyspace in the cluster it belongs to.
+type VSchema struct {
+	Cluster *Cluster `protobuf:"bytes,1,opt,name=cluster,proto3" json:"cluster,omitempty"`
+	// Name is the name of the keyspace this VSchema is for.
+	Name                 string            `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	VSchema              *vschema.Keyspace `protobuf:"bytes,3,opt,name=v_schema,json=vSchema,proto3" json:"v_schema,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}          `json:"-"`
+	XXX_unrecognized     []byte            `json:"-"`
+	XXX_sizecache        int32             `json:"-"`
+}
+
+func (m *VSchema) Reset()         { *m = VSchema{} }
+func (m *VSchema) String() string { return proto.CompactTextString(m) }
+func (*VSchema) ProtoMessage()    {}
+func (*VSchema) Descriptor() ([]byte, []int) {
+	return fileDescriptor_609739e22a0a50b3, []int{5}
+}
+func (m *VSchema) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *VSchema) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_VSchema.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *VSchema) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_VSchema.Merge(m, src)
+}
+func (m *VSchema) XXX_Size() int {
+	return m.Size()
+}
+func (m *VSchema) XXX_DiscardUnknown() {
+	xxx_messageInfo_VSchema.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_VSchema proto.InternalMessageInfo
+
+func (m *VSchema) GetCluster() *Cluster {
+	if m != nil {
+		return m.Cluster
+	}
+	return nil
+}
+
+func (m *VSchema) GetName() string {
+	if m != nil {
+		return m.Name
+	}
+	return ""
+}
+
+func (m *VSchema) GetVSchema() *vschema.Keyspace {
+	if m != nil {
+		return m.VSchema
+	}
+	return nil
+}
+
 // Vtctld represents information about a single Vtctld host.
 type Vtctld struct {
 	Hostname             string   `protobuf:"bytes,1,opt,name=hostname,proto3" json:"hostname,omitempty"`
@@ -320,7 +572,7 @@ func (m *Vtctld) Reset()         { *m = Vtctld{} }
 func (m *Vtctld) String() string { return proto.CompactTextString(m) }
 func (*Vtctld) ProtoMessage()    {}
 func (*Vtctld) Descriptor() ([]byte, []int) {
-	return fileDescriptor_609739e22a0a50b3, []int{4}
+	return fileDescriptor_609739e22a0a50b3, []int{6}
 }
 func (m *Vtctld) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -386,7 +638,7 @@ func (m *VTGate) Reset()         { *m = VTGate{} }
 func (m *VTGate) String() string { return proto.CompactTextString(m) }
 func (*VTGate) ProtoMessage()    {}
 func (*VTGate) Descriptor() ([]byte, []int) {
-	return fileDescriptor_609739e22a0a50b3, []int{5}
+	return fileDescriptor_609739e22a0a50b3, []int{7}
 }
 func (m *VTGate) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -450,7 +702,132 @@ func (m *VTGate) GetKeyspaces() []string {
 	return nil
 }
 
-// Request/Response types
+type Workflow struct {
+	Cluster              *Cluster            `protobuf:"bytes,1,opt,name=cluster,proto3" json:"cluster,omitempty"`
+	Keyspace             string              `protobuf:"bytes,2,opt,name=keyspace,proto3" json:"keyspace,omitempty"`
+	Workflow             *vtctldata.Workflow `protobuf:"bytes,3,opt,name=workflow,proto3" json:"workflow,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}            `json:"-"`
+	XXX_unrecognized     []byte              `json:"-"`
+	XXX_sizecache        int32               `json:"-"`
+}
+
+func (m *Workflow) Reset()         { *m = Workflow{} }
+func (m *Workflow) String() string { return proto.CompactTextString(m) }
+func (*Workflow) ProtoMessage()    {}
+func (*Workflow) Descriptor() ([]byte, []int) {
+	return fileDescriptor_609739e22a0a50b3, []int{8}
+}
+func (m *Workflow) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *Workflow) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_Workflow.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *Workflow) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_Workflow.Merge(m, src)
+}
+func (m *Workflow) XXX_Size() int {
+	return m.Size()
+}
+func (m *Workflow) XXX_DiscardUnknown() {
+	xxx_messageInfo_Workflow.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_Workflow proto.InternalMessageInfo
+
+func (m *Workflow) GetCluster() *Cluster {
+	if m != nil {
+		return m.Cluster
+	}
+	return nil
+}
+
+func (m *Workflow) GetKeyspace() string {
+	if m != nil {
+		return m.Keyspace
+	}
+	return ""
+}
+
+func (m *Workflow) GetWorkflow() *vtctldata.Workflow {
+	if m != nil {
+		return m.Workflow
+	}
+	return nil
+}
+
+type FindSchemaRequest struct {
+	Table                string                     `protobuf:"bytes,1,opt,name=table,proto3" json:"table,omitempty"`
+	ClusterIds           []string                   `protobuf:"bytes,2,rep,name=cluster_ids,json=clusterIds,proto3" json:"cluster_ids,omitempty"`
+	TableSizeOptions     *GetSchemaTableSizeOptions `protobuf:"bytes,3,opt,name=table_size_options,json=tableSizeOptions,proto3" json:"table_size_options,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}                   `json:"-"`
+	XXX_unrecognized     []byte                     `json:"-"`
+	XXX_sizecache        int32                      `json:"-"`
+}
+
+func (m *FindSchemaRequest) Reset()         { *m = FindSchemaRequest{} }
+func (m *FindSchemaRequest) String() string { return proto.CompactTextString(m) }
+func (*FindSchemaRequest) ProtoMessage()    {}
+func (*FindSchemaRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_609739e22a0a50b3, []int{9}
+}
+func (m *FindSchemaRequest) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *FindSchemaRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_FindSchemaRequest.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *FindSchemaRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_FindSchemaRequest.Merge(m, src)
+}
+func (m *FindSchemaRequest) XXX_Size() int {
+	return m.Size()
+}
+func (m *FindSchemaRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_FindSchemaRequest.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_FindSchemaRequest proto.InternalMessageInfo
+
+func (m *FindSchemaRequest) GetTable() string {
+	if m != nil {
+		return m.Table
+	}
+	return ""
+}
+
+func (m *FindSchemaRequest) GetClusterIds() []string {
+	if m != nil {
+		return m.ClusterIds
+	}
+	return nil
+}
+
+func (m *FindSchemaRequest) GetTableSizeOptions() *GetSchemaTableSizeOptions {
+	if m != nil {
+		return m.TableSizeOptions
+	}
+	return nil
+}
+
 type GetClustersRequest struct {
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
@@ -461,7 +838,7 @@ func (m *GetClustersRequest) Reset()         { *m = GetClustersRequest{} }
 func (m *GetClustersRequest) String() string { return proto.CompactTextString(m) }
 func (*GetClustersRequest) ProtoMessage()    {}
 func (*GetClustersRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_609739e22a0a50b3, []int{6}
+	return fileDescriptor_609739e22a0a50b3, []int{10}
 }
 func (m *GetClustersRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -501,7 +878,7 @@ func (m *GetClustersResponse) Reset()         { *m = GetClustersResponse{} }
 func (m *GetClustersResponse) String() string { return proto.CompactTextString(m) }
 func (*GetClustersResponse) ProtoMessage()    {}
 func (*GetClustersResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_609739e22a0a50b3, []int{7}
+	return fileDescriptor_609739e22a0a50b3, []int{11}
 }
 func (m *GetClustersResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -548,7 +925,7 @@ func (m *GetGatesRequest) Reset()         { *m = GetGatesRequest{} }
 func (m *GetGatesRequest) String() string { return proto.CompactTextString(m) }
 func (*GetGatesRequest) ProtoMessage()    {}
 func (*GetGatesRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_609739e22a0a50b3, []int{8}
+	return fileDescriptor_609739e22a0a50b3, []int{12}
 }
 func (m *GetGatesRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -595,7 +972,7 @@ func (m *GetGatesResponse) Reset()         { *m = GetGatesResponse{} }
 func (m *GetGatesResponse) String() string { return proto.CompactTextString(m) }
 func (*GetGatesResponse) ProtoMessage()    {}
 func (*GetGatesResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_609739e22a0a50b3, []int{9}
+	return fileDescriptor_609739e22a0a50b3, []int{13}
 }
 func (m *GetGatesResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -642,7 +1019,7 @@ func (m *GetKeyspacesRequest) Reset()         { *m = GetKeyspacesRequest{} }
 func (m *GetKeyspacesRequest) String() string { return proto.CompactTextString(m) }
 func (*GetKeyspacesRequest) ProtoMessage()    {}
 func (*GetKeyspacesRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_609739e22a0a50b3, []int{10}
+	return fileDescriptor_609739e22a0a50b3, []int{14}
 }
 func (m *GetKeyspacesRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -689,7 +1066,7 @@ func (m *GetKeyspacesResponse) Reset()         { *m = GetKeyspacesResponse{} }
 func (m *GetKeyspacesResponse) String() string { return proto.CompactTextString(m) }
 func (*GetKeyspacesResponse) ProtoMessage()    {}
 func (*GetKeyspacesResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_609739e22a0a50b3, []int{11}
+	return fileDescriptor_609739e22a0a50b3, []int{15}
 }
 func (m *GetKeyspacesResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -726,19 +1103,20 @@ func (m *GetKeyspacesResponse) GetKeyspaces() []*Keyspace {
 }
 
 type GetSchemaRequest struct {
-	ClusterId            string   `protobuf:"bytes,1,opt,name=cluster_id,json=clusterId,proto3" json:"cluster_id,omitempty"`
-	Keyspace             string   `protobuf:"bytes,2,opt,name=keyspace,proto3" json:"keyspace,omitempty"`
-	Table                string   `protobuf:"bytes,3,opt,name=table,proto3" json:"table,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	ClusterId            string                     `protobuf:"bytes,1,opt,name=cluster_id,json=clusterId,proto3" json:"cluster_id,omitempty"`
+	Keyspace             string                     `protobuf:"bytes,2,opt,name=keyspace,proto3" json:"keyspace,omitempty"`
+	Table                string                     `protobuf:"bytes,3,opt,name=table,proto3" json:"table,omitempty"`
+	TableSizeOptions     *GetSchemaTableSizeOptions `protobuf:"bytes,4,opt,name=table_size_options,json=tableSizeOptions,proto3" json:"table_size_options,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}                   `json:"-"`
+	XXX_unrecognized     []byte                     `json:"-"`
+	XXX_sizecache        int32                      `json:"-"`
 }
 
 func (m *GetSchemaRequest) Reset()         { *m = GetSchemaRequest{} }
 func (m *GetSchemaRequest) String() string { return proto.CompactTextString(m) }
 func (*GetSchemaRequest) ProtoMessage()    {}
 func (*GetSchemaRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_609739e22a0a50b3, []int{12}
+	return fileDescriptor_609739e22a0a50b3, []int{16}
 }
 func (m *GetSchemaRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -788,18 +1166,26 @@ func (m *GetSchemaRequest) GetTable() string {
 	return ""
 }
 
+func (m *GetSchemaRequest) GetTableSizeOptions() *GetSchemaTableSizeOptions {
+	if m != nil {
+		return m.TableSizeOptions
+	}
+	return nil
+}
+
 type GetSchemasRequest struct {
-	ClusterIds           []string `protobuf:"bytes,1,rep,name=cluster_ids,json=clusterIds,proto3" json:"cluster_ids,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	ClusterIds           []string                   `protobuf:"bytes,1,rep,name=cluster_ids,json=clusterIds,proto3" json:"cluster_ids,omitempty"`
+	TableSizeOptions     *GetSchemaTableSizeOptions `protobuf:"bytes,2,opt,name=table_size_options,json=tableSizeOptions,proto3" json:"table_size_options,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}                   `json:"-"`
+	XXX_unrecognized     []byte                     `json:"-"`
+	XXX_sizecache        int32                      `json:"-"`
 }
 
 func (m *GetSchemasRequest) Reset()         { *m = GetSchemasRequest{} }
 func (m *GetSchemasRequest) String() string { return proto.CompactTextString(m) }
 func (*GetSchemasRequest) ProtoMessage()    {}
 func (*GetSchemasRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_609739e22a0a50b3, []int{13}
+	return fileDescriptor_609739e22a0a50b3, []int{17}
 }
 func (m *GetSchemasRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -835,6 +1221,13 @@ func (m *GetSchemasRequest) GetClusterIds() []string {
 	return nil
 }
 
+func (m *GetSchemasRequest) GetTableSizeOptions() *GetSchemaTableSizeOptions {
+	if m != nil {
+		return m.TableSizeOptions
+	}
+	return nil
+}
+
 type GetSchemasResponse struct {
 	Schemas              []*Schema `protobuf:"bytes,1,rep,name=schemas,proto3" json:"schemas,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}  `json:"-"`
@@ -846,7 +1239,7 @@ func (m *GetSchemasResponse) Reset()         { *m = GetSchemasResponse{} }
 func (m *GetSchemasResponse) String() string { return proto.CompactTextString(m) }
 func (*GetSchemasResponse) ProtoMessage()    {}
 func (*GetSchemasResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_609739e22a0a50b3, []int{14}
+	return fileDescriptor_609739e22a0a50b3, []int{18}
 }
 func (m *GetSchemasResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -882,6 +1275,61 @@ func (m *GetSchemasResponse) GetSchemas() []*Schema {
 	return nil
 }
 
+type GetSchemaTableSizeOptions struct {
+	AggregateSizes          bool     `protobuf:"varint,1,opt,name=aggregate_sizes,json=aggregateSizes,proto3" json:"aggregate_sizes,omitempty"`
+	IncludeNonServingShards bool     `protobuf:"varint,2,opt,name=include_non_serving_shards,json=includeNonServingShards,proto3" json:"include_non_serving_shards,omitempty"`
+	XXX_NoUnkeyedLiteral    struct{} `json:"-"`
+	XXX_unrecognized        []byte   `json:"-"`
+	XXX_sizecache           int32    `json:"-"`
+}
+
+func (m *GetSchemaTableSizeOptions) Reset()         { *m = GetSchemaTableSizeOptions{} }
+func (m *GetSchemaTableSizeOptions) String() string { return proto.CompactTextString(m) }
+func (*GetSchemaTableSizeOptions) ProtoMessage()    {}
+func (*GetSchemaTableSizeOptions) Descriptor() ([]byte, []int) {
+	return fileDescriptor_609739e22a0a50b3, []int{19}
+}
+func (m *GetSchemaTableSizeOptions) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *GetSchemaTableSizeOptions) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_GetSchemaTableSizeOptions.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *GetSchemaTableSizeOptions) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_GetSchemaTableSizeOptions.Merge(m, src)
+}
+func (m *GetSchemaTableSizeOptions) XXX_Size() int {
+	return m.Size()
+}
+func (m *GetSchemaTableSizeOptions) XXX_DiscardUnknown() {
+	xxx_messageInfo_GetSchemaTableSizeOptions.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_GetSchemaTableSizeOptions proto.InternalMessageInfo
+
+func (m *GetSchemaTableSizeOptions) GetAggregateSizes() bool {
+	if m != nil {
+		return m.AggregateSizes
+	}
+	return false
+}
+
+func (m *GetSchemaTableSizeOptions) GetIncludeNonServingShards() bool {
+	if m != nil {
+		return m.IncludeNonServingShards
+	}
+	return false
+}
+
 type GetTabletRequest struct {
 	Hostname string `protobuf:"bytes,1,opt,name=hostname,proto3" json:"hostname,omitempty"`
 	// ClusterIDs is an optional parameter to narrow the scope of the search, if
@@ -897,7 +1345,7 @@ func (m *GetTabletRequest) Reset()         { *m = GetTabletRequest{} }
 func (m *GetTabletRequest) String() string { return proto.CompactTextString(m) }
 func (*GetTabletRequest) ProtoMessage()    {}
 func (*GetTabletRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_609739e22a0a50b3, []int{15}
+	return fileDescriptor_609739e22a0a50b3, []int{20}
 }
 func (m *GetTabletRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -951,7 +1399,7 @@ func (m *GetTabletsRequest) Reset()         { *m = GetTabletsRequest{} }
 func (m *GetTabletsRequest) String() string { return proto.CompactTextString(m) }
 func (*GetTabletsRequest) ProtoMessage()    {}
 func (*GetTabletsRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_609739e22a0a50b3, []int{16}
+	return fileDescriptor_609739e22a0a50b3, []int{21}
 }
 func (m *GetTabletsRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -998,7 +1446,7 @@ func (m *GetTabletsResponse) Reset()         { *m = GetTabletsResponse{} }
 func (m *GetTabletsResponse) String() string { return proto.CompactTextString(m) }
 func (*GetTabletsResponse) ProtoMessage()    {}
 func (*GetTabletsResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_609739e22a0a50b3, []int{17}
+	return fileDescriptor_609739e22a0a50b3, []int{22}
 }
 func (m *GetTabletsResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1034,6 +1482,359 @@ func (m *GetTabletsResponse) GetTablets() []*Tablet {
 	return nil
 }
 
+type GetVSchemaRequest struct {
+	ClusterId            string   `protobuf:"bytes,1,opt,name=cluster_id,json=clusterId,proto3" json:"cluster_id,omitempty"`
+	Keyspace             string   `protobuf:"bytes,2,opt,name=keyspace,proto3" json:"keyspace,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *GetVSchemaRequest) Reset()         { *m = GetVSchemaRequest{} }
+func (m *GetVSchemaRequest) String() string { return proto.CompactTextString(m) }
+func (*GetVSchemaRequest) ProtoMessage()    {}
+func (*GetVSchemaRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_609739e22a0a50b3, []int{23}
+}
+func (m *GetVSchemaRequest) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *GetVSchemaRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_GetVSchemaRequest.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *GetVSchemaRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_GetVSchemaRequest.Merge(m, src)
+}
+func (m *GetVSchemaRequest) XXX_Size() int {
+	return m.Size()
+}
+func (m *GetVSchemaRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_GetVSchemaRequest.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_GetVSchemaRequest proto.InternalMessageInfo
+
+func (m *GetVSchemaRequest) GetClusterId() string {
+	if m != nil {
+		return m.ClusterId
+	}
+	return ""
+}
+
+func (m *GetVSchemaRequest) GetKeyspace() string {
+	if m != nil {
+		return m.Keyspace
+	}
+	return ""
+}
+
+type GetVSchemasRequest struct {
+	ClusterIds           []string `protobuf:"bytes,1,rep,name=cluster_ids,json=clusterIds,proto3" json:"cluster_ids,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *GetVSchemasRequest) Reset()         { *m = GetVSchemasRequest{} }
+func (m *GetVSchemasRequest) String() string { return proto.CompactTextString(m) }
+func (*GetVSchemasRequest) ProtoMessage()    {}
+func (*GetVSchemasRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_609739e22a0a50b3, []int{24}
+}
+func (m *GetVSchemasRequest) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *GetVSchemasRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_GetVSchemasRequest.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *GetVSchemasRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_GetVSchemasRequest.Merge(m, src)
+}
+func (m *GetVSchemasRequest) XXX_Size() int {
+	return m.Size()
+}
+func (m *GetVSchemasRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_GetVSchemasRequest.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_GetVSchemasRequest proto.InternalMessageInfo
+
+func (m *GetVSchemasRequest) GetClusterIds() []string {
+	if m != nil {
+		return m.ClusterIds
+	}
+	return nil
+}
+
+type GetVSchemasResponse struct {
+	VSchemas             []*VSchema `protobuf:"bytes,1,rep,name=v_schemas,json=vSchemas,proto3" json:"v_schemas,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}   `json:"-"`
+	XXX_unrecognized     []byte     `json:"-"`
+	XXX_sizecache        int32      `json:"-"`
+}
+
+func (m *GetVSchemasResponse) Reset()         { *m = GetVSchemasResponse{} }
+func (m *GetVSchemasResponse) String() string { return proto.CompactTextString(m) }
+func (*GetVSchemasResponse) ProtoMessage()    {}
+func (*GetVSchemasResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_609739e22a0a50b3, []int{25}
+}
+func (m *GetVSchemasResponse) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *GetVSchemasResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_GetVSchemasResponse.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *GetVSchemasResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_GetVSchemasResponse.Merge(m, src)
+}
+func (m *GetVSchemasResponse) XXX_Size() int {
+	return m.Size()
+}
+func (m *GetVSchemasResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_GetVSchemasResponse.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_GetVSchemasResponse proto.InternalMessageInfo
+
+func (m *GetVSchemasResponse) GetVSchemas() []*VSchema {
+	if m != nil {
+		return m.VSchemas
+	}
+	return nil
+}
+
+type GetWorkflowRequest struct {
+	ClusterId            string   `protobuf:"bytes,1,opt,name=cluster_id,json=clusterId,proto3" json:"cluster_id,omitempty"`
+	Keyspace             string   `protobuf:"bytes,2,opt,name=keyspace,proto3" json:"keyspace,omitempty"`
+	Name                 string   `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
+	ActiveOnly           bool     `protobuf:"varint,4,opt,name=active_only,json=activeOnly,proto3" json:"active_only,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *GetWorkflowRequest) Reset()         { *m = GetWorkflowRequest{} }
+func (m *GetWorkflowRequest) String() string { return proto.CompactTextString(m) }
+func (*GetWorkflowRequest) ProtoMessage()    {}
+func (*GetWorkflowRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_609739e22a0a50b3, []int{26}
+}
+func (m *GetWorkflowRequest) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *GetWorkflowRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_GetWorkflowRequest.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *GetWorkflowRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_GetWorkflowRequest.Merge(m, src)
+}
+func (m *GetWorkflowRequest) XXX_Size() int {
+	return m.Size()
+}
+func (m *GetWorkflowRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_GetWorkflowRequest.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_GetWorkflowRequest proto.InternalMessageInfo
+
+func (m *GetWorkflowRequest) GetClusterId() string {
+	if m != nil {
+		return m.ClusterId
+	}
+	return ""
+}
+
+func (m *GetWorkflowRequest) GetKeyspace() string {
+	if m != nil {
+		return m.Keyspace
+	}
+	return ""
+}
+
+func (m *GetWorkflowRequest) GetName() string {
+	if m != nil {
+		return m.Name
+	}
+	return ""
+}
+
+func (m *GetWorkflowRequest) GetActiveOnly() bool {
+	if m != nil {
+		return m.ActiveOnly
+	}
+	return false
+}
+
+type GetWorkflowsRequest struct {
+	ClusterIds []string `protobuf:"bytes,1,rep,name=cluster_ids,json=clusterIds,proto3" json:"cluster_ids,omitempty"`
+	// ActiveOnly specifies whether to return workflows that are currently
+	// active (running or paused) instead of all workflows.
+	ActiveOnly bool `protobuf:"varint,2,opt,name=active_only,json=activeOnly,proto3" json:"active_only,omitempty"`
+	// Keyspaces is a list of keyspaces to restrict the workflow search to. Note
+	// that the keyspaces list applies across all cluster IDs in the request.
+	//
+	// If, for example, you have two clusters, each with a keyspace called "foo"
+	// and want the workflows from "foo" in cluster1 but not from cluster2, you
+	// must make two requests.
+	//
+	// Keyspaces and IgnoreKeyspaces are mutually-exclusive, and Keyspaces takes
+	// precedence; if Keyspaces is a non-empty list, then IgnoreKeyspaces is
+	// ignored completely.
+	Keyspaces []string `protobuf:"bytes,3,rep,name=keyspaces,proto3" json:"keyspaces,omitempty"`
+	// IgnoreKeyspaces is a list of keyspaces to skip during the workflow
+	// search. It has the same semantics as the Keyspaces parameter, so refer to
+	// that documentation for more details.
+	IgnoreKeyspaces      []string `protobuf:"bytes,4,rep,name=ignore_keyspaces,json=ignoreKeyspaces,proto3" json:"ignore_keyspaces,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *GetWorkflowsRequest) Reset()         { *m = GetWorkflowsRequest{} }
+func (m *GetWorkflowsRequest) String() string { return proto.CompactTextString(m) }
+func (*GetWorkflowsRequest) ProtoMessage()    {}
+func (*GetWorkflowsRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_609739e22a0a50b3, []int{27}
+}
+func (m *GetWorkflowsRequest) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *GetWorkflowsRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_GetWorkflowsRequest.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *GetWorkflowsRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_GetWorkflowsRequest.Merge(m, src)
+}
+func (m *GetWorkflowsRequest) XXX_Size() int {
+	return m.Size()
+}
+func (m *GetWorkflowsRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_GetWorkflowsRequest.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_GetWorkflowsRequest proto.InternalMessageInfo
+
+func (m *GetWorkflowsRequest) GetClusterIds() []string {
+	if m != nil {
+		return m.ClusterIds
+	}
+	return nil
+}
+
+func (m *GetWorkflowsRequest) GetActiveOnly() bool {
+	if m != nil {
+		return m.ActiveOnly
+	}
+	return false
+}
+
+func (m *GetWorkflowsRequest) GetKeyspaces() []string {
+	if m != nil {
+		return m.Keyspaces
+	}
+	return nil
+}
+
+func (m *GetWorkflowsRequest) GetIgnoreKeyspaces() []string {
+	if m != nil {
+		return m.IgnoreKeyspaces
+	}
+	return nil
+}
+
+type GetWorkflowsResponse struct {
+	WorkflowsByCluster   map[string]*ClusterWorkflows `protobuf:"bytes,1,rep,name=workflows_by_cluster,json=workflowsByCluster,proto3" json:"workflows_by_cluster,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
+	XXX_NoUnkeyedLiteral struct{}                     `json:"-"`
+	XXX_unrecognized     []byte                       `json:"-"`
+	XXX_sizecache        int32                        `json:"-"`
+}
+
+func (m *GetWorkflowsResponse) Reset()         { *m = GetWorkflowsResponse{} }
+func (m *GetWorkflowsResponse) String() string { return proto.CompactTextString(m) }
+func (*GetWorkflowsResponse) ProtoMessage()    {}
+func (*GetWorkflowsResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_609739e22a0a50b3, []int{28}
+}
+func (m *GetWorkflowsResponse) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *GetWorkflowsResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_GetWorkflowsResponse.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalToSizedBuffer(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *GetWorkflowsResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_GetWorkflowsResponse.Merge(m, src)
+}
+func (m *GetWorkflowsResponse) XXX_Size() int {
+	return m.Size()
+}
+func (m *GetWorkflowsResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_GetWorkflowsResponse.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_GetWorkflowsResponse proto.InternalMessageInfo
+
+func (m *GetWorkflowsResponse) GetWorkflowsByCluster() map[string]*ClusterWorkflows {
+	if m != nil {
+		return m.WorkflowsByCluster
+	}
+	return nil
+}
+
 type VTExplainRequest struct {
 	Cluster              string   `protobuf:"bytes,1,opt,name=cluster,proto3" json:"cluster,omitempty"`
 	Keyspace             string   `protobuf:"bytes,2,opt,name=keyspace,proto3" json:"keyspace,omitempty"`
@@ -1047,7 +1848,7 @@ func (m *VTExplainRequest) Reset()         { *m = VTExplainRequest{} }
 func (m *VTExplainRequest) String() string { return proto.CompactTextString(m) }
 func (*VTExplainRequest) ProtoMessage()    {}
 func (*VTExplainRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_609739e22a0a50b3, []int{18}
+	return fileDescriptor_609739e22a0a50b3, []int{29}
 }
 func (m *VTExplainRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1108,7 +1909,7 @@ func (m *VTExplainResponse) Reset()         { *m = VTExplainResponse{} }
 func (m *VTExplainResponse) String() string { return proto.CompactTextString(m) }
 func (*VTExplainResponse) ProtoMessage()    {}
 func (*VTExplainResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_609739e22a0a50b3, []int{19}
+	return fileDescriptor_609739e22a0a50b3, []int{30}
 }
 func (m *VTExplainResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -1147,12 +1948,20 @@ func (m *VTExplainResponse) GetResponse() string {
 func init() {
 	proto.RegisterEnum("vtadmin.Tablet_ServingState", Tablet_ServingState_name, Tablet_ServingState_value)
 	proto.RegisterType((*Cluster)(nil), "vtadmin.Cluster")
+	proto.RegisterType((*ClusterWorkflows)(nil), "vtadmin.ClusterWorkflows")
 	proto.RegisterType((*Keyspace)(nil), "vtadmin.Keyspace")
 	proto.RegisterMapType((map[string]*vtctldata.Shard)(nil), "vtadmin.Keyspace.ShardsEntry")
 	proto.RegisterType((*Schema)(nil), "vtadmin.Schema")
+	proto.RegisterMapType((map[string]*Schema_TableSize)(nil), "vtadmin.Schema.TableSizesEntry")
+	proto.RegisterType((*Schema_ShardTableSize)(nil), "vtadmin.Schema.ShardTableSize")
+	proto.RegisterType((*Schema_TableSize)(nil), "vtadmin.Schema.TableSize")
+	proto.RegisterMapType((map[string]*Schema_ShardTableSize)(nil), "vtadmin.Schema.TableSize.ByShardEntry")
 	proto.RegisterType((*Tablet)(nil), "vtadmin.Tablet")
+	proto.RegisterType((*VSchema)(nil), "vtadmin.VSchema")
 	proto.RegisterType((*Vtctld)(nil), "vtadmin.Vtctld")
 	proto.RegisterType((*VTGate)(nil), "vtadmin.VTGate")
+	proto.RegisterType((*Workflow)(nil), "vtadmin.Workflow")
+	proto.RegisterType((*FindSchemaRequest)(nil), "vtadmin.FindSchemaRequest")
 	proto.RegisterType((*GetClustersRequest)(nil), "vtadmin.GetClustersRequest")
 	proto.RegisterType((*GetClustersResponse)(nil), "vtadmin.GetClustersResponse")
 	proto.RegisterType((*GetGatesRequest)(nil), "vtadmin.GetGatesRequest")
@@ -1162,9 +1971,17 @@ func init() {
 	proto.RegisterType((*GetSchemaRequest)(nil), "vtadmin.GetSchemaRequest")
 	proto.RegisterType((*GetSchemasRequest)(nil), "vtadmin.GetSchemasRequest")
 	proto.RegisterType((*GetSchemasResponse)(nil), "vtadmin.GetSchemasResponse")
+	proto.RegisterType((*GetSchemaTableSizeOptions)(nil), "vtadmin.GetSchemaTableSizeOptions")
 	proto.RegisterType((*GetTabletRequest)(nil), "vtadmin.GetTabletRequest")
 	proto.RegisterType((*GetTabletsRequest)(nil), "vtadmin.GetTabletsRequest")
 	proto.RegisterType((*GetTabletsResponse)(nil), "vtadmin.GetTabletsResponse")
+	proto.RegisterType((*GetVSchemaRequest)(nil), "vtadmin.GetVSchemaRequest")
+	proto.RegisterType((*GetVSchemasRequest)(nil), "vtadmin.GetVSchemasRequest")
+	proto.RegisterType((*GetVSchemasResponse)(nil), "vtadmin.GetVSchemasResponse")
+	proto.RegisterType((*GetWorkflowRequest)(nil), "vtadmin.GetWorkflowRequest")
+	proto.RegisterType((*GetWorkflowsRequest)(nil), "vtadmin.GetWorkflowsRequest")
+	proto.RegisterType((*GetWorkflowsResponse)(nil), "vtadmin.GetWorkflowsResponse")
+	proto.RegisterMapType((map[string]*ClusterWorkflows)(nil), "vtadmin.GetWorkflowsResponse.WorkflowsByClusterEntry")
 	proto.RegisterType((*VTExplainRequest)(nil), "vtadmin.VTExplainRequest")
 	proto.RegisterType((*VTExplainResponse)(nil), "vtadmin.VTExplainResponse")
 }
@@ -1172,63 +1989,101 @@ func init() {
 func init() { proto.RegisterFile("vtadmin.proto", fileDescriptor_609739e22a0a50b3) }
 
 var fileDescriptor_609739e22a0a50b3 = []byte{
-	// 886 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x94, 0x56, 0xdd, 0x6e, 0xe3, 0x44,
-	0x14, 0x8e, 0x93, 0xe6, 0xc7, 0xc7, 0x4b, 0xeb, 0xce, 0x56, 0xc2, 0x78, 0xdb, 0x52, 0x8d, 0x00,
-	0x05, 0x04, 0xb1, 0x14, 0x60, 0x45, 0xb9, 0x41, 0xcb, 0x6e, 0x15, 0x2d, 0x15, 0x09, 0x72, 0x42,
-	0x90, 0xf6, 0xa6, 0xf2, 0xc6, 0x43, 0x6a, 0xad, 0x63, 0x67, 0x33, 0xd3, 0x88, 0xbe, 0x08, 0xe2,
-	0x96, 0x87, 0xe0, 0x1d, 0xb8, 0x41, 0xe2, 0x11, 0x50, 0xb9, 0xe4, 0x25, 0x90, 0xe7, 0x2f, 0xfe,
-	0xc9, 0x76, 0xdb, 0xbb, 0x99, 0xf3, 0xf7, 0x7d, 0xdf, 0x9c, 0x73, 0x9c, 0xc0, 0x3b, 0x6b, 0x16,
-	0x84, 0x8b, 0x28, 0xe9, 0x2d, 0x57, 0x29, 0x4b, 0x51, 0x5b, 0x5e, 0xdd, 0x77, 0x59, 0xf0, 0x32,
-	0x26, 0x6c, 0x11, 0x24, 0xc1, 0x9c, 0xac, 0xc2, 0x80, 0x05, 0x22, 0xc2, 0xdd, 0x65, 0xe9, 0x32,
-	0xcd, 0xdd, 0xf7, 0xd6, 0x6c, 0xc6, 0xe2, 0x8d, 0x01, 0x7f, 0x06, 0xed, 0xa7, 0xf1, 0x15, 0x65,
-	0x64, 0x85, 0x76, 0xa1, 0x1e, 0x85, 0x8e, 0x71, 0x62, 0x74, 0x4d, 0xbf, 0x1e, 0x85, 0x08, 0xc1,
-	0x4e, 0x12, 0x2c, 0x88, 0x53, 0xe7, 0x16, 0x7e, 0xc6, 0xff, 0x19, 0xd0, 0x39, 0x27, 0xd7, 0x74,
-	0x19, 0xcc, 0x08, 0xfa, 0x04, 0xda, 0x33, 0x91, 0xcb, 0xb3, 0xac, 0xbe, 0xdd, 0x53, 0xfc, 0x64,
-	0x4d, 0x5f, 0x05, 0x20, 0x0f, 0x3a, 0xaf, 0x64, 0x1e, 0x2f, 0x68, 0xf5, 0x1f, 0xf6, 0x36, 0x5c,
-	0x54, 0x49, 0x5f, 0x07, 0xa1, 0x2f, 0xa1, 0x45, 0x2f, 0x83, 0x55, 0x48, 0x9d, 0xc6, 0x49, 0xa3,
-	0x6b, 0xf5, 0x8f, 0x74, 0x6d, 0x15, 0xdc, 0x1b, 0x73, 0xff, 0x59, 0xc2, 0x56, 0xd7, 0xbe, 0x0c,
-	0x76, 0xcf, 0xc1, 0xca, 0x99, 0x91, 0x0d, 0x8d, 0x57, 0xe4, 0x5a, 0x8a, 0xca, 0x8e, 0xe8, 0x23,
-	0x68, 0xae, 0x83, 0xf8, 0x4a, 0xb1, 0xb0, 0x73, 0x2c, 0x78, 0xa2, 0x2f, 0xdc, 0x5f, 0xd7, 0xbf,
-	0x32, 0xf0, 0xef, 0x06, 0xb4, 0xc6, 0xb3, 0x4b, 0xb2, 0x08, 0xee, 0xa5, 0xd5, 0x2d, 0x69, 0x35,
-	0x73, 0xb2, 0x46, 0xb0, 0xcf, 0x7b, 0x75, 0x11, 0x92, 0x9f, 0xa3, 0x24, 0x62, 0x51, 0x9a, 0x28,
-	0x85, 0xb8, 0x57, 0xed, 0xe2, 0x24, 0xb3, 0x3c, 0xd3, 0xa1, 0xbe, 0xcd, 0x8a, 0x06, 0x8a, 0xff,
-	0x32, 0xa0, 0xc5, 0xa3, 0xd8, 0xbd, 0x38, 0x76, 0xa1, 0x25, 0xd0, 0xf4, 0x3b, 0xe8, 0x49, 0x11,
-	0xd5, 0x7c, 0xe9, 0x47, 0x7d, 0x68, 0x52, 0x16, 0x30, 0xe2, 0x34, 0x4e, 0x8c, 0xee, 0x6e, 0xff,
-	0x50, 0xd7, 0x14, 0x71, 0xbd, 0x31, 0x59, 0xad, 0xa3, 0x64, 0x3e, 0xce, 0x62, 0x7c, 0x11, 0x8a,
-	0x4f, 0xe1, 0x41, 0xde, 0x8c, 0x2c, 0x68, 0xff, 0x38, 0x3c, 0x1f, 0x8e, 0x7e, 0x1a, 0xda, 0xb5,
-	0xec, 0x32, 0x3e, 0xf3, 0xa7, 0xcf, 0x87, 0x03, 0xdb, 0x40, 0x7b, 0x60, 0x0d, 0x47, 0x93, 0x0b,
-	0x65, 0xa8, 0xe3, 0x1f, 0xa0, 0x35, 0xe5, 0x1d, 0xc9, 0x9e, 0xf1, 0x32, 0xa5, 0x8c, 0xcf, 0xa0,
-	0x68, 0xa0, 0xbe, 0xe7, 0xa5, 0xd6, 0xdf, 0x22, 0x15, 0xff, 0x6a, 0x40, 0x6b, 0x3a, 0x19, 0x64,
-	0x3c, 0x6e, 0x2b, 0x89, 0x60, 0x67, 0x99, 0xa6, 0xb1, 0x1a, 0xf7, 0xec, 0x9c, 0xd9, 0x66, 0x24,
-	0x8e, 0xb9, 0x74, 0xd3, 0xe7, 0xe7, 0x3c, 0xf4, 0xce, 0xdb, 0x5e, 0xf9, 0x10, 0x4c, 0xd5, 0x79,
-	0xea, 0x34, 0x4f, 0x1a, 0x5d, 0xd3, 0xdf, 0x18, 0xf0, 0x01, 0xa0, 0x01, 0x61, 0x32, 0x89, 0xfa,
-	0xe4, 0xf5, 0x15, 0xa1, 0x0c, 0x3f, 0x85, 0x87, 0x05, 0x2b, 0x5d, 0xa6, 0x09, 0x25, 0xe8, 0x53,
-	0xe8, 0xc8, 0xaa, 0xd4, 0x31, 0xf8, 0xbc, 0x54, 0x71, 0x75, 0x04, 0xee, 0xc3, 0xde, 0x80, 0xb0,
-	0x4c, 0xb3, 0xaa, 0x8b, 0xde, 0x07, 0x4b, 0xba, 0x2f, 0xa2, 0x50, 0xd4, 0x30, 0x7d, 0x90, 0xa6,
-	0xe7, 0x21, 0xc5, 0xa7, 0x60, 0x6f, 0x72, 0x24, 0xea, 0x87, 0xd0, 0x9c, 0x67, 0x06, 0x09, 0xb9,
-	0xa7, 0x21, 0xc5, 0x83, 0xfa, 0xc2, 0x8b, 0x1f, 0x73, 0xce, 0x6a, 0x31, 0xef, 0x0e, 0x39, 0x80,
-	0x83, 0x62, 0x9e, 0x84, 0xf5, 0xf2, 0xef, 0x26, 0xa0, 0xf7, 0x2b, 0xfb, 0x9f, 0x7f, 0xca, 0x19,
-	0xe7, 0x2e, 0x76, 0x55, 0xa1, 0x1f, 0x01, 0x6c, 0xd0, 0x65, 0xbb, 0x4d, 0x0d, 0x7e, 0xeb, 0x96,
-	0x1e, 0x40, 0x93, 0x4f, 0xbf, 0x6c, 0xbc, 0xb8, 0xe0, 0x2f, 0x60, 0x5f, 0x83, 0xdc, 0x5d, 0xe3,
-	0x37, 0xbc, 0xcb, 0x3a, 0x4b, 0x2a, 0xfc, 0x18, 0xda, 0x54, 0x98, 0x2a, 0x4f, 0x2b, 0x55, 0x28,
-	0x3f, 0x1e, 0x71, 0x6d, 0x72, 0x2b, 0x25, 0xea, 0x6d, 0x83, 0x5c, 0x62, 0x54, 0xaf, 0x30, 0x12,
-	0x3a, 0x44, 0xc1, 0xfb, 0xea, 0xd0, 0x59, 0x1b, 0x1d, 0xe2, 0x3b, 0x51, 0xd5, 0x21, 0x19, 0x2b,
-	0x3f, 0x7e, 0x01, 0xf6, 0x74, 0x72, 0xf6, 0xcb, 0x32, 0x0e, 0xa2, 0x44, 0xa1, 0x3a, 0xc5, 0x4f,
-	0x96, 0x79, 0xb7, 0x8f, 0xa8, 0x0d, 0x0d, 0xfa, 0x5a, 0x6d, 0x65, 0x76, 0xc4, 0x1e, 0xec, 0xe7,
-	0x6a, 0x4b, 0x6e, 0x2e, 0x74, 0x56, 0xf2, 0xac, 0x1e, 0x49, 0xdd, 0xfb, 0x7f, 0xec, 0x40, 0x7b,
-	0x3a, 0x79, 0x92, 0x11, 0x45, 0xdf, 0x81, 0x95, 0xdb, 0x38, 0xf4, 0x48, 0x2b, 0xa8, 0x6e, 0xa7,
-	0x7b, 0xb8, 0xdd, 0x29, 0xaa, 0xe2, 0x1a, 0x7a, 0x02, 0x1d, 0xb5, 0x44, 0xc8, 0xc9, 0xc7, 0xe6,
-	0x77, 0xd1, 0x7d, 0x6f, 0x8b, 0x47, 0x97, 0xf8, 0x1e, 0x1e, 0xe4, 0x97, 0x02, 0x15, 0x20, 0xcb,
-	0x3b, 0xe6, 0x1e, 0xbd, 0xc1, 0xab, 0xcb, 0x9d, 0x82, 0xa9, 0xe7, 0x0f, 0x15, 0x80, 0x0b, 0xeb,
-	0xe2, 0x96, 0x07, 0x10, 0xd7, 0xd0, 0x00, 0x60, 0x33, 0xba, 0xc8, 0xad, 0xe6, 0x6a, 0x16, 0x8f,
-	0xb6, 0xfa, 0x4a, 0x1c, 0xe4, 0xcf, 0x54, 0x81, 0x43, 0x61, 0xac, 0xdd, 0xf2, 0xf0, 0x68, 0x0e,
-	0x72, 0xec, 0x8a, 0x1c, 0x8a, 0x13, 0x5c, 0xe4, 0x50, 0x9a, 0x53, 0x5c, 0x43, 0xcf, 0xc0, 0xd4,
-	0x23, 0x92, 0xe3, 0x50, 0x1e, 0x49, 0xd7, 0xdd, 0xe6, 0x52, 0x55, 0xbe, 0x7d, 0xfc, 0xe7, 0xcd,
-	0xb1, 0xf1, 0xf7, 0xcd, 0xb1, 0xf1, 0xcf, 0xcd, 0xb1, 0xf1, 0xdb, 0xbf, 0xc7, 0xb5, 0x17, 0x1f,
-	0xac, 0x23, 0x46, 0x28, 0xed, 0x45, 0xa9, 0x27, 0x4e, 0xde, 0x3c, 0xf5, 0xd6, 0xcc, 0xe3, 0xff,
-	0xaf, 0x3c, 0x59, 0xeb, 0x65, 0x8b, 0x5f, 0x3f, 0xff, 0x3f, 0x00, 0x00, 0xff, 0xff, 0x8c, 0x9e,
-	0x12, 0x81, 0xc2, 0x09, 0x00, 0x00,
+	// 1498 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xac, 0x58, 0x5f, 0x6f, 0xdb, 0x54,
+	0x14, 0xaf, 0x93, 0xb4, 0x89, 0x4f, 0xb6, 0x26, 0xbd, 0xab, 0xb4, 0xd4, 0xed, 0xba, 0xea, 0x0a,
+	0x46, 0x87, 0x58, 0x22, 0x85, 0x6d, 0x62, 0x0c, 0x69, 0xec, 0x1f, 0xd1, 0x18, 0xa4, 0x93, 0x5b,
+	0x32, 0xb4, 0x17, 0xe3, 0x26, 0x5e, 0x6a, 0xcd, 0xb5, 0x33, 0xfb, 0x36, 0x21, 0xbc, 0x21, 0x10,
+	0x4f, 0x3c, 0x23, 0x1e, 0x78, 0xe0, 0x4b, 0xf0, 0x1d, 0x78, 0x41, 0xe2, 0x23, 0xc0, 0x78, 0x41,
+	0xe2, 0x0b, 0xf0, 0x88, 0x7c, 0xff, 0xf9, 0xda, 0x4e, 0xba, 0x96, 0xed, 0xcd, 0xf7, 0x9c, 0xe3,
+	0x73, 0x7e, 0xf7, 0xf8, 0x77, 0x7f, 0xe7, 0x26, 0x70, 0x76, 0x4c, 0xec, 0xc1, 0xa1, 0xeb, 0x37,
+	0x47, 0x61, 0x40, 0x02, 0x54, 0xe6, 0x4b, 0xe3, 0x3c, 0xb1, 0xf7, 0x3d, 0x87, 0x1c, 0xda, 0xbe,
+	0x3d, 0x74, 0xc2, 0x81, 0x4d, 0x6c, 0x16, 0x61, 0x2c, 0x93, 0x60, 0x14, 0x28, 0xeb, 0xb3, 0xe3,
+	0xa8, 0x7f, 0xe0, 0x1c, 0x8a, 0x65, 0x6d, 0x4c, 0xfa, 0xc4, 0x4b, 0xfc, 0xf8, 0x0a, 0x94, 0xef,
+	0x7a, 0x47, 0x11, 0x71, 0x42, 0xb4, 0x0c, 0x05, 0x77, 0xd0, 0xd0, 0xb6, 0xb4, 0x6d, 0xdd, 0x2c,
+	0xb8, 0x03, 0x84, 0xa0, 0xe4, 0xdb, 0x87, 0x4e, 0xa3, 0x40, 0x2d, 0xf4, 0x19, 0x5b, 0x50, 0xe7,
+	0xe1, 0x8f, 0x83, 0xf0, 0xd9, 0x53, 0x2f, 0x98, 0x44, 0xa8, 0x05, 0xfa, 0x44, 0x2c, 0x1a, 0xda,
+	0x56, 0x71, 0xbb, 0xda, 0x5e, 0x69, 0x0a, 0xdc, 0x22, 0xcc, 0x4c, 0x62, 0x90, 0x01, 0x95, 0x89,
+	0x1d, 0xfa, 0xae, 0x3f, 0x8c, 0x1a, 0x85, 0xad, 0xe2, 0xb6, 0x6e, 0xca, 0x35, 0xfe, 0x47, 0x83,
+	0xca, 0x43, 0x67, 0x1a, 0x8d, 0xec, 0xbe, 0x83, 0xde, 0x86, 0x72, 0x9f, 0x55, 0xa3, 0xb0, 0xaa,
+	0xed, 0xba, 0xcc, 0xcb, 0x51, 0x98, 0x22, 0x00, 0xb5, 0xa0, 0xf2, 0x8c, 0xbf, 0x47, 0x11, 0x57,
+	0xdb, 0xe7, 0x9a, 0xc9, 0x66, 0x45, 0x4a, 0x53, 0x06, 0xa1, 0x6b, 0xb0, 0x14, 0x1d, 0xd8, 0xe1,
+	0x20, 0x6a, 0x14, 0x29, 0xe6, 0x0b, 0x32, 0xb7, 0x08, 0x6e, 0xee, 0x52, 0xff, 0x7d, 0x9f, 0x84,
+	0x53, 0x93, 0x07, 0x1b, 0x0f, 0xa1, 0xaa, 0x98, 0x51, 0x1d, 0x8a, 0xcf, 0x9c, 0x29, 0xef, 0x5a,
+	0xfc, 0x88, 0x2e, 0xc1, 0xe2, 0xd8, 0xf6, 0x8e, 0x04, 0x8a, 0xba, 0x82, 0x82, 0xbe, 0x68, 0x32,
+	0xf7, 0xfb, 0x85, 0xf7, 0x34, 0xfc, 0x6f, 0x09, 0x96, 0x76, 0xe9, 0xf7, 0x39, 0xd5, 0x5e, 0x8d,
+	0xcc, 0x5e, 0x75, 0x65, 0x5b, 0x3b, 0xb0, 0x42, 0xb9, 0x61, 0x0d, 0x9c, 0xa7, 0xae, 0xef, 0x12,
+	0x37, 0xf0, 0xc5, 0x0e, 0x71, 0x33, 0xcf, 0x9a, 0xbd, 0xd8, 0x72, 0x4f, 0x86, 0x9a, 0x75, 0x92,
+	0x36, 0x44, 0xe8, 0x43, 0xa8, 0xb2, 0x84, 0x91, 0xfb, 0x95, 0x13, 0x35, 0x4a, 0x34, 0xd5, 0x45,
+	0x09, 0x8e, 0xc1, 0x67, 0x79, 0x76, 0xe3, 0x08, 0xd6, 0x2e, 0x20, 0xd2, 0x60, 0x7c, 0x0e, 0xb5,
+	0x8c, 0x7b, 0x46, 0xdb, 0x5a, 0xe9, 0xb6, 0xad, 0xcd, 0x2d, 0xa0, 0xf4, 0xcf, 0xe8, 0xc2, 0x32,
+	0xed, 0xa9, 0x74, 0xa2, 0x75, 0xd0, 0xc3, 0x60, 0x62, 0xf5, 0x83, 0x23, 0x9f, 0xd0, 0xf4, 0x25,
+	0xb3, 0x12, 0x06, 0x93, 0xbb, 0xf1, 0x1a, 0x5d, 0x84, 0x6a, 0xbc, 0x69, 0xcb, 0x73, 0xfc, 0x21,
+	0x39, 0xa0, 0x95, 0x4a, 0x26, 0xc4, 0xa6, 0x4f, 0xa8, 0xc5, 0xf8, 0x5b, 0x03, 0xfd, 0x35, 0xe5,
+	0x42, 0xb7, 0xa1, 0xb2, 0x3f, 0xb5, 0x28, 0x6b, 0x78, 0xff, 0x2f, 0xcd, 0xdd, 0x53, 0xf3, 0xce,
+	0x94, 0xee, 0x83, 0xf5, 0xae, 0xbc, 0xcf, 0x56, 0xc6, 0x13, 0x38, 0xa3, 0x3a, 0x66, 0x74, 0xed,
+	0x6a, 0xba, 0x6b, 0x9b, 0xd9, 0x0a, 0xe9, 0xee, 0xa8, 0xd4, 0xfb, 0x4d, 0x83, 0x25, 0xea, 0x20,
+	0xa7, 0xa2, 0xde, 0x36, 0x2c, 0x31, 0x12, 0x49, 0x7a, 0x4b, 0xc1, 0x61, 0xd9, 0x4c, 0xee, 0x47,
+	0x6d, 0x58, 0x8c, 0x88, 0x4d, 0x9c, 0x46, 0x71, 0x4b, 0xdb, 0x5e, 0x6e, 0x6f, 0xc8, 0x9c, 0x2c,
+	0xae, 0xb9, 0xeb, 0x84, 0x63, 0xd7, 0x1f, 0xee, 0xc6, 0x31, 0x26, 0x0b, 0xc5, 0x37, 0xe0, 0x8c,
+	0x6a, 0x46, 0x55, 0x28, 0x7f, 0xd6, 0x7d, 0xd8, 0xdd, 0x79, 0xdc, 0xad, 0x2f, 0xc4, 0x8b, 0xdd,
+	0xfb, 0x66, 0xef, 0x41, 0xb7, 0x53, 0xd7, 0x50, 0x0d, 0xaa, 0xdd, 0x9d, 0x3d, 0x4b, 0x18, 0x0a,
+	0x78, 0x02, 0xe5, 0xde, 0xff, 0x38, 0x4a, 0x33, 0x44, 0x0e, 0xbd, 0x03, 0x95, 0xb1, 0xc5, 0x64,
+	0x93, 0x82, 0xa7, 0x7a, 0xc6, 0x65, 0x54, 0x0a, 0x49, 0x79, 0xcc, 0xaa, 0xe1, 0x47, 0xb0, 0xd4,
+	0xa3, 0x27, 0x3c, 0x3e, 0x96, 0x07, 0x41, 0x44, 0x68, 0x3e, 0xf6, 0x8d, 0xe4, 0x5a, 0xc5, 0x54,
+	0x78, 0x09, 0x26, 0xfc, 0x83, 0x06, 0x4b, 0xbd, 0xbd, 0x4e, 0xdc, 0x80, 0xe3, 0x52, 0x22, 0x28,
+	0x8d, 0x82, 0xc0, 0x13, 0xd0, 0xe3, 0xe7, 0xd8, 0xd6, 0x77, 0x3c, 0x8f, 0xc2, 0xd6, 0x4d, 0xfa,
+	0xac, 0x96, 0x2e, 0xbd, 0xac, 0x1d, 0x1b, 0xa0, 0x0b, 0x25, 0x89, 0x1a, 0x8b, 0x54, 0x9b, 0x13,
+	0x03, 0xfe, 0x46, 0x83, 0x8a, 0x10, 0xf4, 0xd7, 0x26, 0x58, 0x2d, 0xa8, 0x88, 0xd1, 0xc0, 0xbb,
+	0xad, 0x0a, 0xb7, 0x9c, 0x1f, 0x32, 0x08, 0xff, 0xa4, 0xc1, 0xca, 0x47, 0xae, 0x3f, 0x60, 0xfd,
+	0x37, 0x9d, 0xe7, 0x47, 0x4e, 0x44, 0xd0, 0x2a, 0x2c, 0x52, 0xe2, 0xf1, 0x36, 0xb1, 0x45, 0x7c,
+	0x4a, 0x39, 0x06, 0xcb, 0x1d, 0x88, 0x69, 0x03, 0xdc, 0xf4, 0x60, 0x10, 0xa1, 0x47, 0x80, 0x12,
+	0x75, 0xb3, 0x82, 0x91, 0xd0, 0x4b, 0x8d, 0xea, 0xa5, 0xd8, 0x50, 0xc7, 0x21, 0xac, 0x9a, 0x3c,
+	0x4a, 0x3b, 0x2c, 0x92, 0xeb, 0xa5, 0x62, 0xc1, 0xab, 0x80, 0x3a, 0x0e, 0xe1, 0x2d, 0x88, 0x38,
+	0x3c, 0x7c, 0x17, 0xce, 0xa5, 0xac, 0xd1, 0x28, 0xf0, 0x23, 0x4a, 0x35, 0x0e, 0x46, 0x8c, 0xce,
+	0x7c, 0x17, 0x65, 0x04, 0x6e, 0x43, 0xad, 0xe3, 0x90, 0x98, 0x18, 0x22, 0x6f, 0x76, 0x83, 0x5a,
+	0x76, 0x83, 0xf8, 0x06, 0xd4, 0x93, 0x77, 0x78, 0xd5, 0x37, 0x61, 0x71, 0x18, 0x1b, 0x78, 0xc9,
+	0x9a, 0x2c, 0xc9, 0x58, 0x67, 0x32, 0x2f, 0xbe, 0x4e, 0x31, 0x0b, 0xc6, 0x9f, 0xbc, 0x64, 0x07,
+	0x56, 0xd3, 0xef, 0xf1, 0xb2, 0x2d, 0x95, 0x5c, 0xd9, 0x8b, 0x82, 0x3c, 0x58, 0x0a, 0xdf, 0x7e,
+	0xd1, 0x28, 0xf8, 0xf4, 0x87, 0xbe, 0x00, 0x90, 0x94, 0xe7, 0x5f, 0x5b, 0x97, 0xd5, 0x8f, 0xa5,
+	0x9a, 0xe4, 0x48, 0x51, 0xe5, 0xc8, 0x6c, 0x0a, 0x94, 0x5e, 0x81, 0x02, 0xdf, 0x69, 0xb0, 0x22,
+	0xe3, 0x4f, 0xdc, 0xb7, 0x39, 0x40, 0x0a, 0xaf, 0x00, 0xe4, 0x16, 0xe5, 0xa2, 0xc4, 0xc1, 0xbf,
+	0xc3, 0x65, 0x28, 0x33, 0x35, 0xcb, 0x13, 0x80, 0xb7, 0x5a, 0xf8, 0xf1, 0xd7, 0x1a, 0xac, 0xcd,
+	0x2d, 0x88, 0xde, 0x82, 0x9a, 0x3d, 0x1c, 0x86, 0x4e, 0x4c, 0x17, 0x7e, 0x3d, 0x88, 0xbf, 0x47,
+	0xc5, 0x5c, 0x96, 0x66, 0x3a, 0xf3, 0xd1, 0x4d, 0x30, 0x5c, 0xbf, 0xef, 0x1d, 0x0d, 0x1c, 0xcb,
+	0x0f, 0x7c, 0x2b, 0x62, 0x1a, 0x6f, 0xf1, 0xfb, 0x57, 0x81, 0xbe, 0x73, 0x9e, 0x47, 0x74, 0x03,
+	0x5f, 0xcc, 0x00, 0xea, 0xc6, 0x3b, 0x94, 0x04, 0x7c, 0xba, 0xf0, 0x5e, 0x1e, 0xa7, 0x8b, 0x2f,
+	0x3b, 0xf3, 0xf8, 0x2a, 0xfd, 0x3a, 0x2c, 0xe1, 0xc9, 0x59, 0xcd, 0x7a, 0x29, 0xdf, 0x4a, 0x7a,
+	0xc9, 0xe6, 0x5d, 0xbe, 0x97, 0x1c, 0xb1, 0xf0, 0xe3, 0x2e, 0x2d, 0xdb, 0x7b, 0x5d, 0x6c, 0xc6,
+	0xd7, 0x28, 0xa0, 0xde, 0x29, 0x59, 0x86, 0xef, 0xd1, 0x53, 0xdd, 0xcb, 0x92, 0xe2, 0x0a, 0xe8,
+	0x62, 0xe8, 0xe5, 0xa5, 0x48, 0x80, 0xae, 0xf0, 0xa1, 0x17, 0xe1, 0x6f, 0x35, 0x5a, 0x5d, 0xca,
+	0xf3, 0xab, 0x1f, 0x4e, 0x31, 0x89, 0x8b, 0xca, 0x24, 0xbe, 0x08, 0x55, 0xbb, 0x4f, 0xdc, 0xb1,
+	0x63, 0x05, 0xbe, 0x37, 0xa5, 0x67, 0xb2, 0x62, 0x02, 0x33, 0xed, 0xf8, 0xde, 0x14, 0xff, 0xac,
+	0xd1, 0xdd, 0xc8, 0x1f, 0x23, 0x27, 0x3e, 0x6b, 0x99, 0xcc, 0x85, 0x6c, 0xe6, 0xf4, 0x24, 0x2c,
+	0x66, 0x26, 0x21, 0xba, 0x0c, 0x75, 0x77, 0xe8, 0x07, 0xa1, 0x63, 0x25, 0x41, 0x25, 0x1a, 0x54,
+	0x63, 0x76, 0xa9, 0x7e, 0xf8, 0x4f, 0x8d, 0xca, 0xa1, 0x02, 0x91, 0x77, 0x7c, 0x08, 0xab, 0xf2,
+	0x37, 0x91, 0xb5, 0x3f, 0xb5, 0x92, 0x69, 0x1a, 0x37, 0xff, 0x9a, 0x7a, 0xe0, 0x73, 0x2f, 0xcb,
+	0xb9, 0x18, 0xdd, 0x99, 0xf2, 0x39, 0xc1, 0xee, 0x8e, 0x68, 0x92, 0x73, 0x18, 0x5f, 0xc0, 0xf9,
+	0x39, 0xe1, 0xa7, 0xb9, 0x87, 0x67, 0x7f, 0xf7, 0xa9, 0x97, 0xc9, 0x27, 0x50, 0xef, 0xed, 0xdd,
+	0xff, 0x72, 0xe4, 0xd9, 0xae, 0x2f, 0x3e, 0x41, 0x23, 0x7d, 0x3f, 0xd0, 0x4f, 0x76, 0x1b, 0xa8,
+	0x43, 0x31, 0x7a, 0x2e, 0xee, 0x2f, 0xf1, 0x23, 0x6e, 0xc1, 0x8a, 0x92, 0x9b, 0xf7, 0xce, 0x80,
+	0x4a, 0xc8, 0x9f, 0xc5, 0xf9, 0x17, 0xeb, 0xf6, 0xf7, 0x65, 0x28, 0xf7, 0xf6, 0x6e, 0xc7, 0xa0,
+	0xd1, 0x4d, 0x80, 0xe4, 0xaa, 0x80, 0x0c, 0xb9, 0x99, 0xdc, 0xfd, 0xc1, 0xc8, 0x6a, 0x20, 0x5e,
+	0x40, 0x1f, 0x43, 0x55, 0x99, 0xd9, 0x68, 0x5d, 0xfd, 0x22, 0x99, 0xf9, 0x6e, 0x6c, 0xcc, 0x76,
+	0x32, 0x48, 0x78, 0x21, 0xfe, 0x35, 0x20, 0xc6, 0x30, 0x6a, 0xa8, 0xb1, 0xea, 0x34, 0x37, 0xd6,
+	0x66, 0x78, 0x64, 0x8a, 0x4f, 0xe1, 0x8c, 0x3a, 0x56, 0x51, 0xaa, 0x64, 0x76, 0x4a, 0x1b, 0x17,
+	0xe6, 0x78, 0x65, 0xba, 0x1b, 0xa0, 0x4b, 0x65, 0x47, 0x6b, 0xf9, 0xf1, 0x72, 0x4c, 0x63, 0x3a,
+	0x00, 0xc9, 0x58, 0x51, 0xba, 0x9a, 0x9b, 0x79, 0xc6, 0xfa, 0x4c, 0x5f, 0x06, 0x03, 0xff, 0x19,
+	0x92, 0xc2, 0x90, 0x92, 0x7b, 0x23, 0x2b, 0xaa, 0x12, 0x03, 0x97, 0xe3, 0x34, 0x86, 0xb4, 0xb2,
+	0xa7, 0x31, 0x64, 0xf4, 0x1b, 0x2f, 0xa0, 0x0f, 0x68, 0xa2, 0x5e, 0x8e, 0x22, 0x39, 0xad, 0x36,
+	0x72, 0x7a, 0x28, 0x39, 0x22, 0xd4, 0x34, 0xcd, 0x91, 0x8c, 0x34, 0xa7, 0x39, 0xd2, 0xcb, 0x77,
+	0xe3, 0x16, 0xcd, 0x25, 0x2f, 0xd8, 0xeb, 0xb3, 0x14, 0x40, 0xe4, 0xca, 0xff, 0xc3, 0x22, 0x19,
+	0x92, 0xfc, 0x33, 0xb3, 0x31, 0x47, 0x43, 0x66, 0x30, 0x24, 0xa7, 0x30, 0x78, 0x01, 0xdd, 0x03,
+	0x5d, 0x9e, 0x3c, 0xe5, 0xeb, 0x64, 0x4f, 0xba, 0x61, 0xcc, 0x72, 0x89, 0x2c, 0x77, 0xae, 0xff,
+	0xfa, 0x62, 0x53, 0xfb, 0xfd, 0xc5, 0xa6, 0xf6, 0xc7, 0x8b, 0x4d, 0xed, 0xc7, 0xbf, 0x36, 0x17,
+	0x9e, 0xbc, 0x31, 0x76, 0x89, 0x13, 0x45, 0x4d, 0x37, 0x68, 0xb1, 0xa7, 0xd6, 0x30, 0x68, 0x8d,
+	0x49, 0x8b, 0xfe, 0x23, 0xd5, 0xe2, 0xb9, 0xf6, 0x97, 0xe8, 0xf2, 0xdd, 0xff, 0x02, 0x00, 0x00,
+	0xff, 0xff, 0xc7, 0xf9, 0x61, 0x16, 0x03, 0x13, 0x00, 0x00,
 }
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -1243,6 +2098,13 @@ const _ = grpc.SupportPackageIsVersion4
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://godoc.org/google.golang.org/grpc#ClientConn.NewStream.
 type VTAdminClient interface {
+	// FindSchema returns a single Schema that matches the provided table name
+	// across all specified clusters IDs. Not specifying a set of cluster IDs
+	// causes the search to span all configured clusters.
+	//
+	// An error occurs if either no table exists across any of the clusters with
+	// the specified table name, or if multiple tables exist with that name.
+	FindSchema(ctx context.Context, in *FindSchemaRequest, opts ...grpc.CallOption) (*Schema, error)
 	// GetClusters returns all configured clusters.
 	GetClusters(ctx context.Context, in *GetClustersRequest, opts ...grpc.CallOption) (*GetClustersResponse, error)
 	// GetGates returns all gates across all the specified clusters.
@@ -1259,6 +2121,16 @@ type VTAdminClient interface {
 	GetTablet(ctx context.Context, in *GetTabletRequest, opts ...grpc.CallOption) (*Tablet, error)
 	// GetTablets returns all tablets across all the specified clusters.
 	GetTablets(ctx context.Context, in *GetTabletsRequest, opts ...grpc.CallOption) (*GetTabletsResponse, error)
+	// GetVSchema returns a VSchema for the specified keyspace in the specified
+	// cluster.
+	GetVSchema(ctx context.Context, in *GetVSchemaRequest, opts ...grpc.CallOption) (*VSchema, error)
+	// GetVSchemas returns the VSchemas for all specified clusters.
+	GetVSchemas(ctx context.Context, in *GetVSchemasRequest, opts ...grpc.CallOption) (*GetVSchemasResponse, error)
+	// GetWorkflow returns a single Workflow for a given cluster, keyspace, and
+	// workflow name.
+	GetWorkflow(ctx context.Context, in *GetWorkflowRequest, opts ...grpc.CallOption) (*Workflow, error)
+	// GetWorkflows returns the Workflows for all specified clusters.
+	GetWorkflows(ctx context.Context, in *GetWorkflowsRequest, opts ...grpc.CallOption) (*GetWorkflowsResponse, error)
 	// VTExplain provides information on how Vitess plans to execute a particular query.
 	VTExplain(ctx context.Context, in *VTExplainRequest, opts ...grpc.CallOption) (*VTExplainResponse, error)
 }
@@ -1269,6 +2141,15 @@ type vTAdminClient struct {
 
 func NewVTAdminClient(cc *grpc.ClientConn) VTAdminClient {
 	return &vTAdminClient{cc}
+}
+
+func (c *vTAdminClient) FindSchema(ctx context.Context, in *FindSchemaRequest, opts ...grpc.CallOption) (*Schema, error) {
+	out := new(Schema)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/FindSchema", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (c *vTAdminClient) GetClusters(ctx context.Context, in *GetClustersRequest, opts ...grpc.CallOption) (*GetClustersResponse, error) {
@@ -1334,6 +2215,42 @@ func (c *vTAdminClient) GetTablets(ctx context.Context, in *GetTabletsRequest, o
 	return out, nil
 }
 
+func (c *vTAdminClient) GetVSchema(ctx context.Context, in *GetVSchemaRequest, opts ...grpc.CallOption) (*VSchema, error) {
+	out := new(VSchema)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/GetVSchema", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vTAdminClient) GetVSchemas(ctx context.Context, in *GetVSchemasRequest, opts ...grpc.CallOption) (*GetVSchemasResponse, error) {
+	out := new(GetVSchemasResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/GetVSchemas", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vTAdminClient) GetWorkflow(ctx context.Context, in *GetWorkflowRequest, opts ...grpc.CallOption) (*Workflow, error) {
+	out := new(Workflow)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/GetWorkflow", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vTAdminClient) GetWorkflows(ctx context.Context, in *GetWorkflowsRequest, opts ...grpc.CallOption) (*GetWorkflowsResponse, error) {
+	out := new(GetWorkflowsResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/GetWorkflows", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vTAdminClient) VTExplain(ctx context.Context, in *VTExplainRequest, opts ...grpc.CallOption) (*VTExplainResponse, error) {
 	out := new(VTExplainResponse)
 	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/VTExplain", in, out, opts...)
@@ -1345,6 +2262,13 @@ func (c *vTAdminClient) VTExplain(ctx context.Context, in *VTExplainRequest, opt
 
 // VTAdminServer is the server API for VTAdmin service.
 type VTAdminServer interface {
+	// FindSchema returns a single Schema that matches the provided table name
+	// across all specified clusters IDs. Not specifying a set of cluster IDs
+	// causes the search to span all configured clusters.
+	//
+	// An error occurs if either no table exists across any of the clusters with
+	// the specified table name, or if multiple tables exist with that name.
+	FindSchema(context.Context, *FindSchemaRequest) (*Schema, error)
 	// GetClusters returns all configured clusters.
 	GetClusters(context.Context, *GetClustersRequest) (*GetClustersResponse, error)
 	// GetGates returns all gates across all the specified clusters.
@@ -1361,6 +2285,16 @@ type VTAdminServer interface {
 	GetTablet(context.Context, *GetTabletRequest) (*Tablet, error)
 	// GetTablets returns all tablets across all the specified clusters.
 	GetTablets(context.Context, *GetTabletsRequest) (*GetTabletsResponse, error)
+	// GetVSchema returns a VSchema for the specified keyspace in the specified
+	// cluster.
+	GetVSchema(context.Context, *GetVSchemaRequest) (*VSchema, error)
+	// GetVSchemas returns the VSchemas for all specified clusters.
+	GetVSchemas(context.Context, *GetVSchemasRequest) (*GetVSchemasResponse, error)
+	// GetWorkflow returns a single Workflow for a given cluster, keyspace, and
+	// workflow name.
+	GetWorkflow(context.Context, *GetWorkflowRequest) (*Workflow, error)
+	// GetWorkflows returns the Workflows for all specified clusters.
+	GetWorkflows(context.Context, *GetWorkflowsRequest) (*GetWorkflowsResponse, error)
 	// VTExplain provides information on how Vitess plans to execute a particular query.
 	VTExplain(context.Context, *VTExplainRequest) (*VTExplainResponse, error)
 }
@@ -1369,6 +2303,9 @@ type VTAdminServer interface {
 type UnimplementedVTAdminServer struct {
 }
 
+func (*UnimplementedVTAdminServer) FindSchema(ctx context.Context, req *FindSchemaRequest) (*Schema, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method FindSchema not implemented")
+}
 func (*UnimplementedVTAdminServer) GetClusters(ctx context.Context, req *GetClustersRequest) (*GetClustersResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetClusters not implemented")
 }
@@ -1390,12 +2327,42 @@ func (*UnimplementedVTAdminServer) GetTablet(ctx context.Context, req *GetTablet
 func (*UnimplementedVTAdminServer) GetTablets(ctx context.Context, req *GetTabletsRequest) (*GetTabletsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetTablets not implemented")
 }
+func (*UnimplementedVTAdminServer) GetVSchema(ctx context.Context, req *GetVSchemaRequest) (*VSchema, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetVSchema not implemented")
+}
+func (*UnimplementedVTAdminServer) GetVSchemas(ctx context.Context, req *GetVSchemasRequest) (*GetVSchemasResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetVSchemas not implemented")
+}
+func (*UnimplementedVTAdminServer) GetWorkflow(ctx context.Context, req *GetWorkflowRequest) (*Workflow, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetWorkflow not implemented")
+}
+func (*UnimplementedVTAdminServer) GetWorkflows(ctx context.Context, req *GetWorkflowsRequest) (*GetWorkflowsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetWorkflows not implemented")
+}
 func (*UnimplementedVTAdminServer) VTExplain(ctx context.Context, req *VTExplainRequest) (*VTExplainResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method VTExplain not implemented")
 }
 
 func RegisterVTAdminServer(s *grpc.Server, srv VTAdminServer) {
 	s.RegisterService(&_VTAdmin_serviceDesc, srv)
+}
+
+func _VTAdmin_FindSchema_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(FindSchemaRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).FindSchema(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/FindSchema",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).FindSchema(ctx, req.(*FindSchemaRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 func _VTAdmin_GetClusters_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -1524,6 +2491,78 @@ func _VTAdmin_GetTablets_Handler(srv interface{}, ctx context.Context, dec func(
 	return interceptor(ctx, in, info, handler)
 }
 
+func _VTAdmin_GetVSchema_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetVSchemaRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).GetVSchema(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/GetVSchema",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).GetVSchema(ctx, req.(*GetVSchemaRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _VTAdmin_GetVSchemas_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetVSchemasRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).GetVSchemas(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/GetVSchemas",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).GetVSchemas(ctx, req.(*GetVSchemasRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _VTAdmin_GetWorkflow_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetWorkflowRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).GetWorkflow(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/GetWorkflow",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).GetWorkflow(ctx, req.(*GetWorkflowRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _VTAdmin_GetWorkflows_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetWorkflowsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).GetWorkflows(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/GetWorkflows",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).GetWorkflows(ctx, req.(*GetWorkflowsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _VTAdmin_VTExplain_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(VTExplainRequest)
 	if err := dec(in); err != nil {
@@ -1546,6 +2585,10 @@ var _VTAdmin_serviceDesc = grpc.ServiceDesc{
 	ServiceName: "vtadmin.VTAdmin",
 	HandlerType: (*VTAdminServer)(nil),
 	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "FindSchema",
+			Handler:    _VTAdmin_FindSchema_Handler,
+		},
 		{
 			MethodName: "GetClusters",
 			Handler:    _VTAdmin_GetClusters_Handler,
@@ -1573,6 +2616,22 @@ var _VTAdmin_serviceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetTablets",
 			Handler:    _VTAdmin_GetTablets_Handler,
+		},
+		{
+			MethodName: "GetVSchema",
+			Handler:    _VTAdmin_GetVSchema_Handler,
+		},
+		{
+			MethodName: "GetVSchemas",
+			Handler:    _VTAdmin_GetVSchemas_Handler,
+		},
+		{
+			MethodName: "GetWorkflow",
+			Handler:    _VTAdmin_GetWorkflow_Handler,
+		},
+		{
+			MethodName: "GetWorkflows",
+			Handler:    _VTAdmin_GetWorkflows_Handler,
 		},
 		{
 			MethodName: "VTExplain",
@@ -1620,6 +2679,56 @@ func (m *Cluster) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 		i = encodeVarintVtadmin(dAtA, i, uint64(len(m.Id)))
 		i--
 		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *ClusterWorkflows) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *ClusterWorkflows) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *ClusterWorkflows) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.XXX_unrecognized != nil {
+		i -= len(m.XXX_unrecognized)
+		copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	if len(m.Warnings) > 0 {
+		for iNdEx := len(m.Warnings) - 1; iNdEx >= 0; iNdEx-- {
+			i -= len(m.Warnings[iNdEx])
+			copy(dAtA[i:], m.Warnings[iNdEx])
+			i = encodeVarintVtadmin(dAtA, i, uint64(len(m.Warnings[iNdEx])))
+			i--
+			dAtA[i] = 0x12
+		}
+	}
+	if len(m.Workflows) > 0 {
+		for iNdEx := len(m.Workflows) - 1; iNdEx >= 0; iNdEx-- {
+			{
+				size, err := m.Workflows[iNdEx].MarshalToSizedBuffer(dAtA[:i])
+				if err != nil {
+					return 0, err
+				}
+				i -= size
+				i = encodeVarintVtadmin(dAtA, i, uint64(size))
+			}
+			i--
+			dAtA[i] = 0xa
+		}
 	}
 	return len(dAtA) - i, nil
 }
@@ -1725,6 +2834,32 @@ func (m *Schema) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 		i -= len(m.XXX_unrecognized)
 		copy(dAtA[i:], m.XXX_unrecognized)
 	}
+	if len(m.TableSizes) > 0 {
+		for k := range m.TableSizes {
+			v := m.TableSizes[k]
+			baseI := i
+			if v != nil {
+				{
+					size, err := v.MarshalToSizedBuffer(dAtA[:i])
+					if err != nil {
+						return 0, err
+					}
+					i -= size
+					i = encodeVarintVtadmin(dAtA, i, uint64(size))
+				}
+				i--
+				dAtA[i] = 0x12
+			}
+			i -= len(k)
+			copy(dAtA[i:], k)
+			i = encodeVarintVtadmin(dAtA, i, uint64(len(k)))
+			i--
+			dAtA[i] = 0xa
+			i = encodeVarintVtadmin(dAtA, i, uint64(baseI-i))
+			i--
+			dAtA[i] = 0x22
+		}
+	}
 	if len(m.TableDefinitions) > 0 {
 		for iNdEx := len(m.TableDefinitions) - 1; iNdEx >= 0; iNdEx-- {
 			{
@@ -1757,6 +2892,106 @@ func (m *Schema) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 		}
 		i--
 		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *Schema_ShardTableSize) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *Schema_ShardTableSize) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *Schema_ShardTableSize) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.XXX_unrecognized != nil {
+		i -= len(m.XXX_unrecognized)
+		copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	if m.DataLength != 0 {
+		i = encodeVarintVtadmin(dAtA, i, uint64(m.DataLength))
+		i--
+		dAtA[i] = 0x10
+	}
+	if m.RowCount != 0 {
+		i = encodeVarintVtadmin(dAtA, i, uint64(m.RowCount))
+		i--
+		dAtA[i] = 0x8
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *Schema_TableSize) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *Schema_TableSize) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *Schema_TableSize) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.XXX_unrecognized != nil {
+		i -= len(m.XXX_unrecognized)
+		copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	if len(m.ByShard) > 0 {
+		for k := range m.ByShard {
+			v := m.ByShard[k]
+			baseI := i
+			if v != nil {
+				{
+					size, err := v.MarshalToSizedBuffer(dAtA[:i])
+					if err != nil {
+						return 0, err
+					}
+					i -= size
+					i = encodeVarintVtadmin(dAtA, i, uint64(size))
+				}
+				i--
+				dAtA[i] = 0x12
+			}
+			i -= len(k)
+			copy(dAtA[i:], k)
+			i = encodeVarintVtadmin(dAtA, i, uint64(len(k)))
+			i--
+			dAtA[i] = 0xa
+			i = encodeVarintVtadmin(dAtA, i, uint64(baseI-i))
+			i--
+			dAtA[i] = 0x1a
+		}
+	}
+	if m.DataLength != 0 {
+		i = encodeVarintVtadmin(dAtA, i, uint64(m.DataLength))
+		i--
+		dAtA[i] = 0x10
+	}
+	if m.RowCount != 0 {
+		i = encodeVarintVtadmin(dAtA, i, uint64(m.RowCount))
+		i--
+		dAtA[i] = 0x8
 	}
 	return len(dAtA) - i, nil
 }
@@ -1799,6 +3034,64 @@ func (m *Tablet) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 			i -= size
 			i = encodeVarintVtadmin(dAtA, i, uint64(size))
 		}
+		i--
+		dAtA[i] = 0x12
+	}
+	if m.Cluster != nil {
+		{
+			size, err := m.Cluster.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintVtadmin(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *VSchema) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *VSchema) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *VSchema) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.XXX_unrecognized != nil {
+		i -= len(m.XXX_unrecognized)
+		copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	if m.VSchema != nil {
+		{
+			size, err := m.VSchema.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintVtadmin(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0x1a
+	}
+	if len(m.Name) > 0 {
+		i -= len(m.Name)
+		copy(dAtA[i:], m.Name)
+		i = encodeVarintVtadmin(dAtA, i, uint64(len(m.Name)))
 		i--
 		dAtA[i] = 0x12
 	}
@@ -1926,6 +3219,119 @@ func (m *VTGate) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 		i -= len(m.Hostname)
 		copy(dAtA[i:], m.Hostname)
 		i = encodeVarintVtadmin(dAtA, i, uint64(len(m.Hostname)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *Workflow) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *Workflow) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *Workflow) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.XXX_unrecognized != nil {
+		i -= len(m.XXX_unrecognized)
+		copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	if m.Workflow != nil {
+		{
+			size, err := m.Workflow.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintVtadmin(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0x1a
+	}
+	if len(m.Keyspace) > 0 {
+		i -= len(m.Keyspace)
+		copy(dAtA[i:], m.Keyspace)
+		i = encodeVarintVtadmin(dAtA, i, uint64(len(m.Keyspace)))
+		i--
+		dAtA[i] = 0x12
+	}
+	if m.Cluster != nil {
+		{
+			size, err := m.Cluster.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintVtadmin(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *FindSchemaRequest) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *FindSchemaRequest) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *FindSchemaRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.XXX_unrecognized != nil {
+		i -= len(m.XXX_unrecognized)
+		copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	if m.TableSizeOptions != nil {
+		{
+			size, err := m.TableSizeOptions.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintVtadmin(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0x1a
+	}
+	if len(m.ClusterIds) > 0 {
+		for iNdEx := len(m.ClusterIds) - 1; iNdEx >= 0; iNdEx-- {
+			i -= len(m.ClusterIds[iNdEx])
+			copy(dAtA[i:], m.ClusterIds[iNdEx])
+			i = encodeVarintVtadmin(dAtA, i, uint64(len(m.ClusterIds[iNdEx])))
+			i--
+			dAtA[i] = 0x12
+		}
+	}
+	if len(m.Table) > 0 {
+		i -= len(m.Table)
+		copy(dAtA[i:], m.Table)
+		i = encodeVarintVtadmin(dAtA, i, uint64(len(m.Table)))
 		i--
 		dAtA[i] = 0xa
 	}
@@ -2178,6 +3584,18 @@ func (m *GetSchemaRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 		i -= len(m.XXX_unrecognized)
 		copy(dAtA[i:], m.XXX_unrecognized)
 	}
+	if m.TableSizeOptions != nil {
+		{
+			size, err := m.TableSizeOptions.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintVtadmin(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0x22
+	}
 	if len(m.Table) > 0 {
 		i -= len(m.Table)
 		copy(dAtA[i:], m.Table)
@@ -2225,6 +3643,18 @@ func (m *GetSchemasRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	if m.XXX_unrecognized != nil {
 		i -= len(m.XXX_unrecognized)
 		copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	if m.TableSizeOptions != nil {
+		{
+			size, err := m.TableSizeOptions.MarshalToSizedBuffer(dAtA[:i])
+			if err != nil {
+				return 0, err
+			}
+			i -= size
+			i = encodeVarintVtadmin(dAtA, i, uint64(size))
+		}
+		i--
+		dAtA[i] = 0x12
 	}
 	if len(m.ClusterIds) > 0 {
 		for iNdEx := len(m.ClusterIds) - 1; iNdEx >= 0; iNdEx-- {
@@ -2275,6 +3705,53 @@ func (m *GetSchemasResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 			i--
 			dAtA[i] = 0xa
 		}
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *GetSchemaTableSizeOptions) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *GetSchemaTableSizeOptions) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *GetSchemaTableSizeOptions) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.XXX_unrecognized != nil {
+		i -= len(m.XXX_unrecognized)
+		copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	if m.IncludeNonServingShards {
+		i--
+		if m.IncludeNonServingShards {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x10
+	}
+	if m.AggregateSizes {
+		i--
+		if m.AggregateSizes {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x8
 	}
 	return len(dAtA) - i, nil
 }
@@ -2399,6 +3876,299 @@ func (m *GetTabletsResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	return len(dAtA) - i, nil
 }
 
+func (m *GetVSchemaRequest) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *GetVSchemaRequest) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *GetVSchemaRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.XXX_unrecognized != nil {
+		i -= len(m.XXX_unrecognized)
+		copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	if len(m.Keyspace) > 0 {
+		i -= len(m.Keyspace)
+		copy(dAtA[i:], m.Keyspace)
+		i = encodeVarintVtadmin(dAtA, i, uint64(len(m.Keyspace)))
+		i--
+		dAtA[i] = 0x12
+	}
+	if len(m.ClusterId) > 0 {
+		i -= len(m.ClusterId)
+		copy(dAtA[i:], m.ClusterId)
+		i = encodeVarintVtadmin(dAtA, i, uint64(len(m.ClusterId)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *GetVSchemasRequest) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *GetVSchemasRequest) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *GetVSchemasRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.XXX_unrecognized != nil {
+		i -= len(m.XXX_unrecognized)
+		copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	if len(m.ClusterIds) > 0 {
+		for iNdEx := len(m.ClusterIds) - 1; iNdEx >= 0; iNdEx-- {
+			i -= len(m.ClusterIds[iNdEx])
+			copy(dAtA[i:], m.ClusterIds[iNdEx])
+			i = encodeVarintVtadmin(dAtA, i, uint64(len(m.ClusterIds[iNdEx])))
+			i--
+			dAtA[i] = 0xa
+		}
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *GetVSchemasResponse) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *GetVSchemasResponse) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *GetVSchemasResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.XXX_unrecognized != nil {
+		i -= len(m.XXX_unrecognized)
+		copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	if len(m.VSchemas) > 0 {
+		for iNdEx := len(m.VSchemas) - 1; iNdEx >= 0; iNdEx-- {
+			{
+				size, err := m.VSchemas[iNdEx].MarshalToSizedBuffer(dAtA[:i])
+				if err != nil {
+					return 0, err
+				}
+				i -= size
+				i = encodeVarintVtadmin(dAtA, i, uint64(size))
+			}
+			i--
+			dAtA[i] = 0xa
+		}
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *GetWorkflowRequest) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *GetWorkflowRequest) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *GetWorkflowRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.XXX_unrecognized != nil {
+		i -= len(m.XXX_unrecognized)
+		copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	if m.ActiveOnly {
+		i--
+		if m.ActiveOnly {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x20
+	}
+	if len(m.Name) > 0 {
+		i -= len(m.Name)
+		copy(dAtA[i:], m.Name)
+		i = encodeVarintVtadmin(dAtA, i, uint64(len(m.Name)))
+		i--
+		dAtA[i] = 0x1a
+	}
+	if len(m.Keyspace) > 0 {
+		i -= len(m.Keyspace)
+		copy(dAtA[i:], m.Keyspace)
+		i = encodeVarintVtadmin(dAtA, i, uint64(len(m.Keyspace)))
+		i--
+		dAtA[i] = 0x12
+	}
+	if len(m.ClusterId) > 0 {
+		i -= len(m.ClusterId)
+		copy(dAtA[i:], m.ClusterId)
+		i = encodeVarintVtadmin(dAtA, i, uint64(len(m.ClusterId)))
+		i--
+		dAtA[i] = 0xa
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *GetWorkflowsRequest) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *GetWorkflowsRequest) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *GetWorkflowsRequest) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.XXX_unrecognized != nil {
+		i -= len(m.XXX_unrecognized)
+		copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	if len(m.IgnoreKeyspaces) > 0 {
+		for iNdEx := len(m.IgnoreKeyspaces) - 1; iNdEx >= 0; iNdEx-- {
+			i -= len(m.IgnoreKeyspaces[iNdEx])
+			copy(dAtA[i:], m.IgnoreKeyspaces[iNdEx])
+			i = encodeVarintVtadmin(dAtA, i, uint64(len(m.IgnoreKeyspaces[iNdEx])))
+			i--
+			dAtA[i] = 0x22
+		}
+	}
+	if len(m.Keyspaces) > 0 {
+		for iNdEx := len(m.Keyspaces) - 1; iNdEx >= 0; iNdEx-- {
+			i -= len(m.Keyspaces[iNdEx])
+			copy(dAtA[i:], m.Keyspaces[iNdEx])
+			i = encodeVarintVtadmin(dAtA, i, uint64(len(m.Keyspaces[iNdEx])))
+			i--
+			dAtA[i] = 0x1a
+		}
+	}
+	if m.ActiveOnly {
+		i--
+		if m.ActiveOnly {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x10
+	}
+	if len(m.ClusterIds) > 0 {
+		for iNdEx := len(m.ClusterIds) - 1; iNdEx >= 0; iNdEx-- {
+			i -= len(m.ClusterIds[iNdEx])
+			copy(dAtA[i:], m.ClusterIds[iNdEx])
+			i = encodeVarintVtadmin(dAtA, i, uint64(len(m.ClusterIds[iNdEx])))
+			i--
+			dAtA[i] = 0xa
+		}
+	}
+	return len(dAtA) - i, nil
+}
+
+func (m *GetWorkflowsResponse) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *GetWorkflowsResponse) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *GetWorkflowsResponse) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if m.XXX_unrecognized != nil {
+		i -= len(m.XXX_unrecognized)
+		copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	if len(m.WorkflowsByCluster) > 0 {
+		for k := range m.WorkflowsByCluster {
+			v := m.WorkflowsByCluster[k]
+			baseI := i
+			if v != nil {
+				{
+					size, err := v.MarshalToSizedBuffer(dAtA[:i])
+					if err != nil {
+						return 0, err
+					}
+					i -= size
+					i = encodeVarintVtadmin(dAtA, i, uint64(size))
+				}
+				i--
+				dAtA[i] = 0x12
+			}
+			i -= len(k)
+			copy(dAtA[i:], k)
+			i = encodeVarintVtadmin(dAtA, i, uint64(len(k)))
+			i--
+			dAtA[i] = 0xa
+			i = encodeVarintVtadmin(dAtA, i, uint64(baseI-i))
+			i--
+			dAtA[i] = 0xa
+		}
+	}
+	return len(dAtA) - i, nil
+}
+
 func (m *VTExplainRequest) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
@@ -2512,6 +4282,30 @@ func (m *Cluster) Size() (n int) {
 	return n
 }
 
+func (m *ClusterWorkflows) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if len(m.Workflows) > 0 {
+		for _, e := range m.Workflows {
+			l = e.Size()
+			n += 1 + l + sovVtadmin(uint64(l))
+		}
+	}
+	if len(m.Warnings) > 0 {
+		for _, s := range m.Warnings {
+			l = len(s)
+			n += 1 + l + sovVtadmin(uint64(l))
+		}
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
 func (m *Keyspace) Size() (n int) {
 	if m == nil {
 		return 0
@@ -2565,6 +4359,68 @@ func (m *Schema) Size() (n int) {
 			n += 1 + l + sovVtadmin(uint64(l))
 		}
 	}
+	if len(m.TableSizes) > 0 {
+		for k, v := range m.TableSizes {
+			_ = k
+			_ = v
+			l = 0
+			if v != nil {
+				l = v.Size()
+				l += 1 + sovVtadmin(uint64(l))
+			}
+			mapEntrySize := 1 + len(k) + sovVtadmin(uint64(len(k))) + l
+			n += mapEntrySize + 1 + sovVtadmin(uint64(mapEntrySize))
+		}
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *Schema_ShardTableSize) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if m.RowCount != 0 {
+		n += 1 + sovVtadmin(uint64(m.RowCount))
+	}
+	if m.DataLength != 0 {
+		n += 1 + sovVtadmin(uint64(m.DataLength))
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *Schema_TableSize) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if m.RowCount != 0 {
+		n += 1 + sovVtadmin(uint64(m.RowCount))
+	}
+	if m.DataLength != 0 {
+		n += 1 + sovVtadmin(uint64(m.DataLength))
+	}
+	if len(m.ByShard) > 0 {
+		for k, v := range m.ByShard {
+			_ = k
+			_ = v
+			l = 0
+			if v != nil {
+				l = v.Size()
+				l += 1 + sovVtadmin(uint64(l))
+			}
+			mapEntrySize := 1 + len(k) + sovVtadmin(uint64(len(k))) + l
+			n += mapEntrySize + 1 + sovVtadmin(uint64(mapEntrySize))
+		}
+	}
 	if m.XXX_unrecognized != nil {
 		n += len(m.XXX_unrecognized)
 	}
@@ -2587,6 +4443,30 @@ func (m *Tablet) Size() (n int) {
 	}
 	if m.State != 0 {
 		n += 1 + sovVtadmin(uint64(m.State))
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *VSchema) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if m.Cluster != nil {
+		l = m.Cluster.Size()
+		n += 1 + l + sovVtadmin(uint64(l))
+	}
+	l = len(m.Name)
+	if l > 0 {
+		n += 1 + l + sovVtadmin(uint64(l))
+	}
+	if m.VSchema != nil {
+		l = m.VSchema.Size()
+		n += 1 + l + sovVtadmin(uint64(l))
 	}
 	if m.XXX_unrecognized != nil {
 		n += len(m.XXX_unrecognized)
@@ -2641,6 +4521,56 @@ func (m *VTGate) Size() (n int) {
 			l = len(s)
 			n += 1 + l + sovVtadmin(uint64(l))
 		}
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *Workflow) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if m.Cluster != nil {
+		l = m.Cluster.Size()
+		n += 1 + l + sovVtadmin(uint64(l))
+	}
+	l = len(m.Keyspace)
+	if l > 0 {
+		n += 1 + l + sovVtadmin(uint64(l))
+	}
+	if m.Workflow != nil {
+		l = m.Workflow.Size()
+		n += 1 + l + sovVtadmin(uint64(l))
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *FindSchemaRequest) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.Table)
+	if l > 0 {
+		n += 1 + l + sovVtadmin(uint64(l))
+	}
+	if len(m.ClusterIds) > 0 {
+		for _, s := range m.ClusterIds {
+			l = len(s)
+			n += 1 + l + sovVtadmin(uint64(l))
+		}
+	}
+	if m.TableSizeOptions != nil {
+		l = m.TableSizeOptions.Size()
+		n += 1 + l + sovVtadmin(uint64(l))
 	}
 	if m.XXX_unrecognized != nil {
 		n += len(m.XXX_unrecognized)
@@ -2768,6 +4698,10 @@ func (m *GetSchemaRequest) Size() (n int) {
 	if l > 0 {
 		n += 1 + l + sovVtadmin(uint64(l))
 	}
+	if m.TableSizeOptions != nil {
+		l = m.TableSizeOptions.Size()
+		n += 1 + l + sovVtadmin(uint64(l))
+	}
 	if m.XXX_unrecognized != nil {
 		n += len(m.XXX_unrecognized)
 	}
@@ -2786,6 +4720,10 @@ func (m *GetSchemasRequest) Size() (n int) {
 			n += 1 + l + sovVtadmin(uint64(l))
 		}
 	}
+	if m.TableSizeOptions != nil {
+		l = m.TableSizeOptions.Size()
+		n += 1 + l + sovVtadmin(uint64(l))
+	}
 	if m.XXX_unrecognized != nil {
 		n += len(m.XXX_unrecognized)
 	}
@@ -2803,6 +4741,24 @@ func (m *GetSchemasResponse) Size() (n int) {
 			l = e.Size()
 			n += 1 + l + sovVtadmin(uint64(l))
 		}
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *GetSchemaTableSizeOptions) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if m.AggregateSizes {
+		n += 2
+	}
+	if m.IncludeNonServingShards {
+		n += 2
 	}
 	if m.XXX_unrecognized != nil {
 		n += len(m.XXX_unrecognized)
@@ -2860,6 +4816,147 @@ func (m *GetTabletsResponse) Size() (n int) {
 		for _, e := range m.Tablets {
 			l = e.Size()
 			n += 1 + l + sovVtadmin(uint64(l))
+		}
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *GetVSchemaRequest) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.ClusterId)
+	if l > 0 {
+		n += 1 + l + sovVtadmin(uint64(l))
+	}
+	l = len(m.Keyspace)
+	if l > 0 {
+		n += 1 + l + sovVtadmin(uint64(l))
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *GetVSchemasRequest) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if len(m.ClusterIds) > 0 {
+		for _, s := range m.ClusterIds {
+			l = len(s)
+			n += 1 + l + sovVtadmin(uint64(l))
+		}
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *GetVSchemasResponse) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if len(m.VSchemas) > 0 {
+		for _, e := range m.VSchemas {
+			l = e.Size()
+			n += 1 + l + sovVtadmin(uint64(l))
+		}
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *GetWorkflowRequest) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.ClusterId)
+	if l > 0 {
+		n += 1 + l + sovVtadmin(uint64(l))
+	}
+	l = len(m.Keyspace)
+	if l > 0 {
+		n += 1 + l + sovVtadmin(uint64(l))
+	}
+	l = len(m.Name)
+	if l > 0 {
+		n += 1 + l + sovVtadmin(uint64(l))
+	}
+	if m.ActiveOnly {
+		n += 2
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *GetWorkflowsRequest) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if len(m.ClusterIds) > 0 {
+		for _, s := range m.ClusterIds {
+			l = len(s)
+			n += 1 + l + sovVtadmin(uint64(l))
+		}
+	}
+	if m.ActiveOnly {
+		n += 2
+	}
+	if len(m.Keyspaces) > 0 {
+		for _, s := range m.Keyspaces {
+			l = len(s)
+			n += 1 + l + sovVtadmin(uint64(l))
+		}
+	}
+	if len(m.IgnoreKeyspaces) > 0 {
+		for _, s := range m.IgnoreKeyspaces {
+			l = len(s)
+			n += 1 + l + sovVtadmin(uint64(l))
+		}
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *GetWorkflowsResponse) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if len(m.WorkflowsByCluster) > 0 {
+		for k, v := range m.WorkflowsByCluster {
+			_ = k
+			_ = v
+			l = 0
+			if v != nil {
+				l = v.Size()
+				l += 1 + sovVtadmin(uint64(l))
+			}
+			mapEntrySize := 1 + len(k) + sovVtadmin(uint64(len(k))) + l
+			n += mapEntrySize + 1 + sovVtadmin(uint64(mapEntrySize))
 		}
 	}
 	if m.XXX_unrecognized != nil {
@@ -3006,6 +5103,126 @@ func (m *Cluster) Unmarshal(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			m.Name = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipVtadmin(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthVtadmin
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthVtadmin
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *ClusterWorkflows) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowVtadmin
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: ClusterWorkflows: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: ClusterWorkflows: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Workflows", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtadmin
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthVtadmin
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtadmin
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Workflows = append(m.Workflows, &Workflow{})
+			if err := m.Workflows[len(m.Workflows)-1].Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Warnings", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtadmin
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthVtadmin
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtadmin
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Warnings = append(m.Warnings, string(dAtA[iNdEx:postIndex]))
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
@@ -3418,6 +5635,448 @@ func (m *Schema) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			iNdEx = postIndex
+		case 4:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field TableSizes", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtadmin
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthVtadmin
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtadmin
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.TableSizes == nil {
+				m.TableSizes = make(map[string]*Schema_TableSize)
+			}
+			var mapkey string
+			var mapvalue *Schema_TableSize
+			for iNdEx < postIndex {
+				entryPreIndex := iNdEx
+				var wire uint64
+				for shift := uint(0); ; shift += 7 {
+					if shift >= 64 {
+						return ErrIntOverflowVtadmin
+					}
+					if iNdEx >= l {
+						return io.ErrUnexpectedEOF
+					}
+					b := dAtA[iNdEx]
+					iNdEx++
+					wire |= uint64(b&0x7F) << shift
+					if b < 0x80 {
+						break
+					}
+				}
+				fieldNum := int32(wire >> 3)
+				if fieldNum == 1 {
+					var stringLenmapkey uint64
+					for shift := uint(0); ; shift += 7 {
+						if shift >= 64 {
+							return ErrIntOverflowVtadmin
+						}
+						if iNdEx >= l {
+							return io.ErrUnexpectedEOF
+						}
+						b := dAtA[iNdEx]
+						iNdEx++
+						stringLenmapkey |= uint64(b&0x7F) << shift
+						if b < 0x80 {
+							break
+						}
+					}
+					intStringLenmapkey := int(stringLenmapkey)
+					if intStringLenmapkey < 0 {
+						return ErrInvalidLengthVtadmin
+					}
+					postStringIndexmapkey := iNdEx + intStringLenmapkey
+					if postStringIndexmapkey < 0 {
+						return ErrInvalidLengthVtadmin
+					}
+					if postStringIndexmapkey > l {
+						return io.ErrUnexpectedEOF
+					}
+					mapkey = string(dAtA[iNdEx:postStringIndexmapkey])
+					iNdEx = postStringIndexmapkey
+				} else if fieldNum == 2 {
+					var mapmsglen int
+					for shift := uint(0); ; shift += 7 {
+						if shift >= 64 {
+							return ErrIntOverflowVtadmin
+						}
+						if iNdEx >= l {
+							return io.ErrUnexpectedEOF
+						}
+						b := dAtA[iNdEx]
+						iNdEx++
+						mapmsglen |= int(b&0x7F) << shift
+						if b < 0x80 {
+							break
+						}
+					}
+					if mapmsglen < 0 {
+						return ErrInvalidLengthVtadmin
+					}
+					postmsgIndex := iNdEx + mapmsglen
+					if postmsgIndex < 0 {
+						return ErrInvalidLengthVtadmin
+					}
+					if postmsgIndex > l {
+						return io.ErrUnexpectedEOF
+					}
+					mapvalue = &Schema_TableSize{}
+					if err := mapvalue.Unmarshal(dAtA[iNdEx:postmsgIndex]); err != nil {
+						return err
+					}
+					iNdEx = postmsgIndex
+				} else {
+					iNdEx = entryPreIndex
+					skippy, err := skipVtadmin(dAtA[iNdEx:])
+					if err != nil {
+						return err
+					}
+					if skippy < 0 {
+						return ErrInvalidLengthVtadmin
+					}
+					if (iNdEx + skippy) > postIndex {
+						return io.ErrUnexpectedEOF
+					}
+					iNdEx += skippy
+				}
+			}
+			m.TableSizes[mapkey] = mapvalue
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipVtadmin(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthVtadmin
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthVtadmin
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *Schema_ShardTableSize) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowVtadmin
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: ShardTableSize: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: ShardTableSize: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field RowCount", wireType)
+			}
+			m.RowCount = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtadmin
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.RowCount |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 2:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field DataLength", wireType)
+			}
+			m.DataLength = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtadmin
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.DataLength |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		default:
+			iNdEx = preIndex
+			skippy, err := skipVtadmin(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthVtadmin
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthVtadmin
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *Schema_TableSize) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowVtadmin
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: TableSize: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: TableSize: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field RowCount", wireType)
+			}
+			m.RowCount = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtadmin
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.RowCount |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 2:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field DataLength", wireType)
+			}
+			m.DataLength = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtadmin
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.DataLength |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 3:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ByShard", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtadmin
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthVtadmin
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtadmin
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.ByShard == nil {
+				m.ByShard = make(map[string]*Schema_ShardTableSize)
+			}
+			var mapkey string
+			var mapvalue *Schema_ShardTableSize
+			for iNdEx < postIndex {
+				entryPreIndex := iNdEx
+				var wire uint64
+				for shift := uint(0); ; shift += 7 {
+					if shift >= 64 {
+						return ErrIntOverflowVtadmin
+					}
+					if iNdEx >= l {
+						return io.ErrUnexpectedEOF
+					}
+					b := dAtA[iNdEx]
+					iNdEx++
+					wire |= uint64(b&0x7F) << shift
+					if b < 0x80 {
+						break
+					}
+				}
+				fieldNum := int32(wire >> 3)
+				if fieldNum == 1 {
+					var stringLenmapkey uint64
+					for shift := uint(0); ; shift += 7 {
+						if shift >= 64 {
+							return ErrIntOverflowVtadmin
+						}
+						if iNdEx >= l {
+							return io.ErrUnexpectedEOF
+						}
+						b := dAtA[iNdEx]
+						iNdEx++
+						stringLenmapkey |= uint64(b&0x7F) << shift
+						if b < 0x80 {
+							break
+						}
+					}
+					intStringLenmapkey := int(stringLenmapkey)
+					if intStringLenmapkey < 0 {
+						return ErrInvalidLengthVtadmin
+					}
+					postStringIndexmapkey := iNdEx + intStringLenmapkey
+					if postStringIndexmapkey < 0 {
+						return ErrInvalidLengthVtadmin
+					}
+					if postStringIndexmapkey > l {
+						return io.ErrUnexpectedEOF
+					}
+					mapkey = string(dAtA[iNdEx:postStringIndexmapkey])
+					iNdEx = postStringIndexmapkey
+				} else if fieldNum == 2 {
+					var mapmsglen int
+					for shift := uint(0); ; shift += 7 {
+						if shift >= 64 {
+							return ErrIntOverflowVtadmin
+						}
+						if iNdEx >= l {
+							return io.ErrUnexpectedEOF
+						}
+						b := dAtA[iNdEx]
+						iNdEx++
+						mapmsglen |= int(b&0x7F) << shift
+						if b < 0x80 {
+							break
+						}
+					}
+					if mapmsglen < 0 {
+						return ErrInvalidLengthVtadmin
+					}
+					postmsgIndex := iNdEx + mapmsglen
+					if postmsgIndex < 0 {
+						return ErrInvalidLengthVtadmin
+					}
+					if postmsgIndex > l {
+						return io.ErrUnexpectedEOF
+					}
+					mapvalue = &Schema_ShardTableSize{}
+					if err := mapvalue.Unmarshal(dAtA[iNdEx:postmsgIndex]); err != nil {
+						return err
+					}
+					iNdEx = postmsgIndex
+				} else {
+					iNdEx = entryPreIndex
+					skippy, err := skipVtadmin(dAtA[iNdEx:])
+					if err != nil {
+						return err
+					}
+					if skippy < 0 {
+						return ErrInvalidLengthVtadmin
+					}
+					if (iNdEx + skippy) > postIndex {
+						return io.ErrUnexpectedEOF
+					}
+					iNdEx += skippy
+				}
+			}
+			m.ByShard[mapkey] = mapvalue
+			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := skipVtadmin(dAtA[iNdEx:])
@@ -3563,6 +6222,164 @@ func (m *Tablet) Unmarshal(dAtA []byte) error {
 					break
 				}
 			}
+		default:
+			iNdEx = preIndex
+			skippy, err := skipVtadmin(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthVtadmin
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthVtadmin
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *VSchema) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowVtadmin
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: VSchema: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: VSchema: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Cluster", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtadmin
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthVtadmin
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtadmin
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.Cluster == nil {
+				m.Cluster = &Cluster{}
+			}
+			if err := m.Cluster.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Name", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtadmin
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthVtadmin
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtadmin
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Name = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 3:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field VSchema", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtadmin
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthVtadmin
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtadmin
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.VSchema == nil {
+				m.VSchema = &vschema.Keyspace{}
+			}
+			if err := m.VSchema.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := skipVtadmin(dAtA[iNdEx:])
@@ -3902,6 +6719,318 @@ func (m *VTGate) Unmarshal(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			m.Keyspaces = append(m.Keyspaces, string(dAtA[iNdEx:postIndex]))
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipVtadmin(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthVtadmin
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthVtadmin
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *Workflow) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowVtadmin
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: Workflow: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: Workflow: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Cluster", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtadmin
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthVtadmin
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtadmin
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.Cluster == nil {
+				m.Cluster = &Cluster{}
+			}
+			if err := m.Cluster.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Keyspace", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtadmin
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthVtadmin
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtadmin
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Keyspace = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 3:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Workflow", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtadmin
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthVtadmin
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtadmin
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.Workflow == nil {
+				m.Workflow = &vtctldata.Workflow{}
+			}
+			if err := m.Workflow.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipVtadmin(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthVtadmin
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthVtadmin
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *FindSchemaRequest) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowVtadmin
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: FindSchemaRequest: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: FindSchemaRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Table", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtadmin
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthVtadmin
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtadmin
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Table = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ClusterIds", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtadmin
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthVtadmin
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtadmin
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.ClusterIds = append(m.ClusterIds, string(dAtA[iNdEx:postIndex]))
+			iNdEx = postIndex
+		case 3:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field TableSizeOptions", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtadmin
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthVtadmin
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtadmin
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.TableSizeOptions == nil {
+				m.TableSizeOptions = &GetSchemaTableSizeOptions{}
+			}
+			if err := m.TableSizeOptions.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
@@ -4543,6 +7672,42 @@ func (m *GetSchemaRequest) Unmarshal(dAtA []byte) error {
 			}
 			m.Table = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
+		case 4:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field TableSizeOptions", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtadmin
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthVtadmin
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtadmin
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.TableSizeOptions == nil {
+				m.TableSizeOptions = &GetSchemaTableSizeOptions{}
+			}
+			if err := m.TableSizeOptions.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := skipVtadmin(dAtA[iNdEx:])
@@ -4628,6 +7793,42 @@ func (m *GetSchemasRequest) Unmarshal(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			m.ClusterIds = append(m.ClusterIds, string(dAtA[iNdEx:postIndex]))
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field TableSizeOptions", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtadmin
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthVtadmin
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtadmin
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.TableSizeOptions == nil {
+				m.TableSizeOptions = &GetSchemaTableSizeOptions{}
+			}
+			if err := m.TableSizeOptions.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
@@ -4717,6 +7918,100 @@ func (m *GetSchemasResponse) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipVtadmin(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthVtadmin
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthVtadmin
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *GetSchemaTableSizeOptions) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowVtadmin
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: GetSchemaTableSizeOptions: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: GetSchemaTableSizeOptions: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field AggregateSizes", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtadmin
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.AggregateSizes = bool(v != 0)
+		case 2:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field IncludeNonServingShards", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtadmin
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.IncludeNonServingShards = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := skipVtadmin(dAtA[iNdEx:])
@@ -5008,6 +8303,821 @@ func (m *GetTabletsResponse) Unmarshal(dAtA []byte) error {
 			if err := m.Tablets[len(m.Tablets)-1].Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipVtadmin(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthVtadmin
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthVtadmin
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *GetVSchemaRequest) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowVtadmin
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: GetVSchemaRequest: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: GetVSchemaRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ClusterId", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtadmin
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthVtadmin
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtadmin
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.ClusterId = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Keyspace", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtadmin
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthVtadmin
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtadmin
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Keyspace = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipVtadmin(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthVtadmin
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthVtadmin
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *GetVSchemasRequest) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowVtadmin
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: GetVSchemasRequest: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: GetVSchemasRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ClusterIds", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtadmin
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthVtadmin
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtadmin
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.ClusterIds = append(m.ClusterIds, string(dAtA[iNdEx:postIndex]))
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipVtadmin(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthVtadmin
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthVtadmin
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *GetVSchemasResponse) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowVtadmin
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: GetVSchemasResponse: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: GetVSchemasResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field VSchemas", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtadmin
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthVtadmin
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtadmin
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.VSchemas = append(m.VSchemas, &VSchema{})
+			if err := m.VSchemas[len(m.VSchemas)-1].Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipVtadmin(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthVtadmin
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthVtadmin
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *GetWorkflowRequest) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowVtadmin
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: GetWorkflowRequest: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: GetWorkflowRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ClusterId", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtadmin
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthVtadmin
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtadmin
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.ClusterId = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Keyspace", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtadmin
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthVtadmin
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtadmin
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Keyspace = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 3:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Name", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtadmin
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthVtadmin
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtadmin
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Name = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 4:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ActiveOnly", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtadmin
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.ActiveOnly = bool(v != 0)
+		default:
+			iNdEx = preIndex
+			skippy, err := skipVtadmin(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthVtadmin
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthVtadmin
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *GetWorkflowsRequest) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowVtadmin
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: GetWorkflowsRequest: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: GetWorkflowsRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ClusterIds", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtadmin
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthVtadmin
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtadmin
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.ClusterIds = append(m.ClusterIds, string(dAtA[iNdEx:postIndex]))
+			iNdEx = postIndex
+		case 2:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ActiveOnly", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtadmin
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.ActiveOnly = bool(v != 0)
+		case 3:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Keyspaces", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtadmin
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthVtadmin
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtadmin
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Keyspaces = append(m.Keyspaces, string(dAtA[iNdEx:postIndex]))
+			iNdEx = postIndex
+		case 4:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field IgnoreKeyspaces", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtadmin
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthVtadmin
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtadmin
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.IgnoreKeyspaces = append(m.IgnoreKeyspaces, string(dAtA[iNdEx:postIndex]))
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipVtadmin(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthVtadmin
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthVtadmin
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *GetWorkflowsResponse) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowVtadmin
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: GetWorkflowsResponse: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: GetWorkflowsResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field WorkflowsByCluster", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowVtadmin
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthVtadmin
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthVtadmin
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.WorkflowsByCluster == nil {
+				m.WorkflowsByCluster = make(map[string]*ClusterWorkflows)
+			}
+			var mapkey string
+			var mapvalue *ClusterWorkflows
+			for iNdEx < postIndex {
+				entryPreIndex := iNdEx
+				var wire uint64
+				for shift := uint(0); ; shift += 7 {
+					if shift >= 64 {
+						return ErrIntOverflowVtadmin
+					}
+					if iNdEx >= l {
+						return io.ErrUnexpectedEOF
+					}
+					b := dAtA[iNdEx]
+					iNdEx++
+					wire |= uint64(b&0x7F) << shift
+					if b < 0x80 {
+						break
+					}
+				}
+				fieldNum := int32(wire >> 3)
+				if fieldNum == 1 {
+					var stringLenmapkey uint64
+					for shift := uint(0); ; shift += 7 {
+						if shift >= 64 {
+							return ErrIntOverflowVtadmin
+						}
+						if iNdEx >= l {
+							return io.ErrUnexpectedEOF
+						}
+						b := dAtA[iNdEx]
+						iNdEx++
+						stringLenmapkey |= uint64(b&0x7F) << shift
+						if b < 0x80 {
+							break
+						}
+					}
+					intStringLenmapkey := int(stringLenmapkey)
+					if intStringLenmapkey < 0 {
+						return ErrInvalidLengthVtadmin
+					}
+					postStringIndexmapkey := iNdEx + intStringLenmapkey
+					if postStringIndexmapkey < 0 {
+						return ErrInvalidLengthVtadmin
+					}
+					if postStringIndexmapkey > l {
+						return io.ErrUnexpectedEOF
+					}
+					mapkey = string(dAtA[iNdEx:postStringIndexmapkey])
+					iNdEx = postStringIndexmapkey
+				} else if fieldNum == 2 {
+					var mapmsglen int
+					for shift := uint(0); ; shift += 7 {
+						if shift >= 64 {
+							return ErrIntOverflowVtadmin
+						}
+						if iNdEx >= l {
+							return io.ErrUnexpectedEOF
+						}
+						b := dAtA[iNdEx]
+						iNdEx++
+						mapmsglen |= int(b&0x7F) << shift
+						if b < 0x80 {
+							break
+						}
+					}
+					if mapmsglen < 0 {
+						return ErrInvalidLengthVtadmin
+					}
+					postmsgIndex := iNdEx + mapmsglen
+					if postmsgIndex < 0 {
+						return ErrInvalidLengthVtadmin
+					}
+					if postmsgIndex > l {
+						return io.ErrUnexpectedEOF
+					}
+					mapvalue = &ClusterWorkflows{}
+					if err := mapvalue.Unmarshal(dAtA[iNdEx:postmsgIndex]); err != nil {
+						return err
+					}
+					iNdEx = postmsgIndex
+				} else {
+					iNdEx = entryPreIndex
+					skippy, err := skipVtadmin(dAtA[iNdEx:])
+					if err != nil {
+						return err
+					}
+					if skippy < 0 {
+						return ErrInvalidLengthVtadmin
+					}
+					if (iNdEx + skippy) > postIndex {
+						return io.ErrUnexpectedEOF
+					}
+					iNdEx += skippy
+				}
+			}
+			m.WorkflowsByCluster[mapkey] = mapvalue
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex

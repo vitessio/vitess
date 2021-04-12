@@ -69,7 +69,7 @@ type logicalPlan interface {
 	SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colNumber int)
 
 	// SupplyWeightString must supply a weight_string expression of the
-	// specified column.
+	// specified column. It returns an error if we cannot supply a weight column for it.
 	SupplyWeightString(colNumber int) (weightcolNumber int, err error)
 
 	// Primitive returns the underlying primitive.

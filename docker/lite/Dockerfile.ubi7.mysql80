@@ -61,7 +61,7 @@ RUN yum update -y --setopt=alwaysprompt=no --setopt=tsflags=nodocs \
     mysql-community-client mysql-community-server \
 # Have to use hacks to ignore conflicts on /etc/my.cnf install
  && mkdir -p /tmp/1 \
- && yum install -y --setopt=alwaysprompt=no --downloadonly --downloaddir=/tmp/1 --enablerepo mysql80-community --disablerepo mysql57-community percona-xtrabackup-80 \
+ && yum install -y --setopt=alwaysprompt=no --downloadonly --downloaddir=/tmp/1 --enablerepo mysql80-community --disablerepo mysql57-community percona-xtrabackup-80 percona-toolkit \
  && rpm -Uvh --replacefiles /tmp/1/*rpm \
  && rm -rf /tmp/1 \
  && yum clean all \

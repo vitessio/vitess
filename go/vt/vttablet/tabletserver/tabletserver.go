@@ -228,7 +228,7 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 // to complete the creation of TabletServer.
 func (tsv *TabletServer) InitDBConfig(target querypb.Target, dbcfgs *dbconfigs.DBConfigs, mysqld mysqlctl.MysqlDaemon) error {
 	if tsv.sm.State() != StateNotConnected {
-		return vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "InitDBConfig failed, current state: %s", tsv.sm.IsServingString())
+		return vterrors.NewErrorf(vtrpcpb.Code_UNAVAILABLE, vterrors.ServerNotAvailable, "Server isn't available")
 	}
 	tsv.sm.Init(tsv, target)
 	tsv.sm.target = target
@@ -397,6 +397,32 @@ func (tsv *TabletServer) IsServingType() bool {
 // ReloadSchema reloads the schema.
 func (tsv *TabletServer) ReloadSchema(ctx context.Context) error {
 	return tsv.se.Reload(ctx)
+}
+
+// WaitForSchemaReset blocks the TabletServer until there's been at least `timeout` duration without
+// any schema changes. This is useful for tests that need to wait for all the currently existing schema
+// changes to finish being applied.
+func (tsv *TabletServer) WaitForSchemaReset(timeout time.Duration) {
+	onSchemaChange := make(chan struct{}, 1)
+	tsv.se.RegisterNotifier("_tsv_wait", func(_ map[string]*schema.Table, _, _, _ []string) {
+		onSchemaChange <- struct{}{}
+	})
+	defer tsv.se.UnregisterNotifier("_tsv_wait")
+
+	after := time.NewTimer(timeout)
+	defer after.Stop()
+
+	for {
+		select {
+		case <-after.C:
+			return
+		case <-onSchemaChange:
+			if !after.Stop() {
+				<-after.C
+			}
+			after.Reset(timeout)
+		}
+	}
 }
 
 // ClearQueryPlanCache clears internal query plan cache
@@ -667,7 +693,7 @@ func (tsv *TabletServer) Execute(ctx context.Context, target *querypb.Target, sq
 	defer span.Finish()
 
 	if transactionID != 0 && reservedID != 0 && transactionID != reservedID {
-		return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "transactionID and reserveID must match if both are non-zero")
+		return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "[BUG] transactionID and reserveID must match if both are non-zero")
 	}
 
 	allowOnShutdown := false
@@ -717,13 +743,14 @@ func (tsv *TabletServer) Execute(ctx context.Context, target *querypb.Target, sq
 			result = result.StripMetadata(sqltypes.IncludeFieldsOrDefault(options))
 
 			// Change database name in mysql output to the keyspace name
-			if sqltypes.IncludeFieldsOrDefault(options) == querypb.ExecuteOptions_ALL {
-				for _, f := range result.Fields {
-					if f.Database != "" {
-						if qre.plan.PlanID == planbuilder.PlanShow {
-							f.Database = "information_schema"
-						} else {
-							f.Database = tsv.sm.target.Keyspace
+			if tsv.sm.target.Keyspace != tsv.config.DB.DBName && sqltypes.IncludeFieldsOrDefault(options) == querypb.ExecuteOptions_ALL {
+				switch qre.plan.PlanID {
+				case planbuilder.PlanSelect, planbuilder.PlanSelectImpossible:
+					dbName := tsv.config.DB.DBName
+					ksName := tsv.sm.target.Keyspace
+					for _, f := range result.Fields {
+						if f.Database == dbName {
+							f.Database = ksName
 						}
 					}
 				}
@@ -778,18 +805,7 @@ func (tsv *TabletServer) StreamExecute(ctx context.Context, target *querypb.Targ
 				logStats:       logStats,
 				tsv:            tsv,
 			}
-			newCallback := func(result *sqltypes.Result) error {
-				if sqltypes.IncludeFieldsOrDefault(options) == querypb.ExecuteOptions_ALL {
-					// Change database name in mysql output to the keyspace name
-					for _, f := range result.Fields {
-						if f.Database != "" {
-							f.Database = tsv.sm.target.Keyspace
-						}
-					}
-				}
-				return callback(result)
-			}
-			return qre.Stream(newCallback)
+			return qre.Stream(callback)
 		},
 	)
 }
@@ -804,10 +820,10 @@ func (tsv *TabletServer) ExecuteBatch(ctx context.Context, target *querypb.Targe
 	defer span.Finish()
 
 	if len(queries) == 0 {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Empty query list")
+		return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.EmptyQuery, "Query was empty")
 	}
 	if asTransaction && transactionID != 0 {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "cannot start a new transaction in the scope of an existing one")
+		return nil, vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.CantDoThisInTransaction, "You are not allowed to execute this command in a transaction")
 	}
 
 	if tsv.enableHotRowProtection && asTransaction {
@@ -1064,7 +1080,7 @@ func (tsv *TabletServer) execDML(ctx context.Context, target *querypb.Target, qu
 
 	query, bv, err := queryGenerator()
 	if err != nil {
-		return 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
+		return 0, err
 	}
 
 	transactionID, _, err := tsv.Begin(ctx, target, nil)
@@ -1184,7 +1200,7 @@ func (tsv *TabletServer) ReserveExecute(ctx context.Context, target *querypb.Tar
 //Release implements the QueryService interface
 func (tsv *TabletServer) Release(ctx context.Context, target *querypb.Target, transactionID, reservedID int64) error {
 	if reservedID == 0 && transactionID == 0 {
-		return vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "Connection Id and Transaction ID does not exists")
+		return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.NoSuchSession, "connection ID and transaction ID do not exist")
 	}
 	return tsv.execRequest(
 		ctx, tsv.QueryTimeout.Get(),
@@ -1396,7 +1412,7 @@ func convertErrorCode(err error) vtrpcpb.Code {
 		errCode = vtrpcpb.Code_RESOURCE_EXHAUSTED
 	case mysql.ERLockWaitTimeout:
 		errCode = vtrpcpb.Code_DEADLINE_EXCEEDED
-	case mysql.CRServerGone, mysql.ERServerShutdown:
+	case mysql.CRServerGone, mysql.ERServerShutdown, mysql.ERServerIsntAvailable:
 		errCode = vtrpcpb.Code_UNAVAILABLE
 	case mysql.ERFormNotFound, mysql.ERKeyNotFound, mysql.ERBadFieldError, mysql.ERNoSuchThread, mysql.ERUnknownTable, mysql.ERCantFindUDF, mysql.ERNonExistingGrant,
 		mysql.ERNoSuchTable, mysql.ERNonExistingTableGrant, mysql.ERKeyDoesNotExist:
@@ -1574,7 +1590,7 @@ func (tsv *TabletServer) registerMigrationStatusHandler() {
 	tsv.exporter.HandleFunc("/schema-migration/report-status", func(w http.ResponseWriter, r *http.Request) {
 		ctx := tabletenv.LocalContext()
 		query := r.URL.Query()
-		if err := tsv.onlineDDLExecutor.OnSchemaMigrationStatus(ctx, query.Get("uuid"), query.Get("status"), query.Get("dryrun"), query.Get("progress")); err != nil {
+		if err := tsv.onlineDDLExecutor.OnSchemaMigrationStatus(ctx, query.Get("uuid"), query.Get("status"), query.Get("dryrun"), query.Get("progress"), query.Get("eta")); err != nil {
 			http.Error(w, fmt.Sprintf("not ok: %v", err), http.StatusInternalServerError)
 			return
 		}
@@ -1704,6 +1720,11 @@ func (tsv *TabletServer) PoolSize() int {
 // SetStreamPoolSize changes the pool size to the specified value.
 func (tsv *TabletServer) SetStreamPoolSize(val int) {
 	tsv.qe.streamConns.SetCapacity(val)
+}
+
+// SetStreamConsolidationBlocking sets whether the stream consolidator should wait for slow clients
+func (tsv *TabletServer) SetStreamConsolidationBlocking(block bool) {
+	tsv.qe.streamConsolidator.SetBlocking(block)
 }
 
 // StreamPoolSize returns the pool size.

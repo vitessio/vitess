@@ -87,6 +87,8 @@ func consulServiceEntry(name string, tags []string, meta map[string]string) *con
 }
 
 func TestConsulDiscoverVTGates(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name      string
 		disco     *ConsulDiscovery
@@ -228,15 +230,21 @@ func TestConsulDiscoverVTGates(t *testing.T) {
 		},
 	}
 
+	ctx := context.Background()
+
 	for _, tt := range tests {
+		tt := tt
+
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			tt.disco.client = &fakeConsulClient{
 				health: &fakeConsulHealth{
 					entries: tt.entries,
 				},
 			}
 
-			gates, err := tt.disco.DiscoverVTGates(context.Background(), tt.tags)
+			gates, err := tt.disco.DiscoverVTGates(ctx, tt.tags)
 			if tt.shouldErr {
 				assert.Error(t, err, assert.AnError)
 				return
@@ -249,6 +257,8 @@ func TestConsulDiscoverVTGates(t *testing.T) {
 }
 
 func TestConsulDiscoverVTGate(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name      string
 		disco     *ConsulDiscovery
@@ -331,15 +341,21 @@ func TestConsulDiscoverVTGate(t *testing.T) {
 		},
 	}
 
+	ctx := context.Background()
+
 	for _, tt := range tests {
+		tt := tt
+
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			tt.disco.client = &fakeConsulClient{
 				health: &fakeConsulHealth{
 					entries: tt.entries,
 				},
 			}
 
-			gate, err := tt.disco.DiscoverVTGate(context.Background(), tt.tags)
+			gate, err := tt.disco.DiscoverVTGate(ctx, tt.tags)
 			if tt.shouldErr {
 				assert.Error(t, err, assert.AnError)
 				return
@@ -352,6 +368,8 @@ func TestConsulDiscoverVTGate(t *testing.T) {
 }
 
 func TestConsulDiscoverVTGateAddr(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name      string
 		disco     *ConsulDiscovery
@@ -421,15 +439,21 @@ func TestConsulDiscoverVTGateAddr(t *testing.T) {
 		},
 	}
 
+	ctx := context.Background()
+
 	for _, tt := range tests {
+		tt := tt
+
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			tt.disco.client = &fakeConsulClient{
 				health: &fakeConsulHealth{
 					entries: tt.entries,
 				},
 			}
 
-			addr, err := tt.disco.DiscoverVTGateAddr(context.Background(), tt.tags)
+			addr, err := tt.disco.DiscoverVTGateAddr(ctx, tt.tags)
 			if tt.shouldErr {
 				assert.Error(t, err, assert.AnError)
 				return

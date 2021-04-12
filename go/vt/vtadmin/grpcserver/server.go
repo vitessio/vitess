@@ -63,7 +63,22 @@ type Options struct {
 	// EnableTracing specifies whether to install opentracing interceptors on
 	// the gRPC server.
 	EnableTracing bool
+	// Services is a list of service names to declare as SERVING in health
+	// checks. Names should be fully-qualified (package_name.service_name, e.g.
+	// vtadmin.VTAdminServer, not VTAdminServer), and must be unique for a
+	// single Server instance. Users of this package are responsible for
+	// ensuring they do not pass a list with duplicate service names.
+	//
+	// The service name "grpc.health.v1.Health" is reserved by this package in
+	// order to power the healthcheck service. Attempting to pass this in the
+	// Services list to a grpcserver will be ignored.
+	//
+	// See https://github.com/grpc/grpc/blob/7324556353e831c57d30973db33df489c3ed3576/doc/health-checking.md
+	// for more details on healthchecking.
+	Services []string
 }
+
+const healthServiceName = "grpc.health.v1.Health" // reserved health service name
 
 // Server provides a multiplexed gRPC/HTTP server.
 type Server struct {
@@ -201,9 +216,16 @@ func (s *Server) ListenAndServe() error { // nolint:funlen
 		shutdown <- err
 	}()
 
-	// (TODO:@amason) Figure out a good abstraction to have other services
-	// register themselves.
-	s.healthServer.SetServingStatus("grpc.health.v1.Health", healthpb.HealthCheckResponse_SERVING)
+	s.healthServer.SetServingStatus(healthServiceName, healthpb.HealthCheckResponse_SERVING)
+
+	for _, name := range s.opts.Services {
+		if name == healthServiceName {
+			log.Warningf("Attempted to register a service under the reserved healthcheck service name %s; ignoring", healthServiceName)
+			continue
+		}
+
+		s.healthServer.SetServingStatus(name, healthpb.HealthCheckResponse_SERVING)
+	}
 
 	s.setServing(true)
 	log.Infof("server %s listening on %s", s.name, s.opts.Addr)

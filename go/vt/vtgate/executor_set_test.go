@@ -246,6 +246,9 @@ func TestExecutorSet(t *testing.T) {
 	}, {
 		in:  "set @@enable_system_settings = false",
 		out: &vtgatepb.Session{Autocommit: true, EnableSystemSettings: false},
+	}, {
+		in:  "set @@socket = '/tmp/change.sock'",
+		err: "Variable 'socket' is a read only variable",
 	}}
 	for i, tcase := range testcases {
 		t.Run(fmt.Sprintf("%d-%s", i, tcase.in), func(t *testing.T) {

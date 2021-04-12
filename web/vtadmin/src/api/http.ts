@@ -25,9 +25,10 @@ interface HttpErrorResponse {
     ok: false;
 }
 
-type HttpResponse = HttpOkResponse | HttpErrorResponse;
-
 export const MALFORMED_HTTP_RESPONSE_ERROR = 'MalformedHttpResponseError';
+
+// MalformedHttpResponseError is thrown when the JSON response envelope
+// is an unexpected shape.
 class MalformedHttpResponseError extends Error {
     responseJson: object;
 
@@ -39,6 +40,9 @@ class MalformedHttpResponseError extends Error {
 }
 
 export const HTTP_RESPONSE_NOT_OK_ERROR = 'HttpResponseNotOkError';
+
+// HttpResponseNotOkError is throw when the `ok` is false in
+// the JSON response envelope.
 class HttpResponseNotOkError extends Error {
     response: HttpErrorResponse | null;
 
@@ -57,7 +61,7 @@ class HttpResponseNotOkError extends Error {
 //
 // Note that this only validates the HttpResponse envelope; it does not
 // do any type checking or validation on the result.
-export const vtfetch = async (endpoint: string): Promise<HttpResponse> => {
+export const vtfetch = async (endpoint: string): Promise<HttpOkResponse> => {
     const { REACT_APP_VTADMIN_API_ADDRESS } = process.env;
 
     const url = `${REACT_APP_VTADMIN_API_ADDRESS}${endpoint}`;
@@ -68,7 +72,11 @@ export const vtfetch = async (endpoint: string): Promise<HttpResponse> => {
     const json = await response.json();
     if (!('ok' in json)) throw new MalformedHttpResponseError('invalid http envelope', json);
 
-    return json as HttpResponse;
+    // Throw "not ok" responses so that react-query correctly interprets them as errors.
+    // See https://react-query.tanstack.com/guides/query-functions#handling-and-throwing-errors
+    if (!json.ok) throw new HttpResponseNotOkError(endpoint, json);
+
+    return json as HttpOkResponse;
 };
 
 export const vtfetchOpts = (): RequestInit => {
@@ -95,10 +103,6 @@ export const vtfetchEntities = async <T>(opts: {
     transform: (e: object) => T;
 }): Promise<T[]> => {
     const res = await vtfetch(opts.endpoint);
-
-    // Throw "not ok" responses so that react-query correctly interprets them as errors.
-    // See https://react-query.tanstack.com/guides/query-functions#handling-and-throwing-errors
-    if (!res.ok) throw new HttpResponseNotOkError(opts.endpoint, res);
 
     const entities = opts.extract(res);
     if (!Array.isArray(entities)) {
@@ -152,6 +156,21 @@ export const fetchSchemas = async () =>
         },
     });
 
+export interface FetchSchemaParams {
+    clusterID: string;
+    keyspace: string;
+    table: string;
+}
+
+export const fetchSchema = async ({ clusterID, keyspace, table }: FetchSchemaParams) => {
+    const { result } = await vtfetch(`/api/schema/${clusterID}/${keyspace}/${table}`);
+
+    const err = pb.Schema.verify(result);
+    if (err) throw Error(err);
+
+    return pb.Schema.create(result);
+};
+
 export const fetchTablets = async () =>
     vtfetchEntities({
         endpoint: '/api/tablets',
@@ -162,3 +181,21 @@ export const fetchTablets = async () =>
             return pb.Tablet.create(e);
         },
     });
+
+export const fetchWorkflows = async () => {
+    const { result } = await vtfetch(`/api/workflows`);
+
+    const err = pb.GetWorkflowsResponse.verify(result);
+    if (err) throw Error(err);
+
+    return pb.GetWorkflowsResponse.create(result);
+};
+
+export const fetchWorkflow = async (params: { clusterID: string; keyspace: string; name: string }) => {
+    const { result } = await vtfetch(`/api/workflow/${params.clusterID}/${params.keyspace}/${params.name}`);
+
+    const err = pb.Workflow.verify(result);
+    if (err) throw Error(err);
+
+    return pb.Workflow.create(result);
+};

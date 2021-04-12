@@ -23,9 +23,10 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select a, b, count(*) from `user` where 1 != 1 group by a",
+            "FieldQuery": "select a, b, count(*), weight_string(b), weight_string(a) from `user` where 1 != 1 group by a",
             "OrderBy": "0 ASC",
-            "Query": "select a, b, count(*) from `user` group by a order by a asc",
+            "Query": "select a, b, count(*), weight_string(b), weight_string(a) from `user` group by a order by a asc",
+            "ResultColumns": 4,
             "Table": "`user`"
           }
         ]
@@ -58,9 +59,10 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select a, b, count(*) as k from `user` where 1 != 1 group by a",
+            "FieldQuery": "select a, b, count(*) as k, weight_string(a) from `user` where 1 != 1 group by a",
             "OrderBy": "0 ASC",
-            "Query": "select a, b, count(*) as k from `user` group by a order by a asc",
+            "Query": "select a, b, count(*) as k, weight_string(a) from `user` group by a order by a asc",
+            "ResultColumns": 3,
             "Table": "`user`"
           }
         ]
@@ -93,9 +95,10 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select a, b, count(*) as k from `user` where 1 != 1 group by a",
+            "FieldQuery": "select a, b, count(*) as k, weight_string(b), weight_string(a) from `user` where 1 != 1 group by a",
             "OrderBy": "0 ASC",
-            "Query": "select a, b, count(*) as k from `user` group by a order by a asc",
+            "Query": "select a, b, count(*) as k, weight_string(b), weight_string(a) from `user` group by a order by a asc",
+            "ResultColumns": 5,
             "Table": "`user`"
           }
         ]
@@ -132,9 +135,10 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select a, b, count(*) as k from `user` where 1 != 1 group by a",
+                "FieldQuery": "select a, b, count(*) as k, weight_string(a) from `user` where 1 != 1 group by a",
                 "OrderBy": "0 ASC",
-                "Query": "select a, b, count(*) as k from `user` group by a order by a asc",
+                "Query": "select a, b, count(*) as k, weight_string(a) from `user` group by a order by a asc",
+                "ResultColumns": 3,
                 "Table": "`user`"
               }
             ]
@@ -169,9 +173,10 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select a, b, count(*) as k from `user` where 1 != 1 group by a",
+            "FieldQuery": "select a, b, count(*) as k, weight_string(a) from `user` where 1 != 1 group by a",
             "OrderBy": "0 ASC",
-            "Query": "select a, b, count(*) as k from `user` group by a order by 1 asc",
+            "Query": "select a, b, count(*) as k, weight_string(a) from `user` group by a order by 1 asc",
+            "ResultColumns": 4,
             "Table": "`user`"
           }
         ]
@@ -189,7 +194,7 @@
   "Instructions": {
     "OperatorType": "Sort",
     "Variant": "Memory",
-    "OrderBy": "2 ASC, 1 ASC, 2 ASC",
+    "OrderBy": "0 ASC, 1 ASC, 0 ASC",
     "Inputs": [
       {
         "OperatorType": "Aggregate",
@@ -206,8 +211,9 @@
               "Sharded": true
             },
             "FieldQuery": "select textcol1 as t, count(*) as k, weight_string(textcol1) from `user` where 1 != 1 group by textcol1",
-            "OrderBy": "2 ASC, 2 ASC",
+            "OrderBy": "0 ASC, 0 ASC",
             "Query": "select textcol1 as t, count(*) as k, weight_string(textcol1) from `user` group by textcol1 order by textcol1 asc, textcol1 asc",
+            "ResultColumns": 3,
             "Table": "`user`"
           }
         ]
@@ -235,7 +241,7 @@
           {
             "OperatorType": "Join",
             "Variant": "Join",
-            "JoinColumnIndexes": "-1,-2",
+            "JoinColumnIndexes": "-1,-2,-3",
             "TableName": "`user`_user_extra",
             "Inputs": [
               {
@@ -245,8 +251,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select `user`.id, `user`.col from `user` where 1 != 1",
-                "Query": "select `user`.id, `user`.col from `user`",
+                "FieldQuery": "select `user`.id, `user`.col, weight_string(`user`.id) from `user` where 1 != 1",
+                "Query": "select `user`.id, `user`.col, weight_string(`user`.id) from `user`",
                 "Table": "`user`"
               },
               {
@@ -281,7 +287,7 @@
       {
         "OperatorType": "Join",
         "Variant": "Join",
-        "JoinColumnIndexes": "-1,-2,1",
+        "JoinColumnIndexes": "-1,-2,1,2",
         "TableName": "`user`_music",
         "Inputs": [
           {
@@ -306,8 +312,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select music.col3 as c from music where 1 != 1",
-            "Query": "select music.col3 as c from music where music.id = :user_id",
+            "FieldQuery": "select music.col3 as c, weight_string(music.col3) from music where 1 != 1",
+            "Query": "select music.col3 as c, weight_string(music.col3) from music where music.id = :user_id",
             "Table": "music",
             "Values": [
               ":user_id"
@@ -333,7 +339,7 @@
       {
         "OperatorType": "Join",
         "Variant": "Join",
-        "JoinColumnIndexes": "-1,-2,1",
+        "JoinColumnIndexes": "-1,-2,1,-3,2,-4",
         "TableName": "`user`_music",
         "Inputs": [
           {
@@ -343,8 +349,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select `user`.col1 as a, `user`.col2, `user`.id from `user` where 1 != 1",
-            "Query": "select `user`.col1 as a, `user`.col2, `user`.id from `user` where `user`.id = 1",
+            "FieldQuery": "select `user`.col1 as a, `user`.col2, weight_string(`user`.col1), weight_string(`user`.col2), `user`.id from `user` where 1 != 1",
+            "Query": "select `user`.col1 as a, `user`.col2, weight_string(`user`.col1), weight_string(`user`.col2), `user`.id from `user` where `user`.id = 1",
             "Table": "`user`",
             "Values": [
               1
@@ -358,8 +364,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select music.col3 from music where 1 != 1",
-            "Query": "select music.col3 from music where music.id = :user_id",
+            "FieldQuery": "select music.col3, weight_string(music.col3) from music where 1 != 1",
+            "Query": "select music.col3, weight_string(music.col3) from music where music.id = :user_id",
             "Table": "music",
             "Values": [
               ":user_id"
@@ -380,12 +386,12 @@
   "Instructions": {
     "OperatorType": "Sort",
     "Variant": "Memory",
-    "OrderBy": "3 ASC, 2 ASC",
+    "OrderBy": "1 ASC, 2 ASC",
     "Inputs": [
       {
         "OperatorType": "Join",
         "Variant": "Join",
-        "JoinColumnIndexes": "-1,-2,1,-3",
+        "JoinColumnIndexes": "-1,-2,1,-3,2",
         "TableName": "`user`_unsharded",
         "Inputs": [
           {
@@ -406,8 +412,8 @@
               "Name": "main",
               "Sharded": false
             },
-            "FieldQuery": "select un.col2 from unsharded as un where 1 != 1",
-            "Query": "select un.col2 from unsharded as un",
+            "FieldQuery": "select un.col2, weight_string(un.col2) from unsharded as un where 1 != 1",
+            "Query": "select un.col2, weight_string(un.col2) from unsharded as un",
             "Table": "unsharded"
           }
         ]
@@ -424,12 +430,12 @@
   "Instructions": {
     "OperatorType": "Sort",
     "Variant": "Memory",
-    "OrderBy": "3 ASC, 2 ASC",
+    "OrderBy": "1 ASC, 2 ASC",
     "Inputs": [
       {
         "OperatorType": "Join",
         "Variant": "Join",
-        "JoinColumnIndexes": "1,2,-1,3",
+        "JoinColumnIndexes": "1,2,-1,3,-2",
         "TableName": "unsharded_`user`",
         "Inputs": [
           {
@@ -439,8 +445,8 @@
               "Name": "main",
               "Sharded": false
             },
-            "FieldQuery": "select un.col2 from unsharded as un where 1 != 1",
-            "Query": "select un.col2 from unsharded as un",
+            "FieldQuery": "select un.col2, weight_string(un.col2) from unsharded as un where 1 != 1",
+            "Query": "select un.col2, weight_string(un.col2) from unsharded as un",
             "Table": "unsharded"
           },
           {
@@ -504,9 +510,10 @@
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select a from `user` where 1 != 1",
+    "FieldQuery": "select a, weight_string(a) from `user` where 1 != 1",
     "OrderBy": "0 DESC",
-    "Query": "select a from `user` order by binary a desc",
+    "Query": "select a, weight_string(a) from `user` order by binary a desc",
+    "ResultColumns": 1,
     "Table": "`user`"
   }
 }
@@ -529,9 +536,10 @@
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select u.a from `user` as u where 1 != 1",
+        "FieldQuery": "select u.a, weight_string(u.a) from `user` as u where 1 != 1",
         "OrderBy": "0 DESC",
-        "Query": "select u.a from `user` as u order by binary a desc",
+        "Query": "select u.a, weight_string(u.a) from `user` as u order by binary a desc",
+        "ResultColumns": 1,
         "Table": "`user`"
       },
       {
@@ -548,3 +556,23 @@
     ]
   }
 }
+
+# intcol order by
+"select id, intcol from user order by intcol"
+{
+  "QueryType": "SELECT",
+  "Original": "select id, intcol from user order by intcol",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select id, intcol from `user` where 1 != 1",
+    "OrderBy": "1 ASC",
+    "Query": "select id, intcol from `user` order by intcol asc",
+    "Table": "`user`"
+  }
+}
+Gen4 plan same as above

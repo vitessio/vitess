@@ -26,6 +26,8 @@ import (
 	"sync"
 	"time"
 
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/key"
@@ -211,7 +213,7 @@ func getQuery(tableName string, filter string) string {
 		query = buf.String()
 	case key.IsKeyRange(filter):
 		buf := sqlparser.NewTrackedBuffer(nil)
-		buf.Myprintf("select * from %v where in_keyrange(%v)", sqlparser.NewTableIdent(tableName), sqlparser.NewStrLiteral([]byte(filter)))
+		buf.Myprintf("select * from %v where in_keyrange(%v)", sqlparser.NewTableIdent(tableName), sqlparser.NewStrLiteral(filter))
 		query = buf.String()
 	}
 	return query
@@ -324,7 +326,7 @@ func (uvs *uvstreamer) setStreamStartPosition() error {
 	}
 	if !curPos.AtLeast(pos) {
 		uvs.vse.errorCounts.Add("GTIDSet Mismatch", 1)
-		return fmt.Errorf("GTIDSet Mismatch: requested source position:%v, current target vrep position: %v", mysql.EncodePosition(pos), mysql.EncodePosition(curPos))
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "GTIDSet Mismatch: requested source position:%v, current target vrep position: %v", mysql.EncodePosition(pos), mysql.EncodePosition(curPos))
 	}
 	uvs.pos = pos
 	return nil

@@ -96,9 +96,6 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 		if err := json2.Unmarshal([]byte(wrap), ks); err != nil {
 			return err
 		}
-		if err != nil {
-			return err
-		}
 		for table, vtab := range ks.Tables {
 			vschema.Tables[table] = vtab
 			tables = append(tables, table)
@@ -993,10 +990,7 @@ func stripTableConstraints(ddl string) (string, error) {
 		return true
 	}
 
-	noConstraintAST, err := sqlparser.Rewrite(ast, stripConstraints, nil)
-	if err != nil {
-		return "", err
-	}
+	noConstraintAST := sqlparser.Rewrite(ast, stripConstraints, nil)
 	newDDL := sqlparser.String(noConstraintAST)
 
 	return newDDL, nil
@@ -1052,8 +1046,8 @@ func (mz *materializer) generateInserts(ctx context.Context) (string, error) {
 					subExprs = append(subExprs, &sqlparser.AliasedExpr{Expr: mappedCol})
 				}
 				vindexName := fmt.Sprintf("%s.%s", mz.ms.TargetKeyspace, cv.Name)
-				subExprs = append(subExprs, &sqlparser.AliasedExpr{Expr: sqlparser.NewStrLiteral([]byte(vindexName))})
-				subExprs = append(subExprs, &sqlparser.AliasedExpr{Expr: sqlparser.NewStrLiteral([]byte("{{.keyrange}}"))})
+				subExprs = append(subExprs, &sqlparser.AliasedExpr{Expr: sqlparser.NewStrLiteral(vindexName)})
+				subExprs = append(subExprs, &sqlparser.AliasedExpr{Expr: sqlparser.NewStrLiteral("{{.keyrange}}")})
 				sel.Where = &sqlparser.Where{
 					Type: sqlparser.WhereClause,
 					Expr: &sqlparser.FuncExpr{

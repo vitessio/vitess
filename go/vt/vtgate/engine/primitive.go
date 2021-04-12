@@ -98,6 +98,12 @@ type (
 		LookupRowLockShardSession() vtgatepb.CommitOrder
 
 		FindRoutedTable(tablename sqlparser.TableName) (*vindexes.Table, error)
+
+		// GetDBDDLPlugin gets the configured plugin for DROP/CREATE DATABASE
+		GetDBDDLPluginName() string
+
+		// KeyspaceAvailable returns true when a keyspace is visible from vtgate
+		KeyspaceAvailable(ks string) bool
 	}
 
 	//SessionActions gives primitives ability to interact with the session state
@@ -156,6 +162,7 @@ type (
 		Original     string                  // Original is the original query.
 		Instructions Primitive               // Instructions contains the instructions needed to fulfil the query.
 		BindVarNeeds *sqlparser.BindVarNeeds // Stores BindVars needed to be provided as part of expression rewriting
+		Warnings     []*querypb.QueryWarning // Warnings that need to be yielded every time this query runs
 
 		ExecCount    uint64 // Count of times this plan was executed
 		ExecTime     uint64 // Total execution time

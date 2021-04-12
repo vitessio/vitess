@@ -231,6 +231,9 @@ func (tp *TxPool) Begin(ctx context.Context, options *querypb.ExecuteOptions, re
 	var err error
 	if reservedID != 0 {
 		conn, err = tp.scp.GetAndLock(reservedID, "start transaction on reserve conn")
+		if err != nil {
+			return nil, "", vterrors.Errorf(vtrpcpb.Code_ABORTED, "transaction %d: %v", reservedID, err)
+		}
 	} else {
 		immediateCaller := callerid.ImmediateCallerIDFromContext(ctx)
 		effectiveCaller := callerid.EffectiveCallerIDFromContext(ctx)
@@ -295,7 +298,7 @@ func createTransaction(ctx context.Context, options *querypb.ExecuteOptions, con
 		if queries.setIsolationLevel != "" {
 			txQuery := "set transaction isolation level " + queries.setIsolationLevel
 			if err := conn.execWithRetry(ctx, txQuery, 1, false); err != nil {
-				return "", false, vterrors.Wrap(err, txQuery)
+				return "", false, err
 			}
 			beginQueries = queries.setIsolationLevel + "; "
 		}
@@ -305,7 +308,7 @@ func createTransaction(ctx context.Context, options *querypb.ExecuteOptions, con
 			beginSQL = "start transaction read only"
 		}
 		if err := conn.execWithRetry(ctx, beginSQL, 1, false); err != nil {
-			return "", false, vterrors.Wrap(err, beginSQL)
+			return "", false, err
 		}
 		beginQueries = beginQueries + beginSQL
 	} else if options.GetTransactionIsolation() == querypb.ExecuteOptions_AUTOCOMMIT {
@@ -316,7 +319,7 @@ func createTransaction(ctx context.Context, options *querypb.ExecuteOptions, con
 
 	for _, preQuery := range preQueries {
 		if _, err := conn.Exec(ctx, preQuery, 1, false); err != nil {
-			return "", false, vterrors.Wrap(err, preQuery)
+			return "", false, err
 		}
 	}
 	return beginQueries, autocommitTransaction, nil

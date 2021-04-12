@@ -33,9 +33,6 @@ func analyzeSelect(sel *sqlparser.Select, tables map[string]*schema.Table) (plan
 		FieldQuery: GenerateFieldQuery(sel),
 		FullQuery:  GenerateLimitQuery(sel),
 	}
-	if sel.Lock != sqlparser.NoLock {
-		plan.PlanID = PlanSelectLock
-	}
 
 	if sel.Where != nil {
 		comp, ok := sel.Where.Expr.(*sqlparser.ComparisonExpr)
@@ -134,10 +131,7 @@ func analyzeShow(show *sqlparser.Show, dbName string) (plan *Plan, err error) {
 			// rewrite WHERE clause if it exists
 			// `where Tables_in_Keyspace` => `where Tables_in_DbName`
 			if showInternal.Filter != nil {
-				err := showTableRewrite(showInternal, dbName)
-				if err != nil {
-					return nil, err
-				}
+				showTableRewrite(showInternal, dbName)
 			}
 		}
 		return &Plan{
@@ -156,23 +150,20 @@ func analyzeShow(show *sqlparser.Show, dbName string) (plan *Plan, err error) {
 	return &Plan{PlanID: PlanOtherRead}, nil
 }
 
-func showTableRewrite(show *sqlparser.ShowBasic, dbName string) error {
+func showTableRewrite(show *sqlparser.ShowBasic, dbName string) {
 	filter := show.Filter.Filter
-	if filter != nil {
-		_, err := sqlparser.Rewrite(filter, func(cursor *sqlparser.Cursor) bool {
-			switch n := cursor.Node().(type) {
-			case *sqlparser.ColName:
-				if n.Qualifier.IsEmpty() && strings.HasPrefix(n.Name.Lowered(), "tables_in_") {
-					cursor.Replace(sqlparser.NewColName("Tables_in_" + dbName))
-				}
-			}
-			return true
-		}, nil)
-		if err != nil {
-			return err
-		}
+	if filter == nil {
+		return
 	}
-	return nil
+	_ = sqlparser.Rewrite(filter, func(cursor *sqlparser.Cursor) bool {
+		switch n := cursor.Node().(type) {
+		case *sqlparser.ColName:
+			if n.Qualifier.IsEmpty() && strings.HasPrefix(n.Name.Lowered(), "tables_in_") {
+				cursor.Replace(sqlparser.NewColName("Tables_in_" + dbName))
+			}
+		}
+		return true
+	}, nil)
 }
 
 func analyzeSet(set *sqlparser.Set) (plan *Plan) {

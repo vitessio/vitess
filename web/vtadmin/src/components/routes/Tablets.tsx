@@ -25,6 +25,8 @@ import { Icons } from '../Icon';
 import { filterNouns } from '../../util/filterNouns';
 import style from './Tablets.module.scss';
 import { Button } from '../Button';
+import { DataCell } from '../dataTable/DataCell';
+import { TabletServingPip } from '../pips/TabletServingPip';
 
 export const Tablets = () => {
     useDocumentTitle('Tablets');
@@ -39,19 +41,23 @@ export const Tablets = () => {
     const renderRows = React.useCallback((rows: typeof filteredData) => {
         return rows.map((t, tdx) => (
             <tr key={tdx}>
-                <td>{t.cluster}</td>
-                <td>{t.keyspace}</td>
-                <td>{t.shard}</td>
-                <td>{t.type}</td>
-                <td>{t.state}</td>
-                <td>{t.alias}</td>
-                <td>{t.hostname}</td>
+                <DataCell>
+                    <div>{t.keyspace}</div>
+                    <div className="font-size-small text-color-secondary">{t.cluster}</div>
+                </DataCell>
+                <DataCell>{t.shard}</DataCell>
+                <DataCell className="white-space-nowrap">
+                    <TabletServingPip state={t._raw.state} /> {t.type}
+                </DataCell>
+                <DataCell>{t.state}</DataCell>
+                <DataCell>{t.alias}</DataCell>
+                <DataCell>{t.hostname}</DataCell>
             </tr>
         ));
     }, []);
 
     return (
-        <div>
+        <div className="max-width-content">
             <h1>Tablets</h1>
             <div className={style.controls}>
                 <TextInput
@@ -66,7 +72,7 @@ export const Tablets = () => {
                 </Button>
             </div>
             <DataTable
-                columns={['Cluster', 'Keyspace', 'Shard', 'Type', 'State', 'Alias', 'Hostname']}
+                columns={['Keyspace', 'Shard', 'Type', 'State', 'Alias', 'Hostname']}
                 data={filteredData}
                 renderRows={renderRows}
             />
@@ -115,6 +121,7 @@ export const formatRows = (tablets: pb.Tablet[] | null, filter: string) => {
         hostname: t.tablet?.hostname,
         type: formatDisplayType(t),
         state: formatState(t),
+        _raw: t,
         _keyspaceShard: `${t.tablet?.keyspace}/${t.tablet?.shard}`,
         // Include the unformatted type so (string) filtering by "master" works
         // even if "primary" is what we display, and what we use for key:value searches.

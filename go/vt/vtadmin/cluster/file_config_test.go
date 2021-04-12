@@ -25,6 +25,8 @@ import (
 )
 
 func TestFileConfigUnmarshalYAML(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name   string
 		yaml   string
@@ -92,7 +94,11 @@ clusters:
 	}
 
 	for _, tt := range tests {
+		tt := tt
+
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			cfg := FileConfig{
 				Defaults: Config{
 					DiscoveryFlagsByImpl: map[string]map[string]string{},
@@ -113,6 +119,8 @@ clusters:
 }
 
 func TestCombine(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name     string
 		fc       FileConfig
@@ -254,7 +262,11 @@ func TestCombine(t *testing.T) {
 	}
 
 	for _, tt := range tests {
+		tt := tt
+
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			actual := tt.fc.Combine(tt.defaults, tt.configs)
 			assert.ElementsMatch(t, tt.expected, actual)
 		})

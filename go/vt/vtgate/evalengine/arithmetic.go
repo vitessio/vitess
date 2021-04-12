@@ -34,6 +34,17 @@ import (
 // a Value, used for arithmetic operations.
 var zeroBytes = []byte("0")
 
+// UnsupportedComparisonError represents the error where the comparison between the two types is unsupported on vitess
+type UnsupportedComparisonError struct {
+	Type1 querypb.Type
+	Type2 querypb.Type
+}
+
+// Error function implements the error interface
+func (err UnsupportedComparisonError) Error() string {
+	return fmt.Sprintf("types are not comparable: %v vs %v", err.Type1, err.Type2)
+}
+
 // Add adds two values together
 // if v1 or v2 is null, then it returns null
 func Add(v1, v2 sqltypes.Value) (sqltypes.Value, error) {
@@ -201,7 +212,10 @@ func NullsafeCompare(v1, v2 sqltypes.Value) (int, error) {
 	if isByteComparable(v1) && isByteComparable(v2) {
 		return bytes.Compare(v1.ToBytes(), v2.ToBytes()), nil
 	}
-	return 0, fmt.Errorf("types are not comparable: %v vs %v", v1.Type(), v2.Type())
+	return 0, UnsupportedComparisonError{
+		Type1: v1.Type(),
+		Type2: v2.Type(),
+	}
 }
 
 // NullsafeHashcode returns an int64 hashcode that is guaranteed to be the same

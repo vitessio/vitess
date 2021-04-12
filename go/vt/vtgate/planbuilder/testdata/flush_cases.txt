@@ -27,6 +27,7 @@
       "Name": "main",
       "Sharded": false
     },
+    "TargetDestination": "AllShards()",
     "IsDML": false,
     "Query": "flush local tables with read lock",
     "SingleShardOnly": false
@@ -44,6 +45,7 @@
       "Name": "main",
       "Sharded": false
     },
+    "TargetDestination": "AllShards()",
     "IsDML": false,
     "Query": "flush local hosts, logs",
     "SingleShardOnly": false

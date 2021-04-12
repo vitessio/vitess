@@ -19,6 +19,7 @@ import { useClusters } from '../../hooks/api';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import { DataTable } from '../dataTable/DataTable';
 import { vtadmin as pb } from '../../proto/vtadmin';
+import { DataCell } from '../dataTable/DataCell';
 
 export const Clusters = () => {
     useDocumentTitle('Clusters');
@@ -31,13 +32,13 @@ export const Clusters = () => {
     const renderRows = (rows: pb.Cluster[]) =>
         rows.map((cluster, idx) => (
             <tr key={idx}>
-                <td>{cluster.name}</td>
-                <td>{cluster.id}</td>
+                <DataCell>{cluster.name}</DataCell>
+                <DataCell>{cluster.id}</DataCell>
             </tr>
         ));
 
     return (
-        <div>
+        <div className="max-width-content">
             <h1>Clusters</h1>
             <DataTable columns={['Name', 'Id']} data={rows} renderRows={renderRows} />
         </div>

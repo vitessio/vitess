@@ -44,17 +44,19 @@ var (
 	utf8 = "'utf8'"
 
 	Autocommit                  = SystemVariable{Name: "autocommit", IsBoolean: true, Default: on}
-	ClientFoundRows             = SystemVariable{Name: "client_found_rows", IsBoolean: true, Default: off}
-	SkipQueryPlanCache          = SystemVariable{Name: "skip_query_plan_cache", IsBoolean: true, Default: off}
-	TxReadOnly                  = SystemVariable{Name: "tx_read_only", IsBoolean: true, Default: off}
-	TransactionReadOnly         = SystemVariable{Name: "transaction_read_only", IsBoolean: true, Default: off}
-	SQLSelectLimit              = SystemVariable{Name: "sql_select_limit", Default: off}
-	TransactionMode             = SystemVariable{Name: "transaction_mode", IdentifierAsString: true}
-	Workload                    = SystemVariable{Name: "workload", IdentifierAsString: true}
 	Charset                     = SystemVariable{Name: "charset", Default: utf8, IdentifierAsString: true}
+	ClientFoundRows             = SystemVariable{Name: "client_found_rows", IsBoolean: true, Default: off}
+	SessionEnableSystemSettings = SystemVariable{Name: "enable_system_settings", IsBoolean: true, Default: on}
 	Names                       = SystemVariable{Name: "names", Default: utf8, IdentifierAsString: true}
 	SessionUUID                 = SystemVariable{Name: "session_uuid", IdentifierAsString: true}
-	SessionEnableSystemSettings = SystemVariable{Name: "enable_system_settings", IsBoolean: true, Default: on}
+	SkipQueryPlanCache          = SystemVariable{Name: "skip_query_plan_cache", IsBoolean: true, Default: off}
+	Socket                      = SystemVariable{Name: "socket", Default: off}
+	SQLSelectLimit              = SystemVariable{Name: "sql_select_limit", Default: off}
+	TransactionMode             = SystemVariable{Name: "transaction_mode", IdentifierAsString: true}
+	TransactionReadOnly         = SystemVariable{Name: "transaction_read_only", IsBoolean: true, Default: off}
+	TxReadOnly                  = SystemVariable{Name: "tx_read_only", IsBoolean: true, Default: off}
+	Workload                    = SystemVariable{Name: "workload", IdentifierAsString: true}
+
 	// Online DDL
 	DDLStrategy    = SystemVariable{Name: "ddl_strategy", IdentifierAsString: true}
 	Version        = SystemVariable{Name: "version"}
@@ -82,6 +84,12 @@ var (
 		ReadAfterWriteGTID,
 		ReadAfterWriteTimeOut,
 		SessionTrackGTIDs,
+	}
+
+	ReadOnly = []SystemVariable{
+		Socket,
+		Version,
+		VersionComment,
 	}
 
 	IgnoreThese = []SystemVariable{
@@ -249,5 +257,6 @@ func GetInterestingVariables() []string {
 	// Also add version and version comment
 	res = append(res, Version.Name)
 	res = append(res, VersionComment.Name)
+	res = append(res, Socket.Name)
 	return res
 }

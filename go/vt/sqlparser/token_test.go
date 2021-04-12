@@ -75,10 +75,12 @@ func TestLiteralID(t *testing.T) {
 	}}
 
 	for _, tcase := range testcases {
-		tkn := NewStringTokenizer(tcase.in)
-		id, out := tkn.Scan()
-		require.Equal(t, tcase.id, id)
-		require.Equal(t, tcase.out, string(out))
+		t.Run(tcase.in, func(t *testing.T) {
+			tkn := NewStringTokenizer(tcase.in)
+			id, out := tkn.Scan()
+			require.Equal(t, tcase.id, id)
+			require.Equal(t, tcase.out, string(out))
+		})
 	}
 }
 
@@ -192,19 +194,21 @@ func TestSplitStatement(t *testing.T) {
 	}}
 
 	for _, tcase := range testcases {
-		sql, rem, err := SplitStatement(tcase.in)
-		if err != nil {
-			t.Errorf("EndOfStatementPosition(%s): ERROR: %v", tcase.in, err)
-			continue
-		}
+		t.Run(tcase.in, func(t *testing.T) {
+			sql, rem, err := SplitStatement(tcase.in)
+			if err != nil {
+				t.Errorf("EndOfStatementPosition(%s): ERROR: %v", tcase.in, err)
+				return
+			}
 
-		if tcase.sql != sql {
-			t.Errorf("EndOfStatementPosition(%s) got sql \"%s\" want \"%s\"", tcase.in, sql, tcase.sql)
-		}
+			if tcase.sql != sql {
+				t.Errorf("EndOfStatementPosition(%s) got sql \"%s\" want \"%s\"", tcase.in, sql, tcase.sql)
+			}
 
-		if tcase.rem != rem {
-			t.Errorf("EndOfStatementPosition(%s) got remainder \"%s\" want \"%s\"", tcase.in, rem, tcase.rem)
-		}
+			if tcase.rem != rem {
+				t.Errorf("EndOfStatementPosition(%s) got remainder \"%s\" want \"%s\"", tcase.in, rem, tcase.rem)
+			}
+		})
 	}
 }
 

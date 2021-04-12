@@ -16,20 +16,40 @@ limitations under the License.
 
 package errors
 
-import "errors"
+import (
+	"errors"
+	"fmt"
+)
 
 var (
+	// ErrAmbiguousSchema occurs when more than one schema is found for a given
+	// set of filter criteria.
+	ErrAmbiguousSchema = errors.New("multiple schemas found")
 	// ErrAmbiguousTablet occurs when more than one tablet is found for a given
 	// set of filter criteria.
 	ErrAmbiguousTablet = errors.New("multiple tablets found")
+	// ErrAmbiguousWorkflow occurs when more than one workflow is found for a
+	// set of filter criteria that should ordinarily never return more than one
+	// workflow.
+	ErrAmbiguousWorkflow = errors.New("multiple workflows found")
 	// ErrInvalidRequest occurs when a request is invalid for any reason.
 	// For example, if mandatory parameters are undefined.
 	ErrInvalidRequest = errors.New("Invalid request")
+	// ErrNoSchema occurs when a schema definition cannot be found for a given
+	// set of filter criteria.
+	ErrNoSchema = errors.New("no such schema")
+	// ErrNoServingTablet occurs when a tablet with state SERVING cannot be
+	// found for a given set of filter criteria. It is a more specific form of
+	// ErrNoTablet
+	ErrNoServingTablet = fmt.Errorf("%w with state=SERVING", ErrNoTablet)
+	// ErrNoSrvVSchema occurs when no SrvVSchema is found for a given keyspace.
+	ErrNoSrvVSchema = errors.New("SrvVSchema not found")
 	// ErrNoTablet occurs when a tablet cannot be found for a given set of
 	// filter criteria.
 	ErrNoTablet = errors.New("no such tablet")
+	// ErrNoWorkflow occurs when a workflow cannot be found for a given set of
+	// filter criteria.
+	ErrNoWorkflow = errors.New("no such workflow")
 	// ErrUnsupportedCluster occurs when a cluster parameter is invalid.
 	ErrUnsupportedCluster = errors.New("unsupported cluster(s)")
-	// ErrNoSrvVSchema occurs when no SrvVSchema is found for a given keyspace.
-	ErrNoSrvVSchema = errors.New("SrvVSchema not found")
 )

@@ -731,9 +731,8 @@ func TestTabletServerExecuteBatchFailEmptyQueryList(t *testing.T) {
 	defer db.Close()
 
 	_, err := tsv.ExecuteBatch(ctx, nil, []*querypb.BoundQuery{}, false, 0, nil)
-	want := "Empty query list"
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), want)
+	assert.Contains(t, err.Error(), "Query was empty")
 }
 
 func TestTabletServerExecuteBatchFailAsTransaction(t *testing.T) {
@@ -747,9 +746,8 @@ func TestTabletServerExecuteBatchFailAsTransaction(t *testing.T) {
 			BindVariables: nil,
 		},
 	}, true, 1, nil)
-	want := "cannot start a new transaction"
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), want)
+	assert.Contains(t, err.Error(), "You are not allowed to execute this command in a transaction")
 }
 
 func TestTabletServerExecuteBatchBeginFail(t *testing.T) {
@@ -1595,9 +1593,8 @@ func TestMessageAck(t *testing.T) {
 	}}
 	_, err := tsv.MessageAck(ctx, &target, "nonmsg", ids)
 	want := "message table nonmsg not found in schema"
-	if err == nil || strings.HasPrefix(err.Error(), want) {
-		t.Errorf("tsv.MessageAck(invalid): %v, want %s", err, want)
-	}
+	require.Error(t, err)
+	require.Contains(t, err.Error(), want)
 
 	_, err = tsv.MessageAck(ctx, &target, "msg", ids)
 	want = "query: 'update msg set time_acked"
@@ -1607,9 +1604,7 @@ func TestMessageAck(t *testing.T) {
 	db.AddQueryPattern("update msg set time_acked = .*", &sqltypes.Result{RowsAffected: 1})
 	count, err := tsv.MessageAck(ctx, &target, "msg", ids)
 	require.NoError(t, err)
-	if count != 1 {
-		t.Errorf("count: %d, want 1", count)
-	}
+	require.EqualValues(t, 1, count)
 }
 
 func TestRescheduleMessages(t *testing.T) {
@@ -1620,9 +1615,8 @@ func TestRescheduleMessages(t *testing.T) {
 
 	_, err := tsv.PostponeMessages(ctx, &target, "nonmsg", []string{"1", "2"})
 	want := "message table nonmsg not found in schema"
-	if err == nil || strings.HasPrefix(err.Error(), want) {
-		t.Errorf("tsv.PostponeMessages(invalid): %v, want %s", err, want)
-	}
+	require.Error(t, err)
+	require.Contains(t, err.Error(), want)
 
 	_, err = tsv.PostponeMessages(ctx, &target, "msg", []string{"1", "2"})
 	want = "query: 'update msg set time_next"
@@ -1631,9 +1625,7 @@ func TestRescheduleMessages(t *testing.T) {
 	db.AddQueryPattern("update msg set time_next = .*", &sqltypes.Result{RowsAffected: 1})
 	count, err := tsv.PostponeMessages(ctx, &target, "msg", []string{"1", "2"})
 	require.NoError(t, err)
-	if count != 1 {
-		t.Errorf("count: %d, want 1", count)
-	}
+	require.EqualValues(t, 1, count)
 }
 
 func TestPurgeMessages(t *testing.T) {
@@ -1644,9 +1636,8 @@ func TestPurgeMessages(t *testing.T) {
 
 	_, err := tsv.PurgeMessages(ctx, &target, "nonmsg", 0)
 	want := "message table nonmsg not found in schema"
-	if err == nil || strings.HasPrefix(err.Error(), want) {
-		t.Errorf("tsv.PurgeMessages(invalid): %v, want %s", err, want)
-	}
+	require.Error(t, err)
+	require.Contains(t, err.Error(), want)
 
 	_, err = tsv.PurgeMessages(ctx, &target, "msg", 0)
 	want = "query: 'delete from msg where time_acked"
@@ -1656,9 +1647,7 @@ func TestPurgeMessages(t *testing.T) {
 	db.AddQuery("delete from msg where time_acked < 3 limit 500", &sqltypes.Result{RowsAffected: 1})
 	count, err := tsv.PurgeMessages(ctx, &target, "msg", 3)
 	require.NoError(t, err)
-	if count != 1 {
-		t.Errorf("count: %d, want 1", count)
-	}
+	require.EqualValues(t, 1, count)
 }
 
 func TestHandleExecUnknownError(t *testing.T) {
@@ -2187,7 +2176,7 @@ func TestReserveStats(t *testing.T) {
 
 func TestDatabaseNameReplaceByKeyspaceNameExecuteMethod(t *testing.T) {
 	db, tsv := setupTabletServerTest(t, "keyspaceName")
-	db.SetName("databaseInMysql")
+	setDBName(db, tsv, "databaseInMysql")
 	defer tsv.StopService()
 	defer db.Close()
 
@@ -2221,7 +2210,7 @@ func TestDatabaseNameReplaceByKeyspaceNameExecuteMethod(t *testing.T) {
 
 func TestDatabaseNameReplaceByKeyspaceNameStreamExecuteMethod(t *testing.T) {
 	db, tsv := setupTabletServerTest(t, "keyspaceName")
-	db.SetName("databaseInMysql")
+	setDBName(db, tsv, "databaseInMysql")
 	defer tsv.StopService()
 	defer db.Close()
 
@@ -2256,7 +2245,7 @@ func TestDatabaseNameReplaceByKeyspaceNameStreamExecuteMethod(t *testing.T) {
 
 func TestDatabaseNameReplaceByKeyspaceNameExecuteBatchMethod(t *testing.T) {
 	db, tsv := setupTabletServerTest(t, "keyspaceName")
-	db.SetName("databaseInMysql")
+	setDBName(db, tsv, "databaseInMysql")
 	defer tsv.StopService()
 	defer db.Close()
 
@@ -2297,7 +2286,7 @@ func TestDatabaseNameReplaceByKeyspaceNameExecuteBatchMethod(t *testing.T) {
 
 func TestDatabaseNameReplaceByKeyspaceNameBeginExecuteMethod(t *testing.T) {
 	db, tsv := setupTabletServerTest(t, "keyspaceName")
-	db.SetName("databaseInMysql")
+	setDBName(db, tsv, "databaseInMysql")
 	defer tsv.StopService()
 	defer db.Close()
 
@@ -2327,9 +2316,14 @@ func TestDatabaseNameReplaceByKeyspaceNameBeginExecuteMethod(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func setDBName(db *fakesqldb.DB, tsv *TabletServer, s string) {
+	tsv.config.DB.DBName = "databaseInMysql"
+	db.SetName("databaseInMysql")
+}
+
 func TestDatabaseNameReplaceByKeyspaceNameBeginExecuteBatchMethod(t *testing.T) {
 	db, tsv := setupTabletServerTest(t, "keyspaceName")
-	db.SetName("databaseInMysql")
+	setDBName(db, tsv, "databaseInMysql")
 	defer tsv.StopService()
 	defer db.Close()
 
@@ -2372,7 +2366,7 @@ func TestDatabaseNameReplaceByKeyspaceNameBeginExecuteBatchMethod(t *testing.T) 
 
 func TestDatabaseNameReplaceByKeyspaceNameReserveExecuteMethod(t *testing.T) {
 	db, tsv := setupTabletServerTest(t, "keyspaceName")
-	db.SetName("databaseInMysql")
+	setDBName(db, tsv, "databaseInMysql")
 	defer tsv.StopService()
 	defer db.Close()
 
@@ -2404,7 +2398,7 @@ func TestDatabaseNameReplaceByKeyspaceNameReserveExecuteMethod(t *testing.T) {
 
 func TestDatabaseNameReplaceByKeyspaceNameReserveBeginExecuteMethod(t *testing.T) {
 	db, tsv := setupTabletServerTest(t, "keyspaceName")
-	db.SetName("databaseInMysql")
+	setDBName(db, tsv, "databaseInMysql")
 	defer tsv.StopService()
 	defer db.Close()
 

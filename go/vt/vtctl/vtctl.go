@@ -99,9 +99,9 @@ import (
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
 
+	"vitess.io/vitess/go/cmd/vtctldclient/cli"
 	"vitess.io/vitess/go/flagutil"
 	"vitess.io/vitess/go/json2"
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/sync2"
 	hk "vitess.io/vitess/go/vt/hook"
@@ -117,7 +117,6 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/wrangler"
 
-	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
@@ -403,8 +402,8 @@ var commands = []commandGroup{
 				"[-exclude_tables=''] [-include-views] [-skip-no-master] <keyspace name>",
 				"Validates that the master schema from shard 0 matches the schema on all of the other tablets in the keyspace."},
 			{"ApplySchema", commandApplySchema,
-				"[-allow_long_unavailability] [-wait_replicas_timeout=10s] [-ddl_strategy=<ddl_strategy>] [-skip_preflight] {-sql=<sql> || -sql-file=<filename>} <keyspace>",
-				"Applies the schema change to the specified keyspace on every master, running in parallel on all shards. The changes are then propagated to replicas via replication. If -allow_long_unavailability is set, schema changes affecting a large number of rows (and possibly incurring a longer period of unavailability) will not be rejected. ddl_strategy is used to intruct migrations via gh-ost or pt-osc with optional parameters. If -skip_preflight, SQL goes directly to shards without going through sanity checks"},
+				"[-allow_long_unavailability] [-wait_replicas_timeout=10s] [-ddl_strategy=<ddl_strategy>] [-request_context=<unique-request-context>] [-skip_preflight] {-sql=<sql> || -sql-file=<filename>} <keyspace>",
+				"Applies the schema change to the specified keyspace on every master, running in parallel on all shards. The changes are then propagated to replicas via replication. If -allow_long_unavailability is set, schema changes affecting a large number of rows (and possibly incurring a longer period of unavailability) will not be rejected. -ddl_strategy is used to intruct migrations via vreplication, gh-ost or pt-osc with optional parameters. -request_context allows the user to specify a custom request context for online DDL migrations. If -skip_preflight, SQL goes directly to shards without going through sanity checks"},
 			{"CopySchemaShard", commandCopySchemaShard,
 				"[-tables=<table1>,<table2>,...] [-exclude_tables=<table1>,<table2>,...] [-include-views] [-skip-verify] [-wait_replicas_timeout=10s] {<source keyspace/shard> || <source tablet alias>} <destination keyspace/shard>",
 				"Copies the schema from a source shard's master (or a specific tablet) to a destination shard. The schema is applied directly on the master of the destination shard, and it is propagated to the replicas through binlogs."},
@@ -550,81 +549,6 @@ func fmtTabletAwkable(ti *topo.TabletInfo) string {
 		mtst = logutil.ProtoToTime(ti.MasterTermStartTime).Format(time.RFC3339)
 	}
 	return fmt.Sprintf("%v %v %v %v %v %v %v %v", topoproto.TabletAliasString(ti.Alias), keyspace, shard, topoproto.TabletTypeLString(ti.Type), ti.Addr(), ti.MysqlAddr(), fmtMapAwkable(ti.Tags), mtst)
-}
-
-func listTabletsByShard(ctx context.Context, wr *wrangler.Wrangler, keyspace, shard string) error {
-	tabletMap, err := wr.TopoServer().GetTabletMapForShard(ctx, keyspace, shard)
-	if err != nil {
-		return err
-	}
-	var trueMasterTimestamp time.Time
-	for _, ti := range tabletMap {
-		if ti.Type == topodatapb.TabletType_MASTER {
-			masterTimestamp := ti.GetMasterTermStartTime()
-			if masterTimestamp.After(trueMasterTimestamp) {
-				trueMasterTimestamp = masterTimestamp
-			}
-		}
-	}
-	for _, ti := range tabletMap {
-		masterTimestamp := ti.GetMasterTermStartTime()
-		if ti.Type == topodatapb.TabletType_MASTER && masterTimestamp.Before(trueMasterTimestamp) {
-			ti.Type = topodatapb.TabletType_UNKNOWN
-		}
-		wr.Logger().Printf("%v\n", fmtTabletAwkable(ti))
-	}
-	return nil
-}
-
-func dumpAllTablets(ctx context.Context, wr *wrangler.Wrangler, cell string) error {
-	tablets, err := topotools.GetAllTablets(ctx, wr.TopoServer(), cell)
-	if err != nil {
-		return err
-	}
-	// It is possible that an old master has not yet updated it's type in the topo
-	// In that case, report its type as UNKNOWN
-	// It used to be MASTER, and it is supposed to be REPLICA/SPARE eventually
-	trueMasterTimestamps := findTrueMasterTimestamps(tablets)
-	for _, ti := range tablets {
-		key := ti.Keyspace + "." + ti.Shard
-		masterTimestamp := ti.GetMasterTermStartTime()
-		if ti.Type == topodatapb.TabletType_MASTER && masterTimestamp.Before(trueMasterTimestamps[key]) {
-			ti.Type = topodatapb.TabletType_UNKNOWN
-		}
-		wr.Logger().Printf("%v\n", fmtTabletAwkable(ti))
-	}
-	return nil
-}
-
-func findTrueMasterTimestamps(tablets []*topo.TabletInfo) map[string]time.Time {
-	result := make(map[string]time.Time)
-	for _, ti := range tablets {
-		key := ti.Keyspace + "." + ti.Shard
-		if v, ok := result[key]; !ok {
-			result[key] = ti.GetMasterTermStartTime()
-		} else {
-			if ti.GetMasterTermStartTime().After(v) {
-				result[key] = ti.GetMasterTermStartTime()
-			}
-		}
-	}
-	return result
-}
-
-func dumpTablets(ctx context.Context, wr *wrangler.Wrangler, tabletAliases []*topodatapb.TabletAlias) error {
-	tabletMap, err := wr.TopoServer().GetTabletMap(ctx, tabletAliases)
-	if err != nil {
-		return err
-	}
-	for _, tabletAlias := range tabletAliases {
-		ti, ok := tabletMap[topoproto.TabletAliasString(tabletAlias)]
-		if !ok {
-			wr.Logger().Warningf("failed to load tablet %v", tabletAlias)
-		} else {
-			wr.Logger().Printf("%v\n", fmtTabletAwkable(ti))
-		}
-	}
-	return nil
 }
 
 // getFileParam returns a string containing either flag is not "",
@@ -1313,19 +1237,23 @@ func commandShardReplicationPositions(ctx context.Context, wr *wrangler.Wrangler
 	if err != nil {
 		return err
 	}
-	tablets, stats, err := wr.ShardReplicationStatuses(ctx, keyspace, shard)
-	if tablets == nil {
+
+	resp, err := wr.VtctldServer().ShardReplicationPositions(ctx, &vtctldatapb.ShardReplicationPositionsRequest{
+		Keyspace: keyspace,
+		Shard:    shard,
+	})
+	if err != nil {
 		return err
 	}
 
 	lines := make([]string, 0, 24)
-	for _, rt := range sortReplicatingTablets(tablets, stats) {
+	for _, rt := range cli.SortedReplicatingTablets(resp.TabletMap, resp.ReplicationStatuses) {
 		status := rt.Status
-		ti := rt.TabletInfo
+		tablet := rt.Tablet
 		if status == nil {
-			lines = append(lines, fmtTabletAwkable(ti)+" <err> <err> <err>")
+			lines = append(lines, cli.MarshalTabletAWK(tablet)+" <err> <err> <err>")
 		} else {
-			lines = append(lines, fmtTabletAwkable(ti)+fmt.Sprintf(" %v %v", status.Position, status.SecondsBehindMaster))
+			lines = append(lines, cli.MarshalTabletAWK(tablet)+fmt.Sprintf(" %v %v", status.Position, status.SecondsBehindMaster))
 		}
 	}
 	for _, l := range lines {
@@ -1345,7 +1273,21 @@ func commandListShardTablets(ctx context.Context, wr *wrangler.Wrangler, subFlag
 	if err != nil {
 		return err
 	}
-	return listTabletsByShard(ctx, wr, keyspace, shard)
+
+	resp, err := wr.VtctldServer().GetTablets(ctx, &vtctldatapb.GetTabletsRequest{
+		Keyspace: keyspace,
+		Shard:    shard,
+		Strict:   false,
+	})
+	if err != nil {
+		return err
+	}
+
+	for _, tablet := range resp.Tablets {
+		wr.Logger().Printf("%v\n", cli.MarshalTabletAWK(tablet))
+	}
+
+	return nil
 }
 
 func commandSetShardIsMasterServing(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -2674,23 +2616,26 @@ func commandListAllTablets(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
+
 	var cells []string
-	var err error
+
 	if subFlags.NArg() == 1 {
 		cells = strings.Split(subFlags.Arg(0), ",")
-	} else {
-		cells, err = wr.TopoServer().GetKnownCells(ctx)
-		if err != nil {
-			return err
-		}
 	}
 
-	for _, cell := range cells {
-		err := dumpAllTablets(ctx, wr, cell)
-		if err != nil {
-			return err
-		}
+	resp, err := wr.VtctldServer().GetTablets(ctx, &vtctldatapb.GetTabletsRequest{
+		Cells:  cells,
+		Strict: false,
+	})
+
+	if err != nil {
+		return err
 	}
+
+	for _, tablet := range resp.Tablets {
+		wr.Logger().Printf("%v\n", cli.MarshalTabletAWK(tablet))
+	}
+
 	return nil
 }
 
@@ -2711,7 +2656,20 @@ func commandListTablets(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 			return err
 		}
 	}
-	return dumpTablets(ctx, wr, aliases)
+
+	resp, err := wr.VtctldServer().GetTablets(ctx, &vtctldatapb.GetTabletsRequest{
+		TabletAliases: aliases,
+		Strict:        false,
+	})
+	if err != nil {
+		return err
+	}
+
+	for _, tablet := range resp.Tablets {
+		wr.Logger().Printf("%v\n", cli.MarshalTabletAWK(tablet))
+	}
+
+	return nil
 }
 
 func commandGetSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -2852,6 +2810,7 @@ func commandApplySchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 	sql := subFlags.String("sql", "", "A list of semicolon-delimited SQL commands")
 	sqlFile := subFlags.String("sql-file", "", "Identifies the file that contains the SQL commands")
 	ddlStrategy := subFlags.String("ddl_strategy", string(schema.DDLStrategyDirect), "Online DDL strategy, compatible with @@ddl_strategy session variable (examples: 'gh-ost', 'pt-osc', 'gh-ost --max-load=Threads_running=100'")
+	requestContext := subFlags.String("request_context", "", "For Only DDL, optionally supply a custom unique string used as context for the migration(s) in this command. By default a unique context is auto-generated by Vitess")
 	waitReplicasTimeout := subFlags.Duration("wait_replicas_timeout", wrangler.DefaultWaitReplicasTimeout, "The amount of time to wait for replicas to receive the schema change via replication.")
 	skipPreflight := subFlags.Bool("skip_preflight", false, "Skip pre-apply schema checks, and dircetly forward schema change query to shards")
 	if err := subFlags.Parse(args); err != nil {
@@ -2870,8 +2829,10 @@ func commandApplySchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 	if err != nil {
 		return err
 	}
-	requestContext := fmt.Sprintf("vtctl:%s", executionUUID)
-	executor := schemamanager.NewTabletExecutor(requestContext, wr, *waitReplicasTimeout)
+	if *requestContext == "" {
+		*requestContext = fmt.Sprintf("vtctl:%s", executionUUID)
+	}
+	executor := schemamanager.NewTabletExecutor(*requestContext, wr, *waitReplicasTimeout)
 	if *allowLongUnavailability {
 		executor.AllowBigSchemaChange()
 	}
@@ -2959,6 +2920,34 @@ func commandOnlineDDL(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag
 				return fmt.Errorf("UUID not allowed in %s", command)
 			}
 			query = `update _vt.schema_migrations set migration_status='cancel-all'`
+		}
+	case "revert":
+		{
+			if arg == "" {
+				return fmt.Errorf("UUID required")
+			}
+			uuid = arg
+			contextUUID, err := schema.CreateUUID()
+			if err != nil {
+				return err
+			}
+			requestContext := fmt.Sprintf("vtctl:%s", contextUUID)
+
+			onlineDDL, err := schema.NewOnlineDDL(keyspace, "", fmt.Sprintf("revert %s", uuid), schema.DDLStrategyOnline, "", requestContext)
+			if err != nil {
+				return err
+			}
+			conn, err := wr.TopoServer().ConnForCell(ctx, topo.GlobalCell)
+			if err != nil {
+				return err
+			}
+			err = onlineDDL.WriteTopo(ctx, conn, schema.MigrationRequestsPath())
+			if err != nil {
+				return err
+			}
+			wr.Logger().Infof("UUID=%+v", onlineDDL.UUID)
+			wr.Logger().Printf("%s\n", onlineDDL.UUID)
+			return nil
 		}
 	default:
 		return fmt.Errorf("Unknown OnlineDDL command: %s", command)
@@ -3322,11 +3311,18 @@ func commandGetSrvKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 		return fmt.Errorf("the <cell> and <keyspace> arguments are required for the GetSrvKeyspace command")
 	}
 
-	srvKeyspace, err := wr.TopoServer().GetSrvKeyspace(ctx, subFlags.Arg(0), subFlags.Arg(1))
+	cell := subFlags.Arg(0)
+	keyspace := subFlags.Arg(1)
+
+	resp, err := wr.VtctldServer().GetSrvKeyspaces(ctx, &vtctldatapb.GetSrvKeyspacesRequest{
+		Keyspace: keyspace,
+		Cells:    []string{cell},
+	})
 	if err != nil {
 		return err
 	}
-	return printJSON(wr.Logger(), srvKeyspace)
+
+	return printJSON(wr.Logger(), resp.SrvKeyspaces[cell])
 }
 
 func commandGetSrvVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -3615,62 +3611,6 @@ func generateShardRanges(shards int) ([]string, error) {
 
 func commandPanic(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	panic(fmt.Errorf("this command panics on purpose"))
-}
-
-type rTablet struct {
-	*topo.TabletInfo
-	*replicationdatapb.Status
-}
-
-type rTablets []*rTablet
-
-func (rts rTablets) Len() int { return len(rts) }
-
-func (rts rTablets) Swap(i, j int) { rts[i], rts[j] = rts[j], rts[i] }
-
-// Sort for tablet replication.
-// Tablet type first (with master first), then replication positions.
-func (rts rTablets) Less(i, j int) bool {
-	l, r := rts[i], rts[j]
-	// l or r ReplicationStatus would be nil if we failed to get
-	// the position (put them at the beginning of the list)
-	if l.Status == nil {
-		return r.Status != nil
-	}
-	if r.Status == nil {
-		return false
-	}
-	// the type proto has MASTER first, so sort by that. Will show
-	// the MASTER first, then each replica type sorted by
-	// replication position.
-	if l.Type < r.Type {
-		return true
-	}
-	if l.Type > r.Type {
-		return false
-	}
-	// then compare replication positions
-	lpos, err := mysql.DecodePosition(l.Position)
-	if err != nil {
-		return true
-	}
-	rpos, err := mysql.DecodePosition(r.Position)
-	if err != nil {
-		return false
-	}
-	return !lpos.AtLeast(rpos)
-}
-
-func sortReplicatingTablets(tablets []*topo.TabletInfo, stats []*replicationdatapb.Status) []*rTablet {
-	rtablets := make([]*rTablet, len(tablets))
-	for i, status := range stats {
-		rtablets[i] = &rTablet{
-			TabletInfo: tablets[i],
-			Status:     status,
-		}
-	}
-	sort.Sort(rTablets(rtablets))
-	return rtablets
 }
 
 // printJSON will print the JSON version of the structure to the logger.

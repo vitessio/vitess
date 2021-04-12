@@ -76,6 +76,11 @@ func generateGCTableName(state TableGCState, uuid string, t time.Time) (tableNam
 	return fmt.Sprintf("_vt_%s_%s_%s", state, uuid, timestamp), nil
 }
 
+// GenerateGCTableName creates a GC table name, based on desired state and time, and with random UUID
+func GenerateGCTableName(state TableGCState, t time.Time) (tableName string, err error) {
+	return generateGCTableName(state, "", t)
+}
+
 // AnalyzeGCTableName analyzes a given table name to see if it's a GC table, and if so, parse out
 // its state, uuid, and timestamp
 func AnalyzeGCTableName(tableName string) (isGCTable bool, state TableGCState, uuid string, t time.Time, err error) {

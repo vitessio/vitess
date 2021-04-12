@@ -55,7 +55,7 @@ RUN yum update -y --setopt=alwaysprompt=no --setopt=tsflags=nodocs \
     jemalloc gperftools-libs procps-ng rsync wget openssl hostname curl tzdata make \
 # Can't use alwaysprompt=no here, since we need to pick up deps
 #   No way to separate key imports and accept deps separately in yum/dnf
- && yum install -y --setopt=tsflags=nodocs Percona-Server-server-57 percona-xtrabackup-24 \
+ && yum install -y --setopt=tsflags=nodocs Percona-Server-server-57 percona-xtrabackup-24 percona-toolkit \
  && yum clean all \
  && rm -rf /etc/my.cnf /var/lib/mysql /tmp/gpg /sbin/mysqld-debug
 

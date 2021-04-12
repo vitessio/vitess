@@ -890,13 +890,6 @@ func TestToNative(t *testing.T) {
 	}
 }
 
-var mustMatch = utils.MustMatchFn(
-	[]interface{}{ // types with unexported fields
-		EvalResult{},
-	},
-	[]string{}, // ignored fields
-)
-
 func TestNewNumeric(t *testing.T) {
 	tcases := []struct {
 		v   sqltypes.Value
@@ -944,7 +937,7 @@ func TestNewNumeric(t *testing.T) {
 			continue
 		}
 
-		mustMatch(t, tcase.out, got, "newEvalResult")
+		utils.MustMatch(t, tcase.out, got, "newEvalResult")
 	}
 }
 
@@ -991,7 +984,7 @@ func TestNewIntegralNumeric(t *testing.T) {
 			continue
 		}
 
-		mustMatch(t, tcase.out, got, "newIntegralNumeric")
+		utils.MustMatch(t, tcase.out, got, "newIntegralNumeric")
 	}
 }
 
@@ -1047,7 +1040,7 @@ func TestAddNumeric(t *testing.T) {
 	for _, tcase := range tcases {
 		got := addNumeric(tcase.v1, tcase.v2)
 
-		mustMatch(t, tcase.out, got, "addNumeric")
+		utils.MustMatch(t, tcase.out, got, "addNumeric")
 	}
 }
 
@@ -1105,8 +1098,8 @@ func TestPrioritize(t *testing.T) {
 	for _, tcase := range tcases {
 		t.Run(tcase.v1.Value().String()+" - "+tcase.v2.Value().String(), func(t *testing.T) {
 			got1, got2 := makeNumericAndprioritize(tcase.v1, tcase.v2)
-			mustMatch(t, tcase.out1, got1, "makeNumericAndprioritize")
-			mustMatch(t, tcase.out2, got2, "makeNumericAndprioritize")
+			utils.MustMatch(t, tcase.out1, got1, "makeNumericAndprioritize")
+			utils.MustMatch(t, tcase.out2, got2, "makeNumericAndprioritize")
 		})
 	}
 }

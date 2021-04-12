@@ -23,6 +23,8 @@ import (
 )
 
 func TestMergeFlagsByImpl(t *testing.T) {
+	t.Parallel()
+
 	var NilMap map[string]map[string]string
 
 	tests := []struct {
@@ -95,11 +97,15 @@ func TestMergeFlagsByImpl(t *testing.T) {
 		},
 	}
 
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			flags := FlagsByImpl(test.base)
-			flags.Merge(test.in)
-			assert.Equal(t, FlagsByImpl(test.expected), flags)
+	for _, tt := range tests {
+		tt := tt
+
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			flags := FlagsByImpl(tt.base)
+			flags.Merge(tt.in)
+			assert.Equal(t, FlagsByImpl(tt.expected), flags)
 		})
 	}
 }

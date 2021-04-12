@@ -21,13 +21,16 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"time"
 
 	"google.golang.org/grpc"
 
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/callerid"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vitessdriver"
 	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery"
+	"vitess.io/vitess/go/vt/vtadmin/vtadminproto"
 
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 )
@@ -70,7 +73,8 @@ type VTGateProxy struct {
 	// DialFunc is called to open a new database connection. In production this
 	// should always be vitessdriver.OpenWithConfiguration, but it is exported
 	// for testing purposes.
-	DialFunc func(cfg vitessdriver.Configuration) (*sql.DB, error)
+	DialFunc        func(cfg vitessdriver.Configuration) (*sql.DB, error)
+	dialPingTimeout time.Duration
 
 	host string
 	conn *sql.DB
@@ -95,11 +99,12 @@ func New(cfg *Config) *VTGateProxy {
 	}
 
 	return &VTGateProxy{
-		cluster:       cfg.Cluster,
-		discovery:     cfg.Discovery,
-		discoveryTags: discoveryTags,
-		creds:         cfg.Credentials,
-		DialFunc:      vitessdriver.OpenWithConfiguration,
+		cluster:         cfg.Cluster,
+		discovery:       cfg.Discovery,
+		discoveryTags:   discoveryTags,
+		creds:           cfg.Credentials,
+		DialFunc:        vitessdriver.OpenWithConfiguration,
+		dialPingTimeout: cfg.DialPingTimeout,
 	}
 }
 
@@ -131,15 +136,31 @@ func (vtgate *VTGateProxy) Dial(ctx context.Context, target string, opts ...grpc
 	vtgate.annotateSpan(span)
 
 	if vtgate.conn != nil {
-		// (TODO:@amason): consider a quick Ping() check in this case, and get a
-		// new connection if that fails.
-		return nil
+		ctx, cancel := context.WithTimeout(ctx, vtgate.dialPingTimeout)
+		defer cancel()
+
+		err := vtgate.PingContext(ctx)
+		switch err {
+		case nil:
+			log.Infof("Have valid connection to %s, reusing it.", vtgate.host)
+			span.Annotate("is_noop", true)
+
+			return nil
+		default:
+			log.Warningf("Ping failed on host %s: %s; Rediscovering a vtgate to get new connection", vtgate.host, err)
+
+			if err := vtgate.Close(); err != nil {
+				log.Warningf("Error when closing connection to vtgate %s: %s; Continuing anyway ...", vtgate.host, err)
+			}
+		}
 	}
+
+	span.Annotate("is_noop", false)
 
 	if vtgate.host == "" {
 		gate, err := vtgate.discovery.DiscoverVTGateAddr(ctx, vtgate.discoveryTags)
 		if err != nil {
-			return err
+			return fmt.Errorf("error discovering vtgate to dial: %w", err)
 		}
 
 		vtgate.host = gate
@@ -147,23 +168,24 @@ func (vtgate *VTGateProxy) Dial(ctx context.Context, target string, opts ...grpc
 		span.Annotate("vtgate_host", gate)
 	}
 
+	log.Infof("Dialing %s ...", vtgate.host)
+
 	conf := vitessdriver.Configuration{
 		Protocol:        fmt.Sprintf("grpc_%s", vtgate.cluster.Id),
 		Address:         vtgate.host,
 		Target:          target,
-		GRPCDialOptions: opts,
+		GRPCDialOptions: append(opts, grpc.WithInsecure()),
 	}
 
 	if vtgate.creds != nil {
 		conf.GRPCDialOptions = append([]grpc.DialOption{
 			grpc.WithPerRPCCredentials(vtgate.creds),
-			grpc.WithInsecure(),
 		}, conf.GRPCDialOptions...)
 	}
 
 	db, err := vtgate.DialFunc(conf)
 	if err != nil {
-		return err
+		return fmt.Errorf("error dialing vtgate %s: %w", vtgate.host, err)
 	}
 
 	vtgate.conn = db
@@ -187,11 +209,20 @@ func (vtgate *VTGateProxy) ShowTablets(ctx context.Context) (*sql.Rows, error) {
 
 // Ping is part of the DB interface.
 func (vtgate *VTGateProxy) Ping() error {
-	return vtgate.PingContext(context.Background())
+	return vtgate.pingContext(context.Background())
 }
 
 // PingContext is part of the DB interface.
 func (vtgate *VTGateProxy) PingContext(ctx context.Context) error {
+	span, ctx := trace.NewSpan(ctx, "VTGateProxy.PingContext")
+	defer span.Finish()
+
+	vtgate.annotateSpan(span)
+
+	return vtgate.pingContext(ctx)
+}
+
+func (vtgate *VTGateProxy) pingContext(ctx context.Context) error {
 	if vtgate.conn == nil {
 		return ErrConnClosed
 	}
@@ -219,8 +250,7 @@ func (vtgate *VTGateProxy) Hostname() string {
 }
 
 func (vtgate *VTGateProxy) annotateSpan(span trace.Span) {
-	span.Annotate("cluster_id", vtgate.cluster.Id)
-	span.Annotate("cluster_name", vtgate.cluster.Name)
+	vtadminproto.AnnotateClusterSpan(vtgate.cluster, span)
 
 	if vtgate.host != "" {
 		span.Annotate("vtgate_host", vtgate.host)

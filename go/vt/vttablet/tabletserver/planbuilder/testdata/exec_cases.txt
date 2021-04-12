@@ -197,7 +197,7 @@
 # for update
 "select eid from a for update"
 {
-  "PlanID": "SelectLock",
+  "PlanID": "Select",
   "TableName": "a",
   "Permissions": [
     {
@@ -212,7 +212,7 @@
 # lock in share mode
 "select eid from a lock in share mode"
 {
-  "PlanID": "SelectLock",
+  "PlanID": "Select",
   "TableName": "a",
   "Permissions": [
     {

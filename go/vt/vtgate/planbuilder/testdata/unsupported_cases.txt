@@ -92,6 +92,7 @@ Gen4 plan same as above
 # Complex aggregate expression on scatter
 "select 1+count(*) from user"
 "unsupported: in scatter query: complex aggregate expression"
+Gen4 plan same as above
 
 # Multi-value aggregates not supported
 "select count(a,b) from user"

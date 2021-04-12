@@ -23,6 +23,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -33,6 +34,8 @@ import (
 )
 
 func TestConfigParse(t *testing.T) {
+	t.Parallel()
+
 	cfg := Config{}
 
 	// This asserts we do not attempt to load a credentialsFlag via its Set func
@@ -41,6 +44,8 @@ func TestConfigParse(t *testing.T) {
 	assert.NoError(t, err)
 
 	t.Run("", func(t *testing.T) {
+		t.Parallel()
+
 		f, err := ioutil.TempFile("", "vtsql-config-test-testcluster-*") // testcluster is going to appear in the template
 		require.NoError(t, err)
 
@@ -93,6 +98,8 @@ func TestConfigParse(t *testing.T) {
 	})
 
 	t.Run("", func(t *testing.T) {
+		t.Parallel()
+
 		f, err := ioutil.TempFile("", "vtsql-config-test-testcluster-*") // testcluster is going to appear in the template
 		require.NoError(t, err)
 
@@ -137,6 +144,7 @@ func TestConfigParse(t *testing.T) {
 				Id:   "cid",
 				Name: "testcluster",
 			},
+			DialPingTimeout: time.Millisecond * 500,
 			DiscoveryTags:   expectedTags,
 			Credentials:     expectedCreds,
 			CredentialsPath: path,

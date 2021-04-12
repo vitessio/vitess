@@ -29,6 +29,8 @@ func TestParseProfileFlag(t *testing.T) {
 		{"cpu,path", nil, true},
 		{"cpu,path=a", &profile{mode: profileCPU, path: "a"}, false},
 		{"cpu,path=a/b/c/d", &profile{mode: profileCPU, path: "a/b/c/d"}, false},
+		{"cpu,waitSig", &profile{mode: profileCPU, waitSig: true}, false},
+		{"cpu,path=a/b,waitSig", &profile{mode: profileCPU, waitSig: true, path: "a/b"}, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.arg, func(t *testing.T) {

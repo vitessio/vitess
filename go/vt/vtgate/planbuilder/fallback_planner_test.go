@@ -36,8 +36,8 @@ type testPlanner struct {
 
 var _ selectPlanner = (*testPlanner)(nil).plan
 
-func (tp *testPlanner) plan(_ string) func(sqlparser.Statement, ContextVSchema) (engine.Primitive, error) {
-	return func(statement sqlparser.Statement, schema ContextVSchema) (engine.Primitive, error) {
+func (tp *testPlanner) plan(_ string) func(sqlparser.Statement, sqlparser.BindVars, ContextVSchema) (engine.Primitive, error) {
+	return func(statement sqlparser.Statement, vars sqlparser.BindVars, schema ContextVSchema) (engine.Primitive, error) {
 		tp.called = true
 		if tp.panic != nil {
 			panic(tp.panic)
@@ -58,14 +58,14 @@ func TestFallbackPlanner(t *testing.T) {
 	var vschema ContextVSchema
 
 	// first planner succeeds
-	_, _ = fb.plan("query")(stmt, vschema)
+	_, _ = fb.plan("query")(stmt, nil, vschema)
 	assert.True(t, a.called)
 	assert.False(t, b.called)
 	a.called = false
 
 	// first planner errors
 	a.err = fmt.Errorf("fail")
-	_, _ = fb.plan("query")(stmt, vschema)
+	_, _ = fb.plan("query")(stmt, nil, vschema)
 	assert.True(t, a.called)
 	assert.True(t, b.called)
 
@@ -74,7 +74,7 @@ func TestFallbackPlanner(t *testing.T) {
 
 	// first planner panics
 	a.panic = "oh noes"
-	_, _ = fb.plan("query")(stmt, vschema)
+	_, _ = fb.plan("query")(stmt, nil, vschema)
 	assert.True(t, a.called)
 	assert.True(t, b.called)
 }

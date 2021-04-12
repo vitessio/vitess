@@ -227,13 +227,25 @@ func (stc *ScatterConn) ExecuteMultiShard(
 						innerqr, reservedID, alias, err = qs.ReserveExecute(ctx, rs.Target, session.SetPreQueries(), queries[i].Sql, queries[i].BindVariables, 0 /*transactionId*/, opts)
 					}
 					if err != nil {
-						return nil, err
+						return info.updateReservedID(reservedID, alias), err
 					}
 				}
 			case begin:
 				innerqr, transactionID, alias, err = qs.BeginExecute(ctx, rs.Target, session.Savepoints, queries[i].Sql, queries[i].BindVariables, info.reservedID, opts)
 				if err != nil {
-					return info.updateTransactionID(transactionID, alias), err
+					if transactionID != 0 {
+						return info.updateTransactionID(transactionID, alias), err
+					}
+					shouldRetry := checkAndResetShardSession(info, err, session)
+					if shouldRetry {
+						// we seem to have lost our connection. if it was a reserved connection, let's try to recreate it
+						info.actionNeeded = reserveBegin
+						innerqr, transactionID, reservedID, alias, err = qs.ReserveBeginExecute(ctx, rs.Target, session.SetPreQueries(), queries[i].Sql, queries[i].BindVariables, opts)
+					}
+					if err != nil {
+						return info.updateTransactionAndReservedID(transactionID, reservedID, alias), err
+					}
+
 				}
 			case reserve:
 				innerqr, reservedID, alias, err = qs.ReserveExecute(ctx, rs.Target, session.SetPreQueries(), queries[i].Sql, queries[i].BindVariables, info.transactionID, opts)
@@ -727,14 +739,26 @@ type shardActionInfo struct {
 }
 
 func (sai *shardActionInfo) updateTransactionID(txID int64, alias *topodatapb.TabletAlias) *shardActionInfo {
+	if txID == 0 {
+		// As transaction id is ZERO, there is nothing to update in session shard sessions.
+		return nil
+	}
 	return sai.updateTransactionAndReservedID(txID, sai.reservedID, alias)
 }
 
 func (sai *shardActionInfo) updateReservedID(rID int64, alias *topodatapb.TabletAlias) *shardActionInfo {
+	if rID == 0 {
+		// As reserved id is ZERO, there is nothing to update in session shard sessions.
+		return nil
+	}
 	return sai.updateTransactionAndReservedID(sai.transactionID, rID, alias)
 }
 
 func (sai *shardActionInfo) updateTransactionAndReservedID(txID int64, rID int64, alias *topodatapb.TabletAlias) *shardActionInfo {
+	if txID == 0 && rID == 0 {
+		// As transaction id and reserved id is ZERO, there is nothing to update in session shard sessions.
+		return nil
+	}
 	newInfo := *sai
 	newInfo.reservedID = rID
 	newInfo.transactionID = txID

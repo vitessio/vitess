@@ -2751,6 +2751,184 @@ func TestGetShard(t *testing.T) {
 	}
 }
 
+func TestGetSrvKeyspaces(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name         string
+		cells        []string
+		srvKeyspaces []*testutil.SrvKeyspace
+		topoErr      error
+		req          *vtctldatapb.GetSrvKeyspacesRequest
+		expected     *vtctldatapb.GetSrvKeyspacesResponse
+		shouldErr    bool
+	}{
+		{
+			name:  "success",
+			cells: []string{"zone1", "zone2"},
+			srvKeyspaces: []*testutil.SrvKeyspace{
+				{
+					Cell:     "zone1",
+					Keyspace: "testkeyspace",
+					SrvKeyspace: &topodatapb.SrvKeyspace{
+						ShardingColumnName: "zone1-sharding-col",
+					},
+				},
+				{
+					Cell:     "zone2",
+					Keyspace: "testkeyspace",
+					SrvKeyspace: &topodatapb.SrvKeyspace{
+						ShardingColumnName: "zone2-sharding-col",
+					},
+				},
+			},
+			req: &vtctldatapb.GetSrvKeyspacesRequest{
+				Keyspace: "testkeyspace",
+			},
+			expected: &vtctldatapb.GetSrvKeyspacesResponse{
+				SrvKeyspaces: map[string]*topodatapb.SrvKeyspace{
+					"zone1": {
+						ShardingColumnName: "zone1-sharding-col",
+					},
+					"zone2": {
+						ShardingColumnName: "zone2-sharding-col",
+					},
+				},
+			},
+			shouldErr: false,
+		},
+		{
+			name:  "filtering by cell",
+			cells: []string{"zone1", "zone2"},
+			srvKeyspaces: []*testutil.SrvKeyspace{
+				{
+					Cell:     "zone1",
+					Keyspace: "testkeyspace",
+					SrvKeyspace: &topodatapb.SrvKeyspace{
+						ShardingColumnName: "zone1-sharding-col",
+					},
+				},
+				{
+					Cell:     "zone2",
+					Keyspace: "testkeyspace",
+					SrvKeyspace: &topodatapb.SrvKeyspace{
+						ShardingColumnName: "zone2-sharding-col",
+					},
+				},
+			},
+			req: &vtctldatapb.GetSrvKeyspacesRequest{
+				Keyspace: "testkeyspace",
+				Cells:    []string{"zone1"},
+			},
+			expected: &vtctldatapb.GetSrvKeyspacesResponse{
+				SrvKeyspaces: map[string]*topodatapb.SrvKeyspace{
+					"zone1": {
+						ShardingColumnName: "zone1-sharding-col",
+					},
+				},
+			},
+			shouldErr: false,
+		},
+		{
+			name:  "no srvkeyspace for single cell",
+			cells: []string{"zone1", "zone2"},
+			srvKeyspaces: []*testutil.SrvKeyspace{
+				{
+					Cell:     "zone1",
+					Keyspace: "testkeyspace",
+					SrvKeyspace: &topodatapb.SrvKeyspace{
+						ShardingColumnName: "zone1-sharding-col",
+					},
+				},
+			},
+			req: &vtctldatapb.GetSrvKeyspacesRequest{
+				Keyspace: "testkeyspace",
+			},
+			expected: &vtctldatapb.GetSrvKeyspacesResponse{
+				SrvKeyspaces: map[string]*topodatapb.SrvKeyspace{
+					"zone1": {
+						ShardingColumnName: "zone1-sharding-col",
+					},
+					"zone2": nil,
+				},
+			},
+			shouldErr: false,
+		},
+		{
+			name:  "error getting cell names",
+			cells: []string{"zone1"},
+			srvKeyspaces: []*testutil.SrvKeyspace{
+				{
+					Cell:     "zone1",
+					Keyspace: "testkeyspace",
+					SrvKeyspace: &topodatapb.SrvKeyspace{
+						ShardingColumnName: "zone1-sharding-col",
+					},
+				},
+			},
+			topoErr: assert.AnError,
+			req: &vtctldatapb.GetSrvKeyspacesRequest{
+				Keyspace: "testkeyspace",
+			},
+			shouldErr: true,
+		},
+		{
+			name:  "error getting srvkeyspace",
+			cells: []string{"zone1"},
+			srvKeyspaces: []*testutil.SrvKeyspace{
+				{
+					Cell:     "zone1",
+					Keyspace: "testkeyspace",
+					SrvKeyspace: &topodatapb.SrvKeyspace{
+						ShardingColumnName: "zone1-sharding-col",
+					},
+				},
+			},
+			topoErr: assert.AnError,
+			req: &vtctldatapb.GetSrvKeyspacesRequest{
+				Keyspace: "testkeyspace",
+				Cells:    []string{"zone1"},
+			},
+			shouldErr: true,
+		},
+	}
+
+	ctx := context.Background()
+
+	for _, tt := range tests {
+		tt := tt
+
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			if tt.req == nil {
+				t.SkipNow()
+			}
+
+			ts, topofactory := memorytopo.NewServerAndFactory(tt.cells...)
+
+			testutil.AddSrvKeyspaces(t, ts, tt.srvKeyspaces...)
+			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+				return NewVtctldServer(ts)
+			})
+
+			if tt.topoErr != nil {
+				topofactory.SetError(tt.topoErr)
+			}
+
+			resp, err := vtctld.GetSrvKeyspaces(ctx, tt.req)
+			if tt.shouldErr {
+				assert.Error(t, err)
+
+				return
+			}
+
+			assert.NoError(t, err)
+			assert.Equal(t, tt.expected, resp)
+		})
+	}
+}
+
 func TestGetSrvVSchema(t *testing.T) {
 	t.Parallel()
 
@@ -3149,7 +3327,7 @@ func TestGetTablets(t *testing.T) {
 			shouldErr: false,
 		},
 		{
-			name:  "cells filter - error",
+			name:  "cells filter with single error is nonfatal",
 			cells: []string{"cell1"},
 			tablets: []*topodatapb.Tablet{
 				{
@@ -3164,12 +3342,117 @@ func TestGetTablets(t *testing.T) {
 			req: &vtctldatapb.GetTabletsRequest{
 				Cells: []string{"cell1", "doesnotexist"},
 			},
-			expected:  []*topodatapb.Tablet{},
+			expected: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "cell1",
+						Uid:  100,
+					},
+					Keyspace: "ks1",
+					Shard:    "-",
+				},
+			},
+			shouldErr: false,
+		},
+		{
+			name:  "cells filter with single error is fatal in strict mode",
+			cells: []string{"cell1"},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "cell1",
+						Uid:  100,
+					},
+					Keyspace: "ks1",
+					Shard:    "-",
+				},
+			},
+			req: &vtctldatapb.GetTabletsRequest{
+				Cells:  []string{"cell1", "doesnotexist"},
+				Strict: true,
+			},
 			shouldErr: true,
+		},
+		{
+			name:  "in nonstrict mode if all cells fail the request fails",
+			cells: []string{"cell1"},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "cell1",
+						Uid:  100,
+					},
+					Keyspace: "ks1",
+					Shard:    "-",
+				},
+			},
+			req: &vtctldatapb.GetTabletsRequest{
+				Cells: []string{"doesnotexist", "alsodoesnotexist"},
+			},
+			shouldErr: true,
+		},
+		{
+			name:  "tablet alias filtering",
+			cells: []string{"zone1"},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+			},
+			req: &vtctldatapb.GetTabletsRequest{
+				TabletAliases: []*topodatapb.TabletAlias{
+					{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					{
+						// This tablet doesn't exist, but doesn't cause a failure.
+						Cell: "zone404",
+						Uid:  404,
+					},
+				},
+				// The below filters are ignored, because TabletAliases always
+				// takes precedence.
+				Keyspace: "another_keyspace",
+				Shard:    "-80",
+				Cells:    []string{"zone404"},
+			},
+			expected: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+			},
+			shouldErr: false,
+		},
+		{
+			name:    "tablet alias filter with none found",
+			tablets: []*topodatapb.Tablet{},
+			req: &vtctldatapb.GetTabletsRequest{
+				TabletAliases: []*topodatapb.TabletAlias{
+					{
+						Cell: "zone1",
+						Uid:  101,
+					},
+				},
+			},
+			expected:  []*topodatapb.Tablet{},
+			shouldErr: false,
 		},
 	}
 
 	for _, tt := range tests {
+		tt := tt
+
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -4449,6 +4732,279 @@ func TestReparentTablet(t *testing.T) {
 	}
 }
 
+func TestShardReplicationPositions(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		ts         *topo.Server
+		tablets    []*topodatapb.Tablet
+		tmc        tmclient.TabletManagerClient
+		ctxTimeout time.Duration
+		req        *vtctldatapb.ShardReplicationPositionsRequest
+		expected   *vtctldatapb.ShardReplicationPositionsResponse
+		shouldErr  bool
+	}{
+		{
+			name: "success",
+			ts:   memorytopo.NewServer("zone1"),
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+					Type:     topodatapb.TabletType_MASTER,
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  101,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+					Type:     topodatapb.TabletType_REPLICA,
+				},
+			},
+			tmc: &testutil.TabletManagerClient{
+				MasterPositionResults: map[string]struct {
+					Position string
+					Error    error
+				}{
+					"zone1-0000000100": {
+						Position: "primary_tablet_position",
+					},
+				},
+				ReplicationStatusResults: map[string]struct {
+					Position *replicationdatapb.Status
+					Error    error
+				}{
+					"zone1-0000000101": {
+						Position: &replicationdatapb.Status{
+							Position: "replica_tablet_position",
+						},
+					},
+				},
+			},
+			req: &vtctldatapb.ShardReplicationPositionsRequest{
+				Keyspace: "testkeyspace",
+				Shard:    "-",
+			},
+			expected: &vtctldatapb.ShardReplicationPositionsResponse{
+				ReplicationStatuses: map[string]*replicationdatapb.Status{
+					"zone1-0000000100": {
+						Position: "primary_tablet_position",
+					},
+					"zone1-0000000101": {
+						Position: "replica_tablet_position",
+					},
+				},
+				TabletMap: map[string]*topodatapb.Tablet{
+					"zone1-0000000100": {
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+						Keyspace: "testkeyspace",
+						Shard:    "-",
+						Type:     topodatapb.TabletType_MASTER,
+					},
+					"zone1-0000000101": {
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+						Keyspace: "testkeyspace",
+						Shard:    "-",
+						Type:     topodatapb.TabletType_REPLICA,
+					},
+				},
+			},
+			shouldErr: false,
+		},
+		{
+			name: "timeouts are nonfatal",
+			ts:   memorytopo.NewServer("zone1"),
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+					Type:     topodatapb.TabletType_MASTER,
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  101,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+					Type:     topodatapb.TabletType_REPLICA,
+				},
+			},
+			tmc: &testutil.TabletManagerClient{
+				MasterPositionDelays: map[string]time.Duration{
+					"zone1-0000000100": time.Millisecond * 100,
+				},
+				MasterPositionResults: map[string]struct {
+					Position string
+					Error    error
+				}{
+					"zone1-0000000100": {
+						Position: "primary_tablet_position",
+					},
+				},
+				ReplicationStatusDelays: map[string]time.Duration{
+					"zone1-0000000101": time.Millisecond * 100,
+				},
+				ReplicationStatusResults: map[string]struct {
+					Position *replicationdatapb.Status
+					Error    error
+				}{
+					"zone1-0000000101": {
+						Position: &replicationdatapb.Status{
+							Position: "replica_tablet_position",
+						},
+					},
+				},
+			},
+			ctxTimeout: time.Millisecond * 10,
+			req: &vtctldatapb.ShardReplicationPositionsRequest{
+				Keyspace: "testkeyspace",
+				Shard:    "-",
+			},
+			expected: &vtctldatapb.ShardReplicationPositionsResponse{
+				ReplicationStatuses: map[string]*replicationdatapb.Status{
+					"zone1-0000000100": nil,
+					"zone1-0000000101": nil,
+				},
+				TabletMap: map[string]*topodatapb.Tablet{
+					"zone1-0000000100": {
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+						Keyspace: "testkeyspace",
+						Shard:    "-",
+						Type:     topodatapb.TabletType_MASTER,
+					},
+					"zone1-0000000101": {
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+						Keyspace: "testkeyspace",
+						Shard:    "-",
+						Type:     topodatapb.TabletType_REPLICA,
+					},
+				},
+			},
+			shouldErr: false,
+		},
+		{
+			name: "other rpc errors are fatal",
+			ts:   memorytopo.NewServer("zone1"),
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+					Type:     topodatapb.TabletType_MASTER,
+				},
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  101,
+					},
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+					Type:     topodatapb.TabletType_REPLICA,
+				},
+			},
+			tmc: &testutil.TabletManagerClient{
+				MasterPositionResults: map[string]struct {
+					Position string
+					Error    error
+				}{
+					"zone1-0000000100": {
+						Error: assert.AnError,
+					},
+				},
+				ReplicationStatusResults: map[string]struct {
+					Position *replicationdatapb.Status
+					Error    error
+				}{
+					"zone1-0000000101": {
+						Position: &replicationdatapb.Status{
+							Position: "replica_tablet_position",
+						},
+					},
+				},
+			},
+			req: &vtctldatapb.ShardReplicationPositionsRequest{
+				Keyspace: "testkeyspace",
+				Shard:    "-",
+			},
+			expected:  nil,
+			shouldErr: true,
+		},
+		{
+			name: "nonexistent shard",
+			ts:   memorytopo.NewServer("zone1"),
+			req: &vtctldatapb.ShardReplicationPositionsRequest{
+				Keyspace: "testkeyspace",
+				Shard:    "-",
+			},
+			expected:  nil,
+			shouldErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			ctx := context.Background()
+
+			testutil.AddTablets(ctx, t, tt.ts, &testutil.AddTabletOptions{
+				AlsoSetShardMaster: true,
+				SkipShardCreation:  false,
+			}, tt.tablets...)
+
+			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, tt.ts, tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+				return NewVtctldServer(ts)
+			})
+
+			if tt.ctxTimeout > 0 {
+				_ctx, cancel := context.WithTimeout(ctx, tt.ctxTimeout)
+				defer cancel()
+
+				ctx = _ctx
+			}
+
+			resp, err := vtctld.ShardReplicationPositions(ctx, tt.req)
+			if tt.shouldErr {
+				assert.Error(t, err)
+
+				return
+			}
+
+			assert.NoError(t, err)
+			assert.Equal(t, tt.expected, resp)
+		})
+	}
+}
+
 func TestTabletExternallyReparented(t *testing.T) {
 	t.Parallel()
 
@@ -4538,7 +5094,7 @@ func TestTabletExternallyReparented(t *testing.T) {
 						Cell: "zone2",
 						Uid:  200,
 					},
-					Type:                topodatapb.TabletType_MASTER,
+					Type:                topodatapb.TabletType_UNKNOWN,
 					Keyspace:            "testkeyspace",
 					Shard:               "-",
 					MasterTermStartTime: &vttime.Time{},
@@ -4844,6 +5400,9 @@ func TestTabletExternallyReparented(t *testing.T) {
 				// of the test.
 				defer func() {
 					topofactory.SetError(nil)
+
+					ctx, cancel := context.WithTimeout(ctx, time.Millisecond*10)
+					defer cancel()
 
 					resp, err := vtctld.GetTablets(ctx, &vtctldatapb.GetTabletsRequest{})
 					require.NoError(t, err, "cannot get all tablets in the topo")
