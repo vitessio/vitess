@@ -7351,4 +7351,5 @@
 2021-04-12T22:45:57Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/742827183
 2021-04-12T22:45:57Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/742827150
 2021-04-12T22:45:57Z,endtoend,https://github.com/vitessio/vitess/actions/runs/742827158
+2021-04-12T22:45:57Z,local_example,https://github.com/vitessio/vitess/actions/runs/742827163
 2021-04-12T22:45:57Z,unit_race,https://github.com/vitessio/vitess/actions/runs/742827164
