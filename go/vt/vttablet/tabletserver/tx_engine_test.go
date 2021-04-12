@@ -545,23 +545,23 @@ func TestTxEngineFailReserve(t *testing.T) {
 
 	options := &querypb.ExecuteOptions{}
 	_, err := te.Reserve(ctx, options, 0, nil)
-	require.EqualError(t, err, "TxEngine.Reserve: cannot provide new connection in state NotServing")
+	assert.EqualError(t, err, "cannot provide new connection in state NotServing")
 
 	_, err = te.ReserveBegin(ctx, options, nil)
-	require.EqualError(t, err, "TxEngine.ReserveBegin: cannot provide new connection in state NotServing")
+	assert.EqualError(t, err, "cannot provide new connection in state NotServing")
 
 	te.AcceptReadOnly()
 
 	db.AddRejectedQuery("dummy_query", errors.New("failed executing dummy_query"))
 	_, err = te.Reserve(ctx, options, 0, []string{"dummy_query"})
-	require.EqualError(t, err, "TxEngine.Reserve: unknown error: failed executing dummy_query (errno 1105) (sqlstate HY000) during query: dummy_query")
+	assert.EqualError(t, err, "unknown error: failed executing dummy_query (errno 1105) (sqlstate HY000) during query: dummy_query")
 
 	_, err = te.ReserveBegin(ctx, options, []string{"dummy_query"})
-	require.EqualError(t, err, "TxEngine.ReserveBegin: unknown error: failed executing dummy_query (errno 1105) (sqlstate HY000) during query: dummy_query")
+	assert.EqualError(t, err, "unknown error: failed executing dummy_query (errno 1105) (sqlstate HY000) during query: dummy_query")
 
 	nonExistingID := int64(42)
 	_, err = te.Reserve(ctx, options, nonExistingID, nil)
-	require.EqualError(t, err, "TxEngine.Reserve: transaction 42: not found")
+	assert.EqualError(t, err, "transaction 42: not found")
 
 	txID, _, err := te.Begin(ctx, nil, 0, options)
 	require.NoError(t, err)
@@ -570,7 +570,7 @@ func TestTxEngineFailReserve(t *testing.T) {
 	conn.Unlock() // but we keep holding on to it... sneaky....
 
 	_, err = te.Reserve(ctx, options, txID, []string{"dummy_query"})
-	require.EqualError(t, err, "TxEngine.Reserve: unknown error: failed executing dummy_query (errno 1105) (sqlstate HY000) during query: dummy_query")
+	assert.EqualError(t, err, "unknown error: failed executing dummy_query (errno 1105) (sqlstate HY000) during query: dummy_query")
 
 	connID, _, err := te.Commit(ctx, txID)
 	require.Error(t, err)

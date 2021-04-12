@@ -476,9 +476,4 @@ func TestNewPlanValue(t *testing.T) {
 	}
 }
 
-var mustMatch = utils.MustMatchFn(
-	[]interface{}{ // types with unexported fields
-		sqltypes.Value{},
-	},
-	[]string{".Conn"}, // ignored fields
-)
+var mustMatch = utils.MustMatchFn(".Conn")

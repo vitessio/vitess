@@ -298,7 +298,7 @@ func createTransaction(ctx context.Context, options *querypb.ExecuteOptions, con
 		if queries.setIsolationLevel != "" {
 			txQuery := "set transaction isolation level " + queries.setIsolationLevel
 			if err := conn.execWithRetry(ctx, txQuery, 1, false); err != nil {
-				return "", false, vterrors.Wrap(err, txQuery)
+				return "", false, err
 			}
 			beginQueries = queries.setIsolationLevel + "; "
 		}
@@ -308,7 +308,7 @@ func createTransaction(ctx context.Context, options *querypb.ExecuteOptions, con
 			beginSQL = "start transaction read only"
 		}
 		if err := conn.execWithRetry(ctx, beginSQL, 1, false); err != nil {
-			return "", false, vterrors.Wrap(err, beginSQL)
+			return "", false, err
 		}
 		beginQueries = beginQueries + beginSQL
 	} else if options.GetTransactionIsolation() == querypb.ExecuteOptions_AUTOCOMMIT {
@@ -319,7 +319,7 @@ func createTransaction(ctx context.Context, options *querypb.ExecuteOptions, con
 
 	for _, preQuery := range preQueries {
 		if _, err := conn.Exec(ctx, preQuery, 1, false); err != nil {
-			return "", false, vterrors.Wrap(err, preQuery)
+			return "", false, err
 		}
 	}
 	return beginQueries, autocommitTransaction, nil
