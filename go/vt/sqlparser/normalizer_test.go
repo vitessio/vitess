@@ -236,8 +236,7 @@ func TestNormalize(t *testing.T) {
 		}
 		known := GetBindvars(stmt)
 		bv := make(map[string]*querypb.BindVariable)
-		require.NoError(t,
-			Normalize(stmt, known, bv, prefix))
+		require.NoError(t, Normalize(stmt, NewReservedVars(prefix, known), bv))
 		outstmt := String(stmt)
 		if outstmt != tc.outstmt {
 			t.Errorf("Query:\n%s:\n%s, want\n%s", tc.in, outstmt, tc.outstmt)
@@ -279,8 +278,7 @@ func BenchmarkNormalize(b *testing.B) {
 		b.Fatal(err)
 	}
 	for i := 0; i < b.N; i++ {
-		require.NoError(b,
-			Normalize(ast, reservedVars, map[string]*querypb.BindVariable{}, ""))
+		require.NoError(b, Normalize(ast, NewReservedVars("", reservedVars), map[string]*querypb.BindVariable{}))
 	}
 }
 
@@ -308,7 +306,7 @@ func BenchmarkNormalizeTraces(b *testing.B) {
 
 			for i := 0; i < b.N; i++ {
 				for i, query := range parsed {
-					_ = Normalize(query, reservedVars[i], map[string]*querypb.BindVariable{}, "")
+					_ = Normalize(query, NewReservedVars("", reservedVars[i]), map[string]*querypb.BindVariable{})
 				}
 			}
 		})
@@ -341,7 +339,7 @@ func BenchmarkNormalizeVTGate(b *testing.B) {
 
 			// Normalize if possible and retry.
 			if CanNormalize(stmt) || MustRewriteAST(stmt) {
-				result, err := PrepareAST(stmt, reservedVars, bindVars, "vtg", true, keyspace)
+				result, err := PrepareAST(stmt, NewReservedVars("vtg", reservedVars), bindVars, true, keyspace)
 				if err != nil {
 					b.Fatal(err)
 				}
@@ -356,8 +354,6 @@ func BenchmarkNormalizeVTGate(b *testing.B) {
 		}
 	}
 }
-
-var randtmplre = regexp.MustCompile("[#@]")
 
 func randtmpl(template string) string {
 	const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
@@ -613,7 +609,7 @@ WHERE no_w_id = %d AND no_d_id = %d`,
 
 func benchmarkNormalization(b *testing.B, sqls []string) {
 	b.Helper()
-
+	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		for _, sql := range sqls {
@@ -622,7 +618,8 @@ func benchmarkNormalization(b *testing.B, sqls []string) {
 				b.Fatalf("%v: %q", err, sql)
 			}
 
-			_, err = PrepareAST(stmt, reserved, make(map[string]*querypb.BindVariable), "vtg", true, "keyspace0")
+			reservedVars := NewReservedVars("vtg", reserved)
+			_, err = PrepareAST(stmt, reservedVars, make(map[string]*querypb.BindVariable), true, "keyspace0")
 			if err != nil {
 				b.Fatal(err)
 			}
