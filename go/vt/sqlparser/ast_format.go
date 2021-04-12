@@ -962,7 +962,7 @@ func (node *Literal) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node Argument) Format(buf *TrackedBuffer) {
-	buf.WriteArg(string(node))
+	buf.WriteArg(":", string(node))
 }
 
 // Format formats the node.
@@ -1004,7 +1004,7 @@ func (node *DerivedTable) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node ListArg) Format(buf *TrackedBuffer) {
-	buf.WriteArg(string(node))
+	buf.WriteArg("::", string(node))
 }
 
 // Format formats the node.

@@ -135,7 +135,7 @@ func (nz *normalizer) convertLiteralDedup(node *Literal, cursor *Cursor) {
 	}
 
 	// Modify the AST node to a bindvar.
-	cursor.Replace(NewArgument(":" + bvname))
+	cursor.Replace(NewArgument(bvname))
 }
 
 // convertLiteral converts an Literal without the dedup.
@@ -148,7 +148,7 @@ func (nz *normalizer) convertLiteral(node *Literal, cursor *Cursor) {
 	bvname := nz.reserved.Next()
 	nz.bindVars[bvname] = bval
 
-	cursor.Replace(NewArgument(":" + bvname))
+	cursor.Replace(NewArgument(bvname))
 }
 
 // convertComparison attempts to convert IN clauses to
@@ -182,7 +182,7 @@ func (nz *normalizer) convertComparison(node *ComparisonExpr) {
 	bvname := nz.reserved.Next()
 	nz.bindVars[bvname] = bvals
 	// Modify RHS to be a list bindvar.
-	node.Right = ListArg(append([]byte("::"), bvname...))
+	node.Right = ListArg(bvname)
 }
 
 func (nz *normalizer) sqlToBindvar(node SQLNode) *querypb.BindVariable {
@@ -217,9 +217,9 @@ func GetBindvars(stmt Statement) map[string]struct{} {
 			// allocations.
 			return false, nil
 		case Argument:
-			bindvars[string(node[1:])] = struct{}{}
+			bindvars[string(node)] = struct{}{}
 		case ListArg:
-			bindvars[string(node[2:])] = struct{}{}
+			bindvars[string(node)] = struct{}{}
 		}
 		return true, nil
 	}, stmt)

@@ -3553,7 +3553,7 @@ col_tuple:
   }
 | LIST_ARG
   {
-    $$ = ListArg($1)
+    $$ = ListArg($1[2:])
     bindVariable(yylex, $1[2:])
   }
 
@@ -4087,7 +4087,7 @@ value:
   }
 | VALUE_ARG
   {
-    $$ = NewArgument($1)
+    $$ = NewArgument($1[1:])
     bindVariable(yylex, $1[1:])
   }
 | NULL
@@ -4111,7 +4111,7 @@ num_val:
   }
 | VALUE_ARG VALUES
   {
-    $$ = NewArgument($1)
+    $$ = NewArgument($1[1:])
     bindVariable(yylex, $1[1:])
   }
 

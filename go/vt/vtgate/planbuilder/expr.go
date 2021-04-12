@@ -156,7 +156,7 @@ func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr, reservedVars *sqlpar
 		construct, ok := constructsMap[sqi.ast]
 		if !ok {
 			// (subquery) -> :_sq
-			expr = sqlparser.ReplaceExpr(expr, sqi.ast, sqlparser.NewArgument(":"+sqName))
+			expr = sqlparser.ReplaceExpr(expr, sqi.ast, sqlparser.NewArgument(sqName))
 			pullouts = append(pullouts, newPulloutSubquery(engine.PulloutValue, sqName, hasValues, sqi.plan))
 			continue
 		}
@@ -167,10 +167,10 @@ func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr, reservedVars *sqlpar
 				right := &sqlparser.ComparisonExpr{
 					Operator: construct.Operator,
 					Left:     construct.Left,
-					Right:    sqlparser.ListArg("::" + sqName),
+					Right:    sqlparser.ListArg(sqName),
 				}
 				left := &sqlparser.ComparisonExpr{
-					Left:     sqlparser.NewArgument(":" + hasValues),
+					Left:     sqlparser.NewArgument(hasValues),
 					Operator: sqlparser.EqualOp,
 					Right:    sqlparser.NewIntLiteral("1"),
 				}
@@ -183,14 +183,14 @@ func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr, reservedVars *sqlpar
 			} else {
 				// a not in (subquery) -> (:__sq_has_values = 0 or (a not in ::__sq))
 				left := &sqlparser.ComparisonExpr{
-					Left:     sqlparser.NewArgument(":" + hasValues),
+					Left:     sqlparser.NewArgument(hasValues),
 					Operator: sqlparser.EqualOp,
 					Right:    sqlparser.NewIntLiteral("0"),
 				}
 				right := &sqlparser.ComparisonExpr{
 					Operator: construct.Operator,
 					Left:     construct.Left,
-					Right:    sqlparser.ListArg("::" + sqName),
+					Right:    sqlparser.ListArg(sqName),
 				}
 				newExpr := &sqlparser.OrExpr{
 					Left:  left,
@@ -201,7 +201,7 @@ func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr, reservedVars *sqlpar
 			}
 		case *sqlparser.ExistsExpr:
 			// exists (subquery) -> :__sq_has_values
-			expr = sqlparser.ReplaceExpr(expr, construct, sqlparser.NewArgument(":"+hasValues))
+			expr = sqlparser.ReplaceExpr(expr, construct, sqlparser.NewArgument(hasValues))
 			pullouts = append(pullouts, newPulloutSubquery(engine.PulloutExists, sqName, hasValues, sqi.plan))
 		}
 	}

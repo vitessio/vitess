@@ -161,7 +161,7 @@ func (rb *route) Wireup(plan logicalPlan, jt *jointab) error {
 				return err
 			}
 			rb.eroute.Values = []sqltypes.PlanValue{pv}
-			vals.Right = sqlparser.ListArg("::" + engine.ListVarName)
+			vals.Right = sqlparser.ListArg(engine.ListVarName)
 		case nil:
 			// no-op.
 		default:
@@ -205,7 +205,7 @@ func (rb *route) Wireup(plan logicalPlan, jt *jointab) error {
 		case *sqlparser.ColName:
 			if !rb.isLocal(node) {
 				joinVar := jt.Procure(plan, node, rb.Order())
-				buf.Myprintf("%a", ":"+joinVar)
+				buf.WriteArg(":", joinVar)
 				return
 			}
 		case sqlparser.TableName:
@@ -287,7 +287,7 @@ func (rb *route) generateFieldQuery(sel sqlparser.SelectStatement, jt *jointab) 
 		case *sqlparser.ColName:
 			if !rb.isLocal(node) {
 				_, joinVar := jt.Lookup(node)
-				buf.Myprintf("%a", ":"+joinVar)
+				buf.WriteArg(":", joinVar)
 				return
 			}
 		case sqlparser.TableName:
