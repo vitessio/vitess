@@ -37,8 +37,8 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
-func buildSelectPlan(query string) func(sqlparser.Statement, sqlparser.BindVars, ContextVSchema) (engine.Primitive, error) {
-	return func(stmt sqlparser.Statement, reservedVars sqlparser.BindVars, vschema ContextVSchema) (engine.Primitive, error) {
+func buildSelectPlan(query string) func(sqlparser.Statement, *sqlparser.ReservedVars, ContextVSchema) (engine.Primitive, error) {
+	return func(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema ContextVSchema) (engine.Primitive, error) {
 		sel := stmt.(*sqlparser.Select)
 
 		p, err := handleDualSelects(sel, vschema)
@@ -256,7 +256,7 @@ var errInto = vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.CantUse
 // The LIMIT clause is the last construct of a query. If it cannot be
 // pushed into a route, then a primitive is created on top of any
 // of the above trees to make it discard unwanted rows.
-func (pb *primitiveBuilder) processSelect(sel *sqlparser.Select, reservedVars sqlparser.BindVars, outer *symtab, query string) error {
+func (pb *primitiveBuilder) processSelect(sel *sqlparser.Select, reservedVars *sqlparser.ReservedVars, outer *symtab, query string) error {
 	// Check and error if there is any locking function present in select expression.
 	for _, expr := range sel.SelectExprs {
 		if aExpr, ok := expr.(*sqlparser.AliasedExpr); ok && sqlparser.IsLockingFunc(aExpr.Expr) {
@@ -360,7 +360,7 @@ func setMiscFunc(in logicalPlan, sel *sqlparser.Select) error {
 	return nil
 }
 
-func buildSQLCalcFoundRowsPlan(query string, sel *sqlparser.Select, reservedVars sqlparser.BindVars, outer *symtab, vschema ContextVSchema) (logicalPlan, error) {
+func buildSQLCalcFoundRowsPlan(query string, sel *sqlparser.Select, reservedVars *sqlparser.ReservedVars, outer *symtab, vschema ContextVSchema) (logicalPlan, error) {
 	ljt := newJointab(reservedVars)
 	frpb := newPrimitiveBuilder(vschema, ljt)
 	err := frpb.processSelect(sel, reservedVars, outer, "")
@@ -368,7 +368,7 @@ func buildSQLCalcFoundRowsPlan(query string, sel *sqlparser.Select, reservedVars
 		return nil, err
 	}
 
-	statement2, reservedVars2, err := sqlparser.Parse2(query)
+	statement2, reserved2, err := sqlparser.Parse2(query)
 	if err != nil {
 		return nil, err
 	}
@@ -404,6 +404,7 @@ func buildSQLCalcFoundRowsPlan(query string, sel *sqlparser.Select, reservedVars
 		sel2 = sel3
 	}
 
+	reservedVars2 := sqlparser.NewReservedVars("vtg", reserved2)
 	cjt := newJointab(reservedVars2)
 	countpb := newPrimitiveBuilder(vschema, cjt)
 	err = countpb.processSelect(sel2, reservedVars2, outer, "")
@@ -480,7 +481,7 @@ func isOnlyDual(sel *sqlparser.Select) bool {
 // pushFilter identifies the target route for the specified bool expr,
 // pushes it down, and updates the route info if the new constraint improves
 // the primitive. This function can push to a WHERE or HAVING clause.
-func (pb *primitiveBuilder) pushFilter(in sqlparser.Expr, whereType string, reservedVars sqlparser.BindVars) error {
+func (pb *primitiveBuilder) pushFilter(in sqlparser.Expr, whereType string, reservedVars *sqlparser.ReservedVars) error {
 	filters := splitAndExpression(nil, in)
 	reorderBySubquery(filters)
 	for _, filter := range filters {
@@ -538,7 +539,7 @@ func (pb *primitiveBuilder) addPullouts(pullouts []*pulloutSubquery) {
 
 // pushSelectExprs identifies the target route for the
 // select expressions and pushes them down.
-func (pb *primitiveBuilder) pushSelectExprs(sel *sqlparser.Select, reservedVars sqlparser.BindVars) error {
+func (pb *primitiveBuilder) pushSelectExprs(sel *sqlparser.Select, reservedVars *sqlparser.ReservedVars) error {
 	resultColumns, err := pb.pushSelectRoutes(sel.SelectExprs, reservedVars)
 	if err != nil {
 		return err
@@ -549,7 +550,7 @@ func (pb *primitiveBuilder) pushSelectExprs(sel *sqlparser.Select, reservedVars 
 
 // pushSelectRoutes is a convenience function that pushes all the select
 // expressions and returns the list of resultColumns generated for it.
-func (pb *primitiveBuilder) pushSelectRoutes(selectExprs sqlparser.SelectExprs, reservedVars sqlparser.BindVars) ([]*resultColumn, error) {
+func (pb *primitiveBuilder) pushSelectRoutes(selectExprs sqlparser.SelectExprs, reservedVars *sqlparser.ReservedVars) ([]*resultColumn, error) {
 	resultColumns := make([]*resultColumn, 0, len(selectExprs))
 	for _, node := range selectExprs {
 		switch node := node.(type) {
