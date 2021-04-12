@@ -505,7 +505,7 @@ func expectDBClientQueries(t *testing.T, queries []string) {
 	for {
 		select {
 		case got := <-globalDBQueries:
-			if heartbeatRe.MatchString(got) {
+			if heartbeatRe.MatchString(got) || strings.Contains(got, "_vt.vreplication_log") {
 				continue
 			}
 			t.Errorf("unexpected query: %s", got)
