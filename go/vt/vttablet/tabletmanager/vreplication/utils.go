@@ -53,6 +53,9 @@ func getLastLog(dbClient *vdbClient, vreplID uint32) (int64, string, string, str
 		return 0, "", "", "", nil
 	}
 	row := qr.Rows[0]
+	if len(row) != 4 {
+		return 0, "", "", "", nil
+	}
 	id, _ := evalengine.ToInt64(row[0])
 	typ := row[1].String()
 	state := row[2].String()
