@@ -486,17 +486,21 @@ func (t *explainTablet) HandleQuery(c *mysql.Conn, query string, callback func(*
 		colTypeMap := map[string]querypb.Type{}
 		for _, table := range tables {
 			tableName := sqlparser.String(table)
-			if columns, exists := tableColumns[tableName]; exists {
-				for k, v := range columns {
-					if colType, exists := colTypeMap[k]; exists {
-						if colType != v {
-							return fmt.Errorf("column type mismatch for column : %s, types: %d vs %d", k, colType, v)
-						}
-						continue
-					}
-					colTypeMap[k] = v
-				}
+			columns, exists := tableColumns[tableName]
+			if !exists && tableName != "" && tableName != "dual" {
+				return fmt.Errorf("unable to resolve table name %s", tableName)
 			}
+
+			for k, v := range columns {
+				if colType, exists := colTypeMap[k]; exists {
+					if colType != v {
+						return fmt.Errorf("column type mismatch for column : %s, types: %d vs %d", k, colType, v)
+					}
+					continue
+				}
+				colTypeMap[k] = v
+			}
+
 		}
 
 		colNames := make([]string, 0, 4)
