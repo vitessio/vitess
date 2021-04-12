@@ -120,7 +120,7 @@ func formatWithBind(buf *sqlparser.TrackedBuffer, node sqlparser.SQLNode) {
 	}
 	switch v.Type {
 	case sqlparser.StrVal, sqlparser.HexVal, sqlparser.IntVal:
-		buf.WriteArg(fmt.Sprintf(":v%d", bindIndex))
+		buf.WriteArg(":", fmt.Sprintf("v%d", bindIndex))
 		bindIndex++
 	default:
 		node.Format(buf)
