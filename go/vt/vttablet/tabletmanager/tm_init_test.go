@@ -20,6 +20,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang/protobuf/proto"
+
 	"context"
 
 	"github.com/stretchr/testify/assert"
@@ -564,10 +566,8 @@ func ensureSrvKeyspace(t *testing.T, ts *topo.Server, cell, keyspace string) {
 	found := false
 	for i := 0; i < 10; i++ {
 		ks, err := ts.GetSrvKeyspace(context.Background(), cell, keyspace)
-		if err == nil {
+		if err == nil && !proto.Equal(&topodatapb.SrvKeyspace{}, ks) /* require non-empty SrvKeyspace */ {
 			found = true
-			// require non-empty
-			require.NotEqual(t, &topodatapb.SrvKeyspace{}, ks, "SrvKeyspace is empty")
 			break
 		}
 		require.True(t, topo.IsErrType(err, topo.NoNode), err)
