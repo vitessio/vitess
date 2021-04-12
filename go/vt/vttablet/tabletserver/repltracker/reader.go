@@ -146,12 +146,12 @@ func (r *heartbeatReader) readHeartbeat() {
 
 	res, err := r.fetchMostRecentHeartbeat(ctx)
 	if err != nil {
-		r.recordError(vterrors.Wrap(err, "Failed to read most recent heartbeat"))
+		r.recordError(vterrors.Wrap(err, "failed to read most recent heartbeat"))
 		return
 	}
 	ts, err := parseHeartbeatResult(res)
 	if err != nil {
-		r.recordError(vterrors.Wrap(err, "Failed to parse heartbeat result"))
+		r.recordError(vterrors.Wrap(err, "failed to parse heartbeat result"))
 		return
 	}
 
