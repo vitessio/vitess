@@ -22,7 +22,11 @@ import { stringify } from '../../util/queryString';
 import { PaginationNav } from './PaginationNav';
 
 interface Props<T> {
-    columns: string[];
+    // When passing a JSX.Element, note that the column element
+    // will be rendered *inside* a <th> tag. (Note: I don't love this
+    // abstraction + we'll likely want to revisit this when we add
+    // table sorting.)
+    columns: Array<string | JSX.Element>;
     data: T[];
     pageSize?: number;
     renderRows: (rows: T[]) => JSX.Element[];
