@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -68,6 +69,7 @@ type fakeDBClient struct {
 	invariants   map[string]*sqltypes.Result
 	invariantsRE map[string]*sqltypes.Result
 	tablet       string
+	mu           sync.Mutex
 }
 
 // NewfakeDBClient returns a new DBClientMock.
@@ -95,6 +97,8 @@ func newFakeDBClient(tablet string) *fakeDBClient {
 }
 
 func (dc *fakeDBClient) addQuery(query string, result *sqltypes.Result, err error) {
+	dc.mu.Lock()
+	defer dc.mu.Unlock()
 	dbr := &dbResult{result: result, err: err}
 	if dbrs, ok := dc.queries[query]; ok {
 		dbrs.results = append(dbrs.results, dbr)
@@ -104,6 +108,8 @@ func (dc *fakeDBClient) addQuery(query string, result *sqltypes.Result, err erro
 }
 
 func (dc *fakeDBClient) addQueryRE(query string, result *sqltypes.Result, err error) {
+	dc.mu.Lock()
+	defer dc.mu.Unlock()
 	dbr := &dbResult{result: result, err: err}
 	if dbrs, ok := dc.queriesRE[query]; ok {
 		dbrs.results = append(dbrs.results, dbr)
@@ -113,10 +119,14 @@ func (dc *fakeDBClient) addQueryRE(query string, result *sqltypes.Result, err er
 }
 
 func (dc *fakeDBClient) addInvariant(query string, result *sqltypes.Result) {
+	dc.mu.Lock()
+	defer dc.mu.Unlock()
 	dc.invariants[query] = result
 }
 
 func (dc *fakeDBClient) addInvariantRE(query string, result *sqltypes.Result) {
+	dc.mu.Lock()
+	defer dc.mu.Unlock()
 	dc.invariantsRE[query] = result
 }
 
@@ -168,6 +178,8 @@ func (dc *fakeDBClient) getInvariantResult(query string) *sqltypes.Result {
 
 // ExecuteFetch is part of the DBClient interface
 func (dc *fakeDBClient) ExecuteFetch(query string, maxrows int) (qr *sqltypes.Result, err error) {
+	dc.mu.Lock()
+	defer dc.mu.Unlock()
 	if testMode == "debug" {
 		fmt.Printf("ExecuteFetch: >>%s<<\n", query)
 	}
@@ -193,6 +205,8 @@ func (dc *fakeDBClient) ExecuteFetch(query string, maxrows int) (qr *sqltypes.Re
 }
 
 func (dc *fakeDBClient) verifyQueries(t *testing.T) {
+	dc.mu.Lock()
+	defer dc.mu.Unlock()
 	t.Helper()
 	for query, dbrs := range dc.queries {
 		if !dbrs.exhausted() {
