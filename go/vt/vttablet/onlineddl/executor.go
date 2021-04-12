@@ -1257,10 +1257,11 @@ func (e *Executor) CancelMigration(ctx context.Context, uuid string, terminateRu
 		}
 		rowsAffected = 1
 	}
+	// There is now a migration to cancel.
+	defer e.updateMigrationMessage(ctx, onlineDDL.UUID, message)
 
 	if terminateRunningMigration {
 		migrationFound, err := e.terminateMigration(ctx, onlineDDL, e.lastMigrationUUID)
-		defer e.updateMigrationMessage(ctx, onlineDDL.UUID, message)
 
 		if migrationFound {
 			rowsAffected = 1
@@ -1273,7 +1274,6 @@ func (e *Executor) CancelMigration(ctx context.Context, uuid string, terminateRu
 	result = &sqltypes.Result{
 		RowsAffected: rowsAffected,
 	}
-
 	return result, nil
 }
 
@@ -1851,6 +1851,22 @@ func (e *Executor) executeMigration(ctx context.Context, onlineDDL *schema.Onlin
 	return nil
 }
 
+// strategyMatchesShard checks whether ddl_strategy has any specific -shards=... listed. If not, good. If it does, then
+// we check whether this shard is listed.
+func (e *Executor) strategyMatchesShard(ctx context.Context, strategySetting *schema.DDLStrategySetting) bool {
+	targetShards := strategySetting.TargetShards()
+	if len(targetShards) == 0 {
+		return true
+	}
+	for _, s := range targetShards {
+		if s == e.shard {
+			return true
+		}
+	}
+	return false
+}
+
+// runNextMigration looks for the next eligible migration to run and kicks it off.
 func (e *Executor) runNextMigration(ctx context.Context) error {
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
@@ -1864,7 +1880,7 @@ func (e *Executor) runNextMigration(ctx context.Context) error {
 		return err
 	}
 	named := r.Named()
-	for i, row := range named.Rows {
+	for _, row := range named.Rows {
 		onlineDDL := &schema.OnlineDDL{
 			Keyspace: row["keyspace"].ToString(),
 			Table:    row["mysql_table"].ToString(),
@@ -1875,6 +1891,11 @@ func (e *Executor) runNextMigration(ctx context.Context) error {
 			Options:  row["options"].ToString(),
 			Status:   schema.OnlineDDLStatus(row["migration_status"].ToString()),
 		}
+		if !e.strategyMatchesShard(ctx, onlineDDL.StrategySetting()) {
+			_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, "shard does not match strategy")
+			_ = e.updateMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusCancelled)
+			continue
+		}
 		{
 			// We strip out any VT query comments because our simplified parser doesn't work well with comments
 			ddlStmt, _, err := schema.ParseOnlineDDLStatement(onlineDDL.SQL)
@@ -1883,12 +1904,7 @@ func (e *Executor) runNextMigration(ctx context.Context) error {
 				onlineDDL.SQL = sqlparser.String(ddlStmt)
 			}
 		}
-		e.executeMigration(ctx, onlineDDL)
-		// the query should only ever return a single row at the most
-		// but let's make it also explicit here that we only run a single migration
-		if i == 0 {
-			break
-		}
+		return e.executeMigration(ctx, onlineDDL)
 	}
 	return nil
 }

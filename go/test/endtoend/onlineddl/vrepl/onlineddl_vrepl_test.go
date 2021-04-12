@@ -336,7 +336,16 @@ func TestSchemaChange(t *testing.T) {
 		uuid := testOnlineDDLStatement(t, onlineDDLDropTableStatement, "online", "vtgate", "")
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusFailed)
 		onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, false)
-		onlineddl.CheckRetryMigration(t, &vtParams, shards, uuid, true)
+	})
+	t.Run("Online DROP TABLE for nonexisting shards, expect cancel", func(t *testing.T) {
+		uuid := testOnlineDDLStatement(t, onlineDDLDropTableIfExistsStatement, "online --shards=0,474", "vtgate", "")
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusCancelled)
+	})
+	t.Run("Online DROP TABLE for given shards", func(t *testing.T) {
+		uuid := testOnlineDDLStatement(t, onlineDDLDropTableIfExistsStatement, "online --shards=-80,80-", "vtgate", "")
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, false)
+		onlineddl.CheckRetryMigration(t, &vtParams, shards, uuid, false)
 	})
 }
 

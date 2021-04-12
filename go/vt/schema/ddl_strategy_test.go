@@ -34,6 +34,50 @@ func TestIsDirect(t *testing.T) {
 	assert.True(t, DDLStrategy("something").IsDirect())
 }
 
+func TestIsShardsFlag(t *testing.T) {
+	tt := []struct {
+		s      string
+		expect bool
+		val    string
+	}{
+		{
+			s: "something",
+		},
+		{
+			s: "-shards",
+		},
+		{
+			s: "-shards",
+		},
+		{
+			s:      "-shards=",
+			expect: true,
+		},
+		{
+			s:      "-shards=0",
+			expect: true,
+			val:    "0",
+		},
+		{
+			s:      "--shards=0",
+			expect: true,
+			val:    "0",
+		},
+		{
+			s:      "-shards=-40,40-80",
+			expect: true,
+			val:    "-40,40-80",
+		},
+	}
+	for _, ts := range tt {
+		t.Run(ts.s, func(t *testing.T) {
+			isShards, val := isShardsFlag((ts.s))
+			assert.Equal(t, ts.expect, isShards)
+			assert.Equal(t, ts.val, val)
+		})
+	}
+}
+
 func TestParseDDLStrategy(t *testing.T) {
 	tt := []struct {
 		strategyVariable string
@@ -42,6 +86,7 @@ func TestParseDDLStrategy(t *testing.T) {
 		isDeclarative    bool
 		isSingleton      bool
 		runtimeOptions   string
+		targetShards     []string
 		err              error
 	}{
 		{
@@ -90,6 +135,35 @@ func TestParseDDLStrategy(t *testing.T) {
 			runtimeOptions:   "",
 			isSingleton:      true,
 		},
+		{
+			strategyVariable: "gh-ost --declarative --shards=-40,40-80 --max-load=Threads_running=100",
+			strategy:         DDLStrategyGhost,
+			options:          "--declarative --shards=-40,40-80 --max-load=Threads_running=100",
+			runtimeOptions:   "--max-load=Threads_running=100",
+			isDeclarative:    true,
+			targetShards:     []string{"-40", "40-80"},
+		},
+		{
+			strategyVariable: "gh-ost --shards=,,-40,40-80,,",
+			strategy:         DDLStrategyGhost,
+			options:          "--shards=,,-40,40-80,,",
+			runtimeOptions:   "",
+			targetShards:     []string{"-40", "40-80"},
+		},
+		{
+			strategyVariable: `gh-ost -shards="-80,80-"`,
+			strategy:         DDLStrategyGhost,
+			options:          `-shards="-80,80-"`,
+			runtimeOptions:   "",
+			targetShards:     []string{"-80", "80-"},
+		},
+		{
+			strategyVariable: `gh-ost -shards="-80, 80-"`,
+			strategy:         DDLStrategyGhost,
+			options:          `-shards="-80, 80-"`,
+			runtimeOptions:   "",
+			targetShards:     []string{"-80", "80-"},
+		},
 	}
 	for _, ts := range tt {
 		setting, err := ParseDDLStrategy(ts.strategyVariable)
@@ -101,6 +175,12 @@ func TestParseDDLStrategy(t *testing.T) {
 
 		runtimeOptions := strings.Join(setting.RuntimeOptions(), " ")
 		assert.Equal(t, ts.runtimeOptions, runtimeOptions)
+
+		if len(ts.targetShards) == 0 {
+			assert.Empty(t, setting.TargetShards())
+		} else {
+			assert.Equal(t, ts.targetShards, setting.TargetShards())
+		}
 	}
 	{
 		_, err := ParseDDLStrategy("other")

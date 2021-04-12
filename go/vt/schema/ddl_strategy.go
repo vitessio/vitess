@@ -19,18 +19,23 @@ package schema
 import (
 	"fmt"
 	"regexp"
+	"strconv"
 
 	"github.com/google/shlex"
-)
 
-var (
-	strategyParserRegexp = regexp.MustCompile(`^([\S]+)\s+(.*)$`)
+	"vitess.io/vitess/go/textutil"
 )
 
 const (
 	declarativeFlag = "declarative"
 	skipTopoFlag    = "skip-topo"
 	singletonFlag   = "singleton"
+	shardsFlag      = "shards"
+)
+
+var (
+	strategyParserRegexp = regexp.MustCompile(`^([\S]+)\s+(.*)$`)
+	shardsFlagRegexp     = regexp.MustCompile(fmt.Sprintf(`^[-]{1,2}%s=(.*?)$`, shardsFlag))
 )
 
 // DDLStrategy suggests how an ALTER TABLE should run (e.g. "direct", "online", "gh-ost" or "pt-osc")
@@ -123,11 +128,39 @@ func (setting *DDLStrategySetting) IsSingleton() bool {
 	return setting.hasFlag(singletonFlag)
 }
 
+// isShardsFlag returns true when given option denotes a `-shards=[...]` flag
+func isShardsFlag(opt string) (bool, string) {
+	submatch := shardsFlagRegexp.FindStringSubmatch(opt)
+	if len(submatch) == 0 {
+		return false, ""
+	}
+	return true, submatch[1]
+}
+
+// TargetShards returns a list of shards specified in '--shards=...', or an empty slice if unspecified
+func (setting *DDLStrategySetting) TargetShards() (shards []string) {
+	// We do some ugly manual parsing of -shards value
+	opts, _ := shlex.Split(setting.Options)
+	for _, opt := range opts {
+		if isShards, val := isShardsFlag(opt); isShards {
+			// value is possibly quoted
+			if s, err := strconv.Unquote(val); err == nil {
+				val = s
+			}
+			shards = append(shards, textutil.SplitDelimitedList(val)...)
+		}
+	}
+	return shards
+}
+
 // RuntimeOptions returns the options used as runtime flags for given strategy, removing any internal hint options
 func (setting *DDLStrategySetting) RuntimeOptions() []string {
 	opts, _ := shlex.Split(setting.Options)
 	validOpts := []string{}
 	for _, opt := range opts {
+		if b, _ := isShardsFlag(opt); b {
+			continue
+		}
 		switch {
 		case isFlag(opt, declarativeFlag):
 		case isFlag(opt, skipTopoFlag):
