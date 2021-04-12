@@ -27,7 +27,6 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
@@ -438,18 +437,13 @@ Error:
 // than the plan and query. If the plan and query don't match the Rule,
 // then it returns nil.
 func (qr *Rule) FilterByPlan(query string, planid planbuilder.PlanType, tableName string) (newqr *Rule) {
-	log.Infof("Running FilterByPlan on %v / %v", qr.Name, qr.Description)
-	log.Infof("  query: %q", query)
 	if !reMatch(qr.query.Regexp, query) {
-		log.Infof("bail: query")
 		return nil
 	}
 	if !planMatch(qr.plans, planid) {
-		log.Infof("bail: plan")
 		return nil
 	}
 	if !tableMatch(qr.tableNames, tableName) {
-		log.Infof("bail: plan")
 		return nil
 	}
 	newqr = qr.Copy()
@@ -458,7 +452,6 @@ func (qr *Rule) FilterByPlan(query string, planid planbuilder.PlanType, tableNam
 	// must be evaluated at execution time.
 	newqr.plans = nil
 	newqr.tableNames = nil
-	log.Infof("Passed FilterByPlan")
 	return newqr
 }
 
@@ -469,14 +462,11 @@ func (qr *Rule) GetAction(
 	bindVars map[string]*querypb.BindVariable,
 	marginComments sqlparser.MarginComments,
 ) Action {
-	// check to see if we need to extract margin comments
-	if qr.leadingComment.Regexp != nil || qr.trailingComment.Regexp != nil {
-		if !reMatch(qr.leadingComment.Regexp, marginComments.Leading) {
-			return QRContinue
-		}
-		if !reMatch(qr.trailingComment.Regexp, marginComments.Trailing) {
-			return QRContinue
-		}
+	if !reMatch(qr.leadingComment.Regexp, marginComments.Leading) {
+		return QRContinue
+	}
+	if !reMatch(qr.trailingComment.Regexp, marginComments.Trailing) {
+		return QRContinue
 	}
 	if !reMatch(qr.requestIP.Regexp, ip) {
 		return QRContinue
