@@ -505,11 +505,11 @@ func TestPlanBuilder(t *testing.T) {
 	}, {
 		inTable: t1,
 		inRule:  &binlogdatapb.Rule{Match: "t1", Filter: "select id, val from t1 where in_keyrange(*, 'hash', '-80')"},
-		outErr:  `unexpected: *`,
+		outErr:  `[BUG] unexpected: *sqlparser.StarExpr *`,
 	}, {
 		inTable: t1,
 		inRule:  &binlogdatapb.Rule{Match: "t1", Filter: "select id, val from t1 where in_keyrange(1, 'hash', '-80')"},
-		outErr:  `unexpected: 1`,
+		outErr:  `[BUG] unexpected: *sqlparser.Literal 1`,
 	}, {
 		inTable: t1,
 		inRule:  &binlogdatapb.Rule{Match: "t1", Filter: "select id, val from t1 where in_keyrange(id, 'lookup', '-80')"},
