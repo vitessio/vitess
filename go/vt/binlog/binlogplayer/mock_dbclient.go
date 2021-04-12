@@ -18,6 +18,7 @@ package binlogplayer
 
 import (
 	"regexp"
+	"strings"
 	"testing"
 	"time"
 
@@ -35,6 +36,7 @@ type MockDBClient struct {
 	expect        []*mockExpect
 	currentResult int
 	done          chan struct{}
+	invariants    map[string]*sqltypes.Result
 }
 
 type mockExpect struct {
@@ -50,6 +52,11 @@ func NewMockDBClient(t *testing.T) *MockDBClient {
 		t:     t,
 		UName: mockClientUNameFiltered,
 		done:  make(chan struct{}),
+		invariants: map[string]*sqltypes.Result{
+			"CREATE TABLE IF NOT EXISTS _vt.vreplication_log":           {},
+			"select id, type, state, message from _vt.vreplication_log": {},
+			"insert into _vt.vreplication_log":                          {},
+		},
 	}
 }
 
@@ -142,6 +149,13 @@ func (dc *MockDBClient) Close() {
 func (dc *MockDBClient) ExecuteFetch(query string, maxrows int) (qr *sqltypes.Result, err error) {
 	dc.t.Helper()
 	dc.t.Logf("DBClient query: %v", query)
+
+	for q, result := range dc.invariants {
+		if strings.Contains(query, q) {
+			return result, nil
+		}
+	}
+
 	if dc.currentResult >= len(dc.expect) {
 		dc.t.Fatalf("DBClientMock: query: %s, no more requests are expected", query)
 	}

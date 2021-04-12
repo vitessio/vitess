@@ -75,7 +75,9 @@ func newFakeDBClient() *fakeDBClient {
 		queriesRE: make(map[string]*dbResults),
 		invariants: map[string]*sqltypes.Result{
 			"use _vt": {},
-			"select * from _vt.vreplication where db_name='db'": {},
+			"select * from _vt.vreplication where db_name='db'":         {},
+			"select id, type, state, message from _vt.vreplication_log": {},
+			"insert into _vt.vreplication_log":                          {},
 		},
 	}
 }
