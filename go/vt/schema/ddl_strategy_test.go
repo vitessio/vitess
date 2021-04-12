@@ -164,6 +164,13 @@ func TestParseDDLStrategy(t *testing.T) {
 			runtimeOptions:   "",
 			targetShards:     []string{"-80", "80-"},
 		},
+		{
+			strategyVariable: `gh-ost -shards="-80" -shards="80-"`,
+			strategy:         DDLStrategyGhost,
+			options:          `-shards="-80" -shards="80-"`,
+			runtimeOptions:   "",
+			targetShards:     []string{"80-"},
+		},
 	}
 	for _, ts := range tt {
 		setting, err := ParseDDLStrategy(ts.strategyVariable)

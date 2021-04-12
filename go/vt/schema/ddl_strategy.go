@@ -147,7 +147,7 @@ func (setting *DDLStrategySetting) TargetShards() (shards []string) {
 			if s, err := strconv.Unquote(val); err == nil {
 				val = s
 			}
-			shards = append(shards, textutil.SplitDelimitedList(val)...)
+			shards = textutil.SplitDelimitedList(val)
 		}
 	}
 	return shards
