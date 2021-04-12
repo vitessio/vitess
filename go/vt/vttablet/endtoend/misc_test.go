@@ -98,7 +98,7 @@ func TestBinary(t *testing.T) {
 		},
 		StatusFlags: sqltypes.ServerStatusAutocommit,
 	}
-	mustMatch(t, want, *qr)
+	utils.MustMatch(t, want, *qr)
 
 	// Test with bindvars.
 	_, err = client.Execute(

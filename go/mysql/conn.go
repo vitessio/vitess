@@ -897,7 +897,7 @@ func (c *Conn) handleNextCommand(handler Handler) bool {
 	default:
 		log.Errorf("Got unhandled packet (default) from %s, returning error: %v", c, data)
 		c.recycleReadPacket()
-		if !c.writeErrorAndLog(ERUnknownComError, SSUnknownComError, "command handling not implemented yet: %v", data[0]) {
+		if !c.writeErrorAndLog(ERUnknownComError, SSNetError, "command handling not implemented yet: %v", data[0]) {
 			return false
 		}
 	}
@@ -922,7 +922,7 @@ func (c *Conn) handleComStmtReset(data []byte) bool {
 	c.recycleReadPacket()
 	if !ok {
 		log.Error("Got unhandled packet from client %v, returning error: %v", c.ConnectionID, data)
-		if !c.writeErrorAndLog(ERUnknownComError, SSUnknownComError, "error handling packet: %v", data) {
+		if !c.writeErrorAndLog(ERUnknownComError, SSNetError, "error handling packet: %v", data) {
 			return false
 		}
 	}
@@ -930,7 +930,7 @@ func (c *Conn) handleComStmtReset(data []byte) bool {
 	prepare, ok := c.PrepareData[stmtID]
 	if !ok {
 		log.Error("Commands were executed in an improper order from client %v, packet: %v", c.ConnectionID, data)
-		if !c.writeErrorAndLog(CRCommandsOutOfSync, SSUnknownComError, "commands were executed in an improper order: %v", data) {
+		if !c.writeErrorAndLog(CRCommandsOutOfSync, SSNetError, "commands were executed in an improper order: %v", data) {
 			return false
 		}
 	}
@@ -1163,7 +1163,7 @@ func (c *Conn) handleComSetOption(data []byte) bool {
 			c.Capabilities &^= CapabilityClientMultiStatements
 		default:
 			log.Errorf("Got unhandled packet (ComSetOption default) from client %v, returning error: %v", c.ConnectionID, data)
-			if !c.writeErrorAndLog(ERUnknownComError, SSUnknownComError, "error handling packet: %v", data) {
+			if !c.writeErrorAndLog(ERUnknownComError, SSNetError, "error handling packet: %v", data) {
 				return false
 			}
 		}
@@ -1173,7 +1173,7 @@ func (c *Conn) handleComSetOption(data []byte) bool {
 		}
 	} else {
 		log.Errorf("Got unhandled packet (ComSetOption else) from client %v, returning error: %v", c.ConnectionID, data)
-		if !c.writeErrorAndLog(ERUnknownComError, SSUnknownComError, "error handling packet: %v", data) {
+		if !c.writeErrorAndLog(ERUnknownComError, SSNetError, "error handling packet: %v", data) {
 			return false
 		}
 	}

@@ -565,7 +565,7 @@ func TestServer(t *testing.T) {
 
 	// If there's an error after streaming has started,
 	// we should get a 2013
-	th.SetErr(NewSQLError(ERUnknownComError, SSUnknownComError, "forced error after send"))
+	th.SetErr(NewSQLError(ERUnknownComError, SSNetError, "forced error after send"))
 	output, err = runMysqlWithErr(t, params, "error after send")
 	require.Error(t, err)
 	assert.Contains(t, output, "ERROR 2013 (HY000)", "Unexpected output for 'panic'")
@@ -650,7 +650,7 @@ func TestServerStats(t *testing.T) {
 	connRefuse.Reset()
 
 	// Run an 'error' command.
-	th.SetErr(NewSQLError(ERUnknownComError, SSUnknownComError, "forced query error"))
+	th.SetErr(NewSQLError(ERUnknownComError, SSNetError, "forced query error"))
 	output, ok := runMysql(t, params, "error")
 	require.False(t, ok, "mysql should have failed: %v", output)
 
