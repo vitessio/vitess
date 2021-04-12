@@ -138,6 +138,7 @@ func TestEngineOpenRetry(t *testing.T) {
 }
 
 func TestEngineExec(t *testing.T) {
+	var err error
 	defer func() { globalStats = &vrStats{} }()
 
 	defer deleteTablet(addTablet(100))
@@ -153,163 +154,173 @@ func TestEngineExec(t *testing.T) {
 	dbClient.ExpectRequest("select * from _vt.vreplication where db_name='db'", &sqltypes.Result{}, nil)
 	vre.Open(context.Background())
 	defer vre.Close()
+	t.Run("Insert", func(t *testing.T) {
+		dbClient.ExpectRequest("use _vt", &sqltypes.Result{}, nil)
+		dbClient.ExpectRequest("begin", &sqltypes.Result{}, nil)
+		dbClient.ExpectRequest("insert into _vt.vreplication values(null)", &sqltypes.Result{InsertID: 1}, nil)
+		dbClient.ExpectRequest("select * from _vt.vreplication where id = 1", sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields(
+				"id|state|source",
+				"int64|varchar|varchar",
+			),
+			fmt.Sprintf(`1|Running|keyspace:"%s" shard:"0" key_range:<end:"\200" > `, env.KeyspaceName),
+		), nil)
+		dbClient.ExpectRequestRE("select id, type, state, message from _vt.vreplication_log", testDMLResponse, nil)
+		dbClient.ExpectRequestRE("insert into _vt.vreplication_log", testDMLResponse, nil)
+		dbClient.ExpectRequest("commit", &sqltypes.Result{}, nil)
+		//select id, type, state, message from _vt.vreplication_log
 
-	dbClient.ExpectRequest("use _vt", &sqltypes.Result{}, nil)
-	dbClient.ExpectRequest("begin", &sqltypes.Result{}, nil)
-	dbClient.ExpectRequest("insert into _vt.vreplication values(null)", &sqltypes.Result{InsertID: 1}, nil)
-	dbClient.ExpectRequest("select * from _vt.vreplication where id = 1", sqltypes.MakeTestResult(
-		sqltypes.MakeTestFields(
-			"id|state|source",
-			"int64|varchar|varchar",
-		),
-		fmt.Sprintf(`1|Running|keyspace:"%s" shard:"0" key_range:<end:"\200" > `, env.KeyspaceName),
-	), nil)
-	dbClient.ExpectRequestRE("select id, type, state, message from _vt.vreplication_log", testDMLResponse, nil)
-	dbClient.ExpectRequestRE("insert into _vt.vreplication_log", testDMLResponse, nil)
-	dbClient.ExpectRequest("commit", &sqltypes.Result{}, nil)
-	//select id, type, state, message from _vt.vreplication_log
+		dbClient.ExpectRequestRE("update _vt.vreplication set message='Picked source tablet.*", testDMLResponse, nil)
+		dbClient.ExpectRequest("update _vt.vreplication set state='Running', message='' where id=1", testDMLResponse, nil)
+		dbClient.ExpectRequest("select pos, stop_pos, max_tps, max_replication_lag, state from _vt.vreplication where id=1", testSettingsResponse, nil)
+		dbClient.ExpectRequest("begin", nil, nil)
+		dbClient.ExpectRequest("insert into t values(1)", testDMLResponse, nil)
+		dbClient.ExpectRequestRE("update _vt.vreplication set pos='MariaDB/0-1-1235', time_updated=.*", testDMLResponse, nil)
+		dbClient.ExpectRequest("commit", nil, nil)
+		qr, err := vre.Exec("insert into _vt.vreplication values(null)")
+		if err != nil {
+			t.Fatal(err)
+		}
+		wantqr := &sqltypes.Result{InsertID: 1}
+		if !reflect.DeepEqual(qr, wantqr) {
+			t.Errorf("Exec: %v, want %v", qr, wantqr)
+		}
+		dbClient.Wait()
 
-	dbClient.ExpectRequestRE("update _vt.vreplication set message='Picked source tablet.*", testDMLResponse, nil)
-	dbClient.ExpectRequest("update _vt.vreplication set state='Running', message='' where id=1", testDMLResponse, nil)
-	dbClient.ExpectRequest("select pos, stop_pos, max_tps, max_replication_lag, state from _vt.vreplication where id=1", testSettingsResponse, nil)
-	dbClient.ExpectRequest("begin", nil, nil)
-	dbClient.ExpectRequest("insert into t values(1)", testDMLResponse, nil)
-	dbClient.ExpectRequestRE("update _vt.vreplication set pos='MariaDB/0-1-1235', time_updated=.*", testDMLResponse, nil)
-	dbClient.ExpectRequest("commit", nil, nil)
-
-	qr, err := vre.Exec("insert into _vt.vreplication values(null)")
-	if err != nil {
-		t.Fatal(err)
-	}
-	wantqr := &sqltypes.Result{InsertID: 1}
-	if !reflect.DeepEqual(qr, wantqr) {
-		t.Errorf("Exec: %v, want %v", qr, wantqr)
-	}
-	dbClient.Wait()
+		// Verify stats
+		if !reflect.DeepEqual(globalStats.controllers, vre.controllers) {
+			t.Errorf("stats are mismatched: %v, want %v", globalStats.controllers, vre.controllers)
+		}
+	})
 
 	ct := vre.controllers[1]
 	if ct == nil || ct.id != 1 {
 		t.Errorf("ct: %v, id should be 1", ct)
 	}
 
-	// Verify stats
-	if !reflect.DeepEqual(globalStats.controllers, vre.controllers) {
-		t.Errorf("stats are mismatched: %v, want %v", globalStats.controllers, vre.controllers)
-	}
-
 	// Test Update
 
 	savedBlp := ct.blpStats
 
-	dbClient.ExpectRequest("use _vt", &sqltypes.Result{}, nil)
-	dbClient.ExpectRequest("select id from _vt.vreplication where id = 1", testSelectorResponse1, nil)
-	dbClient.ExpectRequest("update _vt.vreplication set pos = 'MariaDB/0-1-1084', state = 'Running' where id in (1)", testDMLResponse, nil)
-	dbClient.ExpectRequest("select * from _vt.vreplication where id = 1", sqltypes.MakeTestResult(
-		sqltypes.MakeTestFields(
-			"id|state|source",
-			"int64|varchar|varchar",
-		),
-		fmt.Sprintf(`1|Running|keyspace:"%s" shard:"0" key_range:<end:"\200" > `, env.KeyspaceName),
-	), nil)
-	dbClient.ExpectRequestRE("select id, type, state, message from _vt.vreplication_log", testDMLResponse, nil)
-	dbClient.ExpectRequestRE("insert into _vt.vreplication_log", testDMLResponse, nil)
-	dbClient.ExpectRequestRE("update _vt.vreplication set message='Picked source tablet.*", testDMLResponse, nil)
-	dbClient.ExpectRequest("update _vt.vreplication set state='Running', message='' where id=1", testDMLResponse, nil)
-	dbClient.ExpectRequest("select pos, stop_pos, max_tps, max_replication_lag, state from _vt.vreplication where id=1", testSettingsResponse, nil)
-	dbClient.ExpectRequest("begin", nil, nil)
-	dbClient.ExpectRequest("insert into t values(1)", testDMLResponse, nil)
-	dbClient.ExpectRequestRE("update _vt.vreplication set pos='MariaDB/0-1-1235', time_updated=.*", testDMLResponse, nil)
-	dbClient.ExpectRequest("commit", nil, nil)
+	t.Run("Update", func(t *testing.T) {
+		dbClient.ExpectRequest("use _vt", &sqltypes.Result{}, nil)
+		dbClient.ExpectRequest("select id from _vt.vreplication where id = 1", testSelectorResponse1, nil)
+		dbClient.ExpectRequest("select * from _vt.vreplication where id = 1", sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields(
+				"id|state|source",
+				"int64|varchar|varchar",
+			),
+			fmt.Sprintf(`1|Running|keyspace:"%s" shard:"0" key_range:<end:"\200" > `, env.KeyspaceName),
+		), nil)
+		dbClient.ExpectRequest("update _vt.vreplication set pos = 'MariaDB/0-1-1084', state = 'Running' where id in (1)", testDMLResponse, nil)
+		dbClient.ExpectRequest("select * from _vt.vreplication where id = 1", sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields(
+				"id|state|source",
+				"int64|varchar|varchar",
+			),
+			fmt.Sprintf(`1|Running|keyspace:"%s" shard:"0" key_range:<end:"\200" > `, env.KeyspaceName),
+		), nil)
+		dbClient.ExpectRequestRE("update _vt.vreplication set message='Picked source tablet.*", testDMLResponse, nil)
+		dbClient.ExpectRequest("update _vt.vreplication set state='Running', message='' where id=1", testDMLResponse, nil)
+		dbClient.ExpectRequest("select pos, stop_pos, max_tps, max_replication_lag, state from _vt.vreplication where id=1", testSettingsResponse, nil)
+		dbClient.ExpectRequest("begin", nil, nil)
+		dbClient.ExpectRequest("insert into t values(1)", testDMLResponse, nil)
+		dbClient.ExpectRequestRE("update _vt.vreplication set pos='MariaDB/0-1-1235', time_updated=.*", testDMLResponse, nil)
+		dbClient.ExpectRequest("commit", nil, nil)
 
-	qr, err = vre.Exec("update _vt.vreplication set pos = 'MariaDB/0-1-1084', state = 'Running' where id = 1")
-	if err != nil {
-		t.Fatal(err)
-	}
-	wantqr = &sqltypes.Result{RowsAffected: 1}
-	if !reflect.DeepEqual(qr, wantqr) {
-		t.Errorf("Exec: %v, want %v", qr, wantqr)
-	}
-	dbClient.Wait()
+		qr, err := vre.Exec("update _vt.vreplication set pos = 'MariaDB/0-1-1084', state = 'Running' where id = 1")
+		if err != nil {
+			t.Fatal(err)
+		}
+		wantqr := &sqltypes.Result{RowsAffected: 1}
+		if !reflect.DeepEqual(qr, wantqr) {
+			t.Errorf("Exec: %v, want %v", qr, wantqr)
+		}
+		dbClient.Wait()
 
-	ct = vre.controllers[1]
+		ct = vre.controllers[1]
 
-	// Verify that the new controller has reused the previous blpStats.
-	if ct.blpStats != savedBlp {
-		t.Errorf("BlpStats: %v and %v, must be same", ct.blpStats, savedBlp)
-	}
+		// Verify that the new controller has reused the previous blpStats.
+		if ct.blpStats != savedBlp {
+			t.Errorf("BlpStats: %v and %v, must be same", ct.blpStats, savedBlp)
+		}
 
-	// Verify stats
-	if !reflect.DeepEqual(globalStats.controllers, vre.controllers) {
-		t.Errorf("stats are mismatched: %v, want %v", globalStats.controllers, vre.controllers)
-	}
+		// Verify stats
+		if !reflect.DeepEqual(globalStats.controllers, vre.controllers) {
+			t.Errorf("stats are mismatched: %v, want %v", globalStats.controllers, vre.controllers)
+		}
+	})
 
-	// Test no update
-	dbClient.ExpectRequest("use _vt", &sqltypes.Result{}, nil)
-	dbClient.ExpectRequest("select id from _vt.vreplication where id = 2", &sqltypes.Result{}, nil)
-	_, err = vre.Exec("update _vt.vreplication set pos = 'MariaDB/0-1-1084', state = 'Running' where id = 2")
-	if err != nil {
-		t.Fatal(err)
-	}
-	dbClient.Wait()
-
+	t.Run("NoUpdate", func(t *testing.T) {
+		// Test no update
+		dbClient.ExpectRequest("use _vt", &sqltypes.Result{}, nil)
+		dbClient.ExpectRequest("select id from _vt.vreplication where id = 2", &sqltypes.Result{}, nil)
+		_, err = vre.Exec("update _vt.vreplication set pos = 'MariaDB/0-1-1084', state = 'Running' where id = 2")
+		require.NoError(t, err)
+		dbClient.Wait()
+	})
 	// Test Delete
 
-	dbClient.ExpectRequest("use _vt", &sqltypes.Result{}, nil)
-	dbClient.ExpectRequest("select id from _vt.vreplication where id = 1", testSelectorResponse1, nil)
-	dbClient.ExpectRequestRE("select id, type, state, message from _vt.vreplication_log", testDMLResponse, nil)
-	dbClient.ExpectRequestRE("insert into _vt.vreplication_log", testDMLResponse, nil)
-	dbClient.ExpectRequest("begin", nil, nil)
-	dbClient.ExpectRequest("delete from _vt.vreplication where id in (1)", testDMLResponse, nil)
-	dbClient.ExpectRequest("delete from _vt.copy_state where vrepl_id in (1)", nil, nil)
-	dbClient.ExpectRequest("commit", nil, nil)
+	t.Run("Delete", func(t *testing.T) {
+		dbClient.ExpectRequest("use _vt", &sqltypes.Result{}, nil)
+		dbClient.ExpectRequest("select id from _vt.vreplication where id = 1", testSelectorResponse1, nil)
+		dbClient.ExpectRequestRE("select id, type, state, message from _vt.vreplication_log", testDMLResponse, nil)
+		dbClient.ExpectRequestRE("insert into _vt.vreplication_log", testDMLResponse, nil)
+		dbClient.ExpectRequest("begin", nil, nil)
+		dbClient.ExpectRequest("delete from _vt.vreplication where id in (1)", testDMLResponse, nil)
+		dbClient.ExpectRequest("delete from _vt.copy_state where vrepl_id in (1)", nil, nil)
+		dbClient.ExpectRequest("commit", nil, nil)
 
-	qr, err = vre.Exec("delete from _vt.vreplication where id = 1")
-	if err != nil {
-		t.Fatal(err)
-	}
-	wantqr = &sqltypes.Result{RowsAffected: 1}
-	if !reflect.DeepEqual(qr, wantqr) {
-		t.Errorf("Exec: %v, want %v", qr, wantqr)
-	}
-	dbClient.Wait()
+		qr, err := vre.Exec("delete from _vt.vreplication where id = 1")
+		if err != nil {
+			t.Fatal(err)
+		}
+		wantqr := &sqltypes.Result{RowsAffected: 1}
+		if !reflect.DeepEqual(qr, wantqr) {
+			t.Errorf("Exec: %v, want %v", qr, wantqr)
+		}
+		dbClient.Wait()
 
-	ct = vre.controllers[1]
-	if ct != nil {
-		t.Errorf("ct: %v, want nil", ct)
-	}
+		ct = vre.controllers[1]
+		if ct != nil {
+			t.Errorf("ct: %v, want nil", ct)
+		}
 
-	// Verify stats
-	if !reflect.DeepEqual(globalStats.controllers, vre.controllers) {
-		t.Errorf("stats are mismatched: %v, want %v", globalStats.controllers, vre.controllers)
-	}
-
+		// Verify stats
+		if !reflect.DeepEqual(globalStats.controllers, vre.controllers) {
+			t.Errorf("stats are mismatched: %v, want %v", globalStats.controllers, vre.controllers)
+		}
+	})
 	// Test Delete of multiple rows
 
-	dbClient.ExpectRequest("use _vt", &sqltypes.Result{}, nil)
-	dbClient.ExpectRequest("select id from _vt.vreplication where id > 1", testSelectorResponse2, nil)
-	dbClient.ExpectRequestRE("select id, type, state, message from _vt.vreplication_log", testDMLResponse, nil)
-	dbClient.ExpectRequestRE("insert into _vt.vreplication_log", testDMLResponse, nil)
-	dbClient.ExpectRequestRE("select id, type, state, message from _vt.vreplication_log", testDMLResponse, nil)
-	dbClient.ExpectRequestRE("insert into _vt.vreplication_log", testDMLResponse, nil)
-	dbClient.ExpectRequest("begin", nil, nil)
-	dbClient.ExpectRequest("delete from _vt.vreplication where id in (1, 2)", testDMLResponse, nil)
-	dbClient.ExpectRequest("delete from _vt.copy_state where vrepl_id in (1, 2)", nil, nil)
-	dbClient.ExpectRequest("commit", nil, nil)
+	t.Run("DeleteMultiple", func(t *testing.T) {
+		dbClient.ExpectRequest("use _vt", &sqltypes.Result{}, nil)
+		dbClient.ExpectRequest("select id from _vt.vreplication where id > 1", testSelectorResponse2, nil)
+		dbClient.ExpectRequestRE("select id, type, state, message from _vt.vreplication_log", testDMLResponse, nil)
+		dbClient.ExpectRequestRE("insert into _vt.vreplication_log", testDMLResponse, nil)
+		dbClient.ExpectRequestRE("select id, type, state, message from _vt.vreplication_log", testDMLResponse, nil)
+		dbClient.ExpectRequestRE("insert into _vt.vreplication_log", testDMLResponse, nil)
+		dbClient.ExpectRequest("begin", nil, nil)
+		dbClient.ExpectRequest("delete from _vt.vreplication where id in (1, 2)", testDMLResponse, nil)
+		dbClient.ExpectRequest("delete from _vt.copy_state where vrepl_id in (1, 2)", nil, nil)
+		dbClient.ExpectRequest("commit", nil, nil)
 
-	_, err = vre.Exec("delete from _vt.vreplication where id > 1")
-	if err != nil {
-		t.Fatal(err)
-	}
-	dbClient.Wait()
-
-	// Test no delete
-	dbClient.ExpectRequest("use _vt", &sqltypes.Result{}, nil)
-	dbClient.ExpectRequest("select id from _vt.vreplication where id = 3", &sqltypes.Result{}, nil)
-	_, err = vre.Exec("delete from _vt.vreplication where id = 3")
-	if err != nil {
-		t.Fatal(err)
-	}
-	dbClient.Wait()
+		_, err = vre.Exec("delete from _vt.vreplication where id > 1")
+		if err != nil {
+			t.Fatal(err)
+		}
+		dbClient.Wait()
+	})
+	t.Run("NoDelete", func(t *testing.T) {
+		// Test no delete
+		dbClient.ExpectRequest("use _vt", &sqltypes.Result{}, nil)
+		dbClient.ExpectRequest("select id from _vt.vreplication where id = 3", &sqltypes.Result{}, nil)
+		_, err = vre.Exec("delete from _vt.vreplication where id = 3")
+		if err != nil {
+			t.Fatal(err)
+		}
+		dbClient.Wait()
+	})
 }
 
 func TestEngineBadInsert(t *testing.T) {
