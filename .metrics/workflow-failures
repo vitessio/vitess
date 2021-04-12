@@ -6914,3 +6914,5 @@
 2021-04-12T06:43:03Z,unit_race,https://github.com/vitessio/vitess/actions/runs/740156697
 2021-04-12T06:43:54Z,Cluster (onlineddl_ghost),https://github.com/vitessio/vitess/actions/runs/740159086
 2021-04-12T06:43:54Z,Unit Test (mariadb101),https://github.com/vitessio/vitess/actions/runs/740159062
+2021-04-12T06:43:54Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/740159069
+2021-04-12T06:58:12Z,endtoend,https://github.com/vitessio/vitess/actions/runs/740194167
