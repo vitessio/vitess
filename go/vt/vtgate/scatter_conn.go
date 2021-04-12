@@ -676,7 +676,7 @@ func (stc *ScatterConn) ExecuteLock(
 }
 
 func wasConnectionClosed(err error) bool {
-	sqlErr := mysql.NewSQLErrorFromError(err)
+	sqlErr := mysql.NewSQLErrorFromError(err).(*mysql.SQLError)
 
 	return sqlErr.Number() == mysql.CRServerGone ||
 		sqlErr.Number() == mysql.CRServerLost ||
