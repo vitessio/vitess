@@ -7059,7 +7059,10 @@
 2021-04-12T11:01:32Z,unit_race,https://github.com/vitessio/vitess/actions/runs/740897171
 2021-04-12T11:04:11Z,Unit Test (mariadb101),https://github.com/vitessio/vitess/actions/runs/740905365
 2021-04-12T11:04:11Z,endtoend,https://github.com/vitessio/vitess/actions/runs/740905343
+2021-04-12T11:04:11Z,region_example,https://github.com/vitessio/vitess/actions/runs/740905375
 2021-04-12T11:10:02Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/740922283
 2021-04-12T11:10:02Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/740922316
 2021-04-12T11:10:02Z,local_example,https://github.com/vitessio/vitess/actions/runs/740922281
 2021-04-12T11:10:02Z,unit_race,https://github.com/vitessio/vitess/actions/runs/740922298
+2021-04-12T11:41:34Z,Unit Test (mariadb101),https://github.com/vitessio/vitess/actions/runs/741007053
+2021-04-12T11:41:34Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/741007042
