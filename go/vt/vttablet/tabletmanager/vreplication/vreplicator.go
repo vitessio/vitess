@@ -323,7 +323,7 @@ func (vr *vreplicator) setState(state, message string) error {
 	if state == vr.state {
 		return nil
 	}
-	if err := insertLog(vr.dbClient, LogStateChange, vr.id, vr.state, message); err != nil {
+	if err := insertLog(vr.dbClient, LogStateChange, vr.id, state, message); err != nil {
 		return err
 	}
 	vr.state = state
