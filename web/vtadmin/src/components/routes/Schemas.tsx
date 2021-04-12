@@ -20,6 +20,7 @@ import { Link } from 'react-router-dom';
 import { useSchemas } from '../../hooks/api';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import { filterNouns } from '../../util/filterNouns';
+import { formatBytes } from '../../util/formatBytes';
 import { getTableDefinitions } from '../../util/tableDefinitions';
 import { Button } from '../Button';
 import { DataCell } from '../dataTable/DataCell';
@@ -27,6 +28,21 @@ import { DataTable } from '../dataTable/DataTable';
 import { Icons } from '../Icon';
 import { TextInput } from '../TextInput';
 import style from './Schemas.module.scss';
+
+const TABLE_COLUMNS = [
+    'Keyspace',
+    'Table',
+    // TODO: add tooltips to explain that "approx." means something
+    // along the lines of "information_schema is an eventually correct
+    // statistical analysis, past results do not guarantee future performance,
+    // please consult an attorney and we are not a licensed medical professional".
+    // Namely, these numbers come from `information_schema`, which is never precisely
+    // correct for tables that have a high rate of updates. (The only way to get
+    // accurate numbers is to run `ANALYZE TABLE` on the tables periodically, which
+    // is out of scope for VTAdmin.)
+    <div className="text-align-right">Approx. Size</div>,
+    <div className="text-align-right">Approx. Rows</div>,
+];
 
 export const Schemas = () => {
     useDocumentTitle('Schemas');
@@ -64,6 +80,15 @@ export const Schemas = () => {
                     <DataCell className="font-weight-bold">
                         {href ? <Link to={href}>{row.table}</Link> : row.table}
                     </DataCell>
+                    <DataCell className="text-align-right">
+                        <div>{formatBytes(row._raw.tableSize?.data_length)}</div>
+                        <div className="font-size-small text-color-secondary">
+                            {formatBytes(row._raw.tableSize?.data_length, 'B')}
+                        </div>
+                    </DataCell>
+                    <DataCell className="text-align-right">
+                        {(row._raw.tableSize?.row_count || 0).toLocaleString()}
+                    </DataCell>
                 </tr>
             );
         });
@@ -84,7 +109,7 @@ export const Schemas = () => {
                 </Button>
             </div>
 
-            <DataTable columns={['Keyspace', 'Table']} data={filteredData} renderRows={renderRows} />
+            <DataTable columns={TABLE_COLUMNS} data={filteredData} renderRows={renderRows} />
         </div>
     );
 };
