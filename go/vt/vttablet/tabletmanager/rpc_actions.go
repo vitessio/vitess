@@ -137,7 +137,23 @@ func (tm *TabletManager) RunHealthCheck(ctx context.Context) {
 // UpdateTabletControls will update the tablet controls with the values in the UpdateTabletControlsRequest
 func (tm *TabletManager) UpdateTabletControls(ctx context.Context, tabletControls *tabletmanagerdatapb.TabletControl) error {
 	if tm.Tablet().GetType() == topodatapb.TabletType_MASTER {
-		return tm.tmState.UpdateTabletControls(tabletControls)
+		query := fmt.Sprintf(
+			"INSERT INTO _vt.tablet_controls (tablet_type, cell, query_service, frozen, denylist_tables) VALUES(%v, %v, %v, %v, %v) ON DUPLICATE KEY UPDATE query_service=%v, frozen=%v, denylist_tables=%v",
+			tabletControls.TabletType.String(),
+			tabletControls.Cell,
+			tabletControls.QueryService,
+			tabletControls.Frozen,
+			tabletControls.DenylistTables,
+			tabletControls.QueryService,
+			tabletControls.Frozen,
+			tabletControls.DenylistTables,
+		)
+		_, err := tm.VREngine.Exec(query)
+		if err != nil {
+			return err
+		}
+		err = tm.RefreshState(ctx)
+		return err
 	}
 	return fmt.Errorf("Tablet %v is not the primary in %s/%s, cannot update TabletControls manually", tm.tabletAlias, tm.Tablet().Keyspace, tm.Tablet().KeyRange.String())
 }

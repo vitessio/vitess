@@ -562,3 +562,45 @@ func TestGetDBClient(t *testing.T) {
 	shouldBeFilteredClient := vre.getDBClient(false /*runAsAdmin*/)
 	assert.Equal(t, shouldBeFilteredClient, dbClientFiltered)
 }
+
+func TestTabletControlsTable(t *testing.T) {
+	dbClient := binlogplayer.NewMockDbaClient(t)
+	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
+
+	mysqld := &fakemysqldaemon.FakeMysqlDaemon{MysqlPort: sync2.NewAtomicInt32(3306)}
+	vre := NewTestEngine(env.TopoServ, env.Cells[0], mysqld, dbClientFactory, dbClientFactory, dbClient.DBName(), nil)
+
+	// Should fail, we haven't create the table or db yet.
+	tableNotFound := mysql.SQLError{Num: 1146, Message: "table not found"}
+	dbClient.ExpectRequest("select * from _vt.tablet_controls where db_name='db'", nil, &tableNotFound)
+
+	vre.Open(context.Background())
+	defer vre.Close()
+
+	// db still hasn't been created
+	dbNotFound := mysql.SQLError{Num: 1049, Message: "db not found"}
+	dbClient.ExpectRequest("use _vt", &sqltypes.Result{}, &dbNotFound)
+
+	// creates _vt db and tablet_controls tables.
+	expectDDLs := func() {
+		t.Helper()
+		dbClient.ExpectRequest("CREATE DATABASE IF NOT EXISTS _vt", &sqltypes.Result{}, nil)
+		dbClient.ExpectRequestRE("CREATE TABLE IF NOT EXISTS _vt.tablet_controls.*", &sqltypes.Result{}, nil)
+		dbClient.ExpectRequestRE("ALTER TABLE _vt.tablet_controls ADD COLUMN db_name.*", &sqltypes.Result{}, nil)
+		dbClient.ExpectRequestRE("ALTER TABLE _vt.tablet_controls MODIFY source.*", &sqltypes.Result{}, nil)
+		dbClient.ExpectRequestRE("ALTER TABLE _vt.tablet_controls ADD KEY.*", &sqltypes.Result{}, nil)
+	}
+	expectDDLs()
+
+	dbClient.ExpectRequest("use _vt", &sqltypes.Result{}, nil)
+	dbClient.ExpectRequest("select * from _vt.tablet_controls where cell='us-east-1a' and tablet_type='rdonly'",
+		sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields(
+				"tablet_type|cell|query_service|frozen|denylist_tables",
+				"varbinary|varbinary|boolean|boolean|json",
+			),
+			"rdonly|us-east-1a|false|false",
+		), nil)
+
+	dbClient.ExpectRequest("update _vt.tablet_controls set query_service=true where cell='us-east-1a' AND tablet_type='rdonly'", testDMLResponse, nil)
+}

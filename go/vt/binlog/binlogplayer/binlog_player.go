@@ -510,6 +510,27 @@ func (blp *BinlogPlayer) setVReplicationState(state, message string) error {
 	return nil
 }
 
+// CreateTabletControlsTable returns the statement required to create
+// _vt.tablet_controls table.
+// tablet_type: the tablet type that this row should apply to
+// cell: the cell that this row should apply to
+// query_service: whether query_service should be enabled or not
+// frozen: should these tablet_controls be frozen, hence not able to be altered
+// denylist_tables: ?
+func CreateTabletControlsTable() []string {
+	return []string{
+		"CREATE DATABASE IF NOT EXISTS _vt",
+		`CREATE TABLE IF NOT EXISTS _vt.tablet_controls (
+  tablet_type VARBINARY(128) NOT NULL,
+  cell VARBINARY(128) NOT NULL,
+  query_service BOOLEAN NOT NULL,
+  frozen BOOLEAN NOT NULL,
+  denylist_tables JSON DEFAULT NULL,
+  PRIMARY KEY (tablet_type, cell)
+	) ENGINE=InnoDB`,
+	}
+}
+
 // CreateVReplicationTable returns the statements required to create
 // the _vt.vreplication table.
 // id: is an auto-increment column that identifies the stream.

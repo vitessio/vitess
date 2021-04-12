@@ -70,6 +70,7 @@ const (
 
 func init() {
 	allddls := append([]string{}, binlogplayer.CreateVReplicationTable()...)
+	allddls = append(allddls, binlogplayer.CreateTabletControlsTable()...)
 	allddls = append(allddls, binlogplayer.AlterVReplicationTable...)
 	allddls = append(allddls, createReshardingJournalTable, createCopyState)
 	withDDL = withddl.New(allddls)
