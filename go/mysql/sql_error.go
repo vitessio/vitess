@@ -82,7 +82,7 @@ var errExtract = regexp.MustCompile(`.*\(errno ([0-9]*)\) \(sqlstate ([0-9a-zA-Z
 
 // NewSQLErrorFromError returns a *SQLError from the provided error.
 // If it's not the right type, it still tries to get it from a regexp.
-func NewSQLErrorFromError(err error) *SQLError {
+func NewSQLErrorFromError(err error) error {
 	if err == nil {
 		return nil
 	}
