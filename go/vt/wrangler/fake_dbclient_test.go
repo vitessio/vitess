@@ -49,7 +49,7 @@ type dbResult struct {
 
 func (dbrs *dbResults) next(query string) (*sqltypes.Result, error) {
 	if dbrs.exhausted() {
-		log.Infof(fmt.Sprintf("Unexpected query >%s<", query))
+		log.Infof(fmt.Sprintf("Unexpected query >>>>>>>>>>>>>>>>%s<<<<<<<<<<<<<<<<", query))
 		return nil, fmt.Errorf("code executed this query, but the test did not expect it: %s", query)
 	}
 	i := dbrs.index
@@ -77,7 +77,14 @@ func newFakeDBClient(tablet string) *fakeDBClient {
 		queriesRE: make(map[string]*dbResults),
 		invariants: map[string]*sqltypes.Result{
 			"use _vt": {},
-			"select * from _vt.vreplication where db_name='db'": {},
+			"select * from _vt.vreplication where db_name='db'":         {},
+			"select * from _vt.vreplication where id = 1":               runningResult(1),
+			"select * from _vt.vreplication where id = 2":               runningResult(2),
+			"select * from _vt.vreplication where id = 3":               runningResult(3),
+			"select * from _vt.vreplication where id = 4":               runningResult(4),
+			"select * from _vt.vreplication where id = 5":               runningResult(5),
+			"select * from _vt.vreplication where id = 6":               runningResult(6),
+			"update _vt.vreplication set message='Picked source tablet": {},
 		},
 		invariantsRE: map[string]*sqltypes.Result{
 			"select id, type, state, message from _vt.vreplication_log.*": {},
@@ -142,12 +149,35 @@ func (dc *fakeDBClient) Rollback() error {
 func (dc *fakeDBClient) Close() {
 }
 
+func (dc *fakeDBClient) getInvariantResult(query string) *sqltypes.Result {
+	if result := dc.invariants[query]; result != nil {
+		return result
+	}
+	for q, result := range dc.invariants { //supports allowing just a prefix of an expected query
+		if strings.Contains(query, q) {
+			return result
+		}
+	}
+	for re, result := range dc.invariantsRE {
+		if regexp.MustCompile(re).MatchString(query) {
+			return result
+		}
+	}
+	return nil
+}
+
 // ExecuteFetch is part of the DBClient interface
 func (dc *fakeDBClient) ExecuteFetch(query string, maxrows int) (qr *sqltypes.Result, err error) {
 	if testMode == "debug" {
-		fmt.Printf("ExecuteFetch: %s\n", query)
+		fmt.Printf("ExecuteFetch: >>%s<<\n", query)
 	}
 	if dbrs := dc.queries[query]; dbrs != nil {
+		if dbrs.exhausted() {
+			result := dc.getInvariantResult(query)
+			if result != nil {
+				return result, nil
+			}
+		}
 		return dbrs.next(query)
 	}
 	for re, dbrs := range dc.queriesRE {
@@ -155,18 +185,8 @@ func (dc *fakeDBClient) ExecuteFetch(query string, maxrows int) (qr *sqltypes.Re
 			return dbrs.next(query)
 		}
 	}
-	if result := dc.invariants[query]; result != nil {
+	if result := dc.getInvariantResult(query); result != nil {
 		return result, nil
-	}
-	for q, result := range dc.invariants { //supports allowing just a prefix of an expected query
-		if strings.Contains(query, q) {
-			return result, nil
-		}
-	}
-	for re, result := range dc.invariantsRE {
-		if regexp.MustCompile(re).MatchString(query) {
-			return result, nil
-		}
 	}
 	log.Infof("tablet %s: missing query: >>>>>>>>>>>>>>>>>>%s<<<<<<<<<<<<<<<", dc.tablet, query)
 	return nil, fmt.Errorf("tablet %s: unexpected query: %s", dc.tablet, query)
