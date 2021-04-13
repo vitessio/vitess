@@ -19,9 +19,6 @@ jobs:
 
     - name: Get dependencies
       run: |
-        sudo cat /proc/sys/net/ipv4/ip_local_port_range
-        sudo sysctl net.ipv4.ip_local_port_range
-        
         sudo apt-get update
         sudo apt-get install -y mysql-server mysql-client make unzip g++ etcd curl git wget eatmydata
         sudo service mysql stop
