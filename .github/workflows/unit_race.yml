@@ -29,6 +29,10 @@ jobs:
 
         go mod download
 
+    - name: Tune the OS
+      run: |
+        echo 1024 65535 > /proc/sys/net/ipv4/ip_local_port_range
+
     - name: Run make tools
       run: |
         make tools
