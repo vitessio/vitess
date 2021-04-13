@@ -22,7 +22,14 @@ jobs:
         {{if (eq .Platform "mysql57")}}
 
         # mysql57
-        sudo apt-get install -y mysql-server mysql-client
+        # Ubuntu 20.04 ships with MySQL 8.0. We want to force install 5.7
+        wget http://repo.mysql.com/mysql-apt-config_0.8.16-1_all.deb \
+          && echo mysql-apt-config    mysql-apt-config/repo-codename  select  bionic | debconf-set-selections \
+          && echo mysql-apt-config    mysql-apt-config/repo-distro    select  ubuntu | debconf-set-selections \
+          && echo mysql-apt-config    mysql-apt-config/select-server  select  mysql-5.7 | debconf-set-selections \
+          && echo mysql-apt-config    mysql-apt-config/select-product select  Ok | debconf-set-selections \
+          && dpkg -i mysql-apt-config_0.8.16-1_all.deb \
+          && apt-get update && apt-get install -y mysql-client=5.7.32-1ubuntu18.04
 
         {{else}}
 
