@@ -34,6 +34,8 @@ type RewriteASTResult struct {
 	AST Statement // The rewritten AST
 }
 
+// ReservedVars keeps track of the bind variable names that have already been used
+// in a parsed query.
 type ReservedVars struct {
 	prefix       string
 	reserved     BindVars
@@ -42,19 +44,24 @@ type ReservedVars struct {
 	fast, static bool
 }
 
-func (r *ReservedVars) ContainsAny(names ...string) bool {
+// ReserveAll tries to reserve all the given variable names. If they're all available,
+// they are reserved and the function returns true. Otherwise the function returns false.
+func (r *ReservedVars) ReserveAll(names ...string) bool {
 	for _, name := range names {
 		if _, ok := r.reserved[name]; ok {
-			return true
+			return false
 		}
 	}
 	for _, name := range names {
 		r.reserved[name] = struct{}{}
 	}
-	return false
+	return true
 }
 
-func (r *ReservedVars) NextColumnName(col *ColName) string {
+// ReserveColName reserves a variable name for the given column; if a variable
+// with the same name already exists, it'll be suffixed with a numberic identifier
+// to make it unique.
+func (r *ReservedVars) ReserveColName(col *ColName) string {
 	compliantName := col.CompliantName()
 	if r.fast && strings.HasPrefix(compliantName, r.prefix) {
 		compliantName = "_" + compliantName
@@ -76,7 +83,7 @@ func (r *ReservedVars) NextColumnName(col *ColName) string {
 const staticBvar10 = "vtg0vtg1vtg2vtg3vtg4vtg5vtg6vtg7vtg8vtg9"
 const staticBvar100 = "vtg10vtg11vtg12vtg13vtg14vtg15vtg16vtg17vtg18vtg19vtg20vtg21vtg22vtg23vtg24vtg25vtg26vtg27vtg28vtg29vtg30vtg31vtg32vtg33vtg34vtg35vtg36vtg37vtg38vtg39vtg40vtg41vtg42vtg43vtg44vtg45vtg46vtg47vtg48vtg49vtg50vtg51vtg52vtg53vtg54vtg55vtg56vtg57vtg58vtg59vtg60vtg61vtg62vtg63vtg64vtg65vtg66vtg67vtg68vtg69vtg70vtg71vtg72vtg73vtg74vtg75vtg76vtg77vtg78vtg79vtg80vtg81vtg82vtg83vtg84vtg85vtg86vtg87vtg88vtg89vtg90vtg91vtg92vtg93vtg94vtg95vtg96vtg97vtg98vtg99"
 
-func (r *ReservedVars) Next() string {
+func (r *ReservedVars) nextUnusedVar() string {
 	if r.fast {
 		r.counter++
 
@@ -107,6 +114,9 @@ func (r *ReservedVars) Next() string {
 	}
 }
 
+// NewReservedVars allocates a ReservedVar instance that will generate unique
+// variable names starting with the given `prefix` and making sure that they
+// don't conflict with the given set of `known` variables.
 func NewReservedVars(prefix string, known BindVars) *ReservedVars {
 	rv := &ReservedVars{
 		prefix:   prefix,

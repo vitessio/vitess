@@ -129,7 +129,7 @@ func (nz *normalizer) convertLiteralDedup(node *Literal, cursor *Cursor) {
 	bvname, ok := nz.vals[key]
 	if !ok {
 		// If there's no such bindvar, make a new one.
-		bvname = nz.reserved.Next()
+		bvname = nz.reserved.nextUnusedVar()
 		nz.vals[key] = bvname
 		nz.bindVars[bvname] = bval
 	}
@@ -145,7 +145,7 @@ func (nz *normalizer) convertLiteral(node *Literal, cursor *Cursor) {
 		return
 	}
 
-	bvname := nz.reserved.Next()
+	bvname := nz.reserved.nextUnusedVar()
 	nz.bindVars[bvname] = bval
 
 	cursor.Replace(NewArgument(bvname))
@@ -179,7 +179,7 @@ func (nz *normalizer) convertComparison(node *ComparisonExpr) {
 			Value: bval.Value,
 		})
 	}
-	bvname := nz.reserved.Next()
+	bvname := nz.reserved.nextUnusedVar()
 	nz.bindVars[bvname] = bvals
 	// Modify RHS to be a list bindvar.
 	node.Right = ListArg(bvname)

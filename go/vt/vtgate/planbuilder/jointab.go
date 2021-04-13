@@ -47,7 +47,7 @@ func (jt *jointab) Procure(plan logicalPlan, col *sqlparser.ColName, to int) str
 	from, joinVar := jt.Lookup(col)
 	// If joinVar is empty, generate a unique name.
 	if joinVar == "" {
-		joinVar = jt.reserved.NextColumnName(col)
+		joinVar = jt.reserved.ReserveColName(col)
 		jt.refs[col.Metadata.(*column)] = joinVar
 	}
 	plan.SupplyVar(from, to, col, joinVar)
@@ -63,7 +63,7 @@ func (jt *jointab) GenerateSubqueryVars() (sq, hasValues string) {
 		jt.varIndex++
 		var1 := fmt.Sprintf("__sq%d", jt.varIndex)
 		var2 := fmt.Sprintf("__sq_has_values%d", jt.varIndex)
-		if jt.reserved.ContainsAny(var1, var2) {
+		if !jt.reserved.ReserveAll(var1, var2) {
 			continue
 		}
 		return var1, var2
