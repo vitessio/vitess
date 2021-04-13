@@ -7728,3 +7728,6 @@
 2021-04-13T15:29:50Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/745250552
 2021-04-13T15:29:50Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/745250551
 2021-04-13T15:29:50Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/745250595
+2021-04-13T15:29:50Z,local_example,https://github.com/vitessio/vitess/actions/runs/745250567
+2021-04-13T15:29:50Z,local_example,https://github.com/vitessio/vitess/actions/runs/745250577
+2021-04-13T15:29:50Z,region_example,https://github.com/vitessio/vitess/actions/runs/745250573
