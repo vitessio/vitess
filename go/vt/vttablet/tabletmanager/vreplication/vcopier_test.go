@@ -526,6 +526,24 @@ func TestPlayerCopyTables(t *testing.T) {
 	})
 	expectData(t, "yes", [][]string{})
 	validateCopyRowCountStat(t, 2)
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Run("Check log for start of copy", func(t *testing.T) {
+		query = "select count(*) from _vt.vreplication_log where type = 'LogCopyStarted'"
+		qr, err := env.Mysqld.FetchSuperQuery(ctx, query)
+		require.NoError(t, err)
+		require.NotNil(t, qr)
+		require.Equal(t, 1, len(qr.Rows))
+	})
+
+	t.Run("Check log for end of copy", func(t *testing.T) {
+		query = "select count(*) from _vt.vreplication_log where type = 'LogCopyEnded'"
+		qr, err := env.Mysqld.FetchSuperQuery(ctx, query)
+		require.NoError(t, err)
+		require.NotNil(t, qr)
+		require.Equal(t, 1, len(qr.Rows))
+	})
+	cancel()
+
 }
 
 // TestPlayerCopyBigTable ensures the copy-catchup back-and-forth loop works correctly.
