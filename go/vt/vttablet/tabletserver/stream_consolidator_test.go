@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -36,6 +37,7 @@ type consolidationResult struct {
 	err      error
 	items    []*sqltypes.Result
 	duration time.Duration
+	count    int64
 }
 
 func nocleanup(_ *sqltypes.Result) error {
@@ -97,6 +99,15 @@ func (ct *consolidationTest) leader(stream StreamCallback) error {
 	return nil
 }
 
+func (ct *consolidationTest) waitForResults(worker int, count int64) {
+	for {
+		if atomic.LoadInt64(&ct.results[worker].count) > count {
+			return
+		}
+		time.Sleep(1 * time.Millisecond)
+	}
+}
+
 func (ct *consolidationTest) run(workers int, generateCallback func(int) (string, StreamCallback)) {
 	if ct.results == nil {
 		ct.results = make([]*consolidationResult, workers)
@@ -118,6 +129,7 @@ func (ct *consolidationTest) run(workers int, generateCallback func(int) (string
 			err := ct.cc.Consolidate(logStats, query, func(result *sqltypes.Result) error {
 				cr := ct.results[worker]
 				cr.items = append(cr.items, result)
+				atomic.AddInt64(&cr.count, 1)
 				return callback(result)
 			}, ct.leader)
 
@@ -343,21 +355,9 @@ func TestConsolidatorMemoryLimits(t *testing.T) {
 			streamItems:     results,
 		}
 
-		var sent int
-		var firstBatch = make(chan struct{})
-
 		ct.run(10, func(worker int) (string, StreamCallback) {
-			if worker == 0 {
-				return "select 1", func(_ *sqltypes.Result) error {
-					if sent == streamsInFirstBatch {
-						close(firstBatch)
-					}
-					sent++
-					return nil
-				}
-			}
 			if worker > 4 {
-				<-firstBatch
+				ct.waitForResults(0, streamsInFirstBatch)
 			}
 			return "select 1", func(_ *sqltypes.Result) error { return nil }
 		})
@@ -384,15 +384,13 @@ func TestConsolidatorMemoryLimits(t *testing.T) {
 			switch {
 			case worker >= 0 && worker <= 4:
 			case worker >= 5 && worker <= 9:
-				time.Sleep(21 * time.Millisecond)
+				ct.waitForResults(0, 2)
 			case worker >= 10 && worker <= 14:
-				time.Sleep(42 * time.Millisecond)
+				ct.waitForResults(5, 2)
 			case worker >= 15 && worker <= 19:
-				time.Sleep(63 * time.Millisecond)
+				ct.waitForResults(10, 2)
 			}
-			return "select 1", func(_ *sqltypes.Result) error {
-				return nil
-			}
+			return "select 1", func(_ *sqltypes.Result) error { return nil }
 		})
 
 		require.Equal(t, 4, ct.leaderCalls)
