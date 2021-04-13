@@ -7679,5 +7679,7 @@
 2021-04-13T11:40:24Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/744585345
 2021-04-13T11:40:24Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/744585344
 2021-04-13T11:40:24Z,unit_race,https://github.com/vitessio/vitess/actions/runs/744585323
+2021-04-13T11:43:30Z,endtoend,https://github.com/vitessio/vitess/actions/runs/744593341
 2021-04-13T11:43:30Z,unit_race,https://github.com/vitessio/vitess/actions/runs/744593367
+2021-04-13T11:45:12Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/744597749
 2021-04-13T11:45:12Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/744597763
