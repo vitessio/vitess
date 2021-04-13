@@ -392,15 +392,7 @@ func (rb *route) JoinCanMerge(pb *primitiveBuilder, rrb *route, ajoin *sqlparser
 		if where == nil {
 			return true
 		}
-		hasRuntimeRoutingPredicates := false
-		sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
-			col, ok := node.(*sqlparser.ColName)
-			if ok {
-				hasRuntimeRoutingPredicates = hasRuntimeRoutingPredicates || isTableNameCol(col) || isDbNameCol(col)
-			}
-			return !hasRuntimeRoutingPredicates, nil
-		}, where)
-		return !hasRuntimeRoutingPredicates
+		return ajoin != nil
 	}
 	if ajoin == nil {
 		return false
