@@ -147,8 +147,8 @@ func TestSelectInformationSchemaWithTableAndSchemaWithRoutedTables(t *testing.T)
 				},
 				Query:               "dummy_select",
 				FieldQuery:          "dummy_select_field",
-				SysTableTableSchema: stringToExpr(tc.tableSchema),
-				SysTableTableName:   stringToExpr(tc.tableName),
+				SysTableTableSchema: []evalengine.Expr{stringToExpr(tc.tableSchema)},
+				SysTableTableName:   []evalengine.Expr{stringToExpr(tc.tableName)},
 			}
 			vc := &loggingVCursor{
 				shards:  []string{"1"},
