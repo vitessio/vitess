@@ -223,8 +223,8 @@ func (ft *FakeTablet) StartActionLoop(t *testing.T, wr *wrangler.Wrangler) {
 
 	// And wait for it to serve, so we don't start using it before it's
 	// ready.
-	timeout := 10 * time.Second
-	step := 10 * time.Millisecond
+	timeout := 10 * time.Minute
+	step := 100 * time.Millisecond
 	c := tmclient.NewTabletManagerClient()
 	for timeout >= 0 {
 		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
