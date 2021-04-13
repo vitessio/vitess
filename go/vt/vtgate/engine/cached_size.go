@@ -523,7 +523,7 @@ func (cached *Route) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(208)
+		size += int64(224)
 	}
 	// field Keyspace *vitess.io/vitess/go/vt/vtgate/vindexes.Keyspace
 	size += cached.Keyspace.CachedSize(true)
@@ -552,13 +552,23 @@ func (cached *Route) CachedSize(alloc bool) int64 {
 	{
 		size += int64(cap(cached.OrderBy)) * int64(32)
 	}
-	// field SysTableTableSchema vitess.io/vitess/go/vt/vtgate/evalengine.Expr
-	if cc, ok := cached.SysTableTableSchema.(cachedObject); ok {
-		size += cc.CachedSize(true)
+	// field SysTableTableSchema []vitess.io/vitess/go/vt/vtgate/evalengine.Expr
+	{
+		size += int64(cap(cached.SysTableTableSchema)) * int64(16)
+		for _, elem := range cached.SysTableTableSchema {
+			if cc, ok := elem.(cachedObject); ok {
+				size += cc.CachedSize(true)
+			}
+		}
 	}
-	// field SysTableTableName vitess.io/vitess/go/vt/vtgate/evalengine.Expr
-	if cc, ok := cached.SysTableTableName.(cachedObject); ok {
-		size += cc.CachedSize(true)
+	// field SysTableTableName []vitess.io/vitess/go/vt/vtgate/evalengine.Expr
+	{
+		size += int64(cap(cached.SysTableTableName)) * int64(16)
+		for _, elem := range cached.SysTableTableName {
+			if cc, ok := elem.(cachedObject); ok {
+				size += cc.CachedSize(true)
+			}
+		}
 	}
 	return size
 }
