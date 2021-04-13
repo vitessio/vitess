@@ -7759,3 +7759,5 @@
 2021-04-13T18:03:33Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/745661657
 2021-04-13T18:03:33Z,local_example,https://github.com/vitessio/vitess/actions/runs/745661672
 2021-04-13T18:03:33Z,region_example,https://github.com/vitessio/vitess/actions/runs/745661644
+2021-04-13T20:14:33Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/745996232
+2021-04-13T20:14:33Z,endtoend,https://github.com/vitessio/vitess/actions/runs/745996260
