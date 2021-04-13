@@ -47,4 +47,4 @@ jobs:
       timeout-minutes: 30
       run: |
         source build.env
-        eatmydata -- go run test.go -docker=false -print-log -follow -shard {{.Shard}}
+        go run test.go -docker=false -print-log -follow -shard {{.Shard}}
