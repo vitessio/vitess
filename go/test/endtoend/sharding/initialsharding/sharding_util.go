@@ -684,19 +684,22 @@ func WriteDbCredentialToTmp(tmpDir string) string {
 
 // GetPasswordUpdateSQL returns the sql for password update
 func GetPasswordUpdateSQL(localCluster *cluster.LocalProcessCluster) string {
+	// In MySQL 8.0, PASSWORD() function is deprecated. However, it equals to
+	// CONCAT('*', UPPER(SHA1(UNHEX(SHA1('<clear-text>')))))
+	// so to support both 8.0 and pre-8.0 we use that ugly expression in the following:
 	pwdChangeCmd := `
 					# Set real passwords for all users.
-					UPDATE mysql.user SET %s = PASSWORD('RootPass')
+					UPDATE mysql.user SET %s = CONCAT('*', UPPER(SHA1(UNHEX(SHA1('RootPass')))))
 					  WHERE User = 'root' AND Host = 'localhost';
-					UPDATE mysql.user SET %s = PASSWORD('VtDbaPass')
+					UPDATE mysql.user SET %s = CONCAT('*', UPPER(SHA1(UNHEX(SHA1('VtDbaPass')))))
 					  WHERE User = 'vt_dba' AND Host = 'localhost';
-					UPDATE mysql.user SET %s = PASSWORD('VtAppPass')
+					UPDATE mysql.user SET %s = CONCAT('*', UPPER(SHA1(UNHEX(SHA1('VtAppPass')))))
 					  WHERE User = 'vt_app' AND Host = 'localhost';
-					UPDATE mysql.user SET %s = PASSWORD('VtAllprivsPass')
+					UPDATE mysql.user SET %s = CONCAT('*', UPPER(SHA1(UNHEX(SHA1('VtAllprivsPass')))))
 					  WHERE User = 'vt_allprivs' AND Host = 'localhost';
-					UPDATE mysql.user SET %s = PASSWORD('VtReplPass')
+					UPDATE mysql.user SET %s = CONCAT('*', UPPER(SHA1(UNHEX(SHA1('VtReplPass')))))
 					  WHERE User = 'vt_repl' AND Host = '%%';
-					UPDATE mysql.user SET %s = PASSWORD('VtFilteredPass')
+					UPDATE mysql.user SET %s = CONCAT('*', UPPER(SHA1(UNHEX(SHA1('VtFilteredPass')))))
 					  WHERE User = 'vt_filtered' AND Host = 'localhost';
 					FLUSH PRIVILEGES;
 					`
@@ -707,7 +710,7 @@ func GetPasswordUpdateSQL(localCluster *cluster.LocalProcessCluster) string {
 // getPasswordField Determines which column is used for user passwords in this MySQL version.
 func getPasswordField(localCluster *cluster.LocalProcessCluster) (pwdCol string, err error) {
 	tablet := &cluster.Vttablet{
-		Type:            "relpica",
+		Type:            "replica",
 		TabletUID:       100,
 		MySQLPort:       15000,
 		MysqlctlProcess: *cluster.MysqlCtlProcessInstance(100, 15000, localCluster.TmpDirectory),
