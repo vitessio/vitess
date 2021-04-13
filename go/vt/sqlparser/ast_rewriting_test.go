@@ -413,7 +413,7 @@ func TestReservedVars(t *testing.T) {
 		t.Run("prefix_"+prefix, func(t *testing.T) {
 			reserved := NewReservedVars(prefix, make(BindVars))
 			for i := 1; i < 1000; i++ {
-				require.Equal(t, fmt.Sprintf("%s%d", prefix, i), reserved.Next())
+				require.Equal(t, fmt.Sprintf("%s%d", prefix, i), reserved.nextUnusedVar())
 			}
 		})
 	}
