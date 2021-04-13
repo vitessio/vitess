@@ -452,5 +452,6 @@ func TestMakeCommonTags(t *testing.T) {
 	assert.Equal(t, 0, len(res1))
 	expected2 := []string{"a:b", "c:d"}
 	res2 := makeCommonTags(map[string]string{"a": "b", "c": "d"})
+	sort.Strings(res2)
 	assert.EqualValues(t, expected2, res2)
 }
