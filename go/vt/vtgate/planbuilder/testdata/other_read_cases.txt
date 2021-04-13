@@ -10,7 +10,6 @@
       "Sharded": false
     },
     "TargetDestination": "AnyShard()",
-    "IsDML": false,
     "Query": "explain select * from `user`",
     "SingleShardOnly": true
   }
@@ -38,7 +37,6 @@
       "Sharded": false
     },
     "TargetDestination": "AnyShard()",
-    "IsDML": false,
     "Query": "analyze table t1",
     "SingleShardOnly": true
   }
@@ -56,7 +54,6 @@
       "Sharded": false
     },
     "TargetDestination": "AnyShard()",
-    "IsDML": false,
     "Query": "explain select * from t",
     "SingleShardOnly": true
   }
@@ -74,7 +71,6 @@
       "Sharded": false
     },
     "TargetDestination": "AnyShard()",
-    "IsDML": false,
     "Query": "explain select * from t",
     "SingleShardOnly": true
   }

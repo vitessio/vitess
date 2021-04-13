@@ -13,9 +13,7 @@
           "Sharded": false
         },
         "TargetDestination": "AllShards()",
-        "IsDML": false,
-        "Query": "flush local tables unsharded_a with read lock",
-        "SingleShardOnly": false
+        "Query": "flush local tables unsharded_a with read lock"
       },
       {
         "OperatorType": "Send",
@@ -24,9 +22,7 @@
           "Sharded": true
         },
         "TargetDestination": "AllShards()",
-        "IsDML": false,
-        "Query": "flush local tables `user`, user_extra with read lock",
-        "SingleShardOnly": false
+        "Query": "flush local tables `user`, user_extra with read lock"
       }
     ]
   }
@@ -51,9 +47,7 @@
           "Sharded": false
         },
         "TargetDestination": "AllShards()",
-        "IsDML": false,
-        "Query": "flush local tables unsharded",
-        "SingleShardOnly": false
+        "Query": "flush local tables unsharded"
       },
       {
         "OperatorType": "Send",
@@ -62,9 +56,7 @@
           "Sharded": true
         },
         "TargetDestination": "AllShards()",
-        "IsDML": false,
-        "Query": "flush local tables `user`",
-        "SingleShardOnly": false
+        "Query": "flush local tables `user`"
       }
     ]
   }
@@ -86,9 +78,7 @@
       "Sharded": false
     },
     "TargetDestination": "AllShards()",
-    "IsDML": false,
-    "Query": "flush tables a with read lock",
-    "SingleShardOnly": false
+    "Query": "flush tables a with read lock"
   }
 }
 
@@ -107,9 +97,7 @@
           "Sharded": false
         },
         "TargetDestination": "AllShards()",
-        "IsDML": false,
-        "Query": "flush local tables unsharded_a with read lock",
-        "SingleShardOnly": false
+        "Query": "flush local tables unsharded_a with read lock"
       },
       {
         "OperatorType": "Send",
@@ -118,9 +106,7 @@
           "Sharded": false
         },
         "TargetDestination": "AllShards()",
-        "IsDML": false,
-        "Query": "flush local tables unsharded_tab with read lock",
-        "SingleShardOnly": false
+        "Query": "flush local tables unsharded_tab with read lock"
       },
       {
         "OperatorType": "Send",
@@ -129,9 +115,7 @@
           "Sharded": true
         },
         "TargetDestination": "AllShards()",
-        "IsDML": false,
-        "Query": "flush local tables `user`, user_extra with read lock",
-        "SingleShardOnly": false
+        "Query": "flush local tables `user`, user_extra with read lock"
       }
     ]
   }

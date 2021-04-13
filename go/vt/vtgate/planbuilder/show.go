@@ -70,6 +70,8 @@ func buildShowBasicPlan(show *sqlparser.ShowBasic, vschema ContextVSchema) (engi
 		return engine.NewRowsPrimitive(make([][]sqltypes.Value, 0, 2), buildVarCharFields("Variable_name", "Value")), nil
 	case sqlparser.VitessMigrations:
 		return buildShowVMigrationsPlan(show, vschema)
+	case sqlparser.VGtidExecGlobal:
+		return buildShowVGtidPlan(show, vschema)
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unknown show query type %s", show.Command.ToString())
 
@@ -490,4 +492,37 @@ func buildCreatePlan(show *sqlparser.ShowCreate, vschema ContextVSchema) (engine
 		SingleShardOnly:   true,
 	}, nil
 
+}
+
+func buildShowVGtidPlan(show *sqlparser.ShowBasic, vschema ContextVSchema) (engine.Primitive, error) {
+	dbName := ""
+	if !show.DbName.IsEmpty() {
+		dbName = show.DbName.String()
+	}
+	dest, ks, _, err := vschema.TargetDestination(dbName)
+	if err != nil {
+		return nil, err
+	}
+	if dest == nil {
+		dest = key.DestinationAllShards{}
+	}
+
+	send := &engine.Send{
+		Keyspace:          ks,
+		TargetDestination: dest,
+		Query:             fmt.Sprintf(`select '%s' as 'keyspace', @@global.gtid_executed, :%s`, ks.Name, engine.ShardName),
+		ShardNameNeeded:   true,
+	}
+	return &engine.OrderedAggregate{
+		PreProcess: true,
+		Aggregates: []engine.AggregateParams{
+			{
+				Opcode: engine.AggregateGtid,
+				Col:    1,
+				Alias:  "global vgtid_executed",
+			},
+		},
+		TruncateColumnCount: 2,
+		Input:               send,
+	}, nil
 }

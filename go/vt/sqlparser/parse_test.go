@@ -1526,6 +1526,10 @@ var (
 		input:  "show session variables",
 		output: "show variables",
 	}, {
+		input: "show global vgtid_executed",
+	}, {
+		input: "show global vgtid_executed from ks",
+	}, {
 		input:  "show vitess_keyspaces",
 		output: "show keyspaces",
 	}, {
