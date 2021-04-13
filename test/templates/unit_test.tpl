@@ -3,7 +3,7 @@ on: [push, pull_request]
 jobs:
 
   test:
-    runs-on: ubuntu-20.04
+    {{if (eq .Platform "percona56")}}runs-on: ubuntu-18.04{{else}}runs-on: ubuntu-20.04{{end}}
 
     steps:
     - name: Set up Go
