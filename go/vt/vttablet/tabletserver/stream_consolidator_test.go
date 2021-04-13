@@ -333,22 +333,33 @@ func TestConsolidatorMemoryLimits(t *testing.T) {
 	})
 
 	t.Run("two-phase consolidation (memory)", func(t *testing.T) {
+		const streamsInFirstBatch = 5
 		results := generateResultSizes(100, 10)
 		rsize := results[0].CachedSize(true)
 
 		ct := consolidationTest{
-			cc:              NewStreamConsolidator(128*1024, rsize*5+1, nocleanup),
+			cc:              NewStreamConsolidator(128*1024, rsize*streamsInFirstBatch+1, nocleanup),
 			streamItemDelay: 1 * time.Millisecond,
 			streamItems:     results,
 		}
 
+		var sent int
+		var firstBatch = make(chan struct{})
+
 		ct.run(10, func(worker int) (string, StreamCallback) {
+			if worker == 0 {
+				return "select 1", func(_ *sqltypes.Result) error {
+					if sent == streamsInFirstBatch {
+						close(firstBatch)
+					}
+					sent++
+					return nil
+				}
+			}
 			if worker > 4 {
-				time.Sleep(6 * time.Millisecond)
+				<-firstBatch
 			}
-			return "select 1", func(_ *sqltypes.Result) error {
-				return nil
-			}
+			return "select 1", func(_ *sqltypes.Result) error { return nil }
 		})
 
 		require.Equal(t, 2, ct.leaderCalls)
