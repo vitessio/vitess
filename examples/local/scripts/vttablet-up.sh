@@ -60,8 +60,8 @@ vttablet \
 # Block waiting for the tablet to be listening
 # Not the same as healthy
 
-for i in $(seq 0 300); do
- curl -I "http://$hostname:$port/debug/status" >/dev/null 2>&1 && break
+for i in $(seq 0 30); do
+ curl -m 0.9 -I "http://$hostname:$port/debug/status" >/dev/null 2>&1 && break
  sleep 0.1
 done
 

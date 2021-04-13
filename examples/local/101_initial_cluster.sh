@@ -17,6 +17,8 @@
 # this script brings up zookeeper and all the vitess components
 # required for a single shard deployment.
 
+set -e
+
 source ./env.sh
 
 # start topo server
