@@ -531,7 +531,7 @@ func buildShowGtidPlan(show *sqlparser.ShowBasic, vschema ContextVSchema) (engin
 	return &engine.Send{
 		Keyspace:          ks,
 		TargetDestination: dest,
-		Query:             fmt.Sprintf(`select '%s' as db_name, @@global.gtid_executed as gtid, :%s as shard`, ks.Name, engine.ShardName),
+		Query:             fmt.Sprintf(`select '%s' as db_name, @@global.gtid_executed as gtid_executed, :%s as shard`, ks.Name, engine.ShardName),
 		ShardNameNeeded:   true,
 	}, nil
 }
