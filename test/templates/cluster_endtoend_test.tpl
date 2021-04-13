@@ -4,7 +4,7 @@ jobs:
 
   build:
     name: Run endtoend tests on {{.Name}}
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-20.04
 
     steps:
     - name: Set up Go
