@@ -17,7 +17,6 @@ import { orderBy } from 'lodash-es';
 import * as React from 'react';
 import { useGates } from '../../hooks/api';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
-import { vtadmin as pb } from '../../proto/vtadmin';
 import { DataCell } from '../dataTable/DataCell';
 import { DataTable } from '../dataTable/DataTable';
 
@@ -26,21 +25,33 @@ export const Gates = () => {
     const { data } = useGates();
 
     const rows = React.useMemo(() => {
-        return orderBy(data, ['cluster.name', 'hostname']);
+        const mapped = (data || []).map((g) => ({
+            cell: g.cell,
+            cluster: g.cluster?.name,
+            hostname: g.hostname,
+            keyspaces: g.keyspaces,
+            pool: g.pool,
+        }));
+        return orderBy(mapped, ['cluster', 'pool', 'hostname', 'cell']);
     }, [data]);
 
-    const renderRows = (gates: pb.VTGate[]) =>
+    const renderRows = (gates: typeof rows) =>
         gates.map((gate, idx) => (
             <tr key={idx}>
-                <DataCell>{gate.cluster?.name}</DataCell>
-                <DataCell>{gate.hostname}</DataCell>
+                <DataCell className="white-space-nowrap">
+                    <div>{gate.pool}</div>
+                    <div className="font-size-small text-color-secondary">{gate.cluster}</div>
+                </DataCell>
+                <DataCell className="white-space-nowrap">{gate.hostname}</DataCell>
+                <DataCell className="white-space-nowrap">{gate.cell}</DataCell>
+                <DataCell>{(gate.keyspaces || []).join(', ')}</DataCell>
             </tr>
         ));
 
     return (
         <div className="max-width-content">
             <h1>Gates</h1>
-            <DataTable columns={['Cluster', 'Hostname']} data={rows} renderRows={renderRows} />
+            <DataTable columns={['Pool', 'Hostname', 'Cell', 'Keyspaces']} data={rows} renderRows={renderRows} />
         </div>
     );
 };
