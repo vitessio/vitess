@@ -303,7 +303,7 @@ docker_test:
 	go run test.go -flavor $(flavor)
 
 docker_unit_test:
-	go run test.go -retry=1 -flavor $(flavor) unit
+	go run test.go -flavor $(flavor) unit
 
 # Release a version.
 # This will generate a tar.gz file into the releases folder with the current source
