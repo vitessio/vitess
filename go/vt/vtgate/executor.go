@@ -22,7 +22,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -77,10 +76,6 @@ var (
 )
 
 const (
-	utf8          = "utf8"
-	utf8mb4       = "utf8mb4"
-	both          = "both"
-	charset       = "charset"
 	bindVarPrefix = "__vt"
 )
 
@@ -1389,98 +1384,6 @@ func buildVarCharRow(values ...string) []sqltypes.Value {
 		row[i] = sqltypes.NewVarChar(v)
 	}
 	return row
-}
-
-func generateCharsetRows(showFilter *sqlparser.ShowFilter, colNames []string) ([][]sqltypes.Value, error) {
-	if showFilter == nil {
-		return buildCharsetRows(both), nil
-	}
-
-	var filteredColName string
-	var err error
-
-	if showFilter.Like != "" {
-		filteredColName, err = checkLikeOpt(showFilter.Like, colNames)
-		if err != nil {
-			return nil, err
-		}
-
-	} else {
-		cmpExp, ok := showFilter.Filter.(*sqlparser.ComparisonExpr)
-		if !ok {
-			return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.SyntaxError, "expect a 'LIKE' or '=' expression")
-		}
-
-		left, ok := cmpExp.Left.(*sqlparser.ColName)
-		if !ok {
-			return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.SyntaxError, "expect left side to be 'column'")
-		}
-		leftOk := left.Name.EqualString(charset)
-
-		if leftOk {
-			literal, ok := cmpExp.Right.(*sqlparser.Literal)
-			if !ok {
-				return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.SyntaxError, "expect right side to be string")
-			}
-			rightString := string(literal.Val)
-
-			switch cmpExp.Operator {
-			case sqlparser.EqualOp:
-				for _, colName := range colNames {
-					if rightString == colName {
-						filteredColName = colName
-					}
-				}
-			case sqlparser.LikeOp:
-				filteredColName, err = checkLikeOpt(rightString, colNames)
-				if err != nil {
-					return nil, err
-				}
-			}
-		}
-
-	}
-
-	return buildCharsetRows(filteredColName), nil
-}
-
-func buildCharsetRows(colName string) [][]sqltypes.Value {
-	row0 := buildVarCharRow(
-		"utf8",
-		"UTF-8 Unicode",
-		"utf8_general_ci")
-	row0 = append(row0, sqltypes.NewInt32(3))
-	row1 := buildVarCharRow(
-		"utf8mb4",
-		"UTF-8 Unicode",
-		"utf8mb4_general_ci")
-	row1 = append(row1, sqltypes.NewInt32(4))
-
-	switch colName {
-	case utf8:
-		return [][]sqltypes.Value{row0}
-	case utf8mb4:
-		return [][]sqltypes.Value{row1}
-	case both:
-		return [][]sqltypes.Value{row0, row1}
-	}
-
-	return [][]sqltypes.Value{}
-}
-
-func checkLikeOpt(likeOpt string, colNames []string) (string, error) {
-	likeRegexp := strings.ReplaceAll(likeOpt, "%", ".*")
-	for _, v := range colNames {
-		match, err := regexp.MatchString(likeRegexp, v)
-		if err != nil {
-			return "", err
-		}
-		if match {
-			return v, nil
-		}
-	}
-
-	return "", nil
 }
 
 // isValidPayloadSize validates whether a query payload is above the
