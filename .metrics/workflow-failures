@@ -8009,3 +8009,4 @@
 2021-04-14T22:01:31Z,Unit Test (mariadb101),https://github.com/vitessio/vitess/actions/runs/749904932
 2021-04-14T22:01:31Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/749904953
 2021-04-14T22:02:35Z,Cluster (27),https://github.com/vitessio/vitess/actions/runs/749907750
+2021-04-14T22:02:35Z,unit_race,https://github.com/vitessio/vitess/actions/runs/749907710
