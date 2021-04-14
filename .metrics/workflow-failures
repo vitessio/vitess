@@ -8000,3 +8000,4 @@
 2021-04-14T19:58:21Z,Cluster (onlineddl_declarative),https://github.com/vitessio/vitess/actions/runs/749599163
 2021-04-14T19:58:22Z,local_example,https://github.com/vitessio/vitess/actions/runs/749599175
 2021-04-14T19:58:22Z,unit_race,https://github.com/vitessio/vitess/actions/runs/749599196
+2021-04-14T20:43:24Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/749716564
