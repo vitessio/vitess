@@ -570,7 +570,6 @@ func expectNontxQueries(t *testing.T, queries []string) {
 			if shouldIgnoreQuery(got) {
 				continue
 			}
-
 			t.Errorf("unexpected query: %s", got)
 		default:
 			return

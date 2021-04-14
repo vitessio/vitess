@@ -399,7 +399,6 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 		if err != nil {
 			return nil, err
 		}
-
 		qr, err := withDDL.Exec(vre.ctx, query, dbClient.ExecuteFetch)
 		if err != nil {
 			return nil, err
