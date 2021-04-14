@@ -15,14 +15,23 @@
  */
 import { orderBy } from 'lodash-es';
 import * as React from 'react';
+
 import { useGates } from '../../hooks/api';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
+import { useSyncedURLParam } from '../../hooks/useSyncedURLParam';
+import { filterNouns } from '../../util/filterNouns';
+import { Button } from '../Button';
 import { DataCell } from '../dataTable/DataCell';
 import { DataTable } from '../dataTable/DataTable';
+import { Icons } from '../Icon';
+import { TextInput } from '../TextInput';
+import style from './Gates.module.scss';
 
 export const Gates = () => {
     useDocumentTitle('Gates');
+
     const { data } = useGates();
+    const { value: filter, updateValue: updateFilter } = useSyncedURLParam('filter');
 
     const rows = React.useMemo(() => {
         const mapped = (data || []).map((g) => ({
@@ -32,8 +41,9 @@ export const Gates = () => {
             keyspaces: g.keyspaces,
             pool: g.pool,
         }));
-        return orderBy(mapped, ['cluster', 'pool', 'hostname', 'cell']);
-    }, [data]);
+        const filtered = filterNouns(filter, mapped);
+        return orderBy(filtered, ['cluster', 'pool', 'hostname', 'cell']);
+    }, [data, filter]);
 
     const renderRows = (gates: typeof rows) =>
         gates.map((gate, idx) => (
@@ -51,6 +61,18 @@ export const Gates = () => {
     return (
         <div className="max-width-content">
             <h1>Gates</h1>
+            <div className={style.controls}>
+                <TextInput
+                    autoFocus
+                    iconLeft={Icons.search}
+                    onChange={(e) => updateFilter(e.target.value)}
+                    placeholder="Filter gates"
+                    value={filter || ''}
+                />
+                <Button disabled={!filter} onClick={() => updateFilter('')} secondary>
+                    Clear filters
+                </Button>
+            </div>
             <DataTable columns={['Pool', 'Hostname', 'Cell', 'Keyspaces']} data={rows} renderRows={renderRows} />
         </div>
     );
