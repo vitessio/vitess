@@ -8001,3 +8001,7 @@
 2021-04-14T19:58:22Z,local_example,https://github.com/vitessio/vitess/actions/runs/749599175
 2021-04-14T19:58:22Z,unit_race,https://github.com/vitessio/vitess/actions/runs/749599196
 2021-04-14T20:43:24Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/749716564
+2021-04-14T21:59:16Z,Cluster (27),https://github.com/vitessio/vitess/actions/runs/749899137
+2021-04-14T21:59:16Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/749899152
+2021-04-14T21:59:16Z,unit_race,https://github.com/vitessio/vitess/actions/runs/749899134
+2021-04-14T22:01:31Z,Cluster (12),https://github.com/vitessio/vitess/actions/runs/749904919
