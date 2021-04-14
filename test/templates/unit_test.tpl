@@ -114,4 +114,4 @@ jobs:
     - name: Run test
       timeout-minutes: 30
       run: |
-        eatmydata -- make docker_unit_test flavor={{.Platform}}
+        eatmydata -- go run test.go -retry=1 -print-log -follow -flavor={{.Platform}} unit
