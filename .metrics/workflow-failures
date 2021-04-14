@@ -7843,6 +7843,7 @@
 2021-04-14T09:41:40Z,check_make_sizegen,https://github.com/vitessio/vitess/actions/runs/747825785
 2021-04-14T09:41:40Z,check_make_visitor,https://github.com/vitessio/vitess/actions/runs/747825764
 2021-04-14T09:41:40Z,e2e_race,https://github.com/vitessio/vitess/actions/runs/747825762
+2021-04-14T09:41:40Z,endtoend,https://github.com/vitessio/vitess/actions/runs/747825780
 2021-04-14T09:41:40Z,local_example,https://github.com/vitessio/vitess/actions/runs/747825766
 2021-04-14T09:41:40Z,local_example,https://github.com/vitessio/vitess/actions/runs/747825768
 2021-04-14T09:41:40Z,region_example,https://github.com/vitessio/vitess/actions/runs/747825770
