@@ -17,8 +17,11 @@ limitations under the License.
 package cluster
 
 import (
+	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
+	"time"
 
 	"vitess.io/vitess/go/vt/log"
 )
@@ -143,6 +146,20 @@ func parseOne(cfg *Config, name string, val string) error {
 		cfg.Name = val
 	case "discovery":
 		cfg.DiscoveryImpl = val
+	case "getschema-rpcpool-size":
+		i, err := strconv.Atoi(val)
+		if err != nil {
+			return fmt.Errorf("parsing `getschema-rpcpool-size`: %w", err)
+		}
+
+		cfg.GetSchemaRPCPoolSize = &i
+	case "getschema-rpcpool-wait-timeout":
+		timeout, err := time.ParseDuration(val)
+		if err != nil {
+			return fmt.Errorf("parsing `getschema-rpcpool-wait-timeout`: %w", err)
+		}
+
+		cfg.GetSchemaRPCPoolWaitTimeout = &timeout
 	default:
 		if strings.HasPrefix(name, "vtsql-") {
 			if cfg.VtSQLFlags == nil {

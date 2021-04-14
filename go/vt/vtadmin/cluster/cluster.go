@@ -27,6 +27,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/util/sets"
 
+	"vitess.io/vitess/go/pools"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
@@ -54,6 +55,10 @@ type Cluster struct {
 
 	DB     vtsql.DB
 	Vtctld vtctldclient.Proxy
+
+	// These fields are used to provide an upper bound on the number of
+	// concurrent RPCs a cluster makes across all requests.
+	getSchemaPool *pools.ResourcePool
 
 	// These fields are kept to power debug endpoints.
 	// (TODO|@amason): Figure out if these are needed or if there's a way to
@@ -95,6 +100,17 @@ func New(cfg Config) (*Cluster, error) {
 
 	cluster.DB = vtsql.New(vtsqlCfg)
 	cluster.Vtctld = vtctldclient.New(vtctldCfg)
+
+	// (TODO:@ajm188) define an interface type that provides the rp.Do(...) func
+	// we need so we can implement an "UnboundedPool" type for when
+	// "max-concurrency" is explicitly set to 0 rather than this "idk pick an
+	// arbitrary default value" thing we're currently doing.
+	maxGetSchemaRPCs := 10
+	if cfg.GetSchemaRPCPoolSize != nil {
+		maxGetSchemaRPCs = *cfg.GetSchemaRPCPoolSize
+	}
+
+	cluster.getSchemaPool = pools.NewResourcePool(pools.NewEmptyResource, maxGetSchemaRPCs, maxGetSchemaRPCs, 0, maxGetSchemaRPCs, nil)
 
 	return cluster, nil
 }
@@ -567,7 +583,23 @@ func (c *Cluster) getSchemaFromTablets(ctx context.Context, keyspace string, tab
 			span.Annotate("keyspace", keyspace)
 			span.Annotate("shard", tablet.Tablet.Shard)
 
-			resp, err := c.Vtctld.GetSchema(ctx, &req)
+			var (
+				resp *vtctldatapb.GetSchemaResponse
+				err  error
+			)
+
+			switch c.getSchemaPool {
+			case nil:
+				resp, err = c.Vtctld.GetSchema(ctx, &req)
+			default:
+				err = c.getSchemaPool.Do(ctx, func(resource pools.Resource) (pools.Resource, error) {
+					var err2 error
+
+					resp, err2 = c.Vtctld.GetSchema(ctx, &req)
+					return resource, err2
+				})
+			}
+
 			if err != nil {
 				err = fmt.Errorf("GetSchema(cluster = %s, keyspace = %s, tablet = %s) failed: %w", c.ID, keyspace, tablet.Tablet.Alias, err)
 				rec.RecordError(err)

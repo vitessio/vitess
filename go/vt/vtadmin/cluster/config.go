@@ -16,7 +16,10 @@ limitations under the License.
 
 package cluster
 
-import "fmt"
+import (
+	"fmt"
+	"time"
+)
 
 // Config represents the options to configure a vtadmin cluster.
 type Config struct {
@@ -26,6 +29,9 @@ type Config struct {
 	DiscoveryFlagsByImpl FlagsByImpl
 	VtSQLFlags           map[string]string
 	VtctldFlags          map[string]string
+
+	GetSchemaRPCPoolSize        *int
+	GetSchemaRPCPoolWaitTimeout *time.Duration
 }
 
 // Cluster returns a new cluster instance from the given config.
@@ -49,6 +55,14 @@ func (cfg *Config) Type() string { return "cluster.Config" }
 //		              // a given discovery implementation's constructor.
 //		vtsql-.*= // VtSQL-specific flags. Further parsing of these is delegated
 // 		          // to the vtsql package.
+//		getschema-rpcpool-size= // Number of inflight tmc.GetSchema RPCs to
+//								// allow. Set to < 1 to allow an unbounded
+//								// number of RPCs.
+//		getschema-rpcpool-wait-timeout= // When the RPC Pool for tmc.GetSchema
+//										// RPCs is fully exhausted, how long to
+//										// wait for an inflight RPC to finish
+//										// before erroring. Ignored if the RPC
+//										// Pool is unbounded.
 func (cfg *Config) Set(value string) error {
 	if cfg.DiscoveryFlagsByImpl == nil {
 		cfg.DiscoveryFlagsByImpl = map[string]map[string]string{}
@@ -78,12 +92,14 @@ func (cfg *Config) UnmarshalYAML(unmarshal func(interface{}) error) error {
 // config. Neither the caller or the argument are modified in any way.
 func (cfg Config) Merge(override Config) Config {
 	merged := Config{
-		ID:                   cfg.ID,
-		Name:                 cfg.Name,
-		DiscoveryImpl:        cfg.DiscoveryImpl,
-		DiscoveryFlagsByImpl: map[string]map[string]string{},
-		VtSQLFlags:           map[string]string{},
-		VtctldFlags:          map[string]string{},
+		ID:                          cfg.ID,
+		Name:                        cfg.Name,
+		DiscoveryImpl:               cfg.DiscoveryImpl,
+		DiscoveryFlagsByImpl:        map[string]map[string]string{},
+		VtSQLFlags:                  map[string]string{},
+		VtctldFlags:                 map[string]string{},
+		GetSchemaRPCPoolSize:        cfg.GetSchemaRPCPoolSize,
+		GetSchemaRPCPoolWaitTimeout: cfg.GetSchemaRPCPoolWaitTimeout,
 	}
 
 	if override.ID != "" {
@@ -96,6 +112,14 @@ func (cfg Config) Merge(override Config) Config {
 
 	if override.DiscoveryImpl != "" {
 		merged.DiscoveryImpl = override.DiscoveryImpl
+	}
+
+	if override.GetSchemaRPCPoolSize != nil {
+		merged.GetSchemaRPCPoolSize = override.GetSchemaRPCPoolSize
+	}
+
+	if override.GetSchemaRPCPoolWaitTimeout != nil {
+		merged.GetSchemaRPCPoolWaitTimeout = override.GetSchemaRPCPoolWaitTimeout
 	}
 
 	// first, the default flags
