@@ -96,11 +96,12 @@ func BuildCluster(cfg TestClusterConfig) *cluster.Cluster {
 	}
 
 	return &cluster.Cluster{
-		ID:        cfg.Cluster.Id,
-		Name:      cfg.Cluster.Name,
-		Discovery: disco,
-		DB:        db,
-		Vtctld:    vtctld,
+		ID:            cfg.Cluster.Id,
+		Name:          cfg.Cluster.Name,
+		Discovery:     disco,
+		DB:            db,
+		Vtctld:        vtctld,
+		GetSchemaPool: cluster.NewRPCPool(0, 0),
 	}
 }
 
