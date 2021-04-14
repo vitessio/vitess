@@ -66,22 +66,27 @@ func getLastLog(dbClient *vdbClient, vreplID uint32) (int64, string, string, str
 func insertLog(dbClient *vdbClient, typ string, vreplID uint32, state, message string) error {
 	var query string
 
+	// getLastLog returns the last log for a stream. During insertion, if the id/type/state/message match we do not insert
+	// a new log but increment the count. This prevents spamming of the log table in case the same message is logged continuously.
 	id, currentType, currentState, currentMessage, err := getLastLog(dbClient, vreplID)
 	if err != nil {
 		return err
 	}
+
 	if id > 0 && typ == currentType && state == currentState && message == currentMessage {
 		query = fmt.Sprintf("update _vt.vreplication_log set count = count + 1 where id = %d", id)
 	} else {
 		query = `insert into _vt.vreplication_log(vrepl_id, type, state, message) values(%d, '%s', '%s', %s)`
 		query = fmt.Sprintf(query, vreplID, typ, state, encodeString(message))
 	}
+
 	if _, err := dbClient.ExecuteFetch(query, 1); err != nil {
 		return fmt.Errorf("could not insert into log table: %v: %v", query, err)
 	}
 	return nil
 }
 
+// insertLogWithParams is called when a stream is created. The attributes of the stream are stored as a json string
 func insertLogWithParams(dbClient *vdbClient, action string, vreplID uint32, params map[string]string) error {
 	var message string
 	if params != nil {
