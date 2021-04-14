@@ -114,4 +114,4 @@ jobs:
     - name: Run test
       timeout-minutes: 30
       run: |
-        eatmydata -- make unit_test
+        eatmydata -- make docker_unit_test flavor={{.Platform}}
