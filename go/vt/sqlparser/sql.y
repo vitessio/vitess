@@ -2253,6 +2253,14 @@ alter_table_statement_part:
   {
     $$ = &DDL{Action: AlterStr, AutoIncSpec: &AutoIncSpec{Value: $3}}
   }
+| ALTER column_opt sql_id SET DEFAULT value_expression
+  {
+    $$ = &DDL{Action: AlterStr, DefaultSpec: &DefaultSpec{Action: SetStr, Column: $3, Value: $6}}
+  }
+| ALTER column_opt sql_id DROP DEFAULT
+  {
+    $$ = &DDL{Action: AlterStr, DefaultSpec: &DefaultSpec{Action: DropStr, Column: $3}}
+  }
 
 column_order_opt:
   {
@@ -4383,9 +4391,7 @@ ignore_number_opt:
   { $$ = NewIntVal($2) }
 
 non_add_drop_or_rename_operation:
-  ALTER
-  { $$ = struct{}{} }
-| CHARACTER
+  CHARACTER
   { $$ = struct{}{} }
 | COMMENT_KEYWORD
   { $$ = struct{}{} }

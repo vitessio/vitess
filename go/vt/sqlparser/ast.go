@@ -1519,6 +1519,9 @@ type DDL struct {
 	// IndexSpec is set for all ALTER operations on an index
 	IndexSpec *IndexSpec
 
+	// DefaultSpec is set for SET / DROP DEFAULT operations
+	DefaultSpec *DefaultSpec
+
 	// TriggerSpec is set for CREATE / ALTER / DROP trigger operations
 	TriggerSpec *TriggerSpec
 
@@ -1557,6 +1560,7 @@ const (
 	UniqueStr     = "unique"
 	SpatialStr    = "spatial"
 	FulltextStr   = "fulltext"
+	SetStr        = "set"
 )
 
 // Format formats the node.
@@ -1710,6 +1714,8 @@ func (node *DDL) alterFormat(buf *TrackedBuffer) {
 		default:
 			buf.Myprintf(" drop constraint %s", node.TableSpec.Constraints[0].Name)
 		}
+	} else if node.DefaultSpec != nil {
+		buf.Myprintf(" %v", node.DefaultSpec)
 	}
 }
 
@@ -2374,6 +2380,30 @@ func (node *AutoIncSpec) Format(buf *TrackedBuffer) {
 func (node *AutoIncSpec) walkSubtree(visit Visit) error {
 	err := Walk(visit, node.Sequence, node.Column)
 	return err
+}
+
+// DefaultSpec defines a SET / DROP on a column for its default value.
+type DefaultSpec struct {
+	Action   string
+	Column   ColIdent
+	Value    Expr
+}
+
+var _ SQLNode = (*DefaultSpec)(nil)
+
+// Format implements SQLNode.
+func (node *DefaultSpec) Format(buf *TrackedBuffer) {
+	switch node.Action {
+	case SetStr:
+		buf.Myprintf("alter column %v set default %v", node.Column, node.Value)
+	case DropStr:
+		buf.Myprintf("alter column %v drop default", node.Column)
+	}
+}
+
+// walkSubtree implements SQLNode.
+func (node *DefaultSpec) walkSubtree(visit Visit) error {
+	return Walk(visit, node.Column, node.Value)
 }
 
 // ConstraintDefinition describes a constraint in a CREATE TABLE statement

@@ -1041,9 +1041,6 @@ var (
 			input:  "alter table `By` add foo int",
 			output: "alter table `By` add column (\n\tfoo int\n)",
 		}, {
-			input:  "alter table a alter foo",
-			output: "alter table a",
-		}, {
 			input:  "alter table a drop foo",
 			output: "alter table a drop column foo",
 		}, {
@@ -1914,6 +1911,19 @@ var (
 ), change column foo (
 	bar int not null auto_increment
 ) first, reorganize partition b into (partition c values less than (:v1), partition d values less than (maxvalue)), add spatial index idx (id)`,
+		}, {
+			input:  "alter table t alter foo set default 5",
+			output: "alter table t alter column foo set default 5",
+		}, {
+			input:  "alter table t alter foo set default replace(uuid(),'-','')",
+			output: "alter table t alter column foo set default replace(uuid(), '-', '')",
+		}, {
+			input: "alter table t alter column foo set default now()",
+		}, {
+			input:  "alter table t alter foo drop default",
+			output: "alter table t alter column foo drop default",
+		}, {
+			input: "alter table t alter column foo drop default",
 		}, {
 			input:  "delete a.*, b.* from tbl_a a, tbl_b b where a.id = b.id and b.name = 'test'",
 			output: "delete a, b from tbl_a as a, tbl_b as b where a.id = b.id and b.name = 'test'",
