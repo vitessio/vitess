@@ -52,8 +52,12 @@ type boundedPool struct {
 }
 
 func (pool *boundedPool) Do(ctx context.Context, f func() error) error {
-	ctx, cancel := context.WithTimeout(ctx, pool.waitTimeout)
-	defer cancel()
+	if pool.waitTimeout > 0 {
+		var cancel context.CancelFunc
+
+		ctx, cancel = context.WithTimeout(ctx, pool.waitTimeout)
+		defer cancel()
+	}
 
 	return pool.rp.Do(ctx, func(resource pools.Resource) (pools.Resource, error) {
 		return resource, f()
