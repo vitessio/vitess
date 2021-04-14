@@ -464,6 +464,8 @@ func recordAndAnnotateError(err error, statsKey []string, request map[string]int
 		logger.Errorf("%v, request: %+v", err, request)
 	case vtrpcpb.Code_UNAVAILABLE:
 		logger.Infof("%v, request: %+v", err, request)
+	case vtrpcpb.Code_UNIMPLEMENTED:
+		logger.Infof("unsupported request: %+v", request)
 	}
 	return err
 }
