@@ -27,6 +27,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/util/sets"
 
+	"vitess.io/vitess/go/pools"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
@@ -57,7 +58,7 @@ type Cluster struct {
 
 	// These fields are used to provide an upper bound on the number of
 	// concurrent RPCs a cluster makes across all requests.
-	GetSchemaPool RPCPool
+	GetSchemaPool pools.RPCPool
 
 	// These fields are kept to power debug endpoints.
 	// (TODO|@amason): Figure out if these are needed or if there's a way to
@@ -111,7 +112,7 @@ func New(cfg Config) (*Cluster, error) {
 		getSchemaRPCPoolWaitTimeout = *cfg.GetSchemaRPCPoolWaitTimeout
 	}
 
-	cluster.GetSchemaPool = NewRPCPool(getSchemaRPCPoolSize, getSchemaRPCPoolWaitTimeout)
+	cluster.GetSchemaPool = pools.NewRPCPool(getSchemaRPCPoolSize, getSchemaRPCPoolWaitTimeout)
 
 	return cluster, nil
 }

@@ -22,6 +22,7 @@ import (
 
 	"google.golang.org/grpc"
 
+	"vitess.io/vitess/go/pools"
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/vitessdriver"
 	"vitess.io/vitess/go/vt/vtadmin/cluster"
@@ -101,7 +102,7 @@ func BuildCluster(cfg TestClusterConfig) *cluster.Cluster {
 		Discovery:     disco,
 		DB:            db,
 		Vtctld:        vtctld,
-		GetSchemaPool: cluster.NewRPCPool(0, 0),
+		GetSchemaPool: pools.NewRPCPool(0, 0),
 	}
 }
 

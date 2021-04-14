@@ -14,17 +14,15 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package cluster
+package pools
 
 import (
 	"context"
 	"time"
-
-	"vitess.io/vitess/go/pools"
 )
 
-// RPCPool defines the interface used by Cluster's to pool concurrent outbound
-// RPCs.
+// RPCPool is an abstraction on top of ResourcePool to throttle concurrent
+// operations (RPCs in the most common case) to prevent excessive fanout.
 type RPCPool interface {
 	Do(ctx context.Context, f func() error) error
 }
@@ -37,7 +35,7 @@ func NewRPCPool(maxConcurrentRPCs int, waitTimeout time.Duration) RPCPool {
 	}
 
 	return &boundedPool{
-		rp:          pools.NewResourcePool(pools.NewEmptyResource, maxConcurrentRPCs, maxConcurrentRPCs, 0, maxConcurrentRPCs, nil),
+		rp:          NewResourcePool(NewEmptyResource, maxConcurrentRPCs, maxConcurrentRPCs, 0, maxConcurrentRPCs, nil),
 		waitTimeout: waitTimeout,
 	}
 }
@@ -47,7 +45,7 @@ type unboundedPool struct{}
 func (pool *unboundedPool) Do(ctx context.Context, f func() error) error { return f() }
 
 type boundedPool struct {
-	rp          *pools.ResourcePool
+	rp          *ResourcePool
 	waitTimeout time.Duration
 }
 
@@ -59,7 +57,7 @@ func (pool *boundedPool) Do(ctx context.Context, f func() error) error {
 		defer cancel()
 	}
 
-	return pool.rp.Do(ctx, func(resource pools.Resource) (pools.Resource, error) {
+	return pool.rp.Do(ctx, func(resource Resource) (Resource, error) {
 		return resource, f()
 	})
 }
