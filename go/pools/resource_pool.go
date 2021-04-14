@@ -57,6 +57,21 @@ type Resource interface {
 	Close()
 }
 
+// EmptyResource implements pools.Resource with a no-op Close method. Use this
+// type, and the corresponding NewEmptyResource factory when you need the
+// semantics of the Get and Put of ResourcePool without actually caring about
+// the exact resource values.
+type EmptyResource struct{}
+
+// Close is part of the Resource interface.
+func (r *EmptyResource) Close() {}
+
+// NewEmptyResource returns a new EmptyResource. It satisfies the Factory type
+// definition.
+func NewEmptyResource(ctx context.Context) (Resource, error) {
+	return &EmptyResource{}, nil
+}
+
 // ResourcePool allows you to use a pool of resources.
 type ResourcePool struct {
 	// stats. Atomic fields must remain at the top in order to prevent panics on certain architectures.
@@ -186,6 +201,24 @@ func (rp *ResourcePool) closeIdleResources() {
 		}()
 
 	}
+}
+
+// Do will Get a resource from the pool, and then call the provided function
+// with that resource. The resource returned by the provided function is Put
+// back into the pool; callers may use this to reopen resources by returning a
+// nil value for the resource. That resource is Put back regardless of
+// whether the provided function returns a non-nil error in order to prevent
+// the pool from draining.
+func (rp *ResourcePool) Do(ctx context.Context, f func(resource Resource) (Resource, error)) error {
+	resource, err := rp.Get(ctx)
+	if err != nil {
+		return err
+	}
+
+	resource, err = f(resource)
+	rp.Put(resource)
+
+	return err
 }
 
 // Get will return the next available resource. If capacity
