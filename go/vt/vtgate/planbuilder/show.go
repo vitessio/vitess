@@ -325,7 +325,7 @@ func generateCharsetRows(showFilter *sqlparser.ShowFilter, colNames []string) ([
 			if !ok {
 				return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "we expect the right side to be a string")
 			}
-			rightString := string(literal.Val)
+			rightString := literal.Val
 
 			switch cmpExp.Operator {
 			case sqlparser.EqualOp:
