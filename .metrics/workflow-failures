@@ -7836,3 +7836,18 @@
 2021-04-14T08:30:29Z,local_example,https://github.com/vitessio/vitess/actions/runs/747616886
 2021-04-14T08:30:29Z,region_example,https://github.com/vitessio/vitess/actions/runs/747616867
 2021-04-14T08:30:29Z,unit_race,https://github.com/vitessio/vitess/actions/runs/747616900
+2021-04-14T09:41:40Z,Cluster (tabletmanager_throttler),https://github.com/vitessio/vitess/actions/runs/747825806
+2021-04-14T09:41:40Z,Cluster (tabletmanager_throttler_custom_config),https://github.com/vitessio/vitess/actions/runs/747825812
+2021-04-14T09:41:40Z,Cluster (upgrade),https://github.com/vitessio/vitess/actions/runs/747825773
+2021-04-14T09:41:40Z,check_make_parser,https://github.com/vitessio/vitess/actions/runs/747825791
+2021-04-14T09:41:40Z,check_make_sizegen,https://github.com/vitessio/vitess/actions/runs/747825785
+2021-04-14T09:41:40Z,check_make_visitor,https://github.com/vitessio/vitess/actions/runs/747825764
+2021-04-14T09:41:40Z,e2e_race,https://github.com/vitessio/vitess/actions/runs/747825762
+2021-04-14T09:41:40Z,local_example,https://github.com/vitessio/vitess/actions/runs/747825766
+2021-04-14T09:41:40Z,local_example,https://github.com/vitessio/vitess/actions/runs/747825768
+2021-04-14T09:41:40Z,region_example,https://github.com/vitessio/vitess/actions/runs/747825770
+2021-04-14T09:43:21Z,Cluster (tabletmanager_throttler),https://github.com/vitessio/vitess/actions/runs/747830419
+2021-04-14T09:43:21Z,Cluster (tabletmanager_throttler_custom_config),https://github.com/vitessio/vitess/actions/runs/747830409
+2021-04-14T09:43:21Z,local_example,https://github.com/vitessio/vitess/actions/runs/747830394
+2021-04-14T09:43:21Z,local_example,https://github.com/vitessio/vitess/actions/runs/747830422
+2021-04-14T09:43:21Z,region_example,https://github.com/vitessio/vitess/actions/runs/747830410
