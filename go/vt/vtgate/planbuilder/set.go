@@ -110,7 +110,7 @@ func buildSetOpReadOnly(s setting) planFunc {
 
 func buildNotSupported(setting) planFunc {
 	return func(expr *sqlparser.SetExpr, schema ContextVSchema, _ *expressionConverter) (engine.SetOp, error) {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%s: system setting is not supported", expr.Name)
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%s: system setting is not supported", expr.Name)
 	}
 }
 
