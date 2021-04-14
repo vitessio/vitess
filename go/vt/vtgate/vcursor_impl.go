@@ -525,11 +525,11 @@ func (vc *vcursorImpl) SetTarget(target string) error {
 		return err
 	}
 	if _, ok := vc.vschema.Keyspaces[keyspace]; !ignoreKeyspace(keyspace) && !ok {
-		return vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.BadDb, "Unknown database '%s'", keyspace)
+		return vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.BadDb, "unknown database '%s'", keyspace)
 	}
 
 	if vc.safeSession.InTransaction() && tabletType != topodatapb.TabletType_MASTER {
-		return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.LockOrActiveTransaction, "Can't execute the given command because you have an active transaction")
+		return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.LockOrActiveTransaction, "can't execute the given command because you have an active transaction")
 	}
 	vc.safeSession.SetTargetString(target)
 	return nil
