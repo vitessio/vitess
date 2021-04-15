@@ -46,8 +46,8 @@ func newAnalyzer(dbName string, si SchemaInformation) *analyzer {
 	}
 }
 
-// Analyse analyzes the parsed query.
-func Analyse(statement sqlparser.Statement, currentDb string, si SchemaInformation) (*SemTable, error) {
+// Analyze analyzes the parsed query.
+func Analyze(statement sqlparser.Statement, currentDb string, si SchemaInformation) (*SemTable, error) {
 	analyzer := newAnalyzer(currentDb, si)
 	// Initial scope
 	err := analyzer.analyze(statement)
@@ -135,31 +135,18 @@ func (a *analyzer) analyzeTableExpr(tableExpr sqlparser.TableExpr) error {
 
 // resolveQualifiedColumn handles `tabl.col` expressions
 func (a *analyzer) resolveQualifiedColumn(current *scope, expr *sqlparser.ColName) (*TableInfo, error) {
-	id := tableID{
-		dbName:    expr.Qualifier.Qualifier.String(),
-		tableName: expr.Qualifier.Name.String(),
-	}
-	id2 := tableID{
-		dbName:    a.currentDb,
-		tableName: expr.Qualifier.Name.String(),
-	}
-	checkCurrentDB := id.dbName == "" && id != id2
-
 	// search up the scope stack until we find a match
 	for current != nil {
-		tableExpr, found := current.tables[id]
-		if found {
-			return tableExpr, nil
-		}
-		if checkCurrentDB {
-			tableExpr, found := current.tables[id2]
-			if found {
-				return tableExpr, nil
+		dbName := expr.Qualifier.Qualifier.String()
+		tableName := expr.Qualifier.Name.String()
+		for _, table := range current.tables {
+			if tableName == table.tableName &&
+				(dbName == table.dbName || (dbName == "" && (table.dbName == a.currentDb || a.currentDb == ""))) {
+				return table, nil
 			}
 		}
 		current = current.parent
 	}
-
 	return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadFieldError, "Unknown table referenced by '%s'", sqlparser.String(expr))
 }
 
@@ -206,8 +193,8 @@ func (a *analyzer) bindTable(alias *sqlparser.AliasedTableExpr, expr sqlparser.S
 		}
 		a.popScope()
 		scope := a.currentScope()
-		dbName := "" // derived tables are always referenced only by their alias - they cannot be found using a fully qualified name
-		return scope.addTable(dbName, alias.As.String(), &TableInfo{alias, nil})
+		//dbName := "" // derived tables are always referenced only by their alias - they cannot be found using a fully qualified name
+		return scope.addTable(&TableInfo{})
 	case sqlparser.TableName:
 		tbl, vdx, _, _, _, err := a.si.FindTableOrVindex(t)
 		if err != nil {
@@ -217,16 +204,24 @@ func (a *analyzer) bindTable(alias *sqlparser.AliasedTableExpr, expr sqlparser.S
 			return Gen4NotSupportedF("vindex in FROM")
 		}
 		scope := a.currentScope()
-		table := &TableInfo{alias, tbl}
-		a.Tables = append(a.Tables, table)
-		if alias.As.IsEmpty() {
-			dbName := t.Qualifier.String()
-			if dbName == "" {
-				dbName = a.currentDb
-			}
-			return scope.addTable(dbName, t.Name.String(), table)
+		dbName := t.Qualifier.String()
+		if dbName == "" {
+			dbName = a.currentDb
 		}
-		return scope.addTable("", alias.As.String(), table)
+		var tableName string
+		if alias.As.IsEmpty() {
+			tableName = t.Name.String()
+		} else {
+			tableName = alias.As.String()
+		}
+		table := &TableInfo{
+			dbName:    dbName,
+			tableName: tableName,
+			ASTNode:   alias,
+			Table:     tbl,
+		}
+		a.Tables = append(a.Tables, table)
+		return scope.addTable(table)
 	}
 	return nil
 }
