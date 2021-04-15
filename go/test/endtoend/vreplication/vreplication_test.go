@@ -17,6 +17,7 @@ limitations under the License.
 package vreplication
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -83,6 +84,103 @@ func throttlerCheckSelf(tablet *cluster.VttabletProcess, app string) (resp *http
 	return resp, respBody, err
 }
 
+func TestReplicationStress(t *testing.T) {
+	const initialStressVSchema = `
+{
+  "tables": {
+	"largebin": {},
+	"customer": {}
+  }
+}
+`
+	const initialStressSchema = `
+create table largebin(pid int, maindata varbinary(4096), primary key(pid));
+create table customer(cid int, name varbinary(128), meta json default null, typ enum('individual','soho','enterprise'), sport set('football','cricket','baseball'),ts timestamp not null default current_timestamp, primary key(cid))  CHARSET=utf8mb4;
+`
+
+	const defaultCellName = "zone1"
+
+	const sourceKs = "stress_src"
+	const targetKs = "stress_tgt"
+
+	allCells := []string{defaultCellName}
+	allCellNames = defaultCellName
+
+	vc = NewVitessCluster(t, "TestReplicationStress", allCells, mainClusterConfig)
+	require.NotNil(t, vc)
+
+	defer vc.TearDown(t)
+
+	defaultCell = vc.Cells[defaultCellName]
+	vc.AddKeyspace(t, []*Cell{defaultCell}, sourceKs, "0", initialStressVSchema, initialStressSchema, 0, 0, 100)
+	vtgate = defaultCell.Vtgates[0]
+	require.NotNil(t, vtgate)
+
+	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.master", "product", "0"), 1)
+
+	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+	defer vtgateConn.Close()
+
+	verifyClusterHealth(t, vc)
+
+	const insertCount = 10000
+	const rowsPerInsert = 64
+
+	t.Logf("Inserting initial data")
+	insertStart := time.Now()
+	var query bytes.Buffer
+	rowCount := 0
+
+	execQuery(t, vtgateConn, "use `stress_src:0`;")
+	execQuery(t, vtgateConn, "begin")
+
+	for i := 0; i < insertCount; i++ {
+		query.Reset()
+		query.WriteString("insert into largebin(pid, maindata) values ")
+
+		for j := 0; j < rowsPerInsert; j++ {
+			if j > 0 {
+				query.WriteString(", ")
+			}
+			fmt.Fprintf(&query, "(%d, %q)", rowCount, "foobar")
+			rowCount++
+		}
+		execQuery(t, vtgateConn, query.String())
+	}
+
+	execQuery(t, vtgateConn, "commit")
+	t.Logf("finished inserting (%v)", time.Since(insertStart))
+
+	validateCount(t, vtgateConn, "stress_src:0", "largebin", insertCount*rowsPerInsert)
+
+	t.Logf("creating new keysepace '%s'", targetKs)
+	vc.AddKeyspace(t, []*Cell{defaultCell}, targetKs, "0", initialStressVSchema, initialStressSchema, 0, 0, 200)
+	validateCount(t, vtgateConn, "stress_tgt:0", "largebin", 0)
+
+	t.Logf("moving 'largebin' table...")
+	moveStart := time.Now()
+	keyspace := defaultCell.Keyspaces[targetKs]
+
+	for _, shard := range keyspace.Shards {
+		for _, tablet := range shard.Tablets {
+			tablet.Vttablet.StartProfiling()
+		}
+	}
+
+	moveTables(t, defaultCell.Name, "stress_workflow", sourceKs, targetKs, "largebin")
+
+	for _, shard := range keyspace.Shards {
+		for _, tablet := range shard.Tablets {
+			t.Logf("catchup shard=%v, tablet=%v", shard.Name, tablet.Name)
+			catchup(t, tablet.Vttablet, "stress_workflow", "MoveTables")
+		}
+	}
+
+	t.Logf("finished catching up after MoveTables (%v)", time.Since(moveStart))
+
+	validateCount(t, vtgateConn, "stress_tgt:0", "largebin", insertCount*rowsPerInsert)
+}
+
 func TestBasicVreplicationWorkflow(t *testing.T) {
 	defaultCellName := "zone1"
 	allCells := []string{"zone1"}
@@ -93,7 +191,7 @@ func TestBasicVreplicationWorkflow(t *testing.T) {
 	defaultReplicas = 0 // because of CI resource constraints we can only run this test with master tablets
 	defer func() { defaultReplicas = 1 }()
 
-	defer vc.TearDown()
+	defer vc.TearDown(t)
 
 	defaultCell = vc.Cells[defaultCellName]
 	vc.AddKeyspace(t, []*Cell{defaultCell}, "product", "0", initialProductVSchema, initialProductSchema, defaultReplicas, defaultRdonly, 100)
@@ -140,7 +238,7 @@ func TestMultiCellVreplicationWorkflow(t *testing.T) {
 	defaultCellName := "zone1"
 	defaultCell = vc.Cells[defaultCellName]
 
-	defer vc.TearDown()
+	defer vc.TearDown(t)
 
 	cell1 := vc.Cells["zone1"]
 	cell2 := vc.Cells["zone2"]
@@ -167,7 +265,7 @@ func TestCellAliasVreplicationWorkflow(t *testing.T) {
 	defaultCellName := "zone1"
 	defaultCell = vc.Cells[defaultCellName]
 
-	defer vc.TearDown()
+	defer vc.TearDown(t)
 
 	cell1 := vc.Cells["zone1"]
 	cell2 := vc.Cells["zone2"]
@@ -191,12 +289,12 @@ func TestCellAliasVreplicationWorkflow(t *testing.T) {
 
 func insertInitialData(t *testing.T) {
 	t.Run("insertInitialData", func(t *testing.T) {
-		fmt.Printf("Inserting initial data\n")
+		t.Logf("Inserting initial data")
 		lines, _ := ioutil.ReadFile("unsharded_init_data.sql")
 		execMultipleQueries(t, vtgateConn, "product:0", string(lines))
 		execVtgateQuery(t, vtgateConn, "product:0", "insert into customer_seq(id, next_id, cache) values(0, 100, 100);")
 		execVtgateQuery(t, vtgateConn, "product:0", "insert into order_seq(id, next_id, cache) values(0, 100, 100);")
-		fmt.Printf("Done inserting initial data\n")
+		t.Logf("Done inserting initial data")
 
 		validateCount(t, vtgateConn, "product:0", "product", 2)
 		validateCount(t, vtgateConn, "product:0", "customer", 3)
@@ -472,10 +570,10 @@ func reshard(t *testing.T, ksName string, tableName string, workflow string, sou
 		targetShards = "," + targetShards + ","
 		for _, tab := range tablets {
 			if strings.Contains(targetShards, ","+tab.Shard+",") {
-				fmt.Printf("Waiting for vrepl to catch up on %s since it IS a target shard\n", tab.Shard)
+				t.Logf("Waiting for vrepl to catch up on %s since it IS a target shard", tab.Shard)
 				catchup(t, tab, workflow, "Reshard")
 			} else {
-				fmt.Printf("Not waiting for vrepl to catch up on %s since it is NOT a target shard\n", tab.Shard)
+				t.Logf("Not waiting for vrepl to catch up on %s since it is NOT a target shard", tab.Shard)
 				continue
 			}
 		}
@@ -560,7 +658,7 @@ func shardMerchant(t *testing.T) {
 func vdiff(t *testing.T, workflow, cells string) {
 	t.Run("vdiff", func(t *testing.T) {
 		output, err := vc.VtctlClient.ExecuteCommandWithOutput("VDiff", "-tablet_types=master", "-source_cell="+cells, "-format", "json", workflow)
-		fmt.Printf("vdiff err: %+v, output: %+v\n", err, output)
+		t.Logf("vdiff err: %+v, output: %+v", err, output)
 		require.Nil(t, err)
 		require.NotNil(t, output)
 		diffReports := make([]*wrangler.DiffReport, 0)
@@ -803,7 +901,7 @@ func verifyClusterHealth(t *testing.T, cluster *VitessCluster) {
 
 func catchup(t *testing.T, vttablet *cluster.VttabletProcess, workflow, info string) {
 	const MaxWait = 10 * time.Second
-	err := vc.WaitForVReplicationToCatchup(vttablet, workflow, fmt.Sprintf("vt_%s", vttablet.Keyspace), MaxWait)
+	err := vc.WaitForVReplicationToCatchup(t, vttablet, workflow, fmt.Sprintf("vt_%s", vttablet.Keyspace), MaxWait)
 	require.NoError(t, err, fmt.Sprintf("%s timed out for workflow %s on tablet %s.%s.%s", info, workflow, vttablet.Keyspace, vttablet.Shard, vttablet.Name))
 }
 
@@ -843,7 +941,7 @@ func printSwitchWritesExtraDebug(t *testing.T, ksWorkflow, msg string) {
 	// Temporary code: print lots of info for debugging occasional flaky failures in customer reshard in CI for multicell test
 	debug := true
 	if debug {
-		fmt.Printf("------------------- START Extra debug info %s SwitchWrites %s\n", msg, ksWorkflow)
+		t.Logf("------------------- START Extra debug info %s SwitchWrites %s", msg, ksWorkflow)
 		ksShards := []string{"product/0", "customer/-80", "customer/80-"}
 		printShardPositions(vc, ksShards)
 		custKs := vc.Cells[defaultCell.Name].Keyspaces["customer"]
@@ -861,11 +959,11 @@ func printSwitchWritesExtraDebug(t *testing.T, ksWorkflow, msg string) {
 			for _, query := range queries {
 				qr, err := tab.QueryTablet(query, "", false)
 				require.NoError(t, err)
-				fmt.Printf("\nTablet:%s.%s.%s.%d\nQuery: %s\n%+v\n\n",
+				t.Logf("\nTablet:%s.%s.%s.%d\nQuery: %s\n%+v\n",
 					tab.Cell, tab.Keyspace, tab.Shard, tab.TabletUID, query, qr.Rows)
 			}
 		}
-		fmt.Printf("------------------- END Extra debug info %s SwitchWrites %s\n", msg, ksWorkflow)
+		t.Logf("------------------- END Extra debug info %s SwitchWrites %s", msg, ksWorkflow)
 	}
 }
 
