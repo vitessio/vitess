@@ -262,7 +262,7 @@ func (oa *orderedAggregate) pushAggr(pb *primitiveBuilder, expr *sqlparser.Alias
 			return nil, 0, err
 		}
 		oa.extraDistinct = col
-		oa.eaggr.HasDistinct = true
+		oa.eaggr.PreProcess = true
 		var alias string
 		if expr.As.IsEmpty() {
 			alias = sqlparser.String(expr.Expr)
