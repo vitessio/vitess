@@ -1229,6 +1229,8 @@ func (ty ShowCommandType) ToString() string {
 		return FunctionCStr
 	case Function:
 		return FunctionStr
+	case GtidExecGlobal:
+		return GtidExecGlobalStr
 	case Index:
 		return IndexStr
 	case OpenTable:

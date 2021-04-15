@@ -72,6 +72,8 @@ func buildShowBasicPlan(show *sqlparser.ShowBasic, vschema ContextVSchema) (engi
 		return buildShowVMigrationsPlan(show, vschema)
 	case sqlparser.VGtidExecGlobal:
 		return buildShowVGtidPlan(show, vschema)
+	case sqlparser.GtidExecGlobal:
+		return buildShowGtidPlan(show, vschema)
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unknown show query type %s", show.Command.ToString())
 
@@ -495,23 +497,9 @@ func buildCreatePlan(show *sqlparser.ShowCreate, vschema ContextVSchema) (engine
 }
 
 func buildShowVGtidPlan(show *sqlparser.ShowBasic, vschema ContextVSchema) (engine.Primitive, error) {
-	dbName := ""
-	if !show.DbName.IsEmpty() {
-		dbName = show.DbName.String()
-	}
-	dest, ks, _, err := vschema.TargetDestination(dbName)
+	send, err := buildShowGtidPlan(show, vschema)
 	if err != nil {
 		return nil, err
-	}
-	if dest == nil {
-		dest = key.DestinationAllShards{}
-	}
-
-	send := &engine.Send{
-		Keyspace:          ks,
-		TargetDestination: dest,
-		Query:             fmt.Sprintf(`select '%s' as 'keyspace', @@global.gtid_executed, :%s`, ks.Name, engine.ShardName),
-		ShardNameNeeded:   true,
 	}
 	return &engine.OrderedAggregate{
 		PreProcess: true,
@@ -524,5 +512,26 @@ func buildShowVGtidPlan(show *sqlparser.ShowBasic, vschema ContextVSchema) (engi
 		},
 		TruncateColumnCount: 2,
 		Input:               send,
+	}, nil
+}
+
+func buildShowGtidPlan(show *sqlparser.ShowBasic, vschema ContextVSchema) (engine.Primitive, error) {
+	dbName := ""
+	if !show.DbName.IsEmpty() {
+		dbName = show.DbName.String()
+	}
+	dest, ks, _, err := vschema.TargetDestination(dbName)
+	if err != nil {
+		return nil, err
+	}
+	if dest == nil {
+		dest = key.DestinationAllShards{}
+	}
+
+	return &engine.Send{
+		Keyspace:          ks,
+		TargetDestination: dest,
+		Query:             fmt.Sprintf(`select '%s' as db_name, @@global.gtid_executed as gtid_executed, :%s as shard`, ks.Name, engine.ShardName),
+		ShardNameNeeded:   true,
 	}, nil
 }

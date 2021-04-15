@@ -530,9 +530,26 @@
           "Sharded": false
         },
         "TargetDestination": "AllShards()",
-        "Query": "select 'main' as 'keyspace', @@global.gtid_executed, :__vt_shard",
+        "Query": "select 'main' as db_name, @@global.gtid_executed as gtid_executed, :__vt_shard as shard",
         "ShardNameNeeded": true
       }
     ]
+  }
+}
+
+# show gtid
+"show global gtid_executed from user"
+{
+  "QueryType": "SHOW",
+  "Original": "show global gtid_executed from user",
+  "Instructions": {
+    "OperatorType": "Send",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetDestination": "AllShards()",
+    "Query": "select 'user' as db_name, @@global.gtid_executed as gtid_executed, :__vt_shard as shard",
+    "ShardNameNeeded": true
   }
 }
