@@ -451,7 +451,7 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 		if !ok {
 			return false
 		}
-		return EqualsListArg(a, b)
+		return a == b
 	case *Literal:
 		b, ok := inB.(*Literal)
 		if !ok {
@@ -1749,19 +1749,6 @@ func EqualsRefOfLimit(a, b *Limit) bool {
 		EqualsExpr(a.Rowcount, b.Rowcount)
 }
 
-// EqualsListArg does deep equals between the two objects.
-func EqualsListArg(a, b ListArg) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := 0; i < len(a); i++ {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
-}
-
 // EqualsRefOfLiteral does deep equals between the two objects.
 func EqualsRefOfLiteral(a, b *Literal) bool {
 	if a == b {
@@ -2841,7 +2828,7 @@ func EqualsColTuple(inA, inB ColTuple) bool {
 		if !ok {
 			return false
 		}
-		return EqualsListArg(a, b)
+		return a == b
 	case *Subquery:
 		b, ok := inB.(*Subquery)
 		if !ok {
@@ -3126,7 +3113,7 @@ func EqualsExpr(inA, inB Expr) bool {
 		if !ok {
 			return false
 		}
-		return EqualsListArg(a, b)
+		return a == b
 	case *Literal:
 		b, ok := inB.(*Literal)
 		if !ok {

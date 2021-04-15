@@ -22,6 +22,9 @@ import (
 	"strconv"
 	"strings"
 
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"vitess.io/vitess/go/vt/log"
 
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -542,14 +545,14 @@ func (plan *Plan) analyzeInKeyRange(vschema *localVSchema, exprs sqlparser.Selec
 		for _, expr := range exprs[:len(exprs)-2] {
 			aexpr, ok := expr.(*sqlparser.AliasedExpr)
 			if !ok {
-				return fmt.Errorf("unexpected: %v", sqlparser.String(expr))
+				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unexpected: %T %s", expr, sqlparser.String(expr))
 			}
 			qualifiedName, ok := aexpr.Expr.(*sqlparser.ColName)
 			if !ok {
-				return fmt.Errorf("unexpected: %v", sqlparser.String(expr))
+				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unexpected: %T %s", aexpr.Expr, sqlparser.String(aexpr.Expr))
 			}
 			if !qualifiedName.Qualifier.IsEmpty() {
-				return fmt.Errorf("unsupported qualifier for column: %v", sqlparser.String(qualifiedName))
+				return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported qualifier for column: %v", sqlparser.String(qualifiedName))
 			}
 			colnames = append(colnames, qualifiedName.Name)
 		}
@@ -563,12 +566,12 @@ func (plan *Plan) analyzeInKeyRange(vschema *localVSchema, exprs sqlparser.Selec
 			return err
 		}
 		if !whereFilter.Vindex.IsUnique() {
-			return fmt.Errorf("vindex must be Unique to be used for VReplication: %s", vtype)
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vindex must be Unique to be used for VReplication: %s", vtype)
 		}
 
 		krExpr = exprs[len(exprs)-1]
 	default:
-		return fmt.Errorf("unexpected in_keyrange parameters: %v", sqlparser.String(exprs))
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unexpected in_keyrange parameters: %v", sqlparser.String(exprs))
 	}
 	var err error
 	whereFilter.VindexColumns, err = buildVindexColumns(plan.Table, colnames)

@@ -66,7 +66,7 @@ func TestMemorySortExecute(t *testing.T) {
 	utils.MustMatch(t, wantResult, result)
 
 	fp.rewind()
-	upperlimit, err := sqlparser.NewPlanValue(sqlparser.NewArgument(":__upper_limit"))
+	upperlimit, err := sqlparser.NewPlanValue(sqlparser.NewArgument("__upper_limit"))
 	require.NoError(t, err)
 	ms.UpperLimit = upperlimit
 	bv := map[string]*querypb.BindVariable{"__upper_limit": sqltypes.Int64BindVariable(3)}
@@ -129,7 +129,7 @@ func TestMemorySortStreamExecuteWeightString(t *testing.T) {
 
 	t.Run("Limit test", func(t *testing.T) {
 		fp.rewind()
-		upperlimit, err := sqlparser.NewPlanValue(sqlparser.NewArgument(":__upper_limit"))
+		upperlimit, err := sqlparser.NewPlanValue(sqlparser.NewArgument("__upper_limit"))
 		require.NoError(t, err)
 		ms.UpperLimit = upperlimit
 		bv := map[string]*querypb.BindVariable{"__upper_limit": sqltypes.Int64BindVariable(3)}
@@ -189,7 +189,7 @@ func TestMemorySortExecuteWeightString(t *testing.T) {
 	utils.MustMatch(t, wantResult, result)
 
 	fp.rewind()
-	upperlimit, err := sqlparser.NewPlanValue(sqlparser.NewArgument(":__upper_limit"))
+	upperlimit, err := sqlparser.NewPlanValue(sqlparser.NewArgument("__upper_limit"))
 	require.NoError(t, err)
 	ms.UpperLimit = upperlimit
 	bv := map[string]*querypb.BindVariable{"__upper_limit": sqltypes.Int64BindVariable(3)}
@@ -248,7 +248,7 @@ func TestMemorySortStreamExecute(t *testing.T) {
 	utils.MustMatch(t, wantResults, results)
 
 	fp.rewind()
-	upperlimit, err := sqlparser.NewPlanValue(sqlparser.NewArgument(":__upper_limit"))
+	upperlimit, err := sqlparser.NewPlanValue(sqlparser.NewArgument("__upper_limit"))
 	require.NoError(t, err)
 	ms.UpperLimit = upperlimit
 	bv := map[string]*querypb.BindVariable{"__upper_limit": sqltypes.Int64BindVariable(3)}
@@ -409,7 +409,7 @@ func TestMemorySortMultiColumn(t *testing.T) {
 	utils.MustMatch(t, wantResult, result)
 
 	fp.rewind()
-	upperlimit, err := sqlparser.NewPlanValue(sqlparser.NewArgument(":__upper_limit"))
+	upperlimit, err := sqlparser.NewPlanValue(sqlparser.NewArgument("__upper_limit"))
 	require.NoError(t, err)
 	ms.UpperLimit = upperlimit
 	bv := map[string]*querypb.BindVariable{"__upper_limit": sqltypes.Int64BindVariable(3)}
