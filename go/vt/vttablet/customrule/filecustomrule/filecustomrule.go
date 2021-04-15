@@ -1,5 +1,5 @@
 /*
-Copyright 2019 The Vitess Authors.
+Copyright 2021 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -124,16 +124,22 @@ func ActivateFileCustomRules(qsc tabletserver.Controller) {
 			go func(tsc tabletserver.Controller) {
 				for {
 					select {
-					case evt, ok := <- watcher.Events:
-						if !ok { return }
-						if path.Base(evt.Name) != ruleFileName { continue }
+					case evt, ok := <-watcher.Events:
+						if !ok {
+							return
+						}
+						if path.Base(evt.Name) != ruleFileName {
+							continue
+						}
 						if err := fileCustomRule.Open(tsc, *fileRulePath); err != nil {
 							log.Infof("Failed to load custom rules from %q: %v", *fileRulePath, err)
 						} else {
 							log.Infof("Loaded custom rules from %q", *fileRulePath)
 						}
-					case err, ok := <- watcher.Errors:
-						if !ok { return }
+					case err, ok := <-watcher.Errors:
+						if !ok {
+							return
+						}
 						log.Errorf("Error watching %v: %v", *fileRulePath, err)
 					}
 				}
