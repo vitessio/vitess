@@ -10721,7 +10721,7 @@ yydefault:
 		var yyLOCAL ColTuple
 //line sql.y:3559
 		{
-			yyLOCAL = ListArg(yyDollar[1].str)
+			yyLOCAL = ListArg(yyDollar[1].str[2:])
 			bindVariable(yylex, yyDollar[1].str[2:])
 		}
 		yyVAL.union = yyLOCAL
@@ -11636,7 +11636,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:4093
 		{
-			yyLOCAL = NewArgument(yyDollar[1].str)
+			yyLOCAL = NewArgument(yyDollar[1].str[1:])
 			bindVariable(yylex, yyDollar[1].str[1:])
 		}
 		yyVAL.union = yyLOCAL
@@ -11674,7 +11674,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:4117
 		{
-			yyLOCAL = NewArgument(yyDollar[1].str)
+			yyLOCAL = NewArgument(yyDollar[1].str[1:])
 			bindVariable(yylex, yyDollar[1].str[1:])
 		}
 		yyVAL.union = yyLOCAL
