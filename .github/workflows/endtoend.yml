@@ -36,4 +36,4 @@ jobs:
     - name: endtoend
       timeout-minutes: 30
       run: |
-        tools/e2e_test_runner.sh
+        eatmydata -- go run test.go -print-log -follow -retry=1 e2e
