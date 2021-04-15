@@ -19,6 +19,7 @@ import { Link } from 'react-router-dom';
 
 import { useSchemas } from '../../hooks/api';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
+import { useSyncedURLParam } from '../../hooks/useSyncedURLParam';
 import { filterNouns } from '../../util/filterNouns';
 import { formatBytes } from '../../util/formatBytes';
 import { getTableDefinitions } from '../../util/tableDefinitions';
@@ -48,7 +49,7 @@ export const Schemas = () => {
     useDocumentTitle('Schemas');
 
     const { data = [] } = useSchemas();
-    const [filter, setFilter] = React.useState<string>('');
+    const { value: filter, updateValue: updateFilter } = useSyncedURLParam('filter');
 
     const filteredData = React.useMemo(() => {
         const tableDefinitions = getTableDefinitions(data);
@@ -100,11 +101,11 @@ export const Schemas = () => {
                 <TextInput
                     autoFocus
                     iconLeft={Icons.search}
-                    onChange={(e) => setFilter(e.target.value)}
+                    onChange={(e) => updateFilter(e.target.value)}
                     placeholder="Filter schemas"
-                    value={filter}
+                    value={filter || ''}
                 />
-                <Button disabled={!filter} onClick={() => setFilter('')} secondary>
+                <Button disabled={!filter} onClick={() => updateFilter('')} secondary>
                     Clear filters
                 </Button>
             </div>
