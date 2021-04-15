@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -36,6 +37,7 @@ type consolidationResult struct {
 	err      error
 	items    []*sqltypes.Result
 	duration time.Duration
+	count    int64
 }
 
 func nocleanup(_ *sqltypes.Result) error {
@@ -97,6 +99,15 @@ func (ct *consolidationTest) leader(stream StreamCallback) error {
 	return nil
 }
 
+func (ct *consolidationTest) waitForResults(worker int, count int64) {
+	for {
+		if atomic.LoadInt64(&ct.results[worker].count) > count {
+			return
+		}
+		time.Sleep(1 * time.Millisecond)
+	}
+}
+
 func (ct *consolidationTest) run(workers int, generateCallback func(int) (string, StreamCallback)) {
 	if ct.results == nil {
 		ct.results = make([]*consolidationResult, workers)
@@ -118,6 +129,7 @@ func (ct *consolidationTest) run(workers int, generateCallback func(int) (string
 			err := ct.cc.Consolidate(logStats, query, func(result *sqltypes.Result) error {
 				cr := ct.results[worker]
 				cr.items = append(cr.items, result)
+				atomic.AddInt64(&cr.count, 1)
 				return callback(result)
 			}, ct.leader)
 
@@ -333,22 +345,21 @@ func TestConsolidatorMemoryLimits(t *testing.T) {
 	})
 
 	t.Run("two-phase consolidation (memory)", func(t *testing.T) {
+		const streamsInFirstBatch = 5
 		results := generateResultSizes(100, 10)
 		rsize := results[0].CachedSize(true)
 
 		ct := consolidationTest{
-			cc:              NewStreamConsolidator(128*1024, rsize*5+1, nocleanup),
+			cc:              NewStreamConsolidator(128*1024, rsize*streamsInFirstBatch+1, nocleanup),
 			streamItemDelay: 1 * time.Millisecond,
 			streamItems:     results,
 		}
 
 		ct.run(10, func(worker int) (string, StreamCallback) {
 			if worker > 4 {
-				time.Sleep(6 * time.Millisecond)
+				ct.waitForResults(0, streamsInFirstBatch)
 			}
-			return "select 1", func(_ *sqltypes.Result) error {
-				return nil
-			}
+			return "select 1", func(_ *sqltypes.Result) error { return nil }
 		})
 
 		require.Equal(t, 2, ct.leaderCalls)
@@ -373,15 +384,13 @@ func TestConsolidatorMemoryLimits(t *testing.T) {
 			switch {
 			case worker >= 0 && worker <= 4:
 			case worker >= 5 && worker <= 9:
-				time.Sleep(21 * time.Millisecond)
+				ct.waitForResults(0, 2)
 			case worker >= 10 && worker <= 14:
-				time.Sleep(42 * time.Millisecond)
+				ct.waitForResults(5, 2)
 			case worker >= 15 && worker <= 19:
-				time.Sleep(63 * time.Millisecond)
+				ct.waitForResults(10, 2)
 			}
-			return "select 1", func(_ *sqltypes.Result) error {
-				return nil
-			}
+			return "select 1", func(_ *sqltypes.Result) error { return nil }
 		})
 
 		require.Equal(t, 4, ct.leaderCalls)
