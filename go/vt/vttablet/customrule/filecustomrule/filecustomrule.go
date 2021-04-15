@@ -22,6 +22,8 @@ import (
 	"io/ioutil"
 	"time"
 
+	"github.com/falun/watch"
+
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
@@ -32,6 +34,8 @@ var (
 	fileCustomRule = NewFileCustomRule()
 	// Commandline flag to specify rule path
 	fileRulePath = flag.String("filecustomrules", "", "file based custom rule path")
+
+	fileRulePollInterval = flag.Duration("filecustomrules_interval", 0, "How often should we poll the rule file <= 0 means we will not poll")
 )
 
 // FileCustomRule is an implementation of CustomRuleManager, it reads custom query
@@ -100,8 +104,21 @@ func (fcr *FileCustomRule) GetRules() (qrs *rules.Rules, version int64, err erro
 // ActivateFileCustomRules activates this static file based custom rule mechanism
 func ActivateFileCustomRules(qsc tabletserver.Controller) {
 	if *fileRulePath != "" {
-		qsc.RegisterQueryRuleSource(FileCustomRuleSource)
-		fileCustomRule.Open(qsc, *fileRulePath)
+		if *fileRulePollInterval <= time.Duration(0) {
+			qsc.RegisterQueryRuleSource(FileCustomRuleSource)
+			fileCustomRule.Open(qsc, *fileRulePath)
+		} else {
+			w := watch.File(*fileRulePath)
+			// this returns a cancelFn that for cleanliness we would register to run on server shut down
+			ch, _ := w.OnInterval(*fileRulePollInterval)
+			go func(tsc tabletserver.Controller) {
+				for range ch {
+					if err := fileCustomRule.Open(tsc, *fileRulePath); err != nil {
+						log.Infof("Failed to load fileCustomRule %q: %v", *fileRulePath, err)
+					}
+				}
+			}(qsc)
+		}
 	}
 }
 

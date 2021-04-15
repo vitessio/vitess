@@ -24,6 +24,7 @@ import (
 	"regexp"
 	"strconv"
 
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -192,7 +193,7 @@ type Rule struct {
 	// All defined conditions must match for the rule to fire (AND).
 
 	// Regexp conditions. nil conditions are ignored (TRUE).
-	requestIP, user, query namedRegexp
+	requestIP, user, query, leadingComment, trailingComment namedRegexp
 
 	// Any matched plan will make this condition true (OR)
 	plans []planbuilder.PlanType
@@ -286,6 +287,12 @@ func (qr *Rule) MarshalJSON() ([]byte, error) {
 	if qr.query.Regexp != nil {
 		safeEncode(b, `,"Query":`, qr.query)
 	}
+	if qr.leadingComment.Regexp != nil {
+		safeEncode(b, `,"LeadingComment":`, qr.query)
+	}
+	if qr.trailingComment.Regexp != nil {
+		safeEncode(b, `,"TrailingComment":`, qr.query)
+	}
 	if qr.plans != nil {
 		safeEncode(b, `,"Plans":`, qr.plans)
 	}
@@ -336,6 +343,20 @@ func (qr *Rule) AddTableCond(tableName string) {
 func (qr *Rule) SetQueryCond(pattern string) (err error) {
 	qr.query.name = pattern
 	qr.query.Regexp, err = regexp.Compile(makeExact(pattern))
+	return
+}
+
+// SetLeadingCommentCond adds a regular expression condition for a leading query comment.
+func (qr *Rule) SetLeadingCommentCond(pattern string) (err error) {
+	qr.leadingComment.name = pattern
+	qr.leadingComment.Regexp, err = regexp.Compile(makeExact(pattern))
+	return
+}
+
+// SetTrailingCommentCond adds a regular expression condition for a trailing query comment.
+func (qr *Rule) SetTrailingCommentCond(pattern string) (err error) {
+	qr.trailingComment.name = pattern
+	qr.trailingComment.Regexp, err = regexp.Compile(makeExact(pattern))
 	return
 }
 
@@ -415,6 +436,16 @@ func (qr *Rule) FilterByPlan(query string, planid planbuilder.PlanType, tableNam
 	}
 	if !tableMatch(qr.tableNames, tableName) {
 		return nil
+	}
+	// check to see if we need to extract margin comments
+	if qr.leadingComment.Regexp != nil || qr.trailingComment.Regexp != nil {
+		_, comments := sqlparser.SplitMarginComments(query)
+		if !reMatch(qr.leadingComment.Regexp, comments.Leading) {
+			return nil
+		}
+		if !reMatch(qr.trailingComment.Regexp, comments.Trailing) {
+			return nil
+		}
 	}
 	newqr = qr.Copy()
 	newqr.query = namedRegexp{}
@@ -791,7 +822,7 @@ func BuildQueryRule(ruleInfo map[string]interface{}) (qr *Rule, err error) {
 		var lv []interface{}
 		var ok bool
 		switch k {
-		case "Name", "Description", "RequestIP", "User", "Query", "Action":
+		case "Name", "Description", "RequestIP", "User", "Query", "Action", "LeadingComment", "TrailingComment":
 			sv, ok = v.(string)
 			if !ok {
 				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "want string for %s", k)
@@ -823,6 +854,16 @@ func BuildQueryRule(ruleInfo map[string]interface{}) (qr *Rule, err error) {
 			err = qr.SetQueryCond(sv)
 			if err != nil {
 				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "could not set Query condition: %v", sv)
+			}
+		case "LeadingComment":
+			err = qr.SetLeadingCommentCond(sv)
+			if err != nil {
+				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "could not set LeadingComment condition: %v", sv)
+			}
+		case "TrailingComment":
+			err = qr.SetTrailingCommentCond(sv)
+			if err != nil {
+				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "could not set TrailingComment condition: %v", sv)
 			}
 		case "Plans":
 			for _, p := range lv {
