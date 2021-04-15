@@ -8042,3 +8042,10 @@
 2021-04-15T08:35:02Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/751333498
 2021-04-15T08:35:02Z,unit_race,https://github.com/vitessio/vitess/actions/runs/751333482
 2021-04-15T10:14:25Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/751632500
+2021-04-15T13:49:41Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/752247034
+2021-04-15T13:49:41Z,Unit Test (mariadb101),https://github.com/vitessio/vitess/actions/runs/752247023
+2021-04-15T13:49:41Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/752247038
+2021-04-15T13:49:41Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/752246989
+2021-04-15T13:49:41Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/752246988
+2021-04-15T13:49:41Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/752247002
+2021-04-15T13:49:41Z,unit_race,https://github.com/vitessio/vitess/actions/runs/752247037
