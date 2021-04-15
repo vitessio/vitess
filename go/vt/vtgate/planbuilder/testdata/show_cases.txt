@@ -10,7 +10,6 @@
       "Sharded": false
     },
     "TargetDestination": "AnyShard()",
-    "IsDML": false,
     "Query": "show table status",
     "SingleShardOnly": true
   }
@@ -28,7 +27,6 @@
       "Sharded": false
     },
     "TargetDestination": "AnyShard()",
-    "IsDML": false,
     "Query": "show table status",
     "SingleShardOnly": true
   }
@@ -46,7 +44,6 @@
       "Sharded": false
     },
     "TargetDestination": "AnyShard()",
-    "IsDML": false,
     "Query": "show table status",
     "SingleShardOnly": true
   }
@@ -64,7 +61,6 @@
       "Sharded": true
     },
     "TargetDestination": "AnyShard()",
-    "IsDML": false,
     "Query": "show table status where Rows \u003e 70",
     "SingleShardOnly": true
   }
@@ -82,7 +78,6 @@
       "Sharded": false
     },
     "TargetDestination": "AnyShard()",
-    "IsDML": false,
     "Query": "show table status like '%a'",
     "SingleShardOnly": true
   }
@@ -100,7 +95,6 @@
       "Sharded": true
     },
     "TargetDestination": "AnyShard()",
-    "IsDML": false,
     "Query": "show full columns from user_extra",
     "SingleShardOnly": true
   }
@@ -118,7 +112,6 @@
       "Sharded": false
     },
     "TargetDestination": "AnyShard()",
-    "IsDML": false,
     "Query": "show full columns from unsharded",
     "SingleShardOnly": true
   }
@@ -136,7 +129,6 @@
       "Sharded": false
     },
     "TargetDestination": "AnyShard()",
-    "IsDML": false,
     "Query": "show full columns from unsharded",
     "SingleShardOnly": true
   }
@@ -172,7 +164,6 @@
       "Sharded": false
     },
     "TargetDestination": "AnyShard()",
-    "IsDML": false,
     "Query": "show function status",
     "SingleShardOnly": true
   }
@@ -190,7 +181,6 @@
       "Sharded": false
     },
     "TargetDestination": "AnyShard()",
-    "IsDML": false,
     "Query": "show privileges",
     "SingleShardOnly": true
   }
@@ -208,7 +198,6 @@
       "Sharded": false
     },
     "TargetDestination": "AnyShard()",
-    "IsDML": false,
     "Query": "show procedure status",
     "SingleShardOnly": true
   }
@@ -229,7 +218,6 @@
           "Sharded": false
         },
         "TargetDestination": "AnyShard()",
-        "IsDML": false,
         "Query": "show variables",
         "SingleShardOnly": true
       }
@@ -252,7 +240,6 @@
           "Sharded": false
         },
         "TargetDestination": "AnyShard()",
-        "IsDML": false,
         "Query": "show global variables",
         "SingleShardOnly": true
       }
@@ -282,7 +269,6 @@
       "Sharded": true
     },
     "TargetDestination": "AnyShard()",
-    "IsDML": false,
     "Query": "show create database `user`",
     "SingleShardOnly": true
   }
@@ -300,7 +286,6 @@
       "Sharded": false
     },
     "TargetDestination": "AnyShard()",
-    "IsDML": false,
     "Query": "show create database mysql",
     "SingleShardOnly": true
   }
@@ -318,7 +303,6 @@
       "Sharded": false
     },
     "TargetDestination": "AnyShard()",
-    "IsDML": false,
     "Query": "show create procedure proc",
     "SingleShardOnly": true
   }
@@ -336,7 +320,6 @@
       "Sharded": false
     },
     "TargetDestination": "AnyShard()",
-    "IsDML": false,
     "Query": "show create procedure information_schema.proc",
     "SingleShardOnly": true
   }
@@ -354,7 +337,6 @@
       "Sharded": false
     },
     "TargetDestination": "AnyShard()",
-    "IsDML": false,
     "Query": "show create table user_extra",
     "SingleShardOnly": true
   }
@@ -372,7 +354,6 @@
       "Sharded": true
     },
     "TargetDestination": "AnyShard()",
-    "IsDML": false,
     "Query": "show create table user_extra",
     "SingleShardOnly": true
   }
@@ -390,7 +371,6 @@
       "Sharded": false
     },
     "TargetDestination": "AnyShard()",
-    "IsDML": false,
     "Query": "show create table unknown",
     "SingleShardOnly": true
   }
@@ -412,7 +392,6 @@
       "Sharded": false
     },
     "TargetDestination": "AnyShard()",
-    "IsDML": false,
     "Query": "show create table information_schema.`tables`",
     "SingleShardOnly": true
   }
@@ -439,7 +418,6 @@
           "Sharded": false
         },
         "TargetDestination": "AnyShard()",
-        "IsDML": false,
         "Query": "show tables",
         "SingleShardOnly": true
       }
@@ -468,7 +446,6 @@
           "Sharded": true
         },
         "TargetDestination": "AnyShard()",
-        "IsDML": false,
         "Query": "show tables",
         "SingleShardOnly": true
       }
@@ -497,7 +474,6 @@
           "Sharded": false
         },
         "TargetDestination": "AnyShard()",
-        "IsDML": false,
         "Query": "show tables from performance_schema",
         "SingleShardOnly": true
       }
@@ -517,9 +493,7 @@
       "Sharded": true
     },
     "TargetDestination": "AllShards()",
-    "IsDML": false,
-    "Query": "SELECT * FROM _vt.schema_migrations where migration_uuid LIKE '%format' OR migration_context LIKE '%format' OR migration_status LIKE '%format'",
-    "SingleShardOnly": false
+    "Query": "SELECT * FROM _vt.schema_migrations where migration_uuid LIKE '%format' OR migration_context LIKE '%format' OR migration_status LIKE '%format'"
   }
 }
 
@@ -535,8 +509,30 @@
       "Sharded": true
     },
     "TargetDestination": "AllShards()",
-    "IsDML": false,
-    "Query": "SELECT * FROM _vt.schema_migrations where id = 5",
-    "SingleShardOnly": false
+    "Query": "SELECT * FROM _vt.schema_migrations where id = 5"
+  }
+}
+
+# show vgtid
+"show global vgtid_executed"
+{
+  "QueryType": "SHOW",
+  "Original": "show global vgtid_executed",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "Aggregates": "vgtid(1) AS global vgtid_executed",
+    "Inputs": [
+      {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "AllShards()",
+        "Query": "select 'main' as 'keyspace', @@global.gtid_executed, :__vt_shard",
+        "ShardNameNeeded": true
+      }
+    ]
   }
 }

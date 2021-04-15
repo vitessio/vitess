@@ -458,6 +458,7 @@ var keywords = []keyword{
 	{"varchar", VARCHAR},
 	{"varcharacter", UNUSED},
 	{"varying", UNUSED},
+	{"vgtid_executed", VGTID_EXECUTED},
 	{"virtual", UNUSED},
 	{"vindex", VINDEX},
 	{"vindexes", VINDEXES},
