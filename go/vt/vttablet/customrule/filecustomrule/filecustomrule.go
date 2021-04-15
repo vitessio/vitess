@@ -19,9 +19,7 @@ package filecustomrule
 
 import (
 	"flag"
-	"fmt"
 	"io/ioutil"
-	"os"
 	"path"
 	"time"
 
@@ -145,32 +143,11 @@ func ActivateFileCustomRules(qsc tabletserver.Controller) {
 				}
 			}(qsc)
 
-			// we can't watch a file that doesn't exist so create a stub to be filled in later
-			if err = maybeCreateEmptyFile(*fileRulePath); err != nil {
-				log.Fatalf("Unable to populate empty rules file at %v: %v", *fileRulePath, err)
-			}
 			if err = watcher.Add(baseDir); err != nil {
 				log.Fatalf("Unable to set up watcher for %v + %v: %v", baseDir, ruleFileName, err)
 			}
 		}
 	}
-}
-
-func maybeCreateEmptyFile(path string) error {
-	_, err := os.Stat(path)
-	if err != nil && !os.IsNotExist(err) {
-		return err
-	}
-
-	// file doesn't exist, create it
-	if os.IsNotExist(err) {
-		err = ioutil.WriteFile(path, []byte("[]"), 0660)
-		if err != nil {
-			return fmt.Errorf("Unable to create stub rules file: %v", err)
-		}
-	}
-
-	return nil
 }
 
 func init() {
