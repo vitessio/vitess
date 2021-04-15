@@ -19,6 +19,8 @@ package cluster
 import (
 	"regexp"
 	"strings"
+
+	"vitess.io/vitess/go/vt/log"
 )
 
 // FlagsByImpl groups a set of flags by discovery implementation. Its mapping is
@@ -156,11 +158,14 @@ func parseOne(cfg *Config, name string, val string) error {
 			}
 
 			cfg.VtctldFlags[strings.TrimPrefix(name, "vtctld-")] = val
+
+			return nil
 		}
 
 		match := discoveryFlagRegexp.FindStringSubmatch(name)
 		if match == nil {
 			// not a discovery flag
+			log.Warningf("Attempted to parse %q as a discovery flag, ignoring ...", name)
 			return nil
 		}
 
