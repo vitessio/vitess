@@ -25,7 +25,6 @@ import (
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
@@ -678,7 +677,7 @@ func (vre *Engine) transitionJournal(je *journalEvent) {
 // WaitForPos waits for the replication to reach the specified position.
 func (vre *Engine) WaitForPos(ctx context.Context, id int, pos string) error {
 	start := time.Now()
-	mPos, err := mysql.DecodePosition(pos)
+	mPos, err := binlogplayer.DecodePosition(pos)
 	if err != nil {
 		return err
 	}
@@ -716,7 +715,7 @@ func (vre *Engine) WaitForPos(ctx context.Context, id int, pos string) error {
 		case len(qr.Rows) > 1 || len(qr.Rows[0]) != 3:
 			return fmt.Errorf("unexpected result: %v", qr)
 		}
-		current, err := mysql.DecodePosition(qr.Rows[0][0].ToString())
+		current, err := binlogplayer.DecodePosition(qr.Rows[0][0].ToString())
 		if err != nil {
 			return err
 		}
@@ -785,7 +784,19 @@ func readRow(dbClient binlogplayer.DBClient, id int) (map[string]string, error) 
 	if len(qr.Fields) != len(qr.Rows[0]) {
 		return nil, fmt.Errorf("fields don't match rows: %v", qr)
 	}
-	return rowToMap(qr, 0)
+	row, err := rowToMap(qr, 0)
+	if err != nil {
+		return nil, err
+	}
+	gtid, ok := row["pos"]
+	if ok {
+		b := binlogplayer.MysqlUncompress(gtid)
+		if b != nil {
+			gtid = string(b)
+			row["pos"] = gtid
+		}
+	}
+	return row, nil
 }
 
 // rowToMap converts a row into a map for easier processing.
