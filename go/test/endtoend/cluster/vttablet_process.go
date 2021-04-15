@@ -100,6 +100,7 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 		"-vtctld_addr", vttablet.VtctldAddress,
 		"-vtctld_addr", vttablet.VtctldAddress,
 		"-vreplication_tablet_type", vttablet.VreplicationTabletType,
+		"-pprof", fmt.Sprintf("cpu,waitSig,path=cpu_prof_%s.pb.gz", vttablet.Name),
 	)
 	if *isCoverage {
 		vttablet.proc.Args = append(vttablet.proc.Args, "-test.coverprofile="+getCoveragePath("vttablet.out"))
@@ -360,6 +361,10 @@ func (vttablet *VttabletProcess) getDBSystemValues(placeholder string, value str
 		return fmt.Sprintf("%s", output.Rows[0][1].ToBytes()), nil
 	}
 	return "", nil
+}
+
+func (vttablet *VttabletProcess) StartProfiling() error {
+	return vttablet.proc.Process.Signal(syscall.SIGUSR1)
 }
 
 // VttabletProcessInstance returns a VttabletProcess handle for vttablet process
