@@ -777,10 +777,10 @@ func (bvf *bindvarFormatter) formatter(buf *sqlparser.TrackedBuffer, node sqlpar
 	if node, ok := node.(*sqlparser.ColName); ok {
 		switch bvf.mode {
 		case bvBefore:
-			buf.WriteArg(fmt.Sprintf(":b_%s", node.Name.String()))
+			buf.WriteArg(":", "b_"+node.Name.String())
 			return
 		case bvAfter:
-			buf.WriteArg(fmt.Sprintf(":a_%s", node.Name.String()))
+			buf.WriteArg(":", "a_"+node.Name.String())
 			return
 		}
 	}

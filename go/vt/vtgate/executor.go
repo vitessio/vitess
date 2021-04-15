@@ -448,11 +448,12 @@ func (e *Executor) CloseSession(ctx context.Context, safeSession *SafeSession) e
 }
 
 func (e *Executor) handleSet(ctx context.Context, sql string, logStats *LogStats) (*sqltypes.Result, error) {
-	stmt, reservedVars, err := sqlparser.Parse2(sql)
+	stmt, reserved, err := sqlparser.Parse2(sql)
 	if err != nil {
 		return nil, err
 	}
-	rewrittenAST, err := sqlparser.PrepareAST(stmt, reservedVars, nil, "vtg", false, "")
+	reservedVars := sqlparser.NewReservedVars("vtg", reserved)
+	rewrittenAST, err := sqlparser.PrepareAST(stmt, reservedVars, nil, false, "")
 	if err != nil {
 		return nil, err
 	}
@@ -1237,12 +1238,13 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 		return nil, errors.New("vschema not initialized")
 	}
 
-	stmt, reservedVars, err := sqlparser.Parse2(sql)
+	stmt, reserved, err := sqlparser.Parse2(sql)
 	if err != nil {
 		return nil, err
 	}
 	query := sql
 	statement := stmt
+	reservedVars := sqlparser.NewReservedVars("vtg", reserved)
 	bindVarNeeds := &sqlparser.BindVarNeeds{}
 	if !sqlparser.IgnoreMaxPayloadSizeDirective(statement) && !isValidPayloadSize(query) {
 		return nil, vterrors.NewErrorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.NetPacketTooLarge, "query payload size above threshold")
@@ -1253,7 +1255,7 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 	// Normalize if possible and retry.
 	if (e.normalize && sqlparser.CanNormalize(stmt)) || sqlparser.MustRewriteAST(stmt) {
 		parameterize := e.normalize // the public flag is called normalize
-		result, err := sqlparser.PrepareAST(stmt, reservedVars, bindVars, "vtg", parameterize, vcursor.keyspace)
+		result, err := sqlparser.PrepareAST(stmt, reservedVars, bindVars, parameterize, vcursor.keyspace)
 		if err != nil {
 			return nil, err
 		}
