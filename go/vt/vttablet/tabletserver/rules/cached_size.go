@@ -43,7 +43,7 @@ func (cached *Rule) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(184)
+		size += int64(232)
 	}
 	// field Description string
 	size += int64(len(cached.Description))
@@ -55,6 +55,10 @@ func (cached *Rule) CachedSize(alloc bool) int64 {
 	size += cached.user.CachedSize(false)
 	// field query vitess.io/vitess/go/vt/vttablet/tabletserver/rules.namedRegexp
 	size += cached.query.CachedSize(false)
+	// field leadingComment vitess.io/vitess/go/vt/vttablet/tabletserver/rules.namedRegexp
+	size += cached.leadingComment.CachedSize(false)
+	// field trailingComment vitess.io/vitess/go/vt/vttablet/tabletserver/rules.namedRegexp
+	size += cached.trailingComment.CachedSize(false)
 	// field plans []vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder.PlanType
 	{
 		size += int64(cap(cached.plans)) * int64(8)
