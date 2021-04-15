@@ -17,7 +17,6 @@ limitations under the License.
 package vreplication
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -82,103 +81,6 @@ func throttlerCheckSelf(tablet *cluster.VttabletProcess, app string) (resp *http
 	b, err := ioutil.ReadAll(resp.Body)
 	respBody = string(b)
 	return resp, respBody, err
-}
-
-func TestReplicationStress(t *testing.T) {
-	const initialStressVSchema = `
-{
-  "tables": {
-	"largebin": {},
-	"customer": {}
-  }
-}
-`
-	const initialStressSchema = `
-create table largebin(pid int, maindata varbinary(4096), primary key(pid));
-create table customer(cid int, name varbinary(128), meta json default null, typ enum('individual','soho','enterprise'), sport set('football','cricket','baseball'),ts timestamp not null default current_timestamp, primary key(cid))  CHARSET=utf8mb4;
-`
-
-	const defaultCellName = "zone1"
-
-	const sourceKs = "stress_src"
-	const targetKs = "stress_tgt"
-
-	allCells := []string{defaultCellName}
-	allCellNames = defaultCellName
-
-	vc = NewVitessCluster(t, "TestReplicationStress", allCells, mainClusterConfig)
-	require.NotNil(t, vc)
-
-	defer vc.TearDown(t)
-
-	defaultCell = vc.Cells[defaultCellName]
-	vc.AddKeyspace(t, []*Cell{defaultCell}, sourceKs, "0", initialStressVSchema, initialStressSchema, 0, 0, 100)
-	vtgate = defaultCell.Vtgates[0]
-	require.NotNil(t, vtgate)
-
-	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.master", "product", "0"), 1)
-
-	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
-	defer vtgateConn.Close()
-
-	verifyClusterHealth(t, vc)
-
-	const insertCount = 10000
-	const rowsPerInsert = 64
-
-	t.Logf("Inserting initial data")
-	insertStart := time.Now()
-	var query bytes.Buffer
-	rowCount := 0
-
-	execQuery(t, vtgateConn, "use `stress_src:0`;")
-	execQuery(t, vtgateConn, "begin")
-
-	for i := 0; i < insertCount; i++ {
-		query.Reset()
-		query.WriteString("insert into largebin(pid, maindata) values ")
-
-		for j := 0; j < rowsPerInsert; j++ {
-			if j > 0 {
-				query.WriteString(", ")
-			}
-			fmt.Fprintf(&query, "(%d, %q)", rowCount, "foobar")
-			rowCount++
-		}
-		execQuery(t, vtgateConn, query.String())
-	}
-
-	execQuery(t, vtgateConn, "commit")
-	t.Logf("finished inserting (%v)", time.Since(insertStart))
-
-	validateCount(t, vtgateConn, "stress_src:0", "largebin", insertCount*rowsPerInsert)
-
-	t.Logf("creating new keysepace '%s'", targetKs)
-	vc.AddKeyspace(t, []*Cell{defaultCell}, targetKs, "0", initialStressVSchema, initialStressSchema, 0, 0, 200)
-	validateCount(t, vtgateConn, "stress_tgt:0", "largebin", 0)
-
-	t.Logf("moving 'largebin' table...")
-	moveStart := time.Now()
-	keyspace := defaultCell.Keyspaces[targetKs]
-
-	for _, shard := range keyspace.Shards {
-		for _, tablet := range shard.Tablets {
-			tablet.Vttablet.StartProfiling()
-		}
-	}
-
-	moveTables(t, defaultCell.Name, "stress_workflow", sourceKs, targetKs, "largebin")
-
-	for _, shard := range keyspace.Shards {
-		for _, tablet := range shard.Tablets {
-			t.Logf("catchup shard=%v, tablet=%v", shard.Name, tablet.Name)
-			catchup(t, tablet.Vttablet, "stress_workflow", "MoveTables")
-		}
-	}
-
-	t.Logf("finished catching up after MoveTables (%v)", time.Since(moveStart))
-
-	validateCount(t, vtgateConn, "stress_tgt:0", "largebin", insertCount*rowsPerInsert)
 }
 
 func TestBasicVreplicationWorkflow(t *testing.T) {
@@ -901,8 +803,7 @@ func verifyClusterHealth(t *testing.T, cluster *VitessCluster) {
 
 func catchup(t *testing.T, vttablet *cluster.VttabletProcess, workflow, info string) {
 	const MaxWait = 10 * time.Second
-	err := vc.WaitForVReplicationToCatchup(t, vttablet, workflow, fmt.Sprintf("vt_%s", vttablet.Keyspace), MaxWait)
-	require.NoError(t, err, fmt.Sprintf("%s timed out for workflow %s on tablet %s.%s.%s", info, workflow, vttablet.Keyspace, vttablet.Shard, vttablet.Name))
+	vttablet.WaitForVReplicationToCatchup(t, workflow, fmt.Sprintf("vt_%s", vttablet.Keyspace), MaxWait)
 }
 
 func moveTables(t *testing.T, cell, workflow, sourceKs, targetKs, tables string) {
