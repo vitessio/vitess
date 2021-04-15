@@ -40,6 +40,8 @@ type ClusterConfig struct {
 	tabletPortBase      int
 	tabletGrpcPortBase  int
 	tabletMysqlPortBase int
+
+	vreplicationCompressGTID bool
 }
 
 // VitessCluster represents all components within the test cluster
@@ -219,6 +221,17 @@ func (vc *VitessCluster) AddKeyspace(t *testing.T, cells []*Cell, ksName string,
 func (vc *VitessCluster) AddTablet(t testing.TB, cell *Cell, keyspace *Keyspace, shard *Shard, tabletType string, tabletID int) (*Tablet, *exec.Cmd, error) {
 	tablet := &Tablet{}
 
+	options := []string{
+		"-queryserver-config-schema-reload-time", "5",
+		"-enable-lag-throttler",
+		"-heartbeat_enable",
+		"-heartbeat_interval", "250ms",
+	} //FIXME: for multi-cell initial schema doesn't seem to load without "-queryserver-config-schema-reload-time"
+
+	if mainClusterConfig.vreplicationCompressGTID {
+		options = append(options, "-vreplication_store_compressed_gtid=true")
+	}
+
 	vttablet := cluster.VttabletProcessInstance(
 		vc.ClusterConfig.tabletPortBase+tabletID,
 		vc.ClusterConfig.tabletGrpcPortBase+tabletID,
@@ -231,12 +244,7 @@ func (vc *VitessCluster) AddTablet(t testing.TB, cell *Cell, keyspace *Keyspace,
 		vc.Topo.Port,
 		vc.ClusterConfig.hostname,
 		vc.ClusterConfig.tmpDir,
-		[]string{
-			"-queryserver-config-schema-reload-time", "5",
-			"-enable-lag-throttler",
-			"-heartbeat_enable",
-			"-heartbeat_interval", "250ms",
-		}, //FIXME: for multi-cell initial schema doesn't seem to load without "-queryserver-config-schema-reload-time"
+		options,
 		false)
 
 	require.NotNil(t, vttablet)
