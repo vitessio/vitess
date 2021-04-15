@@ -142,16 +142,7 @@ func (buf *TrackedBuffer) astPrintf(currentNode SQLNode, format string, values .
 				}
 			}
 		case 'a':
-			arg := values[fieldnum].(string)
-			if arg[0] == ':' {
-				if arg[1] == ':' {
-					buf.WriteArg("::", arg[2:])
-				} else {
-					buf.WriteArg(":", arg[1:])
-				}
-			} else {
-				buf.WriteArg("", arg)
-			}
+			buf.WriteArg("", values[fieldnum].(string))
 		default:
 			panic("unexpected")
 		}
