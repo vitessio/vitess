@@ -73,6 +73,7 @@ func TestBindingSingleTable(t *testing.T) {
 			"select col from d.tabl",
 			"select tabl.col from d.tabl",
 			"select d.tabl.col from d.tabl",
+			"select d.tabl.col from X as tabl",
 		}
 		for _, query := range queries {
 			t.Run(query, func(t *testing.T) {
@@ -90,7 +91,6 @@ func TestBindingSingleTable(t *testing.T) {
 	t.Run("negative tests", func(t *testing.T) {
 		queries := []string{
 			"select foo.col from tabl",
-			"select d.tabl.col from X as tabl",
 			"select tabl.col from d.tabl as X",
 			"select d.tabl.col from d.tabl as X",
 		}
@@ -98,7 +98,7 @@ func TestBindingSingleTable(t *testing.T) {
 			t.Run(query, func(t *testing.T) {
 				parse, err := sqlparser.Parse(query)
 				require.NoError(t, err)
-				_, err = Analyse(parse, "d", &fakeSI{})
+				_, err = Analyze(parse, "d", &fakeSI{})
 				require.Error(t, err)
 			})
 		}
@@ -112,6 +112,7 @@ func TestBindingSingleAliasedTable(t *testing.T) {
 			"select tabl.col from X as tabl",
 			"select col from d.X as tabl",
 			"select tabl.col from d.X as tabl",
+			"select d.tabl.col from d.X as tabl",
 		}
 		for _, query := range queries {
 			t.Run(query, func(t *testing.T) {
@@ -131,13 +132,12 @@ func TestBindingSingleAliasedTable(t *testing.T) {
 			"select tabl.col from tabl as X",
 			"select X.col from X as tabl",
 			"select d.X.col from d.X as tabl",
-			"select d.tabl.col from d.X as tabl",
 		}
 		for _, query := range queries {
 			t.Run(query, func(t *testing.T) {
 				parse, err := sqlparser.Parse(query)
 				require.NoError(t, err)
-				_, err = Analyse(parse, "", &fakeSI{
+				_, err = Analyze(parse, "", &fakeSI{
 					tables: map[string]*vindexes.Table{
 						"t": {Name: sqlparser.NewTableIdent("t")},
 					},
@@ -191,11 +191,11 @@ func TestBindingMultiTable(t *testing.T) {
 		}, {
 			query: "select case t.col when s.col then r.col else u.col end from t, s, r, w, u",
 			deps:  T0 | T1 | T2 | T4,
-			//}, {
+			// }, {
 			//	// make sure that we don't let sub-query Dependencies leak out by mistake
 			//	query: "select t.col + (select 42 from s) from t",
 			//	deps:  T0,
-			//}, {
+			// }, {
 			//	query: "select (select 42 from s where r.id = s.id) from r",
 			//	deps:  T0 | T1,
 		}}
@@ -209,7 +209,6 @@ func TestBindingMultiTable(t *testing.T) {
 	})
 
 	t.Run("negative tests", func(t *testing.T) {
-		t.Skip("implement me!")
 		queries := []string{
 			"select 1 from d.tabl, d.foo as tabl",
 		}
@@ -217,9 +216,10 @@ func TestBindingMultiTable(t *testing.T) {
 			t.Run(query, func(t *testing.T) {
 				parse, err := sqlparser.Parse(query)
 				require.NoError(t, err)
-				_, err = Analyse(parse, "", &fakeSI{
+				_, err = Analyze(parse, "d", &fakeSI{
 					tables: map[string]*vindexes.Table{
-						"t": {Name: sqlparser.NewTableIdent("t")},
+						"tabl": {Name: sqlparser.NewTableIdent("tabl")},
+						"foo":  {Name: sqlparser.NewTableIdent("foo")},
 					},
 				})
 				require.Error(t, err)
@@ -252,7 +252,7 @@ func TestNotUniqueTableName(t *testing.T) {
 				t.Skip("derived tables not implemented")
 			}
 			parse, _ := sqlparser.Parse(query)
-			_, err := Analyse(parse, "test", &fakeSI{})
+			_, err := Analyze(parse, "test", &fakeSI{})
 			require.Error(t, err)
 			require.Contains(t, err.Error(), "Not unique table/alias")
 		})
@@ -267,7 +267,7 @@ func TestMissingTable(t *testing.T) {
 	for _, query := range queries {
 		t.Run(query, func(t *testing.T) {
 			parse, _ := sqlparser.Parse(query)
-			_, err := Analyse(parse, "", &fakeSI{})
+			_, err := Analyze(parse, "", &fakeSI{})
 			require.Error(t, err)
 			require.Contains(t, err.Error(), "Unknown table")
 		})
@@ -346,7 +346,7 @@ func TestUnknownColumnMap2(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			si := &fakeSI{tables: test.schema}
-			_, err := Analyse(parse, "", si)
+			_, err := Analyze(parse, "", si)
 			if test.err {
 				require.Error(t, err)
 			} else {
@@ -360,7 +360,7 @@ func parseAndAnalyze(t *testing.T, query, dbName string) (sqlparser.Statement, *
 	t.Helper()
 	parse, err := sqlparser.Parse(query)
 	require.NoError(t, err)
-	semTable, err := Analyse(parse, dbName, &fakeSI{
+	semTable, err := Analyze(parse, dbName, &fakeSI{
 		tables: map[string]*vindexes.Table{
 			"t": {Name: sqlparser.NewTableIdent("t")},
 		},

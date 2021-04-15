@@ -50,7 +50,7 @@ func newBuildSelectPlan(sel *sqlparser.Select, vschema ContextVSchema) (engine.P
 	if err != nil {
 		return nil, err
 	}
-	semTable, err := semantics.Analyse(sel, keyspace.Name, vschema)
+	semTable, err := semantics.Analyze(sel, keyspace.Name, vschema)
 	if err != nil {
 		return nil, err
 	}

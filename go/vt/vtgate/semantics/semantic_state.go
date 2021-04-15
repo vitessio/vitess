@@ -29,8 +29,9 @@ import (
 type (
 	// TableInfo contains the alias table expr and vindex table
 	TableInfo struct {
-		ASTNode *sqlparser.AliasedTableExpr
-		Table   *vindexes.Table
+		dbName, tableName string
+		ASTNode           *sqlparser.AliasedTableExpr
+		Table             *vindexes.Table
 	}
 
 	// TableSet is how a set of tables is expressed.
@@ -44,13 +45,9 @@ type (
 		exprDependencies map[sqlparser.Expr]TableSet
 	}
 
-	tableID struct {
-		dbName, tableName string
-	}
-
 	scope struct {
 		parent *scope
-		tables map[tableID]*TableInfo
+		tables []*TableInfo
 	}
 
 	// SchemaInformation is used tp provide table information from Vschema.
@@ -104,19 +101,19 @@ func (st *SemTable) Dependencies(expr sqlparser.Expr) TableSet {
 }
 
 func newScope(parent *scope) *scope {
-	return &scope{tables: map[tableID]*TableInfo{}, parent: parent}
+	return &scope{parent: parent}
 }
 
-func (s *scope) addTable(dbName, tableName string, table *TableInfo) error {
-	id := tableID{
-		dbName:    dbName,
-		tableName: tableName,
+func (s *scope) addTable(table *TableInfo) error {
+	for _, scopeTable := range s.tables {
+		b := scopeTable.tableName == table.tableName
+		b2 := scopeTable.dbName == table.dbName
+		if b && b2 {
+			return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.NonUniqTable, "Not unique table/alias: '%s'", table.tableName)
+		}
 	}
-	_, found := s.tables[id]
-	if found {
-		return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.NonUniqTable, "Not unique table/alias: '%s'", tableName)
-	}
-	s.tables[id] = table
+
+	s.tables = append(s.tables, table)
 	return nil
 }
 
