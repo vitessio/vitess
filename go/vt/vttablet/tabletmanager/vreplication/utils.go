@@ -1,3 +1,19 @@
+/*
+Copyright 2021 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package vreplication
 
 import (
@@ -38,7 +54,15 @@ const (
 	LogCopyEnd = "Ended Copy Phase"
 	// LogStateChange is used when the state of the stream changes
 	LogStateChange = "State Changed"
-	// LogError is used when there is an error from which we cannot recover and the operator needs to fix something
+
+	// TODO: LogError is not used atm. Currently irrecoverable errors, resumable errors and informational messages
+	//  are all treated the same: the message column is updated and state left as Running.
+	//  Every five seconds we reset the message and retry streaming so that we can automatically resume from a temporary
+	//  loss of connectivity or a reparent. We need to detect if errors are not recoverable and set an Error status.
+	//  Since this device (of overloading the message) is strewn across the code, and incorrectly flagging resumable
+	//  errors can stall workflows, we have deferred implementing it.
+
+	// LogError indicates that there is an error from which we cannot recover and the operator needs to intervene.
 	LogError = "Error"
 )
 
@@ -49,13 +73,10 @@ func getLastLog(dbClient *vdbClient, vreplID uint32) (int64, string, string, str
 	if qr, err = dbClient.ExecuteFetch(query, 1); err != nil {
 		return 0, "", "", "", err
 	}
-	if len(qr.Rows) != 1 {
+	if len(qr.Rows) != 1 || len(qr.Rows[0]) != 4 {
 		return 0, "", "", "", nil
 	}
 	row := qr.Rows[0]
-	if len(row) != 4 {
-		return 0, "", "", "", nil
-	}
 	id, _ := evalengine.ToInt64(row[0])
 	typ := row[1].ToString()
 	state := row[2].ToString()
