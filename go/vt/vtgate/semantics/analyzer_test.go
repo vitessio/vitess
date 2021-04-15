@@ -73,7 +73,6 @@ func TestBindingSingleTable(t *testing.T) {
 			"select col from d.tabl",
 			"select tabl.col from d.tabl",
 			"select d.tabl.col from d.tabl",
-			"select d.tabl.col from X as tabl",
 		}
 		for _, query := range queries {
 			t.Run(query, func(t *testing.T) {
@@ -91,8 +90,10 @@ func TestBindingSingleTable(t *testing.T) {
 	t.Run("negative tests", func(t *testing.T) {
 		queries := []string{
 			"select foo.col from tabl",
-			"select tabl.col from d.tabl as X",
-			"select d.tabl.col from d.tabl as X",
+			"select ks.tabl.col from tabl",
+			"select ks.tabl.col from d.tabl",
+			"select d.tabl.col from ks.tabl",
+			"select foo.col from d.tabl",
 		}
 		for _, query := range queries {
 			t.Run(query, func(t *testing.T) {
@@ -130,8 +131,9 @@ func TestBindingSingleAliasedTable(t *testing.T) {
 	t.Run("negative tests", func(t *testing.T) {
 		queries := []string{
 			"select tabl.col from tabl as X",
-			"select X.col from X as tabl",
 			"select d.X.col from d.X as tabl",
+			"select d.tabl.col from X as tabl",
+			"select d.tabl.col from ks.X as tabl",
 		}
 		for _, query := range queries {
 			t.Run(query, func(t *testing.T) {
@@ -180,8 +182,8 @@ func TestBindingMultiTable(t *testing.T) {
 			query: "select t.col from t, s",
 			deps:  T0,
 		}, {
-			query: "select t.col from t join s",
-			deps:  T0,
+			query: "select s.col from t join s",
+			deps:  T1,
 		}, {
 			query: "select max(t.col+s.col) from t, s",
 			deps:  T0 | T1,
@@ -198,6 +200,21 @@ func TestBindingMultiTable(t *testing.T) {
 			// }, {
 			//	query: "select (select 42 from s where r.id = s.id) from r",
 			//	deps:  T0 | T1,
+		}, {
+			query: "select X.col from t as X, s as S",
+			deps:  T0,
+		}, {
+			query: "select X.col+S.col from t as X, s as S",
+			deps:  T0 | T1,
+		}, {
+			query: "select max(X.col+S.col) from t as X, s as S",
+			deps:  T0 | T1,
+		}, {
+			query: "select max(X.col+s.col) from t as X, s",
+			deps:  T0 | T1,
+		}, {
+			query: "select b.t.col from b.t, t",
+			deps:  T0,
 		}}
 		for _, query := range queries {
 			t.Run(query.query, func(t *testing.T) {
@@ -211,6 +228,8 @@ func TestBindingMultiTable(t *testing.T) {
 	t.Run("negative tests", func(t *testing.T) {
 		queries := []string{
 			"select 1 from d.tabl, d.foo as tabl",
+			"select 1 from d.tabl, d.tabl",
+			"select 1 from d.tabl, tabl",
 		}
 		for _, query := range queries {
 			t.Run(query, func(t *testing.T) {
