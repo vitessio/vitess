@@ -24,6 +24,9 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/vt/binlog/binlogplayer"
+
 	"github.com/golang/protobuf/proto"
 	"k8s.io/apimachinery/pkg/util/sets"
 
@@ -395,6 +398,8 @@ func (wr *Wrangler) getReplicationStatusFromRow(ctx context.Context, row []sqlty
 	var id, timeUpdated, transactionTimestamp int64
 	var state, dbName, pos, stopPos, message string
 	var bls binlogdatapb.BinlogSource
+	var mpos mysql.Position
+
 	id, err = evalengine.ToInt64(row[0])
 	if err != nil {
 		return nil, "", err
@@ -402,7 +407,15 @@ func (wr *Wrangler) getReplicationStatusFromRow(ctx context.Context, row []sqlty
 	if err := proto.UnmarshalText(row[1].ToString(), &bls); err != nil {
 		return nil, "", err
 	}
+
+	// gtid in the pos column can be compressed, so check and possibly uncompress
 	pos = row[2].ToString()
+	mpos, err = binlogplayer.DecodePosition(pos)
+	pos = mpos.String()
+	if err != nil {
+		return nil, "", err
+	}
+
 	stopPos = row[3].ToString()
 	state = row[5].ToString()
 	dbName = row[6].ToString()
