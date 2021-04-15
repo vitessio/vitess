@@ -38,14 +38,20 @@ func runAdd(cmd *cobra.Command, args []string) {
 		rule.AddTableCond(t)
 	}
 
-	if err := rule.SetQueryCond(addOptQueryRE); err != nil {
-		log.Fatalf("Query condition invalid '%v': %v", addOptQueryRE, err)
+	if addOptQueryRE != "" {
+		if err := rule.SetQueryCond(addOptQueryRE); err != nil {
+			log.Fatalf("Query condition invalid '%v': %v", addOptQueryRE, err)
+		}
 	}
-	if err := rule.SetLeadingCommentCond(addOptLeadingCommentRE); err != nil {
-		log.Fatalf("Leading comment condition invalid '%v': %v", addOptLeadingCommentRE, err)
+	if addOptLeadingCommentRE != "" {
+		if err := rule.SetLeadingCommentCond(addOptLeadingCommentRE); err != nil {
+			log.Fatalf("Leading comment condition invalid '%v': %v", addOptLeadingCommentRE, err)
+		}
 	}
-	if err := rule.SetTrailingCommentCond(addOptTrailingCommentRE); err != nil {
-		log.Fatalf("Trailing comment condition invalid '%v': %v", addOptTrailingCommentRE, err)
+	if addOptTrailingCommentRE != "" {
+		if err := rule.SetTrailingCommentCond(addOptTrailingCommentRE); err != nil {
+			log.Fatalf("Trailing comment condition invalid '%v': %v", addOptTrailingCommentRE, err)
+		}
 	}
 
 	var rules *vtrules.Rules
