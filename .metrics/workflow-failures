@@ -8029,3 +8029,8 @@
 2021-04-15T04:34:05Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/750728028
 2021-04-15T04:35:15Z,Cluster (27),https://github.com/vitessio/vitess/actions/runs/750730572
 2021-04-15T04:35:15Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/750730606
+2021-04-15T06:54:41Z,check_formatting,https://github.com/vitessio/vitess/actions/runs/751052764
+2021-04-15T06:54:41Z,check_make_sizegen,https://github.com/vitessio/vitess/actions/runs/751052766
+2021-04-15T06:54:41Z,golangci-lint,https://github.com/vitessio/vitess/actions/runs/751052777
+2021-04-15T06:58:09Z,check_make_sizegen,https://github.com/vitessio/vitess/actions/runs/751062016
+2021-04-15T06:58:47Z,check_make_sizegen,https://github.com/vitessio/vitess/actions/runs/751063666
