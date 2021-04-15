@@ -16,6 +16,8 @@ limitations under the License.
 
 package bytes2
 
+import "unsafe"
+
 // Buffer implements a subset of the write portion of
 // bytes.Buffer, but more efficiently. This is meant to
 // be used in very high QPS operations, especially for
@@ -57,6 +59,14 @@ func (buf *Buffer) Bytes() []byte {
 // Strings is equivalent to bytes.Buffer.Strings.
 func (buf *Buffer) String() string {
 	return string(buf.bytes)
+}
+
+func (buf *Buffer) StringUnsafe() string {
+	return *(*string)(unsafe.Pointer(&buf.bytes))
+}
+
+func (buf *Buffer) Reset() {
+	buf.bytes = buf.bytes[:0]
 }
 
 // Len is equivalent to bytes.Buffer.Len.
