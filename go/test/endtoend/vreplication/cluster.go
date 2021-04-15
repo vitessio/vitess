@@ -1,8 +1,6 @@
 package vreplication
 
 import (
-	"context"
-	"errors"
 	"fmt"
 	"math/rand"
 	"os"
@@ -14,8 +12,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/log"
 )
@@ -48,7 +44,6 @@ type ClusterConfig struct {
 
 // VitessCluster represents all components within the test cluster
 type VitessCluster struct {
-	T             testing.TB
 	ClusterConfig *ClusterConfig
 	Name          string
 	Cells         map[string]*Cell
@@ -422,56 +417,6 @@ func (vc *VitessCluster) TearDown(t testing.TB) {
 			t.Logf("Error in etcd teardown - %s", err.Error())
 		}
 	}
-}
-
-// WaitForVReplicationToCatchup waits for "workflow" to finish copying
-func (vc *VitessCluster) WaitForVReplicationToCatchup(t testing.TB, vttablet *cluster.VttabletProcess, workflow string, database string, duration time.Duration) error {
-	queries := [3]string{
-		fmt.Sprintf(`select count(*) from _vt.vreplication where workflow = "%s" and db_name = "%s" and pos = ''`, workflow, database),
-		"select count(*) from information_schema.tables where table_schema='_vt' and table_name='copy_state' limit 1;",
-		fmt.Sprintf(`select count(*) from _vt.copy_state where vrepl_id in (select id from _vt.vreplication where workflow = "%s" and db_name = "%s" )`, workflow, database),
-	}
-	results := [3]string{"[INT64(0)]", "[INT64(1)]", "[INT64(0)]"}
-	var lastChecked time.Time
-	for ind, query := range queries {
-		waitDuration := 500 * time.Millisecond
-		for duration > 0 {
-			t.Logf("Executing query %s on %s", query, vttablet.Name)
-			lastChecked = time.Now()
-			qr, err := vc.execTabletQuery(vttablet, query)
-			if err != nil {
-				return err
-			}
-			if qr != nil && qr.Rows != nil && len(qr.Rows) > 0 && fmt.Sprintf("%v", qr.Rows[0]) == string(results[ind]) {
-				break
-			} else {
-				t.Logf("In WaitForVReplicationToCatchup: %s %+v", query, qr.Rows)
-			}
-			time.Sleep(waitDuration)
-			duration -= waitDuration
-		}
-		if duration <= 0 {
-			t.Logf("WaitForVReplicationToCatchup timed out for workflow %s, keyspace %s", workflow, database)
-			return errors.New("WaitForVReplicationToCatchup timed out")
-		}
-	}
-	t.Logf("WaitForVReplicationToCatchup succeeded at %v", lastChecked)
-	return nil
-}
-
-func (vc *VitessCluster) execTabletQuery(vttablet *cluster.VttabletProcess, query string) (*sqltypes.Result, error) {
-	vtParams := mysql.ConnParams{
-		UnixSocket: fmt.Sprintf("%s/mysql.sock", vttablet.Directory),
-		Uname:      "vt_dba",
-	}
-	ctx := context.Background()
-	var conn *mysql.Conn
-	conn, err := mysql.Connect(ctx, &vtParams)
-	if err != nil {
-		return nil, err
-	}
-	qr, err := conn.ExecuteFetch(query, 1000, true)
-	return qr, err
 }
 
 func (vc *VitessCluster) getVttabletsInKeyspace(t *testing.T, cell *Cell, ksName string, tabletType string) map[string]*cluster.VttabletProcess {
