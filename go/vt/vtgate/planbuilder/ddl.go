@@ -51,7 +51,7 @@ func (fk *fkContraint) FkWalk(node sqlparser.SQLNode) (kontinue bool, err error)
 // a session context. It's only when we Execute() the primitive that we have that context.
 // This is why we return a compound primitive (DDL) which contains fully populated primitives (Send & OnlineDDL),
 // and which chooses which of the two to invoke at runtime.
-func buildGeneralDDLPlan(sql string, ddlStatement sqlparser.DDLStatement, reservedVars sqlparser.BindVars, vschema ContextVSchema) (engine.Primitive, error) {
+func buildGeneralDDLPlan(sql string, ddlStatement sqlparser.DDLStatement, reservedVars *sqlparser.ReservedVars, vschema ContextVSchema) (engine.Primitive, error) {
 	normalDDLPlan, onlineDDLPlan, err := buildDDLPlans(sql, ddlStatement, reservedVars, vschema)
 	if err != nil {
 		return nil, err
@@ -77,7 +77,7 @@ func buildGeneralDDLPlan(sql string, ddlStatement sqlparser.DDLStatement, reserv
 	}, nil
 }
 
-func buildDDLPlans(sql string, ddlStatement sqlparser.DDLStatement, reservedVars sqlparser.BindVars, vschema ContextVSchema) (*engine.Send, *engine.OnlineDDL, error) {
+func buildDDLPlans(sql string, ddlStatement sqlparser.DDLStatement, reservedVars *sqlparser.ReservedVars, vschema ContextVSchema) (*engine.Send, *engine.OnlineDDL, error) {
 	var destination key.Destination
 	var keyspace *vindexes.Keyspace
 	var err error
@@ -177,7 +177,7 @@ func findTableDestinationAndKeyspace(vschema ContextVSchema, ddlStatement sqlpar
 	return destination, keyspace, nil
 }
 
-func buildAlterView(vschema ContextVSchema, ddl *sqlparser.AlterView, reservedVars sqlparser.BindVars) (key.Destination, *vindexes.Keyspace, error) {
+func buildAlterView(vschema ContextVSchema, ddl *sqlparser.AlterView, reservedVars *sqlparser.ReservedVars) (key.Destination, *vindexes.Keyspace, error) {
 	// For Alter View, we require that the view exist and the select query can be satisfied within the keyspace itself
 	// We should remove the keyspace name from the table name, as the database name in MySQL might be different than the keyspace name
 	destination, keyspace, err := findTableDestinationAndKeyspace(vschema, ddl)
@@ -212,7 +212,7 @@ func buildAlterView(vschema ContextVSchema, ddl *sqlparser.AlterView, reservedVa
 	return destination, keyspace, nil
 }
 
-func buildCreateView(vschema ContextVSchema, ddl *sqlparser.CreateView, reservedVars sqlparser.BindVars) (key.Destination, *vindexes.Keyspace, error) {
+func buildCreateView(vschema ContextVSchema, ddl *sqlparser.CreateView, reservedVars *sqlparser.ReservedVars) (key.Destination, *vindexes.Keyspace, error) {
 	// For Create View, we require that the keyspace exist and the select query can be satisfied within the keyspace itself
 	// We should remove the keyspace name from the table name, as the database name in MySQL might be different than the keyspace name
 	destination, keyspace, _, err := vschema.TargetDestination(ddl.ViewName.Qualifier.String())
