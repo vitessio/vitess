@@ -482,23 +482,25 @@ func (t *explainTablet) HandleQuery(c *mysql.Conn, query string, callback func(*
 			return fmt.Errorf("unsupported select with multiple from clauses")
 		}
 
-		var table sqlparser.TableIdent
-		switch node := selStmt.From[0].(type) {
-		case *sqlparser.AliasedTableExpr:
-			table = sqlparser.GetTableName(node.Expr)
-		}
+		tables := getTables(selStmt.From[0])
+		colTypeMap := map[string]querypb.Type{}
+		for _, table := range tables {
+			tableName := sqlparser.String(table)
+			columns, exists := tableColumns[tableName]
+			if !exists && tableName != "" && tableName != "dual" {
+				return fmt.Errorf("unable to resolve table name %s", tableName)
+			}
 
-		// For complex select queries just return an empty result
-		// since it's too hard to figure out the real columns
-		if table.IsEmpty() {
-			log.V(100).Infof("query %s result {}\n", query)
-			return callback(&sqltypes.Result{})
-		}
+			for k, v := range columns {
+				if colType, exists := colTypeMap[k]; exists {
+					if colType != v {
+						return fmt.Errorf("column type mismatch for column : %s, types: %d vs %d", k, colType, v)
+					}
+					continue
+				}
+				colTypeMap[k] = v
+			}
 
-		tableName := sqlparser.String(table)
-		colTypeMap := tableColumns[tableName]
-		if colTypeMap == nil && tableName != "dual" {
-			return fmt.Errorf("unable to resolve table name %s", tableName)
 		}
 
 		colNames := make([]string, 0, 4)
@@ -591,6 +593,18 @@ func (t *explainTablet) HandleQuery(c *mysql.Conn, query string, callback func(*
 	}
 
 	return callback(result)
+}
+
+func getTables(node sqlparser.SQLNode) []sqlparser.TableIdent {
+	var tables []sqlparser.TableIdent
+	switch expr := node.(type) {
+	case *sqlparser.AliasedTableExpr:
+		tables = append(tables, sqlparser.GetTableName(expr.Expr))
+	case *sqlparser.JoinTableExpr:
+		tables = append(tables, getTables(expr.LeftExpr)...)
+		tables = append(tables, getTables(expr.RightExpr)...)
+	}
+	return tables
 }
 
 func inferColTypeFromExpr(node sqlparser.Expr, colTypeMap map[string]querypb.Type, colNames []string, colTypes []querypb.Type) ([]string, []querypb.Type) {

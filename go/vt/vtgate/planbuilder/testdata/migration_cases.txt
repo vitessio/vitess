@@ -25,9 +25,7 @@
       "Sharded": false
     },
     "TargetDestination": "AllShards()",
-    "IsDML": false,
-    "Query": "alter vitess_migration 'abc' retry",
-    "SingleShardOnly": false
+    "Query": "alter vitess_migration 'abc' retry"
   }
 }
 
@@ -43,9 +41,7 @@
       "Sharded": false
     },
     "TargetDestination": "AllShards()",
-    "IsDML": false,
-    "Query": "alter vitess_migration 'abc' complete",
-    "SingleShardOnly": false
+    "Query": "alter vitess_migration 'abc' complete"
   }
 }
 
@@ -61,9 +57,7 @@
       "Sharded": false
     },
     "TargetDestination": "AllShards()",
-    "IsDML": false,
-    "Query": "alter vitess_migration 'abc' cancel",
-    "SingleShardOnly": false
+    "Query": "alter vitess_migration 'abc' cancel"
   }
 }
 
@@ -79,8 +73,6 @@
       "Sharded": false
     },
     "TargetDestination": "AllShards()",
-    "IsDML": false,
-    "Query": "alter vitess_migration cancel all",
-    "SingleShardOnly": false
+    "Query": "alter vitess_migration cancel all"
   }
 }

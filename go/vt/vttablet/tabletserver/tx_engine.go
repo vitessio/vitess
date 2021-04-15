@@ -485,7 +485,7 @@ func (te *TxEngine) ReserveBegin(ctx context.Context, options *querypb.ExecuteOp
 	defer span.Finish()
 	conn, err := te.reserve(ctx, options, preQueries)
 	if err != nil {
-		return 0, vterrors.Wrap(err, "TxEngine.ReserveBegin")
+		return 0, err
 	}
 	defer conn.UnlockUpdateTime()
 	_, err = te.txPool.begin(ctx, options, te.state == AcceptingReadOnly, conn, nil)
@@ -504,7 +504,7 @@ func (te *TxEngine) Reserve(ctx context.Context, options *querypb.ExecuteOptions
 	if txID == 0 {
 		conn, err := te.reserve(ctx, options, preQueries)
 		if err != nil {
-			return 0, vterrors.Wrap(err, "TxEngine.Reserve")
+			return 0, err
 		}
 		defer conn.Unlock()
 		return conn.ReservedID(), nil
@@ -512,13 +512,13 @@ func (te *TxEngine) Reserve(ctx context.Context, options *querypb.ExecuteOptions
 
 	conn, err := te.txPool.GetAndLock(txID, "to reserve")
 	if err != nil {
-		return 0, vterrors.Wrap(err, "TxEngine.Reserve")
+		return 0, err
 	}
 	defer conn.Unlock()
 
 	err = te.taintConn(ctx, conn, preQueries)
 	if err != nil {
-		return 0, vterrors.Wrap(err, "TxEngine.Reserve")
+		return 0, err
 	}
 	return conn.ReservedID(), nil
 }

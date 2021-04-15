@@ -10,9 +10,7 @@
       "Sharded": false
     },
     "TargetDestination": "AnyShard()",
-    "IsDML": false,
-    "Query": "call proc()",
-    "SingleShardOnly": false
+    "Query": "call proc()"
   }
 }
 
@@ -28,9 +26,7 @@
       "Sharded": false
     },
     "TargetDestination": "AnyShard()",
-    "IsDML": false,
-    "Query": "call proc()",
-    "SingleShardOnly": false
+    "Query": "call proc()"
   }
 }
 
@@ -50,8 +46,6 @@
       "Sharded": false
     },
     "TargetDestination": "AnyShard()",
-    "IsDML": false,
-    "Query": "call proc(1, 'foo', :__vtudvvar)",
-    "SingleShardOnly": false
+    "Query": "call proc(1, 'foo', :__vtudvvar)"
   }
 }

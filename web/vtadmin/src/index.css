@@ -215,6 +215,14 @@ table tbody td[rowSpan] {
   max-width: var(--contentWidth);
 }
 
+.text-align-right {
+  text-align: right;
+}
+
 .text-color-secondary {
   color: var(--textColorSecondary);
+}
+
+.white-space-nowrap {
+  white-space: nowrap;
 }

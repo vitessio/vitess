@@ -99,7 +99,6 @@ Gen4 plan same as above
           "Sharded": false
         },
         "TargetDestination": "AnyShard()",
-        "IsDML": false,
         "Query": "select CONCAT('Any', 'Expression', 'Is', 'Valid') from dual",
         "SingleShardOnly": true
       }

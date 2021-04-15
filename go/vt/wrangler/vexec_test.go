@@ -90,7 +90,7 @@ func TestVExec(t *testing.T) {
 	result = sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 		"id|source|message|cell|tablet_types",
 		"int64|varchar|varchar|varchar|varchar"),
-		"1|keyspace:\"source\" shard:\"0\" filter:<rules:<match:\"t1\" > >|||",
+		"1|keyspace:\"source\" shard:\"0\" filter:<rules:<match:\"t1\" > > |||",
 	)
 	testCases = append(testCases, &TestCase{
 		name:   "select",
