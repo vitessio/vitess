@@ -285,6 +285,7 @@ func (api *API) GetGates(ctx context.Context, req *vtadminpb.GetGatesRequest) (*
 					Hostname:  g.Hostname,
 					Keyspaces: g.Keyspaces,
 					Pool:      g.Pool,
+					FQDN:      g.FQDN,
 				})
 			}
 
