@@ -1249,6 +1249,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4 plan same as above
 
 # subquery
 "select id from (select id, col from user where id = 5) as t"
