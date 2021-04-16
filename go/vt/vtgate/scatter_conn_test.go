@@ -321,6 +321,13 @@ func TestReservedConnFail(t *testing.T) {
 	assert.Equal(t, 2, len(sbc0.Queries), "one for the failed attempt, and one for the retry")
 	require.Equal(t, 1, len(session.ShardSessions))
 	assert.NotEqual(t, oldRId, session.Session.ShardSessions[0].ReservedId, "should have recreated a reserved connection since the last connection was lost")
+
+	sbc0.Queries = nil
+	sbc0.EphemeralShardErr = mysql.NewSQLError(mysql.ERUnknownError, mysql.SSUnknownSQLState, "operation not allowed in state NOT_SERVING during query: query1")
+	_ = executeOnShardsReturnsErr(t, res, keyspace, sc, session, destinations)
+	assert.Equal(t, 2, len(sbc0.Queries), "one for the failed attempt, and one for the retry")
+	require.Equal(t, 1, len(session.ShardSessions))
+	assert.NotEqual(t, oldRId, session.Session.ShardSessions[0].ReservedId, "should have recreated a reserved connection since the last connection was lost")
 }
 
 func TestIsConnClosed(t *testing.T) {
