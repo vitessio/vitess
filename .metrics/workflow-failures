@@ -8084,9 +8084,12 @@
 2021-04-15T21:54:56Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/753560348
 2021-04-15T21:54:56Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/753560355
 2021-04-15T21:54:56Z,unit_race,https://github.com/vitessio/vitess/actions/runs/753560321
+2021-04-16T08:30:25Z,Cluster (17),https://github.com/vitessio/vitess/actions/runs/754950615
 2021-04-16T08:30:25Z,Cluster (27),https://github.com/vitessio/vitess/actions/runs/754950610
 2021-04-16T08:36:24Z,Unit Test (mariadb101),https://github.com/vitessio/vitess/actions/runs/754967455
 2021-04-16T08:36:24Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/754967427
+2021-04-16T08:36:24Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/754967416
+2021-04-16T08:36:24Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/754967459
 2021-04-16T08:36:24Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/754967409
 2021-04-16T08:36:24Z,check_formatting,https://github.com/vitessio/vitess/actions/runs/754967439
 2021-04-16T08:36:24Z,golangci-lint,https://github.com/vitessio/vitess/actions/runs/754967415
