@@ -8113,3 +8113,4 @@
 2021-04-16T16:07:02Z,Cluster (vreplication_multicell),https://github.com/vitessio/vitess/actions/runs/756210988
 2021-04-16T16:07:02Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/756210972
 2021-04-16T21:33:11Z,golangci-lint,https://github.com/vitessio/vitess/actions/runs/756973512
+2021-04-16T21:43:25Z,unit_race,https://github.com/vitessio/vitess/actions/runs/756994916
