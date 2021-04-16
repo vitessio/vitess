@@ -48,7 +48,6 @@ var (
 		msg VARCHAR(64) NOT NULL,
 		PRIMARY KEY (id)
 	) Engine=InnoDB;`
-	wg = &sync.WaitGroup{}
 )
 
 // createConfig creates a config file in TmpDir in vtdataroot and writes the given data.
