@@ -42,7 +42,7 @@ const (
 )
 
 var (
-	keepData           = flag.Bool("keep-data", false, "don't delete the per-test VTDATAROOT subfolders")
+	keepData           = flag.Bool("keep-data", true, "don't delete the per-test VTDATAROOT subfolders")
 	topoFlavor         = flag.String("topo-flavor", "etcd2", "choose a topo server from etcd2, zk2 or consul")
 	isCoverage         = flag.Bool("is-coverage", false, "whether coverage is required")
 	forceVTDATAROOT    = flag.String("force-vtdataroot", "", "force path for VTDATAROOT, which may already be populated")
