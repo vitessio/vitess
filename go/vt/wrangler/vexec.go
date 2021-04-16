@@ -24,11 +24,12 @@ import (
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 
 	"github.com/golang/protobuf/proto"
 	"k8s.io/apimachinery/pkg/util/sets"
+
+	"vitess.io/vitess/go/mysql"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/concurrency"
@@ -410,12 +411,13 @@ func (wr *Wrangler) getReplicationStatusFromRow(ctx context.Context, row []sqlty
 
 	// gtid in the pos column can be compressed, so check and possibly uncompress
 	pos = row[2].ToString()
-	mpos, err = binlogplayer.DecodePosition(pos)
-	pos = mpos.String()
-	if err != nil {
-		return nil, "", err
+	if pos != "" {
+		mpos, err = binlogplayer.DecodePosition(pos)
+		if err != nil {
+			return nil, "", err
+		}
+		pos = mpos.String()
 	}
-
 	stopPos = row[3].ToString()
 	state = row[5].ToString()
 	dbName = row[6].ToString()
