@@ -278,7 +278,8 @@ func (stc *ScatterConn) ExecuteMultiShard(
 	return qr, allErrors.GetErrors()
 }
 
-var errRegx = regexp.MustCompile("transaction ([a-z0-9:]+) (?:ended|not found)")
+var txClosed = regexp.MustCompile("transaction ([a-z0-9:]+) (?:ended|not found)")
+var notServing = regexp.MustCompile("operation not allowed in state (NOT_SERVING|SHUTTING_DOWN)")
 
 func checkAndResetShardSession(info *shardActionInfo, err error, session *SafeSession) bool {
 	if info.reservedID != 0 && info.transactionID == 0 && wasConnectionClosed(err) {
@@ -677,10 +678,12 @@ func (stc *ScatterConn) ExecuteLock(
 
 func wasConnectionClosed(err error) bool {
 	sqlErr := mysql.NewSQLErrorFromError(err).(*mysql.SQLError)
+	message := sqlErr.Error()
 
 	return sqlErr.Number() == mysql.CRServerGone ||
 		sqlErr.Number() == mysql.CRServerLost ||
-		(sqlErr.Number() == mysql.ERQueryInterrupted && errRegx.MatchString(sqlErr.Error()))
+		(sqlErr.Number() == mysql.ERQueryInterrupted && txClosed.MatchString(message)) ||
+		(sqlErr.Number() == mysql.ERUnknownError && notServing.MatchString(message))
 }
 
 // actionInfo looks at the current session, and returns information about what needs to be done for this tablet
