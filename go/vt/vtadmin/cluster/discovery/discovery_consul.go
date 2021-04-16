@@ -49,11 +49,13 @@ type ConsulDiscovery struct {
 	vtgateCellTag             string
 	vtgateKeyspacesToWatchTag string
 	vtgateAddrTmpl            *template.Template
+	vtgateFQDNTmpl            *template.Template
 
 	/* vtctld options */
 	vtctldDatacenter string
 	vtctldService    string
 	vtctldAddrTmpl   *template.Template
+	vtctldFQDNTmpl   *template.Template
 }
 
 // NewConsul returns a ConsulDiscovery for the given cluster. Args are a slice
@@ -96,6 +98,8 @@ func NewConsul(cluster *vtadminpb.Cluster, flags *pflag.FlagSet, args []string) 
 		"Go template string to generate the datacenter for vtgate consul queries. "+
 			"The meta information about the cluster is provided to the template via {{ .Cluster }}. "+
 			"Used once during initialization.")
+	vtgateFQDNTmplStr := flags.String("vtgate-fdqn-tmpl", "",
+		"Optional Go template string to produce an FQDN to access the vtgate from a browser. E.g. \"{{ .Hostname }}.example.com\"")
 
 	/* vtctld discovery config options */
 	flags.StringVar(&disco.vtctldService, "vtctld-service-name", "vtctld", "consul service name vtctlds register as")
@@ -106,15 +110,25 @@ func NewConsul(cluster *vtadminpb.Cluster, flags *pflag.FlagSet, args []string) 
 		"Go template string to generate the datacenter for vtgate consul queries. "+
 			"The cluster name is provided to the template via {{ .Cluster }}. "+
 			"Used once during initialization.")
+	vtctldFQDNTmplStr := flags.String("vtctld-fdqn-tmpl", "",
+		"Optional Go template string to produce an FQDN to access the vtctld from a browser. E.g. \"{{ .Hostname }}.example.com\"")
 
 	if err := flags.Parse(args); err != nil {
 		return nil, err
 	}
 
+	/* gates options */
 	if *vtgateDatacenterTmplStr != "" {
 		disco.vtgateDatacenter, err = generateConsulDatacenter("vtgate", cluster, *vtgateDatacenterTmplStr)
 		if err != nil {
 			return nil, fmt.Errorf("failed to generate vtgate consul datacenter from template: %w", err)
+		}
+	}
+
+	if *vtgateFQDNTmplStr != "" {
+		disco.vtgateFQDNTmpl, err = template.New("consul-vtgate-fqdn-template-" + cluster.Id).Parse(*vtgateFQDNTmplStr)
+		if err != nil {
+			return nil, fmt.Errorf("failde to parse vtgate FQDN template %s: %w", *vtgateFQDNTmplStr, err)
 		}
 	}
 
@@ -123,10 +137,18 @@ func NewConsul(cluster *vtadminpb.Cluster, flags *pflag.FlagSet, args []string) 
 		return nil, fmt.Errorf("failed to parse vtgate host address template %s: %w", *vtgateAddrTmplStr, err)
 	}
 
+	/* vtctld options */
 	if *vtctldDatacenterTmplStr != "" {
 		disco.vtctldDatacenter, err = generateConsulDatacenter("vtctld", cluster, *vtctldDatacenterTmplStr)
 		if err != nil {
 			return nil, fmt.Errorf("failed to generate vtctld consul datacenter from template: %w", err)
+		}
+	}
+
+	if *vtctldFQDNTmplStr != "" {
+		disco.vtctldFQDNTmpl, err = template.New("consul-vtctld-fqdn-template-" + cluster.Id).Parse(*vtctldFQDNTmplStr)
+		if err != nil {
+			return nil, fmt.Errorf("failde to parse vtctld FQDN template %s: %w", *vtctldFQDNTmplStr, err)
 		}
 	}
 
