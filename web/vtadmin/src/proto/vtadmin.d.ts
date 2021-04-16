@@ -913,6 +913,9 @@ export namespace vtadmin {
 
         /** Tablet state */
         state?: (vtadmin.Tablet.ServingState|null);
+
+        /** Tablet FQDN */
+        FQDN?: (string|null);
     }
 
     /** Represents a Tablet. */
@@ -932,6 +935,9 @@ export namespace vtadmin {
 
         /** Tablet state. */
         public state: vtadmin.Tablet.ServingState;
+
+        /** Tablet FQDN. */
+        public FQDN: string;
 
         /**
          * Creates a new Tablet instance using the specified properties.
@@ -1124,6 +1130,9 @@ export namespace vtadmin {
 
         /** Vtctld cluster */
         cluster?: (vtadmin.ICluster|null);
+
+        /** Vtctld FQDN */
+        FQDN?: (string|null);
     }
 
     /** Represents a Vtctld. */
@@ -1140,6 +1149,9 @@ export namespace vtadmin {
 
         /** Vtctld cluster. */
         public cluster?: (vtadmin.ICluster|null);
+
+        /** Vtctld FQDN. */
+        public FQDN: string;
 
         /**
          * Creates a new Vtctld instance using the specified properties.
@@ -1229,6 +1241,9 @@ export namespace vtadmin {
 
         /** VTGate keyspaces */
         keyspaces?: (string[]|null);
+
+        /** VTGate FQDN */
+        FQDN?: (string|null);
     }
 
     /** Represents a VTGate. */
@@ -1254,6 +1269,9 @@ export namespace vtadmin {
 
         /** VTGate keyspaces. */
         public keyspaces: string[];
+
+        /** VTGate FQDN. */
+        public FQDN: string;
 
         /**
          * Creates a new VTGate instance using the specified properties.

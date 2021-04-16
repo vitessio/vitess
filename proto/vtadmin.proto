@@ -126,6 +126,7 @@ message Tablet {
     }
 
     ServingState state = 3;
+    string FQDN = 4;
 }
 
 // VSchema represents the vschema for a keyspace in the cluster it belongs to.
@@ -140,6 +141,7 @@ message VSchema {
 message Vtctld {
     string hostname = 1;
     Cluster cluster = 2;
+    string FQDN = 3;
 }
 
 // VTGate represents information about a single VTGate host.
@@ -156,6 +158,7 @@ message VTGate {
     Cluster cluster = 4;
     // Keyspaces is the list of keyspaces-to-watch for the VTGate.
     repeated string keyspaces = 5;
+    string FQDN = 6;
 }
 
 message Workflow {
