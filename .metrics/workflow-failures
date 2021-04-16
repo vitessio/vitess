@@ -8106,6 +8106,7 @@
 2021-04-16T12:28:08Z,check_make_sizegen,https://github.com/vitessio/vitess/actions/runs/755598524
 2021-04-16T12:28:08Z,e2e_race,https://github.com/vitessio/vitess/actions/runs/755598490
 2021-04-16T12:28:08Z,unit_race,https://github.com/vitessio/vitess/actions/runs/755598509
+2021-04-16T16:07:02Z,Cluster (onlineddl_vrepl),https://github.com/vitessio/vitess/actions/runs/756210981
 2021-04-16T16:07:02Z,Cluster (upgrade),https://github.com/vitessio/vitess/actions/runs/756210958
 2021-04-16T16:07:02Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/756211004
 2021-04-16T16:07:02Z,Cluster (vreplication_cellalias),https://github.com/vitessio/vitess/actions/runs/756210974
