@@ -24,9 +24,9 @@ import (
 )
 
 type queryProjection struct {
-	selectExprs             []*sqlparser.AliasedExpr
-	aggrExprs               []*sqlparser.AliasedExpr
-	groupOrderingCommonExpr map[sqlparser.Expr]*sqlparser.Order
+	selectExprs []*sqlparser.AliasedExpr
+	aggrExprs   []*sqlparser.AliasedExpr
+	//groupOrderingCommonExpr map[sqlparser.Expr]*sqlparser.Order
 
 	orderExprs sqlparser.OrderBy
 
@@ -36,12 +36,12 @@ type queryProjection struct {
 
 func newQueryProjection() *queryProjection {
 	return &queryProjection{
-		groupOrderingCommonExpr: map[sqlparser.Expr]*sqlparser.Order{},
-		orderExprColMap:         map[*sqlparser.Order]int{},
+		//groupOrderingCommonExpr: map[sqlparser.Expr]*sqlparser.Order{},
+		orderExprColMap: map[*sqlparser.Order]int{},
 	}
 }
 
-func createQPFromSelect(sel *sqlparser.Select) (*queryProjection, error) {
+func createQPFromSelect(sel *sqlparser.Select, semTable *semantics.SemTable) (*queryProjection, error) {
 	qp := newQueryProjection()
 
 	for _, selExp := range sel.SelectExprs {
@@ -76,9 +76,31 @@ func createQPFromSelect(sel *sqlparser.Select) (*queryProjection, error) {
 		}
 	}
 
-	if sel.GroupBy == nil || sel.OrderBy == nil {
-		return qp, nil
+	return qp, nil
+}
+
+func (qp *queryProjection) isDistinct(semTable *semantics.SemTable) (bool, error) {
+	// figure out if we are dealing with a qp that is inherently distinct
+
+	for _, aliasedExpr := range qp.selectExprs {
+		col, ok := aliasedExpr.Expr.(*sqlparser.ColName)
+		if !ok {
+			continue
+		}
+		tableInfo, err := semTable.TableInfoForCol(col)
+		if err != nil {
+			return false, err
+		}
+		for _, vindex := range tableInfo.Table.ColumnVindexes {
+			if len(vindex.Columns) == 1 &&
+				vindex.Columns[0].EqualString(col.Name.String()) &&
+				vindex.Vindex.IsUnique() {
+				// we know the results will be unique
+				return true, nil
+			}
+		}
 	}
 
-	return qp, nil
+	// if we got here, we might still get distinct results in the end, but we can't guarantee it
+	return false, nil
 }

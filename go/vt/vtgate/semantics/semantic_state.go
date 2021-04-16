@@ -78,6 +78,11 @@ func (st *SemTable) TableInfoFor(id TableSet) (*TableInfo, error) {
 	return st.Tables[id.TableOffset()], nil
 }
 
+// TableInfoForCol returns the table info for the table that this column belongs to
+func (st *SemTable) TableInfoForCol(col *sqlparser.ColName) (*TableInfo, error) {
+	return st.TableInfoFor(st.Dependencies(col))
+}
+
 // Dependencies return the table dependencies of the expression.
 func (st *SemTable) Dependencies(expr sqlparser.Expr) TableSet {
 	deps, found := st.exprDependencies[expr]

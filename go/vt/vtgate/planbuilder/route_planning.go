@@ -113,51 +113,6 @@ func planLimit(limit *sqlparser.Limit, plan logicalPlan) (logicalPlan, error) {
 	return lPlan, nil
 }
 
-func planHorizon(sel *sqlparser.Select, plan logicalPlan, semTable *semantics.SemTable) (logicalPlan, error) {
-	rb, ok := plan.(*route)
-	if ok && rb.isSingleShard() {
-		ast := rb.Select.(*sqlparser.Select)
-		ast.Distinct = sel.Distinct
-		ast.GroupBy = sel.GroupBy
-		ast.OrderBy = sel.OrderBy
-		ast.SelectExprs = sel.SelectExprs
-		ast.Comments = sel.Comments
-		return plan, nil
-	}
-
-	// TODO real horizon planning to be done
-	if sel.Distinct {
-		return nil, semantics.Gen4NotSupportedF("DISTINCT")
-	}
-	if sel.GroupBy != nil {
-		return nil, semantics.Gen4NotSupportedF("GROUP BY")
-	}
-	qp, err := createQPFromSelect(sel)
-	if err != nil {
-		return nil, err
-	}
-	for _, e := range qp.selectExprs {
-		if _, err := pushProjection(e, plan, semTable); err != nil {
-			return nil, err
-		}
-	}
-
-	if len(qp.aggrExprs) > 0 {
-		plan, err = planAggregations(qp, plan, semTable)
-		if err != nil {
-			return nil, err
-		}
-	}
-	if len(sel.OrderBy) > 0 {
-		plan, err = planOrderBy(qp, plan, semTable)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return plan, nil
-}
-
 type (
 	joinTree interface {
 		// tables returns the table identifiers that are solved by this plan
@@ -684,26 +639,27 @@ func createRoutePlan(table *queryTable, solves semantics.TableSet, vschema Conte
 	return plan, nil
 }
 
-func findColumnVindex(a *routePlan, exp sqlparser.Expr, sem *semantics.SemTable) vindexes.SingleColumn {
-	left, isCol := exp.(*sqlparser.ColName)
+func findColumnVindex(exp sqlparser.Expr, sem *semantics.SemTable) vindexes.SingleColumn {
+	colName, isCol := exp.(*sqlparser.ColName)
 	if !isCol {
 		return nil
 	}
-	leftDep := sem.Dependencies(left)
-	for _, table := range a._tables {
-		if leftDep.IsSolvedBy(table.qtable.tableID) {
-			for _, vindex := range table.vtable.ColumnVindexes {
-				singCol, isSingle := vindex.Vindex.(vindexes.SingleColumn)
-				if isSingle && vindex.Columns[0].Equal(left.Name) {
-					return singCol
-				}
-			}
+	table, err := sem.TableInfoForCol(colName)
+	if err != nil {
+		return nil
+	}
+
+	for _, vindex := range table.Table.ColumnVindexes {
+		singCol, isSingle := vindex.Vindex.(vindexes.SingleColumn)
+		if isSingle && vindex.Columns[0].Equal(colName.Name) {
+			return singCol
 		}
 	}
+
 	return nil
 }
 
-func canMergeOnFilter(a, b *routePlan, predicate sqlparser.Expr, sem *semantics.SemTable) bool {
+func canMergeOnFilter(predicate sqlparser.Expr, sem *semantics.SemTable) bool {
 	comparison, ok := predicate.(*sqlparser.ComparisonExpr)
 	if !ok {
 		return false
@@ -714,24 +670,24 @@ func canMergeOnFilter(a, b *routePlan, predicate sqlparser.Expr, sem *semantics.
 	left := comparison.Left
 	right := comparison.Right
 
-	lVindex := findColumnVindex(a, left, sem)
+	lVindex := findColumnVindex(left, sem)
 	if lVindex == nil {
 		left, right = right, left
-		lVindex = findColumnVindex(a, left, sem)
+		lVindex = findColumnVindex(left, sem)
 	}
 	if lVindex == nil || !lVindex.IsUnique() {
 		return false
 	}
-	rVindex := findColumnVindex(b, right, sem)
+	rVindex := findColumnVindex(right, sem)
 	if rVindex == nil {
 		return false
 	}
 	return rVindex == lVindex
 }
 
-func canMergeOnFilters(a, b *routePlan, joinPredicates []sqlparser.Expr, semTable *semantics.SemTable) bool {
+func canMergeOnFilters(joinPredicates []sqlparser.Expr, semTable *semantics.SemTable) bool {
 	for _, predicate := range joinPredicates {
-		if canMergeOnFilter(a, b, predicate, semTable) {
+		if canMergeOnFilter(predicate, semTable) {
 			return true
 		}
 	}
@@ -776,7 +732,7 @@ func tryMerge(a, b joinTree, joinPredicates []sqlparser.Expr, semTable *semantic
 			return nil
 		}
 
-		canMerge := canMergeOnFilters(aRoute, bRoute, joinPredicates, semTable)
+		canMerge := canMergeOnFilters(joinPredicates, semTable)
 		if !canMerge {
 			return nil
 		}

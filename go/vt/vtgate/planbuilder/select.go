@@ -102,39 +102,6 @@ func shouldRetryWithCNFRewriting(plan logicalPlan) bool {
 
 }
 
-func pushProjection(expr *sqlparser.AliasedExpr, plan logicalPlan, semTable *semantics.SemTable) (int, error) {
-	switch node := plan.(type) {
-	case *route:
-		sel := node.Select.(*sqlparser.Select)
-		offset := len(sel.SelectExprs)
-		sel.SelectExprs = append(sel.SelectExprs, expr)
-		return offset, nil
-	case *joinV4:
-		lhsSolves := node.Left.ContainsTables()
-		rhsSolves := node.Right.ContainsTables()
-		deps := semTable.Dependencies(expr.Expr)
-		switch {
-		case deps.IsSolvedBy(lhsSolves):
-			offset, err := pushProjection(expr, node.Left, semTable)
-			if err != nil {
-				return 0, err
-			}
-			node.Cols = append(node.Cols, -(offset + 1))
-		case deps.IsSolvedBy(rhsSolves):
-			offset, err := pushProjection(expr, node.Right, semTable)
-			if err != nil {
-				return 0, err
-			}
-			node.Cols = append(node.Cols, offset+1)
-		default:
-			return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unknown dependencies for %s", sqlparser.String(expr))
-		}
-		return len(node.Cols) - 1, nil
-	default:
-		return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%T not yet supported", node)
-	}
-}
-
 func planAggregations(qp *queryProjection, plan logicalPlan, semTable *semantics.SemTable) (logicalPlan, error) {
 	eaggr := &engine.OrderedAggregate{}
 	oa := &orderedAggregate{

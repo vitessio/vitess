@@ -78,6 +78,7 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
+Gen4 plan same as above
 
 # distinct and group by together for single route.
 "select distinct col1, id from user group by col1"
