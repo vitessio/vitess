@@ -1034,6 +1034,7 @@ Gen4 plan same as above
     "Vindex": "user_index"
   }
 }
+Gen4 plan same as above
 
 # subquery of information_schema with itself
 "select * from information_schema.a where id in (select * from information_schema.b)"

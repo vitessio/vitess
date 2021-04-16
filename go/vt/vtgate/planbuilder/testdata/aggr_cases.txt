@@ -1244,6 +1244,7 @@ Gen4 plan same as above
     "Table": "unsharded"
   }
 }
+Gen4 plan same as above
 
 # order by on a reference table
 "select col from ref order by col"
