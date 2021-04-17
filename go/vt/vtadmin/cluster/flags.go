@@ -19,6 +19,7 @@ package cluster
 import (
 	"regexp"
 	"strings"
+	"text/template"
 
 	"vitess.io/vitess/go/vt/log"
 )
@@ -143,6 +144,13 @@ func parseOne(cfg *Config, name string, val string) error {
 		cfg.Name = val
 	case "discovery":
 		cfg.DiscoveryImpl = val
+	case "tablet-fqdn-tmpl":
+		tmpl, err := template.New(cfg.ID + "-tablet-fqdn").Parse(val)
+		if err != nil {
+			return err
+		}
+
+		cfg.TabletFQDNTmpl = tmpl
 	default:
 		if strings.HasPrefix(name, "vtsql-") {
 			if cfg.VtSQLFlags == nil {

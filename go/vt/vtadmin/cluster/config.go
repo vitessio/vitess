@@ -16,7 +16,10 @@ limitations under the License.
 
 package cluster
 
-import "fmt"
+import (
+	"fmt"
+	"text/template"
+)
 
 // Config represents the options to configure a vtadmin cluster.
 type Config struct {
@@ -24,6 +27,7 @@ type Config struct {
 	Name                 string
 	DiscoveryImpl        string
 	DiscoveryFlagsByImpl FlagsByImpl
+	TabletFQDNTmpl       *template.Template
 	VtSQLFlags           map[string]string
 	VtctldFlags          map[string]string
 }
@@ -82,6 +86,7 @@ func (cfg Config) Merge(override Config) Config {
 		Name:                 cfg.Name,
 		DiscoveryImpl:        cfg.DiscoveryImpl,
 		DiscoveryFlagsByImpl: map[string]map[string]string{},
+		TabletFQDNTmpl:       cfg.TabletFQDNTmpl,
 		VtSQLFlags:           map[string]string{},
 		VtctldFlags:          map[string]string{},
 	}
@@ -96,6 +101,10 @@ func (cfg Config) Merge(override Config) Config {
 
 	if override.DiscoveryImpl != "" {
 		merged.DiscoveryImpl = override.DiscoveryImpl
+	}
+
+	if override.TabletFQDNTmpl != nil {
+		merged.TabletFQDNTmpl = override.TabletFQDNTmpl
 	}
 
 	// first, the default flags

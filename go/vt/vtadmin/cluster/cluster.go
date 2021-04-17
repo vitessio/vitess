@@ -23,10 +23,12 @@ import (
 	"math/rand"
 	"strings"
 	"sync"
+	"text/template"
 	"time"
 
 	"k8s.io/apimachinery/pkg/util/sets"
 
+	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
@@ -58,6 +60,9 @@ type Cluster struct {
 	// (TODO|@amason): Figure out if these are needed or if there's a way to
 	// push down to the credentials / vtsql.
 	// vtgateCredentialsPath string
+
+	// Fields for generating FQDNs for tablets
+	TabletFQDNTmpl *template.Template
 }
 
 // New creates a new Cluster from a Config.
@@ -200,6 +205,13 @@ func (c *Cluster) parseTablet(rows *sql.Rows) (*vtadminpb.Tablet, error) {
 		}
 
 		topotablet.MasterTermStartTime = logutil.TimeToProto(timeTime)
+	}
+
+	if c.TabletFQDNTmpl != nil {
+		tablet.FQDN, err = textutil.ExecuteTemplate(c.TabletFQDNTmpl, tablet)
+		if err != nil {
+			return nil, fmt.Errorf("failed to execute tablet FQDN template for %+v: %w", tablet, err)
+		}
 	}
 
 	return tablet, nil
