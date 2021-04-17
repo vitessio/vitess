@@ -99,7 +99,7 @@ func NewConsul(cluster *vtadminpb.Cluster, flags *pflag.FlagSet, args []string) 
 		"Go template string to generate the datacenter for vtgate consul queries. "+
 			"The meta information about the cluster is provided to the template via {{ .Cluster }}. "+
 			"Used once during initialization.")
-	vtgateFQDNTmplStr := flags.String("vtgate-fdqn-tmpl", "",
+	vtgateFQDNTmplStr := flags.String("vtgate-fqdn-tmpl", "",
 		"Optional Go template string to produce an FQDN to access the vtgate from a browser. "+
 			"E.g. \"{{ .Hostname }}.example.com\".")
 
@@ -113,7 +113,7 @@ func NewConsul(cluster *vtadminpb.Cluster, flags *pflag.FlagSet, args []string) 
 		"Go template string to generate the datacenter for vtgate consul queries. "+
 			"The cluster name is provided to the template via {{ .Cluster }}. "+
 			"Used once during initialization.")
-	vtctldFQDNTmplStr := flags.String("vtctld-fdqn-tmpl", "",
+	vtctldFQDNTmplStr := flags.String("vtctld-fqdn-tmpl", "",
 		"Optional Go template string to produce an FQDN to access the vtctld from a browser. "+
 			"E.g. \"{{ .Hostname }}.example.com\".")
 
