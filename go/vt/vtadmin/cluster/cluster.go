@@ -388,6 +388,26 @@ func (c *Cluster) findWorkflows(ctx context.Context, keyspaces []string, opts Fi
 	}, nil
 }
 
+// GetGates returns the list of all VTGates in the cluster.
+func (c *Cluster) GetGates(ctx context.Context) ([]*vtadminpb.VTGate, error) {
+	// (TODO|@ajm188) Support tags in the vtadmin RPC request and pass them
+	// through here.
+	gates, err := c.Discovery.DiscoverVTGates(ctx, []string{})
+	if err != nil {
+		return nil, fmt.Errorf("DiscoverVTGates(cluster = %s): %w", c.ID, err)
+	}
+
+	// Not every discovery implementation will necessarily populate the Cluster
+	// field, so we do so here.
+	cpb := c.ToProto()
+
+	for _, g := range gates {
+		g.Cluster = cpb
+	}
+
+	return gates, nil
+}
+
 // GetTablets returns all tablets in the cluster.
 func (c *Cluster) GetTablets(ctx context.Context) ([]*vtadminpb.Tablet, error) {
 	span, ctx := trace.NewSpan(ctx, "Cluster.GetTablets")

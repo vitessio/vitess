@@ -267,29 +267,16 @@ func (api *API) GetGates(ctx context.Context, req *vtadminpb.GetGatesRequest) (*
 		go func(c *cluster.Cluster) {
 			defer wg.Done()
 
-			gs, err := c.Discovery.DiscoverVTGates(ctx, []string{})
+			gs, err := c.GetGates(ctx)
 			if err != nil {
-				er.RecordError(fmt.Errorf("DiscoverVTGates(cluster = %s): %w", c.ID, err))
+				er.RecordError(err)
 				return
 			}
 
 			m.Lock()
+			defer m.Unlock()
 
-			for _, g := range gs {
-				gates = append(gates, &vtadminpb.VTGate{
-					Cell: g.Cell,
-					Cluster: &vtadminpb.Cluster{
-						Id:   c.ID,
-						Name: c.Name,
-					},
-					Hostname:  g.Hostname,
-					Keyspaces: g.Keyspaces,
-					Pool:      g.Pool,
-					FQDN:      g.FQDN,
-				})
-			}
-
-			m.Unlock()
+			gates = append(gates, gs...)
 		}(c)
 	}
 
