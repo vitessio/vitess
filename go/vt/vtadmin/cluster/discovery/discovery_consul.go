@@ -17,7 +17,6 @@ limitations under the License.
 package discovery
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"math/rand"
@@ -28,6 +27,7 @@ import (
 	consul "github.com/hashicorp/consul/api"
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/trace"
 
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
@@ -170,8 +170,7 @@ func generateConsulDatacenter(component string, cluster *vtadminpb.Cluster, tmpl
 		return "", fmt.Errorf("error parsing template %s: %w", tmplStr, err)
 	}
 
-	buf := bytes.NewBuffer(nil)
-	err = tmpl.Execute(buf, &struct {
+	dc, err := textutil.ExecuteTemplate(tmpl, &struct {
 		Cluster *vtadminpb.Cluster
 	}{
 		Cluster: cluster,
@@ -181,7 +180,7 @@ func generateConsulDatacenter(component string, cluster *vtadminpb.Cluster, tmpl
 		return "", fmt.Errorf("failed to execute template: %w", err)
 	}
 
-	return buf.String(), nil
+	return dc, nil
 }
 
 // DiscoverVTGate is part of the Discovery interface.
@@ -219,12 +218,12 @@ func (c *ConsulDiscovery) DiscoverVTGateAddr(ctx context.Context, tags []string)
 		return "", err
 	}
 
-	buf := bytes.NewBuffer(nil)
-	if err := c.vtgateAddrTmpl.Execute(buf, vtgate); err != nil {
+	addr, err := textutil.ExecuteTemplate(c.vtgateAddrTmpl, vtgate)
+	if err != nil {
 		return "", fmt.Errorf("failed to execute vtgate address template for %v: %w", vtgate, err)
 	}
 
-	return buf.String(), nil
+	return addr, nil
 }
 
 // DiscoverVTGates is part of the Discovery interface.
@@ -286,13 +285,10 @@ func (c *ConsulDiscovery) discoverVTGates(_ context.Context, tags []string, exec
 
 		if executeFQDNTemplate {
 			if c.vtgateFQDNTmpl != nil {
-				buf := bytes.NewBuffer(nil)
-
-				if err := c.vtgateFQDNTmpl.Execute(buf, vtgate); err != nil {
+				vtgate.FQDN, err = textutil.ExecuteTemplate(c.vtgateFQDNTmpl, vtgate)
+				if err != nil {
 					return nil, err // TODO: wrap
 				}
-
-				vtgate.FQDN = buf.String()
 			}
 		}
 
@@ -337,12 +333,12 @@ func (c *ConsulDiscovery) DiscoverVtctldAddr(ctx context.Context, tags []string)
 		return "", err
 	}
 
-	buf := bytes.NewBuffer(nil)
-	if err := c.vtctldAddrTmpl.Execute(buf, vtctld); err != nil {
+	addr, err := textutil.ExecuteTemplate(c.vtctldAddrTmpl, vtctld)
+	if err != nil {
 		return "", fmt.Errorf("failed to execute vtctld address template for %v: %w", vtctld, err)
 	}
 
-	return buf.String(), nil
+	return addr, nil
 }
 
 // DiscoverVtctlds is part of the Discovery interface.
@@ -377,13 +373,10 @@ func (c *ConsulDiscovery) discoverVtctlds(_ context.Context, tags []string, exec
 
 		if executeFQDNTemplate {
 			if c.vtctldFQDNTmpl != nil {
-				buf := bytes.NewBuffer(nil)
-
-				if err := c.vtctldFQDNTmpl.Execute(buf, vtctld); err != nil {
+				vtctld.FQDN, err = textutil.ExecuteTemplate(c.vtctldFQDNTmpl, vtctld)
+				if err != nil {
 					return nil, err // TODO: wrap
 				}
-
-				vtctld.FQDN = buf.String()
 			}
 		}
 
