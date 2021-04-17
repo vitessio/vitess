@@ -100,6 +100,13 @@ func New(cfg Config) (*Cluster, error) {
 	cluster.DB = vtsql.New(vtsqlCfg)
 	cluster.Vtctld = vtctldclient.New(vtctldCfg)
 
+	if cfg.TabletFQDNTmplStr != "" {
+		cluster.TabletFQDNTmpl, err = template.New(cluster.ID + "-tablet-fqdn").Parse(cfg.TabletFQDNTmplStr)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse tablet fqdn template %s: %w", cfg.TabletFQDNTmplStr, err)
+		}
+	}
+
 	return cluster, nil
 }
 

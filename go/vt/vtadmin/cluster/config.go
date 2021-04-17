@@ -18,7 +18,6 @@ package cluster
 
 import (
 	"fmt"
-	"text/template"
 )
 
 // Config represents the options to configure a vtadmin cluster.
@@ -27,7 +26,7 @@ type Config struct {
 	Name                 string
 	DiscoveryImpl        string
 	DiscoveryFlagsByImpl FlagsByImpl
-	TabletFQDNTmpl       *template.Template
+	TabletFQDNTmplStr    string
 	VtSQLFlags           map[string]string
 	VtctldFlags          map[string]string
 }
@@ -86,7 +85,7 @@ func (cfg Config) Merge(override Config) Config {
 		Name:                 cfg.Name,
 		DiscoveryImpl:        cfg.DiscoveryImpl,
 		DiscoveryFlagsByImpl: map[string]map[string]string{},
-		TabletFQDNTmpl:       cfg.TabletFQDNTmpl,
+		TabletFQDNTmplStr:    cfg.TabletFQDNTmplStr,
 		VtSQLFlags:           map[string]string{},
 		VtctldFlags:          map[string]string{},
 	}
@@ -103,8 +102,8 @@ func (cfg Config) Merge(override Config) Config {
 		merged.DiscoveryImpl = override.DiscoveryImpl
 	}
 
-	if override.TabletFQDNTmpl != nil {
-		merged.TabletFQDNTmpl = override.TabletFQDNTmpl
+	if override.TabletFQDNTmplStr != "" {
+		merged.TabletFQDNTmplStr = override.TabletFQDNTmplStr
 	}
 
 	// first, the default flags
