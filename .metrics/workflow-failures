@@ -8138,4 +8138,7 @@
 2021-04-18T05:28:17Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/760062310
 2021-04-18T05:28:17Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/760062275
 2021-04-18T05:28:17Z,endtoend,https://github.com/vitessio/vitess/actions/runs/760062282
+2021-04-18T05:28:17Z,local_example,https://github.com/vitessio/vitess/actions/runs/760062276
+2021-04-18T05:28:17Z,local_example,https://github.com/vitessio/vitess/actions/runs/760062300
+2021-04-18T05:28:17Z,region_example,https://github.com/vitessio/vitess/actions/runs/760062286
 2021-04-18T05:28:17Z,unit_race,https://github.com/vitessio/vitess/actions/runs/760062269
