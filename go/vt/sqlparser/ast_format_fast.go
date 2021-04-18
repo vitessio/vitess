@@ -1296,7 +1296,7 @@ func (node *Literal) formatFast(buf *TrackedBuffer) {
 
 // formatFast formats the node.
 func (node Argument) formatFast(buf *TrackedBuffer) {
-	buf.WriteArg(string(node))
+	buf.WriteArg(":", string(node))
 }
 
 // formatFast formats the node.
@@ -1345,7 +1345,7 @@ func (node *DerivedTable) formatFast(buf *TrackedBuffer) {
 
 // formatFast formats the node.
 func (node ListArg) formatFast(buf *TrackedBuffer) {
-	buf.WriteArg(string(node))
+	buf.WriteArg("::", string(node))
 }
 
 // formatFast formats the node.
