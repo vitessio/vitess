@@ -790,7 +790,7 @@ export ONLINE_DDL_PASSWORD
 	onHookContent := func(status schema.OnlineDDLStatus) string {
 		return fmt.Sprintf(`#!/bin/bash
 	curl --max-time 3 -s 'http://localhost:%d/schema-migration/report-status?uuid=%s&status=%s&dryrun='"$GH_OST_DRY_RUN"'&progress='"$GH_OST_PROGRESS"'&eta='"$GH_OST_ETA_SECONDS"
-			`, *servenv.Port, onlineDDL.UUID, string(status))
+	`, *servenv.Port, onlineDDL.UUID, string(status))
 	}
 	if _, err := createTempScript(tempDir, "gh-ost-on-startup", onHookContent(schema.OnlineDDLStatusRunning)); err != nil {
 		log.Errorf("Error creating script: %+v", err)
@@ -912,8 +912,6 @@ export ONLINE_DDL_PASSWORD
 			log.Errorf("Error running gh-ost: %+v", err)
 			return err
 		}
-		_ = e.updateMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusComplete)
-		_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, "gh-ost migration successful")
 		// Migration successful!
 		os.RemoveAll(tempDir)
 		successfulMigrations.Add(1)
