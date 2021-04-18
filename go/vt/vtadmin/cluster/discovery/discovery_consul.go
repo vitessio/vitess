@@ -292,7 +292,7 @@ func (c *ConsulDiscovery) discoverVTGates(_ context.Context, tags []string, exec
 			if c.vtgateFQDNTmpl != nil {
 				vtgate.FQDN, err = textutil.ExecuteTemplate(c.vtgateFQDNTmpl, vtgate)
 				if err != nil {
-					return nil, err // TODO: wrap
+					return nil, fmt.Errorf("failed to execute vtgate fqdn template for %v: %w", vtgate, err)
 				}
 			}
 		}
@@ -385,7 +385,7 @@ func (c *ConsulDiscovery) discoverVtctlds(_ context.Context, tags []string, exec
 			if c.vtctldFQDNTmpl != nil {
 				vtctld.FQDN, err = textutil.ExecuteTemplate(c.vtctldFQDNTmpl, vtctld)
 				if err != nil {
-					return nil, err // TODO: wrap
+					return nil, fmt.Errorf("failed to execute vtctld fqdn template for %v: %w", vtctld, err)
 				}
 			}
 		}
