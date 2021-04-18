@@ -145,6 +145,14 @@ func (stc *ScatterConn) endAction(startTime time.Time, allErrors *concurrency.Al
 	stc.timings.Record(statsKey, startTime)
 }
 
+type reset int
+
+const (
+	none reset = iota
+	shard
+	newQS
+)
+
 // ExecuteMultiShard is like Execute,
 // but each shard gets its own Sql Queries and BindVariables.
 //
@@ -220,8 +228,13 @@ func (stc *ScatterConn) ExecuteMultiShard(
 			case nothing:
 				innerqr, err = qs.Execute(ctx, rs.Target, queries[i].Sql, queries[i].BindVariables, info.transactionID, info.reservedID, opts)
 				if err != nil {
-					shouldRetry := checkAndResetShardSession(info, err, session)
-					if shouldRetry {
+					retry := checkAndResetShardSession(info, err, session)
+					switch retry {
+					case newQS:
+						// Current tablet is not available, try querying new tablet using gateway.
+						qs = rs.Gateway
+						fallthrough
+					case shard:
 						// we seem to have lost our connection. if it was a reserved connection, let's try to recreate it
 						info.actionNeeded = reserve
 						innerqr, reservedID, alias, err = qs.ReserveExecute(ctx, rs.Target, session.SetPreQueries(), queries[i].Sql, queries[i].BindVariables, 0 /*transactionId*/, opts)
@@ -236,8 +249,13 @@ func (stc *ScatterConn) ExecuteMultiShard(
 					if transactionID != 0 {
 						return info.updateTransactionID(transactionID, alias), err
 					}
-					shouldRetry := checkAndResetShardSession(info, err, session)
-					if shouldRetry {
+					retry := checkAndResetShardSession(info, err, session)
+					switch retry {
+					case newQS:
+						// Current tablet is not available, try querying new tablet using gateway.
+						qs = rs.Gateway
+						fallthrough
+					case shard:
 						// we seem to have lost our connection. if it was a reserved connection, let's try to recreate it
 						info.actionNeeded = reserveBegin
 						innerqr, transactionID, reservedID, alias, err = qs.ReserveBeginExecute(ctx, rs.Target, session.SetPreQueries(), queries[i].Sql, queries[i].BindVariables, opts)
@@ -278,24 +296,27 @@ func (stc *ScatterConn) ExecuteMultiShard(
 	return qr, allErrors.GetErrors()
 }
 
-var txClosed = regexp.MustCompile("transaction ([a-z0-9:]+) (?:ended|not found)")
-var notServing = regexp.MustCompile("operation not allowed in state (NOT_SERVING|SHUTTING_DOWN)")
-
-func checkAndResetShardSession(info *shardActionInfo, err error, session *SafeSession) bool {
-	if info.reservedID != 0 && info.transactionID == 0 && wasConnectionClosed(err) {
-		session.ResetShard(info.alias)
-		return true
+func checkAndResetShardSession(info *shardActionInfo, err error, session *SafeSession) reset {
+	retry := none
+	if info.reservedID != 0 && info.transactionID == 0 {
+		if wasConnectionClosed(err) {
+			retry = shard
+		}
+		if requireNewQS(err) {
+			retry = newQS
+		}
 	}
-	return false
+	if retry != none {
+		session.ResetShard(info.alias)
+	}
+	return retry
 }
 
 func getQueryService(rs *srvtopo.ResolvedShard, info *shardActionInfo) (queryservice.QueryService, error) {
 	_, usingLegacyGw := rs.Gateway.(*DiscoveryGateway)
-	if usingLegacyGw {
-		switch info.actionNeeded {
-		case reserve, reserveBegin:
-			return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "reserved connections are not supported on old gen gateway")
-		}
+	if usingLegacyGw &&
+		(info.actionNeeded == reserve || info.actionNeeded == reserveBegin) {
+		return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "reserved connections are not supported on old gen gateway")
 	}
 	if usingLegacyGw || info.alias == nil {
 		return rs.Gateway, nil
@@ -676,14 +697,23 @@ func (stc *ScatterConn) ExecuteLock(
 	return qr, err
 }
 
+var txClosed = regexp.MustCompile("transaction ([a-z0-9:]+) (?:ended|not found)")
+var notServing = regexp.MustCompile("operation not allowed in state (NOT_SERVING|SHUTTING_DOWN)")
+var wrongTabletType = regexp.MustCompile("invalid tablet type:")
+
 func wasConnectionClosed(err error) bool {
 	sqlErr := mysql.NewSQLErrorFromError(err).(*mysql.SQLError)
 	message := sqlErr.Error()
 
 	return sqlErr.Number() == mysql.CRServerGone ||
 		sqlErr.Number() == mysql.CRServerLost ||
-		(sqlErr.Number() == mysql.ERQueryInterrupted && txClosed.MatchString(message)) ||
-		(sqlErr.Number() == mysql.ERUnknownError && notServing.MatchString(message))
+		(sqlErr.Number() == mysql.ERQueryInterrupted && txClosed.MatchString(message))
+}
+
+func requireNewQS(err error) bool {
+	code := vterrors.Code(err)
+	msg := err.Error()
+	return code == vtrpcpb.Code_FAILED_PRECONDITION && (notServing.MatchString(msg) || wrongTabletType.MatchString(msg))
 }
 
 // actionInfo looks at the current session, and returns information about what needs to be done for this tablet
