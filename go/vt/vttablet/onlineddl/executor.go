@@ -880,9 +880,9 @@ curl --max-time 3 -s 'http://localhost:%d/schema-migration/report-status?uuid=%s
 			fmt.Sprintf(`--execute=%t`, execute),
 		}
 		args = append(args, onlineDDL.RuntimeOptions()...)
-		_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, "X1: ExecuteWithGhost")
+		_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, fmt.Sprintf("X1: ExecuteWithGhost %v", execute))
 		_, err := execCmd("bash", args, os.Environ(), "/tmp", nil, nil)
-		_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, "X2: ExecuteWithGhost")
+		_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, fmt.Sprintf("X2: ExecuteWithGhost %v", execute))
 		return err
 	}
 
