@@ -815,6 +815,7 @@ export ONLINE_DDL_PASSWORD
 		return err
 	}
 	// Validate gh-ost binary:
+	_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, "validating gh-ost --version")
 	log.Infof("Will now validate gh-ost binary")
 	_, err = execCmd(
 		"bash",
@@ -831,6 +832,7 @@ export ONLINE_DDL_PASSWORD
 		log.Errorf("Error testing gh-ost binary: %+v", err)
 		return err
 	}
+	_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, "validated gh-ost --version")
 	log.Infof("+ OK")
 
 	if err := e.updateMigrationLogPath(ctx, onlineDDL.UUID, variables.host, tempDir); err != nil {
