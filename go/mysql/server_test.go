@@ -843,7 +843,17 @@ func TestTLSServer(t *testing.T) {
 		"")
 	require.NoError(t, err)
 	l.TLSConfig.Store(serverConfig)
-	go l.Accept()
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func(l *Listener) {
+		wg.Done()
+		l.Accept()
+	}(l)
+	// This is ensure the listener is called
+	wg.Wait()
+	// Sleep so that the Accept function is called as well.'
+	time.Sleep(3 * time.Second)
 
 	connCountByTLSVer.ResetAll()
 	// Setup the right parameters.
@@ -933,7 +943,17 @@ func TestTLSRequired(t *testing.T) {
 	require.NoError(t, err)
 	l.TLSConfig.Store(serverConfig)
 	l.RequireSecureTransport = true
-	go l.Accept()
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func(l *Listener) {
+		wg.Done()
+		l.Accept()
+	}(l)
+	// This is ensure the listener is called
+	wg.Wait()
+	// Sleep so that the Accept function is called as well.'
+	time.Sleep(3 * time.Second)
 
 	// Setup conn params without SSL.
 	params := &ConnParams{

@@ -164,7 +164,7 @@ func CloneSQLNode(in SQLNode) SQLNode {
 	case *Limit:
 		return CloneRefOfLimit(in)
 	case ListArg:
-		return CloneListArg(in)
+		return in
 	case *Literal:
 		return CloneRefOfLiteral(in)
 	case *Load:
@@ -1008,13 +1008,6 @@ func CloneRefOfLimit(n *Limit) *Limit {
 	return &out
 }
 
-// CloneListArg creates a deep clone of the input.
-func CloneListArg(n ListArg) ListArg {
-	res := make(ListArg, 0, len(n))
-	copy(res, n)
-	return res
-}
-
 // CloneRefOfLiteral creates a deep clone of the input.
 func CloneRefOfLiteral(n *Literal) *Literal {
 	if n == nil {
@@ -1845,7 +1838,7 @@ func CloneColTuple(in ColTuple) ColTuple {
 	}
 	switch in := in.(type) {
 	case ListArg:
-		return CloneListArg(in)
+		return in
 	case *Subquery:
 		return CloneRefOfSubquery(in)
 	case ValTuple:
@@ -1975,7 +1968,7 @@ func CloneExpr(in Expr) Expr {
 	case *IsExpr:
 		return CloneRefOfIsExpr(in)
 	case ListArg:
-		return CloneListArg(in)
+		return in
 	case *Literal:
 		return CloneRefOfLiteral(in)
 	case *MatchExpr:

@@ -19,6 +19,7 @@ package sqlparser
 import (
 	"fmt"
 	"io"
+	"strings"
 	"sync"
 
 	"vitess.io/vitess/go/vt/log"
@@ -182,6 +183,17 @@ func SplitStatement(blob string) (string, string, error) {
 // SplitStatementToPieces split raw sql statement that may have multi sql pieces to sql pieces
 // returns the sql pieces blob contains; or error if sql cannot be parsed
 func SplitStatementToPieces(blob string) (pieces []string, err error) {
+	// fast path: the vast majority of SQL statements do not have semicolons in them
+	if blob == "" {
+		return nil, nil
+	}
+	switch strings.IndexByte(blob, ';') {
+	case -1: // if there is no semicolon, return blob as a whole
+		return []string{blob}, nil
+	case len(blob) - 1: // if there's a single semicolon and it's the last character, return blob without it
+		return []string{blob[:len(blob)-1]}, nil
+	}
+
 	pieces = make([]string, 0, 16)
 	tokenizer := NewStringTokenizer(blob)
 

@@ -269,7 +269,7 @@ func TestIsValue(t *testing.T) {
 		in:  NewIntLiteral("1"),
 		out: true,
 	}, {
-		in:  NewArgument(":a"),
+		in:  NewArgument("a"),
 		out: true,
 	}, {
 		in:  &NullVal{},
@@ -320,7 +320,7 @@ func TestIsSimpleTuple(t *testing.T) {
 	}, {
 		in: ValTuple{&ColName{}},
 	}, {
-		in:  ListArg("::a"),
+		in:  ListArg("a"),
 		out: true,
 	}, {
 		in: &ColName{},
@@ -345,7 +345,7 @@ func TestNewPlanValue(t *testing.T) {
 		out sqltypes.PlanValue
 		err string
 	}{{
-		in:  Argument(":valarg"),
+		in:  Argument("valarg"),
 		out: sqltypes.PlanValue{Key: "valarg"},
 	}, {
 		in: &Literal{
@@ -384,11 +384,11 @@ func TestNewPlanValue(t *testing.T) {
 		},
 		err: "odd length hex string",
 	}, {
-		in:  ListArg("::list"),
+		in:  ListArg("list"),
 		out: sqltypes.PlanValue{ListKey: "list"},
 	}, {
 		in: ValTuple{
-			Argument(":valarg"),
+			Argument("valarg"),
 			&Literal{
 				Type: StrVal,
 				Val:  "strval",
@@ -403,7 +403,7 @@ func TestNewPlanValue(t *testing.T) {
 		},
 	}, {
 		in: ValTuple{
-			ListArg("::list"),
+			ListArg("list"),
 		},
 		err: "unsupported: nested lists",
 	}, {

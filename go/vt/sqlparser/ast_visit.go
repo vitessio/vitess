@@ -1260,10 +1260,6 @@ func VisitRefOfLimit(in *Limit, f Visit) error {
 	}
 	return nil
 }
-func VisitListArg(in ListArg, f Visit) error {
-	_, err := f(in)
-	return err
-}
 func VisitRefOfLiteral(in *Literal, f Visit) error {
 	if in == nil {
 		return nil
@@ -2711,6 +2707,10 @@ func VisitBoolVal(in BoolVal, f Visit) error {
 	return err
 }
 func VisitIsolationLevel(in IsolationLevel, f Visit) error {
+	_, err := f(in)
+	return err
+}
+func VisitListArg(in ListArg, f Visit) error {
 	_, err := f(in)
 	return err
 }

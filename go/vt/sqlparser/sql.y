@@ -234,8 +234,9 @@ func bindVariable(yylex yyLexer, bvar string) {
 %token <str> NULLX AUTO_INCREMENT APPROXNUM SIGNED UNSIGNED ZEROFILL
 
 // SHOW tokens
-%token <str> COLLATION DATABASES SCHEMAS TABLES VITESS_METADATA VSCHEMA FULL PROCESSLIST COLUMNS FIELDS ENGINES PLUGINS EXTENDED
-%token <str> KEYSPACES VITESS_KEYSPACES VITESS_SHARDS VITESS_TABLETS VITESS_MIGRATIONS CODE PRIVILEGES FUNCTION OPEN TRIGGERS EVENT USER
+%token <str> CODE COLLATION COLUMNS DATABASES ENGINES EVENT EXTENDED FIELDS FULL FUNCTION GTID_EXECUTED
+%token <str> KEYSPACES OPEN PLUGINS PRIVILEGES PROCESSLIST SCHEMAS TABLES TRIGGERS USER
+%token <str> VGTID_EXECUTED VITESS_KEYSPACES VITESS_METADATA VITESS_MIGRATIONS VITESS_SHARDS VITESS_TABLETS VSCHEMA
 
 // SET tokens
 %token <str> NAMES CHARSET GLOBAL SESSION ISOLATION LEVEL READ WRITE ONLY REPEATABLE COMMITTED UNCOMMITTED SERIALIZABLE
@@ -2497,6 +2498,14 @@ show_statement:
   {
       $$ = &Show{&ShowLegacy{Type: string($3), Scope: ImplicitScope}}
   }
+| SHOW GLOBAL GTID_EXECUTED from_database_opt
+  {
+    $$ = &Show{&ShowBasic{Command: GtidExecGlobal, DbName: $4}}
+  }
+| SHOW GLOBAL VGTID_EXECUTED from_database_opt
+  {
+    $$ = &Show{&ShowBasic{Command: VGtidExecGlobal, DbName: $4}}
+  }
 | SHOW VITESS_METADATA VARIABLES like_opt
   {
     showTablesOpt := &ShowTablesOpt{Filter: $4}
@@ -3548,7 +3557,7 @@ col_tuple:
   }
 | LIST_ARG
   {
-    $$ = ListArg($1)
+    $$ = ListArg($1[2:])
     bindVariable(yylex, $1[2:])
   }
 
@@ -4082,7 +4091,7 @@ value:
   }
 | VALUE_ARG
   {
-    $$ = NewArgument($1)
+    $$ = NewArgument($1[1:])
     bindVariable(yylex, $1[1:])
   }
 | NULL
@@ -4106,7 +4115,7 @@ num_val:
   }
 | VALUE_ARG VALUES
   {
-    $$ = NewArgument($1)
+    $$ = NewArgument($1[1:])
     bindVariable(yylex, $1[1:])
   }
 
@@ -4982,6 +4991,7 @@ non_reserved_keyword:
 | GEOMETRYCOLLECTION
 | GET_MASTER_PUBLIC_KEY
 | GLOBAL
+| GTID_EXECUTED
 | HEADER
 | HISTOGRAM
 | HISTORY
@@ -5148,6 +5158,7 @@ non_reserved_keyword:
 | VARCHAR
 | VARIABLES
 | VCPU
+| VGTID_EXECUTED
 | VIEW
 | VINDEX
 | VINDEXES
