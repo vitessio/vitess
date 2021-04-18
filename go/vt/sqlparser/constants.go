@@ -224,6 +224,7 @@ const (
 	DatabaseStr         = " databases"
 	FunctionCStr        = " function code"
 	FunctionStr         = " function status"
+	GtidExecGlobalStr   = " global gtid_executed"
 	IndexStr            = " indexes"
 	OpenTableStr        = " open tables"
 	PrivilegeStr        = " privileges"
@@ -482,6 +483,7 @@ const (
 	Database
 	FunctionC
 	Function
+	GtidExecGlobal
 	Index
 	OpenTable
 	Privilege

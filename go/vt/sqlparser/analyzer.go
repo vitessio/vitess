@@ -406,7 +406,7 @@ func IsSimpleTuple(node Expr) bool {
 func NewPlanValue(node Expr) (sqltypes.PlanValue, error) {
 	switch node := node.(type) {
 	case Argument:
-		return sqltypes.PlanValue{Key: string(node[1:])}, nil
+		return sqltypes.PlanValue{Key: string(node)}, nil
 	case *Literal:
 		switch node.Type {
 		case IntVal:
@@ -427,7 +427,7 @@ func NewPlanValue(node Expr) (sqltypes.PlanValue, error) {
 			return sqltypes.PlanValue{Value: sqltypes.MakeTrusted(sqltypes.VarBinary, v)}, nil
 		}
 	case ListArg:
-		return sqltypes.PlanValue{ListKey: string(node[2:])}, nil
+		return sqltypes.PlanValue{ListKey: string(node)}, nil
 	case ValTuple:
 		pv := sqltypes.PlanValue{
 			Values: make([]sqltypes.PlanValue, 0, len(node)),

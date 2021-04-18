@@ -50,8 +50,8 @@ func writeNextRecord(connectionString string) error {
 		// Check to see if this is a duplicate key error.  We've seen this
 		// sometimes happen, and when it does this client app gets stuck in an
 		// infinite loop of failure to write a duplicate key.  It's possible
-		// that happens because a write is succesful but something goes wrong
-		// before the client recieves a response, so the client thinks the write
+		// that happens because a write is successful but something goes wrong
+		// before the client receives a response, so the client thinks the write
 		// failed and does not increment the count.
 		//
 		// So when we specifically see a duplicate key error, assume that's what
@@ -98,7 +98,7 @@ func readRandomRecord(connectionString string) error {
 			// lag, so ignore the missing row if we are a replica.
 			// TODO: Should we attempt to roughly figure out replication lag in
 			// this client, at least to catch major failures?  We could probably
-			// multiply delay by the difference betwen maxCount and the page we
+			// multiply delay by the difference between maxCount and the page we
 			// are trying to read to figure out how long ago the row we were
 			// trying to write was written.
 			if client.ParseTabletType(connectionString) == "replica" ||
