@@ -8150,4 +8150,7 @@
 2021-04-18T10:40:06Z,Cluster (onlineddl_declarative),https://github.com/vitessio/vitess/actions/runs/760548582
 2021-04-18T10:40:06Z,Cluster (onlineddl_ghost),https://github.com/vitessio/vitess/actions/runs/760548556
 2021-04-18T10:40:06Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/760548558
+2021-04-18T10:47:33Z,Cluster (onlineddl_declarative),https://github.com/vitessio/vitess/actions/runs/760560926
+2021-04-18T10:47:33Z,Cluster (onlineddl_ghost),https://github.com/vitessio/vitess/actions/runs/760560941
+2021-04-18T10:47:33Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/760560951
 2021-04-18T10:47:33Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/760560914
