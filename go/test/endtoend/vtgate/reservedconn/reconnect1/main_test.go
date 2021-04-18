@@ -19,9 +19,10 @@ package reservedconn
 import (
 	"context"
 	"flag"
-	"fmt"
 	"os"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 
 	"github.com/stretchr/testify/require"
 
@@ -36,21 +37,7 @@ var (
 	keyspaceName    = "ks"
 	cell            = "zone1"
 	hostname        = "localhost"
-	sqlSchema       = `
-	create table test(
-		id bigint,
-		val1 varchar(16),
-		val2 int,
-		val3 float,
-		primary key(id)
-	)Engine=InnoDB;
-
-CREATE TABLE test_vdx (
-    val1 varchar(16) NOT NULL,
-    keyspace_id binary(8),
-    UNIQUE KEY (val1)
-) ENGINE=Innodb;
-`
+	sqlSchema       = `create table test(id bigint primary key)Engine=InnoDB;`
 
 	vSchema = `
 		{	
@@ -58,20 +45,7 @@ CREATE TABLE test_vdx (
 			"vindexes": {
 				"hash_index": {
 					"type": "hash"
-				},
-				"lookup1": {
-					"type": "consistent_lookup",
-					"params": {
-						"table": "test_vdx",
-						"from": "val1",
-						"to": "keyspace_id",
-						"ignore_nulls": "true"
-					},
-					"owner": "test"
-				},
-				"unicode_vdx":{
-					"type": "unicode_loose_md5"
-                }
+				}
 			},	
 			"tables": {
 				"test":{
@@ -79,18 +53,6 @@ CREATE TABLE test_vdx (
 						{
 							"column": "id",
 							"name": "hash_index"
-						},
-						{
-							"column": "val1",
-							"name": "lookup1"
-						}
-					]
-				},
-				"test_vdx":{
-					"column_vindexes": [
-						{
-							"column": "val1",
-							"name": "unicode_vdx"
 						}
 					]
 				}
@@ -118,16 +80,13 @@ func TestMain(m *testing.M) {
 			SchemaSQL: sqlSchema,
 			VSchema:   vSchema,
 		}
-		clusterInstance.VtTabletExtraArgs = []string{"-queryserver-config-transaction-timeout", "5"}
 		if err := clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 1, true); err != nil {
 			return 1
 		}
 
 		// Start vtgate
-		clusterInstance.VtGateExtraArgs = []string{"-lock_heartbeat_time", "2s"}
-		vtgateProcess := clusterInstance.NewVtgateInstance()
-		vtgateProcess.SysVarSetEnabled = true
-		if err := vtgateProcess.Setup(); err != nil {
+		clusterInstance.VtGateExtraArgs = []string{"-lock_heartbeat_time", "2s", "-enable_system_settings=true"} // enable reserved connection.
+		if err := clusterInstance.StartVtgate(); err != nil {
 			return 1
 		}
 
@@ -145,9 +104,7 @@ func TestServingChange(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	// enable reserved connection.
-	checkedExec(t, conn, "set enable_system_settings = true")
-	checkedExec(t, conn, fmt.Sprintf("use %s@rdonly", keyspaceName))
+	checkedExec(t, conn, "use @rdonly")
 	checkedExec(t, conn, "set sql_mode = ''")
 
 	// this will create reserved connection on rdonly on -80 and 80- shards.
@@ -167,10 +124,11 @@ func TestServingChange(t *testing.T) {
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", replicaTablet.Alias, "rdonly")
 	require.NoError(t, err)
 
-	// this should pass now as there is rdonly present
-	_, err = exec(t, conn, "select * from test")
-	require.NoError(t, err)
-
+	for i := 0; i < 10; i++ {
+		// this should pass now as there is rdonly present
+		_, err = exec(t, conn, "select * from test")
+		assert.NoError(t, err, "failed for case: %d", i)
+	}
 	// This test currently failed with error: vttablet: rpc error: code = FailedPrecondition desc = operation not allowed in state NOT_SERVING (errno 1105) (sqlstate HY000) during query: select * from test
 }
 
