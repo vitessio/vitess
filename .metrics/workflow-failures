@@ -8154,3 +8154,5 @@
 2021-04-18T10:47:33Z,Cluster (onlineddl_ghost),https://github.com/vitessio/vitess/actions/runs/760560941
 2021-04-18T10:47:33Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/760560951
 2021-04-18T10:47:33Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/760560914
+2021-04-18T11:08:09Z,Cluster (onlineddl_ghost),https://github.com/vitessio/vitess/actions/runs/760593310
+2021-04-18T11:08:09Z,Cluster (vreplication_multicell),https://github.com/vitessio/vitess/actions/runs/760593335
