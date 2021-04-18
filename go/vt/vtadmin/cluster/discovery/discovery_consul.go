@@ -132,7 +132,7 @@ func NewConsul(cluster *vtadminpb.Cluster, flags *pflag.FlagSet, args []string) 
 	if *vtgateFQDNTmplStr != "" {
 		disco.vtgateFQDNTmpl, err = template.New("consul-vtgate-fqdn-template-" + cluster.Id).Parse(*vtgateFQDNTmplStr)
 		if err != nil {
-			return nil, fmt.Errorf("failde to parse vtgate FQDN template %s: %w", *vtgateFQDNTmplStr, err)
+			return nil, fmt.Errorf("failed to parse vtgate FQDN template %s: %w", *vtgateFQDNTmplStr, err)
 		}
 	}
 
@@ -152,7 +152,7 @@ func NewConsul(cluster *vtadminpb.Cluster, flags *pflag.FlagSet, args []string) 
 	if *vtctldFQDNTmplStr != "" {
 		disco.vtctldFQDNTmpl, err = template.New("consul-vtctld-fqdn-template-" + cluster.Id).Parse(*vtctldFQDNTmplStr)
 		if err != nil {
-			return nil, fmt.Errorf("failde to parse vtctld FQDN template %s: %w", *vtctldFQDNTmplStr, err)
+			return nil, fmt.Errorf("failed to parse vtctld FQDN template %s: %w", *vtctldFQDNTmplStr, err)
 		}
 	}
 
@@ -193,6 +193,8 @@ func (c *ConsulDiscovery) DiscoverVTGate(ctx context.Context, tags []string) (*v
 	return c.discoverVTGate(ctx, tags, executeFQDNTemplate)
 }
 
+// discoverVTGate calls discoverVTGates and then returns a random VTGate from
+// the result. see discoverVTGates for further documentation.
 func (c *ConsulDiscovery) discoverVTGate(ctx context.Context, tags []string, executeFQDNTemplate bool) (*vtadminpb.VTGate, error) {
 	vtgates, err := c.discoverVTGates(ctx, tags, executeFQDNTemplate)
 	if err != nil {
@@ -236,6 +238,9 @@ func (c *ConsulDiscovery) DiscoverVTGates(ctx context.Context, tags []string) ([
 	return c.discoverVTGates(ctx, tags, executeFQDNTemplate)
 }
 
+// discoverVTGates does the actual work of discovering VTGate hosts from a
+// consul datacenter. executeFQDNTemplate is boolean to allow an optimization
+// for DiscoverVTGateAddr (the only function that sets the boolean to false).
 func (c *ConsulDiscovery) discoverVTGates(_ context.Context, tags []string, executeFQDNTemplate bool) ([]*vtadminpb.VTGate, error) {
 	opts := c.getQueryOptions()
 	opts.Datacenter = c.vtgateDatacenter
@@ -308,6 +313,8 @@ func (c *ConsulDiscovery) DiscoverVtctld(ctx context.Context, tags []string) (*v
 	return c.discoverVtctld(ctx, tags, executeFQDNTemplate)
 }
 
+// discoverVtctld calls discoverVtctlds and then returns a random vtctld from
+// the result. see discoverVtctlds for further documentation.
 func (c *ConsulDiscovery) discoverVtctld(ctx context.Context, tags []string, executeFQDNTemplate bool) (*vtadminpb.Vtctld, error) {
 	vtctlds, err := c.discoverVtctlds(ctx, tags, executeFQDNTemplate)
 	if err != nil {
@@ -351,6 +358,9 @@ func (c *ConsulDiscovery) DiscoverVtctlds(ctx context.Context, tags []string) ([
 	return c.discoverVtctlds(ctx, tags, executeFQDNTemplate)
 }
 
+// discoverVtctlds does the actual work of discovering Vtctld hosts from a
+// consul datacenter. executeFQDNTemplate is boolean to allow an optimization
+// for DiscoverVtctldAddr (the only function that sets the boolean to false).
 func (c *ConsulDiscovery) discoverVtctlds(_ context.Context, tags []string, executeFQDNTemplate bool) ([]*vtadminpb.Vtctld, error) {
 	opts := c.getQueryOptions()
 	opts.Datacenter = c.vtctldDatacenter

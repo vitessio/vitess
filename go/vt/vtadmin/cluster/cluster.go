@@ -415,8 +415,8 @@ func (c *Cluster) GetGates(ctx context.Context) ([]*vtadminpb.VTGate, error) {
 		return nil, fmt.Errorf("DiscoverVTGates(cluster = %s): %w", c.ID, err)
 	}
 
-	// Not every discovery implementation will necessarily populate the Cluster
-	// field, so we do so here.
+	// This overwrites any Cluster field populated by a particular discovery
+	// implementation.
 	cpb := c.ToProto()
 
 	for _, g := range gates {
