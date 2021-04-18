@@ -734,7 +734,6 @@ func (e *Executor) ExecuteWithVReplication(ctx context.Context, onlineDDL *schem
 // Validation included testing the backend MySQL server and the gh-ost binary itself
 // Execution runs first a dry run, then an actual migration
 func (e *Executor) ExecuteWithGhost(ctx context.Context, onlineDDL *schema.OnlineDDL) error {
-	_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, "0: ExecuteWithGhost")
 	if e.isAnyMigrationRunning() {
 		return ErrExecutorMigrationAlreadyRunning
 	}
@@ -752,7 +751,6 @@ func (e *Executor) ExecuteWithGhost(ctx context.Context, onlineDDL *schema.Onlin
 		log.Errorf(err.Error())
 		return err
 	}
-	_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, "1: ExecuteWithGhost")
 	onlineDDLPassword, err := e.createOnlineDDLUser(ctx)
 	if err != nil {
 		err := fmt.Errorf("Error creating gh-ost user: %+v", err)
@@ -791,7 +789,7 @@ export ONLINE_DDL_PASSWORD
 	}
 	onHookContent := func(status schema.OnlineDDLStatus) string {
 		return fmt.Sprintf(`#!/bin/bash
-curl --max-time 3 -s 'http://localhost:%d/schema-migration/report-status?uuid=%s&status=%s&dryrun='"$GH_OST_DRY_RUN"'&progress='"$GH_OST_PROGRESS"'&eta='"$GH_OST_ETA_SECONDS"
+curl --max-time 3 -s 'http://localhost:%d/schema-migration/report-status?uuid=%s&status=%s&dryrun='"$GH_OST_DRY_RUN"'&progress='"$GH_OST_PROGRESS"'&eta='"$GH_OST_ETA_SECONDS" || exit 1
 		`, *servenv.Port, onlineDDL.UUID, string(status))
 	}
 	if _, err := createTempScript(tempDir, "gh-ost-on-startup", onHookContent(schema.OnlineDDLStatusRunning)); err != nil {
@@ -811,7 +809,6 @@ curl --max-time 3 -s 'http://localhost:%d/schema-migration/report-status?uuid=%s
 		return err
 	}
 	serveSocketFile := path.Join(tempDir, "serve.sock")
-	_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, "2: ExecuteWithGhost")
 
 	if err := e.deleteGhostPanicFlagFile(onlineDDL.UUID); err != nil {
 		log.Errorf("Error removing gh-ost panic flag file %s: %+v", e.ghostPanicFlagFileName(onlineDDL.UUID), err)
@@ -835,14 +832,12 @@ curl --max-time 3 -s 'http://localhost:%d/schema-migration/report-status?uuid=%s
 		return err
 	}
 	log.Infof("+ OK")
-	_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, "3: ExecuteWithGhost")
 
 	if err := e.updateMigrationLogPath(ctx, onlineDDL.UUID, variables.host, tempDir); err != nil {
 		return err
 	}
 
 	runGhost := func(execute bool) error {
-		_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, "X0: runGhost")
 		alterOptions := e.parseAlterOptions(ctx, onlineDDL)
 		forceTableNames := fmt.Sprintf("%s_%s", onlineDDL.UUID, ReadableTimestamp())
 
@@ -880,15 +875,14 @@ curl --max-time 3 -s 'http://localhost:%d/schema-migration/report-status?uuid=%s
 			fmt.Sprintf(`--execute=%t`, execute),
 		}
 		args = append(args, onlineDDL.RuntimeOptions()...)
-		_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, fmt.Sprintf("X1: ExecuteWithGhost %v", execute))
+		_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, fmt.Sprintf("executing gh-ost --execute=%v", execute))
 		_, err := execCmd("bash", args, os.Environ(), "/tmp", nil, nil)
-		_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, fmt.Sprintf("X2: ExecuteWithGhost %v", execute))
+		_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, fmt.Sprintf("executed gh-ost --execute=%v, err=%v", execute, err))
 		return err
 	}
 
 	atomic.StoreInt64(&e.ghostMigrationRunning, 1)
 	e.lastMigrationUUID = onlineDDL.UUID
-	_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, "4: ExecuteWithGhost")
 
 	go func() error {
 		defer atomic.StoreInt64(&e.ghostMigrationRunning, 0)
@@ -896,7 +890,6 @@ curl --max-time 3 -s 'http://localhost:%d/schema-migration/report-status?uuid=%s
 		defer e.gcArtifacts(ctx)
 
 		log.Infof("Will now dry-run gh-ost on: %s:%d", variables.host, variables.port)
-		_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, "5: ExecuteWithGhost")
 		if err := runGhost(false); err != nil {
 			// perhaps gh-ost was interrupted midway and didn't have the chance to send a "failes" status
 			_ = e.updateMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusFailed)
@@ -906,7 +899,6 @@ curl --max-time 3 -s 'http://localhost:%d/schema-migration/report-status?uuid=%s
 			return err
 		}
 		log.Infof("+ OK")
-		_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, "6: ExecuteWithGhost")
 
 		log.Infof("Will now run gh-ost on: %s:%d", variables.host, variables.port)
 		startedMigrations.Add(1)
@@ -918,7 +910,6 @@ curl --max-time 3 -s 'http://localhost:%d/schema-migration/report-status?uuid=%s
 			log.Errorf("Error running gh-ost: %+v", err)
 			return err
 		}
-		_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, "7: ExecuteWithGhost")
 		// Migration successful!
 		os.RemoveAll(tempDir)
 		successfulMigrations.Add(1)
