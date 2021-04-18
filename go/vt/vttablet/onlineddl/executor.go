@@ -900,6 +900,7 @@ curl -s 'http://localhost:%d/schema-migration/report-status?uuid=%s&status=%s&dr
 
 		log.Infof("Will now run gh-ost on: %s:%d", variables.host, variables.port)
 		startedMigrations.Add(1)
+		_ = e.updateMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusRunning)
 		if err := runGhost(true); err != nil {
 			// perhaps gh-ost was interrupted midway and didn't have the chance to send a "failes" status
 			_ = e.updateMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusFailed)
