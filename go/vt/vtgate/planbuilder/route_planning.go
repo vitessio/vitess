@@ -35,8 +35,8 @@ import (
 
 var _ selectPlanner = gen4Planner
 
-func gen4Planner(_ string) func(sqlparser.Statement, sqlparser.BindVars, ContextVSchema) (engine.Primitive, error) {
-	return func(stmt sqlparser.Statement, reservedVars sqlparser.BindVars, vschema ContextVSchema) (engine.Primitive, error) {
+func gen4Planner(_ string) func(sqlparser.Statement, *sqlparser.ReservedVars, ContextVSchema) (engine.Primitive, error) {
+	return func(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema ContextVSchema) (engine.Primitive, error) {
 		sel, ok := stmt.(*sqlparser.Select)
 		if !ok {
 			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%T not yet supported", stmt)
@@ -478,7 +478,7 @@ func breakPredicateInLHSandRHS(expr sqlparser.Expr, semTable *semantics.SemTable
 			}
 			if deps.IsSolvedBy(lhs) {
 				columns = append(columns, node)
-				arg := sqlparser.NewArgument(":" + node.CompliantName(""))
+				arg := sqlparser.NewArgument(node.CompliantName())
 				cursor.Replace(arg)
 			}
 		}

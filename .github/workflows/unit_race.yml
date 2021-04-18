@@ -36,4 +36,4 @@ jobs:
     - name: unit_race
       timeout-minutes: 30
       run: |
-        eatmydata -- make unit_test_race
+        eatmydata -- go run test.go -print-log -follow -retry=1 unit_race

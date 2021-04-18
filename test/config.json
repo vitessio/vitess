@@ -23,6 +23,17 @@
 			"RetryMax": 0,
 			"Tags": []
 		},
+		"e2e": {
+			"File": "",
+			"Args": [],
+			"Command": [
+				"tools/e2e_test_runner.sh"
+			],
+			"Manual": false,
+			"Shard": "",
+			"RetryMax": 0,
+			"Tags": []
+		},
 		"e2e_race": {
 			"File": "",
 			"Args": [],
@@ -55,6 +66,39 @@
 			],
 			"Manual": false,
 			"Shard": "5",
+			"RetryMax": 0,
+			"Tags": []
+		},
+		"local_example": {
+			"File": "",
+			"Args": [],
+			"Command": [
+				"test/local_example.sh"
+			],
+			"Manual": false,
+			"Shard": "",
+			"RetryMax": 0,
+			"Tags": []
+		},
+		"legacy_local_example": {
+			"File": "",
+			"Args": [],
+			"Command": [
+				"test/legacy_local_example.sh"
+			],
+			"Manual": false,
+			"Shard": "",
+			"RetryMax": 0,
+			"Tags": []
+		},
+		"region_example": {
+			"File": "",
+			"Args": [],
+			"Command": [
+				"test/region_example.sh"
+			],
+			"Manual": false,
+			"Shard": "",
 			"RetryMax": 0,
 			"Tags": []
 		},

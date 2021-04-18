@@ -51,4 +51,4 @@ jobs:
         fi
         # Make sure that testing is entirely non-reliant on config
         mv config config-moved
-        eatmydata -- test/legacy_local_example.sh
+        eatmydata -- go run test.go -print-log -follow -retry=1 legacy_local_example
