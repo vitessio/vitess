@@ -8163,4 +8163,8 @@
 2021-04-18T12:06:31Z,Cluster (onlineddl_declarative),https://github.com/vitessio/vitess/actions/runs/760682908
 2021-04-18T12:06:31Z,Cluster (onlineddl_ghost),https://github.com/vitessio/vitess/actions/runs/760682884
 2021-04-18T12:20:02Z,Cluster (27),https://github.com/vitessio/vitess/actions/runs/760705959
+2021-04-18T12:20:02Z,Cluster (onlineddl_declarative),https://github.com/vitessio/vitess/actions/runs/760705987
+2021-04-18T12:20:02Z,Cluster (onlineddl_ghost),https://github.com/vitessio/vitess/actions/runs/760705981
 2021-04-18T12:20:02Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/760705980
+2021-04-18T12:32:52Z,Cluster (onlineddl_ghost),https://github.com/vitessio/vitess/actions/runs/760727227
+2021-04-18T12:38:21Z,Cluster (27),https://github.com/vitessio/vitess/actions/runs/760736297
