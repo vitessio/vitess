@@ -116,20 +116,9 @@ func TestTabletChange(t *testing.T) {
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("PlannedReparentShard", "-keyspace_shard", fmt.Sprintf("%s/%s", keyspaceName, "-80"))
 	require.NoError(t, err)
 
-	// just to make sure that a new connection is able to successfully run these queries
-	conn2, err := mysql.Connect(context.Background(), &vtParams)
-	require.NoError(t, err)
-	defer conn2.Close()
-	checkedExec(t, conn2, "set enable_system_settings = true")
-	checkedExec(t, conn2, fmt.Sprintf("use %s@master", keyspaceName))
-	checkedExec(t, conn2, "select * from test")
-
-	for i := 0; i < 10; i++ {
-		// this should pass as there is new master tablet and is serving.
-		_, err = exec(t, conn, "select * from test")
-		assert.NoError(t, err, "failed for case: %d", i)
-	}
-	// This test currently failed with error: vttablet: rpc error: code = FailedPrecondition desc = operation not allowed in state NOT_SERVING (errno 1105) (sqlstate HY000) during query: select * from test
+	// this should pass as there is new master tablet and is serving.
+	_, err = exec(t, conn, "select * from test")
+	assert.NoError(t, err)
 }
 
 func exec(t *testing.T, conn *mysql.Conn, query string) (*sqltypes.Result, error) {

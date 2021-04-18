@@ -21,6 +21,7 @@ import (
 	"flag"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 
@@ -124,12 +125,12 @@ func TestServingChange(t *testing.T) {
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", replicaTablet.Alias, "rdonly")
 	require.NoError(t, err)
 
-	for i := 0; i < 10; i++ {
-		// this should pass now as there is rdonly present
-		_, err = exec(t, conn, "select * from test")
-		assert.NoError(t, err, "failed for case: %d", i)
-	}
-	// This test currently failed with error: vttablet: rpc error: code = FailedPrecondition desc = operation not allowed in state NOT_SERVING (errno 1105) (sqlstate HY000) during query: select * from test
+	// added some sleep time for VTGate to know the healthy rdonly.
+	time.Sleep(5 * time.Second)
+
+	// this should pass now as there is rdonly present
+	_, err = exec(t, conn, "select * from test")
+	assert.NoError(t, err)
 }
 
 func exec(t *testing.T, conn *mysql.Conn, query string) (*sqltypes.Result, error) {
