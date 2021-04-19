@@ -221,7 +221,19 @@ func (stc *ScatterConn) ExecuteMultiShard(
 
 			qs, err = getQueryService(rs, info)
 			if err != nil {
-				return nil, err
+				switch info.actionNeeded {
+				case nothing:
+					info.actionNeeded = reserve
+				case begin:
+					info.actionNeeded = reserveBegin
+				default:
+					return nil, err
+				}
+				retry := checkAndResetShardSession(info, err, session)
+				if retry != newQS {
+					return nil, err
+				}
+				qs = rs.Gateway
 			}
 
 			switch info.actionNeeded {
