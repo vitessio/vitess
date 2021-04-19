@@ -789,7 +789,7 @@ export ONLINE_DDL_PASSWORD
 	}
 	onHookContent := func(status schema.OnlineDDLStatus) string {
 		return fmt.Sprintf(`#!/bin/bash
-	curl --max-time 3 -s 'http://localhost:%d/schema-migration/report-status?uuid=%s&status=%s&dryrun='"$GH_OST_DRY_RUN"'&progress='"$GH_OST_PROGRESS"'&eta='"$GH_OST_ETA_SECONDS"
+	curl --max-time 3 -s 'http://127.0.0.1:%d/schema-migration/report-status?uuid=%s&status=%s&dryrun='"$GH_OST_DRY_RUN"'&progress='"$GH_OST_PROGRESS"'&eta='"$GH_OST_ETA_SECONDS"
 	`, *servenv.Port, onlineDDL.UUID, string(status))
 	}
 	if _, err := createTempScript(tempDir, "gh-ost-on-startup", onHookContent(schema.OnlineDDLStatusRunning)); err != nil {
@@ -854,7 +854,7 @@ export ONLINE_DDL_PASSWORD
 		os.Setenv("ONLINE_DDL_PASSWORD", onlineDDLPassword)
 		args := []string{
 			wrapperScriptFileName,
-			fmt.Sprintf(`--host=%s`, variables.host),
+			fmt.Sprintf(`--host=%s`, "127.0.0.1"),
 			fmt.Sprintf(`--port=%d`, variables.port),
 			fmt.Sprintf(`--conf=%s`, credentialsConfigFileName), // user & password found here
 			`--allow-on-master`,
@@ -869,7 +869,7 @@ export ONLINE_DDL_PASSWORD
 			fmt.Sprintf("--serve-socket-file=%s", serveSocketFile),
 			// fmt.Sprintf("--hooks-path=%s", tempDir),
 			fmt.Sprintf(`--hooks-hint-token=%s`, onlineDDL.UUID),
-			fmt.Sprintf(`--throttle-http=http://localhost:%d/throttler/check?app=online-ddl:gh-ost:%s&p=low`, *servenv.Port, onlineDDL.UUID),
+			fmt.Sprintf(`--throttle-http=http://127.0.0.1:%d/throttler/check?app=online-ddl:gh-ost:%s&p=low`, *servenv.Port, onlineDDL.UUID),
 			fmt.Sprintf(`--database=%s`, e.dbName),
 			fmt.Sprintf(`--table=%s`, onlineDDL.Table),
 			fmt.Sprintf(`--alter=%s`, alterOptions),
