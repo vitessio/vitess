@@ -8211,3 +8211,4 @@
 2021-04-19T08:11:03Z,Cluster (27),https://github.com/vitessio/vitess/actions/runs/762835663
 2021-04-19T08:31:27Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/762890390
 2021-04-19T09:41:38Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/763086931
+2021-04-19T09:41:38Z,unit_race,https://github.com/vitessio/vitess/actions/runs/763086946
