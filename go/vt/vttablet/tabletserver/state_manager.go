@@ -348,13 +348,13 @@ func (sm *stateManager) StartRequest(ctx context.Context, target *querypb.Target
 
 	if sm.state != StateServing || !sm.replHealthy {
 		// This specific error string needs to be returned for vtgate buffering to work.
-		return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "operation not allowed in state NOT_SERVING")
+		return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.NotServing)
 	}
 
 	shuttingDown := sm.wantState != StateServing
 	if shuttingDown && !allowOnShutdown {
 		// This specific error string needs to be returned for vtgate buffering to work.
-		return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "operation not allowed in state SHUTTING_DOWN")
+		return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.ShuttingDown)
 	}
 
 	if target != nil {
@@ -369,7 +369,7 @@ func (sm *stateManager) StartRequest(ctx context.Context, target *querypb.Target
 					goto ok
 				}
 			}
-			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "invalid tablet type: %v, want: %v or %v", target.TabletType, sm.target.TabletType, sm.alsoAllow)
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%s: %v, want: %v or %v", vterrors.WrongTablet, target.TabletType, sm.target.TabletType, sm.alsoAllow)
 		}
 	} else {
 		if !tabletenv.IsLocalContext(ctx) {

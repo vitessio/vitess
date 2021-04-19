@@ -698,8 +698,6 @@ func (stc *ScatterConn) ExecuteLock(
 }
 
 var txClosed = regexp.MustCompile("transaction ([a-z0-9:]+) (?:ended|not found)")
-var notServing = regexp.MustCompile("operation not allowed in state (NOT_SERVING|SHUTTING_DOWN)")
-var wrongTabletType = regexp.MustCompile("invalid tablet type:")
 
 func wasConnectionClosed(err error) bool {
 	sqlErr := mysql.NewSQLErrorFromError(err).(*mysql.SQLError)
@@ -713,7 +711,7 @@ func wasConnectionClosed(err error) bool {
 func requireNewQS(err error) bool {
 	code := vterrors.Code(err)
 	msg := err.Error()
-	return code == vtrpcpb.Code_FAILED_PRECONDITION && (notServing.MatchString(msg) || wrongTabletType.MatchString(msg))
+	return code == vtrpcpb.Code_FAILED_PRECONDITION && (vterrors.RxOp.MatchString(msg) || vterrors.RxWrongTablet.MatchString(msg))
 }
 
 // actionInfo looks at the current session, and returns information about what needs to be done for this tablet
