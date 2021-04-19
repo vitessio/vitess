@@ -323,6 +323,7 @@ func TestReservedConnFail(t *testing.T) {
 	assert.Equal(t, 2, len(sbc0.Queries), "one for the failed attempt, and one for the retry")
 	require.Equal(t, 1, len(session.ShardSessions))
 	assert.NotEqual(t, oldRId, session.Session.ShardSessions[0].ReservedId, "should have recreated a reserved connection since the last connection was lost")
+	oldRId = session.Session.ShardSessions[0].ReservedId
 
 	sbc0.Queries = nil
 	sbc0.EphemeralShardErr = vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "operation not allowed in state NOT_SERVING during query: query1")
@@ -330,6 +331,7 @@ func TestReservedConnFail(t *testing.T) {
 	assert.Equal(t, 2, len(sbc0.Queries), "one for the failed attempt, and one for the retry")
 	require.Equal(t, 1, len(session.ShardSessions))
 	assert.NotEqual(t, oldRId, session.Session.ShardSessions[0].ReservedId, "should have recreated a reserved connection since the last connection was lost")
+	oldRId = session.Session.ShardSessions[0].ReservedId
 
 	sbc0.Queries = nil
 	sbc0.EphemeralShardErr = vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "invalid tablet type: REPLICA, want: MASTER or MASTER")
@@ -337,6 +339,24 @@ func TestReservedConnFail(t *testing.T) {
 	assert.Equal(t, 2, len(sbc0.Queries), "one for the failed attempt, and one for the retry")
 	require.Equal(t, 1, len(session.ShardSessions))
 	assert.NotEqual(t, oldRId, session.Session.ShardSessions[0].ReservedId, "should have recreated a reserved connection since the last connection was lost")
+	oldRId = session.Session.ShardSessions[0].ReservedId
+
+	tablet0 := sbc0.Tablet()
+	ths := hc.GetHealthyTabletStats(&querypb.Target{
+		Keyspace:   tablet0.GetKeyspace(),
+		Shard:      tablet0.GetShard(),
+		TabletType: tablet0.GetType(),
+	})
+	ths[0].Serving = false
+	sbc0Rep := hc.AddTestTablet("aa", "0", 2, keyspace, "0", topodatapb.TabletType_REPLICA, true, 1, nil)
+
+	sbc0.Queries = nil
+	_ = executeOnShardsReturnsErr(t, res, keyspace, sc, session, destinations)
+	assert.Equal(t, 0, len(sbc0.Queries), "one for the failed attempt, and one for the retry")
+	assert.Equal(t, 1, len(sbc0Rep.Queries), "one for the failed attempt, and one for the retry")
+	require.Equal(t, 1, len(session.ShardSessions))
+	assert.NotEqual(t, oldRId, session.Session.ShardSessions[0].ReservedId, "should have recreated a reserved connection since the last connection was lost")
+
 }
 
 func TestIsConnClosed(t *testing.T) {
