@@ -340,23 +340,51 @@ func TestReservedConnFail(t *testing.T) {
 	require.Equal(t, 1, len(session.ShardSessions))
 	assert.NotEqual(t, oldRId, session.Session.ShardSessions[0].ReservedId, "should have recreated a reserved connection since the last connection was lost")
 	oldRId = session.Session.ShardSessions[0].ReservedId
+	oldAlias := session.Session.ShardSessions[0].TabletAlias
 
+	// Test Setup
 	tablet0 := sbc0.Tablet()
 	ths := hc.GetHealthyTabletStats(&querypb.Target{
 		Keyspace:   tablet0.GetKeyspace(),
 		Shard:      tablet0.GetShard(),
 		TabletType: tablet0.GetType(),
 	})
-	ths[0].Serving = false
+	sbc0Th := ths[0]
+	sbc0Th.Serving = false
 	sbc0Rep := hc.AddTestTablet("aa", "0", 2, keyspace, "0", topodatapb.TabletType_REPLICA, true, 1, nil)
 
 	sbc0.Queries = nil
 	_ = executeOnShardsReturnsErr(t, res, keyspace, sc, session, destinations)
-	assert.Equal(t, 0, len(sbc0.Queries), "one for the failed attempt, and one for the retry")
-	assert.Equal(t, 1, len(sbc0Rep.Queries), "one for the failed attempt, and one for the retry")
+	assert.Equal(t, 0, len(sbc0.Queries), "no attempt should be made as the tablet is not serving")
+	assert.Equal(t, 1, len(sbc0Rep.Queries), "first attempt should pass as it is healthy")
 	require.Equal(t, 1, len(session.ShardSessions))
 	assert.NotEqual(t, oldRId, session.Session.ShardSessions[0].ReservedId, "should have recreated a reserved connection since the last connection was lost")
+	assert.NotEqual(t, oldAlias, session.Session.ShardSessions[0].TabletAlias, "tablet alias should have changed as this is a different tablet")
+	oldRId = session.Session.ShardSessions[0].ReservedId
+	oldAlias = session.Session.ShardSessions[0].TabletAlias
 
+	// Test Setup
+	tablet0Rep := sbc0Rep.Tablet()
+	newThs := hc.GetHealthyTabletStats(&querypb.Target{
+		Keyspace:   tablet0Rep.GetKeyspace(),
+		Shard:      tablet0Rep.GetShard(),
+		TabletType: tablet0Rep.GetType(),
+	})
+	sbc0RepTh := newThs[0]
+	sbc0RepTh.Target = &querypb.Target{
+		Keyspace:   tablet0Rep.GetKeyspace(),
+		Shard:      tablet0Rep.GetShard(),
+		TabletType: topodatapb.TabletType_SPARE,
+	}
+	sbc0Th.Serving = true
+
+	sbc0Rep.Queries = nil
+	_ = executeOnShardsReturnsErr(t, res, keyspace, sc, session, destinations)
+	assert.Equal(t, 1, len(sbc0.Queries), "first attempt should pass as it is healthy and matches the target")
+	assert.Equal(t, 0, len(sbc0Rep.Queries), " no attempt should be made as the tablet target is changed")
+	require.Equal(t, 1, len(session.ShardSessions))
+	assert.NotEqual(t, oldRId, session.Session.ShardSessions[0].ReservedId, "should have recreated a reserved connection since the last connection was lost")
+	assert.NotEqual(t, oldAlias, session.Session.ShardSessions[0].TabletAlias, "tablet alias should have changed as this is a different tablet")
 }
 
 func TestIsConnClosed(t *testing.T) {
