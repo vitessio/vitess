@@ -435,7 +435,7 @@ func (route *Route) routeInfoSchemaQuery(vcursor VCursor, bindVars map[string]*q
 			specifiedKS = ks
 		}
 		if specifiedKS != ks {
-			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "two predicates for specifying the database are not supported")
+			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "specifying two different database in the query is not supported")
 		}
 	}
 	if specifiedKS != "" {
