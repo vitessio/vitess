@@ -1,5 +1,5 @@
 /*
-Copyright 2019 The Vitess Authors.
+Copyright 2021 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -20,9 +20,13 @@ package filecustomrule
 import (
 	"flag"
 	"io/ioutil"
+	"path"
 	"time"
 
+	"github.com/fsnotify/fsnotify"
+
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
 )
@@ -32,6 +36,8 @@ var (
 	fileCustomRule = NewFileCustomRule()
 	// Commandline flag to specify rule path
 	fileRulePath = flag.String("filecustomrules", "", "file based custom rule path")
+
+	fileRuleShouldWatch = flag.Bool("filecustomrules_watch", false, "set up a watch on the target file and reload query rules when it changes")
 )
 
 // FileCustomRule is an implementation of CustomRuleManager, it reads custom query
@@ -102,6 +108,45 @@ func ActivateFileCustomRules(qsc tabletserver.Controller) {
 	if *fileRulePath != "" {
 		qsc.RegisterQueryRuleSource(FileCustomRuleSource)
 		fileCustomRule.Open(qsc, *fileRulePath)
+
+		if *fileRuleShouldWatch {
+			baseDir := path.Dir(*fileRulePath)
+			ruleFileName := path.Base(*fileRulePath)
+
+			watcher, err := fsnotify.NewWatcher()
+			if err != nil {
+				log.Fatalf("Unable create new fsnotify watcher: %v", err)
+			}
+			servenv.OnTerm(func() { watcher.Close() })
+
+			go func(tsc tabletserver.Controller) {
+				for {
+					select {
+					case evt, ok := <-watcher.Events:
+						if !ok {
+							return
+						}
+						if path.Base(evt.Name) != ruleFileName {
+							continue
+						}
+						if err := fileCustomRule.Open(tsc, *fileRulePath); err != nil {
+							log.Infof("Failed to load custom rules from %q: %v", *fileRulePath, err)
+						} else {
+							log.Infof("Loaded custom rules from %q", *fileRulePath)
+						}
+					case err, ok := <-watcher.Errors:
+						if !ok {
+							return
+						}
+						log.Errorf("Error watching %v: %v", *fileRulePath, err)
+					}
+				}
+			}(qsc)
+
+			if err = watcher.Add(baseDir); err != nil {
+				log.Fatalf("Unable to set up watcher for %v + %v: %v", baseDir, ruleFileName, err)
+			}
+		}
 	}
 }
 
