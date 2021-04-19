@@ -144,7 +144,7 @@ func (fhc *FakeHealthCheck) ReplaceTablet(old, new *topodatapb.Tablet) {
 }
 
 // TabletConnection returns the TabletConn of the given tablet.
-func (fhc *FakeHealthCheck) TabletConnection(alias *topodatapb.TabletAlias, _ *querypb.Target) (queryservice.QueryService, error) {
+func (fhc *FakeHealthCheck) TabletConnection(alias *topodatapb.TabletAlias, target *querypb.Target) (queryservice.QueryService, error) {
 	aliasStr := topoproto.TabletAliasString(alias)
 	fhc.mu.RLock()
 	defer fhc.mu.RUnlock()
@@ -153,6 +153,10 @@ func (fhc *FakeHealthCheck) TabletConnection(alias *topodatapb.TabletAlias, _ *q
 			if !item.ts.Serving {
 				return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.NotServing)
 			}
+			if !proto.Equal(item.ts.Target, target) {
+				return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%s: target mismatch %v vs %v", vterrors.WrongTablet, item.ts.Target, target)
+			}
+
 			return item.ts.Conn, nil
 		}
 	}
