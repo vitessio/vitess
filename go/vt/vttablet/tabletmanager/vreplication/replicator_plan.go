@@ -218,12 +218,14 @@ func (tp *TablePlan) applyBulkInsert(sqlbuffer *bytes2.Buffer, rows *binlogdatap
 		if i > 0 {
 			sqlbuffer.WriteString(", ")
 		}
-		tp.BulkInsertValues.AppendFromRow(sqlbuffer, tp.Fields, row)
+		if err := tp.BulkInsertValues.AppendFromRow(sqlbuffer, tp.Fields, row); err != nil {
+			return nil, err
+		}
 	}
 	if tp.BulkInsertOnDup != nil {
 		sqlbuffer.WriteString(tp.BulkInsertOnDup.Query)
 	}
-	return executor(sqlbuffer.String())
+	return executor(sqlbuffer.StringUnsafe())
 }
 
 // During the copy phase we run catchup and fastforward, which stream binlogs. While streaming we should only process
