@@ -8214,4 +8214,11 @@
 2021-04-19T09:41:38Z,unit_race,https://github.com/vitessio/vitess/actions/runs/763086946
 2021-04-19T12:26:19Z,Cluster (15),https://github.com/vitessio/vitess/actions/runs/763527914
 2021-04-19T12:26:19Z,Cluster (27),https://github.com/vitessio/vitess/actions/runs/763527962
+2021-04-19T14:48:41Z,Cluster (27),https://github.com/vitessio/vitess/actions/runs/763951213
+2021-04-19T14:48:41Z,Cluster (onlineddl_vrepl),https://github.com/vitessio/vitess/actions/runs/763951231
 2021-04-19T14:48:41Z,Cluster (upgrade),https://github.com/vitessio/vitess/actions/runs/763951222
+2021-04-19T14:48:41Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/763951206
+2021-04-19T14:48:41Z,Cluster (vreplication_cellalias),https://github.com/vitessio/vitess/actions/runs/763951198
+2021-04-19T14:48:41Z,Cluster (vreplication_multicell),https://github.com/vitessio/vitess/actions/runs/763951220
+2021-04-19T14:48:41Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/763951201
+2021-04-19T14:59:19Z,endtoend,https://github.com/vitessio/vitess/actions/runs/763981124
