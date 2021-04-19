@@ -19,7 +19,10 @@ package onlineddl
 import (
 	"context"
 	"fmt"
+	"io/ioutil"
 	"os"
+	"path"
+	"strings"
 	"testing"
 
 	"vitess.io/vitess/go/mysql"
@@ -117,6 +120,26 @@ func CheckMigrationStatus(t *testing.T, vtParams *mysql.ConnParams, shards []clu
 	for _, row := range r.Named().Rows {
 		if row["migration_uuid"].ToString() == uuid && row["migration_status"].ToString() == string(expectStatus) {
 			count++
+		}
+		{
+			logPath := row["log_path"].ToString()
+			tokens := strings.Split(logPath, ":")
+			if len(tokens) < 2 {
+				continue
+			}
+			p := tokens[1]
+			logFile := path.Join(p, "migration.log")
+			f, err := os.Open(logFile)
+			if err != nil {
+				fmt.Printf("ERROR: %v\n", err)
+				continue
+			}
+			b, err := ioutil.ReadAll(f)
+			if err != nil {
+				fmt.Printf("ERROR: %v\n", err)
+				continue
+			}
+			fmt.Println(string(b))
 		}
 	}
 	assert.Equal(t, len(shards), count)
