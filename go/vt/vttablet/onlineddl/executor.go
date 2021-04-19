@@ -867,7 +867,7 @@ export ONLINE_DDL_PASSWORD
 			`--default-retries=120`,
 			fmt.Sprintf("--force-table-names=%s", forceTableNames),
 			fmt.Sprintf("--serve-socket-file=%s", serveSocketFile),
-			fmt.Sprintf("--hooks-path=%s", tempDir),
+			// fmt.Sprintf("--hooks-path=%s", tempDir),
 			fmt.Sprintf(`--hooks-hint-token=%s`, onlineDDL.UUID),
 			fmt.Sprintf(`--throttle-http=http://localhost:%d/throttler/check?app=online-ddl:gh-ost:%s&p=low`, *servenv.Port, onlineDDL.UUID),
 			fmt.Sprintf(`--database=%s`, e.dbName),
@@ -912,6 +912,8 @@ export ONLINE_DDL_PASSWORD
 			log.Errorf("Error running gh-ost: %+v", err)
 			return err
 		}
+		_ = e.updateMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusComplete)
+		_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, "gh-ost migration successful")
 		// Migration successful!
 		os.RemoveAll(tempDir)
 		successfulMigrations.Add(1)
