@@ -8204,4 +8204,8 @@
 2021-04-19T06:24:19Z,Cluster (upgrade),https://github.com/vitessio/vitess/actions/runs/762566005
 2021-04-19T06:37:32Z,Cluster (onlineddl_declarative),https://github.com/vitessio/vitess/actions/runs/762597149
 2021-04-19T06:37:32Z,Cluster (onlineddl_ghost),https://github.com/vitessio/vitess/actions/runs/762597146
+2021-04-19T08:04:22Z,Cluster (12),https://github.com/vitessio/vitess/actions/runs/762817127
+2021-04-19T08:04:22Z,Cluster (onlineddl_declarative),https://github.com/vitessio/vitess/actions/runs/762817120
+2021-04-19T08:04:22Z,Cluster (onlineddl_ghost),https://github.com/vitessio/vitess/actions/runs/762817117
 2021-04-19T08:04:22Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/762817167
+2021-04-19T08:11:03Z,Cluster (27),https://github.com/vitessio/vitess/actions/runs/762835663
