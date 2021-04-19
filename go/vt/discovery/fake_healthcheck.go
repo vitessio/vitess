@@ -146,7 +146,7 @@ func (fhc *FakeHealthCheck) ReplaceTablet(old, new *topodatapb.Tablet) {
 }
 
 // TabletConnection returns the TabletConn of the given tablet.
-func (fhc *FakeHealthCheck) TabletConnection(alias *topodatapb.TabletAlias) (queryservice.QueryService, error) {
+func (fhc *FakeHealthCheck) TabletConnection(alias *topodatapb.TabletAlias, target *querypb.Target) (queryservice.QueryService, error) {
 	aliasStr := topoproto.TabletAliasString(alias)
 	fhc.mu.RLock()
 	defer fhc.mu.RUnlock()

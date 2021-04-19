@@ -45,19 +45,19 @@ import (
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"github.com/golang/protobuf/proto"
+
+	"vitess.io/vitess/go/flagutil"
+	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 
-	"vitess.io/vitess/go/flagutil"
-
-	"vitess.io/vitess/go/vt/topo"
-
-	"vitess.io/vitess/go/stats"
-	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/proto/query"
-	"vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/topo/topoproto"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	topoprotopb "vitess.io/vitess/go/vt/topo/topoproto"
 )
 
 var (
@@ -72,7 +72,7 @@ var (
 	//TODO(deepthi): change these vars back to unexported when discoveryGateway is removed
 
 	// AllowedTabletTypes is the list of allowed tablet types. e.g. {MASTER, REPLICA}
-	AllowedTabletTypes []topodata.TabletType
+	AllowedTabletTypes []topodatapb.TabletType
 	// TabletFilters are the keyspace|shard or keyrange filters to apply to the full set of tablets
 	TabletFilters flagutil.StringListValue
 	// KeyspacesToWatch - if provided this specifies which keyspaces should be
@@ -144,7 +144,7 @@ func init() {
 	// Flags are not parsed at this point and the default value of the flag (just the hostname) will be used.
 	ParseTabletURLTemplateFromFlag()
 	flag.Var(&TabletFilters, "tablet_filters", "Specifies a comma-separated list of 'keyspace|shard_name or keyrange' values to filter the tablets to watch")
-	topoproto.TabletTypeListVar(&AllowedTabletTypes, "allowed_tablet_types", "Specifies the tablet types this vtgate is allowed to route queries to")
+	topoprotopb.TabletTypeListVar(&AllowedTabletTypes, "allowed_tablet_types", "Specifies the tablet types this vtgate is allowed to route queries to")
 	flag.Var(&KeyspacesToWatch, "keyspaces_to_watch", "Specifies which keyspaces this vtgate should have access to while routing queries or accessing the vschema")
 }
 
@@ -152,11 +152,11 @@ func init() {
 // It is separated out to enable unit testing.
 type TabletRecorder interface {
 	// AddTablet adds the tablet.
-	AddTablet(tablet *topodata.Tablet)
+	AddTablet(tablet *topodatapb.Tablet)
 	// RemoveTablet removes the tablet.
-	RemoveTablet(tablet *topodata.Tablet)
+	RemoveTablet(tablet *topodatapb.Tablet)
 	// ReplaceTablet does an AddTablet and RemoveTablet in one call, effectively replacing the old tablet with the new.
-	ReplaceTablet(old, new *topodata.Tablet)
+	ReplaceTablet(old, new *topodatapb.Tablet)
 }
 
 type keyspaceShardTabletType string
@@ -174,10 +174,10 @@ type HealthCheck interface {
 	// each given target before returning.
 	// It will return ctx.Err() if the context is canceled.
 	// It will return an error if it can't read the necessary topology records.
-	WaitForAllServingTablets(ctx context.Context, targets []*query.Target) error
+	WaitForAllServingTablets(ctx context.Context, targets []*querypb.Target) error
 
 	// TabletConnection returns the TabletConn of the given tablet.
-	TabletConnection(alias *topodata.TabletAlias) (queryservice.QueryService, error)
+	TabletConnection(alias *topodatapb.TabletAlias, target *querypb.Target) (queryservice.QueryService, error)
 
 	// RegisterStats registers the connection counts stats
 	RegisterStats()
@@ -188,7 +188,7 @@ type HealthCheck interface {
 	// the most recent tablet of type master.
 	// This returns a copy of the data so that callers can access without
 	// synchronization
-	GetHealthyTabletStats(target *query.Target) []*TabletHealth
+	GetHealthyTabletStats(target *querypb.Target) []*TabletHealth
 
 	// Subscribe adds a listener. Used by vtgate buffer to learn about master changes.
 	Subscribe() chan *TabletHealth
@@ -312,7 +312,7 @@ func NewHealthCheck(ctx context.Context, retryDelay, healthCheckTimeout time.Dur
 // AddTablet adds the tablet, and starts health check.
 // It does not block on making connection.
 // name is an optional tag for the tablet, e.g. an alternative address.
-func (hc *HealthCheckImpl) AddTablet(tablet *topodata.Tablet) {
+func (hc *HealthCheckImpl) AddTablet(tablet *topodatapb.Tablet) {
 	// check whether grpc port is present on tablet, if not return
 	if tablet.PortMap["grpc"] == 0 {
 		return
@@ -326,7 +326,7 @@ func (hc *HealthCheckImpl) AddTablet(tablet *topodata.Tablet) {
 		return
 	}
 	ctx, cancelFunc := context.WithCancel(context.Background())
-	target := &query.Target{
+	target := &querypb.Target{
 		Keyspace:   tablet.Keyspace,
 		Shard:      tablet.Shard,
 		TabletType: tablet.Type,
@@ -340,7 +340,7 @@ func (hc *HealthCheckImpl) AddTablet(tablet *topodata.Tablet) {
 
 	// add to our datastore
 	key := hc.keyFromTarget(target)
-	tabletAlias := topoproto.TabletAliasString(tablet.Alias)
+	tabletAlias := topoprotopb.TabletAliasString(tablet.Alias)
 	if _, ok := hc.healthByAlias[tabletAliasString(tabletAlias)]; ok {
 		// We should not add a tablet that we already have
 		log.Errorf("Program bug: tried to add existing tablet: %v to healthcheck", tabletAlias)
@@ -363,23 +363,23 @@ func (hc *HealthCheckImpl) AddTablet(tablet *topodata.Tablet) {
 
 // RemoveTablet removes the tablet, and stops the health check.
 // It does not block.
-func (hc *HealthCheckImpl) RemoveTablet(tablet *topodata.Tablet) {
+func (hc *HealthCheckImpl) RemoveTablet(tablet *topodatapb.Tablet) {
 	hc.deleteTablet(tablet)
 }
 
 // ReplaceTablet removes the old tablet and adds the new tablet.
-func (hc *HealthCheckImpl) ReplaceTablet(old, new *topodata.Tablet) {
+func (hc *HealthCheckImpl) ReplaceTablet(old, new *topodatapb.Tablet) {
 	hc.RemoveTablet(old)
 	hc.AddTablet(new)
 }
 
-func (hc *HealthCheckImpl) deleteTablet(tablet *topodata.Tablet) {
+func (hc *HealthCheckImpl) deleteTablet(tablet *topodatapb.Tablet) {
 	log.Infof("Removing tablet from healthcheck: %v", tablet)
 	hc.mu.Lock()
 	defer hc.mu.Unlock()
 
 	key := hc.keyFromTablet(tablet)
-	tabletAlias := tabletAliasString(topoproto.TabletAliasString(tablet.Alias))
+	tabletAlias := tabletAliasString(topoprotopb.TabletAliasString(tablet.Alias))
 	// delete from authoritative map
 	th, ok := hc.healthByAlias[tabletAlias]
 	if !ok {
@@ -404,17 +404,17 @@ func (hc *HealthCheckImpl) deleteTablet(tablet *topodata.Tablet) {
 	}
 }
 
-func (hc *HealthCheckImpl) updateHealth(th *TabletHealth, prevTarget *query.Target, trivialUpdate bool, isPrimaryUp bool) {
+func (hc *HealthCheckImpl) updateHealth(th *TabletHealth, prevTarget *querypb.Target, trivialUpdate bool, isPrimaryUp bool) {
 	// hc.healthByAlias is authoritative, it should be updated
 	hc.mu.Lock()
 	defer hc.mu.Unlock()
 
-	tabletAlias := tabletAliasString(topoproto.TabletAliasString(th.Tablet.Alias))
+	tabletAlias := tabletAliasString(topoprotopb.TabletAliasString(th.Tablet.Alias))
 	targetKey := hc.keyFromTarget(th.Target)
 	targetChanged := prevTarget.TabletType != th.Target.TabletType || prevTarget.Keyspace != th.Target.Keyspace || prevTarget.Shard != th.Target.Shard
 	if targetChanged {
 		// Error counter has to be set here in case we get a new tablet type for the first time in a stream response
-		hcErrorCounters.Add([]string{th.Target.Keyspace, th.Target.Shard, topoproto.TabletTypeLString(th.Target.TabletType)}, 0)
+		hcErrorCounters.Add([]string{th.Target.Keyspace, th.Target.Shard, topoprotopb.TabletTypeLString(th.Target.TabletType)}, 0)
 		// keyspace and shard are not expected to change, but just in case ...
 		// move this tabletHealthCheck to the correct map
 		oldTargetKey := hc.keyFromTarget(prevTarget)
@@ -427,7 +427,7 @@ func (hc *HealthCheckImpl) updateHealth(th *TabletHealth, prevTarget *query.Targ
 	// add it to the map by target
 	hc.healthData[targetKey][tabletAlias] = th
 
-	isPrimary := th.Target.TabletType == topodata.TabletType_MASTER
+	isPrimary := th.Target.TabletType == topodatapb.TabletType_MASTER
 	switch {
 	case isPrimary && isPrimaryUp:
 		if len(hc.healthy[targetKey]) == 0 {
@@ -437,9 +437,9 @@ func (hc *HealthCheckImpl) updateHealth(th *TabletHealth, prevTarget *query.Targ
 			// need to replace it.
 			if th.MasterTermStartTime < hc.healthy[targetKey][0].MasterTermStartTime {
 				log.Warningf("not marking healthy master %s as Up for %s because its MasterTermStartTime is smaller than the highest known timestamp from previous MASTERs %s: %d < %d ",
-					topoproto.TabletAliasString(th.Tablet.Alias),
-					topoproto.KeyspaceShardString(th.Target.Keyspace, th.Target.Shard),
-					topoproto.TabletAliasString(hc.healthy[targetKey][0].Tablet.Alias),
+					topoprotopb.TabletAliasString(th.Tablet.Alias),
+					topoprotopb.KeyspaceShardString(th.Target.Keyspace, th.Target.Shard),
+					topoprotopb.TabletAliasString(hc.healthy[targetKey][0].Tablet.Alias),
 					th.MasterTermStartTime,
 					hc.healthy[targetKey][0].MasterTermStartTime)
 			} else {
@@ -456,18 +456,18 @@ func (hc *HealthCheckImpl) updateHealth(th *TabletHealth, prevTarget *query.Targ
 		// We re-sort the healthy tablet list whenever we get a health update for tablets we can route to.
 		// Tablets from other cells for non-master targets should not trigger a re-sort;
 		// they should also be excluded from healthy list.
-		if th.Target.TabletType != topodata.TabletType_MASTER && hc.isIncluded(th.Target.TabletType, th.Tablet.Alias) {
+		if th.Target.TabletType != topodatapb.TabletType_MASTER && hc.isIncluded(th.Target.TabletType, th.Tablet.Alias) {
 			hc.recomputeHealthy(targetKey)
 		}
-		if targetChanged && prevTarget.TabletType != topodata.TabletType_MASTER && hc.isIncluded(th.Target.TabletType, th.Tablet.Alias) { // also recompute old target's healthy list
+		if targetChanged && prevTarget.TabletType != topodatapb.TabletType_MASTER && hc.isIncluded(th.Target.TabletType, th.Tablet.Alias) { // also recompute old target's healthy list
 			oldTargetKey := hc.keyFromTarget(prevTarget)
 			hc.recomputeHealthy(oldTargetKey)
 		}
 	}
 
-	isNewPrimary := isPrimary && prevTarget.TabletType != topodata.TabletType_MASTER
+	isNewPrimary := isPrimary && prevTarget.TabletType != topodatapb.TabletType_MASTER
 	if isNewPrimary {
-		log.Errorf("Adding 1 to MasterPromoted counter for target: %v, tablet: %v, tabletType: %v", prevTarget, topoproto.TabletAliasString(th.Tablet.Alias), th.Target.TabletType)
+		log.Errorf("Adding 1 to MasterPromoted counter for target: %v, tablet: %v, tabletType: %v", prevTarget, topoprotopb.TabletAliasString(th.Tablet.Alias), th.Target.TabletType)
 		hcMasterPromotedCounters.Add([]string{th.Target.Keyspace, th.Target.Shard}, 1)
 	}
 
@@ -579,7 +579,7 @@ func (hc *HealthCheckImpl) Close() error {
 // the most recent tablet of type master.
 // This returns a copy of the data so that callers can access without
 // synchronization
-func (hc *HealthCheckImpl) GetHealthyTabletStats(target *query.Target) []*TabletHealth {
+func (hc *HealthCheckImpl) GetHealthyTabletStats(target *querypb.Target) []*TabletHealth {
 	var result []*TabletHealth
 	hc.mu.Lock()
 	defer hc.mu.Unlock()
@@ -593,7 +593,7 @@ func (hc *HealthCheckImpl) GetHealthyTabletStats(target *query.Target) []*Tablet
 // The returned array is owned by the caller.
 // For TabletType_MASTER, this will only return at most one entry,
 // the most recent tablet of type master.
-func (hc *HealthCheckImpl) getTabletStats(target *query.Target) []*TabletHealth {
+func (hc *HealthCheckImpl) getTabletStats(target *querypb.Target) []*TabletHealth {
 	var result []*TabletHealth
 	hc.mu.Lock()
 	defer hc.mu.Unlock()
@@ -607,8 +607,8 @@ func (hc *HealthCheckImpl) getTabletStats(target *query.Target) []*TabletHealth 
 // WaitForTablets waits for at least one tablet in the given
 // keyspace / shard / tablet type before returning. The tablets do not
 // have to be healthy.  It will return ctx.Err() if the context is canceled.
-func (hc *HealthCheckImpl) WaitForTablets(ctx context.Context, keyspace, shard string, tabletType topodata.TabletType) error {
-	targets := []*query.Target{
+func (hc *HealthCheckImpl) WaitForTablets(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType) error {
+	targets := []*querypb.Target{
 		{
 			Keyspace:   keyspace,
 			Shard:      shard,
@@ -622,13 +622,13 @@ func (hc *HealthCheckImpl) WaitForTablets(ctx context.Context, keyspace, shard s
 // each given target before returning.
 // It will return ctx.Err() if the context is canceled.
 // It will return an error if it can't read the necessary topology records.
-func (hc *HealthCheckImpl) WaitForAllServingTablets(ctx context.Context, targets []*query.Target) error {
+func (hc *HealthCheckImpl) WaitForAllServingTablets(ctx context.Context, targets []*querypb.Target) error {
 	return hc.waitForTablets(ctx, targets, true)
 }
 
 // FilterTargetsByKeyspaces only returns the targets that are part of the provided keyspaces
-func FilterTargetsByKeyspaces(keyspaces []string, targets []*query.Target) []*query.Target {
-	filteredTargets := make([]*query.Target, 0)
+func FilterTargetsByKeyspaces(keyspaces []string, targets []*querypb.Target) []*querypb.Target {
+	filteredTargets := make([]*querypb.Target, 0)
 
 	// Keep them all if there are no keyspaces to watch
 	if len(KeyspacesToWatch) == 0 {
@@ -647,7 +647,7 @@ func FilterTargetsByKeyspaces(keyspaces []string, targets []*query.Target) []*qu
 }
 
 // waitForTablets is the internal method that polls for tablets.
-func (hc *HealthCheckImpl) waitForTablets(ctx context.Context, targets []*query.Target, requireServing bool) error {
+func (hc *HealthCheckImpl) waitForTablets(ctx context.Context, targets []*querypb.Target, requireServing bool) error {
 	targets = FilterTargetsByKeyspaces(KeyspacesToWatch, targets)
 
 	for {
@@ -693,25 +693,31 @@ func (hc *HealthCheckImpl) waitForTablets(ctx context.Context, targets []*query.
 }
 
 // TabletConnection returns the Connection to a given tablet.
-func (hc *HealthCheckImpl) TabletConnection(alias *topodata.TabletAlias) (queryservice.QueryService, error) {
+func (hc *HealthCheckImpl) TabletConnection(alias *topodatapb.TabletAlias, target *querypb.Target) (queryservice.QueryService, error) {
 	hc.mu.Lock()
-	thc := hc.healthByAlias[tabletAliasString(topoproto.TabletAliasString(alias))]
+	thc := hc.healthByAlias[tabletAliasString(topoprotopb.TabletAliasString(alias))]
 	hc.mu.Unlock()
 	if thc == nil || thc.Conn == nil {
 		//TODO: test that throws this error
-		return nil, vterrors.Errorf(vtrpc.Code_NOT_FOUND, "tablet: %v is either down or nonexistent", alias)
+		return nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "tablet: %v is either down or nonexistent", alias)
+	}
+	if !thc.Serving {
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "tablet: %v is not serving", alias)
+	}
+	if !proto.Equal(thc.Target, target) {
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "tablet: target mismatch %v vs %v", thc.Target, target)
 	}
 	return thc.Connection(), nil
 }
 
 // Target includes cell which we ignore here
 // because tabletStatsCache is intended to be per-cell
-func (hc *HealthCheckImpl) keyFromTarget(target *query.Target) keyspaceShardTabletType {
-	return keyspaceShardTabletType(fmt.Sprintf("%s.%s.%s", target.Keyspace, target.Shard, topoproto.TabletTypeLString(target.TabletType)))
+func (hc *HealthCheckImpl) keyFromTarget(target *querypb.Target) keyspaceShardTabletType {
+	return keyspaceShardTabletType(fmt.Sprintf("%s.%s.%s", target.Keyspace, target.Shard, topoprotopb.TabletTypeLString(target.TabletType)))
 }
 
-func (hc *HealthCheckImpl) keyFromTablet(tablet *topodata.Tablet) keyspaceShardTabletType {
-	return keyspaceShardTabletType(fmt.Sprintf("%s.%s.%s", tablet.Keyspace, tablet.Shard, topoproto.TabletTypeLString(tablet.Type)))
+func (hc *HealthCheckImpl) keyFromTablet(tablet *topodatapb.Tablet) keyspaceShardTabletType {
+	return keyspaceShardTabletType(fmt.Sprintf("%s.%s.%s", tablet.Keyspace, tablet.Shard, topoprotopb.TabletTypeLString(tablet.Type)))
 }
 
 // getAliasByCell should only be called while holding hc.mu
@@ -728,8 +734,8 @@ func (hc *HealthCheckImpl) getAliasByCell(cell string) string {
 	return alias
 }
 
-func (hc *HealthCheckImpl) isIncluded(tabletType topodata.TabletType, tabletAlias *topodata.TabletAlias) bool {
-	if tabletType == topodata.TabletType_MASTER {
+func (hc *HealthCheckImpl) isIncluded(tabletType topodatapb.TabletType, tabletAlias *topodatapb.TabletAlias) bool {
+	if tabletType == topodatapb.TabletType_MASTER {
 		return true
 	}
 	if tabletAlias.Cell == hc.cell {
