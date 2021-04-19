@@ -321,7 +321,7 @@ func getQueryService(rs *srvtopo.ResolvedShard, info *shardActionInfo) (queryser
 	if usingLegacyGw || info.alias == nil {
 		return rs.Gateway, nil
 	}
-	return rs.Gateway.QueryServiceByAlias(info.alias)
+	return rs.Gateway.QueryServiceByAlias(info.alias, rs.Target)
 }
 
 func (stc *ScatterConn) processOneStreamingResult(mu *sync.Mutex, fieldSent *bool, qr *sqltypes.Result, callback func(*sqltypes.Result) error) error {
