@@ -19,6 +19,8 @@ package vtgate
 import (
 	"testing"
 
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+
 	"github.com/stretchr/testify/assert"
 
 	"vitess.io/vitess/go/mysql"
@@ -323,7 +325,7 @@ func TestReservedConnFail(t *testing.T) {
 	assert.NotEqual(t, oldRId, session.Session.ShardSessions[0].ReservedId, "should have recreated a reserved connection since the last connection was lost")
 
 	sbc0.Queries = nil
-	sbc0.EphemeralShardErr = mysql.NewSQLError(mysql.ERUnknownError, mysql.SSUnknownSQLState, "operation not allowed in state NOT_SERVING during query: query1")
+	sbc0.EphemeralShardErr = vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "operation not allowed in state NOT_SERVING during query: query1")
 	_ = executeOnShardsReturnsErr(t, res, keyspace, sc, session, destinations)
 	assert.Equal(t, 2, len(sbc0.Queries), "one for the failed attempt, and one for the retry")
 	require.Equal(t, 1, len(session.ShardSessions))
