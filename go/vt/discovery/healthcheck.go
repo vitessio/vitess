@@ -702,10 +702,10 @@ func (hc *HealthCheckImpl) TabletConnection(alias *topodatapb.TabletAlias, targe
 		return nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "tablet: %v is either down or nonexistent", alias)
 	}
 	if !thc.Serving {
-		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "tablet: %v is not serving", alias)
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.NotServing)
 	}
 	if !proto.Equal(thc.Target, target) {
-		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "tablet: target mismatch %v vs %v", thc.Target, target)
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%s: target mismatch %v vs %v", vterrors.WrongTablet, thc.Target, target)
 	}
 	return thc.Connection(), nil
 }
