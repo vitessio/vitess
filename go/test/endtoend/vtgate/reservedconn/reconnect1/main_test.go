@@ -21,7 +21,6 @@ import (
 	"flag"
 	"os"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 
@@ -108,11 +107,16 @@ func TestServingChange(t *testing.T) {
 	checkedExec(t, conn, "use @rdonly")
 	checkedExec(t, conn, "set sql_mode = ''")
 
+	rdonlyTablet := clusterInstance.Keyspaces[0].Shards[0].Rdonly()
+
+	// to see/make the new rdonly available
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Ping", rdonlyTablet.Alias)
+	require.NoError(t, err)
+
 	// this will create reserved connection on rdonly on -80 and 80- shards.
 	checkedExec(t, conn, "select * from test")
 
 	// changing rdonly tablet to spare (non serving).
-	rdonlyTablet := clusterInstance.Keyspaces[0].Shards[0].Rdonly()
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", rdonlyTablet.Alias, "spare")
 	require.NoError(t, err)
 
@@ -125,8 +129,9 @@ func TestServingChange(t *testing.T) {
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", replicaTablet.Alias, "rdonly")
 	require.NoError(t, err)
 
-	// added some sleep time for VTGate to know the healthy rdonly.
-	time.Sleep(5 * time.Second)
+	// to see/make the new rdonly available
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Ping", replicaTablet.Alias)
+	require.NoError(t, err)
 
 	// this should pass now as there is rdonly present
 	_, err = exec(t, conn, "select * from test")
