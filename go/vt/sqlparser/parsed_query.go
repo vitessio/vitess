@@ -21,6 +21,9 @@ import (
 	"fmt"
 	"strings"
 
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"vitess.io/vitess/go/bytes2"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -85,8 +88,8 @@ func (pq *ParsedQuery) Append(buf *strings.Builder, bindVariables map[string]*qu
 // AppendFromRow behaves like Append but takes a querypb.Row directly, assuming that
 // the fields in the row are in the same order as the placeholders in this query.
 func (pq *ParsedQuery) AppendFromRow(buf *bytes2.Buffer, fields []*querypb.Field, row *querypb.Row) error {
-	if len(fields) != len(pq.bindLocations) {
-		return fmt.Errorf("wrong number of fields: got %d fields for %d bind locations ", len(fields), len(pq.bindLocations))
+	if len(fields) < len(pq.bindLocations) {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "wrong number of fields: got %d fields for %d bind locations ", len(fields), len(pq.bindLocations))
 	}
 	var offsetQuery int
 	var offsetRow int64
@@ -94,16 +97,15 @@ func (pq *ParsedQuery) AppendFromRow(buf *bytes2.Buffer, fields []*querypb.Field
 		buf.WriteString(pq.Query[offsetQuery:loc.offset])
 
 		typ := fields[i].Type
-		switch typ {
-		case querypb.Type_TUPLE:
-			return fmt.Errorf("unexpected Type_TUPLE for value %d", i)
+		if typ == querypb.Type_TUPLE {
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected Type_TUPLE for value %d", i)
+		}
 
-		case querypb.Type_NULL_TYPE:
-			// null variables don't have a length in row.Length, so serialize them directly
+		length := row.Lengths[i]
+		if length < 0 {
+			// -1 means a null variable; serialize it directly
 			buf.WriteString("null")
-
-		default:
-			length := row.Lengths[i]
+		} else {
 			vv := sqltypes.MakeTrusted(typ, row.Values[offsetRow:offsetRow+length])
 			vv.EncodeSQLBytes2(buf)
 			offsetRow += length
