@@ -8472,3 +8472,5 @@
 2021-04-20T21:54:06Z,Unit Test (mariadb101),https://github.com/vitessio/vitess/actions/runs/768662852
 2021-04-20T22:24:28Z,Cluster (27),https://github.com/vitessio/vitess/actions/runs/768730850
 2021-04-20T22:28:24Z,Cluster (27),https://github.com/vitessio/vitess/actions/runs/768739860
+2021-04-20T22:28:24Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/768739872
+2021-04-20T22:28:24Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/768739895
