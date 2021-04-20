@@ -158,9 +158,9 @@ func NewOnlineDDLs(keyspace string, ddlStmt sqlparser.DDLStatement, ddlStrategyS
 		}
 		return onlineDDLs, nil
 	case *sqlparser.CreateTable:
-		// handled later on
+		// No particular treatment for CreateTable. "case" is here to acknowledge this is a supported type
 	case *sqlparser.AlterTable:
-		// handled later on
+		// No particular treatment for AlterTable. "case" is here to acknowledge this is a supported type
 	default:
 		return nil, fmt.Errorf("Unsupported statement for Online DDL: %v", sqlparser.String(ddlStmt))
 	}
