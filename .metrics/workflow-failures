@@ -8375,3 +8375,5 @@
 2021-04-20T06:44:48Z,Cluster (17),https://github.com/vitessio/vitess/actions/runs/766175527
 2021-04-20T07:20:13Z,Cluster (13),https://github.com/vitessio/vitess/actions/runs/766268189
 2021-04-20T07:20:13Z,Cluster (17),https://github.com/vitessio/vitess/actions/runs/766268163
+2021-04-20T07:55:32Z,Cluster (27),https://github.com/vitessio/vitess/actions/runs/766361370
+2021-04-20T07:55:32Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/766361394
