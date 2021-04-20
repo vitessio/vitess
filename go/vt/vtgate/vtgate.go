@@ -464,6 +464,17 @@ func recordAndAnnotateError(err error, statsKey []string, request map[string]int
 		logger.Errorf("%v, request: %+v", err, request)
 	case vtrpcpb.Code_UNAVAILABLE:
 		logger.Infof("%v, request: %+v", err, request)
+	case vtrpcpb.Code_UNIMPLEMENTED:
+		sql, exists := request["Sql"]
+		if !exists {
+			return err
+		}
+		piiSafeSQL, err2 := sqlparser.RedactSQLQuery(sql.(string))
+		if err2 != nil {
+			return err
+		}
+		// log only if sql query present and able to successfully redact the PII.
+		logger.Infof("unsupported query: %q", piiSafeSQL)
 	}
 	return err
 }
