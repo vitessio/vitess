@@ -153,7 +153,7 @@ func (fhc *FakeHealthCheck) TabletConnection(alias *topodatapb.TabletAlias, targ
 			if !item.ts.Serving {
 				return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.NotServing)
 			}
-			if !proto.Equal(item.ts.Target, target) {
+			if target != nil && !proto.Equal(item.ts.Target, target) {
 				return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%s: target mismatch %v vs %v", vterrors.WrongTablet, item.ts.Target, target)
 			}
 
