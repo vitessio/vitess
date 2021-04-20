@@ -8468,3 +8468,4 @@
 2021-04-20T17:48:29Z,Cluster (upgrade),https://github.com/vitessio/vitess/actions/runs/768041962
 2021-04-20T17:52:12Z,Unit Test (mariadb101),https://github.com/vitessio/vitess/actions/runs/768051576
 2021-04-20T20:48:01Z,golangci-lint,https://github.com/vitessio/vitess/actions/runs/768504692
+2021-04-20T21:28:09Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/768600834
