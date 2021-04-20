@@ -12,6 +12,10 @@ jobs:
       with:
         go-version: 1.15
 
+    - name: Tune the OS
+      run: |
+        echo '1024 65535' | sudo tee -a /proc/sys/net/ipv4/ip_local_port_range
+
     # TEMPORARY WHILE GITHUB FIXES THIS https://github.com/actions/virtual-environments/issues/3185
     - name: Add the current IP address, long hostname and short hostname record to /etc/hosts file
       run: |
