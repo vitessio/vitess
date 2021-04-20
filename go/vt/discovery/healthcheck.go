@@ -704,7 +704,7 @@ func (hc *HealthCheckImpl) TabletConnection(alias *topodatapb.TabletAlias, targe
 	if !thc.Serving {
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.NotServing)
 	}
-	if !proto.Equal(thc.Target, target) {
+	if target != nil && !proto.Equal(thc.Target, target) {
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%s: target mismatch %v vs %v", vterrors.WrongTablet, thc.Target, target)
 	}
 	return thc.Connection(), nil
