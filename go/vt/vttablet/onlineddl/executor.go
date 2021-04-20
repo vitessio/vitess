@@ -789,8 +789,8 @@ export ONLINE_DDL_PASSWORD
 	}
 	onHookContent := func(status schema.OnlineDDLStatus) string {
 		return fmt.Sprintf(`#!/bin/bash
-curl -s 'http://localhost:%d/schema-migration/report-status?uuid=%s&status=%s&dryrun='"$GH_OST_DRY_RUN"'&progress='"$GH_OST_PROGRESS"'&eta='"$GH_OST_ETA_SECONDS"
-		`, *servenv.Port, onlineDDL.UUID, string(status))
+	curl --max-time 10 -s 'http://localhost:%d/schema-migration/report-status?uuid=%s&status=%s&dryrun='"$GH_OST_DRY_RUN"'&progress='"$GH_OST_PROGRESS"'&eta='"$GH_OST_ETA_SECONDS"
+			`, *servenv.Port, onlineDDL.UUID, string(status))
 	}
 	if _, err := createTempScript(tempDir, "gh-ost-on-startup", onHookContent(schema.OnlineDDLStatusRunning)); err != nil {
 		log.Errorf("Error creating script: %+v", err)
@@ -815,6 +815,7 @@ curl -s 'http://localhost:%d/schema-migration/report-status?uuid=%s&status=%s&dr
 		return err
 	}
 	// Validate gh-ost binary:
+	_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, "validating gh-ost --version")
 	log.Infof("Will now validate gh-ost binary")
 	_, err = execCmd(
 		"bash",
@@ -831,6 +832,7 @@ curl -s 'http://localhost:%d/schema-migration/report-status?uuid=%s&status=%s&dr
 		log.Errorf("Error testing gh-ost binary: %+v", err)
 		return err
 	}
+	_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, "validated gh-ost --version")
 	log.Infof("+ OK")
 
 	if err := e.updateMigrationLogPath(ctx, onlineDDL.UUID, variables.host, tempDir); err != nil {
@@ -875,7 +877,9 @@ curl -s 'http://localhost:%d/schema-migration/report-status?uuid=%s&status=%s&dr
 			fmt.Sprintf(`--execute=%t`, execute),
 		}
 		args = append(args, onlineDDL.RuntimeOptions()...)
+		_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, fmt.Sprintf("executing gh-ost --execute=%v", execute))
 		_, err := execCmd("bash", args, os.Environ(), "/tmp", nil, nil)
+		_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, fmt.Sprintf("executed gh-ost --execute=%v, err=%v", execute, err))
 		return err
 	}
 
