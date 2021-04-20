@@ -27,8 +27,10 @@ import (
 	"strings"
 	"time"
 
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 var (
@@ -114,11 +116,11 @@ func FromJSON(bytes []byte) (*OnlineDDL, error) {
 func ReadTopo(ctx context.Context, conn topo.Conn, entryPath string) (*OnlineDDL, error) {
 	bytes, _, err := conn.Get(ctx, entryPath)
 	if err != nil {
-		return nil, fmt.Errorf("ReadTopo Get %s error: %s", entryPath, err.Error())
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "ReadTopo Get %s error: %s", entryPath, err.Error())
 	}
 	onlineDDL, err := FromJSON(bytes)
 	if err != nil {
-		return nil, fmt.Errorf("ReadTopo unmarshal %s error: %s", entryPath, err.Error())
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "ReadTopo unmarshal %s error: %s", entryPath, err.Error())
 	}
 	return onlineDDL, nil
 }
@@ -128,13 +130,13 @@ func ReadTopo(ctx context.Context, conn topo.Conn, entryPath string) (*OnlineDDL
 func ParseOnlineDDLStatement(sql string) (ddlStmt sqlparser.DDLStatement, action sqlparser.DDLAction, err error) {
 	stmt, err := sqlparser.Parse(sql)
 	if err != nil {
-		return nil, 0, fmt.Errorf("Error parsing statement: SQL=%s, error=%+v", sql, err)
+		return nil, 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "error parsing statement: SQL=%s, error=%+v", sql, err)
 	}
 	switch ddlStmt := stmt.(type) {
 	case sqlparser.DDLStatement:
 		return ddlStmt, ddlStmt.GetAction(), nil
 	}
-	return ddlStmt, action, fmt.Errorf("Unsupported query type: %s", sql)
+	return ddlStmt, action, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported query type: %s", sql)
 }
 
 // NewOnlineDDLs takes a single DDL statement, normalizes it (potentially break down into multiple statements), and generates one or more OnlineDDL instances, one for each normalized statement
@@ -162,7 +164,7 @@ func NewOnlineDDLs(keyspace string, ddlStmt sqlparser.DDLStatement, ddlStrategyS
 	case *sqlparser.AlterTable:
 		// No particular treatment for AlterTable. "case" is here to acknowledge this is a supported type
 	default:
-		return nil, fmt.Errorf("Unsupported statement for Online DDL: %v", sqlparser.String(ddlStmt))
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported statement for Online DDL: %v", sqlparser.String(ddlStmt))
 	}
 	if err := appendOnlineDDL(ddlStmt.GetTable().Name.String(), ddlStmt); err != nil {
 		return nil, err
@@ -173,7 +175,7 @@ func NewOnlineDDLs(keyspace string, ddlStmt sqlparser.DDLStatement, ddlStrategyS
 // NewOnlineDDL creates a schema change request with self generated UUID and RequestTime
 func NewOnlineDDL(keyspace string, table string, sql string, ddlStrategySetting *DDLStrategySetting, requestContext string) (*OnlineDDL, error) {
 	if ddlStrategySetting == nil {
-		return nil, fmt.Errorf("NewOnlineDDL: found nil DDLStrategySetting")
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "NewOnlineDDL: found nil DDLStrategySetting")
 	}
 	u, err := CreateOnlineDDLUUID()
 	if err != nil {
@@ -217,13 +219,13 @@ func NewOnlineDDL(keyspace string, table string, sql string, ddlStrategySetting 
 			switch stmt := stmt.(type) {
 			case sqlparser.DDLStatement:
 				if !stmt.IsFullyParsed() {
-					return nil, fmt.Errorf("NewOnlineDDL: cannot fully parse statement %v", sqlparser.String(stmt))
+					return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "NewOnlineDDL: cannot fully parse statement %v", sqlparser.String(stmt))
 				}
 				stmt.SetComments(comments)
 			case *sqlparser.RevertMigration:
 				stmt.SetComments(comments)
 			default:
-				return nil, fmt.Errorf("Unsupported statement for Online DDL: %v", sqlparser.String(stmt))
+				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Unsupported statement for Online DDL: %v", sqlparser.String(stmt))
 			}
 			sql = sqlparser.String(stmt)
 		}
@@ -261,17 +263,17 @@ func OnlineDDLFromCommentedStatement(stmt sqlparser.Statement) (onlineDDL *Onlin
 		sql = sqlparser.String(stmt)
 		stmt.SetComments(comments)
 	default:
-		return nil, fmt.Errorf("Unsupported statement for Online DDL: %v", sqlparser.String(stmt))
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported statement for Online DDL: %v", sqlparser.String(stmt))
 	}
 	if len(comments) == 0 {
-		return nil, fmt.Errorf("No comments found in statement: %v", sqlparser.String(stmt))
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "no comments found in statement: %v", sqlparser.String(stmt))
 	}
 	directives := sqlparser.ExtractCommentDirectives(comments)
 
 	decodeDirective := func(name string) (string, error) {
 		value := fmt.Sprintf("%s", directives[name])
 		if value == "" {
-			return "", fmt.Errorf("No value found for comment directive %s", name)
+			return "", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "no value found for comment directive %s", name)
 		}
 		unquoted, err := strconv.Unquote(value)
 		if err != nil {
@@ -291,7 +293,7 @@ func OnlineDDLFromCommentedStatement(stmt sqlparser.Statement) (onlineDDL *Onlin
 		return nil, err
 	}
 	if !IsOnlineDDLUUID(onlineDDL.UUID) {
-		return nil, fmt.Errorf("Invalid UUID read from statement %s", sqlparser.String(stmt))
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid UUID read from statement %s", sqlparser.String(stmt))
 	}
 	if onlineDDL.Table, err = decodeDirective("table"); err != nil {
 		return nil, err
@@ -358,7 +360,7 @@ func (onlineDDL *OnlineDDL) GetActionStr() (action sqlparser.DDLAction, actionSt
 	case sqlparser.DropDDLAction:
 		return action, sqlparser.DropStr, nil
 	}
-	return action, "", fmt.Errorf("Unsupported online DDL action. SQL=%s", onlineDDL.SQL)
+	return action, "", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported online DDL action. SQL=%s", onlineDDL.SQL)
 }
 
 // GetRevertUUID works when this migration is a revert for another migration. It returns the UUID
@@ -373,7 +375,7 @@ func (onlineDDL *OnlineDDL) GetRevertUUID() (uuid string, err error) {
 			return revert.UUID, nil
 		}
 	}
-	return "", fmt.Errorf("Not a Revert DDL: '%s'", onlineDDL.SQL)
+	return "", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "not a Revert DDL: '%s'", onlineDDL.SQL)
 }
 
 // ToString returns a simple string representation of this instance
@@ -384,15 +386,15 @@ func (onlineDDL *OnlineDDL) ToString() string {
 // WriteTopo writes this online DDL to given topo connection, based on basePath and and this DDL's UUID
 func (onlineDDL *OnlineDDL) WriteTopo(ctx context.Context, conn topo.Conn, basePath string) error {
 	if onlineDDL.UUID == "" {
-		return fmt.Errorf("onlineDDL UUID not found; keyspace=%s, sql=%s", onlineDDL.Keyspace, onlineDDL.SQL)
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "onlineDDL UUID not found; keyspace=%s, sql=%s", onlineDDL.Keyspace, onlineDDL.SQL)
 	}
 	bytes, err := onlineDDL.ToJSON()
 	if err != nil {
-		return fmt.Errorf("onlineDDL marshall error:%s, keyspace=%s, sql=%s", err.Error(), onlineDDL.Keyspace, onlineDDL.SQL)
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "onlineDDL marshall error:%s, keyspace=%s, sql=%s", err.Error(), onlineDDL.Keyspace, onlineDDL.SQL)
 	}
 	_, err = conn.Create(ctx, fmt.Sprintf("%s/%s", basePath, onlineDDL.UUID), bytes)
 	if err != nil {
-		return fmt.Errorf("onlineDDL topo create error:%s, keyspace=%s, sql=%s", err.Error(), onlineDDL.Keyspace, onlineDDL.SQL)
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "onlineDDL topo create error:%s, keyspace=%s, sql=%s", err.Error(), onlineDDL.Keyspace, onlineDDL.SQL)
 	}
 	return nil
 }
