@@ -8452,3 +8452,5 @@
 2021-04-20T14:52:32Z,golangci-lint,https://github.com/vitessio/vitess/actions/runs/767545267
 2021-04-20T15:31:57Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/767662977
 2021-04-20T15:35:38Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/767674257
+2021-04-20T15:36:30Z,Cluster (15),https://github.com/vitessio/vitess/actions/runs/767676890
+2021-04-20T15:36:30Z,local_example,https://github.com/vitessio/vitess/actions/runs/767676900
