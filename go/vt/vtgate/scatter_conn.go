@@ -221,6 +221,10 @@ func (stc *ScatterConn) ExecuteMultiShard(
 
 			qs, err = getQueryService(rs, info)
 			if err != nil {
+				// an error here could mean that the tablet we were targeting earlier has changed type.
+				// if we have a transaction, we'll have to fail, but if we only had a reserved connection,
+				// we can create a new reserved connection to a new tablet that is on the right shard
+				// and has the right type
 				switch info.actionNeeded {
 				case nothing:
 					info.actionNeeded = reserve
@@ -236,49 +240,60 @@ func (stc *ScatterConn) ExecuteMultiShard(
 				qs = rs.Gateway
 			}
 
+			retryConnection := func(resetTabletConnAndExec func(), failUpdate func() *shardActionInfo) {
+				retry := checkAndResetShardSession(info, err, session)
+				switch retry {
+				case newQS:
+					// Current tablet is not available, try querying new tablet using gateway.
+					qs = rs.Gateway
+					fallthrough
+				case shard:
+					// if we need to reset a reserved connection, here is our chance to try executing again,
+					// against a new connection
+					resetTabletConnAndExec()
+				}
+				// err will have been changed by the call above
+				if err != nil {
+					info = failUpdate()
+				}
+			}
+
 			switch info.actionNeeded {
 			case nothing:
 				innerqr, err = qs.Execute(ctx, rs.Target, queries[i].Sql, queries[i].BindVariables, info.transactionID, info.reservedID, opts)
 				if err != nil {
-					retry := checkAndResetShardSession(info, err, session)
-					switch retry {
-					case newQS:
-						// Current tablet is not available, try querying new tablet using gateway.
-						qs = rs.Gateway
-						fallthrough
-					case shard:
-						// we seem to have lost our connection. if it was a reserved connection, let's try to recreate it
+					retryConnection(func() {
+						// we seem to have lost our connection. it was a reserved connection, let's try to recreate it
 						info.actionNeeded = reserve
 						innerqr, reservedID, alias, err = qs.ReserveExecute(ctx, rs.Target, session.SetPreQueries(), queries[i].Sql, queries[i].BindVariables, 0 /*transactionId*/, opts)
-					}
+					}, func() *shardActionInfo {
+						// we failed, let's clear out any lingering reserve ID
+						return info.updateReservedID(reservedID, alias)
+					})
 					if err != nil {
-						return info.updateReservedID(reservedID, alias), err
+						return info, err
 					}
 				}
+
 			case begin:
 				innerqr, transactionID, alias, err = qs.BeginExecute(ctx, rs.Target, session.Savepoints, queries[i].Sql, queries[i].BindVariables, info.reservedID, opts)
 				if err != nil {
 					if transactionID != 0 {
 						return info.updateTransactionID(transactionID, alias), err
 					}
-					retry := checkAndResetShardSession(info, err, session)
-					switch retry {
-					case newQS:
-						// Current tablet is not available, try querying new tablet using gateway.
-						qs = rs.Gateway
-						fallthrough
-					case shard:
-						// we seem to have lost our connection. if it was a reserved connection, let's try to recreate it
+					retryConnection(func() {
+						// we seem to have lost our connection. it was a reserved connection, let's try to recreate it
 						info.actionNeeded = reserveBegin
 						innerqr, transactionID, reservedID, alias, err = qs.ReserveBeginExecute(ctx, rs.Target, session.SetPreQueries(), queries[i].Sql, queries[i].BindVariables, opts)
-					}
+					}, func() *shardActionInfo {
+						return info.updateTransactionAndReservedID(transactionID, reservedID, alias)
+					})
 					if err != nil {
-						return info.updateTransactionAndReservedID(transactionID, reservedID, alias), err
+						return info, err
 					}
-
 				}
 			case reserve:
-				innerqr, reservedID, alias, err = qs.ReserveExecute(ctx, rs.Target, session.SetPreQueries(), queries[i].Sql, queries[i].BindVariables, info.transactionID, opts)
+				innerqr, reservedID, alias, err = qs.ReserveExecute(ctx, rs.Target, session.SetPreQueries(), queries[i].Sql, queries[i].BindVariables, 0 /*transactionId*/, opts)
 				if err != nil {
 					return info.updateReservedID(reservedID, alias), err
 				}
