@@ -8369,3 +8369,6 @@
 2021-04-20T06:17:02Z,Cluster (onlineddl_singleton),https://github.com/vitessio/vitess/actions/runs/766110098
 2021-04-20T06:17:02Z,Cluster (upgrade),https://github.com/vitessio/vitess/actions/runs/766110135
 2021-04-20T06:21:08Z,endtoend,https://github.com/vitessio/vitess/actions/runs/766119011
+2021-04-20T06:21:08Z,local_example,https://github.com/vitessio/vitess/actions/runs/766119017
+2021-04-20T06:21:08Z,unit_race,https://github.com/vitessio/vitess/actions/runs/766118974
+2021-04-20T06:44:48Z,Cluster (17),https://github.com/vitessio/vitess/actions/runs/766175527
