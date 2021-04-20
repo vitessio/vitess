@@ -1,27 +1,19 @@
-name: FOSSA
+name: FOSSA License Scanning
+
 on:
-  push:
-    branches: [master]
-  pull_request:
-    branches: [master]
+  - pull_request
+  - push
 
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions/setup-go@v2
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Run FOSSA scan and upload build data
+        uses: fossa-contrib/fossa-action@v1
         with:
-          go-version: "^1.14.x"
-      - run: go version
-      # Runs a set of commands to initialize and analyze with FOSSA
-      - name: run FOSSA analysis
-        env:
-          # FOSSA Push-Only API Token
-          FOSSA_API_KEY: '76d7483ea206d530d9452e44bffe7ba8'
-        run: |
-          export GOPATH=$HOME/go
-          export PATH=$PATH:$(go env GOPATH)/bin
-          curl -H 'Cache-Control: no-cache' https://raw.githubusercontent.com/fossas/fossa-cli/master/install.sh | bash
-          fossa init
-          fossa analyze
+          fossa-api-key: 76d7483ea206d530d9452e44bffe7ba8
+
