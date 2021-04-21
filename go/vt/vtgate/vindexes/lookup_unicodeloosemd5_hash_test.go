@@ -284,10 +284,35 @@ func TestLookupUnicodeLooseMD5HashCreate(t *testing.T) {
 		t.Errorf("lookup.Create queries:\n%v, want\n%v", vc.queries, wantqueries)
 	}
 
+	// With ignore_nulls off
+	vc.queries = nil
+	err = lookupNonUnique.(Lookup).Create(vc, [][]sqltypes.Value{{sqltypes.NewInt64(10)}, {sqltypes.NULL}}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6"), []byte("\x06\xe7\xea\"Βp\x8f")}, true /* ignoreMode */)
+	want := "lookup.Create: input has null values: row: 1, col: 0"
+	if err == nil || err.Error() != want {
+		t.Errorf("lookupNonUnique(query fail) err: %v, want %s", err, want)
+	}
+
+	// With ignore_nulls on
+	vc.queries = nil
+	lookupNonUnique.(*LookupUnicodeLooseMD5Hash).lkp.IgnoreNulls = true
+	err = lookupNonUnique.(Lookup).Create(vc, [][]sqltypes.Value{{sqltypes.NewInt64(10)}, {sqltypes.NULL}}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6"), []byte("\x06\xe7\xea\"Βp\x8f")}, true /* ignoreMode */)
+	require.NoError(t, err)
+	wantqueries = []*querypb.BoundQuery{{
+		Sql: "insert ignore into t(fromc, toc) values(:fromc_0, :toc_0)",
+		BindVariables: map[string]*querypb.BindVariable{
+			"fromc_0": sqltypes.Uint64BindVariable(hashed10),
+			"toc_0":   sqltypes.Uint64BindVariable(1),
+		},
+	}}
+	if !reflect.DeepEqual(vc.queries, wantqueries) {
+		t.Errorf("lookup.Create queries:\n%v, want\n%v", vc.queries, wantqueries)
+	}
+	lookupNonUnique.(*LookupUnicodeLooseMD5Hash).lkp.IgnoreNulls = false
+
 	// Test query fail.
 	vc.mustFail = true
 	err = lookupNonUnique.(Lookup).Create(vc, [][]sqltypes.Value{{sqltypes.NewInt64(10)}}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")}, false /* ignoreMode */)
-	want := "lookup.Create: execute failed"
+	want = "lookup.Create: execute failed"
 	if err == nil || err.Error() != want {
 		t.Errorf("lookupNonUnique(query fail) err: %v, want %s", err, want)
 	}

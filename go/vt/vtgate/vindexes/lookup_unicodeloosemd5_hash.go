@@ -413,6 +413,11 @@ func unicodeHashValue(value sqltypes.Value) (sqltypes.Value, error) {
 func convertIds(ids []sqltypes.Value) ([]sqltypes.Value, error) {
 	converted := make([]sqltypes.Value, 0, len(ids))
 	for _, id := range ids {
+		// Leave nulls as nulls, as logic further down the line will make the call to persist or not.
+		if id.IsNull() {
+			converted = append(converted, id)
+			continue
+		}
 		idVal, err := unicodeHashValue(id)
 		if err != nil {
 			return nil, err
