@@ -8533,7 +8533,12 @@
 2021-04-21T07:23:36Z,local_example,https://github.com/vitessio/vitess/actions/runs/769813907
 2021-04-21T07:23:36Z,local_example,https://github.com/vitessio/vitess/actions/runs/769813908
 2021-04-21T07:23:36Z,region_example,https://github.com/vitessio/vitess/actions/runs/769813871
+2021-04-21T07:23:36Z,unit_race,https://github.com/vitessio/vitess/actions/runs/769813888
+2021-04-21T07:24:48Z,Cluster (12),https://github.com/vitessio/vitess/actions/runs/769816973
 2021-04-21T07:24:48Z,Cluster (19),https://github.com/vitessio/vitess/actions/runs/769816971
 2021-04-21T07:24:48Z,Cluster (22),https://github.com/vitessio/vitess/actions/runs/769816960
 2021-04-21T07:24:48Z,Cluster (26),https://github.com/vitessio/vitess/actions/runs/769816969
 2021-04-21T07:24:48Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/769816975
+2021-04-21T07:24:48Z,Unit Test (mariadb101),https://github.com/vitessio/vitess/actions/runs/769816948
+2021-04-21T07:24:48Z,docker_test_2,https://github.com/vitessio/vitess/actions/runs/769816965
+2021-04-21T07:24:48Z,e2e_race,https://github.com/vitessio/vitess/actions/runs/769816953
