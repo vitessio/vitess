@@ -2369,5 +2369,5 @@ func TestStreamOrderByLimitWithMultipleResults(t *testing.T) {
 	utils.MustMatch(t, wantResult, gotResult)
 	// some sleep to close all goroutines.
 	time.Sleep(100 * time.Millisecond)
-	assert.Equal(t, before, runtime.NumGoroutine(), "left open goroutines lingering")
+	assert.GreaterOrEqual(t, before, runtime.NumGoroutine(), "left open goroutines lingering")
 }
