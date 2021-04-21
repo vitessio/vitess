@@ -17,19 +17,18 @@ limitations under the License.
 package vreplication
 
 import (
-	"flag"
 	"fmt"
 	"io"
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/test/endtoend/cluster"
+
 	"github.com/stretchr/testify/require"
 )
 
-var perfTest = flag.Bool("perftest", false, "run end-to-end performance tests")
-
 func TestReplicationStress(t *testing.T) {
-	if !*perfTest {
+	if !*cluster.PerfTest {
 		t.Skip("performance tests disabled")
 	}
 
