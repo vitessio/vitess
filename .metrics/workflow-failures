@@ -8601,12 +8601,23 @@
 2021-04-21T15:06:30Z,Cluster (vreplication_cellalias),https://github.com/vitessio/vitess/actions/runs/771107104
 2021-04-21T15:06:30Z,Cluster (vreplication_multicell),https://github.com/vitessio/vitess/actions/runs/771107110
 2021-04-21T15:06:30Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/771107058
+2021-04-21T15:06:30Z,Unit Test (mariadb101),https://github.com/vitessio/vitess/actions/runs/771107068
+2021-04-21T15:06:30Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/771107112
+2021-04-21T15:06:30Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/771107059
+2021-04-21T15:06:30Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/771107151
 2021-04-21T15:06:30Z,cluster_initial_sharding_multi,https://github.com/vitessio/vitess/actions/runs/771107088
 2021-04-21T15:06:30Z,endtoend,https://github.com/vitessio/vitess/actions/runs/771107089
 2021-04-21T15:06:30Z,golangci-lint,https://github.com/vitessio/vitess/actions/runs/771107063
 2021-04-21T15:06:30Z,local_example,https://github.com/vitessio/vitess/actions/runs/771107134
+2021-04-21T15:06:30Z,unit_race,https://github.com/vitessio/vitess/actions/runs/771107093
 2021-04-21T15:06:31Z,docker_test_3,https://github.com/vitessio/vitess/actions/runs/771107207
 2021-04-21T15:06:32Z,Cluster (21),https://github.com/vitessio/vitess/actions/runs/771107283
 2021-04-21T15:06:32Z,Cluster (vreplication_migrate),https://github.com/vitessio/vitess/actions/runs/771107290
+2021-04-21T15:06:32Z,docker_test_1,https://github.com/vitessio/vitess/actions/runs/771107253
 2021-04-21T15:06:32Z,local_example,https://github.com/vitessio/vitess/actions/runs/771107285
 2021-04-21T15:06:32Z,region_example,https://github.com/vitessio/vitess/actions/runs/771107251
+2021-04-21T15:06:33Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/771107345
+2021-04-21T15:20:31Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/771150506
+2021-04-21T15:20:31Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/771150518
+2021-04-21T15:20:31Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/771150516
+2021-04-21T15:20:31Z,golangci-lint,https://github.com/vitessio/vitess/actions/runs/771150514
