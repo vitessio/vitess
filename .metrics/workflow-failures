@@ -8543,3 +8543,15 @@
 2021-04-21T07:24:48Z,Unit Test (mariadb101),https://github.com/vitessio/vitess/actions/runs/769816948
 2021-04-21T07:24:48Z,docker_test_2,https://github.com/vitessio/vitess/actions/runs/769816965
 2021-04-21T07:24:48Z,e2e_race,https://github.com/vitessio/vitess/actions/runs/769816953
+2021-04-21T07:53:49Z,Cluster (17),https://github.com/vitessio/vitess/actions/runs/769892379
+2021-04-21T07:53:49Z,Cluster (18),https://github.com/vitessio/vitess/actions/runs/769892387
+2021-04-21T07:53:49Z,Cluster (19),https://github.com/vitessio/vitess/actions/runs/769892375
+2021-04-21T07:53:49Z,Cluster (20),https://github.com/vitessio/vitess/actions/runs/769892359
+2021-04-21T07:53:49Z,Cluster (21),https://github.com/vitessio/vitess/actions/runs/769892383
+2021-04-21T07:53:49Z,Cluster (27),https://github.com/vitessio/vitess/actions/runs/769892371
+2021-04-21T07:53:49Z,Cluster (onlineddl_singleton),https://github.com/vitessio/vitess/actions/runs/769892386
+2021-04-21T07:53:49Z,Cluster (tabletmanager_throttler_custom_config),https://github.com/vitessio/vitess/actions/runs/769892353
+2021-04-21T07:53:49Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/769892341
+2021-04-21T07:53:49Z,Cluster (vreplication_migrate),https://github.com/vitessio/vitess/actions/runs/769892384
+2021-04-21T07:53:49Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/769892385
+2021-04-21T08:04:21Z,.github/workflows/check_runs_analysis.yaml,https://github.com/vitessio/vitess/actions/runs/769917438
