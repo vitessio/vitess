@@ -8694,3 +8694,5 @@
 2021-04-21T21:07:03Z,golangci-lint,https://github.com/vitessio/vitess/actions/runs/772053991
 2021-04-21T21:07:03Z,unit_race,https://github.com/vitessio/vitess/actions/runs/772054018
 2021-04-21T21:16:30Z,Cluster (27),https://github.com/vitessio/vitess/actions/runs/772077801
+2021-04-21T21:22:32Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/772092512
+2021-04-21T21:22:32Z,unit_race,https://github.com/vitessio/vitess/actions/runs/772092523
