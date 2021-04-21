@@ -22,6 +22,8 @@ import {
     FetchSchemaParams,
     fetchSchemas,
     fetchTablets,
+    fetchVSchema,
+    FetchVSchemaParams,
     fetchWorkflow,
     fetchWorkflows,
 } from '../api/http';
@@ -103,6 +105,13 @@ export const useSchema = (params: FetchSchemaParams, options?: UseQueryOptions<p
         },
         ...options,
     });
+};
+
+/**
+ * useVSchema is a query hook that fetches a single vschema definition for the given parameters.
+ */
+export const useVSchema = (params: FetchVSchemaParams, options?: UseQueryOptions<pb.VSchema, Error> | undefined) => {
+    return useQuery(['vschema', params], () => fetchVSchema(params));
 };
 
 /**
