@@ -178,10 +178,10 @@ func buildDBPlan(show *sqlparser.ShowBasic, vschema ContextVSchema) (engine.Prim
 
 	if show.Command == sqlparser.Database {
 		//Hard code default databases
-		rows = append(rows, buildVarCharRow("information_schema"))
-		rows = append(rows, buildVarCharRow("mysql"))
-		rows = append(rows, buildVarCharRow("sys"))
-		rows = append(rows, buildVarCharRow("performance_schema"))
+		ks = append(ks, &vindexes.Keyspace{Name: "information_schema"},
+			&vindexes.Keyspace{Name: "mysql"},
+			&vindexes.Keyspace{Name: "sys"},
+			&vindexes.Keyspace{Name: "performance_schema"})
 	}
 
 	for _, v := range ks {
