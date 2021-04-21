@@ -28,7 +28,7 @@ const (
 var RxOp = regexp.MustCompile("operation not allowed in state (NOT_SERVING|SHUTTING_DOWN)")
 
 // WrongTablet for invalid tablet type error
-const WrongTablet = "invalid tablet type"
+const WrongTablet = "wrong tablet type"
 
 // RxWrongTablet regex for invalid tablet type error
-var RxWrongTablet = regexp.MustCompile("invalid tablet type")
+var RxWrongTablet = regexp.MustCompile(WrongTablet)
