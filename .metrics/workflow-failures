@@ -8627,4 +8627,6 @@
 2021-04-21T15:20:31Z,golangci-lint,https://github.com/vitessio/vitess/actions/runs/771150514
 2021-04-21T15:20:31Z,unit_race,https://github.com/vitessio/vitess/actions/runs/771150524
 2021-04-21T15:46:06Z,Cluster (27),https://github.com/vitessio/vitess/actions/runs/771227040
+2021-04-21T15:46:06Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/771227012
 2021-04-21T15:46:06Z,golangci-lint,https://github.com/vitessio/vitess/actions/runs/771227011
+2021-04-21T15:46:06Z,unit_race,https://github.com/vitessio/vitess/actions/runs/771227031
