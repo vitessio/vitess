@@ -8569,5 +8569,7 @@
 2021-04-21T12:05:52Z,Cluster (upgrade),https://github.com/vitessio/vitess/actions/runs/770574417
 2021-04-21T12:05:52Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/770574429
 2021-04-21T12:19:11Z,cluster_endtoend,https://github.com/vitessio/vitess/actions/runs/770611169
+2021-04-21T12:19:11Z,local_example,https://github.com/vitessio/vitess/actions/runs/770611171
 2021-04-21T12:19:11Z,local_example,https://github.com/vitessio/vitess/actions/runs/770611177
+2021-04-21T12:19:11Z,region_example,https://github.com/vitessio/vitess/actions/runs/770611176
 2021-04-21T12:19:11Z,unit,https://github.com/vitessio/vitess/actions/runs/770611188
