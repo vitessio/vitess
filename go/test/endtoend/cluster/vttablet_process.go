@@ -103,10 +103,12 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 		"-vtctld_addr", vttablet.VtctldAddress,
 		"-vtctld_addr", vttablet.VtctldAddress,
 		"-vreplication_tablet_type", vttablet.VreplicationTabletType,
-		"-pprof", fmt.Sprintf("cpu,waitSig,path=vttablet_pprof_%s", vttablet.Name),
 	)
 	if *isCoverage {
 		vttablet.proc.Args = append(vttablet.proc.Args, "-test.coverprofile="+getCoveragePath("vttablet.out"))
+	}
+	if *PerfTest {
+		vttablet.proc.Args = append(vttablet.proc.Args, "-pprof", fmt.Sprintf("cpu,waitSig,path=vttablet_pprof_%s", vttablet.Name))
 	}
 
 	if vttablet.SupportsBackup {
