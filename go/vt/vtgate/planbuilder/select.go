@@ -97,8 +97,8 @@ func shouldRetryWithCNFRewriting(plan logicalPlan) bool {
 	}
 	// if we have a I_S query, but have not found table_schema or table_name, let's try CNF
 	return routePlan.eroute.Opcode == engine.SelectDBA &&
-		routePlan.eroute.SysTableTableName == nil &&
-		routePlan.eroute.SysTableTableSchema == nil
+		len(routePlan.eroute.SysTableTableName) == 0 &&
+		len(routePlan.eroute.SysTableTableSchema) == 0
 
 }
 
