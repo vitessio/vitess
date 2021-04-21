@@ -1605,7 +1605,7 @@ func TestKeyDestRangeQuery(t *testing.T) {
 	masterSession.TargetString = "TestExecutor[-]"
 	_, err := executorExec(executor, insertInput, nil)
 
-	require.EqualError(t, err, "range queries are not allowed for insert statement: TestExecutor[-]")
+	require.EqualError(t, err, "INSERT not supported when targeting a key range: TestExecutor[-]")
 
 	masterSession.TargetString = ""
 }
