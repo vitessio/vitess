@@ -391,6 +391,11 @@ func (hc *HealthCheckImpl) deleteTablet(tablet *topodata.Tablet) {
 	th.cancelFunc()
 	delete(hc.healthByAlias, tabletAlias)
 	// delete from map by keyspace.shard.tabletType
+	hc.deleteHealthDateLocked(key, tabletAlias)
+}
+
+func (hc *HealthCheckImpl) deleteHealthDateLocked(key keyspaceShardTabletType, tabletAlias tabletAliasString) {
+	// delete from map by keyspace.shard.tabletType
 	ths, ok := hc.healthData[key]
 	if !ok {
 		log.Warningf("We have no health data for target: %v", key)
@@ -448,8 +453,7 @@ func (hc *HealthCheckImpl) updateHealth(th *TabletHealth, prevTarget *query.Targ
 			}
 		}
 	case isPrimary && !isPrimaryUp:
-		// No healthy master tablet
-		hc.healthy[targetKey] = []*TabletHealth{}
+		hc.deleteHealthDateLocked(targetKey, tabletAlias)
 	}
 
 	if !trivialUpdate {
