@@ -68,8 +68,10 @@ create table test_partitioned (
 		t.Fatalf("parseSchema: %v", err)
 	}
 
-	globalTabletEnv, _ = newTabletEnvironment(ddls, defaultTestOpts())
-
+	{
+		tabletEnv, _ := newTabletEnvironment(ddls, defaultTestOpts())
+		setGlobalTabletEnv(tabletEnv)
+	}
 	tablet := newTablet(defaultTestOpts(), &topodatapb.Tablet{
 		Keyspace: "test_keyspace",
 		Shard:    "-80",

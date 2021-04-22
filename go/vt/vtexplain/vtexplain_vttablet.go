@@ -54,9 +54,22 @@ type tabletEnv struct {
 
 var (
 	// time simulator
-	batchTime       *sync2.Batcher
-	globalTabletEnv *tabletEnv
+	batchTime         *sync2.Batcher
+	globalTabletEnv   *tabletEnv
+	globalTabletEnvMu sync.Mutex
 )
+
+func setGlobalTabletEnv(env *tabletEnv) {
+	globalTabletEnvMu.Lock()
+	defer globalTabletEnvMu.Unlock()
+	globalTabletEnv = env
+}
+
+func getGlobalTabletEnv() *tabletEnv {
+	globalTabletEnvMu.Lock()
+	defer globalTabletEnvMu.Unlock()
+	return globalTabletEnv
+}
 
 // explainTablet is the query service that simulates a tablet.
 //
@@ -458,7 +471,7 @@ func (t *explainTablet) HandleQuery(c *mysql.Conn, query string, callback func(*
 	}
 
 	// return the pre-computed results for any schema introspection queries
-	result, ok := globalTabletEnv.schemaQueries[query]
+	result, ok := getGlobalTabletEnv().schemaQueries[query]
 	if ok {
 		return callback(result)
 	}
