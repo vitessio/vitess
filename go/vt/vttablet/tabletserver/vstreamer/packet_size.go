@@ -18,18 +18,7 @@ var useDynamicPacketSize = flag.Bool("vstream_dynamic_packet_size", true, "Enabl
 type PacketSizer interface {
 	ShouldSend(byteCount int) bool
 	Record(byteCount int, duration time.Duration)
-}
-
-type change int8
-
-const (
-	notChanging change = iota
-	gettingFaster
-	gettingSlower
-)
-
-type fixedPacketSizer struct {
-	baseSize int
+	Limit() int
 }
 
 // DefaultPacketSizer creates a new PacketSizer using the default settings.
@@ -57,8 +46,16 @@ func AdjustPacketSize(size int) func() {
 	}
 }
 
+type fixedPacketSizer struct {
+	baseSize int
+}
+
 func newFixedPacketSize(baseSize int) PacketSizer {
 	return &fixedPacketSizer{baseSize: baseSize}
+}
+
+func (ps *fixedPacketSizer) Limit() int {
+	return ps.baseSize
 }
 
 // ShouldSend checks whether the given byte count is large enough to be sent as a packet while streaming
@@ -90,10 +87,22 @@ func newDynamicPacketSizer(baseSize int) PacketSizer {
 	}
 }
 
+func (ps *dynamicPacketSizer) Limit() int {
+	return ps.target
+}
+
 // ShouldSend checks whether the given byte count is large enough to be sent as a packet while streaming
 func (ps *dynamicPacketSizer) ShouldSend(byteCount int) bool {
 	return byteCount >= ps.target
 }
+
+type change int8
+
+const (
+	notChanging change = iota
+	gettingFaster
+	gettingSlower
+)
 
 func (ps *dynamicPacketSizer) changeInThroughput() change {
 	const PValueMargin = 0.1
@@ -102,7 +111,6 @@ func (ps *dynamicPacketSizer) changeInThroughput() change {
 	if err != nil {
 		return notChanging
 	}
-	log.Infof("dynamicPacketSizer.changeInThroughput(): P = %f", t.P)
 	if t.P < PValueMargin {
 		if ps.candidate.Mean() > ps.current.Mean() {
 			return gettingFaster
@@ -124,6 +132,7 @@ func (ps *dynamicPacketSizer) reset() {
 func (ps *dynamicPacketSizer) Record(byteCount int, d time.Duration) {
 	const ExperimentDelay = 5 * time.Second
 	const CheckFrequency = 16
+	const GrowthFrequency = 32
 	const InitialCandidateLen = 32
 	const SettleCandidateLen = 64
 
@@ -144,7 +153,7 @@ func (ps *dynamicPacketSizer) Record(byteCount int, d time.Duration) {
 		if len(ps.current.Xs) == 0 {
 			if len(ps.candidate.Xs) >= InitialCandidateLen {
 				ps.current, ps.candidate = ps.candidate, ps.current
-				log.Infof("packetSize: stored initial sample, mean = %f", byteCount, d, ps.current.Mean())
+				log.Infof("packetSize: stored initial sample, mean = %f", ps.current.Mean())
 			}
 			return
 		}
@@ -157,7 +166,7 @@ func (ps *dynamicPacketSizer) Record(byteCount int, d time.Duration) {
 				ps.settled = true
 				log.Infof("packetSize: not changing for %d, settled at %d", len(ps.candidate.Xs), ps.target)
 			} else {
-				if change == notChanging {
+				if change == notChanging && ps.hits%GrowthFrequency == 0 {
 					ps.target += ps.grow
 				}
 				log.Infof("packetSize: not changing for %d, grow target to %d", len(ps.candidate.Xs), ps.target)
