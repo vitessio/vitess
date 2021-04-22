@@ -5,10 +5,12 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"os"
 	"os/exec"
 	"regexp"
 	"sort"
 	"strings"
+	"text/template"
 )
 
 type label struct {
@@ -21,8 +23,22 @@ type prInfo struct {
 	Title  string  `json:"title"`
 }
 
+const (
+	markdownTemplate = `
+{{- range $typeName, $components := . }}
+## {{ $typeName }}
+{{- range $componentName, $component := $components }} 
+### {{ $componentName}}
+{{- range $prInfo := $component }}
+ - {{ $prInfo.Title }} #{{ $prInfo.Number }}
+{{- end }}
+{{- end }}
+{{- end }}
+`
+)
+
 func main() {
-	//dir := flag.String("dir", "", "the project directory")
+	//dir := flag.Strigng("dir", "", "the project directory")
 	from := flag.String("from", "", "from sha/tag/branch")
 	to := flag.String("to", "", "to sha/tag/branch")
 
@@ -91,7 +107,12 @@ func main() {
 		prsPerComponentAndType := components[component]
 		components[component] = append(prsPerComponentAndType, info)
 	}
-	fmt.Println(prPerType)
+
+	t := template.Must(template.New("markdownTemplate").Parse(markdownTemplate))
+	err = t.ExecuteTemplate(os.Stdout, "markdownTemplate", prPerType)
+	if err != nil {
+		log.Fatal(err)
+	}
 	/*
 	   {
 	     "labels": [
