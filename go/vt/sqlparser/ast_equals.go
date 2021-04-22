@@ -1031,7 +1031,8 @@ func EqualsRefOfAlterTable(a, b *AlterTable) bool {
 	return a.FullyParsed == b.FullyParsed &&
 		EqualsTableName(a.Table, b.Table) &&
 		EqualsSliceOfAlterOption(a.AlterOptions, b.AlterOptions) &&
-		EqualsRefOfPartitionSpec(a.PartitionSpec, b.PartitionSpec)
+		EqualsRefOfPartitionSpec(a.PartitionSpec, b.PartitionSpec) &&
+		EqualsComments(a.Comments, b.Comments)
 }
 
 // EqualsRefOfAlterView does deep equals between the two objects.
@@ -1357,7 +1358,8 @@ func EqualsRefOfCreateTable(a, b *CreateTable) bool {
 		a.FullyParsed == b.FullyParsed &&
 		EqualsTableName(a.Table, b.Table) &&
 		EqualsRefOfTableSpec(a.TableSpec, b.TableSpec) &&
-		EqualsRefOfOptLike(a.OptLike, b.OptLike)
+		EqualsRefOfOptLike(a.OptLike, b.OptLike) &&
+		EqualsComments(a.Comments, b.Comments)
 }
 
 // EqualsRefOfCreateView does deep equals between the two objects.
@@ -1476,7 +1478,8 @@ func EqualsRefOfDropTable(a, b *DropTable) bool {
 	}
 	return a.Temp == b.Temp &&
 		a.IfExists == b.IfExists &&
-		EqualsTableNames(a.FromTables, b.FromTables)
+		EqualsTableNames(a.FromTables, b.FromTables) &&
+		EqualsComments(a.Comments, b.Comments)
 }
 
 // EqualsRefOfDropView does deep equals between the two objects.
@@ -2079,7 +2082,8 @@ func EqualsRefOfRevertMigration(a, b *RevertMigration) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return a.UUID == b.UUID
+	return a.UUID == b.UUID &&
+		EqualsComments(a.Comments, b.Comments)
 }
 
 // EqualsRefOfRollback does deep equals between the two objects.

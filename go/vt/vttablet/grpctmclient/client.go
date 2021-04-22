@@ -369,6 +369,25 @@ func (client *Client) UnlockTables(ctx context.Context, tablet *topodatapb.Table
 	return err
 }
 
+// ExecuteQuery is part of the tmclient.TabletManagerClient interface.
+func (client *Client) ExecuteQuery(ctx context.Context, tablet *topodatapb.Tablet, query []byte, maxrows int) (*querypb.QueryResult, error) {
+	cc, c, err := client.dial(tablet)
+	if err != nil {
+		return nil, err
+	}
+	defer cc.Close()
+
+	response, err := c.ExecuteQuery(ctx, &tabletmanagerdatapb.ExecuteQueryRequest{
+		Query:   query,
+		DbName:  topoproto.TabletDbName(tablet),
+		MaxRows: uint64(maxrows),
+	})
+	if err != nil {
+		return nil, err
+	}
+	return response.Result, nil
+}
+
 // ExecuteFetchAsDba is part of the tmclient.TabletManagerClient interface.
 func (client *Client) ExecuteFetchAsDba(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, query []byte, maxRows int, disableBinlogs, reloadSchema bool) (*querypb.QueryResult, error) {
 	var c tabletmanagerservicepb.TabletManagerClient

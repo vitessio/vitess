@@ -72,6 +72,15 @@ func debugEnvHandler(tsv *TabletServer, w http.ResponseWriter, r *http.Request) 
 			f(ival)
 			msg = fmt.Sprintf("Setting %v to: %v", varname, value)
 		}
+		setFloat64Val := func(f func(float64)) {
+			fval, err := strconv.ParseFloat(value, 64)
+			if err != nil {
+				msg = fmt.Sprintf("Failed setting value for %v: %v", varname, err)
+				return
+			}
+			f(fval)
+			msg = fmt.Sprintf("Setting %v to: %v", varname, value)
+		}
 		switch varname {
 		case "PoolSize":
 			setIntVal(tsv.SetPoolSize)
@@ -85,6 +94,8 @@ func debugEnvHandler(tsv *TabletServer, w http.ResponseWriter, r *http.Request) 
 			setIntVal(tsv.SetMaxResultSize)
 		case "WarnResultSize":
 			setIntVal(tsv.SetWarnResultSize)
+		case "ThrottleMetricThreshold":
+			setFloat64Val(tsv.SetThrottleMetricThreshold)
 		case "Consolidator":
 			tsv.SetConsolidatorMode(value)
 			msg = fmt.Sprintf("Setting %v to: %v", varname, value)
@@ -98,12 +109,19 @@ func debugEnvHandler(tsv *TabletServer, w http.ResponseWriter, r *http.Request) 
 			Value:   fmt.Sprintf("%v", f()),
 		})
 	}
+	addFloat64Var := func(varname string, f func() float64) {
+		vars = append(vars, envValue{
+			VarName: varname,
+			Value:   fmt.Sprintf("%v", f()),
+		})
+	}
 	addIntVar("PoolSize", tsv.PoolSize)
 	addIntVar("StreamPoolSize", tsv.StreamPoolSize)
 	addIntVar("TxPoolSize", tsv.TxPoolSize)
 	addIntVar("QueryCacheCapacity", tsv.QueryPlanCacheCap)
 	addIntVar("MaxResultSize", tsv.MaxResultSize)
 	addIntVar("WarnResultSize", tsv.WarnResultSize)
+	addFloat64Var("ThrottleMetricThreshold", tsv.ThrottleMetricThreshold)
 	vars = append(vars, envValue{
 		VarName: "Consolidator",
 		Value:   tsv.ConsolidatorMode(),
