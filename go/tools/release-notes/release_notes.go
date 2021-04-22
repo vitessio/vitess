@@ -45,7 +45,8 @@ func loadMergedPRs(from, to string) ([]string, error) {
 	cmd := exec.Command("git", "log", "--oneline", fmt.Sprintf("%s...%s", from, to))
 	out, err := cmd.Output()
 	if err != nil {
-		return nil, fmt.Errorf("%s: %s", err.Error(), string(out))
+		execErr := err.(*exec.ExitError)
+		return nil, fmt.Errorf("%s:\nstderr: %s\nstdout: %s", err.Error(), execErr.Stderr, out)
 	}
 
 	var prs []string
@@ -66,7 +67,8 @@ func loadPRinfo(pr string) (prInfo, error) {
 	cmd := exec.Command("gh", "pr", "view", pr, "--json", "title,number,labels")
 	out, err := cmd.Output()
 	if err != nil {
-		return prInfo{}, fmt.Errorf("%s %s", err.Error(), string(out))
+		execErr := err.(*exec.ExitError)
+		return prInfo{}, fmt.Errorf("%s:\nstderr: %s\nstdout: %s", err.Error(), execErr.Stderr, out)
 	}
 	var prInfo prInfo
 	err = json.Unmarshal(out, &prInfo)
