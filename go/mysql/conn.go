@@ -1118,7 +1118,7 @@ func (c *Conn) handleComPrepare(handler Handler, data []byte) (kontinue bool) {
 	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
 		switch node := node.(type) {
 		case sqlparser.Argument:
-			if strings.HasPrefix(string(node), ":v") {
+			if strings.HasPrefix(string(node), "v") {
 				paramsCount++
 			}
 		}

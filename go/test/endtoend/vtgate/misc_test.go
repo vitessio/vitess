@@ -612,6 +612,34 @@ func TestShowVGtid(t *testing.T) {
 	require.NotEqual(t, qr.Rows[0][1].ToString(), qr2.Rows[0][1].ToString(), "vgtid should have changed")
 }
 
+func TestShowGtid(t *testing.T) {
+	conn, err := mysql.Connect(context.Background(), &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	query := "show global gtid_executed from ks"
+	qr := exec(t, conn, query)
+	require.Equal(t, 2, len(qr.Rows))
+
+	res := make(map[string]string, 2)
+	for _, row := range qr.Rows {
+		require.Equal(t, KeyspaceName, row[0].ToString())
+		res[row[2].ToString()] = row[1].ToString()
+	}
+
+	defer exec(t, conn, `delete from t1`)
+	exec(t, conn, `insert into t1(id1, id2) values (1, 1), (2, 2), (3, 3), (4, 4), (5, 5)`)
+	qr2 := exec(t, conn, query)
+	require.Equal(t, 2, len(qr2.Rows))
+
+	for _, row := range qr2.Rows {
+		require.Equal(t, KeyspaceName, row[0].ToString())
+		gtid, exists := res[row[2].ToString()]
+		require.True(t, exists, "gtid not cached for row: %v", row)
+		require.NotEqual(t, gtid, row[1].ToString())
+	}
+}
+
 func assertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {
 	t.Helper()
 	qr := exec(t, conn, query)

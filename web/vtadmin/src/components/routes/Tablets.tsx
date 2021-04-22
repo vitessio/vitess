@@ -27,11 +27,12 @@ import style from './Tablets.module.scss';
 import { Button } from '../Button';
 import { DataCell } from '../dataTable/DataCell';
 import { TabletServingPip } from '../pips/TabletServingPip';
+import { useSyncedURLParam } from '../../hooks/useSyncedURLParam';
 
 export const Tablets = () => {
     useDocumentTitle('Tablets');
 
-    const [filter, setFilter] = React.useState<string>('');
+    const { value: filter, updateValue: updateFilter } = useSyncedURLParam('filter');
     const { data = [] } = useTablets();
 
     const filteredData = React.useMemo(() => {
@@ -63,11 +64,11 @@ export const Tablets = () => {
                 <TextInput
                     autoFocus
                     iconLeft={Icons.search}
-                    onChange={(e) => setFilter(e.target.value)}
+                    onChange={(e) => updateFilter(e.target.value)}
                     placeholder="Filter tablets"
-                    value={filter}
+                    value={filter || ''}
                 />
-                <Button disabled={!filter} onClick={() => setFilter('')} secondary>
+                <Button disabled={!filter} onClick={() => updateFilter('')} secondary>
                     Clear filters
                 </Button>
             </div>
@@ -106,7 +107,7 @@ const formatDisplayType = (t: pb.Tablet) => {
 
 const formatState = (t: pb.Tablet) => t.state && SERVING_STATES[t.state];
 
-export const formatRows = (tablets: pb.Tablet[] | null, filter: string) => {
+export const formatRows = (tablets: pb.Tablet[] | null | undefined, filter: string | null | undefined) => {
     if (!tablets) return [];
 
     // Properties prefixed with "_" are hidden and included for filtering only.
