@@ -17,18 +17,13 @@ limitations under the License.
 package wrangler
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"math"
 	"strings"
 	"sync"
 	"time"
-
-	"vitess.io/vitess/go/vt/log"
-
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
-
-	"context"
 
 	"github.com/golang/protobuf/proto"
 
@@ -38,17 +33,20 @@ import (
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/key"
-	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
+
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 // DiffReport is the summary of differences for one table.
