@@ -17,15 +17,12 @@ limitations under the License.
 package wrangler
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"strings"
 	"sync"
 	"text/template"
-
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
-
-	"context"
 
 	"github.com/golang/protobuf/proto"
 
@@ -34,12 +31,14 @@ import (
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/key"
-	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
+
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
 
 type streamMigrater struct {
