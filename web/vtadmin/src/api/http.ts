@@ -182,6 +182,20 @@ export const fetchTablets = async () =>
         },
     });
 
+export interface FetchVSchemaParams {
+    clusterID: string;
+    keyspace: string;
+}
+
+export const fetchVSchema = async ({ clusterID, keyspace }: FetchVSchemaParams) => {
+    const { result } = await vtfetch(`/api/vschema/${clusterID}/${keyspace}`);
+
+    const err = pb.VSchema.verify(result);
+    if (err) throw Error(err);
+
+    return pb.VSchema.create(result);
+};
+
 export const fetchWorkflows = async () => {
     const { result } = await vtfetch(`/api/workflows`);
 

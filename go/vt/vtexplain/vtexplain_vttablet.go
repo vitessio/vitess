@@ -44,16 +44,32 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
-var (
+type tabletEnv struct {
 	// map of schema introspection queries to their expected results
 	schemaQueries map[string]*sqltypes.Result
 
 	// map for each table from the column name to its type
 	tableColumns map[string]map[string]querypb.Type
+}
 
+var (
 	// time simulator
-	batchTime *sync2.Batcher
+	batchTime         *sync2.Batcher
+	globalTabletEnv   *tabletEnv
+	globalTabletEnvMu sync.Mutex
 )
+
+func setGlobalTabletEnv(env *tabletEnv) {
+	globalTabletEnvMu.Lock()
+	defer globalTabletEnvMu.Unlock()
+	globalTabletEnv = env
+}
+
+func getGlobalTabletEnv() *tabletEnv {
+	globalTabletEnvMu.Lock()
+	defer globalTabletEnvMu.Unlock()
+	return globalTabletEnv
+}
 
 // explainTablet is the query service that simulates a tablet.
 //
@@ -270,9 +286,11 @@ func (t *explainTablet) Close(ctx context.Context) error {
 	return t.tsv.Close(ctx)
 }
 
-func initTabletEnvironment(ddls []sqlparser.DDLStatement, opts *Options) error {
-	tableColumns = make(map[string]map[string]querypb.Type)
-	schemaQueries = map[string]*sqltypes.Result{
+func newTabletEnvironment(ddls []sqlparser.DDLStatement, opts *Options) (*tabletEnv, error) {
+	var tEnv tabletEnv
+
+	tEnv.tableColumns = make(map[string]map[string]querypb.Type)
+	tEnv.schemaQueries = map[string]*sqltypes.Result{
 		"select unix_timestamp()": {
 			Fields: []*querypb.Field{{
 				Type: sqltypes.Uint64,
@@ -389,7 +407,7 @@ func initTabletEnvironment(ddls []sqlparser.DDLStatement, opts *Options) error {
 		}
 		showTableRows = append(showTableRows, mysql.BaseShowTablesRow(table, false, options))
 	}
-	schemaQueries[mysql.TablesWithSize57] = &sqltypes.Result{
+	tEnv.schemaQueries[mysql.TablesWithSize57] = &sqltypes.Result{
 		Fields: mysql.BaseShowTablesFields,
 		Rows:   showTableRows,
 	}
@@ -400,10 +418,10 @@ func initTabletEnvironment(ddls []sqlparser.DDLStatement, opts *Options) error {
 
 		if ddl.GetOptLike() != nil {
 			likeTable := ddl.GetOptLike().LikeTable.Name.String()
-			if _, ok := schemaQueries["select * from "+likeTable+" where 1 != 1"]; !ok {
-				return fmt.Errorf("check your schema, table[%s] doesn't exist", likeTable)
+			if _, ok := tEnv.schemaQueries["select * from "+likeTable+" where 1 != 1"]; !ok {
+				return nil, fmt.Errorf("check your schema, table[%s] doesn't exist", likeTable)
 			}
-			schemaQueries["select * from "+table+" where 1 != 1"] = schemaQueries["select * from "+likeTable+" where 1 != 1"]
+			tEnv.schemaQueries["select * from "+table+" where 1 != 1"] = tEnv.schemaQueries["select * from "+likeTable+" where 1 != 1"]
 			continue
 		}
 		for _, idx := range ddl.GetTableSpec().Indexes {
@@ -416,7 +434,7 @@ func initTabletEnvironment(ddls []sqlparser.DDLStatement, opts *Options) error {
 			}
 		}
 
-		tableColumns[table] = make(map[string]querypb.Type)
+		tEnv.tableColumns[table] = make(map[string]querypb.Type)
 		var rowTypes []*querypb.Field
 		for _, col := range ddl.GetTableSpec().Columns {
 			colName := strings.ToLower(col.Name.String())
@@ -425,19 +443,19 @@ func initTabletEnvironment(ddls []sqlparser.DDLStatement, opts *Options) error {
 				Type: col.Type.SQLType(),
 			}
 			rowTypes = append(rowTypes, rowType)
-			tableColumns[table][colName] = col.Type.SQLType()
+			tEnv.tableColumns[table][colName] = col.Type.SQLType()
 		}
-		schemaQueries["select * from "+table+" where 1 != 1"] = &sqltypes.Result{
+		tEnv.schemaQueries["select * from "+table+" where 1 != 1"] = &sqltypes.Result{
 			Fields: rowTypes,
 		}
 	}
 
-	schemaQueries[mysql.BaseShowPrimary] = &sqltypes.Result{
+	tEnv.schemaQueries[mysql.BaseShowPrimary] = &sqltypes.Result{
 		Fields: mysql.ShowPrimaryFields,
 		Rows:   indexRows,
 	}
 
-	return nil
+	return &tEnv, nil
 }
 
 // HandleQuery implements the fakesqldb query handler interface
@@ -453,7 +471,7 @@ func (t *explainTablet) HandleQuery(c *mysql.Conn, query string, callback func(*
 	}
 
 	// return the pre-computed results for any schema introspection queries
-	result, ok := schemaQueries[query]
+	result, ok := getGlobalTabletEnv().schemaQueries[query]
 	if ok {
 		return callback(result)
 	}
@@ -486,7 +504,7 @@ func (t *explainTablet) HandleQuery(c *mysql.Conn, query string, callback func(*
 		colTypeMap := map[string]querypb.Type{}
 		for _, table := range tables {
 			tableName := sqlparser.String(table)
-			columns, exists := tableColumns[tableName]
+			columns, exists := getGlobalTabletEnv().tableColumns[tableName]
 			if !exists && tableName != "" && tableName != "dual" {
 				return fmt.Errorf("unable to resolve table name %s", tableName)
 			}

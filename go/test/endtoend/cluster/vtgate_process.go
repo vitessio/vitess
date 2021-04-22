@@ -203,7 +203,7 @@ func (vtgate *VtgateProcess) TearDown() error {
 		vtgate.proc = nil
 		return nil
 
-	case <-time.After(10 * time.Second):
+	case <-time.After(30 * time.Second):
 		vtgate.proc.Process.Kill()
 		vtgate.proc = nil
 		return <-vtgate.exit
