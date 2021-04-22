@@ -140,18 +140,10 @@ func BuildTargets(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManag
 			return nil, err
 		}
 
-		query := fmt.Sprintf(
-			`SELECT
-				id,
-				source,
-				message,
-				cell,
-				tablet_types
-			FROM
-				_vt.vreplication
-			WHERE
-				workflow=%s AND
-				db_name=%s`, encodeString(workflow), encodeString(primary.DbName()))
+		// NB: changing the whitespace of this query breaks tests for now.
+		// (TODO:@ajm188) extend FakeDBClient to be less whitespace-sensitive on
+		// expected queries.
+		query := fmt.Sprintf("select id, source, message, cell, tablet_types from _vt.vreplication where workflow=%s and db_name=%s", encodeString(workflow), encodeString(primary.DbName()))
 		p3qr, err := tmc.VReplicationExec(ctx, primary.Tablet, query)
 		if err != nil {
 			return nil, err
@@ -187,6 +179,8 @@ func BuildTargets(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManag
 			optCells = row[3].ToString()
 			optTabletTypes = row[4].ToString()
 		}
+
+		targets[targetShard] = target
 	}
 
 	if len(targets) == 0 {
