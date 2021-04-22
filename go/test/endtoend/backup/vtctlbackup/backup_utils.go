@@ -392,6 +392,7 @@ func testRestoreOldMaster(t *testing.T, method restoreMethod) {
 	// insert data on master, wait for replica to get it
 	verifyInitialReplication(t)
 
+	time.Sleep(20 * time.Second)
 	// backup the replica
 	err := localCluster.VtctlclientProcess.ExecuteCommand("Backup", replica1.Alias)
 	require.Nil(t, err)
