@@ -10,6 +10,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vtctl/workflow"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -422,7 +423,7 @@ func (vrw *VReplicationWorkflow) switchWrites() (*[]string, error) {
 		keyspace := vrw.params.SourceKeyspace
 		vrw.params.SourceKeyspace = vrw.params.TargetKeyspace
 		vrw.params.TargetKeyspace = keyspace
-		vrw.params.Workflow = reverseName(vrw.params.Workflow)
+		vrw.params.Workflow = workflow.ReverseWorkflowName(vrw.params.Workflow)
 		log.Infof("In VReplicationWorkflow.switchWrites(reverse) for %+v", vrw)
 	}
 	journalID, dryRunResults, err = vrw.wr.SwitchWrites(vrw.ctx, vrw.params.TargetKeyspace, vrw.params.Workflow, vrw.params.Timeout,

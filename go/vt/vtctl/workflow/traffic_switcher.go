@@ -225,11 +225,11 @@ func HashStreams(targetKeyspace string, targets map[string]*MigrationTarget) int
 
 const reverseSuffix = "_reverse"
 
-// ReverseWorkflow returns the "reversed" name of a workflow. For a "forward"
-// workflow, this is the workflow name with "_reversed" appended, and for a
-// "reversed" workflow, this is the workflow name with the "_reversed" suffix
-// removed.
-func ReverseWorkflow(workflow string) string {
+// ReverseWorkflowName returns the "reversed" name of a workflow. For a
+// "forward" workflow, this is the workflow name with "_reversed" appended, and
+// for a "reversed" workflow, this is the workflow name with the "_reversed"
+// suffix removed.
+func ReverseWorkflowName(workflow string) string {
 	if strings.HasSuffix(workflow, reverseSuffix) {
 		return workflow[:len(workflow)-len(reverseSuffix)]
 	}

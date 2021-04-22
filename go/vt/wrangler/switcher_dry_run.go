@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/vt/vtctl/workflow"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -286,7 +287,7 @@ func (dr *switcherDryRun) dropSourceReverseVReplicationStreams(ctx context.Conte
 	logs := make([]string, 0)
 	for _, t := range dr.ts.sources {
 		logs = append(logs, fmt.Sprintf("\tKeyspace %s Shard %s Workflow %s DbName %s Tablet %d",
-			t.GetShard().Keyspace(), t.GetShard().ShardName(), reverseName(dr.ts.workflow), t.GetPrimary().DbName(), t.GetPrimary().Alias.Uid))
+			t.GetShard().Keyspace(), t.GetShard().ShardName(), workflow.ReverseWorkflowName(dr.ts.workflow), t.GetPrimary().DbName(), t.GetPrimary().Alias.Uid))
 	}
 	dr.drLog.LogSlice(logs)
 	return nil

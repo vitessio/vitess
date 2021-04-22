@@ -242,18 +242,18 @@ func (wr *Wrangler) getCellsWithTableReadsSwitched(ctx context.Context, targetKe
 	return cellsSwitched, cellsNotSwitched, nil
 }
 
-func (wr *Wrangler) getWorkflowState(ctx context.Context, targetKeyspace, workflow string) (*trafficSwitcher, *workflowState, error) {
-	ts, err := wr.buildTrafficSwitcher(ctx, targetKeyspace, workflow)
+func (wr *Wrangler) getWorkflowState(ctx context.Context, targetKeyspace, workflowName string) (*trafficSwitcher, *workflowState, error) {
+	ts, err := wr.buildTrafficSwitcher(ctx, targetKeyspace, workflowName)
 
 	if ts == nil || err != nil {
-		if err.Error() == fmt.Sprintf(errorNoStreams, targetKeyspace, workflow) {
+		if err.Error() == fmt.Sprintf(errorNoStreams, targetKeyspace, workflowName) {
 			return nil, nil, nil
 		}
 		wr.Logger().Errorf("buildTrafficSwitcher failed: %v", err)
 		return nil, nil, err
 	}
 
-	ws := &workflowState{Workflow: workflow, TargetKeyspace: targetKeyspace}
+	ws := &workflowState{Workflow: workflowName, TargetKeyspace: targetKeyspace}
 	ws.SourceKeyspace = ts.sourceKeyspace
 	var cellsSwitched, cellsNotSwitched []string
 	var keyspace string
@@ -262,10 +262,10 @@ func (wr *Wrangler) getWorkflowState(ctx context.Context, targetKeyspace, workfl
 	// we reverse writes by using the source_keyspace.workflowname_reverse workflow spec, so we need to use the
 	// source of the reverse workflow, which is the target of the workflow initiated by the user for checking routing rules
 	// Similarly we use a target shard of the reverse workflow as the original source to check if writes have been switched
-	if strings.HasSuffix(workflow, "_reverse") {
+	if strings.HasSuffix(workflowName, "_reverse") {
 		reverse = true
 		keyspace = ws.SourceKeyspace
-		workflow = reverseName(workflow)
+		workflowName = workflow.ReverseWorkflowName(workflowName)
 	} else {
 		keyspace = targetKeyspace
 	}
@@ -274,7 +274,7 @@ func (wr *Wrangler) getWorkflowState(ctx context.Context, targetKeyspace, workfl
 
 		// we assume a consistent state, so only choose routing rule for one table for replica/rdonly
 		if len(ts.tables) == 0 {
-			return nil, nil, fmt.Errorf("no tables in workflow %s.%s", keyspace, workflow)
+			return nil, nil, fmt.Errorf("no tables in workflow %s.%s", keyspace, workflowName)
 
 		}
 		table := ts.tables[0]
@@ -801,7 +801,7 @@ func (wr *Wrangler) buildTrafficSwitcher(ctx context.Context, targetKeyspace, wo
 	ts := &trafficSwitcher{
 		wr:              wr,
 		workflow:        workflowName,
-		reverseWorkflow: workflow.ReverseWorkflow(workflowName),
+		reverseWorkflow: workflow.ReverseWorkflowName(workflowName),
 		id:              workflow.HashStreams(targetKeyspace, targets),
 		targets:         targets,
 		sources:         make(map[string]*workflow.MigrationSource),
@@ -1604,7 +1604,7 @@ func (ts *trafficSwitcher) dropSourceReverseVReplicationStreams(ctx context.Cont
 	return ts.forAllSources(func(source *workflow.MigrationSource) error {
 		ts.wr.Logger().Infof("Deleting reverse streams for workflow %s db_name %s", ts.workflow, source.GetPrimary().DbName())
 		query := fmt.Sprintf("delete from _vt.vreplication where db_name=%s and workflow=%s",
-			encodeString(source.GetPrimary().DbName()), encodeString(reverseName(ts.workflow)))
+			encodeString(source.GetPrimary().DbName()), encodeString(workflow.ReverseWorkflowName(ts.workflow)))
 		_, err := ts.wr.tmc.VReplicationExec(ctx, source.GetPrimary().Tablet, query)
 		return err
 	})
@@ -1691,14 +1691,6 @@ func (wr *Wrangler) saveRoutingRules(ctx context.Context, rules map[string][]str
 		})
 	}
 	return wr.ts.SaveRoutingRules(ctx, rrs)
-}
-
-func reverseName(workflow string) string {
-	const reverse = "_reverse"
-	if strings.HasSuffix(workflow, reverse) {
-		return workflow[:len(workflow)-len(reverse)]
-	}
-	return workflow + reverse
 }
 
 // addParticipatingTablesToKeyspace updates the vschema with the new tables that were created as part of the
