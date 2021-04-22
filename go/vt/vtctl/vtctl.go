@@ -2840,7 +2840,7 @@ func commandApplySchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 		executor.SkipPreflight()
 	}
 	if err := executor.SetDDLStrategy(*ddlStrategy); err != nil {
-		return nil
+		return err
 	}
 
 	return schemamanager.Run(
