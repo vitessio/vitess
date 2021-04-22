@@ -2,12 +2,11 @@ package planbuilder
 
 import (
 	"vitess.io/vitess/go/vt/key"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
-
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // Error messages for CreateView queries
@@ -135,9 +134,10 @@ func buildDDLPlans(sql string, ddlStatement sqlparser.DDLStatement, reservedVars
 			IsDML:             false,
 			SingleShardOnly:   false,
 		}, &engine.OnlineDDL{
-			Keyspace: keyspace,
-			DDL:      ddlStatement,
-			SQL:      query,
+			Keyspace:          keyspace,
+			TargetDestination: destination,
+			DDL:               ddlStatement,
+			SQL:               query,
 		}, nil
 }
 

@@ -1,5 +1,5 @@
 /*
-Copyright 2020 The Vitess Authors.
+Copyright 2021 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -17,12 +17,11 @@ limitations under the License.
 package reservedconn
 
 import (
+	"context"
 	"flag"
-	"fmt"
 	"os"
 	"testing"
 
-	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/stretchr/testify/require"
@@ -38,21 +37,7 @@ var (
 	keyspaceName    = "ks"
 	cell            = "zone1"
 	hostname        = "localhost"
-	sqlSchema       = `
-	create table test(
-		id bigint,
-		val1 varchar(16),
-		val2 int,
-		val3 float,
-		primary key(id)
-	)Engine=InnoDB;
-
-CREATE TABLE test_vdx (
-    val1 varchar(16) NOT NULL,
-    keyspace_id binary(8),
-    UNIQUE KEY (val1)
-) ENGINE=Innodb;
-`
+	sqlSchema       = `create table test(id bigint primary key)Engine=InnoDB;`
 
 	vSchema = `
 		{	
@@ -60,20 +45,7 @@ CREATE TABLE test_vdx (
 			"vindexes": {
 				"hash_index": {
 					"type": "hash"
-				},
-				"lookup1": {
-					"type": "consistent_lookup",
-					"params": {
-						"table": "test_vdx",
-						"from": "val1",
-						"to": "keyspace_id",
-						"ignore_nulls": "true"
-					},
-					"owner": "test"
-				},
-				"unicode_vdx":{
-					"type": "unicode_loose_md5"
-                }
+				}
 			},	
 			"tables": {
 				"test":{
@@ -81,18 +53,6 @@ CREATE TABLE test_vdx (
 						{
 							"column": "id",
 							"name": "hash_index"
-						},
-						{
-							"column": "val1",
-							"name": "lookup1"
-						}
-					]
-				},
-				"test_vdx":{
-					"column_vindexes": [
-						{
-							"column": "val1",
-							"name": "unicode_vdx"
 						}
 					]
 				}
@@ -120,8 +80,7 @@ func TestMain(m *testing.M) {
 			SchemaSQL: sqlSchema,
 			VSchema:   vSchema,
 		}
-		clusterInstance.VtTabletExtraArgs = []string{"-queryserver-config-transaction-timeout", "5"}
-		if err := clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 1, false); err != nil {
+		if err := clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 1, true); err != nil {
 			return 1
 		}
 
@@ -140,6 +99,44 @@ func TestMain(m *testing.M) {
 	os.Exit(exitCode)
 }
 
+func TestServingChange(t *testing.T) {
+	conn, err := mysql.Connect(context.Background(), &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	checkedExec(t, conn, "use @rdonly")
+	checkedExec(t, conn, "set sql_mode = ''")
+
+	// to see rdonly is available and
+	// also this will create reserved connection on rdonly on -80 and 80- shards.
+	_, err = exec(t, conn, "select * from test")
+	for err != nil {
+		_, err = exec(t, conn, "select * from test")
+	}
+
+	// changing rdonly tablet to spare (non serving).
+	rdonlyTablet := clusterInstance.Keyspaces[0].Shards[0].Rdonly()
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", rdonlyTablet.Alias, "spare")
+	require.NoError(t, err)
+
+	// this should fail as there is no rdonly present
+	_, err = exec(t, conn, "select * from test")
+	require.Error(t, err)
+
+	// changing replica tablet to rdonly to make rdonly available for serving.
+	replicaTablet := clusterInstance.Keyspaces[0].Shards[0].Replica()
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", replicaTablet.Alias, "rdonly")
+	require.NoError(t, err)
+
+	// to see/make the new rdonly available
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Ping", replicaTablet.Alias)
+	require.NoError(t, err)
+
+	// this should pass now as there is rdonly present
+	_, err = exec(t, conn, "select * from test")
+	assert.NoError(t, err)
+}
+
 func exec(t *testing.T, conn *mysql.Conn, query string) (*sqltypes.Result, error) {
 	t.Helper()
 	return conn.ExecuteFetch(query, 1000, true)
@@ -150,30 +147,4 @@ func checkedExec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result 
 	qr, err := conn.ExecuteFetch(query, 1000, true)
 	require.NoError(t, err)
 	return qr
-}
-
-func assertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {
-	t.Helper()
-	qr := checkedExec(t, conn, query)
-	got := fmt.Sprintf("%v", qr.Rows)
-	diff := cmp.Diff(expected, got)
-	if diff != "" {
-		t.Errorf("Query: %s (-want +got):\n%s", query, diff)
-	}
-}
-
-func assertIsEmpty(t *testing.T, conn *mysql.Conn, query string) {
-	t.Helper()
-	qr := checkedExec(t, conn, query)
-	assert.Empty(t, qr.Rows)
-}
-
-func assertResponseMatch(t *testing.T, conn *mysql.Conn, query1, query2 string) {
-	qr1 := checkedExec(t, conn, query1)
-	got1 := fmt.Sprintf("%v", qr1.Rows)
-
-	qr2 := checkedExec(t, conn, query2)
-	got2 := fmt.Sprintf("%v", qr2.Rows)
-
-	assert.Equal(t, got1, got2)
 }
