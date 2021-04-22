@@ -37,10 +37,13 @@ import (
 )
 
 var (
+	// Frozen is the message value of frozen vreplication streams.
 	Frozen = "FROZEN"
 )
 
 var (
+	// ErrNoStreams occurs when no target streams are found for a workflow in a
+	// target keyspace.
 	ErrNoStreams = errors.New("no streams found")
 )
 
@@ -63,6 +66,7 @@ type TrafficSwitcher struct {
 	frozen         bool
 }
 
+// TargetInfo contains the metadata for a set of targets involved in a workflow.
 type TargetInfo struct {
 	Targets        map[string]*MigrationTarget
 	Frozen         bool
@@ -70,6 +74,7 @@ type TargetInfo struct {
 	OptTabletTypes string
 }
 
+// MigrationSource contains the metadata for each migration source.
 type MigrationSource struct {
 	si        *topo.ShardInfo
 	primary   *topo.TabletInfo
@@ -77,7 +82,9 @@ type MigrationSource struct {
 	Journaled bool
 }
 
-// TODO: do we always want to start with (position:"", journaled:false)?
+// NewMigrationSource returns a MigrationSource for the given shard and primary.
+//
+// (TODO|@ajm188): do we always want to start with (position:"", journaled:false)?
 func NewMigrationSource(si *topo.ShardInfo, primary *topo.TabletInfo) *MigrationSource {
 	return &MigrationSource{
 		si:      si,
@@ -85,14 +92,18 @@ func NewMigrationSource(si *topo.ShardInfo, primary *topo.TabletInfo) *Migration
 	}
 }
 
+// GetShard returns the *topo.ShardInfo for the migration source.
 func (source *MigrationSource) GetShard() *topo.ShardInfo {
 	return source.si
 }
 
+// GetPrimary returns the *topo.TabletInfo for the primary tablet of the
+// migration source.
 func (source *MigrationSource) GetPrimary() *topo.TabletInfo {
 	return source.primary
 }
 
+// MigrationTarget contains the metadata for each migration target.
 type MigrationTarget struct {
 	si       *topo.ShardInfo
 	primary  *topo.TabletInfo
@@ -100,10 +111,13 @@ type MigrationTarget struct {
 	Position string
 }
 
+// GetShard returns the *topo.ShardInfo for the migration target.
 func (target *MigrationTarget) GetShard() *topo.ShardInfo {
 	return target.si
 }
 
+// GetPrimary returns the *topo.TabletInfo for the primary tablet of the
+// migration target.
 func (target *MigrationTarget) GetPrimary() *topo.TabletInfo {
 	return target.primary
 }
@@ -124,6 +138,10 @@ func BuildTrafficSwitcher(ctx context.Context, ts *topo.Server, tmc tmclient.Tab
 	return switcher, nil
 }
 
+// BuildTargets collects MigrationTargets and other metadata (see TargetInfo)
+// from a workflow in the target keyspace.
+//
+// It returns ErrNoStreams if there are no targets found for the workflow.
 func BuildTargets(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManagerClient, targetKeyspace string, workflow string) (*TargetInfo, error) {
 	targetShards, err := ts.GetShardNames(ctx, targetKeyspace)
 	if err != nil {
@@ -137,6 +155,10 @@ func BuildTargets(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManag
 		targets        = make(map[string]*MigrationTarget, len(targetShards))
 	)
 
+	// We check all shards in the target keyspace. Not all of them may have a
+	// stream. For example, if we're splitting -80 to [-40,40-80], only those
+	// two target shards will have vreplication streams, and the other shards in
+	// the target keyspace will not.
 	for _, targetShard := range targetShards {
 		si, err := ts.GetShard(ctx, targetKeyspace, targetShard)
 		if err != nil {
@@ -214,6 +236,8 @@ func BuildTargets(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManag
 	}, nil
 }
 
+// HashStreams produces a stable hash based on the target keyspace and migration
+// targets.
 func HashStreams(targetKeyspace string, targets map[string]*MigrationTarget) int64 {
 	var expanded []string
 	for shard, target := range targets {
@@ -237,6 +261,10 @@ func HashStreams(targetKeyspace string, targets map[string]*MigrationTarget) int
 
 const reverseSuffix = "_reverse"
 
+// ReverseWorkflow returns the "reversed" name of a workflow. For a "forward"
+// workflow, this is the workflow name with "_reversed" appended, and for a
+// "reversed" workflow, this is the workflow name with the "_reversed" suffix
+// removed.
 func ReverseWorkflow(workflow string) string {
 	if strings.HasSuffix(workflow, reverseSuffix) {
 		return workflow[:len(workflow)-len(reverseSuffix)]
