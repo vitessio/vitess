@@ -76,6 +76,8 @@ func loadPRinfo(pr string) (prInfo, error) {
 }
 
 func loadAllPRs(prs []string) ([]prInfo, error) {
+	errChan := make(chan error)
+	wgDone := make(chan bool)
 	prChan := make(chan string, len(prs))
 	// fill the work queue
 	for _, s := range prs {
@@ -96,8 +98,8 @@ func loadAllPRs(prs []string) ([]prInfo, error) {
 				fmt.Print(".")
 				prInfo, err := loadPRinfo(b)
 				if err != nil {
-					// todo: error handling!
-					log.Fatal(err)
+					errChan <- err
+					break
 				}
 				mu.Lock()
 				prInfos = append(prInfos, prInfo)
@@ -106,11 +108,22 @@ func loadAllPRs(prs []string) ([]prInfo, error) {
 		}()
 	}
 
-	// wait for the loading to finish
-	wg.Wait()
-	fmt.Println()
+	go func() {
+		// wait for the loading to finish
+		wg.Wait()
+		close(wgDone)
+	}()
 
-	return prInfos, nil
+	var err error
+	select {
+	case <-wgDone:
+		break
+	case err = <-errChan:
+		break
+	}
+
+	fmt.Println()
+	return prInfos, err
 }
 
 func groupPRs(prInfos []prInfo) map[string]map[string][]prInfo {
