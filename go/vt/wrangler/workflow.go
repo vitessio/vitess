@@ -8,11 +8,11 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/sqltypes"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
-	"vitess.io/vitess/go/vt/log"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 // VReplicationWorkflowType specifies whether workflow is MoveTables or Reshard
