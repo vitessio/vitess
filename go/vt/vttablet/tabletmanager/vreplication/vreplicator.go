@@ -58,6 +58,10 @@ var (
 	// vreplicationMinimumHeartbeatUpdateInterval overrides vreplicationHeartbeatUpdateInterval if the latter is higher than this
 	// to ensure that it satisfies liveness criteria implicitly expected by internal processes like Online DDL
 	vreplicationMinimumHeartbeatUpdateInterval = 60
+
+	vreplicationExperimentalFlags = flag.Int64("vreplication_experimental_flags", 0, "(Bitmask) of experimental features in vreplication to enable")
+
+	vreplicationExperimentalFlagOptimizeInserts int64 = 1
 )
 
 // vreplicator provides the core logic to start vreplication streams

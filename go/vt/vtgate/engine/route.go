@@ -94,8 +94,8 @@ type Route struct {
 	ScatterErrorsAsWarnings bool
 
 	// The following two fields are used when routing information_schema queries
-	SysTableTableSchema evalengine.Expr
-	SysTableTableName   evalengine.Expr
+	SysTableTableSchema []evalengine.Expr
+	SysTableTableName   []evalengine.Expr
 
 	// Route does not take inputs
 	noInputs
@@ -125,12 +125,19 @@ func NewRoute(opcode RouteOpcode, keyspace *vindexes.Keyspace, query, fieldQuery
 // OrderbyParams specifies the parameters for ordering.
 // This is used for merge-sorting scatter queries.
 type OrderbyParams struct {
-	Col  int
-	Desc bool
+	Col int
+	// WeightStringCol is the weight_string column that will be used for sorting.
+	// It is set to -1 if such a column is not added to the query
+	WeightStringCol   int
+	Desc              bool
+	StarColFixedIndex int
 }
 
 func (obp OrderbyParams) String() string {
 	val := strconv.Itoa(obp.Col)
+	if obp.StarColFixedIndex > obp.Col {
+		val = strconv.Itoa(obp.StarColFixedIndex)
+	}
 	if obp.Desc {
 		val += " DESC"
 	} else {
@@ -408,7 +415,7 @@ func (route *Route) routeInfoSchemaQuery(vcursor VCursor, bindVars map[string]*q
 		return destinations, vterrors.Wrapf(err, "failed to find information about keyspace `%s`", ks)
 	}
 
-	if route.SysTableTableName == nil && route.SysTableTableSchema == nil {
+	if len(route.SysTableTableName) == 0 && len(route.SysTableTableSchema) == 0 {
 		return defaultRoute()
 	}
 
@@ -418,22 +425,38 @@ func (route *Route) routeInfoSchemaQuery(vcursor VCursor, bindVars map[string]*q
 	}
 
 	var specifiedKS string
-	if route.SysTableTableSchema != nil {
-		result, err := route.SysTableTableSchema.Evaluate(env)
+	for _, tableSchema := range route.SysTableTableSchema {
+		result, err := tableSchema.Evaluate(env)
 		if err != nil {
 			return nil, err
 		}
-		specifiedKS = result.Value().ToString()
+		ks := result.Value().ToString()
+		if specifiedKS == "" {
+			specifiedKS = ks
+		}
+		if specifiedKS != ks {
+			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "specifying two different database in the query is not supported")
+		}
+	}
+	if specifiedKS != "" {
 		bindVars[sqltypes.BvSchemaName] = sqltypes.StringBindVariable(specifiedKS)
 	}
 
 	var tableName string
-	if route.SysTableTableName != nil {
-		val, err := route.SysTableTableName.Evaluate(env)
+	for _, sysTableName := range route.SysTableTableName {
+		val, err := sysTableName.Evaluate(env)
 		if err != nil {
 			return nil, err
 		}
-		tableName = val.Value().ToString()
+		tabName := val.Value().ToString()
+		if tableName == "" {
+			tableName = tabName
+		}
+		if tableName != tabName {
+			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "two predicates for table_name not supported")
+		}
+	}
+	if tableName != "" {
 		bindVars[BvTableName] = sqltypes.StringBindVariable(tableName)
 	}
 
@@ -584,26 +607,25 @@ func (route *Route) sort(in *sqltypes.Result) (*sqltypes.Result, error) {
 		InsertID:     in.InsertID,
 	}
 
+	comparers := extractSlices(route.OrderBy)
+
 	sort.Slice(out.Rows, func(i, j int) bool {
+		var cmp int
+		if err != nil {
+			return true
+		}
 		// If there are any errors below, the function sets
 		// the external err and returns true. Once err is set,
 		// all subsequent calls return true. This will make
 		// Slice think that all elements are in the correct
 		// order and return more quickly.
-		for _, order := range route.OrderBy {
-			if err != nil {
-				return true
-			}
-			var cmp int
-			cmp, err = evalengine.NullsafeCompare(out.Rows[i][order.Col], out.Rows[j][order.Col])
+		for _, c := range comparers {
+			cmp, err = c.compare(out.Rows[i], out.Rows[j])
 			if err != nil {
 				return true
 			}
 			if cmp == 0 {
 				continue
-			}
-			if order.Desc {
-				cmp = -cmp
 			}
 			return cmp < 0
 		}
@@ -723,15 +745,34 @@ func (route *Route) description() PrimitiveDescription {
 	if len(route.Values) > 0 {
 		other["Values"] = route.Values
 	}
-	if route.SysTableTableSchema != nil {
-		other["SysTableTableSchema"] = route.SysTableTableSchema.String()
+	if len(route.SysTableTableSchema) != 0 {
+		sysTabSchema := "["
+		for idx, tableSchema := range route.SysTableTableSchema {
+			if idx != 0 {
+				sysTabSchema += ", "
+			}
+			sysTabSchema += tableSchema.String()
+		}
+		sysTabSchema += "]"
+		other["SysTableTableSchema"] = sysTabSchema
 	}
-	if route.SysTableTableName != nil {
-		other["SysTableTableName"] = route.SysTableTableName.String()
+	if len(route.SysTableTableName) != 0 {
+		sysTableName := "["
+		for idx, tableName := range route.SysTableTableName {
+			if idx != 0 {
+				sysTableName += ", "
+			}
+			sysTableName += tableName.String()
+		}
+		sysTableName += "]"
+		other["SysTableTableName"] = sysTableName
 	}
 	orderBy := GenericJoin(route.OrderBy, orderByToString)
 	if orderBy != "" {
 		other["OrderBy"] = orderBy
+	}
+	if route.TruncateColumnCount > 0 {
+		other["ResultColumns"] = route.TruncateColumnCount
 	}
 
 	return PrimitiveDescription{

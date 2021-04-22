@@ -373,11 +373,7 @@ func NewWhere(typ WhereType, expr Expr) *Where {
 // and replaces it with to. If from matches root,
 // then to is returned.
 func ReplaceExpr(root, from, to Expr) Expr {
-	tmp, err := Rewrite(root, replaceExpr(from, to), nil)
-	if err != nil {
-		log.Errorf("Failed to rewrite expression. Rewriter returned an error: %s", err.Error())
-		return from
-	}
+	tmp := Rewrite(root, replaceExpr(from, to), nil)
 
 	expr, success := tmp.(Expr)
 	if !success {
@@ -463,6 +459,7 @@ func NewArgument(in string) Argument {
 	return Argument(in)
 }
 
+// Bytes return the []byte
 func (node *Literal) Bytes() []byte {
 	return []byte(node.Val)
 }
@@ -679,11 +676,12 @@ func (node *TableIdent) UnmarshalJSON(b []byte) error {
 func containEscapableChars(s string, at AtCount) bool {
 	isDbSystemVariable := at != NoAt
 
-	for i, c := range s {
-		letter := isLetter(uint16(c))
-		systemVarChar := isDbSystemVariable && isCarat(uint16(c))
+	for i := range s {
+		c := uint16(s[i])
+		letter := isLetter(c)
+		systemVarChar := isDbSystemVariable && isCarat(c)
 		if !(letter || systemVarChar) {
-			if i == 0 || !isDigit(uint16(c)) {
+			if i == 0 || !isDigit(c) {
 				return true
 			}
 		}
@@ -692,16 +690,12 @@ func containEscapableChars(s string, at AtCount) bool {
 	return false
 }
 
-func isKeyword(s string) bool {
-	_, isKeyword := keywordLookupTable.LookupString(s)
-	return isKeyword
-}
-
-func formatID(buf *TrackedBuffer, original, lowered string, at AtCount) {
-	if containEscapableChars(original, at) || isKeyword(lowered) {
+func formatID(buf *TrackedBuffer, original string, at AtCount) {
+	_, isKeyword := keywordLookupTable.LookupString(original)
+	if isKeyword || containEscapableChars(original, at) {
 		writeEscapedString(buf, original)
 	} else {
-		buf.Myprintf("%s", original)
+		buf.WriteString(original)
 	}
 }
 
@@ -1235,6 +1229,8 @@ func (ty ShowCommandType) ToString() string {
 		return FunctionCStr
 	case Function:
 		return FunctionStr
+	case GtidExecGlobal:
+		return GtidExecGlobalStr
 	case Index:
 		return IndexStr
 	case OpenTable:
@@ -1259,6 +1255,8 @@ func (ty ShowCommandType) ToString() string {
 		return VariableGlobalStr
 	case VariableSession:
 		return VariableSessionStr
+	case VGtidExecGlobal:
+		return VGtidExecGlobalStr
 	case VitessMigrations:
 		return VitessMigrationsStr
 	case Keyspace:
@@ -1300,11 +1298,11 @@ func (lock LockOptionType) ToString() string {
 }
 
 // CompliantName is used to get the name of the bind variable to use for this column name
-func (node *ColName) CompliantName(suffix string) string {
+func (node *ColName) CompliantName() string {
 	if !node.Qualifier.IsEmpty() {
-		return node.Qualifier.Name.CompliantName() + "_" + node.Name.CompliantName() + suffix
+		return node.Qualifier.Name.CompliantName() + "_" + node.Name.CompliantName()
 	}
-	return node.Name.CompliantName() + suffix
+	return node.Name.CompliantName()
 }
 
 // AtCount represents the '@' count in ColIdent

@@ -190,7 +190,7 @@ func (dbc *DBConn) FetchNext(ctx context.Context, maxrows int, wantfields bool) 
 }
 
 // Stream executes the query and streams the results.
-func (dbc *DBConn) Stream(ctx context.Context, query string, callback func(*sqltypes.Result) error, streamBufferSize int, includedFields querypb.ExecuteOptions_IncludedFields) error {
+func (dbc *DBConn) Stream(ctx context.Context, query string, callback func(*sqltypes.Result) error, alloc func() *sqltypes.Result, streamBufferSize int, includedFields querypb.ExecuteOptions_IncludedFields) error {
 	span, ctx := trace.NewSpan(ctx, "DBConn.Stream")
 	trace.AnnotateSQL(span, query)
 	defer span.Finish()
@@ -207,6 +207,7 @@ func (dbc *DBConn) Stream(ctx context.Context, query string, callback func(*sqlt
 				}
 				return callback(r)
 			},
+			alloc,
 			streamBufferSize,
 		)
 		switch {
@@ -239,14 +240,14 @@ func (dbc *DBConn) Stream(ctx context.Context, query string, callback func(*sqlt
 	panic("unreachable")
 }
 
-func (dbc *DBConn) streamOnce(ctx context.Context, query string, callback func(*sqltypes.Result) error, streamBufferSize int) error {
+func (dbc *DBConn) streamOnce(ctx context.Context, query string, callback func(*sqltypes.Result) error, alloc func() *sqltypes.Result, streamBufferSize int) error {
 	defer dbc.stats.MySQLTimings.Record("ExecStream", time.Now())
 
 	dbc.current.Set(query)
 	defer dbc.current.Set("")
 
 	done, wg := dbc.setDeadline(ctx)
-	err := dbc.conn.ExecuteStreamFetch(query, callback, streamBufferSize)
+	err := dbc.conn.ExecuteStreamFetch(query, callback, alloc, streamBufferSize)
 
 	if done != nil {
 		close(done)
@@ -270,35 +271,35 @@ func (dbc *DBConn) VerifyMode(strictTransTables bool) error {
 	if strictTransTables {
 		qr, err := dbc.conn.ExecuteFetch(getModeSQL, 2, false)
 		if err != nil {
-			return vterrors.Wrap(err, "could not verify mode")
+			return err
 		}
 		if len(qr.Rows) != 1 {
-			return fmt.Errorf("incorrect rowcount received for %s: %d", getModeSQL, len(qr.Rows))
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "incorrect rowcount received for %s: %d", getModeSQL, len(qr.Rows))
 		}
 		sqlMode := qr.Rows[0][0].ToString()
 		if !(strings.Contains(sqlMode, "STRICT_TRANS_TABLES") || strings.Contains(sqlMode, "STRICT_ALL_TABLES")) {
-			return fmt.Errorf("require sql_mode to be STRICT_TRANS_TABLES or STRICT_ALL_TABLES: got '%s'", qr.Rows[0][0].ToString())
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "require sql_mode to be STRICT_TRANS_TABLES or STRICT_ALL_TABLES: got '%s'", qr.Rows[0][0].ToString())
 		}
 	}
 	qr, err := dbc.conn.ExecuteFetch(getAutocommit, 2, false)
 	if err != nil {
-		return vterrors.Wrap(err, "could not verify mode")
+		return err
 	}
 	if len(qr.Rows) != 1 {
-		return fmt.Errorf("incorrect rowcount received for %s: %d", getAutocommit, len(qr.Rows))
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "incorrect rowcount received for %s: %d", getAutocommit, len(qr.Rows))
 	}
 	if !strings.Contains(qr.Rows[0][0].ToString(), "1") {
-		return fmt.Errorf("require autocommit to be 1: got %s", qr.Rows[0][0].ToString())
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "require autocommit to be 1: got %s", qr.Rows[0][0].ToString())
 	}
 	qr, err = dbc.conn.ExecuteFetch(getAutoIsNull, 2, false)
 	if err != nil {
-		return vterrors.Wrap(err, "could not verify mode")
+		return err
 	}
 	if len(qr.Rows) != 1 {
-		return fmt.Errorf("incorrect rowcount received for %s: %d", getAutoIsNull, len(qr.Rows))
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "incorrect rowcount received for %s: %d", getAutoIsNull, len(qr.Rows))
 	}
 	if !strings.Contains(qr.Rows[0][0].ToString(), "0") {
-		return fmt.Errorf("require sql_auto_is_null to be 0: got %s", qr.Rows[0][0].ToString())
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "require sql_auto_is_null to be 0: got %s", qr.Rows[0][0].ToString())
 	}
 	return nil
 }

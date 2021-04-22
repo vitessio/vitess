@@ -174,8 +174,6 @@ func (r *NoCloneType) String() string {
 
 type Visit func(node AST) (bool, error)
 
-var errAbort = fmt.Errorf("this error is to abort the rewriter, it is not an actual error")
-
 type application struct {
 	pre, post ApplyFunc
 	cur       Cursor

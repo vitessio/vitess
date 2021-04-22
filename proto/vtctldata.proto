@@ -389,6 +389,17 @@ message GetTabletsRequest {
   string shard = 2;
   // Cells is an optional set of cells to return tablets for.
   repeated string cells = 3;
+  // Strict specifies how the server should treat failures from individual
+  // cells.
+  //
+  // When false (the default), GetTablets will return data from any cells that
+  // return successfully, but will fail the request if all cells fail. When
+  // true, any individual cell can fail the full request.
+  bool strict = 4;
+  // TabletAliases is an optional list of tablet aliases to fetch Tablet objects
+  // for. If specified, Keyspace, Shard, and Cells are ignored, and tablets are
+  // looked up by their respective aliases' Cells directly.
+  repeated topodata.TabletAlias tablet_aliases = 5;
 }
 
 message GetTabletsResponse {

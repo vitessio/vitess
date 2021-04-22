@@ -29,7 +29,7 @@ const (
 	workflowConfigDir = "../.github/workflows"
 
 	unitTestTemplate  = "templates/unit_test.tpl"
-	unitTestDatabases = "percona56, mysql57, mysql80, mariadb101, mariadb102, mariadb103"
+	unitTestDatabases = "percona56, mysql57, mysql80, mariadb101, mariadb103"
 
 	clusterTestTemplate = "templates/cluster_endtoend_test.tpl"
 )
@@ -61,6 +61,8 @@ var (
 		"onlineddl_vrepl_stress",
 		"vreplication_migrate",
 		"onlineddl_revert",
+		"onlineddl_declarative",
+		"onlineddl_singleton",
 		"tabletmanager_throttler",
 		"tabletmanager_throttler_custom_config",
 	}

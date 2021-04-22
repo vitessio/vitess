@@ -48,7 +48,7 @@ func planOrdering(pb *primitiveBuilder, input logicalPlan, orderBy sqlparser.Ord
 	case *orderedAggregate:
 		return planOAOrdering(pb, orderBy, node)
 	case *mergeSort:
-		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "can't do ORDER BY on top of ORDER BY")
+		return nil, vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED, "can't do ORDER BY on top of ORDER BY")
 	}
 	if orderBy == nil {
 		return input, nil
@@ -289,9 +289,35 @@ func planRouteOrdering(orderBy sqlparser.OrderBy, node *route) (logicalPlan, err
 		if colNumber == -1 {
 			return nil, fmt.Errorf("unsupported: in scatter query: order by must reference a column in the select list: %s", sqlparser.String(order))
 		}
+		starColFixedIndex := colNumber
+		if selectStatement, ok := node.Select.(*sqlparser.Select); ok {
+			for i, selectExpr := range selectStatement.SelectExprs {
+				if starExpr, ok := selectExpr.(*sqlparser.StarExpr); ok {
+					if i < colNumber {
+						tableName := starExpr.TableName
+						tableMap := node.resultColumns[i].column.st.tables
+						var tableMeta *table
+						if tableName.IsEmpty() && len(tableMap) == 1 {
+							for j := range tableMap {
+								tableMeta = tableMap[j]
+							}
+						} else {
+							tableMeta = tableMap[tableName]
+						}
+						if tableMeta == nil {
+							break
+						}
+						starColFixedIndex += len(tableMeta.columnNames) - 1
+					}
+				}
+			}
+		}
+
 		ob := engine.OrderbyParams{
-			Col:  colNumber,
-			Desc: order.Direction == sqlparser.DescOrder,
+			Col:               colNumber,
+			WeightStringCol:   -1,
+			Desc:              order.Direction == sqlparser.DescOrder,
+			StarColFixedIndex: starColFixedIndex,
 		}
 		node.eroute.OrderBy = append(node.eroute.OrderBy, ob)
 

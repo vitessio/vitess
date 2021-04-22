@@ -17,8 +17,6 @@ limitations under the License.
 package sqlparser
 
 import (
-	"strconv"
-
 	"vitess.io/vitess/go/sqltypes"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -34,30 +32,23 @@ type BindVars map[string]struct{}
 // Within Select constructs, bind vars are deduped. This allows
 // us to identify vindex equality. Otherwise, every value is
 // treated as distinct.
-func Normalize(stmt Statement, known BindVars, bindVars map[string]*querypb.BindVariable, prefix string) error {
-	nz := newNormalizer(known, bindVars, prefix)
-	_, err := Rewrite(stmt, nz.WalkStatement, nil)
-	if err != nil {
-		return err
-	}
+func Normalize(stmt Statement, reserved *ReservedVars, bindVars map[string]*querypb.BindVariable) error {
+	nz := newNormalizer(reserved, bindVars)
+	_ = Rewrite(stmt, nz.WalkStatement, nil)
 	return nz.err
 }
 
 type normalizer struct {
 	bindVars map[string]*querypb.BindVariable
-	prefix   string
-	reserved map[string]struct{}
-	counter  int
+	reserved *ReservedVars
 	vals     map[string]string
 	err      error
 }
 
-func newNormalizer(reserved map[string]struct{}, bindVars map[string]*querypb.BindVariable, prefix string) *normalizer {
+func newNormalizer(reserved *ReservedVars, bindVars map[string]*querypb.BindVariable) *normalizer {
 	return &normalizer{
 		bindVars: bindVars,
-		prefix:   prefix,
 		reserved: reserved,
-		counter:  1,
 		vals:     make(map[string]string),
 	}
 }
@@ -71,8 +62,7 @@ func (nz *normalizer) WalkStatement(cursor *Cursor) bool {
 	case *Set, *Show, *Begin, *Commit, *Rollback, *Savepoint, *SetTransaction, DDLStatement, *SRollback, *Release, *OtherAdmin, *OtherRead:
 		return false
 	case *Select:
-		_, err := Rewrite(node, nz.WalkSelect, nil)
-		nz.err = err
+		_ = Rewrite(node, nz.WalkSelect, nil)
 		// Don't continue
 		return false
 	case *Literal:
@@ -139,13 +129,13 @@ func (nz *normalizer) convertLiteralDedup(node *Literal, cursor *Cursor) {
 	bvname, ok := nz.vals[key]
 	if !ok {
 		// If there's no such bindvar, make a new one.
-		bvname = nz.newName()
+		bvname = nz.reserved.nextUnusedVar()
 		nz.vals[key] = bvname
 		nz.bindVars[bvname] = bval
 	}
 
 	// Modify the AST node to a bindvar.
-	cursor.Replace(NewArgument(":" + bvname))
+	cursor.Replace(NewArgument(bvname))
 }
 
 // convertLiteral converts an Literal without the dedup.
@@ -155,10 +145,10 @@ func (nz *normalizer) convertLiteral(node *Literal, cursor *Cursor) {
 		return
 	}
 
-	bvname := nz.newName()
+	bvname := nz.reserved.nextUnusedVar()
 	nz.bindVars[bvname] = bval
 
-	cursor.Replace(NewArgument(":" + bvname))
+	cursor.Replace(NewArgument(bvname))
 }
 
 // convertComparison attempts to convert IN clauses to
@@ -189,10 +179,10 @@ func (nz *normalizer) convertComparison(node *ComparisonExpr) {
 			Value: bval.Value,
 		})
 	}
-	bvname := nz.newName()
+	bvname := nz.reserved.nextUnusedVar()
 	nz.bindVars[bvname] = bvals
 	// Modify RHS to be a list bindvar.
-	node.Right = ListArg(append([]byte("::"), bvname...))
+	node.Right = ListArg(bvname)
 }
 
 func (nz *normalizer) sqlToBindvar(node SQLNode) *querypb.BindVariable {
@@ -217,17 +207,6 @@ func (nz *normalizer) sqlToBindvar(node SQLNode) *querypb.BindVariable {
 	return nil
 }
 
-func (nz *normalizer) newName() string {
-	for {
-		newName := nz.prefix + strconv.Itoa(nz.counter)
-		if _, ok := nz.reserved[newName]; !ok {
-			nz.reserved[newName] = struct{}{}
-			return newName
-		}
-		nz.counter++
-	}
-}
-
 // GetBindvars returns a map of the bind vars referenced in the statement.
 func GetBindvars(stmt Statement) map[string]struct{} {
 	bindvars := make(map[string]struct{})
@@ -238,9 +217,9 @@ func GetBindvars(stmt Statement) map[string]struct{} {
 			// allocations.
 			return false, nil
 		case Argument:
-			bindvars[string(node[1:])] = struct{}{}
+			bindvars[string(node)] = struct{}{}
 		case ListArg:
-			bindvars[string(node[2:])] = struct{}{}
+			bindvars[string(node)] = struct{}{}
 		}
 		return true, nil
 	}, stmt)

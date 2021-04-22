@@ -234,8 +234,9 @@ func bindVariable(yylex yyLexer, bvar string) {
 %token <str> NULLX AUTO_INCREMENT APPROXNUM SIGNED UNSIGNED ZEROFILL
 
 // SHOW tokens
-%token <str> COLLATION DATABASES SCHEMAS TABLES VITESS_METADATA VSCHEMA FULL PROCESSLIST COLUMNS FIELDS ENGINES PLUGINS EXTENDED
-%token <str> KEYSPACES VITESS_KEYSPACES VITESS_SHARDS VITESS_TABLETS VITESS_MIGRATIONS CODE PRIVILEGES FUNCTION OPEN TRIGGERS EVENT USER
+%token <str> CODE COLLATION COLUMNS DATABASES ENGINES EVENT EXTENDED FIELDS FULL FUNCTION GTID_EXECUTED
+%token <str> KEYSPACES OPEN PLUGINS PRIVILEGES PROCESSLIST SCHEMAS TABLES TRIGGERS USER
+%token <str> VGTID_EXECUTED VITESS_KEYSPACES VITESS_METADATA VITESS_MIGRATIONS VITESS_SHARDS VITESS_TABLETS VSCHEMA
 
 // SET tokens
 %token <str> NAMES CHARSET GLOBAL SESSION ISOLATION LEVEL READ WRITE ONLY REPEATABLE COMMITTED UNCOMMITTED SERIALIZABLE
@@ -362,14 +363,14 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <str> for_from
 %type <str> default_opt
 %type <ignore> ignore_opt
-%type <str> from_database_opt columns_or_fields extended_opt storage_opt
+%type <str> columns_or_fields extended_opt storage_opt
 %type <showFilter> like_or_where_opt like_opt
 %type <boolean> exists_opt not_exists_opt enforced_opt temp_opt full_opt
 %type <empty> to_opt
 %type <str> reserved_keyword non_reserved_keyword
 %type <colIdent> sql_id reserved_sql_id col_alias as_ci_opt
 %type <expr> charset_value
-%type <tableIdent> table_id reserved_table_id table_alias as_opt_id
+%type <tableIdent> table_id reserved_table_id table_alias as_opt_id table_id_opt from_database_opt
 %type <empty> as_opt work_opt savepoint_opt
 %type <empty> skip_to_end ddl_skip_to_end
 %type <str> charset
@@ -780,9 +781,9 @@ create_statement:
     $1.FullyParsed = true
     $$ = $1
   }
-| CREATE replace_opt algorithm_view definer_opt security_view_opt VIEW table_name column_list_opt AS select_statement check_option_opt
+| CREATE comment_opt replace_opt algorithm_view definer_opt security_view_opt VIEW table_name column_list_opt AS select_statement check_option_opt
   {
-    $$ = &CreateView{ViewName: $7.ToViewName(), IsReplace:$2, Algorithm:$3, Definer: $4 ,Security:$5, Columns:$8, Select: $10, CheckOption: $11 }
+    $$ = &CreateView{ViewName: $8.ToViewName(), IsReplace:$3, Algorithm:$4, Definer: $5 ,Security:$6, Columns:$9, Select: $11, CheckOption: $12 }
   }
 | create_database_prefix create_options_opt
   {
@@ -843,50 +844,50 @@ vindex_param:
   }
 
 create_table_prefix:
-  CREATE temp_opt TABLE not_exists_opt table_name
+  CREATE comment_opt temp_opt TABLE not_exists_opt table_name
   {
-    $$ = &CreateTable{Table: $5, IfNotExists: $4, Temp: $2}
+    $$ = &CreateTable{Comments: Comments($2), Table: $6, IfNotExists: $5, Temp: $3}
     setDDL(yylex, $$)
   }
 
 alter_table_prefix:
-  ALTER TABLE table_name
+  ALTER comment_opt TABLE table_name
   {
-    $$ = &AlterTable{Table: $3}
+    $$ = &AlterTable{Comments: Comments($2), Table: $4}
     setDDL(yylex, $$)
   }
 
 create_index_prefix:
-  CREATE INDEX id_or_var using_opt ON table_name
+  CREATE comment_opt INDEX id_or_var using_opt ON table_name
   {
-    $$ = &AlterTable{Table: $6, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition:&IndexDefinition{Info: &IndexInfo{Name:$3, Type:string($2)}, Options:$4}}}}
+    $$ = &AlterTable{Table: $7, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition:&IndexDefinition{Info: &IndexInfo{Name:$4, Type:string($3)}, Options:$5}}}}
     setDDL(yylex, $$)
   }
-| CREATE FULLTEXT INDEX id_or_var using_opt ON table_name
+| CREATE comment_opt FULLTEXT INDEX id_or_var using_opt ON table_name
   {
-    $$ = &AlterTable{Table: $7, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition:&IndexDefinition{Info: &IndexInfo{Name:$4, Type:string($2)+" "+string($3), Fulltext:true}, Options:$5}}}}
+    $$ = &AlterTable{Table: $8, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition:&IndexDefinition{Info: &IndexInfo{Name:$5, Type:string($3)+" "+string($4), Fulltext:true}, Options:$6}}}}
     setDDL(yylex, $$)
   }
-| CREATE SPATIAL INDEX id_or_var using_opt ON table_name
+| CREATE comment_opt SPATIAL INDEX id_or_var using_opt ON table_name
   {
-    $$ = &AlterTable{Table: $7, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition:&IndexDefinition{Info: &IndexInfo{Name:$4, Type:string($2)+" "+string($3), Spatial:true}, Options:$5}}}}
+    $$ = &AlterTable{Table: $8, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition:&IndexDefinition{Info: &IndexInfo{Name:$5, Type:string($3)+" "+string($4), Spatial:true}, Options:$6}}}}
     setDDL(yylex, $$)
   }
-| CREATE UNIQUE INDEX id_or_var using_opt ON table_name
+| CREATE comment_opt UNIQUE INDEX id_or_var using_opt ON table_name
   {
-    $$ = &AlterTable{Table: $7, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition:&IndexDefinition{Info: &IndexInfo{Name:$4, Type:string($2)+" "+string($3), Unique:true}, Options:$5}}}}
+    $$ = &AlterTable{Table: $8, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition:&IndexDefinition{Info: &IndexInfo{Name:$5, Type:string($3)+" "+string($4), Unique:true}, Options:$6}}}}
     setDDL(yylex, $$)
   }
 
 create_database_prefix:
-  CREATE database_or_schema comment_opt not_exists_opt id_or_var
+  CREATE comment_opt database_or_schema comment_opt not_exists_opt table_id
   {
-    $$ = &CreateDatabase{Comments: Comments($3), DBName: string($5.String()), IfNotExists: $4}
+    $$ = &CreateDatabase{Comments: Comments($4), DBName: $6, IfNotExists: $5}
     setDDL(yylex,$$)
   }
 
 alter_database_prefix:
-  ALTER database_or_schema
+  ALTER comment_opt database_or_schema
   {
     $$ = &AlterDatabase{}
     setDDL(yylex,$$)
@@ -1026,16 +1027,18 @@ column_definition:
 // was specific (as stated in the MySQL guide) and did not accept arbitrary order options. For example NOT NULL DEFAULT 1 and not DEFAULT 1 NOT NULL
 column_type_options:
   {
-    $$ = &ColumnTypeOptions{NotNull: false, Default: nil, OnUpdate: nil, Autoincrement: false, KeyOpt: colKeyNone, Comment: nil}
+    $$ = &ColumnTypeOptions{Null: nil, Default: nil, OnUpdate: nil, Autoincrement: false, KeyOpt: colKeyNone, Comment: nil}
   }
 | column_type_options NULL
   {
-    $1.NotNull = false
+    val := true
+    $1.Null = &val
     $$ = $1
   }
 | column_type_options NOT NULL
   {
-    $1.NotNull = true
+    val := false
+    $1.Null = &val
     $$ = $1
   }
 | column_type_options DEFAULT value_expression
@@ -1546,7 +1549,7 @@ index_column:
 constraint_definition:
   CONSTRAINT id_or_var_opt constraint_info
   {
-    $$ = &ConstraintDefinition{Name: string($2.String()), Details: $3}
+    $$ = &ConstraintDefinition{Name: $2, Details: $3}
   }
 |  constraint_info
   {
@@ -1556,7 +1559,7 @@ constraint_definition:
 check_constraint_definition:
   CONSTRAINT id_or_var_opt check_constraint_info
   {
-    $$ = &ConstraintDefinition{Name: string($2.String()), Details: $3}
+    $$ = &ConstraintDefinition{Name: $2, Details: $3}
   }
 |  check_constraint_info
   {
@@ -1968,7 +1971,7 @@ alter_option:
   }
 | DROP index_or_key id_or_var
   {
-    $$ = &DropKey{Type:NormalKeyType, Name:$3.String()}
+    $$ = &DropKey{Type:NormalKeyType, Name:$3}
   }
 | DROP PRIMARY KEY
   {
@@ -1976,7 +1979,7 @@ alter_option:
   }
 | DROP FOREIGN KEY id_or_var
   {
-    $$ = &DropKey{Type:ForeignKeyType, Name:$4.String()}
+    $$ = &DropKey{Type:ForeignKeyType, Name:$4}
   }
 | FORCE
   {
@@ -1988,7 +1991,7 @@ alter_option:
   }
 | RENAME index_or_key id_or_var TO id_or_var
   {
-    $$ = &RenameIndex{OldName:$3.String(), NewName:$5.String()}
+    $$ = &RenameIndex{OldName:$3, NewName:$5}
   }
 
 alter_commands_modifier_list:
@@ -2066,114 +2069,114 @@ alter_statement:
     $1.PartitionSpec = $2
     $$ = $1
   }
-| ALTER algorithm_view definer_opt security_view_opt VIEW table_name column_list_opt AS select_statement check_option_opt
+| ALTER comment_opt algorithm_view definer_opt security_view_opt VIEW table_name column_list_opt AS select_statement check_option_opt
   {
-    $$ = &AlterView{ViewName: $6.ToViewName(), Algorithm:$2, Definer: $3 ,Security:$4, Columns:$7, Select: $9, CheckOption: $10 }
+    $$ = &AlterView{ViewName: $7.ToViewName(), Algorithm:$3, Definer: $4 ,Security:$5, Columns:$8, Select: $10, CheckOption: $11 }
   }
-| alter_database_prefix id_or_var_opt create_options
+| alter_database_prefix table_id_opt create_options
   {
     $1.FullyParsed = true
-    $1.DBName = $2.String()
+    $1.DBName = $2
     $1.AlterOptions = $3
     $$ = $1
   }
-| alter_database_prefix id_or_var UPGRADE DATA DIRECTORY NAME
+| alter_database_prefix table_id UPGRADE DATA DIRECTORY NAME
   {
     $1.FullyParsed = true
-    $1.DBName = $2.String()
+    $1.DBName = $2
     $1.UpdateDataDirectory = true
     $$ = $1
   }
-| ALTER VSCHEMA CREATE VINDEX table_name vindex_type_opt vindex_params_opt
+| ALTER comment_opt VSCHEMA CREATE VINDEX table_name vindex_type_opt vindex_params_opt
   {
     $$ = &AlterVschema{
         Action: CreateVindexDDLAction,
-        Table: $5,
+        Table: $6,
         VindexSpec: &VindexSpec{
-          Name: NewColIdent($5.Name.String()),
-          Type: $6,
-          Params: $7,
+          Name: NewColIdent($6.Name.String()),
+          Type: $7,
+          Params: $8,
         },
       }
   }
-| ALTER VSCHEMA DROP VINDEX table_name
+| ALTER comment_opt VSCHEMA DROP VINDEX table_name
   {
     $$ = &AlterVschema{
         Action: DropVindexDDLAction,
-        Table: $5,
+        Table: $6,
         VindexSpec: &VindexSpec{
-          Name: NewColIdent($5.Name.String()),
+          Name: NewColIdent($6.Name.String()),
         },
       }
   }
-| ALTER VSCHEMA ADD TABLE table_name
+| ALTER comment_opt VSCHEMA ADD TABLE table_name
   {
-    $$ = &AlterVschema{Action: AddVschemaTableDDLAction, Table: $5}
+    $$ = &AlterVschema{Action: AddVschemaTableDDLAction, Table: $6}
   }
-| ALTER VSCHEMA DROP TABLE table_name
+| ALTER comment_opt VSCHEMA DROP TABLE table_name
   {
-    $$ = &AlterVschema{Action: DropVschemaTableDDLAction, Table: $5}
+    $$ = &AlterVschema{Action: DropVschemaTableDDLAction, Table: $6}
   }
-| ALTER VSCHEMA ON table_name ADD VINDEX sql_id '(' column_list ')' vindex_type_opt vindex_params_opt
+| ALTER comment_opt VSCHEMA ON table_name ADD VINDEX sql_id '(' column_list ')' vindex_type_opt vindex_params_opt
   {
     $$ = &AlterVschema{
         Action: AddColVindexDDLAction,
-        Table: $4,
+        Table: $5,
         VindexSpec: &VindexSpec{
-            Name: $7,
-            Type: $11,
-            Params: $12,
+            Name: $8,
+            Type: $12,
+            Params: $13,
         },
-        VindexCols: $9,
+        VindexCols: $10,
       }
   }
-| ALTER VSCHEMA ON table_name DROP VINDEX sql_id
+| ALTER comment_opt VSCHEMA ON table_name DROP VINDEX sql_id
   {
     $$ = &AlterVschema{
         Action: DropColVindexDDLAction,
-        Table: $4,
+        Table: $5,
         VindexSpec: &VindexSpec{
-            Name: $7,
+            Name: $8,
         },
       }
   }
-| ALTER VSCHEMA ADD SEQUENCE table_name
+| ALTER comment_opt VSCHEMA ADD SEQUENCE table_name
   {
-    $$ = &AlterVschema{Action: AddSequenceDDLAction, Table: $5}
+    $$ = &AlterVschema{Action: AddSequenceDDLAction, Table: $6}
   }
-| ALTER VSCHEMA ON table_name ADD AUTO_INCREMENT sql_id USING table_name
+| ALTER comment_opt VSCHEMA ON table_name ADD AUTO_INCREMENT sql_id USING table_name
   {
     $$ = &AlterVschema{
         Action: AddAutoIncDDLAction,
-        Table: $4,
+        Table: $5,
         AutoIncSpec: &AutoIncSpec{
-            Column: $7,
-            Sequence: $9,
+            Column: $8,
+            Sequence: $10,
         },
     }
   }
-| ALTER VITESS_MIGRATION STRING RETRY
+| ALTER comment_opt VITESS_MIGRATION STRING RETRY
   {
     $$ = &AlterMigration{
       Type: RetryMigrationType,
-      UUID: string($3),
+      UUID: string($4),
     }
   }
-| ALTER VITESS_MIGRATION STRING COMPLETE
+| ALTER comment_opt VITESS_MIGRATION STRING COMPLETE
   {
     $$ = &AlterMigration{
       Type: CompleteMigrationType,
-      UUID: string($3),
+      UUID: string($4),
     }
   }
-| ALTER VITESS_MIGRATION STRING CANCEL
+| ALTER comment_opt VITESS_MIGRATION STRING CANCEL
   {
     $$ = &AlterMigration{
       Type: CancelMigrationType,
-      UUID: string($3),
+      UUID: string($4),
     }
   }
-| ALTER VITESS_MIGRATION CANCEL ALL
+| ALTER comment_opt VITESS_MIGRATION CANCEL ALL
   {
     $$ = &AlterMigration{
       Type: CancelAllMigrationType,
@@ -2321,26 +2324,26 @@ rename_list:
   }
 
 drop_statement:
-  DROP temp_opt TABLE exists_opt table_name_list restrict_or_cascade_opt
+  DROP comment_opt temp_opt TABLE exists_opt table_name_list restrict_or_cascade_opt
   {
-    $$ = &DropTable{FromTables: $5, IfExists: $4, Temp: $2}
+    $$ = &DropTable{FromTables: $6, IfExists: $5, Comments: Comments($2), Temp: $3}
   }
-| DROP INDEX id_or_var ON table_name algorithm_lock_opt
+| DROP comment_opt INDEX id_or_var ON table_name algorithm_lock_opt
   {
     // Change this to an alter statement
-    if $3.Lowered() == "primary" {
-      $$ = &AlterTable{Table: $5,AlterOptions: append([]AlterOption{&DropKey{Type:PrimaryKeyType}},$6...)}
+    if $4.Lowered() == "primary" {
+      $$ = &AlterTable{Table: $6,AlterOptions: append([]AlterOption{&DropKey{Type:PrimaryKeyType}},$7...)}
     } else {
-      $$ = &AlterTable{Table: $5,AlterOptions: append([]AlterOption{&DropKey{Type:NormalKeyType, Name:$3.String()}},$6...)}
+      $$ = &AlterTable{Table: $6,AlterOptions: append([]AlterOption{&DropKey{Type:NormalKeyType, Name:$4}},$7...)}
     }
   }
-| DROP VIEW exists_opt view_name_list restrict_or_cascade_opt
+| DROP comment_opt VIEW exists_opt view_name_list restrict_or_cascade_opt
   {
-    $$ = &DropView{FromTables: $4, IfExists: $3}
+    $$ = &DropView{FromTables: $5, IfExists: $4}
   }
-| DROP database_or_schema comment_opt exists_opt id_or_var
+| DROP comment_opt database_or_schema exists_opt table_id
   {
-    $$ = &DropDatabase{Comments: Comments($3), DBName: string($5.String()), IfExists: $4}
+    $$ = &DropDatabase{Comments: Comments($2), DBName: $5, IfExists: $4}
   }
 
 truncate_statement:
@@ -2495,6 +2498,14 @@ show_statement:
   {
       $$ = &Show{&ShowLegacy{Type: string($3), Scope: ImplicitScope}}
   }
+| SHOW GLOBAL GTID_EXECUTED from_database_opt
+  {
+    $$ = &Show{&ShowBasic{Command: GtidExecGlobal, DbName: $4}}
+  }
+| SHOW GLOBAL VGTID_EXECUTED from_database_opt
+  {
+    $$ = &Show{&ShowBasic{Command: VGtidExecGlobal, DbName: $4}}
+  }
 | SHOW VITESS_METADATA VARIABLES like_opt
   {
     showTablesOpt := &ShowTablesOpt{Filter: $4}
@@ -2591,15 +2602,15 @@ columns_or_fields:
 from_database_opt:
   /* empty */
   {
-    $$ = ""
+    $$ = NewTableIdent("")
   }
 | FROM table_id
   {
-    $$ = $2.v
+    $$ = $2
   }
 | IN table_id
   {
-    $$ = $2.v
+    $$ = $2
   }
 
 like_or_where_opt:
@@ -2836,9 +2847,9 @@ unlock_statement:
   }
 
 revert_statement:
-  REVERT VITESS_MIGRATION STRING
+  REVERT comment_opt VITESS_MIGRATION STRING
   {
-    $$ = &RevertMigration{UUID: string($3)}
+    $$ = &RevertMigration{Comments: Comments($2), UUID: string($4)}
   }
 
 flush_statement:
@@ -3546,7 +3557,7 @@ col_tuple:
   }
 | LIST_ARG
   {
-    $$ = ListArg($1)
+    $$ = ListArg($1[2:])
     bindVariable(yylex, $1[2:])
   }
 
@@ -4080,7 +4091,7 @@ value:
   }
 | VALUE_ARG
   {
-    $$ = NewArgument($1)
+    $$ = NewArgument($1[1:])
     bindVariable(yylex, $1[1:])
   }
 | NULL
@@ -4104,7 +4115,7 @@ num_val:
   }
 | VALUE_ARG VALUES
   {
-    $$ = NewArgument($1)
+    $$ = NewArgument($1[1:])
     bindVariable(yylex, $1[1:])
   }
 
@@ -4725,6 +4736,15 @@ table_id:
     $$ = NewTableIdent(string($1))
   }
 
+table_id_opt:
+  {
+    $$ = NewTableIdent("")
+  }
+| table_id
+  {
+    $$ = $1
+  }
+
 reserved_table_id:
   table_id
 | reserved_keyword
@@ -4752,6 +4772,7 @@ reserved_keyword:
 | CASE
 | CALL
 | CHANGE
+| CHARACTER
 | CHECK
 | COLLATE
 | COLUMN
@@ -4906,7 +4927,6 @@ non_reserved_keyword:
 | CASCADED
 | CHANNEL
 | CHAR
-| CHARACTER
 | CHARSET
 | CHECKSUM
 | CLONE
@@ -4971,6 +4991,7 @@ non_reserved_keyword:
 | GEOMETRYCOLLECTION
 | GET_MASTER_PUBLIC_KEY
 | GLOBAL
+| GTID_EXECUTED
 | HEADER
 | HISTOGRAM
 | HISTORY
@@ -5137,6 +5158,7 @@ non_reserved_keyword:
 | VARCHAR
 | VARIABLES
 | VCPU
+| VGTID_EXECUTED
 | VIEW
 | VINDEX
 | VINDEXES

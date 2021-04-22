@@ -163,7 +163,9 @@ func TestMain(m *testing.M) {
 		clusterInstance.VtctldExtraArgs = []string{
 			"-schema_change_dir", schemaChangeDirectory,
 			"-schema_change_controller", "local",
-			"-schema_change_check_interval", "1"}
+			"-online_ddl_check_interval", "3s",
+			"-schema_change_check_interval", "1",
+		}
 
 		clusterInstance.VtTabletExtraArgs = []string{
 			"-enable-lag-throttler",
@@ -384,7 +386,7 @@ func testWithInitialSchema(t *testing.T) {
 }
 
 // testOnlineDDLStatement runs an online DDL, ALTER statement
-func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy string, executeStrategy string, expectColumn string) (uuid string) {
+func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy string, executeStrategy string, expectHint string) (uuid string) {
 	tableName := fmt.Sprintf("vt_onlineddl_test_%02d", 3)
 	sqlQuery := fmt.Sprintf(alterStatement, tableName)
 	if executeStrategy == "vtgate" {
@@ -394,22 +396,22 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 		}
 	} else {
 		var err error
-		uuid, err = clusterInstance.VtctlclientProcess.ApplySchemaWithOutput(keyspaceName, sqlQuery, ddlStrategy)
+		uuid, err = clusterInstance.VtctlclientProcess.ApplySchemaWithOutput(keyspaceName, sqlQuery, cluster.VtctlClientParams{DDLStrategy: ddlStrategy})
 		assert.NoError(t, err)
 	}
 	uuid = strings.TrimSpace(uuid)
 	fmt.Println("# Generated UUID (for debug purposes):")
 	fmt.Printf("<%s>\n", uuid)
 
-	strategy, _, err := schema.ParseDDLStrategy(ddlStrategy)
+	strategySetting, err := schema.ParseDDLStrategy(ddlStrategy)
 	assert.NoError(t, err)
 
-	if !strategy.IsDirect() {
+	if !strategySetting.Strategy.IsDirect() {
 		time.Sleep(time.Second * 20)
 	}
 
-	if expectColumn != "" {
-		checkMigratedTable(t, tableName, expectColumn)
+	if expectHint != "" {
+		checkMigratedTable(t, tableName, expectHint)
 	}
 	return uuid
 }

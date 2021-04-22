@@ -18,6 +18,7 @@ package planbuilder
 
 import (
 	"errors"
+	"flag"
 	"sort"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -33,6 +34,10 @@ import (
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+)
+
+var (
+	enableOnlineDDL = flag.Bool("enable_online_ddl", true, "Allow users to submit, review and control Online DDL")
 )
 
 // ContextVSchema defines the interface for this package to fetch
@@ -61,6 +66,9 @@ type ContextVSchema interface {
 	// This will let the user know that they are using something
 	// that could become a problem if they move to a sharded keyspace
 	WarnUnshardedOnly(format string, params ...interface{})
+
+	// ForeignKeyMode returns the foreign_key flag value
+	ForeignKeyMode() string
 }
 
 // PlannerVersion is an alias here to make the code more readable
@@ -86,7 +94,7 @@ type truncater interface {
 // TestBuilder builds a plan for a query based on the specified vschema.
 // This method is only used from tests
 func TestBuilder(query string, vschema ContextVSchema) (*engine.Plan, error) {
-	stmt, reservedVars, err := sqlparser.Parse2(query)
+	stmt, reserved, err := sqlparser.Parse2(query)
 	if err != nil {
 		return nil, err
 	}
@@ -95,6 +103,7 @@ func TestBuilder(query string, vschema ContextVSchema) (*engine.Plan, error) {
 		return nil, err
 	}
 
+	reservedVars := sqlparser.NewReservedVars("vtg", reserved)
 	return BuildFromStmt(query, result.AST, reservedVars, vschema, result.BindVarNeeds)
 }
 
@@ -102,7 +111,7 @@ func TestBuilder(query string, vschema ContextVSchema) (*engine.Plan, error) {
 var ErrPlanNotSupported = errors.New("plan building not supported")
 
 // BuildFromStmt builds a plan based on the AST provided.
-func BuildFromStmt(query string, stmt sqlparser.Statement, reservedVars sqlparser.BindVars, vschema ContextVSchema, bindVarNeeds *sqlparser.BindVarNeeds) (*engine.Plan, error) {
+func BuildFromStmt(query string, stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema ContextVSchema, bindVarNeeds *sqlparser.BindVarNeeds) (*engine.Plan, error) {
 	instruction, err := createInstructionFor(query, stmt, reservedVars, vschema)
 	if err != nil {
 		return nil, err
@@ -132,16 +141,16 @@ func getConfiguredPlanner(vschema ContextVSchema) (selectPlanner, error) {
 	}
 }
 
-func buildRoutePlan(stmt sqlparser.Statement, reservedVars sqlparser.BindVars, vschema ContextVSchema, f func(statement sqlparser.Statement, reservedVars sqlparser.BindVars, schema ContextVSchema) (engine.Primitive, error)) (engine.Primitive, error) {
+func buildRoutePlan(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema ContextVSchema, f func(statement sqlparser.Statement, reservedVars *sqlparser.ReservedVars, schema ContextVSchema) (engine.Primitive, error)) (engine.Primitive, error) {
 	if vschema.Destination() != nil {
 		return buildPlanForBypass(stmt, reservedVars, vschema)
 	}
 	return f(stmt, reservedVars, vschema)
 }
 
-type selectPlanner func(query string) func(sqlparser.Statement, sqlparser.BindVars, ContextVSchema) (engine.Primitive, error)
+type selectPlanner func(query string) func(sqlparser.Statement, *sqlparser.ReservedVars, ContextVSchema) (engine.Primitive, error)
 
-func createInstructionFor(query string, stmt sqlparser.Statement, reservedVars sqlparser.BindVars, vschema ContextVSchema) (engine.Primitive, error) {
+func createInstructionFor(query string, stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema ContextVSchema) (engine.Primitive, error) {
 	switch stmt := stmt.(type) {
 	case *sqlparser.Select:
 		configuredPlanner, err := getConfiguredPlanner(vschema)
@@ -197,7 +206,7 @@ func createInstructionFor(query string, stmt sqlparser.Statement, reservedVars s
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: unexpected statement type: %T", stmt)
 }
 
-func buildDBDDLPlan(stmt sqlparser.Statement, reservedVars sqlparser.BindVars, vschema ContextVSchema) (engine.Primitive, error) {
+func buildDBDDLPlan(stmt sqlparser.Statement, _ *sqlparser.ReservedVars, vschema ContextVSchema) (engine.Primitive, error) {
 	dbDDLstmt := stmt.(sqlparser.DBDDLStatement)
 	ksName := dbDDLstmt.GetDatabaseName()
 	if ksName == "" {

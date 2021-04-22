@@ -70,6 +70,10 @@ func buildShowBasicPlan(show *sqlparser.ShowBasic, vschema ContextVSchema) (engi
 		return engine.NewRowsPrimitive(make([][]sqltypes.Value, 0, 2), buildVarCharFields("Variable_name", "Value")), nil
 	case sqlparser.VitessMigrations:
 		return buildShowVMigrationsPlan(show, vschema)
+	case sqlparser.VGtidExecGlobal:
+		return buildShowVGtidPlan(show, vschema)
+	case sqlparser.GtidExecGlobal:
+		return buildShowGtidPlan(show, vschema)
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unknown show query type %s", show.Command.ToString())
 
@@ -113,28 +117,42 @@ func buildVariablePlan(show *sqlparser.ShowBasic, vschema ContextVSchema) (engin
 }
 
 func buildShowTblPlan(show *sqlparser.ShowBasic, vschema ContextVSchema) (engine.Primitive, error) {
-	if show.DbName != "" {
-		show.Tbl.Qualifier = sqlparser.NewTableIdent(show.DbName)
-	}
-	table, _, _, _, destination, err := vschema.FindTableOrVindex(show.Tbl)
-	if err != nil {
-		return nil, err
-	}
-	if table == nil {
-		return nil, vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.UnknownTable, "Table '%s' doesn't exist", show.Tbl.Name.String())
-	}
-	if destination == nil {
-		destination = key.DestinationAnyShard{}
+	if !show.DbName.IsEmpty() {
+		show.Tbl.Qualifier = sqlparser.NewTableIdent(show.DbName.String())
+		// Remove Database Name from the query.
+		show.DbName = sqlparser.NewTableIdent("")
 	}
 
-	// Remove Database Name from the query.
-	show.DbName = ""
-	show.Tbl.Qualifier = sqlparser.NewTableIdent("")
-	show.Tbl.Name = table.Name
+	dest := key.Destination(key.DestinationAnyShard{})
+	var ks *vindexes.Keyspace
+	var err error
+
+	if !show.Tbl.Qualifier.IsEmpty() && sqlparser.SystemSchema(show.Tbl.Qualifier.String()) {
+		ks, err = vschema.AnyKeyspace()
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		table, _, _, _, destination, err := vschema.FindTableOrVindex(show.Tbl)
+		if err != nil {
+			return nil, err
+		}
+		if table == nil {
+			return nil, vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.UnknownTable, "Table '%s' doesn't exist", show.Tbl.Name.String())
+		}
+		// Update the table.
+		show.Tbl.Qualifier = sqlparser.NewTableIdent("")
+		show.Tbl.Name = table.Name
+
+		if destination != nil {
+			dest = destination
+		}
+		ks = table.Keyspace
+	}
 
 	return &engine.Send{
-		Keyspace:          table.Keyspace,
-		TargetDestination: destination,
+		Keyspace:          ks,
+		TargetDestination: dest,
 		Query:             sqlparser.String(show),
 		IsDML:             false,
 		SingleShardOnly:   true,
@@ -178,7 +196,7 @@ func buildDBPlan(show *sqlparser.ShowBasic, vschema ContextVSchema) (engine.Prim
 
 // buildShowVMigrationsPlan serves `SHOW VITESS_MIGRATIONS ...` queries. It invokes queries on _vt.schema_migrations on all MASTER tablets on keyspace's shards.
 func buildShowVMigrationsPlan(show *sqlparser.ShowBasic, vschema ContextVSchema) (engine.Primitive, error) {
-	dest, ks, tabletType, err := vschema.TargetDestination(show.DbName)
+	dest, ks, tabletType, err := vschema.TargetDestination(show.DbName.String())
 	if err != nil {
 		return nil, err
 	}
@@ -213,7 +231,7 @@ func buildShowVMigrationsPlan(show *sqlparser.ShowBasic, vschema ContextVSchema)
 
 func buildPlanWithDB(show *sqlparser.ShowBasic, vschema ContextVSchema) (engine.Primitive, error) {
 	dbName := show.DbName
-	dbDestination := show.DbName
+	dbDestination := show.DbName.String()
 	if sqlparser.SystemSchema(dbDestination) {
 		ks, err := vschema.AnyKeyspace()
 		if err != nil {
@@ -222,7 +240,7 @@ func buildPlanWithDB(show *sqlparser.ShowBasic, vschema ContextVSchema) (engine.
 		dbDestination = ks.Name
 	} else {
 		// Remove Database Name from the query.
-		show.DbName = ""
+		show.DbName = sqlparser.NewTableIdent("")
 	}
 	destination, keyspace, _, err := vschema.TargetDestination(dbDestination)
 	if err != nil {
@@ -232,8 +250,8 @@ func buildPlanWithDB(show *sqlparser.ShowBasic, vschema ContextVSchema) (engine.
 		destination = key.DestinationAnyShard{}
 	}
 
-	if dbName == "" {
-		dbName = keyspace.Name
+	if dbName.IsEmpty() {
+		dbName = sqlparser.NewTableIdent(keyspace.Name)
 	}
 
 	query := sqlparser.String(show)
@@ -246,7 +264,7 @@ func buildPlanWithDB(show *sqlparser.ShowBasic, vschema ContextVSchema) (engine.
 		SingleShardOnly:   true,
 	}
 	if show.Command == sqlparser.Table {
-		plan, err = engine.NewRenameField([]string{"Tables_in_" + dbName}, []int{0}, plan)
+		plan, err = engine.NewRenameField([]string{"Tables_in_" + dbName.String()}, []int{0}, plan)
 		if err != nil {
 			return nil, err
 		}
@@ -293,21 +311,21 @@ func generateCharsetRows(showFilter *sqlparser.ShowFilter, colNames []string) ([
 	} else {
 		cmpExp, ok := showFilter.Filter.(*sqlparser.ComparisonExpr)
 		if !ok {
-			return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.SyntaxError, "expect a 'LIKE' or '=' expression")
+			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "expect a 'LIKE' or '=' expression")
 		}
 
 		left, ok := cmpExp.Left.(*sqlparser.ColName)
 		if !ok {
-			return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.SyntaxError, "expect left side to be 'charset'")
+			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "expect left side to be 'charset'")
 		}
 		leftOk := left.Name.EqualString(charset)
 
 		if leftOk {
 			literal, ok := cmpExp.Right.(*sqlparser.Literal)
 			if !ok {
-				return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.SyntaxError, "we expect the right side to be a string")
+				return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "we expect the right side to be a string")
 			}
-			rightString := string(literal.Val)
+			rightString := literal.Val
 
 			switch cmpExp.Operator {
 			case sqlparser.EqualOp:
@@ -476,4 +494,44 @@ func buildCreatePlan(show *sqlparser.ShowCreate, vschema ContextVSchema) (engine
 		SingleShardOnly:   true,
 	}, nil
 
+}
+
+func buildShowVGtidPlan(show *sqlparser.ShowBasic, vschema ContextVSchema) (engine.Primitive, error) {
+	send, err := buildShowGtidPlan(show, vschema)
+	if err != nil {
+		return nil, err
+	}
+	return &engine.OrderedAggregate{
+		PreProcess: true,
+		Aggregates: []engine.AggregateParams{
+			{
+				Opcode: engine.AggregateGtid,
+				Col:    1,
+				Alias:  "global vgtid_executed",
+			},
+		},
+		TruncateColumnCount: 2,
+		Input:               send,
+	}, nil
+}
+
+func buildShowGtidPlan(show *sqlparser.ShowBasic, vschema ContextVSchema) (engine.Primitive, error) {
+	dbName := ""
+	if !show.DbName.IsEmpty() {
+		dbName = show.DbName.String()
+	}
+	dest, ks, _, err := vschema.TargetDestination(dbName)
+	if err != nil {
+		return nil, err
+	}
+	if dest == nil {
+		dest = key.DestinationAllShards{}
+	}
+
+	return &engine.Send{
+		Keyspace:          ks,
+		TargetDestination: dest,
+		Query:             fmt.Sprintf(`select '%s' as db_name, @@global.gtid_executed as gtid_executed, :%s as shard`, ks.Name, engine.ShardName),
+		ShardNameNeeded:   true,
+	}, nil
 }

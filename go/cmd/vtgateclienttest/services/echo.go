@@ -143,7 +143,7 @@ func (c *echoClient) ExecuteBatch(ctx context.Context, session *vtgatepb.Session
 	return c.fallbackClient.ExecuteBatch(ctx, session, sqlList, bindVariablesList)
 }
 
-func (c *echoClient) VStream(ctx context.Context, tabletType topodatapb.TabletType, vgtid *binlogdatapb.VGtid, filter *binlogdatapb.Filter, callback func([]*binlogdatapb.VEvent) error) error {
+func (c *echoClient) VStream(ctx context.Context, tabletType topodatapb.TabletType, vgtid *binlogdatapb.VGtid, filter *binlogdatapb.Filter, flags *vtgatepb.VStreamFlags, callback func([]*binlogdatapb.VEvent) error) error {
 	if strings.HasPrefix(vgtid.ShardGtids[0].Shard, EchoPrefix) {
 		_ = callback([]*binlogdatapb.VEvent{
 			{
@@ -170,5 +170,5 @@ func (c *echoClient) VStream(ctx context.Context, tabletType topodatapb.TabletTy
 		return nil
 	}
 
-	return c.fallbackClient.VStream(ctx, tabletType, vgtid, filter, callback)
+	return c.fallbackClient.VStream(ctx, tabletType, vgtid, filter, flags, callback)
 }

@@ -30,6 +30,7 @@ const (
 	EmptyQuery
 	ForbidSchemaChange
 	IncorrectGlobalLocalVar
+	NonUniqError
 	NonUniqTable
 	SyntaxError
 	WrongGroupField
@@ -41,6 +42,7 @@ const (
 	NoDB
 	InnodbReadOnly
 	WrongNumberOfColumnsInSelect
+	CantDoThisInTransaction
 
 	// not found
 	BadDb
@@ -49,6 +51,7 @@ const (
 	SPDoesNotExist
 	UnknownSystemVariable
 	UnknownTable
+	NoSuchSession
 
 	// already exists
 	DbCreateExists
@@ -65,6 +68,9 @@ const (
 
 	// permission denied
 	AccessDeniedError
+
+	// server not available
+	ServerNotAvailable
 
 	// No state should be added below NumOfStates
 	NumOfStates

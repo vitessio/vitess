@@ -556,7 +556,7 @@ func TestReplaceExpr(t *testing.T) {
 		in:  "select * from t where case a when b then c when d then c else (select a from b) end",
 		out: "case a when b then c when d then c else :a end",
 	}}
-	to := NewArgument(":a")
+	to := NewArgument("a")
 	for _, tcase := range tcases {
 		tree, err := Parse(tcase.in)
 		if err != nil {
@@ -770,6 +770,12 @@ func TestSplitStatementToPieces(t *testing.T) {
 	}, {
 		input: "select * from table",
 	}, {
+		input:  "select * from table;",
+		output: "select * from table",
+	}, {
+		input:  "select * from table;   ",
+		output: "select * from table",
+	}, {
 		input:  "select * from table1; select * from table2;",
 		output: "select * from table1; select * from table2",
 	}, {
@@ -822,4 +828,33 @@ func TestShowTableStatus(t *testing.T) {
 	tree, err := Parse(query)
 	require.NoError(t, err)
 	require.NotNil(t, tree)
+}
+
+func BenchmarkStringTraces(b *testing.B) {
+	for _, trace := range []string{"django_queries.txt", "lobsters.sql.gz"} {
+		b.Run(trace, func(b *testing.B) {
+			queries := loadQueries(b, trace)
+			if len(queries) > 10000 {
+				queries = queries[:10000]
+			}
+
+			parsed := make([]Statement, 0, len(queries))
+			for _, q := range queries {
+				pp, err := Parse(q)
+				if err != nil {
+					b.Fatal(err)
+				}
+				parsed = append(parsed, pp)
+			}
+
+			b.ResetTimer()
+			b.ReportAllocs()
+
+			for i := 0; i < b.N; i++ {
+				for _, stmt := range parsed {
+					_ = String(stmt)
+				}
+			}
+		})
+	}
 }

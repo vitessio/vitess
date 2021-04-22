@@ -21,7 +21,9 @@ package sandboxconn
 import (
 	"fmt"
 	"sync"
+	"time"
 
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	"context"
@@ -96,6 +98,7 @@ type SandboxConn struct {
 	StartPos      string
 	VStreamEvents [][]*binlogdatapb.VEvent
 	VStreamErrors []error
+	VStreamCh     chan *binlogdatapb.VEvent
 
 	// transaction id generator
 	TransactionID sync2.AtomicInt64
@@ -204,10 +207,25 @@ func (sbc *SandboxConn) StreamExecute(ctx context.Context, target *querypb.Targe
 		return err
 	}
 	parse, _ := sqlparser.Parse(query)
-	nextRs := sbc.getNextResult(parse)
-	sbc.sExecMu.Unlock()
 
-	return callback(nextRs)
+	if sbc.results == nil {
+		nextRs := sbc.getNextResult(parse)
+		sbc.sExecMu.Unlock()
+		return callback(nextRs)
+	}
+
+	for len(sbc.results) > 0 {
+		nextRs := sbc.getNextResult(parse)
+		sbc.sExecMu.Unlock()
+		err := callback(nextRs)
+		if err != nil {
+			return err
+		}
+		sbc.sExecMu.Lock()
+	}
+
+	sbc.sExecMu.Unlock()
+	return nil
 }
 
 // Begin is part of the QueryService interface.
@@ -406,18 +424,60 @@ func (sbc *SandboxConn) AddVStreamEvents(events []*binlogdatapb.VEvent, err erro
 // VStream is part of the QueryService interface.
 func (sbc *SandboxConn) VStream(ctx context.Context, target *querypb.Target, startPos string, tablePKs []*binlogdatapb.TableLastPK, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
 	if sbc.StartPos != "" && sbc.StartPos != startPos {
+		log.Errorf("startPos(%v): %v, want %v", target, startPos, sbc.StartPos)
 		return fmt.Errorf("startPos(%v): %v, want %v", target, startPos, sbc.StartPos)
 	}
-	for len(sbc.VStreamEvents) != 0 {
-		ev := sbc.VStreamEvents[0]
-		err := sbc.VStreamErrors[0]
-		sbc.VStreamEvents = sbc.VStreamEvents[1:]
-		sbc.VStreamErrors = sbc.VStreamErrors[1:]
-		if ev == nil {
-			return err
+	done := false
+	// for testing the minimize stream skew feature (TestStreamSkew) we need the ability to send events in specific sequences from
+	// multiple streams. We introduce a channel in the sandbox that we listen on and vstream those events
+	// as we receive them. We also need to simulate vstreamer heartbeats since the skew detection logic depends on it
+	// in case of shards where there are no real events within a second
+	if sbc.VStreamCh != nil {
+		lastTimestamp := int64(0)
+		for !done {
+			timer := time.NewTimer(1 * time.Second)
+			select {
+			case <-timer.C:
+				events := []*binlogdatapb.VEvent{{
+					Type:        binlogdatapb.VEventType_HEARTBEAT,
+					Timestamp:   lastTimestamp,
+					CurrentTime: lastTimestamp,
+				}, {
+					Type:        binlogdatapb.VEventType_COMMIT,
+					Timestamp:   lastTimestamp,
+					CurrentTime: lastTimestamp,
+				}}
+
+				if err := send(events); err != nil {
+					log.Infof("error sending event in test sandbox %s", err.Error())
+					return err
+				}
+				lastTimestamp++
+
+			case ev := <-sbc.VStreamCh:
+				if ev == nil {
+					done = true
+				}
+				if err := send([]*binlogdatapb.VEvent{ev}); err != nil {
+					log.Infof("error sending event in test sandbox %s", err.Error())
+					return err
+				}
+				lastTimestamp = ev.Timestamp
+			}
 		}
-		if err := send(ev); err != nil {
-			return err
+	} else {
+		// this path is followed for all vstream tests other than the skew tests
+		for len(sbc.VStreamEvents) != 0 {
+			ev := sbc.VStreamEvents[0]
+			err := sbc.VStreamErrors[0]
+			sbc.VStreamEvents = sbc.VStreamEvents[1:]
+			sbc.VStreamErrors = sbc.VStreamErrors[1:]
+			if ev == nil {
+				return err
+			}
+			if err := send(ev); err != nil {
+				return err
+			}
 		}
 	}
 	// Don't return till context is canceled.
@@ -436,7 +496,7 @@ func (sbc *SandboxConn) VStreamResults(ctx context.Context, target *querypb.Targ
 }
 
 // QueryServiceByAlias is part of the Gateway interface.
-func (sbc *SandboxConn) QueryServiceByAlias(_ *topodatapb.TabletAlias) (queryservice.QueryService, error) {
+func (sbc *SandboxConn) QueryServiceByAlias(_ *topodatapb.TabletAlias, _ *querypb.Target) (queryservice.QueryService, error) {
 	return sbc, nil
 }
 
@@ -534,6 +594,10 @@ func (sbc *SandboxConn) setTxReservedID(transactionID int64, reservedID int64) {
 	sbc.mapMu.Lock()
 	defer sbc.mapMu.Unlock()
 	sbc.txIDToRID[transactionID] = reservedID
+}
+
+func (sbc *SandboxConn) ResultsAllFetched() bool {
+	return len(sbc.results) == 0
 }
 
 func (sbc *SandboxConn) getTxReservedID(txID int64) int64 {

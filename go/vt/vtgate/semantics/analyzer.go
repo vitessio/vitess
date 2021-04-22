@@ -17,6 +17,8 @@ limitations under the License.
 package semantics
 
 import (
+	"fmt"
+
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -25,18 +27,21 @@ import (
 type (
 	// analyzer is a struct to work with analyzing the query.
 	analyzer struct {
-		Tables []table
+		si SchemaInformation
 
-		scopes   []*scope
+		Tables []*TableInfo
+		scopes []*scope
+
 		exprDeps map[sqlparser.Expr]TableSet
 		err      error
 	}
 )
 
 // newAnalyzer create the semantic analyzer
-func newAnalyzer() *analyzer {
+func newAnalyzer(si SchemaInformation) *analyzer {
 	return &analyzer{
 		exprDeps: map[sqlparser.Expr]TableSet{},
+		si:       si,
 	}
 }
 
@@ -73,7 +78,7 @@ func (a *analyzer) analyzeDown(cursor *sqlparser.Cursor) bool {
 }
 
 func (a *analyzer) resolveColumn(colName *sqlparser.ColName, current *scope) (TableSet, error) {
-	var t table
+	var t *TableInfo
 	var err error
 	if colName.Qualifier.IsEmpty() {
 		t, err = a.resolveUnQualifiedColumn(current, colName)
@@ -83,7 +88,7 @@ func (a *analyzer) resolveColumn(colName *sqlparser.ColName, current *scope) (Ta
 	if err != nil {
 		return 0, err
 	}
-	return a.tableSetFor(t), nil
+	return a.tableSetFor(t.ASTNode), nil
 }
 
 func (a *analyzer) analyzeTableExprs(tablExprs sqlparser.TableExprs) error {
@@ -119,7 +124,7 @@ func (a *analyzer) analyzeTableExpr(tableExpr sqlparser.TableExpr) error {
 }
 
 // resolveQualifiedColumn handles `tabl.col` expressions
-func (a *analyzer) resolveQualifiedColumn(current *scope, expr *sqlparser.ColName) (table, error) {
+func (a *analyzer) resolveQualifiedColumn(current *scope, expr *sqlparser.ColName) (*TableInfo, error) {
 	qualifier := expr.Qualifier.Name.String()
 
 	for current != nil {
@@ -134,18 +139,33 @@ func (a *analyzer) resolveQualifiedColumn(current *scope, expr *sqlparser.ColNam
 }
 
 // resolveUnQualifiedColumn
-func (a *analyzer) resolveUnQualifiedColumn(current *scope, expr *sqlparser.ColName) (table, error) {
+func (a *analyzer) resolveUnQualifiedColumn(current *scope, expr *sqlparser.ColName) (*TableInfo, error) {
 	if len(current.tables) == 1 {
 		for _, tableExpr := range current.tables {
 			return tableExpr, nil
 		}
 	}
-	return nil, Gen4NotSupportedF("unable to map column to a table: %s", sqlparser.String(expr))
+
+	var tblInfo *TableInfo
+	for _, tbl := range current.tables {
+		if !tbl.Table.ColumnListAuthoritative {
+			return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.NonUniqError, fmt.Sprintf("Column '%s' in field list is ambiguous", sqlparser.String(expr)))
+		}
+		for _, col := range tbl.Table.Columns {
+			if expr.Name.Equal(col.Name) {
+				if tblInfo != nil {
+					return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.NonUniqError, fmt.Sprintf("Column '%s' in field list is ambiguous", sqlparser.String(expr)))
+				}
+				tblInfo = tbl
+			}
+		}
+	}
+	return tblInfo, nil
 }
 
-func (a *analyzer) tableSetFor(t table) TableSet {
+func (a *analyzer) tableSetFor(t *sqlparser.AliasedTableExpr) TableSet {
 	for i, t2 := range a.Tables {
-		if t == t2 {
+		if t == t2.ASTNode {
 			return TableSet(1 << i)
 		}
 	}
@@ -161,23 +181,28 @@ func (a *analyzer) bindTable(alias *sqlparser.AliasedTableExpr, expr sqlparser.S
 		}
 		a.popScope()
 		scope := a.currentScope()
-		return scope.addTable(alias.As.String(), alias)
+		return scope.addTable(alias.As.String(), &TableInfo{alias, nil})
 	case sqlparser.TableName:
-		scope := a.currentScope()
-		a.Tables = append(a.Tables, alias)
-		if alias.As.IsEmpty() {
-			return scope.addTable(t.Name.String(), alias)
+		tbl, vdx, _, _, _, err := a.si.FindTableOrVindex(t)
+		if err != nil {
+			return err
 		}
-		return scope.addTable(alias.As.String(), alias)
+		if tbl == nil && vdx != nil {
+			return Gen4NotSupportedF("vindex in FROM")
+		}
+		scope := a.currentScope()
+		table := &TableInfo{alias, tbl}
+		a.Tables = append(a.Tables, table)
+		if alias.As.IsEmpty() {
+			return scope.addTable(t.Name.String(), table)
+		}
+		return scope.addTable(alias.As.String(), table)
 	}
 	return nil
 }
 
 func (a *analyzer) analyze(statement sqlparser.Statement) error {
-	_, err := sqlparser.Rewrite(statement, a.analyzeDown, a.analyzeUp)
-	if err != nil {
-		return err
-	}
+	_ = sqlparser.Rewrite(statement, a.analyzeDown, a.analyzeUp)
 	return a.err
 }
 

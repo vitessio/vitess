@@ -262,7 +262,7 @@ func (oa *orderedAggregate) pushAggr(pb *primitiveBuilder, expr *sqlparser.Alias
 			return nil, 0, err
 		}
 		oa.extraDistinct = col
-		oa.eaggr.HasDistinct = true
+		oa.eaggr.PreProcess = true
 		var alias string
 		if expr.As.IsEmpty() {
 			alias = sqlparser.String(expr.Expr)
@@ -340,6 +340,10 @@ func (oa *orderedAggregate) Wireup(plan logicalPlan, jt *jointab) error {
 			}
 			weightcolNumber, err := oa.input.SupplyWeightString(colNumber)
 			if err != nil {
+				_, isUnsupportedErr := err.(UnsupportedSupplyWeightString)
+				if isUnsupportedErr {
+					continue
+				}
 				return err
 			}
 			oa.weightStrings[rc] = weightcolNumber

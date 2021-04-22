@@ -44,6 +44,9 @@ import (
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/log"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -55,12 +58,10 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 	"vitess.io/vitess/go/vt/vttablet/vexec"
 
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-
+	mysqldriver "github.com/go-sql-driver/mysql"
 	"github.com/golang/protobuf/proto"
-	"github.com/google/shlex"
+	"github.com/jmoiron/sqlx"
+	"github.com/skeema/tengo"
 )
 
 var (
@@ -104,7 +105,7 @@ var ghostOverridePath = flag.String("gh-ost-path", "", "override default gh-ost 
 var ptOSCOverridePath = flag.String("pt-osc-path", "", "override default pt-online-schema-change binary full path")
 var migrationCheckInterval = flag.Duration("migration_check_interval", 1*time.Minute, "Interval between migration checks")
 var retainOnlineDDLTables = flag.Duration("retain_online_ddl_tables", 24*time.Hour, "How long should vttablet keep an old migrated table before purging it")
-var migrationNextCheckInterval = 5 * time.Second
+var migrationNextCheckIntervals = []time.Duration{1 * time.Second, 5 * time.Second}
 
 const (
 	maxPasswordLength             = 32 // MySQL's *replication* password may not exceed 32 characters
@@ -122,6 +123,14 @@ var (
 	onlineDDLUser        = "vt-online-ddl-internal"
 	onlineDDLGrant       = fmt.Sprintf("'%s'@'%s'", onlineDDLUser, "%")
 )
+
+type mysqlVariables struct {
+	host           string
+	port           int
+	readOnly       bool
+	version        string
+	versionComment string
+}
 
 // Executor wraps and manages the execution of a gh-ost migration.
 type Executor struct {
@@ -163,6 +172,11 @@ func PTOSCFileName() (fileName string, isOverride bool) {
 		return *ptOSCOverridePath, true
 	}
 	return "/usr/bin/pt-online-schema-change", false
+}
+
+// newGCTableRetainTime returns the time until which a new GC table is to be retained
+func newGCTableRetainTime() time.Time {
+	return time.Now().UTC().Add(*retainOnlineDDLTables)
 }
 
 // NewExecutor creates a new gh-ost executor.
@@ -269,7 +283,9 @@ func (e *Executor) Close() {
 
 // triggerNextCheckInterval the next tick sooner than normal
 func (e *Executor) triggerNextCheckInterval() {
-	e.ticks.TriggerAfter(migrationNextCheckInterval)
+	for _, interval := range migrationNextCheckIntervals {
+		e.ticks.TriggerAfter(interval)
+	}
 }
 
 // isAnyMigrationRunning sees if there's any migration running right now
@@ -305,33 +321,44 @@ func (e *Executor) ptPidFileName(uuid string) string {
 }
 
 // readMySQLVariables contacts the backend MySQL server to read some of its configuration
-func (e *Executor) readMySQLVariables(ctx context.Context) (host string, port int, readOnly bool, err error) {
+func (e *Executor) readMySQLVariables(ctx context.Context) (variables *mysqlVariables, err error) {
 	conn, err := e.pool.Get(ctx)
 	if err != nil {
-		return host, port, readOnly, err
+		return nil, err
 	}
 	defer conn.Recycle()
 
-	tm, err := conn.Exec(ctx, "select @@global.hostname as hostname, @@global.port as port, @@global.read_only as read_only from dual", 1, true)
+	tm, err := conn.Exec(ctx, `select
+			@@global.hostname as hostname,
+			@@global.port as port,
+			@@global.read_only as read_only,
+			@@global.version AS version,
+			@@global.version_comment AS version_comment
+		from dual`, 1, true)
 	if err != nil {
-		return host, port, readOnly, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "could not read MySQL variables: %v", err)
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "could not read MySQL variables: %v", err)
 	}
 	row := tm.Named().Row()
 	if row == nil {
-		return host, port, readOnly, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "unexpected result for MySQL variables: %+v", tm.Rows)
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "unexpected result for MySQL variables: %+v", tm.Rows)
 	}
-	host = row["hostname"].ToString()
+	variables = &mysqlVariables{}
 
-	p, err := row.ToInt64("port")
-	if err != nil {
-		return host, port, readOnly, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "could not parse @@global.port %v: %v", tm, err)
-	}
-	port = int(p)
+	variables.host = row["hostname"].ToString()
 
-	if readOnly, err = row.ToBool("read_only"); err != nil {
-		return host, port, readOnly, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "could not parse @@global.read_only %v: %v", tm, err)
+	if port, err := row.ToInt64("port"); err != nil {
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "could not parse @@global.port %v: %v", tm, err)
+	} else {
+		variables.port = int(port)
 	}
-	return host, port, readOnly, nil
+	if variables.readOnly, err = row.ToBool("read_only"); err != nil {
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "could not parse @@global.read_only %v: %v", tm, err)
+	}
+
+	variables.version = row["version"].ToString()
+	variables.versionComment = row["version_comment"].ToString()
+
+	return variables, nil
 }
 
 // createOnlineDDLUser creates a gh-ost user account with all neccessary privileges and with a random password
@@ -716,12 +743,12 @@ func (e *Executor) ExecuteWithGhost(ctx context.Context, onlineDDL *schema.Onlin
 	if e.tabletTypeFunc() != topodatapb.TabletType_MASTER {
 		return ErrExecutorNotWritableTablet
 	}
-	mysqlHost, mysqlPort, readOnly, err := e.readMySQLVariables(ctx)
+	variables, err := e.readMySQLVariables(ctx)
 	if err != nil {
 		log.Errorf("Error before running gh-ost: %+v", err)
 		return err
 	}
-	if readOnly {
+	if variables.readOnly {
 		err := fmt.Errorf("Error before running gh-ost: MySQL server is read_only")
 		log.Errorf(err.Error())
 		return err
@@ -764,8 +791,8 @@ export ONLINE_DDL_PASSWORD
 	}
 	onHookContent := func(status schema.OnlineDDLStatus) string {
 		return fmt.Sprintf(`#!/bin/bash
-curl -s 'http://localhost:%d/schema-migration/report-status?uuid=%s&status=%s&dryrun='"$GH_OST_DRY_RUN"'&progress='"$GH_OST_PROGRESS"'&eta='"$GH_OST_ETA_SECONDS"
-		`, *servenv.Port, onlineDDL.UUID, string(status))
+	curl --max-time 10 -s 'http://localhost:%d/schema-migration/report-status?uuid=%s&status=%s&dryrun='"$GH_OST_DRY_RUN"'&progress='"$GH_OST_PROGRESS"'&eta='"$GH_OST_ETA_SECONDS"
+			`, *servenv.Port, onlineDDL.UUID, string(status))
 	}
 	if _, err := createTempScript(tempDir, "gh-ost-on-startup", onHookContent(schema.OnlineDDLStatusRunning)); err != nil {
 		log.Errorf("Error creating script: %+v", err)
@@ -790,6 +817,7 @@ curl -s 'http://localhost:%d/schema-migration/report-status?uuid=%s&status=%s&dr
 		return err
 	}
 	// Validate gh-ost binary:
+	_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, "validating gh-ost --version")
 	log.Infof("Will now validate gh-ost binary")
 	_, err = execCmd(
 		"bash",
@@ -806,9 +834,10 @@ curl -s 'http://localhost:%d/schema-migration/report-status?uuid=%s&status=%s&dr
 		log.Errorf("Error testing gh-ost binary: %+v", err)
 		return err
 	}
+	_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, "validated gh-ost --version")
 	log.Infof("+ OK")
 
-	if err := e.updateMigrationLogPath(ctx, onlineDDL.UUID, mysqlHost, tempDir); err != nil {
+	if err := e.updateMigrationLogPath(ctx, onlineDDL.UUID, variables.host, tempDir); err != nil {
 		return err
 	}
 
@@ -827,8 +856,8 @@ curl -s 'http://localhost:%d/schema-migration/report-status?uuid=%s&status=%s&dr
 		os.Setenv("ONLINE_DDL_PASSWORD", onlineDDLPassword)
 		args := []string{
 			wrapperScriptFileName,
-			fmt.Sprintf(`--host=%s`, mysqlHost),
-			fmt.Sprintf(`--port=%d`, mysqlPort),
+			fmt.Sprintf(`--host=%s`, variables.host),
+			fmt.Sprintf(`--port=%d`, variables.port),
 			fmt.Sprintf(`--conf=%s`, credentialsConfigFileName), // user & password found here
 			`--allow-on-master`,
 			`--max-load=Threads_running=900`,
@@ -849,9 +878,10 @@ curl -s 'http://localhost:%d/schema-migration/report-status?uuid=%s&status=%s&dr
 			fmt.Sprintf(`--panic-flag-file=%s`, e.ghostPanicFlagFileName(onlineDDL.UUID)),
 			fmt.Sprintf(`--execute=%t`, execute),
 		}
-		opts, _ := shlex.Split(onlineDDL.Options)
-		args = append(args, opts...)
+		args = append(args, onlineDDL.StrategySetting().RuntimeOptions()...)
+		_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, fmt.Sprintf("executing gh-ost --execute=%v", execute))
 		_, err := execCmd("bash", args, os.Environ(), "/tmp", nil, nil)
+		_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, fmt.Sprintf("executed gh-ost --execute=%v, err=%v", execute, err))
 		return err
 	}
 
@@ -863,7 +893,7 @@ curl -s 'http://localhost:%d/schema-migration/report-status?uuid=%s&status=%s&dr
 		defer e.dropOnlineDDLUser(ctx)
 		defer e.gcArtifacts(ctx)
 
-		log.Infof("Will now dry-run gh-ost on: %s:%d", mysqlHost, mysqlPort)
+		log.Infof("Will now dry-run gh-ost on: %s:%d", variables.host, variables.port)
 		if err := runGhost(false); err != nil {
 			// perhaps gh-ost was interrupted midway and didn't have the chance to send a "failes" status
 			_ = e.updateMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusFailed)
@@ -874,7 +904,7 @@ curl -s 'http://localhost:%d/schema-migration/report-status?uuid=%s&status=%s&dr
 		}
 		log.Infof("+ OK")
 
-		log.Infof("Will now run gh-ost on: %s:%d", mysqlHost, mysqlPort)
+		log.Infof("Will now run gh-ost on: %s:%d", variables.host, variables.port)
 		startedMigrations.Add(1)
 		if err := runGhost(true); err != nil {
 			// perhaps gh-ost was interrupted midway and didn't have the chance to send a "failes" status
@@ -904,12 +934,12 @@ func (e *Executor) ExecuteWithPTOSC(ctx context.Context, onlineDDL *schema.Onlin
 	if e.tabletTypeFunc() != topodatapb.TabletType_MASTER {
 		return ErrExecutorNotWritableTablet
 	}
-	mysqlHost, mysqlPort, readOnly, err := e.readMySQLVariables(ctx)
+	variables, err := e.readMySQLVariables(ctx)
 	if err != nil {
 		log.Errorf("Error before running pt-online-schema-change: %+v", err)
 		return err
 	}
-	if readOnly {
+	if variables.readOnly {
 		err := fmt.Errorf("Error before running pt-online-schema-change: MySQL server is read_only")
 		log.Errorf(err.Error())
 		return err
@@ -1014,7 +1044,7 @@ export MYSQL_PWD
 	}
 	log.Infof("+ OK")
 
-	if err := e.updateMigrationLogPath(ctx, onlineDDL.UUID, mysqlHost, tempDir); err != nil {
+	if err := e.updateMigrationLogPath(ctx, onlineDDL.UUID, variables.host, tempDir); err != nil {
 		return err
 	}
 
@@ -1061,9 +1091,9 @@ export MYSQL_PWD
 			`--alter`,
 			alterOptions,
 			`--check-slave-lag`, // We use primary's identity so that pt-online-schema-change calls our lag plugin for exactly 1 server
-			fmt.Sprintf(`h=%s,P=%d,D=%s,t=%s,u=%s`, mysqlHost, mysqlPort, e.dbName, onlineDDL.Table, onlineDDLUser),
+			fmt.Sprintf(`h=%s,P=%d,D=%s,t=%s,u=%s`, variables.host, variables.port, e.dbName, onlineDDL.Table, onlineDDLUser),
 			executeFlag,
-			fmt.Sprintf(`h=%s,P=%d,D=%s,t=%s,u=%s`, mysqlHost, mysqlPort, e.dbName, onlineDDL.Table, onlineDDLUser),
+			fmt.Sprintf(`h=%s,P=%d,D=%s,t=%s,u=%s`, variables.host, variables.port, e.dbName, onlineDDL.Table, onlineDDLUser),
 		}
 
 		if execute {
@@ -1072,8 +1102,7 @@ export MYSQL_PWD
 				`--no-drop-old-table`,
 			)
 		}
-		opts, _ := shlex.Split(onlineDDL.Options)
-		args = append(args, opts...)
+		args = append(args, onlineDDL.StrategySetting().RuntimeOptions()...)
 		_, err = execCmd("bash", args, os.Environ(), "/tmp", nil, nil)
 		return err
 	}
@@ -1086,7 +1115,7 @@ export MYSQL_PWD
 		defer e.dropOnlineDDLUser(ctx)
 		defer e.gcArtifacts(ctx)
 
-		log.Infof("Will now dry-run pt-online-schema-change on: %s:%d", mysqlHost, mysqlPort)
+		log.Infof("Will now dry-run pt-online-schema-change on: %s:%d", variables.host, variables.port)
 		if err := runPTOSC(false); err != nil {
 			// perhaps pt-osc was interrupted midway and didn't have the chance to send a "failes" status
 			_ = e.updateMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusFailed)
@@ -1097,7 +1126,7 @@ export MYSQL_PWD
 		}
 		log.Infof("+ OK")
 
-		log.Infof("Will now run pt-online-schema-change on: %s:%d", mysqlHost, mysqlPort)
+		log.Infof("Will now run pt-online-schema-change on: %s:%d", variables.host, variables.port)
 		startedMigrations.Add(1)
 		if err := runPTOSC(true); err != nil {
 			// perhaps pt-osc was interrupted midway and didn't have the chance to send a "failes" status
@@ -1150,6 +1179,19 @@ func (e *Executor) readMigration(ctx context.Context, uuid string) (onlineDDL *s
 		TabletAlias: row["tablet"].ToString(),
 	}
 	return onlineDDL, row, nil
+}
+
+// readPendingMigrationsUUIDs returns UUIDs for migrations in pending state (queued/ready/running)
+func (e *Executor) readPendingMigrationsUUIDs(ctx context.Context) (uuids []string, err error) {
+	r, err := e.execQuery(ctx, sqlSelectPendingMigrations)
+	if err != nil {
+		return uuids, err
+	}
+	for _, row := range r.Named().Rows {
+		uuid := row["migration_uuid"].ToString()
+		uuids = append(uuids, uuid)
+	}
+	return uuids, err
 }
 
 // terminateMigration attempts to interrupt and hard-stop a running migration
@@ -1253,14 +1295,9 @@ func (e *Executor) cancelMigrations(ctx context.Context, uuids []string, message
 // CancelPendingMigrations cancels all pending migrations (that are expected to run or are running)
 // for this keyspace
 func (e *Executor) CancelPendingMigrations(ctx context.Context, message string) (result *sqltypes.Result, err error) {
-	r, err := e.execQuery(ctx, sqlSelectPendingMigrations)
+	uuids, err := e.readPendingMigrationsUUIDs(ctx)
 	if err != nil {
 		return result, err
-	}
-	var uuids []string
-	for _, row := range r.Named().Rows {
-		uuid := row["migration_uuid"].ToString()
-		uuids = append(uuids, uuid)
 	}
 
 	result = &sqltypes.Result{}
@@ -1473,6 +1510,129 @@ func (e *Executor) executeRevert(ctx context.Context, onlineDDL *schema.OnlineDD
 	return nil
 }
 
+// evaluateDeclarativeDiff is called for -declarative CREATE statements, where the table already exists. The function generates a SQL diff, which can be:
+// - empty, in which case the migration is noop and implicitly successful, or
+// - non-empty, in which case the migration turns to be an ALTER
+func (e *Executor) evaluateDeclarativeDiff(ctx context.Context, onlineDDL *schema.OnlineDDL) (alterClause string, err error) {
+
+	// Modify the CREATE TABLE statement to indicate a different, made up table name, known as the "comparison table"
+	ddlStmt, _, err := schema.ParseOnlineDDLStatement(onlineDDL.SQL)
+	if err != nil {
+		return "", err
+	}
+	comparisonTableName, err := schema.GenerateGCTableName(schema.HoldTableGCState, newGCTableRetainTime())
+	if err != nil {
+		return "", err
+	}
+
+	conn, err := dbconnpool.NewDBConnection(ctx, e.env.Config().DB.DbaWithDB())
+	if err != nil {
+		return "", err
+	}
+	defer conn.Close()
+
+	{
+		// Create the comparison table
+		ddlStmt.SetTable("", comparisonTableName)
+		modifiedCreateSQL := sqlparser.String(ddlStmt)
+
+		if _, err := conn.ExecuteFetch(modifiedCreateSQL, 0, false); err != nil {
+			return "", err
+		}
+
+		defer func() {
+			// Drop the comparison table
+			parsed := sqlparser.BuildParsedQuery(sqlDropTable, comparisonTableName)
+			_, _ = conn.ExecuteFetch(parsed.Query, 0, false)
+			// Nothing bad happens for not checking the error code. The table is GC/HOLD. If we
+			// can't drop it now, it still gets collected later by tablegc mechanism
+		}()
+
+	}
+
+	// Compare the existing (to be potentially migrated) table with the declared (newly created) table:
+	// all things are tengo related
+	if err := func() error {
+		variables, err := e.readMySQLVariables(ctx)
+		if err != nil {
+			return err
+		}
+		flavor := tengo.ParseFlavor(variables.version, variables.versionComment)
+
+		// Create a temporary account for tengo to use
+		onlineDDLPassword, err := e.createOnlineDDLUser(ctx)
+		if err != nil {
+			return err
+		}
+		defer e.dropOnlineDDLUser(ctx)
+
+		// tengo requires sqlx.DB
+		cfg := mysqldriver.NewConfig()
+		cfg.User = onlineDDLUser
+		cfg.Passwd = onlineDDLPassword
+		cfg.Net = "tcp"
+		cfg.Addr = fmt.Sprintf("%s:%d", variables.host, variables.port)
+		cfg.DBName = e.dbName
+		cfg.ParseTime = true
+		cfg.InterpolateParams = true
+		cfg.Timeout = 1 * time.Second
+		mysqlDSN := cfg.FormatDSN()
+
+		db, err := sqlx.Open("mysql", mysqlDSN)
+		if err != nil {
+			return err
+		}
+		defer db.Close()
+
+		// Read existing table
+		existingTable, err := tengo.QuerySchemaTable(ctx, db, e.dbName, onlineDDL.Table, flavor)
+		if err != nil {
+			return err
+		}
+		// Read comparison table
+		comparisonTable, err := tengo.QuerySchemaTable(ctx, db, e.dbName, comparisonTableName, flavor)
+		if err != nil {
+			return err
+		}
+		// We created the comparison tablein same schema as original table, but under different name (because obviously we can't have
+		// two tables with identical name in same schema). It is our preference to create the table in the same schema.
+		// unfortunately, tengo does not allow comparing tables with different names. After asking tengo to read table info, we cheat
+		// and override the name of the table:
+		comparisonTable.Name = existingTable.Name
+		// We also override `.CreateStatement` (output of SHOW CREATE TABLE), because tengo has a validation, where if it doesn't
+		// find any ALTER changes, then the CreateStatement-s must be identical (or else it errors with UnsupportedDiffError)
+		comparisonTable.CreateStatement, err = schema.ReplaceTableNameInCreateTableStatement(comparisonTable.CreateStatement, existingTable.Name)
+		if err != nil {
+			return err
+		}
+		// Diff the two tables
+		diff := tengo.NewAlterTable(existingTable, comparisonTable)
+		if diff == nil {
+			// No change. alterClause remains empty
+			return nil
+		}
+		mods := tengo.StatementModifiers{
+			AllowUnsafe: true,
+			NextAutoInc: tengo.NextAutoIncIfIncreased,
+		}
+		alterClause, err = diff.Clauses(mods)
+		if err != nil {
+			return err
+		}
+		return nil
+	}(); err != nil {
+		return "", err
+	}
+
+	return alterClause, nil
+}
+
+// executeMigration executes a single migration. It analyzes the migration type:
+// - is it declarative?
+// - is it CREATE / DROP / ALTER?
+// - it is a Revert request?
+// - what's the migration strategy?
+// The function invokes the appropriate handlers for each of those cases.
 func (e *Executor) executeMigration(ctx context.Context, onlineDDL *schema.OnlineDDL) error {
 	failMigration := func(err error) error {
 		_ = e.updateMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusFailed)
@@ -1487,6 +1647,78 @@ func (e *Executor) executeMigration(ctx context.Context, onlineDDL *schema.Onlin
 	if err != nil {
 		return failMigration(err)
 	}
+
+	if onlineDDL.StrategySetting().IsDeclarative() {
+		switch ddlAction {
+		case sqlparser.RevertDDLAction:
+			// No special action. Declarative Revert migrations are handled like any normal Revert migration.
+		case sqlparser.AlterDDLAction:
+			return failMigration(vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "strategy is declarative. ALTER cannot run in declarative mode for migration %v", onlineDDL.UUID))
+		case sqlparser.DropDDLAction:
+			// This DROP is declarative, meaning it may:
+			// - actually DROP a table, if that table exists, or
+			// - Implicitly do nothing, if the table does not exist
+
+			exists, err := e.tableExists(ctx, onlineDDL.Table)
+			if err != nil {
+				return failMigration(err)
+			}
+			if exists {
+				// table does exist, so this declarative DROP turns out to really be an actual DROP. No further action is needed here
+			} else {
+				// table does not exist. We mark this DROP as implicitly sucessful
+				_ = e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusComplete, false, progressPctFull, etaSecondsNow)
+				_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, "no change")
+				return nil
+			}
+		case sqlparser.CreateDDLAction:
+			// This CREATE is declarative, meaning it may:
+			// - actually CREATE a table, if that table does not exist, or
+			// - ALTER the table, if it exists and is different, or
+			// - Implicitly do nothing, if the table exists and is identical to CREATE statement
+
+			{
+				// Sanity: reject IF NOT EXISTS statements, because they don't make sense (or are ambiguous) in declarative mode
+				ddlStmt, _, err := schema.ParseOnlineDDLStatement(onlineDDL.SQL)
+				if err != nil {
+					return failMigration(err)
+				}
+				if ddlStmt.GetIfNotExists() {
+					return failMigration(vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "strategy is declarative. IF NOT EXISTS does not work in declarative mode for migration %v", onlineDDL.UUID))
+				}
+			}
+			exists, err := e.tableExists(ctx, onlineDDL.Table)
+			if err != nil {
+				return failMigration(err)
+			}
+			if exists {
+				alterClause, err := e.evaluateDeclarativeDiff(ctx, onlineDDL)
+				if err != nil {
+					return failMigration(err)
+				}
+				if alterClause == "" {
+					// No diff! We mark this CREATE as implicitly sucessful
+					_ = e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusComplete, false, progressPctFull, etaSecondsNow)
+					_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, "no change")
+					return nil
+				}
+				// alterClause is non empty. We convert this migration into an ALTER
+				if err := e.updateDDLAction(ctx, onlineDDL.UUID, sqlparser.AlterStr); err != nil {
+					return failMigration(err)
+				}
+				ddlAction = sqlparser.AlterDDLAction
+				onlineDDL.SQL = fmt.Sprintf("ALTER TABLE `%s` %s", onlineDDL.Table, alterClause)
+				_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, alterClause)
+			} else {
+				{
+					// table does not exist, so this declarative CREATE turns out to really be an actual CREATE. No further action is needed here.
+					// the statement is empty, but I want to keep the 'else' clause here just for sake of this comment.
+				}
+			}
+		}
+	} // endif onlineDDL.IsDeclarative()
+	// Noting that if the migration is declarative, then it may have been modified in the above block, to meet the next operations.
+
 	switch ddlAction {
 	case sqlparser.DropDDLAction:
 		go func() error {
@@ -1512,7 +1744,7 @@ func (e *Executor) executeMigration(ctx context.Context, onlineDDL *schema.Onlin
 			}
 
 			var toTableName string
-			onlineDDL.SQL, toTableName, err = schema.GenerateRenameStatementWithUUID(onlineDDL.Table, schema.HoldTableGCState, onlineDDL.GetGCUUID(), time.Now().UTC().Add(*retainOnlineDDLTables))
+			onlineDDL.SQL, toTableName, err = schema.GenerateRenameStatementWithUUID(onlineDDL.Table, schema.HoldTableGCState, onlineDDL.GetGCUUID(), newGCTableRetainTime())
 			if err != nil {
 				return failMigration(err)
 			}
@@ -1542,7 +1774,7 @@ func (e *Executor) executeMigration(ctx context.Context, onlineDDL *schema.Onlin
 			e.migrationMutex.Lock()
 			defer e.migrationMutex.Unlock()
 
-			sentryArtifactTableName, err := schema.GenerateGCTableName(schema.HoldTableGCState, time.Now().UTC().Add(*retainOnlineDDLTables))
+			sentryArtifactTableName, err := schema.GenerateGCTableName(schema.HoldTableGCState, newGCTableRetainTime())
 			if err != nil {
 				return failMigration(err)
 			}
@@ -1646,6 +1878,14 @@ func (e *Executor) runNextMigration(ctx context.Context) error {
 			Strategy: schema.DDLStrategy(row["strategy"].ToString()),
 			Options:  row["options"].ToString(),
 			Status:   schema.OnlineDDLStatus(row["migration_status"].ToString()),
+		}
+		{
+			// We strip out any VT query comments because our simplified parser doesn't work well with comments
+			ddlStmt, _, err := schema.ParseOnlineDDLStatement(onlineDDL.SQL)
+			if err == nil {
+				ddlStmt.SetComments(sqlparser.Comments{})
+				onlineDDL.SQL = sqlparser.String(ddlStmt)
+			}
 		}
 		e.executeMigration(ctx, onlineDDL)
 		// the query should only ever return a single row at the most
@@ -2267,6 +2507,57 @@ func (e *Executor) RetryMigration(ctx context.Context, uuid string) (result *sql
 	if err != nil {
 		return nil, err
 	}
+	return e.execQuery(ctx, query)
+}
+
+// SubmitMigration inserts a new migration request
+func (e *Executor) SubmitMigration(
+	ctx context.Context,
+	stmt sqlparser.Statement,
+) (result *sqltypes.Result, err error) {
+
+	onlineDDL, err := schema.OnlineDDLFromCommentedStatement(stmt)
+	if err != nil {
+		return nil, fmt.Errorf("Error submitting migration %s: %v", sqlparser.String(stmt), err)
+	}
+	_, actionStr, err := onlineDDL.GetActionStr()
+	if err != nil {
+		return nil, err
+	}
+
+	query, err := sqlparser.ParseAndBind(sqlInsertMigration,
+		sqltypes.StringBindVariable(onlineDDL.UUID),
+		sqltypes.StringBindVariable(e.keyspace),
+		sqltypes.StringBindVariable(e.shard),
+		sqltypes.StringBindVariable(e.dbName),
+		sqltypes.StringBindVariable(onlineDDL.Table),
+		sqltypes.StringBindVariable(onlineDDL.SQL),
+		sqltypes.StringBindVariable(string(onlineDDL.Strategy)),
+		sqltypes.StringBindVariable(onlineDDL.Options),
+		sqltypes.StringBindVariable(actionStr),
+		sqltypes.StringBindVariable(onlineDDL.RequestContext),
+		sqltypes.StringBindVariable(string(schema.OnlineDDLStatusQueued)),
+		sqltypes.StringBindVariable(e.TabletAliasString()),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	if onlineDDL.StrategySetting().IsSingleton() {
+		e.migrationMutex.Lock()
+		defer e.migrationMutex.Unlock()
+
+		uuids, err := e.readPendingMigrationsUUIDs(ctx)
+		if err != nil {
+			return result, err
+		}
+		if len(uuids) > 0 {
+			return result, fmt.Errorf("singleton migration rejected: found pending migrations [%s]", strings.Join(uuids, ", "))
+		}
+	}
+
+	defer e.triggerNextCheckInterval()
+
 	return e.execQuery(ctx, query)
 }
 
