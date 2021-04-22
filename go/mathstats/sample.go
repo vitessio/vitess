@@ -14,11 +14,6 @@ type Sample struct {
 	// Xs is the slice of sample values.
 	Xs []float64
 
-	// Weights[i] is the weight of sample Xs[i].  If Weights is
-	// nil, all Xs have weight 1.  Weights must have the same
-	// length of Xs and all values must be non-negative.
-	Weights []float64
-
 	// Sorted indicates that Xs is sorted in ascending order.
 	Sorted bool
 }
@@ -47,46 +42,10 @@ func Bounds(xs []float64) (min float64, max float64) {
 // This is constant time if s.Sorted and there are no zero-weighted
 // values.
 func (s Sample) Bounds() (min float64, max float64) {
-	if len(s.Xs) == 0 || (!s.Sorted && s.Weights == nil) {
+	if len(s.Xs) == 0 || !s.Sorted {
 		return Bounds(s.Xs)
 	}
-
-	if s.Sorted {
-		if s.Weights == nil {
-			return s.Xs[0], s.Xs[len(s.Xs)-1]
-		}
-		min, max = math.NaN(), math.NaN()
-		for i, w := range s.Weights {
-			if w != 0 {
-				min = s.Xs[i]
-				break
-			}
-		}
-		if math.IsNaN(min) {
-			return
-		}
-		for i := range s.Weights {
-			if s.Weights[len(s.Weights)-i-1] != 0 {
-				max = s.Xs[len(s.Weights)-i-1]
-				break
-			}
-		}
-	} else {
-		min, max = math.Inf(1), math.Inf(-1)
-		for i, x := range s.Xs {
-			w := s.Weights[i]
-			if x < min && w != 0 {
-				min = x
-			}
-			if x > max && w != 0 {
-				max = x
-			}
-		}
-		if math.IsInf(min, 0) {
-			min, max = math.NaN(), math.NaN()
-		}
-	}
-	return
+	return s.Xs[0], s.Xs[len(s.Xs)-1]
 }
 
 // vecSum returns the sum of xs.
@@ -100,22 +59,12 @@ func vecSum(xs []float64) float64 {
 
 // Sum returns the (possibly weighted) sum of the Sample.
 func (s Sample) Sum() float64 {
-	if s.Weights == nil {
-		return vecSum(s.Xs)
-	}
-	sum := 0.0
-	for i, x := range s.Xs {
-		sum += x * s.Weights[i]
-	}
-	return sum
+	return vecSum(s.Xs)
 }
 
 // Weight returns the total weight of the Sasmple.
 func (s Sample) Weight() float64 {
-	if s.Weights == nil {
-		return float64(len(s.Xs))
-	}
-	return vecSum(s.Weights)
+	return float64(len(s.Xs))
 }
 
 // Mean returns the arithmetic mean of xs.
@@ -132,20 +81,7 @@ func Mean(xs []float64) float64 {
 
 // Mean returns the arithmetic mean of the Sample.
 func (s Sample) Mean() float64 {
-	if len(s.Xs) == 0 || s.Weights == nil {
-		return Mean(s.Xs)
-	}
-
-	m, wsum := 0.0, 0.0
-	for i, x := range s.Xs {
-		// Use weighted incremental mean:
-		//   m_i = (1 - w_i/wsum_i) * m_(i-1) + (w_i/wsum_i) * x_i
-		//       = m_(i-1) + (x_i - m_(i-1)) * (w_i/wsum_i)
-		w := s.Weights[i]
-		wsum += w
-		m += (x - m) * w / wsum
-	}
-	return m
+	return Mean(s.Xs)
 }
 
 // GeoMean returns the geometric mean of xs. xs must be positive.
@@ -167,18 +103,7 @@ func GeoMean(xs []float64) float64 {
 // GeoMean returns the geometric mean of the Sample. All samples
 // values must be positive.
 func (s Sample) GeoMean() float64 {
-	if len(s.Xs) == 0 || s.Weights == nil {
-		return GeoMean(s.Xs)
-	}
-
-	m, wsum := 0.0, 0.0
-	for i, x := range s.Xs {
-		w := s.Weights[i]
-		wsum += w
-		lx := math.Log(x)
-		m += (lx - m) * w / wsum
-	}
-	return math.Exp(m)
+	return GeoMean(s.Xs)
 }
 
 // Variance returns the sample variance of xs.
@@ -202,12 +127,9 @@ func Variance(xs []float64) float64 {
 	return M2 / float64(len(xs)-1)
 }
 
+// Variance returns the variance of xs
 func (s Sample) Variance() float64 {
-	if len(s.Xs) == 0 || s.Weights == nil {
-		return Variance(s.Xs)
-	}
-	// TODO(austin)
-	panic("Weighted Variance not implemented")
+	return Variance(s.Xs)
 }
 
 // StdDev returns the sample standard deviation of xs.
@@ -217,11 +139,7 @@ func StdDev(xs []float64) float64 {
 
 // StdDev returns the sample standard deviation of the Sample.
 func (s Sample) StdDev() float64 {
-	if len(s.Xs) == 0 || s.Weights == nil {
-		return StdDev(s.Xs)
-	}
-	// TODO(austin)
-	panic("Weighted StdDev not implemented")
+	return StdDev(s.Xs)
 }
 
 // Percentile returns the pctileth value from the Sample. This uses
@@ -249,33 +167,17 @@ func (s *Sample) Percentile(pctile float64) float64 {
 		s.Sort()
 	}
 
-	if s.Weights == nil {
-		N := float64(len(s.Xs))
-		//n := pctile * (N + 1) // R6
-		n := 1/3.0 + pctile*(N+1/3.0) // R8
-		kf, frac := math.Modf(n)
-		k := int(kf)
-		if k <= 0 {
-			return s.Xs[0]
-		} else if k >= len(s.Xs) {
-			return s.Xs[len(s.Xs)-1]
-		}
-		return s.Xs[k-1] + frac*(s.Xs[k]-s.Xs[k-1])
-	} else {
-		// TODO(austin): Implement interpolation
-
-		target := s.Weight() * pctile
-
-		// TODO(austin) If we had cumulative weights, we could
-		// do this in log time.
-		for i, weight := range s.Weights {
-			target -= weight
-			if target < 0 {
-				return s.Xs[i]
-			}
-		}
+	N := float64(len(s.Xs))
+	//n := pctile * (N + 1) // R6
+	n := 1/3.0 + pctile*(N+1/3.0) // R8
+	kf, frac := math.Modf(n)
+	k := int(kf)
+	if k <= 0 {
+		return s.Xs[0]
+	} else if k >= len(s.Xs) {
 		return s.Xs[len(s.Xs)-1]
 	}
+	return s.Xs[k-1] + frac*(s.Xs[k]-s.Xs[k-1])
 }
 
 // IQR returns the interquartile range of the Sample.
@@ -288,34 +190,14 @@ func (s Sample) IQR() float64 {
 	return s.Percentile(0.75) - s.Percentile(0.25)
 }
 
-type sampleSorter struct {
-	xs      []float64
-	weights []float64
-}
-
-func (p *sampleSorter) Len() int {
-	return len(p.xs)
-}
-
-func (p *sampleSorter) Less(i, j int) bool {
-	return p.xs[i] < p.xs[j]
-}
-
-func (p *sampleSorter) Swap(i, j int) {
-	p.xs[i], p.xs[j] = p.xs[j], p.xs[i]
-	p.weights[i], p.weights[j] = p.weights[j], p.weights[i]
-}
-
 // Sort sorts the samples in place in s and returns s.
 //
 // A sorted sample improves the performance of some algorithms.
 func (s *Sample) Sort() *Sample {
 	if s.Sorted || sort.Float64sAreSorted(s.Xs) {
 		// All set
-	} else if s.Weights == nil {
-		sort.Float64s(s.Xs)
 	} else {
-		sort.Sort(&sampleSorter{s.Xs, s.Weights})
+		sort.Float64s(s.Xs)
 	}
 	s.Sorted = true
 	return s
@@ -328,25 +210,26 @@ func (s *Sample) Sort() *Sample {
 func (s Sample) Copy() *Sample {
 	xs := make([]float64, len(s.Xs))
 	copy(xs, s.Xs)
-
-	weights := []float64(nil)
-	if s.Weights != nil {
-		weights = make([]float64, len(s.Weights))
-		copy(weights, s.Weights)
-	}
-
-	return &Sample{xs, weights, s.Sorted}
+	return &Sample{xs, s.Sorted}
 }
 
+// FilterOutliers updates this sample in-place by removing all the values that are outliers
 func (s *Sample) FilterOutliers() {
-	rvalues := make([]float64, 0, len(s.Xs))
 	// Discard outliers.
 	q1, q3 := s.Percentile(0.25), s.Percentile(0.75)
 	lo, hi := q1-1.5*(q3-q1), q3+1.5*(q3-q1)
+	nn := 0
 	for _, value := range s.Xs {
 		if lo <= value && value <= hi {
-			rvalues = append(rvalues, value)
+			s.Xs[nn] = value
+			nn++
 		}
 	}
-	s.Xs = rvalues
+	s.Xs = s.Xs[:nn]
+}
+
+// Clear resets this sample so it contains 0 values
+func (s *Sample) Clear() {
+	s.Xs = s.Xs[:0]
+	s.Sorted = false
 }
