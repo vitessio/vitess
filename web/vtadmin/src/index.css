@@ -185,16 +185,44 @@ table th {
   text-align: left;
 }
 
-table tbody td {
+table tbody tr {
   border: solid 1px var(--tableBorderColor);
+}
+
+table tbody td {
   padding: var(--tableCellPadding);
+  vertical-align: top;
+}
+
+table tbody td[rowSpan] {
+  border-right: solid 1px var(--tableBorderColor);
 }
 
 /* One-liner utilities */
+.font-family-monospace {
+  font-family: var(--fontFamilyMonospace);
+}
+
+.font-size-small {
+  font-size: var(--fontSizeSmall);
+}
+
+.font-weight-bold {
+  font-weight: 700;
+}
+
 .max-width-content {
   max-width: var(--contentWidth);
 }
 
+.text-align-right {
+  text-align: right;
+}
+
 .text-color-secondary {
   color: var(--textColorSecondary);
+}
+
+.white-space-nowrap {
+  white-space: nowrap;
 }

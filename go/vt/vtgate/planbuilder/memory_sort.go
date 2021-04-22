@@ -82,10 +82,12 @@ func newMemorySort(plan logicalPlan, orderBy sqlparser.OrderBy) (*memorySort, er
 		if colNumber == -1 {
 			return nil, fmt.Errorf("unsupported: memory sort: order by must reference a column in the select list: %s", sqlparser.String(order))
 		}
+
 		ob := engine.OrderbyParams{
-			Col:             colNumber,
-			WeightStringCol: -1,
-			Desc:            order.Direction == sqlparser.DescOrder,
+			Col:               colNumber,
+			WeightStringCol:   -1,
+			Desc:              order.Direction == sqlparser.DescOrder,
+			StarColFixedIndex: colNumber,
 		}
 		ms.eMemorySort.OrderBy = append(ms.eMemorySort.OrderBy, ob)
 	}

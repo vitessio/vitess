@@ -190,6 +190,9 @@ func TestQueryPlanCache(t *testing.T) {
 		"ival1": sqltypes.Int64BindVariable(1),
 		"ival2": sqltypes.Int64BindVariable(1),
 	}
+
+	framework.Server.ClearQueryPlanCache()
+
 	client := framework.NewClient()
 	_, _ = client.Execute("select * from vitess_test where intval=:ival1", bindVars)
 	_, _ = client.Execute("select * from vitess_test where intval=:ival1", bindVars)

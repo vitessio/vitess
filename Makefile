@@ -53,13 +53,43 @@ embed_config:
 	go run github.com/GeertJohan/go.rice/rice embed-go
 	go build .
 
+# build the vitess binaries with dynamic dependency on libc
+build-dyn:
+ifndef NOBANNER
+	echo $$(date): Building source tree
+endif
+	bash ./build.env
+	go install $(EXTRA_BUILD_FLAGS) $(VT_GO_PARALLEL) -ldflags "$(shell tools/build_version_flags.sh)" ./go/...
+	(cd go/cmd/vttablet && go run github.com/GeertJohan/go.rice/rice append --exec=../../../bin/vttablet)
+
+# build the vitess binaries statically
 build:
 ifndef NOBANNER
 	echo $$(date): Building source tree
 endif
 	bash ./build.env
-	go install $(EXTRA_BUILD_FLAGS) $(VT_GO_PARALLEL) -ldflags "$(shell tools/build_version_flags.sh)" ./go/... && \
-		(cd go/cmd/vttablet && go run github.com/GeertJohan/go.rice/rice append --exec=../../../bin/vttablet)
+	# build all the binaries by default with CGO disabled
+	CGO_ENABLED=0 go install $(EXTRA_BUILD_FLAGS) $(VT_GO_PARALLEL) -ldflags "$(shell tools/build_version_flags.sh)" ./go/...
+	# embed local resources in the vttablet executable
+	(cd go/cmd/vttablet && go run github.com/GeertJohan/go.rice/rice append --exec=../../../bin/vttablet)
+	# build vtorc with CGO, because it depends on sqlite
+	CGO_ENABLED=1 go install $(EXTRA_BUILD_FLAGS) $(VT_GO_PARALLEL) -ldflags "$(shell tools/build_version_flags.sh)" ./go/cmd/vtorc/...
+
+# xbuild can be used to cross-compile Vitess client binaries
+# Outside of select client binaries (namely vtctlclient & vtexplain), cross-compiled Vitess Binaries are not recommended for production deployments
+# Usage: GOOS=darwin GOARCH=amd64 make xbuild
+cross-build:
+ifndef NOBANNER
+	echo $$(date): Building source tree
+endif
+	bash ./build.env
+	# In order to cross-compile, go install requires GOBIN to be unset
+	export GOBIN=""
+	# For the specified GOOS + GOARCH, build all the binaries by default with CGO disabled
+	CGO_ENABLED=0 GOOS=${GOOS} GOARCH=${GOARCH} go install $(EXTRA_BUILD_FLAGS) $(VT_GO_PARALLEL) -ldflags "$(shell tools/build_version_flags.sh)" ./go/...
+	# unset GOOS and embed local resources in the vttablet executable
+	(cd go/cmd/vttablet && unset GOOS && go run github.com/GeertJohan/go.rice/rice --verbose append --exec=$${HOME}/go/bin/${GOOS}_${GOARCH}/vttablet)
+	# Cross-compiling w/ cgo isn't trivial and we don't need vtorc, so we can skip building it 
 
 debug:
 ifndef NOBANNER
@@ -112,9 +142,10 @@ asthelpergen:
 
 sizegen:
 	go run ./go/tools/sizegen/sizegen.go \
-		-in ./go/vt/... \
+		-in ./go/... \
 	  	-gen vitess.io/vitess/go/vt/vtgate/engine.Plan \
-	  	-gen vitess.io/vitess/go/vt/vttablet/tabletserver.TabletPlan
+	  	-gen vitess.io/vitess/go/vt/vttablet/tabletserver.TabletPlan \
+	  	-gen vitess.io/vitess/go/sqltypes.Result
 
 astfmtgen:
 	go run ./go/tools/astfmtgen/main.go vitess.io/vitess/go/vt/sqlparser/...

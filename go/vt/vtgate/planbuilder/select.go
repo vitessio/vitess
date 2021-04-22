@@ -20,6 +20,8 @@ import (
 	"errors"
 	"fmt"
 
+	"vitess.io/vitess/go/sqltypes"
+
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
 
 	"vitess.io/vitess/go/vt/vtgate/semantics"
@@ -35,8 +37,8 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
-func buildSelectPlan(query string) func(sqlparser.Statement, sqlparser.BindVars, ContextVSchema) (engine.Primitive, error) {
-	return func(stmt sqlparser.Statement, reservedVars sqlparser.BindVars, vschema ContextVSchema) (engine.Primitive, error) {
+func buildSelectPlan(query string) func(sqlparser.Statement, *sqlparser.ReservedVars, ContextVSchema) (engine.Primitive, error) {
+	return func(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema ContextVSchema) (engine.Primitive, error) {
 		sel := stmt.(*sqlparser.Select)
 
 		p, err := handleDualSelects(sel, vschema)
@@ -100,7 +102,7 @@ func shouldRetryWithCNFRewriting(plan logicalPlan) bool {
 
 }
 
-func pushProjection(expr *sqlparser.AliasedExpr, plan logicalPlan, semTable *semantics.SemTable) (firstOffset int, err error) {
+func pushProjection(expr *sqlparser.AliasedExpr, plan logicalPlan, semTable *semantics.SemTable) (int, error) {
 	switch node := plan.(type) {
 	case *route:
 		sel := node.Select.(*sqlparser.Select)
@@ -133,77 +135,87 @@ func pushProjection(expr *sqlparser.AliasedExpr, plan logicalPlan, semTable *sem
 	}
 }
 
-func pushPredicate(exprs []sqlparser.Expr, plan logicalPlan, semTable *semantics.SemTable) (err error) {
-	if len(exprs) == 0 {
-		return nil
+func planAggregations(qp *queryProjection, plan logicalPlan, semTable *semantics.SemTable) (logicalPlan, error) {
+	eaggr := &engine.OrderedAggregate{}
+	oa := &orderedAggregate{
+		resultsBuilder: newResultsBuilder(plan, eaggr),
+		eaggr:          eaggr,
 	}
-	switch node := plan.(type) {
-	case *route:
-		sel := node.Select.(*sqlparser.Select)
-		finalExpr := reorderExpression(exprs[0], node.tables, semTable)
-		for i, expr := range exprs {
-			if i == 0 {
-				continue
-			}
-			finalExpr = &sqlparser.AndExpr{
-				Left:  finalExpr,
-				Right: reorderExpression(expr, node.tables, semTable),
-			}
-		}
-		if sel.Where != nil {
-			finalExpr = &sqlparser.AndExpr{
-				Left:  sel.Where.Expr,
-				Right: finalExpr,
-			}
-		}
-		sel.Where = &sqlparser.Where{
-			Type: sqlparser.WhereClause,
-			Expr: finalExpr,
-		}
-		return nil
-	case *joinV4:
-		var lhs, rhs []sqlparser.Expr
-		lhsSolves := node.Left.ContainsTables()
-		rhsSolves := node.Right.ContainsTables()
-		for _, expr := range exprs {
-			deps := semTable.Dependencies(expr)
-			switch {
-			case deps.IsSolvedBy(lhsSolves):
-				lhs = append(lhs, expr)
-			case deps.IsSolvedBy(rhsSolves):
-				rhs = append(rhs, expr)
-			default:
-				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unknown dependencies for %s", sqlparser.String(expr))
-			}
-		}
-		err := pushPredicate(lhs, node.Left, semTable)
+	for _, e := range qp.aggrExprs {
+		offset, err := pushProjection(e, plan, semTable)
 		if err != nil {
-			return err
+			return nil, err
 		}
-		err = pushPredicate(rhs, node.Right, semTable)
-		return err
-	default:
-		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%T not yet supported", node)
+		fExpr := e.Expr.(*sqlparser.FuncExpr)
+		opcode := engine.SupportedAggregates[fExpr.Name.Lowered()]
+		oa.eaggr.Aggregates = append(oa.eaggr.Aggregates, engine.AggregateParams{
+			Opcode: opcode,
+			Col:    offset,
+		})
 	}
+	return oa, nil
 }
 
-func reorderExpression(expr sqlparser.Expr, solves semantics.TableSet, semTable *semantics.SemTable) sqlparser.Expr {
-	switch compExpr := expr.(type) {
-	case *sqlparser.ComparisonExpr:
-		if compExpr.Operator == sqlparser.EqualOp {
-			if !dependsOnRoute(solves, compExpr.Left, semTable) && dependsOnRoute(solves, compExpr.Right, semTable) {
-				compExpr.Left, compExpr.Right = compExpr.Right, compExpr.Left
+func planOrderBy(qp *queryProjection, plan logicalPlan, semTable *semantics.SemTable) (logicalPlan, error) {
+	switch plan := plan.(type) {
+	case *route:
+		for _, order := range qp.orderExprs {
+			offset, exists := qp.orderExprColMap[order]
+			if !exists {
+				return nil, semantics.Gen4NotSupportedF("order by column not exists in select list")
 			}
-		}
-	}
-	return expr
-}
+			colName, ok := order.Expr.(*sqlparser.ColName)
+			if !ok {
+				return nil, semantics.Gen4NotSupportedF("order by non-column expression")
+			}
 
-func dependsOnRoute(solves semantics.TableSet, expr sqlparser.Expr, semTable *semantics.SemTable) bool {
-	if node, ok := expr.(*sqlparser.ColName); ok {
-		return semTable.Dependencies(node).IsSolvedBy(solves)
+			table := semTable.Dependencies(colName)
+			tableInfo, err := semTable.TableInfoFor(table)
+			if err != nil {
+				return nil, err
+			}
+			weightStringNeeded := true
+			for _, c := range tableInfo.Table.Columns {
+				if colName.Name.Equal(c.Name) {
+					if sqltypes.IsNumber(c.Type) {
+						weightStringNeeded = false
+					}
+					break
+				}
+			}
+
+			weightStringOffset := -1
+			if weightStringNeeded {
+				expr := &sqlparser.AliasedExpr{
+					Expr: &sqlparser.FuncExpr{
+						Name: sqlparser.NewColIdent("weight_string"),
+						Exprs: []sqlparser.SelectExpr{
+							&sqlparser.AliasedExpr{
+								Expr: order.Expr,
+							},
+						},
+					},
+				}
+				weightStringOffset, err = pushProjection(expr, plan, semTable)
+				if err != nil {
+					return nil, err
+				}
+			}
+			if weightStringOffset != -1 {
+				plan.eroute.TruncateColumnCount = len(qp.selectExprs) + len(qp.aggrExprs)
+			}
+
+			plan.eroute.OrderBy = append(plan.eroute.OrderBy, engine.OrderbyParams{
+				Col:             offset,
+				WeightStringCol: weightStringOffset,
+				Desc:            order.Direction == sqlparser.DescOrder,
+			})
+			plan.Select.AddOrder(order)
+		}
+		return plan, nil
+	default:
+		return nil, semantics.Gen4NotSupportedF("ordering on complex query")
 	}
-	return !sqlparser.IsValue(expr)
 }
 
 var errSQLCalcFoundRows = vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.CantUseOptionHere, "Incorrect usage/placement of 'SQL_CALC_FOUND_ROWS'")
@@ -244,7 +256,7 @@ var errInto = vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.CantUse
 // The LIMIT clause is the last construct of a query. If it cannot be
 // pushed into a route, then a primitive is created on top of any
 // of the above trees to make it discard unwanted rows.
-func (pb *primitiveBuilder) processSelect(sel *sqlparser.Select, reservedVars sqlparser.BindVars, outer *symtab, query string) error {
+func (pb *primitiveBuilder) processSelect(sel *sqlparser.Select, reservedVars *sqlparser.ReservedVars, outer *symtab, query string) error {
 	// Check and error if there is any locking function present in select expression.
 	for _, expr := range sel.SelectExprs {
 		if aExpr, ok := expr.(*sqlparser.AliasedExpr); ok && sqlparser.IsLockingFunc(aExpr.Expr) {
@@ -348,7 +360,7 @@ func setMiscFunc(in logicalPlan, sel *sqlparser.Select) error {
 	return nil
 }
 
-func buildSQLCalcFoundRowsPlan(query string, sel *sqlparser.Select, reservedVars sqlparser.BindVars, outer *symtab, vschema ContextVSchema) (logicalPlan, error) {
+func buildSQLCalcFoundRowsPlan(query string, sel *sqlparser.Select, reservedVars *sqlparser.ReservedVars, outer *symtab, vschema ContextVSchema) (logicalPlan, error) {
 	ljt := newJointab(reservedVars)
 	frpb := newPrimitiveBuilder(vschema, ljt)
 	err := frpb.processSelect(sel, reservedVars, outer, "")
@@ -356,7 +368,7 @@ func buildSQLCalcFoundRowsPlan(query string, sel *sqlparser.Select, reservedVars
 		return nil, err
 	}
 
-	statement2, reservedVars2, err := sqlparser.Parse2(query)
+	statement2, reserved2, err := sqlparser.Parse2(query)
 	if err != nil {
 		return nil, err
 	}
@@ -392,6 +404,7 @@ func buildSQLCalcFoundRowsPlan(query string, sel *sqlparser.Select, reservedVars
 		sel2 = sel3
 	}
 
+	reservedVars2 := sqlparser.NewReservedVars("vtg", reserved2)
 	cjt := newJointab(reservedVars2)
 	countpb := newPrimitiveBuilder(vschema, cjt)
 	err = countpb.processSelect(sel2, reservedVars2, outer, "")
@@ -468,7 +481,7 @@ func isOnlyDual(sel *sqlparser.Select) bool {
 // pushFilter identifies the target route for the specified bool expr,
 // pushes it down, and updates the route info if the new constraint improves
 // the primitive. This function can push to a WHERE or HAVING clause.
-func (pb *primitiveBuilder) pushFilter(in sqlparser.Expr, whereType string, reservedVars sqlparser.BindVars) error {
+func (pb *primitiveBuilder) pushFilter(in sqlparser.Expr, whereType string, reservedVars *sqlparser.ReservedVars) error {
 	filters := splitAndExpression(nil, in)
 	reorderBySubquery(filters)
 	for _, filter := range filters {
@@ -526,7 +539,7 @@ func (pb *primitiveBuilder) addPullouts(pullouts []*pulloutSubquery) {
 
 // pushSelectExprs identifies the target route for the
 // select expressions and pushes them down.
-func (pb *primitiveBuilder) pushSelectExprs(sel *sqlparser.Select, reservedVars sqlparser.BindVars) error {
+func (pb *primitiveBuilder) pushSelectExprs(sel *sqlparser.Select, reservedVars *sqlparser.ReservedVars) error {
 	resultColumns, err := pb.pushSelectRoutes(sel.SelectExprs, reservedVars)
 	if err != nil {
 		return err
@@ -537,7 +550,7 @@ func (pb *primitiveBuilder) pushSelectExprs(sel *sqlparser.Select, reservedVars 
 
 // pushSelectRoutes is a convenience function that pushes all the select
 // expressions and returns the list of resultColumns generated for it.
-func (pb *primitiveBuilder) pushSelectRoutes(selectExprs sqlparser.SelectExprs, reservedVars sqlparser.BindVars) ([]*resultColumn, error) {
+func (pb *primitiveBuilder) pushSelectRoutes(selectExprs sqlparser.SelectExprs, reservedVars *sqlparser.ReservedVars) ([]*resultColumn, error) {
 	resultColumns := make([]*resultColumn, 0, len(selectExprs))
 	for _, node := range selectExprs {
 		switch node := node.(type) {

@@ -10,7 +10,6 @@
       "Sharded": false
     },
     "TargetDestination": "AnyShard()",
-    "IsDML": false,
     "Query": "repair table t1,t2 quick",
     "SingleShardOnly": true
   }
@@ -28,7 +27,6 @@
       "Sharded": false
     },
     "TargetDestination": "AnyShard()",
-    "IsDML": false,
     "Query": "optimize table t1",
     "SingleShardOnly": true
   }
@@ -46,7 +44,6 @@
       "Sharded": false
     },
     "TargetDestination": "AnyShard()",
-    "IsDML": false,
     "Query": "DO 1",
     "SingleShardOnly": true
   }

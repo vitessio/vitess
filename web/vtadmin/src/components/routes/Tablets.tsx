@@ -25,11 +25,14 @@ import { Icons } from '../Icon';
 import { filterNouns } from '../../util/filterNouns';
 import style from './Tablets.module.scss';
 import { Button } from '../Button';
+import { DataCell } from '../dataTable/DataCell';
+import { TabletServingPip } from '../pips/TabletServingPip';
+import { useSyncedURLParam } from '../../hooks/useSyncedURLParam';
 
 export const Tablets = () => {
     useDocumentTitle('Tablets');
 
-    const [filter, setFilter] = React.useState<string>('');
+    const { value: filter, updateValue: updateFilter } = useSyncedURLParam('filter');
     const { data = [] } = useTablets();
 
     const filteredData = React.useMemo(() => {
@@ -39,13 +42,17 @@ export const Tablets = () => {
     const renderRows = React.useCallback((rows: typeof filteredData) => {
         return rows.map((t, tdx) => (
             <tr key={tdx}>
-                <td>{t.cluster}</td>
-                <td>{t.keyspace}</td>
-                <td>{t.shard}</td>
-                <td>{t.type}</td>
-                <td>{t.state}</td>
-                <td>{t.alias}</td>
-                <td>{t.hostname}</td>
+                <DataCell>
+                    <div>{t.keyspace}</div>
+                    <div className="font-size-small text-color-secondary">{t.cluster}</div>
+                </DataCell>
+                <DataCell>{t.shard}</DataCell>
+                <DataCell className="white-space-nowrap">
+                    <TabletServingPip state={t._raw.state} /> {t.type}
+                </DataCell>
+                <DataCell>{t.state}</DataCell>
+                <DataCell>{t.alias}</DataCell>
+                <DataCell>{t.hostname}</DataCell>
             </tr>
         ));
     }, []);
@@ -57,16 +64,16 @@ export const Tablets = () => {
                 <TextInput
                     autoFocus
                     iconLeft={Icons.search}
-                    onChange={(e) => setFilter(e.target.value)}
+                    onChange={(e) => updateFilter(e.target.value)}
                     placeholder="Filter tablets"
-                    value={filter}
+                    value={filter || ''}
                 />
-                <Button disabled={!filter} onClick={() => setFilter('')} secondary>
+                <Button disabled={!filter} onClick={() => updateFilter('')} secondary>
                     Clear filters
                 </Button>
             </div>
             <DataTable
-                columns={['Cluster', 'Keyspace', 'Shard', 'Type', 'State', 'Alias', 'Hostname']}
+                columns={['Keyspace', 'Shard', 'Type', 'State', 'Alias', 'Hostname']}
                 data={filteredData}
                 renderRows={renderRows}
             />
@@ -100,7 +107,7 @@ const formatDisplayType = (t: pb.Tablet) => {
 
 const formatState = (t: pb.Tablet) => t.state && SERVING_STATES[t.state];
 
-export const formatRows = (tablets: pb.Tablet[] | null, filter: string) => {
+export const formatRows = (tablets: pb.Tablet[] | null | undefined, filter: string | null | undefined) => {
     if (!tablets) return [];
 
     // Properties prefixed with "_" are hidden and included for filtering only.
@@ -115,6 +122,7 @@ export const formatRows = (tablets: pb.Tablet[] | null, filter: string) => {
         hostname: t.tablet?.hostname,
         type: formatDisplayType(t),
         state: formatState(t),
+        _raw: t,
         _keyspaceShard: `${t.tablet?.keyspace}/${t.tablet?.shard}`,
         // Include the unformatted type so (string) filtering by "master" works
         // even if "primary" is what we display, and what we use for key:value searches.

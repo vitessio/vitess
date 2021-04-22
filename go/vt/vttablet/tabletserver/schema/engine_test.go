@@ -46,12 +46,7 @@ import (
 
 const baseShowTablesPattern = `SELECT t\.table_name.*`
 
-var mustMatch = utils.MustMatchFn(
-	[]interface{}{ // types with unexported fields
-		sqlparser.TableIdent{},
-	},
-	[]string{".Mutex"}, // ignored fields
-)
+var mustMatch = utils.MustMatchFn(".Mutex")
 
 func TestOpenAndReload(t *testing.T) {
 	db := fakesqldb.New(t)
