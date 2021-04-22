@@ -24,6 +24,8 @@ import (
 	"strings"
 	"time"
 
+	"vitess.io/vitess/go/bytes2"
+
 	"context"
 
 	"github.com/golang/protobuf/proto"
@@ -220,6 +222,7 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 	var pkfields []*querypb.Field
 	var updateCopyState *sqlparser.ParsedQuery
 	var bv map[string]*querypb.BindVariable
+	var sqlbuffer bytes2.Buffer
 	err = vc.vr.sourceVStreamer.VStreamRows(ctx, initialPlan.SendRule.Filter, lastpkpb, func(rows *binlogdatapb.VStreamRowsResponse) error {
 		for {
 			select {
@@ -265,17 +268,15 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 		if err := vc.vr.dbClient.Begin(); err != nil {
 			return err
 		}
-		_, err = vc.tablePlan.applyBulkInsert(rows, func(sql string) (*sqltypes.Result, error) {
+		_, err = vc.tablePlan.applyBulkInsert(&sqlbuffer, rows, func(sql string) (*sqltypes.Result, error) {
 			start := time.Now()
 			qr, err := vc.vr.dbClient.ExecuteWithRetry(ctx, sql)
 			if err != nil {
 				return nil, err
 			}
 			vc.vr.stats.QueryTimings.Record("copy", start)
-
 			vc.vr.stats.CopyRowCount.Add(int64(qr.RowsAffected))
 			vc.vr.stats.QueryCount.Add("copy", 1)
-
 			return qr, err
 		})
 		if err != nil {

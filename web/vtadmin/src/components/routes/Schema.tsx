@@ -17,9 +17,10 @@ import * as React from 'react';
 import { Link, useParams } from 'react-router-dom';
 
 import style from './Schema.module.scss';
-import { useSchema } from '../../hooks/api';
+import { useSchema, useVSchema } from '../../hooks/api';
 import { Code } from '../Code';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
+import { getVindexesForTable } from '../../util/vschemas';
 
 interface RouteParams {
     clusterID: string;
@@ -29,9 +30,10 @@ interface RouteParams {
 
 export const Schema = () => {
     const { clusterID, keyspace, table } = useParams<RouteParams>();
-    const { data, error, isError, isLoading, isSuccess } = useSchema({ clusterID, keyspace, table });
-
     useDocumentTitle(`${table} (${keyspace})`);
+
+    const { data, error, isError, isLoading, isSuccess } = useSchema({ clusterID, keyspace, table });
+    const vschemaQuery = useVSchema({ clusterID, keyspace });
 
     const tableDefinition = React.useMemo(
         () =>
@@ -39,6 +41,11 @@ export const Schema = () => {
                 ? data?.table_definitions.find((t) => t.name === table)
                 : null,
         [data, table]
+    );
+
+    const tableVindexes = React.useMemo(
+        () => (vschemaQuery.data ? getVindexesForTable(vschemaQuery.data, table) : []),
+        [vschemaQuery.data, table]
     );
 
     const is404 = isSuccess && !tableDefinition;
@@ -98,6 +105,64 @@ export const Schema = () => {
                         <h3>Table Definition</h3>
                         <Code code={tableDefinition.schema} />
                     </section>
+
+                    {!!tableVindexes.length && (
+                        <section className={style.panel}>
+                            <h3>Vindexes</h3>
+                            <p>
+                                A Vindex provides a way to map a column value to a keyspace ID. Since each shard in
+                                Vitess covers a range of keyspace ID values, this mapping can be used to identify which
+                                shard contains a row.{' '}
+                                <a
+                                    href="https://vitess.io/docs/reference/features/vindexes/"
+                                    target="_blank"
+                                    rel="noopen noreferrer"
+                                >
+                                    Learn more about Vindexes in the Vitess documentation.
+                                </a>
+                            </p>
+
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Vindex</th>
+                                        <th>Columns</th>
+                                        <th>Type</th>
+                                        <th>Params</th>
+                                        <th className={style.skCol} />
+                                    </tr>
+                                </thead>
+                                <tbody className="font-family-monospace">
+                                    {tableVindexes.map((v, vdx) => {
+                                        const columns = v.column ? [v.column] : v.columns;
+                                        return (
+                                            <tr key={v.name}>
+                                                <td>{v.name}</td>
+                                                <td>{(columns || []).join(', ')}</td>
+                                                <td>{v.meta?.type}</td>
+                                                <td>
+                                                    {v.meta?.params ? (
+                                                        Object.entries(v.meta.params).map(([k, val]) => (
+                                                            <div key={k}>
+                                                                <strong>{k}: </strong> {val}
+                                                            </div>
+                                                        ))
+                                                    ) : (
+                                                        <span className="font-size-small text-color-secondary">
+                                                            N/A
+                                                        </span>
+                                                    )}
+                                                </td>
+                                                <td>
+                                                    {vdx === 0 && <span className={style.skBadge}>Sharding Key</span>}
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </section>
+                    )}
                 </div>
             )}
         </div>

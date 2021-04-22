@@ -105,7 +105,7 @@ var ghostOverridePath = flag.String("gh-ost-path", "", "override default gh-ost 
 var ptOSCOverridePath = flag.String("pt-osc-path", "", "override default pt-online-schema-change binary full path")
 var migrationCheckInterval = flag.Duration("migration_check_interval", 1*time.Minute, "Interval between migration checks")
 var retainOnlineDDLTables = flag.Duration("retain_online_ddl_tables", 24*time.Hour, "How long should vttablet keep an old migrated table before purging it")
-var migrationNextCheckInterval = 5 * time.Second
+var migrationNextCheckIntervals = []time.Duration{1 * time.Second, 5 * time.Second}
 
 const (
 	maxPasswordLength             = 32 // MySQL's *replication* password may not exceed 32 characters
@@ -283,7 +283,9 @@ func (e *Executor) Close() {
 
 // triggerNextCheckInterval the next tick sooner than normal
 func (e *Executor) triggerNextCheckInterval() {
-	e.ticks.TriggerAfter(migrationNextCheckInterval)
+	for _, interval := range migrationNextCheckIntervals {
+		e.ticks.TriggerAfter(interval)
+	}
 }
 
 // isAnyMigrationRunning sees if there's any migration running right now
@@ -876,7 +878,7 @@ export ONLINE_DDL_PASSWORD
 			fmt.Sprintf(`--panic-flag-file=%s`, e.ghostPanicFlagFileName(onlineDDL.UUID)),
 			fmt.Sprintf(`--execute=%t`, execute),
 		}
-		args = append(args, onlineDDL.RuntimeOptions()...)
+		args = append(args, onlineDDL.StrategySetting().RuntimeOptions()...)
 		_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, fmt.Sprintf("executing gh-ost --execute=%v", execute))
 		_, err := execCmd("bash", args, os.Environ(), "/tmp", nil, nil)
 		_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, fmt.Sprintf("executed gh-ost --execute=%v, err=%v", execute, err))
@@ -1100,7 +1102,7 @@ export MYSQL_PWD
 				`--no-drop-old-table`,
 			)
 		}
-		args = append(args, onlineDDL.RuntimeOptions()...)
+		args = append(args, onlineDDL.StrategySetting().RuntimeOptions()...)
 		_, err = execCmd("bash", args, os.Environ(), "/tmp", nil, nil)
 		return err
 	}
@@ -1177,6 +1179,19 @@ func (e *Executor) readMigration(ctx context.Context, uuid string) (onlineDDL *s
 		TabletAlias: row["tablet"].ToString(),
 	}
 	return onlineDDL, row, nil
+}
+
+// readPendingMigrationsUUIDs returns UUIDs for migrations in pending state (queued/ready/running)
+func (e *Executor) readPendingMigrationsUUIDs(ctx context.Context) (uuids []string, err error) {
+	r, err := e.execQuery(ctx, sqlSelectPendingMigrations)
+	if err != nil {
+		return uuids, err
+	}
+	for _, row := range r.Named().Rows {
+		uuid := row["migration_uuid"].ToString()
+		uuids = append(uuids, uuid)
+	}
+	return uuids, err
 }
 
 // terminateMigration attempts to interrupt and hard-stop a running migration
@@ -1280,14 +1295,9 @@ func (e *Executor) cancelMigrations(ctx context.Context, uuids []string, message
 // CancelPendingMigrations cancels all pending migrations (that are expected to run or are running)
 // for this keyspace
 func (e *Executor) CancelPendingMigrations(ctx context.Context, message string) (result *sqltypes.Result, err error) {
-	r, err := e.execQuery(ctx, sqlSelectPendingMigrations)
+	uuids, err := e.readPendingMigrationsUUIDs(ctx)
 	if err != nil {
 		return result, err
-	}
-	var uuids []string
-	for _, row := range r.Named().Rows {
-		uuid := row["migration_uuid"].ToString()
-		uuids = append(uuids, uuid)
 	}
 
 	result = &sqltypes.Result{}
@@ -1638,7 +1648,7 @@ func (e *Executor) executeMigration(ctx context.Context, onlineDDL *schema.Onlin
 		return failMigration(err)
 	}
 
-	if onlineDDL.IsDeclarative() {
+	if onlineDDL.StrategySetting().IsDeclarative() {
 		switch ddlAction {
 		case sqlparser.RevertDDLAction:
 			// No special action. Declarative Revert migrations are handled like any normal Revert migration.
@@ -1868,6 +1878,14 @@ func (e *Executor) runNextMigration(ctx context.Context) error {
 			Strategy: schema.DDLStrategy(row["strategy"].ToString()),
 			Options:  row["options"].ToString(),
 			Status:   schema.OnlineDDLStatus(row["migration_status"].ToString()),
+		}
+		{
+			// We strip out any VT query comments because our simplified parser doesn't work well with comments
+			ddlStmt, _, err := schema.ParseOnlineDDLStatement(onlineDDL.SQL)
+			if err == nil {
+				ddlStmt.SetComments(sqlparser.Comments{})
+				onlineDDL.SQL = sqlparser.String(ddlStmt)
+			}
 		}
 		e.executeMigration(ctx, onlineDDL)
 		// the query should only ever return a single row at the most
@@ -2489,6 +2507,57 @@ func (e *Executor) RetryMigration(ctx context.Context, uuid string) (result *sql
 	if err != nil {
 		return nil, err
 	}
+	return e.execQuery(ctx, query)
+}
+
+// SubmitMigration inserts a new migration request
+func (e *Executor) SubmitMigration(
+	ctx context.Context,
+	stmt sqlparser.Statement,
+) (result *sqltypes.Result, err error) {
+
+	onlineDDL, err := schema.OnlineDDLFromCommentedStatement(stmt)
+	if err != nil {
+		return nil, fmt.Errorf("Error submitting migration %s: %v", sqlparser.String(stmt), err)
+	}
+	_, actionStr, err := onlineDDL.GetActionStr()
+	if err != nil {
+		return nil, err
+	}
+
+	query, err := sqlparser.ParseAndBind(sqlInsertMigration,
+		sqltypes.StringBindVariable(onlineDDL.UUID),
+		sqltypes.StringBindVariable(e.keyspace),
+		sqltypes.StringBindVariable(e.shard),
+		sqltypes.StringBindVariable(e.dbName),
+		sqltypes.StringBindVariable(onlineDDL.Table),
+		sqltypes.StringBindVariable(onlineDDL.SQL),
+		sqltypes.StringBindVariable(string(onlineDDL.Strategy)),
+		sqltypes.StringBindVariable(onlineDDL.Options),
+		sqltypes.StringBindVariable(actionStr),
+		sqltypes.StringBindVariable(onlineDDL.RequestContext),
+		sqltypes.StringBindVariable(string(schema.OnlineDDLStatusQueued)),
+		sqltypes.StringBindVariable(e.TabletAliasString()),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	if onlineDDL.StrategySetting().IsSingleton() {
+		e.migrationMutex.Lock()
+		defer e.migrationMutex.Unlock()
+
+		uuids, err := e.readPendingMigrationsUUIDs(ctx)
+		if err != nil {
+			return result, err
+		}
+		if len(uuids) > 0 {
+			return result, fmt.Errorf("singleton migration rejected: found pending migrations [%s]", strings.Join(uuids, ", "))
+		}
+	}
+
+	defer e.triggerNextCheckInterval()
+
 	return e.execQuery(ctx, query)
 }
 
