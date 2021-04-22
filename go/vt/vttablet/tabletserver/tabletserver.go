@@ -1793,6 +1793,16 @@ func (tsv *TabletServer) WarnResultSize() int {
 	return int(tsv.qe.warnResultSize.Get())
 }
 
+// SetThrottleMetricThreshold changes the throttler metric threshold
+func (tsv *TabletServer) SetThrottleMetricThreshold(val float64) {
+	tsv.lagThrottler.MetricsThreshold.Set(val)
+}
+
+// ThrottleMetricThreshold returns the throttler metric threshold
+func (tsv *TabletServer) ThrottleMetricThreshold() float64 {
+	return tsv.lagThrottler.MetricsThreshold.Get()
+}
+
 // SetPassthroughDMLs changes the setting to pass through all DMLs
 // It should only be used for testing
 func (tsv *TabletServer) SetPassthroughDMLs(val bool) {
