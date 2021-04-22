@@ -8729,4 +8729,11 @@
 2021-04-22T09:32:31Z,Cluster (onlineddl_ghost),https://github.com/vitessio/vitess/actions/runs/773702454
 2021-04-22T09:32:31Z,unit_race,https://github.com/vitessio/vitess/actions/runs/773702497
 2021-04-22T09:49:20Z,Cluster (27),https://github.com/vitessio/vitess/actions/runs/773749596
+2021-04-22T10:05:25Z,Cluster (20),https://github.com/vitessio/vitess/actions/runs/773795490
 2021-04-22T10:05:25Z,unit_race,https://github.com/vitessio/vitess/actions/runs/773795499
+2021-04-22T10:06:58Z,unit_race,https://github.com/vitessio/vitess/actions/runs/773800177
+2021-04-22T10:16:40Z,Cluster (12),https://github.com/vitessio/vitess/actions/runs/773826913
+2021-04-22T10:16:40Z,Cluster (20),https://github.com/vitessio/vitess/actions/runs/773826929
+2021-04-22T10:16:40Z,Cluster (upgrade),https://github.com/vitessio/vitess/actions/runs/773826902
+2021-04-22T10:16:40Z,Cluster (vreplication_cellalias),https://github.com/vitessio/vitess/actions/runs/773826899
+2021-04-22T10:22:21Z,Cluster (27),https://github.com/vitessio/vitess/actions/runs/773842459
