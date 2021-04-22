@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"vitess.io/vitess/go/bytes2"
 	"vitess.io/vitess/go/hack"
@@ -283,6 +284,36 @@ func (v Value) EncodeSQL(b BinWriter) {
 	}
 }
 
+// EncodeSQLStringBuilder is identical to EncodeSQL but it takes a strings.Builder
+// as its writer, so it can be inlined for performance.
+func (v Value) EncodeSQLStringBuilder(b *strings.Builder) {
+	switch {
+	case v.typ == Null:
+		b.Write(nullstr)
+	case v.IsQuoted():
+		encodeBytesSQLStringBuilder(v.val, b)
+	case v.typ == Bit:
+		encodeBytesSQLBits(v.val, b)
+	default:
+		b.Write(v.val)
+	}
+}
+
+// EncodeSQLBytes2 is identical to EncodeSQL but it takes a bytes2.Buffer
+// as its writer, so it can be inlined for performance.
+func (v Value) EncodeSQLBytes2(b *bytes2.Buffer) {
+	switch {
+	case v.typ == Null:
+		b.Write(nullstr)
+	case v.IsQuoted():
+		encodeBytesSQLBytes2(v.val, b)
+	case v.typ == Bit:
+		encodeBytesSQLBits(v.val, b)
+	default:
+		b.Write(v.val)
+	}
+}
+
 // EncodeASCII encodes the value using 7-bit clean ascii bytes.
 func (v Value) EncodeASCII(b BinWriter) {
 	switch {
@@ -386,6 +417,11 @@ func (v *Value) UnmarshalJSON(b []byte) error {
 
 func encodeBytesSQL(val []byte, b BinWriter) {
 	buf := &bytes2.Buffer{}
+	encodeBytesSQLBytes2(val, buf)
+	b.Write(buf.Bytes())
+}
+
+func encodeBytesSQLBytes2(val []byte, buf *bytes2.Buffer) {
 	buf.WriteByte('\'')
 	for _, ch := range val {
 		if encodedChar := SQLEncodeMap[ch]; encodedChar == DontEscape {
@@ -396,12 +432,23 @@ func encodeBytesSQL(val []byte, b BinWriter) {
 		}
 	}
 	buf.WriteByte('\'')
-	b.Write(buf.Bytes())
 }
 
-// EncodeStringSQL encodes the string as a SQL string.
-func EncodeStringSQL(val string) string {
-	buf := &bytes2.Buffer{}
+func encodeBytesSQLStringBuilder(val []byte, buf *strings.Builder) {
+	buf.WriteByte('\'')
+	for _, ch := range val {
+		if encodedChar := SQLEncodeMap[ch]; encodedChar == DontEscape {
+			buf.WriteByte(ch)
+		} else {
+			buf.WriteByte('\\')
+			buf.WriteByte(encodedChar)
+		}
+	}
+	buf.WriteByte('\'')
+}
+
+// BufEncodeStringSQL encodes the string into a strings.Builder
+func BufEncodeStringSQL(buf *strings.Builder, val string) {
 	buf.WriteByte('\'')
 	for _, ch := range val {
 		if encodedChar := SQLEncodeMap[ch]; encodedChar == DontEscape {
@@ -412,6 +459,12 @@ func EncodeStringSQL(val string) string {
 		}
 	}
 	buf.WriteByte('\'')
+}
+
+// EncodeStringSQL encodes the string as a SQL string.
+func EncodeStringSQL(val string) string {
+	var buf strings.Builder
+	BufEncodeStringSQL(&buf, val)
 	return buf.String()
 }
 

@@ -69,6 +69,14 @@ var (
 	}, {
 		input: "select $ from t",
 	}, {
+		// shift/reduce conflict on CHARSET, should throw an error on shifting which will be ignored as it is a DDL
+		input:      "alter database charset = 'utf16';",
+		output:     "alter database",
+		partialDDL: true,
+	}, {
+		input:  "alter database charset charset = 'utf16'",
+		output: "alter database `charset` character set 'utf16'",
+	}, {
 		input: "select a.b as a$b from $test$",
 	}, {
 		input:  "select 1 from t // aa\n",
@@ -931,6 +939,8 @@ var (
 	}, {
 		input: "alter table a add unique key foo (column1)",
 	}, {
+		input: "alter /*vt+ strategy=online */ table a add unique key foo (column1)",
+	}, {
 		input: "alter table a change column s foo int default 1 after x",
 	}, {
 		input: "alter table a modify column foo int default 1 first x",
@@ -1010,6 +1020,8 @@ var (
 	}, {
 		input:  "alter table a partition by range (id) (partition p0 values less than (10), partition p1 values less than (maxvalue))",
 		output: "alter table a",
+	}, {
+		input: "alter table `Post With Space` drop foreign key `Post With Space_ibfk_1`",
 	}, {
 		input: "alter table a add column (id int, id2 char(23))",
 	}, {
@@ -1114,6 +1126,8 @@ var (
 	}, {
 		input: "create table a (\n\ta int not null\n)",
 	}, {
+		input: "create /*vt+ strategy=online */ table a (\n\ta int not null\n)",
+	}, {
 		input: "create table a (\n\ta int not null default 0\n)",
 	}, {
 		input:  "create table a (a int not null default 0, primary key(a))",
@@ -1146,6 +1160,12 @@ var (
 	}, {
 		input:  "CREATE TABLE aipk (id INT AUTO_INCREMENT PRIMARY KEY)",
 		output: "create table aipk (\n\tid INT auto_increment primary key\n)",
+	}, {
+		// This test case is added because MySQL supports this behaviour.
+		// It allows the user to specify null and not null multiple times.
+		// The last value specified is used.
+		input:  "create table foo (f timestamp null not null , g timestamp not null null)",
+		output: "create table foo (\n\tf timestamp not null,\n\tg timestamp null\n)",
 	}, {
 		input: "alter vschema create vindex hash_vdx using hash",
 	}, {
@@ -1271,8 +1291,11 @@ var (
 		input:  "drop view a,B,c",
 		output: "drop view a, b, c",
 	}, {
-		input:  "drop table a",
-		output: "drop table a",
+		input: "drop table a",
+	}, {
+		input: "drop /*vt+ strategy=online */ table if exists a",
+	}, {
+		input: "drop /*vt+ strategy=online */ table a",
 	}, {
 		input:  "drop table a, b",
 		output: "drop table a, b",
@@ -1503,6 +1526,14 @@ var (
 		input:  "show session variables",
 		output: "show variables",
 	}, {
+		input: "show global vgtid_executed",
+	}, {
+		input: "show global vgtid_executed from ks",
+	}, {
+		input: "show global gtid_executed",
+	}, {
+		input: "show global gtid_executed from ks",
+	}, {
 		input:  "show vitess_keyspaces",
 		output: "show keyspaces",
 	}, {
@@ -1536,6 +1567,8 @@ var (
 		input: "show vitess_migrations like '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90'",
 	}, {
 		input: "revert vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90'",
+	}, {
+		input: "revert /*vt+ uuid=123 */ vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90'",
 	}, {
 		input: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' retry",
 	}, {
@@ -1795,12 +1828,12 @@ var (
 		input:  "CREATE DATABASE /*!32312 IF NOT EXISTS*/ `mysql` /*!40100 DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci */ /*!80016 DEFAULT ENCRYPTION='N' */;",
 		output: "create database if not exists mysql default character set utf8mb4 collate utf8mb4_0900_ai_ci",
 	}, {
-		input: "drop database /* simple */ test_db",
+		input: "drop /* simple */ database test_db",
 	}, {
 		input:  "drop schema test_db",
 		output: "drop database test_db",
 	}, {
-		input: "drop database /* simple */ if exists test_db",
+		input: "drop /* simple */ database if exists test_db",
 	}, {
 		input:  "delete a.*, b.* from tbl_a a, tbl_b b where a.id = b.id and b.name = 'test'",
 		output: "delete a, b from tbl_a as a, tbl_b as b where a.id = b.id and b.`name` = 'test'",
@@ -1980,7 +2013,7 @@ func TestInvalid(t *testing.T) {
 		err:   "syntax error",
 	}, {
 		input: "/*!*/",
-		err:   "Query was empty",
+		err:   "query was empty",
 	}}
 
 	for _, tcase := range invalidSQL {
@@ -2017,6 +2050,9 @@ func TestCaseSensitivity(t *testing.T) {
 	}, {
 		input:  "alter table A rename to B",
 		output: "alter table A rename B",
+	}, {
+		input:  "alter table `A r` rename to `B r`",
+		output: "alter table `A r` rename `B r`",
 	}, {
 		input: "rename table A to B",
 	}, {
@@ -2289,10 +2325,16 @@ func TestConvert(t *testing.T) {
 		output: "syntax error at position 33",
 	}, {
 		input:  "/* a comment */",
-		output: "Query was empty",
+		output: "query was empty",
 	}, {
 		input:  "set transaction isolation level 12345",
 		output: "syntax error at position 38 near '12345'",
+	}, {
+		input:  "@",
+		output: "syntax error at position 2",
+	}, {
+		input:  "@@",
+		output: "syntax error at position 3",
 	}}
 
 	for _, tcase := range invalidSQL {
@@ -2556,6 +2598,14 @@ func TestCreateTable(t *testing.T) {
 			"	col_multipolygon2 multipolygon not null\n" +
 			")",
 
+		// test null columns
+		"create table foo (\n" +
+			"	id int primary key,\n" +
+			"	a varchar(255) null,\n" +
+			"	b varchar(255) null default 'foo',\n" +
+			"	c timestamp null default current_timestamp()\n" +
+			")",
+
 		// test defining indexes separately
 		"create table t (\n" +
 			"	id int auto_increment,\n" +
@@ -2631,6 +2681,15 @@ func TestCreateTable(t *testing.T) {
 			"	constraint second_ibfk_1 foreign key (k, j) references simple (a, b) on update no action,\n" +
 			"	constraint second_ibfk_1 foreign key (k, j) references simple (a, b) on update cascade\n" +
 			")",
+
+		// constraint name with spaces
+		"create table `Post With Space` (\n" +
+			"	id int(11) not null auto_increment,\n" +
+			"	user_id int(11) not null,\n" +
+			"	primary key (id),\n" +
+			"	unique key post_user_unique (user_id),\n" +
+			"	constraint `Post With Space_ibfk_1` foreign key (user_id) references `User` (id)\n" +
+			") ENGINE Innodb",
 
 		// table options
 		"create table t (\n" +
@@ -3074,11 +3133,6 @@ var (
 	}, {
 		input:        "select /* aa",
 		output:       "syntax error at position 13 near '/* aa'",
-		excludeMulti: true,
-	}, {
-		// non_reserved keywords are currently not permitted everywhere
-		input:        "create database repair",
-		output:       "syntax error at position 23 near 'repair'",
 		excludeMulti: true,
 	}}
 )

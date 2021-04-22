@@ -22,6 +22,11 @@ import (
 	"sort"
 	"strings"
 
+	"vitess.io/vitess/go/bytes2"
+
+	"vitess.io/vitess/go/vt/binlog/binlogplayer"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 
@@ -47,6 +52,7 @@ type ReplicatorPlan struct {
 	TargetTables  map[string]*TablePlan
 	TablePlans    map[string]*TablePlan
 	PKInfoMap     map[string][]*PrimaryKeyInfo
+	stats         *binlogplayer.Stats
 }
 
 // buildExecution plan uses the field info as input and the partially built
@@ -89,6 +95,7 @@ func (rp *ReplicatorPlan) buildFromFields(tableName string, lastpk *sqltypes.Res
 		name:    sqlparser.NewTableIdent(tableName),
 		lastpk:  lastpk,
 		pkInfos: rp.PKInfoMap[tableName],
+		stats:   rp.stats,
 	}
 	for _, field := range fields {
 		colName := sqlparser.NewColIdent(field.Name)
@@ -173,6 +180,7 @@ type TablePlan struct {
 	// PKReferences is used to check if an event changed
 	// a primary key column (row move).
 	PKReferences []string
+	Stats        *binlogplayer.Stats
 }
 
 // MarshalJSON performs a custom JSON Marshalling.
@@ -201,27 +209,67 @@ func (tp *TablePlan) MarshalJSON() ([]byte, error) {
 	return json.Marshal(&v)
 }
 
-func (tp *TablePlan) applyBulkInsert(rows *binlogdatapb.VStreamRowsResponse, executor func(string) (*sqltypes.Result, error)) (*sqltypes.Result, error) {
-	bindvars := make(map[string]*querypb.BindVariable, len(tp.Fields))
-	var buf strings.Builder
-	if err := tp.BulkInsertFront.Append(&buf, nil, nil); err != nil {
-		return nil, err
-	}
-	buf.WriteString(" values ")
-	separator := ""
-	for _, row := range rows.Rows {
-		vals := sqltypes.MakeRowTrusted(tp.Fields, row)
-		for i, field := range tp.Fields {
-			bindvars["a_"+field.Name] = sqltypes.ValueBindVariable(vals[i])
+func (tp *TablePlan) applyBulkInsert(sqlbuffer *bytes2.Buffer, rows *binlogdatapb.VStreamRowsResponse, executor func(string) (*sqltypes.Result, error)) (*sqltypes.Result, error) {
+	sqlbuffer.Reset()
+	sqlbuffer.WriteString(tp.BulkInsertFront.Query)
+	sqlbuffer.WriteString(" values ")
+
+	for i, row := range rows.Rows {
+		if i > 0 {
+			sqlbuffer.WriteString(", ")
 		}
-		buf.WriteString(separator)
-		separator = ", "
-		tp.BulkInsertValues.Append(&buf, bindvars, nil)
+		if err := tp.BulkInsertValues.AppendFromRow(sqlbuffer, tp.Fields, row); err != nil {
+			return nil, err
+		}
 	}
 	if tp.BulkInsertOnDup != nil {
-		tp.BulkInsertOnDup.Append(&buf, nil, nil)
+		sqlbuffer.WriteString(tp.BulkInsertOnDup.Query)
 	}
-	return executor(buf.String())
+	return executor(sqlbuffer.StringUnsafe())
+}
+
+// During the copy phase we run catchup and fastforward, which stream binlogs. While streaming we should only process
+// rows whose PK has already been copied. Ideally we should compare the PKs before applying the change and never send
+// such rows to the target mysql server. However reliably comparing primary keys in a manner compatible to MySQL will require a lot of
+// coding: consider composite PKs, character sets, collations ... So we send these rows to the mysql server which then does the comparison
+// in sql, through where clauses like "pk_val <= last_seen_pk".
+//
+// But this does generate a lot of unnecessary load of, effectively, no-ops since the where
+// clauses are always false. This can create a significant cpu load on the target for high qps servers resulting in a
+// much lower copy bandwidth (or provisioning more powerful servers).
+// isOutsidePKRange currently checks for rows with single primary keys which are currently comparable in Vitess:
+// (see NullsafeCompare() for types supported). It returns true if pk is not to be applied
+//
+// At this time we have decided to only perform this for Insert statements. Insert statements form a significant majority of
+// the generated noop load during catchup and are easier to test for. Update and Delete statements are very difficult to
+// unit test reliably and without flakiness with our current test framework. So as a pragmatic decision we support Insert
+// now and punt on the others.
+func (tp *TablePlan) isOutsidePKRange(bindvars map[string]*querypb.BindVariable, before, after bool, stmtType string) bool {
+	// added empty comments below, otherwise gofmt removes the spaces between the bitwise & and obfuscates this check!
+	if *vreplicationExperimentalFlags /**/ & /**/ vreplicationExperimentalFlagOptimizeInserts == 0 {
+		return false
+	}
+	// Ensure there is one and only one value in lastpk and pkrefs.
+	if tp.Lastpk != nil && len(tp.Lastpk.Fields) == 1 && len(tp.Lastpk.Rows) == 1 && len(tp.Lastpk.Rows[0]) == 1 && len(tp.PKReferences) == 1 {
+		// check again that this is an insert
+		var bindvar *querypb.BindVariable
+		switch {
+		case !before && after:
+			bindvar = bindvars["a_"+tp.PKReferences[0]]
+		}
+		if bindvar == nil { //should never happen
+			return false
+		}
+
+		rowVal, _ := sqltypes.BindVariableToValue(bindvar)
+		result, err := evalengine.NullsafeCompare(rowVal, tp.Lastpk.Rows[0][0])
+		// If rowVal is > last pk, transaction will be a noop, so don't apply this statement
+		if err == nil && result > 0 {
+			tp.Stats.NoopQueryCount.Add(stmtType, 1)
+			return true
+		}
+	}
+	return false
 }
 
 func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor func(string) (*sqltypes.Result, error)) (*sqltypes.Result, error) {
@@ -244,6 +292,10 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 	}
 	switch {
 	case !before && after:
+		// only apply inserts for rows whose primary keys are within the range of rows already copied
+		if tp.isOutsidePKRange(bindvars, before, after, "insert") {
+			return nil, nil
+		}
 		return execParsedQuery(tp.Insert, bindvars, executor)
 	case before && !after:
 		if tp.Delete == nil {

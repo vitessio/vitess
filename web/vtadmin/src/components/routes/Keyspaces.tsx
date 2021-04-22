@@ -18,6 +18,7 @@ import * as React from 'react';
 import { useKeyspaces } from '../../hooks/api';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import { vtadmin as pb } from '../../proto/vtadmin';
+import { DataCell } from '../dataTable/DataCell';
 import { DataTable } from '../dataTable/DataTable';
 
 export const Keyspaces = () => {
@@ -31,13 +32,13 @@ export const Keyspaces = () => {
     const renderRows = (rows: pb.Keyspace[]) =>
         rows.map((keyspace, idx) => (
             <tr key={idx}>
-                <td>{keyspace.cluster?.name}</td>
-                <td>{keyspace.keyspace?.name}</td>
+                <DataCell>{keyspace.cluster?.name}</DataCell>
+                <DataCell>{keyspace.keyspace?.name}</DataCell>
             </tr>
         ));
 
     return (
-        <div>
+        <div className="max-width-content">
             <h1>Keyspaces</h1>
             <DataTable columns={['Cluster', 'Keyspace']} data={rows} renderRows={renderRows} />
         </div>

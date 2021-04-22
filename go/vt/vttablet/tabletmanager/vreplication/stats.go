@@ -226,6 +226,39 @@ func (st *vrStats) register() {
 		})
 
 	stats.NewGaugesFuncWithMultiLabels(
+		"VReplicationNoopQueryCount",
+		"vreplication noop query counts per stream",
+		[]string{"source_keyspace", "source_shard", "workflow", "counts", "phase"},
+		func() map[string]int64 {
+			st.mu.Lock()
+			defer st.mu.Unlock()
+			result := make(map[string]int64, len(st.controllers))
+			for _, ct := range st.controllers {
+				for label, count := range ct.blpStats.NoopQueryCount.Counts() {
+					if label == "" {
+						continue
+					}
+					result[ct.source.Keyspace+"."+ct.source.Shard+"."+ct.workflow+"."+fmt.Sprintf("%v", ct.id)+"."+label] = count
+				}
+			}
+			return result
+		})
+
+	stats.NewCounterFunc(
+		"VReplicationNoopQueryCountTotal",
+		"vreplication query noop counts aggregated across all streams",
+		func() int64 {
+			st.mu.Lock()
+			defer st.mu.Unlock()
+			result := int64(0)
+			for _, ct := range st.controllers {
+				for _, count := range ct.blpStats.NoopQueryCount.Counts() {
+					result += count
+				}
+			}
+			return result
+		})
+	stats.NewGaugesFuncWithMultiLabels(
 		"VReplicationCopyRowCount",
 		"vreplication rows copied in copy phase per stream",
 		[]string{"source_keyspace", "source_shard", "workflow", "counts"},
@@ -288,7 +321,7 @@ func (st *vrStats) register() {
 			result := make(map[string]int64)
 			for _, ct := range st.controllers {
 				for key, val := range ct.blpStats.ErrorCounts.Counts() {
-					result[fmt.Sprintf("%d_%s", ct.id, key)] = val
+					result[fmt.Sprintf("%d.%s", ct.id, key)] = val
 				}
 			}
 			return result
@@ -353,6 +386,7 @@ func (st *vrStats) status() *EngineStatus {
 			PhaseTimings:        ct.blpStats.PhaseTimings.Counts(),
 			CopyRowCount:        ct.blpStats.CopyRowCount.Get(),
 			CopyLoopCount:       ct.blpStats.CopyLoopCount.Get(),
+			NoopQueryCounts:     ct.blpStats.NoopQueryCount.Counts(),
 		}
 		i++
 	}
@@ -384,6 +418,7 @@ type ControllerStatus struct {
 	PhaseTimings        map[string]int64
 	CopyRowCount        int64
 	CopyLoopCount       int64
+	NoopQueryCounts     map[string]int64
 }
 
 var vreplicationTemplate = `

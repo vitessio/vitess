@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/vt/log"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/assert"
@@ -394,6 +395,45 @@ func TestReservedConnDML(t *testing.T) {
 	exec(t, conn, `begin`)
 	exec(t, conn, `insert into allDefaults () values ()`)
 	exec(t, conn, `commit`)
+}
+
+func TestNumericPrecisionScale(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	vtParams := mysql.ConnParams{
+		Host: "localhost",
+		Port: clusterInstance.VtgateMySQLPort,
+	}
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	_ = exec(t, conn, "CREATE TABLE `a` (`one` bigint NOT NULL PRIMARY KEY) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4")
+	require.NoError(t, err)
+	defer exec(t, conn, "drop table `a`")
+
+	qr := exec(t, conn, "select numeric_precision, numeric_scale from information_schema.columns where table_name = 'a'")
+	require.Equal(t, 1, len(qr.Rows))
+
+	/*
+		We expect UINT64 to be returned as type for field and rows from VTGate to client.
+
+		require.Equal(t, querypb.Type_UINT64, qr.Fields[0].Type)
+		require.Equal(t, querypb.Type_UINT64, qr.Fields[1].Type)
+		require.Equal(t, sqltypes.Uint64, qr.Rows[0][0].Type())
+		require.Equal(t, sqltypes.Uint64, qr.Rows[0][1].Type())
+
+		But, the field query from mysql returns field at UINT32 and row types as UINT64.
+		Our conversion on VTGate on receiving data from VTTablet the Rows are converted to Field Types.
+		So, we see UINT32 for both fields and rows.
+
+		This issue is only with MySQL 8.0. In CI we use 5.7 as well. So asserting with both the values.
+	*/
+
+	assert.True(t, qr.Fields[0].Type == querypb.Type_UINT64 || qr.Fields[0].Type == querypb.Type_UINT32)
+	assert.True(t, qr.Fields[1].Type == querypb.Type_UINT64 || qr.Fields[1].Type == querypb.Type_UINT32)
+	assert.True(t, qr.Rows[0][0].Type() == sqltypes.Uint64 || qr.Rows[0][0].Type() == sqltypes.Uint32)
+	assert.True(t, qr.Rows[0][1].Type() == sqltypes.Uint64 || qr.Rows[0][1].Type() == sqltypes.Uint32)
 }
 
 func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {

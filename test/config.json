@@ -23,6 +23,17 @@
 			"RetryMax": 0,
 			"Tags": []
 		},
+		"e2e": {
+			"File": "",
+			"Args": [],
+			"Command": [
+				"tools/e2e_test_runner.sh"
+			],
+			"Manual": false,
+			"Shard": "",
+			"RetryMax": 0,
+			"Tags": []
+		},
 		"e2e_race": {
 			"File": "",
 			"Args": [],
@@ -55,6 +66,39 @@
 			],
 			"Manual": false,
 			"Shard": "5",
+			"RetryMax": 0,
+			"Tags": []
+		},
+		"local_example": {
+			"File": "",
+			"Args": [],
+			"Command": [
+				"test/local_example.sh"
+			],
+			"Manual": false,
+			"Shard": "",
+			"RetryMax": 0,
+			"Tags": []
+		},
+		"legacy_local_example": {
+			"File": "",
+			"Args": [],
+			"Command": [
+				"test/legacy_local_example.sh"
+			],
+			"Manual": false,
+			"Shard": "",
+			"RetryMax": 0,
+			"Tags": []
+		},
+		"region_example": {
+			"File": "",
+			"Args": [],
+			"Command": [
+				"test/region_example.sh"
+			],
+			"Manual": false,
+			"Shard": "",
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -299,6 +343,24 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "onlineddl_revert",
+			"RetryMax": 0,
+			"Tags": []
+		},
+		"onlineddl_declarative": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl/declarative"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "onlineddl_declarative",
+			"RetryMax": 0,
+			"Tags": []
+		},
+		"onlineddl_singleton": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl/singleton"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "onlineddl_singleton",
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -547,6 +609,24 @@
 		"vtgate_setstatement": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/reservedconn"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "17",
+			"RetryMax": 0,
+			"Tags": []
+		},
+		"vtgate_reserved_conn1": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/reservedconn/reconnect1"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "17",
+			"RetryMax": 0,
+			"Tags": []
+		},
+		"vtgate_reserved_conn2": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/reservedconn/reconnect2"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "17",

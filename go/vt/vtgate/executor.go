@@ -22,7 +22,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -77,10 +76,6 @@ var (
 )
 
 const (
-	utf8          = "utf8"
-	utf8mb4       = "utf8mb4"
-	both          = "both"
-	charset       = "charset"
 	bindVarPrefix = "__vt"
 )
 
@@ -160,7 +155,11 @@ func (e *Executor) Execute(ctx context.Context, method string, safeSession *Safe
 	saveSessionStats(safeSession, stmtType, result, err)
 	if result != nil && len(result.Rows) > *warnMemoryRows {
 		warnings.Add("ResultsExceeded", 1)
-		log.Warningf("%q exceeds warning threshold of max memory rows: %v", sql, *warnMemoryRows)
+		piiSafeSQL, err := sqlparser.RedactSQLQuery(sql)
+		if err != nil {
+			piiSafeSQL = logStats.StmtType
+		}
+		log.Warningf("%q exceeds warning threshold of max memory rows: %v", piiSafeSQL, *warnMemoryRows)
 	}
 
 	logStats.Send()
@@ -444,11 +443,12 @@ func (e *Executor) CloseSession(ctx context.Context, safeSession *SafeSession) e
 }
 
 func (e *Executor) handleSet(ctx context.Context, sql string, logStats *LogStats) (*sqltypes.Result, error) {
-	stmt, reservedVars, err := sqlparser.Parse2(sql)
+	stmt, reserved, err := sqlparser.Parse2(sql)
 	if err != nil {
 		return nil, err
 	}
-	rewrittenAST, err := sqlparser.PrepareAST(stmt, reservedVars, nil, "vtg", false, "")
+	reservedVars := sqlparser.NewReservedVars("vtg", reserved)
+	rewrittenAST, err := sqlparser.PrepareAST(stmt, reservedVars, nil, false, "")
 	if err != nil {
 		return nil, err
 	}
@@ -475,8 +475,7 @@ func (e *Executor) handleSet(ctx context.Context, sql string, logStats *LogStats
 	for _, expr := range set.Exprs {
 		// This is what correctly allows us to handle queries such as "set @@session.`autocommit`=1"
 		// it will remove backticks and double quotes that might surround the part after the first period
-		_, out := sqlparser.NewStringTokenizer(expr.Name.Lowered()).Scan()
-		name := string(out)
+		_, name := sqlparser.NewStringTokenizer(expr.Name.Lowered()).Scan()
 		switch expr.Scope {
 		case sqlparser.VitessMetadataScope:
 			value, err = getValueFor(expr)
@@ -505,15 +504,15 @@ func getValueFor(expr *sqlparser.SetExpr) (interface{}, error) {
 	case *sqlparser.Literal:
 		switch expr.Type {
 		case sqlparser.StrVal:
-			return strings.ToLower(string(expr.Val)), nil
+			return strings.ToLower(expr.Val), nil
 		case sqlparser.IntVal:
-			num, err := strconv.ParseInt(string(expr.Val), 0, 64)
+			num, err := strconv.ParseInt(expr.Val, 0, 64)
 			if err != nil {
 				return nil, err
 			}
 			return num, nil
 		case sqlparser.FloatVal:
-			num, err := strconv.ParseFloat(string(expr.Val), 64)
+			num, err := strconv.ParseFloat(expr.Val, 64)
 			if err != nil {
 				return nil, err
 			}
@@ -1233,12 +1232,13 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 		return nil, errors.New("vschema not initialized")
 	}
 
-	stmt, reservedVars, err := sqlparser.Parse2(sql)
+	stmt, reserved, err := sqlparser.Parse2(sql)
 	if err != nil {
 		return nil, err
 	}
 	query := sql
 	statement := stmt
+	reservedVars := sqlparser.NewReservedVars("vtg", reserved)
 	bindVarNeeds := &sqlparser.BindVarNeeds{}
 	if !sqlparser.IgnoreMaxPayloadSizeDirective(statement) && !isValidPayloadSize(query) {
 		return nil, vterrors.NewErrorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.NetPacketTooLarge, "query payload size above threshold")
@@ -1249,7 +1249,7 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 	// Normalize if possible and retry.
 	if (e.normalize && sqlparser.CanNormalize(stmt)) || sqlparser.MustRewriteAST(stmt) {
 		parameterize := e.normalize // the public flag is called normalize
-		result, err := sqlparser.PrepareAST(stmt, reservedVars, bindVars, "vtg", parameterize, vcursor.keyspace)
+		result, err := sqlparser.PrepareAST(stmt, reservedVars, bindVars, parameterize, vcursor.keyspace)
 		if err != nil {
 			return nil, err
 		}
@@ -1383,98 +1383,6 @@ func buildVarCharRow(values ...string) []sqltypes.Value {
 		row[i] = sqltypes.NewVarChar(v)
 	}
 	return row
-}
-
-func generateCharsetRows(showFilter *sqlparser.ShowFilter, colNames []string) ([][]sqltypes.Value, error) {
-	if showFilter == nil {
-		return buildCharsetRows(both), nil
-	}
-
-	var filteredColName string
-	var err error
-
-	if showFilter.Like != "" {
-		filteredColName, err = checkLikeOpt(showFilter.Like, colNames)
-		if err != nil {
-			return nil, err
-		}
-
-	} else {
-		cmpExp, ok := showFilter.Filter.(*sqlparser.ComparisonExpr)
-		if !ok {
-			return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.SyntaxError, "expect a 'LIKE' or '=' expression")
-		}
-
-		left, ok := cmpExp.Left.(*sqlparser.ColName)
-		if !ok {
-			return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.SyntaxError, "expect left side to be 'column'")
-		}
-		leftOk := left.Name.EqualString(charset)
-
-		if leftOk {
-			literal, ok := cmpExp.Right.(*sqlparser.Literal)
-			if !ok {
-				return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.SyntaxError, "expect right side to be string")
-			}
-			rightString := string(literal.Val)
-
-			switch cmpExp.Operator {
-			case sqlparser.EqualOp:
-				for _, colName := range colNames {
-					if rightString == colName {
-						filteredColName = colName
-					}
-				}
-			case sqlparser.LikeOp:
-				filteredColName, err = checkLikeOpt(rightString, colNames)
-				if err != nil {
-					return nil, err
-				}
-			}
-		}
-
-	}
-
-	return buildCharsetRows(filteredColName), nil
-}
-
-func buildCharsetRows(colName string) [][]sqltypes.Value {
-	row0 := buildVarCharRow(
-		"utf8",
-		"UTF-8 Unicode",
-		"utf8_general_ci")
-	row0 = append(row0, sqltypes.NewInt32(3))
-	row1 := buildVarCharRow(
-		"utf8mb4",
-		"UTF-8 Unicode",
-		"utf8mb4_general_ci")
-	row1 = append(row1, sqltypes.NewInt32(4))
-
-	switch colName {
-	case utf8:
-		return [][]sqltypes.Value{row0}
-	case utf8mb4:
-		return [][]sqltypes.Value{row1}
-	case both:
-		return [][]sqltypes.Value{row0, row1}
-	}
-
-	return [][]sqltypes.Value{}
-}
-
-func checkLikeOpt(likeOpt string, colNames []string) (string, error) {
-	likeRegexp := strings.ReplaceAll(likeOpt, "%", ".*")
-	for _, v := range colNames {
-		match, err := regexp.MatchString(likeRegexp, v)
-		if err != nil {
-			return "", err
-		}
-		if match {
-			return v, nil
-		}
-	}
-
-	return "", nil
 }
 
 // isValidPayloadSize validates whether a query payload is above the

@@ -37,6 +37,8 @@ type DDL struct {
 	NormalDDL *Send
 	OnlineDDL *OnlineDDL
 
+	OnlineDDLEnabled bool
+
 	CreateTempTable bool
 
 	noTxNeeded
@@ -77,7 +79,7 @@ func (ddl *DDL) GetTableName() string {
 func (ddl *DDL) isOnlineSchemaDDL() bool {
 	switch ddl.DDL.GetAction() {
 	case sqlparser.CreateDDLAction, sqlparser.DropDDLAction, sqlparser.AlterDDLAction:
-		return !ddl.OnlineDDL.Strategy.IsDirect()
+		return !ddl.OnlineDDL.DDLStrategySetting.Strategy.IsDirect()
 	}
 	return false
 }
@@ -90,14 +92,16 @@ func (ddl *DDL) Execute(vcursor VCursor, bindVars map[string]*query.BindVariable
 		return ddl.NormalDDL.Execute(vcursor, bindVars, wantfields)
 	}
 
-	strategy, options, err := schema.ParseDDLStrategy(vcursor.Session().GetDDLStrategy())
+	ddlStrategySetting, err := schema.ParseDDLStrategy(vcursor.Session().GetDDLStrategy())
 	if err != nil {
 		return nil, err
 	}
-	ddl.OnlineDDL.Strategy = strategy
-	ddl.OnlineDDL.Options = options
+	ddl.OnlineDDL.DDLStrategySetting = ddlStrategySetting
 
 	if ddl.isOnlineSchemaDDL() {
+		if !ddl.OnlineDDLEnabled {
+			return nil, schema.ErrOnlineDDLDisabled
+		}
 		return ddl.OnlineDDL.Execute(vcursor, bindVars, wantfields)
 	}
 

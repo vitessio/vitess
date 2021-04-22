@@ -16,10 +16,6 @@ limitations under the License.
 
 package sqlparser
 
-import (
-	"fmt"
-)
-
 // The rewriter was heavily inspired by https://github.com/golang/tools/blob/master/go/ast/astutil/rewrite.go
 
 // Rewrite traverses a syntax tree recursively, starting with root,
@@ -38,7 +34,7 @@ import (
 // Only fields that refer to AST nodes are considered children;
 // i.e., fields of basic types (strings, []byte, etc.) are ignored.
 //
-func Rewrite(node SQLNode, pre, post ApplyFunc) (result SQLNode, err error) {
+func Rewrite(node SQLNode, pre, post ApplyFunc) (result SQLNode) {
 	parent := &struct{ SQLNode }{node}
 
 	// this is the root-replacer, used when the user replaces the root of the ast
@@ -51,12 +47,9 @@ func Rewrite(node SQLNode, pre, post ApplyFunc) (result SQLNode, err error) {
 		post: post,
 	}
 
-	err = a.rewriteSQLNode(parent, node, replacer)
-	if err != nil && err != errAbort {
-		return nil, err
-	}
+	a.rewriteSQLNode(parent, node, replacer)
 
-	return parent.SQLNode, nil
+	return parent.SQLNode
 }
 
 // An ApplyFunc is invoked by Rewrite for each node n, even if n is nil,
@@ -66,8 +59,6 @@ func Rewrite(node SQLNode, pre, post ApplyFunc) (result SQLNode, err error) {
 // The return value of ApplyFunc controls the syntax tree traversal.
 // See Rewrite for details.
 type ApplyFunc func(*Cursor) bool
-
-var errAbort = fmt.Errorf("this error is to abort the rewriter, it is not an actual error")
 
 // A Cursor describes a node encountered during Apply.
 // Information about the node and its parent is available

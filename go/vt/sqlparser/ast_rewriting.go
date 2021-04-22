@@ -17,6 +17,8 @@ limitations under the License.
 package sqlparser
 
 import (
+	"strconv"
+
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -32,10 +34,119 @@ type RewriteASTResult struct {
 	AST Statement // The rewritten AST
 }
 
+// ReservedVars keeps track of the bind variable names that have already been used
+// in a parsed query.
+type ReservedVars struct {
+	prefix       string
+	reserved     BindVars
+	next         []byte
+	counter      int
+	fast, static bool
+}
+
+// ReserveAll tries to reserve all the given variable names. If they're all available,
+// they are reserved and the function returns true. Otherwise the function returns false.
+func (r *ReservedVars) ReserveAll(names ...string) bool {
+	for _, name := range names {
+		if _, ok := r.reserved[name]; ok {
+			return false
+		}
+	}
+	for _, name := range names {
+		r.reserved[name] = struct{}{}
+	}
+	return true
+}
+
+// ReserveColName reserves a variable name for the given column; if a variable
+// with the same name already exists, it'll be suffixed with a numberic identifier
+// to make it unique.
+func (r *ReservedVars) ReserveColName(col *ColName) string {
+	compliantName := col.CompliantName()
+	if r.fast && strings.HasPrefix(compliantName, r.prefix) {
+		compliantName = "_" + compliantName
+	}
+
+	joinVar := []byte(compliantName)
+	baseLen := len(joinVar)
+	i := int64(1)
+
+	for {
+		if _, ok := r.reserved[string(joinVar)]; !ok {
+			return string(joinVar)
+		}
+		joinVar = strconv.AppendInt(joinVar[:baseLen], i, 10)
+		i++
+	}
+}
+
+const staticBvar10 = "vtg0vtg1vtg2vtg3vtg4vtg5vtg6vtg7vtg8vtg9"
+const staticBvar100 = "vtg10vtg11vtg12vtg13vtg14vtg15vtg16vtg17vtg18vtg19vtg20vtg21vtg22vtg23vtg24vtg25vtg26vtg27vtg28vtg29vtg30vtg31vtg32vtg33vtg34vtg35vtg36vtg37vtg38vtg39vtg40vtg41vtg42vtg43vtg44vtg45vtg46vtg47vtg48vtg49vtg50vtg51vtg52vtg53vtg54vtg55vtg56vtg57vtg58vtg59vtg60vtg61vtg62vtg63vtg64vtg65vtg66vtg67vtg68vtg69vtg70vtg71vtg72vtg73vtg74vtg75vtg76vtg77vtg78vtg79vtg80vtg81vtg82vtg83vtg84vtg85vtg86vtg87vtg88vtg89vtg90vtg91vtg92vtg93vtg94vtg95vtg96vtg97vtg98vtg99"
+
+func (r *ReservedVars) nextUnusedVar() string {
+	if r.fast {
+		r.counter++
+
+		if r.static {
+			switch {
+			case r.counter < 10:
+				ofs := r.counter * 4
+				return staticBvar10[ofs : ofs+4]
+			case r.counter < 100:
+				ofs := (r.counter - 10) * 5
+				return staticBvar100[ofs : ofs+5]
+			}
+		}
+
+		r.next = strconv.AppendInt(r.next[:len(r.prefix)], int64(r.counter), 10)
+		return string(r.next)
+	}
+
+	for {
+		r.counter++
+		r.next = strconv.AppendInt(r.next[:len(r.prefix)], int64(r.counter), 10)
+
+		if _, ok := r.reserved[string(r.next)]; !ok {
+			bvar := string(r.next)
+			r.reserved[bvar] = struct{}{}
+			return bvar
+		}
+	}
+}
+
+// NewReservedVars allocates a ReservedVar instance that will generate unique
+// variable names starting with the given `prefix` and making sure that they
+// don't conflict with the given set of `known` variables.
+func NewReservedVars(prefix string, known BindVars) *ReservedVars {
+	rv := &ReservedVars{
+		prefix:   prefix,
+		counter:  0,
+		reserved: known,
+		fast:     true,
+		next:     []byte(prefix),
+	}
+
+	if prefix != "" && prefix[0] == '_' {
+		panic("cannot reserve variables with a '_' prefix")
+	}
+
+	for bvar := range known {
+		if strings.HasPrefix(bvar, prefix) {
+			rv.fast = false
+			break
+		}
+	}
+
+	if prefix == "vtg" {
+		rv.static = true
+	}
+	return rv
+}
+
 // PrepareAST will normalize the query
-func PrepareAST(in Statement, reservedVars BindVars, bindVars map[string]*querypb.BindVariable, prefix string, parameterize bool, keyspace string) (*RewriteASTResult, error) {
+func PrepareAST(in Statement, reservedVars *ReservedVars, bindVars map[string]*querypb.BindVariable, parameterize bool, keyspace string) (*RewriteASTResult, error) {
 	if parameterize {
-		err := Normalize(in, reservedVars, bindVars, prefix)
+		err := Normalize(in, reservedVars, bindVars)
 		if err != nil {
 			return nil, err
 		}
@@ -48,10 +159,7 @@ func RewriteAST(in Statement, keyspace string) (*RewriteASTResult, error) {
 	er := newExpressionRewriter(keyspace)
 	er.shouldRewriteDatabaseFunc = shouldRewriteDatabaseFunc(in)
 	setRewriter := &setNormalizer{}
-	result, err := Rewrite(in, er.rewrite, setRewriter.rewriteSetComingUp)
-	if err != nil {
-		return nil, err
-	}
+	result := Rewrite(in, er.rewrite, setRewriter.rewriteSetComingUp)
 	if setRewriter.err != nil {
 		return nil, setRewriter.err
 	}
@@ -122,10 +230,7 @@ const (
 func (er *expressionRewriter) rewriteAliasedExpr(node *AliasedExpr) (*BindVarNeeds, error) {
 	inner := newExpressionRewriter(er.keyspace)
 	inner.shouldRewriteDatabaseFunc = er.shouldRewriteDatabaseFunc
-	tmp, err := Rewrite(node.Expr, inner.rewrite, nil)
-	if err != nil {
-		return nil, err
-	}
+	tmp := Rewrite(node.Expr, inner.rewrite, nil)
 	newExpr, ok := tmp.(Expr)
 	if !ok {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to rewrite AST. function expected to return Expr returned a %s", String(tmp))
@@ -324,16 +429,12 @@ func (er *expressionRewriter) unnestSubQueries(cursor *Cursor, subquery *Subquer
 	er.bindVars.NoteRewrite()
 	// we need to make sure that the inner expression also gets rewritten,
 	// so we fire off another rewriter traversal here
-	rewrittenExpr, err := Rewrite(expr.Expr, er.rewrite, nil)
-	if err != nil {
-		er.err = err
-		return
-	}
+	rewrittenExpr := Rewrite(expr.Expr, er.rewrite, nil)
 	cursor.Replace(rewrittenExpr)
 }
 
 func bindVarExpression(name string) Expr {
-	return NewArgument(":" + name)
+	return NewArgument(name)
 }
 
 // SystemSchema returns true if the schema passed is system schema
@@ -347,11 +448,10 @@ func SystemSchema(schema string) bool {
 // RewriteToCNF walks the input AST and rewrites any boolean logic into CNF
 // Note: In order to re-plan, we need to empty the accumulated metadata in the AST,
 // so ColName.Metadata will be nil:ed out as part of this rewrite
-func RewriteToCNF(ast SQLNode) (SQLNode, error) {
-	var err error
+func RewriteToCNF(ast SQLNode) SQLNode {
 	for {
 		finishedRewrite := true
-		ast, err = Rewrite(ast, func(cursor *Cursor) bool {
+		ast = Rewrite(ast, func(cursor *Cursor) bool {
 			if e, isExpr := cursor.node.(Expr); isExpr {
 				rewritten, didRewrite := rewriteToCNFExpr(e)
 				if didRewrite {
@@ -364,12 +464,9 @@ func RewriteToCNF(ast SQLNode) (SQLNode, error) {
 			}
 			return true
 		}, nil)
-		if err != nil {
-			return nil, err
-		}
 
 		if finishedRewrite {
-			return ast, nil
+			return ast
 		}
 	}
 }

@@ -17,6 +17,7 @@ limitations under the License.
 package utils
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -43,11 +44,13 @@ import (
 // In Test*() function:
 //
 // mustMatch(t, want, got, "something doesn't match")
-func MustMatchFn(allowUnexportedTypes []interface{}, ignoredFields []string, extraOpts ...cmp.Option) func(t *testing.T, want, got interface{}, errMsg ...string) {
-	diffOpts := append([]cmp.Option{
-		cmp.AllowUnexported(allowUnexportedTypes...),
+func MustMatchFn(ignoredFields ...string) func(t *testing.T, want, got interface{}, errMsg ...string) {
+	diffOpts := []cmp.Option{
+		cmp.Exporter(func(reflect.Type) bool {
+			return true
+		}),
 		cmpIgnoreFields(ignoredFields...),
-	}, extraOpts...)
+	}
 	// Diffs want/got and fails with errMsg on any failure.
 	return func(t *testing.T, want, got interface{}, errMsg ...string) {
 		t.Helper()
@@ -62,7 +65,7 @@ func MustMatchFn(allowUnexportedTypes []interface{}, ignoredFields []string, ext
 // Usage in Test*() function:
 //
 // testutils.MustMatch(t, want, got, "something doesn't match")
-var MustMatch = MustMatchFn(nil, nil)
+var MustMatch = MustMatchFn()
 
 // Skips fields of pathNames for cmp.Diff.
 // Similar to standard cmpopts.IgnoreFields, but allows unexported fields.

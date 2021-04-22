@@ -82,6 +82,8 @@ var (
 	// lockHeartbeatTime is used to set the next heartbeat time.
 	lockHeartbeatTime = flag.Duration("lock_heartbeat_time", 5*time.Second, "If there is lock function used. This will keep the lock connection active by using this heartbeat")
 	warnShardedOnly   = flag.Bool("warn_sharded_only", false, "If any features that are only available in unsharded mode are used, query execution warnings will be added to the session")
+
+	foreignKeyMode = flag.String("foreign_key_mode", "allow", "This is to provide how to handle foreign key constraint in create/alter table. Valid values are: allow, disallow")
 )
 
 func getTxMode() vtgatepb.TransactionMode {
@@ -112,6 +114,8 @@ var (
 	errorCounts *stats.CountersWithMultiLabels
 
 	warnings *stats.CountersWithSingleLabel
+
+	vstreamSkewDelayCount *stats.Counter
 )
 
 // VTGate is the rpc interface to vtgate. Only one instance
@@ -153,6 +157,9 @@ func Init(ctx context.Context, serv srvtopo.Server, cell string, tabletTypesToWa
 	// catch the initial load stats.
 	vschemaCounters = stats.NewCountersWithSingleLabel("VtgateVSchemaCounts", "Vtgate vschema counts", "changes")
 
+	vstreamSkewDelayCount = stats.NewCounter("VStreamEventsDelayedBySkewAlignment",
+		"Number of events that had to wait because the skew across shards was too high")
+
 	// Build objects from low to high level.
 	// Start with the gateway. If we can't reach the topology service,
 	// we can't go on much further, so we log.Fatal out.
@@ -174,7 +181,7 @@ func Init(ctx context.Context, serv srvtopo.Server, cell string, tabletTypesToWa
 		}
 	}
 
-	if _, _, err := schema.ParseDDLStrategy(*defaultDDLStrategy); err != nil {
+	if _, err := schema.ParseDDLStrategy(*defaultDDLStrategy); err != nil {
 		log.Fatalf("Invalid value for -ddl_strategy: %v", err.Error())
 	}
 	tc := NewTxConn(gw, getTxMode())
@@ -405,8 +412,8 @@ handleError:
 }
 
 // VStream streams binlog events.
-func (vtg *VTGate) VStream(ctx context.Context, tabletType topodatapb.TabletType, vgtid *binlogdatapb.VGtid, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
-	return vtg.vsm.VStream(ctx, tabletType, vgtid, filter, send)
+func (vtg *VTGate) VStream(ctx context.Context, tabletType topodatapb.TabletType, vgtid *binlogdatapb.VGtid, filter *binlogdatapb.Filter, flags *vtgatepb.VStreamFlags, send func([]*binlogdatapb.VEvent) error) error {
+	return vtg.vsm.VStream(ctx, tabletType, vgtid, filter, flags, send)
 }
 
 // GetGatewayCacheStatus returns a displayable version of the Gateway cache.
@@ -457,6 +464,17 @@ func recordAndAnnotateError(err error, statsKey []string, request map[string]int
 		logger.Errorf("%v, request: %+v", err, request)
 	case vtrpcpb.Code_UNAVAILABLE:
 		logger.Infof("%v, request: %+v", err, request)
+	case vtrpcpb.Code_UNIMPLEMENTED:
+		sql, exists := request["Sql"]
+		if !exists {
+			return err
+		}
+		piiSafeSQL, err2 := sqlparser.RedactSQLQuery(sql.(string))
+		if err2 != nil {
+			return err
+		}
+		// log only if sql query present and able to successfully redact the PII.
+		logger.Infof("unsupported query: %q", piiSafeSQL)
 	}
 	return err
 }

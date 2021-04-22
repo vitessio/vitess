@@ -16,37 +16,101 @@
 import { orderBy } from 'lodash-es';
 import * as React from 'react';
 import { Link } from 'react-router-dom';
-import { TableDefinition, useTableDefinitions } from '../../hooks/api';
+
+import { useSchemas } from '../../hooks/api';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
+import { useSyncedURLParam } from '../../hooks/useSyncedURLParam';
+import { filterNouns } from '../../util/filterNouns';
+import { formatBytes } from '../../util/formatBytes';
+import { getTableDefinitions } from '../../util/tableDefinitions';
+import { Button } from '../Button';
+import { DataCell } from '../dataTable/DataCell';
 import { DataTable } from '../dataTable/DataTable';
+import { Icons } from '../Icon';
+import { TextInput } from '../TextInput';
+import style from './Schemas.module.scss';
+
+const TABLE_COLUMNS = [
+    'Keyspace',
+    'Table',
+    // TODO: add tooltips to explain that "approx." means something
+    // along the lines of "information_schema is an eventually correct
+    // statistical analysis, past results do not guarantee future performance,
+    // please consult an attorney and we are not a licensed medical professional".
+    // Namely, these numbers come from `information_schema`, which is never precisely
+    // correct for tables that have a high rate of updates. (The only way to get
+    // accurate numbers is to run `ANALYZE TABLE` on the tables periodically, which
+    // is out of scope for VTAdmin.)
+    <div className="text-align-right">Approx. Size</div>,
+    <div className="text-align-right">Approx. Rows</div>,
+];
 
 export const Schemas = () => {
     useDocumentTitle('Schemas');
-    const { data = [] } = useTableDefinitions();
 
-    const rows = React.useMemo(() => {
-        return orderBy(data, ['cluster.name', 'keyspace', 'tableDefinition.name']);
-    }, [data]);
+    const { data = [] } = useSchemas();
+    const { value: filter, updateValue: updateFilter } = useSyncedURLParam('filter');
 
-    const renderRows = (rows: TableDefinition[]) =>
+    const filteredData = React.useMemo(() => {
+        const tableDefinitions = getTableDefinitions(data);
+
+        const mapped = tableDefinitions.map((d) => ({
+            cluster: d.cluster?.name,
+            clusterID: d.cluster?.id,
+            keyspace: d.keyspace,
+            table: d.tableDefinition?.name,
+            _raw: d,
+        }));
+
+        const filtered = filterNouns(filter, mapped);
+        return orderBy(filtered, ['cluster', 'keyspace', 'table']);
+    }, [data, filter]);
+
+    const renderRows = (rows: typeof filteredData) =>
         rows.map((row, idx) => {
             const href =
-                row.cluster?.id && row.keyspace && row.tableDefinition?.name
-                    ? `/schema/${row.cluster.id}/${row.keyspace}/${row.tableDefinition.name}`
+                row.clusterID && row.keyspace && row.table
+                    ? `/schema/${row.clusterID}/${row.keyspace}/${row.table}`
                     : null;
             return (
                 <tr key={idx}>
-                    <td>{row.cluster?.name}</td>
-                    <td>{row.keyspace}</td>
-                    <td>{href ? <Link to={href}>{row.tableDefinition?.name}</Link> : row.tableDefinition?.name}</td>
+                    <DataCell>
+                        <div>{row.keyspace}</div>
+                        <div className="font-size-small text-color-secondary">{row.cluster}</div>
+                    </DataCell>
+                    <DataCell className="font-weight-bold">
+                        {href ? <Link to={href}>{row.table}</Link> : row.table}
+                    </DataCell>
+                    <DataCell className="text-align-right">
+                        <div>{formatBytes(row._raw.tableSize?.data_length)}</div>
+                        <div className="font-size-small text-color-secondary">
+                            {formatBytes(row._raw.tableSize?.data_length, 'B')}
+                        </div>
+                    </DataCell>
+                    <DataCell className="text-align-right">
+                        {(row._raw.tableSize?.row_count || 0).toLocaleString()}
+                    </DataCell>
                 </tr>
             );
         });
 
     return (
-        <div>
+        <div className="max-width-content">
             <h1>Schemas</h1>
-            <DataTable columns={['Cluster', 'Keyspace', 'Table']} data={rows} renderRows={renderRows} />
+            <div className={style.controls}>
+                <TextInput
+                    autoFocus
+                    iconLeft={Icons.search}
+                    onChange={(e) => updateFilter(e.target.value)}
+                    placeholder="Filter schemas"
+                    value={filter || ''}
+                />
+                <Button disabled={!filter} onClick={() => updateFilter('')} secondary>
+                    Clear filters
+                </Button>
+            </div>
+
+            <DataTable columns={TABLE_COLUMNS} data={filteredData} renderRows={renderRows} />
         </div>
     );
 };

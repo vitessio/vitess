@@ -1753,7 +1753,21 @@ Gen4 plan same as above
 
 # query trying to query two different keyspaces at the same time
 "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'user' AND TABLE_SCHEMA = 'main'"
-"two predicates for specifying the database are not supported"
+{
+  "QueryType": "SELECT",
+  "Original": "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'user' AND TABLE_SCHEMA = 'main'",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectDBA",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select * from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
+    "Query": "select * from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = :__vtschemaname and TABLE_SCHEMA = :__vtschemaname",
+    "SysTableTableSchema": "[VARBINARY(\"user\"), VARBINARY(\"main\")]"
+  }
+}
 
 # information_schema query using database() func
 "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = database()"
@@ -1786,7 +1800,7 @@ Gen4 plan same as above
     },
     "FieldQuery": "select * from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
     "Query": "select * from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = :__vtschemaname",
-    "SysTableTableSchema": "VARBINARY(\"ks\")"
+    "SysTableTableSchema": "[VARBINARY(\"ks\")]"
   }
 }
 
@@ -1821,8 +1835,8 @@ Gen4 plan same as above
     },
     "FieldQuery": "select * from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
     "Query": "select * from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = :__vtschemaname and TABLE_NAME = :__vttablename",
-    "SysTableTableName": "VARBINARY(\"route1\")",
-    "SysTableTableSchema": "VARBINARY(\"ks\")"
+    "SysTableTableName": "[VARBINARY(\"route1\")]",
+    "SysTableTableSchema": "[VARBINARY(\"ks\")]"
   }
 }
 
@@ -1840,7 +1854,7 @@ Gen4 plan same as above
     },
     "FieldQuery": "select * from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
     "Query": "select * from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = :__vtschemaname and other_column = 42",
-    "SysTableTableSchema": "VARBINARY(\"ks\")"
+    "SysTableTableSchema": "[VARBINARY(\"ks\")]"
   }
 }
 
@@ -1869,19 +1883,40 @@ Gen4 plan same as above
         "Vindex": "user_index"
       },
       {
-        "OperatorType": "Route",
-        "Variant": "SelectIN",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select id from `user` where 1 != 1",
-        "Query": "select id from `user` where :__sq_has_values1 = 1 and id in ::__vals and not (:__sq_has_values2 = 1 and id in ::__sq2)",
-        "Table": "`user`",
-        "Values": [
-          "::__sq1"
-        ],
-        "Vindex": "user_index"
+        "OperatorType": "Subquery",
+        "Variant": "PulloutIn",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectEqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select user_extra.col from user_extra where 1 != 1",
+            "Query": "select user_extra.col from user_extra where user_extra.user_id = 411",
+            "Table": "user_extra",
+            "Values": [
+              411
+            ],
+            "Vindex": "user_index"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectIN",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id from `user` where 1 != 1",
+            "Query": "select id from `user` where :__sq_has_values1 = 1 and id in ::__vals and not (:__sq_has_values2 = 1 and id in ::__sq2)",
+            "Table": "`user`",
+            "Values": [
+              "::__sq1"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
       }
     ]
   }
@@ -1901,6 +1936,6 @@ Gen4 plan same as above
     },
     "FieldQuery": "select * from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
     "Query": "select * from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = :__vtschemaname and (other_column = 42 or TABLE_SCHEMA = 'ks') and (other_column = 42 or foobar = 'value')",
-    "SysTableTableSchema": "VARBINARY(\"ks\")"
+    "SysTableTableSchema": "[VARBINARY(\"ks\")]"
   }
 }

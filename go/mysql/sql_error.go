@@ -92,46 +92,20 @@ func NewSQLErrorFromError(err error) error {
 	}
 
 	sErr := convertToMysqlError(err)
-	if _, ok := sErr.(*SQLError); ok {
-		return sErr
+	if serr, ok := sErr.(*SQLError); ok {
+		return serr
 	}
 
 	msg := err.Error()
 	match := errExtract.FindStringSubmatch(msg)
-	if len(match) < 2 {
-		// Map vitess error codes into the mysql equivalent
-		code := vterrors.Code(err)
-		num := ERUnknownError
-		ss := SSUnknownSQLState
-		switch code {
-		case vtrpcpb.Code_CANCELED, vtrpcpb.Code_DEADLINE_EXCEEDED, vtrpcpb.Code_ABORTED:
-			num = ERQueryInterrupted
-			ss = SSQueryInterrupted
-		case vtrpcpb.Code_UNKNOWN, vtrpcpb.Code_INVALID_ARGUMENT, vtrpcpb.Code_NOT_FOUND, vtrpcpb.Code_ALREADY_EXISTS,
-			vtrpcpb.Code_FAILED_PRECONDITION, vtrpcpb.Code_OUT_OF_RANGE, vtrpcpb.Code_UNAVAILABLE, vtrpcpb.Code_DATA_LOSS:
-			num = ERUnknownError
-		case vtrpcpb.Code_PERMISSION_DENIED, vtrpcpb.Code_UNAUTHENTICATED:
-			num = ERAccessDeniedError
-			ss = SSAccessDeniedError
-		case vtrpcpb.Code_RESOURCE_EXHAUSTED:
-			num = demuxResourceExhaustedErrors(err.Error())
-			ss = SSClientError
-		case vtrpcpb.Code_UNIMPLEMENTED:
-			num = ERNotSupportedYet
-			ss = SSClientError
-		case vtrpcpb.Code_INTERNAL:
-			num = ERInternalError
-			ss = SSUnknownSQLState
-		}
-
-		// Not found, build a generic SQLError.
-		return &SQLError{
-			Num:     num,
-			State:   ss,
-			Message: msg,
-		}
+	if len(match) >= 2 {
+		return extractSQLErrorFromMessage(match, msg)
 	}
 
+	return mapToSQLErrorFromErrorCode(err, msg)
+}
+
+func extractSQLErrorFromMessage(match []string, msg string) *SQLError {
 	num, err := strconv.Atoi(match[1])
 	if err != nil {
 		return &SQLError{
@@ -141,12 +115,44 @@ func NewSQLErrorFromError(err error) error {
 		}
 	}
 
-	serr := &SQLError{
+	return &SQLError{
 		Num:     num,
 		State:   match[2],
 		Message: msg,
 	}
-	return serr
+}
+
+func mapToSQLErrorFromErrorCode(err error, msg string) *SQLError {
+	// Map vitess error codes into the mysql equivalent
+	num := ERUnknownError
+	ss := SSUnknownSQLState
+	switch vterrors.Code(err) {
+	case vtrpcpb.Code_CANCELED, vtrpcpb.Code_DEADLINE_EXCEEDED, vtrpcpb.Code_ABORTED:
+		num = ERQueryInterrupted
+		ss = SSQueryInterrupted
+	case vtrpcpb.Code_UNKNOWN, vtrpcpb.Code_INVALID_ARGUMENT, vtrpcpb.Code_NOT_FOUND, vtrpcpb.Code_ALREADY_EXISTS,
+		vtrpcpb.Code_FAILED_PRECONDITION, vtrpcpb.Code_OUT_OF_RANGE, vtrpcpb.Code_UNAVAILABLE, vtrpcpb.Code_DATA_LOSS:
+		num = ERUnknownError
+	case vtrpcpb.Code_PERMISSION_DENIED, vtrpcpb.Code_UNAUTHENTICATED:
+		num = ERAccessDeniedError
+		ss = SSAccessDeniedError
+	case vtrpcpb.Code_RESOURCE_EXHAUSTED:
+		num = demuxResourceExhaustedErrors(err.Error())
+		ss = SSClientError
+	case vtrpcpb.Code_UNIMPLEMENTED:
+		num = ERNotSupportedYet
+		ss = SSClientError
+	case vtrpcpb.Code_INTERNAL:
+		num = ERInternalError
+		ss = SSUnknownSQLState
+	}
+
+	// Not found, build a generic SQLError.
+	return &SQLError{
+		Num:     num,
+		State:   ss,
+		Message: msg,
+	}
 }
 
 var stateToMysqlCode = map[vterrors.State]struct {
@@ -170,6 +176,7 @@ var stateToMysqlCode = map[vterrors.State]struct {
 	vterrors.NotSupportedYet:              {num: ERNotSupportedYet, state: SSClientError},
 	vterrors.ForbidSchemaChange:           {num: ERForbidSchemaChange, state: SSUnknownSQLState},
 	vterrors.NetPacketTooLarge:            {num: ERNetPacketTooLarge, state: SSNetError},
+	vterrors.NonUniqError:                 {num: ERNonUniq, state: SSConstraintViolation},
 	vterrors.NonUniqTable:                 {num: ERNonUniqTable, state: SSClientError},
 	vterrors.QueryInterrupted:             {num: ERQueryInterrupted, state: SSQueryInterrupted},
 	vterrors.SPDoesNotExist:               {num: ERSPDoesNotExist, state: SSClientError},
@@ -181,6 +188,9 @@ var stateToMysqlCode = map[vterrors.State]struct {
 	vterrors.WrongNumberOfColumnsInSelect: {num: ERWrongNumberOfColumnsInSelect, state: SSWrongNumberOfColumns},
 	vterrors.WrongTypeForVar:              {num: ERWrongTypeForVar, state: SSClientError},
 	vterrors.WrongValueForVar:             {num: ERWrongValueForVar, state: SSClientError},
+	vterrors.ServerNotAvailable:           {num: ERServerIsntAvailable, state: SSNetError},
+	vterrors.CantDoThisInTransaction:      {num: ERCantDoThisDuringAnTransaction, state: SSCantDoThisDuringAnTransaction},
+	vterrors.NoSuchSession:                {num: ERUnknownComError, state: SSNetError},
 }
 
 func init() {

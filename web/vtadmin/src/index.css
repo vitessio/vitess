@@ -88,6 +88,9 @@
   --textColorInverted: #fff;
   --textColorSecondary: #718096;
   --textColorDisabled: #cbd5e0;
+
+  /* A common bounding width for views that don't require the full viewport. */
+  --contentWidth: 1200px;
 }
 
 /* Dark theme */
@@ -182,12 +185,44 @@ table th {
   text-align: left;
 }
 
-table tbody td {
+table tbody tr {
   border: solid 1px var(--tableBorderColor);
-  padding: var(--tableCellPadding);
 }
 
-/* Utilities */
+table tbody td {
+  padding: var(--tableCellPadding);
+  vertical-align: top;
+}
+
+table tbody td[rowSpan] {
+  border-right: solid 1px var(--tableBorderColor);
+}
+
+/* One-liner utilities */
+.font-family-monospace {
+  font-family: var(--fontFamilyMonospace);
+}
+
+.font-size-small {
+  font-size: var(--fontSizeSmall);
+}
+
+.font-weight-bold {
+  font-weight: 700;
+}
+
+.max-width-content {
+  max-width: var(--contentWidth);
+}
+
+.text-align-right {
+  text-align: right;
+}
+
 .text-color-secondary {
   color: var(--textColorSecondary);
+}
+
+.white-space-nowrap {
+  white-space: nowrap;
 }
