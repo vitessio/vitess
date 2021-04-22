@@ -462,6 +462,9 @@ func VisitRefOfAlterTable(in *AlterTable, f Visit) error {
 	if err := VisitRefOfPartitionSpec(in.PartitionSpec, f); err != nil {
 		return err
 	}
+	if err := VisitComments(in.Comments, f); err != nil {
+		return err
+	}
 	return nil
 }
 func VisitRefOfAlterView(in *AlterView, f Visit) error {
@@ -820,6 +823,9 @@ func VisitRefOfCreateTable(in *CreateTable, f Visit) error {
 	if err := VisitRefOfOptLike(in.OptLike, f); err != nil {
 		return err
 	}
+	if err := VisitComments(in.Comments, f); err != nil {
+		return err
+	}
 	return nil
 }
 func VisitRefOfCreateView(in *CreateView, f Visit) error {
@@ -953,6 +959,9 @@ func VisitRefOfDropTable(in *DropTable, f Visit) error {
 		return err
 	}
 	if err := VisitTableNames(in.FromTables, f); err != nil {
+		return err
+	}
+	if err := VisitComments(in.Comments, f); err != nil {
 		return err
 	}
 	return nil
@@ -1606,6 +1615,9 @@ func VisitRefOfRevertMigration(in *RevertMigration, f Visit) error {
 		return nil
 	}
 	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitComments(in.Comments, f); err != nil {
 		return err
 	}
 	return nil
