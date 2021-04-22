@@ -54,9 +54,22 @@ type tabletEnv struct {
 
 var (
 	// time simulator
-	batchTime       *sync2.Batcher
-	globalTabletEnv *tabletEnv
+	batchTime         *sync2.Batcher
+	globalTabletEnv   *tabletEnv
+	globalTabletEnvMu sync.Mutex
 )
+
+func setGlobalTabletEnv(env *tabletEnv) {
+	globalTabletEnvMu.Lock()
+	defer globalTabletEnvMu.Unlock()
+	globalTabletEnv = env
+}
+
+func getGlobalTabletEnv() *tabletEnv {
+	globalTabletEnvMu.Lock()
+	defer globalTabletEnvMu.Unlock()
+	return globalTabletEnv
+}
 
 // explainTablet is the query service that simulates a tablet.
 //
@@ -458,7 +471,7 @@ func (t *explainTablet) HandleQuery(c *mysql.Conn, query string, callback func(*
 	}
 
 	// return the pre-computed results for any schema introspection queries
-	result, ok := globalTabletEnv.schemaQueries[query]
+	result, ok := getGlobalTabletEnv().schemaQueries[query]
 	if ok {
 		return callback(result)
 	}
@@ -491,7 +504,7 @@ func (t *explainTablet) HandleQuery(c *mysql.Conn, query string, callback func(*
 		colTypeMap := map[string]querypb.Type{}
 		for _, table := range tables {
 			tableName := sqlparser.String(table)
-			columns, exists := globalTabletEnv.tableColumns[tableName]
+			columns, exists := getGlobalTabletEnv().tableColumns[tableName]
 			if !exists && tableName != "" && tableName != "dual" {
 				return fmt.Errorf("unable to resolve table name %s", tableName)
 			}

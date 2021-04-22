@@ -64,6 +64,8 @@ type (
 		AffectedTables() TableNames
 		SetTable(qualifier string, name string)
 		SetFromTables(tables TableNames)
+		SetComments(comments Comments)
+		GetComments() Comments
 		Statement
 	}
 
@@ -411,7 +413,8 @@ type (
 
 	// RevertMigration represents a REVERT VITESS_MIGRATION statement
 	RevertMigration struct {
-		UUID string
+		UUID     string
+		Comments Comments
 	}
 
 	// AlterMigrationType represents the type of operation in an ALTER VITESS_MIGRATION statement
@@ -428,6 +431,7 @@ type (
 		Table         TableName
 		AlterOptions  []AlterOption
 		PartitionSpec *PartitionSpec
+		Comments      Comments
 		FullyParsed   bool
 	}
 
@@ -437,6 +441,7 @@ type (
 		FromTables TableNames
 		// The following fields are set if a DDL was fully analyzed.
 		IfExists bool
+		Comments Comments
 	}
 
 	// DropView represents a DROP VIEW statement.
@@ -452,6 +457,7 @@ type (
 		IfNotExists bool
 		TableSpec   *TableSpec
 		OptLike     *OptLike
+		Comments    Comments
 		FullyParsed bool
 	}
 
@@ -1060,6 +1066,96 @@ func (node *DropView) SetFromTables(tables TableNames) {
 // SetFromTables implements DDLStatement.
 func (node *AlterView) SetFromTables(tables TableNames) {
 	// irrelevant
+}
+
+// SetComments implements DDLStatement.
+func (node *RenameTable) SetComments(comments Comments) {
+	// irrelevant
+}
+
+// SetComments implements DDLStatement.
+func (node *TruncateTable) SetComments(comments Comments) {
+	// irrelevant
+}
+
+// SetComments implements DDLStatement.
+func (node *AlterTable) SetComments(comments Comments) {
+	node.Comments = comments
+}
+
+// SetComments implements DDLStatement.
+func (node *CreateTable) SetComments(comments Comments) {
+	node.Comments = comments
+}
+
+// SetComments implements DDLStatement.
+func (node *CreateView) SetComments(comments Comments) {
+	// irrelevant
+}
+
+// SetComments implements DDLStatement.
+func (node *DropTable) SetComments(comments Comments) {
+	node.Comments = comments
+}
+
+// SetComments implements DDLStatement.
+func (node *DropView) SetComments(comments Comments) {
+	// irrelevant
+}
+
+// SetComments implements DDLStatement.
+func (node *AlterView) SetComments(comments Comments) {
+	// irrelevant
+}
+
+// SetComments for RevertMigration, does not implement DDLStatement
+func (node *RevertMigration) SetComments(comments Comments) {
+	node.Comments = comments
+}
+
+// GetComments implements DDLStatement.
+func (node *RenameTable) GetComments() Comments {
+	// irrelevant
+	return nil
+}
+
+// GetComments implements DDLStatement.
+func (node *TruncateTable) GetComments() Comments {
+	// irrelevant
+	return nil
+}
+
+// GetComments implements DDLStatement.
+func (node *AlterTable) GetComments() Comments {
+	return node.Comments
+}
+
+// GetComments implements DDLStatement.
+func (node *CreateTable) GetComments() Comments {
+	return node.Comments
+}
+
+// GetComments implements DDLStatement.
+func (node *CreateView) GetComments() Comments {
+	// irrelevant
+	return nil
+}
+
+// GetComments implements DDLStatement.
+func (node *DropTable) GetComments() Comments {
+	return node.Comments
+}
+
+// GetComments implements DDLStatement.
+func (node *DropView) GetComments() Comments {
+	// irrelevant
+	return nil
+}
+
+// GetComments implements DDLStatement.
+func (node *AlterView) GetComments() Comments {
+	// irrelevant
+	return nil
 }
 
 // GetToTables implements the DDLStatement interface
