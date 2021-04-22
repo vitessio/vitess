@@ -37,19 +37,11 @@ const (
 `
 )
 
-func main() {
-	//dir := flag.Strigng("dir", "", "the project directory")
-	from := flag.String("from", "", "from sha/tag/branch")
-	to := flag.String("to", "", "to sha/tag/branch")
-
-	flag.Parse()
-	//❯ git log --oneline release-10...mster | grep 'Merge pull request #'
-	// 42af3c1000 Merge pull request #7909 from enisoc/enisoc-email
-	// fetch merge PR commits
-	cmd := exec.Command("git", "log", "--oneline", fmt.Sprintf("%s...%s", *from, *to))
+func loadMergedPRs(from, to string) ([]string, error) {
+	cmd := exec.Command("git", "log", "--oneline", fmt.Sprintf("%s...%s", from, to))
 	out, err := cmd.Output()
 	if err != nil {
-		log.Fatalf("%s %s", err.Error(), string(out))
+		return nil, fmt.Errorf("%s: %s", err.Error(), string(out))
 	}
 
 	var prs []string
@@ -63,23 +55,29 @@ func main() {
 	}
 
 	sort.Strings(prs)
+	return prs, nil
+}
 
+func loadPRInfo(prs []string) ([]prInfo, error) {
 	var prInfos []prInfo
 	for i, pr := range prs {
 		cmd := exec.Command("gh", "pr", "view", pr, "--json", "title,number,labels")
 		out, err := cmd.Output()
 		if err != nil {
-			log.Fatalf("%s %s", err.Error(), string(out))
+			return nil, fmt.Errorf("%s %s", err.Error(), string(out))
 		}
 		var prInfo prInfo
 		err = json.Unmarshal(out, &prInfo)
 		if err != nil {
-			log.Fatal(err)
+			return nil, err
 		}
 		prInfos = append(prInfos, prInfo)
 		log.Printf("%d/%d", i, len(prs))
 	}
+	return prInfos, nil
+}
 
+func groupPRs(prInfos []prInfo) map[string]map[string][]prInfo {
 	prPerType := map[string]map[string][]prInfo{}
 
 	for _, info := range prInfos {
@@ -107,28 +105,30 @@ func main() {
 		prsPerComponentAndType := components[component]
 		components[component] = append(prsPerComponentAndType, info)
 	}
+	return prPerType
+}
+
+func main() {
+	from := flag.String("from", "", "from sha/tag/branch")
+	to := flag.String("to", "", "to sha/tag/branch")
+
+	flag.Parse()
+
+	prs, err := loadMergedPRs(*from, *to)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	prInfos, err := loadPRInfo(prs)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	prPerType := groupPRs(prInfos)
 
 	t := template.Must(template.New("markdownTemplate").Parse(markdownTemplate))
 	err = t.ExecuteTemplate(os.Stdout, "markdownTemplate", prPerType)
 	if err != nil {
 		log.Fatal(err)
 	}
-	/*
-	   {
-	     "labels": [
-	       {
-	         "name": "dependencies"
-	       },
-	       {
-	         "name": "javascript"
-	       }
-	     ],
-	     "number": 7920,
-	     "title": "Bump sockjs from 0.3.19 to 0.3.21 in /web/vtctld2"
-	   }
-	*/
-	// foreach PR gh pr view 7920 --json title,number,labels
-	//	fetch json info -> storage
-
-	// group by/sort/template out
 }
