@@ -452,9 +452,9 @@ func (vrw *VReplicationWorkflow) IsCopyInProgress() (bool, error) {
 	ctx := context.Background()
 	getTablesQuery := "select 1 from _vt.copy_state cs, _vt.vreplication vr where vr.id = cs.vrepl_id and vr.id = %d"
 	for _, target := range vrw.ts.targets {
-		for id := range target.sources {
+		for id := range target.Sources {
 			query := fmt.Sprintf(getTablesQuery, id)
-			p3qr, err := vrw.wr.tmc.ExecuteFetchAsDba(ctx, target.master.Tablet, true, []byte(query), 1, false, false)
+			p3qr, err := vrw.wr.tmc.ExecuteFetchAsDba(ctx, target.GetPrimary().Tablet, true, []byte(query), 1, false, false)
 			if err != nil {
 				return false, err
 			}
@@ -475,9 +475,9 @@ func (vrw *VReplicationWorkflow) GetCopyProgress() (*CopyProgress, error) {
 	const MaxRows = 1000
 	sourceMasters := make(map[*topodatapb.TabletAlias]bool)
 	for _, target := range vrw.ts.targets {
-		for id, bls := range target.sources {
+		for id, bls := range target.Sources {
 			query := fmt.Sprintf(getTablesQuery, id)
-			p3qr, err := vrw.wr.tmc.ExecuteFetchAsDba(ctx, target.master.Tablet, true, []byte(query), MaxRows, false, false)
+			p3qr, err := vrw.wr.tmc.ExecuteFetchAsDba(ctx, target.GetPrimary().Tablet, true, []byte(query), MaxRows, false, false)
 			if err != nil {
 				return nil, err
 			}
@@ -543,7 +543,7 @@ func (vrw *VReplicationWorkflow) GetCopyProgress() (*CopyProgress, error) {
 	}
 	sourceDbName := ""
 	for _, tsSource := range vrw.ts.sources {
-		sourceDbName = tsSource.master.DbName()
+		sourceDbName = tsSource.GetPrimary().DbName()
 		break
 	}
 	if sourceDbName == "" {
@@ -551,7 +551,7 @@ func (vrw *VReplicationWorkflow) GetCopyProgress() (*CopyProgress, error) {
 	}
 	targetDbName := ""
 	for _, tsTarget := range vrw.ts.targets {
-		targetDbName = tsTarget.master.DbName()
+		targetDbName = tsTarget.GetPrimary().DbName()
 		break
 	}
 	if sourceDbName == "" || targetDbName == "" {
@@ -561,7 +561,7 @@ func (vrw *VReplicationWorkflow) GetCopyProgress() (*CopyProgress, error) {
 	tablesStr := strings.Join(tableList, ",")
 	query := fmt.Sprintf(getRowCountQuery, encodeString(targetDbName), tablesStr)
 	for _, target := range vrw.ts.targets {
-		tablet := target.master.Tablet
+		tablet := target.GetPrimary().Tablet
 		if err := getTableMetrics(tablet, query, &targetRowCounts, &targetTableSizes); err != nil {
 			return nil, err
 		}
