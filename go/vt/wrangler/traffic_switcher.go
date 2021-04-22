@@ -18,6 +18,7 @@ package wrangler
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
 	"sort"
@@ -246,7 +247,7 @@ func (wr *Wrangler) getWorkflowState(ctx context.Context, targetKeyspace, workfl
 	ts, err := wr.buildTrafficSwitcher(ctx, targetKeyspace, workflowName)
 
 	if ts == nil || err != nil {
-		if err.Error() == fmt.Sprintf(errorNoStreams, targetKeyspace, workflowName) {
+		if errors.Is(err, workflow.ErrNoStreams) || err.Error() == fmt.Sprintf(errorNoStreams, targetKeyspace, workflowName) {
 			return nil, nil, nil
 		}
 		wr.Logger().Errorf("buildTrafficSwitcher failed: %v", err)
