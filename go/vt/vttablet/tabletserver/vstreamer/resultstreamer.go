@@ -19,6 +19,7 @@ package vstreamer
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
@@ -39,6 +40,7 @@ type resultStreamer struct {
 	tableName sqlparser.TableIdent
 	send      func(*binlogdatapb.VStreamResultsResponse) error
 	vse       *Engine
+	pktsize   PacketSizer
 }
 
 func newResultStreamer(ctx context.Context, cp dbconfigs.Connector, query string, send func(*binlogdatapb.VStreamResultsResponse) error, vse *Engine) *resultStreamer {
@@ -114,16 +116,18 @@ func (rs *resultStreamer) Stream() error {
 			byteCount += s.Len()
 		}
 
-		if byteCount >= *PacketSize {
+		if rs.pktsize.ShouldSend(byteCount) {
 			rs.vse.resultStreamerNumRows.Add(int64(len(response.Rows)))
 			rs.vse.resultStreamerNumPackets.Add(int64(1))
+			startSend := time.Now()
 			err = rs.send(response)
 			if err != nil {
 				return err
 			}
+			rs.pktsize.Record(byteCount, time.Since(startSend))
 			// empty the rows so we start over, but we keep the
 			// same capacity
-			response.Rows = nil
+			response.Rows = response.Rows[:0]
 			byteCount = 0
 		}
 	}

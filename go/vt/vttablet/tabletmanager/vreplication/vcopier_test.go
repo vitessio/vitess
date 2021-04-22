@@ -35,10 +35,8 @@ import (
 func TestPlayerCopyCharPK(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
-	savedPacketSize := *vstreamer.PacketSize
-	// PacketSize of 1 byte will send at most one row at a time.
-	*vstreamer.PacketSize = 1
-	defer func() { *vstreamer.PacketSize = savedPacketSize }()
+	reset := vstreamer.AdjustPacketSize(1)
+	defer reset()
 
 	savedCopyTimeout := copyTimeout
 	// copyTimeout should be low enough to have time to send one row.
@@ -138,10 +136,8 @@ func TestPlayerCopyCharPK(t *testing.T) {
 func TestPlayerCopyVarcharPKCaseInsensitive(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
-	savedPacketSize := *vstreamer.PacketSize
-	// PacketSize of 1 byte will send at most one row at a time.
-	*vstreamer.PacketSize = 1
-	defer func() { *vstreamer.PacketSize = savedPacketSize }()
+	reset := vstreamer.AdjustPacketSize(1)
+	defer reset()
 
 	savedCopyTimeout := copyTimeout
 	// copyTimeout should be low enough to have time to send one row.
@@ -244,10 +240,8 @@ func TestPlayerCopyVarcharPKCaseInsensitive(t *testing.T) {
 func TestPlayerCopyVarcharCompositePKCaseSensitiveCollation(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
-	savedPacketSize := *vstreamer.PacketSize
-	// PacketSize of 1 byte will send at most one row at a time.
-	*vstreamer.PacketSize = 1
-	defer func() { *vstreamer.PacketSize = savedPacketSize }()
+	reset := vstreamer.AdjustPacketSize(1)
+	defer reset()
 
 	savedCopyTimeout := copyTimeout
 	// copyTimeout should be low enough to have time to send one row.
@@ -532,10 +526,8 @@ func TestPlayerCopyTables(t *testing.T) {
 func TestPlayerCopyBigTable(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
-	savedPacketSize := *vstreamer.PacketSize
-	// PacketSize of 1 byte will send at most one row at a time.
-	*vstreamer.PacketSize = 1
-	defer func() { *vstreamer.PacketSize = savedPacketSize }()
+	reset := vstreamer.AdjustPacketSize(1)
+	defer reset()
 
 	savedCopyTimeout := copyTimeout
 	// copyTimeout should be low enough to have time to send one row.
@@ -650,10 +642,8 @@ func TestPlayerCopyBigTable(t *testing.T) {
 func TestPlayerCopyWildcardRule(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
-	savedPacketSize := *vstreamer.PacketSize
-	// PacketSize of 1 byte will send at most one row at a time.
-	*vstreamer.PacketSize = 1
-	defer func() { *vstreamer.PacketSize = savedPacketSize }()
+	reset := vstreamer.AdjustPacketSize(1)
+	defer reset()
 
 	savedCopyTimeout := copyTimeout
 	// copyTimeout should be low enough to have time to send one row.

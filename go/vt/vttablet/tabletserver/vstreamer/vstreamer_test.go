@@ -1299,9 +1299,8 @@ func TestBuffering(t *testing.T) {
 		t.Skip()
 	}
 
-	savedSize := *PacketSize
-	*PacketSize = 10
-	defer func() { *PacketSize = savedSize }()
+	reset := AdjustPacketSize(10)
+	defer reset()
 
 	execStatement(t, "create table packet_test(id int, val varbinary(128), primary key(id))")
 	defer execStatement(t, "drop table packet_test")
