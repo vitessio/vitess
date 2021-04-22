@@ -17,17 +17,16 @@ limitations under the License.
 package wrangler
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"strings"
 	"time"
 
 	"vitess.io/vitess/go/mysql"
+
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-
-	"context"
 )
 
 var _ iswitcher = (*switcherDryRun)(nil)
