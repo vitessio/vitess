@@ -36,6 +36,9 @@ const (
 {{- end }}
 {{- end }}
 `
+
+	prefixType      = "Type: "
+	prefixComponent = "Component: "
 )
 
 func loadMergedPRs(from, to string) ([]string, error) {
@@ -115,10 +118,10 @@ func groupPRs(prInfos []prInfo) map[string]map[string][]prInfo {
 		var typ, component string
 		for _, lbl := range info.Labels {
 			switch {
-			case strings.HasPrefix(lbl.Name, "Type: "):
-				typ = lbl.Name
-			case strings.HasPrefix(lbl.Name, "Component: "):
-				component = lbl.Name
+			case strings.HasPrefix(lbl.Name, prefixType):
+				typ = strings.TrimPrefix(lbl.Name, prefixType)
+			case strings.HasPrefix(lbl.Name, prefixComponent):
+				component = strings.TrimPrefix(lbl.Name, prefixComponent)
 			}
 		}
 		if typ == "" {
