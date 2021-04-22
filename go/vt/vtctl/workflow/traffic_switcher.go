@@ -17,6 +17,7 @@ limitations under the License.
 package workflow
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -150,7 +151,7 @@ func BuildTargets(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManag
 				_vt.vreplication
 			WHERE
 				workflow=%s AND
-				db_name=%s`, workflow, primary.DbName()) // TODO: port encodeString()
+				db_name=%s`, encodeString(workflow), encodeString(primary.DbName()))
 		p3qr, err := tmc.VReplicationExec(ctx, primary.Tablet, query)
 		if err != nil {
 			return nil, err
@@ -235,4 +236,13 @@ func ReverseWorkflowName(workflow string) string {
 	}
 
 	return workflow + reverseSuffix
+}
+
+// Straight copy-paste of encodeString from wrangler/keyspace.go. I want to make
+// this public, but it doesn't belong in package workflow. Maybe package sqltypes,
+// or maybe package sqlescape?
+func encodeString(in string) string {
+	buf := bytes.NewBuffer(nil)
+	sqltypes.NewVarChar(in).EncodeSQL(buf)
+	return buf.String()
 }
