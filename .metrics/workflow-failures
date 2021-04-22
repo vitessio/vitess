@@ -8819,3 +8819,7 @@
 2021-04-22T20:07:51Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/775496521
 2021-04-22T20:07:51Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/775496523
 2021-04-22T20:07:51Z,unit_race,https://github.com/vitessio/vitess/actions/runs/775496482
+2021-04-22T20:24:38Z,Cluster (17),https://github.com/vitessio/vitess/actions/runs/775540578
+2021-04-22T20:24:38Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/775540607
+2021-04-22T20:24:38Z,Cluster (vreplication_multicell),https://github.com/vitessio/vitess/actions/runs/775540598
+2021-04-22T20:37:17Z,Cluster (27),https://github.com/vitessio/vitess/actions/runs/775573013
