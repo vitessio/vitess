@@ -28,7 +28,6 @@ import (
 	"github.com/golang/protobuf/proto"
 
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
@@ -46,25 +45,6 @@ var (
 	// target keyspace.
 	ErrNoStreams = errors.New("no streams found")
 )
-
-type TrafficSwitchDirection int
-
-const (
-	DirectionForward = TrafficSwitchDirection(iota)
-	DirectionBackward
-)
-
-type TrafficSwitcher struct {
-	id              int64
-	workflow        string
-	reverseWorkflow string
-
-	sources map[string]*MigrationSource
-	targets map[string]*MigrationTarget
-
-	targetKeyspace string
-	frozen         bool
-}
 
 // TargetInfo contains the metadata for a set of targets involved in a workflow.
 type TargetInfo struct {
@@ -120,22 +100,6 @@ func (target *MigrationTarget) GetShard() *topo.ShardInfo {
 // migration target.
 func (target *MigrationTarget) GetPrimary() *topo.TabletInfo {
 	return target.primary
-}
-
-func BuildTrafficSwitcher(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManagerClient, targetKeyspace string, workflow string) (*TrafficSwitcher, error) {
-	targetInfo, err := BuildTargets(ctx, ts, tmc, targetKeyspace, workflow)
-	if err != nil {
-		log.Infof("Error building targets: %s", err)
-		return nil, err
-	}
-
-	switcher := &TrafficSwitcher{
-		id:              HashStreams(targetKeyspace, targetInfo.Targets),
-		workflow:        workflow,
-		reverseWorkflow: "",
-	}
-
-	return switcher, nil
 }
 
 // BuildTargets collects MigrationTargets and other metadata (see TargetInfo)
