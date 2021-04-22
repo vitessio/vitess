@@ -144,9 +144,27 @@ func groupPRs(prInfos []prInfo) map[string]map[string][]prInfo {
 	return prPerType
 }
 
+func writePrInfos(fileout string, prPerType map[string]map[string][]prInfo) (err error) {
+	writeTo := os.Stdout
+	if fileout != "" {
+		writeTo, err = os.OpenFile(fileout, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
+		if err != nil {
+			return err
+		}
+	}
+
+	t := template.Must(template.New("markdownTemplate").Parse(markdownTemplate))
+	err = t.ExecuteTemplate(writeTo, "markdownTemplate", prPerType)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func main() {
 	from := flag.String("from", "", "from sha/tag/branch")
-	to := flag.String("to", "", "to sha/tag/branch")
+	to := flag.String("to", "HEAD", "to sha/tag/branch")
+	fileout := flag.String("file", "", "file on which to write release notes, stdout if empty")
 
 	flag.Parse()
 
@@ -162,8 +180,7 @@ func main() {
 
 	prPerType := groupPRs(prInfos)
 
-	t := template.Must(template.New("markdownTemplate").Parse(markdownTemplate))
-	err = t.ExecuteTemplate(os.Stdout, "markdownTemplate", prPerType)
+	err = writePrInfos(*fileout, prPerType)
 	if err != nil {
 		log.Fatal(err)
 	}
