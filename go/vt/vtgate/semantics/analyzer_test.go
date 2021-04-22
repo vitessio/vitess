@@ -20,6 +20,11 @@ import (
 	"strings"
 	"testing"
 
+	"vitess.io/vitess/go/vt/key"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
+
 	"github.com/stretchr/testify/assert"
 
 	"github.com/stretchr/testify/require"
@@ -163,7 +168,7 @@ func TestNotUniqueTableName(t *testing.T) {
 				t.Skip("table alias not implemented")
 			}
 			parse, _ := sqlparser.Parse(query)
-			_, err := Analyse(parse)
+			_, err := Analyse(parse, &fakeSI{})
 			require.Error(t, err)
 			require.Contains(t, err.Error(), "Not unique table/alias")
 		})
@@ -178,9 +183,91 @@ func TestMissingTable(t *testing.T) {
 	for _, query := range queries {
 		t.Run(query, func(t *testing.T) {
 			parse, _ := sqlparser.Parse(query)
-			_, err := Analyse(parse)
+			_, err := Analyse(parse, &fakeSI{})
 			require.Error(t, err)
 			require.Contains(t, err.Error(), "Unknown table")
+		})
+	}
+}
+
+func TestUnknownColumnMap2(t *testing.T) {
+	query := "select col from a, b"
+	authoritativeTblA := vindexes.Table{
+		Name: sqlparser.NewTableIdent("a"),
+		Columns: []vindexes.Column{{
+			Name: sqlparser.NewColIdent("col2"),
+			Type: querypb.Type_VARCHAR,
+		}},
+		ColumnListAuthoritative: true,
+	}
+	authoritativeTblB := vindexes.Table{
+		Name: sqlparser.NewTableIdent("b"),
+		Columns: []vindexes.Column{{
+			Name: sqlparser.NewColIdent("col"),
+			Type: querypb.Type_VARCHAR,
+		}},
+		ColumnListAuthoritative: true,
+	}
+	nonAuthoritativeTblA := authoritativeTblA
+	nonAuthoritativeTblA.ColumnListAuthoritative = false
+	nonAuthoritativeTblB := authoritativeTblB
+	nonAuthoritativeTblB.ColumnListAuthoritative = false
+	authoritativeTblAWithConflict := vindexes.Table{
+		Name: sqlparser.NewTableIdent("a"),
+		Columns: []vindexes.Column{{
+			Name: sqlparser.NewColIdent("col"),
+			Type: querypb.Type_VARCHAR,
+		}},
+		ColumnListAuthoritative: true,
+	}
+
+	parse, _ := sqlparser.Parse(query)
+
+	tests := []struct {
+		name   string
+		schema map[string]*vindexes.Table
+		err    bool
+	}{
+		{
+			name:   "no info about tables",
+			schema: map[string]*vindexes.Table{"a": {}, "b": {}},
+			err:    true,
+		},
+		{
+			name:   "non authoritative columns",
+			schema: map[string]*vindexes.Table{"a": &nonAuthoritativeTblA, "b": &nonAuthoritativeTblA},
+			err:    true,
+		},
+		{
+			name:   "non authoritative columns - one authoritative and one not",
+			schema: map[string]*vindexes.Table{"a": &nonAuthoritativeTblA, "b": &authoritativeTblB},
+			err:    true,
+		},
+		{
+			name:   "non authoritative columns - one authoritative and one not",
+			schema: map[string]*vindexes.Table{"a": &authoritativeTblA, "b": &nonAuthoritativeTblB},
+			err:    true,
+		},
+		{
+			name:   "authoritative columns",
+			schema: map[string]*vindexes.Table{"a": &authoritativeTblA, "b": &authoritativeTblB},
+			err:    false,
+		},
+		{
+			name:   "authoritative columns with overlap",
+			schema: map[string]*vindexes.Table{"a": &authoritativeTblAWithConflict, "b": &authoritativeTblB},
+			err:    true,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			si := &fakeSI{tables: test.schema}
+			_, err := Analyse(parse, si)
+			if test.err {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
 		})
 	}
 }
@@ -188,7 +275,21 @@ func TestMissingTable(t *testing.T) {
 func parseAndAnalyze(t *testing.T, query string) (sqlparser.Statement, *SemTable) {
 	parse, err := sqlparser.Parse(query)
 	require.NoError(t, err)
-	semTable, err := Analyse(parse)
+	semTable, err := Analyse(parse, &fakeSI{
+		tables: map[string]*vindexes.Table{
+			"t": {Name: sqlparser.NewTableIdent("t")},
+		},
+	})
 	require.NoError(t, err)
 	return parse, semTable
+}
+
+var _ SchemaInformation = (*fakeSI)(nil)
+
+type fakeSI struct {
+	tables map[string]*vindexes.Table
+}
+
+func (s *fakeSI) FindTableOrVindex(tablename sqlparser.TableName) (*vindexes.Table, vindexes.Vindex, string, topodatapb.TabletType, key.Destination, error) {
+	return s.tables[sqlparser.String(tablename)], nil, "", 0, nil, nil
 }

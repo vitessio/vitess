@@ -2363,6 +2363,9 @@ export namespace vtadmin {
 
         /** GetSchemaTableSizeOptions aggregate_sizes */
         aggregate_sizes?: (boolean|null);
+
+        /** GetSchemaTableSizeOptions include_non_serving_shards */
+        include_non_serving_shards?: (boolean|null);
     }
 
     /** Represents a GetSchemaTableSizeOptions. */
@@ -2376,6 +2379,9 @@ export namespace vtadmin {
 
         /** GetSchemaTableSizeOptions aggregate_sizes. */
         public aggregate_sizes: boolean;
+
+        /** GetSchemaTableSizeOptions include_non_serving_shards. */
+        public include_non_serving_shards: boolean;
 
         /**
          * Creates a new GetSchemaTableSizeOptions instance using the specified properties.

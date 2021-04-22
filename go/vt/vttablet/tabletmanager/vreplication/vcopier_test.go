@@ -998,6 +998,95 @@ func TestPlayerCopyWildcardTableContinuation(t *testing.T) {
 	})
 }
 
+// TestPlayerCopyWildcardTableContinuationWithOptimizeInserts tests the copy workflow where tables have been partially copied
+// enabling the optimize inserts functionality
+func TestPlayerCopyWildcardTableContinuationWithOptimizeInserts(t *testing.T) {
+	oldVreplicationExperimentalFlags := *vreplicationExperimentalFlags
+	*vreplicationExperimentalFlags = vreplicationExperimentalFlagOptimizeInserts
+	defer func() {
+		*vreplicationExperimentalFlags = oldVreplicationExperimentalFlags
+	}()
+
+	defer deleteTablet(addTablet(100))
+
+	execStatements(t, []string{
+		"create table src(id int, val varbinary(128), primary key(id))",
+		"insert into src values(2,'copied'), (3,'uncopied')",
+		fmt.Sprintf("create table %s.dst(id int, val varbinary(128), primary key(id))", vrepldb),
+		fmt.Sprintf("insert into %s.dst values(2,'copied')", vrepldb),
+	})
+	defer execStatements(t, []string{
+		"drop table src",
+		fmt.Sprintf("drop table %s.dst", vrepldb),
+	})
+	env.SchemaEngine.Reload(context.Background())
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "dst",
+			Filter: "select * from src",
+		}},
+	}
+	pos := masterPosition(t)
+	execStatements(t, []string{
+		"insert into src values(4,'new')",
+	})
+
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
+	}
+	query := binlogplayer.CreateVReplicationState("test", bls, "", binlogplayer.BlpStopped, playerEngine.dbName)
+	qr, err := playerEngine.Exec(query)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lastpk := sqltypes.ResultToProto3(sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+		"id",
+		"int32"),
+		"2",
+	))
+	lastpk.RowsAffected = 0
+	execStatements(t, []string{
+		fmt.Sprintf("insert into _vt.copy_state values(%d, '%s', %s)", qr.InsertID, "dst", encodeString(fmt.Sprintf("%v", lastpk))),
+	})
+	id := qr.InsertID
+	_, err = playerEngine.Exec(fmt.Sprintf("update _vt.vreplication set state='Copying', pos=%s where id=%d", encodeString(pos), id))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		query := fmt.Sprintf("delete from _vt.vreplication where id = %d", id)
+		if _, err := playerEngine.Exec(query); err != nil {
+			t.Fatal(err)
+		}
+		expectDeleteQueries(t)
+	}()
+
+	expectNontxQueries(t, []string{
+		// Catchup
+		"/insert into _vt.vreplication",
+		"/update _vt.vreplication set state = 'Copying'",
+		"/update _vt.vreplication set message='Picked source tablet.*",
+		// Copy
+		"insert into dst(id,val) values (3,'uncopied'), (4,'new')",
+		`/update _vt.copy_state set lastpk.*`,
+		"/delete from _vt.copy_state.*dst",
+		"/update _vt.vreplication set state='Running'",
+	})
+	expectData(t, "dst", [][]string{
+		{"2", "copied"},
+		{"3", "uncopied"},
+		{"4", "new"},
+	})
+	for _, ct := range playerEngine.controllers {
+		require.Equal(t, int64(1), ct.blpStats.NoopQueryCount.Counts()["insert"])
+		break
+	}
+}
+
 func TestPlayerCopyTablesNone(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 

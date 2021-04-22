@@ -128,12 +128,16 @@ type OrderbyParams struct {
 	Col int
 	// WeightStringCol is the weight_string column that will be used for sorting.
 	// It is set to -1 if such a column is not added to the query
-	WeightStringCol int
-	Desc            bool
+	WeightStringCol   int
+	Desc              bool
+	StarColFixedIndex int
 }
 
 func (obp OrderbyParams) String() string {
 	val := strconv.Itoa(obp.Col)
+	if obp.StarColFixedIndex > obp.Col {
+		val = strconv.Itoa(obp.StarColFixedIndex)
+	}
 	if obp.Desc {
 		val += " DESC"
 	} else {
@@ -734,6 +738,9 @@ func (route *Route) description() PrimitiveDescription {
 	orderBy := GenericJoin(route.OrderBy, orderByToString)
 	if orderBy != "" {
 		other["OrderBy"] = orderBy
+	}
+	if route.TruncateColumnCount > 0 {
+		other["ResultColumns"] = route.TruncateColumnCount
 	}
 
 	return PrimitiveDescription{

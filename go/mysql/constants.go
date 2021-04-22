@@ -516,6 +516,9 @@ const (
 	ERDataTooLong                  = 1406
 	ERForbidSchemaChange           = 1450
 	ERDataOutOfRange               = 1690
+
+	// server not available
+	ERServerIsntAvailable = 3168
 )
 
 // Sql states for errors.
@@ -526,9 +529,6 @@ const (
 	// const char *unknown_sqlstate= "HY000"
 	// in client.c. So using that one.
 	SSUnknownSQLState = "HY000"
-
-	// SSUnknownComError is ER_UNKNOWN_COM_ERROR
-	SSUnknownComError = "08S01"
 
 	// SSNetError is network related error
 	SSNetError = "08S01"

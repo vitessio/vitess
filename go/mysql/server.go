@@ -766,7 +766,7 @@ func parseConnAttrs(data []byte, pos int) (map[string]string, int, error) {
 		attrLenRead += uint64(keyLen) + 1
 
 		var connAttrKey []byte
-		connAttrKey, pos, ok = readBytesCopy(data, pos, int(keyLen))
+		connAttrKey, pos, ok = readBytes(data, pos, int(keyLen))
 		if !ok {
 			return nil, 0, vterrors.Errorf(vtrpc.Code_INTERNAL, "parseClientHandshakePacket: can't read connection attribute key")
 		}
@@ -779,7 +779,7 @@ func parseConnAttrs(data []byte, pos int) (map[string]string, int, error) {
 		attrLenRead += uint64(valLen) + 1
 
 		var connAttrVal []byte
-		connAttrVal, pos, ok = readBytesCopy(data, pos, int(valLen))
+		connAttrVal, pos, ok = readBytes(data, pos, int(valLen))
 		if !ok {
 			return nil, 0, vterrors.Errorf(vtrpc.Code_INTERNAL, "parseClientHandshakePacket: can't read connection attribute value")
 		}

@@ -1232,9 +1232,4 @@ func createTestTablet(uid uint32, cell, host string) *topodatapb.Tablet {
 	return tablet
 }
 
-var mustMatch = utils.MustMatchFn(
-	[]interface{}{ // types with unexported fields
-		TabletHealth{},
-	},
-	[]string{".Conn"}, // ignored fields
-)
+var mustMatch = utils.MustMatchFn(".Conn" /* ignored fields*/)
