@@ -19,8 +19,6 @@ package wrangler
 import (
 	"context"
 	"fmt"
-	"hash/fnv"
-	"math"
 	"reflect"
 	"sort"
 	"strings"
@@ -40,7 +38,6 @@ import (
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vtctl/workflow"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 
@@ -115,22 +112,6 @@ type trafficSwitcher struct {
 	optTabletTypes  string //tabletTypes option passed to MoveTables/Reshard
 	externalCluster string
 	externalTopo    *topo.Server
-}
-
-// tsTarget contains the metadata for each migration target.
-type tsTarget struct {
-	si       *topo.ShardInfo
-	master   *topo.TabletInfo
-	sources  map[uint32]*binlogdatapb.BinlogSource
-	position string
-}
-
-// tsSource contains the metadata for each migration source.
-type tsSource struct {
-	si        *topo.ShardInfo
-	master    *topo.TabletInfo
-	position  string
-	journaled bool
 }
 
 const (
@@ -903,99 +884,6 @@ func (wr *Wrangler) buildTrafficSwitcher(ctx context.Context, targetKeyspace, wo
 		return nil, err
 	}
 	return ts, nil
-}
-
-type targetInfo struct {
-	targets        map[string]*tsTarget
-	frozen         bool
-	optCells       string
-	optTabletTypes string
-}
-
-func (wr *Wrangler) buildTargets(ctx context.Context, targetKeyspace, workflow string) (*targetInfo, error) {
-	var err error
-	var frozen bool
-	var optCells, optTabletTypes string
-	targets := make(map[string]*tsTarget)
-	targetShards, err := wr.ts.GetShardNames(ctx, targetKeyspace)
-	if err != nil {
-		return nil, err
-	}
-	// We check all target shards. All of them may not have a stream.
-	// For example, if we're splitting -80 to -40,40-80, only those
-	// two target shards will have vreplication streams.
-	for _, targetShard := range targetShards {
-		targetsi, err := wr.ts.GetShard(ctx, targetKeyspace, targetShard)
-		if err != nil {
-			return nil, err
-		}
-		if targetsi.MasterAlias == nil {
-			// This can happen if bad inputs are given.
-			return nil, fmt.Errorf("shard %v:%v doesn't have a master set", targetKeyspace, targetShard)
-		}
-		targetMaster, err := wr.ts.GetTablet(ctx, targetsi.MasterAlias)
-		if err != nil {
-			return nil, err
-		}
-		p3qr, err := wr.tmc.VReplicationExec(ctx, targetMaster.Tablet, fmt.Sprintf("select id, source, message, cell, tablet_types from _vt.vreplication where workflow=%s and db_name=%s", encodeString(workflow), encodeString(targetMaster.DbName())))
-		if err != nil {
-			return nil, err
-		}
-		// If there's no vreplication stream, check the next target.
-		if len(p3qr.Rows) < 1 {
-			continue
-		}
-
-		targets[targetShard] = &tsTarget{
-			si:      targetsi,
-			master:  targetMaster,
-			sources: make(map[uint32]*binlogdatapb.BinlogSource),
-		}
-		qr := sqltypes.Proto3ToResult(p3qr)
-		for _, row := range qr.Rows {
-			id, err := evalengine.ToInt64(row[0])
-			if err != nil {
-				return nil, err
-			}
-
-			var bls binlogdatapb.BinlogSource
-			if err := proto.UnmarshalText(row[1].ToString(), &bls); err != nil {
-				return nil, err
-			}
-			targets[targetShard].sources[uint32(id)] = &bls
-
-			if row[2].ToString() == frozenStr {
-				frozen = true
-			}
-			optCells = row[3].ToString()
-			optTabletTypes = row[4].ToString()
-		}
-	}
-	if len(targets) == 0 {
-		err2 := fmt.Errorf(errorNoStreams, targetKeyspace, workflow)
-		return nil, err2
-	}
-	tinfo := &targetInfo{targets: targets, frozen: frozen, optCells: optCells, optTabletTypes: optTabletTypes}
-	return tinfo, nil
-}
-
-// hashStreams produces a reproducible hash based on the input parameters.
-func hashStreams(targetKeyspace string, targets map[string]*tsTarget) int64 {
-	var expanded []string
-	for shard, target := range targets {
-		for uid := range target.sources {
-			expanded = append(expanded, fmt.Sprintf("%s:%d", shard, uid))
-		}
-	}
-
-	sort.Strings(expanded)
-	hasher := fnv.New64()
-	hasher.Write([]byte(targetKeyspace))
-	for _, str := range expanded {
-		hasher.Write([]byte(str))
-	}
-	// Convert to int64 after dropping the highest bit.
-	return int64(hasher.Sum64() & math.MaxInt64)
 }
 
 func (ts *trafficSwitcher) validate(ctx context.Context) error {
