@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 	"text/template"
 )
 
@@ -58,22 +59,52 @@ func loadMergedPRs(from, to string) ([]string, error) {
 	return prs, nil
 }
 
-func loadPRInfo(prs []string) ([]prInfo, error) {
-	var prInfos []prInfo
-	for i, pr := range prs {
-		cmd := exec.Command("gh", "pr", "view", pr, "--json", "title,number,labels")
-		out, err := cmd.Output()
-		if err != nil {
-			return nil, fmt.Errorf("%s %s", err.Error(), string(out))
-		}
-		var prInfo prInfo
-		err = json.Unmarshal(out, &prInfo)
-		if err != nil {
-			return nil, err
-		}
-		prInfos = append(prInfos, prInfo)
-		log.Printf("%d/%d", i, len(prs))
+func loadPRinfo(pr string) (prInfo, error) {
+	cmd := exec.Command("gh", "pr", "view", pr, "--json", "title,number,labels")
+	out, err := cmd.Output()
+	if err != nil {
+		return prInfo{}, fmt.Errorf("%s %s", err.Error(), string(out))
 	}
+	var prInfo prInfo
+	err = json.Unmarshal(out, &prInfo)
+	return prInfo, err
+}
+
+func loadAllPRs(prs []string) ([]prInfo, error) {
+	prChan := make(chan string, len(prs))
+	// fill the work queue
+	for _, s := range prs {
+		prChan <- s
+	}
+	close(prChan)
+
+	var prInfos []prInfo
+
+	wg := sync.WaitGroup{}
+	mu := sync.Mutex{}
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func() {
+			// load meta data about PRs
+			defer wg.Done()
+			for b := range prChan {
+				fmt.Print(".")
+				prInfo, err := loadPRinfo(b)
+				if err != nil {
+					// todo: error handling!
+					log.Fatal(err)
+				}
+				mu.Lock()
+				prInfos = append(prInfos, prInfo)
+				mu.Unlock()
+			}
+		}()
+	}
+
+	// wait for the loading to finish
+	wg.Wait()
+	fmt.Println()
+
 	return prInfos, nil
 }
 
@@ -119,7 +150,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	prInfos, err := loadPRInfo(prs)
+	prInfos, err := loadAllPRs(prs)
 	if err != nil {
 		log.Fatal(err)
 	}
