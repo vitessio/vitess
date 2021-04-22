@@ -107,16 +107,15 @@ func TestServingChange(t *testing.T) {
 	checkedExec(t, conn, "use @rdonly")
 	checkedExec(t, conn, "set sql_mode = ''")
 
-	rdonlyTablet := clusterInstance.Keyspaces[0].Shards[0].Rdonly()
-
-	// to see/make the new rdonly available
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Ping", rdonlyTablet.Alias)
-	require.NoError(t, err)
-
-	// this will create reserved connection on rdonly on -80 and 80- shards.
-	checkedExec(t, conn, "select * from test")
+	// to see rdonly is available and
+	// also this will create reserved connection on rdonly on -80 and 80- shards.
+	_, err = exec(t, conn, "select * from test")
+	for err != nil {
+		_, err = exec(t, conn, "select * from test")
+	}
 
 	// changing rdonly tablet to spare (non serving).
+	rdonlyTablet := clusterInstance.Keyspaces[0].Shards[0].Rdonly()
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", rdonlyTablet.Alias, "spare")
 	require.NoError(t, err)
 
