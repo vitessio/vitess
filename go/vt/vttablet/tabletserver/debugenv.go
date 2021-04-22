@@ -23,6 +23,7 @@ import (
 	"net/http"
 	"strconv"
 	"text/template"
+	"time"
 
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/vt/log"
@@ -72,6 +73,15 @@ func debugEnvHandler(tsv *TabletServer, w http.ResponseWriter, r *http.Request) 
 			f(ival)
 			msg = fmt.Sprintf("Setting %v to: %v", varname, value)
 		}
+		setDurationVal := func(f func(time.Duration)) {
+			durationVal, err := time.ParseDuration(value)
+			if err != nil {
+				msg = fmt.Sprintf("Failed setting value for %v: %v", varname, err)
+				return
+			}
+			f(durationVal)
+			msg = fmt.Sprintf("Setting %v to: %v", varname, value)
+		}
 		setFloat64Val := func(f func(float64)) {
 			fval, err := strconv.ParseFloat(value, 64)
 			if err != nil {
@@ -94,6 +104,10 @@ func debugEnvHandler(tsv *TabletServer, w http.ResponseWriter, r *http.Request) 
 			setIntVal(tsv.SetMaxResultSize)
 		case "WarnResultSize":
 			setIntVal(tsv.SetWarnResultSize)
+		case "UnhealthyThreshold":
+			setDurationVal(tsv.Config().Healthcheck.UnhealthyThresholdSeconds.Set)
+			setDurationVal(tsv.hs.SetUnhealthyThreshold)
+			setDurationVal(tsv.sm.SetUnhealthyThreshold)
 		case "ThrottleMetricThreshold":
 			setFloat64Val(tsv.SetThrottleMetricThreshold)
 		case "Consolidator":
@@ -104,6 +118,12 @@ func debugEnvHandler(tsv *TabletServer, w http.ResponseWriter, r *http.Request) 
 
 	var vars []envValue
 	addIntVar := func(varname string, f func() int) {
+		vars = append(vars, envValue{
+			VarName: varname,
+			Value:   fmt.Sprintf("%v", f()),
+		})
+	}
+	addDurationVar := func(varname string, f func() time.Duration) {
 		vars = append(vars, envValue{
 			VarName: varname,
 			Value:   fmt.Sprintf("%v", f()),
@@ -121,6 +141,7 @@ func debugEnvHandler(tsv *TabletServer, w http.ResponseWriter, r *http.Request) 
 	addIntVar("QueryCacheCapacity", tsv.QueryPlanCacheCap)
 	addIntVar("MaxResultSize", tsv.MaxResultSize)
 	addIntVar("WarnResultSize", tsv.WarnResultSize)
+	addDurationVar("UnhealthyThreshold", tsv.Config().Healthcheck.UnhealthyThresholdSeconds.Get)
 	addFloat64Var("ThrottleMetricThreshold", tsv.ThrottleMetricThreshold)
 	vars = append(vars, envValue{
 		VarName: "Consolidator",
