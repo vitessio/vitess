@@ -214,18 +214,13 @@ func vtgateExecute(sql string) ([]*engine.Plan, map[string]*TabletActions, error
 			continue
 		}
 
-		func() {
-			tc.mu.Lock()
-			defer tc.mu.Unlock()
+		tabletActions[shard] = &TabletActions{
+			TabletQueries: tc.tabletQueries,
+			MysqlQueries:  tc.mysqlQueries,
+		}
 
-			tabletActions[shard] = &TabletActions{
-				TabletQueries: tc.tabletQueries,
-				MysqlQueries:  tc.mysqlQueries,
-			}
-
-			tc.tabletQueries = nil
-			tc.mysqlQueries = nil
-		}()
+		tc.tabletQueries = nil
+		tc.mysqlQueries = nil
 	}
 
 	return plans, tabletActions, nil
