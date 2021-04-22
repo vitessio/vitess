@@ -150,6 +150,11 @@ func NewOnlineDDLs(keyspace string, ddlStmt sqlparser.DDLStatement, ddlStrategyS
 		return nil
 	}
 	switch ddlStmt := ddlStmt.(type) {
+	case *sqlparser.CreateTable, *sqlparser.AlterTable:
+		if err := appendOnlineDDL(ddlStmt.GetTable().Name.String(), ddlStmt); err != nil {
+			return nil, err
+		}
+		return onlineDDLs, nil
 	case *sqlparser.DropTable:
 		tables := ddlStmt.GetFromTables()
 		for _, table := range tables {
@@ -159,17 +164,9 @@ func NewOnlineDDLs(keyspace string, ddlStmt sqlparser.DDLStatement, ddlStrategyS
 			}
 		}
 		return onlineDDLs, nil
-	case *sqlparser.CreateTable:
-		// No particular treatment for CreateTable. "case" is here to acknowledge this is a supported type
-	case *sqlparser.AlterTable:
-		// No particular treatment for AlterTable. "case" is here to acknowledge this is a supported type
 	default:
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported statement for Online DDL: %v", sqlparser.String(ddlStmt))
 	}
-	if err := appendOnlineDDL(ddlStmt.GetTable().Name.String(), ddlStmt); err != nil {
-		return nil, err
-	}
-	return onlineDDLs, nil
 }
 
 // NewOnlineDDL creates a schema change request with self generated UUID and RequestTime
