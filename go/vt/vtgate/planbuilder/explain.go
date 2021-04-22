@@ -29,7 +29,7 @@ import (
 )
 
 // Builds an explain-plan for the given Primitive
-func buildExplainPlan(stmt sqlparser.Explain, reservedVars sqlparser.BindVars, vschema ContextVSchema) (engine.Primitive, error) {
+func buildExplainPlan(stmt sqlparser.Explain, reservedVars *sqlparser.ReservedVars, vschema ContextVSchema) (engine.Primitive, error) {
 	switch explain := stmt.(type) {
 	case *sqlparser.ExplainTab:
 		return explainTabPlan(explain, vschema)
@@ -61,7 +61,7 @@ func explainTabPlan(explain *sqlparser.ExplainTab, vschema ContextVSchema) (engi
 	}, nil
 }
 
-func buildVitessTypePlan(explain *sqlparser.ExplainStmt, reservedVars sqlparser.BindVars, vschema ContextVSchema) (engine.Primitive, error) {
+func buildVitessTypePlan(explain *sqlparser.ExplainStmt, reservedVars *sqlparser.ReservedVars, vschema ContextVSchema) (engine.Primitive, error) {
 	innerInstruction, err := createInstructionFor(sqlparser.String(explain.Statement), explain.Statement, reservedVars, vschema)
 	if err != nil {
 		return nil, err

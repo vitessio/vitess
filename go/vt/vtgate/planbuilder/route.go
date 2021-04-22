@@ -161,7 +161,7 @@ func (rb *route) Wireup(plan logicalPlan, jt *jointab) error {
 				return err
 			}
 			rb.eroute.Values = []sqltypes.PlanValue{pv}
-			vals.Right = sqlparser.ListArg("::" + engine.ListVarName)
+			vals.Right = sqlparser.ListArg(engine.ListVarName)
 		case nil:
 			// no-op.
 		default:
@@ -205,7 +205,7 @@ func (rb *route) Wireup(plan logicalPlan, jt *jointab) error {
 		case *sqlparser.ColName:
 			if !rb.isLocal(node) {
 				joinVar := jt.Procure(plan, node, rb.Order())
-				buf.Myprintf("%a", ":"+joinVar)
+				buf.WriteArg(":", joinVar)
 				return
 			}
 		case sqlparser.TableName:
@@ -287,7 +287,7 @@ func (rb *route) generateFieldQuery(sel sqlparser.SelectStatement, jt *jointab) 
 		case *sqlparser.ColName:
 			if !rb.isLocal(node) {
 				_, joinVar := jt.Lookup(node)
-				buf.Myprintf("%a", ":"+joinVar)
+				buf.WriteArg(":", joinVar)
 				return
 			}
 		case sqlparser.TableName:
@@ -440,23 +440,7 @@ func (rb *route) JoinCanMerge(pb *primitiveBuilder, rrb *route, ajoin *sqlparser
 		if where == nil {
 			return true
 		}
-		tableWithRoutingPredicates := make(map[sqlparser.TableName]struct{})
-		_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
-			col, ok := node.(*sqlparser.ColName)
-			if ok {
-				hasRuntimeRoutingPredicates := isTableNameCol(col) || isDbNameCol(col)
-				if hasRuntimeRoutingPredicates && pb.st.tables[col.Qualifier] != nil {
-					tableWithRoutingPredicates[col.Qualifier] = struct{}{}
-				}
-			}
-			return true, nil
-		}, where)
-		// Routes can be merged if only 1 table is used in the predicates that are used for routing
-		// TODO :- Even if more table are present in the routing, we can merge if they agree
-		if len(tableWithRoutingPredicates) <= 1 {
-			return true
-		}
-		return len(tableWithRoutingPredicates) == 0
+		return ajoin != nil
 	}
 	if ajoin == nil {
 		return false

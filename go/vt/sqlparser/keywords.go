@@ -208,6 +208,7 @@ var keywords = []keyword{
 	{"geometrycollection", GEOMETRYCOLLECTION},
 	{"get", UNUSED},
 	{"global", GLOBAL},
+	{"gtid_executed", GTID_EXECUTED},
 	{"grant", UNUSED},
 	{"group", GROUP},
 	{"group_concat", GROUP_CONCAT},

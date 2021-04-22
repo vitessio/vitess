@@ -29,7 +29,7 @@ var ErrExprNotSupported = fmt.Errorf("Expr Not Supported")
 func Convert(e Expr) (evalengine.Expr, error) {
 	switch node := e.(type) {
 	case Argument:
-		return evalengine.NewBindVar(string(node[1:])), nil
+		return evalengine.NewBindVar(string(node)), nil
 	case *Literal:
 		switch node.Type {
 		case IntVal:

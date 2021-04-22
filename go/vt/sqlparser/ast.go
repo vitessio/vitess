@@ -1688,7 +1688,7 @@ type (
 	}
 
 	// ListArg represents a named list argument.
-	ListArg []byte
+	ListArg string
 
 	// ValTuple represents a tuple of actual values.
 	ValTuple Exprs
