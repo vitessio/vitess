@@ -49,7 +49,8 @@ var (
 		// ALTER TABLE tbl something
 		regexp.MustCompile(alterTableBasicPattern + `([\S]+)\s+(.*$)`),
 	}
-	createTableRegexp = regexp.MustCompile(`(?s)(?i)(CREATE\s+TABLE\s+)` + "`" + `([^` + "`" + `]+)` + "`" + `(\s*[(].*$)`)
+	createTableRegexp     = regexp.MustCompile(`(?s)(?i)(CREATE\s+TABLE\s+)` + "`" + `([^` + "`" + `]+)` + "`" + `(\s*[(].*$)`)
+	revertStatementRegexp = regexp.MustCompile(`(?i)^revert\s+([\S]*)$`)
 )
 
 // ReplaceTableNameInCreateTableStatement returns a modified CREATE TABLE statement, such that the table name is replaced with given name.
@@ -88,24 +89,15 @@ func ParseAlterTableOptions(alterStatement string) (explicitSchema, explicitTabl
 	return explicitSchema, explicitTable, alterOptions
 }
 
-// NormalizeOnlineDDL normalizes a given query for OnlineDDL, possibly exploding it into multiple distinct queries
-func NormalizeOnlineDDL(sql string) (normalized []*NormalizedDDLQuery, err error) {
-	ddlStmt, action, err := ParseOnlineDDLStatement(sql)
-	if err != nil {
-		return normalized, err
+// legacyParseRevertUUID expects a query like "revert 4e5dcf80_354b_11eb_82cd_f875a4d24e90" and returns the UUID value.
+func legacyParseRevertUUID(sql string) (uuid string, err error) {
+	submatch := revertStatementRegexp.FindStringSubmatch(sql)
+	if len(submatch) == 0 {
+		return "", fmt.Errorf("Not a Revert DDL: '%s'", sql)
 	}
-	switch action {
-	case sqlparser.DropDDLAction:
-		tables := ddlStmt.GetFromTables()
-		for _, table := range tables {
-			ddlStmt.SetFromTables([]sqlparser.TableName{table})
-			normalized = append(normalized, &NormalizedDDLQuery{SQL: sqlparser.String(ddlStmt), TableName: table})
-		}
-		return normalized, nil
+	uuid = submatch[1]
+	if !IsOnlineDDLUUID(uuid) {
+		return "", fmt.Errorf("Not an online DDL UUID: '%s'", uuid)
 	}
-	if ddlStmt.IsFullyParsed() {
-		sql = sqlparser.String(ddlStmt)
-	}
-	n := &NormalizedDDLQuery{SQL: sql, TableName: ddlStmt.GetTable()}
-	return []*NormalizedDDLQuery{n}, nil
+	return uuid, nil
 }

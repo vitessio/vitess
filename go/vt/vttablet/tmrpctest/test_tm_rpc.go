@@ -596,6 +596,17 @@ func tmRPCTestApplySchemaPanic(ctx context.Context, t *testing.T, client tmclien
 	expectHandleRPCPanic(t, "ApplySchema", true /*verbose*/, err)
 }
 
+var testExecuteQueryQuery = []byte("drop table t")
+
+func (fra *fakeRPCTM) ExecuteQuery(ctx context.Context, query []byte, dbName string, maxrows int) (*querypb.QueryResult, error) {
+	if fra.panics {
+		panic(fmt.Errorf("test-triggered panic"))
+	}
+	compare(fra.t, "ExecuteQuery query", query, testExecuteQueryQuery)
+
+	return testExecuteFetchResult, nil
+}
+
 var testExecuteFetchQuery = []byte("fetch this invalid utf8 character \x80")
 var testExecuteFetchMaxRows = 100
 var testExecuteFetchResult = &querypb.QueryResult{
