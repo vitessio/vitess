@@ -348,36 +348,19 @@ func (sm *stateManager) StartRequest(ctx context.Context, target *querypb.Target
 
 	if sm.state != StateServing || !sm.replHealthy {
 		// This specific error string needs to be returned for vtgate buffering to work.
-		return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "operation not allowed in state NOT_SERVING")
+		return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.NotServing)
 	}
 
 	shuttingDown := sm.wantState != StateServing
 	if shuttingDown && !allowOnShutdown {
 		// This specific error string needs to be returned for vtgate buffering to work.
-		return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "operation not allowed in state SHUTTING_DOWN")
+		return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.ShuttingDown)
 	}
 
-	if target != nil {
-		switch {
-		case target.Keyspace != sm.target.Keyspace:
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid keyspace %v does not match expected %v", target.Keyspace, sm.target.Keyspace)
-		case target.Shard != sm.target.Shard:
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid shard %v does not match expected %v", target.Shard, sm.target.Shard)
-		case target.TabletType != sm.target.TabletType:
-			for _, otherType := range sm.alsoAllow {
-				if target.TabletType == otherType {
-					goto ok
-				}
-			}
-			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "invalid tablet type: %v, want: %v or %v", target.TabletType, sm.target.TabletType, sm.alsoAllow)
-		}
-	} else {
-		if !tabletenv.IsLocalContext(ctx) {
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "No target")
-		}
+	err = sm.verifyTargetLocked(ctx, target)
+	if err != nil {
+		return err
 	}
-
-ok:
 	sm.requests.Add(1)
 	return nil
 }
@@ -392,6 +375,10 @@ func (sm *stateManager) EndRequest() {
 func (sm *stateManager) VerifyTarget(ctx context.Context, target *querypb.Target) error {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
+	return sm.verifyTargetLocked(ctx, target)
+}
+
+func (sm *stateManager) verifyTargetLocked(ctx context.Context, target *querypb.Target) error {
 	if target != nil {
 		switch {
 		case target.Keyspace != sm.target.Keyspace:
@@ -404,7 +391,7 @@ func (sm *stateManager) VerifyTarget(ctx context.Context, target *querypb.Target
 					return nil
 				}
 			}
-			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "invalid tablet type: %v, want: %v or %v", target.TabletType, sm.target.TabletType, sm.alsoAllow)
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%s: %v, want: %v or %v", vterrors.WrongTablet, sm.target.TabletType, sm.target.TabletType, sm.alsoAllow)
 		}
 	} else {
 		if !tabletenv.IsLocalContext(ctx) {
