@@ -331,9 +331,8 @@ func TestStreamRowsMultiPacket(t *testing.T) {
 		t.Skip()
 	}
 
-	savedSize := *PacketSize
-	*PacketSize = 10
-	defer func() { *PacketSize = savedSize }()
+	reset := AdjustPacketSize(10)
+	defer reset()
 
 	execStatements(t, []string{
 		"create table t1(id int, val varbinary(128), primary key(id))",
@@ -360,9 +359,8 @@ func TestStreamRowsCancel(t *testing.T) {
 		t.Skip()
 	}
 
-	savedSize := *PacketSize
-	*PacketSize = 10
-	defer func() { *PacketSize = savedSize }()
+	reset := AdjustPacketSize(10)
+	defer reset()
 
 	execStatements(t, []string{
 		"create table t1(id int, val varbinary(128), primary key(id))",

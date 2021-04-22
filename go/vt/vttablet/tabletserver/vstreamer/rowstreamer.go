@@ -19,6 +19,7 @@ package vstreamer
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
@@ -65,6 +66,7 @@ type rowStreamer struct {
 	pkColumns []int
 	sendQuery string
 	vse       *Engine
+	pktsize   PacketSizer
 }
 
 func newRowStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, query string, lastpk []sqltypes.Value, vschema *localVSchema, send func(*binlogdatapb.VStreamRowsResponse) error, vse *Engine) *rowStreamer {
@@ -79,6 +81,7 @@ func newRowStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engi
 		send:    send,
 		vschema: vschema,
 		vse:     vse,
+		pktsize: DefaultPacketSizer(),
 	}
 }
 
@@ -237,11 +240,9 @@ func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.V
 	byteCount := 0
 	for {
 		//log.Infof("StreamResponse for loop iteration starts")
-		select {
-		case <-rs.ctx.Done():
+		if rs.ctx.Err() != nil {
 			log.Infof("Stream ended because of ctx.Done")
 			return fmt.Errorf("stream ended: %v", rs.ctx.Err())
-		default:
 		}
 
 		// check throttler.
@@ -273,19 +274,20 @@ func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.V
 			}
 		}
 
-		if byteCount >= *PacketSize {
+		if rs.pktsize.ShouldSend(byteCount) {
 			rs.vse.rowStreamerNumRows.Add(int64(len(response.Rows)))
 			rs.vse.rowStreamerNumPackets.Add(int64(1))
 
 			response.Lastpk = sqltypes.RowToProto3(lastpk)
+			startSend := time.Now()
 			err = send(response)
 			if err != nil {
 				log.Infof("Rowstreamer send returned error %v", err)
 				return err
 			}
-			// empty the rows so we start over, but we keep the
-			// same capacity
-			response.Rows = nil
+			rs.pktsize.Record(byteCount, time.Since(startSend))
+			// empty the rows so we start over, but we keep the same capacity
+			response.Rows = response.Rows[:0]
 			byteCount = 0
 		}
 	}
