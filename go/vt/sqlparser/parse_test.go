@@ -2320,6 +2320,12 @@ func TestConvert(t *testing.T) {
 	}, {
 		input:  "set transaction isolation level 12345",
 		output: "syntax error at position 38 near '12345'",
+	}, {
+		input:  "@",
+		output: "syntax error at position 2",
+	}, {
+		input:  "@@",
+		output: "syntax error at position 3",
 	}}
 
 	for _, tcase := range invalidSQL {
