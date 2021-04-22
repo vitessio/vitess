@@ -59,7 +59,6 @@ func (vtctlclient *VtctlClientProcess) InitShardMaster(Keyspace string, Shard st
 func (vtctlclient *VtctlClientProcess) ApplySchemaWithOutput(Keyspace string, SQL string, params VtctlClientParams) (result string, err error) {
 	args := []string{
 		"ApplySchema",
-		"-skip_preflight",
 		"-sql", SQL,
 	}
 	if params.DDLStrategy != "" {
