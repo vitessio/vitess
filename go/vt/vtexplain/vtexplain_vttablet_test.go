@@ -67,7 +67,6 @@ create table test_partitioned (
 	if err != nil {
 		t.Fatalf("parseSchema: %v", err)
 	}
-
 	{
 		tabletEnv, _ := newTabletEnvironment(ddls, defaultTestOpts())
 		setGlobalTabletEnv(tabletEnv)

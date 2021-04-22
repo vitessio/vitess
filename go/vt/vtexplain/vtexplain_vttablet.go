@@ -504,7 +504,7 @@ func (t *explainTablet) HandleQuery(c *mysql.Conn, query string, callback func(*
 		colTypeMap := map[string]querypb.Type{}
 		for _, table := range tables {
 			tableName := sqlparser.String(table)
-			columns, exists := globalTabletEnv.tableColumns[tableName]
+			columns, exists := getGlobalTabletEnv().tableColumns[tableName]
 			if !exists && tableName != "" && tableName != "dual" {
 				return fmt.Errorf("unable to resolve table name %s", tableName)
 			}

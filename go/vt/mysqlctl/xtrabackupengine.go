@@ -359,7 +359,7 @@ func (be *XtrabackupEngine) backupFiles(ctx context.Context, params BackupParams
 	sterrOutput := stderrBuilder.String()
 
 	if err := backupCmd.Wait(); err != nil {
-		return replicationPosition, vterrors.Wrap(err, "xtrabackup failed with error")
+		return replicationPosition, vterrors.Wrap(err, fmt.Sprintf("xtrabackup failed with error. Output=%s", sterrOutput))
 	}
 
 	replicationPosition, rerr := findReplicationPosition(sterrOutput, flavor, params.Logger)

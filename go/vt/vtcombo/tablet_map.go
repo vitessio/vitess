@@ -645,6 +645,10 @@ func (itmc *internalTabletManagerClient) ApplySchema(ctx context.Context, tablet
 	return t.tm.ApplySchema(ctx, change)
 }
 
+func (itmc *internalTabletManagerClient) ExecuteQuery(ctx context.Context, tablet *topodatapb.Tablet, query []byte, maxrows int) (*querypb.QueryResult, error) {
+	return nil, fmt.Errorf("not implemented in vtcombo")
+}
+
 func (itmc *internalTabletManagerClient) ExecuteFetchAsDba(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, query []byte, maxRows int, disableBinlogs, reloadSchema bool) (*querypb.QueryResult, error) {
 	return nil, fmt.Errorf("not implemented in vtcombo")
 }
