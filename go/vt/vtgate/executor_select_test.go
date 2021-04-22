@@ -18,8 +18,10 @@ package vtgate
 
 import (
 	"fmt"
+	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"vitess.io/vitess/go/cache"
 	"vitess.io/vitess/go/test/utils"
@@ -2335,4 +2337,37 @@ func TestSelectFromInformationSchema(t *testing.T) {
 	_, err = exec(executor, session, "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'TestExecutor'")
 	require.NoError(t, err)
 	assert.Equal(t, sbc1.StringQueries(), []string{"select * from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = :__vtschemaname"})
+}
+
+func TestStreamOrderByLimitWithMultipleResults(t *testing.T) {
+	// Special setup: Don't use createLegacyExecutorEnv.
+	cell := "aa"
+	hc := discovery.NewFakeHealthCheck()
+	s := createSandbox("TestExecutor")
+	s.VSchema = executorVSchema
+	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
+	serv := new(sandboxTopo)
+	resolver := newTestResolver(hc, serv, cell)
+	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
+	count := 1
+	for _, shard := range shards {
+		sbc := hc.AddTestTablet(cell, shard, 1, "TestExecutor", shard, topodatapb.TabletType_MASTER, true, 1, nil)
+		sbc.SetResults([]*sqltypes.Result{
+			sqltypes.MakeTestResult(sqltypes.MakeTestFields("id|col|weight_string(id)", "int32|int32|varchar"), fmt.Sprintf("%d|%d|NULL", count, count)),
+			sqltypes.MakeTestResult(sqltypes.MakeTestFields("id|col|weight_string(id)", "int32|int32|varchar"), fmt.Sprintf("%d|%d|NULL", count+10, count)),
+		})
+		count++
+	}
+	executor := NewExecutor(context.Background(), serv, cell, resolver, true, false, testBufferSize, cache.DefaultConfig)
+	before := runtime.NumGoroutine()
+
+	query := "select id, col from user order by id limit 2"
+	gotResult, err := executorStream(executor, query)
+	require.NoError(t, err)
+
+	wantResult := sqltypes.MakeTestResult(sqltypes.MakeTestFields("id|col", "int32|int32"), "1|1", "2|2")
+	utils.MustMatch(t, wantResult, gotResult)
+	// some sleep to close all goroutines.
+	time.Sleep(100 * time.Millisecond)
+	assert.GreaterOrEqual(t, before, runtime.NumGoroutine(), "left open goroutines lingering")
 }

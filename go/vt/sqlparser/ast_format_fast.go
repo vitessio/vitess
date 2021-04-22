@@ -253,8 +253,9 @@ func (node *DropDatabase) formatFast(buf *TrackedBuffer) {
 		exists = "if exists "
 	}
 	buf.WriteString(DropStr)
-	buf.WriteString(" database ")
+	buf.WriteByte(' ')
 	node.Comments.formatFast(buf)
+	buf.WriteString("database ")
 	buf.WriteString(exists)
 	node.DBName.formatFast(buf)
 }
@@ -368,7 +369,9 @@ func (node *AlterMigration) formatFast(buf *TrackedBuffer) {
 
 // formatFast formats the node.
 func (node *RevertMigration) formatFast(buf *TrackedBuffer) {
-	buf.WriteString("revert vitess_migration '")
+	buf.WriteString("revert ")
+	node.Comments.formatFast(buf)
+	buf.WriteString("vitess_migration '")
 	buf.WriteString(node.UUID)
 	buf.WriteByte('\'')
 }
@@ -1815,6 +1818,7 @@ func (node *AlterDatabase) formatFast(buf *TrackedBuffer) {
 // formatFast formats the node.
 func (node *CreateTable) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("create ")
+	node.Comments.formatFast(buf)
 	if node.Temp {
 		buf.WriteString("temporary ")
 	}
@@ -1915,15 +1919,16 @@ func (node *AlterView) formatFast(buf *TrackedBuffer) {
 func (node *DropTable) formatFast(buf *TrackedBuffer) {
 	temp := ""
 	if node.Temp {
-		temp = " temporary"
+		temp = "temporary "
 	}
 	exists := ""
 	if node.IfExists {
 		exists = " if exists"
 	}
-	buf.WriteString("drop")
+	buf.WriteString("drop ")
+	node.Comments.formatFast(buf)
 	buf.WriteString(temp)
-	buf.WriteString(" table")
+	buf.WriteString("table")
 	buf.WriteString(exists)
 	buf.WriteByte(' ')
 	node.FromTables.formatFast(buf)
@@ -1943,7 +1948,9 @@ func (node *DropView) formatFast(buf *TrackedBuffer) {
 
 // formatFast formats the AlterTable node.
 func (node *AlterTable) formatFast(buf *TrackedBuffer) {
-	buf.WriteString("alter table ")
+	buf.WriteString("alter ")
+	node.Comments.formatFast(buf)
+	buf.WriteString("table ")
 	node.Table.formatFast(buf)
 	prefix := ""
 	for i, option := range node.AlterOptions {

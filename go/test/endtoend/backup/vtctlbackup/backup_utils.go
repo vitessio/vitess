@@ -392,6 +392,11 @@ func testRestoreOldMaster(t *testing.T, method restoreMethod) {
 	// insert data on master, wait for replica to get it
 	verifyInitialReplication(t)
 
+	// TODO: The following Sleep in introduced as it seems like the previous step doesn't fully complete, causing
+	// this test to be flaky. Sleep seems to solve the problem. Need to fix this in a better way and Wait for
+	// previous test to complete (suspicion: MySQL does not fully start)
+	time.Sleep(5 * time.Second)
+
 	// backup the replica
 	err := localCluster.VtctlclientProcess.ExecuteCommand("Backup", replica1.Alias)
 	require.Nil(t, err)
@@ -487,6 +492,11 @@ func stopAllTablets() {
 func terminatedRestore(t *testing.T) {
 	// insert data on master, wait for replica to get it
 	verifyInitialReplication(t)
+
+	// TODO: The following Sleep in introduced as it seems like the previous step doesn't fully complete, causing
+	// this test to be flaky. Sleep seems to solve the problem. Need to fix this in a better way and Wait for
+	// previous test to complete (suspicion: MySQL does not fully start)
+	time.Sleep(5 * time.Second)
 
 	// backup the replica
 	err := localCluster.VtctlclientProcess.ExecuteCommand("Backup", replica1.Alias)
