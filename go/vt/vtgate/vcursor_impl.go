@@ -593,7 +593,7 @@ func (vc *vcursorImpl) TabletType() topodatapb.TabletType {
 // SubmitOnlineDDL implements the VCursor interface
 func (vc *vcursorImpl) SubmitOnlineDDL(onlineDDl *schema.OnlineDDL) error {
 	if vc.topoServer == nil {
-		return vterrors.New(vtrpcpb.Code_INTERNAL, "Unable to apply DDL toposerver unavailable, ensure this vtgate is not using filtered keyspaces")
+		return vterrors.New(vtrpcpb.Code_INTERNAL, "Unable to apply DDL because toposerver is unavailable, ensure this vtgate is not using filtered keyspaces")
 	}
 	conn, err := vc.topoServer.ConnForCell(vc.ctx, topo.GlobalCell)
 	if err != nil {
