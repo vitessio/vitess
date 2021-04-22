@@ -25,6 +25,7 @@ import (
 	"testing"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
 
@@ -496,31 +497,68 @@ func TestAction(t *testing.T) {
 
 	bv := make(map[string]*querypb.BindVariable)
 	bv["a"] = sqltypes.Uint64BindVariable(0)
-	action, desc := qrs.GetAction("123", "user1", bv)
+
+	mc := sqlparser.MarginComments{
+		Leading:  "some comments leading the query",
+		Trailing: "other trailing comments",
+	}
+
+	action, desc := qrs.GetAction("123", "user1", bv, mc)
 	if action != QRFail {
 		t.Errorf("want fail")
 	}
 	if desc != "rule 1" {
 		t.Errorf("want rule 1, got %s", desc)
 	}
-	action, desc = qrs.GetAction("1234", "user", bv)
+	action, desc = qrs.GetAction("1234", "user", bv, mc)
 	if action != QRFailRetry {
 		t.Errorf("want fail_retry")
 	}
 	if desc != "rule 2" {
 		t.Errorf("want rule 2, got %s", desc)
 	}
-	action, _ = qrs.GetAction("1234", "user1", bv)
+	action, _ = qrs.GetAction("1234", "user1", bv, mc)
 	if action != QRContinue {
 		t.Errorf("want continue")
 	}
+
 	bv["a"] = sqltypes.Uint64BindVariable(1)
-	action, desc = qrs.GetAction("1234", "user1", bv)
+	action, desc = qrs.GetAction("1234", "user1", bv, mc)
 	if action != QRFail {
 		t.Errorf("want fail")
 	}
 	if desc != "rule 3" {
-		t.Errorf("want rule 2, got %s", desc)
+		t.Errorf("want rule 3, got %s", desc)
+	}
+
+	// reset bound variable 'a' to 0 so it doesn't match rule 3
+	bv["a"] = sqltypes.Uint64BindVariable(0)
+
+	qr4 := NewQueryRule("rule 4", "r4", QRFail)
+	qr4.SetTrailingCommentCond(".*trailing.*")
+
+	newQrs := qrs.Copy()
+	newQrs.Add(qr4)
+
+	action, desc = newQrs.GetAction("1234", "user1", bv, mc)
+	if action != QRFail {
+		t.Errorf("want fail")
+	}
+	if desc != "rule 4" {
+		t.Errorf("want rule 4, got %s", desc)
+	}
+
+	qr5 := NewQueryRule("rule 5", "r4", QRFail)
+	qr5.SetLeadingCommentCond(".*leading.*")
+
+	newQrs = qrs.Copy()
+	newQrs.Add(qr5)
+	action, desc = newQrs.GetAction("1234", "user1", bv, mc)
+	if action != QRFail {
+		t.Errorf("want fail")
+	}
+	if desc != "rule 5" {
+		t.Errorf("want rule 5, got %s", desc)
 	}
 }
 
