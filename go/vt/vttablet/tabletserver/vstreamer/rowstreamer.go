@@ -238,6 +238,7 @@ func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.V
 	var response binlogdatapb.VStreamRowsResponse
 	var rows []*querypb.Row
 	var rowCount int
+	var mysqlrow []sqltypes.Value
 
 	filtered := make([]sqltypes.Value, len(rs.plan.ColExprs))
 	lastpk := make([]sqltypes.Value, len(rs.pkColumns))
@@ -254,20 +255,23 @@ func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.V
 			continue
 		}
 
-		row, err := conn.FetchNext()
+		if mysqlrow != nil {
+			mysqlrow = mysqlrow[:0]
+		}
+		mysqlrow, err = conn.FetchNext(mysqlrow)
 		if err != nil {
 			return err
 		}
-		if row == nil {
+		if mysqlrow == nil {
 			break
 		}
 		// Compute lastpk here, because we'll need it
 		// at the end after the loop exits.
 		for i, pk := range rs.pkColumns {
-			lastpk[i] = row[pk]
+			lastpk[i] = mysqlrow[pk]
 		}
 		// Reuse the vstreamer's filter.
-		ok, err := rs.plan.filter(row, filtered)
+		ok, err := rs.plan.filter(mysqlrow, filtered)
 		if err != nil {
 			return err
 		}
