@@ -338,6 +338,24 @@ func (cached *MergeSort) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *MessageStream) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(40)
+	}
+	// field Keyspace *vitess.io/vitess/go/vt/vtgate/vindexes.Keyspace
+	size += cached.Keyspace.CachedSize(true)
+	// field TargetDestination vitess.io/vitess/go/vt/key.Destination
+	if cc, ok := cached.TargetDestination.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field TableName string
+	size += int64(len(cached.TableName))
+	return size
+}
 func (cached *OnlineDDL) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
