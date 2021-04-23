@@ -17,8 +17,9 @@ limitations under the License.
 package main
 
 import (
-	"reflect"
 	"testing"
+
+	"vitess.io/vitess/go/test/utils"
 )
 
 func Test_groupPRs(t *testing.T) {
@@ -27,19 +28,28 @@ func Test_groupPRs(t *testing.T) {
 		prInfos []prInfo
 		want    map[string]map[string][]prInfo
 	}{
-		{name: "Single PR info with no labels", prInfos: []prInfo{{Title: "pr 1", Number: 1}}, want: map[string]map[string][]prInfo{"Other": {"Other": []prInfo{{Title: "pr 1", Number: 1}}}}},
-		{name: "Single PR info with type label", prInfos: []prInfo{{Title: "pr 1", Number: 1, Labels: []label{{Name: prefixType + "Bug"}}}}, want: map[string]map[string][]prInfo{"Bug": {"Other": []prInfo{{Title: "pr 1", Number: 1, Labels: []label{{Name: prefixType + "Bug"}}}}}}},
-		{name: "Single PR info with type and component labels", prInfos: []prInfo{{Title: "pr 1", Number: 1, Labels: []label{{Name: prefixType + "Bug"}, {Name: prefixComponent + "VTGate"}}}}, want: map[string]map[string][]prInfo{"Bug": {"VTGate": []prInfo{{Title: "pr 1", Number: 1, Labels: []label{{Name: prefixType + "Bug"}, {Name: prefixComponent + "VTGate"}}}}}}},
-		{name: "Multiple PR infos with type and component labels", prInfos: []prInfo{
-			{Title: "pr 1", Number: 1, Labels: []label{{Name: prefixType + "Bug"}, {Name: prefixComponent + "VTGate"}}},
-			{Title: "pr 2", Number: 2, Labels: []label{{Name: prefixType + "Feature"}, {Name: prefixComponent + "VTTablet"}}}},
-			want: map[string]map[string][]prInfo{"Bug": {"VTGate": []prInfo{{Title: "pr 1", Number: 1, Labels: []label{{Name: prefixType + "Bug"}, {Name: prefixComponent + "VTGate"}}}}}, "Feature": {"VTTablet": []prInfo{{Title: "pr 2", Number: 2, Labels: []label{{Name: prefixType + "Feature"}, {Name: prefixComponent + "VTTablet"}}}}}}},
+		{
+			name:    "Single PR info with no labels",
+			prInfos: []prInfo{{Title: "pr 1", Number: 1}},
+			want:    map[string]map[string][]prInfo{"Other": {"Other": []prInfo{{Title: "pr 1", Number: 1}}}},
+		}, {
+			name:    "Single PR info with type label",
+			prInfos: []prInfo{{Title: "pr 1", Number: 1, Labels: []label{{Name: prefixType + "Bug"}}}},
+			want:    map[string]map[string][]prInfo{"Bug fixes": {"Other": []prInfo{{Title: "pr 1", Number: 1, Labels: []label{{Name: prefixType + "Bug"}}}}}}},
+		{
+			name:    "Single PR info with type and component labels",
+			prInfos: []prInfo{{Title: "pr 1", Number: 1, Labels: []label{{Name: prefixType + "Bug"}, {Name: prefixComponent + "VTGate"}}}},
+			want:    map[string]map[string][]prInfo{"Bug fixes": {"VTGate": []prInfo{{Title: "pr 1", Number: 1, Labels: []label{{Name: prefixType + "Bug"}, {Name: prefixComponent + "VTGate"}}}}}}},
+		{
+			name: "Multiple PR infos with type and component labels", prInfos: []prInfo{
+				{Title: "pr 1", Number: 1, Labels: []label{{Name: prefixType + "Bug"}, {Name: prefixComponent + "VTGate"}}},
+				{Title: "pr 2", Number: 2, Labels: []label{{Name: prefixType + "Feature"}, {Name: prefixComponent + "VTTablet"}}}},
+			want: map[string]map[string][]prInfo{"Bug fixes": {"VTGate": []prInfo{{Title: "pr 1", Number: 1, Labels: []label{{Name: prefixType + "Bug"}, {Name: prefixComponent + "VTGate"}}}}}, "Feature": {"VTTablet": []prInfo{{Title: "pr 2", Number: 2, Labels: []label{{Name: prefixType + "Feature"}, {Name: prefixComponent + "VTTablet"}}}}}}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := groupPRs(tt.prInfos); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("groupPRs() = %v, want %v", got, tt.want)
-			}
+			got := groupPRs(tt.prInfos)
+			utils.MustMatch(t, tt.want, got)
 		})
 	}
 }
