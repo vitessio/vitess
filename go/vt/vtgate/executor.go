@@ -1029,31 +1029,17 @@ func (e *Executor) handleOther(ctx context.Context, safeSession *SafeSession, sq
 // StreamExecute executes a streaming query.
 func (e *Executor) StreamExecute(ctx context.Context, method string, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, target querypb.Target, callback func(*sqltypes.Result) error) (err error) {
 	logStats := NewLogStats(ctx, method, sql, bindVars)
-	stmtType := sqlparser.Preview(sql)
-	logStats.StmtType = stmtType.String()
 	defer logStats.Send()
 
 	if bindVars == nil {
 		bindVars = make(map[string]*querypb.BindVariable)
 	}
 	query, comments := sqlparser.SplitMarginComments(sql)
-	vcursor, _ := newVCursorImpl(ctx, safeSession, comments, e, logStats, e.vm, e.VSchema(), e.resolver.resolver, e.serv, e.warnShardedOnly)
-	vcursor.SetIgnoreMaxMemoryRows(true)
-	switch stmtType {
-	case sqlparser.StmtSelect, sqlparser.StmtDDL, sqlparser.StmtSet, sqlparser.StmtInsert, sqlparser.StmtReplace, sqlparser.StmtUpdate, sqlparser.StmtDelete,
-		sqlparser.StmtUse, sqlparser.StmtOther, sqlparser.StmtComment, sqlparser.StmtFlush, sqlparser.StmtStream:
-		// These may or may not all work, but getPlan() should either return a plan with instructions
-		// or an error, so it's safe to try.
-		break
-	case sqlparser.StmtVStream:
-		log.Infof("handleVStream called with target %v", target)
-		return e.handleVStream(ctx, sql, target, callback, vcursor, logStats)
-	default:
-		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "OLAP does not supported statement type: %s", stmtType)
-	}
+	vc, _ := newVCursorImpl(ctx, safeSession, comments, e, logStats, e.vm, e.VSchema(), e.resolver.resolver, e.serv, e.warnShardedOnly)
+	vc.SetIgnoreMaxMemoryRows(true)
 
 	plan, err := e.getPlan(
-		vcursor,
+		vc,
 		query,
 		comments,
 		bindVars,
@@ -1063,6 +1049,11 @@ func (e *Executor) StreamExecute(ctx context.Context, method string, safeSession
 	if err != nil {
 		logStats.Error = err
 		return err
+	}
+	logStats.StmtType = plan.Type.String()
+	switch plan.Type {
+	case sqlparser.StmtBegin, sqlparser.StmtCommit, sqlparser.StmtRollback:
+		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "OLAP does not supported statement type: %s", plan.Type)
 	}
 
 	err = e.addNeededBindVars(plan.BindVarNeeds, bindVars, safeSession)
@@ -1087,7 +1078,7 @@ func (e *Executor) StreamExecute(ctx context.Context, method string, safeSession
 	seenResults := false
 	var foundRows uint64
 	callbackGen := callback
-	if plan.Type != sqlparser.StmtStream {
+	if plan.Type != sqlparser.StmtStream && plan.Type != sqlparser.StmtVStream {
 		callbackGen = func(qr *sqltypes.Result) error {
 			// If the row has field info, send it separately.
 			// TODO(sougou): this behavior is for handling tests because
@@ -1122,26 +1113,31 @@ func (e *Executor) StreamExecute(ctx context.Context, method string, safeSession
 		}
 	}
 
-	err = plan.Instructions.StreamExecute(vcursor, bindVars, true, callbackGen)
-
-	// Send left-over rows if there is no error on execution.
-	if err == nil && plan.Type != sqlparser.StmtStream {
-		if len(result.Rows) > 0 || !seenResults {
-			if err := callback(result); err != nil {
-				return err
-			}
-		}
-		// save session stats for future queries
-		if !safeSession.foundRowsHandled {
-			safeSession.FoundRows = foundRows
-		}
-		safeSession.RowCount = -1
-	}
+	err = plan.Instructions.StreamExecute(vc, bindVars, true, callbackGen)
 
 	logStats.ExecuteTime = time.Since(execStart)
 	e.updateQueryCounts(plan.Instructions.RouteType(), plan.Instructions.GetKeyspaceName(), plan.Instructions.GetTableName(), int64(logStats.ShardQueries))
 
-	return err
+	if err != nil {
+		return err
+	}
+
+	if plan.Type == sqlparser.StmtStream || plan.Type == sqlparser.StmtVStream {
+		return nil
+	}
+
+	// Send left-over rows if there is no error on execution.
+	if len(result.Rows) > 0 || !seenResults {
+		if err := callback(result); err != nil {
+			return err
+		}
+	}
+	// save session stats for future queries
+	if !safeSession.foundRowsHandled {
+		safeSession.FoundRows = foundRows
+	}
+	safeSession.RowCount = -1
+	return nil
 }
 
 // MessageStream is part of the vtgate service API. This is a V2 level API that's sent
