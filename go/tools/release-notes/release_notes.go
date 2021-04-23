@@ -102,7 +102,7 @@ func loadAllPRs(prs []string) ([]prInfo, error) {
 	close(prChan)
 
 	var prInfos []prInfo
-
+	fmt.Printf("Found %d merged PRs. Loading PR info", len(prs))
 	wg := sync.WaitGroup{}
 	mu := sync.Mutex{}
 	for i := 0; i < 10; i++ {
@@ -155,6 +155,13 @@ func groupPRs(prInfos []prInfo) map[string]map[string][]prInfo {
 				component = strings.TrimPrefix(lbl.Name, prefixComponent)
 			}
 		}
+		switch typ {
+		case "":
+			typ = "Other"
+		case "Bug":
+			typ = "Bug fixes"
+		}
+
 		if typ == "" {
 			typ = "Other"
 		}
