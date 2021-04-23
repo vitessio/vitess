@@ -30,7 +30,7 @@ func TestVtcomboArguments(t *testing.T) {
 	args := env.VtcomboArguments()
 
 	t.Run("service_map flag", func(t *testing.T) {
-		require.Contains(t, args, "-service_map", "vttest.LocalTestEnv must contain provide `-service_map` flag to vtcombo")
+		require.Contains(t, args, "-service_map", "vttest.LocalTestEnv must provide `-service_map` flag to vtcombo")
 
 		x := sort.SearchStrings(args, "-service_map")
 		require.Less(t, x+1, len(args), "-service_map vtcombo flag (idx = %d) must take an argument. full arg list: %v", x, args)
