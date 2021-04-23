@@ -245,7 +245,9 @@ func (mysqld *Mysqld) WaitMasterPos(ctx context.Context, targetPos mysql.Positio
 		if err != nil {
 			return fmt.Errorf("WaitMasterPos: MasterPosition failed: %v", err)
 		}
+		log.Infof("Master position for mysql connection %s is %s, required position is %s ", conn.String(), mpos, targetPos)
 		if mpos.AtLeast(targetPos) {
+			log.Infof("Master position for mysql connection %s is %s already reached required position is %s ", conn.String(), mpos, targetPos)
 			return nil
 		}
 
@@ -255,9 +257,11 @@ func (mysqld *Mysqld) WaitMasterPos(ctx context.Context, targetPos mysql.Positio
 			return err
 		}
 	}
+	log.Infof("Executing query %s on mysql connection %s", query, conn.String())
 
 	qr, err := mysqld.FetchSuperQuery(ctx, query)
 	if err != nil {
+		log.Infof("Executing query %s on mysql connection %s returned error %s", query, conn.String(), err)
 		return fmt.Errorf("%v(%v) failed: %v", waitCommandName, query, err)
 	}
 
@@ -271,6 +275,12 @@ func (mysqld *Mysqld) WaitMasterPos(ctx context.Context, targetPos mysql.Positio
 	if result.ToString() == "-1" {
 		return fmt.Errorf("timed out waiting for position %v", targetPos)
 	}
+	log.Infof("Executing query %s on mysql connection %s returned success", query, conn.String())
+	mpos, err := conn.MasterPosition()
+	if err != nil {
+		return fmt.Errorf("WaitMasterPos: MasterPosition failed: %v", err)
+	}
+	log.Infof("Master position for mysql connection %s after WaitForPos is now %s, required position is %s ", conn.String(), mpos, targetPos)
 	return nil
 }
 

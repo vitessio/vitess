@@ -21,6 +21,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"runtime/debug"
 	"time"
 
 	"github.com/golang/protobuf/proto"
@@ -819,9 +820,9 @@ func wrapError(err error, stopPos mysql.Position, vse *Engine) error {
 		vse.vstreamersEndedWithErrors.Add(1)
 		vse.errorCounts.Add("StreamEnded", 1)
 		err = fmt.Errorf("stream (at source tablet) error @ %v: %v", stopPos, err)
-		log.Error(err)
+		log.Error("Error: %s. StrackTrace:\n%s", err, debug.Stack())
 		return err
 	}
-	log.Infof("stream (at source tablet) ended @ %v", stopPos)
+	log.Infof("stream (at source tablet) ended @ %v. Stacktrace: %s", stopPos, debug.Stack())
 	return nil
 }

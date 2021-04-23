@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"time"
@@ -199,12 +200,17 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflow, sourceC
 	// We need a cancelable context to abort all running streams
 	// if one stream returns an error.
 	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
+	defer func(ctx context.Context, cancel func()) {
+		deadline, _ := ctx.Deadline()
+		log.Infof("VDiff context cancelled, deadline %v, error %v, callstack:\n%s", deadline, ctx.Err(), debug.Stack())
+		cancel()
+	}(ctx, cancel)
 
 	// TODO(sougou): parallelize
 	diffReports := make(map[string]*DiffReport)
 	jsonOutput := ""
 	for table, td := range df.differs {
+		log.Infof("Starting VDiff for table %s", table)
 		// Stop the targets and record their source positions.
 		if err := df.stopTargets(ctx); err != nil {
 			return nil, vterrors.Wrap(err, "stopTargets")
@@ -240,6 +246,7 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflow, sourceC
 			}
 			jsonOutput += fmt.Sprintf("%s", json)
 		} else {
+			log.Infof("Summary for %v: %+v\n", td.targetTable, *dr)
 			wr.Logger().Printf("Summary for %v: %+v\n", td.targetTable, *dr)
 		}
 		diffReports[table] = dr
@@ -501,6 +508,7 @@ func (df *vdiff) stopTargets(ctx context.Context) error {
 	var mu sync.Mutex
 
 	err := df.forAll(df.targets, func(shard string, target *shardStreamer) error {
+		log.Infof("Stopping target streams for workflow %s on %s", df.ts.workflow, target.master.AliasString())
 		query := fmt.Sprintf("update _vt.vreplication set state='Stopped', message='for vdiff' where db_name=%s and workflow=%s", encodeString(target.master.DbName()), encodeString(df.ts.workflow))
 		_, err := df.ts.wr.tmc.VReplicationExec(ctx, target.master.Tablet, query)
 		if err != nil {
@@ -522,6 +530,8 @@ func (df *vdiff) stopTargets(ctx context.Context) error {
 			if err != nil {
 				return err
 			}
+			log.Infof("Stopped target streams for shard %s at gtid %s", bls.Shard, pos.String())
+
 			func() {
 				mu.Lock()
 				defer mu.Unlock()
@@ -563,6 +573,7 @@ func (df *vdiff) startQueryStreams(ctx context.Context, keyspace string, partici
 			}
 			return vterrors.Wrapf(err, "WaitForPosition for tablet %v", topoproto.TabletAliasString(participant.tablet.Alias))
 		}
+		log.Infof("WaitForPosition: tablet %s should have reached position %s", participant.tablet.Alias.String(), mysql.EncodePosition(participant.position))
 		participant.result = make(chan *sqltypes.Result, 1)
 		gtidch := make(chan string, 1)
 
@@ -606,6 +617,7 @@ func (df *vdiff) streamOne(ctx context.Context, keyspace, shard string, particip
 			TabletType: participant.tablet.Type,
 		}
 		var fields []*querypb.Field
+		log.Infof("Starting to stream results for %s, query %s", target.String(), query)
 		return conn.VStreamResults(ctx, target, query, func(vrs *binlogdatapb.VStreamResultsResponse) error {
 			if vrs.Fields != nil {
 				fields = vrs.Fields
@@ -620,6 +632,7 @@ func (df *vdiff) streamOne(ctx context.Context, keyspace, shard string, particip
 			if vrs.Fields == nil {
 				result.Fields = nil
 			}
+			log.Infof("Got gtid %s with %d rows for %s, query %s", vrs.Gtid, len(vrs.Rows), target.String(), query)
 			select {
 			case participant.result <- result:
 			case <-ctx.Done():
@@ -639,12 +652,15 @@ func (df *vdiff) syncTargets(ctx context.Context, filteredReplicationWaitTime ti
 		bls := target.sources[uid]
 		pos := df.sources[bls.Shard].snapshotPosition
 		query := fmt.Sprintf("update _vt.vreplication set state='Running', stop_pos='%s', message='synchronizing for vdiff' where id=%d", pos, uid)
+		log.Infof("Restarting target streams on %s to sync with source gtid %s", target.master.AliasString(), pos)
 		if _, err := df.ts.wr.tmc.VReplicationExec(ctx, target.master.Tablet, query); err != nil {
 			return err
 		}
+		log.Infof("Waiting for target streams on %s to sync with source gtid %s", target.master.AliasString(), pos)
 		if err := df.ts.wr.tmc.VReplicationWaitForPos(waitCtx, target.master.Tablet, int(uid), pos); err != nil {
 			return vterrors.Wrapf(err, "VReplicationWaitForPos for tablet %v", topoproto.TabletAliasString(target.master.Tablet.Alias))
 		}
+		log.Infof("WaitForPos returned successfully for target streams on %s to sync with source gtid %s", target.master.AliasString(), pos)
 		return nil
 	})
 	if err != nil {
@@ -653,6 +669,7 @@ func (df *vdiff) syncTargets(ctx context.Context, filteredReplicationWaitTime ti
 
 	err = df.forAll(df.targets, func(shard string, target *shardStreamer) error {
 		pos, err := df.ts.wr.tmc.MasterPosition(ctx, target.master.Tablet)
+		log.Infof("Master position for %s is %s", target.master.AliasString(), pos)
 		if err != nil {
 			return err
 		}
