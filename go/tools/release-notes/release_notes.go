@@ -30,23 +30,35 @@ import (
 	"text/template"
 )
 
-type label struct {
-	Name string `json:"name"`
-}
+type (
+	label struct {
+		Name string `json:"name"`
+	}
 
-type prInfo struct {
-	Labels []label `json:"labels"`
-	Number int     `json:"number"`
-	Title  string  `json:"title"`
-}
+	prInfo struct {
+		Labels []label `json:"labels"`
+		Number int     `json:"number"`
+		Title  string  `json:"title"`
+	}
+
+	prComponent struct {
+		Name    string
+		PrInfos []prInfo
+	}
+
+	prType struct {
+		Name       string
+		Components []prComponent
+	}
+)
 
 const (
 	markdownTemplate = `
-{{- range $typeName, $components := . }}
-## {{ $typeName }}
-{{- range $componentName, $component := $components }} 
-### {{ $componentName}}
-{{- range $prInfo := $component }}
+{{- range $type := . }}
+## {{ $type.Name }}
+{{- range $component := $type.Components }} 
+### {{ $component.Name }}
+{{- range $prInfo := $component.PrInfos }}
  - {{ $prInfo.Title }} #{{ $prInfo.Number }}
 {{- end }}
 {{- end }}
@@ -180,6 +192,30 @@ func groupPRs(prInfos []prInfo) map[string]map[string][]prInfo {
 	return prPerType
 }
 
+func createSortedPrTypeSlice(prPerType map[string]map[string][]prInfo) []prType {
+	var data []prType
+	for typeKey, typeElem := range prPerType {
+		newPrType := prType{
+			Name: typeKey,
+		}
+		for componentKey, prInfos := range typeElem {
+			newComponent := prComponent{
+				Name:    componentKey,
+				PrInfos: prInfos,
+			}
+			newPrType.Components = append(newPrType.Components, newComponent)
+		}
+		sort.Slice(newPrType.Components, func(i, j int) bool {
+			return newPrType.Components[i].Name < newPrType.Components[j].Name
+		})
+		data = append(data, newPrType)
+	}
+	sort.Slice(data, func(i, j int) bool {
+		return data[i].Name < data[j].Name
+	})
+	return data
+}
+
 func writePrInfos(fileout string, prPerType map[string]map[string][]prInfo) (err error) {
 	writeTo := os.Stdout
 	if fileout != "" {
@@ -189,8 +225,10 @@ func writePrInfos(fileout string, prPerType map[string]map[string][]prInfo) (err
 		}
 	}
 
+	data := createSortedPrTypeSlice(prPerType)
+
 	t := template.Must(template.New("markdownTemplate").Parse(markdownTemplate))
-	err = t.ExecuteTemplate(writeTo, "markdownTemplate", prPerType)
+	err = t.ExecuteTemplate(writeTo, "markdownTemplate", data)
 	if err != nil {
 		return err
 	}
