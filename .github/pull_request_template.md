@@ -25,4 +25,6 @@
 For each PR, try to find one `Type:` label and one `Component:` label. 
 This will help in finding a reviewer, and in creating release notes for the next release.
 
+If your PR needs to be backported, add the label `Backport me!`.
+
 -->
