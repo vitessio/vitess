@@ -235,7 +235,10 @@ func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.V
 		return fmt.Errorf("stream send error: %v", err)
 	}
 
-	response := &binlogdatapb.VStreamRowsResponse{}
+	var response binlogdatapb.VStreamRowsResponse
+	var rows []*querypb.Row
+	var rowCount int
+
 	lastpk := make([]sqltypes.Value, len(rs.pkColumns))
 	byteCount := 0
 	for {
@@ -268,34 +271,38 @@ func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.V
 			return err
 		}
 		if ok {
-			response.Rows = append(response.Rows, sqltypes.RowToProto3(filtered))
-			for _, s := range filtered {
-				byteCount += s.Len()
+			if rowCount >= len(rows) {
+				rows = append(rows, &querypb.Row{})
 			}
+			byteCount += sqltypes.RowToProto3Inplace(rows[rowCount], filtered)
+			rowCount++
 		}
 
 		if rs.pktsize.ShouldSend(byteCount) {
+			response.Rows = rows[:rowCount]
+			response.Lastpk = sqltypes.RowToProto3(lastpk)
+
 			rs.vse.rowStreamerNumRows.Add(int64(len(response.Rows)))
 			rs.vse.rowStreamerNumPackets.Add(int64(1))
 
-			response.Lastpk = sqltypes.RowToProto3(lastpk)
 			startSend := time.Now()
-			err = send(response)
+			err = send(&response)
 			if err != nil {
 				log.Infof("Rowstreamer send returned error %v", err)
 				return err
 			}
 			rs.pktsize.Record(byteCount, time.Since(startSend))
-			// empty the rows so we start over, but we keep the same capacity
-			response.Rows = response.Rows[:0]
+			rowCount = 0
 			byteCount = 0
 		}
 	}
 
-	if len(response.Rows) > 0 {
-		rs.vse.rowStreamerNumRows.Add(int64(len(response.Rows)))
+	if rowCount > 0 {
+		response.Rows = rows[:rowCount]
 		response.Lastpk = sqltypes.RowToProto3(lastpk)
-		err = send(response)
+
+		rs.vse.rowStreamerNumRows.Add(int64(len(response.Rows)))
+		err = send(&response)
 		if err != nil {
 			return err
 		}
