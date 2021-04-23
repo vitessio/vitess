@@ -17,6 +17,7 @@ limitations under the License.
 package vreplication
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 
@@ -70,7 +71,7 @@ func getLastLog(dbClient *vdbClient, vreplID uint32) (int64, string, string, str
 	var qr *sqltypes.Result
 	var err error
 	query := fmt.Sprintf("select id, type, state, message from _vt.vreplication_log where vrepl_id = %d order by id desc limit 1", vreplID)
-	if qr, err = dbClient.ExecuteFetch(query, 1); err != nil {
+	if qr, err = withDDL.Exec(context.Background(), query, dbClient.ExecuteFetch); err != nil {
 		return 0, "", "", "", err
 	}
 	if len(qr.Rows) != 1 || len(qr.Rows[0]) != 4 {
@@ -101,7 +102,7 @@ func insertLog(dbClient *vdbClient, typ string, vreplID uint32, state, message s
 		query = fmt.Sprintf(query, vreplID, typ, state, encodeString(message))
 	}
 
-	if _, err := dbClient.ExecuteFetch(query, 1); err != nil {
+	if _, err = withDDL.Exec(context.Background(), query, dbClient.ExecuteFetch); err != nil {
 		return fmt.Errorf("could not insert into log table: %v: %v", query, err)
 	}
 	return nil
