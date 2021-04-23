@@ -58,7 +58,7 @@ const (
 )
 
 func loadMergedPRs(from, to string) ([]string, error) {
-	cmd := exec.Command("git", "log", "--oneline", fmt.Sprintf("%s...%s", from, to))
+	cmd := exec.Command("git", "log", "--oneline", fmt.Sprintf("%s..%s", from, to))
 	out, err := cmd.Output()
 	if err != nil {
 		execErr := err.(*exec.ExitError)
