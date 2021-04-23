@@ -147,6 +147,11 @@ func init() {
 	flag.Var(&KeyspacesToWatch, "keyspaces_to_watch", "Specifies which keyspaces this vtgate should have access to while routing queries or accessing the vschema")
 }
 
+// FilteringKeyspaces returns true if any keyspaces have been configured to be filtered.
+func FilteringKeyspaces() bool {
+	return len(KeyspacesToWatch) > 0
+}
+
 // TabletRecorder is a sub interface of HealthCheck.
 // It is separated out to enable unit testing.
 type TabletRecorder interface {

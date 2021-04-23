@@ -42,6 +42,7 @@ import (
 	"context"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
@@ -163,7 +164,8 @@ func newVCursorImpl(
 	vschema *vindexes.VSchema,
 	resolver *srvtopo.Resolver,
 	serv srvtopo.Server,
-	warnShardedOnly bool) (*vcursorImpl, error) {
+	warnShardedOnly bool,
+) (*vcursorImpl, error) {
 	keyspace, tabletType, destination, err := parseDestinationTarget(safeSession.TargetString, vschema)
 	if err != nil {
 		return nil, err
@@ -174,7 +176,9 @@ func newVCursorImpl(
 		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "transaction is supported only for master tablet type, current type: %v", tabletType)
 	}
 	var ts *topo.Server
-	if serv != nil {
+	// We don't have access to the underlying TopoServer if this vtgate is
+	// filtering keyspaces because we don't have an accurate view of the topo.
+	if serv != nil && !discovery.FilteringKeyspaces() {
 		ts, err = serv.GetTopoServer()
 		if err != nil {
 			return nil, err
@@ -588,6 +592,9 @@ func (vc *vcursorImpl) TabletType() topodatapb.TabletType {
 
 // SubmitOnlineDDL implements the VCursor interface
 func (vc *vcursorImpl) SubmitOnlineDDL(onlineDDl *schema.OnlineDDL) error {
+	if vc.topoServer == nil {
+		return vterrors.New(vtrpcpb.Code_INTERNAL, "Unable to apply DDL because toposerver is unavailable, ensure this vtgate is not using filtered keyspaces")
+	}
 	conn, err := vc.topoServer.ConnForCell(vc.ctx, topo.GlobalCell)
 	if err != nil {
 		return err
