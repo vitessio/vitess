@@ -9,7 +9,7 @@
       "Name": "user",
       "Sharded": true
     },
-    "TargetDestination": "AllShards()",
+    "TargetDestination": "ExactKeyRange(-)",
     "Table": "music"
   }
 }

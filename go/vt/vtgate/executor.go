@@ -1041,7 +1041,7 @@ func (e *Executor) StreamExecute(ctx context.Context, method string, safeSession
 	vcursor.SetIgnoreMaxMemoryRows(true)
 	switch stmtType {
 	case sqlparser.StmtSelect, sqlparser.StmtDDL, sqlparser.StmtSet, sqlparser.StmtInsert, sqlparser.StmtReplace, sqlparser.StmtUpdate, sqlparser.StmtDelete,
-		sqlparser.StmtUse, sqlparser.StmtOther, sqlparser.StmtComment, sqlparser.StmtFlush:
+		sqlparser.StmtUse, sqlparser.StmtOther, sqlparser.StmtComment, sqlparser.StmtFlush, sqlparser.StmtStream:
 		// These may or may not all work, but getPlan() should either return a plan with instructions
 		// or an error, so it's safe to try.
 		break

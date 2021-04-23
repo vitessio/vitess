@@ -771,9 +771,10 @@ func (vc *vcursorImpl) ExecuteVSchema(keyspace string, vschemaDDL *sqlparser.Alt
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vschema not loaded")
 	}
 
-	allowed := vschemaacl.Authorized(callerid.ImmediateCallerIDFromContext(vc.ctx))
+	user := callerid.ImmediateCallerIDFromContext(vc.ctx)
+	allowed := vschemaacl.Authorized(user)
 	if !allowed {
-		return vterrors.Errorf(vtrpcpb.Code_PERMISSION_DENIED, "not authorized to perform vschema operations")
+		return vterrors.NewErrorf(vtrpcpb.Code_PERMISSION_DENIED, vterrors.AccessDeniedError, "User '%s' is not authorized to perform vschema operations", user.GetUsername())
 
 	}
 
