@@ -8839,3 +8839,4 @@
 2021-04-22T22:02:40Z,Cluster (13),https://github.com/vitessio/vitess/actions/runs/775781816
 2021-04-22T22:02:40Z,Cluster (27),https://github.com/vitessio/vitess/actions/runs/775781820
 2021-04-23T02:32:11Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/776325454
+2021-04-23T02:32:11Z,endtoend,https://github.com/vitessio/vitess/actions/runs/776325442
