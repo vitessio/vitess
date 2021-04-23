@@ -203,6 +203,9 @@ func createSortedPrTypeSlice(prPerType map[string]map[string][]prInfo) []prType 
 				Name:    componentKey,
 				PrInfos: prInfos,
 			}
+			sort.Slice(newComponent.PrInfos, func(i, j int) bool {
+				return newComponent.PrInfos[i].Number < newComponent.PrInfos[j].Number
+			})
 			newPrType.Components = append(newPrType.Components, newComponent)
 		}
 		sort.Slice(newPrType.Components, func(i, j int) bool {
