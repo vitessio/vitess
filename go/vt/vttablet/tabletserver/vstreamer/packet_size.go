@@ -1,3 +1,19 @@
+/*
+Copyright 2021 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package vstreamer
 
 import (
@@ -5,7 +21,6 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/mathstats"
-	"vitess.io/vitess/go/vt/log"
 )
 
 // defaultPacketSize is the suggested packet size for VReplication streamer.
@@ -67,33 +82,48 @@ func (ps *fixedPacketSizer) ShouldSend(byteCount int) bool {
 func (ps *fixedPacketSizer) Record(_ int, _ time.Duration) {}
 
 type dynamicPacketSizer struct {
-	last      int
-	grow      int
-	target    int
-	hits      int
-	settled   bool
-	current   *mathstats.Sample
-	candidate *mathstats.Sample
-	elapsed   time.Duration
+	// currentSize is the last size for the packet that is safe to use
+	currentSize int
+
+	// current are the performance metrics for the last
+	currentMetrics *mathstats.Sample
+
+	// candidateSize is the target size for packets being tested
+	candidateSize int
+
+	// candidateMetrics are the performance metrics for this new metric
+	candidateMetrics *mathstats.Sample
+
+	// grow is the growth rate with which we adjust the packet size
+	grow int
+
+	// calls is the amount of calls to the packet sizer
+	calls int
+
+	// settled is true when the last experiment has finished and arrived at a new target packet size
+	settled bool
+
+	// elapsed is the time elapsed since the last experiment was settled
+	elapsed time.Duration
 }
 
 func newDynamicPacketSizer(baseSize int) PacketSizer {
 	return &dynamicPacketSizer{
-		last:      baseSize,
-		current:   &mathstats.Sample{},
-		candidate: &mathstats.Sample{},
-		target:    baseSize,
-		grow:      baseSize / 4,
+		currentSize:      baseSize,
+		currentMetrics:   &mathstats.Sample{},
+		candidateMetrics: &mathstats.Sample{},
+		candidateSize:    baseSize,
+		grow:             baseSize / 4,
 	}
 }
 
 func (ps *dynamicPacketSizer) Limit() int {
-	return ps.target
+	return ps.candidateSize
 }
 
 // ShouldSend checks whether the given byte count is large enough to be sent as a packet while streaming
 func (ps *dynamicPacketSizer) ShouldSend(byteCount int) bool {
-	return byteCount >= ps.target
+	return byteCount >= ps.candidateSize
 }
 
 type change int8
@@ -107,12 +137,12 @@ const (
 func (ps *dynamicPacketSizer) changeInThroughput() change {
 	const PValueMargin = 0.1
 
-	t, err := mathstats.TwoSampleWelchTTest(ps.current, ps.candidate, mathstats.LocationDiffers)
+	t, err := mathstats.TwoSampleWelchTTest(ps.currentMetrics, ps.candidateMetrics, mathstats.LocationDiffers)
 	if err != nil {
 		return notChanging
 	}
 	if t.P < PValueMargin {
-		if ps.candidate.Mean() > ps.current.Mean() {
+		if ps.candidateMetrics.Mean() > ps.currentMetrics.Mean() {
 			return gettingFaster
 		}
 		return gettingSlower
@@ -121,9 +151,9 @@ func (ps *dynamicPacketSizer) changeInThroughput() change {
 }
 
 func (ps *dynamicPacketSizer) reset() {
-	ps.current.Clear()
-	ps.candidate.Clear()
-	ps.hits = 0
+	ps.currentMetrics.Clear()
+	ps.candidateMetrics.Clear()
+	ps.calls = 0
 	ps.settled = false
 	ps.elapsed = 0
 }
@@ -144,16 +174,15 @@ func (ps *dynamicPacketSizer) Record(byteCount int, d time.Duration) {
 		ps.reset()
 	}
 
-	ps.hits++
-	ps.candidate.Xs = append(ps.candidate.Xs, float64(byteCount)/float64(d))
-	if ps.hits%CheckFrequency == 0 {
-		ps.candidate.Sorted = false
-		ps.candidate.FilterOutliers()
+	ps.calls++
+	ps.candidateMetrics.Xs = append(ps.candidateMetrics.Xs, float64(byteCount)/float64(d))
+	if ps.calls%CheckFrequency == 0 {
+		ps.candidateMetrics.Sorted = false
+		ps.candidateMetrics.FilterOutliers()
 
-		if len(ps.current.Xs) == 0 {
-			if len(ps.candidate.Xs) >= InitialCandidateLen {
-				ps.current, ps.candidate = ps.candidate, ps.current
-				log.Infof("packetSize: stored initial sample, mean = %f", ps.current.Mean())
+		if len(ps.currentMetrics.Xs) == 0 {
+			if len(ps.candidateMetrics.Xs) >= InitialCandidateLen {
+				ps.currentMetrics, ps.candidateMetrics = ps.candidateMetrics, ps.currentMetrics
 			}
 			return
 		}
@@ -161,24 +190,21 @@ func (ps *dynamicPacketSizer) Record(byteCount int, d time.Duration) {
 		change := ps.changeInThroughput()
 		switch change {
 		case notChanging, gettingSlower:
-			if len(ps.candidate.Xs) >= SettleCandidateLen {
-				ps.target = ps.last
+			if len(ps.candidateMetrics.Xs) >= SettleCandidateLen {
+				ps.candidateSize = ps.currentSize
 				ps.settled = true
-				log.Infof("packetSize: not changing for %d, settled at %d", len(ps.candidate.Xs), ps.target)
 			} else {
-				if change == notChanging && ps.hits%GrowthFrequency == 0 {
-					ps.target += ps.grow
+				if change == notChanging && ps.calls%GrowthFrequency == 0 {
+					ps.candidateSize += ps.grow
 				}
-				log.Infof("packetSize: not changing for %d, grow target to %d", len(ps.candidate.Xs), ps.target)
 			}
 
 		case gettingFaster:
-			ps.candidate, ps.current = ps.current, ps.candidate
-			ps.candidate.Clear()
+			ps.candidateMetrics, ps.currentMetrics = ps.currentMetrics, ps.candidateMetrics
+			ps.candidateMetrics.Clear()
 
-			ps.target += ps.grow
-			ps.last = ps.target
-			log.Infof("packetSize: faster! grow target to %d", ps.target)
+			ps.candidateSize += ps.grow
+			ps.currentSize = ps.candidateSize
 		}
 	}
 }

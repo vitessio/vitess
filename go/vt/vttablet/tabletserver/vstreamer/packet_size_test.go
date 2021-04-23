@@ -1,3 +1,19 @@
+/*
+Copyright 2021 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package vstreamer
 
 import (
@@ -72,15 +88,19 @@ func TestPacketSizeSimulation(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			// Simulate a replication using the given polynomial and the dynamic packet sizer
 			ps1 := newDynamicPacketSizer(tc.baseSize)
 			elapsed1, sent1 := simulate(t, ps1, tc.baseSize, tc.baseSize*1000, tc.p.fit)
 
+			// Simulate the same polynomial using a fixed packet size
 			ps2 := newFixedPacketSize(tc.baseSize)
 			elapsed2, sent2 := simulate(t, ps2, tc.baseSize, tc.baseSize*1000, tc.p.fit)
 
-			t.Logf("dynamic = (%v, %d), fixed = (%v, %d)", elapsed1, sent1, elapsed2, sent2)
+			// the simulation for dynamic packet sizing should always be faster then the fixed packet,
+			// and should also send fewer packets in total
 			require.True(t, elapsed1 < elapsed2)
 			require.True(t, sent1 < sent2)
+			// t.Logf("dynamic = (%v, %d), fixed = (%v, %d)", elapsed1, sent1, elapsed2, sent2)
 		})
 	}
 }
