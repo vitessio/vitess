@@ -894,23 +894,59 @@ var (
 		}, {
 			input: "set /* simple */ a = 3",
 		}, {
+			input: "set #simple\n @b = 4",
+		}, {
 			input: "set #simple\n b = 4",
 		}, {
 			input: "set character_set_results = utf8",
 		}, {
-			input: "set @@session.autocommit = true",
+			input:  "set @@session.autocommit = true",
+			output: "set session autocommit = true",
 		}, {
-			input: "set @@session.`autocommit` = true",
-		}, {
-			input: "set @@session.'autocommit' = true",
-		}, {
-			input: "set @@session.\"autocommit\" = true",
+			input:  "set @@session.`autocommit` = true",
+			output: "set session `autocommit` = true",
 		}, {
 			input:  "set @@session.autocommit = ON",
-			output: "set @@session.autocommit = 'on'",
+			output: "set session autocommit = 'ON'",
 		}, {
 			input:  "set @@session.autocommit= OFF",
-			output: "set @@session.autocommit = 'off'",
+			output: "set session autocommit = 'OFF'",
+		}, {
+			input:  "set @@global.optimizer_prune_level = 1",
+			output: "set global optimizer_prune_level = 1",
+		}, {
+			input: "set global optimizer_prune_level = 1",
+		}, {
+			input:  "set @@persist.optimizer_prune_level = 1",
+			output: "set persist optimizer_prune_level = 1",
+		}, {
+			input: "set persist optimizer_prune_level = 1",
+		}, {
+			input:  "set @@persist_only.optimizer_prune_level = 1",
+			output: "set persist_only optimizer_prune_level = 1",
+		}, {
+			input: "set persist_only optimizer_prune_level = 1",
+		}, {
+			input:  "set @@local.optimizer_prune_level = 1",
+			output: "set session optimizer_prune_level = 1",
+		}, {
+			input:  "set local optimizer_prune_level = 1",
+			output: "set session optimizer_prune_level = 1",
+		}, {
+			input:  "set @@optimizer_prune_level = 1",
+			output: "set session optimizer_prune_level = 1",
+		}, {
+			input: "set session optimizer_prune_level = 1",
+		}, {
+			input:  "set @@optimizer_prune_level = 1, @@global.optimizer_search_depth = 62",
+			output: "set session optimizer_prune_level = 1, global optimizer_search_depth = 62",
+		}, {
+			input:  "set @@GlObAl.optimizer_prune_level = 1",
+			output: "set global optimizer_prune_level = 1",
+		}, {
+			input: "set @user.var = 1",
+		}, {
+			input: "set @user.var.name = 1",
 		}, {
 			input:  "set autocommit = on",
 			output: "set autocommit = 'on'",
@@ -1212,8 +1248,9 @@ var (
 			input: "create trigger t1 before update on foo for each row precedes bar update xxy set baz = 1 where a = b",
 		}, {
 			input: "create trigger t1 after delete on foo for each row delete from xxy where old.y = z",
-		}, {
-			input: "create trigger t1 after delete on foo for each row set @@sum = @@sum + old.b",
+		}, { //TODO: figure out why `SET SESSION sys_var = x` does not work when set directly on the trigger (works in BEGIN/END block)
+			input:  "create trigger t1 after delete on foo for each row set @@sum = @@sum + old.b",
+			output: "create trigger t1 after delete on foo for each row set session sum = @@sum + old.b",
 		}, {
 			input: "create trigger t1 before insert on foo for each row set new.x = new.x + 1",
 		}, {
@@ -2098,19 +2135,19 @@ var ignoreWhitespaceTests = []parseTest{
 	{
 		input: `create trigger t1 before delete on foo for each row follows baz 
 							begin
-								set @@foo = old.x;
-                set @@bar = new.y;
+								set session foo = old.x;
+                set session bar = new.y;
                 update baz.t set a = @@foo + @@bar where z = old.x;
               end`,
 	},
 	{
 		input: `create trigger t1 before delete on foo for each row follows baz 
 							begin
-								set @@foo = old.x;
+								set session foo = old.x;
 								begin
-									set @@boo = new.z;
+									set session boo = new.z;
                 end;
-                set @@bar = new.y;
+                set session bar = new.y;
                 update baz.t set a = @@foo + @@bar where z = old.x;
               end`,
 	},
@@ -2134,7 +2171,7 @@ var ignoreWhitespaceTests = []parseTest{
 		input: `create trigger t1 before delete on foo for each row 
 							begin
 								case old.x
-									when old.y then set @@var = 1;
+									when old.y then set session var = 1;
 									when 0 then update a set b = 2; delete from z;
 									else select true from dual; delete from x;
 								end case;
@@ -2149,7 +2186,7 @@ var ignoreWhitespaceTests = []parseTest{
 								elseif old.y < 0 then 
 									delete from z;
 								elseif new.foo > rand() then
-									set @@autocommit = 1;
+									set session autocommit = 1;
 								else 
 									insert into z values (1, 2, 3);
 								end if;
@@ -2161,7 +2198,7 @@ var ignoreWhitespaceTests = []parseTest{
 									select a + 1 from c;
 									update b set c = 1;
 								elseif new.foo > rand() then
-									set @@autocommit = 1;
+									set session autocommit = 1;
 								else
 									insert into z values (1, 2, 3);
 								end if;
@@ -3554,6 +3591,66 @@ var (
 	}, {
 		input:  "INSERT INTO TABLE a VALUES (1)",
 		output: "syntax error at position 18 near 'TABLE'",
+	}, {
+		input:  "set @user.@var = true",
+		output: "invalid user variable declaration `@var` at position 22 near 'true'",
+	}, {
+		input:  "set @user.var.@name = true",
+		output: "invalid user variable declaration `@name` at position 27 near 'true'",
+	}, {
+		input:  "set @@session.'autocommit' = true",
+		output: "invalid system variable declaration `'autocommit'` at position 34 near 'true'",
+	}, {
+		input:  "set @@session.\"autocommit\" = true",
+		output: "invalid system variable declaration `\"autocommit\"` at position 34 near 'true'",
+	}, {
+		input:  "set @@unknown.autocommit = true",
+		output: "invalid system variable declaration `autocommit` at position 32 near 'true'",
+	}, {
+		input:  "set @@session.@@autocommit = true",
+		output: "invalid system variable declaration `@@autocommit` at position 34 near 'true'",
+	}, {
+		input:  "set xyz.@@autocommit = true",
+		output: "invalid system variable declaration `@@autocommit` at position 28 near 'true'",
+	}, {
+		input:  "set @@session.@autocommit = true",
+		output: "invalid user variable declaration `@autocommit` at position 33 near 'true'",
+	}, {
+		input:  "set xyz.@autocommit = true",
+		output: "invalid user variable declaration `@autocommit` at position 27 near 'true'",
+	}, {
+		input:  "set @@session.validate_password.length = 1",
+		output: "invalid system variable declaration `length` at position 43 near '1'",
+	}, {
+		input:  "set session.@@validate_password.length = 1",
+		output: "invalid system variable declaration `@@validate_password.length` at position 43 near '1'",
+	}, {
+		input:  "set session.validate_password.@@length = 1",
+		output: "invalid system variable declaration `@@length` at position 43 near '1'",
+	}, {
+		input:  "set something.@@validate_password.length = 1",
+		output: "invalid system variable declaration `@@validate_password.length` at position 45 near '1'",
+	}, {
+		input:  "set something.validate_password.@@length = 1",
+		output: "invalid system variable declaration `@@length` at position 45 near '1'",
+	}, {
+		input:  "set session @@autocommit = true",
+		output: "invalid system variable name `@@autocommit` at position 32 near 'true'",
+	}, {
+		input:  "set session @autocommit = true",
+		output: "invalid system variable name `@autocommit` at position 31 near 'true'",
+	}, {
+		input:  "set session @@session.autocommit = true",
+		output: "invalid system variable name `@@session.autocommit` at position 40 near 'true'",
+	}, {
+		input:  "set session @@global.autocommit = true",
+		output: "invalid system variable name `@@global.autocommit` at position 39 near 'true'",
+	}, {
+		input:  "set session other.@@autocommit = true",
+		output: "invalid system variable declaration `@@autocommit` at position 38 near 'true'",
+	}, {
+		input:  "set session other.@autocommit = true",
+		output: "invalid user variable declaration `@autocommit` at position 37 near 'true'",
 	}}
 )
 

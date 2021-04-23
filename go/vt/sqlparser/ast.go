@@ -1240,7 +1240,7 @@ type Update struct {
 	Comments   Comments
 	Ignore     string
 	TableExprs TableExprs
-	Exprs      SetExprs
+	Exprs      AssignmentExprs
 	Where      *Where
 	OrderBy    OrderBy
 	Limit      *Limit
@@ -1307,23 +1307,35 @@ func (node *Delete) walkSubtree(visit Visit) error {
 // Set represents a SET statement.
 type Set struct {
 	Comments Comments
-	Exprs    SetExprs
-	Scope    string
+	Exprs    SetVarExprs
 }
 
-// Set.Scope or Show.Scope
+// Show.Scope
 const (
 	SessionStr  = "session"
 	GlobalStr   = "global"
-	ImplicitStr = ""
 )
 
 // Format formats the node.
 func (node *Set) Format(buf *TrackedBuffer) {
-	if node.Scope == "" {
-		buf.Myprintf("set %v%v", node.Comments, node.Exprs)
+	if len(node.Exprs) > 0 && node.Exprs[0].Name.String() == TransactionStr {
+		switch node.Exprs[0].Scope {
+		case SetScope_None:
+			buf.Myprintf("set %vtransaction", node.Comments)
+		case SetScope_Session:
+			buf.Myprintf("set %vsession transaction", node.Comments)
+		case SetScope_Global:
+			buf.Myprintf("set %vglobal transaction", node.Comments)
+		}
+		for _, transaction := range node.Exprs {
+			if sqlVal, ok := transaction.Expr.(*SQLVal); ok {
+				buf.Myprintf(" %s", string(sqlVal.Val))
+			} else {
+				buf.Myprintf(" %v", transaction.Expr)
+			}
+		}
 	} else {
-		buf.Myprintf("set %v%s %v", node.Comments, node.Scope, node.Exprs)
+		buf.Myprintf("set %v%v", node.Comments, node.Exprs)
 	}
 }
 
@@ -4770,11 +4782,11 @@ func (node Values) walkSubtree(visit Visit) error {
 	return nil
 }
 
-// SetExprs represents a list of set expressions.
-type SetExprs []*SetExpr
+// AssignmentExprs represents a list of assignment expressions.
+type AssignmentExprs []*AssignmentExpr
 
 // Format formats the node.
-func (node SetExprs) Format(buf *TrackedBuffer) {
+func (node AssignmentExprs) Format(buf *TrackedBuffer) {
 	var prefix string
 	for _, n := range node {
 		buf.Myprintf("%s%v", prefix, n)
@@ -4782,7 +4794,7 @@ func (node SetExprs) Format(buf *TrackedBuffer) {
 	}
 }
 
-func (node SetExprs) walkSubtree(visit Visit) error {
+func (node AssignmentExprs) walkSubtree(visit Visit) error {
 	for _, n := range node {
 		if err := Walk(visit, n); err != nil {
 			return err
@@ -4791,13 +4803,200 @@ func (node SetExprs) walkSubtree(visit Visit) error {
 	return nil
 }
 
-// SetExpr represents a set expression.
-type SetExpr struct {
+// AssignmentExpr represents an assignment expression.
+type AssignmentExpr struct {
 	Name *ColName
 	Expr Expr
 }
 
-// SetExpr.Expr, for SET TRANSACTION ... or START TRANSACTION
+// Format formats the node.
+func (node *AssignmentExpr) Format(buf *TrackedBuffer) {
+	buf.Myprintf("%s = %v", node.Name.String(), node.Expr)
+}
+
+func (node *AssignmentExpr) walkSubtree(visit Visit) error {
+	if node == nil {
+		return nil
+	}
+	return Walk(
+		visit,
+		node.Name,
+		node.Expr,
+	)
+}
+
+// SetVarExprs represents a list of set expressions.
+type SetVarExprs []*SetVarExpr
+
+// Format formats the node.
+func (node SetVarExprs) Format(buf *TrackedBuffer) {
+	var prefix string
+	for _, n := range node {
+		buf.Myprintf("%s%v", prefix, n)
+		prefix = ", "
+	}
+}
+
+func (node SetVarExprs) walkSubtree(visit Visit) error {
+	for _, n := range node {
+		if err := Walk(visit, n); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// SetScope represents the scope of the set expression.
+type SetScope string
+const (
+	SetScope_None        SetScope = ""
+	SetScope_Global      SetScope = "global"
+	SetScope_Persist     SetScope = "persist"
+	SetScope_PersistOnly SetScope = "persist_only"
+	SetScope_Session     SetScope = "session"
+	SetScope_User        SetScope = "user"
+)
+
+// VarScopeForColName returns the SetScope of the given ColName, along with a new ColName without the scope information.
+func VarScopeForColName(colName *ColName) (*ColName, SetScope, error) {
+	if colName.Qualifier.IsEmpty() { // Forms are like `@@x` and `@x`
+		if strings.HasPrefix(colName.Name.val, "@") && strings.Index(colName.Name.val, ".") != -1 {
+			varName, scope, err := VarScope(strings.Split(colName.Name.val, ".")...)
+			if err != nil {
+				return nil, SetScope_None, err
+			}
+			if scope == SetScope_None {
+				return colName, scope, nil
+			}
+			return &ColName{Name: ColIdent{val: varName}}, scope, nil
+		} else {
+			varName, scope, err := VarScope(colName.Name.val)
+			if err != nil {
+				return nil, SetScope_None, err
+			}
+			if scope == SetScope_None {
+				return colName, scope, nil
+			}
+			return &ColName{Name: ColIdent{val: varName}}, scope, nil
+		}
+	} else if colName.Qualifier.Qualifier.IsEmpty() { // Forms are like `@@GLOBAL.x` and `@@SESSION.x`
+		varName, scope, err := VarScope(colName.Qualifier.Name.v, colName.Name.val)
+		if err != nil {
+			return nil, SetScope_None, err
+		}
+		if scope == SetScope_None {
+			return colName, scope, nil
+		}
+		return &ColName{Name: ColIdent{val: varName}}, scope, nil
+	} else { // Forms are like `@@GLOBAL.validate_password.length`, which is currently unsupported
+		_, _, err := VarScope(colName.Qualifier.Qualifier.v, colName.Qualifier.Name.v, colName.Name.val)
+		return colName, SetScope_None, err
+	}
+}
+
+// VarScope returns the SetScope of the given name, broken into parts. For example, `@@GLOBAL.sys_var` would become
+// `[]string{"@@GLOBAL", "sys_var"}`. Returns the variable name without any scope specifiers, so the aforementioned
+// variable would simply return "sys_var". `[]string{"@@other_var"}` would return "other_var". If the name parts do not
+// specify a variable (returns SetScope_None), then it is recommended to use the original non-broken string, as this
+// will always only return the last part. `[]string{"my_db", "my_tbl", "my_col"}` will return "my_col" with SetScope_None.
+func VarScope(nameParts ...string) (string, SetScope, error) {
+	switch len(nameParts) {
+	case 0:
+		return "", SetScope_None, nil
+	case 1:
+		// First case covers `@@@`, `@@@@`, etc.
+		if strings.HasPrefix(nameParts[0], "@@@") {
+			return "", SetScope_None, fmt.Errorf("invalid system variable declaration `%s`", nameParts[0])
+		} else if strings.HasPrefix(nameParts[0], "@@") {
+			dotIdx := strings.Index(nameParts[0], ".")
+			if dotIdx != -1 {
+				return VarScope(nameParts[0][:dotIdx], nameParts[0][dotIdx+1:])
+			}
+			return nameParts[0][2:], SetScope_Session, nil
+		} else if strings.HasPrefix(nameParts[0], "@") {
+			return nameParts[0][1:], SetScope_User, nil
+		} else {
+			return nameParts[0], SetScope_None, nil
+		}
+	case 2:
+		// `@user.var` is valid, so we check for it here.
+		if len(nameParts[0]) >= 2 && nameParts[0][0] == '@' && nameParts[0][1] != '@' &&
+			!strings.HasPrefix(nameParts[1], "@") { // `@user.@var` is invalid though.
+			return fmt.Sprintf("%s.%s", nameParts[0][1:], nameParts[1]), SetScope_User, nil
+		}
+		// We don't support variables such as `@@validate_password.length` right now, only `@@GLOBAL.sys_var`, etc.
+		// The `@` symbols are only valid on the first name_part. First case also catches `@@@`, etc.
+		if strings.HasPrefix(nameParts[1], "@@") {
+			return "", SetScope_None, fmt.Errorf("invalid system variable declaration `%s`", nameParts[1])
+		} else if strings.HasPrefix(nameParts[1], "@") {
+			return "", SetScope_None, fmt.Errorf("invalid user variable declaration `%s`", nameParts[1])
+		}
+		switch strings.ToLower(nameParts[0]) {
+		case "@@global":
+			if strings.HasPrefix(nameParts[1], `"`) || strings.HasPrefix(nameParts[1], `'`) {
+				return "", SetScope_None, fmt.Errorf("invalid system variable declaration `%s`", nameParts[1])
+			}
+			return nameParts[1], SetScope_Global, nil
+		case "@@persist":
+			if strings.HasPrefix(nameParts[1], `"`) || strings.HasPrefix(nameParts[1], `'`) {
+				return "", SetScope_None, fmt.Errorf("invalid system variable declaration `%s`", nameParts[1])
+			}
+			return nameParts[1], SetScope_Persist, nil
+		case "@@persist_only":
+			if strings.HasPrefix(nameParts[1], `"`) || strings.HasPrefix(nameParts[1], `'`) {
+				return "", SetScope_None, fmt.Errorf("invalid system variable declaration `%s`", nameParts[1])
+			}
+			return nameParts[1], SetScope_PersistOnly, nil
+		case "@@session":
+			if strings.HasPrefix(nameParts[1], `"`) || strings.HasPrefix(nameParts[1], `'`) {
+				return "", SetScope_None, fmt.Errorf("invalid system variable declaration `%s`", nameParts[1])
+			}
+			return nameParts[1], SetScope_Session, nil
+		case "@@local":
+			if strings.HasPrefix(nameParts[1], `"`) || strings.HasPrefix(nameParts[1], `'`) {
+				return "", SetScope_None, fmt.Errorf("invalid system variable declaration `%s`", nameParts[1])
+			}
+			return nameParts[1], SetScope_Session, nil
+		default:
+			// This catches `@@@GLOBAL.sys_var`. Due to the earlier check, this does not error on `@user.var`.
+			if strings.HasPrefix(nameParts[0], "@") {
+					// Last value is column name, so we return that in the error
+					return "", SetScope_None, fmt.Errorf("invalid system variable declaration `%s`", nameParts[1])
+			}
+			return nameParts[1], SetScope_None, nil
+		}
+	default:
+		// `@user.var.name` is valid, so we check for it here.
+		if len(nameParts[0]) >= 2 && nameParts[0][0] == '@' && nameParts[0][1] != '@' {
+			// `@` may only appear in the first name part for user variables
+			for i := 1; i < len(nameParts); i++ {
+				if strings.HasPrefix(nameParts[i], "@") {
+					// Last value is column name, so we return that in the error
+					return "", SetScope_None, fmt.Errorf("invalid user variable declaration `%s`", nameParts[len(nameParts)-1])
+				}
+			}
+			return strings.Join(append([]string{nameParts[0][1:]}, nameParts[1:]...), "."), SetScope_User, nil
+		}
+		// As we don't support `@@GLOBAL.validate_password.length` or anything potentially longer, we error if any part
+		// starts with either `@@` or `@`. We can just check for `@` though.
+		for _, namePart := range nameParts {
+			if strings.HasPrefix(namePart, "@") {
+				// Last value is column name, so we return that in the error
+				return "", SetScope_None, fmt.Errorf("invalid system variable declaration `%s`", nameParts[len(nameParts)-1])
+			}
+		}
+		return nameParts[len(nameParts)-1], SetScope_None, nil
+	}
+}
+
+// SetVarExpr represents a set expression.
+type SetVarExpr struct {
+	Scope SetScope
+	Name *ColName
+	Expr Expr
+}
+
+// SetVarExpr.Expr, for SET TRANSACTION ... or START TRANSACTION
 const (
 	// TransactionStr is the Name for a SET TRANSACTION statement
 	TransactionStr = "transaction"
@@ -4812,7 +5011,7 @@ const (
 )
 
 // Format formats the node.
-func (node *SetExpr) Format(buf *TrackedBuffer) {
+func (node *SetVarExpr) Format(buf *TrackedBuffer) {
 	// We don't have to backtick set variable names.
 	if node.Name.EqualString("charset") || node.Name.EqualString("names") {
 		buf.Myprintf("%s %v", node.Name.String(), node.Expr)
@@ -4820,11 +5019,18 @@ func (node *SetExpr) Format(buf *TrackedBuffer) {
 		sqlVal := node.Expr.(*SQLVal)
 		buf.Myprintf("%s %s", node.Name.String(), strings.ToLower(string(sqlVal.Val)))
 	} else {
-		buf.Myprintf("%s = %v", node.Name.String(), node.Expr)
+		switch node.Scope {
+		case SetScope_None:
+			buf.Myprintf("%s = %v", node.Name.String(), node.Expr)
+		case SetScope_User:
+			buf.Myprintf("@%s = %v", node.Name.String(), node.Expr)
+		default:
+			buf.Myprintf("%s %s = %v", string(node.Scope), node.Name.String(), node.Expr)
+		}
 	}
 }
 
-func (node *SetExpr) walkSubtree(visit Visit) error {
+func (node *SetVarExpr) walkSubtree(visit Visit) error {
 	if node == nil {
 		return nil
 	}
@@ -4836,18 +5042,18 @@ func (node *SetExpr) walkSubtree(visit Visit) error {
 }
 
 // OnDup represents an ON DUPLICATE KEY clause.
-type OnDup SetExprs
+type OnDup AssignmentExprs
 
 // Format formats the node.
 func (node OnDup) Format(buf *TrackedBuffer) {
 	if node == nil {
 		return
 	}
-	buf.Myprintf(" on duplicate key update %v", SetExprs(node))
+	buf.Myprintf(" on duplicate key update %v", AssignmentExprs(node))
 }
 
 func (node OnDup) walkSubtree(visit Visit) error {
-	return Walk(visit, SetExprs(node))
+	return Walk(visit, AssignmentExprs(node))
 }
 
 // ColIdent is a case insensitive SQL identifier. It will be escaped with

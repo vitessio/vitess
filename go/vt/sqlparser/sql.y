@@ -17,6 +17,8 @@ limitations under the License.
 %{
 package sqlparser
 
+import "fmt"
+
 func setParseTree(yylex interface{}, stmt Statement) {
   yylex.(*Tokenizer).ParseTree = stmt
 }
@@ -99,8 +101,10 @@ func skipToEnd(yylex interface{}) {
   orderBy       OrderBy
   order         *Order
   limit         *Limit
-  setExprs      SetExprs
-  setExpr       *SetExpr
+  assignExprs   AssignmentExprs
+  assignExpr    *AssignmentExpr
+  setVarExprs   SetVarExprs
+  setVarExpr    *SetVarExpr
   colIdent      ColIdent
   colIdents     []ColIdent
   tableIdent    TableIdent
@@ -330,10 +334,11 @@ func skipToEnd(yylex interface{}) {
 %type <str> lock_opt
 %type <columns> ins_column_list column_list column_list_opt
 %type <partitions> opt_partition_clause partition_list
-%type <setExprs> on_dup_opt
-%type <setExprs> set_list transaction_chars
+%type <assignExprs> on_dup_opt assignment_list
+%type <setVarExprs> set_list transaction_chars
 %type <bytes> charset_or_character_set
-%type <setExpr> set_expression transaction_char
+%type <assignExpr> assignment_expression
+%type <setVarExpr> set_expression transaction_char
 %type <str> isolation_level
 %type <bytes> for_from
 %type <str> ignore_opt default_opt
@@ -351,7 +356,7 @@ func skipToEnd(yylex interface{}) {
 %type <expr> charset_value
 %type <tableIdent> table_id reserved_table_id table_alias
 %type <str> charset
-%type <str> set_session_or_global show_session_or_global
+%type <str> show_session_or_global
 %type <convertType> convert_type
 %type <columnType> column_type  column_type_options
 %type <columnType> int_type decimal_type numeric_type time_type char_type spatial_type
@@ -556,7 +561,7 @@ insert_statement:
     ins.OnDup = OnDup($7)
     $$ = ins
   }
-| insert_or_replace comment_opt ignore_opt into_table_name opt_partition_clause SET set_list on_dup_opt
+| insert_or_replace comment_opt ignore_opt into_table_name opt_partition_clause SET assignment_list on_dup_opt
   {
     cols := make(Columns, 0, len($7))
     vals := make(ValTuple, 0, len($8))
@@ -578,7 +583,7 @@ insert_or_replace:
   }
 
 update_statement:
-  UPDATE comment_opt ignore_opt table_references SET set_list where_expression_opt order_by_opt limit_opt
+  UPDATE comment_opt ignore_opt table_references SET assignment_list where_expression_opt order_by_opt limit_opt
   {
     $$ = &Update{Comments: Comments($2), Ignore: $3, TableExprs: $4, Exprs: $6, Where: NewWhere(WhereStr, $7), OrderBy: $8, Limit: $9}
   }
@@ -649,23 +654,32 @@ set_statement:
   {
     $$ = &Set{Comments: Comments($2), Exprs: $3}
   }
-| SET comment_opt set_session_or_global set_list
-  {
-    $$ = &Set{Comments: Comments($2), Scope: $3, Exprs: $4}
-  }
-| SET comment_opt set_session_or_global TRANSACTION transaction_chars
-  {
-    $$ = &Set{Comments: Comments($2), Scope: $3, Exprs: $5}
-  }
 | SET comment_opt TRANSACTION transaction_chars
   {
+    for i := 0; i < len($4); i++ {
+      $4[i].Scope = SetScope_None
+    }
     $$ = &Set{Comments: Comments($2), Exprs: $4}
+  }
+| SET comment_opt GLOBAL TRANSACTION transaction_chars
+  {
+    for i := 0; i < len($5); i++ {
+      $5[i].Scope = SetScope_Global
+    }
+    $$ = &Set{Comments: Comments($2), Exprs: $5}
+  }
+| SET comment_opt SESSION TRANSACTION transaction_chars
+  {
+    for i := 0; i < len($5); i++ {
+      $5[i].Scope = SetScope_Session
+    }
+    $$ = &Set{Comments: Comments($2), Exprs: $5}
   }
 
 transaction_chars:
   transaction_char
   {
-    $$ = SetExprs{$1}
+    $$ = SetVarExprs{$1}
   }
 | transaction_chars ',' transaction_char
   {
@@ -675,15 +689,15 @@ transaction_chars:
 transaction_char:
   ISOLATION LEVEL isolation_level
   {
-    $$ = &SetExpr{Name: NewColName(TransactionStr), Expr: NewStrVal([]byte($3))}
+    $$ = &SetVarExpr{Name: NewColName(TransactionStr), Expr: NewStrVal([]byte($3))}
   }
 | READ WRITE
   {
-    $$ = &SetExpr{Name: NewColName(TransactionStr), Expr: NewStrVal([]byte(TxReadWrite))}
+    $$ = &SetVarExpr{Name: NewColName(TransactionStr), Expr: NewStrVal([]byte(TxReadWrite))}
   }
 | READ ONLY
   {
-    $$ = &SetExpr{Name: NewColName(TransactionStr), Expr: NewStrVal([]byte(TxReadOnly))}
+    $$ = &SetVarExpr{Name: NewColName(TransactionStr), Expr: NewStrVal([]byte(TxReadOnly))}
   }
 
 isolation_level:
@@ -702,16 +716,6 @@ isolation_level:
 | SERIALIZABLE
   {
     $$ = IsolationLevelSerializable
-  }
-
-set_session_or_global:
-  SESSION
-  {
-    $$ = SessionStr
-  }
-| GLOBAL
-  {
-    $$ = GlobalStr
   }
 
 lexer_position:
@@ -4275,7 +4279,7 @@ on_dup_opt:
   {
     $$ = nil
   }
-| ON DUPLICATE KEY UPDATE set_list
+| ON DUPLICATE KEY UPDATE assignment_list
   {
     $$ = $5
   }
@@ -4316,10 +4320,26 @@ tuple_expression:
     }
   }
 
+assignment_list:
+  assignment_expression
+  {
+    $$ = AssignmentExprs{$1}
+  }
+| assignment_list ',' assignment_expression
+  {
+    $$ = append($1, $3)
+  }
+
+assignment_expression:
+  column_name '=' expression
+  {
+    $$ = &AssignmentExpr{Name: $1, Expr: $3}
+  }
+
 set_list:
   set_expression
   {
-    $$ = SetExprs{$1}
+    $$ = SetVarExprs{$1}
   }
 | set_list ',' set_expression
   {
@@ -4329,19 +4349,94 @@ set_list:
 set_expression:
   column_name '=' ON
   {
-    $$ = &SetExpr{Name: $1, Expr: NewStrVal([]byte("on"))}
+    colName, scope, err := VarScopeForColName($1)
+    if err != nil {
+      yylex.Error(err.Error())
+      return 1
+    }
+    $$ = &SetVarExpr{Name: colName, Expr: NewStrVal($3), Scope: scope}
   }
 | column_name '=' OFF
   {
-    $$ = &SetExpr{Name: $1, Expr: NewStrVal([]byte("off"))}
+    colName, scope, err := VarScopeForColName($1)
+    if err != nil {
+      yylex.Error(err.Error())
+      return 1
+    }
+    $$ = &SetVarExpr{Name: colName, Expr: NewStrVal($3), Scope: scope}
   }
 | column_name '=' expression
   {
-    $$ = &SetExpr{Name: $1, Expr: $3}
+    colName, scope, err := VarScopeForColName($1)
+    if err != nil {
+      yylex.Error(err.Error())
+      return 1
+    }
+    $$ = &SetVarExpr{Name: colName, Expr: $3, Scope: scope}
+  }
+| GLOBAL column_name '=' expression
+  {
+    _, scope, err := VarScopeForColName($2)
+    if err != nil {
+      yylex.Error(err.Error())
+      return 1
+    } else if scope != SetScope_None {
+      yylex.Error(fmt.Sprintf("invalid system variable name `%s`", $2.Name.val))
+      return 1
+    }
+    $$ = &SetVarExpr{Name: $2, Expr: $4, Scope: SetScope_Global}
+  }
+| SESSION column_name '=' expression
+  {
+    _, scope, err := VarScopeForColName($2)
+    if err != nil {
+      yylex.Error(err.Error())
+      return 1
+    } else if scope != SetScope_None {
+      yylex.Error(fmt.Sprintf("invalid system variable name `%s`", $2.Name.val))
+      return 1
+    }
+    $$ = &SetVarExpr{Name: $2, Expr: $4, Scope: SetScope_Session}
+  }
+| LOCAL column_name '=' expression
+  {
+    _, scope, err := VarScopeForColName($2)
+    if err != nil {
+      yylex.Error(err.Error())
+      return 1
+    } else if scope != SetScope_None {
+      yylex.Error(fmt.Sprintf("invalid system variable name `%s`", $2.Name.val))
+      return 1
+    }
+    $$ = &SetVarExpr{Name: $2, Expr: $4, Scope: SetScope_Session}
+  }
+| PERSIST column_name '=' expression
+  {
+    _, scope, err := VarScopeForColName($2)
+    if err != nil {
+      yylex.Error(err.Error())
+      return 1
+    } else if scope != SetScope_None {
+      yylex.Error(fmt.Sprintf("invalid system variable name `%s`", $2.Name.val))
+      return 1
+    }
+    $$ = &SetVarExpr{Name: $2, Expr: $4, Scope: SetScope_Persist}
+  }
+| PERSIST_ONLY column_name '=' expression
+  {
+    _, scope, err := VarScopeForColName($2)
+    if err != nil {
+      yylex.Error(err.Error())
+      return 1
+    } else if scope != SetScope_None {
+      yylex.Error(fmt.Sprintf("invalid system variable name `%s`", $2.Name.val))
+      return 1
+    }
+    $$ = &SetVarExpr{Name: $2, Expr: $4, Scope: SetScope_PersistOnly}
   }
 | charset_or_character_set charset_value collate_opt
   {
-    $$ = &SetExpr{Name: NewColName(string($1)), Expr: $2}
+    $$ = &SetVarExpr{Name: NewColName(string($1)), Expr: $2, Scope: SetScope_Session}
   }
 
 charset_or_character_set:

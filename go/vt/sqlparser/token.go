@@ -339,6 +339,8 @@ var keywords = map[string]int{
 	"over":                OVER,
 	"partition":           PARTITION,
 	"percent_rank":        PERCENT_RANK,
+	"persist":             PERSIST,
+	"persist_only":        PERSIST_ONLY,
 	"plugins":             PLUGINS,
 	"point":               POINT,
 	"polygon":             POLYGON,

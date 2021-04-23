@@ -312,7 +312,7 @@ func TestSetAutocommitON(t *testing.T) {
 			t.Errorf("SET statement value is not StrVal: %T", v)
 		}
 
-		if !bytes.Equal([]byte("on"), v.Val) {
+		if !bytes.Equal([]byte("ON"), v.Val) {
 			t.Errorf("SET statement value want: on, got: %s", v.Val)
 		}
 	default:
@@ -339,7 +339,7 @@ func TestSetAutocommitON(t *testing.T) {
 			t.Errorf("SET statement value is not StrVal: %T", v)
 		}
 
-		if !bytes.Equal([]byte("on"), v.Val) {
+		if !bytes.Equal([]byte("ON"), v.Val) {
 			t.Errorf("SET statement value want: on, got: %s", v.Val)
 		}
 	default:
@@ -368,14 +368,14 @@ func TestSetAutocommitOFF(t *testing.T) {
 			t.Errorf("SET statement value is not StrVal: %T", v)
 		}
 
-		if !bytes.Equal([]byte("off"), v.Val) {
+		if !bytes.Equal([]byte("OFF"), v.Val) {
 			t.Errorf("SET statement value want: on, got: %s", v.Val)
 		}
 	default:
 		t.Errorf("SET statement expression is not SQLVal: %T", e.Expr)
 	}
 
-	stmt, err = Parse("SET @@session.autocommit=OFF")
+	stmt, err = Parse("SET @@session.autocommit=off")
 	if err != nil {
 		t.Error(err)
 	}
