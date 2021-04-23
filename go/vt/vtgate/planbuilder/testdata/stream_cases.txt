@@ -13,3 +13,9 @@
     "Table": "music"
   }
 }
+
+#vstream table
+"vstream * from simple"
+{
+
+}
