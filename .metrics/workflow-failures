@@ -8852,3 +8852,5 @@
 2021-04-23T06:04:02Z,check_make_sizegen,https://github.com/vitessio/vitess/actions/runs/776738975
 2021-04-23T07:06:30Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/776880235
 2021-04-23T07:06:30Z,unit_race,https://github.com/vitessio/vitess/actions/runs/776880211
+2021-04-23T07:28:51Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/776935085
+2021-04-23T07:28:51Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/776935092
