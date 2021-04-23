@@ -30,12 +30,12 @@ import (
 // RowToProto3 converts []Value to proto3.
 func RowToProto3(row []Value) *querypb.Row {
 	result := &querypb.Row{}
-	_ = RowToProto3Inplace(result, row)
+	_ = RowToProto3Inplace(row, result)
 	return result
 }
 
 // RowToProto3Inplace converts []Value to proto3 and stores the conversion in the provided Row
-func RowToProto3Inplace(result *querypb.Row, row []Value) int {
+func RowToProto3Inplace(row []Value, result *querypb.Row) int {
 	if result.Lengths == nil {
 		result.Lengths = make([]int64, 0, len(row))
 	} else {
