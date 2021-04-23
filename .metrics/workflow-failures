@@ -8882,3 +8882,5 @@
 2021-04-23T11:28:10Z,Cluster (27),https://github.com/vitessio/vitess/actions/runs/777554773
 2021-04-23T11:28:10Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/777554812
 2021-04-23T11:29:33Z,Cluster (27),https://github.com/vitessio/vitess/actions/runs/777558046
+2021-04-23T11:31:12Z,Cluster (27),https://github.com/vitessio/vitess/actions/runs/777562531
+2021-04-23T11:31:12Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/777562504
