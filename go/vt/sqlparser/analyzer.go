@@ -111,6 +111,8 @@ func ASTToStatementType(stmt Statement) StatementType {
 		return StmtCallProc
 	case *Stream:
 		return StmtStream
+	case *VStream:
+		return StmtVStream
 	default:
 		return StmtUnknown
 	}
