@@ -239,6 +239,7 @@ func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.V
 	var rows []*querypb.Row
 	var rowCount int
 
+	filtered := make([]sqltypes.Value, len(rs.plan.ColExprs))
 	lastpk := make([]sqltypes.Value, len(rs.pkColumns))
 	byteCount := 0
 	for {
@@ -266,7 +267,7 @@ func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.V
 			lastpk[i] = row[pk]
 		}
 		// Reuse the vstreamer's filter.
-		ok, filtered, err := rs.plan.filter(row)
+		ok, err := rs.plan.filter(row, filtered)
 		if err != nil {
 			return err
 		}
@@ -274,7 +275,7 @@ func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.V
 			if rowCount >= len(rows) {
 				rows = append(rows, &querypb.Row{})
 			}
-			byteCount += sqltypes.RowToProto3Inplace(rows[rowCount], filtered)
+			byteCount += sqltypes.RowToProto3Inplace(filtered, rows[rowCount])
 			rowCount++
 		}
 
