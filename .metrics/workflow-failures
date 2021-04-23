@@ -8907,5 +8907,6 @@
 2021-04-23T14:05:02Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/777964371
 2021-04-23T14:05:02Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/777964406
 2021-04-23T14:05:02Z,unit_race,https://github.com/vitessio/vitess/actions/runs/777964412
+2021-04-23T14:24:14Z,Cluster (13),https://github.com/vitessio/vitess/actions/runs/778019860
 2021-04-23T14:46:20Z,cluster_endtoend,https://github.com/vitessio/vitess/actions/runs/778081224
 2021-04-23T14:46:20Z,unit,https://github.com/vitessio/vitess/actions/runs/778081225
