@@ -339,6 +339,7 @@ var keywords = []keyword{
 	{"procedure", PROCEDURE},
 	{"query", QUERY},
 	{"range", UNUSED},
+	{"rank", UNUSED},
 	{"read", READ},
 	{"reads", UNUSED},
 	{"read_write", UNUSED},
