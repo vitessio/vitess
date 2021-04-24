@@ -157,7 +157,7 @@ func (dr *switcherDryRun) migrateStreams(ctx context.Context, sm *streamMigrater
 	dr.drLog.Log(fmt.Sprintf("Migrate streams to %s:", dr.ts.targetKeyspace))
 	for key, streams := range sm.streams {
 		for _, stream := range streams {
-			logs = append(logs, fmt.Sprintf("\tShard %s Id %d, Workflow %s, Pos %s, BinLogSource %v", key, stream.id, stream.workflow, mysql.EncodePosition(stream.pos), stream.bls))
+			logs = append(logs, fmt.Sprintf("\tShard %s Id %d, Workflow %s, Pos %s, BinLogSource %v", key, stream.ID, stream.Workflow, mysql.EncodePosition(stream.Position), stream.BinlogSource))
 		}
 	}
 	if len(logs) > 0 {
@@ -169,7 +169,7 @@ func (dr *switcherDryRun) migrateStreams(ctx context.Context, sm *streamMigrater
 		tabletStreams := copyTabletStreams(sm.templates)
 		for _, vrs := range tabletStreams {
 			logs = append(logs, fmt.Sprintf("\t Keyspace %s, Shard %s, Tablet %d, Workflow %s, Id %d, Pos %v, BinLogSource %s",
-				vrs.bls.Keyspace, vrs.bls.Shard, target.GetPrimary().Alias.Uid, vrs.workflow, vrs.id, mysql.EncodePosition(vrs.pos), vrs.bls))
+				vrs.BinlogSource.Keyspace, vrs.BinlogSource.Shard, target.GetPrimary().Alias.Uid, vrs.Workflow, vrs.ID, mysql.EncodePosition(vrs.Position), vrs.BinlogSource))
 		}
 	}
 	if len(logs) > 0 {
@@ -202,7 +202,7 @@ func (dr *switcherDryRun) stopStreams(ctx context.Context, sm *streamMigrater) (
 	for _, streams := range sm.streams {
 		for _, stream := range streams {
 			logs = append(logs, fmt.Sprintf("\tId %d Keyspace %s Shard %s Rules %s at Position %v",
-				stream.id, stream.bls.Keyspace, stream.bls.Shard, stream.bls.Filter, stream.pos))
+				stream.ID, stream.BinlogSource.Keyspace, stream.BinlogSource.Shard, stream.BinlogSource.Filter, stream.Position))
 		}
 	}
 	if len(logs) > 0 {

@@ -536,7 +536,7 @@ func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflow s
 			ts.wr.Logger().Errorf("stopStreams failed: %v", err)
 			for key, streams := range sm.streams {
 				for _, stream := range streams {
-					ts.wr.Logger().Errorf("stream in stopStreams: key %s shard %s stream %+v", key, stream.bls.Shard, stream.bls)
+					ts.wr.Logger().Errorf("stream in stopStreams: key %s shard %s stream %+v", key, stream.BinlogSource.Shard, stream.BinlogSource)
 				}
 			}
 			sw.cancelMigration(ctx, sm)
