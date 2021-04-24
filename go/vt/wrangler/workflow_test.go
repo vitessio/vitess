@@ -17,17 +17,17 @@ limitations under the License.
 package wrangler
 
 import (
+	"context"
 	"fmt"
 	"testing"
 
-	"vitess.io/vitess/go/vt/topo"
-
 	"github.com/stretchr/testify/require"
-	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vtctl/workflow"
 )
 
 func getMoveTablesWorkflow(t *testing.T, cells, tabletTypes string) *VReplicationWorkflow {
@@ -57,7 +57,7 @@ func testComplete(t *testing.T, vrwf *VReplicationWorkflow) error {
 func TestReshardingWorkflowErrorsAndMisc(t *testing.T) {
 	mtwf := getMoveTablesWorkflow(t, "cell1,cell2", "replica,rdonly")
 	require.False(t, mtwf.Exists())
-	mtwf.ws = &workflowState{}
+	mtwf.ws = &workflow.State{}
 	require.True(t, mtwf.Exists())
 	require.Errorf(t, testComplete(t, mtwf), ErrWorkflowNotFullySwitched)
 	mtwf.ws.WritesSwitched = true
