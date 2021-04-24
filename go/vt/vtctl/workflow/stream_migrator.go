@@ -105,20 +105,24 @@ func StreamMigratorFinalize(ctx context.Context, ts ITrafficSwitcher, workflows 
 	if len(workflows) == 0 {
 		return nil
 	}
+
 	workflowList := stringListify(workflows)
 	err := ts.ForAllSources(func(source *MigrationSource) error {
 		query := fmt.Sprintf("delete from _vt.vreplication where db_name=%s and workflow in (%s)", encodeString(source.GetPrimary().DbName()), workflowList)
 		_, err := ts.VReplicationExec(ctx, source.GetPrimary().Alias, query)
 		return err
 	})
+
 	if err != nil {
 		return err
 	}
+
 	err = ts.ForAllTargets(func(target *MigrationTarget) error {
 		query := fmt.Sprintf("update _vt.vreplication set state='Running' where db_name=%s and workflow in (%s)", encodeString(target.GetPrimary().DbName()), workflowList)
 		_, err := ts.VReplicationExec(ctx, target.GetPrimary().Alias, query)
 		return err
 	})
+
 	return err
 }
 
@@ -172,46 +176,56 @@ func (sm *StreamMigrator) StopStreams(ctx context.Context) ([]string, error) {
 
 func (sm *StreamMigrator) readTabletStreams(ctx context.Context, ti *topo.TabletInfo, constraint string) ([]*VReplicationStream, error) {
 	var query string
-	if constraint == "" {
+
+	switch constraint {
+	case "":
 		query = fmt.Sprintf("select id, workflow, source, pos from _vt.vreplication where db_name=%s and workflow != %s", encodeString(ti.DbName()), encodeString(sm.ts.ReverseWorkflowName()))
-	} else {
+	default:
 		query = fmt.Sprintf("select id, workflow, source, pos from _vt.vreplication where db_name=%s and workflow != %s and %s", encodeString(ti.DbName()), encodeString(sm.ts.ReverseWorkflowName()), constraint)
 	}
+
 	p3qr, err := sm.ts.TabletManagerClient().VReplicationExec(ctx, ti.Tablet, query)
 	if err != nil {
 		return nil, err
 	}
-	qr := sqltypes.Proto3ToResult(p3qr)
 
+	qr := sqltypes.Proto3ToResult(p3qr)
 	tabletStreams := make([]*VReplicationStream, 0, len(qr.Rows))
+
 	for _, row := range qr.Rows {
 		id, err := evalengine.ToInt64(row[0])
 		if err != nil {
 			return nil, err
 		}
+
 		workflowName := row[1].ToString()
-		if workflowName == "" {
+		switch workflowName {
+		case "":
 			return nil, fmt.Errorf("VReplication streams must have named workflows for migration: shard: %s:%s, stream: %d", ti.Keyspace, ti.Shard, id)
-		}
-		if workflowName == sm.ts.WorkflowName() {
+		case sm.ts.WorkflowName():
 			return nil, fmt.Errorf("VReplication stream has the same workflow name as the resharding workflow: shard: %s:%s, stream: %d", ti.Keyspace, ti.Shard, id)
 		}
+
 		var bls binlogdatapb.BinlogSource
 		if err := proto.UnmarshalText(row[2].ToString(), &bls); err != nil {
 			return nil, err
 		}
+
 		isReference, err := sm.blsIsReference(&bls)
 		if err != nil {
 			return nil, vterrors.Wrap(err, "blsIsReference")
 		}
+
 		if isReference {
 			sm.ts.Logger().Infof("readTabletStreams: ignoring reference table %+v", bls)
 			continue
 		}
+
 		pos, err := mysql.DecodePosition(row[3].ToString())
 		if err != nil {
 			return nil, err
 		}
+
 		tabletStreams = append(tabletStreams, &VReplicationStream{
 			ID:           uint32(id),
 			Workflow:     workflowName,
@@ -225,8 +239,11 @@ func (sm *StreamMigrator) readTabletStreams(ctx context.Context, ti *topo.Tablet
 /* source streams */
 
 func (sm *StreamMigrator) readSourceStreams(ctx context.Context, cancelMigrate bool) (map[string][]*VReplicationStream, error) {
-	streams := make(map[string][]*VReplicationStream)
-	var mu sync.Mutex
+	var (
+		mu      sync.Mutex
+		streams = make(map[string][]*VReplicationStream)
+	)
+
 	err := sm.ts.ForAllSources(func(source *MigrationSource) error {
 		if !cancelMigrate {
 			// This flow protects us from the following scenario: When we create streams,
@@ -244,23 +261,28 @@ func (sm *StreamMigrator) readSourceStreams(ctx context.Context, cancelMigrate b
 			if err != nil {
 				return err
 			}
+
 			if len(stoppedStreams) != 0 {
 				return fmt.Errorf("cannot migrate until all streams are running: %s: %d", source.GetShard().ShardName(), source.GetPrimary().Alias.Uid)
 			}
 		}
+
 		tabletStreams, err := sm.readTabletStreams(ctx, source.GetPrimary(), "")
 		if err != nil {
 			return err
 		}
+
 		if len(tabletStreams) == 0 {
 			// No VReplication is running. So, we have no work to do.
 			return nil
 		}
-		p3qr, err := sm.ts.TabletManagerClient().VReplicationExec(ctx, source.GetPrimary().Tablet, fmt.Sprintf("select vrepl_id from _vt.copy_state where vrepl_id in %s", VReplicationStreams(tabletStreams).Values()))
-		if err != nil {
+
+		query := fmt.Sprintf("select vrepl_id from _vt.copy_state where vrepl_id in %s", VReplicationStreams(tabletStreams).Values())
+		p3qr, err := sm.ts.TabletManagerClient().VReplicationExec(ctx, source.GetPrimary().Tablet, query)
+		switch {
+		case err != nil:
 			return err
-		}
-		if len(p3qr.Rows) != 0 {
+		case len(p3qr.Rows) != 0:
 			return fmt.Errorf("cannot migrate while vreplication streams in source shards are still copying: %s", source.GetShard().ShardName())
 		}
 
@@ -269,94 +291,127 @@ func (sm *StreamMigrator) readSourceStreams(ctx context.Context, cancelMigrate b
 		streams[source.GetShard().ShardName()] = tabletStreams
 		return nil
 	})
+
 	if err != nil {
 		return nil, err
 	}
+
 	// Validate that streams match across source shards.
-	streams2 := make(map[string][]*VReplicationStream)
-	var reference []*VReplicationStream
-	var refshard string
+	var (
+		reference []*VReplicationStream
+		refshard  string
+		streams2  = make(map[string][]*VReplicationStream)
+	)
+
 	for k, v := range streams {
 		if reference == nil {
 			refshard = k
 			reference = v
 			continue
 		}
+
 		streams2[k] = append([]*VReplicationStream(nil), v...)
 	}
+
 	for shard, tabletStreams := range streams2 {
-	nextStream:
-		for _, refStream := range reference {
-			for i := 0; i < len(tabletStreams); i++ {
-				vrs := tabletStreams[i]
-				if refStream.Workflow == vrs.Workflow &&
-					refStream.BinlogSource.Keyspace == vrs.BinlogSource.Keyspace &&
-					refStream.BinlogSource.Shard == vrs.BinlogSource.Shard {
-					// Delete the matched item and scan for the next stream.
-					tabletStreams = append(tabletStreams[:i], tabletStreams[i+1:]...)
-					continue nextStream
+		err := func() error {
+			for _, refStream := range reference {
+				for i := 0; i < len(tabletStreams); i++ {
+					vrs := tabletStreams[i]
+
+					if refStream.Workflow == vrs.Workflow &&
+						refStream.BinlogSource.Keyspace == vrs.BinlogSource.Keyspace &&
+						refStream.BinlogSource.Shard == vrs.BinlogSource.Shard {
+						// Delete the matched item and scan for the next stream.
+						tabletStreams = append(tabletStreams[:i], tabletStreams[i+1:]...)
+						return nil
+					}
 				}
+
+				return fmt.Errorf("streams are mismatched across source shards: %s vs %s", refshard, shard)
 			}
-			return nil, fmt.Errorf("streams are mismatched across source shards: %s vs %s", refshard, shard)
-		}
-		if len(tabletStreams) != 0 {
-			return nil, fmt.Errorf("streams are mismatched across source shards: %s vs %s", refshard, shard)
+
+			if len(tabletStreams) != 0 {
+				return fmt.Errorf("streams are mismatched across source shards: %s vs %s", refshard, shard)
+			}
+
+			return nil
+		}()
+
+		if err != nil {
+			return nil, err
 		}
 	}
+
 	return streams, nil
 }
 
 func (sm *StreamMigrator) stopSourceStreams(ctx context.Context) error {
-	stoppedStreams := make(map[string][]*VReplicationStream)
-	var mu sync.Mutex
+	var (
+		mu             sync.Mutex
+		stoppedStreams = make(map[string][]*VReplicationStream)
+	)
+
 	err := sm.ts.ForAllSources(func(source *MigrationSource) error {
 		tabletStreams := sm.streams[source.GetShard().ShardName()]
 		if len(tabletStreams) == 0 {
 			return nil
 		}
+
 		query := fmt.Sprintf("update _vt.vreplication set state='Stopped', message='for cutover' where id in %s", VReplicationStreams(tabletStreams).Values())
 		_, err := sm.ts.TabletManagerClient().VReplicationExec(ctx, source.GetPrimary().Tablet, query)
 		if err != nil {
 			return err
 		}
+
 		tabletStreams, err = sm.readTabletStreams(ctx, source.GetPrimary(), fmt.Sprintf("id in %s", VReplicationStreams(tabletStreams).Values()))
 		if err != nil {
 			return err
 		}
+
 		mu.Lock()
 		defer mu.Unlock()
 		stoppedStreams[source.GetShard().ShardName()] = tabletStreams
+
 		return nil
 	})
+
 	if err != nil {
 		return err
 	}
+
 	sm.streams = stoppedStreams
 	return nil
 }
 
 func (sm *StreamMigrator) syncSourceStreams(ctx context.Context) (map[string]mysql.Position, error) {
 	stopPositions := make(map[string]mysql.Position)
+
 	for _, tabletStreams := range sm.streams {
 		for _, vrs := range tabletStreams {
 			key := fmt.Sprintf("%s:%s", vrs.BinlogSource.Keyspace, vrs.BinlogSource.Shard)
-			pos, ok := stopPositions[key]
-			if !ok || vrs.Position.AtLeast(pos) {
+			if pos, ok := stopPositions[key]; !ok || vrs.Position.AtLeast(pos) {
 				sm.ts.Logger().Infof("syncSourceStreams setting stopPositions +%s %+v %d", key, vrs.Position, vrs.ID)
 				stopPositions[key] = vrs.Position
 			}
 		}
 	}
-	var wg sync.WaitGroup
-	allErrors := &concurrency.AllErrorRecorder{}
+
+	var (
+		wg        sync.WaitGroup
+		allErrors concurrency.AllErrorRecorder
+	)
+
 	for shard, tabletStreams := range sm.streams {
 		for _, vrs := range tabletStreams {
 			key := fmt.Sprintf("%s:%s", vrs.BinlogSource.Keyspace, vrs.BinlogSource.Shard)
 			pos := stopPositions[key]
 			sm.ts.Logger().Infof("syncSourceStreams before go func +%s %+v %d", key, pos, vrs.ID)
+
 			if vrs.Position.Equal(pos) {
 				continue
 			}
+
 			wg.Add(1)
 			go func(vrs *VReplicationStream, shard string, pos mysql.Position) {
 				defer wg.Done()
@@ -367,46 +422,59 @@ func (sm *StreamMigrator) syncSourceStreams(ctx context.Context) (map[string]mys
 					allErrors.RecordError(err)
 					return
 				}
-				master, err := sm.ts.TopoServer().GetTablet(ctx, si.MasterAlias)
+
+				primary, err := sm.ts.TopoServer().GetTablet(ctx, si.MasterAlias)
 				if err != nil {
 					allErrors.RecordError(err)
 					return
 				}
+
 				query := fmt.Sprintf("update _vt.vreplication set state='Running', stop_pos='%s', message='synchronizing for cutover' where id=%d", mysql.EncodePosition(pos), vrs.ID)
-				if _, err := sm.ts.TabletManagerClient().VReplicationExec(ctx, master.Tablet, query); err != nil {
+				if _, err := sm.ts.TabletManagerClient().VReplicationExec(ctx, primary.Tablet, query); err != nil {
 					allErrors.RecordError(err)
 					return
 				}
+
 				sm.ts.Logger().Infof("Waiting for keyspace:shard: %v:%v, position %v", sm.ts.SourceKeyspaceName(), shard, pos)
-				if err := sm.ts.TabletManagerClient().VReplicationWaitForPos(ctx, master.Tablet, int(vrs.ID), mysql.EncodePosition(pos)); err != nil {
+				if err := sm.ts.TabletManagerClient().VReplicationWaitForPos(ctx, primary.Tablet, int(vrs.ID), mysql.EncodePosition(pos)); err != nil {
 					allErrors.RecordError(err)
 					return
 				}
+
 				sm.ts.Logger().Infof("Position for keyspace:shard: %v:%v reached", sm.ts.SourceKeyspaceName(), shard)
 			}(vrs, shard, pos)
 		}
 	}
+
 	wg.Wait()
+
 	return stopPositions, allErrors.AggrError(vterrors.Aggregate)
 }
 
 func (sm *StreamMigrator) verifyStreamPositions(ctx context.Context, stopPositions map[string]mysql.Position) ([]string, error) {
-	stoppedStreams := make(map[string][]*VReplicationStream)
-	var mu sync.Mutex
+	var (
+		mu             sync.Mutex
+		stoppedStreams = make(map[string][]*VReplicationStream)
+	)
+
 	err := sm.ts.ForAllSources(func(source *MigrationSource) error {
 		tabletStreams := sm.streams[source.GetShard().ShardName()]
 		if len(tabletStreams) == 0 {
 			return nil
 		}
+
 		tabletStreams, err := sm.readTabletStreams(ctx, source.GetPrimary(), fmt.Sprintf("id in %s", VReplicationStreams(tabletStreams).Values()))
 		if err != nil {
 			return err
 		}
+
 		mu.Lock()
 		defer mu.Unlock()
 		stoppedStreams[source.GetShard().ShardName()] = tabletStreams
+
 		return nil
 	})
+
 	if err != nil {
 		return nil, err
 	}
@@ -415,28 +483,34 @@ func (sm *StreamMigrator) verifyStreamPositions(ctx context.Context, stopPositio
 	// But we keep it up-to-date for good measure.
 	sm.streams = stoppedStreams
 
-	var oneSet []*VReplicationStream
-	allErrors := &concurrency.AllErrorRecorder{}
+	var (
+		oneSet    []*VReplicationStream
+		allErrors concurrency.AllErrorRecorder
+	)
+
 	for _, tabletStreams := range stoppedStreams {
 		if oneSet == nil {
 			oneSet = tabletStreams
 		}
+
 		for _, vrs := range tabletStreams {
 			key := fmt.Sprintf("%s:%s", vrs.BinlogSource.Keyspace, vrs.BinlogSource.Shard)
-			pos := stopPositions[key]
-			if !vrs.Position.Equal(pos) {
+			if pos := stopPositions[key]; !vrs.Position.Equal(pos) {
 				allErrors.RecordError(fmt.Errorf("%s: stream %d position: %s does not match %s", key, vrs.ID, mysql.EncodePosition(vrs.Position), mysql.EncodePosition(pos)))
 			}
 		}
 	}
+
 	if allErrors.HasErrors() {
 		return nil, allErrors.AggrError(vterrors.Aggregate)
 	}
+
 	sm.templates, err = sm.templatize(ctx, oneSet)
 	if err != nil {
 		// Unreachable: we've already templatized this before.
 		return nil, err
 	}
+
 	return VReplicationStreams(sm.templates).Workflows(), allErrors.AggrError(vterrors.Aggregate)
 }
 
@@ -454,6 +528,7 @@ func (sm *StreamMigrator) createTargetStreams(ctx context.Context, tmpl []*VRepl
 		for _, vrs := range tabletStreams {
 			for _, rule := range vrs.BinlogSource.Filter.Rules {
 				buf := &strings.Builder{}
+
 				t := template.Must(template.New("").Parse(rule.Filter))
 				if err := t.Execute(buf, key.KeyRangeString(target.GetShard().KeyRange)); err != nil {
 					return err
@@ -492,15 +567,18 @@ func (sm *StreamMigrator) deleteTargetStreams(ctx context.Context) error {
 /* templatizing */
 
 func (sm *StreamMigrator) templatize(ctx context.Context, tabletStreams []*VReplicationStream) ([]*VReplicationStream, error) {
-	tabletStreams = VReplicationStreams(tabletStreams).Copy().ToSlice()
 	var shardedStreams []*VReplicationStream
+
+	tabletStreams = VReplicationStreams(tabletStreams).Copy().ToSlice()
 	for _, vrs := range tabletStreams {
 		streamType := StreamTypeUnknown
+
 		for _, rule := range vrs.BinlogSource.Filter.Rules {
 			typ, err := sm.templatizeRule(ctx, rule)
 			if err != nil {
 				return nil, err
 			}
+
 			switch typ {
 			case StreamTypeSharded:
 				if streamType == StreamTypeReference {
@@ -514,10 +592,12 @@ func (sm *StreamMigrator) templatize(ctx context.Context, tabletStreams []*VRepl
 				streamType = StreamTypeReference
 			}
 		}
+
 		if streamType == StreamTypeSharded {
 			shardedStreams = append(shardedStreams, vrs)
 		}
 	}
+
 	return shardedStreams, nil
 }
 
@@ -528,9 +608,11 @@ func (sm *StreamMigrator) templatizeRule(ctx context.Context, rule *binlogdatapb
 	if !ok {
 		return StreamTypeUnknown, fmt.Errorf("table %v not found in vschema", rule.Match)
 	}
+
 	if vtable.Type == vindexes.TypeReference {
 		return StreamTypeReference, nil
 	}
+
 	switch {
 	case rule.Filter == "":
 		return StreamTypeUnknown, fmt.Errorf("rule %v does not have a select expression in vreplication", rule)
@@ -540,10 +622,10 @@ func (sm *StreamMigrator) templatizeRule(ctx context.Context, rule *binlogdatapb
 	case rule.Filter == vreplication.ExcludeStr:
 		return StreamTypeUnknown, fmt.Errorf("unexpected rule in vreplication: %v", rule)
 	default:
-		err := sm.templatizeKeyRange(ctx, rule)
-		if err != nil {
+		if err := sm.templatizeKeyRange(ctx, rule); err != nil {
 			return StreamTypeUnknown, err
 		}
+
 		return StreamTypeSharded, nil
 	}
 }
@@ -553,20 +635,24 @@ func (sm *StreamMigrator) templatizeKeyRange(ctx context.Context, rule *binlogda
 	if err != nil {
 		return err
 	}
+
 	sel, ok := statement.(*sqlparser.Select)
 	if !ok {
 		return fmt.Errorf("unexpected query: %v", rule.Filter)
 	}
+
 	var expr sqlparser.Expr
 	if sel.Where != nil {
 		expr = sel.Where.Expr
 	}
+
 	exprs := sqlparser.SplitAndExpression(nil, expr)
 	for _, subexpr := range exprs {
 		funcExpr, ok := subexpr.(*sqlparser.FuncExpr)
 		if !ok || !funcExpr.Name.EqualString("in_keyrange") {
 			continue
 		}
+
 		var krExpr sqlparser.SelectExpr
 		switch len(funcExpr.Exprs) {
 		case 1:
@@ -576,21 +662,26 @@ func (sm *StreamMigrator) templatizeKeyRange(ctx context.Context, rule *binlogda
 		default:
 			return fmt.Errorf("unexpected in_keyrange parameters: %v", sqlparser.String(funcExpr))
 		}
+
 		aliased, ok := krExpr.(*sqlparser.AliasedExpr)
 		if !ok {
 			return fmt.Errorf("unexpected in_keyrange parameters: %v", sqlparser.String(funcExpr))
 		}
+
 		val, ok := aliased.Expr.(*sqlparser.Literal)
 		if !ok {
 			return fmt.Errorf("unexpected in_keyrange parameters: %v", sqlparser.String(funcExpr))
 		}
+
 		if strings.Contains(rule.Filter, "{{") {
 			return fmt.Errorf("cannot migrate queries that contain '{{' in their string: %s", rule.Filter)
 		}
+
 		val.Val = "{{.}}"
 		rule.Filter = sqlparser.String(statement)
 		return nil
 	}
+
 	// There was no in_keyrange expression. Create a new one.
 	vtable := sm.ts.SourceKeyspaceSchema().Tables[rule.Match]
 	inkr := &sqlparser.FuncExpr{
@@ -615,19 +706,23 @@ func (sm *StreamMigrator) blsIsReference(bls *binlogdatapb.BinlogSource) (bool, 
 		if err != nil {
 			return false, err
 		}
+
 		switch typ {
 		case StreamTypeSharded:
 			if streamType == StreamTypeReference {
 				return false, fmt.Errorf("cannot reshard streams with a mix of reference and sharded tables: %v", bls)
 			}
+
 			streamType = StreamTypeSharded
 		case StreamTypeReference:
 			if streamType == StreamTypeSharded {
 				return false, fmt.Errorf("cannot reshard streams with a mix of reference and sharded tables: %v", bls)
 			}
+
 			streamType = StreamTypeReference
 		}
 	}
+
 	return streamType == StreamTypeReference, nil
 }
 
@@ -636,9 +731,11 @@ func (sm *StreamMigrator) identifyRuleType(rule *binlogdatapb.Rule) (StreamType,
 	if !ok {
 		return 0, fmt.Errorf("table %v not found in vschema", rule.Match)
 	}
+
 	if vtable.Type == vindexes.TypeReference {
 		return StreamTypeReference, nil
 	}
+
 	// In this case, 'sharded' means that it's not a reference
 	// table. We don't care about any other subtleties.
 	return StreamTypeSharded, nil
