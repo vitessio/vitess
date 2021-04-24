@@ -92,9 +92,10 @@ mysql57)
     )
     ;;
 mysql80)
-    mysql8_version=8.0.21
+    mysql8_version=8.0.23
     do_fetch https://repo.mysql.com/apt/debian/pool/mysql-8.0/m/mysql-community/libmysqlclient21_${mysql8_version}-1debian10_amd64.deb /tmp/libmysqlclient21_${mysql8_version}-1debian10_amd64.deb
     do_fetch https://repo.mysql.com/apt/debian/pool/mysql-8.0/m/mysql-community/mysql-community-client-core_${mysql8_version}-1debian10_amd64.deb /tmp/mysql-community-client-core_${mysql8_version}-1debian10_amd64.deb
+    do_fetch https://repo.mysql.com/apt/debian/pool/mysql-8.0/m/mysql-community/mysql-community-client-plugins_${mysql8_version}-1debian10_amd64.deb /tmp/mysql-community-client-plugins_${mysql8_version}-1debian10_amd64.deb
     do_fetch https://repo.mysql.com/apt/debian/pool/mysql-8.0/m/mysql-community/mysql-community-client_${mysql8_version}-1debian10_amd64.deb /tmp/mysql-community-client_${mysql8_version}-1debian10_amd64.deb
     do_fetch https://repo.mysql.com/apt/debian/pool/mysql-8.0/m/mysql-community/mysql-client_${mysql8_version}-1debian10_amd64.deb /tmp/mysql-client_${mysql8_version}-1debian10_amd64.deb
     do_fetch https://repo.mysql.com/apt/debian/pool/mysql-8.0/m/mysql-community/mysql-community-server-core_${mysql8_version}-1debian10_amd64.deb /tmp/mysql-community-server-core_${mysql8_version}-1debian10_amd64.deb
@@ -103,6 +104,7 @@ mysql80)
     PACKAGES=(
         /tmp/libmysqlclient21_${mysql8_version}-1debian10_amd64.deb
         /tmp/mysql-community-client-core_${mysql8_version}-1debian10_amd64.deb
+        /tmp/mysql-community-client-plugins_${mysql8_version}-1debian10_amd64.deb
         /tmp/mysql-community-client_${mysql8_version}-1debian10_amd64.deb
         /tmp/mysql-client_${mysql8_version}-1debian10_amd64.deb
         /tmp/mysql-community-server-core_${mysql8_version}-1debian10_amd64.deb
