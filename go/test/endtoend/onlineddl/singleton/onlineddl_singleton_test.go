@@ -318,7 +318,7 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 	fmt.Printf("<%s>\n", uuid)
 
 	if !strategySetting.Strategy.IsDirect() && !skipWait {
-		time.Sleep(time.Second * 20)
+		time.Sleep(time.Second * 10)
 	}
 
 	if expectError == "" && expectHint != "" {
