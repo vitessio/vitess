@@ -47,10 +47,28 @@ export const Workflows = () => {
                         <div className="font-size-small text-color-secondary">{cluster?.name}</div>
                     </DataCell>
                     <DataCell>
-                        {workflow?.source?.keyspace || <span className="text-color-secondary">n/a</span>}
+                        {workflow?.source?.keyspace ? (
+                            <>
+                                <div>{workflow.source.keyspace}</div>
+                                <div className="font-size-small text-color-secondary">
+                                    {(workflow.source.shards || []).join(', ')}
+                                </div>
+                            </>
+                        ) : (
+                            <span className="text-color-secondary">N/A</span>
+                        )}
                     </DataCell>
                     <DataCell>
-                        {workflow?.target?.keyspace || <span className="text-color-secondary">n/a</span>}
+                        {workflow?.target?.keyspace ? (
+                            <>
+                                <div>{workflow.target.keyspace}</div>
+                                <div className="font-size-small text-color-secondary">
+                                    {(workflow.target.shards || []).join(', ')}
+                                </div>
+                            </>
+                        ) : (
+                            <span className="text-color-secondary">N/A</span>
+                        )}
                     </DataCell>
                 </tr>
             );
