@@ -235,13 +235,7 @@ func TestSchemaChange(t *testing.T) {
 		}
 	})
 	t.Run("failed migrations, singleton-context", func(t *testing.T) {
-		uuidList := testOnlineDDLStatement(t, multiAlterTableThrottlingStatement, "gh-ost -singleton-context --max-load=Threads_running=1", "vtctl", "hint_col", "", false)
-		throttledUUIDs = strings.Split(uuidList, "\n")
-		assert.Equal(t, 3, len(throttledUUIDs))
-		for _, uuid := range throttledUUIDs {
-			uuid = strings.TrimSpace(uuid)
-			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusFailed)
-		}
+		_ = testOnlineDDLStatement(t, multiAlterTableThrottlingStatement, "gh-ost -singleton-context --max-load=Threads_running=1", "vtctl", "hint_col", "rejected", false)
 	})
 	t.Run("terminate throttled migrations", func(t *testing.T) {
 		for _, uuid := range throttledUUIDs {
