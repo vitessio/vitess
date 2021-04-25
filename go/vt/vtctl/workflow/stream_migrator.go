@@ -314,8 +314,8 @@ func (sm *StreamMigrator) readSourceStreams(ctx context.Context, cancelMigrate b
 	}
 
 	for shard, tabletStreams := range streams2 {
-		err := func() error {
-			for _, refStream := range reference {
+		for _, refStream := range reference {
+			err := func() error {
 				for i := 0; i < len(tabletStreams); i++ {
 					vrs := tabletStreams[i]
 
@@ -329,17 +329,15 @@ func (sm *StreamMigrator) readSourceStreams(ctx context.Context, cancelMigrate b
 				}
 
 				return fmt.Errorf("streams are mismatched across source shards: %s vs %s", refshard, shard)
+			}()
+
+			if err != nil {
+				return nil, err
 			}
+		}
 
-			if len(tabletStreams) != 0 {
-				return fmt.Errorf("streams are mismatched across source shards: %s vs %s", refshard, shard)
-			}
-
-			return nil
-		}()
-
-		if err != nil {
-			return nil, err
+		if len(tabletStreams) != 0 {
+			return nil, fmt.Errorf("streams are mismatched across source shards: %s vs %s", refshard, shard)
 		}
 	}
 
