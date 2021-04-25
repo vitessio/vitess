@@ -2544,8 +2544,7 @@ func (e *Executor) SubmitMigration(
 		return nil, err
 	}
 
-	if onlineDDL.StrategySetting().IsSingleton() {
-		// We will reject this migration if there's any pending migration within a different context
+	if onlineDDL.StrategySetting().IsSingleton() || onlineDDL.StrategySetting().IsSingletonContext() {
 		e.migrationMutex.Lock()
 		defer e.migrationMutex.Unlock()
 
@@ -2553,13 +2552,22 @@ func (e *Executor) SubmitMigration(
 		if err != nil {
 			return nil, err
 		}
-		for _, pendingUUID := range pendingUUIDs {
-			pendingOnlineDDL, _, err := e.readMigration(ctx, pendingUUID)
-			if err != nil {
-				return nil, err
+		switch {
+		case onlineDDL.StrategySetting().IsSingleton():
+			// We will reject this migration if there's any pending migration
+			if len(pendingUUIDs) > 0 {
+				return result, fmt.Errorf("singleton migration rejected: found pending migrations [%s]", strings.Join(pendingUUIDs, ", "))
 			}
-			if pendingOnlineDDL.RequestContext != onlineDDL.RequestContext {
-				return nil, fmt.Errorf("singleton migration rejected: found pending migration: %s in different context: %s", pendingUUID, pendingOnlineDDL.RequestContext)
+		case onlineDDL.StrategySetting().IsSingletonContext():
+			// We will reject this migration if there's any pending migration within a different context
+			for _, pendingUUID := range pendingUUIDs {
+				pendingOnlineDDL, _, err := e.readMigration(ctx, pendingUUID)
+				if err != nil {
+					return nil, err
+				}
+				if pendingOnlineDDL.RequestContext != onlineDDL.RequestContext {
+					return nil, fmt.Errorf("singleton migration rejected: found pending migration: %s in different context: %s", pendingUUID, pendingOnlineDDL.RequestContext)
+				}
 			}
 		}
 	}
