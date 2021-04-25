@@ -8934,3 +8934,5 @@
 2021-04-25T10:32:49Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/782530888
 2021-04-25T10:49:32Z,Cluster (onlineddl_singleton),https://github.com/vitessio/vitess/actions/runs/782557314
 2021-04-25T10:49:32Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/782557333
+2021-04-25T11:03:34Z,Cluster (onlineddl_singleton),https://github.com/vitessio/vitess/actions/runs/782579061
+2021-04-25T11:13:24Z,Cluster (upgrade),https://github.com/vitessio/vitess/actions/runs/782595144
