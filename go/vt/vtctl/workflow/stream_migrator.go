@@ -41,9 +41,13 @@ import (
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
 
-// (TODO:@ajm188) Does this need to be exported?
+// StreamType is an enum representing the kind of stream.
+//
+// (TODO:@ajm188) This should be made package-private once the last references
+// in package wrangler are removed.
 type StreamType int
 
+// StreamType values.
 const (
 	StreamTypeUnknown = StreamType(iota)
 	StreamTypeSharded
@@ -124,6 +128,22 @@ func StreamMigratorFinalize(ctx context.Context, ts ITrafficSwitcher, workflows 
 	})
 
 	return err
+}
+
+// Streams returns a deep-copy of the StreamMigrator's streams map.
+func (sm *StreamMigrator) Streams() map[string][]*VReplicationStream {
+	streams := make(map[string][]*VReplicationStream, len(sm.streams))
+
+	for k, v := range sm.streams {
+		streams[k] = VReplicationStreams(v).Copy().ToSlice()
+	}
+
+	return streams
+}
+
+// Templates returns a copy of the StreamMigrator's template streams.
+func (sm *StreamMigrator) Templates() []*VReplicationStream {
+	return VReplicationStreams(sm.templates).Copy().ToSlice()
 }
 
 func (sm *StreamMigrator) CancelMigration(ctx context.Context) {
