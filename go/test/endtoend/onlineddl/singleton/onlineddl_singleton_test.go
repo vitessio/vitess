@@ -231,7 +231,7 @@ func TestSchemaChange(t *testing.T) {
 		throttledUUIDs = strings.Split(uuidList, "\n")
 		assert.Equal(t, 3, len(throttledUUIDs))
 		for _, uuid := range throttledUUIDs {
-			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusRunning)
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusRunning, schema.OnlineDDLStatusQueued)
 		}
 	})
 	t.Run("failed migrations, singleton-context", func(t *testing.T) {
@@ -251,7 +251,7 @@ func TestSchemaChange(t *testing.T) {
 		time.Sleep(2 * time.Second)
 		for _, uuid := range throttledUUIDs {
 			uuid = strings.TrimSpace(uuid)
-			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusFailed)
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusFailed, schema.OnlineDDLStatusCancelled)
 		}
 	})
 
