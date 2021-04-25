@@ -8930,3 +8930,5 @@
 2021-04-25T10:17:32Z,Cluster (onlineddl_singleton),https://github.com/vitessio/vitess/actions/runs/782506634
 2021-04-25T10:17:32Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/782506629
 2021-04-25T10:17:32Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/782506627
+2021-04-25T10:20:18Z,Cluster (onlineddl_singleton),https://github.com/vitessio/vitess/actions/runs/782511534
+2021-04-25T10:32:49Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/782530888
