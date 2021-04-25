@@ -26,15 +26,6 @@ type streamMigrater struct {
 	sm *workflow.StreamMigrator
 }
 
-func buildStreamMigrater(ctx context.Context, ts *trafficSwitcher, cancelMigrate bool) (*streamMigrater, error) {
-	sm, err := workflow.BuildStreamMigrator(ctx, ts, cancelMigrate)
-	if err != nil {
-		return nil, err
-	}
-
-	return &streamMigrater{sm: sm}, nil
-}
-
 func (sm *streamMigrater) stopStreams(ctx context.Context) ([]string, error) {
 	return sm.sm.StopStreams(ctx)
 }
@@ -51,8 +42,4 @@ func (sm *streamMigrater) cancelMigration(ctx context.Context) {
 // It's a standalone function because it does not use the streamMigrater state.
 func streamMigraterfinalize(ctx context.Context, ts *trafficSwitcher, workflows []string) error {
 	return workflow.StreamMigratorFinalize(ctx, ts, workflows)
-}
-
-func copyTabletStreams(in []*workflow.VReplicationStream) []*workflow.VReplicationStream {
-	return workflow.VReplicationStreams(in).Copy().ToSlice()
 }
