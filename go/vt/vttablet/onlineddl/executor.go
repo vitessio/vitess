@@ -1167,16 +1167,17 @@ func (e *Executor) readMigration(ctx context.Context, uuid string) (onlineDDL *s
 		return nil, nil, ErrMigrationNotFound
 	}
 	onlineDDL = &schema.OnlineDDL{
-		Keyspace:    row["keyspace"].ToString(),
-		Table:       row["mysql_table"].ToString(),
-		Schema:      row["mysql_schema"].ToString(),
-		SQL:         row["migration_statement"].ToString(),
-		UUID:        row["migration_uuid"].ToString(),
-		Strategy:    schema.DDLStrategy(row["strategy"].ToString()),
-		Options:     row["options"].ToString(),
-		Status:      schema.OnlineDDLStatus(row["migration_status"].ToString()),
-		Retries:     row.AsInt64("retries", 0),
-		TabletAlias: row["tablet"].ToString(),
+		Keyspace:       row["keyspace"].ToString(),
+		Table:          row["mysql_table"].ToString(),
+		Schema:         row["mysql_schema"].ToString(),
+		SQL:            row["migration_statement"].ToString(),
+		UUID:           row["migration_uuid"].ToString(),
+		Strategy:       schema.DDLStrategy(row["strategy"].ToString()),
+		Options:        row["options"].ToString(),
+		Status:         schema.OnlineDDLStatus(row["migration_status"].ToString()),
+		Retries:        row.AsInt64("retries", 0),
+		TabletAlias:    row["tablet"].ToString(),
+		RequestContext: row["migration_context"].ToString(),
 	}
 	return onlineDDL, row, nil
 }
@@ -2544,15 +2545,22 @@ func (e *Executor) SubmitMigration(
 	}
 
 	if onlineDDL.StrategySetting().IsSingleton() {
+		// We will reject this migration if there's any pending migration within a different context
 		e.migrationMutex.Lock()
 		defer e.migrationMutex.Unlock()
 
-		uuids, err := e.readPendingMigrationsUUIDs(ctx)
+		pendingUUIDs, err := e.readPendingMigrationsUUIDs(ctx)
 		if err != nil {
-			return result, err
+			return nil, err
 		}
-		if len(uuids) > 0 {
-			return result, fmt.Errorf("singleton migration rejected: found pending migrations [%s]", strings.Join(uuids, ", "))
+		for _, pendingUUID := range pendingUUIDs {
+			pendingOnlineDDL, _, err := e.readMigration(ctx, pendingUUID)
+			if err != nil {
+				return nil, err
+			}
+			if pendingOnlineDDL.RequestContext != onlineDDL.RequestContext {
+				return nil, fmt.Errorf("singleton migration rejected: found pending migration: %s in different context: %s", pendingUUID, pendingOnlineDDL.RequestContext)
+			}
 		}
 	}
 
