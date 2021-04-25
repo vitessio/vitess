@@ -323,7 +323,7 @@ func TestPurge(t *testing.T) {
 		checkTableRows(t, tableName, 1024)
 	}
 
-	time.Sleep(1 * time.Minute) // purgeReentranceInterval
+	time.Sleep(2 * time.Minute) // purgeReentranceInterval
 	{
 		// We're now both beyond table's timestamp as well as a tableGC interval
 		exists, _, err := tableExists(tableName)
