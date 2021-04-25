@@ -17,41 +17,56 @@ import { orderBy } from 'lodash-es';
 import * as React from 'react';
 import { Link } from 'react-router-dom';
 
+import style from './Workflows.module.scss';
 import { useWorkflows } from '../../hooks/api';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
+import { Button } from '../Button';
 import { DataCell } from '../dataTable/DataCell';
 import { DataTable } from '../dataTable/DataTable';
+import { Icons } from '../Icon';
+import { TextInput } from '../TextInput';
+import { useSyncedURLParam } from '../../hooks/useSyncedURLParam';
+import { filterNouns } from '../../util/filterNouns';
 
 export const Workflows = () => {
     useDocumentTitle('Workflows');
     const { data } = useWorkflows();
+    const { value: filter, updateValue: updateFilter } = useSyncedURLParam('filter');
 
-    const sortedData = React.useMemo(
-        () => orderBy(data, ['workflow.name', 'cluster.name', 'workflow.source.keyspace', 'workflow.target.keyspace']),
-        [data]
-    );
+    const sortedData = React.useMemo(() => {
+        const mapped = (data || []).map(({ cluster, keyspace, workflow }) => ({
+            clusterID: cluster?.id,
+            clusterName: cluster?.name,
+            keyspace,
+            name: workflow?.name,
+            source: workflow?.source?.keyspace,
+            sourceShards: workflow?.source?.shards,
+            target: workflow?.target?.keyspace,
+            targetShards: workflow?.target?.shards,
+        }));
+        const filtered = filterNouns(filter, mapped);
+        return orderBy(filtered, ['name', 'clusterName', 'source', 'target']);
+    }, [data, filter]);
 
     const renderRows = (rows: typeof sortedData) =>
-        rows.map(({ cluster, keyspace, workflow }, idx) => {
+        rows.map((row, idx) => {
             const href =
-                cluster?.id && keyspace && workflow?.name
-                    ? `/workflow/${cluster.id}/${keyspace}/${workflow.name}`
+                row.clusterID && row.keyspace && row.name
+                    ? `/workflow/${row.clusterID}/${row.keyspace}/${row.name}`
                     : null;
 
             return (
                 <tr key={idx}>
                     <DataCell>
-                        <div className="font-weight-bold">
-                            {href ? <Link to={href}>{workflow?.name}</Link> : workflow?.name}
-                        </div>
-                        <div className="font-size-small text-color-secondary">{cluster?.name}</div>
+                        <div className="font-weight-bold">{href ? <Link to={href}>{row.name}</Link> : row.name}</div>
+                        <div className="font-size-small text-color-secondary">{row.clusterName}</div>
                     </DataCell>
                     <DataCell>
-                        {workflow?.source?.keyspace ? (
+                        {row.source ? (
                             <>
-                                <div>{workflow.source.keyspace}</div>
+                                <div>{row.source}</div>
                                 <div className="font-size-small text-color-secondary">
-                                    {(workflow.source.shards || []).join(', ')}
+                                    {(row.sourceShards || []).join(', ')}
                                 </div>
                             </>
                         ) : (
@@ -59,11 +74,11 @@ export const Workflows = () => {
                         )}
                     </DataCell>
                     <DataCell>
-                        {workflow?.target?.keyspace ? (
+                        {row.target ? (
                             <>
-                                <div>{workflow.target.keyspace}</div>
+                                <div>{row.target}</div>
                                 <div className="font-size-small text-color-secondary">
-                                    {(workflow.target.shards || []).join(', ')}
+                                    {(row.targetShards || []).join(', ')}
                                 </div>
                             </>
                         ) : (
@@ -77,6 +92,20 @@ export const Workflows = () => {
     return (
         <div className="max-width-content">
             <h1>Workflows</h1>
+
+            <div className={style.controls}>
+                <TextInput
+                    autoFocus
+                    iconLeft={Icons.search}
+                    onChange={(e) => updateFilter(e.target.value)}
+                    placeholder="Filter workflows"
+                    value={filter || ''}
+                />
+                <Button disabled={!filter} onClick={() => updateFilter('')} secondary>
+                    Clear filters
+                </Button>
+            </div>
+
             <DataTable columns={['Workflow', 'Source', 'Target']} data={sortedData} renderRows={renderRows} />
         </div>
     );
