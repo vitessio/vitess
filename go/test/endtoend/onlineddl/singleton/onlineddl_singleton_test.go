@@ -63,9 +63,9 @@ var (
 		ALTER TABLE stress_test DROP COLUMN created_timestamp
 	`
 	multiAlterTableThrottlingStatement = `
-		ALTER TABLE stress_test ENGINE=InnoDB,
-		ALTER TABLE stress_test ENGINE=InnoDB,
-		ALTER TABLE stress_test ENGINE=InnoDB
+		ALTER TABLE stress_test ENGINE=InnoDB;
+		ALTER TABLE stress_test ENGINE=InnoDB;
+		ALTER TABLE stress_test ENGINE=InnoDB;
 	`
 	// A trivial statement which must succeed and does not change the schema
 	alterTableTrivialStatement = `
@@ -74,7 +74,7 @@ var (
 	dropStatement = `
 		DROP TABLE stress_test
 	`
-	multiDropStatements = `DROP TABLE IF EXISTS t1, DROP TABLE IF EXISTS t2, DROP TABLE IF EXISTS t3`
+	multiDropStatements = `DROP TABLE IF EXISTS t1; DROP TABLE IF EXISTS t2; DROP TABLE IF EXISTS t3;`
 )
 
 func TestMain(m *testing.M) {
@@ -318,7 +318,7 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 	fmt.Printf("<%s>\n", uuid)
 
 	if !strategySetting.Strategy.IsDirect() && !skipWait {
-		time.Sleep(time.Second * 10)
+		time.Sleep(time.Second * 20)
 	}
 
 	if expectError == "" && expectHint != "" {
