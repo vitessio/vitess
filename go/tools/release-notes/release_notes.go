@@ -41,14 +41,18 @@ type (
 		Title  string  `json:"title"`
 	}
 
-	prComponent struct {
+	prsByComponent = map[string][]prInfo
+
+	prsByType = map[string]prsByComponent
+
+	sortedPRComponent struct {
 		Name    string
 		PrInfos []prInfo
 	}
 
-	prType struct {
+	sortedPRType struct {
 		Name       string
-		Components []prComponent
+		Components []sortedPRComponent
 	}
 )
 
@@ -154,8 +158,8 @@ func loadAllPRs(prs []string) ([]prInfo, error) {
 	return prInfos, err
 }
 
-func groupPRs(prInfos []prInfo) map[string]map[string][]prInfo {
-	prPerType := map[string]map[string][]prInfo{}
+func groupPRs(prInfos []prInfo) prsByType {
+	prPerType := prsByType{}
 
 	for _, info := range prInfos {
 		var typ, component string
@@ -174,15 +178,12 @@ func groupPRs(prInfos []prInfo) map[string]map[string][]prInfo {
 			typ = "Bug fixes"
 		}
 
-		if typ == "" {
-			typ = "Other"
-		}
 		if component == "" {
 			component = "Other"
 		}
 		components, exists := prPerType[typ]
 		if !exists {
-			components = map[string][]prInfo{}
+			components = prsByComponent{}
 			prPerType[typ] = components
 		}
 
@@ -192,14 +193,14 @@ func groupPRs(prInfos []prInfo) map[string]map[string][]prInfo {
 	return prPerType
 }
 
-func createSortedPrTypeSlice(prPerType map[string]map[string][]prInfo) []prType {
-	var data []prType
+func createSortedPrTypeSlice(prPerType prsByType) []sortedPRType {
+	var data []sortedPRType
 	for typeKey, typeElem := range prPerType {
-		newPrType := prType{
+		newPrType := sortedPRType{
 			Name: typeKey,
 		}
 		for componentKey, prInfos := range typeElem {
-			newComponent := prComponent{
+			newComponent := sortedPRComponent{
 				Name:    componentKey,
 				PrInfos: prInfos,
 			}
@@ -219,7 +220,7 @@ func createSortedPrTypeSlice(prPerType map[string]map[string][]prInfo) []prType 
 	return data
 }
 
-func writePrInfos(fileout string, prPerType map[string]map[string][]prInfo) (err error) {
+func writePrInfos(fileout string, prPerType prsByType) (err error) {
 	writeTo := os.Stdout
 	if fileout != "" {
 		writeTo, err = os.OpenFile(fileout, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
