@@ -2544,6 +2544,11 @@ func (e *Executor) SubmitMigration(
 		return nil, err
 	}
 
+	if err := e.initSchema(ctx); err != nil {
+		log.Error(err)
+		return nil, err
+	}
+
 	if onlineDDL.StrategySetting().IsSingleton() || onlineDDL.StrategySetting().IsSingletonContext() {
 		e.migrationMutex.Lock()
 		defer e.migrationMutex.Unlock()
