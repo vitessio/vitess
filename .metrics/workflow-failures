@@ -9046,7 +9046,11 @@
 2021-04-26T12:27:30Z,docker_test_2,https://github.com/vitessio/vitess/actions/runs/785539955
 2021-04-26T12:27:30Z,endtoend,https://github.com/vitessio/vitess/actions/runs/785539947
 2021-04-26T12:27:30Z,unit_race,https://github.com/vitessio/vitess/actions/runs/785539934
+2021-04-26T13:43:19Z,Cluster (onlineddl_vrepl_stress),https://github.com/vitessio/vitess/actions/runs/785760902
+2021-04-26T13:43:19Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/785760940
 2021-04-26T13:43:19Z,Cluster (vreplication_migrate),https://github.com/vitessio/vitess/actions/runs/785760934
+2021-04-26T13:43:19Z,Cluster (vreplication_multicell),https://github.com/vitessio/vitess/actions/runs/785760920
+2021-04-26T13:43:19Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/785760918
 2021-04-26T13:43:19Z,Unit Test (mariadb101),https://github.com/vitessio/vitess/actions/runs/785760908
 2021-04-26T13:43:19Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/785760899
 2021-04-26T13:43:19Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/785760917
