@@ -85,7 +85,7 @@ type dynamicPacketSizer struct {
 	// currentSize is the last size for the packet that is safe to use
 	currentSize int
 
-	// current are the performance metrics for the last
+	// currentMetrics are the performance metrics for the current size
 	currentMetrics *mathstats.Sample
 
 	// candidateSize is the target size for packets being tested
