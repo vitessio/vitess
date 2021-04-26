@@ -18,6 +18,7 @@ package errors
 
 import (
 	"fmt"
+	"net/http"
 	"strings"
 )
 
@@ -77,3 +78,29 @@ func (e *MissingParams) Error() string {
 func (e *MissingParams) Code() string         { return "missing params" }
 func (e *MissingParams) Details() interface{} { return nil }
 func (e *MissingParams) HTTPStatus() int      { return 400 }
+
+// NoSuchSchema is returned when a schema definition cannot be found for a given
+// set of filter criteria. Both GetSchema and FindSchema can return this error.
+type NoSuchSchema struct {
+	Clusters []string
+	Table    string
+}
+
+func (e *NoSuchSchema) Error() string {
+	return fmt.Sprintf("%s: no schemas found with table named %s", e.Code(), e.Table)
+}
+
+func (e *NoSuchSchema) Details() interface{} {
+	details := map[string]interface{}{
+		"table": e.Table,
+	}
+
+	if e.Clusters != nil {
+		details["clusters"] = e.Clusters
+	}
+
+	return details
+}
+
+func (e *NoSuchSchema) Code() string    { return "no such schema" }
+func (e *NoSuchSchema) HTTPStatus() int { return http.StatusNotFound }

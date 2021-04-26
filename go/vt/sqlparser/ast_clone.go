@@ -426,6 +426,7 @@ func CloneRefOfAlterTable(n *AlterTable) *AlterTable {
 	out.Table = CloneTableName(n.Table)
 	out.AlterOptions = CloneSliceOfAlterOption(n.AlterOptions)
 	out.PartitionSpec = CloneRefOfPartitionSpec(n.PartitionSpec)
+	out.Comments = CloneComments(n.Comments)
 	return &out
 }
 
@@ -687,6 +688,7 @@ func CloneRefOfCreateTable(n *CreateTable) *CreateTable {
 	out.Table = CloneTableName(n.Table)
 	out.TableSpec = CloneRefOfTableSpec(n.TableSpec)
 	out.OptLike = CloneRefOfOptLike(n.OptLike)
+	out.Comments = CloneComments(n.Comments)
 	return &out
 }
 
@@ -786,6 +788,7 @@ func CloneRefOfDropTable(n *DropTable) *DropTable {
 	}
 	out := *n
 	out.FromTables = CloneTableNames(n.FromTables)
+	out.Comments = CloneComments(n.Comments)
 	return &out
 }
 
@@ -1286,6 +1289,7 @@ func CloneRefOfRevertMigration(n *RevertMigration) *RevertMigration {
 		return nil
 	}
 	out := *n
+	out.Comments = CloneComments(n.Comments)
 	return &out
 }
 

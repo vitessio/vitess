@@ -87,7 +87,7 @@ func (txc *TxConn) queryService(alias *topodatapb.TabletAlias) (queryservice.Que
 	if qs != nil {
 		return qs, nil
 	}
-	return txc.gateway.QueryServiceByAlias(alias)
+	return txc.gateway.QueryServiceByAlias(alias, nil)
 }
 
 func (txc *TxConn) commitShard(ctx context.Context, s *vtgatepb.Session_ShardSession) error {

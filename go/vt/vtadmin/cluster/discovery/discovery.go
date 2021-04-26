@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 
 	"github.com/spf13/pflag"
 
@@ -82,11 +83,15 @@ type Factory func(cluster *vtadminpb.Cluster, flags *pflag.FlagSet, args []strin
 
 // nolint:gochecknoglobals
 var registry = map[string]Factory{}
+var registryMu sync.Mutex
 
 // Register registers a factory for the given implementation name. Attempting
 // to register multiple factories for the same implementation name causes a
 // panic.
 func Register(name string, factory Factory) {
+	registryMu.Lock()
+	defer registryMu.Unlock()
+
 	_, ok := registry[name]
 	if ok {
 		panic("[discovery] factory already registered for " + name)
@@ -99,7 +104,10 @@ func Register(name string, factory Factory) {
 // implementation. Usage of the args slice is dependent on the implementation's
 // factory.
 func New(impl string, cluster *vtadminpb.Cluster, args []string) (Discovery, error) {
+	registryMu.Lock()
 	factory, ok := registry[impl]
+	registryMu.Unlock()
+
 	if !ok {
 		return nil, fmt.Errorf("%w %s", ErrImplementationNotRegistered, impl)
 	}

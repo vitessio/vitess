@@ -94,8 +94,8 @@ type Route struct {
 	ScatterErrorsAsWarnings bool
 
 	// The following two fields are used when routing information_schema queries
-	SysTableTableSchema evalengine.Expr
-	SysTableTableName   evalengine.Expr
+	SysTableTableSchema []evalengine.Expr
+	SysTableTableName   []evalengine.Expr
 
 	// Route does not take inputs
 	noInputs
@@ -415,7 +415,7 @@ func (route *Route) routeInfoSchemaQuery(vcursor VCursor, bindVars map[string]*q
 		return destinations, vterrors.Wrapf(err, "failed to find information about keyspace `%s`", ks)
 	}
 
-	if route.SysTableTableName == nil && route.SysTableTableSchema == nil {
+	if len(route.SysTableTableName) == 0 && len(route.SysTableTableSchema) == 0 {
 		return defaultRoute()
 	}
 
@@ -425,22 +425,38 @@ func (route *Route) routeInfoSchemaQuery(vcursor VCursor, bindVars map[string]*q
 	}
 
 	var specifiedKS string
-	if route.SysTableTableSchema != nil {
-		result, err := route.SysTableTableSchema.Evaluate(env)
+	for _, tableSchema := range route.SysTableTableSchema {
+		result, err := tableSchema.Evaluate(env)
 		if err != nil {
 			return nil, err
 		}
-		specifiedKS = result.Value().ToString()
+		ks := result.Value().ToString()
+		if specifiedKS == "" {
+			specifiedKS = ks
+		}
+		if specifiedKS != ks {
+			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "specifying two different database in the query is not supported")
+		}
+	}
+	if specifiedKS != "" {
 		bindVars[sqltypes.BvSchemaName] = sqltypes.StringBindVariable(specifiedKS)
 	}
 
 	var tableName string
-	if route.SysTableTableName != nil {
-		val, err := route.SysTableTableName.Evaluate(env)
+	for _, sysTableName := range route.SysTableTableName {
+		val, err := sysTableName.Evaluate(env)
 		if err != nil {
 			return nil, err
 		}
-		tableName = val.Value().ToString()
+		tabName := val.Value().ToString()
+		if tableName == "" {
+			tableName = tabName
+		}
+		if tableName != tabName {
+			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "two predicates for table_name not supported")
+		}
+	}
+	if tableName != "" {
 		bindVars[BvTableName] = sqltypes.StringBindVariable(tableName)
 	}
 
@@ -729,11 +745,27 @@ func (route *Route) description() PrimitiveDescription {
 	if len(route.Values) > 0 {
 		other["Values"] = route.Values
 	}
-	if route.SysTableTableSchema != nil {
-		other["SysTableTableSchema"] = route.SysTableTableSchema.String()
+	if len(route.SysTableTableSchema) != 0 {
+		sysTabSchema := "["
+		for idx, tableSchema := range route.SysTableTableSchema {
+			if idx != 0 {
+				sysTabSchema += ", "
+			}
+			sysTabSchema += tableSchema.String()
+		}
+		sysTabSchema += "]"
+		other["SysTableTableSchema"] = sysTabSchema
 	}
-	if route.SysTableTableName != nil {
-		other["SysTableTableName"] = route.SysTableTableName.String()
+	if len(route.SysTableTableName) != 0 {
+		sysTableName := "["
+		for idx, tableName := range route.SysTableTableName {
+			if idx != 0 {
+				sysTableName += ", "
+			}
+			sysTableName += tableName.String()
+		}
+		sysTableName += "]"
+		other["SysTableTableName"] = sysTableName
 	}
 	orderBy := GenericJoin(route.OrderBy, orderByToString)
 	if orderBy != "" {

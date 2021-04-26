@@ -781,9 +781,9 @@ create_statement:
     $1.FullyParsed = true
     $$ = $1
   }
-| CREATE replace_opt algorithm_view definer_opt security_view_opt VIEW table_name column_list_opt AS select_statement check_option_opt
+| CREATE comment_opt replace_opt algorithm_view definer_opt security_view_opt VIEW table_name column_list_opt AS select_statement check_option_opt
   {
-    $$ = &CreateView{ViewName: $7.ToViewName(), IsReplace:$2, Algorithm:$3, Definer: $4 ,Security:$5, Columns:$8, Select: $10, CheckOption: $11 }
+    $$ = &CreateView{ViewName: $8.ToViewName(), IsReplace:$3, Algorithm:$4, Definer: $5 ,Security:$6, Columns:$9, Select: $11, CheckOption: $12 }
   }
 | create_database_prefix create_options_opt
   {
@@ -844,50 +844,50 @@ vindex_param:
   }
 
 create_table_prefix:
-  CREATE temp_opt TABLE not_exists_opt table_name
+  CREATE comment_opt temp_opt TABLE not_exists_opt table_name
   {
-    $$ = &CreateTable{Table: $5, IfNotExists: $4, Temp: $2}
+    $$ = &CreateTable{Comments: Comments($2), Table: $6, IfNotExists: $5, Temp: $3}
     setDDL(yylex, $$)
   }
 
 alter_table_prefix:
-  ALTER TABLE table_name
+  ALTER comment_opt TABLE table_name
   {
-    $$ = &AlterTable{Table: $3}
+    $$ = &AlterTable{Comments: Comments($2), Table: $4}
     setDDL(yylex, $$)
   }
 
 create_index_prefix:
-  CREATE INDEX id_or_var using_opt ON table_name
+  CREATE comment_opt INDEX id_or_var using_opt ON table_name
   {
-    $$ = &AlterTable{Table: $6, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition:&IndexDefinition{Info: &IndexInfo{Name:$3, Type:string($2)}, Options:$4}}}}
+    $$ = &AlterTable{Table: $7, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition:&IndexDefinition{Info: &IndexInfo{Name:$4, Type:string($3)}, Options:$5}}}}
     setDDL(yylex, $$)
   }
-| CREATE FULLTEXT INDEX id_or_var using_opt ON table_name
+| CREATE comment_opt FULLTEXT INDEX id_or_var using_opt ON table_name
   {
-    $$ = &AlterTable{Table: $7, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition:&IndexDefinition{Info: &IndexInfo{Name:$4, Type:string($2)+" "+string($3), Fulltext:true}, Options:$5}}}}
+    $$ = &AlterTable{Table: $8, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition:&IndexDefinition{Info: &IndexInfo{Name:$5, Type:string($3)+" "+string($4), Fulltext:true}, Options:$6}}}}
     setDDL(yylex, $$)
   }
-| CREATE SPATIAL INDEX id_or_var using_opt ON table_name
+| CREATE comment_opt SPATIAL INDEX id_or_var using_opt ON table_name
   {
-    $$ = &AlterTable{Table: $7, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition:&IndexDefinition{Info: &IndexInfo{Name:$4, Type:string($2)+" "+string($3), Spatial:true}, Options:$5}}}}
+    $$ = &AlterTable{Table: $8, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition:&IndexDefinition{Info: &IndexInfo{Name:$5, Type:string($3)+" "+string($4), Spatial:true}, Options:$6}}}}
     setDDL(yylex, $$)
   }
-| CREATE UNIQUE INDEX id_or_var using_opt ON table_name
+| CREATE comment_opt UNIQUE INDEX id_or_var using_opt ON table_name
   {
-    $$ = &AlterTable{Table: $7, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition:&IndexDefinition{Info: &IndexInfo{Name:$4, Type:string($2)+" "+string($3), Unique:true}, Options:$5}}}}
+    $$ = &AlterTable{Table: $8, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition:&IndexDefinition{Info: &IndexInfo{Name:$5, Type:string($3)+" "+string($4), Unique:true}, Options:$6}}}}
     setDDL(yylex, $$)
   }
 
 create_database_prefix:
-  CREATE database_or_schema comment_opt not_exists_opt table_id
+  CREATE comment_opt database_or_schema comment_opt not_exists_opt table_id
   {
-    $$ = &CreateDatabase{Comments: Comments($3), DBName: $5, IfNotExists: $4}
+    $$ = &CreateDatabase{Comments: Comments($4), DBName: $6, IfNotExists: $5}
     setDDL(yylex,$$)
   }
 
 alter_database_prefix:
-  ALTER database_or_schema
+  ALTER comment_opt database_or_schema
   {
     $$ = &AlterDatabase{}
     setDDL(yylex,$$)
@@ -2069,9 +2069,9 @@ alter_statement:
     $1.PartitionSpec = $2
     $$ = $1
   }
-| ALTER algorithm_view definer_opt security_view_opt VIEW table_name column_list_opt AS select_statement check_option_opt
+| ALTER comment_opt algorithm_view definer_opt security_view_opt VIEW table_name column_list_opt AS select_statement check_option_opt
   {
-    $$ = &AlterView{ViewName: $6.ToViewName(), Algorithm:$2, Definer: $3 ,Security:$4, Columns:$7, Select: $9, CheckOption: $10 }
+    $$ = &AlterView{ViewName: $7.ToViewName(), Algorithm:$3, Definer: $4 ,Security:$5, Columns:$8, Select: $10, CheckOption: $11 }
   }
 | alter_database_prefix table_id_opt create_options
   {
@@ -2087,96 +2087,96 @@ alter_statement:
     $1.UpdateDataDirectory = true
     $$ = $1
   }
-| ALTER VSCHEMA CREATE VINDEX table_name vindex_type_opt vindex_params_opt
+| ALTER comment_opt VSCHEMA CREATE VINDEX table_name vindex_type_opt vindex_params_opt
   {
     $$ = &AlterVschema{
         Action: CreateVindexDDLAction,
-        Table: $5,
+        Table: $6,
         VindexSpec: &VindexSpec{
-          Name: NewColIdent($5.Name.String()),
-          Type: $6,
-          Params: $7,
+          Name: NewColIdent($6.Name.String()),
+          Type: $7,
+          Params: $8,
         },
       }
   }
-| ALTER VSCHEMA DROP VINDEX table_name
+| ALTER comment_opt VSCHEMA DROP VINDEX table_name
   {
     $$ = &AlterVschema{
         Action: DropVindexDDLAction,
-        Table: $5,
+        Table: $6,
         VindexSpec: &VindexSpec{
-          Name: NewColIdent($5.Name.String()),
+          Name: NewColIdent($6.Name.String()),
         },
       }
   }
-| ALTER VSCHEMA ADD TABLE table_name
+| ALTER comment_opt VSCHEMA ADD TABLE table_name
   {
-    $$ = &AlterVschema{Action: AddVschemaTableDDLAction, Table: $5}
+    $$ = &AlterVschema{Action: AddVschemaTableDDLAction, Table: $6}
   }
-| ALTER VSCHEMA DROP TABLE table_name
+| ALTER comment_opt VSCHEMA DROP TABLE table_name
   {
-    $$ = &AlterVschema{Action: DropVschemaTableDDLAction, Table: $5}
+    $$ = &AlterVschema{Action: DropVschemaTableDDLAction, Table: $6}
   }
-| ALTER VSCHEMA ON table_name ADD VINDEX sql_id '(' column_list ')' vindex_type_opt vindex_params_opt
+| ALTER comment_opt VSCHEMA ON table_name ADD VINDEX sql_id '(' column_list ')' vindex_type_opt vindex_params_opt
   {
     $$ = &AlterVschema{
         Action: AddColVindexDDLAction,
-        Table: $4,
+        Table: $5,
         VindexSpec: &VindexSpec{
-            Name: $7,
-            Type: $11,
-            Params: $12,
+            Name: $8,
+            Type: $12,
+            Params: $13,
         },
-        VindexCols: $9,
+        VindexCols: $10,
       }
   }
-| ALTER VSCHEMA ON table_name DROP VINDEX sql_id
+| ALTER comment_opt VSCHEMA ON table_name DROP VINDEX sql_id
   {
     $$ = &AlterVschema{
         Action: DropColVindexDDLAction,
-        Table: $4,
+        Table: $5,
         VindexSpec: &VindexSpec{
-            Name: $7,
+            Name: $8,
         },
       }
   }
-| ALTER VSCHEMA ADD SEQUENCE table_name
+| ALTER comment_opt VSCHEMA ADD SEQUENCE table_name
   {
-    $$ = &AlterVschema{Action: AddSequenceDDLAction, Table: $5}
+    $$ = &AlterVschema{Action: AddSequenceDDLAction, Table: $6}
   }
-| ALTER VSCHEMA ON table_name ADD AUTO_INCREMENT sql_id USING table_name
+| ALTER comment_opt VSCHEMA ON table_name ADD AUTO_INCREMENT sql_id USING table_name
   {
     $$ = &AlterVschema{
         Action: AddAutoIncDDLAction,
-        Table: $4,
+        Table: $5,
         AutoIncSpec: &AutoIncSpec{
-            Column: $7,
-            Sequence: $9,
+            Column: $8,
+            Sequence: $10,
         },
     }
   }
-| ALTER VITESS_MIGRATION STRING RETRY
+| ALTER comment_opt VITESS_MIGRATION STRING RETRY
   {
     $$ = &AlterMigration{
       Type: RetryMigrationType,
-      UUID: string($3),
+      UUID: string($4),
     }
   }
-| ALTER VITESS_MIGRATION STRING COMPLETE
+| ALTER comment_opt VITESS_MIGRATION STRING COMPLETE
   {
     $$ = &AlterMigration{
       Type: CompleteMigrationType,
-      UUID: string($3),
+      UUID: string($4),
     }
   }
-| ALTER VITESS_MIGRATION STRING CANCEL
+| ALTER comment_opt VITESS_MIGRATION STRING CANCEL
   {
     $$ = &AlterMigration{
       Type: CancelMigrationType,
-      UUID: string($3),
+      UUID: string($4),
     }
   }
-| ALTER VITESS_MIGRATION CANCEL ALL
+| ALTER comment_opt VITESS_MIGRATION CANCEL ALL
   {
     $$ = &AlterMigration{
       Type: CancelAllMigrationType,
@@ -2324,26 +2324,26 @@ rename_list:
   }
 
 drop_statement:
-  DROP temp_opt TABLE exists_opt table_name_list restrict_or_cascade_opt
+  DROP comment_opt temp_opt TABLE exists_opt table_name_list restrict_or_cascade_opt
   {
-    $$ = &DropTable{FromTables: $5, IfExists: $4, Temp: $2}
+    $$ = &DropTable{FromTables: $6, IfExists: $5, Comments: Comments($2), Temp: $3}
   }
-| DROP INDEX id_or_var ON table_name algorithm_lock_opt
+| DROP comment_opt INDEX id_or_var ON table_name algorithm_lock_opt
   {
     // Change this to an alter statement
-    if $3.Lowered() == "primary" {
-      $$ = &AlterTable{Table: $5,AlterOptions: append([]AlterOption{&DropKey{Type:PrimaryKeyType}},$6...)}
+    if $4.Lowered() == "primary" {
+      $$ = &AlterTable{Table: $6,AlterOptions: append([]AlterOption{&DropKey{Type:PrimaryKeyType}},$7...)}
     } else {
-      $$ = &AlterTable{Table: $5,AlterOptions: append([]AlterOption{&DropKey{Type:NormalKeyType, Name:$3}},$6...)}
+      $$ = &AlterTable{Table: $6,AlterOptions: append([]AlterOption{&DropKey{Type:NormalKeyType, Name:$4}},$7...)}
     }
   }
-| DROP VIEW exists_opt view_name_list restrict_or_cascade_opt
+| DROP comment_opt VIEW exists_opt view_name_list restrict_or_cascade_opt
   {
-    $$ = &DropView{FromTables: $4, IfExists: $3}
+    $$ = &DropView{FromTables: $5, IfExists: $4}
   }
-| DROP database_or_schema comment_opt exists_opt table_id
+| DROP comment_opt database_or_schema exists_opt table_id
   {
-    $$ = &DropDatabase{Comments: Comments($3), DBName: $5, IfExists: $4}
+    $$ = &DropDatabase{Comments: Comments($2), DBName: $5, IfExists: $4}
   }
 
 truncate_statement:
@@ -2847,9 +2847,9 @@ unlock_statement:
   }
 
 revert_statement:
-  REVERT VITESS_MIGRATION STRING
+  REVERT comment_opt VITESS_MIGRATION STRING
   {
-    $$ = &RevertMigration{UUID: string($3)}
+    $$ = &RevertMigration{Comments: Comments($2), UUID: string($4)}
   }
 
 flush_statement:

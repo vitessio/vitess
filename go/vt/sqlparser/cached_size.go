@@ -174,7 +174,7 @@ func (cached *AlterTable) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(65)
+		size += int64(89)
 	}
 	// field Table vitess.io/vitess/go/vt/sqlparser.TableName
 	size += cached.Table.CachedSize(false)
@@ -189,6 +189,13 @@ func (cached *AlterTable) CachedSize(alloc bool) int64 {
 	}
 	// field PartitionSpec *vitess.io/vitess/go/vt/sqlparser.PartitionSpec
 	size += cached.PartitionSpec.CachedSize(true)
+	// field Comments vitess.io/vitess/go/vt/sqlparser.Comments
+	{
+		size += int64(cap(cached.Comments)) * int64(16)
+		for _, elem := range cached.Comments {
+			size += int64(len(elem))
+		}
+	}
 	return size
 }
 func (cached *AlterView) CachedSize(alloc bool) int64 {
@@ -645,7 +652,7 @@ func (cached *CreateTable) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(65)
+		size += int64(89)
 	}
 	// field Table vitess.io/vitess/go/vt/sqlparser.TableName
 	size += cached.Table.CachedSize(false)
@@ -653,6 +660,13 @@ func (cached *CreateTable) CachedSize(alloc bool) int64 {
 	size += cached.TableSpec.CachedSize(true)
 	// field OptLike *vitess.io/vitess/go/vt/sqlparser.OptLike
 	size += cached.OptLike.CachedSize(true)
+	// field Comments vitess.io/vitess/go/vt/sqlparser.Comments
+	{
+		size += int64(cap(cached.Comments)) * int64(16)
+		for _, elem := range cached.Comments {
+			size += int64(len(elem))
+		}
+	}
 	return size
 }
 func (cached *CreateView) CachedSize(alloc bool) int64 {
@@ -828,13 +842,20 @@ func (cached *DropTable) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(33)
+		size += int64(64)
 	}
 	// field FromTables vitess.io/vitess/go/vt/sqlparser.TableNames
 	{
 		size += int64(cap(cached.FromTables)) * int64(32)
 		for _, elem := range cached.FromTables {
 			size += elem.CachedSize(false)
+		}
+	}
+	// field Comments vitess.io/vitess/go/vt/sqlparser.Comments
+	{
+		size += int64(cap(cached.Comments)) * int64(16)
+		for _, elem := range cached.Comments {
+			size += int64(len(elem))
 		}
 	}
 	return size
@@ -1588,10 +1609,17 @@ func (cached *RevertMigration) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(16)
+		size += int64(40)
 	}
 	// field UUID string
 	size += int64(len(cached.UUID))
+	// field Comments vitess.io/vitess/go/vt/sqlparser.Comments
+	{
+		size += int64(cap(cached.Comments)) * int64(16)
+		for _, elem := range cached.Comments {
+			size += int64(len(elem))
+		}
+	}
 	return size
 }
 func (cached *SRollback) CachedSize(alloc bool) int64 {
