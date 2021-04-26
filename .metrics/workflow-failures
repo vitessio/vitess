@@ -9063,4 +9063,5 @@
 2021-04-26T13:43:19Z,unit_race,https://github.com/vitessio/vitess/actions/runs/785760910
 2021-04-26T14:00:18Z,endtoend,https://github.com/vitessio/vitess/actions/runs/785810433
 2021-04-26T15:44:54Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/786130991
+2021-04-26T16:51:53Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/786320868
 2021-04-26T16:51:53Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/786320883
