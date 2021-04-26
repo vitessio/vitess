@@ -55,6 +55,7 @@ type Table struct {
 
 	FileSize      uint64
 	AllocatedSize uint64
+	TableRows     uint64
 }
 
 // SequenceInfo contains info specific to sequence tabels.

@@ -334,6 +334,7 @@ func (se *Engine) reload(ctx context.Context) error {
 		createTime, _ := evalengine.ToInt64(row[2])
 		fileSize, _ := evalengine.ToUint64(row[4])
 		allocatedSize, _ := evalengine.ToUint64(row[5])
+		tableRows, _ := evalengine.ToUint64(row[6])
 
 		// publish the size metrics
 		se.tableFileSizeGauge.Set(tableName, int64(fileSize))
@@ -356,6 +357,7 @@ func (se *Engine) reload(ctx context.Context) error {
 		}
 		table.FileSize = fileSize
 		table.AllocatedSize = allocatedSize
+		table.TableRows = tableRows
 		changedTables[tableName] = table
 		if isInTablesMap {
 			altered = append(altered, tableName)

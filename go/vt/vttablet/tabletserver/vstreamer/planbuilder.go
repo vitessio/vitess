@@ -98,8 +98,9 @@ type ColExpr struct {
 
 // Table contains the metadata for a table.
 type Table struct {
-	Name   string
-	Fields []*querypb.Field
+	Name      string
+	Fields    []*querypb.Field
+	TableRows int64
 }
 
 // fields returns the fields for the plan.

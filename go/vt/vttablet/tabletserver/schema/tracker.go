@@ -262,8 +262,9 @@ func (tr *Tracker) saveCurrentSchemaToDb(ctx context.Context, gtid, ddl string, 
 
 func newMinimalTable(st *Table) *binlogdatapb.MinimalTable {
 	table := &binlogdatapb.MinimalTable{
-		Name:   st.Name.String(),
-		Fields: st.Fields,
+		Name:      st.Name.String(),
+		Fields:    st.Fields,
+		TableRows: int64(st.TableRows),
 	}
 	var pkc []int64
 	for _, pk := range st.PKColumns {

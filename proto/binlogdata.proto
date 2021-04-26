@@ -356,7 +356,8 @@ message MinimalTable {
     string name = 1;
     repeated query.Field fields = 2;
     repeated int64 p_k_columns = 3;
-}
+    int64 tableRows = 4;
+  }
 
 message MinimalSchema {
     repeated MinimalTable tables = 1;
@@ -395,6 +396,7 @@ message VStreamRowsResponse {
   string gtid = 3;
   repeated query.Row rows = 4;
   query.Row lastpk = 5;
+  int64 tableRows = 6;
 }
 
 message LastPKEvent {

@@ -243,6 +243,7 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 			if err := vc.fastForward(ctx, copyState, rows.Gtid); err != nil {
 				return err
 			}
+			fmt.Printf("============== TableRows! %v\n", rows.TableRows)
 			fieldEvent := &binlogdatapb.FieldEvent{
 				TableName: initialPlan.SendRule.Match,
 				Fields:    rows.Fields,
@@ -255,6 +256,13 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 			buf := sqlparser.NewTrackedBuffer(nil)
 			buf.Myprintf("update _vt.copy_state set lastpk=%a where vrepl_id=%s and table_name=%s", ":lastpk", strconv.Itoa(int(vc.vr.id)), encodeString(tableName))
 			updateCopyState = buf.ParsedQuery()
+
+			if rows.TableRows > 0 {
+				update := binlogplayer.GenerateUpdateRowsEstimate(vc.vr.id, rows.TableRows)
+				if _, err := withDDL.Exec(vc.vr.vre.ctx, update, vc.vr.dbClient.Execute); err != nil {
+					log.Errorf("unable to update vreplication.rows_estimate. Proceeding anyway. err=%v", err)
+				}
+			}
 		}
 		if len(rows.Rows) == 0 {
 			return nil
@@ -342,8 +350,8 @@ func (vc *vcopier) fastForward(ctx context.Context, copyState map[string]*sqltyp
 		return err
 	}
 	if settings.StartPos.IsZero() {
-		update := binlogplayer.GenerateUpdatePos(vc.vr.id, pos, time.Now().Unix(), 0)
-		_, err := vc.vr.dbClient.Execute(update)
+		update := binlogplayer.GenerateUpdatePos(vc.vr.id, pos, time.Now().Unix(), 0, vc.vr.stats.CopyRowCount.Get())
+		_, err := withDDL.Exec(vc.vr.vre.ctx, update, vc.vr.dbClient.Execute)
 		return err
 	}
 	return newVPlayer(vc.vr, settings, copyState, pos, "fastforward").play(ctx)

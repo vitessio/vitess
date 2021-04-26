@@ -119,8 +119,9 @@ func (rs *rowStreamer) buildPlan() error {
 		return err
 	}
 	ti := &Table{
-		Name:   st.Name,
-		Fields: st.Fields,
+		Name:      st.Name,
+		Fields:    st.Fields,
+		TableRows: st.TableRows,
 	}
 	// The plan we build is identical to the one for vstreamer.
 	// This is because the row format of a read is identical
@@ -224,9 +225,10 @@ func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.V
 	}
 
 	err = send(&binlogdatapb.VStreamRowsResponse{
-		Fields:   rs.plan.fields(),
-		Pkfields: pkfields,
-		Gtid:     gtid,
+		Fields:    rs.plan.fields(),
+		Pkfields:  pkfields,
+		Gtid:      gtid,
+		TableRows: rs.plan.Table.TableRows,
 	})
 	if err != nil {
 		return fmt.Errorf("stream send error: %v", err)
