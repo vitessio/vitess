@@ -222,6 +222,7 @@ func VtcomboProcess(env Environment, args *Config, mysql MySQLManager) *VtProces
 		"-mycnf_socket_file", socket,
 		"-normalize_queries",
 		"-enable_query_plan_field_caching=false",
+		"-dbddl_plugin", "vttest",
 	}...)
 
 	vt.ExtraArgs = append(vt.ExtraArgs, QueryServerArgs...)
