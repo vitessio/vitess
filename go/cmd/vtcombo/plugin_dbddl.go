@@ -25,10 +25,13 @@ import (
 	vttestpb "vitess.io/vitess/go/vt/proto/vttest"
 )
 
-var globalDb func(ks *vttestpb.Keyspace) error
+var globalCreateDb func(ks *vttestpb.Keyspace) error
+var globalDropDb func(ksName string) error
 
+// DBDDL doesn't need to store any state - we use the global variables above instead
 type DBDDL struct{}
 
+// CreateDatabase implements the engine.DBDDLPlugin interface
 func (plugin *DBDDL) CreateDatabase(_ context.Context, name string) error {
 	ks := &vttestpb.Keyspace{
 		Name: name,
@@ -36,11 +39,12 @@ func (plugin *DBDDL) CreateDatabase(_ context.Context, name string) error {
 			Name: "0",
 		}},
 	}
-	return globalDb(ks)
+	return globalCreateDb(ks)
 }
 
-func (plugin *DBDDL) DropDatabase(ctx context.Context, name string) error {
-	panic(1)
+// DropDatabase implements the engine.DBDDLPlugin interface
+func (plugin *DBDDL) DropDatabase(_ context.Context, name string) error {
+	return globalDropDb(name)
 }
 
 func init() {
