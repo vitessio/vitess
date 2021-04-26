@@ -22,6 +22,8 @@ import (
 	"sort"
 	"strings"
 
+	"vitess.io/vitess/go/bytes2"
+
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
@@ -207,27 +209,23 @@ func (tp *TablePlan) MarshalJSON() ([]byte, error) {
 	return json.Marshal(&v)
 }
 
-func (tp *TablePlan) applyBulkInsert(rows *binlogdatapb.VStreamRowsResponse, executor func(string) (*sqltypes.Result, error)) (*sqltypes.Result, error) {
-	bindvars := make(map[string]*querypb.BindVariable, len(tp.Fields))
-	var buf strings.Builder
-	if err := tp.BulkInsertFront.Append(&buf, nil, nil); err != nil {
-		return nil, err
-	}
-	buf.WriteString(" values ")
-	separator := ""
-	for _, row := range rows.Rows {
-		vals := sqltypes.MakeRowTrusted(tp.Fields, row)
-		for i, field := range tp.Fields {
-			bindvars["a_"+field.Name] = sqltypes.ValueBindVariable(vals[i])
+func (tp *TablePlan) applyBulkInsert(sqlbuffer *bytes2.Buffer, rows *binlogdatapb.VStreamRowsResponse, executor func(string) (*sqltypes.Result, error)) (*sqltypes.Result, error) {
+	sqlbuffer.Reset()
+	sqlbuffer.WriteString(tp.BulkInsertFront.Query)
+	sqlbuffer.WriteString(" values ")
+
+	for i, row := range rows.Rows {
+		if i > 0 {
+			sqlbuffer.WriteString(", ")
 		}
-		buf.WriteString(separator)
-		separator = ", "
-		tp.BulkInsertValues.Append(&buf, bindvars, nil)
+		if err := tp.BulkInsertValues.AppendFromRow(sqlbuffer, tp.Fields, row); err != nil {
+			return nil, err
+		}
 	}
 	if tp.BulkInsertOnDup != nil {
-		tp.BulkInsertOnDup.Append(&buf, nil, nil)
+		sqlbuffer.WriteString(tp.BulkInsertOnDup.Query)
 	}
-	return executor(buf.String())
+	return executor(sqlbuffer.StringUnsafe())
 }
 
 // During the copy phase we run catchup and fastforward, which stream binlogs. While streaming we should only process

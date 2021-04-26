@@ -172,7 +172,7 @@ func Init(ctx context.Context, serv srvtopo.Server, cell string, tabletTypesToWa
 
 	// If we want to filter keyspaces replace the srvtopo.Server with a
 	// filtering server
-	if len(discovery.KeyspacesToWatch) > 0 {
+	if discovery.FilteringKeyspaces() {
 		log.Infof("Keyspace filtering enabled, selecting %v", discovery.KeyspacesToWatch)
 		var err error
 		serv, err = srvtopo.NewKeyspaceFilteringServer(serv, discovery.KeyspacesToWatch)
@@ -181,7 +181,7 @@ func Init(ctx context.Context, serv srvtopo.Server, cell string, tabletTypesToWa
 		}
 	}
 
-	if _, _, err := schema.ParseDDLStrategy(*defaultDDLStrategy); err != nil {
+	if _, err := schema.ParseDDLStrategy(*defaultDDLStrategy); err != nil {
 		log.Fatalf("Invalid value for -ddl_strategy: %v", err.Error())
 	}
 	tc := NewTxConn(gw, getTxMode())
@@ -464,6 +464,17 @@ func recordAndAnnotateError(err error, statsKey []string, request map[string]int
 		logger.Errorf("%v, request: %+v", err, request)
 	case vtrpcpb.Code_UNAVAILABLE:
 		logger.Infof("%v, request: %+v", err, request)
+	case vtrpcpb.Code_UNIMPLEMENTED:
+		sql, exists := request["Sql"]
+		if !exists {
+			return err
+		}
+		piiSafeSQL, err2 := sqlparser.RedactSQLQuery(sql.(string))
+		if err2 != nil {
+			return err
+		}
+		// log only if sql query present and able to successfully redact the PII.
+		logger.Infof("unsupported query: %q", piiSafeSQL)
 	}
 	return err
 }
@@ -505,7 +516,7 @@ func LegacyInit(ctx context.Context, hc discovery.LegacyHealthCheck, serv srvtop
 
 	// If we want to filter keyspaces replace the srvtopo.Server with a
 	// filtering server
-	if len(discovery.KeyspacesToWatch) > 0 {
+	if discovery.FilteringKeyspaces() {
 		log.Infof("Keyspace filtering enabled, selecting %v", discovery.KeyspacesToWatch)
 		var err error
 		serv, err = srvtopo.NewKeyspaceFilteringServer(serv, discovery.KeyspacesToWatch)

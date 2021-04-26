@@ -154,7 +154,7 @@ func (api *API) FindSchema(ctx context.Context, req *vtadminpb.FindSchemaRequest
 
 	span.Annotate("table", req.Table)
 
-	clusters, _ := api.getClustersForRequest(req.ClusterIds)
+	clusters, clusterIDs := api.getClustersForRequest(req.ClusterIds)
 
 	var (
 		m       sync.Mutex
@@ -217,7 +217,10 @@ func (api *API) FindSchema(ctx context.Context, req *vtadminpb.FindSchemaRequest
 
 	switch len(results) {
 	case 0:
-		return nil, fmt.Errorf("%w: no schemas found with table named %s", errors.ErrNoSchema, req.Table)
+		return nil, &errors.NoSuchSchema{
+			Clusters: clusterIDs,
+			Table:    req.Table,
+		}
 	case 1:
 		return results[0], nil
 	default:
@@ -404,12 +407,24 @@ func (api *API) GetSchema(ctx context.Context, req *vtadminpb.GetSchemaRequest) 
 		return nil, fmt.Errorf("%w: no cluster with id %s", errors.ErrUnsupportedCluster, req.ClusterId)
 	}
 
-	return c.GetSchema(ctx, req.Keyspace, cluster.GetSchemaOptions{
+	schema, err := c.GetSchema(ctx, req.Keyspace, cluster.GetSchemaOptions{
 		BaseRequest: &vtctldatapb.GetSchemaRequest{
 			Tables: []string{req.Table},
 		},
 		TableSizeOptions: req.TableSizeOptions,
 	})
+	if err != nil {
+		return nil, err
+	}
+
+	if schema == nil || len(schema.TableDefinitions) == 0 {
+		return nil, &errors.NoSuchSchema{
+			Clusters: []string{req.ClusterId},
+			Table:    req.Table,
+		}
+	}
+
+	return schema, nil
 }
 
 // GetSchemas is part of the vtadminpb.VTAdminServer interface.

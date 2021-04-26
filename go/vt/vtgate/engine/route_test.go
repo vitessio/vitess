@@ -77,23 +77,24 @@ func TestSelectUnsharded(t *testing.T) {
 }
 
 func TestSelectInformationSchemaWithTableAndSchemaWithRoutedTables(t *testing.T) {
-	stringToExpr := func(in string) evalengine.Expr {
-		var schema evalengine.Expr
-		if in != "" {
-			schema = evalengine.NewLiteralString([]byte(in))
+	stringListToExprList := func(in []string) []evalengine.Expr {
+		var schema []evalengine.Expr
+		for _, s := range in {
+			schema = append(schema, evalengine.NewLiteralString([]byte(s)))
 		}
 		return schema
 	}
 
 	type testCase struct {
-		tableSchema, tableName, testName string
-		expectedLog                      []string
-		routed                           bool
+		tableSchema, tableName []string
+		testName               string
+		expectedLog            []string
+		routed                 bool
 	}
 	tests := []testCase{{
 		testName:    "both schema and table predicates - routed table",
-		tableSchema: "schema",
-		tableName:   "table",
+		tableSchema: []string{"schema"},
+		tableName:   []string{"table"},
 		routed:      true,
 		expectedLog: []string{
 			"FindTable(`schema`.`table`)",
@@ -101,8 +102,17 @@ func TestSelectInformationSchemaWithTableAndSchemaWithRoutedTables(t *testing.T)
 			"ExecuteMultiShard routedKeyspace.1: dummy_select {__replacevtschemaname: type:INT64 value:\"1\" __vttablename: type:VARBINARY value:\"routedTable\" } false false"},
 	}, {
 		testName:    "both schema and table predicates - not routed",
-		tableSchema: "schema",
-		tableName:   "table",
+		tableSchema: []string{"schema"},
+		tableName:   []string{"table"},
+		routed:      false,
+		expectedLog: []string{
+			"FindTable(`schema`.`table`)",
+			"ResolveDestinations schema [] Destinations:DestinationAnyShard()",
+			"ExecuteMultiShard schema.1: dummy_select {__replacevtschemaname: type:INT64 value:\"1\" __vttablename: type:VARBINARY value:\"table\" } false false"},
+	}, {
+		testName:    "multiple schema and table predicates",
+		tableSchema: []string{"schema", "schema", "schema"},
+		tableName:   []string{"table", "table", "table"},
 		routed:      false,
 		expectedLog: []string{
 			"FindTable(`schema`.`table`)",
@@ -110,7 +120,7 @@ func TestSelectInformationSchemaWithTableAndSchemaWithRoutedTables(t *testing.T)
 			"ExecuteMultiShard schema.1: dummy_select {__replacevtschemaname: type:INT64 value:\"1\" __vttablename: type:VARBINARY value:\"table\" } false false"},
 	}, {
 		testName:  "table name predicate - routed table",
-		tableName: "tableName",
+		tableName: []string{"tableName"},
 		routed:    true,
 		expectedLog: []string{
 			"FindTable(tableName)",
@@ -118,7 +128,7 @@ func TestSelectInformationSchemaWithTableAndSchemaWithRoutedTables(t *testing.T)
 			"ExecuteMultiShard routedKeyspace.1: dummy_select {__vttablename: type:VARBINARY value:\"routedTable\" } false false"},
 	}, {
 		testName:  "table name predicate - not routed",
-		tableName: "tableName",
+		tableName: []string{"tableName"},
 		routed:    false,
 		expectedLog: []string{
 			"FindTable(tableName)",
@@ -126,7 +136,13 @@ func TestSelectInformationSchemaWithTableAndSchemaWithRoutedTables(t *testing.T)
 			"ExecuteMultiShard ks.1: dummy_select {__vttablename: type:VARBINARY value:\"tableName\" } false false"},
 	}, {
 		testName:    "schema predicate",
-		tableSchema: "myKeyspace",
+		tableSchema: []string{"myKeyspace"},
+		expectedLog: []string{
+			"ResolveDestinations myKeyspace [] Destinations:DestinationAnyShard()",
+			"ExecuteMultiShard myKeyspace.1: dummy_select {__replacevtschemaname: type:INT64 value:\"1\" } false false"},
+	}, {
+		testName:    "multiple schema predicates",
+		tableSchema: []string{"myKeyspace", "myKeyspace", "myKeyspace", "myKeyspace"},
 		expectedLog: []string{
 			"ResolveDestinations myKeyspace [] Destinations:DestinationAnyShard()",
 			"ExecuteMultiShard myKeyspace.1: dummy_select {__replacevtschemaname: type:INT64 value:\"1\" } false false"},
@@ -147,8 +163,8 @@ func TestSelectInformationSchemaWithTableAndSchemaWithRoutedTables(t *testing.T)
 				},
 				Query:               "dummy_select",
 				FieldQuery:          "dummy_select_field",
-				SysTableTableSchema: stringToExpr(tc.tableSchema),
-				SysTableTableName:   stringToExpr(tc.tableName),
+				SysTableTableSchema: stringListToExprList(tc.tableSchema),
+				SysTableTableName:   stringListToExprList(tc.tableName),
 			}
 			vc := &loggingVCursor{
 				shards:  []string{"1"},
