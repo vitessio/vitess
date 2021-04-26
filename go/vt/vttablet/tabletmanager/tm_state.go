@@ -62,7 +62,7 @@ type tmState struct {
 	mu                sync.Mutex
 	isOpen            bool
 	isResharding      bool
-	isInSRVKeyspace   bool
+	isInSrvKeyspace   bool
 	isShardServing    map[topodatapb.TabletType]bool
 	tabletControls    map[topodatapb.TabletType]bool
 	blacklistedTables map[topodatapb.TabletType][]string
@@ -264,11 +264,11 @@ func (ts *tmState) updateLocked(ctx context.Context) {
 	}
 
 	if ts.isShardServing[ts.tablet.Type] {
-		ts.isInSRVKeyspace = true
-		statsIsInSRVKeyspace.Set(1)
+		ts.isInSrvKeyspace = true
+		statsIsInSrvKeyspace.Set(1)
 	} else {
-		ts.isInSRVKeyspace = false
-		statsIsInSRVKeyspace.Set(0)
+		ts.isInSrvKeyspace = false
+		statsIsInSrvKeyspace.Set(0)
 	}
 
 	// Open TabletServer last so that it advertises serving after all other services are up.

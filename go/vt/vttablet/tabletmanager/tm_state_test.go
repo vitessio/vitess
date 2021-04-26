@@ -155,7 +155,7 @@ func TestStateTabletControls(t *testing.T) {
 	assert.False(t, qsc.IsServing())
 }
 
-func TestStateIsShardServingisInSRVKeyspace(t *testing.T) {
+func TestStateIsShardServingisInSrvKeyspace(t *testing.T) {
 	ctx := context.Background()
 	ts := memorytopo.NewServer("cell1")
 	tm := newTestTM(t, ts, 1, "ks", "0")
@@ -202,11 +202,11 @@ func TestStateIsShardServingisInSRVKeyspace(t *testing.T) {
 	tm.tmState.RefreshFromTopoInfo(ctx, nil, ks)
 
 	tm.tmState.mu.Lock()
-	assert.False(t, tm.tmState.isInSRVKeyspace)
+	assert.False(t, tm.tmState.isInSrvKeyspace)
 	assert.Equal(t, want, tm.tmState.isShardServing)
 	tm.tmState.mu.Unlock()
 
-	assert.Equal(t, int64(0), statsIsInSRVKeyspace.Get())
+	assert.Equal(t, int64(0), statsIsInSrvKeyspace.Get())
 
 	// Shard not in the SrvKeyspace, ServedType in SrvKeyspace
 	ks = &topodatapb.SrvKeyspace{
@@ -230,11 +230,11 @@ func TestStateIsShardServingisInSRVKeyspace(t *testing.T) {
 	tm.tmState.RefreshFromTopoInfo(ctx, nil, ks)
 
 	tm.tmState.mu.Lock()
-	assert.False(t, tm.tmState.isInSRVKeyspace)
+	assert.False(t, tm.tmState.isInSrvKeyspace)
 	assert.Equal(t, want, tm.tmState.isShardServing)
 	tm.tmState.mu.Unlock()
 
-	assert.Equal(t, int64(0), statsIsInSRVKeyspace.Get())
+	assert.Equal(t, int64(0), statsIsInSrvKeyspace.Get())
 
 	// Shard in the SrvKeyspace, ServedType in the SrvKeyspace
 	ks = &topodatapb.SrvKeyspace{
@@ -256,11 +256,11 @@ func TestStateIsShardServingisInSRVKeyspace(t *testing.T) {
 	tm.tmState.RefreshFromTopoInfo(ctx, nil, ks)
 
 	tm.tmState.mu.Lock()
-	assert.True(t, tm.tmState.isInSRVKeyspace)
+	assert.True(t, tm.tmState.isInSrvKeyspace)
 	assert.Equal(t, want, tm.tmState.isShardServing)
 	tm.tmState.mu.Unlock()
 
-	assert.Equal(t, int64(1), statsIsInSRVKeyspace.Get())
+	assert.Equal(t, int64(1), statsIsInSrvKeyspace.Get())
 
 	// Shard in the SrvKeyspace, ServedType not in the SrvKeyspace
 	ks = &topodatapb.SrvKeyspace{
@@ -282,29 +282,29 @@ func TestStateIsShardServingisInSRVKeyspace(t *testing.T) {
 	tm.tmState.RefreshFromTopoInfo(ctx, nil, ks)
 
 	tm.tmState.mu.Lock()
-	assert.False(t, tm.tmState.isInSRVKeyspace)
+	assert.False(t, tm.tmState.isInSrvKeyspace)
 	assert.Equal(t, want, tm.tmState.isShardServing)
 	tm.tmState.mu.Unlock()
 
-	assert.Equal(t, int64(0), statsIsInSRVKeyspace.Get())
+	assert.Equal(t, int64(0), statsIsInSrvKeyspace.Get())
 
 	// Test tablet type change - shard in the SrvKeyspace, ServedType in the SrvKeyspace
 	err = tm.tmState.ChangeTabletType(ctx, topodatapb.TabletType_RDONLY, DBActionNone)
 	require.NoError(t, err)
 	tm.tmState.mu.Lock()
-	assert.True(t, tm.tmState.isInSRVKeyspace)
+	assert.True(t, tm.tmState.isInSrvKeyspace)
 	tm.tmState.mu.Unlock()
 
-	assert.Equal(t, int64(1), statsIsInSRVKeyspace.Get())
+	assert.Equal(t, int64(1), statsIsInSrvKeyspace.Get())
 
 	// Test tablet type change - shard in the SrvKeyspace, ServedType in the SrvKeyspace
 	err = tm.tmState.ChangeTabletType(ctx, topodatapb.TabletType_DRAINED, DBActionNone)
 	require.NoError(t, err)
 	tm.tmState.mu.Lock()
-	assert.False(t, tm.tmState.isInSRVKeyspace)
+	assert.False(t, tm.tmState.isInSrvKeyspace)
 	tm.tmState.mu.Unlock()
 
-	assert.Equal(t, int64(0), statsIsInSRVKeyspace.Get())
+	assert.Equal(t, int64(0), statsIsInSrvKeyspace.Get())
 }
 
 func TestStateNonServing(t *testing.T) {
