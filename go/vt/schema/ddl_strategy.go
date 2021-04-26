@@ -28,9 +28,10 @@ var (
 )
 
 const (
-	declarativeFlag = "declarative"
-	skipTopoFlag    = "skip-topo"
-	singletonFlag   = "singleton"
+	declarativeFlag      = "declarative"
+	skipTopoFlag         = "skip-topo"
+	singletonFlag        = "singleton"
+	singletonContextFlag = "singleton-context"
 )
 
 // DDLStrategy suggests how an ALTER TABLE should run (e.g. "direct", "online", "gh-ost" or "pt-osc")
@@ -123,6 +124,11 @@ func (setting *DDLStrategySetting) IsSingleton() bool {
 	return setting.hasFlag(singletonFlag)
 }
 
+// IsSingletonContext checks if strategy options include -singleton-context
+func (setting *DDLStrategySetting) IsSingletonContext() bool {
+	return setting.hasFlag(singletonContextFlag)
+}
+
 // RuntimeOptions returns the options used as runtime flags for given strategy, removing any internal hint options
 func (setting *DDLStrategySetting) RuntimeOptions() []string {
 	opts, _ := shlex.Split(setting.Options)
@@ -132,6 +138,7 @@ func (setting *DDLStrategySetting) RuntimeOptions() []string {
 		case isFlag(opt, declarativeFlag):
 		case isFlag(opt, skipTopoFlag):
 		case isFlag(opt, singletonFlag):
+		case isFlag(opt, singletonContextFlag):
 		default:
 			validOpts = append(validOpts, opt)
 		}
@@ -142,7 +149,7 @@ func (setting *DDLStrategySetting) RuntimeOptions() []string {
 // IsSkipTopo suggests that DDL should apply to tables bypassing global topo request
 func (setting *DDLStrategySetting) IsSkipTopo() bool {
 	switch {
-	case setting.IsSingleton():
+	case setting.IsSingleton(), setting.IsSingletonContext():
 		return true
 	case setting.hasFlag(skipTopoFlag):
 		return true
