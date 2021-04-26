@@ -9036,4 +9036,5 @@
 2021-04-26T11:27:09Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/785381522
 2021-04-26T11:27:09Z,Unit Test (mariadb101),https://github.com/vitessio/vitess/actions/runs/785381499
 2021-04-26T11:27:09Z,endtoend,https://github.com/vitessio/vitess/actions/runs/785381507
+2021-04-26T12:27:30Z,Cluster (vreplication_multicell),https://github.com/vitessio/vitess/actions/runs/785539956
 2021-04-26T12:27:30Z,endtoend,https://github.com/vitessio/vitess/actions/runs/785539947
