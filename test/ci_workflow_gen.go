@@ -29,7 +29,7 @@ const (
 	workflowConfigDir = "../.github/workflows"
 
 	unitTestTemplate  = "templates/unit_test.tpl"
-	unitTestDatabases = "percona56, mysql57, mysql80, mariadb101, mariadb103"
+	unitTestDatabases = "percona56, mysql57, mysql80, mariadb101, mariadb102, mariadb103"
 
 	clusterTestTemplate = "templates/cluster_endtoend_test.tpl"
 )
@@ -51,7 +51,6 @@ var (
 		"23",
 		"24",
 		"26",
-		"27",
 		"vreplication_basic",
 		"vreplication_multicell",
 		"vreplication_cellalias",
@@ -62,8 +61,10 @@ var (
 		"vreplication_migrate",
 		"onlineddl_revert",
 		"onlineddl_declarative",
+		"onlineddl_singleton",
 		"tabletmanager_throttler",
 		"tabletmanager_throttler_custom_config",
+		"tabletmanager_tablegc",
 	}
 	// TODO: currently some percona tools including xtrabackup are installed on all clusters, we can possibly optimize
 	// this by only installing them in the required clusters

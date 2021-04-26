@@ -44,6 +44,11 @@
   }
 }
 
+.container {
+  display: grid;
+  grid-gap: 16px;
+}
+
 .panel {
   border: solid 1px var(--colorScaffoldingHighlight);
   border-radius: 6px;
@@ -70,4 +75,21 @@
 .errorEmoji {
   display: block;
   font-size: 5.6rem;
+}
+
+.skCol {
+  // Minimize column width
+  width: 1%;
+}
+
+.skBadge {
+  border: solid 1px var(--colorPrimary50);
+  border-radius: 6px;
+  color: var(--colorPrimary);
+  display: inline-block;
+  font-size: var(--fontSizeSmall);
+  margin: 0 8px;
+  padding: 4px 8px;
+  text-transform: uppercase;
+  white-space: nowrap;
 }

@@ -355,6 +355,15 @@
 			"RetryMax": 0,
 			"Tags": []
 		},
+		"onlineddl_singleton": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl/singleton"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "onlineddl_singleton",
+			"RetryMax": 0,
+			"Tags": []
+		},
 		"pitr": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/recovery/pitr"],
@@ -513,7 +522,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/tabletmanager/tablegc"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "27",
+			"Shard": "tabletmanager_tablegc",
 			"RetryMax": 0,
 			"Tags": [
 				"site_test"
