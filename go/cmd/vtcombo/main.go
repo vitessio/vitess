@@ -27,6 +27,8 @@ import (
 	"strings"
 	"time"
 
+	"vitess.io/vitess/go/vt/wrangler"
+
 	"context"
 
 	"github.com/golang/protobuf/proto"
@@ -158,13 +160,24 @@ func main() {
 
 	// tablets configuration and init.
 	// Send mycnf as nil because vtcombo won't do backups and restores.
-	if err := vtcombo.InitTabletMap(ts, tpb, mysqld, &dbconfigs.GlobalDBConfigs, *schemaDir, nil, *startMysql); err != nil {
+	uid, err := vtcombo.InitTabletMap(ts, tpb, mysqld, &dbconfigs.GlobalDBConfigs, *schemaDir, *startMysql)
+	if err != nil {
 		log.Errorf("initTabletMapProto failed: %v", err)
 		// ensure we start mysql in the event we fail here
 		if *startMysql {
 			mysqld.Shutdown(context.TODO(), cnf, true)
 		}
 		exit.Return(1)
+	}
+
+	globalDb = func(ks *vttestpb.Keyspace) error {
+		wr := wrangler.New(logutil.NewConsoleLogger(), ts, nil)
+		newUID, err := vtcombo.CreateKs(context.Background(), ts, tpb, mysqld, &dbconfigs.GlobalDBConfigs, *schemaDir, ks, true, uid, wr)
+		if err != nil {
+			return err
+		}
+		uid = newUID
+		return nil
 	}
 
 	// Now that we have fully initialized the tablets, rebuild the keyspace graph.
