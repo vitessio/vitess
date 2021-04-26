@@ -248,7 +248,8 @@ const (
 			retries,
 			ddl_action,
 			artifacts,
-			tablet
+			tablet,
+			migration_context
 		FROM _vt.schema_migrations
 		WHERE
 			migration_uuid=%a
@@ -273,7 +274,8 @@ const (
 			retries,
 			ddl_action,
 			artifacts,
-			tablet
+			tablet,
+			migration_context
 		FROM _vt.schema_migrations
 		WHERE
 			migration_status='ready'
