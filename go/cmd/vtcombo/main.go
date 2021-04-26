@@ -170,13 +170,30 @@ func main() {
 		exit.Return(1)
 	}
 
-	globalDb = func(ks *vttestpb.Keyspace) error {
+	globalCreateDb = func(ks *vttestpb.Keyspace) error {
 		wr := wrangler.New(logutil.NewConsoleLogger(), ts, nil)
 		newUID, err := vtcombo.CreateKs(context.Background(), ts, tpb, mysqld, &dbconfigs.GlobalDBConfigs, *schemaDir, ks, true, uid, wr)
 		if err != nil {
 			return err
 		}
 		uid = newUID
+		tpb.Keyspaces = append(tpb.Keyspaces, ks)
+		return nil
+	}
+
+	globalDropDb = func(ksName string) error {
+		if err := vtcombo.DeleteKs(context.Background(), ts, ksName, mysqld, tpb); err != nil {
+			return err
+		}
+
+		for i, keyspace := range tpb.Keyspaces {
+			if keyspace.Name == ksName {
+				kss := tpb.Keyspaces             // to save on chars
+				copy(kss[i:], kss[i+1:])         // shift keyspaces to the left, overwriting the value to remove
+				tpb.Keyspaces = kss[:len(kss)-1] // shrink the slice by one
+				break
+			}
+		}
 		return nil
 	}
 

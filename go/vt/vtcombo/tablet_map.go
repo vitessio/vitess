@@ -181,6 +181,35 @@ func InitTabletMap(ts *topo.Server, tpb *vttestpb.VTTestTopology, mysqld mysqlct
 	return uid, nil
 }
 
+// DeleteKs deletes keyspace, shards and tablets with mysql databases
+func DeleteKs(ctx context.Context, ts *topo.Server, ksName string, mysqld mysqlctl.MysqlDaemon, tpb *vttestpb.VTTestTopology) error {
+	var ks *vttestpb.Keyspace
+	for _, keyspace := range tpb.Keyspaces {
+		if keyspace.Name == ksName {
+			ks = keyspace
+			break
+		}
+	}
+	if ks == nil {
+		return fmt.Errorf("database not found")
+	}
+	conn, err := mysqld.GetDbaConnection(ctx)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	for _, shard := range ks.Shards {
+		q := fmt.Sprintf("DROP DATABASE IF EXISTS `vt_%s_%s`", ksName, shard.GetName())
+		log.Infof("drop database query: [%s]", q)
+		_, err = conn.ExecuteFetch(q, 1, false)
+		if err != nil {
+			return err
+		}
+	}
+
+	return ts.DeleteKeyspace(ctx, ksName)
+}
+
 // CreateKs creates keyspace, shards and tablets with mysql database
 func CreateKs(ctx context.Context, ts *topo.Server, tpb *vttestpb.VTTestTopology, mysqld mysqlctl.MysqlDaemon, dbcfgs *dbconfigs.DBConfigs, schemaDir string, kpb *vttestpb.Keyspace, ensureDatabase bool, uid uint32, wr *wrangler.Wrangler) (uint32, error) {
 	keyspace := kpb.Name
