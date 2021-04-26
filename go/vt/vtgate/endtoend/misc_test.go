@@ -27,8 +27,9 @@ import (
 	"vitess.io/vitess/go/mysql"
 )
 
+var ctx = context.Background()
+
 func TestDatabaseFunc(t *testing.T) {
-	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -39,7 +40,6 @@ func TestDatabaseFunc(t *testing.T) {
 }
 
 func TestSysNumericPrecisionScale(t *testing.T) {
-	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -47,4 +47,21 @@ func TestSysNumericPrecisionScale(t *testing.T) {
 	qr := exec(t, conn, "select numeric_precision, numeric_scale from information_schema.columns where table_schema = 'ks' and table_name = 't1'")
 	assert.True(t, qr.Fields[0].Type == qr.Rows[0][0].Type())
 	assert.True(t, qr.Fields[1].Type == qr.Rows[0][1].Type())
+}
+
+func TestCreateAndDropDatabase(t *testing.T) {
+	// note that this is testing vttest and not vtgate
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	_ = exec(t, conn, "create database testitest")
+	_ = exec(t, conn, "use testitest")
+	qr := exec(t, conn, "select database()")
+
+	require.Equal(t, `[[VARBINARY("testitest")]]`, fmt.Sprintf("%v", qr.Rows))
+	_ = exec(t, conn, "drop database testitest")
+
+	_, err = conn.ExecuteFetch("select lower('CASE')", 1000, true)
+	require.NoError(t, err)
 }
