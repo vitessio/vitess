@@ -9066,3 +9066,7 @@
 2021-04-26T16:51:53Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/786320868
 2021-04-26T16:51:53Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/786320883
 2021-04-26T17:27:46Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/786414770
+2021-04-26T18:03:36Z,Cluster (17),https://github.com/vitessio/vitess/actions/runs/786506031
+2021-04-26T18:03:36Z,Cluster (tabletmanager_tablegc),https://github.com/vitessio/vitess/actions/runs/786505996
+2021-04-26T18:03:36Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/786506020
+2021-04-26T18:03:36Z,e2e_race,https://github.com/vitessio/vitess/actions/runs/786506012
