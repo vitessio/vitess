@@ -27,10 +27,11 @@ import (
 )
 
 const (
-	declarativeFlag = "declarative"
-	skipTopoFlag    = "skip-topo"
-	singletonFlag   = "singleton"
-	shardsFlag      = "shards"
+	declarativeFlag      = "declarative"
+	skipTopoFlag         = "skip-topo"
+	singletonFlag        = "singleton"
+	singletonContextFlag = "singleton-context"
+	shardsFlag           = "shards"
 )
 
 var (
@@ -128,6 +129,11 @@ func (setting *DDLStrategySetting) IsSingleton() bool {
 	return setting.hasFlag(singletonFlag)
 }
 
+// IsSingletonContext checks if strategy options include -singleton-context
+func (setting *DDLStrategySetting) IsSingletonContext() bool {
+	return setting.hasFlag(singletonContextFlag)
+}
+
 // isShardsFlag returns true when given option denotes a `-shards=[...]` flag
 func isShardsFlag(opt string) (bool, string) {
 	submatch := shardsFlagRegexp.FindStringSubmatch(opt)
@@ -165,6 +171,7 @@ func (setting *DDLStrategySetting) RuntimeOptions() []string {
 		case isFlag(opt, declarativeFlag):
 		case isFlag(opt, skipTopoFlag):
 		case isFlag(opt, singletonFlag):
+		case isFlag(opt, singletonContextFlag):
 		default:
 			validOpts = append(validOpts, opt)
 		}
@@ -175,7 +182,7 @@ func (setting *DDLStrategySetting) RuntimeOptions() []string {
 // IsSkipTopo suggests that DDL should apply to tables bypassing global topo request
 func (setting *DDLStrategySetting) IsSkipTopo() bool {
 	switch {
-	case setting.IsSingleton():
+	case setting.IsSingleton(), setting.IsSingletonContext():
 		return true
 	case setting.hasFlag(skipTopoFlag):
 		return true
