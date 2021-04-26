@@ -22,6 +22,8 @@ import (
 	"strings"
 	"time"
 
+	strings2 "k8s.io/utils/strings"
+
 	querypb "vitess.io/vitess/go/vt/proto/query"
 
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -46,7 +48,7 @@ var (
 	dbLockRetryDelay    = 1 * time.Second
 	relayLogMaxSize     = flag.Int("relay_log_max_size", 250000, "Maximum buffer size (in bytes) for VReplication target buffering. If single rows are larger than this, a single row is buffered at a time.")
 	relayLogMaxItems    = flag.Int("relay_log_max_items", 5000, "Maximum number of rows for VReplication target buffering.")
-	copyTimeout         = 1 * time.Hour
+	copyTimeout         = 60 * time.Minute
 	replicaLagTolerance = 10 * time.Second
 
 	// vreplicationHeartbeatUpdateInterval determines how often the time_updated column is updated if there are no real events on the source and the source
@@ -59,9 +61,15 @@ var (
 	// to ensure that it satisfies liveness criteria implicitly expected by internal processes like Online DDL
 	vreplicationMinimumHeartbeatUpdateInterval = 60
 
-	vreplicationExperimentalFlags = flag.Int64("vreplication_experimental_flags", 0, "(Bitmask) of experimental features in vreplication to enable")
+	// bitmask to enable which experimental vreplication features are enabled in a vttablet
+	// all such features should be optional and should not affect core vreplication functionality.
 
-	vreplicationExperimentalFlagOptimizeInserts int64 = 1
+	//only enable bulk inserts and optimize inserts
+	vreplicationExperimentalFlags   = flag.Int64("vreplication_experimental_flags", 0x03, "Experimental features in vreplication to enable")
+	vreplicationParallelBulkInserts = flag.Int64("vreplication_parallel_bulk_inserts", 4, "Concurrent bulk inserts during copy")
+
+	vreplicationExperimentalOptimizeInserts        int64 = 0x01 // 0001
+	vreplicationExperimentalParallelizeBulkInserts int64 = 0x02 // 0010
 )
 
 // vreplicator provides the core logic to start vreplication streams
@@ -141,8 +149,9 @@ func newVReplicator(id uint32, source *binlogdatapb.BinlogSource, sourceVStreame
 func (vr *vreplicator) Replicate(ctx context.Context) error {
 	err := vr.replicate(ctx)
 	if err != nil {
-		log.Errorf("Replicate error: %s", err.Error())
-		if err := vr.setMessage(fmt.Sprintf("Error: %s", err.Error())); err != nil {
+		msg := strings2.ShortenString(err.Error(), 1000)
+		log.Errorf("Replicate error: %s", msg)
+		if err := vr.setMessage(fmt.Sprintf("Error: %s", msg)); err != nil {
 			log.Errorf("Failed to set error state: %v", err)
 		}
 	}

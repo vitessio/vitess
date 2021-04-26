@@ -84,7 +84,32 @@ func (st *vrStats) register() {
 			}
 			return result
 		})
-
+	stats.NewGaugesFuncWithMultiLabels(
+		"VReplicationLastCopyBandwidthBps",
+		"vreplication last copy's bytes copied per second per stream",
+		[]string{"source_keyspace", "source_shard", "workflow", "counts"},
+		func() map[string]int64 {
+			st.mu.Lock()
+			defer st.mu.Unlock()
+			result := make(map[string]int64, len(st.controllers))
+			for _, ct := range st.controllers {
+				result[ct.source.Keyspace+"."+ct.source.Shard+"."+ct.workflow+"."+fmt.Sprintf("%v", ct.id)] = ct.blpStats.CopyBandwidth.Get()
+			}
+			return result
+		})
+	stats.NewGaugesFuncWithMultiLabels(
+		"VReplicationLastBatchCopyBandwidthBps",
+		"vreplication last batch copy's bytes copied per second per stream",
+		[]string{"source_keyspace", "source_shard", "workflow", "counts"},
+		func() map[string]int64 {
+			st.mu.Lock()
+			defer st.mu.Unlock()
+			result := make(map[string]int64, len(st.controllers))
+			for _, ct := range st.controllers {
+				result[ct.source.Keyspace+"."+ct.source.Shard+"."+ct.workflow+"."+fmt.Sprintf("%v", ct.id)] = ct.blpStats.BatchCopyBandwidth.Get()
+			}
+			return result
+		})
 	stats.NewCounterFunc(
 		"VReplicationSecondsBehindMasterTotal",
 		"vreplication seconds behind master aggregated across all streams",
@@ -160,6 +185,21 @@ func (st *vrStats) register() {
 			}
 			return result
 		})
+	stats.NewGaugesFuncWithMultiLabels(
+		"VReplicationTableCopyTimings",
+		"vreplication copy timing per table per stream",
+		[]string{"source_keyspace", "source_shard", "workflow", "counts", "table"},
+		func() map[string]int64 {
+			st.mu.Lock()
+			defer st.mu.Unlock()
+			result := make(map[string]int64, len(st.controllers))
+			for _, ct := range st.controllers {
+				for table, t := range ct.blpStats.TableCopyTimings.Histograms() {
+					result[ct.source.Keyspace+"."+ct.source.Shard+"."+ct.workflow+"."+fmt.Sprintf("%v", ct.id)+"."+table] = t.Total() / 1e9
+				}
+			}
+			return result
+		})
 	stats.NewCounterFunc(
 		"VReplicationPhaseTimingsTotal",
 		"vreplication per phase timings aggregated across all phases and streams",
@@ -185,6 +225,52 @@ func (st *vrStats) register() {
 			result := make(map[string]int64, len(st.controllers))
 			for _, ct := range st.controllers {
 				for phase, t := range ct.blpStats.PhaseTimings.Counts() {
+					result[ct.source.Keyspace+"."+ct.source.Shard+"."+ct.workflow+"."+fmt.Sprintf("%v", ct.id)+"."+phase] = t
+				}
+			}
+			return result
+		})
+
+	stats.NewGaugesFuncWithMultiLabels(
+		"VReplicationQueryTimings",
+		"vreplication individual query timings in each phase per stream",
+		[]string{"source_keyspace", "source_shard", "workflow", "counts", "phase"},
+		func() map[string]int64 {
+			st.mu.Lock()
+			defer st.mu.Unlock()
+			result := make(map[string]int64, len(st.controllers))
+			for _, ct := range st.controllers {
+				for phase, t := range ct.blpStats.QueryTimings.Histograms() {
+					result[ct.source.Keyspace+"."+ct.source.Shard+"."+ct.workflow+"."+fmt.Sprintf("%v", ct.id)+"."+phase] = t.Total()
+				}
+			}
+			return result
+		})
+	stats.NewCounterFunc(
+		"VReplicationQueryTimingsTotal",
+		"vreplication individual query timings in each phase aggregated across all phases and streams",
+		func() int64 {
+			st.mu.Lock()
+			defer st.mu.Unlock()
+			result := int64(0)
+			for _, ct := range st.controllers {
+				for _, t := range ct.blpStats.QueryTimings.Histograms() {
+					result += t.Total()
+				}
+			}
+			return result
+		})
+
+	stats.NewGaugesFuncWithMultiLabels(
+		"VReplicationQueryTimingsCounts",
+		"vreplication individual count of query timings in each phase per stream",
+		[]string{"source_keyspace", "source_shard", "workflow", "counts", "phase"},
+		func() map[string]int64 {
+			st.mu.Lock()
+			defer st.mu.Unlock()
+			result := make(map[string]int64, len(st.controllers))
+			for _, ct := range st.controllers {
+				for phase, t := range ct.blpStats.QueryTimings.Counts() {
 					result[ct.source.Keyspace+"."+ct.source.Shard+"."+ct.workflow+"."+fmt.Sprintf("%v", ct.id)+"."+phase] = t
 				}
 			}
@@ -258,6 +344,7 @@ func (st *vrStats) register() {
 			}
 			return result
 		})
+
 	stats.NewGaugesFuncWithMultiLabels(
 		"VReplicationCopyRowCount",
 		"vreplication rows copied in copy phase per stream",
@@ -268,6 +355,20 @@ func (st *vrStats) register() {
 			result := make(map[string]int64, len(st.controllers))
 			for _, ct := range st.controllers {
 				result[ct.source.Keyspace+"."+ct.source.Shard+"."+ct.workflow+"."+fmt.Sprintf("%v", ct.id)] = ct.blpStats.CopyRowCount.Get()
+			}
+			return result
+		})
+
+	stats.NewGaugesFuncWithMultiLabels(
+		"VReplicationCopyBatchCount",
+		"vreplication running count of batches in copy phase",
+		[]string{"source_keyspace", "source_shard", "workflow", "counts"},
+		func() map[string]int64 {
+			st.mu.Lock()
+			defer st.mu.Unlock()
+			result := make(map[string]int64, len(st.controllers))
+			for _, ct := range st.controllers {
+				result[ct.source.Keyspace+"."+ct.source.Shard+"."+ct.workflow+"."+fmt.Sprintf("%v", ct.id)] = ct.blpStats.BatchCopyLoopCount.Get()
 			}
 			return result
 		})
@@ -339,13 +440,19 @@ func (st *vrStats) register() {
 			}
 			return result
 		})
-
+	stats.NewGaugeFunc("VReplicationBulkInsertConcurrency", "Number of concurrent bulk inserts", st.bulkInsertConcurrency)
 }
 
 func (st *vrStats) numControllers() int64 {
 	st.mu.Lock()
 	defer st.mu.Unlock()
 	return int64(len(st.controllers))
+}
+
+func (st *vrStats) bulkInsertConcurrency() int64 {
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	return int64(getCopyBatchConcurrency())
 }
 
 func (st *vrStats) maxSecondsBehindMaster() int64 {
@@ -387,6 +494,8 @@ func (st *vrStats) status() *EngineStatus {
 			CopyRowCount:        ct.blpStats.CopyRowCount.Get(),
 			CopyLoopCount:       ct.blpStats.CopyLoopCount.Get(),
 			NoopQueryCounts:     ct.blpStats.NoopQueryCount.Counts(),
+			CopyBandwidth:       ct.blpStats.CopyBandwidth.Get(),
+			BatchCopyLoopCount:  ct.blpStats.BatchCopyLoopCount.Get(),
 		}
 		i++
 	}
@@ -419,6 +528,8 @@ type ControllerStatus struct {
 	CopyRowCount        int64
 	CopyLoopCount       int64
 	NoopQueryCounts     map[string]int64
+	CopyBandwidth       int64
+	BatchCopyLoopCount  int64
 }
 
 var vreplicationTemplate = `

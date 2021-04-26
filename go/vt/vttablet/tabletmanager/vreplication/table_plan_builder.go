@@ -306,6 +306,7 @@ func (tpb *tablePlanBuilder) generate() *TablePlan {
 		Delete:           tpb.generateDeleteStatement(),
 		PKReferences:     pkrefs,
 		Stats:            tpb.stats,
+		ColExprs:         tpb.colExprs,
 	}
 }
 
@@ -744,6 +745,7 @@ func (tpb *tablePlanBuilder) generatePKConstraint(buf *sqlparser.TrackedBuffer, 
 		buf.Myprintf("%s%s%v%s", separator, charSet, &sqlparser.ColName{Name: sqlparser.NewColIdent(pkname.Name)}, collation)
 		separator = ","
 	}
+
 	separator = ") <= ("
 	for i, val := range tpb.lastpk.Rows[0] {
 		buf.WriteString(separator)

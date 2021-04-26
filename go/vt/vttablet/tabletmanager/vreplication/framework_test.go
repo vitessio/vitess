@@ -97,6 +97,12 @@ func TestMain(m *testing.M) {
 		}
 		defer env.Close()
 
+		oldVReplicationParallelBulkInserts := *vreplicationParallelBulkInserts
+		*vreplicationParallelBulkInserts = 1
+		defer func() {
+			*vreplicationParallelBulkInserts = oldVReplicationParallelBulkInserts
+		}()
+
 		// engines cannot be initialized in testenv because it introduces
 		// circular dependencies.
 		streamerEngine = vstreamer.NewEngine(env.TabletEnv, env.SrvTopo, env.SchemaEngine, nil, env.Cells[0])
@@ -448,10 +454,7 @@ func expectLogsAndUnsubscribe(t *testing.T, logs []LogExpectation, logCh chan in
 					match = (got.Detail == log.Detail)
 				}
 			}
-
-			if !match {
-				t.Errorf("log:\n%q, does not match log %d:\n%q", got, i, log)
-			}
+			require.True(t, match, "log:\n%q, does not match log %d:\n%q", got, i, log)
 		case <-time.After(5 * time.Second):
 			t.Errorf("no logs received, expecting %s", log)
 			failed = true
@@ -487,9 +490,7 @@ func expectDBClientQueries(t *testing.T, queries []string) {
 			} else {
 				match = (got == query)
 			}
-			if !match {
-				t.Errorf("query:\n%q, does not match query %d:\n%q", got, i, query)
-			}
+			require.True(t, match, "log:\n%q, does not match log %d:\n%q", got, i, query)
 		case <-time.After(5 * time.Second):
 			t.Errorf("no query received, expecting %s", query)
 			failed = true
@@ -604,4 +605,12 @@ func validateCopyRowCountStat(t *testing.T, want int64) {
 		count += ct.CopyRowCount
 	}
 	require.Equal(t, want, count, "CopyRowCount stat is incorrect")
+}
+
+func validateCopyBatchCountStat(t *testing.T, want int64) {
+	var count int64
+	for _, ct := range globalStats.status().Controllers {
+		count += ct.BatchCopyLoopCount
+	}
+	require.Equal(t, want, count, "BatchCopyLoopCount stat is incorrect")
 }

@@ -214,6 +214,7 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflow, sourceC
 	diffReports := make(map[string]*DiffReport)
 	jsonOutput := ""
 	for table, td := range df.differs {
+		start := time.Now().Unix()
 		if err := df.diffTable(ctx, wr, table, td, filteredReplicationWaitTime); err != nil {
 			return nil, err
 		}
@@ -232,7 +233,7 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflow, sourceC
 			}
 			jsonOutput += fmt.Sprintf("%s", json)
 		} else {
-			wr.Logger().Printf("Summary for %v: %+v\n", td.targetTable, *dr)
+			wr.Logger().Printf("Summary for %v: %+v (%ds)\n", td.targetTable, *dr, time.Now().Unix()-start)
 		}
 		diffReports[table] = dr
 	}
@@ -868,8 +869,8 @@ func (td *tableDiffer) diff(ctx context.Context, wr *Wrangler, rowsToCompare *in
 	advanceSource := true
 	advanceTarget := true
 	for {
-		if s := logSteps(int64(dr.ProcessedRows)); s != "" {
-			log.Infof("VDiff progress:: table %s: %s rows", td.targetTable, s)
+		if dr.ProcessedRows%1e7 == 0 {
+			log.Infof("VDiff progress:: table %s: %s rows", td.targetTable, humanInt(int64(dr.ProcessedRows)))
 		}
 		*rowsToCompare--
 		if *rowsToCompare < 0 {

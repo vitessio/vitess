@@ -17,12 +17,11 @@ limitations under the License.
 package vreplication
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"testing"
 	"time"
-
-	"context"
 
 	"github.com/stretchr/testify/require"
 
@@ -145,7 +144,7 @@ func TestPlayerCopyVarcharPKCaseInsensitive(t *testing.T) {
 
 	savedCopyTimeout := copyTimeout
 	// copyTimeout should be low enough to have time to send one row.
-	copyTimeout = 500 * time.Millisecond
+	copyTimeout = 50 * time.Millisecond
 	defer func() { copyTimeout = savedCopyTimeout }()
 
 	savedWaitRetryTime := waitRetryTime
@@ -438,6 +437,7 @@ func TestPlayerCopyTablesWithFK(t *testing.T) {
 	if _, err := playerEngine.Exec(query); err != nil {
 		t.Fatal(err)
 	}
+
 	expectDBClientQueries(t, []string{
 		"set foreign_key_checks=1;",
 		"begin",
@@ -526,6 +526,7 @@ func TestPlayerCopyTables(t *testing.T) {
 	})
 	expectData(t, "yes", [][]string{})
 	validateCopyRowCountStat(t, 2)
+	validateQueryCountStat(t, "copy", 1)
 }
 
 // TestPlayerCopyBigTable ensures the copy-catchup back-and-forth loop works correctly.
@@ -543,7 +544,7 @@ func TestPlayerCopyBigTable(t *testing.T) {
 	defer func() { copyTimeout = savedCopyTimeout }()
 
 	savedWaitRetryTime := waitRetryTime
-	// waitRetry time shoulw be very low to cause the wait loop to execute multipel times.
+	// waitRetry time should be very low to cause the wait loop to execute multiple times.
 	waitRetryTime = 10 * time.Millisecond
 	defer func() { waitRetryTime = savedWaitRetryTime }()
 
@@ -1002,7 +1003,7 @@ func TestPlayerCopyWildcardTableContinuation(t *testing.T) {
 // enabling the optimize inserts functionality
 func TestPlayerCopyWildcardTableContinuationWithOptimizeInserts(t *testing.T) {
 	oldVreplicationExperimentalFlags := *vreplicationExperimentalFlags
-	*vreplicationExperimentalFlags = vreplicationExperimentalFlagOptimizeInserts
+	*vreplicationExperimentalFlags = vreplicationExperimentalOptimizeInserts
 	defer func() {
 		*vreplicationExperimentalFlags = oldVreplicationExperimentalFlags
 	}()
@@ -1268,4 +1269,74 @@ func TestPlayerCopyTableCancel(t *testing.T) {
 		{"1", "aaa"},
 		{"2", "bbb"},
 	})
+}
+
+// TestPlayerCopyTablesParallelized sets the packetsize such that each row is a batch
+func TestPlayerCopyTablesParallelized(t *testing.T) {
+	oldVreplicationExperimentalFlags := *vreplicationExperimentalFlags
+	*vreplicationExperimentalFlags = vreplicationExperimentalParallelizeBulkInserts
+
+	oldVreplicationParallelBulkInserts := vreplicationParallelBulkInserts
+	*vreplicationParallelBulkInserts = 2
+
+	oldPacketSize := *vstreamer.PacketSize
+	*vstreamer.PacketSize = 1
+
+	defer func() {
+		*vreplicationExperimentalFlags = oldVreplicationExperimentalFlags
+		vreplicationParallelBulkInserts = oldVreplicationParallelBulkInserts
+		*vstreamer.PacketSize = oldPacketSize
+	}()
+
+	defer deleteTablet(addTablet(100))
+
+	execStatements(t, []string{
+		"create table src1(id int, val varbinary(128), primary key(id))",
+		"insert into src1 values(1, 'aaa'), (2, 'bbb')",
+		"insert into src1 values(3, 'ccc'), (4, 'ddd')",
+		fmt.Sprintf("create table %s.dst1(id int, val varbinary(128), primary key(id))", vrepldb),
+	})
+	defer execStatements(t, []string{
+		"drop table src1",
+		fmt.Sprintf("drop table %s.dst1", vrepldb),
+	})
+	env.SchemaEngine.Reload(context.Background())
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "dst1",
+			Filter: "select * from src1",
+		}},
+	}
+
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
+	}
+	query := binlogplayer.CreateVReplicationState("test", bls, "", binlogplayer.VReplicationInit, playerEngine.dbName)
+	qr, err := playerEngine.Exec(query)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		globalDBQueries = make(chan string, 1000)
+		query := fmt.Sprintf("delete from _vt.vreplication where id = %d", qr.InsertID)
+		if _, err := playerEngine.Exec(query); err != nil {
+			t.Fatal(err)
+		}
+		expectDeleteQueries(t)
+	}()
+
+	time.Sleep(1 * time.Second)
+	expectData(t, "dst1", [][]string{
+		{"1", "aaa"},
+		{"2", "bbb"},
+		{"3", "ccc"},
+		{"4", "ddd"},
+	})
+	validateCopyRowCountStat(t, 4)
+	validateQueryCountStat(t, "copy", 4)
+	validateCopyBatchCountStat(t, 2)
 }

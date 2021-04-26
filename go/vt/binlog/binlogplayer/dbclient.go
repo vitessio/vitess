@@ -20,6 +20,8 @@ import (
 	"context"
 	"fmt"
 
+	"k8s.io/utils/strings"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
@@ -105,7 +107,8 @@ func (dc *dbClientImpl) Close() {
 func (dc *dbClientImpl) ExecuteFetch(query string, maxrows int) (*sqltypes.Result, error) {
 	mqr, err := dc.dbConn.ExecuteFetch(query, maxrows, true)
 	if err != nil {
-		log.Errorf("ExecuteFetch failed w/ error %v", err)
+
+		log.Errorf("ExecuteFetch failed w/ error %s", strings.ShortenString(err.Error(), 200))
 		dc.handleError(err)
 		return nil, err
 	}

@@ -18,13 +18,17 @@ package vreplication
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
-	"context"
+	strings2 "k8s.io/utils/strings"
+
+	"vitess.io/vitess/go/vt/vterrors"
 
 	"github.com/golang/protobuf/proto"
 
@@ -187,6 +191,195 @@ func (vc *vcopier) catchup(ctx context.Context, copyState map[string]*sqltypes.R
 	}
 }
 
+func (vc *vcopier) getClientConnection() (*vdbClient, error) {
+	dbc := vc.vr.vre.dbClientFactoryFiltered()
+	if err := dbc.Connect(); err != nil {
+		return nil, vterrors.Wrap(err, "can't connect to database")
+	}
+	dbClient := newVDBClient(dbc, vc.vr.stats)
+	_, err := dbClient.Execute("set foreign_key_checks=0;")
+	if err != nil {
+		return nil, err
+	}
+	return dbClient, nil
+}
+
+func (vc *vcopier) updateLastPK(dbClient *vdbClient, updateCopyState *sqlparser.ParsedQuery, pkfields []*querypb.Field, lastpk *querypb.Row) error {
+	var buf bytes.Buffer
+	err := proto.CompactText(&buf, &querypb.QueryResult{
+		Fields: pkfields,
+		Rows:   []*querypb.Row{lastpk},
+	})
+	if err != nil {
+		return err
+	}
+	bv := map[string]*querypb.BindVariable{
+		"lastpk": {
+			Type:  sqltypes.VarBinary,
+			Value: buf.Bytes(),
+		},
+	}
+	updateCopyStateQuery, err := updateCopyState.GenerateQuery(bv, nil)
+	if err != nil {
+		return err
+	}
+	log.Infof("update pk query: %s", updateCopyStateQuery)
+	if _, err := dbClient.Execute(updateCopyStateQuery); err != nil {
+		return err
+	}
+	return nil
+}
+
+func getCopyBatchConcurrency() int {
+	concurrentBatches := int(*vreplicationParallelBulkInserts)
+	if *vreplicationExperimentalFlags /**/ & /**/ vreplicationExperimentalParallelizeBulkInserts == 0 {
+		concurrentBatches = 1
+	}
+	return concurrentBatches
+}
+
+// BatchesInfo has all the information required to insert a set of batches concurrently during the copy phase
+type BatchesInfo struct {
+	table   string
+	mu      sync.Mutex
+	done    chan int
+	batches []*BatchInfo
+}
+
+// NewBatchesInfo returns an initialized object for all batches to be concurrently inserted
+func NewBatchesInfo(table string, batches []*BatchInfo) *BatchesInfo {
+	return &BatchesInfo{
+		table:   table,
+		batches: batches,
+		done:    make(chan int, getCopyBatchConcurrency()),
+	}
+}
+
+// BatchInfo has the information required to insert one batch during the copy phase
+type BatchInfo struct {
+	rows     []*querypb.Row
+	lastpk   *querypb.Row
+	err      error
+	dbClient *vdbClient
+	index    int
+
+	inserted  bool
+	committed bool
+}
+
+func (vc *vcopier) copyBatch(ctx context.Context, batches *BatchesInfo, index int) {
+	batch := batches.batches[index]
+	log.Infof("in copyBatch for batch %d with %d rows, lastpk %v, first row %v", batch.index, len(batch.rows), batch.lastpk, batch.rows[0])
+
+	_, err := vc.tablePlan.applyBulkInsert(batch.rows, func(sql string) (*sqltypes.Result, error) {
+		if err := batch.dbClient.Begin(); err != nil {
+			return nil, err
+		}
+		qr, err := batch.dbClient.ExecuteWithRetry(ctx, sql)
+		if err != nil {
+			return nil, err
+		}
+		return qr, err
+	})
+	if err != nil {
+		batch.err = err
+		vc.vr.stats.ErrorCounts.Add([]string{"BulkCopy"}, 1)
+		batch.err = err
+		return
+	}
+	batches.mu.Lock()
+	batch.inserted = true
+	batches.mu.Unlock()
+	batches.done <- index
+}
+
+func (vc *vcopier) copyBatches(ctx context.Context, batchesInfo *BatchesInfo, updateCopyState *sqlparser.ParsedQuery,
+	pkfields []*querypb.Field, dbClientPool []*vdbClient) error {
+	start := time.Now()
+	numBatches := len(batchesInfo.batches)
+	if numBatches == 0 {
+		return fmt.Errorf("no batches passed to copyBatches")
+	}
+	log.Infof("inserting %d batches", numBatches)
+	totalRows := 0
+	for i := 0; i < numBatches; i++ {
+		batchesInfo.batches[i].dbClient = dbClientPool[i]
+		go vc.copyBatch(ctx, batchesInfo, i)
+		totalRows += len(batchesInfo.batches[i].rows)
+	}
+
+	var timeout = time.Duration(getCopyBatchConcurrency()) * 1 * time.Minute //TODO validate timeout value
+	timer := time.NewTimer(timeout * timeout)
+	defer timer.Stop()
+	var allDone bool
+	for {
+		timer.Reset(timeout)
+		// Drain if timer fired before reset.
+		select {
+		case <-timer.C:
+		default:
+		}
+
+		select {
+		case <-timer.C:
+			err := fmt.Errorf("timing out batch copy")
+			log.Errorf("%s", err)
+			vc.vr.stats.ErrorCounts.Add([]string{"BulkCopy"}, 1)
+			return err
+		case <-batchesInfo.done:
+			batchesInfo.mu.Lock()
+			allDone = true
+			for _, batch := range batchesInfo.batches {
+				if batch.err != nil {
+					log.Errorf(strings2.ShortenString(batch.err.Error(), 200))
+					return batch.err
+				}
+				if !batch.committed {
+					if batch.inserted {
+						log.Infof("updating lastpk for batch %d, lastpk %v", batch.index, batch.lastpk)
+
+						if err := vc.updateLastPK(batch.dbClient, updateCopyState, pkfields, batch.lastpk); err != nil {
+							err = fmt.Errorf("error updating lastpk to %v: %s", batch.lastpk, err)
+							log.Errorf(err.Error())
+							return err
+						}
+						log.Infof("updated lastpk for batch %d, lastpk %v, committing", batch.index, batch.lastpk)
+						if err := batch.dbClient.Commit(); err != nil {
+							return err
+						}
+						batch.committed = true
+						log.Infof("committed %d, lastpk %v", batch.index, batch.lastpk)
+
+						elapsedTime := float64(time.Now().UnixNano()-start.UnixNano()) / 1e9
+						bandwidth := int64(float64(len(batch.rows)) / elapsedTime)
+						vc.vr.stats.CopyBandwidth.Set(bandwidth)
+						vc.vr.stats.CopyRowCount.Add(int64(len(batch.rows)))
+						vc.vr.stats.QueryCount.Add("copy", 1)
+					} else {
+						allDone = false
+						break
+					}
+				}
+			}
+			batchesInfo.mu.Unlock()
+		default:
+		}
+		if allDone {
+			elapsedTime := float64(time.Now().UnixNano()-start.UnixNano()) / 1e9
+			bandwidth := int64(float64(totalRows) / elapsedTime)
+			vc.vr.stats.BatchCopyBandwidth.Set(bandwidth)
+			vc.vr.stats.BatchCopyLoopCount.Add(int64(1))
+			duration, err := time.ParseDuration(fmt.Sprintf("%ds", int(elapsedTime)))
+			if err != nil {
+				return err
+			}
+			vc.vr.stats.TableCopyTimings.Add(batchesInfo.table, duration)
+
+			return nil
+		} // Todo add batch stats (bandwidth, count)
+	}
+}
+
 // copyTable performs the synchronized copy of the next set of rows from
 // the current table being copied. Each packet received is transactionally
 // committed with the lastpk. This allows for consistent resumability.
@@ -198,7 +391,6 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 	}()
 
 	log.Infof("Copying table %s, lastpk: %v", tableName, copyState[tableName])
-
 	plan, err := buildReplicatorPlan(vc.vr.source.Filter, vc.vr.pkInfoMap, nil, vc.vr.stats)
 	if err != nil {
 		return err
@@ -212,15 +404,37 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 	ctx, cancel := context.WithTimeout(ctx, copyTimeout)
 	defer cancel()
 
-	var lastpkpb *querypb.QueryResult
+	var currentLastPKpb *querypb.QueryResult
 	if lastpkqr := copyState[tableName]; lastpkqr != nil {
-		lastpkpb = sqltypes.ResultToProto3(lastpkqr)
+		currentLastPKpb = sqltypes.ResultToProto3(lastpkqr)
+	}
+	var updateCopyState *sqlparser.ParsedQuery
+	var pkFields []*querypb.Field
+	var batches []*BatchInfo
+	var insert bool
+	var lastpk *querypb.Row
+
+	concurrentBatches := getCopyBatchConcurrency()
+	dbClientPool := make([]*vdbClient, concurrentBatches)
+	dbClientPool[0] = vc.vr.dbClient
+	for i := 1; i < concurrentBatches; i++ {
+		dbClientPool[i], err = vc.getClientConnection()
+		if err != nil {
+			return err
+		}
+		_, err := dbClientPool[i].Execute("set foreign_key_checks=0;")
+		if err != nil {
+			return err
+		}
 	}
 
-	var pkfields []*querypb.Field
-	var updateCopyState *sqlparser.ParsedQuery
-	var bv map[string]*querypb.BindVariable
-	err = vc.vr.sourceVStreamer.VStreamRows(ctx, initialPlan.SendRule.Filter, lastpkpb, func(rows *binlogdatapb.VStreamRowsResponse) error {
+	defer func(dbClientPool []*vdbClient) {
+		for i := 1; i < concurrentBatches; i++ {
+			dbClientPool[i].Close()
+		}
+	}(dbClientPool)
+
+	err = vc.vr.sourceVStreamer.VStreamRows(ctx, initialPlan.SendRule.Filter, currentLastPKpb, func(rows *binlogdatapb.VStreamRowsResponse) error {
 		for {
 			select {
 			case <-ctx.Done():
@@ -232,7 +446,6 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 				break
 			}
 		}
-
 		if vc.tablePlan == nil {
 			if len(rows.Fields) == 0 {
 				return fmt.Errorf("expecting field event first, got: %v", rows)
@@ -248,13 +461,42 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 			if err != nil {
 				return err
 			}
-			pkfields = rows.Pkfields
+			pkFields = rows.Pkfields
 			buf := sqlparser.NewTrackedBuffer(nil)
-			buf.Myprintf("update _vt.copy_state set lastpk=%a where vrepl_id=%s and table_name=%s", ":lastpk", strconv.Itoa(int(vc.vr.id)), encodeString(tableName))
+			buf.Myprintf("update _vt.copy_state set lastpk=%a where vrepl_id=%s and table_name=%s", ":lastpk",
+				strconv.Itoa(int(vc.vr.id)), encodeString(tableName))
 			updateCopyState = buf.ParsedQuery()
 		}
 		if len(rows.Rows) == 0 {
-			return nil
+			if len(batches) == 0 {
+				return nil
+			}
+			insert = true
+		} else {
+			lastpk = &querypb.Row{Lengths: rows.Lastpk.Lengths, Values: rows.Lastpk.Values}
+			//TODO: check if this allocation can be improved
+			rows2 := make([]*querypb.Row, len(rows.Rows))
+			for i, row := range rows.Rows {
+				rows2[i] = &querypb.Row{Lengths: row.Lengths, Values: row.Values}
+			}
+			batch := &BatchInfo{
+				rows:   rows2,
+				lastpk: lastpk,
+				index:  len(batches),
+			}
+			batches = append(batches, batch)
+			if len(batches) >= concurrentBatches {
+				insert = true
+			}
+		}
+		if insert {
+			batches2 := NewBatchesInfo(tableName, batches)
+			err = vc.copyBatches(ctx, batches2, updateCopyState, pkFields, dbClientPool)
+			insert = false
+			batches = nil
+			if err != nil {
+				return err
+			}
 		}
 
 		// The number of rows we receive depends on the packet size set
@@ -262,64 +504,31 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 		// to data size, this should map to a uniform amount of pages affected
 		// per statement. A packet size of 30K will roughly translate to 8
 		// mysql pages of 4K each.
-		if err := vc.vr.dbClient.Begin(); err != nil {
-			return err
-		}
-		_, err = vc.tablePlan.applyBulkInsert(rows, func(sql string) (*sqltypes.Result, error) {
-			start := time.Now()
-			qr, err := vc.vr.dbClient.ExecuteWithRetry(ctx, sql)
-			if err != nil {
-				return nil, err
-			}
-			vc.vr.stats.QueryTimings.Record("copy", start)
 
-			vc.vr.stats.CopyRowCount.Add(int64(qr.RowsAffected))
-			vc.vr.stats.QueryCount.Add("copy", 1)
-
-			return qr, err
-		})
-		if err != nil {
-			return err
-		}
-
-		var buf bytes.Buffer
-		err = proto.CompactText(&buf, &querypb.QueryResult{
-			Fields: pkfields,
-			Rows:   []*querypb.Row{rows.Lastpk},
-		})
-		if err != nil {
-			return err
-		}
-		bv = map[string]*querypb.BindVariable{
-			"lastpk": {
-				Type:  sqltypes.VarBinary,
-				Value: buf.Bytes(),
-			},
-		}
-		updateState, err := updateCopyState.GenerateQuery(bv, nil)
-		if err != nil {
-			return err
-		}
-		if _, err := vc.vr.dbClient.Execute(updateState); err != nil {
-			return err
-		}
-
-		if err := vc.vr.dbClient.Commit(); err != nil {
-			return err
-		}
 		return nil
 	})
+	if len(batches) > 0 {
+		log.Infof("calling copyBatches with %d batches", len(batches))
+		batches2 := NewBatchesInfo(tableName, batches)
+		err = vc.copyBatches(ctx, batches2, updateCopyState, pkFields, dbClientPool)
+		if err != nil {
+			return err
+		}
+		batches = nil
+	}
+
 	// If there was a timeout, return without an error.
 	select {
 	case <-ctx.Done():
-		log.Infof("Copy of %v stopped at lastpk: %v", tableName, bv)
+		log.Infof("Copy of %v stopped at lastpk: %v", tableName, lastpk)
 		return nil
 	default:
 	}
 	if err != nil {
 		return err
 	}
-	log.Infof("Copy of %v finished at lastpk: %v", tableName, bv)
+
+	log.Infof("Copy of %v finished at lastpk: %v", tableName, lastpk)
 	buf := sqlparser.NewTrackedBuffer(nil)
 	buf.Myprintf("delete from _vt.copy_state where vrepl_id=%s and table_name=%s", strconv.Itoa(int(vc.vr.id)), encodeString(tableName))
 	if _, err := vc.vr.dbClient.Execute(buf.String()); err != nil {

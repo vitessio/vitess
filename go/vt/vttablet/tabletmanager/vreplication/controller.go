@@ -23,6 +23,8 @@ import (
 	"strings"
 	"time"
 
+	strings2 "k8s.io/utils/strings"
+
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -159,7 +161,7 @@ func (ct *controller) run(ctx context.Context) {
 			return
 		default:
 		}
-		log.Errorf("stream %v: %v, retrying after %v", ct.id, err, *retryDelay)
+		log.Errorf("stream %v: %s, retrying after %v", ct.id, strings2.ShortenString(err.Error(), 200), *retryDelay)
 		ct.blpStats.ErrorCounts.Add([]string{"Stream Error"}, 1)
 		timer := time.NewTimer(*retryDelay)
 		select {

@@ -174,11 +174,13 @@ type TablePlan struct {
 	Insert *sqlparser.ParsedQuery
 	Update *sqlparser.ParsedQuery
 	Delete *sqlparser.ParsedQuery
+
 	Fields []*querypb.Field
 	// PKReferences is used to check if an event changed
 	// a primary key column (row move).
 	PKReferences []string
 	Stats        *binlogplayer.Stats
+	ColExprs     []*colExpr
 }
 
 // MarshalJSON performs a custom JSON Marshalling.
@@ -207,7 +209,7 @@ func (tp *TablePlan) MarshalJSON() ([]byte, error) {
 	return json.Marshal(&v)
 }
 
-func (tp *TablePlan) applyBulkInsert(rows *binlogdatapb.VStreamRowsResponse, executor func(string) (*sqltypes.Result, error)) (*sqltypes.Result, error) {
+func (tp *TablePlan) applyBulkInsert(rows []*querypb.Row, executor func(string) (*sqltypes.Result, error)) (*sqltypes.Result, error) {
 	bindvars := make(map[string]*querypb.BindVariable, len(tp.Fields))
 	var buf strings.Builder
 	if err := tp.BulkInsertFront.Append(&buf, nil, nil); err != nil {
@@ -215,7 +217,7 @@ func (tp *TablePlan) applyBulkInsert(rows *binlogdatapb.VStreamRowsResponse, exe
 	}
 	buf.WriteString(" values ")
 	separator := ""
-	for _, row := range rows.Rows {
+	for _, row := range rows {
 		vals := sqltypes.MakeRowTrusted(tp.Fields, row)
 		for i, field := range tp.Fields {
 			bindvars["a_"+field.Name] = sqltypes.ValueBindVariable(vals[i])
@@ -248,7 +250,7 @@ func (tp *TablePlan) applyBulkInsert(rows *binlogdatapb.VStreamRowsResponse, exe
 // now and punt on the others.
 func (tp *TablePlan) isOutsidePKRange(bindvars map[string]*querypb.BindVariable, before, after bool, stmtType string) bool {
 	// added empty comments below, otherwise gofmt removes the spaces between the bitwise & and obfuscates this check!
-	if *vreplicationExperimentalFlags /**/ & /**/ vreplicationExperimentalFlagOptimizeInserts == 0 {
+	if *vreplicationExperimentalFlags /**/ & /**/ vreplicationExperimentalOptimizeInserts == 0 {
 		return false
 	}
 	// Ensure there is one and only one value in lastpk and pkrefs.
