@@ -2519,7 +2519,7 @@ func (e *Executor) SubmitMigration(
 
 	onlineDDL, err := schema.OnlineDDLFromCommentedStatement(stmt)
 	if err != nil {
-		return nil, fmt.Errorf("Error submitting migration %s: %v", sqlparser.String(stmt), err)
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Error submitting migration %s: %v", sqlparser.String(stmt), err)
 	}
 	_, actionStr, err := onlineDDL.GetActionStr()
 	if err != nil {
@@ -2561,7 +2561,7 @@ func (e *Executor) SubmitMigration(
 		case onlineDDL.StrategySetting().IsSingleton():
 			// We will reject this migration if there's any pending migration
 			if len(pendingUUIDs) > 0 {
-				return result, fmt.Errorf("singleton migration rejected: found pending migrations [%s]", strings.Join(pendingUUIDs, ", "))
+				return result, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "singleton migration rejected: found pending migrations [%s]", strings.Join(pendingUUIDs, ", "))
 			}
 		case onlineDDL.StrategySetting().IsSingletonContext():
 			// We will reject this migration if there's any pending migration within a different context
@@ -2571,7 +2571,7 @@ func (e *Executor) SubmitMigration(
 					return nil, err
 				}
 				if pendingOnlineDDL.RequestContext != onlineDDL.RequestContext {
-					return nil, fmt.Errorf("singleton migration rejected: found pending migration: %s in different context: %s", pendingUUID, pendingOnlineDDL.RequestContext)
+					return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "singleton migration rejected: found pending migration: %s in different context: %s", pendingUUID, pendingOnlineDDL.RequestContext)
 				}
 			}
 		}
