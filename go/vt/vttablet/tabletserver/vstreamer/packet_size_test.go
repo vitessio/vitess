@@ -21,8 +21,6 @@ import (
 	"math/rand"
 	"testing"
 	"time"
-
-	"github.com/stretchr/testify/require"
 )
 
 type polynomial []float64
@@ -68,6 +66,7 @@ func TestPacketSizeSimulation(t *testing.T) {
 		name     string
 		baseSize int
 		p        polynomial
+		error    time.Duration
 	}{
 		{
 			name:     "growth with tapper",
@@ -78,16 +77,21 @@ func TestPacketSizeSimulation(t *testing.T) {
 			name:     "growth without tapper",
 			baseSize: 25000,
 			p:        polynomial{0.473, 5.333, -38.663, 90.731, -87.005, 30.128},
+			error:    5 * time.Millisecond,
 		},
 		{
 			name:     "regression",
 			baseSize: 25000,
 			p:        polynomial{0.247, -0.726, 2.864, -3.022, 2.273, -0.641},
+			error:    1 * time.Second,
 		},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			seed := time.Now().UnixNano()
+			rand.Seed(seed)
+
 			// Simulate a replication using the given polynomial and the dynamic packet sizer
 			ps1 := newDynamicPacketSizer(tc.baseSize)
 			elapsed1, sent1 := simulate(t, ps1, tc.baseSize, tc.baseSize*1000, tc.p.fit)
@@ -98,8 +102,13 @@ func TestPacketSizeSimulation(t *testing.T) {
 
 			// the simulation for dynamic packet sizing should always be faster then the fixed packet,
 			// and should also send fewer packets in total
-			require.True(t, elapsed1 < elapsed2)
-			require.True(t, sent1 < sent2)
+			delta := elapsed1 - elapsed2
+			if delta > tc.error {
+				t.Errorf("packet-adjusted simulation is %v slower than fixed approach, seed %d", delta, seed)
+			}
+			if sent1 > sent2 {
+				t.Errorf("packet-adjusted simulation sent more packets (%d) than fixed approach (%d), seed %d", sent1, sent2, seed)
+			}
 			// t.Logf("dynamic = (%v, %d), fixed = (%v, %d)", elapsed1, sent1, elapsed2, sent2)
 		})
 	}
