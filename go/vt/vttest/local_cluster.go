@@ -30,9 +30,8 @@ import (
 	"strings"
 	"unicode"
 
-	"vitess.io/vitess/go/vt/vtgate/engine"
-
 	"vitess.io/vitess/go/vt/proto/logutil"
+
 	// we need to import the grpcvtctlclient library so the gRPC
 	// vtctl client is registered and can be used.
 	_ "vitess.io/vitess/go/vt/vtctl/grpcvtctlclient"
@@ -296,9 +295,6 @@ func (db *LocalCluster) Setup() error {
 			return err
 		}
 	}
-
-	globalDb = db
-	engine.DBDDLRegister("vttest", &dbDDL{})
 
 	return nil
 }

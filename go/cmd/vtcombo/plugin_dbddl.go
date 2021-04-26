@@ -14,36 +14,37 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package vttest
+package main
 
 import (
 	"context"
-	"fmt"
+
+	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/vtgate/engine"
 
 	vttestpb "vitess.io/vitess/go/vt/proto/vttest"
 )
 
-var globalDb *LocalCluster
+var globalDb func(ks *vttestpb.Keyspace) error
 
-type dbDDL struct{}
+type DBDDL struct{}
 
-func (plugin *dbDDL) CreateDatabase(_ context.Context, name string) error {
+func (plugin *DBDDL) CreateDatabase(_ context.Context, name string) error {
 	ks := &vttestpb.Keyspace{
 		Name: name,
 		Shards: []*vttestpb.Shard{{
 			Name: "0",
 		}},
 	}
-	for _, shard := range globalDb.shardNames(ks) {
-		err := globalDb.Execute([]string{fmt.Sprintf("create database `%s`", shard)}, "")
-		if err != nil {
-			return err
-		}
-	}
-	globalDb.Topology.Keyspaces = append(globalDb.Topology.Keyspaces, ks)
-
-	return nil
+	return globalDb(ks)
 }
-func (plugin *dbDDL) DropDatabase(ctx context.Context, name string) error {
+
+func (plugin *DBDDL) DropDatabase(ctx context.Context, name string) error {
 	panic(1)
+}
+
+func init() {
+	servenv.OnRun(func() {
+		engine.DBDDLRegister("vttest", &DBDDL{})
+	})
 }
