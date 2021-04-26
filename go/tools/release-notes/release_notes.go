@@ -99,8 +99,14 @@ func loadPRinfo(pr string) (prInfo, error) {
 	cmd := exec.Command("gh", "pr", "view", pr, "--json", "title,number,labels")
 	out, err := cmd.Output()
 	if err != nil {
-		execErr := err.(*exec.ExitError)
-		return prInfo{}, fmt.Errorf("%s:\nstderr: %s\nstdout: %s", err.Error(), execErr.Stderr, out)
+		execErr, ok := err.(*exec.ExitError)
+		if ok {
+			return prInfo{}, fmt.Errorf("%s:\nstderr: %s\nstdout: %s", err.Error(), execErr.Stderr, out)
+		}
+		if strings.Contains(err.Error(), " executable file not found in") {
+			return prInfo{}, fmt.Errorf("the command `gh` seems to be missing. Please install it from https://github.com/cli/cli")
+		}
+		return prInfo{}, err
 	}
 	var prInfo prInfo
 	err = json.Unmarshal(out, &prInfo)
