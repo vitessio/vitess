@@ -87,7 +87,10 @@ func (a *analyzer) analyzeDown(cursor *sqlparser.Cursor) bool {
 			a.exprDeps[node] = t
 		}
 	}
-	return true // we always return true here, and then return false on the going up phase to abort on error
+	// this is the visitor going down the tree. Returning false here would just not visit the children
+	// to the current node, but that is not what we want if we have encountered an error.
+	// In order to abort the whole visitation, we have to return true here and then return false in the `analyzeUp` method
+	return true
 }
 
 func (a *analyzer) resolveColumn(colName *sqlparser.ColName, current *scope) (TableSet, error) {
