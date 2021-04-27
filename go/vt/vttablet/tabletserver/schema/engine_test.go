@@ -108,6 +108,7 @@ func TestOpenAndReload(t *testing.T) {
 				sqltypes.MakeTrusted(sqltypes.VarChar, []byte("")),              // table_comment
 				sqltypes.MakeTrusted(sqltypes.Int64, []byte("128")),             // file_size
 				sqltypes.MakeTrusted(sqltypes.Int64, []byte("256")),             // allocated_size
+				sqltypes.MakeTrusted(sqltypes.Int64, []byte("17")),              // table_rows
 			},
 			// test_table_04 will in spite of older timestamp because it doesn't exist yet.
 			mysql.BaseShowTablesRow("test_table_04", false, ""),

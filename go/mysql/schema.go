@@ -87,6 +87,12 @@ var BaseShowTablesFields = []*querypb.Field{{
 	ColumnLength: 11,
 	Charset:      CharacterSetBinary,
 	Flags:        uint32(querypb.MySqlFlag_BINARY_FLAG | querypb.MySqlFlag_NUM_FLAG),
+}, {
+	Name:         "t.table_rows",
+	Type:         querypb.Type_INT64,
+	ColumnLength: 11,
+	Charset:      CharacterSetBinary,
+	Flags:        uint32(querypb.MySqlFlag_BINARY_FLAG | querypb.MySqlFlag_NUM_FLAG),
 }}
 
 // BaseShowTablesRow returns the fields from a BaseShowTables or
@@ -103,6 +109,7 @@ func BaseShowTablesRow(tableName string, isView bool, comment string) []sqltypes
 		sqltypes.MakeTrusted(sqltypes.VarChar, []byte(comment)),
 		sqltypes.MakeTrusted(sqltypes.Int64, []byte("100")), // file_size
 		sqltypes.MakeTrusted(sqltypes.Int64, []byte("150")), // allocated_size
+		sqltypes.MakeTrusted(sqltypes.Int64, []byte("17")),  // table_rows
 	}
 }
 
