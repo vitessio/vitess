@@ -18,6 +18,7 @@ package vtgate
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -28,25 +29,20 @@ import (
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/vt/servenv"
-
-	"vitess.io/vitess/go/vt/sysvars"
-
-	"context"
-
-	"vitess.io/vitess/go/trace"
-	"vitess.io/vitess/go/vt/discovery"
-	"vitess.io/vitess/go/vt/log"
-
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/cache"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/callerid"
+	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/key"
+	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
+	"vitess.io/vitess/go/vt/sysvars"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -54,6 +50,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vtgate/vschemaacl"
 
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
@@ -1491,4 +1488,33 @@ func (e *Executor) ExecuteLock(ctx context.Context, rs *srvtopo.ResolvedShard, q
 // ExecuteMessageStream implements the IExecutor interface
 func (e *Executor) ExecuteMessageStream(ctx context.Context, rss []*srvtopo.ResolvedShard, tableName string, callback func(reply *sqltypes.Result) error) error {
 	return e.scatterConn.MessageStream(ctx, rss, tableName, callback)
+}
+
+// ExecuteVStream implements the IExecutor interface
+func (e *Executor) ExecuteVStream(ctx context.Context, rss []*srvtopo.ResolvedShard, filter *binlogdatapb.Filter, gtid string, callback func(evs []*binlogdatapb.VEvent) error) error {
+	return e.startVStream(ctx, rss, filter, gtid, callback)
+}
+
+func (e *Executor) startVStream(ctx context.Context, rss []*srvtopo.ResolvedShard, filter *binlogdatapb.Filter, gtid string, callback func(evs []*binlogdatapb.VEvent) error) error {
+	var shardGtids []*binlogdatapb.ShardGtid
+	for _, rs := range rss {
+		shardGtid := &binlogdatapb.ShardGtid{
+			Keyspace: rs.Target.Keyspace,
+			Shard:    rs.Target.Shard,
+			Gtid:     gtid,
+		}
+		shardGtids = append(shardGtids, shardGtid)
+	}
+	vgtid := &binlogdatapb.VGtid{
+		ShardGtids: shardGtids,
+	}
+	vs := &vstream{
+		vgtid:      vgtid,
+		tabletType: topodatapb.TabletType_MASTER,
+		filter:     filter,
+		send:       callback,
+		rss:        rss,
+	}
+	vs.stream(ctx)
+	return nil
 }
