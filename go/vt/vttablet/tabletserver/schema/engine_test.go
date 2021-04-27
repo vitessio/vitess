@@ -501,6 +501,7 @@ func initialSchema() map[string]*Table {
 				CacheSize:          10,
 				PollInterval:       30 * time.Second,
 			},
+			TableRows: 17,
 		},
 	}
 }
