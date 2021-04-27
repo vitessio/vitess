@@ -9319,3 +9319,5 @@
 2021-04-27T20:59:53Z,unit_race,https://github.com/vitessio/vitess/actions/runs/790486958
 2021-04-27T21:36:40Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/790578845
 2021-04-27T21:36:40Z,cluster_initial_sharding_multi,https://github.com/vitessio/vitess/actions/runs/790578801
+2021-04-27T21:38:04Z,Cluster (tabletmanager_tablegc),https://github.com/vitessio/vitess/actions/runs/790582084
+2021-04-27T21:38:04Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/790582081
