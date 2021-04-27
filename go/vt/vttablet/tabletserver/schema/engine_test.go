@@ -403,8 +403,7 @@ func newDBConfigs(db *fakesqldb.DB) *dbconfigs.DBConfigs {
 func initialSchema() map[string]*Table {
 	return map[string]*Table{
 		"dual": {
-			Name:      sqlparser.NewTableIdent("dual"),
-			TableRows: 17,
+			Name: sqlparser.NewTableIdent("dual"),
 		},
 		"test_table_01": {
 			Name: sqlparser.NewTableIdent("test_table_01"),
