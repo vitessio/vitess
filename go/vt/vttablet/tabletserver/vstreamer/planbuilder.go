@@ -111,6 +111,10 @@ func (plan *Plan) fields() []*querypb.Field {
 	return fields
 }
 
+// filter filters the row against the plan. It returns false if the row did not match.
+// The output of the filtering operation is stored in the 'result' argument because
+// filtering cannot be performed in-place. The result argument must be a slice of
+// length equal to ColExprs
 func (plan *Plan) filter(values, result []sqltypes.Value) (bool, error) {
 	if len(result) != len(plan.ColExprs) {
 		return false, fmt.Errorf("expected %d values in result slice", len(plan.ColExprs))
