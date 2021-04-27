@@ -243,7 +243,6 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 			if err := vc.fastForward(ctx, copyState, rows.Gtid); err != nil {
 				return err
 			}
-			fmt.Printf("============== TableRows! %v\n", rows.TableRows)
 			fieldEvent := &binlogdatapb.FieldEvent{
 				TableName: initialPlan.SendRule.Match,
 				Fields:    rows.Fields,
