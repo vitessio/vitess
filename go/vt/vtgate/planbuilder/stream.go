@@ -32,14 +32,16 @@ func buildStreamPlan(stmt *sqlparser.Stream, vschema ContextVSchema) (engine.Pri
 }
 
 func buildVStreamPlan(stmt *sqlparser.VStream, vschema ContextVSchema) (engine.Primitive, error) {
-	table, _, _, dest, err := vschema.FindTable(stmt.Table)
+	table, _, destTabletType, dest, err := vschema.FindTable(stmt.Table)
 	if err != nil {
 		return nil, err
+	}
+	if destTabletType != topodatapb.TabletType_MASTER {
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstream is supported only for master tablet type, current type: %v", destTabletType)
 	}
 	if dest == nil {
 		dest = key.DestinationAllShards{}
 	}
-	limit := 100
 	var pos string
 	if stmt.Where != nil {
 		pos, err = getVStreamStartPos(stmt)
@@ -47,6 +49,7 @@ func buildVStreamPlan(stmt *sqlparser.VStream, vschema ContextVSchema) (engine.P
 			return nil, err
 		}
 	}
+	limit := 100
 	if stmt.Limit != nil {
 		count, ok := stmt.Limit.Rowcount.(*sqlparser.Literal)
 		if ok {

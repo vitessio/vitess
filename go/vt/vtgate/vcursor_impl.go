@@ -23,6 +23,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+
 	"vitess.io/vitess/go/mysql"
 
 	"github.com/prometheus/common/log"
@@ -71,6 +73,7 @@ type iExecute interface {
 	ExecuteLock(ctx context.Context, rs *srvtopo.ResolvedShard, query *querypb.BoundQuery, session *SafeSession) (*sqltypes.Result, error)
 	Commit(ctx context.Context, safeSession *SafeSession) error
 	ExecuteMessageStream(ctx context.Context, rss []*srvtopo.ResolvedShard, name string, callback func(*sqltypes.Result) error) error
+	ExecuteVStream(ctx context.Context, rss []*srvtopo.ResolvedShard, filter *binlogdatapb.Filter, gtid string, callback func(evs []*binlogdatapb.VEvent) error) error
 
 	// TODO: remove when resolver is gone
 	ParseDestinationTarget(targetString string) (string, topodatapb.TabletType, key.Destination, error)
@@ -806,4 +809,8 @@ func (vc *vcursorImpl) ExecuteVSchema(keyspace string, vschemaDDL *sqlparser.Alt
 func (vc *vcursorImpl) MessageStream(rss []*srvtopo.ResolvedShard, tableName string, callback func(*sqltypes.Result) error) error {
 	atomic.AddUint64(&vc.logStats.ShardQueries, uint64(len(rss)))
 	return vc.executor.ExecuteMessageStream(vc.ctx, rss, tableName, callback)
+}
+
+func (vc *vcursorImpl) VStream(rss []*srvtopo.ResolvedShard, filter *binlogdatapb.Filter, gtid string, callback func(evs []*binlogdatapb.VEvent) error) error {
+	return vc.executor.ExecuteVStream(vc.ctx, rss, filter, gtid, callback)
 }
