@@ -9272,6 +9272,7 @@
 2021-04-27T14:43:31Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/789465331
 2021-04-27T14:43:31Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/789465292
 2021-04-27T14:43:31Z,local_example,https://github.com/vitessio/vitess/actions/runs/789465311
+2021-04-27T15:03:07Z,Cluster (onlineddl_revert),https://github.com/vitessio/vitess/actions/runs/789526728
 2021-04-27T15:03:07Z,Cluster (onlineddl_vrepl_stress),https://github.com/vitessio/vitess/actions/runs/789526715
 2021-04-27T15:03:07Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/789526741
 2021-04-27T15:03:07Z,Cluster (vreplication_cellalias),https://github.com/vitessio/vitess/actions/runs/789526717
