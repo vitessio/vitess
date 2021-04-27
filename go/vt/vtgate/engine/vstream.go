@@ -20,6 +20,9 @@ import (
 	"fmt"
 	"io"
 
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -58,8 +61,8 @@ func (v *VStream) GetTableName() string {
 }
 
 // Execute implements the Primitive interface
-func (v *VStream) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	panic("implement me")
+func (v *VStream) Execute(_ VCursor, _ map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+	return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "'Execute' in VStream is not supported")
 }
 
 // StreamExecute implements the Primitive interface
@@ -138,8 +141,8 @@ func (v *VStream) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.Bi
 }
 
 // GetFields implements the Primitive interface
-func (v *VStream) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	panic("implement me")
+func (v *VStream) GetFields(_ VCursor, _ map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "'GetFields' in VStream is not supported")
 }
 
 func (v *VStream) description() PrimitiveDescription {

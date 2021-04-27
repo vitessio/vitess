@@ -24,7 +24,7 @@ func buildStreamPlan(stmt *sqlparser.Stream, vschema ContextVSchema) (engine.Pri
 	if dest == nil {
 		dest = key.DestinationExactKeyRange{}
 	}
-	return &engine.MessageStream{
+	return &engine.MStream{
 		Keyspace:          table.Keyspace,
 		TargetDestination: dest,
 		TableName:         table.Name.CompliantName(),

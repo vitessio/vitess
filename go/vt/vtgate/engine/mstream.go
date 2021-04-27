@@ -20,13 +20,15 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
-var _ Primitive = (*MessageStream)(nil)
+var _ Primitive = (*MStream)(nil)
 
-// MessageStream is an operator for message streaming from specific keyspace, destination
-type MessageStream struct {
+// MStream is an operator for message streaming from specific keyspace, destination
+type MStream struct {
 	// Keyspace specifies the keyspace to stream messages from
 	Keyspace *vindexes.Keyspace
 
@@ -42,45 +44,45 @@ type MessageStream struct {
 }
 
 // RouteType implements the Primitive interface
-func (s *MessageStream) RouteType() string {
-	return "MessageStream"
+func (m *MStream) RouteType() string {
+	return "MStream"
 }
 
 // GetKeyspaceName implements the Primitive interface
-func (s *MessageStream) GetKeyspaceName() string {
-	return s.Keyspace.Name
+func (m *MStream) GetKeyspaceName() string {
+	return m.Keyspace.Name
 }
 
 // GetTableName implements the Primitive interface
-func (s *MessageStream) GetTableName() string {
-	return s.TableName
+func (m *MStream) GetTableName() string {
+	return m.TableName
 }
 
 // Execute implements the Primitive interface
-func (s *MessageStream) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	panic("implement me")
+func (m *MStream) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+	return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "'Execute' in MStream is not supported")
 }
 
 // StreamExecute implements the Primitive interface
-func (s *MessageStream) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	rss, _, err := vcursor.ResolveDestinations(s.Keyspace.Name, nil, []key.Destination{s.TargetDestination})
+func (m *MStream) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	rss, _, err := vcursor.ResolveDestinations(m.Keyspace.Name, nil, []key.Destination{m.TargetDestination})
 	if err != nil {
 		return err
 	}
-	return vcursor.MessageStream(rss, s.TableName, callback)
+	return vcursor.MessageStream(rss, m.TableName, callback)
 }
 
 // GetFields implements the Primitive interface
-func (s *MessageStream) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	panic("implement me")
+func (m *MStream) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "'GetFields' in MStream is not supported")
 }
 
-func (s *MessageStream) description() PrimitiveDescription {
+func (m *MStream) description() PrimitiveDescription {
 	return PrimitiveDescription{
-		OperatorType:      "MessageStream",
-		Keyspace:          s.Keyspace,
-		TargetDestination: s.TargetDestination,
+		OperatorType:      "MStream",
+		Keyspace:          m.Keyspace,
+		TargetDestination: m.TargetDestination,
 
-		Other: map[string]interface{}{"Table": s.TableName},
+		Other: map[string]interface{}{"Table": m.TableName},
 	}
 }
