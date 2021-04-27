@@ -460,11 +460,17 @@ func expectLogsAndUnsubscribe(t *testing.T, logs []LogExpectation, logCh chan in
 }
 
 func expectDBClientQueries(t *testing.T, queries []string) {
+	queriesWithDDLs := append(withDDL.DDLs(), queries...)
+	// Either 'queries' or 'queriesWithDDLs' must match globalDBQueries
 	t.Helper()
 	failed := false
-	for i, query := range queries {
+	for i, queryWithDDL := range queriesWithDDLs {
+		query := "N/A"
+		if i < len(queries) {
+			query = queries[i]
+		}
 		if failed {
-			t.Errorf("no query received, expecting %s", query)
+			t.Errorf("no query received, expecting %s or %s", query, queryWithDDL)
 			continue
 		}
 		var got string
@@ -477,21 +483,23 @@ func expectDBClientQueries(t *testing.T, queries []string) {
 				goto retry
 			}
 
-			var match bool
-			if query[0] == '/' {
-				result, err := regexp.MatchString(query[1:], got)
-				if err != nil {
-					panic(err)
+			matchQuery := func(q string) bool {
+				if q[0] == '/' {
+					result, err := regexp.MatchString(q[1:], got)
+					if err != nil {
+						panic(err)
+					}
+					return result
 				}
-				match = result
-			} else {
-				match = (got == query)
+				return (got == q)
 			}
+
+			match := matchQuery(query) || matchQuery(queryWithDDL)
 			if !match {
-				t.Errorf("query:\n%q, does not match query %d:\n%q", got, i, query)
+				t.Errorf("query:\n%q, does not match query %d:\n%q, or\n%q", got, i, query, queryWithDDL)
 			}
 		case <-time.After(5 * time.Second):
-			t.Errorf("no query received, expecting %s", query)
+			t.Errorf("no query received, expecting %s or %s", query, queryWithDDL)
 			failed = true
 		}
 	}
