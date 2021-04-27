@@ -86,7 +86,7 @@ The following PRs made changes to behaviors that clients might rely on. They sho
 * VTGate: [10.0] Squashed backport of #7903 #7927
 * VTGate: [10.0] Fix bug with reserved connections to stale tablets #7935
 * VTGate: [10.0] Fix for keyspaces_to_watch regression #7936
-* VTGate:  [10.0] Update healthy tablets correctly for primary down #7937
+* VTGate: [10.0] Update healthy tablets correctly for primary down #7937
 * VTGate: [10.0] Allow modification of tablet unhealthy_threshold via debugEnv #7938
 
 ### Testing 
@@ -197,8 +197,8 @@ Vitess 10.0 introduces a highly-experimental multi-cluster admin API and web UI,
 * VTAdmin: [vtadmin-api] Add /vtexplain endpoint #7528
 * VTAdmin: [vtadmin-api] Reorganize tablet-related functions into vtadmin/cluster/cluster.go #7553
 * VTAdmin: Three small bugfixes in Tablets table around stable sort order, display type lookup, and filtering by type #7568
-* VTAdmin:  [vtadmin] Add GetSchema endpoint #7596
-* VTAdmin:  [vtadmin/testutil] Add testutil helper to manage the complexity of recursively calling WithTestServer #7601
+* VTAdmin: [vtadmin] Add GetSchema endpoint #7596
+* VTAdmin: [vtadmin/testutil] Add testutil helper to manage the complexity of recursively calling WithTestServer #7601
 * VTAdmin: [vtadmin] Add FindSchema route #7610
 * VTAdmin: [vtadmin-web] Add simple /schema view with table definition #7615
 * VTAdmin: [vtadmin] vschemas api endpoints #7625
