@@ -358,7 +358,7 @@ func TestCreateVReplicationTables(t *testing.T) {
 func TestUpdateVReplicationPos(t *testing.T) {
 	gtid := mysql.MustParseGTID("MariaDB", "0-1-8283")
 	want := "update _vt.vreplication " +
-		"set pos='MariaDB/0-1-8283', time_updated=88822, message='' " +
+		"set pos='MariaDB/0-1-8283', time_updated=88822, rows_copied=0, message='' " +
 		"where id=78522"
 
 	got := GenerateUpdatePos(78522, mysql.Position{GTIDSet: gtid.GTIDSet()}, 88822, 0, 0)
