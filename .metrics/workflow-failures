@@ -9258,3 +9258,13 @@
 2021-04-27T13:45:49Z,unit_race,https://github.com/vitessio/vitess/actions/runs/789287450
 2021-04-27T13:51:19Z,Cluster (13),https://github.com/vitessio/vitess/actions/runs/789304270
 2021-04-27T13:51:19Z,local_example,https://github.com/vitessio/vitess/actions/runs/789304261
+2021-04-27T14:09:34Z,Cluster (13),https://github.com/vitessio/vitess/actions/runs/789358993
+2021-04-27T14:14:10Z,Cluster (17),https://github.com/vitessio/vitess/actions/runs/789373064
+2021-04-27T14:43:11Z,Cluster (12),https://github.com/vitessio/vitess/actions/runs/789464316
+2021-04-27T14:43:11Z,Cluster (onlineddl_vrepl_stress),https://github.com/vitessio/vitess/actions/runs/789464341
+2021-04-27T14:43:11Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/789464310
+2021-04-27T14:43:11Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/789464289
+2021-04-27T14:43:11Z,check_make_visitor,https://github.com/vitessio/vitess/actions/runs/789464340
+2021-04-27T14:43:31Z,Cluster (13),https://github.com/vitessio/vitess/actions/runs/789465335
+2021-04-27T14:43:31Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/789465292
+2021-04-27T14:43:31Z,local_example,https://github.com/vitessio/vitess/actions/runs/789465311
