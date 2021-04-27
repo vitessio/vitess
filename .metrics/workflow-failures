@@ -9113,6 +9113,8 @@
 2021-04-27T08:26:58Z,unit_race,https://github.com/vitessio/vitess/actions/runs/788413595
 2021-04-27T08:39:03Z,Cluster (21),https://github.com/vitessio/vitess/actions/runs/788447709
 2021-04-27T08:39:03Z,Cluster (tabletmanager_tablegc),https://github.com/vitessio/vitess/actions/runs/788447712
+2021-04-27T08:42:30Z,Cluster (13),https://github.com/vitessio/vitess/actions/runs/788457507
+2021-04-27T08:42:30Z,Cluster (onlineddl_revert),https://github.com/vitessio/vitess/actions/runs/788457497
 2021-04-27T08:42:30Z,Cluster (onlineddl_vrepl_stress),https://github.com/vitessio/vitess/actions/runs/788457518
 2021-04-27T08:42:30Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/788457485
 2021-04-27T08:42:30Z,Cluster (vreplication_cellalias),https://github.com/vitessio/vitess/actions/runs/788457508
@@ -9126,7 +9128,12 @@
 2021-04-27T08:42:30Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/788457477
 2021-04-27T08:42:30Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/788457505
 2021-04-27T08:42:30Z,unit_race,https://github.com/vitessio/vitess/actions/runs/788457468
+2021-04-27T09:08:33Z,Cluster (onlineddl_vrepl_stress),https://github.com/vitessio/vitess/actions/runs/788533085
+2021-04-27T09:08:33Z,Cluster (tabletmanager_tablegc),https://github.com/vitessio/vitess/actions/runs/788533047
+2021-04-27T09:08:33Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/788533052
+2021-04-27T09:08:33Z,Cluster (vreplication_cellalias),https://github.com/vitessio/vitess/actions/runs/788533082
 2021-04-27T09:08:33Z,Cluster (vreplication_migrate),https://github.com/vitessio/vitess/actions/runs/788533086
+2021-04-27T09:08:33Z,Cluster (vreplication_multicell),https://github.com/vitessio/vitess/actions/runs/788533071
 2021-04-27T09:08:33Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/788533050
 2021-04-27T09:08:33Z,Unit Test (mariadb101),https://github.com/vitessio/vitess/actions/runs/788533064
 2021-04-27T09:08:33Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/788533057
