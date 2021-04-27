@@ -456,11 +456,10 @@ load_statement:
 select_statement:
   base_select order_by_opt limit_opt lock_opt
   {
-    sel := $1.(*Select)
-    sel.OrderBy = $2
-    sel.Limit = $3
-    sel.Lock = $4
-    $$ = sel
+    $1.SetOrderBy($2)
+    $1.SetLimit($3)
+    $1.SetLock($4)
+    $$ = $1
   }
 | union_lhs union_op union_rhs order_by_opt limit_opt lock_opt
   {
