@@ -62,6 +62,7 @@ type comboTablet struct {
 	shard      string
 	tabletType topodatapb.TabletType
 	dbname     string
+	uid        uint32
 
 	// objects built at construction time
 	qsc tabletserver.Controller
@@ -126,6 +127,7 @@ func CreateTablet(ctx context.Context, ts *topo.Server, cell string, uid uint32,
 		shard:      shard,
 		tabletType: tabletType,
 		dbname:     dbname,
+		uid:        uid,
 
 		qsc: controller,
 		tm:  tm,
@@ -204,6 +206,16 @@ func DeleteKs(ctx context.Context, ts *topo.Server, ksName string, mysqld mysqlc
 		_, err = conn.ExecuteFetch(q, 1, false)
 		if err != nil {
 			return err
+		}
+	}
+
+	for key, tablet := range tabletMap {
+		if tablet.keyspace == ksName {
+			log.Info("shutting down tablet since database was deleted")
+			delete(tabletMap, key)
+
+			tablet.tm.Stop()
+			tablet.tm.Close()
 		}
 	}
 
