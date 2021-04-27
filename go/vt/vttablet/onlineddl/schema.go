@@ -296,6 +296,7 @@ const (
 	sqlCreateTableLike   = "CREATE TABLE `%a` LIKE `%a`"
 	sqlDropTable         = "DROP TABLE `%a`"
 	sqlAlterTableOptions = "ALTER TABLE `%a` %s"
+	sqlAnalyzeTable      = "ANALYZE LOCAL TABLE %a"
 	sqlShowColumnsFrom   = "SHOW COLUMNS FROM `%a`"
 	sqlStartVReplStream  = "UPDATE _vt.vreplication set state='Running' where db_name=%a and workflow=%a"
 	sqlStopVReplStream   = "UPDATE _vt.vreplication set state='Stopped' where db_name=%a and workflow=%a"

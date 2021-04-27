@@ -94,7 +94,6 @@ func NewVRepl(workflow, keyspace, shard, dbName, sourceTable, targetTable, alter
 // getCandidateUniqueKeys investigates a table and returns the list of unique keys
 // candidate for chunking
 func (v *VRepl) getCandidateUniqueKeys(ctx context.Context, conn *dbconnpool.DBConnection, tableName string) (uniqueKeys [](*vrepl.UniqueKey), err error) {
-
 	query, err := sqlparser.ParseAndBind(sqlShowColumnsFrom,
 		sqltypes.StringBindVariable(v.dbName),
 		sqltypes.StringBindVariable(tableName),
@@ -253,6 +252,15 @@ func (v *VRepl) analyzeAlter(ctx context.Context) error {
 }
 
 func (v *VRepl) analyzeTables(ctx context.Context, conn *dbconnpool.DBConnection) error {
+	{
+		// By ANALYZE [LOCAL] TABLE we refresh MySQL's table_rows estimate, which the streamer's engine
+		// will soon query for in information_schema.
+		parsed := sqlparser.BuildParsedQuery(sqlAnalyzeTable, v.sourceTable)
+		if _, err := conn.ExecuteFetch(parsed.Query, math.MaxInt64, true); err != nil {
+			return err
+		}
+	}
+
 	// columns:
 	sourceColumns, sourceVirtualColumns, sourcePKColumns, err := v.readTableColumns(ctx, conn, v.sourceTable)
 	if err != nil {
