@@ -199,17 +199,17 @@ Vitess 10.0 introduces a highly-experimental multi-cluster admin API and web UI,
 * VTAdmin: Three small bugfixes in Tablets table around stable sort order, display type lookup, and filtering by type #7568
 * VTAdmin:  [vtadmin] Add GetSchema endpoint #7596
 * VTAdmin:  [vtadmin/testutil] Add testutil helper to manage the complexity of recursively calling WithTestServer #7601
-* VTAdmin:  [vtadmin] Add FindSchema route #7610
-* [vtadmin-web] Add simple /schema view with table definition #7615
+* VTAdmin: [vtadmin] Add FindSchema route #7610
+* VTAdmin: [vtadmin-web] Add simple /schema view with table definition #7615
 * VTAdmin: [vtadmin] vschemas api endpoints #7625
 * VTAdmin: [vtadmin] Add support for additional service healthchecks in grpcserver #7635
-* VTAdmin:  [vtadmin] test refactors #7641
+* VTAdmin: [vtadmin] test refactors #7641
 * VTAdmin: [vtadmin] propagate error contexts #7642
 * VTAdmin: [vtadmin] tracing refactor #7649
 * VTAdmin: [vtadmin] GetWorkflow(s) endpoints #7662
 * VTAdmin: [vitessdriver|vtadmin] Support Ping in vitessdriver, use in vtadmin to healthcheck connections during Dial #7709
 * VTAdmin: [vtadmin]  Add to local example #7699
-* VTAdmin vtexplain lock #7724
+* VTAdmin: [vtexplain] lock #7724
 * VTAdmin: [vtadmin] Aggregate schema sizes #7751
 * VTAdmin: [vtadmin-web] Add comments + 'options' parameter to API hooks #7754
 * VTAdmin: [vtadmin-web] Add common max-width to infrastructure table views #7760
