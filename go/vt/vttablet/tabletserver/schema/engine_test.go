@@ -183,6 +183,7 @@ func TestOpenAndReload(t *testing.T) {
 		PKColumns:     []int{0, 1},
 		FileSize:      128,
 		AllocatedSize: 256,
+		TableRows:     17,
 	}
 	want["test_table_04"] = &Table{
 		Name: sqlparser.NewTableIdent("test_table_04"),
@@ -193,6 +194,7 @@ func TestOpenAndReload(t *testing.T) {
 		PKColumns:     []int{0},
 		FileSize:      100,
 		AllocatedSize: 150,
+		TableRows:     17,
 	}
 	delete(want, "msg")
 	assert.Equal(t, want, se.GetSchema())
