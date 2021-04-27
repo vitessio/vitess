@@ -30,11 +30,9 @@ func TestStreamResults(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
-	oldPacketSize := *PacketSize
-	defer func() {
-		*PacketSize = oldPacketSize
-	}()
-	*PacketSize = 1
+
+	reset := AdjustPacketSize(1)
+	defer reset()
 	engine.resultStreamerNumPackets.Reset()
 	engine.resultStreamerNumRows.Reset()
 

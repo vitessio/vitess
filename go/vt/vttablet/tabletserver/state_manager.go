@@ -122,7 +122,7 @@ type stateManager struct {
 	checkMySQLThrottler *sync2.Semaphore
 
 	timebombDuration      time.Duration
-	unhealthyThreshold    time.Duration
+	unhealthyThreshold    sync2.AtomicDuration
 	shutdownGracePeriod   time.Duration
 	transitionGracePeriod time.Duration
 }
@@ -187,7 +187,7 @@ func (sm *stateManager) Init(env tabletenv.Env, target querypb.Target) {
 	sm.checkMySQLThrottler = sync2.NewSemaphore(1, 0)
 	sm.timebombDuration = env.Config().OltpReadPool.TimeoutSeconds.Get() * 10
 	sm.hcticks = timer.NewTimer(env.Config().Healthcheck.IntervalSeconds.Get())
-	sm.unhealthyThreshold = env.Config().Healthcheck.UnhealthyThresholdSeconds.Get()
+	sm.unhealthyThreshold = sync2.NewAtomicDuration(env.Config().Healthcheck.UnhealthyThresholdSeconds.Get())
 	sm.shutdownGracePeriod = env.Config().GracePeriods.ShutdownSeconds.Get()
 	sm.transitionGracePeriod = env.Config().GracePeriods.TransitionSeconds.Get()
 }
@@ -348,36 +348,19 @@ func (sm *stateManager) StartRequest(ctx context.Context, target *querypb.Target
 
 	if sm.state != StateServing || !sm.replHealthy {
 		// This specific error string needs to be returned for vtgate buffering to work.
-		return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "operation not allowed in state NOT_SERVING")
+		return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.NotServing)
 	}
 
 	shuttingDown := sm.wantState != StateServing
 	if shuttingDown && !allowOnShutdown {
 		// This specific error string needs to be returned for vtgate buffering to work.
-		return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "operation not allowed in state SHUTTING_DOWN")
+		return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.ShuttingDown)
 	}
 
-	if target != nil {
-		switch {
-		case target.Keyspace != sm.target.Keyspace:
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid keyspace %v does not match expected %v", target.Keyspace, sm.target.Keyspace)
-		case target.Shard != sm.target.Shard:
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid shard %v does not match expected %v", target.Shard, sm.target.Shard)
-		case target.TabletType != sm.target.TabletType:
-			for _, otherType := range sm.alsoAllow {
-				if target.TabletType == otherType {
-					goto ok
-				}
-			}
-			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "invalid tablet type: %v, want: %v or %v", target.TabletType, sm.target.TabletType, sm.alsoAllow)
-		}
-	} else {
-		if !tabletenv.IsLocalContext(ctx) {
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "No target")
-		}
+	err = sm.verifyTargetLocked(ctx, target)
+	if err != nil {
+		return err
 	}
-
-ok:
 	sm.requests.Add(1)
 	return nil
 }
@@ -392,6 +375,10 @@ func (sm *stateManager) EndRequest() {
 func (sm *stateManager) VerifyTarget(ctx context.Context, target *querypb.Target) error {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
+	return sm.verifyTargetLocked(ctx, target)
+}
+
+func (sm *stateManager) verifyTargetLocked(ctx context.Context, target *querypb.Target) error {
 	if target != nil {
 		switch {
 		case target.Keyspace != sm.target.Keyspace:
@@ -404,7 +391,7 @@ func (sm *stateManager) VerifyTarget(ctx context.Context, target *querypb.Target
 					return nil
 				}
 			}
-			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "invalid tablet type: %v, want: %v or %v", target.TabletType, sm.target.TabletType, sm.alsoAllow)
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%s: %v, want: %v or %v", vterrors.WrongTablet, sm.target.TabletType, sm.target.TabletType, sm.alsoAllow)
 		}
 	} else {
 		if !tabletenv.IsLocalContext(ctx) {
@@ -640,7 +627,7 @@ func (sm *stateManager) refreshReplHealthLocked() (time.Duration, error) {
 		}
 		sm.replHealthy = false
 	} else {
-		if lag > sm.unhealthyThreshold {
+		if lag > sm.unhealthyThreshold.Get() {
 			if sm.replHealthy {
 				log.Infof("Going unhealthy due to high replication lag: %v", lag)
 			}
@@ -767,4 +754,8 @@ func (sm *stateManager) IsServingString() string {
 		return "SERVING"
 	}
 	return "NOT_SERVING"
+}
+
+func (sm *stateManager) SetUnhealthyThreshold(v time.Duration) {
+	sm.unhealthyThreshold.Set(v)
 }
