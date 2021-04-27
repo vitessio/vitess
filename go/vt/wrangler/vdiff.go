@@ -17,18 +17,13 @@ limitations under the License.
 package wrangler
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"math"
 	"strings"
 	"sync"
 	"time"
-
-	"vitess.io/vitess/go/vt/log"
-
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
-
-	"context"
 
 	"github.com/golang/protobuf/proto"
 
@@ -38,17 +33,21 @@ import (
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/key"
+	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vtctl/workflow"
+	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+	"vitess.io/vitess/go/vt/vttablet/tabletconn"
+	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
+
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/topo/topoproto"
-	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/engine"
-	"vitess.io/vitess/go/vt/vttablet/tabletconn"
-	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 )
 
 // DiffReport is the summary of differences for one table.
@@ -118,10 +117,10 @@ type shardStreamer struct {
 }
 
 // VDiff reports differences between the sources and targets of a vreplication workflow.
-func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflow, sourceCell, targetCell, tabletTypesStr string,
+func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflowName, sourceCell, targetCell, tabletTypesStr string,
 	filteredReplicationWaitTime time.Duration, format string, maxRows int64, tables string) (map[string]*DiffReport, error) {
 	log.Infof("Starting VDiff for %s.%s, sourceCell %s, targetCell %s, tabletTypes %s, timeout %s",
-		targetKeyspace, workflow, sourceCell, targetCell, tabletTypesStr, filteredReplicationWaitTime.String())
+		targetKeyspace, workflowName, sourceCell, targetCell, tabletTypesStr, filteredReplicationWaitTime.String())
 	// Assign defaults to sourceCell and targetCell if not specified.
 	if sourceCell == "" && targetCell == "" {
 		cells, err := wr.ts.GetCellInfoNames(ctx)
@@ -143,7 +142,7 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflow, sourceC
 	}
 
 	// Reuse migrater code to fetch and validate initial metadata about the workflow.
-	ts, err := wr.buildTrafficSwitcher(ctx, targetKeyspace, workflow)
+	ts, err := wr.buildTrafficSwitcher(ctx, targetKeyspace, workflowName)
 	if err != nil {
 		wr.Logger().Errorf("buildTrafficSwitcher: %v", err)
 		return nil, err
@@ -165,28 +164,28 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflow, sourceC
 		tabletTypesStr: tabletTypesStr,
 		sources:        make(map[string]*shardStreamer),
 		targets:        make(map[string]*shardStreamer),
-		workflow:       workflow,
+		workflow:       workflowName,
 		targetKeyspace: targetKeyspace,
 		tables:         includeTables,
 	}
 	for shard, source := range ts.sources {
 		df.sources[shard] = &shardStreamer{
-			master: source.master,
+			master: source.GetPrimary(),
 		}
 	}
-	var oneTarget *tsTarget
+	var oneTarget *workflow.MigrationTarget
 	for shard, target := range ts.targets {
 		df.targets[shard] = &shardStreamer{
-			master: target.master,
+			master: target.GetPrimary(),
 		}
 		oneTarget = target
 	}
 	var oneFilter *binlogdatapb.Filter
-	for _, bls := range oneTarget.sources {
+	for _, bls := range oneTarget.Sources {
 		oneFilter = bls.Filter
 		break
 	}
-	schm, err := wr.GetSchema(ctx, oneTarget.master.Alias, nil, nil, false)
+	schm, err := wr.GetSchema(ctx, oneTarget.GetPrimary().Alias, nil, nil, false)
 	if err != nil {
 		return nil, vterrors.Wrap(err, "GetSchema")
 	}
@@ -199,7 +198,7 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflow, sourceC
 	}
 	defer func(ctx context.Context) {
 		if err := df.restartTargets(ctx); err != nil {
-			wr.Logger().Errorf("Could not restart workflow %s: %v, please restart it manually", workflow, err)
+			wr.Logger().Errorf("Could not restart workflow %s: %v, please restart it manually", workflowName, err)
 		}
 	}(ctx)
 
@@ -690,15 +689,15 @@ func (df *vdiff) streamOne(ctx context.Context, keyspace, shard string, particip
 func (df *vdiff) syncTargets(ctx context.Context, filteredReplicationWaitTime time.Duration) error {
 	waitCtx, cancel := context.WithTimeout(ctx, filteredReplicationWaitTime)
 	defer cancel()
-	err := df.ts.forAllUids(func(target *tsTarget, uid uint32) error {
-		bls := target.sources[uid]
+	err := df.ts.forAllUids(func(target *workflow.MigrationTarget, uid uint32) error {
+		bls := target.Sources[uid]
 		pos := df.sources[bls.Shard].snapshotPosition
 		query := fmt.Sprintf("update _vt.vreplication set state='Running', stop_pos='%s', message='synchronizing for vdiff' where id=%d", pos, uid)
-		if _, err := df.ts.wr.tmc.VReplicationExec(ctx, target.master.Tablet, query); err != nil {
+		if _, err := df.ts.wr.tmc.VReplicationExec(ctx, target.GetPrimary().Tablet, query); err != nil {
 			return err
 		}
-		if err := df.ts.wr.tmc.VReplicationWaitForPos(waitCtx, target.master.Tablet, int(uid), pos); err != nil {
-			return vterrors.Wrapf(err, "VReplicationWaitForPos for tablet %v", topoproto.TabletAliasString(target.master.Tablet.Alias))
+		if err := df.ts.wr.tmc.VReplicationWaitForPos(waitCtx, target.GetPrimary().Tablet, int(uid), pos); err != nil {
+			return vterrors.Wrapf(err, "VReplicationWaitForPos for tablet %v", topoproto.TabletAliasString(target.GetPrimary().Tablet.Alias))
 		}
 		return nil
 	})
