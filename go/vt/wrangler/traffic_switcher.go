@@ -1788,27 +1788,11 @@ func (ts *trafficSwitcher) deleteRoutingRules(ctx context.Context) error {
 }
 
 func (wr *Wrangler) getRoutingRules(ctx context.Context) (map[string][]string, error) {
-	rrs, err := wr.ts.GetRoutingRules(ctx)
-	if err != nil {
-		return nil, err
-	}
-	rules := make(map[string][]string, len(rrs.Rules))
-	for _, rr := range rrs.Rules {
-		rules[rr.FromTable] = rr.ToTables
-	}
-	return rules, nil
+	return topotools.GetRoutingRules(ctx, wr.ts)
 }
 
 func (wr *Wrangler) saveRoutingRules(ctx context.Context, rules map[string][]string) error {
-	log.Infof("Saving routing rules %v\n", rules)
-	rrs := &vschemapb.RoutingRules{Rules: make([]*vschemapb.RoutingRule, 0, len(rules))}
-	for from, to := range rules {
-		rrs.Rules = append(rrs.Rules, &vschemapb.RoutingRule{
-			FromTable: from,
-			ToTables:  to,
-		})
-	}
-	return wr.ts.SaveRoutingRules(ctx, rrs)
+	return topotools.SaveRoutingRules(ctx, wr.ts, rules)
 }
 
 func reverseName(workflow string) string {
