@@ -9238,3 +9238,10 @@
 2021-04-27T12:58:24Z,Cluster (vreplication_multicell),https://github.com/vitessio/vitess/actions/runs/789146652
 2021-04-27T13:13:13Z,Cluster (tabletmanager_tablegc),https://github.com/vitessio/vitess/actions/runs/789189617
 2021-04-27T13:19:40Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/789209278
+2021-04-27T13:45:49Z,Cluster (onlineddl_vrepl_stress),https://github.com/vitessio/vitess/actions/runs/789287404
+2021-04-27T13:45:49Z,Cluster (vreplication_migrate),https://github.com/vitessio/vitess/actions/runs/789287424
+2021-04-27T13:45:49Z,Cluster (vreplication_multicell),https://github.com/vitessio/vitess/actions/runs/789287409
+2021-04-27T13:45:49Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/789287422
+2021-04-27T13:45:49Z,Unit Test (mariadb101),https://github.com/vitessio/vitess/actions/runs/789287399
+2021-04-27T13:45:49Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/789287413
+2021-04-27T13:51:19Z,local_example,https://github.com/vitessio/vitess/actions/runs/789304261
