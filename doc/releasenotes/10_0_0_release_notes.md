@@ -197,8 +197,8 @@ Vitess 10.0 introduces a highly-experimental multi-cluster admin API and web UI,
 * VTAdmin: [vtadmin-api] Add /vtexplain endpoint #7528
 * VTAdmin: [vtadmin-api] Reorganize tablet-related functions into vtadmin/cluster/cluster.go #7553
 * VTAdmin: Three small bugfixes in Tablets table around stable sort order, display type lookup, and filtering by type #7568
-*VTAdmin:  [vtadmin] Add GetSchema endpoint #7596
-*VTAdmin:  [vtadmin/testutil] Add testutil helper to manage the complexity of recursively calling WithTestServer #7601
+* VTAdmin:  [vtadmin] Add GetSchema endpoint #7596
+* VTAdmin:  [vtadmin/testutil] Add testutil helper to manage the complexity of recursively calling WithTestServer #7601
 * VTAdmin:  [vtadmin] Add FindSchema route #7610
 * [vtadmin-web] Add simple /schema view with table definition #7615
 * VTAdmin: [vtadmin] vschemas api endpoints #7625
