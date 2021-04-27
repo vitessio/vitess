@@ -9159,6 +9159,7 @@
 2021-04-27T09:47:12Z,e2e_race,https://github.com/vitessio/vitess/actions/runs/788641556
 2021-04-27T09:47:12Z,unit_race,https://github.com/vitessio/vitess/actions/runs/788641532
 2021-04-27T09:49:36Z,Cluster (17),https://github.com/vitessio/vitess/actions/runs/788647815
+2021-04-27T09:49:36Z,Cluster (onlineddl_revert),https://github.com/vitessio/vitess/actions/runs/788647839
 2021-04-27T09:49:36Z,Cluster (onlineddl_vrepl_stress),https://github.com/vitessio/vitess/actions/runs/788647819
 2021-04-27T09:49:36Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/788647867
 2021-04-27T09:49:36Z,Cluster (vreplication_cellalias),https://github.com/vitessio/vitess/actions/runs/788647838
@@ -9172,8 +9173,12 @@
 2021-04-27T09:49:36Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/788647856
 2021-04-27T09:49:36Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/788647874
 2021-04-27T09:49:36Z,unit_race,https://github.com/vitessio/vitess/actions/runs/788647854
+2021-04-27T09:50:50Z,Cluster (onlineddl_revert),https://github.com/vitessio/vitess/actions/runs/788651337
+2021-04-27T09:50:50Z,Cluster (onlineddl_vrepl_stress),https://github.com/vitessio/vitess/actions/runs/788651342
+2021-04-27T09:50:50Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/788651363
 2021-04-27T09:50:50Z,Cluster (vreplication_cellalias),https://github.com/vitessio/vitess/actions/runs/788651319
 2021-04-27T09:50:50Z,Cluster (vreplication_migrate),https://github.com/vitessio/vitess/actions/runs/788651343
+2021-04-27T09:50:50Z,Cluster (vreplication_multicell),https://github.com/vitessio/vitess/actions/runs/788651350
 2021-04-27T09:50:50Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/788651320
 2021-04-27T09:50:50Z,Unit Test (mariadb101),https://github.com/vitessio/vitess/actions/runs/788651341
 2021-04-27T09:50:50Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/788651369
@@ -9182,4 +9187,20 @@
 2021-04-27T09:50:50Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/788651340
 2021-04-27T09:50:50Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/788651328
 2021-04-27T09:50:50Z,unit_race,https://github.com/vitessio/vitess/actions/runs/788651351
+2021-04-27T09:53:44Z,Cluster (onlineddl_revert),https://github.com/vitessio/vitess/actions/runs/788659095
+2021-04-27T09:53:44Z,Cluster (onlineddl_vrepl_stress),https://github.com/vitessio/vitess/actions/runs/788659094
+2021-04-27T09:53:44Z,Cluster (tabletmanager_tablegc),https://github.com/vitessio/vitess/actions/runs/788659089
+2021-04-27T09:53:44Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/788659123
+2021-04-27T09:53:44Z,Cluster (vreplication_cellalias),https://github.com/vitessio/vitess/actions/runs/788659098
+2021-04-27T09:53:44Z,Cluster (vreplication_migrate),https://github.com/vitessio/vitess/actions/runs/788659096
+2021-04-27T09:53:44Z,Cluster (vreplication_multicell),https://github.com/vitessio/vitess/actions/runs/788659091
+2021-04-27T09:53:44Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/788659136
 2021-04-27T09:53:44Z,Unit Test (mariadb101),https://github.com/vitessio/vitess/actions/runs/788659108
+2021-04-27T09:53:44Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/788659132
+2021-04-27T09:53:44Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/788659134
+2021-04-27T09:53:44Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/788659097
+2021-04-27T09:53:44Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/788659109
+2021-04-27T09:53:44Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/788659117
+2021-04-27T09:53:44Z,unit_race,https://github.com/vitessio/vitess/actions/runs/788659111
+2021-04-27T10:18:00Z,endtoend,https://github.com/vitessio/vitess/actions/runs/788726009
+2021-04-27T10:18:32Z,check_make_sizegen,https://github.com/vitessio/vitess/actions/runs/788727392
