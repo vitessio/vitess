@@ -20,6 +20,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -63,6 +64,9 @@ var (
 	// striping mode
 	xtrabackupStripes         = flag.Uint("xtrabackup_stripes", 0, "If greater than 0, use data striping across this many destination files to parallelize data transfer and decompression")
 	xtrabackupStripeBlockSize = flag.Uint("xtrabackup_stripe_block_size", 102400, "Size in bytes of each block that gets sent to a given stripe before rotating to the next stripe")
+	// use and external command to decompress the backups
+	decompressMethod     = flag.String("decompress_method", "builtin", "what decompressor to use [builtin|external]")
+	externalDecompressor = flag.String("external_decompressor", "", "command with arguments to which decompressor to run")
 )
 
 const (
@@ -521,17 +525,74 @@ func (be *XtrabackupEngine) extractFiles(ctx context.Context, logger logutil.Log
 		}
 	}()
 
+	var (
+		decompressorCmd *exec.Cmd
+		decompressorWg  sync.WaitGroup
+	)
 	srcReaders := []io.Reader{}
 	srcDecompressors := []io.ReadCloser{}
+
 	for _, file := range srcFiles {
 		reader := io.Reader(file)
 
 		// Create the decompressor if needed.
 		if compressed {
-			decompressor, err := pgzip.NewReader(reader)
-			if err != nil {
-				return vterrors.Wrap(err, "can't create gzip decompressor")
+			var decompressor io.ReadCloser
+
+			switch *decompressMethod {
+			case "builtin":
+				logger.Infof("Using built-in decompressor")
+
+				decompressor, err = pgzip.NewReader(reader)
+				if err != nil {
+					return vterrors.Wrap(err, "can't create gzip decompressor")
+				}
+			case "external":
+				decompressorFlags := strings.Split(*externalDecompressor, " ")
+				if len(decompressorFlags) < 1 {
+					return vterrors.Wrap(err, "external_decompressor is empty")
+				}
+
+				decompressorCmdPath, err := validateExternalDecompressor(decompressorFlags[0])
+				if err != nil {
+					return vterrors.Wrap(err, "could not validate external decompressor")
+				}
+
+				decompressorCmd = exec.CommandContext(ctx, decompressorCmdPath, decompressorFlags[1:]...)
+				decompressorCmd.Stdin = reader
+
+				logger.Infof("Decompressing using %v", decompressorFlags)
+
+				decompressorOut, err := decompressorCmd.StdoutPipe()
+				if err != nil {
+					return vterrors.Wrap(err, "cannot create external decompressor stdout pipe")
+				}
+
+				decompressorErr, err := decompressorCmd.StderrPipe()
+				if err != nil {
+					return vterrors.Wrap(err, "cannot create external decompressor stderr pipe")
+				}
+
+				if err := decompressorCmd.Start(); err != nil {
+					return vterrors.Wrap(err, "can't start external decompressor")
+				}
+
+				decompressorWg.Add(1)
+				go scanLinesToLogger("decompressor stderr", decompressorErr, logger, decompressorWg.Done)
+
+				decompressor = decompressorOut
+
+				defer func() {
+					decompressorWg.Wait()
+					// log the exit status
+					if err := decompressorCmd.Wait(); err != nil {
+						vterrors.Wrap(err, "external decompressor failed")
+					}
+				}()
+			default:
+				return vterrors.Wrap(err, "unknown decompressor method")
 			}
+
 			srcDecompressors = append(srcDecompressors, decompressor)
 			reader = decompressor
 		}
@@ -822,6 +883,15 @@ func stripeReader(readers []io.Reader, blockSize int64) io.Reader {
 // xtrabackup can run while tablet is serving, hence false
 func (be *XtrabackupEngine) ShouldDrainForBackup() bool {
 	return false
+}
+
+// Validates if the external decompressor exists and return its path.
+func validateExternalDecompressor(cmd string) (string, error) {
+	if cmd == "" {
+		return "", errors.New("external compressor command is empty")
+	}
+
+	return exec.LookPath(cmd)
 }
 
 func init() {
