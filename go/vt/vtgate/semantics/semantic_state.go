@@ -29,8 +29,9 @@ import (
 type (
 	// TableInfo contains the alias table expr and vindex table
 	TableInfo struct {
-		ASTNode *sqlparser.AliasedTableExpr
-		Table   *vindexes.Table
+		dbName, tableName string
+		ASTNode           *sqlparser.AliasedTableExpr
+		Table             *vindexes.Table
 	}
 
 	// TableSet is how a set of tables is expressed.
@@ -46,7 +47,7 @@ type (
 
 	scope struct {
 		parent *scope
-		tables map[string]*TableInfo
+		tables []*TableInfo
 	}
 
 	// SchemaInformation is used tp provide table information from Vschema.
@@ -100,27 +101,20 @@ func (st *SemTable) Dependencies(expr sqlparser.Expr) TableSet {
 }
 
 func newScope(parent *scope) *scope {
-	return &scope{tables: map[string]*TableInfo{}, parent: parent}
+	return &scope{parent: parent}
 }
 
-func (s *scope) addTable(name string, table *TableInfo) error {
-	_, found := s.tables[name]
-	if found {
-		return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.NonUniqTable, "Not unique table/alias: '%s'", name)
+func (s *scope) addTable(table *TableInfo) error {
+	for _, scopeTable := range s.tables {
+		b := scopeTable.tableName == table.tableName
+		b2 := scopeTable.dbName == table.dbName
+		if b && b2 {
+			return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.NonUniqTable, "Not unique table/alias: '%s'", table.tableName)
+		}
 	}
-	s.tables[name] = table
+
+	s.tables = append(s.tables, table)
 	return nil
-}
-
-// Analyse analyzes the parsed query.
-func Analyse(statement sqlparser.Statement, si SchemaInformation) (*SemTable, error) {
-	analyzer := newAnalyzer(si)
-	// Initial scope
-	err := analyzer.analyze(statement)
-	if err != nil {
-		return nil, err
-	}
-	return &SemTable{exprDependencies: analyzer.exprDeps, Tables: analyzer.Tables}, nil
 }
 
 // IsOverlapping returns true if at least one table exists in both sets

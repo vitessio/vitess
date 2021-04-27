@@ -966,6 +966,7 @@ Gen4 plan same as above
     "Vindex": "user_index"
   }
 }
+Gen4 plan same as above
 
 # LIMIT
 "select col1 from user where id = 1 limit 1"
