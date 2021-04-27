@@ -357,7 +357,7 @@ message MinimalTable {
     repeated query.Field fields = 2;
     repeated int64 p_k_columns = 3;
     int64 tableRows = 4;
-  }
+}
 
 message MinimalSchema {
     repeated MinimalTable tables = 1;
