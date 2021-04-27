@@ -150,13 +150,13 @@ var (
 		}, {
 			input: "select /* union parenthesized select 2 */ 1 from t union (select 1 from t)",
 		}, {
+			input: "with test as (select 1 from dual), test_two as (select 2 from dual) select * from test, test_two union all (with b as (with c as (select 1, 2 from dual) select * from c) select * from b)",
+		}, {
 			input:  "select /* union order by */ 1 from t union select 1 from t order by a",
 			output: "select /* union order by */ 1 from t union select 1 from t order by a asc",
 		}, {
 			input:  "select /* union order by limit lock */ 1 from t union select 1 from t order by a limit 1 for update",
 			output: "select /* union order by limit lock */ 1 from t union select 1 from t order by a asc limit 1 for update",
-		}, {
-			input: "select /* union with limit on lhs */ 1 from t limit 1 union select 1 from t",
 		}, {
 			input:  "(select id, a from t order by id limit 1) union (select id, b as a from s order by id limit 1) order by a limit 1",
 			output: "(select id, a from t order by id asc limit 1) union (select id, b as a from s order by id asc limit 1) order by a asc limit 1",
@@ -2325,6 +2325,12 @@ func TestInvalid(t *testing.T) {
 		err:   "Every derived table must have its own alias",
 	}, {
 		input: "select a, b from (select * from tbl) sort by a",
+		err:   "syntax error",
+	}, {
+		input: "with test as (select 1), test_two as (select 2) select * from test, test_two union all with b as (select 1, 2) select * from b",
+		err:   "syntax error",
+	}, {
+		input: "select * from test order by a union select * from test",
 		err:   "syntax error",
 	}}
 
