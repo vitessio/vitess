@@ -373,5 +373,5 @@ func (vse *Engine) setWatch() {
 }
 
 func getPacketSize() int64 {
-	return int64(*PacketSize)
+	return int64(*defaultPacketSize)
 }

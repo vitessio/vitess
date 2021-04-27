@@ -132,8 +132,8 @@ func NewTabletGateway(ctx context.Context, hc discovery.HealthCheck, serv srvtop
 }
 
 // QueryServiceByAlias satisfies the Gateway interface
-func (gw *TabletGateway) QueryServiceByAlias(alias *topodatapb.TabletAlias) (queryservice.QueryService, error) {
-	return gw.hc.TabletConnection(alias)
+func (gw *TabletGateway) QueryServiceByAlias(alias *topodatapb.TabletAlias, target *querypb.Target) (queryservice.QueryService, error) {
+	return gw.hc.TabletConnection(alias, target)
 }
 
 // RegisterStats registers the stats to export the lag since the last refresh
