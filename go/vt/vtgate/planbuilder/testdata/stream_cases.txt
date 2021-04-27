@@ -4,7 +4,7 @@
   "QueryType": "STREAM",
   "Original": "stream * from music",
   "Instructions": {
-    "OperatorType": "MessageStream",
+    "OperatorType": "MStream",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
