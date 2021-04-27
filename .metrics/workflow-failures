@@ -9288,4 +9288,5 @@
 2021-04-27T15:03:07Z,cluster_initial_sharding_multi,https://github.com/vitessio/vitess/actions/runs/789526727
 2021-04-27T15:03:07Z,unit_race,https://github.com/vitessio/vitess/actions/runs/789526713
 2021-04-27T15:22:44Z,Cluster (17),https://github.com/vitessio/vitess/actions/runs/789589146
+2021-04-27T15:46:33Z,Cluster (vreplication_cellalias),https://github.com/vitessio/vitess/actions/runs/789660449
 2021-04-27T15:46:33Z,unit_race,https://github.com/vitessio/vitess/actions/runs/789660425
