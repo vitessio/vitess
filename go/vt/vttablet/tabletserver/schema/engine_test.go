@@ -414,6 +414,7 @@ func initialSchema() map[string]*Table {
 			PKColumns:     []int{0},
 			FileSize:      0x64,
 			AllocatedSize: 0x96,
+			TableRows:     17,
 		},
 		"test_table_02": {
 			Name: sqlparser.NewTableIdent("test_table_02"),
@@ -424,6 +425,7 @@ func initialSchema() map[string]*Table {
 			PKColumns:     []int{0},
 			FileSize:      0x64,
 			AllocatedSize: 0x96,
+			TableRows:     17,
 		},
 		"test_table_03": {
 			Name: sqlparser.NewTableIdent("test_table_03"),
@@ -434,6 +436,7 @@ func initialSchema() map[string]*Table {
 			PKColumns:     []int{0},
 			FileSize:      0x64,
 			AllocatedSize: 0x96,
+			TableRows:     17,
 		},
 		"seq": {
 			Name: sqlparser.NewTableIdent("seq"),
