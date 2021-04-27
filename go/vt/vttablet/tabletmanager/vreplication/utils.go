@@ -26,7 +26,8 @@ import (
 )
 
 const (
-	createVReplicationLog = `CREATE TABLE IF NOT EXISTS _vt.vreplication_log (
+	vreplicationLogTableName = "_vt.vreplication_log"
+	createVReplicationLog    = `CREATE TABLE IF NOT EXISTS _vt.vreplication_log (
 		id BIGINT(20) AUTO_INCREMENT,
 		vrepl_id INT NOT NULL,
 		type VARBINARY(256) NOT NULL,
