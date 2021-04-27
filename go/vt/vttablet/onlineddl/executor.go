@@ -105,7 +105,7 @@ var ghostOverridePath = flag.String("gh-ost-path", "", "override default gh-ost 
 var ptOSCOverridePath = flag.String("pt-osc-path", "", "override default pt-online-schema-change binary full path")
 var migrationCheckInterval = flag.Duration("migration_check_interval", 1*time.Minute, "Interval between migration checks")
 var retainOnlineDDLTables = flag.Duration("retain_online_ddl_tables", 24*time.Hour, "How long should vttablet keep an old migrated table before purging it")
-var migrationNextCheckIntervals = []time.Duration{1 * time.Second, 5 * time.Second}
+var migrationNextCheckIntervals = []time.Duration{1 * time.Second, 5 * time.Second, 10 * time.Second, 20 * time.Second}
 
 const (
 	maxPasswordLength             = 32 // MySQL's *replication* password may not exceed 32 characters
@@ -1635,12 +1635,12 @@ func (e *Executor) evaluateDeclarativeDiff(ctx context.Context, onlineDDL *schem
 // - what's the migration strategy?
 // The function invokes the appropriate handlers for each of those cases.
 func (e *Executor) executeMigration(ctx context.Context, onlineDDL *schema.OnlineDDL) error {
+	defer e.triggerNextCheckInterval()
 	failMigration := func(err error) error {
 		_ = e.updateMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusFailed)
 		if err != nil {
 			_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, err.Error())
 		}
-		e.triggerNextCheckInterval()
 		return err
 	}
 
