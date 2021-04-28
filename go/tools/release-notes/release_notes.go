@@ -388,7 +388,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	_, err = out.WriteString(fmt.Sprintf("Thanks to all our contributors: %s\n", strings.Join(authors, ", ")))
+	_, err = out.WriteString(fmt.Sprintf("Thanks to all our contributors: @%s\n", strings.Join(authors, ", @")))
 	if err != nil {
 		log.Fatal(err)
 	}
