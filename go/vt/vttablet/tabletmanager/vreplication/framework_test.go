@@ -484,18 +484,17 @@ func expectDBClientQueries(t *testing.T, queries []string) {
 				}
 			}
 
-			matchQuery := func() bool {
-				if query[0] == '/' {
-					result, err := regexp.MatchString(query[1:], got)
-					if err != nil {
-						panic(err)
-					}
-					return result
+			var match bool
+			if query[0] == '/' {
+				result, err := regexp.MatchString(query[1:], got)
+				if err != nil {
+					panic(err)
 				}
-				return (got == query)
+				match = result
+			} else {
+				match = (got == query)
 			}
-
-			if !matchQuery() {
+			if !match {
 				t.Errorf("query:\n%q, does not match query %d:\n%q", got, i, query)
 			}
 		case <-time.After(5 * time.Second):
