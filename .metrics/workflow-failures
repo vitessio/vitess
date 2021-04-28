@@ -9367,3 +9367,5 @@
 2021-04-28T13:23:01Z,Cluster (upgrade),https://github.com/vitessio/vitess/actions/runs/792759261
 2021-04-28T13:58:26Z,Cluster (17),https://github.com/vitessio/vitess/actions/runs/792863417
 2021-04-28T14:22:22Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/792937463
+2021-04-28T14:32:21Z,Cluster (17),https://github.com/vitessio/vitess/actions/runs/792967919
+2021-04-28T14:32:21Z,Cluster (tabletmanager_tablegc),https://github.com/vitessio/vitess/actions/runs/792967905
