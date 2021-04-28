@@ -63,7 +63,7 @@ const (
 {{- range $component := $type.Components }} 
 ### {{ $component.Name }}
 {{- range $prInfo := $component.PrInfos }}
- - {{ $prInfo.Title }} #{{ $prInfo.Number }}
+ * {{ $prInfo.Title }} #{{ $prInfo.Number }}
 {{- end }}
 {{- end }}
 {{- end }}
