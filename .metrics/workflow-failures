@@ -9371,3 +9371,4 @@
 2021-04-28T14:32:21Z,Cluster (tabletmanager_tablegc),https://github.com/vitessio/vitess/actions/runs/792967905
 2021-04-28T14:32:21Z,cluster_initial_sharding_multi,https://github.com/vitessio/vitess/actions/runs/792967886
 2021-04-28T14:32:21Z,e2e_race,https://github.com/vitessio/vitess/actions/runs/792967882
+2021-04-28T15:01:13Z,unit_race,https://github.com/vitessio/vitess/actions/runs/793055165
