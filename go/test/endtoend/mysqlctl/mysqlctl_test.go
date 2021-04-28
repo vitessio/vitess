@@ -108,6 +108,7 @@ func initCluster(shardNames []string, totalTabletsRequired int) {
 			// start vttablet process
 			tablet.VttabletProcess = cluster.VttabletProcessInstance(tablet.HTTPPort,
 				tablet.GrpcPort,
+				tablet.DrpcPort,
 				tablet.TabletUID,
 				clusterInstance.Cell,
 				shardName,

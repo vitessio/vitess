@@ -24,7 +24,6 @@ import (
 	"context"
 
 	"vitess.io/vitess/go/json2"
-	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
@@ -308,7 +307,7 @@ func (sct *sandboxTopo) WatchSrvVSchema(ctx context.Context, cell string, callba
 	}()
 }
 
-func sandboxDialer(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
+func sandboxDialer(tablet *topodatapb.Tablet, failFast bool) (queryservice.QueryService, error) {
 	sand := getSandbox(tablet.Keyspace)
 	sand.sandmu.Lock()
 	defer sand.sandmu.Unlock()

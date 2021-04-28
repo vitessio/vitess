@@ -55,7 +55,6 @@ import (
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/sync2"
-	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -636,7 +635,7 @@ func (hcc *legacyHealthCheckConn) setServingState(serving bool, reason string) {
 // stream streams healthcheck responses to callback.
 func (hcc *legacyHealthCheckConn) stream(ctx context.Context, hc *LegacyHealthCheckImpl, callback func(*querypb.StreamHealthResponse) error) {
 	if hcc.conn == nil {
-		conn, err := tabletconn.GetDialer()(hcc.tabletStats.Tablet, grpcclient.FailFast(true))
+		conn, err := tabletconn.GetDialer()(hcc.tabletStats.Tablet, true)
 		if err != nil {
 			hcc.tabletStats.LastError = err
 			return

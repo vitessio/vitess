@@ -25,7 +25,6 @@ import (
 
 	"vitess.io/vitess/go/sync2"
 
-	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -129,6 +128,7 @@ func (thc *tabletHealthCheck) stream(ctx context.Context, callback func(*query.S
 		// This signals the caller to retry
 		return nil
 	}
+	log.Infof("tabletHealthCheck: %T", conn)
 	err := conn.StreamHealth(ctx, callback)
 	if err != nil {
 		// Depending on the specific error the caller can take action
@@ -145,7 +145,7 @@ func (thc *tabletHealthCheck) Connection() queryservice.QueryService {
 
 func (thc *tabletHealthCheck) connectionLocked() queryservice.QueryService {
 	if thc.Conn == nil {
-		conn, err := tabletconn.GetDialer()(thc.Tablet, grpcclient.FailFast(true))
+		conn, err := tabletconn.GetDialer()(thc.Tablet, true)
 		if err != nil {
 			thc.LastError = err
 			return nil

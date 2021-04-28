@@ -40,7 +40,6 @@ import (
 
 	"context"
 
-	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/status"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
@@ -1189,7 +1188,7 @@ func TestDebugURLFormatting(t *testing.T) {
 	require.Contains(t, wr.String(), expectedURL, "output missing formatted URL")
 }
 
-func tabletDialer(tablet *topodatapb.Tablet, _ grpcclient.FailFast) (queryservice.QueryService, error) {
+func tabletDialer(tablet *topodatapb.Tablet, _ bool) (queryservice.QueryService, error) {
 	connMapMu.Lock()
 	defer connMapMu.Unlock()
 

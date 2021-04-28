@@ -20,7 +20,6 @@ import (
 	"flag"
 	"sync"
 
-	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
@@ -36,7 +35,8 @@ var (
 
 var (
 	// TabletProtocol is exported for unit tests
-	TabletProtocol = flag.String("tablet_protocol", "grpc", "how to talk to the vttablets")
+	TabletProtocol  = flag.String("tablet_protocol", "grpc", "how to talk to the vttablets")
+	VStreamProtocol = flag.String("vstream_protocol", "", "how to talk to the vttablets for vreplication")
 )
 
 // TabletDialer represents a function that will return a QueryService
@@ -47,7 +47,7 @@ var (
 // timeout represents the connection timeout. If set to 0, this
 // connection should be established in the background and the
 // TabletDialer should return right away.
-type TabletDialer func(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error)
+type TabletDialer func(tablet *topodatapb.Tablet, failFast bool) (queryservice.QueryService, error)
 
 var dialers = make(map[string]TabletDialer)
 
@@ -65,13 +65,17 @@ func RegisterDialer(name string, dialer TabletDialer) {
 	dialers[name] = dialer
 }
 
-// GetDialer returns the dialer to use, described by the command line flag
-func GetDialer() TabletDialer {
+func GetDialerForProtocol(proto string) TabletDialer {
 	mu.Lock()
 	defer mu.Unlock()
-	td, ok := dialers[*TabletProtocol]
+	td, ok := dialers[proto]
 	if !ok {
-		log.Exitf("No dialer registered for tablet protocol %s", *TabletProtocol)
+		log.Exitf("No dialer registered for tablet protocol %s", proto)
 	}
 	return td
+}
+
+// GetDialer returns the dialer to use, described by the command line flag
+func GetDialer() TabletDialer {
+	return GetDialerForProtocol(*TabletProtocol)
 }

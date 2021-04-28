@@ -24,7 +24,6 @@ import (
 
 	"context"
 
-	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -102,7 +101,7 @@ func (th *tabletHealth) stream(ctx context.Context, ts *topo.Server, tabletAlias
 		return err
 	}
 
-	conn, err := tabletconn.GetDialer()(ti.Tablet, grpcclient.FailFast(true))
+	conn, err := tabletconn.GetDialer()(ti.Tablet, true)
 	if err != nil {
 		return err
 	}

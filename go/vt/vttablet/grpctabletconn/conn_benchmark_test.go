@@ -9,12 +9,16 @@ import (
 	"testing"
 
 	"google.golang.org/grpc"
+	"storj.io/drpc/drpcmux"
+	"storj.io/drpc/drpcserver"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/callerid"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/vttablet/drpcqueryservice"
+	_ "vitess.io/vitess/go/vt/vttablet/drpctabletconn"
 	"vitess.io/vitess/go/vt/vttablet/grpcqueryservice"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 	"vitess.io/vitess/go/vt/vttablet/tabletconntest"
@@ -254,24 +258,35 @@ func (gen *generator) generateQueryResultList() (qrl []sqltypes.Result) {
 	return
 }
 
-func BenchmarkGRPCTabletConn(b *testing.B) {
+func BenchmarkRPCTabletConn(b *testing.B) {
 	// fake service
 	service := &BenchmarkService{
 		t: b,
 	}
 
 	// listen on a random port
-	listener, err := net.Listen("tcp", ":0")
+	listenerGrpc, err := net.Listen("tcp", ":0")
 	if err != nil {
 		b.Fatalf("Cannot listen: %v", err)
 	}
-	host := listener.Addr().(*net.TCPAddr).IP.String()
-	port := listener.Addr().(*net.TCPAddr).Port
+	host := listenerGrpc.Addr().(*net.TCPAddr).IP.String()
+	portGrpc := listenerGrpc.Addr().(*net.TCPAddr).Port
 
 	// Create a gRPC server and listen on the port
-	server := grpc.NewServer()
-	grpcqueryservice.Register(server, service)
-	go server.Serve(listener)
+	serverGrpc := grpc.NewServer()
+	grpcqueryservice.Register(serverGrpc, service)
+	go serverGrpc.Serve(listenerGrpc)
+
+	listenerDrpc, err := net.Listen("tcp", ":0")
+	if err != nil {
+		b.Fatalf("Cannot listen: %v", err)
+	}
+	portDrpc := listenerDrpc.Addr().(*net.TCPAddr).Port
+
+	muxDrpc := drpcmux.New()
+	serverDrpc := drpcserver.New(muxDrpc)
+	drpcqueryservice.Register(muxDrpc, service)
+	go serverDrpc.Serve(context.Background(), listenerDrpc)
 
 	tablet := &topodatapb.Tablet{
 		Keyspace: tabletconntest.TestTarget.Keyspace,
@@ -280,7 +295,8 @@ func BenchmarkGRPCTabletConn(b *testing.B) {
 		Alias:    tabletconntest.TestAlias,
 		Hostname: host,
 		PortMap: map[string]int32{
-			"grpc": int32(port),
+			"grpc": int32(portGrpc),
+			"drpc": int32(portDrpc),
 		},
 	}
 
@@ -302,30 +318,51 @@ func BenchmarkGRPCTabletConn(b *testing.B) {
 		responses[size] = gen.generateQueryResultList()
 	}
 
-	for _, reqSize := range querySizes {
-		for _, respSize := range querySizes {
-			b.Run(fmt.Sprintf("Req%d-Resp%d", reqSize, respSize), func(b *testing.B) {
-				conn, err := tabletconn.GetDialer()(tablet, false)
-				if err != nil {
-					b.Fatalf("dial failed: %v", err)
-				}
-				defer conn.Close(context.Background())
+	for _, protocol := range []string{"grpc", "drpc"} {
+		for _, par := range []int{0, 1} {
+			for _, reqSize := range querySizes {
+				for _, respSize := range querySizes {
+					b.Run(fmt.Sprintf("%s-Req%d-Resp%d-X%d", protocol, reqSize, respSize, par), func(b *testing.B) {
+						requestQuery := requests[reqSize]
+						service.batchResult = responses[respSize]
 
-				requestQuery := requests[reqSize]
-				service.batchResult = responses[respSize]
+						if par == 0 {
+							conn, err := tabletconn.GetDialerForProtocol(protocol)(tablet, false)
+							if err != nil {
+								b.Fatalf("dial failed: %v", err)
+							}
+							defer conn.Close(context.Background())
 
-				b.SetParallelism(4)
-				b.RunParallel(func(pb *testing.PB) {
-					for pb.Next() {
-						ctx := context.Background()
-						ctx = callerid.NewContext(ctx, tabletconntest.TestCallerID, tabletconntest.TestVTGateCallerID)
-						_, err := conn.ExecuteBatch(ctx, tabletconntest.TestTarget, requestQuery, tabletconntest.TestAsTransaction, tabletconntest.ExecuteBatchTransactionID, tabletconntest.TestExecuteOptions)
-						if err != nil {
-							b.Fatalf("ExecuteBatch failed: %v", err)
+							for i := 0; i < b.N; i++ {
+								ctx := context.Background()
+								ctx = callerid.NewContext(ctx, tabletconntest.TestCallerID, tabletconntest.TestVTGateCallerID)
+								_, err := conn.ExecuteBatch(ctx, tabletconntest.TestTarget, requestQuery, tabletconntest.TestAsTransaction, tabletconntest.ExecuteBatchTransactionID, tabletconntest.TestExecuteOptions)
+								if err != nil {
+									b.Fatalf("ExecuteBatch failed: %v", err)
+								}
+							}
+						} else {
+							b.SetParallelism(par)
+							b.RunParallel(func(pb *testing.PB) {
+								conn, err := tabletconn.GetDialerForProtocol(protocol)(tablet, false)
+								if err != nil {
+									b.Fatalf("dial failed: %v", err)
+								}
+								defer conn.Close(context.Background())
+
+								for pb.Next() {
+									ctx := context.Background()
+									ctx = callerid.NewContext(ctx, tabletconntest.TestCallerID, tabletconntest.TestVTGateCallerID)
+									_, err := conn.ExecuteBatch(ctx, tabletconntest.TestTarget, requestQuery, tabletconntest.TestAsTransaction, tabletconntest.ExecuteBatchTransactionID, tabletconntest.TestExecuteOptions)
+									if err != nil {
+										b.Fatalf("ExecuteBatch failed: %v", err)
+									}
+								}
+							})
 						}
-					}
-				})
-			})
+					})
+				}
+			}
 		}
 	}
 }

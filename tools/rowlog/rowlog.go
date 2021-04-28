@@ -28,6 +28,7 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	_ "vitess.io/vitess/go/vt/topo/etcd2topo"
 	_ "vitess.io/vitess/go/vt/vtgate/grpcvtgateconn"
+	_ "vitess.io/vitess/go/vt/vttablet/drpctabletconn"
 	_ "vitess.io/vitess/go/vt/vttablet/grpctabletconn"
 
 	_ "vitess.io/vitess/go/vt/vtctl/grpcvtctlclient"

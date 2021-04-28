@@ -23,7 +23,6 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
-	"vitess.io/vitess/go/vt/grpcclient"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -162,7 +161,11 @@ func newTabletConnector(tablet *topodatapb.Tablet) *tabletConnector {
 
 func (tc *tabletConnector) Open(ctx context.Context) error {
 	var err error
-	tc.qs, err = tabletconn.GetDialer()(tc.tablet, grpcclient.FailFast(true))
+	proto := *tabletconn.VStreamProtocol
+	if proto == "" {
+		proto = *tabletconn.TabletProtocol
+	}
+	tc.qs, err = tabletconn.GetDialerForProtocol(proto)(tc.tablet, true)
 	return err
 }
 

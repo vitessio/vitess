@@ -41,8 +41,10 @@ var (
 func Run(port int) {
 	populateListeningURL(int32(port))
 	createGRPCServer()
+	createDRPCServer()
 	onRunHooks.Fire()
 	serveGRPC()
+	serveDRPC()
 	serveSocketFile()
 
 	l, err := net.Listen("tcp", fmt.Sprintf(":%v", port))

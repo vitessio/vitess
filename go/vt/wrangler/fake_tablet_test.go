@@ -43,6 +43,7 @@ import (
 	// import the gRPC client implementation for tablet manager
 	_ "vitess.io/vitess/go/vt/vttablet/grpctmclient"
 
+	_ "vitess.io/vitess/go/vt/vttablet/drpctabletconn"
 	// import the gRPC client implementation for query service
 	_ "vitess.io/vitess/go/vt/vttablet/grpctabletconn"
 )

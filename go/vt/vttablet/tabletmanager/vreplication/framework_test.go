@@ -39,7 +39,6 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/dbconfigs"
-	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/queryservice/fakes"
@@ -71,7 +70,7 @@ type LogExpectation struct {
 var heartbeatRe *regexp.Regexp
 
 func init() {
-	tabletconn.RegisterDialer("test", func(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
+	tabletconn.RegisterDialer("test", func(tablet *topodatapb.Tablet, failFast bool) (queryservice.QueryService, error) {
 		return &fakeTabletConn{
 			QueryService: fakes.ErrorQueryService,
 			tablet:       tablet,

@@ -477,6 +477,7 @@ func tlsLaunchRecoveryTablet(t *testing.T, tablet *cluster.Vttablet, tabletForBi
 
 	tablet.VttabletProcess = cluster.VttabletProcessInstance(tablet.HTTPPort,
 		tablet.GrpcPort,
+		tablet.DrpcPort,
 		tablet.TabletUID,
 		clusterInstance.Cell,
 		shardName,

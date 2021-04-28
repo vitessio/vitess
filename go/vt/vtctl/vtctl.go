@@ -666,6 +666,7 @@ func commandInitTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 	mysqlPort := subFlags.Int("mysql_port", 0, "The mysql port for the mysql server")
 	port := subFlags.Int("port", 0, "The main port for the vttablet process")
 	grpcPort := subFlags.Int("grpc_port", 0, "The gRPC port for the vttablet process")
+	drpcPort := subFlags.Int("drpc_port", 0, "The DRPC port for the vttablet process")
 	keyspace := subFlags.String("keyspace", "", "The keyspace to which this tablet belongs")
 	shard := subFlags.String("shard", "", "The shard to which this tablet belongs")
 
@@ -708,6 +709,9 @@ func commandInitTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 	if *grpcPort != 0 {
 		tablet.PortMap["grpc"] = int32(*grpcPort)
 	}
+	if *drpcPort != 0 {
+		tablet.PortMap["drpc"] = int32(*drpcPort)
+	}
 
 	return wr.InitTablet(ctx, tablet, *allowMasterOverride, *createShardAndKeyspace, *allowUpdate)
 }
@@ -738,6 +742,7 @@ func commandUpdateTabletAddrs(ctx context.Context, wr *wrangler.Wrangler, subFla
 	mysqlPort := subFlags.Int("mysql-port", 0, "The mysql port for the mysql daemon")
 	vtPort := subFlags.Int("vt-port", 0, "The main port for the vttablet process")
 	grpcPort := subFlags.Int("grpc-port", 0, "The gRPC port for the vttablet process")
+	drpcPort := subFlags.Int("drpc-port", 0, "The DRPC port for the vttablet process")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -767,6 +772,9 @@ func commandUpdateTabletAddrs(ctx context.Context, wr *wrangler.Wrangler, subFla
 			}
 			if *grpcPort != 0 {
 				tablet.PortMap["grpc"] = int32(*grpcPort)
+			}
+			if *drpcPort != 0 {
+				tablet.PortMap["drpc"] = int32(*drpcPort)
 			}
 			if *mysqlPort != 0 {
 				tablet.MysqlPort = int32(*mysqlPort)

@@ -26,7 +26,6 @@ require (
 	github.com/go-sql-driver/mysql v1.5.1-0.20210202043019-fe2230a8b20c
 	github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b
 	github.com/golang/mock v1.5.0
-	github.com/golang/protobuf v1.5.2
 	github.com/golang/snappy v0.0.1
 	github.com/google/go-cmp v0.5.5
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510
@@ -121,6 +120,7 @@ require (
 	k8s.io/client-go v0.17.3
 	k8s.io/code-generator v0.17.3
 	sigs.k8s.io/yaml v1.2.0
+	storj.io/drpc v0.0.23
 )
 
 replace github.com/skeema/tengo => github.com/planetscale/tengo v0.9.6-ps.v3

@@ -30,7 +30,6 @@ import (
 
 	"context"
 
-	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
@@ -96,7 +95,7 @@ func TestSuite(t *testing.T, name string, g Gateway, f *tabletconntest.FakeQuery
 
 	protocolName := "gateway-test-" + name
 
-	tabletconn.RegisterDialer(protocolName, func(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
+	tabletconn.RegisterDialer(protocolName, func(tablet *topodatapb.Tablet, failFast bool) (queryservice.QueryService, error) {
 		return &gatewayAdapter{Gateway: g}, nil
 	})
 

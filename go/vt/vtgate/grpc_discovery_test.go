@@ -31,6 +31,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/grpcqueryservice"
 	"vitess.io/vitess/go/vt/vttablet/tabletconntest"
 
+	_ "vitess.io/vitess/go/vt/vttablet/drpctabletconn"
 	// We will use gRPC to connect, register the dialer
 	_ "vitess.io/vitess/go/vt/vttablet/grpctabletconn"
 

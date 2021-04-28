@@ -33,7 +33,6 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/callerid"
-	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
@@ -869,7 +868,7 @@ func TestSuite(t *testing.T, protocol string, tablet *topodatapb.Tablet, fake *F
 		flag.Set("grpc_auth_static_client_creds", clientCreds.Name())
 	}
 
-	conn, err := tabletconn.GetDialer()(tablet, grpcclient.FailFast(false))
+	conn, err := tabletconn.GetDialer()(tablet, false)
 	if err != nil {
 		t.Fatalf("dial failed: %v", err)
 	}

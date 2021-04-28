@@ -31,6 +31,8 @@ import (
 
 	// Import and register the gRPC vtgateconn client
 	_ "vitess.io/vitess/go/vt/vtgate/grpcvtgateconn"
+	_ "vitess.io/vitess/go/vt/vttablet/drpctabletconn"
+
 	// Import and register the gRPC tabletconn client
 	_ "vitess.io/vitess/go/vt/vttablet/grpctabletconn"
 )

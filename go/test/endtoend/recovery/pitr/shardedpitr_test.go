@@ -497,6 +497,7 @@ func launchRecoveryTablet(t *testing.T, tablet *cluster.Vttablet, binlogServer *
 
 	tablet.VttabletProcess = cluster.VttabletProcessInstance(tablet.HTTPPort,
 		tablet.GrpcPort,
+		tablet.DrpcPort,
 		tablet.TabletUID,
 		clusterInstance.Cell,
 		shardName,

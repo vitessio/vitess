@@ -24,7 +24,6 @@ import (
 	"context"
 
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/logutil"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -66,7 +65,7 @@ type testVDiffEnv struct {
 var vdiffEnv *testVDiffEnv
 
 func init() {
-	tabletconn.RegisterDialer("VDiffTest", func(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
+	tabletconn.RegisterDialer("VDiffTest", func(tablet *topodatapb.Tablet, failFast bool) (queryservice.QueryService, error) {
 		vdiffEnv.mu.Lock()
 		defer vdiffEnv.mu.Unlock()
 		if qs, ok := vdiffEnv.tablets[int(tablet.Alias.Uid)]; ok {

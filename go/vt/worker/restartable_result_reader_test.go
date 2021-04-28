@@ -26,7 +26,6 @@ import (
 	"context"
 
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
@@ -184,7 +183,7 @@ func TestGenerateQuery(t *testing.T) {
 func TestNewRestartableResultReader(t *testing.T) {
 	wantErr := errors.New("restartable_result_reader_test.go: context canceled")
 
-	tabletconn.RegisterDialer("fake_dialer", func(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
+	tabletconn.RegisterDialer("fake_dialer", func(tablet *topodatapb.Tablet, failFast bool) (queryservice.QueryService, error) {
 		return nil, wantErr
 	})
 	protocol := flag.CommandLine.Lookup("tablet_protocol").Value.String()

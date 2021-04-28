@@ -33,7 +33,6 @@ import (
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/discovery"
-	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
@@ -702,7 +701,7 @@ func (df *vdiff) streamOne(ctx context.Context, keyspace, shard string, particip
 	// Wrap the streaming in a separate function so we can capture the error.
 	// This shows that the error will be set before the channels are closed.
 	participant.err = func() error {
-		conn, err := tabletconn.GetDialer()(participant.tablet, grpcclient.FailFast(false))
+		conn, err := tabletconn.GetDialer()(participant.tablet, false)
 		if err != nil {
 			return err
 		}

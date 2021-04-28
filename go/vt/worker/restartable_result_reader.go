@@ -28,7 +28,6 @@ import (
 
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -159,7 +158,7 @@ func (r *RestartableResultReader) getTablet() (bool, error) {
 	}
 
 	// Connect (dial) to the tablet.
-	conn, err := tabletconn.GetDialer()(tablet, grpcclient.FailFast(false))
+	conn, err := tabletconn.GetDialer()(tablet, false)
 	if err != nil {
 		return false /* retryable */, vterrors.Wrap(err, "failed to get dialer for tablet")
 	}

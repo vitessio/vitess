@@ -38,7 +38,6 @@ import (
 
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/proto/query"
@@ -73,7 +72,7 @@ func NewQueryResultReaderForTablet(ctx context.Context, ts *topo.Server, tabletA
 		return nil, err
 	}
 
-	conn, err := tabletconn.GetDialer()(tablet.Tablet, grpcclient.FailFast(false))
+	conn, err := tabletconn.GetDialer()(tablet.Tablet, false)
 	if err != nil {
 		return nil, err
 	}
@@ -107,7 +106,7 @@ func NewTransactionalQueryResultReaderForTablet(ctx context.Context, ts *topo.Se
 		return nil, err
 	}
 
-	conn, err := tabletconn.GetDialer()(tablet.Tablet, grpcclient.FailFast(false))
+	conn, err := tabletconn.GetDialer()(tablet.Tablet, false)
 	if err != nil {
 		return nil, err
 	}

@@ -309,6 +309,7 @@ func clusterSetUp(t *testing.T) (int, error) {
 			// start vttablet process
 			tablet.VttabletProcess = cluster.VttabletProcessInstance(tablet.HTTPPort,
 				tablet.GrpcPort,
+				tablet.DrpcPort,
 				tablet.TabletUID,
 				clusterInstance.Cell,
 				shardName,

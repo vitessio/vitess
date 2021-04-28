@@ -87,11 +87,16 @@ func main() {
 	}
 
 	// Initialize and start tm.
-	gRPCPort := int32(0)
-	if servenv.GRPCPort != nil {
-		gRPCPort = int32(*servenv.GRPCPort)
+	portMap := map[string]int32{
+		"vt": int32(*servenv.Port),
 	}
-	tablet, err := tabletmanager.BuildTabletFromInput(tabletAlias, int32(*servenv.Port), gRPCPort)
+	if servenv.GRPCPort != nil {
+		portMap["grpc"] = int32(*servenv.GRPCPort)
+	}
+	if servenv.DRPCPort != nil {
+		portMap["drpc"] = int32(*servenv.DRPCPort)
+	}
+	tablet, err := tabletmanager.BuildTabletFromInput(tabletAlias, portMap)
 	if err != nil {
 		log.Exitf("failed to parse -tablet-path: %v", err)
 	}

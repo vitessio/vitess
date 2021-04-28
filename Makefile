@@ -214,6 +214,7 @@ install_protoc-gen-go:
 	go install google.golang.org/protobuf/cmd/protoc-gen-go
 	go install google.golang.org/grpc/cmd/protoc-gen-go-grpc
 	go install github.com/planetscale/vtprotobuf/cmd/protoc-gen-go-vtproto
+	go install storj.io/drpc/cmd/protoc-gen-go-drpc
 
 PROTO_SRCS = $(wildcard proto/*.proto)
 PROTO_SRC_NAMES = $(basename $(notdir $(PROTO_SRCS)))
@@ -231,6 +232,8 @@ $(PROTO_GO_OUTS): minimaltools install_protoc-gen-go proto/*.proto
 		$(VTROOT)/bin/protoc \
 		--go_out=. --plugin protoc-gen-go="${GOBIN}/protoc-gen-go" \
 		--go-grpc_out=. --plugin protoc-gen-go-grpc="${GOBIN}/protoc-gen-go-grpc" \
+		--go-drpc_out=. --plugin protoc-gen-go-drpc="${GOBIN}/protoc-gen-go-drpc" \
+		--go-drpc_opt=protolib=vitess.io/vitess/go/vt/servenv/vtproto \
 		--go-vtproto_out=. --plugin protoc-gen-go-vtproto="${GOBIN}/protoc-gen-go-vtproto" \
 		--go-vtproto_opt=features=marshal+unmarshal+size+pool \
 		--go-vtproto_opt=pool=vitess.io/vitess/go/vt/proto/query.Row \
@@ -338,10 +341,10 @@ ifndef DEV_VERSION
 endif
 ifeq ($(strip $(GIT_STATUS)),)
 	echo so much clean
-else	
+else
 	echo cannot do release with dirty git state
 	exit 1
-	echo so much win        
+	echo so much win
 endif
 # Pre checks passed. Let's change the current version
 	cd java && mvn versions:set -DnewVersion=$(RELEASE_VERSION)
@@ -351,7 +354,7 @@ endif
 	echo -n Pausing so relase notes can be added. Press enter to continue
 	read line
 	git add --all
-	git commit -n -s -m "Release commit for $(RELEASE_VERSION)" 
+	git commit -n -s -m "Release commit for $(RELEASE_VERSION)"
 	git tag -m Version\ $(RELEASE_VERSION) v$(RELEASE_VERSION)
 	cd java && mvn versions:set -DnewVersion=$(DEV_VERSION)
 	echo package servenv > go/vt/servenv/version.go
@@ -359,7 +362,7 @@ endif
 	echo const versionName = \"$(DEV_VERSION)\" >> go/vt/servenv/version.go
 	git add --all
 	git commit -n -s -m "Back to dev mode"
-	echo "Release preparations successful" 
+	echo "Release preparations successful"
 	echo "A git tag was created, you can push it with:"
 	echo "   git push upstream v$(RELEASE_VERSION)"
 	echo "The git branch has also been updated. You need to push it and get it merged"

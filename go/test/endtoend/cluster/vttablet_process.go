@@ -50,6 +50,7 @@ type VttabletProcess struct {
 	Cell                        string
 	Port                        int
 	GrpcPort                    int
+	DrpcPort                    int
 	Shard                       string
 	CommonArg                   VtctlProcess
 	LogDir                      string
@@ -104,6 +105,9 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 		"-vtctld_addr", vttablet.VtctldAddress,
 		"-vreplication_tablet_type", vttablet.VreplicationTabletType,
 	)
+	if vttablet.DrpcPort != 0 {
+		vttablet.proc.Args = append(vttablet.proc.Args, "-drpc_port", fmt.Sprintf("%d", vttablet.DrpcPort))
+	}
 	if *isCoverage {
 		vttablet.proc.Args = append(vttablet.proc.Args, "-test.coverprofile="+getCoveragePath("vttablet.out"))
 	}
@@ -468,7 +472,7 @@ func (vttablet *VttabletProcess) BulkLoad(t testing.TB, db, table string, bulkIn
 // VttabletProcessInstance returns a VttabletProcess handle for vttablet process
 // configured with the given Config.
 // The process must be manually started by calling setup()
-func VttabletProcessInstance(port int, grpcPort int, tabletUID int, cell string, shard string, keyspace string, vtctldPort int, tabletType string, topoPort int, hostname string, tmpDirectory string, extraArgs []string, enableSemiSync bool) *VttabletProcess {
+func VttabletProcessInstance(port, grpcPort, drpcPort int, tabletUID int, cell string, shard string, keyspace string, vtctldPort int, tabletType string, topoPort int, hostname string, tmpDirectory string, extraArgs []string, enableSemiSync bool) *VttabletProcess {
 	vtctl := VtctlProcessInstance(topoPort, hostname)
 	vttablet := &VttabletProcess{
 		Name:                        "vttablet",
@@ -486,6 +490,7 @@ func VttabletProcessInstance(port int, grpcPort int, tabletUID int, cell string,
 		HealthCheckInterval:         5,
 		Port:                        port,
 		GrpcPort:                    grpcPort,
+		DrpcPort:                    drpcPort,
 		VtctldAddress:               fmt.Sprintf("http://%s:%d", hostname, vtctldPort),
 		ExtraArgs:                   extraArgs,
 		EnableSemiSync:              enableSemiSync,
@@ -495,6 +500,10 @@ func VttabletProcessInstance(port int, grpcPort int, tabletUID int, cell string,
 		FileBackupStorageRoot:       path.Join(os.Getenv("VTDATAROOT"), "/backups"),
 		VreplicationTabletType:      "replica",
 		TabletUID:                   tabletUID,
+	}
+
+	if drpcPort != 0 {
+		vttablet.ServiceMap = vttablet.ServiceMap + ",drpc-queryservice"
 	}
 
 	if tabletType == "rdonly" {

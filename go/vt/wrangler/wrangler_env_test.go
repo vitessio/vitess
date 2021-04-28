@@ -23,7 +23,6 @@ import (
 	"sync"
 
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -60,7 +59,7 @@ type testWranglerEnv struct {
 var wranglerEnv *testWranglerEnv
 
 func init() {
-	tabletconn.RegisterDialer("WranglerTest", func(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
+	tabletconn.RegisterDialer("WranglerTest", func(tablet *topodatapb.Tablet, failFast bool) (queryservice.QueryService, error) {
 		wranglerEnv.mu.Lock()
 		defer wranglerEnv.mu.Unlock()
 		if qs, ok := wranglerEnv.tablets[int(tablet.Alias.Uid)]; ok {

@@ -32,7 +32,6 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/callerid"
-	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
@@ -220,7 +219,7 @@ func commandVtTabletExecute(ctx context.Context, wr *wrangler.Wrangler, subFlags
 			callerid.NewImmediateCallerID(*username))
 	}
 
-	conn, err := tabletconn.GetDialer()(tabletInfo.Tablet, grpcclient.FailFast(false))
+	conn, err := tabletconn.GetDialer()(tabletInfo.Tablet, false)
 	if err != nil {
 		return fmt.Errorf("cannot connect to tablet %v: %v", tabletAlias, err)
 	}
@@ -274,7 +273,7 @@ func commandVtTabletBegin(ctx context.Context, wr *wrangler.Wrangler, subFlags *
 			callerid.NewImmediateCallerID(*username))
 	}
 
-	conn, err := tabletconn.GetDialer()(tabletInfo.Tablet, grpcclient.FailFast(false))
+	conn, err := tabletconn.GetDialer()(tabletInfo.Tablet, false)
 	if err != nil {
 		return fmt.Errorf("cannot connect to tablet %v: %v", tabletAlias, err)
 	}
@@ -325,7 +324,7 @@ func commandVtTabletCommit(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 			callerid.NewImmediateCallerID(*username))
 	}
 
-	conn, err := tabletconn.GetDialer()(tabletInfo.Tablet, grpcclient.FailFast(false))
+	conn, err := tabletconn.GetDialer()(tabletInfo.Tablet, false)
 	if err != nil {
 		return fmt.Errorf("cannot connect to tablet %v: %v", tabletAlias, err)
 	}
@@ -371,7 +370,7 @@ func commandVtTabletRollback(ctx context.Context, wr *wrangler.Wrangler, subFlag
 			callerid.NewImmediateCallerID(*username))
 	}
 
-	conn, err := tabletconn.GetDialer()(tabletInfo.Tablet, grpcclient.FailFast(false))
+	conn, err := tabletconn.GetDialer()(tabletInfo.Tablet, false)
 	if err != nil {
 		return fmt.Errorf("cannot connect to tablet %v: %v", tabletAlias, err)
 	}
@@ -407,7 +406,7 @@ func commandVtTabletStreamHealth(ctx context.Context, wr *wrangler.Wrangler, sub
 		return err
 	}
 
-	conn, err := tabletconn.GetDialer()(tabletInfo.Tablet, grpcclient.FailFast(false))
+	conn, err := tabletconn.GetDialer()(tabletInfo.Tablet, false)
 	if err != nil {
 		return fmt.Errorf("cannot connect to tablet %v: %v", tabletAlias, err)
 	}

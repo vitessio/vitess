@@ -108,6 +108,7 @@ type Vttablet struct {
 	TabletUID int
 	HTTPPort  int
 	GrpcPort  int
+	DrpcPort  int
 	MySQLPort int
 	Alias     string
 	Cell      string
@@ -281,6 +282,7 @@ func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames 
 			// start vttablet process
 			tablet.VttabletProcess = VttabletProcessInstance(tablet.HTTPPort,
 				tablet.GrpcPort,
+				tablet.DrpcPort,
 				tablet.TabletUID,
 				cluster.Cell,
 				shardName,
@@ -396,6 +398,7 @@ func (cluster *LocalProcessCluster) SetupCluster(keyspace *Keyspace, shards []Sh
 			tablet.VttabletProcess = VttabletProcessInstance(
 				tablet.HTTPPort,
 				tablet.GrpcPort,
+				tablet.DrpcPort,
 				tablet.TabletUID,
 				tablet.Cell,
 				shard.Name,
@@ -728,6 +731,7 @@ func (cluster *LocalProcessCluster) NewOrcProcess(configFile string) *VtorcProce
 func (cluster *LocalProcessCluster) VtprocessInstanceFromVttablet(tablet *Vttablet, shardName string, ksName string) *VttabletProcess {
 	return VttabletProcessInstance(tablet.HTTPPort,
 		tablet.GrpcPort,
+		tablet.DrpcPort,
 		tablet.TabletUID,
 		cluster.Cell,
 		shardName,
@@ -747,6 +751,7 @@ func (cluster *LocalProcessCluster) StartVttablet(tablet *Vttablet, servingStatu
 	tablet.VttabletProcess = VttabletProcessInstance(
 		tablet.HTTPPort,
 		tablet.GrpcPort,
+		tablet.DrpcPort,
 		tablet.TabletUID,
 		cell,
 		shardName,

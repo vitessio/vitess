@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"io"
 
+	"storj.io/drpc/drpcerr"
+
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
@@ -140,4 +142,11 @@ func FromGRPC(err error) error {
 		code = s.Code()
 	}
 	return New(vtrpcpb.Code(code), err.Error())
+}
+
+func ToDRPC(err error) error {
+	if err == nil {
+		return nil
+	}
+	return drpcerr.WithCode(err, uint64(codes.Code(Code(err))))
 }

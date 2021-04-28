@@ -173,6 +173,7 @@ func initClusterForInitialSharding(keyspaceName string, shardNames []string, tot
 			// start vttablet process
 			tablet.VttabletProcess = cluster.VttabletProcessInstance(tablet.HTTPPort,
 				tablet.GrpcPort,
+				tablet.DrpcPort,
 				tablet.TabletUID,
 				ClusterInstance.Cell,
 				shardName,
@@ -715,7 +716,7 @@ func getPasswordField(localCluster *cluster.LocalProcessCluster) (pwdCol string,
 	if err = tablet.MysqlctlProcess.Start(); err != nil {
 		return "", err
 	}
-	tablet.VttabletProcess = cluster.VttabletProcessInstance(tablet.HTTPPort, tablet.GrpcPort, tablet.TabletUID, "", "", "", 0,
+	tablet.VttabletProcess = cluster.VttabletProcessInstance(tablet.HTTPPort, tablet.GrpcPort, tablet.DrpcPort, tablet.TabletUID, "", "", "", 0,
 		tablet.Type, localCluster.TopoPort, "", "", nil, false)
 	result, err := tablet.VttabletProcess.QueryTablet("select password from mysql.user limit 0", "", false)
 	if err == nil && len(result.Rows) > 0 {

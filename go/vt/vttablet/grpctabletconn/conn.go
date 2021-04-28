@@ -65,7 +65,7 @@ type gRPCQueryClient struct {
 var _ queryservice.QueryService = (*gRPCQueryClient)(nil)
 
 // DialTablet creates and initializes gRPCQueryClient.
-func DialTablet(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
+func DialTablet(tablet *topodatapb.Tablet, failFast bool) (queryservice.QueryService, error) {
 	// create the RPC client
 	addr := ""
 	if grpcPort, ok := tablet.PortMap["grpc"]; ok {
@@ -77,7 +77,7 @@ func DialTablet(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (querys
 	if err != nil {
 		return nil, err
 	}
-	cc, err := grpcclient.Dial(addr, failFast, opt)
+	cc, err := grpcclient.Dial(addr, grpcclient.FailFast(failFast), opt)
 	if err != nil {
 		return nil, err
 	}

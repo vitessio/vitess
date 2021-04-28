@@ -21,6 +21,7 @@ import (
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"storj.io/drpc/drpcerr"
 
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -39,6 +40,15 @@ func ErrorFromGRPC(err error) error {
 		code = s.Code()
 	}
 	return vterrors.Errorf(vtrpcpb.Code(code), "vttablet: %v", err)
+}
+
+func ErrorFromDRPC(err error) error {
+	// io.EOF is end of stream. Don't treat it as an error.
+	if err == nil || err == io.EOF {
+		return nil
+	}
+	code := drpcerr.Code(err)
+	return vterrors.Errorf(vtrpcpb.Code(code), "vttablet(drpc): %v", err)
 }
 
 // ErrorFromVTRPC converts a *vtrpcpb.RPCError to vtError for

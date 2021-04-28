@@ -132,6 +132,7 @@ func TestMain(m *testing.M) {
 			tablet.MysqlctlProcess = *cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, localCluster.TmpDirectory)
 			tablet.VttabletProcess = cluster.VttabletProcessInstance(tablet.HTTPPort,
 				tablet.GrpcPort,
+				tablet.DrpcPort,
 				tablet.TabletUID,
 				tablet.Cell,
 				"",

@@ -23,7 +23,6 @@ import (
 
 	"context"
 
-	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
@@ -102,7 +101,7 @@ func (wr *Wrangler) WaitForFilteredReplication(ctx context.Context, keyspace, sh
 		return fmt.Errorf("failed to run explicit healthcheck on tablet: %v err: %v", tabletInfo, err)
 	}
 
-	conn, err := tabletconn.GetDialer()(tabletInfo.Tablet, grpcclient.FailFast(false))
+	conn, err := tabletconn.GetDialer()(tabletInfo.Tablet, false)
 	if err != nil {
 		return fmt.Errorf("cannot connect to tablet %v: %v", alias, err)
 	}
