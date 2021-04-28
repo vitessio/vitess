@@ -892,6 +892,30 @@ var (
 			input:  "delete from a1, a2 using t1 as a1 inner join t2 as a2 where a1.id=a2.id",
 			output: "delete a1, a2 from t1 as a1 join t2 as a2 where a1.id = a2.id",
 		}, {
+			input: "savepoint abc",
+		}, {
+			input:  "savepoint `ab_cd`",
+			output: "savepoint ab_cd",
+		}, {
+			input: "rollback to abc",
+		}, {
+			input:  "rollback work to abc",
+			output: "rollback to abc",
+		}, {
+			input:  "rollback to savepoint abc",
+			output: "rollback to abc",
+		}, {
+			input:  "rollback work to savepoint abc",
+			output: "rollback to abc",
+		}, {
+			input:  "rollback work to savepoint `ab_cd`",
+			output: "rollback to ab_cd",
+		}, {
+			input: "release savepoint abc",
+		}, {
+			input:  "release savepoint `ab_cd`",
+			output: "release savepoint ab_cd",
+		}, {
 			input: "set /* simple */ a = 3",
 		}, {
 			input: "set #simple\n @b = 4",
@@ -911,6 +935,12 @@ var (
 		}, {
 			input:  "set @@session.autocommit= OFF",
 			output: "set session autocommit = 'OFF'",
+		}, {
+			input:  "set session autocommit = ON",
+			output: "set session autocommit = 'ON'",
+		}, {
+			input:  "set global autocommit = OFF",
+			output: "set global autocommit = 'OFF'",
 		}, {
 			input:  "set @@global.optimizer_prune_level = 1",
 			output: "set global optimizer_prune_level = 1",

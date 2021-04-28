@@ -105,6 +105,7 @@ func skipToEnd(yylex interface{}) {
   assignExpr    *AssignmentExpr
   setVarExprs   SetVarExprs
   setVarExpr    *SetVarExpr
+  setScope      SetScope
   colIdent      ColIdent
   colIdents     []ColIdent
   tableIdent    TableIdent
@@ -213,7 +214,7 @@ func skipToEnd(yylex interface{}) {
 %token <bytes> DECLARE CONDITION CURSOR CONTINUE EXIT UNDO HANDLER FOUND SQLWARNING SQLEXCEPTION
 
 // Transaction Tokens
-%token <bytes> BEGIN START TRANSACTION COMMIT ROLLBACK
+%token <bytes> BEGIN START TRANSACTION COMMIT ROLLBACK SAVEPOINT WORK RELEASE
 
 // Type Tokens
 %token <bytes> BIT TINYINT SMALLINT MEDIUMINT INT INTEGER BIGINT INTNUM
@@ -266,6 +267,7 @@ func skipToEnd(yylex interface{}) {
 %type <statement> create_statement rename_statement drop_statement truncate_statement flush_statement call_statement
 %type <statement> trigger_begin_end_block statement_list_statement case_statement if_statement signal_statement
 %type <statement> begin_end_block declare_statement resignal_statement
+%type <statement> savepoint_statement rollback_savepoint_statement release_savepoint_statement
 %type <statements> statement_list
 %type <caseStatementCases> case_statement_case_list
 %type <caseStatementCase> case_statement_case
@@ -338,7 +340,8 @@ func skipToEnd(yylex interface{}) {
 %type <setVarExprs> set_list transaction_chars
 %type <bytes> charset_or_character_set
 %type <assignExpr> assignment_expression
-%type <setVarExpr> set_expression transaction_char
+%type <setVarExpr> set_expression set_expression_assignment transaction_char
+%type <setScope> set_scope_primary set_scope_secondary
 %type <str> isolation_level
 %type <bytes> for_from
 %type <str> ignore_opt default_opt
@@ -442,6 +445,9 @@ command:
 | resignal_statement
 | call_statement
 | load_statement
+| savepoint_statement
+| rollback_savepoint_statement
+| release_savepoint_statement
 | /*empty*/
 {
   setParseTree(yylex, nil)
@@ -661,17 +667,10 @@ set_statement:
     }
     $$ = &Set{Comments: Comments($2), Exprs: $4}
   }
-| SET comment_opt GLOBAL TRANSACTION transaction_chars
+| SET comment_opt set_scope_primary TRANSACTION transaction_chars
   {
     for i := 0; i < len($5); i++ {
-      $5[i].Scope = SetScope_Global
-    }
-    $$ = &Set{Comments: Comments($2), Exprs: $5}
-  }
-| SET comment_opt SESSION TRANSACTION transaction_chars
-  {
-    for i := 0; i < len($5); i++ {
-      $5[i].Scope = SetScope_Session
+      $5[i].Scope = $3
     }
     $$ = &Set{Comments: Comments($2), Exprs: $5}
   }
@@ -1264,6 +1263,9 @@ statement_list_statement:
 | signal_statement
 | resignal_statement
 | call_statement
+| savepoint_statement
+| rollback_savepoint_statement
+| release_savepoint_statement
 | begin_end_block
 
 create_table_prefix:
@@ -2662,6 +2664,36 @@ rollback_statement:
   ROLLBACK
   {
     $$ = &Rollback{}
+  }
+
+savepoint_statement:
+  SAVEPOINT ID
+  {
+    $$ = &Savepoint{Identifier: string($2)}
+  }
+
+rollback_savepoint_statement:
+  ROLLBACK TO ID
+  {
+    $$ = &RollbackSavepoint{Identifier: string($3)}
+  }
+| ROLLBACK WORK TO ID
+  {
+    $$ = &RollbackSavepoint{Identifier: string($4)}
+  }
+| ROLLBACK TO SAVEPOINT ID
+  {
+    $$ = &RollbackSavepoint{Identifier: string($4)}
+  }
+| ROLLBACK WORK TO SAVEPOINT ID
+  {
+    $$ = &RollbackSavepoint{Identifier: string($5)}
+  }
+
+release_savepoint_statement:
+  RELEASE SAVEPOINT ID
+  {
+    $$ = &ReleaseSavepoint{Identifier: string($3)}
   }
 
 describe:
@@ -4347,96 +4379,84 @@ set_list:
   }
 
 set_expression:
-  column_name '=' ON
+  set_expression_assignment
   {
-    colName, scope, err := VarScopeForColName($1)
+    colName, scope, err := VarScopeForColName($1.Name)
     if err != nil {
       yylex.Error(err.Error())
       return 1
     }
-    $$ = &SetVarExpr{Name: colName, Expr: NewStrVal($3), Scope: scope}
+    $1.Name = colName
+    $1.Scope = scope
+    $$ = $1
   }
-| column_name '=' OFF
+| set_scope_primary set_expression_assignment
   {
-    colName, scope, err := VarScopeForColName($1)
-    if err != nil {
-      yylex.Error(err.Error())
-      return 1
-    }
-    $$ = &SetVarExpr{Name: colName, Expr: NewStrVal($3), Scope: scope}
-  }
-| column_name '=' expression
-  {
-    colName, scope, err := VarScopeForColName($1)
-    if err != nil {
-      yylex.Error(err.Error())
-      return 1
-    }
-    $$ = &SetVarExpr{Name: colName, Expr: $3, Scope: scope}
-  }
-| GLOBAL column_name '=' expression
-  {
-    _, scope, err := VarScopeForColName($2)
+    _, scope, err := VarScopeForColName($2.Name)
     if err != nil {
       yylex.Error(err.Error())
       return 1
     } else if scope != SetScope_None {
-      yylex.Error(fmt.Sprintf("invalid system variable name `%s`", $2.Name.val))
+      yylex.Error(fmt.Sprintf("invalid system variable name `%s`", $2.Name.Name.val))
       return 1
     }
-    $$ = &SetVarExpr{Name: $2, Expr: $4, Scope: SetScope_Global}
+    $2.Scope = $1
+    $$ = $2
   }
-| SESSION column_name '=' expression
+| set_scope_secondary set_expression_assignment
   {
-    _, scope, err := VarScopeForColName($2)
+    _, scope, err := VarScopeForColName($2.Name)
     if err != nil {
       yylex.Error(err.Error())
       return 1
     } else if scope != SetScope_None {
-      yylex.Error(fmt.Sprintf("invalid system variable name `%s`", $2.Name.val))
+      yylex.Error(fmt.Sprintf("invalid system variable name `%s`", $2.Name.Name.val))
       return 1
     }
-    $$ = &SetVarExpr{Name: $2, Expr: $4, Scope: SetScope_Session}
-  }
-| LOCAL column_name '=' expression
-  {
-    _, scope, err := VarScopeForColName($2)
-    if err != nil {
-      yylex.Error(err.Error())
-      return 1
-    } else if scope != SetScope_None {
-      yylex.Error(fmt.Sprintf("invalid system variable name `%s`", $2.Name.val))
-      return 1
-    }
-    $$ = &SetVarExpr{Name: $2, Expr: $4, Scope: SetScope_Session}
-  }
-| PERSIST column_name '=' expression
-  {
-    _, scope, err := VarScopeForColName($2)
-    if err != nil {
-      yylex.Error(err.Error())
-      return 1
-    } else if scope != SetScope_None {
-      yylex.Error(fmt.Sprintf("invalid system variable name `%s`", $2.Name.val))
-      return 1
-    }
-    $$ = &SetVarExpr{Name: $2, Expr: $4, Scope: SetScope_Persist}
-  }
-| PERSIST_ONLY column_name '=' expression
-  {
-    _, scope, err := VarScopeForColName($2)
-    if err != nil {
-      yylex.Error(err.Error())
-      return 1
-    } else if scope != SetScope_None {
-      yylex.Error(fmt.Sprintf("invalid system variable name `%s`", $2.Name.val))
-      return 1
-    }
-    $$ = &SetVarExpr{Name: $2, Expr: $4, Scope: SetScope_PersistOnly}
+    $2.Scope = $1
+    $$ = $2
   }
 | charset_or_character_set charset_value collate_opt
   {
     $$ = &SetVarExpr{Name: NewColName(string($1)), Expr: $2, Scope: SetScope_Session}
+  }
+
+set_scope_primary:
+  GLOBAL
+  {
+    $$ = SetScope_Global
+  }
+| SESSION
+  {
+    $$ = SetScope_Session
+  }
+
+set_scope_secondary:
+  LOCAL
+  {
+    $$ = SetScope_Session
+  }
+| PERSIST
+  {
+    $$ = SetScope_Persist
+  }
+| PERSIST_ONLY
+  {
+    $$ = SetScope_PersistOnly
+  }
+
+set_expression_assignment:
+  column_name '=' ON
+  {
+    $$ = &SetVarExpr{Name: $1, Expr: NewStrVal($3), Scope: SetScope_None}
+  }
+| column_name '=' OFF
+  {
+    $$ = &SetVarExpr{Name: $1, Expr: NewStrVal($3), Scope: SetScope_None}
+  }
+| column_name '=' expression
+  {
+    $$ = &SetVarExpr{Name: $1, Expr: $3, Scope: SetScope_None}
   }
 
 charset_or_character_set:
@@ -4944,6 +4964,7 @@ non_reserved_keyword:
 | REAL
 | REFERENCE
 | REFERENCES
+| RELEASE
 | REORGANIZE
 | REPAIR
 | REPEATABLE
@@ -4957,6 +4978,7 @@ non_reserved_keyword:
 | REUSE
 | ROLE
 | ROLLBACK
+| SAVEPOINT
 | SCHEMAS
 | SCHEMA_NAME
 | SECONDARY
@@ -5008,6 +5030,7 @@ non_reserved_keyword:
 | VIEW
 | VISIBLE
 | WARNINGS
+| WORK
 | WRITE
 | YEAR
 | ZEROFILL
