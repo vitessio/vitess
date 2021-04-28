@@ -35,10 +35,15 @@ type (
 		Name string `json:"name"`
 	}
 
+	author struct {
+		Login string `json:"login"`
+	}
+
 	prInfo struct {
 		Labels []label `json:"labels"`
 		Number int     `json:"number"`
 		Title  string  `json:"title"`
+		Author author  `json:"author"`
 	}
 
 	prsByComponent = map[string][]prInfo
@@ -69,34 +74,64 @@ const (
 {{- end }}
 `
 
-	prefixType      = "Type: "
-	prefixComponent = "Component: "
+	prefixType        = "Type: "
+	prefixComponent   = "Component: "
+	numberOfThreads   = 10
+	lengthOfSingleSHA = 40
 )
 
-func loadMergedPRs(from, to string) ([]string, error) {
-	cmd := exec.Command("git", "log", "--oneline", fmt.Sprintf("%s..%s", from, to))
+func loadMergedPRs(from, to string) (prs []string, authors []string, commitCount int, err error) {
+	// load the git log with "author \t title \t parents"
+	cmd := exec.Command("git", "log", `--pretty=format:%ae%x09%s%x09%P`, fmt.Sprintf("%s..%s", from, to))
 	out, err := cmd.Output()
 	if err != nil {
 		execErr := err.(*exec.ExitError)
-		return nil, fmt.Errorf("%s:\nstderr: %s\nstdout: %s", err.Error(), execErr.Stderr, out)
+		return nil, nil, 0, fmt.Errorf("%s:\nstderr: %s\nstdout: %s", err.Error(), execErr.Stderr, out)
 	}
 
-	var prs []string
-	rgx := regexp.MustCompile(`Merge pull request #(\d+)`)
-	lines := strings.Split(string(out), "\n")
+	return parseGitLog(string(out))
+}
+
+func parseGitLog(s string) (prs []string, authors []string, commitCount int, err error) {
+	rx := regexp.MustCompile(`(.+)\t(.+)\t(.+)`)
+	mergePR := regexp.MustCompile(`Merge pull request #(\d+)`)
+	authMap := map[string]bool{}
+	lines := strings.Split(s, "\n")
 	for _, line := range lines {
-		lineInfo := rgx.FindStringSubmatch(line)
-		if len(lineInfo) == 2 {
-			prs = append(prs, lineInfo[1])
+		lineInfo := rx.FindStringSubmatch(line)
+		if len(lineInfo) != 4 {
+			log.Fatalf("failed to parse the output from git log: %s", line)
 		}
+		author := lineInfo[1]
+		title := lineInfo[2]
+		parents := lineInfo[3]
+		merged := mergePR.FindStringSubmatch(title)
+		if len(merged) == 2 {
+			// this is a merged PR. remember the PR #
+			prs = append(prs, merged[1])
+			continue
+		}
+
+		if len(parents) > lengthOfSingleSHA {
+			// if we have two parents, it means this is a merge commit. we only count non-merge commits
+			continue
+		}
+		commitCount++
+		authMap[author] = true
+	}
+
+	for author := range authMap {
+		authors = append(authors, author)
 	}
 
 	sort.Strings(prs)
-	return prs, nil
+	sort.Strings(authors)
+
+	return
 }
 
 func loadPRinfo(pr string) (prInfo, error) {
-	cmd := exec.Command("gh", "pr", "view", pr, "--json", "title,number,labels")
+	cmd := exec.Command("gh", "pr", "view", pr, "--json", "title,number,labels,author")
 	out, err := cmd.Output()
 	if err != nil {
 		execErr, ok := err.(*exec.ExitError)
@@ -127,7 +162,8 @@ func loadAllPRs(prs []string) ([]prInfo, error) {
 	fmt.Printf("Found %d merged PRs. Loading PR info", len(prs))
 	wg := sync.WaitGroup{}
 	mu := sync.Mutex{}
-	for i := 0; i < 10; i++ {
+
+	for i := 0; i < numberOfThreads; i++ {
 		wg.Add(1)
 		go func() {
 			// load meta data about PRs
@@ -226,15 +262,15 @@ func createSortedPrTypeSlice(prPerType prsByType) []sortedPRType {
 	return data
 }
 
-func writePrInfos(fileout string, prPerType prsByType) (err error) {
-	writeTo := os.Stdout
-	if fileout != "" {
-		writeTo, err = os.OpenFile(fileout, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
-		if err != nil {
-			return err
-		}
+func getOutput(fileout string) (*os.File, error) {
+	if fileout == "" {
+		return os.Stdout, nil
 	}
 
+	return os.OpenFile(fileout, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
+}
+
+func writePrInfos(writeTo *os.File, prPerType prsByType) (err error) {
 	data := createSortedPrTypeSlice(prPerType)
 
 	t := template.Must(template.New("markdownTemplate").Parse(markdownTemplate))
@@ -252,7 +288,7 @@ func main() {
 
 	flag.Parse()
 
-	prs, err := loadMergedPRs(*from, *to)
+	prs, authors, commits, err := loadMergedPRs(*from, *to)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -263,8 +299,24 @@ func main() {
 	}
 
 	prPerType := groupPRs(prInfos)
+	out, err := getOutput(*fileout)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer func() {
+		_ = out.Close()
+	}()
 
-	err = writePrInfos(*fileout, prPerType)
+	err = writePrInfos(out, prPerType)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	_, err = out.WriteString(fmt.Sprintf("\n\nThe release includes %d commits (excluding merges)\n", commits))
+	if err != nil {
+		log.Fatal(err)
+	}
+	_, err = out.WriteString(fmt.Sprintf("Thanks to all our contributors: %s\n", strings.Join(authors, ", ")))
 	if err != nil {
 		log.Fatal(err)
 	}
