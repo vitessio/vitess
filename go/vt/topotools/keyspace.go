@@ -111,7 +111,9 @@ func UpdateShardRecords(
 		// For 'to' shards, refresh to make them serve. The 'from' shards will
 		// be refreshed after traffic has migrated.
 		if !isFrom {
-			_ = RefreshTabletsByShard(ctx, ts, tmc, si, cells, logger)
+			if err := RefreshTabletsByShard(ctx, ts, tmc, si, cells, logger); err != nil {
+				logger.Warningf("RefreshTabletsByShard(%v/%v, cells=%v) failed with %v; continuing ...", si.Keyspace(), si.ShardName(), cells, err)
+			}
 		}
 	}
 
