@@ -2153,7 +2153,7 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 	case vReplicationWorkflowActionProgress:
 		return printCopyProgress()
 	case vReplicationWorkflowActionCreate:
-		err = wf.Create()
+		err = wf.Create(ctx)
 		if err != nil {
 			return err
 		}
@@ -2783,7 +2783,7 @@ func commandValidateSchemaShard(ctx context.Context, wr *wrangler.Wrangler, subF
 	if *excludeTables != "" {
 		excludeTableArray = strings.Split(*excludeTables, ",")
 	}
-	return wr.ValidateSchemaShard(ctx, keyspace, shard, excludeTableArray, *includeViews)
+	return wr.ValidateSchemaShard(ctx, keyspace, shard, excludeTableArray, *includeViews, false /*includeVSchema*/)
 }
 
 func commandValidateSchemaKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
