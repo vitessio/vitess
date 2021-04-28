@@ -17,15 +17,12 @@ limitations under the License.
 package wrangler
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"strings"
 	"sync"
 	"text/template"
-
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
-
-	"context"
 
 	"github.com/golang/protobuf/proto"
 
@@ -34,12 +31,15 @@ import (
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/key"
-	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vtctl/workflow"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
+
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
 
 type streamMigrater struct {
@@ -83,7 +83,7 @@ func buildStreamMigrater(ctx context.Context, ts *trafficSwitcher, cancelMigrate
 func (sm *streamMigrater) readSourceStreams(ctx context.Context, cancelMigrate bool) (map[string][]*vrStream, error) {
 	streams := make(map[string][]*vrStream)
 	var mu sync.Mutex
-	err := sm.ts.forAllSources(func(source *tsSource) error {
+	err := sm.ts.forAllSources(func(source *workflow.MigrationSource) error {
 		if !cancelMigrate {
 			// This flow protects us from the following scenario: When we create streams,
 			// we always do it in two phases. We start them off as Stopped, and then
@@ -96,15 +96,15 @@ func (sm *streamMigrater) readSourceStreams(ctx context.Context, cancelMigrate b
 			// If so, we request the operator to clean them up, or restart them before going ahead.
 			// This allows us to assume that all stopped streams can be safely restarted
 			// if we cancel the operation.
-			stoppedStreams, err := sm.readTabletStreams(ctx, source.master, "state = 'Stopped' and message != 'FROZEN'")
+			stoppedStreams, err := sm.readTabletStreams(ctx, source.GetPrimary(), "state = 'Stopped' and message != 'FROZEN'")
 			if err != nil {
 				return err
 			}
 			if len(stoppedStreams) != 0 {
-				return fmt.Errorf("cannot migrate until all streams are running: %s: %d", source.si.ShardName(), source.master.Alias.Uid)
+				return fmt.Errorf("cannot migrate until all streams are running: %s: %d", source.GetShard().ShardName(), source.GetPrimary().Alias.Uid)
 			}
 		}
-		tabletStreams, err := sm.readTabletStreams(ctx, source.master, "")
+		tabletStreams, err := sm.readTabletStreams(ctx, source.GetPrimary(), "")
 		if err != nil {
 			return err
 		}
@@ -112,17 +112,17 @@ func (sm *streamMigrater) readSourceStreams(ctx context.Context, cancelMigrate b
 			// No VReplication is running. So, we have no work to do.
 			return nil
 		}
-		p3qr, err := sm.ts.wr.tmc.VReplicationExec(ctx, source.master.Tablet, fmt.Sprintf("select vrepl_id from _vt.copy_state where vrepl_id in %s", tabletStreamValues(tabletStreams)))
+		p3qr, err := sm.ts.wr.tmc.VReplicationExec(ctx, source.GetPrimary().Tablet, fmt.Sprintf("select vrepl_id from _vt.copy_state where vrepl_id in %s", tabletStreamValues(tabletStreams)))
 		if err != nil {
 			return err
 		}
 		if len(p3qr.Rows) != 0 {
-			return fmt.Errorf("cannot migrate while vreplication streams in source shards are still copying: %s", source.si.ShardName())
+			return fmt.Errorf("cannot migrate while vreplication streams in source shards are still copying: %s", source.GetShard().ShardName())
 		}
 
 		mu.Lock()
 		defer mu.Unlock()
-		streams[source.si.ShardName()] = tabletStreams
+		streams[source.GetShard().ShardName()] = tabletStreams
 		return nil
 	})
 	if err != nil {
@@ -269,23 +269,23 @@ func (sm *streamMigrater) readTabletStreams(ctx context.Context, ti *topo.Tablet
 func (sm *streamMigrater) stopSourceStreams(ctx context.Context) error {
 	stoppedStreams := make(map[string][]*vrStream)
 	var mu sync.Mutex
-	err := sm.ts.forAllSources(func(source *tsSource) error {
-		tabletStreams := sm.streams[source.si.ShardName()]
+	err := sm.ts.forAllSources(func(source *workflow.MigrationSource) error {
+		tabletStreams := sm.streams[source.GetShard().ShardName()]
 		if len(tabletStreams) == 0 {
 			return nil
 		}
 		query := fmt.Sprintf("update _vt.vreplication set state='Stopped', message='for cutover' where id in %s", tabletStreamValues(tabletStreams))
-		_, err := sm.ts.wr.tmc.VReplicationExec(ctx, source.master.Tablet, query)
+		_, err := sm.ts.wr.tmc.VReplicationExec(ctx, source.GetPrimary().Tablet, query)
 		if err != nil {
 			return err
 		}
-		tabletStreams, err = sm.readTabletStreams(ctx, source.master, fmt.Sprintf("id in %s", tabletStreamValues(tabletStreams)))
+		tabletStreams, err = sm.readTabletStreams(ctx, source.GetPrimary(), fmt.Sprintf("id in %s", tabletStreamValues(tabletStreams)))
 		if err != nil {
 			return err
 		}
 		mu.Lock()
 		defer mu.Unlock()
-		stoppedStreams[source.si.ShardName()] = tabletStreams
+		stoppedStreams[source.GetShard().ShardName()] = tabletStreams
 		return nil
 	})
 	if err != nil {
@@ -353,18 +353,18 @@ func (sm *streamMigrater) syncSourceStreams(ctx context.Context) (map[string]mys
 func (sm *streamMigrater) verifyStreamPositions(ctx context.Context, stopPositions map[string]mysql.Position) ([]string, error) {
 	stoppedStreams := make(map[string][]*vrStream)
 	var mu sync.Mutex
-	err := sm.ts.forAllSources(func(source *tsSource) error {
-		tabletStreams := sm.streams[source.si.ShardName()]
+	err := sm.ts.forAllSources(func(source *workflow.MigrationSource) error {
+		tabletStreams := sm.streams[source.GetShard().ShardName()]
 		if len(tabletStreams) == 0 {
 			return nil
 		}
-		tabletStreams, err := sm.readTabletStreams(ctx, source.master, fmt.Sprintf("id in %s", tabletStreamValues(tabletStreams)))
+		tabletStreams, err := sm.readTabletStreams(ctx, source.GetPrimary(), fmt.Sprintf("id in %s", tabletStreamValues(tabletStreams)))
 		if err != nil {
 			return err
 		}
 		mu.Lock()
 		defer mu.Unlock()
-		stoppedStreams[source.si.ShardName()] = tabletStreams
+		stoppedStreams[source.GetShard().ShardName()] = tabletStreams
 		return nil
 	})
 	if err != nil {
@@ -540,24 +540,24 @@ func (sm *streamMigrater) createTargetStreams(ctx context.Context, tmpl []*vrStr
 	if len(tmpl) == 0 {
 		return nil
 	}
-	return sm.ts.forAllTargets(func(target *tsTarget) error {
+	return sm.ts.forAllTargets(func(target *workflow.MigrationTarget) error {
 		tabletStreams := copyTabletStreams(tmpl)
 		for _, vrs := range tabletStreams {
 			for _, rule := range vrs.bls.Filter.Rules {
 				buf := &strings.Builder{}
 				t := template.Must(template.New("").Parse(rule.Filter))
-				if err := t.Execute(buf, key.KeyRangeString(target.si.KeyRange)); err != nil {
+				if err := t.Execute(buf, key.KeyRangeString(target.GetShard().KeyRange)); err != nil {
 					return err
 				}
 				rule.Filter = buf.String()
 			}
 		}
 
-		ig := vreplication.NewInsertGenerator(binlogplayer.BlpStopped, target.master.DbName())
+		ig := vreplication.NewInsertGenerator(binlogplayer.BlpStopped, target.GetPrimary().DbName())
 		for _, vrs := range tabletStreams {
 			ig.AddRow(vrs.workflow, vrs.bls, mysql.EncodePosition(vrs.pos), "", "")
 		}
-		_, err := sm.ts.wr.VReplicationExec(ctx, target.master.Alias, ig.String())
+		_, err := sm.ts.wr.VReplicationExec(ctx, target.GetPrimary().Alias, ig.String())
 		return err
 	})
 }
@@ -570,9 +570,9 @@ func (sm *streamMigrater) cancelMigration(ctx context.Context) {
 	// Ignore error. We still want to restart the source streams if deleteTargetStreams fails.
 	_ = sm.deleteTargetStreams(ctx)
 
-	err := sm.ts.forAllSources(func(source *tsSource) error {
-		query := fmt.Sprintf("update _vt.vreplication set state='Running', stop_pos=null, message='' where db_name=%s and workflow != %s", encodeString(source.master.DbName()), encodeString(sm.ts.reverseWorkflow))
-		_, err := sm.ts.wr.VReplicationExec(ctx, source.master.Alias, query)
+	err := sm.ts.forAllSources(func(source *workflow.MigrationSource) error {
+		query := fmt.Sprintf("update _vt.vreplication set state='Running', stop_pos=null, message='' where db_name=%s and workflow != %s", encodeString(source.GetPrimary().DbName()), encodeString(sm.ts.reverseWorkflow))
+		_, err := sm.ts.wr.VReplicationExec(ctx, source.GetPrimary().Alias, query)
 		return err
 	})
 	if err != nil {
@@ -585,9 +585,9 @@ func (sm *streamMigrater) deleteTargetStreams(ctx context.Context) error {
 		return nil
 	}
 	workflowList := stringListify(sm.workflows)
-	err := sm.ts.forAllTargets(func(target *tsTarget) error {
-		query := fmt.Sprintf("delete from _vt.vreplication where db_name=%s and workflow in (%s)", encodeString(target.master.DbName()), workflowList)
-		_, err := sm.ts.wr.VReplicationExec(ctx, target.master.Alias, query)
+	err := sm.ts.forAllTargets(func(target *workflow.MigrationTarget) error {
+		query := fmt.Sprintf("delete from _vt.vreplication where db_name=%s and workflow in (%s)", encodeString(target.GetPrimary().DbName()), workflowList)
+		_, err := sm.ts.wr.VReplicationExec(ctx, target.GetPrimary().Alias, query)
 		return err
 	})
 	if err != nil {
@@ -603,17 +603,17 @@ func streamMigraterfinalize(ctx context.Context, ts *trafficSwitcher, workflows 
 		return nil
 	}
 	workflowList := stringListify(workflows)
-	err := ts.forAllSources(func(source *tsSource) error {
-		query := fmt.Sprintf("delete from _vt.vreplication where db_name=%s and workflow in (%s)", encodeString(source.master.DbName()), workflowList)
-		_, err := ts.wr.VReplicationExec(ctx, source.master.Alias, query)
+	err := ts.forAllSources(func(source *workflow.MigrationSource) error {
+		query := fmt.Sprintf("delete from _vt.vreplication where db_name=%s and workflow in (%s)", encodeString(source.GetPrimary().DbName()), workflowList)
+		_, err := ts.wr.VReplicationExec(ctx, source.GetPrimary().Alias, query)
 		return err
 	})
 	if err != nil {
 		return err
 	}
-	err = ts.forAllTargets(func(target *tsTarget) error {
-		query := fmt.Sprintf("update _vt.vreplication set state='Running' where db_name=%s and workflow in (%s)", encodeString(target.master.DbName()), workflowList)
-		_, err := ts.wr.VReplicationExec(ctx, target.master.Alias, query)
+	err = ts.forAllTargets(func(target *workflow.MigrationTarget) error {
+		query := fmt.Sprintf("update _vt.vreplication set state='Running' where db_name=%s and workflow in (%s)", encodeString(target.GetPrimary().DbName()), workflowList)
+		_, err := ts.wr.VReplicationExec(ctx, target.GetPrimary().Alias, query)
 		return err
 	})
 	return err

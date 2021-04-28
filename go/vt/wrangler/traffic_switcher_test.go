@@ -1689,23 +1689,6 @@ func TestMigrateNoTableWildcards(t *testing.T) {
 	}
 }
 
-func TestReverseName(t *testing.T) {
-	tests := []struct {
-		in, out string
-	}{{
-		in:  "aa",
-		out: "aa_reverse",
-	}, {
-		in:  "aa_reverse",
-		out: "aa",
-	}}
-	for _, test := range tests {
-		if got, want := reverseName(test.in), test.out; got != want {
-			t.Errorf("reverseName(%s): %s, want %s", test.in, got, test.out)
-		}
-	}
-}
-
 func TestReverseVReplicationUpdateQuery(t *testing.T) {
 	ts := &trafficSwitcher{
 		reverseWorkflow: "wf",

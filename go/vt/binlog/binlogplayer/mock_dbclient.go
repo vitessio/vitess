@@ -37,6 +37,7 @@ type MockDBClient struct {
 	currentResult   int
 	done            chan struct{}
 	queriesToIgnore []*mockExpect // these queries will return a standard nil result, you SHOULD NOT expect them in the tests
+	invariants      map[string]*sqltypes.Result
 }
 
 type mockExpect struct {
@@ -68,6 +69,11 @@ func NewMockDBClient(t *testing.T) *MockDBClient {
 		UName:           mockClientUNameFiltered,
 		done:            make(chan struct{}),
 		queriesToIgnore: getQueriesToIgnore(),
+		invariants: map[string]*sqltypes.Result{
+			"CREATE TABLE IF NOT EXISTS _vt.vreplication_log":           {},
+			"select id, type, state, message from _vt.vreplication_log": {},
+			"insert into _vt.vreplication_log":                          {},
+		},
 	}
 }
 
@@ -166,6 +172,11 @@ func (dc *MockDBClient) ExecuteFetch(query string, maxrows int) (qr *sqltypes.Re
 	for _, q := range dc.queriesToIgnore {
 		if strings.EqualFold(q.query, query) || strings.Contains(strings.ToLower(query), strings.ToLower(q.query)) {
 			return q.result, q.err
+		}
+	}
+	for q, result := range dc.invariants {
+		if strings.Contains(query, q) {
+			return result, nil
 		}
 	}
 
