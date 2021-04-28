@@ -15,7 +15,6 @@ package vindexes
 import (
 	"bytes"
 	"encoding/json"
-	"sort"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
@@ -132,11 +131,18 @@ func NewCFC(name string, params map[string]string) (Vindex, error) {
 }
 
 func validOffsets(offsets []int) bool {
-	if len(offsets) == 0 || !sort.IntsAreSorted(offsets) {
+	n := len(offsets)
+	if n == 0 {
 		return false
 	}
 	if offsets[0] <= 0 {
 		return false
+	}
+
+	for i := 1; i < n; i++ {
+		if offsets[i] <= offsets[i-1] {
+			return false
+		}
 	}
 	return true
 }
