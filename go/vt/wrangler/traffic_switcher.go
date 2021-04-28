@@ -987,6 +987,15 @@ func (ts *trafficSwitcher) switchShardReads(ctx context.Context, cells []string,
 			return err
 		}
 	}
+
+	// After running MigrateServedType and updating the SrvKeyspace, let's refresh the tabletmanager state view
+	for _, shard := range fromShards {
+		ts.wr.RefreshTabletsByShard(ctx, shard, cells)
+	}
+	for _, shard := range toShards {
+		ts.wr.RefreshTabletsByShard(ctx, shard, cells)
+	}
+
 	if err := ts.wr.ts.ValidateSrvKeyspace(ctx, ts.targetKeyspace, strings.Join(cells, ",")); err != nil {
 		err2 := vterrors.Wrapf(err, "After switching shard reads, found SrvKeyspace for %s is corrupt in cell %s",
 			ts.targetKeyspace, strings.Join(cells, ","))
@@ -1364,6 +1373,15 @@ func (ts *trafficSwitcher) changeShardRouting(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+
+	// After running MigrateServedType and updating the SrvKeyspace, let's refresh the tabletmanager state view
+	for _, shard := range ts.sourceShards() {
+		ts.wr.RefreshTabletsByShard(ctx, shard, nil)
+	}
+	for _, shard := range ts.targetShards() {
+		ts.wr.RefreshTabletsByShard(ctx, shard, nil)
+	}
+
 	if err := ts.wr.ts.ValidateSrvKeyspace(ctx, ts.targetKeyspace, ""); err != nil {
 		err2 := vterrors.Wrapf(err, "After changing shard routes, found SrvKeyspace for %s is corrupt", ts.targetKeyspace)
 		log.Errorf("%w", err2)

@@ -461,14 +461,15 @@ func (wr *Wrangler) MigrateServedTypes(ctx context.Context, keyspace, shard stri
 	wr.Logger().Infof("WaitForDrain: Sleeping finished. Shutting down queryservice on old tablets now.")
 
 	rec := concurrency.AllErrorRecorder{}
-	refreshShards := sourceShards
-	if reverse {
-		// For a backwards migration, we should refresh (disable) destination shards instead.
-		refreshShards = destinationShards
+
+	// After running MigrateServedType and updating the SrvKeyspace, let's refresh the tabletmanager state view
+	for _, shard := range sourceShards {
+		rec.RecordError(wr.RefreshTabletsByShard(ctx, shard, cells))
 	}
-	for _, si := range refreshShards {
-		rec.RecordError(wr.RefreshTabletsByShard(ctx, si, cells))
+	for _, shard := range destinationShards {
+		rec.RecordError(wr.RefreshTabletsByShard(ctx, shard, cells))
 	}
+
 	return rec.Error()
 }
 
@@ -647,9 +648,16 @@ func (wr *Wrangler) replicaMigrateServedType(ctx context.Context, keyspace strin
 	}
 
 	// Now update serving keyspace
-
 	if err = wr.ts.MigrateServedType(ctx, keyspace, toShards, fromShards, servedType, cells); err != nil {
 		return err
+	}
+
+	// After we run MigrateServedType and we update the SrvKeyspace, let's refresh the tabletmanager state view
+	for _, shard := range fromShards {
+		wr.RefreshTabletsByShard(ctx, shard, cells)
+	}
+	for _, shard := range toShards {
+		wr.RefreshTabletsByShard(ctx, shard, cells)
 	}
 
 	event.DispatchUpdate(ev, "finished")
@@ -815,6 +823,12 @@ func (wr *Wrangler) masterMigrateServedType(ctx context.Context, keyspace string
 		}
 	}
 
+	// After we run MigrateServedType and we update the SrvKeyspace, let's refresh the tabletmanager state view
+	for _, si := range sourceShards {
+		if err := wr.RefreshTabletsByShard(ctx, si, nil); err != nil {
+			return err
+		}
+	}
 	for _, si := range destinationShards {
 		if err := wr.RefreshTabletsByShard(ctx, si, nil); err != nil {
 			return err
