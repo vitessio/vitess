@@ -557,6 +557,11 @@ var AlterVReplicationTable = []string{
 	"ALTER TABLE _vt.vreplication ADD COLUMN rows_copied BIGINT(20) NOT NULL DEFAULT 0",
 }
 
+var WithDDLInitialQueries = []string{
+	"SELECT db_name FROM _vt.vreplication LIMIT 0",
+	"SELECT rows_copied FROM _vt.vreplication LIMIT 0",
+}
+
 // VRSettings contains the settings of a vreplication table.
 type VRSettings struct {
 	StartPos          mysql.Position

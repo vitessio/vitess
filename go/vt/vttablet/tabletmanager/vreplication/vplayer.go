@@ -199,7 +199,7 @@ func (vp *vplayer) applyStmtEvent(ctx context.Context, event *binlogdatapb.VEven
 	}
 	if event.Type == binlogdatapb.VEventType_SAVEPOINT || vp.canAcceptStmtEvents {
 		start := time.Now()
-		_, err := withDDL.Exec(vp.vr.vre.ctx, sql, vp.vr.dbClient.ExecuteWithRetry)
+		_, err := vp.vr.dbClient.ExecuteWithRetry(ctx, sql)
 		vp.vr.stats.QueryTimings.Record(vp.phase, start)
 		vp.vr.stats.QueryCount.Add(vp.phase, 1)
 		return err
@@ -216,7 +216,7 @@ func (vp *vplayer) applyRowEvent(ctx context.Context, rowEvent *binlogdatapb.Row
 		_, err := tplan.applyChange(change, func(sql string) (*sqltypes.Result, error) {
 			stats := NewVrLogStats("ROWCHANGE")
 			start := time.Now()
-			qr, err := withDDL.Exec(vp.vr.vre.ctx, sql, vp.vr.dbClient.ExecuteWithRetry)
+			qr, err := vp.vr.dbClient.ExecuteWithRetry(ctx, sql)
 			vp.vr.stats.QueryCount.Add(vp.phase, 1)
 			vp.vr.stats.QueryTimings.Record(vp.phase, start)
 			stats.Send(sql)
@@ -232,7 +232,7 @@ func (vp *vplayer) applyRowEvent(ctx context.Context, rowEvent *binlogdatapb.Row
 func (vp *vplayer) updatePos(ts int64) (posReached bool, err error) {
 	vp.numAccumulatedHeartbeats = 0
 	update := binlogplayer.GenerateUpdatePos(vp.vr.id, vp.pos, time.Now().Unix(), ts, vp.vr.stats.CopyRowCount.Get())
-	if _, err := withDDL.Exec(vp.vr.vre.ctx, update, vp.vr.dbClient.Execute); err != nil {
+	if _, err := vp.vr.dbClient.Execute(update); err != nil {
 		return false, fmt.Errorf("error %v updating position", err)
 	}
 	vp.unsavedEvent = nil
@@ -255,7 +255,7 @@ func (vp *vplayer) updateCurrentTime(tm int64) error {
 	if err != nil {
 		return err
 	}
-	if _, err := withDDL.Exec(vp.vr.vre.ctx, update, vp.vr.dbClient.Execute); err != nil {
+	if _, err := vp.vr.dbClient.Execute(update); err != nil {
 		return fmt.Errorf("error %v updating time", err)
 	}
 	return nil
@@ -550,7 +550,7 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			// So, we apply the DDL first, and then save the position.
 			// Manual intervention may be needed if there is a partial
 			// failure here.
-			if _, err := withDDL.Exec(vp.vr.vre.ctx, event.Statement, vp.vr.dbClient.ExecuteWithRetry); err != nil {
+			if _, err := vp.vr.dbClient.ExecuteWithRetry(ctx, event.Statement); err != nil {
 				return err
 			}
 			stats.Send(fmt.Sprintf("%v", event.Statement))
@@ -562,7 +562,7 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 				return io.EOF
 			}
 		case binlogdatapb.OnDDLAction_EXEC_IGNORE:
-			if _, err := withDDL.Exec(vp.vr.vre.ctx, event.Statement, vp.vr.dbClient.ExecuteWithRetry); err != nil {
+			if _, err := vp.vr.dbClient.ExecuteWithRetry(ctx, event.Statement); err != nil {
 				log.Infof("Ignoring error: %v for DDL: %s", err, event.Statement)
 			}
 			stats.Send(fmt.Sprintf("%v", event.Statement))

@@ -343,7 +343,7 @@ func (vc *vcopier) fastForward(ctx context.Context, copyState map[string]*sqltyp
 	}
 	if settings.StartPos.IsZero() {
 		update := binlogplayer.GenerateUpdatePos(vc.vr.id, pos, time.Now().Unix(), 0, vc.vr.stats.CopyRowCount.Get())
-		_, err := withDDL.Exec(vc.vr.vre.ctx, update, vc.vr.dbClient.Execute)
+		_, err := vc.vr.dbClient.Execute(update)
 		return err
 	}
 	return newVPlayer(vc.vr, settings, copyState, pos, "fastforward").play(ctx)
