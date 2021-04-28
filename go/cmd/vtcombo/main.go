@@ -170,9 +170,9 @@ func main() {
 		exit.Return(1)
 	}
 
-	globalCreateDb = func(ks *vttestpb.Keyspace) error {
+	globalCreateDb = func(ctx context.Context, ks *vttestpb.Keyspace) error {
 		wr := wrangler.New(logutil.NewConsoleLogger(), ts, nil)
-		newUID, err := vtcombo.CreateKs(context.Background(), ts, tpb, mysqld, &dbconfigs.GlobalDBConfigs, *schemaDir, ks, true, uid, wr)
+		newUID, err := vtcombo.CreateKs(ctx, ts, tpb, mysqld, &dbconfigs.GlobalDBConfigs, *schemaDir, ks, true, uid, wr)
 		if err != nil {
 			return err
 		}
@@ -181,13 +181,13 @@ func main() {
 		return nil
 	}
 
-	globalDropDb = func(ksName string) error {
-		if err := vtcombo.DeleteKs(context.Background(), ts, ksName, mysqld, tpb); err != nil {
+	globalDropDb = func(ctx context.Context, ksName string) error {
+		if err := vtcombo.DeleteKs(ctx, ts, ksName, mysqld, tpb); err != nil {
 			return err
 		}
 
 		// Rebuild the SrvVSchema object
-		if err := ts.RebuildSrvVSchema(context.Background(), tpb.Cells); err != nil {
+		if err := ts.RebuildSrvVSchema(ctx, tpb.Cells); err != nil {
 			return err
 		}
 
