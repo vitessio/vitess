@@ -9372,3 +9372,5 @@
 2021-04-28T14:32:21Z,cluster_initial_sharding_multi,https://github.com/vitessio/vitess/actions/runs/792967886
 2021-04-28T14:32:21Z,e2e_race,https://github.com/vitessio/vitess/actions/runs/792967882
 2021-04-28T15:01:13Z,unit_race,https://github.com/vitessio/vitess/actions/runs/793055165
+2021-04-28T15:26:11Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/793132832
+2021-04-28T15:27:00Z,unit_race,https://github.com/vitessio/vitess/actions/runs/793135331
