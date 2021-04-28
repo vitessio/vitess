@@ -54,12 +54,6 @@ var (
 	testPos               = "MariaDB/0-1-1083"
 )
 
-func expectWithDDLInitialQueries(dbClient *binlogplayer.MockDBClient) {
-	for _, query := range withDDLInitialQueries {
-		dbClient.ExpectRequest(query, nil, nil)
-	}
-}
-
 func TestControllerKeyRange(t *testing.T) {
 	resetBinlogClient()
 	wantTablet := addTablet(100)
@@ -72,7 +66,6 @@ func TestControllerKeyRange(t *testing.T) {
 	}
 
 	dbClient := binlogplayer.NewMockDBClient(t)
-	expectWithDDLInitialQueries(dbClient)
 	dbClient.ExpectRequestRE("update _vt.vreplication set message='Picked source tablet.*", testDMLResponse, nil)
 	dbClient.ExpectRequest("update _vt.vreplication set state='Running', message='' where id=1", testDMLResponse, nil)
 	dbClient.ExpectRequest("select pos, stop_pos, max_tps, max_replication_lag, state from _vt.vreplication where id=1", testSettingsResponse, nil)
@@ -109,7 +102,6 @@ func TestControllerTables(t *testing.T) {
 	}
 
 	dbClient := binlogplayer.NewMockDBClient(t)
-	expectWithDDLInitialQueries(dbClient)
 	dbClient.ExpectRequestRE("update _vt.vreplication set message='Picked source tablet.*", testDMLResponse, nil)
 	dbClient.ExpectRequest("update _vt.vreplication set state='Running', message='' where id=1", testDMLResponse, nil)
 	dbClient.ExpectRequest("select pos, stop_pos, max_tps, max_replication_lag, state from _vt.vreplication where id=1", testSettingsResponse, nil)
@@ -203,7 +195,6 @@ func TestControllerOverrides(t *testing.T) {
 	}
 
 	dbClient := binlogplayer.NewMockDBClient(t)
-	expectWithDDLInitialQueries(dbClient)
 	dbClient.ExpectRequestRE("update _vt.vreplication set message='Picked source tablet.*", testDMLResponse, nil)
 	dbClient.ExpectRequest("update _vt.vreplication set state='Running', message='' where id=1", testDMLResponse, nil)
 	dbClient.ExpectRequest("select pos, stop_pos, max_tps, max_replication_lag, state from _vt.vreplication where id=1", testSettingsResponse, nil)
@@ -269,7 +260,6 @@ func TestControllerRetry(t *testing.T) {
 	}
 
 	dbClient := binlogplayer.NewMockDBClient(t)
-	expectWithDDLInitialQueries(dbClient)
 	dbClient.ExpectRequestRE("update _vt.vreplication set message='Picked source tablet.*", testDMLResponse, nil)
 	dbClient.ExpectRequest("update _vt.vreplication set state='Running', message='' where id=1", testDMLResponse, nil)
 	dbClient.ExpectRequest("select pos, stop_pos, max_tps, max_replication_lag, state from _vt.vreplication where id=1", nil, errors.New("(expected error)"))
@@ -305,7 +295,6 @@ func TestControllerStopPosition(t *testing.T) {
 	}
 
 	dbClient := binlogplayer.NewMockDBClient(t)
-	expectWithDDLInitialQueries(dbClient)
 	dbClient.ExpectRequestRE("update _vt.vreplication set message='Picked source tablet.*", testDMLResponse, nil)
 	dbClient.ExpectRequest("update _vt.vreplication set state='Running', message='' where id=1", testDMLResponse, nil)
 	withStop := &sqltypes.Result{
