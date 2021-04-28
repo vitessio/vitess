@@ -23,6 +23,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"os"
 	"strings"
 	"time"
@@ -194,6 +195,12 @@ func main() {
 				break
 			}
 		}
+
+		// Rebuild the SrvVSchema object
+		if err := ts.RebuildSrvVSchema(context.Background(), tpb.Cells); err != nil {
+			return fmt.Errorf("RebuildVSchemaGraph failed: %v", err)
+		}
+
 		return nil
 	}
 
