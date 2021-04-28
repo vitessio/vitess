@@ -105,7 +105,7 @@ func (rs *resultStreamer) Stream() error {
 			continue
 		}
 
-		row, err := conn.FetchNext()
+		row, err := conn.FetchNext(nil)
 		if err != nil {
 			return err
 		}

@@ -874,7 +874,9 @@ func (vs *vstreamer) extractRowAndFilter(plan *streamerPlan, data []byte, dataCo
 		values[colNum] = value
 		valueIndex++
 	}
-	return plan.filter(values)
+	filtered := make([]sqltypes.Value, len(plan.ColExprs))
+	ok, err := plan.filter(values, filtered)
+	return ok, filtered, err
 }
 
 func wrapError(err error, stopPos mysql.Position, vse *Engine) error {
