@@ -347,32 +347,35 @@ type Statement interface {
 
 type Statements []Statement
 
-func (*Union) iStatement()         {}
-func (*Select) iStatement()        {}
-func (*Stream) iStatement()        {}
-func (*Insert) iStatement()        {}
-func (*Update) iStatement()        {}
-func (*Delete) iStatement()        {}
-func (*Set) iStatement()           {}
-func (*DBDDL) iStatement()         {}
-func (*DDL) iStatement()           {}
-func (*MultiAlterDDL) iStatement() {}
-func (*Explain) iStatement()       {}
-func (*Show) iStatement()          {}
-func (*Use) iStatement()           {}
-func (*Begin) iStatement()         {}
-func (*Commit) iStatement()        {}
-func (*Rollback) iStatement()      {}
-func (*OtherRead) iStatement()     {}
-func (*OtherAdmin) iStatement()    {}
-func (*BeginEndBlock) iStatement() {}
-func (*CaseStatement) iStatement() {}
-func (*IfStatement) iStatement()   {}
-func (*Signal) iStatement()        {}
-func (*Resignal) iStatement()      {}
-func (*Declare) iStatement()       {}
-func (*Call) iStatement()          {}
-func (*Load) iStatement()          {}
+func (*Union) iStatement()             {}
+func (*Select) iStatement()            {}
+func (*Stream) iStatement()            {}
+func (*Insert) iStatement()            {}
+func (*Update) iStatement()            {}
+func (*Delete) iStatement()            {}
+func (*Set) iStatement()               {}
+func (*DBDDL) iStatement()             {}
+func (*DDL) iStatement()               {}
+func (*MultiAlterDDL) iStatement()     {}
+func (*Explain) iStatement()           {}
+func (*Show) iStatement()              {}
+func (*Use) iStatement()               {}
+func (*Begin) iStatement()             {}
+func (*Commit) iStatement()            {}
+func (*Rollback) iStatement()          {}
+func (*OtherRead) iStatement()         {}
+func (*OtherAdmin) iStatement()        {}
+func (*BeginEndBlock) iStatement()     {}
+func (*CaseStatement) iStatement()     {}
+func (*IfStatement) iStatement()       {}
+func (*Signal) iStatement()            {}
+func (*Resignal) iStatement()          {}
+func (*Declare) iStatement()           {}
+func (*Call) iStatement()              {}
+func (*Load) iStatement()              {}
+func (*Savepoint) iStatement()         {}
+func (*RollbackSavepoint) iStatement() {}
+func (*ReleaseSavepoint) iStatement()  {}
 
 // ParenSelect can actually not be a top level statement,
 // but we have to allow it because it's a requirement
@@ -5080,6 +5083,57 @@ func (node OnDup) Format(buf *TrackedBuffer) {
 
 func (node OnDup) walkSubtree(visit Visit) error {
 	return Walk(visit, AssignmentExprs(node))
+}
+
+// Savepoint represents a SAVEPOINT statement.
+type Savepoint struct {
+	Identifier string
+}
+
+var _ SQLNode = (*Savepoint)(nil)
+
+// Format implements the SQLNode interface.
+func (node *Savepoint) Format(buf *TrackedBuffer) {
+	buf.Myprintf("savepoint %s", node.Identifier)
+}
+
+// walkSubtree implements the SQLNode interface.
+func (node *Savepoint) walkSubtree(visit Visit) error {
+	return nil
+}
+
+// RollbackSavepoint represents a ROLLBACK TO statement.
+type RollbackSavepoint struct {
+	Identifier string
+}
+
+var _ SQLNode = (*RollbackSavepoint)(nil)
+
+// Format implements the SQLNode interface.
+func (node *RollbackSavepoint) Format(buf *TrackedBuffer) {
+	buf.Myprintf("rollback to %s", node.Identifier)
+}
+
+// walkSubtree implements the SQLNode interface.
+func (node *RollbackSavepoint) walkSubtree(visit Visit) error {
+	return nil
+}
+
+// ReleaseSavepoint represents a RELEASE SAVEPOINT statement.
+type ReleaseSavepoint struct {
+	Identifier string
+}
+
+var _ SQLNode = (*ReleaseSavepoint)(nil)
+
+// Format implements the SQLNode interface.
+func (node *ReleaseSavepoint) Format(buf *TrackedBuffer) {
+	buf.Myprintf("release savepoint %s", node.Identifier)
+}
+
+// walkSubtree implements the SQLNode interface.
+func (node *ReleaseSavepoint) walkSubtree(visit Visit) error {
+	return nil
 }
 
 // ColIdent is a case insensitive SQL identifier. It will be escaped with
