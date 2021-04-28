@@ -62,6 +62,8 @@ type tmState struct {
 	mu                sync.Mutex
 	isOpen            bool
 	isResharding      bool
+	isInSrvKeyspace   bool
+	isShardServing    map[topodatapb.TabletType]bool
 	tabletControls    map[topodatapb.TabletType]bool
 	blacklistedTables map[topodatapb.TabletType][]string
 	tablet            *topodatapb.Tablet
@@ -139,8 +141,17 @@ func (ts *tmState) RefreshFromTopoInfo(ctx context.Context, shardInfo *topo.Shar
 	}
 
 	if srvKeyspace != nil {
+		ts.isShardServing = make(map[topodatapb.TabletType]bool)
 		ts.tabletControls = make(map[topodatapb.TabletType]bool)
+
 		for _, partition := range srvKeyspace.GetPartitions() {
+
+			for _, shard := range partition.GetShardReferences() {
+				if key.KeyRangeEqual(shard.GetKeyRange(), ts.tablet.KeyRange) {
+					ts.isShardServing[partition.GetServedType()] = true
+				}
+			}
+
 			for _, tabletControl := range partition.GetShardTabletControls() {
 				if key.KeyRangeEqual(tabletControl.GetKeyRange(), ts.KeyRange()) {
 					if tabletControl.QueryServiceDisabled {
@@ -250,6 +261,14 @@ func (ts *tmState) updateLocked(ctx context.Context) {
 		} else {
 			ts.tm.VREngine.Close()
 		}
+	}
+
+	if ts.isShardServing[ts.tablet.Type] {
+		ts.isInSrvKeyspace = true
+		statsIsInSrvKeyspace.Set(1)
+	} else {
+		ts.isInSrvKeyspace = false
+		statsIsInSrvKeyspace.Set(0)
 	}
 
 	// Open TabletServer last so that it advertises serving after all other services are up.
