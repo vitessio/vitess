@@ -195,6 +195,21 @@ func DeleteKs(ctx context.Context, ts *topo.Server, ksName string, mysqld mysqlc
 	if ks == nil {
 		return fmt.Errorf("database not found")
 	}
+
+	for key, tablet := range tabletMap {
+		if tablet.keyspace == ksName {
+			log.Info("shutting down tablet since database was deleted")
+			delete(tabletMap, key)
+			tablet.tm.Stop()
+			tablet.tm.Close()
+			tablet.qsc.SchemaEngine().Close()
+			err := ts.DeleteTablet(ctx, tablet.alias)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
 	conn, err := mysqld.GetDbaConnection(ctx)
 	if err != nil {
 		return err
@@ -207,15 +222,9 @@ func DeleteKs(ctx context.Context, ts *topo.Server, ksName string, mysqld mysqlc
 		if err != nil {
 			return err
 		}
-	}
-
-	for key, tablet := range tabletMap {
-		if tablet.keyspace == ksName {
-			log.Info("shutting down tablet since database was deleted")
-			delete(tabletMap, key)
-
-			tablet.tm.Stop()
-			tablet.tm.Close()
+		err := ts.DeleteShard(ctx, ksName, shard.GetName())
+		if err != nil {
+			return err
 		}
 	}
 
