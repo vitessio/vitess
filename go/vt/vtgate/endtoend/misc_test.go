@@ -55,13 +55,17 @@ func TestCreateAndDropDatabase(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	_ = exec(t, conn, "create database testitest")
-	_ = exec(t, conn, "use testitest")
-	qr := exec(t, conn, "select database()")
+	// run it 3 times.
+	for count := 0; count < 3; count++ {
+		t.Run(fmt.Sprintf("exec:%d", count), func(t *testing.T) {
+			_ = exec(t, conn, "create database testitest")
+			_ = exec(t, conn, "use testitest")
+			qr := exec(t, conn, "select round(1.58)")
+			assert.Equal(t, `[[DECIMAL(2)]]`, fmt.Sprintf("%v", qr.Rows))
 
-	require.Equal(t, `[[VARBINARY("testitest")]]`, fmt.Sprintf("%v", qr.Rows))
-	_ = exec(t, conn, "drop database testitest")
-
-	_, err = conn.ExecuteFetch("select lower('CASE')", 1000, true)
-	require.NoError(t, err)
+			_ = exec(t, conn, "drop database testitest")
+			_, err = conn.ExecuteFetch("use testitest", 1000, true)
+			require.Error(t, err)
+		})
+	}
 }

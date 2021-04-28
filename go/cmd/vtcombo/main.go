@@ -23,7 +23,6 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"os"
 	"strings"
 	"time"
@@ -187,18 +186,9 @@ func main() {
 			return err
 		}
 
-		for i, keyspace := range tpb.Keyspaces {
-			if keyspace.Name == ksName {
-				kss := tpb.Keyspaces             // to save on chars
-				copy(kss[i:], kss[i+1:])         // shift keyspaces to the left, overwriting the value to remove
-				tpb.Keyspaces = kss[:len(kss)-1] // shrink the slice by one
-				break
-			}
-		}
-
 		// Rebuild the SrvVSchema object
 		if err := ts.RebuildSrvVSchema(context.Background(), tpb.Cells); err != nil {
-			return fmt.Errorf("RebuildVSchemaGraph failed: %v", err)
+			return err
 		}
 
 		return nil

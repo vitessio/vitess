@@ -185,20 +185,8 @@ func InitTabletMap(ts *topo.Server, tpb *vttestpb.VTTestTopology, mysqld mysqlct
 
 // DeleteKs deletes keyspace, shards and tablets with mysql databases
 func DeleteKs(ctx context.Context, ts *topo.Server, ksName string, mysqld mysqlctl.MysqlDaemon, tpb *vttestpb.VTTestTopology) error {
-	var ks *vttestpb.Keyspace
-	for _, keyspace := range tpb.Keyspaces {
-		if keyspace.Name == ksName {
-			ks = keyspace
-			break
-		}
-	}
-	if ks == nil {
-		return fmt.Errorf("database not found")
-	}
-
 	for key, tablet := range tabletMap {
 		if tablet.keyspace == ksName {
-			log.Info("shutting down tablet since database was deleted")
 			delete(tabletMap, key)
 			tablet.tm.Stop()
 			tablet.tm.Close()
@@ -210,6 +198,19 @@ func DeleteKs(ctx context.Context, ts *topo.Server, ksName string, mysqld mysqlc
 		}
 	}
 
+	var ks *vttestpb.Keyspace
+	index := 0
+	for _, keyspace := range tpb.Keyspaces {
+		if keyspace.Name == ksName {
+			ks = keyspace
+			break
+		}
+		index++
+	}
+	if ks == nil {
+		return fmt.Errorf("database not found")
+	}
+
 	conn, err := mysqld.GetDbaConnection(ctx)
 	if err != nil {
 		return err
@@ -217,18 +218,23 @@ func DeleteKs(ctx context.Context, ts *topo.Server, ksName string, mysqld mysqlc
 	defer conn.Close()
 	for _, shard := range ks.Shards {
 		q := fmt.Sprintf("DROP DATABASE IF EXISTS `vt_%s_%s`", ksName, shard.GetName())
-		log.Infof("drop database query: [%s]", q)
-		_, err = conn.ExecuteFetch(q, 1, false)
-		if err != nil {
+		if _, err = conn.ExecuteFetch(q, 1, false); err != nil {
 			return err
 		}
-		err := ts.DeleteShard(ctx, ksName, shard.GetName())
-		if err != nil {
+		if err := ts.DeleteShard(ctx, ksName, shard.GetName()); err != nil {
 			return err
 		}
 	}
 
-	return ts.DeleteKeyspace(ctx, ksName)
+	if err = ts.DeleteKeyspace(ctx, ksName); err != nil {
+		return err
+	}
+
+	kss := tpb.Keyspaces             // to save on chars
+	copy(kss[index:], kss[index+1:]) // shift keyspaces to the left, overwriting the value to remove
+	tpb.Keyspaces = kss[:len(kss)-1] // shrink the slice by one
+
+	return nil
 }
 
 // CreateKs creates keyspace, shards and tablets with mysql database

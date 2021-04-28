@@ -147,7 +147,6 @@ func (c *DBDDL) createDatabase(vcursor VCursor, plugin DBDDLPlugin) (*sqltypes.R
 		noErr := true
 		for _, err := range errors {
 			if err != nil {
-				log.Info("---> still not able to send query - %s", err.Error())
 				noErr = false
 				select {
 				case <-ctx.Done(): //context cancelled
