@@ -175,15 +175,16 @@ func TestCFCPrefixQueryNoHash(t *testing.T) {
 	qr := exec(t, conn, "select c2 from t1 where c1 like 'A%' order by c2")
 	assert.Equal(t, 2, len(qr.Rows))
 	// should only target a subset of shards serving rows starting with 'A'.
-	assert.EqualValues(t, []string{"shard-1", "shard-2"}, []string{qr.Rows[0][0].ToString(), qr.Rows[1][0].ToString()})
+	assert.EqualValues(t, `[[VARCHAR("shard-1")] [VARCHAR("shard-2")]]`, fmt.Sprintf("%v", qr.Rows))
 	// should only target a subset of shards serving rows starting with 'AA',
 	// the shards to which 'AA' maps to.
 	qr = exec(t, conn, "select c2 from t1 where c1 like 'AA'")
 	assert.Equal(t, 1, len(qr.Rows))
-	assert.EqualValues(t, "shard-1", qr.Rows[0][0].ToString())
+	assert.EqualValues(t, `[[VARCHAR("shard-1")]]`, fmt.Sprintf("%v", qr.Rows))
 	// fan out to all when there is no prefix
 	qr = exec(t, conn, "select c2 from t1 where c1 like '%A' order by c2")
 	assert.Equal(t, 4, len(qr.Rows))
+	fmt.Printf("%v", qr.Rows)
 	for i, r := range qr.Rows {
 		assert.Equal(t, fmt.Sprintf("shard-%d", i), r[0].ToString())
 	}
@@ -220,24 +221,18 @@ func TestCFCPrefixQueryWithHash(t *testing.T) {
 	// so keyspace id is c20a7f, which means shards "c2-c20a80"
 	qr := exec(t, conn, "select c2 from t2 where c1 like '12A%' order by c2")
 	assert.Equal(t, 1, len(qr.Rows))
-	assert.Equal(t, "shard-1", qr.Rows[0][0].ToString())
+	assert.Equal(t, `[[VARCHAR("shard-1")]]`, fmt.Sprintf("%v", qr.Rows))
 	// The prefix is ('12')
 	// md5('12') -> c20ad4d76fe97759aa27a0c99bff6710 so the corresponding
 	// so keyspace id is c20a, which means shards "c2-c20a80", "c20a80-d0"
 	qr = exec(t, conn, "select c2 from t2 where c1 like '12%' order by c2")
 	assert.Equal(t, 4, len(qr.Rows))
-	assert.Equal(t, "shard-1", qr.Rows[0][0].ToString())
-	assert.Equal(t, "shard-1", qr.Rows[1][0].ToString())
-	assert.Equal(t, "shard-2", qr.Rows[2][0].ToString())
-	assert.Equal(t, "shard-2", qr.Rows[3][0].ToString())
+	assert.Equal(t, `[[VARCHAR("shard-1")] [VARCHAR("shard-1")] [VARCHAR("shard-2")] [VARCHAR("shard-2")]]`, fmt.Sprintf("%v", qr.Rows))
 	// in vschema the prefix length is defined as 2 bytes however only 1 byte
 	// is provided here so the query fans out to all.
 	qr = exec(t, conn, "select c2 from t2 where c1 like '2%' order by c2")
 	assert.Equal(t, 4, len(qr.Rows))
-	assert.Equal(t, "shard-0", qr.Rows[0][0].ToString())
-	assert.Equal(t, "shard-1", qr.Rows[1][0].ToString())
-	assert.Equal(t, "shard-2", qr.Rows[2][0].ToString())
-	assert.Equal(t, "shard-3", qr.Rows[3][0].ToString())
+	assert.Equal(t, `[[VARCHAR("shard-0")] [VARCHAR("shard-1")] [VARCHAR("shard-2")] [VARCHAR("shard-3")]]`, fmt.Sprintf("%v", qr.Rows))
 }
 
 func TestCFCInsert(t *testing.T) {
@@ -267,7 +262,7 @@ func TestCFCInsert(t *testing.T) {
 	exec(t, conn, "use `cfc_testing:41-4180`")
 	qr = exec(t, conn, "select c2 from t1")
 	assert.Equal(t, 1, len(qr.Rows))
-	assert.Equal(t, "BBB", qr.Rows[0][0].ToString())
+	assert.Equal(t, `[[VARCHAR("BBB")]]`, fmt.Sprintf("%v", qr.Rows))
 }
 
 func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
