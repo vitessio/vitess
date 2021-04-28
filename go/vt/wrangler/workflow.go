@@ -156,7 +156,7 @@ func (vrw *VReplicationWorkflow) stateAsString(ws *workflowState) string {
 }
 
 // Create initiates a workflow
-func (vrw *VReplicationWorkflow) Create() error {
+func (vrw *VReplicationWorkflow) Create(ctx context.Context) error {
 	var err error
 	if vrw.Exists() {
 		return fmt.Errorf("workflow already exists")
@@ -168,6 +168,22 @@ func (vrw *VReplicationWorkflow) Create() error {
 	case MoveTablesWorkflow:
 		err = vrw.initMoveTables()
 	case ReshardWorkflow:
+		excludeTables := strings.Split(vrw.params.ExcludeTables, ",")
+		keyspace := vrw.params.SourceKeyspace
+
+		errs := []string{}
+		for _, shard := range vrw.params.SourceShards {
+			if err := vrw.wr.ValidateSchemaShard(ctx, keyspace, shard, excludeTables, true /*includeViews*/, true /*includeVschema*/); err != nil {
+				errMsg := fmt.Sprintf("%s/%s: %s", keyspace, shard, err.Error())
+				errs = append(errs, errMsg)
+			}
+		}
+
+		// There were some schema drifts
+		if len(errs) > 0 {
+			return fmt.Errorf("Create ReshardWorkflow failed Schema Validation:\n" + strings.Join(errs, "\n"))
+		}
+
 		err = vrw.initReshard()
 	default:
 		return fmt.Errorf("unknown workflow type %d", vrw.workflowType)

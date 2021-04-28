@@ -143,7 +143,7 @@ func (wr *Wrangler) diffSchema(ctx context.Context, masterSchema *tabletmanagerd
 }
 
 // ValidateSchemaShard will diff the schema from all the tablets in the shard.
-func (wr *Wrangler) ValidateSchemaShard(ctx context.Context, keyspace, shard string, excludeTables []string, includeViews bool) error {
+func (wr *Wrangler) ValidateSchemaShard(ctx context.Context, keyspace, shard string, excludeTables []string, includeViews bool, includeVSchema bool) error {
 	si, err := wr.ts.GetShard(ctx, keyspace, shard)
 	if err != nil {
 		return fmt.Errorf("GetShard(%v, %v) failed: %v", keyspace, shard, err)
@@ -157,6 +157,24 @@ func (wr *Wrangler) ValidateSchemaShard(ctx context.Context, keyspace, shard str
 	masterSchema, err := wr.GetSchema(ctx, si.MasterAlias, nil, excludeTables, includeViews)
 	if err != nil {
 		return fmt.Errorf("GetSchema(%v, nil, %v, %v) failed: %v", si.MasterAlias, excludeTables, includeViews, err)
+	}
+
+	if includeVSchema {
+		vschm, err := wr.ts.GetVSchema(ctx, keyspace)
+		if err != nil {
+			return fmt.Errorf("GetVSchema(%s) failed: %v", keyspace, err)
+		}
+		notFoundTables := []string{}
+
+		for _, tableDef := range masterSchema.TableDefinitions {
+			if _, ok := vschm.Tables[tableDef.Name]; !ok {
+				notFoundTables = append(notFoundTables, tableDef.Name)
+			}
+		}
+
+		if len(notFoundTables) > 0 {
+			return fmt.Errorf("Vschema Validation Failed: the following tables were not found in the vschema %v", notFoundTables)
+		}
 	}
 
 	// read all the aliases in the shard, that is all tablets that are
@@ -199,7 +217,7 @@ func (wr *Wrangler) ValidateSchemaKeyspace(ctx context.Context, keyspace string,
 	}
 	sort.Strings(shards)
 	if len(shards) == 1 {
-		return wr.ValidateSchemaShard(ctx, keyspace, shards[0], excludeTables, includeViews)
+		return wr.ValidateSchemaShard(ctx, keyspace, shards[0], excludeTables, includeViews, false /*includeVSchema*/)
 	}
 
 	var referenceSchema *tabletmanagerdatapb.SchemaDefinition
