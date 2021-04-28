@@ -460,7 +460,8 @@ func expectLogsAndUnsubscribe(t *testing.T, logs []LogExpectation, logCh chan in
 }
 
 func expectDBClientQueries(t *testing.T, queries []string) {
-	ddls := withDDL.DDLs()
+	extraQueries := withDDL.DDLs()
+	extraQueries = append(extraQueries, withDDLInitialQueries...)
 	// Either 'queries' or 'queriesWithDDLs' must match globalDBQueries
 	t.Helper()
 	failed := false
@@ -478,8 +479,8 @@ func expectDBClientQueries(t *testing.T, queries []string) {
 			if heartbeatRe.MatchString(got) {
 				goto retry
 			}
-			for _, ddl := range ddls {
-				if got == ddl {
+			for _, extraQuery := range extraQueries {
+				if got == extraQuery {
 					goto retry
 				}
 			}
