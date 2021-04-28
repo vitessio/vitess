@@ -262,7 +262,7 @@ func skipToEnd(yylex interface{}) {
 %token <bytes> THREAD_PRIORITY TIES UNBOUNDED VCPU VISIBLE SYSTEM INFILE
 
 %type <statement> command
-%type <selStmt> select_statement base_select union_lhs union_rhs
+%type <selStmt> select_statement base_select base_select_no_cte union_lhs union_rhs
 %type <statement> stream_statement insert_statement update_statement delete_statement set_statement trigger_body
 %type <statement> create_statement rename_statement drop_statement truncate_statement flush_statement call_statement
 %type <statement> trigger_begin_end_block statement_list_statement case_statement if_statement signal_statement
@@ -462,15 +462,10 @@ load_statement:
 select_statement:
   base_select order_by_opt limit_opt lock_opt
   {
-    sel := $1.(*Select)
-    sel.OrderBy = $2
-    sel.Limit = $3
-    sel.Lock = $4
-    $$ = sel
-  }
-| union_lhs union_op union_rhs order_by_opt limit_opt lock_opt
-  {
-    $$ = &Union{Type: $2, Left: $1, Right: $3, OrderBy: $4, Limit: $5, Lock: $6}
+    $1.SetOrderBy($2)
+    $1.SetLimit($3)
+    $1.SetLock($4)
+    $$ = $1
   }
 | SELECT comment_opt cache_opt NEXT num_val for_from table_name
   {
@@ -485,6 +480,23 @@ stream_statement:
 
 // base_select is an unparenthesized SELECT with no order by clause or beyond.
 base_select:
+  base_select_no_cte
+  {
+    $$ = $1
+  }
+| with_clause SELECT comment_opt cache_opt distinct_opt sql_calc_found_rows_opt straight_join_opt select_expression_list FROM table_references where_expression_opt group_by_opt having_opt
+  {
+    $$ = &Select{CommonTableExprs: $1, Comments: Comments($3), Cache: $4, Distinct: $5, Hints: $7, SelectExprs: $8, From: $10, Where: NewWhere(WhereStr, $11), GroupBy: GroupBy($12), Having: NewWhere(HavingStr, $13)}
+    if $6 == 1 {
+      $$.(*Select).CalcFoundRows = true
+    }
+  }
+| union_lhs union_op union_rhs
+  {
+    $$ = &Union{Type: $2, Left: $1, Right: $3}
+  }
+
+base_select_no_cte:
   SELECT comment_opt cache_opt distinct_opt sql_calc_found_rows_opt straight_join_opt select_expression_list where_expression_opt group_by_opt having_opt
   {
     $$ = &Select{Comments: Comments($2), Cache: $3, Distinct: $4, Hints: $6, SelectExprs: $7, From: TableExprs{&AliasedTableExpr{Expr:TableName{Name: NewTableIdent("dual")}}}, Where: NewWhere(WhereStr, $8), GroupBy: GroupBy($9), Having: NewWhere(HavingStr, $10)}
@@ -496,13 +508,6 @@ base_select:
   {
     $$ = &Select{Comments: Comments($2), Cache: $3, Distinct: $4, Hints: $6, SelectExprs: $7, From: $9, Where: NewWhere(WhereStr, $10), GroupBy: GroupBy($11), Having: NewWhere(HavingStr, $12)}
     if $5 == 1 {
-      $$.(*Select).CalcFoundRows = true
-    }
-  }
-| with_clause SELECT comment_opt cache_opt distinct_opt sql_calc_found_rows_opt straight_join_opt select_expression_list FROM table_references where_expression_opt group_by_opt having_opt
-  {
-    $$ = &Select{CommonTableExprs: $1, Comments: Comments($3), Cache: $4, Distinct: $5, Hints: $7, SelectExprs: $8, From: $10, Where: NewWhere(WhereStr, $11), GroupBy: GroupBy($12), Having: NewWhere(HavingStr, $13)}
-    if $6 == 1 {
       $$.(*Select).CalcFoundRows = true
     }
   }
@@ -534,16 +539,6 @@ common_table_expression:
   }
 
 union_lhs:
-  select_statement
-  {
-    $$ = $1
-  }
-| openb select_statement closeb
-  {
-    $$ = &ParenSelect{Select: $2}
-  }
-
-union_rhs:
   base_select
   {
     $$ = $1
@@ -553,6 +548,15 @@ union_rhs:
     $$ = &ParenSelect{Select: $2}
   }
 
+union_rhs:
+  base_select_no_cte
+  {
+    $$ = $1
+  }
+| openb select_statement closeb
+  {
+    $$ = &ParenSelect{Select: $2}
+  }
 
 insert_statement:
   insert_or_replace comment_opt ignore_opt into_table_name opt_partition_clause insert_data on_dup_opt

@@ -389,6 +389,8 @@ type SelectStatement interface {
 	iInsertRows()
 	AddOrder(*Order)
 	SetLimit(*Limit)
+	SetLock(string)
+	SetOrderBy(OrderBy)
 	SQLNode
 }
 
@@ -436,6 +438,14 @@ const (
 // AddOrder adds an order by element
 func (node *Select) AddOrder(order *Order) {
 	node.OrderBy = append(node.OrderBy, order)
+}
+
+func (node *Select) SetOrderBy(orderBy OrderBy) {
+	node.OrderBy = orderBy
+}
+
+func (node *Select) SetLock(lock string) {
+	node.Lock = lock
 }
 
 // SetLimit sets the limit clause
@@ -538,6 +548,14 @@ func (node *ParenSelect) AddOrder(order *Order) {
 	panic("unreachable")
 }
 
+func (node *ParenSelect) SetOrderBy(orders OrderBy) {
+	panic("unreachable")
+}
+
+func (node *ParenSelect) SetLock(lock string) {
+	panic("unreachable")
+}
+
 // SetLimit sets the limit clause
 func (node *ParenSelect) SetLimit(limit *Limit) {
 	panic("unreachable")
@@ -600,9 +618,17 @@ func (node *Union) AddOrder(order *Order) {
 	node.OrderBy = append(node.OrderBy, order)
 }
 
+func (node *Union) SetOrderBy(orderBy OrderBy) {
+	node.OrderBy = orderBy
+}
+
 // SetLimit sets the limit clause
 func (node *Union) SetLimit(limit *Limit) {
 	node.Limit = limit
+}
+
+func (node *Union) SetLock(lock string) {
+	node.Lock = lock
 }
 
 // Format formats the node.
