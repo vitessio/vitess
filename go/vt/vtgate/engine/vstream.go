@@ -62,7 +62,7 @@ func (v *VStream) GetTableName() string {
 
 // Execute implements the Primitive interface
 func (v *VStream) Execute(_ VCursor, _ map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "'Execute' in VStream is not supported")
+	return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "[BUG] 'Execute' called for VStream")
 }
 
 // StreamExecute implements the Primitive interface
@@ -142,7 +142,7 @@ func (v *VStream) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.Bi
 
 // GetFields implements the Primitive interface
 func (v *VStream) GetFields(_ VCursor, _ map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "'GetFields' in VStream is not supported")
+	return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "[BUG] 'GetFields' called for VStream")
 }
 
 func (v *VStream) description() PrimitiveDescription {
