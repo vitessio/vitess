@@ -9389,3 +9389,4 @@
 2021-04-29T09:25:41Z,Cluster (vreplication_migrate),https://github.com/vitessio/vitess/actions/runs/795550204
 2021-04-29T12:40:43Z,golangci-lint,https://github.com/vitessio/vitess/actions/runs/796055411
 2021-04-29T12:43:01Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/796061582
+2021-04-29T12:45:08Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/796067458
