@@ -16,8 +16,8 @@
 import * as React from 'react';
 
 import { useTablets } from '../../hooks/api';
-import { vtadmin as pb, topodata } from '../../proto/vtadmin';
-import { invertBy, orderBy } from 'lodash-es';
+import { vtadmin as pb } from '../../proto/vtadmin';
+import { orderBy } from 'lodash-es';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import { DataTable } from '../dataTable/DataTable';
 import { TextInput } from '../TextInput';
@@ -28,6 +28,7 @@ import { Button } from '../Button';
 import { DataCell } from '../dataTable/DataCell';
 import { TabletServingPip } from '../pips/TabletServingPip';
 import { useSyncedURLParam } from '../../hooks/useSyncedURLParam';
+import { formatAlias, formatDisplayType, formatState, formatType } from '../../util/tablets';
 
 export const Tablets = () => {
     useDocumentTitle('Tablets');
@@ -80,32 +81,6 @@ export const Tablets = () => {
         </div>
     );
 };
-
-const SERVING_STATES = Object.keys(pb.Tablet.ServingState);
-
-// TABLET_TYPES maps numeric tablet types back to human readable strings.
-// Note that topodata.TabletType allows duplicate values: specifically,
-// both RDONLY (new name) and BATCH (old name) share the same numeric value.
-// So, we make the assumption that if there are duplicate keys, we will
-// always take the first value.
-const TABLET_TYPES = Object.entries(invertBy(topodata.TabletType)).reduce((acc, [k, vs]) => {
-    acc[k] = vs[0];
-    return acc;
-}, {} as { [k: string]: string });
-
-const formatAlias = (t: pb.Tablet) =>
-    t.tablet?.alias?.cell && t.tablet?.alias?.uid && `${t.tablet.alias.cell}-${t.tablet.alias.uid}`;
-
-const formatType = (t: pb.Tablet) => {
-    return t.tablet?.type && TABLET_TYPES[t.tablet?.type];
-};
-
-const formatDisplayType = (t: pb.Tablet) => {
-    const tt = formatType(t);
-    return tt === 'MASTER' ? 'PRIMARY' : tt;
-};
-
-const formatState = (t: pb.Tablet) => t.state && SERVING_STATES[t.state];
 
 export const formatRows = (tablets: pb.Tablet[] | null | undefined, filter: string | null | undefined) => {
     if (!tablets) return [];
