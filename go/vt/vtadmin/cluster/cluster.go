@@ -23,10 +23,12 @@ import (
 	"math/rand"
 	"strings"
 	"sync"
+	"text/template"
 	"time"
 
 	"k8s.io/apimachinery/pkg/util/sets"
 
+	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
@@ -39,7 +41,6 @@ import (
 	"vitess.io/vitess/go/vt/vtadmin/vtsql"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/proto/vtadmin"
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
@@ -59,6 +60,9 @@ type Cluster struct {
 	// (TODO|@amason): Figure out if these are needed or if there's a way to
 	// push down to the credentials / vtsql.
 	// vtgateCredentialsPath string
+
+	// Fields for generating FQDNs for tablets
+	TabletFQDNTmpl *template.Template
 }
 
 // New creates a new Cluster from a Config.
@@ -95,6 +99,13 @@ func New(cfg Config) (*Cluster, error) {
 
 	cluster.DB = vtsql.New(vtsqlCfg)
 	cluster.Vtctld = vtctldclient.New(vtctldCfg)
+
+	if cfg.TabletFQDNTmplStr != "" {
+		cluster.TabletFQDNTmpl, err = template.New(cluster.ID + "-tablet-fqdn").Parse(cfg.TabletFQDNTmplStr)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse tablet fqdn template %s: %w", cfg.TabletFQDNTmplStr, err)
+		}
+	}
 
 	return cluster, nil
 }
@@ -201,6 +212,13 @@ func (c *Cluster) parseTablet(rows *sql.Rows) (*vtadminpb.Tablet, error) {
 		}
 
 		topotablet.MasterTermStartTime = logutil.TimeToProto(timeTime)
+	}
+
+	if c.TabletFQDNTmpl != nil {
+		tablet.FQDN, err = textutil.ExecuteTemplate(c.TabletFQDNTmpl, tablet)
+		if err != nil {
+			return nil, fmt.Errorf("failed to execute tablet FQDN template for %+v: %w", tablet, err)
+		}
 	}
 
 	return tablet, nil
@@ -386,6 +404,26 @@ func (c *Cluster) findWorkflows(ctx context.Context, keyspaces []string, opts Fi
 		Workflows: results,
 		Warnings:  rec.ErrorStrings(),
 	}, nil
+}
+
+// GetGates returns the list of all VTGates in the cluster.
+func (c *Cluster) GetGates(ctx context.Context) ([]*vtadminpb.VTGate, error) {
+	// (TODO|@ajm188) Support tags in the vtadmin RPC request and pass them
+	// through here.
+	gates, err := c.Discovery.DiscoverVTGates(ctx, []string{})
+	if err != nil {
+		return nil, fmt.Errorf("DiscoverVTGates(cluster = %s): %w", c.ID, err)
+	}
+
+	// This overwrites any Cluster field populated by a particular discovery
+	// implementation.
+	cpb := c.ToProto()
+
+	for _, g := range gates {
+		g.Cluster = cpb
+	}
+
+	return gates, nil
 }
 
 // GetTablets returns all tablets in the cluster.
@@ -680,7 +718,7 @@ func (c *Cluster) getTabletsToQueryForSchemas(ctx context.Context, keyspace stri
 	}
 
 	randomServingTablet := keyspaceTablets[rand.Intn(len(keyspaceTablets))]
-	return []*vtadmin.Tablet{randomServingTablet}, nil
+	return []*vtadminpb.Tablet{randomServingTablet}, nil
 }
 
 // GetVSchema returns the vschema for a given keyspace in this cluster. The
