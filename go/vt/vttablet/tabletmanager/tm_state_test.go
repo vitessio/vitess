@@ -305,6 +305,24 @@ func TestStateIsShardServingisInSrvKeyspace(t *testing.T) {
 	tm.tmState.mu.Unlock()
 
 	assert.Equal(t, int64(0), statsIsInSrvKeyspace.Get())
+
+	// Test tablet isOpen
+	tm.tmState.mu.Lock()
+	tm.tmState.isOpen = false
+	tm.tmState.isInSrvKeyspace = false
+	tm.tmState.tablet.Type = topodatapb.TabletType_REPLICA
+	tm.tmState.isShardServing = map[topodatapb.TabletType]bool{
+		topodatapb.TabletType_REPLICA: true,
+	}
+	tm.tmState.mu.Unlock()
+
+	tm.tmState.Open()
+
+	tm.tmState.mu.Lock()
+	assert.True(t, tm.tmState.isInSrvKeyspace)
+	tm.tmState.mu.Unlock()
+
+	assert.Equal(t, int64(1), statsIsInSrvKeyspace.Get())
 }
 
 func TestStateNonServing(t *testing.T) {
