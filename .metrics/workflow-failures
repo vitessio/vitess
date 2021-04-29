@@ -9387,3 +9387,5 @@
 2021-04-29T07:06:46Z,Cluster (13),https://github.com/vitessio/vitess/actions/runs/795181472
 2021-04-29T08:43:39Z,Cluster (tabletmanager_tablegc),https://github.com/vitessio/vitess/actions/runs/795432634
 2021-04-29T09:25:41Z,Cluster (vreplication_migrate),https://github.com/vitessio/vitess/actions/runs/795550204
+2021-04-29T12:40:43Z,golangci-lint,https://github.com/vitessio/vitess/actions/runs/796055411
+2021-04-29T12:43:01Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/796061582
