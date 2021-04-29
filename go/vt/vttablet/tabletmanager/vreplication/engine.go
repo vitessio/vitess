@@ -63,6 +63,7 @@ const (
 )
 
 var withDDL *withddl.WithDDL
+var withDDLInitialQueries []string
 
 const (
 	throttlerAppName = "vreplication"
@@ -74,6 +75,8 @@ func init() {
 	allddls = append(allddls, createReshardingJournalTable, createCopyState)
 	allddls = append(allddls, createVReplicationLog)
 	withDDL = withddl.New(allddls)
+
+	withDDLInitialQueries = append(withDDLInitialQueries, binlogplayer.WithDDLInitialQueries...)
 }
 
 // this are the default tablet_types that will be used by the tablet picker to find sources for a vreplication stream
