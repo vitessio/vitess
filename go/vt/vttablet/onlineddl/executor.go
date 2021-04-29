@@ -105,7 +105,7 @@ var ghostOverridePath = flag.String("gh-ost-path", "", "override default gh-ost 
 var ptOSCOverridePath = flag.String("pt-osc-path", "", "override default pt-online-schema-change binary full path")
 var migrationCheckInterval = flag.Duration("migration_check_interval", 1*time.Minute, "Interval between migration checks")
 var retainOnlineDDLTables = flag.Duration("retain_online_ddl_tables", 24*time.Hour, "How long should vttablet keep an old migrated table before purging it")
-var migrationNextCheckIntervals = []time.Duration{1 * time.Second, 5 * time.Second}
+var migrationNextCheckIntervals = []time.Duration{1 * time.Second, 5 * time.Second, 10 * time.Second, 20 * time.Second}
 
 const (
 	maxPasswordLength             = 32 // MySQL's *replication* password may not exceed 32 characters
@@ -1167,16 +1167,17 @@ func (e *Executor) readMigration(ctx context.Context, uuid string) (onlineDDL *s
 		return nil, nil, ErrMigrationNotFound
 	}
 	onlineDDL = &schema.OnlineDDL{
-		Keyspace:    row["keyspace"].ToString(),
-		Table:       row["mysql_table"].ToString(),
-		Schema:      row["mysql_schema"].ToString(),
-		SQL:         row["migration_statement"].ToString(),
-		UUID:        row["migration_uuid"].ToString(),
-		Strategy:    schema.DDLStrategy(row["strategy"].ToString()),
-		Options:     row["options"].ToString(),
-		Status:      schema.OnlineDDLStatus(row["migration_status"].ToString()),
-		Retries:     row.AsInt64("retries", 0),
-		TabletAlias: row["tablet"].ToString(),
+		Keyspace:       row["keyspace"].ToString(),
+		Table:          row["mysql_table"].ToString(),
+		Schema:         row["mysql_schema"].ToString(),
+		SQL:            row["migration_statement"].ToString(),
+		UUID:           row["migration_uuid"].ToString(),
+		Strategy:       schema.DDLStrategy(row["strategy"].ToString()),
+		Options:        row["options"].ToString(),
+		Status:         schema.OnlineDDLStatus(row["migration_status"].ToString()),
+		Retries:        row.AsInt64("retries", 0),
+		TabletAlias:    row["tablet"].ToString(),
+		RequestContext: row["migration_context"].ToString(),
 	}
 	return onlineDDL, row, nil
 }
@@ -1634,12 +1635,12 @@ func (e *Executor) evaluateDeclarativeDiff(ctx context.Context, onlineDDL *schem
 // - what's the migration strategy?
 // The function invokes the appropriate handlers for each of those cases.
 func (e *Executor) executeMigration(ctx context.Context, onlineDDL *schema.OnlineDDL) error {
+	defer e.triggerNextCheckInterval()
 	failMigration := func(err error) error {
 		_ = e.updateMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusFailed)
 		if err != nil {
 			_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, err.Error())
 		}
-		e.triggerNextCheckInterval()
 		return err
 	}
 
@@ -2518,7 +2519,7 @@ func (e *Executor) SubmitMigration(
 
 	onlineDDL, err := schema.OnlineDDLFromCommentedStatement(stmt)
 	if err != nil {
-		return nil, fmt.Errorf("Error submitting migration %s: %v", sqlparser.String(stmt), err)
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Error submitting migration %s: %v", sqlparser.String(stmt), err)
 	}
 	_, actionStr, err := onlineDDL.GetActionStr()
 	if err != nil {
@@ -2543,16 +2544,36 @@ func (e *Executor) SubmitMigration(
 		return nil, err
 	}
 
-	if onlineDDL.StrategySetting().IsSingleton() {
+	if err := e.initSchema(ctx); err != nil {
+		log.Error(err)
+		return nil, err
+	}
+
+	if onlineDDL.StrategySetting().IsSingleton() || onlineDDL.StrategySetting().IsSingletonContext() {
 		e.migrationMutex.Lock()
 		defer e.migrationMutex.Unlock()
 
-		uuids, err := e.readPendingMigrationsUUIDs(ctx)
+		pendingUUIDs, err := e.readPendingMigrationsUUIDs(ctx)
 		if err != nil {
-			return result, err
+			return nil, err
 		}
-		if len(uuids) > 0 {
-			return result, fmt.Errorf("singleton migration rejected: found pending migrations [%s]", strings.Join(uuids, ", "))
+		switch {
+		case onlineDDL.StrategySetting().IsSingleton():
+			// We will reject this migration if there's any pending migration
+			if len(pendingUUIDs) > 0 {
+				return result, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "singleton migration rejected: found pending migrations [%s]", strings.Join(pendingUUIDs, ", "))
+			}
+		case onlineDDL.StrategySetting().IsSingletonContext():
+			// We will reject this migration if there's any pending migration within a different context
+			for _, pendingUUID := range pendingUUIDs {
+				pendingOnlineDDL, _, err := e.readMigration(ctx, pendingUUID)
+				if err != nil {
+					return nil, err
+				}
+				if pendingOnlineDDL.RequestContext != onlineDDL.RequestContext {
+					return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "singleton migration rejected: found pending migration: %s in different context: %s", pendingUUID, pendingOnlineDDL.RequestContext)
+				}
+			}
 		}
 	}
 

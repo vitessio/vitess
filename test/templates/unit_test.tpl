@@ -124,4 +124,4 @@ jobs:
     - name: Run test
       timeout-minutes: 30
       run: |
-        eatmydata -- go run test.go -retry=1 -print-log -follow -flavor={{.Platform}} unit
+        eatmydata -- make unit_test

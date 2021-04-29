@@ -80,6 +80,10 @@ func (vc *vcopier) initTablesForCopy(ctx context.Context) error {
 		if err := vc.vr.setState(binlogplayer.VReplicationCopying, ""); err != nil {
 			return err
 		}
+		if err := vc.vr.insertLog(LogCopyStart, fmt.Sprintf("Copy phase started for %d table(s)",
+			len(plan.TargetTables))); err != nil {
+			return err
+		}
 	} else {
 		if err := vc.vr.setState(binlogplayer.BlpStopped, "There is nothing to replicate"); err != nil {
 			return err
@@ -342,7 +346,7 @@ func (vc *vcopier) fastForward(ctx context.Context, copyState map[string]*sqltyp
 		return err
 	}
 	if settings.StartPos.IsZero() {
-		update := binlogplayer.GenerateUpdatePos(vc.vr.id, pos, time.Now().Unix(), 0)
+		update := binlogplayer.GenerateUpdatePos(vc.vr.id, pos, time.Now().Unix(), 0, vc.vr.stats.CopyRowCount.Get())
 		_, err := vc.vr.dbClient.Execute(update)
 		return err
 	}

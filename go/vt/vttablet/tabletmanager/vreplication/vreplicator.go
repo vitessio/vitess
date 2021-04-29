@@ -72,8 +72,8 @@ type vreplicator struct {
 	// source
 	source          *binlogdatapb.BinlogSource
 	sourceVStreamer VStreamerClient
-
-	stats *binlogplayer.Stats
+	state           string
+	stats           *binlogplayer.Stats
 	// mysqld is used to fetch the local schema.
 	mysqld    mysqlctl.MysqlDaemon
 	pkInfoMap map[string][]*PrimaryKeyInfo
@@ -188,6 +188,15 @@ func (vr *vreplicator) replicate(ctx context.Context) error {
 			if err := newVCopier(vr).copyNext(ctx, settings); err != nil {
 				vr.stats.ErrorCounts.Add([]string{"Copy"}, 1)
 				return err
+			}
+			settings, numTablesToCopy, err = vr.readSettings(ctx)
+			if err != nil {
+				return err
+			}
+			if numTablesToCopy == 0 {
+				if err := vr.insertLog(LogCopyEnd, fmt.Sprintf("Copy phase completed at gtid %s", settings.StartPos)); err != nil {
+					return err
+				}
 			}
 		case settings.StartPos.IsZero():
 			if err := newVCopier(vr).initTablesForCopy(ctx); err != nil {
@@ -317,7 +326,14 @@ func (vr *vreplicator) setMessage(message string) error {
 	if _, err := vr.dbClient.Execute(query); err != nil {
 		return fmt.Errorf("could not set message: %v: %v", query, err)
 	}
+	if err := insertLog(vr.dbClient, LogMessage, vr.id, vr.state, message); err != nil {
+		return err
+	}
 	return nil
+}
+
+func (vr *vreplicator) insertLog(typ, message string) error {
+	return insertLog(vr.dbClient, typ, vr.id, vr.state, message)
 }
 
 func (vr *vreplicator) setState(state, message string) error {
@@ -332,6 +348,14 @@ func (vr *vreplicator) setState(state, message string) error {
 	if _, err := vr.dbClient.ExecuteFetch(query, 1); err != nil {
 		return fmt.Errorf("could not set state: %v: %v", query, err)
 	}
+	if state == vr.state {
+		return nil
+	}
+	if err := insertLog(vr.dbClient, LogStateChange, vr.id, state, message); err != nil {
+		return err
+	}
+	vr.state = state
+
 	return nil
 }
 

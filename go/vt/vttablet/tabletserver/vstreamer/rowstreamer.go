@@ -19,6 +19,7 @@ package vstreamer
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
@@ -65,6 +66,7 @@ type rowStreamer struct {
 	pkColumns []int
 	sendQuery string
 	vse       *Engine
+	pktsize   PacketSizer
 }
 
 func newRowStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, query string, lastpk []sqltypes.Value, vschema *localVSchema, send func(*binlogdatapb.VStreamRowsResponse) error, vse *Engine) *rowStreamer {
@@ -79,6 +81,7 @@ func newRowStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engi
 		send:    send,
 		vschema: vschema,
 		vse:     vse,
+		pktsize: DefaultPacketSizer(),
 	}
 }
 
@@ -232,16 +235,19 @@ func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.V
 		return fmt.Errorf("stream send error: %v", err)
 	}
 
-	response := &binlogdatapb.VStreamRowsResponse{}
+	var response binlogdatapb.VStreamRowsResponse
+	var rows []*querypb.Row
+	var rowCount int
+	var mysqlrow []sqltypes.Value
+
+	filtered := make([]sqltypes.Value, len(rs.plan.ColExprs))
 	lastpk := make([]sqltypes.Value, len(rs.pkColumns))
 	byteCount := 0
 	for {
 		//log.Infof("StreamResponse for loop iteration starts")
-		select {
-		case <-rs.ctx.Done():
+		if rs.ctx.Err() != nil {
 			log.Infof("Stream ended because of ctx.Done")
 			return fmt.Errorf("stream ended: %v", rs.ctx.Err())
-		default:
 		}
 
 		// check throttler.
@@ -249,51 +255,59 @@ func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.V
 			continue
 		}
 
-		row, err := conn.FetchNext()
+		if mysqlrow != nil {
+			mysqlrow = mysqlrow[:0]
+		}
+		mysqlrow, err = conn.FetchNext(mysqlrow)
 		if err != nil {
 			return err
 		}
-		if row == nil {
+		if mysqlrow == nil {
 			break
 		}
 		// Compute lastpk here, because we'll need it
 		// at the end after the loop exits.
 		for i, pk := range rs.pkColumns {
-			lastpk[i] = row[pk]
+			lastpk[i] = mysqlrow[pk]
 		}
 		// Reuse the vstreamer's filter.
-		ok, filtered, err := rs.plan.filter(row)
+		ok, err := rs.plan.filter(mysqlrow, filtered)
 		if err != nil {
 			return err
 		}
 		if ok {
-			response.Rows = append(response.Rows, sqltypes.RowToProto3(filtered))
-			for _, s := range filtered {
-				byteCount += s.Len()
+			if rowCount >= len(rows) {
+				rows = append(rows, &querypb.Row{})
 			}
+			byteCount += sqltypes.RowToProto3Inplace(filtered, rows[rowCount])
+			rowCount++
 		}
 
-		if byteCount >= *PacketSize {
+		if rs.pktsize.ShouldSend(byteCount) {
+			response.Rows = rows[:rowCount]
+			response.Lastpk = sqltypes.RowToProto3(lastpk)
+
 			rs.vse.rowStreamerNumRows.Add(int64(len(response.Rows)))
 			rs.vse.rowStreamerNumPackets.Add(int64(1))
 
-			response.Lastpk = sqltypes.RowToProto3(lastpk)
-			err = send(response)
+			startSend := time.Now()
+			err = send(&response)
 			if err != nil {
 				log.Infof("Rowstreamer send returned error %v", err)
 				return err
 			}
-			// empty the rows so we start over, but we keep the
-			// same capacity
-			response.Rows = nil
+			rs.pktsize.Record(byteCount, time.Since(startSend))
+			rowCount = 0
 			byteCount = 0
 		}
 	}
 
-	if len(response.Rows) > 0 {
-		rs.vse.rowStreamerNumRows.Add(int64(len(response.Rows)))
+	if rowCount > 0 {
+		response.Rows = rows[:rowCount]
 		response.Lastpk = sqltypes.RowToProto3(lastpk)
-		err = send(response)
+
+		rs.vse.rowStreamerNumRows.Add(int64(len(response.Rows)))
+		err = send(&response)
 		if err != nil {
 			return err
 		}

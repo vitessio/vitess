@@ -476,7 +476,7 @@ func (blp *BinlogPlayer) writeRecoveryPosition(tx *binlogdatapb.BinlogTransactio
 	}
 
 	now := time.Now().Unix()
-	updateRecovery := GenerateUpdatePos(blp.uid, position, now, tx.EventToken.Timestamp)
+	updateRecovery := GenerateUpdatePos(blp.uid, position, now, tx.EventToken.Timestamp, blp.blplStats.CopyRowCount.Get())
 
 	qr, err := blp.exec(updateRecovery)
 	if err != nil {
@@ -554,6 +554,12 @@ var AlterVReplicationTable = []string{
 	"ALTER TABLE _vt.vreplication ADD COLUMN db_name VARBINARY(255) NOT NULL",
 	"ALTER TABLE _vt.vreplication MODIFY source BLOB NOT NULL",
 	"ALTER TABLE _vt.vreplication ADD KEY workflow_idx (workflow(64))",
+	"ALTER TABLE _vt.vreplication ADD COLUMN rows_copied BIGINT(20) NOT NULL DEFAULT 0",
+}
+
+var WithDDLInitialQueries = []string{
+	"SELECT db_name FROM _vt.vreplication LIMIT 0",
+	"SELECT rows_copied FROM _vt.vreplication LIMIT 0",
 }
 
 // VRSettings contains the settings of a vreplication table.
@@ -624,16 +630,16 @@ func CreateVReplicationState(workflow string, source *binlogdatapb.BinlogSource,
 
 // GenerateUpdatePos returns a statement to update a value in the
 // _vt.vreplication table.
-func GenerateUpdatePos(uid uint32, pos mysql.Position, timeUpdated int64, txTimestamp int64) string {
+func GenerateUpdatePos(uid uint32, pos mysql.Position, timeUpdated int64, txTimestamp int64, rowsCopied int64) string {
 	if txTimestamp != 0 {
 		return fmt.Sprintf(
-			"update _vt.vreplication set pos=%v, time_updated=%v, transaction_timestamp=%v, message='' where id=%v",
-			encodeString(mysql.EncodePosition(pos)), timeUpdated, txTimestamp, uid)
+			"update _vt.vreplication set pos=%v, time_updated=%v, transaction_timestamp=%v, rows_copied=%v, message='' where id=%v",
+			encodeString(mysql.EncodePosition(pos)), timeUpdated, txTimestamp, rowsCopied, uid)
 	}
 
 	return fmt.Sprintf(
-		"update _vt.vreplication set pos=%v, time_updated=%v, message='' where id=%v",
-		encodeString(mysql.EncodePosition(pos)), timeUpdated, uid)
+		"update _vt.vreplication set pos=%v, time_updated=%v, rows_copied=%v, message='' where id=%v",
+		encodeString(mysql.EncodePosition(pos)), timeUpdated, rowsCopied, uid)
 }
 
 // GenerateUpdateTime returns a statement to update time_updated in the _vt.vreplication table.

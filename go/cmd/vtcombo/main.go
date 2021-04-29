@@ -27,6 +27,8 @@ import (
 	"strings"
 	"time"
 
+	"vitess.io/vitess/go/vt/wrangler"
+
 	"context"
 
 	"github.com/golang/protobuf/proto"
@@ -158,13 +160,38 @@ func main() {
 
 	// tablets configuration and init.
 	// Send mycnf as nil because vtcombo won't do backups and restores.
-	if err := vtcombo.InitTabletMap(ts, tpb, mysqld, &dbconfigs.GlobalDBConfigs, *schemaDir, nil, *startMysql); err != nil {
+	uid, err := vtcombo.InitTabletMap(ts, tpb, mysqld, &dbconfigs.GlobalDBConfigs, *schemaDir, *startMysql)
+	if err != nil {
 		log.Errorf("initTabletMapProto failed: %v", err)
 		// ensure we start mysql in the event we fail here
 		if *startMysql {
 			mysqld.Shutdown(context.TODO(), cnf, true)
 		}
 		exit.Return(1)
+	}
+
+	globalCreateDb = func(ctx context.Context, ks *vttestpb.Keyspace) error {
+		wr := wrangler.New(logutil.NewConsoleLogger(), ts, nil)
+		newUID, err := vtcombo.CreateKs(ctx, ts, tpb, mysqld, &dbconfigs.GlobalDBConfigs, *schemaDir, ks, true, uid, wr)
+		if err != nil {
+			return err
+		}
+		uid = newUID
+		tpb.Keyspaces = append(tpb.Keyspaces, ks)
+		return nil
+	}
+
+	globalDropDb = func(ctx context.Context, ksName string) error {
+		if err := vtcombo.DeleteKs(ctx, ts, ksName, mysqld, tpb); err != nil {
+			return err
+		}
+
+		// Rebuild the SrvVSchema object
+		if err := ts.RebuildSrvVSchema(ctx, tpb.Cells); err != nil {
+			return err
+		}
+
+		return nil
 	}
 
 	// Now that we have fully initialized the tablets, rebuild the keyspace graph.
