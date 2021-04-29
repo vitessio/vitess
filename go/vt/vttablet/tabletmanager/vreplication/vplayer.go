@@ -231,7 +231,7 @@ func (vp *vplayer) applyRowEvent(ctx context.Context, rowEvent *binlogdatapb.Row
 
 func (vp *vplayer) updatePos(ts int64) (posReached bool, err error) {
 	vp.numAccumulatedHeartbeats = 0
-	update := binlogplayer.GenerateUpdatePos(vp.vr.id, vp.pos, time.Now().Unix(), ts)
+	update := binlogplayer.GenerateUpdatePos(vp.vr.id, vp.pos, time.Now().Unix(), ts, vp.vr.stats.CopyRowCount.Get())
 	if _, err := vp.vr.dbClient.Execute(update); err != nil {
 		return false, fmt.Errorf("error %v updating position", err)
 	}

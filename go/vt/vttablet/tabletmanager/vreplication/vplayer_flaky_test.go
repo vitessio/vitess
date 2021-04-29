@@ -2456,6 +2456,32 @@ func TestPlayerJSONDocs(t *testing.T) {
 	}
 }
 
+func TestVReplicationLogs(t *testing.T) {
+	defer deleteTablet(addTablet(100))
+	dbClient := playerEngine.dbClientFactoryDba()
+	err := dbClient.Connect()
+	require.NoError(t, err)
+	defer dbClient.Close()
+	vdbc := newVDBClient(dbClient, binlogplayer.NewStats())
+	query := "select vrepl_id, state, message, count from _vt.vreplication_log order by id desc limit 1"
+
+	expected := []string{
+		"[[INT32(1) VARBINARY(\"Running\") TEXT(\"message1\") INT64(1)]]",
+		"[[INT32(1) VARBINARY(\"Running\") TEXT(\"message1\") INT64(2)]]",
+	}
+
+	for _, want := range expected {
+		t.Run("", func(t *testing.T) {
+			err = insertLog(vdbc, LogMessage, 1, "Running", "message1")
+			require.NoError(t, err)
+			qr, err := env.Mysqld.FetchSuperQuery(context.Background(), query)
+			require.NoError(t, err)
+			require.Equal(t, want, fmt.Sprintf("%v", qr.Rows))
+		})
+
+	}
+}
+
 func expectJSON(t *testing.T, table string, values [][]string, id int, exec func(ctx context.Context, query string) (*sqltypes.Result, error)) {
 	t.Helper()
 

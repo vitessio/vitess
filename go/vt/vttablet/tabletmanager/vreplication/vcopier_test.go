@@ -35,10 +35,8 @@ import (
 func TestPlayerCopyCharPK(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
-	savedPacketSize := *vstreamer.PacketSize
-	// PacketSize of 1 byte will send at most one row at a time.
-	*vstreamer.PacketSize = 1
-	defer func() { *vstreamer.PacketSize = savedPacketSize }()
+	reset := vstreamer.AdjustPacketSize(1)
+	defer reset()
 
 	savedCopyTimeout := copyTimeout
 	// copyTimeout should be low enough to have time to send one row.
@@ -138,10 +136,8 @@ func TestPlayerCopyCharPK(t *testing.T) {
 func TestPlayerCopyVarcharPKCaseInsensitive(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
-	savedPacketSize := *vstreamer.PacketSize
-	// PacketSize of 1 byte will send at most one row at a time.
-	*vstreamer.PacketSize = 1
-	defer func() { *vstreamer.PacketSize = savedPacketSize }()
+	reset := vstreamer.AdjustPacketSize(1)
+	defer reset()
 
 	savedCopyTimeout := copyTimeout
 	// copyTimeout should be low enough to have time to send one row.
@@ -244,10 +240,8 @@ func TestPlayerCopyVarcharPKCaseInsensitive(t *testing.T) {
 func TestPlayerCopyVarcharCompositePKCaseSensitiveCollation(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
-	savedPacketSize := *vstreamer.PacketSize
-	// PacketSize of 1 byte will send at most one row at a time.
-	*vstreamer.PacketSize = 1
-	defer func() { *vstreamer.PacketSize = savedPacketSize }()
+	reset := vstreamer.AdjustPacketSize(1)
+	defer reset()
 
 	savedCopyTimeout := copyTimeout
 	// copyTimeout should be low enough to have time to send one row.
@@ -526,16 +520,35 @@ func TestPlayerCopyTables(t *testing.T) {
 	})
 	expectData(t, "yes", [][]string{})
 	validateCopyRowCountStat(t, 2)
+	ctx, cancel := context.WithCancel(context.Background())
+
+	type logTestCase struct {
+		name string
+		typ  string
+	}
+	testCases := []logTestCase{
+		{name: "Check log for start of copy", typ: "LogCopyStarted"},
+		{name: "Check log for end of copy", typ: "LogCopyEnded"},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			query = fmt.Sprintf("select count(*) from _vt.vreplication_log where type = '%s'", testCase.typ)
+			qr, err := env.Mysqld.FetchSuperQuery(ctx, query)
+			require.NoError(t, err)
+			require.NotNil(t, qr)
+			require.Equal(t, 1, len(qr.Rows))
+		})
+	}
+	cancel()
+
 }
 
 // TestPlayerCopyBigTable ensures the copy-catchup back-and-forth loop works correctly.
 func TestPlayerCopyBigTable(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
-	savedPacketSize := *vstreamer.PacketSize
-	// PacketSize of 1 byte will send at most one row at a time.
-	*vstreamer.PacketSize = 1
-	defer func() { *vstreamer.PacketSize = savedPacketSize }()
+	reset := vstreamer.AdjustPacketSize(1)
+	defer reset()
 
 	savedCopyTimeout := copyTimeout
 	// copyTimeout should be low enough to have time to send one row.
@@ -650,10 +663,8 @@ func TestPlayerCopyBigTable(t *testing.T) {
 func TestPlayerCopyWildcardRule(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
-	savedPacketSize := *vstreamer.PacketSize
-	// PacketSize of 1 byte will send at most one row at a time.
-	*vstreamer.PacketSize = 1
-	defer func() { *vstreamer.PacketSize = savedPacketSize }()
+	reset := vstreamer.AdjustPacketSize(1)
+	defer reset()
 
 	savedCopyTimeout := copyTimeout
 	// copyTimeout should be low enough to have time to send one row.

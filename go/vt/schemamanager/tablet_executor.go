@@ -250,7 +250,9 @@ func (exec *TabletExecutor) executeSQL(ctx context.Context, sql string, execResu
 			for _, onlineDDL := range onlineDDLs {
 				if exec.ddlStrategySetting.IsSkipTopo() {
 					exec.executeOnAllTablets(ctx, execResult, onlineDDL.SQL, true)
-					exec.wr.Logger().Printf("%s\n", onlineDDL.UUID)
+					if len(execResult.SuccessShards) > 0 {
+						exec.wr.Logger().Printf("%s\n", onlineDDL.UUID)
+					}
 				} else {
 					exec.executeOnlineDDL(ctx, execResult, onlineDDL)
 				}
