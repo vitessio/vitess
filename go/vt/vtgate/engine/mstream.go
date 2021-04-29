@@ -60,7 +60,7 @@ func (m *MStream) GetTableName() string {
 
 // Execute implements the Primitive interface
 func (m *MStream) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "'Execute' in MStream is not supported")
+	return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "[BUG] 'Execute' called for Stream")
 }
 
 // StreamExecute implements the Primitive interface
@@ -74,7 +74,7 @@ func (m *MStream) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.Bi
 
 // GetFields implements the Primitive interface
 func (m *MStream) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "'GetFields' in MStream is not supported")
+	return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "[BUG] 'GetFields' called for Stream")
 }
 
 func (m *MStream) description() PrimitiveDescription {
