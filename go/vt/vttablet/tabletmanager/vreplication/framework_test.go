@@ -477,6 +477,9 @@ func shouldIgnoreQuery(query string) bool {
 }
 
 func expectDBClientQueries(t *testing.T, queries []string) {
+	extraQueries := withDDL.DDLs()
+	extraQueries = append(extraQueries, withDDLInitialQueries...)
+	// Either 'queries' or 'queriesWithDDLs' must match globalDBQueries
 	t.Helper()
 	failed := false
 	for i, query := range queries {
@@ -492,6 +495,11 @@ func expectDBClientQueries(t *testing.T, queries []string) {
 			// is indeterminable and varies with each test execution.
 			if shouldIgnoreQuery(got) {
 				goto retry
+			}
+			for _, extraQuery := range extraQueries {
+				if got == extraQuery {
+					goto retry
+				}
 			}
 
 			var match bool
@@ -531,6 +539,7 @@ func expectNontxQueries(t *testing.T, queries []string) {
 	t.Helper()
 	failed := false
 
+	skipQueries := withDDLInitialQueries
 	for i, query := range queries {
 		if failed {
 			t.Errorf("no query received, expecting %s", query)
@@ -543,6 +552,11 @@ func expectNontxQueries(t *testing.T, queries []string) {
 			if got == "begin" || got == "commit" || got == "rollback" || strings.Contains(got, "update _vt.vreplication set pos") ||
 				shouldIgnoreQuery(got) {
 				goto retry
+			}
+			for _, skipQuery := range skipQueries {
+				if got == skipQuery {
+					goto retry
+				}
 			}
 
 			var match bool

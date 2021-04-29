@@ -80,9 +80,6 @@ type vstreamer struct {
 	vse   *Engine
 }
 
-// CopyState contains the last PK for tables to be copied
-type CopyState map[string][]*sqltypes.Result
-
 // streamerPlan extends the original plan to also include
 // the TableMap, which comes from the binlog. It's used
 // to extract values from the ROW events.
