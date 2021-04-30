@@ -115,26 +115,6 @@ type trafficSwitcher struct {
 	externalTopo    *topo.Server
 }
 
-const (
-	workflowTypeReshard    = "Reshard"
-	workflowTypeMoveTables = "MoveTables"
-)
-
-type workflowState struct {
-	Workflow       string
-	SourceKeyspace string
-	TargetKeyspace string
-	WorkflowType   string
-
-	ReplicaCellsSwitched    []string
-	ReplicaCellsNotSwitched []string
-
-	RdonlyCellsSwitched    []string
-	RdonlyCellsNotSwitched []string
-
-	WritesSwitched bool
-}
-
 // For a Reshard, to check whether we have switched reads for a tablet type, we check if any one of the source shards has
 // the query service disabled in its tablet control record
 func (wr *Wrangler) getCellsWithShardReadsSwitched(ctx context.Context, targetKeyspace string, si *topo.ShardInfo, tabletType string) (
@@ -243,7 +223,7 @@ func (wr *Wrangler) getCellsWithTableReadsSwitched(ctx context.Context, targetKe
 	return cellsSwitched, cellsNotSwitched, nil
 }
 
-func (wr *Wrangler) getWorkflowState(ctx context.Context, targetKeyspace, workflowName string) (*trafficSwitcher, *workflowState, error) {
+func (wr *Wrangler) getWorkflowState(ctx context.Context, targetKeyspace, workflowName string) (*trafficSwitcher, *workflow.State, error) {
 	ts, err := wr.buildTrafficSwitcher(ctx, targetKeyspace, workflowName)
 
 	if ts == nil || err != nil {
@@ -254,7 +234,7 @@ func (wr *Wrangler) getWorkflowState(ctx context.Context, targetKeyspace, workfl
 		return nil, nil, err
 	}
 
-	ws := &workflowState{Workflow: workflowName, TargetKeyspace: targetKeyspace}
+	ws := &workflow.State{Workflow: workflowName, TargetKeyspace: targetKeyspace}
 	ws.SourceKeyspace = ts.sourceKeyspace
 	var cellsSwitched, cellsNotSwitched []string
 	var keyspace string
@@ -271,7 +251,7 @@ func (wr *Wrangler) getWorkflowState(ctx context.Context, targetKeyspace, workfl
 		keyspace = targetKeyspace
 	}
 	if ts.migrationType == binlogdatapb.MigrationType_TABLES {
-		ws.WorkflowType = workflowTypeMoveTables
+		ws.WorkflowType = workflow.TypeMoveTables
 
 		// we assume a consistent state, so only choose routing rule for one table for replica/rdonly
 		if len(ts.tables) == 0 {
@@ -302,7 +282,7 @@ func (wr *Wrangler) getWorkflowState(ctx context.Context, targetKeyspace, workfl
 			}
 		}
 	} else {
-		ws.WorkflowType = workflowTypeReshard
+		ws.WorkflowType = workflow.TypeReshard
 
 		// we assume a consistent state, so only choose one shard
 		var shard *topo.ShardInfo

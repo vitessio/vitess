@@ -44,7 +44,7 @@ type VReplicationWorkflow struct {
 	wr           *Wrangler
 	params       *VReplicationWorkflowParams
 	ts           *trafficSwitcher
-	ws           *workflowState
+	ws           *workflow.State
 }
 
 func (vrw *VReplicationWorkflow) String() string {
@@ -122,7 +122,7 @@ func (vrw *VReplicationWorkflow) Exists() bool {
 	return vrw.ws != nil
 }
 
-func (vrw *VReplicationWorkflow) stateAsString(ws *workflowState) string {
+func (vrw *VReplicationWorkflow) stateAsString(ws *workflow.State) string {
 	log.Infof("Workflow state is %+v", ws)
 	var stateInfo []string
 	s := ""
