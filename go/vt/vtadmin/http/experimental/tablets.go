@@ -24,8 +24,6 @@ import (
 	"net/http"
 	"text/template"
 
-	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/topo/topoproto"
 	vtadminhttp "vitess.io/vitess/go/vt/vtadmin/http"
 
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
@@ -41,8 +39,6 @@ func TabletDebugVarsPassthrough(ctx context.Context, r vtadminhttp.Request, api 
 		Hostname:   vars["tablet"],
 		ClusterIds: r.URL.Query()["cluster"],
 	})
-
-	log.Infof("Found tablet %s:%s", topoproto.TabletAliasString(tablet.Tablet.Alias), tablet.Tablet.Hostname)
 
 	if err != nil {
 		return vtadminhttp.NewJSONResponse(nil, err)
@@ -62,12 +58,9 @@ func getDebugVars(ctx context.Context, api *vtadminhttp.API, tablet *vtadminpb.T
 	if err := tmpl.Execute(buf, tablet); err != nil {
 		return nil, err
 	}
-
 	_, _ = buf.WriteString("/debug/vars")
 
 	url := buf.String()
-	log.Infof("Creating GET request to %s", url)
-
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return nil, err
