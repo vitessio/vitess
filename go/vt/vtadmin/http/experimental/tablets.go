@@ -63,6 +63,8 @@ func getDebugVars(ctx context.Context, api *vtadminhttp.API, tablet *vtadminpb.T
 		return nil, err
 	}
 
+	_, _ = buf.WriteString("/debug/vars")
+
 	url := buf.String()
 	log.Infof("Creating GET request to %s", url)
 
