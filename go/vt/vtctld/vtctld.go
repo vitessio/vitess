@@ -81,7 +81,7 @@ func InitVtctld(ts *topo.Server) {
 
 	actionRepo.RegisterShardAction("ValidateSchemaShard",
 		func(ctx context.Context, wr *wrangler.Wrangler, keyspace, shard string) (string, error) {
-			return "", wr.ValidateSchemaShard(ctx, keyspace, shard, nil, false)
+			return "", wr.ValidateSchemaShard(ctx, keyspace, shard, nil, false, false /*includeVSchema*/)
 		})
 
 	actionRepo.RegisterShardAction("ValidateVersionShard",
