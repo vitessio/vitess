@@ -49,7 +49,7 @@ CREATE TABLE if not exists _vt.schemacopy (
 	PRIMARY KEY (table_schema, table_name, ordinal_position))`
 
 	detectNewColumns = `
-select 1
+select ISC.table_name
 from information_schema.columns as ISC
 	 left join _vt.schemacopy as c on 
 		ISC.table_name = c.table_name and 
@@ -58,7 +58,7 @@ from information_schema.columns as ISC
 where ISC.table_schema = database() AND c.table_schema is null`
 
 	detectChangeColumns = `
-select 1
+select ISC.table_name
 from information_schema.columns as ISC
 	  join _vt.schemacopy as c on 
 		ISC.table_name = c.table_name and 
@@ -72,7 +72,7 @@ where ISC.table_schema = database()
 	OR not(ISC.column_key <=> c.column_key))`
 
 	detectRemoveColumns = `
-select 1
+select c.table_name
 from information_schema.columns as ISC
 	  right join _vt.schemacopy as c on 
 		ISC.table_name = c.table_name and 
