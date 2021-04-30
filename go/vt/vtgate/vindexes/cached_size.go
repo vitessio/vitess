@@ -505,11 +505,9 @@ func (cached *prefixCFC) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(24)
+		size += int64(8)
 	}
-	// field name string
-	size += int64(len(cached.name))
-	// field cfc *vitess.io/vitess/go/vt/vtgate/vindexes.CFC
-	size += cached.cfc.CachedSize(true)
+	// field CFC *vitess.io/vitess/go/vt/vtgate/vindexes.CFC
+	size += cached.CFC.CachedSize(true)
 	return size
 }
