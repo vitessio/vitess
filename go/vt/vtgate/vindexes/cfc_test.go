@@ -378,6 +378,13 @@ func TestCFCBuildPrefix(t *testing.T) {
 	assert.False(t, prefixcfc.IsUnique())
 	assert.False(t, prefixcfc.NeedsVCursor())
 	assert.Equal(t, 2, prefixcfc.Cost())
+
+	cfc = makeCFC(t, map[string]string{"offsets": "[1,2,3]", "hash": "xxhash64"})
+	prefixcfc = cfc.PrefixVindex()
+	assert.Equal(t, "cfc", prefixcfc.String())
+	assert.False(t, prefixcfc.IsUnique())
+	assert.False(t, prefixcfc.NeedsVCursor())
+	assert.Equal(t, 3, prefixcfc.Cost())
 }
 
 func TestCFCPrefixMap(t *testing.T) {

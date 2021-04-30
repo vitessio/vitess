@@ -95,7 +95,7 @@ func NewCFC(name string, params map[string]string) (Vindex, error) {
 		name: name,
 	}
 	// prefixCFC is only used in 'LIKE' compare expressions.
-	ss.prefixVindex = &prefixCFC{name: name, cfc: ss}
+	ss.prefixVindex = &prefixCFC{CFC: ss}
 
 	if params == nil {
 		return ss, nil
@@ -271,33 +271,21 @@ func addOne(value []byte) []byte {
 }
 
 type prefixCFC struct {
-	name string
-	cfc  *CFC
-}
-
-func (vind *prefixCFC) String() string {
-	return vind.name
+	*CFC
 }
 
 // In prefix mode, i.e. within a LIKE op, the cost is higher than regular mode.
 // Ideally the cost should be the number of shards we resolved to but the current
 // framework doesn't do dynamic cost evaluation.
 func (vind *prefixCFC) Cost() int {
+	if n := len(vind.offsets); n > 0 {
+		return n
+	}
 	return 2
 }
 
 func (vind *prefixCFC) IsUnique() bool {
 	return false
-}
-
-func (vind *prefixCFC) NeedsVCursor() bool {
-	return false
-}
-
-// Verify returns true if ids maps to ksids.
-func (vind *prefixCFC) Verify(vc VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
-	// prefixCFC is only active for 'LIKE' expr. Verify is used by 'INSERT' so we re-use CFC.Verify()
-	return vind.cfc.Verify(vc, ids, ksids)
 }
 
 // Map can map ids to key.Destination objects.
@@ -306,7 +294,7 @@ func (vind *prefixCFC) Map(cursor VCursor, ids []sqltypes.Value) ([]key.Destinat
 	for i, id := range ids {
 		value := id.ToBytes()
 		prefix := findPrefix(value)
-		begin, err := vind.cfc.computeKsid(prefix, true)
+		begin, err := vind.computeKsid(prefix, true)
 		if err != nil {
 			return nil, err
 		}
