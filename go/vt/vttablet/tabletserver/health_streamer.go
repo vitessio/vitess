@@ -112,7 +112,7 @@ func (hs *healthStreamer) Open() {
 	if hs.cancel != nil {
 		return
 	}
-	hs.ctx, hs.cancel = context.WithCancel(context.TODO())
+	hs.ctx, hs.cancel = context.WithCancel(context.Background())
 	hs.ticks.Start(func() {
 		if err := hs.Reload(); err != nil {
 			log.Errorf("periodic schema reload failed in health stream: %v", err)
@@ -126,6 +126,7 @@ func (hs *healthStreamer) Close() {
 	defer hs.mu.Unlock()
 
 	if hs.cancel != nil {
+		hs.ticks.Stop()
 		hs.cancel()
 		hs.cancel = nil
 	}
@@ -282,6 +283,9 @@ func (hs *healthStreamer) Reload() error {
 	hs.mu.Lock()
 	defer hs.mu.Unlock()
 
+	// Reset the schema state.
+	hs.state.RealtimeStats.TableSchemaChanged = nil
+
 	// Schema Reload to happen only on master.
 	if hs.state.Target.TabletType != topodatapb.TabletType_MASTER {
 		return nil
@@ -311,11 +315,13 @@ func (hs *healthStreamer) Reload() error {
 		return nil
 	}
 
-	log.Info("schema change detected")
-	// TODO: add logic to notify vtgate
+	var tables []string
+	for _, row := range qr.Rows {
+		tables = append(tables, row[0].ToString())
+	}
+	hs.state.RealtimeStats.TableSchemaChanged = tables
 
 	// Reload the schema in a transaction.
-
 	_, err = conn.Exec(ctx, "begin", 1, false)
 	if err != nil {
 		return err
