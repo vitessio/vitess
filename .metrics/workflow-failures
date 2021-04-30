@@ -9400,3 +9400,7 @@
 2021-04-30T01:09:14Z,check_make_sizegen,https://github.com/vitessio/vitess/actions/runs/797966990
 2021-04-30T01:17:20Z,Cluster (13),https://github.com/vitessio/vitess/actions/runs/797981299
 2021-04-30T05:49:10Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/798467325
+2021-04-30T09:20:28Z,Cluster (17),https://github.com/vitessio/vitess/actions/runs/798958398
+2021-04-30T09:20:28Z,Cluster (vreplication_multicell),https://github.com/vitessio/vitess/actions/runs/798958379
+2021-04-30T09:27:58Z,check_formatting,https://github.com/vitessio/vitess/actions/runs/798977802
+2021-04-30T09:27:59Z,golangci-lint,https://github.com/vitessio/vitess/actions/runs/798977841
