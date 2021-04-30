@@ -13,16 +13,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-.controls {
-  display: grid;
-  grid-gap: 8px;
-  grid-template-columns: 1fr min-content;
-  margin-bottom: 24px;
+import { Pip, PipState } from './Pip';
+
+interface Props {
+    state?: string | null | undefined;
 }
 
-.shardList {
-  color: var(--textColorSecondary);
-  font-size: var(--fontSizeSmall);
-  max-width: 20rem;
-  padding-right: 24px;
-}
+// TODO(doeg): add a protobuf enum for this (https://github.com/vitessio/vitess/projects/12#card-60190340)
+const STREAM_STATES: { [key: string]: PipState } = {
+    Copying: 'primary',
+    Error: 'danger',
+    Running: 'success',
+    Stopped: null,
+};
+
+export const StreamStatePip = ({ state }: Props) => {
+    const pipState = state ? STREAM_STATES[state] : null;
+    return <Pip state={pipState} />;
+};
