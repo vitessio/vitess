@@ -23,6 +23,10 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/timer"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
+
 	"context"
 
 	"github.com/golang/protobuf/proto"
@@ -61,9 +65,14 @@ type healthStreamer struct {
 	state   *querypb.StreamHealthResponse
 
 	history *history.History
+
+	ticks       *timer.Timer
+	conns       *connpool.Pool
+	initSuccess bool
 }
 
 func newHealthStreamer(env tabletenv.Env, alias topodatapb.TabletAlias) *healthStreamer {
+	reloadTime := env.Config().SchemaReloadIntervalSeconds.Get()
 	return &healthStreamer{
 		stats:              env.Stats(),
 		degradedThreshold:  env.Config().Healthcheck.DegradedThresholdSeconds.Get(),
@@ -79,6 +88,13 @@ func newHealthStreamer(env tabletenv.Env, alias topodatapb.TabletAlias) *healthS
 		},
 
 		history: history.New(5),
+
+		ticks: timer.NewTimer(reloadTime),
+		// We need one connection for the reloader.
+		conns: connpool.NewPool(env, "", tabletenv.ConnPoolConfig{
+			Size:               1,
+			IdleTimeoutSeconds: env.Config().OltpReadPool.IdleTimeoutSeconds,
+		}),
 	}
 }
 
@@ -97,6 +113,12 @@ func (hs *healthStreamer) Open() {
 		return
 	}
 	hs.ctx, hs.cancel = context.WithCancel(context.TODO())
+	hs.ticks.Start(func() {
+		if err := hs.Reload(); err != nil {
+			log.Errorf("periodic schema reload failed in health stream: %v", err)
+		}
+	})
+
 }
 
 func (hs *healthStreamer) Close() {
@@ -254,4 +276,74 @@ func (hs *healthStreamer) SetUnhealthyThreshold(v time.Duration) {
 			delete(hs.clients, ch)
 		}
 	}
+}
+
+func (hs *healthStreamer) Reload() error {
+	hs.mu.Lock()
+	defer hs.mu.Unlock()
+
+	// Schema Reload to happen only on master.
+	if hs.state.Target.TabletType != topodatapb.TabletType_MASTER {
+		return nil
+	}
+
+	ctx := hs.ctx
+	conn, err := hs.conns.Get(ctx)
+	if err != nil {
+		return err
+	}
+	defer conn.Recycle()
+
+	if !hs.initSuccess {
+		hs.initSuccess, err = hs.InitSchemaLocked(conn)
+		if err != nil {
+			return err
+		}
+	}
+
+	qr, err := conn.Exec(ctx, mysql.DetectSchemaChange, 5, false)
+	if err != nil {
+		return err
+	}
+
+	// If no change detected, then return
+	if len(qr.Rows) == 0 {
+		return nil
+	}
+
+	log.Info("schema change detected")
+	// TODO: add logic to notify vtgate
+
+	// Reload the schema in a transaction.
+
+	_, err = conn.Exec(ctx, "begin", 1, false)
+	if err != nil {
+		return err
+	}
+	defer conn.Exec(ctx, "rollback", 1, false)
+
+	_, err = conn.Exec(ctx, mysql.ClearSchemaCopy, 1, false)
+	if err != nil {
+		return err
+	}
+
+	_, err = conn.Exec(ctx, mysql.InsertIntoSchemaCopy, 1, false)
+	if err != nil {
+		return err
+	}
+
+	_, err = conn.Exec(ctx, "commit", 1, false)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (hs *healthStreamer) InitSchemaLocked(conn *connpool.DBConn) (bool, error) {
+	_, err := conn.Exec(hs.ctx, mysql.CreateSchemaCopyTable, 1, false)
+	if err != nil {
+		return false, err
+	}
+	return true, nil
 }
