@@ -9440,5 +9440,6 @@
 2021-04-30T22:45:37Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/800919024
 2021-05-01T07:11:14Z,Cluster (17),https://github.com/vitessio/vitess/actions/runs/801724927
 2021-05-01T21:03:58Z,Cluster (tabletmanager_tablegc),https://github.com/vitessio/vitess/actions/runs/802959902
+2021-05-01T23:10:10Z,Cluster (12),https://github.com/vitessio/vitess/actions/runs/803141744
 2021-05-01T23:10:10Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/803141755
 2021-05-01T23:10:10Z,endtoend,https://github.com/vitessio/vitess/actions/runs/803141754
