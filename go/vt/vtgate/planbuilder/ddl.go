@@ -25,6 +25,9 @@ const (
 // and which chooses which of the two to invoke at runtime.
 func buildGeneralDDLPlan(sql string, ddlStatement sqlparser.DDLStatement, vschema ContextVSchema) (engine.Primitive, error) {
 	normalDDLPlan, onlineDDLPlan, err := buildDDLPlans(sql, ddlStatement, vschema)
+	if vschema.Destination() != nil {
+		return buildByPassDDLPlan(sql, vschema)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -35,6 +38,18 @@ func buildGeneralDDLPlan(sql string, ddlStatement sqlparser.DDLStatement, vschem
 		DDL:       ddlStatement,
 		NormalDDL: normalDDLPlan,
 		OnlineDDL: onlineDDLPlan,
+	}, nil
+}
+
+func buildByPassDDLPlan(sql string, vschema ContextVSchema) (engine.Primitive, error) {
+	keyspace, err := vschema.DefaultKeyspace()
+	if err != nil {
+		return nil, err
+	}
+	return &engine.Send{
+		Keyspace:          keyspace,
+		TargetDestination: vschema.Destination(),
+		Query:             sql,
 	}, nil
 }
 
