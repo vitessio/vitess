@@ -1219,7 +1219,7 @@ func TestExecFail(t *testing.T) {
 	})
 
 	vc.Rewind()
-	vc.multiShardErrs = nil
+	vc.results = nil
 	vc.resultErr = mysql.NewSQLError(mysql.ERQueryInterrupted, "", "query timeout -20")
 	_, err = wrapStreamExecute(sel, vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err, "unexpected ScatterErrorsAsWarnings error %v", err)
@@ -1254,7 +1254,6 @@ func TestExecFail(t *testing.T) {
 	expectResult(t, "sel.Execute", result, defaultSelectResult)
 
 	vc.Rewind()
-	vc.multiShardErrs = nil
 	vc.resultErr = mysql.NewSQLError(mysql.ERQueryInterrupted, "", "query timeout -20")
 	// test when there is order by column
 	sel.OrderBy = []OrderbyParams{{
