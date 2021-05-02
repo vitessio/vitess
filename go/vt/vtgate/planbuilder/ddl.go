@@ -51,6 +51,9 @@ func (fk *fkContraint) FkWalk(node sqlparser.SQLNode) (kontinue bool, err error)
 // This is why we return a compound primitive (DDL) which contains fully populated primitives (Send & OnlineDDL),
 // and which chooses which of the two to invoke at runtime.
 func buildGeneralDDLPlan(sql string, ddlStatement sqlparser.DDLStatement, reservedVars *sqlparser.ReservedVars, vschema ContextVSchema) (engine.Primitive, error) {
+	if vschema.Destination() != nil {
+		return buildByPassDDLPlan(sql, vschema)
+	}
 	normalDDLPlan, onlineDDLPlan, err := buildDDLPlans(sql, ddlStatement, reservedVars, vschema)
 	if err != nil {
 		return nil, err
@@ -73,6 +76,18 @@ func buildGeneralDDLPlan(sql string, ddlStatement sqlparser.DDLStatement, reserv
 		OnlineDDLEnabled: *enableOnlineDDL,
 
 		CreateTempTable: ddlStatement.IsTemporary(),
+	}, nil
+}
+
+func buildByPassDDLPlan(sql string, vschema ContextVSchema) (engine.Primitive, error) {
+	keyspace, err := vschema.DefaultKeyspace()
+	if err != nil {
+		return nil, err
+	}
+	return &engine.Send{
+		Keyspace:          keyspace,
+		TargetDestination: vschema.Destination(),
+		Query:             sql,
 	}, nil
 }
 

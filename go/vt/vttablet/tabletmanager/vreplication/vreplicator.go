@@ -93,8 +93,9 @@ type vreplicator struct {
 //   "select * from t where in_keyrange(col1, 'hash', '-80')",
 //   "select col1, col2 from t where...",
 //   "select col1, keyspace_id() as ksid from t where...",
-//   "select id, count(*), sum(price) from t group by id".
-//   Only "in_keyrange" expressions are supported in the where clause.
+//   "select id, count(*), sum(price) from t group by id",
+//   "select * from t where customer_id=1 and val = 'newton'".
+//   Only "in_keyrange" expressions, integer and string comparisons are supported in the where clause.
 //   The select expressions can be any valid non-aggregate expressions,
 //   or count(*), or sum(col).
 //   If the target column name does not match the source expression, an

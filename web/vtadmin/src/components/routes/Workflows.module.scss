@@ -19,3 +19,10 @@
   grid-template-columns: 1fr min-content;
   margin-bottom: 24px;
 }
+
+.shardList {
+  color: var(--textColorSecondary);
+  font-size: var(--fontSizeSmall);
+  max-width: 20rem;
+  padding-right: 24px;
+}

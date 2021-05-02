@@ -606,10 +606,36 @@ func (rb *route) computePlan(pb *primitiveBuilder, filter sqlparser.Expr) (opcod
 			return rb.computeINPlan(pb, node)
 		case sqlparser.NotInOp:
 			return rb.computeNotInPlan(node.Right), nil, nil
+		case sqlparser.LikeOp:
+			return rb.computeLikePlan(pb, node)
 		}
 	case *sqlparser.IsExpr:
 		return rb.computeISPlan(pb, node)
 	}
+	return engine.SelectScatter, nil, nil
+}
+
+// computeLikePlan computes the plan for 'LIKE' constraint
+func (rb *route) computeLikePlan(pb *primitiveBuilder, comparison *sqlparser.ComparisonExpr) (opcode engine.RouteOpcode, vindex vindexes.SingleColumn, condition sqlparser.Expr) {
+
+	left := comparison.Left
+	right := comparison.Right
+
+	if sqlparser.IsNull(right) {
+		return engine.SelectNone, nil, nil
+	}
+	if !rb.exprIsValue(right) {
+		return engine.SelectScatter, nil, nil
+	}
+	vindex = pb.st.Vindex(left, rb)
+	if vindex == nil {
+		// if there is no vindex defined, scatter
+		return engine.SelectScatter, nil, nil
+	}
+	if subsharding, ok := vindex.(vindexes.Prefixable); ok {
+		return engine.SelectEqual, subsharding.PrefixVindex(), right
+	}
+
 	return engine.SelectScatter, nil, nil
 }
 
