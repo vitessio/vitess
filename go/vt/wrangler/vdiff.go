@@ -20,7 +20,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"math"
 	"strings"
 	"sync"
 	"time"
@@ -842,19 +841,6 @@ func humanInt(n int64) string {
 	return fmt.Sprintf("%s%s", s, unit)
 }
 
-// logSteps returns a "human" readable value of n, for proportional steps of n (so as not to spam logs)
-// the go-humanize package doesn't support counts atm
-func logSteps(n int64) string {
-	if n == 0 {
-		return ""
-	}
-	step := int64(math.Floor(math.Pow(10, math.Floor(math.Log10(float64(n))))))
-	if (n%step == 0) || (n%1e6 == 0) { // min step is a million
-		return humanInt(n)
-	}
-	return ""
-}
-
 //-----------------------------------------------------------------
 // tableDiffer
 
@@ -867,8 +853,8 @@ func (td *tableDiffer) diff(ctx context.Context, wr *Wrangler, rowsToCompare *in
 	advanceSource := true
 	advanceTarget := true
 	for {
-		if s := logSteps(int64(dr.ProcessedRows)); s != "" {
-			log.Infof("VDiff progress:: table %s: %s rows", td.targetTable, s)
+		if dr.ProcessedRows%1e7 == 0 { // log progress every 10 million rows
+			log.Infof("VDiff progress:: table %s: %s rows", td.targetTable, humanInt(int64(dr.ProcessedRows)))
 		}
 		*rowsToCompare--
 		if *rowsToCompare < 0 {
