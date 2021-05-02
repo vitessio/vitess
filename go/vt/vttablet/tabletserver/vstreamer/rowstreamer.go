@@ -344,6 +344,6 @@ func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.V
 	}
 
 	fmt.Printf("===========1 rowCount=%v\n", rowCount)
-	hasMoreRows = (rowCount > 0)
+	hasMoreRows = (len(rows) > 0)
 	return hasMoreRows, gtid, nil
 }
