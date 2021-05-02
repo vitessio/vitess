@@ -32,6 +32,8 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
+const streamRowsLimit = 1000
+
 // RowStreamer exposes an externally usable interface to rowStreamer.
 type RowStreamer interface {
 	Stream() error
@@ -107,7 +109,23 @@ func (rs *rowStreamer) Stream() error {
 	if _, err := conn.ExecuteFetch("set names binary", 1, false); err != nil {
 		return err
 	}
-	return rs.streamQuery(conn, rs.send)
+	gtid := ""
+	hasMoreRows := false
+	for {
+		rs.sendQuery, err = rs.buildSelect()
+		fmt.Printf("=========== rs.sendQuery=%v, err=%v\n", rs.sendQuery, err)
+		if err != nil {
+			return err
+		}
+		hasMoreRows, gtid, err = rs.streamQuery(conn, rs.send, gtid)
+		fmt.Printf("=========== hasMoreRows=%v, err=%v\n", hasMoreRows, err)
+		if err != nil {
+			return err
+		}
+		if !hasMoreRows {
+			return nil
+		}
+	}
 }
 
 func (rs *rowStreamer) buildPlan() error {
@@ -203,20 +221,28 @@ func (rs *rowStreamer) buildSelect() (string, error) {
 		buf.Myprintf("%s%v", prefix, sqlparser.NewColIdent(rs.plan.Table.Fields[pk].Name))
 		prefix = ", "
 	}
+	buf.WriteString(fmt.Sprintf(" limit %d", streamRowsLimit))
 	return buf.String(), nil
 }
 
-func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.VStreamRowsResponse) error) error {
+func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.VStreamRowsResponse) error, lastGtid string) (hasMoreRows bool, gtid string, err error) {
 	log.Infof("Streaming query: %v\n", rs.sendQuery)
-	gtid, err := conn.streamWithSnapshot(rs.ctx, rs.plan.Table.Name, rs.sendQuery)
-	if err != nil {
-		return err
+	if lastGtid == "" {
+		gtid, err = conn.streamWithSnapshot(rs.ctx, rs.plan.Table.Name, rs.sendQuery)
+		if err != nil {
+			return hasMoreRows, gtid, err
+		}
+	} else {
+		gtid = lastGtid
+		if err := conn.ExecuteStreamFetch(rs.sendQuery); err != nil {
+			return hasMoreRows, gtid, err
+		}
 	}
 
 	// first call the callback with the fields
 	flds, err := conn.Fields()
 	if err != nil {
-		return err
+		return hasMoreRows, gtid, err
 	}
 	pkfields := make([]*querypb.Field, len(rs.pkColumns))
 	for i, pk := range rs.pkColumns {
@@ -232,7 +258,7 @@ func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.V
 		Gtid:     gtid,
 	})
 	if err != nil {
-		return fmt.Errorf("stream send error: %v", err)
+		return hasMoreRows, gtid, fmt.Errorf("stream send error: %v", err)
 	}
 
 	var response binlogdatapb.VStreamRowsResponse
@@ -247,7 +273,7 @@ func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.V
 		//log.Infof("StreamResponse for loop iteration starts")
 		if rs.ctx.Err() != nil {
 			log.Infof("Stream ended because of ctx.Done")
-			return fmt.Errorf("stream ended: %v", rs.ctx.Err())
+			return hasMoreRows, gtid, fmt.Errorf("stream ended: %v", rs.ctx.Err())
 		}
 
 		// check throttler.
@@ -260,7 +286,7 @@ func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.V
 		}
 		mysqlrow, err = conn.FetchNext(mysqlrow)
 		if err != nil {
-			return err
+			return hasMoreRows, gtid, err
 		}
 		if mysqlrow == nil {
 			break
@@ -270,10 +296,11 @@ func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.V
 		for i, pk := range rs.pkColumns {
 			lastpk[i] = mysqlrow[pk]
 		}
+		rs.lastpk = lastpk
 		// Reuse the vstreamer's filter.
 		ok, err := rs.plan.filter(mysqlrow, filtered)
 		if err != nil {
-			return err
+			return hasMoreRows, gtid, err
 		}
 		if ok {
 			if rowCount >= len(rows) {
@@ -294,7 +321,7 @@ func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.V
 			err = send(&response)
 			if err != nil {
 				log.Infof("Rowstreamer send returned error %v", err)
-				return err
+				return hasMoreRows, gtid, err
 			}
 			rs.pktsize.Record(byteCount, time.Since(startSend))
 			rowCount = 0
@@ -303,15 +330,20 @@ func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.V
 	}
 
 	if rowCount > 0 {
+		fmt.Printf("===========rowCount=%v\n", rowCount)
 		response.Rows = rows[:rowCount]
 		response.Lastpk = sqltypes.RowToProto3(lastpk)
+		fmt.Printf("===========response.Lastpk=%v\n", response.Lastpk)
 
 		rs.vse.rowStreamerNumRows.Add(int64(len(response.Rows)))
+		fmt.Printf("===========err=%v\n", err)
 		err = send(&response)
 		if err != nil {
-			return err
+			return hasMoreRows, gtid, err
 		}
 	}
 
-	return nil
+	fmt.Printf("===========1 rowCount=%v\n", rowCount)
+	hasMoreRows = (rowCount > 0)
+	return hasMoreRows, gtid, nil
 }
