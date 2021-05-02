@@ -336,7 +336,8 @@ const (
 			time_updated,
 			transaction_timestamp,
 			state,
-			message
+			message,
+			rows_copied
 		FROM _vt.vreplication
 		WHERE
 			workflow=%a
