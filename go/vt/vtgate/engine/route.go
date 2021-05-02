@@ -347,9 +347,17 @@ func (route *Route) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.
 	}
 
 	if len(route.OrderBy) == 0 {
-		return vcursor.StreamExecuteMulti(route.Query, rss, bvs, func(qr *sqltypes.Result) error {
+		err = vcursor.StreamExecuteMulti(route.Query, rss, bvs, func(qr *sqltypes.Result) error {
 			return callback(qr.Truncate(route.TruncateColumnCount))
 		})
+		if err != nil {
+			if !route.ScatterErrorsAsWarnings {
+				return err
+			}
+			partialSuccessScatterQueries.Add(1)
+			sErr := mysql.NewSQLErrorFromError(err).(*mysql.SQLError)
+			vcursor.Session().RecordWarning(&querypb.QueryWarning{Code: uint32(sErr.Num), Message: err.Error()})
+		}
 	}
 
 	// There is an order by. We have to merge-sort.
@@ -365,9 +373,18 @@ func (route *Route) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.
 		Primitives: prims,
 		OrderBy:    route.OrderBy,
 	}
-	return ms.StreamExecute(vcursor, bindVars, wantfields, func(qr *sqltypes.Result) error {
+	err = ms.StreamExecute(vcursor, bindVars, wantfields, func(qr *sqltypes.Result) error {
 		return callback(qr.Truncate(route.TruncateColumnCount))
 	})
+	if err != nil {
+		if !route.ScatterErrorsAsWarnings {
+			return err
+		}
+		partialSuccessScatterQueries.Add(1)
+		sErr := mysql.NewSQLErrorFromError(err).(*mysql.SQLError)
+		vcursor.Session().RecordWarning(&querypb.QueryWarning{Code: uint32(sErr.Num), Message: err.Error()})
+	}
+	return nil
 }
 
 // GetFields fetches the field info.
