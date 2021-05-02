@@ -232,6 +232,9 @@ esac
 # Install flavor-specific packages
 apt-get update
 for i in $(seq 1 $MAX_RETRY); do apt-get install -y --no-install-recommends "${PACKAGES[@]}" && break; done
+if [[ "$i" = "$MAX_RETRY" ]]; then
+    exit 1
+fi
 
 # Clean up files we won't need in the final image.
 rm -rf /var/lib/apt/lists/*

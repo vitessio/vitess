@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import { orderBy } from 'lodash-es';
+import { groupBy, orderBy } from 'lodash-es';
 import * as React from 'react';
 import { Link } from 'react-router-dom';
 
@@ -27,22 +27,27 @@ import { Icons } from '../Icon';
 import { TextInput } from '../TextInput';
 import { useSyncedURLParam } from '../../hooks/useSyncedURLParam';
 import { filterNouns } from '../../util/filterNouns';
+import { getStreams, getTimeUpdated } from '../../util/workflows';
+import { formatDateTime, formatRelativeTime } from '../../util/time';
+import { StreamStatePip } from '../pips/StreamStatePip';
 
 export const Workflows = () => {
     useDocumentTitle('Workflows');
-    const { data } = useWorkflows();
+    const { data } = useWorkflows({ refetchInterval: 1000 });
     const { value: filter, updateValue: updateFilter } = useSyncedURLParam('filter');
 
     const sortedData = React.useMemo(() => {
-        const mapped = (data || []).map(({ cluster, keyspace, workflow }) => ({
-            clusterID: cluster?.id,
-            clusterName: cluster?.name,
-            keyspace,
-            name: workflow?.name,
-            source: workflow?.source?.keyspace,
-            sourceShards: workflow?.source?.shards,
-            target: workflow?.target?.keyspace,
-            targetShards: workflow?.target?.shards,
+        const mapped = (data || []).map((workflow) => ({
+            clusterID: workflow.cluster?.id,
+            clusterName: workflow.cluster?.name,
+            keyspace: workflow.keyspace,
+            name: workflow.workflow?.name,
+            source: workflow.workflow?.source?.keyspace,
+            sourceShards: workflow.workflow?.source?.shards,
+            streams: groupBy(getStreams(workflow), 'state'),
+            target: workflow.workflow?.target?.keyspace,
+            targetShards: workflow.workflow?.target?.shards,
+            timeUpdated: getTimeUpdated(workflow),
         }));
         const filtered = filterNouns(filter, mapped);
         return orderBy(filtered, ['name', 'clusterName', 'source', 'target']);
@@ -65,9 +70,7 @@ export const Workflows = () => {
                         {row.source ? (
                             <>
                                 <div>{row.source}</div>
-                                <div className="font-size-small text-color-secondary">
-                                    {(row.sourceShards || []).join(', ')}
-                                </div>
+                                <div className={style.shardList}>{(row.sourceShards || []).join(', ')}</div>
                             </>
                         ) : (
                             <span className="text-color-secondary">N/A</span>
@@ -77,13 +80,31 @@ export const Workflows = () => {
                         {row.target ? (
                             <>
                                 <div>{row.target}</div>
-                                <div className="font-size-small text-color-secondary">
-                                    {(row.targetShards || []).join(', ')}
-                                </div>
+                                <div className={style.shardList}>{(row.targetShards || []).join(', ')}</div>
                             </>
                         ) : (
                             <span className="text-color-secondary">N/A</span>
                         )}
+                    </DataCell>
+
+                    {/* TODO(doeg): add a protobuf enum for this (https://github.com/vitessio/vitess/projects/12#card-60190340) */}
+                    {['Error', 'Copying', 'Running', 'Stopped'].map((streamState) => (
+                        <DataCell key={streamState}>
+                            {streamState in row.streams ? (
+                                <>
+                                    <StreamStatePip state={streamState} /> {row.streams[streamState].length}
+                                </>
+                            ) : (
+                                <span className="text-color-secondary">-</span>
+                            )}
+                        </DataCell>
+                    ))}
+
+                    <DataCell>
+                        <div className="font-family-primary white-space-nowrap">{formatDateTime(row.timeUpdated)}</div>
+                        <div className="font-family-primary font-size-small text-color-secondary">
+                            {formatRelativeTime(row.timeUpdated)}
+                        </div>
                     </DataCell>
                 </tr>
             );
@@ -106,7 +127,11 @@ export const Workflows = () => {
                 </Button>
             </div>
 
-            <DataTable columns={['Workflow', 'Source', 'Target']} data={sortedData} renderRows={renderRows} />
+            <DataTable
+                columns={['Workflow', 'Source', 'Target', 'Error', 'Copying', 'Running', 'Stopped', 'Last Updated']}
+                data={sortedData}
+                renderRows={renderRows}
+            />
         </div>
     );
 };

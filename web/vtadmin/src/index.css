@@ -203,6 +203,10 @@ table tbody td[rowSpan] {
   font-family: var(--fontFamilyMonospace);
 }
 
+.font-family-primary {
+  font-family: var(--fontFamilyPrimary);
+}
+
 .font-size-small {
   font-size: var(--fontSizeSmall);
 }
