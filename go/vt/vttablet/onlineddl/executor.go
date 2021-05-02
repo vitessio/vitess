@@ -695,6 +695,9 @@ func (e *Executor) ExecuteWithVReplication(ctx context.Context, onlineDDL *schem
 	if err := v.analyze(ctx, conn); err != nil {
 		return err
 	}
+	if err := e.updateMigrationTableRows(ctx, onlineDDL.UUID, v.tableRows); err != nil {
+		return err
+	}
 	if err := e.updateArtifacts(ctx, onlineDDL.UUID, v.targetTable); err != nil {
 		return err
 	}
@@ -1992,6 +1995,7 @@ func (e *Executor) readVReplStream(ctx context.Context, uuid string, okIfMissing
 		transactionTimestamp: row.AsInt64("transaction_timestamp", 0),
 		state:                row.AsString("state", ""),
 		message:              row.AsString("message", ""),
+		rowsCopied:           row.AsInt64("rows_copied", 0),
 		bls:                  &binlogdatapb.BinlogSource{},
 	}
 	if err := proto.UnmarshalText(s.source, s.bls); err != nil {
@@ -2107,6 +2111,10 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 					// migrationMutex lock and it's now safe to ensure vreplMigrationRunning is 1
 					atomic.StoreInt64(&e.vreplMigrationRunning, 1)
 					_ = e.updateMigrationTimestamp(ctx, "liveness_timestamp", uuid)
+
+					_ = e.updateMigrationProgressByRowsCopied(ctx, uuid, s.rowsCopied)
+					_ = e.updateMigrationETASecondsByProgress(ctx, uuid)
+
 					isReady, err := e.isVReplMigrationReadyToCutOver(ctx, s)
 					if err != nil {
 						return countRunnning, cancellable, err
@@ -2447,7 +2455,7 @@ func (e *Executor) updateMySQLTable(ctx context.Context, uuid string, tableName 
 	return err
 }
 
-func (e *Executor) updateETASeconds(ctx context.Context, uuid string, etaSeconds int64) error {
+func (e *Executor) updateMigrationETASeconds(ctx context.Context, uuid string, etaSeconds int64) error {
 	query, err := sqlparser.ParseAndBind(sqlUpdateMigrationETASeconds,
 		sqltypes.Int64BindVariable(etaSeconds),
 		sqltypes.StringBindVariable(uuid),
@@ -2468,6 +2476,41 @@ func (e *Executor) updateMigrationProgress(ctx context.Context, uuid string, pro
 	}
 	query, err := sqlparser.ParseAndBind(sqlUpdateMigrationProgress,
 		sqltypes.Float64BindVariable(progress),
+		sqltypes.StringBindVariable(uuid),
+	)
+	if err != nil {
+		return err
+	}
+	_, err = e.execQuery(ctx, query)
+	return err
+}
+
+func (e *Executor) updateMigrationProgressByRowsCopied(ctx context.Context, uuid string, rowsCopied int64) error {
+	query, err := sqlparser.ParseAndBind(sqlUpdateMigrationProgressByRowsCopied,
+		sqltypes.Int64BindVariable(rowsCopied),
+		sqltypes.StringBindVariable(uuid),
+	)
+	if err != nil {
+		return err
+	}
+	_, err = e.execQuery(ctx, query)
+	return err
+}
+
+func (e *Executor) updateMigrationETASecondsByProgress(ctx context.Context, uuid string) error {
+	query, err := sqlparser.ParseAndBind(sqlUpdateMigrationETASecondsByProgress,
+		sqltypes.StringBindVariable(uuid),
+	)
+	if err != nil {
+		return err
+	}
+	_, err = e.execQuery(ctx, query)
+	return err
+}
+
+func (e *Executor) updateMigrationTableRows(ctx context.Context, uuid string, tableRows int64) error {
+	query, err := sqlparser.ParseAndBind(sqlUpdateMigrationTableRows,
+		sqltypes.Int64BindVariable(tableRows),
 		sqltypes.StringBindVariable(uuid),
 	)
 	if err != nil {
@@ -2619,7 +2662,7 @@ func (e *Executor) onSchemaMigrationStatus(ctx context.Context, uuid string, sta
 	if err = e.updateMigrationProgress(ctx, uuid, progressPct); err != nil {
 		return err
 	}
-	if err = e.updateETASeconds(ctx, uuid, etaSeconds); err != nil {
+	if err = e.updateMigrationETASeconds(ctx, uuid, etaSeconds); err != nil {
 		return err
 	}
 
