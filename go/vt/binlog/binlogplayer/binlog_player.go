@@ -560,6 +560,7 @@ var AlterVReplicationTable = []string{
 	"ALTER TABLE _vt.vreplication ADD COLUMN rows_copied BIGINT(20) NOT NULL DEFAULT 0",
 }
 
+// WithDDLInitialQueries contains the queries to be expected by the mock db client during tests
 var WithDDLInitialQueries = []string{
 	"SELECT db_name FROM _vt.vreplication LIMIT 0",
 	"SELECT rows_copied FROM _vt.vreplication LIMIT 0",
@@ -644,7 +645,7 @@ func GenerateUpdatePos(uid uint32, pos mysql.Position, timeUpdated int64, txTime
 			strGTID, timeUpdated, txTimestamp, rowsCopied, uid)
 	}
 	return fmt.Sprintf(
-		"update _vt.vreplication set pos=%v, time_updated=%v, , rows_copied=%v, message='' where id=%v", strGTID, timeUpdated, rowsCopied, uid)
+		"update _vt.vreplication set pos=%v, time_updated=%v, rows_copied=%v, message='' where id=%v", strGTID, timeUpdated, rowsCopied, uid)
 }
 
 // GenerateUpdateTime returns a statement to update time_updated in the _vt.vreplication table.
