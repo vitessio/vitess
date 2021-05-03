@@ -27,6 +27,7 @@ import (
 
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
+	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/log"
 
 	"github.com/golang/protobuf/proto"
@@ -590,7 +591,7 @@ func (df *vdiff) stopTargets(ctx context.Context) error {
 			if err := proto.UnmarshalText(row[0].ToString(), &bls); err != nil {
 				return err
 			}
-			pos, err := mysql.DecodePosition(row[1].ToString())
+			pos, err := binlogplayer.DecodePosition(row[1].ToString())
 			if err != nil {
 				return err
 			}
@@ -726,7 +727,7 @@ func (df *vdiff) syncTargets(ctx context.Context, filteredReplicationWaitTime ti
 		if err != nil {
 			return err
 		}
-		mpos, err := mysql.DecodePosition(pos)
+		mpos, err := binlogplayer.DecodePosition(pos)
 		if err != nil {
 			return err
 		}
