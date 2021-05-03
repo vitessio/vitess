@@ -119,7 +119,7 @@ func TestPlayerCopyCharPK(t *testing.T) {
 		"/update _vt.vreplication set state='Copying'",
 		"insert into dst(idc,val) values ('a\\0',1)",
 		`/update _vt.copy_state set lastpk='fields:<name:\\"idc\\" type:BINARY > rows:<lengths:2 values:\\"a\\\\000\\" > ' where vrepl_id=.*`,
-		`update dst set val=3 where idc=cast('a' as binary(2)) and ('a') <= ('a\0')`,
+		`update dst set val=3 where idc='a\0' and ('a\0') <= ('a\0')`,
 		"insert into dst(idc,val) values ('c\\0',2)",
 		`/update _vt.copy_state set lastpk='fields:<name:\\"idc\\" type:BINARY > rows:<lengths:2 values:\\"c\\\\000\\" > ' where vrepl_id=.*`,
 		"/delete from _vt.copy_state.*dst",
