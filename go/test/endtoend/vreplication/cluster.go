@@ -17,7 +17,7 @@ import (
 )
 
 var (
-	debug = false // set to true to always use local env vtdataroot for local debugging
+	debug = false // set to true for local debugging: this uses the local env vtdataroot and does not teardown clusters
 
 	originalVtdataroot    string
 	vtdataroot            string
@@ -391,6 +391,9 @@ func (vc *VitessCluster) AddCell(t testing.TB, name string) (*Cell, error) {
 
 // TearDown brings down a cluster, deleting processes, removing topo keys
 func (vc *VitessCluster) TearDown(t testing.TB) {
+	if debug {
+		return
+	}
 	for _, cell := range vc.Cells {
 		for _, vtgate := range cell.Vtgates {
 			if err := vtgate.TearDown(); err != nil {
