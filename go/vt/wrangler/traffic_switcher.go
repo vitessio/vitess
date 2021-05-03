@@ -1361,7 +1361,7 @@ func (ts *trafficSwitcher) startReverseVReplication(ctx context.Context) error {
 }
 
 func (ts *trafficSwitcher) changeShardsAccess(ctx context.Context, keyspace string, shards []*topo.ShardInfo, access accessType) error {
-	if err := ts.wr.ts.UpdateDisableQueryService(ctx, ts.sourceKeyspace, shards, topodatapb.TabletType_MASTER, nil, access == disallowWrites /* disable */); err != nil {
+	if err := ts.wr.ts.UpdateDisableQueryService(ctx, keyspace, shards, topodatapb.TabletType_MASTER, nil, access == disallowWrites /* disable */); err != nil {
 		return err
 	}
 	return ts.wr.refreshMasters(ctx, shards)
