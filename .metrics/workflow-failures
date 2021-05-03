@@ -9489,3 +9489,9 @@
 2021-05-03T17:22:22Z,FOSSA License Scanning,https://github.com/vitessio/vitess/actions/runs/807552768
 2021-05-03T19:54:58Z,Cluster (17),https://github.com/vitessio/vitess/actions/runs/807928784
 2021-05-03T19:54:58Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/807928796
+2021-05-03T21:15:39Z,Cluster (upgrade),https://github.com/vitessio/vitess/actions/runs/808119072
+2021-05-03T21:15:39Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/808119025
+2021-05-03T21:15:39Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/808119027
+2021-05-03T21:15:39Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/808119020
+2021-05-03T21:16:01Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/808119774
+2021-05-03T21:16:02Z,endtoend,https://github.com/vitessio/vitess/actions/runs/808119799
