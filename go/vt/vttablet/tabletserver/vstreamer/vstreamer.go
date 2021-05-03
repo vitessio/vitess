@@ -873,7 +873,6 @@ func (vs *vstreamer) extractRowAndFilter(plan *streamerPlan, data []byte, dataCo
 		pos += l
 
 		values[colNum] = value
-
 		valueIndex++
 	}
 	filtered := make([]sqltypes.Value, len(plan.ColExprs))
