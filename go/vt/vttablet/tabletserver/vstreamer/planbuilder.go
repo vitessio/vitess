@@ -156,20 +156,8 @@ func (plan *Plan) filter(values []sqltypes.Value) (bool, []sqltypes.Value, error
 
 func getKeyspaceID(values []sqltypes.Value, vindex vindexes.Vindex, vindexColumns []int, fields []*querypb.Field) (key.DestinationKeyspaceID, error) {
 	vindexValues := make([]sqltypes.Value, 0, len(vindexColumns))
-	for colNum, col := range vindexColumns {
-		// For binary(n) column types, mysql pads the data on the right with nulls. However the binlog event contains
-		// the data without this padding. In particular, this causes an issue if a binary(n) column is part of the
-		// sharding key: the keyspace_id() returned during the copy phase (where the value is the result of a mysql query)
-		// is different from the one during replication (where the value is the one from the binlogs)
-		// Hence we need to add the padding here
-		value := values[col]
-		if fields[colNum].Type == querypb.Type_BINARY {
-			newValueBytes := make([]byte, int(fields[colNum].ColumnLength))
-			copy(newValueBytes[:value.Len()], value.Raw())
-			value = sqltypes.MakeTrusted(fields[colNum].Type, newValueBytes)
-		}
-
-		vindexValues = append(vindexValues, value)
+	for _, col := range vindexColumns {
+		vindexValues = append(vindexValues, values[col])
 	}
 	destinations, err := vindexes.Map(vindex, nil, [][]sqltypes.Value{vindexValues})
 	if err != nil {
