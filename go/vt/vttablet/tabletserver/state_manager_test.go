@@ -22,6 +22,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/mysql/fakesqldb"
+
 	"context"
 
 	"github.com/stretchr/testify/assert"
@@ -696,7 +698,7 @@ func newTestStateManager(t *testing.T) *stateManager {
 		tableGC:     &testTableGC{},
 	}
 	sm.Init(env, querypb.Target{})
-	sm.hs.InitDBConfig(querypb.Target{})
+	sm.hs.InitDBConfig(querypb.Target{}, fakesqldb.New(t).ConnParams())
 	log.Infof("returning sm: %p", sm)
 	return sm
 }
