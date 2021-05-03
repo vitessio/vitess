@@ -23,6 +23,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/vt/dbconfigs"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
@@ -67,6 +69,7 @@ type healthStreamer struct {
 	history *history.History
 
 	ticks       *timer.Timer
+	dbConfig    dbconfigs.Connector
 	conns       *connpool.Pool
 	initSuccess bool
 }
@@ -98,11 +101,12 @@ func newHealthStreamer(env tabletenv.Env, alias topodatapb.TabletAlias) *healthS
 	}
 }
 
-func (hs *healthStreamer) InitDBConfig(target querypb.Target) {
+func (hs *healthStreamer) InitDBConfig(target querypb.Target, cp dbconfigs.Connector) {
 	// Weird test failures happen if we don't instantiate
 	// a separate variable.
 	inner := target
 	hs.state.Target = &inner
+	hs.dbConfig = cp
 }
 
 func (hs *healthStreamer) Open() {
@@ -113,6 +117,7 @@ func (hs *healthStreamer) Open() {
 		return
 	}
 	hs.ctx, hs.cancel = context.WithCancel(context.Background())
+	hs.conns.Open(hs.dbConfig, hs.dbConfig, hs.dbConfig)
 	hs.ticks.Start(func() {
 		if err := hs.Reload(); err != nil {
 			log.Errorf("periodic schema reload failed in health stream: %v", err)
@@ -205,6 +210,17 @@ func (hs *healthStreamer) ChangeState(tabletType topodatapb.TabletType, terTimes
 
 	shr := proto.Clone(hs.state).(*querypb.StreamHealthResponse)
 
+	hs.broadCastToClients(shr)
+	hs.history.Add(&historyRecord{
+		Time:       time.Now(),
+		serving:    shr.Serving,
+		tabletType: shr.Target.TabletType,
+		lag:        lag,
+		err:        err,
+	})
+}
+
+func (hs *healthStreamer) broadCastToClients(shr *querypb.StreamHealthResponse) {
 	for ch := range hs.clients {
 		select {
 		case ch <- shr:
@@ -226,13 +242,6 @@ func (hs *healthStreamer) ChangeState(tabletType topodatapb.TabletType, terTimes
 			delete(hs.clients, ch)
 		}
 	}
-	hs.history.Add(&historyRecord{
-		Time:       time.Now(),
-		serving:    shr.Serving,
-		tabletType: shr.Target.TabletType,
-		lag:        lag,
-		err:        err,
-	})
 }
 
 func (hs *healthStreamer) AppendDetails(details []*kv) []*kv {
@@ -283,9 +292,6 @@ func (hs *healthStreamer) Reload() error {
 	hs.mu.Lock()
 	defer hs.mu.Unlock()
 
-	// Reset the schema state.
-	hs.state.RealtimeStats.TableSchemaChanged = nil
-
 	// Schema Reload to happen only on master.
 	if hs.state.Target.TabletType != topodatapb.TabletType_MASTER {
 		return nil
@@ -320,6 +326,9 @@ func (hs *healthStreamer) Reload() error {
 		tables = append(tables, row[0].ToString())
 	}
 	hs.state.RealtimeStats.TableSchemaChanged = tables
+	shr := proto.Clone(hs.state).(*querypb.StreamHealthResponse)
+	hs.broadCastToClients(shr)
+	hs.state.RealtimeStats.TableSchemaChanged = nil
 
 	// Reload the schema in a transaction.
 	_, err = conn.Exec(ctx, "begin", 1, false)

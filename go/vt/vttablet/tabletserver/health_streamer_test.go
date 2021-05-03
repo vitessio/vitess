@@ -19,18 +19,25 @@ package tabletserver
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 
+	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/fakesqldb"
+	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
 func TestHealthStreamerClosed(t *testing.T) {
-	config := tabletenv.NewDefaultConfig()
+	db := fakesqldb.New(t)
+	defer db.Close()
+	config := newConfig(db)
 	env := tabletenv.NewEnv(config, "ReplTrackerTest")
 	alias := topodatapb.TabletAlias{
 		Cell: "cell",
@@ -44,8 +51,17 @@ func TestHealthStreamerClosed(t *testing.T) {
 	assert.Contains(t, err.Error(), "tabletserver is shutdown")
 }
 
+func newConfig(db *fakesqldb.DB) *tabletenv.TabletConfig {
+	cfg := tabletenv.NewDefaultConfig()
+	cfg.DB = newDBConfigs(db)
+	return cfg
+}
+
 func TestHealthStreamerBroadcast(t *testing.T) {
-	config := tabletenv.NewDefaultConfig()
+	db := fakesqldb.New(t)
+	defer db.Close()
+	config := newConfig(db)
+
 	env := tabletenv.NewEnv(config, "ReplTrackerTest")
 	alias := topodatapb.TabletAlias{
 		Cell: "cell",
@@ -56,7 +72,7 @@ func TestHealthStreamerBroadcast(t *testing.T) {
 	hs.Open()
 	defer hs.Close()
 	target := querypb.Target{}
-	hs.InitDBConfig(target)
+	hs.InitDBConfig(target, db.ConnParams())
 
 	ch, cancel := testStream(hs)
 	defer cancel()
@@ -134,6 +150,68 @@ func TestHealthStreamerBroadcast(t *testing.T) {
 		},
 	}
 	assert.Equal(t, want, shr)
+}
+
+func TestReloadSchema(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	config := newConfig(db)
+	config.SchemaReloadIntervalSeconds.Set(100 * time.Millisecond)
+
+	env := tabletenv.NewEnv(config, "ReplTrackerTest")
+	alias := topodatapb.TabletAlias{
+		Cell: "cell",
+		Uid:  1,
+	}
+	blpFunc = testBlpFunc
+	hs := newHealthStreamer(env, alias)
+
+	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	configs := config.DB
+
+	db.AddQuery(mysql.CreateSchemaCopyTable, &sqltypes.Result{})
+	db.AddQuery(mysql.ClearSchemaCopy, &sqltypes.Result{})
+	db.AddQuery(mysql.InsertIntoSchemaCopy, &sqltypes.Result{})
+	db.AddQuery("begin", &sqltypes.Result{})
+	db.AddQuery("commit", &sqltypes.Result{})
+	db.AddQuery("rollback", &sqltypes.Result{})
+	db.AddQuery(mysql.DetectSchemaChange, sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"table_name",
+			"varchar",
+		),
+		"product",
+		"users",
+	))
+
+	hs.InitDBConfig(target, configs.DbaWithDB())
+	hs.Open()
+	defer hs.Close()
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		hs.Stream(ctx, func(response *querypb.StreamHealthResponse) error {
+			if response.RealtimeStats.TableSchemaChanged != nil {
+				assert.Equal(t, []string{"product", "users"}, response.RealtimeStats.TableSchemaChanged)
+				wg.Done()
+			} else {
+				log.Error("1")
+			}
+			return nil
+		})
+	}()
+
+	c := make(chan struct{})
+	go func() {
+		defer close(c)
+		wg.Wait()
+	}()
+	select {
+	case <-c:
+
+	case <-time.After(1 * time.Second):
+		t.Errorf("timed out")
+	}
 }
 
 func testStream(hs *healthStreamer) (<-chan *querypb.StreamHealthResponse, context.CancelFunc) {

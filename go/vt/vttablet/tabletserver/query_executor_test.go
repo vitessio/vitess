@@ -1147,8 +1147,9 @@ func newTestTabletServer(ctx context.Context, flags executorFlags, db *fakesqldb
 	if flags&smallResultSize > 0 {
 		config.Oltp.MaxRows = 2
 	}
-	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
 	dbconfigs := newDBConfigs(db)
+	config.DB = dbconfigs
+	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
 	err := tsv.StartService(target, dbconfigs, nil /* mysqld */)
 	if err != nil {
