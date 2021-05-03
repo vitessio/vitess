@@ -9477,3 +9477,4 @@
 2021-05-03T07:28:10Z,Cluster (13),https://github.com/vitessio/vitess/actions/runs/806077828
 2021-05-03T10:04:36Z,Cluster (upgrade),https://github.com/vitessio/vitess/actions/runs/806452606
 2021-05-03T10:40:43Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/806540669
+2021-05-03T12:27:13Z,Cluster (vreplication_cellalias),https://github.com/vitessio/vitess/actions/runs/806791271
