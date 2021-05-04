@@ -1,5 +1,8 @@
 This release complies with VEP-3 which removes the upgrade order requirement. Components can be upgraded in any order. It is recommended that the upgrade order should still be followed if possible, except to canary test the new version of VTGate before upgrading the rest of the components.
 
+## Known Issues
+* Running binaries with `--version` or calling @@version from a MySQL client still shows `10.0.0-RC1` (Note: fixed in v10.0.1)
+* Online DDL [cannot be used](https://github.com/vitessio/vitess/pull/7873#issuecomment-822798180) if you are using the keyspace filtering feature of VTGate
 
 The following PRs made changes to behaviors that clients might rely on. They should be reviewed carefully so that client code can be changed in concert with a Vitess release deployment.
 
