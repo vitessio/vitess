@@ -94,6 +94,9 @@ var (
 	// statsBackupIsRunning is set to 1 (true) if a backup is running.
 	statsBackupIsRunning *stats.GaugesWithMultiLabels
 
+	// statsIsInSRVKeyspace is set to 1 (true), 0 (false) whether the tablet is in the serving keyspace
+	statsIsInSRVKeyspace *stats.Gauge
+
 	statsKeyspace      = stats.NewString("TabletKeyspace")
 	statsShard         = stats.NewString("TabletShard")
 	statsKeyRangeStart = stats.NewString("TabletKeyRangeStart")
@@ -115,6 +118,7 @@ func init() {
 	statsTabletType = stats.NewString("TabletType")
 	statsTabletTypeCount = stats.NewCountersWithSingleLabel("TabletTypeCount", "Number of times the tablet changed to the labeled type", "type")
 	statsBackupIsRunning = stats.NewGaugesWithMultiLabels("BackupIsRunning", "Whether a backup is running", []string{"mode"})
+	statsIsInSRVKeyspace = stats.NewGauge("IsInSRVKeyspace", "Whether the vttablet is in the serving keyspace (1 = true / 0 = false)")
 }
 
 // TabletManager is the main class for the tablet manager.

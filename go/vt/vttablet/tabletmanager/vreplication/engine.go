@@ -69,6 +69,7 @@ func init() {
 	allddls := append([]string{}, binlogplayer.CreateVReplicationTable()...)
 	allddls = append(allddls, binlogplayer.AlterVReplicationTable...)
 	allddls = append(allddls, createReshardingJournalTable, createCopyState)
+	allddls = append(allddls, createVReplicationLog)
 	withDDL = withddl.New(allddls)
 }
 
@@ -336,7 +337,7 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 	}
 
 	dbClient := vre.getDBClient(runAsAdmin)
-
+	vdbc := newVDBClient(dbClient, binlogplayer.NewStats())
 	if err := dbClient.Connect(); err != nil {
 		return nil, err
 	}
@@ -373,6 +374,9 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 				return nil, err
 			}
 			vre.controllers[id] = ct
+			if err := insertLogWithParams(vdbc, LogStreamCreate, uint32(id), params); err != nil {
+				return nil, err
+			}
 		}
 		return qr, nil
 	case updateQuery:
@@ -411,6 +415,9 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 				return nil, err
 			}
 			vre.controllers[id] = ct
+			if err := insertLog(vdbc, LogStateChange, uint32(id), params["state"], ""); err != nil {
+				return nil, err
+			}
 		}
 		return qr, nil
 	case deleteQuery:
@@ -426,6 +433,9 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 			if ct := vre.controllers[id]; ct != nil {
 				ct.Stop()
 				delete(vre.controllers, id)
+			}
+			if err := insertLogWithParams(vdbc, LogStreamDelete, uint32(id), nil); err != nil {
+				return nil, err
 			}
 		}
 		if err := dbClient.Begin(); err != nil {

@@ -122,7 +122,7 @@ func (plan *Plan) filter(values []sqltypes.Value) (bool, []sqltypes.Value, error
 				return false, nil, nil
 			}
 		case VindexMatch:
-			ksid, err := getKeyspaceID(values, filter.Vindex, filter.VindexColumns)
+			ksid, err := getKeyspaceID(values, filter.Vindex, filter.VindexColumns, plan.Table.Fields)
 			if err != nil {
 				return false, nil, err
 			}
@@ -144,7 +144,7 @@ func (plan *Plan) filter(values []sqltypes.Value) (bool, []sqltypes.Value, error
 		if colExpr.Vindex == nil {
 			result[i] = values[colExpr.ColNum]
 		} else {
-			ksid, err := getKeyspaceID(values, colExpr.Vindex, colExpr.VindexColumns)
+			ksid, err := getKeyspaceID(values, colExpr.Vindex, colExpr.VindexColumns, plan.Table.Fields)
 			if err != nil {
 				return false, nil, err
 			}
@@ -154,7 +154,7 @@ func (plan *Plan) filter(values []sqltypes.Value) (bool, []sqltypes.Value, error
 	return true, result, nil
 }
 
-func getKeyspaceID(values []sqltypes.Value, vindex vindexes.Vindex, vindexColumns []int) (key.DestinationKeyspaceID, error) {
+func getKeyspaceID(values []sqltypes.Value, vindex vindexes.Vindex, vindexColumns []int, fields []*querypb.Field) (key.DestinationKeyspaceID, error) {
 	vindexValues := make([]sqltypes.Value, 0, len(vindexColumns))
 	for _, col := range vindexColumns {
 		vindexValues = append(vindexValues, values[col])

@@ -88,12 +88,13 @@ type Stats struct {
 
 	State sync2.AtomicString
 
-	PhaseTimings  *stats.Timings
-	QueryTimings  *stats.Timings
-	QueryCount    *stats.CountersWithSingleLabel
-	CopyRowCount  *stats.Counter
-	CopyLoopCount *stats.Counter
-	ErrorCounts   *stats.CountersWithMultiLabels
+	PhaseTimings   *stats.Timings
+	QueryTimings   *stats.Timings
+	QueryCount     *stats.CountersWithSingleLabel
+	CopyRowCount   *stats.Counter
+	CopyLoopCount  *stats.Counter
+	ErrorCounts    *stats.CountersWithMultiLabels
+	NoopQueryCount *stats.CountersWithSingleLabel
 }
 
 // RecordHeartbeat updates the time the last heartbeat from vstreamer was seen
@@ -149,6 +150,7 @@ func NewStats() *Stats {
 	bps.CopyRowCount = stats.NewCounter("", "")
 	bps.CopyLoopCount = stats.NewCounter("", "")
 	bps.ErrorCounts = stats.NewCountersWithMultiLabels("", "", []string{"type"})
+	bps.NoopQueryCount = stats.NewCountersWithSingleLabel("", "", "Statement", "")
 	return bps
 }
 

@@ -47,6 +47,18 @@ var (
 	relayLogMaxItems    = flag.Int("relay_log_max_items", 5000, "Maximum number of rows for VReplication target buffering.")
 	copyTimeout         = 1 * time.Hour
 	replicaLagTolerance = 10 * time.Second
+
+	// vreplicationHeartbeatUpdateInterval determines how often the time_updated column is updated if there are no real events on the source and the source
+	// vstream is only sending heartbeats for this long. Keep this low if you expect high QPS and are monitoring this column to alert about potential
+	// outages. Keep this high if
+	// 		you have too many streams the extra write qps or cpu load due to these updates are unacceptable
+	//		you have too many streams and/or a large source field (lot of participating tables) which generates unacceptable increase in your binlog size
+	// vreplicationMinimumHeartbeatUpdateInterval overrides vreplicationHeartbeatUpdateInterval if the latter is higher than this
+	// to ensure that it satisfies liveness criteria implicitly expected by internal processes like Online DDL
+
+	vreplicationExperimentalFlags = flag.Int64("vreplication_experimental_flags", 0, "(Bitmask) of experimental features in vreplication to enable")
+
+	vreplicationExperimentalFlagOptimizeInserts int64 = 1
 )
 
 // vreplicator provides the core logic to start vreplication streams
@@ -57,8 +69,8 @@ type vreplicator struct {
 	// source
 	source          *binlogdatapb.BinlogSource
 	sourceVStreamer VStreamerClient
-
-	stats *binlogplayer.Stats
+	state           string
+	stats           *binlogplayer.Stats
 	// mysqld is used to fetch the local schema.
 	mysqld    mysqlctl.MysqlDaemon
 	pkInfoMap map[string][]*PrimaryKeyInfo
@@ -169,6 +181,15 @@ func (vr *vreplicator) replicate(ctx context.Context) error {
 			if err := newVCopier(vr).copyNext(ctx, settings); err != nil {
 				vr.stats.ErrorCounts.Add([]string{"Copy"}, 1)
 				return err
+			}
+			settings, numTablesToCopy, err = vr.readSettings(ctx)
+			if err != nil {
+				return err
+			}
+			if numTablesToCopy == 0 {
+				if err := vr.insertLog(LogCopyEnd, fmt.Sprintf("Copy phase completed at gtid %s", settings.StartPos)); err != nil {
+					return err
+				}
 			}
 		case settings.StartPos.IsZero():
 			if err := newVCopier(vr).initTablesForCopy(ctx); err != nil {
@@ -298,7 +319,14 @@ func (vr *vreplicator) setMessage(message string) error {
 	if _, err := vr.dbClient.Execute(query); err != nil {
 		return fmt.Errorf("could not set message: %v: %v", query, err)
 	}
+	if err := insertLog(vr.dbClient, LogMessage, vr.id, vr.state, message); err != nil {
+		return err
+	}
 	return nil
+}
+
+func (vr *vreplicator) insertLog(typ, message string) error {
+	return insertLog(vr.dbClient, typ, vr.id, vr.state, message)
 }
 
 func (vr *vreplicator) setState(state, message string) error {
@@ -313,6 +341,14 @@ func (vr *vreplicator) setState(state, message string) error {
 	if _, err := vr.dbClient.ExecuteFetch(query, 1); err != nil {
 		return fmt.Errorf("could not set state: %v: %v", query, err)
 	}
+	if state == vr.state {
+		return nil
+	}
+	if err := insertLog(vr.dbClient, LogStateChange, vr.id, state, message); err != nil {
+		return err
+	}
+	vr.state = state
+
 	return nil
 }
 
