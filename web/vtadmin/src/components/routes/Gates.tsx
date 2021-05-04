@@ -24,6 +24,9 @@ import { Button } from '../Button';
 import { DataCell } from '../dataTable/DataCell';
 import { DataTable } from '../dataTable/DataTable';
 import { Icons } from '../Icon';
+import { ContentContainer } from '../layout/ContentContainer';
+import { WorkspaceHeader } from '../layout/WorkspaceHeader';
+import { WorkspaceTitle } from '../layout/WorkspaceTitle';
 import { TextInput } from '../TextInput';
 import style from './Gates.module.scss';
 
@@ -59,21 +62,25 @@ export const Gates = () => {
         ));
 
     return (
-        <div className="max-width-content">
-            <h1>Gates</h1>
-            <div className={style.controls}>
-                <TextInput
-                    autoFocus
-                    iconLeft={Icons.search}
-                    onChange={(e) => updateFilter(e.target.value)}
-                    placeholder="Filter gates"
-                    value={filter || ''}
-                />
-                <Button disabled={!filter} onClick={() => updateFilter('')} secondary>
-                    Clear filters
-                </Button>
-            </div>
-            <DataTable columns={['Pool', 'Hostname', 'Cell', 'Keyspaces']} data={rows} renderRows={renderRows} />
+        <div>
+            <WorkspaceHeader>
+                <WorkspaceTitle>Gates</WorkspaceTitle>
+            </WorkspaceHeader>
+            <ContentContainer>
+                <div className={style.controls}>
+                    <TextInput
+                        autoFocus
+                        iconLeft={Icons.search}
+                        onChange={(e) => updateFilter(e.target.value)}
+                        placeholder="Filter gates"
+                        value={filter || ''}
+                    />
+                    <Button disabled={!filter} onClick={() => updateFilter('')} secondary>
+                        Clear filters
+                    </Button>
+                </div>
+                <DataTable columns={['Pool', 'Hostname', 'Cell', 'Keyspaces']} data={rows} renderRows={renderRows} />
+            </ContentContainer>
         </div>
     );
 };
