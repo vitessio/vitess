@@ -22,15 +22,13 @@ import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import { useSyncedURLParam } from '../../hooks/useSyncedURLParam';
 import { DataCell } from '../dataTable/DataCell';
 import { DataTable } from '../dataTable/DataTable';
-import { Button } from '../Button';
-import { Icons } from '../Icon';
-import { TextInput } from '../TextInput';
 import { Pip } from '../pips/Pip';
 import { filterNouns } from '../../util/filterNouns';
 import { getShardsByState } from '../../util/keyspaces';
 import { ContentContainer } from '../layout/ContentContainer';
 import { WorkspaceHeader } from '../layout/WorkspaceHeader';
 import { WorkspaceTitle } from '../layout/WorkspaceTitle';
+import { DataFilter } from '../dataTable/DataFilter';
 
 export const Keyspaces = () => {
     useDocumentTitle('Keyspaces');
@@ -83,20 +81,14 @@ export const Keyspaces = () => {
                 <WorkspaceTitle>Keyspaces</WorkspaceTitle>
             </WorkspaceHeader>
             <ContentContainer>
+                <DataFilter
+                    autoFocus
+                    onChange={(e) => updateFilter(e.target.value)}
+                    onClear={() => updateFilter('')}
+                    placeholder="Filter keyspaces"
+                    value={filter || ''}
+                />
                 <div className={style.container}>
-                    <div className={style.controls}>
-                        <TextInput
-                            autoFocus
-                            iconLeft={Icons.search}
-                            onChange={(e) => updateFilter(e.target.value)}
-                            placeholder="Filter keyspaces"
-                            value={filter || ''}
-                        />
-                        <Button disabled={!filter} onClick={() => updateFilter('')} secondary>
-                            Clear filters
-                        </Button>
-                    </div>
-
                     <DataTable columns={['Keyspace', 'Shards']} data={ksRows} renderRows={renderRows} />
                 </div>
             </ContentContainer>

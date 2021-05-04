@@ -20,15 +20,12 @@ import { useGates } from '../../hooks/api';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import { useSyncedURLParam } from '../../hooks/useSyncedURLParam';
 import { filterNouns } from '../../util/filterNouns';
-import { Button } from '../Button';
 import { DataCell } from '../dataTable/DataCell';
+import { DataFilter } from '../dataTable/DataFilter';
 import { DataTable } from '../dataTable/DataTable';
-import { Icons } from '../Icon';
 import { ContentContainer } from '../layout/ContentContainer';
 import { WorkspaceHeader } from '../layout/WorkspaceHeader';
 import { WorkspaceTitle } from '../layout/WorkspaceTitle';
-import { TextInput } from '../TextInput';
-import style from './Gates.module.scss';
 
 export const Gates = () => {
     useDocumentTitle('Gates');
@@ -67,18 +64,13 @@ export const Gates = () => {
                 <WorkspaceTitle>Gates</WorkspaceTitle>
             </WorkspaceHeader>
             <ContentContainer>
-                <div className={style.controls}>
-                    <TextInput
-                        autoFocus
-                        iconLeft={Icons.search}
-                        onChange={(e) => updateFilter(e.target.value)}
-                        placeholder="Filter gates"
-                        value={filter || ''}
-                    />
-                    <Button disabled={!filter} onClick={() => updateFilter('')} secondary>
-                        Clear filters
-                    </Button>
-                </div>
+                <DataFilter
+                    autoFocus
+                    onChange={(e) => updateFilter(e.target.value)}
+                    onClear={() => updateFilter('')}
+                    placeholder="Filter gates"
+                    value={filter || ''}
+                />
                 <DataTable columns={['Pool', 'Hostname', 'Cell', 'Keyspaces']} data={rows} renderRows={renderRows} />
             </ContentContainer>
         </div>
