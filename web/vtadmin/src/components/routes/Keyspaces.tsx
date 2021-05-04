@@ -28,6 +28,9 @@ import { TextInput } from '../TextInput';
 import { Pip } from '../pips/Pip';
 import { filterNouns } from '../../util/filterNouns';
 import { getShardsByState } from '../../util/keyspaces';
+import { ContentContainer } from '../layout/ContentContainer';
+import { WorkspaceHeader } from '../layout/WorkspaceHeader';
+import { WorkspaceTitle } from '../layout/WorkspaceTitle';
 
 export const Keyspaces = () => {
     useDocumentTitle('Keyspaces');
@@ -75,21 +78,28 @@ export const Keyspaces = () => {
         ));
 
     return (
-        <div className="max-width-content">
-            <h1>Keyspaces</h1>
-            <div className={style.controls}>
-                <TextInput
-                    autoFocus
-                    iconLeft={Icons.search}
-                    onChange={(e) => updateFilter(e.target.value)}
-                    placeholder="Filter keyspaces"
-                    value={filter || ''}
-                />
-                <Button disabled={!filter} onClick={() => updateFilter('')} secondary>
-                    Clear filters
-                </Button>
-            </div>
-            <DataTable columns={['Keyspace', 'Shards']} data={ksRows} renderRows={renderRows} />
+        <div>
+            <WorkspaceHeader>
+                <WorkspaceTitle>Keyspaces</WorkspaceTitle>
+            </WorkspaceHeader>
+            <ContentContainer>
+                <div className={style.container}>
+                    <div className={style.controls}>
+                        <TextInput
+                            autoFocus
+                            iconLeft={Icons.search}
+                            onChange={(e) => updateFilter(e.target.value)}
+                            placeholder="Filter keyspaces"
+                            value={filter || ''}
+                        />
+                        <Button disabled={!filter} onClick={() => updateFilter('')} secondary>
+                            Clear filters
+                        </Button>
+                    </div>
+
+                    <DataTable columns={['Keyspace', 'Shards']} data={ksRows} renderRows={renderRows} />
+                </div>
+            </ContentContainer>
         </div>
     );
 };

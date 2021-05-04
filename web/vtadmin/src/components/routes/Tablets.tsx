@@ -30,6 +30,9 @@ import { TabletServingPip } from '../pips/TabletServingPip';
 import { useSyncedURLParam } from '../../hooks/useSyncedURLParam';
 import { formatAlias, formatDisplayType, formatState, formatType } from '../../util/tablets';
 import { ShardServingPip } from '../pips/ShardServingPip';
+import { ContentContainer } from '../layout/ContentContainer';
+import { WorkspaceHeader } from '../layout/WorkspaceHeader';
+import { WorkspaceTitle } from '../layout/WorkspaceTitle';
 
 export const Tablets = () => {
     useDocumentTitle('Tablets');
@@ -71,25 +74,29 @@ export const Tablets = () => {
     );
 
     return (
-        <div className="max-width-content">
-            <h1>Tablets</h1>
-            <div className={style.controls}>
-                <TextInput
-                    autoFocus
-                    iconLeft={Icons.search}
-                    onChange={(e) => updateFilter(e.target.value)}
-                    placeholder="Filter tablets"
-                    value={filter || ''}
+        <div>
+            <WorkspaceHeader>
+                <WorkspaceTitle>Tablets</WorkspaceTitle>
+            </WorkspaceHeader>
+            <ContentContainer>
+                <div className={style.controls}>
+                    <TextInput
+                        autoFocus
+                        iconLeft={Icons.search}
+                        onChange={(e) => updateFilter(e.target.value)}
+                        placeholder="Filter tablets"
+                        value={filter || ''}
+                    />
+                    <Button disabled={!filter} onClick={() => updateFilter('')} secondary>
+                        Clear filters
+                    </Button>
+                </div>
+                <DataTable
+                    columns={['Keyspace', 'Shard', 'Type', 'Tablet State', 'Alias', 'Hostname']}
+                    data={filteredData}
+                    renderRows={renderRows}
                 />
-                <Button disabled={!filter} onClick={() => updateFilter('')} secondary>
-                    Clear filters
-                </Button>
-            </div>
-            <DataTable
-                columns={['Keyspace', 'Shard', 'Type', 'Tablet State', 'Alias', 'Hostname']}
-                data={filteredData}
-                renderRows={renderRows}
-            />
+            </ContentContainer>
         </div>
     );
 };

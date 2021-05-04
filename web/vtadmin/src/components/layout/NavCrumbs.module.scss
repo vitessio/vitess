@@ -1,5 +1,5 @@
 /**
- * Copyright 2020 The Vitess Authors.
+ * Copyright 2021 The Vitess Authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,23 +13,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-.container {
-  display: grid;
-  grid-template-areas: 'nav content';
-  grid-template-rows: auto;
-  grid-template-columns: 240px auto;
-  height: 100vh;
-  overflow: hidden;
-  position: relative;
-  width: 100vw;
-}
+.container > a {
+  font-family: var(--fontFamilyMonospace);
+  font-size: var(--fontSizeLarge);
+  line-height: 4rem;
 
-.navContainer {
-  grid-area: nav;
-  height: 100vh;
-}
-
-.mainContainer {
-  grid-area: content;
-  overflow: auto;
+  &::after {
+    color: var(--colorScaffoldingHighlight);
+    content: "/";
+    display: inline-block;
+    font-size: 2rem;
+    line-height: 2rem;
+    margin: 0 1rem;
+    vertical-align: middle;
+  }
 }
