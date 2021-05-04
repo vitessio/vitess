@@ -13,6 +13,26 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+.headingMeta {
+  display: flex;
+}
+
+.headingMeta span {
+  display: inline-block;
+  line-height: 2;
+
+  &::after {
+    color: var(--colorScaffoldingHighlight);
+    content: '/';
+    display: inline-block;
+    margin: 0 1.2rem;
+  }
+
+  &:last-child::after {
+    content: none;
+  }
+}
+
 .container {
   display: grid;
   grid-gap: 16px;
