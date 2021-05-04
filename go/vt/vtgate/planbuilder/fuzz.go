@@ -46,6 +46,11 @@ func FuzzAnalyse(data []byte) int {
 	if err != nil {
 		return 0
 	}
-	_, _ = createQGFromSelect(tree.(*sqlparser.Select), semTable)
+	switch stmt := tree.(type) {
+	case *sqlparser.Select:
+		_, _ = createQGFromSelect(stmt, semTable)
+	default:
+		return 0
+	}
 	return 1
 }
