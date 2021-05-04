@@ -9530,3 +9530,5 @@
 2021-05-04T16:52:11Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/810766822
 2021-05-04T16:52:11Z,unit_race,https://github.com/vitessio/vitess/actions/runs/810766829
 2021-05-04T17:05:01Z,Cluster (17),https://github.com/vitessio/vitess/actions/runs/810801615
+2021-05-04T17:58:45Z,unit_race,https://github.com/vitessio/vitess/actions/runs/810939692
+2021-05-04T18:05:37Z,Unit Test (mariadb101),https://github.com/vitessio/vitess/actions/runs/810958714
