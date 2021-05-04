@@ -63,6 +63,15 @@ export const Schema = () => {
                     </NavCrumbs>
 
                     <WorkspaceTitle className="font-family-monospace">{table}</WorkspaceTitle>
+
+                    <div className={style.headingMeta}>
+                        <span>
+                            Cluster: <code>{clusterID}</code>
+                        </span>
+                        <span>
+                            Keyspace: <code>{keyspace}</code>
+                        </span>
+                    </div>
                 </WorkspaceHeader>
             )}
 
