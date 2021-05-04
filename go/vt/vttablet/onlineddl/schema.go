@@ -335,8 +335,11 @@ var (
 		`CREATE USER IF NOT EXISTS %s IDENTIFIED BY '%s'`,
 		`ALTER USER %s IDENTIFIED BY '%s'`,
 	}
-	sqlGrantOnlineDDLUser = []string{
+	sqlGrantOnlineDDLSuper = []string{
 		`GRANT SUPER, REPLICATION SLAVE ON *.* TO %s`,
+	}
+	sqlGrantOnlineDDLUser = []string{
+		`GRANT PROCESS, REPLICATION SLAVE, REPLICATION CLIENT ON *.* TO %s`,
 		`GRANT ALTER, CREATE, DELETE, DROP, INDEX, INSERT, LOCK TABLES, SELECT, TRIGGER, UPDATE ON *.* TO %s`,
 	}
 	sqlDropOnlineDDLUser = `DROP USER IF EXISTS %s`

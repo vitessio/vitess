@@ -361,7 +361,8 @@ func (e *Executor) readMySQLVariables(ctx context.Context) (variables *mysqlVari
 	return variables, nil
 }
 
-// createOnlineDDLUser creates a gh-ost user account with all neccessary privileges and with a random password
+// createOnlineDDLUser creates a gh-ost or pt-osc user account with all
+// neccessary privileges and with a random password
 func (e *Executor) createOnlineDDLUser(ctx context.Context) (password string, err error) {
 	conn, err := dbconnpool.NewDBConnection(ctx, e.env.Config().DB.DbaConnector())
 	if err != nil {
@@ -376,6 +377,12 @@ func (e *Executor) createOnlineDDLUser(ctx context.Context) (password string, er
 		if _, err := conn.ExecuteFetch(parsed.Query, 0, false); err != nil {
 			return password, err
 		}
+	}
+	for _, query := range sqlGrantOnlineDDLSuper {
+		parsed := sqlparser.BuildParsedQuery(query, onlineDDLGrant)
+		conn.ExecuteFetch(parsed.Query, 0, false)
+		// We ignore failure, since we might not be able to grant
+		// SUPER privs (e.g. Aurora)
 	}
 	for _, query := range sqlGrantOnlineDDLUser {
 		parsed := sqlparser.BuildParsedQuery(query, onlineDDLGrant)
