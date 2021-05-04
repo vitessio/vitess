@@ -23,15 +23,12 @@ import { useSyncedURLParam } from '../../hooks/useSyncedURLParam';
 import { filterNouns } from '../../util/filterNouns';
 import { formatBytes } from '../../util/formatBytes';
 import { getTableDefinitions } from '../../util/tableDefinitions';
-import { Button } from '../Button';
 import { DataCell } from '../dataTable/DataCell';
+import { DataFilter } from '../dataTable/DataFilter';
 import { DataTable } from '../dataTable/DataTable';
-import { Icons } from '../Icon';
 import { ContentContainer } from '../layout/ContentContainer';
 import { WorkspaceHeader } from '../layout/WorkspaceHeader';
 import { WorkspaceTitle } from '../layout/WorkspaceTitle';
-import { TextInput } from '../TextInput';
-import style from './Schemas.module.scss';
 
 const TABLE_COLUMNS = [
     'Keyspace',
@@ -103,19 +100,13 @@ export const Schemas = () => {
                 <WorkspaceTitle>Schemas</WorkspaceTitle>
             </WorkspaceHeader>
             <ContentContainer>
-                <div className={style.controls}>
-                    <TextInput
-                        autoFocus
-                        iconLeft={Icons.search}
-                        onChange={(e) => updateFilter(e.target.value)}
-                        placeholder="Filter schemas"
-                        value={filter || ''}
-                    />
-                    <Button disabled={!filter} onClick={() => updateFilter('')} secondary>
-                        Clear filters
-                    </Button>
-                </div>
-
+                <DataFilter
+                    autoFocus
+                    onChange={(e) => updateFilter(e.target.value)}
+                    onClear={() => updateFilter('')}
+                    placeholder="Filter schemas"
+                    value={filter || ''}
+                />
                 <DataTable columns={TABLE_COLUMNS} data={filteredData} renderRows={renderRows} />
             </ContentContainer>
         </div>
