@@ -9522,3 +9522,5 @@
 2021-05-04T12:10:11Z,endtoend,https://github.com/vitessio/vitess/actions/runs/809973613
 2021-05-04T16:17:15Z,Cluster (27),https://github.com/vitessio/vitess/actions/runs/810671520
 2021-05-04T16:18:06Z,Cluster (18),https://github.com/vitessio/vitess/actions/runs/810674296
+2021-05-04T16:18:06Z,Cluster (upgrade),https://github.com/vitessio/vitess/actions/runs/810674322
+2021-05-04T16:18:06Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/810674338
