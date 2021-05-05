@@ -168,15 +168,29 @@ func (te *TxEngine) transition(state txEngineState) {
 		// If there are errors, we choose to raise an alert and
 		// continue anyway. Serving traffic is considered more important
 		// than blocking everything for the sake of a few transactions.
-		if err := te.twoPC.Open(te.env.Config().DB); err != nil {
-			te.env.Stats().InternalErrors.Add("TwopcOpen", 1)
-			log.Errorf("Could not open TwoPC engine: %v", err)
-		}
-		if err := te.prepareFromRedo(); err != nil {
-			te.env.Stats().InternalErrors.Add("TwopcResurrection", 1)
-			log.Errorf("Could not prepare transactions: %v", err)
-		}
-		te.startWatchdog()
+		// We do this async; so we do not end up blocking writes on
+		// failover for our setup tasks if using semi-sync replication.
+		go func() {
+			for {
+				if err := te.twoPC.Open(te.env.Config().DB); err != nil {
+					te.env.Stats().InternalErrors.Add("TwopcOpen", 1)
+					log.Errorf("Could not open TwoPC engine, retrying: %v", err)
+					time.Sleep(10 * time.Second)
+				} else {
+					break
+				}
+			}
+			for {
+				if err := te.prepareFromRedo(); err != nil {
+					te.env.Stats().InternalErrors.Add("TwopcResurrection", 1)
+					log.Errorf("Could not prepare transactions, retrying: %v", err)
+					time.Sleep(10 * time.Second)
+				} else {
+					break
+				}
+			}
+			te.startWatchdog()
+		}()
 	}
 }
 
@@ -398,7 +412,7 @@ outer:
 		te.preparedPool.SetFailed(preparedTx.Dtid)
 	}
 	te.txPool.AdjustLastID(maxid)
-	log.Infof("Prepared %d transactions, and registered %d failures.", len(prepared), len(failed))
+	log.Infof("TwoPC: Prepared %d transactions, and registered %d failures.", len(prepared), len(failed))
 	return allErr.Error()
 }
 
