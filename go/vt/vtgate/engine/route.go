@@ -347,12 +347,25 @@ func (route *Route) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.
 	}
 
 	if len(route.OrderBy) == 0 {
-		return vcursor.StreamExecuteMulti(route.Query, rss, bvs, func(qr *sqltypes.Result) error {
+		err = vcursor.StreamExecuteMulti(route.Query, rss, bvs, func(qr *sqltypes.Result) error {
 			return callback(qr.Truncate(route.TruncateColumnCount))
 		})
+		if err != nil {
+			if !route.ScatterErrorsAsWarnings {
+				return err
+			}
+			partialSuccessScatterQueries.Add(1)
+			sErr := mysql.NewSQLErrorFromError(err).(*mysql.SQLError)
+			vcursor.Session().RecordWarning(&querypb.QueryWarning{Code: uint32(sErr.Num), Message: err.Error()})
+		}
+		return nil
 	}
 
 	// There is an order by. We have to merge-sort.
+	return route.mergeSort(vcursor, bindVars, wantfields, callback, rss, bvs)
+}
+
+func (route *Route) mergeSort(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error, rss []*srvtopo.ResolvedShard, bvs []map[string]*querypb.BindVariable) error {
 	prims := make([]StreamExecutor, 0, len(rss))
 	for i, rs := range rss {
 		prims = append(prims, &shardRoute{
@@ -365,9 +378,18 @@ func (route *Route) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.
 		Primitives: prims,
 		OrderBy:    route.OrderBy,
 	}
-	return ms.StreamExecute(vcursor, bindVars, wantfields, func(qr *sqltypes.Result) error {
+	err := ms.StreamExecute(vcursor, bindVars, wantfields, func(qr *sqltypes.Result) error {
 		return callback(qr.Truncate(route.TruncateColumnCount))
 	})
+	if err != nil {
+		if !route.ScatterErrorsAsWarnings {
+			return err
+		}
+		partialSuccessScatterQueries.Add(1)
+		sErr := mysql.NewSQLErrorFromError(err).(*mysql.SQLError)
+		vcursor.Session().RecordWarning(&querypb.QueryWarning{Code: uint32(sErr.Num), Message: err.Error()})
+	}
+	return nil
 }
 
 // GetFields fetches the field info.
