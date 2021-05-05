@@ -198,10 +198,24 @@ func (sbc *SandboxConn) StreamExecute(ctx context.Context, target *querypb.Targe
 		sbc.sExecMu.Unlock()
 		return err
 	}
-	nextRs := sbc.getNextResult()
+	if sbc.results == nil {
+		nextRs := sbc.getNextResult()
+		sbc.sExecMu.Unlock()
+		return callback(nextRs)
+	}
+
+	for len(sbc.results) > 0 {
+		nextRs := sbc.getNextResult()
+		sbc.sExecMu.Unlock()
+		err := callback(nextRs)
+		if err != nil {
+			return err
+		}
+		sbc.sExecMu.Lock()
+	}
 	sbc.sExecMu.Unlock()
 
-	return callback(nextRs)
+	return nil
 }
 
 // Begin is part of the QueryService interface.
