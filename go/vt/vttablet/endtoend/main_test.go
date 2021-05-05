@@ -208,7 +208,7 @@ var tableACLConfig = `{
     },
     {
       "name": "vitess",
-      "table_names_or_prefixes": ["vitess_a", "vitess_b", "vitess_c", "dual", "vitess_d", "vitess_temp", "vitess_e", "vitess_f", "vitess_mixed_case", "upsert_test", "vitess_strings", "vitess_fracts", "vitess_ints", "vitess_misc", "vitess_bit_default", "vitess_big", "vitess_stress", "vitess_view", "vitess_json", "vitess_bool", "vitess_autoinc_seq"],
+      "table_names_or_prefixes": ["vitess_a", "vitess_b", "vitess_c", "dual", "vitess_d", "vitess_temp", "vitess_e", "vitess_f", "vitess_mixed_case", "upsert_test", "vitess_strings", "vitess_fracts", "vitess_ints", "vitess_misc", "vitess_bit_default", "vitess_big", "vitess_stress", "vitess_view", "vitess_json", "vitess_bool", "vitess_autoinc_seq", "vitess_sc"],
       "readers": ["dev"],
       "writers": ["dev"],
       "admins": ["dev"]
@@ -305,6 +305,13 @@ var tableACLConfig = `{
     {
       "name": "sys_table",
       "table_names_or_prefixes": ["tables", "user", "processlist", "mutex_instances", "columns", "a"],
+      "readers": ["dev"],
+      "writers": ["dev"],
+      "admins": ["dev"]
+    },
+    {
+      "name": "vitess_healthstream",
+      "table_names_or_prefixes": ["vitess_sc1", "vitess_sc2"],
       "readers": ["dev"],
       "writers": ["dev"],
       "admins": ["dev"]
