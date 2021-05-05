@@ -9601,3 +9601,6 @@
 2021-05-05T19:39:34Z,endtoend,https://github.com/vitessio/vitess/actions/runs/814573775
 2021-05-05T19:39:34Z,unit_race,https://github.com/vitessio/vitess/actions/runs/814573749
 2021-05-05T19:39:35Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/814573802
+2021-05-05T21:13:20Z,Cluster (tabletmanager_tablegc),https://github.com/vitessio/vitess/actions/runs/814793096
+2021-05-05T21:13:20Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/814793105
+2021-05-05T21:13:20Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/814793094
