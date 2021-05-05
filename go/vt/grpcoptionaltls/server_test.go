@@ -15,14 +15,17 @@ package grpcoptionaltls
 import (
 	"context"
 	"crypto/tls"
-	"crypto/x509"
+	"io/ioutil"
 	"net"
+	"os"
 	"testing"
 	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	pb "google.golang.org/grpc/examples/helloworld/helloworld"
+
+	"vitess.io/vitess/go/vt/tlstest"
 )
 
 // server is used to implement helloworld.GreeterServer.
@@ -47,20 +50,25 @@ type testCredentials struct {
 }
 
 func createCredentials() (*testCredentials, error) {
-	cert, err := tls.X509KeyPair(localhostCert, localhostKey)
+	// Create a temporary directory.
+	certDir, err := ioutil.TempDir("", "optionaltls_grpc_test")
+	if err != nil {
+		return nil, err
+	}
+	defer os.RemoveAll(certDir)
+
+	certs := tlstest.CreateClientServerCertPairs(certDir)
+	cert, err := tls.LoadX509KeyPair(certs.ServerCert, certs.ServerKey)
 	if err != nil {
 		return nil, err
 	}
 
-	certificate, err := x509.ParseCertificate(cert.Certificate[0])
+	clientCredentials, err := credentials.NewClientTLSFromFile(certs.ServerCA, certs.ServerName)
 	if err != nil {
 		return nil, err
 	}
-	certpool := x509.NewCertPool()
-	certpool.AddCert(certificate)
-
 	tc := &testCredentials{
-		client: credentials.NewClientTLSFromCert(certpool, "example.com"),
+		client: clientCredentials,
 		server: credentials.NewServerTLSFromCert(&cert),
 	}
 	return tc, nil

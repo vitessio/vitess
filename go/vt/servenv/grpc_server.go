@@ -139,6 +139,7 @@ func createGRPCServer() {
 		// create the creds server options
 		creds := credentials.NewTLS(config)
 		if *GRPCEnableOptionalTLS {
+			log.Warning("Optional TLS is active. Plain-text connections will be accepted")
 			creds = grpcoptionaltls.New(creds)
 		}
 		opts = []grpc.ServerOption{grpc.Creds(creds)}
