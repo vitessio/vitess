@@ -9585,3 +9585,5 @@
 2021-05-05T12:55:32Z,docker_test_2,https://github.com/vitessio/vitess/actions/runs/813459474
 2021-05-05T12:55:32Z,docker_test_3,https://github.com/vitessio/vitess/actions/runs/813459476
 2021-05-05T12:55:32Z,unit_race,https://github.com/vitessio/vitess/actions/runs/813459465
+2021-05-05T16:28:45Z,cluster_initial_sharding_multi,https://github.com/vitessio/vitess/actions/runs/814091296
+2021-05-05T16:28:45Z,endtoend,https://github.com/vitessio/vitess/actions/runs/814091326
