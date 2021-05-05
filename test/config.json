@@ -520,7 +520,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/reservedconn/reconnect1"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "17",
+			"Shard": 17,
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -529,7 +529,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/reservedconn/reconnect2"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "17",
+			"Shard": 17,
 			"RetryMax": 0,
 			"Tags": []
 		},
