@@ -46,7 +46,7 @@ var (
 	dbLockRetryDelay    = 1 * time.Second
 	relayLogMaxSize     = flag.Int("relay_log_max_size", 250000, "Maximum buffer size (in bytes) for VReplication target buffering. If single rows are larger than this, a single row is buffered at a time.")
 	relayLogMaxItems    = flag.Int("relay_log_max_items", 5000, "Maximum number of rows for VReplication target buffering.")
-	copyTimeout         = 1 * time.Hour
+	copyTimeout         = *flag.Duration("vreplication_copy_timeout", 3600*time.Second, "vreplication copy timeout")
 	replicaLagTolerance = 10 * time.Second
 
 	// vreplicationHeartbeatUpdateInterval determines how often the time_updated column is updated if there are no real events on the source and the source

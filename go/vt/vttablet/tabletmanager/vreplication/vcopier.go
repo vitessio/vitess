@@ -215,6 +215,7 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 		return fmt.Errorf("plan not found for table: %s, current plans are: %#v", tableName, plan.TargetTables)
 	}
 
+	fmt.Printf("============ copyTimeout=%v\n", copyTimeout)
 	ctx, cancel := context.WithTimeout(ctx, copyTimeout)
 	defer cancel()
 
@@ -227,10 +228,12 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 	var updateCopyState *sqlparser.ParsedQuery
 	var bv map[string]*querypb.BindVariable
 	var sqlbuffer bytes2.Buffer
+	var moreRows bool
 	err = vc.vr.sourceVStreamer.VStreamRows(ctx, initialPlan.SendRule.Filter, lastpkpb, func(rows *binlogdatapb.VStreamRowsResponse) error {
 		for {
 			select {
 			case <-ctx.Done():
+				fmt.Printf("============ <-ctx.Done() lastpkpb=%v\n", lastpkpb)
 				return io.EOF
 			default:
 			}
@@ -274,6 +277,7 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 		}
 		_, err = vc.tablePlan.applyBulkInsert(&sqlbuffer, rows, func(sql string) (*sqltypes.Result, error) {
 			start := time.Now()
+			fmt.Printf("==================== sql=%v\n", sql[0:100])
 			qr, err := vc.vr.dbClient.ExecuteWithRetry(ctx, sql)
 			if err != nil {
 				return nil, err
@@ -312,6 +316,8 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 		if err := vc.vr.dbClient.Commit(); err != nil {
 			return err
 		}
+		moreRows = true
+		fmt.Printf("===========len(rows.Rows) : %v\n", len(rows.Rows))
 		return nil
 	})
 	// If there was a timeout, return without an error.
@@ -324,6 +330,10 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 	if err != nil {
 		return err
 	}
+	if moreRows {
+		return nil
+	}
+	// Getting here means we are certain we are done with the copy, and we delete copy_state
 	log.Infof("Copy of %v finished at lastpk: %v", tableName, bv)
 	buf := sqlparser.NewTrackedBuffer(nil)
 	buf.Myprintf("delete from _vt.copy_state where vrepl_id=%s and table_name=%s", strconv.Itoa(int(vc.vr.id)), encodeString(tableName))
@@ -337,6 +347,10 @@ func (vc *vcopier) fastForward(ctx context.Context, copyState map[string]*sqltyp
 	defer func() {
 		vc.vr.stats.PhaseTimings.Record("fastforward", time.Now())
 	}()
+	fmt.Printf("========== fastForward: gtid=%v\n", gtid)
+	// if gtid == "" {
+	// 	return nil
+	// }
 	pos, err := mysql.DecodePosition(gtid)
 	if err != nil {
 		return err

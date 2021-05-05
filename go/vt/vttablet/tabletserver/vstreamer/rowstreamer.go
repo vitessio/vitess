@@ -138,7 +138,7 @@ func (rs *rowStreamer) buildPlan() error {
 	if err != nil {
 		return err
 	}
-	rs.sendQuery, err = rs.buildSelect()
+	rs.sendQuery, err = rs.buildSelect(rs.lastpk)
 	if err != nil {
 		return err
 	}
@@ -163,7 +163,7 @@ func buildPKColumns(st *binlogdatapb.MinimalTable) ([]int, error) {
 	return pkColumns, nil
 }
 
-func (rs *rowStreamer) buildSelect() (string, error) {
+func (rs *rowStreamer) buildSelect(startWithPk []sqltypes.Value) (string, error) {
 	buf := sqlparser.NewTrackedBuffer(nil)
 	// We could have used select *, but being explicit is more predictable.
 	buf.Myprintf("select ")
@@ -173,9 +173,9 @@ func (rs *rowStreamer) buildSelect() (string, error) {
 		prefix = ", "
 	}
 	buf.Myprintf(" from %v", sqlparser.NewTableIdent(rs.plan.Table.Name))
-	if len(rs.lastpk) != 0 {
-		if len(rs.lastpk) != len(rs.pkColumns) {
-			return "", fmt.Errorf("primary key values don't match length: %v vs %v", rs.lastpk, rs.pkColumns)
+	if len(startWithPk) != 0 {
+		if len(startWithPk) != len(rs.pkColumns) {
+			return "", fmt.Errorf("primary key values don't match length: %v vs %v", startWithPk, rs.pkColumns)
 		}
 		buf.WriteString(" where ")
 		prefix := ""
@@ -189,11 +189,11 @@ func (rs *rowStreamer) buildSelect() (string, error) {
 			prefix = " or "
 			for i, pk := range rs.pkColumns[:lastcol] {
 				buf.Myprintf("%v = ", sqlparser.NewColIdent(rs.plan.Table.Fields[pk].Name))
-				rs.lastpk[i].EncodeSQL(buf)
+				startWithPk[i].EncodeSQL(buf)
 				buf.Myprintf(" and ")
 			}
 			buf.Myprintf("%v > ", sqlparser.NewColIdent(rs.plan.Table.Fields[rs.pkColumns[lastcol]].Name))
-			rs.lastpk[lastcol].EncodeSQL(buf)
+			startWithPk[lastcol].EncodeSQL(buf)
 			buf.Myprintf(")")
 		}
 	}
@@ -203,15 +203,17 @@ func (rs *rowStreamer) buildSelect() (string, error) {
 		buf.Myprintf("%s%v", prefix, sqlparser.NewColIdent(rs.plan.Table.Fields[pk].Name))
 		prefix = ", "
 	}
+	buf.WriteString(" limit 10000 ")
 	return buf.String(), nil
 }
 
 func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.VStreamRowsResponse) error) error {
 	log.Infof("Streaming query: %v\n", rs.sendQuery)
-	gtid, err := conn.streamWithSnapshot(rs.ctx, rs.plan.Table.Name, rs.sendQuery)
+	gtid, err := conn.streamWithoutSnapshot(rs.ctx, rs.plan.Table.Name, rs.sendQuery)
 	if err != nil {
 		return err
 	}
+	fmt.Printf("============= streamQuery gtid: %v\n", gtid)
 
 	// first call the callback with the fields
 	flds, err := conn.Fields()
@@ -263,7 +265,25 @@ func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.V
 			return err
 		}
 		if mysqlrow == nil {
-			break
+			fmt.Printf("============= mysqlrow is nil: %v\n", mysqlrow)
+			// attempt next round
+			nextQuery, err := rs.buildSelect(lastpk)
+			if err != nil {
+				return err
+			}
+			fmt.Printf("============= nextQuery: %v\n", nextQuery)
+			if nextQuery == rs.sendQuery {
+				fmt.Printf("============= nextQuery identical to curent query\n")
+				// No change in query; we're at same lastPK; that means we've exhausted all rows
+				break
+			}
+			rs.sendQuery = nextQuery
+			fmt.Printf("============= proceeeding with nextQuery: %v\n", nextQuery)
+			_, err = conn.streamWithoutSnapshot(rs.ctx, rs.plan.Table.Name, rs.sendQuery)
+			if err != nil {
+				return err
+			}
+			continue
 		}
 		// Compute lastpk here, because we'll need it
 		// at the end after the loop exits.
