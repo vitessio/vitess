@@ -336,7 +336,7 @@ var (
 		`ALTER USER %s IDENTIFIED BY '%s'`,
 	}
 	sqlGrantOnlineDDLSuper = []string{
-		`GRANT SUPER, REPLICATION SLAVE ON *.* TO %s`,
+		`GRANT SUPER ON *.* TO %s`,
 	}
 	sqlGrantOnlineDDLUser = []string{
 		`GRANT PROCESS, REPLICATION SLAVE, REPLICATION CLIENT ON *.* TO %s`,
