@@ -169,6 +169,7 @@ func TestReloadSchema(t *testing.T) {
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
 	configs := config.DB
 
+	db.AddQuery(mysql.CreateVTDatabase, &sqltypes.Result{})
 	db.AddQuery(mysql.CreateSchemaCopyTable, &sqltypes.Result{})
 	db.AddQuery(mysql.ClearSchemaCopy, &sqltypes.Result{})
 	db.AddQuery(mysql.InsertIntoSchemaCopy, &sqltypes.Result{})

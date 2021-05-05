@@ -35,6 +35,9 @@ const (
 	// ShowRowsRead is the query used to find the number of rows read.
 	ShowRowsRead = "show status like 'Innodb_rows_read'"
 
+	// CreateVTDatabase creates the _vt database
+	CreateVTDatabase = `CREATE DATABASE IF NOT EXISTS _vt`
+
 	// CreateSchemaCopyTable query creates schemacopy table in _vt schema.
 	CreateSchemaCopyTable = `
 CREATE TABLE if not exists _vt.schemacopy (
@@ -92,6 +95,12 @@ select table_schema, table_name, column_name, ordinal_position, character_set_na
 from information_schema.columns 
 where table_schema = database()`
 )
+
+// VTDatabaseInit contains all the schema creation queries needed to
+var VTDatabaseInit = []string{
+	CreateVTDatabase,
+	CreateSchemaCopyTable,
+}
 
 // BaseShowTablesFields contains the fields returned by a BaseShowTables or a BaseShowTablesForTable command.
 // They are validated by the
