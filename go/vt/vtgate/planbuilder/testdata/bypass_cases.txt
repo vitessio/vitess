@@ -156,3 +156,21 @@
     "SingleShardOnly": true
   }
 }
+
+# create table
+"create /* test */ table t1(id bigint, primary key(id)) /* comments */"
+{
+  "QueryType": "DDL",
+  "Original": "create /* test */ table t1(id bigint, primary key(id)) /* comments */",
+  "Instructions": {
+    "OperatorType": "Send",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetDestination": "Shard(-80)",
+    "IsDML": false,
+    "Query": "create /* test */ table t1(id bigint, primary key(id)) /* comments */",
+    "SingleShardOnly": false
+  }
+}
