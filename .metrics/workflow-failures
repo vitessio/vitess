@@ -9548,5 +9548,7 @@
 2021-05-05T06:01:37Z,docker_test_1,https://github.com/vitessio/vitess/actions/runs/812424630
 2021-05-05T06:01:37Z,docker_test_2,https://github.com/vitessio/vitess/actions/runs/812424627
 2021-05-05T06:01:37Z,docker_test_3,https://github.com/vitessio/vitess/actions/runs/812424629
+2021-05-05T06:09:41Z,cluster_endtoend,https://github.com/vitessio/vitess/actions/runs/812441236
 2021-05-05T06:12:49Z,Cluster (17),https://github.com/vitessio/vitess/actions/runs/812447946
 2021-05-05T06:15:10Z,Cluster (17),https://github.com/vitessio/vitess/actions/runs/812452486
+2021-05-05T06:34:43Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/812494527
