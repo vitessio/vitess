@@ -9578,3 +9578,10 @@
 2021-05-05T12:04:17Z,local_example,https://github.com/vitessio/vitess/actions/runs/813321929
 2021-05-05T12:04:17Z,unit_race,https://github.com/vitessio/vitess/actions/runs/813321925
 2021-05-05T12:27:22Z,cluster_endtoend,https://github.com/vitessio/vitess/actions/runs/813383498
+2021-05-05T12:55:32Z,Cluster (upgrade),https://github.com/vitessio/vitess/actions/runs/813459470
+2021-05-05T12:55:32Z,cluster_endtoend,https://github.com/vitessio/vitess/actions/runs/813459461
+2021-05-05T12:55:32Z,cluster_initial_sharding_multi,https://github.com/vitessio/vitess/actions/runs/813459475
+2021-05-05T12:55:32Z,docker_test_1,https://github.com/vitessio/vitess/actions/runs/813459468
+2021-05-05T12:55:32Z,docker_test_2,https://github.com/vitessio/vitess/actions/runs/813459474
+2021-05-05T12:55:32Z,docker_test_3,https://github.com/vitessio/vitess/actions/runs/813459476
+2021-05-05T12:55:32Z,unit_race,https://github.com/vitessio/vitess/actions/runs/813459465
