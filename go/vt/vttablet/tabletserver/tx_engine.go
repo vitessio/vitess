@@ -171,23 +171,13 @@ func (te *TxEngine) transition(state txEngineState) {
 		// We do this async; so we do not end up blocking writes on
 		// failover for our setup tasks if using semi-sync replication.
 		go func() {
-			for {
-				if err := te.twoPC.Open(te.env.Config().DB); err != nil {
-					te.env.Stats().InternalErrors.Add("TwopcOpen", 1)
-					log.Errorf("Could not open TwoPC engine, retrying: %v", err)
-					time.Sleep(10 * time.Second)
-				} else {
-					break
-				}
+			if err := te.twoPC.Open(te.env.Config().DB); err != nil {
+				te.env.Stats().InternalErrors.Add("TwopcOpen", 1)
+				log.Errorf("Could not open TwoPC engine: %v", err)
 			}
-			for {
-				if err := te.prepareFromRedo(); err != nil {
-					te.env.Stats().InternalErrors.Add("TwopcResurrection", 1)
-					log.Errorf("Could not prepare transactions, retrying: %v", err)
-					time.Sleep(10 * time.Second)
-				} else {
-					break
-				}
+			if err := te.prepareFromRedo(); err != nil {
+				te.env.Stats().InternalErrors.Add("TwopcResurrection", 1)
+				log.Errorf("Could not prepare transactions: %v", err)
 			}
 			te.startWatchdog()
 		}()
