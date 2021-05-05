@@ -322,7 +322,7 @@ func (hs *healthStreamer) Reload() error {
 		}
 	}
 
-	qr, err := conn.Exec(ctx, mysql.DetectSchemaChange, 5, false)
+	qr, err := conn.Exec(ctx, mysql.DetectSchemaChange, 10000, false)
 	if err != nil {
 		return err
 	}
