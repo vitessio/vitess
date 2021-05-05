@@ -9540,7 +9540,10 @@
 2021-05-05T02:02:48Z,Cluster (tabletmanager_tablegc),https://github.com/vitessio/vitess/actions/runs/811996547
 2021-05-05T05:40:53Z,cluster_endtoend,https://github.com/vitessio/vitess/actions/runs/812387217
 2021-05-05T05:40:53Z,unit_race,https://github.com/vitessio/vitess/actions/runs/812387227
+2021-05-05T05:42:12Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/812389865
 2021-05-05T05:42:12Z,unit_race,https://github.com/vitessio/vitess/actions/runs/812389868
+2021-05-05T06:01:37Z,Cluster (upgrade),https://github.com/vitessio/vitess/actions/runs/812424637
+2021-05-05T06:01:37Z,cluster_endtoend,https://github.com/vitessio/vitess/actions/runs/812424631
 2021-05-05T06:01:37Z,cluster_initial_sharding_multi,https://github.com/vitessio/vitess/actions/runs/812424640
 2021-05-05T06:01:37Z,docker_test_1,https://github.com/vitessio/vitess/actions/runs/812424630
 2021-05-05T06:01:37Z,docker_test_2,https://github.com/vitessio/vitess/actions/runs/812424627
