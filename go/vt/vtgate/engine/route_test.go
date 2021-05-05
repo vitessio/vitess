@@ -1184,7 +1184,6 @@ func TestExecFail(t *testing.T) {
 		`ExecuteMultiShard ks.-20: dummy_select {} ks.20-: dummy_select {} false false`,
 	})
 
-	vc.Rewind()
 	// Scatter succeeds if all shards fail with ScatterErrorsAsWarnings
 	sel = NewRoute(
 		SelectScatter,
@@ -1220,6 +1219,11 @@ func TestExecFail(t *testing.T) {
 	})
 
 	vc.Rewind()
+	vc.results = nil
+	vc.resultErr = mysql.NewSQLError(mysql.ERQueryInterrupted, "", "query timeout -20")
+	_, err = wrapStreamExecute(sel, vc, map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err, "unexpected ScatterErrorsAsWarnings error %v", err)
+	vc.ExpectWarnings(t, []*querypb.QueryWarning{{Code: mysql.ERQueryInterrupted, Message: "query timeout -20 (errno 1317) (sqlstate HY000)"}})
 
 	// Scatter succeeds if one of N fails with ScatterErrorsAsWarnings
 	sel = NewRoute(
@@ -1250,4 +1254,13 @@ func TestExecFail(t *testing.T) {
 	expectResult(t, "sel.Execute", result, defaultSelectResult)
 
 	vc.Rewind()
+	vc.resultErr = mysql.NewSQLError(mysql.ERQueryInterrupted, "", "query timeout -20")
+	// test when there is order by column
+	sel.OrderBy = []OrderbyParams{{
+		WeightStringCol: -1,
+		Col:             0,
+	}}
+	_, err = wrapStreamExecute(sel, vc, map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err, "unexpected ScatterErrorsAsWarnings error %v", err)
+	vc.ExpectWarnings(t, []*querypb.QueryWarning{{Code: mysql.ERQueryInterrupted, Message: "query timeout -20 (errno 1317) (sqlstate HY000)"}})
 }
