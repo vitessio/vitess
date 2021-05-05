@@ -13,9 +13,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-.controls {
-  display: grid;
-  grid-gap: 8px;
-  grid-template-columns: 1fr min-content;
-  margin-bottom: 24px;
+.container > a {
+  font-family: var(--fontFamilyMonospace);
+  font-size: var(--fontSizeLarge);
+  line-height: 4rem;
+
+  &::after {
+    color: var(--colorScaffoldingHighlight);
+    content: "/";
+    display: inline-block;
+    font-size: 2rem;
+    line-height: 2rem;
+    margin: 0 1rem;
+    vertical-align: middle;
+  }
 }

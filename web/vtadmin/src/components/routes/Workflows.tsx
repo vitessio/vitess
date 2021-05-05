@@ -30,6 +30,9 @@ import { filterNouns } from '../../util/filterNouns';
 import { getStreams, getTimeUpdated } from '../../util/workflows';
 import { formatDateTime, formatRelativeTime } from '../../util/time';
 import { StreamStatePip } from '../pips/StreamStatePip';
+import { ContentContainer } from '../layout/ContentContainer';
+import { WorkspaceHeader } from '../layout/WorkspaceHeader';
+import { WorkspaceTitle } from '../layout/WorkspaceTitle';
 
 export const Workflows = () => {
     useDocumentTitle('Workflows');
@@ -111,27 +114,30 @@ export const Workflows = () => {
         });
 
     return (
-        <div className="max-width-content">
-            <h1>Workflows</h1>
+        <div>
+            <WorkspaceHeader>
+                <WorkspaceTitle>Workflows</WorkspaceTitle>
+            </WorkspaceHeader>
+            <ContentContainer>
+                <div className={style.controls}>
+                    <TextInput
+                        autoFocus
+                        iconLeft={Icons.search}
+                        onChange={(e) => updateFilter(e.target.value)}
+                        placeholder="Filter workflows"
+                        value={filter || ''}
+                    />
+                    <Button disabled={!filter} onClick={() => updateFilter('')} secondary>
+                        Clear filters
+                    </Button>
+                </div>
 
-            <div className={style.controls}>
-                <TextInput
-                    autoFocus
-                    iconLeft={Icons.search}
-                    onChange={(e) => updateFilter(e.target.value)}
-                    placeholder="Filter workflows"
-                    value={filter || ''}
+                <DataTable
+                    columns={['Workflow', 'Source', 'Target', 'Error', 'Copying', 'Running', 'Stopped', 'Last Updated']}
+                    data={sortedData}
+                    renderRows={renderRows}
                 />
-                <Button disabled={!filter} onClick={() => updateFilter('')} secondary>
-                    Clear filters
-                </Button>
-            </div>
-
-            <DataTable
-                columns={['Workflow', 'Source', 'Target', 'Error', 'Copying', 'Running', 'Stopped', 'Last Updated']}
-                data={sortedData}
-                renderRows={renderRows}
-            />
+            </ContentContainer>
         </div>
     );
 };
